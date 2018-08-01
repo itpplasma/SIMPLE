@@ -3,6 +3,7 @@
   use chamb_mod,  only : rbig,rcham2
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
+  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
 !
   implicit none
 !
@@ -115,6 +116,28 @@ print *,'canonical'
 !
 !
     write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+  enddo
+print *,'done'
+!
+  print *,'can : ',r,vartheta_c,varphi_c
+!
+  isw_field_type=0
+  z(1)=r
+  z(2)=vartheta_c
+  z(3)=varphi_c
+  z(4)=1.d0
+  z(5)=alam0
+!
+print *,'symplectic'
+  call orbit_sympl_init(z)
+  do i=1,L1i*npoiper*npoiper2*10
+!
+    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
+!
+    call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+!
+!
+    write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
   enddo
 print *,'done'
 !

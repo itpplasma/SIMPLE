@@ -19,7 +19,8 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/new_vmec_allocation_stuff.o \
 	OBJS/get_canonical_coordinates.o \
 	OBJS/testing.o \
-	OBJS/canonical_coordinates.o
+	OBJS/canonical_coordinates.o \
+	OBJS/orbit_symplectic.o
 
 canonical_coordinates.x: $(OBJS) Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -o canonical_coordinates.x $(OBJS) $(NCLIB)
@@ -62,6 +63,9 @@ OBJS/testing.o: SRC/testing.f90 Canonical_coordinates.mk SRC/canonical_coordinat
 OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
 	mv canonical_coordinates.o OBJS/
+OBJS/orbit_symplectic.o: SRC/orbit_symplectic.f90 Canonical_coordinates.mk
+	$(FC) $(OPTS) -c SRC/orbit_symplectic.f90
+	mv orbit_symplectic.o OBJS/
 #OBJS/.o: SRC/.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 #	$(FC) $(OPTS) -c SRC/.f90
 #	mv .o OBJS/
