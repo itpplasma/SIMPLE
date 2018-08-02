@@ -20,6 +20,12 @@ add_executable (neo-orb.x
 	SRC/get_canonical_coordinates.f90
 	SRC/testing.f90
 	SRC/minpack.f90
+	SRC/nleq1/nleq1.f
+	SRC/nleq1/wnorm.f
+	SRC/nleq1/linalg_nleq1.f
+	SRC/nleq1/zibconst.f
+	SRC/nleq1/zibsec.f
+	SRC/nleq1/zibmon.f
 	SRC/orbit_symplectic.f90
 	SRC/canonical_coordinates.f90
 )
@@ -38,6 +44,12 @@ add_executable (orbit-symplectic-test.x
 	SRC/get_canonical_coordinates.f90
 	SRC/testing.f90
 	SRC/minpack.f90
+	SRC/nleq1/nleq1.f
+	SRC/nleq1/wnorm.f
+	SRC/nleq1/linalg_nleq1.f
+	SRC/nleq1/zibconst.f
+	SRC/nleq1/zibsec.f
+	SRC/nleq1/zibmon.f
 	SRC/orbit_symplectic.f90
 	SRC/orbit_symplectic_test.f90
 )

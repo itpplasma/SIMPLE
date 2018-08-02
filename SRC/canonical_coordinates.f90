@@ -129,7 +129,7 @@ print *,'done'
   z(5)=alam0
 !
 print *,'symplectic'
-  call orbit_sympl_init(z)
+  call orbit_sympl_init(z) 
   do i=1,L1i*npoiper*npoiper2*10
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)

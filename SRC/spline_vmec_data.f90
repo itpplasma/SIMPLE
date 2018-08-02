@@ -56,7 +56,7 @@
   splcoe(0,1)=0.d0
   do is=1,ns-1
     splcoe(0,is+1)=splcoe(ns_A,is)
-    do k=ns_A,1,-1
+    do k=ns_A-1,0,-1
       splcoe(0,is+1)=splcoe(k,is)+hs*splcoe(0,is+1)
     enddo
   enddo
