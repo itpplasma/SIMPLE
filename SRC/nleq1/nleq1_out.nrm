@@ -1,0 +1,794 @@
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to        88 ( 22.0 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   2
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.629E+00       0.395E+00                  0
+         1      0.622E+00    *  0.391E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.622E+00       0.388E+00                  0
+         2      0.302E+00    *  0.188E+00      1.00000
+ Returned from call    2 of NLEQ1
+         2      0.302E+00       0.120E+00                  0
+         3      0.183E-01    *  0.727E-02      1.00000
+ Returned from call    3 of NLEQ1
+         3      0.183E-01       0.107E-01                  0
+         4      0.872E-04    *  0.509E-04      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.872E-04       0.465E-04                  0
+         5      0.202E-08    *  0.108E-08      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   5 iteration steps
+
+ Achieved relative accuracy 0.108E-08
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     6      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  5      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                5      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                10      0.000     0.0000       0.00       0.00   #
+ #   Output                 16      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       5  ***
+   ***  Corrector steps   :       0  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       5  ***
+   ***  Function eval.    :       6  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    5 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       105 ( 26.2 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   3
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.577E+00       0.304E+00                  0
+         1      0.572E+00    *  0.301E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.572E+00       0.300E+00                  0
+         2      0.140E+00    *  0.736E-01      1.00000
+ Returned from call    2 of NLEQ1
+         2      0.140E+00       0.641E-01                  0
+         3      0.379E-02    *  0.173E-02      1.00000
+ Returned from call    3 of NLEQ1
+         3      0.379E-02       0.249E-02                  0
+         4      0.310E-05    *  0.204E-05      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   4 iteration steps
+
+ Achieved relative accuracy 0.204E-05
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     5      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  4      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                4      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                 8      0.000     0.0000       0.00       0.00   #
+ #   Output                 13      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       4  ***
+   ***  Corrector steps   :       0  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       4  ***
+   ***  Function eval.    :       5  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    4 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       124 ( 31.0 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   4
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.534E+00       0.472E+00                  0
+         1      0.528E+00    *  0.468E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.528E+00       0.459E+00                  0
+         2      0.236E+00    *  0.103E+00      0.49661
+ Returned from call    2 of NLEQ1
+         2      0.236E+00       0.204E+00                  0
+         2      0.256E+00    *  0.207E+00      0.77237
+         3      0.153E+00    *  0.129E+00      0.24189
+ Returned from call    3 of NLEQ1
+         3      0.153E+00       0.837E-01                  0
+         4      0.333E-01    *  0.139E-01      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.333E-01       0.964E-02                  0
+         5      0.881E-03    *  0.225E-03      1.00000
+ Returned from call    5 of NLEQ1
+         5      0.881E-03       0.242E-03                  0
+         6      0.663E-06    *  0.178E-06      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   6 iteration steps
+
+ Achieved relative accuracy 0.178E-06
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     8      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  6      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                6      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                13      0.000     0.0000       0.00       0.00   #
+ #   Output                 20      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       6  ***
+   ***  Corrector steps   :       1  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       6  ***
+   ***  Function eval.    :       8  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    6 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       145 ( 36.2 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   5
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.505E+00       0.359E+00                  0
+         1      0.500E+00    *  0.355E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.500E+00       0.351E+00                  0
+         2      0.319E+00    *  0.691E-01      0.58141
+ Returned from call    2 of NLEQ1
+         2      0.319E+00       0.838E-01                  0
+         3      0.302E-01    *  0.960E-02      1.00000
+ Returned from call    3 of NLEQ1
+         3      0.302E-01       0.950E-02                  0
+         4      0.176E-03    *  0.104E-03      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.176E-03       0.111E-03                  0
+         5      0.361E-07    *  0.106E-07      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   5 iteration steps
+
+ Achieved relative accuracy 0.106E-07
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     6      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  5      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                5      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                10      0.000     0.0000       0.00       0.00   #
+ #   Output                 16      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       5  ***
+   ***  Corrector steps   :       0  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       5  ***
+   ***  Function eval.    :       6  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    5 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       168 ( 42.0 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   6
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.528E+00       0.690E+00                  0
+         1      0.523E+00    *  0.683E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.523E+00       0.664E+00                  0
+         2      0.338E+00    *  0.376E+00      0.31913
+ Returned from call    2 of NLEQ1
+         2      0.338E+00       0.158E+00                  0
+         3      0.123E+00    *  0.133E+00      1.00000
+ Returned from call    3 of NLEQ1
+         3      0.123E+00       0.420E-01                  0
+         4      0.770E-02    *  0.248E-02      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.770E-02       0.285E-02                  0
+         5      0.143E-04    *  0.959E-05      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   5 iteration steps
+
+ Achieved relative accuracy 0.959E-05
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     6      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  5      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                5      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                10      0.000     0.0000       0.00       0.00   #
+ #   Output                 16      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       5  ***
+   ***  Corrector steps   :       0  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       5  ***
+   ***  Function eval.    :       6  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    5 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       193 ( 48.2 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   7
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.486E+00       0.450E+00                  0
+         1      0.481E+00    *  0.445E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.481E+00       0.436E+00                  0
+         2      0.218E+00    *  0.129E+00      0.43108
+ Returned from call    2 of NLEQ1
+         2      0.218E+00       0.424E+00                  0
+         3      0.163E+00    *  0.144E+00      0.17345
+ Returned from call    3 of NLEQ1
+         3      0.163E+00       0.775E-01                  0
+         4      0.211E-01    *  0.825E-02      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.211E-01       0.740E-02                  0
+         5      0.403E-03    *  0.911E-04      1.00000
+ Returned from call    5 of NLEQ1
+         5      0.403E-03       0.991E-04                  0
+         6      0.722E-07    *  0.153E-07      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   6 iteration steps
+
+ Achieved relative accuracy 0.153E-07
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     7      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  6      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                6      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                12      0.000     0.0000       0.00       0.00   #
+ #   Output                 19      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       6  ***
+   ***  Corrector steps   :       0  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       6  ***
+   ***  Function eval.    :       7  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    6 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       220 ( 55.0 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   8
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.556E+00       0.136E+01                  0
+         1      0.550E+00    *  0.135E+01      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.550E+00       0.132E+01                  0
+         2      0.135E+01    *  0.121E+01      0.19749
+ Returned from call    2 of NLEQ1
+         2      0.135E+01       0.532E+00                  0
+         3      0.480E+00    *  0.375E+00      0.39451
+ Returned from call    3 of NLEQ1
+         3      0.480E+00       0.132E+00                  0
+         4      0.480E+00    *  0.554E-01      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.480E+00       0.131E+00                  0
+         5      0.468E+00    *  0.119E+00      0.39289
+ Returned from call    5 of NLEQ1
+         5      0.468E+00       0.167E+00                  0
+         6      0.423E+00    *  0.154E+00      0.15110
+ Returned from call    6 of NLEQ1
+         6      0.423E+00       0.167E+01                  0
+         7      0.423E+00    *  0.167E+01      0.00141
+ Returned from call    7 of NLEQ1
+         7      0.423E+00       0.600E+02                  0
+         7      0.423E+00    *  0.605E+02      0.00010
+
+ Damping factor has become too small: lambda = 0.532E-06
+
+
+    Achieved relative accuracy 0.107E+03
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     9      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  8      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                8      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                16      0.000     0.0000       0.00       0.00   #
+ #   Output                 25      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       8  ***
+   ***  Corrector steps   :       1  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       8  ***
+   ***  Function eval.    :       9  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    8 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
+   N L E Q 1  *****  V e r s i o n  2 . 3 ***
+
+ Newton-Method for the solution of nonlinear systems
+
+
+ Real    Workspace declared as       400 is used up to       249 ( 62.3 percent)
+
+ Integer Workspace declared as        60 is used up to        50 ( 83.3 percent)
+
+
+
+ N =   9
+
+ Prescribed relative precision  0.10E-04
+
+ The Jacobian is supplied by a user subroutine
+ The Jacobian will be stored in full mode
+ Automatic row scaling of the Jacobian is allowed
+
+ Rank-1 updates are inhibited
+ Problem is specified as being highly nonlinear
+ Bounded damping strategy is off
+ Maximum permitted number of iteration steps :     10
+
+
+ Internal parameters:
+
+ Starting value for damping factor FCSTART =  0.10E-01
+ Minimum allowed damping factor FCMIN =  0.10E-03
+ Rank-1 updates decision parameter SIGMA =  0.10E+06
+
+
+
+  ******************************************************************
+
+        It       Normf           Normx         Damp.Fct.   New
+         0      0.510E+00       0.713E+00                  0
+         1      0.505E+00    *  0.705E+00      0.01000
+ Returned from call    1 of NLEQ1
+         1      0.505E+00       0.680E+00                  0
+         2      0.666E+00    *  0.473E+00      0.23884
+ Returned from call    2 of NLEQ1
+         2      0.666E+00       0.289E+00                  0
+         3      0.643E+00    *  0.270E+00      0.46972
+ Returned from call    3 of NLEQ1
+         3      0.643E+00       0.975E-01                  0
+         4      0.188E+00    *  0.279E-01      1.00000
+ Returned from call    4 of NLEQ1
+         4      0.188E+00       0.164E-01                  0
+         5      0.617E-02    *  0.150E-02      1.00000
+ Returned from call    5 of NLEQ1
+         5      0.617E-02       0.159E-02                  0
+         6      0.605E-04    *  0.263E-04      1.00000
+ Returned from call    6 of NLEQ1
+         6      0.605E-04       0.253E-04                  0
+         7      0.167E-07    *  0.786E-08      1.00000
+
+
+
+ Solution of nonlinear system of equations obtained within   7 iteration steps
+
+ Achieved relative accuracy 0.786E-08
+
+
+
+
+ #############################################################################
+ #                                                                           #
+ #                                                                           #
+ #     Results from time monitor program for:   NLEQ1                        #
+ #                                                                           #
+ #   Total time:      0.000     Sum of parts:      0.000                     #
+ #                                                                           #
+ #     Name              Calls       Time    Av-time    % Total      % Sum   #
+ #   NLEQ1                   1      0.000     0.0000       0.00              #
+ #   FCN                     8      0.000     0.0000       0.00       0.00   #
+ #   Jacobi                  7      0.000     0.0000       0.00       0.00   #
+ #   Lin-Fact                7      0.000     0.0000       0.00       0.00   #
+ #   Lin-Sol                14      0.000     0.0000       0.00       0.00   #
+ #   Output                 22      0.000     0.0000       0.00       0.00   #
+ #                                                                           #
+ #############################################################################
+
+
+
+
+
+   ******  Statistics * NLEQ1    *******
+   ***  Newton iterations :       7  ***
+   ***  Corrector steps   :       0  ***
+   ***  Rejected rk-1 st. :       0  ***
+   ***  Jacobian eval.    :       7  ***
+   ***  Function eval.    :       8  ***
+   ***  ...  for Jacobian :       0  ***
+   *************************************
+
+ Returned from call    7 of NLEQ1
+
+
+ Time used =    0.000 Sec
+
+******************************************************************
+
