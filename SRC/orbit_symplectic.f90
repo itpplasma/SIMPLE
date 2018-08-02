@@ -36,7 +36,7 @@ subroutine orbit_sympl_init(z)
   pabs=z(4)
   alambd=z(5)
 
-  rmumag = .5d0*pabs**2*(1.d0-alambd**2)/B_mod
+  rmumag = .5d0*pabs**2*(1.d0-alambd**2)/B_mod*2d0 ! rmumag by factor 2 from other modules
   ro0 = ro0_parmot/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
 
   yold(1:3) = z(1:3) ! r, theta, varphi
