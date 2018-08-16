@@ -2,6 +2,8 @@
 !
       subroutine chamb_can(y,phi,ierr)
 !
+      use chamb_mod, only : rnegflag
+!
 ! checks whether the point is inside the vacuum chamber
 !  Input parameters:
 !            formal: y(i) - coordinates on the poloidal cross section
@@ -19,6 +21,11 @@
         ierr = 1
       else
         ierr = 0
+      endif
+!
+      if(rnegflag) then
+        rnegflag=.false.
+        ierr = 2
       endif
 !
       end subroutine chamb_can
