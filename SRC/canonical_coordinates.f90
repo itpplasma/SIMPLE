@@ -89,6 +89,7 @@ dtau=2*dtaumin
 print *,dtau
 !
   call get_canonical_coordinates
+call testing
 !
   r=0.7d0
   vartheta_c=0.5d0
@@ -143,7 +144,7 @@ print *,'done'
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
-  call deallocate_can_coord
+!  call deallocate_can_coord
 !
   call spline_vmec_data
 !
@@ -162,7 +163,7 @@ print *,'VMEC, splines'
     write (3001,*) dtau*dfloat(i),z
   enddo
 print *,'done'
+call testing
 !
-!call testing
   end
 !

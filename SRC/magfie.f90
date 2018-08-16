@@ -199,12 +199,16 @@
   implicit none
 !
   logical :: fullset
+  integer :: mode_secders
   double precision :: bmod,sqrtg
   double precision :: r,vartheta_c,varphi_c,                                           &
-                      A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,                 &
+                      A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                       sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                       B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c
+                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c,     &
+                      d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
+                      d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
+                      d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp
   double precision :: Bctr_vartheta,Bctr_varphi,bmod2
   double precision, dimension(3) :: x,bder,hcovar,hctrvr,hcurl
 !
@@ -213,13 +217,16 @@
   varphi_c=x(3)
 !
   fullset=.false.
+  mode_secders=0
 !
-  call splint_can_coord(r,vartheta_c,varphi_c,                                           &
-                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
+  call splint_can_coord(fullset,mode_secders,r,vartheta_c,varphi_c,                      &
+                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                         sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                         B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
                         B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                        fullset,G_c)
+                        d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
+                        d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
+                        d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp,G_c)
 !
   sqrtg=sqg_c
 !

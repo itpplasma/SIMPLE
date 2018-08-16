@@ -228,23 +228,21 @@
 !
   use canonical_coordinates_mod, only : ns_c,n_theta_c,n_phi_c,hs_c,h_theta_c,h_phi_c,    &
                                         ns_s_c,ns_tp_c,G_c,sqg_c,B_vartheta_c,B_varphi_c, &
-                                        s_sqg_c,s_B_vartheta_c,s_B_varphi_c,s_G_c
+                                        s_sqg_Bt_Bp,s_G_c,ns_max,derf1,derf2,derf3
 !
   implicit none
 !
   logical :: fullset
-  integer :: k,is,i_theta,i_phi
+  integer :: k,is,i_theta,i_phi,i_qua
   integer :: iss,ist,isp
   double precision, dimension(:,:), allocatable :: splcoe
 !
-  allocate(s_sqg_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
-  allocate(s_B_vartheta_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
-  allocate(s_B_varphi_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
+  allocate(s_sqg_Bt_Bp(3,ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
   if(fullset) allocate(s_G_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
 !
-  s_sqg_c(1,1,1,:,:,:)=sqg_c
-  s_B_vartheta_c(1,1,1,:,:,:)=B_vartheta_c
-  s_B_varphi_c(1,1,1,:,:,:)=B_varphi_c
+  s_sqg_Bt_Bp(1,1,1,1,:,:,:)=sqg_c
+  s_sqg_Bt_Bp(2,1,1,1,:,:,:)=B_vartheta_c
+  s_sqg_Bt_Bp(3,1,1,1,:,:,:)=B_varphi_c
   if(fullset) s_G_c(1,1,1,:,:,:)=G_c
 !
 ! splining over $\varphi$:
@@ -253,29 +251,16 @@
 !
   do is=1,ns_c
     do i_theta=1,n_theta_c
+      do i_qua=1,3
 !
-      splcoe(0,:)=s_sqg_c(1,1,1,is,i_theta,:)
+        splcoe(0,:)=s_sqg_Bt_Bp(i_qua,1,1,1,is,i_theta,:)
 !
-      call spl_per(ns_tp_c,n_phi_c,h_phi_c,splcoe)
+        call spl_per(ns_tp_c,n_phi_c,h_phi_c,splcoe)
 !
-      do k=1,ns_tp_c
-        s_sqg_c(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
+        do k=1,ns_tp_c
+          s_sqg_Bt_Bp(i_qua,1,1,k+1,is,i_theta,:)=splcoe(k,:)
+        enddo
 !
-      splcoe(0,:)=s_B_vartheta_c(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp_c,n_phi_c,h_phi_c,splcoe)
-!
-      do k=1,ns_tp_c
-        s_B_vartheta_c(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-      splcoe(0,:)=s_B_varphi_c(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp_c,n_phi_c,h_phi_c,splcoe)
-!
-      do k=1,ns_tp_c
-        s_B_varphi_c(1,1,k+1,is,i_theta,:)=splcoe(k,:)
       enddo
 !
       if(fullset) then
@@ -301,29 +286,16 @@
   do is=1,ns_c
     do i_phi=1,n_phi_c
       do isp=1,ns_tp_c+1
+        do i_qua=1,3
 !
-        splcoe(0,:)=s_sqg_c(1,1,isp,is,:,i_phi)
+          splcoe(0,:)=s_sqg_Bt_Bp(i_qua,1,1,isp,is,:,i_phi)
 !
-        call spl_per(ns_tp_c,n_theta_c,h_theta_c,splcoe)
+          call spl_per(ns_tp_c,n_theta_c,h_theta_c,splcoe)
 !
-        do k=1,ns_tp_c
-          s_sqg_c(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
-        enddo
+          do k=1,ns_tp_c
+            s_sqg_Bt_Bp(i_qua,1,k+1,isp,is,:,i_phi)=splcoe(k,:)
+          enddo
 !
-        splcoe(0,:)=s_B_vartheta_c(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp_c,n_theta_c,h_theta_c,splcoe)
-!
-        do k=1,ns_tp_c
-          s_B_vartheta_c(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
-        enddo
-!
-        splcoe(0,:)=s_B_varphi_c(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp_c,n_theta_c,h_theta_c,splcoe)
-!
-        do k=1,ns_tp_c
-          s_B_varphi_c(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
         enddo
 !
         if(fullset) then
@@ -352,29 +324,16 @@
     do i_phi=1,n_phi_c
       do ist=1,ns_tp_c+1
         do isp=1,ns_tp_c+1
+          do i_qua=1,3
 !
-          splcoe(0,:)=s_sqg_c(1,ist,isp,:,i_theta,i_phi)
+            splcoe(0,:)=s_sqg_Bt_Bp(i_qua,1,ist,isp,:,i_theta,i_phi)
 !
-          call spl_reg(ns_s_c,ns_c,hs_c,splcoe)
+            call spl_reg(ns_s_c,ns_c,hs_c,splcoe)
 !
-          do k=1,ns_s_c
-            s_sqg_c(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
-          enddo
+            do k=1,ns_s_c
+              s_sqg_Bt_Bp(i_qua,k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+            enddo
 !
-          splcoe(0,:)=s_B_vartheta_c(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s_c,ns_c,hs_c,splcoe)
-!
-          do k=1,ns_s_c
-            s_B_vartheta_c(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
-          enddo
-!
-          splcoe(0,:)=s_B_varphi_c(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s_c,ns_c,hs_c,splcoe)
-!
-          do k=1,ns_s_c
-            s_B_varphi_c(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
           enddo
 !
           if(fullset) then
@@ -396,46 +355,65 @@
 !
   deallocate(splcoe)
 !
+  do k=1,ns_max
+    derf1(k)=dfloat(k-1)
+    derf2(k)=dfloat((k-1)*(k-2))
+    derf3(k)=dfloat((k-1)*(k-2)*(k-3))
+  enddo
+!
   end subroutine spline_can_coord
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  subroutine splint_can_coord(r,vartheta_c,varphi_c,                                           &
-                              A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
+  subroutine splint_can_coord(fullset,mode_secders,r,vartheta_c,varphi_c,                      &
+                              A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                               sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                               B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
                               B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                              fullset,G_c)
+                              d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
+                              d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
+                              d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp,G_c)
 !
   use canonical_coordinates_mod, only : ns_c,n_theta_c,n_phi_c,hs_c,h_theta_c,h_phi_c,    &
-                                        ns_s_c,ns_tp_c,                                   &
-                                        s_sqg_c,s_B_vartheta_c,s_B_varphi_c,s_G_c
+                                        ns_s_c,ns_tp_c,ns_max,n_qua,derf1,derf2,derf3,    &
+                                        s_sqg_Bt_Bp,s_G_c
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
   use new_vmec_stuff_mod,   only : nper,ns_A
+  use chamb_mod,            only : rnegflag
 !
   implicit none
 !
-  integer, parameter :: ns_max=6
   double precision, parameter :: twopi=2.d0*3.14159265358979d0
 !
   logical :: fullset
 !
-  integer :: nstp
+  integer :: mode_secders,nstp,ns_A_p1,ns_s_p1
   integer :: k,is,i_theta,i_phi
   integer :: iss,ist,isp
 !
   double precision :: r,vartheta_c,varphi_c,                                           &
-                      A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,                 &
+                      A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                       sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                       B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c
-  double precision :: s,ds,dtheta,dphi,rho_tor
+                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c,     &
+                      d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
+                      d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
+                      d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp
+  double precision :: s,ds,dtheta,dphi,rho_tor,drhods,drhods2,d2rhods2m
 !
-  double precision, dimension(ns_max)        :: sp_sqg,sp_bt,sp_bp,sp_G
-  double precision, dimension(ns_max)        :: dsp_sqg_ds,dsp_bt_ds,dsp_bp_ds
-  double precision, dimension(ns_max)        :: dsp_sqg_dt,dsp_bt_dt,dsp_bp_dt
-  double precision, dimension(ns_max,ns_max) :: stp_sqg,stp_bt,stp_bp,stp_G
-  double precision, dimension(ns_max,ns_max) :: dstp_sqg_ds,dstp_bt_ds,dstp_bp_ds
+  double precision, dimension(ns_max)              :: sp_G
+  double precision, dimension(ns_max,ns_max)       :: stp_G
+!
+  double precision, dimension(n_qua)               :: qua,dqua_dr,dqua_dt,dqua_dp
+  double precision, dimension(n_qua)               :: d2qua_dr2,d2qua_drdt,d2qua_drdp,d2qua_dt2,d2qua_dtdp,d2qua_dp2
+  double precision, dimension(n_qua,ns_max)        :: sp_all,dsp_all_ds,dsp_all_dt
+  double precision, dimension(n_qua,ns_max)        :: d2sp_all_ds2,d2sp_all_dsdt,d2sp_all_dt2
+  double precision, dimension(n_qua,ns_max,ns_max) :: stp_all,dstp_all_ds,d2stp_all_ds2
+!
+  if(r.le.0.d0) then
+    rnegflag=.true.
+    r=abs(r)
+  endif
 !
   A_theta=torflux*r
   dA_theta_dr=torflux
@@ -450,26 +428,40 @@
   dphi=(dphi-dfloat(i_phi))*h_phi_c
   i_phi=i_phi+1
 !
-! Begin interpolation over $s$
+! Begin interpolation of vector potentials over $s$
 !
   ds=r/hs
   is=max(0,min(ns-1,int(ds)))
   ds=(ds-dfloat(is))*hs
   is=is+1
 !
-  A_phi=sA_phi(ns_A+1,is)
-  dA_phi_dr=0.d0
+  ns_A_p1=ns_A+1
+  A_phi=sA_phi(ns_A_p1,is)
+  dA_phi_dr=A_phi*derf1(ns_A_p1)
+  d2A_phi_dr2=A_phi*derf2(ns_A_p1)
 !
-  do k=ns_A,1,-1
+  do k=ns_A,3,-1
     A_phi=sA_phi(k,is)+ds*A_phi
-    dA_phi_dr=sA_phi(k+1,is)*dfloat(k)+ds*dA_phi_dr
+    dA_phi_dr=sA_phi(k,is)*derf1(k)+ds*dA_phi_dr
+    d2A_phi_dr2=sA_phi(k,is)*derf2(k)+ds*d2A_phi_dr2
   enddo
 !
-  d2A_phi_dr2=0.d0
+  A_phi=sA_phi(1,is)+ds*(sA_phi(2,is)+ds*A_phi)
+  dA_phi_dr=sA_phi(2,is)+ds*dA_phi_dr
 !
-  do k=ns_A,2,-1
-    d2A_phi_dr2=sA_phi(k+1,is)*dfloat(k)*dfloat(k-1)+ds*d2A_phi_dr2
-  enddo
+  if(mode_secders.gt.0) then
+    d3A_phi_dr3=sA_phi(ns_A_p1,is)*derf3(ns_A_p1)
+!
+    do k=ns_A,4,-1
+      d3A_phi_dr3=sA_phi(k,is)*derf3(k)+ds*d3A_phi_dr3
+    enddo
+!
+  endif
+!
+! End interpolation of vector potentials over $s$
+!
+!--------------------------------
+!-------------------------------
 !
   rho_tor=sqrt(r)
   ds=rho_tor/hs_c
@@ -479,108 +471,358 @@
 !
   nstp=ns_tp_c+1
 !
-  stp_sqg(1:nstp,1:nstp)=s_sqg_c(ns_s_c+1,:,:,is,i_theta,i_phi)
-  dstp_sqg_ds(1:nstp,1:nstp)=0.d0
+  if(fullset) then
 !
-  stp_bt(1:nstp,1:nstp)=s_B_vartheta_c(ns_s_c+1,:,:,is,i_theta,i_phi)
-  dstp_bt_ds(1:nstp,1:nstp)=0.d0
+! Begin interpolation of G over $s$
 !
-  stp_bp(1:nstp,1:nstp)=s_B_varphi_c(ns_s_c+1,:,:,is,i_theta,i_phi)
-  dstp_bp_ds(1:nstp,1:nstp)=0.d0
+    stp_G(1:nstp,1:nstp)=s_G_c(ns_s_c+1,:,:,is,i_theta,i_phi)
 !
-  if(fullset) stp_G(1:nstp,1:nstp)=s_G_c(ns_s_c+1,:,:,is,i_theta,i_phi)
+    do k=ns_s_c,1,-1
+      stp_G(1:nstp,1:nstp)=s_G_c(k,:,:,is,i_theta,i_phi)+ds*stp_G(1:nstp,1:nstp)
+    enddo
 !
-  do k=ns_s_c,1,-1
-    stp_sqg(1:nstp,1:nstp)=s_sqg_c(k,:,:,is,i_theta,i_phi)+ds*stp_sqg(1:nstp,1:nstp)
-    dstp_sqg_ds(1:nstp,1:nstp)=s_sqg_c(k+1,:,:,is,i_theta,i_phi)*dfloat(k)+ds*dstp_sqg_ds(1:nstp,1:nstp)
-!
-    stp_bt(1:nstp,1:nstp)=s_B_vartheta_c(k,:,:,is,i_theta,i_phi)+ds*stp_bt(1:nstp,1:nstp)
-    dstp_bt_ds(1:nstp,1:nstp)=s_B_vartheta_c(k+1,:,:,is,i_theta,i_phi)*dfloat(k)+ds*dstp_bt_ds(1:nstp,1:nstp)
-!
-    stp_bp(1:nstp,1:nstp)=s_B_varphi_c(k,:,:,is,i_theta,i_phi)+ds*stp_bp(1:nstp,1:nstp)
-    dstp_bp_ds(1:nstp,1:nstp)=s_B_varphi_c(k+1,:,:,is,i_theta,i_phi)*dfloat(k)+ds*dstp_bp_ds(1:nstp,1:nstp)
-!
-    if(fullset) stp_G(1:nstp,1:nstp)=s_G_c(k,:,:,is,i_theta,i_phi)+ds*stp_G(1:nstp,1:nstp)
-  enddo
-!
-! End interpolation over $s$
+! End interpolation of G over $s$
 !----------------------------
+! Begin interpolation of G over $\theta$
 !
-! Begin interpolation over $\theta$
+    sp_G(1:nstp)=stp_G(nstp,1:nstp)
 !
-  sp_sqg(1:nstp)=stp_sqg(nstp,1:nstp)
-  dsp_sqg_ds(1:nstp)=dstp_sqg_ds(nstp,1:nstp)
-  dsp_sqg_dt(1:nstp)=0.d0
-  sp_bt(1:nstp)=stp_bt(nstp,1:nstp)
-  dsp_bt_ds(1:nstp)=dstp_bt_ds(nstp,1:nstp)
-  dsp_bt_dt(1:nstp)=0.d0
-  sp_bp(1:nstp)=stp_bp(nstp,1:nstp)
-  dsp_bp_ds(1:nstp)=dstp_bp_ds(nstp,1:nstp)
-  dsp_bp_dt(1:nstp)=0.d0
-  if(fullset) sp_G(1:nstp)=stp_G(nstp,1:nstp)
+    do k=ns_tp_c,1,-1
+      sp_G(1:nstp)=stp_G(k,1:nstp)+dtheta*sp_G(1:nstp)
+    enddo
 !
-  do k=ns_tp_c,1,-1
-    sp_sqg(1:nstp)=stp_sqg(k,1:nstp)+dtheta*sp_sqg(1:nstp)
-    dsp_sqg_ds(1:nstp)=dstp_sqg_ds(k,1:nstp)+dtheta*dsp_sqg_ds(1:nstp)
-    dsp_sqg_dt(1:nstp)=stp_sqg(k+1,1:nstp)*dfloat(k)+dtheta*dsp_sqg_dt(1:nstp)
+! End interpolation of G over $\theta$
+!--------------------------------
+! Begin interpolation of G over $\varphi$
 !
-    sp_bt(1:nstp)=stp_bt(k,1:nstp)+dtheta*sp_bt(1:nstp)
-    dsp_bt_ds(1:nstp)=dstp_bt_ds(k,1:nstp)+dtheta*dsp_bt_ds(1:nstp)
-    dsp_bt_dt(1:nstp)=stp_bt(k+1,1:nstp)*dfloat(k)+dtheta*dsp_bt_dt(1:nstp)
+    G_c=sp_G(nstp)
 !
-    sp_bp(1:nstp)=stp_bp(k,1:nstp)+dtheta*sp_bp(1:nstp)
-    dsp_bp_ds(1:nstp)=dstp_bp_ds(k,1:nstp)+dtheta*dsp_bp_ds(1:nstp)
-    dsp_bp_dt(1:nstp)=stp_bp(k+1,1:nstp)*dfloat(k)+dtheta*dsp_bp_dt(1:nstp)
+    do k=ns_tp_c,1,-1
+      G_c=sp_G(k)+dphi*G_c
+    enddo
 !
-    if(fullset) sp_G(1:nstp)=stp_G(k,1:nstp)+dtheta*sp_G(1:nstp)
-  enddo
+! End interpolation of G over $\varphi$
 !
-! End interpolation over $\theta$
+  endif
+!
+!--------------------------------
+  if(mode_secders.eq.2) then
 !--------------------------------
 !
-! Begin interpolation over $\varphi$
+! Begin interpolation of all over $s$
 !
-  sqg_c=sp_sqg(nstp)
-  dsqg_c_dr=dsp_sqg_ds(nstp)
-  dsqg_c_dt=dsp_sqg_dt(nstp)
-  dsqg_c_dp=0.d0
+    ns_s_p1=ns_s_c+1
+    stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,ns_s_p1,:,:,is,i_theta,i_phi)
+    dstp_all_ds(:,1:nstp,1:nstp)=stp_all(:,1:nstp,1:nstp)*derf1(ns_s_p1)
+    d2stp_all_ds2(:,1:nstp,1:nstp)=stp_all(:,1:nstp,1:nstp)*derf2(ns_s_p1)
 !
-  B_vartheta_c=sp_bt(nstp)
-  dB_vartheta_c_dr=dsp_bt_ds(nstp)
-  dB_vartheta_c_dt=dsp_bt_dt(nstp)
-  dB_vartheta_c_dp=0.d0
+    do k=ns_s_c,3,-1
+      stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)+ds*stp_all(:,1:nstp,1:nstp)
+      dstp_all_ds(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)*derf1(k)+ds*dstp_all_ds(:,1:nstp,1:nstp)
+      d2stp_all_ds2(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)*derf2(k)+ds*d2stp_all_ds2(:,1:nstp,1:nstp)
+    enddo
 !
-  B_varphi_c=sp_bp(nstp)
-  dB_varphi_c_dr=dsp_bp_ds(nstp)
-  dB_varphi_c_dt=dsp_bp_dt(nstp)
-  dB_varphi_c_dp=0.d0
+    stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,1,:,:,is,i_theta,i_phi)                                 &
+                            +ds*(s_sqg_Bt_Bp(:,2,:,:,is,i_theta,i_phi)+ds*stp_all(:,1:nstp,1:nstp))
+    dstp_all_ds(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,2,:,:,is,i_theta,i_phi)+ds*dstp_all_ds(:,1:nstp,1:nstp)
 !
-  if(fullset) G_c=sp_G(nstp)
+! End interpolation of all over $s$
+!-------------------------------
+! Begin interpolation of all over $\theta$
 !
-  do k=ns_tp_c,1,-1
-    sqg_c=sp_sqg(k)+dphi*sqg_c
-    dsqg_c_dr=dsp_sqg_ds(k)+dphi*dsqg_c_dr
-    dsqg_c_dt=dsp_sqg_dt(k)+dphi*dsqg_c_dt
-    dsqg_c_dp=sp_sqg(k+1)*dfloat(k)+dphi*dsqg_c_dp
+    sp_all(:,1:nstp)=stp_all(:,nstp,1:nstp)
+    dsp_all_ds(:,1:nstp)=dstp_all_ds(:,nstp,1:nstp)
+    d2sp_all_ds2(:,1:nstp)=d2stp_all_ds2(:,nstp,1:nstp)
+    dsp_all_dt(:,1:nstp)=sp_all(:,1:nstp)*derf1(nstp)
+    d2sp_all_dsdt(:,1:nstp)=dsp_all_ds(:,1:nstp)*derf1(nstp)
+    d2sp_all_dt2(:,1:nstp)=sp_all(:,1:nstp)*derf2(nstp)
 !
-    B_vartheta_c=sp_bt(k)+dphi*B_vartheta_c
-    dB_vartheta_c_dr=dsp_bt_ds(k)+dphi*dB_vartheta_c_dr
-    dB_vartheta_c_dt=dsp_bt_dt(k)+dphi*dB_vartheta_c_dt
-    dB_vartheta_c_dp=sp_bt(k+1)*dfloat(k)+dphi*dB_vartheta_c_dp
+    do k=ns_tp_c,3,-1
+      sp_all(:,1:nstp)=stp_all(:,k,1:nstp)+dtheta*sp_all(:,1:nstp)
+      dsp_all_ds(:,1:nstp)=dstp_all_ds(:,k,1:nstp)+dtheta*dsp_all_ds(:,1:nstp)
+      d2sp_all_ds2(:,1:nstp)=d2stp_all_ds2(:,k,1:nstp)+dtheta*d2sp_all_ds2(:,1:nstp)
+      dsp_all_dt(:,1:nstp)=stp_all(:,k,1:nstp)*derf1(k)+dtheta*dsp_all_dt(:,1:nstp)
+      d2sp_all_dsdt(:,1:nstp)=dstp_all_ds(:,k,1:nstp)*derf1(k)+dtheta*d2sp_all_dsdt(:,1:nstp)
+      d2sp_all_dt2(:,1:nstp)=stp_all(:,k,1:nstp)*derf2(k)+dtheta*d2sp_all_dt2(:,1:nstp)
+    enddo
 !
-    B_varphi_c=sp_bp(k)+dphi*B_varphi_c
-    dB_varphi_c_dr=dsp_bp_ds(k)+dphi*dB_varphi_c_dr
-    dB_varphi_c_dt=dsp_bp_dt(k)+dphi*dB_varphi_c_dt
-    dB_varphi_c_dp=sp_bp(k+1)*dfloat(k)+dphi*dB_varphi_c_dp
+    sp_all(:,1:nstp)=stp_all(:,1,1:nstp)                                                    &
+                    +dtheta*(stp_all(:,2,1:nstp)+dtheta*sp_all(:,1:nstp))
+    dsp_all_ds(:,1:nstp)=dstp_all_ds(:,1,1:nstp)                                            &
+                        +dtheta*(dstp_all_ds(:,2,1:nstp)+dtheta*dsp_all_ds(:,1:nstp))
+    d2sp_all_ds2(:,1:nstp)=d2stp_all_ds2(:,1,1:nstp)                                        &
+                          +dtheta*(d2stp_all_ds2(:,2,1:nstp)+dtheta*d2sp_all_ds2(:,1:nstp))
+    dsp_all_dt(:,1:nstp)=stp_all(:,2,1:nstp)+dtheta*dsp_all_dt(:,1:nstp)
+    d2sp_all_dsdt(:,1:nstp)=dstp_all_ds(:,2,1:nstp)+dtheta*d2sp_all_dsdt(:,1:nstp)
 !
-    if(fullset) G_c=sp_G(k)+dphi*G_c
-  enddo
+! End interpolation of all over $\theta$
+!--------------------------------
+! Begin interpolation of all over $\varphi$
 !
-! End interpolation over $\varphi$
+    qua=sp_all(:,nstp)
+    dqua_dr=dsp_all_ds(:,nstp)
+    dqua_dt=dsp_all_dt(:,nstp)
+    dqua_dp=qua*derf1(nstp)
 !
-  dsqg_c_dr=0.5*dsqg_c_dr/rho_tor
-  dB_vartheta_c_dr=0.5d0*dB_vartheta_c_dr/rho_tor
-  dB_varphi_c_dr=0.5d0*dB_varphi_c_dr/rho_tor
+    d2qua_dr2=d2sp_all_ds2(:,nstp)
+    d2qua_drdt=d2sp_all_dsdt(:,nstp)
+    d2qua_drdp=dqua_dr*derf1(nstp)
+    d2qua_dt2=d2sp_all_dt2(:,nstp)
+    d2qua_dtdp=dqua_dt*derf1(nstp)
+    d2qua_dp2=qua*derf2(nstp)
+!
+    do k=ns_tp_c,3,-1
+      qua=sp_all(:,k)+dphi*qua
+      dqua_dr=dsp_all_ds(:,k)+dphi*dqua_dr
+      dqua_dt=dsp_all_dt(:,k)+dphi*dqua_dt
+      dqua_dp=sp_all(:,k)*derf1(k)+dphi*dqua_dp
+!
+      d2qua_dr2=d2sp_all_ds2(:,k)+dphi*d2qua_dr2
+      d2qua_drdt=d2sp_all_dsdt(:,k)+dphi*d2qua_drdt
+      d2qua_drdp=dsp_all_ds(:,k)*derf1(k)+dphi*d2qua_drdp
+      d2qua_dt2=d2sp_all_dt2(:,k)+dphi*d2qua_dt2
+      d2qua_dtdp=dsp_all_dt(:,k)*derf1(k)+dphi*d2qua_dtdp
+      d2qua_dp2=sp_all(:,k)*derf2(k)+dphi*d2qua_dp2
+    enddo
+!
+    qua=sp_all(:,1)+dphi*(sp_all(:,2)+dphi*qua)
+    dqua_dr=dsp_all_ds(:,1)+dphi*(dsp_all_ds(:,2)+dphi*dqua_dr)
+    dqua_dt=dsp_all_dt(:,1)+dphi*(dsp_all_dt(:,2)+dphi*dqua_dt)
+!
+    d2qua_dr2=d2sp_all_ds2(:,1)+dphi*(d2sp_all_ds2(:,2)+dphi*d2qua_dr2)
+    d2qua_drdt=d2sp_all_dsdt(:,1)+dphi*(d2sp_all_dsdt(:,2)+dphi*d2qua_drdt)
+    d2qua_dt2=d2sp_all_dt2(:,1)+dphi*(d2sp_all_dt2(:,2)+dphi*d2qua_dt2)
+!
+    dqua_dp=sp_all(:,2)+dphi*dqua_dp
+    d2qua_drdp=dsp_all_ds(:,2)+dphi*d2qua_drdp
+    d2qua_dtdp=dsp_all_dt(:,2)+dphi*d2qua_dtdp
+!
+! End interpolation of all over $\varphi$
+!
+    drhods=0.5d0/rho_tor
+    drhods2=drhods**2
+    d2rhods2m=drhods2/rho_tor
+!
+    d2qua_dr2=d2qua_dr2*drhods2-dqua_dr*d2rhods2m
+    dqua_dr=dqua_dr*drhods
+    d2qua_drdt=d2qua_drdt*drhods
+    d2qua_drdp=d2qua_drdp*drhods
+!
+    sqg_c=qua(1)
+    B_vartheta_c=qua(2)
+    B_varphi_c=qua(3)
+!
+    dsqg_c_dr=dqua_dr(1)
+    dB_vartheta_c_dr=dqua_dr(2)
+    dB_varphi_c_dr=dqua_dr(3)
+!
+    dsqg_c_dt=dqua_dt(1)
+    dB_vartheta_c_dt=dqua_dt(2)
+    dB_varphi_c_dt=dqua_dt(3)
+!
+    dsqg_c_dp=dqua_dp(1)
+    dB_vartheta_c_dp=dqua_dp(2)
+    dB_varphi_c_dp=dqua_dp(3)
+!
+    d2sqg_rr=d2qua_dr2(1)
+    d2bth_rr=d2qua_dr2(2)
+    d2bph_rr=d2qua_dr2(3)
+!
+    d2sqg_rt=d2qua_drdt(1)
+    d2bth_rt=d2qua_drdt(2)
+    d2bph_rt=d2qua_drdt(3)
+!
+    d2sqg_rp=d2qua_drdp(1)
+    d2bth_rp=d2qua_drdp(2)
+    d2bph_rp=d2qua_drdp(3)
+!
+    d2sqg_tt=d2qua_dt2(1)
+    d2bth_tt=d2qua_dt2(2)
+    d2bph_tt=d2qua_dt2(3)
+!
+    d2sqg_tp=d2qua_dtdp(1)
+    d2bth_tp=d2qua_dtdp(2)
+    d2bph_tp=d2qua_dtdp(3)
+!
+    d2sqg_pp=d2qua_dp2(1)
+    d2bth_pp=d2qua_dp2(2)
+    d2bph_pp=d2qua_dp2(3)
+!
+!--------------------------------
+  elseif(mode_secders.eq.1) then
+!--------------------------------
+!
+! Begin interpolation of all over $s$
+!
+    ns_s_p1=ns_s_c+1
+    stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,ns_s_p1,:,:,is,i_theta,i_phi)
+    dstp_all_ds(:,1:nstp,1:nstp)=stp_all(:,1:nstp,1:nstp)*derf1(ns_s_p1)
+    d2stp_all_ds2(:,1:nstp,1:nstp)=stp_all(:,1:nstp,1:nstp)*derf2(ns_s_p1)
+!
+    do k=ns_s_c,3,-1
+      stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)+ds*stp_all(:,1:nstp,1:nstp)
+      dstp_all_ds(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)*derf1(k)+ds*dstp_all_ds(:,1:nstp,1:nstp)
+      d2stp_all_ds2(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)*derf2(k)+ds*d2stp_all_ds2(:,1:nstp,1:nstp)
+    enddo
+!
+    stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,1,:,:,is,i_theta,i_phi)                                 &
+                            +ds*(s_sqg_Bt_Bp(:,2,:,:,is,i_theta,i_phi)+ds*stp_all(:,1:nstp,1:nstp))
+    dstp_all_ds(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,2,:,:,is,i_theta,i_phi)+ds*dstp_all_ds(:,1:nstp,1:nstp)
+!
+! End interpolation of all over $s$
+!-------------------------------
+! Begin interpolation of all over $\theta$
+!
+    sp_all(:,1:nstp)=stp_all(:,nstp,1:nstp)
+    dsp_all_ds(:,1:nstp)=dstp_all_ds(:,nstp,1:nstp)
+    d2sp_all_ds2(:,1:nstp)=d2stp_all_ds2(:,nstp,1:nstp)
+    dsp_all_dt(:,1:nstp)=sp_all(:,1:nstp)*derf1(nstp)
+!
+    do k=ns_tp_c,2,-1
+      sp_all(:,1:nstp)=stp_all(:,k,1:nstp)+dtheta*sp_all(:,1:nstp)
+      dsp_all_ds(:,1:nstp)=dstp_all_ds(:,k,1:nstp)+dtheta*dsp_all_ds(:,1:nstp)
+      d2sp_all_ds2(:,1:nstp)=d2stp_all_ds2(:,k,1:nstp)+dtheta*d2sp_all_ds2(:,1:nstp)
+      dsp_all_dt(:,1:nstp)=stp_all(:,k,1:nstp)*derf1(k)+dtheta*dsp_all_dt(:,1:nstp)
+    enddo
+!
+    sp_all(:,1:nstp)=stp_all(:,1,1:nstp)+dtheta*sp_all(:,1:nstp)
+    dsp_all_ds(:,1:nstp)=dstp_all_ds(:,1,1:nstp)+dtheta*dsp_all_ds(:,1:nstp)
+    d2sp_all_ds2(:,1:nstp)=d2stp_all_ds2(:,1,1:nstp)+dtheta*d2sp_all_ds2(:,1:nstp)
+!
+! End interpolation of all over $\theta$
+!--------------------------------
+! Begin interpolation of all over $\varphi$
+!
+    qua=sp_all(:,nstp)
+    dqua_dr=dsp_all_ds(:,nstp)
+    dqua_dt=dsp_all_dt(:,nstp)
+    dqua_dp=qua*derf1(nstp)
+!
+    d2qua_dr2=d2sp_all_ds2(:,nstp)
+!
+    do k=ns_tp_c,2,-1
+      qua=sp_all(:,k)+dphi*qua
+      dqua_dr=dsp_all_ds(:,k)+dphi*dqua_dr
+      dqua_dt=dsp_all_dt(:,k)+dphi*dqua_dt
+      dqua_dp=sp_all(:,k)*derf1(k)+dphi*dqua_dp
+!
+      d2qua_dr2=d2sp_all_ds2(:,k)+dphi*d2qua_dr2
+    enddo
+!
+    qua=sp_all(:,1)+dphi*qua
+    dqua_dr=dsp_all_ds(:,1)+dphi*dqua_dr
+    dqua_dt=dsp_all_dt(:,1)+dphi*dqua_dt
+!
+    d2qua_dr2=d2sp_all_ds2(:,1)+dphi*d2qua_dr2
+!
+! End interpolation of all over $\varphi$
+!
+    drhods=0.5d0/rho_tor
+    drhods2=drhods**2
+    d2rhods2m=drhods2/rho_tor
+!
+    d2qua_dr2=d2qua_dr2*drhods2-dqua_dr*d2rhods2m
+    dqua_dr=dqua_dr*drhods
+!
+    sqg_c=qua(1)
+    B_vartheta_c=qua(2)
+    B_varphi_c=qua(3)
+!
+    dsqg_c_dr=dqua_dr(1)
+    dB_vartheta_c_dr=dqua_dr(2)
+    dB_varphi_c_dr=dqua_dr(3)
+!
+    dsqg_c_dt=dqua_dt(1)
+    dB_vartheta_c_dt=dqua_dt(2)
+    dB_varphi_c_dt=dqua_dt(3)
+!
+    dsqg_c_dp=dqua_dp(1)
+    dB_vartheta_c_dp=dqua_dp(2)
+    dB_varphi_c_dp=dqua_dp(3)
+!
+    d2sqg_rr=d2qua_dr2(1)
+    d2bth_rr=d2qua_dr2(2)
+    d2bph_rr=d2qua_dr2(3)
+!
+!--------------------------------
+  else
+!--------------------------------
+!
+! Begin interpolation of all over $s$
+!
+    ns_s_p1=ns_s_c+1
+    stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,ns_s_p1,:,:,is,i_theta,i_phi)
+    dstp_all_ds(:,1:nstp,1:nstp)=stp_all(:,1:nstp,1:nstp)*derf1(ns_s_p1)
+!
+    do k=ns_s_c,2,-1
+      stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)+ds*stp_all(:,1:nstp,1:nstp)
+      dstp_all_ds(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,k,:,:,is,i_theta,i_phi)*derf1(k)+ds*dstp_all_ds(:,1:nstp,1:nstp)
+    enddo
+!
+    stp_all(:,1:nstp,1:nstp)=s_sqg_Bt_Bp(:,1,:,:,is,i_theta,i_phi)+ds*stp_all(:,1:nstp,1:nstp)
+!
+! End interpolation of all over $s$
+!-------------------------------
+! Begin interpolation of all over $\theta$
+!
+    sp_all(:,1:nstp)=stp_all(:,nstp,1:nstp)
+    dsp_all_ds(:,1:nstp)=dstp_all_ds(:,nstp,1:nstp)
+    dsp_all_dt(:,1:nstp)=sp_all(:,1:nstp)*derf1(nstp)
+!
+    do k=ns_tp_c,2,-1
+      sp_all(:,1:nstp)=stp_all(:,k,1:nstp)+dtheta*sp_all(:,1:nstp)
+      dsp_all_ds(:,1:nstp)=dstp_all_ds(:,k,1:nstp)+dtheta*dsp_all_ds(:,1:nstp)
+      dsp_all_dt(:,1:nstp)=stp_all(:,k,1:nstp)*derf1(k)+dtheta*dsp_all_dt(:,1:nstp)
+    enddo
+!
+    sp_all(:,1:nstp)=stp_all(:,1,1:nstp)+dtheta*sp_all(:,1:nstp)
+    dsp_all_ds(:,1:nstp)=dstp_all_ds(:,1,1:nstp)+dtheta*dsp_all_ds(:,1:nstp)
+!
+! End interpolation of all over $\theta$
+!--------------------------------
+! Begin interpolation of all over $\varphi$
+!
+    qua=sp_all(:,nstp)
+    dqua_dr=dsp_all_ds(:,nstp)
+    dqua_dt=dsp_all_dt(:,nstp)
+    dqua_dp=qua*derf1(nstp)
+!
+    do k=ns_tp_c,2,-1
+      qua=sp_all(:,k)+dphi*qua
+      dqua_dr=dsp_all_ds(:,k)+dphi*dqua_dr
+      dqua_dt=dsp_all_dt(:,k)+dphi*dqua_dt
+      dqua_dp=sp_all(:,k)*derf1(k)+dphi*dqua_dp
+    enddo
+!
+    qua=sp_all(:,1)+dphi*qua
+    dqua_dr=dsp_all_ds(:,1)+dphi*dqua_dr
+    dqua_dt=dsp_all_dt(:,1)+dphi*dqua_dt
+!
+! End interpolation of all over $\varphi$
+!
+    drhods=0.5d0/rho_tor
+!
+    dqua_dr=dqua_dr*drhods
+!
+    sqg_c=qua(1)
+    B_vartheta_c=qua(2)
+    B_varphi_c=qua(3)
+!
+    dsqg_c_dr=dqua_dr(1)
+    dB_vartheta_c_dr=dqua_dr(2)
+    dB_varphi_c_dr=dqua_dr(3)
+!
+    dsqg_c_dt=dqua_dt(1)
+    dB_vartheta_c_dt=dqua_dt(2)
+    dB_varphi_c_dt=dqua_dt(3)
+!
+    dsqg_c_dp=dqua_dp(1)
+    dB_vartheta_c_dp=dqua_dp(2)
+    dB_varphi_c_dp=dqua_dp(3)
+!
+!--------------------------------
+  endif
+!--------------------------------
 !
   end subroutine splint_can_coord
 !
@@ -593,22 +835,29 @@
   implicit none
 !
   logical :: fullset
+  integer :: mode_secders
   double precision :: theta_vmec,varphi_vmec
   double precision :: r,vartheta_c_in,varphi_c_in,                                     &
-                      A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,                 &
+                      A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                       sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                       B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c
+                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c,     &
+                      d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
+                      d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
+                      d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp
   double precision, dimension(1) :: y,dy
 !
   fullset=.true.
+  mode_secders=0
 !
-  call splint_can_coord(r,vartheta_c_in,varphi_c_in,                                     &
-                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
+  call splint_can_coord(fullset,mode_secders,r,vartheta_c_in,varphi_c_in,                &
+                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                         sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                         B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
                         B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                        fullset,G_c)
+                        d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
+                        d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
+                        d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp,G_c)
 !
   vartheta_c=vartheta_c_in
   varphi_c=varphi_c_in
@@ -625,11 +874,13 @@
 !
   subroutine deallocate_can_coord
 !
-  use canonical_coordinates_mod, only : s_sqg_c,s_B_vartheta_c,s_B_varphi_c,s_G_c
+  use canonical_coordinates_mod, only : s_sqg_Bt_Bp,s_G_c
 !
   implicit none
 !
-  deallocate(s_sqg_c,s_B_vartheta_c,s_B_varphi_c)
+  deallocate(s_sqg_Bt_Bp)
   if(allocated(s_G_c)) deallocate(s_G_c)
 !
   end subroutine deallocate_can_coord
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
