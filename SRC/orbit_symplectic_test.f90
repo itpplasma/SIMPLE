@@ -1,7 +1,7 @@
 program orbit_symplectic_test
 
 use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, f_sympl_euler, yold,&
-  rmumag, ro0, field_can, d_field_can, d2_field_can, eval_field
+  rmumag, ro0, f, df, d2f !, eval_field
 
 implicit none
 
@@ -13,13 +13,9 @@ integer :: info
 
 integer :: k
 
-type(field_can) :: f
-type(d_field_can) :: df
-type(d2_field_can) :: d2f
-
 rmumag = 0.1d0
 ro0 = 1d0
-dt0 = 1.0d0*dsqrt(2d0)
+dt0 = 1.0d-1*dsqrt(2d0)
 
 yold = 0d0
 yold(1) = 0.3d0
@@ -27,6 +23,19 @@ yold(2) = 1.5d0
 yold(4) = 0.1d0
 
 call eval_field(yold(1), yold(2), yold(3), 0, f, df, d2f)
+
+print *, f%Ath
+print *, f%Aph
+print *, f%Bth
+print *, f%Bph
+print *, f%Bmod
+print *, df%dAth
+print *, df%dAph
+print *, df%dBth
+print *, df%dBph
+print *, df%dBmod
+
+!stop
 
 yold(5) = yold(4)*f%Bth/f%Bmod + f%Ath/ro0
 yold(6) = yold(4)*f%Bph/f%Bmod + f%Aph/ro0
@@ -41,7 +50,7 @@ z(4) = yold(4)**2/2d0 + rmumag*f%Bmod
 write(4001,*) z
 
 do k = 1, 10000
-  call orbit_timestep_sympl(z, 10*dt0, dt0, info)
+  call orbit_timestep_sympl(z, dt0, dt0, info)
   write(4001,*) z
 end do
 

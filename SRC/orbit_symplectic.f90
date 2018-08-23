@@ -54,7 +54,7 @@ subroutine orbit_sympl_init(z)
   yold(1:3) = z(1:3) ! r, theta, varphi
   yold(4) = pabs*alambd*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
   yold(5) = yold(4)*f%Bth/f%Bmod + f%Ath/ro0
-  yold(6) = yold(4)*f%Bth/f%Bmod + f%Aph/ro0
+  yold(6) = yold(4)*f%Bph/f%Bmod + f%Aph/ro0
 
 end subroutine orbit_sympl_init
 
@@ -134,18 +134,18 @@ subroutine get_derivatives(r, th, ph, vpar, dHdq, dHdw, pqw, dwdq, dwdp)
   x(3) = ph
   call elefie_can(x, derphi)
 
-  dHdq(1) = rmumag*df%dBmod(1) + derphi(2)
-  dHdq(2) = rmumag*df%dBmod(2) + derphi(3)
-  dHdw(1) = rmumag*df%dBmod(3) + derphi(1)
+  dHdq(1) = rmumag*df%dBmod(2) + derphi(2)
+  dHdq(2) = rmumag*df%dBmod(3) + derphi(3)
+  dHdw(1) = rmumag*df%dBmod(1) + derphi(1)
   dHdw(2) = vpar
 
   pqw(1) = vpar*f%Bth/f%Bmod + f%Ath/ro0
   pqw(2) = vpar*f%Bph/f%Bmod + f%Aph/ro0
 
-  dpdq(1,1) = vpar*(df%dBth(2) - f%Bth*df%dBmod(2)/f%Bmod)/f%Bmod + df%dAth(2)/ro0
-  dpdq(1,2) = vpar*(df%dBth(3) - f%Bth*df%dBmod(3)/f%Bmod)/f%Bmod + df%dAth(3)/ro0
-  dpdq(2,1) = vpar*(df%dBph(2) - f%Bph*df%dBmod(2)/f%Bmod)/f%Bmod + df%dAph(2)/ro0
-  dpdq(2,2) = vpar*(df%dBph(3) - f%Bph*df%dBmod(3)/f%Bmod)/f%Bmod + df%dAph(3)/ro0
+  dpdq(1,1) = vpar*(df%dBth(2) - f%Bth*df%dBmod(2)/f%Bmod)/f%Bmod! + df%dAth(2)/ro0
+  dpdq(1,2) = vpar*(df%dBth(3) - f%Bth*df%dBmod(3)/f%Bmod)/f%Bmod! + df%dAth(3)/ro0
+  dpdq(2,1) = vpar*(df%dBph(2) - f%Bph*df%dBmod(2)/f%Bmod)/f%Bmod! + df%dAph(2)/ro0
+  dpdq(2,2) = vpar*(df%dBph(3) - f%Bph*df%dBmod(3)/f%Bmod)/f%Bmod! + df%dAph(3)/ro0
 
   dpdw(1,1) = vpar*(df%dBth(1) - f%Bth*df%dBmod(1)/f%Bmod)/f%Bmod + df%dAth(1)/ro0
   dpdw(1,2) = f%Bth/f%Bmod
@@ -171,7 +171,7 @@ subroutine step_forward(y)
 
   double precision, dimension(2) :: dHdq_can, dHdp_can
 
-  call eval_field(y(1), y(2), y(3), 0, f, df, d2f)
+  !call eval_field(y(1), y(2), y(3), 0, f, df, d2f)
   call get_derivatives(y(1), y(2), y(3), y(4), dHdq, dHdw, pqw, dwdq, dwdp)
 
   ! dH(q,p)/dq
@@ -184,7 +184,7 @@ subroutine step_forward(y)
   y(4) = y(4) + sum(dwdq(2,:)*dHdp_can - dwdp(2,:)*dHdq_can)*dt
 
   ! for using new r and vpar for angle timestep (pseudo-symplectic Euler)
-  call eval_field(y(1), y(2), y(3), 0, f, df, d2f)
+  !call eval_field(y(1), y(2), y(3), 0, f, df, d2f)
   call get_derivatives(y(1), y(2), y(3), y(4), dHdq, dHdw, pqw, dwdq, dwdp)
   
   y(2) = y(2) + sum(dHdw*dwdp(:,1))*dt
@@ -208,6 +208,8 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
   double precision, dimension(6) :: y, fvec
 
   double precision tau2
+  
+  ierr = 0
 
   ! for nleq1
 
@@ -223,12 +225,11 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
   ! CHARACTER CHGDAT*20, PRODCT*8
 
   ! end for nleq1
-
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   tau2 = 0.0
   do while(tau2.lt.dtau)
     y = yold
-    !call step_forward(y)
+    call step_forward(y)
     tol = 1d-10
     call hybrd1 (f_sympl_euler, n, y, fvec, tol, ierr)
     !IOPT = 0
@@ -258,98 +259,102 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
   z(5) = y(4)**2/2d0 + rmumag*f%Bmod
 end
 
-! subroutine eval_field(r, th_c, ph_c, mode_secders, f, df, d2f)
-!   double precision, intent(in) :: r, th_c, ph_c     
-!   integer, intent(in) :: mode_secders          
-                             
-!   field_can, intent(out) :: f
-!   d_field_can, intent(out) :: df
-!   d2_field_can, intent(out) :: d2f
+end module orbit_symplectic
 
-!   double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy
+subroutine eval_field(r, th_c, ph_c, mode_secders, f, df, d2f)
 
-!   ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
-!   df%dAth = 0d0
-!   df%dAph = 0d0
-!   d2f%d2Ath = 0d0
-!   d2f%d2Aph = 0d0
-
-! call splint_can_coord(false, mode_secders, r, th_c, ph_c,                            &
-!                         f%Ath, f%Aph, df%dAth(1), df%dAph(1), d2f%d2Aph(1), d3Aphdr3,  &
-!                         sqg, dsqg(1), dsqg(2), dsqg(3),                                &
-!                         f%Bth, df%dBth(1), df%dBth(2), df%dBth(3),                     &
-!                         f%Bph, df%dBph(1), df%dBph(2), df%dBph(3),                     &
-!                         d2f%d2sqg(1), d2f%d2sqg(2), d2f%d2sqg(3), d2f%d2sqg(4), d2f%d2sqg(5), d2f%d2sqg(6), &
-!                         d2f%d2Bth(1), d2f%d2Bth(2), d2f%d2Bth(3), d2f%d2Bth(4), d2f%d2Bth(5), d2f%d2Bth(6), &
-!                         d2f%d2Bph(1), d2f%d2Bph(2), d2f%d2Bph(3), d2f%d2Bph(4), d2f%d2Bph(5), d2f%d2Bph(6), dummy)
- 
-!   Bctr_vartheta=-dA_phi_dr/sqg
-!   Bctr_varphi=dA_theta_dr/sqg
-! !
-!   bmod2=Bctr_vartheta*B_vartheta_c+Bctr_varphi*B_varphi_c
-!   B_mod=sqrt(bmod2)
-! !
-!   df%dBmod(1) = 0.5d0*((df%dAth(1)*df%dBph(1)-df%dAph(1)*df%dBth(1)-d2f%d2Aph(1)*f%Bth)/B_mod-dsqg(1)*B_mod)/sqg
-!   df%dBmod(2) = 0.5d0*((df%dAth(1)*df%dBph(2)-df%dAth(1)*df%dBth(2))/B_mod-dsqg(2)*B_mod)/sqg
-!   df%dBmod(3) = 0.5d0*((df%dAth(1)*df%dBph(3)-df%dAth(1)*df%dBth(3))/B_mod-dsqg(3)*B_mod)/sqg
-
-
-! end subroutine eval_field
-
-! for testing -> circular tokamak
-subroutine eval_field(r, th, ph, mode_secders, f, df, d2f)
+  use orbit_symplectic, only: field_can, d_field_can, d2_field_can
 
   implicit none
 
-  double precision, intent(in) :: r, th, ph   
-  integer, intent(in) :: mode_secders        
+  double precision, intent(in) :: r, th_c, ph_c     
+  integer, intent(in) :: mode_secders          
                              
   type(field_can), intent(out) :: f
   type(d_field_can), intent(out) :: df
   type(d2_field_can), intent(out) :: d2f
 
-  double precision :: B0th, B0ph, cth, sth 
-  B0th = .99d0
-  B0ph = sqrt(1d0-B0th**2)
+  double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy
 
-  cth = cos(th)
-  sth = sin(th)
-  
-  f%Ath      = B0ph*(r**2/2d0 - r**3/3d0*cth)
-  df%dAth(1) = B0ph*(r - r**2*cth)
-  df%dAth(2) = B0ph*r**3/3d0*sth
-  df%dAth(3) = 0d0
-
-  f%Aph     = -B0th*r
-  df%dAph(1) = -B0th
-  df%dAph(2) = 0d0
-  df%dAph(3) = 0d0
-
-  f%Bth      = B0th*r*(1d0 - r*cth)
-  df%dBth(1) = B0th*(1.-2d0*cth)
-  df%dBth(2) =  B0th*r**2*sth
-  df%dBth(3) = 0d0
-  
-  f%Bph      = B0ph*(1d0 - (r*cth)**2)
-  df%dBph(1) = -2d0*B0ph*r*cth**2
-  df%dBph(2) = 2d0*B0ph*r**2*cth*sth
-  df%dBph(3) = 0d0
-
-  f%Bmod   = 1d0 - r*cth
-  df%dBmod(1) = -cth
-  df%dBmod(2) = r*sth
-  df%dBmod(3) = 0d0
-
-  ! TODO: second derivatives
+  ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
+  df%dAth = 0d0
+  df%dAph = 0d0
   d2f%d2Ath = 0d0
   d2f%d2Aph = 0d0
-  d2f%d2Bth = 0d0
-  d2f%d2Bph = 0d0
-  d2f%d2Bmod = 0d0
+
+  call splint_can_coord(.false., mode_secders, r, th_c, ph_c,                             &
+    f%Ath, f%Aph, df%dAth(1), df%dAph(1), d2f%d2Aph(1), d3Aphdr3,                       &
+    sqg, dsqg(1), dsqg(2), dsqg(3),                                                     &
+    f%Bth, df%dBth(1), df%dBth(2), df%dBth(3),                                          &
+    f%Bph, df%dBph(1), df%dBph(2), df%dBph(3),                                          &
+    d2sqg(1), d2sqg(2), d2sqg(3), d2sqg(4), d2sqg(5), d2sqg(6), &
+    d2f%d2Bth(1), d2f%d2Bth(2), d2f%d2Bth(3), d2f%d2Bth(4), d2f%d2Bth(5), d2f%d2Bth(6), &
+    d2f%d2Bph(1), d2f%d2Bph(2), d2f%d2Bph(3), d2f%d2Bph(4), d2f%d2Bph(5), d2f%d2Bph(6), dummy)
+ 
+  Bctr_vartheta=-df%dAph(1)/sqg
+  Bctr_varphi=df%dAth(1)/sqg
+!
+  bmod2=Bctr_vartheta*f%Bth+Bctr_varphi*f%Bph
+  f%Bmod=sqrt(bmod2)
+!
+  df%dBmod(1) = 0.5d0*((df%dAth(1)*df%dBph(1)-df%dAph(1)*df%dBth(1)-d2f%d2Aph(1)*f%Bth)/f%Bmod-dsqg(1)*f%Bmod)/sqg
+  df%dBmod(2) = 0.5d0*((df%dAth(1)*df%dBph(2)-df%dAth(1)*df%dBth(2))/f%Bmod-dsqg(2)*f%Bmod)/sqg
+  df%dBmod(3) = 0.5d0*((df%dAth(1)*df%dBph(3)-df%dAth(1)*df%dBth(3))/f%Bmod-dsqg(3)*f%Bmod)/sqg
 
 end subroutine eval_field
 
-end module orbit_symplectic
+! for testing -> circular tokamak
+! subroutine eval_field(r, th, ph, mode_secders, f, df, d2f)
+!   use orbit_symplectic, only: field_can, d_field_can, d2_field_can
+!   implicit none
+
+!   double precision, intent(in) :: r, th, ph   
+!   integer, intent(in) :: mode_secders        
+                             
+!   type(field_can), intent(out) :: f
+!   type(d_field_can), intent(out) :: df
+!   type(d2_field_can), intent(out) :: d2f
+
+!   double precision :: B0th, B0ph, cth, sth 
+!   B0th = .99d0
+!   B0ph = sqrt(1d0-B0th**2)
+
+!   cth = cos(th)
+!   sth = sin(th)
+  
+!   f%Ath      = B0ph*(r**2/2d0 - r**3/3d0*cth)
+!   df%dAth(1) = B0ph*(r - r**2*cth)
+!   df%dAth(2) = B0ph*r**3/3d0*sth
+!   df%dAth(3) = 0d0
+
+!   f%Aph     = -B0th*r
+!   df%dAph(1) = -B0th
+!   df%dAph(2) = 0d0
+!   df%dAph(3) = 0d0
+
+!   f%Bth      = B0th*r*(1d0 - r*cth)
+!   df%dBth(1) = B0th*(1d0 - 2d0*r*cth)
+!   df%dBth(2) = B0th*r**2*sth
+!   df%dBth(3) = 0d0
+  
+!   f%Bph      = B0ph*(1d0 - (r*cth)**2)
+!   df%dBph(1) = -2d0*B0ph*r*cth**2
+!   df%dBph(2) = 2d0*B0ph*r**2*cth*sth
+!   df%dBph(3) = 0d0
+
+!   f%Bmod   = 1d0 - r*cth
+!   df%dBmod(1) = -cth
+!   df%dBmod(2) = r*sth
+!   df%dBmod(3) = 0d0
+
+!   ! TODO: second derivatives
+!   d2f%d2Ath = 0d0
+!   d2f%d2Aph = 0d0
+!   d2f%d2Bth = 0d0
+!   d2f%d2Bph = 0d0
+!   d2f%d2Bmod = 0d0
+
+! end subroutine eval_field
 
 ! TODO: Check with VMEC field
 ! !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

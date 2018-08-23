@@ -89,7 +89,7 @@ dtau=2*dtaumin
 print *,dtau
 !
   call get_canonical_coordinates
-call testing
+! call testing
 !
   r=0.7d0
   vartheta_c=0.5d0
@@ -163,7 +163,7 @@ print *,'VMEC, splines'
     write (3001,*) dtau*dfloat(i),z
   enddo
 print *,'done'
-call testing
+!call testing
 !
   end
 !
