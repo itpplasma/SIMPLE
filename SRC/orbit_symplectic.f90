@@ -228,7 +228,7 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
   tau2 = 0.0
   do while(tau2.lt.dtau)
     y = yold
-    call step_forward(y)
+    !call step_forward(y)
     tol = 1d-10
     call hybrd1 (f_sympl_euler, n, y, fvec, tol, ierr)
     !IOPT = 0
