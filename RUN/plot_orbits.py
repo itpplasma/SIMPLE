@@ -8,51 +8,24 @@ Created on Wed Aug  1 18:12:14 2018
 from numpy import *
 from matplotlib.pyplot import *
 
-data0 = loadtxt('fort.3001')
-data1 = loadtxt('fort.3003')
-data2 = loadtxt('fort.3004')
+data_rk = loadtxt('fort.3001') # Runge Kutta
+data_can = loadtxt('fort.3003') # Runge Kutta on canonicalized coordinates
+data_sym = loadtxt('fort.3004') # Symplectic Euler r, vpar
 
-data2 = data2[1:100,:]
-
-figure()
-plot(data0[:len(data2),1])
-plot(data1[:len(data2),1])
-plot(data2[:,1])
+nrange = range(1,1001)
+data_rk = data_rk[nrange,:]
+data_can = data_can[nrange,:]
+data_sym = data_sym[nrange,:]
 
 figure()
-plot(data0[:len(data2),2])
-plot(data1[:len(data2),2])
-plot(data2[:,2])
+plot(data_can[:,0], data_can[:,1],'.-')
+plot(data_sym[:,0], data_sym[:,1],'.-')
+plot(data_rk[:,0], data_rk[:,1],'.-')
 
 figure()
-plot(data0[:len(data2),3])
-plot(data1[:len(data2),3])
-plot(data2[:len(data2),3])
-
-#figure()
-#plot(data0[:,0],data0[:,1])
-#plot(data1[:,0],data1[:,1])
-#plot(data2[:,0],data2[:,1])
-figure()
-plot(data2[:,4])
-figure()
-plot(data2[:,5])
-figure()
-plot(data0[:,2],data0[:,3])
-plot(data1[:,2],data1[:,3])
-plot(data2[:,2],data2[:,3])
-plot()
-
-#%%
+plot(data_can[:,0], data_can[:,-2],'.-')
+plot(data_sym[:,0], data_sym[:,-2],'.-')
 
 figure()
-plot(data1[:len(data2),0],data1[:len(data2),1],'b,')
-plot(data2[:len(data2),0],data2[:len(data2),1],'r,')
-xlabel('t/tau0')
-ylabel('r(t)')
-
-figure()
-plot(data1[:len(data2),-2],data1[:len(data2),-1],'b,')
-plot(data2[:len(data2),-2],data2[:len(data2),-1],'r,')
-xlabel('th_c(t)')
-ylabel('ph_c(t)')
+plot(data_can[:,0], data_can[:,-1],'.-')
+plot(data_sym[:,0], data_sym[:,-1],'.-')

@@ -62,7 +62,7 @@ subroutine f_sympl_euler(n, y, fvec, iflag)
 
   implicit none
 
-  integer, parameter :: mode = 1
+  integer, parameter :: mode = 2
 
   integer, intent(in) :: n
   double precision, intent(in) :: y(n)
@@ -142,10 +142,10 @@ subroutine get_derivatives(r, th, ph, vpar, dHdq, dHdw, pqw, dwdq, dwdp)
   pqw(1) = vpar*f%Bth/f%Bmod + f%Ath/ro0
   pqw(2) = vpar*f%Bph/f%Bmod + f%Aph/ro0
 
-  dpdq(1,1) = vpar*(df%dBth(2) - f%Bth*df%dBmod(2)/f%Bmod)/f%Bmod! + df%dAth(2)/ro0
-  dpdq(1,2) = vpar*(df%dBth(3) - f%Bth*df%dBmod(3)/f%Bmod)/f%Bmod! + df%dAth(3)/ro0
-  dpdq(2,1) = vpar*(df%dBph(2) - f%Bph*df%dBmod(2)/f%Bmod)/f%Bmod! + df%dAph(2)/ro0
-  dpdq(2,2) = vpar*(df%dBph(3) - f%Bph*df%dBmod(3)/f%Bmod)/f%Bmod! + df%dAph(3)/ro0
+  dpdq(1,1) = vpar*(df%dBth(2) - f%Bth*df%dBmod(2)/f%Bmod)/f%Bmod + df%dAth(2)/ro0
+  dpdq(1,2) = vpar*(df%dBth(3) - f%Bth*df%dBmod(3)/f%Bmod)/f%Bmod + df%dAth(3)/ro0
+  dpdq(2,1) = vpar*(df%dBph(2) - f%Bph*df%dBmod(2)/f%Bmod)/f%Bmod + df%dAph(2)/ro0
+  dpdq(2,2) = vpar*(df%dBph(3) - f%Bph*df%dBmod(3)/f%Bmod)/f%Bmod + df%dAph(3)/ro0
 
   dpdw(1,1) = vpar*(df%dBth(1) - f%Bth*df%dBmod(1)/f%Bmod)/f%Bmod + df%dAth(1)/ro0
   dpdw(1,2) = f%Bth/f%Bmod
