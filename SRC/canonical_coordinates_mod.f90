@@ -1,5 +1,6 @@
 !
   module chamb_mod
+    double precision :: rbig,rcham2
     logical :: rnegflag=.false.
   end module chamb_mod
 !
