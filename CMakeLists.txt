@@ -54,5 +54,23 @@ add_executable (orbit-symplectic-test.x
 	SRC/orbit_symplectic_test.f90
 )
 
+add_executable (alpha_lifetime_vmec_c.x
+	SRC/canonical_coordinates_mod.f90
+	SRC/nctools_module.f90
+  SRC/odeint_allroutines.f
+  SRC/magfie.f90
+  SRC/chamb_m.f90
+  SRC/sub_alpha_lifetime_can.f90
+  SRC/vmecinm_m.f90
+  SRC/spline_vmec_data.f90
+  SRC/spl_three_to_five.f90
+  SRC/new_vmec_allocation_stuff.f90
+  SRC/get_canonical_coordinates.f90
+  SRC/zzg.f90
+  SRC/alpha_lifetime_c.f90
+)
+
+
 target_link_libraries(neo-orb.x netcdf netcdff)
 target_link_libraries(orbit-symplectic-test.x netcdf netcdff)
+target_link_libraries(alpha_lifetime_vmec_c.x netcdf netcdff)

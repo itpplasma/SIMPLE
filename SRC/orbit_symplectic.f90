@@ -4,19 +4,36 @@ use parmot_mod, only : ro0_parmot => ro0
 
 implicit none
 
+type :: field_can
+    double precision :: Ath, Aph
+    double precision :: Bth, Bph
+    double precision :: Bmod
+end type field_can
+
+type :: d_field_can
+    double precision, dimension(3) :: dAth, dAph
+    double precision, dimension(3) :: dBth, dBph
+    double precision, dimension(3) :: dBmod
+end type d_field_can
+
+! second derivatives: drdr, drdt, drdp, dtdt, dtdp, dpdp
+type :: d2_field_can 
+    double precision, dimension(6) :: d2Ath, d2Aph  
+    double precision, dimension(6) :: d2Bth, d2Bph  
+    double precision, dimension(6) :: d2Bmod
+end type d2_field_can
+
 double precision, dimension(6) :: yold
 double precision :: rmumag
 double precision :: dt, ro0
 
-double precision :: A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,                 &
-                    sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                    B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                    B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c, &
-                    dA_theta_dt
-
 double precision :: coala
-double precision :: B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, derphi(3)
+double precision :: derphi(3)
 double precision :: alambd, pabs
+
+type(field_can) :: f
+type(d_field_can) :: df
+type(d2_field_can) :: d2f
 
 contains
 
@@ -26,23 +43,18 @@ subroutine orbit_sympl_init(z)
   
   double precision, intent(in) :: z(5)
 
-  call splint_can_extra(z(1),z(2),z(3),                                           &
-                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-                        sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                        B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                        B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                        .false., G_c, B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt)
+  call eval_field(z(1), z(2), z(3), 0, f, df, d2f)
 
   pabs=z(4)
   alambd=z(5)
 
-  rmumag = .5d0*pabs**2*(1.d0-alambd**2)/B_mod*2d0 ! rmumag by factor 2 from other modules
+  rmumag = .5d0*pabs**2*(1.d0-alambd**2)/f%Bmod*2d0 ! rmumag by factor 2 from other modules
   ro0 = ro0_parmot/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
 
   yold(1:3) = z(1:3) ! r, theta, varphi
   yold(4) = pabs*alambd*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-  yold(5) = yold(4)*B_vartheta_c/B_mod + A_theta/ro0
-  yold(6) = yold(4)*B_varphi_c/B_mod + A_phi/ro0
+  yold(5) = yold(4)*f%Bth/f%Bmod + f%Ath/ro0
+  yold(6) = yold(4)*f%Bth/f%Bmod + f%Aph/ro0
 
 end subroutine orbit_sympl_init
 
@@ -115,35 +127,30 @@ subroutine get_derivatives(r, th, ph, vpar, dHdq, dHdw, pqw, dwdq, dwdp)
   double precision, dimension(3) :: x
   double precision, dimension(2,2) :: dpdw, dpdq
 
-  call splint_can_extra(r, th, ph,                                                       &
-                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-                        sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                        B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                        B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                        .false., G_c, B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt)
+  call eval_field(r, th, ph, 0, f, df, d2f)
 
   x(1) = r
   x(2) = th
   x(3) = ph
   call elefie_can(x, derphi)
 
-  dHdq(1) = rmumag*B_mod*dlnB_mod_dt + derphi(2)
-  dHdq(2) = rmumag*B_mod*dlnB_mod_dp + derphi(3)
-  dHdw(1) = rmumag*B_mod*dlnB_mod_dr + derphi(1)
+  dHdq(1) = rmumag*df%dBmod(1) + derphi(2)
+  dHdq(2) = rmumag*df%dBmod(2) + derphi(3)
+  dHdw(1) = rmumag*df%dBmod(3) + derphi(1)
   dHdw(2) = vpar
 
-  pqw(1) = vpar*B_vartheta_c/B_mod + A_theta/ro0
-  pqw(2) = vpar*B_varphi_c/B_mod + A_phi/ro0
+  pqw(1) = vpar*f%Bth/f%Bmod + f%Ath/ro0
+  pqw(2) = vpar*f%Bph/f%Bmod + f%Aph/ro0
 
-  dpdq(1,1) = vpar*(dB_vartheta_c_dt - B_vartheta_c*dlnB_mod_dt)/B_mod + dA_theta_dt/ro0
-  dpdq(1,2) = vpar*(dB_vartheta_c_dp - B_vartheta_c*dlnB_mod_dp)/B_mod !+dA_theta_dp/ro0
-  dpdq(2,1) = vpar*(dB_varphi_c_dt - B_varphi_c*dlnB_mod_dt)/B_mod !+dA_phi_dt/ro0
-  dpdq(2,2) = vpar*(dB_varphi_c_dp - B_varphi_c*dlnB_mod_dp)/B_mod !+dA_phi_dp/ro0
+  dpdq(1,1) = vpar*(df%dBth(2) - f%Bth*df%dBmod(2)/f%Bmod)/f%Bmod + df%dAth(2)/ro0
+  dpdq(1,2) = vpar*(df%dBth(3) - f%Bth*df%dBmod(3)/f%Bmod)/f%Bmod + df%dAth(3)/ro0
+  dpdq(2,1) = vpar*(df%dBph(2) - f%Bph*df%dBmod(2)/f%Bmod)/f%Bmod + df%dAph(2)/ro0
+  dpdq(2,2) = vpar*(df%dBph(3) - f%Bph*df%dBmod(3)/f%Bmod)/f%Bmod + df%dAph(3)/ro0
 
-  dpdw(1,1) = vpar*(dB_vartheta_c_dr - B_vartheta_c*dlnB_mod_dr)/B_mod + dA_theta_dr/ro0
-  dpdw(1,2) = B_vartheta_c/B_mod
-  dpdw(2,1) = vpar*(dB_varphi_c_dr- B_varphi_c*dlnB_mod_dr)/B_mod + dA_phi_dr/ro0
-  dpdw(2,2) = B_varphi_c/B_mod
+  dpdw(1,1) = vpar*(df%dBth(1) - f%Bth*df%dBmod(1)/f%Bmod)/f%Bmod + df%dAth(1)/ro0
+  dpdw(1,2) = f%Bth/f%Bmod
+  dpdw(2,1) = vpar*(df%dBph(1) - f%Bth*df%dBmod(1)/f%Bmod)/f%Bmod + df%dAph(1)/ro0
+  dpdw(2,2) = f%Bph/f%Bmod
 
   ! inverse matrix
   dwdp(1,1) = dpdw(2,2)
@@ -164,13 +171,7 @@ subroutine step_forward(y)
 
   double precision, dimension(2) :: dHdq_can, dHdp_can
 
-  call splint_can_extra(y(1),y(2),y(3),                                                  &
-                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-                        sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                        B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                        B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                        .false., G_c, B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt)
-
+  call eval_field(y(1), y(2), y(3), 0, f, df, d2f)
   call get_derivatives(y(1), y(2), y(3), y(4), dHdq, dHdw, pqw, dwdq, dwdp)
 
   ! dH(q,p)/dq
@@ -183,13 +184,7 @@ subroutine step_forward(y)
   y(4) = y(4) + sum(dwdq(2,:)*dHdp_can - dwdp(2,:)*dHdq_can)*dt
 
   ! for using new r and vpar for angle timestep (pseudo-symplectic Euler)
-  call splint_can_extra(y(1),y(2),y(3),                                                  &
-                         A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-                         sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                         B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                         B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                         .false., G_c, B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt)
-
+  call eval_field(y(1), y(2), y(3), 0, f, df, d2f)
   call get_derivatives(y(1), y(2), y(3), y(4), dHdq, dHdw, pqw, dwdq, dwdp)
   
   y(2) = y(2) + sum(dHdw*dwdp(:,1))*dt
@@ -260,101 +255,101 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
   enddo
   z = 0.0
   z(1:4) = y(1:4)
-  z(5) = y(4)**2/2d0 + rmumag*B_mod
+  z(5) = y(4)**2/2d0 + rmumag*f%Bmod
 end
 
-end module orbit_symplectic
+! subroutine eval_field(r, th_c, ph_c, mode_secders, f, df, d2f)
+!   double precision, intent(in) :: r, th_c, ph_c     
+!   integer, intent(in) :: mode_secders          
+                             
+!   field_can, intent(out) :: f
+!   d_field_can, intent(out) :: df
+!   d2_field_can, intent(out) :: d2f
 
-subroutine splint_can_extra(r,vartheta_c,varphi_c,                                           &
-                  A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-                  sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                  B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                  B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                  fullset, G_c, B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt)
+!   double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy
+
+!   ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
+!   df%dAth = 0d0
+!   df%dAph = 0d0
+!   d2f%d2Ath = 0d0
+!   d2f%d2Aph = 0d0
+
+! call splint_can_coord(false, mode_secders, r, th_c, ph_c,                            &
+!                         f%Ath, f%Aph, df%dAth(1), df%dAph(1), d2f%d2Aph(1), d3Aphdr3,  &
+!                         sqg, dsqg(1), dsqg(2), dsqg(3),                                &
+!                         f%Bth, df%dBth(1), df%dBth(2), df%dBth(3),                     &
+!                         f%Bph, df%dBph(1), df%dBph(2), df%dBph(3),                     &
+!                         d2f%d2sqg(1), d2f%d2sqg(2), d2f%d2sqg(3), d2f%d2sqg(4), d2f%d2sqg(5), d2f%d2sqg(6), &
+!                         d2f%d2Bth(1), d2f%d2Bth(2), d2f%d2Bth(3), d2f%d2Bth(4), d2f%d2Bth(5), d2f%d2Bth(6), &
+!                         d2f%d2Bph(1), d2f%d2Bph(2), d2f%d2Bph(3), d2f%d2Bph(4), d2f%d2Bph(5), d2f%d2Bph(6), dummy)
+ 
+!   Bctr_vartheta=-dA_phi_dr/sqg
+!   Bctr_varphi=dA_theta_dr/sqg
+! !
+!   bmod2=Bctr_vartheta*B_vartheta_c+Bctr_varphi*B_varphi_c
+!   B_mod=sqrt(bmod2)
+! !
+!   df%dBmod(1) = 0.5d0*((df%dAth(1)*df%dBph(1)-df%dAph(1)*df%dBth(1)-d2f%d2Aph(1)*f%Bth)/B_mod-dsqg(1)*B_mod)/sqg
+!   df%dBmod(2) = 0.5d0*((df%dAth(1)*df%dBph(2)-df%dAth(1)*df%dBth(2))/B_mod-dsqg(2)*B_mod)/sqg
+!   df%dBmod(3) = 0.5d0*((df%dAth(1)*df%dBph(3)-df%dAth(1)*df%dBth(3))/B_mod-dsqg(3)*B_mod)/sqg
 
 
-  logical, intent(in) :: fullset
-  double precision, intent(in) :: r,vartheta_c,varphi_c                                            
-  double precision, intent(out) :: A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,     &
-                      sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                              &
-                      B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp,  &
-                      B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c,      &
-                      B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt
-
-  double precision :: Bctr_vartheta, Bctr_varphi, bmod2
-
-  call splint_can_coord(r,vartheta_c,varphi_c,                                           &
-                        A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-                        sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-                        B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-                        B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-                        .false., G_c)
-  
-  Bctr_vartheta=-dA_phi_dr/sqg_c
-  Bctr_varphi=dA_theta_dr/sqg_c
-!
-  bmod2=Bctr_vartheta*B_vartheta_c+Bctr_varphi*B_varphi_c
-  B_mod=sqrt(bmod2)
-!
-  dlnB_mod_dr=0.5d0*((dA_theta_dr*dB_varphi_c_dr-dA_phi_dr*dB_vartheta_c_dr-d2A_phi_dr2*B_vartheta_c) &
-         /bmod2-dsqg_c_dr)/sqg_c
-  dlnB_mod_dt=0.5d0*((dA_theta_dr*dB_varphi_c_dt-dA_phi_dr*dB_vartheta_c_dt)/bmod2-dsqg_c_dt)/sqg_c
-  dlnB_mod_dp=0.5d0*((dA_theta_dr*dB_varphi_c_dp-dA_phi_dr*dB_vartheta_c_dp)/bmod2-dsqg_c_dp)/sqg_c
-
-  dA_theta_dt = 0d0 ! only for testing routine by now, could be extended
-end subroutine splint_can_extra
+! end subroutine eval_field
 
 ! for testing -> circular tokamak
-! subroutine splint_can_extra(r, th, ph,                                                &
-!                     A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,                 &
-!                     sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-!                     B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-!                     B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,         &
-!                     fullset, G_c, B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt)
+subroutine eval_field(r, th, ph, mode_secders, f, df, d2f)
 
-!   implicit none
+  implicit none
 
-!   logical, intent(in) :: fullset
-!   double precision, intent(in) :: r,th,ph                                             
-!   double precision, intent(out) :: A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,    &
-!                       sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
-!                       B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
-!                       B_varphi_c,dB_varphi_c_dr,dB_varphi_c_dt,dB_varphi_c_dp,G_c,     &
-!                       B_mod, dlnB_mod_dr, dlnB_mod_dt, dlnB_mod_dp, dA_theta_dt
+  double precision, intent(in) :: r, th, ph   
+  integer, intent(in) :: mode_secders        
+                             
+  type(field_can), intent(out) :: f
+  type(d_field_can), intent(out) :: df
+  type(d2_field_can), intent(out) :: d2f
 
-!   double precision :: B0th, B0ph
-!   B0th = .99d0
-!   B0ph = sqrt(1d0-B0th**2)
+  double precision :: B0th, B0ph, cth, sth 
+  B0th = .99d0
+  B0ph = sqrt(1d0-B0th**2)
+
+  cth = cos(th)
+  sth = sin(th)
   
-!   A_theta  = B0ph*(r**2/2d0 - r**3/3d0*cos(th))
-!   dA_theta_dr = B0ph*(r - r**2*cos(th))
-!   dA_theta_dt = B0ph*r**3/3d0*sin(th)
-!   A_phi  = -B0th*r
-!   dA_phi_dr = -B0th
-!   d2A_phi_dr2 = 0d0
+  f%Ath      = B0ph*(r**2/2d0 - r**3/3d0*cth)
+  df%dAth(1) = B0ph*(r - r**2*cth)
+  df%dAth(2) = B0ph*r**3/3d0*sth
+  df%dAth(3) = 0d0
 
-!   sqg_c = 1d0
-!   dsqg_c_dr = 0d0
-!   dsqg_c_dp = 0d0
+  f%Aph     = -B0th*r
+  df%dAph(1) = -B0th
+  df%dAph(2) = 0d0
+  df%dAph(3) = 0d0
 
-!   B_mod    = 1d0-r*cos(th)
-!   dlnB_mod_dr = -cos(th)/B_mod   ! dB/dr * B**(-1)
-!   dlnB_mod_dt = r*sin(th)/B_mod
-!   dlnB_mod_dp = 0d0
-
-!   B_vartheta_c  = r*B0th*B_mod
-!   dB_vartheta_c_dr = B0th*B_mod + B_vartheta_c*dlnB_mod_dr
-!   dB_vartheta_c_dt = B_vartheta_c*dlnB_mod_dt
-!   dB_vartheta_c_dp = 0d0
+  f%Bth      = B0th*r*(1d0 - r*cth)
+  df%dBth(1) = B0th*(1.-2d0*cth)
+  df%dBth(2) =  B0th*r**2*sth
+  df%dBth(3) = 0d0
   
-!   B_varphi_c  = B0ph*(1d0 + r*cos(th))*B_mod
-!   dB_varphi_c_dr = B0ph*cos(th)*B_mod + B_varphi_c*dlnB_mod_dr
-!   dB_varphi_c_dt = -r*B0ph*sin(th)*B_mod + B_varphi_c*dlnB_mod_dt
-!   dB_vartheta_c_dp = 0d0
+  f%Bph      = B0ph*(1d0 - (r*cth)**2)
+  df%dBph(1) = -2d0*B0ph*r*cth**2
+  df%dBph(2) = 2d0*B0ph*r**2*cth*sth
+  df%dBph(3) = 0d0
 
-!   G_c = 0d0
+  f%Bmod   = 1d0 - r*cth
+  df%dBmod(1) = -cth
+  df%dBmod(2) = r*sth
+  df%dBmod(3) = 0d0
 
-! end subroutine splint_can_extra
+  ! TODO: second derivatives
+  d2f%d2Ath = 0d0
+  d2f%d2Aph = 0d0
+  d2f%d2Bth = 0d0
+  d2f%d2Bph = 0d0
+  d2f%d2Bmod = 0d0
+
+end subroutine eval_field
+
+end module orbit_symplectic
 
 ! TODO: Check with VMEC field
 ! !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
