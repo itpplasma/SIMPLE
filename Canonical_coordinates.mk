@@ -20,7 +20,8 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/get_canonical_coordinates.o \
 	OBJS/testing.o \
 	OBJS/minpack.o \
-	OBJS/orbit_symplectic.o \
+	OBJS/field_can.o \
+	OBJS/orbit_symplectic_euler.o \
 	OBJS/canonical_coordinates.o
 
 canonical_coordinates.x: $(OBJS) Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
@@ -64,9 +65,12 @@ OBJS/testing.o: SRC/testing.f90 Canonical_coordinates.mk SRC/canonical_coordinat
 OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
 	mv canonical_coordinates.o OBJS/
-OBJS/orbit_symplectic.o: SRC/orbit_symplectic.f90 Canonical_coordinates.mk
-	$(FC) $(OPTS) -c SRC/orbit_symplectic.f90
-	mv orbit_symplectic.o OBJS/
+OBJS/field_can.o: SRC/field_can.f90 Canonical_coordinates.mk
+	$(FC) $(OPTS) -c SRC/field_can.f90
+	mv field_can.o OBJS/
+OBJS/orbit_symplectic_euler.o: SRC/orbit_symplectic_euler.f90 Canonical_coordinates.mk SRC/field_can.f90
+	$(FC) $(OPTS) -c SRC/orbit_symplectic_euler.f90
+	mv orbit_symplectic_euler.o OBJS/
 OBJS/minpack.o: SRC/minpack.f90 Canonical_coordinates.mk
 	$(FC) $(OPTS) -c SRC/minpack.f90
 	mv minpack.o OBJS/

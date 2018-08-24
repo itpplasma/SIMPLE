@@ -17,7 +17,7 @@ integer :: k
 
 mu = 0.1d0
 ro0 = 1d0
-dt0 = 0.13*dsqrt(2d0)
+dt0 = 0.5*0.13*dsqrt(2d0)
 
 w(1) = 0.3d0
 q(1) = 1.5d0
@@ -35,7 +35,7 @@ z(4) = vpar**2/2d0 + mu*f%Bmod
 z(5) = vpar/sqrt(vpar**2/2d0 + mu*f%Bmod)
 write(4001,*) z
 
-do k = 1, 1000
+do k = 1, 100
   call orbit_timestep_sympl(z, dt0, dt0, info)
   write(4001,*) z
 end do
