@@ -109,7 +109,7 @@ print *,dtau
   z(5)=alam0
 !
 print *,'canonical'
-  do i=1,L1i*npoiper*npoiper2*10
+  do i=1,L1i*npoiper*npoiper2
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
 !
@@ -131,7 +131,7 @@ print *,'done'
 !
 print *,'symplectic'
   call orbit_sympl_init(z) 
-  do i=1,L1i*npoiper*npoiper2*10
+  do i=1,L1i*npoiper*npoiper2
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
 !
@@ -156,7 +156,7 @@ print *,'done'
   z(5)=alam0
 !
 print *,'VMEC, splines'
-  do i=1,L1i*npoiper*npoiper2*10
+  do i=1,L1i*npoiper*npoiper2
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
 !
