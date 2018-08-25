@@ -57,8 +57,8 @@ subroutine f_sympl_euler(n, x, fvec, iflag)
   w = x
   call get_derivatives()
 
-  fvec(1) = dpth(1)*(pth - pthold) + dt*(dH(2)*dpth(1) - dH(1)*dpth(2))
-  fvec(2) = w(2) - wold(2) + dt*dH(3)
+  fvec(1) = dpth(1)*(pth - pthold)   + dt*(dH(2)*dpth(1) - dH(1)*dpth(2))
+  fvec(2) = dpth(1)*(w(2) - wold(2)) + dt*(dH(3)*dpth(1) - dH(1)*dpth(3))
 
   !print *, pth, pthold
   !print *, dH
@@ -135,12 +135,12 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
     wold = w
     pthold = pth
     ! TODO: initial guess with Lagrange
-    tol = 1d-9
+    tol = 1d-10
     call hybrd1 (f_sympl_euler, n, w, fvec, tol, ierr)
     if(ierr > 1) stop 'error in root finding'
     call get_derivatives()
     q(1) = qold(1) + dt*dH(1)/dpth(1)
-    q(2) = qold(2) + dt*vpar*f%Bmod/f%Bph
+    q(2) = qold(2) + dt*(vpar*f%Bmod - dH(1)/dpth(1)*f%Bth)/f%Bph
     tau2 = tau2 + dtaumin
   enddo
   z(1) = w(1)
