@@ -1,5 +1,8 @@
 module field_can_mod
 
+implicit none
+save
+
 type :: field_can
     double precision :: Ath, Aph
     double precision :: Bth, Bph
@@ -19,18 +22,66 @@ type :: d2_field_can
     double precision, dimension(6) :: d2Bmod
 end type d2_field_can
 
+type(field_can) :: f
+type(d_field_can) :: df
+type(d2_field_can) :: d2f
+
+double precision :: H, pth, vpar
+double precision, dimension(4) :: dvpar, dH, dpth
+
+double precision :: mu, ro0
+
 contains
 
-subroutine eval_field(r, th_c, ph_c, mode_secders, f, df, d2f)
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine get_val(pphi)
+!
+! computes values of H, pth and vpar at z=(r, th, ph, pphi)
+!
+!
+  double precision, intent(in) :: pphi
 
+  vpar = f%Bmod/f%Bph*(pphi - f%Aph/ro0)
+  H = vpar**2/2d0 + mu*f%Bmod
+  pth = f%Bth/f%Bmod*vpar + f%Ath/ro0
+  
+end subroutine get_val
+
+    
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine get_derivatives(pphi)
+!
+! computes H, pth and vpar at z=(r, th, ph, pphi) and their derivatives  
+!
+!
+  double precision, intent(in) :: pphi
+
+  call get_val(pphi)
+
+  dvpar(1:3) = df%dBmod*(pphi - f%Aph/ro0) - f%Bmod*df%dAph/ro0
+  dvpar(1:3) = (dvpar(1:3) - df%dBph*vpar)/f%Bph
+  dvpar(4)   = f%Bmod/f%Bph
+
+  dH(1:3) = vpar*dvpar(1:3) + mu*df%dBmod
+  dH(4)   = vpar*f%Bmod/f%Bph
+  
+  dpth(1:3) = ((pphi-f%Aph/ro0)*df%dBth - df%dAph/ro0*f%Bth            &
+               -(pth-f%Ath/ro0)*df%dBph + df%dAth/ro0*f%Bph)/f%Bph
+  dpth(4) = f%Bth/f%Bph
+
+end subroutine get_derivatives
+
+    
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine eval_field(r, th_c, ph_c, mode_secders)
+!
   implicit none
 
   double precision, intent(in) :: r, th_c, ph_c     
-  integer, intent(in) :: mode_secders          
-                             
-  type(field_can), intent(out) :: f
-  type(d_field_can), intent(out) :: df
-  type(d2_field_can), intent(out) :: d2f
+  integer, intent(in) :: mode_secders
 
   double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy
 
@@ -56,8 +107,13 @@ subroutine eval_field(r, th_c, ph_c, mode_secders, f, df, d2f)
   f%Bmod = sqrt(bmod2)
   
   df%dBmod(1) = 0.5d0*((df%dAth(1)*df%dBph(1)-df%dAph(1)*df%dBth(1)-d2f%d2Aph(1)*f%Bth)/f%Bmod-dsqg(1)*f%Bmod)/sqg
-  df%dBmod(2) = 0.5d0*((df%dAth(1)*df%dBph(2)-df%dAth(1)*df%dBth(2))/f%Bmod-dsqg(2)*f%Bmod)/sqg
-  df%dBmod(3) = 0.5d0*((df%dAth(1)*df%dBph(3)-df%dAth(1)*df%dBth(3))/f%Bmod-dsqg(3)*f%Bmod)/sqg
+  df%dBmod(2) = 0.5d0*((df%dAth(1)*df%dBph(2)-df%dAph(1)*df%dBth(2))/f%Bmod-dsqg(2)*f%Bmod)/sqg
+  df%dBmod(3) = 0.5d0*((df%dAth(1)*df%dBph(3)-df%dAph(1)*df%dBth(3))/f%Bmod-dsqg(3)*f%Bmod)/sqg
+
+  !write(4004,*) r, th_c, ph_c
+  !write(4004,*) dsqg(2)
+  !write(4004,*) dsqg(3)
+  !write(4004,*) df%dBmod
 
 end subroutine eval_field
 

@@ -15,8 +15,8 @@ data_rk = loadtxt('fort.3001') # Runge Kutta
 data_can = loadtxt('fort.3003') # Runge Kutta on canonicalized coordinates
 data_sym = loadtxt('fort.3004') # Symplectic Euler r, vpar
 
-#nrange = range(1,len(data_sym))
-nrange = range(1,1000)
+nrange = range(1,len(data_sym))
+#nrange = range(1,1000)
 
 data_rk = data_rk[nrange,:]
 data_can = data_can[nrange,:]
