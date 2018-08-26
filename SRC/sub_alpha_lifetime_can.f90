@@ -162,6 +162,10 @@
       vz(5)=-(0.5d0*coala/hpstar)*(sum(hstar*derphi)/p                 &
             + p*sum(hstar*bder)/gamma+alambd*sum(a_phi*bder))
 !
+!write(4001,*) z(1:3)
+!write(4001,*) hstar/hpstar
+!write(4001,*) vpa*hstar/hpstar
+!write(4001,*) vz
       end subroutine velo_can
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
