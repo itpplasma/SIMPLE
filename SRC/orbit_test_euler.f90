@@ -76,20 +76,21 @@ subroutine orbit_timestep_sympl(z, dtau, dtaumin, ierr)
     Bstarpar = (Bstarctr(2) * f%Bth + Bstarctr(3) * f%Bph)/f%Bmod
 
     vz(1:3) = vpar*Bstarctr/Bstarpar
-    vz(2) = vz(2) + ro0*f%Bph*mu*df%dBmod(2)/(f%Bmod*Bstarpar)
-    vz(3) = vz(3) - ro0*f%Bth*mu*df%dBmod(3)/(f%Bmod*Bstarpar)
+    vz(1) = vz(1) + ro0/(Bstarpar*f%Bmod)*mu*(f%Bth*df%dBmod(3)-f%Bph*df%dBmod(2))
+    vz(2) = vz(2) + ro0/(Bstarpar*f%Bmod)*mu*(f%Bph*df%dBmod(1))
+    vz(3) = vz(3) + ro0/(Bstarpar*f%Bmod)*mu*(-f%Bth*df%dBmod(1))
     vz(4) = 0d0 !... no electric field, momentum unchanged
     vz(5) = -(1d0-alambd**2)/alambd*sum(vz(1:3)*df%dBmod)/(2d0*f%Bmod)
     
-    write(4004,*) z(1:3)
-    write(4004,*) vpar/dsqrt(2d0)*Bstarctr/Bstarpar
-    write(4004,*) vz/dsqrt(2d0)
+    !write(4004,*) z(1:3)
+    !write(4004,*) vpar/dsqrt(2d0)*Bstarctr/Bstarpar
+    !write(4004,*) vz/dsqrt(2d0)
     !write(4004,*) df%dAth
     !write(4004,*) df%dAph
     !write(4004,*) df%dBmod
 
-    z = z + dt*vz
-    tau2 = tau2 + dtaumin
+    z = z + 0.1*dt*vz
+    tau2 = tau2 + 0.1*dtaumin
   enddo
 end
 
