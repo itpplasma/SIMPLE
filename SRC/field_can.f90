@@ -31,6 +31,20 @@ double precision, dimension(4) :: dvpar, dH, dpth
 
 double precision :: mu, ro0
 
+integer :: neval = 0
+
+integer, parameter :: nbuf = 32
+integer :: kbuf = 1
+double precision :: xbuf(3, nbuf) = 1e30
+type(field_can) :: fbuf(nbuf)
+type(d_field_can) :: dfbuf(nbuf)
+type(d2_field_can) :: d2fbuf(nbuf)
+
+
+interface eval_field
+  module procedure eval_field_can
+end interface
+
 contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -76,7 +90,7 @@ end subroutine get_derivatives
     
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine eval_field(r, th_c, ph_c, mode_secders)
+subroutine eval_field_can(r, th_c, ph_c, mode_secders)
 !
   implicit none
 
@@ -84,6 +98,24 @@ subroutine eval_field(r, th_c, ph_c, mode_secders)
   integer, intent(in) :: mode_secders
 
   double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy
+
+  integer :: kb, bufind
+
+  do kb = 0, nbuf
+    bufind = kbuf-kb
+    if (bufind<1) bufind = bufind + nbuf
+    if (r == xbuf(1,bufind) .and. th_c == xbuf(2,bufind) .and. ph_c == xbuf(3,bufind)) then
+        ! exact match
+        f = fbuf(bufind)
+        df = dfbuf(bufind)
+        d2f = d2fbuf(bufind)
+        return
+        !print *, 'buffer hit ', xbuf(:,bufind)
+    end if
+  end do
+
+  ! Count evaluations for profiling
+  neval = neval + 1
 
   ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
   df%dAth = 0d0
@@ -110,64 +142,68 @@ subroutine eval_field(r, th_c, ph_c, mode_secders)
   df%dBmod(2) = 0.5d0*((df%dAth(1)*df%dBph(2)-df%dAph(1)*df%dBth(2))/f%Bmod-dsqg(2)*f%Bmod)/sqg
   df%dBmod(3) = 0.5d0*((df%dAth(1)*df%dBph(3)-df%dAph(1)*df%dBth(3))/f%Bmod-dsqg(3)*f%Bmod)/sqg
 
-  !write(4004,*) r, th_c, ph_c
-  !write(4004,*) dsqg(2)
-  !write(4004,*) dsqg(3)
-  !write(4004,*) df%dBmod
+  if (nbuf>0) then
+    xbuf(:,kbuf) = (/r,th_c,ph_c/)
+    fbuf(kbuf) = f
+    dfbuf(kbuf) = df 
+    d2fbuf(kbuf) = d2f
+    kbuf = mod(kbuf, nbuf) + 1
+  end if
 
-end subroutine eval_field
+end subroutine eval_field_can
 
 ! for testing -> circular tokamak
-!subroutine eval_field(r, th, ph, mode_secders, f, df, d2f)
-!  implicit none
+subroutine eval_field_test(r, th, ph, mode_secders)
 !
-!  double precision, intent(in) :: r, th, ph   
-!  integer, intent(in) :: mode_secders        
-!                             
-!  type(field_can), intent(out) :: f
-!  type(d_field_can), intent(out) :: df
-!  type(d2_field_can), intent(out) :: d2f
+ implicit none
 
-!  double precision :: B0th, B0ph, cth, sth 
-!  B0th = .99d0
-!  B0ph = sqrt(1d0-B0th**2)
+ double precision, intent(in) :: r, th, ph   
+ integer, intent(in) :: mode_secders        
 
-!  cth = cos(th)
-!  sth = sin(th)
+ double precision :: B0th, B0ph, cth, sth 
+
+   ! Count evaluations for profiling
+  neval = neval + 1
+
+  B0th = .99d0
+  B0ph = sqrt(1d0-B0th**2)
+
+  cth = cos(th)
+  sth = sin(th)
   
-!  f%Ath      = B0ph*(r**2/2d0 - r**3/3d0*cth)
-!  df%dAth(1) = B0ph*(r - r**2*cth)
-!  df%dAth(2) = B0ph*r**3/3d0*sth
-!  df%dAth(3) = 0d0
+  f%Ath      = B0ph*(r**2/2d0 - r**3/3d0*cth)
+  df%dAth(1) = B0ph*(r - r**2*cth)
+  df%dAth(2) = B0ph*r**3/3d0*sth
+  df%dAth(3) = 0d0
 
-!  f%Aph     = -B0th*r
-!  df%dAph(1) = -B0th
-!  df%dAph(2) = 0d0
-!  df%dAph(3) = 0d0
+  f%Aph     = -B0th*r
+  df%dAph(1) = -B0th
+  df%dAph(2) = 0d0
+  df%dAph(3) = 0d0
 
-!  f%Bth      = B0th*r*(1d0 - r*cth)
-!  df%dBth(1) = B0th*(1d0 - 2d0*r*cth)
-!  df%dBth(2) = B0th*r**2*sth
-!  df%dBth(3) = 0d0
+  f%Bth      = B0th*r*(1d0 - r*cth)
+  df%dBth(1) = B0th*(1d0 - 2d0*r*cth)
+  df%dBth(2) = B0th*r**2*sth
+  df%dBth(3) = 0d0
   
-!  f%Bph      = B0ph*(1d0 - (r*cth)**2)
-!  df%dBph(1) = -2d0*B0ph*r*cth**2
-!  df%dBph(2) = 2d0*B0ph*r**2*cth*sth
-!  df%dBph(3) = 0d0
+  f%Bph      = B0ph*(1d0 - (r*cth)**2)
+  df%dBph(1) = -2d0*B0ph*r*cth**2
+  df%dBph(2) = 2d0*B0ph*r**2*cth*sth
+  df%dBph(3) = 0d0
 
-!  f%Bmod   = 1d0 - r*cth
-!  df%dBmod(1) = -cth
-!  df%dBmod(2) = r*sth
-!  df%dBmod(3) = 0d0
+  f%Bmod   = 1d0 - r*cth
+  df%dBmod(1) = -cth
+  df%dBmod(2) = r*sth
+  df%dBmod(3) = 0d0
 
-  ! TODO: second derivatives
-!  d2f%d2Ath = 0d0
-!  d2f%d2Aph = 0d0
-!  d2f%d2Bth = 0d0
-!  d2f%d2Bph = 0d0
-!  d2f%d2Bmod = 0d0
+!  TODO: second derivatives
+  d2f%d2Ath = 0d0
+  d2f%d2Aph = 0d0
+  d2f%d2Bth = 0d0
+  d2f%d2Bph = 0d0
+  d2f%d2Bmod = 0d0
 
-!end subroutine eval_field
+end subroutine eval_field_test
 
 
 end module field_can_mod

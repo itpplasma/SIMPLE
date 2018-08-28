@@ -99,17 +99,17 @@
 !
   do i_theta=1,n_theta_c
     print *,'integrate ODE: ',i_theta,' of ',n_theta_c
-    vartheta_c=h_theta_c*dfloat(i_theta-1)
+    vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
-      varphi_c=h_phi_c*dfloat(i_phi-1)
+      varphi_c=h_phi_c*dble(i_phi-1)
 !
       G_c(is_beg,i_theta,i_phi)=G_beg
       y(1)=G_beg
 !
 !      do is=is_beg-1,1,-1
       do is=is_beg-1,2,-1
-        r1=(hs_c*dfloat(is))**2
-        r2=(hs_c*dfloat(is-1))**2
+        r1=(hs_c*dble(is))**2
+        r2=(hs_c*dble(is-1))**2
 !        if(is.eq.1) r2=hs_c*1d-5
 !        if(is.eq.1) r2=(hs_c*1d-5)**2
 !
@@ -121,8 +121,8 @@
       y(1)=G_beg
 !
       do is=is_beg+1,ns_c
-        r1=(hs_c*dfloat(is-2))**2
-        r2=(hs_c*dfloat(is-1))**2
+        r1=(hs_c*dble(is-2))**2
+        r2=(hs_c*dble(is-1))**2
 !
         call odeint_allroutines(y,ndim,r1,r2,relerr,rhs_cancoord)
 !
@@ -133,12 +133,12 @@
 !
   do i_theta=1,n_theta_c
     print *,'compute components: ',i_theta,' of ',n_theta_c
-    vartheta_c=h_theta_c*dfloat(i_theta-1)
+    vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
-      varphi_c=h_phi_c*dfloat(i_phi-1)
+      varphi_c=h_phi_c*dble(i_phi-1)
 !      do is=1,ns_c
       do is=2,ns_c
-        r=(hs_c*dfloat(is-1))**2
+        r=(hs_c*dble(is-1))**2
         y(1)=G_c(is,i_theta,i_phi)
 !
         call rhs_cancoord(r,y,dy)
@@ -356,9 +356,9 @@
   deallocate(splcoe)
 !
   do k=1,ns_max
-    derf1(k)=dfloat(k-1)
-    derf2(k)=dfloat((k-1)*(k-2))
-    derf3(k)=dfloat((k-1)*(k-2)*(k-3))
+    derf1(k)=dble(k-1)
+    derf2(k)=dble((k-1)*(k-2))
+    derf3(k)=dble((k-1)*(k-2)*(k-3))
   enddo
 !
   end subroutine spline_can_coord
@@ -420,19 +420,19 @@
 !
   dtheta=modulo(vartheta_c,twopi)/h_theta_c
   i_theta=max(0,min(n_theta_c-1,int(dtheta)))
-  dtheta=(dtheta-dfloat(i_theta))*h_theta_c
+  dtheta=(dtheta-dble(i_theta))*h_theta_c
   i_theta=i_theta+1
 !
-  dphi=modulo(varphi_c,twopi/dfloat(nper))/h_phi_c
+  dphi=modulo(varphi_c,twopi/dble(nper))/h_phi_c
   i_phi=max(0,min(n_phi_c-1,int(dphi)))
-  dphi=(dphi-dfloat(i_phi))*h_phi_c
+  dphi=(dphi-dble(i_phi))*h_phi_c
   i_phi=i_phi+1
 !
 ! Begin interpolation of vector potentials over $s$
 !
   ds=r/hs
   is=max(0,min(ns-1,int(ds)))
-  ds=(ds-dfloat(is))*hs
+  ds=(ds-dble(is))*hs
   is=is+1
 !
   ns_A_p1=ns_A+1
@@ -466,7 +466,7 @@
   rho_tor=sqrt(r)
   ds=rho_tor/hs_c
   is=max(0,min(ns_c-1,int(ds)))
-  ds=(ds-dfloat(is))*hs_c
+  ds=(ds-dble(is))*hs_c
   is=is+1
 !
   nstp=ns_tp_c+1

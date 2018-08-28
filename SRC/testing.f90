@@ -1,7 +1,7 @@
   subroutine testing
 !
 !  implicit none
-  implicit real*8 (a-h,o-z),integer(i-n)
+  implicit real(8) (a-h,o-z),integer(i-n)
 !
   logical :: fullset=.false.
   integer :: is,npoi

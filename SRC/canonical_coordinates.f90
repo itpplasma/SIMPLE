@@ -4,6 +4,7 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
+  use field_can_mod, only : neval
 !
   implicit none
 !
@@ -140,7 +141,7 @@ print *,'symplectic'
 !
     write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
   enddo
-print *,'done'
+print *,'done. Evaluations: ', neval
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
