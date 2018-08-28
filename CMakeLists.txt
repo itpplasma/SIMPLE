@@ -4,9 +4,9 @@
 cmake_minimum_required (VERSION 2.8.11)
 project (NEO-ORB Fortran)
 
-include_directories (/usr/include)
+include_directories (/usr/include; ${NETCDFF_INCLUDE})
 
-set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
+#set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
 
 add_executable (neo-orb.x
   SRC/canonical_coordinates_mod.f90
