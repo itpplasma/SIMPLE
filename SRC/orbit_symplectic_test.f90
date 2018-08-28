@@ -1,43 +1,47 @@
 program orbit_symplectic_test
 
-use field_can_mod, only: eval_field
+use field_can_mod, only: eval_field, neval
 
-use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, f_sympl_euler, &
-  mu, ro0, f, df, d2f, q, w, pth
+use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, &
+  mu, ro0, f, df, d2f, z, pth
 
 implicit none
 
 integer, parameter :: n = 6
 
 double precision :: dt0, vpar
-double precision, dimension(6) :: z, fvec
+double precision, dimension(6) :: z0, fvec
 integer :: info
 
 integer :: k
+
+integer :: nts = 1000
+integer :: kwrite = 1
 
 mu = 0.1d0
 ro0 = 1d0
 dt0 = 0.5*0.13*dsqrt(2d0)
 
-w(1) = 0.3d0
-q(1) = 1.5d0
-q(2) = 0.0d0
+z(1) = 0.3d0
+z(2) = 1.5d0
+z(3) = 0.0d0
 
 vpar = 0.1d0
-call eval_field(w(1), q(1), q(2), 0, f, df, d2f)
-w(2) = vpar*f%Bph/f%Bmod + f%Aph/ro0
+call eval_field(z(1), z(2), z(3), 0)
+z(4) = vpar*f%Bph/f%Bmod + f%Aph/ro0
 pth = vpar*f%Bth/f%Bmod + f%Ath/ro0
 
-z = 0d0
-z(1) = w(1)
-z(2:3) = q
-z(4) = vpar**2/2d0 + mu*f%Bmod
-z(5) = vpar/sqrt(vpar**2/2d0 + mu*f%Bmod)
-write(4001,*) z
+z0 = 0d0
+z0(1:3) = z(1:3)
+z0(4) = vpar**2/2d0 + mu*f%Bmod
+z0(5) = vpar/sqrt(vpar**2/2d0 + mu*f%Bmod)
+write(4001,*) z0
 
-do k = 1, 100
-  call orbit_timestep_sympl(z, dt0, dt0, info)
-  write(4001,*) z
+do k = 1, nts
+  call orbit_timestep_sympl(z0, dt0, dt0, info)
+  if (mod(k, kwrite) == 0) write(4001,*) z0
 end do
+
+print *,'done. Evaluations: ', neval
 
 end program orbit_symplectic_test

@@ -15,4 +15,5 @@
 2        n_e               !test particle charge number (the same as Z)
 4        n_d               !test particle mass number (the same as A)
 'wout_23_1900_fix_bdry.nc'        !name of VMEC file in NETCDF format
+!'wout_26_scaled.nc'        !name of VMEC file in NETCDF format
 
