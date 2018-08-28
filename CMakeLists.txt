@@ -4,7 +4,7 @@
 cmake_minimum_required (VERSION 2.8.11)
 project (NEO-ORB Fortran)
 
-include_directories (/usr/include $ENV{NETCDFF_INCLUDE})
+include_directories ($ENV{NETCDFF_INCLUDE})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
