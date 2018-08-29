@@ -29,6 +29,7 @@
   integer          :: ibins
   integer          :: n_e,n_d,n_b
   double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
+  double precision :: alam,alam_prev,par_inv
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -110,16 +111,27 @@ print *,dtau
   z(5)=alam0
 !
 
+par_inv=0.d0
+alam=alam0
+alam_prev=alam
 open(3003, file='orbit_can.out', recl=1024)
 print *,'canonical'
-  do i=1,L1i*npoiper*npoiper2*10
+  do i=1,L1i*npoiper*npoiper2*10000
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
 !
     call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
 !
 !
-    write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+    alam=z(5)
+    par_inv=par_inv+alam**2*dtau
+    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+      write (101,*) i,par_inv
+      write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+      par_inv=0.d0
+    endif
+    alam_prev=alam
+    
   enddo
 close(3003)
 print *,'done'
@@ -133,17 +145,29 @@ print *,'done'
   z(4)=1.d0
   z(5)=alam0
 !
+
+par_inv=0.d0
+alam=alam0
+alam_prev=alam
 print *,'symplectic'
 open(3004, file='orbit_sympl.out', recl=1024)
   call orbit_sympl_init(z) 
-  do i=1,L1i*npoiper*npoiper2*10
+  do i=1,L1i*npoiper*npoiper2*10000
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
 !
     call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+!    
+    alam=z(5)
+    par_inv=par_inv+alam**2*dtau
+    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+      write (102,*) i,par_inv
+      write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+      par_inv=0.d0
+    endif
+    alam_prev=alam
 !
-!
-    write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+    
   enddo
 close(3004)
 print *,'done. Evaluations: ', neval
@@ -161,13 +185,25 @@ print *,'done. Evaluations: ', neval
   z(4)=1.d0
   z(5)=alam0
 !
+
+par_inv=0.d0
+alam=alam0
+alam_prev=alam
 print *,'VMEC, splines'
 open(3001, file='orbit_vmec.out', recl=1024)
-  do i=1,L1i*npoiper*npoiper2*10
+  do i=1,L1i*npoiper*npoiper2*10000
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
 !
-    write (3001,*) dtau*dfloat(i),z
+    alam=z(5)
+    par_inv=par_inv+alam**2*dtau
+    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+      write (100,*) i,par_inv
+      write (3001,*) dtau*dfloat(i),z
+      par_inv=0.d0
+    endif
+    alam_prev=alam
+    
   enddo
 close(3001)
 print *,'done'
