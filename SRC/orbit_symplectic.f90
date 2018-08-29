@@ -59,7 +59,7 @@ subroutine f_sympl_euler1(n, x, fvec, iflag)
   integer, intent(in) :: n
   double precision, intent(in) :: x(n)
   double precision, intent(out) :: fvec(n)
-  integer, intent(out) :: iflag
+  integer, intent(in) :: iflag
 
   call eval_field(x(1), z(2), z(3), 0)
   call get_derivatives(x(2))
@@ -253,7 +253,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
   double precision :: tau2
   
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 4 ! order
+  integer, parameter :: nlag = 2 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 
@@ -275,6 +275,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
         bufind(k) = kbuf-2*nlag+2*k-1
         if (bufind(k)<1) bufind(k) = bufind(k) + nbuf 
       end do
+  !    print *, bufind
       x1(1)=sum(zbuf(1,bufind)*coef(0,:))
       x1(2)=sum(zbuf(2,bufind)*coef(0,:))
       x1(3)=sum(zbuf(3,bufind)*coef(0,:))
@@ -334,7 +335,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
   enddo
   z0(1:3) = z(1:3)
   z0(4) = H
-  z0(5) = vpar/sqrt(H) ! alambda
+  z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_verlet
 
