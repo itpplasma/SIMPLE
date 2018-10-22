@@ -54,7 +54,7 @@
 !  Called routines: magfie_can, magfie_vmec, elefie_can
 !
       use parmot_mod, only : rmu,ro0,eeff
-      use velo_mod,   only : isw_field_type
+      use velo_mod,   only : isw_field_type, neval_rk
 !
       implicit none
 !
@@ -102,6 +102,7 @@
         print *,'velo: unknown field type'
         return
       endif
+      neval_rk = neval_rk + 1
 !
 ! in elefie: x(i)   - space coords (input, see above)
 !            derphi - derivatives of the dimensionless electric potential
@@ -175,7 +176,7 @@
       implicit none
 !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: relerr=1d-8
+      double precision, parameter :: relerr=1d-6
 !
       integer :: ierr,j
       double precision :: dtau,dtaumin,phi,tau1,tau2
