@@ -4,7 +4,7 @@
 cmake_minimum_required (VERSION 2.8.11)
 project (NEO-ORB Fortran)
 
-include_directories ($ENV{NETCDFF_INCLUDE})
+include_directories ($ENV{NETCDFF_INCLUDE} /usr/include)
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
@@ -84,6 +84,34 @@ add_executable (alpha_lifetime_vmec_c.x
 )
 
 
+add_executable (test_magfie.x
+	SRC/canonical_coordinates_mod.f90
+ 	SRC/nctools_module.f90
+ 	SRC/odeint_allroutines.f
+ 	SRC/magfie.f90
+ 	SRC/chamb_m.f90
+ 	SRC/sub_alpha_lifetime_can.f90
+ 	SRC/vmecinm_m.f90
+ 	SRC/spline_vmec_data.f90
+ 	SRC/spl_three_to_five.f90
+ 	SRC/new_vmec_allocation_stuff.f90
+ 	SRC/get_canonical_coordinates.f90
+ 	SRC/testing.f90
+ 	SRC/minpack.f90
+ 	SRC/nleq1/nleq1.f
+ 	SRC/nleq1/wnorm.f
+ 	SRC/nleq1/linalg_nleq1.f
+ 	SRC/nleq1/zibconst.f
+ 	SRC/nleq1/zibsec.f
+ 	SRC/nleq1/zibmon.f
+ 	SRC/field_can.f90
+
+	SRC/orbit_symplectic.f90
+ 	SRC/test_magfie.f90
+)
+
+
 target_link_libraries(neo-orb.x netcdf netcdff)
 target_link_libraries(orbit-symplectic-test.x netcdf netcdff)
 target_link_libraries(alpha_lifetime_vmec_c.x netcdf netcdff)
+target_link_libraries(test_magfie.x netcdf netcdff)

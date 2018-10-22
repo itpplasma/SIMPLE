@@ -44,6 +44,7 @@
 !
   module velo_mod
     integer :: isw_field_type = 1
+    integer :: neval_rk = 0
   end module velo_mod
 !
 module gbpi_mod

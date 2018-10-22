@@ -2,7 +2,7 @@
   use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
   use chamb_mod,  only : rbig,rcham2
   use parmot_mod, only : rmu,ro0,eeff
-  use velo_mod,   only : isw_field_type
+  use velo_mod,   only : isw_field_type, neval_rk
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
   use field_can_mod, only : neval
 !
@@ -96,7 +96,7 @@ print *,dtau
   r=0.7d0
   vartheta_c=0.5d0
   varphi_c=0.5d0
-  alam0=0.5d0
+  alam0=0.3d0 !0.5d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
@@ -116,17 +116,16 @@ alam=alam0
 alam_prev=alam
 open(3003, file='orbit_can.out', recl=1024)
 print *,'canonical'
+neval_rk = 0
   do i=1,L1i*npoiper*npoiper2*10000
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
-!
-    call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-!
 !
     alam=z(5)
     par_inv=par_inv+alam**2*dtau
     if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
       write (101,*) i,par_inv
+      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
       write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
       par_inv=0.d0
     endif
@@ -134,7 +133,7 @@ print *,'canonical'
     
   enddo
 close(3003)
-print *,'done'
+print *,'done. Evaluations: ', neval_rk
 !
   print *,'can : ',r,vartheta_c,varphi_c
 !
@@ -155,13 +154,12 @@ open(3004, file='orbit_sympl.out', recl=1024)
   do i=1,L1i*npoiper*npoiper2*10000
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
-!
-    call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
 !    
     alam=z(5)
     par_inv=par_inv+alam**2*dtau
     if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
       write (102,*) i,par_inv
+      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
       write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
       par_inv=0.d0
     endif
@@ -186,27 +184,28 @@ print *,'done. Evaluations: ', neval
   z(5)=alam0
 !
 
-par_inv=0.d0
-alam=alam0
-alam_prev=alam
-print *,'VMEC, splines'
-open(3001, file='orbit_vmec.out', recl=1024)
-  do i=1,L1i*npoiper*npoiper2*10000
-!
-    call orbit_timestep_can(z,dtau,dtaumin,ierr)
-!
-    alam=z(5)
-    par_inv=par_inv+alam**2*dtau
-    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-      write (100,*) i,par_inv
-      write (3001,*) dtau*dfloat(i),z
-      par_inv=0.d0
-    endif
-    alam_prev=alam
+! par_inv=0.d0
+! alam=alam0
+! alam_prev=alam
+! print *,'VMEC, splines'
+! neval_rk = 0
+! open(3001, file='orbit_vmec.out', recl=1024)
+!   do i=1,L1i*npoiper*npoiper2*1000
+! !
+!     call orbit_timestep_can(z,dtau,dtaumin,ierr)
+! !
+!     alam=z(5)
+!     par_inv=par_inv+alam**2*dtau
+!     if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+!       write (100,*) i,par_inv
+!       write (3001,*) dtau*dfloat(i),z
+!       par_inv=0.d0
+!     endif
+!     alam_prev=alam
     
-  enddo
-close(3001)
-print *,'done'
+!   enddo
+! close(3001)
+! print *,'done. Evaluations: ', neval_rk
 !call testing
 !
   end

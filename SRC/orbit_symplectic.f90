@@ -23,7 +23,7 @@ double precision :: derphi(3)
 double precision :: alambd, pabs
 
 interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_verlet
+  module procedure orbit_timestep_sympl_euler1
 end interface
 
 contains
@@ -142,7 +142,7 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
 
     tol = 1d-8
     call hybrd1 (f_sympl_euler1, n, x, fvec, tol, ierr)
-    if(ierr > 1) stop 'error: root finding'
+    if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
     
     z(1) = x(1)
     z(4) = x(2)
@@ -160,7 +160,7 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
   enddo
   z0(1:3) = z(1:3)
   z0(4) = H
-  z0(5) = vpar/sqrt(H) ! alambda
+  z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_euler1
 
@@ -212,7 +212,7 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
     tol = 1d-8
     
     call hybrd1 (f_sympl_euler2, n, x, fvec, tol, ierr)
-    if(ierr > 1) stop 'error: root finding'
+    if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
     z(1:3) = x
 
     call eval_field(z(1), z(2), z(3), 0)
@@ -229,7 +229,7 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
   enddo
   z0(1:3) = z(1:3)
   z0(4) = H
-  z0(5) = vpar/sqrt(H) ! alambda
+  z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_euler2
 
@@ -285,7 +285,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
 
     tol = 1d-8
     call hybrd1 (f_sympl_euler2, n1, x1, fvec1, tol, ierr)
-    if(ierr > 1) stop 'error in root finding'
+    if(ierr > 1 .and. any(abs(fvec1)>tol)) stop 'error: root finding'
     z(1:3) = x1
 
     call eval_field(z(1), z(2), z(3), 0)
@@ -317,7 +317,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
 
     tol = 1d-8
     call hybrd1 (f_sympl_euler1, n2, x2, fvec2, tol, ierr)
-    if(ierr > 1) stop 'error in root finding'
+    if(ierr > 1 .and. any(abs(fvec2)>tol)) stop 'error: root finding'
     z(1) = x2(1)
     z(4) = x2(2)
 !    print *, z(1), z(4)
