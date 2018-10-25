@@ -2,11 +2,13 @@ module orbit_symplectic
 
 use parmot_mod, only : ro0_parmot => ro0
 use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
-  get_val, get_derivatives, H, pth, vpar, dvpar, dH, dpth, f, df, d2f, ro0, mu
+  get_val, get_derivatives, get_derivatives2, &
+  H, pth, vpar, dvpar, dH, dpth, f, df, d2f, ro0, mu, d2pth, d2H
 
 implicit none
 save
 
+double precision, parameter :: atol = 1e-15, rtol = 1e-7
 
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
 double precision :: pthold
@@ -23,7 +25,7 @@ double precision :: derphi(3)
 double precision :: alambd, pabs
 
 interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_euler1
+  module procedure orbit_timestep_sympl_verlet
 end interface
 
 contains
@@ -44,8 +46,8 @@ subroutine orbit_sympl_init(z0)
   vpar = pabs*alambd*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
 
   z(1:3) = z0(1:3)  ! r, th, ph
-  z(4) = vpar*f%Bph/f%Bmod + f%Aph/ro0 ! pphi
-  pth = vpar*f%Bth/f%Bmod + f%Ath/ro0 ! pth
+  z(4) = vpar*f%hph + f%Aph/ro0 ! pphi
+  pth = vpar*f%hth + f%Ath/ro0 ! pth
 
 end subroutine orbit_sympl_init
 
@@ -54,15 +56,13 @@ end subroutine orbit_sympl_init
 !
 subroutine f_sympl_euler1(n, x, fvec, iflag)
 !
-  integer, parameter :: mode = 2
-
   integer, intent(in) :: n
   double precision, intent(in) :: x(n)
   double precision, intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
-  call eval_field(x(1), z(2), z(3), 0)
-  call get_derivatives(x(2))
+  call eval_field(x(1), z(2), z(3), 2)
+  call get_derivatives2(x(2))
 
   fvec(1) = dpth(1)*(pth - pthold) + dt*(dH(2)*dpth(1) - dH(1)*dpth(2))
   fvec(2) = dpth(1)*(x(2) - z(4))  + dt*(dH(3)*dpth(1) - dH(1)*dpth(3))
@@ -71,27 +71,110 @@ subroutine f_sympl_euler1(n, x, fvec, iflag)
 
 end subroutine f_sympl_euler1
 
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine jac_sympl_euler1(x, jac)
+!
+  double precision, intent(in)  :: x(2)
+  double precision, intent(out) :: jac(2, 2)
+
+  jac(1,1) = d2pth(1)*(pth - pthold) + dpth(1)**2 &
+    + dt*(d2H(2)*dpth(1) + dH(2)*d2pth(1) - d2H(1)*dpth(2) - dH(1)*d2pth(2))
+  jac(1,2) = d2pth(7)*(pth - pthold) + dpth(1)*dpth(4) &
+    + dt*(d2H(8)*dpth(1) + dH(2)*d2pth(7) - d2H(7)*dpth(2) - dH(1)*d2pth(8))
+  jac(2,1) = d2pth(1)*(x(2) - z(4)) &
+    + dt*(d2H(3)*dpth(1) + dH(3)*d2pth(1) - d2H(1)*dpth(3) - dH(1)*d2pth(3))
+  jac(2,2) = d2pth(7)*(x(2) - z(4)) + dpth(1) &
+    + dt*(d2H(9)*dpth(1) + dH(3)*d2pth(7) - d2H(7)*dpth(3) - dH(1)*d2pth(9))
+
+end subroutine jac_sympl_euler1
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine f_sympl_euler2(n, x, fvec, iflag)
 !
-  integer, parameter :: mode = 2
-
   integer, intent(in) :: n
   double precision, intent(in) :: x(n)
   double precision, intent(out) :: fvec(n)
-  integer, intent(out) :: iflag
+  integer, intent(in) :: iflag
 
-  call eval_field(x(1), x(2), x(3), 0)
-  call get_derivatives(z(4))
+  call eval_field(x(1), x(2), x(3), 2)
+  call get_derivatives2(z(4))
 
   fvec(1) = pth - pthold
   fvec(2) = dpth(1)*(x(2) - z(2)) - dt*dH(1)
-  fvec(3) = dpth(1)*(x(3) - z(3)) - dt*(dpth(1)*vpar*f%Bmod - dH(1)*f%Bth)/f%Bph
+  fvec(3) = dpth(1)*f%hph*(x(3) - z(3)) - dt*(dpth(1)*vpar - dH(1)*f%hth)
 
 end subroutine f_sympl_euler2
 
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine jac_sympl_euler2(x, jac)
+!
+  double precision, intent(in)  :: x(3)
+  double precision, intent(out) :: jac(3, 3)
+
+  jac(1,:) = dpth(1:3)
+  jac(2,:) = d2pth(1:3)*(x(2) - z(2)) - dt*d2H(1:3)
+  jac(2,2) = jac(2,2) + dpth(1) 
+  jac(3,:) = (d2pth(1:3)*f%hph + dpth(1)*df%dhph)*(x(3) - z(3)) &
+    - dt*(d2pth(1:3)*vpar + dpth(1)*dvpar(1:3) - d2H(1)*f%hth - dH(1)*df%dhth)
+  jac(3,3) = jac(3,3) + dpth(1)*f%hph 
+
+end subroutine jac_sympl_euler2
+
+subroutine newton1(x, atol, rtol, maxit, xlast)
+  integer, parameter :: n = 2
+
+  double precision, intent(inout) :: x(n)
+  double precision, intent(in) :: atol, rtol
+  integer, intent(in) :: maxit
+  double precision, intent(out) :: xlast(n)
+
+  double precision :: fvec(n), fjac(n,n), ijac(n,n)
+  integer :: kit
+
+  do kit = 1, maxit
+    call f_sympl_euler1(n, x, fvec, 1)
+    call jac_sympl_euler1(x, fjac)
+    ijac(1,1) = fjac(2,2)
+    ijac(1,2) = -fjac(1,2)
+    ijac(2,1) = -fjac(2,1)
+    ijac(2,2) = fjac(1,1)
+    ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
+    xlast = x
+    x = x - matmul(ijac, fvec)
+    if (all(abs(fvec) < atol) &
+      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
+  enddo
+  print *, 'Warning: maximum iterations reached in newton1: ', maxit
+end subroutine
+
+subroutine newton2(x, atol, rtol, maxit, xlast)
+  integer, parameter :: n = 3
+  integer :: kit
+
+  double precision, intent(inout) :: x(n)
+  double precision, intent(in) :: atol, rtol
+  integer, intent(in) :: maxit
+  double precision, intent(out) :: xlast(n)
+
+  double precision :: fvec(n), fjac(n,n)
+  integer :: pivot(n), info
+
+  do kit = 1, maxit
+    call f_sympl_euler2(n, x, fvec, 1)
+    call jac_sympl_euler2(x, fjac)
+    call dgesv(n, 1, fjac, n, pivot, fvec, 3, info) 
+    xlast = x
+    ! after solution: fvec = (xold-xnew)_Newton
+    x = x - fvec
+    if (all(abs(fvec) < atol) &
+      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
+  enddo
+  print *, 'Warning: maximum iterations reached in newton2: ', maxit
+end subroutine
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -103,14 +186,14 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
   double precision, intent(in) :: dtaumin
 
   integer, parameter :: n = 2
-  double precision :: tol
+  integer, parameter :: maxit = 100
 
-  double precision, dimension(n) :: fvec, x
+  double precision, dimension(n) :: x, xlast
 
   double precision :: tau2
 
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 2 ! order
+  integer, parameter :: nlag = 4 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 
@@ -140,9 +223,11 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
     !print *, z(1), x(1) 
     !print *, z(4), x(2)
 
-    tol = 1d-8
-    call hybrd1 (f_sympl_euler1, n, x, fvec, tol, ierr)
-    if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
+    !tol = 1d-8
+    !call hybrd1 (f_sympl_euler1, n, x, fvec, tol, ierr)
+    !if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
+
+    call newton1(x, atol, rtol, maxit, xlast)
     
     z(1) = x(1)
     z(4) = x(2)
@@ -150,7 +235,7 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
     call eval_field(z(1), z(2), z(3), 0)
     call get_derivatives(z(4))
     z(2) = z(2) + dt*dH(1)/dpth(1)
-    z(3) = z(3) + dt*(vpar*f%Bmod - dH(1)/dpth(1)*f%Bth)/f%Bph
+    z(3) = z(3) + dt*(vpar - dH(1)/dpth(1)*f%hth)/f%hph
 
     kbuf = mod(kt, nbuf) + 1
     zbuf(:,kbuf) = z
@@ -175,14 +260,14 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
   double precision, intent(in) :: dtaumin
 
   integer, parameter :: n = 3
-  double precision :: tol
+  integer, parameter :: maxit = 10
 
-  double precision, dimension(n) :: x, fvec
+  double precision, dimension(n) :: x, xlast
 
   double precision :: tau2
 
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 2 ! order
+  integer, parameter :: nlag = 4 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 
@@ -209,10 +294,13 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
       x = z(1:3)
     end if
     
-    tol = 1d-8
     
-    call hybrd1 (f_sympl_euler2, n, x, fvec, tol, ierr)
-    if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
+    !tol = 1d-8
+    !call hybrd1 (f_sympl_euler2, n, x, fvec, tol, ierr)
+    !if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
+    
+    call newton2(x, atol, rtol, maxit, xlast)
+
     z(1:3) = x
 
     call eval_field(z(1), z(2), z(3), 0)
@@ -245,15 +333,15 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
-  double precision :: tol
+  integer, parameter :: maxit = 10
 
-  double precision, dimension(n1) :: x1, fvec1
-  double precision, dimension(n2) :: x2, fvec2
+  double precision, dimension(n1) :: x1, xlast1
+  double precision, dimension(n2) :: x2, xlast2
 
   double precision :: tau2
   
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 2 ! order
+  integer, parameter :: nlag = 4 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 
@@ -283,9 +371,12 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
       x1 = z(1:3)
     end if
 
-    tol = 1d-8
-    call hybrd1 (f_sympl_euler2, n1, x1, fvec1, tol, ierr)
-    if(ierr > 1 .and. any(abs(fvec1)>tol)) stop 'error: root finding'
+    !tol = 1d-8
+    !call hybrd1 (f_sympl_euler2, n1, x1, fvec1, tol, ierr)
+    !if(ierr > 1 .and. any(abs(fvec1)>tol)) stop 'error: root finding'
+    
+    call newton2(x1, atol, rtol, maxit, xlast1)
+
     z(1:3) = x1
 
     call eval_field(z(1), z(2), z(3), 0)
@@ -315,9 +406,12 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
       x2(2)=z(4)
     end if
 
-    tol = 1d-8
-    call hybrd1 (f_sympl_euler1, n2, x2, fvec2, tol, ierr)
-    if(ierr > 1 .and. any(abs(fvec2)>tol)) stop 'error: root finding'
+    !tol = 1d-8
+    !call hybrd1 (f_sympl_euler1, n2, x2, fvec2, tol, ierr)
+    !if(ierr > 1 .and. any(abs(fvec2)>tol)) stop 'error: root finding'
+    
+    call newton1(x2, atol, rtol, maxit, xlast2)
+
     z(1) = x2(1)
     z(4) = x2(2)
 !    print *, z(1), z(4)
@@ -325,7 +419,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
     call eval_field(z(1), z(2), z(3), 0)
     call get_derivatives(z(4))
     z(2) = z(2) + dt*dH(1)/dpth(1)
-    z(3) = z(3) + dt*(vpar*f%Bmod - dH(1)/dpth(1)*f%Bth)/f%Bph
+    z(3) = z(3) + dt*(vpar - dH(1)/dpth(1)*f%hth)/f%hph
 
     kbuf = mod(2*kt+1, nbuf) + 1
     zbuf(:,kbuf) = z
@@ -338,8 +432,6 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
   z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_verlet
-
-
 
 subroutine debug_root(x0)
   double precision :: x0(2), x(2)

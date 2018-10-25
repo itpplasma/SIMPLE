@@ -28,8 +28,8 @@ z(3) = 0.0d0
 
 vpar = 0.1d0
 call eval_field(z(1), z(2), z(3), 0)
-z(4) = vpar*f%Bph/f%Bmod + f%Aph/ro0
-pth = vpar*f%Bth/f%Bmod + f%Ath/ro0
+z(4) = vpar*f%hph + f%Aph/ro0
+pth = vpar*f%hth + f%Ath/ro0
 
 z0 = 0d0
 z0(1:3) = z(1:3)
