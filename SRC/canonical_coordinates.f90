@@ -30,6 +30,7 @@
   integer          :: n_e,n_d,n_b
   double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
   double precision :: alam,alam_prev,par_inv
+  real :: tstart, tend
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -96,7 +97,7 @@ print *,dtau
   r=0.7d0
   vartheta_c=0.5d0
   varphi_c=0.5d0
-  alam0=0.3d0 !0.5d0
+  alam0=0.45d0 !0.3d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
@@ -117,6 +118,7 @@ alam_prev=alam
 open(3003, file='orbit_can.out', recl=1024)
 print *,'canonical'
 neval_rk = 0
+call cpu_time(tstart)
   do i=1,L1i*npoiper*npoiper2*10000
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
@@ -133,7 +135,8 @@ neval_rk = 0
     
   enddo
 close(3003)
-print *,'done. Evaluations: ', neval_rk
+call cpu_time(tend)
+print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
 !
   print *,'can : ',r,vartheta_c,varphi_c
 !
@@ -149,6 +152,8 @@ par_inv=0.d0
 alam=alam0
 alam_prev=alam
 print *,'symplectic'
+neval = 0
+call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
   call orbit_sympl_init(z) 
   do i=1,L1i*npoiper*npoiper2*10000
@@ -168,7 +173,8 @@ open(3004, file='orbit_sympl.out', recl=1024)
     
   enddo
 close(3004)
-print *,'done. Evaluations: ', neval
+call cpu_time(tend)
+print *,'done. Evaluations: ', neval, 'CPU time (s): ', tend - tstart
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
