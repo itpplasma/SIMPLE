@@ -25,7 +25,7 @@ double precision :: derphi(3)
 double precision :: alambd, pabs
 
 interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_euler1
+  module procedure orbit_timestep_sympl_verlet
 end interface
 
 contains

@@ -8,6 +8,7 @@ include_directories ($ENV{NETCDFF_INCLUDE} /usr/include)
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -Wall")
 
 add_executable (neo-orb.x
   SRC/canonical_coordinates_mod.f90
@@ -111,7 +112,7 @@ add_executable (test_magfie.x
 )
 
 
-target_link_libraries(neo-orb.x netcdf netcdff)
-target_link_libraries(orbit-symplectic-test.x netcdf netcdff)
-target_link_libraries(alpha_lifetime_vmec_c.x netcdf netcdff)
-target_link_libraries(test_magfie.x netcdf netcdff)
+target_link_libraries(neo-orb.x netcdf netcdff lapack)
+target_link_libraries(orbit-symplectic-test.x netcdf netcdff lapack)
+target_link_libraries(alpha_lifetime_vmec_c.x netcdf netcdff lapack)
+target_link_libraries(test_magfie.x netcdf netcdff lapack)
