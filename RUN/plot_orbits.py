@@ -22,6 +22,7 @@ nrange = range(1,len(data_sym))
 #data_can = data_can[nrange,:]
 #data_sym = data_sym[nrange,:]
 
+
 figure()
 plot(data_can[:,0], data_can[:,1],'b,')
 plot(data_sym[:,0], data_sym[:,1],'r,')
@@ -38,6 +39,10 @@ plot(data_can[:,0], data_can[:,-1],'b,')
 plot(data_sym[:,0], data_sym[:,-1],'r,')
 savefig('orbit_stell_phcan.png')
 
+#%%
+nsmooth = 10000
+H_sm = convolve(data_sym[:,-4], ones((nsmooth,))/nsmooth, mode='valid')
+
 figure()
-plot(data_sym[:,0], data_sym[:,-4],'b,')
+plot(H_sm,'b,')
 
