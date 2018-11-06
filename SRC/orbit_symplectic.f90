@@ -193,7 +193,7 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
   double precision :: tau2
 
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 4 ! order
+  integer, parameter :: nlag = 3 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 
@@ -260,14 +260,14 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
   double precision, intent(in) :: dtaumin
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 10
+  integer, parameter :: maxit = 100
 
   double precision, dimension(n) :: x, xlast
 
   double precision :: tau2
 
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 4 ! order
+  integer, parameter :: nlag = 3 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 
@@ -333,7 +333,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
-  integer, parameter :: maxit = 10
+  integer, parameter :: maxit = 100
 
   double precision, dimension(n1) :: x1, xlast1
   double precision, dimension(n2) :: x2, xlast2
@@ -341,7 +341,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
   double precision :: tau2
   
   ! for Lagrange interpolation
-  integer, parameter :: nlag = 4 ! order
+  integer, parameter :: nlag = 3 ! order
   integer :: bufind(0:nlag), k
   double precision, dimension(0:0, nlag+1) :: coef
 

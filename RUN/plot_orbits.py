@@ -40,7 +40,7 @@ plot(data_sym[:,0], data_sym[:,-1],'r,')
 savefig('orbit_stell_phcan.png')
 
 #%%
-nsmooth = 10000
+nsmooth = 100
 H_sm = convolve(data_sym[:,-4], ones((nsmooth,))/nsmooth, mode='valid')
 
 figure()
