@@ -94,10 +94,10 @@ print *,dtau
   call get_canonical_coordinates
 ! call testing
 !
-  r=0.7d0
+  r=0.05d0
   vartheta_c=0.5d0
   varphi_c=0.5d0
-  alam0=0.45d0 !0.3d0
+  alam0=0.5d0 !0.3d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
