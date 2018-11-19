@@ -6,6 +6,8 @@ fort.*
 *.out
 *~
 *.nc
+*.x
+*.png
 RUN/PICS
-canonical_coordinates.x
+*.sublime-*
 			 

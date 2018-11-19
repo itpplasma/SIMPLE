@@ -14,14 +14,17 @@
   double precision,parameter  :: e_mass=9.1094d-28
   double precision,parameter  :: p_mass=1.6726d-24
   double precision,parameter  :: ev=1.6022d-12
+  double precision,parameter  :: snear_axis=0.05d0
 !
+  logical :: near_axis
   integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
-  integer          :: ipart,notrace_passing,loopskip,iskip,ilost
+  integer          :: ipart,notrace_passing,loopskip,iskip,ilost,it
   real             :: zzg
   double precision :: dphi,rbeg,phibeg,zbeg,bmod00,rcham,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
   double precision :: RT0,R0i,cbfi,bz0i,bf0,trap_par
   double precision :: sbeg,thetabeg
+  double precision :: z1,z2
   double precision, dimension(5) :: z
   integer          :: npoiper2
   double precision :: contr_pp
@@ -80,6 +83,7 @@ bmod00=281679.46317784750d0
   ns_tp=5
 !
   call spline_vmec_data
+!call testing
 !
   call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)         !<=2017
 !
@@ -92,12 +96,14 @@ dtau=2*dtaumin
 print *,dtau
 !
   call get_canonical_coordinates
-! call testing
+!call testing
 !
-  r=0.05d0
-  vartheta_c=0.5d0
+do it=1,100
+  r=0.1d0 !0.005d0 !0.1d0 !0.7d0
+  vartheta_c=0.5d0 !0.d0 !0.5d0
+vartheta_c=8.d0*atan(1.d0)*dfloat(it)*0.01
   varphi_c=0.5d0
-  alam0=0.5d0 !0.3d0
+  alam0=0.01d0 !0.5d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
@@ -110,6 +116,7 @@ print *,dtau
   z(3)=varphi_c
   z(4)=1.d0
   z(5)=alam0
+!call testing
 !
 
 par_inv=0.d0
@@ -139,6 +146,45 @@ call cpu_time(tend)
 print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
 !
   print *,'can : ',r,vartheta_c,varphi_c
+
+!
+  isw_field_type=0
+  z(1)=r
+  z(2)=vartheta_c
+  z(3)=varphi_c
+  z(4)=1.d0
+  z(5)=alam0
+!call testing
+!
+
+par_inv=0.d0
+alam=alam0
+alam_prev=alam
+open(3003, file='orbit_can.out', recl=1024)
+print *,'canonical'
+neval_rk = 0
+call cpu_time(tstart)
+  do i=1,L1i*npoiper*npoiper2*10000
+!
+    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+!
+    alam=z(5)
+    par_inv=par_inv+alam**2*dtau
+    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+      write (101,*) i,par_inv
+      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+      write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+      par_inv=0.d0
+    endif
+    alam_prev=alam
+    
+  enddo
+close(3003)
+call cpu_time(tend)
+print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
+!
+  print *,'axis : ',r,vartheta_c,varphi_c
+
 !
   isw_field_type=0
   z(1)=r

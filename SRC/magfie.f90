@@ -253,8 +253,4 @@
   hcurl(2)=(-dB_varphi_c_dr/bmod+bder(1)*hcovar(3))/sqg_c
   hcurl(3)=(dB_vartheta_c_dr/bmod-bder(1)*hcovar(2))/sqg_c
 !
-!write(4001,*) x
-!write(4001,*) bder*bmod
-!write(4001,*) dsqg_c_dp
-
   end subroutine magfie_can
