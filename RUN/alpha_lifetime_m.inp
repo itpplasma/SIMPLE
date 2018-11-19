@@ -14,5 +14,4 @@
 1        npoiper2          !additional integration step split factor
 2        n_e               !test particle charge number (the same as Z)
 4        n_d               !test particle mass number (the same as A)
-'wout_26_scaled.nc'        !name of VMEC file in NETCDF format
-!'wout_23_1900_fix_bdry.nc'        !name of VMEC file in NETCDF format
+'netcdf_file_for_test.nc'  !name of VMEC file in NETCDF format

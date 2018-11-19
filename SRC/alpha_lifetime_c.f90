@@ -3,6 +3,7 @@
   use chamb_mod,  only : rnegflag
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
+use diag_mod, only : dodiag
 !
   implicit none
 !
@@ -276,7 +277,8 @@ print *,ipart,' / ',ntestpart
 ! 13.02.2013
       if(trap_par.le.contr_pp) go to 111
 ! 13.02.2013 end
-        call orbit_timestep_can(z,dtau,dtaumin,ierr)
+!
+        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
 !
         if(ierr.ne.0) exit
 ! 13.02.2013
@@ -284,7 +286,7 @@ print *,ipart,' / ',ntestpart
 ! 13.02.2013 end
         ilost=ntimstep-i
 ! 26.03.2016
-if(i/100*100.eq.i) print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
+print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
 ! 26.03.2016 end
         confpart_pass(i)=confpart_pass(i)+1.d0
       enddo
@@ -299,12 +301,13 @@ if(i/100*100.eq.i) print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
       ilost=ntimstep-1
       do i=2,ntimstep
 !
-        call orbit_timestep_can(z,dtau,dtaumin,ierr)
+        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
 !
         if(ierr.ne.0) exit
         ilost=ntimstep-i
 ! 26.03.2016
-if(i/100*100.eq.i) print *,'trapped particle ',ipart,' step ',i,' of ',ntimstep
+print *,'trapped particle ',ipart,' step ',i,' of ',ntimstep
+if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
 ! 26.03.2016 end
         confpart_trap(i)=confpart_trap(i)+1.d0
       enddo

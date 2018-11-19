@@ -21,6 +21,7 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/zzg.o \
 	OBJS/field_can.o \
 	OBJS/orbit_symplectic.o \
+	OBJS/binsrc.o \
 	OBJS/alpha_lifetime_c.o
 
 alpha_lifetime_vmec_c.x: $(OBJS) Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
@@ -67,6 +68,9 @@ OBJS/field_can.o: SRC/field_can.f90 Canonical_coordinates.mk
 OBJS/orbit_symplectic.o: SRC/orbit_symplectic.f90 Canonical_coordinates.mk SRC/field_can.f90
 	$(FC) $(OPTS) -c SRC/orbit_symplectic.f90
 	mv orbit_symplectic.o OBJS/
+OBJS/binsrc.o: SRC/binsrc.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
+	$(FC) $(OPTS) -c SRC/binsrc.f90
+	mv binsrc.o OBJS/
 OBJS/alpha_lifetime_c.o: SRC/alpha_lifetime_c.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/alpha_lifetime_c.f90
 	mv alpha_lifetime_c.o OBJS/
