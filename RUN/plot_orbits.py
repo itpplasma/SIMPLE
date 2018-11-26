@@ -11,10 +11,12 @@ Created on Wed Aug  1 18:12:14 2018
 from numpy import *
 from matplotlib.pyplot import *
 
+parent = '/home/calbert/run/NEO-ORB/'
+
 #data_rk = loadtxt('orbit_vmec.out') # Runge Kutta
 #data_can = loadtxt('orbit_can.out') # Runge Kutta on canonicalized coordinates
-data_axi = loadtxt('orbit_axis.out') # Runge Kutta canonical with axis coorection
-data_sym = loadtxt('orbit_sympl.out') # Symplectic Euler r, vpar
+data_axi = loadtxt(parent+'/orbit_axis.out') # Runge Kutta canonical with axis coorection
+data_sym = loadtxt(parent+'/orbit_sympl.out') # Symplectic Euler r, vpar
 
 nrange = range(1,len(data_sym))
 #nrange = range(1,146)
