@@ -1,6 +1,5 @@
 !
   module chamb_mod
-    double precision :: rbig,rcham2
     logical :: rnegflag=.false.
   end module chamb_mod
 !
@@ -44,7 +43,6 @@
 !
   module velo_mod
     integer :: isw_field_type = 1
-    integer :: neval_rk = 0
   end module velo_mod
 !
 module gbpi_mod
@@ -54,4 +52,5 @@ end module gbpi_mod
 !
 module diag_mod
 logical :: dodiag=.false.
+integer :: icounter
 end module diag_mod

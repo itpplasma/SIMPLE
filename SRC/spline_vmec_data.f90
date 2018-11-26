@@ -76,6 +76,8 @@
   m_max=nint(maxval(axm))
   n_max=nint(maxval(axn))
 !
+  print *,'VMEC ns = ',ns,' m_max = ',m_max,' n_max = ',n_max
+!
   n_theta = m_max*multharm+1
   n_phi = n_max*multharm+1
   twopi=8.d0*atan2(1.d0,1.d0)
