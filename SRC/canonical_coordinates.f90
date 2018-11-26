@@ -121,6 +121,7 @@ print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !call testing
 !
 do 
+  print *, 'Enter r, theta, phi, lambda: '
   read *,r,vartheta_c,varphi_c,alam0
 !
   isw_field_type=0

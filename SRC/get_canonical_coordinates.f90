@@ -1,5 +1,7 @@
 !
   module exchange_get_cancoord_mod
+!$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
+!$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,theta)
     logical :: onlytheta
     double precision :: vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,Bcovar_varphi,theta
   end module exchange_get_cancoord_mod
@@ -91,6 +93,7 @@
   allocate(B_vartheta_c(ns_c,n_theta_c,n_phi_c))
   allocate(B_varphi_c(ns_c,n_theta_c,n_phi_c))
 !
+!$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r)
   onlytheta=.false.
   ndim=1
   allocate(y(ndim),dy(ndim))
@@ -99,6 +102,7 @@
 !  G_beg=1.d-5 !<=OLD
   G_beg=1.d-8   !<=NEW
 !
+!$omp do
   do i_theta=1,n_theta_c
     print *,'integrate ODE: ',i_theta,' of ',n_theta_c
     vartheta_c=h_theta_c*dble(i_theta-1)
@@ -137,7 +141,9 @@
       enddo
     enddo
   enddo
+!$omp end do
 !
+!$omp do
   do i_theta=1,n_theta_c
     print *,'compute components: ',i_theta,' of ',n_theta_c
     vartheta_c=h_theta_c*dble(i_theta-1)
@@ -167,6 +173,8 @@
                                   + B_varphi_c(4,i_theta,i_phi)
     enddo
   enddo
+!$omp end do
+!$omp single
 !
   ns_s_c=ns_s
   ns_tp_c=ns_tp
@@ -189,9 +197,9 @@
 !enddo
 !stop
   call spline_can_coord(fullset)
-!
   deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,y,dy,sqg_c,B_vartheta_c,B_varphi_c,G_c)
-!
+!$omp end single
+!$omp end parallel
   end subroutine get_canonical_coordinates
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
