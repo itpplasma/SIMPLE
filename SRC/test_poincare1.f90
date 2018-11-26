@@ -4,7 +4,7 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl, ntau
+  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
 !
   implicit none
 !
@@ -36,6 +36,7 @@ use diag_mod, only : icounter
   real :: tstart, tend
   integer, parameter :: runlen = 1
   logical, parameter :: jparmode = .true.
+  integer :: ntau
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -101,14 +102,10 @@ print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !call testing
 !
 !it = 1
-!do it=50,100
-  r=0.45d0 !0.005d0 !0.1d0 !0.7d0
-  vartheta_c=0.5d0 !0.d0 !0.5d0
-!vartheta_c=0.5d0
-!vartheta_c=8.d0*atan(1.d0)*dfloat(it)*0.01
-  varphi_c=0.5d0
-  !alam0=0.01d0 !0.5d0
-  alam0=0.1d0
+  r=0.5d0
+  vartheta_c=0.0d0
+  varphi_c=0.314d0
+  alam0=0.0d0 !0.3d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
@@ -212,9 +209,10 @@ par_inv=0.d0
 alam=alam0
 alam_prev=alam
 print *,'symplectic'
+icounter = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
-  call orbit_sympl_init(z,1) 
+  call orbit_sympl_init(z, ntau) 
   do i=1,ntimstep
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
