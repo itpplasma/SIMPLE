@@ -8,7 +8,7 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1e-15, rtol = 1e-7
+double precision, parameter :: atol = 1e-15, rtol = 1e-15
 
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
 double precision :: pthold
@@ -24,8 +24,17 @@ double precision :: coala
 double precision :: derphi(3)
 double precision :: alambd, pabs
 
+! for Lagrange interpolation
+integer, parameter :: nlag = 3 ! order
+integer :: bufind(0:nlag), k
+double precision, dimension(0:0, nlag+1) :: coef
+
+logical, parameter :: extrap_field = .false.
+
+integer :: ntau
+
 interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_verlet
+  module procedure orbit_timestep_sympl_euler1
 end interface
 
 contains
@@ -49,6 +58,7 @@ subroutine orbit_sympl_init(z0)
   z(4) = vpar*f%hph + f%Aph/ro0 ! pphi
   pth = vpar*f%hth + f%Ath/ro0 ! pth
 
+  call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), coef)
 end subroutine orbit_sympl_init
 
 
@@ -191,19 +201,14 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
   double precision, dimension(n) :: x, xlast
 
   double precision :: tau2
-
-  ! for Lagrange interpolation
-  integer, parameter :: nlag = 3 ! order
-  integer :: bufind(0:nlag), k
-  double precision, dimension(0:0, nlag+1) :: coef
-
-  call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), coef)
+  integer :: ktau
   
   ierr = 0
 
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   tau2 = 0d0
-  do while(tau2.lt.dtau)
+  ktau = 0
+  do while(ktau .lt. ntau)
     pthold = pth
 
     ! Initial guess with Lagrange extrapolation
@@ -220,28 +225,31 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
       x(2)=z(4)
     end if
 
-    !print *, z(1), x(1) 
-    !print *, z(4), x(2)
-
-    !tol = 1d-8
-    !call hybrd1 (f_sympl_euler1, n, x, fvec, tol, ierr)
-    !if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
-
     call newton1(x, atol, rtol, maxit, xlast)
     
     z(1) = x(1)
     z(4) = x(2)
 
-    call eval_field(z(1), z(2), z(3), 0)
-    call get_derivatives(z(4))
+    if (extrap_field) then
+      dH(1) = dH(1) + d2H(1)*(x(1)-xlast(1)) + d2H(7)*(x(2)-xlast(2))
+      dpth(1) = dpth(1) + d2pth(1)*(x(1)-xlast(1)) + d2pth(7)*(x(2)-xlast(2))
+      vpar = vpar + dvpar(1)*(x(1)-xlast(1)) + dvpar(4)*(x(2)-xlast(2))
+      f%hth = f%hth + df%dhth(1)*(x(1)-xlast(1))
+      f%hph = f%hph + df%dhph(1)*(x(1)-xlast(1))
+    else
+      call eval_field(z(1), z(2), z(3), 0)
+      call get_derivatives(z(4))
+    endif
+
     z(2) = z(2) + dt*dH(1)/dpth(1)
     z(3) = z(3) + dt*(vpar - dH(1)/dpth(1)*f%hth)/f%hph
 
     kbuf = mod(kt, nbuf) + 1
     zbuf(:,kbuf) = z
-    kt = kt+1
 
     tau2 = tau2 + dtaumin
+    kt = kt+1
+    ktau = ktau+1
   enddo
   z0(1:3) = z(1:3)
   z0(4) = H
@@ -266,18 +274,14 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
 
   double precision :: tau2
 
-  ! for Lagrange interpolation
-  integer, parameter :: nlag = 3 ! order
-  integer :: bufind(0:nlag), k
-  double precision, dimension(0:0, nlag+1) :: coef
-
-  call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), coef)
+  integer :: ktau
   
   ierr = 0
 
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   tau2 = 0d0
-  do while(tau2.lt.dtau)
+  ktau = 0
+  do while(ktau .lt. ntau)
     pthold = pth
 
     ! Initial guess with Lagrange extrapolation
@@ -294,11 +298,6 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
       x = z(1:3)
     end if
     
-    
-    !tol = 1d-8
-    !call hybrd1 (f_sympl_euler2, n, x, fvec, tol, ierr)
-    !if(ierr > 1 .and. any(abs(fvec)>tol)) stop 'error: root finding'
-    
     call newton2(x, atol, rtol, maxit, xlast)
 
     z(1:3) = x
@@ -311,9 +310,10 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
 
     kbuf = mod(kt, nbuf) + 1
     zbuf(:,kbuf) = z
-    kt = kt+1
 
     tau2 = tau2 + dtaumin
+    kt = kt+1
+    ktau = ktau+1
   enddo
   z0(1:3) = z(1:3)
   z0(4) = H
@@ -339,19 +339,15 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
   double precision, dimension(n2) :: x2, xlast2
 
   double precision :: tau2
-  
-  ! for Lagrange interpolation
-  integer, parameter :: nlag = 3 ! order
-  integer :: bufind(0:nlag), k
-  double precision, dimension(0:0, nlag+1) :: coef
 
-  call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), coef)
+  integer :: ktau
 
   ierr = 0
 
   dt = 0.5d0*dtaumin/dsqrt(2d0)
   tau2 = 0d0
-  do while(tau2.lt.dtau)
+  ktau = 0
+  do while(ktau .lt. ntau)
     pthold = pth
 
     ! Verlet part one: impl/expl Euler
@@ -370,10 +366,6 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
     else
       x1 = z(1:3)
     end if
-
-    !tol = 1d-8
-    !call hybrd1 (f_sympl_euler2, n1, x1, fvec1, tol, ierr)
-    !if(ierr > 1 .and. any(abs(fvec1)>tol)) stop 'error: root finding'
     
     call newton2(x1, atol, rtol, maxit, xlast1)
 
@@ -399,22 +391,15 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
       end do
       x2(1)=sum(zbuf(1,bufind)*coef(0,:))
       x2(2)=sum(zbuf(4,bufind)*coef(0,:))
-!      print *, bufind
-!      print *, x2, z(1), z(4)
     else
       x2(1)=z(1)
       x2(2)=z(4)
     end if
-
-    !tol = 1d-8
-    !call hybrd1 (f_sympl_euler1, n2, x2, fvec2, tol, ierr)
-    !if(ierr > 1 .and. any(abs(fvec2)>tol)) stop 'error: root finding'
     
     call newton1(x2, atol, rtol, maxit, xlast2)
 
     z(1) = x2(1)
     z(4) = x2(2)
-!    print *, z(1), z(4)
 
     call eval_field(z(1), z(2), z(3), 0)
     call get_derivatives(z(4))
@@ -423,9 +408,10 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
 
     kbuf = mod(2*kt+1, nbuf) + 1
     zbuf(:,kbuf) = z
-    kt = kt+1
     
     tau2 = tau2 + dtaumin
+    kt = kt+1
+    ktau = ktau+1
   enddo
   z0(1:3) = z(1:3)
   z0(4) = H

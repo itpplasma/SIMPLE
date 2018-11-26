@@ -261,6 +261,7 @@ print *,ipart,' / ',ntestpart
 ! starting pitch z(5)=v_\parallel / v:
     xi=zzg()
     z(5)=2.d0*(xi-0.5d0)
+!
     trap_par=((1.d0-z(5)**2)*bmax/bstart(i)-1.d0)*bmin/(bmax-bmin)
     if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
 ! passing particle

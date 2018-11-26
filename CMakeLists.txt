@@ -24,12 +24,6 @@ add_executable (neo-orb.x
 	SRC/get_canonical_coordinates.f90
 	SRC/testing.f90
 	SRC/minpack.f90
-	SRC/nleq1/nleq1.f
-	SRC/nleq1/wnorm.f
-	SRC/nleq1/linalg_nleq1.f
-	SRC/nleq1/zibconst.f
-	SRC/nleq1/zibsec.f
-	SRC/nleq1/zibmon.f
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 
@@ -50,12 +44,6 @@ add_executable (orbit-symplectic-test.x
  	SRC/get_canonical_coordinates.f90
  	SRC/testing.f90
  	SRC/minpack.f90
- 	SRC/nleq1/nleq1.f
- 	SRC/nleq1/wnorm.f
- 	SRC/nleq1/linalg_nleq1.f
- 	SRC/nleq1/zibconst.f
- 	SRC/nleq1/zibsec.f
- 	SRC/nleq1/zibmon.f
  	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 
@@ -75,7 +63,9 @@ add_executable (alpha_lifetime_vmec_c.x
   SRC/new_vmec_allocation_stuff.f90
   SRC/get_canonical_coordinates.f90
   SRC/zzg.f90
+  SRC/field_can.f90
   SRC/orbit_symplectic.f90
+  SRC/binsrc.f90
 
   SRC/alpha_lifetime_c.f90
 )
@@ -95,12 +85,6 @@ add_executable (test_magfie.x
  	SRC/get_canonical_coordinates.f90
  	SRC/testing.f90
  	SRC/minpack.f90
- 	SRC/nleq1/nleq1.f
- 	SRC/nleq1/wnorm.f
- 	SRC/nleq1/linalg_nleq1.f
- 	SRC/nleq1/zibconst.f
- 	SRC/nleq1/zibsec.f
- 	SRC/nleq1/zibmon.f
  	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 

@@ -54,7 +54,7 @@
 !  Called routines: magfie_can, magfie_vmec, elefie_can
 !
       use parmot_mod, only : rmu,ro0,eeff
-      use velo_mod,   only : isw_field_type, neval_rk
+      use velo_mod,   only : isw_field_type
 !
       implicit none
 !
@@ -102,7 +102,6 @@
         print *,'velo: unknown field type'
         return
       endif
-      neval_rk = neval_rk + 1
 !
 ! in elefie: x(i)   - space coords (input, see above)
 !            derphi - derivatives of the dimensionless electric potential
@@ -163,10 +162,6 @@
       vz(5)=-(0.5d0*coala/hpstar)*(sum(hstar*derphi)/p                 &
             + p*sum(hstar*bder)/gamma+alambd*sum(a_phi*bder))
 !
-!write(4001,*) z(1:3)
-!write(4001,*) hstar/hpstar
-!write(4001,*) vpa*hstar/hpstar
-!write(4001,*) vz
       end subroutine velo_can
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

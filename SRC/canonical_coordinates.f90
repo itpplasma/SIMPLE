@@ -1,9 +1,10 @@
 !
   use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
-  use chamb_mod,  only : rbig,rcham2
+!  use chamb_mod,  only : rbig,rcham2
   use parmot_mod, only : rmu,ro0,eeff
-  use velo_mod,   only : isw_field_type, neval_rk
-  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
+  use velo_mod,   only : isw_field_type
+use diag_mod, only : icounter
+  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl, ntau
   use field_can_mod, only : neval
 !
   implicit none
@@ -34,6 +35,8 @@
   double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
   double precision :: alam,alam_prev,par_inv
   real :: tstart, tend
+  integer, parameter :: runlen = 1
+  logical, parameter :: jparmode = .true.
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -77,7 +80,7 @@ bmod00=281679.46317784750d0
 ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
   ro0=rlarm*bmod00  ! 23.09.2013
 !
-  multharm=3 !7
+  multharm=3 !3 !7
   ns_A=5
   ns_s=5
   ns_tp=5
@@ -86,24 +89,27 @@ bmod00=281679.46317784750d0
 !call testing
 !
   call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)         !<=2017
-!
-  rbig=rt0
 ! field line integration step step over phi (to check chamber wall crossing)
   dphi=2.d0*pi/(L1i*npoiper)
 ! orbit integration time step (to check chamber wall crossing)
-  dtaumin=dphi*rbig/npoiper2!
-dtau=2*dtaumin
-print *,dtau
+  dtaumin=dphi*rt0/npoiper2!
+!dtau=2*dtaumin
+ntau = ceiling(dtau/dtaumin)
+dtaumin = dtau/ntau
+print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
   call get_canonical_coordinates
 !call testing
 !
-do it=1,100
-  r=0.1d0 !0.005d0 !0.1d0 !0.7d0
+!it = 1
+!do it=50,100
+  r=0.45d0 !0.005d0 !0.1d0 !0.7d0
   vartheta_c=0.5d0 !0.d0 !0.5d0
-vartheta_c=8.d0*atan(1.d0)*dfloat(it)*0.01
+!vartheta_c=0.5d0
+!vartheta_c=8.d0*atan(1.d0)*dfloat(it)*0.01
   varphi_c=0.5d0
-  alam0=0.01d0 !0.5d0
+  !alam0=0.01d0 !0.5d0
+  alam0=0.1d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
@@ -122,68 +128,77 @@ vartheta_c=8.d0*atan(1.d0)*dfloat(it)*0.01
 par_inv=0.d0
 alam=alam0
 alam_prev=alam
-open(3003, file='orbit_can.out', recl=1024)
-print *,'canonical'
-neval_rk = 0
+open(3005, file='orbit_axis.out', recl=1024)
+print *,'canonical axi'
+icounter = 0
 call cpu_time(tstart)
-  do i=1,L1i*npoiper*npoiper2*10000
+  do i=1,ntimstep
 !
-    call orbit_timestep_can(z,dtau,dtaumin,ierr)
-!
-    alam=z(5)
-    par_inv=par_inv+alam**2*dtau
-    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-      write (101,*) i,par_inv
+    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+    if (.not. jparmode) then
       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-      write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-      par_inv=0.d0
+      write (3005,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+    else
+      alam=z(5)
+      par_inv=par_inv+alam**2*dtau
+      if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+        write (103,*) i,par_inv
+        call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+        write (3005,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+        par_inv = 0.d0
+      endif
+      alam_prev=alam
     endif
-    alam_prev=alam
     
   enddo
-close(3003)
+close(3005)
 call cpu_time(tend)
-print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
+print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
 !
-  print *,'can : ',r,vartheta_c,varphi_c
+  print *,'axis : ',r,vartheta_c,varphi_c
 
 !
-  isw_field_type=0
-  z(1)=r
-  z(2)=vartheta_c
-  z(3)=varphi_c
-  z(4)=1.d0
-  z(5)=alam0
+!   isw_field_type=0
+!   z(1)=r
+!   z(2)=vartheta_c
+!   z(3)=varphi_c
+!   z(4)=1.d0
+!   z(5)=alam0
 !call testing
 !
 
-par_inv=0.d0
-alam=alam0
-alam_prev=alam
-open(3003, file='orbit_can.out', recl=1024)
-print *,'canonical'
-neval_rk = 0
-call cpu_time(tstart)
-  do i=1,L1i*npoiper*npoiper2*10000
-!
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-!
-    alam=z(5)
-    par_inv=par_inv+alam**2*dtau
-    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-      write (101,*) i,par_inv
-      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-      write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-      par_inv=0.d0
-    endif
-    alam_prev=alam
+! par_inv=0.d0
+! alam=alam0
+! alam_prev=alam
+! open(3003, file='orbit_can.out', recl=1024)
+! print *,'canonical'
+! icounter = 0
+! call cpu_time(tstart)
+!   do i=1,L1i*npoiper*npoiper2*runlen
+! !
+!     call orbit_timestep_can(z,dtau,dtaumin,ierr)
+!     if (.not. jparmode) then
+!     call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+!     write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+!     else
+! !
+!     alam=z(5)
+!     par_inv=par_inv+alam**2*dtau
+!     if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+!       write (101,*) i,par_inv
+!       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+!       write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+!       par_inv=0.d0
+!     endif
+!     alam_prev=alam
+!   endif
     
-  enddo
-close(3003)
-call cpu_time(tend)
-print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
-!
-  print *,'axis : ',r,vartheta_c,varphi_c
+!   enddo
+! close(3003)
+! call cpu_time(tend)
+! print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
+! !
+!   print *,'can : ',r,vartheta_c,varphi_c
 
 !
   isw_field_type=0
@@ -202,63 +217,74 @@ neval = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
   call orbit_sympl_init(z) 
-  do i=1,L1i*npoiper*npoiper2*10000
+  do i=1,ntimstep
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
-!    
-    alam=z(5)
-    par_inv=par_inv+alam**2*dtau
-    if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-      write (102,*) i,par_inv
+    if(z(1)>1.0) exit
+    if (.not. jparmode) then
       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
       write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-      par_inv=0.d0
+    else
+  !    
+      alam=z(5)
+      par_inv=par_inv+alam**2*dtau
+      if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+        write (102,*) i, par_inv
+        call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+        write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+        par_inv=0.d0
+      endif
+      alam_prev=alam
     endif
-    alam_prev=alam
 !
     
   enddo
 close(3004)
 call cpu_time(tend)
 print *,'done. Evaluations: ', neval, 'CPU time (s): ', tend - tstart
+call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
-  call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
 !  call deallocate_can_coord
 !
-  call spline_vmec_data
-!
-  isw_field_type=1
-  z(1)=r
-  z(2)=theta_vmec
-  z(3)=varphi_vmec
-  z(4)=1.d0
-  z(5)=alam0
-!
+!   call spline_vmec_data
+! !
+! isw_field_type=1
+! z(1)=r
+! z(2)=theta_vmec
+! z(3)=varphi_vmec
+! z(4)=1.d0
+! z(5)=alam0
+! !
 
 ! par_inv=0.d0
 ! alam=alam0
 ! alam_prev=alam
 ! print *,'VMEC, splines'
 ! neval_rk = 0
+! call cpu_time(tstart)
 ! open(3001, file='orbit_vmec.out', recl=1024)
-!   do i=1,L1i*npoiper*npoiper2*1000
+!   do i=1,L1i*npoiper*npoiper2*runlen
 ! !
-!     call orbit_timestep_can(z,dtau,dtaumin,ierr)
-! !
-!     alam=z(5)
-!     par_inv=par_inv+alam**2*dtau
-!     if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-!       write (100,*) i,par_inv
+!     call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+!     if (.not. jparmode) then
 !       write (3001,*) dtau*dfloat(i),z
-!       par_inv=0.d0
+!     else
+!       alam=z(5)
+!       par_inv=par_inv+alam**2*dtau
+!       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+!         write (100,*) i,par_inv
+!         write (3001,*) dtau*dfloat(i),z
+!         par_inv=0.d0
+!       endif
+!       alam_prev=alam
 !     endif
-!     alam_prev=alam
-    
-!   enddo
+! enddo
 ! close(3001)
-! print *,'done. Evaluations: ', neval_rk
+! call cpu_time(tend)
+! print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
 !call testing
 !
-  end
-!
+!pause
+!enddo
+end
