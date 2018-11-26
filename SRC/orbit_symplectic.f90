@@ -29,12 +29,12 @@ integer, parameter :: nlag = 3 ! order
 integer :: bufind(0:nlag), k
 double precision, dimension(0:0, nlag+1) :: coef
 
-logical, parameter :: extrap_field = .false.
+logical, parameter :: extrap_field = .true.
 
 integer :: ntau
 
 interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_verlet
+  module procedure orbit_timestep_sympl_euler1
 end interface
 
 contains
@@ -255,7 +255,7 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
     ktau = ktau+1
   enddo
   z0(1:3) = z(1:3)
-  z0(4) = H
+  !z0(4) = H
   z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_euler1
@@ -319,7 +319,7 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
     ktau = ktau+1
   enddo
   z0(1:3) = z(1:3)
-  z0(4) = H
+  !z0(4) = H
   z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_euler2
@@ -417,7 +417,7 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
     ktau = ktau+1
   enddo
   z0(1:3) = z(1:3)
-  z0(4) = H
+  !z0(4) = H
   z0(5) = vpar/(pabs*dsqrt(2d0))  ! alambda
 
 end subroutine orbit_timestep_sympl_verlet

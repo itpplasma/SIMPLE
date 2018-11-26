@@ -43,6 +43,7 @@ use diag_mod, only : icounter
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
 !
+  nder=0
   zerolam=0.d0
   twopi=2.d0*pi
   nplagr=4
@@ -114,7 +115,7 @@ bmod00=281679.46317784750d0
   dtaumin=dphi*rbig/npoiper2!
 !dtau=2*dtaumin
 dtau=dtaumin
-print *,dtau
+print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
   call get_canonical_coordinates
 !call testing
@@ -143,35 +144,34 @@ icounter=0
 !
   open(101,file='poiplot.dat')
 !
-  do i=1,L1i*npoiper*npoiper2*100 !300 !10
+  do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
     call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
-    write(101,*) z
 !
     if(ierr.ne.0) exit
 !
 !-------------------------------------------------------------------------
 ! Tip detection and interpolation
 !
-!     if(alam_prev.lt.0.d0.and.z(5).gt.0.d0) itip=0   !<=tip has been passed
-!     itip=itip+1
-!     alam_prev=z(5)
-!     if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
-!       orb_sten(:,i)=z
-!     else                          !<=normal case, shift stencil
-!       orb_sten(:,ipoi(1))=z
-!       ipoi=cshift(ipoi,1)
-!       if(itip.eq.npl_half) then   !<=stencil around tip is complete, interpolate
-!         xp=orb_sten(5,ipoi)
-! !
-!         call plag_coeff(nplagr,nder,zerolam,xp,coef)
-! !
-!         z_tip=matmul(orb_sten(:,ipoi),coef(0,:))
-!         z_tip(2)=modulo(z_tip(2),twopi)
-!         z_tip(3)=modulo(z_tip(3),twopi)
-!         write(101,*) z_tip
-!       endif
-!     endif
+    if(alam_prev.lt.0.d0.and.z(5).gt.0.d0) itip=0   !<=tip has been passed
+    itip=itip+1
+    alam_prev=z(5)
+    if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
+      orb_sten(:,i)=z
+    else                          !<=normal case, shift stencil
+      orb_sten(:,ipoi(1))=z
+      ipoi=cshift(ipoi,1)
+      if(itip.eq.npl_half) then   !<=stencil around tip is complete, interpolate
+        xp=orb_sten(5,ipoi)
+!
+        call plag_coeff(nplagr,nder,zerolam,xp,coef)
+!
+        z_tip=matmul(orb_sten(:,ipoi),coef(0,:))
+        z_tip(2)=modulo(z_tip(2),twopi)
+        z_tip(3)=modulo(z_tip(3),twopi)
+        write(101,*) z_tip
+      endif
+    endif
 !
 ! End tip detection and interpolation
 !-------------------------------------------------------------------------
