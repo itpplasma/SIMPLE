@@ -4,6 +4,7 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
+  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
 !
   implicit none
 !
@@ -36,7 +37,6 @@ use diag_mod, only : icounter
 ! Prepare calculation of orbit tip by interpolation
 !
   integer                                       :: nplagr,nder,itip,npl_half
-  integer                                       :: ifp,npassing,ntr_regular,ntr_chaotic
   double precision                              :: alam_prev,zerolam,twopi,fraction
   double precision, dimension(5)                :: z_tip
   integer,          dimension(:),   allocatable :: ipoi
@@ -115,29 +115,14 @@ bmod00=281679.46317784750d0
   dtaumin=dphi*rbig/npoiper2!
 !dtau=2*dtaumin
 dtau=dtaumin
-print *,dtau
+print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
   call get_canonical_coordinates
+!call testing
 !
-  npassing=0
-  ntr_regular=0
-  ntr_chaotic=0
-!
-do ipart=1,1000
-!  read *,r,vartheta_c,varphi_c,alam0
-  r=0.5d0
-!
-  call random_number(zzg)
-!
-  vartheta_c=twopi*zzg
-!
-  call random_number(zzg)
-!
-  varphi_c=twopi*zzg
-!
-  call random_number(zzg)
-!
-  alam0=2.d0*zzg-1.d0
+do 
+  print *, 'Enter r, theta, phi, lambda: '
+  read *,r,vartheta_c,varphi_c,alam0
 !
   isw_field_type=0
   z(1)=r
@@ -146,9 +131,8 @@ do ipart=1,1000
   z(4)=1.d0
   z(5)=alam0
 !
-  ifp=0
-!
 icounter=0
+  call orbit_sympl_init(z, 1) 
 !
 !--------------------------------
 ! Initialize tip detector
@@ -163,7 +147,7 @@ icounter=0
 !
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
 !
     if(ierr.ne.0) exit
 !
@@ -187,7 +171,6 @@ icounter=0
         z_tip(2)=modulo(z_tip(2),twopi)
         z_tip(3)=modulo(z_tip(3),twopi)
         write(101,*) z_tip
-        ifp=ifp+1
       endif
     endif
 !
@@ -199,87 +182,18 @@ icounter=0
 !
 print *,'done  ',icounter,'  field calls'
 !
-  if(ifp.eq.0) then
-    print *,'passing orbit'
-    npassing=npassing+1
-    cycle
-  endif
-!
   call fract_dimension(fraction)
 !
-  if(fraction.gt.0.2d0) then
+  if(fraction.gt.0.3d0) then
     print *,'chaotic orbit'
-    ntr_chaotic=ntr_chaotic+1
   else
     print *,'regular orbit'
-    ntr_regular=ntr_regular+1
   endif
-print *,npassing,' passing ',ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
 enddo
 !
   call deallocate_can_coord
 !
   end
-!
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-  SUBROUTINE plag_coeff(npoi,nder,x,xp,coef)
-    !
-    ! npoi - number of points (determines the order of Lagrange
-    ! polynomial
-    ! which is equal npoi-1)
-    ! nder - number of derivatives computed 0 - function only, 1 - first
-    ! derivative
-    ! x - actual point where function and derivatives are evaluated
-    ! xp(npoi) - array of points where function is known
-    ! coef(0:nder,npoi) - weights for computation of function and
-    ! derivatives,
-    ! f=sum(fun(1:npoi)*coef(0,1:npoi) gives the function value
-    ! df=sum(fun(1:npoi)*coef(1,1:npoi) gives the derivative value value
-    !
-    !
-    INTEGER, INTENT(in)                                :: npoi,nder
-    double precision, INTENT(in)                          :: x
-    double precision, DIMENSION(npoi), INTENT(in)         :: xp
-    double precision, DIMENSION(0:nder,npoi), INTENT(out) :: coef
-    double precision, DIMENSION(:), ALLOCATABLE           :: dummy
-    !
-    INTEGER                                            :: i,k,j
-    double precision                                      :: fac
-    !
-    DO i=1,npoi
-       coef(0,i)=1.d0
-       DO k=1,npoi
-          IF(k.EQ.i) CYCLE
-          coef(0,i)=coef(0,i)*(x-xp(k))/(xp(i)-xp(k))
-       ENDDO
-    ENDDO
-    !
-    IF(nder.EQ.0) RETURN
-    !
-    ALLOCATE(dummy(npoi))
-    !
-    DO i=1,npoi
-       dummy=1.d0
-       dummy(i)=0.d0
-       DO k=1,npoi
-          IF(k.EQ.i) CYCLE
-          fac=(x-xp(k))/(xp(i)-xp(k))
-          DO j=1,npoi
-             IF(j.EQ.k) THEN
-                dummy(j)=dummy(j)/(xp(i)-xp(k))
-             ELSE
-                dummy(j)=dummy(j)*fac
-             ENDIF
-          ENDDO
-       ENDDO
-       coef(1,i)=SUM(dummy)
-    ENDDO
-    !
-    DEALLOCATE(dummy)
-    !
-    RETURN
-  END SUBROUTINE plag_coeff
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
