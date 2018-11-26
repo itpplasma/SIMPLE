@@ -6,8 +6,11 @@ fort.*
 *.out
 *~
 *.nc
+*.nc.*
 *.x
 *.png
+*.o
+*.mod
 RUN/PICS
 *.sublime-*
 			 
