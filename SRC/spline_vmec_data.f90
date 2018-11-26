@@ -115,6 +115,9 @@
   sZ(1,1,1,:,:,:)=0.d0
   slam(1,1,1,:,:,:)=0.d0
 !
+!$omp parallel private(m, n, i_theta, i_phi, i, is, iexpt, iexpp, &
+!$omp&  expphase, cosphase, sinphase, k, splcoe)
+!$omp do
   do i_theta=1,n_theta
     do i_phi=1,n_phi
       do i=1,nstrm
@@ -136,13 +139,18 @@
       enddo
     enddo
   enddo
+!$omp end do
 !
+!$omp barrier
+!$omp single
   call new_deallocate_vmec_stuff
+!$omp end single
 !
 ! splining over $\varphi$:
 !
   allocate(splcoe(0:ns_tp,n_phi))
 !
+!$omp do
   do is=1,ns
     do i_theta=1,n_theta
 !
@@ -172,6 +180,7 @@
 !
     enddo
   enddo
+!$omp end do
 !
   deallocate(splcoe)
 !
@@ -179,6 +188,7 @@
 !
   allocate(splcoe(0:ns_tp,n_theta))
 !
+!$omp do
   do is=1,ns
     do i_phi=1,n_phi
       do isp=1,ns_tp+1
@@ -210,6 +220,7 @@
       enddo
     enddo
   enddo
+!$omp end do
 !
   deallocate(splcoe)
 !
@@ -217,6 +228,7 @@
 !
   allocate(splcoe(0:ns_s,ns))
 !
+!$omp do
   do i_theta=1,n_theta
     do i_phi=1,n_phi
       do ist=1,ns_tp+1
@@ -250,8 +262,11 @@
       enddo
     enddo
   enddo
+!$omp end do
 !
-  deallocate(splcoe,exp_imt,exp_inp)
+  deallocate(splcoe)
+!$omp end parallel
+  deallocate(exp_imt,exp_inp)
 !
   end subroutine spline_vmec_data
 !

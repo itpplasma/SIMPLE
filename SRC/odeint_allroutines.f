@@ -19,6 +19,9 @@
 !
 !------------------------------------------------------------------------------
       module odeint_mod
+!$omp threadprivate(kmax, kount, kmaxx, ialloc, dxsav, dydx, xp, y)
+!$omp threadprivate(yscal, yp, ak2, ak3, ak4, ak5, ak6, ytemp, yerr)
+!$omp threadprivate(ytemp1)
         integer :: kmax=0, kount=0, kmaxx=200, ialloc
         double precision :: dxsav=0.d0
         double precision, dimension(:),   allocatable :: dydx,xp,y,yscal
@@ -30,7 +33,6 @@
 !
 !------------------------------------------------------------------------------
       SUBROUTINE alloc_odeint(nvar)
-!
       use odeint_mod
 !
       if(ialloc.eq.1) then
@@ -54,7 +56,7 @@
       use odeint_mod, only : kmax,kount,ialloc,dxsav,dydx,xp,y,yscal,yp
 !
 ! 18.07.2016
-      use gbpi_mod
+      use gbpi_mod, only : ierrfield
 ! 18.07.2016 end
       implicit double precision (a-h,o-z)
 !

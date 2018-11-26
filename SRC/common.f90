@@ -1,3 +1,24 @@
+#ifndef _OPENMP
+  function omp_get_thread_num()
+    integer :: omp_get_thread_num
+    omp_get_thread_num = 0
+  end function omp_get_thread_num
+#endif
+
+module common
+
+implicit none
+
+double precision, parameter  :: pi=3.14159265358979d0
+double precision, parameter  :: c=2.9979d10
+double precision, parameter  :: e_charge=4.8032d-10
+double precision, parameter  :: e_mass=9.1094d-28
+double precision, parameter  :: p_mass=1.6726d-24
+double precision, parameter  :: ev=1.6022d-12
+
+end module common
+
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 SUBROUTINE plag_coeff(npoi,nder,x,xp,coef)

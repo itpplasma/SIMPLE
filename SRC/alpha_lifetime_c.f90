@@ -181,7 +181,7 @@ use diag_mod, only : dodiag
     stop
   endif
 !
-! Larmor raidus corresponds to the field stregth egual to $B_{00}$ harmonic
+! Larmor radius corresponds to the field stregth egual to $B_{00}$ harmonic
 ! in Boozer coordinates:
 ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
   ro0=rlarm*bmod00  ! 23.09.2013
