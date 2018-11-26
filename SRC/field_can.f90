@@ -1,5 +1,7 @@
 module field_can_mod
 
+use diag_mod, only : icounter
+
 implicit none
 save
 
@@ -34,8 +36,6 @@ double precision, dimension(10) :: d2vpar, d2H, d2pth
 ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
 
 double precision :: mu, ro0
-
-integer :: neval = 0
 
 integer, parameter :: nbuf = 0
 integer :: kbuf = 1
@@ -174,7 +174,7 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   end if
 
   ! Count evaluations for profiling
-  neval = neval + 1
+  icounter = icounter + 1
 
   ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
   df%dAth = 0d0
@@ -290,7 +290,7 @@ end subroutine eval_field_can
 !  double precision :: B0th, B0ph, cth, sth 
 
 !    ! Count evaluations for profiling
-!   neval = neval + 1
+!   icounter = icounter + 1
 
 !   B0th = .99d0
 !   B0ph = sqrt(1d0-B0th**2)

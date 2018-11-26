@@ -8,7 +8,7 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1e-15, rtol = 1e-15
+double precision, parameter :: atol = 1e-15, rtol = 1e-7
 
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
 double precision :: pthold
@@ -34,16 +34,19 @@ logical, parameter :: extrap_field = .false.
 integer :: ntau
 
 interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_euler1
+  module procedure orbit_timestep_sympl_verlet
 end interface
 
 contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_sympl_init(z0)
+subroutine orbit_sympl_init(z0, ntau_init)
 !
   double precision, intent(in) :: z0(5)
+  integer, intent(in) :: ntau_init ! dtau/dtaumin, must be integer
+
+  ntau = ntau_init
 
   call eval_field(z0(1), z0(2), z0(3), 0)
 
@@ -438,66 +441,3 @@ subroutine debug_root(x0)
 end subroutine debug_root
 
 end module orbit_symplectic
-
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-SUBROUTINE plag_coeff(npoi,nder,x,xp,coef)
-  !
-  ! npoi - number of points (determines the order of Lagrange
-  ! polynomial
-  ! which is equal npoi-1)
-  ! nder - number of derivatives computed 0 - function only, 1 - first
-  ! derivative
-  ! x - actual point where function and derivatives are evaluated
-  ! xp(npoi) - array of points where function is known
-  ! coef(0:nder,npoi) - weights for computation of function and
-  ! derivatives,
-  ! f=sum(fun(1:npoi)*coef(0,1:npoi) gives the function value
-  ! df=sum(fun(1:npoi)*coef(1,1:npoi) gives the derivative value value
-  !
-  implicit none
-  !
-  INTEGER, INTENT(in)                                :: npoi,nder
-  double precision, INTENT(in)                          :: x
-  double precision, DIMENSION(npoi), INTENT(in)         :: xp
-  double precision, DIMENSION(0:nder,npoi), INTENT(out) :: coef
-  double precision, DIMENSION(:), ALLOCATABLE           :: dummy
-  !
-  INTEGER                                            :: i,k,j
-  double precision                                      :: fac
-  !
-  DO i=1,npoi
-      coef(0,i)=1.d0
-      DO k=1,npoi
-        IF(k.EQ.i) CYCLE
-        coef(0,i)=coef(0,i)*(x-xp(k))/(xp(i)-xp(k))
-      ENDDO
-  ENDDO
-  !
-  IF(nder.EQ.0) RETURN
-  !
-  ALLOCATE(dummy(npoi))
-  !
-  DO i=1,npoi
-      dummy=1.d0
-      dummy(i)=0.d0
-      DO k=1,npoi
-        IF(k.EQ.i) CYCLE
-        fac=(x-xp(k))/(xp(i)-xp(k))
-        DO j=1,npoi
-            IF(j.EQ.k) THEN
-              dummy(j)=dummy(j)/(xp(i)-xp(k))
-            ELSE
-              dummy(j)=dummy(j)*fac
-            ENDIF
-        ENDDO
-      ENDDO
-      coef(1,i)=SUM(dummy)
-  ENDDO
-  !
-  DEALLOCATE(dummy)
-  !
-  RETURN
-END SUBROUTINE plag_coeff
-

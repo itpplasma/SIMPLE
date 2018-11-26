@@ -1,9 +1,10 @@
 program orbit_symplectic_test
 
-use field_can_mod, only: eval_field, neval
+use field_can_mod, only: eval_field
+use diag_mod, only : icounter
 
 use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, &
-  mu, ro0, f, df, d2f, z, pth
+  mu, ro0, f, df, d2f, z, pth, ntau
 
 implicit none
 
@@ -17,6 +18,8 @@ integer :: k
 
 integer :: nts = 1000
 integer :: kwrite = 1
+
+ntau = 1
 
 mu = 0.1d0
 ro0 = 1d0
@@ -42,6 +45,6 @@ do k = 1, nts
   if (mod(k, kwrite) == 0) write(4001,*) z0
 end do
 
-print *,'done. Evaluations: ', neval
+print *,'done. Evaluations: ', icounter
 
 end program orbit_symplectic_test
