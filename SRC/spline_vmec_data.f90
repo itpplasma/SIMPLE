@@ -9,10 +9,10 @@
   integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
   integer :: iss,ist,isp,nrho,nheal
   double precision :: twopi,cosphase,sinphase
-  double complex   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
+  complex(8)   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
   double precision, dimension(:,:), allocatable :: splcoe
   double precision, dimension(:,:), allocatable :: almn_rho,rmn_rho,zmn_rho
-  double complex,   dimension(:),   allocatable :: exp_imt,exp_inp
+  complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
 !
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
@@ -50,7 +50,7 @@
   call spl_reg(ns_A-1,ns,hs,splcoe(0:ns_A-1,:))
 !
   do i=ns_A,1,-1
-    splcoe(i,:)=splcoe(i-1,:)/dfloat(i)
+    splcoe(i,:)=splcoe(i-1,:)/dble(i)
   enddo
 !
   splcoe(0,1)=0.d0
@@ -76,11 +76,13 @@
   m_max=nint(maxval(axm))
   n_max=nint(maxval(axn))
 !
+  print *,'VMEC ns = ',ns,' m_max = ',m_max,' n_max = ',n_max
+!
   n_theta = m_max*multharm+1
   n_phi = n_max*multharm+1
   twopi=8.d0*atan2(1.d0,1.d0)
-  h_theta=twopi/dfloat(n_theta-1)
-  h_phi=twopi/dfloat((n_phi-1)*nper)
+  h_theta=twopi/dble(n_theta-1)
+  h_phi=twopi/dble((n_phi-1)*nper)
 !
   nsize_exp_imt=(n_theta-1)*m_max
   nsize_exp_inp=(n_phi-1)*n_max
@@ -309,17 +311,17 @@
 !
   ds=s/hs
   is=max(0,min(ns-1,int(ds)))
-  ds=(ds-dfloat(is))*hs
+  ds=(ds-dble(is))*hs
   is=is+1
 !
   dtheta=modulo(theta,twopi)/h_theta
   i_theta=max(0,min(n_theta-1,int(dtheta)))
-  dtheta=(dtheta-dfloat(i_theta))*h_theta
+  dtheta=(dtheta-dble(i_theta))*h_theta
   i_theta=i_theta+1
 !
-  dphi=modulo(varphi,twopi/dfloat(nper))/h_phi
+  dphi=modulo(varphi,twopi/dble(nper))/h_phi
   i_phi=max(0,min(n_phi-1,int(dphi)))
-  dphi=(dphi-dfloat(i_phi))*h_phi
+  dphi=(dphi-dble(i_phi))*h_phi
   i_phi=i_phi+1
 !
 ! Begin interpolation over $s$
@@ -330,7 +332,7 @@
 !
   do k=ns_A,1,-1
     A_phi=sA_phi(k,is)+ds*A_phi
-    dA_phi_ds=sA_phi(k+1,is)*dfloat(k)+ds*dA_phi_ds
+    dA_phi_ds=sA_phi(k+1,is)*dble(k)+ds*dA_phi_ds
   enddo
 !
 ! R, Z and $\lambda$ and their derivatives over $s$:
@@ -338,7 +340,7 @@
   rho_tor=sqrt(s)
   ds=rho_tor/hs
   is=max(0,min(ns-2,int(ds)))
-  ds=(ds-dfloat(is))*hs
+  ds=(ds-dble(is))*hs
   is=is+1
 !
   stp_R(1:nstp,1:nstp)=sR(ns_s+1,:,:,is,i_theta,i_phi)
@@ -350,11 +352,11 @@
 !
   do k=ns_s,1,-1
     stp_R(1:nstp,1:nstp)=sR(k,:,:,is,i_theta,i_phi)+ds*stp_R(1:nstp,1:nstp)
-    dstp_R_ds(1:nstp,1:nstp)=sR(k+1,:,:,is,i_theta,i_phi)*dfloat(k)+ds*dstp_R_ds(1:nstp,1:nstp)
+    dstp_R_ds(1:nstp,1:nstp)=sR(k+1,:,:,is,i_theta,i_phi)*dble(k)+ds*dstp_R_ds(1:nstp,1:nstp)
     stp_Z(1:nstp,1:nstp)=sZ(k,:,:,is,i_theta,i_phi)+ds*stp_Z(1:nstp,1:nstp)
-    dstp_Z_ds(1:nstp,1:nstp)=sZ(k+1,:,:,is,i_theta,i_phi)*dfloat(k)+ds*dstp_Z_ds(1:nstp,1:nstp)
+    dstp_Z_ds(1:nstp,1:nstp)=sZ(k+1,:,:,is,i_theta,i_phi)*dble(k)+ds*dstp_Z_ds(1:nstp,1:nstp)
     stp_lam(1:nstp,1:nstp)=slam(k,:,:,is,i_theta,i_phi)+ds*stp_lam(1:nstp,1:nstp)
-    dstp_lam_ds(1:nstp,1:nstp)=slam(k+1,:,:,is,i_theta,i_phi)*dfloat(k)+ds*dstp_lam_ds(1:nstp,1:nstp)
+    dstp_lam_ds(1:nstp,1:nstp)=slam(k+1,:,:,is,i_theta,i_phi)*dble(k)+ds*dstp_lam_ds(1:nstp,1:nstp)
   enddo
 !
 ! End interpolation over $s$
@@ -377,15 +379,15 @@
   do k=ns_tp,1,-1
     sp_R(1:nstp)=stp_R(k,1:nstp)+dtheta*sp_R(1:nstp)
     dsp_R_ds(1:nstp)=dstp_R_ds(k,1:nstp)+dtheta*dsp_R_ds(1:nstp)
-    dsp_R_dt(1:nstp)=stp_R(k+1,1:nstp)*dfloat(k)+dtheta*dsp_R_dt(1:nstp)
+    dsp_R_dt(1:nstp)=stp_R(k+1,1:nstp)*dble(k)+dtheta*dsp_R_dt(1:nstp)
 !
     sp_Z(1:nstp)=stp_Z(k,1:nstp)+dtheta*sp_Z(1:nstp)
     dsp_Z_ds(1:nstp)=dstp_Z_ds(k,1:nstp)+dtheta*dsp_Z_ds(1:nstp)
-    dsp_Z_dt(1:nstp)=stp_Z(k+1,1:nstp)*dfloat(k)+dtheta*dsp_Z_dt(1:nstp)
+    dsp_Z_dt(1:nstp)=stp_Z(k+1,1:nstp)*dble(k)+dtheta*dsp_Z_dt(1:nstp)
 !
     sp_lam(1:nstp)=stp_lam(k,1:nstp)+dtheta*sp_lam(1:nstp)
     dsp_lam_ds(1:nstp)=dstp_lam_ds(k,1:nstp)+dtheta*dsp_lam_ds(1:nstp)
-    dsp_lam_dt(1:nstp)=stp_lam(k+1,1:nstp)*dfloat(k)+dtheta*dsp_lam_dt(1:nstp)
+    dsp_lam_dt(1:nstp)=stp_lam(k+1,1:nstp)*dble(k)+dtheta*dsp_lam_dt(1:nstp)
   enddo
 !
 ! End interpolation over $\theta$
@@ -410,17 +412,17 @@
     R=sp_R(k)+dphi*R
     dR_ds=dsp_R_ds(k)+dphi*dR_ds
     dR_dt=dsp_R_dt(k)+dphi*dR_dt
-    dR_dp=sp_R(k+1)*dfloat(k)+dphi*dR_dp
+    dR_dp=sp_R(k+1)*dble(k)+dphi*dR_dp
 !
     Z=sp_Z(k)+dphi*Z
     dZ_ds=dsp_Z_ds(k)+dphi*dZ_ds
     dZ_dt=dsp_Z_dt(k)+dphi*dZ_dt
-    dZ_dp=sp_Z(k+1)*dfloat(k)+dphi*dZ_dp
+    dZ_dp=sp_Z(k+1)*dble(k)+dphi*dZ_dp
 !
     alam=sp_lam(k)+dphi*alam
     dl_ds=dsp_lam_ds(k)+dphi*dl_ds
     dl_dt=dsp_lam_dt(k)+dphi*dl_dt
-    dl_dp=sp_lam(k+1)*dfloat(k)+dphi*dl_dp
+    dl_dp=sp_lam(k+1)*dble(k)+dphi*dl_dp
   enddo
 !
 ! End interpolation over $\varphi$
@@ -505,19 +507,19 @@
 !
   ds=s/hs
   is=max(0,min(ns-1,int(ds)))
-  ds=(ds-dfloat(is))*hs
+  ds=(ds-dble(is))*hs
   is=is+1
 !
   dA_phi_ds=0.d0
 !
   do k=ns_A,1,-1
-    dA_phi_ds=sA_phi(k+1,is)*dfloat(k)+ds*dA_phi_ds
+    dA_phi_ds=sA_phi(k+1,is)*dble(k)+ds*dA_phi_ds
   enddo
 !
   d2A_phi_ds2=0.d0
 !
   do k=ns_A,2,-1
-    d2A_phi_ds2=sA_phi(k+1,is)*dfloat(k)*dfloat(k-1)+ds*d2A_phi_ds2
+    d2A_phi_ds2=sA_phi(k+1,is)*dble(k)*dble(k-1)+ds*d2A_phi_ds2
   enddo
 !
   aiota=-dA_phi_ds/dA_theta_ds
@@ -552,17 +554,17 @@
 !
   ds=sqrt(s)/hs
   is=max(0,min(ns-1,int(ds)))
-  ds=(ds-dfloat(is))*hs
+  ds=(ds-dble(is))*hs
   is=is+1
 !
   dtheta=modulo(theta,twopi)/h_theta
   i_theta=max(0,min(n_theta-1,int(dtheta)))
-  dtheta=(dtheta-dfloat(i_theta))*h_theta
+  dtheta=(dtheta-dble(i_theta))*h_theta
   i_theta=i_theta+1
 !
-  dphi=modulo(varphi,twopi/dfloat(nper))/h_phi
+  dphi=modulo(varphi,twopi/dble(nper))/h_phi
   i_phi=max(0,min(n_phi-1,int(dphi)))
-  dphi=(dphi-dfloat(i_phi))*h_phi
+  dphi=(dphi-dble(i_phi))*h_phi
   i_phi=i_phi+1
 !
 ! Begin interpolation over $s$
@@ -583,7 +585,7 @@
 !
   do k=ns_tp,1,-1
     sp_lam(1:nstp)=stp_lam(k,1:nstp)+dtheta*sp_lam(1:nstp)
-    dsp_lam_dt(1:nstp)=stp_lam(k+1,1:nstp)*dfloat(k)+dtheta*dsp_lam_dt(1:nstp)
+    dsp_lam_dt(1:nstp)=stp_lam(k+1,1:nstp)*dble(k)+dtheta*dsp_lam_dt(1:nstp)
   enddo
 !
 ! End interpolation over $\theta$
@@ -623,14 +625,14 @@
 !close(2001)
 !print *,m
 !
-  hs=1.d0/dfloat(ns-1)
-  hrho=1.d0/dfloat(nrho-1)
+  hs=1.d0/dble(ns-1)
+  hrho=1.d0/dble(nrho-1)
 !
   nhe=max(1,nheal)+1
 !
   do is=nhe,ns
     if(m.gt.0) then
-      rho=sqrt(hs*dfloat(is-1))
+      rho=sqrt(hs*dble(is-1))
       arr_out(is)=arr_in(is)/rho**m
     else
       arr_out(is)=arr_in(is)
@@ -642,7 +644,7 @@
   c=0.5d0*(arr_out(nhe)+arr_out(nhe+2)-2.d0*arr_out(nhe+1))
 !
   do is=1,nhe-1
-    arr_out(is)=a+b*dfloat(is-nhe)+c*dfloat(is-nhe)**2
+    arr_out(is)=a+b*dble(is-nhe)+c*dble(is-nhe)**2
   enddo
 !do is=1,ns
 !write(2002,*) is,arr_out(is)
@@ -656,12 +658,12 @@
   call spl_reg(ns_s,ns,hs,splcoe)
 !
   do irho=1,nrho
-    rho=hrho*dfloat(irho-1)
+    rho=hrho*dble(irho-1)
     s=rho**2
 !
     ds=s/hs
     is=max(0,min(ns-1,int(ds)))
-    ds=(ds-dfloat(is))*hs
+    ds=(ds-dble(is))*hs
     is=is+1
 !
     arr_out(irho)=splcoe(ns_s,is)

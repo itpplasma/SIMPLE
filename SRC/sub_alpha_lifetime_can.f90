@@ -167,6 +167,7 @@
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
       subroutine orbit_timestep_can(z,dtau,dtaumin,ierr)
+use diag_mod, only : dodiag
 !
       implicit none
 !
@@ -202,6 +203,7 @@
 !
         call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
 !
+if(dodiag) write (123,*) tau2,z
         y(1)=z(1)
         y(2)=z(2)
         phi=z(3)
@@ -369,34 +371,181 @@
       end subroutine integrate_mfl_can
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  subroutine binsrc(p,nmin,nmax,xi,i)
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-! Finds the index  i  of the array of increasing numbers   p  with dimension  n 
-! which satisfies   p(i-1) <  xi  <  p(i) . Uses binary search algorithm.
+  subroutine velo_axis(tau,z_axis,vz_axis)
+!
+! Here variables z(1)=s and z(2)=theta are replaced with
+! x_axis(1)=x=sqrt(s)*cos(theta) and x_axis(2)=y=sqrt(s)*sin(theta)
 !
   implicit none
 !
-  integer                                :: n,nmin,nmax,i,imin,imax,k
-  double precision                       :: xi
-  double precision, dimension(nmin:nmax) :: p
+  double precision :: tau,derlogsqs
+  double precision, dimension(5) :: z,vz,z_axis,vz_axis
 !
-  imin=nmin
-  imax=nmax
-  n=nmax-nmin
+!  z(1)=z_axis(1)**2+z_axis(2)**2
+  z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
+  z(1)=max(z(1),1.d-8)
+  z(2)=atan2(z_axis(2),z_axis(1))
+  z(3:5)=z_axis(3:5)
 !
-  do k=1,n
-    i=(imax-imin)/2+imin
-    if(p(i).gt.xi) then
-      imax=i
-    else
-      imin=i
-    endif
-    if(imax.eq.imin+1) exit
-  enddo
+  call velo_can(tau,z,vz)
 !
-  i=imax
+!  derlogsqs=0.5d0*vz(1)/sqrt(z(1))
+  derlogsqs=vz(1)/z(1)
+  vz_axis(1)=derlogsqs*z_axis(1)-vz(2)*z_axis(2)
+  vz_axis(2)=derlogsqs*z_axis(2)+vz(2)*z_axis(1)
+  vz_axis(3:5)=vz(3:5)
 !
-  return
-  end
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  end subroutine velo_axis
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+      subroutine orbit_timestep_axis(z,dtau,dtaumin,ierr)
+!
+      implicit none
+!
+      integer, parameter          :: ndim=5, nstepmax=1000000
+      double precision, parameter :: relerr=1d-8, snear_axis=0.01d0
+!
+      logical :: near_axis
+      integer :: ierr,j
+      double precision :: dtau,dtaumin,phi,tau1,tau2,z1,z2
+!
+      double precision, dimension(2)    :: y
+      double precision, dimension(ndim) :: z
+!
+      external velo_can,velo_axis
+!
+      if(dtaumin*nstepmax.le.dtau) then
+        ierr=2
+        print *,'orbit_timestep: number of steps exceeds nstepmax'
+        return
+      endif
+!
+      ierr=0
+      y(1)=z(1)
+      y(2)=z(2)
+      phi=z(3)
+!
+      call chamb_can(y,phi,ierr)
+!
+      if(ierr.ne.0) return
+      tau1=0.d0
+      tau2=dtaumin
+!
+      near_axis=.false.
+!
+      do while(tau2.lt.dtau)
+        if(near_axis) then
+          if(z(1)**2+z(2)**2.gt.snear_axis**2) then
+            near_axis=.false.
+            z1=sqrt(z(1)**2+z(2)**2)
+            z2=atan2(z(2),z(1))
+            z(1)=z1
+            z(2)=z2
+!
+            call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+!
+            y(1)=z(1)
+            y(2)=z(2)
+            phi=z(3)
+!
+            call chamb_can(y,phi,ierr)
+!
+            if(ierr.ne.0) return
+          else
+!
+            call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+!
+          endif
+        else
+          if(z(1).lt.snear_axis) then
+            near_axis=.true.
+            z1=z(1)*cos(z(2))
+            z2=z(1)*sin(z(2))
+            z(1)=z1
+            z(2)=z2
+!
+            call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+!
+          else
+!
+            call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+!
+            y(1)=z(1)
+            y(2)=z(2)
+            phi=z(3)
+!
+            call chamb_can(y,phi,ierr)
+!
+            if(ierr.ne.0) return
+!
+          endif
+        endif
+        tau1=tau2
+        tau2=tau2+dtaumin
+      enddo
+!
+      tau2=dtau
+!
+      if(near_axis) then
+        if(z(1)**2+z(2)**2.gt.snear_axis**2) then
+          near_axis=.false.
+          z1=sqrt(z(1)**2+z(2)**2)
+          z2=atan2(z(2),z(1))
+          z(1)=z1
+          z(2)=z2
+!
+          call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+!
+          y(1)=z(1)
+          y(2)=z(2)
+          phi=z(3)
+!
+          call chamb_can(y,phi,ierr)
+!
+          if(ierr.ne.0) return
+        else
+!
+          call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+!
+        endif
+      else
+        if(z(1).lt.snear_axis) then
+          near_axis=.true.
+          z1=z(1)*cos(z(2))
+          z2=z(1)*sin(z(2))
+          z(1)=z1
+          z(2)=z2
+!
+          call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+!
+        else
+!
+          call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+!
+          y(1)=z(1)
+          y(2)=z(2)
+          phi=z(3)
+!
+          call chamb_can(y,phi,ierr)
+!
+          if(ierr.ne.0) return
+!
+        endif
+      endif
+!
+      if(near_axis) then
+        z1=sqrt(z(1)**2+z(2)**2)
+        z2=atan2(z(2),z(1))
+        z(1)=z1
+        z(2)=z2
+      endif
+!
+      end subroutine orbit_timestep_axis
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

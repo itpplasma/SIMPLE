@@ -36,7 +36,6 @@ use diag_mod, only : icounter
 ! Prepare calculation of orbit tip by interpolation
 !
   integer                                       :: nplagr,nder,itip,npl_half
-  integer                                       :: ifp,npassing,ntr_regular,ntr_chaotic
   double precision                              :: alam_prev,zerolam,twopi,fraction
   double precision, dimension(5)                :: z_tip
   integer,          dimension(:),   allocatable :: ipoi
@@ -118,26 +117,10 @@ dtau=dtaumin
 print *,dtau
 !
   call get_canonical_coordinates
+!call testing
 !
-  npassing=0
-  ntr_regular=0
-  ntr_chaotic=0
-!
-do ipart=1,1000
-!  read *,r,vartheta_c,varphi_c,alam0
-  r=0.5d0
-!
-  call random_number(zzg)
-!
-  vartheta_c=twopi*zzg
-!
-  call random_number(zzg)
-!
-  varphi_c=twopi*zzg
-!
-  call random_number(zzg)
-!
-  alam0=2.d0*zzg-1.d0
+do 
+  read *,r,vartheta_c,varphi_c,alam0
 !
   isw_field_type=0
   z(1)=r
@@ -145,8 +128,6 @@ do ipart=1,1000
   z(3)=varphi_c
   z(4)=1.d0
   z(5)=alam0
-!
-  ifp=0
 !
 icounter=0
 !
@@ -187,7 +168,6 @@ icounter=0
         z_tip(2)=modulo(z_tip(2),twopi)
         z_tip(3)=modulo(z_tip(3),twopi)
         write(101,*) z_tip
-        ifp=ifp+1
       endif
     endif
 !
@@ -199,22 +179,13 @@ icounter=0
 !
 print *,'done  ',icounter,'  field calls'
 !
-  if(ifp.eq.0) then
-    print *,'passing orbit'
-    npassing=npassing+1
-    cycle
-  endif
-!
   call fract_dimension(fraction)
 !
-  if(fraction.gt.0.2d0) then
+  if(fraction.gt.0.3d0) then
     print *,'chaotic orbit'
-    ntr_chaotic=ntr_chaotic+1
   else
     print *,'regular orbit'
-    ntr_regular=ntr_regular+1
   endif
-print *,npassing,' passing ',ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
 enddo
 !
   call deallocate_can_coord
