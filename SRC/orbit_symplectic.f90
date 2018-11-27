@@ -209,7 +209,8 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
   integer :: ktau
   
   ierr = 0
-  if (z0(1) < 0.0 .or. z0(1) > 1.0) then
+
+  if (z0(1) > 1.0) then
     ierr = 1
     return
   end if
@@ -234,6 +235,12 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
       x(2)=z(4)
     end if
 
+    ! correct if Lagrange messed up
+    if (x(1) < 0.0 .or. x(1) > 1.0) then
+      x(1) = z(1) 
+      x(2) = z(4)
+    end if
+      
     call newton1(x, atol, rtol, maxit, xlast)
     if (x(1) < 0.0 .or. x(1) > 1.0) then
       ierr = 1
