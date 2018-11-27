@@ -44,6 +44,8 @@ use diag_mod, only : icounter
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
 !
+  integer :: i_ctr ! for nice counting in parallel
+
   zerolam=0.d0
   twopi=2.d0*pi
   nplagr=4
@@ -135,7 +137,7 @@ do ipart=1,npart
 enddo
 
 isw_field_type=0
-
+i_ctr=0
 !$omp parallel private(z, ifp, itip, alam_prev, &
 !$omp& ierr, orb_sten, xp, z_tip, coef, ipoi, i)
 print *, 'run started on thread ', omp_get_thread_num()
@@ -219,7 +221,10 @@ icounter=0
   enddo
   close(6000+omp_get_thread_num())
 !
-print *, 'particle ', ipart, '/', npart, ' done: ',icounter,'  field calls'
+!$omp critical
+i_ctr = i_ctr+1
+print *, 'particle ', i_ctr, '/', npart, ' done: ',icounter,'  field calls'
+!$omp end critical
 !
   if(ifp.eq.0) then
     print *,'passing orbit'

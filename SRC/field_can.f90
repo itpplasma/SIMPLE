@@ -37,11 +37,12 @@ double precision, dimension(10) :: d2vpar, d2H, d2pth
 ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
 ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
 
+!$omp threadprivate(mu, ro0)
 double precision :: mu, ro0
 
 ! TODO: make buffering work again, or drop it
-!$omp threadprivate(kbuf, xbuf, fbuf, dfbuf, d2fbuf)
 integer, parameter :: nbuf = 0
+!$omp threadprivate(kbuf, xbuf, fbuf, dfbuf, d2fbuf)
 integer :: kbuf = 1
 double precision :: xbuf(3, nbuf) = 1e30
 type(field_can) :: fbuf(nbuf)
@@ -204,6 +205,7 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   Bctr_varphi = df%dAth(1)/sqg
   
   bmod2 = Bctr_vartheta*Bth + Bctr_varphi*Bph
+  if (bmod2<0) print *, r, th_c, ph_c, bmod2
   f%Bmod = sqrt(bmod2)
   twobmod = 2.d0*f%Bmod
 
