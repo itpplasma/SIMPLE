@@ -8,16 +8,12 @@ NCINC = -I/usr/include
 NCLIB = -L/usr/lib -lnetcdff -lnetcdf
 
 OBJS =  OBJS/canonical_coordinates_mod.o \
-	OBJS/alpha_lifetime_mod_m.o \
 	OBJS/nctools_module.o \
 	OBJS/odeint_allroutines.o \
 	OBJS/magfie.o \
 	OBJS/chamb_m.o \
-	OBJS/sub_alpha_lifetime.o \
 	OBJS/sub_alpha_lifetime_can.o \
 	OBJS/vmecinm_m.o \
-	OBJS/vmec_allocation_stuff.o \
-	OBJS/vvnvmecv_m_fixedaxis.o \
 	OBJS/spline_vmec_data.o \
 	OBJS/spl_three_to_five.o \
 	OBJS/new_vmec_allocation_stuff.o \
@@ -30,9 +26,6 @@ canonical_coordinates.x: $(OBJS) Canonical_coordinates.mk SRC/canonical_coordina
 OBJS/canonical_coordinates_mod.o: SRC/canonical_coordinates_mod.f90 Canonical_coordinates.mk 
 	$(FC) $(OPTS) -c SRC/canonical_coordinates_mod.f90
 	mv canonical_coordinates_mod.o OBJS/
-OBJS/alpha_lifetime_mod_m.o: SRC/alpha_lifetime_mod_m.f90 Canonical_coordinates.mk
-	$(FC) $(OPTS) -c SRC/alpha_lifetime_mod_m.f90
-	mv alpha_lifetime_mod_m.o OBJS/
 OBJS/nctools_module.o: SRC/nctools_module.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) $(NCINC) -c SRC/nctools_module.f90 
 	mv nctools_module.o OBJS/
@@ -45,21 +38,12 @@ OBJS/magfie.o: SRC/magfie.f90 Canonical_coordinates.mk SRC/canonical_coordinates
 OBJS/chamb_m.o: SRC/chamb_m.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90 
 	$(FC) $(OPTS) -c SRC/chamb_m.f90
 	mv chamb_m.o OBJS/
-OBJS/sub_alpha_lifetime.o: SRC/sub_alpha_lifetime.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
-	$(FC) $(OPTS) -c SRC/sub_alpha_lifetime.f90
-	mv sub_alpha_lifetime.o OBJS/
 OBJS/sub_alpha_lifetime_can.o: SRC/sub_alpha_lifetime_can.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/sub_alpha_lifetime_can.f90
 	mv sub_alpha_lifetime_can.o OBJS/
 OBJS/vmecinm_m.o: SRC/vmecinm_m.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/vmecinm_m.f90
 	mv vmecinm_m.o OBJS/
-OBJS/vmec_allocation_stuff.o: SRC/vmec_allocation_stuff.f90 SRC/alpha_lifetime_mod_m.f90  Canonical_coordinates.mk
-	$(FC) $(OPTS) -c SRC/vmec_allocation_stuff.f90
-	mv vmec_allocation_stuff.o OBJS/
-OBJS/vvnvmecv_m_fixedaxis.o: SRC/vvnvmecv_m_fixedaxis.f Canonical_coordinates.mk
-	$(FC) $(OPTS) -c SRC/vvnvmecv_m_fixedaxis.f
-	mv vvnvmecv_m_fixedaxis.o OBJS/
 OBJS/spline_vmec_data.o: SRC/spline_vmec_data.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/spline_vmec_data.f90
 	mv spline_vmec_data.o OBJS/
@@ -72,12 +56,12 @@ OBJS/new_vmec_allocation_stuff.o: SRC/new_vmec_allocation_stuff.f90 Canonical_co
 OBJS/get_canonical_coordinates.o: SRC/get_canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/get_canonical_coordinates.f90
 	mv get_canonical_coordinates.o OBJS/
-OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
-	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
-	mv canonical_coordinates.o OBJS/
 OBJS/testing.o: SRC/testing.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/testing.f90
 	mv testing.o OBJS/
+OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
+	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
+	mv canonical_coordinates.o OBJS/
 #OBJS/.o: SRC/.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 #	$(FC) $(OPTS) -c SRC/.f90
 #	mv .o OBJS/
