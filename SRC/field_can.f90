@@ -159,7 +159,7 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   integer :: kb, bufind
 
   if (mode_secders == 0) then
-    do kb = 0, nbuf
+    do kb = 0, nbuf-1
       bufind = kbuf-kb
       if (bufind<1) bufind = bufind + nbuf
       if (r == xbuf(1,bufind) .and. th_c == xbuf(2,bufind) .and. ph_c == xbuf(3,bufind)) then
