@@ -3,7 +3,7 @@ FC       = gfortran
 #DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow,underflow -fbounds-check
 DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check
 #OPTS= -J OBJS -O
-OPTS= -J OBJS $(DEBUGFLAG)
+OPTS= -J OBJS $(DEBUGFLAG) -fopenmp # comment out -fopenmp for single-core version
 NCINC = -I/usr/include
 NCLIB = -L/usr/lib -lnetcdff -lnetcdf
 
@@ -21,6 +21,7 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/testing.o \
 	OBJS/field_can.o \
 	OBJS/orbit_symplectic.o \
+	OBJS/common.o \
 	OBJS/canonical_coordinates.o
 
 canonical_coordinates.x: $(OBJS) Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
@@ -67,6 +68,9 @@ OBJS/field_can.o: SRC/field_can.f90 Canonical_coordinates.mk
 OBJS/orbit_symplectic.o: SRC/orbit_symplectic.f90 Canonical_coordinates.mk SRC/field_can.f90
 	$(FC) $(OPTS) -c SRC/orbit_symplectic.f90
 	mv orbit_symplectic.o OBJS/
+OBJS/common.o: SRC/common.f90 Canonical_coordinates.mk
+	$(FC) $(OPTS) -c SRC/common.f90
+	mv common.o OBJS/
 OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
 	mv canonical_coordinates.o OBJS/
