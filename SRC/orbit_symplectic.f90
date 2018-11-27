@@ -159,6 +159,7 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
     ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
     xlast = x
     x = x - matmul(ijac, fvec)
+    if(x(1) < 0.0 .or. x(1) > 1.0) return
     if (all(abs(fvec) < atol) &
       .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
   enddo
@@ -208,6 +209,10 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
   integer :: ktau
   
   ierr = 0
+  if (z0(1) < 0.0 .or. z0(1) > 1.0) then
+    ierr = 1
+    return
+  end if
 
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   tau2 = 0d0
@@ -230,6 +235,10 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
     end if
 
     call newton1(x, atol, rtol, maxit, xlast)
+    if (x(1) < 0.0 .or. x(1) > 1.0) then
+      ierr = 1
+      return
+    end if
     
     z(1) = x(1)
     z(4) = x(2)

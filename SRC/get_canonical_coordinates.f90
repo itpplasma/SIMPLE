@@ -31,6 +31,7 @@
 !
   double precision :: r,r1,r2,G_beg,dG_c_dt,dG_c_dp
   integer :: is
+  integer :: i_ctr ! for nice counting in parallel
 !
   external rhs_cancoord
 !
@@ -99,12 +100,17 @@
   is_beg=1       !<=NEW
 !  G_beg=1.d-5 !<=OLD
   G_beg=1.d-8   !<=NEW
+
+  i_ctr=0
 !$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r, dG_c_dt, dG_c_dp)
   allocate(y(ndim),dy(ndim))
 !
 !$omp do
   do i_theta=1,n_theta_c
-    print *,'integrate ODE: ',i_theta,' of ',n_theta_c
+!$omp critical
+    i_ctr = i_ctr + 1
+    print *,'integrate ODE: ',i_ctr,' of ',n_theta_c
+!$omp end critical
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
       varphi_c=h_phi_c*dble(i_phi-1)
@@ -143,10 +149,14 @@
   enddo
 !$omp end do
 !
+i_ctr=0
 !$omp barrier
 !$omp do
   do i_theta=1,n_theta_c
-    print *,'compute components: ',i_theta,' of ',n_theta_c
+!$omp critical
+    i_ctr = i_ctr + 1
+    print *,'compute components: ',i_ctr,' of ',n_theta_c
+!$omp end critical
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
       varphi_c=h_phi_c*dble(i_phi-1)
