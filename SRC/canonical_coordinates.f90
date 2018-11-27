@@ -143,7 +143,7 @@ do ipart=1,npart
 enddo
 
 do ipart=1,1000
-print *, 'particle ', ipart, ' sympl'
+print *, 'particle ', ipart, '/', npart
 !
   isw_field_type=0
   z(1)=r
@@ -166,7 +166,7 @@ icounter=0
 ! End initialize tip detector
 !--------------------------------
 !
-  open(101,file='poiplot_sympl.dat')
+  open(101,file='poiplot.dat')
 !
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
