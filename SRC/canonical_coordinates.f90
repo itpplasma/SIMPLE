@@ -138,6 +138,7 @@ isw_field_type=0
 
 !$omp parallel private(z, ifp, itip, alam_prev, &
 !$omp& ierr, orb_sten, xp, z_tip, coef, ipoi, i)
+print *, 'run started on thread ', omp_get_thread_num()
   
 !
 !---------------------------------------------------------------------------
@@ -183,8 +184,8 @@ icounter=0
 !
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
-!    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
+!    call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
+    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
 !
     if(ierr.ne.0) exit
 !
