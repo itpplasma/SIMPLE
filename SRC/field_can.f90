@@ -24,10 +24,12 @@ type :: d2_field_can
     double precision, dimension(6) :: d2Bmod
 end type d2_field_can
 
+!$omp threadprivate(f, df, d2f)
 type(field_can) :: f
 type(d_field_can) :: df
 type(d2_field_can) :: d2f
 
+!$omp threadprivate(H, pth, vpar, dH, dpth, dvpar, d2H, d2pth, d2vpar)
 double precision :: H, pth, vpar
 double precision, dimension(4) :: dvpar, dH, dpth
 double precision, dimension(10) :: d2vpar, d2H, d2pth
@@ -37,6 +39,8 @@ double precision, dimension(10) :: d2vpar, d2H, d2pth
 
 double precision :: mu, ro0
 
+! TODO: make buffering work again, or drop it
+!$omp threadprivate(kbuf, xbuf, fbuf, dfbuf, d2fbuf)
 integer, parameter :: nbuf = 0
 integer :: kbuf = 1
 double precision :: xbuf(3, nbuf) = 1e30

@@ -51,6 +51,7 @@ module gbpi_mod
 end module gbpi_mod
 !
 module diag_mod
+!$omp threadprivate(icounter)
 logical :: dodiag=.false.
 integer :: icounter
 end module diag_mod

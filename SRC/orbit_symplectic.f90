@@ -10,28 +10,29 @@ save
 
 double precision, parameter :: atol = 1e-15, rtol = 1e-7
 
+! Current phase-space coordinates z and old pth
+!$omp threadprivate(z, pthold)
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
 double precision :: pthold
 
+! Buffer for Lagrange polynomial interpolation
+integer, parameter :: nlag = 3 ! order
 integer, parameter :: nbuf = 16 ! values to store back
+!$omp threadprivate(kbuf, kt, k, bufind, zbuf, coef)
 integer :: kbuf = 0
 integer :: kt = 0
+integer :: k = 0
+integer :: bufind(0:nlag)
 double precision, dimension(4, nbuf) :: zbuf
-
-double precision :: dt
-
-double precision :: coala
-double precision :: derphi(3)
-double precision :: alambd, pabs
-
-! for Lagrange interpolation
-integer, parameter :: nlag = 3 ! order
-integer :: bufind(0:nlag), k
 double precision, dimension(0:0, nlag+1) :: coef
 
-logical, parameter :: extrap_field = .true.
-
+! Timestep and variables from z0
+!$omp threadprivate(ntau, dt, alambd, pabs)
 integer :: ntau
+double precision :: dt
+double precision :: alambd, pabs
+
+logical, parameter :: extrap_field = .true.
 
 interface orbit_timestep_sympl
   module procedure orbit_timestep_sympl_euler1

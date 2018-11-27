@@ -5,18 +5,17 @@
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
+  use common, only: pi,c,e_charge,e_mass,p_mass,ev
+!
+#ifdef _OPENMP
+  use omp_lib
+#endif
 !
   implicit none
 !
-  double precision, parameter :: pi=3.14159265358979d0
-  double precision,parameter  :: c=2.9979d10
-  double precision,parameter  :: e_charge=4.8032d-10
-  double precision,parameter  :: e_mass=9.1094d-28
-  double precision,parameter  :: p_mass=1.6726d-24
-  double precision,parameter  :: ev=1.6022d-12
   double precision,parameter  :: snear_axis=0.05d0
 !
-  logical :: near_axis
+  logical          :: near_axis
   integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
   integer          :: ipart,notrace_passing,loopskip,iskip,ilost,it
   real             :: zzg
@@ -35,7 +34,7 @@ use diag_mod, only : icounter
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
 !---------------------------------------------------------------------------
-! Prepare calculation of orbit tip by interpolation
+! Parameters for orbit tip by interpolation
 !
   integer                                       :: nplagr,nder,itip,npl_half
   integer                                       :: ifp,npassing,ntr_regular,ntr_chaotic
@@ -50,14 +49,7 @@ use diag_mod, only : icounter
   nplagr=4
   nder=0
   npl_half=nplagr/2
-  allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(5,nplagr),xp(nplagr))
-  do i=1,nplagr
-    ipoi(i)=i
-  enddo
-!
-! End prepare calculation of orbit tip by interpolation
-!--------------------------------------------------------------------------
-!
+
   open(1,file='alpha_lifetime_m.inp')
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
   read (1,*) nper              !number of periods for initial field line
@@ -142,16 +134,36 @@ do ipart=1,npart
   alam0(ipart)=2.d0*zzg-1.d0
 enddo
 
-do ipart=1,1000
-print *, 'particle ', ipart, '/', npart
+isw_field_type=0
+
+!$omp parallel private(z, ifp, itip, alam_prev, &
+!$omp& ierr, orb_sten, xp, z_tip, coef, ipoi, i)
+  
 !
-  isw_field_type=0
+!---------------------------------------------------------------------------
+! Prepare calculation of orbit tip by interpolation
+!
+  allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(5,nplagr),xp(nplagr))
+  do i=1,nplagr
+    ipoi(i)=i
+  enddo
+!
+! End prepare calculation of orbit tip by interpolation
+!--------------------------------------------------------------------------
+!
+!  
+
+!$omp do
+do ipart=1,npart  
+!print *, 'particle ', ipart, '/', npart
+!
   z(1)=r
   z(2)=vartheta_c(ipart)
   z(3)=varphi_c(ipart)
   z(4)=1.d0
   z(5)=alam0(ipart)
-print *, 'z=', z
+!  
+!print *, 'z=', z
 !
   ifp=0
 !
@@ -167,7 +179,7 @@ icounter=0
 ! End initialize tip detector
 !--------------------------------
 !
-  open(101,file='poiplot.dat')
+  open(6000+omp_get_thread_num())
 !
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
@@ -195,7 +207,7 @@ icounter=0
         z_tip=matmul(orb_sten(:,ipoi),coef(0,:))
         z_tip(2)=modulo(z_tip(2),twopi)
         z_tip(3)=modulo(z_tip(3),twopi)
-        write(101,*) z_tip
+        write(6000+omp_get_thread_num(),*) z_tip
         ifp=ifp+1
       endif
     endif
@@ -204,13 +216,15 @@ icounter=0
 !-------------------------------------------------------------------------
 !
   enddo
-  close(101)
+  close(6000+omp_get_thread_num())
 !
-print *,'done  ',icounter,'  field calls'
+print *, 'particle ', ipart, '/', npart, ' done: ',icounter,'  field calls'
 !
   if(ifp.eq.0) then
     print *,'passing orbit'
+!$omp atomic
     npassing=npassing+1
+    print *,npassing,' passing ',ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
     cycle
   endif
 !
@@ -218,13 +232,17 @@ print *,'done  ',icounter,'  field calls'
 !
   if(fraction.gt.0.2d0) then
     print *,'chaotic orbit'
+!$omp atomic
     ntr_chaotic=ntr_chaotic+1
   else
     print *,'regular orbit'
+!$omp atomic
     ntr_regular=ntr_regular+1
   endif
 print *,npassing,' passing ',ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
 enddo
+!$omp end do
+!$omp end parallel
 !
   call deallocate_can_coord
 !
@@ -234,9 +252,13 @@ enddo
 !
   subroutine fract_dimension(fraction)
 !
+#ifdef _OPENMP
+  use omp_lib
+#endif
+!
   implicit none
 !
-  integer, parameter :: iunit=171
+  integer :: iunit
   integer :: itr,ntr,ir,it,ngrid,nrefine,irefine,kr,kt,nboxes
   double precision :: fraction,r,rmax,rmin,tmax,tmin,hr,ht
   logical,          dimension(:,:), allocatable :: free
@@ -244,7 +266,9 @@ enddo
 !
   ntr=0
 !
-  open(iunit,file='poiplot.dat')
+  iunit = 6000+omp_get_thread_num()
+!  
+  open(iunit)
   do
     read(iunit,*,end=1) r
     ntr=ntr+1
@@ -252,7 +276,7 @@ enddo
 1 close(iunit)
 !
   allocate(rt(2,ntr))
-  open(iunit,file='poiplot.dat')
+  open(iunit)
   do itr=1,ntr
     read(iunit,*) rt(:,itr)
   enddo
@@ -265,7 +289,7 @@ enddo
 !
   nrefine=int(log(dble(ntr))/log(4.d0))
 !
-  open(iunit,file='boxcount.dat')
+  open(iunit+1000)
   ngrid=1
   nrefine=nrefine+3       !<=add 3 for curiousity
   do irefine=1,nrefine
@@ -286,10 +310,10 @@ enddo
       endif
     enddo
     deallocate(free)
-    write(iunit,*) dble(irefine),dble(nboxes)/dble(ngrid**2)
+    write(iunit+1000,*) dble(irefine),dble(nboxes)/dble(ngrid**2)
     if(irefine.eq.nrefine-3) fraction=dble(nboxes)/dble(ngrid**2)
   enddo
-  close(iunit)
+  close(iunit+1000)
   deallocate(rt)
 !
   end subroutine fract_dimension
