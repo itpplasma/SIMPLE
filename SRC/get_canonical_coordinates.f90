@@ -174,6 +174,7 @@
     enddo
   enddo
 !$omp end do
+!$omp barrier
 !$omp master
 !
   ns_s_c=ns_s
