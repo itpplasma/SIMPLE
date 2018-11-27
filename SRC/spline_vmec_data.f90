@@ -546,8 +546,8 @@
 !
   subroutine splint_lambda(s,theta,varphi,alam,dl_dt)
 !
-  use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,sR,sZ,slam,nper,ns_A,ns_s,ns_tp
-  use vector_potentail_mod, only : ns,hs,torflux,sA_phi
+  use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,slam,nper,ns_s,ns_tp
+  use vector_potentail_mod, only : ns,hs
 !
   implicit none
 !

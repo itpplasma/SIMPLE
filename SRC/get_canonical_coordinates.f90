@@ -93,14 +93,14 @@
   allocate(B_vartheta_c(ns_c,n_theta_c,n_phi_c))
   allocate(B_varphi_c(ns_c,n_theta_c,n_phi_c))
 !
-!$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r)
   onlytheta=.false.
   ndim=1
-  allocate(y(ndim),dy(ndim))
 !  is_beg=ns_c/2 !<=OLD
   is_beg=1       !<=NEW
 !  G_beg=1.d-5 !<=OLD
   G_beg=1.d-8   !<=NEW
+!$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r, dG_c_dt, dG_c_dp)
+  allocate(y(ndim),dy(ndim))
 !
 !$omp do
   do i_theta=1,n_theta_c
@@ -143,6 +143,7 @@
   enddo
 !$omp end do
 !
+!$omp barrier
 !$omp do
   do i_theta=1,n_theta_c
     print *,'compute components: ',i_theta,' of ',n_theta_c

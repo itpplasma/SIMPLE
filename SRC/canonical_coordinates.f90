@@ -151,6 +151,7 @@ print *, 'particle ', ipart, '/', npart
   z(3)=varphi_c(ipart)
   z(4)=1.d0
   z(5)=alam0(ipart)
+print *, 'z=', z
 !
   ifp=0
 !
@@ -205,7 +206,7 @@ icounter=0
   enddo
   close(101)
 !
-print *,'done  ',icounter,'  field calls for sympl'
+print *,'done  ',icounter,'  field calls'
 !
   if(ifp.eq.0) then
     print *,'passing orbit'
