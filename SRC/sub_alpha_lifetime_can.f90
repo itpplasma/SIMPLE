@@ -171,7 +171,7 @@
       implicit none
 !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: relerr=1d-6
+      double precision, parameter :: relerr=1d-8
 !
       integer :: ierr,j
       double precision :: dtau,dtaumin,phi,tau1,tau2
