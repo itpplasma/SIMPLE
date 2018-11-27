@@ -174,7 +174,7 @@
     enddo
   enddo
 !$omp end do
-!$omp single
+!$omp master
 !
   ns_s_c=ns_s
   ns_tp_c=ns_tp
@@ -199,7 +199,7 @@
   call spline_can_coord(fullset)
 !
   deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,y,dy,sqg_c,B_vartheta_c,B_varphi_c,G_c)
-!$omp end single
+!$omp end master
 !$omp end parallel
   end subroutine get_canonical_coordinates
 !
