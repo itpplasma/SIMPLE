@@ -3,7 +3,7 @@ FC       = gfortran
 #DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow,underflow -fbounds-check
 DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check
 #OPTS= -J OBJS -O
-OPTS= -J OBJS $(DEBUGFLAG) -fopenmp # comment out -fopenmp for single-core version
+OPTS= -J OBJS $(DEBUGFLAG) #-fopenmp # comment out -fopenmp for single-core version
 NCINC = -I/usr/include
 NCLIB = -L/usr/lib -lnetcdff -lnetcdf
 
