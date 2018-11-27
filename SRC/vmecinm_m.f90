@@ -17,7 +17,7 @@
   double precision, dimension(nstrb,0:kparb) :: rmn,zmn,almn
 !
   do i=0,kparb
-    sps(i)=dfloat(i)
+    sps(i)=dble(i)
   enddo
 !
   call nc_open(netcdffile, ncid)

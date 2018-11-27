@@ -19,6 +19,7 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/new_vmec_allocation_stuff.o \
 	OBJS/get_canonical_coordinates.o \
 	OBJS/zzg.o \
+	OBJS/binsrc.o \
 	OBJS/alpha_lifetime_c.o
 
 alpha_lifetime_vmec_c.x: $(OBJS) Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
@@ -59,6 +60,9 @@ OBJS/get_canonical_coordinates.o: SRC/get_canonical_coordinates.f90 Alpha_lifeti
 OBJS/zzg.o: SRC/zzg.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/zzg.f90
 	mv zzg.o OBJS/
+OBJS/binsrc.o: SRC/binsrc.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
+	$(FC) $(OPTS) -c SRC/binsrc.f90
+	mv binsrc.o OBJS/
 OBJS/alpha_lifetime_c.o: SRC/alpha_lifetime_c.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/alpha_lifetime_c.f90
 	mv alpha_lifetime_c.o OBJS/

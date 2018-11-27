@@ -94,22 +94,26 @@
   onlytheta=.false.
   ndim=1
   allocate(y(ndim),dy(ndim))
-  is_beg=ns_c/2
-  G_beg=1.d-5
+!  is_beg=ns_c/2 !<=OLD
+  is_beg=1       !<=NEW
+!  G_beg=1.d-5 !<=OLD
+  G_beg=1.d-8   !<=NEW
 !
   do i_theta=1,n_theta_c
     print *,'integrate ODE: ',i_theta,' of ',n_theta_c
-    vartheta_c=h_theta_c*dfloat(i_theta-1)
+    vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
-      varphi_c=h_phi_c*dfloat(i_phi-1)
+      varphi_c=h_phi_c*dble(i_phi-1)
 !
       G_c(is_beg,i_theta,i_phi)=G_beg
       y(1)=G_beg
 !
 !      do is=is_beg-1,1,-1
       do is=is_beg-1,2,-1
-        r1=(hs_c*dfloat(is))**2
-        r2=(hs_c*dfloat(is-1))**2
+!        r1=(hs_c*dble(is))**2    !<=OLD
+!        r2=(hs_c*dble(is-1))**2  !<=OLD
+        r1=hs_c*dble(is)          !<=NEW
+        r2=hs_c*dble(is-1)        !<=NEW
 !        if(is.eq.1) r2=hs_c*1d-5
 !        if(is.eq.1) r2=(hs_c*1d-5)**2
 !
@@ -121,8 +125,11 @@
       y(1)=G_beg
 !
       do is=is_beg+1,ns_c
-        r1=(hs_c*dfloat(is-2))**2
-        r2=(hs_c*dfloat(is-1))**2
+!        r1=(hs_c*dble(is-2))**2  !<=OLD
+!        r2=(hs_c*dble(is-1))**2  !<=OLD
+        r1=hs_c*dble(is-2)        !<=NEW
+        r2=hs_c*dble(is-1)        !<=NEW
+        if(is.eq.2) r1=1.d-8
 !
         call odeint_allroutines(y,ndim,r1,r2,relerr,rhs_cancoord)
 !
@@ -133,12 +140,13 @@
 !
   do i_theta=1,n_theta_c
     print *,'compute components: ',i_theta,' of ',n_theta_c
-    vartheta_c=h_theta_c*dfloat(i_theta-1)
+    vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
-      varphi_c=h_phi_c*dfloat(i_phi-1)
+      varphi_c=h_phi_c*dble(i_phi-1)
 !      do is=1,ns_c
       do is=2,ns_c
-        r=(hs_c*dfloat(is-1))**2
+!        r=(hs_c*dble(is-1))**2  !<=OLD
+        r=hs_c*dble(is-1)        !<=NEW
         y(1)=G_c(is,i_theta,i_phi)
 !
         call rhs_cancoord(r,y,dy)
@@ -152,8 +160,9 @@
 !First point is=1 (on axis) is bad, extrapolate with parabola:
       sqg_c(1,i_theta,i_phi) = 3.d0*(sqg_c(2,i_theta,i_phi)-sqg_c(3,i_theta,i_phi))                      &
                              + sqg_c(4,i_theta,i_phi)
-      B_vartheta_c(1,i_theta,i_phi) = 3.d0*(B_vartheta_c(2,i_theta,i_phi)-B_vartheta_c(3,i_theta,i_phi)) &
-                                    + B_vartheta_c(4,i_theta,i_phi)
+!      B_vartheta_c(1,i_theta,i_phi) = 3.d0*(B_vartheta_c(2,i_theta,i_phi)-B_vartheta_c(3,i_theta,i_phi)) & !<=OLD
+!                                    + B_vartheta_c(4,i_theta,i_phi)                                        !<=OLD
+      B_vartheta_c(1,i_theta,i_phi) = 0.d0                                                                  !<=NEW
       B_varphi_c(1,i_theta,i_phi) = 3.d0*(B_varphi_c(2,i_theta,i_phi)-B_varphi_c(3,i_theta,i_phi))       &
                                   + B_varphi_c(4,i_theta,i_phi)
     enddo
@@ -167,6 +176,18 @@
 !
   onlytheta=.true.
 !
+!do is=1,ns_c
+!write(400,*) G_c(is,:,10)
+!write(401,*) B_vartheta_c(is,:,10)
+!write(402,*) B_varphi_c(is,:,10)
+!enddo
+!is=90
+!do i_phi=1,n_phi_c
+!write(500,*) G_c(is,:,i_phi)
+!write(501,*) B_vartheta_c(is,:,i_phi)
+!write(502,*) B_varphi_c(is,:,i_phi)
+!enddo
+!stop
   call spline_can_coord(fullset)
 !
   deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,y,dy,sqg_c,B_vartheta_c,B_varphi_c,G_c)
@@ -190,7 +211,8 @@
   double precision :: r,vartheta,daiota_ds,deltheta
   double precision, dimension(1) :: y,dy
 !
-  s=r
+!  s=r   !<=OLD
+  s=r**2 !<=NEW
 !
   call splint_iota(s,aiota,daiota_ds)
 !
@@ -219,6 +241,7 @@
                   Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
 !
   dy(1)=-(Bcovar_r+daiota_ds*Bcovar_vartheta*y(1))/(aiota*Bcovar_vartheta+Bcovar_varphi)
+  dy(1)=2.d0*r*dy(1)  !<=NEW
 !
   end subroutine rhs_cancoord
 !
@@ -356,9 +379,9 @@
   deallocate(splcoe)
 !
   do k=1,ns_max
-    derf1(k)=dfloat(k-1)
-    derf2(k)=dfloat((k-1)*(k-2))
-    derf3(k)=dfloat((k-1)*(k-2)*(k-3))
+    derf1(k)=dble(k-1)
+    derf2(k)=dble((k-1)*(k-2))
+    derf3(k)=dble((k-1)*(k-2)*(k-3))
   enddo
 !
   end subroutine spline_can_coord
@@ -380,6 +403,7 @@
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
   use new_vmec_stuff_mod,   only : nper,ns_A
   use chamb_mod,            only : rnegflag
+use diag_mod, only : icounter
 !
   implicit none
 !
@@ -410,6 +434,7 @@
   double precision, dimension(n_qua,ns_max)        :: d2sp_all_ds2,d2sp_all_dsdt,d2sp_all_dt2
   double precision, dimension(n_qua,ns_max,ns_max) :: stp_all,dstp_all_ds,d2stp_all_ds2
 !
+icounter=icounter+1
   if(r.le.0.d0) then
     rnegflag=.true.
     r=abs(r)
@@ -420,19 +445,19 @@
 !
   dtheta=modulo(vartheta_c,twopi)/h_theta_c
   i_theta=max(0,min(n_theta_c-1,int(dtheta)))
-  dtheta=(dtheta-dfloat(i_theta))*h_theta_c
+  dtheta=(dtheta-dble(i_theta))*h_theta_c
   i_theta=i_theta+1
 !
-  dphi=modulo(varphi_c,twopi/dfloat(nper))/h_phi_c
+  dphi=modulo(varphi_c,twopi/dble(nper))/h_phi_c
   i_phi=max(0,min(n_phi_c-1,int(dphi)))
-  dphi=(dphi-dfloat(i_phi))*h_phi_c
+  dphi=(dphi-dble(i_phi))*h_phi_c
   i_phi=i_phi+1
 !
 ! Begin interpolation of vector potentials over $s$
 !
   ds=r/hs
   is=max(0,min(ns-1,int(ds)))
-  ds=(ds-dfloat(is))*hs
+  ds=(ds-dble(is))*hs
   is=is+1
 !
   ns_A_p1=ns_A+1
@@ -466,7 +491,7 @@
   rho_tor=sqrt(r)
   ds=rho_tor/hs_c
   is=max(0,min(ns_c-1,int(ds)))
-  ds=(ds-dfloat(is))*hs_c
+  ds=(ds-dble(is))*hs_c
   is=is+1
 !
   nstp=ns_tp_c+1
@@ -863,7 +888,8 @@
   varphi_c=varphi_c_in
   y(1)=G_c
 !
-  call rhs_cancoord(r,y,dy)
+!  call rhs_cancoord(r,y,dy)      !<=OLD
+  call rhs_cancoord(sqrt(r),y,dy) !<=NEW
 !
   theta_vmec=theta
   varphi_vmec=varphi_c_in+G_c

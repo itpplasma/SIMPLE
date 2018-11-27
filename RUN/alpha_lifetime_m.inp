@@ -1,6 +1,6 @@
 1        notrace_passing   !skip tracing passing prts if notrace_passing=1
 250      nper              !number of periods for initial field line
-100      npoiper           !number of points per period on this field line
+16 100      npoiper           !number of points per period on this field line
 1000     ntimstep          !number of time steps per slowing down time
 100      ntestpart         !number of test particles
 5d4      bmod_ref          !reference field, G, for Boozer $B_{00}$
