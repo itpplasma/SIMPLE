@@ -170,7 +170,8 @@ icounter=0
 !
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
-    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
+    call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
+!    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
 !
     if(ierr.ne.0) exit
 !
