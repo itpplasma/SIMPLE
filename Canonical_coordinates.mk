@@ -18,7 +18,6 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/spl_three_to_five.o \
 	OBJS/new_vmec_allocation_stuff.o \
 	OBJS/get_canonical_coordinates.o \
-	OBJS/testing.o \
 	OBJS/canonical_coordinates.o
 
 canonical_coordinates.x: $(OBJS) Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
@@ -56,9 +55,6 @@ OBJS/new_vmec_allocation_stuff.o: SRC/new_vmec_allocation_stuff.f90 Canonical_co
 OBJS/get_canonical_coordinates.o: SRC/get_canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/get_canonical_coordinates.f90
 	mv get_canonical_coordinates.o OBJS/
-OBJS/testing.o: SRC/testing.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
-	$(FC) $(OPTS) -c SRC/testing.f90
-	mv testing.o OBJS/
 OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
 	mv canonical_coordinates.o OBJS/
