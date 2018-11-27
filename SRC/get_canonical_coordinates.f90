@@ -174,8 +174,8 @@
     enddo
   enddo
 !$omp end do
-!$omp barrier
-!$omp master
+deallocate(y,dy)
+!$omp end parallel
 !
   ns_s_c=ns_s
   ns_tp_c=ns_tp
@@ -198,10 +198,8 @@
 !enddo
 !stop
   call spline_can_coord(fullset)
+  deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,sqg_c,B_vartheta_c,B_varphi_c,G_c)
 !
-  deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,y,dy,sqg_c,B_vartheta_c,B_varphi_c,G_c)
-!$omp end master
-!$omp end parallel
   end subroutine get_canonical_coordinates
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
