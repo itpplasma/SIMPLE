@@ -140,6 +140,7 @@ print *,'VMEC, splines'
     write (3001,*) dtau*dfloat(i),z
   enddo
 print *,'done'
+call testing
 !
   end
 !

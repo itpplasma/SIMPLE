@@ -337,7 +337,7 @@
 !
   rho_tor=sqrt(s)
   ds=rho_tor/hs
-  is=max(0,min(ns-1,int(ds)))
+  is=max(0,min(ns-2,int(ds)))
   ds=(ds-dfloat(is))*hs
   is=is+1
 !
