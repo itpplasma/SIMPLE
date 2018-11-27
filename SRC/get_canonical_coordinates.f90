@@ -197,6 +197,7 @@
 !enddo
 !stop
   call spline_can_coord(fullset)
+!
   deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,y,dy,sqg_c,B_vartheta_c,B_varphi_c,G_c)
 !$omp end single
 !$omp end parallel
