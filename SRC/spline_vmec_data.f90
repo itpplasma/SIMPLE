@@ -7,11 +7,10 @@
   implicit none
 !
   integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
-  integer :: iss,ist,isp,nrho,nheal
+  integer :: iss,ist,isp
   double precision :: twopi,cosphase,sinphase
   double complex   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
   double precision, dimension(:,:), allocatable :: splcoe
-  double precision, dimension(:,:), allocatable :: almn_rho,rmn_rho,zmn_rho
   double complex,   dimension(:),   allocatable :: exp_imt,exp_inp
 !
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
@@ -24,23 +23,6 @@
   ns=kpar+1
   allocate(splcoe(0:ns_A,ns))
   hs=s(2)-s(1)
-!
-  nrho=ns
-  allocate(almn_rho(nstrm,0:nrho-1),rmn_rho(nstrm,0:nrho-1),zmn_rho(nstrm,0:nrho-1))
-!
-  do i=1,nstrm
-!
-    m=nint(abs(axm(i)))
-!
-    nheal=min(m,10)
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,rmn(i,:),rmn_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,zmn(i,:),zmn_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,almn(i,:),almn_rho(i,:))
-!
-  enddo
 !
 !------------------------------------
 ! Begin poloidal flux ($A_\varphi$):
@@ -125,11 +107,11 @@
         sinphase=dimag(expphase)
         do is=1,ns
           sR(1,1,1,is,i_theta,i_phi) = sR(1,1,1,is,i_theta,i_phi)      &
-                                     + rmn_rho(i,is-1)*cosphase
+                                     + rmn(i,is-1)*cosphase
           sZ(1,1,1,is,i_theta,i_phi) = sZ(1,1,1,is,i_theta,i_phi)      &
-                                     + zmn_rho(i,is-1)*sinphase
+                                     + zmn(i,is-1)*sinphase
           slam(1,1,1,is,i_theta,i_phi) = slam(1,1,1,is,i_theta,i_phi)  &
-                                       + almn_rho(i,is-1)*sinphase
+                                       + almn(i,is-1)*sinphase
         enddo
       enddo
     enddo
@@ -288,7 +270,7 @@
   double precision, parameter :: twopi=2.d0*3.14159265358979d0
 !
   integer :: is,i_theta,i_phi,k
-  double precision :: ds,dtheta,dphi,rho_tor
+  double precision :: ds,dtheta,dphi
   double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
                       R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
 !
@@ -334,13 +316,6 @@
   enddo
 !
 ! R, Z and $\lambda$ and their derivatives over $s$:
-!
-  rho_tor=sqrt(s)
-  ds=rho_tor/hs
-  is=max(0,min(ns-1,int(ds)))
-  ds=(ds-dfloat(is))*hs
-  is=is+1
-!
   stp_R(1:nstp,1:nstp)=sR(ns_s+1,:,:,is,i_theta,i_phi)
   dstp_R_ds(1:nstp,1:nstp)=0.d0
   stp_Z(1:nstp,1:nstp)=sZ(ns_s+1,:,:,is,i_theta,i_phi)
@@ -424,10 +399,6 @@
   enddo
 !
 ! End interpolation over $\varphi$
-!
-  dR_ds=0.5d0*dR_ds/rho_tor
-  dZ_ds=0.5d0*dZ_ds/rho_tor
-  dl_ds=0.5d0*dl_ds/rho_tor
 !
   end subroutine splint_vmec_data
 !
@@ -550,7 +521,7 @@
 !
   nstp=ns_tp+1
 !
-  ds=sqrt(s)/hs
+  ds=s/hs
   is=max(0,min(ns-1,int(ds)))
   ds=(ds-dfloat(is))*hs
   is=is+1
@@ -601,78 +572,3 @@
 !
   end subroutine splint_lambda
 !
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-  subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
-!
-  use new_vmec_stuff_mod, only : ns_s
-!
-  implicit none
-!
-  integer :: m,ns,nrho,nheal,irho,is,k,nhe
-!
-  double precision :: hs,hrho,s,ds,rho,a,b,c
-!
-  double precision, dimension(ns)   :: arr_in
-  double precision, dimension(nrho) :: arr_out
-  double precision, dimension(:,:), allocatable :: splcoe
-!
-!do is=1,ns
-!write(2001,*) is,arr_in(is)
-!enddo
-!close(2001)
-!print *,m
-!
-  hs=1.d0/dfloat(ns-1)
-  hrho=1.d0/dfloat(nrho-1)
-!
-  nhe=max(1,nheal)+1
-!
-  do is=nhe,ns
-    if(m.gt.0) then
-      rho=sqrt(hs*dfloat(is-1))
-      arr_out(is)=arr_in(is)/rho**m
-    else
-      arr_out(is)=arr_in(is)
-    endif
-  enddo
-!
-  a=arr_out(nhe)
-  b=0.5d0*(4.d0*arr_out(nhe+1)-3.d0*arr_out(nhe)-arr_out(nhe+2))
-  c=0.5d0*(arr_out(nhe)+arr_out(nhe+2)-2.d0*arr_out(nhe+1))
-!
-  do is=1,nhe-1
-    arr_out(is)=a+b*dfloat(is-nhe)+c*dfloat(is-nhe)**2
-  enddo
-!do is=1,ns
-!write(2002,*) is,arr_out(is)
-!enddo
-!close(2002)
-!
-  allocate(splcoe(0:ns_s,ns))
-!
-  splcoe(0,:)=arr_out
-!
-  call spl_reg(ns_s,ns,hs,splcoe)
-!
-  do irho=1,nrho
-    rho=hrho*dfloat(irho-1)
-    s=rho**2
-!
-    ds=s/hs
-    is=max(0,min(ns-1,int(ds)))
-    ds=(ds-dfloat(is))*hs
-    is=is+1
-!
-    arr_out(irho)=splcoe(ns_s,is)
-!
-    do k=ns_s-1,0,-1
-      arr_out(irho)=splcoe(k,is)+ds*arr_out(irho)
-    enddo
-!
-    if(m.gt.0) arr_out(irho)=arr_out(irho)*rho**m
-  enddo
-!
-  deallocate(splcoe)
-!
-  end subroutine s_to_rho_healaxis
