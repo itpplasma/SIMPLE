@@ -150,6 +150,7 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
   integer :: kit
 
   do kit = 1, maxit
+    if(x(1) < 0.0 .or. x(1) > 1.0) return
     call f_sympl_euler1(n, x, fvec, 1)
     call jac_sympl_euler1(x, fjac)
     ijac(1,1) = fjac(2,2)
@@ -159,7 +160,6 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
     ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
     xlast = x
     x = x - matmul(ijac, fvec)
-    if(x(1) < 0.0 .or. x(1) > 1.0) return
     if (all(abs(fvec) < atol) &
       .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
   enddo
