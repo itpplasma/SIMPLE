@@ -41,13 +41,13 @@ double precision, dimension(10) :: d2vpar, d2H, d2pth
 double precision :: mu, ro0
 
 ! TODO: make buffering work again, or drop it
-integer, parameter :: nbuf = 0
-!$omp threadprivate(kbuf, xbuf, fbuf, dfbuf, d2fbuf)
-integer :: kbuf = 1
-double precision :: xbuf(3, nbuf) = 1e30
-type(field_can) :: fbuf(nbuf)
-type(d_field_can) :: dfbuf(nbuf)
-type(d2_field_can) :: d2fbuf(nbuf)
+! integer, parameter :: nbuf = 0
+! !$omp threadprivate(kbuf, xbuf, fbuf, dfbuf, d2fbuf)
+! integer :: kbuf = 1
+! double precision :: xbuf(3, nbuf) = 1e30
+! type(field_can) :: fbuf(nbuf)
+! type(d_field_can) :: dfbuf(nbuf)
+! type(d2_field_can) :: d2fbuf(nbuf)
 
 
 interface eval_field
@@ -127,15 +127,15 @@ subroutine get_derivatives2(pphi)
   d2H(3) = d2H(3) + dvpar(1)*dvpar(3)
   d2H(5) = d2H(5) + dvpar(2)*dvpar(3)
 
-  d2pth(1:6) = d2vpar(1:6)*f%hth + vpar*d2f%d2hth - d2f%d2Ath/ro0
+  d2pth(1:6) = d2vpar(1:6)*f%hth + vpar*d2f%d2hth + d2f%d2Ath/ro0
   d2pth((/1,4,6/)) = d2pth((/1,4,6/)) + 2d0*dvpar(1:3)*df%dhth
   d2pth(2) = d2pth(2) + dvpar(1)*df%dhth(2) + dvpar(2)*df%dhth(1) 
   d2pth(3) = d2pth(3) + dvpar(1)*df%dhth(3) + dvpar(3)*df%dhth(1) 
   d2pth(5) = d2pth(5) + dvpar(2)*df%dhth(3) + dvpar(3)*df%dhth(2) 
 
-  d2vpar(7:9) = -dvpar(1:3)/f%hph**2
-  d2H(7:9) = dvpar(1:3)/f%hph - vpar/f%hph**2*df%dhph
-  d2pth(7:9) = df%dhth/f%hph - f%hth/f%hph**2*df%dhph
+  d2vpar(7:9) = -df%dhph/f%hph**2
+  d2H(7:9) = dvpar(1:3)/f%hph + vpar*d2vpar(7:9)
+  d2pth(7:9) = df%dhth/f%hph + f%hth*d2vpar(7:9)
 end subroutine get_derivatives2
 
     
@@ -163,20 +163,20 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
 
   integer :: kb, bufind
 
-  if (mode_secders == 0) then
-    do kb = 0, nbuf-1
-      bufind = kbuf-kb
-      if (bufind<1) bufind = bufind + nbuf
-      if (r == xbuf(1,bufind) .and. th_c == xbuf(2,bufind) .and. ph_c == xbuf(3,bufind)) then
-          ! exact match
-          f = fbuf(bufind)
-          df = dfbuf(bufind)
-          d2f = d2fbuf(bufind)
-          return
-          !print *, 'buffer hit ', xbuf(:,bufind)
-      end if
-    end do
-  end if
+  ! if (mode_secders == 0) then
+  !   do kb = 0, nbuf-1
+  !     bufind = kbuf-kb
+  !     if (bufind<1) bufind = bufind + nbuf
+  !     if (r == xbuf(1,bufind) .and. th_c == xbuf(2,bufind) .and. ph_c == xbuf(3,bufind)) then
+  !         ! exact match
+  !         f = fbuf(bufind)
+  !         df = dfbuf(bufind)
+  !         d2f = d2fbuf(bufind)
+  !         return
+  !         !print *, 'buffer hit ', xbuf(:,bufind)
+  !     end if
+  !   end do
+  ! end if
 
   ! Count evaluations for profiling
   icounter = icounter + 1
@@ -273,15 +273,15 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   endif
 
 
-  if(mode_secders == 0) then
-    if (nbuf>0) then
-      xbuf(:,kbuf) = (/r,th_c,ph_c/)
-      fbuf(kbuf) = f
-      dfbuf(kbuf) = df 
-      d2fbuf(kbuf) = d2f
-      kbuf = mod(kbuf, max(nbuf, 1)) + 1
-    end if
-  end if
+  ! if(mode_secders == 0) then
+  !   if (nbuf>0) then
+  !     xbuf(:,kbuf) = (/r,th_c,ph_c/)
+  !     fbuf(kbuf) = f
+  !     dfbuf(kbuf) = df 
+  !     d2fbuf(kbuf) = d2f
+  !     kbuf = mod(kbuf, max(nbuf, 1)) + 1
+  !   end if
+  ! end if
 
 end subroutine eval_field_can
 

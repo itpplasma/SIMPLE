@@ -83,10 +83,15 @@ call spline_vmec_data
 call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
 call get_canonical_coordinates
 
-r=0.7d0
-vartheta_c=0.5d0
-varphi_c=0.5d0
-alam0=0.3d0 !0.5d0
+!r=0.7d0
+!vartheta_c=0.5d0
+!varphi_c=0.5d0
+!alam0=0.3d0 !0.5d0
+
+r=0.5d0
+vartheta_c=0.0d0
+varphi_c=0.314d0
+alam0=0.3d0
 
 call can_to_vmec(r, vartheta_c, varphi_c, theta_vmec, varphi_vmec)
 
@@ -100,7 +105,7 @@ z0(3)=varphi_c
 z0(4)=1.d0
 z0(5)=alam0
 
-call orbit_sympl_init(z0, 1)
+call orbit_sympl_init(z0, 1.0d0, 1.0d0, 0)
 call do_test
 
 contains

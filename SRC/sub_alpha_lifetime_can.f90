@@ -182,7 +182,7 @@ use diag_mod, only : dodiag
 !
       external velo_can
 !
-      if(dtaumin*nstepmax.le.dtau) then
+      if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
         print *,'orbit_timestep: number of steps exceeds nstepmax'
         return
@@ -199,7 +199,7 @@ use diag_mod, only : dodiag
       tau1=0.d0
       tau2=dtaumin
 !
-      do while(tau2.lt.dtau)
+      do while((dtau>0 .and. (tau2 .lt. dtau)) .or. (dtau<0 .and. (tau2 .gt. dtau)))
 !
         call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
 !
@@ -420,7 +420,7 @@ if(dodiag) write (123,*) tau2,z
 !
       external velo_can,velo_axis
 !
-      if(dtaumin*nstepmax.le.dtau) then
+      if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
         print *,'orbit_timestep: number of steps exceeds nstepmax'
         return
@@ -439,7 +439,7 @@ if(dodiag) write (123,*) tau2,z
 !
       near_axis=.false.
 !
-      do while(tau2.lt.dtau)
+      do while((dtau>0 .and. (tau2 .lt. dtau)) .or. (dtau<0 .and. (tau2 .gt. dtau)))
         if(near_axis) then
           if(z(1)**2+z(2)**2.gt.snear_axis**2) then
             near_axis=.false.

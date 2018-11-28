@@ -41,7 +41,7 @@ z0(5) = vpar/sqrt(vpar**2/2d0 + mu*f%Bmod)
 write(4001,*) z0
 
 do k = 1, nts
-  call orbit_timestep_sympl(z0, dt0, dt0, info)
+  call orbit_timestep_sympl(z0, info)
   if (mod(k, kwrite) == 0) write(4001,*) z0
 end do
 

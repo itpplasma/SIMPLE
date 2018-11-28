@@ -19,11 +19,11 @@ def doplot(z, marker):
     plt.figure(2)
     plt.plot(z[:,2], z[:,0], marker)
     plt.xlim([.9985,1.001])
-    plt.ylim([.4875,.4885])
+    plt.ylim([.4875,.491])
 
 #%%
     
-z = np.loadtxt('/home/calbert/run/NEO-ORB/poiplot_euler16_extrap.dat')
+z = np.loadtxt('/home/calbert/run/NEO-ORB/poiplot.dat')
 doplot(z, 'r,')
 
 z = np.loadtxt('/home/calbert/run/NEO-ORB/poiplot_euler16.dat')

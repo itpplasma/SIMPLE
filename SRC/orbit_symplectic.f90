@@ -8,7 +8,7 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1e-15, rtol = 1e-7
+double precision, parameter :: atol = 1e-15, rtol = 1e-9
 
 ! Current phase-space coordinates z and old pth
 !$omp threadprivate(z, pthold)
@@ -19,51 +19,168 @@ double precision :: pthold
 integer, parameter :: nlag = 3 ! order
 integer, parameter :: nbuf = 16 ! values to store back
 !$omp threadprivate(kbuf, kt, k, bufind, zbuf, coef)
-integer :: kbuf = 0
-integer :: kt = 0
-integer :: k = 0
+integer :: kbuf
+integer :: kt
+integer :: k
 integer :: bufind(0:nlag)
 double precision, dimension(4, nbuf) :: zbuf
 double precision, dimension(0:0, nlag+1) :: coef
 
 ! Timestep and variables from z0
-!$omp threadprivate(ntau, dt, alambd, pabs)
+!$omp threadprivate(ntau, dt, pabs)
 integer :: ntau
 double precision :: dt
-double precision :: alambd, pabs
+double precision :: pabs
 
 logical, parameter :: extrap_field = .true.
 
-interface orbit_timestep_sympl
-  module procedure orbit_timestep_sympl_euler1
-end interface
+! For initial conditions
+!$omp threadprivate(z0init)
+double precision :: z0init(5)
+
+! For initial conditions
+!$omp threadprivate(mode)
+integer :: mode
 
 contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_sympl_init(z0, ntau_init)
+subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
 !
   double precision, intent(in) :: z0(5)
-  integer, intent(in) :: ntau_init ! dtau/dtaumin, must be integer
+  double precision, intent(in) :: dtau, dtaumin
+  integer, intent(in) :: mode_init ! 0 = euler1, 1 = euler2, 2 = verlet
 
-  ntau = ntau_init
+  double precision :: x(2), fvec(2)
+  integer ierr, info
+
+  integer, parameter :: n = 2
+  double precision, parameter :: tol = 1e-13
+
+  mode = mode_init
+
+  kbuf = 0
+  kt = 0
+  k = 0
+
+  if(abs(mod(dtau, dtaumin)) > dtaumin*1e-14) stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+  ntau = nint(dtau/dtaumin)
+  dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
+  if (mode==2) dt = dt/2d0 ! Verlet out of two Euler steps
 
   call eval_field(z0(1), z0(2), z0(3), 0)
 
-  pabs=z0(4)
-  alambd=z0(5)
+  pabs = z0(4)
 
-  mu = .5d0*pabs**2*(1.d0-alambd**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+  mu = .5d0*pabs**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
   ro0 = ro0_parmot/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
-  vpar = pabs*alambd*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+  vpar = pabs*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
 
-  z(1:3) = z0(1:3)  ! r, th, ph
-  z(4) = vpar*f%hph + f%Aph/ro0 ! pphi
-  pth = vpar*f%hth + f%Ath/ro0 ! pth
+  ! initialize canonical variables
+  z(2:3) = z0(2:3)  ! th, ph
+  
+  if (mode==0) then
+    z0init = z0
+!print *, 'z0(0) :', z0init
+    call orbit_timestep_axis(z0init,-dtaumin,-dtaumin, ierr)
+!print *, 'z0(-1):', z0init
+    x(1) = (z0(1) + z0init(1))/2d0
+    x(2) = (vpar*f%hph + f%Aph/ro0)/2d0 ! pphi
+    call eval_field(z0init(1), z0init(2), z0init(3), 0)
+    vpar = pabs*z0init(5)*dsqrt(2d0)
+    x(2) = x(2) + (vpar*f%hph + f%Aph/ro0)/2d0 ! pphi
+!print *, 'before: ', x
+    !call newton1_init(x, atol, rtol, 101) ! TODO: debug and see why this is not working
+    call hybrd1 (f_sympl_euler1_init, n, x, fvec, tol, info)
+!print *, fvec, info
+!print *, 'after: ', x
+    z(1) = x(1)
+    z(4) = x(2) 
+    call eval_field(z(1), z(2), z(3), 0)
+    call get_val(z(4))
+    pth = vpar*f%hth + f%Ath/ro0 ! pth
+  else
+    z(1) = z0(1)
+    z(4) = vpar*f%hph + f%Aph/ro0 ! pphi 
+    call get_val(z(4))
+  end if
 
   call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), coef)
 end subroutine orbit_sympl_init
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine f_sympl_euler1_init(n, x, fvec, iflag)
+!
+  integer, intent(in) :: n
+  double precision, intent(in) :: x(n)
+  double precision, intent(out) :: fvec(n)
+  integer, intent(in) :: iflag
+
+  call eval_field(x(1), z0init(2), z0init(3), 2)
+  call get_derivatives2(x(2))
+
+  fvec(1) = dpth(1)*(z(2) - z0init(2)) - dt*dH(1)
+  fvec(2) = dpth(1)*f%hph*(z(3) - z0init(3)) - dt*(dpth(1)*vpar - dH(1)*f%hth)
+
+end subroutine f_sympl_euler1_init
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine jac_sympl_euler1_init(x, jac)
+!
+  double precision, intent(in)  :: x(2)
+  double precision, intent(out) :: jac(2, 2)
+
+  jac(1,1) = d2pth(1)*(z(2) - z0init(2)) - dt*d2H(1) 
+  jac(1,2) = d2pth(7)*(z(2) - z0init(2)) - dt*d2H(7) 
+  jac(2,1) = (d2pth(1)*f%hph+dpth(1)*df%dhph(1))*(z(3) - z0init(3)) &
+           - dt*(d2pth(1)*vpar + dpth(1)*dvpar(1) - d2H(1)*f%hth - dH(1)*df%dhth(1))
+  jac(2,2) = d2pth(7)*f%hph*(z(3) - z0init(3)) &
+           - dt*(d2pth(7)*vpar + dpth(4)*dvpar(4) - d2H(7)*f%hth)
+
+end subroutine jac_sympl_euler1_init
+
+
+subroutine newton1_init(x, atol, rtol, maxit)
+  integer, parameter :: n = 2
+
+  double precision, intent(inout) :: x(n)
+  double precision, intent(in) :: atol, rtol
+  integer, intent(in) :: maxit
+
+  double precision :: xlast(n)
+  double precision :: fvec(n), fjac(n,n), ijac(n,n)
+  integer :: kit
+
+  do kit = 1, maxit
+    call f_sympl_euler1_init(n, x, fvec, 1)
+    call jac_sympl_euler1_init(x, fjac)
+    print *, '-------------'
+    print *, 'it ', kit
+    print *, 'x=', x
+    print *, 'f=', fvec
+    print *, 'J=', fjac
+    print *, '-------------'
+    read(*,*)
+    ijac(1,1) = fjac(2,2)
+    ijac(1,2) = -fjac(1,2)
+    ijac(2,1) = -fjac(2,1)
+    ijac(2,2) = fjac(1,1)
+    ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
+    xlast = x
+    x = x - matmul(ijac, fvec)
+    if (all(abs(fvec) < atol) &
+      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) then
+print *, 'reached fvec = ', fvec
+      return
+    end if
+  enddo
+  print *, 'Warning: maximum iterations reached in newton1: ', maxit
+end subroutine newton1_init
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -81,9 +198,8 @@ subroutine f_sympl_euler1(n, x, fvec, iflag)
   fvec(1) = dpth(1)*(pth - pthold) + dt*(dH(2)*dpth(1) - dH(1)*dpth(2))
   fvec(2) = dpth(1)*(x(2) - z(4))  + dt*(dH(3)*dpth(1) - dH(1)*dpth(3))
 
-  !print *, fvec
-
 end subroutine f_sympl_euler1
+
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -179,6 +295,7 @@ subroutine newton2(x, atol, rtol, maxit, xlast)
   integer :: pivot(n), info
 
   do kit = 1, maxit
+    if(x(1) < 0.0 .or. x(1) > 1.0) return
     call f_sympl_euler2(n, x, fvec, 1)
     call jac_sympl_euler2(x, fjac)
     call dgesv(n, 1, fjac, n, pivot, fvec, 3, info) 
@@ -193,30 +310,46 @@ end subroutine
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
+subroutine orbit_timestep_sympl(z0, ierr)
 !
   integer, intent(out) :: ierr
   double precision, dimension(5), intent(inout) :: z0
-  double precision, intent(in) :: dtau
-  double precision, intent(in) :: dtaumin
+
+  select case (mode)
+   case (0)
+      call orbit_timestep_sympl_euler1(z0, ierr)
+   case (1)
+      call orbit_timestep_sympl_euler2(z0, ierr)
+   case (2)
+      call orbit_timestep_sympl_verlet(z0, ierr)
+   case default
+      stop 'invalid mode for orbit_timestep_sympl'
+  end select
+
+end subroutine orbit_timestep_sympl
+
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine orbit_timestep_sympl_euler1(z0, ierr)
+!
+  integer, intent(out) :: ierr
+  double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 2
   integer, parameter :: maxit = 100
 
   double precision, dimension(n) :: x, xlast
-
-  double precision :: tau2
   integer :: ktau
   
   ierr = 0
 
-  if (z0(1) > 1.0) then
+  if (z0(1) < 0.0 .or. z0(1) > 1.0) then
     ierr = 1
     return
   end if
-
-  dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
-  tau2 = 0d0
+  
   ktau = 0
   do while(ktau .lt. ntau)
     pthold = pth
@@ -242,6 +375,7 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
     end if
       
     call newton1(x, atol, rtol, maxit, xlast)
+
     if (x(1) < 0.0 .or. x(1) > 1.0) then
       ierr = 1
       return
@@ -267,7 +401,6 @@ subroutine orbit_timestep_sympl_euler1(z0, dtau, dtaumin, ierr)
     kbuf = mod(kt, nbuf) + 1
     zbuf(:,kbuf) = z
 
-    tau2 = tau2 + dtaumin
     kt = kt+1
     ktau = ktau+1
   enddo
@@ -280,26 +413,18 @@ end subroutine orbit_timestep_sympl_euler1
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
+subroutine orbit_timestep_sympl_euler2(z0, ierr)
 !
   integer, intent(out) :: ierr
   double precision, dimension(5), intent(inout) :: z0
-  double precision, intent(in) :: dtau
-  double precision, intent(in) :: dtaumin
 
   integer, parameter :: n = 3
   integer, parameter :: maxit = 100
 
   double precision, dimension(n) :: x, xlast
-
-  double precision :: tau2
-
   integer :: ktau
   
   ierr = 0
-
-  dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
-  tau2 = 0d0
   ktau = 0
   do while(ktau .lt. ntau)
     pthold = pth
@@ -331,7 +456,6 @@ subroutine orbit_timestep_sympl_euler2(z0, dtau, dtaumin, ierr)
     kbuf = mod(kt, nbuf) + 1
     zbuf(:,kbuf) = z
 
-    tau2 = tau2 + dtaumin
     kt = kt+1
     ktau = ktau+1
   enddo
@@ -344,12 +468,10 @@ end subroutine orbit_timestep_sympl_euler2
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
+subroutine orbit_timestep_sympl_verlet(z0, ierr)
 !
   integer, intent(out) :: ierr
   double precision, dimension(5), intent(inout) :: z0
-  double precision, intent(in) :: dtau
-  double precision, intent(in) :: dtaumin
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
@@ -357,15 +479,9 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
 
   double precision, dimension(n1) :: x1, xlast1
   double precision, dimension(n2) :: x2, xlast2
-
-  double precision :: tau2
-
   integer :: ktau
 
   ierr = 0
-
-  dt = 0.5d0*dtaumin/dsqrt(2d0)
-  tau2 = 0d0
   ktau = 0
   do while(ktau .lt. ntau)
     pthold = pth
@@ -387,7 +503,17 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
       x1 = z(1:3)
     end if
     
+    ! correct if Lagrange messed up
+    if (x1(1) < 0.0 .or. x1(1) > 1.0) then
+      x1 = z(1:3)
+    end if
+    
     call newton2(x1, atol, rtol, maxit, xlast1)
+    
+    if (x1(1) < 0.0 .or. x1(1) > 1.0) then
+      ierr = 1
+      return
+    end if
 
     z(1:3) = x1
 
@@ -416,7 +542,18 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
       x2(2)=z(4)
     end if
     
+    ! correct if Lagrange messed up
+    if (x2(1) < 0.0 .or. x2(1) > 1.0) then
+      x2(1) = z(1) 
+      x2(2) = z(4)
+    end if
+
     call newton1(x2, atol, rtol, maxit, xlast2)
+    
+    if (x2(1) < 0.0 .or. x2(1) > 1.0) then
+      ierr = 1
+      return
+    end if
 
     z(1) = x2(1)
     z(4) = x2(2)
@@ -429,7 +566,6 @@ subroutine orbit_timestep_sympl_verlet(z0, dtau, dtaumin, ierr)
     kbuf = mod(2*kt+1, nbuf) + 1
     zbuf(:,kbuf) = z
     
-    tau2 = tau2 + dtaumin
     kt = kt+1
     ktau = ktau+1
   enddo

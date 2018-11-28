@@ -12,6 +12,7 @@ from numpy import *
 from matplotlib.pyplot import *
 
 parent = '/home/calbert/run/NEO-ORB/'
+#parent = '/home/calbert/code/NEO-ORB/RUN'
 
 #data_rk = loadtxt('orbit_vmec.out') # Runge Kutta
 #data_can = loadtxt('orbit_can.out') # Runge Kutta on canonicalized coordinates
@@ -27,11 +28,11 @@ nrange = range(1,len(data_sym))
 
 
 figure()
-plot(data_axi[:,0], data_axi[:,1],'b,')
-plot(data_sym[:,0], data_sym[:,1],'r,')
+plot(data_axi[2:,0], data_axi[2:,1],'b,')
+plot(data_sym[2:,0], data_sym[2:,1],'r,')
 #plot(data_can[:,0], data_can[:,1]+.02,'b,')
 #plot(data_rk[:,0], data_rk[:,1]+.03,'k,')
-legend(['sympl','axi'])
+legend(['can','sympl'])
 #plot(data_rk[:,0], data_rk[:,1],'g,')
 #savefig('orbit_stell.png')
 
