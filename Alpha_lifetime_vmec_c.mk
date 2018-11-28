@@ -23,6 +23,7 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/orbit_symplectic.o \
 	OBJS/binsrc.o \
 	OBJS/common.o \
+	OBJS/minpack.o \
 	OBJS/alpha_lifetime_c.o
 
 alpha_lifetime_vmec_c.x: $(OBJS) Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
@@ -75,6 +76,9 @@ OBJS/binsrc.o: SRC/binsrc.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates
 OBJS/common.o: SRC/common.f90 Canonical_coordinates.mk
 	$(FC) $(OPTS) -c SRC/common.f90
 	mv common.o OBJS/
+OBJS/minpack.o: SRC/minpack.f90 Canonical_coordinates.mk
+	$(FC) $(OPTS) -c SRC/minpack.f90
+	mv minpack.o OBJS/
 OBJS/alpha_lifetime_c.o: SRC/alpha_lifetime_c.f90 Alpha_lifetime_vmec_c.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/alpha_lifetime_c.f90
 	mv alpha_lifetime_c.o OBJS/
