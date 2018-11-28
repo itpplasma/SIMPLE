@@ -22,6 +22,7 @@ OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/field_can.o \
 	OBJS/orbit_symplectic.o \
 	OBJS/common.o \
+	OBJS/minpack.o \
 	OBJS/canonical_coordinates.o
 
 canonical_coordinates.x: $(OBJS) Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
@@ -71,6 +72,9 @@ OBJS/orbit_symplectic.o: SRC/orbit_symplectic.f90 Canonical_coordinates.mk SRC/f
 OBJS/common.o: SRC/common.f90 Canonical_coordinates.mk
 	$(FC) $(OPTS) -c SRC/common.f90
 	mv common.o OBJS/
+OBJS/minpack.o: SRC/minpack.f90 Canonical_coordinates.mk
+	$(FC) $(OPTS) -c SRC/minpack.f90
+	mv minpack.o OBJS/
 OBJS/canonical_coordinates.o: SRC/canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/canonical_coordinates.f90
 	mv canonical_coordinates.o OBJS/

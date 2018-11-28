@@ -80,7 +80,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   ! initialize canonical variables
   z(2:3) = z0(2:3)  ! th, ph
   
-  if (mode==0) then
+  if (mode==-1) then
     z0init = z0
 !print *, 'z0(0) :', z0init
     call orbit_timestep_axis(z0init,-dtaumin,-dtaumin, ierr)
