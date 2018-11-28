@@ -105,12 +105,55 @@ print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
   r=0.5d0
   vartheta_c=0.0d0
   varphi_c=0.314d0
-  alam0=0.0d0 !0.3d0
+  alam0=0.0d0
 !
   call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
   print *,'can : ',r,vartheta_c,varphi_c
   print *,'VMEC: ',r,theta_vmec,varphi_vmec
+!
+  isw_field_type=0
+  z(1)=r
+  z(2)=vartheta_c
+  z(3)=varphi_c
+  z(4)=1.d0
+  z(5)=alam0
+!
+
+par_inv=0.d0
+alam=alam0
+alam_prev=alam
+print *,'symplectic'
+icounter = 0
+call cpu_time(tstart)
+open(3004, file='orbit_sympl.out', recl=1024)
+  call orbit_sympl_init(z, dtau, dtaumin, 0) 
+  do i=1,ntimstep
+!
+    call orbit_timestep_sympl(z, ierr)
+    if(z(1)>1.0) exit
+    if (.not. jparmode) then
+      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+      write (3004,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+    else
+  !    
+      alam=z(5)
+      par_inv=par_inv+alam**2*dtau
+      if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
+        write (102,*) i, par_inv
+        call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
+        write (3004,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+        par_inv=0.d0
+      endif
+      alam_prev=alam
+    endif
+!
+    
+  enddo
+close(3004)
+call cpu_time(tend)
+print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
+
 !
   isw_field_type=0
   z(1)=r
@@ -133,14 +176,14 @@ call cpu_time(tstart)
     call orbit_timestep_axis(z,dtau,dtaumin,ierr)
     if (.not. jparmode) then
       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-      write (3005,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+      write (3005,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
     else
       alam=z(5)
       par_inv=par_inv+alam**2*dtau
       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
         write (103,*) i,par_inv
         call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-        write (3005,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+        write (3005,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
         par_inv = 0.d0
       endif
       alam_prev=alam
@@ -151,95 +194,8 @@ close(3005)
 call cpu_time(tend)
 print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
 !
-  print *,'axis : ',r,vartheta_c,varphi_c
 
-!
-!   isw_field_type=0
-!   z(1)=r
-!   z(2)=vartheta_c
-!   z(3)=varphi_c
-!   z(4)=1.d0
-!   z(5)=alam0
-!call testing
-!
-
-! par_inv=0.d0
-! alam=alam0
-! alam_prev=alam
-! open(3003, file='orbit_can.out', recl=1024)
-! print *,'canonical'
-! icounter = 0
-! call cpu_time(tstart)
-!   do i=1,L1i*npoiper*npoiper2*runlen
-! !
-!     call orbit_timestep_can(z,dtau,dtaumin,ierr)
-!     if (.not. jparmode) then
-!     call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-!     write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-!     else
-! !
-!     alam=z(5)
-!     par_inv=par_inv+alam**2*dtau
-!     if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-!       write (101,*) i,par_inv
-!       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-!       write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-!       par_inv=0.d0
-!     endif
-!     alam_prev=alam
-!   endif
-    
-!   enddo
-! close(3003)
-! call cpu_time(tend)
-! print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
-! !
-!   print *,'can : ',r,vartheta_c,varphi_c
-
-!
-  isw_field_type=0
-  z(1)=r
-  z(2)=vartheta_c
-  z(3)=varphi_c
-  z(4)=1.d0
-  z(5)=alam0
-!
-
-par_inv=0.d0
-alam=alam0
-alam_prev=alam
-print *,'symplectic'
-icounter = 0
-call cpu_time(tstart)
-open(3004, file='orbit_sympl.out', recl=1024)
-  call orbit_sympl_init(z, ntau) 
-  do i=1,ntimstep
-!
-    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
-    if(z(1)>1.0) exit
-    if (.not. jparmode) then
-      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-      write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-    else
-  !    
-      alam=z(5)
-      par_inv=par_inv+alam**2*dtau
-      if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-        write (102,*) i, par_inv
-        call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-        write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-        par_inv=0.d0
-      endif
-      alam_prev=alam
-    endif
-!
-    
-  enddo
-close(3004)
-call cpu_time(tend)
-print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
-call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
-!
+!  call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
 !
 !  call deallocate_can_coord
 !

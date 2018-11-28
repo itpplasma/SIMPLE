@@ -33,8 +33,11 @@ use diag_mod, only : icounter
   integer, parameter :: npart = 960
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
+  integer :: i_ctr ! for nice counting in parallel
+  
+!
 !---------------------------------------------------------------------------
-! Parameters for orbit tip by interpolation
+! Prepare calculation of orbit tip by interpolation
 !
   integer                                       :: nplagr,nder,itip,npl_half
   integer                                       :: ifp,npassing,ntr_regular,ntr_chaotic
@@ -43,14 +46,22 @@ use diag_mod, only : icounter
   integer,          dimension(:),   allocatable :: ipoi
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
-!
-  integer :: i_ctr ! for nice counting in parallel
 
   zerolam=0.d0
   twopi=2.d0*pi
   nplagr=4
   nder=0
   npl_half=nplagr/2
+
+  allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(5,nplagr),xp(nplagr))
+  do i=1,nplagr
+    ipoi(i)=i
+  enddo
+!
+! End prepare calculation of orbit tip by interpolation
+!--------------------------------------------------------------------------
+!
+!  
 
   open(1,file='alpha_lifetime_m.inp')
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -138,23 +149,9 @@ enddo
 
 isw_field_type=0
 i_ctr=0
-!$omp parallel private(z, ifp, itip, alam_prev, &
-!$omp& ierr, orb_sten, xp, z_tip, coef, ipoi, i)
+!$omp parallel private(z,ifp,alam_prev,itip,ierr,orb_sten,xp,z_tip,i) &
+!$omp& firstprivate(ipoi)
 print *, 'run started on thread ', omp_get_thread_num()
-  
-!
-!---------------------------------------------------------------------------
-! Prepare calculation of orbit tip by interpolation
-!
-  allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(5,nplagr),xp(nplagr))
-  do i=1,nplagr
-    ipoi(i)=i
-  enddo
-!
-! End prepare calculation of orbit tip by interpolation
-!--------------------------------------------------------------------------
-!
-!  
 
 !$omp do
 do ipart=1,npart  
@@ -171,7 +168,7 @@ do ipart=1,npart
   ifp=0
 !
 icounter=0
-  call orbit_sympl_init(z, 1) 
+  call orbit_sympl_init(z, dtau, dtaumin, 0) 
 !
 !--------------------------------
 ! Initialize tip detector
@@ -187,7 +184,7 @@ icounter=0
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
 !    call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
-    call orbit_timestep_sympl(z,dtau,dtaumin,ierr)
+    call orbit_timestep_sympl(z, ierr)
 !
     if(ierr.ne.0) exit
 !

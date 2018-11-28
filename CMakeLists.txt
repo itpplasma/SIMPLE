@@ -27,6 +27,7 @@ add_library ( neo-orb
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 	SRC/common.f90
+	SRC/minpack.f90
 )
 
 add_executable (neo-orb.x
@@ -46,6 +47,11 @@ add_executable (test_poincare1.x
 	SRC/test_poincare1.f90
 )
 
+
+add_executable (test_poiplot_classification.x
+	SRC/test_poiplot_classification.f90
+)
+
 add_executable (alpha_lifetime_vmec_c.x
 	SRC/zzg.f90
 	SRC/binsrc.f90
@@ -62,5 +68,6 @@ target_link_libraries(neo-orb.x neo-orb netcdf netcdff lapack)
 target_link_libraries(orbit-symplectic-test.x neo-orb netcdf netcdff lapack)
 target_link_libraries(test_magfie.x neo-orb netcdf netcdff lapack)
 target_link_libraries(test_poincare1.x neo-orb netcdf netcdff lapack)
+target_link_libraries(test_poiplot_classification.x neo-orb netcdf netcdff lapack)
 target_link_libraries(alpha_lifetime_vmec_c.x neo-orb netcdf netcdff lapack)
 target_link_libraries(alpha_lifetime.x neo-orb netcdf netcdff lapack)
