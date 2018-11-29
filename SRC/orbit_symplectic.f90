@@ -38,7 +38,7 @@ logical, parameter :: extrap_field = .true.
 !$omp threadprivate(z0init)
 double precision :: z0init(5)
 
-! For initial conditions
+! Set integrator mode
 !$omp threadprivate(mode)
 integer :: mode
 
@@ -78,109 +78,12 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   vpar = pabs*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
 
   ! initialize canonical variables
-  z(2:3) = z0(2:3)  ! th, ph
-  
-  if (mode==-1) then
-    z0init = z0
-!print *, 'z0(0) :', z0init
-    call orbit_timestep_axis(z0init,-dtaumin,-dtaumin, ierr)
-!print *, 'z0(-1):', z0init
-    x(1) = (z0(1) + z0init(1))/2d0
-    x(2) = (vpar*f%hph + f%Aph/ro0)/2d0 ! pphi
-    call eval_field(z0init(1), z0init(2), z0init(3), 0)
-    vpar = pabs*z0init(5)*dsqrt(2d0)
-    x(2) = x(2) + (vpar*f%hph + f%Aph/ro0)/2d0 ! pphi
-!print *, 'before: ', x
-    !call newton1_init(x, atol, rtol, 101) ! TODO: debug and see why this is not working
-    call hybrd1 (f_sympl_euler1_init, n, x, fvec, tol, info)
-!print *, fvec, info
-!print *, 'after: ', x
-    z(1) = x(1)
-    z(4) = x(2) 
-    call eval_field(z(1), z(2), z(3), 0)
-    call get_val(z(4))
-    pth = vpar*f%hth + f%Ath/ro0 ! pth
-  else
-    z(1) = z0(1)
-    z(4) = vpar*f%hph + f%Aph/ro0 ! pphi 
-    call get_val(z(4))
-  end if
+  z(1:3) = z0(1:3)  ! r, th, ph
+  z(4) = vpar*f%hph + f%Aph/ro0 ! pphi 
+  call get_val(z(4)) ! for pth
 
   call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), coef)
 end subroutine orbit_sympl_init
-
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-subroutine f_sympl_euler1_init(n, x, fvec, iflag)
-!
-  integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
-  integer, intent(in) :: iflag
-
-  call eval_field(x(1), z0init(2), z0init(3), 2)
-  call get_derivatives2(x(2))
-
-  fvec(1) = dpth(1)*(z(2) - z0init(2)) - dt*dH(1)
-  fvec(2) = dpth(1)*f%hph*(z(3) - z0init(3)) - dt*(dpth(1)*vpar - dH(1)*f%hth)
-
-end subroutine f_sympl_euler1_init
-
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-subroutine jac_sympl_euler1_init(x, jac)
-!
-  double precision, intent(in)  :: x(2)
-  double precision, intent(out) :: jac(2, 2)
-
-  jac(1,1) = d2pth(1)*(z(2) - z0init(2)) - dt*d2H(1) 
-  jac(1,2) = d2pth(7)*(z(2) - z0init(2)) - dt*d2H(7) 
-  jac(2,1) = (d2pth(1)*f%hph+dpth(1)*df%dhph(1))*(z(3) - z0init(3)) &
-           - dt*(d2pth(1)*vpar + dpth(1)*dvpar(1) - d2H(1)*f%hth - dH(1)*df%dhth(1))
-  jac(2,2) = d2pth(7)*f%hph*(z(3) - z0init(3)) &
-           - dt*(d2pth(7)*vpar + dpth(4)*dvpar(4) - d2H(7)*f%hth)
-
-end subroutine jac_sympl_euler1_init
-
-
-subroutine newton1_init(x, atol, rtol, maxit)
-  integer, parameter :: n = 2
-
-  double precision, intent(inout) :: x(n)
-  double precision, intent(in) :: atol, rtol
-  integer, intent(in) :: maxit
-
-  double precision :: xlast(n)
-  double precision :: fvec(n), fjac(n,n), ijac(n,n)
-  integer :: kit
-
-  do kit = 1, maxit
-    call f_sympl_euler1_init(n, x, fvec, 1)
-    call jac_sympl_euler1_init(x, fjac)
-    print *, '-------------'
-    print *, 'it ', kit
-    print *, 'x=', x
-    print *, 'f=', fvec
-    print *, 'J=', fjac
-    print *, '-------------'
-    read(*,*)
-    ijac(1,1) = fjac(2,2)
-    ijac(1,2) = -fjac(1,2)
-    ijac(2,1) = -fjac(2,1)
-    ijac(2,2) = fjac(1,1)
-    ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
-    xlast = x
-    x = x - matmul(ijac, fvec)
-    if (all(abs(fvec) < atol) &
-      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) then
-print *, 'reached fvec = ', fvec
-      return
-    end if
-  enddo
-  print *, 'Warning: maximum iterations reached in newton1: ', maxit
-end subroutine newton1_init
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -254,7 +157,11 @@ subroutine jac_sympl_euler2(x, jac)
 
 end subroutine jac_sympl_euler2
 
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
 subroutine newton1(x, atol, rtol, maxit, xlast)
+!
   integer, parameter :: n = 2
 
   double precision, intent(inout) :: x(n)
@@ -308,6 +215,7 @@ subroutine newton2(x, atol, rtol, maxit, xlast)
   print *, 'Warning: maximum iterations reached in newton2: ', maxit
 end subroutine
 
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_sympl(z0, ierr)
@@ -327,7 +235,6 @@ subroutine orbit_timestep_sympl(z0, ierr)
   end select
 
 end subroutine orbit_timestep_sympl
-
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

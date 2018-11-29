@@ -32,6 +32,8 @@ use diag_mod, only : icounter
   integer          :: ibins
   integer          :: n_e,n_d,n_b
   double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
+
+  integer, parameter :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
 !
 !---------------------------------------------------------------------------
 ! Prepare calculation of orbit tip by interpolation
@@ -115,14 +117,20 @@ bmod00=281679.46317784750d0
   dtaumin=dphi*rbig/npoiper2!
 !dtau=2*dtaumin
 dtau=dtaumin
-print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
+ntimstep = L1i*npoiper*npoiper2*10000
+print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin
+print *, 'ttrace = ', ntimstep*dtau/v0, 'nstep = ', ntimstep
 !
   call get_canonical_coordinates
 !call testing
 !
-do 
-  print *, 'Enter r, theta, phi, lambda: '
-  read *,r,vartheta_c,varphi_c,alam0
+!do 
+  !print *, 'Enter r, theta, phi, lambda: '
+  !read *,r,vartheta_c,varphi_c,alam0
+  r = 0.5
+  vartheta_c = 0.0
+  varphi_c = 0.314
+  alam0 = 0.0
 !
   isw_field_type=0
   z(1)=r
@@ -132,7 +140,7 @@ do
   z(5)=alam0
 !
 icounter=0
-  call orbit_sympl_init(z, dtau, dtaumin, 0) 
+  call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
 !
 !--------------------------------
 ! Initialize tip detector
@@ -145,7 +153,7 @@ icounter=0
 !
   open(101,file='poiplot.dat')
 !
-  do i=1,L1i*npoiper*npoiper2*10000 !300 !10
+  do i=1,ntimstep !300 !10
 !
 !    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
     call orbit_timestep_sympl(z,ierr)
@@ -181,7 +189,7 @@ icounter=0
   enddo
   close(101)
 !
-print *,'done  ',icounter,'  field calls'
+print *,'done  ',icounter,'  field calls', icounter*1.0d0/ntimstep, 'per step'
 !
   call fract_dimension(fraction)
 !
@@ -190,7 +198,7 @@ print *,'done  ',icounter,'  field calls'
   else
     print *,'regular orbit'
   endif
-enddo
+!enddo
 !
   call deallocate_can_coord
 !

@@ -11,9 +11,11 @@ Created on Wed Aug  1 18:12:14 2018
 from numpy import *
 from matplotlib.pyplot import *
 
+parent = '/home/calbert/run/NEO-ORB/'
+
 #data_rk = loadtxt('fort.100') # Runge Kutta on VMEC coordinates
-data_axi = loadtxt('fort.103') # Runge Kutta on canonicalized coordinates
-data_sym = loadtxt('fort.102') # Symplectic Euler r, vpar
+data_axi = loadtxt(parent+'/fort.103') # Runge Kutta on canonicalized coordinates
+data_sym = loadtxt(parent+'/fort.102') # Symplectic Euler r, vpar
 
 
 figure()

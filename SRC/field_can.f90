@@ -179,7 +179,6 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   ! end if
 
   ! Count evaluations for profiling
-  icounter = icounter + 1
 
   ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
   df%dAth = 0d0
