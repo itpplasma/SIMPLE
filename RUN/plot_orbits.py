@@ -28,8 +28,8 @@ nrange = range(1,len(data_sym))
 
 
 figure()
-plot(data_axi[2:,0], data_axi[2:,1],'b,')
-plot(data_sym[2:,0], data_sym[2:,1],'r,')
+plot(data_axi[1:,0], data_axi[1:,3],'b-',linewidth=0.5)
+plot(data_sym[1:,0], data_sym[1:,3],'r-',linewidth=0.5)
 #plot(data_can[:,0], data_can[:,1]+.02,'b,')
 #plot(data_rk[:,0], data_rk[:,1]+.03,'k,')
 legend(['can','sympl'])

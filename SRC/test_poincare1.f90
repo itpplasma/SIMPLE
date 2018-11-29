@@ -35,7 +35,8 @@ use diag_mod, only : icounter
   double precision :: alam,alam_prev,par_inv
   real :: tstart, tend
   integer, parameter :: runlen = 1
-  logical, parameter :: jparmode = .true.
+  logical, parameter :: jparmode = .false.
+  integer, parameter :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
   integer :: ntau
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
@@ -94,8 +95,10 @@ bmod00=281679.46317784750d0
 ! orbit integration time step (to check chamber wall crossing)
   dtaumin=dphi*rt0/npoiper2!
 !dtau=2*dtaumin
-ntau = ceiling(dtau/dtaumin)
-dtaumin = dtau/ntau
+!ntau = ceiling(dtau/dtaumin)
+!dtaumin = dtau/ntau
+dtau = dtaumin
+ntimstep = L1i*npoiper*npoiper2*100
 print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
   call get_canonical_coordinates
@@ -127,7 +130,7 @@ print *,'symplectic'
 icounter = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
-  call orbit_sympl_init(z, dtau, dtaumin, 0) 
+  call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
   do i=1,ntimstep
 !
     call orbit_timestep_sympl(z, ierr)

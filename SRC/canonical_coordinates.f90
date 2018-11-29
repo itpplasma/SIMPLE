@@ -34,6 +34,7 @@ use diag_mod, only : icounter
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
+  integer :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
   
 !
 !---------------------------------------------------------------------------
@@ -168,7 +169,7 @@ do ipart=1,npart
   ifp=0
 !
 icounter=0
-  call orbit_sympl_init(z, dtau, dtaumin, 0) 
+  call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
 !
 !--------------------------------
 ! Initialize tip detector

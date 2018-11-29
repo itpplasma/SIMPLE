@@ -172,7 +172,7 @@ use diag_mod, only : dodiag
       implicit none
 !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: relerr=1d-8
+      double precision, parameter :: relerr=1d-10
 !
       integer :: ierr,j
       double precision :: dtau,dtaumin,phi,tau1,tau2
@@ -291,7 +291,7 @@ if(dodiag) write (123,*) tau2,z
       implicit none
 !
       integer, parameter          :: ndim=5
-      double precision, parameter :: relerr=1d-8
+      double precision, parameter :: relerr=1d-10
       integer :: npoi,i,ierr
       double precision :: dphi,rbeg,phibeg,zbeg,bmod00,phi,phiold
       double precision, dimension(3,npoi) :: xstart
@@ -409,7 +409,7 @@ if(dodiag) write (123,*) tau2,z
       implicit none
 !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: relerr=1d-8, snear_axis=0.01d0
+      double precision, parameter :: relerr=1d-10, snear_axis=0.01d0
 !
       logical :: near_axis
       integer :: ierr,j
