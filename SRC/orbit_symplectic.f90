@@ -50,7 +50,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
 !
   double precision, intent(in) :: z0(5)
   double precision, intent(in) :: dtau, dtaumin
-  integer, intent(in) :: mode_init ! 0 = euler1, 1 = euler2, 2 = verlet
+  integer, intent(in) :: mode_init ! 1 = euler1, 2 = euler2, 3 = verlet
 
   double precision :: x(2), fvec(2)
   integer ierr, info
@@ -67,7 +67,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   if(abs(mod(dtau, dtaumin)) > dtaumin*1e-14) stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
   ntau = nint(dtau/dtaumin)
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
-  if (mode==2) dt = dt/2d0 ! Verlet out of two Euler steps
+  if (mode==3) dt = dt/2d0 ! Verlet out of two Euler steps
 
   call eval_field(z0(1), z0(2), z0(3), 0)
 
@@ -224,11 +224,11 @@ subroutine orbit_timestep_sympl(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   select case (mode)
-   case (0)
-      call orbit_timestep_sympl_euler1(z0, ierr)
    case (1)
-      call orbit_timestep_sympl_euler2(z0, ierr)
+      call orbit_timestep_sympl_euler1(z0, ierr)
    case (2)
+      call orbit_timestep_sympl_euler2(z0, ierr)
+   case (3)
       call orbit_timestep_sympl_verlet(z0, ierr)
    case default
       stop 'invalid mode for orbit_timestep_sympl'
