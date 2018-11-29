@@ -36,27 +36,22 @@ use diag_mod, only : icounter
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
-!
-!---------------------------------------------------------------------------  
-! buffer for Poincare plot:
+  
 !
 !---------------------------------------------------------------------------
-! Prepare calculation of orbit tip by interpolation and buffer for Poincare plot:
+! Prepare calculation of orbit tip by interpolation
 !
-  integer                                       :: nplagr,nder,npl_half,itip,iper
-  integer                                       :: npass_regular,npass_chaotic,ntr_regular,ntr_chaotic
-  integer                                       :: nstep_tot,norbper,ifp_tip,ifp_per
-  integer                                       :: nfp,nfp_tip,nfp_per,kper
-  double precision                              :: alam_prev,zerolam,twopi,fraction,fper,phiper
+  integer                                       :: nplagr,nder,itip,npl_half
+  integer                                       :: ifp,npassing,ntr_regular,ntr_chaotic
+  double precision                              :: alam_prev,zerolam,twopi,fraction
   double precision, dimension(5)                :: z_tip
   integer,          dimension(:),   allocatable :: ipoi
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
-  double precision, dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
 
   zerolam=0.d0
   twopi=2.d0*pi
-  nplagr=6
+  nplagr=4
   nder=0
   npl_half=nplagr/2
 
@@ -131,12 +126,9 @@ bmod00=281679.46317784750d0
 dtau=dtaumin
 print *,dtau
 !
-  fper=twopi/dble(L1i)   !<= field period
-!
   call get_canonical_coordinates
 !
-  npass_regular=0
-  npass_chaotic=0
+  npassing=0
   ntr_regular=0
   ntr_chaotic=0
 !
@@ -175,16 +167,7 @@ do ipart=1,npart
 !  
 !print *, 'z=', z
 !
-  norbper=10000 !300 !10
-  nstep_tot=L1i*npoiper*norbper
-  nfp=L1i*norbper         !<= guess for footprint number
-  nfp_tip=nfp             !<= initial array dimension for tips
-  nfp_per=nfp             !<= initial array dimension for periods
-!
-  allocate(zpoipl_tip(2,nfp_tip),zpoipl_per(2,nfp_per))
-!
-  ifp_tip=0               !<= initialize footprint counter on tips
-  ifp_per=0               !<= initialize footprint counter on periods
+  ifp=0
 !
 icounter=0
   call orbit_sympl_init(z, dtau, dtaumin, 0) 
@@ -192,33 +175,20 @@ icounter=0
 !--------------------------------
 ! Initialize tip detector
 !
-  itip=npl_half+1
+  itip=3
   alam_prev=z(5)
 !
 ! End initialize tip detector
 !--------------------------------
-! Initialize period crossing detector
 !
-  iper=npl_half+1
-  kper=int(z(3)/fper)
+  open(6000+omp_get_thread_num())
 !
-! End initialize period crossing detector
-!--------------------------------
-!
-!
-  do i=1,nstep_tot
+  do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
 !    call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
     call orbit_timestep_sympl(z, ierr)
 !
     if(ierr.ne.0) exit
-!
-    if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
-      orb_sten(:,i)=z
-    else                          !<=normal case, shift stencil
-      orb_sten(:,ipoi(1))=z
-      ipoi=cshift(ipoi,1)
-    endif
 !
 !-------------------------------------------------------------------------
 ! Tip detection and interpolation
@@ -226,7 +196,11 @@ icounter=0
     if(alam_prev.lt.0.d0.and.z(5).gt.0.d0) itip=0   !<=tip has been passed
     itip=itip+1
     alam_prev=z(5)
-    if(i.gt.nplagr) then          !<=use only initialized stencil
+    if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
+      orb_sten(:,i)=z
+    else                          !<=normal case, shift stencil
+      orb_sten(:,ipoi(1))=z
+      ipoi=cshift(ipoi,1)
       if(itip.eq.npl_half) then   !<=stencil around tip is complete, interpolate
         xp=orb_sten(5,ipoi)
 !
@@ -235,102 +209,42 @@ icounter=0
         z_tip=matmul(orb_sten(:,ipoi),coef(0,:))
         z_tip(2)=modulo(z_tip(2),twopi)
         z_tip(3)=modulo(z_tip(3),twopi)
-write(1001,*) z_tip
-        ifp_tip=ifp_tip+1
-        if(ifp_tip.gt.nfp_tip) then   !<=increase the buffer for banana tips
-          allocate(dummy2d(2,ifp_tip-1))
-          dummy2d=zpoipl_tip(:,1:ifp_tip-1)
-          deallocate(zpoipl_tip)
-          nfp_tip=nfp_tip+nfp
-          allocate(zpoipl_tip(2,nfp_tip))
-          zpoipl_tip(:,1:ifp_tip-1)=dummy2d
-          deallocate(dummy2d)
-        endif
-        zpoipl_tip(:,ifp_tip)=z_tip(1:2)
+        write(6000+omp_get_thread_num(),*) z_tip
+        ifp=ifp+1
       endif
     endif
 !
 ! End tip detection and interpolation
 !-------------------------------------------------------------------------
-! Periodic boundary footprint detection and interpolation
-!
-    if(z(3).gt.dble(kper+1)*fper) then
-      iper=0   !<=periodic boundary has been passed
-      phiper=dble(kper+1)*fper
-      kper=kper+1
-    elseif(z(3).lt.dble(kper)*fper) then
-      iper=0   !<=periodic boundary has been passed
-      phiper=dble(kper)*fper
-      kper=kper-1
-    endif
-    iper=iper+1
-    if(i.gt.nplagr) then          !<=use only initialized stencil 
-      if(iper.eq.npl_half) then   !<=stencil around periodic boundary is complete, interpolate
-        xp=orb_sten(3,ipoi)-phiper
-!
-        call plag_coeff(nplagr,nder,zerolam,xp,coef)
-!
-        z_tip=matmul(orb_sten(:,ipoi),coef(0,:))
-        z_tip(2)=modulo(z_tip(2),twopi)
-        z_tip(3)=modulo(z_tip(3),twopi)
-write(1002,*) z_tip
-        ifp_per=ifp_per+1
-        if(ifp_per.gt.nfp_per) then   !<=increase the buffer for periodic boundary footprints
-          allocate(dummy2d(2,ifp_per-1))
-          dummy2d=zpoipl_per(:,1:ifp_per-1)
-          deallocate(zpoipl_per)
-          nfp_per=nfp_per+nfp
-          allocate(zpoipl_per(2,nfp_per))
-          zpoipl_per(:,1:ifp_per-1)=dummy2d
-          deallocate(dummy2d)
-        endif
-        zpoipl_per(:,ifp_per)=z_tip(1:2)
-      endif
-    endif
-!
-! End periodic boundary footprint detection and interpolation
-!-------------------------------------------------------------------------
 !
   enddo
-close(1001)
-close(1002)
+  close(6000+omp_get_thread_num())
 !
 !$omp critical
 i_ctr = i_ctr+1
 print *, 'particle ', i_ctr, '/', npart, ' done: ',icounter,'  field calls'
 !$omp end critical
 !
-  if(ifp_tip.eq.0) then
-!
-    call fract_dimension(ifp_per,zpoipl_per(:,1:ifp_per),fraction)
-!
-    if(fraction.gt.0.2d0) then
-      print *,'chaotic passing orbit'
+  if(ifp.eq.0) then
+    print *,'passing orbit'
 !$omp atomic
-      npass_chaotic=npass_chaotic+1
-    else
-      print *,'regular passing orbit'
-!$omp atomic
-      npass_regular=npass_regular+1
-    endif
-  else
-!
-    call fract_dimension(ifp_tip,zpoipl_tip(:,1:ifp_tip),fraction)
-!
-    if(fraction.gt.0.2d0) then
-      print *,'chaotic trapped orbit'
-!$omp atomic
-      ntr_chaotic=ntr_chaotic+1
-    else
-      print *,'regular trapped orbit'
-!$omp atomic
-      ntr_regular=ntr_regular+1
-    endif
+    npassing=npassing+1
+    print *,npassing,' passing ',ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
+    cycle
   endif
 !
-  deallocate(zpoipl_tip,zpoipl_per)
-print *,npass_regular,' passing regular ',npass_chaotic,' passing chaotic ', &
-        ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
+  call fract_dimension(fraction)
+!
+  if(fraction.gt.0.2d0) then
+    print *,'chaotic orbit'
+!$omp atomic
+    ntr_chaotic=ntr_chaotic+1
+  else
+    print *,'regular orbit'
+!$omp atomic
+    ntr_regular=ntr_regular+1
+  endif
+print *,npassing,' passing ',ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
 enddo
 !$omp end do
 !$omp end parallel
@@ -341,7 +255,7 @@ enddo
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  subroutine fract_dimension(ntr,rt,fraction)
+  subroutine fract_dimension(fraction)
 !
 #ifdef _OPENMP
   use omp_lib
@@ -349,11 +263,29 @@ enddo
 !
   implicit none
 !
-integer, parameter :: iunit=1003
+  integer :: iunit
   integer :: itr,ntr,ir,it,ngrid,nrefine,irefine,kr,kt,nboxes
   double precision :: fraction,r,rmax,rmin,tmax,tmin,hr,ht
-  double precision, dimension(2,ntr)              :: rt
-  logical,          dimension(:,:),   allocatable :: free
+  logical,          dimension(:,:), allocatable :: free
+  double precision, dimension(:,:), allocatable :: rt
+!
+  ntr=0
+!
+  iunit = 6000+omp_get_thread_num()
+!  
+  open(iunit)
+  do
+    read(iunit,*,end=1) r
+    ntr=ntr+1
+  enddo
+1 close(iunit)
+!
+  allocate(rt(2,ntr))
+  open(iunit)
+  do itr=1,ntr
+    read(iunit,*) rt(:,itr)
+  enddo
+  close(iunit)
 !
   rmin=minval(rt(1,:))
   rmax=maxval(rt(1,:))
@@ -362,6 +294,7 @@ integer, parameter :: iunit=1003
 !
   nrefine=int(log(dble(ntr))/log(4.d0))
 !
+  open(iunit+1000)
   ngrid=1
   nrefine=nrefine+3       !<=add 3 for curiousity
   do irefine=1,nrefine
@@ -382,9 +315,10 @@ integer, parameter :: iunit=1003
       endif
     enddo
     deallocate(free)
-write(iunit,*) dble(irefine),dble(nboxes)/dble(ngrid**2)
+    write(iunit+1000,*) dble(irefine),dble(nboxes)/dble(ngrid**2)
     if(irefine.eq.nrefine-3) fraction=dble(nboxes)/dble(ngrid**2)
   enddo
-close(iunit)
+  close(iunit+1000)
+  deallocate(rt)
 !
   end subroutine fract_dimension
