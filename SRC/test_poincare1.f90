@@ -1,6 +1,5 @@
 !
   use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
-!  use chamb_mod,  only : rbig,rcham2
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
