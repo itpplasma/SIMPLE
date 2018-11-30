@@ -35,7 +35,7 @@ use diag_mod, only : icounter
   double precision :: facE_al
   integer          :: ibins
   integer          :: n_e,n_d,n_b
-  integer, parameter :: npart = 960 !984 !960
+  integer, parameter :: npart = 100 !984 !960
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
@@ -285,14 +285,16 @@ program canonical_coordinates
 
   integer :: calls_rk(npart), calls_sympl(npart), i, funit
   integer :: orb_kind_rk(npart), orb_kind_sympl(npart)
-  integer :: seedsize
-  integer, allocatable :: seed(:)
+  
+  
+! run with fixed random seed 
+!integer :: seedsize
+!integer, allocatable :: seed(:)
 
-! initialize random seed
-call random_seed(size = seedsize)
-allocate(seed(seedsize))
-seed = 0
-call random_seed(put=seed)
+!call random_seed(size = seedsize)
+!allocate(seed(seedsize))
+!seed = 0
+!call random_seed(put=seed)
 
   zerolam=0.d0
   twopi=2.d0*pi
