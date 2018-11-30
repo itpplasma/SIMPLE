@@ -53,7 +53,7 @@ def doplot3(ax, z, z2, marker):
 
 prefix = '/home/calbert/run/NEO-ORB/'
 
-ipart = 21
+ipart = 250
 num = '{:03d}'.format(ipart)
     
 plt.figure()

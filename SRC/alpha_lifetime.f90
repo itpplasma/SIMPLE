@@ -157,12 +157,18 @@ use diag_mod, only : dodiag
     enddo
   enddo
 
-! initialize positions
-  print *, 'initializing random starting positions'
+! files for storing starting coords of passing and trapped  
+  open(2,file='start_p.dat')
+  open(3,file='start_t.dat')
+
+! do particle tracing in parallel
+!$omp parallel private(ibins, xi, i, z, trap_par)
+!$omp do
   do ipart=1,ntestpart
+    print *, ipart, ' / ', ntestpart, 'thread: ', omp_get_thread_num()
+    ! 
     ! determine the starting point:
     xi=zzg()
-
     call binsrc(volstart,1,npoi,xi,i)
     ibins=i
     ! coordinates: z(1) = R, z(2) = phi, z(3) = Z
@@ -172,71 +178,71 @@ use diag_mod, only : dodiag
     ! starting pitch z(5)=v_\parallel / v:
     xi=zzg()
     zstart(5,ipart)=2.d0*(xi-0.5d0)
-  enddo
+    
+    trap_par=((1.d0-z(5)**2)*bmax/bstart(i)-1.d0)*bmin/(bmax-bmin)
 
-! do particle tracing in parallel
-!$omp parallel
-!$omp do
-  do ipart=1,ntestpart
-    print *, ipart, ' / ', ntestpart, 'thread: ', omp_get_thread_num()
-    ! 
-!     trap_par=((1.d0-z(5)**2)*bmax/bstart(i)-1.d0)*bmin/(bmax-bmin)
-!     if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
-!     ! passing particle
-!       if(notrace_passing.eq.1) then
-!       ! no tracing of passing particles, assume that all are confined
-!         confpart_pass=confpart_pass+1.d0
-!         return
-!       endif
-!       ! trace passing particle
-!       confpart_pass(1)=confpart_pass(1)+1.d0
-!       ilost=ntimstep-1
-!       do i=2,ntimstep
-!       if(trap_par.le.contr_pp) go to 111
-!         call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-!         if(ierr.ne.0) exit
-!   111  continue
-!         ilost=ntimstep-i
-! print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
-!         confpart_pass(i)=confpart_pass(i)+1.d0
-!       enddo
-!       write(2,*) trap_par,ilost,xstart(:,ibins),ierr
-!       close(2)
-!       open(2,file='start_p.dat',position='append')
-!     else
-! ! trapped particle (traced always)
-!       confpart_trap(1)=confpart_trap(1)+1.d0
-!       ilost=ntimstep-1
-!       do i=2,ntimstep
+    z = zstart(:,ipart)    
 
-!         call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+    if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
+    ! passing particle
+      if(notrace_passing.eq.1) then
+      ! no tracing of passing particles, assume that all are confined
+!$omp critical
+        confpart_pass=confpart_pass+1.d0
+!$omp end critical
+        cycle
+      endif
+      ! trace passing particle
+!$omp atomic
+      confpart_pass(1)=confpart_pass(1)+1.d0
+      ilost=ntimstep-1
+      do i=2,ntimstep
+      if(trap_par.le.contr_pp) go to 111
+        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        if(ierr.ne.0) exit
+  111  continue
+        ilost=ntimstep-i
+print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
+!$omp atomic
+        confpart_pass(i)=confpart_pass(i)+1.d0
+      enddo
+!$omp critical
+      write(2,*) trap_par,ilost,xstart(:,ibins),ierr
+      close(2)
+      open(2,file='start_p.dat',position='append')
+!$omp end critical
+    else
+! trapped particle (traced always)
+      confpart_trap(1)=confpart_trap(1)+1.d0
+      ilost=ntimstep-1
+      do i=2,ntimstep
 
-!         if(ierr.ne.0) exit
-!         ilost=ntimstep-i
+        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
 
-! print *,'trapped particle ',ipart,' step ',i,' of ',ntimstep
-! if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
+        if(ierr.ne.0) exit
+        ilost=ntimstep-i
 
-!         confpart_trap(i)=confpart_trap(i)+1.d0
-!       enddo
-!       write(3,*) trap_par,ilost,xstart(:,ibins),ierr
-!       close(3)
-!       open(3,file='start_t.dat',position='append')
-!     endif
-!     open(1,file='confined_fraction.dat')
-!     do i=1,ntimstep
-!       write(1,*) dfloat(i-1)*dtau/v0,confpart_trap(i)/ntestpart, &
-!                  confpart_pass(i)/ntestpart,ipart
-!     enddo
-!     close(1)
+print *,'trapped particle ',ipart,' step ',i,' of ',ntimstep
+if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
+
+        confpart_trap(i)=confpart_trap(i)+1.d0
+      enddo
+!$omp critical
+      write(3,*) trap_par,ilost,xstart(:,ibins),ierr
+      close(3)
+      open(3,file='start_t.dat',position='append')
+!$omp end critical
+    endif
+    open(1,file='confined_fraction.dat')
+    do i=1,ntimstep
+      write(1,*) dble(i-1)*dtau/v0,confpart_trap(i)/ntestpart, &
+                                     confpart_pass(i)/ntestpart,ipart
+    enddo
+    close(1)
   enddo
 !$omp end do
 !$omp end parallel
 
-! files for storing starting coords of passing and trapped  
-  open(2,file='start_p.dat')
-  open(3,file='start_t.dat')
-! TODO: write results
   close(2)
   close(3)
 
@@ -245,7 +251,7 @@ use diag_mod, only : dodiag
 
   open(1,file='confined_fraction.dat')
   do i=1,ntimstep
-    write(1,*) dfloat(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
+    write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo
   close(1)
 

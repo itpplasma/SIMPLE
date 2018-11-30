@@ -35,7 +35,7 @@ use diag_mod, only : icounter
   double precision :: facE_al
   integer          :: ibins
   integer          :: n_e,n_d,n_b
-  integer, parameter :: npart = 100 !984 !960
+  integer, parameter :: npart = 960 !984 !960
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
@@ -285,6 +285,14 @@ program canonical_coordinates
 
   integer :: calls_rk(npart), calls_sympl(npart), i, funit
   integer :: orb_kind_rk(npart), orb_kind_sympl(npart)
+  integer :: seedsize
+  integer, allocatable :: seed(:)
+
+! initialize random seed
+call random_seed(size = seedsize)
+allocate(seed(seedsize))
+seed = 0
+call random_seed(put=seed)
 
   zerolam=0.d0
   twopi=2.d0*pi
@@ -369,6 +377,7 @@ print *,dtau
 !
 print *, 'generating random initial conditions'
 r=0.5d0
+
 do ipart=1,npart
 !
   call random_number(zzg)
@@ -383,9 +392,15 @@ do ipart=1,npart
 !
   alam0(ipart)=2.d0*zzg-1.d0
 enddo
-!$omp parallel private(orb_kind_rk, orb_kind_sympl), &
-!$omp& firstprivate(calls_rk, calls_sympl)
 
+calls_rk = 0
+calls_sympl = 0
+
+open(unit=newunit(funit), file='orbit_kinds.out')
+write(funit,*) '# ipart', ' r vartheta_c varphi_c p alam0', 'orb_kind_rk', &
+    ' orb_kind_sympl', ' calls_rk', ' calls_sympl'    
+
+!$omp parallel 
   isw_field_type=0
   i_ctr=0
   norbper=10000 !300 !10
@@ -393,9 +408,6 @@ enddo
   nfp=L1i*norbper         !<= guess for footprint number
   nfp_tip=nfp             !<= initial array dimension for tips
   nfp_per=nfp             !<= initial array dimension for periods
-
-  calls_rk = 0
-  calls_sympl = 0
 
   allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(5,nplagr),xp(nplagr))
   do i=1,nplagr
@@ -430,21 +442,16 @@ enddo
 
     print *,npass_regular,' passing regular ',npass_chaotic,' passing chaotic ', &
           ntr_regular,' trapped regular ',ntr_chaotic,' trapped chaotic'
+
+    write(funit,*) ipart, r, vartheta_c(ipart), varphi_c(ipart), 1.d0, &
+    alam0(ipart), orb_kind_rk(ipart), orb_kind_sympl(ipart), calls_rk(ipart), calls_sympl(ipart)
+    close(funit)   
+    open(funit,file='orbit_kinds.out',position='append')
   !$omp end critical
   enddo
 !$omp end do
 !$omp end parallel
 !
-  open(unit=newunit(funit), file='orbit-kinds.out')
-
-  write(funit,*) '# ipart', ' r vartheta_c varphi_c p alam0', 'orb_kind_rk', &
-    ' orb_kind_sympl', ' calls_rk', ' calls_sympl'    
-  do ipart=1,npart
-     write(funit,*) ipart, r, vartheta_c(ipart), varphi_c(ipart), 1.d0, &
-     alam0(ipart), orb_kind_rk(ipart), orb_kind_sympl(ipart), calls_rk(ipart), calls_sympl(ipart)   
-  end do
-  close(funit)
-
   call deallocate_can_coord
 
 end program canonical_coordinates
