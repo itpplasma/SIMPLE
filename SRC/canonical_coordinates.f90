@@ -35,7 +35,7 @@ use diag_mod, only : icounter
   double precision :: facE_al
   integer          :: ibins
   integer          :: n_e,n_d,n_b
-  integer, parameter :: npart = 960 !100 !984 !960
+  integer, parameter :: npart = 100 !984 !960
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
@@ -217,6 +217,10 @@ contains
     endif
 !
     deallocate(zpoipl_tip,zpoipl_per)
+    close(10000+ipart)
+    close(11000+ipart)
+    close(20000+ipart)
+    close(21000+ipart)
   end subroutine trace_orbit
 
 !
