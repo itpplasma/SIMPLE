@@ -1,12 +1,11 @@
 module canonical_coordinates_main
 !
   use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
-!  use chamb_mod,  only : rbig,rcham2
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-  use common, only: pi,c,e_charge,e_mass,p_mass,ev
+  use common, only: pi,c,e_charge,e_mass,p_mass,ev,newunit
 !
 #ifdef _OPENMP
   use omp_lib
@@ -36,7 +35,7 @@ use diag_mod, only : icounter
   double precision :: facE_al
   integer          :: ibins
   integer          :: n_e,n_d,n_b
-  integer, parameter :: npart = 100 !984 !960
+  integer, parameter :: npart = 960 !100 !984 !960
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
@@ -280,8 +279,8 @@ program canonical_coordinates
 
   implicit none
 
-  integer :: calls_rk, calls_sympl, i
-  integer :: orb_kind_rk, orb_kind_sympl
+  integer :: calls_rk(npart), calls_sympl(npart), i, funit
+  integer :: orb_kind_rk(npart), orb_kind_sympl(npart)
 
   zerolam=0.d0
   twopi=2.d0*pi
@@ -331,7 +330,7 @@ program canonical_coordinates
   dtau=tau/dble(ntimstep-1)
 !
 bmod00=281679.46317784750d0
-! Larmor raidus corresponds to the field stregth egual to $B_{00}$ harmonic
+! Larmor radius corresponds to the field stregth egual to $B_{00}$ harmonic
 ! in Boozer coordinates:
 ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
   ro0=rlarm*bmod00  ! 23.09.2013
@@ -401,27 +400,27 @@ enddo
 !$omp do
   do ipart=1,npart
     icounter = 0
-    call trace_orbit(ipart, 0, orb_kind_rk)
-    calls_rk = icounter
+    call trace_orbit(ipart, 0, orb_kind_rk(ipart))
+    calls_rk(ipart) = icounter
     icounter = 0
-    call trace_orbit(ipart, 1, orb_kind_sympl)
-    calls_sympl = icounter
-    if (orb_kind_rk == 1) npass_regular(1) = npass_regular(1) + 1
-    if (orb_kind_rk == 2) npass_chaotic(1) = npass_chaotic(1) + 1
-    if (orb_kind_rk == 3) ntr_regular(1) = ntr_regular(1) + 1
-    if (orb_kind_rk == 4) ntr_chaotic(1) = ntr_chaotic(1) + 1
+    call trace_orbit(ipart, 1, orb_kind_sympl(ipart))
+    calls_sympl(ipart) = icounter
+    if (orb_kind_rk(ipart) == 1) npass_regular(1) = npass_regular(1) + 1
+    if (orb_kind_rk(ipart) == 2) npass_chaotic(1) = npass_chaotic(1) + 1
+    if (orb_kind_rk(ipart) == 3) ntr_regular(1) = ntr_regular(1) + 1
+    if (orb_kind_rk(ipart) == 4) ntr_chaotic(1) = ntr_chaotic(1) + 1
 
-    if (orb_kind_sympl == 1) npass_regular(2) = npass_regular(2) + 1
-    if (orb_kind_sympl == 2) npass_chaotic(2) = npass_chaotic(2) + 1
-    if (orb_kind_sympl == 3) ntr_regular(2) = ntr_regular(2) + 1
-    if (orb_kind_sympl == 4) ntr_chaotic(2) = ntr_chaotic(2) + 1
+    if (orb_kind_sympl(ipart) == 1) npass_regular(2) = npass_regular(2) + 1
+    if (orb_kind_sympl(ipart) == 2) npass_chaotic(2) = npass_chaotic(2) + 1
+    if (orb_kind_sympl(ipart) == 3) ntr_regular(2) = ntr_regular(2) + 1
+    if (orb_kind_sympl(ipart) == 4) ntr_chaotic(2) = ntr_chaotic(2) + 1
   !$omp critical
   i_ctr = i_ctr+1
-    print *, 'ipart', ipart, '(',i_ctr,'/', npart,')',' RK calls:',calls_rk, &
-      ' kind:', orb_kind_rk, ' Sympl calls:', calls_sympl, ' kind:', orb_kind_sympl
-    if (orb_kind_rk /= orb_kind_sympl) then
-      print *, 'difference in classification - ipart', ipart, ': RK kind:',orb_kind_rk,&
-      ', Sympl kind:', orb_kind_sympl, 'z0=', r, vartheta_c(ipart), varphi_c(ipart), 1.d0, alam0(ipart)
+    print *, 'ipart', ipart, '(',i_ctr,'/', npart,')',' RK calls:',calls_rk(ipart), &
+      ' kind:', orb_kind_rk(ipart), ' Sympl calls:', calls_sympl(ipart), ' kind:', orb_kind_sympl(ipart)
+    if (orb_kind_rk(ipart) /= orb_kind_sympl(ipart)) then
+      print *, 'difference in classification - ipart', ipart, ': RK kind:',orb_kind_rk(ipart),&
+      ', Sympl kind:', orb_kind_sympl(ipart), 'z0=', r, vartheta_c(ipart), varphi_c(ipart), 1.d0, alam0(ipart)
 !read(*,*)
     end if
 
@@ -432,6 +431,16 @@ enddo
 !$omp end do
 !$omp end parallel
 !
+  open(unit=newunit(funit), file='orbit-kinds.out')
+
+  write(funit,*) '# ipart', ' r vartheta_c varphi_c p alam0', 'orb_kind_rk', &
+    ' orb_kind_sympl', ' calls_rk', ' calls_sympl'    
+  do ipart=1,npart
+     write(funit,*) ipart, r, vartheta_c(ipart), varphi_c(ipart), 1.d0, &
+     alam0(ipart), orb_kind_rk(ipart), orb_kind_sympl(ipart), calls_rk(ipart), calls_sympl(ipart)   
+  end do
+  close(funit)
+
   call deallocate_can_coord
 
 end program canonical_coordinates
