@@ -38,9 +38,13 @@ def doplot(z, marker):
 #doplot(z, 'r,')
 
 #plt.legend(['Euler16 w Taylor', 'Euler16', 'Verlet16', 'Verlet8 old', 'RK16'])
+
+type1='10'
+type2='11'
+num='036'
     
-z = np.loadtxt('L:/run/NEO-ORB/fort.10003')
+z = np.loadtxt('L:/run/NEO-ORB/fort.{}{}'.format(type1,num))
 doplot(z, 'b,')
 
-z = np.loadtxt('L:/run/NEO-ORB/fort.11003')
+z = np.loadtxt('L:/run/NEO-ORB/fort.{}{}'.format(type2,num))
 doplot(z, 'r,')
