@@ -11,36 +11,36 @@ save
 double precision, parameter :: atol = 1e-15, rtol = 1e-9
 
 ! Current phase-space coordinates z and old pth
-!$omp threadprivate(z, pthold)
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
 double precision :: pthold
+!$omp threadprivate(z, pthold)
 
 ! Buffer for Lagrange polynomial interpolation
 integer, parameter :: nlag = 3 ! order
 integer, parameter :: nbuf = 16 ! values to store back
-!$omp threadprivate(kbuf, kt, k, bufind, zbuf, coef)
 integer :: kbuf
 integer :: kt
 integer :: k
 integer :: bufind(0:nlag)
 double precision, dimension(4, nbuf) :: zbuf
 double precision, dimension(0:0, nlag+1) :: coef
+!$omp threadprivate(kbuf, kt, k, bufind, zbuf, coef)
 
 ! Timestep and variables from z0
-!$omp threadprivate(ntau, dt, pabs)
 integer :: ntau
 double precision :: dt
 double precision :: pabs
+!$omp threadprivate(ntau, dt, pabs)
 
 logical, parameter :: extrap_field = .true.
 
 ! For initial conditions
-!$omp threadprivate(z0init)
 double precision :: z0init(5)
+!$omp threadprivate(z0init)
 
 ! Set integrator mode
-!$omp threadprivate(mode)
 integer :: mode
+!$omp threadprivate(mode)
 
 contains
 

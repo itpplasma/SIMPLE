@@ -15,9 +15,6 @@ use diag_mod, only : icounter
   implicit none
 !
 
-!$omp threadprivate(z,ifp_tip,ifp_per,ierr,orb_sten,xp,z_tip, &
-!$omp& zpoipl_tip, zpoipl_per, dummy2d, nfp, nfp_tip, nfp_per, ipoi, coef)
-
   double precision,parameter  :: snear_axis=0.05d0
 !
   logical          :: near_axis
@@ -57,6 +54,10 @@ use diag_mod, only : icounter
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
   double precision, dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
+  integer :: stat
+
+!$omp threadprivate(z,ifp_tip,ifp_per,ierr,orb_sten,xp,z_tip, &
+!$omp& zpoipl_tip, zpoipl_per, dummy2d, nfp, nfp_tip, nfp_per, ipoi, coef)
 
 contains
 
@@ -79,6 +80,22 @@ contains
     z(5)=alam0(ipart)
 !
     allocate(zpoipl_tip(2,nfp_tip),zpoipl_per(2,nfp_per))
+!
+    open(unit=10000+ipart, iostat=stat, status='old')
+    if (stat == 0) close(10000+ipart, status='delete')
+    open(unit=10000+ipart, recl=1024, position='append')
+
+    open(unit=11000+ipart, iostat=stat, status='old')
+    if (stat == 0) close(11000+ipart, status='delete')
+    open(unit=11000+ipart, recl=1024, position='append')
+
+    open(unit=20000+ipart, iostat=stat, status='old')
+    if (stat == 0) close(20000+ipart, status='delete')
+    open(unit=20000+ipart, recl=1024, position='append')
+
+    open(unit=21000+ipart, iostat=stat, status='old')
+    if (stat == 0) close(21000+ipart, status='delete')
+    open(unit=21000+ipart, recl=1024, position='append')
 !
     ifp_tip=0               !<= initialize footprint counter on tips
     ifp_per=0               !<= initialize footprint counter on periods
@@ -398,7 +415,7 @@ enddo
 calls_rk = 0
 calls_sympl = 0
 
-open(unit=newunit(funit), file='orbit_kinds.out')
+open(unit=newunit(funit), file='orbit_kinds.out', recl=1024)
 write(funit,*) '# ipart', ' r vartheta_c varphi_c p alam0', 'orb_kind_rk', &
     ' orb_kind_sympl', ' calls_rk', ' calls_sympl'    
 
@@ -448,7 +465,7 @@ write(funit,*) '# ipart', ' r vartheta_c varphi_c p alam0', 'orb_kind_rk', &
     write(funit,*) ipart, r, vartheta_c(ipart), varphi_c(ipart), 1.d0, &
     alam0(ipart), orb_kind_rk(ipart), orb_kind_sympl(ipart), calls_rk(ipart), calls_sympl(ipart)
     close(funit)   
-    open(funit,file='orbit_kinds.out',position='append')
+    open(funit,file='orbit_kinds.out', position='append', recl=1024)
   !$omp end critical
   enddo
 !$omp end do
