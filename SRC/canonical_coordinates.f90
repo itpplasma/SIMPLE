@@ -288,13 +288,13 @@ program canonical_coordinates
   
   
 ! run with fixed random seed 
-!integer :: seedsize
-!integer, allocatable :: seed(:)
+integer :: seedsize
+integer, allocatable :: seed(:)
 
-!call random_seed(size = seedsize)
-!allocate(seed(seedsize))
-!seed = 0
-!call random_seed(put=seed)
+call random_seed(size = seedsize)
+allocate(seed(seedsize))
+seed = 0
+call random_seed(put=seed)
 
   zerolam=0.d0
   twopi=2.d0*pi
