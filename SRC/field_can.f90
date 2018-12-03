@@ -24,21 +24,21 @@ type :: d2_field_can
     double precision, dimension(6) :: d2Bmod
 end type d2_field_can
 
-!$omp threadprivate(f, df, d2f)
 type(field_can) :: f
 type(d_field_can) :: df
 type(d2_field_can) :: d2f
+!$omp threadprivate(f, df, d2f)
 
-!$omp threadprivate(H, pth, vpar, dH, dpth, dvpar, d2H, d2pth, d2vpar)
 double precision :: H, pth, vpar
 double precision, dimension(4) :: dvpar, dH, dpth
 double precision, dimension(10) :: d2vpar, d2H, d2pth
+!$omp threadprivate(H, pth, vpar, dH, dpth, dvpar, d2H, d2pth, d2vpar)
 ! order of second derivatives: 
 ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
 ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
 
-!$omp threadprivate(mu, ro0)
 double precision :: mu, ro0
+!$omp threadprivate(mu, ro0)
 
 ! TODO: make buffering work again, or drop it
 ! integer, parameter :: nbuf = 0
