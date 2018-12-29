@@ -43,7 +43,7 @@ prefix = '/home/calbert/run/NEO-ORB/'
 
 type1='10'
 type2='11'
-num='607'
+num='721'
     
 z = np.loadtxt(prefix+'fort.{}{}'.format(type1,num))
 doplot(z, 'b,')
