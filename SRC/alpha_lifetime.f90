@@ -26,13 +26,14 @@ use diag_mod, only : dodiag
   double precision :: facE_al
   integer          :: ibins
   integer          :: n_e,n_d,n_b
+  integer          :: startmode
 
   rmu=1d5 ! inverse relativistic temperature
 
-  open(1,file='alpha_lifetime_c.inp')
+  open(1,file='alpha_lifetime.inp',recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
-  read (1,*) nper              !number of periods for initial field line
-  read (1,*) npoiper           !number of points per period on this field line
+  read (1,*) nper              !number of periods for initial field line        ! TODO: increase
+  read (1,*) npoiper           !number of points per period on this field line  ! TODO: increase
   read (1,*) ntimstep          !number of time steps per slowing down time
   read (1,*) ntestpart         !number of test particles
   read (1,*) bmod_ref          !reference field, G, for Boozer $B_{00}$
@@ -50,6 +51,7 @@ use diag_mod, only : dodiag
   read (1,*) ns_s              !spline order for 3D quantities over s variable
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
+  read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
   close(1)
 
 ! initialize field geometry
@@ -80,7 +82,7 @@ use diag_mod, only : dodiag
   dtaumin=dphi*rbig/npoiper2
 
 ! log initial configuration
-  open(1,file='alpha_lifetime.log')
+  open(1,file='alpha_lifetime.log',recl=1024)
   write (1,*) 'notrace_passing = ',notrace_passing
   write (1,*) 'nper = ',nper
   write (1,*) 'npoiper = ',npoiper
@@ -104,6 +106,7 @@ use diag_mod, only : dodiag
   write (1,*) 'ns_s = ',ns_s
   write (1,*) 'ns_tp = ',ns_tp
   write (1,*) 'multharm = ',multharm
+  write (1,*) 'startmode = ',startmode
   close(1)
 
 ! pre-compute starting points
@@ -129,16 +132,16 @@ use diag_mod, only : dodiag
   bmax=maxval(bstart)
   bmin=minval(bstart)
 
-  open(1,file='bminmax.dat')
+  open(1,file='bminmax.dat',recl=1024)
   write(1,*)bmin,bmax,bmod00
   close(1)
-  open(1,file='volstart.dat')
+  open(1,file='volstart.dat',recl=1024)
   do i=1,npoi
   write(1,*)i,volstart(i)
   end do
   close(1)
 
-  open(1,file='starting_surface.dat')
+  open(1,file='starting_surface.dat',recl=1024)
   do i=1,npoi,npoiper
     write (1,*) xstart(1,i),xstart(3,i)
   enddo
@@ -157,30 +160,39 @@ use diag_mod, only : dodiag
     enddo
   enddo
 
-! files for storing starting coords of passing and trapped  
-  open(2,file='start_p.dat')
-  open(3,file='start_t.dat')
+! files for storing starting coords
+  open(1,file='start.dat',recl=1024)
+
+! determine the starting point:
+  if (startmode == 0 .or. startmode == 1) then
+    do ipart=1,ntestpart
+      xi=zzg()
+      call binsrc(volstart,1,npoi,xi,i)
+      ibins=i
+      ! coordinates: z(1) = R, z(2) = phi, z(3) = Z
+      zstart(1:3,ipart)=xstart(:,i)
+      ! normalized velocity module z(4) = v / v_0:
+      zstart(4,ipart)=1.d0
+      ! starting pitch z(5)=v_\parallel / v:
+      xi=zzg()
+      zstart(5,ipart)=2.d0*(xi-0.5d0)
+      write(1,*) zstart(:,ipart)
+    enddo
+  else
+    do ipart=1,ntestpart
+      read(1,*) zstart(:,ipart)
+    enddo
+  endif
+
+  close(1)
+
+  if (startmode == 0) stop
 
 ! do particle tracing in parallel
 !$omp parallel private(ibins, xi, i, z, trap_par)
 !$omp do
   do ipart=1,ntestpart
     print *, ipart, ' / ', ntestpart, 'thread: ', omp_get_thread_num()
-    ! 
-    ! determine the starting point:
-    xi=zzg()
-    call binsrc(volstart,1,npoi,xi,i)
-    ibins=i
-    ! coordinates: z(1) = R, z(2) = phi, z(3) = Z
-    zstart(1:3,ipart)=xstart(:,i)
-    ! normalized velocity module z(4) = v / v_0:
-    zstart(4,ipart)=1.d0
-    ! starting pitch z(5)=v_\parallel / v:
-    xi=zzg()
-    zstart(5,ipart)=2.d0*(xi-0.5d0)
-    
-    trap_par=((1.d0-z(5)**2)*bmax/bstart(i)-1.d0)*bmin/(bmax-bmin)
-
     z = zstart(:,ipart)    
 
     if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
@@ -206,11 +218,6 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
 !$omp atomic
         confpart_pass(i)=confpart_pass(i)+1.d0
       enddo
-!$omp critical
-      write(2,*) trap_par,ilost,xstart(:,ibins),ierr
-      close(2)
-      open(2,file='start_p.dat',position='append')
-!$omp end critical
     else
 ! trapped particle (traced always)
       confpart_trap(1)=confpart_trap(1)+1.d0
@@ -222,34 +229,17 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
         if(ierr.ne.0) exit
         ilost=ntimstep-i
 
-print *,'trapped particle ',ipart,' step ',i,' of ',ntimstep
-if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
-
         confpart_trap(i)=confpart_trap(i)+1.d0
       enddo
-!$omp critical
-      write(3,*) trap_par,ilost,xstart(:,ibins),ierr
-      close(3)
-      open(3,file='start_t.dat',position='append')
-!$omp end critical
     endif
-    open(1,file='confined_fraction.dat')
-    do i=1,ntimstep
-      write(1,*) dble(i-1)*dtau/v0,confpart_trap(i)/ntestpart, &
-                                     confpart_pass(i)/ntestpart,ipart
-    enddo
-    close(1)
   enddo
 !$omp end do
 !$omp end parallel
 
-  close(2)
-  close(3)
-
   confpart_pass=confpart_pass/ntestpart
   confpart_trap=confpart_trap/ntestpart
 
-  open(1,file='confined_fraction.dat')
+  open(1,file='confined_fraction.dat',recl=1024)
   do i=1,ntimstep
     write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo

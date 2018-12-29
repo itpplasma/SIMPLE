@@ -204,8 +204,8 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   Bctr_varphi = df%dAth(1)/sqg
   
   bmod2 = Bctr_vartheta*Bth + Bctr_varphi*Bph
-  if (bmod2<0) print *, r, th_c, ph_c, bmod2
-  f%Bmod = sqrt(bmod2)
+  !if (bmod2<0) print *, r, th_c, ph_c, bmod2
+  f%Bmod = sqrt(abs(bmod2))
   twobmod = 2.d0*f%Bmod
 
   dbmod2(1) = (df%dAth(1)*dBph(1)-df%dAph(1)*dBth(1)-d2f%d2Aph(1)*Bth-bmod2*dsqg(1))/sqg
