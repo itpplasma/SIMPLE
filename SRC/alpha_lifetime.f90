@@ -5,6 +5,7 @@ program alpha_lifetime
   use chamb_mod,  only : rnegflag
   use parmot_mod, only : rmu, ro0, eeff
   use velo_mod,   only : isw_field_type
+  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
 use diag_mod, only : dodiag
 
   implicit none
@@ -27,6 +28,9 @@ use diag_mod, only : dodiag
   integer          :: ibins
   integer          :: n_e,n_d,n_b
   integer          :: startmode
+
+  integer :: ntau ! number of dtaumin in dtau
+  integer, parameter :: mode_sympl = 1 ! 1 = Euler1, 2 = Euler2, 3 = Verlet
 
   rmu=1d5 ! inverse relativistic temperature
 
@@ -80,6 +84,9 @@ use diag_mod, only : dodiag
   dphi=2.d0*pi/(L1i*npoiper)
 ! orbit integration time step (to check chamber wall crossing)
   dtaumin=dphi*rbig/npoiper2
+  ntau=ceiling(dtau/dtaumin)
+  dtaumin=dtau/ntau
+  print *, 'tau: ', dtau, dtaumin, min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
 
 ! log initial configuration
   open(1,file='alpha_lifetime.log',recl=1024)
@@ -194,6 +201,7 @@ use diag_mod, only : dodiag
   do ipart=1,ntestpart
     print *, ipart, ' / ', ntestpart, 'thread: ', omp_get_thread_num()
     z = zstart(:,ipart)    
+    call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
 
     if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
     ! passing particle
@@ -210,7 +218,8 @@ use diag_mod, only : dodiag
       ilost=ntimstep-1
       do i=2,ntimstep
       if(trap_par.le.contr_pp) go to 111
-        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        !call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        call orbit_timestep_sympl(z, ierr)
         if(ierr.ne.0) exit
   111  continue
         ilost=ntimstep-i
@@ -224,7 +233,8 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
       ilost=ntimstep-1
       do i=2,ntimstep
 
-        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        !call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        call orbit_timestep_sympl(z, ierr)
 
         if(ierr.ne.0) exit
         ilost=ntimstep-i

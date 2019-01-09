@@ -18,4 +18,4 @@
 5        ns_s              !spline order for 3D quantities over s variable
 5        ns_tp             !spline order for 3D quantities over theta and phi
 7        multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
-0        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
+1        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
