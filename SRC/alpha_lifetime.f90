@@ -83,7 +83,7 @@ use diag_mod, only : dodiag
 ! field line integration step step over phi (to check chamber wall crossing)
   dphi=2.d0*pi/(L1i*npoiper)
 ! orbit integration time step (to check chamber wall crossing)
-  dtaumin=dphi*rbig/npoiper2
+  dtaumin=2.d0*pi*rbig/npoiper2
   ntau=ceiling(dtau/dtaumin)
   dtaumin=dtau/ntau
   print *, 'tau: ', dtau, dtaumin, min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau

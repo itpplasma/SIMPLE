@@ -8,7 +8,7 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1e-15, rtol = 1e-9
+double precision, parameter :: atol = 1e-15, rtol = 1e-10
 
 ! Current phase-space coordinates z and old pth
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
@@ -64,7 +64,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   kt = 0
   k = 0
 
-  if(min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin)) > 1d-11*dtaumin) stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+  if(min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
   ntau = nint(dtau/dtaumin)
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   if (mode==3) dt = dt/2d0 ! Verlet out of two Euler steps
