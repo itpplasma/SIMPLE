@@ -64,7 +64,10 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   kt = 0
   k = 0
 
-  if(min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+  if(min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
+    stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+  endif
+  
   ntau = nint(dtau/dtaumin)
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   if (mode==3) dt = dt/2d0 ! Verlet out of two Euler steps
