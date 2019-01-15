@@ -53,11 +53,11 @@ def doplot3(ax, z, z2, marker):
 #plt.legend(['Euler16 w Taylor', 'Euler16', 'Verlet16', 'Verlet8 old', 'RK16'])
 
 #prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_32/'
-#prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_64/'
+prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_64/'
 #prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_128/'
 #prefix = 'L:/run/NEO-ORB/'
 #prefix = '/home/calbert/mnt/marconi_scratch/NEO-ORB/RK_1em10_Verlet_32/'
-prefix = '/home/calbert/run/NEO-ORB/'
+#prefix = '/home/calbert/run/NEO-ORB/'
 
 data = np.loadtxt(os.path.join(prefix,'orbit_kinds.out'))
 difffilter = abs(data[:,6] - data[:,7]) > 1e-5
@@ -67,7 +67,8 @@ partdiff = datadiff[:,0].astype(int)
 
 #%%
 #ipart = data[3,0].astype(int)
-ipart = 91
+#ipart = 91
+ipart = partdiff[1]
 num = '{:03d}'.format(ipart)
     
 plt.figure()

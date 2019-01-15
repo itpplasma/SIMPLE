@@ -19,7 +19,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -fopenmp -Wall -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check")
-set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -g -mkl")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -g")# -mkl")
 
 add_library ( neo-orb SHARED
 	SRC/canonical_coordinates_mod.f90
@@ -74,10 +74,10 @@ add_executable (alpha_lifetime.x
 	SRC/alpha_lifetime.f90
 )
 
-target_link_libraries(neo-orb.x neo-orb netcdf netcdff)
-target_link_libraries(orbit-symplectic-test.x neo-orb netcdf netcdff)
-target_link_libraries(test_magfie.x neo-orb netcdf netcdff)
-target_link_libraries(test_poincare1.x neo-orb netcdf netcdff)
-target_link_libraries(test_poiplot_classification.x neo-orb netcdf netcdff)
-target_link_libraries(alpha_lifetime_vmec_c.x neo-orb netcdf netcdff)
-target_link_libraries(alpha_lifetime.x neo-orb netcdf netcdff)
+target_link_libraries(neo-orb.x neo-orb netcdf netcdff openblas)
+target_link_libraries(orbit-symplectic-test.x neo-orb netcdf netcdff openblas)
+target_link_libraries(test_magfie.x neo-orb netcdf netcdff openblas)
+target_link_libraries(test_poincare1.x neo-orb netcdf netcdff openblas)
+target_link_libraries(test_poiplot_classification.x neo-orb netcdf netcdff openblas)
+target_link_libraries(alpha_lifetime_vmec_c.x neo-orb netcdf netcdff openblas)
+target_link_libraries(alpha_lifetime.x neo-orb netcdf netcdff openblas)
