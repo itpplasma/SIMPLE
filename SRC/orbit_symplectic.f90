@@ -8,7 +8,7 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1e-15, rtol = 1e-10
+double precision, parameter :: atol = 1d-15, rtol = 1d-12
 
 ! Current phase-space coordinates z and old pth
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
@@ -56,7 +56,6 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   integer ierr, info
 
   integer, parameter :: n = 2
-  double precision, parameter :: tol = 1e-13
 
   mode = mode_init
 
@@ -67,7 +66,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   if(min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
     stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
   endif
-  
+
   ntau = nint(dtau/dtaumin)
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   if (mode==3) dt = dt/2d0 ! Verlet out of two Euler steps
@@ -189,7 +188,7 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
     if (all(abs(fvec) < atol) &
       .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
   enddo
-  print *, 'Warning: maximum iterations reached in newton1: ', maxit
+  print *, 'newton1: maximum iterations reached: ', maxit, 'z = ', x(1), z(2), z(3), x(2)
 end subroutine
 
 subroutine newton2(x, atol, rtol, maxit, xlast)
@@ -215,7 +214,7 @@ subroutine newton2(x, atol, rtol, maxit, xlast)
     if (all(abs(fvec) < atol) &
       .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
   enddo
-  print *, 'Warning: maximum iterations reached in newton2: ', maxit
+  print *, 'newton2: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), z(4)
 end subroutine
 
 
@@ -248,7 +247,7 @@ subroutine orbit_timestep_sympl_euler1(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
@@ -286,9 +285,14 @@ subroutine orbit_timestep_sympl_euler1(z0, ierr)
       
     call newton1(x, atol, rtol, maxit, xlast)
 
-    if (x(1) < 0.0 .or. x(1) > 1.0) then
+    if (x(1) > 1.0) then
       ierr = 1
       return
+    end if
+
+    if (x(1) < 0.0) then
+      print *, 'r<0, z = ', x(1), z(2), z(3), x(2) 
+      x(1) = 0.01
     end if
     
     z(1) = x(1)
@@ -329,10 +333,12 @@ subroutine orbit_timestep_sympl_euler2(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
+
+stop 'need to implement behavior on axis and for lost particles'
   
   ierr = 0
   ktau = 0
@@ -385,11 +391,13 @@ subroutine orbit_timestep_sympl_verlet(z0, ierr)
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n1) :: x1, xlast1
   double precision, dimension(n2) :: x2, xlast2
   integer :: ktau
+
+stop 'need to implement behavior on axis and for lost particles'
 
   ierr = 0
   ktau = 0
@@ -489,7 +497,7 @@ subroutine debug_root(x0)
   double precision :: x0(2), x(2)
   integer :: k, l, iflag
   integer, parameter :: n = 100
-  double precision, parameter :: eps = 1e-15
+  double precision, parameter :: eps = 1d-15
 
   double precision :: fvec(2)
 

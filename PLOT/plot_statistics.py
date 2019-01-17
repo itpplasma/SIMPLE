@@ -31,18 +31,24 @@ def plotdata(infile):
     plt.tight_layout()
     
     plt.figure(2)
-    plt.loglog(t+1e-4, fractrap)
+    plt.loglog(t+1e-4, fractrap/fractrap[0])
     plt.xlabel('t')
     plt.ylabel('% confined (trapped, relative)')
     plt.grid(True, which="both")
     plt.tight_layout()
+    
+cases = ['RKV', 'RK', '0016', '0032', '0064', '0128']
 
 
-plotdata(os.path.join(inpath[0], 'confined_fraction.dat'))
-plotdata(os.path.join(inpath[1], '016/confined_fraction.dat'))
-plotdata(os.path.join(inpath[5], 'confined_fraction.dat'))
+#plotdata(os.path.join(inpath[0], 'confined_fraction.dat'))
+#plotdata(os.path.join(inpath[1], '016/confined_fraction.dat'))
+#plotdata(os.path.join(inpath[5], 'confined_fraction.dat'))
+for run in cases:
+        plotdata(os.path.join(inpath[5], 'confined_fraction_{}.dat'.format(run)))
 
 plt.figure(1)
-plt.legend(['RK', '1600'])
+plt.legend(cases)
 plt.figure(2)
-plt.legend(['RK', '1600'])
+plt.legend(cases)
+
+plt.show()
