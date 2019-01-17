@@ -8,7 +8,7 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1d-15, rtol = 1d-12
+double precision, parameter :: atol = 1d-15, rtol = 1d-13
 
 ! Current phase-space coordinates z and old pth
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
@@ -63,7 +63,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   kt = 0
   k = 0
 
-  if(min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
+  if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
     stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
   endif
 
@@ -175,7 +175,8 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
   integer :: kit
 
   do kit = 1, maxit
-    if(x(1) < 0.0 .or. x(1) > 1.0) return
+    if(x(1) > 1.0) return
+    if(x(1) < 0.0) x(1) = 0.2
     call f_sympl_euler1(n, x, fvec, 1)
     call jac_sympl_euler1(x, fjac)
     ijac(1,1) = fjac(2,2)
@@ -185,10 +186,11 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
     ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
     xlast = x
     x = x - matmul(ijac, fvec)
-    if (all(abs(fvec) < atol) &
-      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
+    if (all(dabs(fvec) < atol) &
+      .or. all(dabs(x-xlast) < rtol*dabs(x))) return
   enddo
-  print *, 'newton1: maximum iterations reached: ', maxit, 'z = ', x(1), z(2), z(3), x(2)
+  print *, 'newton1: maximum iterations reached: ', maxit
+  write(6601,*) x(1), z(2), z(3), x(2), x-xlast, fvec
 end subroutine
 
 subroutine newton2(x, atol, rtol, maxit, xlast)
@@ -204,17 +206,19 @@ subroutine newton2(x, atol, rtol, maxit, xlast)
   integer :: pivot(n), info
 
   do kit = 1, maxit
-    if(x(1) < 0.0 .or. x(1) > 1.0) return
+    if(x(1) > 1.0) return
+    if(x(1) < 0.0) x(1) = 0.01
     call f_sympl_euler2(n, x, fvec, 1)
     call jac_sympl_euler2(x, fjac)
     call dgesv(n, 1, fjac, n, pivot, fvec, 3, info) 
     xlast = x
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
-    if (all(abs(fvec) < atol) &
-      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
+    if (all(dabs(fvec) < atol) &
+      .or. all(dabs(x-xlast) < rtol*dabs(x))) return
   enddo
   print *, 'newton2: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), z(4)
+  write(6602,*) x(1), x(2), x(3), z(4), x-xlast, fvec
 end subroutine
 
 
