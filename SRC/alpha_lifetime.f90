@@ -30,7 +30,9 @@ use diag_mod, only : dodiag
   integer          :: startmode
 
   integer :: ntau ! number of dtaumin in dtau
-  integer, parameter :: mode_sympl = 1 ! 1 = Euler1, 2 = Euler2, 3 = Verlet
+  integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+
+  integer :: kpart = 0 ! progress counter for particles
 
   rmu=1d5 ! inverse relativistic temperature
 
@@ -56,13 +58,17 @@ use diag_mod, only : dodiag
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
   read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
+  read (1,*) integmode         !mode for integrator: 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
   close(1)
 
 ! initialize field geometry
   call spline_vmec_data ! initialize splines for VMEC field
   call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius 
-  call get_canonical_coordinates ! pre-compute transformation to canonical coords
-  isw_field_type = 0 ! evaluate fields in canonical coords (0 = CAN, 1 = VMEC)
+  isw_field_type = 1 ! evaluate fields in VMEC coords (0 = CAN, 1 = VMEC)
+  if (integmode>=0) then
+    call get_canonical_coordinates ! pre-compute transformation to canonical coords
+    isw_field_type = 0 ! evaluate fields in canonical coords (0 = CAN, 1 = VMEC)
+  end if
 
 ! initialize position and do first check if z is inside vacuum chamber
   z = 0.0d0 
@@ -199,9 +205,11 @@ use diag_mod, only : dodiag
 !$omp parallel private(ibins, xi, i, z, trap_par)
 !$omp do
   do ipart=1,ntestpart
-    print *, ipart, ' / ', ntestpart, 'thread: ', omp_get_thread_num()
+!$omp atomic
+    kpart = kpart+1
+    print *, kpart, ' / ', ntestpart, 'particle: ', ipart, 'thread: ', omp_get_thread_num()
     z = zstart(:,ipart)    
-    call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
+    if (integmode>0) call orbit_sympl_init(z, dtau, dtaumin, integmode)
 
     if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
     ! passing particle
@@ -217,9 +225,12 @@ use diag_mod, only : dodiag
       confpart_pass(1)=confpart_pass(1)+1.d0
       ilost=ntimstep-1
       do i=2,ntimstep
-      if(trap_par.le.contr_pp) go to 111
-        !call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-        call orbit_timestep_sympl(z, ierr)
+        if(trap_par.le.contr_pp) go to 111
+        if (integmode <= 0) then
+          call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        else
+          call orbit_timestep_sympl(z, ierr)
+        endif
         if(ierr.ne.0) exit
   111  continue
         ilost=ntimstep-i
@@ -232,9 +243,11 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
       confpart_trap(1)=confpart_trap(1)+1.d0
       ilost=ntimstep-1
       do i=2,ntimstep
-
-        !call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-        call orbit_timestep_sympl(z, ierr)
+        if (integmode <= 0) then
+          call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        else
+          call orbit_timestep_sympl(z, ierr)
+        endif
 
         if(ierr.ne.0) exit
         ilost=ntimstep-i
@@ -255,5 +268,5 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
   enddo
   close(1)
 
-  call deallocate_can_coord
+  if (integmode >= 0) call deallocate_can_coord
 end program alpha_lifetime

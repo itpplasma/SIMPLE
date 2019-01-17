@@ -128,8 +128,8 @@ subroutine der2(x0, i, j)
         H00, H11, H10, H01, pth00, pth11, pth10, pth01
     integer :: k
 
-    hi = 1e-4
-    hj = 1e-4
+    hi = 1d-4
+    hj = 1d-4
 
     dxi = 0d0
     dxj = 0d0
