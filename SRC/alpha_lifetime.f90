@@ -92,7 +92,7 @@ use diag_mod, only : dodiag
   dtaumin=2.d0*pi*rbig/npoiper2
   ntau=ceiling(dtau/dtaumin)
   dtaumin=dtau/ntau
-  print *, 'tau: ', dtau, dtaumin, min(abs(mod(dtau, dtaumin)), abs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
+  print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
 
 ! log initial configuration
   open(1,file='alpha_lifetime.log',recl=1024)

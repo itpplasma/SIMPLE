@@ -5,7 +5,7 @@ Created on Tue Jan  8 14:51:30 2019
 
 @author: calbert
 """
-
+#%%
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -37,13 +37,13 @@ def plotdata(infile):
     plt.grid(True, which="both")
     plt.tight_layout()
     
-cases = ['RKV', 'RK', '0016', '0032', '0064', '0128']
+cases = ['current', 'RKV', 'RK', '0016', '0032', '0064', '0128']
 
 
 #plotdata(os.path.join(inpath[0], 'confined_fraction.dat'))
 #plotdata(os.path.join(inpath[1], '016/confined_fraction.dat'))
-#plotdata(os.path.join(inpath[5], 'confined_fraction.dat'))
-for run in cases:
+plotdata(os.path.join(inpath[5], 'confined_fraction.dat'))
+for run in cases[1:]:
         plotdata(os.path.join(inpath[5], 'confined_fraction_{}.dat'.format(run)))
 
 plt.figure(1)
@@ -52,3 +52,5 @@ plt.figure(2)
 plt.legend(cases)
 
 plt.show()
+
+#%%
