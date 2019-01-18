@@ -35,7 +35,8 @@ program alpha_lifetime
 
   integer :: kpart = 0 ! progress counter for particles
 
-  double precision bmod,sqrtg,bder,hcovar,hctrvr,hcurl ! for bmod at initial positions
+  double precision :: bmod,sqrtg
+  double precision, dimension(3) :: bder,hcovar,hctrvr,hcurl
 
   rmu=1d5 ! inverse relativistic temperature
 

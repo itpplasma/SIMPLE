@@ -19,7 +19,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -Wall -Wno-unused -Wno-unused-dummy-argument -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps")
-set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -g -mkl -Wall -Wno-unused -Wno-unused-dummy-argument")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O0 -cpp -fopenmp -g -mkl -warn all -check all -traceback -ftrapuv -debug all -fpe0")
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -g -mkl")
 
 add_library ( neo-orb SHARED
