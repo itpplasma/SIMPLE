@@ -18,8 +18,8 @@ include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} /usr/include)
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
-#set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -fopenmp -Wall -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check")
-set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -g")# -mkl")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -Wall -Wno-unused -Wno-unused-dummy-argument -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps")
+#set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O0 -cpp -fopenmp -g")# -mkl")
 
 add_library ( neo-orb SHARED
 	SRC/canonical_coordinates_mod.f90
@@ -37,7 +37,7 @@ add_library ( neo-orb SHARED
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 	SRC/common.f90
-	SRC/minpack.f90
+#	SRC/minpack.f90
 )
 
 add_executable (neo-orb.x
