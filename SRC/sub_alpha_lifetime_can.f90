@@ -166,19 +166,19 @@
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-      subroutine orbit_timestep_can(z,dtau,dtaumin,ierr)
+      subroutine orbit_timestep_can(z,dtau,dtaumin,relerr,ierr)
 use diag_mod, only : dodiag
 !
       implicit none
 !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: relerr=1d-10
 !
       integer :: ierr,j
       double precision :: dtau,dtaumin,phi,tau1,tau2
 !
       double precision, dimension(2)    :: y
       double precision, dimension(ndim) :: z
+      double precision :: relerr
 !
       external velo_can
 !
@@ -404,16 +404,17 @@ if(dodiag) write (123,*) tau2,z
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-      subroutine orbit_timestep_axis(z,dtau,dtaumin,ierr)
+      subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
 !
       implicit none
 !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: relerr=1d-10, snear_axis=0.01d0
+      double precision, parameter :: snear_axis=0.01d0
 !
       logical :: near_axis
       integer :: ierr,j
       double precision :: dtau,dtaumin,phi,tau1,tau2,z1,z2
+      double precision :: relerr
 !
       double precision, dimension(2)    :: y
       double precision, dimension(ndim) :: z
