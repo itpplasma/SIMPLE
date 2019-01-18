@@ -38,6 +38,8 @@ program alpha_lifetime
   double precision :: bmod,sqrtg
   double precision, dimension(3) :: bder,hcovar,hctrvr,hcurl
 
+  double precision :: relerr
+
   rmu=1d5 ! inverse relativistic temperature
 
   open(1,file='alpha_lifetime.inp',recl=1024)
@@ -62,7 +64,8 @@ program alpha_lifetime
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
   read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
-  read (1,*) integmode         !mode for integrator: 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+  read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
+  read (1,*) relerr            !relative error for RK integrator
   close(1)
 
 ! initialize field geometry
@@ -209,6 +212,8 @@ program alpha_lifetime
 
   if (startmode == 0) stop
 
+  icounter=0 ! evaluation counter
+
 ! do particle tracing in parallel
 !$omp parallel private(ibins, xi, i, z, ierr, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 !$omp do
@@ -239,7 +244,7 @@ program alpha_lifetime
       confpart_pass(1)=confpart_pass(1)+1.d0
       do i=2,ntimstep
         if (integmode <= 0) then
-          call orbit_timestep_axis(z, dtau, dtaumin, ierr)
+          call orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr)
         else
           call orbit_timestep_sympl(z, ierr)
         endif
@@ -254,7 +259,7 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
       confpart_trap(1)=confpart_trap(1)+1.d0
       do i=2,ntimstep
         if (integmode <= 0) then
-          call orbit_timestep_axis(z, dtau, dtaumin, ierr)
+          call orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr)
         else
           call orbit_timestep_sympl(z, ierr)
         endif
