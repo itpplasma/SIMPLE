@@ -1,38 +1,41 @@
 program alpha_lifetime
   use omp_lib
   use common, only: pi, c, e_charge, e_mass, p_mass, ev
-  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_A, ns_s, ns_tp
-  use chamb_mod,  only : rnegflag
-  use parmot_mod, only : rmu, ro0, eeff
+  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
+
+  use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-use diag_mod, only : dodiag
+!use diag_mod, only : dodiag
 
   implicit none
 
   integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
-  integer          :: ipart,notrace_passing,loopskip,iskip,ilost
+  integer          :: ipart,notrace_passing,loopskip,iskip
   real             :: zzg
-  double precision :: dphi,rbeg,phibeg,zbeg,bmod00,rcham,rlarm,bmax,bmin
+  double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
-  double precision :: RT0,R0i,cbfi,bz0i,bf0,trap_par,rbig
+  double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
   double precision :: sbeg,thetabeg
   double precision, dimension(5) :: z
-  double precision, dimension(:),   allocatable :: bstart,volstart,confpart
+  double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
+  double precision, dimension(:), allocatable :: times_lost
   integer          :: npoiper2
   double precision :: contr_pp
   double precision :: facE_al
   integer          :: ibins
-  integer          :: n_e,n_d,n_b
+  integer          :: n_e,n_d
   integer          :: startmode
 
   integer :: ntau ! number of dtaumin in dtau
   integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 
   integer :: kpart = 0 ! progress counter for particles
+
+  double precision bmod,sqrtg,bder,hcovar,hctrvr,hcurl ! for bmod at initial positions
 
   rmu=1d5 ! inverse relativistic temperature
 
@@ -48,7 +51,7 @@ use diag_mod, only : dodiag
   read (1,*) phibeg            !starting phi for field line                     !<=2017
   read (1,*) thetabeg          !starting theta for field line                   !<=2017
   read (1,*) loopskip          !how many loops to skip to shift random numbers
-  read (1,*) contr_pp          !control of passing particle fraction
+  read (1,*) contr_pp          !control of passing particle fraction            ! UNUSED (2019)
   read (1,*) facE_al           !facE_al test particle energy reduction factor
   read (1,*) npoiper2          !additional integration step split factor
   read (1,*) n_e               !test particle charge number (the same as Z)
@@ -165,6 +168,10 @@ use diag_mod, only : dodiag
   confpart_trap=0.d0
   confpart_pass=0.d0
 
+! initialize lost times when particles get lost
+  allocate(times_lost(ntestpart))
+  times_lost = -1.d0
+
 ! skip random numbers according to configuration
   do iskip=1,loopskip
     do ipart=1,ntestpart
@@ -202,7 +209,7 @@ use diag_mod, only : dodiag
   if (startmode == 0) stop
 
 ! do particle tracing in parallel
-!$omp parallel private(ibins, xi, i, z, trap_par)
+!$omp parallel private(ibins, xi, i, z, ierr, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 !$omp do
   do ipart=1,ntestpart
 !$omp atomic
@@ -211,7 +218,13 @@ use diag_mod, only : dodiag
     z = zstart(:,ipart)    
     if (integmode>0) call orbit_sympl_init(z, dtau, dtaumin, integmode)
 
-    if(z(5)**2.gt.1.d0-bstart(i)/bmax) then
+    if(isw_field_type.eq.0) then
+        call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+    else
+        call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+    endif
+
+    if(z(5)**2.gt.1.d0-bmod/bmax) then
     ! passing particle
       if(notrace_passing.eq.1) then
       ! no tracing of passing particles, assume that all are confined
@@ -223,37 +236,32 @@ use diag_mod, only : dodiag
       ! trace passing particle
 !$omp atomic
       confpart_pass(1)=confpart_pass(1)+1.d0
-      ilost=ntimstep-1
       do i=2,ntimstep
-        if(trap_par.le.contr_pp) go to 111
         if (integmode <= 0) then
-          call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+          call orbit_timestep_axis(z, dtau, dtaumin, ierr)
         else
           call orbit_timestep_sympl(z, ierr)
         endif
         if(ierr.ne.0) exit
-  111  continue
-        ilost=ntimstep-i
 print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
 !$omp atomic
         confpart_pass(i)=confpart_pass(i)+1.d0
       enddo
     else
 ! trapped particle (traced always)
+!$omp atomic
       confpart_trap(1)=confpart_trap(1)+1.d0
-      ilost=ntimstep-1
       do i=2,ntimstep
         if (integmode <= 0) then
-          call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+          call orbit_timestep_axis(z, dtau, dtaumin, ierr)
         else
           call orbit_timestep_sympl(z, ierr)
         endif
-
         if(ierr.ne.0) exit
-        ilost=ntimstep-i
-
+!$omp atomic
         confpart_trap(i)=confpart_trap(i)+1.d0
       enddo
+      times_lost(ipart) = dble(i-1)*dtau/v0
     endif
   enddo
 !$omp end do
@@ -268,5 +276,12 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
   enddo
   close(1)
 
+  open(1,file='times_lost.dat',recl=1024)
+  do i=1,ntestpart
+    write(1,*) i, times_lost(i)
+  enddo
+  close(1)
+
   if (integmode >= 0) call deallocate_can_coord
+  deallocate(times_lost, confpart_trap, confpart_pass)
 end program alpha_lifetime

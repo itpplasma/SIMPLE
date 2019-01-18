@@ -161,7 +161,7 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy, &
     Bth, Bph, dBth(3), dBph(3), d2Bth(6), d2Bph(6), twobmod, dbmod2(3)
 
-  integer :: kb, bufind
+  !integer :: kb, bufind
 
   ! if (mode_secders == 0) then
   !   do kb = 0, nbuf-1
