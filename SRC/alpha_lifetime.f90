@@ -194,7 +194,7 @@ use diag_mod, only : icounter
     kpart = kpart+1
     print *, kpart, ' / ', ntestpart, 'particle: ', ipart, 'thread: ', omp_get_thread_num()
     z = zstart(:,ipart)    
-    if (integmode>0) call orbit_sympl_init(z, dtau, dtaumin, integmode)
+    if (integmode>0) call orbit_sympl_init(z, dtau, dtaumin, relerr, integmode)
 
     if(isw_field_type.eq.0) then
         call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)

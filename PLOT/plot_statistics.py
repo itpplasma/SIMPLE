@@ -38,7 +38,7 @@ def plotdata(infile):
     plt.tight_layout()
     
 #cases = ['current', 'RKV', 'RK', '0016', '0032', '0064', '0128']
-cases = ['reference', '64', '32', '16', r'RK $10^{-6}$', r'RK $10^{-3}$']
+cases = ['reference', '64', '32', '16', r'RK $10^{-6}$', r'RK $10^{-5}$', r'RK $10^{-4}$']
 
 plotdata(os.path.join(inpath[1], 'confined_fraction_RK.dat'))
 #plotdata(os.path.join(inpath[1], 'confined_fraction_1024.dat'))
@@ -46,8 +46,9 @@ plotdata(os.path.join(inpath[1], 'confined_fraction_0064.dat'))
 plotdata(os.path.join(inpath[1], 'confined_fraction_0032.dat'))
 plotdata(os.path.join(inpath[1], 'confined_fraction_0016.dat'))
 plotdata(os.path.join(inpath[1], 'confined_fraction_RK1d-6.dat'))
+plotdata(os.path.join(inpath[1], 'confined_fraction_RK1d-5.dat'))
 plotdata(os.path.join(inpath[1], 'confined_fraction_RK1d-4.dat'))
-plotdata(os.path.join(inpath[1], 'confined_fraction_RK1d-3.dat'))
+#plotdata(os.path.join(inpath[1], 'confined_fraction_RK1d-3.dat'))
 #plotdata(os.path.join(inpath[1], 'confined_fraction.dat'))
 #for run in cases[1:3]:
 #  plotdata(os.path.join(inpath[5], 'confined_fraction_{}.dat'.format(run)))

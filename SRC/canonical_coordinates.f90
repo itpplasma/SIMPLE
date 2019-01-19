@@ -103,7 +103,7 @@ endif
     ifp_per=0               !<= initialize footprint counter on periods
 !
   icounter=0
-    if (mode>0) call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
+    if (mode>0) call orbit_sympl_init(z, dtau, dtaumin, 1d-12, mode_sympl) 
 !
 !--------------------------------
 ! Initialize tip detector

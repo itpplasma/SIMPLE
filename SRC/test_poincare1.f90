@@ -131,7 +131,7 @@ print *,'symplectic'
 icounter = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
-  call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
+  call orbit_sympl_init(z, dtau, dtaumin, 1d-12, mode_sympl) 
   do i=1,ntimstep
 !
     call orbit_timestep_sympl(z, ierr)
