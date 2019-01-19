@@ -38,6 +38,7 @@ use diag_mod, only : dodiag
   integer          :: n_e,n_d,n_b
 ! 22.09.2013 end
 ! 13.02.2013 end
+  double precision, parameter :: relerr = 1d-10
 !
 ! inverse relativistic temperature
   rmu=1d5
@@ -279,7 +280,7 @@ print *,ipart,' / ',ntestpart
       if(trap_par.le.contr_pp) go to 111
 ! 13.02.2013 end
 !
-        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        call orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
 !
         if(ierr.ne.0) exit
 ! 13.02.2013
@@ -302,7 +303,7 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
       ilost=ntimstep-1
       do i=2,ntimstep
 !
-        call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+        call orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
 !
         if(ierr.ne.0) exit
         ilost=ntimstep-i

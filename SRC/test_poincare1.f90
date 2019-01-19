@@ -37,6 +37,8 @@ use diag_mod, only : icounter
   logical, parameter :: jparmode = .false.
   integer, parameter :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
   integer :: ntau
+
+  double precision, parameter :: relerr = 1d-10
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -175,7 +177,7 @@ icounter = 0
 call cpu_time(tstart)
   do i=1,ntimstep
 !
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+    call orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
     if (.not. jparmode) then
       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
       write (3005,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
@@ -220,7 +222,7 @@ print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
 ! open(3001, file='orbit_vmec.out', recl=1024)
 !   do i=1,L1i*npoiper*npoiper2*runlen
 ! !
-!     call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+!     call orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
 !     if (.not. jparmode) then
 !       write (3001,*) dtau*dfloat(i),z
 !     else

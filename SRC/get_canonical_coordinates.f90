@@ -452,7 +452,7 @@ use diag_mod, only : icounter
   double precision, dimension(n_qua,ns_max)        :: sp_all,dsp_all_ds,dsp_all_dt
   double precision, dimension(n_qua,ns_max)        :: d2sp_all_ds2,d2sp_all_dsdt,d2sp_all_dt2
   double precision, dimension(n_qua,ns_max,ns_max) :: stp_all,dstp_all_ds,d2stp_all_ds2
-!
+!$omp atomic
 icounter=icounter+1
   if(r.le.0.d0) then
     rnegflag=.true.
