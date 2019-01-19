@@ -40,7 +40,6 @@ use diag_mod, only : icounter
 
   double precision :: relerr
 
-  icounter = 0
   rmu=1d5 ! inverse relativistic temperature
 
   open(1,file='alpha_lifetime.inp',recl=1024)
