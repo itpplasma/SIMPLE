@@ -105,7 +105,7 @@ z0(3)=varphi_c
 z0(4)=1.d0
 z0(5)=alam0
 
-call orbit_sympl_init(z0, 1.0d0, 1.0d0, 0)
+call orbit_sympl_init(z0, 1.0d0, 1.0d0, 1d-12, 0)
 call do_test
 
 contains

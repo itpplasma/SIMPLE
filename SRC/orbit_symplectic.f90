@@ -8,7 +8,8 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1d-15, rtol = 1d-13
+double precision, parameter :: atol = 1d-15
+double precision :: rtol
 
 ! Current phase-space coordinates z and old pth
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
@@ -46,10 +47,11 @@ contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
+subroutine orbit_sympl_init(z0, dtau, dtaumin, rtol_init, mode_init)
 !
   double precision, intent(in) :: z0(5)
   double precision, intent(in) :: dtau, dtaumin
+  double precision, intent(in) :: rtol_init
   integer, intent(in) :: mode_init ! 1 = euler1, 2 = euler2, 3 = verlet
 
   double precision :: x(2), fvec(2)
@@ -58,6 +60,7 @@ subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
   integer, parameter :: n = 2
 
   mode = mode_init
+  rtol = rtol_init
 
   kbuf = 0
   kt = 0
@@ -251,7 +254,7 @@ subroutine orbit_timestep_sympl_euler1(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 100
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
@@ -337,7 +340,7 @@ subroutine orbit_timestep_sympl_euler2(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 100
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
@@ -395,7 +398,7 @@ subroutine orbit_timestep_sympl_verlet(z0, ierr)
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 100
 
   double precision, dimension(n1) :: x1, xlast1
   double precision, dimension(n2) :: x2, xlast2
