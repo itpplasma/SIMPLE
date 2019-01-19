@@ -6,7 +6,7 @@ program alpha_lifetime
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-!use diag_mod, only : dodiag
+use diag_mod, only : icounter 
 
   implicit none
 
@@ -40,6 +40,7 @@ program alpha_lifetime
 
   double precision :: relerr
 
+  icounter = 0
   rmu=1d5 ! inverse relativistic temperature
 
   open(1,file='alpha_lifetime.inp',recl=1024)
@@ -100,34 +101,6 @@ program alpha_lifetime
   ntau=ceiling(dtau/dtaumin)
   dtaumin=dtau/ntau
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
-
-! log initial configuration
-  open(1,file='alpha_lifetime.log',recl=1024)
-  write (1,*) 'notrace_passing = ',notrace_passing
-  write (1,*) 'nper = ',nper
-  write (1,*) 'npoiper = ',npoiper
-  write (1,*) 'ntimestep = ',ntimstep
-  write (1,*) 'ntestpart = ',ntestpart
-  write (1,*) 'bmod_ref = ',bmod_ref
-  write (1,*) 'trace_time = ',trace_time
-  write (1,*) 'sbeg = ',sbeg
-  write (1,*) 'phibeg = ',phibeg
-  write (1,*) 'thetabeg = ',thetabeg
-  write (1,*) 'Rbig = ',rbig
-  write (1,*) 'dphi = ',dphi
-  write (1,*) 'v0 = ',v0
-  write (1,*) 'rlarm = ',rlarm
-  write (1,*) 'dtau = ',dtau
-  write (1,*) 'dtaumin = ',dtaumin
-  write (1,*) 'E_alpha = ',E_alpha
-  write (1,*) 'contr_pp =', contr_pp
-  write (1,*) 'n_e = ',n_e
-  write (1,*) 'n_d = ',n_d
-  write (1,*) 'ns_s = ',ns_s
-  write (1,*) 'ns_tp = ',ns_tp
-  write (1,*) 'multharm = ',multharm
-  write (1,*) 'startmode = ',startmode
-  close(1)
 
 ! pre-compute starting points
   npoi=nper*npoiper ! total number of starting points
@@ -290,4 +263,38 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
 
   if (integmode >= 0) call deallocate_can_coord
   deallocate(times_lost, confpart_trap, confpart_pass)
+
+! log initial configuration
+  open(1,file='alpha_lifetime.log',recl=1024)
+  write (1,*) 'notrace_passing = ',notrace_passing
+  write (1,*) 'nper = ',nper
+  write (1,*) 'npoiper = ',npoiper
+  write (1,*) 'ntimestep = ',ntimstep
+  write (1,*) 'ntestpart = ',ntestpart
+  write (1,*) 'bmod_ref = ',bmod_ref
+  write (1,*) 'trace_time = ',trace_time
+  write (1,*) 'sbeg = ',sbeg
+  write (1,*) 'phibeg = ',phibeg
+  write (1,*) 'thetabeg = ',thetabeg
+  write (1,*) 'Rbig = ',rbig
+  write (1,*) 'dphi = ',dphi
+  write (1,*) 'v0 = ',v0
+  write (1,*) 'rlarm = ',rlarm
+  write (1,*) 'dtau = ',dtau
+  write (1,*) 'dtaumin = ',dtaumin
+  write (1,*) 'E_alpha = ',E_alpha
+  write (1,*) 'contr_pp =', contr_pp
+  write (1,*) 'n_e = ',n_e
+  write (1,*) 'n_d = ',n_d
+  write (1,*) 'ns_s = ',ns_s
+  write (1,*) 'ns_tp = ',ns_tp
+  write (1,*) 'multharm = ',multharm
+  write (1,*) 'startmode = ',startmode
+  write (1,*) 'npoiper2 = ',npoiper2
+  write (1,*) 'integmode = ',integmode
+  write (1,*) 'neval = ', icounter
+  close(1)
+
+
+  print *, 'integ_mode'
 end program alpha_lifetime

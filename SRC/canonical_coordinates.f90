@@ -124,7 +124,7 @@ endif
 !
     do i=1,nstep_tot
 !
-      if (mode==0) call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
+      if (mode==0) call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)    
       if (mode>0)  call orbit_timestep_sympl(z, ierr)
 !
       if(ierr.ne.0) exit
@@ -304,7 +304,7 @@ program canonical_coordinates
 
   integer :: calls_rk(npart), calls_sympl(npart), i, funit
   integer :: orb_kind_rk(npart), orb_kind_sympl(npart)
-  
+ 
   
 ! run with fixed random seed 
 integer :: seedsize
