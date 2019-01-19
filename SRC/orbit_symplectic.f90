@@ -254,7 +254,7 @@ subroutine orbit_timestep_sympl_euler1(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
@@ -340,7 +340,7 @@ subroutine orbit_timestep_sympl_euler2(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
@@ -398,7 +398,7 @@ subroutine orbit_timestep_sympl_verlet(z0, ierr)
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n1) :: x1, xlast1
   double precision, dimension(n2) :: x2, xlast2
