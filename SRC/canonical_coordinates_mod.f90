@@ -51,6 +51,6 @@ module gbpi_mod
 end module gbpi_mod
 !
 module diag_mod
-logical :: dodiag=.false.
-integer :: icounter
+  logical :: dodiag=.false.
+  integer(8) :: icounter
 end module diag_mod
