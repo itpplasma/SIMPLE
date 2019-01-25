@@ -35,7 +35,7 @@ use diag_mod, only : icounter
   double precision :: alam,alam_prev,par_inv
   real :: tstart, tend
   integer, parameter :: runlen = 1
-  logical, parameter :: jparmode = .false.
+  logical, parameter :: jparmode = .false. ! if true output orbit points only when vpar changes sign from positive to negative
   integer, parameter :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
   integer :: ntau
 !
@@ -58,7 +58,9 @@ use diag_mod, only : icounter
   read (1,*) n_d               !test particle mass number (the same as A)
   read (1,*) netcdffile        !name of VMEC file in NETCDF format <=2017 NEW
   close(1)
-!
+
+isw_field_type=1
+  !
 ! inverse relativistic temperature
   rmu=1d8
 !
@@ -86,7 +88,7 @@ bmod00=281679.46317784750d0
   ns_s=5
   ns_tp=5
 !
-  call spline_vmec_data
+call spline_vmec_data
 !call testing
 !
   call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)         !<=2017
@@ -101,145 +103,39 @@ dtau = dtaumin
 ntimstep = L1i*npoiper*npoiper2*100
 print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
-  call get_canonical_coordinates
-!call testing
 !
-!it = 1
-  r=0.5d0
-  vartheta_c=0.0d0
-  varphi_c=0.314d0
-  alam0=0.0d0
-!
-  call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
-!
-  print *,'can : ',r,vartheta_c,varphi_c
-  print *,'VMEC: ',r,theta_vmec,varphi_vmec
-!
-  isw_field_type=0
-  z(1)=r
-  z(2)=vartheta_c
-  z(3)=varphi_c
-  z(4)=1.d0
-  z(5)=alam0
-!
+!call spline_vmec_data
+! !
+z(1)=r
+z(2)=theta_vmec
+z(3)=varphi_vmec
+z(4)=1.d0
+z(5)=alam0
+! !
 
 par_inv=0.d0
 alam=alam0
 alam_prev=alam
-print *,'symplectic'
-icounter = 0
+print *,'VMEC, splines'
 call cpu_time(tstart)
-open(3004, file='orbit_sympl.out', recl=1024)
-  call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
-  do i=1,ntimstep
-!
-    call orbit_timestep_sympl(z, ierr)
-    if(z(1)>1.0) exit
+open(3001, file='orbit_vmec.out', recl=1024)
+do i=1,L1i*npoiper*npoiper2*runlen
+! !
+    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
     if (.not. jparmode) then
-      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-      write (3004,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+      write (3001,*) dtau*dfloat(i),z
     else
-  !    
       alam=z(5)
       par_inv=par_inv+alam**2*dtau
       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-        write (102,*) i, par_inv
-        call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-        write (3004,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+        write (100,*) i,par_inv
+        write (3001,*) dtau*dfloat(i),z
         par_inv=0.d0
       endif
       alam_prev=alam
     endif
-!
-    
-  enddo
-close(3004)
+enddo
+close(3001)
 call cpu_time(tend)
-print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
-
-!
-  isw_field_type=0
-  z(1)=r
-  z(2)=vartheta_c
-  z(3)=varphi_c
-  z(4)=1.d0
-  z(5)=alam0
-!call testing
-!
-
-par_inv=0.d0
-alam=alam0
-alam_prev=alam
-open(3005, file='orbit_axis.out', recl=1024)
-print *,'canonical axi'
-icounter = 0
-call cpu_time(tstart)
-  do i=1,ntimstep
-!
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-    if (.not. jparmode) then
-      call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-      write (3005,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-    else
-      alam=z(5)
-      par_inv=par_inv+alam**2*dtau
-      if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-        write (103,*) i,par_inv
-        call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
-        write (3005,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
-        par_inv = 0.d0
-      endif
-      alam_prev=alam
-    endif
-    
-  enddo
-close(3005)
-call cpu_time(tend)
-print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
-!
-
-!  call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
-!
-!  call deallocate_can_coord
-!
-!   call spline_vmec_data
-! !
-! isw_field_type=1
-! z(1)=r
-! z(2)=theta_vmec
-! z(3)=varphi_vmec
-! z(4)=1.d0
-! z(5)=alam0
-! !
-
-! par_inv=0.d0
-! alam=alam0
-! alam_prev=alam
-! print *,'VMEC, splines'
-! neval_rk = 0
-! call cpu_time(tstart)
-! open(3001, file='orbit_vmec.out', recl=1024)
-!   do i=1,L1i*npoiper*npoiper2*runlen
-! !
-!     call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-!     if (.not. jparmode) then
-!       write (3001,*) dtau*dfloat(i),z
-!     else
-!       alam=z(5)
-!       par_inv=par_inv+alam**2*dtau
-!       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
-!         write (100,*) i,par_inv
-!         write (3001,*) dtau*dfloat(i),z
-!         par_inv=0.d0
-!       endif
-!       alam_prev=alam
-!     endif
-! enddo
-! close(3001)
-! call cpu_time(tend)
-! print *,'done. Evaluations: ', neval_rk, 'CPU time (s): ', tend - tstart
-!call testing
-!
-!pause
-!enddo
+print *, 'CPU time (s): ', tend - tstart
 end
