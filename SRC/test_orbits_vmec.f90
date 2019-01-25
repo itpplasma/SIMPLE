@@ -121,7 +121,7 @@ call cpu_time(tstart)
 open(3001, file='orbit_vmec.out', recl=1024)
 do i=1,L1i*npoiper*npoiper2*runlen
 ! !
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+    call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)
     if (.not. jparmode) then
       write (3001,*) dtau*dfloat(i),z
     else
