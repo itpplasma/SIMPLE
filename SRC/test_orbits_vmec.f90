@@ -104,7 +104,11 @@ ntimstep = L1i*npoiper*npoiper2*100
 print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
 !
-!call spline_vmec_data
+r = 0.7
+theta_vmec = 0.5*pi
+varphi_vmec = 0.0
+alam0 = 0.5 
+
 ! !
 z(1)=r
 z(2)=theta_vmec
