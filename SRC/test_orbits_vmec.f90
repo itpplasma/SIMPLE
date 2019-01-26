@@ -83,7 +83,7 @@ bmod00=281679.46317784750d0
 ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
   ro0=rlarm*bmod00  ! 23.09.2013
 !
-  multharm=3 !3 !7
+  multharm=3 ! resolution of interpolation in angles
   ns_A=5
   ns_s=5
   ns_tp=5
@@ -103,18 +103,18 @@ dtau = dtaumin
 ntimstep = L1i*npoiper*npoiper2*100
 print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
-!
+! initial conditions
 r = 0.7
 theta_vmec = 0.5*pi
 varphi_vmec = 0.0
 alam0 = 0.5 
 
 ! !
-z(1)=r
-z(2)=theta_vmec
-z(3)=varphi_vmec
-z(4)=1.d0
-z(5)=alam0
+z(1)=r           ! radius ~psi_pol
+z(2)=theta_vmec  ! poloidal angle
+z(3)=varphi_vmec ! toroidal angle
+z(4)=1.d0        ! normalized momentum
+z(5)=alam0       ! parameter for pitch angle between parallel and perp velocity
 ! !
 
 par_inv=0.d0
