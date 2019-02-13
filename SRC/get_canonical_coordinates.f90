@@ -420,7 +420,7 @@ deallocate(y,dy)
                                         ns_s_c,ns_tp_c,ns_max,n_qua,derf1,derf2,derf3,    &
                                         s_sqg_Bt_Bp,s_G_c
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
-  use new_vmec_stuff_mod,   only : nper,ns_A
+  use new_vmec_stuff_mod,   only : nper,ns_A 
   use chamb_mod,            only : rnegflag
 use diag_mod, only : icounter
 !
@@ -508,6 +508,7 @@ icounter=icounter+1
 !-------------------------------
 !
   rho_tor=sqrt(r)
+  !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
   ds=rho_tor/hs_c
   is=max(0,min(ns_c-1,int(ds)))
   ds=(ds-dble(is))*hs_c
