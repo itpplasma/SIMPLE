@@ -1,10 +1,10 @@
 1        notrace_passing   !skip tracing passing prts if notrace_passing=1
 250      nper              !number of periods for initial field line
 32 16 4 100      npoiper           !number of points per period on this field line
-3000000   ntimstep          !number of time steps per slowing down time
+30000   ntimstep          !number of time steps per slowing down time
 100      ntestpart         !number of test particles
 5d4      bmod_ref          !reference field, G, for Boozer $B_{00}$
-1d0     trace_time        !slowing down time, s
+1d-2     trace_time        !slowing down time, s
 0.90d0   sbeg              !starting s (normalzed toroidal flux) for field line
 0.d0     phibeg            !starting phi for field line
 0.d0     thetabeg          !starting theta for field line
@@ -14,4 +14,5 @@
 1        npoiper2          !additional integration step split factor
 2        n_e               !test particle charge number (the same as Z)
 4        n_d               !test particle mass number (the same as A)
-'netcdf_file_for_test.nc'  !name of VMEC file in NETCDF format
+'wout.nc'  !name of VMEC file in NETCDF format
+
