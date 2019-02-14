@@ -53,7 +53,7 @@ def doplot3(ax, z, z2, marker):
 #plt.legend(['Euler16 w Taylor', 'Euler16', 'Verlet16', 'Verlet8 old', 'RK16'])
 
 #prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_32/'
-prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_64/'
+prefix = '/home/calbert/run/NEO-ORB/RK_1em8_Euler1_32/'
 #prefix = '/home/calbert/run/NEO-ORB/RK_1em10_Euler1_128/'
 #prefix = 'L:/run/NEO-ORB/'
 #prefix = '/home/calbert/mnt/marconi_scratch/NEO-ORB/RK_1em10_Verlet_32/'
@@ -66,12 +66,12 @@ ndiff = len(datadiff)
 partdiff = datadiff[:,0].astype(int)
 
 #%%
-#ipart = data[3,0].astype(int)
-#ipart = 91
-ipart = partdiff[1]
+ipart = data[10,0].astype(int)
+#ipart = 601
+#ipart = partdiff[3]
+#ipart = 1
 num = '{:03d}'.format(ipart)
     
-plt.figure()
 z = np.empty((1,3)); z[:] = np.nan
 z2 = np.empty((1,3)); z2[:] = np.nan
 try:
@@ -84,13 +84,31 @@ try:
     if(len(z2) == 0) : z2 = np.empty((1,3)); z2[:] = np.nan
 except:
     pass
+
+plt.figure()
+nsmooth = 1000
+par_inv_sy = np.convolve(z2[1:,-1], np.ones((nsmooth,))/nsmooth, mode='valid')
+par_inv_rk = np.convolve(z[1:,-1], np.ones((nsmooth,))/nsmooth, mode='valid')
+
+nb_sy = z.shape[0]/par_inv_sy.shape[0]*np.arange(par_inv_sy.shape[0])
+nb_rk = z.shape[0]/par_inv_rk.shape[0]*np.arange(par_inv_rk.shape[0])
+
+plt.plot(nb_sy, par_inv_sy/par_inv_sy[0])
+plt.plot(nb_rk, par_inv_rk/par_inv_rk[0])
+#%%
+plt.figure(figsize=(2.4,2.4))
 doplot(z, z2, ',')
+frame1 = plt.gca()
+frame1.axes.xaxis.set_ticklabels([])
+frame1.axes.yaxis.set_ticklabels([])
+plt.axis('equal')
 plt.title('tip cut, ipart={:3d}'.format(ipart))
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 doplot3(ax, z, z2, ',')
 plt.title('tip cut, ipart={:3d}'.format(ipart))
+
 #%%
 plt.figure()
 z = np.zeros([1,2]); z[:,0] = 0.5
@@ -115,3 +133,4 @@ plt.title('period cut, ipart={:3d}'.format(ipart))
 plt.show()
 print('different classifications: {}'.format(ndiff))
 print(sorted(partdiff))
+
