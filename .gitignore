@@ -14,4 +14,7 @@ fort.*
 *.mod
 RUN/PICS
 *.sublime-*
-			 
+RUN/
+*.pdf
+\#*
+

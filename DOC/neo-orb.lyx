@@ -1,0 +1,908 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass elsarticle
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "tgpagella" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine natbib
+\cite_engine_type authoryear
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 3cm
+\topmargin 3cm
+\rightmargin 3cm
+\bottommargin 3cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+\begin_inset FormulaMacro
+\newcommand{\tht}{\vartheta}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\ph}{\varphi}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bJ}{\boldsymbol{J}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bGamma}{\boldsymbol{\Gamma}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bOmega}{\boldsymbol{\Omega}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\d}{\text{d}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\t}[1]{\text{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\m}{\text{m}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\v}[1]{\boldsymbol{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\u}[1]{\underline{#1}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset FormulaMacro
+\renewcommand{\t}[1]{\mathbf{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bA}{\boldsymbol{A}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bB}{\boldsymbol{B}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\c}{\mathrm{c}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\difp}[2]{\frac{\partial#1}{\partial#2}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\xset}{{\bf x}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\zset}{{\bf z}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\qset}{{\bf q}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\pset}{{\bf p}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\wset}{{\bf w}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\rset}{{\bf r}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\yset}{\mathbf{y}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Title
+Comments on geometric and symplectic integration of guiding-center motion
+\end_layout
+
+\begin_layout Author
+Christopher Albert
+\end_layout
+
+\begin_layout Address
+Max-Planck-Institut für Plasmaphysik, Boltzmannstraße 2, 85748 Garching,
+ Germany
+\begin_inset Newline newline
+\end_inset
+
+<albert@alumni.tugraz.at>
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+date{
+\backslash
+today}
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+maketitle
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+makeatletter 
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+def
+\backslash
+ps@pprintTitle{ 
+\end_layout
+
+\begin_layout Plain Layout
+
+ 
+\backslash
+let
+\backslash
+@oddhead
+\backslash
+@empty 
+\end_layout
+
+\begin_layout Plain Layout
+
+ 
+\backslash
+let
+\backslash
+@evenhead
+\backslash
+@empty                         
+\backslash
+def
+\backslash
+@oddfoot{
+\backslash
+footnotesize
+\backslash
+itshape
+\backslash
+hfill
+\backslash
+today} 
+\backslash
+def
+\backslash
+@evenfoot{
+\backslash
+thepage
+\backslash
+hfill}
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+makeatother
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Hamiltonian mechanics in non-canonical coordinates
+\end_layout
+
+\begin_layout Standard
+This section gives a short overview of Hamiltonian mechanics in non-canonical
+ coordinates 
+\begin_inset Formula $\zset$
+\end_inset
+
+.
+ These equations of motion can be equivalently obtained by Euler-Lagrange
+ equations of the phase-space Lagrangian written in terms of 
+\begin_inset Formula $\zset$
+\end_inset
+
+ (as in paper of Littlejohn), or by using the Jacobian matrix of transformation
+ from the canonical Hamiltonian formalism (as in book of Balescu).
+ Here we take the latter path.
+ Take equations of motion in canonical coordinates 
+\begin_inset Formula $\zset_{\mathrm{c}}=(\qset,\pset)=(q^{1},q^{2},\dots q^{N},p_{1},p_{2},\dots p_{N})=(z_{c}^{\,\alpha})_{\alpha=1\dots2N}$
+\end_inset
+
+, 
+\begin_inset Formula 
+\begin{align}
+\dot{q}^{i} & =\frac{\partial H}{\partial p_{i}},\\
+\dot{p}_{j} & =-\frac{\partial H}{\partial q^{j}}.
+\end{align}
+
+\end_inset
+
+The notation with 
+\begin_inset Formula $i$
+\end_inset
+
+ and 
+\begin_inset Formula $j$
+\end_inset
+
+ up and down, but greek indices 
+\begin_inset Formula $\alpha,\beta$
+\end_inset
+
+ always up comes from the fact that momentum coordinates describe components
+ of covectors (index down) in velocity space, but also general phase-space
+ coordinates (index up).
+ More compactly equations of motion can be written as
+\begin_inset Formula 
+\begin{equation}
+\dot{z}_{\mathrm{c}}^{\,\alpha}=J^{\alpha\beta}\frac{\partial H}{\partial z_{\mathrm{c}}^{\,\beta}},
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula 
+\begin{equation}
+(J^{\alpha\beta})=\left(\begin{array}{cc}
+0 & (\delta_{i}^{j})\\
+(-\delta_{j}^{i}) & 0
+\end{array}\right)
+\end{equation}
+
+\end_inset
+
+is an antisymmetric matrix with positive and negative identity matrix in
+ the upper right and lower left block, respectively.
+ Equivalently, by inverting 
+\begin_inset Formula $\v J$
+\end_inset
+
+, or just switching order and a minus sign in canonical equations of motion,
+\begin_inset Formula 
+\begin{align}
+-\dot{p}_{j} & =\frac{\partial H}{\partial q^{j}},\\
+\dot{q}^{i} & =\frac{\partial H}{\partial p_{i}},
+\end{align}
+
+\end_inset
+
+we can write
+\begin_inset Formula 
+\begin{equation}
+\bar{J}_{\alpha\beta}\dot{z}_{\mathrm{c}}^{\,\alpha}=\frac{\partial H}{\partial z_{\mathrm{c}}^{\,\beta}},
+\end{equation}
+
+\end_inset
+
+where
+\begin_inset Formula 
+\begin{equation}
+(\bar{J}_{\alpha\beta})=\left(\begin{array}{cc}
+0 & (-\delta_{i}^{j})\\
+(\delta_{j}^{i}) & 0
+\end{array}\right).
+\end{equation}
+
+\end_inset
+
+Now if we switch to non-canonical coordinates 
+\begin_inset Formula $\zset$
+\end_inset
+
+ the chain rule tells us that
+\begin_inset Formula 
+\begin{align}
+\dot{z}_{\mathrm{c}}^{\,\gamma} & =\frac{\partial z_{\mathrm{c}}^{\,\gamma}}{\partial z^{\alpha}}\dot{z}^{\alpha},\\
+\frac{\partial H}{\partial z_{\mathrm{c}}^{\delta}} & =\frac{\partial z^{\beta}}{\partial z_{\mathrm{c}}^{\,\delta}}\frac{\partial H}{\partial z^{\beta}}.
+\end{align}
+
+\end_inset
+
+Thus we can write equations of motion in terms of non-canonical coordinates
+ as
+\begin_inset Formula 
+\begin{align}
+\frac{\partial z_{\mathrm{c}}^{\,\gamma}}{\partial z^{\alpha}}\dot{z}^{\alpha} & =J^{\gamma\delta}\frac{\partial z^{\beta}}{\partial z_{\mathrm{c}}^{\,\delta}}\frac{\partial H}{\partial z^{\beta}}.
+\end{align}
+
+\end_inset
+
+This can be treated in two ways.
+ If we multiply by a left inverse of the Jacobian matrix of the coordinate
+ transform we obtain
+\begin_inset Formula 
+\begin{align}
+\dot{z}^{\alpha} & =\frac{\partial z^{\alpha}}{\partial z_{\mathrm{c}}^{\,\gamma}}J^{\gamma\delta}\frac{\partial z^{\beta}}{\partial z_{\mathrm{c}}^{\,\delta}}\frac{\partial H}{\partial z^{\beta}}.
+\end{align}
+
+\end_inset
+
+This is of an uncoupled Hamiltonian form
+\begin_inset Formula 
+\begin{equation}
+\dot{z}^{\alpha}=\Lambda^{\alpha\beta}\frac{\partial H}{\partial z^{\beta}}
+\end{equation}
+
+\end_inset
+
+with the antisymmetric 
+\emph on
+Poisson matrix
+\emph default
+
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{\alpha\beta}\equiv\frac{\partial z^{\gamma}}{\partial z_{\mathrm{c}}^{\,\alpha}}J^{\alpha\beta}\frac{\partial z^{\delta}}{\partial z_{\mathrm{c}}^{\,\beta}}.
+\end{equation}
+
+\end_inset
+
+By taking the inverse we obtain (covariant) components of the antisymmetric
+ 
+\emph on
+symplectic form
+\emph default
+
+\begin_inset Formula 
+\begin{equation}
+(\omega_{\alpha\beta})=(\Lambda^{\alpha\beta})^{-1}
+\end{equation}
+
+\end_inset
+
+and coupled equations of motion
+\begin_inset Formula 
+\begin{equation}
+\omega_{\alpha\beta}\dot{z}^{\beta}=\frac{\partial H}{\partial z^{\alpha}}.
+\end{equation}
+
+\end_inset
+
+In terms of tensor calculus in phase-space, the Poisson matrix 
+\begin_inset Formula $\Lambda^{\alpha\beta}$
+\end_inset
+
+ represents the Poisson tensor in contravariant form, and 
+\begin_inset Formula $\omega_{\alpha\beta}$
+\end_inset
+
+ represents the symplectic 2-form.
+ Both are antisymmetric and follow usual transformation properties.
+ In the special case of canonical coordinates, 
+\begin_inset Formula $\Lambda^{\alpha\beta}=J^{\alpha\beta}$
+\end_inset
+
+ and 
+\begin_inset Formula $\omega_{\alpha\beta}=\bar{J}_{\alpha\beta}$
+\end_inset
+
+ are block diagonal antisymmetric matrices.
+ In the general non-canonical case, 
+\begin_inset Formula $\Lambda^{\alpha\beta}$
+\end_inset
+
+ and 
+\begin_inset Formula $\omega_{\alpha\beta}$
+\end_inset
+
+ depend on phase-space coordinates 
+\begin_inset Formula $\zset$
+\end_inset
+
+, but not on time 
+\begin_inset Formula $t$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+Geometric integrators that solve equations of motion exactly are symplectic
+ per definition (2D: Kasilov/Runov and 3D: Eder/Kasilov).
+ For the construction of numerical symplectic integrators with non-canonical
+ quadrature, certain tricks are required (Albert/Kasilov).
+ Another alternative is to keep the formulation with a (degenerate) phase-space
+ Lagrangian and use stabilized variational integrators (Kraus).
+\end_layout
+
+\begin_layout Section
+Geometric 3D integrator
+\end_layout
+
+\begin_layout Standard
+A detailed description of the integrator can be found in the master's thesis
+ of Michael Eder [1] who is the main developer of the mesh-based geometric
+ orbit integration code.
+\end_layout
+
+\begin_layout Standard
+Equations of [1] can be re-written using an antisymmetric Poisson matrix.
+ Namely we have equations of motion (2.9) with
+\begin_inset Formula 
+\begin{align}
+\frac{\d x^{i}}{\d\tau} & =\varepsilon^{ijk}\left(z^{4}\frac{\partial A_{k}}{\partial x^{j}}+2U\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\\
+\frac{\d v_{\parallel}}{\d\tau} & =\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\end{align}
+
+\end_inset
+
+The idea is to use linear interpolation of 
+\begin_inset Formula $A_{k},B_{k}/\omega_{c}$
+\end_inset
+
+ and 
+\begin_inset Formula $U$
+\end_inset
+
+ independently to obtain a linear set of equations of motion in each mesh
+ element.
+ Covariant components 
+\begin_inset Formula $h_{k}=B_{k}/B=e/mc\,B_{k}/\omega_{c}$
+\end_inset
+
+ of the normalized guiding field can be used to compute of 
+\begin_inset Formula $B_{k}/\omega_{c}$
+\end_inset
+
+, and 
+\begin_inset Formula $U=(w-J_{\perp}\omega_{c}-e\Phi)$
+\end_inset
+
+ is computed from linear interpolations of 
+\begin_inset Formula $\omega_{c}$
+\end_inset
+
+ and 
+\begin_inset Formula $\Phi$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Subsection*
+Trying to bring the system to Poisson form
+\end_layout
+
+\begin_layout Standard
+Now the question is what to move into the Poisson matrix, and what into
+ the Hamiltonian.
+ Since we use 
+\begin_inset Formula $U$
+\end_inset
+
+ and 
+\begin_inset Formula $v_{\parallel}$
+\end_inset
+
+ we have some freedom to move things around.
+ Namely in the exact system
+\begin_inset Formula 
+\begin{align}
+H & =\frac{mv_{\parallel}^{\,2}}{2}+J_{\perp}\omega_{c}(\xset)+e\Phi(\xset)\\
+ & =\frac{mv_{\parallel}^{\,2}}{2}+w-mU(\xset)\\
+ & =w.
+\end{align}
+
+\end_inset
+
+Using the middle form we obtain the following gradient of 
+\begin_inset Formula $H$
+\end_inset
+
+ in phase-space,
+\begin_inset Formula 
+\begin{align}
+\frac{\partial H}{\partial x^{i}} & =-m\frac{\partial U}{\partial x^{i}},\\
+\frac{\partial H}{\partial v_{\parallel}} & =mv_{\parallel}.
+\end{align}
+
+\end_inset
+
+Now we want to get equations of motion
+\begin_inset Formula 
+\begin{equation}
+\dot{z}^{\alpha}=\Lambda^{\alpha\beta}\frac{\partial H}{\partial z^{\beta}}
+\end{equation}
+
+\end_inset
+
+with an antisymmetric 
+\begin_inset Formula $\Lambda^{\alpha\beta}$
+\end_inset
+
+, where 
+\begin_inset Formula $\zset=(x^{1},x^{2},x^{3},v_{\parallel})$
+\end_inset
+
+, and we use Greek indices to go from 
+\begin_inset Formula $1\dots4$
+\end_inset
+
+ rather than 
+\begin_inset Formula $1\dots3$
+\end_inset
+
+ for Latin ones.
+ We use
+\begin_inset Formula 
+\begin{align}
+\dot{z}^{i}=\dot{x}^{i} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+2U\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\\
+\dot{z}^{4}=\dot{v}_{\parallel} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\end{align}
+
+\end_inset
+
+Take
+\begin_inset Formula 
+\begin{equation}
+H=\frac{mv_{\parallel}^{\,2}}{2}+w-mU(\xset).
+\end{equation}
+
+\end_inset
+
+Using
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{i4}=\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{\partial A_{k}}{\partial x^{j}}
+\end{equation}
+
+\end_inset
+
+we obtain the first term
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{i4}\frac{\partial H}{\partial v_{\parallel}}=\frac{\varepsilon^{ijk}}{B_{\parallel}^{\star}\sqrt{g}}\frac{\partial A_{k}}{\partial x^{j}}v_{\parallel}.
+\end{equation}
+
+\end_inset
+
+With
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{ij}=-\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}
+\end{equation}
+
+\end_inset
+
+we obtain the spatial part
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{ij}\frac{\partial H}{\partial x^{j}}=\frac{\varepsilon^{ijk}}{B_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}.
+\end{equation}
+
+\end_inset
+
+We for sure want
+\begin_inset Formula 
+\begin{align}
+\Lambda^{4i} & =-\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right),\\
+\Lambda^{44} & =0.
+\end{align}
+
+\end_inset
+
+Now what's missing is the middle term with 
+\begin_inset Formula $2U$
+\end_inset
+
+.
+ Also, we have no antisymmetry due to a missing term in 
+\begin_inset Formula $\Lambda^{i4}$
+\end_inset
+
+.
+ Try
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{i4}=-\Lambda^{4i}\propto\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\end{equation}
+
+\end_inset
+
+Then
+\begin_inset Formula 
+\begin{align}
+\Lambda^{i4}\frac{\partial H}{\partial v_{\parallel}} & \propto\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}v_{\parallel}+v_{\parallel}^{\,2}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\end{align}
+
+\end_inset
+
+This is nearly what we want, except for the 
+\begin_inset Formula $v_{\parallel}^{\,2}$
+\end_inset
+
+ instead of the 
+\begin_inset Formula $2U$
+\end_inset
+
+.
+ What we would need is
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{i4}\propto\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+\frac{2U}{v_{\parallel}}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\end{equation}
+
+\end_inset
+
+This is again in conflict with antisymmetry w.r.t.
+ 
+\begin_inset Formula $\Lambda^{4i}$
+\end_inset
+
+.
+ Can we tweak the Hamiltonian instead? The condition
+\begin_inset Formula 
+\begin{equation}
+\frac{\partial H}{\partial v_{\parallel}}=mv_{\parallel}
+\end{equation}
+
+\end_inset
+
+makes sense.
+ Would it be possible to obtain 
+\begin_inset Formula $2U$
+\end_inset
+
+ via a spatial derivative such that the annoying part with 
+\begin_inset Formula $v_{\parallel}^{\,2}$
+\end_inset
+
+ is cancelled out? This means
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{ij}\frac{\partial H}{\partial x^{j}}\propto\varepsilon^{ilk}(2U-v_{\parallel}^{\,2})\frac{\partial}{\partial x^{l}}\frac{B_{k}}{\omega_{c}}.
+\end{equation}
+
+\end_inset
+
+If we can get this done, or how much error we make otherwise, is an open
+ task.
+ We can take however a different path, which is shown below in the conclusion.
+\end_layout
+
+\begin_layout Subsection*
+Conclusion
+\end_layout
+
+\begin_layout Standard
+To be exactly symplectic the easiest option right now is to solve the approximat
+e linear system using 
+\begin_inset Formula $2U$
+\end_inset
+
+ in Eq.
+ (2.8-2.9) of [1] only for the initial guess, and during final iterations,
+ solve rather the variant with 
+\begin_inset Formula $2U=v_{\parallel}^{\,2}$
+\end_inset
+
+,
+\begin_inset Formula 
+\begin{align}
+\dot{z}^{i}=\dot{x}^{i} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}^{\,2}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\\
+\dot{z}^{4}=\dot{v}_{\parallel} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\end{align}
+
+\end_inset
+
+where a quadratic term in 
+\begin_inset Formula $v_{\parallel}$
+\end_inset
+
+ appears.
+ The other option to replace 
+\begin_inset Formula $v_{\parallel}$
+\end_inset
+
+ by 
+\begin_inset Formula $U/(2v_{\parallel})$
+\end_inset
+
+ in the second equation could cause trouble when 
+\begin_inset Formula $v_{\parallel}$
+\end_inset
+
+ vanishes at banana tips.
+ Then we can write equations of motion as a Poisson system
+\begin_inset Formula 
+\begin{equation}
+\dot{z}^{\alpha}=\Lambda^{\alpha\beta}\frac{\partial H}{\partial z^{\beta}}
+\end{equation}
+
+\end_inset
+
+using a Hamiltonian
+\begin_inset Formula 
+\begin{equation}
+H=\frac{mv_{\parallel}^{\,2}}{2}+w-mU
+\end{equation}
+
+\end_inset
+
+with derivatives
+\begin_inset Formula 
+\begin{align}
+\frac{\partial H}{\partial x^{i}} & =-m\frac{\partial U}{\partial x^{i}},\\
+\frac{\partial H}{\partial v_{\parallel}} & =mv_{\parallel}.
+\end{align}
+
+\end_inset
+
+and an antisymmetric Poisson matrix with spatial components
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{ij}=-\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}
+\end{equation}
+
+\end_inset
+
+and mixed spatial-
+\begin_inset Formula $v_{\parallel}$
+\end_inset
+
+ components
+\begin_inset Formula 
+\begin{equation}
+\Lambda^{i4}=-\Lambda^{4i}=\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right),
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $i,j=1\dots3$
+\end_inset
+
+ and 
+\begin_inset Formula $\alpha,\beta=1\dots4$
+\end_inset
+
+.
+ Antisymmetry of 
+\begin_inset Formula $\Lambda^{\alpha\beta}$
+\end_inset
+
+ guarantees symplecticity, i.e.
+ conservation of the symplectic form, and thereby phase-space volume (Liouville'
+s theorem) and conservation of invariants.
+\end_layout
+
+\end_body
+\end_document
