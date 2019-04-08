@@ -15,4 +15,10 @@
 2        n_e               !test particle charge number (the same as Z)
 4        n_d               !test particle mass number (the same as A)
 'wout.nc'  !name of VMEC file in NETCDF format
+5
+5
+3
+1
+0
+1d-8
 
