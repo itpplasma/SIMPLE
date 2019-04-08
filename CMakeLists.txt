@@ -12,7 +12,8 @@ execute_process(COMMAND "nf-config" --flibs
 message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
 
-set(NFLIBS /mpcdf/soft/SLE_12_SP3/packages/haswell/netcdf-serial/intel_18_0/4.4.1/lib)
+#set(NFLIBS /mpcdf/soft/SLE_12_SP3/packages/haswell/netcdf-serial/intel_18_0/4.4.1/lib)
+set(NFLIBS /opt/local/lib)
 
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} /usr/include)
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
@@ -22,7 +23,7 @@ set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -Wall -Wno-unu
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O0 -cpp -fopenmp -g -mkl -warn all -warn nounused -check all -check noarg_temp_created -traceback -ftrapuv -debug all -fpe0")
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -mkl -warn all -warn nounused")
 
-add_library ( neo-orb SHARED
+add_library ( neo_orb SHARED
 	SRC/canonical_coordinates_mod.f90
 	SRC/nctools_module.f90
 	SRC/odeint_allroutines.f
@@ -38,11 +39,13 @@ add_library ( neo-orb SHARED
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 	SRC/common.f90
+	SRC/neo_orb.f90
 #	SRC/minpack.f90
 )
 
 add_executable (neo-orb.x
-	SRC/canonical_coordinates.f90
+#	SRC/canonical_coordinates.f90
+	SRC/main.f90
 )
 
 add_executable (orbit-symplectic-test.x
@@ -75,11 +78,11 @@ add_executable (alpha_lifetime.x
 	SRC/alpha_lifetime.f90
 )
 
-target_link_libraries(neo-orb netcdf netcdff openblas)
-target_link_libraries(neo-orb.x neo-orb)
-target_link_libraries(orbit-symplectic-test.x neo-orb)
-target_link_libraries(test_magfie.x neo-orb)
-target_link_libraries(test_poincare1.x neo-orb)
-target_link_libraries(test_poiplot_classification.x neo-orb)
-target_link_libraries(alpha_lifetime_vmec_c.x neo-orb)
-target_link_libraries(alpha_lifetime.x neo-orb)
+target_link_libraries(neo_orb netcdf netcdff blas lapack)  # openblas)
+target_link_libraries(neo-orb.x neo_orb)
+target_link_libraries(orbit-symplectic-test.x neo_orb)
+target_link_libraries(test_magfie.x neo_orb)
+target_link_libraries(test_poincare1.x neo_orb)
+target_link_libraries(test_poiplot_classification.x neo_orb)
+target_link_libraries(alpha_lifetime_vmec_c.x neo_orb)
+target_link_libraries(alpha_lifetime.x neo_orb)

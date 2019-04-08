@@ -82,7 +82,7 @@
 !            bmod   - dimensionless magnetic field module: bmod=B/B_ref
 !            sqrtg  - Jacobian of space coordinates (square root of
 !                     metric tensor
-!            bder   - derivatives of logarithm of bmod over space coords 
+!            bder   - derivatives of logarithm of bmod over space coords
 !                     (covariant vector)
 !            hcovar - covariant components of the unit vector along
 !                     the magnetic field
@@ -234,7 +234,7 @@ if(dodiag) write (123,*) tau2,z
       subroutine rhs_mflint_can(phi,y,dery)
 !
 ! Computes the right hand side of the magnetic field line equation for
-! the integration over the toroidal angle, subintegrand for the flux tube 
+! the integration over the toroidal angle, subintegrand for the flux tube
 ! volume $1/B^\varphi$ and subintegrants for Boozer $B_{00}$ computation
 ! $B^2/B^\varphi$ and $B^3/B^\varphi$                       -   dery
 !
@@ -290,10 +290,12 @@ if(dodiag) write (123,*) tau2,z
 !
       implicit none
 !
+      double precision, intent(out) :: bmod00
+!
       integer, parameter          :: ndim=5
       double precision, parameter :: relerr=1d-10
       integer :: npoi,i,ierr
-      double precision :: dphi,rbeg,phibeg,zbeg,bmod00,phi,phiold
+      double precision :: dphi,rbeg,phibeg,zbeg,phi,phiold
       double precision, dimension(3,npoi) :: xstart
       double precision, dimension(npoi)   :: bstart,volstart
       double precision, dimension(ndim)   :: y
