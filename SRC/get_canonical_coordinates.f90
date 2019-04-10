@@ -1,9 +1,9 @@
 !
   module exchange_get_cancoord_mod
-!$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
-!$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,theta)
     logical :: onlytheta
     double precision :: vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,Bcovar_varphi,theta
+!$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
+!$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,theta)
   end module exchange_get_cancoord_mod
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -420,7 +420,7 @@ deallocate(y,dy)
                                         ns_s_c,ns_tp_c,ns_max,n_qua,derf1,derf2,derf3,    &
                                         s_sqg_Bt_Bp,s_G_c
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
-  use new_vmec_stuff_mod,   only : nper,ns_A
+  use new_vmec_stuff_mod,   only : nper,ns_A 
   use chamb_mod,            only : rnegflag
 use diag_mod, only : icounter
 !
@@ -452,7 +452,7 @@ use diag_mod, only : icounter
   double precision, dimension(n_qua,ns_max)        :: sp_all,dsp_all_ds,dsp_all_dt
   double precision, dimension(n_qua,ns_max)        :: d2sp_all_ds2,d2sp_all_dsdt,d2sp_all_dt2
   double precision, dimension(n_qua,ns_max,ns_max) :: stp_all,dstp_all_ds,d2stp_all_ds2
-!
+!$omp atomic
 icounter=icounter+1
   if(r.le.0.d0) then
     rnegflag=.true.
@@ -508,6 +508,7 @@ icounter=icounter+1
 !-------------------------------
 !
   rho_tor=sqrt(r)
+  !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
   ds=rho_tor/hs_c
   is=max(0,min(ns_c-1,int(ds)))
   ds=(ds-dble(is))*hs_c

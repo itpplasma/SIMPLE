@@ -8,63 +8,68 @@ use field_can_mod, only: field_can, d_field_can, d2_field_can, eval_field, &
 implicit none
 save
 
-double precision, parameter :: atol = 1e-15, rtol = 1e-9
+double precision, parameter :: atol = 1d-15
+double precision :: rtol
 
 ! Current phase-space coordinates z and old pth
-!$omp threadprivate(z, pthold)
 double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
 double precision :: pthold
+!$omp threadprivate(z, pthold)
 
 ! Buffer for Lagrange polynomial interpolation
 integer, parameter :: nlag = 3 ! order
 integer, parameter :: nbuf = 16 ! values to store back
-!$omp threadprivate(kbuf, kt, k, bufind, zbuf, coef)
 integer :: kbuf
 integer :: kt
 integer :: k
 integer :: bufind(0:nlag)
 double precision, dimension(4, nbuf) :: zbuf
 double precision, dimension(0:0, nlag+1) :: coef
+!$omp threadprivate(kbuf, kt, k, bufind, zbuf, coef)
 
 ! Timestep and variables from z0
-!$omp threadprivate(ntau, dt, pabs)
 integer :: ntau
 double precision :: dt
 double precision :: pabs
+!$omp threadprivate(ntau, dt, pabs)
 
 logical, parameter :: extrap_field = .true.
 
 ! For initial conditions
-!$omp threadprivate(z0init)
 double precision :: z0init(5)
+!$omp threadprivate(z0init)
 
 ! Set integrator mode
-!$omp threadprivate(mode)
 integer :: mode
+!$omp threadprivate(mode)
 
 contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_sympl_init(z0, dtau, dtaumin, mode_init)
+subroutine orbit_sympl_init(z0, dtau, dtaumin, rtol_init, mode_init)
 !
   double precision, intent(in) :: z0(5)
   double precision, intent(in) :: dtau, dtaumin
+  double precision, intent(in) :: rtol_init
   integer, intent(in) :: mode_init ! 1 = euler1, 2 = euler2, 3 = verlet
 
   double precision :: x(2), fvec(2)
   integer ierr, info
 
   integer, parameter :: n = 2
-  double precision, parameter :: tol = 1e-13
 
   mode = mode_init
+  rtol = rtol_init
 
   kbuf = 0
   kt = 0
   k = 0
 
-  if(abs(mod(dtau, dtaumin)) > dtaumin*1e-14) stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+  if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
+    stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+  endif
+
   ntau = nint(dtau/dtaumin)
   dt = dtaumin/dsqrt(2d0) ! factor 1/sqrt(2) due to velocity normalisation different from other modules
   if (mode==3) dt = dt/2d0 ! Verlet out of two Euler steps
@@ -173,7 +178,8 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
   integer :: kit
 
   do kit = 1, maxit
-    if(x(1) < 0.0 .or. x(1) > 1.0) return
+    if(x(1) > 1.0) return
+    if(x(1) < 0.0) x(1) = 0.2
     call f_sympl_euler1(n, x, fvec, 1)
     call jac_sympl_euler1(x, fjac)
     ijac(1,1) = fjac(2,2)
@@ -183,10 +189,11 @@ subroutine newton1(x, atol, rtol, maxit, xlast)
     ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
     xlast = x
     x = x - matmul(ijac, fvec)
-    if (all(abs(fvec) < atol) &
-      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
+    if (all(dabs(fvec) < atol) &
+      .or. all(dabs(x-xlast) < rtol*dabs(x))) return
   enddo
-  print *, 'Warning: maximum iterations reached in newton1: ', maxit
+  print *, 'newton1: maximum iterations reached: ', maxit
+  write(6601,*) x(1), z(2), z(3), x(2), x-xlast, fvec
 end subroutine
 
 subroutine newton2(x, atol, rtol, maxit, xlast)
@@ -202,17 +209,19 @@ subroutine newton2(x, atol, rtol, maxit, xlast)
   integer :: pivot(n), info
 
   do kit = 1, maxit
-    if(x(1) < 0.0 .or. x(1) > 1.0) return
+    if(x(1) > 1.0) return
+    if(x(1) < 0.0) x(1) = 0.01
     call f_sympl_euler2(n, x, fvec, 1)
     call jac_sympl_euler2(x, fjac)
     call dgesv(n, 1, fjac, n, pivot, fvec, 3, info) 
     xlast = x
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
-    if (all(abs(fvec) < atol) &
-      .or. all(abs(x-xlast)/(abs(x)*(1d0+1d-30)) < rtol)) return
+    if (all(dabs(fvec) < atol) &
+      .or. all(dabs(x-xlast) < rtol*dabs(x))) return
   enddo
-  print *, 'Warning: maximum iterations reached in newton2: ', maxit
+  print *, 'newton2: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), z(4)
+  write(6602,*) x(1), x(2), x(3), z(4), x-xlast, fvec
 end subroutine
 
 
@@ -245,7 +254,7 @@ subroutine orbit_timestep_sympl_euler1(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
@@ -283,9 +292,14 @@ subroutine orbit_timestep_sympl_euler1(z0, ierr)
       
     call newton1(x, atol, rtol, maxit, xlast)
 
-    if (x(1) < 0.0 .or. x(1) > 1.0) then
+    if (x(1) > 1.0) then
       ierr = 1
       return
+    end if
+
+    if (x(1) < 0.0) then
+      print *, 'r<0, z = ', x(1), z(2), z(3), x(2) 
+      x(1) = 0.01
     end if
     
     z(1) = x(1)
@@ -326,10 +340,12 @@ subroutine orbit_timestep_sympl_euler2(z0, ierr)
   double precision, dimension(5), intent(inout) :: z0
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n) :: x, xlast
   integer :: ktau
+
+stop 'need to implement behavior on axis and for lost particles'
   
   ierr = 0
   ktau = 0
@@ -382,11 +398,13 @@ subroutine orbit_timestep_sympl_verlet(z0, ierr)
 
   integer, parameter :: n1 = 3
   integer, parameter :: n2 = 2
-  integer, parameter :: maxit = 100
+  integer, parameter :: maxit = 256
 
   double precision, dimension(n1) :: x1, xlast1
   double precision, dimension(n2) :: x2, xlast2
   integer :: ktau
+
+stop 'need to implement behavior on axis and for lost particles'
 
   ierr = 0
   ktau = 0
@@ -486,7 +504,7 @@ subroutine debug_root(x0)
   double precision :: x0(2), x(2)
   integer :: k, l, iflag
   integer, parameter :: n = 100
-  double precision, parameter :: eps = 1e-15
+  double precision, parameter :: eps = 1d-15
 
   double precision :: fvec(2)
 

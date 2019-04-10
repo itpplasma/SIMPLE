@@ -24,21 +24,21 @@ type :: d2_field_can
     double precision, dimension(6) :: d2Bmod
 end type d2_field_can
 
-!$omp threadprivate(f, df, d2f)
 type(field_can) :: f
 type(d_field_can) :: df
 type(d2_field_can) :: d2f
+!$omp threadprivate(f, df, d2f)
 
-!$omp threadprivate(H, pth, vpar, dH, dpth, dvpar, d2H, d2pth, d2vpar)
 double precision :: H, pth, vpar
 double precision, dimension(4) :: dvpar, dH, dpth
 double precision, dimension(10) :: d2vpar, d2H, d2pth
+!$omp threadprivate(H, pth, vpar, dH, dpth, dvpar, d2H, d2pth, d2vpar)
 ! order of second derivatives: 
 ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
 ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
 
-!$omp threadprivate(mu, ro0)
 double precision :: mu, ro0
+!$omp threadprivate(mu, ro0)
 
 ! TODO: make buffering work again, or drop it
 ! integer, parameter :: nbuf = 0
@@ -161,7 +161,7 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, dsqg(3), d2sqg(6), d3Aphdr3, dummy, &
     Bth, Bph, dBth(3), dBph(3), d2Bth(6), d2Bph(6), twobmod, dbmod2(3)
 
-  integer :: kb, bufind
+  !integer :: kb, bufind
 
   ! if (mode_secders == 0) then
   !   do kb = 0, nbuf-1
@@ -204,8 +204,8 @@ subroutine eval_field_can(r, th_c, ph_c, mode_secders)
   Bctr_varphi = df%dAth(1)/sqg
   
   bmod2 = Bctr_vartheta*Bth + Bctr_varphi*Bph
-  if (bmod2<0) print *, r, th_c, ph_c, bmod2
-  f%Bmod = sqrt(bmod2)
+  !if (bmod2<0) print *, r, th_c, ph_c, bmod2
+  f%Bmod = sqrt(abs(bmod2))
   twobmod = 2.d0*f%Bmod
 
   dbmod2(1) = (df%dAth(1)*dBph(1)-df%dAph(1)*dBth(1)-d2f%d2Aph(1)*Bth-bmod2*dsqg(1))/sqg

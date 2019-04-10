@@ -1,11 +1,18 @@
-FC       = gfortran
-
+#FC       = gfortran
 #DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow,underflow -fbounds-check
-DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check
+#DEBUGFLAG += -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check
 #OPTS= -J OBJS -O
-OPTS= -J OBJS $(DEBUGFLAG) -cpp -fopenmp # comment out -fopenmp for single-core version
-NCINC = -I/usr/include
-NCLIB = -L/usr/lib -lnetcdff -lnetcdf
+#OPTS= -J OBJS $(DEBUGFLAG) -cpp -fopenmp # comment out -fopenmp for single-core version
+
+FC = ifort
+DEBUGFLAG = -g -traceback
+OPTS = -module OBJS $(DEBUGFLAG) -cpp -fopenmp
+
+#NCINC = -I/usr/include
+#NCLIB = -L/usr/lib -lnetcdff -lnetcdf
+
+NCINC = -I/temp/ert/netcdf-intel18/include/
+NCLIB = -L/temp/ert/netcdf-intel18/lib/ -lnetcdff -lnetcdf 
 
 OBJS =  OBJS/canonical_coordinates_mod.o \
 	OBJS/nctools_module.o \
@@ -46,7 +53,7 @@ OBJS/sub_alpha_lifetime_can.o: SRC/sub_alpha_lifetime_can.f90 Canonical_coordina
 	$(FC) $(OPTS) -c SRC/sub_alpha_lifetime_can.f90
 	mv sub_alpha_lifetime_can.o OBJS/
 OBJS/vmecinm_m.o: SRC/vmecinm_m.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
-	$(FC) $(OPTS) -c SRC/vmecinm_m.f90
+	$(FC) $(OPTS) $(NCINC) -c SRC/vmecinm_m.f90
 	mv vmecinm_m.o OBJS/
 OBJS/spline_vmec_data.o: SRC/spline_vmec_data.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/spline_vmec_data.f90
@@ -55,7 +62,7 @@ OBJS/spl_three_to_five.o: SRC/spl_three_to_five.f90 Canonical_coordinates.mk SRC
 	$(FC) $(OPTS) -c SRC/spl_three_to_five.f90
 	mv spl_three_to_five.o OBJS/
 OBJS/new_vmec_allocation_stuff.o: SRC/new_vmec_allocation_stuff.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
-	$(FC) $(OPTS) -c SRC/new_vmec_allocation_stuff.f90
+	$(FC) $(OPTS) $(NCINC) -c SRC/new_vmec_allocation_stuff.f90
 	mv new_vmec_allocation_stuff.o OBJS/
 OBJS/get_canonical_coordinates.o: SRC/get_canonical_coordinates.f90 Canonical_coordinates.mk SRC/canonical_coordinates_mod.f90
 	$(FC) $(OPTS) -c SRC/get_canonical_coordinates.f90

@@ -1,6 +1,6 @@
   subroutine testing
 !
-  implicit real*8 (a-h,o-z),integer(i-n)
+  implicit real(8) (a-h,o-z),integer(i-n)
 !
   double precision, dimension(:), allocatable :: dummy,dummy1
   double precision, dimension(:,:), allocatable :: dummy2d

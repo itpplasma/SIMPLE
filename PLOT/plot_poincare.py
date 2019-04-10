@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 def doplot(z, marker):
     plt.figure(1)
-    plt.plot(z[:,2], z[:,0], marker)
+    plt.plot(z[:,1], z[:,0], marker)
     
 #    plt.figure(2)
 #    plt.plot(z[:,2], z[:,0], marker)
@@ -39,12 +39,14 @@ def doplot(z, marker):
 
 #plt.legend(['Euler16 w Taylor', 'Euler16', 'Verlet16', 'Verlet8 old', 'RK16'])
 
+prefix = '/home/calbert/run/NEO-ORB/'
+
 type1='10'
 type2='11'
-num='036'
+num='721'
     
-z = np.loadtxt('L:/run/NEO-ORB/fort.{}{}'.format(type1,num))
+z = np.loadtxt(prefix+'fort.{}{}'.format(type1,num))
 doplot(z, 'b,')
 
-z = np.loadtxt('L:/run/NEO-ORB/fort.{}{}'.format(type2,num))
+z = np.loadtxt(prefix+'fort.{}{}'.format(type2,num))
 doplot(z, 'r,')
