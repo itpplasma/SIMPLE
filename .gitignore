@@ -17,4 +17,6 @@ RUN/PICS
 RUN/
 *.pdf
 \#*
+*.so
+*.dylib
 

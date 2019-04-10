@@ -6,7 +6,7 @@ program alpha_lifetime
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-use diag_mod, only : icounter 
+use diag_mod, only : icounter
 
   implicit none
 
@@ -70,7 +70,7 @@ use diag_mod, only : icounter
 
 ! initialize field geometry
   call spline_vmec_data ! initialize splines for VMEC field
-  call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius 
+  call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
   isw_field_type = 1 ! evaluate fields in VMEC coords (0 = CAN, 1 = VMEC)
   if (integmode>=0) then
     call get_canonical_coordinates ! pre-compute transformation to canonical coords
@@ -78,7 +78,7 @@ use diag_mod, only : icounter
   end if
 
 ! initialize position and do first check if z is inside vacuum chamber
-  z = 0.0d0 
+  z = 0.0d0
   call chamb_can(z(1:2), z(3), ierr)
 
 ! set alpha energy, velocity, and Larmor radius
@@ -87,7 +87,7 @@ use diag_mod, only : icounter
   rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
 
 ! normalized slowing down time:
-  tau=trace_time*v0 
+  tau=trace_time*v0
 ! normalized time step:
   dtau=tau/dfloat(ntimstep-1)
 ! parameters for the vacuum chamber:
@@ -193,7 +193,7 @@ use diag_mod, only : icounter
 !$omp atomic
     kpart = kpart+1
     print *, kpart, ' / ', ntestpart, 'particle: ', ipart, 'thread: ', omp_get_thread_num()
-    z = zstart(:,ipart)    
+    z = zstart(:,ipart)
     if (integmode>0) call orbit_sympl_init(z, dtau, dtaumin, relerr, integmode)
 
     if(isw_field_type.eq.0) then

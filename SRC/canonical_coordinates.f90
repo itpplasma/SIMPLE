@@ -1,7 +1,7 @@
 module canonical_coordinates_main
 
   use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
-  use parmot_mod, only : rmu,ro0,eeff
+  use parmot_mod, only : rmu,ro0
   use velo_mod,   only : isw_field_type
   use diag_mod, only : icounter
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
@@ -39,7 +39,7 @@ module canonical_coordinates_main
 
   double precision :: relerr ! relative error for RK
 
-  !---------------------------------------------------------------------------  
+  !---------------------------------------------------------------------------
   ! buffer for Poincare plot:
 
   !---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ contains
 
     double precision :: phiper, alam_prev, par_inv
 
-    integer(8) :: i 
+    integer(8) :: i
     integer iper, itip, kper
 
     z(1)=r
@@ -95,7 +95,7 @@ contains
         open(unit=20000+ipart, iostat=stat, status='old')
         if (stat == 0) close(20000+ipart, status='delete')
         open(unit=20000+ipart, recl=1024, position='append')
-    else    
+    else
         open(unit=11000+ipart, iostat=stat, status='old')
         if (stat == 0) close(11000+ipart, status='delete')
         open(unit=11000+ipart, recl=1024, position='append')
@@ -109,8 +109,8 @@ contains
     ifp_per=0               !<= initialize footprint counter on periods
 
     icounter=0
-    if (mode>0) call orbit_sympl_init(z, dtau, dtaumin, 1d-12, mode_sympl) 
-      
+    if (mode>0) call orbit_sympl_init(z, dtau, dtaumin, 1d-12, mode_sympl)
+
       !--------------------------------
       ! Initialize tip detector
 
@@ -130,7 +130,7 @@ contains
       par_inv = 0d0
       do i=1,nstep_tot
 
-        if (mode==0) call orbit_timestep_axis(z, dtau, dtaumin,relerr,ierr)    
+        if (mode==0) call orbit_timestep_axis(z, dtau, dtaumin,relerr,ierr)
         if (mode>0)  call orbit_timestep_sympl(z, ierr)
 
         if(ierr.ne.0) exit
@@ -194,7 +194,7 @@ contains
           kper=kper-1
         endif
         iper=iper+1
-        if(i.gt.nplagr) then          !<=use only initialized stencil 
+        if(i.gt.nplagr) then          !<=use only initialized stencil
           if(iper.eq.npl_half) then   !<=stencil around periodic boundary is complete, interpolate
             xp=orb_sten(3,ipoi)-phiper
 
@@ -315,9 +315,9 @@ program canonical_coordinates
 
   integer :: calls_rk(npart), calls_sympl(npart), i, funit
   integer :: orb_kind_rk(npart), orb_kind_sympl(npart)
- 
-  
-  ! run with fixed random seed 
+
+
+  ! run with fixed random seed
   integer :: seedsize
   integer, allocatable :: seed(:)
 
@@ -335,7 +335,7 @@ program canonical_coordinates
   ! End prepare calculation of orbit tip by interpolation
   !--------------------------------------------------------------------------
 
-  !  
+  !
 
   open(1,file='alpha_lifetime_m.inp')
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -395,7 +395,7 @@ program canonical_coordinates
   nstep_tot = ceiling(tau/dtaumin)
   dtau=tau/nstep_tot
   dtaumin = dtau
-  
+
   print *, 'tau: ', tau, dtau, dtaumin, min(dabs(mod(tau, dtaumin)), dabs(mod(tau, dtaumin)-dtaumin))/dtaumin
   print *, 'total steps: ', nstep_tot
 
@@ -431,9 +431,9 @@ program canonical_coordinates
 
   open(unit=newunit(funit), file='orbit_kinds.out', recl=1024)
   write(funit,*) '# ipart', ' r vartheta_c varphi_c p alam0', 'orb_kind_rk', &
-      ' orb_kind_sympl', ' calls_rk', ' calls_sympl'    
+      ' orb_kind_sympl', ' calls_rk', ' calls_sympl'
 
-  !$omp parallel 
+  !$omp parallel
   isw_field_type=0
   i_ctr=0
 
@@ -480,7 +480,7 @@ program canonical_coordinates
 
     write(funit,*) ipart, r, vartheta_c(ipart), varphi_c(ipart), 1.d0, &
     alam0(ipart), orb_kind_rk(ipart), orb_kind_sympl(ipart), calls_rk(ipart), calls_sympl(ipart)
-    close(funit)   
+    close(funit)
     open(funit,file='orbit_kinds.out', position='append', recl=1024)
     !$omp end critical
   enddo
