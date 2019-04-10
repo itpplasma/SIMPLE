@@ -6,8 +6,8 @@ program main
   real(8) :: s, th, ph, lam
   integer :: ierr
 
-  call init_field(5, 5, 3)
-  call init_params(2, 4, 3.5d6, 1d-2, 1d-2, -1, 1d-8)  ! fusion alphas
+  call init_field(5, 5, 3, -1)
+  call init_params(2, 4, 3.5d6, 1d-2, 1d-2, 1d-8)  ! fusion alphas
 
   s = 0.5d0
   th = 0d0
