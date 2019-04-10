@@ -125,7 +125,6 @@ alam_prev=alam
 
 if (mode_sympl>0)    call orbit_sympl_init(z, dtau, dtaumin, 1d-10, mode_sympl)
 
-
 print *,'VMEC, splines'
 call cpu_time(tstart)
 open(3001, file='orbit_vmec.out', recl=1024)
