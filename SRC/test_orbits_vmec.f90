@@ -36,7 +36,7 @@ use diag_mod, only : icounter
   real :: tstart, tend
   integer, parameter :: runlen = 1
   logical, parameter :: jparmode = .false. ! if true output orbit points only when vpar changes sign from positive to negative
-  integer, parameter :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
+  integer, parameter :: mode_sympl = 1 ! 0=NEO-ORB in vmec (sergei); 1=symplectic in canonical (christopher; euler1)
   integer :: ntau
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
@@ -83,7 +83,7 @@ bmod00=281679.46317784750d0
 ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
   ro0=rlarm*bmod00  ! 23.09.2013
 !
-  multharm=3 !3 !7
+  multharm=3 ! resolution of interpolation in angles
   ns_A=5
   ns_s=5
   ns_tp=5
@@ -103,25 +103,36 @@ dtau = dtaumin
 ntimstep = L1i*npoiper*npoiper2*100
 print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
-!
-!call spline_vmec_data
+! initial conditions
+r = 0.7
+theta_vmec = 0.5*pi
+varphi_vmec = 0.0
+alam0 = 0.5 
+
+if (mode_sympl>0)   call get_canonical_coordinates
+
 ! !
-z(1)=r
-z(2)=theta_vmec
-z(3)=varphi_vmec
-z(4)=1.d0
-z(5)=alam0
+z(1)=r           ! radius ~psi_pol
+z(2)=theta_vmec  ! poloidal angle
+z(3)=varphi_vmec ! toroidal angle
+z(4)=1.d0        ! normalized momentum
+z(5)=alam0       ! parameter for pitch angle between parallel and perp velocity
 ! !
 
 par_inv=0.d0
 alam=alam0
 alam_prev=alam
+
+if (mode_sympl>0)    call orbit_sympl_init(z, dtau, dtaumin, 1d-10, mode_sympl)
+
 print *,'VMEC, splines'
 call cpu_time(tstart)
 open(3001, file='orbit_vmec.out', recl=1024)
 do i=1,L1i*npoiper*npoiper2*runlen
 ! !
-    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
+    if (mode_sympl==0) call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)    
+    if (mode_sympl>0) call orbit_timestep_sympl(z, ierr)
+    
     if (.not. jparmode) then
       write (3001,*) dtau*dfloat(i),z
     else

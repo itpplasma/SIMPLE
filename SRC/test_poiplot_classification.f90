@@ -140,7 +140,7 @@ print *, 'ttrace = ', ntimstep*dtau/v0, 'nstep = ', ntimstep
   z(5)=alam0
 !
 icounter=0
-  call orbit_sympl_init(z, dtau, dtaumin, mode_sympl) 
+  call orbit_sympl_init(z, dtau, dtaumin, 1d-12, mode_sympl) 
 !
 !--------------------------------
 ! Initialize tip detector

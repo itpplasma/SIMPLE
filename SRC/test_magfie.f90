@@ -105,7 +105,7 @@ z0(3)=varphi_c
 z0(4)=1.d0
 z0(5)=alam0
 
-call orbit_sympl_init(z0, 1.0d0, 1.0d0, 0)
+call orbit_sympl_init(z0, 1.0d0, 1.0d0, 1d-12, 0)
 call do_test
 
 contains
@@ -128,8 +128,8 @@ subroutine der2(x0, i, j)
         H00, H11, H10, H01, pth00, pth11, pth10, pth01
     integer :: k
 
-    hi = 1e-4
-    hj = 1e-4
+    hi = 1d-4
+    hj = 1d-4
 
     dxi = 0d0
     dxj = 0d0
