@@ -754,7 +754,7 @@ Normalisation
 \end_layout
 
 \begin_layout Subsection
-Normalization in symplectic integrator module
+Normalization in symplectic integrator module of NEO-ORB
 \end_layout
 
 \begin_layout Standard
@@ -828,7 +828,7 @@ Derivatives:
 \end_layout
 
 \begin_layout Subsection
-Comparison to global normalization in NEO-ORB
+Global normalization in NEO-ORB
 \end_layout
 
 \begin_layout Standard
