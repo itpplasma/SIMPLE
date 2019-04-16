@@ -470,7 +470,7 @@ Poisson matrix
 
 \begin_inset Formula 
 \begin{equation}
-\Lambda^{\alpha\beta}\equiv\frac{\partial z^{\gamma}}{\partial z_{\mathrm{c}}^{\,\alpha}}J^{\alpha\beta}\frac{\partial z^{\delta}}{\partial z_{\mathrm{c}}^{\,\beta}}.
+\Lambda^{\alpha\beta}\equiv\frac{\partial z^{\alpha}}{\partial z_{\mathrm{c}}^{\,\gamma}}J^{\gamma\delta}\frac{\partial z^{\beta}}{\partial z_{\mathrm{c}}^{\,\delta}}.
 \end{equation}
 
 \end_inset

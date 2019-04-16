@@ -1,6 +1,5 @@
 module neo_orb
-  use omp_lib
-  use common, only: pi, c, e_charge, e_mass, p_mass, ev
+  use common, only: c, e_charge, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : rmu, ro0
@@ -72,7 +71,7 @@ contains
     dtau = adtau ! timestep where to get results
     dtaumax = adtaumax ! maximum timestep for adaptive integration
 
-end subroutine init_params
+  end subroutine init_params
 
   subroutine timestep(s, th, ph, lam, ierr)
     real(8), intent(inout) :: s, th, ph, lam

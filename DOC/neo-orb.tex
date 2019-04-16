@@ -124,7 +124,7 @@ This is of an uncoupled Hamiltonian form
 \end{equation}
 with the antisymmetric \emph{Poisson matrix}
 \begin{equation}
-\Lambda^{\alpha\beta}\equiv\frac{\partial z^{\gamma}}{\partial z_{\mathrm{c}}^{\,\alpha}}J^{\alpha\beta}\frac{\partial z^{\delta}}{\partial z_{\mathrm{c}}^{\,\beta}}.
+\Lambda^{\alpha\beta}\equiv\frac{\partial z^{\alpha}}{\partial z_{\mathrm{c}}^{\,\gamma}}J^{\gamma\delta}\frac{\partial z^{\beta}}{\partial z_{\mathrm{c}}^{\,\delta}}.
 \end{equation}
 By taking the inverse we obtain (covariant) components of the antisymmetric
 \emph{symplectic form}
@@ -192,101 +192,117 @@ Now we want to get equations of motion
 \end{equation}
 with an antisymmetric $\Lambda^{\alpha\beta}$, where $\zset=(x^{1},x^{2},x^{3},v_{\parallel})$,
 and we use Greek indices to go from $1\dots4$ rather than $1\dots3$
-for Latin ones. We use
+for Latin ones. Antisymmetry of $\Lambda^{\alpha\beta}$ guarantees
+symplecticity, i.e. conservation of the symplectic form, and thereby
+phase-space volume (Liouville's theorem) and conservation of invariants.
+We want to obtain equations of motion (2.8) as
 \begin{align}
-\dot{z}^{i}=\dot{x}^{i} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+2U\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\\
-\dot{z}^{4}=\dot{v}_{\parallel} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\dot{z}^{i}=\dot{x}^{i} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+2U\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\label{eq:xdot}\\
+\dot{z}^{4}=\dot{v}_{\parallel} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).\label{eq:vpardot}
 \end{align}
-Take
-\begin{equation}
-H=\frac{mv_{\parallel}^{\,2}}{2}+w-mU(\xset).
-\end{equation}
-Using
-\begin{equation}
-\Lambda^{i4}=\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{\partial A_{k}}{\partial x^{j}}
-\end{equation}
-we obtain the first term
-\begin{equation}
-\Lambda^{i4}\frac{\partial H}{\partial v_{\parallel}}=\frac{\varepsilon^{ijk}}{B_{\parallel}^{\star}\sqrt{g}}\frac{\partial A_{k}}{\partial x^{j}}v_{\parallel}.
-\end{equation}
-With
-\begin{equation}
-\Lambda^{ij}=-\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}
-\end{equation}
-we obtain the spatial part
-\begin{equation}
-\Lambda^{ij}\frac{\partial H}{\partial x^{j}}=\frac{\varepsilon^{ijk}}{B_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}.
-\end{equation}
-We for sure want
+For sure we want
 \begin{align}
 \Lambda^{4i} & =-\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right),\\
 \Lambda^{44} & =0.
 \end{align}
-Now what's missing is the middle term with $2U$. Also, we have no
-antisymmetry due to a missing term in $\Lambda^{i4}$. Try
+This way the equation (\ref{eq:vpardot}) in $\dot{v}_{\parallel}$
+is fulfilled. Antisymmetry requires that
 \begin{equation}
-\Lambda^{i4}=-\Lambda^{4i}\propto\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
+\Lambda^{i4}=-\Lambda^{4i}=+\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
 \end{equation}
-Then
-\begin{align}
-\Lambda^{i4}\frac{\partial H}{\partial v_{\parallel}} & \propto\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}v_{\parallel}+v_{\parallel}^{\,2}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
-\end{align}
-This is nearly what we want, except for the $v_{\parallel}^{\,2}$
-instead of the $2U$. What we would need is
-\begin{equation}
-\Lambda^{i4}\propto\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+\frac{2U}{v_{\parallel}}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
-\end{equation}
-This is again in conflict with antisymmetry w.r.t. $\Lambda^{4i}$.
-Can we tweak the Hamiltonian instead? The condition
-\begin{equation}
-\frac{\partial H}{\partial v_{\parallel}}=mv_{\parallel}
-\end{equation}
-makes sense. Would it be possible to obtain $2U$ via a spatial derivative
-such that the annoying part with $v_{\parallel}^{\,2}$ is cancelled
-out? This means
-\begin{equation}
-\Lambda^{ij}\frac{\partial H}{\partial x^{j}}\propto\varepsilon^{ilk}(2U-v_{\parallel}^{\,2})\frac{\partial}{\partial x^{l}}\frac{B_{k}}{\omega_{c}}.
-\end{equation}
-If we can get this done, or how much error we make otherwise, is an
-open task. We can take however a different path, which is shown below
-in the conclusion.
-
-\subsection*{Conclusion}
-
-To be exactly symplectic the easiest option right now is to solve
-the approximate linear system using $2U$ in Eq. (2.8-2.9) of {[}1{]}
-only for the initial guess, and during final iterations, solve rather
-the variant with $2U=v_{\parallel}^{\,2}$,
-\begin{align}
-\dot{z}^{i}=\dot{x}^{i} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}^{\,2}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\\
-\dot{z}^{4}=\dot{v}_{\parallel} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
-\end{align}
-where a quadratic term in $v_{\parallel}$ appears. The other option
-to replace $v_{\parallel}$ by $U/(2v_{\parallel})$ in the second
-equation could cause trouble when $v_{\parallel}$ vanishes at banana
-tips. Then we can write equations of motion as a Poisson system
-\begin{equation}
-\dot{z}^{\alpha}=\Lambda^{\alpha\beta}\frac{\partial H}{\partial z^{\beta}}
-\end{equation}
-using a Hamiltonian
-\begin{equation}
-H=\frac{mv_{\parallel}^{\,2}}{2}+w-mU
-\end{equation}
-with derivatives
-\begin{align}
-\frac{\partial H}{\partial x^{i}} & =-m\frac{\partial U}{\partial x^{i}},\\
-\frac{\partial H}{\partial v_{\parallel}} & =mv_{\parallel}.
-\end{align}
-and an antisymmetric Poisson matrix with spatial components
+If we choose in addition
 \begin{equation}
 \Lambda^{ij}=-\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}
 \end{equation}
-and mixed spatial-$v_{\parallel}$ components
+we obtain 
 \begin{equation}
-\Lambda^{i4}=-\Lambda^{4i}=\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right),
+\dot{x}=\Lambda^{i4}\frac{\partial H}{\partial v_{\parallel}}+\Lambda^{ij}\frac{\partial H}{\partial x^{j}}=\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}^{\ 2}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right).
 \end{equation}
-where $i,j=1\dots3$ and $\alpha,\beta=1\dots4$. Antisymmetry of
-$\Lambda^{\alpha\beta}$ guarantees symplecticity, i.e. conservation
-of the symplectic form, and thereby phase-space volume (Liouville's
-theorem) and conservation of invariants.
+Now this is the correct expression (\ref{eq:xdot}) if $v_{\parallel}^{\,2}=2U$
+exactly during the whole procedure. This is true due to definition
+(2.6) and the time evolution (2.7) of $v_{\parallel}$ based upon
+this equation. Any approximation that does not fulfil (2.6) up to
+computer accuracy will violate symplecticity.
+
+\section{Normalisation}
+
+\subsection{Normalization in symplectic integrator module of NEO-ORB}
+
+With thermal velocity 
+\begin{equation}
+v_{0}=\sqrt{\frac{T}{m}}
+\end{equation}
+we introduce normalised gyroradius
+\begin{equation}
+\rho_{0}=\frac{mc}{e}v_{0}.
+\end{equation}
+and dimensionless quantities
+\begin{align}
+\bar{v}_{\parallel} & =\frac{v_{\parallel}}{v_{0}}\,,\\
+\bar{H} & =\frac{H}{T}\,,\\
+\bar{t} & =v_{0}\,t\,,\\
+\bar{\Phi} & =\frac{e}{T}\Phi\,,\\
+\bar{p} & =\frac{p}{mv_{0}}=\frac{v}{v_{0}}=\bar{v}\\
+\bar{\mu} & =\frac{\mu}{T}\,.
+\end{align}
+Cyclotron frequency is
+\[
+\omega_{c}=\frac{eB}{mc}=\frac{v_{0}}{\rho_{0}}B.
+\]
+Then
+
+\begin{align}
+\bar{H}(\boldsymbol{R},\bar{v}_{\parallel}) & =\frac{\bar{v}_{\parallel}^{\,2}}{2}+\bar{\mu}B(\boldsymbol{R})+\bar{\Phi}(\boldsymbol{R})\\
+\bar{p}_{k} & =\frac{mv_{\parallel}h_{k}+\frac{e}{c}A_{k}}{mv_{0}}=\bar{v}_{\parallel}h_{k}+\rho_{0}^{-1}A_{k}\label{eq:pkbar}
+\end{align}
+then
+\begin{align}
+\frac{\d q^{k}}{\d\bar{t}}=\frac{\dot{q}^{k}}{v_{0}} & =\frac{1}{v_{0}}\frac{\partial H}{\partial p_{k}}=\frac{T}{mv_{0}^{\,2}}\frac{\partial\bar{H}}{\partial\bar{p}_{k}}=\frac{\partial\bar{H}}{\partial\bar{p}_{k}},\label{eq:qk-1}\\
+\frac{\d\bar{p}^{k}}{\d\bar{t}} & =\frac{\dot{p}^{k}}{mv_{0}^{\,2}}=-\frac{1}{T}\frac{\partial H}{\partial q^{k}}=-\frac{\partial\bar{H}}{\partial q^{k}}.\label{eq:pk-1}
+\end{align}
+Derivatives:
+\begin{align}
+\frac{\partial\bar{H}}{\partial r} & =\bar{\mu}\frac{\partial B}{\partial r}+\frac{\partial\bar{\Phi}}{\partial r},\quad\frac{\partial\bar{H}}{\partial\bar{v}_{\parallel}}=\bar{v}_{\parallel}
+\end{align}
+
+
+\subsection{Global normalization in NEO-ORB}
+
+With different thermal velocity 
+\begin{equation}
+v_{0s}=\sqrt{\frac{2T}{m}}=\sqrt{2}v_{0}
+\end{equation}
+and normalised gyroradius
+\begin{equation}
+\rho_{0s}=\frac{mc}{e}v_{0s}=\sqrt{2}\rho_{0}.
+\end{equation}
+Additional parameter 
+\begin{align}
+\lambda & =\cos\,\Theta_{p}=\frac{v_{\parallel}}{v}=\frac{v_{\parallel}}{\sqrt{v_{\parallel}^{\,2}+v_{\perp}^{\,2}}}\nonumber \\
+ & =\sqrt{\frac{m}{2}}\frac{v_{\parallel}}{\sqrt{mv_{\parallel}^{\,2}/2+\mu B}}=\sqrt{\frac{m}{2}}\frac{v_{\parallel}}{\sqrt{H-e\Phi}}.
+\end{align}
+where the pitch angle $\Theta_{p}$ measures the angle between particle
+velocity $\v v$ and magnetic field $\boldsymbol{B}$. Similarly
+\begin{align}
+\lambda^{2} & =\frac{mv_{\parallel}/2}{H-e\Phi}=\frac{H-\mu B-e\Phi}{H-e\Phi}
+\end{align}
+so
+\begin{equation}
+H=\frac{\mu B}{1-\lambda^{2}}+e\Phi.
+\end{equation}
+We have (non-relativistic)
+\begin{align}
+\bar{v}_{\parallel s} & =\frac{v_{\parallel}}{v_{0s}}=\frac{\bar{v}_{\parallel}}{\sqrt{2}}\,,\\
+\bar{H}_{s} & =\frac{H}{T}=\bar{H}\,,\\
+\bar{t}_{s} & =v_{0s}\,t=\sqrt{2}\bar{t}\,,\\
+\bar{\Phi}_{s} & =\frac{e}{T}\Phi=\bar{\Phi}\,,\\
+\bar{p}_{s} & =\frac{p}{mv_{0s}}=\frac{v}{v_{0s}}=\bar{v}_{s}=\frac{\bar{p}}{\sqrt{2}}=\frac{\bar{v}}{\sqrt{2}}\\
+\bar{\mu}_{s} & =\frac{\bar{p}_{s}^{\,2}(1-\lambda^{2})}{2B}=\frac{p^{\,2}(1-\lambda^{2})}{2m^{2}v_{0}^{\,2}B}\nonumber \\
+ & =\frac{p_{\perp}^{\,2}}{4mTB}=\frac{\mu}{2T}=\frac{\bar{\mu}}{2}
+\end{align}
+Cyclotron frequency is
+\begin{equation}
+\omega_{c}=\frac{eB}{mc}=\frac{v_{0s}}{\rho_{0s}}B.=\frac{v_{0}}{\rho_{0}}B.
+\end{equation}
+
 \end{document}
