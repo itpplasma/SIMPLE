@@ -23,8 +23,8 @@ calllib('libneo_orb', 'neo_orb_MOD_init_params', Z_charge, m_mass, ...
     E_kin, dtau, dtaumax, integmode, relerr);
 %%
 s = libpointer('doublePtr', 0.5);
-th = libpointer('doublePtr', 0.0);
-ph = libpointer('doublePtr', 0.0);
+th = libpointer('doublePtr', 0);
+ph = libpointer('doublePtr', 0);
 lam = libpointer('doublePtr', 0.1);
 ierr = libpointer('int32Ptr', 0);
 

@@ -1,6 +1,6 @@
 %% Initialize field
-addpath('/home/calbert/code/NEO-ORB/matlab');
-neo_orb_init('/home/calbert/code/NEO-ORB');
+addpath('/proj/plasma/CODE/NEO-ORB/matlab');
+neo_orb_init('/proj/plasma/CODE/NEO-ORB');
 neo_orb_init_field(5, 5, 3, -1);
 
 %% Initialize parameters
@@ -30,7 +30,7 @@ hold on
 %% Test orbit integration
 nt = 1000;
 z = zeros(nt, 4);
-z(1,:) = [0.5, 0.0, 0.0, 0.1];
+z(1,:) = [0.35, 0.333, 0.97, 0.1];
 
 for k = 1:nt-1
   z(k+1,:) = neo_orb_timestep(z(k,:));
@@ -47,5 +47,32 @@ xlim([-3.0, 3.0])
 ylim([-3.0, 3.0])
 zlim([-1.0, 1.0])
 
+%% Johanna comparisons
+u=2;v=0.1;
+hcompare=zeros(3,99);hhcompare=hcompare;s=linspace(0,1,99);
+sqrtg=zeros(1,99); bmod=sqrtg;
+for i=1:99
+    [bmod(i), sqrtg(i), ~, hcovar,hcontrvar,~]=neo_orb_magfie_vmec([(s(i)), u, v]);
+    hcompare(:,i)=hcovar(:,1);
+    hhcompare(:,i)=hcontrvar(:,1)*bmod(i);
+end
+
+figure
+plot(s,sqrtg)
+xlabel('s/ fluxsurface label')
+ylabel('g/')
+
+figure
+plot(s,bmod)
+xlabel('s/ fluxsurface label')
+ylabel('b/')
+
+figure
+plot(s,hhcompare(1,:),s,hhcompare(2,:),s,hhcompare(3,:));
+xlabel('s/ fluxsurface label')
+
+figure
+plot(s,hcompare(1,:),s,hcompare(2,:),s,hcompare(3,:));
+xlabel('s/ fluxsurface label')
 %% Clean up
 neo_orb_cleanup();

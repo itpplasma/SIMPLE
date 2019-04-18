@@ -519,6 +519,7 @@
   integer :: nstp
 !
   dA_theta_ds=torflux
+  write(*,*) torflux
 !
   ds=s/hs
   is=max(0,min(ns-1,int(ds)))
