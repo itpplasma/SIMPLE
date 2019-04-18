@@ -21,14 +21,14 @@ function val=ceval(s,u,v,coef,xm,xn,derivindex,mesh)
     
     switch(derivindex)
         case 0
-            valvec=cos(xm.*u-v.*xn)*coef; 
+            valvec=cos(xm.*u+v.*xn)*coef; 
             if mesh==0, valvec=valvec(2:end);end
             k=(valvec(end)-valvec(1))/(x(end)-x(1)); d=valvec(1)-k*x(1);
             y = valvec-k*x-d*ones(size(x));
             sp = fastBSpline.lsqspline(knots,3,x,y);
             val=sp.evalAt(s)+k*s+d*ones(size(s));
         case 1
-            valvec=cos(xm.*u-v.*xn)*coef; 
+            valvec=cos(xm.*u+v.*xn)*coef; 
             if mesh==0, valvec=valvec(2:end);end
             k=(valvec(end)-valvec(1))/(x(end)-x(1)); d=valvec(1)-k*x(1);
             y = valvec-k*x-d*ones(size(x));
@@ -37,14 +37,14 @@ function val=ceval(s,u,v,coef,xm,xn,derivindex,mesh)
             sp=sp.dx;
             val=sp.evalAt(s)+k*ones(size(s));
         case 2
-            valvec=-(sin(xm.*u-v.*xn).*xm)*coef; 
+            valvec=-(sin(xm.*u+v.*xn).*xm)*coef; 
             if mesh==0, valvec=valvec(2:end);end
             k=(valvec(end)-valvec(1))/(x(end)-x(1)); d=valvec(1)-k*x(1);
             y = valvec-k*x-d*ones(size(x));
             sp = fastBSpline.lsqspline(knots,3,x,y);
             val=sp.evalAt(s)+k*s+d*ones(size(s));
         case 3
-            valvec=(sin(xm.*u-v.*xn).*xn)*coef; 
+            valvec=-(sin(xm.*u+v.*xn).*xn)*coef; 
             if mesh==0, valvec=valvec(2:end);end
             k=(valvec(end)-valvec(1))/(x(end)-x(1)); d=valvec(1)-k*x(1);
             y = valvec-k*x-d*ones(size(x));
