@@ -492,6 +492,7 @@
   cmat(2,3)=-dl_dp*cjac
 !
   g=matmul(transpose(cmat),matmul(gV,cmat))
+  write(*,*) g
 !
   Bcovar_r=g(1,2)*Bctrvr_vartheta+g(1,3)*Bctrvr_varphi
   Bcovar_vartheta=g(2,2)*Bctrvr_vartheta+g(2,3)*Bctrvr_varphi
@@ -519,7 +520,6 @@
   integer :: nstp
 !
   dA_theta_ds=torflux
-  write(*,*) torflux
 !
   ds=s/hs
   is=max(0,min(ns-1,int(ds)))
