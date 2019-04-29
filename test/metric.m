@@ -10,7 +10,7 @@ gV(2,2)=Rcc(s,u,v,2)^2+Zcc(s,u,v,2)^2;
 gV(2,3)=Rcc(s,u,v,2)*Rcc(s,u,v,3)+Zcc(s,u,v,2)*Zcc(s,u,v,3);
 gV(3,1)=gV(1,3);
 gV(3,2)=gV(2,3);
-gV(3,3)=Rcc(s,u,v,0)^2+Rcc(s,u,v,1)^2+Zcc(s,u,v,1)^2;
+gV(3,3)=Rcc(s,u,v,0)^2+Rcc(s,u,v,3)^2+Zcc(s,u,v,3)^2;
 
 gmat=zeros(3,3);
 cmat(1,2:3)=0.d0;
