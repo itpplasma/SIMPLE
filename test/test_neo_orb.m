@@ -48,31 +48,26 @@ ylim([-3.0, 3.0])
 zlim([-1.0, 1.0])
 
 %% Johanna comparisons
-u=2;v=0.1;
-hcompare=zeros(3,99);hhcompare=hcompare;s=linspace(0,1,99);
-sqrtg=zeros(1,99); bmod=sqrtg;
-for i=1:99
-    [bmod(i), sqrtg(i), ~, hcovar,hcontrvar,~]=neo_orb_magfie_vmec([(s(i)), u, v]);
-    hcompare(:,i)=hcovar(:,1);
-    hhcompare(:,i)=hcontrvar(:,1)*bmod(i);
+figure
+subplot(2,2,1)
+plot([1:1:length(z)],z(:,1));
+title('s');
+subplot(2,2,2)
+plot([1:1:length(z)],z(:,2));
+title('u');
+subplot(2,2,3)
+plot([1:1:length(z)],z(:,3));
+title('v');
+subplot(2,2,4)
+plot([1:1:length(z)],z(:,4));
+title('v_{||}/ v_{thermal}');
+
+bmu=zeros(length(z),1);
+for i=1:length(z)
+    [bmu(i), ~, ~, ~, ~, ~] = neo_orb_magfie_vmec([z(i,1), z(i,2), z(i,3)]);
 end
 
 figure
-plot(s,sqrtg)
-xlabel('s/ fluxsurface label')
-ylabel('g/')
-
-figure
-plot(s,bmod)
-xlabel('s/ fluxsurface label')
-ylabel('b/')
-
-figure
-plot(s,hhcompare(1,:),s,hhcompare(2,:),s,hhcompare(3,:));
-xlabel('s/ fluxsurface label')
-
-figure
-plot(s,hcompare(1,:),s,hcompare(2,:),s,hcompare(3,:));
-xlabel('s/ fluxsurface label')
+plot([1:1:length(z)],(ones(size(bmu))-z(:,4).^2)./bmu)
 %% Clean up
 neo_orb_cleanup();

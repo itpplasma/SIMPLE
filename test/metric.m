@@ -2,7 +2,7 @@ function g=metric(s,u,v,Rcc,Zcc,lambda)
 
 
 gV=zeros(3,3);
-gV(1,1)= Rcc(s,u,v,1)^2+Zcc(s,u,v,1)^2;
+gV(1,1)= (Rcc(s,u,v,1)^2+Zcc(s,u,v,1)^2);
 gV(1,2)=Rcc(s,u,v,1)*Rcc(s,u,v,2)+Zcc(s,u,v,1)*Zcc(s,u,v,2);
 gV(1,3)=Rcc(s,u,v,1)*Rcc(s,u,v,3)+Zcc(s,u,v,1)*Zcc(s,u,v,3);
 gV(2,1)=gV(1,2);

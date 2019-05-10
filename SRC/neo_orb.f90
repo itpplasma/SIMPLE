@@ -55,6 +55,7 @@ contains
 
     integer, intent(in) :: Z_charge, m_mass
     real(8), intent(in) :: E_kin, adtau, adtaumax
+    double precision :: bmod_ref=5e4 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     real(8), intent(in) :: arelerr
 
     n_e = Z_charge
@@ -66,8 +67,11 @@ contains
 
     ! Reference velocity and normalized Larmor radius
     v0 = sqrt(2.d0*E_kin*ev/(n_d*p_mass))
-    ro0 = v0*n_d*p_mass*c/(n_e*e_charge)
-
+    !ro0 = v0*n_d*p_mass*c/(n_e*e_charge) commented by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
+    ! Larmor radius:
+    rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref) ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
+    bmod00=281679.46317784750d0 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
+    ro0=rlarm*bmod00  ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     dtau = adtau ! timestep where to get results
     dtaumax = adtaumax ! maximum timestep for adaptive integration
 
