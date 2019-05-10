@@ -36,7 +36,7 @@ use diag_mod, only : icounter
   real :: tstart, tend
   integer, parameter :: runlen = 1
   logical, parameter :: jparmode = .false. ! if true output orbit points only when vpar changes sign from positive to negative
-  integer, parameter :: mode_sympl = 1 ! 0=NEO-ORB in vmec (sergei); 1=symplectic in canonical (christopher; euler1)
+  integer, parameter :: mode_sympl = 0 ! 0=NEO-ORB in vmec (sergei); 1=symplectic in canonical (christopher; euler1)
   integer :: ntau
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
@@ -104,10 +104,10 @@ ntimstep = L1i*npoiper*npoiper2*100
 print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 !
 ! initial conditions
-r = 0.7
-theta_vmec = 0.5*pi
-varphi_vmec = 0.0
-alam0 = 0.5 
+r = 0.35
+theta_vmec = 0.33
+varphi_vmec = 0.97
+alam0 = 0.1 
 
 if (mode_sympl>0)   call get_canonical_coordinates
 
