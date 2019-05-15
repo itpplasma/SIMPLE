@@ -22,30 +22,33 @@ javaaddpath([parentpath, '/test/netcdfAll-4.6.13.jar']);
 data=read_vmec([parentpath, '/test/wout.nc']);
 
 
-%% evaluation functions of VMEC quantities
+%% evaluation functions of VMEC quantities - Johanna
 J=@(s,u,v) ceval(s,u,v,data.gmnc,data.xm,data.xn,0,0);
-B=@(s,u,v,derivindex) 2*pi*ceval(s,u,v,data.bmnc,data.xm,data.xn,derivindex,0);
-B_s=@(s,u,v,derivindex) -2*pi*seval(s,u,v,data.bsubsmns,data.xm,data.xn,derivindex,0);
-B_u=@(s,u,v,derivindex) -2*pi*ceval(s,u,v,data.bsubumnc,data.xm,data.xn,derivindex,0);
-B_v=@(s,u,v,derivindex) -2*pi*ceval(s,u,v,data.bsubvmnc,data.xm,data.xn,derivindex,0);
-Bu=@(s,u,v,derivindex) -2*pi*ceval(s,u,v,data.bsupumnc,data.xm,data.xn,derivindex,0);
-Bv=@(s,u,v,derivindex) -2*pi*ceval(s,u,v,data.bsupvmnc,data.xm,data.xn,derivindex,0);
-Rcc=@(s,u,v,derivindex)  2*pi*ceval(s,u,v,data.rmnc,data.xm,data.xn,derivindex,1)*1e2;
-Zcc=@(s,u,v,derivindex)  -2*pi*seval(s,u,v,data.zmns,data.xm,data.xn,derivindex,1)*1e2;
-lambda=@(s,u,v,derivindex) -2*pi*seval(s,u,v,data.lmns,data.xm,data.xn,derivindex,0);
+B=@(s,u,v,derivindex) ceval(s,u,v,data.bmnc,data.xm,data.xn,derivindex,0);
+B_s=@(s,u,v,derivindex) -seval(s,u,v,data.bsubsmns,data.xm,data.xn,derivindex,1);
+B_u=@(s,u,v,derivindex) -ceval(s,u,v,data.bsubumnc,data.xm,data.xn,derivindex,0);
+B_v=@(s,u,v,derivindex) -ceval(s,u,v,data.bsubvmnc,data.xm,data.xn,derivindex,0);
+Bu=@(s,u,v,derivindex) -ceval(s,u,v,data.bsupumnc,data.xm,data.xn,derivindex,0);
+Bv=@(s,u,v,derivindex) -ceval(s,u,v,data.bsupvmnc,data.xm,data.xn,derivindex,0);
+Rcc=@(s,u,v,derivindex)  ceval(s,u,v,data.rmnc,data.xm,data.xn,derivindex,1)*1e2;
+Zcc=@(s,u,v,derivindex)  -seval(s,u,v,data.zmns,data.xm,data.xn,derivindex,1)*1e2;
+lambda=@(s,u,v,derivindex) -seval(s,u,v,data.lmns,data.xm,data.xn,derivindex,0);
 
 
 %% evaluate different fields
 
+%fortran routine
 x=linspace(0.2,0.8,64);
-u=0.3333;v=0.97;
+u=0.33;v=0.97;
 hcompare=zeros(3,length(x));hhcompare=hcompare;hbder=hcompare;hhcurl=hcompare;
 sqrtg=zeros(1,length(x)); bmod=sqrtg;
 
+%VMEC coefficient evaluation
 Gi=zeros(size(x)); Bi=zeros(size(x));
 Bbi=zeros(3,length(x));B_i=zeros(3,length(x));
 Bderi=zeros(3,length(x));Curlbi=Bderi;
 
+%fortran algorithm in matlab
 bvii=zeros(size(x));buii=zeros(size(x));bvi=zeros(size(x));bui=zeros(size(x));
 b_sii=zeros(size(x));b_uii=zeros(size(x));b_vii=zeros(size(x));
 b_si=zeros(size(x));b_ui=zeros(size(x));b_vi=zeros(size(x));
@@ -82,109 +85,110 @@ for i=1:length(x)
     bi(i)=sqrt(b_ui(i)*bui(i)+b_vi(i)*bvi(i));
     
     
-end
-
-hbmodu=zeros(1,1000); hbmodv=hbmodu; Bmodu=hbmodu; Bmodv=hbmodv;
-uu=linspace(0,2*pi,1000);s=0.35;vv=linspace(0,2*pi/5,1000);
-for i=1:length(uu)
-    Bmodu(i)=B(s,uu(i),v,0);
-    Bmodv(i)=B(s,u,vv(i),0);
-    [hbmodu(i), ~, ~, ~,~,~]=neo_orb_magfie_vmec([s, uu(i), v]);
-    [hbmodv(i), ~, ~, ~,~,~]=neo_orb_magfie_vmec([s, u, vv(i)]);
-end
-    
+end 
 
 %plot jacobian
 figure 
-subplot(2,1,1)
-plot(x,sqrtg)
-xlabel('s / fluxsurface label')
-ylabel('g / cm^3')
-title('Fortran Routine')
-subplot(2,1,2)
+plot(x,sqrtg.*1e-6)
+hold on
 plot(x,Gi)
 xlabel('s / fluxsurface label')
-ylabel('g / m^3')
-title('VMEC coefficient evaluation')
+ylabel('\surd{g} / m^{-3}')
+h1=legend('Fortran Routine','VMEC coefficient evaluation');
+set(h1,'Location','northwest')
+%saveas(gcf,['../../../../../user/ganglb_j/masterarbeit/latextemplate/figures/Jacobian','.eps'],'epsc');
+
 
 %plot magnetic field magnitude
 figure 
-subplot(2,1,1)
-plot(x,bmod)
-xlabel('s / fluxsurface label')
-ylabel('|B| / G')
-title('Fortran Routine')
-subplot(2,1,2)
+plot(x,bmod.*(1e-4/(2*pi)))
+hold on
 plot(x,Bi)
 xlabel('s / fluxsurface label')
 ylabel('|B| / T')
-title('VMEC coefficient evaluation')
+h1=legend('Fortran Routine','VMEC coefficient evaluation');
+set(h1,'Location','northwest')
+%saveas(gcf,['../../../../../user/ganglb_j/masterarbeit/latextemplate/figures/Bmod','.eps'],'epsc');
 
 %plot contravariant vector
-h=gobjects(2,1);
-figure 
-h(1)=subplot(2,1,1);
-h1=plot(x,hhcompare(2,:),x,hhcompare(3,:));
-ylabel('contravariant / cm^{-1}')
-title('Fortran Routine')
-h(2)=subplot(2,1,2);
-plot(x,Bbi(2,:)./Bi,x,Bbi(3,:)./Bi);
-xlabel('s / fluxsurface label')
-ylabel('contravariant / m^{-1}')
-title('VMEC coefficient evaluation')
-lgd=legend([h1],'u','v');
-set(h(1),'Position',[0.13,0.65,0.7750,0.3]);
-set(h(2),'Position',[0.13,0.25,0.7750,0.3]);
-set(lgd,'Position',[0.13,0.05,0.7750,0.05]);
+figure
+h1=plot(x,hhcompare(2,:).*1e2,x,hhcompare(3,:).*1e2);
+hold on
+h2=plot(x,Bbi(2,:)./Bi,x,Bbi(3,:)./Bi);
+hold off
+set(gca);
+xlabel('s / fluxsurface label');
+ylabel('contravariant / m^{-1}');
+l1=legend(h1,'u','v','Position',[0.15,0.3,0.25,0.1]);
+title(l1,'Fortran Routine');
+a=axes('position',get(gca,'position'),'visible','off');
+l2=legend(a,h2,'u','v','Position',[0.15,0.15,0.4,0.1]);
+title(l2,'VMEC coefficient evaluation');
+%saveas(gcf,['../../../../../user/ganglb_j/masterarbeit/latextemplate/figures/hcontravariant','.eps'],'epsc');
+
 
 %plot covariant vector
 figure 
-h(1)=subplot(2,1,1);
-h1=plot(x,hcompare(1,:),x,hcompare(2,:),x,hcompare(3,:));
-ylabel('covariant / cm')
-title('Fortran Routine')
-h(2)=subplot(2,1,2);
-plot(x,B_i(1,:)./Bi,x,B_i(2,:)./Bi,x,B_i(3,:)./Bi);
+h1=plot(x,hcompare(1,:).*1e-2,x,hcompare(2,:).*1e-2,x,hcompare(3,:).*1e-2,'visible','on');
+hold on
+h2=plot(x,B_i(1,:)./Bi,x,B_i(2,:)./Bi,x,B_i(3,:)./Bi);
+hold off
 xlabel('s/ fluxsurface label')
 ylabel('covariant / m')
-title('VMEC coefficient evaluation')
-lgd=legend([h1],'s','u','v');
-set(h(1),'Position',[0.13,0.65,0.7750,0.3]);
-set(h(2),'Position',[0.13,0.25,0.7750,0.3]);
-set(lgd,'Position',[0.13,0.05,0.7750,0.05]);
+breakyaxis([-27,-1])
+set(gca);
+a1=axes('position',get(gca,'position'),'visible','off');
+l1=legend(a1,h1,'s','u','v','Position',[0.15,0.35,0.25,0.1],'color','none');
+set(h1,'visible','on')
+title(l1,'Fortran Routine');
+set(gca);
+a2=axes('position',get(gca,'position'),'visible','off');
+l2=legend(a2,h2,'s','u','v','Position',[0.15,0.17,0.4,0.1],'color','none');
+set(h2,'visible','on')
+title(l2,'VMEC coefficient evaluation');
+%saveas(gcf,['../../../../../user/ganglb_j/masterarbeit/latextemplate/figures/hcovariant','.eps'],'epsc');
+
 
 %plot derivative of B
-h=gobjects(2,1);
 figure 
-h(1)=subplot(2,1,1);
 h1=plot(x,hbder(1,:),x,hbder(2,:),x,hbder(3,:));
+hold on
+h2=plot(x,Bderi(1,:)./Bi,x,Bderi(2,:)./Bi,x,Bderi(3,:)./Bi);
+hold off
+xlabel('s/ fluxsurface label')
 ylabel('\nabla B / |B|')
-title('Fortran Routine')
-h(2)=subplot(2,1,2);
-plot(x,Bderi(1,:)./Bi,x,Bderi(2,:)./Bi,x,Bderi(3,:)./Bi);
-xlabel('s / fluxsurface label')
-ylabel('\nabla B / |B|')
-title('VMEC coefficient evaluation')
-lgd=legend([h1],'s','u','v');
-set(h(1),'Position',[0.13,0.65,0.7750,0.3]);
-set(h(2),'Position',[0.13,0.25,0.7750,0.3]);
-set(lgd,'Position',[0.13,0.05,0.7750,0.05]);
+breakyaxis([0.16,0.99])
+set(gca);
+a1=axes('position',get(gca,'position'),'visible','off');
+l1=legend(a1,h1,'s','u','v','Position',[0.15,0.78,0.25,0.1],'color','none');
+set(h1,'visible','on')
+title(l1,'Fortran Routine');
+set(gca);
+a2=axes('position',get(gca,'position'),'visible','off');
+l2=legend(a2,h2,'s','u','v','Position',[0.42,0.78,0.4,0.1],'color','none');
+set(h2,'visible','on')
+title(l2,'VMEC coefficient evaluation');
+%saveas(gcf,['../../../../../user/ganglb_j/masterarbeit/latextemplate/figures/nablaB','.eps'],'epsc');
 
 %plot curl of b
-h=gobjects(2,1);
 figure 
-h(1)=subplot(2,1,1);
-h1=plot(x,hhcurl(1,:),x,hhcurl(2,:),x,hhcurl(3,:));
-ylabel('\nabla x b / cm^-2')
-title('Fortran Routine')
-h(2)=subplot(2,1,2);
+h1=plot(x,hhcurl(1,:).*1e4,x,hhcurl(2,:).*1e4,x,hhcurl(3,:).*1e4);
+hold on
 plot(x,Curlbi(1,:),x,Curlbi(2,:),x,Curlbi(3,:));
+hold off
+ylabel('\nabla x b / m^{-2}')
 xlabel('s / fluxsurface label')
-ylabel('\nabla x b / m^-2')
-title('VMEC coefficient evaluation')
-lgd=legend([h1],'s','u','v');
-set(h(1),'Position',[0.13,0.65,0.7750,0.3]);
-set(h(2),'Position',[0.13,0.25,0.7750,0.3]);
-set(lgd,'Position',[0.13,0.05,0.7750,0.05]);
+set(gca);
+a1=axes('position',get(gca,'position'),'visible','off');
+l1=legend(a1,h1,'s','u','v','Position',[0.15,0.16,0.25,0.1],'color','none');
+set(h1,'visible','on')
+title(l1,'Fortran Routine');
+set(gca);
+a2=axes('position',get(gca,'position'),'visible','off');
+l2=legend(a2,h2,'s','u','v','Position',[0.42,0.5,0.4,0.1],'color','none');
+set(h2,'visible','on')
+title(l2,'VMEC coefficient evaluation');
+%saveas(gcf,['../../../../../user/ganglb_j/masterarbeit/latextemplate/figures/nablaxb','.eps'],'epsc');
+
 
 
