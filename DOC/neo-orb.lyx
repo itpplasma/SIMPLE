@@ -725,7 +725,16 @@ we obtain
 
 \end_inset
 
-Now this is the correct expression 
+Resulting Poisson brackets 
+\begin_inset Formula $\{f,g\}=\frac{\partial f}{z^{\alpha}}\Lambda^{\alpha\beta}\frac{\partial g}{\partial z^{\beta}}$
+\end_inset
+
+ match Eq.
+\begin_inset space ~
+\end_inset
+
+(17) of Grebogi and Littlejohn (1984).
+ Now this is the correct expression 
 \begin_inset CommandInset ref
 LatexCommand eqref
 reference "eq:xdot"
