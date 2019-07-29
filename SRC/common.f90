@@ -10,6 +10,7 @@ module common
 implicit none
 
 double precision, parameter  :: pi=3.14159265358979d0
+double precision, parameter  :: twopi=6.28318530717958d0
 double precision, parameter  :: c=2.9979d10
 double precision, parameter  :: e_charge=4.8032d-10
 double precision, parameter  :: e_mass=9.1094d-28
@@ -41,7 +42,7 @@ integer function newunit(unit)
     end if
   end do
   if (present(unit)) unit=newunit
-end function newunit  
+end function newunit
 
 end module common
 

@@ -5,14 +5,14 @@ module canonical_coordinates_main
   use velo_mod,   only : isw_field_type
   use diag_mod, only : icounter
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-  use common, only: pi,c,e_charge,e_mass,p_mass,ev,newunit
+  use common, only: twopi,c,e_charge,e_mass,p_mass,ev,newunit
+  use cut_detector, only : fract_dimension
 
 #ifdef _OPENMP
   use omp_lib
 #endif
 
   implicit none
-
 
   double precision,parameter  :: snear_axis=0.05d0
 
@@ -50,7 +50,7 @@ module canonical_coordinates_main
   integer(8)                                    :: nstep_tot
   integer(4)                                    :: norbper,ifp_tip,ifp_per
   integer                                       :: nfp,nfp_tip,nfp_per
-  double precision                              :: zerolam,twopi,fraction,fper
+  double precision                              :: zerolam,fraction,fper
   integer, parameter                            :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
   double precision, dimension(n_tip_vars)       :: var_tip
   integer,          dimension(:),   allocatable :: ipoi
@@ -109,6 +109,7 @@ contains
     ifp_per=0               !<= initialize footprint counter on periods
 
     icounter=0
+    phiper=0.0d0
     if (mode>0) call orbit_sympl_init(z, dtau, dtaumin, 1d-12, mode_sympl)
 
       !--------------------------------
@@ -258,53 +259,6 @@ contains
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-  subroutine fract_dimension(ntr,rt,fraction)
-
-#ifdef _OPENMP
-    use omp_lib
-#endif
-
-    implicit none
-
-    integer, parameter :: iunit=1003
-    integer :: itr,ntr,ngrid,nrefine,irefine,kr,kt,nboxes
-    double precision :: fraction,rmax,rmin,tmax,tmin,hr,ht
-    double precision, dimension(2,ntr)              :: rt
-    logical,          dimension(:,:),   allocatable :: free
-
-    rmin=minval(rt(1,:))
-    rmax=maxval(rt(1,:))
-    tmin=minval(rt(2,:))
-    tmax=maxval(rt(2,:))
-
-    nrefine=int(log(dble(ntr))/log(4.d0))
-
-    ngrid=1
-    nrefine=nrefine+3       !<=add 3 for curiousity
-    do irefine=1,nrefine
-      ngrid=ngrid*2
-      allocate(free(0:ngrid,0:ngrid))
-      free=.true.
-      hr=(rmax-rmin)/dble(ngrid)
-      ht=(tmax-tmin)/dble(ngrid)
-      nboxes=0
-      do itr=1,ntr
-        kr=int((rt(1,itr)-rmin)/hr)
-        kr=min(ngrid-1,max(0,kr))
-        kt=int((rt(2,itr)-tmin)/ht)
-        kt=min(ngrid-1,max(0,kt))
-        if(free(kr,kt)) then
-          free(kr,kt)=.false.
-          nboxes=nboxes+1
-        endif
-      enddo
-      deallocate(free)
-    write(iunit,*) dble(irefine),dble(nboxes)/dble(ngrid**2)
-      if(irefine.eq.nrefine-3) fraction=dble(nboxes)/dble(ngrid**2)
-    enddo
-    close(iunit)
-
-  end subroutine fract_dimension
 
 end module canonical_coordinates_main
 
@@ -313,7 +267,8 @@ program canonical_coordinates
 
   implicit none
 
-  integer :: calls_rk(npart), calls_sympl(npart), i, funit
+  integer(8) :: calls_rk(npart), calls_sympl(npart)
+  integer :: i, funit
   integer :: orb_kind_rk(npart), orb_kind_sympl(npart)
 
 
@@ -327,7 +282,6 @@ program canonical_coordinates
   call random_seed(put=seed)
 
   zerolam=0.d0
-  twopi=2.d0*pi
   nplagr=6
   nder=0
   npl_half=nplagr/2
@@ -389,9 +343,9 @@ program canonical_coordinates
 
   rbig=rt0
   ! field line integration step step over phi (to check chamber wall crossing)
-  dphi=2.d0*pi/(L1i*npoiper)
+  dphi=twopi/(L1i*npoiper)
   ! orbit integration time step (to check chamber wall crossing)
-  dtaumin=2.d0*pi*rbig/npoiper2
+  dtaumin=twopi*rbig/npoiper2
   nstep_tot = ceiling(tau/dtaumin)
   dtau=tau/nstep_tot
   dtaumin = dtau
