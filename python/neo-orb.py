@@ -65,9 +65,10 @@ cut_detector.fdef("""
     subroutine init()
     end
     
-    subroutine trace_to_cut(t, var_tip, ierr)
+    subroutine trace_to_cut(t, var_tip, cut_type, ierr)
       double precision, intent(inout) :: t
       double precision, dimension(:), intent(inout) :: var_tip
+      integer, intent(out) :: cut_type
       integer, intent(out) :: ierr
     end
 """)
@@ -77,7 +78,7 @@ neo_orb.load()
 new_vmec_stuff.load()
 
 #%%
-neo_orb.init_field(5, 5, 3, 1)
+neo_orb.init_field(5, 5, 3, 0)
 
 #%%
 npoiper2 = 64                       # interation points per field period
@@ -109,19 +110,22 @@ ierr = 0  # doesn't work yet with pass-by-reference
 for kt in range(1, ntimstep):
     neo_orb.timestep_global(ierr)
     zs[:, kt] = z[[0,1,2,4]]
+print(z)
 print('time elapsed: {} s'.format(time.time() - t))
 
 t = 0.0
 ierr = 0
 var_tip = np.zeros(6)
-ncut = 10000
+ncut = 1000
 # variables to evaluate at tip: z(1..5), par_inv
 var_tips = np.empty([6, ncut])
 
 t = time.time()
 for k in np.arange(ncut):
-    cut_detector.trace_to_cut(t, var_tip, ierr)
+    cut_type = 0
+    cut_detector.trace_to_cut(0.0, var_tip, cut_type, ierr)
     var_tips[:,k] = var_tip
+print(z)
 print('time elapsed: {} s'.format(time.time() - t))
 
 plt.plot(zs[0,:]*np.cos(zs[1,:]), zs[0,:]*np.sin(zs[1,:]))
