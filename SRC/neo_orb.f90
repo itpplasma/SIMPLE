@@ -4,50 +4,60 @@ module neo_orb
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
-  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
+  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, orbit_timestep_sympl
   use diag_mod, only : icounter
 
-  implicit none
+implicit none
+save
+
+  logical :: debug = .False.
+
+public
+
+  type :: NeoOrb
+    double precision :: fper  ! field period
+    double precision :: dtau, dtaumax, v0
+    integer          :: n_e, n_d
+
+    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+    double precision :: relerr
+
+    logical :: firstrun = .True.
+
+    !type(SymplecticIntegrator), allocatable :: si
+  end type NeoOrb
 
   interface tstep
       module procedure timestep
       module procedure timestep_z
-      module procedure timestep_global
    end interface tstep
-
-  double precision :: fper  ! field period
-  double precision :: dtau, dtaumax, v0
-  double precision, dimension(5) :: z
-  integer          :: n_e, n_d
-
-  integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-  double precision :: relerr
-
-  logical :: firstrun = .True.
-  logical :: debug = .False.
 
 contains
 
-  subroutine init_field(ans_s, ans_tp, amultharm, aintegmode)
+  subroutine init_field(self, ans_s, ans_tp, amultharm, aintegmode)
     ! initialize field geometry
     ! character*32, intent(in) :: vmec_file
+    type(NeoOrb), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     integer             :: ierr
     integer             :: L1i
     double precision    :: RT0, R0i, cbfi, bz0i, bf0
+    double precision    :: z(5)
+
+    self%firstrun = .True.
 
     netcdffile = 'wout.nc'  ! TODO: don't hardcode this
     ns_s = ans_s
     ns_tp = ans_tp
     multharm = amultharm
-    integmode = aintegmode
+    self%integmode = aintegmode
 
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
-    fper = twopi/dble(L1i)   !<= field period
-    print *, 'R0 = ', RT0, ' cm'
+    self%fper = twopi/dble(L1i)   !<= field period
+    print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
     isw_field_type = 1 ! evaluate fields in VMEC coords (0 = CAN, 1 = VMEC)
-    if (integmode>=0) then
+    if (self%integmode>=0) then
       call get_canonical_coordinates ! pre-compute transformation to canonical coords
       isw_field_type = 0 ! evaluate fields in canonical coords (0 = CAN, 1 = VMEC)
     end if
@@ -59,40 +69,43 @@ contains
     z = 1.0d0
   end subroutine init_field
 
-  subroutine init_params(Z_charge, m_mass, E_kin, adtau, adtaumax, arelerr)
+  subroutine init_params(self, Z_charge, m_mass, E_kin, adtau, adtaumax, arelerr)
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
     ! of plasma particles (= temperature for thermal particles).
 
+    type(NeoOrb) :: self
     integer, intent(in) :: Z_charge, m_mass
     real(8), intent(in) :: E_kin, adtau, adtaumax
     double precision :: bmod_ref=5d4 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     double precision :: bmod00, rlarm ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    double precision :: pi=3.14159265359 ! added by johanna 14.05.2019 in order to correct orbit calculation (missing 2pi in vmec in phitor)
     real(8), intent(in) :: arelerr
 
-    n_e = Z_charge
-    n_d = m_mass
-    relerr = arelerr
+    self%n_e = Z_charge
+    self%n_d = m_mass
+    self%relerr = arelerr
 
     ! Neglect relativistic effects by large inverse relativistic temperature
     rmu=1d8
 
     ! Reference velocity and normalized Larmor radius
-    v0 = sqrt(2.d0*E_kin*ev/(n_d*p_mass))
+    self%v0 = sqrt(2.d0*E_kin*ev/(self%n_d*p_mass))
     !ro0 = v0*n_d*p_mass*c/(n_e*e_charge) !commented by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     ! Larmor radius:
-    rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref) ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
+    rlarm=self%v0*self%n_d*p_mass*c/(self%n_e*e_charge*bmod_ref) ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     bmod00=281679.46317784750d0 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     ro0=rlarm*bmod00  ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     !ro0=v0*n_d*p_mass*c*2*pi/(n_e*e_charge) ! added by johanna 14.05.2019 in order to correct orbit calculation (missing 2pi in vmec in phitor)
-    dtau = adtau ! timestep where to get results
-    dtaumax = adtaumax ! maximum timestep for adaptive integration
+    self%dtau = adtau ! timestep where to get results
+    self%dtaumax = adtaumax ! maximum timestep for adaptive integration
 
   end subroutine init_params
 
-  subroutine timestep(s, th, ph, lam, ierr)
+  subroutine timestep(self, s, th, ph, lam, ierr)
+    type(NeoOrb), intent(inout) :: self
     real(8), intent(inout) :: s, th, ph, lam
     integer, intent(out) :: ierr
+
+    double precision, dimension(5) :: z
 
     z(1) = s
     z(2) = th
@@ -100,15 +113,7 @@ contains
     z(4) = 1d0
     z(5) = lam
 
-    if (integmode <= 0) then
-      call orbit_timestep_axis(z, dtau, dtau, relerr, ierr)
-    else
-      if (firstrun) then
-        call orbit_sympl_init(z, dtau, dtaumax, relerr, integmode)
-        firstrun = .False.
-      endif
-      call orbit_timestep_sympl(z, ierr)
-    endif
+    call timestep_z(self, z, ierr)
 
     s = z(1)
     th = z(2)
@@ -116,80 +121,94 @@ contains
     lam = z(5)
   end subroutine timestep
 
-  subroutine timestep_z(az, ierr)
-    real(8), intent(inout) :: az(:)
+  subroutine timestep_z(self, z, ierr)
+    type(NeoOrb), intent(inout) :: self
+    real(8), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
-    call timestep(az(1), az(2), az(3), az(4), ierr)
+    if (self%integmode <= 0) then
+      call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
+    ! else
+    !   if (self%firstrun) then
+    !     if (.not. allocated(self%si)) allocate(self%si)
+    !     call orbit_sympl_init(self%si, z, self%dtau, self%dtaumax, self%relerr, self%integmode)
+    !     self%firstrun = .False.
+    !   endif
+    !   call orbit_timestep_sympl(self%si, z, ierr)
+    endif
   end subroutine timestep_z
-
-  subroutine timestep_global(ierr)
-    integer, intent(out) :: ierr
-
-    call timestep(z(1), z(2), z(3), z(5), ierr)
-  end subroutine timestep_global
 
 end module neo_orb
 
 module cut_detector
   use common, only: twopi
-  use neo_orb, only: z, fper, debug, dtau, tstep
+  use neo_orb, only: NeoOrb, debug, tstep
 
   implicit none
-
-  ! for Poincare cuts
-  integer                                       :: nplagr,nder,npl_half
-  integer,          dimension(:),   allocatable :: ipoi
-  double precision, dimension(:),   allocatable :: xp
-  double precision, dimension(:,:), allocatable :: coef,orb_sten
-  double precision, dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
-  double precision :: alam_prev, par_inv, zerolam
-  integer iper, itip, kper
+  save
+  
   integer, parameter :: n_tip_vars = 6
+  integer, parameter :: nplagr = 6
+  integer, parameter :: nder = 0
+
+  public
+
+  type :: CutDetector
+    ! for Poincare cuts
+    integer          :: npl_half
+    double precision :: alam_prev, par_inv
+    integer          :: iper, itip, kper
+
+    double precision :: orb_sten(6,nplagr), coef(0:nder,nplagr)
+    integer :: ipoi(nplagr)
+
+    type(NeoOrb), pointer :: norb
+  end type CutDetector
 
 contains
 
-  subroutine init()
+  subroutine init(self, norb, z)
+    type(CutDetector) :: self
+    type(NeoOrb), target :: norb
+    double precision, intent(in) :: z(:)
     integer :: i
+
+    self%norb => norb
 
     !---------------------------------------------------------------------------
     ! Prepare calculation of orbit tip by interpolation and buffer for Poincare plot:
 
-    nplagr=6
-    nder=0
-    npl_half=nplagr/2
+    self%npl_half=nplagr/2
 
-    ! End prepare calculation of orbit tip by interpolation
-    !--------------------------------------------------------------------------
-
-
-    allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(6,nplagr),xp(nplagr))
     do i=1,nplagr
-      ipoi(i)=i
+      self%ipoi(i)=i
     enddo
 
     !--------------------------------
     ! Initialize tip detector
 
-    itip=npl_half+1
-    alam_prev=z(5)
+    self%itip=self%npl_half+1
+    self%alam_prev=z(5)
 
     ! End initialize tip detector
     !--------------------------------
     ! Initialize period crossing detector
 
-    iper=npl_half+1
-    kper=int(z(3)/fper)
+    self%iper=self%npl_half+1
+    self%kper=int(z(3)/self%norb%fper)
 
     ! End initialize period crossing detector
     !--------------------------------
-    par_inv = 0.0d0
-    zerolam = 0.0d0
+    self%par_inv = 0.0d0
     !
+
+    ! End prepare calculation of orbit tip by interpolation
+    !--------------------------------------------------------------------------
   end subroutine init
 
-  subroutine trace_to_cut(t, var_cut, cut_type, ierr)
-    double precision, intent(inout) :: t
+  subroutine trace_to_cut(self, z, var_cut, cut_type, ierr)
+    type(CutDetector) :: self
+    double precision, intent(inout) :: z(:)
     ! variables to evaluate at tip: z(1..5), par_inv
     double precision, dimension(:), intent(inout) :: var_cut
     integer, intent(out) :: cut_type
@@ -197,79 +216,70 @@ contains
 
     integer, parameter :: nstep_max = 1000000000
     integer :: i
-    double precision :: phiper
+    double precision :: phiper = 0.0d0
 
-    phiper = 0.0d0
-
-    do i=1,nstep_max
-      call tstep(ierr)
+    do i=1, nstep_max
+      call tstep(self%norb, z, ierr)
       if(ierr.ne.0) exit
 
-      par_inv = par_inv+z(5)**2*dtau ! parallel adiabatic invariant
+      self%par_inv = self%par_inv+z(5)**2*self%norb%dtau ! parallel adiabatic invariant
 
       if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
-        orb_sten(1:5,i)=z
-        orb_sten(6,i)=par_inv
+        self%orb_sten(1:5,i)=z
+        self%orb_sten(6,i)=self%par_inv
       else                          !<=normal case, shift stencil
-        orb_sten(1:5,ipoi(1))=z
-        orb_sten(6,ipoi(1))=par_inv
-        ipoi=cshift(ipoi,1)
+        self%orb_sten(1:5,self%ipoi(1))=z
+        self%orb_sten(6,self%ipoi(1))=self%par_inv
+        self%ipoi=cshift(self%ipoi,1)
       endif
 
       !-------------------------------------------------------------------------
       ! Tip detection and interpolation
 
-      if(alam_prev.lt.0.d0.and.z(5).gt.0.d0) itip=0   !<=tip has been passed
-      itip=itip+1
-      alam_prev=z(5)
-      if(i.gt.nplagr) then          !<=use only initialized stencil
-        if(itip.eq.npl_half) then   !<=stencil around tip is complete, interpolate
-          xp=orb_sten(5,ipoi)
+      if(self%alam_prev.lt.0.d0.and.z(5).gt.0.d0) self%itip=0   !<=tip has been passed
+      self%itip=self%itip+1
+      self%alam_prev=z(5)
 
-          call plag_coeff(nplagr,nder,zerolam,xp,coef)
+      !<=use only initialized stencil
+      if(i.gt.nplagr .and. self%itip.eq.self%npl_half) then
+        cut_type = 0
+        call plag_coeff(nplagr, nder, 0, self%orb_sten(5, self%ipoi), self%coef)
+        var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
+        var_cut(2) = modulo(var_cut(2), twopi)
+        var_cut(3) = modulo(var_cut(3), twopi)
+        self%par_inv = self%par_inv - var_cut(6)
+        return
+      end if
 
-          var_cut=matmul(orb_sten(:,ipoi),coef(0,:))
-          var_cut(2)=modulo(var_cut(2),twopi)
-          var_cut(3)=modulo(var_cut(3),twopi)
+      ! End tip detection and interpolation
 
-          par_inv = par_inv - var_cut(6)
-          cut_type = 0
-          return
-        endif
+      !-------------------------------------------------------------------------
+      ! Periodic boundary footprint detection and interpolation
+
+      if(z(3).gt.dble(self%kper+1)*self%norb%fper) then
+        self%iper=0   !<=periodic boundary has been passed
+        phiper=dble(self%kper+1)*self%norb%fper
+        self%kper=self%kper+1
+      elseif(z(3).lt.dble(self%kper)*self%norb%fper) then
+        self%iper=0   !<=periodic boundary has been passed
+        phiper=dble(self%kper)*self%norb%fper
+        self%kper=self%kper-1
       endif
+      self%iper=self%iper+1
 
-    ! End tip detection and interpolation
-    !-------------------------------------------------------------------------
-    ! Periodic boundary footprint detection and interpolation
+      !<=use only initialized stencil
+      if(i.gt.nplagr .and. self%iper.eq.self%npl_half) then
+        cut_type = 1
+        !<=stencil around periodic boundary is complete, interpolate
+        call plag_coeff(nplagr, nder, 0, self%orb_sten(3, self%ipoi) - phiper, self%coef)
+        var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
+        var_cut(2) = modulo(var_cut(2), twopi)
+        var_cut(3) = modulo(var_cut(3), twopi)
+        return
+      end if
 
-        if(z(3).gt.dble(kper+1)*fper) then
-          iper=0   !<=periodic boundary has been passed
-          phiper=dble(kper+1)*fper
-          kper=kper+1
-        elseif(z(3).lt.dble(kper)*fper) then
-          iper=0   !<=periodic boundary has been passed
-          phiper=dble(kper)*fper
-          kper=kper-1
-        endif
-        iper=iper+1
-        if(i.gt.nplagr) then          !<=use only initialized stencil
-          if(iper.eq.npl_half) then   !<=stencil around periodic boundary is complete, interpolate
-            xp=orb_sten(3,ipoi)-phiper
-
-            call plag_coeff(nplagr,nder,zerolam,xp,coef)
-
-            var_cut=matmul(orb_sten(:,ipoi),coef(0,:))
-            var_cut(2)=modulo(var_cut(2),twopi)
-            var_cut(3)=modulo(var_cut(3),twopi)
-
-            cut_type = 1
-            return
-          endif   
-        endif
-
-    ! End periodic boundary footprint detection and interpolation
-    !-------------------------------------------------------------------------
-
+      ! End periodic boundary footprint detection and interpolation
+      !-------------------------------------------------------------------------
 
     end do
   end subroutine trace_to_cut

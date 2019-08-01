@@ -5,7 +5,7 @@ program alpha_lifetime
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
-  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
+  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, orbit_timestep_sympl
 use diag_mod, only : icounter
 
   implicit none
@@ -39,6 +39,8 @@ use diag_mod, only : icounter
   double precision, dimension(3) :: bder,hcovar,hctrvr,hcurl
 
   double precision :: relerr
+
+  type(SymplecticIntegrator) :: si
 
   rmu=1d5 ! inverse relativistic temperature
 
@@ -187,14 +189,14 @@ use diag_mod, only : icounter
   icounter=0 ! evaluation counter
 
 ! do particle tracing in parallel
-!$omp parallel private(ibins, xi, i, z, ierr, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+!$omp parallel private(ibins, xi, i, z, ierr, bmod, sqrtg, bder, hcovar, hctrvr, hcurl, si)
 !$omp do
   do ipart=1,ntestpart
 !$omp atomic
     kpart = kpart+1
     print *, kpart, ' / ', ntestpart, 'particle: ', ipart, 'thread: ', omp_get_thread_num()
     z = zstart(:,ipart)
-    if (integmode>0) call orbit_sympl_init(z, dtau, dtaumin, relerr, integmode)
+    if (integmode>0) call orbit_sympl_init(si, z, dtau, dtaumin, relerr, integmode)
 
     if(isw_field_type.eq.0) then
         call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -218,7 +220,7 @@ use diag_mod, only : icounter
         if (integmode <= 0) then
           call orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr)
         else
-          call orbit_timestep_sympl(z, ierr)
+          call orbit_timestep_sympl(si, z, ierr)
         endif
         if(ierr.ne.0) exit
 print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
@@ -233,7 +235,7 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
         if (integmode <= 0) then
           call orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr)
         else
-          call orbit_timestep_sympl(z, ierr)
+          call orbit_timestep_sympl(si, z, ierr)
         endif
         if(ierr.ne.0) exit
 !$omp atomic

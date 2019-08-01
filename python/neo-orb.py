@@ -35,7 +35,6 @@ neo_orb = fortran_module(libneo_orb, 'neo_orb')
 neo_orb.fdef("""
   double precision :: fper
   double precision :: dtau, dtaumax, v0
-  double precision, dimension(5) :: z
   integer          :: n_e, n_d
   integer          :: firstrun
   
@@ -49,7 +48,8 @@ neo_orb.fdef("""
     double precision :: arelerr
   end
   
-  subroutine timestep_global(ierr)
+  subroutine timestep_z(z, ierr)
+    double precision, dimension(:) :: z
     integer :: ierr
   end
 """)
@@ -62,12 +62,13 @@ new_vmec_stuff.fdef("""
 
 cut_detector = fortran_module(libneo_orb, 'cut_detector')
 cut_detector.fdef("""
-    subroutine init()
+    subroutine init(z)
+      double precision, dimension(:), intent(in) :: z
     end
     
-    subroutine trace_to_cut(t, var_tip, cut_type, ierr)
-      double precision, intent(inout) :: t
-      double precision, dimension(:), intent(inout) :: var_tip
+    subroutine trace_to_cut(z, var_cut, cut_type, ierr)
+      double precision, dimension(:), intent(inout) :: z
+      double precision, dimension(:), intent(inout) :: var_cut
       integer, intent(out) :: cut_type
       integer, intent(out) :: ierr
     end
@@ -78,7 +79,7 @@ neo_orb.load()
 new_vmec_stuff.load()
 
 #%%
-neo_orb.init_field(5, 5, 3, 0)
+neo_orb.init_field(5, 5, 3, 1)
 
 #%%
 npoiper2 = 64                       # interation points per field period
@@ -88,7 +89,6 @@ dtau = dtaumax                   # time step for output
 neo_orb.init_params(Z_charge, m_mass, E_kin, dtau, dtaumax, 1e-8)
 #%%
 cut_detector.load()
-cut_detector.init()
 
 #%%
 ntimstep = 10000
@@ -99,8 +99,7 @@ th = 0.0
 ph = 0.314
 lam = 0.22
 
-z = neo_orb.z
-z[:] = [s,th,ph,1.0,lam]
+z = np.array([s,th,ph,1.0,lam])
 
 zs = np.empty([4, ntimstep])
 zs[:,0] = z[[0,1,2,4]]
@@ -108,14 +107,14 @@ zs[:,0] = z[[0,1,2,4]]
 t = time.time()
 ierr = 0  # doesn't work yet with pass-by-reference
 for kt in range(1, ntimstep):
-    neo_orb.timestep_global(ierr)
+    neo_orb.timestep_z(z, ierr)
     zs[:, kt] = z[[0,1,2,4]]
 print(z)
 print('time elapsed: {} s'.format(time.time() - t))
 
-t = 0.0
+cut_detector.init(z)
 ierr = 0
-var_tip = np.zeros(6)
+var_cut = np.zeros(6)
 ncut = 1000
 # variables to evaluate at tip: z(1..5), par_inv
 var_tips = np.empty([6, ncut])
@@ -123,8 +122,8 @@ var_tips = np.empty([6, ncut])
 t = time.time()
 for k in np.arange(ncut):
     cut_type = 0
-    cut_detector.trace_to_cut(0.0, var_tip, cut_type, ierr)
-    var_tips[:,k] = var_tip
+    cut_detector.trace_to_cut(z, var_cut, cut_type, ierr)
+    var_tips[:,k] = var_cut
 print(z)
 print('time elapsed: {} s'.format(time.time() - t))
 

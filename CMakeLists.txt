@@ -19,7 +19,7 @@ include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} /usr/include)
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=f95 -fall-intrinsics")
-set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -Wall -Wno-unused -Wno-unused-dummy-argument -g -ggdb -C -p -pg -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -Wall -Wno-unused -Wno-unused-dummy-argument -g -ggdb -C -p -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps")
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O0 -cpp -fopenmp -g -mkl -warn all -warn nounused -check all -check noarg_temp_created -traceback -ftrapuv -debug all -fpe0")
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -cpp -fopenmp -mkl -warn all -warn nounused")
 
@@ -48,14 +48,14 @@ add_executable (neo-orb.x
 	SRC/main.f90
 )
 
-add_executable (orbit-symplectic-test.x
- 	SRC/orbit_symplectic_test.f90
-)
+# 	add_executable (orbit-symplectic-test.x
+#  	SRC/orbit_symplectic_test.f90
+# )
 
 
-add_executable (test_magfie.x
- 	SRC/test_magfie.f90
-)
+# add_executable (test_magfie.x
+#  	SRC/test_magfie.f90
+# )
 
 add_executable (test_poincare1.x
 	SRC/test_poincare1.f90
@@ -80,8 +80,8 @@ add_executable (alpha_lifetime.x
 
 target_link_libraries(neo_orb netcdf netcdff blas lapack)  # openblas)
 target_link_libraries(neo-orb.x neo_orb)
-target_link_libraries(orbit-symplectic-test.x neo_orb)
-target_link_libraries(test_magfie.x neo_orb)
+#target_link_libraries(orbit-symplectic-test.x neo_orb)
+#target_link_libraries(test_magfie.x neo_orb)
 target_link_libraries(test_poincare1.x neo_orb)
 target_link_libraries(test_poiplot_classification.x neo_orb)
 target_link_libraries(alpha_lifetime_vmec_c.x neo_orb)

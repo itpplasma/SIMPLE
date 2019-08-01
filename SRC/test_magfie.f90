@@ -5,9 +5,7 @@ use parmot_mod, only : rmu,ro0
 use velo_mod,   only : isw_field_type
 use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl, z, &
   f_sympl_euler1, f_sympl_euler2, jac_sympl_euler1, jac_sympl_euler2
-use field_can_mod, only : field_can, d_field_can, d2_field_can, f, df, d2f,&
-        vpar, H, pth, dvpar, dH, dpth, d2vpar, d2H, d2pth, eval_field_can, &
-        get_val, get_derivatives, get_derivatives2 
+use field_can_mod, only : FieldCan, eval_field, get_val, get_derivatives, get_derivatives2 
 
 implicit none
 
