@@ -243,7 +243,7 @@ contains
       !<=use only initialized stencil
       if(i.gt.nplagr .and. self%itip.eq.self%npl_half) then
         cut_type = 0
-        call plag_coeff(nplagr, nder, 0, self%orb_sten(5, self%ipoi), self%coef)
+        call plag_coeff(nplagr, nder, 0d0, self%orb_sten(5, self%ipoi), self%coef)
         var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
         var_cut(2) = modulo(var_cut(2), twopi)
         var_cut(3) = modulo(var_cut(3), twopi)
@@ -271,7 +271,7 @@ contains
       if(i.gt.nplagr .and. self%iper.eq.self%npl_half) then
         cut_type = 1
         !<=stencil around periodic boundary is complete, interpolate
-        call plag_coeff(nplagr, nder, 0, self%orb_sten(3, self%ipoi) - phiper, self%coef)
+        call plag_coeff(nplagr, nder, 0d0, self%orb_sten(3, self%ipoi) - phiper, self%coef)
         var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
         var_cut(2) = modulo(var_cut(2), twopi)
         var_cut(3) = modulo(var_cut(3), twopi)
