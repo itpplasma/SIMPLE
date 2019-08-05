@@ -24,7 +24,7 @@ public
 
     logical :: firstrun = .True.
 
-    !type(SymplecticIntegrator), allocatable :: si
+    type(SymplecticIntegrator), allocatable :: si
   end type NeoOrb
 
   interface tstep
@@ -128,13 +128,13 @@ contains
 
     if (self%integmode <= 0) then
       call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
-    ! else
-    !   if (self%firstrun) then
-    !     if (.not. allocated(self%si)) allocate(self%si)
-    !     call orbit_sympl_init(self%si, z, self%dtau, self%dtaumax, self%relerr, self%integmode)
-    !     self%firstrun = .False.
-    !   endif
-    !   call orbit_timestep_sympl(self%si, z, ierr)
+    else
+      if (self%firstrun) then
+        if (.not. allocated(self%si)) allocate(self%si)
+        call orbit_sympl_init(self%si, z, self%dtau, self%dtaumax, self%relerr, self%integmode)
+        self%firstrun = .False.
+      endif
+      call orbit_timestep_sympl(self%si, z, ierr)
     endif
   end subroutine timestep_z
 
