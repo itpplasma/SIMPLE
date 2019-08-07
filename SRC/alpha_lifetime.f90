@@ -192,7 +192,7 @@ use diag_mod, only : icounter
   icounter=0 ! evaluation counter
 
 ! do particle tracing in parallel
-!$omp parallel private(ibins, xi, i, z, ierr, bmod, sqrtg, bder, hcovar, hctrvr, hcurl, si)
+!$omp parallel private(ibins, xi, i, z, ierr, bmod, sqrtg, bder, hcovar, hctrvr, hcurl, si, f)
 !$omp do
   do ipart=1,ntestpart
 !$omp atomic
