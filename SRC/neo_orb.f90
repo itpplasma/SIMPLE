@@ -108,7 +108,7 @@ contains
     double precision, intent(in) :: z0(:)
     double precision, intent(in) :: dtau, dtaumin
     double precision, intent(in) :: rtol_init
-    integer, intent(in) :: mode_init ! 1 = expl.-impl. Euler, 2 = impl.-expl. Euler
+    integer, intent(in) :: mode_init ! 1 = expl.-impl. Euler, 2 = impl.-expl. Euler, 3 = Midpoint
 
     double precision :: z(4)
 
@@ -130,7 +130,7 @@ contains
 
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                          rtol_init, mode_init, 2) 
+                          rtol_init, mode_init, 1) 
   end subroutine init_sympl
 
   subroutine init_integrator(self, z0)
