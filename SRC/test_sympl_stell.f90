@@ -47,7 +47,7 @@ f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from
 print *, f%ro0, f%mu
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 
-nt = 10000
+nt = 100000
 
 npoiper2 = 48
 dt = twopi*rbig/npoiper2

@@ -335,7 +335,7 @@ subroutine newton1(si, f, x, maxit, xlast)
     ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
     xlast = x
     x = x - matmul(ijac, fvec)
-    !if (all(dabs(fvec) < si%atol)) return
+    if (all(dabs(fvec) < si%atol)) return
     if (all(dabs(x-xlast) < si%rtol*dabs(x))) return
   enddo
   print *, 'newton1: maximum iterations reached: ', maxit
@@ -376,11 +376,11 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     tolref = dabs(x)
     tolref(2) = 2d0*pi
     tolref(3) = 2d0*pi
-    !if (all(fabs < atol)) return
+    if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
   print *, 'newton2: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6602,*) x(1), x(2), x(3), si%z(4), x-xlast, fvec
+  write(6602,*) x(1), x(2), x(3), si%z(4), xabs, fvec
 end subroutine
 
 subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
@@ -411,7 +411,7 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     fmid = f
     call f_midpoint_part2(si, f, n, x, fvec, 1)
     call jac_midpoint_part2(si, f, fmid, x, fjac)
-    fabs = fvec
+    fabs = dabs(fvec)
     xlast = x
     call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
     ! after solution: fvec = (xold-xnew)_Newton
@@ -424,11 +424,11 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     tolref(2) = 2d0*pi
     tolref(3) = 2d0*pi
     
-    !if (all(fabs < atol)) return
+    if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
   print *, 'newton_midpoint: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6602,*) x(1), x(2), x(3), x(4), x(5), x-xlast, fvec
+  write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
 end subroutine
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
