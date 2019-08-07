@@ -13,13 +13,14 @@ type :: FieldCan
   double precision, dimension(3) :: dhth, dhph
   double precision, dimension(3) :: dBmod
 
-  ! second derivatives: drdr, drdhth, drdph, dthdth, dthdph, dphdph
+  ! second derivatives: drdr, drdth, drdph, dthdth, dthdph, dphdph
   double precision, dimension(6) :: d2Ath, d2Aph
   double precision, dimension(6) :: d2hth, d2hph
   double precision, dimension(6) :: d2Bmod
 
   double precision :: H, pth, vpar
   double precision, dimension(4) :: dvpar, dH, dpth
+  
   ! order of second derivatives:
   ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
   ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
@@ -29,7 +30,11 @@ type :: FieldCan
 end type FieldCan
 
 interface eval_field
+#ifdef test
+  module procedure eval_field_test
+#else
   module procedure eval_field_can
+#endif
 end interface
 
 contains
@@ -118,6 +123,7 @@ subroutine get_derivatives2(f, pphi)
 end subroutine get_derivatives2
 
 
+#ifndef test
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
@@ -237,57 +243,93 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 
 end subroutine eval_field_can
 
+#else
 ! for testing -> circular tokamak
-! subroutine eval_field_test(r, th, ph, mode_secders)
-! !
+subroutine eval_field_test(f, r, th, ph, mode_secders)
+!
+  type(FieldCan), intent(inout) :: f
+  double precision, intent(in) :: r, th, ph
+  integer, intent(in) :: mode_secders
 
-!  double precision, intent(in) :: r, th, ph
-!  integer, intent(in) :: mode_secders
+  double precision :: B0, iota0, a, R0, cth, sth
 
-!  double precision :: B0th, B0ph, cth, sth
+    ! Count evaluations for profiling
+   icounter = icounter + 1
+   
+   B0 = 1.0    ! magnetic field modulus normalization
+   iota0 = 1.0 ! constant part of rotational transform
+   a = 0.5     ! (equivalent) minor radius
+   R0 = 1.0    ! (equivalent) major radius
 
-!    ! Count evaluations for profiling
-!   icounter = icounter + 1
+   cth = cos(th)
+   sth = sin(th)
+   
+   f%Ath = B0*(r**2/2d0 - r**3/(3d0*R0)*cth)
+  
+   f%dAth(1) = B0*(r - r**2/R0*cth)
+   f%dAth(2) = B0*r**3*sth/(3.0*R0)
+   f%dAth(3) = 0d0
+   
+   f%d2Ath(1) = B0*(1d0 - 2d0*r/R0*cth)
+   f%d2Ath(4) = B0*r**3*cth/(3d0*R0)
+   f%d2Ath(3) = 0d0
+   f%d2Ath(2) = B0*r**2/R0*sth
+   f%d2Ath(5) = 0d0
+   f%d2Ath(6) = 0d0
 
-!   B0th = .99d0
-!   B0ph = sqrt(1d0-B0th**2)
 
-!   cth = cos(th)
-!   sth = sin(th)
+   f%Aph     = -B0*iota0*(r**2/2d0-r**4/(4d0*a**2))
+ 
+   f%dAph(1) = -B0*iota0*(r-r**3/a**2)
+   f%dAph(2) = 0d0
+   f%dAph(3) = 0d0
+   
+   f%d2Aph(1) = -B0*iota0*(1d0-3d0*r**2/a**2)
+   f%d2Aph(4) = 0d0
+   f%d2Aph(3) = 0d0
+   f%d2Aph(2) = 0d0
+   f%d2Aph(5) = 0d0
+   f%d2Aph(6) = 0d0
 
-!   f%Ath      = B0ph*(r**2/2d0 - r**3/3d0*cth)
-!   f%dAth(1) = B0ph*(r - r**2*cth)
-!   f%dAth(2) = B0ph*r**3/3d0*sth
-!   f%dAth(3) = 0d0
 
-!   f%Aph     = -B0th*r
-!   f%dAph(1) = -B0th
-!   f%dAph(2) = 0d0
-!   f%dAph(3) = 0d0
+   f%hth     = iota0*(1d0-r**2/a**2)*r**2/R0
 
-!   f%Bth      = B0th*r*(1d0 - r*cth)
-!   f%dBth(1) = B0th*(1d0 - 2d0*r*cth)
-!   f%dBth(2) = B0th*r**2*sth
-!   f%dBth(3) = 0d0
+   f%dhth(1) = 2d0*iota0*r*(a**2-2d0*r**2)/(a**2*R0)
+   f%dhth(2) = 0d0
+   f%dhth(3) = 0d0
+   
+   f%d2hth = 0d0
+   f%d2hth(1) = 2d0*iota0*(a**2-6d0*r**2)/(a**2*R0)
 
-!   f%Bph      = B0ph*(1d0 - (r*cth)**2)
-!   Bph(1) = -2d0*B0ph*r*cth**2
-!   Bph(2) = 2d0*B0ph*r**2*cth*sth
-!   Bph(3) = 0d0
 
-!   f%Bmod   = 1d0 - r*cth
-!   f%dBmod(1) = -cth
-!   f%dBmod(2) = r*sth
-!   f%dBmod(3) = 0d0
+   f%hph     = R0 + r*cth
+  
+   f%dhph(1) = cth
+   f%dhph(2) = -r*sth
+   f%dhph(3) = 0d0
+  
+   f%d2hph(1) = 0d0
+   f%d2hph(4) = -r*cth
+   f%d2hph(3) = 0d0
+   f%d2hph(2) = -sth
+   f%d2hph(5) = 0d0
+   f%d2hph(6) = 0d0
 
-! !  TODO: second derivatives
-!   f%d2Ath = 0d0
-!   f%d2Aph = 0d0
-!   f%d2Bth = 0d0
-!   f%d2Bph = 0d0
-!   f%d2Bmod = 0d0
 
-! end subroutine eval_field_test
+   f%Bmod     = B0*(1d0 - r/R0*cth)
+ 
+   f%dBmod(1) = -B0/R0*cth
+   f%dBmod(2) = B0*r/R0*sth
+   f%dBmod(3) = 0d0
+   
+   f%d2Bmod(1) = 0d0
+   f%d2Bmod(4) = B0*r/R0*cth
+   f%d2Bmod(3) = 0d0
+   f%d2Bmod(2) = B0/R0*sth
+   f%d2Bmod(5) = 0d0
+   f%d2Bmod(6) = 0d0 
 
+end subroutine eval_field_test
+#endif
 
 end module field_can_mod

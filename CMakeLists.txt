@@ -48,14 +48,24 @@ add_executable (neo-orb.x
 	SRC/main.f90
 )
 
-# 	add_executable (orbit-symplectic-test.x
-#  	SRC/orbit_symplectic_test.f90
-# )
+add_executable (test_sympl.x
+    SRC/canonical_coordinates_mod.f90
+    SRC/field_can.f90
+	SRC/orbit_symplectic.f90
+	SRC/common.f90
+  	SRC/test_sympl.f90
+)
+set_target_properties(test_sympl.x PROPERTIES COMPILE_FLAGS "-Dtest" )
 
 
-# add_executable (test_magfie.x
-#  	SRC/test_magfie.f90
-# )
+add_executable (test_magfie.x
+	SRC/canonical_coordinates_mod.f90
+	SRC/field_can.f90
+	SRC/orbit_symplectic.f90
+	SRC/common.f90
+  	SRC/test_magfie.f90
+)
+set_target_properties(test_magfie.x PROPERTIES COMPILE_FLAGS "-Dtest" )
 
 add_executable (test_poincare1.x
 	SRC/test_poincare1.f90
@@ -80,8 +90,8 @@ add_executable (alpha_lifetime.x
 
 target_link_libraries(neo_orb netcdf netcdff blas lapack)  # openblas)
 target_link_libraries(neo-orb.x neo_orb)
-#target_link_libraries(orbit-symplectic-test.x neo_orb)
-#target_link_libraries(test_magfie.x neo_orb)
+target_link_libraries(test_sympl.x lapack blas)
+target_link_libraries(test_magfie.x lapack blas)
 target_link_libraries(test_poincare1.x neo_orb)
 target_link_libraries(test_poiplot_classification.x neo_orb)
 target_link_libraries(alpha_lifetime_vmec_c.x neo_orb)

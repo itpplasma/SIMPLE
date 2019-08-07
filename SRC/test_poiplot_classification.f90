@@ -4,7 +4,9 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, orbit_timestep_sympl
+  use field_can_mod, only : FieldCan
+  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
+  use neo_orb, only : init_sympl
 !
   implicit none
 !
@@ -45,6 +47,7 @@ use diag_mod, only : icounter
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
 !
+  type(FieldCan) :: f
   type(SymplecticIntegrator) :: si
   
   zerolam=0.d0
@@ -142,7 +145,7 @@ print *, 'ttrace = ', ntimstep*dtau/v0, 'nstep = ', ntimstep
   z(5)=alam0
 !
 icounter=0
-  call orbit_sympl_init(si, z, dtau, dtaumin, 1d-12, mode_sympl) 
+  call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl) 
 !
 !--------------------------------
 ! Initialize tip detector
@@ -158,7 +161,7 @@ icounter=0
   do i=1,ntimstep !300 !10
 !
 !    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
-    call orbit_timestep_sympl(si, z,ierr)
+    call orbit_timestep_sympl(si, f, ierr)
 !
     if(ierr.ne.0) exit
 !
