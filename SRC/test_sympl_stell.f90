@@ -15,7 +15,7 @@ integer :: ierr, kt
 double precision :: z0(4), vpar0, dt
 
 type(FieldCan) :: f
-type(SymplecticIntegrator) :: euler1, euler2, midpoint
+type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss4
 type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4
 type(NeoOrb) :: norb
 
@@ -47,7 +47,13 @@ f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from
 print *, f%ro0, f%mu
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 
-nt = 100000
+nt = 10000
+
+
+npoiper2 = 48
+dt = twopi*rbig/npoiper2
+call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 4, 2)
+call test_single(gauss4, 'gauss4.out')
 
 npoiper2 = 48
 dt = twopi*rbig/npoiper2
@@ -67,12 +73,18 @@ dt = twopi*rbig/npoiper2
 call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
 call test_multi(verlet, 'verlet.out')
 
+npoiper2 = 64
+dt = twopi*rbig/npoiper2
 call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 call test_multi(order4, 'order4.out')
 
+npoiper2 = 64
+dt = twopi*rbig/npoiper2
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi(mclachlan4, 'mclachlan4.out')
 
+npoiper2 = 48
+dt = twopi*rbig/npoiper2
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
 call test_multi(blanes4, 'blanes4.out')
 

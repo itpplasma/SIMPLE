@@ -89,6 +89,7 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
 
   call eval_field(f, z(1), z(2), z(3), 0)
   call get_val(f, si%z(4)) ! for pth
+  si%pthold = f%pth
   if(si%nlag > 0) call plag_coeff(si%nlag+1, 0, 1d0, 1d0*(/(k,k=-si%nlag,0)/), si%coef)
 end subroutine orbit_sympl_init
 
@@ -431,6 +432,196 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
 end subroutine
 
+subroutine coeff_rk_gauss(n, a, b, c)
+  integer, intent(in) :: n
+  double precision, intent(inout) :: a(n,n), b(n), c(n)
+
+  if (n == 1) then
+    a(1,1) = 0.5d0
+    b(1) = 1.0d0
+    c(1) = 0.5d0
+  elseif (n == 2) then
+    a(1,1) =  0.25d0
+    a(1,2) = -0.038675134594812d0
+    a(2,1) =  0.538675134594812d0
+    a(2,2) =  0.25d0
+
+    b(1) = 0.5d0
+    b(2) = 0.5d0
+
+    c(1) = 0.211324865405187d0
+    c(2) = 0.788675134594812d0
+  else
+    ! not implemented
+    a = 0d0
+    b = 0d0
+    c = 0d0
+  endif
+end subroutine coeff_rk_gauss
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine f_rk_gauss(si, fs, n, x, fvec, iflag)
+  !
+    type(SymplecticIntegrator), intent(in) :: si
+    integer, intent(in) :: n
+    type(FieldCan), intent(inout) :: fs(n)
+    double precision, intent(in) :: x(4*n)  ! = (rend, thend, phend, pphend)
+    double precision, intent(out) :: fvec(4*n)
+    integer, intent(in) :: iflag
+
+    double precision :: a(n,n), b(n), c(n), Hprime(n)
+    integer :: k,l  ! counters
+
+    call coeff_rk_gauss(n, a, b, c)  ! TODO: move this to preprocessing
+
+    ! evaluate stages
+    do k = 1, n
+      call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 2)
+      call get_derivatives2(fs(k), x(4*k))
+      Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+    end do
+
+    do k = 1, n
+      fvec(4*k-3) = fs(k)%pth - si%pthold
+      fvec(4*k-2) = x(4*k-2)  - si%z(2)
+      fvec(4*k-1) = x(4*k-1)  - si%z(3)
+      fvec(4*k)   = x(4*k)    - si%z(4)
+      do l = 1, n
+        fvec(4*k-3) = fvec(4*k-3) + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
+        fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                      ! thdot
+        fvec(4*k-1) = fvec(4*k-1) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+        fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+      end do
+    end do
+  
+  end subroutine f_rk_gauss
+
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine jac_rk_gauss(si, fs, n, x, jac)
+    !
+      type(SymplecticIntegrator), intent(in) :: si
+      integer, intent(in) :: n
+      type(FieldCan), intent(in) :: fs(n)
+      double precision, intent(in)  :: x(4*n)
+      double precision, intent(out) :: jac(4*n, 4*n)
+
+      double precision :: a(n,n), b(n), c(n), Hprime(n), dHprime(4*n)
+      integer :: k,l  ! counters
+  
+      call coeff_rk_gauss(n, a, b, c)  ! TODO: move this to preprocessing
+    
+      ! evaluate stages
+      do k = 1,n
+        Hprime(k)      = fs(k)%dH(1)/fs(k)%dpth(1)
+        dHprime(4*k-3) = (fs(k)%d2H(1) - Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
+        dHprime(4*k-2) = (fs(k)%d2H(2) - Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth 
+        dHprime(4*k-1) = (fs(k)%d2H(3) - Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
+        dHprime(4*k)   = (fs(k)%d2H(7) - Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph 
+      end do
+
+      jac = 0d0
+        
+      do k = 1, n
+        jac(4*k-3, 4*k-3) = fs(k)%dpth(1)
+        jac(4*k-3, 4*k-2) = fs(k)%dpth(2)
+        jac(4*k-3, 4*k-1) = fs(k)%dpth(3)
+        jac(4*k-3, 4*k)   = fs(k)%dpth(4)
+        jac(4*k-2, 4*k-2) = 1d0
+        jac(4*k-1, 4*k-1) = 1d0
+        jac(4*k, 4*k) = 1d0
+
+        do l = 1, n
+           jac(4*k-3, 4*l-3) = jac(4*k-3, 4*l-3) & ! d/dr
+             + si%dt*a(k,l)*(fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-3))
+           jac(4*k-3, 4*l-2) = jac(4*k-3, 4*l-2) & ! d/dth
+             + si%dt*a(k,l)*(fs(l)%d2H(4) - fs(l)%d2pth(4)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-2))
+           jac(4*k-3, 4*l-1) = jac(4*k-3, 4*l-1) & ! d/dph
+             + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-1))
+           jac(4*k-3, 4*l) = jac(4*k-3, 4*l) & ! d/dpph
+             + si%dt*a(k,l)*(fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l))
+          
+          jac(4*k-2, 4*l-3)   = jac(4*k-2, 4*l-3)   - si%dt*a(k,l)*dHprime(4*l-3)   ! d/dr
+          jac(4*k-2, 4*l-2) = jac(4*k-2, 4*l-2) - si%dt*a(k,l)*dHprime(4*l-2) ! d/dth
+          jac(4*k-2, 4*l-1) = jac(4*k-2, 4*l-1) - si%dt*a(k,l)*dHprime(4*l-1) ! d/dph
+          jac(4*k-2, 4*l) = jac(4*k-2, 4*l) - si%dt*a(k,l)*dHprime(4*l) ! d/dpph
+
+          jac(4*k-1, 4*l-3) = jac(4*k-1, 4*l-3) & ! d/dr
+            - si%dt*a(k,l)*(-fs(l)%dhph(1)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
+              + (fs(l)%dvpar(1) - dHprime(4*l-3)*fs(l)%hth - Hprime(l)*fs(l)%dhth(1))/fs(l)%hph)
+          jac(4*k-1, 4*l-2) = jac(4*k-1, 4*l-2) & ! d/dth
+            - si%dt*a(k,l)*(-fs(l)%dhph(2)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
+              + (fs(l)%dvpar(2) - dHprime(4*l-2)*fs(l)%hth - Hprime(l)*fs(l)%dhth(2))/fs(l)%hph)
+          jac(4*k-1, 4*l-1) = jac(4*k-1, 4*l-1) & ! d/dph
+            - si%dt*a(k,l)*(-fs(l)%dhph(3)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
+              + (fs(l)%dvpar(3) - dHprime(4*l-1)*fs(l)%hth - Hprime(l)*fs(l)%dhth(3))/fs(l)%hph)
+          jac(4*k-1, 4*l) = jac(4*k-1, 4*l) & ! d/dpph
+            - si%dt*a(k,l)*((fs(l)%dvpar(4) - dHprime(4*l)*fs(l)%hth)/fs(l)%hph)
+
+          jac(4*k, 4*l-3) = jac(4*k, 4*l-3) & ! d/dr
+            + si%dt*a(k,l)*(fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-3))
+          jac(4*k, 4*l-2) = jac(4*k, 4*l-2) & ! d/dth
+            + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-2))
+          jac(4*k, 4*l-1) = jac(4*k, 4*l-1) & ! d/dph
+            + si%dt*a(k,l)*(fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-1))
+          jac(4*k, 4*l) = jac(4*k, 4*l) & ! d/dpph
+            + si%dt*a(k,l)*(fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l)) 
+        end do
+  end do
+    
+  end subroutine jac_rk_gauss
+
+  subroutine newton_rk_gauss(si, fs, x, atol, rtol, maxit, xlast)
+    type(SymplecticIntegrator), intent(inout) :: si
+  
+    integer, parameter :: n = 2
+    type(FieldCan), intent(inout) :: fs(n)
+    integer :: kit
+  
+    double precision, intent(inout) :: x(4*n)
+    double precision, intent(in) :: atol, rtol
+    integer, intent(in) :: maxit
+    double precision, intent(out) :: xlast(4*n)
+  
+    double precision :: fvec(4*n), fjac(4*n,4*n)
+    integer :: pivot(4*n), info
+    
+    double precision :: xabs(4*n), tolref(4*n), fabs(4*n)
+
+    do kit = 1, maxit
+      if(x(1) > 1.0) return
+      if(x(1) < 0.0) x(1) = 0.01
+      if(x(5) < 0.0) x(5) = 0.01
+      call f_rk_gauss(si, fs, n, x, fvec, 1)
+      call jac_rk_gauss(si, fs, n, x, fjac)
+      fabs = dabs(fvec)
+      xlast = x
+      call dgesv(4*n, 1, fjac, 4*n, pivot, fvec, 4*n, info)
+      ! after solution: fvec = (xold-xnew)_Newton
+      x = x - fvec
+      xabs = dabs(x - xlast)
+      xabs(2) = modulo(xabs(2), pi)
+      xabs(3) = modulo(xabs(3), pi)
+      xabs(6) = modulo(xabs(6), pi)
+      xabs(7) = modulo(xabs(7), pi)
+      
+      tolref = dabs(x)
+      tolref(2) = 2d0*pi
+      tolref(3) = 2d0*pi
+      tolref(6) = 2d0*pi
+      tolref(7) = 2d0*pi
+      
+      if (all(fabs < atol)) return
+      if (all(xabs < rtol*tolref)) return
+    enddo
+    print *, 'newton_rk_gauss: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
+    write(6603,*) x, xabs, fvec
+  end subroutine newton_rk_gauss
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_sympl(si, f, ierr)
@@ -452,6 +643,8 @@ subroutine orbit_timestep_sympl(si, f, ierr)
       call orbit_timestep_sympl_euler2(si, f, ierr)
    case (3)
       call orbit_timestep_sympl_midpoint(si, f, ierr)
+   case (4)
+      call orbit_timestep_sympl_rk_gauss(si, f, ierr)
    case default
       print *, 'invalid mode for orbit_timestep_sympl: ', si%mode
       stop
@@ -895,6 +1088,67 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 
 end subroutine orbit_timestep_sympl_midpoint
 
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine orbit_timestep_sympl_rk_gauss(si, f, ierr)
+  !
+    type(SymplecticIntegrator), intent(inout) :: si
+    type(FieldCan), intent(inout) :: f
+  
+    integer, intent(out) :: ierr
+  
+    integer, parameter :: n = 2
+    integer, parameter :: maxit = 256
+  
+    double precision, dimension(4*n) :: x, xlast
+    integer :: k, l, ktau
+
+    type(FieldCan) :: fs(n)
+    double precision :: a(n,n), b(n), c(n), Hprime(n)
+
+    fs(1) = f
+    fs(2) = f
+  
+    ierr = 0
+    ktau = 0
+    do while(ktau .lt. si%ntau)
+      si%pthold = f%pth
+      
+      x(1:4) = si%z
+      x(5:8) = si%z
+  
+      call newton_rk_gauss(si, fs, x, si%atol, si%rtol, maxit, xlast)
+  
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
+  
+      if (x(1) < 0.0) then
+        print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+        x(1) = 0.01
+      end if
+  
+      call coeff_rk_gauss(n, a, b, c)  ! TODO: move this to preprocessing
+
+      f = fs(2)
+      f%pth = si%pthold
+      si%z(1) = x(5)
+
+      do l = 1, n
+        Hprime(l) = fs(l)%dH(1)/fs(l)%dpth(1)
+        f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))            ! pthdot
+        si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)                                      ! thdot
+        si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+        si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+      end do
+    
+      si%kt = si%kt+1
+      ktau = ktau+1
+    enddo
+  
+  end subroutine orbit_timestep_sympl_rk_gauss
 
 subroutine debug_root(si, f, x0)
   type(SymplecticIntegrator), intent(inout) :: si
