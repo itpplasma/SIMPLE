@@ -199,7 +199,6 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
     f%d2hph(1) = d2Bph(1)/f%Bmod - 2d0*dBph(1)*f%dBmod(1)/bmod2 + Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
   endif
 
-  ! TODO check if this is working:
   if(mode_secders.eq.2) then
     ! d2dth2, d2dph2
     f%d2Bmod(4)=(d2Bph(4)*f%dAth(1)-d2Bth(4)*f%dAph(1)-2.d0*dsqg(2)*dbmod2(2)-bmod2*d2sqg(4))/sqg

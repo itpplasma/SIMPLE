@@ -278,9 +278,52 @@ subroutine test_jac_midpoint(si)
 
 end subroutine test_jac_midpoint
 
-subroutine test_newton(si, f)
+
+subroutine test_jac_grk(si)
+  integer, parameter :: n = 2
+
   type(SymplecticIntegrator) :: si
-  type(FieldCan) :: f
+  type(FieldCan) :: fs(n)
+  double precision :: x(4*n), dx(4*n), jac(4*n,4*n), x0(4*n), h(4*n), jacnum(4*n,4*n), fvec(4*n)
+  integer :: k, l
+
+  h = 1d-6
+  h(4) = 1d-6*z0(4)
+  h(8) = 1d-6*z0(4)
+    
+  x0(1:4) = si%z(1:4) - 1d-4
+  x0(5:8) = si%z(1:4) + 2d-2
+
+  fs(1) = f
+  fs(2) = f
+
+  do k = 1,4*n
+    dx = 0d0
+    dx(k) = h(k)*0.5d0
+
+    x = x0 + dx
+    call f_rk_gauss(si, fs, n, x, fvec, 0)
+    jacnum(:, k) = fvec
+
+    x = x0 - dx
+    call f_rk_gauss(si, fs, n, x, fvec, 0)
+    jacnum(:, k) = (jacnum(:, k) - fvec)/h(k)
+  end do
+
+  x = x0
+  call f_rk_gauss(si, fs, n, x, fvec, 0)
+  call jac_rk_gauss(si, fs, n, x, jac)
+
+  do k = 1,4*n
+    do l = 1,4*n
+      print *, k, l, jac(k,l), jacnum(k,l), relerr(jac(k,l), jacnum(k,l))
+    end do
+  end do
+end subroutine test_jac_grk
+
+
+subroutine test_newton(si)
+  type(SymplecticIntegrator) :: si
   integer, parameter :: n = 2
   double precision :: x(n), fvec(n), fjac(n,n), ijac(n,n)
   integer :: k
@@ -303,9 +346,8 @@ subroutine test_newton(si, f)
 end subroutine
 
 
-subroutine test_newton2(si, f)
+subroutine test_newton2(si)
   type(SymplecticIntegrator) :: si
-  type(FieldCan) :: f
   integer, parameter :: n = 3
   double precision :: x(n)
   double precision :: fvec(n), fjac(n,n)
@@ -328,7 +370,7 @@ end subroutine
 
 subroutine do_test()
 
-    type(SymplecticIntegrator) :: euler1, euler2, midpoint
+    type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss4
 
     double precision :: dz(4)
     integer :: i, j, k
@@ -405,14 +447,17 @@ subroutine do_test()
 
     call orbit_sympl_init(euler1, f, z0, 1.0d0, 1, 1d-12, 0, 0)
     call test_jac1(euler1)
-    call test_newton(euler1, f)
+    call test_newton(euler1)
 
     call orbit_sympl_init(euler2, f, z0, 1.0d0, 1, 1d-12, 0, 0)
     call test_jac2(euler2)
-    call test_newton2(euler2, f)
+    call test_newton2(euler2)
 
     call orbit_sympl_init(midpoint, f, z0, 1.0d0, 1, 1d-12, 0, 3)
     call test_jac_midpoint(midpoint)
+
+    call orbit_sympl_init(gauss4, f, z0, 1.0d0, 1, 1d-12, 0, 4)
+    call test_jac_grk(gauss4)
 end subroutine do_test
 
 end program test_magfie
