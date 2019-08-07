@@ -4,7 +4,10 @@ module neo_orb
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, orbit_timestep_sympl
+  use field_can_mod, only : FieldCan
+  use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
+    orbit_sympl_init, orbit_timestep_sympl
+  use field_can_mod, only : FieldCan, eval_field
   use diag_mod, only : icounter
 
 implicit none
@@ -16,15 +19,15 @@ public
 
   type :: NeoOrb
     double precision :: fper  ! field period
-    double precision :: dtau, dtaumax, v0
+    double precision :: dtau, dtaumin, v0
     integer          :: n_e, n_d
 
     integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
     double precision :: relerr
 
-    logical :: firstrun = .True.
-
-    type(SymplecticIntegrator), allocatable :: si
+    type(FieldCan) :: f
+    type(SymplecticIntegrator) :: si
+    type(MultistageIntegrator) :: mi
   end type NeoOrb
 
   interface tstep
@@ -43,8 +46,6 @@ contains
     integer             :: L1i
     double precision    :: RT0, R0i, cbfi, bz0i, bf0
     double precision    :: z(5)
-
-    self%firstrun = .True.
 
     netcdffile = 'wout.nc'  ! TODO: don't hardcode this
     ns_s = ans_s
@@ -69,13 +70,13 @@ contains
     z = 1.0d0
   end subroutine init_field
 
-  subroutine init_params(self, Z_charge, m_mass, E_kin, adtau, adtaumax, arelerr)
+  subroutine init_params(self, Z_charge, m_mass, E_kin, adtau, adtaumin, arelerr)
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
     ! of plasma particles (= temperature for thermal particles).
 
     type(NeoOrb) :: self
     integer, intent(in) :: Z_charge, m_mass
-    real(8), intent(in) :: E_kin, adtau, adtaumax
+    real(8), intent(in) :: E_kin, adtau, adtaumin
     double precision :: bmod_ref=5d4 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     double precision :: bmod00, rlarm ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     real(8), intent(in) :: arelerr
@@ -96,9 +97,49 @@ contains
     ro0=rlarm*bmod00  ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     !ro0=v0*n_d*p_mass*c*2*pi/(n_e*e_charge) ! added by johanna 14.05.2019 in order to correct orbit calculation (missing 2pi in vmec in phitor)
     self%dtau = adtau ! timestep where to get results
-    self%dtaumax = adtaumax ! maximum timestep for adaptive integration
+    self%dtaumin = adtaumin ! minimum timestep for adaptive integration
 
   end subroutine init_params
+
+  subroutine init_sympl(si, f, z0, dtau, dtaumin, rtol_init, mode_init)
+    !
+    type(SymplecticIntegrator), intent(inout) :: si
+    type(FieldCan), intent(inout) :: f
+    double precision, intent(in) :: z0(:)
+    double precision, intent(in) :: dtau, dtaumin
+    double precision, intent(in) :: rtol_init
+    integer, intent(in) :: mode_init ! 1 = expl.-impl. Euler, 2 = impl.-expl. Euler
+
+    double precision :: z(4)
+
+    if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
+      stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+    endif
+
+    ! Initialize symplectic integrator
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+
+    si%pabs = z0(4)
+  
+    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+    f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
+    f%vpar = z0(4)*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+      
+    z(1:3) = z0(1:3)  ! s, th, ph
+    z(4) = f%vpar*f%hph + f%Aph/f%ro0 ! pphi
+
+    ! factor 1/sqrt(2) due to velocity normalisation different from other modules
+    call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
+                          rtol_init, mode_init, 1) 
+  end subroutine init_sympl
+
+  subroutine init_integrator(self, z0)
+    type(NeoOrb), intent(inout) :: self
+    double precision, intent(in) :: z0(:)
+    
+    call init_sympl(self%si, self%f, z0, self%dtau, self%dtaumin, &
+      self%relerr, self%integmode)
+  end subroutine init_integrator
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(NeoOrb), intent(inout) :: self
@@ -126,17 +167,25 @@ contains
     real(8), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
-    if (self%integmode <= 0) then
-      call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
-    else
-      if (self%firstrun) then
-        if (.not. allocated(self%si)) allocate(self%si)
-        call orbit_sympl_init(self%si, z, self%dtau, self%dtaumax, self%relerr, self%integmode)
-        self%firstrun = .False.
-      endif
-      call orbit_timestep_sympl(self%si, z, ierr)
-    endif
+    call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
   end subroutine timestep_z
+
+  subroutine timestep_sympl_z(norb, z, ierr)
+    type(NeoOrb), intent(inout) :: norb
+    real(8), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+
+    if (z(1) < 0.0 .or. z(1) > 1.0) then
+      ierr = 1
+      return
+    end if
+
+    call orbit_timestep_sympl(norb%si, norb%f, ierr)
+
+    z(1:3) = norb%si%z(1:3)
+    z(5) = norb%f%vpar/(norb%si%pabs*dsqrt(2d0))  ! alambda
+
+  end subroutine timestep_sympl_z
 
 end module neo_orb
 

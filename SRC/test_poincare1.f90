@@ -3,7 +3,9 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, orbit_timestep_sympl
+  use field_can_mod, only : FieldCan
+  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
+  use neo_orb, only : init_sympl
 !
   implicit none
 !
@@ -40,6 +42,7 @@ use diag_mod, only : icounter
 
   double precision, parameter :: relerr = 1d-10
 
+  type(FieldCan) :: f
   type(SymplecticIntegrator) :: si
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
@@ -133,10 +136,10 @@ print *,'symplectic'
 icounter = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
-  call orbit_sympl_init(si, z, dtau, dtaumin, 1d-12, mode_sympl) 
+  call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl) 
   do i=1,ntimstep
 !
-    call orbit_timestep_sympl(si, z, ierr)
+    call orbit_timestep_sympl(si, f, ierr)
     if(z(1)>1.0) exit
     if (.not. jparmode) then
       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)

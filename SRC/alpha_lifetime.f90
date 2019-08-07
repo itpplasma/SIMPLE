@@ -5,7 +5,9 @@ program alpha_lifetime
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, orbit_timestep_sympl
+  use field_can_mod, only : FieldCan
+  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
+  use neo_orb, only : init_sympl
 use diag_mod, only : icounter
 
   implicit none
@@ -40,6 +42,7 @@ use diag_mod, only : icounter
 
   double precision :: relerr
 
+  type(FieldCan) :: f
   type(SymplecticIntegrator) :: si
 
   rmu=1d5 ! inverse relativistic temperature
@@ -196,7 +199,7 @@ use diag_mod, only : icounter
     kpart = kpart+1
     print *, kpart, ' / ', ntestpart, 'particle: ', ipart, 'thread: ', omp_get_thread_num()
     z = zstart(:,ipart)
-    if (integmode>0) call orbit_sympl_init(si, z, dtau, dtaumin, relerr, integmode)
+    if (integmode>0) call init_sympl(si, f, z, dtau, dtaumin, relerr, integmode)
 
     if(isw_field_type.eq.0) then
         call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -220,7 +223,7 @@ use diag_mod, only : icounter
         if (integmode <= 0) then
           call orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr)
         else
-          call orbit_timestep_sympl(si, z, ierr)
+          call orbit_timestep_sympl(si, f, ierr)
         endif
         if(ierr.ne.0) exit
 print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
@@ -235,7 +238,7 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
         if (integmode <= 0) then
           call orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr)
         else
-          call orbit_timestep_sympl(si, z, ierr)
+          call orbit_timestep_sympl(si, f, ierr)
         endif
         if(ierr.ne.0) exit
 !$omp atomic
