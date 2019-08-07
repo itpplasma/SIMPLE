@@ -8,8 +8,8 @@ save
 
 public
 
-integer, parameter :: NLAG_MAX = 4
-integer, parameter :: NBUF_MAX = 16
+integer, parameter :: NLAG_MAX = 2
+integer, parameter :: NBUF_MAX = 4*NLAG_MAX
 
 type :: SymplecticIntegrator
   integer :: nlag          ! Lagrange polynomial order
@@ -28,7 +28,7 @@ type :: SymplecticIntegrator
   integer :: kt
   integer :: k
   integer :: bufind(0:NLAG_MAX)
-  double precision, dimension(4, 0:NBUF_MAX) :: zbuf
+  double precision, dimension(8, 0:NBUF_MAX) :: zbuf
   double precision, dimension(0:0, NLAG_MAX+1) :: coef
 
   ! Timestep and variables from z0
@@ -686,6 +686,7 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     si%z(4) = x(2)
 
     if (si%extrap_field) then
+      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1))  + f%dpth(4)*(x(2)-xlast(2))
       f%dH(1) = f%dH(1) + f%d2H(1)*(x(1)-xlast(1)) + f%d2H(7)*(x(2)-xlast(2))
       f%dpth(1) = f%dpth(1) + f%d2pth(1)*(x(1)-xlast(1)) + f%d2pth(7)*(x(2)-xlast(2))
       f%vpar = f%vpar + f%dvpar(1)*(x(1)-xlast(1)) + f%dvpar(4)*(x(2)-xlast(2))
@@ -701,7 +702,7 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
 
     if (si%nbuf > 0) then
       si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(:,si%kbuf) = si%z
+      si%zbuf(1:4,si%kbuf) = si%z
     endif
 
     si%kt = si%kt+1
@@ -807,7 +808,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
 
     if (si%nbuf > 0) then
       si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(:,si%kbuf) = si%z
+      si%zbuf(1:4,si%kbuf) = si%z
     endif
 
     si%kt = si%kt+1
@@ -838,10 +839,25 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
+    
+    ! Initial guess with Lagrange extrapolation
+    if (si%nlag>0) then
+      do k=0, si%nlag
+        si%bufind(k) = si%kbuf-si%nlag+k
+        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
+      end do
+    endif
 
-    ! TODO: Initial guess with Lagrange extrapolation
-    x(1:4) = si%z
-    x(5) = si%z(1)
+    if (si%nlag>0 .and. si%kt>si%nlag) then
+      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
+      x(2)=sum(si%zbuf(2,si%bufind)*si%coef(0,:))
+      x(3)=sum(si%zbuf(3,si%bufind)*si%coef(0,:))
+      x(4)=sum(si%zbuf(4,si%bufind)*si%coef(0,:))
+      x(5)=sum(si%zbuf(5,si%bufind)*si%coef(0,:))
+    else
+      x(1:4) = si%z
+      x(5) = si%z(1)
+    end if
 
     call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast)
 
@@ -857,8 +873,21 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 
     si%z = x(1:4) 
     
-    call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
-    call get_derivatives(f, si%z(4))
+    if (si%extrap_field) then
+      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
+                    + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
+                    + f%dpth(3)*(x(3)-xlast(3)) &  ! d/dph
+                    + f%dpth(4)*(x(4)-xlast(4))    ! d/dpph
+    else
+      call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+      call get_val(f, si%z(4))
+    endif
+
+    if (si%nbuf > 0) then
+      si%kbuf = mod(si%kt, si%nbuf) + 1
+      si%zbuf(1:4,si%kbuf) = si%z
+      si%zbuf(5,si%kbuf) = x(5)  ! midpoint radius
+    endif
 
     si%kt = si%kt+1
     ktau = ktau+1

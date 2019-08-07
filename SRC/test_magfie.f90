@@ -5,118 +5,40 @@ program test_magfie
 ! use velo_mod,   only : isw_field_type
 use orbit_symplectic
 use field_can_mod
+use neo_orb
+use new_vmec_stuff_mod, only: rmajor
 
 implicit none
-
-! double precision, parameter :: pi=3.14159265358979d0
-! double precision, parameter :: c=2.9979d10
-! double precision, parameter :: e_charge=4.8032d-10
-! double precision, parameter :: e_mass=9.1094d-28
-! double precision, parameter :: p_mass=1.6726d-24
-! double precision, parameter :: ev=1.6022d-12
-
-! integer          :: L1i,nper,npoiper,ntimstep,ntestpart
-! integer          :: notrace_passing,loopskip
-
-! double precision :: phibeg,bmod00,rlarm
-! double precision :: tau,dtau,v0,bmod_ref,E_alpha,trace_time
-! double precision :: RT0,R0i,cbfi,bz0i,bf0
-! double precision :: sbeg,thetabeg
-! double precision :: z0(5)
-! integer          :: npoiper2
-! double precision :: contr_pp
-! double precision :: facE_al
-! integer          :: n_e,n_d
-! double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
-
-! open(1,file='alpha_lifetime_m.inp', recl=1024)
-! read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
-! read (1,*) nper              !number of periods for initial field line
-! read (1,*) npoiper           !number of points per period on this field line
-! read (1,*) ntimstep          !number of time steps per slowing down time
-! read (1,*) ntestpart         !number of test particles
-! read (1,*) bmod_ref          !reference field, G, for Boozer $B_{00}$
-! read (1,*) trace_time        !slowing down time, s
-! read (1,*) sbeg              !starting s for field line                       !<=2017
-! read (1,*) phibeg            !starting phi for field line                     !<=2017
-! read (1,*) thetabeg          !starting theta for field line                   !<=2017
-! read (1,*) loopskip          !how many loops to skip to shift random numbers
-! read (1,*) contr_pp          !control of passing particle fraction
-! read (1,*) facE_al           !facE_al test particle energy reduction factor
-! read (1,*) npoiper2          !additional integration step split factor
-! read (1,*) n_e               !test particle charge number (the same as Z)
-! read (1,*) n_d               !test particle mass number (the same as A)
-! read (1,*) netcdffile        !name of VMEC file in NETCDF format <=2017 NEW
-! close(1)
-
-! ! inverse relativistic temperature
-!   rmu=1d8
-! !
-! ! alpha particle energy, eV:
-!   E_alpha=3.5d6/facE_al
-! ! alpha particle velocity, cm/s
-!   v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
-! ! 14.04.2013 end
-! !
-! ! Larmor radius:
-!   rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
-! ! normalized slowing down time:
-!   tau=trace_time*v0
-! ! normalized time step:
-!   dtau=tau/dfloat(ntimstep-1)
-! !
-! bmod00=281679.46317784750d0
-! ! Larmor raidus corresponds to the field stregth egual to $B_{00}$ harmonic
-! ! in Boozer coordinates:
-! ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
-!   ro0=rlarm*bmod00  ! 23.09.2013
-! !
-!   multharm=3 !7
-!   ns_A=5
-!   ns_s=5
-!   ns_tp=5
-
-! call spline_vmec_data
-! call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
-! call get_canonical_coordinates
-
-! !r=0.7d0
-! !vartheta_c=0.5d0
-! !varphi_c=0.5d0
-! !alam0=0.3d0 !0.5d0
-
-! r=0.5d0
-! vartheta_c=0.0d0
-! varphi_c=0.314d0
-! alam0=0.3d0
-
-! call can_to_vmec(r, vartheta_c, varphi_c, theta_vmec, varphi_vmec)
-
-! print *,'can : ', r, vartheta_c, varphi_c
-! print *,'VMEC: ', r, theta_vmec, varphi_vmec
-
-! isw_field_type=0
-! z0(1)=r
-! z0(2)=vartheta_c
-! z0(3)=varphi_c
-! z0(4)=1.d0
-! z0(5)=alam0
-
-! call orbit_sympl_init(si, f, z0, 1.0d0, 1, 1d-12, 0, 0)
+save
 
 double precision :: z0(4), vpar0
+type(NeoOrb) :: norb
 type(FieldCan) :: f
 
-! Initial conditions
-z0(1) = 0.7d0  ! r
-z0(2) = 0.5d0  ! theta
-z0(3) = 0.3d0  ! phi
-vpar0 = 0.1d0  ! parallel velocity
+integer :: npoiper2
+real(8) :: rbig, dtau, dtaumax
 
-! Compute toroidal momentum from initial conditions
-f%ro0 = 1.0d0
-f%mu = 1.0d-5
+call init_field(norb, 5, 5, 3, 2)
+
+npoiper2 = 64
+rbig = rmajor*1.0d2
+dtaumax = twopi*rbig/npoiper2
+dtau = dtaumax
+
+call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+
+! Initial conditions
+z0(1) = 0.1d0  ! r
+z0(2) = 0.7d0  ! theta
+z0(3) = 0.1d0  ! phi
+vpar0 = 0.8d0  ! parallel velocity
 call eval_field(f, z0(1), z0(2), z0(3), 0)
+
+f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
+f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+
+print *, f%ro0, f%mu
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 call do_test
 
@@ -128,11 +50,11 @@ function relerr(a, b)
     relerr = merge(0d0, (a - b)/b, b == 0d0)
 end function relerr
 
-subroutine der2(f, x0, pphi, i, j)
+subroutine der2(x0, pphi, i, j)
     double precision, intent(in) :: x0(3)
     integer, intent(in) :: i, j
     double precision hi, hj
-    type(FieldCan) :: f, f00, f01, f10, f11
+    type(FieldCan) :: f00, f01, f10, f11
     type(FieldCan) :: d2fnum
     double precision :: pphi, x(3), dxi(3), dxj(3)
     double precision, dimension(10) ::  d2vparnum, d2Hnum, d2pthnum
@@ -225,8 +147,8 @@ subroutine test_jac1(si)
     h1(2), h2(3), jac1num(2,2), jac2num(3,3), fvec1(2), fvec2(3)
   integer :: k
 
-  h1(1) = 1d-8
-  h1(2) = si%z(4)*1d-8
+  h1(1) = 1d-6
+  h1(2) = z0(4)*1d-6
 
   do k = 1,2
     dx1 = 0d0
@@ -259,7 +181,7 @@ subroutine test_jac2(si)
     h1(2), h2(3), jac1num(2,2), jac2num(3,3), fvec1(2), fvec2(3)
   integer :: k
 
-  h2 = 1d-8
+  h2 = 1d-6
 
   do k = 1,3
     dx2 = 0d0
@@ -300,6 +222,7 @@ subroutine test_jac_midpoint(si)
   integer :: k
 
   h2 = 1d-6
+  h2(4) = 1d-6*z0(4)
 
   do k = 1,5
     dx2 = 0d0
@@ -367,7 +290,6 @@ subroutine test_newton(si, f)
   do k=1,10
     call f_sympl_euler1(si, f, n, x, fvec, 1)
     call jac_sympl_euler1(si, f, x, fjac)
-    print *, x, fvec
     ijac(1,1) = fjac(2,2)
     ijac(1,2) = -fjac(1,2)
     ijac(2,1) = -fjac(2,1)
@@ -377,8 +299,6 @@ subroutine test_newton(si, f)
   enddo
 
   call f_sympl_euler1(si, f, n, x, fvec, 1)
-  print *, x, fvec
-  print *, fjac
 
 end subroutine
 
@@ -397,7 +317,6 @@ subroutine test_newton2(si, f)
   do k=1,10
     call f_sympl_euler2(si, f, n, x, fvec, 1)
     call jac_sympl_euler2(si, f, x, fjac)
-    print *, x, fvec
 
     call dgesv(n, 1, fjac, n, pivot, fvec, 3, info) 
     ! after solution: fvec = (xold-xnew)_Newton
@@ -405,8 +324,6 @@ subroutine test_newton2(si, f)
     x = x - fvec
   enddo
   call f_sympl_euler2(si, f, n, x, fvec, 1)
-  print *, x, fvec
-  print *, fjac
 end subroutine
 
 subroutine do_test()
@@ -428,7 +345,6 @@ subroutine do_test()
         dx = 1d-8
         dz(k) = .5d0*dx
         call eval_field(f, z0(1) + dz(1), z0(2) + dz(2), z0(3) + dz(3), 0)
-        print *, f
         call get_val(f, z0(4))
         dfnum%dAth(k) = f%Ath
         dfnum%dAph(k) = f%Aph
@@ -480,7 +396,7 @@ subroutine do_test()
 
     do i = 1,3
         do j = 1,3
-            call der2(f, z0(1:3), z0(4), i, j)
+            call der2(z0(1:3), z0(4), i, j)
         enddo
     enddo
 
