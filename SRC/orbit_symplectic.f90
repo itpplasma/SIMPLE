@@ -177,17 +177,13 @@ end subroutine jac_sympl_euler2
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine f_midpoint_part1(si, f, n, x, fvec, iflag)
+subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
     type(SymplecticIntegrator), intent(in) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
     double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
     double precision, intent(out) :: fvec(n)
-    integer, intent(in) :: iflag
-    
-    double precision :: thmid, phmid
-
 
     ! evaluate at midpoint
     call eval_field(f, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 2)
@@ -202,14 +198,13 @@ subroutine f_midpoint_part1(si, f, n, x, fvec, iflag)
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine f_midpoint_part2(si, f, n, x, fvec, iflag)
+subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
     type(SymplecticIntegrator), intent(in) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
     double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
     double precision, intent(out) :: fvec(n)
-    integer, intent(in) :: iflag
 
     double precision :: dpthmid, pthdotbar
 
@@ -414,10 +409,10 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     if(x(1) > 1.0) return
     if(x(1) < 0.0) x(1) = 0.01
     if(x(5) < 0.0) x(5) = 0.01
-    call f_midpoint_part1(si, f, n, x, fvec, 1)
+    call f_midpoint_part1(si, f, n, x, fvec)
     call jac_midpoint_part1(si, f, x, fjac)
     fmid = f
-    call f_midpoint_part2(si, f, n, x, fvec, 1)
+    call f_midpoint_part2(si, f, n, x, fvec)
     call jac_midpoint_part2(si, f, fmid, x, fjac)
     fabs = dabs(fvec)
     xlast = x
@@ -458,6 +453,24 @@ subroutine coeff_rk_gauss(n, a, b, c)
 
     c(1) = 0.211324865405187d0
     c(2) = 0.788675134594812d0
+  elseif (n == 3) then
+    a(1,1) =  0.1388888888888889d0
+    a(1,2) = -0.03597666752493894d0
+    a(1,3) =  0.009789444015308318d0 
+    a(2,1) =  0.3002631949808646d0
+    a(2,2) =  0.2222222222222222d0
+    a(2,3) = -0.022485417203086805d0
+    a(3,1) = 0.26798833376246944d0
+    a(3,2) = 0.48042111196938336d0
+    a(3,3) = 0.1388888888888889d0
+
+    b(1) = 0.2777777777777778d0
+    b(2) = 0.4444444444444444d0
+    b(3) = 0.2777777777777778d0
+
+    c(1) = 0.1127016653792583d0
+    c(2) = 0.5d0
+    c(3) = 0.8872983346207417d0
   else
     ! not implemented
     a = 0d0
@@ -741,6 +754,8 @@ subroutine orbit_timestep_sympl(si, f, ierr)
       call orbit_timestep_sympl_rk_gauss(si, f, 1, ierr)
    case (5)
       call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
+   case (6)
+      call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
    case default
       print *, 'invalid mode for orbit_timestep_sympl: ', si%mode
       stop
@@ -917,6 +932,37 @@ subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine orbit_sympl_init_blanes4
 
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
+  !
+  ! Composition method of order 6 with s=9 by Kahan&Li (1995)
+  ! with coefficients in the form of Hairer (2002)
+  !
+  !
+    type(MultistageIntegrator), intent(inout) :: mi
+    type(FieldCan), intent(inout) :: f
+  
+    double precision, intent(in) :: z(:)
+    double precision, intent(in) :: dtau
+    integer, intent(in) :: ntau
+    double precision, intent(in) :: rtol_init
+  
+    double precision :: gam(9)
+  
+    gam(1) = 0.39216144400731413927925056d0
+    gam(2) = 0.33259913678935943859974864d0
+    gam(3) = -0.70624617255763935980996482d0
+    gam(4) = 0.08221359629355080023149045d0
+    gam(5) = 0.79854399093482996339895035d0
+    gam(6) = gam(4)
+    gam(7) = gam(3)
+    gam(8) = gam(2)
+    gam(9) = gam(1)
+  
+    call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, gam/2.0d0, gam/2.0d0)
+  end subroutine orbit_sympl_init_kahan6
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !

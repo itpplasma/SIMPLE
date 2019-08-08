@@ -245,20 +245,20 @@ subroutine test_jac_midpoint(si)
     x20(5) = si%z(1) + 0.5d-4
 
     x2 = x20 + dx2
-    call f_midpoint_part1(si, f, 5, x2, fvec2, 0)
-    call f_midpoint_part2(si, f, 5, x2, fvec2, 0)
+    call f_midpoint_part1(si, f, 5, x2, fvec2)
+    call f_midpoint_part2(si, f, 5, x2, fvec2)
     jac2num(:, k) = fvec2
 
     x2 = x20 - dx2
-    call f_midpoint_part1(si, f, 5, x2, fvec2, 0)
-    call f_midpoint_part2(si, f, 5, x2, fvec2, 0)
+    call f_midpoint_part1(si, f, 5, x2, fvec2)
+    call f_midpoint_part2(si, f, 5, x2, fvec2)
     jac2num(:, k) = (jac2num(:, k) - fvec2)/h2(k)
 
     x2 = x20
-    call f_midpoint_part1(si, f, 5, x2, fvec2, 0)
+    call f_midpoint_part1(si, f, 5, x2, fvec2)
     call jac_midpoint_part1(si, f, x2, jac2)
     fmid = f
-    call f_midpoint_part2(si, f, 5, x2, fvec2, 0)
+    call f_midpoint_part2(si, f, 5, x2, fvec2)
     call jac_midpoint_part2(si, f, fmid, x2, jac2)
 
   end do

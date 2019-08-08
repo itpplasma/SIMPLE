@@ -18,8 +18,8 @@ integer :: ierr, kt
 double precision :: z0(4), vpar0, dt, taub
 
 type(FieldCan) :: f
-type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4
-type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4
+type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6
+type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
@@ -34,9 +34,9 @@ call eval_field(f, z0(1), z0(2), z0(3), 0)
 z0(4) = m*vpar0*f%hph + qe/c*f%Aph  ! p_phi
 
 taub = 7800d0  ! estimated bounce time
-nbounce = 1000
+nbounce = 10000
 
-steps_per_bounce = 16
+steps_per_bounce = 8
 dt = taub/steps_per_bounce
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 1)
@@ -53,14 +53,20 @@ call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
 call test_single(gauss2, 'gauss2.out')
 print *, ''
 
-call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-call test_multi(order4, 'order4.out')
+! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
+! call test_multi(order4, 'order4.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi(mclachlan4, 'mclachlan4.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
 call test_multi(blanes4, 'blanes4.out')
 call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
 call test_single(gauss4, 'gauss4.out')
+print *, ''
+
+call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
+call test_multi(kahan6, 'kahan6.out')
+call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
+call test_single(gauss6, 'gauss6.out')
 print *, ''
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 0)
@@ -77,14 +83,20 @@ call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
 call test_quasi(gauss2, 'gauss2_quasi.out')
 print *, ''
 
-call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(order4, 'order4_quasi.out')
+! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
+! call test_multi_quasi(order4, 'order4_quasi.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(mclachlan4, 'mclachlan4_quasi.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(blanes4, 'blanes4_quasi.out')
 call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
 call test_quasi(gauss4, 'gauss4_quasi.out')
+print *, ''
+
+call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
+call test_multi_quasi(kahan6, 'kahan6_quasi.out')
+call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
+call test_quasi(gauss6, 'gauss6_quasi.out')
 print *, ''
 
 contains
