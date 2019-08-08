@@ -1,6 +1,6 @@
 program test_magfie
 
-! use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
+! use new_vmec_stuff_mod, only : netcdffile, multharm,ns_A,ns_s,ns_tp
 ! use parmot_mod, only : rmu,ro0
 ! use velo_mod,   only : isw_field_type
 use orbit_symplectic
@@ -18,28 +18,43 @@ type(FieldCan) :: f
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
 
-call init_field(norb, 5, 5, 3, 2)
+integer :: field_mode
 
-npoiper2 = 64
-rbig = rmajor*1.0d2
-dtaumax = twopi*rbig/npoiper2
-dtau = dtaumax
-
-call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+field_mode = -1
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
 z0(2) = 0.7d0  ! theta
 z0(3) = 0.1d0  ! phi
 vpar0 = 0.8d0  ! parallel velocity
-call eval_field(f, z0(1), z0(2), z0(3), 0)
 
-f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
-f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
-f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+if (field_mode == -1) then
+  call FieldCan_init(f, 1d-5, 1d0, vpar0, field_mode)
+  call eval_field(f, z0(1), z0(2), z0(3), 0)
+elseif (field_mode == 0) then
+  call init_field(norb, 5, 5, 3, 0)
 
-print *, f%ro0, f%mu
+  npoiper2 = 64
+  rbig = rmajor*1.0d2
+  dtaumax = twopi*rbig/npoiper2
+  dtau = dtaumax
+
+  call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+
+  ! Initial conditions
+  z0(1) = 0.1d0  ! r
+  z0(2) = 0.7d0  ! theta
+  z0(3) = 0.1d0  ! phi
+  vpar0 = 0.8d0  ! parallel velocity
+
+  ! ro0 = mc/e*v0, different by sqrt(2) from other modules
+  ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0), field_mode)
+  f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+end if
+
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
+print *, z0(4)
 call do_test
 
 contains
@@ -49,6 +64,7 @@ function relerr(a, b)
     double precision, intent(in) :: a, b
     relerr = merge(0d0, (a - b)/b, b == 0d0)
 end function relerr
+
 
 subroutine der2(x0, pphi, i, j)
     double precision, intent(in) :: x0(3)
@@ -143,8 +159,7 @@ end subroutine der2
 
 subroutine test_jac1(si)  
   type(SymplecticIntegrator) :: si
-  double precision :: x1(2), x2(3), dx1(2), dx2(3), jac1(2,2), jac2(3,3), x10(2), x20(3), &
-    h1(2), h2(3), jac1num(2,2), jac2num(3,3), fvec1(2), fvec2(3)
+  double precision :: x1(2), dx1(2), jac1(2,2), x10(2), h1(2), jac1num(2,2), fvec1(2)
   integer :: k
 
   h1(1) = 1d-6
@@ -177,8 +192,7 @@ end subroutine test_jac1
 
 subroutine test_jac2(si)  
   type(SymplecticIntegrator) :: si
-  double precision :: x1(2), x2(3), dx1(2), dx2(3), jac1(2,2), jac2(3,3), x10(2), x20(3), &
-    h1(2), h2(3), jac1num(2,2), jac2num(3,3), fvec1(2), fvec2(3)
+  double precision ::x2(3), dx2(3),  jac2(3,3), x20(3), h2(3), jac2num(3,3), fvec2(3)
   integer :: k
 
   h2 = 1d-6
@@ -302,16 +316,16 @@ subroutine test_jac_grk(si)
     dx(k) = h(k)*0.5d0
 
     x = x0 + dx
-    call f_rk_gauss(si, fs, n, x, fvec, 0)
+    call f_rk_gauss(si, fs, n, x, fvec)
     jacnum(:, k) = fvec
 
     x = x0 - dx
-    call f_rk_gauss(si, fs, n, x, fvec, 0)
+    call f_rk_gauss(si, fs, n, x, fvec)
     jacnum(:, k) = (jacnum(:, k) - fvec)/h(k)
   end do
 
   x = x0
-  call f_rk_gauss(si, fs, n, x, fvec, 0)
+  call f_rk_gauss(si, fs, n, x, fvec)
   call jac_rk_gauss(si, fs, n, x, jac)
 
   do k = 1,4*n
@@ -367,6 +381,7 @@ subroutine test_newton2(si)
   enddo
   call f_sympl_euler2(si, f, n, x, fvec, 1)
 end subroutine
+
 
 subroutine do_test()
 

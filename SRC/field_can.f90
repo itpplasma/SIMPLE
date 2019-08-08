@@ -5,6 +5,8 @@ use diag_mod, only : icounter
 implicit none
 
 type :: FieldCan
+  integer :: field_type  ! -1: testing, 0: canonical
+
   double precision :: Ath, Aph
   double precision :: hth, hph
   double precision :: Bmod
@@ -29,15 +31,39 @@ type :: FieldCan
   double precision :: mu, ro0
 end type FieldCan
 
-interface eval_field
-#ifdef test
-  module procedure eval_field_test
-#else
-  module procedure eval_field_can
-#endif
-end interface
-
 contains
+
+subroutine FieldCan_init(f, mu, ro0, vpar, field_type)
+  type(FieldCan), intent(inout) :: f
+  double precision, intent(in), optional  :: mu, ro0, vpar
+  integer, intent(in), optional :: field_type
+
+  if (present(mu)) then
+    f%mu = mu
+  else
+    f%mu = 0d0
+  end if
+
+  if (present(ro0)) then
+    f%ro0 = ro0
+  else
+    f%ro0 = 0d0
+  end if
+
+  if (present(vpar)) then
+    f%vpar = vpar
+  else
+    f%vpar = 0d0
+  end if
+
+  if (present(field_type)) then
+    f%field_type = field_type
+  else
+    f%field_type = 0
+  end if
+
+end subroutine FieldCan_init
+
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -123,7 +149,6 @@ subroutine get_derivatives2(f, pphi)
 end subroutine get_derivatives2
 
 
-#ifndef test
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
@@ -242,7 +267,7 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 
 end subroutine eval_field_can
 
-#else
+
 ! for testing -> circular tokamak
 subroutine eval_field_test(f, r, th, ph, mode_secders)
 !
@@ -275,7 +300,6 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
    f%d2Ath(2) = B0*r**2/R0*sth
    f%d2Ath(5) = 0d0
    f%d2Ath(6) = 0d0
-
 
    f%Aph     = -B0*iota0*(r**2/2d0-r**4/(4d0*a**2))
  
@@ -329,6 +353,34 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
    f%d2Bmod(6) = 0d0 
 
 end subroutine eval_field_test
-#endif
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine eval_field(f, r, th_c, ph_c, mode_secders)
+!
+! Evaluates magnetic field in canonical coordinates (r, th_c, ph_c)
+! and stores results in variable f
+! Works for A_th linear in r (toroidal flux as radial variable)
+!
+! mode_secders = 0: no second derivatives
+! mode_secders = 1: second derivatives only in d/dr^2
+! mode_secders = 2: all second derivatives, including mixed
+!
+! tested in test_magfie.f90, 2018-10-23, C. Albert <albert@alumni.tugraz.at>
+!
+
+  type(FieldCan), intent(inout) :: f
+  double precision, intent(in) :: r, th_c, ph_c
+  integer, intent(in) :: mode_secders
+
+  select case (f%field_type)
+    case (-1)
+      call eval_field_test(f, r, th_c, ph_c, mode_secders)
+    case default
+      call eval_field_can(f, r, th_c, ph_c, mode_secders)
+  end select
+  
+end subroutine eval_field
 
 end module field_can_mod
