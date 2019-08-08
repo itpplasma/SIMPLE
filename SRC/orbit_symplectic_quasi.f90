@@ -7,7 +7,7 @@ implicit none
 save
 
 logical, parameter :: exact_steps = .False.
-integer, parameter :: S_MAX_GAUSS = 2
+integer, parameter :: S_MAX_GAUSS = 3
 
 type(FieldCan) :: f
 type(FieldCan) :: fs(S_MAX_GAUSS)
@@ -150,6 +150,8 @@ subroutine orbit_timestep_quasi(ierr)
       call timestep_rk_gauss_quasi(1, ierr)
     case (5)
       call timestep_rk_gauss_quasi(2, ierr)
+    case (6)
+      call timestep_rk_gauss_quasi(3, ierr)
     case default
       print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
       stop
@@ -347,7 +349,6 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
   double precision :: a(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
-    fs(k) = f
     fs(k) = f
   end do
 
