@@ -18,7 +18,8 @@ integer :: ierr, kt
 double precision :: z0(4), vpar0, dt, taub
 
 type(FieldCan) :: f
-type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6, gauss8
+
+type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, lobatto4, gauss6, gauss8
 type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6, kahan8
 
 ! Initial conditions
@@ -52,6 +53,11 @@ call test_single(midpoint, 'midpoint.out')
 call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
 call test_single(gauss2, 'gauss2.out')
 print *, ''
+
+
+call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
+call test_quasi(lobatto4, 'lobatto4q.out')
+stop
 
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 ! call test_multi(order4, 'order4.out')
