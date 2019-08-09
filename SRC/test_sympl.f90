@@ -18,8 +18,8 @@ integer :: ierr, kt
 double precision :: z0(4), vpar0, dt, taub
 
 type(FieldCan) :: f
-type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6
-type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6
+type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6, gauss8
+type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6, kahan8
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
@@ -34,9 +34,9 @@ call eval_field(f, z0(1), z0(2), z0(3), 0)
 z0(4) = m*vpar0*f%hph + qe/c*f%Aph  ! p_phi
 
 taub = 7800d0  ! estimated bounce time
-nbounce = 10000
+nbounce = 1000
 
-steps_per_bounce = 8
+steps_per_bounce = 12
 dt = taub/steps_per_bounce
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 1)
@@ -69,34 +69,46 @@ call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
 call test_single(gauss6, 'gauss6.out')
 print *, ''
 
+call orbit_sympl_init_kahan8(kahan8, f, z0, dt, 1, 1d-12)
+call test_multi(kahan8, 'kahan8.out')
+call orbit_sympl_init(gauss8, f, z0, dt, 1, 1d-12, 7, 0)
+call test_single(gauss8, 'gauss8.out')
+print *, ''
+
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 0)
-call test_quasi(euler1, 'euler1_quasi.out')
+call test_quasi(euler1, 'euler1q.out')
 call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2, 0)
-call test_quasi(euler2, 'euler2_quasi.out')
+call test_quasi(euler2, 'euler2q.out')
 print *, ''
 
 call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(verlet, 'verlet_quasi.out')
+call test_multi_quasi(verlet, 'verletq.out')
 call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3, 0)
-call test_quasi(midpoint, 'midpoint_quasi.out')
+call test_quasi(midpoint, 'midpointq.out')
 call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
-call test_quasi(gauss2, 'gauss2_quasi.out')
+call test_quasi(gauss2, 'gauss2q.out')
 print *, ''
 
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-! call test_multi_quasi(order4, 'order4_quasi.out')
+! call test_multi_quasi(order4, 'order4q.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(mclachlan4, 'mclachlan4_quasi.out')
+call test_multi_quasi(mclachlan4, 'mclachlan4q.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(blanes4, 'blanes4_quasi.out')
+call test_multi_quasi(blanes4, 'blanes4q.out')
 call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
-call test_quasi(gauss4, 'gauss4_quasi.out')
+call test_quasi(gauss4, 'gauss4q.out')
 print *, ''
 
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(kahan6, 'kahan6_quasi.out')
+call test_multi_quasi(kahan6, 'kahan6q.out')
 call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
-call test_quasi(gauss6, 'gauss6_quasi.out')
+call test_quasi(gauss6, 'gauss6q.out')
+print *, ''
+
+call orbit_sympl_init_kahan8(kahan8, f, z0, dt, 1, 1d-12)
+call test_multi_quasi(kahan8, 'kahan8q.out')
+call orbit_sympl_init(gauss8, f, z0, dt, 1, 1d-12, 7, 0)
+call test_quasi(gauss8, 'gauss8q.out')
 print *, ''
 
 contains
@@ -129,7 +141,7 @@ subroutine test_single(si, outname)
         out(5,kt) = f%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
     open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
@@ -171,9 +183,9 @@ subroutine test_quasi(si, outname)
         out(5,kt) = f_quasi%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
         write(20,*) out(:,kt)
     end do
@@ -208,9 +220,9 @@ subroutine test_multi(mi, outname)
         out(5,kt) = f%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nbounce*steps_per_bounce
         write(20,*) out(:,kt)
     end do
@@ -246,11 +258,11 @@ subroutine test_multi_quasi(mi, outname)
         out(5,kt) = f_quasi%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nbounce*steps_per_bounce
-        write(20,*) out(:,kt)
+       write(20,*) out(:,kt)
     end do
     close(20)
     deallocate(out)

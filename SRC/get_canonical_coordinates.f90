@@ -279,8 +279,10 @@ deallocate(y,dy)
   integer :: iss,ist,isp
   double precision, dimension(:,:), allocatable :: splcoe
 !
-  allocate(s_sqg_Bt_Bp(3,ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
-  if(fullset) allocate(s_G_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
+  if (.not. allocated(s_sqg_Bt_Bp)) &
+    allocate(s_sqg_Bt_Bp(3,ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
+  if(fullset .and. (.not. allocated(s_G_c))) &
+    allocate(s_G_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
 !
   s_sqg_Bt_Bp(1,1,1,1,:,:,:)=sqg_c
   s_sqg_Bt_Bp(2,1,1,1,:,:,:)=B_vartheta_c
@@ -924,7 +926,7 @@ icounter=icounter+1
 !
   implicit none
 !
-  deallocate(s_sqg_Bt_Bp)
+  if(allocated(s_sqg_Bt_Bp)) deallocate(s_sqg_Bt_Bp)
   if(allocated(s_G_c)) deallocate(s_G_c)
 !
   end subroutine deallocate_can_coord

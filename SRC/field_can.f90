@@ -120,32 +120,35 @@ subroutine get_derivatives2(f, pphi)
 
   call get_derivatives(f, pphi)
 
-  f%d2vpar = 0d0
-  f%d2H    = 0d0
-  f%d2pth  = 0d0
-
   f%d2vpar(1:6) = -f%d2Aph/f%ro0 - f%d2hph*f%vpar
-  f%d2vpar((/1,4,6/)) = f%d2vpar((/1,4,6/)) - 2d0*f%dhph*f%dvpar(1:3)
+  f%d2vpar(1) = f%d2vpar(1) - 2d0*f%dhph(1)*f%dvpar(1)
   f%d2vpar(2) = f%d2vpar(2) - (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
   f%d2vpar(3) = f%d2vpar(3) - (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
+  f%d2vpar(4) = f%d2vpar(4) - 2d0*f%dhph(2)*f%dvpar(2)
   f%d2vpar(5) = f%d2vpar(5) - (f%dhph(2)*f%dvpar(3) + f%dhph(3)*f%dvpar(2))
+  f%d2vpar(6) = f%d2vpar(6) - 2d0*f%dhph(3)*f%dvpar(3)
   f%d2vpar(1:6) = f%d2vpar(1:6)/f%hph
 
   f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod ! + qi*d2Phie
-  f%d2H((/1,4,6/)) = f%d2H((/1,4,6/)) + f%dvpar(1:3)**2
+  f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
   f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
   f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
+  f%d2H(4) = f%d2H(4) + f%dvpar(2)**2
   f%d2H(5) = f%d2H(5) + f%dvpar(2)*f%dvpar(3)
+  f%d2H(6) = f%d2H(6) + f%dvpar(3)**2
 
   f%d2pth(1:6) = f%d2vpar(1:6)*f%hth + f%vpar*f%d2hth + f%d2Ath/f%ro0
-  f%d2pth((/1,4,6/)) = f%d2pth((/1,4,6/)) + 2d0*f%dvpar(1:3)*f%dhth
+  f%d2pth(1) = f%d2pth(1) + 2d0*f%dvpar(1)*f%dhth(1)
   f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + f%dvpar(2)*f%dhth(1)
   f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + f%dvpar(3)*f%dhth(1)
+  f%d2pth(4) = f%d2pth(4) + 2d0*f%dvpar(2)*f%dhth(2)
   f%d2pth(5) = f%d2pth(5) + f%dvpar(2)*f%dhth(3) + f%dvpar(3)*f%dhth(2)
+  f%d2pth(6) = f%d2pth(6) + 2d0*f%dvpar(3)*f%dhth(3)
 
   f%d2vpar(7:9) = -f%dhph/f%hph**2
   f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
   f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+  
 end subroutine get_derivatives2
 
 

@@ -418,6 +418,14 @@ contains
   end subroutine init_params
 
 
+  subroutine init_integrator(z0)
+    double precision, dimension(:), intent(in) :: z0
+
+    call neo_orb_init_integrator(norb, z0)
+  end subroutine init_integrator
+
+
+
   subroutine timestep(s, th, ph, lam, ierr)
     real(8), intent(inout) :: s, th, ph, lam
     integer, intent(out) :: ierr
@@ -444,8 +452,9 @@ contains
 end module neo_orb_global
 
 module cut_detector_global
+  use common
   use neo_orb_global, only: norb
-  use cut_detector, only: CutDetector, cut_detector_trace_to_cut => trace_to_cut
+  use cut_detector, only: CutDetector, cut_detector_init => init, cut_detector_trace_to_cut => trace_to_cut
   
   implicit none
   save
@@ -454,6 +463,12 @@ module cut_detector_global
   !$omp threadprivate(cutter)
 
 contains
+  subroutine init(z)
+    double precision, intent(in) :: z(:)
+
+    call cut_detector_init(cutter, norb%fper, z)
+  end subroutine init
+
   subroutine trace_to_cut(z, var_cut, cut_type, ierr)
     double precision, intent(inout) :: z(:)
     ! variables to evaluate at tip: z(1..5), par_inv

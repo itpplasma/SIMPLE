@@ -5,8 +5,6 @@
 #replot "midpoint_quasi.out" u 5 ps .001  
 #replot   "verlet_quasi.out" u 5 ps .001
 
-plot "mclachlan4_quasi.out" u 5 ps .001
-replot "blanes4_quasi.out" u 5 ps .001
-#replot "order4_quasi.out" u 5 ps .001
-replot "gauss4_quasi.out"   u 5 ps .001
+plot "kahan8q.out" u 5 ps .001
+replot "gauss8q.out"   u 5 ps .001
 
