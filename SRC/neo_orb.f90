@@ -18,7 +18,7 @@ save
 public
 
   type :: NeoOrb
-    double precision :: fper  ! field period
+    double precision :: fper
     double precision :: dtau, dtaumin, v0
     integer          :: n_e, n_d
 
@@ -33,13 +33,14 @@ public
   interface tstep
       module procedure timestep
       module procedure timestep_z
+      module procedure timestep_sympl_z
    end interface tstep
 
 contains
 
-  subroutine init_field(self, ans_s, ans_tp, amultharm, aintegmode)
+  subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     ! initialize field geometry
-    ! character*32, intent(in) :: vmec_file
+    character(len=*), intent(in) :: vmec_file
     type(NeoOrb), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     integer             :: ierr
@@ -47,7 +48,7 @@ contains
     double precision    :: RT0, R0i, cbfi, bz0i, bf0
     double precision    :: z(5)
 
-    netcdffile = 'wout.nc'  ! TODO: don't hardcode this
+    netcdffile = vmec_file
     ns_s = ans_s
     ns_tp = ans_tp
     multharm = amultharm
@@ -77,9 +78,9 @@ contains
     type(NeoOrb) :: self
     integer, intent(in) :: Z_charge, m_mass
     real(8), intent(in) :: E_kin, adtau, adtaumin
+    real(8), intent(in) :: arelerr
     double precision :: bmod_ref=5d4 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     double precision :: bmod00, rlarm ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    real(8), intent(in) :: arelerr
 
     self%n_e = Z_charge
     self%n_d = m_mass
@@ -170,8 +171,9 @@ contains
     call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
   end subroutine timestep_z
 
-  subroutine timestep_sympl_z(norb, z, ierr)
-    type(NeoOrb), intent(inout) :: norb
+  subroutine timestep_sympl_z(si, f, z, ierr)
+    type(SymplecticIntegrator), intent(inout) :: si
+    type(FieldCan), intent(inout) :: f
     real(8), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
@@ -180,10 +182,10 @@ contains
       return
     end if
 
-    call orbit_timestep_sympl(norb%si, norb%f, ierr)
+    call orbit_timestep_sympl(si, f, ierr)
 
-    z(1:3) = norb%si%z(1:3)
-    z(5) = norb%f%vpar/(norb%si%pabs*dsqrt(2d0))  ! alambda
+    z(1:3) = si%z(1:3)
+    z(5) = f%vpar/(si%pabs*dsqrt(2d0))  ! alambda
 
   end subroutine timestep_sympl_z
 
@@ -191,7 +193,9 @@ end module neo_orb
 
 module cut_detector
   use common, only: twopi
-  use neo_orb, only: NeoOrb, debug, tstep
+  use neo_orb, only: debug, tstep
+  use orbit_symplectic, only: SymplecticIntegrator
+  use field_can_mod, only: FieldCan
 
   implicit none
   save
@@ -203,6 +207,8 @@ module cut_detector
   public
 
   type :: CutDetector
+    double precision :: fper  ! field period
+
     ! for Poincare cuts
     integer          :: npl_half
     double precision :: alam_prev, par_inv
@@ -210,19 +216,17 @@ module cut_detector
 
     double precision :: orb_sten(6,nplagr), coef(0:nder,nplagr)
     integer :: ipoi(nplagr)
-
-    type(NeoOrb), pointer :: norb
   end type CutDetector
 
 contains
 
-  subroutine init(self, norb, z)
+  subroutine init(self, fper, z)
     type(CutDetector) :: self
-    type(NeoOrb), target :: norb
+    double precision, intent(in) :: fper
     double precision, intent(in) :: z(:)
     integer :: i
 
-    self%norb => norb
+    self%fper = fper
 
     !---------------------------------------------------------------------------
     ! Prepare calculation of orbit tip by interpolation and buffer for Poincare plot:
@@ -244,7 +248,7 @@ contains
     ! Initialize period crossing detector
 
     self%iper=self%npl_half+1
-    self%kper=int(z(3)/self%norb%fper)
+    self%kper=int(z(3)/self%fper)
 
     ! End initialize period crossing detector
     !--------------------------------
@@ -255,8 +259,11 @@ contains
     !--------------------------------------------------------------------------
   end subroutine init
 
-  subroutine trace_to_cut(self, z, var_cut, cut_type, ierr)
+  subroutine trace_to_cut(self, si, f, z, var_cut, cut_type, ierr)
     type(CutDetector) :: self
+    type(SymplecticIntegrator) :: si
+    type(FieldCan) :: f
+
     double precision, intent(inout) :: z(:)
     ! variables to evaluate at tip: z(1..5), par_inv
     double precision, dimension(:), intent(inout) :: var_cut
@@ -268,10 +275,10 @@ contains
     double precision :: phiper = 0.0d0
 
     do i=1, nstep_max
-      call tstep(self%norb, z, ierr)
+      call tstep(si, f, z, ierr)
       if(ierr.ne.0) exit
 
-      self%par_inv = self%par_inv+z(5)**2*self%norb%dtau ! parallel adiabatic invariant
+      self%par_inv = self%par_inv+z(5)**2 ! parallel adiabatic invariant
 
       if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
         self%orb_sten(1:5,i)=z
@@ -305,13 +312,13 @@ contains
       !-------------------------------------------------------------------------
       ! Periodic boundary footprint detection and interpolation
 
-      if(z(3).gt.dble(self%kper+1)*self%norb%fper) then
+      if(z(3).gt.dble(self%kper+1)*self%fper) then
         self%iper=0   !<=periodic boundary has been passed
-        phiper=dble(self%kper+1)*self%norb%fper
+        phiper=dble(self%kper+1)*self%fper
         self%kper=self%kper+1
-      elseif(z(3).lt.dble(self%kper)*self%norb%fper) then
+      elseif(z(3).lt.dble(self%kper)*self%fper) then
         self%iper=0   !<=periodic boundary has been passed
-        phiper=dble(self%kper)*self%norb%fper
+        phiper=dble(self%kper)*self%fper
         self%kper=self%kper-1
       endif
       self%iper=self%iper+1
@@ -376,3 +383,84 @@ contains
   end subroutine fract_dimension
 
 end module cut_detector
+
+
+module neo_orb_global
+  use neo_orb, only: NeoOrb, neo_orb_init_field => init_field, &
+                             neo_orb_init_params => init_params, &
+                             neo_orb_init_integrator => init_integrator, &
+                             neo_orb_timestep => timestep, &
+                             neo_orb_timestep_z => timestep_z, &
+                             neo_orb_timestep_sympl_z => timestep_sympl_z
+  
+  implicit none
+  save
+
+  type(NeoOrb) :: norb
+  !$omp threadprivate(norb)
+
+contains
+
+  subroutine init_field(ans_s, ans_tp, amultharm, aintegmode)
+    ! initialize field geometry
+    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
+
+    call neo_orb_init_field(norb, 'wout.nc', ans_s, ans_tp, amultharm, aintegmode)
+  end subroutine init_field
+
+
+  subroutine init_params(Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
+    integer, intent(in) :: Z_charge, m_mass
+    real(8), intent(in) :: E_kin, dtau, dtaumin
+    real(8), intent(in) :: relerr
+
+    call neo_orb_init_params(norb, Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
+  end subroutine init_params
+
+
+  subroutine timestep(s, th, ph, lam, ierr)
+    real(8), intent(inout) :: s, th, ph, lam
+    integer, intent(out) :: ierr
+
+    call neo_orb_timestep(norb, s, th, ph, lam, ierr)
+  end subroutine timestep
+
+
+  subroutine timestep_z(z, ierr)
+    real(8), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+
+    call neo_orb_timestep_z(norb, z, ierr)
+  end subroutine timestep_z
+
+
+  subroutine timestep_sympl_z(z, ierr)
+    real(8), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+
+    call neo_orb_timestep_sympl_z(norb%si, norb%f, z, ierr)
+  end subroutine timestep_sympl_z
+
+end module neo_orb_global
+
+module cut_detector_global
+  use neo_orb_global, only: norb
+  use cut_detector, only: CutDetector, cut_detector_trace_to_cut => trace_to_cut
+  
+  implicit none
+  save
+
+  type(CutDetector) :: cutter
+  !$omp threadprivate(cutter)
+
+contains
+  subroutine trace_to_cut(z, var_cut, cut_type, ierr)
+    double precision, intent(inout) :: z(:)
+    ! variables to evaluate at tip: z(1..5), par_inv
+    double precision, dimension(:), intent(inout) :: var_cut
+    integer, intent(out) :: cut_type
+    integer, intent(out) :: ierr
+
+    call cut_detector_trace_to_cut(cutter, norb%si, norb%f, z, var_cut, cut_type, ierr)
+  end subroutine trace_to_cut
+end module cut_detector_global

@@ -9,7 +9,7 @@ libfunctions('libneo_orb', '-full')
 ns = libpointer('int32Ptr', 5);
 ntp = libpointer('int32Ptr', 5);
 multharm = libpointer('int32Ptr', 3);
-calllib('libneo_orb', 'neo_orb_MOD_init_field', ns, ntp, multharm);
+calllib('libneo_orb', 'neo_orb_global_MOD_init_field', ns, ntp, multharm);
 
 Z_charge = libpointer('int32Ptr', 2);
 m_mass = libpointer('int32Ptr', 4);
@@ -19,7 +19,7 @@ dtaumax = libpointer('doublePtr', 100);
 integmode = libpointer('int32Ptr', -1);
 relerr = libpointer('doublePtr', 1e-8);
 
-calllib('libneo_orb', 'neo_orb_MOD_init_params', Z_charge, m_mass, ...
+calllib('libneo_orb', 'neo_orb_global_MOD_init_params', Z_charge, m_mass, ...
     E_kin, dtau, dtaumax, integmode, relerr);
 %%
 s = libpointer('doublePtr', 0.5);
@@ -32,7 +32,7 @@ nt = 10000;
 z = zeros(nt, 4);
 
 for k = 1:nt
-  calllib('libneo_orb', 'neo_orb_MOD_timestep', s, th, ph, lam, ierr);
+  calllib('libneo_orb', 'neo_orb_global_MOD_timestep', s, th, ph, lam, ierr);
   z(k, 1) = s.Value;
   z(k, 2) = th.Value;
   z(k, 3) = ph.Value;

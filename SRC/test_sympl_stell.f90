@@ -25,7 +25,7 @@ real(8) :: rbig, dtau, dtaumax
 
 integer :: nt
 
-call init_field(norb, 5, 5, 3, 2)
+call init_field(norb, 'wout.nc', 5, 5, 3, 2)
 
 npoiper2 = 64
 rbig = rmajor*1.0d2
@@ -48,7 +48,7 @@ f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from
 print *, f%ro0, f%mu
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 
-nt = 10000
+nt = 100000
 
 npoiper2 = 128
 dt = twopi*rbig/npoiper2
@@ -144,7 +144,7 @@ subroutine test_single(si, outname)
     endtime = omp_get_wtime()
     print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
         write(20,*) out(:,kt)
     end do

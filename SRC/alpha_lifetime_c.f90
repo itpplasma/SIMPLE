@@ -1,7 +1,7 @@
+program alpha_lifetime_c
 !
-  use new_vmec_stuff_mod, only : netcdffile,multharm,ns_A,ns_s,ns_tp
-  use chamb_mod,  only : rnegflag
-  use parmot_mod, only : rmu,ro0,eeff
+  use new_vmec_stuff_mod, only : netcdffile,multharm,ns_s,ns_tp
+  use parmot_mod, only : rmu,ro0
   use velo_mod,   only : isw_field_type
 use diag_mod, only : dodiag
 !
@@ -17,12 +17,12 @@ use diag_mod, only : dodiag
   integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
   integer          :: ipart,notrace_passing,loopskip,iskip,ilost
   real             :: zzg
-  double precision :: dphi,rbeg,phibeg,zbeg,bmod00,rcham,rlarm,bmax,bmin
+  double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin!,rcham
   double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
   double precision :: RT0,R0i,cbfi,bz0i,bf0,trap_par,rbig
   double precision :: sbeg,thetabeg
   double precision, dimension(5) :: z
-  double precision, dimension(:),   allocatable :: bstart,volstart,confpart
+  double precision, dimension(:),   allocatable :: bstart,volstart!,confpart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
 ! 24.03.2016
@@ -35,7 +35,7 @@ use diag_mod, only : dodiag
   integer          :: ibins
 ! 14.04.2013 end
 ! 22.09.2013
-  integer          :: n_e,n_d,n_b
+  integer          :: n_e,n_d!,n_b
 ! 22.09.2013 end
 ! 13.02.2013 end
   double precision, parameter :: relerr = 1d-10
@@ -110,7 +110,7 @@ use diag_mod, only : dodiag
 ! normalized slowing down time:
   tau=trace_time*v0
 ! normalized time step:
-  dtau=tau/dfloat(ntimstep-1)
+  dtau=tau/dble(ntimstep-1)
 !
 ! 14.11.2011  call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)
   call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)         !<=2017
@@ -228,8 +228,8 @@ use diag_mod, only : dodiag
   close(1)
 !<=2017  open(1,file='vacuum_chamber.dat')
 !<=2017  do i=0,npoi
-!<=2017    write (1,*) rbig+rcham*cos(2.d0*pi*dfloat(i)/dfloat(npoi)), &
-!<=2017                rcham*sin(2.d0*pi*dfloat(i)/dfloat(npoi))
+!<=2017    write (1,*) rbig+rcham*cos(2.d0*pi*dble(i)/dble(npoi)), &
+!<=2017                rcham*sin(2.d0*pi*dble(i)/dble(npoi))
 !<=2017  enddo
 !<=2017  close(1)
 !
@@ -321,9 +321,9 @@ if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
     endif
     open(1,file='confined_fraction.dat')
     do i=1,ntimstep
-!      write(1,*) dfloat(i-1)*dtau/v0,confpart_pass(i)/ntestpart, &
+!      write(1,*) dble(i-1)*dtau/v0,confpart_pass(i)/ntestpart, &
 !                                     confpart_trap(i)/ntestpart
-      write(1,*) dfloat(i-1)*dtau/v0,confpart_trap(i)/ntestpart, &
+      write(1,*) dble(i-1)*dtau/v0,confpart_trap(i)/ntestpart, &
                                      confpart_pass(i)/ntestpart,ipart
     enddo
     close(1)
@@ -335,10 +335,10 @@ if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
 ! 
   open(1,file='confined_fraction.dat')
   do i=1,ntimstep
-    write(1,*) dfloat(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
+    write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo
   close(1)
 !
   call deallocate_can_coord   !<=2017 NEW
 !
-  end
+end program alpha_lifetime_c

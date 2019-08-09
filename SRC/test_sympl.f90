@@ -131,7 +131,7 @@ subroutine test_single(si, outname)
     endtime = omp_get_wtime()
     print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
         write(20,*) out(:,kt)
     end do

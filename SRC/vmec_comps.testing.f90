@@ -30,7 +30,7 @@ do is=1,npoi
     s=ds*is
     r=s
     mode_secders=2
-!    vartheta_c=2.d0*pi*dfloat(it)/dfloat(ntheta)
+!    vartheta_c=2.d0*pi*dble(it)/dble(ntheta)
   call vmec_field(s,vartheta_c,varphi_c,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                   sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                   Bcovar_r,Bcovar_vartheta,Bcovar_varphi)

@@ -31,7 +31,7 @@ tau=trace_time*v0
 
 libneo_orb = fortran_library('neo_orb', path='../lib')
 
-neo_orb = fortran_module(libneo_orb, 'neo_orb')
+neo_orb = fortran_module(libneo_orb, 'neo_orb_global')
 neo_orb.fdef("""
   double precision :: fper
   double precision :: dtau, dtaumax, v0

@@ -5,7 +5,7 @@ function znew = neo_orb_timestep(z)
     ph = libpointer('doublePtr', z(3));
     lam = libpointer('doublePtr', z(4));
     ierr = libpointer('int32Ptr', 0);
-    calllib('libneo_orb', 'neo_orb_MOD_timestep', s, th, ph, lam, ierr);
+    calllib('libneo_orb', 'neo_orb_global_MOD_timestep', s, th, ph, lam, ierr);
     znew(1) = s.Value;
     znew(2) = th.Value;
     znew(3) = ph.Value;

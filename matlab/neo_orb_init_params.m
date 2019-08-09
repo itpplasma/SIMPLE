@@ -17,6 +17,6 @@ function neo_orb_init_params(Z_charge, A_mass, E0, dtau, dtaumax, relerr)
     p_dtaumax = libpointer('doublePtr', dtaumax);
     p_relerr = libpointer('doublePtr', relerr);
 
-    calllib('libneo_orb', 'neo_orb_MOD_init_params', p_Z_charge, ...
+    calllib('libneo_orb', 'neo_orb_global_MOD_init_params', p_Z_charge, ...
         p_A_mass, p_E0, p_dtau, p_dtaumax, p_relerr);
 end

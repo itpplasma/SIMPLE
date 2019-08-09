@@ -1,7 +1,7 @@
 program main
-#ifdef _OPENMP
+  
   use omp_lib
-#endif
+  
   use common, only: twopi
   use neo_orb, only: NeoOrb, init_field, init_params, init_integrator, timestep_sympl_z
   use field_can_mod, only: FieldCan
@@ -27,7 +27,7 @@ program main
   type(SymplecticIntegrator) :: si
   type(CutDetector) :: cutter
 
-  call init_field(norb, 5, 5, 3, 2)
+  call init_field(norb, 'wout.nc', 5, 5, 3, 2)
 
   npoiper2 = 64
   rbig = rmajor*1.0d2
@@ -53,22 +53,22 @@ program main
 
   starttime = omp_get_wtime()
   do i = 1,ntimstep
-    call timestep_sympl_z(norb, z, ierr)
+    call timestep_sympl_z(norb%si, norb%f, z, ierr)
   end do
   endtime = omp_get_wtime()
 
   print *, z
   write(*,*) 'Time elapsed: ', endtime - starttime,' s'
 
-  ! ncut = 1000
-  ! call init_cut(cutter, norb, z)
+  ncut = 1000
+  call init_cut(cutter, norb%fper, z)
 
-  ! starttime = omp_get_wtime()
-  ! do i = 1, ncut
-  !   call trace_to_cut(cutter, z, var_tip, cut_type, ierr)
-  ! end do
-  ! endtime = omp_get_wtime()
-  ! write(*,*) 'Time elapsed: ', endtime - starttime,' s'
-  ! print *, z
+  starttime = omp_get_wtime()
+  do i = 1, ncut
+    call trace_to_cut(cutter, norb%si, norb%f, z, var_tip, cut_type, ierr)
+  end do
+  endtime = omp_get_wtime()
+  write(*,*) 'Time elapsed: ', endtime - starttime,' s'
+  print *, z
 
 end program main

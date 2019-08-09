@@ -15,8 +15,8 @@
   nx=100
   ny=100
 !
-  hx=xrange/dfloat(nx)
-  hy=yrange/dfloat(ny)
+  hx=xrange/dble(nx)
+  hy=yrange/dble(ny)
 !
   allocate(dummy2d(-ny:ny,5))
 !
@@ -24,9 +24,9 @@
   z(5)=0.1d0
 !
   do ix=-nx,nx
-    z(1)=hx*dfloat(ix)
+    z(1)=hx*dble(ix)
     do iy=-ny,ny
-      z(2)=hy*dfloat(iy)+epsilon(1.d0)
+      z(2)=hy*dble(iy)+epsilon(1.d0)
 !
       call velo_axis(tau,z,vz)
 !

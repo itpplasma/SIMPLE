@@ -94,7 +94,7 @@ use diag_mod, only : icounter
 ! normalized slowing down time:
   tau=trace_time*v0
 ! normalized time step:
-  dtau=tau/dfloat(ntimstep-1)
+  dtau=tau/dble(ntimstep-1)
 ! parameters for the vacuum chamber:
   call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) ! TODO: why again?
   rbig=rt0
