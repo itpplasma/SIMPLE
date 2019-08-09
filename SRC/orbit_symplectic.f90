@@ -784,6 +784,90 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
   end subroutine fixpoint_rk_gauss
 
 
+subroutine coeff_rk_lobatto(n, a, ahat, b, c)
+  integer, intent(in) :: n
+  double precision, intent(inout) :: a(n,n), ahat(n,n), b(n), c(n)
+
+  if (n == 3) then
+    a(1,1) =  0d0
+    a(1,2) =  0d0
+    a(1,3) =  0d0
+
+    a(2,1) =  0.20833333333333334d0
+    a(2,2) =  0.33333333333333333d0
+    a(2,3) = -0.041666666666666664d0
+
+    a(3,1) =  0.16666666666666667d0
+    a(3,2) =  0.66666666666666667d0
+    a(3,3) =  0.16666666666666667d0 
+
+    ahat(1,1) =  0.16666666666666667d0
+    ahat(1,2) = -0.16666666666666667d0 
+    ahat(1,3) =  0d0
+
+    ahat(2,1) =  0.16666666666666667d0
+    ahat(2,2) =  0.33333333333333333d0
+    ahat(2,3) =  0d0
+
+    ahat(3,1) =  0.16666666666666667d0
+    ahat(3,2) =  0.66666666666666667d0
+    ahat(3,3) =  0d0
+
+    b(1) =  0.16666666666666667d0
+    b(2) =  0.66666666666666667d0
+    b(3) =  0.16666666666666667d0
+
+    c(1) = 0d0
+    c(2) = 0.5d0
+    c(3) = 1.0d0
+
+  else
+    ! not implemented
+    a = 0d0
+    b = 0d0
+    c = 0d0
+  endif
+end subroutine coeff_rk_lobatto
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
+!
+subroutine f_rk_lobatto(si, fs, s, x, fvec)
+  !
+  type(SymplecticIntegrator), intent(in) :: si
+  integer, intent(in) :: s
+  type(FieldCan), intent(inout) :: fs(s)
+  double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
+  double precision, intent(out) :: fvec(4*s)
+
+  double precision :: a(s,s), ahat(s), b(s), c(s), Hprime(s)
+  integer :: k,l  ! counters
+
+  call coeff_rk_lobatto(s, a, ahat, b, c)  ! TODO: move this to preprocessing
+
+  ! evaluate stages
+  do k = 1, s
+    call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 2)
+    call get_derivatives2(fs(k), x(4*k))
+    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+  end do
+
+  do k = 1, s
+    fvec(4*k-3) = fs(k)%pth - si%pthold
+    fvec(4*k-2) = x(4*k-2)  - si%z(2)
+    fvec(4*k-1) = x(4*k-1)  - si%z(3)
+    fvec(4*k)   = x(4*k)    - si%z(4)
+    do l = 1, s
+      fvec(4*k-3) = fvec(4*k-3) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
+      fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
+      fvec(4*k-1) = fvec(4*k-1) - si%dt*ahat(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+      fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))           ! pphdot
+    end do
+  end do
+  
+  end subroutine f_rk_lobatto
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_sympl(si, f, ierr)
@@ -1412,6 +1496,7 @@ end subroutine debug_root
 end module orbit_symplectic
 
 module orbit_symplectic_global
+<<<<<<< HEAD
   use field_can_mod, only: FieldCan
   use orbit_symplectic, only: SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_sympl_init_multi, orbit_timestep_sympl, &
@@ -1469,4 +1554,7 @@ contains
     end do
   end subroutine timesteps
 
+=======
+  
+>>>>>>> Lobatto halfway
 end module orbit_symplectic_global

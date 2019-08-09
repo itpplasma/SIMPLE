@@ -133,6 +133,43 @@ subroutine f_rk_gauss_quasi(n, x, fvec, iflag)
 
 end subroutine f_rk_gauss_quasi
 
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
+!
+subroutine f_rk_lobatto_quasi(s, x, fvec)
+  !
+  integer, intent(in) :: s
+  double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
+  double precision, intent(out) :: fvec(4*s)
+
+  double precision :: a(s,s), ahat(s), b(s), c(s), Hprime(s)
+  integer :: k,l  ! counters
+
+  call coeff_rk_lobatto(s, a, ahat, b, c)  ! TODO: move this to preprocessing
+
+  ! evaluate stages
+  do k = 1, s
+    call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 0)
+    call get_derivatives(fs(k), x(4*k))
+    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+  end do
+
+  do k = 1, s
+    fvec(4*k-3) = fs(k)%pth - si%pthold
+    fvec(4*k-2) = x(4*k-2)  - si%z(2)
+    fvec(4*k-1) = x(4*k-1)  - si%z(3)
+    fvec(4*k)   = x(4*k)    - si%z(4)
+    do l = 1, s
+      fvec(4*k-3) = fvec(4*k-3) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
+      fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
+      fvec(4*k-1) = fvec(4*k-1) - si%dt*ahat(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+      fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))           ! pphdot
+    end do
+  end do
+  
+  end subroutine f_rk_lobatto_quasi
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_quasi(ierr)
@@ -154,6 +191,8 @@ subroutine orbit_timestep_quasi(ierr)
       call timestep_rk_gauss_quasi(3, ierr)
     case (7)
       call timestep_rk_gauss_quasi(4, ierr)
+    case (15)
+      call timestep_rk_lobatto_quasi(si, f, 3, ierr)
     case default
       print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
       stop
@@ -394,5 +433,64 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
   enddo
 
 end subroutine timestep_rk_gauss_quasi
+
+
+subroutine timestep_rk_lobatto_quasi(s, ierr)
+!
+  integer, intent(out) :: ierr
+
+  integer, parameter :: maxit = 256
+
+  integer, intent(in) :: s
+  double precision, dimension(4*s) :: x
+  double precision :: fvec(4*s)
+  integer :: ktau, info, k, l
+
+  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+
+  do k = 1,s
+    fs(k) = f
+  end do
+
+  ierr = 0
+  ktau = 0
+  do while(ktau .lt. si%ntau)
+    si%pthold = f%pth
+    
+    do k = 1,s
+      x((4*k-3):(4*k)) = si%z
+    end do
+
+    call hybrd1(f_rk_gauss_quasi, 4*s, x, fvec, si%rtol, info)
+
+    if (x(1) > 1.0) then
+      ierr = 1
+      return
+    end if
+
+    if (x(1) < 0.0) then
+      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      x(1) = 0.01
+    end if
+
+    call coeff_rk_lobatto(s, a, ahat, b, c)  ! TODO: move this to preprocessing
+
+    f = fs(s)
+    f%pth = si%pthold
+    si%z(1) = x(4*s-3)
+
+    do l = 1, s
+      Hprime(l) = fs(l)%dH(1)/fs(l)%dpth(1)
+      f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))            ! pthdot
+      si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)                                      ! thdot
+      si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+      si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+    end do
+  
+    si%kt = si%kt+1
+    ktau = ktau+1
+  enddo
+
+end subroutine timestep_rk_lobatto_quasi
 
 end module orbit_symplectic_quasi
