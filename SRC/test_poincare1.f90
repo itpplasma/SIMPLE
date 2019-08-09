@@ -79,7 +79,7 @@ use diag_mod, only : icounter
 ! normalized slowing down time:
   tau=trace_time*v0
 ! normalized time step:
-  dtau=tau/dfloat(ntimstep-1)
+  dtau=tau/dble(ntimstep-1)
 !
 bmod00=281679.46317784750d0
 ! Larmor raidus corresponds to the field stregth egual to $B_{00}$ harmonic
@@ -229,13 +229,13 @@ print *,'done. Evaluations: ', icounter, 'CPU time (s): ', tend - tstart
 ! !
 !     call orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
 !     if (.not. jparmode) then
-!       write (3001,*) dtau*dfloat(i),z
+!       write (3001,*) dtau*dble(i),z
 !     else
 !       alam=z(5)
 !       par_inv=par_inv+alam**2*dtau
 !       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
 !         write (100,*) i,par_inv
-!         write (3001,*) dtau*dfloat(i),z
+!         write (3001,*) dtau*dble(i),z
 !         par_inv=0.d0
 !       endif
 !       alam_prev=alam

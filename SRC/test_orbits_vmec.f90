@@ -75,7 +75,7 @@ isw_field_type=1
 ! normalized slowing down time:
   tau=trace_time*v0
 ! normalized time step:
-  dtau=tau/dfloat(ntimstep-1)
+  dtau=tau/dble(ntimstep-1)
 !
 bmod00=281679.46317784750d0
 ! Larmor raidus corresponds to the field stregth egual to $B_{00}$ harmonic
@@ -134,13 +134,13 @@ do i=1,L1i*npoiper*npoiper2*runlen
     if (mode_sympl>0) call orbit_timestep_sympl(z, ierr)
     
     if (.not. jparmode) then
-      write (3001,*) dtau*dfloat(i),z
+      write (3001,*) dtau*dble(i),z
     else
       alam=z(5)
       par_inv=par_inv+alam**2*dtau
       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
         write (100,*) i,par_inv
-        write (3001,*) dtau*dfloat(i),z
+        write (3001,*) dtau*dble(i),z
         par_inv=0.d0
       endif
       alam_prev=alam

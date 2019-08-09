@@ -65,7 +65,7 @@
 ! normalized slowing down time:
   tau=trace_time*v0
 ! normalized time step:
-  dtau=tau/dfloat(ntimstep-1)
+  dtau=tau/dble(ntimstep-1)
 !
 bmod00=281679.46317784750d0
 ! Larmor raidus corresponds to the field stregth egual to $B_{00}$ harmonic
@@ -97,7 +97,7 @@ print *,dtau
 do it=1,100
   r=0.1d0 !0.005d0 !0.1d0 !0.7d0
   vartheta_c=0.5d0 !0.d0 !0.5d0
-vartheta_c=8.d0*atan(1.d0)*dfloat(it)*0.01
+vartheta_c=8.d0*atan(1.d0)*dble(it)*0.01
   varphi_c=0.5d0
   alam0=0.01d0 !0.5d0
 !
@@ -122,7 +122,7 @@ print *,'canonical'
     call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
 !
 !
-    write (3003,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+    write (3003,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
   enddo
 close(3003)
 print *,'done'
@@ -140,7 +140,7 @@ print *,'axis'
 !
     call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
 !
-    write (3004,*) dtau*dfloat(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
+    write (3004,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
   enddo
 close(3004)
 print *,'done'
@@ -165,7 +165,7 @@ print *,'VMEC, splines'
 !
     call orbit_timestep_can(z,dtau,dtaumin,ierr)
 !
-    write (3001,*) dtau*dfloat(i),z
+    write (3001,*) dtau*dble(i),z
   enddo
 print *,'done'
 !call testing

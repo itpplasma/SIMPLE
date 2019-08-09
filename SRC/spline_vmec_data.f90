@@ -89,8 +89,8 @@
 ! 
   allocate(exp_imt(0:nsize_exp_imt),exp_inp(-nsize_exp_inp:nsize_exp_inp))
 !
-  base_exp_imt=exp(dcmplx(0.d0,h_theta))
-  base_exp_inp=exp(dcmplx(0.d0,h_phi))
+  base_exp_imt=exp(cmplx(0.d0,h_theta,kind=kind(0d0)))
+  base_exp_inp=exp(cmplx(0.d0,h_phi,kind=kind(0d0)))
   base_exp_inp_inv=(1.d0,0.d0)/base_exp_inp
   exp_imt(0)=(1.d0,0.d0)
   exp_inp(0)=(1.d0,0.d0)
@@ -127,7 +127,7 @@
         iexpp=n*(i_phi-1)
         expphase=exp_imt(iexpt)*exp_inp(-iexpp)
         cosphase=dble(expphase)
-        sinphase=dimag(expphase)
+        sinphase=aimag(expphase)
         do is=1,ns
           sR(1,1,1,is,i_theta,i_phi) = sR(1,1,1,is,i_theta,i_phi)      &
                                      + rmn_rho(i,is-1)*cosphase

@@ -107,7 +107,7 @@ contains
 
     if(status /= nf90_noerr) then
        print *, trim(nf90_strerror(status))
-       call abort
+       ! call abort
        stop
     end if
   end subroutine nf90_check

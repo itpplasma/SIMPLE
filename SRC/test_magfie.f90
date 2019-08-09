@@ -32,7 +32,7 @@ if (field_mode == -1) then
   call FieldCan_init(f, 1d-5, 1d0, vpar0, field_mode)
   call eval_field(f, z0(1), z0(2), z0(3), 0)
 elseif (field_mode == 0) then
-  call init_field(norb, 5, 5, 3, 0)
+  call init_field(norb, 'wout.nc', 5, 5, 3, 0)
 
   npoiper2 = 64
   rbig = rmajor*1.0d2
