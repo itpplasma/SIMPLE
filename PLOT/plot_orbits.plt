@@ -1,8 +1,9 @@
-plot   "euler1.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001
-replot "euler2.out" u (1+$1*cos($2)):($1*sin($2)) ps .001
+#plot   "euler1.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001
+#replot "euler2.out" u (1+$1*cos($2)):($1*sin($2)) ps .001
 #replot "verlet.out" u (1+$1*cos($2)):($1*sin($2)) ps .001
 #replot "verlet_quasi.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001
-replot "gauss8.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001 
+plot "gauss2.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001 
+replot "lobatto4q.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001 
 #replot "euler2.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001
 #plot "verlet.out"   u (1+$1*cos($2)):($1*sin($2)) ps .001
 #replot "midpoint.out" u (1+$1*cos($2)):($1*sin($2)) ps .001
