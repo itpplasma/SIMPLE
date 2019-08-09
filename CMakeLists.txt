@@ -43,7 +43,7 @@ else()
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -g -shared-libgcc)
 	else()
-		add_compile_options(-O3 -march=haswell -mtune=haswell)
+		add_compile_options(-O3 -march=ivybridge -mtune=ivybridge)
 	endif()
 endif()
 
@@ -67,7 +67,6 @@ add_library ( neo_orb SHARED
 	SRC/minpack.f90
 	SRC/common.f90
 	SRC/neo_orb.f90
-#	SRC/minpack.f90
 )
 
 add_executable (neo-orb.x
@@ -109,10 +108,10 @@ add_executable (alpha_lifetime.x
 	SRC/alpha_lifetime.f90
 )
 
-if ("${CMAKE_Fortran_COMPILER_ID}" MATCHES "Intel")
+if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(neo_orb netcdf netcdff)
 else()
-	target_link_libraries(neo_orb netcdf netcdff openblas)
+	target_link_libraries(neo_orb netcdf netcdff lapack blas)
 endif()
 
 target_link_libraries(neo-orb.x neo_orb)

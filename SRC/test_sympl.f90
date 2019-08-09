@@ -37,9 +37,9 @@ z0(4) = m*vpar0*f%hph + qe/c*f%Aph  ! p_phi
 taub = 7800d0  ! estimated bounce time
 nbounce = 1000
 
-steps_per_bounce = 12
-dt = taub/steps_per_bounce
 
+steps_per_bounce = 32
+dt = taub/steps_per_bounce
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 1)
 call test_single(euler1, 'euler1.out')
 call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2, 1)
@@ -55,12 +55,10 @@ call test_single(gauss2, 'gauss2.out')
 print *, ''
 
 
-call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
-call test_quasi(lobatto4, 'lobatto4q.out')
-stop
-
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 ! call test_multi(order4, 'order4.out')
+!call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
+!call test_single(lobatto4, 'lobatto4.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi(mclachlan4, 'mclachlan4.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
@@ -97,6 +95,8 @@ print *, ''
 
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 ! call test_multi_quasi(order4, 'order4q.out')
+call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
+call test_quasi(lobatto4, 'lobatto4.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(mclachlan4, 'mclachlan4q.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)

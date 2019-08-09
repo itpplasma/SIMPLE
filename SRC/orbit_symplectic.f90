@@ -810,7 +810,7 @@ subroutine coeff_rk_lobatto(n, a, ahat, b, c)
     ahat(2,3) =  0d0
 
     ahat(3,1) =  0.16666666666666667d0
-    ahat(3,2) =  0.66666666666666667d0
+    ahat(3,2) =  0.83333333333333333d0
     ahat(3,3) =  0d0
 
     b(1) =  0.16666666666666667d0
@@ -841,7 +841,7 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec)
   double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
   double precision, intent(out) :: fvec(4*s)
 
-  double precision :: a(s,s), ahat(s), b(s), c(s), Hprime(s)
+  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
   integer :: k,l  ! counters
 
   call coeff_rk_lobatto(s, a, ahat, b, c)  ! TODO: move this to preprocessing
@@ -861,8 +861,8 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec)
     do l = 1, s
       fvec(4*k-3) = fvec(4*k-3) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
       fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
-      fvec(4*k-1) = fvec(4*k-1) - si%dt*ahat(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-      fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))           ! pphdot
+      fvec(4*k-1) = fvec(4*k-1) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph     ! phdot
+      fvec(4*k)   = fvec(4*k)   + si%dt*ahat(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
     end do
   end do
   
@@ -1454,12 +1454,17 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
     call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
 
+    do k = 1, s
+      call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 0)
+      call get_derivatives(fs(k), x(4*k))
+      Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+    end do
+
     f = fs(s)
     f%pth = si%pthold
     si%z(1) = x(4*s-3)
 
     do l = 1, s
-      Hprime(l) = fs(l)%dH(1)/fs(l)%dpth(1)
       f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))            ! pthdot
       si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)                                      ! thdot
       si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
@@ -1496,7 +1501,6 @@ end subroutine debug_root
 end module orbit_symplectic
 
 module orbit_symplectic_global
-<<<<<<< HEAD
   use field_can_mod, only: FieldCan
   use orbit_symplectic, only: SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_sympl_init_multi, orbit_timestep_sympl, &
@@ -1554,7 +1558,5 @@ contains
     end do
   end subroutine timesteps
 
-=======
   
->>>>>>> Lobatto halfway
 end module orbit_symplectic_global
