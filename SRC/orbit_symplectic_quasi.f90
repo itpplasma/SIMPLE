@@ -152,6 +152,8 @@ subroutine orbit_timestep_quasi(ierr)
       call timestep_rk_gauss_quasi(2, ierr)
     case (6)
       call timestep_rk_gauss_quasi(3, ierr)
+    case (7)
+      call timestep_rk_gauss_quasi(4, ierr)
     case default
       print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
       stop

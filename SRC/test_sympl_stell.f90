@@ -48,10 +48,11 @@ f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from
 print *, f%ro0, f%mu
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 
-nt = 100000
 
-npoiper2 = 128
+npoiper2 = 64
 dt = twopi*rbig/npoiper2
+
+nt = 10000*npoiper2/64
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 1)
 call test_single(euler1, 'euler1.out')
@@ -67,8 +68,8 @@ call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
 call test_single(gauss2, 'gauss2.out')
 print *, ''
 
-! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-! call test_multi(order4, 'order4.out')
+!call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
+!call test_multi(order4, 'order4.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi(mclachlan4, 'mclachlan4.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
@@ -77,6 +78,8 @@ call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
 call test_single(gauss4, 'gauss4.out')
 print *, ''
 
+stop
+
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
 call test_multi(kahan6, 'kahan6.out')
 call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
@@ -84,33 +87,33 @@ call test_single(gauss6, 'gauss6.out')
 print *, ''
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 0)
-call test_quasi(euler1, 'euler1_quasi.out')
+call test_quasi(euler1, 'euler11.out')
 call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2, 0)
-call test_quasi(euler2, 'euler2_quasi.out')
+call test_quasi(euler2, 'euler21.out')
 print *, ''
 
 call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(verlet, 'verlet_quasi.out')
+call test_multi_quasi(verlet, 'verletq.out')
 call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3, 0)
-call test_quasi(midpoint, 'midpoint_quasi.out')
+call test_quasi(midpoint, 'midpointq.out')
 call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
-call test_quasi(gauss2, 'gauss2_quasi.out')
+call test_quasi(gauss2, 'gauss2q.out')
 print *, ''
 
 !call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-!call test_multi_quasi(order4, 'order4_quasi.out')
+!call test_multi_quasi(order4, 'order4q.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(mclachlan4, 'mclachlan4_quasi.out')
+call test_multi_quasi(mclachlan4, 'mclachlan4q.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(blanes4, 'blanes4_quasi.out')
+call test_multi_quasi(blanes4, 'blanes4q.out')
 call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
-call test_quasi(gauss4, 'gauss4_quasi.out')
+call test_quasi(gauss4, 'gauss4q.out')
 print *, ''
 
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(kahan6, 'kahan6_quasi.out')
+call test_multi_quasi(kahan6, 'kahan6q.out')
 call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
-call test_quasi(gauss6, 'gauss6_quasi.out')
+call test_quasi(gauss6, 'gauss6q.out')
 print *, ''
 
 
@@ -142,7 +145,7 @@ subroutine test_single(si, outname)
         out(5,kt) = f%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
     open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
@@ -182,9 +185,9 @@ subroutine test_quasi(si, outname)
         out(5,kt) = f_quasi%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
         write(20,*) out(:,kt)
     end do
@@ -216,9 +219,9 @@ subroutine test_multi(mi, outname)
         out(5,kt) = f%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
         write(20,*) out(:,kt)
     end do
@@ -252,9 +255,9 @@ subroutine test_multi_quasi(mi, outname)
         out(5,kt) = f_quasi%H
     end do
     endtime = omp_get_wtime()
-    print *, outname(1:10), ' Time: ', endtime-starttime, 's, Evaluations: ', icounter
+    print *, outname(1:10), endtime-starttime, icounter
 
-    open(unit=20, file=outname, action='write')
+    open(unit=20, file=outname, action='write', recl=4096)
     do kt = 1, nt
         write(20,*) out(:,kt)
     end do

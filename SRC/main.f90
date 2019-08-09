@@ -27,7 +27,7 @@ program main
   type(SymplecticIntegrator) :: si
   type(CutDetector) :: cutter
 
-  call init_field(norb, 'wout.nc', 5, 5, 3, 2)
+  call init_field(norb, 'wout.nc', 5, 5, 3, 1)
 
   npoiper2 = 64
   rbig = rmajor*1.0d2
@@ -60,7 +60,7 @@ program main
   print *, z
   write(*,*) 'Time elapsed: ', endtime - starttime,' s'
 
-  ncut = 1000
+  ncut = 10000
   call init_cut(cutter, norb%fper, z)
 
   starttime = omp_get_wtime()

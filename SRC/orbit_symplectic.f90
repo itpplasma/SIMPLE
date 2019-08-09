@@ -44,7 +44,7 @@ end type SymplecticIntegrator
 !
 ! Composition method with 2s internal stages according to Hairer, 2002 V.3.1
 !
-integer, parameter :: S_MAX = 64
+integer, parameter :: S_MAX = 32
 type :: MultistageIntegrator
   integer :: s
   double precision :: alpha(S_MAX), beta(S_MAX)
@@ -356,10 +356,11 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   integer, intent(in) :: maxit
   double precision, intent(out) :: xlast(n)
 
-  double precision :: fvec(n), fjac(n,n)
+  double precision :: fvec(n), fjac(n,n), jinv(n,n)
   integer :: pivot(n), info
   
   double precision :: xabs(n), tolref(n), fabs(n)
+  double precision :: det
 
   do kit = 1, maxit
     if(x(1) > 1.0) return
@@ -368,9 +369,28 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     fabs = dabs(fvec)
     call jac_sympl_euler2(si, f, x, fjac)
     xlast = x
-    call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
+
+    det = fjac(1,1)*fjac(2,2)*fjac(3,3) + fjac(1,2)*fjac(2,3)*fjac(3,1) + fjac(1,3)*fjac(2,1)*fjac(3,2) &
+        - fjac(1,3)*fjac(2,2)*fjac(3,1) - fjac(1,1)*fjac(2,3)*fjac(3,2) - fjac(1,2)*fjac(2,1)*fjac(3,3)
+
+    jinv(1,1) = fjac(2,2)*fjac(3,3) - fjac(2,3)*fjac(3,2)
+    jinv(1,2) = fjac(1,3)*fjac(3,2) - fjac(1,2)*fjac(3,3)
+    jinv(1,3) = fjac(1,2)*fjac(2,3) - fjac(1,3)*fjac(2,2)
+        
+    jinv(2,1) = fjac(2,3)*fjac(3,1) - fjac(2,1)*fjac(3,3)
+    jinv(2,2) = fjac(1,1)*fjac(3,3) - fjac(1,3)*fjac(3,1)
+    jinv(2,3) = fjac(1,3)*fjac(2,1) - fjac(1,1)*fjac(2,3)
+        
+    jinv(3,1) = fjac(2,1)*fjac(3,2) - fjac(3,1)*fjac(2,2)
+    jinv(3,2) = fjac(1,2)*fjac(3,1) - fjac(3,2)*fjac(1,1)
+    jinv(3,3) = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
+
+    x = x - matmul(jinv, fvec)/det
+
+    !call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
     ! after solution: fvec = (xold-xnew)_Newton
-    x = x - fvec
+    !x = x - fvec
+
     xabs = dabs(x-xlast)
     xabs(2) = modulo(xabs(2), pi)
     xabs(3) = modulo(xabs(3), pi)
@@ -383,7 +403,7 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     if (all(xabs < rtol*tolref)) return
   enddo
   print *, 'newton2: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6602,*) x(1), x(2), x(3), si%z(4), xabs, fvec
+  write(6602,*) x(1), x(2), x(3), si%z(4), xabs
 end subroutine
 
 subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
@@ -471,6 +491,36 @@ subroutine coeff_rk_gauss(n, a, b, c)
     c(1) = 0.1127016653792583d0
     c(2) = 0.5d0
     c(3) = 0.8872983346207417d0
+  elseif (n == 4) then  ! with help of coefficients from GeometricIntegrators.jl of Michael Kraus
+    a(1,1) = 0.086963711284363462428182d0
+    a(1,2) = -0.026604180084998794303397d0
+    a(1,3) = 0.012627462689404725035280d0
+    a(1,4) = -0.003555149685795683332096d0
+
+    a(2,1) = 0.188118117499868064967927d0
+    a(2,2) = 0.163036288715636523694030d0
+    a(2,3) = -0.027880428602470894855481d0
+    a(2,4) = 0.006735500594538155853808d0
+
+    a(3,1) = 0.167191921974188778543535d0
+    a(3,2) = 0.353953006033743966529670d0
+    a(3,3) = 0.163036288715636523694030d0
+    a(3,4) = -0.014190694931141143581010d0
+
+    a(4,1) = 0.177482572254522602550608d0
+    a(4,2) = 0.313445114741868369190314d0
+    a(4,3) = 0.352676757516271865977586d0
+    a(4,4) = 0.086963711284363462428182d0
+
+    b(1) = 0.173927422568726924856364d0
+    b(2) = 0.326072577431273047388061d0
+    b(3) = 0.326072577431273047388061d0
+    b(4) = 0.173927422568726924856364d0
+
+    c(1) = 0.069431844202973713731097d0
+    c(2) = 0.330009478207571871344328d0
+    c(3) = 0.669990521792428128655672d0
+    c(4) = 0.930568155797026341780054d0
   else
     ! not implemented
     a = 0d0
@@ -756,6 +806,8 @@ subroutine orbit_timestep_sympl(si, f, ierr)
       call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
    case (6)
       call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
+   case (7)
+      call orbit_timestep_sympl_rk_gauss(si, f, 4, ierr)
    case default
       print *, 'invalid mode for orbit_timestep_sympl: ', si%mode
       stop
@@ -809,9 +861,9 @@ subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
 
   do ks = 1, mi%s
     call orbit_sympl_init(mi%stages(2*ks-1), f, z, &
-      alpha(ks)*dtau, ntau, rtol_init, 1, 0)
+      alpha(ks)*dtau, ntau, rtol_init, 1, 1)
     call orbit_sympl_init(mi%stages(2*ks), f, z, &
-      beta(ks)*dtau, ntau, rtol_init, 2, 0)
+      beta(ks)*dtau, ntau, rtol_init, 2, 1)
   end do
 end subroutine orbit_sympl_init_multi
 
@@ -963,6 +1015,46 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, gam/2.0d0, gam/2.0d0)
   end subroutine orbit_sympl_init_kahan6
+
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+  subroutine orbit_sympl_init_kahan8(mi, f, z, dtau, ntau, rtol_init)
+    !
+    ! Composition method of order 8 with s=17 by Kahan&Li (1995)
+    ! with coefficients in the form of Hairer (2002)
+    !
+    !
+      type(MultistageIntegrator), intent(inout) :: mi
+      type(FieldCan), intent(inout) :: f
+    
+      double precision, intent(in) :: z(:)
+      double precision, intent(in) :: dtau
+      integer, intent(in) :: ntau
+      double precision, intent(in) :: rtol_init
+    
+      double precision :: gam(17)
+    
+      gam(1) =  0.13020248308889008087881763d0
+      gam(2) =  0.56116298177510838456196441d0
+      gam(3) = -0.38947496264484728640807860d0
+      gam(4) =  0.15884190655515560089621075d0
+      gam(5) = -0.39590389413323757733623154d0
+      gam(6) =  0.18453964097831570709183254d0
+      gam(7) =  0.25837438768632204729397911d0
+      gam(8) =  0.29501172360931029887096624d0
+      gam(9) = -0.60550853383003451169892108d0
+      gam(10) = gam(8)
+      gam(11) = gam(7)
+      gam(12) = gam(6)
+      gam(13) = gam(5)
+      gam(14) = gam(4)
+      gam(15) = gam(3)
+      gam(16) = gam(2)
+      gam(17) = gam(1)
+    
+      call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, gam/2.0d0, gam/2.0d0)
+    end subroutine orbit_sympl_init_kahan8
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -1318,3 +1410,63 @@ subroutine debug_root(si, f, x0)
 end subroutine debug_root
 
 end module orbit_symplectic
+
+module orbit_symplectic_global
+  use field_can_mod, only: FieldCan
+  use orbit_symplectic, only: SymplecticIntegrator, MultistageIntegrator, &
+    orbit_sympl_init, orbit_sympl_init_multi, orbit_timestep_sympl, &
+    orbit_timestep_sympl_multi
+
+  implicit none
+  save
+
+  type(SymplecticIntegrator) :: si
+  type(MultistageIntegrator) :: mi
+  type(FieldCan) :: f
+  !$omp threadprivate(si, f)
+
+contains
+  subroutine init(z, dt, ntau, rtol_init, mode_init, nlag)
+    double precision, dimension(:), intent(in) :: z
+    double precision, intent(in) :: dt
+    integer, intent(in) :: ntau
+    double precision, intent(in) :: rtol_init
+    integer, intent(in) :: mode_init
+    integer, intent(in) :: nlag
+
+    call orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
+  end subroutine init
+
+  subroutine init_multi(z, dtau, ntau, rtol_init, alpha, beta)
+    double precision, dimension(:), intent(in) :: z
+    double precision, intent(in) :: dtau
+    integer, intent(in) :: ntau
+    double precision, intent(in) :: rtol_init
+    double precision, dimension(:), intent(in) :: alpha
+    double precision, dimension(:), intent(in) :: beta
+
+    call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
+  end subroutine init_multi
+
+  subroutine timestep(z, ierr)
+    double precision, intent(out) :: z(:)
+    integer, intent(out) :: ierr
+
+    call orbit_timestep_sympl(si, f, ierr)
+    z = si%z
+  end subroutine timestep
+
+  subroutine timesteps(n, zs, ierr)
+    integer, intent(in) :: n
+    double precision, intent(out) :: zs(:,:)
+    integer, intent(out) :: ierr
+
+    integer :: k
+
+    do k = 1, n
+      call orbit_timestep_sympl(si, f, ierr)
+      zs(:, k) = si%z
+    end do
+  end subroutine timesteps
+
+end module orbit_symplectic_global

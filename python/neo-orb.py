@@ -32,12 +32,7 @@ tau=trace_time*v0
 libneo_orb = fortran_library('neo_orb', path='../lib')
 
 neo_orb = fortran_module(libneo_orb, 'neo_orb_global')
-neo_orb.fdef("""
-  double precision :: fper
-  double precision :: dtau, dtaumax, v0
-  integer          :: n_e, n_d
-  integer          :: firstrun
-  
+neo_orb.fdef("""  
   subroutine init_field(ans_s, ans_tp, amultharm, aintegmode)
     integer :: ans_s, ans_tp, amultharm, aintegmode
   end
@@ -48,7 +43,16 @@ neo_orb.fdef("""
     double precision :: arelerr
   end
   
+  subroutine init_integrator(z0)
+    double precision, dimension(:), intent(in) :: z0
+  end
+  
   subroutine timestep_z(z, ierr)
+    double precision, dimension(:) :: z
+    integer :: ierr
+  end
+  
+  subroutine timestep_sympl_z(z, ierr)
     double precision, dimension(:) :: z
     integer :: ierr
   end
@@ -60,7 +64,7 @@ new_vmec_stuff.fdef("""
 """)
 
 
-cut_detector = fortran_module(libneo_orb, 'cut_detector')
+cut_detector = fortran_module(libneo_orb, 'cut_detector_global')
 cut_detector.fdef("""
     subroutine init(z)
       double precision, dimension(:), intent(in) :: z
@@ -82,7 +86,7 @@ new_vmec_stuff.load()
 neo_orb.init_field(5, 5, 3, 1)
 
 #%%
-npoiper2 = 64                       # interation points per field period
+npoiper2 = 24                       # interation points per field period
 rbig = new_vmec_stuff.rmajor*1.0e2  # major radius in cm
 dtaumax = 2.0*pi*rbig/npoiper2      # maximum time step for integrator
 dtau = dtaumax                   # time step for output
@@ -100,15 +104,16 @@ ph = 0.314
 lam = 0.22
 
 z = np.array([s,th,ph,1.0,lam])
+neo_orb.init_integrator(z)
 
-zs = np.empty([4, ntimstep])
+zs = np.empty([4, ntimstep+1])
 zs[:,0] = z[[0,1,2,4]]
 
 t = time.time()
 ierr = 0  # doesn't work yet with pass-by-reference
-for kt in range(1, ntimstep):
-    neo_orb.timestep_z(z, ierr)
-    zs[:, kt] = z[[0,1,2,4]]
+for kt in range(ntimstep):
+    neo_orb.timestep_sympl_z(z, ierr)
+    zs[:, kt+1] = z[[0,1,2,4]]
 print(z)
 print('time elapsed: {} s'.format(time.time() - t))
 
