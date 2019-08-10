@@ -96,7 +96,7 @@ print *, ''
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 ! call test_multi_quasi(order4, 'order4q.out')
 call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
-call test_quasi(lobatto4, 'lobatto4.out')
+call test_quasi(lobatto4, 'lobatto4q.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(mclachlan4, 'mclachlan4q.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
