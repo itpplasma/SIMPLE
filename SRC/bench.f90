@@ -1,5 +1,6 @@
 program test_sympl
 
+use field_can_mod, only: FieldCan_init
 use orbit_symplectic
 use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
@@ -29,42 +30,63 @@ double precision, allocatable :: out(:, :)
 double precision :: starttime, endtime
 
 
-logical :: multi
-logical :: quasi
+logical :: multi  ! use multi-stage scheme
+logical :: quasi  ! use quasi-Newton (numerical Jacobian)
+logical :: tok    ! tokamak (.True.) or stellarator (.False.)
 integer :: integ_mode
 integer :: nlag
 integer :: ncut
-character(len=64) :: outname
+character(len=128) :: infile, outfile
 
 integer, parameter :: n_tip_vars = 7
 double precision, allocatable :: var_cut(:, :)  ! r, th, ph, pph, H, Jpar
 
-namelist / bench / multi, quasi, integ_mode, npoiper2, nlag, ncut, outname
+double precision :: taub
+
+namelist / bench / multi, quasi, tok, integ_mode, npoiper2, nlag, ncut, infile, outfile
 
 read( *, nml = bench )
 
-call init_field(norb, 'wout.nc', 5, 5, 3, 1)
+if (tok) then
+    ! Initial conditions
+    z0(1) = 0.1d0  ! r
+    z0(2) = 1.5d0  ! theta
+    z0(3) = 0.0d0  ! phi
+    vpar0 = 0.0d0  ! parallel velocity
+    
+    call FieldCan_init(f, 1d-5, 1d0, vpar0, -1)
+    
+    ! Compute toroidal momentum from initial conditions
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
 
-rbig = rmajor*1.0d2
-dtaumax = twopi*rbig/npoiper2
-dtau = dtaumax
+    taub = 7800d0  ! estimated bounce time
+    dt = taub/npoiper2
+else
+    call init_field(norb, infile, 5, 5, 3, 1)
 
-call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+    rbig = rmajor*1.0d2
+    dtaumax = twopi*rbig/npoiper2
+    dtau = dtaumax
 
-! Initial conditions
-z0(1) = 0.4d0  ! r
-z0(2) = 0.7d0  ! theta
-z0(3) = 0.1d0  ! phi
-vpar0 = 0.0d0  ! parallel velocity
-call eval_field(f, z0(1), z0(2), z0(3), 0)
+    call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
 
-f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
-f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
-f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+    ! Initial conditions
+    z0(1) = 0.5d0    ! r
+    z0(2) = 0.0d0    ! theta
+    z0(3) = 0.314d0  ! phi
+    vpar0 = 0.0d0    ! parallel velocity
+
+
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+
+    f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+    f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
+    f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+
+    dt = twopi*rbig/npoiper2
+end if
 
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
-
-dt = twopi*rbig/npoiper2
 
 nt = 10000
 
@@ -75,13 +97,15 @@ out=0d0
 out(1:4,1) = z0
 out(5,1) = f%H
 
-call orbit_sympl_init(si, f, z0, dt, 1, 1d-12, integ_mode, nlag)
+call orbit_sympl_init(si, f, z0, dt, 1, 1d-13, integ_mode, nlag)
+
+
 starttime = omp_get_wtime()
 call test_cuts
 endtime = omp_get_wtime()
 print *, endtime-starttime, icounter
 
-open(unit=20, file=outname, action='write', recl=4096)
+open(unit=20, file=outfile, action='write', recl=4096)
 do kt = 1, ncut
     write(20,*) var_cut(kt, :)
 end do
@@ -96,7 +120,7 @@ subroutine test_cuts
     double precision :: vpar_old, z(4)
 
     integer, parameter :: nder = 0
-    integer, parameter :: nplagr = 6
+    integer, parameter :: nplagr = 4
     double precision :: orb_sten(n_tip_vars,nplagr), coef(0:nder,nplagr)
     integer :: ipoi(nplagr)
 
@@ -105,7 +129,7 @@ subroutine test_cuts
     double precision :: par_inv
 
     par_inv = 0d0
-    itip=nplagr/2+1
+    itip = nplagr/2+1
     do i=1,nplagr
       ipoi(i)=i
     enddo
@@ -139,7 +163,7 @@ subroutine test_cuts
 
             !<=use only initialized stencil
             if(i .gt. nplagr .and. itip .eq. nplagr/2) then
-                print *, orb_sten(6, ipoi)
+                !print *, orb_sten(6, ipoi)
                 call plag_coeff(nplagr, nder, 0d0, orb_sten(7, ipoi), coef)
                 var_cut(kcut, :) = matmul(orb_sten(:, ipoi), coef(0,:))
                 var_cut(kcut, 2) = modulo(var_cut(kcut, 2), twopi)
