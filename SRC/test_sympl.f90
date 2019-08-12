@@ -28,7 +28,7 @@ z0(2) = 1.5d0  ! theta
 z0(3) = 0.0d0  ! phi
 vpar0 = 0.0d0  ! parallel velocity
 
-call FieldCan_init(f, mu, c*m/qe, vpar0, field_type=-1)
+call FieldCan_init(f, mu, c*m/qe, vpar0, -1)
 
 ! Compute toroidal momentum from initial conditions
 call eval_field(f, z0(1), z0(2), z0(3), 0)
@@ -38,12 +38,15 @@ taub = 7800d0  ! estimated bounce time
 nbounce = 1000
 
 
-steps_per_bounce = 32
+steps_per_bounce = 8
 dt = taub/steps_per_bounce
+
 print *, 'timesteps: ', nbounce*steps_per_bounce
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 1)
 call test_single(euler1, 'euler1.out')
+
+stop
 call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2, 1)
 call test_single(euler2, 'euler2.out')
 print *, ''
@@ -76,7 +79,6 @@ call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
 call test_quasi(lobatto4, 'lobatto4q.out')
 print *, ''
 stop
-
 
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 ! call test_multi(order4, 'order4.out')

@@ -1,9 +1,11 @@
 &bench
-  multi = .False.,
-  quasi = .False.,
-  integ_mode = 1,
-  npoiper2 = 256,
-  nlag = 0,
-  ncut = 1000,
-  outname = '/tmp/out.txt'
+  multi = .False.
+  quasi = .False.
+  tok = .True.
+  integ_mode = 1
+  npoiper2 = 8
+  nlag = 1
+  ncut = 1000
+  infile = '../RUN/wout_26_scaled.nc'
+  outfile = '/tmp/out.txt'
 /
