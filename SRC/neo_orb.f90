@@ -210,7 +210,6 @@ module cut_detector
     double precision :: fper  ! field period
 
     ! for Poincare cuts
-    integer          :: npl_half
     double precision :: alam_prev, par_inv
     integer          :: iper, itip, kper
 
@@ -231,8 +230,6 @@ contains
     !---------------------------------------------------------------------------
     ! Prepare calculation of orbit tip by interpolation and buffer for Poincare plot:
 
-    self%npl_half=nplagr/2
-
     do i=1,nplagr
       self%ipoi(i)=i
     enddo
@@ -240,14 +237,14 @@ contains
     !--------------------------------
     ! Initialize tip detector
 
-    self%itip=self%npl_half+1
+    self%itip=nplagr/2+1
     self%alam_prev=z(5)
 
     ! End initialize tip detector
     !--------------------------------
     ! Initialize period crossing detector
 
-    self%iper=self%npl_half+1
+    self%iper=nplagr/2+1
     self%kper=int(z(3)/self%fper)
 
     ! End initialize period crossing detector
@@ -297,7 +294,7 @@ contains
       self%alam_prev=z(5)
 
       !<=use only initialized stencil
-      if(i.gt.nplagr .and. self%itip.eq.self%npl_half) then
+      if(i.gt.nplagr .and. self%itip.eq.nplagr/2) then
         cut_type = 0
         call plag_coeff(nplagr, nder, 0d0, self%orb_sten(5, self%ipoi), self%coef)
         var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
@@ -324,7 +321,7 @@ contains
       self%iper=self%iper+1
 
       !<=use only initialized stencil
-      if(i.gt.nplagr .and. self%iper.eq.self%npl_half) then
+      if(i.gt.nplagr .and. self%iper.eq.nplagr/2) then
         cut_type = 1
         !<=stencil around periodic boundary is complete, interpolate
         call plag_coeff(nplagr, nder, 0d0, self%orb_sten(3, self%ipoi) - phiper, self%coef)

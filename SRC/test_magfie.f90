@@ -20,7 +20,7 @@ real(8) :: rbig, dtau, dtaumax
 
 integer :: field_mode
 
-field_mode = -1
+field_mode = 0
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
@@ -45,11 +45,12 @@ elseif (field_mode == 0) then
   z0(1) = 0.1d0  ! r
   z0(2) = 0.7d0  ! theta
   z0(3) = 0.1d0  ! phi
-  vpar0 = 0.8d0  ! parallel velocity
+  vpar0 = 0.1d0  ! parallel velocity
 
   ! ro0 = mc/e*v0, different by sqrt(2) from other modules
   ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
   call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0), field_mode)
+  call eval_field(f, z0(1), z0(2), z0(3), 0)
   f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
 end if
 
@@ -326,7 +327,7 @@ subroutine test_jac_grk(si)
 
   x = x0
   call f_rk_gauss(si, fs, n, x, fvec)
-  call jac_rk_gauss(si, fs, n, x, jac)
+  call jac_rk_gauss(si, fs, n, jac)
 
   do k = 1,4*n
     do l = 1,4*n
@@ -334,6 +335,53 @@ subroutine test_jac_grk(si)
     end do
   end do
 end subroutine test_jac_grk
+
+
+subroutine test_jac_lob(si)
+  integer, parameter :: n = 3
+
+  type(SymplecticIntegrator) :: si
+  type(FieldCan) :: fs(n)
+  double precision :: x(4*n-2), dx(4*n-2), jac(4*n-2,4*n-2), x0(4*n-2), &
+    h(4*n-2), jacnum(4*n-2,4*n-2), fvec(4*n-2)
+  integer :: k, l
+
+  h = 1d-6
+  h(2) = 1d-6*z0(4)
+  h(6) = 1d-6*z0(4)
+  h(10) = 1d-6*z0(4)
+    
+  x0(1:2) = z0((/1,4/)) - 5d-4
+  x0(3:6) = z0(1:4) - 1d-4
+  x0(7:10) = z0(1:4) + 1d-4
+
+  fs(1) = f
+  fs(2) = f
+  fs(3) = f
+
+  do k = 1, 4*n-2
+    dx = 0d0
+    dx(k) = h(k)*0.5d0
+
+    x = x0 + dx
+    call f_rk_lobatto(si, fs, n, x, fvec, 0)
+    jacnum(:, k) = fvec
+
+    x = x0 - dx
+    call f_rk_lobatto(si, fs, n, x, fvec, 0)
+    jacnum(:, k) = (jacnum(:, k) - fvec)/h(k)
+  end do
+
+  x = x0
+  call f_rk_lobatto(si, fs, n, x, fvec, 2)
+  call jac_rk_lobatto(si, fs, n, jac)
+
+  do k = 1,4*n-2
+    do l = 1,4*n-2
+      print *, k, l, jac(k,l), jacnum(k,l), relerr(jac(k,l), jacnum(k,l))
+    end do
+  end do
+end subroutine test_jac_lob
 
 
 subroutine test_newton(si)
@@ -385,7 +433,7 @@ end subroutine
 
 subroutine do_test()
 
-    type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss4
+    type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss4, lobatto4
 
     double precision :: dz(4)
     integer :: i, j, k
@@ -459,7 +507,6 @@ subroutine do_test()
 
     ! TODO: second ders in pphi and mixed
 
-
     call orbit_sympl_init(euler1, f, z0, 1.0d0, 1, 1d-12, 0, 0)
     call test_jac1(euler1)
     call test_newton(euler1)
@@ -473,6 +520,10 @@ subroutine do_test()
 
     call orbit_sympl_init(gauss4, f, z0, 1.0d0, 1, 1d-12, 0, 4)
     call test_jac_grk(gauss4)
+
+    print *, 'lobatto'
+    call orbit_sympl_init(lobatto4, f, z0, 1.0d0, 1, 1d-12, 0, 15)
+    call test_jac_lob(lobatto4)
 end subroutine do_test
 
 end program test_magfie

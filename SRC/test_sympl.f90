@@ -40,29 +40,48 @@ nbounce = 1000
 
 steps_per_bounce = 32
 dt = taub/steps_per_bounce
+print *, 'timesteps: ', nbounce*steps_per_bounce
+
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 1)
 call test_single(euler1, 'euler1.out')
 call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2, 1)
 call test_single(euler2, 'euler2.out')
 print *, ''
 
-call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
-call test_multi(verlet, 'verlet.out')
-call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3, 0)
-call test_single(midpoint, 'midpoint.out')
 call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
 call test_single(gauss2, 'gauss2.out')
+call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3, 0)
+call test_single(midpoint, 'midpoint.out')
+call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
+call test_multi(verlet, 'verlet.out')
 print *, ''
+
+call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
+call test_single(gauss4, 'gauss4.out')
+call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
+call test_multi(mclachlan4, 'mclachlan4.out')
+call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
+call test_multi(blanes4, 'blanes4.out')
+call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
+call test_single(lobatto4, 'lobatto4.out')
+call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
+call test_single(gauss6, 'gauss6.out')
+print *, ''
+
+call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
+call test_quasi(gauss4, 'gauss4q.out')
+call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
+call test_quasi(gauss6, 'gauss6q.out')
+call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
+call test_quasi(lobatto4, 'lobatto4q.out')
+print *, ''
+stop
 
 
 ! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
 ! call test_multi(order4, 'order4.out')
 !call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
 !call test_single(lobatto4, 'lobatto4.out')
-call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
-call test_multi(mclachlan4, 'mclachlan4.out')
-call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
-call test_multi(blanes4, 'blanes4.out')
 call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
 call test_single(gauss4, 'gauss4.out')
 print *, ''

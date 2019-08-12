@@ -49,8 +49,10 @@ subroutine f_euler1_quasi(n, x, fvec, iflag)
   call eval_field(f, x(1), si%z(2), si%z(3), 0)
   call get_derivatives(f, x(2))
 
-  fvec(1) = f%dpth(1)*(f%pth - si%pthold) + si%dt*(f%dH(2)*f%dpth(1) - f%dH(1)*f%dpth(2))
-  fvec(2) = f%dpth(1)*(x(2) - si%z(4))  + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
+  fvec(1) = f%dpth(1)*(f%pth - si%pthold) &
+    + si%dt*(f%dH(2)*f%dpth(1) - f%dH(1)*f%dpth(2))
+  fvec(2) = f%dpth(1)*(x(2) - si%z(4)) &
+    + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
 
 end subroutine f_euler1_quasi
 
@@ -66,7 +68,8 @@ subroutine f_euler2_quasi(n, x, fvec, iflag)
 
   fvec(1) = f%pth - si%pthold
   fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-  fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
+  fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) &
+    - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
 
 end subroutine f_euler2_quasi
 
@@ -83,9 +86,12 @@ subroutine f_midpoint_quasi(n, x, fvec, iflag)
     call get_derivatives(f, 0.5*(x(4) + si%z(4)))
 
     fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-    fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
-    fvec(4) = f%dpth(1)*(x(4) - si%z(4)) + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-    fvec(5) = f%dpth(1)*(f%pth - si%pthold) + si%dt/2.0d0*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
+    fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) &
+      - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
+    fvec(4) = f%dpth(1)*(x(4) - si%z(4)) &
+      + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
+    fvec(5) = f%dpth(1)*(f%pth - si%pthold) &
+      + si%dt/2.0d0*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
   
     ! save evaluation from midpoint
     dpthmid = f%dpth(1)
@@ -124,63 +130,30 @@ subroutine f_rk_gauss_quasi(n, x, fvec, iflag)
     fvec(4*k-1) = x(4*k-1)  - si%z(3)
     fvec(4*k)   = x(4*k)    - si%z(4)
     do l = 1, n/4
-      fvec(4*k-3) = fvec(4*k-3) + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                      ! thdot
-      fvec(4*k-1) = fvec(4*k-1) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-      fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+      fvec(4*k-3) = fvec(4*k-3) &
+        + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))       ! pthdot
+      fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)             ! thdot
+      fvec(4*k-1) = fvec(4*k-1) &
+        - si%dt*a(k,l)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+      fvec(4*k)   = fvec(4*k) &
+        + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))       ! pphdot
     end do
   end do
 
 end subroutine f_rk_gauss_quasi
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
+! Lobatto (IIIA)-(IIIB) Runge-Kutta method, s stages (n=4*s-2 variables)
 !
 subroutine f_rk_lobatto_quasi(n, x, fvec)
   !
   integer, intent(in) :: n
   double precision, intent(in) :: x(n)  
   double precision, intent(out) :: fvec(n)
-
-  double precision :: a((n+2)/4,(n+2)/4), ahat((n+2)/4,(n+2)/4), & 
-    b((n+2)/4), c((n+2)/4), Hprime((n+2)/4)
-  integer :: k,l  ! counters
-
-  call coeff_rk_lobatto((n+2)/4, a, ahat, b, c)  ! TODO: move this to preprocessing
   
-  call eval_field(fs(1), x(1), si%z(2), si%z(3), 0)
-  call get_derivatives(fs(1), x(2))
-  Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
+  call f_rk_lobatto(si, fs, (n+2)/4, x, fvec, 0)
 
-  ! evaluate stages
-  do k = 2, (n+2)/4
-    call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), 0)
-    call get_derivatives(fs(k), x(4*k-2))
-    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
-  end do
-
-  fvec(1) = fs(1)%pth - si%pthold 
-  fvec(2) = x(2) - si%z(4)
-  
-  do l = 1, (n+2)/4
-      fvec(1) = fvec(1) + si%dt*ahat(1,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(2)   = fvec(2) + si%dt*ahat(1,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-  end do
-  
-  do k = 2, (n+2)/4
-    fvec(4*k-3-2) = fs(k)%pth - si%pthold
-    fvec(4*k-2-2) = x(4*k-2-2)  - si%z(2)
-    fvec(4*k-1-2) = x(4*k-1-2)  - si%z(3)
-    fvec(4*k-2)   = x(4*k-2)    - si%z(4)
-    do l = 1, (n+2)/4
-      fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(4*k-2-2) = fvec(4*k-2-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
-      fvec(4*k-1-2) = fvec(4*k-1-2) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph     ! phdot
-      fvec(4*k-2)   = fvec(4*k-2)   + si%dt*ahat(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-    end do
-  end do
-  
   end subroutine f_rk_lobatto_quasi
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -213,10 +186,11 @@ subroutine orbit_timestep_quasi(ierr)
 
 end subroutine orbit_timestep_quasi
 
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_multi_quasi(mi, ierr)
-  !
+!
     type(MultistageIntegrator), intent(inout) :: mi
   
     integer, intent(out) :: ierr
@@ -240,7 +214,7 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine timestep_midpoint_quasi(ierr)
-    
+!    
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
@@ -427,7 +401,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
       x(1) = 0.01
     end if
 
-    call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
+    call coeff_rk_gauss(s, a, b, c)
 
     f = fs(s)
     f%pth = si%pthold
@@ -435,10 +409,10 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
 
     do l = 1, s
       Hprime(l) = fs(l)%dH(1)/fs(l)%dpth(1)
-      f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))            ! pthdot
-      si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)                                      ! thdot
-      si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-      si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+      f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))          
+      si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)
+      si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
+      si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
   
     si%kt = si%kt+1
@@ -502,7 +476,7 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
 
     call hybrd1(f_rk_lobatto_quasi, 4*s-2, x, fvec, si%rtol, info)
 
-    call coeff_rk_lobatto(s, a, ahat, b, c)  ! TODO: move this to preprocessing
+    call coeff_rk_lobatto(s, a, ahat, b, c)
 
     call eval_field(fs(1), x(1), si%z(2), si%z(3), 0)
     call get_derivatives(fs(1), x(2))
@@ -519,10 +493,10 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
     si%z(1) = x(4*s-3-2)
 
     do l = 1, s
-      f%pth   = f%pth   - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)                                      ! thdot
-      si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-      si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+      f%pth   = f%pth   - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))
+      si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)
+      si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
+      si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
   
     si%kt = si%kt+1

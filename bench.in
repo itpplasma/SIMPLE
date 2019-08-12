@@ -1,0 +1,9 @@
+&bench
+  multi = .False.,
+  quasi = .False.,
+  integ_mode = 1,
+  npoiper2 = 256,
+  nlag = 0,
+  ncut = 1000,
+  outname = '/tmp/out.txt'
+/
