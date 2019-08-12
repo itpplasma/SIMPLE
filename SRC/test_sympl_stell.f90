@@ -16,7 +16,7 @@ integer :: ierr, kt
 double precision :: z0(4), vpar0, dt
 
 type(FieldCan) :: f
-type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6
+type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6, lobatto4
 type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6
 type(NeoOrb) :: norb
 
@@ -49,7 +49,7 @@ print *, f%ro0, f%mu
 z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 
 
-npoiper2 = 64
+npoiper2 = 48
 dt = twopi*rbig/npoiper2
 
 nt = 10000*npoiper2/64
@@ -60,30 +60,32 @@ call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2, 1)
 call test_single(euler2, 'euler2.out')
 print *, ''
 
-call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
-call test_multi(verlet, 'verlet.out')
-call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3, 0)
-call test_single(midpoint, 'midpoint.out')
 call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4, 0)
 call test_single(gauss2, 'gauss2.out')
+call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3, 0)
+call test_single(midpoint, 'midpoint.out')
+call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
+call test_multi(verlet, 'verlet.out')
 print *, ''
 
-!call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-!call test_multi(order4, 'order4.out')
+call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
+call test_single(gauss4, 'gauss4.out')
+! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
+! call test_multi(order4, 'order4.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi(mclachlan4, 'mclachlan4.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
 call test_multi(blanes4, 'blanes4.out')
-call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5, 0)
-call test_single(gauss4, 'gauss4.out')
+call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15, 0)
+call test_single(lobatto4, 'lobatto4.out')
+call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
+call test_single(gauss6, 'gauss6.out')
 print *, ''
 
 stop
 
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
 call test_multi(kahan6, 'kahan6.out')
-call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6, 0)
-call test_single(gauss6, 'gauss6.out')
 print *, ''
 
 call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1, 0)

@@ -1,0 +1,202 @@
+program test_sympl
+
+use orbit_symplectic
+use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
+    orbit_timestep_quasi, orbit_timestep_multi_quasi
+use neo_orb
+use new_vmec_stuff_mod, only: rmajor
+use diag_mod, only : icounter
+use omp_lib
+
+implicit none
+save
+
+integer :: ierr, kt
+
+double precision :: z0(4), vpar0, dt
+
+type(FieldCan) :: f
+type(SymplecticIntegrator) :: si
+type(MultistageIntegrator) :: mi
+type(NeoOrb) :: norb
+
+integer :: npoiper2
+real(8) :: rbig, dtau, dtaumax
+
+integer :: nt
+double precision, allocatable :: out(:, :)
+
+double precision :: starttime, endtime
+
+
+logical :: multi
+logical :: quasi
+integer :: integ_mode
+integer :: nlag
+integer :: ncut
+character(len=64) :: outname
+
+integer, parameter :: n_tip_vars = 7
+double precision, allocatable :: var_cut(:, :)  ! r, th, ph, pph, H, Jpar
+
+namelist / bench / multi, quasi, integ_mode, npoiper2, nlag, ncut, outname
+
+read( *, nml = bench )
+
+call init_field(norb, 'wout.nc', 5, 5, 3, 1)
+
+rbig = rmajor*1.0d2
+dtaumax = twopi*rbig/npoiper2
+dtau = dtaumax
+
+call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+
+! Initial conditions
+z0(1) = 0.4d0  ! r
+z0(2) = 0.7d0  ! theta
+z0(3) = 0.1d0  ! phi
+vpar0 = 0.0d0  ! parallel velocity
+call eval_field(f, z0(1), z0(2), z0(3), 0)
+
+f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
+f%vpar = vpar0*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+
+z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
+
+dt = twopi*rbig/npoiper2
+
+nt = 10000
+
+allocate(out(5,nt))
+allocate(var_cut(ncut, n_tip_vars))
+icounter = 0
+out=0d0
+out(1:4,1) = z0
+out(5,1) = f%H
+
+call orbit_sympl_init(si, f, z0, dt, 1, 1d-12, integ_mode, nlag)
+starttime = omp_get_wtime()
+call test_cuts
+endtime = omp_get_wtime()
+print *, endtime-starttime, icounter
+
+open(unit=20, file=outname, action='write', recl=4096)
+do kt = 1, ncut
+    write(20,*) var_cut(kt, :)
+end do
+close(20)
+deallocate(var_cut)
+deallocate(out)
+
+contains
+
+subroutine test_cuts
+    integer :: itip
+    double precision :: vpar_old, z(4)
+
+    integer, parameter :: nder = 0
+    integer, parameter :: nplagr = 6
+    double precision :: orb_sten(n_tip_vars,nplagr), coef(0:nder,nplagr)
+    integer :: ipoi(nplagr)
+
+    integer, parameter :: nstep_max = 1000000000
+    integer :: i, kcut
+    double precision :: par_inv
+
+    par_inv = 0d0
+    itip=nplagr/2+1
+    do i=1,nplagr
+      ipoi(i)=i
+    enddo
+    vpar_old=vpar0
+
+    do kcut=1, ncut
+        do i=1, nstep_max
+
+            call orbit_timestep_sympl(si, f, ierr)
+            z = si%z
+            if (.not. ierr==0) stop 'Error'
+
+            par_inv = par_inv+f%vpar**2 ! parallel adiabatic invariant
+
+            if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
+                orb_sten(1:4,i)=z
+                orb_sten(5,i)=f%H
+                orb_sten(6,i)=par_inv
+                orb_sten(7,i)=f%vpar
+            else                          !<=normal case, shift stencil
+                orb_sten(1:4,ipoi(1))=z
+                orb_sten(5,ipoi(1))=f%H
+                orb_sten(6,ipoi(1))=par_inv
+                orb_sten(7,ipoi(1))=f%vpar
+                ipoi=cshift(ipoi,1)
+            endif
+
+            if(vpar_old.lt.0.d0.and.f%vpar.gt.0.d0) itip=0   !<=tip has been passed
+            itip=itip+1
+            vpar_old=f%vpar
+
+            !<=use only initialized stencil
+            if(i .gt. nplagr .and. itip .eq. nplagr/2) then
+                print *, orb_sten(6, ipoi)
+                call plag_coeff(nplagr, nder, 0d0, orb_sten(7, ipoi), coef)
+                var_cut(kcut, :) = matmul(orb_sten(:, ipoi), coef(0,:))
+                var_cut(kcut, 2) = modulo(var_cut(kcut, 2), twopi)
+                var_cut(kcut, 3) = modulo(var_cut(kcut, 3), twopi)
+                par_inv = par_inv - var_cut(kcut, 6)
+                exit
+            end if
+        end do
+    end do
+end subroutine test_cuts
+
+subroutine test_single
+    do kt = 2, nt
+        ierr = 0
+        call orbit_timestep_sympl(si, f, ierr)
+        if (.not. ierr==0) stop 'Error'
+        out(1:4,kt) = si%z
+        out(5,kt) = f%H
+        out(6,kt) = f%vpar
+    end do
+end subroutine test_single
+
+subroutine test_quasi
+    f_quasi = f
+    si_quasi = si
+    do kt = 2, nt
+        ierr = 0
+        call orbit_timestep_quasi(ierr)
+        if (.not. ierr==0) stop 'Error'
+        out(1:4,kt) = si_quasi%z
+        out(5,kt) = f_quasi%H
+        out(6,kt) = f_quasi%vpar
+    end do
+end subroutine test_quasi
+
+subroutine test_multi
+    do kt = 2, nt
+        ierr = 0
+        call orbit_timestep_sympl_multi(mi, f, ierr)
+        if (.not. ierr==0) stop 'Error'
+        out(1:4,kt) = mi%stages(1)%z
+        out(5,kt) = f%H
+        out(6,kt) = f%vpar
+    end do
+end subroutine test_multi
+
+subroutine test_multi_quasi
+    f_quasi = f
+    si_quasi = si
+    do kt = 2, nt
+        ierr = 0
+        call orbit_timestep_multi_quasi(mi, ierr)
+        if (.not. ierr==0) stop 'Error'
+        out(1:4,kt) = mi%stages(1)%z
+        out(5,kt) = f_quasi%H
+        out(6,kt) = f_quasi%vpar
+    end do
+end subroutine test_multi_quasi
+
+end program test_sympl
