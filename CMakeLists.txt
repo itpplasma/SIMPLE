@@ -48,7 +48,6 @@ else()
 endif()
 
 add_library ( neo_orb SHARED
-
 	SRC/canonical_coordinates_mod.f90
 	SRC/nctools_module.f90
 	SRC/odeint_allroutines.f
@@ -67,6 +66,7 @@ add_library ( neo_orb SHARED
 	SRC/minpack.f90
 	SRC/common.f90
 	SRC/neo_orb.f90
+	SRC/bench.f90
 )
 
 add_executable (neo-orb.x
@@ -108,10 +108,6 @@ add_executable (alpha_lifetime.x
 	SRC/alpha_lifetime.f90
 )
 
-add_executable (bench.x
-	SRC/bench.f90
-)
-
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(neo_orb netcdf netcdff)
 else()
@@ -126,4 +122,3 @@ target_link_libraries(test_poincare1.x neo_orb)
 target_link_libraries(test_poiplot_classification.x neo_orb)
 target_link_libraries(alpha_lifetime_vmec_c.x neo_orb)
 target_link_libraries(alpha_lifetime.x neo_orb)
-target_link_libraries(bench.x neo_orb)
