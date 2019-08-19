@@ -86,9 +86,9 @@ subroutine init_bench()
     end if
 
     z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
+
     if (.not. allocated(out)) allocate(out(5,nt))
     if (.not. allocated(var_cut)) allocate(var_cut(ncut, n_tip_vars))
-    nt = 10000
     out=0d0
     out(1:4,1) = z0
     out(5,1) = f%H
@@ -123,9 +123,15 @@ subroutine do_bench()
     print *, endtime-starttime, icounter
 
     open(unit=20, file=outfile, action='write', recl=4096)
-    do kt = 1, ncut
-        write(20,*) var_cut(kt, :)
-    end do
+    if (ncut>0) then
+        do kt = 1, ncut
+            write(20,*) var_cut(kt, :)
+        end do
+    else
+        do kt = 1, nt
+            write(20,*) out(:, kt)
+        end do
+    end if
     close(20)
 end subroutine do_bench
 
@@ -199,6 +205,7 @@ subroutine test_cuts(nplagr)
 end subroutine test_cuts
 
 subroutine test_orbit
+    call test_single()
 end subroutine test_orbit
 
 subroutine test_single
@@ -248,5 +255,29 @@ subroutine test_multi_quasi
         out(6,kt) = f_quasi%vpar
     end do
 end subroutine test_multi_quasi
+
+subroutine minsqdist(za, zref, result)
+    real(8), intent(in) :: za(:,:)
+    real(8), intent(in) :: zref(:,:)
+    real(8), intent(inout) :: result(:)
+
+    integer :: k, l, ka, la
+    real(8) :: current
+
+    la = size(za, 2)
+    l = size(zref, 2)
+    result = 1d30
+
+!$omp parallel private(current)
+!$omp do
+    do ka = 1, la
+        do k = 1, l
+            current = sum( (za(:,ka) - zref(:,k))**2 )
+            if (current < result(ka)) result(ka) = current
+        end do
+    end do
+!$omp end do
+!$omp end parallel
+end subroutine minsqdist
 
 end module neo_orb_bench
