@@ -4,17 +4,23 @@ Created: Fri Aug  9 15:50:40 2019
 """
 
 import numpy as np
+import scipy.optimize as spo
 import matplotlib.pyplot as plt
 from subprocess import Popen, PIPE
 from fffi import fortran_library, fortran_module
+import time
 
 runtimes = []
 evalss = []
 Herr = []
 jparerr = []
 runtimes_bench = {}
+runtimes_single = {}
 evals_bench = {}
+evals_single = {}
 Herr_bench = {}
+avgdist_single = {}
+Herr_single = {}
 jparerr_bench = {}
 
 runtime = None
@@ -28,7 +34,6 @@ bench.fdef("""
     double precision :: rbig, dtau, dtaumax
     
     integer :: nt
-    double precision, allocatable :: out(:, :)
     
     double precision :: starttime, endtime
     
@@ -40,8 +45,6 @@ bench.fdef("""
     integer :: nlag
     integer :: nplagr_invar
     integer :: ncut
-    
-    double precision, allocatable :: var_cut(:, :)
     
     double precision :: taub
     
@@ -58,6 +61,12 @@ bench.fdef("""
     subroutine test_cuts(nplagr)
       integer, intent(in) :: nplagr
     end
+    
+    subroutine minsqdist(za, zref, result)
+      double precision, intent(in) :: za(:,:)
+      double precision, intent(in) :: zref(:,:)
+      double precision, intent(out) :: result(:)
+    end
 """)
 
 diag = fortran_module(libneo_orb, 'diag_mod')
@@ -73,13 +82,39 @@ bench.multi = 0
 bench.quasi = 0
 bench.tok = 1
 bench.integ_mode = 1
-bench.npoiper2 = 64
+bench.npoiper2 = 100000
 bench.nlag = 0
 bench.nplagr_invar = 4
 bench.ncut = 1000
+bench.nt = 100000
 bench.init_bench()
 
 #%%
+
+def do_singlebench(integ_mode, npoipers):
+    runtimes = []
+    evalss = []
+    avgdists = []
+    Herr = []
+    
+    bench.ncut = 0
+    bench.integ_mode = integ_mode
+    for npoiper in npoipers:
+        bench.npoiper2 = npoiper
+        bench.do_bench()
+        time.sleep(0.1)
+        data = np.loadtxt('/tmp/out.txt')
+        x = 1.0 + data[:,0]*np.cos(data[:,1])
+        y = data[:,0]*np.sin(data[:,1])
+        avgdists.append(avgdist(np.stack((x,y)).copy(order='F')))
+        Hmean = np.sqrt(np.mean(data[1:,4]**2))
+        Herr.append(np.sqrt(np.mean((data[1:,4]/Hmean-1.0)**2)))
+        runtimes.append(bench.endtime - bench.starttime)
+        evalss.append(diag.icounter)
+        
+    return np.array(runtimes), np.array(evalss), np.array(avgdists), np.array(Herr)
+    
+    
 
 def do_run(integ_mode, npoiper2, nplagr_invar):
     global data, runtimes, evalss, Herr, jparerr, jparmean, Hmean, runtime, evals
@@ -123,13 +158,152 @@ def do_cutbench(integ_mode, npoipers, nplagr_invar):
     print('')
     for krun in range(nrun):
         do_run(integ_mode, npoipers[krun], nplagr_invar[krun])
-        if(krun == 1): do_plot()
+        #if(krun == 1): do_plot()
         print('{} {:.2e} {} {:.2e} {:.2e}'.format(npoipers[krun],
             runtime, evals, Herr[-1], jparerr[-1]))
     
-    return runtimes, evalss, Herr, jparerr
+    return np.array(runtimes), np.array(evalss), np.array(Herr), np.array(jparerr)
+
+#def avgdist(z):
+#    nx = z.shape[0]
+#    krange = range(nx)    
+#    sqdists = np.empty(nx)
+#    tlast = 0.0
+#    for k in krange:
+#        res = spo.minimize(refsqdist, tlast, args = z[k,:], tol=1e-12)
+#        #res = spo.minimize_scalar(refsqdist, args = z[k,:], tol=1e-12)
+#        sqdists[k] = refsqdist(res.x, z[k,:])
+#        #print(res.x, sqdists[k])
+#        tlast = res.x + 0.01
+#        if tlast > 1: tlast = 0.01
+#        
+#    #print(np.sqrt(sqdists))
+#    return np.sqrt(np.mean(sqdists))
+
+def avgdist(z):
+    nz = z.shape[1]
+    sqdists = np.empty(nz)
+    bench.minsqdist(z, zref, sqdists)
+    print(sqdists)
+    return np.sqrt(np.mean(sqdists))
+
+#%% Getting reference
+    
+bench.nt = 500000
+bench.npoiper2 = 500000
+bench.ncut = 0
+bench.multi = 0
+integ_mode = 3
+bench.do_bench()
+time.sleep(0.1)
+refdata = np.loadtxt('/tmp/out.txt')
+xref = 1.0 + refdata[:,0]*np.cos(refdata[:,1])
+yref = refdata[:,0]*np.sin(refdata[:,1])
+zref = np.stack((xref, yref)).copy(order='F')
+
+bench.nt = 10000
+res = do_singlebench(4, [3])
+print(res)
+time.sleep(0.1)
+data = np.loadtxt('/tmp/out.txt')
+x = 1.0 + data[:,0]*np.cos(data[:,1])
+y = data[:,0]*np.sin(data[:,1])
+plt.figure()
+plt.plot(x, y, ',')
+plt.plot(xref, yref, ',')
+#bench.cleanup_bench()  
+#import scipy.interpolate as spi
+#tck, u = spi.splprep(refdata[:,:2].T, s=0, k=3)
+#
+#def refsqdist(t, z):
+#    splres = spi.splev(t, tck)
+#    return (z[0]-splres[0])**2 + (z[1]-splres[1])**2
+
+
+#%% Benchmarking Hamiltonian and distance
+bench.nt = 10000
+
+npoipers = np.array([3, 8, 16, 32, 64, 128, 256], int)
+integ_mode = 1
+(runtimes_single[integ_mode], evals_single[integ_mode], avgdist_single[integ_mode],
+ Herr_single[integ_mode]) = do_singlebench(integ_mode, npoipers[1:])
+integ_mode = 2
+(runtimes_single[integ_mode], evals_single[integ_mode], avgdist_single[integ_mode],
+ Herr_single[integ_mode]) = do_singlebench(integ_mode, npoipers[1:])
+integ_mode = 3
+(runtimes_single[integ_mode], evals_single[integ_mode], avgdist_single[integ_mode], 
+ Herr_single[integ_mode]) = do_singlebench(integ_mode, npoipers)
+integ_mode = 4
+(runtimes_single[integ_mode], evals_single[integ_mode], avgdist_single[integ_mode],
+ Herr_single[integ_mode]) = do_singlebench(integ_mode, npoipers)
+#integ_mode = 5
+#(runtimes_single[integ_mode], evals_single[integ_mode], avgdist_single[integ_mode], 
+# Herr_single[integ_mode]) = do_singlebench(integ_mode, npoipers)
+#integ_mode = 15
+#(runtimes_single[integ_mode], evals_single[integ_mode], avgdist_single[integ_mode], 
+# Herr_single[integ_mode]) = do_singlebench(integ_mode, npoipers[1:])
     
 #%%
+plt.figure(figsize=(7,3))
+plt.subplot(1,2,1)
+plt.loglog(np.array(runtimes_single[1])*npoipers[1:]/bench.nt, avgdist_single[1], 'k-')
+plt.loglog(np.array(runtimes_single[2])*npoipers[1:]/bench.nt, avgdist_single[2], 'k--')
+plt.loglog(np.array(runtimes_single[3])*npoipers/bench.nt, avgdist_single[3], 'k:')
+plt.loglog(np.array(runtimes_single[4])*npoipers/bench.nt, avgdist_single[4], 'k-.')
+#plt.loglog(np.array(runtimes_single[5])*npoipers/bench.nt, avgdist_single[5], 'k-.')
+#plt.loglog(np.array(runtimes_single[15])*npoipers[1:]/bench.nt, avgdist_single[15], 'r-.')
+plt.xlim([3e-6, 1e-3])
+#plt.ylim([1e-14, 1e-1])
+plt.ylim([1e-6, 5e-2])
+plt.xlabel('CPU time / s')
+plt.ylabel('$\delta x$')
+
+plt.subplot(1,2,2)
+plt.loglog(np.array(evals_single[1])*npoipers[1:]/bench.nt, avgdist_single[1], 'k-')
+plt.loglog(np.array(evals_single[2])*npoipers[1:]/bench.nt, avgdist_single[2], 'k--')
+plt.loglog(np.array(evals_single[3])*npoipers/bench.nt, avgdist_single[3], 'k:')
+plt.loglog(np.array(evals_single[4])*npoipers/bench.nt, avgdist_single[4], 'k-.')
+#plt.loglog(np.array(evals_single[5])*npoipers/bench.nt, avgdist_single[5], 'k-.')
+#plt.loglog(np.array(evals_single[15])*npoipers[1:]/bench.nt, avgdist_single[15], 'r-.')
+plt.xlim([1e1, 1.1e3])
+#plt.ylim([1e-14, 1e-1])
+plt.ylim([1e-6, 5e-2])
+plt.xlabel('field evaluations')
+plt.ylabel('$\delta x$')
+plt.tight_layout()
+
+#%%
+plt.figure(figsize=(7,3))
+plt.subplot(1,2,1)
+plt.loglog(np.array(runtimes_single[1])*npoipers[1:]/bench.nt, Herr_single[1], 'k-')
+plt.loglog(np.array(runtimes_single[3])*npoipers/bench.nt, Herr_single[3], 'k:')
+plt.loglog(np.array(runtimes_single[4])*npoipers/bench.nt, Herr_single[4], 'k--')
+#plt.loglog(np.array(runtimes_single[5])*npoipers/bench.nt, Herr_single[5], 'k-.')
+#plt.loglog(np.array(runtimes_single[15])*npoipers[1:]/bench.nt, Herr_single[15], 'r-.')
+#plt.xlim([4e-3, 2e0])
+#plt.ylim([1e-14, 1e-1])
+plt.ylim([1e-6, 5e-2])
+plt.xlabel('runtime / s')
+plt.ylabel('$\delta H$')
+
+plt.subplot(1,2,2)
+plt.loglog(np.array(evals_single[1])*npoipers[1:]/bench.nt, Herr_single[1], 'k-')
+plt.loglog(np.array(evals_single[3])*npoipers/bench.nt, Herr_single[3], 'k:')
+plt.loglog(np.array(evals_single[4])*npoipers/bench.nt, Herr_single[4], 'k--')
+#plt.loglog(np.array(evals_single[5])*npoipers/bench.nt, Herr_single[5], 'k-.')
+#plt.loglog(np.array(evals_single[15])*npoipers[1:]/bench.nt, Herr_single[15], 'r-.')
+#plt.xlim([1e4, 1e7])
+#plt.ylim([1e-14, 1e-1])
+plt.ylim([1e-6, 5e-2])
+plt.xlabel('evaluations')
+plt.ylabel('$\delta H$')
+plt.tight_layout()
+    
+    
+#%% Benchmarking parallel invariant
+ncut = 1000
+bench.ncut = ncut
+
 bench.multi = 1
 # Stellarator
 #npoipers = [20, 24, 28, 32, 48, 64, 128, 256, 512]
@@ -185,7 +359,6 @@ integ_mode = 5
 #  jparerr_bench[integ_mode]) = do_cutbench(integ_mode, npoipers, nplagr_invar)
 
 
-#bench.cleanup_bench()
     
 #%%
 # Stellarator
@@ -230,29 +403,30 @@ integ_mode = 5
 #plt.xlabel('evaluations')
 #plt.ylabel('$\delta H$')
 #plt.tight_layout()
-    
+
+#%%
 # Tokamak
 plt.figure(figsize=(7,3))
 plt.subplot(1,2,1)
-plt.loglog(runtimes_bench[1], jparerr_bench[1], 'k-')
-plt.loglog(runtimes_bench[3], jparerr_bench[3], 'k:')
-plt.loglog(runtimes_bench[4], jparerr_bench[4], 'k--')
-plt.loglog(runtimes_bench[21], jparerr_bench[21], 'k-.')
-plt.xlim([4e-3, 2e0])
-plt.ylim([1e-14, 1e-1])
+plt.loglog(runtimes_bench[1]/ncut, jparerr_bench[1], 'k-')
+plt.loglog(runtimes_bench[3]/ncut, jparerr_bench[3], 'k:')
+plt.loglog(runtimes_bench[4]/ncut, jparerr_bench[4], 'k--')
+plt.loglog(runtimes_bench[21]/ncut, jparerr_bench[21], 'k-.')
+#plt.xlim([4e-3, 2e0])
+plt.ylim([1e-13, 1e-1])
 plt.xlabel('runtime / s')
 plt.ylabel('$\delta J_{\parallel} $')
-
 plt.subplot(1,2,2)
-plt.loglog(evals_bench[1], jparerr_bench[1], 'k-')
-plt.loglog(evals_bench[3], jparerr_bench[3], 'k:')
-plt.loglog(evals_bench[4], jparerr_bench[4], 'k--')
-plt.loglog(evals_bench[21], jparerr_bench[21], 'k-.')
-plt.xlim([1e4, 1e7])
-plt.ylim([1e-14, 1e-1])
+plt.loglog(evals_bench[1]/ncut, jparerr_bench[1], 'k-')
+plt.loglog(evals_bench[3]/ncut, jparerr_bench[3], 'k:')
+plt.loglog(evals_bench[4]/ncut, jparerr_bench[4], 'k--')
+plt.loglog(evals_bench[21]/ncut, jparerr_bench[21], 'k-.')
+#plt.xlim([1e4, 1e7])
+plt.ylim([1e-13, 1e-1])
 plt.xlabel('evaluations')
 plt.ylabel('$\delta J_{\parallel} $')
 plt.tight_layout()
+#%%
 
 plt.figure(figsize=(7,3))
 plt.subplot(1,2,1)
@@ -316,3 +490,5 @@ plt.xlabel('evaluations')
 plt.ylabel('$\delta H$')
 plt.tight_layout()
     
+#bench.cleanup_bench()
+#plt.show()
