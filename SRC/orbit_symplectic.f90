@@ -1355,7 +1355,6 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
 !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
-
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 2

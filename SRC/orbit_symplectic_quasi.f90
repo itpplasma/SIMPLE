@@ -163,6 +163,8 @@ subroutine orbit_timestep_quasi(ierr)
   integer, intent(out) :: ierr
 
   select case (si%mode)
+    case (0)
+     call orbit_timestep_rk45(ierr)
     case (1)
       call timestep_euler1_quasi(ierr)
     case (2)
@@ -504,5 +506,44 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
   enddo
 
 end subroutine timestep_rk_lobatto_quasi
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine f_ode(tau, z, zdot)
+!
+  
+  double precision, intent(in)  :: tau
+  double precision, intent(in)  :: z(4)
+  double precision, intent(out) :: zdot(4)
+  double precision :: Hprime
+
+  call eval_field(f, z(1), z(2), z(3), 0)
+  call get_derivatives(f, z(4))
+
+  Hprime = f%dH(1)/f%dpth(1)
+
+  zdot(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
+  zdot(2) = Hprime
+  zdot(3) = (f%vpar-Hprime*f%hth)/f%hph
+  zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
+  
+end subroutine f_ode
+  
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine orbit_timestep_rk45(ierr)
+!
+  integer, intent(out) :: ierr
+  integer :: ktau
+
+  ierr = 0
+  ktau = 0
+  do while(ktau .lt. si%ntau)
+    call odeint_allroutines(si%z, 4, ktau*si%dt, (ktau+1)*si%dt, si%rtol, f_ode)
+    si%kt = si%kt+1
+    ktau = ktau+1
+  end do
+end subroutine orbit_timestep_rk45
 
 end module orbit_symplectic_quasi
