@@ -44,6 +44,7 @@ integer, parameter :: n_tip_vars = 7
 double precision, allocatable :: var_cut(:, :)  ! r, th, ph, pph, H, Jpar
 
 double precision :: taub
+double precision :: rtol
 
 contains
 
@@ -87,7 +88,7 @@ subroutine init_bench()
 
     z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 
-    if (.not. allocated(out)) allocate(out(5,nt))
+    if (.not. allocated(out)) allocate(out(6,nt))
     if (.not. allocated(var_cut)) allocate(var_cut(ncut, n_tip_vars))
     out=0d0
     out(1:4,1) = z0
@@ -104,18 +105,22 @@ subroutine do_bench()
     if (multi) then
         select case (integ_mode)
             case (21)
-                call orbit_sympl_init_verlet(mi, f, z0, dt, 1, 1d-13)
+                call orbit_sympl_init_verlet(mi, f, z0, dt, 1, rtol)
             case (22)
-                call orbit_sympl_init_mclachlan4(mi, f, z0, dt, 1, 1d-13)
+                call orbit_sympl_init_mclachlan4(mi, f, z0, dt, 1, rtol)
         end select
     else
-        call orbit_sympl_init(si, f, z0, dt, 1, 1d-13, integ_mode, nlag)
+        call orbit_sympl_init(si, f, z0, dt, 1, rtol, integ_mode, nlag)
     end if
 
     icounter = 0
     starttime = omp_get_wtime()
     if (ncut>0) then
         call test_cuts(nplagr_invar)
+    elseif (quasi) then
+        call test_quasi
+    elseif (multi) then
+        call test_multi
     else
         call test_orbit
     end if
@@ -152,6 +157,12 @@ subroutine test_cuts(nplagr)
     integer, parameter :: nstep_max = 1000000000
     integer :: i, kcut
     double precision :: par_inv
+    double precision :: temptime
+
+    si_quasi = si
+    f_quasi = f
+    call eval_field(f_quasi, z0(1), z0(2), z0(3), 0)
+    call get_derivatives(f_quasi, z0(4))
 
     par_inv = 0d0
     itip = nplagr/2+1
@@ -165,11 +176,21 @@ subroutine test_cuts(nplagr)
             if (multi) then
                 call orbit_timestep_sympl_multi(mi, f, ierr)
                 z = mi%stages(1)%z
+            elseif (quasi) then
+                call orbit_timestep_quasi(ierr)
+                z = si_quasi%z
+                ! evaluate field, but don't count
+                temptime = omp_get_wtime()
+                call eval_field(f, z(1), z(2), z(3), 0)
+                call get_derivatives(f, z(4))
+                icounter = icounter - 1
+                starttime = starttime - (omp_get_wtime() - temptime)
             else
                 call orbit_timestep_sympl(si, f, ierr)
                 z = si%z
             end if
             if (.not. ierr==0) stop 'Error'
+
 
             par_inv = par_inv+f%vpar**2 ! parallel adiabatic invariant
 
