@@ -104,3 +104,51 @@ def do_cutbench(integ_mode, npoipers, nplagr_invar, rtols = None):
             runtime, evals, Herr, jparerr))
     
     return np.array(runtimes), np.array(evalss), np.array(Herrs), np.array(jparerrs)
+
+
+#%%
+
+def do_singlebench(integ_mode, npoipers, nskip, zref):
+    runtimes = []
+    evalss = []
+    avgdists = []
+    Herr = []
+    
+    bench.ncut = 0
+    bench.integ_mode = integ_mode
+    for npoiper in npoipers:
+        bench.npoiper2 = npoiper
+        bench.do_bench()
+        data = np.loadtxt('/tmp/out.txt')[::nskip,:]
+        x = 1.0 + data[:,0]*np.cos(data[:,1])
+        y = data[:,0]*np.sin(data[:,1])
+        avgdists.append(avgdist(np.stack((x,y)).copy(order='F'), zref))
+        Hmean = np.sqrt(np.mean(data[1:,4]**2))
+        Herr.append(np.sqrt(np.mean((data[1:,4]/Hmean-1.0)**2)))
+        runtimes.append(bench.endtime - bench.starttime)
+        evalss.append(diag.icounter)
+        
+    return np.array(runtimes), np.array(evalss), np.array(avgdists), np.array(Herr)
+    
+#def avgdist(z):
+#    nx = z.shape[0]
+#    krange = range(nx)    
+#    sqdists = np.empty(nx)
+#    tlast = 0.0
+#    for k in krange:
+#        res = spo.minimize(refsqdist, tlast, args = z[k,:], tol=1e-12)
+#        #res = spo.minimize_scalar(refsqdist, args = z[k,:], tol=1e-12)
+#        sqdists[k] = refsqdist(res.x, z[k,:])
+#        #print(res.x, sqdists[k])
+#        tlast = res.x + 0.01
+#        if tlast > 1: tlast = 0.01
+#        
+#    #print(np.sqrt(sqdists))
+#    return np.sqrt(np.mean(sqdists))
+
+def avgdist(z, zref):
+    nz = z.shape[1]
+    sqdists = np.empty(nz)
+    bench.minsqdist(z, zref, sqdists)
+    #print(sqdists)
+    return np.sqrt(np.mean(sqdists))
