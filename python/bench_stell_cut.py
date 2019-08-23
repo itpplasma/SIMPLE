@@ -2,7 +2,7 @@
 Created: Fri Aug  9 15:50:40 2019
 @author: Christopher Albert <albert@alumni.tugraz.at>
 """
-
+#%%
 import numpy as np
 import scipy.optimize as spo
 import matplotlib.pyplot as plt
@@ -33,7 +33,7 @@ bench.nt = 10000
 bench.rtol = 1e-13
 bench.init_bench()
 #%%
-bench.ncut = 10000
+bench.ncut = 1000
 
 # RK45
 bench.quasi = 1
@@ -120,3 +120,6 @@ plt.xlabel('evaluations')
 plt.ylabel('$\delta H$')
 plt.tight_layout()
     
+
+
+#%%

@@ -3,6 +3,8 @@ Created: Fri Aug  9 15:50:40 2019
 @author: Christopher Albert <albert@alumni.tugraz.at>
 """
 
+#%%
+
 import numpy as np
 import scipy.optimize as spo
 import matplotlib.pyplot as plt
@@ -44,20 +46,12 @@ bench.ncut = 10000
 bench.quasi = 1
 bench_multi = 0
 tols = np.array([1e-6, 1e-8, 1e-10, 1e-12, 1e-14])
-npoipers = np.array([5, 8, 16, 32, 64])
+npoipers0 = np.array([5, 8, 16, 32, 64])
 #npoipers = np.array([8, 16, 32, 64, 128])
 nplagr_invar = [2, 2, 4, 6, 8]
-print('')
-for k in range(len(tols)):
-    bench.rtol = tols[k]
-    do_run(0, npoipers[k], nplagr_invar[k])
-    print('{} {:.2e} {} {:.2e} {:.2e}'.format(4,
-        runtime, evals, Herr[-1], jparerr[-1]))
-
-runtimes_bench[0] = np.array(runtimes)
-evals_bench[0] = np.array(evalss)
-Herr_bench[0] = np.array(Herr)
-jparerr_bench[0] = np.array(jparerr)
+integ_mode = 0
+(runtimes_bench[integ_mode], evals_bench[integ_mode], Herr_bench[integ_mode],
+  jparerr_bench[integ_mode]) = do_cutbench(integ_mode, npoipers0, nplagr_invar, tols)
 #%%
 bench.quasi = 0
 bench.rtol = 1e-13
@@ -121,9 +115,8 @@ integ_mode = 4
 
 #%%
 # Tokamak
-plt.figure(figsize=(7,3))
-plt.subplot(1,2,1)
-plt.loglog(runtimes_bench[0]/bench.ncut, jparerr_bench[0], 'r-')
+plt.figure()
+plt.loglog(runtimes_bench[0]/bench.ncut, jparerr_bench[0], '-', color='tab:gray')
 plt.loglog(runtimes_bench[1]/bench.ncut, jparerr_bench[1], 'k-')
 plt.loglog(runtimes_bench[3]/bench.ncut, jparerr_bench[3], 'k:')
 plt.loglog(runtimes_bench[4]/bench.ncut, jparerr_bench[4], 'k--')
@@ -132,8 +125,8 @@ plt.loglog(runtimes_bench[21]/bench.ncut, jparerr_bench[21], 'k-.')
 plt.ylim([1e-13, 1e-1])
 plt.xlabel('runtime / s')
 plt.ylabel('$\delta J_{\parallel} $')
-plt.subplot(1,2,2)
-plt.loglog(evals_bench[0]/bench.ncut, jparerr_bench[0], 'r-')
+plt.figure()
+plt.loglog(evals_bench[0]/bench.ncut, jparerr_bench[0], '-', color='tab:gray')
 plt.loglog(evals_bench[1]/bench.ncut, jparerr_bench[1], 'k-')
 plt.loglog(evals_bench[3]/bench.ncut, jparerr_bench[3], 'k:')
 plt.loglog(evals_bench[4]/bench.ncut, jparerr_bench[4], 'k--')
@@ -142,13 +135,10 @@ plt.loglog(evals_bench[21]/bench.ncut, jparerr_bench[21], 'k-.')
 plt.ylim([1e-13, 1e-1])
 plt.xlabel('evaluations')
 plt.ylabel('$\delta J_{\parallel} $')
-plt.tight_layout()
 #%%
 
-plt.figure(figsize=(7,3))
-plt.subplot(1,2,1)
-plt.loglog(runtimes_bench[0]/bench.ncut, Herr_bench[0], 'r-')
-#%%
+plt.figure()
+plt.loglog(runtimes_bench[0]/bench.ncut, Herr_bench[0], '-', color='tab:gray')
 plt.loglog(runtimes_bench[1]/bench.ncut, Herr_bench[1], 'k-')
 plt.loglog(runtimes_bench[3]/bench.ncut, Herr_bench[3], 'k:')
 plt.loglog(runtimes_bench[4]/bench.ncut, Herr_bench[4], 'k--')
@@ -158,7 +148,8 @@ plt.ylim([1e-14, 1e-1])
 plt.xlabel('runtime / s')
 plt.ylabel('$\delta H$')
 
-plt.subplot(1,2,2)
+plt.figure()
+plt.loglog(evals_bench[0]/bench.ncut, Herr_bench[0], '-', color='tab:gray')
 plt.loglog(evals_bench[1]/bench.ncut, Herr_bench[1], 'k-')
 plt.loglog(evals_bench[3]/bench.ncut, Herr_bench[3], 'k:')
 plt.loglog(evals_bench[4]/bench.ncut, Herr_bench[4], 'k--')
@@ -167,7 +158,6 @@ plt.loglog(evals_bench[21]/bench.ncut, Herr_bench[21], 'k-.')
 plt.ylim([1e-14, 1e-1])
 plt.xlabel('evaluations')
 plt.ylabel('$\delta H$')
-plt.tight_layout()
 #    
 #plt.figure(figsize=(7,3))
 #plt.subplot(1,2,1)
@@ -208,3 +198,6 @@ plt.tight_layout()
 #plt.xlabel('evaluations')
 #plt.ylabel('$\delta H$')
 #plt.tight_layout()
+
+
+#%%
