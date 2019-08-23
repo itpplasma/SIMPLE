@@ -130,8 +130,13 @@ contains
     z(4) = f%vpar*f%hph + f%Aph/f%ro0 ! pphi
 
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
-    call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                          rtol_init, mode_init, 1) 
+    if (mode_init == 1) then
+      call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
+                            rtol_init, mode_init, 1) 
+    else
+      call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
+                            rtol_init, mode_init, 0) 
+    end if
   end subroutine init_sympl
 
   subroutine init_integrator(self, z0)
