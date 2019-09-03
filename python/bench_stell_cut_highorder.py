@@ -51,25 +51,25 @@ bench.rtol = 1e-13
 
 bench.multi = 1
 # Stellarator
-npoipers = [19, 20, 21, 22, 23, 24, 26, 28, 32, 48, 64]#, 128, 256, 512]
+npoipers = [16, 18, 20, 22, 24, 26, 28, 32, 48, 64, 128]#, 128, 256, 512]
 
 nplagr_invar = np.concatenate([4*np.ones(len(npoipers), int)])
 
-integ_mode = 21
+integ_mode = 22 # McLachlan
 (runtimes_bench[integ_mode], evals_bench[integ_mode], Herr_bench[integ_mode],
   jparerr_bench[integ_mode]) = do_cutbench(integ_mode, npoipers, nplagr_invar)
 
 bench.multi = 0
 
-integ_mode = 1
+integ_mode = 15 # Lobatto
 (runtimes_bench[integ_mode], evals_bench[integ_mode], Herr_bench[integ_mode],
   jparerr_bench[integ_mode]) = do_cutbench(integ_mode, npoipers, nplagr_invar)
 
-integ_mode = 3
+integ_mode = 3 # Midpoint
 (runtimes_bench[integ_mode], evals_bench[integ_mode], Herr_bench[integ_mode],
   jparerr_bench[integ_mode]) = do_cutbench(integ_mode, npoipers, nplagr_invar)
 
-integ_mode = 4
+integ_mode = 5 # 4th order Gauss-Legendre
 (runtimes_bench[integ_mode], evals_bench[integ_mode], Herr_bench[integ_mode],
   jparerr_bench[integ_mode]) = do_cutbench(integ_mode, npoipers, nplagr_invar)
 
@@ -78,51 +78,29 @@ integ_mode = 4
 plt.figure()
 plt.semilogx([1e-4, 3e-3], 7.24e-04*np.ones(2), 'lightgray')
 plt.loglog(runtimes_bench[0]/bench.ncut, jparerr_bench[0], '-', color='gray')
-plt.loglog(runtimes_bench[1][1:]/bench.ncut, jparerr_bench[1][1:], 'k-')
-plt.loglog(runtimes_bench[3][1:]/bench.ncut, jparerr_bench[3][1:], 'k:')
-plt.loglog(runtimes_bench[4]/bench.ncut, jparerr_bench[4], 'k--')
+plt.loglog(runtimes_bench[15]/bench.ncut, jparerr_bench[15], 'k-')
+#plt.loglog(runtimes_bench[3]/bench.ncut, jparerr_bench[3], 'k:')
+plt.loglog(runtimes_bench[5]/bench.ncut, jparerr_bench[5], 'k--')
 #plt.semilogx(runtimes_bench[5], jparerr_bench[5], '-.')
-plt.loglog(runtimes_bench[21][1:]/bench.ncut, jparerr_bench[21][1:], 'k-.')
+plt.loglog(runtimes_bench[22][1:]/bench.ncut, jparerr_bench[22][1:], 'k-.')
 plt.xlim([1e-4, 3e-3])
 plt.ylim([6e-4, 1e-1])
 plt.xlabel('CPU time per bounce period / s')
 plt.ylabel('$\delta J_{\parallel} / J_{\parallel}(t=0)$')
-#exportpng('fig_stell_cut1')
+exportpng('fig_stell_cut_highorder1')
 
 plt.figure()
 plt.loglog([8e1, 2e3], 7.24e-04*np.ones(2), 'lightgray')
 plt.loglog(evals_bench[0]/bench.ncut, jparerr_bench[0], '-', color='gray')
-plt.loglog(evals_bench[1][1:]/bench.ncut, jparerr_bench[1][1:], 'k-')
-plt.loglog(evals_bench[3][1:]/bench.ncut, jparerr_bench[3][1:], 'k:')
-plt.loglog(evals_bench[4]/bench.ncut, jparerr_bench[4], 'k--')
+plt.loglog(evals_bench[15]/bench.ncut, jparerr_bench[15], 'k-')
+#plt.loglog(evals_bench[3]/bench.ncut, jparerr_bench[3], 'k:')
+plt.loglog(evals_bench[5]/bench.ncut, jparerr_bench[5], 'k--')
 #plt.semilogx(evals_bench[5], jparerr_bench[5], '-.')
-plt.loglog(evals_bench[21][1:]/bench.ncut, jparerr_bench[21][1:], 'k-.')
+plt.loglog(evals_bench[22][1:]/bench.ncut, jparerr_bench[22][1:], 'k-.')
 plt.xlim([8e1, 2e3])
 plt.ylim([6e-4, 1e-1])
 plt.xlabel('evaluations $N_{\mathrm{f}}$ per bounce period')
 plt.ylabel('$\delta J_{\parallel} / J_{\parallel}(t=0)$')
-#exportpng('fig_stell_cut2')
-
-#%%
-plt.figure(figsize=(7,3))
-plt.subplot(1,2,1)
-plt.loglog(runtimes_bench[1]/bench.ncut, Herr_bench[1], '-')
-plt.loglog(runtimes_bench[3]/bench.ncut, Herr_bench[3], ':')
-plt.loglog(runtimes_bench[4]/bench.ncut, Herr_bench[4], '--')
-#plt.loglog(runtimes_bench[5], Herr_bench[5], '-.')
-plt.loglog(runtimes_bench[21]/bench.ncut, Herr_bench[21], '-.')
-plt.xlabel('runtime / s')
-plt.ylabel('$\delta H$')
-plt.subplot(1,2,2)
-plt.loglog(evals_bench[1]/bench.ncut, Herr_bench[1], '-')
-plt.loglog(evals_bench[3]/bench.ncut, Herr_bench[3], ':')
-plt.loglog(evals_bench[4]/bench.ncut, Herr_bench[4], '--')
-#plt.loglog(evals_bench[5], Herr_bench[5], '-.')
-plt.loglog(evals_bench[21]/bench.ncut, Herr_bench[21], '-.')
-plt.xlabel('evaluations')
-plt.ylabel('$\delta H$')
-plt.tight_layout()
-    
-
+exportpng('fig_stell_cut_highorder2')
 
 #%%
