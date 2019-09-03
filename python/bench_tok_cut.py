@@ -121,10 +121,14 @@ plt.loglog(runtimes_bench[1]/bench.ncut, jparerr_bench[1], 'k-')
 plt.loglog(runtimes_bench[3]/bench.ncut, jparerr_bench[3], 'k:')
 plt.loglog(runtimes_bench[4]/bench.ncut, jparerr_bench[4], 'k--')
 plt.loglog(runtimes_bench[21]/bench.ncut, jparerr_bench[21], 'k-.')
-#plt.xlim([4e-3, 2e0])
+plt.xlim([3e-6, 1e-3])
 plt.ylim([1e-13, 1e-1])
-plt.xlabel('runtime / s')
-plt.ylabel('$\delta J_{\parallel} $')
+plt.xlabel('CPU time per bounce period / s')
+plt.ylabel('$\delta J_{\parallel}  / J_{\parallel}(t=0)$')
+
+exportpng('fig_tok_cut1')
+
+
 plt.figure()
 plt.loglog(evals_bench[0]/bench.ncut, jparerr_bench[0], '-', color='tab:gray')
 plt.loglog(evals_bench[1]/bench.ncut, jparerr_bench[1], 'k-')
@@ -132,9 +136,13 @@ plt.loglog(evals_bench[3]/bench.ncut, jparerr_bench[3], 'k:')
 plt.loglog(evals_bench[4]/bench.ncut, jparerr_bench[4], 'k--')
 plt.loglog(evals_bench[21]/bench.ncut, jparerr_bench[21], 'k-.')
 #plt.xlim([1e4, 1e7])
+plt.xlim([1e1, 1e4])
 plt.ylim([1e-13, 1e-1])
-plt.xlabel('evaluations')
-plt.ylabel('$\delta J_{\parallel} $')
+plt.xlabel('evaluations $N_{\mathrm{f}}$ per bounce period')
+plt.ylabel('$\delta J_{\parallel} / J_{\parallel}(t=0)$')
+
+exportpng('fig_tok_cut2')
+
 #%%
 
 plt.figure()

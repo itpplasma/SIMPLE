@@ -144,8 +144,10 @@ plt.loglog(np.array(runtimes_single[21])*npoipers[1:]/bench.nt, avgdist_single[2
 plt.xlim([3e-6, 1e-3])
 #plt.ylim([1e-14, 1e-1])
 plt.ylim([1e-6, 5e-2])
-plt.xlabel('CPU time / s')
-plt.ylabel('$\delta x$')
+plt.xlabel('CPU time per bounce period / s')
+plt.ylabel('$\delta x_{\mathrm{pol}}$')
+
+exportpng('fig_tok_dist1')
 
 plt.figure()
 plt.loglog(np.array(evals_single[1])*npoipers[1:]/bench.nt, avgdist_single[1], 'k-')
@@ -158,8 +160,10 @@ plt.loglog(np.array(evals_single[21])*npoipers[1:]/bench.nt, avgdist_single[21],
 plt.xlim([1e1, 1.1e3])
 #plt.ylim([1e-14, 1e-1])
 plt.ylim([1e-6, 5e-2])
-plt.xlabel('field evaluations')
-plt.ylabel('$\delta x$')
+plt.xlabel('evaluations $N_{\mathrm{f}}$ per bounce period')
+plt.ylabel('$\delta x_{\mathrm{pol}}$')
+
+exportpng('fig_tok_dist2')
 
 #%%
 plt.figure()
@@ -173,7 +177,7 @@ plt.loglog(np.array(runtimes_single[21])*npoipers[1:]/bench.nt, Herr_single[21],
 #plt.xlim([4e-3, 2e0])
 #plt.ylim([1e-14, 1e-1])
 plt.ylim([1e-6, 5e-2])
-plt.xlabel('runtime / s')
+plt.xlabel('CPU time / s')
 plt.ylabel('$\delta H$')
 
 plt.figure()

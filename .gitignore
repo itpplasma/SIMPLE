@@ -21,4 +21,4 @@ RUN/
 *.dylib
 BUILD/*
 _*.c
-
+*.pyc
