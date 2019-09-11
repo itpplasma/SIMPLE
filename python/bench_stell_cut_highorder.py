@@ -75,6 +75,8 @@ integ_mode = 5 # 4th order Gauss-Legendre
 
 #%%
 # Stellarator
+from exportfig import *
+
 plt.figure()
 plt.semilogx([1e-4, 3e-3], 7.24e-04*np.ones(2), 'lightgray')
 plt.loglog(runtimes_bench[0]/bench.ncut, jparerr_bench[0], '-', color='gray')
@@ -86,7 +88,7 @@ plt.loglog(runtimes_bench[22][1:]/bench.ncut, jparerr_bench[22][1:], 'k-.')
 plt.xlim([1e-4, 3e-3])
 plt.ylim([6e-4, 1e-1])
 plt.xlabel('CPU time per bounce period / s')
-plt.ylabel('$\delta J_{\parallel} / J_{\parallel}(t=0)$')
+plt.ylabel(r'$\delta J_{\parallel}  / \bar{J_{\parallel}}$')
 exportpng('fig_stell_cut_highorder1')
 
 plt.figure()
@@ -100,7 +102,7 @@ plt.loglog(evals_bench[22][1:]/bench.ncut, jparerr_bench[22][1:], 'k-.')
 plt.xlim([8e1, 2e3])
 plt.ylim([6e-4, 1e-1])
 plt.xlabel('evaluations $N_{\mathrm{f}}$ per bounce period')
-plt.ylabel('$\delta J_{\parallel} / J_{\parallel}(t=0)$')
+plt.ylabel(r'$\delta J_{\parallel}  / \bar{J_{\parallel}}$')
 exportpng('fig_stell_cut_highorder2')
 
 #%%
