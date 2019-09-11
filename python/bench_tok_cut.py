@@ -115,6 +115,8 @@ integ_mode = 4
 
 #%%
 # Tokamak
+from exportfig import *
+
 plt.figure()
 plt.loglog(runtimes_bench[0]/bench.ncut, jparerr_bench[0], '-', color='tab:gray')
 plt.loglog(runtimes_bench[1]/bench.ncut, jparerr_bench[1], 'k-')
@@ -124,7 +126,7 @@ plt.loglog(runtimes_bench[21]/bench.ncut, jparerr_bench[21], 'k-.')
 plt.xlim([3e-6, 1e-3])
 plt.ylim([1e-13, 1e-1])
 plt.xlabel('CPU time per bounce period / s')
-plt.ylabel('$\delta J_{\parallel}  / J_{\parallel}(t=0)$')
+plt.ylabel(r'$\delta J_{\parallel}  / \bar{J_{\parallel}}$')
 
 exportpng('fig_tok_cut1')
 
@@ -139,7 +141,7 @@ plt.loglog(evals_bench[21]/bench.ncut, jparerr_bench[21], 'k-.')
 plt.xlim([1e1, 1e4])
 plt.ylim([1e-13, 1e-1])
 plt.xlabel('evaluations $N_{\mathrm{f}}$ per bounce period')
-plt.ylabel('$\delta J_{\parallel} / J_{\parallel}(t=0)$')
+plt.ylabel(r'$\delta J_{\parallel}  / \bar{J_{\parallel}}$')
 
 exportpng('fig_tok_cut2')
 

@@ -45,15 +45,12 @@
 !                     ro0    -   Larmor radius for the reference
 !                                magnetic field and temperature:
 !                                ro0=sqrt(2*T/m)/(e*B_ref/m*c)
-!                     p0     -   dimensionless momentum module in the
-!                                initial point
-!                     alamb0 -   cos of pitch-angle in the initial point
 !  Output parameters:
 !            formal:  vz     -   see above
 !
 !  Called routines: magfie_can, magfie_vmec, elefie_can
 !
-      use parmot_mod, only : rmu,ro0,eeff
+      use parmot_mod, only : rmu,ro0
       use velo_mod,   only : isw_field_type
 !
       implicit none
