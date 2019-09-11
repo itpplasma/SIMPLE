@@ -244,7 +244,11 @@ print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
 !$omp atomic
         confpart_trap(i)=confpart_trap(i)+1.d0
       enddo
-      times_lost(ipart) = dble(i-1)*dtau/v0
+      if (integmode <= 0) then
+        times_lost(ipart) = dble(i-1)*dtau/v0
+      else
+        times_lost(ipart) = si%kt*dtaumin/v0  ! more accurate sub-steps
+      endif
     endif
   enddo
 !$omp end do
