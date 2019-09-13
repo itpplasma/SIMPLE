@@ -226,10 +226,14 @@ use diag_mod, only : icounter
           call orbit_timestep_sympl(si, f, ierr)
         endif
         if(ierr.ne.0) exit
-print *,'passing particle ',ipart,' step ',i,' of ',ntimstep
 !$omp atomic
         confpart_pass(i)=confpart_pass(i)+1.d0
       enddo
+      if (integmode <= 0) then
+        times_lost(ipart) = dble(i-1)*dtau/v0
+      else
+        times_lost(ipart) = si%kt*dtaumin/v0  ! more accurate sub-steps
+      endif
     else
 ! trapped particle (traced always)
 !$omp atomic
