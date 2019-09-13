@@ -319,29 +319,44 @@ subroutine newton1(si, f, x, maxit, xlast)
   double precision :: fvec(n), fjac(n,n), ijac(n,n)
   double precision :: tolref(n)
   integer :: kit
+  
+  tolref(1) = 1d0
+  tolref(2) = dabs(x(2))
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
-    if(x(1) < 0.0) x(1) = 0.1
+    if(x(1) > 1d0) return
+    if(x(1) < 0d0) x(1) = 0.01d0
 
     call f_sympl_euler1(si, f, n, x, fvec, 1)
     call jac_sympl_euler1(si, f, x, fjac)
-    ijac(1,1) = fjac(2,2)
-    ijac(1,2) = -fjac(1,2)
-    ijac(2,1) = -fjac(2,1)
-    ijac(2,2) = fjac(1,1)
-    ijac = ijac/(fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1))
+    ijac(1,1) = 1d0/(fjac(1,1) - fjac(1,2)*fjac(2,1)/fjac(2,2))
+    ijac(1,2) = -1d0/(fjac(1,1)*fjac(2,2)/fjac(1,2) - fjac(2,1))
+    ijac(2,1) = -1d0/(fjac(1,1)*fjac(2,2)/fjac(2,1) - fjac(1,2))
+    ijac(2,2) = 1d0/(fjac(2,2) - fjac(1,2)*fjac(2,1)/fjac(1,1))
     xlast = x
     x = x - matmul(ijac, fvec)
 
-    tolref(1) = 1d0
-    tolref(2) = dabs(xlast(2))
+    ! Don't take too small values in pphi as tolerance reference
+    tolref(2) = max(dabs(x(2)), tolref(2))
+    tolref(2) = max(dabs(x(2)), tolref(2))
 
     if (all(dabs(fvec) < si%atol)) return
     if (all(dabs(x-xlast) < si%rtol*tolref)) return
   enddo
   print *, 'newton1: maximum iterations reached: ', maxit
-  write(6601,*) x(1), si%z(2), si%z(3), x(2), x-xlast, fvec
+  write(6601,*) x(1), x(2)
+  write(6601,*) x-xlast
+  write(6601,*) fvec
+  write(6601,*) ''
+  write(6601,*) fjac(1,1), fjac(1,2)
+  write(6601,*) fjac(2,1), fjac(2,2)
+  write(6601,*) ''
+  write(6601,*) ijac(1,1), ijac(1,2)
+  write(6601,*) ijac(2,1), ijac(2,2)
+  write(6601,*) ''
+  write(6601,*) si%z(2), si%z(3)
+  write(6601,*) ''
+  write(6601,*) ''
 end subroutine
 
 subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
