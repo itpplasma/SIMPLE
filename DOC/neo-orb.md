@@ -30,3 +30,11 @@ z_{\mathrm{sy}}^4 &= p_\varphi.
 \end{align}
 $$
 The routine  `timestep_sympl_z` does the conversion back in every time-step such that the same variables $z$  as for the RK4/5 integrator can be used.
+
+## Implementation
+
+There is a trapping parameter
+$$
+\left((1-v_\parallel^2/v^2)\frac{B_\max}{B}-1\right)\frac{B_\min}{B_\max-B_\min}
+= \left(\frac{\mu}{\mu_{\mathrm{tp}}} - 1\right)B_\min/(B_\max-B_\min)
+$$

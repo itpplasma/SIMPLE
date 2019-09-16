@@ -38,7 +38,7 @@ else()
 	add_compile_options(-std=f95 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
 	add_link_options(-fopenmp)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace 
+		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -g -shared-libgcc)
@@ -62,7 +62,7 @@ add_library ( neo_orb SHARED
 	SRC/testing.f90
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
-	SRC/orbit_symplectic_quasi.f90	
+	SRC/orbit_symplectic_quasi.f90
 	SRC/minpack.f90
 	SRC/common.f90
 	SRC/neo_orb.f90
@@ -71,6 +71,8 @@ add_library ( neo_orb SHARED
 
 add_executable (neo-orb.x
 #	SRC/canonical_coordinates.f90
+	SRC/zzg.f90
+	SRC/binsrc.f90
 	SRC/main.f90
 )
 
