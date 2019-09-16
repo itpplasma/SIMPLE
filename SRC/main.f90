@@ -223,6 +223,8 @@ contains
   ! maximum value of B module:
     bmax=maxval(bstart)
     bmin=minval(bstart)
+
+    print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
   end subroutine init_starting_surf
 
   subroutine init_starting_points

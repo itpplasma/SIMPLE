@@ -35,6 +35,28 @@ The routine  `timestep_sympl_z` does the conversion back in every time-step such
 
 There is a trapping parameter
 $$
-\left((1-v_\parallel^2/v^2)\frac{B_\max}{B}-1\right)\frac{B_\min}{B_\max-B_\min}
+\bar{\mu} = \left((1-v_\parallel^2/v^2)\frac{B_\max}{B}-1\right)\frac{B_\min}{B_\max-B_\min}
 = \left(\frac{\mu}{\mu_{\mathrm{tp}}} - 1\right)B_\min/(B_\max-B_\min)
 $$
+
+For deeply trapped
+$$
+\mu_\mathrm{dt} = \frac{mv^2}{B_\mathrm{min}}
+$$
+So
+$$
+\bar{\mu} = \left(\frac{\mu}{\mu_{\mathrm{tp}}} - 1\right)/(mv^2\mu_\mathrm{dt}B_\max-1)
+$$
+
+$$
+J_\perp =(1-\lambda^2)/B
+$$
+
+$$
+(\eta B_\mathrm{max} - 1) B_\mathrm{min}/(B_\max-B_\min)
+$$
+
+$$
+\eta = \frac{v_\perp^2}{v^2 B}
+$$
+
