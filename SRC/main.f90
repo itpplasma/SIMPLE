@@ -254,12 +254,14 @@ subroutine trace_orbit(anorb, ipart)
   integer :: iper, itip, kper, nfp_tip, nfp_per
 
   double precision :: fraction
+  logical :: regular
+  integer :: ntcut
 
 
-  open(unit=10000+ipart, iostat=stat, status='old')
-  if (stat == 0) close(10000+ipart, status='delete')
-  open(unit=20000+ipart, iostat=stat, status='old')
-  if (stat == 0) close(20000+ipart, status='delete')
+  !open(unit=10000+ipart, iostat=stat, status='old')
+  !if (stat == 0) close(10000+ipart, status='delete')
+  !open(unit=20000+ipart, iostat=stat, status='old')
+  !if (stat == 0) close(20000+ipart, status='delete')
 
   z = zstart(:, ipart)
   if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
@@ -292,8 +294,8 @@ subroutine trace_orbit(anorb, ipart)
   nfp_per=nfp             !<= initial array dimension for periods
   allocate(zpoipl_tip(2,nfp_tip),zpoipl_per(2,nfp_per))
 
-  open(unit=10000+ipart, recl=1024, position='append')
-  open(unit=20000+ipart, recl=1024, position='append')
+  !open(unit=10000+ipart, recl=1024, position='append')
+  !open(unit=20000+ipart, recl=1024, position='append')
 
   ifp_tip=0               !<= initialize footprint counter on tips
   ifp_per=0               !<= initialize footprint counter on periods
@@ -325,7 +327,20 @@ subroutine trace_orbit(anorb, ipart)
   !--------------------------------
 
   par_inv = 0d0
+  regular = .False.
+  ntcut = ntimstep*ntau/10
   do it=2,ntimstep
+    if (regular) then  ! regular orbit, will not be lost
+      if(passing) then
+        !$omp atomic
+        confpart_pass(it)=confpart_pass(it)+1.d0
+      else
+        !$omp atomic
+        confpart_trap(it)=confpart_trap(it)+1.d0
+      endif
+      kt = kt+ntau
+      cycle
+    endif
     do ktau=1,ntau
       if (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
@@ -362,7 +377,7 @@ subroutine trace_orbit(anorb, ipart)
           var_tip(2)=modulo(var_tip(2),twopi)
           var_tip(3)=modulo(var_tip(3),twopi)
 
-          write(10000+ipart,*) var_tip
+          !write(10000+ipart,*) var_tip
 
           ifp_tip=ifp_tip+1
           if(ifp_tip.gt.nfp_tip) then   !<=increase the buffer for banana tips
@@ -400,7 +415,7 @@ subroutine trace_orbit(anorb, ipart)
           var_tip=matmul(orb_sten(:,ipoi),coef(0,:))
           var_tip(2)=modulo(var_tip(2),twopi)
           var_tip(3)=modulo(var_tip(3),twopi)
-          write(20000+ipart,*) var_tip
+          !write(20000+ipart,*) var_tip
           ifp_per=ifp_per+1
           if(ifp_per.gt.nfp_per) then   !<=increase the buffer for periodic boundary footprints
             allocate(dummy2d(2,ifp_per-1))
@@ -415,6 +430,35 @@ subroutine trace_orbit(anorb, ipart)
         endif
       endif
       ! End periodic boundary footprint detection and interpolation
+
+      ! Cut classification into regular or chaotic
+      if (kt == ntcut) then
+        regular = .True.
+
+        if(ifp_per > 0) then
+
+          call fract_dimension(ifp_per,zpoipl_per(:,1:ifp_per),fraction)
+
+          if(fraction.gt.0.2d0) then
+            print *, ipart, ' chaotic per ', ifp_per
+            regular = .False.
+          else
+            print *, ipart, ' regular per', ifp_per
+          endif
+        endif
+
+        if(ifp_tip > 0) then
+
+          call fract_dimension(ifp_tip,zpoipl_tip(:,1:ifp_tip),fraction)
+
+          if(fraction.gt.0.2d0) then
+            print *, ipart, ' chaotic tip ', ifp_tip
+            regular = .False.
+          else
+            print *, ipart, ' regular tip ', ifp_tip
+          endif
+        endif
+      endif
     enddo
     if(ierr.ne.0) exit
     if(passing) then
@@ -426,30 +470,8 @@ subroutine trace_orbit(anorb, ipart)
     endif
   enddo
 
-  if(ifp_tip.eq.0) then
-
-    call fract_dimension(ifp_per,zpoipl_per(:,1:ifp_per),fraction)
-
-    if(fraction.gt.0.2d0) then
-      print *, ipart, ' chaotic passing'
-    else
-      print *, ipart, ' regular passing'
-    endif
-  else
-
-    call fract_dimension(ifp_tip,zpoipl_tip(:,1:ifp_tip),fraction)
-
-    if(fraction.gt.0.2d0) then
-      print *, ipart, ' chaotic trapped'
-    else
-      print *, ipart, ' regular trapped'
-    endif
-  endif
-
   times_lost(ipart) = kt*dtaumin/v0
   deallocate(zpoipl_tip, zpoipl_per)
-  close(10000+ipart)
-  close(20000+ipart)
 end subroutine trace_orbit
 
 end program neo_orb_main
