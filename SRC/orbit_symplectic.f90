@@ -186,13 +186,13 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
     double precision, intent(out) :: fvec(n)
 
     ! evaluate at midpoint
-    call eval_field(f, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 2)
-    call get_derivatives2(f, 0.5*(x(4) + si%z(4)))
+    call eval_field(f, x(5), 0.5d0*(x(2) + si%z(2)), 0.5d0*(x(3) + si%z(3)), 2)
+    call get_derivatives2(f, 0.5d0*(x(4) + si%z(4)))
 
     fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
     fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
     fvec(4) = f%dpth(1)*(x(4) - si%z(4)) + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-    fvec(5) = f%dpth(1)*(f%pth - si%pthold) + si%dt/2.0d0*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
+    fvec(5) = f%dpth(1)*(f%pth - si%pthold) + 0.5d0*si%dt*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
   
   end subroutine f_midpoint_part1
 
