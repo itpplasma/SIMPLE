@@ -110,7 +110,7 @@ program neo_orb_main
 contains
 
 subroutine read_config
-  open(1,file='alpha_lifetime.inp',recl=1024)
+  open(1,file='simple.in',recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
   read (1,*) nper              !number of periods for initial field line        ! TODO: increase
   read (1,*) npoiper           !number of points per period on this field line  ! TODO: increase

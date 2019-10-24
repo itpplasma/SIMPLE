@@ -10,14 +10,16 @@ The main focus of SIMPLE is to make computation of fusion alpha particle losses 
 stellarator optimization codes. For that reason currently 3D configurations with nested magnetic flux surfaces are 
 supported based on a VMEC equilibrium file in NetCDF format, and orbits are computed without taking collisions into account. 
 
+## Building
+
 ## Usage
 
 SIMPLE currently runs on a single node with OpenMP shared memory parallelization with one particle per thread and background
 fields residing in main memory. As an input it takes
-* `alpha_lifetime.in`
-* a VMEC NetCDF equlibrium file with name specified in `alpha_lifetime.in`
+* `simple.in`
+* a VMEC NetCDF equlibrium (wout.nc) file with name specified in `simple.in`
 
-An example input file with explanation of each parameter can be found in `examples/alpha_lifetime.in`.
+An example input file with explanation of each parameter can be found in `examples/simple.in`.
 
 The main output is `confined_fraction.dat`, containing four columns:
 1) Physical time
@@ -27,6 +29,8 @@ The main output is `confined_fraction.dat`, containing four columns:
 
 The sum of 2) and 3) yields the overall confined fraction at each time.
 
+In addition `start.dat` is either an input for given or an output for randomly generated initial conditions. Diagnostics for slow convergence of Newton
+iterations are written in `fort.6601`.
 
 ## References
 When using this code for scientific publications, please cite

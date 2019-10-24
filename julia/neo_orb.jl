@@ -59,7 +59,7 @@ end
 norb = NeoOrb()
 if !@isdefined(firstrun) | firstrun == true
     global firstrun, norb
-    ccall((:__neo_orb_MOD_init_field, "lib/libneo_orb"),
+    ccall((:__neo_orb_global_MOD_init_field, "libsimple"),
     Cvoid, (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}), 
     norb, 5, 5, 3, 0)
     firstrun = false
@@ -86,13 +86,13 @@ tau=trace_time*v0
 
 npoiper2 = 64
 
-p_rmajor = cglobal((:__new_vmec_stuff_mod_MOD_rmajor, "lib/libneo_orb"), Float64)
+p_rmajor = cglobal((:__new_vmec_stuff_mod_MOD_rmajor, "libsimple"), Float64)
 rmajor = unsafe_load(p_rmajor)
 println("R0 = ", rmajor)
 rbig = rmajor*1.0e2
 dtaumin = 2.0*pi*rbig/npoiper2
 dtau = dtaumin
-ccall((:__neo_orb_MOD_init_params, "lib/libneo_orb"), Cvoid,
+ccall((:__neo_orb_global_MOD_init_params, "libsimple"), Cvoid,
       (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Float64},
        Ref{Float64}, Ref{Float64}),
       norb, Z_charge, m_mass, E_kin, dtau, dtaumin, 1e-8)
@@ -115,14 +115,14 @@ k = 0
 dt = dtaumin/sqrt(2e0) # factor 1/sqrt(2) due to velocity normalisation different from other modules
 
 f = FieldCan()
-ccall((:__field_can_mod_MOD_eval_field_can, "lib/libneo_orb"), Cvoid,
+ccall((:__field_can_mod_MOD_eval_field_can, "libsimple"), Cvoid,
         (Ref{FieldCan}, Ref{Float64}, Ref{Float64}, Ref{Float64}, Ref{Int32}),
         f, s, th, ph, 0)
 
 mu = 0.5 * z0[4] * (1.0 - z0[5]^2)/f.Bmod*2.0 # mu by factor 2 from other modules
 
 ro0_parmot = unsafe_load(
-    cglobal((:__parmot_mod_MOD_ro0, "lib/libneo_orb"), Float64)
+    cglobal((:__parmot_mod_MOD_ro0, "libsimple"), Float64)
 )
 
 f.ro0 = ro0_parmot/sqrt(2.0) # ro0 = mc/e*v0, different by sqrt(2) from other modules
@@ -132,13 +132,13 @@ f.vpar = z0[4]*z0[5]*sqrt(2.0) # vpar_bar = vpar/sqrt(T/m), different by sqrt(2)
 z = zeros(4)
 z[1:3] = z0[1:3]  # r, th, ph
 z[4] = f.vpar*f.hph + f.Aph/f.ro0
-ccall((:__field_can_mod_MOD_get_val, "lib/libneo_orb"), Cvoid,
+ccall((:__field_can_mod_MOD_get_val, "libsimple"), Cvoid,
         (Ref{FieldCan}, Ref{Float64}),
         f, z[4])  # for pth
 
 # call plag_coeff(nlag+1, 0, 1d0, 1d0*(/(k,k=-nlag,0)/), si%coef)
 
-# ccall((:__field_can_mod_MOD_get_val, "lib/libneo_orb"), Cvoid,
+# ccall((:__field_can_mod_MOD_get_val, "lib/libsimple"), Cvoid,
 #                    (Ref{FieldCan}, Ref{Float64}), f, pphi)
 
 function timestep!(z)

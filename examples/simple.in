@@ -1,0 +1,25 @@
+0        notrace_passing   !skip tracing passing prts if notrace_passing=1
+1000     nper              !number of periods for initial field line
+100      npoiper           !number of points per period on this field line
+10000    ntimstep          !number of time steps per slowing down time
+100      ntestpart         !number of test particles
+5d4      bmod_ref          !reference field, G, for Boozer $B_{00}$
+1d0      trace_time        !slowing down time, s
+0.6d0    sbeg              !starting s (normalzed toroidal flux) for field line
+0.d0     phibeg            !starting phi for field line
+0.d0     thetabeg          !starting theta for field line
+0        loopskip          !loops to skip for random number shift           
+-1.0d0   contr_pp          !control of passing particle fraction
+1.0      facE_al           !test particle energy reduction factor
+128	 npoiper2          !points per period for integrator step
+2        n_e               !test particle charge number (the same as Z)
+4        n_d               !test particle mass number (the same as A)
+'wout.nc'                  !name of VMEC file in NETCDF format
+5        ns_s              !spline order for 3D quantities over s variable
+5        ns_tp             !spline order for 3D quantities over theta and phi
+3        multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
+1        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
+1        integmode         !mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+1d-13    tol               !tolerance for integrator. Set to 1d-13 for symplectic.
+! TODO: add switch for time of Poincare cuts and to disable them
+

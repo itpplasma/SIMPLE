@@ -2,7 +2,7 @@
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
 cmake_minimum_required (VERSION 3.0.0)
-project (NEO-ORB Fortran)
+project (SIMPLE Fortran)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -47,7 +47,7 @@ else()
 	endif()
 endif()
 
-add_library ( neo_orb SHARED
+add_library ( simple SHARED
 	SRC/canonical_coordinates_mod.f90
 	SRC/nctools_module.f90
 	SRC/odeint_allroutines.f
@@ -65,12 +65,11 @@ add_library ( neo_orb SHARED
 	SRC/orbit_symplectic_quasi.f90
 	SRC/minpack.f90
 	SRC/common.f90
-	SRC/neo_orb.f90
+	SRC/simple.f90
 	SRC/bench.f90
 )
 
-add_executable (neo-orb.x
-#	SRC/canonical_coordinates.f90
+add_executable (simple.x
 	SRC/zzg.f90
 	SRC/binsrc.f90
 	SRC/main.f90
@@ -104,23 +103,23 @@ add_executable (alpha_lifetime_vmec_c.x
 	SRC/alpha_lifetime_c.f90
 )
 
-add_executable (alpha_lifetime.x
+add_executable (alpha_lifetime_old.x
 	SRC/zzg.f90
 	SRC/binsrc.f90
 	SRC/alpha_lifetime.f90
 )
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(neo_orb netcdf netcdff)
+	target_link_libraries(simple netcdf netcdff)
 else()
-	target_link_libraries(neo_orb netcdf netcdff lapack blas)
+	target_link_libraries(simple netcdf netcdff lapack blas)
 endif()
 
-target_link_libraries(neo-orb.x neo_orb)
-target_link_libraries(test_sympl_tok.x neo_orb)
-target_link_libraries(test_sympl.x neo_orb)
-target_link_libraries(test_magfie.x neo_orb)
-target_link_libraries(test_poincare1.x neo_orb)
-target_link_libraries(test_poiplot_classification.x neo_orb)
-target_link_libraries(alpha_lifetime_vmec_c.x neo_orb)
-target_link_libraries(alpha_lifetime.x neo_orb)
+target_link_libraries(simple.x simple)
+target_link_libraries(test_sympl_tok.x simple)
+target_link_libraries(test_sympl.x simple)
+target_link_libraries(test_magfie.x simple)
+target_link_libraries(test_poincare1.x simple)
+target_link_libraries(test_poiplot_classification.x simple)
+target_link_libraries(alpha_lifetime_vmec_c.x simple)
+target_link_libraries(alpha_lifetime_old.x simple)
