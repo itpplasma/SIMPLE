@@ -12,28 +12,36 @@ supported based on a VMEC equilibrium file in NetCDF format, and orbits are comp
 
 ## Building
 
+The build system for SIMPLE is CMake. Required libraries are NetCDF, and LAPACK/BLAS and supported compilers are GNU Fortran
+and Intel Fortran. To build, simply create a "build" folder, and inside run `cmake` and `make`. This will produce `libsimple.so` and `simple.x` required to run the code.
+
 ## Usage
 
 SIMPLE currently runs on a single node with OpenMP shared memory parallelization with one particle per thread and background
-fields residing in main memory. As an input it takes
+fields residing in main memory. 
+
+The main executable is `simple.x`. As an input it takes
 * `simple.in`
 * a VMEC NetCDF equlibrium (wout.nc) file with name specified in `simple.in`
 
 An example input file with explanation of each parameter can be found in `examples/simple.in`.
 
 The main output is `confined_fraction.dat`, containing four columns:
-1) Physical time
-2) Confined fraction of passing particles
-3) Confined fraction of trapped particles
-4) Total number of particles
+1. Physical time
+2. Confined fraction of passing particles
+3. Confined fraction of trapped particles
+4. Total number of particles
 
-The sum of 2) and 3) yields the overall confined fraction at each time.
+The sum of 2. and 3. yields the overall confined fraction at each time.
 
-In addition `start.dat` is either an input for given or an output for randomly generated initial conditions. Diagnostics for slow convergence of Newton
-iterations are written in `fort.6601`.
+In addition `start.dat` is either an input for given or an output for randomly generated initial conditions. 
+Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
+
+Currently the code automatically classifies orbits as regular/chaotic after 1/10 of the tracing time.
+This will be made configurable in `simple.in` very soon.
 
 ## References
 When using this code for scientific publications, please cite
 
 [1] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
-Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys (forthcoming, 2019), arXiv:1903.06885
+Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys (forthcoming, 2019), https://arxiv.org/abs/1903.06885
