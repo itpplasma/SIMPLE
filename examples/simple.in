@@ -11,7 +11,7 @@
 0        loopskip          !loops to skip for random number shift           
 -1.0d0   contr_pp          !control of passing particle fraction
 1.0      facE_al           !test particle energy reduction factor
-128	 npoiper2          !points per period for integrator step
+128	     npoiper2          !points per period for integrator step
 2        n_e               !test particle charge number (the same as Z)
 4        n_d               !test particle mass number (the same as A)
 'wout.nc'                  !name of VMEC file in NETCDF format
@@ -21,5 +21,4 @@
 1        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
 1        integmode         !mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 1d-13    tol               !tolerance for integrator. Set to 1d-13 for symplectic.
-! TODO: add switch for time of Poincare cuts and to disable them
-
+-1       tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired

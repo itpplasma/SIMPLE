@@ -37,9 +37,6 @@ The sum of 2. and 3. yields the overall confined fraction at each time.
 In addition `start.dat` is either an input for given or an output for randomly generated initial conditions. 
 Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
 
-Currently the code automatically classifies orbits as regular/chaotic after 1/10 of the tracing time.
-This will be made configurable in `simple.in` very soon.
-
 ## References
 When using this code for scientific publications, please cite
 

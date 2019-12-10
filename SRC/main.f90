@@ -46,6 +46,9 @@ program neo_orb_main
   integer :: norbper,nfp
   double precision :: fper, zerolam = 0d0
 
+  double precision :: tcut
+  integer :: ntcut
+
 ! read config file
   call read_config
 
@@ -134,6 +137,7 @@ subroutine read_config
   read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
   read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
   read (1,*) relerr            !relative error for RK integrator
+  read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
   close(1)
 end subroutine read_config
 
@@ -156,6 +160,8 @@ subroutine init_params
   dtaumin=2.d0*pi*rbig/npoiper2
   ntau=ceiling(dtau/dtaumin)
   dtaumin=dtau/ntau
+
+  ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
 
   norbper=ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
   nfp=L1i*norbper         !<= guess for footprint number
@@ -255,7 +261,6 @@ subroutine trace_orbit(anorb, ipart)
 
   double precision :: fraction
   logical :: regular
-  integer :: ntcut
 
 
   !open(unit=10000+ipart, iostat=stat, status='old')
@@ -328,7 +333,6 @@ subroutine trace_orbit(anorb, ipart)
 
   par_inv = 0d0
   regular = .False.
-  ntcut = ntimstep*ntau/10
   do it=2,ntimstep
     if (regular) then  ! regular orbit, will not be lost
       if(passing) then
