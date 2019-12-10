@@ -41,4 +41,4 @@ Diagnostics for slow convergence of Newton iterations are written in `fort.6601`
 When using this code for scientific publications, please cite
 
 [1] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
-Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys (forthcoming, 2019), https://arxiv.org/abs/1903.06885
+Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys (in press, 2019), https://doi.org/10.1016/j.jcp.2019.109065, preprint on https://arxiv.org/abs/1903.06885
