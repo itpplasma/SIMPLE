@@ -12,8 +12,23 @@ supported based on a VMEC equilibrium file in NetCDF format, and orbits are comp
 
 ## Building
 
-The build system for SIMPLE is CMake. Required libraries are NetCDF, and LAPACK/BLAS and supported compilers are GNU Fortran
-and Intel Fortran. To build, simply create a "build" folder, and inside run `cmake` and `make`. This will produce `libsimple.so` and `simple.x` required to run the code.
+The build system for SIMPLE is CMake. 
+
+Required libraries:
+* NetCDF
+* LAPACK/BLAS
+
+Supported compilers:
+* GNU Fortan 
+* Intel Fortran
+
+Building: 
+```bash
+mkdir build; cd build
+cmake ..
+make
+```
+This will produce `libsimple.so` and `simple.x` required to run the code.
 
 ## Usage
 

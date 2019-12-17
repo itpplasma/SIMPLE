@@ -20,5 +20,7 @@ RUN/
 *.so
 *.dylib
 BUILD/*
+build/*
 _*.c
 *.pyc
+
