@@ -24,6 +24,7 @@ Supported compilers:
 
 Building: 
 ```bash
+cd /path/to/SIMPLE
 mkdir build; cd build
 cmake ..
 make
