@@ -22,3 +22,5 @@
 1        integmode         !mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 1d-13    tol               !tolerance for integrator. Set to 1d-13 for symplectic.
 -1       tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+.False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
+  

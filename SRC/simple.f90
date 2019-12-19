@@ -377,7 +377,17 @@ contains
         endif
       enddo
       deallocate(free)
-      if(debug) write(iunit,*) dble(irefine),dble(nboxes)/dble(ngrid**2)
+      if(debug) then
+!$omp critical
+        !
+        ! Right now criterion for regular is at nboxes/ngrid**2 < 0.2 .
+        ! For fractal dimension d = log(nboxes)/log(ngrid) this means
+        ! d_thresh = 2 + log(0.2)/log(ngrid)
+        !        
+        write(iunit,*) irefine, nboxes, ngrid, dble(nboxes)/dble(ngrid**2), 0.2d0,& 
+                       log(1d0*nboxes)/log(1d0*ngrid), 2d0 + log(0.2d0)/log(1d0*ngrid)
+!$omp end critical
+      end if
       if(irefine.eq.nrefine-3) fraction=dble(nboxes)/dble(ngrid**2)
     enddo
     close(iunit)

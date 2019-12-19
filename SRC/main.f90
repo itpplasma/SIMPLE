@@ -7,7 +7,7 @@ program neo_orb_main
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_field, init_sympl, NeoOrb
+  use neo_orb, only : init_field, init_sympl, NeoOrb, debug
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   
@@ -138,6 +138,7 @@ subroutine read_config
   read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
   read (1,*) relerr            !relative error for RK integrator
   read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+  read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
   close(1)
 end subroutine read_config
 
