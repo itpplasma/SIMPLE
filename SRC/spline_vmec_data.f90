@@ -32,7 +32,7 @@
 !
     m=nint(abs(axm(i)))
 !
-    nheal=min(m,10)
+    nheal=min(m, 4)
 !
     call s_to_rho_healaxis(m,ns,nrho,nheal,rmn(i,:),rmn_rho(i,:))
 !
