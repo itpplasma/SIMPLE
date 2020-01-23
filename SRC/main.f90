@@ -3,7 +3,7 @@ program neo_orb_main
   use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
-  use parmot_mod, only : ro0
+  use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
