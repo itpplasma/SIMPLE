@@ -148,6 +148,9 @@ subroutine init_params
   v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
   rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
 
+! Neglect relativistic effects by large inverse relativistic temperature
+  rmu=1d8
+
 ! normalized slowing down time:
   tau=trace_time*v0
 ! normalized time step:
