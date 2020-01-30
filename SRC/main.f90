@@ -48,6 +48,8 @@ program neo_orb_main
 
   double precision :: tcut
   integer :: ntcut
+  logical          :: class_plot     !<=AAA
+  double precision :: cut_in_per     !<=AAA
 
 ! read config file
   call read_config
@@ -139,6 +141,8 @@ subroutine read_config
   read (1,*) relerr            !relative error for RK integrator
   read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
   read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
+  read (1,*) class_plot        !write starting points at phi=const cut for classification plot (.True./.False.).  !<=AAA
+  read (1,*) cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True. !<=AAA
   close(1)
 end subroutine read_config
 
@@ -265,6 +269,8 @@ subroutine trace_orbit(anorb, ipart)
 
   double precision :: fraction
   logical :: regular
+  integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002, &  !<=AAA
+                        iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
 
   !open(unit=10000+ipart, iostat=stat, status='old')
@@ -272,7 +278,29 @@ subroutine trace_orbit(anorb, ipart)
   !open(unit=20000+ipart, iostat=stat, status='old')
   !if (stat == 0) close(20000+ipart, status='delete')
 
+  if(class_plot) then                                                    !<=AAA
+    if(ipart.eq.1) then                                                  !<=AAA
+      z(1)=zstart(1,ipart)                                               !<=AAA
+      z(3)=0.2d0*pi                                                      !<=AAA
+      do kt=0,1000                                                       !<=AAA
+        z(2)=1d-3*twopi*dble(kt)                                         !<=AAA
+        if(isw_field_type.eq.0) then                                     !<=AAA
+          call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)    !<=AAA
+        else                                                             !<=AAA
+          call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)   !<=AAA
+        endif                                                            !<=AAA
+        write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)                      !<=AAA
+      enddo                                                              !<=AAA
+    endif                                                                !<=AAA
+  endif                                                                  !<=AAA
+
   z = zstart(:, ipart)
+
+  if(class_plot) then                                                    !<=AAA
+    z(3)=cut_in_per*fper                                                 !<=AAA
+    zstart(2,ipart)=modulo(zstart(2,ipart),twopi)                        !<=AAA
+  endif                                                                  !<=AAA
+
   if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
 
   if(isw_field_type.eq.0) then
@@ -291,6 +319,11 @@ subroutine trace_orbit(anorb, ipart)
     !$omp critical
     confpart_pass=confpart_pass+1.d0
     !$omp end critical
+    if(class_plot) then                                                   !<=AAA
+!$omp critical
+      write (iaaa_pnt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+!$omp end critical
+    endif                                                                 !<=AAA
     return
   endif
 
@@ -358,6 +391,19 @@ subroutine trace_orbit(anorb, ipart)
         z(4) = 1d0
         z(5) = anorb%f%vpar/dsqrt(2d0)
       endif
+
+      if(class_plot) then                                                       !<=AAA
+        if(ierr.ne.0) then                                                      !<=AAA
+!$omp critical
+          if(passing) then                                                      !<=AAA
+            write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+          else                                                                  !<=AAA
+            write (iaaa_prt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+          endif                                                                 !<=AAA
+!$omp end critical
+        endif                                                                   !<=AAA
+      endif                                                                     !<=AAA
+
       if(ierr.ne.0) exit
       kt = kt+1
 
@@ -466,6 +512,27 @@ subroutine trace_orbit(anorb, ipart)
             print *, ipart, ' regular tip ', ifp_tip
           endif
         endif
+
+        if(class_plot) then                                                       !<=AAA
+!$omp critical
+          if(regular) then                                                        !<=AAA
+            if(passing) then                                                      !<=AAA
+              write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+            else                                                                  !<=AAA
+              write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+            endif                                                                 !<=AAA
+          else                                                                    !<=AAA
+            if(passing) then                                                      !<=AAA
+              write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+            else                                                                  !<=AAA
+              write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+            endif                                                                 !<=AAA
+          endif                                                                   !<=AAA
+!$omp end critical
+          ierr=1                                                                  !<=AAA
+          exit                                                                    !<=AAA
+        endif                                                                     !<=AAA
+
       endif
     enddo
     if(ierr.ne.0) exit

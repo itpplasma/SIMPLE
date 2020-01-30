@@ -421,6 +421,19 @@ contains
   end subroutine init_field
 
 
+  subroutine spline_vmec(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+  
+    double precision, intent(in) :: s,theta,varphi
+    double precision, intent(out) :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,   &
+    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
+
+    call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+
+  end subroutine spline_vmec
+  
+
   subroutine init_params(Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
     integer, intent(in) :: Z_charge, m_mass
     real(8), intent(in) :: E_kin, dtau, dtaumin
