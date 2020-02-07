@@ -2,9 +2,9 @@
 **S**ymplectic **I**ntegration **M**ethods for **P**article **L**oss **E**stimation
 
 SIMPLE computes statistical losses of guiding-center orbits for particles of given mass, charge and 
-energy from the volume of 3D magnetic configurations. Orbits are traced via a symplectic integrator [1] 
+energy from the volume of 3D magnetic configurations. Orbits are traced via a symplectic integrator [1,2] 
 that guarantees conservation of invariants of motion within fixed bounds over long integration periods.
-A classifier based on Poincarè plots allows for accelerated prediction for confinement of regular (non-chaotic) orbits.
+A classifier based on Poincarè plots [1] allows for accelerated prediction for confinement of regular (non-chaotic) orbits.
 
 The main focus of SIMPLE is to make computation of fusion alpha particle losses fast enough to be used directly in 
 stellarator optimization codes. For that reason currently 3D configurations with nested magnetic flux surfaces are 
@@ -54,7 +54,10 @@ In addition `start.dat` is either an input for given or an output for randomly g
 Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
 
 ## References
-When using this code for scientific publications, please cite
+When using this code for scientific publications, please cite the according references:
 
 [1] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
-Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys (in press, 2019), https://doi.org/10.1016/j.jcp.2019.109065, preprint on https://arxiv.org/abs/1903.06885
+Accelerated methods for direct computation of fusion alpha particle losses within stellarator optimization. J. Plasma Phys. (submitted 2019)
+
+[2] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
+Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys 403, 109065 (2020), https://doi.org/10.1016/j.jcp.2019.109065, preprint on https://arxiv.org/abs/1903.06885
