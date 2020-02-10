@@ -11,7 +11,7 @@ stellarator optimization codes. For that reason currently 3D configurations with
 supported based on a VMEC equilibrium file in NetCDF format, and orbits are computed without taking collisions into account.
 
 The code is free to use and modify under the MIT License and links to Runge-Kutta-Fehlberg routines in
-`SRC/contrib/rkf45.f90` under the GNU LGPL License.
+`SRC/contrib/rkf45.f90` from https://people.sc.fsu.edu/~jburkardt/f_src/rkf45/rkf45.html under the GNU LGPL License.
 
 ## Building
 
