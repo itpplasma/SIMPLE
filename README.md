@@ -8,7 +8,10 @@ A classifier based on Poincarè plots [1] allows for accelerated prediction for 
 
 The main focus of SIMPLE is to make computation of fusion alpha particle losses fast enough to be used directly in 
 stellarator optimization codes. For that reason currently 3D configurations with nested magnetic flux surfaces are 
-supported based on a VMEC equilibrium file in NetCDF format, and orbits are computed without taking collisions into account. 
+supported based on a VMEC equilibrium file in NetCDF format, and orbits are computed without taking collisions into account.
+
+The code is free to use and modify under the MIT License and links to Runge-Kutta-Fehlberg routines in
+`SRC/contrib/rkf45.f90` under the GNU LGPL License.
 
 ## Building
 
