@@ -2,7 +2,7 @@
 1000     nper              !number of periods for initial field line
 100      npoiper           !number of points per period on this field line
 10000    ntimstep          !number of time steps per slowing down time
-100      ntestpart         !number of test particles
+1000     ntestpart         !number of test particles
 5d4      bmod_ref          !reference field, G, for Boozer $B_{00}$
 1d0      trace_time        !slowing down time, s
 0.6d0    sbeg              !starting s (normalzed toroidal flux) for field line
@@ -21,6 +21,9 @@
 1        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
 1        integmode         !mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 1d-13    tol               !tolerance for integrator. Set to 1d-13 for symplectic.
--1       tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+1d-1     tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
 .False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
+.False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode
+.False.  class_plot        !write starting points at phi=const cut for classification plot (.True./.False.)
+0        cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True.
   
