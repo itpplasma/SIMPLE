@@ -1614,11 +1614,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
   integer, intent(out) :: ierr
 
-<<<<<<< HEAD
-  integer, parameter :: maxit = 32
-=======
   integer, parameter :: maxit = 16
->>>>>>> a1c73cbce15344d615bc2812b10b1578cfbb19de
 
   integer, intent(in) :: s
   double precision, dimension(4*s) :: x, xlast
@@ -1775,11 +1771,7 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
 
-<<<<<<< HEAD
-  integer, parameter :: maxit = 32
-=======
   integer, parameter :: maxit = 16
->>>>>>> a1c73cbce15344d615bc2812b10b1578cfbb19de
 
   integer, intent(in) :: s
   double precision, dimension(4*s-2) :: x, xlast
