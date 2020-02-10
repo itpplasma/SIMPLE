@@ -251,7 +251,7 @@ subroutine r4_rkf45 ( f, neqn, y, yp, t, tout, relerr, abserr, flag )
 !
 !  Modified:
 !
-!    04 April 2011
+!    10 February 2020
 !
 !  Author:
 !
@@ -354,6 +354,10 @@ subroutine r4_rkf45 ( f, neqn, y, yp, t, tout, relerr, abserr, flag )
   real ( kind = 4 ) y(neqn)
   real ( kind = 4 ) yp(neqn)
   real ( kind = 4 ) ypk
+
+! Thread safety
+!$omp threadprivate(abserr_save,h,flag_save,init,kflag,kop,nfe,relerr_save)
+  
 !
 !  Check the input parameters.
 !
@@ -1014,7 +1018,7 @@ subroutine r8_rkf45 ( f, neqn, y, yp, t, tout, relerr, abserr, flag )
 !
 !  Modified:
 !
-!    04 April 2011
+!    10 February 2020
 !
 !  Author:
 !
@@ -1117,6 +1121,10 @@ subroutine r8_rkf45 ( f, neqn, y, yp, t, tout, relerr, abserr, flag )
   real ( kind = 8 ) y(neqn)
   real ( kind = 8 ) yp(neqn)
   real ( kind = 8 ) ypk
+
+! Thread safety
+!$omp threadprivate(abserr_save,h,flag_save,init,kflag,kop,nfe,relerr_save)
+
 !
 !  Check the input parameters.
 !
