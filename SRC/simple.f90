@@ -420,6 +420,9 @@ contains
     call neo_orb_init_field(norb, 'wout.nc', ans_s, ans_tp, amultharm, aintegmode)
   end subroutine init_field
 
+  subroutine init_spline_vmec
+    call spline_vmec_data
+  end subroutine init_spline_vmec
 
   subroutine spline_vmec(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
     R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
@@ -432,6 +435,19 @@ contains
     R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
 
   end subroutine spline_vmec
+
+  subroutine field_vmec(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds, &
+    aiota, sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+
+    double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,        &
+                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
+    double precision :: Bctrvr_vartheta,Bctrvr_varphi,Bcovar_r,Bcovar_vartheta,Bcovar_varphi,sqg
+
+    call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+  end subroutine field_vmec
   
 
   subroutine init_params(Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
