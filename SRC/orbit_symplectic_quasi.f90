@@ -220,7 +220,7 @@ subroutine timestep_midpoint_quasi(ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   double precision, dimension(n) :: x
   double precision :: fvec(n)
@@ -262,7 +262,7 @@ subroutine timestep_euler1_quasi(ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   double precision, dimension(n) :: x
   double precision :: fvec(n)
@@ -319,7 +319,7 @@ subroutine timestep_euler2_quasi(ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   double precision, dimension(n) :: x
   double precision :: fvec(n)
@@ -369,7 +369,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
 !
   integer, intent(out) :: ierr
 
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   integer, intent(in) :: s
   double precision, dimension(4*s) :: x
@@ -428,7 +428,7 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
 !
   integer, intent(out) :: ierr
 
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   integer, intent(in) :: s
   double precision, dimension(4*s-2) :: x

@@ -1373,7 +1373,7 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   double precision, dimension(n) :: x, xlast
   integer :: k, ktau
@@ -1457,7 +1457,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   double precision, dimension(n) :: x, xlast, dz
   integer :: k, ktau
@@ -1539,7 +1539,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   double precision, dimension(n) :: x, xlast
   integer :: k, ktau
@@ -1614,7 +1614,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
   integer, intent(out) :: ierr
 
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   integer, intent(in) :: s
   double precision, dimension(4*s) :: x, xlast
@@ -1771,7 +1771,7 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
 
-  integer, parameter :: maxit = 256
+  integer, parameter :: maxit = 32
 
   integer, intent(in) :: s
   double precision, dimension(4*s-2) :: x, xlast
