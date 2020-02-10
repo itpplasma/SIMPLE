@@ -47,10 +47,17 @@ else()
 	endif()
 endif()
 
+# RKF45 from https://people.sc.fsu.edu/~jburkardt/
+# licenced under LGPL (see SRC/contrib/LICENSE.rkf45)
+add_library ( rkf45 SHARED
+	SRC/contrib/rkf45.f90
+)
+
 add_library ( simple SHARED
 	SRC/canonical_coordinates_mod.f90
 	SRC/nctools_module.f90
-	SRC/odeint_allroutines.f
+#	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
+	SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
 	SRC/magfie.f90
 	SRC/chamb_m.f90
 	SRC/sub_alpha_lifetime_can.f90
@@ -110,9 +117,9 @@ add_executable (alpha_lifetime_old.x
 )
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(simple netcdf netcdff)
+	target_link_libraries(simple rkf45 netcdf netcdff)
 else()
-	target_link_libraries(simple netcdf netcdff lapack blas)
+	target_link_libraries(simple rkf45 netcdf netcdff lapack blas)
 endif()
 
 target_link_libraries(simple.x simple)
