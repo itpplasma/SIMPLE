@@ -72,7 +72,7 @@
     almn(:,i) = 0.5d0*(lmns(:,i+1) + lmns(:,i))
   enddo
   almn(:,kparb) = lmns(:,kparb) &
-  + 0.5d0*(s(kparb)-s(kparb-1))*(lmns(:,kparb)-lmns(:,kparb-1))
+  + 0.5d0*(lmns(:,kparb)-lmns(:,kparb-1))
 !
   rmn=rmn*fac_r
   zmn=zmn*fac_r
