@@ -42,7 +42,7 @@
   double precision :: flux
   double precision, dimension(nstrb)         :: axm,axn
   double precision, dimension(0:kparb)       :: sps,aiota,phi,s
-  double precision, dimension(nstrb,0:kparb) :: rmn,zmn,almn
+  double precision, dimension(nstrb,0:kparb) :: rmn,zmn,almn,lmns
 !
   do i=0,kparb
     sps(i)=dble(i)
@@ -63,7 +63,16 @@
   call nc_get(ncid, 'iotaf', aiota)
   call nc_get(ncid, 'rmnc', rmn)
   call nc_get(ncid, 'zmns', zmn)
-  call nc_get(ncid, 'lmns', almn)
+  call nc_get(ncid, 'lmns', lmns)
+
+! Convert half-mesh to full mesh for lambda
+! added by Christopher Albert, 2020-02-11
+  almn(:,0) = 0d0
+  do i=1,kparb-1
+    almn(:,i) = 0.5d0*(lmns(:,i+1) + lmns(:,i))
+  enddo
+  almn(:,kparb) = lmns(:,kparb) &
+  + 0.5d0*(s(kparb)-s(kparb-1))*(lmns(:,kparb)-lmns(:,kparb-1))
 !
   rmn=rmn*fac_r
   zmn=zmn*fac_r
