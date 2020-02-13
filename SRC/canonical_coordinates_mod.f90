@@ -1,6 +1,7 @@
 !
   module chamb_mod
     logical :: rnegflag=.false.
+!$omp threadprivate(rnegflag)
   end module chamb_mod
 !
   module parmot_mod
