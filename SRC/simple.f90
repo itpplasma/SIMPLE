@@ -342,16 +342,17 @@ contains
     end do
   end subroutine trace_to_cut
 
-  subroutine fract_dimension(ntr,rt0,fraction)
+  subroutine fract_dimension(ntr,rt,fraction)
 
     integer, parameter :: iunit=1003
     integer :: itr,ntr,ngrid,nrefine,irefine,kr,kt,nboxes
     double precision :: fraction,rmax,rmin,tmax,tmin,hr,ht
-    double precision, dimension(2,ntr)              :: rt0, rt
+    double precision, dimension(2,ntr)              :: rt!0, rt
     logical,          dimension(:,:),   allocatable :: free
 
-    rt(1,:) = rt0(1,:)*cos(rt0(2,:))
-    rt(2,:) = rt0(1,:)*sin(rt0(2,:))
+! TODO: check if this works better on tips only
+!    rt(1,:) = rt0(1,:)*cos(rt0(2,:))
+!    rt(2,:) = rt0(1,:)*sin(rt0(2,:))
 
     rmin=minval(rt(1,:))
     rmax=maxval(rt(1,:))
