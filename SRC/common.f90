@@ -84,7 +84,9 @@ SUBROUTINE plag_coeff(npoi,nder,x,xp,coef)
   !
   IF(nder.EQ.0) RETURN
   !
+  !$omp critical
   ALLOCATE(dummy(npoi))
+  !$omp end critical
   !
   DO i=1,npoi
       dummy=1.d0
@@ -103,7 +105,9 @@ SUBROUTINE plag_coeff(npoi,nder,x,xp,coef)
       coef(1,i)=SUM(dummy)
   ENDDO
   !
+  !$omp critical
   DEALLOCATE(dummy)
+  !$omp end critical
   !
   RETURN
 END SUBROUTINE plag_coeff

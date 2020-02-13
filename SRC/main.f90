@@ -327,14 +327,18 @@ subroutine trace_orbit(anorb, ipart)
     return
   endif
 
+!$omp critical
   allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(6,nplagr),xp(nplagr))
+!$omp end critical
   do it=1,nplagr
     ipoi(it)=it
   enddo
 
   nfp_tip=nfp             !<= initial array dimension for tips
   nfp_per=nfp             !<= initial array dimension for periods
+!$omp critical
   allocate(zpoipl_tip(2,nfp_tip),zpoipl_per(2,nfp_per))
+!$omp end critical
 
 !  open(unit=10000+ipart, recl=1024, position='append')
 !  open(unit=20000+ipart, recl=1024, position='append')
@@ -435,13 +439,21 @@ subroutine trace_orbit(anorb, ipart)
 
           ifp_tip=ifp_tip+1
           if(ifp_tip.gt.nfp_tip) then   !<=increase the buffer for banana tips
+            !$omp critical
             allocate(dummy2d(2,ifp_tip-1))
+            !$omp end critical
             dummy2d=zpoipl_tip(:,1:ifp_tip-1)
+            !$omp critical
             deallocate(zpoipl_tip)
+            !$omp end critical
             nfp_tip=nfp_tip+nfp
+            !$omp critical
             allocate(zpoipl_tip(2,nfp_tip))
+            !$omp end critical
             zpoipl_tip(:,1:ifp_tip-1)=dummy2d
+            !$omp critical
             deallocate(dummy2d)
+            !$omp end critical
           endif
           zpoipl_tip(:,ifp_tip)=var_tip(1:2)
           par_inv = par_inv - var_tip(6)
@@ -472,13 +484,21 @@ subroutine trace_orbit(anorb, ipart)
 ! write(20000+ipart,*) var_tip
           ifp_per=ifp_per+1
           if(ifp_per.gt.nfp_per) then   !<=increase the buffer for periodic boundary footprints
+            !$omp critical
             allocate(dummy2d(2,ifp_per-1))
+            !$omp end critical
             dummy2d=zpoipl_per(:,1:ifp_per-1)
+            !$omp critical
             deallocate(zpoipl_per)
+            !$omp end critical
             nfp_per=nfp_per+nfp
+            !$omp critical
             allocate(zpoipl_per(2,nfp_per))
+            !$omp end critical
             zpoipl_per(:,1:ifp_per-1)=dummy2d
+            !$omp critical
             deallocate(dummy2d)
+            !$omp end critical
           endif
           zpoipl_per(:,ifp_per)=var_tip(1:2)
         endif
@@ -546,7 +566,9 @@ subroutine trace_orbit(anorb, ipart)
   enddo
 
   times_lost(ipart) = kt*dtaumin/v0
+  !$omp critical
   deallocate(zpoipl_tip, zpoipl_per)
+  !$omp end critical
 !  close(unit=10000+ipart)
 !  close(unit=10000+ipart)
 end subroutine trace_orbit

@@ -103,7 +103,9 @@
 
   i_ctr=0
 !$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r, dG_c_dt, dG_c_dp)
+!$omp critical
   allocate(y(ndim),dy(ndim))
+!$omp end critical
 !
 !$omp do
   do i_theta=1,n_theta_c
@@ -185,7 +187,9 @@ i_ctr=0
     enddo
   enddo
 !$omp end do
+!$omp critical
 deallocate(y,dy)
+!$omp end critical
 !$omp end parallel
 !
   ns_s_c=ns_s

@@ -361,7 +361,9 @@ contains
     nrefine=nrefine+3       !<=add 3 for curiousity
     do irefine=1,nrefine
       ngrid=ngrid*2
+!$omp critical
       allocate(free(0:ngrid,0:ngrid))
+!$omp end critical
       free=.true.
       hr=(rmax-rmin)/dble(ngrid)
       ht=(tmax-tmin)/dble(ngrid)
@@ -376,7 +378,9 @@ contains
           nboxes=nboxes+1
         endif
       enddo
+!$omp critical
       deallocate(free)
+!$omp end critical
       if(debug) then
 !$omp critical
         !
