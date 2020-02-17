@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/146476544.svg)](https://zenodo.org/badge/latestdoi/146476544)
+
 # SIMPLE
 **S**ymplectic **I**ntegration **M**ethods for **P**article **L**oss **E**stimation
 
