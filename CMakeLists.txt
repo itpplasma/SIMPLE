@@ -58,6 +58,7 @@ add_library ( simple SHARED
 	SRC/nctools_module.f90
 #	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
 	SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
+	SRC/contrib/minpack.f90
 	SRC/magfie.f90
 	SRC/chamb_m.f90
 	SRC/sub_alpha_lifetime_can.f90
@@ -70,7 +71,6 @@ add_library ( simple SHARED
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 	SRC/orbit_symplectic_quasi.f90
-	SRC/minpack.f90
 	SRC/common.f90
 	SRC/simple.f90
 	SRC/bench.f90
@@ -90,7 +90,6 @@ add_executable (test_sympl.x
   	SRC/test_sympl_stell.f90
 )
 
-
 add_executable (test_magfie.x
   	SRC/test_magfie.f90
 )
@@ -98,7 +97,6 @@ add_executable (test_magfie.x
 add_executable (test_poincare1.x
 	SRC/test_poincare1.f90
 )
-
 
 add_executable (test_poiplot_classification.x
 	SRC/test_poiplot_classification.f90
