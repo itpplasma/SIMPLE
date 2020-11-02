@@ -544,226 +544,11 @@ Geometric integrators that solve equations of motion exactly are symplectic
 \end_layout
 
 \begin_layout Section
-Geometric 3D integrator
-\end_layout
-
-\begin_layout Standard
-A detailed description of the integrator can be found in the master's thesis
- of Michael Eder [1] who is the main developer of the mesh-based geometric
- orbit integration code.
-\end_layout
-
-\begin_layout Standard
-Equations of [1] can be re-written using an antisymmetric Poisson matrix.
- Namely we have equations of motion (2.9) with
-\begin_inset Formula 
-\begin{align}
-\frac{\d x^{i}}{\d\tau} & =\varepsilon^{ijk}\left(z^{4}\frac{\partial A_{k}}{\partial x^{j}}+2U\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\\
-\frac{\d v_{\parallel}}{\d\tau} & =\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
-\end{align}
-
-\end_inset
-
-The idea is to use linear interpolation of 
-\begin_inset Formula $A_{k},B_{k}/\omega_{c}$
-\end_inset
-
- and 
-\begin_inset Formula $U$
-\end_inset
-
- independently to obtain a linear set of equations of motion in each mesh
- element.
- Covariant components 
-\begin_inset Formula $h_{k}=B_{k}/B=e/mc\,B_{k}/\omega_{c}$
-\end_inset
-
- of the normalized guiding field can be used to compute of 
-\begin_inset Formula $B_{k}/\omega_{c}$
-\end_inset
-
-, and 
-\begin_inset Formula $U=(w-J_{\perp}\omega_{c}-e\Phi)$
-\end_inset
-
- is computed from linear interpolations of 
-\begin_inset Formula $\omega_{c}$
-\end_inset
-
- and 
-\begin_inset Formula $\Phi$
-\end_inset
-
-.
-\end_layout
-
-\begin_layout Subsection*
-Trying to bring the system to Poisson form
-\end_layout
-
-\begin_layout Standard
-Now the question is what to move into the Poisson matrix, and what into
- the Hamiltonian.
- Since we use 
-\begin_inset Formula $U$
-\end_inset
-
- and 
-\begin_inset Formula $v_{\parallel}$
-\end_inset
-
- we have some freedom to move things around.
- Namely in the exact system
-\begin_inset Formula 
-\begin{align}
-H & =\frac{mv_{\parallel}^{\,2}}{2}+J_{\perp}\omega_{c}(\xset)+e\Phi(\xset)\\
- & =\frac{mv_{\parallel}^{\,2}}{2}+w-mU(\xset)\\
- & =w.
-\end{align}
-
-\end_inset
-
-Using the middle form we obtain the following gradient of 
-\begin_inset Formula $H$
-\end_inset
-
- in phase-space,
-\begin_inset Formula 
-\begin{align}
-\frac{\partial H}{\partial x^{i}} & =-m\frac{\partial U}{\partial x^{i}},\\
-\frac{\partial H}{\partial v_{\parallel}} & =mv_{\parallel}.
-\end{align}
-
-\end_inset
-
-Now we want to get equations of motion
-\begin_inset Formula 
-\begin{equation}
-\dot{z}^{\alpha}=\Lambda^{\alpha\beta}\frac{\partial H}{\partial z^{\beta}}
-\end{equation}
-
-\end_inset
-
-with an antisymmetric 
-\begin_inset Formula $\Lambda^{\alpha\beta}$
-\end_inset
-
-, where 
-\begin_inset Formula $\zset=(x^{1},x^{2},x^{3},v_{\parallel})$
-\end_inset
-
-, and we use Greek indices to go from 
-\begin_inset Formula $1\dots4$
-\end_inset
-
- rather than 
-\begin_inset Formula $1\dots3$
-\end_inset
-
- for Latin ones.
- Antisymmetry of 
-\begin_inset Formula $\Lambda^{\alpha\beta}$
-\end_inset
-
- guarantees symplecticity, i.e.
- conservation of the symplectic form, and thereby phase-space volume (Liouville'
-s theorem) and conservation of invariants.
- We want to obtain equations of motion (2.8) as
-\begin_inset Formula 
-\begin{align}
-\dot{z}^{i}=\dot{x}^{i} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+2U\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right),\label{eq:xdot}\\
-\dot{z}^{4}=\dot{v}_{\parallel} & =\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\frac{\partial U}{\partial x^{i}}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).\label{eq:vpardot}
-\end{align}
-
-\end_inset
-
-For sure we want
-\begin_inset Formula 
-\begin{align}
-\Lambda^{4i} & =-\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right),\\
-\Lambda^{44} & =0.
-\end{align}
-
-\end_inset
-
-This way the equation 
-\begin_inset CommandInset ref
-LatexCommand eqref
-reference "eq:vpardot"
-plural "false"
-caps "false"
-noprefix "false"
-
-\end_inset
-
- in 
-\begin_inset Formula $\dot{v}_{\parallel}$
-\end_inset
-
- is fulfilled.
- Antisymmetry requires that
-\begin_inset Formula 
-\begin{equation}
-\Lambda^{i4}=-\Lambda^{4i}=+\frac{1}{mB_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}\right).
-\end{equation}
-
-\end_inset
-
-If we choose in addition
-\begin_inset Formula 
-\begin{equation}
-\Lambda^{ij}=-\frac{\varepsilon^{ijk}}{mB_{\parallel}^{\star}\sqrt{g}}\frac{B_{k}}{\omega_{c}}
-\end{equation}
-
-\end_inset
-
-we obtain 
-\begin_inset Formula 
-\begin{equation}
-\dot{x}=\Lambda^{i4}\frac{\partial H}{\partial v_{\parallel}}+\Lambda^{ij}\frac{\partial H}{\partial x^{j}}=\frac{1}{B_{\parallel}^{\star}\sqrt{g}}\varepsilon^{ijk}\left(v_{\parallel}\frac{\partial A_{k}}{\partial x^{j}}+v_{\parallel}^{\ 2}\frac{\partial}{\partial x^{j}}\frac{B_{k}}{\omega_{c}}+\frac{B_{k}}{\omega_{c}}\frac{\partial U}{\partial x^{j}}\right).
-\end{equation}
-
-\end_inset
-
-Resulting Poisson brackets 
-\begin_inset Formula $\{f,g\}=\frac{\partial f}{z^{\alpha}}\Lambda^{\alpha\beta}\frac{\partial g}{\partial z^{\beta}}$
-\end_inset
-
- match Eq.
-\begin_inset space ~
-\end_inset
-
-(17) of Grebogi and Littlejohn (1984).
- Now this is the correct expression 
-\begin_inset CommandInset ref
-LatexCommand eqref
-reference "eq:xdot"
-plural "false"
-caps "false"
-noprefix "false"
-
-\end_inset
-
- if 
-\begin_inset Formula $v_{\parallel}^{\,2}=2U$
-\end_inset
-
- exactly during the whole procedure.
- This is true due to definition (2.6) and the time evolution (2.7) of 
-\begin_inset Formula $v_{\parallel}$
-\end_inset
-
- based upon this equation.
- Any approximation that does not fulfil (2.6) up to computer accuracy will
- violate symplecticity.
-\end_layout
-
-\begin_layout Section
 Normalisation
 \end_layout
 
 \begin_layout Subsection
-Normalization in symplectic integrator module of NEO-ORB
+Normalization in symplectic integrator module of SIMPLE
 \end_layout
 
 \begin_layout Standard
@@ -837,7 +622,7 @@ Derivatives:
 \end_layout
 
 \begin_layout Subsection
-Global normalization in NEO-ORB
+Global normalization in SIMPLE
 \end_layout
 
 \begin_layout Standard
@@ -882,7 +667,7 @@ where the pitch angle
  Similarly
 \begin_inset Formula 
 \begin{align}
-\lambda^{2} & =\frac{mv_{\parallel}/2}{H-e\Phi}=\frac{H-\mu B-e\Phi}{H-e\Phi}
+\lambda^{2} & =\frac{mv_{\parallel}^{\,2}/2}{H-e\Phi}=\frac{H-\mu B-e\Phi}{H-e\Phi}
 \end{align}
 
 \end_inset
@@ -903,7 +688,7 @@ We have (non-relativistic)
 \bar{t}_{s} & =v_{0s}\,t=\sqrt{2}\bar{t}\,,\\
 \bar{\Phi}_{s} & =\frac{e}{T}\Phi=\bar{\Phi}\,,\\
 \bar{p}_{s} & =\frac{p}{mv_{0s}}=\frac{v}{v_{0s}}=\bar{v}_{s}=\frac{\bar{p}}{\sqrt{2}}=\frac{\bar{v}}{\sqrt{2}}\\
-\bar{\mu}_{s} & =\frac{\bar{p}_{s}^{\,2}(1-\lambda^{2})}{2B}=\frac{p^{\,2}(1-\lambda^{2})}{2m^{2}v_{0}^{\,2}B}\nonumber \\
+\bar{\mu}_{s} & =\frac{\bar{p}_{s}^{\,2}(1-\lambda^{2})}{2B}=\frac{p^{\,2}(1-\lambda^{2})}{2m^{2}v_{0}^{\,2}B}=\frac{p_{\perp}^{\,2}}{2p_{0}^{\,2}B}\nonumber \\
  & =\frac{p_{\perp}^{\,2}}{4mTB}=\frac{\mu}{2T}=\frac{\bar{\mu}}{2}
 \end{align}
 
@@ -914,6 +699,16 @@ Cyclotron frequency is
 \begin{equation}
 \omega_{c}=\frac{eB}{mc}=\frac{v_{0s}}{\rho_{0s}}B.=\frac{v_{0}}{\rho_{0}}B.
 \end{equation}
+
+\end_inset
+
+To get a quantity like
+\begin_inset Formula 
+\begin{align}
+T & =\frac{mv_{0}^{\,2}}{2}\\
+mv_{\parallel}^{\,2} & =mv_{0}^{\,2}\frac{v^{2}}{v_{0}^{\,2}}\frac{v_{\parallel}^{\,2}}{v^{\,2}}=2T\frac{v^{2}}{v_{0}^{\,2}}\lambda^{2}\\
+\mu B & =\frac{mv_{\perp}^{\,2}}{2}=\frac{mv_{0}^{\,2}}{2}\frac{v^{2}}{v_{0}^{\,2}}\frac{v_{\perp}^{\,2}}{v^{2}}=T\frac{v^{2}}{v_{0}^{\,2}}(1-\lambda^{2})
+\end{align}
 
 \end_inset
 
