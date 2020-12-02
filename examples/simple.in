@@ -8,7 +8,7 @@
 0.6d0    sbeg              !starting s (normalzed toroidal flux) for field line
 0.d0     phibeg            !starting phi for field line
 0.d0     thetabeg          !starting theta for field line
-0        loopskip          !loops to skip for random number shift           
+0        loopskip          !loops to skip for random number shift
 -1.0d0   contr_pp          !control of passing particle fraction
 1.0      facE_al           !test particle energy reduction factor
 128	     npoiper2          !points per period for integrator step
@@ -23,7 +23,5 @@
 1d-13    tol               !tolerance for integrator. Set to 1d-13 for symplectic.
 1d-1     tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
 .False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
-.False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode
 .False.  class_plot        !write starting points at phi=const cut for classification plot (.True./.False.)
 0        cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True.
-  
