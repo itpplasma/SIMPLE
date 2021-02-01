@@ -8,8 +8,14 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+find_program(NF_CONFIG "nf-config")
+
+if (NF_CONFIG)
 execute_process(COMMAND "nf-config" --prefix
 		OUTPUT_VARIABLE NFPREFIX)
+else()
+message(SEND_ERROR "nf-config not found. Please install libnetcdff-dev")
+endif()
 
 string(STRIP ${NFPREFIX} NFPREFIX)
 set(NFINC ${NFPREFIX}/include)
@@ -24,7 +30,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 add_compile_options(-cpp)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f95)
+	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f2008)
 	link_libraries("-mkl -qopenmp")
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options(-O0 -g)
@@ -35,7 +41,7 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O3 -march=skylake -mtune=skylake)
 	endif()
 else()
-	add_compile_options(-std=f95 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
+	add_compile_options(-std=f2008 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
 	link_libraries("-fopenmp")
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace
@@ -112,6 +118,11 @@ add_executable (alpha_lifetime_old.x
 	SRC/zzg.f90
 	SRC/binsrc.f90
 	SRC/alpha_lifetime.f90
+)
+
+add_executable (test_parse_ants.x
+	SRC/parse_ants.f90
+	SRC/test_parse_ants.f90
 )
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
