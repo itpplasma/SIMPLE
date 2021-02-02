@@ -80,6 +80,7 @@ add_library ( simple SHARED
 	SRC/common.f90
 	SRC/simple.f90
 	SRC/bench.f90
+	SRC/parse_ants.f90
 )
 
 add_executable (simple.x
