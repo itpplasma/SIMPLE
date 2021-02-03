@@ -10,7 +10,7 @@ program neo_orb_main
   use neo_orb, only : init_field, init_sympl, NeoOrb, debug
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
-  
+
   implicit none
 
   integer          :: npoi,L1i,nper,npoiper,i,ntimstep,ntestpart
@@ -136,7 +136,7 @@ subroutine read_config
   read (1,*) ns_s              !spline order for 3D quantities over s variable
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
-  read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run
+  read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
   read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
   read (1,*) relerr            !relative error for RK integrator
   read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
@@ -208,10 +208,26 @@ subroutine init_starting_surf
   print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
 end subroutine init_starting_surf
 
+subroutine init_starting_points_ants(unit)
+  use parse_ants, only: process_line
+  integer, intent(in) :: unit
+
+  integer, parameter :: maxlen = 4096
+  character(len=maxlen) :: line
+  real(8) :: v_par, v_perp, u, v, s
+  integer :: ipart
+
+  do ipart=1,ntestpart
+    read(unit, '(A)') line
+    call process_line(line, v_par, v_perp, u, v, s)
+    print *, v_par, v_perp, u, v, s
+  enddo
+end subroutine
+
 subroutine init_starting_points
   integer :: ipart
   real :: zzg
-  
+
   ! skip random numbers according to configuration
     do iskip=1,loopskip
       do ipart=1,ntestpart
@@ -219,7 +235,7 @@ subroutine init_starting_points
         xi=zzg()
       enddo
     enddo
-  
+
   ! files for storing starting coords
   open(1,file='start.dat',recl=1024)
   ! determine the starting point:
@@ -237,12 +253,14 @@ subroutine init_starting_points
       zstart(5,ipart)=2.d0*(xi-0.5d0)
       write(1,*) zstart(:,ipart)
     enddo
-  else
+  else if (startmode == 2) then
     do ipart=1,ntestpart
       read(1,*) zstart(:,ipart)
     enddo
+  else if (startmode == 3) then  ! ANTS input mode
+    call init_starting_points_ants(1)
   endif
-  
+
   close(1)
 end subroutine init_starting_points
 
@@ -460,7 +478,7 @@ subroutine trace_orbit(anorb, ipart)
         endif
       endif
       ! End tip detection and interpolation
-    
+
       ! Periodic boundary footprint detection and interpolation
       if(z(3).gt.dble(kper+1)*fper) then
         iper=0   !<=periodic boundary has been passed
