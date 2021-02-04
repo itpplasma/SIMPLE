@@ -89,6 +89,12 @@ add_executable (simple.x
 	SRC/main.f90
 )
 
+add_executable (test_coord_trans.x
+	SRC/zzg.f90
+	SRC/binsrc.f90
+	SRC/test_coord_trans.f90
+)
+
 add_executable (test_sympl_tok.x
   	SRC/test_sympl.f90
 )
@@ -133,6 +139,7 @@ else()
 endif()
 
 target_link_libraries(simple.x simple)
+target_link_libraries(test_coord_trans.x simple)
 target_link_libraries(test_sympl_tok.x simple)
 target_link_libraries(test_sympl.x simple)
 target_link_libraries(test_magfie.x simple)

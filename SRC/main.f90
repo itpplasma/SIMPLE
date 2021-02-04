@@ -110,7 +110,9 @@ program neo_orb_main
   close(1)
 
   if (integmode >= 0) call deallocate_can_coord
+
   deallocate(times_lost, confpart_trap, confpart_pass, trap_par)
+  deallocate(xstart, bstart, volstart, zstart)
 
 contains
 
