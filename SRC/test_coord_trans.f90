@@ -234,24 +234,29 @@ subroutine testcoordtrans
 implicit none
 !
 double precision, parameter :: pi=3.14159265358979d0
-integer :: it,ip,nt,np
+integer :: it,ip,nt,np,nper
 double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,ht,hp
+double precision :: vartheta_c_back,varphi_c_back
 !
+nper=5
 nt=100
 np=101
 ht=2.d0*pi/dble(nt)
-hp=2.d0*pi/dble(np)
+hp=2.d0*pi/dble(np*nper)
+r=0.7
 do it=0,nt
   do ip=0,np
     vartheta_c=ht*dble(it)
     varphi_c=hp*dble(ip)
 !
     call can_to_vmec(r,vartheta_c,varphi_c,theta_vmec,varphi_vmec)
+    call vmec_to_can(r,theta_vmec,varphi_vmec,vartheta_c_back,varphi_c_back)
 !
-    write(20001,*) vartheta_c,varphi_c,theta_vmec
-    write(20002,*) vartheta_c,varphi_c,varphi_vmec
+    write(20001,*) vartheta_c,varphi_c,vartheta_c_back-vartheta_c
+    write(20002,*) vartheta_c,varphi_c,varphi_c_back-varphi_c
   enddo
-print *,it
+  write(20001,*) ' '
+  write(20002,*) ' '
 enddo
 
 stop

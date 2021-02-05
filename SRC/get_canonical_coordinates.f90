@@ -936,3 +936,160 @@ icounter=icounter+1
   end subroutine deallocate_can_coord
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine vmec_to_can(r,theta,varphi,vartheta_c,varphi_c)
+!
+! Input : r,theta,varphi      - VMEC coordinates
+! Output: vartheta_c,varphi_c - canonical coordinates
+!
+  implicit none
+!
+  double precision, parameter :: epserr=1.d-14
+  integer,          parameter :: niter=100
+  integer          :: iter
+  double precision :: r,theta,varphi,vartheta_c,varphi_c,vartheta
+  double precision :: delthe,delphi,alam,dl_dt
+!
+  call splint_lambda(r,theta,varphi,alam,dl_dt)
+!
+  vartheta=theta+alam
+!
+  vartheta_c=vartheta
+  varphi_c=varphi
+!
+  do iter=1,niter
+!
+    call newt_step
+!
+    vartheta_c=vartheta_c+delthe
+    varphi_c=varphi_c+delphi
+    if(abs(delthe)+abs(delphi).lt.epserr) exit
+  enddo
+!
+!------------------------------------------
+!
+  contains
+!
+!------------------------------------------
+!
+  subroutine newt_step
+!
+  use canonical_coordinates_mod, only : ns_c,n_theta_c,n_phi_c,hs_c,h_theta_c,h_phi_c,    &
+                                        ns_s_c,ns_tp_c,ns_max,derf1,s_G_c
+  use vector_potentail_mod, only : ns,hs,torflux,sA_phi
+  use new_vmec_stuff_mod,   only : nper,ns_A 
+  use chamb_mod,            only : rnegflag
+!
+  implicit none
+!
+  double precision, parameter :: twopi=2.d0*3.14159265358979d0
+!
+  integer :: nstp,ns_A_p1,ns_s_p1
+  integer :: k,is,i_theta,i_phi
+  integer :: iss,ist,isp
+!
+  double precision :: A_phi,A_theta,dA_phi_dr,dA_theta_dr
+  double precision :: s,ds,dtheta,dphi,rho_tor,drhods,drhods2,d2rhods2m
+  double precision :: aiota,G_c,dG_c_dt,dG_c_dp
+  double precision :: ts,ps,dts_dtc,dts_dpc,dps_dtc,dps_dpc,det
+!
+  double precision, dimension(ns_max)              :: sp_G,dsp_G_dt
+  double precision, dimension(ns_max,ns_max)       :: stp_G
+!
+  if(r.le.0.d0) then
+    rnegflag=.true.
+    r=abs(r)
+  endif
+!
+  dA_theta_dr=torflux
+!
+  dtheta=modulo(vartheta_c,twopi)/h_theta_c
+  i_theta=max(0,min(n_theta_c-1,int(dtheta)))
+  dtheta=(dtheta-dble(i_theta))*h_theta_c
+  i_theta=i_theta+1
+!
+  dphi=modulo(varphi_c,twopi/dble(nper))/h_phi_c
+  i_phi=max(0,min(n_phi_c-1,int(dphi)))
+  dphi=(dphi-dble(i_phi))*h_phi_c
+  i_phi=i_phi+1
+!
+! Begin interpolation of vector potentials over $s$
+!
+  ds=r/hs
+  is=max(0,min(ns-1,int(ds)))
+  ds=(ds-dble(is))*hs
+  is=is+1
+!
+  ns_A_p1=ns_A+1
+  A_phi=sA_phi(ns_A_p1,is)
+  dA_phi_dr=A_phi*derf1(ns_A_p1)
+!
+  do k=ns_A,3,-1
+    dA_phi_dr=sA_phi(k,is)*derf1(k)+ds*dA_phi_dr
+  enddo
+!
+  dA_phi_dr=sA_phi(2,is)+ds*dA_phi_dr
+!
+  aiota=-dA_phi_dr/dA_theta_dr
+!
+! End interpolation of vector potentials over $s$
+!
+  rho_tor=sqrt(r)
+  !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
+  ds=rho_tor/hs_c
+  is=max(0,min(ns_c-1,int(ds)))
+  ds=(ds-dble(is))*hs_c
+  is=is+1
+!
+  nstp=ns_tp_c+1
+!
+! Begin interpolation of G over $s$
+!
+  stp_G(1:nstp,1:nstp)=s_G_c(ns_s_c+1,:,:,is,i_theta,i_phi)
+!
+  do k=ns_s_c,1,-1
+    stp_G(1:nstp,1:nstp)=s_G_c(k,:,:,is,i_theta,i_phi)+ds*stp_G(1:nstp,1:nstp)
+  enddo
+!
+! End interpolation of G over $s$
+! Begin interpolation of G over $\theta$
+!
+  sp_G(1:nstp)=stp_G(nstp,1:nstp)
+  dsp_G_dt(1:nstp)=sp_G(1:nstp)*derf1(nstp)
+!
+  do k=ns_tp_c,1,-1
+    sp_G(1:nstp)=stp_G(k,1:nstp)+dtheta*sp_G(1:nstp)
+    if(k.gt.1) dsp_G_dt(1:nstp)=stp_G(k,1:nstp)*derf1(k)+dtheta*dsp_G_dt(1:nstp)
+  enddo
+!
+! End interpolation of G over $\theta$
+! Begin interpolation of G over $\varphi$
+!
+  G_c=sp_G(nstp)
+  dG_c_dt=dsp_G_dt(nstp)
+  dG_c_dp=G_c*derf1(nstp)
+!
+  do k=ns_tp_c,1,-1
+    G_c=sp_G(k)+dphi*G_c
+    dG_c_dt=dsp_G_dt(k)+dphi*dG_c_dt
+    if(k.gt.1) dG_c_dp=sp_G(k)*derf1(k)+dphi*dG_c_dp
+  enddo
+!
+! End interpolation of G over $\varphi$
+!
+  ts=vartheta_c+aiota*G_c-vartheta
+  ps=varphi_c+G_c-varphi
+  dts_dtc=1.d0+aiota*dG_c_dt
+  dts_dpc=aiota*dG_c_dp
+  dps_dtc=dG_c_dt
+  dps_dpc=1.d0+dG_c_dp
+  det=1.d0+aiota*dG_c_dt+dG_c_dp
+!
+  delthe=(ps*dts_dpc-ts*dps_dpc)/det
+  delphi=(ts*dps_dtc-ps*dts_dtc)/det
+!
+  end subroutine newt_step
+!
+!------------------------------------------
+!
+  end subroutine vmec_to_can
