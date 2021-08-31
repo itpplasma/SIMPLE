@@ -1,6 +1,7 @@
 program test_parse_ants
 use iso_fortran_env
 use parse_ants, only: process_line
+use common, only: pi
 implicit none
 
 integer, parameter :: maxlen = 4096
@@ -14,8 +15,8 @@ read(unit, '(A)', iostat=iostat) line  ! Skip header
 do  ! Read and parse every line
     read(unit, '(A)', iostat=iostat) line
     call process_line(line, v_par, v_perp, u, v, s)
-    print *, v_par, v_perp, u, v, s
     if(is_iostat_end(iostat)) exit
+    print *, s, 2d0*pi*u, 2d0*pi*v, v_par, v_perp
 end do
 
 close(unit)

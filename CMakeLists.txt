@@ -128,7 +128,6 @@ add_executable (alpha_lifetime_old.x
 )
 
 add_executable (test_parse_ants.x
-	SRC/parse_ants.f90
 	SRC/test_parse_ants.f90
 )
 
@@ -147,3 +146,4 @@ target_link_libraries(test_poincare1.x simple)
 target_link_libraries(test_poiplot_classification.x simple)
 target_link_libraries(alpha_lifetime_vmec_c.x simple)
 target_link_libraries(alpha_lifetime_old.x simple)
+target_link_libraries(test_parse_ants.x simple)

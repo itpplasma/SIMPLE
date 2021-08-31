@@ -217,12 +217,19 @@ subroutine init_starting_points_ants(unit)
   integer, parameter :: maxlen = 4096
   character(len=maxlen) :: line
   real(8) :: v_par, v_perp, u, v, s
+  real(8) :: th, ph, th_c, ph_c  ! Canonical flux coordinate angles
   integer :: ipart
 
   do ipart=1,ntestpart
     read(unit, '(A)') line
     call process_line(line, v_par, v_perp, u, v, s)
-    print *, v_par, v_perp, u, v, s
+    ! In the test case, u runs from 0 to 1 and v from 0 to 4
+    call vmec_to_can(s, 2d0*pi*u, 2d0*pi*v/4d0, th_c, ph_c)
+    zstart(1, ipart) = s
+    zstart(2, ipart) = ph_c
+    zstart(3, ipart) = th_c
+    zstart(4, ipart) = 1.d0
+    zstart(5, ipart) = v_par / sqrt(v_par**2 + v_perp**2)
   enddo
 end subroutine
 
