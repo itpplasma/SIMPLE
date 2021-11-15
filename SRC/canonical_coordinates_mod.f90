@@ -18,7 +18,8 @@
     double precision :: rmajor,h_theta,h_phi
     double precision, dimension(:),     allocatable :: axm,axn,soa
     double precision, dimension(:),     allocatable :: aiota,s,sps,phi
-    double precision, dimension(:,:),   allocatable :: almn,rmn,zmn
+    double precision, dimension(:,:),   allocatable :: almnc,rmnc,zmnc
+    double precision, dimension(:,:),   allocatable :: almns,rmns,zmns
 !
     double precision, dimension(:,:,:,:,:,:), allocatable :: sR,sZ,slam
   end module new_vmec_stuff_mod

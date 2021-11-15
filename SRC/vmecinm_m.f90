@@ -1,7 +1,7 @@
 !
 ! Usage:
 !
-!    call vmecin(rmn,zmn,almn,aiota,phi,sps,axm,axn,s,    &
+!    call vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s,    &
 !               nsurfm,nstrm,kpar,torflux)
 !
 !  where scalars are:
@@ -18,16 +18,22 @@
 !  axn(nstrm)                - (double precision) toroidal mode numbers
   
 !  matrices are:
-!  rmn(nstrm,0:kpar)     - (double precision) profiles of Fourier
-!  amplitudes of R for various harmonics
-!  zmn(nstrm,0:kpar)     - (double precision) profiles of Fourier
-!  amplitudes of Z for various harmonics
-!  almn(nstrm,0:kpar)     - (double precision) profiles of Fourier
-!  amplitudes of lambda for various harmonics
+!  rmnc(nstrm,0:kpar)     - (double precision) profiles of Fourier
+!  amplitudes of R for various cos(m*theta - n*phi) harmonics
+!  zmnc(nstrm,0:kpar)     - (double precision) profiles of Fourier
+!  amplitudes of Z for various cos(m*theta - n*phi) harmonics
+!  almnc(nstrm,0:kpar)     - (double precision) profiles of Fourier
+!  amplitudes of lambda for various cos(m*theta - n*phi) harmonics
+!  rmns(nstrm,0:kpar)     - (double precision) profiles of Fourier
+!  amplitudes of R for various sin(m*theta - n*phi) harmonics
+!  zmns(nstrm,0:kpar)     - (double precision) profiles of Fourier
+!  amplitudes of Z for various sin(m*theta - n*phi) harmonics
+!  almns(nstrm,0:kpar)     - (double precision) profiles of Fourier
+!  amplitudes of lambda for various sin(m*theta - n*phi) harmonics
 !
 !
 
-  subroutine vmecin(rmn,zmn,almn,aiota,phi,sps,axm,axn,s, &
+  subroutine vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s, &
                     nsurfb,nstrb,kparb,flux)
 !
   use new_vmec_stuff_mod, only : netcdffile
@@ -42,13 +48,19 @@
   double precision :: flux
   double precision, dimension(nstrb)         :: axm,axn
   double precision, dimension(0:kparb)       :: sps,aiota,phi,s
-  double precision, dimension(nstrb,0:kparb) :: rmn,zmn,almn,lmns
+  double precision, dimension(nstrb,0:kparb) :: rmnc,zmnc,almnc,lmnc
+  double precision, dimension(nstrb,0:kparb) :: rmns,zmns,almns,lmns
+  integer :: lasym_int
+  logical :: lasym
 !
   do i=0,kparb
     sps(i)=dble(i)
   enddo
 !
   call nc_open(netcdffile, ncid)
+!
+  call nc_get(ncid, 'lasym__logical__', lasym_int)
+  lasym = (lasym_int == 1)
 !
   call nc_get(ncid, 'phi', phi)
   phi = phi/(2*pi)  ! added by Christopher Albert, 2019-09-16 for correct normalization
@@ -61,21 +73,36 @@
   call nc_get(ncid, 'xm', axm)
   call nc_get(ncid, 'xn', axn)
   call nc_get(ncid, 'iotaf', aiota)
-  call nc_get(ncid, 'rmnc', rmn)
-  call nc_get(ncid, 'zmns', zmn)
+  call nc_get(ncid, 'rmnc', rmnc)
+  call nc_get(ncid, 'zmns', zmns)
   call nc_get(ncid, 'lmns', lmns)
-
+  if (lasym) then
+     call nc_get(ncid, 'rmns', rmns)
+     call nc_get(ncid, 'zmnc', zmnc)
+     call nc_get(ncid, 'lmnc', lmnc)
+  else
+     rmns = 0d0
+     zmnc = 0d0
+     lmnc = 0d0
+  end if
 ! Convert half-mesh to full mesh for lambda
 ! added by Christopher Albert, 2020-02-11
-  almn(:,0) = 0d0
+  almnc(:,0) = 0d0
+  almns(:,0) = 0d0
   do i=1,kparb-1
-    almn(:,i) = 0.5d0*(lmns(:,i+1) + lmns(:,i))
+    almnc(:,i) = 0.5d0*(lmnc(:,i+1) + lmnc(:,i))
+    almns(:,i) = 0.5d0*(lmns(:,i+1) + lmns(:,i))
   enddo
-  almn(:,kparb) = lmns(:,kparb) &
+  almnc(:,kparb) = lmnc(:,kparb) &
+  + 0.5d0*(lmnc(:,kparb)-lmnc(:,kparb-1))
+!
+  almns(:,kparb) = lmns(:,kparb) &
   + 0.5d0*(lmns(:,kparb)-lmns(:,kparb-1))
 !
-  rmn=rmn*fac_r
-  zmn=zmn*fac_r
+  rmnc=rmnc*fac_r
+  zmnc=zmnc*fac_r
+  rmns=rmns*fac_r
+  zmns=zmns*fac_r
 !
   call nc_close(ncid)
 !
