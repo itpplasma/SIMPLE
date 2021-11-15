@@ -9,7 +9,7 @@
   end module parmot_mod
 !
   module new_vmec_stuff_mod
-    character*32     :: netcdffile
+    character*1000   :: netcdffile
     integer          :: nsurfm,nstrm,nper,kpar
     integer          :: multharm,n_theta,n_phi
     integer          :: ns_A=5  !<- spline order for vector potential
