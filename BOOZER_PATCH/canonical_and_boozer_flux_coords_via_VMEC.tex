@@ -1,0 +1,660 @@
+\documentclass[12pt]{article}
+%\sloppy 
+\textheight24.7cm                                                              
+\textwidth18.0cm                                                               
+\topmargin-1.5cm                                                               
+\oddsidemargin-1.0cm                                                            
+\evensidemargin0.0cm
+\usepackage{times}
+\usepackage{amsmath}
+%\renewcommand{\baselinestretch}{2}
+\newcommand{\be}[1]{\begin{equation} \label{#1}}
+\newcommand{\ee}{\end{equation}}
+\newcommand{\bea}[1]{\begin{eqnarray} \label{#1}}
+\newcommand{\eea}{\end{eqnarray}}
+\newcommand{\bean}{\begin{eqnarray*}}
+\newcommand{\eean}{\end{eqnarray*}}
+
+\newcommand{\non}{\nonumber\\}
+\newcommand{\eq}[1]{(\ref{#1})}
+\newcommand{\difp}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\br}{{\bf r}}
+\newcommand{\bR}{{\bf R}}
+\newcommand{\bA}{{\bf A}}
+\newcommand{\bB}{{\bf B}}
+\newcommand{\bE}{{\bf E}}
+\newcommand{\bm}{{\bf m}}
+\newcommand{\bn}{{\bf n}}
+\newcommand{\bN}{{\bf N}}
+\newcommand{\bp}{{\bf p}}
+\newcommand{\bF}{{\bf F}}
+\newcommand{\bz}{{\bf z}}
+\newcommand{\bZ}{{\bf Z}}
+\newcommand{\bV}{{\bf V}}
+\newcommand{\bv}{{\bf v}}
+\newcommand{\bu}{{\bf u}}
+\newcommand{\bx}{{\bf x}}
+\newcommand{\bX}{{\bf X}}
+\newcommand{\bJ}{{\bf J}}
+\newcommand{\bj}{{\bf j}}
+\newcommand{\bk}{{\bf k}}
+\newcommand{\bTheta}{{\bf \Theta}}
+\newcommand{\btheta}{{\boldsymbol\theta}}
+\newcommand{\bOmega}{{\bf \Omega}}
+\newcommand{\bomega}{{\boldsymbol\omega}}
+\newcommand{\brho}{{\boldsymbol\rho}}
+\newcommand{\rd}{{\rm d}}
+\newcommand{\rJ}{{\rm J}}
+\newcommand{\ph}{{\varphi}}
+\newcommand{\te}{\theta}
+\newcommand{\tht}{\vartheta}
+\newcommand{\vpar}{v_\parallel}
+\newcommand{\vparkb}{v_{\parallel k b}}
+\newcommand{\vparkm}{v_{\parallel k m}}
+\newcommand{\Jpar}{J_\parallel}
+\newcommand{\ppar}{p_\parallel}
+\newcommand{\Bpstar}{B_\parallel^*}
+\newcommand{\intpi}{\int\limits_{0}^{2\pi}}
+\newcommand{\summ}{\sum \limits_{m=-\infty}^\infty}
+\newcommand{\tb}{\tau_b(\uv)}
+\newcommand{\bh}{{\bf h}}
+\newcommand{\cE}{{\cal E}}
+\newcommand{\cB}{{\cal B}}
+\newcommand{\cg}{{\cal G}}
+\newcommand{\odtwo}[2]{\frac{\rd #1}{\rd #2}}
+\newcommand{\pdone}[1]{\frac{\partial}{\partial #1}}
+\newcommand{\pdtwo}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\ds}{\displaystyle}
+%\newcommand{\bc}{\begin{center} 
+%\newcommand{\ec}{\end{center}}
+%\input{prespan}
+
+\begin{document}
+
+\section{Canonical flux coordinates obtained from VMEC data}
+
+\subsection{VMEC data}
+\label{ssec:vmecdata}
+
+VMEC code provides the data in his own flux coordinates $(s,\theta,\varphi)$ where 
+$s=\psi_{\rm tor}/\psi_{\rm tor}^{(a)}$ is the toroidal flux $\psi_{\rm tor}$ normalized 
+by its value $\psi_{\rm tor}^{(a)}$ at the last closed magnetic surface, 
+$\theta$ - poloidal angle of VMEC and $\varphi$ - usual azimuth of cylindrical coordinates.
+Angles here do not make a straight field line coordinate system.
+Output of the code consists of three 3D function which are poloidal coordinates $R(s,\theta,\varphi)$ 
+and $Z(s,\theta,\varphi)$, and the stream function $\lambda(s,\theta,\varphi)$, and of three 1D functions
+which are the rotational transform angle $\iota(s)$, normalized poloidal flux $\psi_{\rm pol}(s)$ and
+toroidal magnetic field flux $\psi_{\rm tor}(s)$ (linear function). Normalized magnetic field fluxes 
+differ from full fluxes $\Psi_{\rm pol}$ and $\Psi_{\rm tor}$ by a factor of $2\pi$,
+$\Psi_{\rm pol}=2\pi\psi_{\rm pol}$, $\Psi_{\rm tor}=2\pi\psi_{\rm tor}$.
+
+\noindent
+Stream function $\lambda$ determines the conversion to straight field line coordinates $(s,\vartheta,\varphi)$
+which are so-called symmetry flux coordinates with poloidal angle
+\be{defpolangle}
+\vartheta = \theta + \lambda(s,\theta,\varphi).
+\ee
+There-dimensional functions are represented in the form of stellarator-symmetric Fourier series,
+\bea{stelsymseries}
+R(s,\theta,\varphi) &=& \sum_{k=1}^{N_F} R_{m_k n_k}(s)\cos(m_k\theta-n_k\varphi),
+\nonumber \\
+Z(s,\theta,\varphi) &=& \sum_{k=1}^{N_F} Z_{m_k n_k}(s)\sin(m_k\theta-n_k\varphi),
+\\
+\lambda(s,\theta,\varphi) &=& \sum_{k=1}^{N_F} \lambda_{m_k n_k}(s)\sin(m_k\theta-n_k\varphi),
+\nonumber
+\eea
+where poloidal, $m_k$, and toroidal, $n_k$, Fourier harmonic indices are numbered in the single list by list index $k$
+with total number of harmonics $N_F$. Fourier amplitudes $R_{m_k n_k}$, $Z_{m_k n_k}$ and $\lambda_{m_k n_k}$ as well
+as 1D quantities $\iota$, $\psi_{\rm pol}$ and $\psi_{\rm tor}$ are given at knots $s=s_j$ of an equidistant grid 
+in $s$ with $1\le j \le N_s$ such that $s_{j_{N_s}}=1$.
+
+\noindent
+With this, magnetic field is presented in the form
+\be{magfieldform}
+\bB=\nabla\varphi\times\nabla\psi_{\rm pol}+\nabla\psi_{\rm tor}\times\nabla\left(\theta+\lambda\right)
+=\nabla\times\left(\psi_{\rm tor}\nabla\vartheta-\psi_{\rm pol}\nabla\varphi\right)
+=\nabla\times\left(A_\vartheta\nabla\vartheta+A_\varphi\nabla\varphi\right),
+\ee
+where $A_\vartheta=\psi_{\rm tor}$ and $A_\varphi=-\psi_{\rm pol}$ are covariant components of vector-potential.
+Since $\iota$, poloidal and toroidal fluxes are linked together by the relation~\eq{iotadef} below, 
+information about these
+1D quantities is redundant. Therefore, one should use only $\iota(s)$ or $\psi_{\rm pol}(s)$ for data consistency,
+and reconstruct the other one from~\eq{iotadef}.
+
+\subsection{Flux coordinates with $B_r=0$}
+
+\noindent
+From now on we would formally introduce more general notation for the flux surfaces label $r$, which would 
+play a role of radial coordinate, although all results will be obtained later setting $r=s$.
+In order to find suitable, ``canonical'' coordinates with zero radial covariant magnetic field component, 
+$B_r=0$, we start from some straight field line flux coordinates $\bx=(r,\vartheta,\varphi)$ which in our case
+are symmetry flux coordinates. 
+General properties of straight field line flux coordinates are the following.
+\begin{itemize}
+\item 
+Vector potential is already of the desired form,
+\be{Aflux}
+\bA = A_\vartheta\nabla\vartheta+A_\varphi\nabla\varphi,
+\ee
+where covariant components $A_\vartheta=\psi_{\rm tor}(r)$ and 
+$A_\varphi=-\psi_{\rm pol}(r)$ are expressed through the
+poloidal and toroidal fluxes divided by $2\pi$, respectively.
+\item
+Magnetic field, consequently, is expressed through the contra-variant components
+as
+\be{Bflux}
+\bB = 
+\nabla A_\vartheta\times\nabla\vartheta
++\nabla A_\varphi\times\nabla\varphi
+=
+ A_\vartheta^\prime \nabla r\times\nabla\vartheta
++A_\varphi^\prime \nabla r\times\nabla\varphi
+=
+\frac{A_\vartheta^\prime}{\sqrt{g}}\difp{\br}{\varphi}
+-\frac{A_\varphi^\prime}{\sqrt{g}}\difp{\br}{\vartheta}
+=
+B^k \difp{\br}{x^k},
+\ee
+where metric determinant $g$ is given by
+\be{sqrtg}
+\sqrt{g}=\difp{\br}{r}\cdot\difp{\br}{\varphi}\times\difp{\br}{\vartheta}
+=\frac{1}{\nabla r \cdot \nabla\vartheta\times\nabla\varphi}
+\ee
+Namely, Eq.~\eq{Bflux} gives for the contra-variant components
+\be{conraBcomp}
+B^r=0,  
+\qquad B^\vartheta 
+= -\frac{A_\varphi^\prime}{\sqrt{g}}
+=\frac{\psi_{\rm pol}^\prime}{\sqrt{g}},
+\qquad B^\varphi 
+= \frac{A_\vartheta^\prime}{\sqrt{g}}
+= \frac{\psi_{\rm tor}^\prime}{\sqrt{g}},
+\ee
+and, as a consequence, 
+the property of straight field lines $B^\vartheta=\iota(r) B^\varphi$
+where
+\be{iotadef}
+\iota(r)=\frac{1}{q(r)}=-\frac{A_\vartheta^\prime}{A_\varphi^\prime}
+=\frac{\psi_{\rm pol}^\prime(r)}
+{\psi_{\rm tor}^\prime(r)}=
+\frac{\rd \psi_{\rm pol}}{\rd \psi_{\rm tor}}
+\ee
+is the rotational transform ($q$ is a safety factor).
+\item
+Covariant field components follow from the usual tensor transformation
+\be{bcovar}
+B_i = g_{ij}B^j=g_{i\vartheta}B^\vartheta+g_{i\varphi}B^\varphi
+=\difp{\br}{x^i}\cdot\difp{\br}{\vartheta}B^\vartheta+\difp{\br}{x^i}\cdot\difp{\br}{\varphi}B^\varphi.
+\ee
+\item
+Different straight field line flux coordinate systems $\bx=(r,\vartheta,\varphi)$ and 
+$\bx_c=(r_c,\vartheta_c,\varphi_c)$ (which always assume 
+that $r_c=f(r)$ where $f(r)$ is a monotonous function) 
+are linked with each other by the transform of angles
+\be{transangles}
+\vartheta_c = \vartheta+\iota(r)G(\bx),
+\qquad
+\varphi_c = \varphi+G(\bx),
+\ee
+where $G(\bx)$ is a single valued function 
+(periodic function of angles $\vartheta$ and $\varphi$).
+Since all properties~\eq{Bflux}-\eq{conraBcomp} follow from~\eq{Aflux}
+let us check its invariance
+\be{Acheck}
+\bA=
+A_\vartheta\nabla\left(\vartheta+\iota G\right)
++
+A_\varphi\nabla\left(\varphi+ G\right)
+=
+A_\vartheta\nabla\vartheta+A_\varphi\nabla\varphi
++\nabla\left(\iota A_\vartheta G+A_\varphi G\right),
+\ee
+where we used~\eq{iotadef}. Last term is a gradient and can be removed from
+the vector potential (what means a gauge transformation) which leaves then co-variant components unchanged.
+\end{itemize}
+In the following we will not modify the flux surface label such that $r_c=r$.
+When looking for the coordinate system $\bx_c$ with zero co-variant radial magnetic 
+field component it is more convenient to look for the inverse
+transform
+\be{invtrans}
+\vartheta = \vartheta_c+\iota(r)G_c(\bx_c),
+\qquad
+\varphi = \varphi_c+G_c(\bx_c).
+\ee
+From the transformation of co-variant components of the magnetic field,
+\bea{Bcovar}
+B_k^c=B_j\difp{x^j}{x_c^k},
+\eea
+and the condition $B^c_r=0$ we obtain the nonlinear ODE for $G_c$,
+\be{eqforG}
+\difp{}{r}G_c(r,\vartheta_c,\varphi_c)=
+-\frac{B_r(r,\vartheta,\varphi)
++\iota^\prime(r) B_\vartheta(r,\vartheta,\varphi) G_c(r,\vartheta_c,\varphi_c)}
+{\iota(r)B_\vartheta(r,\vartheta,\varphi)
++B_\varphi(r,\vartheta,\varphi)},
+\ee
+where $\vartheta=\vartheta(\bx_c)$ and $\varphi=\varphi(\bx_c)$ must be substituted from Eq.~\eq{invtrans}.
+In the tokamak case, magnetic field components are independent of the 
+toroidal angle and, therefore, $G_c=G_c(r,\vartheta_c)$. As a result, components
+of the magnetic field are independent of $\varphi_c$ in the new coordinates
+too.
+
+\noindent
+Set of quantities required for the formulation of guiding center equations in the canonical form
+is covariant components of vector potential, $A_\vartheta^c=A_\vartheta$ and $A_\varphi^c=A_\varphi$,
+magnetic field strength $B$ and covariant components of the magnetic field $B_\vartheta^c$ and $B_\varphi^c$.
+Using the relations~\eq{Bcovar} and~\eq{invtrans},
+the latter two are expressed with help of function $G_c$ via corresponding components 
+$B_\vartheta$ and $B_\varphi$ in symmetry flux coordinates as follows,
+\bea{covarBcan}
+B_\vartheta^c
+&=&
+B_\vartheta + \left(\iota B_\vartheta+B_\varphi\right)\difp{}{\vartheta_c}G_c(\bx_c),
+\nonumber \\
+B_\varphi^c
+&=&
+B_\varphi + \left(\iota B_\vartheta+B_\varphi\right)\difp{}{\varphi_c}G_c(\bx_c).
+\eea
+
+\subsection{Direct transformation from VMEC coordinates to canonical coordinates}
+
+\noindent
+As one can see from the structure of VMEC data in section~\ref{ssec:vmecdata}
+3D functions are explicitly given as functions of intrinsic VMEC coordinates $\bx_V=(s,\theta,\varphi)$
+but of symmetry flux coordinates $\bx=(s,\vartheta,\varphi)$. It is convenient to avoid transformation
+of 3D functions to functions of $\bx$ and obtain final results in canonical coordinates $\bx_c$
+directly from VMEC coordinates $\bx_V$. For this purpose we denote covariant magnetic filed 
+components in symmetry flux coordinates $B_k$ expressed as functions of VMEC coordinates $\bx_V$ as
+follows
+\be{dentcov}
+B_k\left(r,\vartheta(r,\theta,\varphi),\varphi\right)=\cB_k(r,\theta,\varphi).
+\ee
+Then, equation~\eq{eqforG} for transformation function $G_c$ becomes
+\be{eqforG_VMEC}
+\difp{}{r}G_c(\bx_c)\equiv
+\difp{}{r}G_c(r,\vartheta_c,\varphi_c)=
+-\frac{\cB_r\left(r,\theta(\bx_c),\varphi(\bx_c)\right)
++\iota^\prime(r) \cB_\vartheta\left(r,\theta(\bx_c),\varphi\right) G_c(r,\vartheta_c,\varphi_c)}
+{\iota(r)\cB_\vartheta\left(r,\theta(\bx_c),\varphi(\bx_c)\right)
++\cB_\varphi\left(r,\theta(\bx_c),\varphi(\bx_c)\right)},
+\ee
+where functions $\theta(\bx_c)$ and $\varphi(\bx_c)$ are implicitly defined by
+\be{vmec_via_can}
+\theta(\bx_c) + \lambda\left(r,\theta(\bx_c),\varphi(\bx_c)\right) = \vartheta_c+\iota(r)G_c(\bx_c),
+\qquad
+\varphi(\bx_c) = \varphi_c+G_c(\bx_c).
+\ee
+which follows from~\eq{invtrans} and~\eq{defpolangle}. First of these functions, $\theta(\bx_c)$, can be
+computed by Newton method. The covariant canonical components of the magnetic field~\eq{covarBcan} then are
+\bea{covarBcan_VMEC}
+B_\vartheta^c(\bx_c)
+&=&
+\cB_\vartheta\left(r,\theta(\bx_c),\varphi(\bx_c)\right) + 
+\left(\iota(r) \cB_\vartheta\left(r,\theta(\bx_c),\varphi(\bx_c)\right)
++\cB_\varphi\left(r,\theta(\bx_c),\varphi(\bx_c)\right)\right)\difp{}{\vartheta_c}G_c(\bx_c),
+\nonumber \\
+B_\varphi^c(\bx_c)
+&=&
+\cB_\varphi\left(r,\theta(\bx_c),\varphi(\bx_c)\right) 
++ \left(\iota(r) \cB_\vartheta\left(r,\theta(\bx_c),\varphi(\bx_c)\right)
++\cB_\varphi\left(r,\theta(\bx_c),\varphi(\bx_c)\right)\right)\difp{}{\varphi_c}G_c(\bx_c).
+\eea
+Since expression~\eq{conraBcomp} for contra-variant components of are the same in all straight field line
+flux coordinates and covariant components of vector potential are the same too,
+what remains is to obtain metric determinant of canonical coordinates $g_c$ in order to define those components as
+\be{conraBcomp_can}
+B^r_c(\bx_c)=0,
+\qquad B^\vartheta_c(\bx_c)
+= -\frac{A_\varphi^\prime(r)}{\sqrt{g_c(\bx_c)}},
+\qquad B^\varphi_c(\bx_c)
+= \frac{A_\vartheta^\prime(r)}{\sqrt{g_c(\bx_c)}}.
+\ee
+First, let us compute using Jacobians metric determinant of VMEC coordinates, $g_V$, 
+via metric determinant of cylindrical coordinates $(R,\varphi,Z)$ which are known functions of VMEC coordinates 
+$\bx_V=(s,\theta,\varphi)=(r,\theta,\varphi)$,
+\be{g_VMEC}
+\sqrt{g_V(\bx_V)}=\difp{(\br)}{(\bx_V)}=R\difp{(R,\varphi,Z)}{(r,\theta,\varphi)}=R\difp{(R,Z)}{(\theta,r)}
+=R\left(\difp{R}{\theta}\difp{Z}{r}-\difp{Z}{\theta}\difp{R}{r}\right).
+\ee
+Metric determinant of canonical coordinates, $g_c$, follows then as
+\bea{g_can}
+\sqrt{g_c(\bx_c)}
+&=&
+\difp{(\br)}{(\bx_c)}=\difp{(\br)}{(\bx_V)}\difp{(\bx_V)}{(\bx_c)}
+=\sqrt{g_V(\bx_V)}\difp{(r,\theta,\varphi)}{(r,\theta_c,\varphi_c)}
+\nonumber \\
+&=&
+\sqrt{g_V(\bx_V(\bx_c))}\left(\difp{\theta(\bx_c)}{\vartheta_c}\difp{\varphi(\bx_c)}{\varphi_c}
+-\difp{\varphi(\bx_c)}{\vartheta_c}\difp{\theta(\bx_c)}{\varphi_c}\right)
+\nonumber \\
+&=&
+\sqrt{\cg\left(\bx_V(\bx_c)\right)}\left(1+\iota(r) \difp{G_c(\bx_c)}{\vartheta_c}+\difp{G_c(\bx_c)}{\varphi_c}\right),
+\eea
+where dependencies $\bx_V(\bx_c)$ of VMEC coordinates on canonical coordinates are known via~\eq{vmec_via_can},
+and with $\sqrt{\cg(\bx_V)}$ we denote the Jacobian of symmetry flux coordinates $\sqrt{g}$ as function of VMEC coordinates,
+$\sqrt{\cg(\bx_V)}=\sqrt{g\left(\bx(\bx_V)\right)}$.
+
+\noindent
+What is still missing here, it is functions $\cB_k$ used in Eq.~\eq{eqforG_VMEC} and in~\eq{covarBcan_VMEC}. 
+We obtain these functions from contra-variant components in symmetry flux coordinates, $B^k$
+\be{covar_symm}
+B_k = g_{k\vartheta} B^\vartheta+g_{k\varphi} B^\varphi
+=\frac{A^\prime_\vartheta}{\sqrt{g}}\left(g_{k\varphi}+\iota g_{k\vartheta}\right),
+\ee
+where we used~\eq{conraBcomp} and~\eq{iotadef}. To make~\eq{covar_symm} a definition of functions $\cB_k$
+we need to obtain $\sqrt{g}$ and $g_{ik}$ of symmetry flux coordinates as functions of VMEC coordinates.
+First of these follows as
+\be{sqg_sym}
+\sqrt{g}=\sqrt{g_V}\difp{(r,\theta,\varphi)}{(r,\vartheta,\varphi)}
+= \sqrt{g_V}\left(\difp{\vartheta}{\theta}\right)^{-1}
+= \sqrt{g_V(\bx_V)}\left(1+\difp{}{\theta}\lambda(\bx_V)\right)^{-1}.
+\ee
+Metric tensor of symmetry flux coordinates $g_{ik}$ is obtained from metric tensor of VMEC coordinates $g_{ik}^V$
+which has the following components
+\bea{gik_VMEC}
+g^V_{rr} &=& \left(\difp{R}{r}\right)^2+\left(\difp{Z}{r}\right)^2,
+\nonumber \\
+g^V_{r\theta} &=& g^V_{\theta r} = \difp{R}{r}\difp{R}{\theta}+\difp{Z}{r}\difp{Z}{\theta},
+\nonumber \\
+g^V_{r\varphi} &=& g^V_{\varphi r} = \difp{R}{r}\difp{R}{\varphi}+\difp{Z}{r}\difp{Z}{\varphi},
+\nonumber \\
+g^V_{\theta\theta} &=& \left(\difp{R}{\theta}\right)^2+\left(\difp{Z}{\theta}\right)^2,
+\nonumber \\
+g^V_{\theta\varphi} &=& g^V_{\varphi \theta} = \difp{R}{\theta}\difp{R}{\varphi}+\difp{Z}{\theta}\difp{Z}{\varphi},
+\nonumber \\
+g^V_{\varphi\varphi} &=& R^2+\left(\difp{R}{\varphi}\right)^2+\left(\difp{Z}{\varphi}\right)^2.
+\eea
+In order to use
+\be{transV-c}
+g_{ik}=g_{mn}^V c^m_i c^n_k, \qquad c^m_i \equiv \difp{x_V^m}{x^i}
+\ee
+we calculate the inverse matrix $\bar c^i_k$ such that
+\be{invmatc}
+\bar c^i_k c^k_j = \delta^i_j, \qquad \bar c^i_j = \difp{x^i}{x_V^j}.
+\ee
+Explicitly, components of this matrix are
+\bea{cbar_elements}
+& & \bar c^r_r=1, \qquad \bar c^r_\theta=0, \qquad \bar c^r_\varphi=0,
+\nonumber \\
+& & \bar c^\vartheta_r=\difp{\lambda}{r}, 
+\qquad \bar c^\vartheta_\theta=1+\difp{\lambda}{\theta}, \qquad \bar c^\vartheta_\varphi=\difp{\lambda}{\varphi},
+\nonumber \\
+& & \bar c^\varphi_r=0, \qquad \bar c^\varphi_\theta=0, \qquad \bar c^\varphi_\varphi=1.
+\eea
+Respectively, components of matrix $c^i_j$ are
+\bea{c_elements}
+& & c^r_r=1, \qquad c^r_\vartheta=0, \qquad c^r_\varphi=0,
+\nonumber \\
+& & c^\theta_r=-\difp{\lambda}{r}\left(1+\difp{\lambda}{\theta}\right)^{-1}, 
+\qquad c^\theta_\vartheta=\left(1+\difp{\lambda}{\theta}\right)^{-1}, 
+\qquad c^\theta_\varphi=-\difp{\lambda}{\varphi}\left(1+\difp{\lambda}{\theta}\right)^{-1},
+\nonumber \\
+& & c^\varphi_r=0, \qquad c^\varphi_\vartheta=0, \qquad c^\varphi_\varphi=1.
+\eea
+
+\subsection{Numerical realization}
+
+\noindent
+Equation~\eq{eqforG_VMEC} is a nonlinear ODE with respect to variable $r$ where variables $\vartheta_c$
+and $\varphi_c$ play a role of parameters. Therefore, family of solutions to this equation non-trivially
+depends on initial radial integration point and a starting value of $G_c$ which can be an arbitrary function
+of parameters $\vartheta_c$ and $\varphi_c$. Our choice of initial integration point is half radius because
+near the last closed magnetic surface and near the magnetic axis VMEC data suffers from numerical pollution.
+Integration constant will be fixed to zero.
+
+For numerics, we spline $R(\bx_V)$, $Z(\bx_V)$ and $\lambda(\bx_V)$ in 3D using 5-th order splines (periodic
+in $\theta$ and $\varphi$) and spline $A_\varphi$ and $A_\vartheta$ in 1D. Then all necessary derivatives of 
+these functions are available. Equation~\eq{eqforG_VMEC} is solved then by RK4/5 for each node of the 
+equidistant grid in $\vartheta_c$ and $\varphi_c$, and the transformation function $G_c$ is again splined
+in 3D on $\bx_c$ grid. Using these two kinds of 3D splines (on $\bx_V$ grid and on $\bx_c$ grid) the covariant
+components $B^c_\vartheta$ and $B^c_\varphi$ and metric determinant $\sqrt{g_c}$ can be computed on $\bx_c$
+grid. The rest quantities (contra-variant components $B_c^\vartheta$ and $B_c^\varphi$, module of magnetic field 
+$B$) can be computed using 3D spline interpolation of those 3 quantities and 1D spline interpolation for 
+covariant components of vector potentials $A_\vartheta$ and $A_\varphi$.
+
+
+
+\subsection{Canonical form of guiding center equations} 
+
+Guiding center Lagrangian, which has in general curvilinear coordinates $\bx$ the following form,
+\be{lagrgencoord}
+L_{gc} = \left(mv_\parallel h_k+\frac{e}{c}A_k\right)\dot x^k-J_\perp\dot\phi-H,
+\ee
+where $h_k = B_k /B$, and the Hamiltonian is
+\be{gcham}
+H=J_\perp\omega_c+\frac{mv_\parallel^2}{2}+e\Phi,
+\ee
+in canonical straight field line coordinates $\bx_c$ where covariant radial components of both, vector potential
+and magnetic field are zeros, $A_r^c=B_r^c=0$, takes a short form
+\be{lagrcancoord}
+L_{gc} = 
+\left(mv_\parallel h_\vartheta^c+\frac{e}{c}A_\vartheta^c\right)\dot \vartheta_c
++
+\left(mv_\parallel h_\varphi^c+\frac{e}{c}A_\varphi^c\right)\dot \varphi_c
+-
+J_\perp\dot\phi-H.
+\ee
+\noindent
+Introducing in~\eq{lagrcancoord} the notation
+\be{canmomenta}
+p_\vartheta=mv_\parallel h_\vartheta^c+\frac{e}{c}A_\vartheta^c,
+\qquad
+p_\varphi=mv_\parallel h_\varphi^c+\frac{e}{c}A_\varphi^c,
+\ee
+we obtain the canonical form of the Lagrangian,
+\be{Lagr_can}
+L_{gc}=p_\vartheta\dot\vartheta_c+p_\varphi\dot\varphi_c- J_\perp\dot\phi-H.
+\ee
+Note that we did not specify here the independent variables. Lagrangian does 
+not depend on this choice. If we choose $p_\vartheta$ and $p_\varphi$ instead
+of $r$ and $H$, we obtain Hamiltonian equations of motion,
+\be{hameqs}
+\dot J_\perp = 0, \quad \dot\phi=-\difp{H}{J_\perp},
+\qquad
+\dot p_\vartheta = - \difp{H}{\vartheta_c}, \quad 
+\dot \vartheta_c = \difp{H}{p_\vartheta},
+\qquad
+\dot p_\varphi = - \difp{H}{\varphi_c}, \quad 
+\dot \varphi_c = \difp{H}{p_\varphi},
+\ee
+where $H=H(\vartheta_c,\varphi_c,J_\perp,p_\vartheta,p_\varphi)$. These equations
+are still different from the usual form because of the sign of the Hamiltonian
+in the first pair (sign in the equation for $\dot\phi$). Standard form can be 
+obtained by either changing the sign of $J_\perp\rightarrow -J_\perp$ 
+(usual way in the literature) or by changing the sign of the gyrophase,
+$\phi\rightarrow-\phi$, as in our cylindrical model where the gyrophase is
+counted clockwise (in mathematically negative direction).
+
+\section{Boozer flux coordinates obtained from VMEC data}
+
+\subsection{Generating function from transformation of covariant field components}
+\label{ssec:covartrans}
+
+We denote here a set of Boozer flux coordinates as $\bx_B=(r,\vartheta_B,\varphi_B)$.
+In these coordinates, field is fully described by two 3D functions, namely, module
+of $B=B(r,\vartheta_B,\varphi_B)$ and covariant radial field components 
+$B_r^B=B_r^B(r,\vartheta_B,\varphi_B)$ while the other two covariant components
+are 1D, $B_\vartheta^B=B_\vartheta^B(r)$ and $B_\varphi^B=B_\varphi^B(r)$.
+Our task is to obtain generating function $G_B(\bx_b)$ in the inverse transform
+similar to~\eq{invtrans}. Given are field components $B_k$ in symmetry flux coordinates
+$\bx=(r,\vartheta,\varphi)$ as functions of VMEC coordinates $\bx_V=(r,\theta,\varphi)$ and
+stream function $\lambda(\bx_V)$ linking $\theta$ and $\vartheta$ via~\eq{defpolangle}.
+With this, we have covariant field components in VMEC coordinates given as
+\be{covvmec}
+B_\theta^V=\left(1+\difp{\lambda}{\theta}\right)B_\vartheta,
+\qquad
+B_\varphi^V=B_\varphi+\difp{\lambda}{\varphi}B_\vartheta.
+\ee
+Using Stoke's theorem,
+\be{stokes}
+\frac{4\pi}{c}\int\limits_S \rd{\bf S}\cdot\bj=\oint\limits_{\partial S}\rd {\bf l}\cdot\bB,
+\ee
+where $\rd{\bf S}$ is the element of area $S$ bounded by the line $\partial S$, and $\rd {\bf l}$
+is the element of this bounding line. Choosing for the bounding line a poloidal or toroidal contour
+whose elements can be described in any flux coordinate system, including VMEC coordinates system $\bx_V$,
+as
+\be{lineels}
+\rd {\bf l}_{\rm pol}=\difp{\br(\bx_V)}{\theta}\rd\theta,
+\qquad
+\rd {\bf l}_{\rm tor}=\difp{\br(\bx_V)}{\varphi}\rd\varphi,
+\ee
+so that both line elements are tangential to the magnetic flux surface $r=const$ we obtain in the 
+l.h.s of~\eq{stokes} toroidal and poloidal currents through the areas $S_{\rm pol}$ and $S_{\rm tor}$ 
+limited by poloidal and toroidal contours $\partial S_{\rm pol}$ and $\partial S_{\rm tor}$,
+respectively,
+\be{currents}
+\int\limits_{S_{\rm pol}} \rd{\bf S}\cdot\bj=I_{\rm tor}(r),
+\qquad
+\int\limits_{S_{\rm tor}} \rd{\bf S}\cdot\bj=I_{\rm pol}(r).
+\ee
+Thus
+\bea{stokespolotor}
+\frac{4\pi}{c}I_{\rm tor}(r)
+&=&
+\oint\limits_{\partial S_{\rm pol}}\rd {\bf l}_{\rm pol}\cdot\bB
+=\int\limits_0^{2\pi}\rd\theta \difp{\br(\bx_V)}{\theta}\cdot \bB
+=\int\limits_0^{2\pi}\rd\theta B_\theta^V(\bx_V),
+\nonumber \\
+\frac{4\pi}{c}I_{\rm pol}(r)
+&=&
+\oint\limits_{\partial S_{\rm tor}}\rd {\bf l}_{\rm tor}\cdot\bB
+=\int\limits_0^{2\pi}\rd\varphi \difp{\br(\bx_V)}{\varphi}\cdot \bB
+=\int\limits_0^{2\pi}\rd\varphi B_\varphi^V(\bx_V).
+\eea
+Since Boozer components are constant on flux surface, we obtain
+\be{boozcur}
+\frac{2}{c}I_{\rm tor}(r)=B_\vartheta^B(r),
+\qquad
+\frac{2}{c}I_{\rm pol}(r)=B_\varphi^B(r),
+\ee
+and, respectively,
+\be{boozcovar}
+B_\vartheta^B(r)=\frac{1}{2\pi}\int\limits_0^{2\pi}\rd\theta B_\theta^V(\bx_V),
+\qquad
+B_\varphi^B(r)=\frac{1}{2\pi}\int\limits_0^{2\pi}\rd\varphi B_\varphi^V(\bx_V).
+\ee
+For a perfect equilibrium, integrals~\eq{boozcovar} are independent of $\varphi$
+and $\theta$, respectively, however some weak dependence may appear due to numerical
+imperfections. Therefore, we compute Boozer components as double integrals
+\be{boozcovar_double}
+B_{\vartheta,\varphi}^B(r)=\frac{1}{4\pi^2}
+\int\limits_0^{2\pi}\rd\theta 
+\int\limits_0^{2\pi}\rd\varphi 
+B_{\theta,\varphi}^V(\bx_V),
+\ee
+well approximated by the sums over equidistant grid
+\be{boozcovar_sum}
+B_{\vartheta,\varphi}^B(r)\approx\frac{1}{N_\theta N_\varphi}
+\sum\limits_{i_\theta=1}^{N_\theta} \sum\limits_{i_\varphi=1}^{N_\varphi}
+B_{\theta,\varphi}^V\left(r,\frac{2 \pi i_\theta}{N_\theta},\frac{2\pi i_\varphi}{N_\varphi}\right).
+\ee
+Since we get Boozer's covariant angular components in this easy way, we can find an equation for the
+forward transformation function $G_F(\bx_V)=G_B(\bx_B(\bx_V))$ from the transform of covariant components
+to symmetry flux variables where
+\be{symmtobooz}
+\vartheta_B=\vartheta+\iota G_F, \qquad \varphi_B=\varphi+G_F.
+\ee
+Namely, we get
+\be{covtrans}
+B_\vartheta=B_\vartheta^B+
+\left(\iota B_\vartheta^B+B_\varphi^B\right)\difp{(G_F,\varphi)}{(\vartheta,\varphi)},
+\qquad
+B_\varphi=B_\varphi^B+\left(\iota B_\vartheta^B+B_\varphi^B\right)\difp{(\vartheta,G_F)}{(\vartheta,\varphi)},
+\ee
+where we used Jacobians to indicate fixed variable during differentiation.
+Using~\eq{defpolangle} and properties of the Jacobians for transformation to derivatives over VMEC variables
+we finally obtain
+\bea{dGdphi}
+\difp{G_F}{\varphi}\equiv \difp{(\theta,G_F)}{(\theta,\varphi)}
+&=&
+\frac{1}{\iota B_\vartheta^B+B_\varphi^B}\left(B_\varphi-B_\varphi^B 
++\difp{\lambda}{\varphi}\left(B_\vartheta-B_\vartheta^B\right)
+\right)
+\nonumber \\
+&=&
+\frac{1}{\iota B_\vartheta^B+B_\varphi^B}\left(B_\varphi^V-B_\varphi^B 
+-\difp{\lambda}{\varphi}B_\vartheta^B\right)
+\eea
+with~\eq{covvmec} used in the last expression. Similarly we obtain another partial derivative,
+\be{dGdtheta}
+\difp{G_F}{\theta}\equiv \difp{(G_F,\varphi)}{(\theta,\varphi)}
+=
+\frac{1}{\iota B_\vartheta^B+B_\varphi^B}\left(B_\theta^V
+-B_\vartheta^B\left(1+\difp{\lambda}{\theta}\right)\right).
+\ee
+Integrating~\eq{dGdtheta} for $\varphi=0$ we obtain $G_F(r,\theta,0)$ which is a starting value
+for integration of~\eq{dGdphi} giving $G_F(\bx_V)$ up to a flux surface constant $G_F(r,0,0)$,
+\bea{G_F}
+G_F(r,\theta,\varphi)
+&=&
+G_F(r,0,0)+
+\frac{1}{\iota B_\vartheta^B(r)+B_\varphi^B(r)}
+\left(
+\int\limits_0^\varphi\rd\varphi^\prime B_\varphi^V(r,\theta,\varphi^\prime)
+-\frac{\varphi}{2\pi}\int\limits_0^{2\pi}\rd\varphi^\prime B_\varphi^V(r,\theta,\varphi^\prime)
+\right.
+\nonumber \\
+&+&
+\left.
+\int\limits_0^\theta\rd\theta^\prime B_\theta^V(r,\theta^\prime,0)
+-\frac{\theta}{2\pi}\int\limits_0^{2\pi}\rd\theta^\prime B_\theta^V(r,\theta^\prime,0)
+-B_\vartheta^B(r)\left(\lambda(r,\theta,\varphi)-\lambda(r,0,0)\right)
+\right).
+\eea
+In this form where we used Eqs.~\eq{boozcovar} for some occurrences of covariant Boozer components,
+generating function is perfectly periodic even in presence of numerical imperfections of the equilibrium.
+Integrals in~\eq{G_F} are computed uploading field components to the equidistant grid in $(\theta,\varphi)$
+and using periodic spline approximation.
+
+With this, we obtain two transformation functions specified on the equidistant $(\theta,\varphi)$ grid,
+\be{deltp_BV}
+\Delta\vartheta_{BV}(r,\theta,\varphi)\equiv\vartheta_B-\theta
+=\iota(r) G_F(r,\theta,\varphi)+\lambda(r,\theta,\varphi),
+\qquad
+\Delta\varphi_{BV}(r,\theta,\varphi)\equiv \varphi_B-\varphi
+=G_F(r,\theta,\varphi).
+\ee
+These function map the equidistant grid in $(\theta,\varphi)$ into non-equidistant grid in
+$(\vartheta_B,\varphi_B)$. In order to find the inverse transform $\theta=\theta(r,\vartheta_B,\varphi_B)$
+and $\varphi=\varphi(r,\vartheta_B,\varphi_B)$ we simply re-interpolate functions $\Delta\vartheta_{BV}$
+and $\Delta\varphi_{BV}$ to the new, equidistant grid in $(\vartheta_B,\varphi_B)$ using Lagrange polynomial
+interpolation on the old non-equidistant $(\vartheta_B,\varphi_B)$ grid. This is performed subsequently
+re-interpolating over $\vartheta_B$ keeping $\varphi$ fixed (one needs previously to extend the range of $\theta$
+variable from $[0,2\pi]$ to $[-2\pi,4\pi]$ in order to avoid problems with periodic boundaries)
+to get $\Delta\vartheta_{BV}(r,\theta(\vartheta_B,\varphi),\varphi)$ and
+$\Delta\varphi_{BV}(r,\theta(\vartheta_B,\varphi),\varphi)$
+and then over $\varphi_B$ keeping $\vartheta_B$ fixed (similar range extension is needed than for the toroidal 
+angle).
+Re-interpolating $G_F(r,\theta,\varphi)$ and $B(r,\theta,\varphi)$ together with transformation functions
+one obtains $G_B(\bx_B)$ and $B(\bx_B)$ specified on the equidistant grid of Boozer angles.
+Note that all the functions which are re-interpolated are periodic functions of angles - no problems appear
+due to multi-valuedness of angles.
+
+\subsection{Radial component}
+
+For the radial component, we have an expression via symmetry flux components
+\bea{B_rsf}
+B_r^B &=& 
+B_r+B_\vartheta\difp{}{r}\vartheta(\bx_B)+B_\varphi\difp{}{r}\varphi(\bx_B)
+\nonumber \\
+&=&
+B_r-B_\vartheta\difp{}{r}\iota(r)G_B(\bx_B)-B_\varphi\difp{}{r}G_B(\bx_B).
+\eea
+Re-interpolating covariant symmetry flux components $B_k(\bx_V)$ to the equidistant grid of Boozer angles 
+(within the transformation of the previous section) gives us $B_k(\bx_B)$. 
+Thus, all quantities in the r.h.s. of~\eq{B_rsf} are specified on the equidistant grid of Boozer angles.
+What remains is to compute
+radial derivatives by finite difference scheme (we use 4-th order Lagrange polynomial for this).
+
+\bigskip
+Finally, we store and spline interpolate up to six 3D functions. Arguments of these functions
+indicate equidistant angular grid in particular variables ($\bx_V$ means VMEC grid and $\bx_B$ means Boozer grid).
+These functions are $B(\bx_B)$ which is mandatory, $B_r(\bx_B)$ which is optional (needed if one uses usual 
+integrator for exact orbits), $\Delta \vartheta_{BV}(\bx_V)$ and $\Delta\varphi_{BV}(\bx_V)$ which are also
+mandatory but are needed only for the conversion of initial starting points from VMEC to Boozer coordinates
+and backward conversion of final points by 2D Newton method (i.e. they are not needed by the integrators), and 
+$\Delta \vartheta_{BV}(\bx_B)$ and $\Delta\varphi_{BV}(\bx_B)$ (optional). Last two quantities
+provide the first iteration for the inverse transformation $\bx_B\rightarrow\bx_V$ however they can be safely
+ignored since they save only one iteration (normally 4 Newton iterations converge up to computer accuracy).
+
+\end{document}
