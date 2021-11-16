@@ -11,14 +11,15 @@
   double precision :: twopi,cosphase,sinphase
   complex(8)   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
   double precision, dimension(:,:), allocatable :: splcoe
-  double precision, dimension(:,:), allocatable :: almn_rho,rmn_rho,zmn_rho
+  double precision, dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
+  double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
   complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
 !
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
   call new_allocate_vmec_stuff
 !
-  call vmecin(rmn,zmn,almn,aiota,phi,sps,axm,axn,s,    &
+  call vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s,    &
               nsurfm,nstrm,kpar,torflux)
 !
   ns=kpar+1
@@ -26,7 +27,8 @@
   hs=s(2)-s(1)
 !
   nrho=ns
-  allocate(almn_rho(nstrm,0:nrho-1),rmn_rho(nstrm,0:nrho-1),zmn_rho(nstrm,0:nrho-1))
+  allocate(almnc_rho(nstrm,0:nrho-1),rmnc_rho(nstrm,0:nrho-1),zmnc_rho(nstrm,0:nrho-1))
+  allocate(almns_rho(nstrm,0:nrho-1),rmns_rho(nstrm,0:nrho-1),zmns_rho(nstrm,0:nrho-1))
 !
   do i=1,nstrm
 !
@@ -34,11 +36,17 @@
 !
     nheal=min(m, 4)
 !
-    call s_to_rho_healaxis(m,ns,nrho,nheal,rmn(i,:),rmn_rho(i,:))
+    call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
 !
-    call s_to_rho_healaxis(m,ns,nrho,nheal,zmn(i,:),zmn_rho(i,:))
+    call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
 !
-    call s_to_rho_healaxis(m,ns,nrho,nheal,almn(i,:),almn_rho(i,:))
+    call s_to_rho_healaxis(m,ns,nrho,nheal,almnc(i,:),almnc_rho(i,:))
+!
+    call s_to_rho_healaxis(m,ns,nrho,nheal,rmns(i,:),rmns_rho(i,:))
+!
+    call s_to_rho_healaxis(m,ns,nrho,nheal,zmns(i,:),zmns_rho(i,:))
+!
+    call s_to_rho_healaxis(m,ns,nrho,nheal,almns(i,:),almns_rho(i,:))
 !
   enddo
 !
@@ -130,11 +138,14 @@
         sinphase=aimag(expphase)
         do is=1,ns
           sR(1,1,1,is,i_theta,i_phi) = sR(1,1,1,is,i_theta,i_phi)      &
-                                     + rmn_rho(i,is-1)*cosphase
+                                     + rmnc_rho(i,is-1)*cosphase       &
+                                     + rmns_rho(i,is-1)*sinphase
           sZ(1,1,1,is,i_theta,i_phi) = sZ(1,1,1,is,i_theta,i_phi)      &
-                                     + zmn_rho(i,is-1)*sinphase
+                                     + zmnc_rho(i,is-1)*cosphase       &
+                                     + zmns_rho(i,is-1)*sinphase
           slam(1,1,1,is,i_theta,i_phi) = slam(1,1,1,is,i_theta,i_phi)  &
-                                       + almn_rho(i,is-1)*sinphase
+                                       + almnc_rho(i,is-1)*cosphase    &
+                                       + almns_rho(i,is-1)*sinphase
         enddo
       enddo
     enddo

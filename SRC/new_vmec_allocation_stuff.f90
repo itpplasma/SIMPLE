@@ -25,7 +25,8 @@
 !
   allocate(axm(nstrm),axn(nstrm),soa(0:kpar))
   allocate(aiota(0:kpar),sps(0:kpar),phi(0:kpar),s(0:kpar))
-  allocate(rmn(nstrm,0:kpar),zmn(nstrm,0:kpar),almn(nstrm,0:kpar))
+  allocate(rmnc(nstrm,0:kpar),zmnc(nstrm,0:kpar),almnc(nstrm,0:kpar))
+  allocate(rmns(nstrm,0:kpar),zmns(nstrm,0:kpar),almns(nstrm,0:kpar))
 !
   end subroutine new_allocate_vmec_stuff
 !
@@ -37,6 +38,6 @@
 !
   implicit none
 !
-  deallocate(axm,axn,soa,aiota,sps,phi,s,rmn,zmn,almn)
+  deallocate(axm,axn,soa,aiota,sps,phi,s,rmnc,zmnc,almnc,rmns,zmns,almns)
 !
   end subroutine new_deallocate_vmec_stuff
