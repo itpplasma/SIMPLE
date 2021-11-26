@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 2.8.12)
 project (SIMPLE Fortran)
 
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
+    set(CMAKE_BUILD_TYPE Fast)
 endif()
 
 find_program(NF_CONFIG "nf-config")
@@ -38,7 +38,7 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O2 -g -shared-intel -debug inline-debug-info
 			-D TBB_USE_THREADING_TOOLS -qopenmp-link dynamic -parallel-source-info=2)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		add_compile_options(-O3 -march=skylake -mtune=skylake)
+		add_compile_options(-xCORE-AVX512 -O3)
 	endif()
 else()
 	add_compile_options(-std=f2008 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
