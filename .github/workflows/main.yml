@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: registry.gitlab.tugraz.at/plasma/images/texlive:full
+      image: ghcr.io/itpplasma/texlive:full
       credentials:
-        username: gitlab+deploy-token-246
-        password: mJVsBY_TAmnyzZARM2Tz
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v2
