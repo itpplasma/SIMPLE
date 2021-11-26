@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     container:
       image: registry.gitlab.tugraz.at/plasma/images/texlive:full
       credentials:
@@ -19,6 +19,5 @@ jobs:
         password: mJVsBY_TAmnyzZARM2Tz
 
     steps:
-      - run: lyx
-     
-
+      - run: cd DOC
+      - run: latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
