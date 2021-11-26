@@ -131,6 +131,13 @@ add_executable (test_parse_ants.x
 	SRC/test_parse_ants.f90
 )
 
+add_executable (test_boozer.x
+	SRC/plag_coeff.f90
+	SRC/binsrc.f90
+	SRC/boozer_converter.f90
+	SRC/test_boozer.f90
+)
+
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
 else()
@@ -147,3 +154,4 @@ target_link_libraries(test_poiplot_classification.x simple)
 target_link_libraries(alpha_lifetime_vmec_c.x simple)
 target_link_libraries(alpha_lifetime_old.x simple)
 target_link_libraries(test_parse_ants.x simple)
+target_link_libraries(test_boozer.x simple)

@@ -1,0 +1,3 @@
+* start.dat - VMEC or canonical angles? Document and send mail to Aaron
+* For each particle lost or not / times_lost.dat? Document
+* Supply plotting scripts

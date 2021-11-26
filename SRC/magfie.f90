@@ -10,8 +10,8 @@
 ! field direction                                               - hcovar,
 ! contravariant components of this vector                       - hctrvr,
 ! contravariant component of the curl of this vector            - hcurl
-! Order of coordinates is the following: x(1)=R (big radius),
-! x(2)=phi (toroidal angle), x(3)=Z (altitude).
+! Order of coordinates is the following: x(1)=s (normalized toroidal flux),
+! x(2)=theta (VMEC poloidal angle), x(3)=varphi (geometrical toroidal angle).
 !
 !  Input parameters:
 !            formal:  x(3)             - array of VMEC coordinates
@@ -167,7 +167,7 @@
   hcurl(3)=(dht_ds-dhs_dt)/sqrtg
 !
   end subroutine magfie_vmec
-
+!
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine magfie_can(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -181,11 +181,11 @@
 ! field direction                                               - hcovar,
 ! contravariant components of this vector                       - hctrvr,
 ! contravariant component of the curl of this vector            - hcurl
-! Order of coordinates is the following: x(1)=R (big radius),
-! x(2)=phi (toroidal angle), x(3)=Z (altitude).
+! Order of coordinates is the following: x(1)=s (normalized toroidal flux),
+! x(2)=vartheta_c (canonical poloidal angle), x(3)=varphi_c (canonical toroidal angle).
 !
 !  Input parameters:
-!            formal:  x(3)             - array of VMEC coordinates
+!            formal:  x(3)             - array of canonical coordinates
 !  Output parameters:
 !            formal:  bmod
 !                     sqrtg
@@ -254,3 +254,6 @@
   hcurl(3)=(dB_vartheta_c_dr/bmod-bder(1)*hcovar(2))/sqg_c
 !
   end subroutine magfie_can
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!

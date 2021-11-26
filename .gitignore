@@ -24,3 +24,4 @@ build/*
 _*.c
 *.pyc
 python/launch*
+.DS_Store
