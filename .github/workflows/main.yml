@@ -19,5 +19,16 @@ jobs:
         password: mJVsBY_TAmnyzZARM2Tz
 
     steps:
-      - run: cd DOC
-      - run: latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
+      - name: Checkout
+        uses: actions/checkout@v2
+        run: |
+         cd ${{ github.workspace }}/DOC
+         latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
+         lyx --export pdf2 neo-orb.lyx
+      - name: Upload doc artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: doc
+          path: |
+            canonical_and_boozer_flux_coords_via_VMEC.pdf
+            neo-orb.pdf
