@@ -66,6 +66,9 @@ add_library ( simple SHARED
 	SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
 	SRC/contrib/minpack.f90
 	SRC/magfie.f90
+	SRC/boozer_converter.f90
+	SRC/binsrc.f90
+	SRC/plag_coeff.f90
 	SRC/chamb_m.f90
 	SRC/sub_alpha_lifetime_can.f90
 	SRC/vmecinm_m.f90
@@ -85,13 +88,11 @@ add_library ( simple SHARED
 
 add_executable (simple.x
 	SRC/zzg.f90
-	SRC/binsrc.f90
 	SRC/main.f90
 )
 
 add_executable (test_coord_trans.x
 	SRC/zzg.f90
-	SRC/binsrc.f90
 	SRC/test_coord_trans.f90
 )
 
@@ -132,11 +133,14 @@ add_executable (test_parse_ants.x
 )
 
 add_executable (test_boozer.x
-	SRC/plag_coeff.f90
-	SRC/binsrc.f90
-	SRC/boozer_converter.f90
 	SRC/test_boozer.f90
 )
+
+add_executable (test_orbits.x
+	SRC/test_orbits_vmec.f90
+)
+
+
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
@@ -155,3 +159,4 @@ target_link_libraries(alpha_lifetime_vmec_c.x simple)
 target_link_libraries(alpha_lifetime_old.x simple)
 target_link_libraries(test_parse_ants.x simple)
 target_link_libraries(test_boozer.x simple)
+target_link_libraries(test_orbits.x simple)

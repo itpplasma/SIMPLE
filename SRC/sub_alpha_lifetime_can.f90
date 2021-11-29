@@ -48,7 +48,7 @@
 !  Output parameters:
 !            formal:  vz     -   see above
 !
-!  Called routines: magfie_can, magfie_vmec, elefie_can
+!  Called routines: magfie_can, magfie_vmec, elefie_can, magfie_boozer
 !
       use parmot_mod, only : rmu,ro0
       use velo_mod,   only : isw_field_type
@@ -94,6 +94,10 @@
       elseif(isw_field_type.eq.1) then
 !
         call magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!
+      elseif(isw_field_type.eq.2) then
+!
+        call magfie_boozer(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
       else
         print *,'velo: unknown field type'
@@ -245,7 +249,7 @@ if(dodiag) write (123,*) tau2,z
 !  Output parameters:
 !            formal:
 !                 dery(1:5) - vector of the right-hand side
-!  Called routines:  magfie_vmec, magfie_can
+!  Called routines:  magfie_vmec, magfie_can, magfie_boozer
 !
       use velo_mod,   only : isw_field_type
 !
@@ -265,6 +269,10 @@ if(dodiag) write (123,*) tau2,z
       elseif(isw_field_type.eq.1) then
 !
         call magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!
+      elseif(isw_field_type.eq.2) then
+!
+        call magfie_boozer(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
       else
         print *,'rhs_mflint_can: unknown field type'
@@ -324,6 +332,10 @@ if(dodiag) write (123,*) tau2,z
 !
         call magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
+      elseif(isw_field_type.eq.2) then
+!
+        call magfie_boozer(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!
       else
         print *,'rhs_mflint_can: unknown field type'
         return
@@ -353,6 +365,10 @@ if(dodiag) write (123,*) tau2,z
         elseif(isw_field_type.eq.1) then
 !
           call magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!
+        elseif(isw_field_type.eq.2) then
+!
+          call magfie_boozer(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
         else
           print *,'rhs_mflint_can: unknown field type'

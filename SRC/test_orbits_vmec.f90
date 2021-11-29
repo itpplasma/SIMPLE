@@ -4,7 +4,6 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-  use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
 !
   implicit none
 !
@@ -38,7 +37,7 @@ use diag_mod, only : icounter
   logical, parameter :: jparmode = .false. ! if true output orbit points only when vpar changes sign from positive to negative
   integer, parameter :: mode_sympl = 0 ! 0=NEO-ORB in vmec (sergei); 1=symplectic in canonical (christopher; euler1)
   integer :: ntau
-!
+ 
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
   read (1,*) nper              !number of periods for initial field line
@@ -59,8 +58,8 @@ use diag_mod, only : icounter
   read (1,*) netcdffile        !name of VMEC file in NETCDF format <=2017 NEW
   close(1)
 
-isw_field_type=1
-  !
+isw_field_type=2
+!
 ! inverse relativistic temperature
   rmu=1d8
 !
@@ -109,7 +108,11 @@ theta_vmec = 0.33
 varphi_vmec = 0.97
 alam0 = 0.1 
 
-if (mode_sympl>0)   call get_canonical_coordinates
+if (isw_field_type == 0) then
+    call get_canonical_coordinates
+elseif (isw_field_type == 2) then
+    call boozer_converter
+endif
 
 ! !
 z(1)=r           ! radius ~psi_pol
@@ -123,15 +126,12 @@ par_inv=0.d0
 alam=alam0
 alam_prev=alam
 
-if (mode_sympl>0)    call orbit_sympl_init(z, dtau, dtaumin, 1d-10, mode_sympl)
-
 print *,'VMEC, splines'
 call cpu_time(tstart)
 open(3001, file='orbit_vmec.out', recl=1024)
 do i=1,L1i*npoiper*npoiper2*runlen
 ! !
     if (mode_sympl==0) call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)    
-    if (mode_sympl>0) call orbit_timestep_sympl(z, ierr)
     
     if (.not. jparmode) then
       write (3001,*) dtau*dble(i),z

@@ -313,8 +313,12 @@ subroutine trace_orbit(anorb, ipart)
         z(2)=1d-3*twopi*dble(kt)                                         !<=AAA
         if(isw_field_type.eq.0) then                                     !<=AAA
           call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)    !<=AAA
-        else                                                             !<=AAA
+        elseif(isw_field_type.eq.1) then                                 !<=AAA
           call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)   !<=AAA
+        elseif(isw_field_type.eq.2) then                                 !<=AAA
+          call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl) !<=AAA
+        else
+          print *,'unknown field type'
         endif                                                            !<=AAA
         write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)                      !<=AAA
       enddo                                                              !<=AAA
@@ -332,9 +336,13 @@ subroutine trace_orbit(anorb, ipart)
 
   if(isw_field_type.eq.0) then
       call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  else
+  elseif(isw_field_type.eq.1) then
       call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  endif
+  elseif(isw_field_type.eq.2) then
+      call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+  else
+      print *,'unknown field type'
+  endif 
 
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
