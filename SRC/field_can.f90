@@ -292,8 +292,8 @@ subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
 
     double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, &
       d3Aphdr3, dummy, dummy3(3), dummy6(6), &
-      Bth, Bph, dBth(3), dBph(3), d2Bth(6), &
-      d2Bph(6)
+      Bth, Bph, dBth, dBph, d2Bth, d2Bph
+
 
     ! Count evaluations for profiling
 
@@ -310,8 +310,8 @@ subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
 
     call splint_boozer_coord(r, th_c, ph_c, &
       f%Ath, f%Aph, f%dAth(1), f%dAph(1), f%d2Aph(1), d3Aphdr3, &
-      Bth, dBth(1), d2Bth(1), &
-      Bph, dBph(1), d2Bph(1), &
+      Bth, dBth, d2Bth, &
+      Bph, dBph, d2Bph, &
       f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
 
     bmod2 = f%Bmod**2
@@ -325,30 +325,26 @@ subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
     f%dhph = dBph/f%Bmod - Bph*f%dBmod/bmod2
 
     if(mode_secders > 0) then
-      f%d2hth(1) = d2Bth(1)/f%Bmod - 2d0*dBth(1)*f%dBmod(1)/bmod2 + Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-      f%d2hph(1) = d2Bph(1)/f%Bmod - 2d0*dBph(1)*f%dBmod(1)/bmod2 + Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+      f%d2hth(1) = d2Bth/f%Bmod - 2d0*dBth*f%dBmod(1)/bmod2 + Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+      f%d2hph(1) = d2Bph/f%Bmod - 2d0*dBph*f%dBmod(1)/bmod2 + Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
     endif
 
     if(mode_secders.eq.2) then
-      f%d2hth((/4,6/)) = d2Bth((/4,6/))/f%Bmod - 2d0*dBth((/2,3/))*f%dBmod((/2,3/))/bmod2 &
-      + Bth/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
-      f%d2hph((/4,6/)) = d2Bph((/4,6/))/f%Bmod - 2d0*dBph((/2,3/))*f%dBmod((/2,3/))/bmod2 &
-      + Bph/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
+      f%d2hth((/4,6/)) = Bth/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
+      f%d2hph((/4,6/)) = Bph/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
 
-      f%d2hth(2) = d2Bth(2)/f%Bmod - (dBth(1)*f%dBmod(2) + dBth(2)*f%dBmod(1))/bmod2 &
+      f%d2hth(2) =  -dBth*f%dBmod(2)/bmod2 &
         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-      f%d2hph(2) = d2Bph(2)/f%Bmod - (dBph(1)*f%dBmod(2) + dBph(2)*f%dBmod(1))/bmod2 &
+      f%d2hph(2) =  -dBph*f%dBmod(2)/bmod2 &
         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
 
-      f%d2hth(3) = d2Bth(3)/f%Bmod - (dBth(1)*f%dBmod(3) + dBth(3)*f%dBmod(1))/bmod2 &
+      f%d2hth(3) =  -dBth*f%dBmod(3)/bmod2 &
         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-      f%d2hph(3) = d2Bph(3)/f%Bmod - (dBph(1)*f%dBmod(3) + dBph(3)*f%dBmod(1))/bmod2 &
+      f%d2hph(3) =  -dBph*f%dBmod(3)/bmod2 &
         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
 
-      f%d2hth(5) = d2Bth(5)/f%Bmod - (dBth(2)*f%dBmod(3) + dBth(3)*f%dBmod(2))/bmod2 &
-        + Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
-      f%d2hph(5) = d2Bph(5)/f%Bmod - (dBph(2)*f%dBmod(3) + dBph(3)*f%dBmod(2))/bmod2 &
-        + Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+      f%d2hth(5) = Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+      f%d2hph(5) = Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
     endif
 
   end subroutine eval_field_booz
