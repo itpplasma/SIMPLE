@@ -282,6 +282,8 @@
 !
 !  Called routines: splint_boozer_coord
 !
+  use vector_potentail_mod, only : torflux
+!
   implicit none
 !
   double precision :: bmod,sqrtg
@@ -312,7 +314,7 @@
   bmod=Bmod_B
   bder=dBmod_B/Bmod_B
 !
-  sqrtg=(aiota*B_vartheta_B+B_varphi_B)/bmod**2
+  sqrtg=(aiota*B_vartheta_B+B_varphi_B)/bmod**2*torflux
 !
   Bctrvr_phi=dA_theta_dr/sqrtg
   Bctrvr_theta=aiota*Bctrvr_phi

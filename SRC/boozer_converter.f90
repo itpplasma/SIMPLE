@@ -1074,8 +1074,8 @@ icounter=icounter+1
     if(abs(delthe)+abs(delphi).lt.epserr) exit
   enddo
 !
-  theta=modulo(theta,twopi)
-  varphi=modulo(varphi,twopi/dble(nper))
+!  theta=modulo(theta,twopi)
+!  varphi=modulo(varphi,twopi/dble(nper))
 !
   end subroutine boozer_to_vmec
 !

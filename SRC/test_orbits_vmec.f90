@@ -3,6 +3,7 @@
 !  use chamb_mod,  only : rbig,rcham2
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
+  use boozer_coordinates_mod, only : use_B_r
 use diag_mod, only : icounter
 !
   implicit none
@@ -31,6 +32,7 @@ use diag_mod, only : icounter
   integer          :: ibins
   integer          :: n_e,n_d,n_b
   double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
+  double precision :: vartheta,varphi
   double precision :: alam,alam_prev,par_inv
   real :: tstart, tend
   integer, parameter :: runlen = 1
@@ -82,7 +84,7 @@ bmod00=281679.46317784750d0
 ! 14.11.2011  bmod00=bmod_ref  !<=deactivated, use value from the 'alpha_lifetime.inp'
   ro0=rlarm*bmod00  ! 23.09.2013
 !
-  multharm=3 ! resolution of interpolation in angles
+  multharm=7 !3 ! resolution of interpolation in angles
   ns_A=5
   ns_s=5
   ns_tp=5
@@ -110,14 +112,21 @@ alam0 = 0.1
 
 if (isw_field_type == 0) then
     call get_canonical_coordinates
+    call vmec_to_can(r,theta_vmec,varphi_vmec,vartheta,varphi)
 elseif (isw_field_type == 2) then
+    use_B_r=.false.
+!    use_B_r=.true.
     call boozer_converter
+    call vmec_to_boozer(r,theta_vmec,varphi_vmec,vartheta,varphi)
+else
+    vartheta=theta_vmec
+    varphi=varphi_vmec
 endif
 
 ! !
 z(1)=r           ! radius ~psi_pol
-z(2)=theta_vmec  ! poloidal angle
-z(3)=varphi_vmec ! toroidal angle
+z(2)=vartheta    ! poloidal angle
+z(3)=varphi      ! toroidal angle
 z(4)=1.d0        ! normalized momentum
 z(5)=alam0       ! parameter for pitch angle between parallel and perp velocity
 ! !
@@ -128,19 +137,30 @@ alam_prev=alam
 
 print *,'VMEC, splines'
 call cpu_time(tstart)
-open(3001, file='orbit_vmec.out', recl=1024)
+open(3001, file='orbit_rk.out', recl=1024)
 do i=1,L1i*npoiper*npoiper2*runlen
 ! !
     if (mode_sympl==0) call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)    
+    r=z(1)
+    vartheta=z(2)
+    varphi=z(3)
+    if (isw_field_type == 0) then
+      call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+    elseif (isw_field_type == 1) then
+      theta_vmec=vartheta
+      varphi_vmec=varphi
+    elseif (isw_field_type == 2) then
+      call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+    endif
     
     if (.not. jparmode) then
-      write (3001,*) dtau*dble(i),z
+      write (3001,*) dtau*dble(i),z,theta_vmec,varphi_vmec
     else
       alam=z(5)
       par_inv=par_inv+alam**2*dtau
       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
         write (100,*) i,par_inv
-        write (3001,*) dtau*dble(i),z
+        write (3001,*) dtau*dble(i),z,theta_vmec,varphi_vmec
         par_inv=0.d0
       endif
       alam_prev=alam
