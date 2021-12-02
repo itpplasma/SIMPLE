@@ -2,7 +2,7 @@ program test_magfie
 
 ! use new_vmec_stuff_mod, only : netcdffile, multharm,ns_A,ns_s,ns_tp
 ! use parmot_mod, only : rmu,ro0
-! use velo_mod,   only : isw_field_type
+use velo_mod,   only : isw_field_type
 use orbit_symplectic
 use field_can_mod
 use neo_orb
@@ -18,9 +18,7 @@ type(FieldCan) :: f
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
 
-integer :: field_mode
-
-field_mode = 0
+isw_field_type = 2
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
@@ -28,10 +26,10 @@ z0(2) = 0.7d0  ! theta
 z0(3) = 0.1d0  ! phi
 vpar0 = 0.8d0  ! parallel velocity
 
-if (field_mode == -1) then
-  call FieldCan_init(f, 1d-5, 1d0, vpar0, field_mode)
+if (isw_field_type == -1) then
+  call FieldCan_init(f, 1d-5, 1d0, vpar0, isw_field_type)
   call eval_field(f, z0(1), z0(2), z0(3), 0)
-elseif (field_mode == 0) then
+else
   call init_field(norb, 'wout.nc', 5, 5, 3, 0)
 
   npoiper2 = 64
@@ -49,7 +47,7 @@ elseif (field_mode == 0) then
 
   ! ro0 = mc/e*v0, different by sqrt(2) from other modules
   ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0), field_mode)
+  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0), isw_field_type)
   call eval_field(f, z0(1), z0(2), z0(3), 0)
   f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
 end if
@@ -122,10 +120,10 @@ subroutine der2(x0, pphi, i, j)
     if (i==1 .and. j==1) k=1
     if ((i==1 .and. j==2) .or. (i==2 .and. j==1)) k=2
     if ((i==1 .and. j==3) .or. (i==3 .and. j==1)) k=3
-    
+
     if (i==2 .and. j==2) k=4
     if ((i==2 .and. j==3) .or. (i==3 .and. j==2)) k=5
-    
+
     if (i==3 .and. j==3) k=6
 
     if(i==j) then
@@ -133,10 +131,10 @@ subroutine der2(x0, pphi, i, j)
         d2fnum%d2Aph(k) = (f11%Aph - 2d0*f%Aph + f00%Aph)/(hi*hj)
         d2fnum%d2hth(k) = (f11%hth - 2d0*f%hth + f00%hth)/(hi*hj)
         d2fnum%d2hph(k) = (f11%hph - 2d0*f%hph + f00%hph)/(hi*hj)
-        d2fnum%d2Bmod(k) = (f11%Bmod - 2d0*f%Bmod + f00%Bmod)/(hi*hj) 
-        d2vparnum(k) = (vpar11 - 2d0*f%vpar + vpar00)/(hi*hj) 
-        d2Hnum(k) = (H11 - 2d0*f%H + H00)/(hi*hj) 
-        d2pthnum(k) = (pth11 - 2d0*f%pth + pth00)/(hi*hj) 
+        d2fnum%d2Bmod(k) = (f11%Bmod - 2d0*f%Bmod + f00%Bmod)/(hi*hj)
+        d2vparnum(k) = (vpar11 - 2d0*f%vpar + vpar00)/(hi*hj)
+        d2Hnum(k) = (H11 - 2d0*f%H + H00)/(hi*hj)
+        d2pthnum(k) = (pth11 - 2d0*f%pth + pth00)/(hi*hj)
     else
         d2fnum%d2Ath(k) = (f11%Ath - f10%Ath - f01%Ath + f00%Ath)/(hi*hj)
         d2fnum%d2Aph(k) = (f11%Aph - f10%Aph - f01%Aph + f00%Aph)/(hi*hj)
@@ -158,7 +156,7 @@ subroutine der2(x0, pphi, i, j)
     print *, 'd2pth(',i,j,')', f%d2pth(k), d2pthnum(k), relerr(d2pthnum(k), f%d2pth(k))
 end subroutine der2
 
-subroutine test_jac1(si)  
+subroutine test_jac1(si)
   type(SymplecticIntegrator) :: si
   double precision :: x1(2), dx1(2), jac1(2,2), x10(2), h1(2), jac1num(2,2), fvec1(2)
   integer :: k
@@ -191,7 +189,7 @@ subroutine test_jac1(si)
   print *, 'jac_sympl_euler1(2,2)', jac1(2,2), jac1num(2,2), relerr(jac1(2,2), jac1num(2,2))
 end subroutine test_jac1
 
-subroutine test_jac2(si)  
+subroutine test_jac2(si)
   type(SymplecticIntegrator) :: si
   double precision ::x2(3), dx2(3),  jac2(3,3), x20(3), h2(3), jac2num(3,3), fvec2(3)
   integer :: k
@@ -305,7 +303,7 @@ subroutine test_jac_grk(si)
   h = 1d-6
   h(4) = 1d-6*z0(4)
   h(8) = 1d-6*z0(4)
-    
+
   x0(1:4) = si%z(1:4) - 1d-4
   x0(5:8) = si%z(1:4) + 2d-2
 
@@ -350,7 +348,7 @@ subroutine test_jac_lob(si)
   h(2) = 1d-6*z0(4)
   h(6) = 1d-6*z0(4)
   h(10) = 1d-6*z0(4)
-    
+
   x0(1:2) = z0((/1,4/)) - 5d-4
   x0(3:6) = z0(1:4) - 1d-4
   x0(7:10) = z0(1:4) + 1d-4
@@ -391,7 +389,7 @@ subroutine test_newton(si)
   integer :: k
 
   x = si%z((/1,4/)) + (/1d-4, 1d-2/)
- 
+
   do k=1,10
     call f_sympl_euler1(si, f, n, x, fvec, 1)
     call jac_sympl_euler1(si, f, x, fjac)
@@ -422,7 +420,7 @@ subroutine test_newton2(si)
     call f_sympl_euler2(si, f, n, x, fvec, 1)
     call jac_sympl_euler2(si, f, x, fjac)
 
-    call dgesv(n, 1, fjac, n, pivot, fvec, 3, info) 
+    call dgesv(n, 1, fjac, n, pivot, fvec, 3, info)
     ! after solution: fvec = (xold-xnew)_Newton
 
     x = x - fvec
@@ -489,7 +487,7 @@ subroutine do_test()
     dHnum(4) = (dHnum(4) - f%H)/dx
     dpthnum(4) = (dpthnum(4) - f%pth)/dx
     call get_derivatives(f, z0(4))
-    
+
     do k=1,3
         print *, 'dvpar(',k,')', f%dvpar(k), dvparnum(k), relerr(dvparnum(k), f%dvpar(k))
         print *, 'dH   (',k,')', f%dH(k), dHnum(k), relerr(dHnum(k), f%dH(k))

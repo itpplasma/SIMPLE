@@ -2,9 +2,9 @@
 1000     nper              !number of periods for initial field line
 100      npoiper           !number of points per period on this field line
 10000    ntimstep          !number of time steps per slowing down time
-1000     ntestpart         !number of test particles
+100      ntestpart         !number of test particles
 5d4      bmod_ref          !reference field, G, for Boozer $B_{00}$
-1d0      trace_time        !slowing down time, s
+1d-1      trace_time        !slowing down time, s
 0.6d0    sbeg              !starting s (normalzed toroidal flux) for field line
 0.d0     phibeg            !starting phi for field line
 0.d0     thetabeg          !starting theta for field line
@@ -18,10 +18,11 @@
 5        ns_s              !spline order for 3D quantities over s variable
 5        ns_tp             !spline order for 3D quantities over theta and phi
 5        multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
-1        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
+2        field_type        !-1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
+2        startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
 1        integmode         !mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 1d-13    tol               !tolerance for integrator. Set to 1d-13 for symplectic.
-1d-1     tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+-1     tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
 .False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
 .False.  class_plot        !write starting points at phi=const cut for classification plot (.True./.False.)
 0        cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True.

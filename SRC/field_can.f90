@@ -5,7 +5,7 @@ use diag_mod, only : icounter
 implicit none
 
 type :: FieldCan
-  integer :: field_type  ! -1: testing, 0: canonical
+  integer :: field_type  ! -1: testing, 0: canonical, 2: Boozer
 
   double precision :: Ath, Aph
   double precision :: hth, hph
@@ -22,7 +22,7 @@ type :: FieldCan
 
   double precision :: H, pth, vpar
   double precision, dimension(4) :: dvpar, dH, dpth
-  
+
   ! order of second derivatives:
   ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
   ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
@@ -148,7 +148,7 @@ subroutine get_derivatives2(f, pphi)
   f%d2vpar(7:9) = -f%dhph/f%hph**2
   f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
   f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
-  
+
 end subroutine get_derivatives2
 
 
@@ -270,6 +270,88 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 
 end subroutine eval_field_can
 
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
+  use vector_potentail_mod, only : torflux
+  !
+  ! Evaluates magnetic field in Boozer canonical coordinates (r, th_c, ph_c)
+  ! and stores results in variable f
+  ! Works for A_th linear in r (toroidal flux as radial variable)
+  !
+  ! mode_secders = 0: no second derivatives
+  ! mode_secders = 1: second derivatives only in d/dr^2
+  ! mode_secders = 2: all second derivatives, including mixed
+  !
+  ! tested in test_magfie.f90, 2018-10-23, C. Albert <albert@alumni.tugraz.at>
+  !
+
+    type(FieldCan), intent(inout) :: f
+    double precision, intent(in) :: r, th_c, ph_c
+    integer, intent(in) :: mode_secders
+
+    double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, &
+      d3Aphdr3, dummy, dummy3(3), dummy6(6), &
+      Bth, Bph, dBth(3), dBph(3), d2Bth(6), &
+      d2Bph(6)
+
+    ! Count evaluations for profiling
+
+    ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
+    f%dAth = 0d0
+    f%dAph = 0d0
+
+    ! initialize all 2nd derivatives to zero, as the mode decides, which one to use
+    f%d2Ath = 0d0
+    f%d2Aph = 0d0
+    f%d2hth = 0d0
+    f%d2hph = 0d0
+    f%d2Bmod = 0d0
+
+    call splint_boozer_coord(r, th_c, ph_c, &
+      f%Ath, f%Aph, f%dAth(1), f%dAph(1), f%d2Aph(1), d3Aphdr3, &
+      Bth, dBth(1), d2Bth(1), &
+      Bph, dBph(1), d2Bph(1), &
+      f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
+
+    bmod2 = f%Bmod**2
+    sqg=(-f%dAph(1)/f%dAth(1)*Bth+Bph)/bmod2*torflux
+    Bctr_vartheta = -f%dAph(1)/sqg
+    Bctr_varphi = f%dAth(1)/sqg
+
+    f%hth = Bth/f%Bmod
+    f%hph = Bph/f%Bmod
+    f%dhth = dBth/f%Bmod - Bth*f%dBmod/bmod2
+    f%dhph = dBph/f%Bmod - Bph*f%dBmod/bmod2
+
+    if(mode_secders > 0) then
+      f%d2hth(1) = d2Bth(1)/f%Bmod - 2d0*dBth(1)*f%dBmod(1)/bmod2 + Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+      f%d2hph(1) = d2Bph(1)/f%Bmod - 2d0*dBph(1)*f%dBmod(1)/bmod2 + Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+    endif
+
+    if(mode_secders.eq.2) then
+      f%d2hth((/4,6/)) = d2Bth((/4,6/))/f%Bmod - 2d0*dBth((/2,3/))*f%dBmod((/2,3/))/bmod2 &
+      + Bth/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
+      f%d2hph((/4,6/)) = d2Bph((/4,6/))/f%Bmod - 2d0*dBph((/2,3/))*f%dBmod((/2,3/))/bmod2 &
+      + Bph/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
+
+      f%d2hth(2) = d2Bth(2)/f%Bmod - (dBth(1)*f%dBmod(2) + dBth(2)*f%dBmod(1))/bmod2 &
+        + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+      f%d2hph(2) = d2Bph(2)/f%Bmod - (dBph(1)*f%dBmod(2) + dBph(2)*f%dBmod(1))/bmod2 &
+        + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+
+      f%d2hth(3) = d2Bth(3)/f%Bmod - (dBth(1)*f%dBmod(3) + dBth(3)*f%dBmod(1))/bmod2 &
+        + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+      f%d2hph(3) = d2Bph(3)/f%Bmod - (dBph(1)*f%dBmod(3) + dBph(3)*f%dBmod(1))/bmod2 &
+        + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+
+      f%d2hth(5) = d2Bth(5)/f%Bmod - (dBth(2)*f%dBmod(3) + dBth(3)*f%dBmod(2))/bmod2 &
+        + Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+      f%d2hph(5) = d2Bph(5)/f%Bmod - (dBph(2)*f%dBmod(3) + dBph(3)*f%dBmod(2))/bmod2 &
+        + Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+    endif
+
+  end subroutine eval_field_booz
 
 ! for testing -> circular tokamak
 subroutine eval_field_test(f, r, th, ph, mode_secders)
@@ -282,7 +364,7 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
 
     ! Count evaluations for profiling
    icounter = icounter + 1
-   
+
    B0 = 1.0    ! magnetic field modulus normalization
    iota0 = 1.0 ! constant part of rotational transform
    a = 0.5     ! (equivalent) minor radius
@@ -290,17 +372,17 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
 
    cth = cos(th)
    sth = sin(th)
-   
+
    f%Ath = B0*(r**2/2d0 - r**3/(3d0*R0)*cth)
    f%Aph     = -B0*iota0*(r**2/2d0-r**4/(4d0*a**2))
    f%hth     = iota0*(1d0-r**2/a**2)*r**2/R0
    f%hph     = R0 + r*cth
    f%Bmod     = B0*(1d0 - r/R0*cth)
-  
+
    f%dAth(1) = B0*(r - r**2/R0*cth)
    f%dAth(2) = B0*r**3*sth/(3.0*R0)
    f%dAth(3) = 0d0
-   
+
    f%dAph(1) = -B0*iota0*(r-r**3/a**2)
    f%dAph(2) = 0d0
    f%dAph(3) = 0d0
@@ -312,7 +394,7 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
    f%dhph(1) = cth
    f%dhph(2) = -r*sth
    f%dhph(3) = 0d0
- 
+
    f%dBmod(1) = -B0/R0*cth
    f%dBmod(2) = B0*r/R0*sth
    f%dBmod(3) = 0d0
@@ -325,30 +407,30 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
    f%d2Ath(2) = B0*r**2/R0*sth
    f%d2Ath(5) = 0d0
    f%d2Ath(6) = 0d0
-   
+
    f%d2Aph(1) = -B0*iota0*(1d0-3d0*r**2/a**2)
    f%d2Aph(4) = 0d0
    f%d2Aph(3) = 0d0
    f%d2Aph(2) = 0d0
    f%d2Aph(5) = 0d0
    f%d2Aph(6) = 0d0
-   
+
    f%d2hth = 0d0
    f%d2hth(1) = 2d0*iota0*(a**2-6d0*r**2)/(a**2*R0)
-  
+
    f%d2hph(1) = 0d0
    f%d2hph(4) = -r*cth
    f%d2hph(3) = 0d0
    f%d2hph(2) = -sth
    f%d2hph(5) = 0d0
    f%d2hph(6) = 0d0
-   
+
    f%d2Bmod(1) = 0d0
    f%d2Bmod(4) = B0*r/R0*cth
    f%d2Bmod(3) = 0d0
    f%d2Bmod(2) = B0/R0*sth
    f%d2Bmod(5) = 0d0
-   f%d2Bmod(6) = 0d0 
+   f%d2Bmod(6) = 0d0
 
 end subroutine eval_field_test
 
@@ -375,10 +457,15 @@ subroutine eval_field(f, r, th_c, ph_c, mode_secders)
   select case (f%field_type)
     case (-1)
       call eval_field_test(f, r, th_c, ph_c, mode_secders)
-    case default
+    case (0)
       call eval_field_can(f, r, th_c, ph_c, mode_secders)
+    case (2)
+      call eval_field_booz(f, r, th_c, ph_c, mode_secders)
+    case default
+      print *, 'Illegal field type ', f%field_type, ' for eval_field'
+      stop
   end select
-  
+
 end subroutine eval_field
 
 end module field_can_mod

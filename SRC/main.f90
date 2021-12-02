@@ -5,8 +5,7 @@ program neo_orb_main
 
   use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
-  use field_can_mod, only : FieldCan
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
+  use orbit_symplectic, only : orbit_timestep_sympl
   use neo_orb, only : init_field, init_sympl, NeoOrb, debug
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
@@ -82,7 +81,7 @@ program neo_orb_main
 
 ! do particle tracing in parallel
 
-  !$omp parallel private(norb)
+  !$omp parallel firstprivate(norb)
   !$omp do
   do i=1,ntestpart
     !$omp critical
@@ -138,6 +137,7 @@ subroutine read_config
   read (1,*) ns_s              !spline order for 3D quantities over s variable
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
+  read (1,*) isw_field_type    !-1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
   read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
   read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
   read (1,*) relerr            !relative error for RK integrator
@@ -342,7 +342,7 @@ subroutine trace_orbit(anorb, ipart)
       call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
   else
       print *,'unknown field type'
-  endif 
+  endif
 
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)

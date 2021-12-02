@@ -58,10 +58,17 @@ contains
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
     self%fper = twopi/dble(L1i)   !<= field period
     print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
-    isw_field_type = 1 ! evaluate fields in VMEC coords (0 = CAN, 1 = VMEC)
+
     if (self%integmode>=0) then
-      call get_canonical_coordinates ! pre-compute transformation to canonical coords
-      isw_field_type = 0 ! evaluate fields in canonical coords (0 = CAN, 1 = VMEC)
+      if (isw_field_type == 0) then
+        call get_canonical_coordinates ! pre-compute transformation to canonical coords
+      elseif (isw_field_type == 2) then
+        print *, 'Boozer field'
+        call boozer_converter
+      else
+        print *, 'Unknown field type ', isw_field_type
+      endif
+
     end if
 
     ! initialize position and do first check if z is inside vacuum chamber
@@ -118,31 +125,32 @@ contains
     endif
 
     ! Initialize symplectic integrator
+    f%field_type = isw_field_type
     call eval_field(f, z0(1), z0(2), z0(3), 0)
 
     si%pabs = z0(4)
-  
+
     f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
     f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
     f%vpar = z0(4)*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-      
+
     z(1:3) = z0(1:3)  ! s, th, ph
     z(4) = f%vpar*f%hph + f%Aph/f%ro0 ! pphi
 
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
     if (mode_init == 1) then
       call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                            rtol_init, mode_init, 1) 
+                            rtol_init, mode_init, 1)
     else
       call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                            rtol_init, mode_init, 0) 
+                            rtol_init, mode_init, 0)
     end if
   end subroutine init_sympl
 
   subroutine init_integrator(self, z0)
     type(NeoOrb), intent(inout) :: self
     double precision, intent(in) :: z0(:)
-    
+
     call init_sympl(self%si, self%f, z0, self%dtau, self%dtaumin, &
       self%relerr, self%integmode)
   end subroutine init_integrator
@@ -204,7 +212,7 @@ module cut_detector
 
   implicit none
   save
-  
+
   integer, parameter :: n_tip_vars = 6
   integer, parameter :: nplagr = 6
   integer, parameter :: nder = 0
@@ -391,8 +399,8 @@ contains
         ! Right now criterion for regular is at nboxes/ngrid**2 < 0.2 .
         ! For fractal dimension d = log(nboxes)/log(ngrid) this means
         ! d_thresh = 2 + log(0.2)/log(ngrid)
-        !        
-        write(iunit,*) irefine, nboxes, ngrid, dble(nboxes)/dble(ngrid**2), 0.2d0,& 
+        !
+        write(iunit,*) irefine, nboxes, ngrid, dble(nboxes)/dble(ngrid**2), 0.2d0,&
                        log(1d0*nboxes)/log(1d0*ngrid), 2d0 + log(0.2d0)/log(1d0*ngrid)
 !$omp end critical
       end if
@@ -412,7 +420,7 @@ module neo_orb_global
                              neo_orb_timestep => timestep, &
                              neo_orb_timestep_z => timestep_z, &
                              neo_orb_timestep_sympl_z => timestep_sympl_z
-  
+
   implicit none
   save
 
@@ -434,7 +442,7 @@ contains
 
   subroutine spline_vmec(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
     R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
-  
+
     double precision, intent(in) :: s,theta,varphi
     double precision, intent(out) :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,   &
     R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
@@ -456,7 +464,7 @@ contains
     sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
     Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
   end subroutine field_vmec
-  
+
 
   subroutine init_params(Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
     integer, intent(in) :: Z_charge, m_mass
@@ -504,7 +512,7 @@ module cut_detector_global
   use common
   use neo_orb_global, only: norb
   use cut_detector, only: CutDetector, cut_detector_init => init, cut_detector_trace_to_cut => trace_to_cut
-  
+
   implicit none
   save
 
