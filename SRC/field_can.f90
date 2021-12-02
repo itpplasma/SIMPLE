@@ -321,8 +321,10 @@ subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
 
     f%hth = Bth/f%Bmod
     f%hph = Bph/f%Bmod
-    f%dhth = dBth/f%Bmod - Bth*f%dBmod/bmod2
-    f%dhph = dBph/f%Bmod - Bph*f%dBmod/bmod2
+    f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
+    f%dhph(1) = dBph/f%Bmod - Bph*f%dBmod(1)/bmod2
+    f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
+    f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
 
     if(mode_secders > 0) then
       f%d2hth(1) = d2Bth/f%Bmod - 2d0*dBth*f%dBmod(1)/bmod2 + Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
