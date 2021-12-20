@@ -371,7 +371,7 @@ if(dodiag) write (123,*) tau2,z
           call magfie_boozer(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
         else
-          print *,'rhs_mflint_can: unknown field type'
+          print *,'integrate_mfl_can: unknown field type'
           return
         endif
 !

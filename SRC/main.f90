@@ -137,7 +137,7 @@ subroutine read_config
   read (1,*) ns_s              !spline order for 3D quantities over s variable
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
-  read (1,*) isw_field_type    !-1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
+  read (1,*) isw_field_type    !field type: -1 - Testing, 0 - Canonical, 1 - VMEC, 2 - Boozer
   read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
   read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
   read (1,*) relerr            !relative error for RK integrator
@@ -236,6 +236,7 @@ end subroutine
 subroutine init_starting_points
   integer :: ipart
   real :: zzg
+  double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
 
   ! skip random numbers according to configuration
     do iskip=1,loopskip
@@ -253,8 +254,26 @@ subroutine init_starting_points
       xi=zzg()
       call binsrc(volstart,1,npoi,xi,i)
       ibins=i
-      ! coordinates: z(1) = R, z(2) = phi, z(3) = Z
-      zstart(1:3,ipart)=xstart(:,i)
+      ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
+      r=xstart(1,i)
+      vartheta=xstart(2,i)
+      varphi=xstart(3,i)
+!
+! we store starting points in VMEC coordinates:
+      if(isw_field_type.eq.0) then
+        call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+      elseif(isw_field_type.eq.1) then
+        theta_vmec=vartheta
+        varphi_vmec=varphi
+      elseif(isw_field_type.eq.2) then
+        call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+      else
+        print *,'init_starting_points: unknown field type'
+      endif
+!
+      zstart(1,ipart)=r
+      zstart(2,ipart)=theta_vmec
+      zstart(3,ipart)=varphi_vmec
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:
@@ -295,6 +314,7 @@ subroutine trace_orbit(anorb, ipart)
   integer :: iper, itip, kper, nfp_tip, nfp_per
 
   double precision :: fraction
+  double precision :: r,theta_vmec,varphi_vmec
   logical :: regular
   integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002, &  !<=AAA
                         iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
@@ -324,8 +344,19 @@ subroutine trace_orbit(anorb, ipart)
       enddo                                                              !<=AAA
     endif                                                                !<=AAA
   endif                                                                  !<=AAA
-
+!
   z = zstart(:, ipart)
+  r=z(1)
+  theta_vmec=z(2)
+  varphi_vmec=z(3)
+!
+  if(isw_field_type.eq.0) then
+      call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
+  elseif(isw_field_type.eq.2) then
+      call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
+  else
+      print *,'unknown field type'
+  endif
 
   if(class_plot) then                                                    !<=AAA
     z(3)=cut_in_per*fper                                                 !<=AAA
