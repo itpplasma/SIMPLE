@@ -1,5 +1,6 @@
 !
   module detect_oneline_mod
+  !$omp threadprivate(iper, igroup, iret, fprs) 
     logical :: prop=.true.
     integer, parameter :: nfp_dim=3,ipermin=10
     integer :: nfp_max,iper,igroup
