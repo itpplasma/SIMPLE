@@ -56,9 +56,9 @@
   open(21345,file='deltheta.dat')
   open(213456,file='delphi.dat')
 !
-  do it=0,100
+  do it=0,n
     vartheta_B=dble(it)*twopi/dble(n)
-    do ip=0,100
+    do ip=0,n
       varphi_B=dble(ip)*twopi/dble(n*nper)
 !
       call splint_boozer_coord(r,vartheta_B,varphi_B,                                       &
@@ -90,6 +90,33 @@
   close(123456)
   close(21345)
   close(213456)
+!
+!---------------------------------------------------------
+!
+! Plot B_r, B_theta, B_phi in (s,theta) plane at half period
+!
+  open(1234,file='B_theta_phi_vs_r.dat')
+  open(12345,file='B_r_st_plane.dat')
+  varphi_B=0.5d0*twopi/dble(nper)
+  do i=1,300
+    r=dble(i)/300.d0
+    do it=1,n
+      vartheta_B=dble(it)*twopi/dble(n)
+!
+      call splint_boozer_coord(r,vartheta_B,varphi_B,                                       &
+                               A_theta,A_phi,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3, &
+                               B_vartheta_B,dB_vartheta_B,d2B_vartheta_B,                   &
+                               B_varphi_B,dB_varphi_B,d2B_varphi_B,                         &
+                               Bmod_B,dBmod_B,d2Bmod_B,                                     &
+                               B_r,dB_r,d2B_r)
+!
+      arr(it)=B_r
+    enddo
+    write(1234,*) r,B_vartheta_B,B_varphi_B
+    write(12345,*) arr
+  enddo
+  close(1234)
+  close(12345)
 !
 !---------------------------------------------------------
 !

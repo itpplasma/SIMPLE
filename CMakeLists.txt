@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 2.8.12)
 project (SIMPLE Fortran)
 
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Fast)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
 find_program(NF_CONFIG "nf-config")
@@ -30,7 +30,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 add_compile_options(-cpp)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f2008 -assume byterecl)
+	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f2008)
 	link_libraries("-mkl -qopenmp")
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options(-O0 -g)
@@ -38,7 +38,7 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O2 -g -shared-intel -debug inline-debug-info
 			-D TBB_USE_THREADING_TOOLS -qopenmp-link dynamic -parallel-source-info=2)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		add_compile_options(-xCORE-AVX512 -O3 -g)
+		add_compile_options(-O3 -march=skylake -mtune=skylake)
 	endif()
 else()
 	add_compile_options(-std=f2008 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
@@ -88,6 +88,8 @@ add_library ( simple SHARED
 
 add_executable (simple.x
 	SRC/zzg.f90
+	SRC/sorting.f90
+	SRC/check_orbit_type.f90
 	SRC/main.f90
 )
 

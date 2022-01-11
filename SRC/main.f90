@@ -316,34 +316,63 @@ subroutine trace_orbit(anorb, ipart)
   double precision :: fraction
   double precision :: r,theta_vmec,varphi_vmec
   logical :: regular
+! output files:
+! iaaa_bou - trapped-passing boundary
+! iaaa_pnt - forced regular passing
+! iaaa_prp - lossed passing
+! iaaa_prt - lossed trapped
+! iaaa_rep - regular passing
+! iaaa_ret - regular trapped
+! iaaa_stp - stochastic passing
+! iaaa_stt - stochastic trapped
   integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002, &  !<=AAA
                         iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
+! Variables and settings for classification by J_parallel and ideal orbit condition:
+  integer, parameter :: nfp_dim=3, nturns=8
+  integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
+  double precision, dimension(nfp_dim) :: fpr_in
+! output files:
+! iaaa_jre - regular trapped by J_parallel
+! iaaa_jst - stochastic trapped by J_parallel
+! iaaa_jer - non-classified trapped by J_parallel
+! iaaa_ire - ideal trapped by recurrences and monotonicity
+! iaaa_ist - non-ideal trapped by recurrences and monotonicity
+! iaaa_ier - non-iclassified trapped by recurrences and monotonicity
+  integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
+                        iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
+                        
+!
+  iangvar=2
+! End variables and settings for classification by J_parallel and ideal orbit condition
+!
 
 !  open(unit=10000+ipart, iostat=stat, status='old')
 !  if (stat == 0) close(10000+ipart, status='delete')
 !  open(unit=20000+ipart, iostat=stat, status='old')
 !  if (stat == 0) close(20000+ipart, status='delete')
 
-  if(class_plot) then                                                    !<=AAA
-    if(ipart.eq.1) then                                                  !<=AAA
-      z(1)=zstart(1,ipart)                                               !<=AAA
-      z(3)=0.2d0*pi                                                      !<=AAA
-      do kt=0,1000                                                       !<=AAA
-        z(2)=1d-3*twopi*dble(kt)                                         !<=AAA
-        if(isw_field_type.eq.0) then                                     !<=AAA
-          call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)    !<=AAA
-        elseif(isw_field_type.eq.1) then                                 !<=AAA
-          call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)   !<=AAA
-        elseif(isw_field_type.eq.2) then                                 !<=AAA
-          call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl) !<=AAA
+! Write out trapped-passing boundary at the classification cut:
+  if(class_plot) then
+    if(ipart.eq.1) then
+      z(1)=zstart(1,ipart)
+      z(3)=cut_in_per*fper
+      do kt=0,1000
+        z(2)=1d-3*twopi*dble(kt)
+        if(isw_field_type.eq.0) then
+          call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+        elseif(isw_field_type.eq.1) then
+          call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+        elseif(isw_field_type.eq.2) then
+          call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
         else
           print *,'unknown field type'
-        endif                                                            !<=AAA
-        write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)                      !<=AAA
-      enddo                                                              !<=AAA
-    endif                                                                !<=AAA
-  endif                                                                  !<=AAA
+        endif
+        write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)
+      enddo
+    endif
+  endif
+! End write out trapped-passing boundary at the classification cut
 !
   z = zstart(:, ipart)
   r=z(1)
@@ -358,10 +387,12 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 
-  if(class_plot) then                                                    !<=AAA
-    z(3)=cut_in_per*fper                                                 !<=AAA
-    zstart(2,ipart)=modulo(zstart(2,ipart),twopi)                        !<=AAA
-  endif                                                                  !<=AAA
+! In case of classification plot all starting points are moved to the classification cut:
+  if(class_plot) then
+    z(3)=cut_in_per*fper
+    zstart(2,ipart)=modulo(zstart(2,ipart),twopi)
+  endif
+! End moving starting points to the classification cut
 
   if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
 
@@ -378,6 +409,7 @@ subroutine trace_orbit(anorb, ipart)
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
 
+! Forced classification of passing as regular:
   if(passing.and.(notrace_passing.eq.1 .or. trap_par(ipart).le.contr_pp)) then
     ! passing particle
     ! no tracing of passing particles, assume that all are confined
@@ -385,13 +417,14 @@ subroutine trace_orbit(anorb, ipart)
     !$omp critical
     confpart_pass=confpart_pass+1.d0
     !$omp end critical
-    if(class_plot) then                                                   !<=AAA
+    if(class_plot) then
 !$omp critical
-      write (iaaa_pnt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
+      write (iaaa_pnt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
 !$omp end critical
-    endif                                                                 !<=AAA
+    endif
     return
   endif
+! End forced classification of passing as regular
 
 !$omp critical
   allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(6,nplagr),xp(nplagr))
@@ -437,7 +470,11 @@ subroutine trace_orbit(anorb, ipart)
 
   ! End initialize period crossing detector
   !--------------------------------
-
+!
+! Initialize classification by J_parallel and ideal orbit condition:
+  nfp_cot=0
+! End Initialize classification by J_parallel and ideal orbit condition
+!
   par_inv = 0d0
   regular = .False.
   do it=2,ntimstep
@@ -462,17 +499,19 @@ subroutine trace_orbit(anorb, ipart)
         z(5) = anorb%f%vpar/dsqrt(2d0)
       endif
 
-      if(class_plot) then                                                       !<=AAA
-        if(ierr.ne.0) then                                                      !<=AAA
+! Write starting data for orbits which were lost in case of classification plot
+      if(class_plot) then
+        if(ierr.ne.0) then
 !$omp critical
-          if(passing) then                                                      !<=AAA
-            write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
-          else                                                                  !<=AAA
-            write (iaaa_prt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
-          endif                                                                 !<=AAA
+          if(passing) then
+            write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+          else
+            write (iaaa_prt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+          endif
 !$omp end critical
-        endif                                                                   !<=AAA
-      endif                                                                     !<=AAA
+        endif
+      endif
+! End write starting data for orbits which were lost in case of classification plot
 
       if(ierr.ne.0) exit
       kt = kt+1
@@ -523,6 +562,17 @@ subroutine trace_orbit(anorb, ipart)
           endif
           zpoipl_tip(:,ifp_tip)=var_tip(1:2)
           par_inv = par_inv - var_tip(6)
+!
+! Classification by J_parallel and ideal orbit conditions:
+          fpr_in(1)=var_tip(1)
+          fpr_in(2)=var_tip(iangvar)
+          fpr_in(3)=var_tip(6)
+!
+print *,'before',ipart
+          call check_orbit_type(nturns,nfp_cot,fpr_in,ideal,ijpar,ierr_cot)
+print *,'after',ipart,nfp_cot,ideal,ijpar,ierr_cot
+!
+! End classification by J_parallel and ideal orbit conditions
         endif
       endif
       ! End tip detection and interpolation
@@ -572,6 +622,7 @@ subroutine trace_orbit(anorb, ipart)
       ! End periodic boundary footprint detection and interpolation
 
       ! Cut classification into regular or chaotic
+!if(kt.gt.2000000) print *,kt,ntcut,ipart,'particle'
       if (kt == ntcut) then
         regular = .True.
 
@@ -599,25 +650,52 @@ subroutine trace_orbit(anorb, ipart)
           endif
         endif
 
-        if(class_plot) then                                                       !<=AAA
+! Write data for classification plot:
+        if(class_plot) then
 !$omp critical
-          if(regular) then                                                        !<=AAA
-            if(passing) then                                                      !<=AAA
-              write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
-            else                                                                  !<=AAA
-              write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
-            endif                                                                 !<=AAA
-          else                                                                    !<=AAA
-            if(passing) then                                                      !<=AAA
-              write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
-            else                                                                  !<=AAA
-              write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)  !<=AAA
-            endif                                                                 !<=AAA
-          endif                                                                   !<=AAA
+! Output of classification by Minkowsky dimension:
+          if(regular) then
+            if(passing) then
+              write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            else
+              write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            endif
+          else
+            if(passing) then
+              write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            else
+              write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            endif
+          endif
+!End output of classification by Minkowsky dimension
+!
+! Output of classification by J_parallel and ideal orbit condition: 
+          if(.not.passing) then
+            select case(ijpar)
+            case(0)
+              write (iaaa_jer,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            case(1)
+              write (iaaa_jre,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            case(2)
+              write (iaaa_jst,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            end select
+!
+            select case(ideal)
+            case(0)
+              write (iaaa_ier,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            case(1)
+              write (iaaa_ire,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            case(2)
+              write (iaaa_ist,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            end select
+          endif
+! End output of classification by J_parallel and ideal orbit condition
+!
 !$omp end critical
-          ierr=1                                                                  !<=AAA
-          exit                                                                    !<=AAA
-        endif                                                                     !<=AAA
+          ierr=1
+          exit
+        endif
+! End write data for classification plot
 
       endif
     enddo
