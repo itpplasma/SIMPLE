@@ -704,3 +704,57 @@
   deallocate(splcoe)
 !
   end subroutine s_to_rho_healaxis
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine volume_and_B00(volume,B00)
+!
+  use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,nper
+  use vector_potentail_mod, only : ns,hs,torflux,sA_phi
+!
+  implicit none
+!
+  integer :: is,i_theta,i_phi,k
+  double precision :: volume,B00
+  double precision :: B3,B2,bmod2
+  double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp, &
+                      sqg,Bctrvr_vartheta,Bctrvr_varphi,                              &
+                      Bcovar_r,Bcovar_vartheta,Bcovar_varphi
+!
+  s=0.9999999999d0
+  volume=0.d0
+!
+  do i_theta=0,n_theta-2
+    theta=h_theta*dble(i_theta)
+    do i_phi=0,n_phi-2
+      varphi=h_phi*dble(i_phi)
+!
+      call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                            R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+!
+      volume=volume+R**2*dZ_dt
+    enddo
+  enddo
+!
+  volume=0.5d0*abs(volume)*h_theta*h_phi*dble(nper)
+!
+  s=1d-8
+  theta=0.d0
+  B2=0.d0
+  B3=0.d0
+  do i_phi=0,n_phi-2
+    varphi=h_phi*dble(i_phi)
+!
+    call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+                    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+                    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+!
+    bmod2=Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi
+    B2=B2+bmod2/Bctrvr_varphi
+    B3=B3+bmod2*sqrt(bmod2)/Bctrvr_varphi
+  enddo
+!
+  B00=B3/B2
+!
+  end subroutine volume_and_B00

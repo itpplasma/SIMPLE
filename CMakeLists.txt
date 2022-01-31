@@ -6,6 +6,7 @@ project (SIMPLE Fortran)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
+#    set(CMAKE_BUILD_TYPE Debug)
 endif()
 
 find_program(NF_CONFIG "nf-config")
@@ -45,7 +46,7 @@ else()
 	link_libraries("-fopenmp")
 	add_compile_options(-g)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace 
+		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -g -shared-libgcc)
@@ -91,6 +92,7 @@ add_executable (simple.x
 	SRC/zzg.f90
 	SRC/sorting.f90
 	SRC/check_orbit_type.f90
+	SRC/find_bminmax.f90
 	SRC/main.f90
 )
 

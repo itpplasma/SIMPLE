@@ -26,3 +26,8 @@
 .False.  debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
 .False.  class_plot        !write starting points at phi=const cut for classification plot (.True./.False.)
 0        cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True.
+.False.  fast_class
+.True.   local
+.False.  collisions
+1.0d0    vmec_B_scale
+1.0d0    vmec_RZ_scale

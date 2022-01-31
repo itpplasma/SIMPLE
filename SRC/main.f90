@@ -38,7 +38,8 @@ program neo_orb_main
   double precision :: relerr
 
   type(NeoOrb) :: norb
-  double precision, allocatable :: trap_par(:)
+  double precision, allocatable :: trap_par(:), perp_inv(:)
+  integer,          allocatable :: iclass(:,:)
 
   integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
   integer :: nplagr,nder,npl_half
@@ -49,6 +50,7 @@ program neo_orb_main
   integer :: ntcut
   logical          :: class_plot     !<=AAA
   double precision :: cut_in_per     !<=AAA
+  logical          :: local=.false.
 
 ! read config file
   call read_config
@@ -70,11 +72,16 @@ program neo_orb_main
   confpart_pass=0.d0
 
 ! initialize lost times when particles get lost
-  allocate(times_lost(ntestpart), trap_par(ntestpart))
+  allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
+  allocate(iclass(3,ntestpart))
   times_lost = -1.d0
 
   allocate(zstart(5,ntestpart))
-  call init_starting_points
+  if(local) then
+    call init_starting_points
+  else
+    call init_starting_points_global
+  endif
   if (startmode == 0) stop
 
   icounter=0 ! evaluation counter
@@ -108,9 +115,15 @@ program neo_orb_main
   enddo
   close(1)
 
+  open(1,file='class_parts.dat',recl=1024)
+  do i=1,ntestpart
+    write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
+  enddo
+  close(1)
+
   if (integmode >= 0) call deallocate_can_coord
 
-  deallocate(times_lost, confpart_trap, confpart_pass, trap_par)
+  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, perp_inv, iclass)
   deallocate(xstart, bstart, volstart, zstart)
 
 contains
@@ -145,6 +158,7 @@ subroutine read_config
   read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
   read (1,*) class_plot        !write starting points at phi=const cut for classification plot (.True./.False.).  !<=AAA
   read (1,*) cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True. !<=AAA
+! TODO: add new config options and check that collisions are never combined with classification
   close(1)
 end subroutine read_config
 
@@ -292,6 +306,78 @@ subroutine init_starting_points
   close(1)
 end subroutine init_starting_points
 
+subroutine init_starting_points_global
+  integer, parameter :: ns=1000
+  integer :: ipart,is
+  real :: zzg
+  double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+  double precision :: s,bmin,bmax
+!
+  open(1,file='bminmax.dat',recl=1024)
+  do is=0,ns
+    s=dble(is)/dble(ns)
+!
+    call get_bminmax(s,bmin,bmax)
+!
+    write(1,*) s,bmin,bmax
+  enddo
+  close(1)
+
+  ! skip random numbers according to configuration
+    do iskip=1,loopskip
+      do ipart=1,ntestpart
+        xi=zzg()
+        xi=zzg()
+        xi=zzg()
+        xi=zzg()
+      enddo
+    enddo
+
+  ! files for storing starting coords
+  open(1,file='start.dat',recl=1024)
+  ! determine the starting point:
+  if (startmode == 0 .or. startmode == 1) then
+    do ipart=1,ntestpart
+      xi=zzg()
+      r=xi
+      xi=zzg()
+      vartheta=twopi*xi
+      xi=zzg()
+      varphi=twopi*xi
+!
+! we store starting points in VMEC coordinates:
+      if(isw_field_type.eq.0) then
+        call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+      elseif(isw_field_type.eq.1) then
+        theta_vmec=vartheta
+        varphi_vmec=varphi
+      elseif(isw_field_type.eq.2) then
+        call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+      else
+        print *,'init_starting_points: unknown field type'
+      endif
+!
+      zstart(1,ipart)=r
+      zstart(2,ipart)=theta_vmec
+      zstart(3,ipart)=varphi_vmec
+      ! normalized velocity module z(4) = v / v_0:
+      zstart(4,ipart)=1.d0
+      ! starting pitch z(5)=v_\parallel / v:
+      xi=zzg()
+      zstart(5,ipart)=2.d0*(xi-0.5d0)
+      write(1,*) zstart(:,ipart)
+    enddo
+  else if (startmode == 2) then
+    do ipart=1,ntestpart
+      read(1,*) zstart(:,ipart)
+    enddo
+  else if (startmode == 3) then  ! ANTS input mode
+    call init_starting_points_ants(1)
+  endif
+
+  close(1)
+end subroutine init_starting_points_global
+
 subroutine trace_orbit(anorb, ipart)
   type(NeoOrb), intent(inout) :: anorb
   integer, intent(in) :: ipart
@@ -329,7 +415,7 @@ subroutine trace_orbit(anorb, ipart)
                         iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
 ! Variables and settings for classification by J_parallel and ideal orbit condition:
-  logical :: fast_class=.false. !.true.  !if .true. quit immeadiately after fast classification
+  logical :: fast_class=.true.  !if .true. quit immeadiately after fast classification
   integer, parameter :: nfp_dim=3, nturns=8
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in
@@ -342,7 +428,7 @@ subroutine trace_orbit(anorb, ipart)
 ! iaaa_ier - non-classified trapped by recurrences and monotonicity
   integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
                         iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
-                        
+
 !
   iangvar=2
 ! End variables and settings for classification by J_parallel and ideal orbit condition
@@ -406,9 +492,17 @@ subroutine trace_orbit(anorb, ipart)
   else
       print *,'unknown field type'
   endif
-
+!
+  if(.not.local) then
+!
+    call get_bminmax(z(1),bmin,bmax)
+!
+  endif
+!
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
+  perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
+  iclass(:,ipart) = 0
 
 ! Forced classification of passing as regular:
   if(passing.and.(notrace_passing.eq.1 .or. trap_par(ipart).le.contr_pp)) then
@@ -423,6 +517,8 @@ subroutine trace_orbit(anorb, ipart)
       write (iaaa_pnt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
 !$omp end critical
     endif
+    iclass(1,ipart) = 1
+    iclass(2,ipart) = 1
     return
   endif
 ! End forced classification of passing as regular
@@ -499,6 +595,7 @@ subroutine trace_orbit(anorb, ipart)
         z(4) = 1d0
         z(5) = anorb%f%vpar/dsqrt(2d0)
       endif
+! TODO: add collisional step
 
 ! Write starting data for orbits which were lost in case of classification plot
       if(class_plot) then
@@ -571,6 +668,8 @@ subroutine trace_orbit(anorb, ipart)
 !
           call check_orbit_type(nturns,nfp_cot,fpr_in,ideal,ijpar,ierr_cot)
 !
+          iclass(1,ipart) = ijpar
+          iclass(2,ipart) = ideal
           if(fast_class) ierr=ierr_cot
 !
 ! End classification by J_parallel and ideal orbit conditions
@@ -645,8 +744,10 @@ subroutine trace_orbit(anorb, ipart)
           if(fraction.gt.0.2d0) then
             print *, ipart, ' chaotic tip ', ifp_tip
             regular = .False.
+            iclass(3,ipart) = 2
           else
             print *, ipart, ' regular tip ', ifp_tip
+            iclass(3,ipart) = 1
           endif
         endif
 
@@ -674,7 +775,7 @@ subroutine trace_orbit(anorb, ipart)
 !
       if(ierr.ne.0) then
         if(class_plot) then
-! Output of classification by J_parallel and ideal orbit condition: 
+! Output of classification by J_parallel and ideal orbit condition:
           if(.not.passing) then
 !$omp critical
             select case(ijpar)

@@ -16,6 +16,7 @@
     integer          :: ns_s=5  !<- spline order for R,Z,lambda over s
     integer          :: ns_tp=5 !<- spline order for R,Z,lambda over theta and varphi
     double precision :: rmajor,h_theta,h_phi
+    double precision :: vmec_B_scale=1.d0, vmec_RZ_scale=1.d0
     double precision, dimension(:),     allocatable :: axm,axn,soa
     double precision, dimension(:),     allocatable :: aiota,s,sps,phi
     double precision, dimension(:,:),   allocatable :: almnc,rmnc,zmnc

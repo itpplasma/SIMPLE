@@ -1,6 +1,7 @@
 module neo_orb
   use common, only: c, e_charge, p_mass, ev, twopi
-  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
+  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
+                                 vmec_B_scale, vmec_RZ_scale
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
@@ -45,7 +46,7 @@ contains
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     integer             :: ierr
     integer             :: L1i
-    double precision    :: RT0, R0i, cbfi, bz0i, bf0
+    double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
     double precision    :: z(5)
 
     netcdffile = vmec_file
@@ -54,10 +55,14 @@ contains
     multharm = amultharm
     self%integmode = aintegmode
 
+vmec_B_scale=4.43499830360708d0
+vmec_RZ_scale=1.67796641871913d0
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
     self%fper = twopi/dble(L1i)   !<= field period
     print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
+    call volume_and_B00(volume,B00)
+    print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
 
     if (self%integmode>=0) then
       if (isw_field_type == 0) then
