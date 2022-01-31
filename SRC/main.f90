@@ -329,6 +329,7 @@ subroutine trace_orbit(anorb, ipart)
                         iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
 ! Variables and settings for classification by J_parallel and ideal orbit condition:
+  logical :: fast_class=.false. !.true.  !if .true. quit immeadiately after fast classification
   integer, parameter :: nfp_dim=3, nturns=8
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in
@@ -338,7 +339,7 @@ subroutine trace_orbit(anorb, ipart)
 ! iaaa_jer - non-classified trapped by J_parallel
 ! iaaa_ire - ideal trapped by recurrences and monotonicity
 ! iaaa_ist - non-ideal trapped by recurrences and monotonicity
-! iaaa_ier - non-iclassified trapped by recurrences and monotonicity
+! iaaa_ier - non-classified trapped by recurrences and monotonicity
   integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
                         iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
                         
@@ -568,9 +569,9 @@ subroutine trace_orbit(anorb, ipart)
           fpr_in(2)=var_tip(iangvar)
           fpr_in(3)=var_tip(6)
 !
-print *,'before',ipart
           call check_orbit_type(nturns,nfp_cot,fpr_in,ideal,ijpar,ierr_cot)
-print *,'after',ipart,nfp_cot,ideal,ijpar,ierr_cot
+!
+          if(fast_class) ierr=ierr_cot
 !
 ! End classification by J_parallel and ideal orbit conditions
         endif
@@ -622,7 +623,6 @@ print *,'after',ipart,nfp_cot,ideal,ijpar,ierr_cot
       ! End periodic boundary footprint detection and interpolation
 
       ! Cut classification into regular or chaotic
-!if(kt.gt.2000000) print *,kt,ntcut,ipart,'particle'
       if (kt == ntcut) then
         regular = .True.
 
@@ -650,7 +650,6 @@ print *,'after',ipart,nfp_cot,ideal,ijpar,ierr_cot
           endif
         endif
 
-! Write data for classification plot:
         if(class_plot) then
 !$omp critical
 ! Output of classification by Minkowsky dimension:
@@ -668,9 +667,16 @@ print *,'after',ipart,nfp_cot,ideal,ijpar,ierr_cot
             endif
           endif
 !End output of classification by Minkowsky dimension
+!$omp end critical
+          ierr=1
+        endif
+      endif
 !
+      if(ierr.ne.0) then
+        if(class_plot) then
 ! Output of classification by J_parallel and ideal orbit condition: 
           if(.not.passing) then
+!$omp critical
             select case(ijpar)
             case(0)
               write (iaaa_jer,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
@@ -688,15 +694,11 @@ print *,'after',ipart,nfp_cot,ideal,ijpar,ierr_cot
             case(2)
               write (iaaa_ist,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
             end select
-          endif
-! End output of classification by J_parallel and ideal orbit condition
-!
 !$omp end critical
-          ierr=1
-          exit
+          endif
         endif
-! End write data for classification plot
-
+! End output of classification by J_parallel and ideal orbit condition
+        exit
       endif
     enddo
     if(ierr.ne.0) exit

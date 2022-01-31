@@ -1,8 +1,8 @@
 !
   module detect_oneline_mod
-  !$omp threadprivate(iper, igroup, iret, fprs) 
+  !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs)
     logical :: prop=.true.
-    integer, parameter :: nfp_dim=3,ipermin=10
+    integer, parameter :: nfp_dim=3, ipermin=10
     integer :: nfp_max,iper,igroup
     double precision :: pi,twopi
     integer,          dimension(:),   allocatable :: iret
@@ -55,7 +55,6 @@
     ideal=0
     ijpar=0
   endif
-print *,igroup
 !
   if(igroup.ge.nturns) then
     ierr=2

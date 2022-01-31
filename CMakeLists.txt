@@ -43,7 +43,7 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 else()
 	add_compile_options(-std=f2008 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
 	link_libraries("-fopenmp")
-	add_compile_options(-g -fbacktrace)
+	add_compile_options(-g)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace 
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
