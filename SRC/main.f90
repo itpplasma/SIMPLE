@@ -1,7 +1,8 @@
 program neo_orb_main
   use omp_lib
   use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
-  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
+  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
+    vmec_B_scale, vmec_RZ_scale
 
   use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
@@ -9,6 +10,7 @@ program neo_orb_main
   use neo_orb, only : init_field, init_sympl, NeoOrb, debug
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
+  use collis_alp, only : swcoll
 
   implicit none
 
@@ -51,6 +53,8 @@ program neo_orb_main
   logical          :: class_plot     !<=AAA
   double precision :: cut_in_per     !<=AAA
   logical          :: local=.false.
+
+  logical :: fast_class=.true.  !if .true. quit immeadiately after fast classification
 
 ! read config file
   call read_config
@@ -158,8 +162,24 @@ subroutine read_config
   read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
   read (1,*) class_plot        !write starting points at phi=const cut for classification plot (.True./.False.).  !<=AAA
   read (1,*) cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True. !<=AAA
-! TODO: add new config options and check that collisions are never combined with classification
+  read (1,*) fast_class        !if .True. quit immeadiately after fast classification and don't trace orbits to the end
+  read (1,*) local             !if .True. orbits are started on a single flux surface, if .False. (not yet equally distributed) in volume
+  read (1,*) vmec_B_scale      !factor to scale the B field from VMEC
+  read (1,*) vmec_RZ_scale     !factor to scale the device size from VMEC
+  read (1,*) swcoll            !if .True. enables collisions. This is incompatible with classification.
+! TODO: add new config options for collisions
+!  read (1,*) am1           !mass number of the 1-st field ion species
+!  read (1,*) am2           !mass number of the 2-nd field ion species
+!  read (1,*) Z1            !charge number of the 1-st field ion species
+!  read (1,*) Z2            !charge number of the 2-nd field ion species
+!  read (1,*) densi1        !density of the 1-st field ion species, 1/cm^3
+!  read (1,*) densi2        !density of the 2-nd field ion species, 1/cm^3
+!  read (1,*) tempi1        !temperature of the 1-st field ion species, eV
+!  read (1,*) tempi2        !temperature of the 2-nd field ion species, eV
+!  read (1,*) tempe         !temperature of electrons, eV
   close(1)
+
+
 end subroutine read_config
 
 subroutine init_params
@@ -415,7 +435,6 @@ subroutine trace_orbit(anorb, ipart)
                         iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
 ! Variables and settings for classification by J_parallel and ideal orbit condition:
-  logical :: fast_class=.true.  !if .true. quit immeadiately after fast classification
   integer, parameter :: nfp_dim=3, nturns=8
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in

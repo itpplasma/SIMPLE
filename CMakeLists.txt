@@ -86,10 +86,12 @@ add_library ( simple SHARED
 	SRC/simple.f90
 	SRC/bench.f90
 	SRC/parse_ants.f90
+	SRC/zzg.f90
+	SRC/rng.f
+	SRC/collis_alphas.f90
 )
 
 add_executable (simple.x
-	SRC/zzg.f90
 	SRC/sorting.f90
 	SRC/check_orbit_type.f90
 	SRC/find_bminmax.f90
@@ -97,7 +99,6 @@ add_executable (simple.x
 )
 
 add_executable (test_coord_trans.x
-	SRC/zzg.f90
 	SRC/test_coord_trans.f90
 )
 
@@ -122,13 +123,11 @@ add_executable (test_poiplot_classification.x
 )
 
 add_executable (alpha_lifetime_vmec_c.x
-	SRC/zzg.f90
 	SRC/binsrc.f90
 	SRC/alpha_lifetime_c.f90
 )
 
 add_executable (alpha_lifetime_old.x
-	SRC/zzg.f90
 	SRC/binsrc.f90
 	SRC/alpha_lifetime.f90
 )
