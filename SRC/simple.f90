@@ -55,8 +55,6 @@ contains
     multharm = amultharm
     self%integmode = aintegmode
 
-vmec_B_scale=4.43499830360708d0
-vmec_RZ_scale=1.67796641871913d0
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
     self%fper = twopi/dble(L1i)   !<= field period
