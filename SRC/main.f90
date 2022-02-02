@@ -536,8 +536,7 @@ subroutine trace_orbit(anorb, ipart)
       write (iaaa_pnt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
 !$omp end critical
     endif
-    iclass(1,ipart) = 1
-    iclass(2,ipart) = 1
+    iclass(:,ipart) = 1
     return
   endif
 ! End forced classification of passing as regular
