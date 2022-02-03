@@ -1,0 +1,4 @@
+This file contains a non-exhaustive list of important changes
+
+commit 6981791: start.dat is now always stored in VMEC coordinates.
+v1.1: Lambda is now evaluated on half mesh, improves B-field interpolation.
