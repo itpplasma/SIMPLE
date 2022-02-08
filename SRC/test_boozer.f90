@@ -49,7 +49,10 @@
 !
 ! Plot mod-B, B_r, theta_B-theta_V and phi_B-phi_V on a given flux surface:
 !
-  r=0.5d0
+
+  print *, "enter radius s"
+  read(*,*) r
+
   open(1234,file='angle.dat')
   open(12345,file='Bmod.dat')
   open(123456,file='B_r.dat')
@@ -207,7 +210,7 @@
                              A_theta,A_phi_m,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3, &
                              B_vartheta_B_m,dB_vartheta_B,d2B_vartheta_B,                   &
                              B_varphi_B_m,dB_varphi_B,d2B_varphi_B,                         &
-                             Bmod_B_m,dBmod_B,d2Bmod_B,                                     &      
+                             Bmod_B_m,dBmod_B,d2Bmod_B,                                     &
                              B_r_m,dB_r,d2B_r)
 !
     dBmod_B_num(2)=(Bmod_B_p-Bmod_B_m)/(2d0*eps)
@@ -234,8 +237,8 @@
     d2Bmod_B_num(6)=(Bmod_B_p+Bmod_B_m-2.d0*Bmod_B)/eps**2
     dB_r_num(3)=(B_r_p-B_r_m)/(2d0*eps)
     d2B_r_num(6)=(B_r_p+B_r_m-2.d0*B_r)/eps**2
-! 
-! 
+!
+!
     call splint_boozer_coord(r+eps,vartheta_B+eps,varphi_B,                                       &
                              A_theta,A_phi_p,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3, &
                              B_vartheta_B_p,dB_vartheta_B,d2B_vartheta_B,                   &
@@ -249,7 +252,7 @@
                              B_varphi_B_m,dB_varphi_B,d2B_varphi_B,                         &
                              Bmod_B_mm,dBmod_B,d2Bmod_B,                                     &
                              B_r_mm,dB_r,d2B_r)
-!   
+!
     call splint_boozer_coord(r+eps,vartheta_B-eps,varphi_B,                                       &
                              A_theta,A_phi_p,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3, &
                              B_vartheta_B_p,dB_vartheta_B,d2B_vartheta_B,                   &
@@ -263,10 +266,10 @@
                              B_varphi_B_m,dB_varphi_B,d2B_varphi_B,                         &
                              Bmod_B_mp,dBmod_B,d2Bmod_B,                                     &
                              B_r_mp,dB_r,d2B_r)
-! 
+!
     d2Bmod_B_num(2)=(Bmod_B_pp+Bmod_B_mm-Bmod_B_pm-Bmod_B_mp)/(2.d0*eps)**2
     d2B_r_num(2)=(B_r_pp+B_r_mm-B_r_pm-B_r_mp)/(2d0*eps)**2
-! 
+!
 !
     call splint_boozer_coord(r+eps,vartheta_B,varphi_B+eps,                                       &
                              A_theta,A_phi_p,dA_theta_dr,dA_phi_dr,d2A_phi_dr2,d3A_phi_dr3, &
@@ -331,7 +334,7 @@
     d2Bmod_B_num(5)=(Bmod_B_pp+Bmod_B_mm-Bmod_B_pm-Bmod_B_mp)/(2.d0*eps)**2
     d2B_r_num(5)=(B_r_pp+B_r_mm-B_r_pm-B_r_mp)/(2d0*eps)**2
 !
-! 
+!
     write(12345,*) xi,dA_phi_dr_num,d2A_phi_dr2_num,     &
                    dB_vartheta_B_num,d2B_vartheta_B_num, &
                    dB_varphi_B_num,d2B_varphi_B_num,     &
