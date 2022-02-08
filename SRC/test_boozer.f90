@@ -53,6 +53,8 @@
   print *, "enter radius s"
   read(*,*) r
 
+  print *, "r = ", r
+
   open(1234,file='angle.dat')
   open(12345,file='Bmod.dat')
   open(123456,file='B_r.dat')
