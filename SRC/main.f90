@@ -115,7 +115,7 @@ program neo_orb_main
 
   open(1,file='times_lost.dat',recl=1024)
   do i=1,ntestpart
-    write(1,*) i, times_lost(i), trap_par(i)
+    write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i)
   enddo
   close(1)
 
