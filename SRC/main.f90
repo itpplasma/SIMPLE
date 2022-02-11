@@ -179,6 +179,9 @@ subroutine read_config
 !  read (1,*) tempe         !temperature of electrons, eV
   close(1)
 
+  if swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class) then
+    stop 'Collisions are incompatible with classification'
+  endif
 
 end subroutine read_config
 
