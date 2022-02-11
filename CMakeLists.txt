@@ -48,10 +48,10 @@ else()
 	link_libraries("-fopenmp")
 	add_compile_options(-g)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options(-O0 -g -ggdb -C -p -fbacktrace
+		add_compile_options(-O0 -g -ggdb -C -fbacktrace
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-		add_compile_options(-O2 -g -shared-libgcc)
+		add_compile_options(-O2 -p -g -shared-libgcc)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
 		add_compile_options(-O3 -g -fbacktrace)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
