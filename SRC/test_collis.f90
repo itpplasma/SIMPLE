@@ -17,7 +17,7 @@ program test_collis
   densi2 = 1.0d20
   tempi1 = 1.0d4
   tempi2 = 1.0d4
-  tempi2 = 1.0d4
+  tempe = 1.0d4
   ealpha = 3.5d6
 
   dtau = 1.0d0 ! TODO
