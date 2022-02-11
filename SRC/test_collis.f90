@@ -31,12 +31,12 @@ program test_collis
   z(4) = 1.0d0
   k = 10000
   open(1, file='energyslow.dat')
-  write (1, *) 0.d0, z(4)**2
+  write (1, *) 0.d0, z(4)**2, z(5)
   do i = 2, ntimstep
     do j = 1, k
-      call stost(z, dtau/dble(k), 3, ierr)
+      call stost(z, dtau/dble(k), 1, ierr)
     enddo
-    write (1,*) dble(i-1)*dtau/v0, z(4)**2
+    write (1,*) dble(i-1)*dtau/v0, z(4)**2, z(5)
   enddo
   close(1)
 end program test_collis
