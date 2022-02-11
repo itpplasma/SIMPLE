@@ -34,12 +34,14 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f2008)
 	link_libraries("-mkl -qopenmp")
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options(-O0 -g)
+		add_compile_options(-O0 -g -traceback)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -g -shared-intel -debug inline-debug-info
 			-D TBB_USE_THREADING_TOOLS -qopenmp-link dynamic -parallel-source-info=2)
+	elseif (CMAKE_BUILD_TYPE MATCHES Release)
+		add_compile_options(-O3 -g -traceback)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		add_compile_options(-O3 -march=skylake -mtune=skylake)
+		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
 else()
 	add_compile_options(-std=f2008 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
@@ -50,8 +52,10 @@ else()
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -g -shared-libgcc)
+	elseif (CMAKE_BUILD_TYPE MATCHES Release)
+		add_compile_options(-O3 -g -fbacktrace)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		add_compile_options(-O3 -march=ivybridge -mtune=ivybridge)
+		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
 endif()
 
@@ -90,61 +94,7 @@ add_library ( simple SHARED
 	SRC/rng.f
 	SRC/collis_alphas.f90
 )
-
-add_executable (simple.x
-	SRC/sorting.f90
-	SRC/check_orbit_type.f90
-	SRC/find_bminmax.f90
-	SRC/main.f90
-)
-
-add_executable (test_coord_trans.x
-	SRC/test_coord_trans.f90
-)
-
-add_executable (test_sympl_tok.x
-  	SRC/test_sympl.f90
-)
-
-add_executable (test_sympl.x
-  	SRC/test_sympl_stell.f90
-)
-
-add_executable (test_magfie.x
-  	SRC/test_magfie.f90
-)
-
-add_executable (test_poincare1.x
-	SRC/test_poincare1.f90
-)
-
-add_executable (test_poiplot_classification.x
-	SRC/test_poiplot_classification.f90
-)
-
-add_executable (alpha_lifetime_vmec_c.x
-	SRC/binsrc.f90
-	SRC/alpha_lifetime_c.f90
-)
-
-add_executable (alpha_lifetime_old.x
-	SRC/binsrc.f90
-	SRC/alpha_lifetime.f90
-)
-
-add_executable (test_parse_ants.x
-	SRC/test_parse_ants.f90
-)
-
-add_executable (test_boozer.x
-	SRC/test_boozer.f90
-)
-
-add_executable (test_orbits.x
-	SRC/test_orbits_vmec.f90
-)
-
-
+link_libraries(simple)
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
@@ -152,15 +102,28 @@ else()
 	target_link_libraries(simple rkf45 netcdf netcdff lapack blas)
 endif()
 
-target_link_libraries(simple.x simple)
-target_link_libraries(test_coord_trans.x simple)
-target_link_libraries(test_sympl_tok.x simple)
-target_link_libraries(test_sympl.x simple)
-target_link_libraries(test_magfie.x simple)
-target_link_libraries(test_poincare1.x simple)
-target_link_libraries(test_poiplot_classification.x simple)
-target_link_libraries(alpha_lifetime_vmec_c.x simple)
-target_link_libraries(alpha_lifetime_old.x simple)
-target_link_libraries(test_parse_ants.x simple)
-target_link_libraries(test_boozer.x simple)
-target_link_libraries(test_orbits.x simple)
+add_executable (simple.x
+	SRC/sorting.f90
+	SRC/check_orbit_type.f90
+	SRC/find_bminmax.f90
+	SRC/main.f90
+)
+add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
+add_executable (test_sympl_tok.x SRC/test_sympl.f90)
+add_executable (test_sympl.x SRC/test_sympl_stell.f90)
+add_executable (test_magfie.x SRC/test_magfie.f90)
+add_executable (test_poincare1.x SRC/test_poincare1.f90)
+add_executable (test_poiplot_classification.x
+	SRC/test_poiplot_classification.f90
+)
+add_executable (alpha_lifetime_vmec_c.x
+	SRC/binsrc.f90
+	SRC/alpha_lifetime_c.f90
+)
+add_executable (alpha_lifetime_old.x
+	SRC/binsrc.f90
+	SRC/alpha_lifetime.f90
+)
+add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
+add_executable (test_boozer.x SRC/test_boozer.f90)
+add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
