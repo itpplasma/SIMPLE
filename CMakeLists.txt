@@ -127,3 +127,4 @@ add_executable (alpha_lifetime_old.x
 add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
 add_executable (test_boozer.x SRC/test_boozer.f90)
 add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
+add_executable (test_collis.x SRC/test_collis.f90)
