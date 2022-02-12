@@ -1,14 +1,11 @@
 !
 module collis_alp
+  implicit none
+
   integer, parameter :: nsorts=3
-  integer :: iswmod=1  ! switch of the collision mode:
-  !                        1 - full operator (pitch-angle and energy scattering and drag)
-  !                        2 - energy scattering and drag only
-  !                        3 - drag only
-  !                        4 - pitch-angle scattering only
-  logical :: swcoll=.false.
   double precision, dimension(nsorts) :: efcolf,velrat,enrat
-end module collis_alp
+
+  contains
 !
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -29,10 +26,6 @@ end module collis_alp
 !                dhh    - dimensionless pitch angle diffusion coeff.
 !                fpeff  - effective dimensionless drag force (prop. to linear
 !                         deviation in Fokker-Planck eq.)
-!
-  use collis_alp
-!
-  implicit none
 !
   integer :: i
   double precision :: p,dpp,dhh,fpeff,plim,xbeta,dp,dh,dpd
@@ -140,10 +133,6 @@ end module collis_alp
 !                enrat  - ratio of initial alpha particle energy to the background species
 !                         energy
 !
-  use collis_alp
-!
-  implicit none
-!
   double precision :: am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,ealpha,dense
   double precision :: v0,dchichi,slowrate,dchichi_norm,slowrate_norm,vti1,vti2,vte
   double precision :: pi,pmass,emass,e,ev,alame,frecol_base,alami1,alami2
@@ -216,8 +205,6 @@ end module collis_alp
 !               10 or >10 - new momentum module is less then
 !                   prescribed minimum, reflection was performed.
 !
-  implicit none
-!
   integer :: iswmode,ierr
   double precision, parameter :: pmin=1.e-8
   double precision :: dtauc,p,dpp,dhh,fpeff,alam,dalam,coala
@@ -281,3 +268,4 @@ end module collis_alp
   return
   end
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+end module collis_alp

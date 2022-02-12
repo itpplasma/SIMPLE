@@ -10,7 +10,7 @@ program neo_orb_main
   use neo_orb, only : init_field, init_sympl, NeoOrb, debug
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
-  use collis_alp, only : swcoll
+  use collis_alp, only : loacol_alpha, stost
 
   implicit none
 
@@ -56,6 +56,12 @@ program neo_orb_main
 
   logical :: fast_class=.true.  !if .true. quit immeadiately after fast classification
 
+! colliding with D-T reactor plasma. TODO: Make configurable
+  logical :: swcoll
+  double precision :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
+    densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
+  double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
+
 ! read config file
   call read_config
 
@@ -64,6 +70,13 @@ program neo_orb_main
   call init_params
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
+
+
+! init collisions
+  if (swcoll) then
+    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,E_alpha, &
+                    v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
+  endif
 
 ! pre-compute starting flux surface
   npoi=nper*npoiper ! total number of starting points
@@ -261,7 +274,9 @@ subroutine init_starting_points_ants(unit)
     read(unit, '(A)') line
     call process_line(line, v_par, v_perp, u, v, s)
     ! In the test case, u runs from 0 to 1 and v from 0 to 4
-    call vmec_to_can(s, 2d0*pi*u, 2d0*pi*v/4d0, th_c, ph_c)
+    th = 2d0*pi*u
+    ph = 2d0*pi*v/4d0
+    call vmec_to_can(s, th, ph, th_c, ph_c)
     zstart(1, ipart) = s
     zstart(2, ipart) = ph_c
     zstart(3, ipart) = th_c
@@ -418,7 +433,6 @@ subroutine trace_orbit(anorb, ipart)
   double precision, dimension(:,:), allocatable :: coef,orb_sten
   double precision, dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
   double precision, dimension(n_tip_vars)       :: var_tip
-  integer :: stat
   double precision :: phiper, alam_prev, par_inv
   integer :: iper, itip, kper, nfp_tip, nfp_per
 
@@ -616,7 +630,13 @@ subroutine trace_orbit(anorb, ipart)
         z(4) = 1d0
         z(5) = anorb%f%vpar/dsqrt(2d0)
       endif
-! TODO: add collisional step
+! Collisions
+      if (swcoll) then
+        call stost(z, dtaumin, 1, ierr)
+        if (ierr /= 0) then
+          print *, 'Error in stost: ', ierr, 'z = ', z, 'dtaumin = ', dtaumin
+        endif
+      endif
 
 ! Write starting data for orbits which were lost in case of classification plot
       if(class_plot) then

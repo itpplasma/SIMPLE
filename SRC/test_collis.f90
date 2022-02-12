@@ -35,6 +35,9 @@ program test_collis
   do i = 2, ntimstep
     do j = 1, k
       call stost(z, dtau/dble(k), 1, ierr)
+      if (ierr /= 0) then
+        print *, 'Error in stost: ', ierr, 'z = ', z
+      endif
     enddo
     write (1,*) dble(i-1)*dtau/v0, z(4)**2, z(5)
   enddo
