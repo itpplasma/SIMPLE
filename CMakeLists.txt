@@ -9,13 +9,13 @@ if (NOT CMAKE_BUILD_TYPE)
 #    set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-find_program(NF_CONFIG "nf-config")
+find_program(NF_CONFIG "nc-config")
 
 if (NF_CONFIG)
-execute_process(COMMAND "nf-config" --prefix
+execute_process(COMMAND "nc-config" --prefix
 		OUTPUT_VARIABLE NFPREFIX)
 else()
-message(SEND_ERROR "nf-config not found. Please install libnetcdff-dev")
+message(SEND_ERROR "nc-config not found. Please install libnetcdff-dev")
 endif()
 
 string(STRIP ${NFPREFIX} NFPREFIX)
