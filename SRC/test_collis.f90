@@ -27,6 +27,8 @@ program test_collis
 
   dtau = trace_time*v0/dble(ntimstep-1)
 
+  print *, 'dtau = ', dtau
+
   z = 0.0d0
   z(4) = 1.0d0
   k = 10000

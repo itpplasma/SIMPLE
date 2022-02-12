@@ -1,13 +1,13 @@
 program neo_orb_main
   use omp_lib
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
+  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
     vmec_B_scale, vmec_RZ_scale
 
   use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
-  use orbit_symplectic, only : orbit_timestep_sympl
-  use neo_orb, only : init_field, init_sympl, NeoOrb, debug
+  use orbit_symplectic, only : orbit_timestep_sympl, get_val
+  use neo_orb, only : init_field, init_sympl, NeoOrb, debug, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -58,7 +58,7 @@ program neo_orb_main
 
 ! colliding with D-T reactor plasma. TODO: Make configurable
   logical :: swcoll
-  double precision :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
+  double precision, parameter :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
     densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
 
@@ -70,6 +70,7 @@ program neo_orb_main
   call init_params
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
+  print *, 'v0 = ', v0
 
 
 ! init collisions
@@ -77,6 +78,7 @@ program neo_orb_main
     call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,E_alpha, &
                     v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
   endif
+  print *, 'v0 = ', v0
 
 ! pre-compute starting flux surface
   npoi=nper*npoiper ! total number of starting points
@@ -625,18 +627,26 @@ subroutine trace_orbit(anorb, ipart)
       if (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
       else
+        anorb%f%vpar = z(4)*z(5)*sqrt2
+        if (swcoll) then  ! TODO: move this inside modules
+          call eval_field(anorb%f, z(1), z(2), z(3), 0)
+          anorb%si%z(4) = anorb%f%vpar*anorb%f%hph + anorb%f%Aph/anorb%f%ro0
+          call get_val(anorb%f, anorb%si%z(4)) ! for pth
+        endif
         call orbit_timestep_sympl(anorb%si, anorb%f, ierr)
         z(1:3) = anorb%si%z(1:3)
-        z(4) = 1d0
-        z(5) = anorb%f%vpar/dsqrt(2d0)
+        z(5) = anorb%f%vpar/sqrt2
+        z(4) = anorb%f%vpar/(z(5)*sqrt2)
       endif
 ! Collisions
+
       if (swcoll) then
         call stost(z, dtaumin, 1, ierr)
         if (ierr /= 0) then
           print *, 'Error in stost: ', ierr, 'z = ', z, 'dtaumin = ', dtaumin
         endif
       endif
+      write(999, *) z
 
 ! Write starting data for orbits which were lost in case of classification plot
       if(class_plot) then

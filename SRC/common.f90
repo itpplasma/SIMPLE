@@ -16,6 +16,7 @@ double precision, parameter  :: e_charge=4.8032d-10
 double precision, parameter  :: e_mass=9.1094d-28
 double precision, parameter  :: p_mass=1.6726d-24
 double precision, parameter  :: ev=1.6022d-12
+double precision, parameter  :: sqrt2=dsqrt(2.0d0)
 
 contains
 
@@ -45,4 +46,3 @@ integer function newunit(unit)
 end function newunit
 
 end module common
-
