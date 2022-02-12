@@ -143,7 +143,7 @@ contains
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
     if (mode_init == 1) then
       call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                            rtol_init, mode_init, 1)
+                            rtol_init, mode_init, 0)
     else
       call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
                             rtol_init, mode_init, 0)
