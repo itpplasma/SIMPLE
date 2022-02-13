@@ -421,7 +421,7 @@ end subroutine init_starting_points_global
 subroutine trace_orbit(anorb, ipart)
   type(NeoOrb), intent(inout) :: anorb
   integer, intent(in) :: ipart
-  integer :: ierr
+  integer :: ierr, ierr_coll
   double precision, dimension(5) :: z
   double precision :: bmod,sqrtg
   double precision, dimension(3) :: bder, hcovar, hctrvr, hcurl
@@ -627,40 +627,42 @@ subroutine trace_orbit(anorb, ipart)
       if (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
       else
-        anorb%f%vpar = z(4)*z(5)*sqrt2
         if (swcoll) then  ! TODO: move this inside modules
           call eval_field(anorb%f, z(1), z(2), z(3), 0)
+          anorb%si%pabs = z(4)
+          anorb%f%vpar = z(4)*z(5)*sqrt2
+          anorb%f%mu = z(4)**2*(1.d0-z(5)**2)/anorb%f%Bmod
           anorb%si%z(4) = anorb%f%vpar*anorb%f%hph + anorb%f%Aph/anorb%f%ro0
           call get_val(anorb%f, anorb%si%z(4)) ! for pth
+          anorb%si%pthold = anorb%f%pth
         endif
         call orbit_timestep_sympl(anorb%si, anorb%f, ierr)
         z(1:3) = anorb%si%z(1:3)
-        z(5) = anorb%f%vpar/sqrt2
-        z(4) = anorb%f%vpar/(z(5)*sqrt2)
+        z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod + (anorb%f%vpar/sqrt2)**2)
+        z(5) = anorb%f%vpar/(z(4)*sqrt2)
       endif
-! Collisions
 
+      ! Collisions
       if (swcoll) then
-        call stost(z, dtaumin, 1, ierr)
-        if (ierr /= 0) then
-          print *, 'Error in stost: ', ierr, 'z = ', z, 'dtaumin = ', dtaumin
+        call stost(z, dtaumin, 1, ierr_coll)
+        if (ierr_coll /= 0) then
+          print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
         endif
       endif
-      write(999, *) z
 
-! Write starting data for orbits which were lost in case of classification plot
+      ! Write starting data for orbits which were lost in case of classification plot
       if(class_plot) then
         if(ierr.ne.0) then
-!$omp critical
+          !$omp critical
           if(passing) then
             write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
           else
             write (iaaa_prt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
           endif
-!$omp end critical
+          !$omp end critical
         endif
       endif
-! End write starting data for orbits which were lost in case of classification plot
+      ! End write starting data for orbits which were lost in case of classification plot
 
       if(ierr.ne.0) exit
       kt = kt+1
