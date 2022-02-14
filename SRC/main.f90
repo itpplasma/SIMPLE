@@ -61,6 +61,7 @@ program neo_orb_main
   double precision, parameter :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
     densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
+  logical :: deterministic = .False.
 
 ! read config file
   call read_config
@@ -182,6 +183,7 @@ subroutine read_config
   read (1,*) vmec_B_scale      !factor to scale the B field from VMEC
   read (1,*) vmec_RZ_scale     !factor to scale the device size from VMEC
   read (1,*) swcoll            !if .True. enables collisions. This is incompatible with classification.
+  read (1,*) deterministic     !if .True. put seed for the same random walk always
 ! TODO: add new config options for collisions
 !  read (1,*) am1           !mass number of the 1-st field ion species
 !  read (1,*) am2           !mass number of the 2-nd field ion species
@@ -467,6 +469,16 @@ subroutine trace_orbit(anorb, ipart)
   integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
                         iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
 
+! for run with fixed random seed
+  integer :: seedsize
+  integer, allocatable :: seed(:)
+
+  if (deterministic) then
+    call random_seed(size = seedsize)
+    allocate(seed(seedsize))
+    seed = 0
+    call random_seed(put=seed)
+  endif
 !
   iangvar=2
 ! End variables and settings for classification by J_parallel and ideal orbit condition
@@ -853,7 +865,7 @@ subroutine trace_orbit(anorb, ipart)
 ! End output of classification by J_parallel and ideal orbit condition
         exit
       endif
-    write(999, *) kt*dtaumin/v0, z
+!    write(999, *) kt*dtaumin/v0, z
     enddo
     if(ierr.ne.0) exit
     if(passing) then
