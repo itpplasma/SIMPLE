@@ -627,18 +627,26 @@ subroutine trace_orbit(anorb, ipart)
       if (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
       else
-        if (swcoll) then  ! TODO: move this inside modules
-          call eval_field(anorb%f, z(1), z(2), z(3), 0)
+        !if (swcoll) then  ! TODO: move this inside modules
+          !call eval_field(anorb%f, z(1), z(2), z(3), 0)
+          !print *, 'pabs', anorb%si%pabs, z(4)
           anorb%si%pabs = z(4)
+          !print *, 'vpar', anorb%f%vpar, z(4)*z(5)*sqrt2
           anorb%f%vpar = z(4)*z(5)*sqrt2
+          !print *, 'mu', anorb%f%mu, z(4)**2*(1.d0-z(5)**2)/anorb%f%Bmod
           anorb%f%mu = z(4)**2*(1.d0-z(5)**2)/anorb%f%Bmod
+          ! (anorb%f%mu*anorb%f%Bmod + (anorb%f%vpar/sqrt2)**2)*(1.d0-(anorb%f%vpar/(z(4)*sqrt2))**2)/anorb%f%Bmod
+          ! = (anorb%f%mu*anorb%f%Bmod + (anorb%f%vpar/sqrt2)**2)*(1.d0-(anorb%f%vpar/(z(4)*sqrt2))**2)/anorb%f%Bmod
+          !print *, 'pphi', anorb%si%z(4), &
+          !  anorb%f%vpar*anorb%f%hph + anorb%f%Aph/anorb%f%ro0
           anorb%si%z(4) = anorb%f%vpar*anorb%f%hph + anorb%f%Aph/anorb%f%ro0
           call get_val(anorb%f, anorb%si%z(4)) ! for pth
+          !print *, 'pthold', anorb%si%pthold, anorb%f%pth
           anorb%si%pthold = anorb%f%pth
-        endif
+        !endif
         call orbit_timestep_sympl(anorb%si, anorb%f, ierr)
         z(1:3) = anorb%si%z(1:3)
-        z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod + (anorb%f%vpar/sqrt2)**2)
+        z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod+0.5d0*anorb%f%vpar**2)
         z(5) = anorb%f%vpar/(z(4)*sqrt2)
       endif
 
@@ -854,6 +862,7 @@ subroutine trace_orbit(anorb, ipart)
 ! End output of classification by J_parallel and ideal orbit condition
         exit
       endif
+    write(999, *) kt*dtaumin/v0, z
     enddo
     if(ierr.ne.0) exit
     if(passing) then

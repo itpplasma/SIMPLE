@@ -193,7 +193,7 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
     fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
     fvec(4) = f%dpth(1)*(x(4) - si%z(4)) + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
     fvec(5) = f%dpth(1)*(f%pth - si%pthold) + 0.5d0*si%dt*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
-  
+
   end subroutine f_midpoint_part1
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -216,7 +216,7 @@ subroutine f_midpoint_part2(si, f, n, x, fvec)
     call eval_field(f, x(1), x(2), x(3), 2)
     call get_derivatives2(f, x(4))
     fvec(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
-  
+
   end subroutine f_midpoint_part2
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -228,13 +228,13 @@ subroutine jac_midpoint_part1(si, f, x, jac)
     double precision, intent(in)  :: x(5)
     double precision, intent(out) :: jac(5, 5)
 
-    jac(2,1) = 0d0  
+    jac(2,1) = 0d0
     jac(2,5) = f%d2pth(1)*(x(2) - si%z(2)) - si%dt*f%d2H(1)
     jac(2,2:3) = 0.5d0*(f%d2pth(2:3)*(x(2) - si%z(2)) - si%dt*f%d2H(2:3))
     jac(2,2) = jac(2,2) + f%dpth(1)
     jac(2,4) = 0.5d0*(f%d2pth(7)*(x(2) - si%z(2)) - si%dt*f%d2H(7))
 
-    jac(3,1) = 0d0  
+    jac(3,1) = 0d0
     jac(3,5) = (f%d2pth(1)*f%hph + f%dpth(1)*f%dhph(1))*(x(3) - si%z(3)) &
       - si%dt*(f%d2pth(1)*f%vpar + f%dpth(1)*f%dvpar(1) &
       - f%d2H(1)*f%hth - f%dH(1)*f%dhth(1))
@@ -245,7 +245,7 @@ subroutine jac_midpoint_part1(si, f, x, jac)
     jac(3,4) = 0.5d0*(f%d2pth(7)*f%hph*(x(3) - si%z(3)) &
       - si%dt*(f%d2pth(7)*f%vpar + f%dpth(1)*f%dvpar(4) - f%d2H(7)*f%hth))
 
-    jac(4,1) = 0d0  
+    jac(4,1) = 0d0
     jac(4,5) = f%d2pth(1)*(x(4) - si%z(4)) &
       + si%dt*(f%d2H(3)*f%dpth(1) + f%dH(3)*f%d2pth(1) &
       - f%d2H(1)*f%dpth(3) - f%dH(1)*f%d2pth(3))
@@ -260,7 +260,7 @@ subroutine jac_midpoint_part1(si, f, x, jac)
       - f%d2H(7)*f%dpth(3) - f%dH(1)*f%d2pth(9)))
     jac(4,4) = jac(4,4) + f%dpth(1)
 
-    jac(5,1) = 0d0  
+    jac(5,1) = 0d0
     jac(5,5) = f%d2pth(1)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(1)&
       + si%dt/2.0d0*(f%d2pth(1)*f%dH(2) + f%dpth(1)*f%d2H(2) &
       - f%d2pth(2)*f%dH(1) - f%dpth(2)*f%d2H(1))
@@ -273,7 +273,7 @@ subroutine jac_midpoint_part1(si, f, x, jac)
     jac(5,4) = 0.5d0*(f%d2pth(7)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(4) &
       + si%dt/2.0d0*(f%d2pth(7)*f%dH(2) + f%dpth(1)*f%d2H(8) &
       - f%d2pth(8)*f%dH(1) - f%dpth(2)*f%d2H(7)))
-  
+
 end subroutine jac_midpoint_part1
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -285,7 +285,7 @@ subroutine jac_midpoint_part2(si, f, fmid, x, jac)
     type(FieldCan), intent(inout) :: fmid
     double precision, intent(in)  :: x(5)
     double precision, intent(out) :: jac(5, 5)
-  
+
     ! fmid%dpth(1)*(f%pth - si%pthold) + si%dt*(fmid%dpth(1)*fmid%dH(2)-fmid%dpth(2)*fmid%dH(1))
 
     jac(1,1) = fmid%dpth(1)*f%dpth(1)
@@ -301,7 +301,7 @@ subroutine jac_midpoint_part2(si, f, fmid, x, jac)
     jac(1,5) = fmid%d2pth(1)*(f%pth - si%pthold) &
         + si%dt*(fmid%d2pth(1)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(2) &
         - fmid%dpth(2)*fmid%d2H(1) - fmid%d2pth(2)*fmid%dH(1))
-  
+
 end subroutine jac_midpoint_part2
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -319,7 +319,7 @@ subroutine newton1(si, f, x, maxit, xlast)
   double precision :: fvec(n), fjac(n,n), ijac(n,n)
   double precision :: tolref(n)
   integer :: kit
-  
+
   tolref(1) = 1d0
   tolref(2) = dabs(x(2))
 
@@ -373,7 +373,7 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
 
   double precision :: fvec(n), fjac(n,n), jinv(n,n)
   integer :: pivot(n), info
-  
+
   double precision :: xabs(n), tolref(n), fabs(n)
   double precision :: det
 
@@ -391,11 +391,11 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     jinv(1,1) = fjac(2,2)*fjac(3,3) - fjac(2,3)*fjac(3,2)
     jinv(1,2) = fjac(1,3)*fjac(3,2) - fjac(1,2)*fjac(3,3)
     jinv(1,3) = fjac(1,2)*fjac(2,3) - fjac(1,3)*fjac(2,2)
-        
+
     jinv(2,1) = fjac(2,3)*fjac(3,1) - fjac(2,1)*fjac(3,3)
     jinv(2,2) = fjac(1,1)*fjac(3,3) - fjac(1,3)*fjac(3,1)
     jinv(2,3) = fjac(1,3)*fjac(2,1) - fjac(1,1)*fjac(2,3)
-        
+
     jinv(3,1) = fjac(2,1)*fjac(3,2) - fjac(3,1)*fjac(2,2)
     jinv(3,2) = fjac(1,2)*fjac(3,1) - fjac(3,2)*fjac(1,1)
     jinv(3,3) = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
@@ -407,7 +407,7 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     !x = x - fvec
 
     xabs = dabs(x-xlast)
-    
+
     tolref(1) = 1d0
     tolref(2) = twopi
     tolref(3) = twopi
@@ -435,7 +435,7 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
 
   double precision :: fvec(n), fjac(n,n)
   integer :: pivot(n), info
-  
+
   double precision :: xabs(n), tolref(n), fabs(n)
 
   do kit = 1, maxit
@@ -453,11 +453,11 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
     xabs = dabs(x - xlast)
-    
+
     tolref = dabs(xlast)
     tolref(2) = twopi
     tolref(3) = twopi
-    
+
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
@@ -487,7 +487,7 @@ subroutine coeff_rk_gauss(n, a, b, c)
   elseif (n == 3) then
     a(1,1) =  0.1388888888888889d0
     a(1,2) = -0.03597666752493894d0
-    a(1,3) =  0.009789444015308318d0 
+    a(1,3) =  0.009789444015308318d0
     a(2,1) =  0.3002631949808646d0
     a(2,2) =  0.2222222222222222d0
     a(2,3) = -0.022485417203086805d0
@@ -577,7 +577,7 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
       fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
     end do
   end do
-  
+
   end subroutine f_rk_gauss
 
 
@@ -601,13 +601,13 @@ subroutine jac_rk_gauss(si, fs, s, jac)
     m=4*k
     Hprime(k)      = fs(k)%dH(1)/fs(k)%dpth(1)
     dHprime(m-3) = (fs(k)%d2H(1) - Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
-    dHprime(m-2) = (fs(k)%d2H(2) - Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth 
+    dHprime(m-2) = (fs(k)%d2H(2) - Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
     dHprime(m-1) = (fs(k)%d2H(3) - Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
-    dHprime(m)   = (fs(k)%d2H(7) - Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph 
+    dHprime(m)   = (fs(k)%d2H(7) - Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph
   end do
 
   jac = 0d0
-      
+
   do k = 1, s
     m=4*k
     jac(m-3, m-3) = fs(k)%dpth(1)
@@ -630,7 +630,7 @@ subroutine jac_rk_gauss(si, fs, s, jac)
           + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-1))
         jac(m-3, 4*l) = jac(m-3, 4*l) & ! d/dpph
           + si%dt*a(k,l)*(fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l))
-      
+
       jac(m-2, 4*l-3)   = jac(m-2, 4*l-3)   - si%dt*a(k,l)*dHprime(4*l-3)   ! d/dr
       jac(m-2, 4*l-2) = jac(m-2, 4*l-2) - si%dt*a(k,l)*dHprime(4*l-2) ! d/dth
       jac(m-2, 4*l-1) = jac(m-2, 4*l-1) - si%dt*a(k,l)*dHprime(4*l-1) ! d/dph
@@ -655,10 +655,10 @@ subroutine jac_rk_gauss(si, fs, s, jac)
       jac(m, 4*l-1) = jac(m, 4*l-1) & ! d/dph
         + si%dt*a(k,l)*(fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-1))
       jac(m, 4*l) = jac(m, 4*l) & ! d/dpph
-        + si%dt*a(k,l)*(fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l)) 
+        + si%dt*a(k,l)*(fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l))
     end do
   end do
-  
+
 end subroutine jac_rk_gauss
 
 subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
@@ -675,7 +675,7 @@ subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 
   double precision :: fvec(4*s), fjac(4*s, 4*s)
   integer :: pivot(4*s), info
-  
+
   double precision :: xabs(4*s), tolref(4*s), fabs(4*s)
 
   do kit = 1, maxit
@@ -685,7 +685,7 @@ subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
       if (x(4*ks-3) > 1d0) return
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
     end do
-    
+
     call f_rk_gauss(si, fs, s, x, fvec)
     call jac_rk_gauss(si, fs, s, fjac)
     fabs = dabs(fvec)
@@ -694,14 +694,14 @@ subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
     xabs = dabs(x - xlast)
-      
+
     do ks = 1, s
       tolref(4*ks-3) = 1d0
       tolref(4*ks-2) = twopi
       tolref(4*ks-1) = twopi
       tolref(4*ks) = dabs(xlast(4*ks))
     end do
-    
+
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
@@ -724,7 +724,7 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   double precision, intent(out) :: xlast(4*s)
 
   double precision :: fvec(4*s)
-  
+
   double precision :: xabs(4*s), tolref(4*s), fabs(4*s)
 
   double precision :: a(s,s), b(s), c(s), Hprime(s), dHprimedr(s)
@@ -741,7 +741,7 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
       if (x(4*ks-3) > 1d0) return
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
     end do
-    
+
     call f_rk_gauss(si, fs, s, x, fvec)
     fabs = dabs(fvec)
     xlast = x
@@ -756,7 +756,7 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     k = 1
     l = 1
 
-    pthnew = si%pthold - si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2)) 
+    pthnew = si%pthold - si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))
     dpthnewdr = -si%dt*a(k,l)*( &
     fs(l)%d2H(2) - Hprime(l)*fs(l)%d2pth(2) - dHprimedr(l)*fs(l)%dpth(2))
     !print *, pthnew, dpthnewdr, pthnew/dpthnewdr
@@ -778,14 +778,14 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
       xabs(4*ks-2) = modulo(xabs(4*ks-2), pi)
       xabs(4*ks-1) = modulo(xabs(4*ks-1), pi)
     end do
-      
+
     do ks = 1, s
       tolref(4*ks-3) = 1d0
       tolref(4*ks-2) = twopi
       tolref(4*ks-1) = twopi
       tolref(4*ks) = dabs(x(4*ks))
     end do
-    
+
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
@@ -809,10 +809,10 @@ subroutine coeff_rk_lobatto(n, a, ahat, b, c)
 
     a(3,1) =  0.16666666666666667d0
     a(3,2) =  0.66666666666666667d0
-    a(3,3) =  0.16666666666666667d0 
+    a(3,3) =  0.16666666666666667d0
 
     ahat(1,1) =  0.16666666666666667d0
-    ahat(1,2) = -0.16666666666666667d0 
+    ahat(1,2) = -0.16666666666666667d0
     ahat(1,3) =  0d0
 
     ahat(2,1) =  0.16666666666666667d0
@@ -858,7 +858,7 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   integer :: k,l  ! counters
 
   call coeff_rk_lobatto(s, a, ahat, b, c)
-  
+
   call eval_field(fs(1), x(1), si%z(2), si%z(3), jactype)
   call get_derivatives(fs(1), x(2))
 
@@ -869,9 +869,9 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
 
   Hprime = fs%dH(1)/fs%dpth(1)
 
-  fvec(1) = fs(1)%pth - si%pthold 
+  fvec(1) = fs(1)%pth - si%pthold
   fvec(2) = x(2) - si%z(4)
-  
+
   do l = 1, s
       fvec(1) = fvec(1) + si%dt*ahat(1,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
       fvec(2) = fvec(2) + si%dt*ahat(1,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
@@ -883,7 +883,7 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
     fvec(4*k-1-2) = x(4*k-1-2)  - si%z(3)
     fvec(4*k-2)   = x(4*k-2)    - si%z(4)
   end do
-  
+
   do l = 1, s
     do k = 2, s
       fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
@@ -917,9 +917,9 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
   do k = 2, s
     m = 4*k-2
     dHprime(m-3)=(fs(k)%d2H(1)-Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
-    dHprime(m-2)=(fs(k)%d2H(2)-Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth 
+    dHprime(m-2)=(fs(k)%d2H(2)-Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
     dHprime(m-1)=(fs(k)%d2H(3)-Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
-    dHprime(m)  =(fs(k)%d2H(7)-Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph 
+    dHprime(m)  =(fs(k)%d2H(7)-Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph
   end do
 
   ! evaluate first stage with only r and pph as unknowns
@@ -927,13 +927,13 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
   jac(1, 2) = fs(1)%dpth(4)
   jac(2, 2) = 1d0
 
-  jac(1, 1) = jac(1, 1) + si%dt*ahat(1,1) * & 
+  jac(1, 1) = jac(1, 1) + si%dt*ahat(1,1) * &
     (fs(1)%d2H(2) - fs(1)%d2pth(2)*Hprime(1) - fs(1)%dpth(2)*dHprime(1))
   jac(1, 2) = jac(1, 2) + si%dt*ahat(1,1)* &
     (fs(1)%d2H(8) - fs(1)%d2pth(8)*Hprime(1) - fs(1)%dpth(2)*dHprime(2))
   jac(2, 1) = jac(2, 1) + si%dt*ahat(1,1) * &
     (fs(1)%d2H(3) - fs(1)%d2pth(3)*Hprime(1) - fs(1)%dpth(3)*dHprime(1))
-  jac(2, 2) = jac(2, 2) + si%dt*ahat(1,1) * & 
+  jac(2, 2) = jac(2, 2) + si%dt*ahat(1,1) * &
     (fs(1)%d2H(9) - fs(1)%d2pth(9)*Hprime(1) - fs(1)%dpth(3)*dHprime(2))
 
   do l = 2, s
@@ -949,7 +949,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
 
     jac(2, n-3) = jac(2, n-3) + si%dt*ahat(1,l) * &
       (fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-3))
-    jac(2, n-2) = jac(2, n-2) + si%dt*ahat(1,l) * & 
+    jac(2, n-2) = jac(2, n-2) + si%dt*ahat(1,l) * &
       (fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-2))
     jac(2, n-1) = jac(2, n-1) + si%dt*ahat(1,l) * &
       (fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-1))
@@ -958,7 +958,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
   end do
 
   ! evaluate remaining stages with r, th, ph, pph as unknowns
-    
+
   do k = 2, s
     m = 4*k-2
     jac(m-3, m-3) = fs(k)%dpth(1)
@@ -969,7 +969,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
     jac(m-1, m-1) = 1d0
     jac(m, m) = 1d0
   end do
-  
+
   l = 1
   do k = 2, s
     m = 4*k-2
@@ -977,7 +977,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
       (fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(1))
     jac(m-3, 2) = jac(m-3, 2) + si%dt*ahat(k,l)* &                   ! d/dpph
       (fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(2))
-  
+
     jac(m-2, 1) = jac(m-2, 1) - si%dt*a(k,l)*dHprime(1)  ! d/dr
     jac(m-2, 2) = jac(m-2, 2) - si%dt*a(k,l)*dHprime(2)  ! d/dpph
 
@@ -990,7 +990,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
     jac(m, 1) = jac(m, 1) + si%dt*ahat(k,l) * & ! d/dr
       (fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(1))
     jac(m, 2) = jac(m, 2) + si%dt*ahat(k,l) * & ! d/dpph
-      (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(2)) 
+      (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(2))
   end do
 
   do l = 2, s
@@ -1005,7 +1005,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
         (fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-1))
       jac(m-3, n) = jac(m-3, n) + si%dt*ahat(k,l)* &                   ! d/dpph
         (fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(n))
-    
+
       jac(m-2, n-3) = jac(m-2, n-3) - si%dt*a(k,l)*dHprime(n-3)
       jac(m-2, n-2) = jac(m-2, n-2) - si%dt*a(k,l)*dHprime(n-2)
       jac(m-2, n-1) = jac(m-2, n-1) - si%dt*a(k,l)*dHprime(n-1)
@@ -1030,7 +1030,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
       jac(m, n-1) = jac(m, n-1) + si%dt*ahat(k,l) * & ! d/dph
         (fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-1))
       jac(m, n) = jac(m, n) + si%dt*ahat(k,l) * & ! d/dpph
-        (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(n)) 
+        (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(n))
     end do
   end do
 end subroutine jac_rk_lobatto
@@ -1050,7 +1050,7 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
 
   double precision :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
   integer :: pivot(4*s-2), info
-  
+
   double precision :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2)
 
   do kit = 1, maxit
@@ -1062,7 +1062,7 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
       if (x(4*ks-2-3) > 1d0) return
       if (x(4*ks-2-3) < 0.0) x(4*ks-3) = 0.01d0
     end do
-    
+
     call f_rk_lobatto(si, fs, s, x, fvec, 2)
     call jac_rk_lobatto(si, fs, s, fjac)
     fabs = dabs(fvec)
@@ -1071,7 +1071,7 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
     xabs = dabs(x - xlast)
-      
+
     tolref(1) = 1d0
     tolref(2) = dabs(xlast(2))
     do ks = 2, s
@@ -1080,7 +1080,7 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
       tolref(4*ks-2-1) = twopi
       tolref(4*ks-2) = dabs(xlast(4*ks-2))
     end do
-    
+
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
@@ -1142,7 +1142,7 @@ subroutine orbit_timestep_sympl_multi(mi, f, ierr)
     mi%stages(kstage)%pthold = f%pth
     call orbit_timestep_sympl(mi%stages(kstage), f, ierr)
   end do
-  
+
   mi%stages(1)%z = mi%stages(2*mi%s)%z
   mi%stages(1)%pthold = f%pth
 
@@ -1206,20 +1206,20 @@ subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
   !
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
-  
+
     double precision, intent(in) :: z(:)
     double precision, intent(in) :: dtau
     integer, intent(in) :: ntau
     double precision, intent(in) :: rtol_init
-  
+
     double precision :: alpha(5), beta(5)
-  
+
     alpha(1) = 1d0/(2d0*(2d0 - 2d0**(1d0/3d0)))
     alpha(2) = 2d0**(1d0/3d0)/(2d0*(2d0 - 2d0**(1d0/3d0)))
     alpha(3) = alpha(1)
 
     beta = alpha
-  
+
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine orbit_sympl_init_order4
 
@@ -1233,26 +1233,26 @@ subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
   !
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
-  
+
     double precision, intent(in) :: z(:)
     double precision, intent(in) :: dtau
     integer, intent(in) :: ntau
     double precision, intent(in) :: rtol_init
-  
+
     double precision :: alpha(5), beta(5)
-  
+
     alpha(1) = (146d0 + 5d0*dsqrt(19d0))/540d0
     alpha(2) = (-2d0 + 10d0*dsqrt(19d0))/135d0
     alpha(3) = 1d0/5d0
     alpha(4) = (-23d0 + 20d0*dsqrt(19d0))/270d0
     alpha(5) = (14d0 - dsqrt(19d0))/108d0
-  
+
     beta(5)  = alpha(1)
     beta(4) = alpha(2)
     beta(3) = alpha(3)
     beta(2) = alpha(4)
     beta(1) = alpha(5)
-  
+
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine orbit_sympl_init_mclachlan4
 
@@ -1267,28 +1267,28 @@ subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
   !
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
-  
+
     double precision, intent(in) :: z(:)
     double precision, intent(in) :: dtau
     integer, intent(in) :: ntau
     double precision, intent(in) :: rtol_init
-  
+
     double precision :: alpha(6), beta(6)
-  
+
     alpha(1) = 0.16231455076687d0
     alpha(2) = 0.37087741497958d0
     alpha(3) = 0.059762097006575d0
     alpha(4) = 0.40993371990193d0
     alpha(5) = 0.23399525073150d0
     alpha(6) = 0.082984406417405d0
-  
+
     beta(6) = alpha(1)
     beta(5) = alpha(2)
     beta(4) = alpha(3)
     beta(3) = alpha(4)
     beta(2) = alpha(5)
     beta(1) = alpha(6)
-  
+
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine orbit_sympl_init_blanes4
 
@@ -1303,14 +1303,14 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   !
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
-  
+
     double precision, intent(in) :: z(:)
     double precision, intent(in) :: dtau
     integer, intent(in) :: ntau
     double precision, intent(in) :: rtol_init
-  
+
     double precision :: gam(9)
-  
+
     gam(1) = 0.39216144400731413927925056d0
     gam(2) = 0.33259913678935943859974864d0
     gam(3) = -0.70624617255763935980996482d0
@@ -1320,7 +1320,7 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
     gam(7) = gam(3)
     gam(8) = gam(2)
     gam(9) = gam(1)
-  
+
     call orbit_sympl_init_multi(mi,f,z,dtau,ntau,rtol_init,gam/2d0,gam/2d0)
   end subroutine orbit_sympl_init_kahan6
 
@@ -1335,14 +1335,14 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
     !
       type(MultistageIntegrator), intent(inout) :: mi
       type(FieldCan), intent(inout) :: f
-    
+
       double precision, intent(in) :: z(:)
       double precision, intent(in) :: dtau
       integer, intent(in) :: ntau
       double precision, intent(in) :: rtol_init
-    
+
       double precision :: gam(17)
-    
+
       gam(1) =  0.13020248308889008087881763d0
       gam(2) =  0.56116298177510838456196441d0
       gam(3) = -0.38947496264484728640807860d0
@@ -1360,7 +1360,7 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
       gam(15) = gam(3)
       gam(16) = gam(2)
       gam(17) = gam(1)
-    
+
       call orbit_sympl_init_multi(mi,f,z,dtau,ntau,rtol_init,gam/2d0,gam/2d0)
     end subroutine orbit_sympl_init_kahan8
 
@@ -1495,14 +1495,14 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
       x(1) = 0.01
     end if
 
-    si%z(1:3) = x  
+    si%z(1:3) = x
 
     if (si%extrap_field) then
       dz(1) = x(1)-xlast(1)
       dz(2) = x(2)-xlast(2)
       dz(3) = x(3)-xlast(3)
 
-      f%dH(1) = f%dH(1) + f%d2H(1)*dz(1) + f%d2H(2)*dz(2) + f%d2H(3)*dz(3) 
+      f%dH(1) = f%dH(1) + f%d2H(1)*dz(1) + f%d2H(2)*dz(2) + f%d2H(3)*dz(3)
       f%dH(2) = f%dH(2) + f%d2H(2)*dz(1) + f%d2H(4)*dz(2) + f%d2H(5)*dz(3)
       f%dH(3) = f%dH(3) + f%d2H(3)*dz(1) + f%d2H(5)*dz(2) + f%d2H(6)*dz(3)
 
@@ -1548,7 +1548,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
-    
+
     ! Initial guess with Lagrange extrapolation
     if (si%nlag>0) then
       do k=0, si%nlag
@@ -1581,7 +1581,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
     end if
 
     si%z = x(1:4)
-    
+
     if (si%extrap_field) then
       f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
                     + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
@@ -1632,7 +1632,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
-    
+
     ! Initial guess with Lagrange extrapolation
     if (si%nlag>0) then
       do k=0, si%nlag
@@ -1673,20 +1673,20 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     if (si%extrap_field) then
       do k = 1, s
         dz(1) = x(4*k-3)-xlast(4*k-3)
-        dz(2) = x(4*k-2)-xlast(4*k-2) 
+        dz(2) = x(4*k-2)-xlast(4*k-2)
         dz(3) = x(4*k-1)-xlast(4*k-1)
         dz(4) = x(4*k)-xlast(4*k)
-        
+
         fs(k)%pth = fs(k)%pth + fs(k)%dpth(1)*dz(1) &  ! d/dr
                       + fs(k)%dpth(2)*dz(2) &          ! d/dth
                       + fs(k)%dpth(3)*dz(3) &          ! d/dph
                       + fs(k)%dpth(4)*dz(4)            ! d/dpph
-                      
+
         fs(k)%dpth(1) = fs(k)%dpth(1) + fs(k)%d2pth(1)*dz(1) &
                       + fs(k)%d2pth(2)*dz(2) &
                       + fs(k)%d2pth(3)*dz(3) &
                       + fs(k)%d2pth(7)*dz(4)
-                      
+
         fs(k)%dpth(2) = fs(k)%dpth(2) + fs(k)%d2pth(2)*dz(1)&
                       + fs(k)%d2pth(4)*dz(2) &
                       + fs(k)%d2pth(5)*dz(3) &
@@ -1696,12 +1696,12 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                       + fs(k)%d2pth(5)*dz(2) &
                       + fs(k)%d2pth(6)*dz(3) &
                       + fs(k)%d2pth(9)*dz(4)
-                      
+
         fs(k)%dH(1) = fs(k)%dH(1) + fs(k)%d2H(1)*dz(1) &
                       + fs(k)%d2H(2)*dz(2) &
                       + fs(k)%d2H(3)*dz(3) &
                       + fs(k)%d2H(7)*dz(4)
-                      
+
         fs(k)%dH(2) = fs(k)%dH(2) + fs(k)%d2H(2)*dz(1) &
                       + fs(k)%d2H(4)*dz(2) &
                       + fs(k)%d2H(5)*dz(3) &
@@ -1711,17 +1711,17 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                       + fs(k)%d2H(5)*dz(2) &
                       + fs(k)%d2H(6)*dz(3) &
                       + fs(k)%d2H(9)*dz(4)
-        
+
         fs(k)%vpar = fs(k)%vpar + fs(k)%dvpar(1)*dz(1) &  ! d/dr
-                   + fs(k)%dvpar(2)*dz(2) & 
+                   + fs(k)%dvpar(2)*dz(2) &
                    + fs(k)%dvpar(3)*dz(3)
 
         fs(k)%hth = fs(k)%hth + fs(k)%dhth(1)*dz(1) &  ! d/dr
-                      + fs(k)%dhth(2)*dz(2) & 
+                      + fs(k)%dhth(2)*dz(2) &
                       + fs(k)%dhth(3)*dz(3)
-                      
+
         fs(k)%hph = fs(k)%hph + fs(k)%dhph(1)*dz(1) &  ! d/dr
-                      + fs(k)%dhph(2)*dz(2) & 
+                      + fs(k)%dhph(2)*dz(2) &
                       + fs(k)%dhph(3)*dz(3)
       end do
     else
@@ -1755,7 +1755,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
         si%zbuf(4, si%kbuf+(4*k)) = si%z(4)
       end do
     endif
-  
+
     si%kt = si%kt+1
     ktau = ktau+1
   enddo
@@ -1788,7 +1788,7 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
-    
+
     x(1) = si%z(1)
     x(2) = si%z(4)
     do k = 2,s
@@ -1802,7 +1802,7 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
     call eval_field(fs(1), x(1), si%z(2), si%z(3), 0)
     call get_derivatives(fs(1), x(2))
     Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
-      
+
     do k = 2, s
       call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), 0)
       call get_derivatives(fs(k), x(4*k-2))
@@ -1819,11 +1819,11 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
-  
+
     si%kt = si%kt+1
     ktau = ktau+1
   enddo
-  
+
 end subroutine orbit_timestep_sympl_rk_lobatto
 
 
@@ -1908,5 +1908,5 @@ contains
     end do
   end subroutine timesteps
 
-  
+
 end module orbit_symplectic_global
