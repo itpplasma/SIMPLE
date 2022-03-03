@@ -65,16 +65,10 @@ program simple_main
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
   logical :: deterministic = .False.
 
-  integer :: ierr, mpirank, mpisize
+  integer :: ierr, mpirank, mpisize, nfirstpart, nlastpart
 
-  call MPI_INIT(ierr)
-  call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
-  call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
-  if (ierr /= 0) then
-    print *, "MPI initialization failed with error code ", ierr
-    error stop
-  endif
-  print *, "MPI initialized: rank=", mpirank, ", size=", mpisize
+  double precision, dimension(:), allocatable :: &
+    confpart_trap_glob, confpart_pass_glob
 
 ! read config file
   call read_config
@@ -101,6 +95,7 @@ program simple_main
 
 ! initialize array of confined particle percentage
   allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
+  allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
   confpart_trap=0.d0
   confpart_pass=0.d0
 
@@ -121,52 +116,102 @@ program simple_main
 
 ! do particle tracing in parallel
 
+  call MPI_INIT(ierr)
+  call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
+  call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
+  if (ierr /= 0) then
+    print *, 'MPI initialization failed with error code ', ierr
+    error stop
+  endif
+  print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
+
+  if (mod(ntestpart, mpisize) /= 0) then
+    print *, 'Number of test particles ', ntestpart, &
+             ' no multiple of MPI size ', mpisize
+    call finalize
+    error stop
+  endif
+
+  nfirstpart = mpirank * ntestpart/mpisize + 1
+  nlastpart = (mpirank+1) * ntestpart/mpisize
+
   !$omp parallel firstprivate(norb)
   !$omp do
-  do i=1,ntestpart
+  do i=nfirstpart, nlastpart
     !$omp critical
     kpart = kpart+1
-    print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+    print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
+      'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
     !$omp end critical
     call trace_orbit(norb, i)
   end do
   !$omp end do
   !$omp end parallel
 
-  confpart_pass=confpart_pass/ntestpart
-  confpart_trap=confpart_trap/ntestpart
+  call MPI_REDUCE(confpart_trap, confpart_trap_glob, ntimstep, &
+    MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+  call MPI_REDUCE(confpart_pass, confpart_pass_glob, ntimstep, &
+    MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
-  open(1,file='confined_fraction.dat',recl=1024)
-  do i=1,ntimstep
-    write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
-  enddo
-  close(1)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    times_lost, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+    MPI_COMM_WORLD, ierr)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    trap_par, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+    MPI_COMM_WORLD, ierr)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    perp_inv, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+    MPI_COMM_WORLD, ierr)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    iclass, 3*ntestpart/mpisize, MPI_INTEGER, &
+    MPI_COMM_WORLD, ierr)
 
-  open(1,file='times_lost.dat',recl=1024)
-  do i=1,ntestpart
-    write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i)
-  enddo
-  close(1)
+  if (mpirank == 0) then
+    confpart_pass_glob=confpart_pass_glob/ntestpart
+    confpart_trap_glob=confpart_trap_glob/ntestpart
 
-  open(1,file='class_parts.dat',recl=1024)
-  do i=1,ntestpart
-    write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
-  enddo
-  close(1)
+    open(1,file='confined_fraction.dat',recl=1024)
+    do i=1,ntimstep
+      write(1,*) dble(i-1)*dtau/v0, confpart_pass_glob(i), &
+        confpart_trap_glob(i), ntestpart
+    enddo
+    close(1)
 
+    open(1,file='times_lost.dat',recl=1024)
+    do i=1,ntestpart
+      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i)
+    enddo
+    close(1)
+
+    open(1,file='class_parts.dat',recl=1024)
+    do i=1,ntestpart
+      write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
+    enddo
+    close(1)
+  end if
+
+  call finalize()
+
+contains
+
+subroutine finalize
   if (integmode >= 0) call deallocate_can_coord
 
-  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, perp_inv, iclass)
+  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, &
+    perp_inv, iclass, confpart_trap_glob, confpart_pass_glob)
   deallocate(xstart, bstart, volstart, zstart)
 
   call MPI_FINALIZE (ierr)
   if (ierr /= 0) then
-    print *, "MPI finalization failed with error code ", ierr
+    print *, 'MPI finalization failed with error code ', ierr
     error stop
   endif
-  print *, "MPI finalized"
-
-contains
+  print *, 'MPI finalized'
+end subroutine finalize
 
 subroutine read_config
   open(1,file='simple.in',recl=1024)
