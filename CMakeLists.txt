@@ -22,11 +22,15 @@ string(STRIP ${NFPREFIX} NFPREFIX)
 set(NFINC ${NFPREFIX}/include)
 set(NFLIBS ${NFPREFIX}/lib)
 
+find_package(MPI REQUIRED)
+
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
+message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
+
+include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 add_compile_options(-cpp)
@@ -108,6 +112,15 @@ add_executable (simple.x
 	SRC/find_bminmax.f90
 	SRC/main.f90
 )
+
+add_executable (simple_mpi.x
+	SRC/sorting.f90
+	SRC/check_orbit_type.f90
+	SRC/find_bminmax.f90
+	SRC/main_mpi.f90
+)
+target_link_libraries(simple_mpi.x ${MPI_Fortran_LIBRARIES})
+
 add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
 add_executable (test_sympl_tok.x SRC/test_sympl.f90)
 add_executable (test_sympl.x SRC/test_sympl_stell.f90)
