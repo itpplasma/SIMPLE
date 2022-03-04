@@ -29,9 +29,8 @@ message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
 message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
-link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
+link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
 add_compile_options(-cpp)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
@@ -103,7 +102,7 @@ link_libraries(simple)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
 else()
-	target_link_libraries(simple rkf45 netcdf netcdff lapack blas)
+	target_link_libraries(simple rkf45 netcdf netcdff openblas)
 endif()
 
 add_executable (simple.x
