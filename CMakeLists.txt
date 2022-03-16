@@ -140,3 +140,9 @@ add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
 add_executable (test_boozer.x SRC/test_boozer.f90)
 add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
 add_executable (test_collis.x SRC/test_collis.f90)
+
+add_library( stell SHARED IMPORTED )
+set_target_properties( stell PROPERTIES IMPORTED_LOCATION
+/marconi/home/userexternal/calbert0/src/STELLOPT/LIBSTELL/Release/libstell.so )
+add_executable(test_vmec.x EXCLUDE_FROM_ALL SRC/test_vmec.f90)
+target_link_libraries(test_vmec.x stell)
