@@ -163,3 +163,6 @@ target_link_libraries(alpha_lifetime_old.x simple)
 target_link_libraries(test_parse_ants.x simple)
 target_link_libraries(test_boozer.x simple)
 target_link_libraries(test_orbits.x simple)
+
+install(TARGETS simple.x DESTINATION bin)
+install(TARGETS alpha_lifetime_vmec_c.x DESTINATION bin)
