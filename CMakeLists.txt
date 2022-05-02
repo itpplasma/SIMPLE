@@ -165,12 +165,12 @@ add_executable (test_boozer.x SRC/test_boozer.f90)
 add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
 add_executable (test_collis.x SRC/test_collis.f90)
 
-add_executable(test_vmec.x EXCLUDE_FROM_ALL SRC/test_vmec.f90)
+add_executable(test_vmec.x SRC/test_vmec.f90)
 target_include_directories(test_vmec.x PRIVATE
-	$ENV{HOME}/src/STELLOPT/LIBSTELL/Release)
+	$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release)
 add_library(stell SHARED IMPORTED)
 set_target_properties(stell PROPERTIES IMPORTED_LOCATION
-	$ENV{HOME}/src/STELLOPT/LIBSTELL/Release/libstell.so)
+	$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release/libstell.so)
 target_link_libraries(test_vmec.x stell)
 
 
