@@ -628,82 +628,101 @@
   enddo
 !
   end subroutine splint_lambda
-!
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
+! Go from s to rho grid, with special treatment of the axis.
 !
+! Interpolate values from s to rho grid. It is assumed that the
+! innermost points of the input grid are not valid and thus need special
+! treatment.
+! This is done by extrapolating from values outside of this region to
+! the axis.
+! An intermediate rescaling with rho can be used (might be useful to
+! enforce behaviour near the axis). This will be in effect for
+! extrapolating to the axis and for the interpolation to the new grid.
+!
+! input:
+! ------
+! m: integer, exponent, values <= 0 are ignored. Intermediate scaling of
+!   values is done with rho**m.
+! ns: integer, size of input array.
+! nrho: integer, size of output array.
+! nheal: integer,
+! arr_in: double precision 1d array, with ns elements.
+!
+! output:
+! -------
+! arr_out: double precision 1d array, with nrho elements.
+!
+! sideeffects:
+! ------------
+! none
+subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
+
   use new_vmec_stuff_mod, only : ns_s
-!
+
   implicit none
-!
-  integer :: m,ns,nrho,nheal,irho,is,k,nhe
-!
+
+  integer, intent(in) :: m, ns, nrho, nheal
+  double precision, dimension(ns), intent(in) :: arr_in
+  double precision, dimension(nrho), intent(out) :: arr_out
+
+  integer :: irho,is,k,nhe
   double precision :: hs,hrho,s,ds,rho,a,b,c
-!
-  double precision, dimension(ns)   :: arr_in
-  double precision, dimension(nrho) :: arr_out
   double precision, dimension(:,:), allocatable :: splcoe
-!
-!do is=1,ns
-!write(2001,*) is,arr_in(is)
-!enddo
-!close(2001)
-!print *,m
-!
-  hs=1.d0/dble(ns-1)
-  hrho=1.d0/dble(nrho-1)
-!
-  nhe=max(1,nheal)+1
-!
+
+  hs = 1.d0/dble(ns-1)
+  hrho = 1.d0/dble(nrho-1)
+
+  nhe = max(1,nheal)+1
+
+  ! Rescale
   do is=nhe,ns
     if(m.gt.0) then
-      rho=sqrt(hs*dble(is-1))
-      arr_out(is)=arr_in(is)/rho**m
+      rho = sqrt(hs*dble(is-1))
+      arr_out(is) = arr_in(is)/rho**m
     else
-      arr_out(is)=arr_in(is)
-    endif
-  enddo
-!
-  a=arr_out(nhe)
-  b=0.5d0*(4.d0*arr_out(nhe+1)-3.d0*arr_out(nhe)-arr_out(nhe+2))
-  c=0.5d0*(arr_out(nhe)+arr_out(nhe+2)-2.d0*arr_out(nhe+1))
-!
+      arr_out(is) = arr_in(is)
+    end if
+  end do
+
+  ! Second order interpolation near axis.
+  a = arr_out(nhe)
+  b = 0.5d0*(4.d0*arr_out(nhe+1) - 3.d0*arr_out(nhe) - arr_out(nhe+2))
+  c = 0.5d0*(arr_out(nhe) + arr_out(nhe+2) - 2.d0*arr_out(nhe+1))
   do is=1,nhe-1
-    arr_out(is)=a+b*dble(is-nhe)+c*dble(is-nhe)**2
-  enddo
-!do is=1,ns
-!write(2002,*) is,arr_out(is)
-!enddo
-!close(2002)
-!
+    arr_out(is) = a + b*dble(is-nhe) + c*dble(is-nhe)**2
+  end do
+
   allocate(splcoe(0:ns_s,ns))
-!
-  splcoe(0,:)=arr_out
-!
+
+  splcoe(0,:) = arr_out
+
   call spl_reg(ns_s,ns,hs,splcoe)
-!
+
   do irho=1,nrho
-    rho=hrho*dble(irho-1)
-    s=rho**2
-!
-    ds=s/hs
-    is=max(0,min(ns-1,int(ds)))
-    ds=(ds-dble(is))*hs
-    is=is+1
-!
-    arr_out(irho)=splcoe(ns_s,is)
-!
+    rho = hrho*dble(irho-1)
+    s = rho**2
+
+    ds = s/hs
+    is = max(0,min(ns-1,int(ds)))
+    ds = (ds-dble(is))*hs
+    is = is+1
+
+    arr_out(irho) = splcoe(ns_s,is)
+
     do k=ns_s-1,0,-1
-      arr_out(irho)=splcoe(k,is)+ds*arr_out(irho)
-    enddo
-!
-    if(m.gt.0) arr_out(irho)=arr_out(irho)*rho**m
-  enddo
-!
+      arr_out(irho) = splcoe(k,is) + ds*arr_out(irho)
+    end do
+
+    ! Undo rescaling
+    if(m.gt.0) arr_out(irho) = arr_out(irho)*rho**m
+  end do
+
   deallocate(splcoe)
-!
-  end subroutine s_to_rho_healaxis
+
+end subroutine s_to_rho_healaxis
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
