@@ -14,7 +14,9 @@
   double precision, dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
   double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
   complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
-!
+
+  logical, parameter :: old_axis_healing_boundary = .false.
+
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
   call new_allocate_vmec_stuff
@@ -33,9 +35,13 @@
   do i=1,nstrm
 !
     m=nint(abs(axm(i)))
-!
-    nheal=min(m, 4)
-!
+
+    if (old_axis_healing_boundary) then
+      nheal = min(m, 4)
+    else
+      call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
+    end if
+
     call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
 !
     call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
@@ -634,10 +640,11 @@
 ! Go from s to rho grid, with special treatment of the axis.
 !
 ! Interpolate values from s to rho grid. It is assumed that the
-! innermost points of the input grid are not valid and thus need special
-! treatment.
+! innermost points of the input grid are not valid/noisy and thus need
+! special treatment.
 ! This is done by extrapolating from values outside of this region to
 ! the axis.
+! Extrapolation is done linear (more robust).
 ! An intermediate rescaling with rho can be used (might be useful to
 ! enforce behaviour near the axis). This will be in effect for
 ! extrapolating to the axis and for the interpolation to the new grid.
@@ -672,6 +679,8 @@ subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
   double precision :: hs,hrho,s,ds,rho,a,b,c
   double precision, dimension(:,:), allocatable :: splcoe
 
+  logical, parameter :: old_axis_healing = .false.
+
   hs = 1.d0/dble(ns-1)
   hrho = 1.d0/dble(nrho-1)
 
@@ -687,13 +696,26 @@ subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
     end if
   end do
 
-  ! Second order interpolation near axis.
-  a = arr_out(nhe)
-  b = 0.5d0*(4.d0*arr_out(nhe+1) - 3.d0*arr_out(nhe) - arr_out(nhe+2))
-  c = 0.5d0*(arr_out(nhe) + arr_out(nhe+2) - 2.d0*arr_out(nhe+1))
-  do is=1,nhe-1
-    arr_out(is) = a + b*dble(is-nhe) + c*dble(is-nhe)**2
-  end do
+  if (old_axis_healing) then
+    ! parabolic extrapolation:
+    a = arr_out(nhe)
+    b = 0.5d0*(4.d0*arr_out(nhe+1) - 3.d0*arr_out(nhe) - arr_out(nhe+2))
+    c = 0.5d0*(arr_out(nhe) + arr_out(nhe+2) - 2.d0*arr_out(nhe+1))
+
+    do is=1,nhe-1
+      arr_out(is) = a + b*dble(is-nhe) + c*dble(is-nhe)**2
+    enddo
+
+  else
+    ! linear extrapolation ("less accurate" but more robust):
+    a = arr_out(nhe)
+    b = arr_out(nhe+1) - arr_out(nhe)
+
+    do is=1,nhe-1
+      arr_out(is) = a + b*dble(is-nhe)
+    enddo
+
+  end if
 
   allocate(splcoe(0:ns_s,ns))
 
@@ -723,7 +745,90 @@ subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
   deallocate(splcoe)
 
 end subroutine s_to_rho_healaxis
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
+subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
+  !> Determines the number of first radial points, nheal, where data is
+  !> replaced by extrapolation.
+  !>
+  !> Takes cosine harmonic amplitude of arr_in and checks the difference
+  !> between the data value at point i and the value obtained by 3-rd
+  !> order Lagrange polynomial extrapolation from the points i+1,i+2,i+3
+  !> and i+4. If relative value exceeds given tolerance (parameter set
+  !> to 30%) this point is regarded as "bad" so that amplitude values
+  !> for all points with indices smaller than i are replaced by linear
+  !> extrapolation from points i and i+1. Note that harmonic function at
+  !> 60 points per period is extrapolated with relative error about
+  !> 1e-4, therefore 30% is quite a large tolerance which is exceeded if
+  !> there is noise in the data. Even with this high tolerance, some
+  !> harmonics have to be extrapolated almost from the very edge. Those,
+  !> however, have amplitudes about 8 orders of magnitude smaller than
+  !> main harmonics and, therefore, play no role.
+  !>
+  !> input:
+  !> ------
+  !> m:
+  !> ns:
+  !> arr_in: double precision array (ns entries), data from which to
+  !>   determine the number of points to extrapolate at the axis.
+  !>
+  !> output:
+  !> -------
+  !> nheal: integer, number of points to extrapolate at the axis.
+
+  use new_vmec_stuff_mod, only : ns_s
+
+  implicit none
+
+  ! Lagrange polynomial stencil size for checking the data by extraplation:
+  integer, parameter :: nplag = 4
+  ! tolerance for Lagrange polynomial extrapolation by one point (to check if data is noisy):
+  double precision, parameter :: tol = 3.d-1
+  double precision, parameter :: tiny = 1.d-200
+  ! 3-rd order Lagrange polynomial extrapolation coefficients from points (1,2,3,4) to point 0:
+  double precision, parameter, dimension(nplag) :: weight = (/4.d0,-6.d0,4.d0,-1.d0/)
+
+  integer, intent(in) :: m,ns
+  integer, intent(out) :: nheal
+  double precision, dimension(ns), intent(in) :: arr_in
+
+  integer :: is,k,nhe,ncheck
+
+  double precision :: hs,s,ds,rho,rho_nonzero,errmax
+
+  double precision, dimension(:), allocatable :: arr
+
+  ! We check points which are away by more than 3 stencils from the edge:
+  ncheck = ns - 3*nplag
+
+  hs = 1.d0/dble(ns-1)
+  allocate(arr(ns))
+
+  do is=2,ns
+    if(m > 0) then
+      rho = sqrt(hs*dble(is-1))
+      rho_nonzero = max(rho**m, tiny)
+      arr(is) = arr_in(is)/rho_nonzero
+    else
+      arr(is) = arr_in(is)
+    end if
+  end do
+
+  nheal = 1
+  do is=ncheck,2,-1
+    nheal = is
+    errmax = maxval(abs(arr(is:is+nplag)))*tol
+    if(abs(arr(is)-sum(arr(is+1:is+nplag)*weight)) > errmax) then
+      deallocate(arr)
+      exit
+    end if
+  end do
+
+  deallocate(arr)
+
+end subroutine determine_nheal_for_axis
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine volume_and_B00(volume,B00)
