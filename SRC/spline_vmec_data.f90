@@ -820,7 +820,6 @@ subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
     nheal = is
     errmax = maxval(abs(arr(is:is+nplag)))*tol
     if(abs(arr(is)-sum(arr(is+1:is+nplag)*weight)) > errmax) then
-      deallocate(arr)
       exit
     end if
   end do
