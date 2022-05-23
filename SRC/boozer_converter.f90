@@ -192,6 +192,7 @@
       perqua_t(2,1:n_theta_B)=delphi_BV_Vg(:,i_phi)
       perqua_t(3,1:n_theta_B)=bmod_Vg(:,i_phi)
       perqua_t(4:6,1:n_theta_B)=perqua_2D(4:6,:,i_phi)
+      ! Extend range of theta values
       perqua_t(:,2-n_theta_B:0)=perqua_t(:,1:n_theta_B-1)
       perqua_t(:,n_theta_B+1:2*n_theta_B-1)=perqua_t(:,2:n_theta_B)
       theta_B=theta_V+perqua_t(1,:)
@@ -215,6 +216,7 @@
     do i_theta=1,n_theta_B
       perqua_p(:,1:n_phi_B)=perqua_2D(:,i_theta,:)
       perqua_p(:,2-n_phi_B:0)=perqua_p(:,1:n_phi_B-1)
+      ! Extend range of phi values
       perqua_p(:,n_phi_B+1:2*n_phi_B-1)=perqua_p(:,2:n_phi_B)
       phi_B=phi_V+perqua_p(2,:)
       do i_phi=1,n_phi_B

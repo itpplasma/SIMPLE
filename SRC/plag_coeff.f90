@@ -12,7 +12,7 @@
     ! coef(0:nder,npoi) - weights for computation of function and
     ! derivatives,
     ! f=sum(fun(1:npoi)*coef(0,1:npoi) gives the function value
-    ! df=sum(fun(1:npoi)*coef(1,1:npoi) gives the derivative value value
+    ! df=sum(fun(1:npoi)*coef(1,1:npoi) gives the derivative value
     !
     !
     INTEGER, INTENT(in)                                :: npoi,nder
