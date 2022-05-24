@@ -34,7 +34,8 @@
 !
     m=nint(abs(axm(i)))
 !
-    nheal=min(m, 4)
+    call determine_nheal_for_axis(m,ns,rmnc(i,:),nheal)       !NEW AXIS HEALING
+!    nheal=min(m, 4)                                          !OLD AXIS HEALING
 !
     call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
 !
@@ -645,12 +646,6 @@
   double precision, dimension(nrho) :: arr_out
   double precision, dimension(:,:), allocatable :: splcoe
 !
-!do is=1,ns
-!write(2001,*) is,arr_in(is)
-!enddo
-!close(2001)
-!print *,m
-!
   hs=1.d0/dble(ns-1)
   hrho=1.d0/dble(nrho-1)
 !
@@ -665,17 +660,27 @@
     endif
   enddo
 !
-  a=arr_out(nhe)
-  b=0.5d0*(4.d0*arr_out(nhe+1)-3.d0*arr_out(nhe)-arr_out(nhe+2))
-  c=0.5d0*(arr_out(nhe)+arr_out(nhe+2)-2.d0*arr_out(nhe+1))
+!  if(.true.) then           !OLD AXIS HEALING
+  if(.false.) then           !NEW AXIS HEALING
+! parabolic extrapolation:
+    a=arr_out(nhe)
+    b=0.5d0*(4.d0*arr_out(nhe+1)-3.d0*arr_out(nhe)-arr_out(nhe+2))
+    c=0.5d0*(arr_out(nhe)+arr_out(nhe+2)-2.d0*arr_out(nhe+1))
 !
-  do is=1,nhe-1
-    arr_out(is)=a+b*dble(is-nhe)+c*dble(is-nhe)**2
-  enddo
-!do is=1,ns
-!write(2002,*) is,arr_out(is)
-!enddo
-!close(2002)
+    do is=1,nhe-1
+      arr_out(is)=a+b*dble(is-nhe)+c*dble(is-nhe)**2
+    enddo
+!
+  else
+! linear extrapolation:
+    a=arr_out(nhe)
+    b=arr_out(nhe+1)-arr_out(nhe)
+!
+    do is=1,nhe-1
+      arr_out(is)=a+b*dble(is-nhe)
+    enddo
+!
+  endif
 !
   allocate(splcoe(0:ns_s,ns))
 !
@@ -704,6 +709,58 @@
   deallocate(splcoe)
 !
   end subroutine s_to_rho_healaxis
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
+!
+! Determines the number of first radial points, nheal, where data is replaced by extrapolation
+!
+  use new_vmec_stuff_mod, only : ns_s
+!
+  implicit none
+!
+! Lagrange polynomial stencil size for checking the data by extraplation:
+  integer, parameter :: nplag=4
+! tolerance for Lagrange polynomial extrapolation by one point (to check if data is noisy):
+  double precision, parameter :: tol=3.d-1
+  double precision, parameter :: tiny=1.d-200
+! 3-rd order Lagrange polynomial extrapolation coefficients from points (1,2,3,4) to point 0:
+  double precision, parameter, dimension(nplag) :: weight=(/4.d0,-6.d0,4.d0,-1.d0/)
+!
+  integer :: m,ns,nheal,is,k,nhe,ncheck
+!
+  double precision :: hs,s,ds,rho,rho_nonzero,errmax
+!
+  double precision, dimension(ns) :: arr_in
+  double precision, dimension(:), allocatable :: arr
+!
+! We check points which are away by more than 3 stencils from the edge:
+  ncheck=ns-3*nplag
+!
+  hs=1.d0/dble(ns-1)
+  allocate(arr(ns))
+!
+  do is=2,ns
+    if(m.gt.0) then
+      rho=sqrt(hs*dble(is-1))
+      rho_nonzero=max(rho**m,tiny)
+      arr(is)=arr_in(is)/rho_nonzero
+    else
+      arr(is)=arr_in(is)
+    endif
+  enddo
+!
+  nheal=1
+  do is=ncheck,2,-1
+    nheal=is
+    errmax=maxval(abs(arr(is:is+nplag)))*tol
+    if(abs(arr(is)-sum(arr(is+1:is+nplag)*weight)).gt.errmax) exit
+  enddo
+!
+  deallocate(arr)
+!
+  end subroutine determine_nheal_for_axis
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
