@@ -4,7 +4,7 @@
 10000    ntimstep          !number of time steps per slowing down time
 1000     ntestpart         !number of test particles
 5d4      bmod_ref          !reference field, G, for Boozer $B_{00}$
-1d-1      trace_time        !slowing down time, s
+1d-1     trace_time        !slowing down time, s
 0.6d0    sbeg              !starting s (normalzed toroidal flux) for field line
 0.d0     phibeg            !starting phi for field line
 0.d0     thetabeg          !starting theta for field line
@@ -31,3 +31,4 @@
 1.0d0    vmec_B_scale      !factor to scale the B field from VMEC
 1.0d0    vmec_RZ_scale     !factor to scale the device size from VMEC
 .False.  swcoll            !if .True. enables collisions. This is incompatible with classification.
+.False.  deterministic     !if .True. put seed for the same random walk always

@@ -22,12 +22,15 @@ string(STRIP ${NFPREFIX} NFPREFIX)
 set(NFINC ${NFPREFIX}/include)
 set(NFLIBS ${NFPREFIX}/lib)
 
+find_package(MPI REQUIRED)
+
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
+message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
-link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
+include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
+link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
 add_compile_options(-cpp)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
@@ -99,7 +102,7 @@ link_libraries(simple)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
 else()
-	target_link_libraries(simple rkf45 netcdf netcdff lapack blas)
+	target_link_libraries(simple rkf45 netcdf netcdff openblas)
 endif()
 
 add_executable (simple.x
@@ -108,6 +111,15 @@ add_executable (simple.x
 	SRC/find_bminmax.f90
 	SRC/main.f90
 )
+
+add_executable (simple_mpi.x
+	SRC/sorting.f90
+	SRC/check_orbit_type.f90
+	SRC/find_bminmax.f90
+	SRC/main_mpi.f90
+)
+target_link_libraries(simple_mpi.x ${MPI_Fortran_LIBRARIES})
+
 add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
 add_executable (test_sympl_tok.x SRC/test_sympl.f90)
 add_executable (test_sympl.x SRC/test_sympl_stell.f90)
@@ -128,3 +140,11 @@ add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
 add_executable (test_boozer.x SRC/test_boozer.f90)
 add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
 add_executable (test_collis.x SRC/test_collis.f90)
+
+add_executable(test_vmec.x EXCLUDE_FROM_ALL SRC/test_vmec.f90)
+target_include_directories(test_vmec.x PRIVATE
+	$ENV{HOME}/src/STELLOPT/LIBSTELL/Release)
+add_library(stell SHARED IMPORTED)
+set_target_properties(stell PROPERTIES IMPORTED_LOCATION
+	$ENV{HOME}/src/STELLOPT/LIBSTELL/Release/libstell.so)
+target_link_libraries(test_vmec.x stell)

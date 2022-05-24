@@ -61,7 +61,7 @@ contains
 function relerr(a, b)
     double precision :: relerr
     double precision, intent(in) :: a, b
-    relerr = merge(0d0, (a - b)/b, b == 0d0)
+    relerr = merge(a, (a - b)/b, b == 0d0)
 end function relerr
 
 
