@@ -24,7 +24,7 @@ program simple_main
   double precision :: sbeg,thetabeg
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
-  double precision, dimension(:,:), allocatable :: zstart
+  double precision, dimension(:,:), allocatable :: zstart, zend
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
   double precision, dimension(:), allocatable :: times_lost
   integer          :: npoiper2
@@ -104,7 +104,7 @@ program simple_main
   allocate(iclass(3,ntestpart))
   times_lost = -1.d0
 
-  allocate(zstart(5,ntestpart))
+  allocate(zstart(5,ntestpart), zend(5,ntestpart))
   if(local) then
     call init_starting_points
   else
@@ -183,7 +183,7 @@ program simple_main
 
     open(1,file='times_lost.dat',recl=1024)
     do i=1,ntestpart
-      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i)
+      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
     enddo
     close(1)
 
@@ -941,7 +941,7 @@ subroutine trace_orbit(anorb, ipart)
       confpart_trap(it)=confpart_trap(it)+1.d0
     endif
   enddo
-
+  zend(:,ipart) = z
   times_lost(ipart) = kt*dtaumin/v0
   !$omp critical
   deallocate(zpoipl_tip, zpoipl_per)
