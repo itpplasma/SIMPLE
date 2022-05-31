@@ -7,7 +7,7 @@
   implicit none
 !
   integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
-  integer :: iss,ist,isp,nrho,nheal
+  integer :: iss,ist,isp,nrho,nheal,iunit_hs
   double precision :: twopi,cosphase,sinphase
   complex(8)   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
   double precision, dimension(:,:), allocatable :: splcoe
@@ -32,6 +32,9 @@
   allocate(almnc_rho(nstrm,0:nrho-1),rmnc_rho(nstrm,0:nrho-1),zmnc_rho(nstrm,0:nrho-1))
   allocate(almns_rho(nstrm,0:nrho-1),rmns_rho(nstrm,0:nrho-1),zmns_rho(nstrm,0:nrho-1))
 !
+  iunit_hs=1357
+  open(iunit_hs,file='healaxis.dat')
+!
   do i=1,nstrm
 !
     m=nint(abs(axm(i)))
@@ -39,7 +42,10 @@
     if (old_axis_healing_boundary) then
       nheal = min(m, 4)
     else
+!
       call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
+!
+      write(iunit_hs,*) 'm = ',m,' n = ',nint(abs(axn(i))),' skipped ',nheal,' / ',ns
     end if
 
     call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
@@ -55,6 +61,8 @@
     call s_to_rho_healaxis(m,ns,nrho,nheal,almns(i,:),almns_rho(i,:))
 !
   enddo
+!
+  close(iunit_hs)
 !
 !------------------------------------
 ! Begin poloidal flux ($A_\varphi$):
