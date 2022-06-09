@@ -67,7 +67,7 @@
   end module boozer_coordinates_mod
 !
   module velo_mod
-    integer :: isw_field_type = 1
+    integer :: isw_field_type = 0
   end module velo_mod
 !
 module gbpi_mod
