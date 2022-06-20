@@ -22,6 +22,8 @@ string(STRIP ${NFPREFIX} NFPREFIX)
 set(NFINC ${NFPREFIX}/include)
 set(NFLIBS ${NFPREFIX}/lib)
 
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
@@ -102,7 +104,9 @@ link_libraries(simple)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
 else()
-	target_link_libraries(simple rkf45 netcdf netcdff openblas)
+	target_link_libraries(simple
+		rkf45 netcdf netcdff ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+	)
 endif()
 
 add_executable (simple.x
