@@ -5,7 +5,7 @@
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-  use common, only: pi,c,e_charge,e_mass,p_mass,ev
+  use util, only: pi,c,e_charge,e_mass,p_mass,ev
 !
 #ifdef _OPENMP
   use omp_lib
@@ -36,7 +36,7 @@ use diag_mod, only : icounter
   double precision :: r,vartheta_c(npart),varphi_c(npart),theta_vmec,varphi_vmec,alam0(npart)
 !
   integer :: i_ctr ! for nice counting in parallel
-  
+
 !
 !---------------------------------------------------------------------------
 ! Prepare calculation of orbit tip by interpolation
@@ -63,7 +63,7 @@ use diag_mod, only : icounter
 ! End prepare calculation of orbit tip by interpolation
 !--------------------------------------------------------------------------
 !
-!  
+!
 
   open(1,file='alpha_lifetime_m.inp')
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
@@ -156,7 +156,7 @@ i_ctr=0
 !print *, 'run started on thread ', omp_get_thread_num()
 
 !$omp do
-do ipart=1,npart  
+do ipart=1,npart
 !print *, 'particle ', ipart, '/', npart
 !
   z(1)=r
@@ -164,13 +164,13 @@ do ipart=1,npart
   z(3)=varphi_c(ipart)
   z(4)=1.d0
   z(5)=alam0(ipart)
-!  
+!
 !print *, 'z=', z
 !
   ifp=0
 !
 icounter=0
-  call orbit_sympl_init(z, dtau, dtaumin, 0) 
+  call orbit_sympl_init(z, dtau, dtaumin, 0)
 !
 !--------------------------------
 ! Initialize tip detector
@@ -185,7 +185,7 @@ icounter=0
 !
   do i=1,L1i*npoiper*npoiper2*10000 !300 !10
 !
-!    call orbit_timestep_axis(z,dtau,dtaumin,ierr)    
+!    call orbit_timestep_axis(z,dtau,dtaumin,ierr)
     call orbit_timestep_sympl(z, ierr)
 !
     if(ierr.ne.0) exit
@@ -272,7 +272,7 @@ enddo
   ntr=0
 !
   iunit = 6000+omp_get_thread_num()
-!  
+!
   open(iunit)
   do
     read(iunit,*,end=1) r

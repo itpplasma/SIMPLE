@@ -1,6 +1,6 @@
 program test_coord_trans
   use omp_lib
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
+  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : ro0, rmu

@@ -1,5 +1,5 @@
 module neo_orb
-  use common, only: c, e_charge, p_mass, ev, twopi
+  use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
 
@@ -203,7 +203,7 @@ contains
 end module neo_orb
 
 module cut_detector
-  use common, only: twopi
+  use util, only: twopi
   use neo_orb, only: debug, tstep
   use orbit_symplectic, only: SymplecticIntegrator
   use field_can_mod, only: FieldCan
@@ -507,7 +507,7 @@ contains
 end module neo_orb_global
 
 module cut_detector_global
-  use common
+  use util
   use neo_orb_global, only: norb
   use cut_detector, only: CutDetector, cut_detector_init => init, cut_detector_trace_to_cut => trace_to_cut
 

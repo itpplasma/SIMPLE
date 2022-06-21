@@ -2,7 +2,7 @@ program simple_main
   use mpi
 
   use omp_lib
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
+  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
     vmec_B_scale, vmec_RZ_scale
 

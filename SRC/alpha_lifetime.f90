@@ -1,6 +1,6 @@
 program alpha_lifetime
   use omp_lib
-  use common, only: pi, c, e_charge, e_mass, p_mass, ev
+  use util, only: pi, c, e_charge, e_mass, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : rmu, ro0

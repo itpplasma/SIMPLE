@@ -5,7 +5,7 @@
   end function omp_get_thread_num
 #endif
 
-module common
+module util
 
 implicit none
 
@@ -45,4 +45,4 @@ integer function newunit(unit)
   if (present(unit)) unit=newunit
 end function newunit
 
-end module common
+end module util

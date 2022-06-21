@@ -1,23 +1,13 @@
-program neo_orb_main
-  use omp_lib
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
-  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
-    vmec_B_scale, vmec_RZ_scale
-
+module params
+  use util
   use parmot_mod, only : ro0, rmu
-  use velo_mod,   only : isw_field_type
-  use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use neo_orb, only : init_field, init_sympl, NeoOrb, debug, eval_field
-  use cut_detector, only : fract_dimension
-  use diag_mod, only : icounter
-  use collis_alp, only : loacol_alpha, stost
-
+  use neo_orb, only: NeoOrb
   implicit none
 
-  integer          :: npoi,L1i,nper,npoiper,i,ntimstep,ntestpart
+  integer          :: npoi,L1i,nper,i,ntestpart
   integer          :: notrace_passing,loopskip,iskip
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
-  double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
+  double precision :: tau,dtau,dtaumin,xi,v0
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
   double precision :: sbeg,thetabeg
   double precision, dimension(:),   allocatable :: bstart,volstart
@@ -25,9 +15,7 @@ program neo_orb_main
   double precision, dimension(:,:), allocatable :: zstart, zend
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
   double precision, dimension(:), allocatable :: times_lost
-  integer          :: npoiper2
   double precision :: contr_pp
-  double precision :: facE_al
   integer          :: ibins
   integer          :: n_e,n_d
   integer          :: startmode
@@ -39,7 +27,6 @@ program neo_orb_main
 
   double precision :: relerr
 
-  type(NeoOrb) :: norb
   double precision, allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
 
@@ -48,7 +35,7 @@ program neo_orb_main
   integer :: norbper,nfp
   double precision :: fper, zerolam = 0d0
 
-  double precision :: tcut
+  double precision :: tcut = -1d0
   integer :: ntcut
   logical          :: class_plot     !<=AAA
   double precision :: cut_in_per     !<=AAA
@@ -63,12 +50,82 @@ program neo_orb_main
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
   logical :: deterministic = .False.
 
+contains
+
+  subroutine init_params(E_alpha, bmod_ref, trace_time, ntimstep, npoiper, &
+      npoiper2)
+    double precision, intent(in) :: E_alpha     ! Particle energy in eV
+    double precision, intent(in) :: bmod_ref    ! Reference magnetic field in G
+    double precision, intent(in) :: trace_time  ! Tracing time in seconds
+    integer, intent(in) :: ntimstep  ! Number of times to record loss fraction
+    integer, intent(in) :: npoiper   ! Number of field-line integration steps
+                                     ! per field period to init flux surface
+    integer, intent(in) :: npoiper2  ! Minimum number of integration steps per
+                                     ! field period (i.e. strongly passing)
+
+  ! set alpha energy, velocity, and Larmor radius
+    v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
+    rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
+
+  ! Neglect relativistic effects by large inverse relativistic temperature
+    rmu=1d8
+
+  ! normalized slowing down time:
+    tau=trace_time*v0
+  ! normalized time step:
+    dtau=tau/dble(ntimstep-1)
+  ! parameters for the vacuum chamber:
+    call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) ! TODO: why again?
+    rbig=rt0
+  ! field line integration step step over phi (to check chamber wall crossing)
+    dphi=2.d0*pi/(L1i*npoiper)
+  ! orbit integration time step (to check chamber wall crossing)
+    dtaumin=2.d0*pi*rbig/npoiper2  ! ntimstep =
+    ntau=ceiling(dtau/dtaumin)
+    dtaumin=dtau/ntau
+
+    ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
+
+    norbper=ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
+    nfp=L1i*norbper         !<= guess for footprint number
+
+    zerolam=0.d0
+    nplagr=4
+    nder=0
+    npl_half=nplagr/2
+
+    fper = 2d0*pi/dble(L1i)   !<= field period
+  end subroutine init_params
+end module params
+
+
+program neo_orb_main
+  use omp_lib
+  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
+  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
+    vmec_B_scale, vmec_RZ_scale
+
+  use velo_mod,   only : isw_field_type
+  use orbit_symplectic, only : orbit_timestep_sympl, get_val
+  use neo_orb, only : init_field, init_sympl, debug, eval_field
+  use cut_detector, only : fract_dimension
+  use diag_mod, only : icounter
+  use collis_alp, only : loacol_alpha, stost
+  use params
+
+  implicit none
+
+  double precision :: facE_al, bmod_ref, trace_time
+  integer :: ntimstep, npoiper, npoiper2
+  type(NeoOrb) :: norb
+
 ! read config file
   call read_config
 
 ! initialize field geometry
   call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-  call init_params
+  call init_params(3.5d6/facE_al, bmod_ref, trace_time, ntimstep, npoiper, &
+    npoiper2)
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
   print *, 'v0 = ', v0
@@ -76,8 +133,8 @@ program neo_orb_main
 
 ! init collisions
   if (swcoll) then
-    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,E_alpha, &
-                    v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
+    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
+      3.5d6/facE_al,v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
   endif
   print *, 'v0 = ', v0
 
@@ -201,42 +258,6 @@ subroutine read_config
   endif
 
 end subroutine read_config
-
-subroutine init_params
-! set alpha energy, velocity, and Larmor radius
-  E_alpha=3.5d6/facE_al
-  v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
-  rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
-
-! Neglect relativistic effects by large inverse relativistic temperature
-  rmu=1d8
-
-! normalized slowing down time:
-  tau=trace_time*v0
-! normalized time step:
-  dtau=tau/dble(ntimstep-1)
-! parameters for the vacuum chamber:
-  call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) ! TODO: why again?
-  rbig=rt0
-! field line integration step step over phi (to check chamber wall crossing)
-  dphi=2.d0*pi/(L1i*npoiper)
-! orbit integration time step (to check chamber wall crossing)
-  dtaumin=2.d0*pi*rbig/npoiper2
-  ntau=ceiling(dtau/dtaumin)
-  dtaumin=dtau/ntau
-
-  ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
-
-  norbper=ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
-  nfp=L1i*norbper         !<= guess for footprint number
-
-  zerolam=0.d0
-  nplagr=4
-  nder=0
-  npl_half=nplagr/2
-
-  fper = 2d0*pi/dble(L1i)   !<= field period
-end subroutine init_params
 
 subroutine init_starting_surf
   integer :: ierr

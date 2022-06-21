@@ -2,7 +2,7 @@
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
 cmake_minimum_required (VERSION 2.8.12)
-project (SIMPLE Fortran)
+project (SIMPLE Fortran C)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -26,6 +26,7 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
+
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
@@ -34,7 +35,9 @@ message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
-add_compile_options(-cpp)
+add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
+add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-std=f2008>)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f2008)
 	link_libraries("-mkl -qopenmp")
@@ -49,8 +52,8 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
 else()
-	add_compile_options(-std=f2008 -Wall -Wno-unused -Wno-unused-dummy-argument -fopenmp)
-	link_libraries("-fopenmp")
+	add_compile_options(-Wall -Wno-unused -Wno-unused-dummy-argument)
+	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
 	add_compile_options(-g)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options(-O0 -g -ggdb -C -fbacktrace
@@ -91,7 +94,7 @@ add_library ( simple SHARED
 	SRC/field_can.f90
 	SRC/orbit_symplectic.f90
 	SRC/orbit_symplectic_quasi.f90
-	SRC/common.f90
+	SRC/util.f90
 	SRC/simple.f90
 	SRC/bench.f90
 	SRC/parse_ants.f90
@@ -152,3 +155,69 @@ add_library(stell SHARED IMPORTED)
 set_target_properties(stell PROPERTIES IMPORTED_LOCATION
 	$ENV{HOME}/src/STELLOPT/LIBSTELL/Release/libstell.so)
 target_link_libraries(test_vmec.x stell)
+
+# Grab Python
+find_package(Python3 REQUIRED
+  COMPONENTS Interpreter Development NumPy)
+
+# Grab the variables from a local Python installation
+# F2PY headers
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}"
+  -c "import numpy.f2py; print(numpy.f2py.get_include())"
+  OUTPUT_VARIABLE F2PY_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+include_directories(
+    BEFORE
+    ${Python3_INCLUDE_DIRS}
+    ${Python3_NumPy_INCLUDE_DIRS}
+    ${F2PY_INCLUDE_DIR}
+)
+
+message(STATUS ${Python3_INCLUDE_DIRS})
+message(STATUS ${F2PY_INCLUDE_DIR})
+message(STATUS ${Python3_NumPy_INCLUDE_DIRS})
+
+# Vars
+set(f2py_module_name "pysimple")
+set(fortran_src_file "${CMAKE_SOURCE_DIR}/SRC/pysimple.f90")
+set(fortran_pyf_file "${CMAKE_SOURCE_DIR}/SRC/pysimple.pyf")
+set(f2py_module_c "${f2py_module_name}module.c")
+set(generated_module_file "${f2py_module_name}${Python3_SOABI}")
+
+# Generate sources
+add_custom_target(
+  genpyf
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}"
+  )
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}"
+  COMMAND ${Python3_EXECUTABLE}  -m "numpy.f2py"
+                   "${fortran_pyf_file}"
+                   -m "${f2py_module_name}"
+                   --lower # Important
+  DEPENDS "${fortran_src_file}" # Fortran source
+  )
+
+# Set up target
+add_library(${f2py_module_name} SHARED
+  "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}" # Generated
+  "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
+  "${fortran_src_file}" # Fortran source(s)
+  )
+
+# Depend on sources
+add_dependencies(${f2py_module_name} genpyf)
+
+set_target_properties(
+    ${f2py_module_name}
+    PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "${f2py_module_name}"
+		SUFFIX ".so"
+        LINKER_LANGUAGE C
+    )
+
+set(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "${CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS} -undefined dynamic_lookup")

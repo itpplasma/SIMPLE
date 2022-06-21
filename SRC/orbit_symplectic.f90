@@ -1,6 +1,6 @@
 module orbit_symplectic
 
-use common, only: pi, twopi
+use util, only: pi, twopi
 use field_can_mod, only: FieldCan, eval_field, get_val, get_derivatives, get_derivatives2
 
 implicit none
