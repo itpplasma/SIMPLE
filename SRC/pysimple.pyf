@@ -90,9 +90,7 @@ module params ! in main.f90
         integer intent(in) :: npoiper2
     end subroutine init_params
 end module params
-module pysimple ! in pysimple.f90
-    use neo_orb, only: neoorb
-end module pysimple
+
 subroutine init(vmec_file,ns_s,ns_tp,multharm,integmode) ! in pysimple.f90
     use neo_orb, only: init_field
     use pysimple, only: norb

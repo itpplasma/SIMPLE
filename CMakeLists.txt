@@ -67,6 +67,10 @@ else()
 	endif()
 endif()
 
+if (CMAKE_C_COMPILER_ID MATCHES Clang)
+	set(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "${CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS} -undefined dynamic_lookup")
+endif()
+
 # RKF45 from https://people.sc.fsu.edu/~jburkardt/
 # licenced under LGPL (see SRC/contrib/LICENSE.rkf45)
 add_library ( rkf45 SHARED
@@ -101,6 +105,7 @@ add_library ( simple SHARED
 	SRC/zzg.f90
 	SRC/rng.f
 	SRC/collis_alphas.f90
+	SRC/params.f90
 )
 link_libraries(simple)
 
@@ -204,6 +209,7 @@ add_custom_command(
 # Set up target
 add_library(${f2py_module_name} SHARED
   "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}" # Generated
+  "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90"
   "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
   "${fortran_src_file}" # Fortran source(s)
   )
@@ -219,5 +225,3 @@ set_target_properties(
 		SUFFIX ".so"
         LINKER_LANGUAGE C
     )
-
-set(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "${CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS} -undefined dynamic_lookup")
