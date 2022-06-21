@@ -15,7 +15,7 @@ program neo_orb_main
   implicit none
 
   double precision :: facE_al, bmod_ref, trace_time
-  integer :: ntimstep, npoiper, npoiper2
+  integer :: ntimstep, npoiper, npoiper2, n_e, n_d
   type(NeoOrb) :: norb
 
 ! read config file
@@ -24,7 +24,7 @@ program neo_orb_main
 ! initialize field geometry
   call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
   call init_params(3.5d6/facE_al, bmod_ref, trace_time, ntimstep, npoiper, &
-    npoiper2)
+    npoiper2, n_e, n_d)
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
   print *, 'v0 = ', v0
@@ -440,8 +440,6 @@ subroutine trace_orbit(anorb, ipart)
       call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
   elseif(isw_field_type.eq.2) then
       call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
-  else
-      print *,'unknown field type'
   endif
 
 ! In case of classification plot all starting points are moved to the classification cut:

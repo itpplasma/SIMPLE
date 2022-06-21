@@ -42,8 +42,6 @@ module params ! in main.f90
     double precision, allocatable,dimension(:) :: times_lost
     double precision :: contr_pp
     integer :: ibins
-    integer :: n_e
-    integer :: n_d
     integer :: startmode
     integer :: ntau
     integer, optional :: integmode=0
@@ -81,13 +79,15 @@ module params ! in main.f90
     double precision :: dchichi_norm
     double precision :: slowrate_norm
     logical, optional :: deterministic=.false.
-    subroutine init_params(e_alpha,bmod_ref,trace_time,ntimstep,npoiper,npoiper2) ! in main.f90:params
+    subroutine init_params(e_alpha,bmod_ref,trace_time,ntimstep,npoiper,npoiper2,n_e,n_d) ! in main.f90:params
         double precision intent(in) :: e_alpha
         double precision intent(in) :: bmod_ref
         double precision intent(in) :: trace_time
         integer intent(in) :: ntimstep
         integer intent(in) :: npoiper
         integer intent(in) :: npoiper2
+    integer intent(in) :: n_e
+    integer intent(in) :: n_d
     end subroutine init_params
 end module params
 

@@ -585,8 +585,6 @@ subroutine trace_orbit(anorb, ipart)
       call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
   elseif(isw_field_type.eq.2) then
       call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
-  else
-      print *,'unknown field type'
   endif
 
 ! In case of classification plot all starting points are moved to the classification cut:

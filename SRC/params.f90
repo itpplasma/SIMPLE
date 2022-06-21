@@ -17,7 +17,6 @@ module params
   double precision, dimension(:), allocatable :: times_lost
   double precision :: contr_pp
   integer          :: ibins
-  integer          :: n_e,n_d
   integer          :: startmode
 
   integer :: ntau ! number of dtaumin in dtau
@@ -53,7 +52,7 @@ module params
 contains
 
   subroutine init_params(E_alpha, bmod_ref, trace_time, ntimstep, npoiper, &
-      npoiper2)
+      npoiper2, n_e, n_d)
     double precision, intent(in) :: E_alpha     ! Particle energy in eV
     double precision, intent(in) :: bmod_ref    ! Reference magnetic field in G
     double precision, intent(in) :: trace_time  ! Tracing time in seconds
@@ -62,6 +61,7 @@ contains
                                      ! per field period to init flux surface
     integer, intent(in) :: npoiper2  ! Minimum number of integration steps per
                                      ! field period (i.e. strongly passing)
+    integer, intent(in) :: n_e,n_d   ! Test particle charge and mass number
 
   ! set alpha energy, velocity, and Larmor radius
     v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))

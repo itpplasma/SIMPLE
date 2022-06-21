@@ -197,8 +197,12 @@ add_custom_target(
   genpyf
   DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}"
   )
+
+set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}module.c")
+list(APPEND f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90")
+
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}"
+  OUTPUT ${f2py_wrappers}
   COMMAND ${Python3_EXECUTABLE}  -m "numpy.f2py"
                    "${fortran_pyf_file}"
                    -m "${f2py_module_name}"
@@ -208,8 +212,7 @@ add_custom_command(
 
 # Set up target
 add_library(${f2py_module_name} SHARED
-  "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}" # Generated
-  "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90"
+	${f2py_wrappers}
   "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
   "${fortran_src_file}" # Fortran source(s)
   )
