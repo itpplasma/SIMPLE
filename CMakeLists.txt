@@ -9,6 +9,8 @@ if (NOT CMAKE_BUILD_TYPE)
 #    set(CMAKE_BUILD_TYPE Debug)
 endif()
 
+set(CMAKE_MACOSX_RPATH 1)
+
 find_program(NF_CONFIG "nc-config")
 
 if (NF_CONFIG)
@@ -67,10 +69,6 @@ else()
 	endif()
 endif()
 
-if (CMAKE_C_COMPILER_ID MATCHES Clang)
-	set(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "${CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS} -undefined dynamic_lookup")
-endif()
-
 # RKF45 from https://people.sc.fsu.edu/~jburkardt/
 # licenced under LGPL (see SRC/contrib/LICENSE.rkf45)
 add_library ( rkf45 SHARED
@@ -124,13 +122,13 @@ add_executable (simple.x
 	SRC/main.f90
 )
 
-add_executable (simple_mpi.x
-	SRC/sorting.f90
-	SRC/check_orbit_type.f90
-	SRC/find_bminmax.f90
-	SRC/main_mpi.f90
-)
-target_link_libraries(simple_mpi.x ${MPI_Fortran_LIBRARIES})
+# add_executable (simple_mpi.x
+# 	SRC/sorting.f90
+# 	SRC/check_orbit_type.f90
+# 	SRC/find_bminmax.f90
+# 	SRC/main_mpi.f90
+# )
+# target_link_libraries(simple_mpi.x ${MPI_Fortran_LIBRARIES})
 
 add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
 add_executable (test_sympl_tok.x SRC/test_sympl.f90)
@@ -162,13 +160,13 @@ set_target_properties(stell PROPERTIES IMPORTED_LOCATION
 target_link_libraries(test_vmec.x stell)
 
 # Grab Python
-find_package(Python3 REQUIRED
+find_package(Python REQUIRED
   COMPONENTS Interpreter Development NumPy)
 
 # Grab the variables from a local Python installation
 # F2PY headers
 execute_process(
-  COMMAND "${Python3_EXECUTABLE}"
+  COMMAND "${Python_EXECUTABLE}"
   -c "import numpy.f2py; print(numpy.f2py.get_include())"
   OUTPUT_VARIABLE F2PY_INCLUDE_DIR
   OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -176,14 +174,15 @@ execute_process(
 
 include_directories(
     BEFORE
-    ${Python3_INCLUDE_DIRS}
-    ${Python3_NumPy_INCLUDE_DIRS}
+    ${Python_INCLUDE_DIRS}
+    ${Python_NumPy_INCLUDE_DIRS}
     ${F2PY_INCLUDE_DIR}
 )
 
-message(STATUS ${Python3_INCLUDE_DIRS})
+message(STATUS ${Python_INCLUDE_DIRS})
 message(STATUS ${F2PY_INCLUDE_DIR})
-message(STATUS ${Python3_NumPy_INCLUDE_DIRS})
+message(STATUS ${Python_NumPy_INCLUDE_DIRS})
+message(STATUS ${Python_LIBRARIES})
 
 # Vars
 set(f2py_module_name "_pysimple")
@@ -193,7 +192,7 @@ set(fortran_src_files
 	f90wrap_orbit_symplectic.f90
 	f90wrap_field_can.f90
 )
-set(generated_module_file "${f2py_module_name}.${Python3_SOABI}")
+set(generated_module_file "${f2py_module_name}.${Python_SOABI}")
 set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}")
 
 # Generate sources
@@ -214,9 +213,9 @@ add_custom_command(
 add_custom_command(
 	OUTPUT ${fortran_src_files}
 	COMMAND f90wrap -m pysimple
-	${CMAKE_SOURCE_DIR}/SRC/simple.f90
-	${CMAKE_SOURCE_DIR}/SRC/orbit_symplectic.f90
-	${CMAKE_SOURCE_DIR}/SRC/field_can.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/simple.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/field_can.f90
 )
 
 #
@@ -224,13 +223,15 @@ add_custom_command(
 
 # # Set up target
 add_library(${f2py_module_name} SHARED
-	${f2py_wrappers}
+   "${f2py_wrappers}"
    "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
    "${fortran_src_files}" # Fortran source(s)
 )
 
+
 # # Depend on sources
 # add_dependencies(${f2py_module_name} genpyf)
+target_link_libraries(${f2py_module_name} PRIVATE ${Python_LIBRARIES})
 
 set_target_properties(
     ${f2py_module_name}
@@ -241,4 +242,8 @@ set_target_properties(
         LINKER_LANGUAGE C
     )
 
-install(TARGETS simple.x DESTINATION bin)
+ADD_CUSTOM_COMMAND(TARGET ${f2py_module_name} POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+                   "${CMAKE_CURRENT_BINARY_DIR}/pysimple.py"
+                   "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/pysimple.py"
+                   COMMENT "Copying 'pysimple.py' file to '${CMAKE_LIBRARY_OUTPUT_DIRECTORY}'")
