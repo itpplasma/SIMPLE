@@ -5,7 +5,7 @@ module canonical_coordinates_main
   use velo_mod,   only : isw_field_type
   use diag_mod, only : icounter
   use orbit_symplectic, only : orbit_sympl_init, orbit_timestep_sympl
-  use common, only: twopi,c,e_charge,e_mass,p_mass,ev,newunit
+  use util, only: twopi,c,e_charge,e_mass,p_mass,ev,newunit
   use cut_detector, only : fract_dimension
 
 #ifdef _OPENMP

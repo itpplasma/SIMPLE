@@ -1,6 +1,6 @@
 module orbit_symplectic
 
-use common, only: pi, twopi
+use util, only: pi, twopi
 use field_can_mod, only: FieldCan, eval_field, get_val, get_derivatives, get_derivatives2
 
 implicit none
@@ -549,7 +549,7 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(s)
+  type(FieldCan), intent(inout) :: fs(:)
   double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
   double precision, intent(out) :: fvec(4*s)
 
@@ -588,7 +588,7 @@ subroutine jac_rk_gauss(si, fs, s, jac)
 !
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(in) :: fs(s)
+  type(FieldCan), intent(in) :: fs(:)
   double precision, intent(out) :: jac(4*s, 4*s)
 
   double precision :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
@@ -665,7 +665,7 @@ subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   type(SymplecticIntegrator), intent(inout) :: si
 
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(s)
+  type(FieldCan), intent(inout) :: fs(:)
   integer :: kit, ks
 
   double precision, intent(inout) :: x(4*s)
@@ -715,7 +715,7 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   type(SymplecticIntegrator), intent(inout) :: si
 
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(s)
+  type(FieldCan), intent(inout) :: fs(:)
   integer :: kit, ks
 
   double precision, intent(inout) :: x(4*s)
@@ -849,7 +849,7 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   !
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(s)
+  type(FieldCan), intent(inout) :: fs(:)
   double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
   double precision, intent(out) :: fvec(4*s)
   integer, intent(in) :: jactype  ! 0 = no second derivatives, 2 = second derivatives
@@ -902,7 +902,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
 !
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(in) :: fs(s)
+  type(FieldCan), intent(in) :: fs(:)
   double precision, intent(out) :: jac(4*s-2, 4*s-2)
 
   double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s), dHprime(4*s-2)
@@ -1040,7 +1040,7 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
   type(SymplecticIntegrator), intent(inout) :: si
 
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(s)
+  type(FieldCan), intent(inout) :: fs(:)
   integer :: kit, ks
 
   double precision, intent(inout) :: x(4*s-2)
@@ -1865,16 +1865,16 @@ module orbit_symplectic_global
   !$omp threadprivate(si, f)
 
 contains
-  subroutine init(z, dt, ntau, rtol_init, mode_init, nlag)
-    double precision, dimension(:), intent(in) :: z
-    double precision, intent(in) :: dt
-    integer, intent(in) :: ntau
-    double precision, intent(in) :: rtol_init
-    integer, intent(in) :: mode_init
-    integer, intent(in) :: nlag
+  ! subroutine init(z, dt, ntau, rtol_init, mode_init, nlag)
+  !   double precision, dimension(:), intent(in) :: z
+  !   double precision, intent(in) :: dt
+  !   integer, intent(in) :: ntau
+  !   double precision, intent(in) :: rtol_init
+  !   integer, intent(in) :: mode_init
+  !   integer, intent(in) :: nlag
 
-    call orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
-  end subroutine init
+  !   call orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
+  ! end subroutine init
 
   subroutine init_multi(z, dtau, ntau, rtol_init, alpha, beta)
     double precision, dimension(:), intent(in) :: z
@@ -1887,13 +1887,13 @@ contains
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine init_multi
 
-  subroutine timestep(z, ierr)
-    double precision, intent(out) :: z(:)
-    integer, intent(out) :: ierr
+  ! subroutine timestep(z, ierr)
+  !   double precision, intent(out) :: z(:)
+  !   integer, intent(out) :: ierr
 
-    call orbit_timestep_sympl(si, f, ierr)
-    z = si%z
-  end subroutine timestep
+  !   call orbit_timestep_sympl(si, f, ierr)
+  !   z = si%z
+  ! end subroutine timestep
 
   subroutine timesteps(n, zs, ierr)
     integer, intent(in) :: n

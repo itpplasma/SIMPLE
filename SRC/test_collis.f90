@@ -1,6 +1,6 @@
 program test_collis
   use collis_alp
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
+  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
 
   implicit none
 

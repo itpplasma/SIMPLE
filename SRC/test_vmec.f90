@@ -1,6 +1,6 @@
 program test_vmec
 use read_wout_mod, only: tosuvspace, nfp
-use common, only: pi
+use util, only: pi
 implicit none
 
 character(*), parameter :: filename = 'wout.nc'

@@ -2,14 +2,14 @@ program simple_main
   use mpi
 
   use omp_lib
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
+  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
     vmec_B_scale, vmec_RZ_scale
 
   use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use neo_orb, only : init_field, init_sympl, NeoOrb, debug, eval_field
+  use simple, only : init_field, init_sympl, Tracer, debug, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -24,7 +24,7 @@ program simple_main
   double precision :: sbeg,thetabeg
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
-  double precision, dimension(:,:), allocatable :: zstart
+  double precision, dimension(:,:), allocatable :: zstart, zend
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
   double precision, dimension(:), allocatable :: times_lost
   integer          :: npoiper2
@@ -41,7 +41,7 @@ program simple_main
 
   double precision :: relerr
 
-  type(NeoOrb) :: norb
+  type(Tracer) :: norb
   double precision, allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
 
@@ -104,7 +104,7 @@ program simple_main
   allocate(iclass(3,ntestpart))
   times_lost = -1.d0
 
-  allocate(zstart(5,ntestpart))
+  allocate(zstart(5,ntestpart), zend(5,ntestpart))
   if(local) then
     call init_starting_points
   else
@@ -183,7 +183,7 @@ program simple_main
 
     open(1,file='times_lost.dat',recl=1024)
     do i=1,ntestpart
-      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i)
+      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
     enddo
     close(1)
 
@@ -486,7 +486,7 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
-  type(NeoOrb), intent(inout) :: anorb
+  type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart
   integer :: ierr, ierr_coll
   double precision, dimension(5) :: z
@@ -585,8 +585,6 @@ subroutine trace_orbit(anorb, ipart)
       call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
   elseif(isw_field_type.eq.2) then
       call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
-  else
-      print *,'unknown field type'
   endif
 
 ! In case of classification plot all starting points are moved to the classification cut:
@@ -941,7 +939,7 @@ subroutine trace_orbit(anorb, ipart)
       confpart_trap(it)=confpart_trap(it)+1.d0
     endif
   enddo
-
+  zend(:,ipart) = z
   times_lost(ipart) = kt*dtaumin/v0
   !$omp critical
   deallocate(zpoipl_tip, zpoipl_per)

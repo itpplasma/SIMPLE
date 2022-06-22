@@ -1,13 +1,13 @@
 program alpha_lifetime
   use omp_lib
-  use common, only: pi, c, e_charge, e_mass, p_mass, ev
+  use util, only: pi, c, e_charge, e_mass, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_sympl
+  use simple, only : init_sympl
 use diag_mod, only : icounter
 
   implicit none

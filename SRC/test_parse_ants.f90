@@ -1,7 +1,7 @@
 program test_parse_ants
 use iso_fortran_env
 use parse_ants, only: process_line
-use common, only: pi
+use util, only: pi
 implicit none
 
 integer, parameter :: maxlen = 4096
