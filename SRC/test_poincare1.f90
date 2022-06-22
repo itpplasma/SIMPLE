@@ -5,7 +5,7 @@
 use diag_mod, only : icounter
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_sympl
+  use simple, only : init_sympl
 !
   implicit none
 !
@@ -136,7 +136,7 @@ print *,'symplectic'
 icounter = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
-  call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl) 
+  call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl)
   do i=1,ntimstep
 !
     call orbit_timestep_sympl(si, f, ierr)
@@ -145,7 +145,7 @@ open(3004, file='orbit_sympl.out', recl=1024)
       call can_to_vmec(z(1),z(2),z(3),theta_vmec,varphi_vmec)
       write (3004,*) dtau*dble(i),z(1),theta_vmec,varphi_vmec,z(4:5),z(2:3)
     else
-  !    
+  !
       alam=z(5)
       par_inv=par_inv+alam**2*dtau
       if(alam_prev.lt.0.d0.and.alam.gt.0.d0) then
@@ -157,7 +157,7 @@ open(3004, file='orbit_sympl.out', recl=1024)
       alam_prev=alam
     endif
 !
-    
+
   enddo
 close(3004)
 call cpu_time(tend)
@@ -197,7 +197,7 @@ call cpu_time(tstart)
       endif
       alam_prev=alam
     endif
-    
+
   enddo
 close(3005)
 call cpu_time(tend)

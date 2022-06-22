@@ -1,13 +1,13 @@
 !
   program test_boozer
 !
-  use neo_orb, only : NeoOrb, init_field
+  use simple, only : Tracer, init_field
   use boozer_coordinates_mod, only : use_B_r, use_del_tp_B
   use new_vmec_stuff_mod,   only : nper
 !
   implicit none
 !
-  type(NeoOrb) :: norb
+  type(Tracer) :: norb
 !
   double precision :: r,vartheta_B,varphi_B,                                       &
                       A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3, &

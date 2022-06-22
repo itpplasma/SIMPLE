@@ -7,7 +7,7 @@ program test_coord_trans
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_field, init_sympl, NeoOrb, debug
+  use simple, only : init_field, init_sympl, Tracer, debug
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
 
@@ -38,7 +38,7 @@ program test_coord_trans
 
   double precision :: relerr
 
-  type(NeoOrb) :: norb
+  type(Tracer) :: norb
   double precision, allocatable :: trap_par(:)
 
   integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv

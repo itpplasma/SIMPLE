@@ -6,7 +6,7 @@ program neo_orb_main
 
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use neo_orb, only : init_field, init_sympl, debug, eval_field
+  use simple, only : init_field, init_sympl, debug, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -16,14 +16,14 @@ program neo_orb_main
 
   double precision :: facE_al, bmod_ref, trace_time
   integer :: ntimstep, npoiper, npoiper2, n_e, n_d
-  type(NeoOrb) :: norb
+  type(Tracer) :: norb
 
 ! read config file
   call read_config
 
 ! initialize field geometry
   call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-  call init_params(3.5d6/facE_al, bmod_ref, trace_time, ntimstep, npoiper, &
+  call params_init(3.5d6/facE_al, bmod_ref, trace_time, ntimstep, npoiper, &
     npoiper2, n_e, n_d)
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
@@ -341,7 +341,7 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
-  type(NeoOrb), intent(inout) :: anorb
+  type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart
   integer :: ierr, ierr_coll
   double precision, dimension(5) :: z

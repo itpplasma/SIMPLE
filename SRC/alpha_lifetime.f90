@@ -7,7 +7,7 @@ program alpha_lifetime
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_sympl
+  use simple, only : init_sympl
 use diag_mod, only : icounter
 
   implicit none

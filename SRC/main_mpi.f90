@@ -9,7 +9,7 @@ program simple_main
   use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use neo_orb, only : init_field, init_sympl, NeoOrb, debug, eval_field
+  use simple, only : init_field, init_sympl, Tracer, debug, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -41,7 +41,7 @@ program simple_main
 
   double precision :: relerr
 
-  type(NeoOrb) :: norb
+  type(Tracer) :: norb
   double precision, allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
 
@@ -486,7 +486,7 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
-  type(NeoOrb), intent(inout) :: anorb
+  type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart
   integer :: ierr, ierr_coll
   double precision, dimension(5) :: z

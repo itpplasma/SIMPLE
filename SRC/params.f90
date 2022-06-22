@@ -1,7 +1,7 @@
 module params
   use util
   use parmot_mod, only : ro0, rmu
-  use neo_orb, only: NeoOrb
+  use simple, only: Tracer
   implicit none
 
   integer          :: npoi,L1i,nper,i,ntestpart
@@ -51,7 +51,7 @@ module params
 
 contains
 
-  subroutine init_params(E_alpha, bmod_ref, trace_time, ntimstep, npoiper, &
+  subroutine params_init(E_alpha, bmod_ref, trace_time, ntimstep, npoiper, &
       npoiper2, n_e, n_d)
     double precision, intent(in) :: E_alpha     ! Particle energy in eV
     double precision, intent(in) :: bmod_ref    ! Reference magnetic field in G
@@ -95,5 +95,5 @@ contains
     npl_half=nplagr/2
 
     fper = 2d0*pi/dble(L1i)   !<= field period
-  end subroutine init_params
+  end subroutine params_init
 end module params

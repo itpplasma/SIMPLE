@@ -5,14 +5,14 @@ program test_magfie
 use velo_mod,   only : isw_field_type
 use orbit_symplectic
 use field_can_mod
-use neo_orb
+use simple
 use new_vmec_stuff_mod, only: rmajor
 
 implicit none
 save
 
 double precision :: z0(4), vpar0
-type(NeoOrb) :: norb
+type(Tracer) :: norb
 type(FieldCan) :: f
 
 integer :: npoiper2

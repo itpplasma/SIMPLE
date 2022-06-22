@@ -1,4 +1,4 @@
-module neo_orb
+module simple
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -18,7 +18,7 @@ save
 
 public
 
-  type :: NeoOrb
+  type :: Tracer
     double precision :: fper
     double precision :: dtau, dtaumin, v0
     integer          :: n_e, n_d
@@ -29,7 +29,7 @@ public
     type(FieldCan) :: f
     type(SymplecticIntegrator) :: si
     type(MultistageIntegrator) :: mi
-  end type NeoOrb
+  end type Tracer
 
   interface tstep
       module procedure timestep
@@ -42,7 +42,7 @@ contains
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     ! initialize field geometry
     character(len=*), intent(in) :: vmec_file
-    type(NeoOrb), intent(inout) :: self
+    type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     integer             :: ierr
     integer             :: L1i
@@ -85,10 +85,10 @@ contains
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
     ! of plasma particles (= temperature for thermal particles).
 
-    type(NeoOrb) :: self
+    type(Tracer) :: self
     integer, intent(in) :: Z_charge, m_mass
-    real(8), intent(in) :: E_kin, adtau, adtaumin
-    real(8), intent(in) :: arelerr
+    double precision, intent(in) :: E_kin, adtau, adtaumin
+    double precision, intent(in) :: arelerr
     double precision :: bmod_ref=5d4 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
     double precision :: bmod00, rlarm ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
 
@@ -146,7 +146,7 @@ contains
   end subroutine init_sympl
 
   subroutine init_integrator(self, z0)
-    type(NeoOrb), intent(inout) :: self
+    type(Tracer), intent(inout) :: self
     double precision, intent(in) :: z0(:)
 
     call init_sympl(self%si, self%f, z0, self%dtau, self%dtaumin, &
@@ -154,8 +154,8 @@ contains
   end subroutine init_integrator
 
   subroutine timestep(self, s, th, ph, lam, ierr)
-    type(NeoOrb), intent(inout) :: self
-    real(8), intent(inout) :: s, th, ph, lam
+    type(Tracer), intent(inout) :: self
+    double precision, intent(inout) :: s, th, ph, lam
     integer, intent(out) :: ierr
 
     double precision, dimension(5) :: z
@@ -175,8 +175,8 @@ contains
   end subroutine timestep
 
   subroutine timestep_z(self, z, ierr)
-    type(NeoOrb), intent(inout) :: self
-    real(8), intent(inout) :: z(:)
+    type(Tracer), intent(inout) :: self
+    double precision, intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
     call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
@@ -185,7 +185,7 @@ contains
   subroutine timestep_sympl_z(si, f, z, ierr)
     type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
-    real(8), intent(inout) :: z(:)
+    double precision, intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
     if (z(1) < 0.0 .or. z(1) > 1.0) then
@@ -200,11 +200,11 @@ contains
 
   end subroutine timestep_sympl_z
 
-end module neo_orb
+end module simple
 
 module cut_detector
   use util, only: twopi
-  use neo_orb, only: debug, tstep
+  use simple, only: debug, tstep
   use orbit_symplectic, only: SymplecticIntegrator
   use field_can_mod, only: FieldCan
 
@@ -409,128 +409,3 @@ contains
   end subroutine fract_dimension
 
 end module cut_detector
-
-
-module neo_orb_global
-  use neo_orb, only: NeoOrb, neo_orb_init_field => init_field, &
-                             neo_orb_init_params => init_params, &
-                             neo_orb_init_integrator => init_integrator, &
-                             neo_orb_timestep => timestep, &
-                             neo_orb_timestep_z => timestep_z, &
-                             neo_orb_timestep_sympl_z => timestep_sympl_z
-
-  implicit none
-  save
-
-  type(NeoOrb) :: norb
-  !$omp threadprivate(norb)
-
-contains
-
-  subroutine init_field(ans_s, ans_tp, amultharm, aintegmode)
-    ! initialize field geometry
-    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-
-    call neo_orb_init_field(norb, 'wout.nc', ans_s, ans_tp, amultharm, aintegmode)
-  end subroutine init_field
-
-  subroutine init_spline_vmec
-    call spline_vmec_data
-  end subroutine init_spline_vmec
-
-  subroutine spline_vmec(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
-    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
-
-    double precision, intent(in) :: s,theta,varphi
-    double precision, intent(out) :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,   &
-    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
-
-    call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
-    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
-
-  end subroutine spline_vmec
-
-  subroutine field_vmec(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds, &
-    aiota, sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-
-    double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,        &
-                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
-    double precision :: Bctrvr_vartheta,Bctrvr_varphi,Bcovar_r,Bcovar_vartheta,Bcovar_varphi,sqg
-
-    call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  end subroutine field_vmec
-
-
-  subroutine init_params(Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
-    integer, intent(in) :: Z_charge, m_mass
-    real(8), intent(in) :: E_kin, dtau, dtaumin
-    real(8), intent(in) :: relerr
-
-    call neo_orb_init_params(norb, Z_charge, m_mass, E_kin, dtau, dtaumin, relerr)
-  end subroutine init_params
-
-
-  subroutine init_integrator(z0)
-    double precision, dimension(:), intent(in) :: z0
-
-    call neo_orb_init_integrator(norb, z0)
-  end subroutine init_integrator
-
-
-
-  subroutine timestep(s, th, ph, lam, ierr)
-    real(8), intent(inout) :: s, th, ph, lam
-    integer, intent(out) :: ierr
-
-    call neo_orb_timestep(norb, s, th, ph, lam, ierr)
-  end subroutine timestep
-
-
-  subroutine timestep_z(z, ierr)
-    real(8), intent(inout) :: z(:)
-    integer, intent(out) :: ierr
-
-    call neo_orb_timestep_z(norb, z, ierr)
-  end subroutine timestep_z
-
-
-  subroutine timestep_sympl_z(z, ierr)
-    real(8), intent(inout) :: z(:)
-    integer, intent(out) :: ierr
-
-    call neo_orb_timestep_sympl_z(norb%si, norb%f, z, ierr)
-  end subroutine timestep_sympl_z
-
-end module neo_orb_global
-
-module cut_detector_global
-  use util
-  use neo_orb_global, only: norb
-  use cut_detector, only: CutDetector, cut_detector_init => init, cut_detector_trace_to_cut => trace_to_cut
-
-  implicit none
-  save
-
-  type(CutDetector) :: cutter
-  !$omp threadprivate(cutter)
-
-contains
-  subroutine init(z)
-    double precision, intent(in) :: z(:)
-
-    call cut_detector_init(cutter, norb%fper, z)
-  end subroutine init
-
-  subroutine trace_to_cut(z, var_cut, cut_type, ierr)
-    double precision, intent(inout) :: z(:)
-    ! variables to evaluate at tip: z(1..5), par_inv
-    double precision, dimension(:), intent(inout) :: var_cut
-    integer, intent(out) :: cut_type
-    integer, intent(out) :: ierr
-
-    call cut_detector_trace_to_cut(cutter, norb%si, norb%f, z, var_cut, cut_type, ierr)
-  end subroutine trace_to_cut
-end module cut_detector_global
