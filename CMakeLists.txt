@@ -240,3 +240,5 @@ set_target_properties(
 		SUFFIX ".so"
         LINKER_LANGUAGE C
     )
+
+install(TARGETS simple.x DESTINATION bin)
