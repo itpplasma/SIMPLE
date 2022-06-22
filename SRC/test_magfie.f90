@@ -37,7 +37,7 @@ else
   dtaumax = twopi*rbig/npoiper2
   dtau = dtaumax
 
-  call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+  call init_params(norb, 2, 4, 3.5d6, npoiper2, 1, 1d-8)  ! fusion alphas)
 
   ! Initial conditions
   z0(1) = 0.1d0  ! r

@@ -37,7 +37,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local
 
 add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
 add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-std=f2008>)
+#add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-std=f2008>)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused -stand f2008)
 	link_libraries("-mkl -qopenmp")
@@ -186,45 +186,57 @@ message(STATUS ${F2PY_INCLUDE_DIR})
 message(STATUS ${Python3_NumPy_INCLUDE_DIRS})
 
 # Vars
-set(f2py_module_name "pysimple")
-set(fortran_src_file "${CMAKE_SOURCE_DIR}/SRC/pysimple.f90")
-set(fortran_pyf_file "${CMAKE_SOURCE_DIR}/SRC/pysimple.pyf")
+set(f2py_module_name "_pysimple")
 set(f2py_module_c "${f2py_module_name}module.c")
-set(generated_module_file "${f2py_module_name}${Python3_SOABI}")
+set(fortran_src_files
+	f90wrap_simple.f90
+	f90wrap_orbit_symplectic.f90
+	f90wrap_field_can.f90
+)
+set(generated_module_file "${f2py_module_name}.${Python3_SOABI}")
+set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}")
 
 # Generate sources
 add_custom_target(
   genpyf
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}"
-  )
-
-set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}module.c")
-list(APPEND f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90")
+  DEPENDS "${f2py_wrappers}"
+)
 
 add_custom_command(
   OUTPUT ${f2py_wrappers}
-  COMMAND ${Python3_EXECUTABLE}  -m "numpy.f2py"
-                   "${fortran_pyf_file}"
-                   -m "${f2py_module_name}"
+  COMMAND f2py-f90wrap
+                   ${fortran_src_files}
+                   -m ${f2py_module_name}
                    --lower # Important
-  DEPENDS "${fortran_src_file}" # Fortran source
+  DEPENDS ${fortran_src_files} # Fortran source
   )
 
-# Set up target
+add_custom_command(
+	OUTPUT ${fortran_src_files}
+	COMMAND f90wrap -m pysimple
+	${CMAKE_SOURCE_DIR}/SRC/simple.f90
+	${CMAKE_SOURCE_DIR}/SRC/orbit_symplectic.f90
+	${CMAKE_SOURCE_DIR}/SRC/field_can.f90
+)
+
+#
+# list(APPEND f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90")
+
+# # Set up target
 add_library(${f2py_module_name} SHARED
 	${f2py_wrappers}
-  "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
-  "${fortran_src_file}" # Fortran source(s)
-  )
+   "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
+   "${fortran_src_files}" # Fortran source(s)
+)
 
-# Depend on sources
-add_dependencies(${f2py_module_name} genpyf)
+# # Depend on sources
+# add_dependencies(${f2py_module_name} genpyf)
 
 set_target_properties(
     ${f2py_module_name}
     PROPERTIES
         PREFIX ""
-        OUTPUT_NAME "${f2py_module_name}"
+        OUTPUT_NAME "${generated_module_file}"
 		SUFFIX ".so"
         LINKER_LANGUAGE C
     )

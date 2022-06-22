@@ -6,7 +6,7 @@ program neo_orb_main
 
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use simple, only : init_field, init_sympl, debug, eval_field
+  use simple, only : init_field, init_sympl, Tracer, debug, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost

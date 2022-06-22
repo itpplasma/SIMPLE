@@ -81,34 +81,49 @@ contains
     z = 1.0d0
   end subroutine init_field
 
-  subroutine init_params(self, Z_charge, m_mass, E_kin, adtau, adtaumin, arelerr)
+  subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
     ! of plasma particles (= temperature for thermal particles).
+    use new_vmec_stuff_mod, only : rmajor
 
     type(Tracer) :: self
-    integer, intent(in) :: Z_charge, m_mass
-    double precision, intent(in) :: E_kin, adtau, adtaumin
-    double precision, intent(in) :: arelerr
-    double precision :: bmod_ref=5d4 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    double precision :: bmod00, rlarm ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
+    integer, intent(in), optional :: Z_charge, m_mass
+    double precision, intent(in), optional :: E_kin
+    integer, intent(in), optional :: npoints  ! Integrator resolution. Number of
+    ! integration points for strongly passing particles around the torus
 
-    self%n_e = Z_charge
-    self%n_d = m_mass
-    self%relerr = arelerr
+    integer, intent(in), optional :: store_step       ! Store every X timesteps
+    double precision, intent(in), optional :: relerr  ! Relative error
+
+    if (present(Z_charge)) self%n_e = Z_charge
+    if (present(m_mass)) self%n_d = m_mass
+    if (present(relerr)) self%relerr = relerr
 
     ! Neglect relativistic effects by large inverse relativistic temperature
     rmu=1d8
 
     ! Reference velocity and normalized Larmor radius
-    self%v0 = sqrt(2.d0*E_kin*ev/(self%n_d*p_mass))
-    !ro0 = v0*n_d*p_mass*c/(n_e*e_charge) !commented by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    ! Larmor radius:
-    rlarm=self%v0*self%n_d*p_mass*c/(self%n_e*e_charge*bmod_ref) ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    bmod00=281679.46317784750d0 ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    ro0=rlarm*bmod00  ! added by johanna 10.05.2019 in order to correct orbit calculation (in analogy to test_orbits_vmec)
-    !ro0=v0*n_d*p_mass*c*2*pi/(n_e*e_charge) ! added by johanna 14.05.2019 in order to correct orbit calculation (missing 2pi in vmec in phitor)
-    self%dtau = adtau ! timestep where to get results
-    self%dtaumin = adtaumin ! minimum timestep for adaptive integration
+    if (present(E_kin)) then
+      self%v0 = sqrt(2.d0*E_kin*ev/(self%n_d*p_mass))
+    else
+      self%v0 = sqrt(2.d0*3.5d6*ev/(self%n_d*p_mass))
+    end if
+
+    ! Larmor radius times magnetic field:
+    ro0=self%v0*self%n_d*p_mass*c/(self%n_e*e_charge)
+
+    if (present(npoints)) then
+      self%dtaumin=twopi*rmajor*1.0d2/npoints
+    else
+      self%dtaumin=twopi*rmajor*1.0d2/256.0d0
+    end if
+
+   ! timestep where to get results
+    if (present(store_step)) then
+      self%dtau = store_step*self%dtaumin
+    else
+      self%dtau = self%dtaumin
+    end if
 
   end subroutine init_params
 
