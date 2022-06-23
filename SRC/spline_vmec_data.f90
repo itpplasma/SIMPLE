@@ -673,7 +673,7 @@
 ! none
 subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
 
-  use new_vmec_stuff_mod, only : ns_s
+  use new_vmec_stuff_mod, only : ns_s, old_axis_healing
 
   implicit none
 
@@ -684,7 +684,6 @@ subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
   integer :: irho,is,k,nhe
   double precision :: hs,hrho,s,ds,rho,a,b,c
   double precision, dimension(:,:), allocatable :: splcoe
-  logical, parameter :: old_axis_healing = .false.
 
   hs = 1.d0/dble(ns-1)
   hrho = 1.d0/dble(nrho-1)
