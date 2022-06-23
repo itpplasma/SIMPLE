@@ -243,8 +243,10 @@ set_target_properties(
         LINKER_LANGUAGE C
     )
 
-ADD_CUSTOM_COMMAND(TARGET ${f2py_module_name} POST_BUILD
+if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+	add_custom_command(TARGET ${f2py_module_name} POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy
                    "${CMAKE_CURRENT_BINARY_DIR}/pysimple.py"
                    "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/pysimple.py"
                    COMMENT "Copying 'pysimple.py' file to '${CMAKE_LIBRARY_OUTPUT_DIRECTORY}'")
+endif()
