@@ -173,7 +173,7 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-if (${NUMPY_VERSION} VERSION_GREATER "1.21.1")
+if (${NUMPY_VERSION} VERSION_GREATER_EQUAL "1.21.1")
 	execute_process(
         COMMAND "${Python_EXECUTABLE}"
         -c "import numpy.f2py; print(numpy.f2py.get_include())"
@@ -187,7 +187,7 @@ else()
         OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    set(F2PY_INCLUDE_DIR, "${NUMPY_INCLUDE_DIR}../../f2py/src/")
+    set(F2PY_INCLUDE_DIR "${NUMPY_INCLUDE_DIR}/../../f2py/src/")
 endif()
 
 include_directories(
