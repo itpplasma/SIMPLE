@@ -56,7 +56,8 @@ else()
 	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
 	add_compile_options(-g)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options(-O0 -g -ggdb -C -fbacktrace
+		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
+		add_compile_options(-O0 -g -ggdb -fbacktrace
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -p -g -shared-libgcc)
