@@ -1,7 +1,7 @@
 # CMakeLists files in this project can
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
-cmake_minimum_required (VERSION 2.8.12)
+cmake_minimum_required (VERSION 3.7)
 project (SIMPLE Fortran C)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -162,16 +162,33 @@ target_link_libraries(test_vmec.x stell)
 
 # Grab Python
 find_package(Python REQUIRED
-  COMPONENTS Interpreter Development NumPy)
+    COMPONENTS Interpreter Development NumPy)
 
 # Grab the variables from a local Python installation
 # F2PY headers
 execute_process(
-  COMMAND "${Python_EXECUTABLE}"
-  -c "import numpy.f2py; print(numpy.f2py.get_include())"
-  OUTPUT_VARIABLE F2PY_INCLUDE_DIR
-  OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND "${Python_EXECUTABLE}"
+    -c "import numpy; print(numpy.__version__)"
+    OUTPUT_VARIABLE NUMPY_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+if (${NUMPY_VERSION} VERSION_GREATER "1.21.1")
+	execute_process(
+        COMMAND "${Python_EXECUTABLE}"
+        -c "import numpy.f2py; print(numpy.f2py.get_include())"
+        OUTPUT_VARIABLE F2PY_INCLUDE_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+	)
+else()
+    execute_process(
+        COMMAND "${Python_EXECUTABLE}"
+        -c "import numpy; print(numpy.get_include())"
+        OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    set(F2PY_INCLUDE_DIR, "${NUMPY_INCLUDE_DIR}../../f2py/src/")
+endif()
 
 include_directories(
     BEFORE
