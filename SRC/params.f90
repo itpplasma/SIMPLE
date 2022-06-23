@@ -2,8 +2,8 @@ module params
 
   use util
   use parmot_mod, only : ro0, rmu
-  use new_vmec_stuff_mod, only : old_axis_healing_boundary, netcdffile, ns_s, &
-    ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
+  use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
+    netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
   use simple, only: Tracer, debug
 
@@ -66,7 +66,8 @@ module params
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
-    vmec_RZ_scale, swcoll, deterministic, old_axis_healing_boundary
+    vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
+    old_axis_healing_boundary
 
 contains
 
