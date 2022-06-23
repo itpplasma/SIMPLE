@@ -101,17 +101,6 @@ program neo_orb_main
 
 contains
 
-subroutine read_config
-  open(1,file='simple.in',recl=1024)
-  read(1, nml=config)
-  close(1)
-
-  if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
-    stop 'Collisions are incompatible with classification'
-  endif
-
-end subroutine read_config
-
 subroutine init_starting_surf
   integer :: ierr
 

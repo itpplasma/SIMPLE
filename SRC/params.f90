@@ -1,10 +1,12 @@
 module params
+
   use util
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing_boundary, netcdffile, ns_s, &
     ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
   use simple, only: Tracer, debug
+
   implicit none
 
   integer          :: npoi, L1i, nper=1000, i, ntestpart=1024
@@ -67,6 +69,40 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing_boundary
 
 contains
+
+  subroutine read_config
+    integer :: iostat
+    character(1024) :: iomsg
+
+    open(1, file='simple.in', recl=1024, iostat=iostat, iomsg=iomsg)
+    if (iostat /= 0) goto 666
+
+    read(1, nml=config, iostat=iostat, iomsg=iomsg)
+    if (iostat /= 0) goto 666
+
+    print *, iostat
+
+    if (iostat /= 0) then
+    end if
+    close(1)
+
+    print *, notrace_passing, nper, npoiper, ntimstep, ntestpart, &
+    bmod_ref, trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,    &
+    facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
+    isw_field_type, startmode, integmode, relerr, tcut, debug,           &
+    class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
+    vmec_RZ_scale, swcoll, deterministic, old_axis_healing_boundary
+
+    if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
+      stop 'Collisions are incompatible with classification'
+    endif
+
+    return
+
+    666 stop iomsg
+
+  end subroutine read_config
+
 
   subroutine params_init
     double precision :: E_alpha
