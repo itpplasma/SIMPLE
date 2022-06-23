@@ -10,15 +10,30 @@ program test_collis
   double precision :: n_d=4.0d0, n_e=2.0d0  ! Test particle mass and charge no.
   double precision :: trace_time = 1.0d-1   ! Total trace time in seconds
 
-  integer :: i,j,k,ntimstep,ierr
+  integer, parameter :: ntimstep=100000 
+  integer :: i,j,k,ierr,npart,ipart
+  double precision, dimension(ntimstep) :: enoftim
 
-  namelist /config/ n_d, n_e, ealpha, trace_time, ntimstep
-  namelist /collisions/ am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe
+!  namelist /config/ n_d, n_e, ealpha, trace_time, ntimstep
+!  namelist /collisions/ am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe
 
-  open(1, file='collis.in')
-  read(nml=config, unit=1)
-  read(nml=collisions, unit=1)
-  close(1)
+!  open(1, file='collis.in')
+!  read(nml=config, unit=1)
+!  read(nml=collisions, unit=1)
+!  close(1)
+
+  ealpha=3.5d6
+  trace_time=1.d0
+
+  am1=2.0d0 
+  am2=3.0d0 
+  Z1=1.0d0 
+  Z2=1.0d0
+  densi1=0.5d14 
+  densi2=0.5d14
+  tempi1=1.0d4
+  tempi2=1.0d4
+  tempe=1.0d4
 
   call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,ealpha, &
                     v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
@@ -29,19 +44,23 @@ program test_collis
 
   print *, 'dtau = ', dtau
 
+enoftim=0.d0
+npart=10000
+do ipart=1,npart
   z = 0.0d0
   z(4) = 1.0d0
-  k = 10000
-  open(1, file='energyslow.dat')
-  write (1, *) 0.d0, z(4)**2, z(5)
+  enoftim(1)=enoftim(1)+1.d0
   do i = 2, ntimstep
-    do j = 1, k
-      call stost(z, dtau/dble(k), 1, ierr)
-      if (ierr /= 0) then
-        print *, 'Error in stost: ', ierr, 'z = ', z
-      endif
-    enddo
-    write (1,*) dble(i-1)*dtau/v0, z(4)**2, z(5)
+    call stost(z, dtau, 1, ierr)
+!    if(ierr.ne.0) print *,ierr
+    enoftim(i)=enoftim(i)+z(4)**2
   enddo
+print *,ipart
+enddo
+enoftim=enoftim/dble(npart)
+  open(1, file='energyslow_aver.dat')
+do i = 1, ntimstep
+    write (1,*) dble(i-1)*dtau/v0, enoftim(i)
+enddo
   close(1)
 end program test_collis
