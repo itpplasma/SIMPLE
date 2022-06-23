@@ -1,8 +1,10 @@
 This file contains a (possibly non-exhaustive) list of important changes.
 
-Changes marked with "!" yield different output when run on the same input
+Changes marked with "!" may yield different output when run on the same input
 compared to earlier versions.
 
+! commit a247433: Disable extrapolation entirely in init_sympl
+! commit 468e317: Compute actual momentum in z(4) every timestep
 commit 86c3a5d: simple.in is now in namelist format
 ! commit e264ef7: New healing procedure for VMEC near axis
 commit 6981791: start.dat is now always stored in VMEC coordinates.
