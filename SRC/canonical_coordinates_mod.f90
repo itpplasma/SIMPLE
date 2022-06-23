@@ -24,6 +24,7 @@
 !
     double precision, dimension(:,:,:,:,:,:), allocatable :: sR,sZ,slam
 
+    logical :: old_axis_healing = .True.
     logical :: old_axis_healing_boundary = .True.
   end module new_vmec_stuff_mod
 !
