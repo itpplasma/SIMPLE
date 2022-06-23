@@ -1,30 +1,33 @@
 module params
   use util
   use parmot_mod, only : ro0, rmu
-  use simple, only: Tracer
+  use new_vmec_stuff_mod, only : old_axis_healing_boundary, netcdffile, ns_s, &
+    ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
+  use velo_mod,   only : isw_field_type
+  use simple, only: Tracer, debug
   implicit none
 
-  integer          :: npoi,L1i,nper,i,ntestpart
-  integer          :: notrace_passing,loopskip,iskip
+  integer          :: npoi, L1i, nper=1000, i, ntestpart=1024
+  integer          :: loopskip=0,iskip
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
-  double precision :: tau,dtau,dtaumin,xi,v0
+  double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision :: sbeg,thetabeg
+  double precision :: sbeg=0.5d0, thetabeg=0.0d0
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart, zend
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
   double precision, dimension(:), allocatable :: times_lost
-  double precision :: contr_pp
+  double precision :: contr_pp=-1d0
   integer          :: ibins
-  integer          :: startmode
+  integer          :: startmode=1
 
   integer :: ntau ! number of dtaumin in dtau
-  integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+  integer :: integmode = 1 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 
   integer :: kpart = 0 ! progress counter for particles
 
-  double precision :: relerr
+  double precision :: relerr = 1d-13
 
   double precision, allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
@@ -36,32 +39,39 @@ module params
 
   double precision :: tcut = -1d0
   integer :: ntcut
-  logical          :: class_plot     !<=AAA
-  double precision :: cut_in_per     !<=AAA
-  logical          :: local=.false.
+  logical          :: class_plot = .False.    !<=AAA
+  double precision :: cut_in_per = 0d0        !<=AAA
+  logical          :: local=.True.
 
-  logical :: fast_class=.true.  !if .true. quit immeadiately after fast classification
+  logical :: fast_class=.False.  !if .true. quit immeadiately after fast classification
 
-! colliding with D-T reactor plasma. TODO: Make configurable
-  logical :: swcoll
+  ! Colliding with D-T reactor plasma. TODO: Make configurable
+  logical :: swcoll = .False.
   double precision, parameter :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
     densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
   logical :: deterministic = .False.
 
+  ! Further configuration parameters
+  integer          :: notrace_passing = 0
+  double precision :: facE_al=1d0, bmod_ref=5d4, trace_time=1d-1
+  integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
+
+  double precision, protected :: v0
+
+  namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
+    bmod_ref, trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,    &
+    facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
+    isw_field_type, startmode, integmode, relerr, tcut, debug,           &
+    class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
+    vmec_RZ_scale, swcoll, deterministic, old_axis_healing_boundary
+
 contains
 
-  subroutine params_init(E_alpha, bmod_ref, trace_time, ntimstep, npoiper, &
-      npoiper2, n_e, n_d)
-    double precision, intent(in) :: E_alpha     ! Particle energy in eV
-    double precision, intent(in) :: bmod_ref    ! Reference magnetic field in G
-    double precision, intent(in) :: trace_time  ! Tracing time in seconds
-    integer, intent(in) :: ntimstep  ! Number of times to record loss fraction
-    integer, intent(in) :: npoiper   ! Number of field-line integration steps
-                                     ! per field period to init flux surface
-    integer, intent(in) :: npoiper2  ! Minimum number of integration steps per
-                                     ! field period (i.e. strongly passing)
-    integer, intent(in) :: n_e,n_d   ! Test particle charge and mass number
+  subroutine params_init
+    double precision :: E_alpha
+
+    E_alpha = 3.5d6/facE_al
 
   ! set alpha energy, velocity, and Larmor radius
     v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))

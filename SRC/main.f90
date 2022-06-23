@@ -14,8 +14,6 @@ program neo_orb_main
 
   implicit none
 
-  double precision :: facE_al, bmod_ref, trace_time
-  integer :: ntimstep, npoiper, npoiper2, n_e, n_d
   type(Tracer) :: norb
 
 ! read config file
@@ -23,8 +21,7 @@ program neo_orb_main
 
 ! initialize field geometry
   call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-  call params_init(3.5d6/facE_al, bmod_ref, trace_time, ntimstep, npoiper, &
-    npoiper2, n_e, n_d)
+  call params_init
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
   print *, 'v0 = ', v0
@@ -106,50 +103,7 @@ contains
 
 subroutine read_config
   open(1,file='simple.in',recl=1024)
-  read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
-  read (1,*) nper              !number of periods for initial field line        ! TODO: increase
-  read (1,*) npoiper           !number of points per period on this field line  ! TODO: increase
-  read (1,*) ntimstep          !number of time steps per slowing down time
-  read (1,*) ntestpart         !number of test particles
-  read (1,*) bmod_ref          !reference field, G, for Boozer $B_{00}$
-  read (1,*) trace_time        !slowing down time, s
-  read (1,*) sbeg              !starting s for field line                       !<=2017
-  read (1,*) phibeg            !starting phi for field line                     !<=2017
-  read (1,*) thetabeg          !starting theta for field line                   !<=2017
-  read (1,*) loopskip          !how many loops to skip to shift random numbers
-  read (1,*) contr_pp          !control of passing particle fraction            ! UNUSED (2019)
-  read (1,*) facE_al           !facE_al test particle energy reduction factor
-  read (1,*) npoiper2          !additional integration step split factor
-  read (1,*) n_e               !test particle charge number (the same as Z)
-  read (1,*) n_d               !test particle mass number (the same as A)
-  read (1,*) netcdffile        !name of VMEC file in NETCDF format <=2017 NEW
-  read (1,*) ns_s              !spline order for 3D quantities over s variable
-  read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
-  read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
-  read (1,*) isw_field_type    !field type: -1 - Testing, 0 - Canonical, 1 - VMEC, 2 - Boozer
-  read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
-  read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
-  read (1,*) relerr            !relative error for RK integrator
-  read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
-  read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
-  read (1,*) class_plot        !write starting points at phi=const cut for classification plot (.True./.False.).  !<=AAA
-  read (1,*) cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True. !<=AAA
-  read (1,*) fast_class        !if .True. quit immeadiately after fast classification and don't trace orbits to the end
-  read (1,*) local             !if .True. orbits are started on a single flux surface, if .False. (not yet equally distributed) in volume
-  read (1,*) vmec_B_scale      !factor to scale the B field from VMEC
-  read (1,*) vmec_RZ_scale     !factor to scale the device size from VMEC
-  read (1,*) swcoll            !if .True. enables collisions. This is incompatible with classification.
-  read (1,*) deterministic     !if .True. put seed for the same random walk always
-! TODO: add new config options for collisions
-!  read (1,*) am1           !mass number of the 1-st field ion species
-!  read (1,*) am2           !mass number of the 2-nd field ion species
-!  read (1,*) Z1            !charge number of the 1-st field ion species
-!  read (1,*) Z2            !charge number of the 2-nd field ion species
-!  read (1,*) densi1        !density of the 1-st field ion species, 1/cm^3
-!  read (1,*) densi2        !density of the 2-nd field ion species, 1/cm^3
-!  read (1,*) tempi1        !temperature of the 1-st field ion species, eV
-!  read (1,*) tempi2        !temperature of the 2-nd field ion species, eV
-!  read (1,*) tempe         !temperature of electrons, eV
+  read(1, nml=config)
   close(1)
 
   if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then

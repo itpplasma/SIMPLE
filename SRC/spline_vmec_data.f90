@@ -15,8 +15,6 @@
   double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
   complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
 
-  logical, parameter :: old_axis_healing_boundary = .false.
-
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
   call new_allocate_vmec_stuff
@@ -108,7 +106,7 @@
 !
   nsize_exp_imt=(n_theta-1)*m_max
   nsize_exp_inp=(n_phi-1)*n_max
-! 
+!
   allocate(exp_imt(0:nsize_exp_imt),exp_inp(-nsize_exp_inp:nsize_exp_inp))
 !
   base_exp_imt=exp(cmplx(0.d0,h_theta,kind=kind(0d0)))
@@ -478,7 +476,7 @@
   subroutine vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                         sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                         Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-                        
+
 !
   implicit none
 !

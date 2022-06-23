@@ -9,20 +9,22 @@
   end module parmot_mod
 !
   module new_vmec_stuff_mod
-    character*1000   :: netcdffile
+    character*1000   :: netcdffile = 'wout.nc'
     integer          :: nsurfm,nstrm,nper,kpar
-    integer          :: multharm,n_theta,n_phi
+    integer          :: multharm=5,n_theta,n_phi
     integer          :: ns_A=5  !<- spline order for vector potential
     integer          :: ns_s=5  !<- spline order for R,Z,lambda over s
     integer          :: ns_tp=5 !<- spline order for R,Z,lambda over theta and varphi
     double precision :: rmajor,h_theta,h_phi
-    double precision :: vmec_B_scale=1.d0, vmec_RZ_scale=1.d0
+    double precision :: vmec_B_scale=1d0, vmec_RZ_scale=1d0
     double precision, dimension(:),     allocatable :: axm,axn,soa
     double precision, dimension(:),     allocatable :: aiota,s,sps,phi
     double precision, dimension(:,:),   allocatable :: almnc,rmnc,zmnc
     double precision, dimension(:,:),   allocatable :: almns,rmns,zmns
 !
     double precision, dimension(:,:,:,:,:,:), allocatable :: sR,sZ,slam
+
+    logical :: old_axis_healing_boundary = .True.
   end module new_vmec_stuff_mod
 !
   module vector_potentail_mod
