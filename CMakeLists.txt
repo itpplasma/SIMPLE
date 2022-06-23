@@ -213,11 +213,6 @@ set(fortran_src_files
 set(generated_module_file "${f2py_module_name}.${Python_SOABI}")
 set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}")
 
-# Generate sources
-add_custom_target(
-  genpyf
-  DEPENDS "${f2py_wrappers}"
-)
 
 add_custom_command(
   OUTPUT ${f2py_wrappers}
@@ -239,8 +234,14 @@ add_custom_command(
 #
 # list(APPEND f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90")
 
+# Generate sources
+add_custom_target(
+  pysimple
+  DEPENDS "${f2py_module_name}"
+)
+
 # # Set up target
-add_library(${f2py_module_name} SHARED
+add_library(${f2py_module_name} SHARED EXCLUDE_FROM_ALL
    "${f2py_wrappers}"
    "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
    "${fortran_src_files}" # Fortran source(s)
