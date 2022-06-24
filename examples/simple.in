@@ -29,7 +29,7 @@ class_plot = .False.     ! write starting points at phi=const cut for classifica
 cut_in_per = 0d0         ! normalized phi-cut position within field period, [0:1], used if class_plot=.True.
 fast_class = .False.     ! if .True. quit immeadiately after fast classification and don't trace orbits to the end
 local = .True.           ! if .True. orbits are started on a single flux surface, if .False. (not yet equally distributed) in volume
-vmec_B_scale= 1.0d0      ! factor to scale the B field from VMEC
+vmec_B_scale = 1.0d0     ! factor to scale the B field from VMEC
 vmec_RZ_scale = 1.0d0    ! factor to scale the device size from VMEC
 swcoll = .False.         ! if .True. enables collisions. This is incompatible with classification.
 deterministic = .False.  ! if .True. put seed for the same random walk

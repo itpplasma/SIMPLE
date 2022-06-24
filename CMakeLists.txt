@@ -209,6 +209,8 @@ set(fortran_src_files
 	f90wrap_simple.f90
 	f90wrap_orbit_symplectic.f90
 	f90wrap_field_can.f90
+	f90wrap_get_canonical_coordinates.f90
+	f90wrap_toplevel.f90
 )
 set(generated_module_file "${f2py_module_name}.${Python_SOABI}")
 set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}")
@@ -229,6 +231,7 @@ add_custom_command(
 	${CMAKE_CURRENT_LIST_DIR}/SRC/simple.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/field_can.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/get_canonical_coordinates.f90
 )
 
 #
