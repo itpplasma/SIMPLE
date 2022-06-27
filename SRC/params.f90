@@ -130,5 +130,14 @@ contains
     npl_half=nplagr/2
 
     fper = 2d0*pi/dble(L1i)   !<= field period
+
+    npoi=nper*npoiper ! total number of starting points
+
+    allocate(zstart(5,ntestpart), zend(5,ntestpart))
+    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
+    allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
+    allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
+    allocate(iclass(3,ntestpart))
+
   end subroutine params_init
 end module params

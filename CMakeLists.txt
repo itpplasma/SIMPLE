@@ -205,6 +205,14 @@ message(STATUS ${Python_LIBRARIES})
 # Vars
 set(f2py_module_name "_pysimple")
 set(f2py_module_c "${f2py_module_name}module.c")
+set(files_to_wrap
+	${CMAKE_CURRENT_LIST_DIR}/SRC/simple.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/field_can.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/get_canonical_coordinates.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/params.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/canonical_coordinates_mod.f90
+)
 set(fortran_src_files
 	f90wrap_simple.f90
 	f90wrap_orbit_symplectic.f90
@@ -229,13 +237,8 @@ add_custom_command(
 
 add_custom_command(
 	OUTPUT ${fortran_src_files}
-	COMMAND f90wrap -m pysimple
-	${CMAKE_CURRENT_LIST_DIR}/SRC/simple.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/field_can.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/get_canonical_coordinates.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/params.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/canonical_coordinates_mod.f90
+	COMMAND f90wrap -m pysimple ${files_to_wrap}
+	DEPENDS ${files_to_wrap}
 )
 
 #
