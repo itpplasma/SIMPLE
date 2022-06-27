@@ -105,6 +105,9 @@ add_library ( simple SHARED
 	SRC/rng.f
 	SRC/collis_alphas.f90
 	SRC/params.f90
+	SRC/sorting.f90
+	SRC/check_orbit_type.f90
+	SRC/find_bminmax.f90
 )
 link_libraries(simple)
 
@@ -117,9 +120,6 @@ else()
 endif()
 
 add_executable (simple.x
-	SRC/sorting.f90
-	SRC/check_orbit_type.f90
-	SRC/find_bminmax.f90
 	SRC/main.f90
 )
 
@@ -211,6 +211,8 @@ set(fortran_src_files
 	f90wrap_field_can.f90
 	f90wrap_get_canonical_coordinates.f90
 	f90wrap_toplevel.f90
+	f90wrap_params.f90
+	f90wrap_canonical_coordinates_mod.f90
 )
 set(generated_module_file "${f2py_module_name}.${Python_SOABI}")
 set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}")
@@ -232,6 +234,8 @@ add_custom_command(
 	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/field_can.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/get_canonical_coordinates.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/params.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/canonical_coordinates_mod.f90
 )
 
 #

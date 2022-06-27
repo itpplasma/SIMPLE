@@ -59,7 +59,7 @@ module params
   double precision :: facE_al=1d0, bmod_ref=5d4, trace_time=1d-1
   integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
 
-  double precision, protected :: v0
+  double precision :: v0
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     bmod_ref, trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,    &
