@@ -5,6 +5,10 @@
 ! Finds the index  i  of the array of increasing numbers   p  with dimension  n 
 ! which satisfies   p(i-1) <  xi  <  p(i) . Uses binary search algorithm.
 !
+!
+! Note: there is no check if p(nmin) < xi < p(nmax).
+!   If xi <= p(nmin) then nmin+1 is returned.
+!   If xi >= p(nmax) then nmax is returned.
   implicit none
 !
   integer                                :: n,nmin,nmax,i,imin,imax,k

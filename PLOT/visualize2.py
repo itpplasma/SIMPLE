@@ -16,26 +16,29 @@ from scipy.stats import gaussian_kde
 
 #basedir = '/home/calbert/net/cobra/run/SIMPLE/QA/2020-01-22_s0.3_withcut'
 #basedir = '/home/calbert/net/cobra/run/SIMPLE/QH/2020-02-10_s0.3_withcut'
-basedir = '/home/calbert/net/cobra/run/SIMPLE/QA/2020-02-10_s0.6_withcut'
+#basedir = '/home/calbert/net/cobra/run/SIMPLE/QA/2020-02-10_s0.6_withcut'
 #basedir = '/home/calbert/net/cobra/run/NEO-ORB/QH/2019-09-17_1k'
 
-data = np.loadtxt(os.path.join(basedir, 'start.dat'))
-r0 = data[:, 0]
-th0 = np.mod(data[:, 1], 2*np.pi)
-ph0 = np.mod(data[:, 2], 2*np.pi)
-p0 = data[:, 3]
-lam0 = data[:, 4]
-
-# plt.figure()
-#plt.plot(th0, ph0, ',')
-
-# %%
-
-npart = data.shape[0]
 
 data = np.loadtxt(os.path.join(basedir, 'times_lost.dat'))
 tlost = np.abs(data[:, 1])
 trap_par = data[:, 2]
+perp_inv = data[:, 4]
+perp_inv = (perp_inv-perp_inv.min())/(perp_inv.max()-perp_inv.min())
+
+npart = data.shape[0]
+
+data = np.loadtxt(os.path.join(basedir, 'start.dat'))
+r0 = data[:npart, 0]
+th0 = np.mod(data[:npart, 1], 2*np.pi)
+ph0 = np.mod(data[:npart, 2], 2*np.pi)
+p0 = data[:npart, 3]
+lam0 = data[:npart, 4]
+
+plt.figure()
+plt.plot(th0, ph0, ',')
+
+# %%
 
 data = np.loadtxt(os.path.join(basedir, 'confined_fraction.dat'))
 tconf = np.abs(data[1:, 0])
@@ -88,3 +91,13 @@ ax2.set_ylabel('confined fraction                    ', color='tab:red')
 ax2.set_yticks(np.linspace(0.5, 1, 6))
 ax2.tick_params('y', colors='tab:red')
 # plt.savefig('qi.png',dpi=150)
+
+#%% The same with Jperp
+
+plt.figure()
+plt.semilogx(tlost, perp_inv, 'kx', markersize=0.3, alpha=0.5)
+plt.ylim([0.0, 1.0])
+plt.ylabel(r'$J_\perp$')
+plt.xlabel(r'$t\,/\,\mathrm{s}$')
+plt.semilogx(tconf, conffrac, color='tab:red')
+# %%

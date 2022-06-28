@@ -1,454 +1,81 @@
-module simple
-  use util, only: c, e_charge, p_mass, ev, twopi
-  use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
-                                 vmec_B_scale, vmec_RZ_scale
+program simple_main
+  use mpi
 
-  use parmot_mod, only : rmu, ro0
-  use velo_mod,   only : isw_field_type
-  use field_can_mod, only : FieldCan
-  use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
-    orbit_sympl_init, orbit_timestep_sympl
-  use field_can_mod, only : FieldCan, eval_field
-  use diag_mod, only : icounter
-
-implicit none
-save
-
-  logical :: debug = .False.
-
-public
-
-  type :: Tracer
-    double precision :: fper
-    double precision :: dtau, dtaumin, v0
-    integer          :: n_e, n_d
-
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-    double precision :: relerr
-
-    type(FieldCan) :: f
-    type(SymplecticIntegrator) :: si
-    type(MultistageIntegrator) :: mi
-  end type Tracer
-
-  interface tstep
-      module procedure timestep
-      module procedure timestep_z
-      module procedure timestep_sympl_z
-   end interface tstep
-
-contains
-
-  subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    ! initialize field geometry
-    character(len=*), intent(in) :: vmec_file
-    type(Tracer), intent(inout) :: self
-    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-    integer             :: ierr
-    integer             :: L1i
-    double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
-    double precision    :: z(5)
-
-    netcdffile = vmec_file
-    ns_s = ans_s
-    ns_tp = ans_tp
-    multharm = amultharm
-    self%integmode = aintegmode
-
-    call spline_vmec_data ! initialize splines for VMEC field
-    call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
-    self%fper = twopi/dble(L1i)   !<= field period
-    print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
-    call volume_and_B00(volume,B00)
-    print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
-
-    if (self%integmode>=0) then
-      if (isw_field_type == 0) then
-        call get_canonical_coordinates ! pre-compute transformation to canonical coords
-      elseif (isw_field_type == 2) then
-        print *, 'Boozer field'
-        call boozer_converter
-      else
-        print *, 'Unknown field type ', isw_field_type
-      endif
-
-    end if
-
-    ! initialize position and do first check if z is inside vacuum chamber
-    z = 0.0d0
-    call chamb_can(z(1:2), z(3), ierr)
-    if(ierr.ne.0) stop
-    z = 1.0d0
-  end subroutine init_field
-
-  subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
-    ! Initializes normalization for velocity and Larmor radius based on kinetic energy
-    ! of plasma particles (= temperature for thermal particles).
-    use new_vmec_stuff_mod, only : rmajor
-
-    type(Tracer) :: self
-    integer, intent(in), optional :: Z_charge, m_mass
-    double precision, intent(in), optional :: E_kin
-    integer, intent(in), optional :: npoints  ! Integrator resolution. Number of
-    ! integration points for strongly passing particles around the torus
-
-    integer, intent(in), optional :: store_step       ! Store every X timesteps
-    double precision, intent(in), optional :: relerr  ! Relative error
-
-    if (present(Z_charge)) self%n_e = Z_charge
-    if (present(m_mass)) self%n_d = m_mass
-    if (present(relerr)) self%relerr = relerr
-
-    ! Neglect relativistic effects by large inverse relativistic temperature
-    rmu=1d8
-
-    ! Reference velocity and normalized Larmor radius
-    if (present(E_kin)) then
-      self%v0 = sqrt(2.d0*E_kin*ev/(self%n_d*p_mass))
-    else
-      self%v0 = sqrt(2.d0*3.5d6*ev/(self%n_d*p_mass))
-    end if
-
-    ! Larmor radius times magnetic field:
-    ro0=self%v0*self%n_d*p_mass*c/(self%n_e*e_charge)
-
-    if (present(npoints)) then
-      self%dtaumin=twopi*rmajor*1.0d2/npoints
-    else
-      self%dtaumin=twopi*rmajor*1.0d2/256.0d0
-    end if
-
-   ! timestep where to get results
-    if (present(store_step)) then
-      self%dtau = store_step*self%dtaumin
-    else
-      self%dtau = self%dtaumin
-    end if
-
-  end subroutine init_params
-
-  subroutine init_sympl(si, f, z0, dtau, dtaumin, rtol_init, mode_init)
-    !
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
-    double precision, intent(in) :: z0(:)
-    double precision, intent(in) :: dtau, dtaumin
-    double precision, intent(in) :: rtol_init
-    integer, intent(in) :: mode_init ! 1 = expl.-impl. Euler, 2 = impl.-expl. Euler, 3 = Midpoint
-
-    double precision :: z(4)
-
-    if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
-      stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
-    endif
-
-    ! Initialize symplectic integrator
-    f%field_type = isw_field_type
-    call eval_field(f, z0(1), z0(2), z0(3), 0)
-
-    si%pabs = z0(4)
-
-    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
-    f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
-    f%vpar = z0(4)*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-
-    z(1:3) = z0(1:3)  ! s, th, ph
-    z(4) = f%vpar*f%hph + f%Aph/f%ro0 ! pphi
-
-    ! factor 1/sqrt(2) due to velocity normalisation different from other modules
-    call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                          rtol_init, mode_init, 0)
-  end subroutine init_sympl
-
-  subroutine init_integrator(self, z0)
-    type(Tracer), intent(inout) :: self
-    double precision, intent(in) :: z0(:)
-
-    call init_sympl(self%si, self%f, z0, self%dtau, self%dtaumin, &
-      self%relerr, self%integmode)
-  end subroutine init_integrator
-
-  subroutine timestep(self, s, th, ph, lam, ierr)
-    type(Tracer), intent(inout) :: self
-    double precision, intent(inout) :: s, th, ph, lam
-    integer, intent(out) :: ierr
-
-    double precision, dimension(5) :: z
-
-    z(1) = s
-    z(2) = th
-    z(3) = ph
-    z(4) = 1d0
-    z(5) = lam
-
-    call timestep_z(self, z, ierr)
-
-    s = z(1)
-    th = z(2)
-    ph = z(3)
-    lam = z(5)
-  end subroutine timestep
-
-  subroutine timestep_z(self, z, ierr)
-    type(Tracer), intent(inout) :: self
-    double precision, intent(inout) :: z(:)
-    integer, intent(out) :: ierr
-
-    call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
-  end subroutine timestep_z
-
-  subroutine timestep_sympl_z(si, f, z, ierr)
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
-    double precision, intent(inout) :: z(:)
-    integer, intent(out) :: ierr
-
-    if (z(1) < 0.0 .or. z(1) > 1.0) then
-      ierr = 1
-      return
-    end if
-
-    call orbit_timestep_sympl(si, f, ierr)
-
-    z(1:3) = si%z(1:3)
-    z(5) = f%vpar/(si%pabs*dsqrt(2d0))  ! alambda
-
-  end subroutine timestep_sympl_z
-
-end module simple
-
-module cut_detector
-  use util, only: twopi
-  use simple, only: debug, tstep
-  use orbit_symplectic, only: SymplecticIntegrator
-  use field_can_mod, only: FieldCan
-
-  implicit none
-  save
-
-  integer, parameter :: n_tip_vars = 6
-  integer, parameter :: nplagr = 6
-  integer, parameter :: nder = 0
-
-  public
-
-  type :: CutDetector
-    double precision :: fper  ! field period
-
-    ! for Poincare cuts
-    double precision :: alam_prev, par_inv
-    integer          :: iper, itip, kper
-
-    double precision :: orb_sten(6,nplagr), coef(0:nder,nplagr)
-    integer :: ipoi(nplagr)
-  end type CutDetector
-
-contains
-
-  subroutine init(self, fper, z)
-    type(CutDetector) :: self
-    double precision, intent(in) :: fper
-    double precision, intent(in) :: z(:)
-    integer :: i
-
-    self%fper = fper
-
-    !---------------------------------------------------------------------------
-    ! Prepare calculation of orbit tip by interpolation and buffer for Poincare plot:
-
-    do i=1,nplagr
-      self%ipoi(i)=i
-    enddo
-
-    !--------------------------------
-    ! Initialize tip detector
-
-    self%itip=nplagr/2+1
-    self%alam_prev=z(5)
-
-    ! End initialize tip detector
-    !--------------------------------
-    ! Initialize period crossing detector
-
-    self%iper=nplagr/2+1
-    self%kper=int(z(3)/self%fper)
-
-    ! End initialize period crossing detector
-    !--------------------------------
-    self%par_inv = 0.0d0
-    !
-
-    ! End prepare calculation of orbit tip by interpolation
-    !--------------------------------------------------------------------------
-  end subroutine init
-
-  subroutine trace_to_cut(self, si, f, z, var_cut, cut_type, ierr)
-    type(CutDetector) :: self
-    type(SymplecticIntegrator) :: si
-    type(FieldCan) :: f
-
-    double precision, intent(inout) :: z(:)
-    ! variables to evaluate at tip: z(1..5), par_inv
-    double precision, dimension(:), intent(inout) :: var_cut
-    integer, intent(out) :: cut_type
-    integer, intent(out) :: ierr
-
-    integer, parameter :: nstep_max = 1000000000
-    integer :: i
-    double precision :: phiper = 0.0d0
-
-    do i=1, nstep_max
-      call tstep(si, f, z, ierr)
-      if(ierr.ne.0) exit
-
-      self%par_inv = self%par_inv+z(5)**2 ! parallel adiabatic invariant
-
-      if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
-        self%orb_sten(1:5,i)=z
-        self%orb_sten(6,i)=self%par_inv
-      else                          !<=normal case, shift stencil
-        self%orb_sten(1:5,self%ipoi(1))=z
-        self%orb_sten(6,self%ipoi(1))=self%par_inv
-        self%ipoi=cshift(self%ipoi,1)
-      endif
-
-      !-------------------------------------------------------------------------
-      ! Tip detection and interpolation
-
-      if(self%alam_prev.lt.0.d0.and.z(5).gt.0.d0) self%itip=0   !<=tip has been passed
-      self%itip=self%itip+1
-      self%alam_prev=z(5)
-
-      !<=use only initialized stencil
-      if(i.gt.nplagr .and. self%itip.eq.nplagr/2) then
-        cut_type = 0
-        call plag_coeff(nplagr, nder, 0d0, self%orb_sten(5, self%ipoi), self%coef)
-        var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
-        var_cut(2) = modulo(var_cut(2), twopi)
-        var_cut(3) = modulo(var_cut(3), twopi)
-        self%par_inv = self%par_inv - var_cut(6)
-        return
-      end if
-
-      ! End tip detection and interpolation
-
-      !-------------------------------------------------------------------------
-      ! Periodic boundary footprint detection and interpolation
-
-      if(z(3).gt.dble(self%kper+1)*self%fper) then
-        self%iper=0   !<=periodic boundary has been passed
-        phiper=dble(self%kper+1)*self%fper
-        self%kper=self%kper+1
-      elseif(z(3).lt.dble(self%kper)*self%fper) then
-        self%iper=0   !<=periodic boundary has been passed
-        phiper=dble(self%kper)*self%fper
-        self%kper=self%kper-1
-      endif
-      self%iper=self%iper+1
-
-      !<=use only initialized stencil
-      if(i.gt.nplagr .and. self%iper.eq.nplagr/2) then
-        cut_type = 1
-        !<=stencil around periodic boundary is complete, interpolate
-        call plag_coeff(nplagr, nder, 0d0, self%orb_sten(3, self%ipoi) - phiper, self%coef)
-        var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
-        var_cut(2) = modulo(var_cut(2), twopi)
-        var_cut(3) = modulo(var_cut(3), twopi)
-        return
-      end if
-
-      ! End periodic boundary footprint detection and interpolation
-      !-------------------------------------------------------------------------
-
-    end do
-  end subroutine trace_to_cut
-
-  subroutine fract_dimension(ntr,rt,fraction)
-
-    integer, parameter :: iunit=1003
-    integer :: itr,ntr,ngrid,nrefine,irefine,kr,kt,nboxes
-    double precision :: fraction,rmax,rmin,tmax,tmin,hr,ht
-    double precision, dimension(2,ntr)              :: rt!0, rt
-    logical,          dimension(:,:),   allocatable :: free
-
-! TODO: check if this works better on tips only
-!    rt(1,:) = rt0(1,:)*cos(rt0(2,:))
-!    rt(2,:) = rt0(1,:)*sin(rt0(2,:))
-
-    rmin=minval(rt(1,:))
-    rmax=maxval(rt(1,:))
-    tmin=minval(rt(2,:))
-    tmax=maxval(rt(2,:))
-
-    nrefine=int(log(dble(ntr))/log(4.d0))
-
-    ngrid=1
-    nrefine=nrefine+3       !<=add 3 for curiousity
-    do irefine=1,nrefine
-      ngrid=ngrid*2
-!$omp critical
-      allocate(free(0:ngrid,0:ngrid))
-!$omp end critical
-      free=.true.
-      hr=(rmax-rmin)/dble(ngrid)
-      ht=(tmax-tmin)/dble(ngrid)
-      nboxes=0
-      do itr=1,ntr
-        kr=int((rt(1,itr)-rmin)/hr)
-        kr=min(ngrid-1,max(0,kr))
-        kt=int((rt(2,itr)-tmin)/ht)
-        kt=min(ngrid-1,max(0,kt))
-        if(free(kr,kt)) then
-          free(kr,kt)=.false.
-          nboxes=nboxes+1
-        endif
-      enddo
-!$omp critical
-      deallocate(free)
-!$omp end critical
-      if(debug) then
-!$omp critical
-        !
-        ! Right now criterion for regular is at nboxes/ngrid**2 < 0.2 .
-        ! For fractal dimension d = log(nboxes)/log(ngrid) this means
-        ! d_thresh = 2 + log(0.2)/log(ngrid)
-        !
-        write(iunit,*) irefine, nboxes, ngrid, dble(nboxes)/dble(ngrid**2), 0.2d0,&
-                       log(1d0*nboxes)/log(1d0*ngrid), 2d0 + log(0.2d0)/log(1d0*ngrid)
-!$omp end critical
-      end if
-      if(irefine.eq.nrefine-3) fraction=dble(nboxes)/dble(ngrid**2)
-    enddo
-    close(iunit)
-
-  end subroutine fract_dimension
-
-end module cut_detector
-
-module simple_main
   use omp_lib
   use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
     vmec_B_scale, vmec_RZ_scale
 
+  use parmot_mod, only : ro0, rmu
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
   use simple, only : init_field, init_sympl, Tracer, debug, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
-  use params
 
   implicit none
 
-  public
+  integer          :: npoi,L1i,nper,npoiper,i,ntimstep,ntestpart
+  integer          :: notrace_passing,loopskip,iskip
+  double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
+  double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
+  double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
+  double precision :: sbeg,thetabeg
+  double precision, dimension(:),   allocatable :: bstart,volstart
+  double precision, dimension(:,:), allocatable :: xstart
+  double precision, dimension(:,:), allocatable :: zstart, zend
+  double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
+  double precision, dimension(:), allocatable :: times_lost
+  integer          :: npoiper2
+  double precision :: contr_pp
+  double precision :: facE_al
+  integer          :: ibins
+  integer          :: n_e,n_d
+  integer          :: startmode
 
-contains
+  integer :: ntau ! number of dtaumin in dtau
+  integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 
-subroutine run(norb)
+  integer :: kpart = 0 ! progress counter for particles
 
-  type(Tracer), intent(inout) :: norb
+  double precision :: relerr
 
+  type(Tracer) :: norb
+  double precision, allocatable :: trap_par(:), perp_inv(:)
+  integer,          allocatable :: iclass(:,:)
+
+  integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
+  integer :: nplagr,nder,npl_half
+  integer :: norbper,nfp
+  double precision :: fper, zerolam = 0d0
+
+  double precision :: tcut
+  integer :: ntcut
+  logical          :: class_plot     !<=AAA
+  double precision :: cut_in_per     !<=AAA
+  logical          :: local=.false.
+
+  logical :: fast_class=.true.  !if .true. quit immeadiately after fast classification
+
+! colliding with D-T reactor plasma. TODO: Make configurable
+  logical :: swcoll
+  double precision, parameter :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
+    densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
+  double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
+  logical :: deterministic = .False.
+
+  integer :: ierr, mpirank, mpisize, nfirstpart, nlastpart
+
+  double precision, dimension(:), allocatable :: &
+    confpart_trap_glob, confpart_pass_glob
+
+! read config file
+  call read_config
+
+! initialize field geometry
+  call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
+  call init_params
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
   print *, 'v0 = ', v0
@@ -456,14 +83,28 @@ subroutine run(norb)
 
 ! init collisions
   if (swcoll) then
-    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
-      3.5d6/facE_al,v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
+    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,E_alpha, &
+                    v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
   endif
   print *, 'v0 = ', v0
 
 ! pre-compute starting flux surface
+  npoi=nper*npoiper ! total number of starting points
+  allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
   call init_starting_surf
 
+! initialize array of confined particle percentage
+  allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
+  allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
+  confpart_trap=0.d0
+  confpart_pass=0.d0
+
+! initialize lost times when particles get lost
+  allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
+  allocate(iclass(3,ntestpart))
+  times_lost = -1.d0
+
+  allocate(zstart(5,ntestpart), zend(5,ntestpart))
   if(local) then
     call init_starting_points
   else
@@ -472,56 +113,195 @@ subroutine run(norb)
   if (startmode == 0) stop
 
   icounter=0 ! evaluation counter
-  kpart=0
-
-  ! initialize array of confined particle percentage
-  confpart_trap=0.d0
-  confpart_pass=0.d0
-
-  ! initialize lost times when particles get lost
-  times_lost = -1.d0
 
 ! do particle tracing in parallel
+
+  call MPI_INIT(ierr)
+  call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
+  call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
+  if (ierr /= 0) then
+    print *, 'MPI initialization failed with error code ', ierr
+    error stop
+  endif
+  print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
+
+  if (mod(ntestpart, mpisize) /= 0) then
+    print *, 'Number of test particles ', ntestpart, &
+             ' no multiple of MPI size ', mpisize
+    call finalize
+    error stop
+  endif
+
+  nfirstpart = mpirank * ntestpart/mpisize + 1
+  nlastpart = (mpirank+1) * ntestpart/mpisize
+
   !$omp parallel firstprivate(norb)
   !$omp do
-  do i=1,ntestpart
+  do i=nfirstpart, nlastpart
     !$omp critical
     kpart = kpart+1
-    print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+    print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
+      'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
     !$omp end critical
     call trace_orbit(norb, i)
   end do
   !$omp end do
   !$omp end parallel
 
-  confpart_pass=confpart_pass/ntestpart
-  confpart_trap=confpart_trap/ntestpart
-end subroutine run
+  call MPI_REDUCE(confpart_trap, confpart_trap_glob, ntimstep, &
+    MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+  call MPI_REDUCE(confpart_pass, confpart_pass_glob, ntimstep, &
+    MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
-subroutine write_output
-  open(1,file='confined_fraction.dat',recl=1024)
-  do i=1,ntimstep
-    write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
-  enddo
-  close(1)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    times_lost, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+    MPI_COMM_WORLD, ierr)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    trap_par, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+    MPI_COMM_WORLD, ierr)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    perp_inv, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+    MPI_COMM_WORLD, ierr)
+  call MPI_ALLGATHER( &
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, &
+    iclass, 3*ntestpart/mpisize, MPI_INTEGER, &
+    MPI_COMM_WORLD, ierr)
 
-  open(1,file='times_lost.dat',recl=1024)
-  do i=1,ntestpart
-    write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
-  enddo
-  close(1)
+  if (mpirank == 0) then
+    confpart_pass_glob=confpart_pass_glob/ntestpart
+    confpart_trap_glob=confpart_trap_glob/ntestpart
 
-  open(1,file='class_parts.dat',recl=1024)
-  do i=1,ntestpart
-    write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
-  enddo
-  close(1)
+    open(1,file='confined_fraction.dat',recl=1024)
+    do i=1,ntimstep
+      write(1,*) dble(i-1)*dtau/v0, confpart_pass_glob(i), &
+        confpart_trap_glob(i), ntestpart
+    enddo
+    close(1)
 
+    open(1,file='times_lost.dat',recl=1024)
+    do i=1,ntestpart
+      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
+    enddo
+    close(1)
+
+    open(1,file='class_parts.dat',recl=1024)
+    do i=1,ntestpart
+      write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
+    enddo
+    close(1)
+  end if
+
+  call finalize()
+
+contains
+
+subroutine finalize
   if (integmode >= 0) call deallocate_can_coord
 
-  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, perp_inv, iclass)
+  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, &
+    perp_inv, iclass, confpart_trap_glob, confpart_pass_glob)
   deallocate(xstart, bstart, volstart, zstart)
-end subroutine write_output
+
+  call MPI_FINALIZE (ierr)
+  if (ierr /= 0) then
+    print *, 'MPI finalization failed with error code ', ierr
+    error stop
+  endif
+  print *, 'MPI finalized'
+end subroutine finalize
+
+subroutine read_config
+  open(1,file='simple.in',recl=1024)
+  read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
+  read (1,*) nper              !number of periods for initial field line        ! TODO: increase
+  read (1,*) npoiper           !number of points per period on this field line  ! TODO: increase
+  read (1,*) ntimstep          !number of time steps per slowing down time
+  read (1,*) ntestpart         !number of test particles
+  read (1,*) bmod_ref          !reference field, G, for Boozer $B_{00}$
+  read (1,*) trace_time        !slowing down time, s
+  read (1,*) sbeg              !starting s for field line                       !<=2017
+  read (1,*) phibeg            !starting phi for field line                     !<=2017
+  read (1,*) thetabeg          !starting theta for field line                   !<=2017
+  read (1,*) loopskip          !how many loops to skip to shift random numbers
+  read (1,*) contr_pp          !control of passing particle fraction            ! UNUSED (2019)
+  read (1,*) facE_al           !facE_al test particle energy reduction factor
+  read (1,*) npoiper2          !additional integration step split factor
+  read (1,*) n_e               !test particle charge number (the same as Z)
+  read (1,*) n_d               !test particle mass number (the same as A)
+  read (1,*) netcdffile        !name of VMEC file in NETCDF format <=2017 NEW
+  read (1,*) ns_s              !spline order for 3D quantities over s variable
+  read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
+  read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
+  read (1,*) isw_field_type    !field type: -1 - Testing, 0 - Canonical, 1 - VMEC, 2 - Boozer
+  read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
+  read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
+  read (1,*) relerr            !relative error for RK integrator
+  read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+  read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
+  read (1,*) class_plot        !write starting points at phi=const cut for classification plot (.True./.False.).  !<=AAA
+  read (1,*) cut_in_per        !normalized phi-cut position within field period, [0:1], used if class_plot=.True. !<=AAA
+  read (1,*) fast_class        !if .True. quit immeadiately after fast classification and don't trace orbits to the end
+  read (1,*) local             !if .True. orbits are started on a single flux surface, if .False. (not yet equally distributed) in volume
+  read (1,*) vmec_B_scale      !factor to scale the B field from VMEC
+  read (1,*) vmec_RZ_scale     !factor to scale the device size from VMEC
+  read (1,*) swcoll            !if .True. enables collisions. This is incompatible with classification.
+  read (1,*) deterministic     !if .True. put seed for the same random walk always
+! TODO: add new config options for collisions
+!  read (1,*) am1           !mass number of the 1-st field ion species
+!  read (1,*) am2           !mass number of the 2-nd field ion species
+!  read (1,*) Z1            !charge number of the 1-st field ion species
+!  read (1,*) Z2            !charge number of the 2-nd field ion species
+!  read (1,*) densi1        !density of the 1-st field ion species, 1/cm^3
+!  read (1,*) densi2        !density of the 2-nd field ion species, 1/cm^3
+!  read (1,*) tempi1        !temperature of the 1-st field ion species, eV
+!  read (1,*) tempi2        !temperature of the 2-nd field ion species, eV
+!  read (1,*) tempe         !temperature of electrons, eV
+  close(1)
+
+  if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
+    stop 'Collisions are incompatible with classification'
+  endif
+
+end subroutine read_config
+
+subroutine init_params
+! set alpha energy, velocity, and Larmor radius
+  E_alpha=3.5d6/facE_al
+  v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
+  rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
+
+! Neglect relativistic effects by large inverse relativistic temperature
+  rmu=1d8
+
+! normalized slowing down time:
+  tau=trace_time*v0
+! normalized time step:
+  dtau=tau/dble(ntimstep-1)
+! parameters for the vacuum chamber:
+  call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) ! TODO: why again?
+  rbig=rt0
+! field line integration step step over phi (to check chamber wall crossing)
+  dphi=2.d0*pi/(L1i*npoiper)
+! orbit integration time step (to check chamber wall crossing)
+  dtaumin=2.d0*pi*rbig/npoiper2
+  ntau=ceiling(dtau/dtaumin)
+  dtaumin=dtau/ntau
+
+  ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
+
+  norbper=ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
+  nfp=L1i*norbper         !<= guess for footprint number
+
+  zerolam=0.d0
+  nplagr=4
+  nder=0
+  npl_half=nplagr/2
+
+  fper = 2d0*pi/dble(L1i)   !<= field period
+end subroutine init_params
 
 subroutine init_starting_surf
   integer :: ierr
@@ -760,7 +540,7 @@ subroutine trace_orbit(anorb, ipart)
 
   if (deterministic) then
     call random_seed(size = seedsize)
-    if (.not. allocated(seed)) allocate(seed(seedsize))
+    allocate(seed(seedsize))
     seed = 0
     call random_seed(put=seed)
   endif
@@ -856,7 +636,6 @@ subroutine trace_orbit(anorb, ipart)
 ! End forced classification of passing as regular
 
 !$omp critical
-  if (.not. allocated(ipoi)) &
   allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(6,nplagr),xp(nplagr))
 !$omp end critical
   do it=1,nplagr
@@ -866,7 +645,6 @@ subroutine trace_orbit(anorb, ipart)
   nfp_tip=nfp             !<= initial array dimension for tips
   nfp_per=nfp             !<= initial array dimension for periods
 !$omp critical
-  if (.not. allocated(zpoipl_tip)) &
   allocate(zpoipl_tip(2,nfp_tip),zpoipl_per(2,nfp_per))
 !$omp end critical
 
@@ -881,13 +659,10 @@ subroutine trace_orbit(anorb, ipart)
 
 
   kt = 0
-  if (passing) then
-    !$omp atomic
-    confpart_pass(1)=confpart_pass(1)+1.d0
-  else
-    !$omp atomic
-    confpart_trap(1)=confpart_trap(1)+1.d0
-  end if
+  !$omp atomic
+  confpart_pass(1)=confpart_pass(1)+1.d0
+  !$omp atomic
+  confpart_trap(1)=confpart_trap(1)+1.d0
 
   !--------------------------------
       ! Initialize tip detector
@@ -1172,4 +947,5 @@ subroutine trace_orbit(anorb, ipart)
 !  close(unit=10000+ipart)
 !  close(unit=10000+ipart)
 end subroutine trace_orbit
-end module simple_main
+
+end program simple_main
