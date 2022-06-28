@@ -251,7 +251,7 @@ add_custom_target(
 )
 
 # # Set up target
-add_library(${f2py_module_name} SHARED EXCLUDE_FROM_ALL
+add_library(${f2py_module_name} SHARED #EXCLUDE_FROM_ALL
    "${f2py_wrappers}"
    "${F2PY_INCLUDE_DIR}/fortranobject.c" # From NumPy
    "${fortran_src_files}" # Fortran source(s)
