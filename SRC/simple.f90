@@ -10,26 +10,12 @@ module simple
     orbit_sympl_init, orbit_timestep_sympl
   use field_can_mod, only : FieldCan, eval_field
   use diag_mod, only : icounter
+  use params, only : Tracer
 
 implicit none
 save
 
-  logical :: debug = .False.
-
 public
-
-  type :: Tracer
-    double precision :: fper
-    double precision :: dtau, dtaumin, v0
-    integer          :: n_e, n_d
-
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-    double precision :: relerr
-
-    type(FieldCan) :: f
-    type(SymplecticIntegrator) :: si
-    type(MultistageIntegrator) :: mi
-  end type Tracer
 
   interface tstep
       module procedure timestep
@@ -219,9 +205,10 @@ end module simple
 
 module cut_detector
   use util, only: twopi
-  use simple, only: debug, tstep
+  use simple, only: tstep
   use orbit_symplectic, only: SymplecticIntegrator
   use field_can_mod, only: FieldCan
+  use params, only: debug
 
   implicit none
   save
@@ -433,7 +420,7 @@ module simple_main
 
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use simple, only : init_field, init_sympl, Tracer, debug, eval_field
+  use simple, only : init_field, init_sympl, eval_field
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -482,17 +469,50 @@ subroutine run(norb)
   times_lost = -1.d0
 
 ! do particle tracing in parallel
+! #ifdef MPI
+!   call MPI_INIT(ierr)
+!   call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
+!   call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
+!   if (ierr /= 0) then
+!     print *, 'MPI initialization failed with error code ', ierr
+!     error stop
+!   endif
+!   print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
+
+!   if (mod(ntestpart, mpisize) /= 0) then
+!     print *, 'Number of test particles ', ntestpart, &
+!              ' no multiple of MPI size ', mpisize
+!     call finalize
+!     error stop
+!   endif
+
+!   nfirstpart = mpirank * ntestpart/mpisize + 1
+!   nlastpart = (mpirank+1) * ntestpart/mpisize
+! #else
+  nfirstpart = 1
+  nlastpart = ntestpart
+! #endif
+
   !$omp parallel firstprivate(norb)
   !$omp do
-  do i=1,ntestpart
+  do i=nfirstpart,nlastpart
     !$omp critical
     kpart = kpart+1
+! #ifdef MPI
+!     print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
+!     'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
+! #else
     print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+! #endif
     !$omp end critical
     call trace_orbit(norb, i)
   end do
   !$omp end do
   !$omp end parallel
+
+! #ifdef MPI
+!   TODO
+! #endif
 
   confpart_pass=confpart_pass/ntestpart
   confpart_trap=confpart_trap/ntestpart

@@ -4,12 +4,11 @@ program test_coord_trans
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : ro0, rmu
-  use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use simple, only : init_field, init_sympl, Tracer, debug
+  use simple, only : init_field, init_sympl
   use cut_detector, only : fract_dimension
-  use diag_mod, only : icounter
+  use params, only : Tracer, debug
 
   implicit none
 

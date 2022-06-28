@@ -56,7 +56,7 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 else()
 	add_compile_options(-Wall -Wno-unused -Wno-unused-dummy-argument)
 	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-	add_compile_options(-g)
+	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
 		add_compile_options(-O0 -g -ggdb -fbacktrace

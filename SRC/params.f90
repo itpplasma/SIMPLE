@@ -5,9 +5,24 @@ module params
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
-  use simple, only: Tracer, debug
+  use field_can_mod, only : FieldCan
+  use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator
 
   implicit none
+  save
+
+  type :: Tracer
+    double precision :: fper
+    double precision :: dtau, dtaumin, v0
+    integer          :: n_e, n_d
+
+    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+    double precision :: relerr
+
+    type(FieldCan) :: f
+    type(SymplecticIntegrator) :: si
+    type(MultistageIntegrator) :: mi
+  end type Tracer
 
   integer          :: npoi, L1i, nper=1000, i, ntestpart=1024
   integer          :: loopskip=0,iskip
@@ -60,6 +75,17 @@ module params
   integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
 
   double precision :: v0
+
+  integer :: nfirstpart, nlastpart
+
+  logical :: debug = .False.
+
+! #ifdef MPI
+!   integer :: ierr, mpirank, mpisize
+
+!   double precision, dimension(:), allocatable :: &
+!     confpart_trap_glob, confpart_pass_glob
+! #endif
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     bmod_ref, trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,    &
@@ -137,6 +163,9 @@ contains
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
+! #ifdef MPI
+!       allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
+! #endif
     allocate(iclass(3,ntestpart))
 
   end subroutine params_init
