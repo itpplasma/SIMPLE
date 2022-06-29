@@ -7,8 +7,8 @@ tracy = params.Tracer()
 simple.init_field(tracy, "wout.nc", 3, 3, 3, 1)
 simple.init_params(tracy, 2, 4, 3.5e6, 256, 1, 1e-13)
 
-# Initial conditions
-z0_vmec = np.array([0.5, 0.3, 0.2, 1.0, 0.1])   # s, th, ph, v/v_th, v_par/v
+#%% Initial conditions
+z0_vmec = np.array([0.5, 1.0, 0.2, 1.0, 0.1])   # s, th, ph, v/v_th, v_par/v
 z0_can = z0_vmec.copy()  # s, th_c, ph_c, v/v_th, v_par/v
 
 z0_can[1:3] = vmec_to_can(z0_vmec[0], z0_vmec[1], z0_vmec[2])
@@ -38,6 +38,7 @@ plt.xlabel('s * cos(th)')
 plt.ylabel('s * sin(th)')
 plt.title('Poloidal orbit topology')
 
+
 plt.figure()
 plt.plot(z_vmec[:, 3])
 plt.plot(z_vmec[:, 4])
@@ -46,4 +47,28 @@ plt.ylabel('Normalized velocity')
 plt.legend(['v/v_0', 'v_par/v'])
 plt.title('Velocities over time')
 
+#%% 3D plot
+from mpl_toolkits import mplot3d
+# R = S0 + s*cos(th)
+# Z = s*sin(th)
+# X = R*cos(ph)
+# Y = R*sin(ph)
+# Z = Z
+
+S0 = 5.0
+plt.figure()
+ax = plt.axes(projection='3d')
+ax.plot3D((S0 + z_vmec[:, 0]*np.cos(z_vmec[:, 1]))*np.cos(z_vmec[:, 2]),
+         (S0 + z_vmec[:, 0]*np.cos(z_vmec[:, 1]))*np.sin(z_vmec[:,2]),
+          z_vmec[:, 0]*np.sin(z_vmec[:, 1]))
+ax.set_xlabel('(3 + s * cos(th))*cos(ph)')
+ax.set_ylabel('(3 + s * sin(th))*cos(ph)')
+ax.set_zlabel('s*cos(ph)')
+ax.set_title('3D orbit topology')
+ax.set_xlim(-5,5)
+ax.set_ylim(-5,5)
+ax.set_zlim(-5,5)
+
 plt.show()
+
+# %%
