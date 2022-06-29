@@ -1249,3 +1249,18 @@ subroutine trace_orbit(anorb, ipart)
 !  close(unit=10000+ipart)
 end subroutine trace_orbit
 end module simple_main
+
+subroutine vmec_to_cyl(s,theta,varphi,Rcyl,Zcyl)
+  implicit none
+  double precision, intent(in) :: s,theta,varphi
+  double precision, intent(out) :: Rcyl,Zcyl
+
+  double precision :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
+
+  call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+  R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+
+  Rcyl = R
+  Zcyl = Z
+end subroutine vmec_to_cyl

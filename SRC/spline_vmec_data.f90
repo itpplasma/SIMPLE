@@ -329,7 +329,8 @@
 !
   integer :: is,i_theta,i_phi,k
   double precision :: ds,dtheta,dphi,rho_tor
-  double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+  double precision, intent(in) :: s,theta,varphi
+  double precision, intent(out) :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
                       R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
 !
   integer, parameter :: ns_max=6

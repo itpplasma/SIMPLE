@@ -196,7 +196,7 @@ deallocate(y,dy)
   ns_tp_c=ns_tp
   fullset=.true.
 !
-  call deallocate_vmec_spline(1)
+!  call deallocate_vmec_spline(1)
 !
   onlytheta=.true.
 !
