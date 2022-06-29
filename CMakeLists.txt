@@ -202,9 +202,8 @@ message(STATUS ${F2PY_INCLUDE_DIR})
 message(STATUS ${Python_NumPy_INCLUDE_DIRS})
 message(STATUS ${Python_LIBRARIES})
 
-# Vars
-set(f2py_module_name "_pysimple")
-set(f2py_module_c "${f2py_module_name}module.c")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
+
 set(files_to_wrap
 	${CMAKE_CURRENT_LIST_DIR}/SRC/simple.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
@@ -213,14 +212,46 @@ set(files_to_wrap
 	${CMAKE_CURRENT_LIST_DIR}/SRC/params.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/canonical_coordinates_mod.f90
 )
+
+set(preprocessed_sources
+	${CMAKE_BINARY_DIR}/simple.f90.i
+	${CMAKE_BINARY_DIR}/orbit_symplectic.f90.i
+	${CMAKE_BINARY_DIR}/field_can.f90.i
+	${CMAKE_BINARY_DIR}/get_canonical_coordinates.f90.i
+	${CMAKE_BINARY_DIR}/params.f90.i
+	${CMAKE_BINARY_DIR}/canonical_coordinates_mod.f90.i
+)
+
+add_custom_target(preprocessed_sources
+	DEPENDS ${files_to_wrap}
+)
+
+foreach (file_to_wrap ${files_to_wrap})
+	file(RELATIVE_PATH
+		basename ${CMAKE_CURRENT_LIST_DIR}/SRC/ ${file_to_wrap}
+		)
+	add_custom_command(TARGET preprocessed_sources
+		COMMAND gfortran -E -cpp
+			-o ${CMAKE_BINARY_DIR}/${basename}.i
+			${file_to_wrap}
+		DEPENDS ${files_to_wrap}
+	)
+endforeach()
+
+
+# Vars
+set(f2py_module_name "_pysimple")
+set(f2py_module_c "${f2py_module_name}module.c")
+
+# Yes. f90.f90 due to preprocessor output filenames
 set(fortran_src_files
-	f90wrap_simple.f90
-	f90wrap_orbit_symplectic.f90
-	f90wrap_field_can.f90
-	f90wrap_get_canonical_coordinates.f90
+	f90wrap_simple.f90.f90
+	f90wrap_orbit_symplectic.f90.f90
+	f90wrap_field_can.f90.f90
+	f90wrap_get_canonical_coordinates.f90.f90
+	f90wrap_params.f90.f90
+	f90wrap_canonical_coordinates_mod.f90.f90
 	f90wrap_toplevel.f90
-	f90wrap_params.f90
-	f90wrap_canonical_coordinates_mod.f90
 )
 set(generated_module_file "${f2py_module_name}.${Python_SOABI}")
 set(f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_c}")
@@ -237,12 +268,9 @@ add_custom_command(
 
 add_custom_command(
 	OUTPUT ${fortran_src_files}
-	COMMAND f90wrap -m pysimple ${files_to_wrap}
-	DEPENDS ${files_to_wrap}
+	COMMAND f90wrap -m pysimple ${preprocessed_sources}
+	DEPENDS preprocessed_sources
 )
-
-#
-# list(APPEND f2py_wrappers "${CMAKE_CURRENT_BINARY_DIR}/${f2py_module_name}-f2pywrappers2.f90")
 
 # Generate sources
 add_custom_target(

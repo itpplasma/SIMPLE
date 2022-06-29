@@ -469,41 +469,41 @@ subroutine run(norb)
   times_lost = -1.d0
 
 ! do particle tracing in parallel
-! #ifdef MPI
-!   call MPI_INIT(ierr)
-!   call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
-!   call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
-!   if (ierr /= 0) then
-!     print *, 'MPI initialization failed with error code ', ierr
-!     error stop
-!   endif
-!   print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
+#ifdef MPI
+  call MPI_INIT(ierr)
+  call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
+  call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
+  if (ierr /= 0) then
+    print *, 'MPI initialization failed with error code ', ierr
+    error stop
+  endif
+  print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
 
-!   if (mod(ntestpart, mpisize) /= 0) then
-!     print *, 'Number of test particles ', ntestpart, &
-!              ' no multiple of MPI size ', mpisize
-!     call finalize
-!     error stop
-!   endif
+  if (mod(ntestpart, mpisize) /= 0) then
+    print *, 'Number of test particles ', ntestpart, &
+             ' no multiple of MPI size ', mpisize
+    call finalize
+    error stop
+  endif
 
-!   nfirstpart = mpirank * ntestpart/mpisize + 1
-!   nlastpart = (mpirank+1) * ntestpart/mpisize
-! #else
+  nfirstpart = mpirank * ntestpart/mpisize + 1
+  nlastpart = (mpirank+1) * ntestpart/mpisize
+#else
   nfirstpart = 1
   nlastpart = ntestpart
-! #endif
+#endif
 
   !$omp parallel firstprivate(norb)
   !$omp do
   do i=nfirstpart,nlastpart
     !$omp critical
     kpart = kpart+1
-! #ifdef MPI
-!     print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
-!     'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
-! #else
+#ifdef MPI
+    print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
+    'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
+#else
     print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
-! #endif
+#endif
     !$omp end critical
     call trace_orbit(norb, i)
   end do

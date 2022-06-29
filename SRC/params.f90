@@ -80,12 +80,12 @@ module params
 
   logical :: debug = .False.
 
-! #ifdef MPI
-!   integer :: ierr, mpirank, mpisize
+#ifdef MPI
+  integer :: ierr, mpirank, mpisize
 
-!   double precision, dimension(:), allocatable :: &
-!     confpart_trap_glob, confpart_pass_glob
-! #endif
+  double precision, dimension(:), allocatable :: &
+    confpart_trap_glob, confpart_pass_glob
+#endif
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     bmod_ref, trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,    &
@@ -163,9 +163,9 @@ contains
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
-! #ifdef MPI
-!       allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
-! #endif
+#ifdef MPI
+      allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
+#endif
     allocate(iclass(3,ntestpart))
 
   end subroutine params_init
