@@ -35,7 +35,7 @@ for kt in range(nt-1):
 plt.figure()
 plt.plot(z_vmec[:, 0]*np.cos(z_vmec[:, 1]), z_vmec[:, 0]*np.sin(z_vmec[:, 1]))
 plt.xlabel('s * cos(th)')
-plt.xlabel('s * sin(th)')
+plt.ylabel('s * sin(th)')
 plt.title('Poloidal orbit topology')
 
 plt.figure()
