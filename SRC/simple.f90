@@ -615,9 +615,6 @@ subroutine init_starting_surf
     stop
   endif
 
-! Larmor radius corresponds to the field stregth egual to $B_{00}$ harmonic
-! in Boozer coordinates:
-  ro0=rlarm*bmod00
 ! maximum value of B module:
   bmax=maxval(bstart)
   bmin=minval(bstart)

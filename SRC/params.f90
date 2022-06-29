@@ -73,7 +73,7 @@ module params
 
   ! Further configuration parameters
   integer          :: notrace_passing = 0
-  double precision :: facE_al=1d0, bmod_ref=5d4, trace_time=1d-1
+  double precision :: facE_al=1d0, trace_time=1d-1
   integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
 
   double precision :: v0
@@ -90,7 +90,7 @@ module params
 #endif
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-    bmod_ref, trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,    &
+    trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
@@ -128,7 +128,8 @@ contains
 
   ! set alpha energy, velocity, and Larmor radius
     v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
-    rlarm=v0*n_d*p_mass*c/(n_e*e_charge*bmod_ref)
+    rlarm=v0*n_d*p_mass*c/(n_e*e_charge)
+    ro0=rlarm
 
   ! Neglect relativistic effects by large inverse relativistic temperature
     rmu=1d8

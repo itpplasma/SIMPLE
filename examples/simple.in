@@ -4,7 +4,10 @@ nper = 1000              ! number of periods for initial field line
 npoiper = 100            ! number of points per period on this field line
 ntimstep = 10000         ! number of time steps per slowing down time
 ntestpart = 1000         ! number of test particles
-bmod_ref = 5d4           ! rescale field to fix Boozer $B_{00}$ on starting surface to bmod_ref in Gauss
+! bmod_ref = 5d4           ! rescale field to fix Boozer $B_{00}$ on
+!                            starting surface to bmod_ref in Gauss -- removed,
+!                            now the actual field from VMEC is used one can
+!                            rather scale it with vmec_B_scale
 trace_time = 1d-1        ! slowing down time, s
 sbeg = 0.6d0             ! starting s (normalzed toroidal flux) for field line
 phibeg = 0.d0            ! starting phi for field line

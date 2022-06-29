@@ -39,7 +39,7 @@ use diag_mod, only : icounter
   logical, parameter :: jparmode = .false. ! if true output orbit points only when vpar changes sign from positive to negative
   integer, parameter :: mode_sympl = 0 ! 0=NEO-ORB in vmec (sergei); 1=symplectic in canonical (christopher; euler1)
   integer :: ntau
- 
+
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1
   read (1,*) nper              !number of periods for initial field line
@@ -108,7 +108,7 @@ print *, 'dtau = ', dtau, ' dtau/dtaumin = ', dtau/dtaumin, 'tau = ', tau
 r = 0.35
 theta_vmec = 0.33
 varphi_vmec = 0.97
-alam0 = 0.1 
+alam0 = 0.1
 
 if (isw_field_type == 0) then
     call get_canonical_coordinates
@@ -140,7 +140,7 @@ call cpu_time(tstart)
 open(3001, file='orbit_rk.out', recl=1024)
 do i=1,L1i*npoiper*npoiper2*runlen
 ! !
-    if (mode_sympl==0) call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)    
+    if (mode_sympl==0) call orbit_timestep_axis(z,dtau,dtaumin,1d-10,ierr)
     r=z(1)
     vartheta=z(2)
     varphi=z(3)
@@ -152,7 +152,7 @@ do i=1,L1i*npoiper*npoiper2*runlen
     elseif (isw_field_type == 2) then
       call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
     endif
-    
+
     if (.not. jparmode) then
       write (3001,*) dtau*dble(i),z,theta_vmec,varphi_vmec
     else
