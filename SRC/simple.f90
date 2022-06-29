@@ -1,4 +1,7 @@
 module simple
+#ifdef MPI
+  use mpi
+#endif
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -510,19 +513,73 @@ subroutine run(norb)
   !$omp end do
   !$omp end parallel
 
-! #ifdef MPI
-!   TODO
-! #endif
+#ifdef MPI
+call MPI_REDUCE(confpart_trap, confpart_trap_glob, ntimstep, &
+MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+call MPI_REDUCE(confpart_pass, confpart_pass_glob, ntimstep, &
+MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
+  call MPI_GATHER( &
+  times_lost(nfirstpart:nlastpart), ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  times_lost, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  0, MPI_COMM_WORLD, ierr)
+  call MPI_GATHER( &
+  trap_par(nfirstpart:nlastpart), ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  trap_par, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  0, MPI_COMM_WORLD, ierr)
+  call MPI_GATHER( &
+  perp_inv(nfirstpart:nlastpart), ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  perp_inv, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  0, MPI_COMM_WORLD, ierr)
+  ! TODO FIX
+  ! call MPI_GATHER( &
+  ! iclass(:, nfirstpart:nlastpart), 3*ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
+  ! iclass, 3*ntestpart/mpisize, MPI_INTEGER, &
+  ! 0, MPI_COMM_WORLD, ierr)
+  ! print *, mpirank, iclass
+
+  if (mpirank == 0) then
+    confpart_pass_glob=confpart_pass_glob/ntestpart
+    confpart_trap_glob=confpart_trap_glob/ntestpart
+  endif
+#else
   confpart_pass=confpart_pass/ntestpart
   confpart_trap=confpart_trap/ntestpart
+#endif
+
 end subroutine run
+
+subroutine finalize
+  if (integmode >= 0) call deallocate_can_coord
+
+  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, &
+    perp_inv, iclass)
+  deallocate(xstart, bstart, volstart, zstart)
+
+#ifdef MPI
+  deallocate(confpart_trap_glob, confpart_pass_glob)
+  call MPI_FINALIZE (ierr)
+  if (ierr /= 0) then
+    print *, 'MPI finalization failed with error code ', ierr
+    error stop
+  endif
+  print *, 'MPI finalized'
+#endif
+end subroutine finalize
 
 subroutine write_output
   open(1,file='confined_fraction.dat',recl=1024)
+#ifdef MPI
+  if (mpirank == 0) then
+    do i=1,ntimstep
+      write(1,*) dble(i-1)*dtau/v0, confpart_pass_glob(i), &
+        confpart_trap_glob(i), ntestpart
+    enddo
+#else
   do i=1,ntimstep
     write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo
+#endif
   close(1)
 
   open(1,file='times_lost.dat',recl=1024)
@@ -537,14 +594,13 @@ subroutine write_output
   enddo
   close(1)
 
-  if (integmode >= 0) call deallocate_can_coord
+#ifdef MPI
+  end if
+#endif
 
-  deallocate(times_lost, confpart_trap, confpart_pass, trap_par, perp_inv, iclass)
-  deallocate(xstart, bstart, volstart, zstart)
 end subroutine write_output
 
 subroutine init_starting_surf
-  integer :: ierr
 
   xstart=0.d0
   bstart=0.d0

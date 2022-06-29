@@ -76,10 +76,10 @@ add_library ( rkf45 SHARED
 	SRC/contrib/rkf45.f90
 )
 
-add_library ( simple SHARED
+set ( simple_sources
 	SRC/canonical_coordinates_mod.f90
 	SRC/nctools_module.f90
-#	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
+	#	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
 	SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
 	SRC/contrib/minpack.f90
 	SRC/magfie.f90
@@ -109,7 +109,17 @@ add_library ( simple SHARED
 	SRC/check_orbit_type.f90
 	SRC/find_bminmax.f90
 )
+
+add_library ( simple SHARED
+	${simple_sources}
+)
 link_libraries(simple)
+
+add_library ( simple_mpi SHARED
+	${simple_sources}
+)
+target_compile_options(simple_mpi PUBLIC -DMPI)
+target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
@@ -123,13 +133,13 @@ add_executable (simple.x
 	SRC/main.f90
 )
 
-# add_executable (simple_mpi.x
-# 	SRC/sorting.f90
-# 	SRC/check_orbit_type.f90
-# 	SRC/find_bminmax.f90
-# 	SRC/main_mpi.f90
-# )
-# target_link_libraries(simple_mpi.x ${MPI_Fortran_LIBRARIES})
+add_executable (simple_mpi.x
+	SRC/main.f90
+)
+target_link_libraries(simple_mpi.x simple_mpi)
+get_target_property(SIMPLE_MPI_LINKED_LIBS simple_mpi.x LINK_LIBRARIES)
+list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS simple)
+set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
 
 add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
 add_executable (test_sympl_tok.x SRC/test_sympl.f90)
@@ -211,6 +221,7 @@ set(files_to_wrap
 	${CMAKE_CURRENT_LIST_DIR}/SRC/get_canonical_coordinates.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/params.f90
 	${CMAKE_CURRENT_LIST_DIR}/SRC/canonical_coordinates_mod.f90
+	${CMAKE_CURRENT_LIST_DIR}/SRC/spline_vmec_data.f90
 )
 
 set(preprocessed_sources
@@ -220,6 +231,7 @@ set(preprocessed_sources
 	${CMAKE_BINARY_DIR}/get_canonical_coordinates.f90.i
 	${CMAKE_BINARY_DIR}/params.f90.i
 	${CMAKE_BINARY_DIR}/canonical_coordinates_mod.f90.i
+	${CMAKE_BINARY_DIR}/spline_vmec_data.f90.i
 )
 
 add_custom_target(preprocessed_sources

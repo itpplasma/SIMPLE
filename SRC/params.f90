@@ -1,5 +1,7 @@
 module params
-
+#ifdef MPI
+    use mpi
+#endif
   use util
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
@@ -79,9 +81,9 @@ module params
   integer :: nfirstpart, nlastpart
 
   logical :: debug = .False.
-
+  integer :: ierr
 #ifdef MPI
-  integer :: ierr, mpirank, mpisize
+  integer :: mpirank, mpisize
 
   double precision, dimension(:), allocatable :: &
     confpart_trap_glob, confpart_pass_glob
