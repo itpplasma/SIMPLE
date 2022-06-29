@@ -34,6 +34,7 @@ message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
 message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
+set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/mod)
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
@@ -110,16 +111,10 @@ set ( simple_sources
 	SRC/find_bminmax.f90
 )
 
-add_library ( simple SHARED
-	${simple_sources}
-)
+add_library (simple SHARED)
+target_sources (simple PRIVATE ${simple_sources})
 link_libraries(simple)
 
-add_library ( simple_mpi SHARED
-	${simple_sources}
-)
-target_compile_options(simple_mpi PUBLIC -DMPI)
-target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple rkf45 netcdf netcdff)
@@ -132,6 +127,14 @@ endif()
 add_executable (simple.x
 	SRC/main.f90
 )
+
+
+add_library (simple_mpi SHARED)
+target_compile_options(simple_mpi PUBLIC -DMPI)
+target_sources (simple_mpi PRIVATE ${simple_sources})
+set_property(TARGET simple_mpi PROPERTY Fortran_MODULE_DIRECTORY mod_mpi/)
+target_include_directories(simple_mpi PRIVATE ${CMAKE_BINARY_DIR}/mod_mpi/)
+target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
 
 add_executable (simple_mpi.x
 	SRC/main.f90
@@ -215,13 +218,14 @@ message(STATUS ${Python_LIBRARIES})
 message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
 set(files_to_wrap
-	${CMAKE_CURRENT_LIST_DIR}/SRC/simple.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/orbit_symplectic.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/field_can.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/get_canonical_coordinates.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/params.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/canonical_coordinates_mod.f90
-	${CMAKE_CURRENT_LIST_DIR}/SRC/spline_vmec_data.f90
+	SRC/simple.f90
+	SRC/orbit_symplectic.f90
+	SRC/field_can.f90
+	SRC/get_canonical_coordinates.f90
+	SRC/params.f90
+	SRC/canonical_coordinates_mod.f90
+	SRC/spline_vmec_data.f90
+	SRC/bench.f90
 )
 
 set(preprocessed_sources
@@ -232,6 +236,7 @@ set(preprocessed_sources
 	${CMAKE_BINARY_DIR}/params.f90.i
 	${CMAKE_BINARY_DIR}/canonical_coordinates_mod.f90.i
 	${CMAKE_BINARY_DIR}/spline_vmec_data.f90.i
+	${CMAKE_BINARY_DIR}/bench.f90.i
 )
 
 add_custom_target(preprocessed_sources
@@ -240,12 +245,12 @@ add_custom_target(preprocessed_sources
 
 foreach (file_to_wrap ${files_to_wrap})
 	file(RELATIVE_PATH
-		basename ${CMAKE_CURRENT_LIST_DIR}/SRC/ ${file_to_wrap}
+		basename ${CMAKE_CURRENT_LIST_DIR}/SRC/ ${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
 		)
 	add_custom_command(TARGET preprocessed_sources
 		COMMAND gfortran -E -cpp
 			-o ${CMAKE_BINARY_DIR}/${basename}.i
-			${file_to_wrap}
+			${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
 		DEPENDS ${files_to_wrap}
 	)
 endforeach()
@@ -263,6 +268,7 @@ set(fortran_src_files
 	f90wrap_get_canonical_coordinates.f90.f90
 	f90wrap_params.f90.f90
 	f90wrap_canonical_coordinates_mod.f90.f90
+	f90wrap_bench.f90.f90
 	f90wrap_toplevel.f90
 )
 set(generated_module_file "${f2py_module_name}.${Python_SOABI}")

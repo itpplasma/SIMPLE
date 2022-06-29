@@ -1,4 +1,4 @@
-module neo_orb_bench
+module simple_bench
 
 use field_can_mod, only: FieldCan_init
 use orbit_symplectic
@@ -22,7 +22,7 @@ type(MultistageIntegrator) :: mi
 type(Tracer) :: norb
 
 integer :: npoiper2
-real(8) :: rbig, dtau, dtaumax
+double precision :: rbig, dtau, dtaumax
 
 integer :: nt
 double precision, allocatable :: out(:, :)
@@ -278,12 +278,12 @@ subroutine test_multi_quasi
 end subroutine test_multi_quasi
 
 subroutine minsqdist(za, zref, result)
-    real(8), intent(in) :: za(:,:)
-    real(8), intent(in) :: zref(:,:)
-    real(8), intent(inout) :: result(:)
+    double precision, intent(in) :: za(:,:)
+    double precision, intent(in) :: zref(:,:)
+    double precision, intent(inout) :: result(:)
 
     integer :: k, l, ka, la
-    real(8) :: current
+    double precision :: current
 
     la = size(za, 2)
     l = size(zref, 2)
@@ -301,4 +301,4 @@ subroutine minsqdist(za, zref, result)
 !$omp end parallel
 end subroutine minsqdist
 
-end module neo_orb_bench
+end module simple_bench

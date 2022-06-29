@@ -76,8 +76,6 @@ ax.set_xlim(-5,5)
 ax.set_ylim(-5,5)
 ax.set_zlim(-5,5)
 
-plt.show()
-
 # Poloidal orbit in RZ
 
 plt.figure()
@@ -102,3 +100,6 @@ ax.set_ylim(-1400,1400)
 ax.set_zlim(-1400,1400)
 
 # %%
+
+
+plt.show()
