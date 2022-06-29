@@ -1,8 +1,8 @@
-from pysimple import simple, orbit_symplectic, vmec_to_can, can_to_vmec
+from pysimple import simple, params, orbit_symplectic, vmec_to_can, can_to_vmec
 import numpy as np
 import matplotlib.pyplot as plt
 
-tracy = simple.Tracer()
+tracy = params.Tracer()
 
 simple.init_field(tracy, "wout.nc", 3, 3, 3, 1)
 simple.init_params(tracy, 2, 4, 3.5e6, 256, 1, 1e-13)

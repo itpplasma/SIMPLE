@@ -16,7 +16,7 @@ p.trace_time = 1e-3
 p.contr_pp = -1e10     # Trace all passing passing
 p.startmode = -1       # Manual start conditions
 
-tracy = simple.Tracer()
+tracy = p.Tracer()
 
 simple.init_field(tracy, 'wout.nc',
     stuff.ns_s, stuff.ns_tp, stuff.multharm, p.integmode)
