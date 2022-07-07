@@ -173,6 +173,9 @@ set_target_properties(stell PROPERTIES IMPORTED_LOCATION
 	$ENV{HOME}/src/STELLOPT/LIBSTELL/Release/libstell.so)
 target_link_libraries(test_vmec.x stell)
 
+
+add_executable (test_new_can.x SRC/test_new_can.f90)
+
 # Grab Python
 find_package(Python REQUIRED
     COMPONENTS Interpreter Development NumPy)
