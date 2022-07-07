@@ -1,7 +1,8 @@
 !
   module exchange_get_cancoord_mod
     logical :: onlytheta
-    double precision :: vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,Bcovar_varphi,theta
+    double precision :: vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,&
+      Bcovar_varphi,A_theta,A_phi,theta
 !$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
 !$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,theta)
   end module exchange_get_cancoord_mod
@@ -16,18 +17,20 @@
                                         nh_stencil,G_c,sqg_c,             &
                                         B_vartheta_c,B_varphi_c
   use vector_potentail_mod, only : ns,hs
-  use exchange_get_cancoord_mod, only : vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,Bcovar_varphi, &
-                                        theta,onlytheta
+  use exchange_get_cancoord_mod, only : vartheta_c,varphi_c,sqg,aiota,    &
+                                        Bcovar_vartheta,Bcovar_varphi,    &
+                                        onlytheta
   use new_vmec_stuff_mod, only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
 !
   implicit none
 !
   logical :: fullset
   double precision, parameter :: relerr=1d-10
-  integer :: i_theta,i_phi,i_y,i_sten,ndim,is_beg
+  integer :: i_theta,i_phi,i_sten,ndim,is_beg
   integer,          dimension(:),     allocatable :: ipoi_t,ipoi_p
   double precision, dimension(:),     allocatable :: y,dy
-  double precision, dimension(:),     allocatable :: dstencil_theta,dstencil_phi
+  double precision :: dstencil_theta(-nh_stencil:nh_stencil), &
+                      dstencil_phi(-nh_stencil:nh_stencil)
 !
   double precision :: r,r1,r2,G_beg,dG_c_dt,dG_c_dp
   integer :: is
@@ -42,10 +45,6 @@
   h_theta_c=h_theta
   h_phi_c=h_phi
   hs_c=hs
-!
-  nh_stencil=3
-!
-  allocate(dstencil_theta(-nh_stencil:nh_stencil),dstencil_phi(-nh_stencil:nh_stencil))
 !
   if(nh_stencil.eq.1) then
     dstencil_theta(-1)=-0.5d0
@@ -213,7 +212,7 @@ deallocate(y,dy)
 !enddo
 !stop
   call spline_can_coord(fullset)
-  deallocate(dstencil_theta,dstencil_phi,ipoi_t,ipoi_p,sqg_c,B_vartheta_c,B_varphi_c,G_c)
+  deallocate(ipoi_t,ipoi_p,sqg_c,B_vartheta_c,B_varphi_c,G_c)
 !
   end subroutine get_canonical_coordinates
 !

@@ -38,9 +38,11 @@
     integer, parameter :: ns_max=6, n_qua=3
 !
     integer :: ns_s_c,ns_tp_c
-    integer :: ns_c,n_theta_c,n_phi_c,nh_stencil
+    integer :: ns_c,n_theta_c,n_phi_c
+    integer, parameter :: nh_stencil=3
     double precision :: hs_c,h_theta_c,h_phi_c
-    double precision, dimension(:,:,:), allocatable :: G_c,sqg_c,B_vartheta_c,B_varphi_c
+    double precision, dimension(:,:,:), allocatable :: G_c,sqg_c,&
+      B_vartheta_c,B_varphi_c,A_vartheta_c,A_varphi_c,Delta_varphi_c,chi_gauge
 !
     double precision, dimension(ns_max)                     :: derf1,derf2,derf3
     double precision, dimension(:,:,:,:,:,:),   allocatable :: s_G_c
