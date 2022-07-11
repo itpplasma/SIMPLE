@@ -1,10 +1,12 @@
 !
   module exchange_get_cancoord_mod
+    implicit none
+
     logical :: onlytheta
     double precision :: vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,&
-      Bcovar_varphi,A_theta,A_phi,theta
+      Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi
 !$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
-!$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,theta)
+!$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi)
   end module exchange_get_cancoord_mod
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
