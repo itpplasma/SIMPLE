@@ -29,6 +29,12 @@ find_package(LAPACK REQUIRED)
 # find_package(MPI REQUIRED)
 
 
+if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
+	find_package(PFUNIT REQUIRED)
+	enable_testing()
+	add_link_options(--coverage)
+endif()
+
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
@@ -168,6 +174,11 @@ add_executable (test_collis.x SRC/test_collis.f90)
 add_executable(test_vmec.x SRC/test_vmec.f90)
 target_include_directories(test_vmec.x PRIVATE
 	$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release)
+	
+if ( $ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
+    add_subdirectory ( test )
+endif ()
+	
 add_library(stell SHARED IMPORTED)
 set_target_properties(stell PROPERTIES IMPORTED_LOCATION
 	$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release/libstell.so)
