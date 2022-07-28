@@ -14,10 +14,10 @@ set(CMAKE_MACOSX_RPATH 1)
 find_program(NF_CONFIG "nc-config")
 
 if (NF_CONFIG)
-execute_process(COMMAND "nc-config" --prefix
+    execute_process(COMMAND "nc-config" --prefix
 		OUTPUT_VARIABLE NFPREFIX)
 else()
-message(SEND_ERROR "nc-config not found. Please install libnetcdff-dev")
+    message(SEND_ERROR "nc-config not found. Please install libnetcdff-dev")
 endif()
 
 string(STRIP ${NFPREFIX} NFPREFIX)
@@ -28,9 +28,15 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 # find_package(MPI REQUIRED)
 
+message(STATUS "Resolving Git Dependencies...")
+execute_process(COMMAND
+    git submodule update --init --recursive #for submodule handling, can always be called, doesn't do much if not needed
+)
+message(STATUS "Git Submodules up-to-date!")
 
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
-	find_package(PFUNIT REQUIRED)
+    message(STATUS "Unit Tests and Code Coverage Enabled!")
+	#find_package(PFUNIT REQUIRED)
 	enable_testing()
 	add_link_options(--coverage)
 endif()
@@ -77,62 +83,68 @@ else()
 	endif()
 endif()
 
+add_subdirectory(SRC)
+
 # RKF45 from https://people.sc.fsu.edu/~jburkardt/
 # licenced under LGPL (see SRC/contrib/LICENSE.rkf45)
-add_library ( rkf45 SHARED
-	SRC/contrib/rkf45.f90
-)
+#add_library ( rkf45 SHARED
+	#SRC/contrib/rkf45.f90
+#)
 
-set ( simple_sources
-	SRC/canonical_coordinates_mod.f90
-	SRC/nctools_module.f90
-	#	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
-	SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
-	SRC/contrib/minpack.f90
-	SRC/magfie.f90
-	SRC/boozer_converter.f90
-	SRC/binsrc.f90
-	SRC/plag_coeff.f90
-	SRC/chamb_m.f90
-	SRC/sub_alpha_lifetime_can.f90
-	SRC/vmecinm_m.f90
-	SRC/spline_vmec_data.f90
-	SRC/spl_three_to_five.f90
-	SRC/new_vmec_allocation_stuff.f90
-	SRC/get_canonical_coordinates.f90
-	SRC/testing.f90
-	SRC/field_can.f90
-	SRC/orbit_symplectic.f90
-	SRC/orbit_symplectic_quasi.f90
-	SRC/util.f90
-	SRC/simple.f90
-	SRC/bench.f90
-	SRC/parse_ants.f90
-	SRC/zzg.f90
-	SRC/rng.f
-	SRC/collis_alphas.f90
-	SRC/params.f90
-	SRC/sorting.f90
-	SRC/check_orbit_type.f90
-	SRC/find_bminmax.f90
-)
+#set ( simple_sources
+	#SRC/canonical_coordinates_mod.f90
+	#SRC/nctools_module.f90
+	##	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
+	#SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
+	#SRC/contrib/minpack.f90
+	#SRC/magfie.f90
+	#SRC/boozer_converter.f90
+	#SRC/binsrc.f90
+	#SRC/plag_coeff.f90
+	#SRC/chamb_m.f90
+	#SRC/sub_alpha_lifetime_can.f90
+	#SRC/vmecinm_m.f90
+	#SRC/spline_vmec_data.f90
+	#SRC/spl_three_to_five.f90
+	#SRC/new_vmec_allocation_stuff.f90
+	#SRC/get_canonical_coordinates.f90
+	#SRC/testing.f90
+	#SRC/field_can.f90
+	#SRC/orbit_symplectic.f90
+	#SRC/orbit_symplectic_quasi.f90
+	#SRC/util.f90
+	#SRC/simple.f90
+	#SRC/bench.f90
+	#SRC/parse_ants.f90
+	#SRC/zzg.f90
+	#SRC/rng.f
+	#SRC/collis_alphas.f90
+	#SRC/params.f90
+	#SRC/sorting.f90
+	#SRC/check_orbit_type.f90
+	#SRC/find_bminmax.f90
+#)
 
-add_library (simple SHARED)
-target_sources (simple PRIVATE ${simple_sources})
-link_libraries(simple)
+add_library (SIMPLE_LIB SHARED)
+target_link_libraries(SIMPLE_LIB PRIVATE SIMPLE_SRC)
 
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(simple rkf45 netcdf netcdff)
+	target_link_libraries(SIMPLE_LIB netcdf netcdff)
 else()
 	target_link_libraries(simple
-		rkf45 netcdf netcdff ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+		netcdf netcdff ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
 	)
 endif()
 
 add_executable (simple.x
 	SRC/main.f90
 )
+
+target_link_libraries(simple.x PRIVATE SIMPLE_SRC)
+if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
+    add_subdirectory (test)
+endif ()
 
 
 # add_library (simple_mpi SHARED)
@@ -150,42 +162,39 @@ add_executable (simple.x
 # list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS simple)
 # set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
 
-add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
-add_executable (test_sympl_tok.x SRC/test_sympl.f90)
-add_executable (test_sympl.x SRC/test_sympl_stell.f90)
-add_executable (test_magfie.x SRC/test_magfie.f90)
-add_executable (test_poincare1.x SRC/test_poincare1.f90)
-add_executable (test_poiplot_classification.x
-	SRC/test_poiplot_classification.f90
-)
-add_executable (alpha_lifetime_vmec_c.x
-	SRC/binsrc.f90
-	SRC/alpha_lifetime_c.f90
-)
-add_executable (alpha_lifetime_old.x
-	SRC/binsrc.f90
-	SRC/alpha_lifetime.f90
-)
-add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
-add_executable (test_boozer.x SRC/test_boozer.f90)
-add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
-add_executable (test_collis.x SRC/test_collis.f90)
+#add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
+#add_executable (test_sympl_tok.x SRC/test_sympl.f90)
+#add_executable (test_sympl.x SRC/test_sympl_stell.f90)
+#add_executable (test_magfie.x SRC/test_magfie.f90)
+#add_executable (test_poincare1.x SRC/test_poincare1.f90)
+#add_executable (test_poiplot_classification.x
+	#SRC/test_poiplot_classification.f90
+#)
+#add_executable (alpha_lifetime_vmec_c.x
+	#SRC/binsrc.f90
+	#SRC/alpha_lifetime_c.f90
+#)
+#add_executable (alpha_lifetime_old.x
+	#SRC/binsrc.f90
+	#SRC/alpha_lifetime.f90
+#)
+#add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
+#add_executable (test_boozer.x SRC/test_boozer.f90)
+#add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
+#add_executable (test_collis.x SRC/test_collis.f90)
 
-add_executable(test_vmec.x SRC/test_vmec.f90)
-target_include_directories(test_vmec.x PRIVATE
-	$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release)
+#add_executable(test_vmec.x SRC/test_vmec.f90)
+#target_include_directories(test_vmec.x PRIVATE
+	#$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release)
+
 	
-if ( $ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
-    add_subdirectory ( test )
-endif ()
-	
-add_library(stell SHARED IMPORTED)
-set_target_properties(stell PROPERTIES IMPORTED_LOCATION
-	$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release/libstell.so)
-target_link_libraries(test_vmec.x stell)
+#add_library(stell SHARED IMPORTED)
+#set_target_properties(stell PROPERTIES IMPORTED_LOCATION
+	#$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release/libstell.so)
+#target_link_libraries(test_vmec.x stell)
 
 
-add_executable (test_new_can.x SRC/test_new_can.f90)
+#add_executable (test_new_can.x SRC/test_new_can.f90)
 
 # Grab Python
 find_package(Python REQUIRED
