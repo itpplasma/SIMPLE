@@ -132,7 +132,7 @@ target_link_libraries(SIMPLE_LIB PRIVATE SIMPLE_SRC)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(SIMPLE_LIB netcdf netcdff)
 else()
-	target_link_libraries(simple
+	target_link_libraries(SIMPLE_LIB
 		netcdf netcdff ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
 	)
 endif()
@@ -144,6 +144,7 @@ add_executable (simple.x
 target_link_libraries(simple.x PRIVATE SIMPLE_SRC)
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     add_subdirectory (test)
+    ctest_test()
 endif ()
 
 
