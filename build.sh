@@ -1,28 +1,14 @@
-#!/ bin / bash -f
-
+#!/bin/bash -f
 
 if [[ -d build ]]
 then
-rm - rf build
+    rm -rf build
 fi
 
-if [[ $# -eq 0 ]]
-then
-export SIMPLE_COVERAGE = FALSE
-else
-    if [[ $1 == enable_tests ]]
-    then
-    export SIMPLE_COVERAGE = TRUE
-    else
-    echo "Type \"enable_test\" as first command line argument to enable pFUnit and code coverage."
-    fi
-fi
-
+export SIMPLE_COVERAGE=FALSE
 
 mkdir -p build
 cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j
-
-
 

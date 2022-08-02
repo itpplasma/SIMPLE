@@ -26,7 +26,7 @@ set(NFLIBS ${NFPREFIX}/lib)
 
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-# find_package(MPI REQUIRED)
+find_package(MPI REQUIRED)
 
 message(STATUS "Resolving Git Dependencies...")
 execute_process(COMMAND
@@ -36,7 +36,7 @@ message(STATUS "Git Submodules up-to-date!")
 
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     message(STATUS "Unit Tests and Code Coverage Enabled!")
-	#find_package(PFUNIT REQUIRED)
+	find_package(PFUNIT REQUIRED)
 	enable_testing()
 	add_link_options(--coverage)
 endif()
