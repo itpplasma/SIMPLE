@@ -13,7 +13,7 @@ add_pfunit_ctest(test_magfie
 	TEST_SOURCES test_magfie.f90
 	LINK_LIBRARIES SIMPLE)
 
-add_pfunit_ctest(test_magfie 
+add_pfunit_ctest(test_magfie_unit
 	TEST_SOURCES test_magfie.f90
 	LINK_LIBRARIES SIMPLE)
 

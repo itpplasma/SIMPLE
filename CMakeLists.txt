@@ -1,7 +1,7 @@
 # CMakeLists files in this project can
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
-cmake_minimum_required (VERSION 3.7)
+cmake_minimum_required (VERSION 3.12)
 project (SIMPLE Fortran C)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -28,11 +28,34 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
-message(STATUS "Resolving Git Dependencies...")
+#[[message(STATUS "Resolving Git Dependencies...")
 execute_process(COMMAND
     git submodule update --init --recursive #for submodule handling, can always be called, doesn't do much if not needed
 )
-message(STATUS "Git Submodules up-to-date!")
+if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
+    message("****** (Re-)Building pFUnit... ******")
+    execute_process(COMMAND
+    #cd /SRC/contrib/pFUnit/
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/SRC/contrib/pFUnit/
+    #COMMAND
+    rm -r -f build/
+    COMMAND
+    mkdir build
+    #COMMAND
+    #cd build
+    COMMAND
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/SRC/contrib/pFUnit/build/
+    cmake ..
+    COMMAND
+    make -j tests
+    COMMAND
+    make -j install
+    #OUTPUT_QUIET
+    )
+    message("****** End of pFUnit (re-)build! ******")
+endif()
+
+message(STATUS "Git Submodules up-to-date!")]]
 
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     message(STATUS "Unit Tests and Code Coverage Enabled!")
@@ -125,14 +148,14 @@ add_subdirectory(SRC)
 	#SRC/find_bminmax.f90
 #)
 
-add_library (SIMPLE_LIB SHARED)
-target_link_libraries(SIMPLE_LIB PRIVATE SIMPLE_SRC)
+add_library (SIMPLE_LIB INTERFACE)
+target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
 
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(SIMPLE_LIB netcdf netcdff)
+	target_link_libraries(SIMPLE_LIB PRIVATE netcdf netcdff)
 else()
-	target_link_libraries(SIMPLE_LIB
+	target_link_libraries(SIMPLE_LIB INTERFACE
 		netcdf netcdff ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
 	)
 endif()
@@ -144,7 +167,6 @@ add_executable (simple.x
 target_link_libraries(simple.x PRIVATE SIMPLE_SRC)
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     add_subdirectory (test)
-    ctest_test()
 endif ()
 
 

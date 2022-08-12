@@ -10,7 +10,7 @@ if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     add_subdirectory(pFUnit)
 endif()
 
-add_library(CONTRIB PRIVATE ${SOURCES})
+add_library(CONTRIB SHARED ${SOURCES})
 
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     target_link_libraries(CONTRIB pFUnit)
