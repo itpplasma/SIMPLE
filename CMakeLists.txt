@@ -160,6 +160,10 @@ else()
 	)
 endif()
 
+if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
+    target_link_libraries(SIMPLE_LIB INTERFACE pfunit)
+endif()
+
 add_executable (simple.x
 	SRC/main.f90
 )

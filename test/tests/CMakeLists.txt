@@ -1,10 +1,15 @@
 
 
-add_pfunit_ctest(test_boozer 
-    TEST_SOURCES test_boozer.f90
-	LINK_LIBRARIES SIMPLE
-    LINK_LIBRARIES SIMPLE)
 
+add_pfunit_ctest(test_example
+    TEST_SOURCES test_example.f90
+	LINK_LIBRARIES SIMPLE_LIB)
+
+#[[add_pfunit_ctest(test_boozer 
+    TEST_SOURCES test_boozer.f90
+	LINK_LIBRARIES SIMPLE)
+add_executable(test_example.x
+               test_example.f90)
 add_pfunit_ctest(test_coord_trans 
 	TEST_SOURCES test_coord_trans.f90
 	LINK_LIBRARIES SIMPLE)
@@ -43,6 +48,6 @@ add_pfunit_ctest(test_sympl_stell
 
 add_pfunit_ctest(test_vmec 
 	TEST_SOURCES test_vmec.f90
-	LINK_LIBRARIES SIMPLE)
+	LINK_LIBRARIES SIMPLE)]]
 
 
