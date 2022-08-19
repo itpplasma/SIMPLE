@@ -69,7 +69,7 @@ message(STATUS "NetCDF include path: " ${NFINC})
 message(STATUS "NetCDF lib path: " ${NFLIBS})
 message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-# set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/mod)
+set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/mod)
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
@@ -149,6 +149,7 @@ add_subdirectory(SRC)
 #)
 
 add_library (SIMPLE_LIB INTERFACE)
+target_compile_options(SIMPLE_LIB INTERFACE -DMPI)
 target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
 
 
@@ -160,34 +161,36 @@ else()
 	)
 endif()
 
-if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
-    target_link_libraries(SIMPLE_LIB INTERFACE pfunit)
-endif()
-
 add_executable (simple.x
 	SRC/main.f90
 )
 
-target_link_libraries(simple.x PRIVATE SIMPLE_SRC)
+target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
+
+if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
+    target_link_libraries(SIMPLE_LIB INTERFACE pfunit)
+endif()
+
+
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     add_subdirectory (test)
 endif ()
 
 
-# add_library (simple_mpi SHARED)
-# target_compile_options(simple_mpi PUBLIC -DMPI)
-# target_sources (simple_mpi PRIVATE ${simple_sources})
-# set_property(TARGET simple_mpi PROPERTY Fortran_MODULE_DIRECTORY mod_mpi/)
-# target_include_directories(simple_mpi PRIVATE ${CMAKE_BINARY_DIR}/mod_mpi/)
-# target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
+#add_library (simple_mpi INTERFACE)
+#target_compile_options(simple_mpi PUBLIC -DMPI)
+#target_sources (simple_mpi PRIVATE ${simple_sources})
+#set_property(TARGET simple_mpi PROPERTY Fortran_MODULE_DIRECTORY mod_mpi/)
+#target_include_directories(simple_mpi PRIVATE ${CMAKE_BINARY_DIR}/mod_mpi/)
+#target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
 
-# add_executable (simple_mpi.x
-# 	SRC/main.f90
-# )
-# target_link_libraries(simple_mpi.x simple_mpi)
-# get_target_property(SIMPLE_MPI_LINKED_LIBS simple_mpi.x LINK_LIBRARIES)
-# list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS simple)
-# set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
+#add_executable (simple_mpi.x
+#	SRC/main.f90
+#)
+#target_link_libraries(simple_mpi.x simple_mpi)
+#get_target_property(SIMPLE_MPI_LINKED_LIBS simple_mpi.x LINK_LIBRARIES)
+#list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS simple)
+#set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
 
 #add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
 #add_executable (test_sympl_tok.x SRC/test_sympl.f90)
@@ -298,14 +301,14 @@ foreach (file_to_wrap ${files_to_wrap})
 		basename ${CMAKE_CURRENT_LIST_DIR}/SRC/ ${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
 		)
 	add_custom_command(TARGET preprocessed_sources
-		COMMAND gfortran -E -cpp
+		COMMAND ${FC} -E -cpp
 			-o ${CMAKE_BINARY_DIR}/${basename}.i
 			${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
 		DEPENDS ${files_to_wrap}
 	)
 endforeach()
 
-
+#[[
 # Vars
 set(f2py_module_name "_pysimple")
 set(f2py_module_c "${f2py_module_name}module.c")
@@ -373,4 +376,4 @@ if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
         "${CMAKE_CURRENT_BINARY_DIR}/pysimple.py"
         "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/pysimple.py"
         COMMENT "Copying 'pysimple.py' file to '${CMAKE_LIBRARY_OUTPUT_DIRECTORY}'")
-endif()
+endif()]]

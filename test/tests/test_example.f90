@@ -12,7 +12,7 @@ contains
 
       i = 3
       j = 2*i
-      k = 5
+      k = 6
       
       @assertEqual(k, j, message = "test example 1")
 
