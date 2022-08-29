@@ -21,20 +21,24 @@ integer :: k
 call init_own
 call init_libstell
 
-s = 0.6d0
-varphi = 0.2d0
+s = 0.6d0 !multiple s, phi, theta (20 variants),s E 0,1
+varphi = 0.2d0 !in rad
 
 do k = 1,ntheta
   theta = k*2d0*pi*1.0/ntheta
 
-  ! VMEC coordinate u=nfp*varphi where nfp is the number of field periods
+  ! VMEC coordinate v=nfp*varphi where nfp is the number of field periods
   ! (e.g. nfp=5 in W7-X, built from 5 identical segments toroidally)
   call tosuvspace(s, theta, nfp*varphi, gsqrt, bsupu, bsupv, jsupu, jsupv, lam)
   call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota, &
     sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi, &
     Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-    write(101, *) lam
-    write(102, *) alam
+    !write(101, *) lam
+    !write(102, *) alam
+    !Bctrvr_vartheta == bsupu ausser nfp? see https://princetonuniversity.github.io/STELLOPT/VMEC.html
+    !zeta  == varphi == phi(libstell) == v/nfp
+    !no j
+    !dA_theta_ds comp. A_theta ds
 
   call get_derivatives() !ToDo
 end do
