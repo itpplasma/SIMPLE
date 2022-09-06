@@ -3,7 +3,11 @@
 
 add_pfunit_ctest(test_example
     TEST_SOURCES test_example.f90
-	LINK_LIBRARIES SIMPLE_LIB)
+    LINK_LIBRARIES SIMPLE_LIB)
+
+add_pfunit_ctest(test_vmec 
+    TEST_SOURCES test_vmec.f90
+    LINK_LIBRARIES SIMPLE_LIB)
 
 #[[add_pfunit_ctest(test_boozer 
     TEST_SOURCES test_boozer.f90
@@ -45,9 +49,6 @@ add_pfunit_ctest(test_sympl
 add_pfunit_ctest(test_sympl_stell 
 	TEST_SOURCES test_sympl_stell.f90
 	LINK_LIBRARIES SIMPLE)
-
-add_pfunit_ctest(test_vmec 
-	TEST_SOURCES test_vmec.f90
-	LINK_LIBRARIES SIMPLE)]]
+]]
 
 
