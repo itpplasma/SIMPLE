@@ -28,35 +28,6 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
-#[[message(STATUS "Resolving Git Dependencies...")
-execute_process(COMMAND
-    git submodule update --init --recursive #for submodule handling, can always be called, doesn't do much if not needed
-)
-if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
-    message("****** (Re-)Building pFUnit... ******")
-    execute_process(COMMAND
-    #cd /SRC/contrib/pFUnit/
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/SRC/contrib/pFUnit/
-    #COMMAND
-    rm -r -f build/
-    COMMAND
-    mkdir build
-    #COMMAND
-    #cd build
-    COMMAND
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/SRC/contrib/pFUnit/build/
-    cmake ..
-    COMMAND
-    make -j tests
-    COMMAND
-    make -j install
-    #OUTPUT_QUIET
-    )
-    message("****** End of pFUnit (re-)build! ******")
-endif()
-
-message(STATUS "Git Submodules up-to-date!")]]
-
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     message(STATUS "Unit Tests and Code Coverage Enabled!")
 	find_package(PFUNIT REQUIRED)
@@ -107,46 +78,6 @@ else()
 endif()
 
 add_subdirectory(SRC)
-
-# RKF45 from https://people.sc.fsu.edu/~jburkardt/
-# licenced under LGPL (see SRC/contrib/LICENSE.rkf45)
-#add_library ( rkf45 SHARED
-	#SRC/contrib/rkf45.f90
-#)
-
-#set ( simple_sources
-	#SRC/canonical_coordinates_mod.f90
-	#SRC/nctools_module.f90
-	##	SRC/odeint_allroutines.f   # to use this, copy local version into SRC
-	#SRC/odeint_rkf45.f90       # interface to contrib/rkf45.f90
-	#SRC/contrib/minpack.f90
-	#SRC/magfie.f90
-	#SRC/boozer_converter.f90
-	#SRC/binsrc.f90
-	#SRC/plag_coeff.f90
-	#SRC/chamb_m.f90
-	#SRC/sub_alpha_lifetime_can.f90
-	#SRC/vmecinm_m.f90
-	#SRC/spline_vmec_data.f90
-	#SRC/spl_three_to_five.f90
-	#SRC/new_vmec_allocation_stuff.f90
-	#SRC/get_canonical_coordinates.f90
-	#SRC/testing.f90
-	#SRC/field_can.f90
-	#SRC/orbit_symplectic.f90
-	#SRC/orbit_symplectic_quasi.f90
-	#SRC/util.f90
-	#SRC/simple.f90
-	#SRC/bench.f90
-	#SRC/parse_ants.f90
-	#SRC/zzg.f90
-	#SRC/rng.f
-	#SRC/collis_alphas.f90
-	#SRC/params.f90
-	#SRC/sorting.f90
-	#SRC/check_orbit_type.f90
-	#SRC/find_bminmax.f90
-#)
 
 add_library (SIMPLE_LIB INTERFACE)
 target_compile_options(SIMPLE_LIB INTERFACE -DMPI)

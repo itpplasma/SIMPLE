@@ -4,7 +4,7 @@ use util, only: pi
 implicit none
 
 character(*), parameter :: filename = 'wout.nc'
-real(8) :: s, theta, varphi
+real(8) :: s, theta, varphi, errtol
 
 ! For testing own routines
 real(8) :: gsqrt, bsupu, bsupv, jsupu, jsupv, lam
@@ -13,7 +13,7 @@ real(8) :: gsqrt, bsupu, bsupv, jsupu, jsupv, lam
 real(8) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota,&
   R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp
   real(8) :: Bctrvr_vartheta, Bctrvr_varphi, Bcovar_vartheta, &
-  Bcovar_varphi, sqg, Bcovar_r
+  Bcovar_varphi, sqg, Bcovar_r, Bsqrt_varphi, Bsqrt_vartheta
 
 integer, parameter :: ntheta = 100
 integer :: k
@@ -21,28 +21,37 @@ integer :: k
 call init_own
 call init_libstell
 
-s = 0.6d0 !multiple s, phi, theta (20 variants),s E 0,1
-varphi = 0.2d0 !in rad
+!s = 0.6d0 !multiple s, phi, theta (20 variants),s E 0,1
+!varphi = 0.2d0 !in rad
+errtol = 1e-13
+do s = 0d0,1d0
+    do varphi = 0d0, 2d0 * pi
+	    do k = 1,ntheta
+	      theta = k*2d0*pi*1.0/ntheta
 
-do k = 1,ntheta
-  theta = k*2d0*pi*1.0/ntheta
-
-  ! VMEC coordinate v=nfp*varphi where nfp is the number of field periods
-  ! (e.g. nfp=5 in W7-X, built from 5 identical segments toroidally)
-  call tosuvspace(s, theta, nfp*varphi, gsqrt, bsupu, bsupv, jsupu, jsupv, lam)
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota, &
-    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi, &
-    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-    !write(101, *) lam
-    !write(102, *) alam
-    !Bctrvr_vartheta == bsupu ausser nfp? see https://princetonuniversity.github.io/STELLOPT/VMEC.html
-    !zeta  == varphi == phi(libstell) == v/nfp
-    !no j
-    !dA_theta_ds comp. A_theta ds
-
-  call get_derivatives() !ToDo
-end do
-
+	      ! VMEC coordinate v=nfp*varphi where nfp is the number of field periods
+	      ! (e.g. nfp=5 in W7-X, built from 5 identical segments toroidally)
+	      call tosuvspace(s, theta, nfp*varphi, gsqrt, bsupu, bsupv, jsupu, jsupv, lam)
+	      call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota, &
+	        sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi, &
+	        Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+	        
+	        !cccc Assert outputs cccc
+	        @assertequal(lam, alam, tolerance=errtol)
+	        Bsqrt_varphi = 
+	        Bsqrt_vartheta = 
+	        @assertequal()
+	        
+	        !write(101, *) lam
+	        !write(102, *) alam
+	        !Bctrvr_vartheta == bsupu ausser nfp? see https://princetonuniversity.github.io/STELLOPT/VMEC.html
+	        !zeta  == varphi == phi(libstell) == v/nfp
+	        !no j
+	        !dA_theta_ds comp. A_theta ds
+	        
+	    end do !k
+    end do !varphi
+end do !s
 
 
 contains
