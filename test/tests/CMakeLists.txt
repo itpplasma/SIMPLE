@@ -5,7 +5,7 @@ add_pfunit_ctest(test_example
     TEST_SOURCES test_example.f90
     LINK_LIBRARIES SIMPLE_LIB)
 
-add_pfunit_ctest(test_vmec 
+add_pfunit_ctest(test_vmec
     TEST_SOURCES test_vmec.f90
     LINK_LIBRARIES SIMPLE_LIB)
 

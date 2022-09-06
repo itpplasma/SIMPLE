@@ -109,13 +109,13 @@ if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
         )
     endif()
     if (EXISTS $ENV{STELLOPT_PATH})
-        #add_library(stell SHARED IMPORTED GLOBAL) #For Comparing VMEC Routines
-        #set_target_properties(stell PROPERTIES IMPORTED_LOCATION
-         #   ${CMAKE_CURRENT_SOURCE_DIR}/../STELLOPT/LIBSTELL/Release/libstell.a)
+        add_library(stell SHARED IMPORTED GLOBAL) #For Comparing VMEC Routines
+        set_target_properties(stell PROPERTIES IMPORTED_LOCATION
+            ${CMAKE_CURRENT_SOURCE_DIR}/../STELLOPT/LIBSTELL/Release/libstell.so)
             #${CMAKE_CURRENT_SOURCE_DIR}/../STELLOPT/LIBSTELL/Release/read_wout_mod.o)
         target_include_directories(SIMPLE_LIB INTERFACE $ENV{STELLOPT_PATH}/LIBSTELL/Release/)
-          
-        #target_link_libraries(SIMPLE_LIB INTERFACE stell)
+        target_include_directories(SIMPLE_LIB INTERFACE ${CMAKE_BINARY_DIR}/mod/)
+        target_link_libraries(SIMPLE_LIB INTERFACE stell)
     else()
         message(FATAL_ERROR "STELLOPT could not be resolved. (Default in parallel to SIMPLE, or set STELLOPT_PATH.)")
     endif()
