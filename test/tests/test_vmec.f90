@@ -47,7 +47,7 @@ contains
 
                     Bsqrt_varphi = sqrt(Bcovar_varphi * Bctrvr_varphi)
                     Bsqrt_vartheta = sqrt(Bcovar_vartheta * Bctrvr_vartheta)
-                    !@assertEqual()
+                    @assertEqual(Bsqrt_vartheta, )
 
                     !write(101, *) lam
                     !write(102, *) alam
