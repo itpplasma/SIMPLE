@@ -28,7 +28,7 @@ export PFUNIT_DIR=./SRC/contrib/pFUnit/build/installed/PFUNIT-4.4/cmake
 cmake .. -DCMAKE_PREFIX_PATH=$PFUNIT_DIR -DCMAKE_INSTALL_PREFIX=$PFUNIT_DIR
 make -j16
 
-ctest --output-on-failure
+ctest --output-on-failure --verbose
 
 cd $work_dir
 

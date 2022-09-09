@@ -1,8 +1,9 @@
 module test_vmec
-use read_wout_mod, only: tosuvspace, nfp
-use util, only: pi
-use funit
-implicit none
+    use read_wout_mod, only: tosuvspace, nfp
+    use util, only: pi
+    use funit
+
+    implicit none
 
 double precision :: errtol
 character(*), parameter :: filename = 'wout.nc'
@@ -29,8 +30,8 @@ contains
         call init_own
         call init_libstell
 
-        errtol = 1e-13
-        do s = 0d0,1d0
+        errtol = 1e-14
+        do s = 0d0,1
             do varphi = 0d0, 2d0 * pi
                 do k = 1,ntheta
                     theta = k*2d0*pi*1.0/ntheta
@@ -44,11 +45,8 @@ contains
                     
                     !cccc Assert outputs cccc
                     @assertEqual(lam, alam, tolerance=errtol)
-
-                    Bsqrt_varphi = sqrt(Bcovar_varphi * Bctrvr_varphi)
-                    Bsqrt_vartheta = sqrt(Bcovar_vartheta * Bctrvr_vartheta)
-                    @assertEqual(Bsqrt_vartheta, )
-
+                    @assertEqual(Bctrvr_vartheta, bsupu/nfp, tolerance=errtol)
+                    @assertEqual(1, 2)
                     !write(101, *) lam
                     !write(102, *) alam
                     !Bctrvr_vartheta == bsupu ausser nfp? see https://princetonuniversity.github.io/STELLOPT/VMEC.html
