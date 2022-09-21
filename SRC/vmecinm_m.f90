@@ -36,13 +36,14 @@
   subroutine vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s, &
                     nsurfb,nstrb,kparb,flux)
 !
-  use new_vmec_stuff_mod, only : netcdffile
+  use new_vmec_stuff_mod, only : netcdffile, vmec_B_scale, vmec_RZ_scale
   use nctools_module
 !
   implicit none
 !
   double precision, parameter :: pi=3.14159265358979d0
-  double precision, parameter :: fac_b=1d4,fac_r=1d2
+  double precision, parameter :: fac_b0=1d4,fac_r0=1d2
+  double precision :: fac_b, fac_r
 !
   integer :: nsurfb,nstrb,kparb,ncid,i
   double precision :: flux
@@ -52,6 +53,9 @@
   double precision, dimension(nstrb,0:kparb) :: rmns,zmns,almns,lmns
   integer :: lasym_int
   logical :: lasym
+!
+  fac_b = fac_b0 * vmec_B_scale
+  fac_r = fac_r0 * vmec_RZ_scale
 !
   do i=0,kparb
     sps(i)=dble(i)

@@ -1,0 +1,16 @@
+This file contains a (possibly non-exhaustive) list of important changes.
+
+Changes marked with "!" may yield different output when run on the same input
+compared to earlier versions.
+
+! commit 8e19626: Removed bmod_ref that rescaled to match B_00 on flux surface
+  commit b5fc202: MPI working again, misses later columns in times_lost.dat
+  commit b5fc202: MPI working again, misses later columns in times_lost.dat
+      2022-06-28: Merge collisions branch back to master, cross-checked results
+! commit 7ca8fad: Default to old VMEC near-axis healing again
+  commit 86c3a5d: simple.in is now in namelist format
+! commit a247433: Disable extrapolation entirely in init_sympl
+! commit 468e317: Compute actual momentum in z(4) every timestep
+! commit e264ef7: New healing procedure for VMEC near axis
+  commit 6981791: start.dat is now always stored in VMEC coordinates.
+! v1.1: Lambda is now evaluated on half mesh, improves B-field interpolation.

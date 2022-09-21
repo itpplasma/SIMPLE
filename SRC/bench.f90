@@ -1,10 +1,10 @@
-module neo_orb_bench
+module simple_bench
 
 use field_can_mod, only: FieldCan_init
 use orbit_symplectic
 use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
-use neo_orb
+use simple
 use new_vmec_stuff_mod, only: rmajor
 use diag_mod, only : icounter
 use omp_lib
@@ -19,10 +19,10 @@ double precision :: z0(4), vpar0, dt
 type(FieldCan) :: f
 type(SymplecticIntegrator) :: si
 type(MultistageIntegrator) :: mi
-type(NeoOrb) :: norb
+type(Tracer) :: norb
 
 integer :: npoiper2
-real(8) :: rbig, dtau, dtaumax
+double precision :: rbig, dtau, dtaumax
 
 integer :: nt
 double precision, allocatable :: out(:, :)
@@ -57,9 +57,9 @@ subroutine init_bench()
         z0(2) = 1.5d0  ! theta
         z0(3) = 0.0d0  ! phi
         vpar0 = 0.0d0  ! parallel velocity
-        
+
         call FieldCan_init(f, 1d-5, 1d0, vpar0, -1)
-        
+
         ! Compute toroidal momentum from initial conditions
         call eval_field(f, z0(1), z0(2), z0(3), 0)
 
@@ -71,7 +71,7 @@ subroutine init_bench()
         dtaumax = twopi*rbig/npoiper2
         dtau = dtaumax
 
-        call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+        call init_params(norb, 2, 4, 3.5d6, npoiper2, 1, 1d-8)  ! fusion alphas)
 
         ! Initial conditions
         z0(1) = 0.5d0    ! r
@@ -278,12 +278,12 @@ subroutine test_multi_quasi
 end subroutine test_multi_quasi
 
 subroutine minsqdist(za, zref, result)
-    real(8), intent(in) :: za(:,:)
-    real(8), intent(in) :: zref(:,:)
-    real(8), intent(inout) :: result(:)
+    double precision, intent(in) :: za(:,:)
+    double precision, intent(in) :: zref(:,:)
+    double precision, intent(inout) :: result(:)
 
     integer :: k, l, ka, la
-    real(8) :: current
+    double precision :: current
 
     la = size(za, 2)
     l = size(zref, 2)
@@ -301,4 +301,4 @@ subroutine minsqdist(za, zref, result)
 !$omp end parallel
 end subroutine minsqdist
 
-end module neo_orb_bench
+end module simple_bench

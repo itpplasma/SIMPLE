@@ -20,6 +20,7 @@
   nstrm=lens(1)
   nsurfm=lens(2)
   kpar=nsurfm-1
+  rmajor=rmajor*vmec_RZ_scale
 !
   call nc_close(ncid)
 !

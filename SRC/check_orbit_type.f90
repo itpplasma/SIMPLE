@@ -1,12 +1,12 @@
 !
   module detect_oneline_mod
-  !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs)
     logical :: prop=.true.
     integer, parameter :: nfp_dim=3, ipermin=10
     integer :: nfp_max,iper,igroup
     double precision :: pi,twopi
     integer,          dimension(:),   allocatable :: iret
     double precision, dimension(:,:), allocatable :: fprs
+  !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs)
   end module detect_oneline_mod
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

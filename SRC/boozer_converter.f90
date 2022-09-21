@@ -101,21 +101,23 @@
     wint_t(i)=h_theta_B**(i+1)/dble(i+1)
     wint_p(i)=h_phi_B**(i+1)/dble(i+1)
   enddo
-!
+
+  ! Set theta_V and phi_V linear, with value 0 at index 1 and stepsize h.
+  ! Then expand this in both directions beyond 1:n_theta_B.
   do i_theta=1,n_theta_B
     theta_V(i_theta)=dble(i_theta-1)*h_theta_B
   enddo
   per_theta=dble(n_theta_B-1)*h_theta_B
   theta_V(2-n_theta_B:0)=theta_V(1:n_theta_B-1)-per_theta
   theta_V(n_theta_B+1:2*n_theta_B-1)=theta_V(2:n_theta_B)+per_theta
-!
+
   do i_phi=1,n_phi_B
     phi_V(i_phi)=dble(i_phi-1)*h_phi_B
   enddo
   per_phi=dble(n_phi_B-1)*h_phi_B
   phi_V(2-n_phi_B:0)=phi_V(1:n_phi_B-1)-per_phi
   phi_V(n_phi_B+1:2*n_phi_B-1)=phi_V(2:n_phi_B)+per_phi
-!
+
   do i_rho=1,ns_B
     rho_tor(i_rho)=max(dble(i_rho-1)*hs_B,rho_min)
     s=rho_tor(i_rho)**2
@@ -156,6 +158,7 @@
     do i_theta=1,n_theta_B-1
       delphi_BV_Vg(i_theta+1,1)=delphi_BV_Vg(i_theta,1)+sum(wint_t*splcoe_t(:,i_theta))
     enddo
+    ! Remove linear increasing component from delphi_BV_Vg
     aper=(delphi_BV_Vg(n_theta_B,1)-delphi_BV_Vg(1,1))/dble(n_theta_B-1)
     do i_theta=2,n_theta_B
       delphi_BV_Vg(i_theta,1)=delphi_BV_Vg(i_theta,1)-aper*dble(i_theta-1)
@@ -192,6 +195,7 @@
       perqua_t(2,1:n_theta_B)=delphi_BV_Vg(:,i_phi)
       perqua_t(3,1:n_theta_B)=bmod_Vg(:,i_phi)
       perqua_t(4:6,1:n_theta_B)=perqua_2D(4:6,:,i_phi)
+      ! Extend range of theta values
       perqua_t(:,2-n_theta_B:0)=perqua_t(:,1:n_theta_B-1)
       perqua_t(:,n_theta_B+1:2*n_theta_B-1)=perqua_t(:,2:n_theta_B)
       theta_B=theta_V+perqua_t(1,:)
@@ -215,6 +219,7 @@
     do i_theta=1,n_theta_B
       perqua_p(:,1:n_phi_B)=perqua_2D(:,i_theta,:)
       perqua_p(:,2-n_phi_B:0)=perqua_p(:,1:n_phi_B-1)
+      ! Extend range of phi values
       perqua_p(:,n_phi_B+1:2*n_phi_B-1)=perqua_p(:,2:n_phi_B)
       phi_B=phi_V+perqua_p(2,:)
       do i_phi=1,n_phi_B

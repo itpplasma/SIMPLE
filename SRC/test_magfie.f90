@@ -5,14 +5,14 @@ program test_magfie
 use velo_mod,   only : isw_field_type
 use orbit_symplectic
 use field_can_mod
-use neo_orb
+use simple
 use new_vmec_stuff_mod, only: rmajor
 
 implicit none
 save
 
 double precision :: z0(4), vpar0
-type(NeoOrb) :: norb
+type(Tracer) :: norb
 type(FieldCan) :: f
 
 integer :: npoiper2
@@ -37,7 +37,7 @@ else
   dtaumax = twopi*rbig/npoiper2
   dtau = dtaumax
 
-  call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+  call init_params(norb, 2, 4, 3.5d6, npoiper2, 1, 1d-8)  ! fusion alphas)
 
   ! Initial conditions
   z0(1) = 0.1d0  ! r
@@ -61,7 +61,7 @@ contains
 function relerr(a, b)
     double precision :: relerr
     double precision, intent(in) :: a, b
-    relerr = merge(0d0, (a - b)/b, b == 0d0)
+    relerr = merge(a, (a - b)/b, b == 0d0)
 end function relerr
 
 
