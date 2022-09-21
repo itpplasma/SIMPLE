@@ -61,7 +61,7 @@
     sps(i)=dble(i)
   enddo
 !
-    call nc_open(netcdffile, ncid)
+  call nc_open(netcdffile, ncid)
 !
   call nc_get(ncid, 'lasym__logical__', lasym_int)
   lasym = (lasym_int == 1)
