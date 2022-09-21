@@ -6,7 +6,7 @@
 use diag_mod, only : icounter
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_sympl
+  use simple, only : init_sympl
 !
   implicit none
 !
@@ -49,7 +49,7 @@ use diag_mod, only : icounter
 !
   type(FieldCan) :: f
   type(SymplecticIntegrator) :: si
-  
+
   zerolam=0.d0
   twopi=2.d0*pi
   nplagr=4
@@ -129,7 +129,7 @@ print *, 'ttrace = ', ntimstep*dtau/v0, 'nstep = ', ntimstep
   call get_canonical_coordinates
 !call testing
 !
-!do 
+!do
   !print *, 'Enter r, theta, phi, lambda: '
   !read *,r,vartheta_c,varphi_c,alam0
   r = 0.5
@@ -145,7 +145,7 @@ print *, 'ttrace = ', ntimstep*dtau/v0, 'nstep = ', ntimstep
   z(5)=alam0
 !
 icounter=0
-  call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl) 
+  call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl)
 !
 !--------------------------------
 ! Initialize tip detector

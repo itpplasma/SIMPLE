@@ -7,14 +7,14 @@
   implicit none
 !
   integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
-  integer :: iss,ist,isp,nrho,nheal
+  integer :: iss,ist,isp,nrho,nheal,iunit_hs
   double precision :: twopi,cosphase,sinphase
   complex(8)   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
   double precision, dimension(:,:), allocatable :: splcoe
   double precision, dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
   double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
   complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
-!
+
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
   print *,''
@@ -33,12 +33,22 @@
   allocate(almnc_rho(nstrm,0:nrho-1),rmnc_rho(nstrm,0:nrho-1),zmnc_rho(nstrm,0:nrho-1))
   allocate(almns_rho(nstrm,0:nrho-1),rmns_rho(nstrm,0:nrho-1),zmns_rho(nstrm,0:nrho-1))
 !
+  iunit_hs=1357
+  open(iunit_hs,file='healaxis.dat')
+!
   do i=1,nstrm
 !
     m=nint(abs(axm(i)))
+
+    if (old_axis_healing_boundary) then
+      nheal = min(m, 4)
+    else
 !
-    nheal=min(m, 4)
+      call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
 !
+      write(iunit_hs,*) 'm = ',m,' n = ',nint(abs(axn(i))),' skipped ',nheal,' / ',ns
+    end if
+
     call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
 !
     call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
@@ -52,6 +62,8 @@
     call s_to_rho_healaxis(m,ns,nrho,nheal,almns(i,:),almns_rho(i,:))
 !
   enddo
+!
+  close(iunit_hs)
 !
 !------------------------------------
 ! Begin poloidal flux ($A_\varphi$):
@@ -97,7 +109,7 @@
 !
   nsize_exp_imt=(n_theta-1)*m_max
   nsize_exp_inp=(n_phi-1)*n_max
-! 
+!
   allocate(exp_imt(0:nsize_exp_imt),exp_inp(-nsize_exp_inp:nsize_exp_inp))
 !
   base_exp_imt=exp(cmplx(0.d0,h_theta,kind=kind(0d0)))
@@ -320,7 +332,8 @@
 !
   integer :: is,i_theta,i_phi,k
   double precision :: ds,dtheta,dphi,rho_tor
-  double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+  double precision, intent(in) :: s,theta,varphi
+  double precision, intent(out) :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
                       R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
 !
   integer, parameter :: ns_max=6
@@ -467,7 +480,7 @@
   subroutine vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                         sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                         Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-                        
+
 !
   implicit none
 !
@@ -631,79 +644,248 @@
   enddo
 !
   end subroutine splint_lambda
-!
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
+! Go from s to rho grid, with special treatment of the axis.
 !
+! Interpolate values from s to rho grid. It is assumed that the
+! innermost points of the input grid are not valid/noisy and thus need
+! special treatment.
+! This is done by extrapolating from values outside of this region to
+! the axis.
+! Extrapolation is done linear (more robust).
+! An intermediate rescaling with rho can be used (might be useful to
+! enforce behaviour near the axis). This will be in effect for
+! extrapolating to the axis and for the interpolation to the new grid.
+!
+! input:
+! ------
+! m: integer, exponent, values <= 0 are ignored. Intermediate scaling of
+!   values is done with rho**m.
+! ns: integer, size of input array.
+! nrho: integer, size of output array.
+! nheal: integer,
+! arr_in: double precision 1d array, with ns elements.
+!
+! output:
+! -------
+! arr_out: double precision 1d array, with nrho elements.
+!
+! sideeffects:
+! ------------
+! none
+subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
+
+  use new_vmec_stuff_mod, only : ns_s, old_axis_healing
+
+  implicit none
+
+  integer, intent(in) :: m, ns, nrho, nheal
+  double precision, dimension(ns), intent(in) :: arr_in
+  double precision, dimension(nrho), intent(out) :: arr_out
+
+  integer :: irho,is,k,nhe
+  double precision :: hs,hrho,s,ds,rho,a,b,c
+  double precision, dimension(:,:), allocatable :: splcoe
+
+  hs = 1.d0/dble(ns-1)
+  hrho = 1.d0/dble(nrho-1)
+
+  nhe = max(1,nheal)+1
+
+  ! Rescale
+  do is=nhe,ns
+    if(m.gt.0) then
+      rho = sqrt(hs*dble(is-1))
+      arr_out(is) = arr_in(is)/rho**m
+    else
+      arr_out(is) = arr_in(is)
+    end if
+  end do
+
+  if (old_axis_healing) then
+    ! parabolic extrapolation:
+    a = arr_out(nhe)
+    b = 0.5d0*(4.d0*arr_out(nhe+1) - 3.d0*arr_out(nhe) - arr_out(nhe+2))
+    c = 0.5d0*(arr_out(nhe) + arr_out(nhe+2) - 2.d0*arr_out(nhe+1))
+
+    do is=1,nhe-1
+      arr_out(is) = a + b*dble(is-nhe) + c*dble(is-nhe)**2
+    enddo
+
+  else
+    ! linear extrapolation ("less accurate" but more robust):
+    a = arr_out(nhe)
+    b = arr_out(nhe+1) - arr_out(nhe)
+
+    do is=1,nhe-1
+      arr_out(is) = a + b*dble(is-nhe)
+    enddo
+
+  end if
+
+  allocate(splcoe(0:ns_s,ns))
+
+  splcoe(0,:) = arr_out
+
+  call spl_reg(ns_s,ns,hs,splcoe)
+
+  do irho=1,nrho
+    rho = hrho*dble(irho-1)
+    s = rho**2
+
+    ds = s/hs
+    is = max(0,min(ns-1,int(ds)))
+    ds = (ds-dble(is))*hs
+    is = is+1
+
+    arr_out(irho) = splcoe(ns_s,is)
+
+    do k=ns_s-1,0,-1
+      arr_out(irho) = splcoe(k,is) + ds*arr_out(irho)
+    end do
+
+    ! Undo rescaling
+    if(m.gt.0) arr_out(irho) = arr_out(irho)*rho**m
+  end do
+
+  deallocate(splcoe)
+
+end subroutine s_to_rho_healaxis
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
+  !> Determines the number of first radial points, nheal, where data is
+  !> replaced by extrapolation.
+  !>
+  !> Takes cosine harmonic amplitude of arr_in and checks the difference
+  !> between the data value at point i and the value obtained by 3-rd
+  !> order Lagrange polynomial extrapolation from the points i+1,i+2,i+3
+  !> and i+4. If relative value exceeds given tolerance (parameter set
+  !> to 30%) this point is regarded as "bad" so that amplitude values
+  !> for all points with indices smaller than i are replaced by linear
+  !> extrapolation from points i and i+1. Note that harmonic function at
+  !> 60 points per period is extrapolated with relative error about
+  !> 1e-4, therefore 30% is quite a large tolerance which is exceeded if
+  !> there is noise in the data. Even with this high tolerance, some
+  !> harmonics have to be extrapolated almost from the very edge. Those,
+  !> however, have amplitudes about 8 orders of magnitude smaller than
+  !> main harmonics and, therefore, play no role.
+  !>
+  !> input:
+  !> ------
+  !> m:
+  !> ns:
+  !> arr_in: double precision array (ns entries), data from which to
+  !>   determine the number of points to extrapolate at the axis.
+  !>
+  !> output:
+  !> -------
+  !> nheal: integer, number of points to extrapolate at the axis.
+
   use new_vmec_stuff_mod, only : ns_s
+
+  implicit none
+
+  ! Lagrange polynomial stencil size for checking the data by extraplation:
+  integer, parameter :: nplag = 4
+  ! tolerance for Lagrange polynomial extrapolation by one point (to check if data is noisy):
+  double precision, parameter :: tol = 3.d-1
+  double precision, parameter :: tiny = 1.d-200
+  ! 3-rd order Lagrange polynomial extrapolation coefficients from points (1,2,3,4) to point 0:
+  double precision, parameter, dimension(nplag) :: weight = (/4.d0,-6.d0,4.d0,-1.d0/)
+
+  integer, intent(in) :: m,ns
+  integer, intent(out) :: nheal
+  double precision, dimension(ns), intent(in) :: arr_in
+
+  integer :: is,k,nhe,ncheck
+
+  double precision :: hs,s,ds,rho,rho_nonzero,errmax
+
+  double precision, dimension(:), allocatable :: arr
+
+  ! We check points which are away by more than 3 stencils from the edge:
+  ncheck = ns - 3*nplag
+
+  hs = 1.d0/dble(ns-1)
+  allocate(arr(ns))
+
+  do is=2,ns
+    if(m > 0) then
+      rho = sqrt(hs*dble(is-1))
+      rho_nonzero = max(rho**m, tiny)
+      arr(is) = arr_in(is)/rho_nonzero
+    else
+      arr(is) = arr_in(is)
+    end if
+  end do
+
+  nheal = 1
+  do is=ncheck,2,-1
+    nheal = is
+    errmax = maxval(abs(arr(is:is+nplag)))*tol
+    if(abs(arr(is)-sum(arr(is+1:is+nplag)*weight)) > errmax) then
+      exit
+    end if
+  end do
+
+  deallocate(arr)
+
+end subroutine determine_nheal_for_axis
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine volume_and_B00(volume,B00)
+!
+  use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,nper
+  use vector_potentail_mod, only : ns,hs,torflux,sA_phi
 !
   implicit none
 !
-  integer :: m,ns,nrho,nheal,irho,is,k,nhe
+  integer :: is,i_theta,i_phi,k
+  double precision :: volume,B00
+  double precision :: B3,B2,bmod2
+  double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp, &
+                      sqg,Bctrvr_vartheta,Bctrvr_varphi,                              &
+                      Bcovar_r,Bcovar_vartheta,Bcovar_varphi
 !
-  double precision :: hs,hrho,s,ds,rho,a,b,c
+  s=0.9999999999d0
+  volume=0.d0
 !
-  double precision, dimension(ns)   :: arr_in
-  double precision, dimension(nrho) :: arr_out
-  double precision, dimension(:,:), allocatable :: splcoe
+  do i_theta=0,n_theta-2
+    theta=h_theta*dble(i_theta)
+    do i_phi=0,n_phi-2
+      varphi=h_phi*dble(i_phi)
 !
-!do is=1,ns
-!write(2001,*) is,arr_in(is)
-!enddo
-!close(2001)
-!print *,m
+      call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                            R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
 !
-  hs=1.d0/dble(ns-1)
-  hrho=1.d0/dble(nrho-1)
-!
-  nhe=max(1,nheal)+1
-!
-  do is=nhe,ns
-    if(m.gt.0) then
-      rho=sqrt(hs*dble(is-1))
-      arr_out(is)=arr_in(is)/rho**m
-    else
-      arr_out(is)=arr_in(is)
-    endif
-  enddo
-!
-  a=arr_out(nhe)
-  b=0.5d0*(4.d0*arr_out(nhe+1)-3.d0*arr_out(nhe)-arr_out(nhe+2))
-  c=0.5d0*(arr_out(nhe)+arr_out(nhe+2)-2.d0*arr_out(nhe+1))
-!
-  do is=1,nhe-1
-    arr_out(is)=a+b*dble(is-nhe)+c*dble(is-nhe)**2
-  enddo
-!do is=1,ns
-!write(2002,*) is,arr_out(is)
-!enddo
-!close(2002)
-!
-  allocate(splcoe(0:ns_s,ns))
-!
-  splcoe(0,:)=arr_out
-!
-  call spl_reg(ns_s,ns,hs,splcoe)
-!
-  do irho=1,nrho
-    rho=hrho*dble(irho-1)
-    s=rho**2
-!
-    ds=s/hs
-    is=max(0,min(ns-1,int(ds)))
-    ds=(ds-dble(is))*hs
-    is=is+1
-!
-    arr_out(irho)=splcoe(ns_s,is)
-!
-    do k=ns_s-1,0,-1
-      arr_out(irho)=splcoe(k,is)+ds*arr_out(irho)
+      volume=volume+R**2*dZ_dt
     enddo
-!
-    if(m.gt.0) arr_out(irho)=arr_out(irho)*rho**m
   enddo
 !
-  deallocate(splcoe)
+  volume=0.5d0*abs(volume)*h_theta*h_phi*dble(nper)
 !
-  end subroutine s_to_rho_healaxis
+  s=1d-8
+  theta=0.d0
+  B2=0.d0
+  B3=0.d0
+  do i_phi=0,n_phi-2
+    varphi=h_phi*dble(i_phi)
+!
+    call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+                    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+                    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+!
+    bmod2=Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi
+    B2=B2+bmod2/Bctrvr_varphi
+    B3=B3+bmod2*sqrt(bmod2)/Bctrvr_varphi
+  enddo
+!
+  B00=B3/B2
+!
+  end subroutine volume_and_B00

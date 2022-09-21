@@ -3,7 +3,7 @@ program test_sympl
 use orbit_symplectic
 use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
-use neo_orb
+use simple
 use new_vmec_stuff_mod, only: rmajor
 use diag_mod, only : icounter
 use omp_lib
@@ -18,7 +18,7 @@ double precision :: z0(4), vpar0, dt
 type(FieldCan) :: f
 type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6, lobatto4
 type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6
-type(NeoOrb) :: norb
+type(Tracer) :: norb
 
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
@@ -32,7 +32,7 @@ rbig = rmajor*1.0d2
 dtaumax = twopi*rbig/npoiper2
 dtau = dtaumax
 
-call init_params(norb, 2, 4, 3.5d6, dtau, dtaumax, 1d-8)  ! fusion alphas)
+call init_params(norb, 2, 4, 3.5d6, npoiper2, 1, 1d-8)  ! fusion alphas)
 
 ! Initial conditions
 z0(1) = 0.4d0  ! r
@@ -127,7 +127,7 @@ subroutine test_single(si, outname)
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
-    
+
     allocate(out(5,nt))
 
     icounter = 0
@@ -163,7 +163,7 @@ subroutine test_quasi(si, outname)
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
-    
+
     allocate(out(5,nt))
 
     icounter = 0
@@ -204,7 +204,7 @@ subroutine test_multi(mi, outname)
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
-    
+
     allocate(out(5,nt))
 
     icounter = 0
@@ -239,7 +239,7 @@ subroutine test_multi_quasi(mi, outname)
     double precision, allocatable :: out(:, :)
 
     f_quasi = f
-    
+
     allocate(out(5,nt))
 
     icounter = 0

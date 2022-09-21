@@ -79,9 +79,9 @@ subroutine f_midpoint_quasi(n, x, fvec, iflag)
     double precision, intent(in) :: x(n)
     double precision, intent(out) :: fvec(n)
     integer, intent(in) :: iflag
-    
+
     double precision :: dpthmid, pthdotbar
-    
+
     call eval_field(f, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 0)
     call get_derivatives(f, 0.5*(x(4) + si%z(4)))
 
@@ -92,7 +92,7 @@ subroutine f_midpoint_quasi(n, x, fvec, iflag)
       + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
     fvec(5) = f%dpth(1)*(f%pth - si%pthold) &
       + si%dt/2.0d0*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
-  
+
     ! save evaluation from midpoint
     dpthmid = f%dpth(1)
     pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
@@ -149,9 +149,9 @@ end subroutine f_rk_gauss_quasi
 subroutine f_rk_lobatto_quasi(n, x, fvec)
   !
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)  
+  double precision, intent(in) :: x(n)
   double precision, intent(out) :: fvec(n)
-  
+
   call f_rk_lobatto(si, fs, (n+2)/4, x, fvec, 0)
 
   end subroutine f_rk_lobatto_quasi
@@ -159,7 +159,7 @@ subroutine f_rk_lobatto_quasi(n, x, fvec)
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_quasi(ierr)
-  
+
   integer, intent(out) :: ierr
 
   select case (si%mode)
@@ -194,14 +194,14 @@ end subroutine orbit_timestep_quasi
 subroutine orbit_timestep_multi_quasi(mi, ierr)
 !
     type(MultistageIntegrator), intent(inout) :: mi
-  
+
     integer, intent(out) :: ierr
-  
+
     integer :: kstage
-  
+
     si = mi%stages(1)
     call orbit_timestep_quasi(ierr)
-  
+
     do kstage = 2, 2*mi%s
       mi%stages(kstage)%z = si%z
       mi%stages(kstage)%pthold = f%pth
@@ -210,13 +210,13 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
     end do
     mi%stages(1)%z = si%z
     mi%stages(1)%pthold = f%pth
-  
+
   end subroutine orbit_timestep_multi_quasi
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine timestep_midpoint_quasi(ierr)
-!    
+!
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
@@ -258,7 +258,7 @@ end subroutine timestep_midpoint_quasi
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine timestep_euler1_quasi(ierr)
-  !  
+  !
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 2
@@ -362,7 +362,7 @@ subroutine timestep_euler2_quasi(ierr)
     si%kt = si%kt+1
     ktau = ktau+1
   enddo
-  
+
 end subroutine timestep_euler2_quasi
 
 subroutine timestep_rk_gauss_quasi(s, ierr)
@@ -386,7 +386,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
-    
+
     do k = 1,s
       x((4*k-3):(4*k)) = si%z
     end do
@@ -411,12 +411,12 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
 
     do l = 1, s
       Hprime(l) = fs(l)%dH(1)/fs(l)%dpth(1)
-      f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))          
+      f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))
       si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)
       si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
-  
+
     si%kt = si%kt+1
     ktau = ktau+1
   enddo
@@ -445,13 +445,13 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
-    
+
     x(1) = si%z(1)
     x(2) = si%z(4)
     do k = 2,s
       x((4*k-3-2):(4*k-2)) = si%z
     end do
-    
+
     !
     ! q1 = q0
     ! q2 = q0 + h*(a21*f(w1) + a22*f(z2) + a23*f(z3)
@@ -483,7 +483,7 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
     call eval_field(fs(1), x(1), si%z(2), si%z(3), 0)
     call get_derivatives(fs(1), x(2))
     Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
-      
+
     do k = 2, s
       call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), 0)
       call get_derivatives(fs(k), x(4*k-2))
@@ -500,7 +500,7 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
       si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
-  
+
     si%kt = si%kt+1
     ktau = ktau+1
   enddo
@@ -512,7 +512,7 @@ end subroutine timestep_rk_lobatto_quasi
 !
 subroutine f_ode(tau, z, zdot)
 !
-  
+
   double precision, intent(in)  :: tau
   double precision, intent(in)  :: z(4)
   double precision, intent(out) :: zdot(4)
@@ -527,9 +527,9 @@ subroutine f_ode(tau, z, zdot)
   zdot(2) = Hprime
   zdot(3) = (f%vpar-Hprime*f%hth)/f%hph
   zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
-  
+
 end subroutine f_ode
-  
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_rk45(ierr)

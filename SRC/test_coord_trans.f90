@@ -1,15 +1,14 @@
 program test_coord_trans
   use omp_lib
-  use common, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
+  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : ro0, rmu
-  use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use neo_orb, only : init_field, init_sympl, NeoOrb, debug
+  use simple, only : init_field, init_sympl
   use cut_detector, only : fract_dimension
-  use diag_mod, only : icounter
+  use params, only : Tracer, debug
 
   implicit none
 
@@ -38,7 +37,7 @@ program test_coord_trans
 
   double precision :: relerr
 
-  type(NeoOrb) :: norb
+  type(Tracer) :: norb
   double precision, allocatable :: trap_par(:)
 
   integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
