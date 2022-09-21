@@ -15,7 +15,7 @@
   double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
   complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
 
-  print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
+  ! print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
   call new_allocate_vmec_stuff
 !
@@ -96,7 +96,7 @@
   m_max=nint(maxval(axm))
   n_max=nint(maxval(axn))
 !
-  print *,'VMEC ns = ',ns,' m_max = ',m_max,' n_max = ',n_max
+  ! print *,'VMEC ns = ',ns,' m_max = ',m_max,' n_max = ',n_max
 !
   n_theta = m_max*multharm+1
   n_phi = n_max*multharm+1

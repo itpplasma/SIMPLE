@@ -162,11 +162,17 @@ contains
 
     npoi=nper*npoiper ! total number of starting points
 
+    IF( ALLOCATED(zstart))  THEN
+      DEALLOCATE(zstart, zend, times_lost, trap_par, perp_inv, iclass)
+      DEALLOCATE(xstart, bstart, volstart, confpart_trap, confpart_pass)
+    END IF
+
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
 #ifdef MPI
+      IF( ALLOCATED(zstart))  DEALLOCATE(confpart_trap_glob,confpart_pass_glob)
       allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
 #endif
     allocate(iclass(3,ntestpart))

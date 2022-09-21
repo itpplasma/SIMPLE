@@ -112,7 +112,7 @@
   do i_theta=1,n_theta_c
 !$omp critical
     i_ctr = i_ctr + 1
-    print *,'integrate ODE: ',i_ctr,' of ',n_theta_c
+    ! print *,'integrate ODE: ',i_ctr,' of ',n_theta_c
 !$omp end critical
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
@@ -158,7 +158,7 @@ i_ctr=0
   do i_theta=1,n_theta_c
 !$omp critical
     i_ctr = i_ctr + 1
-    print *,'compute components: ',i_ctr,' of ',n_theta_c
+    ! print *,'compute components: ',i_ctr,' of ',n_theta_c
 !$omp end critical
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c

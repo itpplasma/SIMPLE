@@ -47,15 +47,15 @@ contains
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
     self%fper = twopi/dble(L1i)   !<= field period
-    print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
+    ! print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
     call volume_and_B00(volume,B00)
-    print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
+    ! print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
 
     if (self%integmode>=0) then
       if (isw_field_type == 0) then
         call get_canonical_coordinates ! pre-compute transformation to canonical coords
       elseif (isw_field_type == 2) then
-        print *, 'Boozer field'
+        ! print *, 'Boozer field'
         call boozer_converter
       else
         print *, 'Unknown field type ', isw_field_type
@@ -439,9 +439,9 @@ subroutine run(norb)
 
   type(Tracer), intent(inout) :: norb
 
-  print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
-                    dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
-  print *, 'v0 = ', v0
+  ! print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
+  !                  dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
+  ! print *, 'v0 = ', v0
 
 
 ! init collisions
@@ -449,7 +449,7 @@ subroutine run(norb)
     call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
       3.5d6/facE_al,v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
   endif
-  print *, 'v0 = ', v0
+  ! print *, 'v0 = ', v0
 
 ! pre-compute starting flux surface
   call init_starting_surf
@@ -477,10 +477,10 @@ subroutine run(norb)
   call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
   call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
   if (ierr /= 0) then
-    print *, 'MPI initialization failed with error code ', ierr
+    ! print *, 'MPI initialization failed with error code ', ierr
     error stop
   endif
-  print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
+  ! print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
 
   if (mod(ntestpart, mpisize) /= 0) then
     print *, 'Number of test particles ', ntestpart, &
@@ -501,12 +501,12 @@ subroutine run(norb)
   do i=nfirstpart,nlastpart
     !$omp critical
     kpart = kpart+1
-#ifdef MPI
-    print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
-    'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
-#else
-    print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
-#endif
+! #ifdef MPI
+!     print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
+!     'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
+! #else
+!     print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+! #endif
     !$omp end critical
     call trace_orbit(norb, i)
   end do
@@ -619,7 +619,7 @@ subroutine init_starting_surf
   bmax=maxval(bstart)
   bmin=minval(bstart)
 
-  print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
+  ! print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
 end subroutine init_starting_surf
 
 subroutine init_starting_points_ants(unit)
@@ -1017,9 +1017,9 @@ subroutine trace_orbit(anorb, ipart)
       ! Collisions
       if (swcoll) then
         call stost(z, dtaumin, 1, ierr_coll)
-        if (ierr_coll /= 0) then
-          print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
-        endif
+        ! if (ierr_coll /= 0) then
+        !   print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
+        ! endif
       endif
 
       ! Write starting data for orbits which were lost in case of classification plot
@@ -1155,10 +1155,10 @@ subroutine trace_orbit(anorb, ipart)
           call fract_dimension(ifp_per,zpoipl_per(:,1:ifp_per),fraction)
 
           if(fraction.gt.0.2d0) then
-            print *, ipart, ' chaotic per ', ifp_per
+            ! print *, ipart, ' chaotic per ', ifp_per
             regular = .False.
-          else
-            print *, ipart, ' regular per', ifp_per
+          ! else
+          !   print *, ipart, ' regular per', ifp_per
           endif
         endif
 
@@ -1167,11 +1167,11 @@ subroutine trace_orbit(anorb, ipart)
           call fract_dimension(ifp_tip,zpoipl_tip(:,1:ifp_tip),fraction)
 
           if(fraction.gt.0.2d0) then
-            print *, ipart, ' chaotic tip ', ifp_tip
+            ! print *, ipart, ' chaotic tip ', ifp_tip
             regular = .False.
             iclass(3,ipart) = 2
           else
-            print *, ipart, ' regular tip ', ifp_tip
+            ! print *, ipart, ' regular tip ', ifp_tip
             iclass(3,ipart) = 1
           endif
         endif

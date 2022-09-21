@@ -63,7 +63,7 @@
 !
   nfp=nfp+1
   if(nfp.gt.nfp_max) then
-    print *,'detect_oneline: nfp > nfp_max, nturns not reached'
+    ! print *,'detect_oneline: nfp > nfp_max, nturns not reached'
     ierr=1
     return
   endif
@@ -81,13 +81,13 @@
     if(iper.eq.0) then
       iper=nfp
       if(iper.le.ipermin) then
-        print *,'detect_oneline: stochastic, iper < ipermin'
+        ! print *,'detect_oneline: stochastic, iper < ipermin'
         ideal=2
         ijpar=2
         igroup=nturns
         return
       endif
-      print *,'detect_oneline: return period',iper-1
+      ! print *,'detect_oneline: return period',iper-1
       igroup=1
     else
       igroup=igroup+1

@@ -182,7 +182,7 @@ subroutine orbit_timestep_quasi(ierr)
     case (15)
       call timestep_rk_lobatto_quasi(3, ierr)
     case default
-      print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
+      ! print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
       stop
   end select
 
@@ -242,7 +242,7 @@ subroutine timestep_midpoint_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -284,7 +284,7 @@ subroutine timestep_euler1_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -340,7 +340,7 @@ subroutine timestep_euler2_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -399,7 +399,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
