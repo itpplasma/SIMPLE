@@ -17,13 +17,10 @@
 
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
-  print *,''
   call new_allocate_vmec_stuff
-  print *,''
 !
   call vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s,    &
               nsurfm,nstrm,kpar,torflux)
-  print *,''
 !
   ns=kpar+1
   allocate(splcoe(0:ns_A,ns))

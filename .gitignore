@@ -24,3 +24,6 @@ _*.c
 *.pyc
 python/launch*
 .DS_Store
+RUN_*
+*.[0-9]*.[0-9]*.[0-9]*
+TMP

@@ -343,7 +343,7 @@ subroutine newton1(si, f, x, maxit, xlast)
     if (all(dabs(fvec) < si%atol)) return
     if (all(dabs(x-xlast) < si%rtol*tolref)) return
   enddo
-!   print *, 'newton1: maximum iterations reached: ', maxit
+  print *, 'newton1: maximum iterations reached: ', maxit
   write(6601,*) x(1), x(2)
   write(6601,*) x-xlast
   write(6601,*) fvec
