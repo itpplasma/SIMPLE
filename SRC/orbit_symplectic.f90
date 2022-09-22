@@ -343,7 +343,7 @@ subroutine newton1(si, f, x, maxit, xlast)
     if (all(dabs(fvec) < si%atol)) return
     if (all(dabs(x-xlast) < si%rtol*tolref)) return
   enddo
-  print *, 'newton1: maximum iterations reached: ', maxit
+  ! print *, 'newton1: maximum iterations reached: ', maxit
   write(6601,*) x(1), x(2)
   write(6601,*) x-xlast
   write(6601,*) fvec
@@ -1413,7 +1413,7 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -1491,7 +1491,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -1576,7 +1576,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -1664,7 +1664,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      ! print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
