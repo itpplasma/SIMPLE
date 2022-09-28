@@ -1,1 +1,1 @@
-../BUILD/pysimple.py
+../build/pysimple.py
