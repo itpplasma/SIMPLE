@@ -12,7 +12,7 @@ contains
 
     @test
     subroutine compare_libstell()
-        real(8) :: s, theta, varphi
+        real(8) :: s, theta, varphi, ds
 
 
         ! For testing libstell routines
@@ -21,17 +21,21 @@ contains
         ! For testing own routines
         real(8) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota,&
           R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp
-          real(8) :: Bctrvr_vartheta, Bctrvr_varphi, Bcovar_vartheta, &
+        real(8) :: Bctrvr_vartheta, Bctrvr_varphi, Bcovar_vartheta, &
           Bcovar_varphi, sqg, Bcovar_r, Bsqrt_varphi, Bsqrt_vartheta
 
         integer, parameter :: ntheta = 100
         integer :: k
 
+        write(*,*) "Before own"
         call init_own
+        write(*,*) "Before theirs"
         call init_libstell
 
         errtol = 1e-14
-        do s = 0d0,1
+        ds=1e-1
+        
+        do s = 0d0,1,ds
             do varphi = 0d0, 2d0 * pi
                 do k = 1,ntheta
                     theta = k*2d0*pi*1.0/ntheta
@@ -44,12 +48,20 @@ contains
                     Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
                     
                     !cccc Assert outputs cccc
-                    @assertEqual(lam, alam, tolerance=errtol)
+                    @assertEqual(lam, alam, tolerance=errtol, message="Lambda mismatch between SIMPLE and STELLOPT.")
                     @assertEqual(Bctrvr_vartheta, bsupu/nfp, tolerance=errtol)
-                    @assertEqual(1, 2)
+                    @assertEqual(Bctrvr_varphi, bsupv/nfp, tolerance=errtol)
+                    !Bctrvr_vartheta == bsupu ausser nfp? see https://princetonuniversity.github.io/STELLOPT/VMEC.html
+                    !@assertEqual(varphi, , tolerance=errtol) !v=nfp*varphi
+                    !@assertEqual(dA_theta_ds, ,tolerance=errtol)
+                    !@assertEqual(gsqrt, , tolerance=errtol)
+                    
+                    @assertTrue(relerr(dA_theta_ds, A_theta*ds) < errtol, message = "Disparity between da_theta_ds and A_theta ds!")
+                    @assertTrue(relerr(dA_phi_ds, A_phi*ds) < errtol, message = "Disparity between da_phi_ds and A_phi ds!")
+                    
                     !write(101, *) lam
                     !write(102, *) alam
-                    !Bctrvr_vartheta == bsupu ausser nfp? see https://princetonuniversity.github.io/STELLOPT/VMEC.html
+
                     !zeta  == varphi == phi(libstell) == v/nfp
                     !no j
                     !dA_theta_ds comp. A_theta ds
