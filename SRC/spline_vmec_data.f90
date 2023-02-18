@@ -173,119 +173,121 @@
 !
   allocate(splcoe(0:ns_tp,n_phi))
 !
+  if (n_phi/=1) then
 !$omp do
-  do is=1,ns
-    do i_theta=1,n_theta
-!
-      splcoe(0,:)=sR(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp,n_phi,h_phi,splcoe)
-!
-      do k=1,ns_tp
-        sR(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-      splcoe(0,:)=sZ(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp,n_phi,h_phi,splcoe)
-!
-      do k=1,ns_tp
-        sZ(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-      splcoe(0,:)=slam(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp,n_phi,h_phi,splcoe)
-!
-      do k=1,ns_tp
-        slam(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-    enddo
-  enddo
-!$omp end do
-!
-  deallocate(splcoe)
-!
-! splining over $\vartheta$:
-!
-  allocate(splcoe(0:ns_tp,n_theta))
-!
-!$omp do
-  do is=1,ns
-    do i_phi=1,n_phi
-      do isp=1,ns_tp+1
-!
-        splcoe(0,:)=sR(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp,n_theta,h_theta,splcoe)
-!
+    do is=1,ns
+      do i_theta=1,n_theta
+  !
+        splcoe(0,:)=sR(1,1,1,is,i_theta,:)
+  !
+        call spl_per(ns_tp,n_phi,h_phi,splcoe)
+  !
         do k=1,ns_tp
-          sR(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
+          sR(1,1,k+1,is,i_theta,:)=splcoe(k,:)
         enddo
-!
-        splcoe(0,:)=sZ(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp,n_theta,h_theta,splcoe)
-!
+  !
+        splcoe(0,:)=sZ(1,1,1,is,i_theta,:)
+  !
+        call spl_per(ns_tp,n_phi,h_phi,splcoe)
+  !
         do k=1,ns_tp
-          sZ(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
+          sZ(1,1,k+1,is,i_theta,:)=splcoe(k,:)
         enddo
-!
-        splcoe(0,:)=slam(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp,n_theta,h_theta,splcoe)
-!
+  !
+        splcoe(0,:)=slam(1,1,1,is,i_theta,:)
+  !
+        call spl_per(ns_tp,n_phi,h_phi,splcoe)
+  !
         do k=1,ns_tp
-          slam(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
+          slam(1,1,k+1,is,i_theta,:)=splcoe(k,:)
         enddo
-!
+  !
       enddo
     enddo
-  enddo
 !$omp end do
-!
-  deallocate(splcoe)
-!
-! splining over $s$:
-!
-  allocate(splcoe(0:ns_s,ns))
-!
+  !
+    deallocate(splcoe)
+  !
+  ! splining over $\vartheta$:
+  !
+    allocate(splcoe(0:ns_tp,n_theta))
+  !
 !$omp do
-  do i_theta=1,n_theta
-    do i_phi=1,n_phi
-      do ist=1,ns_tp+1
+    do is=1,ns
+      do i_phi=1,n_phi
         do isp=1,ns_tp+1
-!
-          splcoe(0,:)=sR(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s,ns,hs,splcoe)
-!
-          do k=1,ns_s
-            sR(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+  !
+          splcoe(0,:)=sR(1,1,isp,is,:,i_phi)
+  !
+          call spl_per(ns_tp,n_theta,h_theta,splcoe)
+  !
+          do k=1,ns_tp
+            sR(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
           enddo
-!
-          splcoe(0,:)=sZ(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s,ns,hs,splcoe)
-!
-          do k=1,ns_s
-            sZ(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+  !
+          splcoe(0,:)=sZ(1,1,isp,is,:,i_phi)
+  !
+          call spl_per(ns_tp,n_theta,h_theta,splcoe)
+  !
+          do k=1,ns_tp
+            sZ(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
           enddo
-!
-          splcoe(0,:)=slam(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s,ns,hs,splcoe)
-!
-          do k=1,ns_s
-            slam(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+  !
+          splcoe(0,:)=slam(1,1,isp,is,:,i_phi)
+  !
+          call spl_per(ns_tp,n_theta,h_theta,splcoe)
+  !
+          do k=1,ns_tp
+            slam(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
           enddo
-!
+  !
         enddo
       enddo
     enddo
-  enddo
 !$omp end do
+  !
+    deallocate(splcoe)
+  !
+  ! splining over $s$:
+  !
+    allocate(splcoe(0:ns_s,ns))
+  !
+!$omp do
+    do i_theta=1,n_theta
+      do i_phi=1,n_phi
+        do ist=1,ns_tp+1
+          do isp=1,ns_tp+1
+  !
+            splcoe(0,:)=sR(1,ist,isp,:,i_theta,i_phi)
+  !
+            call spl_reg(ns_s,ns,hs,splcoe)
+  !
+            do k=1,ns_s
+              sR(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+            enddo
+  !
+            splcoe(0,:)=sZ(1,ist,isp,:,i_theta,i_phi)
+  !
+            call spl_reg(ns_s,ns,hs,splcoe)
+  !
+            do k=1,ns_s
+              sZ(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+            enddo
+  !
+            splcoe(0,:)=slam(1,ist,isp,:,i_theta,i_phi)
+  !
+            call spl_reg(ns_s,ns,hs,splcoe)
+  !
+            do k=1,ns_s
+              slam(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
+            enddo
+  !
+          enddo
+        enddo
+      enddo
+    enddo
+!$omp end do
+  end if
 !
   deallocate(splcoe)
 !$omp end parallel
