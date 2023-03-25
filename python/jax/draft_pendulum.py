@@ -43,3 +43,11 @@ fig, ax = plt.subplots()
 ax.plot(z[0,:], z[1,:])
 
 # %%
+
+def f(x):
+    if(x>0): return x
+    return -x
+
+fg = value_and_grad(f)
+
+# %%
