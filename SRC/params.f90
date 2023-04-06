@@ -88,6 +88,9 @@ module params
   double precision, dimension(:), allocatable :: &
     confpart_trap_glob, confpart_pass_glob
 #endif
+  integer :: batch_size=10000
+  integer :: ran_seed=12345
+  logical :: reuse_batch =.False.
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
@@ -95,7 +98,8 @@ module params
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
-    old_axis_healing_boundary
+    old_axis_healing_boundary, &
+    batch_size, ran_seed, reuse_batch
 
 contains
 
@@ -114,6 +118,7 @@ contains
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       stop 'Collisions are incompatible with classification'
     endif
+    !TODO add batch parsing
 
     return
 
@@ -123,6 +128,10 @@ contains
 
   subroutine params_init
     double precision :: E_alpha
+    integer :: iostat, i
+    integer, dimension (:,:), allocatable :: iomsg, idx
+    logical :: old_batch
+    real :: ran_tmp
 
     E_alpha = 3.5d6/facE_al
 
@@ -161,6 +170,47 @@ contains
     fper = 2d0*pi/dble(L1i)   !<= field period
 
     npoi=nper*npoiper ! total number of starting points
+    
+    !See if batch is wanted, if yes find random or re-use from previous file.
+    if (ntestpart > batch_size) then
+      if (reuse_batch) then
+        INQUIRE(FILE="batch.dat", EXIST=old_batch)
+        
+        if (old_batch) then
+          allocate(iomsg, batch_size)
+          allocate(idx, batch_size)
+          open(1, file='batch.dat', recl=1024, iostat=iostat, iomsg=iomsg)
+          if (iostat /= 0) goto 666
+
+          do i=0,batch_size-1
+            read(1,iostat=iostat) iomsg(i) ! TODO need cast to int?
+            if (iostat /= 0) goto 666
+          end do
+
+          ! TODO assign iomsg batch indices to list of particles used. May require new startmode where start.dat is required to be populated, and correct indices are read into new list.
+
+          deallocate(iomsg)
+          deallocate(idx)
+          close(1)
+
+        else !old_batch
+          !Create a random list(batch_size) of indices using ran_seed.
+          allocate(idx, batch_size)
+          do i=0,batch_size
+            call random_number(ran_tmp)
+            idx(i) = FLOOR(batch_size * ran_tmp)
+          end do
+
+          ! TODO assign iomsg batch indices to list of particles used. May require new startmode where start.dat is required to be populated, and correct indices are read into new list.
+
+          deallocate(idx)
+        endif !old_batch
+        
+      endif !reuse_batch
+      
+      !Set ntestpart to batch_size for rest of the run.
+      ntestpart = batch_size
+    endif() !batches wanted
 
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
