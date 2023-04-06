@@ -129,7 +129,8 @@ contains
   subroutine params_init
     double precision :: E_alpha
     integer :: iostat, i
-    integer, dimension (:,:), allocatable :: iomsg, idx
+    character, dimension (:), allocatable :: batch_file
+    integer, dimension (:), allocatable :: idx
     logical :: old_batch
     real :: ran_tmp
 
@@ -177,27 +178,27 @@ contains
         INQUIRE(FILE="batch.dat", EXIST=old_batch)
         
         if (old_batch) then
-          allocate(iomsg, batch_size)
-          allocate(idx, batch_size)
-          open(1, file='batch.dat', recl=1024, iostat=iostat, iomsg=iomsg)
+          allocate(batch_file(batch_size))
+          allocate(idx(batch_size))
+          open(1, file='batch.dat', recl=batch_size, iostat=iostat)
           if (iostat /= 0) goto 666
 
           do i=0,batch_size-1
-            read(1,iostat=iostat) iomsg(i) ! TODO need cast to int?
-            if (iostat /= 0) goto 666
+            read(1,iostat=iostat) batch_file(i) ! TODO need cast to int
+            if (iostat /= 0) goto 667
           end do
 
-          ! TODO assign iomsg batch indices to list of particles used. May require new startmode where start.dat is required to be populated, and correct indices are read into new list.
+          ! TODO assign batch_file batch indices to list of particles used. May require new startmode where start.dat is required to be populated, and correct indices are read into new list.
 
-          deallocate(iomsg)
+          deallocate(batch_file)
           deallocate(idx)
           close(1)
 
         else !old_batch
           !Create a random list(batch_size) of indices using ran_seed.
-          allocate(idx, batch_size)
+          allocate(idx(batch_size))
           do i=0,batch_size
-            call random_number(ran_tmp)
+            call random_number(ran_tmp) ! TODO seed handling before this
             idx(i) = FLOOR(batch_size * ran_tmp)
           end do
 
@@ -210,7 +211,7 @@ contains
       
       !Set ntestpart to batch_size for rest of the run.
       ntestpart = batch_size
-    endif() !batches wanted
+    endif !batches wanted
 
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -221,5 +222,7 @@ contains
 #endif
     allocate(iclass(3,ntestpart))
 
+    666 stop iostat
+    667 stop iostat
   end subroutine params_init
 end module params
