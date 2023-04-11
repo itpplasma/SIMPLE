@@ -13,7 +13,7 @@ module simple
     orbit_sympl_init, orbit_timestep_sympl
   use field_can_mod, only : FieldCan, eval_field
   use diag_mod, only : icounter
-  use params, only : Tracer
+  use params, only : Tracer, idx
 
 implicit none
 save
@@ -781,6 +781,13 @@ subroutine init_starting_points_global
     enddo
   else if (startmode == 3) then  ! ANTS input mode
     call init_starting_points_ants(1)
+  else if (startmode == 4) then
+    !select only the indices from batch and overwrite zstart.
+    do ipart=idx(0),idx(ntestpart)
+      read(1,*) zstart(:,ipart)
+    enddo
+    ! indices no longer needed
+    deallocate(idx)
   endif
 
   close(1)

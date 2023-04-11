@@ -91,6 +91,7 @@ module params
   integer :: batch_size=10000
   integer :: ran_seed=12345
   logical :: reuse_batch =.False.
+  integer, dimension (:), allocatable :: idx
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
@@ -118,7 +119,6 @@ contains
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       stop 'Collisions are incompatible with classification'
     endif
-    !TODO add batch parsing
 
     return
 
@@ -130,7 +130,6 @@ contains
     double precision :: E_alpha
     integer :: iostat, i
     character, dimension (:), allocatable :: batch_file
-    integer, dimension (:), allocatable :: idx
     logical :: old_batch
     real :: ran_tmp
 
@@ -171,12 +170,12 @@ contains
     fper = 2d0*pi/dble(L1i)   !<= field period
 
     npoi=nper*npoiper ! total number of starting points
-    
+
     !See if batch is wanted, if yes find random or re-use from previous file.
     if (ntestpart > batch_size) then
       if (reuse_batch) then
         INQUIRE(FILE="batch.dat", EXIST=old_batch)
-        
+
         if (old_batch) then
           allocate(batch_file(batch_size))
           allocate(idx(batch_size))
@@ -184,31 +183,28 @@ contains
           if (iostat /= 0) goto 666
 
           do i=0,batch_size-1
-            read(1,iostat=iostat) batch_file(i) ! TODO need cast to int
+            read(1,iostat=iostat) batch_file(i)
             if (iostat /= 0) goto 667
+            idx (i) = ICHAR(batch_file(i)) ! TODO batch_file list is pointless
           end do
-
-          ! TODO assign batch_file batch indices to list of particles used. May require new startmode where start.dat is required to be populated, and correct indices are read into new list.
-
           deallocate(batch_file)
-          deallocate(idx)
           close(1)
 
         else !old_batch
           !Create a random list(batch_size) of indices using ran_seed.
           allocate(idx(batch_size))
+          call SRAND(ran_seed)
           do i=0,batch_size
-            call random_number(ran_tmp) ! TODO seed handling before this
+            
+            call random_number(ran_tmp)
             idx(i) = FLOOR(batch_size * ran_tmp)
           end do
-
-          ! TODO assign iomsg batch indices to list of particles used. May require new startmode where start.dat is required to be populated, and correct indices are read into new list.
-
-          deallocate(idx)
+          call sort_idx(idx, batch_size)
+          
         endif !old_batch
-        
+
       endif !reuse_batch
-      
+
       !Set ntestpart to batch_size for rest of the run.
       ntestpart = batch_size
     endif !batches wanted
@@ -225,4 +221,13 @@ contains
     666 stop iostat
     667 stop iostat
   end subroutine params_init
+  
+  
+  ! TODO sort, then check for duplicates
+  subroutine sort_idx(idx_arr, N)
+    integer, dimension (N) :: idx_arr
+    integer :: N
+    ! TODO implement
+  end subroutine sort_idx
+
 end module params
