@@ -32,6 +32,7 @@ module params
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
   double precision :: sbeg=0.5d0, thetabeg=0.0d0
+  double precision, dimension(:), allocatable :: sbeg_arr
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart, zend
@@ -94,7 +95,7 @@ module params
   integer, dimension (:), allocatable :: idx
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-    trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
+    trace_time, sbeg_multi, sbeg_arr, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
@@ -182,7 +183,7 @@ contains
           open(1, file='batch.dat', recl=batch_size, iostat=iostat)
           if (iostat /= 0) goto 666
 
-          do i=0,batch_size-1
+          do i=1,batch_size
             read(1,iostat=iostat) batch_file(i)
             if (iostat /= 0) goto 667
             idx (i) = ICHAR(batch_file(i)) ! TODO batch_file list is pointless
@@ -201,6 +202,11 @@ contains
           end do
           call sort_idx(idx, batch_size)
           
+          open(1, file='batch.dat', recl=batch_size*2, iostat=iostat)
+          do n=1, batch_size
+            write(1, *) idx(i)
+          end do
+          close(1)
         endif !old_batch
 
       endif !reuse_batch

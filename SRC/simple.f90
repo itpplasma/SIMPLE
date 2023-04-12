@@ -455,7 +455,11 @@ subroutine run(norb)
   call init_starting_surf
 
   if(local) then
-    call init_starting_points
+    if (sbeg_multi) then
+      call init_starting_points
+    else
+      call init_starting_points_multiline
+    endif
   else
     call init_starting_points_global
   endif
@@ -709,10 +713,40 @@ subroutine init_starting_points
     enddo
   else if (startmode == 3) then  ! ANTS input mode
     call init_starting_points_ants(1)
+  else if (startmode == 4) then
+    !select only the indices from batch and overwrite zstart.
+    do ipart=idx(0),idx(ntestpart)
+      read(1,*) zstart(:,ipart)
+    enddo
+    ! indices no longer needed
+    deallocate(idx)
   endif
 
   close(1)
 end subroutine init_starting_points
+
+subroutine init_starting_points_multiline ! TODO this may not be the right time, possibly shift this into init_starting_surf
+  integer :: sbeg_size, parts_per_line, part_cnt, i, j
+  double precision :: s
+  
+  j = 0
+  sbeg_size = SIZE(sbeg_arr, 1)
+  parts_per_line = FLOOR(ntestpart / sbeg_size)
+  
+  do i = 1, ntestpart
+    s = sbeg_arr(j)
+    ! TODO init particle at s
+    part_cnt = part_cnt + 1
+    if (parts_per_line == part_cnt) then
+      ! use next s from sbeg_arr for following particles
+      j =  j + 1
+      
+      ! Reset particle counter
+      part_cnt = 0 
+    endif
+  end do
+
+end subroutine init_starting_points_multiline
 
 subroutine init_starting_points_global
   integer, parameter :: ns=1000
