@@ -21,7 +21,7 @@ contains
         amultharm = 7
         aintegmode = 0
         
-        !call init_field(self, filename, ans_s, ans_tp, amultharm, aintegmode)
+        call init_field(self, filename, ans_s, ans_tp, amultharm, aintegmode)
         
     end subroutine test_initfield
 

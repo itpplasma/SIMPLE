@@ -98,10 +98,6 @@ add_executable (simple.x
 
 target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
 
-#[[if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
-    target_link_libraries(SIMPLE_LIB INTERFACE pfunit)
-endif()]]
-
 if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     if (NOT DEFINED ENV{STELLOPT_PATH})
         set(ENV{STELLOPT_PATH}
@@ -123,57 +119,22 @@ if ($ENV{SIMPLE_COVERAGE} STREQUAL "TRUE")
     add_subdirectory(test)
 endif ()
 
+# add_library (simple_mpi SHARED)
+# target_compile_options(simple_mpi PUBLIC -DMPI)
+# target_sources (simple_mpi PRIVATE ${simple_sources})
+# set_property(TARGET simple_mpi PROPERTY Fortran_MODULE_DIRECTORY mod_mpi/)
+# target_include_directories(simple_mpi PRIVATE ${CMAKE_BINARY_DIR}/mod_mpi/)
+# target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
 
-#add_library (simple_mpi INTERFACE)
-#target_compile_options(simple_mpi PUBLIC -DMPI)
-#target_sources (simple_mpi PRIVATE ${simple_sources})
-#set_property(TARGET simple_mpi PROPERTY Fortran_MODULE_DIRECTORY mod_mpi/)
-#target_include_directories(simple_mpi PRIVATE ${CMAKE_BINARY_DIR}/mod_mpi/)
-#target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
+# add_executable (simple_mpi.x
+# 	SRC/main.f90
+# )
+# target_link_libraries(simple_mpi.x simple_mpi)
+# get_target_property(SIMPLE_MPI_LINKED_LIBS simple_mpi.x LINK_LIBRARIES)
+# list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS simple)
+# set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
 
-#add_executable (simple_mpi.x
-#	SRC/main.f90
-#)
-#target_link_libraries(simple_mpi.x simple_mpi)
-#get_target_property(SIMPLE_MPI_LINKED_LIBS simple_mpi.x LINK_LIBRARIES)
-#list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS simple)
-#set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
-
-#add_executable (test_coord_trans.x SRC/test_coord_trans.f90)
-#add_executable (test_sympl_tok.x SRC/test_sympl.f90)
-#add_executable (test_sympl.x SRC/test_sympl_stell.f90)
-#add_executable (test_magfie.x SRC/test_magfie.f90)
-#add_executable (test_poincare1.x SRC/test_poincare1.f90)
-#add_executable (test_poiplot_classification.x
-	#SRC/test_poiplot_classification.f90
-#)
-#add_executable (alpha_lifetime_vmec_c.x
-	#SRC/binsrc.f90
-	#SRC/alpha_lifetime_c.f90
-#)
-#add_executable (alpha_lifetime_old.x
-	#SRC/binsrc.f90
-	#SRC/alpha_lifetime.f90
-#)
-#add_executable (test_parse_ants.x SRC/test_parse_ants.f90)
-#add_executable (test_boozer.x SRC/test_boozer.f90)
-#add_executable (test_orbits.x SRC/test_orbits_vmec.f90)
-#add_executable (test_collis.x SRC/test_collis.f90)
-
-#add_executable(test_vmec.x SRC/test_vmec.f90)
-#target_include_directories(test_vmec.x PRIVATE
-	#$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release)
-
-	
-#add_library(stell SHARED IMPORTED)
-#set_target_properties(stell PROPERTIES IMPORTED_LOCATION
-	#$ENV{HOME}/Documents/Master/STELLOPT/LIBSTELL/Release/libstell.so)
-#target_link_libraries(test_vmec.x stell)
-
-
-#add_executable (test_new_can.x SRC/test_new_can.f90)
-
-# Grab Python
+#[[# Grab Python
 find_package(Python REQUIRED
     COMPONENTS Interpreter Development NumPy)
 
@@ -255,7 +216,7 @@ foreach (file_to_wrap ${files_to_wrap})
 	)
 endforeach()
 
-#[[
+
 # Vars
 set(f2py_module_name "_pysimple")
 set(f2py_module_c "${f2py_module_name}module.c")
@@ -323,4 +284,4 @@ if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
         "${CMAKE_CURRENT_BINARY_DIR}/pysimple.py"
         "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/pysimple.py"
         COMMENT "Copying 'pysimple.py' file to '${CMAKE_LIBRARY_OUTPUT_DIRECTORY}'")
-endif()]]
+endif()#]]
