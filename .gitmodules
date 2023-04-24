@@ -1,0 +1,3 @@
+[submodule "SRC/contrib/pFUnit"]
+	path = SRC/contrib/pFUnit
+	url = https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git

@@ -173,6 +173,10 @@
 !
   allocate(splcoe(0:ns_tp,n_phi))
 !
+  if (n_phi == 1) then
+    print *,'Spline not supported for a Phi period of 1, exiting...'
+    call EXIT(-1)
+  endif
 !$omp do
   do is=1,ns
     do i_theta=1,n_theta
