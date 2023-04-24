@@ -35,7 +35,7 @@ contains
        
         call spline_vmec_data ! initialize splines for VMEC field
         call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
-        self%fper = twopi/dble(L1i)   !<= field period
+        self%fper = (2.0*pi)/dble(L1i)   !<= field period
         print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
         call volume_and_B00(volume,B00)
         print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'

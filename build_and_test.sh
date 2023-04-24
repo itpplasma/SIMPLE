@@ -5,8 +5,6 @@ then
     rm -rf build
 fi
 
-export SIMPLE_TESTING=TRUE
-
 export work_dir=$PWD
 export FC=gfortran
 
@@ -25,7 +23,7 @@ mkdir -p build
 cd build
 export PFUNIT_DIR=./SRC/contrib/pFUnit/build/installed/PFUNIT-4.4/cmake
 #export PFUNIT_DIR=../../pFUnit/build/installed/PFUNIT-4.4/cmake
-cmake .. -DCMAKE_PREFIX_PATH=$PFUNIT_DIR -DCMAKE_INSTALL_PREFIX=$PFUNIT_DIR
+cmake .. -DCMAKE_PREFIX_PATH=$PFUNIT_DIR -DCMAKE_INSTALL_PREFIX=$PFUNIT_DIR -DSIMPLE_TESTING=ON
 make -j8
 
 ctest --output-on-failure --verbose

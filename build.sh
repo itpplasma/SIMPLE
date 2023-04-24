@@ -5,10 +5,8 @@ then
     rm -rf build
 fi
 
-export SIMPLE_TESTING=FALSE
-
 mkdir -p build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_BUILD_TYPE=Release .. -DSIMPLE_TESTING=OFF
 make -j
 

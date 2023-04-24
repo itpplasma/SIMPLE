@@ -10,6 +10,8 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." OFF)
+option(SIMPLE_TESTING "Enable testing." OFF)
+
 set(CMAKE_MACOSX_RPATH 1)
 
 find_program(NF_CONFIG "nc-config")
@@ -29,7 +31,7 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
-if ($ENV{SIMPLE_TESTING} STREQUAL "TRUE")
+if (SIMPLE_TESTING)
     message(STATUS "Unit Tests and Code Coverage Enabled!")
 	find_package(PFUNIT REQUIRED)
 	enable_testing()
@@ -83,6 +85,7 @@ add_subdirectory(SRC)
 add_library (SIMPLE_LIB INTERFACE)
 target_compile_options(SIMPLE_LIB INTERFACE -DMPI)
 target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
+target_include_directories(SIMPLE_LIB INTERFACE ${CMAKE_BINARY_DIR}/mod/) #Why?
 
  #add_library (simple_mpi SHARED)
  #target_compile_options(simple_mpi PUBLIC -DMPI)
@@ -113,5 +116,8 @@ add_executable (simple.x
 
 target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
 
+if (SIMPLE_TESTING)
+    add_subdirectory(test)
+endif ()
 
 
