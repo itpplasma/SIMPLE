@@ -5,7 +5,7 @@ then
     rm -rf build
 fi
 
-export SIMPLE_COVERAGE=FALSE
+export SIMPLE_TESTING=FALSE
 
 mkdir -p build
 cd build

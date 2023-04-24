@@ -1,21 +1,16 @@
 
-if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/wout_unittests.nc)
-    configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/wout_unittests.nc
-        ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
-        COPYONLY
-    )
-else()
-    message(FATAL_ERROR "No .nc file, tests cannot be executed!")
-endif()
-
+#Dummy target, use for test environment sanity and file download.
 add_pfunit_ctest(test_example
     TEST_SOURCES test_example.f90
     LINK_LIBRARIES SIMPLE_LIB)
 
-add_pfunit_ctest(test_midlevel
-    TEST_SOURCES test_midlevel.f90
-    LINK_LIBRARIES SIMPLE_LIB)
+add_custom_command(TARGET test_example PRE_BUILD
+    COMMAND wget -O wout.nc https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_LandremanPaul2021_QA_lowres.nc?raw=true
+    )
+
+##################################################
+# PFUNIT TESTS
+##################################################
 
 add_pfunit_ctest(test_highlevel
     TEST_SOURCES test_highlevel.f90
@@ -25,6 +20,10 @@ add_pfunit_ctest(test_lowlevel
     TEST_SOURCES test_lowlevel.f90
     LINK_LIBRARIES SIMPLE_LIB)
     
+##################################################
+# TEST EXECUTABLES
+##################################################
+
 add_executable (test_coord_trans.x test_coord_trans.f90)
 target_link_libraries(test_coord_trans.x SIMPLE_LIB)
 add_executable (test_sympl_tok.x test_sympl.f90)

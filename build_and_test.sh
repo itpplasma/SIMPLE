@@ -5,7 +5,7 @@ then
     rm -rf build
 fi
 
-export SIMPLE_COVERAGE=TRUE
+export SIMPLE_TESTING=TRUE
 
 export work_dir=$PWD
 export FC=gfortran
