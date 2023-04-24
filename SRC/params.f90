@@ -92,6 +92,7 @@ module params
   integer :: batch_size=10000
   integer :: ran_seed=12345
   logical :: reuse_batch =.False.
+  logical :: sbeg_multi = .False.
   integer, dimension (:), allocatable :: idx
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
@@ -129,7 +130,7 @@ contains
 
   subroutine params_init
     double precision :: E_alpha
-    integer :: iostat, i
+    integer :: iostat, i, n
     character, dimension (:), allocatable :: batch_file
     logical :: old_batch
     real :: ran_tmp

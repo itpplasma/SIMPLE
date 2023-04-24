@@ -327,3 +327,4 @@ if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
         "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/pysimple.py"
         COMMENT "Copying 'pysimple.py' file to '${CMAKE_LIBRARY_OUTPUT_DIRECTORY}'")
 endif()
+

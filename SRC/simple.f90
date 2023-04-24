@@ -731,7 +731,7 @@ subroutine init_starting_points_multiline ! TODO this may not be the right time,
   
   j = 0
   sbeg_size = SIZE(sbeg_arr, 1)
-  parts_per_line = FLOOR(ntestpart / sbeg_size)
+  parts_per_line = FLOOR(REAL(ntestpart / sbeg_size))
   
   do i = 1, ntestpart
     s = sbeg_arr(j)
