@@ -9,9 +9,7 @@ ntestpart = 1000         ! number of test particles
 !                            now the actual field from VMEC is used one can
 !                            rather scale it with vmec_B_scale
 trace_time = 1d-1        ! slowing down time, s
-sbeg_multi = .False. ! If .True., sbeg_arr is used instead of sbeg and is expected to be an array of s.
-sbeg_arr(3) = 0.4d, 0.6d, 0.8d
-sbeg = 0.6d0             ! starting s (normalzed toroidal flux) for field line
+sbeg = 0.6d0, 0.7d0     ! starting s (normalzed toroidal flux) for field lines. The particles will be distributed equally along these lines. If size(sbeg)==0, (not yet equally) distributed in volume.
 phibeg = 0.d0            ! starting phi for field line
 thetabeg = 0.d0          ! starting theta for field line
 loopskip = 0             ! loops to skip for random number shift
@@ -33,14 +31,13 @@ debug = .False.          ! produce debugging output (.True./.False.). Use only i
 class_plot = .False.     ! write starting points at phi=const cut for classification plot (.True./.False.)
 cut_in_per = 0d0         ! normalized phi-cut position within field period, [0:1], used if class_plot=.True.
 fast_class = .False.     ! if .True. quit immeadiately after fast classification and don't trace orbits to the end
-local = .True.           ! if .True. orbits are started on a single flux surface, if .False. (not yet equally distributed) in volume
 vmec_B_scale = 1.0d0     ! factor to scale the B field from VMEC
 vmec_RZ_scale = 1.0d0    ! factor to scale the device size from VMEC
 swcoll = .False.         ! if .True. enables collisions. This is incompatible with classification.
 deterministic = .False.  ! if .True. put seed for the same random walk
 old_axis_healing = .True.  ! How to heal VMEC axis. Leave .True. until new version is fully tested.
 old_axis_healing_boundary = .True.  ! How to heal VMEC axis. Leave .True. until new version is fully tested.
-batch_size = 10000 ! Use only a portion of all particles. Ignored if larger than ntestpart.
+batch_size = 1000 ! Use only a portion of all particles. Ignored if larger than ntestpart.
 ran_seed = 12345   ! Random seed to get batch_size amounts of random indices from ntestpart.
 reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored in batch.dat, new batch generated if batch.dat not found.
 /

@@ -454,12 +454,9 @@ subroutine run(norb)
 ! pre-compute starting flux surface
   call init_starting_surf
 
-  if(local) then
-    if (sbeg_multi) then
-      call init_starting_points
-    else
-      call init_starting_points_multiline
-    endif
+  ! local?
+  if(1 == SIZE(sbeg)) then
+    call init_starting_points
   else
     call init_starting_points_global
   endif
@@ -725,32 +722,10 @@ subroutine init_starting_points
   close(1)
 end subroutine init_starting_points
 
-subroutine init_starting_points_multiline ! TODO this may not be the right time, possibly shift this into init_starting_surf
-  integer :: sbeg_size, parts_per_line, part_cnt, i, j
-  double precision :: s
-  
-  j = 0
-  sbeg_size = SIZE(sbeg_arr, 1)
-  parts_per_line = FLOOR(REAL(ntestpart / sbeg_size))
-  
-  do i = 1, ntestpart
-    s = sbeg_arr(j)
-    ! TODO init particle at s
-    part_cnt = part_cnt + 1
-    if (parts_per_line == part_cnt) then
-      ! use next s from sbeg_arr for following particles
-      j =  j + 1
-      
-      ! Reset particle counter
-      part_cnt = 0 
-    endif
-  end do
-
-end subroutine init_starting_points_multiline
-
 subroutine init_starting_points_global
+  
   integer, parameter :: ns=1000
-  integer :: ipart,is
+  integer :: ipart,is,s_idx,parts_per_s
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
   double precision :: s,bmin,bmax
@@ -768,10 +743,10 @@ subroutine init_starting_points_global
   ! skip random numbers according to configuration
     do iskip=1,loopskip
       do ipart=1,ntestpart
-        xi=zzg()
-        xi=zzg()
-        xi=zzg()
-        xi=zzg()
+        call random_number(xi)
+        call random_number(xi)
+        call random_number(xi)
+        call random_number(xi)
       enddo
     enddo
 
@@ -780,11 +755,20 @@ subroutine init_starting_points_global
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
     do ipart=1,ntestpart
-      xi=zzg()
-      r=xi
-      xi=zzg()
+      if (0 == SIZE(sbeg)) then
+        call random_number(xi)
+        r = xi
+      else if (1 < SIZE(sbeg)) then
+        parts_per_s = int(ntestpart/SIZE(sbeg))
+        s_idx = (ipart/parts_per_s)+1
+        r = sbeg(s_idx)
+      else ! Should not happen (as we are not in "local mode"), however let's catch it anyway.
+        r = sbeg(1)
+      endif
+      
+      call random_number(xi)
       vartheta=twopi*xi
-      xi=zzg()
+      call random_number(xi)
       varphi=twopi*xi
 !
 ! we store starting points in VMEC coordinates:
@@ -948,7 +932,7 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
-  if(.not.local) then
+  if(1 < SIZE(sbeg)) then
 !
     call get_bminmax(z(1),bmin,bmax)
 !

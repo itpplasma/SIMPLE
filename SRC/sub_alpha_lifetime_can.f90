@@ -288,6 +288,7 @@ if(dodiag) write (123,*) tau2,z
       end subroutine rhs_mflint_can
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!Integrates along a magnetic field line to generate equidistant homogeneous volumetric distribution on flux surface 
       subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
                                xstart,bstart,volstart,bmod00,ierr)
 !

@@ -31,8 +31,8 @@ module params
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision :: sbeg=0.5d0, thetabeg=0.0d0
-  double precision, dimension(:), allocatable :: sbeg_arr
+  double precision, dimension(2):: sbeg
+  double precision :: thetabeg=0.0d0
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart, zend
@@ -92,11 +92,10 @@ module params
   integer :: batch_size=10000
   integer :: ran_seed=12345
   logical :: reuse_batch =.False.
-  logical :: sbeg_multi = .False.
   integer, dimension (:), allocatable :: idx
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-    trace_time, sbeg_multi, sbeg_arr, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
+    trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
@@ -115,7 +114,6 @@ contains
 
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
-
     close(1)
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
@@ -172,8 +170,7 @@ contains
     fper = 2d0*pi/dble(L1i)   !<= field period
 
     npoi=nper*npoiper ! total number of starting points
-
-    !See if batch is wanted, if yes find random or re-use from previous file.
+    !See if batch is wanted, if yes find random or re-use from previous file. 
     if (ntestpart > batch_size) then
       if (reuse_batch) then
         INQUIRE(FILE="batch.dat", EXIST=old_batch)
@@ -215,7 +212,7 @@ contains
       !Set ntestpart to batch_size for rest of the run.
       ntestpart = batch_size
     endif !batches wanted
-
+    
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
@@ -225,6 +222,8 @@ contains
 #endif
     allocate(iclass(3,ntestpart))
 
+    return 
+    
     666 stop iostat
     667 stop iostat
   end subroutine params_init
