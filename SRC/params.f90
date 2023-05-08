@@ -31,7 +31,7 @@ module params
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision, dimension(2):: sbeg
+  double precision, dimension(1024) :: sbeg
   double precision :: thetabeg=0.0d0
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
@@ -61,7 +61,6 @@ module params
   integer :: ntcut
   logical          :: class_plot = .False.    !<=AAA
   double precision :: cut_in_per = 0d0        !<=AAA
-  logical          :: local=.True.
 
   logical :: fast_class=.False.  !if .true. quit immeadiately after fast classification
 
@@ -91,14 +90,15 @@ module params
 #endif
   integer :: batch_size=10000
   integer :: ran_seed=12345
+  integer :: num_surf=1
   logical :: reuse_batch =.False.
   integer, dimension (:), allocatable :: idx
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-    trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
+    trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
-    class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
+    class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, &
     batch_size, ran_seed, reuse_batch
@@ -212,6 +212,7 @@ contains
       !Set ntestpart to batch_size for rest of the run.
       ntestpart = batch_size
     endif !batches wanted
+    
     
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))

@@ -455,7 +455,7 @@ subroutine run(norb)
   call init_starting_surf
 
   ! local?
-  if(1 == SIZE(sbeg)) then
+  if(1 == num_surf) then
     call init_starting_points
   else
     call init_starting_points_global
@@ -754,12 +754,13 @@ subroutine init_starting_points_global
   open(1,file='start.dat',recl=1024)
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
+    print *, "Initialising for", num_surf, "surfaces."
     do ipart=1,ntestpart
-      if (0 == SIZE(sbeg)) then
+      if (0 == num_surf) then
         call random_number(xi)
         r = xi
-      else if (1 < SIZE(sbeg)) then
-        parts_per_s = int(ntestpart/SIZE(sbeg))
+      else if (1 < num_surf) then
+        parts_per_s = int(ntestpart/num_surf)
         s_idx = (ipart/parts_per_s)+1
         r = sbeg(s_idx)
       else ! Should not happen (as we are not in "local mode"), however let's catch it anyway.
@@ -932,7 +933,7 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
-  if(1 < SIZE(sbeg)) then
+  if(1 < num_surf) then
 !
     call get_bminmax(z(1),bmin,bmax)
 !
