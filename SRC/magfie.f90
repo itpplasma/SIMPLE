@@ -29,13 +29,14 @@
 !
   double precision, parameter :: twopi=2.d0*3.14159265358979d0, hs=1.d-3, ht=hs*twopi, hp=ht/5.d0
 !
-  double precision :: bmod,sqrtg
+  double precision, intent(out) :: bmod,sqrtg
   double precision :: s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                       sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                       Bcovar_r,Bcovar_vartheta,Bcovar_varphi
   double precision :: cjac,bcov_s_vmec,bcov_t_vmec,bcov_p_vmec
   double precision :: dhs_dt,dhs_dp,dht_ds,dht_dp,dhp_ds,dhp_dt
-  double precision, dimension(3) :: x,bder,hcovar,hctrvr,hcurl
+  double precision, dimension(3), intent(in) :: x
+  double precision, dimension(3), intent(out) :: bder,hcovar,hctrvr,hcurl
 !
 ! Begin derivatives over s
 !
