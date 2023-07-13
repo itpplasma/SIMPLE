@@ -188,26 +188,33 @@ contains
           end do
           deallocate(batch_file)
           close(1)
-
         else !old_batch
-          !Create a random list(batch_size) of indices using ran_seed.
+          ! no old batch file found, so we pretend the user knew this and set the flag to :False.
+          reuse_batch = .False.
+        endif !old_batch
+      endif !reuse_batch
+      
+      if (.not.reuse_batch) then
+        !Create a random list(batch_size) of indices using ran_seed.
           allocate(idx(batch_size))
+          
           call SRAND(ran_seed)
+          
           do i=0,batch_size
-            
             call random_number(ran_tmp)
-            idx(i) = FLOOR(batch_size * ran_tmp)
+            !Create randomized inidces from the amount available, leaving out the upper 1% as margin for later sorting and replacing of duplicates (relevant especially for smaller batches)
+            idx(i) = FLOOR(CEILING((ntestpart - (ntestpart*0.01))) * ran_tmp)
           end do
+            
           call sort_idx(idx, batch_size)
           
           open(1, file='batch.dat', recl=batch_size*2, iostat=iostat)
+          
           do n=1, batch_size
-            write(1, *) idx(i)
+            write(1, *) idx(n)
           end do
           close(1)
-        endif !old_batch
-
-      endif !reuse_batch
+      endif !reuse_batch again
 
       !Set ntestpart to batch_size for rest of the run.
       ntestpart = batch_size
@@ -229,12 +236,48 @@ contains
     667 stop iostat
   end subroutine params_init
   
-  
-  ! TODO sort, then check for duplicates
   subroutine sort_idx(idx_arr, N)
-    integer, dimension (N) :: idx_arr
+    ! sort particle indices.
     integer :: N
-    ! TODO implement
+    integer, dimension (N) :: idx_arr
+    integer :: i, j, temp, o, r, num_removed, p
+    logical :: swapped
+    
+    do j = n-1, 1, -1
+       swapped = .false.
+       do i = 1, j
+          if (idx_arr(i) > idx_arr(i+1)) then
+             temp = idx_arr(i)
+             idx_arr(i) = idx_arr(i+1)
+             idx_arr(i+1) = temp
+             swapped = .true.
+          end if
+       end do
+       if (.not. swapped) exit
+    end do
+
+    ! eliminate the duplicates, replace them by either appending from higher  indices, dependent on available indices.
+    num_removed = 0
+    do o=1, N
+      if ((N-o) < (num_removed+1)) exit
+
+      if (idx_arr(o) == idx_arr(o+1)) then
+        num_removed = num_removed + 1
+        do r=o+1, N-1
+          idx_arr(r) = idx_arr(r+1)
+        end do
+      end if
+    end do
+    
+    do p=N-num_removed+1, N
+      idx_arr(p) = idx_arr(p-1) + 1
+    end do
+    
+    if (idx_arr(N) > ntestpart) then
+      print *,'ERROR - Invalid indices (Out of Range)!'
+      error stop
+    end if
+    
   end subroutine sort_idx
 
 end module params
