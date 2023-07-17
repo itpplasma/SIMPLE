@@ -170,10 +170,10 @@ contains
     fper = 2d0*pi/dble(L1i)   !<= field period
 
     npoi=nper*npoiper ! total number of starting points
-    !See if batch is wanted, if yes find random or re-use from previous file. 
+    !See if batch is wanted, if yes find random or re-use from previous file.
     if (ntestpart > batch_size) then
       if (reuse_batch) then
-        INQUIRE(FILE="batch.dat", EXIST=old_batch)
+        inquire(file="batch.dat", exist=old_batch)
 
         if (old_batch) then
           allocate(batch_file(batch_size))
@@ -184,7 +184,7 @@ contains
           do i=1,batch_size
             read(1,iostat=iostat) batch_file(i)
             if (iostat /= 0) goto 667
-            idx (i) = ICHAR(batch_file(i)) ! TODO batch_file list is pointless
+            idx(i) = ichar(batch_file(i)) ! TODO batch_file list is pointless
           end do
           deallocate(batch_file)
           close(1)
@@ -193,23 +193,23 @@ contains
           reuse_batch = .False.
         endif !old_batch
       endif !reuse_batch
-      
+
       if (.not.reuse_batch) then
         !Create a random list(batch_size) of indices using ran_seed.
           allocate(idx(batch_size))
-          
-          call SRAND(ran_seed)
-          
+
+          call srand(ran_seed)
+
           do i=0,batch_size
             call random_number(ran_tmp)
             !Create randomized inidces from the amount available, leaving out the upper 1% as margin for later sorting and replacing of duplicates (relevant especially for smaller batches)
-            idx(i) = FLOOR(CEILING((ntestpart - (ntestpart*0.01))) * ran_tmp)
+            idx(i) = floor(ceiling((ntestpart - (ntestpart*0.01))) * ran_tmp)
           end do
-            
+
           call sort_idx(idx, batch_size)
-          
+
           open(1, file='batch.dat', recl=batch_size*2, iostat=iostat)
-          
+
           do n=1, batch_size
             write(1, *) idx(n)
           end do
@@ -219,8 +219,8 @@ contains
       !Set ntestpart to batch_size for rest of the run.
       ntestpart = batch_size
     endif !batches wanted
-    
-    
+
+
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
@@ -230,19 +230,19 @@ contains
 #endif
     allocate(iclass(3,ntestpart))
 
-    return 
-    
+    return
+
     666 stop iostat
     667 stop iostat
   end subroutine params_init
-  
+
   subroutine sort_idx(idx_arr, N)
     ! sort particle indices.
     integer :: N
     integer, dimension (N) :: idx_arr
     integer :: i, j, temp, o, r, num_removed, p
     logical :: swapped
-    
+
     do j = n-1, 1, -1
        swapped = .false.
        do i = 1, j
@@ -268,16 +268,16 @@ contains
         end do
       end if
     end do
-    
+
     do p=N-num_removed+1, N
       idx_arr(p) = idx_arr(p-1) + 1
     end do
-    
+
     if (idx_arr(N) > ntestpart) then
       print *,'ERROR - Invalid indices (Out of Range)!'
       error stop
     end if
-    
+
   end subroutine sort_idx
 
 end module params

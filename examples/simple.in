@@ -9,7 +9,7 @@ ntestpart = 1000         ! number of test particles
 !                            now the actual field from VMEC is used one can
 !                            rather scale it with vmec_B_scale
 trace_time = 1d-1        ! slowing down time, s
-sbeg = 0.6d0, 0.7d0     ! starting s (normalzed toroidal flux) for field lines. The particles will be distributed equally along these lines. If size(sbeg)==0, (not yet equally) distributed in volume.
+sbeg = 0.6d0, 0.7d0     ! starting s (normalzed toroidal flux) for particles. The particles will be distributed equally along these flux surfaces. If size(sbeg)==0, (not yet equally) distributed in volume.
 phibeg = 0.d0            ! starting phi for field line
 thetabeg = 0.d0          ! starting theta for field line
 loopskip = 0             ! loops to skip for random number shift
