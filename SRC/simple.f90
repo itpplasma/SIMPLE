@@ -13,7 +13,7 @@ module simple
     orbit_sympl_init, orbit_timestep_sympl
   use field_can_mod, only : FieldCan, eval_field
   use diag_mod, only : icounter
-  use params, only : Tracer
+  use params, only : Tracer, idx
 
 implicit none
 save
@@ -454,7 +454,8 @@ subroutine run(norb)
 ! pre-compute starting flux surface
   call init_starting_surf
 
-  if(local) then
+  ! local?
+  if(1 == num_surf) then
     call init_starting_points
   else
     call init_starting_points_global
@@ -568,6 +569,18 @@ subroutine finalize
 end subroutine finalize
 
 subroutine write_output
+
+  double precision :: times_lost_sum
+
+  open(1,file='times_lost.dat',recl=1024) !do first to get avg. time_lost
+  times_lost_sum = 0
+  do i=1,ntestpart
+    write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
+    times_lost_sum = times_lost_sum + times_lost(i)
+  enddo
+  write(1,*) "<1/t_lost> = ", ntestpart/times_lost_sum !1.0/(times_lost_sum/ntestpart)
+  close(1)
+
   open(1,file='confined_fraction.dat',recl=1024)
 #ifdef MPI
   if (mpirank == 0) then
@@ -580,12 +593,8 @@ subroutine write_output
     write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo
 #endif
-  close(1)
 
-  open(1,file='times_lost.dat',recl=1024)
-  do i=1,ntestpart
-    write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
-  enddo
+  write(1,*) "<1/t_lost> = ", ntestpart/times_lost_sum !1.0/(times_lost_sum/ntestpart)
   close(1)
 
   open(1,file='class_parts.dat',recl=1024)
@@ -701,14 +710,22 @@ subroutine init_starting_points
     enddo
   else if (startmode == 3) then  ! ANTS input mode
     call init_starting_points_ants(1)
+  else if (startmode == 4) then
+    !select only the indices from batch and overwrite zstart.
+    do ipart=idx(0),idx(ntestpart)
+      read(1,*) zstart(:,ipart)
+    enddo
+    ! indices no longer needed
+    deallocate(idx)
   endif
 
   close(1)
 end subroutine init_starting_points
 
 subroutine init_starting_points_global
+  
   integer, parameter :: ns=1000
-  integer :: ipart,is
+  integer :: ipart,is,s_idx,parts_per_s
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
   double precision :: s,bmin,bmax
@@ -726,10 +743,10 @@ subroutine init_starting_points_global
   ! skip random numbers according to configuration
     do iskip=1,loopskip
       do ipart=1,ntestpart
-        xi=zzg()
-        xi=zzg()
-        xi=zzg()
-        xi=zzg()
+        call random_number(xi)
+        call random_number(xi)
+        call random_number(xi)
+        call random_number(xi)
       enddo
     enddo
 
@@ -737,12 +754,22 @@ subroutine init_starting_points_global
   open(1,file='start.dat',recl=1024)
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
+    print *, "Initialising for", num_surf, "surfaces."
     do ipart=1,ntestpart
-      xi=zzg()
-      r=xi
-      xi=zzg()
+      if (0 == num_surf) then
+        call random_number(xi)
+        r = xi
+      else if (1 < num_surf) then
+        parts_per_s = int(ntestpart/num_surf)
+        s_idx = (ipart/parts_per_s)+1
+        r = sbeg(s_idx)
+      else ! Should not happen (as we are not in "local mode"), however let's catch it anyway.
+        r = sbeg(1)
+      endif
+      
+      call random_number(xi)
       vartheta=twopi*xi
-      xi=zzg()
+      call random_number(xi)
       varphi=twopi*xi
 !
 ! we store starting points in VMEC coordinates:
@@ -773,6 +800,13 @@ subroutine init_starting_points_global
     enddo
   else if (startmode == 3) then  ! ANTS input mode
     call init_starting_points_ants(1)
+  else if (startmode == 4) then
+    !select only the indices from batch and overwrite zstart.
+    do ipart=idx(0),idx(ntestpart)
+      read(1,*) zstart(:,ipart)
+    enddo
+    ! indices no longer needed
+    deallocate(idx)
   endif
 
   close(1)
@@ -899,7 +933,7 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
-  if(.not.local) then
+  if(1 < num_surf) then
 !
     call get_bminmax(z(1),bmin,bmax)
 !

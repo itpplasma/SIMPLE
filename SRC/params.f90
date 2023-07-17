@@ -31,7 +31,8 @@ module params
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision :: sbeg=0.5d0, thetabeg=0.0d0
+  double precision, dimension(1024) :: sbeg
+  double precision :: thetabeg=0.0d0
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart, zend
@@ -60,7 +61,6 @@ module params
   integer :: ntcut
   logical          :: class_plot = .False.    !<=AAA
   double precision :: cut_in_per = 0d0        !<=AAA
-  logical          :: local=.True.
 
   logical :: fast_class=.False.  !if .true. quit immeadiately after fast classification
 
@@ -88,14 +88,20 @@ module params
   double precision, dimension(:), allocatable :: &
     confpart_trap_glob, confpart_pass_glob
 #endif
+  integer :: batch_size=10000
+  integer :: ran_seed=12345
+  integer :: num_surf=1
+  logical :: reuse_batch =.False.
+  integer, dimension (:), allocatable :: idx
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-    trace_time, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
+    trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
-    class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
+    class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
-    old_axis_healing_boundary
+    old_axis_healing_boundary, &
+    batch_size, ran_seed, reuse_batch
 
 contains
 
@@ -108,7 +114,6 @@ contains
 
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
-
     close(1)
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
@@ -123,6 +128,10 @@ contains
 
   subroutine params_init
     double precision :: E_alpha
+    integer :: iostat, i, n
+    character, dimension (:), allocatable :: batch_file
+    logical :: old_batch
+    real :: ran_tmp
 
     E_alpha = 3.5d6/facE_al
 
@@ -161,6 +170,56 @@ contains
     fper = 2d0*pi/dble(L1i)   !<= field period
 
     npoi=nper*npoiper ! total number of starting points
+    !See if batch is wanted, if yes find random or re-use from previous file.
+    if (ntestpart > batch_size) then
+      if (reuse_batch) then
+        inquire(file="batch.dat", exist=old_batch)
+
+        if (old_batch) then
+          allocate(batch_file(batch_size))
+          allocate(idx(batch_size))
+          open(1, file='batch.dat', recl=batch_size, iostat=iostat)
+          if (iostat /= 0) goto 666
+
+          do i=1,batch_size
+            read(1,iostat=iostat) batch_file(i)
+            if (iostat /= 0) goto 667
+            idx(i) = ichar(batch_file(i)) ! TODO batch_file list is pointless
+          end do
+          deallocate(batch_file)
+          close(1)
+        else !old_batch
+          ! no old batch file found, so we pretend the user knew this and set the flag to :False.
+          reuse_batch = .False.
+        endif !old_batch
+      endif !reuse_batch
+
+      if (.not.reuse_batch) then
+        !Create a random list(batch_size) of indices using ran_seed.
+          allocate(idx(batch_size))
+
+          call srand(ran_seed)
+
+          do i=0,batch_size
+            call random_number(ran_tmp)
+            !Create randomized inidces from the amount available, leaving out the upper 1% as margin for later sorting and replacing of duplicates (relevant especially for smaller batches)
+            idx(i) = floor(ceiling((ntestpart - (ntestpart*0.01))) * ran_tmp)
+          end do
+
+          call sort_idx(idx, batch_size)
+
+          open(1, file='batch.dat', recl=batch_size*2, iostat=iostat)
+
+          do n=1, batch_size
+            write(1, *) idx(n)
+          end do
+          close(1)
+      endif !reuse_batch again
+
+      !Set ntestpart to batch_size for rest of the run.
+      ntestpart = batch_size
+    endif !batches wanted
+
 
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -171,5 +230,54 @@ contains
 #endif
     allocate(iclass(3,ntestpart))
 
+    return
+
+    666 stop iostat
+    667 stop iostat
   end subroutine params_init
+
+  subroutine sort_idx(idx_arr, N)
+    ! sort particle indices.
+    integer :: N
+    integer, dimension (N) :: idx_arr
+    integer :: i, j, temp, o, r, num_removed, p
+    logical :: swapped
+
+    do j = n-1, 1, -1
+       swapped = .false.
+       do i = 1, j
+          if (idx_arr(i) > idx_arr(i+1)) then
+             temp = idx_arr(i)
+             idx_arr(i) = idx_arr(i+1)
+             idx_arr(i+1) = temp
+             swapped = .true.
+          end if
+       end do
+       if (.not. swapped) exit
+    end do
+
+    ! eliminate the duplicates, replace them by either appending from higher  indices, dependent on available indices.
+    num_removed = 0
+    do o=1, N
+      if ((N-o) < (num_removed+1)) exit
+
+      if (idx_arr(o) == idx_arr(o+1)) then
+        num_removed = num_removed + 1
+        do r=o+1, N-1
+          idx_arr(r) = idx_arr(r+1)
+        end do
+      end if
+    end do
+
+    do p=N-num_removed+1, N
+      idx_arr(p) = idx_arr(p-1) + 1
+    end do
+
+    if (idx_arr(N) > ntestpart) then
+      print *,'ERROR - Invalid indices (Out of Range)!'
+      error stop
+    end if
+
+  end subroutine sort_idx
+
 end module params

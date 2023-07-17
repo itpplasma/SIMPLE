@@ -120,4 +120,3 @@ if (SIMPLE_TESTING)
     add_subdirectory(test)
 endif ()
 
-
