@@ -221,11 +221,25 @@ contains
     endif !batches wanted
 
 
+    if( allocated(zstart))  deallocate(zstart)
+    if( allocated(zend))  deallocate(zend)
+    if( allocated(times_lost))  deallocate(times_lost)
+    if( allocated(trap_par))  deallocate(trap_par)
+    if( allocated(perp_inv))  deallocate(perp_inv)
+    if( allocated(iclass))  deallocate(iclass)
+    if( allocated(xstart))  deallocate(xstart)
+    if( allocated(bstart))  deallocate(bstart)
+    if( allocated(volstart))  deallocate(volstart)
+    if( allocated(confpart_trap))  deallocate(confpart_trap)
+    if( allocated(confpart_pass))  deallocate(confpart_pass)
+
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
 #ifdef MPI
+      if( allocated(confpart_pass_glob))  deallocate(confpart_pass_glob)
+      if( allocated(confpart_trap_glob))  deallocate(confpart_trap_glob)
       allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
 #endif
     allocate(iclass(3,ntestpart))
