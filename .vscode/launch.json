@@ -8,7 +8,7 @@
             "name": "(gdb) test_collis",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/BUILD/test_collis.x",
+            "program": "${workspaceFolder}/build/test_collis.x",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/RUN/test_collis",
@@ -23,6 +23,26 @@
                 }
             ],
             "preLaunchTask": "make"
+        },
+
+        {
+            "name": "(gdb) simple",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/simple.x",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/RUN/alan/",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
         }
     ]
 }

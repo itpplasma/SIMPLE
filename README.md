@@ -62,7 +62,7 @@ Diagnostics for slow convergence of Newton iterations are written in `fort.6601`
 When using this code for scientific publications, please cite the according references:
 
 [1] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
-Accelerated methods for direct computation of fusion alpha particle losses within stellarator optimization. J. Plasma Phys. (submitted 2019)
+Accelerated methods for direct computation of fusion alpha particle losses within stellarator optimization. J. Plasma Phys 86, 815860201 (2020), https://doi.org/10.1017/S0022377820000203
 
 [2] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
 Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys 403, 109065 (2020), https://doi.org/10.1016/j.jcp.2019.109065, preprint on https://arxiv.org/abs/1903.06885
