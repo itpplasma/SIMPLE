@@ -46,6 +46,8 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
+link_libraries(BLAS LAPACK)
+
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests and Code Coverage Enabled!")
 	find_package(PFUNIT REQUIRED)
@@ -98,7 +100,6 @@ add_subdirectory(SRC)
 add_library (SIMPLE_LIB INTERFACE)
 target_compile_options(SIMPLE_LIB INTERFACE -DMPI)
 target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
-#target_include_directories(SIMPLE_LIB INTERFACE ${CMAKE_BINARY_DIR}/mod/) #Why?
 
  #add_library (simple_mpi SHARED)
  #target_compile_options(simple_mpi PUBLIC -DMPI)
@@ -126,6 +127,7 @@ endif()
 add_executable (simple.x
 	SRC/main.f90
 )
+set_source_files_properties(SRC/main.f90 PROPERTIES COMPILE_OPTIONS "-I ${CMAKE_BINARY_DIR}/SRC")
 
 target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
 
