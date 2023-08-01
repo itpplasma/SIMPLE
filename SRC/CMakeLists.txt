@@ -37,7 +37,7 @@ set(SOURCES
 
 
 add_library (SIMPLE_SRC SHARED ${SOURCES})
-target_link_libraries(SIMPLE_SRC CONTRIB)
+target_link_libraries(SIMPLE_SRC CONTRIB ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 
 if (ENABLE_PYTHON_INTERFACE)
     # Grab Python
@@ -189,5 +189,3 @@ if (ENABLE_PYTHON_INTERFACE)
         "${CMAKE_CURRENT_BINARY_DIR}/../../python/pysimple.py"
         COMMENT "Copying 'pysimple.py' file to ${CMAKE_CURRENT_BINARY_DIR}/../../python/")
 endif() #ENABLE_PYTHON_INTERFACE
-
-

@@ -46,8 +46,6 @@ find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
-link_libraries(BLAS LAPACK)
-
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests and Code Coverage Enabled!")
 	find_package(PFUNIT REQUIRED)
