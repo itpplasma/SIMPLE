@@ -4,9 +4,13 @@
 cmake_minimum_required (VERSION 3.12)
 project (SIMPLE Fortran C)
 
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+	Release Debug Profile Fast
+)
+
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-#    set(CMAKE_BUILD_TYPE Debug)
+    set(CMAKE_BUILD_TYPE Release CACHE
+	STRING "Choose the type of build." FORCE)
 endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." OFF)
@@ -14,18 +18,33 @@ option(SIMPLE_TESTING "Enable testing." OFF)
 
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(NF_CONFIG "nc-config")
+find_program(NC_CONFIG "nf-config")
 
-if (NF_CONFIG)
-    execute_process(COMMAND "nc-config" --prefix
-		OUTPUT_VARIABLE NFPREFIX)
+if (NC_CONFIG)
+execute_process(COMMAND nf-config --includedir
+                OUTPUT_VARIABLE NETCDFINCLUDE_DIR)
+execute_process(COMMAND nc-config --libdir
+				OUTPUT_VARIABLE NETCDFLIB_DIR)
+execute_process(COMMAND nf-config --flibs
+                OUTPUT_VARIABLE NETCDF_FLIBS)
 else()
-    message(SEND_ERROR "nc-config not found. Please install libnetcdff-dev")
+message(SEND_ERROR "nc-config not found. Please install libnetcdff-dev")
 endif()
 
-string(STRIP ${NFPREFIX} NFPREFIX)
-set(NFINC ${NFPREFIX}/include)
-set(NFLIBS ${NFPREFIX}/lib)
+string(STRIP ${NETCDFINCLUDE_DIR} NETCDFINCLUDE_DIR)
+string(STRIP ${NETCDFLIB_DIR} NETCDFLIB_DIR)
+string(STRIP ${NETCDF_FLIBS} NETCDF_FLIBS)
+
+message(STATUS "NetCDF include path: " ${NETCDFINCLUDE_DIR})
+message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
+message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
+
+# Replace space by semicolon in the Fortran libs
+string(REPLACE " " ";" NETCDF_FLIBS ${NETCDF_FLIBS})
+
+include_directories(${NETCDFINCLUDE_DIR})
+link_directories(${NETCDFLIB_DIR})
+add_link_options(${NETCDF_FLIBS})
 
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
@@ -39,11 +58,8 @@ if (SIMPLE_TESTING)
 endif()
 
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
-message(STATUS "NetCDF include path: " ${NFINC})
-message(STATUS "NetCDF lib path: " ${NFLIBS})
 message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/mod)
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
@@ -70,7 +86,7 @@ else()
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
 		add_compile_options(-O0 -g -ggdb -fbacktrace
-			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
+			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps -finit-real=nan -fno-omit-frame-pointer -fno-inline)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -p -g -shared-libgcc)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
@@ -85,7 +101,6 @@ add_subdirectory(SRC)
 add_library (SIMPLE_LIB INTERFACE)
 target_compile_options(SIMPLE_LIB INTERFACE -DMPI)
 target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
-target_include_directories(SIMPLE_LIB INTERFACE ${CMAKE_BINARY_DIR}/mod/) #Why?
 
  #add_library (simple_mpi SHARED)
  #target_compile_options(simple_mpi PUBLIC -DMPI)
@@ -113,10 +128,10 @@ endif()
 add_executable (simple.x
 	SRC/main.f90
 )
+set_source_files_properties(SRC/main.f90 PROPERTIES COMPILE_OPTIONS "-I ${CMAKE_BINARY_DIR}/SRC")
 
 target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
 
 if (SIMPLE_TESTING)
     add_subdirectory(test)
 endif ()
-
