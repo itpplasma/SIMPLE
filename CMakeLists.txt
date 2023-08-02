@@ -4,9 +4,13 @@
 cmake_minimum_required (VERSION 3.12)
 project (SIMPLE Fortran C)
 
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+	Release Debug Profile Fast
+)
+
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-#    set(CMAKE_BUILD_TYPE Debug)
+    set(CMAKE_BUILD_TYPE Release CACHE
+	STRING "Choose the type of build." FORCE)
 endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." OFF)
@@ -56,7 +60,6 @@ endif()
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-#set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/mod)
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
@@ -83,7 +86,7 @@ else()
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
 		add_compile_options(-O0 -g -ggdb -fbacktrace
-			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
+			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps -finit-real=nan -fno-omit-frame-pointer -fno-inline)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -p -g -shared-libgcc)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
