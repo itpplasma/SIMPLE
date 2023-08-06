@@ -51,10 +51,7 @@ find_package(LAPACK REQUIRED)
 find_package(MPI REQUIRED)
 
 if (SIMPLE_TESTING)
-    message(STATUS "Unit Tests and Code Coverage Enabled!")
-	find_package(PFUNIT REQUIRED)
-	enable_testing()
-	add_link_options(--coverage)
+    message(STATUS "Unit Tests enabled!")
 endif()
 
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
