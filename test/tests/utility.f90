@@ -3,10 +3,10 @@ module test_utils
     implicit none
     save
     
-    public assertion
-    interface assertion
+    public assert_equal
+    interface assert_equal
         module procedure :: assert_int, assert_flt, assert_flt_range, assert_dbl, assert_dbl_range
-    end interface assertion
+    end interface assert_equal
 
     contains
     
