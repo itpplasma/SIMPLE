@@ -57,7 +57,7 @@ struct FArray2D
 end
 
 function show(io::IO, farr::FArray1D)
-    data = unsafe_wrap(Array{Float64,1}, Ptr{Float64}(farr.base_addr), 
+    data = unsafe_wrap(Array{Float64,1}, Ptr{Float64}(farr.base_addr),
         (farr.dim.upper_bound - farr.dim.lower_bound + 1,))
     print(io, data)
 end
@@ -86,11 +86,11 @@ mutable struct FieldCan
     H::Float64
     pth::Float64
     vpar::Float64
-    
+
     dvpar::SVector{4, Float64}
     dH::SVector{4, Float64}
     dpth::SVector{4, Float64}
-    
+
     # order of second derivatives:
     # d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
     # d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
@@ -181,8 +181,8 @@ end
 norb = NeoOrb()
 if !@isdefined(firstrun) | firstrun == true
       global firstrun, norb
-      ccall((:__neo_orb_MOD_init_field, "lib/libneo_orb"),
-      Cvoid, (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}), 
+      ccall((:__neo_orb_MOD_init_field, "../build/libsimple"),
+      Cvoid, (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}),
       norb, 5, 5, 3, 1)
       firstrun = false
 end
@@ -207,13 +207,13 @@ tau=trace_time*v0
 
 npoiper2 = 64
 
-p_rmajor = cglobal((:__new_vmec_stuff_mod_MOD_rmajor, "lib/libneo_orb"), Float64)
+p_rmajor = cglobal((:__new_vmec_stuff_mod_MOD_rmajor, "../build/libsimple"), Float64)
 rmajor = unsafe_load(p_rmajor)
 println(rmajor)
 rbig = rmajor*1.0e2
 dtaumax = 2.0*pi*rbig/npoiper2
 dtau = dtaumax
-ccall((:__neo_orb_MOD_init_params, "lib/libneo_orb"), Cvoid,
+ccall((:__neo_orb_MOD_init_params, "../build/libsimple"), Cvoid,
       (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Float64},
        Ref{Float64}, Ref{Float64}),
       norb, Z_charge, m_mass, E_kin, dtau, dtaumax, 1e-8)
@@ -240,15 +240,15 @@ z[:] = [0.5, 0.0, 0.314, 1.0, 0.2]
 
 # Explicit Euler
 stages[1] = SymplecticIntegrator()
-ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "lib/libneo_orb"), Cvoid,
-    (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64}, 
+ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
+    (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
      Ref{Float64}, Ref{Float64}, Ref{Int32}),
      stages[1], f, za, fac*norb.dtau/2.0, fac*norb.dtaumax/2.0, 1e-12, 2)
 
 # ImplicitEuler
 stages[2] = SymplecticIntegrator()
-ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "lib/libneo_orb"), Cvoid,
-    (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64}, 
+ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
+    (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
      Ref{Float64}, Ref{Float64}, Ref{Int32}),
      stages[2], f, za, fac*norb.dtau/2.0, fac*norb.dtaumax/2.0, 1e-12, 2)
 
@@ -259,12 +259,12 @@ zpl = zeros(ntimstep, 5)
 
 @time begin
     for i = 1:ntimstep
-        ccall((:__neo_orb_MOD_timestep_sympl_z, "lib/libneo_orb"), Cvoid,
-              (Ref{NeoOrb}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}), 
+        ccall((:__neo_orb_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
+              (Ref{NeoOrb}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
               norb, stages[1], f, za, ierr)
         stages[2].z = stages[1].z
-        ccall((:__neo_orb_MOD_timestep_sympl_z, "lib/libneo_orb"), Cvoid,
-              (Ref{NeoOrb}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}), 
+        ccall((:__neo_orb_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
+              (Ref{NeoOrb}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
               norb, stages[2], f, za, ierr)
         stages[1].z = stages[2].z
         zpl[i,:] = z
@@ -288,7 +288,7 @@ plot(zpl[:,1].*cos.(zpl[:,2]), zpl[:,1].*sin.(zpl[:,2]))
 # ccall((:__cut_detector_MOD_init, "lib/libneo_orb"), Cvoid,
 #        (Ref{CutDetector}, Ref{NeoOrb}, Ref{FArray1D}),
 #        cutter, norb, za)
-         
+
 # println(cutter)
 
 # @time begin

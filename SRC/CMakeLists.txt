@@ -1,5 +1,3 @@
-
-
 add_subdirectory(contrib)
 
 set(SOURCES
@@ -36,8 +34,15 @@ set(SOURCES
 )
 
 
-add_library (SIMPLE_SRC SHARED ${SOURCES})
-target_link_libraries(SIMPLE_SRC CONTRIB ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+add_library (simple SHARED ${SOURCES})
+
+if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
+	target_link_libraries(simple CONTRIB netcdf netcdff)
+else()
+	target_link_libraries(simple
+		netcdf netcdff CONTRIB ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+	)
+endif()
 
 if (ENABLE_PYTHON_INTERFACE)
     # Grab Python
