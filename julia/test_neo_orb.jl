@@ -137,7 +137,7 @@ mutable struct MultistepIntegrator
   stages::SVector{42496, Int8}  # Static 64*664 array of SymplecticIntegrators
 end
 
-mutable struct NeoOrb
+mutable struct Tracer
   fper::Float64
   dtau::Float64
   dtaumax::Float64
@@ -147,7 +147,7 @@ mutable struct NeoOrb
   integmode::Int32
   relerr::Float64
 
-  NeoOrb() = new()
+  Tracer() = new()
 end
 
 
@@ -163,7 +163,7 @@ mutable struct CutDetector
   coef::SMatrix{1, 6, Float64, 6}
   ipoi::SVector{6, Int32}
 
-  norb::NeoOrb
+  tracer::Tracer
 
 #   fper::Float64
 #   dtau::Float64
@@ -178,12 +178,14 @@ mutable struct CutDetector
   CutDetector() = new()
 end
 
-norb = NeoOrb()
+
+tracer = Tracer()
 if !@isdefined(firstrun) | firstrun == true
-      global firstrun, norb
-      ccall((:__neo_orb_MOD_init_field, "../build/libsimple"),
-      Cvoid, (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}),
-      norb, 5, 5, 3, 1)
+      global firstrun, tracer
+      # subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+      ccall((:__simple_MOD_init_field, "../build/libsimple"),
+      Cvoid, (Ref{Tracer}, Cstring, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}),
+      tracer, "../RUN/test_qh/wout_qh_8_7.nc", 5, 5, 3, 1)
       firstrun = false
 end
 
@@ -205,7 +207,7 @@ v0 = sqrt(2.0*E_kin*ev/(m_mass*p_mass))    # alpha particle velocity, cm/s
 rlarm=v0*m_mass*p_mass*c/(Z_charge*e_charge*bmod_ref) # reference gyroradius
 tau=trace_time*v0
 
-npoiper2 = 64
+npoiper2 = 128
 
 p_rmajor = cglobal((:__new_vmec_stuff_mod_MOD_rmajor, "../build/libsimple"), Float64)
 rmajor = unsafe_load(p_rmajor)
@@ -213,10 +215,11 @@ println(rmajor)
 rbig = rmajor*1.0e2
 dtaumax = 2.0*pi*rbig/npoiper2
 dtau = dtaumax
-ccall((:__neo_orb_MOD_init_params, "../build/libsimple"), Cvoid,
-      (Ref{NeoOrb}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Float64},
-       Ref{Float64}, Ref{Float64}),
-      norb, Z_charge, m_mass, E_kin, dtau, dtaumax, 1e-8)
+#subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
+ccall((:__simple_MOD_init_params, "../build/libsimple"), Cvoid,
+      (Ref{Tracer}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
+       Ref{Int32}, Ref{Float64}),
+      tracer, Z_charge, m_mass, E_kin, npoiper2, 1, 1e-13)
 
 s = [0.5]
 th = [0.0]
@@ -243,14 +246,14 @@ stages[1] = SymplecticIntegrator()
 ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
     (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
      Ref{Float64}, Ref{Float64}, Ref{Int32}),
-     stages[1], f, za, fac*norb.dtau/2.0, fac*norb.dtaumax/2.0, 1e-12, 2)
+     stages[1], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumax/2.0, 1e-12, 2)
 
 # ImplicitEuler
 stages[2] = SymplecticIntegrator()
 ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
     (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
      Ref{Float64}, Ref{Float64}, Ref{Int32}),
-     stages[2], f, za, fac*norb.dtau/2.0, fac*norb.dtaumax/2.0, 1e-12, 2)
+     stages[2], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumax/2.0, 1e-12, 2)
 
 # Integrate 10000 timesteps
 
@@ -260,12 +263,12 @@ zpl = zeros(ntimstep, 5)
 @time begin
     for i = 1:ntimstep
         ccall((:__neo_orb_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
-              (Ref{NeoOrb}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
-              norb, stages[1], f, za, ierr)
+              (Ref{Tracer}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
+              tracer, stages[1], f, za, ierr)
         stages[2].z = stages[1].z
         ccall((:__neo_orb_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
-              (Ref{NeoOrb}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
-              norb, stages[2], f, za, ierr)
+              (Ref{Tracer}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
+              tracer, stages[2], f, za, ierr)
         stages[1].z = stages[2].z
         zpl[i,:] = z
     end
@@ -286,8 +289,8 @@ plot(zpl[:,1].*cos.(zpl[:,2]), zpl[:,1].*sin.(zpl[:,2]))
 #println(cutter)
 
 # ccall((:__cut_detector_MOD_init, "lib/libneo_orb"), Cvoid,
-#        (Ref{CutDetector}, Ref{NeoOrb}, Ref{FArray1D}),
-#        cutter, norb, za)
+#        (Ref{CutDetector}, Ref{Tracer}, Ref{FArray1D}),
+#        cutter, tracer, za)
 
 # println(cutter)
 
