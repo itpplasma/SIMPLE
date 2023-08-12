@@ -2,11 +2,10 @@
 # Julia. It supports UTF-8. (╯°□°）╯︵ ┻┻
 #
 
-using Plots
-using StaticArrays
+using Plots: plot
+using StaticArrays: SVector, SMatrix
+using Printf: @printf
 import Base.show
-
-firstrun = true
 
 struct FArrayDims
     fstride::Cptrdiff_t
@@ -56,86 +55,13 @@ struct FArray2D
         )
 end
 
+
 function show(io::IO, farr::FArray1D)
     data = unsafe_wrap(Array{Float64,1}, Ptr{Float64}(farr.base_addr),
         (farr.dim.upper_bound - farr.dim.lower_bound + 1,))
     print(io, data)
 end
 
-
-mutable struct FieldCan
-    Ath::Float64
-    Aph::Float64
-    hth::Float64
-    hph::Float64
-    Bmod::Float64
-
-    dAth::SVector{3, Float64}
-    dAph::SVector{3, Float64}
-    dhth::SVector{3, Float64}
-    dhph::SVector{3, Float64}
-    dBmod::SVector{3, Float64}
-
-    # second derivatives: drdr, drdhth, drdph, dthdth, dthdph, dphdph
-    d2Ath::SVector{6, Float64}
-    d2Aph::SVector{6, Float64}
-    d2hth::SVector{6, Float64}
-    d2hph::SVector{6, Float64}
-    d2Bmod::SVector{6, Float64}
-
-    H::Float64
-    pth::Float64
-    vpar::Float64
-
-    dvpar::SVector{4, Float64}
-    dH::SVector{4, Float64}
-    dpth::SVector{4, Float64}
-
-    # order of second derivatives:
-    # d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
-    # d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
-    d2vpar::SVector{10, Float64}
-    d2H::SVector{10, Float64}
-    d2pth::SVector{10, Float64}
-
-    mu::Float64
-    ro0::Float64
-
-    FieldCan() = new()
-  end
-
-mutable struct SymplecticIntegrator
-    atol::Float64
-    rtol::Float64
-
-    z::SVector{4, Float64}
-    pthold::Float64
-
-    # Buffer for Lagrange polynomial interpolation
-    kbuf::Int32
-    kt::Int32
-    k::Int32
-    bufind::SVector{4, Int32}
-    zbuf::SMatrix{4, 16, Float64, 64}
-    coef::SMatrix{1, 4, Float64, 4}
-
-    # Timestep and variables from z0
-    ntau::Int32
-    dt::Float64
-    pabs::Float64
-
-    # Integrator mode
-    mode::Int32  # 1 = euler1, 2 = euler2, 3 = verlet
-
-    SymplecticIntegrator() = new()
-end
-
-mutable struct MultistageIntegrator
-  s::Int32
-  alpha::SVector{64, Float64}
-  beta::SVector{64, Float64}
-  stages::SVector{42496, Int8}  # Static 64*664 array of SymplecticIntegrators
-end
 
 mutable struct Tracer
   fper::Float64
@@ -147,51 +73,118 @@ mutable struct Tracer
   integmode::Int32
   relerr::Float64
 
-  f::FieldCan
-  si::SymplecticIntegrator
-  mi::MultistageIntegrator
+  #
+  # The following structs cannot be stored in-line in a mutable struct.
+  # This is why they are now inlined explicitly
+  #
+
+  ## f::FieldCan
+  field_type::Int32  # -1: testing, 0: canonical, 2: Boozer
+
+  Ath::Float64
+  Aph::Float64
+  hth::Float64
+  hph::Float64
+  Bmod::Float64
+
+  dAth::SVector{3, Float64}
+  dAph::SVector{3, Float64}
+  dhth::SVector{3, Float64}
+  dhph::SVector{3, Float64}
+  dBmod::SVector{3, Float64}
+
+  # second derivatives: drdr, drdhth, drdph, dthdth, dthdph, dphdph
+  d2Ath::SVector{6, Float64}
+  d2Aph::SVector{6, Float64}
+  d2hth::SVector{6, Float64}
+  d2hph::SVector{6, Float64}
+  d2Bmod::SVector{6, Float64}
+
+  H::Float64
+  pth::Float64
+  vpar::Float64
+
+  dvpar::SVector{4, Float64}
+  dH::SVector{4, Float64}
+  dpth::SVector{4, Float64}
+
+  # order of second derivatives:
+  # d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
+  # d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
+  d2vpar::SVector{10, Float64}
+  d2H::SVector{10, Float64}
+  d2pth::SVector{10, Float64}
+
+  mu::Float64
+  ro0::Float64
+
+
+  ## si::SymplecticIntegrator
+  atol::Float64
+  rtol::Float64
+
+  z::SVector{4, Float64}
+  pthold::Float64
+
+  # Buffer for Lagrange polynomial interpolation
+  kbuf::Int32
+  kt::Int32
+  k::Int32
+  bufind::SVector{4, Int32}
+  zbuf::SMatrix{4, 16, Float64, 64}
+  coef::SMatrix{1, 4, Float64, 4}
+
+  # Timestep and variables from z0
+  ntau::Int32
+  dt::Float64
+  pabs::Float64
+
+  # Integrator mode
+  mode::Int32  # 1 = euler1, 2 = euler2, 3 = verlet
+
+
+  ## mi::MultistageIntegrator
+  s::Int32
+  alpha::SVector{64, Float64}
+  beta::SVector{64, Float64}
+  stages::SVector{42496, Int8}  # Static 64*664 array of SymplecticIntegrators
 
   Tracer() = new()
 end
 
+# TODO
+# mutable struct CutDetector
+#   npl_half::Int32
+#   alam_prev::Float64
+#   par_inv::Float64
+#   iper::Int32
+#   itip::Int32
+#   kper::Int32
 
-mutable struct CutDetector
-  npl_half::Int32
-  alam_prev::Float64
-  par_inv::Float64
-  iper::Int32
-  itip::Int32
-  kper::Int32
+#   orb_sten::SMatrix{6, 6, Float64, 36}
+#   coef::SMatrix{1, 6, Float64, 6}
+#   ipoi::SVector{6, Int32}
 
-  orb_sten::SMatrix{6, 6, Float64, 36}
-  coef::SMatrix{1, 6, Float64, 6}
-  ipoi::SVector{6, Int32}
+#   tracer::Tracer
 
-  tracer::Tracer
+# #   fper::Float64
+# #   dtau::Float64
+# #   dtaumax::Float64
+# #   v0::Float64
+# #   n_e::Int32
+# #   n_d::Int32
+# #   integmode::Int32
+# #   relerr::Float64
+# #   firstrun::Bool
 
-#   fper::Float64
-#   dtau::Float64
-#   dtaumax::Float64
-#   v0::Float64
-#   n_e::Int32
-#   n_d::Int32
-#   integmode::Int32
-#   relerr::Float64
-#   firstrun::Bool
-
-  CutDetector() = new()
-end
+#   CutDetector() = new()
+# end
 
 
 tracer = Tracer()
-if !@isdefined(firstrun) | firstrun == true
-      global firstrun, tracer
-      # subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-      ccall((:__simple_MOD_init_field, "../build/libsimple"),
-      Cvoid, (Ref{Tracer}, Cstring, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}),
-      tracer, "wout.nc", 5, 5, 3, 1)
-      firstrun = false
-end
+ccall((:__simple_MOD_init_field, "../build/libsimple"),
+Cvoid, (Ref{Tracer}, Cstring, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}),
+tracer, "wout.nc", 3, 3, 3, 1)
 
 Z_charge = 2
 m_mass = 4
@@ -219,7 +212,7 @@ println(rmajor)
 rbig = rmajor*1.0e2
 dtaumin = 2.0*pi*rbig/npoiper2
 dtau = dtaumin
-#subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
+
 ccall((:__simple_MOD_init_params, "../build/libsimple"), Cvoid,
       (Ref{Tracer}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
        Ref{Int32}, Ref{Float64}),
@@ -234,91 +227,23 @@ lam = [0.22]
 th_c = [0.0]
 ph_c = [0.314]
 
-z0_vmec = FArray1D([0.5, 0.0, 0.314, 1.0, 0.22])
 
 ccall((:vmec_to_can_, "../build/libsimple"), Cvoid,
       (Ref{Float64}, Ref{Float64}, Ref{Float64}, Ref{Float64}, Ref{Float64}),
       s, th, ph, th_c, ph_c)
 
-z0_can = FArray1D([0.5, 0.0, 0.314, 1.0, 0.22])
+z0_can = [0.5, th_c[1], ph_c[1], 1.0, 0.22]
 
+println("VMEC coordinates:")
+println([s[1], th[1], ph[1], 1.0, lam[1]])
+println("Canonical coordinates:")
+println(z0_can)
+
+z0_can_array = FArray1D(z0_can)
 ccall((:__simple_MOD_init_integrator, "../build/libsimple"), Cvoid,
-      (Ref{Tracer}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
-       Ref{Int32}, Ref{Float64}),
-      tracer, Z_charge, m_mass, E_kin, npoiper2, 1, 1e-13)
+      (Ref{Tracer}, Ref{FArray1D}),
+      tracer, z0_can_array)
 
 ierr = 0
 
-f = FieldCan()
-
-## Multistage method
-fac = 6.0
-
-nstage = 2
-stages = Array{SymplecticIntegrator}(undef, 2)
-
-z = FArray1D([0.5, 0.0, 0.314, 1.0, 0.2])
-
-# Explicit Euler
-stages[1] = SymplecticIntegrator()
-ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
-    (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
-     Ref{Float64}, Ref{Float64}, Ref{Int32}),
-     stages[1], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumin/2.0, 1e-12, 2)
-
-# ImplicitEuler
-stages[2] = SymplecticIntegrator()
-ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
-    (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
-     Ref{Float64}, Ref{Float64}, Ref{Int32}),
-     stages[2], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumin/2.0, 1e-12, 2)
-
-# Integrate 10000 timesteps
-println("Integrating 100 timesteps")
-
-ntimstep = 100
-zpl = zeros(ntimstep, 4)
-
-@time begin
-    for i = 1:ntimstep
-        ccall((:__simple_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
-              (Ref{Tracer}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
-              tracer, stages[1], f, z, ierr)
-        stages[2].z = stages[1].z
-        ccall((:__simple_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
-              (Ref{Tracer}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
-              tracer, stages[2], f, z, ierr)
-        stages[1].z = stages[2].z
-        zpl[i,:] = z
-    end
-end
-
-plot(zpl[:,1].*cos.(zpl[:,2]), zpl[:,1].*sin.(zpl[:,2]))
-
-## Cut detection
-# println(za)
-# println(si)
-
-# ncut = 1000
-# cutter = CutDetector()
-# var_tip = zeros(6)
-# var_tipa = FArray1D(var_tip)
-# cut_type = 0
-
-#println(cutter)
-
-# ccall((:__cut_detector_MOD_init, "lib/libneo_orb"), Cvoid,
-#        (Ref{CutDetector}, Ref{Tracer}, Ref{FArray1D}),
-#        cutter, tracer, za)
-
-# println(cutter)
-
-# @time begin
-#         for i = 1:ncut
-#                 ccall((:__cut_detector_MOD_trace_to_cut, "lib/libneo_orb"), Cvoid,
-#                       (Ref{CutDetector}, Ref{FArray1D}, Ref{FArray1D}, Ref{Int32}, Ref{Int32}),
-#                       cutter, za, var_tipa, cut_type, ierr)
-#         end
-# end
-
-#%%
+@printf "B = %e\n" tracer.Bmod
