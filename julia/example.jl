@@ -130,7 +130,7 @@ mutable struct SymplecticIntegrator
     SymplecticIntegrator() = new()
 end
 
-mutable struct MultistepIntegrator
+mutable struct MultistageIntegrator
   s::Int32
   alpha::SVector{64, Float64}
   beta::SVector{64, Float64}
@@ -140,12 +140,16 @@ end
 mutable struct Tracer
   fper::Float64
   dtau::Float64
-  dtaumax::Float64
+  dtaumin::Float64
   v0::Float64
   n_e::Int32
   n_d::Int32
   integmode::Int32
   relerr::Float64
+
+  f::FieldCan
+  si::SymplecticIntegrator
+  mi::MultistageIntegrator
 
   Tracer() = new()
 end
@@ -185,7 +189,7 @@ if !@isdefined(firstrun) | firstrun == true
       # subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
       ccall((:__simple_MOD_init_field, "../build/libsimple"),
       Cvoid, (Ref{Tracer}, Cstring, Ref{Int32}, Ref{Int32}, Ref{Int32}, Ref{Int32}),
-      tracer, "../RUN/test_qh/wout_qh_8_7.nc", 5, 5, 3, 1)
+      tracer, "wout.nc", 5, 5, 3, 1)
       firstrun = false
 end
 
@@ -213,8 +217,8 @@ p_rmajor = cglobal((:__new_vmec_stuff_mod_MOD_rmajor, "../build/libsimple"), Flo
 rmajor = unsafe_load(p_rmajor)
 println(rmajor)
 rbig = rmajor*1.0e2
-dtaumax = 2.0*pi*rbig/npoiper2
-dtau = dtaumax
+dtaumin = 2.0*pi*rbig/npoiper2
+dtau = dtaumin
 #subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
 ccall((:__simple_MOD_init_params, "../build/libsimple"), Cvoid,
       (Ref{Tracer}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
@@ -226,8 +230,22 @@ th = [0.0]
 ph = [0.314]
 lam = [0.22]
 
-z = [0.5, 0.0, 0.314, 1.0, 0.22]
-za = FArray1D(z)
+
+th_c = [0.0]
+ph_c = [0.314]
+
+z0_vmec = FArray1D([0.5, 0.0, 0.314, 1.0, 0.22])
+
+ccall((:vmec_to_can_, "../build/libsimple"), Cvoid,
+      (Ref{Float64}, Ref{Float64}, Ref{Float64}, Ref{Float64}, Ref{Float64}),
+      s, th, ph, th_c, ph_c)
+
+z0_can = FArray1D([0.5, 0.0, 0.314, 1.0, 0.22])
+
+ccall((:__simple_MOD_init_integrator, "../build/libsimple"), Cvoid,
+      (Ref{Tracer}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
+       Ref{Int32}, Ref{Float64}),
+      tracer, Z_charge, m_mass, E_kin, npoiper2, 1, 1e-13)
 
 ierr = 0
 
@@ -239,36 +257,37 @@ fac = 6.0
 nstage = 2
 stages = Array{SymplecticIntegrator}(undef, 2)
 
-z[:] = [0.5, 0.0, 0.314, 1.0, 0.2]
+z = FArray1D([0.5, 0.0, 0.314, 1.0, 0.2])
 
 # Explicit Euler
 stages[1] = SymplecticIntegrator()
 ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
     (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
      Ref{Float64}, Ref{Float64}, Ref{Int32}),
-     stages[1], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumax/2.0, 1e-12, 2)
+     stages[1], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumin/2.0, 1e-12, 2)
 
 # ImplicitEuler
 stages[2] = SymplecticIntegrator()
 ccall((:__orbit_symplectic_MOD_orbit_sympl_init, "../build/libsimple"), Cvoid,
     (Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Float64},
      Ref{Float64}, Ref{Float64}, Ref{Int32}),
-     stages[2], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumax/2.0, 1e-12, 2)
+     stages[2], f, za, fac*tracer.dtau/2.0, fac*tracer.dtaumin/2.0, 1e-12, 2)
 
 # Integrate 10000 timesteps
+println("Integrating 100 timesteps")
 
-ntimstep = 10000
-zpl = zeros(ntimstep, 5)
+ntimstep = 100
+zpl = zeros(ntimstep, 4)
 
 @time begin
     for i = 1:ntimstep
-        ccall((:__neo_orb_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
+        ccall((:__simple_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
               (Ref{Tracer}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
-              tracer, stages[1], f, za, ierr)
+              tracer, stages[1], f, z, ierr)
         stages[2].z = stages[1].z
-        ccall((:__neo_orb_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
+        ccall((:__simple_MOD_timestep_sympl_z, "../build/libsimple"), Cvoid,
               (Ref{Tracer}, Ref{SymplecticIntegrator}, Ref{FieldCan}, Ref{FArray1D}, Ref{Int32}),
-              tracer, stages[2], f, za, ierr)
+              tracer, stages[2], f, z, ierr)
         stages[1].z = stages[2].z
         zpl[i,:] = z
     end
