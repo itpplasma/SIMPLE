@@ -240,10 +240,23 @@ println("Canonical coordinates:")
 println(z0_can)
 
 z0_can_array = FArray1D(z0_can)
+
+println("Before init_integrator:")
+print("dAth = ")
+println(tracer.dAth)
+@printf "B = %e\n" tracer.Bmod
+
 ccall((:__simple_MOD_init_integrator, "../build/libsimple"), Cvoid,
       (Ref{Tracer}, Ref{FArray1D}),
       tracer, z0_can_array)
 
 ierr = 0
 
+
+# This shows that Fortran can fiddle in the formally immutable SArray.
+# Since Fortran changes the contents of the stack variables,
+# this hack is required (MArray will not work).
+println("After init_integrator:")
+print("dAth = ")
+println(tracer.dAth)
 @printf "B = %e\n" tracer.Bmod
