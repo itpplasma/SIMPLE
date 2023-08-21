@@ -7,7 +7,7 @@ module nctools_module
      module procedure nc_inq_dim_1
      module procedure nc_inq_dim_2
   end interface nc_inq_dim
-  
+
   interface nc_get
      module procedure nc_get_int_0
      module procedure nc_get_int_1
@@ -16,7 +16,7 @@ module nctools_module
      module procedure nc_get_double_2
      module procedure nc_get_double_3
   end interface nc_get
-  
+
 contains
 
   subroutine nc_get_int_0(ncid, name, var)
@@ -24,7 +24,7 @@ contains
     character(len=*) :: name
     integer, intent(out) :: var
     integer :: varid
-    
+
     call nf90_check(nf90_inq_varid(ncid, name, varid))
     call nf90_check(nf90_get_var(ncid, varid, var))
   end subroutine nc_get_int_0
@@ -34,17 +34,17 @@ contains
     character(len=*) :: name
     integer, dimension(:), intent(out) :: var
     integer :: varid
-    
+
     call nf90_check(nf90_inq_varid(ncid, name, varid))
     call nf90_check(nf90_get_var(ncid, varid, var))
   end subroutine nc_get_int_1
-  
+
   subroutine nc_get_double_0(ncid, name, var)
     integer :: ncid
     character(len=*) :: name
     double precision, intent(out) :: var
     integer :: varid
-    
+
     call nf90_check(nf90_inq_varid(ncid, name, varid))
     call nf90_check(nf90_get_var(ncid, varid, var))
   end subroutine nc_get_double_0
@@ -54,7 +54,7 @@ contains
     character(len=*) :: name
     double precision, dimension(:), intent(out) :: var
     integer :: varid
-    
+
     call nf90_check(nf90_inq_varid(ncid, name, varid))
     call nf90_check(nf90_get_var(ncid, varid, var))
   end subroutine nc_get_double_1
@@ -64,7 +64,7 @@ contains
     character(len=*) :: name
     double precision, dimension(:,:), intent(out) :: var
     integer :: varid
-    
+
     call nf90_check(nf90_inq_varid(ncid, name, varid))
     call nf90_check(nf90_get_var(ncid, varid, var))
   end subroutine nc_get_double_2
@@ -74,11 +74,11 @@ contains
     character(len=*) :: name
     double precision, dimension(:,:,:), intent(out) :: var
     integer :: varid
-    
+
     call nf90_check(nf90_inq_varid(ncid, name, varid))
     call nf90_check(nf90_get_var(ncid, varid, var))
   end subroutine nc_get_double_3
-  
+
   subroutine nc_inq_dim_1(ncid, name, len)
     integer :: ncid, varid
     character(len=*)      :: name
@@ -101,20 +101,20 @@ contains
     call nf90_check(nf90_inquire_dimension(ncid, dimids(1), len = len(1)))
     call nf90_check(nf90_inquire_dimension(ncid, dimids(2), len = len(2)))
   end subroutine nc_inq_dim_2
-  
+
   subroutine nf90_check(status)
     integer, intent ( in) :: status
 
     if(status /= nf90_noerr) then
        print *, trim(nf90_strerror(status))
        ! call abort
-       stop
+       error stop
     end if
   end subroutine nf90_check
 
   subroutine nc_close(ncid)
     integer :: ncid
-    
+
     call nf90_check(nf90_close(ncid))
   end subroutine nc_close
 
