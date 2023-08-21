@@ -16,7 +16,7 @@ if (NOT CMAKE_BUILD_TYPE)
 	STRING "Choose the type of build." FORCE)
 endif()
 
-option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." OFF)
+option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." OFF)
 
 set(CMAKE_MACOSX_RPATH 1)
@@ -97,6 +97,7 @@ else()
 endif()
 
 add_subdirectory(SRC)
+include_directories("${CMAKE_BINARY_DIR}/SRC")
 
  #add_library (simple_mpi SHARED)
  #target_compile_options(simple_mpi PUBLIC -DMPI)
@@ -116,9 +117,12 @@ add_subdirectory(SRC)
 add_executable (simple.x
 	SRC/main.f90
 )
-set_source_files_properties(SRC/main.f90 PROPERTIES COMPILE_OPTIONS "-I ${CMAKE_BINARY_DIR}/SRC")
 
 target_link_libraries(simple.x PRIVATE simple)
+
+if (ENABLE_PYTHON_INTERFACE)
+	add_subdirectory(python)
+endif ()
 
 if (SIMPLE_TESTING)
     add_subdirectory(test)
