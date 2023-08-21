@@ -14,7 +14,10 @@
   if(status /= nf90_noerr) then
     print *, trim(nf90_strerror(status))
     print *, trim(netcdffile)
+    status = 1
     return
+  else
+    status = 0
   end if
 !
   call nc_inq_dim(ncid, 'lmns', lens)
