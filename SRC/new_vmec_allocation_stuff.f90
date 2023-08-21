@@ -3,13 +3,19 @@
 !
   use new_vmec_stuff_mod
   use nctools_module
-! 
+  use netcdf, only : nf90_open, NF90_NOWRITE
+!
   implicit none
 !
-  integer :: ncid
+  integer :: ncid, status
   integer, dimension(2) :: lens
 !
-  call nc_open(netcdffile, ncid)
+  status = nf90_open(netcdffile, NF90_NOWRITE, ncid)
+  if(status /= nf90_noerr) then
+    print *, trim(nf90_strerror(status))
+    print *, trim(netcdffile)
+    return
+  end if
 !
   call nc_inq_dim(ncid, 'lmns', lens)
 !

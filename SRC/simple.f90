@@ -44,7 +44,8 @@ contains
     multharm = amultharm
     self%integmode = aintegmode
 
-    call spline_vmec_data ! initialize splines for VMEC field
+    call spline_vmec_data(ierr) ! initialize splines for VMEC field
+    if(ierr /= 0) return
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
     self%fper = twopi/dble(L1i)   !<= field period
     print *, 'R0 = ', RT0, ' cm, fper = ', self%fper

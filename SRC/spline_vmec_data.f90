@@ -1,11 +1,12 @@
 !
-  subroutine spline_vmec_data
+  subroutine spline_vmec_data(status)
 !
   use new_vmec_stuff_mod
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
 !
   implicit none
 !
+  integer, intent(out) :: status
   integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
   integer :: iss,ist,isp,nrho,nheal,iunit_hs
   double precision :: twopi,cosphase,sinphase
@@ -17,7 +18,8 @@
 
   print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
 !
-  call new_allocate_vmec_stuff
+  call new_allocate_vmec_stuff(status)
+  if (status /= 0) return
 !
   call vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s,    &
               nsurfm,nstrm,kpar,torflux)
