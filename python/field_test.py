@@ -10,8 +10,6 @@ iota0 = 1.0 # constant part of rotational transform
 a = 0.5     # (equivalent) minor radius
 R0 = 1.0    # (equivalent) major radius
 
-#test
-
 class field:
     """ Model tokamak field with B ~ B0*(1-r/R0*cos(th)) """
     def evaluate(self, r, th, ph):
