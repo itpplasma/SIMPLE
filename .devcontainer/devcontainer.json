@@ -13,7 +13,13 @@
 	"settings": {},
 
 	// Add the IDs of extensions you want installed when the container is created.
-	"extensions": [],
+	"extensions": [
+		"fortran-lang.linter-gfortran",
+		"ms-python.python",
+		"ms-toolsai.jupyter",
+		"ms-python.black-formatter",
+		"julialang.language-julia"
+	],
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],

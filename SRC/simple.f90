@@ -128,7 +128,8 @@ contains
     double precision :: z(4)
 
     if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
-      stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
+      print *, 'dtau = ', dtau, ' dtaumin = ', dtaumin
+      error stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
     endif
 
     ! Initialize symplectic integrator
@@ -723,7 +724,7 @@ subroutine init_starting_points
 end subroutine init_starting_points
 
 subroutine init_starting_points_global
-  
+
   integer, parameter :: ns=1000
   integer :: ipart,is,s_idx,parts_per_s
   real :: zzg
@@ -766,7 +767,7 @@ subroutine init_starting_points_global
       else ! Should not happen (as we are not in "local mode"), however let's catch it anyway.
         r = sbeg(1)
       endif
-      
+
       call random_number(xi)
       vartheta=twopi*xi
       call random_number(xi)
