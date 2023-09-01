@@ -1,5 +1,5 @@
 #%%
-from pysimple import simple, simple_main, params as p, new_vmec_stuff_mod as stuff
+from simple import simple, simple_main, params as p, new_vmec_stuff_mod as stuff
 import numpy as np
 import matplotlib.pyplot as plt
 

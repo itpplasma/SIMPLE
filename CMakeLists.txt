@@ -132,3 +132,5 @@ target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
 if (SIMPLE_TESTING)
     add_subdirectory(test)
 endif ()
+
+add_subdirectory(python)
