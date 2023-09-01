@@ -1,5 +1,5 @@
 #%%
-from pysimple import simple, params, orbit_symplectic, vmec_to_can,\
+from simple import simple, params, orbit_symplectic, vmec_to_can,\
      can_to_vmec, vmec_to_cyl
 import numpy as np
 import matplotlib.pyplot as plt
