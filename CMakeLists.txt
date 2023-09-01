@@ -127,5 +127,3 @@ endif ()
 if (SIMPLE_TESTING)
     add_subdirectory(test)
 endif ()
-
-add_subdirectory(python)
