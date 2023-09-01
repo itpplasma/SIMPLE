@@ -57,7 +57,6 @@ endif()
 
 include_directories(
     BEFORE
-    ${CMAKE_BINARY_DIR}/SRC
     ${Python_INCLUDE_DIRS}
     ${Python_NumPy_INCLUDE_DIRS}
     ${F2PY_INCLUDE_DIR}
@@ -69,83 +68,76 @@ message(STATUS "Python numpy include dir: ${Python_NumPy_INCLUDE_DIRS}")
 message(STATUS "Python libraries: ${Python_LIBRARIES}")
 message(STATUS "Python binary output dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
-set(SOURCES_TO_WRAP
-    ${PROJECT_SOURCE_DIR}/SRC/params.f90
-    ${PROJECT_SOURCE_DIR}/SRC/field_can.f90
-    ${PROJECT_SOURCE_DIR}/SRC/orbit_symplectic.f90
-    ${PROJECT_SOURCE_DIR}/SRC/get_canonical_coordinates.f90
-    ${PROJECT_SOURCE_DIR}/SRC/canonical_coordinates_mod.f90
-    ${PROJECT_SOURCE_DIR}/SRC/spline_vmec_data.f90
-    ${PROJECT_SOURCE_DIR}/SRC/simple.f90
-    ${PROJECT_SOURCE_DIR}/SRC/bench.f90
-)
-
 set(FILES_TO_WRAP
-    ${CMAKE_BINARY_DIR}/params.f90.i
-    ${CMAKE_BINARY_DIR}/field_can.f90.i
-    ${CMAKE_BINARY_DIR}/orbit_symplectic.f90.i
-    ${CMAKE_BINARY_DIR}/get_canonical_coordinates.f90.i
-    ${CMAKE_BINARY_DIR}/canonical_coordinates_mod.f90.i
-    ${CMAKE_BINARY_DIR}/spline_vmec_data.f90.i
-    ${CMAKE_BINARY_DIR}/simple.f90.i
-    ${CMAKE_BINARY_DIR}/bench.f90.i
+    simple.f90
+    orbit_symplectic.f90
+    field_can.f90
+    get_canonical_coordinates.f90
+    params.f90
+    canonical_coordinates_mod.f90
+    spline_vmec_data.f90
+    bench.f90
 )
 
-add_custom_target(PREPROCESS
-    DEPENDS ${SOURCES_TO_WRAP}
+set(EXCLUDE_BASENAMES
+    spline_vmec_data
 )
 
-foreach (SOURCE_TO_WRAP ${SOURCES_TO_WRAP})
-get_filename_component(SOURCE_NAME ${SOURCE_TO_WRAP} NAME_WE)
-add_custom_command(
-    TARGET PREPROCESS
-    COMMAND gfortran -E -cpp
-        -o ${CMAKE_BINARY_DIR}/${SOURCE_NAME}.f90.i
-        ${SOURCE_TO_WRAP}
-    DEPENDS ${SOURCES_TO_WRAP}
-)
+foreach(file ${FILES_TO_WRAP})
+    get_filename_component(basename ${file} NAME_WE)
+    list(APPEND PREPROCESSED_SOURCES
+        ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
+    )
+    if(NOT ${basename} IN_LIST EXCLUDE_BASENAMES)
+        list(APPEND F90WRAP_OUTPUT
+            ${CMAKE_CURRENT_BINARY_DIR}/f90wrap_${basename}.f90.f90
+        )
+    endif()
 endforeach()
 
-set(F90WRAP_OUTPUT
-    f90wrap_simple.f90.f90
-    f90wrap_orbit_symplectic.f90.f90
-    f90wrap_field_can.f90.f90
-    f90wrap_get_canonical_coordinates.f90.f90
-    f90wrap_params.f90.f90
-    f90wrap_canonical_coordinates_mod.f90.f90
-    f90wrap_bench.f90.f90
-    f90wrap_toplevel.f90
-)
+list(APPEND F90WRAP_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/f90wrap_toplevel.f90)
 
-set(F2PY_MODULE_NAME "_simple")
+list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/SRC/)
+
+set(F2PY_MODULE_NAME "_pysimple")
+
 set(F2PY_MODULE_C "${F2PY_MODULE_NAME}module.c")
 set(GENERATED_MODULE_FILE "${F2PY_MODULE_NAME}.${Python_SOABI}")
 set(F2PY_WRAPPERS "${CMAKE_CURRENT_BINARY_DIR}/${F2PY_MODULE_C}")
 
-add_custom_command(
-	OUTPUT ${F90WRAP_OUTPUT} simple.py .f2py_f2cmap
+add_custom_target(F90WrapOutput)
+
+foreach (file_to_wrap ${FILES_TO_WRAP})
+    get_filename_component(basename ${file_to_wrap} NAME_WE)
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
+        COMMAND gfortran -E -cpp
+            -o ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
+            ${file_to_wrap}
+    DEPENDS ${file_to_wrap}
+)
+endforeach()
+
+add_custom_command(OUTPUT ${F90WRAP_OUTPUT}
 	COMMAND ${Python_EXECUTABLE}
         -m f90wrap
         --f90wrap
-        -m simple
-        ${FILES_TO_WRAP}
-	DEPENDS PREPROCESS
+        -m pysimple
+        ${CMAKE_CURRENT_BINARY_DIR}/*.f90.i
+        > ${CMAKE_CURRENT_BINARY_DIR}/f90wrap.log 2>&1
+	DEPENDS ${PREPROCESSED_SOURCES}
+    COMMENT "Processing preprocessed sources with f90wrap"
 )
 
-add_custom_command(
-    OUTPUT ${F2PY_WRAPPERS}
+add_custom_command(OUTPUT ${F2PY_WRAPPERS}
     COMMAND ${Python_EXECUTABLE}
         -m f90wrap
         --f2py-f90wrap
         ${F90WRAP_OUTPUT}
         -m ${F2PY_MODULE_NAME}
         --lower
-    DEPENDS PREPROCESS ${F90WRAP_OUTPUT}
-)
-
-add_custom_target(
-    pysimple
-    DEPENDS "${F2PY_MODULE_NAME}"
+        > ${CMAKE_CURRENT_BINARY_DIR}/f2py.log 2>&1
+    DEPENDS ${F90WRAP_OUTPUT}
+    COMMENT "Processing wrapped sources with f2py"
 )
 
 add_library(${F2PY_MODULE_NAME} SHARED
@@ -153,9 +145,10 @@ add_library(${F2PY_MODULE_NAME} SHARED
    ${F2PY_INCLUDE_DIR}/fortranobject.c
    ${F90WRAP_OUTPUT}
 )
-add_dependencies(${F2PY_MODULE_NAME} SIMPLE_LIB)
 
-target_link_libraries(${F2PY_MODULE_NAME} PRIVATE ${Python_LIBRARIES} SIMPLE_LIB)
+add_dependencies(${F2PY_MODULE_NAME} simple)
+
+target_link_libraries(${F2PY_MODULE_NAME} PRIVATE ${Python_LIBRARIES} simple)
 
 set_target_properties(
     ${F2PY_MODULE_NAME}
@@ -164,4 +157,18 @@ set_target_properties(
     OUTPUT_NAME "${GENERATED_MODULE_FILE}"
     SUFFIX ".so"
     LINKER_LANGUAGE C
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/pysimple.py
+    DEPENDS "${F2PY_MODULE_NAME}"
+    COMMENT "copying file"
+    COMMAND ${CMAKE_COMMAND} -E rename
+            ${CMAKE_CURRENT_BINARY_DIR}/pysimple.py
+            ${CMAKE_BINARY_DIR}/pysimple.py
+)
+
+add_custom_target(
+    pysimple ALL
+    DEPENDS ${CMAKE_BINARY_DIR}/pysimple.py
 )

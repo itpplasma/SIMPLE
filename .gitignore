@@ -18,8 +18,12 @@ RUN/
 \#*
 *.so
 *.dylib
-BUILD/*
-build/*
+BUILD
+build
+Build
+Debug
+Release
+Fast
 _*.c
 *.pyc
 python/launch*

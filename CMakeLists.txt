@@ -4,6 +4,9 @@
 cmake_minimum_required (VERSION 3.12)
 project (SIMPLE Fortran C)
 
+set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set	(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
 	Release Debug Profile Fast
 )
@@ -13,7 +16,7 @@ if (NOT CMAKE_BUILD_TYPE)
 	STRING "Choose the type of build." FORCE)
 endif()
 
-option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." OFF)
+option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." OFF)
 
 set(CMAKE_MACOSX_RPATH 1)
@@ -94,10 +97,7 @@ else()
 endif()
 
 add_subdirectory(SRC)
-
-add_library (SIMPLE_LIB INTERFACE)
-target_compile_options(SIMPLE_LIB INTERFACE -DMPI)
-target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
+include_directories("${CMAKE_BINARY_DIR}/SRC")
 
  #add_library (simple_mpi SHARED)
  #target_compile_options(simple_mpi PUBLIC -DMPI)
@@ -114,20 +114,15 @@ target_link_libraries(SIMPLE_LIB INTERFACE SIMPLE_SRC)
  #list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS SIMPLE_LIB)
  #set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
 
-if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(SIMPLE_LIB PRIVATE netcdf netcdff)
-else()
-	target_link_libraries(SIMPLE_LIB INTERFACE
-		netcdf netcdff ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
-	)
-endif()
-
 add_executable (simple.x
 	SRC/main.f90
 )
-set_source_files_properties(SRC/main.f90 PROPERTIES COMPILE_OPTIONS "-I ${CMAKE_BINARY_DIR}/SRC")
 
-target_link_libraries(simple.x PRIVATE SIMPLE_LIB)
+target_link_libraries(simple.x PRIVATE simple)
+
+if (ENABLE_PYTHON_INTERFACE)
+	add_subdirectory(python)
+endif ()
 
 if (SIMPLE_TESTING)
     add_subdirectory(test)
