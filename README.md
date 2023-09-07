@@ -47,7 +47,7 @@ The main executable is `simple.x`. As an input it takes
 
 An example input file with explanation of each parameter can be found in `examples/simple.in`. An example `wout.nc` can be obtained by
 ```bash
-wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_lowres.nc -O wout.nc
+wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc
 ```
 
 The main output is `confined_fraction.dat`, containing four columns:
