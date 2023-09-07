@@ -150,6 +150,21 @@ ax.set_ylabel('y')
 ax.set_zlabel('z')
 plt.tight_layout()
 
+# %% Same for Poincare cut
+plt.figure()
+plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
+
+plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]), 
+         np.sqrt(var_tips[0, :])*np.sin(var_tips[1, :]),
+         'o', markersize=0.5, color='tab:red')
+plt.xlabel(r'$R$')
+plt.ylabel(r'$Z$')
+plt.axis('equal')
+plt.tight_layout()
+#plt.savefig('orbit2_proj_topo.png', dpi=300)
+
+#exportfig.exporteps('orbit2_proj_topo')
+
 #%% Compute orbit in cylindrical coordinates   
 
 phase = -np.pi
@@ -274,20 +289,6 @@ plt.tight_layout()
 #plt.savefig('orbit2_proj.png', dpi=300)
 #exportfig.exporteps('orbit2_proj')
 
-# %%
-plt.figure()
-plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
-
-plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]), 
-         np.sqrt(var_tips[0, :])*np.sin(var_tips[1, :]),
-         'o', markersize=0.5, color='tab:red')
-plt.xlabel(r'$R$')
-plt.ylabel(r'$Z$')
-plt.axis('equal')
-plt.tight_layout()
-#plt.savefig('orbit2_proj_topo.png', dpi=300)
-
-#exportfig.exporteps('orbit2_proj_topo')
 
 
 # %%# %%
