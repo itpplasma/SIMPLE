@@ -9,22 +9,16 @@ Created on Wed Feb 13 12:35:03 2019
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from neo_orb_fffi import *
+from pysimple import simple, params, orbit_symplectic, vmec_to_can,\
+     can_to_vmec, vmec_to_cyl
 
 from mpl_toolkits.mplot3d import Axes3D
 
-# for QI plots
 s0 = 0.6
 th0 = 0.0
 ph0 = 0.25*np.pi
 lam = -0.4  # trapped regular
 #lam = 0.8   # passing regular
-
-# QI wrongly classified orbit
-# s0 = 0.6
-# th0 = 843.147414394473
-# ph0 = 873.438155920418
-# lam = -9.521549940109253E-002
 
 pi = 3.14159265358979
 c = 2.9979e10
@@ -38,53 +32,48 @@ Z_charge = 2
 m_mass = 4
 E_kin = 3.5e6
 trace_time = 1.0e-2
-# rbig=rlarm*bmod00
-# dphi=2.d0*pi/(L1i*npoiper)
 
 v0 = np.sqrt(2.0*E_kin*ev/(m_mass*p_mass))    # alpha particle velocity, cm/s
 rlarm = v0*m_mass*p_mass*c/(Z_charge*e_charge*bmod_ref)  # reference gyroradius
 tau = trace_time*v0
 
-libneo_orb.compile(verbose=1)
-neo_orb.load()
-new_vmec_stuff.load()
-cut_detector.load()
+# %%
+tracy = params.Tracer()
+
+simple.init_field(tracy, "wout.nc", 5, 5, 3, 1)
+simple.init_params(tracy, Z_charge, m_mass, E_kin, 256, 1, 1e-13)
 
 # %%
-neo_orb.init_field(5, 5, 3, 1)
+s = np.array(0.7)
+theta = np.array(0.0)
+varphi = np.array(0.0)
+A_phi = np.array(0.0)
+A_theta = np.array(0.0)
+dA_phi_ds = np.array(0.0)
+dA_theta_ds = np.array(0.0)
+aiota = np.array(0.0)
+alam = np.array(0.0)
+dR_ds = np.array(0.0)
+dR_dt = np.array(0.0)
+dR_dp = np.array(0.0)
+dZ_ds = np.array(0.0)
+dZ_dt = np.array(0.0)
+dZ_dp = np.array(0.0)
+dl_ds = np.array(0.0)
+dl_dt = np.array(0.0)
+dl_dp = np.array(0.0)
+Bctrvr_vartheta = np.array(0.0)
+Bctrvr_varphi = np.array(0.0)
+Bcovar_r = np.array(0.0)
+Bcovar_vartheta = np.array(0.0)
+Bcovar_varphi = np.array(0.0)
+sqg = np.array(0.0)
 # %%
-s = libneo_orb._ffi.new('double*', 0.7)
-theta = libneo_orb._ffi.new('double*', 0.0)
-varphi = libneo_orb._ffi.new('double*', 0.0)
-theta_vmec = libneo_orb._ffi.new('double*', 0.0)
-varphi_vmec = libneo_orb._ffi.new('double*', 0.0)
-A_phi = libneo_orb._ffi.new('double*', 0.0)
-A_theta = libneo_orb._ffi.new('double*', 0.0)
-dA_phi_ds = libneo_orb._ffi.new('double*', 0.0)
-dA_theta_ds = libneo_orb._ffi.new('double*', 0.0)
-aiota = libneo_orb._ffi.new('double*', 0.0)
-R = libneo_orb._ffi.new('double*', 0.0)
-Z = libneo_orb._ffi.new('double*', 0.0)
-alam = libneo_orb._ffi.new('double*', 0.0)
-dR_ds = libneo_orb._ffi.new('double*', 0.0)
-dR_dt = libneo_orb._ffi.new('double*', 0.0)
-dR_dp = libneo_orb._ffi.new('double*', 0.0)
-dZ_ds = libneo_orb._ffi.new('double*', 0.0)
-dZ_dt = libneo_orb._ffi.new('double*', 0.0)
-dZ_dp = libneo_orb._ffi.new('double*', 0.0)
-dl_ds = libneo_orb._ffi.new('double*', 0.0)
-dl_dt = libneo_orb._ffi.new('double*', 0.0)
-dl_dp = libneo_orb._ffi.new('double*', 0.0)
-Bctrvr_vartheta = libneo_orb._ffi.new('double*', 0.0)
-Bctrvr_varphi = libneo_orb._ffi.new('double*', 0.0)
-Bcovar_r = libneo_orb._ffi.new('double*', 0.0)
-Bcovar_vartheta = libneo_orb._ffi.new('double*', 0.0)
-Bcovar_varphi = libneo_orb._ffi.new('double*', 0.0)
-sqg = libneo_orb._ffi.new('double*', 0.0)
-# %%
-libneo_orb._lib.can_to_vmec_(s, theta, varphi,
-                            theta_vmec, varphi_vmec)
-print(theta_vmec[0], varphi_vmec[0])
+theta_vmec, varphi_vmec = can_to_vmec(s, theta, varphi)
+R, Z = vmec_to_cyl(s, theta_vmec, varphi_vmec)
+print("Initial canonical coordinates (s,th_c,ph_c) = ", s, theta, varphi)
+print("Initial VMEC coordinates (s,th,ph) = ", s, theta_vmec, varphi_vmec)
+print("Initial cylindrical coordinates (R,PH,Z) = ", R, varphi_vmec, Z)
 
 # %%
 npoiper2 = 128                       # interation points per field period
