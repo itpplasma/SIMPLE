@@ -17,8 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 s0 = 0.6
 th0 = 0.0
 ph0 = 0.25*np.pi
-lam = -0.4  # trapped regular
-#lam = 0.8   # passing regular
+lam = -0.4   # passing regular
 
 pi = 3.14159265358979
 c = 2.9979e10
@@ -54,7 +53,7 @@ print("Initial canonical coordinates (s,th_c,ph_c) = ", s, theta, varphi)
 print("Initial VMEC coordinates (s,th,ph) = ", s, theta_vmec, varphi_vmec)
 print("Initial cylindrical coordinates (R,PH,Z) = ", R, varphi_vmec, Z)
 
-# %%
+# %% Trace orbit and plot in "topological" RZ plane projection
 ntimstep = 10000
 
 z = np.array([s0, th0, ph0, 1.0, lam])
@@ -75,7 +74,7 @@ fig, ax = plt.subplots()
 ax.plot(zs[0,:]*np.sin(zs[1,:]), zs[0,:]*np.cos(zs[1,:]))
 
 
-# %%
+# %% Find and plot Poincare cuts of this orbit
 z = np.array([s0, th0, ph0, 1.0, lam])
 simple.init_integrator(tracy, z)
 
@@ -94,9 +93,9 @@ for k in np.arange(ncut):
 print('time elapsed: {} s'.format(time.time() - t))
 
 fig, ax = plt.subplots()
-ax.plot(var_tips[0,:]*np.sin(var_tips[1,:]), var_tips[0,:]*np.cos(var_tips[1,:]), ',')
+ax.plot(var_tips[0,:]*np.sin(var_tips[1,:]), var_tips[0,:]*np.cos(var_tips[1,:]), 'r,')
 
-#%%
+# %% Convert everything to VMEC coordinates
 
 z_vmec = np.zeros_like(zs)
 tip_vmec = np.zeros_like(var_tips)
@@ -122,8 +121,8 @@ for k in np.arange(var_tips.shape[1]):
         break
     tip_vmec[1, k], tip_vmec[2, k] = can_to_vmec(s, theta, varphi)
 
-#%% Plot orbit in canonical coordinates stretched to a torus
-#   This is not the actual geometry, but the topology is the same.
+# %% Plot orbit in canonical coordinates stretched to a torus
+#    This is not the actual geometry, but the topology is the same.
 #
 fig = plt.figure(figsize=(16, 9))
 ax = fig.add_subplot(111, projection='3d')
@@ -150,20 +149,6 @@ ax.set_ylabel('y')
 ax.set_zlabel('z')
 plt.tight_layout()
 
-# %% Same for Poincare cut
-plt.figure()
-plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
-
-plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]), 
-         np.sqrt(var_tips[0, :])*np.sin(var_tips[1, :]),
-         'o', markersize=0.5, color='tab:red')
-plt.xlabel(r'$R$')
-plt.ylabel(r'$Z$')
-plt.axis('equal')
-plt.tight_layout()
-#plt.savefig('orbit2_proj_topo.png', dpi=300)
-
-#exportfig.exporteps('orbit2_proj_topo')
 
 #%% Compute orbit in cylindrical coordinates   
 
@@ -289,6 +274,20 @@ plt.tight_layout()
 #plt.savefig('orbit2_proj.png', dpi=300)
 #exportfig.exporteps('orbit2_proj')
 
+# %% Same in topological toroidal coordinates
 
+plt.figure()
+plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
+
+plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]), 
+         np.sqrt(var_tips[0, :])*np.sin(var_tips[1, :]),
+         'o', markersize=0.5, color='tab:red')
+plt.xlabel(r'$R$')
+plt.ylabel(r'$Z$')
+plt.axis('equal')
+plt.tight_layout()
+#plt.savefig('orbit2_proj_topo.png', dpi=300)
+
+#exportfig.exporteps('orbit2_proj_topo')
 
 # %%# %%
