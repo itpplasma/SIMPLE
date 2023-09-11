@@ -4,6 +4,8 @@ Modified: 2019-03-07
 Author:   Christopher Albert <albert@alumni.tugraz.at>
 """
 
+# test
+
 from numpy import empty, nan, zeros, ones, sqrt, mod, array
 from field_test import field
 #%%
