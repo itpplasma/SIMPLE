@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from pysimple import simple, params, orbit_symplectic, cut_detector, \
     vmec_to_can, can_to_vmec, vmec_to_cyl, spline_vmec_data
 
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D  # test
 
 s0 = 0.6
 th0 = 0.0
