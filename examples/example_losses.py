@@ -1,20 +1,14 @@
 #%%
-from simple import simple, simple_main, params as p, new_vmec_stuff_mod as stuff
+from pysimple import simple, simple_main, params as p, new_vmec_stuff_mod as stuff
 import numpy as np
 import matplotlib.pyplot as plt
 
-for item in dir(p):
-    if item.startswith("__"): continue
-    try:
-        print(f'{item}: {getattr(p, item)}')
-    except:
-        print(f'{item}: NULL')
-
 stuff.multharm = 3     # Fast but inaccurate splines
 p.ntestpart = 32
-p.trace_time = 1e-3
+p.trace_time = 1e-2
 p.contr_pp = -1e10     # Trace all passing passing
 p.startmode = -1       # Manual start conditions
+p.sbeg = [0.5]         # Starting flux surface
 
 tracy = p.Tracer()
 
@@ -24,6 +18,13 @@ simple.init_field(tracy, 'wout.nc',
 print(stuff.ns_s, stuff.ns_tp, stuff.multharm, p.integmode)
 
 p.params_init()
+
+for item in dir(p):
+    if item.startswith("__"): continue
+    try:
+        print(f'{item}: {getattr(p, item)}')
+    except:
+        print(f'{item}: NULL')
 #%%
 # s, th_vmec, ph_vmec, v/v0, v_par/v
 p.zstart = np.array([
