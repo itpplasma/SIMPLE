@@ -51,7 +51,6 @@ add_link_options(${NETCDF_FLIBS})
 
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-find_package(MPI REQUIRED)
 
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
