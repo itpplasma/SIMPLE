@@ -151,8 +151,8 @@ ax.set_zlabel('z')
 plt.tight_layout()
 
 # %% Same for Poincare cut
-plt.figure()
-plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
+#plt.figure()
+#plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
 
 plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]), 
          np.sqrt(var_tips[0, :])*np.sin(var_tips[1, :]),
@@ -292,3 +292,4 @@ plt.tight_layout()
 
 
 # %%# %%
+plt.show()

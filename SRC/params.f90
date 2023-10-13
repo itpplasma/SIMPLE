@@ -33,7 +33,7 @@ module params
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
   double precision, dimension(1024) :: sbeg
   double precision :: thetabeg=0.0d0
-  double precision, dimension(:),   allocatable :: bstart,volstart
+  double precision, dimension(:),   allocatable :: bstart,volstart !where npoi is used, add a dimension at the end for sbeg
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart, zend
   double precision, dimension(:), allocatable :: confpart_trap,confpart_pass

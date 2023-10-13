@@ -614,7 +614,7 @@ subroutine init_starting_surf
 
   xstart=0.d0
   bstart=0.d0
-  volstart=0.d0
+  volstart=0.d0 !ToDo add loop for all sbeg, check dimension
 
   call integrate_mfl_can( &
     npoi,dphi,sbeg,phibeg,thetabeg, &

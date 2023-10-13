@@ -1,3 +1,4 @@
+!ToDo make module from all global things like this one
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
       subroutine elefie_can(x,derphi)
