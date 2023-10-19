@@ -433,6 +433,7 @@ module simple_main
   use params
   use binsrc_sub, only : binsrc
   use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
+  use check_orbit_type_sub, only : check_orbit_type
 
   implicit none
 
