@@ -730,6 +730,8 @@ end subroutine init_starting_points
 
 subroutine init_starting_points_global
 
+  use find_bminmax_sub, only : get_bminmax
+
   integer, parameter :: ns=1000
   integer :: ipart,is,s_idx,parts_per_s
   real :: zzg
@@ -819,6 +821,8 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
+  use find_bminmax_sub, only : get_bminmax
+
   type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart
   integer :: ierr, ierr_coll

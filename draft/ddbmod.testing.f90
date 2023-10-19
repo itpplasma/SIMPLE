@@ -51,19 +51,19 @@ if(.true.) then
 !
     if(mode_secders.eq.1) then
       d2bmod2_rr=(d2bph_rr*dA_theta_dr-d2bth_rr*dA_phi_dr-2.d0*dB_vartheta_c_dr*d2A_phi_dr2-B_vartheta_c*d3A_phi_dr3 &
-                 - 2.d0*dsqg_c_dr*dbmod2_dr-bmod2*d2sqg_rr)/sqg_c 
+                 - 2.d0*dsqg_c_dr*dbmod2_dr-bmod2*d2sqg_rr)/sqg_c
 !
       d2bmod_rr=d2bmod2_rr/twobmod-dbmod_dr**2/bmod
     elseif(mode_secders.eq.2) then
       d2bmod2_rr=(d2bph_rr*dA_theta_dr-d2bth_rr*dA_phi_dr-2.d0*dB_vartheta_c_dr*d2A_phi_dr2-B_vartheta_c*d3A_phi_dr3 &
-                 - 2.d0*dsqg_c_dr*dbmod2_dr-bmod2*d2sqg_rr)/sqg_c 
+                 - 2.d0*dsqg_c_dr*dbmod2_dr-bmod2*d2sqg_rr)/sqg_c
       d2bmod2_rt=(d2bph_rt*dA_theta_dr-d2bth_rt*dA_phi_dr-dB_vartheta_c_dt*d2A_phi_dr2                               &
-                 - dsqg_c_dr*dbmod2_dt-dsqg_c_dt*dbmod2_dr-bmod2*d2sqg_rt)/sqg_c 
+                 - dsqg_c_dr*dbmod2_dt-dsqg_c_dt*dbmod2_dr-bmod2*d2sqg_rt)/sqg_c
       d2bmod2_rp=(d2bph_rp*dA_theta_dr-d2bth_rp*dA_phi_dr-dB_vartheta_c_dp*d2A_phi_dr2                               &
-                 - dsqg_c_dr*dbmod2_dp-dsqg_c_dp*dbmod2_dr-bmod2*d2sqg_rp)/sqg_c 
-      d2bmod2_tt=(d2bph_tt*dA_theta_dr-d2bth_tt*dA_phi_dr-2.d0*dsqg_c_dt*dbmod2_dt-bmod2*d2sqg_tt)/sqg_c 
-      d2bmod2_tp=(d2bph_tp*dA_theta_dr-d2bth_tp*dA_phi_dr-dsqg_c_dt*dbmod2_dp-dsqg_c_dp*dbmod2_dt-bmod2*d2sqg_tp)/sqg_c 
-      d2bmod2_pp=(d2bph_pp*dA_theta_dr-d2bth_pp*dA_phi_dr-2.d0*dsqg_c_dp*dbmod2_dp-bmod2*d2sqg_pp)/sqg_c 
+                 - dsqg_c_dr*dbmod2_dp-dsqg_c_dp*dbmod2_dr-bmod2*d2sqg_rp)/sqg_c
+      d2bmod2_tt=(d2bph_tt*dA_theta_dr-d2bth_tt*dA_phi_dr-2.d0*dsqg_c_dt*dbmod2_dt-bmod2*d2sqg_tt)/sqg_c
+      d2bmod2_tp=(d2bph_tp*dA_theta_dr-d2bth_tp*dA_phi_dr-dsqg_c_dt*dbmod2_dp-dsqg_c_dp*dbmod2_dt-bmod2*d2sqg_tp)/sqg_c
+      d2bmod2_pp=(d2bph_pp*dA_theta_dr-d2bth_pp*dA_phi_dr-2.d0*dsqg_c_dp*dbmod2_dp-bmod2*d2sqg_pp)/sqg_c
 !
       d2bmod_rr=d2bmod2_rr/twobmod-dbmod_dr**2/bmod
       d2bmod_rt=d2bmod2_rt/twobmod-dbmod_dr*dbmod_dt/bmod
