@@ -168,6 +168,8 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 ! tested in test_magfie.f90, 2018-10-23, C. Albert <albert@alumni.tugraz.at>
 !
 
+  use get_canonical_coordinates_sub, only : splint_can_coord
+
   type(FieldCan), intent(inout) :: f
   double precision, intent(in) :: r, th_c, ph_c
   integer, intent(in) :: mode_secders

@@ -172,6 +172,8 @@
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine magfie_can(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+
+  use get_canonical_coordinates_sub, only : splint_can_coord
 !
 !
 ! Computes magnetic field module in units of the magnetic code  - bmod,

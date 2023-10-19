@@ -31,6 +31,8 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use get_canonical_coordinates_sub, only : get_canonical_coordinates
+
     ! initialize field geometry
     character(len=*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -557,6 +559,8 @@ MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 end subroutine run
 
 subroutine finalize
+  use get_canonical_coordinates_sub, only : deallocate_can_coord
+
   if (integmode >= 0) call deallocate_can_coord
 
   deallocate(times_lost, confpart_trap, confpart_pass, trap_par, &
@@ -638,7 +642,9 @@ subroutine init_starting_surf
 end subroutine init_starting_surf
 
 subroutine init_starting_points_ants(unit)
-  use parse_ants, only: process_line
+  use parse_ants, only : process_line
+  use get_canonical_coordinates_sub, only : vmec_to_can
+
   integer, intent(in) :: unit
 
   integer, parameter :: maxlen = 4096
@@ -663,6 +669,8 @@ subroutine init_starting_points_ants(unit)
 end subroutine
 
 subroutine init_starting_points
+  use get_canonical_coordinates_sub, only: can_to_vmec
+
   integer :: ipart
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
@@ -731,6 +739,7 @@ end subroutine init_starting_points
 subroutine init_starting_points_global
 
   use find_bminmax_sub, only : get_bminmax
+  use get_canonical_coordinates_sub, only: can_to_vmec
 
   integer, parameter :: ns=1000
   integer :: ipart,is,s_idx,parts_per_s
@@ -822,6 +831,7 @@ end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : get_bminmax
+  use get_canonical_coordinates_sub, only : vmec_to_can
 
   type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart

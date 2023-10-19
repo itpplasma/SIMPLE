@@ -9,6 +9,13 @@
 !$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi)
   end module exchange_get_cancoord_mod
 !
+
+module get_canonical_coordinates_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine get_canonical_coordinates
@@ -39,7 +46,6 @@
   integer :: is
   integer :: i_ctr ! for nice counting in parallel
 !
-  external rhs_cancoord
 !
 !
   ns_c=ns
@@ -1096,3 +1102,5 @@ icounter=icounter+1
 !------------------------------------------
 !
   end subroutine vmec_to_can
+
+end module get_canonical_coordinates_sub
