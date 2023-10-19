@@ -1,3 +1,9 @@
+module magfie_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -172,6 +178,8 @@
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine magfie_can(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+
+  use get_canonical_coordinates_sub, only : splint_can_coord
 !
 !
 ! Computes magnetic field module in units of the magnetic code  - bmod,
@@ -284,6 +292,7 @@
 !  Called routines: splint_boozer_coord
 !
   use vector_potentail_mod, only : torflux
+  use boozer_sub, only : splint_boozer_coord
 !
   implicit none
 !
@@ -333,3 +342,5 @@
   hcurl(3)=(B_r*bder(2)-B_vartheta_B*bder(1)+dB_vartheta_B-dB_r(2))/sqrtgbmod
 !
   end subroutine magfie_boozer
+
+  end module magfie_sub

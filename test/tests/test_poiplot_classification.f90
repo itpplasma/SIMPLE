@@ -7,6 +7,7 @@ use diag_mod, only : icounter
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
   use simple, only : init_sympl
+  use plag_coeff_sub, only : plag_coeff
 !
   implicit none
 !

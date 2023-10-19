@@ -9,6 +9,8 @@ program alpha_lifetime
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
   use simple, only : init_sympl
 use diag_mod, only : icounter
+  use binsrc_sub, only : binsrc
+  use chamb_sub, only : chamb_can
 
   implicit none
 

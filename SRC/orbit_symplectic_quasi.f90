@@ -534,6 +534,7 @@ end subroutine f_ode
 !
 subroutine orbit_timestep_rk45(ierr)
 !
+  use odeint_sub, only : odeint_allroutines
   integer, intent(out) :: ierr
   integer :: ktau
 

@@ -9,6 +9,12 @@
 !
   end module bminmax_mod
 !
+module find_bminmax_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine find_bminmax(s,bmin,bmax)
@@ -69,12 +75,13 @@
 !-----------
 !
   subroutine getbmod
+  use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
 !
   implicit none
 !
   double precision :: sqrtg
   double precision, dimension(3) :: hcovar, hctrvr, hcurl
-! 
+!
   if(isw_field_type.eq.0) then
     call magfie_can(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
   elseif(isw_field_type.eq.1) then
@@ -127,7 +134,7 @@
     call getbmod
 !
     bpp=bder(3)*bmod
-!    
+!
     x(3)=phi-hdp
 !
     call getbmod
@@ -179,3 +186,5 @@
   bmax=bmax_arr(k)*(1.d0-ws)+bmax_arr(k+1)*ws
 !
   end subroutine get_bminmax
+
+end module find_bminmax_sub

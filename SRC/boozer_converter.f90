@@ -1,3 +1,7 @@
+module boozer_sub
+  implicit none
+
+  contains
 !
   subroutine boozer_converter
 !
@@ -10,6 +14,8 @@
                                      s_delt_delp_V,s_delt_delp_B,           &
                                      ns_max,derf1,derf2,derf3,              &
                                      use_B_r, use_del_tp_B
+  use binsrc_sub, only : binsrc
+  use plag_coeff_sub, only : plag_coeff
 !
   implicit none
 !
@@ -1084,3 +1090,4 @@ icounter=icounter+1
 !
   end subroutine boozer_to_vmec
 !
+end module boozer_sub

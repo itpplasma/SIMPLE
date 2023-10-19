@@ -53,6 +53,7 @@
 !
       use parmot_mod, only : rmu,ro0
       use velo_mod,   only : isw_field_type
+      use magfie_sub, only : magfie_can, magfie_vmec,magfie_boozer
 !
       implicit none
 !
@@ -170,6 +171,8 @@
 !
       subroutine orbit_timestep_can(z,dtau,dtaumin,relerr,ierr)
 use diag_mod, only : dodiag
+use odeint_sub, only : odeint_allroutines
+use chamb_sub, only : chamb_can
 !
       implicit none
 !
@@ -253,6 +256,7 @@ if(dodiag) write (123,*) tau2,z
 !  Called routines:  magfie_vmec, magfie_can, magfie_boozer
 !
       use velo_mod,   only : isw_field_type
+      use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
 !
       double precision :: phi
       double precision, dimension(5) :: y,dery
@@ -289,11 +293,14 @@ if(dodiag) write (123,*) tau2,z
       end subroutine rhs_mflint_can
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!Integrates along a magnetic field line to generate equidistant homogeneous volumetric distribution on flux surface 
+!Integrates along a magnetic field line to generate equidistant homogeneous volumetric distribution on flux surface
       subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
                                xstart,bstart,volstart,bmod00,ierr)
 !
       use velo_mod,   only : isw_field_type
+      use odeint_sub, only : odeint_allroutines
+      use chamb_sub, only : chamb_can
+      use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
 !
       implicit none
 !
@@ -422,6 +429,8 @@ if(dodiag) write (123,*) tau2,z
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
       subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
+      use odeint_sub, only : odeint_allroutines
+      use chamb_sub, only : chamb_can
 !
       implicit none
 !

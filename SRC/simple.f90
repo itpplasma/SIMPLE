@@ -14,6 +14,8 @@ module simple
   use field_can_mod, only : FieldCan, eval_field
   use diag_mod, only : icounter
   use params, only : Tracer, idx
+  use boozer_sub, only : boozer_converter
+  use chamb_sub, only : chamb_can
 
 implicit none
 save
@@ -29,6 +31,8 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use get_canonical_coordinates_sub, only : get_canonical_coordinates
+
     ! initialize field geometry
     character(len=*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -274,6 +278,8 @@ contains
   end subroutine init
 
   subroutine trace_to_cut(self, si, f, z, var_cut, cut_type, ierr)
+    use plag_coeff_sub, only : plag_coeff
+
     type(CutDetector) :: self
     type(SymplecticIntegrator) :: si
     type(FieldCan) :: f
@@ -429,6 +435,9 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use params
+  use binsrc_sub, only : binsrc
+  use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
+  use check_orbit_type_sub, only : check_orbit_type
 
   implicit none
 
@@ -552,6 +561,8 @@ MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 end subroutine run
 
 subroutine finalize
+  use get_canonical_coordinates_sub, only : deallocate_can_coord
+
   if (integmode >= 0) call deallocate_can_coord
 
   deallocate(times_lost, confpart_trap, confpart_pass, trap_par, &
@@ -633,7 +644,9 @@ subroutine init_starting_surf
 end subroutine init_starting_surf
 
 subroutine init_starting_points_ants(unit)
-  use parse_ants, only: process_line
+  use parse_ants, only : process_line
+  use get_canonical_coordinates_sub, only : vmec_to_can
+
   integer, intent(in) :: unit
 
   integer, parameter :: maxlen = 4096
@@ -658,6 +671,8 @@ subroutine init_starting_points_ants(unit)
 end subroutine
 
 subroutine init_starting_points
+  use get_canonical_coordinates_sub, only: can_to_vmec
+
   integer :: ipart
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
@@ -724,6 +739,9 @@ subroutine init_starting_points
 end subroutine init_starting_points
 
 subroutine init_starting_points_global
+
+  use find_bminmax_sub, only : get_bminmax
+  use get_canonical_coordinates_sub, only: can_to_vmec
 
   integer, parameter :: ns=1000
   integer :: ipart,is,s_idx,parts_per_s
@@ -814,6 +832,11 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
+  use find_bminmax_sub, only : get_bminmax
+  use get_canonical_coordinates_sub, only : vmec_to_can
+  use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
+  use plag_coeff_sub, only : plag_coeff
+
   type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart
   integer :: ierr, ierr_coll
@@ -1281,18 +1304,3 @@ subroutine trace_orbit(anorb, ipart)
 !  close(unit=10000+ipart)
 end subroutine trace_orbit
 end module simple_main
-
-subroutine vmec_to_cyl(s,theta,varphi,Rcyl,Zcyl)
-  implicit none
-  double precision, intent(in) :: s,theta,varphi
-  double precision, intent(out) :: Rcyl,Zcyl
-
-  double precision :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
-                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
-
-  call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
-  R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
-
-  Rcyl = R
-  Zcyl = Z
-end subroutine vmec_to_cyl

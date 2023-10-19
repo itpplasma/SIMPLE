@@ -9,6 +9,13 @@
 !$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi)
   end module exchange_get_cancoord_mod
 !
+
+module get_canonical_coordinates_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine get_canonical_coordinates
@@ -23,6 +30,7 @@
                                         Bcovar_vartheta,Bcovar_varphi,    &
                                         onlytheta
   use new_vmec_stuff_mod, only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
+  use odeint_sub, only : odeint_allroutines
 !
   implicit none
 !
@@ -38,7 +46,6 @@
   integer :: is
   integer :: i_ctr ! for nice counting in parallel
 !
-  external rhs_cancoord
 !
 !
   ns_c=ns
@@ -1095,3 +1102,19 @@ icounter=icounter+1
 !------------------------------------------
 !
   end subroutine vmec_to_can
+
+  subroutine vmec_to_cyl(s,theta,varphi,Rcyl,Zcyl)
+    double precision, intent(in) :: s,theta,varphi
+    double precision, intent(out) :: Rcyl,Zcyl
+
+    double precision :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                        R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
+
+    call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+
+    Rcyl = R
+    Zcyl = Z
+  end subroutine vmec_to_cyl
+
+end module get_canonical_coordinates_sub

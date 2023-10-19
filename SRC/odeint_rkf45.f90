@@ -1,3 +1,9 @@
+module odeint_sub
+
+implicit none
+
+contains
+
 subroutine odeint_allroutines(y, nvar, x1, x2, eps, derivs)
     implicit none
 
@@ -27,3 +33,5 @@ subroutine odeint_allroutines(y, nvar, x1, x2, eps, derivs)
     endif
 
 end subroutine odeint_allroutines
+
+end module odeint_sub

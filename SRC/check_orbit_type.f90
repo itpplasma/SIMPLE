@@ -9,6 +9,12 @@
   !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs)
   end module detect_oneline_mod
 !
+module check_orbit_type_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine check_orbit_type(nturns,nfp,fpr_in,ideal,ijpar,ierr)
@@ -164,3 +170,4 @@
 !
   end subroutine check_recurs
 !
+end module check_orbit_type_sub

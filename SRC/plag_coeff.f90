@@ -1,3 +1,9 @@
+module plag_coeff_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   SUBROUTINE plag_coeff(npoi,nder,x,xp,coef)
@@ -58,3 +64,4 @@
     RETURN
   END SUBROUTINE plag_coeff
 
+end module plag_coeff_sub

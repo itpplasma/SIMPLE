@@ -146,6 +146,8 @@ subroutine cleanup_bench()
 end subroutine cleanup_bench
 
 subroutine test_cuts(nplagr)
+    use plag_coeff_sub, only : plag_coeff
+
     integer, intent(in) :: nplagr
     integer :: itip
     double precision :: vpar_old, z(4)

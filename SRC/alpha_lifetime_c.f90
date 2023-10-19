@@ -4,6 +4,8 @@ program alpha_lifetime_c
   use parmot_mod, only : rmu,ro0
   use velo_mod,   only : isw_field_type
 use diag_mod, only : dodiag
+  use binsrc_sub , only : binsrc
+  use chamb_sub, only : chamb_can
 !
   implicit none
 !
