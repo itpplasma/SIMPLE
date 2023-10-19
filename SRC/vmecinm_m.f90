@@ -36,7 +36,7 @@
   subroutine vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s, &
                     nsurfb,nstrb,kparb,flux)
 !
-  use new_vmec_stuff_mod, only : netcdffile, vmec_B_scale, vmec_RZ_scale
+  use new_vmec_stuff_mod, only : netcdffile, vmec_B_scale, vmec_RZ_scale, rmajor
   use nctools_module
 !
   implicit none
@@ -103,6 +103,8 @@
   almns(:,kparb) = lmns(:,kparb) &
   + 0.5d0*(lmns(:,kparb)-lmns(:,kparb-1))
 !
+! Fallback if rmajor defined by volume is not given
+  if (rmajor == 0d0) rmajor = rmnc(1,0)
   rmnc=rmnc*fac_r
   zmnc=zmnc*fac_r
   rmns=rmns*fac_r
