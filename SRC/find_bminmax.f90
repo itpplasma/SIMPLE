@@ -75,6 +75,7 @@ contains
 !-----------
 !
   subroutine getbmod
+  use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
 !
   implicit none
 !

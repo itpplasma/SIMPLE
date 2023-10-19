@@ -832,6 +832,7 @@ end subroutine init_starting_points_global
 subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : get_bminmax
   use get_canonical_coordinates_sub, only : vmec_to_can
+  use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
 
   type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart

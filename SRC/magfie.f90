@@ -1,3 +1,9 @@
+module magfie_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -336,3 +342,5 @@
   hcurl(3)=(B_r*bder(2)-B_vartheta_B*bder(1)+dB_vartheta_B-dB_r(2))/sqrtgbmod
 !
   end subroutine magfie_boozer
+
+  end module magfie_sub
