@@ -1,6 +1,7 @@
 module field_can_mod
 
 use diag_mod, only : icounter
+use boozer_sub, only : splint_boozer_coord
 
 implicit none
 

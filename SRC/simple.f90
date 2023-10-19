@@ -14,6 +14,7 @@ module simple
   use field_can_mod, only : FieldCan, eval_field
   use diag_mod, only : icounter
   use params, only : Tracer, idx
+  use boozer_sub, only : boozer_converter
 
 implicit none
 save
@@ -430,6 +431,7 @@ module simple_main
   use collis_alp, only : loacol_alpha, stost
   use params
   use binsrc_sub, only : binsrc
+  use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
 
   implicit none
 

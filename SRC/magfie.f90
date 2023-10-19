@@ -284,6 +284,7 @@
 !  Called routines: splint_boozer_coord
 !
   use vector_potentail_mod, only : torflux
+  use boozer_sub, only : splint_boozer_coord
 !
   implicit none
 !

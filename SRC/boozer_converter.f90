@@ -1,3 +1,7 @@
+module boozer_sub
+  implicit none
+
+  contains
 !
   subroutine boozer_converter
 !
@@ -1085,3 +1089,4 @@ icounter=icounter+1
 !
   end subroutine boozer_to_vmec
 !
+end module boozer_sub
