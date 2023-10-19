@@ -15,6 +15,7 @@ module simple
   use diag_mod, only : icounter
   use params, only : Tracer, idx
   use boozer_sub, only : boozer_converter
+  use chamb_sub, only : chamb_can
 
 implicit none
 save

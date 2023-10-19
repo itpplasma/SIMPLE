@@ -171,6 +171,7 @@
       subroutine orbit_timestep_can(z,dtau,dtaumin,relerr,ierr)
 use diag_mod, only : dodiag
 use odeint_sub, only : odeint_allroutines
+use chamb_sub, only : chamb_can
 !
       implicit none
 !
@@ -296,6 +297,7 @@ if(dodiag) write (123,*) tau2,z
 !
       use velo_mod,   only : isw_field_type
       use odeint_sub, only : odeint_allroutines
+      use chamb_sub, only : chamb_can
 !
       implicit none
 !
@@ -425,6 +427,7 @@ if(dodiag) write (123,*) tau2,z
 !
       subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
       use odeint_sub, only : odeint_allroutines
+      use chamb_sub, only : chamb_can
 !
       implicit none
 !
