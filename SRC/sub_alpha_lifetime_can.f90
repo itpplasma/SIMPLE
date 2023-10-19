@@ -1,3 +1,9 @@
+module alpha_lifetime_sub
+
+implicit none
+
+contains
+
 !ToDo make module from all global things like this one
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -185,8 +191,6 @@ use chamb_sub, only : chamb_can
       double precision, dimension(ndim) :: z
       double precision :: relerr
 !
-      external velo_can
-!
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
         print *,'orbit_timestep: number of steps exceeds nstepmax'
@@ -317,8 +321,6 @@ if(dodiag) write (123,*) tau2,z
       double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
 !
-      external :: rhs_mflint_can
-!
       ierr=0
 !
       phi=phibeg
@@ -444,8 +446,6 @@ if(dodiag) write (123,*) tau2,z
 !
       double precision, dimension(2)    :: y
       double precision, dimension(ndim) :: z
-!
-      external velo_can,velo_axis
 !
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
@@ -576,3 +576,4 @@ if(dodiag) write (123,*) tau2,z
       end subroutine orbit_timestep_axis
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+end module alpha_lifetime_sub

@@ -11,6 +11,7 @@ program alpha_lifetime
 use diag_mod, only : icounter
   use binsrc_sub, only : binsrc
   use chamb_sub, only : chamb_can
+  use alpha_lifetime_sub, only : integrate_mfl_can, orbit_timestep_axis
 
   implicit none
 
