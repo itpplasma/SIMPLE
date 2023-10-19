@@ -1103,4 +1103,18 @@ icounter=icounter+1
 !
   end subroutine vmec_to_can
 
+  subroutine vmec_to_cyl(s,theta,varphi,Rcyl,Zcyl)
+    double precision, intent(in) :: s,theta,varphi
+    double precision, intent(out) :: Rcyl,Zcyl
+
+    double precision :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+                        R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
+
+    call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+
+    Rcyl = R
+    Zcyl = Z
+  end subroutine vmec_to_cyl
+
 end module get_canonical_coordinates_sub
