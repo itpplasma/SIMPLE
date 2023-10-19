@@ -23,6 +23,7 @@
                                         Bcovar_vartheta,Bcovar_varphi,    &
                                         onlytheta
   use new_vmec_stuff_mod, only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
+  use odeint_sub, only : odeint_allroutines
 !
   implicit none
 !
