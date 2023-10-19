@@ -184,6 +184,8 @@ contains
   end subroutine timestep
 
   subroutine timestep_z(self, z, ierr)
+    use alpha_lifetime_sub, only : orbit_timestep_axis
+
     type(Tracer), intent(inout) :: self
     double precision, intent(inout) :: z(:)
     integer, intent(out) :: ierr
@@ -622,13 +624,14 @@ subroutine write_output
 end subroutine write_output
 
 subroutine init_starting_surf
+  use alpha_lifetime_sub, only : integrate_mfl_can
 
   xstart=0.d0
   bstart=0.d0
   volstart=0.d0 !ToDo add loop for all sbeg, check dimension
 
   call integrate_mfl_can( &
-    npoi,dphi,sbeg,phibeg,thetabeg, &
+    npoi,dphi,sbeg(1),phibeg,thetabeg, &
     xstart,bstart,volstart,bmod00,ierr)
 
   if(ierr.ne.0) then
@@ -836,6 +839,7 @@ subroutine trace_orbit(anorb, ipart)
   use get_canonical_coordinates_sub, only : vmec_to_can
   use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
   use plag_coeff_sub, only : plag_coeff
+  use alpha_lifetime_sub, only : orbit_timestep_axis
 
   type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart

@@ -6,6 +6,7 @@ program alpha_lifetime_c
 use diag_mod, only : dodiag
   use binsrc_sub , only : binsrc
   use chamb_sub, only : chamb_can
+  use alpha_lifetime_sub, only : integrate_mfl_can, orbit_timestep_axis
 !
   implicit none
 !
@@ -87,7 +88,7 @@ use diag_mod, only : dodiag
 !
   call spline_vmec_data
 !
-  call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) 
+  call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)
 !
   call get_canonical_coordinates
 !
@@ -153,11 +154,11 @@ use diag_mod, only : dodiag
 ! 13.02.2013
   write (1,*) 'contr_pp =', contr_pp
 ! 13.02.2013 end
-! 22.09.2013 
+! 22.09.2013
   write (1,*) 'n_e = ',n_e
   write (1,*) 'n_d = ',n_d
 ! 22.09.2013 end
-! 26.09.2013 
+! 26.09.2013
 !<=2017  write (1,*) 'n_b = ',n_b
   write (1,*) 'ns_s = ',ns_s
   write (1,*) 'ns_tp = ',ns_tp
@@ -254,7 +255,7 @@ print *,ipart,' / ',ntestpart
     xi=zzg()
 !
     call binsrc(volstart,1,npoi,xi,i)
-! 14.04.2013 
+! 14.04.2013
   ibins=i
 ! 14.04.2013 end
 ! coordinates: z(1) = R, z(2) = phi, z(3) = Z
@@ -334,7 +335,7 @@ if(ipart.eq.15.and.i.eq.7633) dodiag=.true.
   close(3)
   confpart_pass=confpart_pass/ntestpart
   confpart_trap=confpart_trap/ntestpart
-! 
+!
   open(1,file='confined_fraction.dat')
   do i=1,ntimstep
     write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart

@@ -1,4 +1,5 @@
   subroutine testing
+  use alpha_lifetime_sub, only : velo_axis
 !
   implicit real(8) (a-h,o-z),integer(i-n)
 !
