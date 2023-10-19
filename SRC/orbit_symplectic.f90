@@ -57,6 +57,8 @@ contains
 !
 subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
 !
+  use plag_coeff_sub, only : plag_coeff
+
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   double precision, intent(in) :: z(:)

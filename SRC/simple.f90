@@ -278,6 +278,8 @@ contains
   end subroutine init
 
   subroutine trace_to_cut(self, si, f, z, var_cut, cut_type, ierr)
+    use plag_coeff_sub, only : plag_coeff
+
     type(CutDetector) :: self
     type(SymplecticIntegrator) :: si
     type(FieldCan) :: f
@@ -833,6 +835,7 @@ subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : get_bminmax
   use get_canonical_coordinates_sub, only : vmec_to_can
   use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
+  use plag_coeff_sub, only : plag_coeff
 
   type(Tracer), intent(inout) :: anorb
   integer, intent(in) :: ipart

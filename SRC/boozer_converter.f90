@@ -15,6 +15,7 @@ module boozer_sub
                                      ns_max,derf1,derf2,derf3,              &
                                      use_B_r, use_del_tp_B
   use binsrc_sub, only : binsrc
+  use plag_coeff_sub, only : plag_coeff
 !
   implicit none
 !
