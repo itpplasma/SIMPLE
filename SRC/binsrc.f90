@@ -1,3 +1,9 @@
+module binsrc_sub
+
+implicit none
+
+contains
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine binsrc(p,nmin,nmax,xi,i)
@@ -34,3 +40,4 @@
   return
   end
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+end module binsrc_sub

@@ -429,6 +429,7 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use params
+  use binsrc_sub, only : binsrc
 
   implicit none
 

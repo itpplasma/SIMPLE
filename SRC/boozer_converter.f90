@@ -10,6 +10,7 @@
                                      s_delt_delp_V,s_delt_delp_B,           &
                                      ns_max,derf1,derf2,derf3,              &
                                      use_B_r, use_del_tp_B
+  use binsrc_sub, only : binsrc
 !
   implicit none
 !
