@@ -122,8 +122,8 @@ contains
 
     return
 
-666 print *, iomsg
-    stop
+    666 print *, iomsg
+    error stop
   end subroutine read_config
 
 
@@ -247,8 +247,10 @@ contains
 
     return
 
-    666 stop iostat
-    667 stop iostat
+    666 print *, iostat
+    error stop
+    667 print *, iostat
+    error stop
   end subroutine params_init
 
   subroutine sort_idx(idx_arr, N)
