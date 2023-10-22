@@ -62,7 +62,7 @@ message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
-add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
+add_compile_options(-cpp)
 add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
 #add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-std=f2008>)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)

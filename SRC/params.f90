@@ -122,7 +122,8 @@ contains
 
     return
 
-    666 stop iomsg
+666 print *, iomsg
+    stop
   end subroutine read_config
 
 
