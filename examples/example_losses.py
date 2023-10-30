@@ -3,15 +3,16 @@ from pysimple import simple, simple_main, params as p, new_vmec_stuff_mod as stu
 import numpy as np
 import matplotlib.pyplot as plt
 
-nth = 5
-nph = 5
+nth = 16
+nph = 16
 
 stuff.multharm = 5     # Fast but inaccurate splines
 p.ntestpart = nth*nph
-p.trace_time = 1e-2
+p.npoiper2 = 128
+p.trace_time = 1e-3
 p.contr_pp = -1e10     # Trace all passing passing
 p.startmode = -1       # Manual start conditions
-p.sbeg = [0.4]         # Starting flux surface
+p.sbeg = [0.6]         # Starting flux surface
 
 tracy = p.Tracer()
 
@@ -32,9 +33,10 @@ for item in dir(p):
 # s, th_vmec, ph_vmec, v/v0, v_par/v
 p.zstart[0,:] = p.sbeg[0]
 TH, PH = np.meshgrid(np.linspace(0,2*np.pi,nth+1)[:-1], np.linspace(0,2*np.pi,nph+1)[:-1])  # TODO: th and phi check order
-p.zstart[2, :] = TH.flatten()
-p.zstart[3,:] = PH.flatten() 
-p.zstart[4, :] = 0.0
+p.zstart[1,:] = TH.flatten()
+p.zstart[2,:] = PH.flatten() 
+p.zstart[3,:] = 1.0  # p/p0 
+p.zstart[4,:] = 0.0  # v_par/v0
 #%%
 simple_main.run(tracy)
 
@@ -44,14 +46,14 @@ t = np.linspace(p.dtau/p.v0, p.trace_time, p.ntimstep)
 
 plt.figure()
 plt.semilogx(t, p.confpart_pass + p.confpart_trap)
-plt.xlim([1e-4, p.trace_time])
+plt.xlim([1e-5, p.trace_time])
 plt.xlabel('time')
 plt.ylabel('confined fraction')
 
 plt.figure()
 condi = np.logical_and(p.times_lost > 0, p.times_lost < p.trace_time)
 plt.semilogx(p.times_lost[condi], p.perp_inv[condi], 'x')
-plt.xlim([1e-4, p.trace_time])
+plt.xlim([1e-5, p.trace_time])
 plt.xlabel('loss time')
 plt.ylabel('perpendicular invariant')
 plt.show()
