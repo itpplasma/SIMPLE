@@ -13,11 +13,14 @@ simple.init_params(tracy, 2, 4, 3.5e6, 256, 1, 1e-13)
 #%%
 ns = 3
 nth = 64
-nph = 3
+nph = 1
+
 
 s = np.linspace(0, 1, ns)
 th = np.arange(nth)*2*np.pi/nth
 ph = np.arange(nph)*2*np.pi/nph
+
+S, TH = np.meshgrid(s, th)
 
 x = []
 for ks in np.arange(ns):
@@ -28,4 +31,10 @@ x = np.array(x)
 
 plt.figure()
 plt.plot(x[:, 0], x[:, 1], 'o')
+# %%
+import scipy as sp
+
+fit = sp.interpolate.bisplrep(S.flatten(), TH.flatten(),
+                              x[:, 0].T)
+
 # %%
