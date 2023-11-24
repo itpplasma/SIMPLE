@@ -3,7 +3,8 @@ from pysimple import simple, params, orbit_symplectic
 from pysimple import get_canonical_coordinates_sub as coord
 from pysimple import splint_vmec_data
 from pysimple import magfie_sub
-from magfie_sub import magfie_vmec
+
+magfie_vmec = magfie_sub.magfie_vmec
 
 import numpy as np
 import matplotlib.pyplot as plt
