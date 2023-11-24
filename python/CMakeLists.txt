@@ -77,6 +77,7 @@ set(FILES_TO_WRAP
     canonical_coordinates_mod.f90
     spline_vmec_data.f90
     bench.f90
+    magfie.f90
 )
 
 set(EXCLUDE_BASENAMES

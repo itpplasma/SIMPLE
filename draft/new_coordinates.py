@@ -2,6 +2,8 @@
 from pysimple import simple, params, orbit_symplectic
 from pysimple import get_canonical_coordinates_sub as coord
 from pysimple import splint_vmec_data
+from pysimple import magfie_sub
+from magfie_sub import magfie_vmec
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -35,6 +37,9 @@ for ks in np.arange(ns):
             R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, \
                 dl_ds,dl_dt,dl_dp = splint_vmec_data(
                     s[ks], th[kth], ph[kph])
+
+            bmod,sqrtg,bder,hcovar,hctrvr,hcurl = magfie_vmec(
+                [s[ks], th[kth], ph[kph]])
 
             k = k+1
 x = np.array(x)
