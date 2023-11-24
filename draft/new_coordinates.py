@@ -1,6 +1,7 @@
 #%%
 from pysimple import simple, params, orbit_symplectic
 from pysimple import get_canonical_coordinates_sub as coord
+from pysimple import splint_vmec_data
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,15 +30,16 @@ for ks in np.arange(ns):
         for kph in np.arange(nph):
             x[k, :2] = coord.vmec_to_cyl(s[ks], th[kth], ph[kph])
             x[k, 2] = ph[kph]
+
+            A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota, \
+            R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, \
+                dl_ds,dl_dt,dl_dp = splint_vmec_data(
+                    s[ks], th[kth], ph[kph])
+
             k = k+1
 x = np.array(x)
 
 plt.figure()
 plt.plot(x[:, 0], x[:, 1], 'o')
-# %%
-import scipy as sp
-
-fit = sp.interpolate.bisplrep(S.flatten(), TH.flatten(),
-                              x[:, 0].T)
 
 # %%
