@@ -64,35 +64,34 @@ scatter(x[:, 1], x[:, 2], st=:scatter, aspect_ratio=:equal,
 
 using BSplineKit
 using LinearAlgebra
-f(x, y) = 2.0 + sinpi(x) * cospi(y)
 
-xs = 0:0.1:1
-ys = 0:0.1:2
-fdata = f.(xs, ys')
+function fit_spline2D(fdata)
+    ord = BSplineOrder(6)  # quintic splines
 
-ord = BSplineOrder(6)  # quintic splines
+    # Create B-spline knots based on interpolation points (uses an internal function)
+    ts_x = SplineInterpolations.make_knots(xs, ord, nothing)
+    ts_y = SplineInterpolations.make_knots(ys, ord, nothing)
 
-# Create B-spline knots based on interpolation points (uses an internal function)
-ts_x = SplineInterpolations.make_knots(xs, ord, nothing)
-ts_y = SplineInterpolations.make_knots(ys, ord, nothing)
+    # Create B-spline bases
+    Bx = BSplineBasis(ord, ts_x; augment = Val(false))
+    By = BSplineBasis(ord, ts_y; augment = Val(false))
 
-# Create B-spline bases
-Bx = BSplineBasis(ord, ts_x; augment = Val(false))
-By = BSplineBasis(ord, ts_y; augment = Val(false))
+    # Create and factorise interpolation matrices
+    Cx = lu!(collocation_matrix(Bx, xs))
+    Cy = lu!(collocation_matrix(By, ys))
 
-# Create and factorise interpolation matrices
-Cx = lu!(collocation_matrix(Bx, xs))
-Cy = lu!(collocation_matrix(By, ys))
+    # 2D B-spline coefficients (output)
+    coefs = similar(fdata)
 
-# 2D B-spline coefficients (output)
-coefs = similar(fdata)
+    # Solve linear systems
+    for j ∈ eachindex(ys)
+        @views ldiv!(coefs[:, j], Cx, fdata[:, j])
+    end
+    for i ∈ eachindex(xs)
+        @views ldiv!(Cy, coefs[i, :])
+    end
 
-# Solve linear systems
-for j ∈ eachindex(ys)
-    @views ldiv!(coefs[:, j], Cx, fdata[:, j])
-end
-for i ∈ eachindex(xs)
-    @views ldiv!(Cy, coefs[i, :])
+    return coefs
 end
 
 # Evaluate 2D (tensor product) spline at point (x, y).
@@ -111,6 +110,15 @@ function eval_spline2D(coefs::AbstractMatrix, (Bx, By), (x, y))
     val
 end
 
+
+f(x, y) = 2.0 + sinpi(x) * cospi(y)
+
+xs = 0:0.1:1
+ys = 0:0.1:2
+fdata = f.(xs, ys')
+
+coefs = spline2D(fdata)
+
 # Verification: evaluate 2D spline at data points
 for m ∈ eachindex(ys), n ∈ eachindex(xs)
     x = xs[n]
@@ -119,3 +127,7 @@ for m ∈ eachindex(ys), n ∈ eachindex(xs)
     fval = fdata[n, m]
     @assert val ≈ fval  # check that the value is correct
 end
+
+# Plot
+using Plots
+plot(fdata, st = :surface, color = :viridis, legend = false)
