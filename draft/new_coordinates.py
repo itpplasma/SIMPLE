@@ -27,6 +27,12 @@ ph = np.arange(nph)*2*np.pi/nph
 S, TH = np.meshgrid(s, th)
 
 x = np.zeros((ns*nth*nph, 3))
+
+bder = np.zeros(3)
+hcovar = np.zeros(3)
+hctrvr = np.zeros(3)
+hcurl = np.zeros(3)
+
 k = 0
 for ks in np.arange(ns):
     for kth in np.arange(nth):
@@ -39,8 +45,8 @@ for ks in np.arange(ns):
                 dl_ds,dl_dt,dl_dp = splint_vmec_data(
                     s[ks], th[kth], ph[kph])
 
-            bmod,sqrtg,bder,hcovar,hctrvr,hcurl = magfie_vmec(
-                [s[ks], th[kth], ph[kph]])
+            bmod,sqrtg = magfie_vmec(
+                [s[ks], th[kth], ph[kph]],bder,hcovar,hctrvr,hcurl)
 
             k = k+1
 x = np.array(x)
