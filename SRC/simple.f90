@@ -584,15 +584,22 @@ end subroutine finalize
 
 subroutine write_output
 
-  double precision :: times_lost_sum
+  integer :: num_lost
+  double precision :: inverse_times_lost_sum
 
-  open(1,file='times_lost.dat',recl=1024) !do first to get avg. time_lost
-  times_lost_sum = 0
+  open(1,file='times_lost.dat',recl=1024)
+  num_lost = 0
+  inverse_times_lost_sum = 0.0d0
   do i=1,ntestpart
     write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
-    times_lost_sum = times_lost_sum + times_lost(i)
+    if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
+      num_lost = num_lost + 1
+      inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
+    end if
   enddo
-  write(1,*) "<1/t_lost> = ", ntestpart/times_lost_sum !1.0/(times_lost_sum/ntestpart)
+  close(1)
+  open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
+  write(1,*) inverse_times_lost_sum/num_lost
   close(1)
 
   open(1,file='confined_fraction.dat',recl=1024)
@@ -607,8 +614,6 @@ subroutine write_output
     write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo
 #endif
-
-  write(1,*) "<1/t_lost> = ", ntestpart/times_lost_sum !1.0/(times_lost_sum/ntestpart)
   close(1)
 
   open(1,file='class_parts.dat',recl=1024)
