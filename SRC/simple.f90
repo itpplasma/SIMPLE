@@ -1299,7 +1299,16 @@ subroutine trace_orbit(anorb, ipart)
       confpart_trap(it)=confpart_trap(it)+1.d0
     endif
   enddo
+
   zend(:,ipart) = z
+  if(isw_field_type.eq.0) then
+    ! TODO not implemented yet, need to add can_to_vmec
+    ! call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
+    zend(2,ipart) = -1d10
+    zend(3,ipart) = -1d10
+  elseif(isw_field_type.eq.2) then
+    call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
+  endif
   times_lost(ipart) = kt*dtaumin/v0
   !$omp critical
   deallocate(zpoipl_tip, zpoipl_per)
