@@ -17,7 +17,7 @@ def doplot_inner(prompt, regular, stochastic, bminmax, outfile, arrows):
     jpmin=bmin/bmax
     print("Minimum J_perp: ", jpmin)
 
-    plt.figure(figsize=(3,3))
+    plt.figure(figsize=(5,4))
     plt.imshow(cla1.T, origin='lower', extent=[0,1,0,1], aspect='auto',
         vmin=-1.0, vmax=1.0, clim=(-1.0,1.0))
     plt.plot(bminmax[:,0],bmin/bminmax[:,1],'k')
@@ -28,11 +28,10 @@ def doplot_inner(prompt, regular, stochastic, bminmax, outfile, arrows):
             head_width=0.01, head_length=0.04, ec='w', fc='w')
     plt.xticks([0,.25,.5,.75,1])
     plt.ylim(jpmin, 1)
-    plt.xlabel('$s$')
-    plt.ylabel('$J_\perp$')
+    plt.xlabel('Normalized toroidal flux $s$')
+    plt.ylabel('Perpendicular invariant $J_\perp$')
 
     plt.tight_layout()
-    plt.savefig(outfile)
 
 def doplot(basedir, outfile1, outfile2, arrows):
     # J_parallel regular/chaotic classification
@@ -48,8 +47,17 @@ def doplot(basedir, outfile1, outfile2, arrows):
     bminmax = np.loadtxt(os.path.join(basedir, 'bminmax.dat'))
 
     doplot_inner(prompt1, regular1, stochastic1, bminmax, outfile1, [])
-    doplot_inner(prompt2, regular2, stochastic2, bminmax, outfile2,arrows)
+    plt.title(r'$J_\parallel$ classifier')
+    cb = plt.colorbar()
+    cb.set_ticks([-1, 0, 1])
+    cb.set_ticklabels(['Prompt losses', 'Non-ideal', 'Prompt'])
+    plt.savefig(outfile1)
+    doplot_inner(prompt2, regular2, stochastic2, bminmax, outfile2, arrows)
+    plt.title('Topological classifier')
+    # Set colorbar tick labels
+    cb = plt.colorbar()
+    cb.set_ticks([-1, 0, 1])
+    cb.set_ticklabels(['Prompt losses', 'Non-ideal', 'Ideal'])
+    plt.savefig(outfile2)
 
-
-#doplot('reference/QH_Drevlak/RUN_CLASS', 'class_jpar.pdf', 'class_ideal.pdf', [])
 doplot('.', 'class_jpar.pdf', 'class_ideal.pdf', [])
