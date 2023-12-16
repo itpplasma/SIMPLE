@@ -1,8 +1,8 @@
 &config
 notrace_passing = 1      ! skip tracing passing prts if notrace_passing=1
 ntestpart = 1000         ! number of test particles
-sbeg = 0.6d0, 0.7d0     ! starting s (normalzed toroidal flux) for particles. The particles will be distributed equally along these flux surfaces. If size(sbeg)==0, (not yet equally) distributed in volume.
-contr_pp = -1.0d0        ! control of passing particle fraction
+num_surf = 0             ! number of start surfaces, start points everywhere if 0
+sbeg = 0.2
 netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
 isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
 trace_time = 1.5d-1
