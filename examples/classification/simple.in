@@ -1,9 +1,9 @@
 &config
 notrace_passing = 1      ! skip tracing passing prts if notrace_passing=1
-ntestpart = 65536        ! number of test particles
+ntestpart = 4096        ! number of test particles
 num_surf = 0             ! number of start surfaces, start points everywhere if 0
 sbeg = 0.2
-netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
+netcdffile = 'wout_qh_8_7.nc'   ! name of VMEC file in NETCDF format
 isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
 trace_time = 1.5d-2
 tcut = 1d-2              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
