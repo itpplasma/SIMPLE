@@ -966,11 +966,7 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
-  if(1 < num_surf) then
-!
-    call get_bminmax(z(1),bmin,bmax)
-!
-  endif
+  call get_bminmax(z(1),bmin,bmax)
 !
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
