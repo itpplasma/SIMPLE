@@ -88,7 +88,7 @@ module params
   double precision, dimension(:), allocatable :: &
     confpart_trap_glob, confpart_pass_glob
 #endif
-  integer :: batch_size=10000
+  integer :: batch_size=2000000000  ! Initialize large so batch mode is not default
   integer :: ran_seed=12345
   integer :: num_surf=1
   logical :: reuse_batch =.False.
