@@ -21,4 +21,4 @@ postprocess_class.x: postprocess_class.f90
 	$(FC) $(FFLAGS) -o postprocess_class.x postprocess_class.f90
 
 clean:
-	rm -f *.dat fort.* *.pdf
+	rm -f *.x *.dat fort.* *.pdf
