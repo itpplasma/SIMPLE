@@ -4,7 +4,6 @@ import os
 
 def doplot_inner(prompt, regular, stochastic, bminmax, outfile, arrows):
     tot1=prompt+regular+stochastic
-    tot2=regular+stochastic
     wpr=-1.
     wst=0.
     wre=1.
@@ -13,14 +12,10 @@ def doplot_inner(prompt, regular, stochastic, bminmax, outfile, arrows):
     tot1[tot1==0]=np.nan
     cla1=cla1/tot1
 
-    ns=np.shape(cla1)[0]
-    s=(np.arange(ns)+0.5)/ns
-    nj=np.shape(cla1)[1]
     bmin=min(bminmax[:,1])
     bmax=max(bminmax[:,2])
-    jp=(np.arange(nj)+0.5)/nj
     jpmin=bmin/bmax
-    print(jpmin)
+    print("Minimum J_perp: ", jpmin)
 
     plt.figure(figsize=(3,3))
     plt.imshow(cla1.T, origin='lower', extent=[0,1,0,1], aspect='auto',
@@ -56,4 +51,5 @@ def doplot(basedir, outfile1, outfile2, arrows):
     doplot_inner(prompt2, regular2, stochastic2, bminmax, outfile2,arrows)
 
 
-doplot('reference/QH_Drevlak/RUN_CLASS', 'class_jpar.pdf', 'class_ideal.pdf', [])
+#doplot('reference/QH_Drevlak/RUN_CLASS', 'class_jpar.pdf', 'class_ideal.pdf', [])
+doplot('.', 'class_jpar.pdf', 'class_ideal.pdf', [])
