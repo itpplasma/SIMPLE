@@ -26,7 +26,7 @@ module params
     type(MultistageIntegrator) :: mi
   end type Tracer
 
-  integer          :: npoi, L1i, nper=1000, i, ntestpart=1024
+  integer          :: npoi=1000, L1i=1, nper=1, i, ntestpart=1024
   integer          :: loopskip=0,iskip
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
