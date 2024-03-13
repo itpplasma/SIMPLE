@@ -968,12 +968,14 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
+  !$omp critical 
   call find_bminmax(z(1),bmin,bmax)
 !
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
   perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
   iclass(:,ipart) = 0
+  !$omp end critical
 
 ! Forced classification of passing as regular:
   if(passing.and.(notrace_passing.eq.1 .or. trap_par(ipart).le.contr_pp)) then
