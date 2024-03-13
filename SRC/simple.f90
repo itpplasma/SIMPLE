@@ -840,7 +840,7 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
-  use find_bminmax_sub, only : get_bminmax
+  use find_bminmax_sub, only : find_bminmax
   use get_canonical_coordinates_sub, only : vmec_to_can
   use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
   use plag_coeff_sub, only : plag_coeff
@@ -966,7 +966,7 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
-  call get_bminmax(z(1),bmin,bmax)
+  call find_bminmax(z(1),bmin,bmax)
 !
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
