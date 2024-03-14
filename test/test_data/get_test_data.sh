@@ -2,6 +2,8 @@
 
 read -p "Release tag to check out [vX.Y(.Z)]: " simple_release_version
 
+wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc
+
 git clone git@github.com:itpplasma/SIMPLE.git simple_$simple_release_version
 cd simple_$simple_release_version
 git fetch --all --tags --prune
