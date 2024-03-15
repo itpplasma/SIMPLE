@@ -14,7 +14,7 @@ program test_against_legacy_behaviour
     if (file_size_old /= file_size_new) error stop
 
     open(1,file='times_lost_old.dat',recl=1024)
-    open(2,file='times_lost_old.dat',recl=1024)
+    open(2,file='times_lost_new.dat',recl=1024)
         do idx=1,file_size_old
             read(1,*) old_line
             read(2,*) new_line
