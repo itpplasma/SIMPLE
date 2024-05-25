@@ -1,6 +1,6 @@
 #%%
 from pysimple import simple, params, orbit_symplectic
-from pysimple import get_canonical_coordinates_sub as coord
+from pysimple import get_can_sub as coord
 from pysimple import splint_vmec_data
 from pysimple import magfie_sub
 
