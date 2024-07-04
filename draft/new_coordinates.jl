@@ -41,7 +41,7 @@ k = 1
 for ks in 1:ns
     for kth in 1:nth
         for kph in 1:nph
-            x[k, 1:2] .= pysimple.get_canonical_coordinates_sub.vmec_to_cyl(s[ks], th[kth], ph[kph])
+            x[k, 1:2] .= pysimple.get_can_sub.vmec_to_cyl(s[ks], th[kth], ph[kph])
             x[k, 3] = ph[kph]
 
             A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp = pysimple.splint_vmec_data(
