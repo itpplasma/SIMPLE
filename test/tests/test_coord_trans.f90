@@ -143,6 +143,7 @@ subroutine init_params
 end subroutine init_params
 
 subroutine init_starting_surf
+  use alpha_lifetime_sub, only: integrate_mfl_can
   integer :: ierr
 
   xstart=0.d0
@@ -185,6 +186,8 @@ subroutine init_starting_points_ants(unit)
 end subroutine
 
 subroutine init_starting_points
+  use binsrc_sub
+
   integer :: ipart
   real :: zzg
 
@@ -229,6 +232,7 @@ end program test_coord_trans
 !--------------------------------------------------
 
 subroutine testcoordtrans
+use get_can_sub
 !
 implicit none
 !

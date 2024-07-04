@@ -109,7 +109,7 @@ contains
 !
       else
         print *,'velo: unknown field type'
-        return
+        error stop
       endif
 !
 ! in elefie: x(i)   - space coords (input, see above)
@@ -349,7 +349,7 @@ if(dodiag) write (123,*) tau2,z
 !
       else
         print *,'rhs_mflint_can: unknown field type'
-        return
+        error stop
       endif
 !
       xstart(:,1)=x
@@ -383,7 +383,7 @@ if(dodiag) write (123,*) tau2,z
 !
         else
           print *,'integrate_mfl_can: unknown field type'
-          return
+          error stop
         endif
 !
         xstart(:,i)=x

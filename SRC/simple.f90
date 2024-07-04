@@ -63,6 +63,7 @@ contains
         call boozer_converter
       else
         print *, 'Unknown field type ', isw_field_type
+        error stop
       endif
 
     end if
@@ -809,6 +810,7 @@ subroutine init_starting_points_global
         call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       else
         print *,'init_starting_points: unknown field type'
+        error stop
       endif
 !
       zstart(1,ipart)=r
@@ -929,6 +931,7 @@ subroutine trace_orbit(anorb, ipart)
           call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
         else
           print *,'unknown field type'
+          error stop
         endif
         write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)
       enddo

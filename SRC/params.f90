@@ -117,7 +117,11 @@ contains
     close(1)
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
-      stop 'Collisions are incompatible with classification'
+      error stop 'Collisions are incompatible with classification'
+    endif
+
+    if (isw_field_type < -1 .or. isw_field_type > 2) then
+      error stop 'Invalid field type'
     endif
 
     return

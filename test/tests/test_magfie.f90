@@ -2,10 +2,10 @@ program test_magfie
 
 ! use new_vmec_stuff_mod, only : netcdffile, multharm,ns_A,ns_s,ns_tp
 ! use parmot_mod, only : rmu,ro0
-use velo_mod,   only : isw_field_type
+use velo_mod,   only: isw_field_type
 use orbit_symplectic
-use field_can_mod
-use simple
+use field_can_mod, only: FieldCan_init, eval_field
+use simple, only: Tracer, init_field, init_params, ro0
 use new_vmec_stuff_mod, only: rmajor
 
 implicit none
@@ -18,7 +18,7 @@ type(FieldCan) :: f
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
 
-isw_field_type = 2
+isw_field_type = -1
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
