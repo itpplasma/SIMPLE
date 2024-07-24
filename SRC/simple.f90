@@ -786,10 +786,19 @@ subroutine init_starting_points_global
       if (0 == num_surf) then
         call random_number(xi)
         r = xi
-      else if (1 < num_surf) then
-        parts_per_s = int(ntestpart/num_surf)
-        s_idx = (ipart/parts_per_s)+1
+      else if (2 == num_surf) then
+        ! now we are just sampling between first two sbeg surfaces with a uniform distribution
+        call random_number(xi)
+        r = sbeg(1) + xi*(sbeg(2)-sbeg(1))
+      else if (3 < num_surf) then
+        ! This splits the particles into num_surf groups and launches parts_per_s particles from each group
+        parts_per_s = ntestpart / num_surf
+        s_idx = int(ipart / parts_per_s) + 1
         r = sbeg(s_idx)
+        if (r == 0) then
+          print *, "Error: The length of sbeg is less than required (num_surf + 1)."
+          stop
+        endif
       else ! Should not happen (as we are not in "local mode"), however let's catch it anyway.
         r = sbeg(1)
       endif
