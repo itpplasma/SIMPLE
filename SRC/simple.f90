@@ -816,6 +816,8 @@ subroutine trace_orbit(anorb, ipart)
   integer :: seedsize
   integer, allocatable :: seed(:)
 
+  zend(:,ipart) = 0d0
+
   if (deterministic) then
     call random_seed(size = seedsize)
     if (.not. allocated(seed)) allocate(seed(seedsize))
@@ -884,12 +886,13 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
+!$omp critical
   call find_bminmax(z(1),bmin,bmax)
-!
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
   perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
   iclass(:,ipart) = 0
+!$omp end critical
 
 ! Forced classification of passing as regular:
   if(passing.and.(notrace_passing.eq.1 .or. trap_par(ipart).le.contr_pp)) then
@@ -1219,6 +1222,7 @@ subroutine trace_orbit(anorb, ipart)
     endif
   enddo
 
+  !$omp critical
   zend(:,ipart) = z
   if(isw_field_type.eq.0) then
     ! TODO not implemented yet, need to add can_to_vmec
@@ -1229,7 +1233,6 @@ subroutine trace_orbit(anorb, ipart)
     call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
   endif
   times_lost(ipart) = kt*dtaumin/v0
-  !$omp critical
   deallocate(zpoipl_tip, zpoipl_per)
   !$omp end critical
 !  close(unit=10000+ipart)

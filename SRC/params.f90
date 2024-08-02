@@ -71,7 +71,8 @@ module params
   ! Further configuration parameters
   integer          :: notrace_passing = 0
   double precision :: facE_al=1d0, trace_time=1d-1
-  integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
+  integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2
+  double precision :: n_d=4
 
   double precision :: v0
 
