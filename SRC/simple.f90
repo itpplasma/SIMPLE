@@ -1,7 +1,4 @@
 module simple
-#ifdef MPI
-  use mpi
-#endif
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -485,80 +482,23 @@ subroutine run(norb)
   times_lost = -1.d0
 
 ! do particle tracing in parallel
-#ifdef MPI
-  call MPI_INIT(ierr)
-  call MPI_COMM_RANK(MPI_COMM_WORLD, mpirank, ierr)
-  call MPI_COMM_SIZE(MPI_COMM_WORLD, mpisize, ierr)
-  if (ierr /= 0) then
-    print *, 'MPI initialization failed with error code ', ierr
-    error stop
-  endif
-  print *, 'MPI initialized: rank=', mpirank, ', size=', mpisize
-
-  if (mod(ntestpart, mpisize) /= 0) then
-    print *, 'Number of test particles ', ntestpart, &
-             ' no multiple of MPI size ', mpisize
-    call finalize
-    error stop
-  endif
-
-  nfirstpart = mpirank * ntestpart/mpisize + 1
-  nlastpart = (mpirank+1) * ntestpart/mpisize
-#else
   nfirstpart = 1
   nlastpart = ntestpart
-#endif
 
   !$omp parallel firstprivate(norb)
   !$omp do
   do i=nfirstpart,nlastpart
     !$omp critical
     kpart = kpart+1
-#ifdef MPI
-    print *, kpart, ' / ', ntestpart/mpisize, 'particle: ', i, &
-    'MPI rank: ', mpirank, 'thread: ', omp_get_thread_num()
-#else
     print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
-#endif
     !$omp end critical
     call trace_orbit(norb, i)
   end do
   !$omp end do
   !$omp end parallel
 
-#ifdef MPI
-call MPI_REDUCE(confpart_trap, confpart_trap_glob, ntimstep, &
-MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-call MPI_REDUCE(confpart_pass, confpart_pass_glob, ntimstep, &
-MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-
-  call MPI_GATHER( &
-  times_lost(nfirstpart:nlastpart), ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  times_lost, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  0, MPI_COMM_WORLD, ierr)
-  call MPI_GATHER( &
-  trap_par(nfirstpart:nlastpart), ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  trap_par, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  0, MPI_COMM_WORLD, ierr)
-  call MPI_GATHER( &
-  perp_inv(nfirstpart:nlastpart), ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  perp_inv, ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  0, MPI_COMM_WORLD, ierr)
-  ! TODO FIX
-  ! call MPI_GATHER( &
-  ! iclass(:, nfirstpart:nlastpart), 3*ntestpart/mpisize, MPI_DOUBLE_PRECISION, &
-  ! iclass, 3*ntestpart/mpisize, MPI_INTEGER, &
-  ! 0, MPI_COMM_WORLD, ierr)
-  ! print *, mpirank, iclass
-
-  if (mpirank == 0) then
-    confpart_pass_glob=confpart_pass_glob/ntestpart
-    confpart_trap_glob=confpart_trap_glob/ntestpart
-  endif
-#else
   confpart_pass=confpart_pass/ntestpart
   confpart_trap=confpart_trap/ntestpart
-#endif
 
 end subroutine run
 
@@ -570,16 +510,6 @@ subroutine finalize
   deallocate(times_lost, confpart_trap, confpart_pass, trap_par, &
     perp_inv, iclass)
   deallocate(xstart, bstart, volstart, zstart)
-
-#ifdef MPI
-  deallocate(confpart_trap_glob, confpart_pass_glob)
-  call MPI_FINALIZE (ierr)
-  if (ierr /= 0) then
-    print *, 'MPI finalization failed with error code ', ierr
-    error stop
-  endif
-  print *, 'MPI finalized'
-#endif
 end subroutine finalize
 
 subroutine write_output
@@ -603,17 +533,9 @@ subroutine write_output
   close(1)
 
   open(1,file='confined_fraction.dat',recl=1024)
-#ifdef MPI
-  if (mpirank == 0) then
-    do i=1,ntimstep
-      write(1,*) dble(i-1)*dtau/v0, confpart_pass_glob(i), &
-        confpart_trap_glob(i), ntestpart
-    enddo
-#else
   do i=1,ntimstep
     write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
   enddo
-#endif
   close(1)
 
   open(1,file='class_parts.dat',recl=1024)
@@ -621,10 +543,6 @@ subroutine write_output
     write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
   enddo
   close(1)
-
-#ifdef MPI
-  end if
-#endif
 
 end subroutine write_output
 
@@ -898,6 +816,8 @@ subroutine trace_orbit(anorb, ipart)
   integer :: seedsize
   integer, allocatable :: seed(:)
 
+  zend(:,ipart) = 0d0
+
   if (deterministic) then
     call random_seed(size = seedsize)
     if (.not. allocated(seed)) allocate(seed(seedsize))
@@ -966,12 +886,13 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
+!$omp critical
   call find_bminmax(z(1),bmin,bmax)
-!
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
   perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
   iclass(:,ipart) = 0
+!$omp end critical
 
 ! Forced classification of passing as regular:
   if(passing.and.(notrace_passing.eq.1 .or. trap_par(ipart).le.contr_pp)) then
@@ -1301,6 +1222,7 @@ subroutine trace_orbit(anorb, ipart)
     endif
   enddo
 
+  !$omp critical
   zend(:,ipart) = z
   if(isw_field_type.eq.0) then
     ! TODO not implemented yet, need to add can_to_vmec
@@ -1311,7 +1233,6 @@ subroutine trace_orbit(anorb, ipart)
     call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
   endif
   times_lost(ipart) = kt*dtaumin/v0
-  !$omp critical
   deallocate(zpoipl_tip, zpoipl_per)
   !$omp end critical
 !  close(unit=10000+ipart)
