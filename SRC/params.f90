@@ -1,7 +1,4 @@
 module params
-#ifdef MPI
-    use mpi
-#endif
   use util
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
@@ -82,12 +79,7 @@ module params
 
   logical :: debug = .False.
   integer :: ierr
-#ifdef MPI
-  integer :: mpirank, mpisize
 
-  double precision, dimension(:), allocatable :: &
-    confpart_trap_glob, confpart_pass_glob
-#endif
   integer :: batch_size=2000000000  ! Initialize large so batch mode is not default
   integer :: ran_seed=12345
   integer :: num_surf=1
@@ -239,11 +231,6 @@ contains
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
-#ifdef MPI
-      if( allocated(confpart_pass_glob))  deallocate(confpart_pass_glob)
-      if( allocated(confpart_trap_glob))  deallocate(confpart_trap_glob)
-      allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
-#endif
     allocate(iclass(3,ntestpart))
 
     return
