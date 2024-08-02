@@ -15,4 +15,4 @@ for old, new in zip(old_data, new_data):
     for old_d, new_d in zip(old, new):
         if not np.isclose(old_d, new_d):
             i += 1
-print(i)
+print(f"Found {i} non-matching entries when comparing times_lost.dat.")
