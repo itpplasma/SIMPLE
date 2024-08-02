@@ -13,6 +13,6 @@ new_data = np.loadtxt(NEW_FILE)
 i = 0
 for old, new in zip(old_data, new_data):
     for old_d, new_d in zip(old, new):
-        if np.isclose(old_d, new_d):
+        if not np.isclose(old_d, new_d):
             i += 1
 print(i)
