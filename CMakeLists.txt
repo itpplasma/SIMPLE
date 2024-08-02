@@ -57,14 +57,12 @@ if (SIMPLE_TESTING)
 endif()
 
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
-message(STATUS "MPI include path: " ${MPI_Fortran_INCLUDE_DIRS})
 
-include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC} ${MPI_Fortran_INCLUDE_DIRS})
+include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
 add_compile_options(-cpp)
 add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-#add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-std=f2008>)
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused)
 	link_libraries("-mkl -qopenmp")
@@ -97,21 +95,6 @@ endif()
 
 add_subdirectory(SRC)
 include_directories("${CMAKE_BINARY_DIR}/SRC")
-
- #add_library (simple_mpi SHARED)
- #target_compile_options(simple_mpi PUBLIC -DMPI)
- #target_sources (simple_mpi PRIVATE ${simple_sources})
- #set_property(TARGET simple_mpi PROPERTY Fortran_MODULE_DIRECTORY mod_mpi/)
- #target_include_directories(simple_mpi PRIVATE ${CMAKE_BINARY_DIR}/mod_mpi/)
- #target_link_libraries(simple_mpi ${MPI_Fortran_LIBRARIES})
-
- #add_executable (simple_mpi.x
- #	main.f90
- #)
- #target_link_libraries(simple_mpi.x simple_mpi)
- #get_target_property(SIMPLE_MPI_LINKED_LIBS simple_mpi.x LINK_LIBRARIES)
- #list(REMOVE_ITEM SIMPLE_MPI_LINKED_LIBS SIMPLE_LIB)
- #set_property(TARGET simple_mpi.x PROPERTY LINK_LIBRARIES ${SIMPLE_MPI_LINKED_LIBS})
 
 add_executable (simple.x
 	SRC/main.f90
