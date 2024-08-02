@@ -66,7 +66,7 @@ module params
 
   ! Colliding with D-T reactor plasma. TODO: Make configurable
   logical :: swcoll = .False.
-  double precision, parameter :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
+  double precision :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
     densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
   logical :: deterministic = .False.
@@ -100,7 +100,8 @@ module params
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
-    old_axis_healing_boundary, &
+    old_axis_healing_boundary, am1, am2, Z1, Z2, &
+    densi1, densi2, tempi1, tempi2, tempe, &
     batch_size, ran_seed, reuse_batch
 
 contains
