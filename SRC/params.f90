@@ -1,7 +1,4 @@
 module params
-#ifdef MPI
-    use mpi
-#endif
   use util
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
@@ -66,7 +63,7 @@ module params
 
   ! Colliding with D-T reactor plasma. TODO: Make configurable
   logical :: swcoll = .False.
-  double precision, parameter :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
+  double precision :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
     densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
   double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
   logical :: deterministic = .False.
@@ -74,7 +71,8 @@ module params
   ! Further configuration parameters
   integer          :: notrace_passing = 0
   double precision :: facE_al=1d0, trace_time=1d-1
-  integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
+  integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2
+  double precision :: n_d=4
 
   double precision :: v0
 
@@ -82,12 +80,7 @@ module params
 
   logical :: debug = .False.
   integer :: ierr
-#ifdef MPI
-  integer :: mpirank, mpisize
 
-  double precision, dimension(:), allocatable :: &
-    confpart_trap_glob, confpart_pass_glob
-#endif
   integer :: batch_size=2000000000  ! Initialize large so batch mode is not default
   integer :: ran_seed=12345
   integer :: num_surf=1
@@ -100,7 +93,8 @@ module params
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
-    old_axis_healing_boundary, &
+    old_axis_healing_boundary, am1, am2, Z1, Z2, &
+    densi1, densi2, tempi1, tempi2, tempe, &
     batch_size, ran_seed, reuse_batch
 
 contains
@@ -238,11 +232,6 @@ contains
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
-#ifdef MPI
-      if( allocated(confpart_pass_glob))  deallocate(confpart_pass_glob)
-      if( allocated(confpart_trap_glob))  deallocate(confpart_trap_glob)
-      allocate(confpart_trap_glob(ntimstep),confpart_pass_glob(ntimstep))
-#endif
     allocate(iclass(3,ntestpart))
 
     return
