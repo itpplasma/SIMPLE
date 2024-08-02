@@ -70,6 +70,12 @@ The sum of 2. and 3. yields the overall confined fraction at each time.
 3. Trapping parameter trap_par that is 1 for deeply trapped, 0 for tp boundary
    and negative for passing. Eq. (3.1) in Accelerated Methods paper.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.
+   
+### Comparing Commits ("Golden Record")
+To execute test_against_legacy_behaviour.py, execute `get_test_data.sh`, run SIMPLE and create the following symlinks in the `tests` directory after running SIMPLE in the `test_data` directory:
+* ../../../test_data/wout.nc --> wout.nc
+*  ../../../../examples/simple_full.in --> simple.in
+*  ../../../../build/start.dat start.dat
 
 ## References
 When using this code for scientific publications, please cite the according references:

@@ -3,12 +3,12 @@ notrace_passing = 0      ! skip tracing passing prts if notrace_passing=1
 nper = 1000              ! number of periods for initial field line
 npoiper = 100            ! number of points per period on this field line
 ntimstep = 10000         ! number of time steps per slowing down time
-ntestpart = 25         ! number of test particles
+ntestpart = 1000         ! number of test particles
 ! bmod_ref = 5d4           ! rescale field to fix Boozer $B_{00}$ on
 !                            starting surface to bmod_ref in Gauss -- removed,
 !                            now the actual field from VMEC is used one can
 !                            rather scale it with vmec_B_scale
-trace_time = 1d-3        ! slowing down time, s
+trace_time = 1d-1        ! slowing down time, s
 sbeg = 0.6d0, 0.7d0     ! starting s (normalized toroidal flux) for particles. The particles will be distributed equally along these flux surfaces.
 num_surf = 2             ! number of flux surfaces. Value 0, distributes in volume.
 phibeg = 0.d0            ! starting phi for field line
@@ -24,7 +24,7 @@ ns_s = 5                 ! spline order for 3D quantities over s variable
 ns_tp = 5                ! spline order for 3D quantities over theta and phi
 multharm = 5             ! angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
 isw_field_type = 0       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
-startmode = 2            ! mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run, 4=read and run a batch
+startmode = 1            ! mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run, 4=read and run a batch
 integmode = 1            ! mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 relerr = 1d-13           ! tolerance for integrator. Set to 1d-13 for symplectic.
 tcut = -1d0              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
