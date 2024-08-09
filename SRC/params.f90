@@ -24,8 +24,8 @@ module params
   end type Tracer
 
   integer          :: nper=1000, ntestpart=1024
-  integer          :: loopskip=0,iskip
-  double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
+  integer          :: loopskip=0
+  double precision :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
   double precision, dimension(1024) :: sbeg
