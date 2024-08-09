@@ -447,6 +447,7 @@ contains
 subroutine run(norb)
 
   type(Tracer), intent(inout) :: norb
+  integer :: i
 
   print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                     dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
@@ -514,7 +515,7 @@ end subroutine finalize
 
 subroutine write_output
 
-  integer :: num_lost
+  integer :: i, num_lost
   double precision :: inverse_times_lost_sum
 
   open(1,file='times_lost.dat',recl=1024)
@@ -600,7 +601,7 @@ end subroutine
 subroutine init_starting_points
   use get_can_sub, only: can_to_vmec
 
-  integer :: ipart
+  integer :: i, ipart
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
 
