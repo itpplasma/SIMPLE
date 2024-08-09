@@ -553,8 +553,9 @@ subroutine init_starting_surf
   bstart=0.d0
   volstart=0.d0 !ToDo add loop for all sbeg, check dimension
 
+  print *, 'dphi = ', dphi, 'sbeg = ', sbeg(1)
   call integrate_mfl_can( &
-    npoi,dphi,sbeg(1),phibeg,thetabeg, &
+    npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
     xstart,bstart,volstart,bmod00,ierr)
 
   if(ierr.ne.0) then
@@ -617,7 +618,7 @@ subroutine init_starting_points
   if (startmode == 0 .or. startmode == 1) then
     do ipart=1,ntestpart
       xi=zzg()
-      call binsrc(volstart,1,npoi,xi,i)
+      call binsrc(volstart,1,npoiper*nper,xi,i)
       ibins=i
       ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
       r=xstart(1,i)

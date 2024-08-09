@@ -23,7 +23,7 @@ module params
     type(MultistageIntegrator) :: mi
   end type Tracer
 
-  integer          :: npoi, L1i, nper=1000, i, ntestpart=1024
+  integer          :: nper=1000, i, ntestpart=1024
   integer          :: loopskip=0,iskip
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
@@ -102,6 +102,10 @@ contains
   subroutine read_config
     integer :: iostat
     character(1024) :: iomsg
+   
+    ! for run with fixed random seed
+    integer :: seedsize
+    integer, allocatable :: seed(:)
 
     open(1, file='simple.in', recl=1024, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
@@ -109,6 +113,13 @@ contains
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
     close(1)
+
+	if (deterministic) then
+      call random_seed(size = seedsize)
+      if (.not. allocated(seed)) allocate(seed(seedsize))
+      seed = 0
+      call random_seed(put=seed)
+    endif
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       stop 'Collisions are incompatible with classification'
@@ -127,6 +138,7 @@ contains
     character, dimension (:), allocatable :: batch_file
     logical :: old_batch
     real :: ran_tmp
+    integer :: npoi, L1i 
 
     E_alpha = 3.5d6/facE_al
 
