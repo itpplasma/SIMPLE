@@ -4,5 +4,5 @@ sbeg = 0.6d0             ! starting s (normalzed toroidal flux) for particles.
 ntestpart = 25         ! number of test particles
 netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
 deterministic = .True.
-startmode = 2
+startmode = 1
 /

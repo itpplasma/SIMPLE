@@ -76,7 +76,7 @@ module samplers
   end subroutine sample_volume_single
 
   subroutine sample_surface_fieldline(zstart)
-    use params, only: volstart, isw_field_type, ibins, xstart, npoi
+    use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
     use boozer_sub, only: boozer_to_vmec
     use get_canonical_coordinates_sub, only: can_to_vmec
     use binsrc_sub, only: binsrc
@@ -89,7 +89,7 @@ module samplers
 
     do ipart=1,size(zstart,2)
       call random_number(xi)
-      call binsrc(volstart,1,npoi,xi,i)
+      call binsrc(volstart,1,npoiper*nper,xi,i)
       ibins=i
       ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
       r=xstart(1,i)
