@@ -554,7 +554,6 @@ subroutine init_starting_surf
   bstart=0.d0
   volstart=0.d0 !ToDo add loop for all sbeg, check dimension
 
-  print *, 'dphi = ', dphi, 'sbeg = ', sbeg(1)
   call integrate_mfl_can( &
     npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
     xstart,bstart,volstart,bmod00,ierr)
@@ -601,7 +600,7 @@ end subroutine
 subroutine init_starting_points
   use get_can_sub, only: can_to_vmec
 
-  integer :: i, ipart
+  integer :: i, ipart, iskip
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
 
@@ -672,7 +671,7 @@ subroutine init_starting_points_global
   use get_can_sub, only: can_to_vmec
 
   integer, parameter :: ns=1000
-  integer :: ipart,is,s_idx,parts_per_s
+  integer :: ipart,iskip,is,s_idx,parts_per_s
   real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
   double precision :: s,bmin,bmax
