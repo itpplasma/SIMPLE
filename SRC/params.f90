@@ -23,7 +23,7 @@ module params
     type(MultistageIntegrator) :: mi
   end type Tracer
 
-  integer          :: nper=1000, i, ntestpart=1024
+  integer          :: nper=1000, ntestpart=1024
   integer          :: loopskip=0,iskip
   double precision :: dphi,phibeg,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
@@ -102,7 +102,7 @@ contains
   subroutine read_config
     integer :: iostat
     character(1024) :: iomsg
-    
+
     ! for run with fixed random seed
     integer :: seedsize
     integer, allocatable :: seed(:)
