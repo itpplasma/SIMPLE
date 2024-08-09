@@ -102,7 +102,7 @@ contains
   subroutine read_config
     integer :: iostat
     character(1024) :: iomsg
- 
+    
     ! for run with fixed random seed
     integer :: seedsize
     integer, allocatable :: seed(:)
@@ -115,6 +115,13 @@ contains
     close(1)
     
     if (deterministic) then
+      call random_seed(size = seedsize)
+      if (.not. allocated(seed)) allocate(seed(seedsize))
+      seed = 0
+      call random_seed(put=seed)
+    endif
+
+	if (deterministic) then
       call random_seed(size = seedsize)
       if (.not. allocated(seed)) allocate(seed(seedsize))
       seed = 0

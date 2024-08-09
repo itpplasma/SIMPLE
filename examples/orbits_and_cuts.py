@@ -10,7 +10,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from pysimple import simple, params, orbit_symplectic, cut_detector, \
-    get_canonical_coordinates_sub, spline_vmec_data
+    get_can_sub, spline_vmec_data
 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -48,8 +48,8 @@ s = 0.7
 theta = 0.0
 varphi = 0.0
 # %%
-theta_vmec, varphi_vmec = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
-R, Z = get_canonical_coordinates_sub.vmec_to_cyl(s, theta_vmec, varphi_vmec)
+theta_vmec, varphi_vmec = get_can_sub.can_to_vmec(s, theta, varphi)
+R, Z = get_can_sub.vmec_to_cyl(s, theta_vmec, varphi_vmec)
 print("Initial canonical coordinates (s,th_c,ph_c) = ", s, theta, varphi)
 print("Initial VMEC coordinates (s,th,ph) = ", s, theta_vmec, varphi_vmec)
 print("Initial cylindrical coordinates (R,PH,Z) = ", R, varphi_vmec, Z)
@@ -110,7 +110,7 @@ for k in np.arange(zs.shape[1]):
         break
 
     z_vmec[0, k] = s
-    z_vmec[1, k], z_vmec[2, k] = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
+    z_vmec[1, k], z_vmec[2, k] = get_can_sub.can_to_vmec(s, theta, varphi)
 
 for k in np.arange(var_tips.shape[1]):
     s = var_tips[0, k]
@@ -119,7 +119,7 @@ for k in np.arange(var_tips.shape[1]):
     if s <= 0.0 or s >= 1.0:
         print(s)
         break
-    tip_vmec[1, k], tip_vmec[2, k] = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
+    tip_vmec[1, k], tip_vmec[2, k] = get_can_sub.can_to_vmec(s, theta, varphi)
 
 #%% Plot orbit in canonical coordinates stretched to a torus
 #   This is not the actual geometry, but the topology is the same.
@@ -153,7 +153,7 @@ plt.tight_layout()
 #plt.figure()
 #plt.plot(np.cos(thring), np.sin(thring), '-', color='tab:blue')
 
-plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]), 
+plt.plot(np.sqrt(var_tips[0, :])*np.cos(var_tips[1, :]),
          np.sqrt(var_tips[0, :])*np.sin(var_tips[1, :]),
          'o', markersize=0.5, color='tab:red')
 plt.xlabel(r'$R$')
@@ -164,7 +164,7 @@ plt.tight_layout()
 
 #exportfig.exporteps('orbit2_proj_topo')
 
-#%% Compute orbit in cylindrical coordinates   
+#%% Compute orbit in cylindrical coordinates
 
 phase = -np.pi
 
@@ -179,8 +179,8 @@ for k in np.arange(len(RR)):
     if s <= 0.0 or s >= 1.0:
         break
 
-    theta, varphi = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
-    RR[k], ZZ[k] = get_canonical_coordinates_sub.vmec_to_cyl(s, theta, varphi)
+    theta, varphi = get_can_sub.can_to_vmec(s, theta, varphi)
+    RR[k], ZZ[k] = get_can_sub.vmec_to_cyl(s, theta, varphi)
     RR[k] = RR[k]/100.0  # cm to m
     ZZ[k] = ZZ[k]/100.0
     PP[k] = varphi
@@ -202,8 +202,8 @@ for k in np.arange(len(thflat)):
     s = 1.0
     theta = thflat[k]
     varphi = phflat[k]
-    theta, varphi = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
-    R, Z = get_canonical_coordinates_sub.vmec_to_cyl(s, theta, varphi)
+    theta, varphi = get_can_sub.can_to_vmec(s, theta, varphi)
+    R, Z = get_can_sub.vmec_to_cyl(s, theta, varphi)
     x[k] = np.cos(-varphi) * R/100.0
     y[k] = np.sin(-varphi) * R/100.0
     z[k] = Z/100.0
@@ -242,8 +242,8 @@ for k in np.arange(len(RR)):
     varphi = var_tips[2, k]
     if s <= 0.0 or s >= 1.0:
         break
-    theta, varphi = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
-    RR[k], ZZ[k] = get_canonical_coordinates_sub.vmec_to_cyl(s, theta, varphi)
+    theta, varphi = get_can_sub.can_to_vmec(s, theta, varphi)
+    RR[k], ZZ[k] = get_can_sub.vmec_to_cyl(s, theta, varphi)
     RR[k] = RR[k]/100.0  # cm to m
     ZZ[k] = ZZ[k]/100.0
     PP[k] = varphi
@@ -274,12 +274,12 @@ for k in np.arange(len(RR)):
     s = 1.0
     theta = var_tips[1, k]
     varphi = np.mod(var_tips[2, k], 2.0*np.pi)
-    theta, varphi = get_canonical_coordinates_sub.can_to_vmec(s, theta, varphi)
-    R, Z = get_canonical_coordinates_sub.vmec_to_cyl(s, theta, varphi)
+    theta, varphi = get_can_sub.can_to_vmec(s, theta, varphi)
+    R, Z = get_can_sub.vmec_to_cyl(s, theta, varphi)
     x[k] = R/100.0
     #y[k] = np.sin(-varphi[0]) * R[0]/100.0
     z[k] = Z/100.0
- 
+
 plt.plot(x, z, '.', markersize=1, color='tab:blue')
 plt.plot(RR, ZZ, '.', markersize=0.5, color='tab:red')
 
