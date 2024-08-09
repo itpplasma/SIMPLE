@@ -28,7 +28,7 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use get_can_sub, only : get_canonical_coordinates
+    use get_canonical_coordinates_sub, only : get_canonical_coordinates
 
     ! initialize field geometry
     character(len=*), intent(in) :: vmec_file
@@ -504,7 +504,7 @@ subroutine run(norb)
 end subroutine run
 
 subroutine finalize
-  use get_can_sub, only : deallocate_can_coord
+  use get_canonical_coordinates_sub, only : deallocate_can_coord
 
   if (integmode >= 0) call deallocate_can_coord
 
@@ -572,7 +572,7 @@ end subroutine init_starting_surf
 
 subroutine init_starting_points_ants(unit)
   use parse_ants, only : process_line
-  use get_can_sub, only : vmec_to_can
+  use get_canonical_coordinates_sub, only : vmec_to_can
 
   integer, intent(in) :: unit
 
@@ -598,7 +598,8 @@ subroutine init_starting_points_ants(unit)
 end subroutine
 
 subroutine init_starting_points
-  use get_can_sub, only: can_to_vmec
+  use get_canonical_coordinates_sub, only: can_to_vmec
+  use samplers, only: START_FILE
 
   integer :: i, ipart, iskip
   real :: zzg
@@ -613,7 +614,7 @@ subroutine init_starting_points
     enddo
 
   ! files for storing starting coords
-  open(1,file='start.dat',recl=1024)
+  open(1,file=START_FILE,recl=1024)
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
     do ipart=1,ntestpart
@@ -668,7 +669,9 @@ end subroutine init_starting_points
 subroutine init_starting_points_global
 
   use find_bminmax_sub, only : get_bminmax
-  use get_can_sub, only: can_to_vmec
+  use get_canonical_coordinates_sub, only: can_to_vmec
+  use samplers, only: START_FILE
+
 
   integer, parameter :: ns=1000
   integer :: ipart,iskip,is,s_idx,parts_per_s
@@ -697,7 +700,7 @@ subroutine init_starting_points_global
     enddo
 
   ! files for storing starting coords
-  open(1,file='start.dat',recl=1024)
+  open(1,file=START_FILE,recl=1024)
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
     print *, "Initialising for", num_surf, "surfaces."
@@ -760,7 +763,7 @@ end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : find_bminmax
-  use get_can_sub, only : vmec_to_can
+  use get_canonical_coordinates_sub, only : vmec_to_can
   use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
   use plag_coeff_sub, only : plag_coeff
   use alpha_lifetime_sub, only : orbit_timestep_axis
@@ -887,6 +890,7 @@ subroutine trace_orbit(anorb, ipart)
       print *,'unknown field type'
   endif
 !
+
 !$omp critical
   call find_bminmax(z(1),bmin,bmax)
   passing = z(5)**2.gt.1.d0-bmod/bmax
@@ -894,6 +898,7 @@ subroutine trace_orbit(anorb, ipart)
   perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
   iclass(:,ipart) = 0
 !$omp end critical
+
 
 ! Forced classification of passing as regular:
   if(passing.and.(notrace_passing.eq.1 .or. trap_par(ipart).le.contr_pp)) then

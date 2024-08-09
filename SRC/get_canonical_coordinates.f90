@@ -10,7 +10,7 @@
   end module exchange_get_cancoord_mod
 !
 
-module get_can_sub
+module get_canonical_coordinates_sub
 
 implicit none
 
@@ -1117,4 +1117,4 @@ icounter=icounter+1
     Zcyl = Z
   end subroutine vmec_to_cyl
 
-end module get_can_sub
+end module get_canonical_coordinates_sub

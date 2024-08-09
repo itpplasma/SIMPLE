@@ -9,6 +9,9 @@ program test_coord_trans
   use simple, only : init_field, init_sympl
   use cut_detector, only : fract_dimension
   use params, only : Tracer, debug
+  use binsrc_sub, only: binsrc
+  use get_canonical_coordinates_sub, only: can_to_vmec, vmec_to_can
+  use alpha_lifetime_sub, only: integrate_mfl_can
 
   implicit none
 
@@ -224,15 +227,10 @@ subroutine init_starting_points
   close(1)
 end subroutine init_starting_points
 
-end program test_coord_trans
-
 !--------------------------------------------------
 
 subroutine testcoordtrans
 !
-implicit none
-!
-double precision, parameter :: pi=3.14159265358979d0
 integer :: it,ip,nt,np,nper
 double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,ht,hp
 double precision :: vartheta_c_back,varphi_c_back
@@ -263,3 +261,6 @@ stop
 end subroutine testcoordtrans
 
 !-----------------------------------------
+
+end program test_coord_trans
+
