@@ -28,7 +28,7 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use get_can_sub, only : get_canonical_coordinates
+    use get_canonical_coordinates_sub, only : get_canonical_coordinates
 
     ! initialize field geometry
     character(len=*), intent(in) :: vmec_file
@@ -503,7 +503,7 @@ subroutine run(norb)
 end subroutine run
 
 subroutine finalize
-  use get_can_sub, only : deallocate_can_coord
+  use get_canonical_coordinates_sub, only : deallocate_can_coord
 
   if (integmode >= 0) call deallocate_can_coord
 
@@ -571,7 +571,7 @@ end subroutine init_starting_surf
 
 subroutine init_starting_points_ants(unit)
   use parse_ants, only : process_line
-  use get_can_sub, only : vmec_to_can
+  use get_canonical_coordinates_sub, only : vmec_to_can
 
   integer, intent(in) :: unit
 
@@ -762,7 +762,7 @@ end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : find_bminmax
-  use get_can_sub, only : vmec_to_can
+  use get_canonical_coordinates_sub, only : vmec_to_can
   use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
   use plag_coeff_sub, only : plag_coeff
   use alpha_lifetime_sub, only : orbit_timestep_axis

@@ -1,6 +1,8 @@
 &config
 trace_time = 1d-3        ! slowing down time, s
 sbeg = 0.6d0             ! starting s (normalzed toroidal flux) for particles.
-ntestpart = 1024         ! number of test particles
+ntestpart = 25         ! number of test particles
 netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
+deterministic = .True.
+startmode = 2
 /
