@@ -99,7 +99,9 @@ module params
 
 contains
 
-  subroutine read_config
+  subroutine read_config(config_file)
+    character(len=256), intent(in) :: config_file
+
     integer :: iostat
     character(1024) :: iomsg
 
@@ -107,7 +109,7 @@ contains
     integer :: seedsize
     integer, allocatable :: seed(:)
 
-    open(1, file='simple.in', recl=1024, iostat=iostat, iomsg=iomsg)
+    open(1, file=config_file, recl=1024, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
 
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
