@@ -1,6 +1,6 @@
 module orbit_symplectic_quasi
 
-use field_can_mod
+use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
 use orbit_symplectic
 
 implicit none

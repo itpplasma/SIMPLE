@@ -8,7 +8,8 @@ module simple
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_timestep_sympl
-  use field_can_mod, only : FieldCan, eval_field
+  use simple_magfie, only : VmecField
+  use field_can_mod, only : eval_field => evaluate, FieldCan, field_can_from_id
   use diag_mod, only : icounter
   use params, only : Tracer, idx
   use boozer_sub, only : boozer_converter
@@ -42,8 +43,6 @@ contains
     double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
     double precision    :: z(5)
 
-    call init_magfie(isw_field_type)
-
     netcdffile = vmec_file
     ns_s = ans_s
     ns_tp = ans_tp
@@ -58,17 +57,17 @@ contains
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
 
     if (self%integmode>=0) then
+      call field_can_from_id(isw_field_type, VmecField())
       if (isw_field_type == 0) then
+        print *, 'init_field: Canonical flux coordinates'
         call get_canonical_coordinates ! pre-compute transformation to canonical coords
       elseif (isw_field_type == 2) then
-        print *, 'Boozer field'
+        print *, 'init_field: Boozer coordinates'
         call boozer_converter
-      else
-        print *, 'Unknown field type ', isw_field_type
-        error stop
       endif
-
+      call init_magfie(isw_field_type)
     end if
+
 
     ! initialize position and do first check if z is inside vacuum chamber
     z = 0.0d0
@@ -140,7 +139,6 @@ contains
     endif
 
     ! Initialize symplectic integrator
-    f%field_type = isw_field_type
     call eval_field(f, z0(1), z0(2), z0(3), 0)
 
     si%pabs = z0(4)
@@ -283,6 +281,7 @@ contains
   end subroutine init
 
   subroutine trace_to_cut(self, si, f, z, var_cut, cut_type, ierr)
+    use field_can_mod, only : FieldCan
     use plag_coeff_sub, only : plag_coeff
 
     type(CutDetector) :: self
@@ -435,7 +434,7 @@ module simple_main
 
   use velo_mod,   only : isw_field_type
   use orbit_symplectic, only : orbit_timestep_sympl, get_val
-  use simple, only : init_field, init_sympl, eval_field
+  use simple, only : init_field, init_sympl
   use cut_detector, only : fract_dimension
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -638,6 +637,9 @@ subroutine init_starting_points
         varphi_vmec=varphi
       elseif(isw_field_type.eq.2) then
         call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+      elseif(isw_field_type.eq.3) then ! TODO
+          theta_vmec=vartheta
+          varphi_vmec=varphi
       else
         print *,'init_starting_points: unknown field type'
       endif
@@ -872,7 +874,9 @@ subroutine trace_orbit(anorb, ipart)
   endif
 ! End moving starting points to the classification cut
 
-  if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
+  if (integmode>0) then
+    call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
+  endif
 
   call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 

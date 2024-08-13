@@ -1,7 +1,8 @@
 module orbit_symplectic
 
 use util, only: pi, twopi
-use field_can_mod, only: FieldCan, eval_field, get_val, get_derivatives, get_derivatives2
+use field_can_mod, only: eval_field => evaluate, FieldCan, get_val, get_derivatives, &
+  get_derivatives2
 
 implicit none
 save
@@ -141,7 +142,7 @@ end subroutine jac_sympl_euler1
 !
 subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
 !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(in) :: n
   double precision, intent(in) :: x(n)
@@ -181,7 +182,7 @@ end subroutine jac_sympl_euler2
 !
 subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
-    type(SymplecticIntegrator), intent(in) :: si
+    type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
     double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
@@ -202,7 +203,7 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
 !
 subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
-    type(SymplecticIntegrator), intent(in) :: si
+    type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
     double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
@@ -549,7 +550,7 @@ end subroutine coeff_rk_gauss
 !
 subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(SymplecticIntegrator), intent(inout) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(inout) :: fs(:)
   double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
@@ -849,7 +850,7 @@ end subroutine coeff_rk_lobatto
 
 subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(SymplecticIntegrator), intent(inout) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(inout) :: fs(:)
   double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
@@ -1183,6 +1184,7 @@ end subroutine orbit_sympl_init_multi
 subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
 !
   type(MultistageIntegrator), intent(inout) :: mi
+
   type(FieldCan), intent(inout) :: f
 
   double precision, intent(in) :: z(:)

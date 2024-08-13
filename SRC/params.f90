@@ -4,7 +4,7 @@ module params
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
-  use field_can_mod, only : FieldCan
+  use field_can_mod, only : eval_field => evaluate, FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator
   use vmecin_sub, only : stevvo
 

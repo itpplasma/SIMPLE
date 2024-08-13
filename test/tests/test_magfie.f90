@@ -4,7 +4,7 @@ program test_magfie
 ! use parmot_mod, only : rmu,ro0
 use velo_mod,   only: isw_field_type
 use orbit_symplectic
-use field_can_mod, only: FieldCan_init, eval_field
+use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, FieldCan_init
 use simple, only: Tracer, init_field, init_params, ro0
 use new_vmec_stuff_mod, only: rmajor
 
@@ -13,6 +13,7 @@ save
 
 double precision :: z0(4), vpar0
 type(Tracer) :: norb
+
 type(FieldCan) :: f
 
 integer :: npoiper2
@@ -27,7 +28,8 @@ z0(3) = 0.1d0  ! phi
 vpar0 = 0.8d0  ! parallel velocity
 
 if (isw_field_type == -1) then
-  call FieldCan_init(f, 1d-5, 1d0, vpar0, isw_field_type)
+  call FieldCan_init(f, 1d-5, 1d0, vpar0)
+  call field_can_from_name('test')
   call eval_field(f, z0(1), z0(2), z0(3), 0)
 else
   call init_field(norb, 'wout.nc', 5, 5, 3, 0)
@@ -47,7 +49,7 @@ else
 
   ! ro0 = mc/e*v0, different by sqrt(2) from other modules
   ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0), isw_field_type)
+  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0))
   call eval_field(f, z0(1), z0(2), z0(3), 0)
   f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
 end if

@@ -16,6 +16,14 @@ set(SOURCES
     spl_three_to_five.f90
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.f90
+    magfie/magfie_base.f90
+    magfie/magfie_vmec.f90
+    magfie/magfie.f90
+    field/field_can_base.f90
+    field/field_can_test.f90
+    field/field_can_flux.f90
+    field/field_can_boozer.f90
+    field/field_can_meiss.f90
     field_can.f90
     orbit_symplectic.f90
     orbit_symplectic_quasi.f90

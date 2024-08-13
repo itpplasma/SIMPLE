@@ -28,7 +28,8 @@ z0(2) = 1.5d0  ! theta
 z0(3) = 0.0d0  ! phi
 vpar0 = 0.0d0  ! parallel velocity
 
-call FieldCan_init(f, mu, c*m/qe, vpar0, -1)
+call field_can_from_name('test')
+call FieldCan_init(f, mu, c*m/qe, vpar0)
 
 ! Compute toroidal momentum from initial conditions
 call eval_field(f, z0(1), z0(2), z0(3), 0)
