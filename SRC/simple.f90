@@ -29,6 +29,7 @@ contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use get_can_sub, only : get_canonical_coordinates
+    use magfie_sub, only : init_magfie
 
     ! initialize field geometry
     character(len=*), intent(in) :: vmec_file
@@ -38,6 +39,8 @@ contains
     integer             :: L1i
     double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
     double precision    :: z(5)
+
+    call init_magfie(isw_field_type)
 
     netcdffile = vmec_file
     ns_s = ans_s
@@ -761,7 +764,7 @@ end subroutine init_starting_points_global
 subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : find_bminmax
   use get_can_sub, only : vmec_to_can
-  use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
+  use magfie_sub, only : magfie
   use plag_coeff_sub, only : plag_coeff
   use alpha_lifetime_sub, only : orbit_timestep_axis
 
@@ -842,15 +845,7 @@ subroutine trace_orbit(anorb, ipart)
       z(3)=cut_in_per*fper
       do kt=0,1000
         z(2)=1d-3*twopi*dble(kt)
-        if(isw_field_type.eq.0) then
-          call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-        elseif(isw_field_type.eq.1) then
-          call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-        elseif(isw_field_type.eq.2) then
-          call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-        else
-          print *,'unknown field type'
-        endif
+        call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
         write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)
       enddo
     endif
@@ -877,16 +872,8 @@ subroutine trace_orbit(anorb, ipart)
 
   if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
 
-  if(isw_field_type.eq.0) then
-      call magfie_can(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  elseif(isw_field_type.eq.1) then
-      call magfie_vmec(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  elseif(isw_field_type.eq.2) then
-      call magfie_boozer(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  else
-      print *,'unknown field type'
-  endif
-!
+  call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+
 !$omp critical
   call find_bminmax(z(1),bmin,bmax)
   passing = z(5)**2.gt.1.d0-bmod/bmax
