@@ -164,7 +164,7 @@ add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/pysimple.py
     DEPENDS "${F2PY_MODULE_NAME}"
     COMMENT "copying file"
-    COMMAND ${CMAKE_COMMAND} -E rename
+    COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_CURRENT_BINARY_DIR}/pysimple.py
             ${CMAKE_BINARY_DIR}/pysimple.py
 )
