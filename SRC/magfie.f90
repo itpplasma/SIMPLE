@@ -2,7 +2,49 @@ module magfie_sub
 
 implicit none
 
+abstract interface
+  subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+    !            x(i)   - set of 3 curvilinear space coordinates (input)
+    !            bmod   - dimensionless magnetic field module: bmod=B/B_ref
+    !            sqrtg  - Jacobian of space coordinates (square root of
+    !                     metric tensor
+    !            bder   - derivatives of logarithm of bmod over space coords
+    !                     (covariant vector)
+    !            hcovar - covariant components of the unit vector along
+    !                     the magnetic field
+    !            hctrvr - contravariant components of the unit vector along
+    !                     the magnetic field
+    !            hcurl  - contravariant components of the curl of this vector
+    double precision, intent(in) :: x(3)
+    double precision, intent(out) :: bmod,sqrtg
+    double precision, intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+  end subroutine magfie_base
+end interface
+
+procedure(magfie_base), pointer :: magfie => null()
+
+integer, parameter :: TEST=-1, CAN=0, VMEC=1, BOOZER=2
+
 contains
+
+subroutine init_magfie(id)
+  integer, intent(in) :: id
+
+  select case(id)
+  case(TEST)
+    print *, 'init_magfie: magfie_test not implemented'
+    error stop
+  case(CAN)
+    magfie => magfie_can
+  case(VMEC)
+    magfie => magfie_vmec
+  case(BOOZER)
+    magfie => magfie_boozer
+  case default
+    print *,'init_magfie: unknown id ', id
+    error stop
+  end select
+end subroutine init_magfie
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -205,11 +247,13 @@ contains
 !
 !  Called routines: canonical_field
 !
-  implicit none
 !
+  double precision, intent(in) :: x(3)
+  double precision, intent(out) :: bmod,sqrtg
+  double precision, intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+
   logical :: fullset
   integer :: mode_secders
-  double precision :: bmod,sqrtg
   double precision :: r,vartheta_c,varphi_c,                                           &
                       A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                       sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
@@ -219,7 +263,6 @@ contains
                       d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
                       d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp
   double precision :: Bctr_vartheta,Bctr_varphi,bmod2
-  double precision, dimension(3) :: x,bder,hcovar,hctrvr,hcurl
 !
   r=x(1)
   vartheta_c=x(2)
@@ -294,10 +337,9 @@ contains
   use vector_potentail_mod, only : torflux
   use boozer_sub, only : splint_boozer_coord
 !
-  implicit none
-!
-  double precision :: bmod,sqrtg
-  double precision, dimension(3) :: x,bder,hcovar,hctrvr,hcurl
+  double precision, intent(in) :: x(3)
+  double precision, intent(out) :: bmod,sqrtg
+  double precision, intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
 !
   double precision :: r,vartheta_B,varphi_B,                                       &
                       A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3, &
