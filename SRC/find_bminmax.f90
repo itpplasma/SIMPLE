@@ -20,7 +20,6 @@ contains
   subroutine find_bminmax(s,bmin,bmax)
 !
   use new_vmec_stuff_mod, only : nper
-  use velo_mod,           only : isw_field_type
 !
   implicit none
 !

@@ -58,7 +58,6 @@ contains
 !  Called routines: magfie, elefie_can
 !
       use parmot_mod, only : rmu,ro0
-      use velo_mod,   only : isw_field_type
       use magfie_sub, only : magfie
 !
       implicit none
@@ -244,7 +243,6 @@ if(dodiag) write (123,*) tau2,z
 !                 dery(1:5) - vector of the right-hand side
 !  Called routines:  magfie_vmec, magfie_can, magfie_boozer
 !
-      use velo_mod,   only : isw_field_type
       use magfie_sub, only : magfie
 !
       double precision :: phi
@@ -271,7 +269,6 @@ if(dodiag) write (123,*) tau2,z
       subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
                                xstart,bstart,volstart,bmod00,ierr)
 !
-      use velo_mod,   only : isw_field_type
       use odeint_sub, only : odeint_allroutines
       use chamb_sub, only : chamb_can
       use magfie_sub, only : magfie
