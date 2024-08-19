@@ -7,7 +7,7 @@ program neo_orb_main
 
   implicit none
 
-  character(len=256) :: config_file
+  character(256) :: config_file
   type(Tracer) :: norb
 
   ! read configuration file name from command line arguments
