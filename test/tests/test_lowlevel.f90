@@ -12,6 +12,7 @@ contains
     @test
     subroutine test_vmec_allocate()
         use new_vmec_stuff_mod
+        use vmec_alloc_sub
         print *,'test_vmec_allocate'
 
         call new_allocate_vmec_stuff

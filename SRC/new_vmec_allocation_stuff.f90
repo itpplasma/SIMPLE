@@ -1,11 +1,11 @@
-!
+module vmec_alloc_sub
+  implicit none
+contains
   subroutine new_allocate_vmec_stuff
 !
   use new_vmec_stuff_mod
   use nctools_module
   use netcdf, only : nf90_open, NF90_NOWRITE
-!
-  implicit none
 !
   integer :: ncid, status
   integer, dimension(2) :: lens
@@ -48,3 +48,4 @@
   deallocate(axm,axn,soa,aiota,sps,phi,s,rmnc,zmnc,almnc,rmns,zmns,almns)
 !
   end subroutine new_deallocate_vmec_stuff
+end  module vmec_alloc_sub
