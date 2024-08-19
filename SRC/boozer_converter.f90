@@ -16,6 +16,7 @@ module boozer_sub
                                      use_B_r, use_del_tp_B
   use binsrc_sub, only : binsrc
   use plag_coeff_sub, only : plag_coeff
+  use spline_vmec_sub
 !
   implicit none
 !

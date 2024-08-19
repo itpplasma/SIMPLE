@@ -96,8 +96,6 @@ foreach(file ${FILES_TO_WRAP})
     endif()
 endforeach()
 
-list(APPEND F90WRAP_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/f90wrap_toplevel.f90)
-
 list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/SRC/)
 
 set(F2PY_MODULE_NAME "_pysimple")

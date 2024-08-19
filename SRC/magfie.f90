@@ -1,4 +1,5 @@
 module magfie_sub
+use spline_vmec_sub
 
 implicit none
 

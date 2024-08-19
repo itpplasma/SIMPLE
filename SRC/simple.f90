@@ -28,6 +28,7 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use spline_vmec_sub
     use get_can_sub, only : get_canonical_coordinates
     use magfie_sub, only : init_magfie
 
