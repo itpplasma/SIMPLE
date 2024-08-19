@@ -103,13 +103,23 @@ contains
     integer :: iostat
     character(1024) :: iomsg
 
+    ! for run with fixed random seed
+    integer :: seedsize
+    integer, allocatable :: seed(:)
+
     open(1, file='simple.in', recl=1024, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
 
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
-
     close(1)
+
+    if (deterministic) then
+      call random_seed(size = seedsize)
+      if (.not. allocated(seed)) allocate(seed(seedsize))
+      seed = 0
+      call random_seed(put=seed)
+    endif
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       stop 'Collisions are incompatible with classification'
