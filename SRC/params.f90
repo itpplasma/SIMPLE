@@ -28,7 +28,7 @@ module params
   double precision :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision, dimension(1024) :: sbeg
+  double precision, dimension(1024) :: sbeg=0.5d0
   double precision :: thetabeg=0.0d0
   double precision, dimension(:),   allocatable :: bstart,volstart !where npoi is used, add a dimension at the end for sbeg
   double precision, dimension(:,:), allocatable :: xstart
