@@ -71,7 +71,7 @@ message(STATUS "Python binary output dir: ${CMAKE_CURRENT_BINARY_DIR}")
 set(FILES_TO_WRAP
     simple.f90
     orbit_symplectic.f90
-    field/field_can.f90
+    field_can.f90
     get_canonical_coordinates.f90
     params.f90
     canonical_coordinates_mod.f90

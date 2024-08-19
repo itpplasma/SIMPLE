@@ -15,7 +15,6 @@ integer :: ierr, kt
 
 double precision :: z0(4), vpar0, dt
 
-class(FieldCan), allocatable :: fc
 type(FieldCan) :: f
 type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, gauss6, lobatto4
 type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6
