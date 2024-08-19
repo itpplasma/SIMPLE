@@ -17,7 +17,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
-option(SIMPLE_TESTING "Enable testing." OFF)
+option(SIMPLE_TESTING "Enable testing." ON)
 
 set(CMAKE_MACOSX_RPATH 1)
 
@@ -108,5 +108,6 @@ if (ENABLE_PYTHON_INTERFACE)
 endif ()
 
 if (SIMPLE_TESTING)
+	enable_testing()
     add_subdirectory(test)
 endif ()

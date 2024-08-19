@@ -47,7 +47,7 @@ module vmecin_sub
   double precision :: fac_b, fac_r
 !
   integer :: nsurfb,nstrb,kparb,ncid,i
-  double precision :: flux
+  double precision, intent(out) :: flux
   double precision, dimension(nstrb)         :: axm,axn
   double precision, dimension(0:kparb)       :: sps,aiota,phi,s
   double precision, dimension(nstrb,0:kparb) :: rmnc,zmnc,almnc,lmnc
