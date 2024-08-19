@@ -32,7 +32,7 @@ module samplers
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type
     use boozer_sub, only: boozer_to_vmec
-    use get_canonical_coordinates_sub, only: can_to_vmec
+    use get_can_sub, only: can_to_vmec
 
     double precision, intent(in) :: s_inner
     double precision, intent(in) :: s_outer
@@ -78,7 +78,7 @@ module samplers
   subroutine sample_surface_fieldline(zstart)
     use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
     use boozer_sub, only: boozer_to_vmec
-    use get_canonical_coordinates_sub, only: can_to_vmec
+    use get_can_sub, only: can_to_vmec
     use binsrc_sub, only: binsrc
 
     double precision, dimension(:,:), intent(inout) :: zstart

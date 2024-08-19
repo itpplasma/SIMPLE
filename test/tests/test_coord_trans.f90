@@ -10,7 +10,7 @@ program test_coord_trans
   use cut_detector, only : fract_dimension
   use params, only : Tracer, debug
   use binsrc_sub, only: binsrc
-  use get_canonical_coordinates_sub, only: can_to_vmec, vmec_to_can
+  use get_can_sub, only: can_to_vmec, vmec_to_can
   use alpha_lifetime_sub, only: integrate_mfl_can
 
   implicit none
@@ -267,4 +267,3 @@ end subroutine testcoordtrans
 !-----------------------------------------
 
 end program test_coord_trans
-

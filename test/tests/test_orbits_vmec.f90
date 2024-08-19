@@ -6,7 +6,7 @@
   use boozer_coordinates_mod, only : use_B_r
   use boozer_sub, only : splint_boozer_coord, boozer_converter, &
     delthe_delphi_bv, vmec_to_boozer, boozer_to_vmec
-  use get_canonical_coordinates_sub, only: get_canonical_coordinates, &
+  use get_can_sub, only: get_canonical_coordinates, &
     vmec_to_can, can_to_vmec
   use alpha_lifetime_sub, only : orbit_timestep_axis
   use spline_vmec_sub
