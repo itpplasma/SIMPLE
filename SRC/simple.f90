@@ -29,7 +29,7 @@ contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use spline_vmec_sub
-    use get_can_sub, only : get_canonical_coordinates
+    use get_canonical_coordinates_sub, only : get_canonical_coordinates
     use magfie_sub, only : init_magfie
 
     ! initialize field geometry
@@ -767,7 +767,7 @@ end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
   use find_bminmax_sub, only : get_bminmax
-  use get_can_sub, only : vmec_to_can
+  use get_canonical_coordinates_sub, only : vmec_to_can
   use magfie_sub, only : magfie
   use plag_coeff_sub, only : plag_coeff
   use alpha_lifetime_sub, only : orbit_timestep_axis
