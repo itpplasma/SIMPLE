@@ -33,3 +33,5 @@ RUN_*
 TMP
 */test_data/simple_*/
 *.geany
+examples/test1/
+examples/test2/

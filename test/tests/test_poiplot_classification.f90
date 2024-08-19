@@ -8,6 +8,8 @@ use diag_mod, only : icounter
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
   use simple, only : init_sympl
   use plag_coeff_sub, only : plag_coeff
+  use get_can_sub
+  use spline_vmec_sub
 !
   implicit none
 !
