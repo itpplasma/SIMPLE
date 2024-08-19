@@ -124,7 +124,7 @@ contains
     endif
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
-      stop 'Collisions are incompatible with classification'
+      error stop 'Collisions are incompatible with classification'
     endif
 
     return
