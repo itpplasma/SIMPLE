@@ -462,9 +462,6 @@ subroutine eval_field(f, r, th_c, ph_c, mode_secders)
       call eval_field_can(f, r, th_c, ph_c, mode_secders)
     case (2)
       call eval_field_booz(f, r, th_c, ph_c, mode_secders)
-    case default
-      print *, 'Illegal field type ', f%field_type, ' for eval_field'
-      stop
   end select
 
 end subroutine eval_field

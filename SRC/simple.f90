@@ -65,6 +65,7 @@ contains
         call boozer_converter
       else
         print *, 'Unknown field type ', isw_field_type
+        error stop
       endif
 
     end if
@@ -731,6 +732,7 @@ subroutine init_starting_points_global
         call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       else
         print *,'init_starting_points: unknown field type'
+        error stop
       endif
 !
       zstart(1,ipart)=r
