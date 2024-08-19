@@ -9,6 +9,7 @@ program test_coord_trans
   use simple, only : init_field, init_sympl
   use cut_detector, only : fract_dimension
   use params, only : Tracer, debug
+  use vmecin_sub, only : stevvo
 
   implicit none
 

@@ -5,6 +5,7 @@ contains
 !
   use new_vmec_stuff_mod
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
+  use vmecin_sub, only : vmecin
 !
   implicit none
 !

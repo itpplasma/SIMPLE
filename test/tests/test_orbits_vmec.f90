@@ -8,6 +8,7 @@
   use boozer_sub
   use alpha_lifetime_sub
   use spline_vmec_sub
+  use vmecin_sub, only : stevvo
 use diag_mod, only : icounter
 !
   implicit none

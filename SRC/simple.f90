@@ -28,9 +28,10 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use spline_vmec_sub
+    use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
     use get_can_sub, only : get_canonical_coordinates
     use magfie_sub, only : init_magfie
+    use vmecin_sub, only : stevvo
 
     ! initialize field geometry
     character(*), intent(in) :: vmec_file

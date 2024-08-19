@@ -10,6 +10,7 @@ use diag_mod, only : icounter
   use plag_coeff_sub, only : plag_coeff
   use get_can_sub
   use spline_vmec_sub
+  use vmecin_sub, only : stevvo
 !
   implicit none
 !
