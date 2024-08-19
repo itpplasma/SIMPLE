@@ -5,6 +5,9 @@ compared to earlier versions.
 
 | Differing output | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | c2bb751 2024-08-19 | Restore behavior of `release/1.3` branch |
+| Y | 6c5eb2c 2024-03-11 | Different `bmin` and `bmax` from local init lead to 1e-4 difference in trap_par |
+| Y | 081a859 2023-12-15 | Set default values to -1d10 for end angles to mark it's not VMEC coordinates |
 | Y | 8e19626 2022-06-29 -> `release/1.3` | Removed bmod_ref that rescaled to match B_00 on flux surface |
 | N | b5fc202 2022-06-29 | MPI working again, misses later columns in times_lost.dat |
 | N | c796d90 2022-06-28 | Merge collisions branch back to master, cross-checked results |
