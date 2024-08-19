@@ -831,6 +831,8 @@ subroutine trace_orbit(anorb, ipart)
   integer :: seedsize
   integer, allocatable :: seed(:)
 
+  zend(:,ipart) = 0d0
+
   if (deterministic) then
     call random_seed(size = seedsize)
     if (.not. allocated(seed)) allocate(seed(seedsize))
