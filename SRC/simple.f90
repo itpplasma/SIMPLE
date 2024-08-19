@@ -763,7 +763,7 @@ subroutine init_starting_points_global
 end subroutine init_starting_points_global
 
 subroutine trace_orbit(anorb, ipart)
-  use find_bminmax_sub, only : find_bminmax
+  use find_bminmax_sub, only : get_bminmax
   use get_can_sub, only : vmec_to_can
   use magfie_sub, only : magfie
   use plag_coeff_sub, only : plag_coeff
@@ -876,7 +876,9 @@ subroutine trace_orbit(anorb, ipart)
   call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
 !$omp critical
-  call find_bminmax(z(1),bmin,bmax)
+  if(num_surf > 1) then
+    call get_bminmax(z(1),bmin,bmax)
+  endif
   passing = z(5)**2.gt.1.d0-bmod/bmax
   trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
   perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
@@ -1214,10 +1216,8 @@ subroutine trace_orbit(anorb, ipart)
   !$omp critical
   zend(:,ipart) = z
   if(isw_field_type.eq.0) then
-    ! TODO not implemented yet, need to add can_to_vmec
+    ! TODO need to add can_to_vmec
     ! call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
-    zend(2,ipart) = -1d10
-    zend(3,ipart) = -1d10
   elseif(isw_field_type.eq.2) then
     call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
   endif
