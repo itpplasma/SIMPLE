@@ -32,7 +32,7 @@ contains
     use magfie_sub, only : init_magfie
 
     ! initialize field geometry
-    character(len=*), intent(in) :: vmec_file
+    character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     integer             :: ierr

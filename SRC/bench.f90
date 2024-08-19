@@ -37,8 +37,8 @@ integer :: integ_mode
 integer :: nlag
 integer :: nplagr_invar
 integer :: ncut
-character(len=*), parameter :: infile = 'wout.nc'
-character(len=*), parameter :: outfile = '/tmp/out.txt'
+character(*), parameter :: infile = 'wout.nc'
+character(*), parameter :: outfile = '/tmp/out.txt'
 
 integer, parameter :: n_tip_vars = 7
 double precision, allocatable :: var_cut(:, :)  ! r, th, ph, pph, H, Jpar

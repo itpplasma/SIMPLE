@@ -123,7 +123,7 @@ contains
 
 subroutine test_single(si, outname)
     type(SymplecticIntegrator) :: si
-    character(len=*) :: outname
+    character(*) :: outname
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
@@ -159,7 +159,7 @@ end subroutine test_single
 
 subroutine test_quasi(si, outname)
     type(SymplecticIntegrator) :: si
-    character(len=*) :: outname
+    character(*) :: outname
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
@@ -200,7 +200,7 @@ end subroutine test_quasi
 
 subroutine test_multi(mi, outname)
     type(MultistageIntegrator) :: mi
-    character(len=*) :: outname
+    character(*) :: outname
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
@@ -233,7 +233,7 @@ end subroutine test_multi
 
 subroutine test_multi_quasi(mi, outname)
     type(MultistageIntegrator) :: mi
-    character(len=*) :: outname
+    character(*) :: outname
 
     double precision :: starttime, endtime
     double precision, allocatable :: out(:, :)
