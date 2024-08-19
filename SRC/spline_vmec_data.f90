@@ -1,4 +1,6 @@
-!
+module spline_vmec_sub
+implicit none
+contains
   subroutine spline_vmec_data
 !
   use new_vmec_stuff_mod
@@ -481,7 +483,6 @@
   subroutine vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                         sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                         Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-
 !
   implicit none
 !
@@ -890,3 +891,4 @@ end subroutine determine_nheal_for_axis
   B00=B3/B2
 !
   end subroutine volume_and_B00
+end module spline_vmec_sub

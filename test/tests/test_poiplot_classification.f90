@@ -8,10 +8,8 @@ use diag_mod, only : icounter
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
   use simple, only : init_sympl
   use plag_coeff_sub, only : plag_coeff
-  use binsrc_sub, only: binsrc
-  use get_canonical_coordinates_sub, only: can_to_vmec, vmec_to_can, &
-    get_canonical_coordinates, deallocate_can_coord
-  use alpha_lifetime_sub, only: integrate_mfl_can, orbit_timestep_axis
+  use get_can_sub
+  use spline_vmec_sub
 !
   implicit none
 !

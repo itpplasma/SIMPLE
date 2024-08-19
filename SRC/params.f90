@@ -28,7 +28,7 @@ module params
   double precision :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision, dimension(1024) :: sbeg
+  double precision, dimension(1024) :: sbeg=0.5d0
   double precision :: thetabeg=0.0d0
   double precision, dimension(:),   allocatable :: bstart,volstart !where npoi is used, add a dimension at the end for sbeg
   double precision, dimension(:,:), allocatable :: xstart
@@ -99,7 +99,9 @@ module params
 
 contains
 
-  subroutine read_config
+  subroutine read_config(config_file)
+    character(len=256), intent(in) :: config_file
+
     integer :: iostat
     character(1024) :: iomsg
 
@@ -107,7 +109,7 @@ contains
     integer :: seedsize
     integer, allocatable :: seed(:)
 
-    open(1, file='simple.in', recl=1024, iostat=iostat, iomsg=iomsg)
+    open(1, file=config_file, recl=1024, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
 
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
@@ -121,7 +123,7 @@ contains
       call random_seed(put=seed)
     endif
 
-	if (deterministic) then
+    if (deterministic) then
       call random_seed(size = seedsize)
       if (.not. allocated(seed)) allocate(seed(seedsize))
       seed = 0
@@ -129,7 +131,7 @@ contains
     endif
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
-      stop 'Collisions are incompatible with classification'
+      error stop 'Collisions are incompatible with classification'
     endif
 
     return

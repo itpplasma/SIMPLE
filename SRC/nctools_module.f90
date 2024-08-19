@@ -21,7 +21,7 @@ contains
 
   subroutine nc_get_int_0(ncid, name, var)
     integer :: ncid
-    character(len=*) :: name
+    character(*) :: name
     integer, intent(out) :: var
     integer :: varid
 
@@ -31,7 +31,7 @@ contains
 
   subroutine nc_get_int_1(ncid, name, var)
     integer :: ncid
-    character(len=*) :: name
+    character(*) :: name
     integer, dimension(:), intent(out) :: var
     integer :: varid
 
@@ -41,7 +41,7 @@ contains
 
   subroutine nc_get_double_0(ncid, name, var)
     integer :: ncid
-    character(len=*) :: name
+    character(*) :: name
     double precision, intent(out) :: var
     integer :: varid
 
@@ -51,7 +51,7 @@ contains
 
   subroutine nc_get_double_1(ncid, name, var)
     integer :: ncid
-    character(len=*) :: name
+    character(*) :: name
     double precision, dimension(:), intent(out) :: var
     integer :: varid
 
@@ -61,7 +61,7 @@ contains
 
   subroutine nc_get_double_2(ncid, name, var)
     integer :: ncid
-    character(len=*) :: name
+    character(*) :: name
     double precision, dimension(:,:), intent(out) :: var
     integer :: varid
 
@@ -71,7 +71,7 @@ contains
 
   subroutine nc_get_double_3(ncid, name, var)
     integer :: ncid
-    character(len=*) :: name
+    character(*) :: name
     double precision, dimension(:,:,:), intent(out) :: var
     integer :: varid
 
@@ -81,7 +81,7 @@ contains
 
   subroutine nc_inq_dim_1(ncid, name, len)
     integer :: ncid, varid
-    character(len=*)      :: name
+    character(*)      :: name
     integer, dimension(1) :: dimids
     integer :: len
 
@@ -92,7 +92,7 @@ contains
 
   subroutine nc_inq_dim_2(ncid, name, len)
     integer :: ncid, varid
-    character(len=*)      :: name
+    character(*)      :: name
     integer, dimension(2) :: dimids
     integer, dimension(2) :: len
 
@@ -119,7 +119,7 @@ contains
   end subroutine nc_close
 
   subroutine nc_open(filename, ncid)
-    character(len=*) :: filename
+    character(*) :: filename
     integer :: ncid
 
     call nf90_check(nf90_open(filename, NF90_NOWRITE, ncid))

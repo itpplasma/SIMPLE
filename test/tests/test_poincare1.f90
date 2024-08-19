@@ -6,10 +6,9 @@ use diag_mod, only : icounter
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
   use simple, only : init_sympl
-  use binsrc_sub, only: binsrc
-  use get_canonical_coordinates_sub, only: can_to_vmec, vmec_to_can, &
-    get_canonical_coordinates
-  use alpha_lifetime_sub, only: integrate_mfl_can, orbit_timestep_axis
+  use get_can_sub, only : can_to_vmec, get_canonical_coordinates
+  use alpha_lifetime_sub, only : orbit_timestep_axis
+  use spline_vmec_sub
 !
   implicit none
 !

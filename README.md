@@ -16,8 +16,8 @@ The code is free to use and modify under the MIT License and links to Runge-Kutt
 `SRC/contrib/rkf45.f90` from https://people.sc.fsu.edu/~jburkardt/f_src/rkf45/rkf45.html under the GNU LGPL License.
 
 ## Building
-
-The build system for SIMPLE is CMake.
+Run `make` to produce a `build` directory including the main executable
+`simple.x`, main library `libsimple.so` and Python module `pysimple`.
 
 Required libraries:
 * NetCDF
@@ -27,19 +27,10 @@ Supported compilers:
 * GNU Fortan
 * Intel Fortran
 
-Building:
-```bash
-cd /path/to/SIMPLE
-mkdir build; cd build
-cmake ..
-make
-```
-This will produce `libsimple.so` and `simple.x` required to run the code.
-
 ## Usage
 
 SIMPLE currently runs on a single node with OpenMP shared memory parallelization with one particle per thread and background
-fields residing in main memory. The main executable is `simple.x`. 
+fields residing in main memory. The main executable is `simple.x`.
 
 ### Input
 * `simple.in`
@@ -70,7 +61,7 @@ The sum of 2. and 3. yields the overall confined fraction at each time.
 3. Trapping parameter trap_par that is 1 for deeply trapped, 0 for tp boundary
    and negative for passing. Eq. (3.1) in Accelerated Methods paper.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.
-   
+
 ### Comparing Commits ("Golden Record")
 To execute test_against_legacy_behaviour.py, execute `get_test_data.sh`, run SIMPLE and create the following symlinks in the `tests` directory after running SIMPLE in the `test_data` directory:
 * ../../../test_data/wout.nc --> wout.nc

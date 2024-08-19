@@ -9,6 +9,7 @@
   use get_canonical_coordinates_sub, only: get_canonical_coordinates, &
     vmec_to_can, can_to_vmec
   use alpha_lifetime_sub, only : orbit_timestep_axis
+  use spline_vmec_sub
   use diag_mod, only : icounter
 !
   implicit none

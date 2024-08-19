@@ -231,6 +231,7 @@ deallocate(y,dy)
 !
   use exchange_get_cancoord_mod, only : vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,Bcovar_varphi, &
                                         theta,onlytheta
+  use spline_vmec_sub
 !
   implicit none
 !
@@ -950,6 +951,7 @@ icounter=icounter+1
 ! Input : r,theta,varphi      - VMEC coordinates
 ! Output: vartheta_c,varphi_c - canonical coordinates
 !
+  use spline_vmec_sub
   implicit none
 !
   double precision, parameter :: epserr=1.d-14
@@ -1104,6 +1106,7 @@ icounter=icounter+1
   end subroutine vmec_to_can
 
   subroutine vmec_to_cyl(s,theta,varphi,Rcyl,Zcyl)
+    use spline_vmec_sub
     double precision, intent(in) :: s,theta,varphi
     double precision, intent(out) :: Rcyl,Zcyl
 

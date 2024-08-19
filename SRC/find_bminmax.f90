@@ -20,7 +20,6 @@ contains
   subroutine find_bminmax(s,bmin,bmax)
 !
   use new_vmec_stuff_mod, only : nper
-  use velo_mod,           only : isw_field_type
 !
   implicit none
 !
@@ -75,22 +74,14 @@ contains
 !-----------
 !
   subroutine getbmod
-  use magfie_sub, only : magfie_can, magfie_vmec, magfie_boozer
+  use magfie_sub, only : magfie
 !
   implicit none
 !
   double precision :: sqrtg
   double precision, dimension(3) :: hcovar, hctrvr, hcurl
 !
-  if(isw_field_type.eq.0) then
-    call magfie_can(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  elseif(isw_field_type.eq.1) then
-    call magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  elseif(isw_field_type.eq.2) then
-    call magfie_boozer(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  else
-    print *,'find_bminmax: unknown field type'
-  endif
+  call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
   end subroutine getbmod
 !

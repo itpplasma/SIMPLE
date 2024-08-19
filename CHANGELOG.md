@@ -5,7 +5,7 @@ compared to earlier versions.
 
 | Differing output | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
-| Y | 8e19626 2022-06-29 | Removed bmod_ref that rescaled to match B_00 on flux surface |
+| Y | 8e19626 2022-06-29 -> `release/1.3` | Removed bmod_ref that rescaled to match B_00 on flux surface |
 | N | b5fc202 2022-06-29 | MPI working again, misses later columns in times_lost.dat |
 | N | c796d90 2022-06-28 | Merge collisions branch back to master, cross-checked results |
 | Y | 7ca8fad 2022-06-23 | Default to old VMEC near-axis healing again |
