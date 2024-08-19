@@ -26,16 +26,6 @@ target_link_libraries(test_poincare1.x simple)
 add_executable (test_poiplot_classification.x test_poiplot_classification.f90
 )
 target_link_libraries(test_poiplot_classification.x simple)
-add_executable (alpha_lifetime_vmec_c.x
-	../../SRC/binsrc.f90
-	../../SRC/alpha_lifetime_c.f90
-)
-target_link_libraries(alpha_lifetime_vmec_c.x simple)
-add_executable (alpha_lifetime_old.x
-	../../SRC/binsrc.f90
-	../../SRC/alpha_lifetime.f90
-)
-target_link_libraries(alpha_lifetime_old.x simple)
 add_executable (test_parse_ants.x test_parse_ants.f90)
 target_link_libraries(test_parse_ants.x simple)
 add_executable (test_boozer.x test_boozer.f90)
