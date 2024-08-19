@@ -116,7 +116,7 @@ contains
     if (iostat /= 0) goto 666
     close(1)
 
-	  if (deterministic) then
+    if (deterministic) then
       call random_seed(size = seedsize)
       if (.not. allocated(seed)) allocate(seed(seedsize))
       seed = 0
