@@ -3,6 +3,8 @@ module field_can_meiss
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_can_base, only: FieldCan
 use simple_magfie, only: MagneticField
+use interpolate, only: SplineData3D, construct_splines_3d, &
+    evaluate_splines_3d, evaluate_splines_3d_der2
 
 implicit none
 
@@ -15,7 +17,36 @@ real(dp) :: rmin=1d-12, rmax=1d0, thmin=0d0, thmax=twopi
 real(dp) :: h_r, h_phi, h_th
 real(dp), dimension(:,:,:), allocatable :: lam_phi, chi_gauge
 
+type(SplineData3D) :: spl_Bmod, spl_A2, spl_A3, spl_h2, spl_h3
+integer, parameter :: order(3) = [5, 5, 5]
+logical, parameter :: periodic(3) = [.False., .True., .True.]
+
 contains
+
+subroutine init(magfie_, n_r_, n_phi_, n_th_, rmin_, rmax_, thmin_, thmax_)
+
+  class(MagneticField), intent(in) :: magfie_
+  integer, intent(in), optional :: n_r_, n_phi_, n_th_
+  real(dp), intent(in), optional :: rmin_, rmax_, thmin_, thmax_
+
+  if (allocated(magfie)) deallocate(magfie)
+  allocate(magfie, source=magfie_)
+
+  if (present(n_r_)) n_r = n_r_
+  if (present(n_phi_)) n_phi = n_phi_
+  if (present(n_th_)) n_th = n_th_
+
+  if (present(rmin_)) rmin = rmin_
+  if (present(rmax_)) rmax = rmax_
+  if (present(thmin_)) thmin = thmin_
+  if (present(thmax_)) thmax = thmax_
+
+  h_r = (rmax-rmin)/(n_r-1)
+  h_phi = twopi/(n_phi-1)
+  h_th = (thmax-thmin)/(n_th-1)
+
+end subroutine init
+
 
 subroutine evaluate(f, r, th_c, ph_c, mode_secders)
 
@@ -28,6 +59,39 @@ subroutine evaluate(f, r, th_c, ph_c, mode_secders)
     f%Aph = 0d0
 
 end subroutine evaluate
+
+
+subroutine init_canonical_field_components
+    real(dp), dimension(:,:,:,:), allocatable :: xcan
+    real(dp), dimension(:,:,:), allocatable :: A2, A3, h2, h3, Bmod
+    real(dp) :: x_min(3), x_max(3)
+
+    allocate(xcan(3,n_r,n_phi,n_th))
+    call generate_regular_grid(xcan)
+
+    x_min = [rmin, 0d0, thmin]
+    x_max = [rmax, twopi, thmax]
+
+    ! TODO: Fill A2, A3, h2, h3, Bmod
+
+    allocate(A2(n_r,n_phi,n_th), A3(n_r,n_phi,n_th))
+    call construct_splines_3d(x_min, x_max, A2(:,:,:), order, periodic, spl_A2)
+    call construct_splines_3d(x_min, x_max, A3(:,:,:), order, periodic, spl_A3)
+    deallocate(A2, A3)
+
+    allocate(h2(n_r,n_phi,n_th), h3(n_r,n_phi,n_th))
+    call construct_splines_3d(x_min, x_max, h2(:,:,:), order, periodic, spl_h2)
+    call construct_splines_3d(x_min, x_max, h3(:,:,:), order, periodic, spl_h3)
+    deallocate(h2, h3)
+
+    allocate(Bmod(n_r,n_phi,n_th))
+    call construct_splines_3d(x_min, x_max, Bmod, order, periodic, spl_Bmod)
+    deallocate(Bmod)
+
+    deallocate(xcan)
+
+end subroutine init_canonical_field_components
+
 
 subroutine init_transformation
     integer :: i_r, i_phi, i_th, i_ctr
@@ -163,28 +227,30 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
 end subroutine ah_cov_on_slice
 
 
-subroutine init(magfie_, n_r_, n_phi_, n_th_, rmin_, rmax_, thmin_, thmax_)
+pure subroutine generate_regular_grid(x)
+real(dp), intent(inout) :: x(:,:,:,:)
 
-  class(MagneticField), intent(in) :: magfie_
-  integer, intent(in), optional :: n_r_, n_phi_, n_th_
-  real(dp), intent(in), optional :: rmin_, rmax_, thmin_, thmax_
+integer :: i_r, i_phi, i_th
 
-  if (allocated(magfie)) deallocate(magfie)
-  allocate(magfie, source=magfie_)
+do i_th=1,n_th
+    do i_phi=1,n_phi
+        do i_r=1,n_r
+            x(:, i_r, i_phi, i_th) = get_grid_point(i_r, i_phi, i_th)
+        enddo
+    enddo
+enddo
 
-  if (present(n_r_)) n_r = n_r_
-  if (present(n_phi_)) n_phi = n_phi_
-  if (present(n_th_)) n_th = n_th_
+end subroutine generate_regular_grid
 
-  if (present(rmin_)) rmin = rmin_
-  if (present(rmax_)) rmax = rmax_
-  if (present(thmin_)) thmin = thmin_
-  if (present(thmax_)) thmax = thmax_
+pure function get_grid_point(i_r, i_phi, i_th)
+    integer, intent(in) :: i_r, i_phi, i_th
+    real(dp) :: get_grid_point(3)
 
-  h_r = (rmax-rmin)/(n_r-1)
-  h_phi = twopi/(n_phi-1)
-  h_th = (thmax-thmin)/(n_th-1)
-
-end subroutine init
+    get_grid_point = [ &
+        rmin + h_r*dble(i_r-1), &
+        h_phi*dble(i_phi-1), &
+        thmin + h_th*dble(i_th-1) &
+    ]
+end function get_grid_point
 
 end module field_can_meiss
