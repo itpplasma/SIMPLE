@@ -19,6 +19,7 @@ set(SOURCES
     magfie/magfie_base.f90
     magfie/magfie_vmec.f90
     magfie/magfie.f90
+    field/field_vmec.f90
     field/field_can_base.f90
     field/field_can_test.f90
     field/field_can_flux.f90
