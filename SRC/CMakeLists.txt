@@ -8,6 +8,7 @@ set(SOURCES
     magfie.f90
     boozer_converter.f90
     binsrc.f90
+    coordinates/coordinates.f90
     plag_coeff.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
