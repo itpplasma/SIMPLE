@@ -606,14 +606,13 @@ subroutine init_starting_points
   use get_can_sub, only: can_to_vmec
 
   integer :: i, ipart, iskip
-  real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
 
   ! skip random numbers according to configuration
     do iskip=1,loopskip
       do ipart=1,ntestpart
-        xi=zzg()
-        xi=zzg()
+        call random_number(xi)
+        call random_number(xi)
       enddo
     enddo
 
@@ -622,7 +621,7 @@ subroutine init_starting_points
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
     do ipart=1,ntestpart
-      xi=zzg()
+      call random_number(xi)
       call binsrc(volstart,1,npoiper*nper,xi,i)
       ibins=i
       ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
@@ -648,7 +647,7 @@ subroutine init_starting_points
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:
-      xi=zzg()
+      call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)
       write(1,*) zstart(:,ipart)
     enddo
@@ -677,7 +676,6 @@ subroutine init_starting_points_global
 
   integer, parameter :: ns=1000
   integer :: ipart,iskip,is,s_idx,parts_per_s
-  real :: zzg
   double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
   double precision :: s,bmin,bmax
 !
@@ -741,7 +739,7 @@ subroutine init_starting_points_global
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:
-      xi=zzg()
+      call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)
       write(1,*) zstart(:,ipart)
     enddo

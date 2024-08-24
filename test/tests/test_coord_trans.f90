@@ -190,13 +190,12 @@ subroutine init_starting_points
   use binsrc_sub
 
   integer :: ipart
-  real :: zzg
 
   ! skip random numbers according to configuration
     do iskip=1,loopskip
       do ipart=1,ntestpart
-        xi=zzg()
-        xi=zzg()
+        call random_number(xi)
+        call random_number(xi)
       enddo
     enddo
 
@@ -205,7 +204,7 @@ subroutine init_starting_points
   ! determine the starting point:
   if (startmode == 0 .or. startmode == 1) then
     do ipart=1,ntestpart
-      xi=zzg()
+      call random_number(xi)
       call binsrc(volstart,1,npoi,xi,i)
       ibins=i
       ! coordinates: z(1) = R, z(2) = phi, z(3) = Z
@@ -213,7 +212,7 @@ subroutine init_starting_points
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:
-      xi=zzg()
+      call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)
       write(1,*) zstart(:,ipart)
     enddo
