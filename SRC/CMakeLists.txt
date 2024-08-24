@@ -21,7 +21,6 @@ set(SOURCES
     orbit_symplectic_quasi.f90
     util.f90
     simple.f90
-    bench.f90
     parse_ants.f90
     collis_alphas.f90
     params.f90

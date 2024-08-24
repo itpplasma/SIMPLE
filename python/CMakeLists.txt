@@ -78,7 +78,6 @@ set(FILES_TO_WRAP
     vmecinm_m.f90
     new_vmec_allocation_stuff.f90
     spline_vmec_data.f90
-    bench.f90
     magfie.f90
 )
 
