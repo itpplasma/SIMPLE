@@ -35,4 +35,8 @@ target_link_libraries(test_orbits.x simple)
 add_executable (test_collis.x ../../SRC/test_collis.f90)
 target_link_libraries(test_collis.x simple)
 
+add_executable (test_coordinates.x test_coordinates.f90)
+target_link_libraries(test_coordinates.x simple)
+add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
+
 add_subdirectory(field_can)
