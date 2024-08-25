@@ -10,7 +10,7 @@ procedure(transform_i), pointer :: transform
 character(32) :: from, to
 real(dp) :: xfrom(3), xto(3), dxto_dxfrom(3,3)
 
-xfrom = [0.d0, 0.d0, 0.d0]
+xfrom = [0.5d0, 0.1d0, 0.2d0]
 
 call get_command_argument(1, from)
 call get_command_argument(2, to)
