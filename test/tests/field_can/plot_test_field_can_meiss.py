@@ -34,8 +34,10 @@ PH = data[:,1]
 TH = data[:,2]
 Ar = data[:,3]
 Ap = data[:,4]
-hr = data[:,5]
-hp = data[:,6]
+At = data[:,5]
+hr = data[:,6]
+hp = data[:,7]
+ht = data[:,8]
 
 r = np.unique(R)
 ph = np.unique(PH)

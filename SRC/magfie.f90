@@ -24,7 +24,7 @@ end interface
 
 procedure(magfie_base), pointer :: magfie => null()
 
-integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3
+integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
 
 contains
 
@@ -42,6 +42,8 @@ subroutine init_magfie(id)
   case(BOOZER)
     magfie => magfie_boozer
   case(MEISS)
+    magfie => magfie_vmec  ! TODO
+  case(ALBERT)
     magfie => magfie_vmec  ! TODO
   case default
     print *,'init_magfie: unknown id ', id

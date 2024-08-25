@@ -14,6 +14,7 @@ module simple
   use params, only : Tracer, idx
   use boozer_sub, only : boozer_converter
   use chamb_sub, only : chamb_can
+  use magfie_sub, only: VMEC, CANFLUX, BOOZER, MEISS, ALBERT
 
 implicit none
 save
@@ -33,6 +34,7 @@ contains
     use get_can_sub, only : get_canonical_coordinates
     use magfie_sub, only : init_magfie
     use vmecin_sub, only : stevvo
+    use field_can_meiss, only : get_meiss_coordinates
 
     ! initialize field geometry
     character(*), intent(in) :: vmec_file
@@ -58,12 +60,15 @@ contains
 
     if (self%integmode>=0) then
       call field_can_from_id(isw_field_type, VmecField())
-      if (isw_field_type == 0) then
+      if (isw_field_type == CANFLUX) then
         print *, 'init_field: Canonical flux coordinates'
         call get_canonical_coordinates ! pre-compute transformation to canonical coords
-      elseif (isw_field_type == 2) then
+      elseif (isw_field_type == BOOZER) then
         print *, 'init_field: Boozer coordinates'
         call boozer_converter
+      elseif (isw_field_type == MEISS) then
+        print *, 'init_field: Meiss coordinates'
+        call get_meiss_coordinates
       endif
       call init_magfie(isw_field_type)
     end if
@@ -442,6 +447,7 @@ module simple_main
   use binsrc_sub, only : binsrc
   use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
   use check_orbit_type_sub, only : check_orbit_type
+  use magfie_sub, only: VMEC, CANFLUX, BOOZER, MEISS, ALBERT
 
   implicit none
 
@@ -630,14 +636,17 @@ subroutine init_starting_points
       varphi=xstart(3,i)
 !
 ! we store starting points in VMEC coordinates:
-      if(isw_field_type.eq.0) then
+      if(isw_field_type .eq. CANFLUX) then
         call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.1) then
+      elseif(isw_field_type .eq. VMEC) then
         theta_vmec=vartheta
         varphi_vmec=varphi
-      elseif(isw_field_type.eq.2) then
+      elseif(isw_field_type .eq. BOOZER) then
         call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.3) then ! TODO
+      elseif(isw_field_type .eq. MEISS) then ! TODO
+          theta_vmec=vartheta
+          varphi_vmec=varphi
+      elseif(isw_field_type .eq. ALBERT) then ! TODO
           theta_vmec=vartheta
           varphi_vmec=varphi
       else
@@ -725,12 +734,12 @@ subroutine init_starting_points_global
       varphi=twopi*xi
 !
 ! we store starting points in VMEC coordinates:
-      if(isw_field_type.eq.0) then
+      if(isw_field_type .eq. CANFLUX) then
         call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.1) then
+      elseif(isw_field_type .eq. VMEC) then
         theta_vmec=vartheta
         varphi_vmec=varphi
-      elseif(isw_field_type.eq.2) then
+      elseif(isw_field_type .eq. BOOZER) then
         call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       else
         print *,'init_starting_points: unknown field type'
@@ -861,9 +870,9 @@ subroutine trace_orbit(anorb, ipart)
   theta_vmec=z(2)
   varphi_vmec=z(3)
 !
-  if(isw_field_type.eq.0) then
+  if(isw_field_type .eq. CANFLUX) then
       call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
-  elseif(isw_field_type.eq.2) then
+  elseif(isw_field_type .eq. BOOZER) then
       call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
   endif
 
@@ -1220,10 +1229,10 @@ subroutine trace_orbit(anorb, ipart)
 
   !$omp critical
   zend(:,ipart) = z
-  if(isw_field_type.eq.0) then
+  if(isw_field_type .eq. CANFLUX) then
     ! TODO need to add can_to_vmec
     ! call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
-  elseif(isw_field_type.eq.2) then
+  elseif(isw_field_type .eq. BOOZER) then
     call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
   endif
   times_lost(ipart) = kt*dtaumin/v0

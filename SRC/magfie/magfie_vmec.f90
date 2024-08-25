@@ -11,19 +11,18 @@ end type VmecField
 
 contains
 
-subroutine evaluate(self, x, Acov, hcov, sqgBctr, Bmod)
+subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     use spline_vmec_sub
     class(VmecField), intent(in) :: self
     real(dp), intent(in) :: x(3)
-    real(dp), intent(out), dimension(3) :: Acov, hcov, sqgBctr
+    real(dp), intent(out), dimension(3) :: Acov, hcov
     real(dp), intent(out) :: Bmod
+    real(dp), intent(out), optional :: sqgBctr(3)
 
     real(dp) :: Acov_theta, Acov_phi
     real(dp) :: dA_theta_ds, dA_phi_ds, Bctr_theta, Bctr_phi
     real(dp) :: aiota, sqg, alam, dl_ds, dl_dt, dl_dp
     real(dp) :: Bcov_s, Bcov_theta, Bcov_phi
-
-    sqgBctr(1) = 0d0
 
     call vmec_field(x(1), x(2), x(3), Acov_theta, Acov_phi, &
         dA_theta_ds, dA_phi_ds, aiota, sqg, alam, dl_ds, dl_dt, dl_dp, &
@@ -39,9 +38,11 @@ subroutine evaluate(self, x, Acov, hcov, sqgBctr, Bmod)
     hcov(2) = Bcov_theta/Bmod
     hcov(3) = Bcov_phi/Bmod
 
-    sqgBctr(1) = 0d0
-    sqgBctr(2) = -dA_phi_ds
-    sqgBctr(3) = dA_theta_ds
+    if (present(sqgBctr)) then
+        sqgBctr(1) = 0d0
+        sqgBctr(2) = -dA_phi_ds
+        sqgBctr(3) = dA_theta_ds
+    end if
 end subroutine evaluate
 
 end module simple_magfie_vmec

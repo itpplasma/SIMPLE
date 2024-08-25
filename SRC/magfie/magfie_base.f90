@@ -9,14 +9,14 @@ contains
 end type MagneticField
 
 abstract interface
-    subroutine evaluate(self, x, Acov, hcov, sqgBctr, Bmod)
+    subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         import :: dp, MagneticField
         class(MagneticField), intent(in) :: self
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: Acov(3)
         real(dp), intent(out) :: hcov(3)
-        real(dp), intent(out) :: sqgBctr(3)
         real(dp), intent(out) :: Bmod
+        real(dp), intent(out), optional :: sqgBctr(3)
     end subroutine evaluate
 end interface
 

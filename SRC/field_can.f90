@@ -3,13 +3,14 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
-use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS
+use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
 use simple_magfie, only : MagneticField
 use field_can_base, only : evaluate_base => evaluate, FieldCan
 use field_can_test, only : evaluate_test => evaluate
 use field_can_flux, only : evaluate_flux => evaluate
 use field_can_boozer, only : evaluate_boozer => evaluate
 use field_can_meiss, only : evaluate_meiss => evaluate, init_meiss => init
+use field_can_albert, only : evaluate_albert => evaluate, init_albert => init
 
 implicit none
 
@@ -36,6 +37,11 @@ subroutine field_can_from_name(field_name, magfie)
         call init_meiss(magfie)
       end if
       evaluate => evaluate_meiss
+    case("albert")
+      if (present(magfie)) then
+        call init_albert(magfie)
+      end if
+      evaluate => evaluate_albert
     case default
       print *, "field_can_from_name: Unknown field type ", field_name
       error stop
@@ -70,6 +76,8 @@ function name_from_id(field_id)
       name_from_id = "boozer"
     case(MEISS)
       name_from_id = "meiss"
+    case(ALBERT)
+      name_from_id = "albert"
     case default
       print *, "name_from_id: Unknown field id ", field_id
       error stop

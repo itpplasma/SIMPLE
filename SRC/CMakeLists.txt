@@ -27,6 +27,8 @@ set(SOURCES
     field/field_can_flux.f90
     field/field_can_boozer.f90
     field/field_can_meiss.f90
+    field/psi_transform.f90
+    field/field_can_albert.f90
     field_can.f90
     orbit_symplectic.f90
     orbit_symplectic_quasi.f90
