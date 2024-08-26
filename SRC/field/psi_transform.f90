@@ -6,16 +6,16 @@ module psi_transform
 
   contains
 
-  subroutine grid_r_to_psi( n_r, n_phi, n_th, rmin, rmax, psi_inner, psi_outer, &
+  subroutine grid_r_to_psi( n_r, n_th, n_phi, rmin, rmax, psi_inner, psi_outer, &
       psi_of_x, Aph_of_x, hph_of_x, hth_of_x, Bmod_of_x, &
       r_of_xc, Aph_of_xc, hph_of_xc, hth_of_xc, Bmod_of_xc)
 
-      integer, intent(in) :: n_r, n_phi, n_th
+      integer, intent(in) :: n_r, n_th, n_phi
       real(dp), intent(in) :: rmin, rmax, psi_inner, psi_outer
-      real(dp), dimension(n_r, n_phi, n_th), intent(in) :: &
+      real(dp), dimension(n_r, n_th, n_phi), intent(in) :: &
         psi_of_x, Aph_of_x, hph_of_x, hth_of_x, Bmod_of_x
-      real(dp), dimension(n_r, n_phi, n_th), intent(out) :: &
-          r_of_xc, Aph_of_xc, hph_of_xc, hth_of_xc, Bmod_of_xc
+      real(dp), dimension(n_r, n_th, n_phi), intent(out) :: &
+          r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc
 
 ! ***** This should be an input variable:
 !        integer,  intent(in) :: n_psi
@@ -50,7 +50,7 @@ module psi_transform
 !
       i_phi = n_phi/2
       i_th = n_th/2
-      if(psi_of_x(n_r,i_phi,i_th).gt.psi_of_x(1,i_phi,i_th)) then
+      if(psi_of_x(n_r,i_th,i_phi).gt.psi_of_x(1,i_th,i_phi)) then
         reverse = .false.
       else
         reverse = .true.
@@ -61,9 +61,9 @@ module psi_transform
       do i_phi = 1,n_phi
         do i_th = 1,n_th
           if(reverse) then
-            psi_loc = psi_of_x(n_r:1:-1, i_phi, i_th)
+            psi_loc = psi_of_x(n_r:1:-1, i_th, i_phi)
           else
-            psi_loc = psi_of_x(:, i_phi, i_th)
+            psi_loc = psi_of_x(:, i_th, i_phi)
           endif
           do i_psi = 1,n_psi
             psi_fix = psi_inner+h_psi*dble(i_psi-1)
@@ -85,17 +85,17 @@ module psi_transform
             if(reverse) then
               ibeg = n_r - ibeg +1
               iend = n_r - iend +1
-              r_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*r(ibeg:iend:-1))
-              Aph_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*Aph_of_x(ibeg:iend:-1, i_phi, i_th))
-              hph_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*hph_of_x(ibeg:iend:-1, i_phi, i_th))
-              hth_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*hth_of_x(ibeg:iend:-1, i_phi, i_th))
-              Bmod_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*Bmod_of_x(ibeg:iend:-1, i_phi, i_th))
+              r_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*r(ibeg:iend:-1))
+              Aph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Aph_of_x(ibeg:iend:-1, i_th, i_phi))
+              hph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hph_of_x(ibeg:iend:-1, i_th, i_phi))
+              hth_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hth_of_x(ibeg:iend:-1, i_th, i_phi))
+              Bmod_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Bmod_of_x(ibeg:iend:-1, i_th, i_phi))
             else
-              r_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*r(ibeg:iend))
-              Aph_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*Aph_of_x(ibeg:iend, i_phi, i_th))
-              hph_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*hph_of_x(ibeg:iend, i_phi, i_th))
-              hth_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*hth_of_x(ibeg:iend, i_phi, i_th))
-              Bmod_of_xc(i_psi, i_phi, i_th) = sum(coef(0,:)*Bmod_of_x(ibeg:iend, i_phi, i_th))
+              r_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*r(ibeg:iend))
+              Aph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Aph_of_x(ibeg:iend, i_th, i_phi))
+              hph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hph_of_x(ibeg:iend, i_th, i_phi))
+              hth_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hth_of_x(ibeg:iend, i_th, i_phi))
+              Bmod_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Bmod_of_x(ibeg:iend, i_th, i_phi))
             endif
           enddo
         enddo
