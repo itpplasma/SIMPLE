@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_can_base, only: FieldCan, n_field_evaluations
 use simple_magfie, only: MagneticField
 use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der2
+    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
 
 implicit none
 
@@ -61,17 +61,31 @@ subroutine evaluate(f, r, th_c, ph_c, mode_secders)
 
     real(dp) :: x(3), a, da(3), d2a(6)
 
+    n_field_evaluations = n_field_evaluations + 1
+
     x = [r, th_c, ph_c]
 
-    call evaluate_splines_3d_der2(spl_Ath, x, f%Ath, f%dAth, f%d2Ath)
-    call evaluate_splines_3d_der2(spl_Aph, x, f%Aph, f%dAph, f%d2Aph)
+    if (mode_secders > 0) then
 
-    call evaluate_splines_3d_der2(spl_hth, x, f%hth, f%dhth, f%d2hth)
-    call evaluate_splines_3d_der2(spl_hph, x, f%hph, f%dhph, f%d2hph)
+        call evaluate_splines_3d_der2(spl_Ath, x, f%Ath, f%dAth, f%d2Ath)
+        call evaluate_splines_3d_der2(spl_Aph, x, f%Aph, f%dAph, f%d2Aph)
 
-    call evaluate_splines_3d_der2(spl_Bmod, x, f%Bmod, f%dBmod, f%d2Bmod)
+        call evaluate_splines_3d_der2(spl_hth, x, f%hth, f%dhth, f%d2hth)
+        call evaluate_splines_3d_der2(spl_hph, x, f%hph, f%dhph, f%d2hph)
 
-    n_field_evaluations = n_field_evaluations + 1
+        call evaluate_splines_3d_der2(spl_Bmod, x, f%Bmod, f%dBmod, f%d2Bmod)
+
+        return
+    end if
+
+    call evaluate_splines_3d_der(spl_Ath, x, f%Ath, f%dAth)
+    call evaluate_splines_3d_der(spl_Aph, x, f%Aph, f%dAph)
+
+    call evaluate_splines_3d_der(spl_hth, x, f%hth, f%dhth)
+    call evaluate_splines_3d_der(spl_hph, x, f%hph, f%dhph)
+
+    call evaluate_splines_3d_der(spl_Bmod, x, f%Bmod, f%dBmod)
+
 end subroutine evaluate
 
 
