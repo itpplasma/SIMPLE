@@ -29,22 +29,30 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
-    use magfie_sub, only : init_magfie
-    use vmecin_sub, only : stevvo
-    use get_can_sub, only : get_canonical_coordinates
-    use boozer_sub, only : get_boozer_coordinates
-    use field_can_meiss, only : get_meiss_coordinates
-    use field_can_albert, only : get_albert_coordinates
-
-    ! initialize field geometry
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-    integer             :: ierr
+
+    call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
+
+    self%integmode = aintegmode
+
+    if (self%integmode>=0) then
+      call init_field_can
+    end if
+  end subroutine init_field
+
+
+  subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)
+    use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
+    use vmecin_sub, only : stevvo
+
+    character(*), intent(in) :: vmec_file
+    integer, intent(in) :: ans_s, ans_tp, amultharm
+    double precision, intent(out) :: fper
+
     integer             :: L1i
     double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
-    double precision    :: z(5)
 
     netcdffile = vmec_file
     ns_s = ans_s
@@ -53,15 +61,21 @@ contains
 
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
-    self%fper = twopi/dble(L1i)   !<= field period
-    print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
+    fper = twopi/dble(L1i)   !<= field period
+    print *, 'R0 = ', RT0, ' cm, fper = ', fper
     call volume_and_B00(volume,B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
+  end subroutine init_vmec
 
-    self%integmode = aintegmode
 
-    if (self%integmode>=0) then
-      call field_can_from_id(isw_field_type, VmecField())
+  subroutine init_field_can
+    use magfie_sub, only : init_magfie
+    use get_can_sub, only : get_canonical_coordinates
+    use boozer_sub, only : get_boozer_coordinates
+    use field_can_meiss, only : get_meiss_coordinates
+    use field_can_albert, only : get_albert_coordinates
+
+    call field_can_from_id(isw_field_type, VmecField())
       select case (isw_field_type)
         case (CANFLUX)
           print *, 'init_field: Canonical flux coordinates'
@@ -77,14 +91,8 @@ contains
           call get_albert_coordinates
       end select
       call init_magfie(isw_field_type)
-    end if
+  end subroutine init_field_can
 
-    ! initialize position and do first check if z is inside vacuum chamber
-    z = 0.0d0
-    call chamb_can(z(1:2), z(3), ierr)
-    if(ierr.ne.0) stop
-    z = 1.0d0
-  end subroutine init_field
 
   subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
