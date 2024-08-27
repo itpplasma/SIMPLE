@@ -1,17 +1,17 @@
 module field_can_meiss
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: FieldCan, n_field_evaluations
-use simple_magfie, only: MagneticField
 use interpolate, only: SplineData3D, construct_splines_3d, &
     evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
+use field_can_base, only: FieldCan, n_field_evaluations
+use simple_magfie, only: MagneticField
 
 implicit none
 
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
 class(MagneticField), allocatable :: magfie
-integer :: n_r=63, n_th=65, n_phi=64
+integer :: n_r=63, n_th=64, n_phi=65
 real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
@@ -54,12 +54,11 @@ end subroutine init
 
 
 subroutine evaluate(f, r, th_c, ph_c, mode_secders)
-
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
-    real(dp) :: x(3), a, da(3), d2a(6)
+    real(dp) :: x(3)
 
     n_field_evaluations = n_field_evaluations + 1
 
@@ -85,7 +84,6 @@ subroutine evaluate(f, r, th_c, ph_c, mode_secders)
     call evaluate_splines_3d_der(spl_hph, x, f%hph, f%dhph)
 
     call evaluate_splines_3d_der(spl_Bmod, x, f%Bmod, f%dBmod)
-
 end subroutine evaluate
 
 
@@ -287,6 +285,7 @@ do i_phi=1,n_phi
 enddo
 
 end subroutine generate_regular_grid
+
 
 pure function get_grid_point(i_r, i_th, i_phi)
     integer, intent(in) :: i_r, i_th, i_phi

@@ -12,7 +12,6 @@ module simple
   use field_can_mod, only : eval_field => evaluate, FieldCan, field_can_from_id
   use diag_mod, only : icounter
   use params, only : Tracer, idx
-  use boozer_sub, only : boozer_converter
   use chamb_sub, only : chamb_can
   use magfie_sub, only: VMEC, CANFLUX, BOOZER, MEISS, ALBERT
 
@@ -31,10 +30,12 @@ contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
-    use get_can_sub, only : get_canonical_coordinates
     use magfie_sub, only : init_magfie
     use vmecin_sub, only : stevvo
+    use get_can_sub, only : get_canonical_coordinates
+    use boozer_sub, only : get_boozer_coordinates
     use field_can_meiss, only : get_meiss_coordinates
+    use field_can_albert, only : get_albert_coordinates
 
     ! initialize field geometry
     character(*), intent(in) :: vmec_file
@@ -49,7 +50,6 @@ contains
     ns_s = ans_s
     ns_tp = ans_tp
     multharm = amultharm
-    self%integmode = aintegmode
 
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
@@ -58,21 +58,26 @@ contains
     call volume_and_B00(volume,B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
 
+    self%integmode = aintegmode
+
     if (self%integmode>=0) then
       call field_can_from_id(isw_field_type, VmecField())
-      if (isw_field_type == CANFLUX) then
-        print *, 'init_field: Canonical flux coordinates'
-        call get_canonical_coordinates ! pre-compute transformation to canonical coords
-      elseif (isw_field_type == BOOZER) then
-        print *, 'init_field: Boozer coordinates'
-        call boozer_converter
-      elseif (isw_field_type == MEISS) then
-        print *, 'init_field: Meiss coordinates'
-        call get_meiss_coordinates
-      endif
+      select case (isw_field_type)
+        case (CANFLUX)
+          print *, 'init_field: Canonical flux coordinates'
+          call get_canonical_coordinates
+        case (BOOZER)
+          print *, 'init_field: Boozer coordinates'
+          call get_boozer_coordinates
+        case (MEISS)
+          print *, 'init_field: Meiss coordinates'
+          call get_meiss_coordinates
+        case (ALBERT)
+          print *, 'init_field: Albert coordinates'
+          call get_albert_coordinates
+      end select
       call init_magfie(isw_field_type)
     end if
-
 
     ! initialize position and do first check if z is inside vacuum chamber
     z = 0.0d0
@@ -612,7 +617,7 @@ subroutine init_starting_points
   use get_can_sub, only: can_to_vmec
 
   integer :: i, ipart, iskip
-  double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+  double precision :: r,vartheta,varphi,s_vmec,theta_vmec,varphi_vmec
 
   ! skip random numbers according to configuration
     do iskip=1,loopskip
@@ -637,23 +642,28 @@ subroutine init_starting_points
 !
 ! we store starting points in VMEC coordinates:
       if(isw_field_type .eq. CANFLUX) then
+        s_vmec=r
         call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       elseif(isw_field_type .eq. VMEC) then
+        s_vmec=r
         theta_vmec=vartheta
         varphi_vmec=varphi
       elseif(isw_field_type .eq. BOOZER) then
+        s_vmec=r
         call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       elseif(isw_field_type .eq. MEISS) then ! TODO
+          s_vmec=r
           theta_vmec=vartheta
           varphi_vmec=varphi
       elseif(isw_field_type .eq. ALBERT) then ! TODO
+          s_vmec=r
           theta_vmec=vartheta
           varphi_vmec=varphi
       else
         print *,'init_starting_points: unknown field type'
       endif
 !
-      zstart(1,ipart)=r
+      zstart(1,ipart)=s_vmec
       zstart(2,ipart)=theta_vmec
       zstart(3,ipart)=varphi_vmec
       ! normalized velocity module z(4) = v / v_0:

@@ -6,17 +6,17 @@ module psi_transform
 
   contains
 
-  subroutine grid_r_to_psi( n_r, n_th, n_phi, rmin, rmax, psi_inner, psi_outer, &
-      psi_of_x, Aph_of_x, hph_of_x, hth_of_x, Bmod_of_x, &
-      r_of_xc, Aph_of_xc, hph_of_xc, hth_of_xc, Bmod_of_xc)
+  subroutine grid_r_to_psi(rmin, rmax, psi_inner, psi_outer, &
+      psi_of_x, Aph_of_x, hth_of_x, hph_of_x, Bmod_of_x, &
+      r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc)
 
-      integer, intent(in) :: n_r, n_th, n_phi
       real(dp), intent(in) :: rmin, rmax, psi_inner, psi_outer
-      real(dp), dimension(n_r, n_th, n_phi), intent(in) :: &
-        psi_of_x, Aph_of_x, hph_of_x, hth_of_x, Bmod_of_x
-      real(dp), dimension(n_r, n_th, n_phi), intent(out) :: &
+      real(dp), dimension(:,:,:), intent(in) :: &
+        psi_of_x, Aph_of_x, hth_of_x, hph_of_x, Bmod_of_x
+      real(dp), dimension(:,:,:), intent(out) :: &
           r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc
 
+      integer :: n_r, n_th, n_phi
 ! ***** This should be an input variable:
 !        integer,  intent(in) :: n_psi
 ! in case n_psi is different from n_r, n_r should be replaced
@@ -37,6 +37,10 @@ module psi_transform
       real(dp), dimension(:),   allocatable :: xp, psi_loc, r
       real(dp), dimension(:,:), allocatable :: coef
 !
+      n_r = size(psi_of_x,1)
+      n_th = size(psi_of_x,2)
+      n_phi = size(psi_of_x,3)
+!
       allocate(xp(nplagr),coef(0:nder,nplagr),psi_loc(n_r),r(n_r))
       nshift = nplagr/2
 
@@ -55,7 +59,7 @@ module psi_transform
       else
         reverse = .true.
       endif
-
+!
       h_psi=(psi_outer-psi_inner)/dble(n_psi-1)
 !
       do i_phi = 1,n_phi
@@ -72,12 +76,12 @@ module psi_transform
 !
             ibeg = i_r - nshift
             iend = ibeg+nplagr-1
-            if(ibeg.lt.0) then
+            if(ibeg.lt.1) then
               ibeg = 1
-              iend = ibeg+nplagr-1
+              iend = min(ibeg+nplagr-1,n_r)
             elseif(iend.gt.n_r) then
               iend = n_r
-              ibeg = iend-nplagr+1
+              ibeg = max(1, iend-nplagr+1)
             endif
 !
             call plag_coeff(nplagr,nder,psi_fix,psi_loc(ibeg:iend),coef)
@@ -87,14 +91,14 @@ module psi_transform
               iend = n_r - iend +1
               r_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*r(ibeg:iend:-1))
               Aph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Aph_of_x(ibeg:iend:-1, i_th, i_phi))
-              hph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hph_of_x(ibeg:iend:-1, i_th, i_phi))
               hth_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hth_of_x(ibeg:iend:-1, i_th, i_phi))
+              hph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hph_of_x(ibeg:iend:-1, i_th, i_phi))
               Bmod_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Bmod_of_x(ibeg:iend:-1, i_th, i_phi))
             else
               r_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*r(ibeg:iend))
               Aph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Aph_of_x(ibeg:iend, i_th, i_phi))
-              hph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hph_of_x(ibeg:iend, i_th, i_phi))
               hth_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hth_of_x(ibeg:iend, i_th, i_phi))
+              hph_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*hph_of_x(ibeg:iend, i_th, i_phi))
               Bmod_of_xc(i_psi, i_th, i_phi) = sum(coef(0,:)*Bmod_of_x(ibeg:iend, i_th, i_phi))
             endif
           enddo
