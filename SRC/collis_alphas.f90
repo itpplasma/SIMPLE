@@ -233,7 +233,7 @@ module collis_alp
     if(abs(dalam).gt.1.d0) then
       ierr=2
 !
-      call random_num(ur)
+      call random_number(ur)
 !
       alam=2.d0*(dble(ur)-0.5d0)
     else
@@ -268,4 +268,32 @@ module collis_alp
   return
   end
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+  subroutine getran(irand,ur)
+!
+!  Produces the random number with zero deviation and unit square
+!  deviation
+!
+!  Input parameters: irand - 0 for continious, 1 for +1 -1,
+!  Output parameters: ur   - random number
+!
+    integer, intent(in) :: irand
+    real, intent(out) :: ur
+!
+    call random_number(ur)
+!
+    if(irand.eq.0) then
+    ! continiuos random number, constant is sqrt(12)
+      ur=3.464102*(ur-.5)
+    else
+    ! discrete random number
+      if(ur.gt..5) then
+        ur=1.
+      else
+        ur=-1.
+      endif
+    endif
+  end
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
 end module collis_alp

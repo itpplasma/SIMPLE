@@ -10,7 +10,7 @@
     vmec_to_can, can_to_vmec
   use alpha_lifetime_sub, only : orbit_timestep_axis
   use spline_vmec_sub
-  use diag_mod, only : icounter
+  use vmecin_sub, only : stevvo
 !
   implicit none
 !
@@ -25,7 +25,6 @@
   logical :: near_axis
   integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
   integer          :: ipart,notrace_passing,loopskip,iskip,ilost,it
-  real             :: zzg
   double precision :: dphi,rbeg,phibeg,zbeg,bmod00,rcham,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
   double precision :: RT0,R0i,cbfi,bz0i,bf0,trap_par

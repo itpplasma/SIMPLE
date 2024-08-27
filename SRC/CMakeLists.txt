@@ -16,17 +16,13 @@ set(SOURCES
     spl_three_to_five.f90
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.f90
-    testing.f90
     field_can.f90
     orbit_symplectic.f90
     orbit_symplectic_quasi.f90
     util.f90
     samplers.f90
     simple.f90
-    bench.f90
     parse_ants.f90
-    zzg.f90
-    rng.f
     collis_alphas.f90
     params.f90
     sorting.f90

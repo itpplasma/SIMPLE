@@ -1,3 +1,6 @@
+module vmecin_sub
+  implicit none
+  contains
 !
 ! Usage:
 !
@@ -5,10 +8,10 @@
 !               nsurfm,nstrm,kpar,torflux)
 !
 !  where scalars are:
-  
+
 !  nstrm - (integer) number of harmonics
 !  kpar  - (integer) number of radial points
-  
+
 !  vectors are:
 !  aiota(0:kpar)             - (double precision) iota profile
 !  sps(0:kpar) = 0:kpar      - (double precision) radial index as dble number
@@ -16,7 +19,7 @@
 !  s(0:kpar)                 - (double precision) normalized toroidal flux
 !  axm(nstrm)                - (double precision) poloidal mode numbers
 !  axn(nstrm)                - (double precision) toroidal mode numbers
-  
+
 !  matrices are:
 !  rmnc(nstrm,0:kpar)     - (double precision) profiles of Fourier
 !  amplitudes of R for various cos(m*theta - n*phi) harmonics
@@ -39,14 +42,12 @@
   use new_vmec_stuff_mod, only : netcdffile, vmec_B_scale, vmec_RZ_scale, rmajor
   use nctools_module
 !
-  implicit none
-!
   double precision, parameter :: pi=3.14159265358979d0
   double precision, parameter :: fac_b0=1d4,fac_r0=1d2
   double precision :: fac_b, fac_r
 !
   integer :: nsurfb,nstrb,kparb,ncid,i
-  double precision :: flux
+  double precision, intent(out) :: flux
   double precision, dimension(nstrb)         :: axm,axn
   double precision, dimension(0:kparb)       :: sps,aiota,phi,s
   double precision, dimension(nstrb,0:kparb) :: rmnc,zmnc,almnc,lmnc
@@ -120,8 +121,6 @@
 !
   use new_vmec_stuff_mod, only : nper,rmajor
 !
-  implicit none
-! 
   integer :: L1i
   double precision :: RT0,R0i,cbfi,bz0i,bf0
 !
@@ -129,3 +128,5 @@
   RT0=rmajor*1.d2
 !
   end subroutine stevvo
+
+end module vmecin_sub

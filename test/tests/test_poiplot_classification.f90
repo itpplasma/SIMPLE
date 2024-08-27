@@ -10,6 +10,7 @@ use diag_mod, only : icounter
   use plag_coeff_sub, only : plag_coeff
   use get_can_sub
   use spline_vmec_sub
+  use vmecin_sub, only : stevvo
 !
   implicit none
 !
@@ -24,7 +25,6 @@ use diag_mod, only : icounter
   logical :: near_axis
   integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
   integer          :: ipart,notrace_passing,loopskip,iskip,ilost,it
-  real             :: zzg
   double precision :: dphi,rbeg,phibeg,zbeg,bmod00,rcham,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
   double precision :: RT0,R0i,cbfi,bz0i,bf0,trap_par

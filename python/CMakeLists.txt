@@ -75,13 +75,14 @@ set(FILES_TO_WRAP
     get_canonical_coordinates.f90
     params.f90
     canonical_coordinates_mod.f90
+    vmecinm_m.f90
+    new_vmec_allocation_stuff.f90
     spline_vmec_data.f90
-    bench.f90
     magfie.f90
 )
 
 set(EXCLUDE_BASENAMES
-    spline_vmec_data
+    # Empty
 )
 
 foreach(file ${FILES_TO_WRAP})

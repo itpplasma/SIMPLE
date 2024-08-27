@@ -5,6 +5,8 @@ contains
 !
   use new_vmec_stuff_mod
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
+  use vmecin_sub, only : vmecin
+  use vmec_alloc_sub
 !
   implicit none
 !
@@ -483,50 +485,82 @@ contains
   subroutine vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                         sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                         Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-!
-  implicit none
-!
-  double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,        &
-                      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
-  double precision :: Bctrvr_vartheta,Bctrvr_varphi,Bcovar_vartheta,Bcovar_varphi,sqg
-  double precision :: cjac,sqgV,Bcovar_r
-  double precision, dimension(3,3) :: cmat,gV,g
-!
-!
+
+  double precision, intent(in) :: s,theta,varphi
+  double precision, intent(out) :: A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+    Bcovar_r,Bcovar_vartheta,Bcovar_varphi
+  double precision :: R,Z,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp
+
   call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,      &
                         R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
-!
-  gV(1,1)=dR_ds**2+dZ_ds**2
-  gV(1,2)=dR_ds*dR_dt+dZ_ds*dZ_dt
-  gV(1,3)=dR_ds*dR_dp+dZ_ds*dZ_dp
-  gV(2,1)=gV(1,2)
-  gV(2,2)=dR_dt**2+dZ_dt**2
-  gV(2,3)=dR_dt*dR_dp+dZ_dt*dZ_dp
-  gV(3,1)=gV(1,3)
-  gV(3,2)=gV(2,3)
-  gV(3,3)=R**2+dR_dp**2+dZ_dp**2
-  sqgV=R*(dR_dt*dZ_ds-dR_ds*dZ_dt)
-!
-  cjac=1.d0/(1.d0+dl_dt)
-  sqg=sqgV*cjac
-  Bctrvr_vartheta=-dA_phi_ds/sqg
-  Bctrvr_varphi=dA_theta_ds/sqg
-!
-  cmat(1,2:3)=0.d0
-  cmat(3,1:2)=0.d0
-  cmat(1,1)=1.d0
-  cmat(3,3)=1.d0
-  cmat(2,1)=-dl_ds*cjac
-  cmat(2,2)=cjac
-  cmat(2,3)=-dl_dp*cjac
-!
-  g=matmul(transpose(cmat),matmul(gV,cmat))
-!
-  Bcovar_r=g(1,2)*Bctrvr_vartheta+g(1,3)*Bctrvr_varphi
-  Bcovar_vartheta=g(2,2)*Bctrvr_vartheta+g(2,3)*Bctrvr_varphi
-  Bcovar_varphi=g(3,2)*Bctrvr_vartheta+g(3,3)*Bctrvr_varphi
-!
+
+  call compute_field_components(R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
+    dA_theta_ds,dA_phi_ds,dl_ds,dl_dt,dl_dp,&
+    sqg,Bctrvr_vartheta,Bctrvr_varphi,Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+
   end subroutine vmec_field
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine compute_field_components(R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
+    dA_theta_ds,dA_phi_ds,dl_ds,dl_dt,dl_dp,&
+    sqg,Bctrvr_vartheta,Bctrvr_varphi,Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+
+    double precision, intent(in) :: R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
+      dA_theta_ds,dA_phi_ds,dl_ds,dl_dt,dl_dp
+    double precision, intent(out) :: sqg,&
+      Bctrvr_vartheta,Bctrvr_varphi,Bcovar_vartheta,Bcovar_varphi,Bcovar_r
+
+      double precision :: g(3,3)
+
+    call compute_metric_tensor(R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
+      dl_ds,dl_dt,dl_dp,g,sqg)
+
+    Bctrvr_vartheta=-dA_phi_ds/sqg
+    Bctrvr_varphi=dA_theta_ds/sqg
+
+    Bcovar_r=g(1,2)*Bctrvr_vartheta+g(1,3)*Bctrvr_varphi
+    Bcovar_vartheta=g(2,2)*Bctrvr_vartheta+g(2,3)*Bctrvr_varphi
+    Bcovar_varphi=g(3,2)*Bctrvr_vartheta+g(3,3)*Bctrvr_varphi
+  end subroutine compute_field_components
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine compute_metric_tensor(R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
+      dl_ds,dl_dt,dl_dp,g,sqg)
+
+    double precision, intent(in) :: R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
+      dl_ds,dl_dt,dl_dp
+    double precision, intent(out) :: g(3,3),sqg
+
+    double precision, dimension(3,3) :: cmat,gV
+    double precision :: cjac,sqgV
+
+    gV(1,1)=dR_ds**2+dZ_ds**2
+    gV(1,2)=dR_ds*dR_dt+dZ_ds*dZ_dt
+    gV(1,3)=dR_ds*dR_dp+dZ_ds*dZ_dp
+    gV(2,1)=gV(1,2)
+    gV(2,2)=dR_dt**2+dZ_dt**2
+    gV(2,3)=dR_dt*dR_dp+dZ_dt*dZ_dp
+    gV(3,1)=gV(1,3)
+    gV(3,2)=gV(2,3)
+    gV(3,3)=R**2+dR_dp**2+dZ_dp**2
+    sqgV=R*(dR_dt*dZ_ds-dR_ds*dZ_dt)
+
+    cjac=1.d0/(1.d0+dl_dt)
+    sqg=sqgV*cjac
+
+    cmat(1,2:3)=0.d0
+    cmat(3,1:2)=0.d0
+    cmat(1,1)=1.d0
+    cmat(3,3)=1.d0
+    cmat(2,1)=-dl_ds*cjac
+    cmat(2,2)=cjac
+    cmat(2,3)=-dl_dp*cjac
+
+    g=matmul(transpose(cmat),matmul(gV,cmat))
+  end subroutine compute_metric_tensor
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !

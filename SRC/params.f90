@@ -6,6 +6,7 @@ module params
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator
+  use vmecin_sub, only : stevvo
 
   implicit none
   save
