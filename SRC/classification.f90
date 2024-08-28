@@ -102,9 +102,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     theta_vmec=z(2)
     varphi_vmec=z(3)
     !
-    if(isw_field_type.eq.0) then
+    if(isw_field_type .eq. CANFLUX) then
         call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
-    elseif(isw_field_type.eq.2) then
+    elseif(isw_field_type .eq. BOOZER) then
         call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
     endif
 
@@ -395,10 +395,10 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
 
     !$omp critical
     zend(:,ipart) = z
-    if(isw_field_type.eq.0) then
+    if(isw_field_type .eq. CANFLUX) then
         ! TODO need to add can_to_vmec
         ! call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
-    elseif(isw_field_type.eq.2) then
+    elseif(isw_field_type .eq. BOOZER) then
         call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
     endif
     times_lost(ipart) = kt*dtaumin/v0
