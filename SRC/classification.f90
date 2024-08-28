@@ -10,6 +10,7 @@ use cut_detector, only : fract_dimension
 use diag_mod, only : icounter
 use get_can_sub, only : vmec_to_can
 use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
+use magfie_sub, only : CANFLUX, BOOZER
 use check_orbit_type_sub, only : check_orbit_type
 
 implicit none
