@@ -71,6 +71,7 @@ message(STATUS "Python binary output dir: ${CMAKE_CURRENT_BINARY_DIR}")
 set(FILES_TO_WRAP
     simple_main.f90
     simple.f90
+    cut_detector.f90
     orbit_symplectic.f90
     field_can.f90
     get_canonical_coordinates.f90
