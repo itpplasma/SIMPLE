@@ -22,6 +22,7 @@ set(SOURCES
     util.f90
     samplers.f90
     cut_detector.f90
+    classification.f90
     simple.f90
     parse_ants.f90
     collis_alphas.f90
