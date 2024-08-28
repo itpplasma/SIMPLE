@@ -72,18 +72,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
     double precision, dimension(nfp_dim) :: fpr_in
 
-    ! for run with fixed random seed
-    integer :: seedsize
-    integer, allocatable :: seed(:)
-
     zend(:,ipart) = 0d0
-
-    if (deterministic) then
-        call random_seed(size = seedsize)
-        if (.not. allocated(seed)) allocate(seed(seedsize))
-        seed = 0
-        call random_seed(put=seed)
-    endif
     !
     iangvar=2
     ! End variables and settings for classification by J_parallel and ideal orbit condition

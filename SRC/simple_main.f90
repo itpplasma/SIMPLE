@@ -1,23 +1,17 @@
 module simple_main
-    use omp_lib
-    use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev, sqrt2
-    use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
-      vmec_B_scale, vmec_RZ_scale
+  use omp_lib
+  use util, only: pi, twopi, sqrt2
+  use velo_mod,   only : isw_field_type
+  use orbit_symplectic, only : orbit_timestep_sympl, get_val
+  use simple, only : init_sympl
+  use diag_mod, only : icounter
+  use collis_alp, only : loacol_alpha, stost
+  use binsrc_sub, only : binsrc
+  use get_can_sub, only : vmec_to_can
+  use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
+  use params
 
-    use velo_mod,   only : isw_field_type
-    use orbit_symplectic, only : orbit_timestep_sympl, get_val
-    use simple, only : init_field, init_sympl, eval_field
-    use cut_detector, only : fract_dimension
-    use diag_mod, only : icounter
-    use collis_alp, only : loacol_alpha, stost
-    use params
-    use binsrc_sub, only : binsrc
-    use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
-    use check_orbit_type_sub, only : check_orbit_type
-
-    implicit none
-
-    public
+  implicit none
 
   contains
 
@@ -86,43 +80,6 @@ module simple_main
     ! initialize lost times when particles get lost
     times_lost = -1.d0
   end subroutine init_counters
-
-
-  subroutine write_output
-
-    integer :: i, num_lost
-    double precision :: inverse_times_lost_sum
-
-    open(1,file='times_lost.dat',recl=1024)
-    num_lost = 0
-    inverse_times_lost_sum = 0.0d0
-    do i=1,ntestpart
-      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
-      if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
-        num_lost = num_lost + 1
-        inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
-      end if
-    enddo
-    close(1)
-    open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
-    write(1,*) inverse_times_lost_sum/num_lost
-    close(1)
-
-    open(1,file='confined_fraction.dat',recl=1024)
-    do i=1,ntimstep
-      write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
-    enddo
-    close(1)
-
-    if (ntcut>0 .or. class_plot) then
-        open(1,file='class_parts.dat',recl=1024)
-        do i=1,ntestpart
-        write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
-        enddo
-        close(1)
-    endif
-
-  end subroutine write_output
 
   subroutine init_starting_surf
     use alpha_lifetime_sub, only : integrate_mfl_can
@@ -333,52 +290,28 @@ module simple_main
     close(1)
   end subroutine init_starting_points_global
 
+
   subroutine trace_orbit(anorb, ipart)
     use find_bminmax_sub, only : get_bminmax
-    use get_can_sub, only : vmec_to_can
     use magfie_sub, only : magfie
-    use plag_coeff_sub, only : plag_coeff
     use alpha_lifetime_sub, only : orbit_timestep_axis
     use classification, only : trace_orbit_with_classifiers
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
-    integer :: ierr, ierr_coll
+    integer :: ierr_orbit, ierr_coll
     double precision, dimension(5) :: z
-    double precision :: bmod,sqrtg
+    double precision :: bmod, sqrtg
     double precision, dimension(3) :: bder, hcovar, hctrvr, hcurl
     integer :: it, ktau
     integer(8) :: kt
     logical :: passing
 
-    integer                                       :: ifp_tip,ifp_per
-    integer,          dimension(:),   allocatable :: ipoi
-    double precision, dimension(:),   allocatable :: xp
-    double precision, dimension(:,:), allocatable :: coef,orb_sten
-    double precision, dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
-    double precision, dimension(n_tip_vars)       :: var_tip
-    double precision :: phiper, alam_prev, par_inv
-    integer :: iper, itip, kper, nfp_tip, nfp_per
-
-    double precision :: fraction
-    double precision :: r,theta_vmec,varphi_vmec
-    logical :: regular
-
-  ! Variables and settings for classification by J_parallel and ideal orbit condition:
-    integer, parameter :: nfp_dim=3, nturns=8
-    integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
-    double precision, dimension(nfp_dim) :: fpr_in
+    double precision :: r, theta_vmec, varphi_vmec
 
   ! for run with fixed random seed
     integer :: seedsize
     integer, allocatable :: seed(:)
-
-    if (ntcut>0 .or. class_plot) then
-      call trace_orbit_with_classifiers(anorb, ipart)
-      return
-    endif
-
-    zend(:,ipart) = 0d0
 
     if (deterministic) then
       call random_seed(size = seedsize)
@@ -386,6 +319,13 @@ module simple_main
       seed = 0
       call random_seed(put=seed)
     endif
+
+    if (ntcut>0 .or. class_plot) then
+      call trace_orbit_with_classifiers(anorb, ipart)
+      return
+    endif
+
+    zend(:,ipart) = 0d0
 
     z = zstart(:, ipart)
     r=z(1)
@@ -428,23 +368,10 @@ module simple_main
       confpart_trap(1)=confpart_trap(1)+1.d0
     end if
   !
-    par_inv = 0d0
-    regular = .False.
     do it=2,ntimstep
-      if (regular) then  ! regular orbit, will not be lost
-        if(passing) then
-          !$omp atomic
-          confpart_pass(it)=confpart_pass(it)+1.d0
-        else
-          !$omp atomic
-          confpart_trap(it)=confpart_trap(it)+1.d0
-        endif
-        kt = kt+ntau
-        cycle
-      endif
       do ktau=1,ntau
         if (integmode <= 0) then
-          call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
+          call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
         else
           if (swcoll) then  ! TODO: move this inside modules
             anorb%si%pabs = z(4)
@@ -454,7 +381,7 @@ module simple_main
             call get_val(anorb%f, anorb%si%z(4)) ! for pth
             anorb%si%pthold = anorb%f%pth
           endif
-          call orbit_timestep_sympl(anorb%si, anorb%f, ierr)
+          call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
           z(1:3) = anorb%si%z(1:3)
           z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod+0.5d0*anorb%f%vpar**2)
           z(5) = anorb%f%vpar/(z(4)*sqrt2)
@@ -468,10 +395,10 @@ module simple_main
           endif
         endif
 
-        if(ierr.ne.0) exit
+        if(ierr_orbit.ne.0) exit
         kt = kt+1
       enddo
-      if(ierr.ne.0) exit
+      if(ierr_orbit.ne.0) exit
       if(passing) then
         !$omp atomic
         confpart_pass(it)=confpart_pass(it)+1.d0
@@ -493,4 +420,41 @@ module simple_main
     !$omp end critical
   end subroutine trace_orbit
 
-  end module simple_main
+
+  subroutine write_output
+
+    integer :: i, num_lost
+    double precision :: inverse_times_lost_sum
+
+    open(1,file='times_lost.dat',recl=1024)
+    num_lost = 0
+    inverse_times_lost_sum = 0.0d0
+    do i=1,ntestpart
+      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
+      if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
+        num_lost = num_lost + 1
+        inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
+      end if
+    enddo
+    close(1)
+    open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
+    write(1,*) inverse_times_lost_sum/num_lost
+    close(1)
+
+    open(1,file='confined_fraction.dat',recl=1024)
+    do i=1,ntimstep
+      write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
+    enddo
+    close(1)
+
+    if (ntcut>0 .or. class_plot) then
+        open(1,file='class_parts.dat',recl=1024)
+        do i=1,ntestpart
+        write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
+        enddo
+        close(1)
+    endif
+
+  end subroutine write_output
+
+end module simple_main
