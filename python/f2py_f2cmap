@@ -1,0 +1,21 @@
+{
+    'integer': {
+        '': 'int',
+        '4': 'int',
+        '8': 'long_long'
+    },
+    'real': {
+        '' : 'float',
+        'sp': 'float',
+        'dp': 'double',
+        'real_kind': 'double',
+        'kind1.d0': 'double',
+        '8': 'double'
+    },
+    'complex' : {
+        '' : 'complex_float',
+        '8' : 'complex_double',
+        '16' : 'complex_long_double',
+        'dp' : 'complex_double'
+    }
+}

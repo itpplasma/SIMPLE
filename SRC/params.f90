@@ -9,7 +9,6 @@ module params
   use vmecin_sub, only : stevvo
 
   implicit none
-  save
 
   type :: Tracer
     double precision :: fper
@@ -77,8 +76,6 @@ module params
 
   double precision :: v0
 
-  integer :: nfirstpart, nlastpart
-
   logical :: debug = .False.
   integer :: ierr
 
@@ -106,10 +103,6 @@ contains
     integer :: iostat
     character(1024) :: iomsg
 
-    ! for run with fixed random seed
-    integer :: seedsize
-    integer, allocatable :: seed(:)
-
     open(1, file=config_file, recl=1024, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
 
@@ -117,12 +110,7 @@ contains
     if (iostat /= 0) goto 666
     close(1)
 
-    if (deterministic) then
-      call random_seed(size = seedsize)
-      if (.not. allocated(seed)) allocate(seed(seedsize))
-      seed = 0
-      call random_seed(put=seed)
-    endif
+    call reset_seed_if_deterministic
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
@@ -137,11 +125,7 @@ contains
 
   subroutine params_init
     double precision :: E_alpha
-    integer :: iostat, i, n
-    character, dimension (:), allocatable :: batch_file
-    logical :: old_batch
-    real :: ran_tmp
-    integer :: npoi, L1i
+    integer :: L1i
 
     E_alpha = 3.5d6/facE_al
 
@@ -179,7 +163,16 @@ contains
 
     fper = 2d0*pi/dble(L1i)   !<= field period
 
-    npoi=nper*npoiper ! total number of starting points
+    call init_batch
+    call reallocate_arrays
+  end subroutine params_init
+
+  subroutine init_batch
+    integer :: iostat, i, n
+    real :: ran_tmp
+    character, dimension (:), allocatable :: batch_file
+    logical :: old_batch
+
     !See if batch is wanted, if yes find random or re-use from previous file.
     if (ntestpart > batch_size) then
       if (reuse_batch) then
@@ -230,32 +223,38 @@ contains
       ntestpart = batch_size
     endif !batches wanted
 
-
-    if( allocated(zstart))  deallocate(zstart)
-    if( allocated(zend))  deallocate(zend)
-    if( allocated(times_lost))  deallocate(times_lost)
-    if( allocated(trap_par))  deallocate(trap_par)
-    if( allocated(perp_inv))  deallocate(perp_inv)
-    if( allocated(iclass))  deallocate(iclass)
-    if( allocated(xstart))  deallocate(xstart)
-    if( allocated(bstart))  deallocate(bstart)
-    if( allocated(volstart))  deallocate(volstart)
-    if( allocated(confpart_trap))  deallocate(confpart_trap)
-    if( allocated(confpart_pass))  deallocate(confpart_pass)
-
-    allocate(zstart(5,ntestpart), zend(5,ntestpart))
-    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
-    allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
-    allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
-    allocate(iclass(3,ntestpart))
-
     return
 
     666 print *, iostat
     error stop
     667 print *, iostat
     error stop
-  end subroutine params_init
+  end subroutine init_batch
+
+  subroutine reallocate_arrays
+    integer :: npoi
+
+    npoi=nper*npoiper ! total number of starting points
+
+    if(allocated(zstart))  deallocate(zstart)
+    if(allocated(zend))  deallocate(zend)
+    if(allocated(times_lost))  deallocate(times_lost)
+    if(allocated(trap_par))  deallocate(trap_par)
+    if(allocated(perp_inv))  deallocate(perp_inv)
+    if(allocated(iclass))  deallocate(iclass)
+    if(allocated(xstart))  deallocate(xstart)
+    if(allocated(bstart))  deallocate(bstart)
+    if(allocated(volstart))  deallocate(volstart)
+    if(allocated(confpart_trap))  deallocate(confpart_trap)
+    if(allocated(confpart_pass))  deallocate(confpart_pass)
+
+    allocate(zstart(5,ntestpart), zend(5,ntestpart))
+    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
+    allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
+    allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
+    allocate(iclass(3,ntestpart))
+  end subroutine reallocate_arrays
+
 
   subroutine sort_idx(idx_arr, N)
     ! sort particle indices.
@@ -300,5 +299,29 @@ contains
     end if
 
   end subroutine sort_idx
+
+
+  function should_skip(ipart)
+    ! notrace_passing: no tracing of passing particles, assume that all are confined
+    ! or skip strongly passing particles that are certainly confined
+    logical :: should_skip
+    integer, intent(in) :: ipart
+
+    should_skip = (notrace_passing .eq. 1) .or. (trap_par(ipart) .le. contr_pp)
+  end function should_skip
+
+
+  subroutine reset_seed_if_deterministic
+    ! for run with fixed random seed
+    integer :: seedsize
+    integer, allocatable :: seed(:)
+
+    if (deterministic) then
+      call random_seed(size = seedsize)
+      if (.not. allocated(seed)) allocate(seed(seedsize))
+      seed = 0
+      call random_seed(put=seed)
+    endif
+  end subroutine reset_seed_if_deterministic
 
 end module params

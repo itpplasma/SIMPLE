@@ -69,7 +69,9 @@ message(STATUS "Python libraries: ${Python_LIBRARIES}")
 message(STATUS "Python binary output dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
 set(FILES_TO_WRAP
+    simple_main.f90
     simple.f90
+    cut_detector.f90
     orbit_symplectic.f90
     field_can.f90
     get_canonical_coordinates.f90
@@ -122,6 +124,7 @@ add_custom_command(OUTPUT ${F90WRAP_OUTPUT}
         -m f90wrap
         --f90wrap
         -m pysimple
+        -k ${CMAKE_CURRENT_SOURCE_DIR}/f2py_f2cmap
         ${CMAKE_CURRENT_BINARY_DIR}/*.f90.i
         > ${CMAKE_CURRENT_BINARY_DIR}/f90wrap.log 2>&1
 	DEPENDS ${PREPROCESSED_SOURCES}
@@ -134,6 +137,7 @@ add_custom_command(OUTPUT ${F2PY_WRAPPERS}
         --f2py-f90wrap
         ${F90WRAP_OUTPUT}
         -m ${F2PY_MODULE_NAME}
+        --f2cmap ${CMAKE_CURRENT_SOURCE_DIR}/f2py_f2cmap
         --lower
         > ${CMAKE_CURRENT_BINARY_DIR}/f2py.log 2>&1
     DEPENDS ${F90WRAP_OUTPUT}

@@ -1102,6 +1102,8 @@ subroutine orbit_timestep_sympl(si, f, ierr)
 
   integer, intent(out) :: ierr
 
+  ierr = 0
+
   select case (si%mode)
    case (1)
       call orbit_timestep_sympl_euler1(si, f, ierr)
