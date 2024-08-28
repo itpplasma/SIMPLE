@@ -114,11 +114,13 @@ module simple_main
     enddo
     close(1)
 
-    open(1,file='class_parts.dat',recl=1024)
-    do i=1,ntestpart
-      write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
-    enddo
-    close(1)
+    if (ntcut>0 .or. class_plot) then
+        open(1,file='class_parts.dat',recl=1024)
+        do i=1,ntestpart
+        write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
+        enddo
+        close(1)
+    endif
 
   end subroutine write_output
 
