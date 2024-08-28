@@ -20,6 +20,8 @@ set(SOURCES
     orbit_symplectic.f90
     orbit_symplectic_quasi.f90
     util.f90
+    cut_detector.f90
+    classification.f90
     simple.f90
     parse_ants.f90
     collis_alphas.f90
@@ -27,6 +29,7 @@ set(SOURCES
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90
+    simple_main.f90
 )
 
 

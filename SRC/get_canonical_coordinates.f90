@@ -119,7 +119,7 @@ contains
   do i_theta=1,n_theta_c
 !$omp critical
     i_ctr = i_ctr + 1
-    print *,'integrate ODE: ',i_ctr,' of ',n_theta_c
+    call print_progress('integrate ODE: ', i_ctr, n_theta_c)
 !$omp end critical
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
@@ -165,7 +165,7 @@ i_ctr=0
   do i_theta=1,n_theta_c
 !$omp critical
     i_ctr = i_ctr + 1
-    print *,'compute components: ',i_ctr,' of ',n_theta_c
+    call print_progress('compute components: ', i_ctr, n_theta_c)
 !$omp end critical
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
@@ -276,6 +276,21 @@ deallocate(y,dy)
   dy(1)=2.d0*r*dy(1)  !<=NEW
 !
   end subroutine rhs_cancoord
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine print_progress(message, progress, total)
+    character(*), intent(in) :: message
+    integer, intent(in) :: progress, total
+
+    write(*,'(A, I4, A, I4)',advance='no') message, progress, ' of ', total
+
+    if(progress < total) then
+      write(*, '(A)', advance="no") char(13)
+    else
+      write(*, *)
+    end if
+  end subroutine print_progress
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
