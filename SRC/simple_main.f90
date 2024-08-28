@@ -8,7 +8,11 @@ module simple_main
   use binsrc_sub, only : binsrc
   use get_can_sub, only : vmec_to_can
   use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
-  use params
+  use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
+    kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
+    class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
+    zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
+    ntimstep, bstart, ibins, ierr, Tracer, should_skip, reset_seed_if_deterministic
 
   implicit none
 
@@ -58,6 +62,9 @@ module simple_main
   end subroutine print_parameters
 
   subroutine init_collisions
+    use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
+    facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
+
     real(8) :: v0_coll
 
     call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
