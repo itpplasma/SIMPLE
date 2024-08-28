@@ -79,3 +79,5 @@ for k, thk in enumerate(TH):
 
 plt.axis('equal')
 plt.savefig('test_vmec.png')
+
+# %%
