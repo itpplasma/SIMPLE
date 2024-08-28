@@ -8,6 +8,7 @@ module simple_main
   use binsrc_sub, only : binsrc
   use get_can_sub, only : vmec_to_can
   use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
+  use magfie_sub, only: VMEC, CANFLUX, BOOZER, MEISS, ALBERT
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
@@ -141,7 +142,7 @@ module simple_main
     use get_can_sub, only: can_to_vmec
 
     integer :: i, ipart, iskip
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+    double precision :: r,vartheta,varphi,s_vmec,theta_vmec,varphi_vmec
 
     ! skip random numbers according to configuration
       do iskip=1,loopskip
@@ -165,18 +166,29 @@ module simple_main
         varphi=xstart(3,i)
   !
   ! we store starting points in VMEC coordinates:
-        if(isw_field_type.eq.0) then
+        if(isw_field_type .eq. CANFLUX) then
+          s_vmec=r
           call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type.eq.1) then
+        elseif(isw_field_type .eq. VMEC) then
+          s_vmec=r
           theta_vmec=vartheta
           varphi_vmec=varphi
-        elseif(isw_field_type.eq.2) then
+        elseif(isw_field_type .eq. BOOZER) then
+          s_vmec=r
           call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
+        elseif(isw_field_type .eq. MEISS) then ! TODO
+            s_vmec=r
+            theta_vmec=vartheta
+            varphi_vmec=varphi
+        elseif(isw_field_type .eq. ALBERT) then ! TODO
+            s_vmec=r
+            theta_vmec=vartheta
+            varphi_vmec=varphi
         else
           print *,'init_starting_points: unknown field type'
         endif
   !
-        zstart(1,ipart)=r
+        zstart(1,ipart)=s_vmec
         zstart(2,ipart)=theta_vmec
         zstart(3,ipart)=varphi_vmec
         ! normalized velocity module z(4) = v / v_0:
@@ -255,17 +267,18 @@ module simple_main
         vartheta=twopi*xi
         call random_number(xi)
         varphi=twopi*xi
-  !
-  ! we store starting points in VMEC coordinates:
-        if(isw_field_type.eq.0) then
+!
+! we store starting points in VMEC coordinates:
+        if(isw_field_type .eq. CANFLUX) then
           call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type.eq.1) then
+        elseif(isw_field_type .eq. VMEC) then
           theta_vmec=vartheta
           varphi_vmec=varphi
-        elseif(isw_field_type.eq.2) then
+        elseif(isw_field_type .eq. BOOZER) then
           call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
         else
           print *,'init_starting_points: unknown field type'
+          error stop
         endif
   !
         zstart(1,ipart)=r
@@ -396,7 +409,7 @@ module simple_main
     double precision, intent(inout) :: xlab(:)
 
     xlab = x
-    if(isw_field_type.eq.2) then
+    if(isw_field_type .eq. BOOZER) then
       call boozer_to_vmec(x(1), x(2), x(3), xlab(2), xlab(3))
     endif
     ! TODO: add conversion to lab coordinates for other field types
