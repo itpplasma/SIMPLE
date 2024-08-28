@@ -450,23 +450,13 @@ module simple_main
 contains
 
 subroutine run(norb)
-
   type(Tracer), intent(inout) :: norb
   integer :: i
 
-  print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
-                    dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
-  print *, 'v0 = ', v0
+  call print_parameters
+  if (swcoll) call init_collisions
 
-
-! init collisions
-  if (swcoll) then
-    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
-      3.5d6/facE_al,v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
-  endif
-  print *, 'v0 = ', v0
-
-! pre-compute starting flux surface
+  ! pre-compute starting flux surface
   call init_starting_surf
 
   ! local?
@@ -475,25 +465,13 @@ subroutine run(norb)
   else
     call init_starting_points_global
   endif
-  if (startmode == 0) stop
+  if (startmode == 0) stop 'startmode == 0, stopping after generating start.dat'
 
-  icounter=0 ! evaluation counter
-  kpart=0
-
-  ! initialize array of confined particle percentage
-  confpart_trap=0.d0
-  confpart_pass=0.d0
-
-  ! initialize lost times when particles get lost
-  times_lost = -1.d0
-
-! do particle tracing in parallel
-  nfirstpart = 1
-  nlastpart = ntestpart
+  call init_counters
 
   !$omp parallel firstprivate(norb)
   !$omp do
-  do i=nfirstpart,nlastpart
+  do i = 1, ntestpart
     !$omp critical
     kpart = kpart+1
     print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
@@ -507,6 +485,36 @@ subroutine run(norb)
   confpart_trap=confpart_trap/ntestpart
 
 end subroutine run
+
+subroutine print_parameters
+  print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
+                    dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
+  print *, 'v0 = ', v0
+end subroutine print_parameters
+
+subroutine init_collisions
+  real(8) :: v0_coll
+
+  call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
+    3.5d6/facE_al,v0_coll,dchichi,slowrate,dchichi_norm,slowrate_norm)
+
+  if (abs(v0_coll - v0) > 1d-6) then
+    error stop 'simple_main.init_collisions: v0_coll != v0'
+  end if
+end subroutine init_collisions
+
+subroutine init_counters
+  icounter=0 ! evaluation counter
+  kpart=0
+
+  ! initialize array of confined particle percentage
+  confpart_trap=0.d0
+  confpart_pass=0.d0
+
+  ! initialize lost times when particles get lost
+  times_lost = -1.d0
+end subroutine init_counters
+
 
 subroutine finalize
   use get_can_sub, only : deallocate_can_coord
@@ -790,31 +798,11 @@ subroutine trace_orbit(anorb, ipart)
   double precision :: fraction
   double precision :: r,theta_vmec,varphi_vmec
   logical :: regular
-! output files:
-! iaaa_bou - trapped-passing boundary
-! iaaa_pnt - forced regular passing
-! iaaa_prp - lossed passing
-! iaaa_prt - lossed trapped
-! iaaa_rep - regular passing
-! iaaa_ret - regular trapped
-! iaaa_stp - stochastic passing
-! iaaa_stt - stochastic trapped
-  integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002, &  !<=AAA
-                        iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
 ! Variables and settings for classification by J_parallel and ideal orbit condition:
   integer, parameter :: nfp_dim=3, nturns=8
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in
-! output files:
-! iaaa_jre - regular trapped by J_parallel
-! iaaa_jst - stochastic trapped by J_parallel
-! iaaa_jer - non-classified trapped by J_parallel
-! iaaa_ire - ideal trapped by recurrences and monotonicity
-! iaaa_ist - non-ideal trapped by recurrences and monotonicity
-! iaaa_ier - non-classified trapped by recurrences and monotonicity
-  integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
-                        iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
 
 ! for run with fixed random seed
   integer :: seedsize
@@ -937,7 +925,7 @@ subroutine trace_orbit(anorb, ipart)
   end if
 
   !--------------------------------
-      ! Initialize tip detector
+  ! Initialize tip detector
 
   itip=npl_half+1
   alam_prev=z(5)
@@ -997,16 +985,8 @@ subroutine trace_orbit(anorb, ipart)
       endif
 
       ! Write starting data for orbits which were lost in case of classification plot
-      if(class_plot) then
-        if(ierr.ne.0) then
-          !$omp critical
-          if(passing) then
-            write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-          else
-            write (iaaa_prt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-          endif
-          !$omp end critical
-        endif
+      if(class_plot .and. ierr.ne.0) then
+        call output_lost_orbit_starting_data(ipart, passing)
       endif
       ! End write starting data for orbits which were lost in case of classification plot
 
@@ -1151,54 +1131,17 @@ subroutine trace_orbit(anorb, ipart)
         endif
 
         if(class_plot) then
-!$omp critical
-! Output of classification by Minkowsky dimension:
-          if(regular) then
-            if(passing) then
-              write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            else
-              write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            endif
-          else
-            if(passing) then
-              write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            else
-              write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            endif
-          endif
-!End output of classification by Minkowsky dimension
-!$omp end critical
+          call output_minkowsky_class(ipart, regular, passing)
           ierr=1
         endif
       endif
 !
       if(ierr.ne.0) then
-        if(class_plot) then
-! Output of classification by J_parallel and ideal orbit condition:
-          if(.not.passing) then
-!$omp critical
-            select case(ijpar)
-            case(0)
-              write (iaaa_jer,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            case(1)
-              write (iaaa_jre,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            case(2)
-              write (iaaa_jst,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            end select
-!
-            select case(ideal)
-            case(0)
-              write (iaaa_ier,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            case(1)
-              write (iaaa_ire,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            case(2)
-              write (iaaa_ist,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            end select
-!$omp end critical
-          endif
+        if(class_plot .and. .not. passing) then
+          call output_jpar_class(ipart, ijpar)
+          call output_topological_class(ipart, ideal)
+          exit
         endif
-! End output of classification by J_parallel and ideal orbit condition
-        exit
       endif
 !    write(999, *) kt*dtaumin/v0, z
     enddo
@@ -1226,4 +1169,75 @@ subroutine trace_orbit(anorb, ipart)
 !  close(unit=10000+ipart)
 !  close(unit=10000+ipart)
 end subroutine trace_orbit
+
+subroutine output_lost_orbit_starting_data(ipart, passing)
+  use params, only : iaaa_prp, iaaa_prt
+
+  integer, intent(in) :: ipart
+  logical, intent(in) :: passing
+
+  !$omp critical
+  if(passing) then
+    write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  else
+    write (iaaa_prt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  endif
+  !$omp end critical
+end subroutine output_lost_orbit_starting_data
+
+subroutine output_minkowsky_class(ipart, regular, passing)
+  use params, only : iaaa_rep, iaaa_ret, iaaa_stp, iaaa_stt
+
+  integer, intent(in) :: ipart
+  logical, intent(in) :: regular, passing
+
+  !$omp critical
+    if(regular) then
+      if(passing) then
+        write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+      else
+        write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+      endif
+    else
+      if(passing) then
+        write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+      else
+        write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+      endif
+    endif
+  !$omp end critical
+end subroutine output_minkowsky_class
+
+subroutine output_jpar_class(ipart, ijpar)
+  use params, only : iaaa_jer, iaaa_jre, iaaa_jst
+
+  integer, intent(in) :: ipart, ijpar
+
+  !$omp critical
+  select case(ijpar)
+  case(0)
+    write (iaaa_jer,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  case(1)
+    write (iaaa_jre,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  case(2)
+    write (iaaa_jst,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  end select
+  !$omp end critical
+end subroutine output_jpar_class
+
+subroutine output_topological_class(ipart, ideal)
+  use params, only : iaaa_ier, iaaa_ire, iaaa_ist
+
+  integer, intent(in) :: ipart, ideal
+
+  select case(ideal)
+  case(0)
+    write (iaaa_ier,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  case(1)
+    write (iaaa_ire,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  case(2)
+    write (iaaa_ist,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+  end select
+end subroutine output_topological_class
+
 end module simple_main

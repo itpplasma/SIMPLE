@@ -9,7 +9,6 @@ module params
   use vmecin_sub, only : stevvo
 
   implicit none
-  save
 
   type :: Tracer
     double precision :: fper
@@ -77,8 +76,6 @@ module params
 
   double precision :: v0
 
-  integer :: nfirstpart, nlastpart
-
   logical :: debug = .False.
   integer :: ierr
 
@@ -87,6 +84,28 @@ module params
   integer :: num_surf=1
   logical :: reuse_batch =.False.
   integer, dimension (:), allocatable :: idx
+
+! output files:
+! iaaa_bou - trapped-passing boundary
+! iaaa_pnt - forced regular passing
+! iaaa_prp - lossed passing
+! iaaa_prt - lossed trapped
+! iaaa_rep - regular passing
+! iaaa_ret - regular trapped
+! iaaa_stp - stochastic passing
+! iaaa_stt - stochastic trapped
+  integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002,&
+                        iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022
+
+! output files:
+! iaaa_jre - regular trapped by J_parallel
+! iaaa_jst - stochastic trapped by J_parallel
+! iaaa_jer - non-classified trapped by J_parallel
+! iaaa_ire - ideal trapped by recurrences and monotonicity
+! iaaa_ist - non-ideal trapped by recurrences and monotonicity
+! iaaa_ier - non-classified trapped by recurrences and monotonicity
+  integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
+                        iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
@@ -137,11 +156,7 @@ contains
 
   subroutine params_init
     double precision :: E_alpha
-    integer :: iostat, i, n
-    character, dimension (:), allocatable :: batch_file
-    logical :: old_batch
-    real :: ran_tmp
-    integer :: npoi, L1i
+    integer :: L1i
 
     E_alpha = 3.5d6/facE_al
 
@@ -179,7 +194,16 @@ contains
 
     fper = 2d0*pi/dble(L1i)   !<= field period
 
-    npoi=nper*npoiper ! total number of starting points
+    call init_batch
+    call reallocate_arrays
+  end subroutine params_init
+
+  subroutine init_batch
+    integer :: iostat, i, n
+    real :: ran_tmp
+    character, dimension (:), allocatable :: batch_file
+    logical :: old_batch
+
     !See if batch is wanted, if yes find random or re-use from previous file.
     if (ntestpart > batch_size) then
       if (reuse_batch) then
@@ -230,6 +254,18 @@ contains
       ntestpart = batch_size
     endif !batches wanted
 
+    return
+
+    666 print *, iostat
+    error stop
+    667 print *, iostat
+    error stop
+  end subroutine init_batch
+
+  subroutine reallocate_arrays
+    integer :: npoi
+
+    npoi=nper*npoiper ! total number of starting points
 
     if( allocated(zstart))  deallocate(zstart)
     if( allocated(zend))  deallocate(zend)
@@ -248,14 +284,8 @@ contains
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
     allocate(iclass(3,ntestpart))
+  end subroutine reallocate_arrays
 
-    return
-
-    666 print *, iostat
-    error stop
-    667 print *, iostat
-    error stop
-  end subroutine params_init
 
   subroutine sort_idx(idx_arr, N)
     ! sort particle indices.
