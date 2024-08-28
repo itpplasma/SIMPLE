@@ -291,61 +291,31 @@ module simple_main
 
 
   subroutine trace_orbit(anorb, ipart)
-    use find_bminmax_sub, only : get_bminmax
-    use magfie_sub, only : magfie
     use classification, only : trace_orbit_with_classifiers
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
-    integer :: ierr_orbit
+
     double precision, dimension(5) :: z
-    double precision :: bmod, sqrtg
-    double precision, dimension(3) :: bder, hcovar, hctrvr, hcurl
-    integer :: it
+    integer :: it, ierr_orbit
     integer(8) :: kt
     logical :: passing
 
-    double precision :: r, theta_vmec, varphi_vmec
-
-  ! for run with fixed random seed
-    integer :: seedsize
-    integer, allocatable :: seed(:)
-
-    if (deterministic) then
-      call random_seed(size = seedsize)
-      if (.not. allocated(seed)) allocate(seed(seedsize))
-      seed = 0
-      call random_seed(put=seed)
-    endif
+    call reset_seed_if_deterministic
 
     if (ntcut>0 .or. class_plot) then
       call trace_orbit_with_classifiers(anorb, ipart)
       return
     endif
 
-    zend(:,ipart) = 0d0
-
-    z = zstart(:, ipart)
-    r=z(1)
-    theta_vmec=z(2)
-    varphi_vmec=z(3)
-
     call from_lab_coordinates(zstart(1:3, ipart), z(1:3))
+    z(4:5) = zstart(4:5, ipart)
+    zend(:,ipart) = 0d0
 
     if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
 
-    call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+    call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
-    !$omp critical
-    if(num_surf > 1) then
-      call get_bminmax(z(1),bmin,bmax)
-    endif
-    passing = z(5)**2.gt.1.d0-bmod/bmax
-    trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
-    perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
-    !$omp end critical
-
-    ! Forced classification of passing as regular:
     if(passing .and. should_skip(ipart)) then
       !$omp critical
       confpart_pass=confpart_pass+1.d0
@@ -355,7 +325,6 @@ module simple_main
 
     kt = 0
     call increase_confined_count(1, passing)
-    !
     do it=2,ntimstep
       call macrostep(anorb, z, kt, ierr_orbit)
       if(ierr_orbit .ne. 0) exit
@@ -407,6 +376,7 @@ module simple_main
     double precision, intent(in) :: xlab(:)
     double precision, intent(inout) :: x(:)
 
+    x = xlab
     if(isw_field_type.eq.0) then
       call vmec_to_can(xlab(1), xlab(2), xlab(3), x(2), x(3))
     elseif(isw_field_type.eq.2) then
@@ -437,6 +407,37 @@ module simple_main
     end if
     !$omp end critical
   end subroutine increase_confined_count
+
+  subroutine compute_pitch_angle_params(z, passing, trap_par_, perp_inv_)
+    use find_bminmax_sub, only : get_bminmax
+
+    double precision, intent(in) :: z(5)
+    logical, intent(out) :: passing
+    double precision, intent(out) :: trap_par_, perp_inv_
+
+    double precision :: bmod
+
+    bmod = compute_bmod(z(1:3))
+    !$omp critical
+    if(num_surf > 1) then
+      call get_bminmax(z(1),bmin,bmax)
+    endif
+    passing = z(5)**2.gt.1.d0-bmod/bmax
+    trap_par_ = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
+    perp_inv_ = z(4)**2*(1.d0-z(5)**2)/bmod
+    !$omp end critical
+  end subroutine compute_pitch_angle_params
+
+  function compute_bmod(z) result(bmod)
+    use magfie_sub, only : magfie
+
+    double precision :: bmod
+    double precision, intent(in) :: z(3)
+
+    double precision :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+    call magfie(z(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+  end function compute_bmod
 
   subroutine update_momentum(anorb, z)
     use orbit_symplectic, only : get_val

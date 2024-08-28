@@ -103,10 +103,6 @@ contains
     integer :: iostat
     character(1024) :: iomsg
 
-    ! for run with fixed random seed
-    integer :: seedsize
-    integer, allocatable :: seed(:)
-
     open(1, file=config_file, recl=1024, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
 
@@ -114,12 +110,7 @@ contains
     if (iostat /= 0) goto 666
     close(1)
 
-    if (deterministic) then
-      call random_seed(size = seedsize)
-      if (.not. allocated(seed)) allocate(seed(seedsize))
-      seed = 0
-      call random_seed(put=seed)
-    endif
+    call reset_seed_if_deterministic
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
@@ -318,5 +309,19 @@ contains
 
     should_skip = (notrace_passing .eq. 1) .or. (trap_par(ipart) .le. contr_pp)
   end function should_skip
+
+
+  subroutine reset_seed_if_deterministic
+    ! for run with fixed random seed
+    integer :: seedsize
+    integer, allocatable :: seed(:)
+
+    if (deterministic) then
+      call random_seed(size = seedsize)
+      if (.not. allocated(seed)) allocate(seed(seedsize))
+      seed = 0
+      call random_seed(put=seed)
+    endif
+  end subroutine reset_seed_if_deterministic
 
 end module params
