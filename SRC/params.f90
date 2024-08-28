@@ -85,28 +85,6 @@ module params
   logical :: reuse_batch =.False.
   integer, dimension (:), allocatable :: idx
 
-! output files:
-! iaaa_bou - trapped-passing boundary
-! iaaa_pnt - forced regular passing
-! iaaa_prp - lossed passing
-! iaaa_prt - lossed trapped
-! iaaa_rep - regular passing
-! iaaa_ret - regular trapped
-! iaaa_stp - stochastic passing
-! iaaa_stt - stochastic trapped
-  integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002,&
-                        iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022
-
-! output files:
-! iaaa_jre - regular trapped by J_parallel
-! iaaa_jst - stochastic trapped by J_parallel
-! iaaa_jer - non-classified trapped by J_parallel
-! iaaa_ire - ideal trapped by recurrences and monotonicity
-! iaaa_ist - non-ideal trapped by recurrences and monotonicity
-! iaaa_ier - non-classified trapped by recurrences and monotonicity
-  integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
-                        iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
-
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
@@ -267,17 +245,17 @@ contains
 
     npoi=nper*npoiper ! total number of starting points
 
-    if( allocated(zstart))  deallocate(zstart)
-    if( allocated(zend))  deallocate(zend)
-    if( allocated(times_lost))  deallocate(times_lost)
-    if( allocated(trap_par))  deallocate(trap_par)
-    if( allocated(perp_inv))  deallocate(perp_inv)
-    if( allocated(iclass))  deallocate(iclass)
-    if( allocated(xstart))  deallocate(xstart)
-    if( allocated(bstart))  deallocate(bstart)
-    if( allocated(volstart))  deallocate(volstart)
-    if( allocated(confpart_trap))  deallocate(confpart_trap)
-    if( allocated(confpart_pass))  deallocate(confpart_pass)
+    if(allocated(zstart))  deallocate(zstart)
+    if(allocated(zend))  deallocate(zend)
+    if(allocated(times_lost))  deallocate(times_lost)
+    if(allocated(trap_par))  deallocate(trap_par)
+    if(allocated(perp_inv))  deallocate(perp_inv)
+    if(allocated(iclass))  deallocate(iclass)
+    if(allocated(xstart))  deallocate(xstart)
+    if(allocated(bstart))  deallocate(bstart)
+    if(allocated(volstart))  deallocate(volstart)
+    if(allocated(confpart_trap))  deallocate(confpart_trap)
+    if(allocated(confpart_pass))  deallocate(confpart_pass)
 
     allocate(zstart(5,ntestpart), zend(5,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -330,5 +308,15 @@ contains
     end if
 
   end subroutine sort_idx
+
+
+  function should_skip(ipart)
+    ! notrace_passing: no tracing of passing particles, assume that all are confined
+    ! or skip strongly passing particles that are certainly confined
+    logical :: should_skip
+    integer, intent(in) :: ipart
+
+    should_skip = (notrace_passing .eq. 1) .or. (trap_par(ipart) .le. contr_pp)
+  end function should_skip
 
 end module params
