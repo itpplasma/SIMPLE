@@ -312,12 +312,13 @@ module simple_main
 
   subroutine trace_orbit(anorb, ipart)
     use classification, only : trace_orbit_with_classifiers
+    use callback, only : callbacks_macrostep
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
 
     double precision, dimension(5) :: z
-    integer :: it, ierr_orbit
+    integer :: it, ierr_orbit=0
     integer(8) :: kt
     logical :: passing
 
@@ -344,9 +345,9 @@ module simple_main
     endif
 
     kt = 0
-    call increase_confined_count(1, passing)
-    do it=2,ntimstep
-      call macrostep(anorb, z, kt, ierr_orbit)
+    do it = 1, ntimstep
+      if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
+      call callbacks_macrostep(anorb, ipart, it, kt*dtaumin/v0, z, ierr_orbit)
       if(ierr_orbit .ne. 0) exit
       call increase_confined_count(it, passing)
     enddo
