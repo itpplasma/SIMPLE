@@ -7,12 +7,12 @@ use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
 use simple_magfie, only : MagneticField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
-use field_can_test, only : evaluate_test => evaluate
+use field_can_test, only : evaluate_test
 use field_can_flux, only : evaluate_flux, can_to_ref_flux, ref_to_can_flux
 use field_can_boozer, only : evaluate_boozer, can_to_ref_boozer, ref_to_can_boozer
 use field_can_meiss, only : init_meiss, evaluate_meiss, &
   can_to_ref_meiss, ref_to_can_meiss
-use field_can_albert, only : evaluate_albert => evaluate, init_albert
+use field_can_albert, only : evaluate_albert, init_albert
 
 implicit none
 

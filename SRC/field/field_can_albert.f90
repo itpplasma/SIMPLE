@@ -29,7 +29,7 @@ real(8) :: Ath_norm
 
 contains
 
-subroutine evaluate(f, r, th_c, ph_c, mode_secders)
+subroutine evaluate_albert(f, r, th_c, ph_c, mode_secders)
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
@@ -61,7 +61,7 @@ subroutine evaluate(f, r, th_c, ph_c, mode_secders)
     call evaluate_splines_3d_der(spl_hph_of_xc, x, f%hph, f%dhph)
 
     call evaluate_splines_3d_der(spl_Bmod_of_xc, x, f%Bmod, f%dBmod)
-end subroutine evaluate
+end subroutine evaluate_albert
 
 
 subroutine get_albert_coordinates
@@ -158,5 +158,44 @@ subroutine init_psi_grid
         psi_grid(i_r) = psi_inner + (psi_outer - psi_inner) * (i_r - 1) / (n_r - 1)
     end do
 end subroutine init_psi_grid
+
+
+subroutine magfie_albert(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!  Computes magnetic field and derivatives with bmod in units of the magnetic code
+!
+!  Input parameters:
+!            formal:  x               - array of canonicalized coordinates r, th, ph
+!  Output parameters:
+!            formal:  bmod            - magnetic field module
+!                     sqrtg           - metric determinant
+!                     bder            - covariant components of (grad B)/B
+!                     hcovar          - covariant components of \bB/B
+!                     hctrvr          - contravariant components of \bB/B
+!                     hcurl           - contravariant components of curl (\bB/B)
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: bmod, sqrtg
+    real(dp), dimension(3), intent(out) :: bder, hcovar, hctrvr, hcurl
+
+    type(FieldCan) :: f
+    real(dp) :: sqrtg_bmod
+
+    call evaluate_albert(f, x(1), x(2), x(3), 0)
+
+    sqrtg_bmod = f%hph*Ath_norm - f%hth*f%dAph(1)
+    sqrtg = sqrtg_bmod/f%Bmod
+    bder = f%dBmod/f%Bmod
+
+    hcovar(1) = 0.d0
+    hcovar(2) = f%hth
+    hcovar(3) = f%hph
+
+    hctrvr(1) = f%dAph(2)/sqrtg_bmod
+    hctrvr(2) = -f%dAph(1)/sqrtg_bmod
+    hctrvr(3) = 1.d0/sqrtg_bmod
+
+    hcurl(1) = (f%dhph(2) - f%dhth(3))/sqrtg
+    hcurl(2) = -f%dhph(1)/sqrtg
+    hcurl(3) = f%dhth(1)/sqrtg
+end subroutine magfie_albert
 
 end module field_can_albert

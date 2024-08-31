@@ -7,7 +7,7 @@ implicit none
 
 contains
 
-subroutine evaluate(f, r, th_c, ph_c, mode_secders)
+subroutine evaluate_test(f, r, th_c, ph_c, mode_secders)
     type(FieldCan), intent(inout) :: f
 
     real(dp), intent(in) :: r, th_c, ph_c
@@ -16,7 +16,7 @@ subroutine evaluate(f, r, th_c, ph_c, mode_secders)
     call eval_field_test(f, r, th_c, ph_c, mode_secders)
 
     n_field_evaluations = n_field_evaluations + 1
-end subroutine evaluate
+end subroutine evaluate_test
 
 
 ! for testing -> circular tokamak

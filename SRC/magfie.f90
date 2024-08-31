@@ -1,5 +1,7 @@
 module magfie_sub
 use spline_vmec_sub
+use field_can_meiss, only: magfie_meiss
+use field_can_albert, only: magfie_albert
 
 implicit none
 
@@ -42,9 +44,9 @@ subroutine init_magfie(id)
   case(BOOZER)
     magfie => magfie_boozer
   case(MEISS)
-    magfie => magfie_vmec  ! TODO
+    magfie => magfie_meiss
   case(ALBERT)
-    magfie => magfie_vmec  ! TODO
+    magfie => magfie_albert
   case default
     print *,'init_magfie: unknown id ', id
     error stop
