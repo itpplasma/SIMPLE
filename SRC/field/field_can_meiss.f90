@@ -353,9 +353,9 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     hcovar(2) = f%hth
     hcovar(3) = f%hph
 
-    hctrvr(1) = f%dAph(2)/sqrtg_bmod
+    hctrvr(1) = (f%dAph(2) - f%dAth(3))/sqrtg_bmod
     hctrvr(2) = -f%dAph(1)/sqrtg_bmod
-    hctrvr(3) = 1.d0/sqrtg_bmod
+    hctrvr(3) = f%dAth(1)/sqrtg_bmod
 
     hcurl(1) = (f%dhph(2) - f%dhth(3))/sqrtg
     hcurl(2) = -f%dhph(1)/sqrtg

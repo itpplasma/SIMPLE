@@ -191,7 +191,7 @@ subroutine magfie_albert(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
     hctrvr(1) = f%dAph(2)/sqrtg_bmod
     hctrvr(2) = -f%dAph(1)/sqrtg_bmod
-    hctrvr(3) = 1.d0/sqrtg_bmod
+    hctrvr(3) = Ath_norm/sqrtg_bmod
 
     hcurl(1) = (f%dhph(2) - f%dhth(3))/sqrtg
     hcurl(2) = -f%dhph(1)/sqrtg
