@@ -92,7 +92,7 @@ subroutine init_splines_with_psi
         Bmod_of_xc(n_r, n_th, n_phi) &
     )
 
-    call init_psi_grid()
+    call init_psi_grid
 
     associate(Aphi => spl_Aph%coeff(order(1), 0, 0, :, :, :), &
         hth => spl_hth%coeff(order(1), 0, 0, :, :, :), &
