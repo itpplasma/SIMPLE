@@ -25,8 +25,10 @@ subroutine write_error(tracer_, ipart, itime, t, z, ierr_orbit)
     double precision, intent(in) :: t, z(:)
     integer, intent(in) :: ierr_orbit
 
-
-    print *, 'Error ', ierr_orbit , 'orbit ', ipart, ' step ', itime, ' time ', t
+    !$omp critical
+    print *, 'Error ', ierr_orbit , 'orbit ', ipart, ' step ', itime
+    print *, t, z
+    !$omp end critical
 end subroutine write_error
 
 
@@ -34,7 +36,9 @@ subroutine write_position(ipart, t, z)
     integer, intent(in) :: ipart
     double precision, intent(in) :: t, z(:)
 
-    write(9000+ipart, *) z
+    !$omp critical
+    write(9000+ipart, *) t, z
+    !$omp end critical
 end subroutine write_position
 
 end module callback

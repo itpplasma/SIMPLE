@@ -318,9 +318,11 @@ module simple_main
     integer, intent(in) :: ipart
 
     double precision, dimension(5) :: z
-    integer :: it, ierr_orbit=0
+    integer :: it, ierr_orbit
     integer(8) :: kt
     logical :: passing
+
+    ierr_orbit = 0
 
     call reset_seed_if_deterministic
 
@@ -438,8 +440,8 @@ module simple_main
 
     double precision :: bmod
 
-    bmod = compute_bmod(z(1:3))
     !$omp critical
+    bmod = compute_bmod(z(1:3))
     if(num_surf > 1) then
       call get_bminmax(z(1),bmin,bmax)
     endif

@@ -1406,21 +1406,21 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     end if
 
     ! correct if Lagrange messed up
-    if (x(1) < 0.0 .or. x(1) > 1.0) then
+    if (x(1) < 0.0d0 .or. x(1) > 1.0d0) then
       x(1) = si%z(1)
       x(2) = si%z(4)
     end if
 
     call newton1(si, f, x, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > 1.0d0) then
       ierr = 1
       return
     end if
 
-    if (x(1) < 0.0) then
+    if (x(1) < 0.0d0) then
       print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
+      x(1) = 0.01d0
     end if
 
     si%z(1) = x(1)

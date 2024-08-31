@@ -11,7 +11,7 @@ implicit none
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
 class(MagneticField), allocatable :: magfie
-integer :: n_r=63, n_th=64, n_phi=65
+integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
