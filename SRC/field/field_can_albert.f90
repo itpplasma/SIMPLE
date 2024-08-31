@@ -181,9 +181,11 @@ subroutine magfie_albert(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
     call evaluate_albert(f, x(1), x(2), x(3), 0)
 
+    bmod = f%Bmod
+
     sqrtg_bmod = f%hph*Ath_norm - f%hth*f%dAph(1)
-    sqrtg = sqrtg_bmod/f%Bmod
-    bder = f%dBmod/f%Bmod
+    sqrtg = sqrtg_bmod/bmod
+    bder = f%dBmod/bmod
 
     hcovar(1) = 0.d0
     hcovar(2) = f%hth

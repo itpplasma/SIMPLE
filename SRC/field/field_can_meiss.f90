@@ -345,9 +345,11 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
     call evaluate_meiss(f, x(1), x(2), x(3), 0)
 
+    bmod = f%Bmod
+
     sqrtg_bmod = f%hph*f%dAth(1) - f%hth*f%dAph(1)
     sqrtg = sqrtg_bmod/f%Bmod
-    bder = f%dBmod/f%Bmod
+    bder = f%dBmod/bmod
 
     hcovar(1) = 0.d0
     hcovar(2) = f%hth
