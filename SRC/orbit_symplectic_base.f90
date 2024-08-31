@@ -5,9 +5,6 @@ use field_can_mod, only: eval_field => evaluate, FieldCan, get_val, get_derivati
 
 implicit none
 
-integer, parameter :: NLAG_MAX = 2
-integer, parameter :: NBUF_MAX = 16*NLAG_MAX
-
 type :: SymplecticIntegrator
   integer :: nlag          ! Lagrange polynomial order
   integer :: nbuf          ! values to store back
@@ -19,14 +16,6 @@ type :: SymplecticIntegrator
 ! Current phase-space coordinates z and old pth
   double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
   double precision :: pthold
-
-  ! Buffer for Lagrange polynomial interpolation
-  integer :: kbuf
-  integer :: kt
-  integer :: k
-  integer :: bufind(0:NLAG_MAX)
-  double precision, dimension(8, 0:NBUF_MAX) :: zbuf
-  double precision, dimension(0:0, NLAG_MAX+1) :: coef
 
   ! Timestep and variables from z0
   integer :: ntau

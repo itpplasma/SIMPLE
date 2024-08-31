@@ -145,7 +145,7 @@ contains
 
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                          rtol_init, mode_init, 0)
+                          rtol_init, mode_init)
   end subroutine init_sympl
 
   subroutine init_integrator(self, z0)

@@ -507,22 +507,22 @@ subroutine do_test()
 
     ! TODO: second ders in pphi and mixed
 
-    call orbit_sympl_init(euler1, f, z0, 1.0d0, 1, 1d-12, 0, 0)
+    call orbit_sympl_init(euler1, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac1(euler1)
     call test_newton(euler1)
 
-    call orbit_sympl_init(euler2, f, z0, 1.0d0, 1, 1d-12, 0, 0)
+    call orbit_sympl_init(euler2, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac2(euler2)
     call test_newton2(euler2)
 
-    call orbit_sympl_init(midpoint, f, z0, 1.0d0, 1, 1d-12, 0, 3)
+    call orbit_sympl_init(midpoint, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac_midpoint(midpoint)
 
-    call orbit_sympl_init(gauss4, f, z0, 1.0d0, 1, 1d-12, 0, 4)
+    call orbit_sympl_init(gauss4, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac_grk(gauss4)
 
     print *, 'lobatto'
-    call orbit_sympl_init(lobatto4, f, z0, 1.0d0, 1, 1d-12, 0, 15)
+    call orbit_sympl_init(lobatto4, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac_lob(lobatto4)
 end subroutine do_test
 

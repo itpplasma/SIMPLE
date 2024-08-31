@@ -218,7 +218,6 @@ subroutine timestep_midpoint_quasi(ierr)
 
     si%z = x(1:4)
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -274,7 +273,6 @@ subroutine timestep_euler1_quasi(ierr)
       call get_derivatives(f, si%z(4))
     end if
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -329,7 +327,6 @@ subroutine timestep_euler2_quasi(ierr)
       call get_derivatives(f, si%z(4))
     end if
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -387,7 +384,6 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -471,7 +467,6 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -512,7 +507,6 @@ subroutine orbit_timestep_rk45(ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     call odeint_allroutines(si%z, 4, ktau*si%dt, (ktau+1)*si%dt, si%rtol, f_ode)
-    si%kt = si%kt+1
     ktau = ktau+1
   end do
 end subroutine orbit_timestep_rk45

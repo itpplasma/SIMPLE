@@ -14,7 +14,7 @@ contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
+subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 !
   use plag_coeff_sub, only : plag_coeff
 
@@ -25,32 +25,22 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
   integer, intent(in) :: ntau
   double precision, intent(in) :: rtol_init
   integer, intent(in) :: mode_init
-  integer, intent(in) :: nlag ! Lagrangian polynomials
 
   integer :: k
 
   si%atol = 1d-15
   si%rtol = rtol_init
 
-  si%kbuf = 0
-  si%kt = 0
-  si%k = 0
-
-  si%bufind = 0
-
   si%ntau = ntau
   si%dt = dt
 
   si%z = z
-  si%nlag = nlag
-  si%nbuf = 4*nlag
 
   si%extrap_field = .True.
 
   call eval_field(f, z(1), z(2), z(3), 0)
   call get_val(f, si%z(4)) ! for pth
   si%pthold = f%pth
-  if(si%nlag > 0) call plag_coeff(si%nlag+1, 0, 1d0, 1d0*(/(k,k=-si%nlag,0)/), si%coef)
 
   select case (mode_init)
     case (0)
@@ -1017,9 +1007,9 @@ subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
 
   do ks = 1, mi%s
     call orbit_sympl_init(mi%stages(2*ks-1), f, z, &
-      alpha(ks)*dtau, ntau, rtol_init, 1, 1)
+      alpha(ks)*dtau, ntau, rtol_init, 1)
     call orbit_sympl_init(mi%stages(2*ks), f, z, &
-      beta(ks)*dtau, ntau, rtol_init, 2, 1)
+      beta(ks)*dtau, ntau, rtol_init, 2)
   end do
 end subroutine orbit_sympl_init_multi
 
@@ -1232,27 +1222,8 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
-      end do
-    end if
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
-      x(2)=sum(si%zbuf(4,si%bufind)*si%coef(0,:))
-    else
-      x(1)=si%z(1)
-      x(2)=si%z(4)
-    end if
-
-    ! correct if Lagrange messed up
-    if (x(1) < 0.0d0 .or. x(1) > 1.0d0) then
-      x(1) = si%z(1)
-      x(2) = si%z(4)
-    end if
+    x(1)=si%z(1)
+    x(2)=si%z(4)
 
     call newton1(si, f, x, maxit, xlast)
 
@@ -1284,12 +1255,6 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     si%z(2) = si%z(2) + si%dt*f%dH(1)/f%dpth(1)
     si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(1:4,si%kbuf) = si%z
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1316,21 +1281,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
-      end do
-    endif
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
-      x(2)=sum(si%zbuf(2,si%bufind)*si%coef(0,:))
-      x(3)=sum(si%zbuf(3,si%bufind)*si%coef(0,:))
-    else
-      x = si%z(1:3)
-    end if
+    x = si%z(1:3)
 
     call newton2(si, f, x, si%atol, si%rtol, maxit, xlast)
 
@@ -1366,12 +1317,6 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
     f%pth = si%pthold - si%dt*(f%dH(2) - f%dH(1)*f%dpth(2)/f%dpth(1))
     si%z(4) = si%z(4) - si%dt*(f%dH(3) - f%dH(1)*f%dpth(3)/f%dpth(1))
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(1:4,si%kbuf) = si%z
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1398,24 +1343,8 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
-      end do
-    endif
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
-      x(2)=sum(si%zbuf(2,si%bufind)*si%coef(0,:))
-      x(3)=sum(si%zbuf(3,si%bufind)*si%coef(0,:))
-      x(4)=sum(si%zbuf(4,si%bufind)*si%coef(0,:))
-      x(5)=sum(si%zbuf(5,si%bufind)*si%coef(0,:))
-    else
-      x(1:4) = si%z
-      x(5) = si%z(1)
-    end if
+    x(1:4) = si%z
+    x(5) = si%z(1)
 
     call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast)
 
@@ -1441,13 +1370,6 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       call get_val(f, si%z(4))
     endif
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(1:4,si%kbuf) = si%z
-      si%zbuf(5,si%kbuf) = x(5)  ! midpoint radius
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1482,26 +1404,9 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf/(4*s)
-      end do
-    end if
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      do k = 1,s
-        x(1)=sum(si%zbuf(1,si%bufind+(4*k-3))*si%coef(0,:))
-        x(1)=sum(si%zbuf(2,si%bufind+(4*k-2))*si%coef(0,:))
-        x(1)=sum(si%zbuf(3,si%bufind+(4*k-1))*si%coef(0,:))
-        x(2)=sum(si%zbuf(4,si%bufind+(4*k))*si%coef(0,:))
-      end do
-    else
-      do k = 1,s
-        x((4*k-3):(4*k)) = si%z
-      end do
-    end if
+    do k = 1,s
+      x((4*k-3):(4*k)) = si%z
+    end do
 
     call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
     !optionally try fixed point iterations, doesn't work yet
@@ -1595,17 +1500,6 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      do k = 1, s
-        si%zbuf(1, si%kbuf+(4*k-3)) = si%z(1)
-        si%zbuf(2, si%kbuf+(4*k-2)) = si%z(2)
-        si%zbuf(3, si%kbuf+(4*k-1)) = si%z(3)
-        si%zbuf(4, si%kbuf+(4*k)) = si%z(4)
-      end do
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1669,7 +1563,6 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
