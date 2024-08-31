@@ -6,7 +6,6 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
-  use magfie_sub, only: VMEC, CANFLUX, BOOZER, MEISS, ALBERT
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &

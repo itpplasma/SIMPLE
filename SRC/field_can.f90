@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
-use simple_magfie, only : MagneticField
+use simple_magfie, only : MagneticField, VmecField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
 use field_can_test, only : evaluate_test
@@ -94,6 +94,31 @@ function name_from_id(field_id)
       error stop
   end select
 end function name_from_id
+
+
+subroutine init_field_can(field_id)
+  use get_can_sub, only : get_canonical_coordinates
+  use boozer_sub, only : get_boozer_coordinates
+  use field_can_meiss, only : get_meiss_coordinates
+  use field_can_albert, only : get_albert_coordinates
+
+  integer, intent(in) :: field_id
+
+  call field_can_from_id(field_id, VmecField())
+  select case (field_id)
+    case (CANFLUX)
+      call get_canonical_coordinates
+    case (BOOZER)
+      call get_boozer_coordinates
+    case (MEISS)
+      call get_meiss_coordinates
+    case (ALBERT)
+      call get_albert_coordinates
+    case default
+      print *, "init_field_can: Unknown field id ", field_id
+      error stop
+  end select
+end subroutine init_field_can
 
 
 subroutine FieldCan_init(f, mu, ro0, vpar)

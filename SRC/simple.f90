@@ -9,11 +9,10 @@ module simple
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_timestep_sympl
   use simple_magfie, only : VmecField
-  use field_can_mod, only : eval_field => evaluate, FieldCan, field_can_from_id
+  use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
   use params, only : Tracer, idx
   use chamb_sub, only : chamb_can
-  use magfie_sub, only: VMEC, CANFLUX, BOOZER, MEISS, ALBERT
 
 implicit none
 save
@@ -38,7 +37,7 @@ contains
 
     self%integmode = aintegmode
     if (self%integmode>=0) then
-      call init_field_can
+      call init_field_can(isw_field_type)
     end if
 
     call init_magfie(isw_field_type)
@@ -68,30 +67,6 @@ contains
     call volume_and_B00(volume,B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
   end subroutine init_vmec
-
-
-  subroutine init_field_can
-    use get_can_sub, only : get_canonical_coordinates
-    use boozer_sub, only : get_boozer_coordinates
-    use field_can_meiss, only : get_meiss_coordinates
-    use field_can_albert, only : get_albert_coordinates
-
-    call field_can_from_id(isw_field_type, VmecField())
-      select case (isw_field_type)
-        case (CANFLUX)
-          print *, 'init_field: Canonical flux coordinates'
-          call get_canonical_coordinates
-        case (BOOZER)
-          print *, 'init_field: Boozer coordinates'
-          call get_boozer_coordinates
-        case (MEISS)
-          print *, 'init_field: Meiss coordinates'
-          call get_meiss_coordinates
-        case (ALBERT)
-          print *, 'init_field: Albert coordinates'
-          call get_albert_coordinates
-      end select
-  end subroutine init_field_can
 
 
   subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
