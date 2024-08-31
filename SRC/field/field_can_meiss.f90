@@ -137,26 +137,26 @@ end subroutine get_meiss_coordinates
 
 
 subroutine init_transformation
+    real(dp) :: y(2)
     integer :: i_r, i_th, i_phi, i_ctr
 
     allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
 
     i_ctr=0
 
-    !$omp parallel private(i_r, i_th, i_phi)
+    !$omp parallel private(i_r, i_th, i_phi, y)
     !$omp do
     do i_phi=1,n_phi
         !$omp critical
         i_ctr = i_ctr + 1
         call print_progress
         !$omp end critical
-
         do i_th=1,n_th
-            lam_phi(1, i_th, i_phi) = 0.d0
-            chi_gauge(1, i_th, i_phi) = 0.d0
-
+            lam_phi(1, i_th, i_phi) = 0d0
+            chi_gauge(1, i_th, i_phi) = 0d0
+            y = 0d0
             do i_r=2,n_r
-                call integrate(i_r, i_th, i_phi)
+                call integrate(i_r, i_th, i_phi, y)
             enddo
         enddo
     enddo
@@ -175,17 +175,15 @@ subroutine init_transformation
     end subroutine print_progress
 end subroutine init_transformation
 
-subroutine integrate(i_r, i_th, i_phi)
+subroutine integrate(i_r, i_th, i_phi, y)
     use odeint_sub, only: odeint_allroutines
 
     integer, intent(in) :: i_r, i_th, i_phi
-    real(dp), dimension(2) :: y
+    real(dp), dimension(2), intent(inout) :: y
 
     real(dp), parameter :: relerr=1d-11
     real(dp) :: r1, r2
     integer :: ndim=2
-
-    y = 0d0
 
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
@@ -253,7 +251,7 @@ end subroutine ah_cov_on_slice
 subroutine init_canonical_field_components
     real(dp), dimension(:,:,:,:), allocatable :: xcan
     real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
-    real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3), dummy(6)
+    real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
     integer :: i_r, i_th, i_phi
 
     allocate(xcan(3,n_r,n_th,n_phi))
@@ -269,14 +267,14 @@ subroutine init_canonical_field_components
                 call can_to_ref_meiss(xcan(:,i_r,i_th,i_phi), xref)
                 call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
-                call evaluate_splines_3d_der2(spl_lam_phi, &
-                    xcan(:,i_r,i_th,i_phi), lam, dlam, dummy)
-                call evaluate_splines_3d_der2(spl_chi_gauge, &
-                    xcan(:,i_r,i_th,i_phi), chi, dchi, dummy)
+                call evaluate_splines_3d_der(spl_lam_phi, &
+                    xcan(:,i_r,i_th,i_phi), lam, dlam)
+                call evaluate_splines_3d_der(spl_chi_gauge, &
+                    xcan(:,i_r,i_th,i_phi), chi, dchi)
 
-                Ath(i_r, i_th, i_phi) = Acov(2) + Acov(2)*dlam(2) - dchi(2)
+                Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
-                hth(i_r, i_th, i_phi) = hcov(2) + hcov(2)*dlam(2)
+                hth(i_r, i_th, i_phi) = hcov(2) + hcov(3)*dlam(2)
                 hphi(i_r, i_th, i_phi) = hcov(3)*(1.0d0 + dlam(3))
             end do
         end do
