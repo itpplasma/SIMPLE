@@ -30,8 +30,9 @@ set(SOURCES
     field/psi_transform.f90
     field/field_can_albert.f90
     field_can.f90
-    orbit_symplectic.f90
+    orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
+    orbit_symplectic.f90
     util.f90
     cut_detector.f90
     classification.f90

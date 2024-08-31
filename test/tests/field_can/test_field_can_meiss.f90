@@ -48,15 +48,15 @@ subroutine test_covar_components
     open(newunit=funit, file='covar_components.out')
     write(funit, *) '#', ' r', ' phi', ' th', ' Arcov', ' Apcov', ' Atcov', &
                     ' hrcov', ' hpcov', ' htcov', ' Bmod'
-    do i_th = 1, n_th
-        th = xmin(2) + h_th*(i_th-1)
-        do i_phi = 1, n_phi
-            phi = xmin(3) + h_phi*(i_phi-1)
-            do i_r = 1, n_r
-                r = xmin(1) + h_r*(i_r-1)
-                call ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
-                write(funit, *) r, phi, th, Ar, Ap, 0d0, hr, hp, 0d0, 0d0
-            end do
+    do i_phi = 1, n_phi
+        phi = xmin(3) + h_phi*(i_phi-1)
+        do i_th = 1, n_th
+            th = xmin(2) + h_th*(i_th-1)
+                do i_r = 1, n_r
+                    r = xmin(1) + h_r*(i_r-1)
+                    call ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
+                    write(funit, *) r, phi, th, Ar, Ap, 0d0, hr, hp, 0d0, 0d0
+                end do
         end do
     end do
     close(funit)
