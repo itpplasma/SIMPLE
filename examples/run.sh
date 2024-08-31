@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cmake --build ../build/simple.x -j$(nproc)
+cmake --build ../build --target simple.x -j$(nproc)
 
 pushd canflux
 ../../build/simple.x
