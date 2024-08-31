@@ -103,8 +103,8 @@ subroutine init_splines_with_psi
             Aphi, hth, hph, Bmod, r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc)
     end associate
 
-    call construct_splines_3d([psi_inner, 0.0d0, xmin(3)], [psi_outer, twopi, xmax(3)],&
-        r_of_xc, order, periodic, spl_r_of_xc)
+    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
+        [psi_outer, xmax(2), xmax(3)], r_of_xc, order, periodic, spl_r_of_xc)
 
     !$omp parallel private(i_r, i_th, i_phi, x)
     !$omp do
@@ -114,6 +114,9 @@ subroutine init_splines_with_psi
                 x = get_grid_point(i_r, i_th, i_phi)
                 x(1) = r_of_xc(i_r, i_th, i_phi)
                 call evaluate_splines_3d(spl_Aph, x, Aph_of_xc(i_r, i_th, i_phi))
+                call evaluate_splines_3d(spl_hth, x, hth_of_xc(i_r, i_th, i_phi))
+                call evaluate_splines_3d(spl_hph, x, hph_of_xc(i_r, i_th, i_phi))
+                call evaluate_splines_3d(spl_Bmod, x, Bmod_of_xc(i_r, i_th, i_phi))
             end do
         end do
     end do
