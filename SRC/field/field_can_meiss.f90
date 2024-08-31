@@ -274,10 +274,10 @@ subroutine init_canonical_field_components
                 call evaluate_splines_3d_der2(spl_chi_gauge, &
                     xcan(:,i_r,i_th,i_phi), chi, dchi, dummy)
 
-                Ath(i_r, i_th, i_phi) = Acov(2) + Acov(2)*dlam(3) - dchi(3)
-                Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(2)) - dchi(2)
-                hth(i_r, i_th, i_phi) = hcov(2) + hcov(2)*dlam(3)
-                hphi(i_r, i_th, i_phi) = hcov(3)*(1.0d0 + dlam(2))
+                Ath(i_r, i_th, i_phi) = Acov(2) + Acov(2)*dlam(2) - dchi(2)
+                Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
+                hth(i_r, i_th, i_phi) = hcov(2) + hcov(2)*dlam(2)
+                hphi(i_r, i_th, i_phi) = hcov(3)*(1.0d0 + dlam(3))
             end do
         end do
     end do
