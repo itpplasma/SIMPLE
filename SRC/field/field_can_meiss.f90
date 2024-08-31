@@ -249,13 +249,10 @@ end subroutine ah_cov_on_slice
 
 
 subroutine init_canonical_field_components
-    real(dp), dimension(:,:,:,:), allocatable :: xcan
+    real(dp) :: xcan(3)
     real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
     real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
     integer :: i_r, i_th, i_phi
-
-    allocate(xcan(3,n_r,n_th,n_phi))
-    call generate_regular_grid(xcan)
 
     allocate(Aphi(n_r,n_th,n_phi), Ath(n_r,n_th,n_phi))
     allocate(hphi(n_r,n_th,n_phi), hth(n_r,n_th,n_phi))
@@ -264,13 +261,14 @@ subroutine init_canonical_field_components
     do i_phi=1,n_phi
         do i_th=1,n_th
             do i_r=1,n_r
-                call can_to_ref_meiss(xcan(:,i_r,i_th,i_phi), xref)
+                xcan(1) = xmin(1) + h_r*dble(i_r-1)
+                xcan(2) = xmin(2) + h_th*dble(i_th-1)
+                xcan(3) = xmin(3) + h_phi*dble(i_phi-1)
+                call can_to_ref_meiss(xcan, xref)
                 call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
-                call evaluate_splines_3d_der(spl_lam_phi, &
-                    xcan(:,i_r,i_th,i_phi), lam, dlam)
-                call evaluate_splines_3d_der(spl_chi_gauge, &
-                    xcan(:,i_r,i_th,i_phi), chi, dchi)
+                call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
+                call evaluate_splines_3d_der(spl_chi_gauge, xcan, chi, dchi)
 
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
@@ -289,8 +287,6 @@ subroutine init_canonical_field_components
     deallocate(Bmod)
     deallocate(hphi, hth)
     deallocate(Aphi, Ath)
-
-    deallocate(xcan)
 end subroutine init_canonical_field_components
 
 
