@@ -44,7 +44,7 @@ subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
 
     if (present(rmin)) xmin(1) = rmin
     if (present(rmax)) xmax(1) = rmax
-    if (present(thmin)) xmax(2) = thmin
+    if (present(thmin)) xmin(2) = thmin
     if (present(thmax)) xmax(2) = thmax
 
     h_r = (xmax(1)-xmin(1))/(n_r-1)
@@ -142,7 +142,7 @@ subroutine init_transformation
 
     allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
 
-    i_ctr=0
+    i_ctr = 0
 
     !$omp parallel private(i_r, i_th, i_phi, y)
     !$omp do
@@ -206,7 +206,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
 end subroutine integrate
 
 subroutine rh_can(r_c, z, dz, i_th, i_phi)
-    real(dp), intent(in) :: r_c  ! plus threadprivate phi_c, th_c from module
+    real(dp), intent(in) :: r_c
     real(dp), dimension(2), intent(in) :: z  ! lam_phi, chi_gauge
     real(dp), dimension(2), intent(inout) :: dz
     integer, intent(in) :: i_th, i_phi
