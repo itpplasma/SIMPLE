@@ -140,7 +140,6 @@ module simple_main
     use get_can_sub, only: can_to_vmec
 
     integer :: i, ipart, iskip
-    double precision :: r,vartheta,varphi,s_vmec,theta_vmec,varphi_vmec
 
     ! skip random numbers according to configuration
       do iskip=1,loopskip
@@ -158,37 +157,8 @@ module simple_main
         call random_number(xi)
         call binsrc(volstart,1,npoiper*nper,xi,i)
         ibins=i
-        ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
-        r=xstart(1,i)
-        vartheta=xstart(2,i)
-        varphi=xstart(3,i)
-  !
-  ! we store starting points in VMEC coordinates:
-        if(isw_field_type .eq. CANFLUX) then
-          s_vmec=r
-          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type .eq. VMEC) then
-          s_vmec=r
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-        elseif(isw_field_type .eq. BOOZER) then
-          s_vmec=r
-          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type .eq. MEISS) then ! TODO
-          s_vmec=r
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-        elseif(isw_field_type .eq. ALBERT) then ! TODO
-          s_vmec=r
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-        else
-          print *,'init_starting_points: unknown field type'
-        endif
-  !
-        zstart(1,ipart)=s_vmec
-        zstart(2,ipart)=theta_vmec
-        zstart(3,ipart)=varphi_vmec
+        ! we store starting points in lab coordinates:
+        call to_lab_coordinates(xstart(1:3,i), zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -265,23 +235,8 @@ module simple_main
         vartheta=twopi*xi
         call random_number(xi)
         varphi=twopi*xi
-!
-! we store starting points in VMEC coordinates:
-        if(isw_field_type .eq. CANFLUX) then
-          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type .eq. VMEC) then
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-        elseif(isw_field_type .eq. BOOZER) then
-          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        else
-          print *,'init_starting_points: unknown field type'
-          error stop
-        endif
-  !
-        zstart(1,ipart)=r
-        zstart(2,ipart)=theta_vmec
-        zstart(3,ipart)=varphi_vmec
+        ! we store starting points in lab coordinates:
+        call to_lab_coordinates([r, vartheta, varphi], zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:

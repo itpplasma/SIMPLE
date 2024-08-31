@@ -34,8 +34,12 @@ subroutine field_can_from_name(field_name, magfie)
       evaluate => evaluate_test
     case("flux")
       evaluate => evaluate_flux
+      can_to_ref => can_to_ref_flux
+      ref_to_can => ref_to_can_flux
     case("boozer")
       evaluate => evaluate_boozer
+      can_to_ref => can_to_ref_boozer
+      ref_to_can => ref_to_can_boozer
     case("meiss")
       if (present(magfie)) then
         call init_meiss(magfie)
