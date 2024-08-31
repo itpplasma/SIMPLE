@@ -29,6 +29,7 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use magfie_sub, only : init_magfie
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
@@ -36,10 +37,11 @@ contains
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
 
     self%integmode = aintegmode
-
     if (self%integmode>=0) then
       call init_field_can
     end if
+
+    call init_magfie(isw_field_type)
   end subroutine init_field
 
 
@@ -69,7 +71,6 @@ contains
 
 
   subroutine init_field_can
-    use magfie_sub, only : init_magfie
     use get_can_sub, only : get_canonical_coordinates
     use boozer_sub, only : get_boozer_coordinates
     use field_can_meiss, only : get_meiss_coordinates
@@ -90,7 +91,6 @@ contains
           print *, 'init_field: Albert coordinates'
           call get_albert_coordinates
       end select
-      call init_magfie(isw_field_type)
   end subroutine init_field_can
 
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 cmake --build ../build --target simple.x -j$(nproc)
 

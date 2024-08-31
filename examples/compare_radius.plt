@@ -4,9 +4,11 @@ orbit_num = ARG1
 set title 'Orbit '.orbit_num
 
 # Plot the data using the variable
-plot 'canflux/fort.'.orbit_num u 2 lt rgb 'dark-green' w l \
+plot 'vmec/fort.'.orbit_num u 2 w l lt rgb 'dark-red' lw 2 \
+    title 'VMEC', \
+    'canflux/fort.'.orbit_num u 2 w l  lt rgb 'dark-green' lw 1.5 \
     title 'Canonical', \
-    'boozer/fort.'.orbit_num u 2 lt rgb 'black' w l \
+    'boozer/fort.'.orbit_num u 2 w l  lt rgb 'black' lw 1 \
     title 'Boozer', \
     'meiss/fort.'.orbit_num u 2 w l lt rgb 'blue' lw 2 \
     title 'Meiss', \
