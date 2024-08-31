@@ -282,10 +282,10 @@ subroutine init_canonical_field_components
         end do
     end do
 
-    call construct_splines_3d(xmin, xmax, Ath(:,:,:), order, periodic, spl_Ath)
-    call construct_splines_3d(xmin, xmax, Aphi(:,:,:), order, periodic, spl_Aph)
-    call construct_splines_3d(xmin, xmax, hth(:,:,:), order, periodic, spl_hth)
-    call construct_splines_3d(xmin, xmax, hphi(:,:,:), order, periodic, spl_hph)
+    call construct_splines_3d(xmin, xmax, Ath, order, periodic, spl_Ath)
+    call construct_splines_3d(xmin, xmax, Aphi, order, periodic, spl_Aph)
+    call construct_splines_3d(xmin, xmax, hth, order, periodic, spl_hth)
+    call construct_splines_3d(xmin, xmax, hphi, order, periodic, spl_hph)
     call construct_splines_3d(xmin, xmax, Bmod, order, periodic, spl_Bmod)
 
     deallocate(Bmod)
