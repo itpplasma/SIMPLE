@@ -6,7 +6,7 @@ use simple, only: Tracer, init_field
 use magfie_sub, only: ALBERT
 use velo_mod, only: isw_field_type
 use simple_magfie, only: VmecField
-use field_can_albert, only: init_albert => init
+use field_can_albert, only: init_albert
 
 implicit none
 

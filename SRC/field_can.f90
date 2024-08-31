@@ -10,9 +10,9 @@ use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transfor
 use field_can_test, only : evaluate_test => evaluate
 use field_can_flux, only : evaluate_flux, can_to_ref_flux, ref_to_can_flux
 use field_can_boozer, only : evaluate_boozer, can_to_ref_boozer, ref_to_can_boozer
-use field_can_meiss, only : evaluate_meiss => evaluate, init_meiss => init, &
-  can_to_ref_meiss => can_to_ref, ref_to_can_meiss => ref_to_can
-use field_can_albert, only : evaluate_albert => evaluate, init_albert => init
+use field_can_meiss, only : init_meiss, evaluate_meiss, &
+  can_to_ref_meiss, ref_to_can_meiss
+use field_can_albert, only : evaluate_albert => evaluate, init_albert
 
 implicit none
 
@@ -45,14 +45,14 @@ subroutine field_can_from_name(field_name, magfie)
       end if
       evaluate => evaluate_meiss
       can_to_ref => can_to_ref_meiss
-      ref_to_can => can_to_ref_meiss
+      ref_to_can => ref_to_can_meiss
     case("albert")
       if (present(magfie)) then
         call init_albert(magfie)
       end if
       evaluate => evaluate_albert
       can_to_ref => can_to_ref_meiss
-      ref_to_can => can_to_ref_meiss
+      ref_to_can => ref_to_can_meiss
     case default
       print *, "field_can_from_name: Unknown field type ", field_name
       error stop

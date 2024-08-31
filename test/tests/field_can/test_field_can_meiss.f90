@@ -7,7 +7,7 @@ use velo_mod, only: isw_field_type
 use simple_magfie, only: VmecField
 use field_can_mod, only: eval_field => evaluate, FieldCan, FieldCan_init
 use magfie_sub, only: CANFLUX, BOOZER, VMEC, MEISS
-use field_can_meiss, only: init_meiss => init, init_transformation, &
+use field_can_meiss, only: init_meiss, init_transformation, &
     spline_transformation, init_canonical_field_components, &
     xmin, h_r, h_phi, h_th, ah_cov_on_slice, n_r, n_phi, n_th, lam_phi, chi_gauge
 use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary

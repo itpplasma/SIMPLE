@@ -30,7 +30,7 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
 
-subroutine init(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
+subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     class(MagneticField), intent(in) :: magfie_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
@@ -50,10 +50,10 @@ subroutine init(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     h_r = (xmax(1)-xmin(1))/(n_r-1)
     h_th = (xmax(2)-xmin(2))/(n_th-1)
     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
-end subroutine init
+end subroutine init_meiss
 
 
-subroutine evaluate(f, r, th_c, ph_c, mode_secders)
+subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
@@ -84,7 +84,44 @@ subroutine evaluate(f, r, th_c, ph_c, mode_secders)
     call evaluate_splines_3d_der(spl_hph, x, f%hph, f%dhph)
 
     call evaluate_splines_3d_der(spl_Bmod, x, f%Bmod, f%dBmod)
-end subroutine evaluate
+end subroutine evaluate_meiss
+
+
+subroutine can_to_ref_meiss(xcan, xref)
+    real(dp), intent(in) :: xcan(3)
+    real(dp), intent(out) :: xref(3)
+    real(dp) :: lam
+
+    call evaluate_splines_3d(spl_lam_phi, xcan, lam)
+    xref(1) = xcan(1)
+    xref(2) = xcan(2)
+    xref(3) = modulo(xcan(3) + lam, twopi)
+end subroutine can_to_ref_meiss
+
+
+subroutine ref_to_can_meiss(xref, xcan)
+    real(dp), intent(in) :: xref(3)
+    real(dp), intent(out) :: xcan(3)
+
+    real(dp), parameter :: TOL = 1d-12
+    integer, parameter :: MAX_ITER = 16
+
+    real(dp) :: lam, phi_old
+    integer :: i
+
+    xcan(1) = xref(1)
+    xcan(2) = xref(2)
+    xcan(3) = xref(3)
+
+    ! TODO make this efficient with Newton
+    do i=1, MAX_ITER
+        call evaluate_splines_3d(spl_lam_phi, xcan, lam)
+        phi_old = xcan(3)
+        xcan(3) = modulo(xref(3) - lam, twopi)
+        if (abs(xcan(3) - phi_old) < TOL) return
+    enddo
+    print *, 'WARNING: ref_to_can_meiss did not converge after', MAX_ITER, 'iterations'
+end subroutine ref_to_can_meiss
 
 
 subroutine get_meiss_coordinates
@@ -229,7 +266,7 @@ subroutine init_canonical_field_components
     do i_phi=1,n_phi
         do i_th=1,n_th
             do i_r=1,n_r
-                call can_to_ref(xcan(:,i_r,i_th,i_phi), xref)
+                call can_to_ref_meiss(xcan(:,i_r,i_th,i_phi), xref)
                 call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
                 call evaluate_splines_3d_der2(spl_lam_phi, &
@@ -257,30 +294,6 @@ subroutine init_canonical_field_components
 
     deallocate(xcan)
 end subroutine init_canonical_field_components
-
-
-subroutine can_to_ref(xcan, xref)
-    real(dp), intent(in) :: xcan(3)
-    real(dp), intent(out) :: xref(3)
-    real(dp) :: lam
-
-    call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-    xref(1) = xcan(1)
-    xref(2) = xcan(2)
-    xref(3) = modulo(xcan(3) + lam, twopi)
-end subroutine can_to_ref
-
-
-subroutine ref_to_can(xref, xcan)
-    real(dp), intent(in) :: xref(3)
-    real(dp), intent(out) :: xcan(3)
-    real(dp) :: lam
-
-    call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-    xcan(1) = xref(1)
-    xcan(2) = xref(2)
-    xcan(3) = modulo(xref(3) - lam, twopi)
-end subroutine ref_to_can
 
 
 pure subroutine generate_regular_grid(x)
