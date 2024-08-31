@@ -86,40 +86,6 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
 end subroutine orbit_sympl_init
 
 
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! subroutine orbit_timestep_quasi(ierr)
-
-!   integer, intent(out) :: ierr
-
-!   select case (si%mode)
-!     case (0)
-!      call orbit_timestep_rk45(ierr)
-!     case (1)
-!       call timestep_euler1_quasi(ierr)
-!     case (2)
-!         call timestep_euler2_quasi(ierr)
-!     case (3)
-!       call timestep_midpoint_quasi(ierr)
-!     case (4)
-!       call timestep_rk_gauss_quasi(1, ierr)
-!     case (5)
-!       call timestep_rk_gauss_quasi(2, ierr)
-!     case (6)
-!       call timestep_rk_gauss_quasi(3, ierr)
-!     case (7)
-!       call timestep_rk_gauss_quasi(4, ierr)
-!     case (15)
-!       call timestep_rk_lobatto_quasi(3, ierr)
-!     case default
-!       print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
-!       stop
-!   end select
-
-! end subroutine orbit_timestep_quasi
-
-
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
