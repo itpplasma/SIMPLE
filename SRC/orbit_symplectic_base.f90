@@ -5,10 +5,11 @@ use field_can_mod, only: eval_field => evaluate, FieldCan, get_val, get_derivati
 
 implicit none
 
+logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
+
 type :: SymplecticIntegrator
   integer :: nlag          ! Lagrange polynomial order
   integer :: nbuf          ! values to store back
-  logical :: extrap_field  ! do extrapolation after final iteration
 
   double precision :: atol
   double precision :: rtol

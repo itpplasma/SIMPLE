@@ -36,8 +36,6 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   si%z = z
 
-  si%extrap_field = .True.
-
   call eval_field(f, z(1), z(2), z(3), 0)
   call get_val(f, si%z(4)) ! for pth
   si%pthold = f%pth
@@ -1240,7 +1238,7 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     si%z(1) = x(1)
     si%z(4) = x(2)
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1))  + f%dpth(4)*(x(2)-xlast(2))
       f%dH(1) = f%dH(1) + f%d2H(1)*(x(1)-xlast(1)) + f%d2H(7)*(x(2)-xlast(2))
       f%dpth(1)=f%dpth(1)+f%d2pth(1)*(x(1)-xlast(1))+f%d2pth(7)*(x(2)-xlast(2))
@@ -1297,7 +1295,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
 
     si%z(1:3) = x
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       dz(1) = x(1)-xlast(1)
       dz(2) = x(2)-xlast(2)
       dz(3) = x(3)-xlast(3)
@@ -1360,7 +1358,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 
     si%z = x(1:4)
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
                     + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
                     + f%dpth(3)*(x(3)-xlast(3)) &  ! d/dph
@@ -1424,7 +1422,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
     call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       do k = 1, s
         dz(1) = x(4*k-3)-xlast(4*k-3)
         dz(2) = x(4*k-2)-xlast(4*k-2)
