@@ -1,28 +1,46 @@
 module field_can_boozer
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_can_base, only: FieldCan, n_field_evaluations
-use boozer_sub, only: splint_boozer_coord
 
 implicit none
 
 contains
 
-subroutine evaluate(f, r, th_c, ph_c, mode_secders)
+subroutine evaluate_boozer(f, r, th_c, ph_c, mode_secders)
     type(FieldCan), intent(inout) :: f
-
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
     call eval_field_booz(f, r, th_c, ph_c, mode_secders)
 
     n_field_evaluations = n_field_evaluations + 1
-end subroutine evaluate
+end subroutine evaluate_boozer
 
+
+subroutine can_to_ref_boozer(xcan, xref)
+    use boozer_sub, only: boozer_to_vmec
+    real(dp), intent(in) :: xcan(3)
+    real(dp), intent(out) :: xref(3)
+
+    xref(1) = xcan(1)
+    call boozer_to_vmec(xcan(1), xcan(2), xcan(3), xref(2), xref(3))
+end subroutine can_to_ref_boozer
+
+
+subroutine ref_to_can_boozer(xref, xcan)
+    use boozer_sub, only: vmec_to_boozer
+    real(dp), intent(in) :: xref(3)
+    real(dp), intent(out) :: xcan(3)
+
+    xcan(1) = xref(1)
+    call vmec_to_boozer(xref(1), xref(2), xref(3), xcan(2), xcan(3))
+end subroutine ref_to_can_boozer
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
+    use boozer_sub, only: splint_boozer_coord
     use vector_potentail_mod, only : torflux
     !
     ! Evaluates magnetic field in Boozer canonical coordinates (r, th_c, ph_c)

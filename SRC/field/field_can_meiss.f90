@@ -216,7 +216,7 @@ end subroutine ah_cov_on_slice
 subroutine init_canonical_field_components
     real(dp), dimension(:,:,:,:), allocatable :: xcan
     real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
-    real(dp) :: xbase(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3), dummy(6)
+    real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3), dummy(6)
     integer :: i_r, i_th, i_phi
 
     allocate(xcan(3,n_r,n_th,n_phi))
@@ -229,8 +229,8 @@ subroutine init_canonical_field_components
     do i_phi=1,n_phi
         do i_th=1,n_th
             do i_r=1,n_r
-                call can_to_base(xcan(:,i_r,i_th,i_phi), xbase)
-                call magfie%evaluate(xbase, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                call can_to_ref(xcan(:,i_r,i_th,i_phi), xref)
+                call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
                 call evaluate_splines_3d_der2(spl_lam_phi, &
                     xcan(:,i_r,i_th,i_phi), lam, dlam, dummy)
@@ -259,16 +259,28 @@ subroutine init_canonical_field_components
 end subroutine init_canonical_field_components
 
 
-subroutine can_to_base(xcan, xbase)
+subroutine can_to_ref(xcan, xref)
     real(dp), intent(in) :: xcan(3)
-    real(dp), intent(out) :: xbase(3)
+    real(dp), intent(out) :: xref(3)
     real(dp) :: lam
 
     call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-    xbase(1) = xcan(1)
-    xbase(2) = modulo(xcan(2) + lam, twopi)
-    xbase(3) = xcan(3)
-end subroutine can_to_base
+    xref(1) = xcan(1)
+    xref(2) = xcan(2)
+    xref(3) = modulo(xcan(3) + lam, twopi)
+end subroutine can_to_ref
+
+
+subroutine ref_to_can(xref, xcan)
+    real(dp), intent(in) :: xref(3)
+    real(dp), intent(out) :: xcan(3)
+    real(dp) :: lam
+
+    call evaluate_splines_3d(spl_lam_phi, xcan, lam)
+    xcan(1) = xref(1)
+    xcan(2) = xref(2)
+    xcan(3) = modulo(xref(3) - lam, twopi)
+end subroutine ref_to_can
 
 
 pure subroutine generate_regular_grid(x)

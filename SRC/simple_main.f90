@@ -177,13 +177,13 @@ module simple_main
           s_vmec=r
           call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
         elseif(isw_field_type .eq. MEISS) then ! TODO
-            s_vmec=r
-            theta_vmec=vartheta
-            varphi_vmec=varphi
+          s_vmec=r
+          theta_vmec=vartheta
+          varphi_vmec=varphi
         elseif(isw_field_type .eq. ALBERT) then ! TODO
-            s_vmec=r
-            theta_vmec=vartheta
-            varphi_vmec=varphi
+          s_vmec=r
+          theta_vmec=vartheta
+          varphi_vmec=varphi
         else
           print *,'init_starting_points: unknown field type'
         endif
@@ -396,26 +396,19 @@ module simple_main
   end subroutine to_standard_z_coordinates
 
   subroutine from_lab_coordinates(xlab, x)
+    use field_can_mod, only : ref_to_can
     double precision, intent(in) :: xlab(:)
     double precision, intent(inout) :: x(:)
 
-    x = xlab
-    if(isw_field_type.eq.0) then
-      call vmec_to_can(xlab(1), xlab(2), xlab(3), x(2), x(3))
-    elseif(isw_field_type.eq.2) then
-      call vmec_to_boozer(xlab(1), xlab(2), xlab(3), x(2), x(3))
-    endif
+    call ref_to_can(xlab, x)  ! TODO don't assume lab=ref
   end subroutine from_lab_coordinates
 
   subroutine to_lab_coordinates(x, xlab)
+    use field_can_mod, only : can_to_ref
     double precision, intent(in) :: x(:)
     double precision, intent(inout) :: xlab(:)
 
-    xlab = x
-    if(isw_field_type .eq. BOOZER) then
-      call boozer_to_vmec(x(1), x(2), x(3), xlab(2), xlab(3))
-    endif
-    ! TODO: add conversion to lab coordinates for other field types
+    call can_to_ref(x, xlab)  ! TODO don't assume lab=ref
   end subroutine to_lab_coordinates
 
   subroutine increase_confined_count(it, passing)

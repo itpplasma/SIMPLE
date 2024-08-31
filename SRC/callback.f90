@@ -1,6 +1,7 @@
 module callback
 
 use params, only : Tracer
+use field_can_mod, only : can_to_ref
 
 implicit none
 
@@ -36,8 +37,12 @@ subroutine write_position(ipart, t, z)
     integer, intent(in) :: ipart
     double precision, intent(in) :: t, z(:)
 
+    double precision :: xref(3)
+
+    call can_to_ref(z(1:3), xref)
+
     !$omp critical
-    write(9000+ipart, *) t, z
+    write(9000+ipart, *) t, xref, z(4), z(5)
     !$omp end critical
 end subroutine write_position
 
