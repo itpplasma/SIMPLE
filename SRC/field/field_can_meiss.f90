@@ -261,14 +261,16 @@ subroutine init_canonical_field_components
     do i_phi=1,n_phi
         do i_th=1,n_th
             do i_r=1,n_r
-                xcan(1) = xmin(1) + h_r*dble(i_r-1)
-                xcan(2) = xmin(2) + h_th*dble(i_th-1)
-                xcan(3) = xmin(3) + h_phi*dble(i_phi-1)
-                call can_to_ref_meiss(xcan, xref)
-                call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                xcan = get_grid_point(i_r, i_th, i_phi)
 
                 call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
                 call evaluate_splines_3d_der(spl_chi_gauge, xcan, chi, dchi)
+
+                xref(1) = xcan(1)
+                xref(2) = modulo(xcan(2), twopi)
+                xref(3) = modulo(xcan(3) + lam, twopi)
+
+                call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
@@ -288,22 +290,6 @@ subroutine init_canonical_field_components
     deallocate(hphi, hth)
     deallocate(Aphi, Ath)
 end subroutine init_canonical_field_components
-
-
-pure subroutine generate_regular_grid(x)
-real(dp), intent(inout) :: x(:,:,:,:)
-
-integer :: i_r, i_th, i_phi
-
-do i_phi=1,n_phi
-    do i_th=1,n_th
-        do i_r=1,n_r
-            x(:, i_r, i_th, i_phi) = get_grid_point(i_r, i_th, i_phi)
-        enddo
-    enddo
-enddo
-
-end subroutine generate_regular_grid
 
 
 pure function get_grid_point(i_r, i_th, i_phi)
@@ -342,10 +328,10 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     bmod = f%Bmod
 
     sqrtg_bmod = f%hph*f%dAth(1) - f%hth*f%dAph(1)
-    sqrtg = sqrtg_bmod/f%Bmod
+    sqrtg = sqrtg_bmod/bmod
     bder = f%dBmod/bmod
 
-    hcovar(1) = 0.d0
+    hcovar(1) = 0d0
     hcovar(2) = f%hth
     hcovar(3) = f%hph
 

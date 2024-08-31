@@ -5,7 +5,7 @@ use interpolate, only: SplineData3D, construct_splines_3d, &
     evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
 use field_can_base, only: FieldCan, n_field_evaluations
 use field_can_meiss, only: xmin, xmax, n_r, n_th, n_phi, order, periodic, twopi, &
-    get_grid_point, generate_regular_grid, spl_Ath, spl_Aph, spl_hth, spl_hph, spl_Bmod, &
+    get_grid_point, spl_Ath, spl_Aph, spl_hth, spl_hph, spl_Bmod, &
     init_albert => init_meiss, init_transformation, spline_transformation, &
     init_canonical_field_components
 use psi_transform, only: grid_r_to_psi
