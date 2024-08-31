@@ -13,6 +13,7 @@ contains
 
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     use spline_vmec_sub
+    use magfie_sub
     class(VmecField), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
@@ -28,20 +29,18 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         dA_theta_ds, dA_phi_ds, aiota, sqg, alam, dl_ds, dl_dt, dl_dp, &
         Bctr_theta, Bctr_phi, Bcov_s, Bcov_theta, Bcov_phi)
 
-    Acov(1) = 0d0
-    Acov(2) = Acov_theta
-    Acov(3) = Acov_phi
+    Acov(1) = Acov_theta*dl_ds
+    Acov(2) = Acov_theta*(1d0 + dl_dt)
+    Acov(3) = Acov_phi + Acov_theta*dl_dp
 
-    Bmod = sqrt(abs(Bctr_theta*Bcov_theta + Bctr_phi*Bcov_phi))
+    Bmod = sqrt(Bctr_theta*Bcov_theta + Bctr_phi*Bcov_phi)
 
-    hcov(1) = Bcov_s/Bmod
-    hcov(2) = Bcov_theta/Bmod
-    hcov(3) = Bcov_phi/Bmod
+    hcov(1) = (Bcov_s + Bcov_theta*dl_ds)/Bmod
+    hcov(2) = Bcov_theta*(1d0 + dl_dt)/Bmod
+    hcov(3) = (Bcov_phi + Bcov_theta*dl_dp)/Bmod
 
     if (present(sqgBctr)) then
-        sqgBctr(1) = 0d0
-        sqgBctr(2) = -dA_phi_ds
-        sqgBctr(3) = dA_theta_ds
+        error stop 'sqgBctr not implemented'
     end if
 end subroutine evaluate
 
