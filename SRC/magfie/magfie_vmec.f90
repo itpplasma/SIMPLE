@@ -13,7 +13,7 @@ contains
 
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     use spline_vmec_sub
-    use magfie_sub
+
     class(VmecField), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
