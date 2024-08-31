@@ -449,9 +449,12 @@ module simple_main
       end if
     enddo
     close(1)
-    open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
-    write(1,*) inverse_times_lost_sum/num_lost
-    close(1)
+
+    if (num_lost > 0) then
+      open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
+      write(1,*) inverse_times_lost_sum/num_lost
+      close(1)
+    endif
 
     open(1,file='confined_fraction.dat',recl=1024)
     do i=1,ntimstep
