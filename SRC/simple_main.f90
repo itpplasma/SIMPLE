@@ -1,7 +1,6 @@
 module simple_main
   use omp_lib
   use util, only: pi, twopi, sqrt2
-  use velo_mod,   only : isw_field_type
   use simple, only : init_sympl
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
