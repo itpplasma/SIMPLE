@@ -5,5 +5,6 @@ ntestpart = 7            ! number of test particles
 isw_field_type = 3       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer, 3: Meiss, 4: Albert
 integmode = 1
 startmode = 2
+relerr = 1d-13
 deterministic = .True.
 /
