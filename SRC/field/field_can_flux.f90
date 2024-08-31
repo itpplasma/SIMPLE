@@ -1,7 +1,7 @@
 module field_can_flux
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: FieldCan, n_field_evaluations
+use field_can_base, only: FieldCan, n_field_evaluations, twopi
 
 implicit none
 
@@ -25,6 +25,8 @@ subroutine can_to_ref_flux(xcan, xref)
 
     xref(1) = xcan(1)
     call can_to_vmec(xcan(1), xcan(2), xcan(3), xref(2), xref(3))
+    xref(2) = mod(xref(2), twopi)
+    xref(3) = mod(xref(3), twopi)
 end subroutine can_to_ref_flux
 
 
@@ -35,6 +37,8 @@ subroutine ref_to_can_flux(xref, xcan)
 
     xcan(1) = xref(1)
     call vmec_to_can(xref(1), xref(2), xref(3), xcan(2), xcan(3))
+    xcan(2) = mod(xcan(2), twopi)
+    xcan(3) = mod(xcan(3), twopi)
 end subroutine ref_to_can_flux
 
 

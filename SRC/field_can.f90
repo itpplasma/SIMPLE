@@ -5,7 +5,7 @@ use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
 use simple_magfie, only : MagneticField
-use field_can_base, only : evaluate_base => evaluate, coordinate_transform, &
+use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
 use field_can_test, only : evaluate_test => evaluate
 use field_can_flux, only : evaluate_flux, can_to_ref_flux, ref_to_can_flux
@@ -16,7 +16,6 @@ use field_can_albert, only : evaluate_albert => evaluate, init_albert => init
 
 implicit none
 
-real(dp), parameter :: twopi = atan(1.d0)*8.d0
 procedure(evaluate_base), pointer :: evaluate => null()
 procedure(coordinate_transform), pointer :: can_to_ref => identity_transform
 procedure(coordinate_transform), pointer :: ref_to_can => identity_transform

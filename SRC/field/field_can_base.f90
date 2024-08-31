@@ -3,6 +3,8 @@ module field_can_base
 use, intrinsic :: iso_fortran_env, only: dp => real64
 implicit none
 
+real(dp), parameter :: twopi = atan(1.d0)*8.d0
+
 integer(8) :: n_field_evaluations = 0
 
 !$omp threadprivate(n_field_evaluations)
