@@ -94,7 +94,7 @@ subroutine can_to_ref_meiss(xcan, xref)
 
     call evaluate_splines_3d(spl_lam_phi, xcan, lam)
     xref(1) = xcan(1)
-    xref(2) = xcan(2)
+    xref(2) = modulo(xcan(2), twopi)
     xref(3) = modulo(xcan(3) + lam, twopi)
 end subroutine can_to_ref_meiss
 
@@ -110,8 +110,8 @@ subroutine ref_to_can_meiss(xref, xcan)
     integer :: i
 
     xcan(1) = xref(1)
-    xcan(2) = xref(2)
-    xcan(3) = xref(3)
+    xcan(2) = modulo(xref(2), twopi)
+    xcan(3) = modulo(xref(3), twopi)
 
     ! TODO make this efficient with Newton
     do i=1, MAX_ITER

@@ -23,7 +23,8 @@ subroutine can_to_ref_boozer(xcan, xref)
     real(dp), intent(out) :: xref(3)
 
     xref(1) = xcan(1)
-    call boozer_to_vmec(xcan(1), xcan(2), xcan(3), xref(2), xref(3))
+    call boozer_to_vmec( &
+        xcan(1), mod(xcan(2), twopi), mod(xcan(3), twopi), xref(2), xref(3))
     xref(2) = mod(xref(2), twopi)
     xref(3) = mod(xref(3), twopi)
 end subroutine can_to_ref_boozer
@@ -35,7 +36,8 @@ subroutine ref_to_can_boozer(xref, xcan)
     real(dp), intent(out) :: xcan(3)
 
     xcan(1) = xref(1)
-    call vmec_to_boozer(xref(1), xref(2), xref(3), xcan(2), xcan(3))
+    call vmec_to_boozer( &
+        xref(1), mod(xref(2), twopi), mod(xref(3), twopi), xcan(2), xcan(3))
     xcan(2) = mod(xcan(2), twopi)
     xcan(3) = mod(xcan(3), twopi)
 end subroutine ref_to_can_boozer

@@ -1,9 +1,9 @@
 &config
 trace_time = 1d-4        ! slowing down time, s
 sbeg = 0.3d0             ! starting s (normalzed toroidal flux) for particles.
-ntestpart = 2            ! number of test particles
+ntestpart = 12           ! number of test particles
 isw_field_type = 1       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer, 3: Meiss, 4: Albert
-startmode = 2
+startmode = 1
 integmode = -1
 relerr = 1d-9            ! tolerance for integrator. Set to 1d-13 for symplectic.
 deterministic = .True.

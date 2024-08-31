@@ -96,6 +96,28 @@ function name_from_id(field_id)
 end function name_from_id
 
 
+function id_from_name(field_name)
+  integer :: id_from_name
+  character(*), intent(in) :: field_name
+
+  select case(trim(field_name))
+    case("test")
+      id_from_name = TEST
+    case("flux")
+      id_from_name = CANFLUX
+    case("boozer")
+      id_from_name = BOOZER
+    case("meiss")
+      id_from_name = MEISS
+    case("albert")
+      id_from_name = ALBERT
+    case default
+      print *, "id_from_name: Unknown field type ", field_name
+      error stop
+  end select
+end function id_from_name
+
+
 subroutine init_field_can(field_id)
   use get_can_sub, only : get_canonical_coordinates
   use boozer_sub, only : get_boozer_coordinates

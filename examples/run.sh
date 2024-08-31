@@ -3,10 +3,6 @@ set -e
 
 cmake --build ../build --target simple.x -j$(nproc)
 
-pushd vmec
-../../build/simple.x
-popd
-
 pushd canflux
 ../../build/simple.x
 popd
