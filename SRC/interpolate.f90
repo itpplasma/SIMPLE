@@ -3,8 +3,6 @@ module interpolate
 
     implicit none
 
-    real(8) :: twopi = 8d0*atan(1d0)
-
     type :: SplineData1D
         integer :: order
         integer :: num_points
@@ -80,7 +78,7 @@ contains
         integer :: interval_index, k_power
 
         if (spl%periodic) then
-            xj = modulo(x, twopi)
+            xj = modulo(x, spl%h_step*(spl%num_points-1))
         else
             xj = x
         end if
@@ -217,7 +215,7 @@ contains
 
         do j=1,2
             if (spl%periodic(j)) then
-                xj = modulo(x(j), twopi)
+                xj = modulo(x(j), spl%h_step(j)*(spl%num_points(j)-1))
             else
                 xj = x(j)
             end if
@@ -340,7 +338,7 @@ contains
 
         do j=1,3
             if (spl%periodic(j)) then
-                xj = modulo(x(j), twopi)
+                xj = modulo(x(j), spl%h_step(j)*(spl%num_points(j)-1))
             else
                 xj = x(j)
             end if
@@ -394,7 +392,7 @@ contains
 
         do j=1,3
             if (spl%periodic(j)) then
-                xj = modulo(x(j), twopi)
+                xj = modulo(x(j), spl%h_step(j)*(spl%num_points(j)-1))
             else
                 xj = x(j)
             end if
@@ -492,7 +490,7 @@ contains
 
         do j=1,3
             if (spl%periodic(j)) then
-                xj = modulo(x(j), twopi)
+                xj = modulo(x(j), spl%h_step(j)*(spl%num_points(j)-1))
             else
                 xj = x(j)
             end if
