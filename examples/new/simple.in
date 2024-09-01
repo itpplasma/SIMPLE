@@ -1,9 +1,0 @@
-&config
-deterministic = .True.
-trace_time = 1d-3        ! slowing down time, s
-sbeg = 0.9d0             ! starting s (normalzed toroidal flux) for particles.
-ntestpart = 10           ! number of test particles
-netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
-isw_field_type = 2
-swcoll = .False.
-/
