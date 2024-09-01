@@ -62,6 +62,8 @@ message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
 
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused)
 	link_libraries("-mkl -qopenmp")
