@@ -5,6 +5,7 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
+  use field_can_mod, only : can_to_ref, ref_to_can
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
@@ -154,8 +155,8 @@ module simple_main
         call random_number(xi)
         call binsrc(volstart,1,npoiper*nper,xi,i)
         ibins=i
-        ! we store starting points in lab coordinates:
-        call to_lab_coordinates(xstart(1:3,i), zstart(1:3,ipart))
+        ! we store starting points in reference coordinates:
+        call can_to_ref(xstart(1:3,i), zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -232,8 +233,8 @@ module simple_main
         vartheta=twopi*xi
         call random_number(xi)
         varphi=twopi*xi
-        ! we store starting points in lab coordinates:
-        call to_lab_coordinates([r, vartheta, varphi], zstart(1:3,ipart))
+        ! we store starting points in reference coordinates:
+        call can_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -281,7 +282,7 @@ module simple_main
       return
     endif
 
-    call from_lab_coordinates(zstart(1:3, ipart), z(1:3))
+    call ref_to_can(zstart(1:3, ipart), z(1:3))
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
@@ -305,7 +306,7 @@ module simple_main
     enddo
 
     !$omp critical
-    call to_lab_coordinates(z(1:3), zend(1:3,ipart))
+    call can_to_ref(z(1:3), zend(1:3,ipart))
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
@@ -344,22 +345,6 @@ module simple_main
     z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod+0.5d0*anorb%f%vpar**2)
     z(5) = anorb%f%vpar/(z(4)*sqrt2)
   end subroutine to_standard_z_coordinates
-
-  subroutine from_lab_coordinates(xlab, x)
-    use field_can_mod, only : ref_to_can
-    double precision, intent(in) :: xlab(:)
-    double precision, intent(inout) :: x(:)
-
-    call ref_to_can(xlab, x)  ! TODO don't assume lab=ref
-  end subroutine from_lab_coordinates
-
-  subroutine to_lab_coordinates(x, xlab)
-    use field_can_mod, only : can_to_ref
-    double precision, intent(in) :: x(:)
-    double precision, intent(inout) :: xlab(:)
-
-    call can_to_ref(x, xlab)  ! TODO don't assume lab=ref
-  end subroutine to_lab_coordinates
 
   subroutine increase_confined_count(it, passing)
     integer, intent(in) :: it
