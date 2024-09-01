@@ -7,15 +7,15 @@ set title 'Orbit '.orbit_num
 set size square
 
 # Plot the data using the variable
-splot 'vmec/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'dark-red' lw 2 \
+splot 'vmec/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'dark-red' \
     title 'VMEC', \
-    'canflux/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'dark-green' lw 1.5 \
+    'canflux/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'dark-green' \
     title 'Canonical', \
-    'boozer/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l  lt rgb 'black' lw 1\
+    'boozer/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l  lt rgb 'black' \
     title 'Boozer', \
-    'meiss/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'blue' lw 2\
+    'meiss/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'blue' \
     title 'Meiss', \
-    'albert/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'red' lw 1\
+    'albert/fort.'.orbit_num u ((R0+$2*cos($3))*cos($4)):((R0+$2*cos($3))*sin($4)):($2*sin($3)) w l lt rgb 'red' \
     title 'Albert'
 
 pause -1
