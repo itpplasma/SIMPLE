@@ -126,7 +126,7 @@ subroutine init_field_can(field_id)
 
   integer, intent(in) :: field_id
 
-  !call field_can_from_id(field_id, VmecField())
+  !call field_can_from_id(field_id, VmecField()) ! TODO make this configurable
   call field_can_from_id(field_id, create_coils_field('coils'))
   select case (field_id)
     case (CANFLUX)
