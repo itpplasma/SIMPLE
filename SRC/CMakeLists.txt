@@ -51,9 +51,16 @@ set(SOURCES
 add_library (simple SHARED ${SOURCES})
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(simple CONTRIB netcdf netcdff)
+	target_link_libraries(simple PRIVATE CONTRIB netcdf netcdff)
 else()
-	target_link_libraries(simple
+	target_link_libraries(simple PUBLIC
 		netcdf netcdff CONTRIB ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
 	)
 endif()
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/../libneo/src/polylag neo_polylag)
+target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_polylag>)
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/../libneo/src/field neo_field)
+add_dependencies(neo_field neo_polylag)
+target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_field>)
