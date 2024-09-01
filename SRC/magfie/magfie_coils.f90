@@ -1,10 +1,12 @@
 module simple_magfie_coils
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
+use neo_biotsavart, only: coils_t, load_coils_from_file
 use simple_magfie_base, only: MagneticField
 implicit none
 
 type, extends(MagneticField) :: CoilsField
+    type(coils_t) :: coils
 contains
     procedure :: evaluate
 end type CoilsField
@@ -38,5 +40,15 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         error stop 'sqgBctr not implemented'
     end if
 end subroutine evaluate
+
+
+function create_coils_field(coils_file) result(field)
+    class(CoilsField), allocatable :: field
+    character(*), intent(in) :: coils_file
+
+    allocate(CoilsField :: field)
+    call load_coils_from_file(coils_file, field%coils)
+
+end function create_coils_field
 
 end module simple_magfie_coils
