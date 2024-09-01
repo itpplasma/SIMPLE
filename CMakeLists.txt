@@ -6,6 +6,7 @@ project (SIMPLE Fortran C)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set	(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set (CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
 
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
 	Release Debug Profile Fast
@@ -60,6 +61,8 @@ message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
+
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused)

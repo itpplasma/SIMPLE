@@ -1,7 +1,7 @@
 module orbit_symplectic_quasi
 
-use field_can_mod
-use orbit_symplectic
+use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
+use orbit_symplectic_base
 
 implicit none
 save
@@ -13,6 +13,8 @@ type(FieldCan) :: f
 type(FieldCan) :: fs(S_MAX_GAUSS)
 type(SymplecticIntegrator) :: si
 !$omp threadprivate(f, si)
+
+procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
 
 contains
 
@@ -156,38 +158,6 @@ subroutine f_rk_lobatto_quasi(n, x, fvec)
 
   end subroutine f_rk_lobatto_quasi
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-subroutine orbit_timestep_quasi(ierr)
-
-  integer, intent(out) :: ierr
-
-  select case (si%mode)
-    case (0)
-     call orbit_timestep_rk45(ierr)
-    case (1)
-      call timestep_euler1_quasi(ierr)
-    case (2)
-        call timestep_euler2_quasi(ierr)
-    case (3)
-      call timestep_midpoint_quasi(ierr)
-    case (4)
-      call timestep_rk_gauss_quasi(1, ierr)
-    case (5)
-      call timestep_rk_gauss_quasi(2, ierr)
-    case (6)
-      call timestep_rk_gauss_quasi(3, ierr)
-    case (7)
-      call timestep_rk_gauss_quasi(4, ierr)
-    case (15)
-      call timestep_rk_lobatto_quasi(3, ierr)
-    case default
-      print *, 'invalid mode for orbit_timestep_quasi: ', si%mode
-      stop
-  end select
-
-end subroutine orbit_timestep_quasi
-
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -248,7 +218,6 @@ subroutine timestep_midpoint_quasi(ierr)
 
     si%z = x(1:4)
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -304,7 +273,6 @@ subroutine timestep_euler1_quasi(ierr)
       call get_derivatives(f, si%z(4))
     end if
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -359,7 +327,6 @@ subroutine timestep_euler2_quasi(ierr)
       call get_derivatives(f, si%z(4))
     end if
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -417,7 +384,6 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -501,7 +467,6 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -542,7 +507,6 @@ subroutine orbit_timestep_rk45(ierr)
   ktau = 0
   do while(ktau .lt. si%ntau)
     call odeint_allroutines(si%z, 4, ktau*si%dt, (ktau+1)*si%dt, si%rtol, f_ode)
-    si%kt = si%kt+1
     ktau = ktau+1
   end do
 end subroutine orbit_timestep_rk45

@@ -120,7 +120,7 @@ if (isw_field_type == 0) then
 elseif (isw_field_type == 2) then
     use_B_r=.false.
 !    use_B_r=.true.
-    call boozer_converter
+    call get_boozer_coordinates
     call vmec_to_boozer(r,theta_vmec,varphi_vmec,vartheta,varphi)
 else
     vartheta=theta_vmec

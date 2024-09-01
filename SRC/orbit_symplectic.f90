@@ -1,61 +1,20 @@
 module orbit_symplectic
 
 use util, only: pi, twopi
-use field_can_mod, only: FieldCan, eval_field, get_val, get_derivatives, get_derivatives2
+use orbit_symplectic_base
+use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_euler1_quasi, &
+  timestep_euler2_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
+  timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 
 implicit none
-save
 
-public
-
-integer, parameter :: NLAG_MAX = 2
-integer, parameter :: NBUF_MAX = 16*NLAG_MAX
-
-type :: SymplecticIntegrator
-  integer :: nlag          ! Lagrange polynomial order
-  integer :: nbuf          ! values to store back
-  logical :: extrap_field  ! do extrapolation after final iteration
-
-  double precision :: atol
-  double precision :: rtol
-
-! Current phase-space coordinates z and old pth
-  double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
-  double precision :: pthold
-
-  ! Buffer for Lagrange polynomial interpolation
-  integer :: kbuf
-  integer :: kt
-  integer :: k
-  integer :: bufind(0:NLAG_MAX)
-  double precision, dimension(8, 0:NBUF_MAX) :: zbuf
-  double precision, dimension(0:0, NLAG_MAX+1) :: coef
-
-  ! Timestep and variables from z0
-  integer :: ntau
-  double precision :: dt
-  double precision :: pabs
-
-  ! Integrator mode
-  integer :: mode  ! 1 = euler1, 2 = euler2
-end type SymplecticIntegrator
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! Composition method with 2s internal stages according to Hairer, 2002 V.3.1
-!
-integer, parameter :: S_MAX = 32
-type :: MultistageIntegrator
-  integer :: s
-  double precision :: alpha(S_MAX), beta(S_MAX)
-  type(SymplecticIntegrator) stages(2*S_MAX)
-end type MultistageIntegrator
+procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 
 contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
+subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 !
   use plag_coeff_sub, only : plag_coeff
 
@@ -66,34 +25,121 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init, nlag)
   integer, intent(in) :: ntau
   double precision, intent(in) :: rtol_init
   integer, intent(in) :: mode_init
-  integer, intent(in) :: nlag ! Lagrangian polynomials
 
   integer :: k
 
-  si%mode = mode_init
   si%atol = 1d-15
   si%rtol = rtol_init
-
-  si%kbuf = 0
-  si%kt = 0
-  si%k = 0
-
-  si%bufind = 0
 
   si%ntau = ntau
   si%dt = dt
 
   si%z = z
-  si%nlag = nlag
-  si%nbuf = 4*nlag
-
-  si%extrap_field = .True.
 
   call eval_field(f, z(1), z(2), z(3), 0)
   call get_val(f, si%z(4)) ! for pth
   si%pthold = f%pth
-  if(si%nlag > 0) call plag_coeff(si%nlag+1, 0, 1d0, 1d0*(/(k,k=-si%nlag,0)/), si%coef)
+
+  select case (mode_init)
+    case (0)
+      orbit_timestep_quasi => orbit_timestep_rk45
+    case (1)
+      orbit_timestep_sympl => orbit_timestep_sympl_euler1
+      orbit_timestep_quasi => timestep_euler1_quasi
+    case (2)
+      orbit_timestep_sympl => orbit_timestep_sympl_euler2
+      orbit_timestep_quasi => timestep_euler2_quasi
+    case (3)
+      orbit_timestep_sympl => orbit_timestep_sympl_midpoint
+      orbit_timestep_quasi => timestep_midpoint_quasi
+    case (4)
+      orbit_timestep_sympl => orbit_timestep_sympl_gauss1
+      orbit_timestep_quasi => orbit_timestep_quasi_gauss1
+    case (5)
+      orbit_timestep_sympl => orbit_timestep_sympl_gauss2
+      orbit_timestep_quasi => orbit_timestep_quasi_gauss2
+    case (6)
+      orbit_timestep_sympl => orbit_timestep_sympl_gauss3
+      orbit_timestep_quasi => orbit_timestep_quasi_gauss3
+    case (7)
+      orbit_timestep_sympl => orbit_timestep_sympl_gauss4
+      orbit_timestep_quasi => orbit_timestep_quasi_gauss4
+    case (15)
+      orbit_timestep_sympl => orbit_timestep_sympl_lobatto3
+      orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
+    case default
+      print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
+      error stop
+  end select
 end subroutine orbit_sympl_init
+
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
+  type(SymplecticIntegrator), intent(inout) :: si
+  type(FieldCan), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  call orbit_timestep_sympl_rk_gauss(si, f, 1, ierr)
+end subroutine orbit_timestep_sympl_gauss1
+
+subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
+  type(SymplecticIntegrator), intent(inout) :: si
+  type(FieldCan), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
+end subroutine orbit_timestep_sympl_gauss2
+
+subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
+  type(SymplecticIntegrator), intent(inout) :: si
+  type(FieldCan), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
+end subroutine orbit_timestep_sympl_gauss3
+
+subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
+  type(SymplecticIntegrator), intent(inout) :: si
+  type(FieldCan), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  call orbit_timestep_sympl_rk_gauss(si, f, 4, ierr)
+end subroutine orbit_timestep_sympl_gauss4
+
+subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
+  type(SymplecticIntegrator), intent(inout) :: si
+  type(FieldCan), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  call orbit_timestep_sympl_rk_lobatto(si, f, 3, ierr)
+end subroutine orbit_timestep_sympl_lobatto3
+
+subroutine orbit_timestep_quasi_gauss1(ierr)
+  integer, intent(out) :: ierr
+  call timestep_rk_gauss_quasi(1, ierr)
+end subroutine orbit_timestep_quasi_gauss1
+
+subroutine orbit_timestep_quasi_gauss2(ierr)
+  integer, intent(out) :: ierr
+  call timestep_rk_gauss_quasi(2, ierr)
+end subroutine orbit_timestep_quasi_gauss2
+
+subroutine orbit_timestep_quasi_gauss3(ierr)
+  integer, intent(out) :: ierr
+  call timestep_rk_gauss_quasi(3, ierr)
+end subroutine orbit_timestep_quasi_gauss3
+
+subroutine orbit_timestep_quasi_gauss4(ierr)
+  integer, intent(out) :: ierr
+  call timestep_rk_gauss_quasi(4, ierr)
+end subroutine orbit_timestep_quasi_gauss4
+
+subroutine orbit_timestep_quasi_lobatto3(ierr)
+  integer, intent(out) :: ierr
+  call timestep_rk_lobatto_quasi(3, ierr)
+end subroutine orbit_timestep_quasi_lobatto3
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -141,7 +187,7 @@ end subroutine jac_sympl_euler1
 !
 subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
 !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(in) :: n
   double precision, intent(in) :: x(n)
@@ -181,7 +227,7 @@ end subroutine jac_sympl_euler2
 !
 subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
-    type(SymplecticIntegrator), intent(in) :: si
+    type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
     double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
@@ -202,7 +248,7 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
 !
 subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
-    type(SymplecticIntegrator), intent(in) :: si
+    type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
     double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
@@ -467,89 +513,13 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
 end subroutine
 
-subroutine coeff_rk_gauss(n, a, b, c)
-  integer, intent(in) :: n
-  double precision, intent(inout) :: a(n,n), b(n), c(n)
-
-  if (n == 1) then
-    a(1,1) = 0.5d0
-    b(1) = 1.0d0
-    c(1) = 0.5d0
-  elseif (n == 2) then
-    a(1,1) =  0.25d0
-    a(1,2) = -0.038675134594812d0
-    a(2,1) =  0.538675134594812d0
-    a(2,2) =  0.25d0
-
-    b(1) = 0.5d0
-    b(2) = 0.5d0
-
-    c(1) = 0.211324865405187d0
-    c(2) = 0.788675134594812d0
-  elseif (n == 3) then
-    a(1,1) =  0.1388888888888889d0
-    a(1,2) = -0.03597666752493894d0
-    a(1,3) =  0.009789444015308318d0
-    a(2,1) =  0.3002631949808646d0
-    a(2,2) =  0.2222222222222222d0
-    a(2,3) = -0.022485417203086805d0
-    a(3,1) = 0.26798833376246944d0
-    a(3,2) = 0.48042111196938336d0
-    a(3,3) = 0.1388888888888889d0
-
-    b(1) = 0.2777777777777778d0
-    b(2) = 0.4444444444444444d0
-    b(3) = 0.2777777777777778d0
-
-    c(1) = 0.1127016653792583d0
-    c(2) = 0.5d0
-    c(3) = 0.8872983346207417d0
-  elseif (n == 4) then  ! with help of coefficients from GeometricIntegrators.jl of Michael Kraus
-    a(1,1) = 0.086963711284363462428182d0
-    a(1,2) = -0.026604180084998794303397d0
-    a(1,3) = 0.012627462689404725035280d0
-    a(1,4) = -0.003555149685795683332096d0
-
-    a(2,1) = 0.188118117499868064967927d0
-    a(2,2) = 0.163036288715636523694030d0
-    a(2,3) = -0.027880428602470894855481d0
-    a(2,4) = 0.006735500594538155853808d0
-
-    a(3,1) = 0.167191921974188778543535d0
-    a(3,2) = 0.353953006033743966529670d0
-    a(3,3) = 0.163036288715636523694030d0
-    a(3,4) = -0.014190694931141143581010d0
-
-    a(4,1) = 0.177482572254522602550608d0
-    a(4,2) = 0.313445114741868369190314d0
-    a(4,3) = 0.352676757516271865977586d0
-    a(4,4) = 0.086963711284363462428182d0
-
-    b(1) = 0.173927422568726924856364d0
-    b(2) = 0.326072577431273047388061d0
-    b(3) = 0.326072577431273047388061d0
-    b(4) = 0.173927422568726924856364d0
-
-    c(1) = 0.069431844202973713731097d0
-    c(2) = 0.330009478207571871344328d0
-    c(3) = 0.669990521792428128655672d0
-    c(4) = 0.930568155797026341780054d0
-  else
-    ! not implemented
-    a = 0d0
-    b = 0d0
-    c = 0d0
-  endif
-end subroutine coeff_rk_gauss
-
-
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 ! Gauss-Legendre Runge-Kutta method with s internal stages (n=4*s variables)
 !
 subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(SymplecticIntegrator), intent(inout) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(inout) :: fs(:)
   double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
@@ -796,108 +766,6 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 end subroutine fixpoint_rk_gauss
 
 
-subroutine coeff_rk_lobatto(n, a, ahat, b, c)
-  integer, intent(in) :: n
-  double precision, intent(inout) :: a(n,n), ahat(n,n), b(n), c(n)
-
-  if (n == 3) then
-    a(1,1) =  0d0
-    a(1,2) =  0d0
-    a(1,3) =  0d0
-
-    a(2,1) =  0.20833333333333334d0
-    a(2,2) =  0.33333333333333333d0
-    a(2,3) = -0.041666666666666664d0
-
-    a(3,1) =  0.16666666666666667d0
-    a(3,2) =  0.66666666666666667d0
-    a(3,3) =  0.16666666666666667d0
-
-    ahat(1,1) =  0.16666666666666667d0
-    ahat(1,2) = -0.16666666666666667d0
-    ahat(1,3) =  0d0
-
-    ahat(2,1) =  0.16666666666666667d0
-    ahat(2,2) =  0.33333333333333333d0
-    ahat(2,3) =  0d0
-
-    ahat(3,1) =  0.16666666666666667d0
-    ahat(3,2) =  0.83333333333333333d0
-    ahat(3,3) =  0d0
-
-    b(1) =  0.16666666666666667d0
-    b(2) =  0.66666666666666667d0
-    b(3) =  0.16666666666666667d0
-
-    c(1) = 0d0
-    c(2) = 0.5d0
-    c(3) = 1.0d0
-
-  else
-    ! not implemented
-    a = 0d0
-    b = 0d0
-    c = 0d0
-  endif
-end subroutine coeff_rk_lobatto
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
-!
-
-
-subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
-  !
-  type(SymplecticIntegrator), intent(in) :: si
-  integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(:)
-  double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
-  double precision, intent(out) :: fvec(4*s)
-  integer, intent(in) :: jactype  ! 0 = no second derivatives, 2 = second derivatives
-
-  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
-  integer :: k,l  ! counters
-
-  call coeff_rk_lobatto(s, a, ahat, b, c)
-
-  call eval_field(fs(1), x(1), si%z(2), si%z(3), jactype)
-  call get_derivatives(fs(1), x(2))
-
-  do k = 2, s
-    call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), jactype)
-    call get_derivatives(fs(k), x(4*k-2))
-  end do
-
-  Hprime = fs%dH(1)/fs%dpth(1)
-
-  fvec(1) = fs(1)%pth - si%pthold
-  fvec(2) = x(2) - si%z(4)
-
-  do l = 1, s
-      fvec(1) = fvec(1) + si%dt*ahat(1,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(2) = fvec(2) + si%dt*ahat(1,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-  end do
-
-  do k = 2, s
-    fvec(4*k-3-2) = fs(k)%pth - si%pthold
-    fvec(4*k-2-2) = x(4*k-2-2)  - si%z(2)
-    fvec(4*k-1-2) = x(4*k-1-2)  - si%z(3)
-    fvec(4*k-2)   = x(4*k-2)    - si%z(4)
-  end do
-
-  do l = 1, s
-    do k = 2, s
-      fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(4*k-2-2) = fvec(4*k-2-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
-      fvec(4*k-1-2) = fvec(4*k-1-2) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph     ! phdot
-      fvec(4*k-2)   = fvec(4*k-2)   + si%dt*ahat(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-    end do
-  end do
-
-end subroutine f_rk_lobatto
-
-
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine jac_rk_lobatto(si, fs, s, jac)
@@ -1094,42 +962,6 @@ end subroutine newton_rk_lobatto
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_timestep_sympl(si, f, ierr)
-!
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
-
-  integer, intent(out) :: ierr
-
-  ierr = 0
-
-  select case (si%mode)
-   case (1)
-      call orbit_timestep_sympl_euler1(si, f, ierr)
-   case (2)
-      call orbit_timestep_sympl_euler2(si, f, ierr)
-   case (3)
-      call orbit_timestep_sympl_midpoint(si, f, ierr)
-   case (4)
-      call orbit_timestep_sympl_rk_gauss(si, f, 1, ierr)
-   case (5)
-      call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
-   case (6)
-      call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
-   case (7)
-      call orbit_timestep_sympl_rk_gauss(si, f, 4, ierr)
-   case (15)
-      call orbit_timestep_sympl_rk_lobatto(si, f, 3, ierr)
-   case default
-      print *, 'invalid mode for orbit_timestep_sympl: ', si%mode
-      stop
-  end select
-
-end subroutine orbit_timestep_sympl
-
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
 subroutine orbit_timestep_sympl_multi(mi, f, ierr)
 !
   type(MultistageIntegrator), intent(inout) :: mi
@@ -1173,9 +1005,9 @@ subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
 
   do ks = 1, mi%s
     call orbit_sympl_init(mi%stages(2*ks-1), f, z, &
-      alpha(ks)*dtau, ntau, rtol_init, 1, 1)
+      alpha(ks)*dtau, ntau, rtol_init, 1)
     call orbit_sympl_init(mi%stages(2*ks), f, z, &
-      beta(ks)*dtau, ntau, rtol_init, 2, 1)
+      beta(ks)*dtau, ntau, rtol_init, 2)
   end do
 end subroutine orbit_sympl_init_multi
 
@@ -1185,6 +1017,7 @@ end subroutine orbit_sympl_init_multi
 subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
 !
   type(MultistageIntegrator), intent(inout) :: mi
+
   type(FieldCan), intent(inout) :: f
 
   double precision, intent(in) :: z(:)
@@ -1387,44 +1220,25 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
-      end do
-    end if
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
-      x(2)=sum(si%zbuf(4,si%bufind)*si%coef(0,:))
-    else
-      x(1)=si%z(1)
-      x(2)=si%z(4)
-    end if
-
-    ! correct if Lagrange messed up
-    if (x(1) < 0.0 .or. x(1) > 1.0) then
-      x(1) = si%z(1)
-      x(2) = si%z(4)
-    end if
+    x(1)=si%z(1)
+    x(2)=si%z(4)
 
     call newton1(si, f, x, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > 1.0d0) then
       ierr = 1
       return
     end if
 
-    if (x(1) < 0.0) then
+    if (x(1) < 0.0d0) then
       print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
+      x(1) = 0.01d0
     end if
 
     si%z(1) = x(1)
     si%z(4) = x(2)
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1))  + f%dpth(4)*(x(2)-xlast(2))
       f%dH(1) = f%dH(1) + f%d2H(1)*(x(1)-xlast(1)) + f%d2H(7)*(x(2)-xlast(2))
       f%dpth(1)=f%dpth(1)+f%d2pth(1)*(x(1)-xlast(1))+f%d2pth(7)*(x(2)-xlast(2))
@@ -1439,12 +1253,6 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     si%z(2) = si%z(2) + si%dt*f%dH(1)/f%dpth(1)
     si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(1:4,si%kbuf) = si%z
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1471,21 +1279,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
-      end do
-    endif
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
-      x(2)=sum(si%zbuf(2,si%bufind)*si%coef(0,:))
-      x(3)=sum(si%zbuf(3,si%bufind)*si%coef(0,:))
-    else
-      x = si%z(1:3)
-    end if
+    x = si%z(1:3)
 
     call newton2(si, f, x, si%atol, si%rtol, maxit, xlast)
 
@@ -1501,7 +1295,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
 
     si%z(1:3) = x
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       dz(1) = x(1)-xlast(1)
       dz(2) = x(2)-xlast(2)
       dz(3) = x(3)-xlast(3)
@@ -1521,12 +1315,6 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
     f%pth = si%pthold - si%dt*(f%dH(2) - f%dH(1)*f%dpth(2)/f%dpth(1))
     si%z(4) = si%z(4) - si%dt*(f%dH(3) - f%dH(1)*f%dpth(3)/f%dpth(1))
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(1:4,si%kbuf) = si%z
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1553,24 +1341,8 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf
-      end do
-    endif
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      x(1)=sum(si%zbuf(1,si%bufind)*si%coef(0,:))
-      x(2)=sum(si%zbuf(2,si%bufind)*si%coef(0,:))
-      x(3)=sum(si%zbuf(3,si%bufind)*si%coef(0,:))
-      x(4)=sum(si%zbuf(4,si%bufind)*si%coef(0,:))
-      x(5)=sum(si%zbuf(5,si%bufind)*si%coef(0,:))
-    else
-      x(1:4) = si%z
-      x(5) = si%z(1)
-    end if
+    x(1:4) = si%z
+    x(5) = si%z(1)
 
     call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast)
 
@@ -1586,7 +1358,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 
     si%z = x(1:4)
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
                     + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
                     + f%dpth(3)*(x(3)-xlast(3)) &  ! d/dph
@@ -1596,13 +1368,6 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       call get_val(f, si%z(4))
     endif
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      si%zbuf(1:4,si%kbuf) = si%z
-      si%zbuf(5,si%kbuf) = x(5)  ! midpoint radius
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1637,26 +1402,9 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    ! Initial guess with Lagrange extrapolation
-    if (si%nlag>0) then
-      do k=0, si%nlag
-        si%bufind(k) = si%kbuf-si%nlag+k
-        if (si%bufind(k)<1) si%bufind(k) = si%bufind(k) + si%nbuf/(4*s)
-      end do
-    end if
-
-    if (si%nlag>0 .and. si%kt>si%nlag) then
-      do k = 1,s
-        x(1)=sum(si%zbuf(1,si%bufind+(4*k-3))*si%coef(0,:))
-        x(1)=sum(si%zbuf(2,si%bufind+(4*k-2))*si%coef(0,:))
-        x(1)=sum(si%zbuf(3,si%bufind+(4*k-1))*si%coef(0,:))
-        x(2)=sum(si%zbuf(4,si%bufind+(4*k))*si%coef(0,:))
-      end do
-    else
-      do k = 1,s
-        x((4*k-3):(4*k)) = si%z
-      end do
-    end if
+    do k = 1,s
+      x((4*k-3):(4*k)) = si%z
+    end do
 
     call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
     !optionally try fixed point iterations, doesn't work yet
@@ -1674,7 +1422,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
     call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
 
-    if (si%extrap_field) then
+    if (extrap_field) then
       do k = 1, s
         dz(1) = x(4*k-3)-xlast(4*k-3)
         dz(2) = x(4*k-2)-xlast(4*k-2)
@@ -1750,17 +1498,6 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    if (si%nbuf > 0) then
-      si%kbuf = mod(si%kt, si%nbuf) + 1
-      do k = 1, s
-        si%zbuf(1, si%kbuf+(4*k-3)) = si%z(1)
-        si%zbuf(2, si%kbuf+(4*k-2)) = si%z(2)
-        si%zbuf(3, si%kbuf+(4*k-1)) = si%z(3)
-        si%zbuf(4, si%kbuf+(4*k)) = si%z(4)
-      end do
-    endif
-
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 
@@ -1824,7 +1561,6 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-    si%kt = si%kt+1
     ktau = ktau+1
   enddo
 

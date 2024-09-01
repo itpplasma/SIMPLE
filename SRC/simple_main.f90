@@ -1,13 +1,10 @@
 module simple_main
   use omp_lib
   use util, only: pi, twopi, sqrt2
-  use velo_mod,   only : isw_field_type
   use simple, only : init_sympl
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
-  use get_can_sub, only : vmec_to_can
-  use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
@@ -119,7 +116,7 @@ module simple_main
     integer, parameter :: maxlen = 4096
     character(len=maxlen) :: line
     real(8) :: v_par, v_perp, u, v, s
-    real(8) :: th, ph, th_c, ph_c  ! Canonical flux coordinate angles
+    real(8) :: th, ph
     integer :: ipart
 
     do ipart=1,ntestpart
@@ -128,10 +125,9 @@ module simple_main
       ! In the test case, u runs from 0 to 1 and v from 0 to 4
       th = 2d0*pi*u
       ph = 2d0*pi*v/4d0
-      call vmec_to_can(s, th, ph, th_c, ph_c)
       zstart(1, ipart) = s
-      zstart(2, ipart) = ph_c
-      zstart(3, ipart) = th_c
+      zstart(2, ipart) = th
+      zstart(3, ipart) = ph
       zstart(4, ipart) = 1.d0
       zstart(5, ipart) = v_par / sqrt(v_par**2 + v_perp**2)
     enddo
@@ -141,7 +137,6 @@ module simple_main
     use get_can_sub, only: can_to_vmec
 
     integer :: i, ipart, iskip
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
 
     ! skip random numbers according to configuration
       do iskip=1,loopskip
@@ -159,26 +154,8 @@ module simple_main
         call random_number(xi)
         call binsrc(volstart,1,npoiper*nper,xi,i)
         ibins=i
-        ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
-        r=xstart(1,i)
-        vartheta=xstart(2,i)
-        varphi=xstart(3,i)
-  !
-  ! we store starting points in VMEC coordinates:
-        if(isw_field_type.eq.0) then
-          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type.eq.1) then
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-        elseif(isw_field_type.eq.2) then
-          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        else
-          print *,'init_starting_points: unknown field type'
-        endif
-  !
-        zstart(1,ipart)=r
-        zstart(2,ipart)=theta_vmec
-        zstart(3,ipart)=varphi_vmec
+        ! we store starting points in lab coordinates:
+        call to_lab_coordinates(xstart(1:3,i), zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -255,22 +232,8 @@ module simple_main
         vartheta=twopi*xi
         call random_number(xi)
         varphi=twopi*xi
-  !
-  ! we store starting points in VMEC coordinates:
-        if(isw_field_type.eq.0) then
-          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        elseif(isw_field_type.eq.1) then
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-        elseif(isw_field_type.eq.2) then
-          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        else
-          print *,'init_starting_points: unknown field type'
-        endif
-  !
-        zstart(1,ipart)=r
-        zstart(2,ipart)=theta_vmec
-        zstart(3,ipart)=varphi_vmec
+        ! we store starting points in lab coordinates:
+        call to_lab_coordinates([r, vartheta, varphi], zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -299,6 +262,7 @@ module simple_main
 
   subroutine trace_orbit(anorb, ipart)
     use classification, only : trace_orbit_with_classifiers
+    use callback, only : callbacks_macrostep
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
@@ -307,6 +271,8 @@ module simple_main
     integer :: it, ierr_orbit
     integer(8) :: kt
     logical :: passing
+
+    ierr_orbit = 0
 
     call reset_seed_if_deterministic
 
@@ -331,9 +297,9 @@ module simple_main
     endif
 
     kt = 0
-    call increase_confined_count(1, passing)
-    do it=2,ntimstep
-      call macrostep(anorb, z, kt, ierr_orbit)
+    do it = 1, ntimstep
+      if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
+      call callbacks_macrostep(anorb, ipart, it, kt*dtaumin/v0, z, ierr_orbit)
       if(ierr_orbit .ne. 0) exit
       call increase_confined_count(it, passing)
     enddo
@@ -380,26 +346,19 @@ module simple_main
   end subroutine to_standard_z_coordinates
 
   subroutine from_lab_coordinates(xlab, x)
+    use field_can_mod, only : ref_to_can
     double precision, intent(in) :: xlab(:)
     double precision, intent(inout) :: x(:)
 
-    x = xlab
-    if(isw_field_type.eq.0) then
-      call vmec_to_can(xlab(1), xlab(2), xlab(3), x(2), x(3))
-    elseif(isw_field_type.eq.2) then
-      call vmec_to_boozer(xlab(1), xlab(2), xlab(3), x(2), x(3))
-    endif
+    call ref_to_can(xlab, x)  ! TODO don't assume lab=ref
   end subroutine from_lab_coordinates
 
   subroutine to_lab_coordinates(x, xlab)
+    use field_can_mod, only : can_to_ref
     double precision, intent(in) :: x(:)
     double precision, intent(inout) :: xlab(:)
 
-    xlab = x
-    if(isw_field_type.eq.2) then
-      call boozer_to_vmec(x(1), x(2), x(3), xlab(2), xlab(3))
-    endif
-    ! TODO: add conversion to lab coordinates for other field types
+    call can_to_ref(x, xlab)  ! TODO don't assume lab=ref
   end subroutine to_lab_coordinates
 
   subroutine increase_confined_count(it, passing)
@@ -424,8 +383,8 @@ module simple_main
 
     double precision :: bmod
 
-    bmod = compute_bmod(z(1:3))
     !$omp critical
+    bmod = compute_bmod(z(1:3))
     if(num_surf > 1) then
       call get_bminmax(z(1),bmin,bmax)
     endif
@@ -487,9 +446,12 @@ module simple_main
       end if
     enddo
     close(1)
-    open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
-    write(1,*) inverse_times_lost_sum/num_lost
-    close(1)
+
+    if (num_lost > 0) then
+      open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
+      write(1,*) inverse_times_lost_sum/num_lost
+      close(1)
+    endif
 
     open(1,file='confined_fraction.dat',recl=1024)
     do i=1,ntimstep

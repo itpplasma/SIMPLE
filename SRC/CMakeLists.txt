@@ -8,6 +8,7 @@ set(SOURCES
     magfie.f90
     boozer_converter.f90
     binsrc.f90
+    coordinates/coordinates.f90
     plag_coeff.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
@@ -16,9 +17,22 @@ set(SOURCES
     spl_three_to_five.f90
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.f90
+    interpolate.f90
+    magfie/magfie_base.f90
+    magfie/magfie_vmec.f90
+    magfie/magfie.f90
+    field/field_vmec.f90
+    field/field_can_base.f90
+    field/field_can_test.f90
+    field/field_can_flux.f90
+    field/field_can_boozer.f90
+    field/field_can_meiss.f90
+    field/psi_transform.f90
+    field/field_can_albert.f90
     field_can.f90
-    orbit_symplectic.f90
+    orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
+    orbit_symplectic.f90
     util.f90
     cut_detector.f90
     classification.f90
@@ -29,6 +43,7 @@ set(SOURCES
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90
+    callback.f90
     simple_main.f90
 )
 

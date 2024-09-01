@@ -2,10 +2,10 @@ program test_magfie
 
 ! use new_vmec_stuff_mod, only : netcdffile, multharm,ns_A,ns_s,ns_tp
 ! use parmot_mod, only : rmu,ro0
-use velo_mod,   only : isw_field_type
+use velo_mod,   only: isw_field_type
 use orbit_symplectic
-use field_can_mod
-use simple
+use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, FieldCan_init
+use simple, only: Tracer, init_field, init_params, ro0
 use new_vmec_stuff_mod, only: rmajor
 
 implicit none
@@ -13,12 +13,13 @@ save
 
 double precision :: z0(4), vpar0
 type(Tracer) :: norb
+
 type(FieldCan) :: f
 
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
 
-isw_field_type = 2
+isw_field_type = -1
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
@@ -27,7 +28,8 @@ z0(3) = 0.1d0  ! phi
 vpar0 = 0.8d0  ! parallel velocity
 
 if (isw_field_type == -1) then
-  call FieldCan_init(f, 1d-5, 1d0, vpar0, isw_field_type)
+  call FieldCan_init(f, 1d-5, 1d0, vpar0)
+  call field_can_from_name('test')
   call eval_field(f, z0(1), z0(2), z0(3), 0)
 else
   call init_field(norb, 'wout.nc', 5, 5, 3, 0)
@@ -47,7 +49,7 @@ else
 
   ! ro0 = mc/e*v0, different by sqrt(2) from other modules
   ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0), isw_field_type)
+  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0))
   call eval_field(f, z0(1), z0(2), z0(3), 0)
   f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
 end if
@@ -505,22 +507,22 @@ subroutine do_test()
 
     ! TODO: second ders in pphi and mixed
 
-    call orbit_sympl_init(euler1, f, z0, 1.0d0, 1, 1d-12, 0, 0)
+    call orbit_sympl_init(euler1, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac1(euler1)
     call test_newton(euler1)
 
-    call orbit_sympl_init(euler2, f, z0, 1.0d0, 1, 1d-12, 0, 0)
+    call orbit_sympl_init(euler2, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac2(euler2)
     call test_newton2(euler2)
 
-    call orbit_sympl_init(midpoint, f, z0, 1.0d0, 1, 1d-12, 0, 3)
+    call orbit_sympl_init(midpoint, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac_midpoint(midpoint)
 
-    call orbit_sympl_init(gauss4, f, z0, 1.0d0, 1, 1d-12, 0, 4)
+    call orbit_sympl_init(gauss4, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac_grk(gauss4)
 
     print *, 'lobatto'
-    call orbit_sympl_init(lobatto4, f, z0, 1.0d0, 1, 1d-12, 0, 15)
+    call orbit_sympl_init(lobatto4, f, z0, 1.0d0, 1, 1d-12, 0)
     call test_jac_lob(lobatto4)
 end subroutine do_test
 
