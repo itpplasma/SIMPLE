@@ -5,7 +5,8 @@ use field_can_mod, only : can_to_ref
 
 implicit none
 
-logical :: output_orbits_macro = .True.
+logical :: output_err = .False.
+logical :: output_orbits_macro = .False.
 
 contains
 
@@ -15,7 +16,9 @@ subroutine callbacks_macrostep(tracer_, ipart, itime, t, z, ierr_orbit)
     double precision, intent(in) :: t, z(:)
     integer, intent(in) :: ierr_orbit
 
-    if (ierr_orbit /= 0) call write_error(tracer_, ipart, itime, t, z, ierr_orbit)
+    if (output_err .and. ierr_orbit /= 0) then
+        call write_error(tracer_, ipart, itime, t, z, ierr_orbit)
+    end if
     if (output_orbits_macro) call write_position(ipart, t, z)
 end subroutine callbacks_macrostep
 
