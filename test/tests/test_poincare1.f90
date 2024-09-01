@@ -3,7 +3,7 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-  use field_can_mod, only : FieldCan
+  use field_can_mod, only : eval_field => evaluate, field_can_from_name, FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
   use simple, only : init_sympl
   use get_can_sub, only : can_to_vmec, get_canonical_coordinates
@@ -139,6 +139,7 @@ print *,'symplectic'
 icounter = 0
 call cpu_time(tstart)
 open(3004, file='orbit_sympl.out', recl=1024)
+  call field_can_from_name('flux')
   call init_sympl(si, f, z, dtau, dtaumin, 1d-12, mode_sympl)
   do i=1,ntimstep
 !

@@ -3,7 +3,7 @@ module boozer_sub
 
   contains
 !
-  subroutine boozer_converter
+  subroutine get_boozer_coordinates
 !
   use vector_potentail_mod,   only : ns,hs
   use new_vmec_stuff_mod,     only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
@@ -483,7 +483,7 @@ module boozer_sub
 !
 ! End spline Boozer data
 !
-  end subroutine boozer_converter
+  end subroutine get_boozer_coordinates
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !

@@ -45,7 +45,7 @@
   use_del_tp_B=.false.  !not very important (saves 1 iteration in coord. transform), don't use to save memory
 !  use_del_tp_B=.true.
 !
-  call boozer_converter
+  call get_boozer_coordinates
 !
 !---------------------------------------------------------
 !

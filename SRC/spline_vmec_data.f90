@@ -374,6 +374,7 @@ contains
 ! Begin interpolation over $s$
 !
 ! Vector potential $A_\varphi$ and its derivative:
+  if (.not. allocated(sA_phi)) call spline_vmec_data
   A_phi=sA_phi(ns_A+1,is)
   dA_phi_ds=0.d0
 !

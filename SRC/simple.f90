@@ -8,10 +8,10 @@ module simple
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_timestep_sympl
-  use field_can_mod, only : FieldCan, eval_field
+  use simple_magfie, only : VmecField
+  use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
   use params, only : Tracer, idx
-  use boozer_sub, only : boozer_converter
   use chamb_sub, only : chamb_can
 
 implicit none
@@ -28,53 +28,46 @@ public
 contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
-    use get_can_sub, only : get_canonical_coordinates
     use magfie_sub, only : init_magfie
-    use vmecin_sub, only : stevvo
-
-    ! initialize field geometry
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-    integer             :: ierr
-    integer             :: L1i
-    double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
-    double precision    :: z(5)
+
+    call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
+
+    self%integmode = aintegmode
+    if (self%integmode>=0) then
+      call init_field_can(isw_field_type)
+    end if
 
     call init_magfie(isw_field_type)
+  end subroutine init_field
+
+
+  subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)
+    use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
+    use vmecin_sub, only : stevvo
+
+    character(*), intent(in) :: vmec_file
+    integer, intent(in) :: ans_s, ans_tp, amultharm
+    double precision, intent(out) :: fper
+
+    integer             :: L1i
+    double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
 
     netcdffile = vmec_file
     ns_s = ans_s
     ns_tp = ans_tp
     multharm = amultharm
-    self%integmode = aintegmode
 
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
-    self%fper = twopi/dble(L1i)   !<= field period
-    print *, 'R0 = ', RT0, ' cm, fper = ', self%fper
+    fper = twopi/dble(L1i)   !<= field period
+    print *, 'R0 = ', RT0, ' cm, fper = ', fper
     call volume_and_B00(volume,B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
+  end subroutine init_vmec
 
-    if (self%integmode>=0) then
-      if (isw_field_type == 0) then
-        call get_canonical_coordinates ! pre-compute transformation to canonical coords
-      elseif (isw_field_type == 2) then
-        print *, 'Boozer field'
-        call boozer_converter
-      else
-        print *, 'Unknown field type ', isw_field_type
-      endif
-
-    end if
-
-    ! initialize position and do first check if z is inside vacuum chamber
-    z = 0.0d0
-    call chamb_can(z(1:2), z(3), ierr)
-    if(ierr.ne.0) stop
-    z = 1.0d0
-  end subroutine init_field
 
   subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
@@ -139,7 +132,6 @@ contains
     endif
 
     ! Initialize symplectic integrator
-    f%field_type = isw_field_type
     call eval_field(f, z0(1), z0(2), z0(3), 0)
 
     si%pabs = z0(4)
@@ -153,7 +145,7 @@ contains
 
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
-                          rtol_init, mode_init, 0)
+                          rtol_init, mode_init)
   end subroutine init_sympl
 
   subroutine init_integrator(self, z0)
