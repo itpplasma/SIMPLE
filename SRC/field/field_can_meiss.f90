@@ -9,11 +9,12 @@ use simple_magfie, only: MagneticField
 implicit none
 
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
+integer, parameter :: nper = 4  ! TODO
 
 class(MagneticField), allocatable :: magfie
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]
-real(dp) :: xmax(3) = [1d0, twopi, twopi]
+real(dp) :: xmax(3) = [1d0, twopi, twopi/nper]
 
 real(dp) :: h_r, h_th, h_phi
 
