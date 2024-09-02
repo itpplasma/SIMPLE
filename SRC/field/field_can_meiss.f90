@@ -107,7 +107,7 @@ subroutine ref_to_can_meiss(xref, xcan)
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: lam, dlam(3), phi_can_old
+    real(dp) :: lam, dlam(3), phi_can_prev
     integer :: i
 
     xcan(1) = xref(1)
@@ -116,9 +116,9 @@ subroutine ref_to_can_meiss(xref, xcan)
 
     do i=1, MAX_ITER
         call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
-        phi_can_old = xcan(3)
-        xcan(3) = phi_can_old - (phi_can_old + lam - xref(3))/(1d0 + dlam(3))
-        if (abs(modulo(xcan(3) - phi_can_old, twopi)) < TOL) return
+        phi_can_prev = xcan(3)
+        xcan(3) = phi_can_prev - (phi_can_prev + lam - xref(3))/(1d0 + dlam(3))
+        if (abs(xcan(3) - phi_can_prev) < TOL) return
     enddo
     print *, 'WARNING: ref_to_can_meiss did not converge after', MAX_ITER, 'iterations'
 end subroutine ref_to_can_meiss
