@@ -107,19 +107,18 @@ subroutine ref_to_can_meiss(xref, xcan)
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: lam, phi_old
+    real(dp) :: lam, dlam(3), phi_can_old
     integer :: i
 
     xcan(1) = xref(1)
     xcan(2) = modulo(xref(2), twopi)
     xcan(3) = modulo(xref(3), twopi)
 
-    ! TODO make this efficient with Newton
     do i=1, MAX_ITER
-        call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-        phi_old = xcan(3)
-        xcan(3) = modulo(xref(3) - lam, twopi)
-        if (abs(xcan(3) - phi_old) < TOL) return
+        call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
+        phi_can_old = xcan(3)
+        xcan(3) = phi_can_old - (phi_can_old + lam - xref(3))/(1d0 + dlam(3))
+        if (abs(modulo(xcan(3) - phi_can_old, twopi)) < TOL) return
     enddo
     print *, 'WARNING: ref_to_can_meiss did not converge after', MAX_ITER, 'iterations'
 end subroutine ref_to_can_meiss
