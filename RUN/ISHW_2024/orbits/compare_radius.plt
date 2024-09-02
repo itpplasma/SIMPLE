@@ -10,11 +10,9 @@ plot 'vmec/fort.'.orbit_num u 1:2 w l lt rgb 'dark-red'  \
     title 'Canonical', \
     'boozer/fort.'.orbit_num u 1:2 w l  lt rgb 'black' \
     title 'Boozer', \
-    'albert/fort.'.orbit_num u 1:2 w l lt rgb 'red' \
-    title 'Meiss RK4/5', \
+    'albert/fort.'.orbit_num u 1:2 w lp lt rgb 'red' \
+    title 'Albert', \
     'meiss/fort.'.orbit_num u 1:2 w l lt rgb 'blue' \
-    title 'Meiss', \
-    'meiss512/fort.'.orbit_num u 1:2 w l lt rgb 'green' \
-    title 'Meiss512'
+    title 'Meiss'
 
 pause -1
