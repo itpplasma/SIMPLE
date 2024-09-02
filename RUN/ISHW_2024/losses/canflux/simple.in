@@ -4,6 +4,6 @@ sbeg = 0.6d0             ! starting s (normalzed toroidal flux) for particles.
 ntestpart = 128          ! number of test particles
 isw_field_type = 0       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer, 3: Meiss, 4: Albert
 startmode = 2
-integmode = 1
+integmode = 3
 deterministic = .True.
 /
