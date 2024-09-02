@@ -8,9 +8,6 @@ implicit none
 logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
 type :: SymplecticIntegrator
-  integer :: nlag          ! Lagrange polynomial order
-  integer :: nbuf          ! values to store back
-
   double precision :: atol
   double precision :: rtol
 

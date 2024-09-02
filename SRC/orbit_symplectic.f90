@@ -369,7 +369,7 @@ subroutine newton1(si, f, x, maxit, xlast)
   integer :: kit
 
   tolref(1) = 1d0
-  tolref(2) = dabs(x(2))
+  tolref(2) = dabs(f%Aph/f%ro0)
 
   do kit = 1, maxit
     if(x(1) > 1d0) return
@@ -385,7 +385,6 @@ subroutine newton1(si, f, x, maxit, xlast)
     x = x - matmul(ijac, fvec)
 
     ! Don't take too small values in pphi as tolerance reference
-    tolref(2) = max(dabs(x(2)), tolref(2))
     tolref(2) = max(dabs(x(2)), tolref(2))
 
     if (all(dabs(fvec) < si%atol)) return
@@ -476,7 +475,7 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   integer, parameter :: n = 5
   integer :: kit
 
-  double precision, intent(inout) :: x(n)
+  double precision, intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
   double precision, intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   double precision, intent(out) :: xlast(n)
@@ -485,6 +484,12 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   integer :: pivot(n), info
 
   double precision :: xabs(n), tolref(n), fabs(n)
+
+  tolref(1) = 1d0
+  tolref(2) = twopi
+  tolref(3) = twopi
+  tolref(4) = dabs(f%Aph/f%ro0)
+  tolref(5) = 1d0
 
   do kit = 1, maxit
     if(x(1) > 1.0) return
@@ -502,14 +507,13 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     x = x - fvec
     xabs = dabs(x - xlast)
 
-    tolref = dabs(xlast)
-    tolref(2) = twopi
-    tolref(3) = twopi
+    ! Don't take too small values in pphi as tolerance reference
+    tolref(4) = max(dabs(x(4)), tolref(4))
 
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  print *, 'newton_midpoint: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
+  print *, 'newton_midpoint: maximum iterations reached: ', maxit
   write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
 end subroutine
 
