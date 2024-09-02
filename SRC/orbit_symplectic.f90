@@ -5,6 +5,7 @@ use orbit_symplectic_base
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_euler1_quasi, &
   timestep_euler2_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
+use vector_potentail_mod, only: torflux
 
 implicit none
 
@@ -369,7 +370,7 @@ subroutine newton1(si, f, x, maxit, xlast)
   integer :: kit
 
   tolref(1) = 1d0
-  tolref(2) = dabs(f%Aph/f%ro0)
+  tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
     if(x(1) > 1d0) return
@@ -488,7 +489,7 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   tolref(1) = 1d0
   tolref(2) = twopi
   tolref(3) = twopi
-  tolref(4) = dabs(f%Aph/f%ro0)
+  tolref(4) = dabs(1d1*torflux/f%ro0)
   tolref(5) = 1d0
 
   do kit = 1, maxit
