@@ -24,7 +24,6 @@ function magfie_from_file(filename)
         print *,  'magfie_from_file: Unknown file name format ', filename
         error stop
     end if
-
 end function magfie_from_file
 
 

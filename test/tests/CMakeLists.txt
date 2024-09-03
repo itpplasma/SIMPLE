@@ -40,3 +40,4 @@ target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
 add_subdirectory(field_can)
+add_subdirectory(magfie)

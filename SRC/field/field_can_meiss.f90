@@ -3,12 +3,11 @@ module field_can_meiss
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: SplineData3D, construct_splines_3d, &
     evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
+use util, only: twopi
 use field_can_base, only: FieldCan, n_field_evaluations
 use simple_magfie, only: MagneticField
 
 implicit none
-
-real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
 class(MagneticField), allocatable :: magfie
 integer :: n_r=62, n_th=63, n_phi=64
