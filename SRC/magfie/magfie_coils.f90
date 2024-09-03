@@ -13,6 +13,7 @@ implicit none
 
 type, extends(MagneticField) :: CoilsField
     type(coils_t) :: coils
+    type(SplineData3D) :: spl_x, spl_y, spl_z
     type(SplineData3D) :: spl_Ar, spl_Ath, spl_Aphi, spl_hr, spl_hth, spl_hphi, spl_Bmod
 contains
     procedure :: evaluate
@@ -52,11 +53,10 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp), intent(out) :: Bmod
     real(dp), intent(out), optional :: sqgBctr(3)
 
-    real(dp) :: xcart(3), dxvmec_dxcart(3,3), dxcart_dxvmec(3,3)
+    real(dp) :: xcart(3), dxcart_dxvmec(3,3)
     real(dp), dimension(3) :: Acart, Bcart
 
-    call transform_vmec_to_cart(x, xcart, dxvmec_dxcart)
-    dxcart_dxvmec = invert3(dxvmec_dxcart)
+    call transform_vmec_to_cart(x, xcart, dxcart_dxvmec)
 
     Acart = compute_vector_potential(self%coils, xcart)
     Bcart = compute_magnetic_field(self%coils, xcart)
@@ -159,10 +159,6 @@ subroutine init_splines(self)
     call construct_splines_3d(xmin, xmax, hphi, order, periodic, self%spl_hphi)
     call construct_splines_3d(xmin, xmax, Bmod, order, periodic, self%spl_Bmod)
 
-    deallocate(Bmod)
-    deallocate(hphi, hth)
-    deallocate(Aphi, Ath)
-
     contains
 
     pure function get_grid_point(i_r_, i_th_, i_phi_)
@@ -188,29 +184,5 @@ subroutine init_splines(self)
         !$omp end critical
     end subroutine print_progress
 end subroutine init_splines
-
-
-
-function invert3(M) result(Minv)
-    implicit none
-    real(8), intent(in) :: M(3,3)
-    real(8) :: Minv(3,3)
-    real(8) :: det
-
-    det = M(1,1)*(M(2,2)*M(3,3) - M(2,3)*M(3,2)) - &
-          M(1,2)*(M(2,1)*M(3,3) - M(2,3)*M(3,1)) + &
-          M(1,3)*(M(2,1)*M(3,2) - M(2,2)*M(3,1))
-
-    Minv(1,1) = (M(2,2)*M(3,3) - M(2,3)*M(3,2)) / det
-    Minv(1,2) = -(M(1,2)*M(3,3) - M(1,3)*M(3,2)) / det
-    Minv(1,3) = (M(1,2)*M(2,3) - M(1,3)*M(2,2)) / det
-    Minv(2,1) = -(M(2,1)*M(3,3) - M(2,3)*M(3,1)) / det
-    Minv(2,2) = (M(1,1)*M(3,3) - M(1,3)*M(3,1)) / det
-    Minv(2,3) = -(M(1,1)*M(2,3) - M(1,3)*M(2,1)) / det
-    Minv(3,1) = (M(2,1)*M(3,2) - M(2,2)*M(3,1)) / det
-    Minv(3,2) = -(M(1,1)*M(3,2) - M(1,2)*M(3,1)) / det
-    Minv(3,3) = (M(1,1)*M(2,2) - M(1,2)*M(2,1)) / det
-end function invert3
-
 
 end module simple_magfie_coils
