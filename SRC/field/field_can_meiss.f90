@@ -9,12 +9,11 @@ use simple_magfie, only: MagneticField
 implicit none
 
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
-integer, parameter :: nper = 4  ! TODO
 
 class(MagneticField), allocatable :: magfie
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]
-real(dp) :: xmax(3) = [1d0, twopi, twopi/nper]
+real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
 
@@ -32,6 +31,8 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 contains
 
 subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
+    use new_vmec_stuff_mod, only : nper
+
     class(MagneticField), intent(in) :: magfie_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
@@ -47,6 +48,7 @@ subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     if (present(rmax)) xmax(1) = rmax
     if (present(thmin)) xmin(2) = thmin
     if (present(thmax)) xmax(2) = thmax
+    xmax(3) = twopi/nper
 
     h_r = (xmax(1)-xmin(1))/(n_r-1)
     h_th = (xmax(2)-xmin(2))/(n_th-1)
