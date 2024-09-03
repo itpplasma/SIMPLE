@@ -73,12 +73,15 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine evaluate_direct
 
 
-function create_coils_field(coils_file) result(field)
+function create_coils_field(coils_file, should_spline) result(field)
     class(CoilsField), allocatable :: field
     character(*), intent(in) :: coils_file
+    logical, intent(in), optional :: should_spline
 
     real(dp), parameter :: M_TO_CM = 100.0d0
     real(dp), parameter :: A_TO_STATA = 2997924536.8431d0
+
+    logical :: should_spline_ = .True.
 
     allocate(CoilsField :: field)
     call load_coils_from_file(coils_file, field%coils)
@@ -88,8 +91,8 @@ function create_coils_field(coils_file) result(field)
     field%coils%z = field%coils%z * M_TO_CM
     field%coils%current = field%coils%current * A_TO_STATA
 
-    call field%init_splines
-
+    if(present(should_spline)) should_spline_ = should_spline
+    if(should_spline_) call field%init_splines
 end function create_coils_field
 
 

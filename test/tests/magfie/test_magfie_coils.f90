@@ -16,7 +16,7 @@ isw_field_type = VMEC
 
 call init_vmec('wout.nc', 5, 5, 5, dummy)
 allocate(vmec_field)
-coils_field = create_coils_field('coils.5C')
+coils_field = create_coils_field('coils.5C', should_spline=.False.)
 
 x = [0.3d0, 0.2d0, 0.1d0]
 
@@ -33,6 +33,8 @@ print *, 'coils_field%evaluate_direct'
 print *, 'A = ', Acov
 print *, 'h = ', hcov
 print *, 'B = ', Bmod
+
+stop
 
 call coils_field%evaluate(x, Acov, hcov, Bmod)
 print *, 'coils_field%evaluate'
