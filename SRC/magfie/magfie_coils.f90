@@ -60,11 +60,11 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
     Acart = compute_vector_potential(self%coils, xcart)
     Bcart = compute_magnetic_field(self%coils, xcart)
 
-    Acov = matmul(Acart, dxcart_dxvmec)
+    Acov = -matmul(Acart, dxcart_dxvmec)
 
     Bmod = sqrt(Bcart(1)**2 + Bcart(2)**2 + Bcart(3)**2)
 
-    hcov = matmul(Bcart, dxcart_dxvmec)/Bmod
+    hcov = -matmul(Bcart, dxcart_dxvmec)/Bmod
 
     if (present(sqgBctr)) then
         error stop 'sqgBctr not implemented'
