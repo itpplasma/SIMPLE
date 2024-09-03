@@ -11,7 +11,7 @@ module simple
   use simple_magfie, only : VmecField
   use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
-  use params, only : Tracer, idx
+  use params, only : Tracer, idx, field_input
   use chamb_sub, only : chamb_can
 
 implicit none
@@ -29,6 +29,8 @@ contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use magfie_sub, only : init_magfie
+    use simple_magfie, only : magfie_from_file
+
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
@@ -37,7 +39,7 @@ contains
 
     self%integmode = aintegmode
     if (self%integmode>=0) then
-      call init_field_can(isw_field_type)
+      call init_field_can(isw_field_type, magfie_from_file(field_input))
     end if
 
     call init_magfie(isw_field_type)

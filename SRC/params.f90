@@ -85,6 +85,8 @@ module params
   logical :: reuse_batch =.False.
   integer, dimension (:), allocatable :: idx
 
+  character(1000) :: field_input = ''
+
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
@@ -93,7 +95,7 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
-    batch_size, ran_seed, reuse_batch
+    batch_size, ran_seed, reuse_batch, field_input
 
 contains
 
@@ -109,6 +111,8 @@ contains
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
     close(1)
+
+    if(trim(field_input) == '') field_input = netcdffile
 
     call reset_seed_if_deterministic
 

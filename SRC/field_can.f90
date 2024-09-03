@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
-use simple_magfie, only : MagneticField, VmecField, create_coils_field
+use simple_magfie, only : MagneticField, VmecField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
 use field_can_test, only : evaluate_test
@@ -119,16 +119,20 @@ function id_from_name(field_name)
 end function id_from_name
 
 
-subroutine init_field_can(field_id)
+subroutine init_field_can(field_id, magfie)
   use get_can_sub, only : get_canonical_coordinates
   use boozer_sub, only : get_boozer_coordinates
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
 
   integer, intent(in) :: field_id
+  class(MagneticField), intent(in), optional :: magfie
 
-  call field_can_from_id(field_id, VmecField()) ! TODO make this configurable
-  !call field_can_from_id(field_id, create_coils_field('coils'))
+  if (present(magfie)) then
+    call field_can_from_id(field_id, magfie)
+  else
+    call field_can_from_id(field_id, VmecField())
+  end if
   select case (field_id)
     case (CANFLUX)
       call get_canonical_coordinates

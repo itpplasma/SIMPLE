@@ -4,6 +4,61 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use simple_magfie_base, only: MagneticField
 use simple_magfie_vmec, only: VmecField
 use simple_magfie_coils, only: CoilsField, create_coils_field
+
 implicit none
+
+contains
+
+function magfie_from_file(filename)
+    class(MagneticField), allocatable :: magfie_from_file
+    character(*), intent(in) :: filename
+
+    if (endswith(filename, '.nc')) then
+        allocate(VmecField :: magfie_from_file)
+    else if (startswidth(filename, 'coils') .or. endswith(filename, '.coils')) then
+        magfie_from_file = create_coils_field(filename)
+    else
+        print *,  'magfie_from_file: Unknown file name format ', filename
+        error stop
+    end if
+
+end function magfie_from_file
+
+
+function startswidth(text, start)
+    logical :: startswidth
+    character(*), intent(in) :: text
+    character(*), intent(in) :: start
+    integer :: len_text, len_start
+
+    len_text = len_trim(text)
+    len_start = len_trim(start)
+
+    startswidth = .false.
+    if (len_text >= len_start) then
+        if (text(1 : len_start) == start) then
+            startswidth = .true.
+        end if
+    end if
+end function startswidth
+
+
+function endswith(text, ending)
+    logical :: endswith
+    character(*), intent(in) :: text
+    character(*), intent(in) :: ending
+    integer :: len_text, len_end
+
+    len_text = len_trim(text)
+    len_end = len_trim(ending)
+
+    endswith = .false.
+    if (len_text >= len_end) then
+        if (text(len_text - len_end + 1 : len_text) == ending) then
+            endswith = .true.
+        end if
+    end if
+end function endswith
+
 
 end module simple_magfie
