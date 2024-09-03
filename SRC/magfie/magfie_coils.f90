@@ -13,7 +13,6 @@ implicit none
 
 type, extends(MagneticField) :: CoilsField
     type(coils_t) :: coils
-    type(SplineData3D) :: spl_x, spl_y, spl_z
     type(SplineData3D) :: spl_Ar, spl_Ath, spl_Aphi, spl_hr, spl_hth, spl_hphi, spl_Bmod
 contains
     procedure :: evaluate
