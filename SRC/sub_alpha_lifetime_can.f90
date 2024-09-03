@@ -255,8 +255,6 @@ if(dodiag) write (123,*) tau2,z
       x(3)=phi
 !
       call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-      print *, x, bmod, hctrvr
-      stop
 !
       dery(1)=hctrvr(1)/hctrvr(3)
       dery(2)=hctrvr(2)/hctrvr(3)
