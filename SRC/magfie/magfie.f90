@@ -13,9 +13,12 @@ function magfie_from_file(filename)
     class(MagneticField), allocatable :: magfie_from_file
     character(*), intent(in) :: filename
 
+    character(len(filename)) :: stripped_name
+    stripped_name = strip_directory(filename)
+
     if (endswith(filename, '.nc')) then
         allocate(VmecField :: magfie_from_file)
-    else if (startswidth(filename, 'coils') .or. endswith(filename, '.coils')) then
+    else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
         magfie_from_file = create_coils_field(filename)
     else
         print *,  'magfie_from_file: Unknown file name format ', filename
@@ -59,6 +62,21 @@ function endswith(text, ending)
         end if
     end if
 end function endswith
+
+
+function strip_directory(filename)
+    character(*), intent(in) :: filename
+    character(len(filename)) :: strip_directory
+    integer :: i
+
+    strip_directory = filename
+    do i = len(filename), 1, -1
+        if (filename(i:i) == '/') then
+            strip_directory = filename(i + 1 : len(filename))
+            return
+        end if
+    end do
+end function strip_directory
 
 
 end module simple_magfie
