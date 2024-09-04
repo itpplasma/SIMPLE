@@ -514,8 +514,9 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  print *, 'newton_midpoint: maximum iterations reached: ', maxit
-  write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
+  !print *, 'newton_midpoint: maximum iterations reached: ', maxit
+  !write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
+  ! TODO fix criterion for convergence
 end subroutine
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
