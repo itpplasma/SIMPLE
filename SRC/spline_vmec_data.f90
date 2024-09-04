@@ -561,6 +561,8 @@ contains
     cmat(2,3)=-dl_dp*cjac
 
     g=matmul(transpose(cmat),matmul(gV,cmat))
+print *, sqgV, sqg
+stop
   end subroutine compute_metric_tensor
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

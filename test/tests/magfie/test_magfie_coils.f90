@@ -6,6 +6,7 @@ use magfie_sub, only : VMEC
 use velo_mod, only: isw_field_type
 use simple_magfie, only: VmecField, CoilsField, create_coils_field
 use magfie_sub, only: magfie_vmec
+use util, only: twopi
 
 implicit none
 
@@ -41,9 +42,29 @@ print *, 'A = ', Acov
 print *, 'h = ', hcov
 print *, 'B = ', Bmod
 
+call test_curve
 call test_magfie
+call test_magfie_curve
+stop
+call test_can
 
 contains
+
+subroutine test_curve
+    real(dp) :: x(3), Acov(3), hcov(3), Bmod
+    integer :: i, N=1000
+
+    x = [0.3d0, 0.2d0, 0.0d0]
+
+    do i = 0, N
+        x(3) = x(3) + twopi/N
+        call vmec_field%evaluate(x, Acov, hcov, Bmod)
+        write(1, *) x, Acov, hcov, Bmod
+        call coils_field%evaluate(x, Acov, hcov, Bmod)
+        write(2, *) x, Acov, hcov, Bmod
+    end do
+end subroutine test_curve
+
 
 subroutine test_magfie
 
@@ -70,6 +91,22 @@ subroutine test_magfie
 
 end subroutine test_magfie
 
+
+subroutine test_magfie_curve
+    real(dp) :: bmod, sqrtg
+    real(dp), dimension(3) :: x, bder, hcovar, hctrvr, hcurl
+    integer :: i, N=1000
+
+    x = [0.3d0, 0.2d0, 0.0d0]
+
+    do i = 0, N
+        x(3) = x(3) + twopi/N
+        call magfie_vmec(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        write(11, *) x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl
+        call magfie_coils(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        write(12, *) x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl
+    end do
+end subroutine test_magfie_curve
 
 
 subroutine magfie_coils(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -113,6 +150,35 @@ subroutine magfie_coils(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     hcurl(2) = (dhr(3) - dhphi(1))/sqrtg
     hcurl(3) = (dhth(1) - dhr(2))/sqrtg
 end subroutine magfie_coils
+
+
+subroutine test_can
+    use field_can_mod, only: FieldCan
+    use field_can_meiss, only: init_meiss, get_meiss_coordinates, evaluate_meiss
+
+    type(FieldCan) :: f
+    real(dp) :: r, th, ph
+
+    r = 0.3d0
+    th = 0.2d0
+    ph = 0.1d0
+
+    call init_meiss(coils_field)
+    call get_meiss_coordinates
+    call evaluate_meiss(f, r, th, ph, 0)
+    print *, 'field_can_meiss(coils_field)'
+    print *, 'A = ', f%Ath, f%Aph
+    print *, 'h = ', f%hth, f%hph
+    print *, 'B = ', f%Bmod
+
+    call init_meiss(vmec_field)
+    call get_meiss_coordinates
+    call evaluate_meiss(f, r, th, ph, 0)
+    print *, 'field_can_meiss(vmec_field)'
+    print *, 'A = ', f%Ath, f%Aph
+    print *, 'h = ', f%hth, f%hph
+    print *, 'B = ', f%Bmod
+end subroutine test_can
 
 
 end program test_magfie_coils

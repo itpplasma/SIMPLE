@@ -125,7 +125,7 @@ subroutine init_splines(self)
     allocate(Bmod(n_r,n_th,n_phi))
 
     i_ctr = 0d0
-    !$omp parallel private(i_r, i_th, i_phi, x)
+    !$omp parallel private(i_r, i_th, i_phi, x, Acov, hcov)
     !$omp do
     do i_phi=1,n_phi
         !$omp atomic

@@ -141,6 +141,7 @@ subroutine init_transformation
     real(dp) :: y(2)
     integer :: i_r, i_th, i_phi, i_ctr
 
+    if (allocated(lam_phi)) deallocate(lam_phi, chi_gauge)
     allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
 
     i_ctr = 0
@@ -255,8 +256,8 @@ subroutine init_canonical_field_components
     real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
     integer :: i_r, i_th, i_phi
 
-    allocate(Aphi(n_r,n_th,n_phi), Ath(n_r,n_th,n_phi))
-    allocate(hphi(n_r,n_th,n_phi), hth(n_r,n_th,n_phi))
+    allocate(Ath(n_r,n_th,n_phi), Aphi(n_r,n_th,n_phi))
+    allocate(hth(n_r,n_th,n_phi), hphi(n_r,n_th,n_phi))
     allocate(Bmod(n_r,n_th,n_phi))
 
     do i_phi=1,n_phi
@@ -286,10 +287,6 @@ subroutine init_canonical_field_components
     call construct_splines_3d(xmin, xmax, hth, order, periodic, spl_hth)
     call construct_splines_3d(xmin, xmax, hphi, order, periodic, spl_hph)
     call construct_splines_3d(xmin, xmax, Bmod, order, periodic, spl_Bmod)
-
-    deallocate(Bmod)
-    deallocate(hphi, hth)
-    deallocate(Aphi, Ath)
 end subroutine init_canonical_field_components
 
 
