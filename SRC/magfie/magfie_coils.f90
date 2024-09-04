@@ -64,7 +64,7 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
 
     Bmod = sqrt(Bcart(1)**2 + Bcart(2)**2 + Bcart(3)**2)
 
-    hcov = matmul(Bcart, dxcart_dxvmec)/Bmod
+    hcov = -matmul(Bcart, dxcart_dxvmec)/Bmod
 
     if (present(sqgBctr)) then
         error stop 'sqgBctr not implemented'
