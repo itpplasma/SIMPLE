@@ -67,8 +67,8 @@
   lasym = (lasym_int == 1)
 !
   call nc_get(ncid, 'phi', phi)
-  phi = phi/(2*pi)  ! added by Christopher Albert, 2019-09-16 for correct normalization
-!
+  phi = -phi/(2*pi)  ! added by Christopher Albert, 2019-09-16 for correct normalization
+! TODO phi sign
   flux=phi(kparb)
   flux=flux*fac_b*fac_r**2
   phi=phi*fac_b*fac_r**2
