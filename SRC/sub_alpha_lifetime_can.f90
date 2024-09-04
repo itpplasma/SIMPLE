@@ -303,6 +303,14 @@ if(dodiag) write (123,*) tau2,z
       x(3)=phi
 !
       call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+print *, x
+print *, bmod
+print *, sqrtg
+print *, bder
+print *, hcovar
+print *, hctrvr
+print *, hcurl
+!stop
 !
       xstart(:,1)=x
       bstart(1)=bmod
