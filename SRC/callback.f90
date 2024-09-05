@@ -40,12 +40,15 @@ subroutine write_position(ipart, t, z)
     integer, intent(in) :: ipart
     double precision, intent(in) :: t, z(:)
 
-    double precision :: xref(3)
+    double precision :: xref(3), xlab(3)
 
     call can_to_ref(z(1:3), xref)
+    xlab(1) = xref(1)**2
+    xlab(2) = xref(2)
+    xlab(3) = xref(3)
 
     !$omp critical
-    write(9000+ipart, *) t, xref, z(4), z(5)
+    write(9000+ipart, *) t, xlab, z(4), z(5)
     !$omp end critical
 end subroutine write_position
 

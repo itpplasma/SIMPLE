@@ -353,8 +353,11 @@ module simple_main
     double precision, intent(in) :: xlab(3)
     double precision, intent(out) :: xcan(3)
 
-    xcan = xlab
-    xcan(1) = sqrt(xcan(1)) ! TODO make this individual to each coordinate system
+    double precision :: xref(3)
+
+    xref = xlab
+    xref(1) = sqrt(xref(1)) ! TODO make this individual to each coordinate system
+    call ref_to_can(xref, xcan)
   end subroutine from_lab_coordinates
 
   subroutine to_standard_z_coordinates(anorb, z)
