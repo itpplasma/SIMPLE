@@ -11,7 +11,7 @@ implicit none
 
 class(MagneticField), allocatable :: magfie
 integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-1, 0d0, 0d0]  ! TODO check limits
+real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi

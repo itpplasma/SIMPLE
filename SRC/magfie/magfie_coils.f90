@@ -55,16 +55,23 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: xcart(3), dxcart_dxvmec(3,3)
     real(dp), dimension(3) :: Acart, Bcart
 
-    call transform_vmec_to_cart(x, xcart, dxcart_dxvmec)
+    real(dp) :: s, ds_dr
+
+    s = x(1)**2
+    ds_dr = 2d0*x(1)
+
+    call transform_vmec_to_cart([s, x(2), x(3)], xcart, dxcart_dxvmec)
 
     Acart = compute_vector_potential(self%coils, xcart)
     Bcart = compute_magnetic_field(self%coils, xcart)
 
     Acov = matmul(Acart, dxcart_dxvmec)
+    Acov(1) = Acov(1)*ds_dr
 
     Bmod = sqrt(Bcart(1)**2 + Bcart(2)**2 + Bcart(3)**2)
 
     hcov = matmul(Bcart, dxcart_dxvmec)/Bmod
+    hcov(1) = hcov(1)*ds_dr
 
     if (present(sqgBctr)) then
         error stop 'sqgBctr not implemented'

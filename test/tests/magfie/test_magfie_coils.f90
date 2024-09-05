@@ -189,7 +189,7 @@ subroutine test_can_curve
     real(dp) :: r, th, ph
     integer :: i, N=1000
 
-    r = 0.3d0
+    r = 0.0d0
     th = 0.2d0
 
     call init_meiss(coils_field)
