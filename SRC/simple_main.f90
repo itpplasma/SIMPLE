@@ -282,7 +282,7 @@ module simple_main
       return
     endif
 
-    call ref_to_can(zstart(1:3, ipart), z(1:3))
+    call from_lab_coordinates(zstart(1:3, ipart), z(1:3))
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
@@ -306,7 +306,7 @@ module simple_main
     enddo
 
     !$omp critical
-    call can_to_ref(z(1:3), zend(1:3,ipart))
+    call to_lab_coordinates(z(1:3), zend(1:3,ipart))
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
@@ -336,6 +336,26 @@ module simple_main
       kt = kt+1
     enddo
   end subroutine macrostep
+
+  subroutine to_lab_coordinates(xcan, xlab)
+    use field_can_mod, only: ref_to_can
+
+    double precision, intent(in) :: xcan(3)
+    double precision, intent(out) :: xlab(3)
+
+    call can_to_ref(xcan, xlab)
+    xlab(1) = xlab(1)**2 ! TODO make this individual to each coordinate system
+  end subroutine to_lab_coordinates
+
+  subroutine from_lab_coordinates(xlab, xcan)
+    use field_can_mod, only: can_to_ref
+
+    double precision, intent(in) :: xlab(3)
+    double precision, intent(out) :: xcan(3)
+
+    xcan = xlab
+    xcan(1) = sqrt(xcan(1)) ! TODO make this individual to each coordinate system
+  end subroutine from_lab_coordinates
 
   subroutine to_standard_z_coordinates(anorb, z)
     type(Tracer), intent(in) :: anorb

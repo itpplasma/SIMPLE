@@ -5,8 +5,8 @@ use field_can_mod, only : can_to_ref
 
 implicit none
 
-logical :: output_err = .False.
-logical :: output_orbits_macro = .False.
+logical :: output_err = .True.
+logical :: output_orbits_macro = .True.
 
 contains
 
