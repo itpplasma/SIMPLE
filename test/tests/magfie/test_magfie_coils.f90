@@ -45,8 +45,8 @@ print *, 'B = ', Bmod
 call test_curve
 call test_magfie
 call test_magfie_curve
-stop
 call test_can
+call test_can_curve
 
 contains
 
@@ -179,6 +179,37 @@ subroutine test_can
     print *, 'h = ', f%hth, f%hph
     print *, 'B = ', f%Bmod
 end subroutine test_can
+
+
+subroutine test_can_curve
+    use field_can_mod, only: FieldCan
+    use field_can_meiss, only: init_meiss, get_meiss_coordinates, evaluate_meiss
+
+    type(FieldCan) :: f
+    real(dp) :: r, th, ph
+    integer :: i, N=1000
+
+    r = 0.3d0
+    th = 0.2d0
+
+    call init_meiss(coils_field)
+    call get_meiss_coordinates
+
+    do i = 0, N
+        ph = i*twopi/N
+        call evaluate_meiss(f, r, th, ph, 0)
+        write(21, *) r, th, ph, f%Ath, f%Aph, f%hth, f%hph, f%Bmod
+    end do
+
+    call init_meiss(vmec_field)
+    call get_meiss_coordinates
+
+    do i = 0, N
+        ph = i*twopi/N
+        call evaluate_meiss(f, r, th, ph, 0)
+        write(22, *) r, th, ph, f%Ath, f%Aph, f%hth, f%hph, f%Bmod
+    end do
+end subroutine test_can_curve
 
 
 end program test_magfie_coils

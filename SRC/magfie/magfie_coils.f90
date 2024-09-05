@@ -150,6 +150,10 @@ subroutine init_splines(self)
     !$omp end do
     !$omp end parallel
 
+    Ar = Ar - Ar(1,1,1)
+    Ath = Ath - Ath(1,1,1)
+    Aphi = Aphi - Aphi(1,1,1)
+
     call construct_splines_3d(xmin, xmax, Ar, order, periodic, self%spl_Ar)
     call construct_splines_3d(xmin, xmax, Ath, order, periodic, self%spl_Ath)
     call construct_splines_3d(xmin, xmax, Aphi, order, periodic, self%spl_Aphi)

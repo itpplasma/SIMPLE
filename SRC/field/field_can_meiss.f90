@@ -282,6 +282,9 @@ subroutine init_canonical_field_components
         end do
     end do
 
+    Ath = Ath - Ath(1,1,1)
+    Aphi = Aphi - Aphi(1,1,1)
+
     call construct_splines_3d(xmin, xmax, Ath, order, periodic, spl_Ath)
     call construct_splines_3d(xmin, xmax, Aphi, order, periodic, spl_Aph)
     call construct_splines_3d(xmin, xmax, hth, order, periodic, spl_hth)
