@@ -170,6 +170,7 @@ subroutine test_can
     print *, 'A = ', f%Ath, f%Aph
     print *, 'h = ', f%hth, f%hph
     print *, 'B = ', f%Bmod
+    print *, 'sqrtgBctr = ', f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
 
     call init_meiss(vmec_field)
     call get_meiss_coordinates
@@ -178,6 +179,7 @@ subroutine test_can
     print *, 'A = ', f%Ath, f%Aph
     print *, 'h = ', f%hth, f%hph
     print *, 'B = ', f%Bmod
+    print *, 'sqrtgBctr = ', f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
 end subroutine test_can
 
 
@@ -189,7 +191,7 @@ subroutine test_can_curve
     real(dp) :: r, th, ph
     integer :: i, N=1000
 
-    r = 0.0d0
+    r = 0.1d0
     th = 0.2d0
 
     call init_meiss(coils_field)
@@ -199,6 +201,7 @@ subroutine test_can_curve
         ph = i*twopi/N
         call evaluate_meiss(f, r, th, ph, 0)
         write(21, *) r, th, ph, f%Ath, f%Aph, f%hth, f%hph, f%Bmod
+        write(31, *) r, th, ph, f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
     end do
 
     call init_meiss(vmec_field)
@@ -208,6 +211,7 @@ subroutine test_can_curve
         ph = i*twopi/N
         call evaluate_meiss(f, r, th, ph, 0)
         write(22, *) r, th, ph, f%Ath, f%Aph, f%hth, f%hph, f%Bmod
+        write(32, *) r, th, ph, f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
     end do
 end subroutine test_can_curve
 

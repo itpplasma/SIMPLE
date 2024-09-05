@@ -11,7 +11,7 @@ implicit none
 
 class(MagneticField), allocatable :: magfie
 integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]  ! TODO check limits
+real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
@@ -281,9 +281,6 @@ subroutine init_canonical_field_components
             end do
         end do
     end do
-
-    Ath = Ath - Ath(1,1,1)
-    Aphi = Aphi - Aphi(1,1,1)
 
     call construct_splines_3d(xmin, xmax, Ath, order, periodic, spl_Ath)
     call construct_splines_3d(xmin, xmax, Aphi, order, periodic, spl_Aph)
