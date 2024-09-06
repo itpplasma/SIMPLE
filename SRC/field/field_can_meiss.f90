@@ -118,8 +118,9 @@ subroutine ref_to_can_meiss(xref, xcan)
     do i=1, MAX_ITER
         call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
         phi_can_prev = xcan(3)
-        xcan(3) = phi_can_prev - (phi_can_prev + lam - xref(3))/(1d0 + dlam(3))
-print *, abs(xcan(3) - phi_can_prev)
+        xcan(3) = xref(3) + lam
+        !xcan(3) = phi_can_prev - (phi_can_prev + lam - xref(3))/(1d0 + dlam(3))
+!print *, abs(xcan(3) - phi_can_prev)
         if (abs(xcan(3) - phi_can_prev) < TOL) return
     enddo
     print *, 'WARNING: ref_to_can_meiss did not converge after', MAX_ITER, 'iterations'
