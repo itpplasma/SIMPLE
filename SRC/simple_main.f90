@@ -18,7 +18,6 @@ module simple_main
   contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use magfie_sub, only : init_magfie
     use field, only : field_from_file
     use simple, only : init_vmec
 
@@ -32,28 +31,29 @@ module simple_main
     if (self%integmode>=0) then
       call init_field_can(isw_field_type, field_from_file(field_input))
     end if
-
-    call init_magfie(isw_field_type)
   end subroutine init_field
 
 
   subroutine run(norb)
+    use magfie_sub, only : init_magfie, VMEC
     type(Tracer), intent(inout) :: norb
     integer :: i
 
     call print_parameters
     if (swcoll) call init_collisions
 
-    ! pre-compute starting flux surface
+    call init_magfie(VMEC)
+
     call init_starting_surf
 
-    ! local?
     if(1 == num_surf) then
       call init_starting_points
     else
       call init_starting_points_global
     endif
     if (startmode == 0) stop 'startmode == 0, stopping after generating start.dat'
+
+    call init_magfie(isw_field_type)
 
     call init_counters
 
@@ -176,8 +176,7 @@ module simple_main
         call random_number(xi)
         call binsrc(volstart,1,npoiper*nper,xi,i)
         ibins=i
-        ! we store starting points in reference coordinates:
-        call can_to_ref(xstart(1:3,i), zstart(1:3,ipart))
+        zstart(1:3,ipart) = xstart(1:3,i)
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -210,7 +209,7 @@ module simple_main
 
     integer, parameter :: ns=1000
     integer :: ipart,iskip,is,s_idx,parts_per_s
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+    double precision :: r,vartheta,varphi
     double precision :: s,bmin,bmax
   !
     open(1,file='bminmax.dat',recl=1024)
