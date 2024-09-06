@@ -1,4 +1,4 @@
-module simple_magfie_base
+module field_base
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 implicit none
@@ -21,4 +21,4 @@ abstract interface
 end interface
 
 
-end module simple_magfie_base
+end module field_base

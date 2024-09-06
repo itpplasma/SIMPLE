@@ -8,7 +8,7 @@ module simple
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_timestep_sympl
-  use simple_magfie, only : VmecField
+  use field, only : VmecField
   use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
   use params, only : Tracer, idx, field_input
@@ -29,7 +29,7 @@ contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use magfie_sub, only : init_magfie
-    use simple_magfie, only : magfie_from_file
+    use field, only : field_from_file
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -39,7 +39,7 @@ contains
 
     self%integmode = aintegmode
     if (self%integmode>=0) then
-      call init_field_can(isw_field_type, magfie_from_file(field_input))
+      call init_field_can(isw_field_type, field_from_file(field_input))
     end if
 
     call init_magfie(isw_field_type)

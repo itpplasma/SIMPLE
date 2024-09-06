@@ -18,11 +18,10 @@ set(SOURCES
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.f90
     interpolate.f90
-    magfie/magfie_base.f90
-    magfie/magfie_coils.f90
-    magfie/magfie_vmec.f90
-    magfie/magfie.f90
+    field/field_base.f90
+    field/field_coils.f90
     field/field_vmec.f90
+    field.f90
     field/field_can_base.f90
     field/field_can_test.f90
     field/field_can_flux.f90

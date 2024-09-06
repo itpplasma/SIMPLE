@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
-use simple_magfie, only : MagneticField, VmecField
+use field, only : MagneticField, VmecField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
 use field_can_test, only : evaluate_test

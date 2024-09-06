@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use params, only: read_config
 use simple, only: Tracer, init_field
 use velo_mod, only: isw_field_type
-use simple_magfie, only: VmecField
+use field, only: VmecField
 use field_can_mod, only: eval_field => evaluate, FieldCan, FieldCan_init
 use magfie_sub, only: MEISS
 use field_can_meiss, only: init_meiss, init_transformation, &

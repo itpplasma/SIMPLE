@@ -1,57 +1,53 @@
 module field_vmec
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use new_vmec_stuff_mod, only: rmnc, zmns, lmns => almns, rmns, zmnc, lmnc => almnc, &
-    iota => aiota, psitor => phi, s_indices => sps, xm => axm, xn => axn, s, nsurfm, &
-    n_mn => nstrm, ns => kpar, netcdffile
-use vector_potentail_mod, only: psitor_a => torflux
-
+use field_base, only: MagneticField
 implicit none
+
+type, extends(MagneticField) :: VmecField
+contains
+    procedure :: evaluate
+end type VmecField
 
 contains
 
-subroutine init_field_vmec(filename)
-    use vmec_alloc_sub, only: new_allocate_vmec_stuff
-    use vmecin_sub, only: vmecin
+subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
+    use spline_vmec_sub
 
-    character(*), intent(in) :: filename
+    class(VmecField), intent(in) :: self
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out), dimension(3) :: Acov, hcov
+    real(dp), intent(out) :: Bmod
+    real(dp), intent(out), optional :: sqgBctr(3)
 
-    integer :: dummy
+    real(dp) :: Acov_theta, Acov_phi
+    real(dp) :: dA_theta_ds, dA_phi_ds, Bctr_theta, Bctr_phi
+    real(dp) :: aiota, sqg, alam, dl_ds, dl_dt, dl_dp
+    real(dp) :: Bcov_s, Bcov_theta, Bcov_phi
+    real(dp) :: s, ds_dr
 
-    netcdffile = filename
-    call new_allocate_vmec_stuff
-    call vmecin(rmnc, zmns, lmns, rmns, zmnc, lmnc, iota, psitor, s_indices, xm, xn, &
-        s, dummy, n_mn, ns, psitor_a)
-end subroutine init_field_vmec
+    s = x(1)**2
+    ds_dr = 2d0*x(1)
 
+    call vmec_field(s, x(2), x(3), Acov_theta, Acov_phi, &
+        dA_theta_ds, dA_phi_ds, aiota, sqg, alam, dl_ds, dl_dt, dl_dp, &
+        Bctr_theta, Bctr_phi, Bcov_s, Bcov_theta, Bcov_phi)
 
-subroutine deinit_field_vmec()
-    use vmec_alloc_sub, only: new_deallocate_vmec_stuff
-    call new_deallocate_vmec_stuff
-end subroutine deinit_field_vmec
+    Acov(1) = Acov_theta*dl_ds
+    Acov(1) = Acov(1)*ds_dr
+    Acov(2) = Acov_theta*(1d0 + dl_dt)
+    Acov(3) = Acov_phi + Acov_theta*dl_dp
 
+    Bmod = sqrt(Bctr_theta*Bcov_theta + Bctr_phi*Bcov_phi)
 
-subroutine vmec_to_cyl(ks, th, ph)
-    integer, intent(in) :: ks
-    real(dp), intent(in) :: th, ph
-    real(dp) :: R, P, Z
+    hcov(1) = (Bcov_s + Bcov_theta*dl_ds)/Bmod
+    hcov(1) = hcov(1)*ds_dr
+    hcov(2) = Bcov_theta*(1d0 + dl_dt)/Bmod
+    hcov(3) = (Bcov_phi + Bcov_theta*dl_dp)/Bmod
 
-    real(dp) :: cosphase, sinphase
-    integer :: k_mn, m, n
-
-    R = 0d0
-    P = 0d0
-    Z = 0d0
-
-    do k_mn = 1, n_mn
-        m = int(xm(k_mn))
-        n = int(xn(k_mn))
-        cosphase = cos(m*th - n*ph)
-        sinphase = sin(m*th - n*ph)
-        R = R + rmnc(k_mn, ks)*cosphase + rmns(k_mn, ks)*sinphase
-        P = ph
-        Z = Z + zmnc(k_mn, ks)*cosphase + zmns(k_mn, ks)*sinphase
-    end do
-end subroutine vmec_to_cyl
+    if (present(sqgBctr)) then
+        error stop 'sqgBctr not implemented'
+    end if
+end subroutine evaluate
 
 end module field_vmec

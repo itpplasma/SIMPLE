@@ -1,30 +1,30 @@
-module simple_magfie
+module field
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use simple_magfie_base, only: MagneticField
-use simple_magfie_vmec, only: VmecField
-use simple_magfie_coils, only: CoilsField, create_coils_field
+use field_base, only: MagneticField
+use field_vmec, only: VmecField
+use field_coils, only: CoilsField, create_coils_field
 
 implicit none
 
 contains
 
-function magfie_from_file(filename)
-    class(MagneticField), allocatable :: magfie_from_file
+function field_from_file(filename)
+    class(MagneticField), allocatable :: field_from_file
     character(*), intent(in) :: filename
 
     character(len(filename)) :: stripped_name
     stripped_name = strip_directory(filename)
 
     if (endswith(filename, '.nc')) then
-        allocate(VmecField :: magfie_from_file)
+        allocate(VmecField :: field_from_file)
     else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
-        magfie_from_file = create_coils_field(filename)
+        field_from_file = create_coils_field(filename)
     else
-        print *,  'magfie_from_file: Unknown file name format ', filename
+        print *,  'field_from_file: Unknown file name format ', filename
         error stop
     end if
-end function magfie_from_file
+end function field_from_file
 
 
 function startswidth(text, start)
@@ -78,4 +78,4 @@ function strip_directory(filename)
 end function strip_directory
 
 
-end module simple_magfie
+end module field

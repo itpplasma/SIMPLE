@@ -5,7 +5,7 @@ use interpolate, only: SplineData3D, construct_splines_3d, &
     evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
 use util, only: twopi
 use field_can_base, only: FieldCan, n_field_evaluations
-use simple_magfie, only: MagneticField
+use field, only: MagneticField
 
 implicit none
 

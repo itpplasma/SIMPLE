@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use simple, only : init_vmec
 use magfie_sub, only : VMEC
 use velo_mod, only: isw_field_type
-use simple_magfie, only: VmecField, CoilsField, create_coils_field
+use field, only: VmecField, CoilsField, create_coils_field
 use magfie_sub, only: magfie_vmec
 use util, only: twopi
 

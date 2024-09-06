@@ -1,4 +1,4 @@
-module simple_magfie_coils
+module field_coils
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: SplineData3D, construct_splines_3d, &
@@ -6,7 +6,7 @@ use interpolate, only: SplineData3D, construct_splines_3d, &
 use util, only: twopi
 use neo_biotsavart, only: coils_t, load_coils_from_file, &
     compute_vector_potential, compute_magnetic_field
-use simple_magfie_base, only: MagneticField
+use field_base, only: MagneticField
 use simple_coordinates, only: transform_vmec_to_cart
 
 implicit none
@@ -79,8 +79,8 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine evaluate_direct
 
 
-function create_coils_field(coils_file, should_spline) result(field)
-    class(CoilsField), allocatable :: field
+function create_coils_field(coils_file, should_spline) result(coils_field)
+    class(CoilsField), allocatable :: coils_field
     character(*), intent(in) :: coils_file
     logical, intent(in), optional :: should_spline
 
@@ -89,16 +89,16 @@ function create_coils_field(coils_file, should_spline) result(field)
 
     logical :: should_spline_ = .True.
 
-    allocate(CoilsField :: field)
-    call load_coils_from_file(coils_file, field%coils)
+    allocate(CoilsField :: coils_field)
+    call load_coils_from_file(coils_file, coils_field%coils)
 
-    field%coils%x = field%coils%x * M_TO_CM
-    field%coils%y = field%coils%y * M_TO_CM
-    field%coils%z = field%coils%z * M_TO_CM
-    field%coils%current = field%coils%current * A_TO_STATA
+    coils_field%coils%x = coils_field%coils%x * M_TO_CM
+    coils_field%coils%y = coils_field%coils%y * M_TO_CM
+    coils_field%coils%z = coils_field%coils%z * M_TO_CM
+    coils_field%coils%current = coils_field%coils%current * A_TO_STATA
 
     if(present(should_spline)) should_spline_ = should_spline
-    if(should_spline_) call field%init_splines
+    if(should_spline_) call coils_field%init_splines
 end function create_coils_field
 
 
@@ -195,4 +195,4 @@ subroutine init_splines(self)
     end subroutine print_progress
 end subroutine init_splines
 
-end module simple_magfie_coils
+end module field_coils
