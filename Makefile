@@ -1,6 +1,6 @@
 BUILD_DIR := build
 CMAKE_CACHE := $(BUILD_DIR)/CMakeCache.txt
-NUM_PROC := $(shell python -c 'import os; print(os.cpu_count())')
+NUM_PROC := $(nproc)
 
 .PHONY: all compile install test fasttest clean
 all: compile
