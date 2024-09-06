@@ -18,16 +18,18 @@ use field_can_albert, only : evaluate_albert, init_albert, can_to_ref_albert, &
 implicit none
 
 procedure(evaluate_base), pointer :: evaluate => null()
+
+! Conversion to and from reference coordinates - currently VMEC coordinates (s, th, ph)
 procedure(coordinate_transform), pointer :: can_to_ref => identity_transform
 procedure(coordinate_transform), pointer :: ref_to_can => identity_transform
 
 contains
 
-subroutine field_can_from_name(field_name, magfie)
+subroutine field_can_from_name(field_name, field_noncan)
 
   character(*), intent(in) :: field_name
   !> For FieldCanMeiss
-  class(MagneticField), intent(in), optional :: magfie
+  class(MagneticField), intent(in), optional :: field_noncan
 
   select case(trim(field_name))
     case("test")
@@ -41,15 +43,15 @@ subroutine field_can_from_name(field_name, magfie)
       can_to_ref => can_to_ref_boozer
       ref_to_can => ref_to_can_boozer
     case("meiss")
-      if (present(magfie)) then
-        call init_meiss(magfie)
+      if (present(field_noncan)) then
+        call init_meiss(field_noncan)
       end if
       evaluate => evaluate_meiss
       can_to_ref => can_to_ref_meiss
       ref_to_can => ref_to_can_meiss
     case("albert")
-      if (present(magfie)) then
-        call init_albert(magfie)
+      if (present(field_noncan)) then
+        call init_albert(field_noncan)
       end if
       evaluate => evaluate_albert
       can_to_ref => can_to_ref_albert
@@ -61,13 +63,13 @@ subroutine field_can_from_name(field_name, magfie)
 end subroutine field_can_from_name
 
 
-subroutine field_can_from_id(field_id, magfie)
+subroutine field_can_from_id(field_id, field_noncan)
   integer, intent(in) :: field_id
   !> For FieldCanMeiss
-  class(MagneticField), intent(in), optional :: magfie
+  class(MagneticField), intent(in), optional :: field_noncan
 
-  if (present(magfie)) then
-    call field_can_from_name(name_from_id(field_id), magfie)
+  if (present(field_noncan)) then
+    call field_can_from_name(name_from_id(field_id), field_noncan)
   else
     call field_can_from_name(name_from_id(field_id))
   end if
@@ -119,17 +121,17 @@ function id_from_name(field_name)
 end function id_from_name
 
 
-subroutine init_field_can(field_id, magfie)
+subroutine init_field_can(field_id, field_noncan)
   use get_can_sub, only : get_canonical_coordinates
   use boozer_sub, only : get_boozer_coordinates
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
 
   integer, intent(in) :: field_id
-  class(MagneticField), intent(in), optional :: magfie
+  class(MagneticField), intent(in), optional :: field_noncan
 
-  if (present(magfie)) then
-    call field_can_from_id(field_id, magfie)
+  if (present(field_noncan)) then
+    call field_can_from_id(field_id, field_noncan)
   else
     call field_can_from_id(field_id, VmecField())
   end if

@@ -9,7 +9,7 @@ use field, only: MagneticField
 
 implicit none
 
-class(MagneticField), allocatable :: magfie
+class(MagneticField), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
@@ -29,15 +29,15 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
 
-subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
+subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     use new_vmec_stuff_mod, only : nper
 
-    class(MagneticField), intent(in) :: magfie_
+    class(MagneticField), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
 
-    if (allocated(magfie)) deallocate(magfie)
-    allocate(magfie, source=magfie_)
+    if (allocated(field_noncan)) deallocate(field_noncan)
+    allocate(field_noncan, source=field_noncan_)
 
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
@@ -95,7 +95,7 @@ subroutine can_to_ref_meiss(xcan, xref)
     real(dp) :: lam
 
     call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-    xref(1) = xcan(1)
+    xref(1) = xcan(1)**2
     xref(2) = modulo(xcan(2), twopi)
     xref(3) = modulo(xcan(3) + lam, twopi)
 end subroutine can_to_ref_meiss
@@ -111,7 +111,7 @@ subroutine ref_to_can_meiss(xref, xcan)
     real(dp) :: lam, dlam(3), phi_can_prev
     integer :: i
 
-    xcan(1) = xref(1)
+    xcan(1) = sqrt(xref(1))
     xcan(2) = modulo(xref(2), twopi)
     xcan(3) = modulo(xref(3), twopi)
 
@@ -241,7 +241,7 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     ! TODO: Make this more efficient with slices
     ! TODO: Support not only VMEC field
     th = xmin(2) + h_th*(i_th-1)
-    call magfie%evaluate([r, th, phi], Acov, hcov, Bmod)
+    call field_noncan%evaluate([r, th, phi], Acov, hcov, Bmod)
 
     Ar = Acov(1)
     Ap = Acov(3)
@@ -272,7 +272,7 @@ subroutine init_canonical_field_components
                 xref(2) = modulo(xcan(2), twopi)
                 xref(3) = modulo(xcan(3) + lam, twopi)
 
-                call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
