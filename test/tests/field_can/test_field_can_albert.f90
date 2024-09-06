@@ -2,7 +2,8 @@ program test_field_can_albert
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 
-use simple, only: Tracer, init_field
+use simple, only: Tracer
+use simple_main, only: init_field
 use magfie_sub, only: ALBERT
 use velo_mod, only: isw_field_type
 use field, only: VmecField

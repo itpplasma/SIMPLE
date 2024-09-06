@@ -1,20 +1,41 @@
 module simple_main
   use omp_lib
   use util, only: pi, twopi, sqrt2
-  use simple, only : init_sympl
+  use simple, only : init_sympl, Tracer
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
-  use field_can_mod, only : can_to_ref, ref_to_can
+  use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
-    ntimstep, bstart, ibins, ierr, Tracer, should_skip, reset_seed_if_deterministic
+    ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
+    field_input, isw_field_type
 
   implicit none
 
   contains
+
+  subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use magfie_sub, only : init_magfie
+    use field, only : field_from_file
+    use simple, only : init_vmec
+
+    character(*), intent(in) :: vmec_file
+    type(Tracer), intent(inout) :: self
+    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
+
+    call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
+
+    self%integmode = aintegmode
+    if (self%integmode>=0) then
+      call init_field_can(isw_field_type, field_from_file(field_input))
+    end if
+
+    call init_magfie(isw_field_type)
+  end subroutine init_field
+
 
   subroutine run(norb)
     type(Tracer), intent(inout) :: norb

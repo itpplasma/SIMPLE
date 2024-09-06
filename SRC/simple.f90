@@ -11,13 +11,25 @@ module simple
   use field, only : VmecField
   use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
-  use params, only : Tracer, idx, field_input
   use chamb_sub, only : chamb_can
 
 implicit none
 save
 
 public
+
+  type :: Tracer
+    double precision :: fper
+    double precision :: dtau, dtaumin, v0
+    integer          :: n_e, n_d
+
+    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+    double precision :: relerr
+
+    type(FieldCan) :: f
+    type(SymplecticIntegrator) :: si
+    type(MultistageIntegrator) :: mi
+  end type Tracer
 
   interface tstep
       module procedure timestep
@@ -26,24 +38,6 @@ public
    end interface tstep
 
 contains
-
-  subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use magfie_sub, only : init_magfie
-    use field, only : field_from_file
-
-    character(*), intent(in) :: vmec_file
-    type(Tracer), intent(inout) :: self
-    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-
-    call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
-
-    self%integmode = aintegmode
-    if (self%integmode>=0) then
-      call init_field_can(isw_field_type, field_from_file(field_input))
-    end if
-
-    call init_magfie(isw_field_type)
-  end subroutine init_field
 
 
   subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)

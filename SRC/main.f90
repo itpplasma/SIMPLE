@@ -2,8 +2,8 @@ program neo_orb_main
 
   use params, only : read_config, netcdffile, ns_s, ns_tp, multharm, &
     integmode, params_init
-  use simple_main, only : run, write_output
-  use simple, only : Tracer, init_field
+  use simple_main, only : init_field, run, write_output
+  use simple, only : Tracer
 
   implicit none
 
