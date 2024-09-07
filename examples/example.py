@@ -5,7 +5,7 @@ from pysimple import get_can_sub as coord
 import numpy as np
 import matplotlib.pyplot as plt
 #%%
-tracy = params.Tracer()
+tracy = simple.Tracer()
 
 simple.init_field(tracy, "wout.nc", 3, 3, 3, 1)
 simple.init_params(tracy, 2, 4, 3.5e6, 256, 1, 1e-13)

@@ -1,37 +1,59 @@
 module simple_main
   use omp_lib
   use util, only: pi, twopi, sqrt2
-  use simple, only : init_sympl
+  use simple, only : init_sympl, Tracer
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
+  use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
-    ntimstep, bstart, ibins, ierr, Tracer, should_skip, reset_seed_if_deterministic
+    ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
+    field_input, isw_field_type
 
   implicit none
 
   contains
 
+  subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use field, only : field_from_file
+    use simple, only : init_vmec
+
+    character(*), intent(in) :: vmec_file
+    type(Tracer), intent(inout) :: self
+    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
+
+    call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
+
+    self%integmode = aintegmode
+    if (self%integmode>=0) then
+      call init_field_can(isw_field_type, field_from_file(field_input))
+    end if
+  end subroutine init_field
+
+
   subroutine run(norb)
+    use magfie_sub, only : init_magfie, VMEC
     type(Tracer), intent(inout) :: norb
     integer :: i
 
     call print_parameters
     if (swcoll) call init_collisions
 
-    ! pre-compute starting flux surface
+    call init_magfie(VMEC)
+
     call init_starting_surf
 
-    ! local?
     if(1 == num_surf) then
       call init_starting_points
     else
       call init_starting_points_global
     endif
     if (startmode == 0) stop 'startmode == 0, stopping after generating start.dat'
+
+    call init_magfie(isw_field_type)
 
     call init_counters
 
@@ -154,8 +176,7 @@ module simple_main
         call random_number(xi)
         call binsrc(volstart,1,npoiper*nper,xi,i)
         ibins=i
-        ! we store starting points in lab coordinates:
-        call to_lab_coordinates(xstart(1:3,i), zstart(1:3,ipart))
+        zstart(1:3,ipart) = xstart(1:3,i)
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -188,7 +209,7 @@ module simple_main
 
     integer, parameter :: ns=1000
     integer :: ipart,iskip,is,s_idx,parts_per_s
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+    double precision :: r,vartheta,varphi
     double precision :: s,bmin,bmax
   !
     open(1,file='bminmax.dat',recl=1024)
@@ -232,8 +253,8 @@ module simple_main
         vartheta=twopi*xi
         call random_number(xi)
         varphi=twopi*xi
-        ! we store starting points in lab coordinates:
-        call to_lab_coordinates([r, vartheta, varphi], zstart(1:3,ipart))
+        ! we store starting points in reference coordinates:
+        call can_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
         ! normalized velocity module z(4) = v / v_0:
         zstart(4,ipart)=1.d0
         ! starting pitch z(5)=v_\parallel / v:
@@ -281,7 +302,7 @@ module simple_main
       return
     endif
 
-    call from_lab_coordinates(zstart(1:3, ipart), z(1:3))
+    call ref_to_can(zstart(1:3, ipart), z(1:3))
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
@@ -305,7 +326,7 @@ module simple_main
     enddo
 
     !$omp critical
-    call to_lab_coordinates(z(1:3), zend(1:3,ipart))
+    call can_to_ref(z(1:3), zend(1:3,ipart))
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
@@ -344,22 +365,6 @@ module simple_main
     z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod+0.5d0*anorb%f%vpar**2)
     z(5) = anorb%f%vpar/(z(4)*sqrt2)
   end subroutine to_standard_z_coordinates
-
-  subroutine from_lab_coordinates(xlab, x)
-    use field_can_mod, only : ref_to_can
-    double precision, intent(in) :: xlab(:)
-    double precision, intent(inout) :: x(:)
-
-    call ref_to_can(xlab, x)  ! TODO don't assume lab=ref
-  end subroutine from_lab_coordinates
-
-  subroutine to_lab_coordinates(x, xlab)
-    use field_can_mod, only : can_to_ref
-    double precision, intent(in) :: x(:)
-    double precision, intent(inout) :: xlab(:)
-
-    call can_to_ref(x, xlab)  ! TODO don't assume lab=ref
-  end subroutine to_lab_coordinates
 
   subroutine increase_confined_count(it, passing)
     integer, intent(in) :: it

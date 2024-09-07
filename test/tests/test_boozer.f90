@@ -1,7 +1,8 @@
 !
   program test_boozer
 !
-  use simple, only : Tracer, init_field
+  use simple, only : Tracer
+  use simple_main, only : init_field
   use boozer_coordinates_mod, only : use_B_r, use_del_tp_B
   use new_vmec_stuff_mod,   only : nper
   use boozer_sub

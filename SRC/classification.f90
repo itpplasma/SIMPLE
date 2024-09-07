@@ -5,7 +5,7 @@ use params
 use util, only: twopi, sqrt2
 use velo_mod,   only : isw_field_type
 use orbit_symplectic, only : orbit_timestep_sympl, get_val
-use simple, only : init_sympl
+use simple, only : init_sympl, Tracer
 use cut_detector, only : fract_dimension
 use diag_mod, only : icounter
 use get_can_sub, only : vmec_to_can

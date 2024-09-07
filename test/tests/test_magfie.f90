@@ -5,7 +5,8 @@ program test_magfie
 use velo_mod,   only: isw_field_type
 use orbit_symplectic
 use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, FieldCan_init
-use simple, only: Tracer, init_field, init_params, ro0
+use simple, only: Tracer, init_params, ro0
+use simple_main, only : init_field
 use new_vmec_stuff_mod, only: rmajor
 
 implicit none

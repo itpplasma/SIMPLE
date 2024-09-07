@@ -64,6 +64,34 @@ subroutine evaluate_albert(f, r, th_c, ph_c, mode_secders)
 end subroutine evaluate_albert
 
 
+subroutine can_to_ref_albert(xcan, xref)
+    use field_can_meiss, only: can_to_ref_meiss
+
+    real(dp), intent(in) :: xcan(3)
+    real(dp), intent(out) :: xref(3) 
+    real(dp) :: xmeiss(3)
+
+    call evaluate_splines_3d(spl_r_of_xc, xcan, xmeiss(1))
+    xmeiss(2:3) = xcan(2:3)
+    call can_to_ref_meiss(xmeiss, xref)
+end subroutine can_to_ref_albert
+    
+
+subroutine ref_to_can_albert(xref, xcan)
+    use field_can_meiss, only: ref_to_can_meiss
+
+    real(dp), intent(in) :: xref(3)
+    real(dp), intent(out) :: xcan(3)
+ 
+    real(dp) :: Ath, xmeiss(3)
+
+    call ref_to_can_meiss(xref, xmeiss)   
+    call evaluate_splines_3d(spl_Ath, xmeiss, Ath)
+    xcan(1) = Ath/Ath_norm
+    xcan(2:3) = xmeiss(2:3)
+end subroutine ref_to_can_albert
+
+
 subroutine get_albert_coordinates
     print *, 'field_can_meiss.init_transformation'
     call init_transformation
@@ -123,7 +151,7 @@ subroutine init_psi_grid
     allocate(psi_of_x(n_r, n_th, n_phi), psi_grid(n_r))
 
     psi_of_x(:, :, :) = spl_Ath%coeff(order(1), 0, 0, :, :, :)
-    Ath_norm = maxval(psi_of_x)
+    Ath_norm = sign(maxval(abs(psi_of_x)), psi_of_x(n_r, n_th/2, n_phi/2))
     psi_of_x = psi_of_x / Ath_norm
 
     ! Here we use the "safe side" approach (new grid is fully within the old grid).

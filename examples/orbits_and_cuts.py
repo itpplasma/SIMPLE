@@ -38,7 +38,7 @@ rlarm = v0*m_mass*p_mass*c/(Z_charge*e_charge*bmod_ref)  # reference gyroradius
 tau = trace_time*v0
 
 # %%
-tracy = params.Tracer()
+tracy = simple.Tracer()
 
 simple.init_field(tracy, "wout.nc", 5, 5, 3, 1)
 simple.init_params(tracy, Z_charge, m_mass, E_kin, 256, 1, 1e-13)

@@ -2,7 +2,8 @@ module test_highlevel
     use simple
     use util, only: pi
     use funit
-    use params, only : Tracer
+    use simple, only : Tracer
+    use simple_main, only : init_field
     use new_vmec_stuff_mod
     use vmecin_sub, only : stevvo
 
