@@ -14,7 +14,7 @@ p.contr_pp = -1e10     # Trace all passing passing
 p.startmode = -1       # Manual start conditions
 p.sbeg = [0.6]         # Starting flux surface
 
-tracy = p.Tracer()
+tracy = simple.Tracer()
 
 simple.init_field(tracy, 'wout.nc',
     stuff.ns_s, stuff.ns_tp, stuff.multharm, p.integmode)
@@ -34,8 +34,8 @@ for item in dir(p):
 p.zstart[0,:] = p.sbeg[0]
 TH, PH = np.meshgrid(np.linspace(0,2*np.pi,nth+1)[:-1], np.linspace(0,2*np.pi,nph+1)[:-1])  # TODO: th and phi check order
 p.zstart[1,:] = TH.flatten()
-p.zstart[2,:] = PH.flatten() 
-p.zstart[3,:] = 1.0  # p/p0 
+p.zstart[2,:] = PH.flatten()
+p.zstart[3,:] = 1.0  # p/p0
 p.zstart[4,:] = 0.0  # v_par/v0
 #%%
 simple_main.run(tracy)
@@ -59,4 +59,3 @@ plt.ylabel('perpendicular invariant')
 plt.show()
 
 # %%
- 
