@@ -53,11 +53,12 @@ subroutine transform_vmec_to_cart(xfrom, xto, dxto_dxfrom)
     real(dp), intent(out) :: xto(3)
     real(dp), intent(out), optional :: dxto_dxfrom(3,3)
 
-    real(dp) :: xcyl(3), dxcyl_dxvmec(3,3)
+    real(dp) :: xcyl(3), dxcyl_dxvmec(3,3), dxcart_dxcyl(3,3)
 
     if (present(dxto_dxfrom)) then
         call transform_vmec_to_cyl(xfrom, xcyl, dxcyl_dxvmec)
-        call transform_cyl_to_cart(xcyl, xto, dxto_dxfrom)
+        call transform_cyl_to_cart(xcyl, xto, dxcart_dxcyl)
+        dxto_dxfrom = matmul(dxcart_dxcyl, dxcyl_dxvmec)
     else
         call transform_vmec_to_cyl(xfrom, xcyl)
         call transform_cyl_to_cart(xcyl, xto)

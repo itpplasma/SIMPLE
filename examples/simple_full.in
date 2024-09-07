@@ -50,4 +50,6 @@ old_axis_healing_boundary = .True.  ! How to heal VMEC axis. Leave .True. until 
 batch_size = 1000 ! Use only a portion of all particles. Ignored if larger than ntestpart.
 ran_seed = 12345   ! Random seed to get batch_size amounts of random indices from ntestpart.
 reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored in batch.dat, new batch generated if batch.dat not found.
+output_orbits_macrostep = .False. ! Output orbit positions to fort.9XXXX
+output_error = .False. ! Output additional error diagnostics
 /

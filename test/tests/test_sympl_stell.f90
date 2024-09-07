@@ -4,6 +4,7 @@ use orbit_symplectic
 use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
 use simple
+use simple_main, only : init_field
 use new_vmec_stuff_mod, only: rmajor
 use diag_mod, only : icounter
 use omp_lib

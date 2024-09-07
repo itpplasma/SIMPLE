@@ -6,9 +6,10 @@ program test_coord_trans
   use parmot_mod, only : ro0, rmu
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use simple, only : init_field, init_sympl
+  use simple, only : Tracer, init_sympl
+  use simple_main, only : init_field
   use cut_detector, only : fract_dimension
-  use params, only : Tracer, debug
+  use params, only : debug
   use vmecin_sub, only : stevvo
 
   implicit none

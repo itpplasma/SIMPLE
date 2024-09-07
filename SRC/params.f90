@@ -7,21 +7,9 @@ module params
   use field_can_mod, only : eval_field => evaluate, FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator
   use vmecin_sub, only : stevvo
+  use callback, only : output_error, output_orbits_macrostep
 
   implicit none
-
-  type :: Tracer
-    double precision :: fper
-    double precision :: dtau, dtaumin, v0
-    integer          :: n_e, n_d
-
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-    double precision :: relerr
-
-    type(FieldCan) :: f
-    type(SymplecticIntegrator) :: si
-    type(MultistageIntegrator) :: mi
-  end type Tracer
 
   integer          :: nper=1000, ntestpart=1024
   integer          :: loopskip=0
@@ -85,6 +73,8 @@ module params
   logical :: reuse_batch =.False.
   integer, dimension (:), allocatable :: idx
 
+  character(1000) :: field_input = ''
+
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
@@ -93,12 +83,13 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
-    batch_size, ran_seed, reuse_batch
+    batch_size, ran_seed, reuse_batch, field_input, &
+    output_error, output_orbits_macrostep  ! callback
 
 contains
 
   subroutine read_config(config_file)
-    character(len=256), intent(in) :: config_file
+    character(256), intent(in) :: config_file
 
     integer :: iostat
     character(1024) :: iomsg
@@ -109,6 +100,8 @@ contains
     read(1, nml=config, iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) goto 666
     close(1)
+
+    if(trim(field_input) == '') field_input = netcdffile
 
     call reset_seed_if_deterministic
 

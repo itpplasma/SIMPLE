@@ -3,16 +3,15 @@ module field_can_meiss
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: SplineData3D, construct_splines_3d, &
     evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
+use util, only: twopi
 use field_can_base, only: FieldCan, n_field_evaluations
-use simple_magfie, only: MagneticField
+use field, only: MagneticField
 
 implicit none
 
-real(dp), parameter :: twopi = atan(1.d0)*8.d0
-
-class(MagneticField), allocatable :: magfie
+class(MagneticField), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]
+real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
@@ -30,13 +29,15 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
 
-subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
-    class(MagneticField), intent(in) :: magfie_
+subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
+    use new_vmec_stuff_mod, only : nper
+
+    class(MagneticField), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
 
-    if (allocated(magfie)) deallocate(magfie)
-    allocate(magfie, source=magfie_)
+    if (allocated(field_noncan)) deallocate(field_noncan)
+    allocate(field_noncan, source=field_noncan_)
 
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
@@ -46,6 +47,7 @@ subroutine init_meiss(magfie_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     if (present(rmax)) xmax(1) = rmax
     if (present(thmin)) xmin(2) = thmin
     if (present(thmax)) xmax(2) = thmax
+    xmax(3) = twopi/nper
 
     h_r = (xmax(1)-xmin(1))/(n_r-1)
     h_th = (xmax(2)-xmin(2))/(n_th-1)
@@ -93,7 +95,7 @@ subroutine can_to_ref_meiss(xcan, xref)
     real(dp) :: lam
 
     call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-    xref(1) = xcan(1)
+    xref(1) = xcan(1)**2
     xref(2) = modulo(xcan(2), twopi)
     xref(3) = modulo(xcan(3) + lam, twopi)
 end subroutine can_to_ref_meiss
@@ -106,19 +108,19 @@ subroutine ref_to_can_meiss(xref, xcan)
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: lam, phi_old
+    real(dp) :: lam, dlam(3), phi_can_prev
     integer :: i
 
-    xcan(1) = xref(1)
+    xcan(1) = sqrt(xref(1))
     xcan(2) = modulo(xref(2), twopi)
     xcan(3) = modulo(xref(3), twopi)
 
-    ! TODO make this efficient with Newton
     do i=1, MAX_ITER
-        call evaluate_splines_3d(spl_lam_phi, xcan, lam)
-        phi_old = xcan(3)
-        xcan(3) = modulo(xref(3) - lam, twopi)
-        if (abs(xcan(3) - phi_old) < TOL) return
+        call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
+        phi_can_prev = xcan(3)
+        xcan(3) = phi_can_prev - (phi_can_prev + lam - xref(3))/(1d0 + dlam(3))
+!print *, abs(xcan(3) - phi_can_prev)
+        if (abs(xcan(3) - phi_can_prev) < TOL) return
     enddo
     print *, 'WARNING: ref_to_can_meiss did not converge after', MAX_ITER, 'iterations'
 end subroutine ref_to_can_meiss
@@ -140,6 +142,7 @@ subroutine init_transformation
     real(dp) :: y(2)
     integer :: i_r, i_th, i_phi, i_ctr
 
+    if (allocated(lam_phi)) deallocate(lam_phi, chi_gauge)
     allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
 
     i_ctr = 0
@@ -239,7 +242,7 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     ! TODO: Make this more efficient with slices
     ! TODO: Support not only VMEC field
     th = xmin(2) + h_th*(i_th-1)
-    call magfie%evaluate([r, th, phi], Acov, hcov, Bmod)
+    call field_noncan%evaluate([r, th, phi], Acov, hcov, Bmod)
 
     Ar = Acov(1)
     Ap = Acov(3)
@@ -254,8 +257,8 @@ subroutine init_canonical_field_components
     real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
     integer :: i_r, i_th, i_phi
 
-    allocate(Aphi(n_r,n_th,n_phi), Ath(n_r,n_th,n_phi))
-    allocate(hphi(n_r,n_th,n_phi), hth(n_r,n_th,n_phi))
+    allocate(Ath(n_r,n_th,n_phi), Aphi(n_r,n_th,n_phi))
+    allocate(hth(n_r,n_th,n_phi), hphi(n_r,n_th,n_phi))
     allocate(Bmod(n_r,n_th,n_phi))
 
     do i_phi=1,n_phi
@@ -270,7 +273,7 @@ subroutine init_canonical_field_components
                 xref(2) = modulo(xcan(2), twopi)
                 xref(3) = modulo(xcan(3) + lam, twopi)
 
-                call magfie%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
@@ -285,10 +288,6 @@ subroutine init_canonical_field_components
     call construct_splines_3d(xmin, xmax, hth, order, periodic, spl_hth)
     call construct_splines_3d(xmin, xmax, hphi, order, periodic, spl_hph)
     call construct_splines_3d(xmin, xmax, Bmod, order, periodic, spl_Bmod)
-
-    deallocate(Bmod)
-    deallocate(hphi, hth)
-    deallocate(Aphi, Ath)
 end subroutine init_canonical_field_components
 
 
