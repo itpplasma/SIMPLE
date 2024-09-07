@@ -69,7 +69,7 @@ module vmecin_sub
 !
   call nc_get(ncid, 'phi', phi)
   phi = -phi/(2*pi)  ! added by Christopher Albert, 2019-09-16 for correct normalization
-! TODO phi sign
+! TODO phi sign changed 2024-09-04, check further
   flux=phi(kparb)
   flux=flux*fac_b*fac_r**2
   phi=phi*fac_b*fac_r**2
