@@ -94,6 +94,12 @@ target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:interpolate>)
 add_subdirectory(libneo/src/polylag neo_polylag)
 target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_polylag>)
 
+add_subdirectory(libneo/src/hdf5_tools)
+target_link_libraries(simple PUBLIC hdf5_tools)
+
+add_subdirectory(libneo/src/interpolate interpolate)
+target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:interpolate>)
+
 add_subdirectory(libneo/src/field neo_field)
 add_dependencies(neo_field neo_polylag interpolate hdf5_tools)
 target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_field>)
