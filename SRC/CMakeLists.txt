@@ -57,40 +57,6 @@ else()
 	)
 endif()
 
-### Find HDF5
-find_package(HDF5 COMPONENTS Fortran Fortran_HL)
-if (NOT ${HDF5_FOUND})
-	message(FATAL_ERROR "HDF5 not found, please set environment variable HDF5_ROOT to the correct path")
-endif ()
-
-if (APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-  message(STATUS "Apple M1 detected, fixing paths to Fortran HDF5 libraries")
-  set(HDF5_LIBRARIES /opt/homebrew/lib/libhdf5_fortran.dylib)
-  set(HDF5_HL_LIBRARIES /opt/homebrew/lib/libhdf5_hl_fortran.dylib)
-endif()
-
-# Set variables in parent scope, so find_package is not needed there
-set(HDF5_INCLUDE_DIRS ${HDF5_INCLUDE_DIRS} PARENT_SCOPE)
-set(HDF5_LIBRARIES ${HDF5_LIBRARIES} PARENT_SCOPE)
-set(HDF5_HL_LIBRARIES ${HDF5_HL_LIBRARIES} PARENT_SCOPE)
-
-
-message(STATUS "HDF5 include dirs: ${HDF5_INCLUDE_DIRS}")
-message(STATUS "HDF5 libraries: ${HDF5_LIBRARIES}")
-message(STATUS "HDF5 HL libraries: ${HDF5_HL_LIBRARIES}")
-
-include_directories(${HDF5_INCLUDE_DIRS})
-
-add_library(hdf5_tools
-    libneo/src/hdf5_tools/hdf5_tools.f90
-	libneo/src/hdf5_tools/hdf5_tools_f2003.f90
-)
-target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:hdf5_tools>)
-target_link_libraries(simple PUBLIC ${HDF5_LIBRARIES} ${HDF5_HL_LIBRARIES})
-
-add_subdirectory(libneo/src/interpolate interpolate)
-target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:interpolate>)
-
 add_subdirectory(libneo/src/polylag neo_polylag)
 target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_polylag>)
 
