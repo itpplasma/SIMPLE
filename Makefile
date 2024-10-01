@@ -20,15 +20,28 @@ $(CMAKE_CACHE): libneo
 # Clone libneo if it doesn't exist, or update it if it does
 LIBNEO_PATH := SRC/libneo
 LIBNEO_REPO := https://github.com/itpplasma/libneo.git
+define checkout_branch
+	BRANCH_NAME="$(1)"; \
+	if git fetch origin "$$BRANCH_NAME" >/dev/null 2>&1; then \
+		echo "Branch $$BRANCH_NAME exists upstream. Checking it out..."; \
+		git checkout "$$BRANCH_NAME"; \
+	else \
+		echo "Branch $$BRANCH_NAME does not exist upstream. Checking out main branch..."; \
+		git checkout main; \
+	fi
+endef
 libneo:
-	@if [ ! -d $(LIBNEO_PATH) ]; then \
+	@SIMPLE_BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ ! -d $(LIBNEO_PATH) ]; then \
 		echo "Cloning libneo repository..."; \
 		git clone $(LIBNEO_REPO) $(LIBNEO_PATH); \
+		cd $(LIBNEO_PATH) && $(call checkout_branch,$$SIMPLE_BRANCH); \
 	elif [ -L $(LIBNEO_PATH) ]; then \
 		echo "libneo is a symlink. Skipping clone..."; \
 	elif [ -d $(LIBNEO_PATH)/.git ]; then \
 		echo "libneo exists, pulling latest changes..."; \
-		cd $(LIBNEO_PATH) && git pull origin main; \
+		cd $(LIBNEO_PATH) && $(call checkout_branch,$$SIMPLE_BRANCH); \
+		git pull; \
 	else \
 		echo "libneo already exists as a non-git directory. Skipping update..."; \
 	fi
