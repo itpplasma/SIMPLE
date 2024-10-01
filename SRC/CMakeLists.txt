@@ -1,7 +1,6 @@
 add_subdirectory(contrib)
 
 set(SOURCES
-    libneo/src/interpolate.f90
     coordinates/coordinates.f90
     field/field_base.f90
     field/field_coils.f90
@@ -58,9 +57,12 @@ else()
 	)
 endif()
 
+add_subdirectory(libneo/src/interpolate interpolate)
+target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:interpolate>)
+
 add_subdirectory(libneo/src/polylag neo_polylag)
 target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_polylag>)
 
 add_subdirectory(libneo/src/field neo_field)
-add_dependencies(neo_field neo_polylag)
+add_dependencies(neo_field neo_polylag interpolate)
 target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_field>)
