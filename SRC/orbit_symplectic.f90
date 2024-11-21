@@ -2,8 +2,8 @@ module orbit_symplectic
 
 use util, only: pi, twopi
 use orbit_symplectic_base
-use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_euler1_quasi, &
-  timestep_euler2_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
+use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
+  timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use vector_potentail_mod, only: torflux
 
@@ -45,11 +45,11 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
     case (0)
       orbit_timestep_quasi => orbit_timestep_rk45
     case (1)
-      orbit_timestep_sympl => orbit_timestep_sympl_euler1
-      orbit_timestep_quasi => timestep_euler1_quasi
+      orbit_timestep_sympl => orbit_timestep_sympl_expl_impl_euler
+      orbit_timestep_quasi => timestep_expl_impl_euler_quasi
     case (2)
-      orbit_timestep_sympl => orbit_timestep_sympl_euler2
-      orbit_timestep_quasi => timestep_euler2_quasi
+      orbit_timestep_sympl => orbit_timestep_sympl_impl_expl_euler
+      orbit_timestep_quasi => timestep_impl_expl_euler_quasi
     case (3)
       orbit_timestep_sympl => orbit_timestep_sympl_midpoint
       orbit_timestep_quasi => timestep_midpoint_quasi
@@ -1209,7 +1209,7 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_timestep_sympl_euler1(si, f, ierr)
+subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
 !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
@@ -1262,12 +1262,12 @@ subroutine orbit_timestep_sympl_euler1(si, f, ierr)
     ktau = ktau+1
   enddo
 
-end subroutine orbit_timestep_sympl_euler1
+end subroutine orbit_timestep_sympl_expl_impl_euler
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine orbit_timestep_sympl_euler2(si, f, ierr)
+subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
 !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
@@ -1324,7 +1324,7 @@ subroutine orbit_timestep_sympl_euler2(si, f, ierr)
     ktau = ktau+1
   enddo
 
-end subroutine orbit_timestep_sympl_euler2
+end subroutine orbit_timestep_sympl_impl_expl_euler
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
