@@ -4,20 +4,7 @@ import numpy as np
 from scipy.optimize import root
 from scipy.interpolate import lagrange
 import common
-from common import (
-    f,
-    r0,
-    th0,
-    ph0,
-    pph0,
-    timesteps,
-    get_val,
-    get_der,
-    mu,
-    qe,
-    m,
-    c,
-)
+from common import (f,r0,th0,ph0,pph0,timesteps,get_val,get_der,mu,qe,m,c,)
 from plotting import plot_orbit, plot_cost_function
 
 dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
@@ -48,66 +35,31 @@ def Newton(x, zold, eq2, eq3):
         f.evaluate(x[0], x[1], zold[2])
         cov = calc_fields(x[2])
 
-        eq1 = -(
-            cov["dA2"][0] * (x[1] - zold[1])
-            - dt * (cov["dB"][0] + cov["dPhie"][0])
-        ) / (cov["dA3"][0])
-        deq1 = np.array(
-            [
-                -(
-                    cov["d2A2"][0] * (x[1] - zold[1])
-                    - dt * (cov["d2B"][0] + cov["d2Phie"][0])
-                )
-                / (cov["dA3"][0])
-                + (
-                    cov["dA2"][0] * (x[1] - zold[1])
-                    - dt * (cov["dB"][0] + cov["dPhie"][0])
-                )
-                / (cov["dA3"][0]) ** 2
+        eq1 = -(cov["dA2"][0] * (x[1] - zold[1]) - dt * (cov["dB"][0] + cov["dPhie"][0])) / (cov["dA3"][0])
+        deq1 = np.array([
+                - (cov["d2A2"][0] * (x[1] - zold[1]) - dt * (cov["d2B"][0] + cov["d2Phie"][0])) / (cov["dA3"][0])
+                + (cov["dA2"][0] * (x[1] - zold[1]) - dt * (cov["dB"][0] + cov["dPhie"][0])) / (cov["dA3"][0]) ** 2
                 * cov["d2A3"][0],
-                -(
-                    cov["d2A2"][3] * (x[1] - zold[1])
-                    + cov["dA2"][0]
-                    - dt * (cov["d2B"][3] + cov["d2Phie"][3])
-                )
-                / (cov["dA3"][0])
-                + (
-                    cov["dA2"][0] * (x[1] - zold[1])
-                    - dt * (cov["dB"][0] + cov["dPhie"][0])
-                )
-                / (cov["dA3"][0]) ** 2
+                - (cov["d2A2"][3] * (x[1] - zold[1]) + cov["dA2"][0] - dt * (cov["d2B"][3] + cov["d2Phie"][3])) / (cov["dA3"][0])
+                + (cov["dA2"][0] * (x[1] - zold[1]) - dt * (cov["dB"][0] + cov["dPhie"][0])) / (cov["dA3"][0]) ** 2
                 * cov["d2A3"][3],
-                -(m * f.dhth[0] * (x[1] - zold[1])) / (cov["dA3"][0])
-                + (
-                    cov["dA2"][0] * (x[1] - zold[1])
-                    - dt * (cov["dB"][0] + cov["dPhie"][0])
-                )
-                / (cov["dA3"][0]) ** 2
+                - (m * f.dhth[0] * (x[1] - zold[1])) / (cov["dA3"][0])
+                + (cov["dA2"][0] * (x[1] - zold[1]) - dt * (cov["dB"][0] + cov["dPhie"][0])) / (cov["dA3"][0]) ** 2
                 * (m * f.dhph[0]),
-            ]
-        )
+            ])
 
         F = np.zeros(3)
         F[0] = eq2 - cov["A2"]
         F[1] = eq3 - cov["A3"]
         F[2] = m * f.hth * (x[1] - zold[1]) + m * f.hph * eq1 - dt * x[2]
 
-        Jacobi = np.array(
-            [
+        Jacobi = np.array([
                 [-cov["dA2"][0], -cov["dA2"][1], -m * f.hth],
                 [-cov["dA3"][0], -cov["dA3"][1], -m * f.hph],
-                [
-                    m
-                    * (
-                        f.dhth[0] * (x[1] - zold[1])
-                        + f.dhph[0] * eq1
-                        + f.hph * deq1[0]
-                    ),
-                    m * (f.hth + f.dhph[1] * eq1 + f.hph * deq1[1]),
-                    m * f.hph * deq1[2] - dt,
-                ],
-            ]
-        )
+                [m * (f.dhth[0] * (x[1] - zold[1]) + f.dhph[0] * eq1 + f.hph * deq1[0]),
+                 m * (f.hth + f.dhph[1] * eq1 + f.hph * deq1[1]),
+                 m * f.hph * deq1[2] - dt],
+        ])
 
         delta = np.linalg.solve(Jacobi, -F)
 
