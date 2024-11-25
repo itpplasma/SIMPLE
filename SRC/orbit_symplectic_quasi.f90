@@ -226,7 +226,7 @@ end subroutine timestep_midpoint_quasi
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine timestep_euler1_quasi(ierr)
+subroutine timestep_expl_impl_euler_quasi(ierr)
   !
   integer, intent(out) :: ierr
 
@@ -276,13 +276,13 @@ subroutine timestep_euler1_quasi(ierr)
     ktau = ktau+1
   enddo
 
-end subroutine timestep_euler1_quasi
+end subroutine timestep_expl_impl_euler_quasi
 
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-subroutine timestep_euler2_quasi(ierr)
+subroutine timestep_impl_expl_euler_quasi(ierr)
 !
   integer, intent(out) :: ierr
 
@@ -330,7 +330,7 @@ subroutine timestep_euler2_quasi(ierr)
     ktau = ktau+1
   enddo
 
-end subroutine timestep_euler2_quasi
+end subroutine timestep_impl_expl_euler_quasi
 
 subroutine timestep_rk_gauss_quasi(s, ierr)
 !

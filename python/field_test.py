@@ -36,7 +36,7 @@ class field:
 
         self.hph  = R0 + r*cth
         self.dhph = array((cth, -r*sth, zer))
-        self.d2hph = array((zer, -r*cth, zer, -sth, zer) )
+        self.d2hph = array((zer, -r*cth, zer, -sth, zer, zer) )
 
         self.B    = B0*(1.0 - r/R0*cth)
         self.dB   = array((-B0/R0*cth, B0*r/R0*sth, zer))

@@ -19,8 +19,9 @@ double precision :: z0(4), vpar0, dt, taub
 
 type(FieldCan) :: f
 
-type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss2, gauss4, lobatto4, gauss6, gauss8
-type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6, kahan8
+type(SymplecticIntegrator) :: integ_euler1, integ_euler2, integ_midpoint, integ_gauss2, &
+    integ_gauss4, integ_lobatto4, integ_gauss6, integ_gauss8
+type(MultistageIntegrator) :: verlet, mclachlan4, blanes4, kahan6, kahan8
 
 ! Initial conditions
 z0(1) = 0.1d0  ! r
@@ -44,99 +45,92 @@ dt = taub/steps_per_bounce
 
 print *, 'timesteps: ', nbounce*steps_per_bounce
 
-call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1)
-call test_single(euler1, 'euler1.out')
+call orbit_sympl_init(integ_euler1, f, z0, dt, 1, 1d-12, 1)
+call test_single(integ_euler1, 'euler1.out')
 
 stop
-call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2)
-call test_single(euler2, 'euler2.out')
+call orbit_sympl_init(integ_euler2, f, z0, dt, 1, 1d-12, 2)
+call test_single(integ_euler2, 'euler2.out')
 print *, ''
 
-call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4)
-call test_single(gauss2, 'gauss2.out')
-call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3)
-call test_single(midpoint, 'midpoint.out')
+call orbit_sympl_init(integ_gauss2, f, z0, dt, 1, 1d-12, 4)
+call test_single(integ_gauss2, 'gauss2.out')
+call orbit_sympl_init(integ_midpoint, f, z0, dt, 1, 1d-12, 3)
+call test_single(integ_midpoint, 'midpoint.out')
 call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
 call test_multi(verlet, 'verlet.out')
 print *, ''
 
-call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_single(gauss4, 'gauss4.out')
+call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
+call test_single(integ_gauss4, 'gauss4.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi(mclachlan4, 'mclachlan4.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
 call test_multi(blanes4, 'blanes4.out')
-call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15)
-call test_single(lobatto4, 'lobatto4.out')
-call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_single(gauss6, 'gauss6.out')
+call orbit_sympl_init(integ_lobatto4, f, z0, dt, 1, 1d-12, 15)
+call test_single(integ_lobatto4, 'lobatto4.out')
+call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
+call test_single(integ_gauss6, 'gauss6.out')
 print *, ''
 
-call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_quasi(gauss4, 'gauss4q.out')
-call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_quasi(gauss6, 'gauss6q.out')
-call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15)
-call test_quasi(lobatto4, 'lobatto4q.out')
+call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
+call test_quasi(integ_gauss4, 'gauss4q.out')
+call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
+call test_quasi(integ_gauss6, 'gauss6q.out')
+call orbit_sympl_init(integ_lobatto4, f, z0, dt, 1, 1d-12, 15)
+call test_quasi(integ_lobatto4, 'lobatto4q.out')
 print *, ''
-stop
 
-! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-! call test_multi(order4, 'order4.out')
-!call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15)
-!call test_single(lobatto4, 'lobatto4.out')
-call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_single(gauss4, 'gauss4.out')
+call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
+call test_single(integ_gauss4, 'gauss4.out')
 print *, ''
 
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
 call test_multi(kahan6, 'kahan6.out')
-call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_single(gauss6, 'gauss6.out')
+call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
+call test_single(integ_gauss6, 'gauss6.out')
 print *, ''
 
 call orbit_sympl_init_kahan8(kahan8, f, z0, dt, 1, 1d-12)
 call test_multi(kahan8, 'kahan8.out')
-call orbit_sympl_init(gauss8, f, z0, dt, 1, 1d-12, 7)
-call test_single(gauss8, 'gauss8.out')
+call orbit_sympl_init(integ_gauss8, f, z0, dt, 1, 1d-12, 7)
+call test_single(integ_gauss8, 'gauss8.out')
 print *, ''
 
-call orbit_sympl_init(euler1, f, z0, dt, 1, 1d-12, 1)
-call test_quasi(euler1, 'euler1q.out')
-call orbit_sympl_init(euler2, f, z0, dt, 1, 1d-12, 2)
-call test_quasi(euler2, 'euler2q.out')
+call orbit_sympl_init(integ_euler1, f, z0, dt, 1, 1d-12, 1)
+call test_quasi(integ_euler1, 'euler1q.out')
+call orbit_sympl_init(integ_euler2, f, z0, dt, 1, 1d-12, 2)
+call test_quasi(integ_euler2, 'euler2q.out')
 print *, ''
 
 call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(verlet, 'verletq.out')
-call orbit_sympl_init(midpoint, f, z0, dt, 1, 1d-12, 3)
-call test_quasi(midpoint, 'midpointq.out')
-call orbit_sympl_init(gauss2, f, z0, dt, 1, 1d-12, 4)
-call test_quasi(gauss2, 'gauss2q.out')
+call orbit_sympl_init(integ_midpoint, f, z0, dt, 1, 1d-12, 3)
+call test_quasi(integ_midpoint, 'midpointq.out')
+call orbit_sympl_init(integ_gauss2, f, z0, dt, 1, 1d-12, 4)
+call test_quasi(integ_gauss2, 'gauss2q.out')
 print *, ''
 
-! call orbit_sympl_init_order4(order4, f, z0, dt, 1, 1d-12)
-! call test_multi_quasi(order4, 'order4q.out')
-call orbit_sympl_init(lobatto4, f, z0, dt, 1, 1d-12, 15)
-call test_quasi(lobatto4, 'lobatto4q.out')
+call orbit_sympl_init(integ_lobatto4, f, z0, dt, 1, 1d-12, 15)
+call test_quasi(integ_lobatto4, 'lobatto4q.out')
 call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(mclachlan4, 'mclachlan4q.out')
 call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(blanes4, 'blanes4q.out')
-call orbit_sympl_init(gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_quasi(gauss4, 'gauss4q.out')
+call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
+call test_quasi(integ_gauss4, 'gauss4q.out')
 print *, ''
 
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(kahan6, 'kahan6q.out')
-call orbit_sympl_init(gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_quasi(gauss6, 'gauss6q.out')
+call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
+call test_quasi(integ_gauss6, 'gauss6q.out')
 print *, ''
 
 call orbit_sympl_init_kahan8(kahan8, f, z0, dt, 1, 1d-12)
 call test_multi_quasi(kahan8, 'kahan8q.out')
-call orbit_sympl_init(gauss8, f, z0, dt, 1, 1d-12, 7)
-call test_quasi(gauss8, 'gauss8q.out')
+call orbit_sympl_init(integ_gauss8, f, z0, dt, 1, 1d-12, 7)
+call test_quasi(integ_gauss8, 'gauss8q.out')
 print *, ''
 
 contains
