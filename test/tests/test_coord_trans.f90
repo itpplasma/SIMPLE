@@ -228,16 +228,11 @@ subroutine init_starting_points
   close(1)
 end subroutine init_starting_points
 
-end program test_coord_trans
-
 !--------------------------------------------------
 
 subroutine testcoordtrans
 use get_can_sub
 !
-implicit none
-!
-double precision, parameter :: pi=3.14159265358979d0
 integer :: it,ip,nt,np,nper
 double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,ht,hp
 double precision :: vartheta_c_back,varphi_c_back
@@ -268,3 +263,5 @@ stop
 end subroutine testcoordtrans
 
 !-----------------------------------------
+
+end program test_coord_trans

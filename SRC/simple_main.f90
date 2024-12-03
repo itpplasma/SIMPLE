@@ -157,6 +157,7 @@ module simple_main
 
   subroutine init_starting_points
     use get_can_sub, only: can_to_vmec
+    use samplers, only: START_FILE
 
     integer :: i, ipart, iskip
 
@@ -169,7 +170,7 @@ module simple_main
       enddo
 
     ! files for storing starting coords
-    open(1,file='start.dat',recl=1024)
+    open(1,file=START_FILE,recl=1024)
     ! determine the starting point:
     if (startmode == 0 .or. startmode == 1) then
       do ipart=1,ntestpart
@@ -206,6 +207,8 @@ module simple_main
 
     use find_bminmax_sub, only : get_bminmax
     use get_can_sub, only: can_to_vmec
+    use samplers, only: START_FILE
+
 
     integer, parameter :: ns=1000
     integer :: ipart,iskip,is,s_idx,parts_per_s
@@ -233,7 +236,7 @@ module simple_main
       enddo
 
     ! files for storing starting coords
-    open(1,file='start.dat',recl=1024)
+    open(1,file=START_FILE,recl=1024)
     ! determine the starting point:
     if (startmode == 0 .or. startmode == 1) then
       print *, "Initialising for", num_surf, "surfaces."
