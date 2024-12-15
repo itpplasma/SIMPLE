@@ -86,6 +86,7 @@ else()
 	if (INCLUDE_OPENMP)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
 		add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+	endif()
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
 		add_compile_options(-O0 -g -ggdb

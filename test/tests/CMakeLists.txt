@@ -16,6 +16,7 @@ if (INCLUDE_OPENMP)
     target_link_libraries(test_sympl_tok.x simple)
     add_executable (test_sympl.x test_sympl_stell.f90)
     target_link_libraries(test_sympl.x simple)
+endif()
 
 add_executable (test_coord_trans.x test_coord_trans.f90)
 target_link_libraries(test_coord_trans.x simple)
