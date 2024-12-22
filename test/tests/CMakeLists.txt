@@ -11,7 +11,7 @@ add_library(testing_utils ${CMAKE_CURRENT_SOURCE_DIR}/utility.f90 ${CMAKE_CURREN
 add_executable(utility_test.x utility_test.f90)
 target_link_libraries(utility_test.x testing_utils)
 
-if (INCLUDE_OPENMP)
+if (ENABLE_OPENMP)
     add_executable (test_sympl_tok.x test_sympl.f90)
     target_link_libraries(test_sympl_tok.x simple)
     add_executable (test_sympl.x test_sympl_stell.f90)
