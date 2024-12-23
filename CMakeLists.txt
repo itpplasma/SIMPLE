@@ -19,6 +19,7 @@ endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
+option(ENABLE_OPENMP "Enable build for openmp (if off some features are unavailable)." ON)
 
 set(CMAKE_MACOSX_RPATH 1)
 
@@ -81,9 +82,11 @@ else()
 	add_compile_options(-Wall -Wextra -Wimplicit-interface -fPIC -fmax-errors=5)
 	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-Wno-unused-dummy-argument>)
 	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
-	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
 	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
+	if (ENABLE_OPENMP)
+		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+		add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+	endif()
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
 		add_compile_options(-O0 -g -ggdb
