@@ -7,6 +7,10 @@ implicit none
 
 logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
+! Integration methods
+integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
+  MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
+
 type :: SymplecticIntegrator
   double precision :: atol
   double precision :: rtol
