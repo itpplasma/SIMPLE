@@ -18,7 +18,9 @@ function(find_or_fetch DEPENDENCY)
             GIT_REPOSITORY ${REPO_URL}
             GIT_TAG ${REMOTE_BRANCH}
         )
-        FetchContent_MakeAvailable(${DEPENDENCY})
+        FetchContent_Populate(${DEPENDENCY})
+
+        add_subdirectory(${${DEPENDENCY}_SOURCE_DIR} EXCLUDE_FROM_ALL)
     endif()
 endfunction()
 
