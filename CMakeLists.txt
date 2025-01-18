@@ -8,7 +8,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
-include(FetchLibneo)
+include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set	(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -59,6 +59,7 @@ add_link_options(${NETCDF_FLIBS})
 
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
+find_or_fetch(libneo)
 
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
