@@ -245,7 +245,7 @@ module simple_main
           parts_per_s = int(ntestpart/num_surf)
           s_idx = (ipart/parts_per_s)+1
           r = sbeg(s_idx)
-        else ! Should not happen (as we are not in "local mode"), however let's catch it anyway.
+        else ! Should not happen (as we are not in "local mode"), however let us catch it anyway.
           r = sbeg(1)
         endif
 
