@@ -2,10 +2,7 @@ include(FetchContent)
 
 function(find_or_fetch DEPENDENCY)
     if(DEFINED ENV{CODE})
-        add_subdirectory($ENV{CODE}/${DEPENDENCY}
-            ${CMAKE_CURRENT_BINARY_DIR}/${DEPENDENCY}
-            EXCLUDE_FROM_ALL
-        )
+        set(${DEPENDENCY}_SOURCE_DIR $ENV{CODE}/${DEPENDENCY})
         message(STATUS "Using ${DEPENDENCY} in $ENV{CODE}/${DEPENDENCY}")
     else()
         set(REPO_URL https://github.com/itpplasma/${DEPENDENCY}.git)
@@ -19,9 +16,12 @@ function(find_or_fetch DEPENDENCY)
             GIT_TAG ${REMOTE_BRANCH}
         )
         FetchContent_Populate(${DEPENDENCY})
-
-        add_subdirectory(${${DEPENDENCY}_SOURCE_DIR} EXCLUDE_FROM_ALL)
     endif()
+
+    add_subdirectory(${${DEPENDENCY}_SOURCE_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}/${DEPENDENCY}
+        EXCLUDE_FROM_ALL
+    )
 endfunction()
 
 
