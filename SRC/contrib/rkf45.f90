@@ -1124,7 +1124,6 @@ subroutine r8_rkf45 ( f, neqn, y, yp, t, tout, relerr, abserr, flag )
 
 ! Thread safety
 !$omp threadprivate(abserr_save,h,flag_save,init,kflag,kop,nfe,relerr_save)
-
 !
 !  Check the input parameters.
 !
