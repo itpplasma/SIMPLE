@@ -38,3 +38,8 @@ examples/test2/
 Testing/
 *.swp
 SRC/libneo
+.geany
+tests/times_lost_*
+*/tests/simple.in
+*/tests/wout*
+*/tests/start.dat
