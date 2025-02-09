@@ -126,20 +126,22 @@ module samplers
   !END FUNCTION sample_surface_regular_grid
   ! Interface #################################
 
-!  INTERFACE sample
+  INTERFACE sample
+    
+    !load_starting_points(zstart)
+    FUNCTION sample_surface_read(zstart)
+      double precision, dimension(:,:), intent(inout) :: zstart
+    END FUNCTION sample_surface_read
 
-!    FUNCTION sample_surface_read()
-!    END FUNCTION sample_surface_read
+    FUNCTION sample_surface_fieldline(n_start)
+      integer, intent(in) :: n_start
+    END FUNCTION sample_surface_fieldline
 
-!    FUNCTION sample_surface_fieldline(n_start)
-!      integer, intent(in) :: n_start
-!    END FUNCTION sample_surface_fieldline
+    FUNCTION sample_volume_single(n_start, s_inner, s_outer)
+      integer, intent(in) :: n_start
+      real, intent(in) :: s_inner
+      real, intent(in) :: s_outer
+    END FUNCTION sample_volume_single
 
-!    FUNCTION sample_volume_single(n_start, s_inner, s_outer)
-!      integer, intent(in) :: n_start
-!      real, intent(in) :: s_inner
-!      real, intent(in) :: s_outer
-!    END FUNCTION sample_volume_single
-
-!  END INTERFACE sample
+  END INTERFACE sample
 end module samplers
