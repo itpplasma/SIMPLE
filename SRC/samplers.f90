@@ -7,8 +7,9 @@ module samplers
 
   contains
   ! Functions #################################
-  subroutine load_starting_points(zstart)
+  subroutine load_starting_points(zstart, filename)
     double precision, dimension(:,:), intent(inout) :: zstart
+    character(len=*), parameter, intent(in) :: filename = START_FILE
     integer :: ipart
 
     open(1,file=START_FILE,recl=1024)
@@ -124,14 +125,49 @@ module samplers
   !  !TODO is the grid one above this one? then what is the grid one?
 
   !END FUNCTION sample_surface_regular_grid
+  
+  
+  subroutine sample_random_batch(idx_begin, idx_end, zstart)
+  ! Get random batch from preexisting zstart, allows reuse.
+    use params, only: batch_size, reuse_batch, ntestpart
+    
+    integer :: ran_begin, ran_end, ipart
+    integer, intent(in) :: idx_begin, idx_end
+    double precision, dimension(:,:) :: zstart_batch
+    double precision, dimension(:,:), intent(inout) :: zstart
+    
+    
+    call load_starting_points(zstart_batch, START_FILE)
+    if (reuse_batch.eq.1) then
+      do ipart=idx_begin, idx_end
+        zstart(:,ipart-idx_begin) = zstart_batch(:,ipart)
+      enddo
+    else
+      call random_number(ran_begin)
+      ran_end = ran_begin+batch_size
+      if ((ran_end).gt.(ntestpart)) then
+        ran_begin = ran_begin - (ran_end-ntestpart)
+      endif
+      do ipart=0,batch_size
+        zstart(:,ipart) = zstart_batch(:,(ipart+ran_begin))
+      enddo
+    endif 
+    
+    do ipart=idx(0),idx(ntestpart)
+      read(1,*) zstart(:,ipart)
+    enddo
+    
+    deallocate(zstart_batch)
+    
+  end subroutine
   ! Interface #################################
 
   INTERFACE sample
     
-    !load_starting_points(zstart)
-    FUNCTION sample_surface_read(zstart)
+    FUNCTION sample_read(zstart, filename)
       double precision, dimension(:,:), intent(inout) :: zstart
-    END FUNCTION sample_surface_read
+      character(len=*), parameter, intent(in) :: filename = START_FILE
+    END FUNCTION sample_read
 
     FUNCTION sample_surface_fieldline(n_start)
       integer, intent(in) :: n_start
@@ -142,6 +178,11 @@ module samplers
       real, intent(in) :: s_inner
       real, intent(in) :: s_outer
     END FUNCTION sample_volume_single
+    
+    FUNCTION sample_random_batch(idx_begin, idx_end, zstart)
+      integer, intent(in) :: idx_begin, idx_end
+      double precision, dimension(:,:), intent(inout) :: zstart
+    END FUNCTION
 
   END INTERFACE sample
 end module samplers
