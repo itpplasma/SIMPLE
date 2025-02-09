@@ -107,8 +107,6 @@ set(F2PY_MODULE_C "${F2PY_MODULE_NAME}module.c")
 set(GENERATED_MODULE_FILE "${F2PY_MODULE_NAME}.${Python_SOABI}")
 set(F2PY_WRAPPERS "${CMAKE_CURRENT_BINARY_DIR}/${F2PY_MODULE_C}")
 
-add_custom_target(F90WrapOutput)
-
 foreach (file_to_wrap ${FILES_TO_WRAP})
     get_filename_component(basename ${file_to_wrap} NAME_WE)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
