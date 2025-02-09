@@ -9,6 +9,7 @@ module samplers
     
     MODULE PROCEDURE sample_volume_single
     MODULE PROCEDURE sample_surface_fieldline
+    MODULE PROCEDURE sample_random_batch
 
   END INTERFACE sample
 
@@ -56,71 +57,49 @@ module samplers
       vartheta=twopi*tmp_rand
       call random_number(tmp_rand)
       varphi=twopi*tmp_rand
-! we store starting points in VMEC coordinates:
-      if(isw_field_type.eq.0) then
-          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.1) then
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-      elseif(isw_field_type.eq.2) then
-          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      else
-          print *,'init_starting_points: unknown field type'
-      endif
-  !
+
+      !zstart is in VMEC-coordinates, a case construct on `isw_field_type` is here
+      select case(isw_field_type)
+        case(0,2,3)
+          theta_vmec = vartheta
+          varphi_vmec = varphi
+        case(1,11) !boozer
+          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec) 
+        case(21,31,32) !can
+          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec) 
+      end select
       zstart(1,ipart)=r
       zstart(2,ipart)=theta_vmec
       zstart(3,ipart)=varphi_vmec
-      ! normalized velocity module z(4) = v / v_0:
-      zstart(4,ipart)=1.d0
-      ! starting pitch z(5)=v_\parallel / v:
-      call random_number(tmp_rand)
-      zstart(5,ipart)=2.d0*(tmp_rand-0.5d0)
+      zstart(4,ipart)=1.0d-3
+      zstart(5,ipart)=1.0d0
+
     enddo
 
+    !save to file
     call save_starting_points(zstart)
 
   end subroutine sample_volume_single
 
   subroutine sample_surface_fieldline(zstart)
-    use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
-    use boozer_sub, only: boozer_to_vmec
-    use get_can_sub, only: can_to_vmec
-    use binsrc_sub, only: binsrc
-
     double precision, dimension(:,:), intent(inout) :: zstart
+    integer :: ipart
 
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
-    double precision :: xi
-    integer :: ipart, i
+    !to implement
+    print *,"WARNING sample_surface_fieldline  not yet implemented!"
+    !NEEDS: flux surface in canonical coordinates!!!!!!!!!!
 
+    print *,"STUB: start points on a r=0.1 flux surface on field line in Boozer on phi-theta-grid"
     do ipart=1,size(zstart,2)
-      call random_number(xi)
-      call binsrc(volstart,1,npoiper*nper,xi,i)
-      ibins=i
-      ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
-      r=xstart(1,i)
-      vartheta=xstart(2,i)
-      varphi=xstart(3,i)
-
-      ! we store starting points in VMEC coordinates:
-      if(isw_field_type.eq.0) then
-        call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.1) then
-        theta_vmec=vartheta
-        varphi_vmec=varphi
-      elseif(isw_field_type.eq.2) then
-        call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      else
-        print *,'init_starting_points: unknown field type'
-      endif
-
-      zstart(1,ipart)=r
-      zstart(2,ipart)=theta_vmec
-      zstart(3,ipart)=varphi_vmec
-      zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
-      call random_number(xi)
-      zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
+      ! this assumes particles on a canonical flux surface
+      ! on Boozer this means constant Aphi and Ath
+      ! where Aphi= psi_tor - aiota * psi_pol = Psi - aiota * Psi_pol;
+      ! Psi is the toroidal flux devided by 2 pi normalized to 1 at the boundary
+      zstart(1,ipart)=0.1d0
+      zstart(2,ipart)=twopi/size(zstart,2)*dble(ipart)
+      zstart(3,ipart)=twopi/size(zstart,2)*dble(ipart)
+      zstart(4,ipart)=1.0d-3
+      zstart(5,ipart)=1.0d0
     enddo
 
     call save_starting_points(zstart)
@@ -131,4 +110,39 @@ module samplers
   !  !TODO is the grid one above this one? then what is the grid one?
 
   !END FUNCTION sample_surface_regular_grid
+  
+  
+  subroutine sample_random_batch(idx_begin, idx_end, zstart)
+  ! Get random batch from preexisting zstart, allows reuse.
+    use params, only: batch_size, reuse_batch, ntestpart
+    
+    integer :: ran_begin, ran_end, ipart
+    integer, intent(in) :: idx_begin, idx_end
+    double precision :: tmp_rand
+    double precision, dimension(:,:), allocatable :: zstart_batch
+    double precision, dimension(:,:), intent(inout) :: zstart
+    
+    allocate(zstart_batch(size(zstart,1), ntestpart))
+    call load_starting_points(zstart_batch)
+    if (reuse_batch) then
+      do ipart=idx_begin, idx_end
+        zstart(:,ipart-idx_begin+1) = zstart_batch(:,ipart)
+      enddo
+    else
+      call random_number(tmp_rand)
+      ran_begin = int(tmp_rand * (ntestpart - batch_size)) + 1
+      ran_end = ran_begin+batch_size-1
+      if (ran_end.gt.ntestpart) then
+        ran_begin = ran_begin - (ran_end-ntestpart)
+        ran_end = ntestpart
+      endif
+      do ipart=1,batch_size
+        zstart(:,ipart) = zstart_batch(:,ran_begin+ipart-1)
+      enddo
+    endif 
+    
+    deallocate(zstart_batch)
+    
+  end subroutine sample_random_batch
+
 end module samplers
