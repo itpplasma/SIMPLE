@@ -5,6 +5,7 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
+  use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
   use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
@@ -186,17 +187,12 @@ module simple_main
         write(1,*) zstart(:,ipart)
       enddo
     else if (startmode == 2) then
-      do ipart=1,ntestpart
-        read(1,*) zstart(:,ipart)
-      enddo
+      sample(zstart, START_FILE)
     else if (startmode == 3) then  ! ANTS input mode
       call init_starting_points_ants(1)
     else if (startmode == 4) then
-      !select only the indices from batch and overwrite zstart.
-      do ipart=idx(0),idx(ntestpart)
-        read(1,*) zstart(:,ipart)
-      enddo
-      ! indices no longer needed
+      sample(idx(0),idx(ntestpart),zstart)
+      !idx is no longer needed
       deallocate(idx)
     endif
 
@@ -266,16 +262,11 @@ module simple_main
         write(1,*) zstart(:,ipart)
       enddo
     else if (startmode == 2) then
-      do ipart=1,ntestpart
-        read(1,*) zstart(:,ipart)
-      enddo
+      sample(zstart, START_FILE)
     else if (startmode == 3) then  ! ANTS input mode
       call init_starting_points_ants(1)
     else if (startmode == 4) then
-      !select only the indices from batch and overwrite zstart.
-      do ipart=idx(0),idx(ntestpart)
-        read(1,*) zstart(:,ipart)
-      enddo
+      sample(idx(0),idx(ntestpart),zstart)
       ! indices no longer needed
       deallocate(idx)
     endif
