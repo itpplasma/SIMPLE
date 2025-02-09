@@ -5,6 +5,13 @@ module samplers
 
   character(len=*), parameter :: START_FILE = 'start.dat'
 
+  INTERFACE sample
+    
+    MODULE PROCEDURE sample_volume_single
+    MODULE PROCEDURE sample_surface_fieldline
+
+  END INTERFACE sample
+
   contains
   ! Functions #################################
   subroutine load_starting_points(zstart)
@@ -124,22 +131,4 @@ module samplers
   !  !TODO is the grid one above this one? then what is the grid one?
 
   !END FUNCTION sample_surface_regular_grid
-  ! Interface #################################
-
-!  INTERFACE sample
-
-!    FUNCTION sample_surface_read()
-!    END FUNCTION sample_surface_read
-
-!    FUNCTION sample_surface_fieldline(n_start)
-!      integer, intent(in) :: n_start
-!    END FUNCTION sample_surface_fieldline
-
-!    FUNCTION sample_volume_single(n_start, s_inner, s_outer)
-!      integer, intent(in) :: n_start
-!      real, intent(in) :: s_inner
-!      real, intent(in) :: s_outer
-!    END FUNCTION sample_volume_single
-
-!  END INTERFACE sample
 end module samplers

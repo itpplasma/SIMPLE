@@ -5,8 +5,8 @@
   use simple_main, only : init_field
   use boozer_coordinates_mod, only : use_B_r, use_del_tp_B
   use new_vmec_stuff_mod,   only : nper
-  use boozer_sub, only : splint_boozer_coord, boozer_converter, &
-    delthe_delphi_bv, vmec_to_boozer, boozer_to_vmec
+  use boozer_sub, only : get_boozer_coordinates, splint_boozer_coord, &
+    vmec_to_boozer, boozer_to_vmec, delthe_delphi_BV
 !
   implicit none
 !

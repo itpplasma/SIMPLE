@@ -1,6 +1,9 @@
 module boozer_sub
   implicit none
 
+  public :: get_boozer_coordinates, splint_boozer_coord
+  public :: vmec_to_boozer, boozer_to_vmec, delthe_delphi_BV
+
   contains
 !
   subroutine get_boozer_coordinates
