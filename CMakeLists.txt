@@ -2,7 +2,13 @@
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
 cmake_minimum_required (VERSION 3.12)
-project (SIMPLE Fortran C)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+
+project (SIMPLE)
+enable_language(C Fortran)
+
+include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set	(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -19,6 +25,7 @@ endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
+option(ENABLE_OPENMP "Enable build for openmp (if off some features are unavailable)." ON)
 
 set(CMAKE_MACOSX_RPATH 1)
 
@@ -52,6 +59,7 @@ add_link_options(${NETCDF_FLIBS})
 
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
+find_or_fetch(libneo)
 
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
@@ -81,9 +89,11 @@ else()
 	add_compile_options(-Wall -Wextra -Wimplicit-interface -fPIC -fmax-errors=5)
 	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-Wno-unused-dummy-argument>)
 	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
-	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
 	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
+	if (ENABLE_OPENMP)
+		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+		add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+	endif()
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
 		add_compile_options(-O0 -g -ggdb

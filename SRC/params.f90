@@ -5,7 +5,8 @@ module params
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : eval_field => evaluate, FieldCan
-  use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator
+  use orbit_symplectic_base, only : SymplecticIntegrator, MultistageIntegrator, &
+    EXPL_IMPL_EULER
   use vmecin_sub, only : stevvo
   use callback, only : output_error, output_orbits_macrostep
 
@@ -28,7 +29,8 @@ module params
   integer          :: startmode=1
 
   integer :: ntau ! number of dtaumin in dtau
-  integer :: integmode = 1 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+
+  integer :: integmode = EXPL_IMPL_EULER
 
   integer :: kpart = 0 ! progress counter for particles
 

@@ -54,19 +54,13 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple PRIVATE CONTRIB netcdf netcdff)
 else()
 	target_link_libraries(simple PUBLIC
-		netcdf netcdff CONTRIB ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+		netcdf netcdff CONTRIB BLAS::BLAS LAPACK::LAPACK
 	)
 endif()
 
-add_subdirectory(libneo/src/polylag neo_polylag)
-target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_polylag>)
-
-add_subdirectory(libneo/src/hdf5_tools)
-target_link_libraries(simple PUBLIC hdf5_tools)
-
-add_subdirectory(libneo/src/interpolate interpolate)
-target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:interpolate>)
-
-add_subdirectory(libneo/src/field neo_field)
-add_dependencies(neo_field neo_polylag interpolate hdf5_tools)
-target_link_libraries(simple PUBLIC $<TARGET_OBJECTS:neo_field>)
+target_link_libraries(simple PUBLIC
+    LIBNEO::hdf5_tools
+    LIBNEO::interpolate
+    LIBNEO::field
+    LIBNEO::polylag
+)
