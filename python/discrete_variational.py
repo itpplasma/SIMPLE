@@ -7,8 +7,9 @@ import common
 from common import (f,r0,th0,ph0,pph0,timesteps,get_val,get_der,mu,qe,m,c,)
 from plotting import plot_orbit, plot_cost_function
 
-dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
 
+
+dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
 z = np.zeros([3, nt + 1])
 z[:, 0] = [r0, th0, ph0]
 [H, pth, vpar] = get_val(np.array([r0, th0, ph0, pph0]))
