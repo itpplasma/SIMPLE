@@ -38,7 +38,7 @@ def velo_cpp(t, z, mu0ovm):
     zdot[3] = z[4] * B[2] - z[5] * B[1] - mu0ovm * dBmod[0]
     zdot[4] = z[5] * B[0] - z[3] * B[2] - mu0ovm * dBmod[1]
     zdot[5] = z[3] * B[1] - z[4] * B[0] - mu0ovm * dBmod[2]
-
+ 
     return zdot
 
 

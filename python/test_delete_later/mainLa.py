@@ -1,3 +1,4 @@
+# %%
 from numba import njit
 from field import afield_simple, bfield_simple, bmod_simple
 from scipy.integrate import solve_ivp

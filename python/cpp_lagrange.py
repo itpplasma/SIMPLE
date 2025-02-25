@@ -11,7 +11,7 @@ dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
 
 print(dt)
 print(nt)
-dt = 1
+dt = 8
 nt = 5000
 
 z = np.zeros([3, nt + 1])
@@ -24,6 +24,18 @@ vold = v
 metric = lambda z: {
     "_11": 1,
     "_22": z[0]**2,
+    "_33": (1 + z[0]*np.cos(z[1]))**2,
+    "^11": 1,
+    "^22": 1/z[0]**2,
+    "^33": 1/(1 + z[0]*np.cos(z[1]))**2,
+    "d_11": [0,0,0],
+    "d_22": [2*z[0], 0,0],
+    "d_33": [2*(1+z[0]*np.cos(z[1]))*np.cos(z[1]), -2*(1+z[0]*np.cos(z[1]))*np.sin(z[1]), 0],
+}
+'''
+metric = lambda z: {
+    "_11": 1,
+    "_22": z[0]**2,
     "_33": z[0]**2 * np.sin(z[1])**2,
     "^11": 1,
     "^22": 1/z[0]**2,
@@ -32,8 +44,7 @@ metric = lambda z: {
     "d_22": [2*z[0], 0,0],
     "d_33": [2*z[0]*np.sin(z[1])**2, 2*z[0]**2 * np.sin(z[1])*np.cos(z[1]), 0],
 }
-
-
+'''
 
 
 def implicit_v(v, vold, dAth, dAph, dB, g):
@@ -70,6 +81,7 @@ for kt in range(nt):
 
 
 plot_orbit(z)
+plt.plot(z[0,:5]*np.cos(z[1,:5]), z[0,:5]*np.sin(z[1,:5]), "o")
 plt.show()
 
 

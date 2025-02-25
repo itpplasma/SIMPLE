@@ -11,34 +11,23 @@ dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
 
 print(dt)
 print(nt)
-dt = 0.01
-nt = 5000
+dt = 1.9
+nt = 10000
 
 z = np.zeros([3, nt + 1])
 z[:, 0] = [r0, th0, ph0]
 
-f.evaluate(r0, th0, ph0)
-p = np.zeros(3)
-p[0] = 0
-p[1] = qe/(m*c) * f.Ath
-p[2] = qe/(m*c) * f.Aph
-
-pold = p
-
 metric = lambda z: {
     "_11": 1,
     "_22": z[0]**2,
-    "_33": z[0]**2 * np.sin(z[1])**2,
+    "_33": (1 + z[0]*np.cos(z[1]))**2,
     "^11": 1,
     "^22": 1/z[0]**2,
-    "^33": 1/(z[0]**2 * np.sin(z[1])**2),
+    "^33": 1/(1 + z[0]*np.cos(z[1]))**2,
     "d_11": [0,0,0],
     "d_22": [2*z[0], 0,0],
-    "d_33": [2*z[0]*np.sin(z[1])**2, 2*z[0]**2 * np.sin(z[1])*np.cos(z[1]), 0],
+    "d_33": [2*(1+z[0]*np.cos(z[1]))*np.cos(z[1]), -2*(1+z[0]*np.cos(z[1]))*np.sin(z[1]), 0],
 }
-
-
-
 
 def implicit_p(p, pold, Ath, Aph, dB, dAth, dAph, g):
     ret = np.zeros(3)
@@ -54,34 +43,42 @@ def implicit_p(p, pold, Ath, Aph, dB, dAth, dAph, g):
 
     return ret
 
-
+#Initial Conditions 
+f.evaluate(r0, th0, ph0)
+g = metric(z[:,0])
+p = np.zeros(3)
+p[0] = 0
+p[1] = qe/(m*c) * f.Ath
+p[2] = qe/(m*c) * f.Aph
+pold = p
 
 from time import time
 tic = time()
 for kt in range(nt):
 
-    f.evaluate(z[0, kt], z[1, kt], z[2, kt])
-    g = metric(z[:,kt])
-
     sol = root(implicit_p, p, method='hybr',tol=1e-12,args=(pold, f.Ath, f.Aph, f.dB, f.dAth, f.dAph, g))
-    pold = p
     p = sol.x
+    pold = p 
 
     z[0,kt+1] = z[0,kt] + dt/m * g['^11']*(p[0])
     z[1,kt+1] = z[1,kt] + dt/m * g['^22']*(p[1] - qe/c*f.Ath)
     z[2,kt+1] = z[2,kt] + dt/m * g['^33']*(p[2] - qe/c*f.Aph)
 
+    f.evaluate(z[0, kt+1], z[1, kt+1], z[2, kt+1])
+    g = metric(z[:,kt+1])
+'''
+    p = np.zeros(3)
+    p[0] = g['_11']*m*(z[0,kt+1]-z[0,kt])/dt
+    p[1] = g['_22']*m*(z[1,kt+1]-z[1,kt])/dt + qe/c*f.Ath
+    p[2] = g['_33']*m*(z[2,kt+1]-z[2,kt])/dt + qe/c*f.Aph
+'''
 
 
 plot_orbit(z)
+plt.plot(z[0,:5]*np.cos(z[1,:5]), z[0,:5]*np.sin(z[1,:5]), "o")
 plt.show()
 
 
 
 
-#implicit
-
-
-
-
-
+# %%
