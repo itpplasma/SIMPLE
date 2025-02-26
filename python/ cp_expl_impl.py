@@ -11,8 +11,8 @@ dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
 
 print(dt)
 print(nt)
-dt = 1.9
-nt = 10000
+dt = 0.001
+nt = 5000
 
 z = np.zeros([3, nt + 1])
 z[:, 0] = [r0, th0, ph0]
@@ -29,7 +29,7 @@ metric = lambda z: {
     "d_33": [2*(1+z[0]*np.cos(z[1]))*np.cos(z[1]), -2*(1+z[0]*np.cos(z[1]))*np.sin(z[1]), 0],
 }
 
-def implicit_p(p, pold, Ath, Aph, dB, dAth, dAph, g):
+def implicit_p(p, pold, Ath, Aph, dAth, dAph, g):
     ret = np.zeros(3)
 
     ctrv = np.zeros(3)
@@ -37,26 +37,30 @@ def implicit_p(p, pold, Ath, Aph, dB, dAth, dAph, g):
     ctrv[1] = 1/m *g['^22'] *(p[1] - qe/c*Ath)
     ctrv[2] = 1/m *g['^33'] *(p[2] - qe/c*Aph)
 
-    ret[0] = p[0] - pold[0] - dt*(qe/c*(ctrv[1]*dAth[0] + ctrv[2]*dAph[0]) - mu*dB[0] + m/2*(g['d_11'][0]*ctrv[0]**2 + g['d_22'][0]*ctrv[1]**2 + g['d_33'][0]*ctrv[2]**2))
-    ret[1] = p[1] - pold[1] - dt*(qe/c*(ctrv[1]*dAth[1] + ctrv[2]*dAph[1]) - mu*dB[1] + m/2*(g['d_11'][1]*ctrv[0]**2 + g['d_22'][1]*ctrv[1]**2 + g['d_33'][1]*ctrv[2]**2))
-    ret[2] = p[2] - pold[2] - dt*(qe/c*(ctrv[1]*dAth[2] + ctrv[2]*dAph[2]) - mu*dB[2] + m/2*(g['d_11'][2]*ctrv[0]**2 + g['d_22'][2]*ctrv[1]**2 + g['d_33'][2]*ctrv[2]**2))
+    ret[0] = p[0] - pold[0] - dt*(qe/c*(ctrv[1]*dAth[0] + ctrv[2]*dAph[0]) + m/2*(g['d_11'][0]*ctrv[0]**2 + g['d_22'][0]*ctrv[1]**2 + g['d_33'][0]*ctrv[2]**2))
+    ret[1] = p[1] - pold[1] - dt*(qe/c*(ctrv[1]*dAth[1] + ctrv[2]*dAph[1]) + m/2*(g['d_11'][1]*ctrv[0]**2 + g['d_22'][1]*ctrv[1]**2 + g['d_33'][1]*ctrv[2]**2))
+    ret[2] = p[2] - pold[2] - dt*(qe/c*(ctrv[1]*dAth[2] + ctrv[2]*dAph[2]) + m/2*(g['d_11'][2]*ctrv[0]**2 + g['d_22'][2]*ctrv[1]**2 + g['d_33'][2]*ctrv[2]**2))
 
     return ret
 
 #Initial Conditions 
 f.evaluate(r0, th0, ph0)
 g = metric(z[:,0])
+ctrv = np.zeros(3)
+ctrv[0] = np.sqrt(g['^11']*mu*2*f.B)
+ctrv[1] = -np.sqrt(g['^22']*mu*2*f.B)
+ctrv[2] = -np.sqrt(g['^33']*mu*2*f.B)
 p = np.zeros(3)
-p[0] = 0
-p[1] = qe/(m*c) * f.Ath
-p[2] = qe/(m*c) * f.Aph
+p[0] = g['_11']*ctrv[0]
+p[1] = g['_22']*ctrv[1] + qe/c * f.Ath
+p[2] = g['_33']*ctrv[2] + qe/c * f.Aph
 pold = p
 
 from time import time
 tic = time()
 for kt in range(nt):
 
-    sol = root(implicit_p, p, method='hybr',tol=1e-12,args=(pold, f.Ath, f.Aph, f.dB, f.dAth, f.dAph, g))
+    sol = root(implicit_p, p, method='hybr',tol=1e-12,args=(pold, f.Ath, f.Aph, f.dAth, f.dAph, g))
     p = sol.x
     pold = p 
 
@@ -66,12 +70,11 @@ for kt in range(nt):
 
     f.evaluate(z[0, kt+1], z[1, kt+1], z[2, kt+1])
     g = metric(z[:,kt+1])
-'''
+
     p = np.zeros(3)
     p[0] = g['_11']*m*(z[0,kt+1]-z[0,kt])/dt
     p[1] = g['_22']*m*(z[1,kt+1]-z[1,kt])/dt + qe/c*f.Ath
     p[2] = g['_33']*m*(z[2,kt+1]-z[2,kt])/dt + qe/c*f.Aph
-'''
 
 
 plot_orbit(z)

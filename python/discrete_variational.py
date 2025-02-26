@@ -10,6 +10,7 @@ from plotting import plot_orbit, plot_cost_function
 
 
 dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
+print(dt)
 z = np.zeros([3, nt + 1])
 z[:, 0] = [r0, th0, ph0]
 [H, pth, vpar] = get_val(np.array([r0, th0, ph0, pph0]))

@@ -38,10 +38,11 @@ def field_Aph(r, th, ph):
     return Aph, dAph
 
 
-def field_dB(r, th, ph):
-    dB = np.array((iota0*(1-3*r**2/a**2)/(R0+r*np.cos(th)) - iota0*(r-r**3/a**2)/(R0+r*np.cos(th))**2 * np.cos(th) - np.cos(th)/R0, 
-                    iota0*(r-r**3/a**2)/(R0+r*np.cos(th))**2 *r*np.sin(th)  + r*np.sin(th), 0))
-    return dB
+def field_B(r, th, ph):
+    B = B0*(iota0*(r-r**3/a**2)/(R0+r*np.cos(th)) + (1-r*np.cos(th)/R0)) 
+    #dB = np.array((iota0*(1-3*r**2/a**2)/(R0+r*np.cos(th)) - iota0*(r-r**3/a**2)/(R0+r*np.cos(th))**2 * np.cos(th) - np.cos(th)/R0, 
+    #                iota0*(r-r**3/a**2)/(R0+r*np.cos(th))**2 *r*np.sin(th)  + r*np.sin(th), 0))
+    return B
 
 
 #Initial Conditions 
@@ -49,16 +50,21 @@ Ath = np.empty(1)
 Aph = np.empty(1)
 dAth = np.empty(3)
 dAph = np.empty(3)
-dB = np.empty(3)
+B = np.empty(1)
+#dB = np.empty(3)
 Ath, dAth = field_Ath(r0, th0, ph0)
 Aph, dAph = field_Aph(r0, th0, ph0)
-dB = field_dB(r0, th0, ph0)
+B = field_B(r0, th0, ph0)
 
 g = metric(z0_cpp[:])
+ctrv = np.zeros(3)
+ctrv[0] = np.sqrt(g['^11']*mu*2*B/3)
+ctrv[1] = np.sqrt(g['^22']*mu*2*B/3)
+ctrv[2] = np.sqrt(g['^33']*mu*2*B/3)
 p = np.zeros(3)
-p[0] = 0
-p[1] = qe/c * Ath
-p[2] = qe/c * Aph
+p[0] = g['_11']*ctrv[0]
+p[1] = g['_22']*ctrv[1] + qe/c * Ath
+p[2] = g['_33']*ctrv[2] + qe/c * Aph
 pold = p
 
 #Initial Conditions Runge-Kutta
@@ -70,10 +76,11 @@ def momenta_cpp(t, x):
     Aph = np.empty(1)
     dAth = np.empty(3)
     dAph = np.empty(3)
-    dB = np.empty(3)
+    #B = np.empty(1)
+    #dB = np.empty(3)
     Ath, dAth = field_Ath(x[0], x[1], x[2])
     Aph, dAph = field_Aph(x[0], x[1], x[2])
-    dB = field_dB(x[0], x[1], x[2])
+    #B = field_B(x[0], x[1], x[2])
     g = metric(x[:3])
 
     ctrv = np.empty(3)
@@ -85,9 +92,9 @@ def momenta_cpp(t, x):
     xdot[0] = 1/m * g['^11']*x[3]
     xdot[1] = 1/m * g['^22']*(x[4] - qe/c*Ath)
     xdot[2] = 1/m * g['^33']*(x[5] - qe/c*Aph)
-    xdot[3] = qe/c*(ctrv[1]*dAth[0] + ctrv[2]*dAph[0]) - mu*dB[0] + m/2*(g['d_11'][0]*ctrv[0]**2 + g['d_22'][0]*ctrv[1]**2 + g['d_33'][0]*ctrv[2]**2)
-    xdot[4] = qe/c*(ctrv[1]*dAth[1] + ctrv[2]*dAph[1]) - mu*dB[1] + m/2*(g['d_11'][1]*ctrv[0]**2 + g['d_22'][1]*ctrv[1]**2 + g['d_33'][1]*ctrv[2]**2)
-    xdot[5] = qe/c*(ctrv[1]*dAth[2] + ctrv[2]*dAph[2]) - mu*dB[2] + m/2*(g['d_11'][2]*ctrv[0]**2 + g['d_22'][2]*ctrv[1]**2 + g['d_33'][2]*ctrv[2]**2)
+    xdot[3] = qe/c*(ctrv[1]*dAth[0] + ctrv[2]*dAph[0]) + m/2*(g['d_11'][0]*ctrv[0]**2 + g['d_22'][0]*ctrv[1]**2 + g['d_33'][0]*ctrv[2]**2)
+    xdot[4] = qe/c*(ctrv[1]*dAth[1] + ctrv[2]*dAph[1]) + m/2*(g['d_11'][1]*ctrv[0]**2 + g['d_22'][1]*ctrv[1]**2 + g['d_33'][1]*ctrv[2]**2)
+    xdot[5] = qe/c*(ctrv[1]*dAth[2] + ctrv[2]*dAph[2]) + m/2*(g['d_11'][2]*ctrv[0]**2 + g['d_22'][2]*ctrv[1]**2 + g['d_33'][2]*ctrv[2]**2)
 
     return xdot
 
