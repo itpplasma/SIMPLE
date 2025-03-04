@@ -4,15 +4,17 @@ import numpy as np
 from scipy.optimize import root
 from scipy.interpolate import lagrange
 import common
-from common import (f,r0,th0,ph0,pph0,timesteps,get_val,get_der,mu,qe,m,c,)
+from common import (r0,th0,ph0,pph0,timesteps,get_val,get_der,mu,qe,m,c,)
+from field_correct_test import field
 from plotting import plot_orbit, plot_cost_function
 
+f = field()
 dt, nt = timesteps(steps_per_bounce=8, nbounce=100)
 
 print(dt)
 print(nt)
 dt = 1.9
-nt = 3000
+nt = 4000
 
 z = np.zeros([3, nt + 1])
 z[:, 0] = [r0, th0, ph0]
@@ -48,8 +50,8 @@ f.evaluate(r0, th0, ph0)
 g = metric(z[:,0])
 p = np.zeros(3)
 p[0] = 0
-p[1] = qe/c * f.Ath
-p[2] = qe/c * f.Aph
+p[1] = qe/c * f.co_Ath
+p[2] = qe/c * f.co_Aph
 pold = p
 
 from time import time
@@ -57,24 +59,21 @@ tic = time()
 for kt in range(nt):
 
 
-    sol = root(implicit_p, p, method='hybr',tol=1e-12,args=(pold, f.Ath, f.Aph, f.dB, f.dAth, f.dAph, g))
+    sol = root(implicit_p, p, method='hybr',tol=1e-12,args=(pold, f.co_Ath, f.co_Aph, f.dB, f.co_dAth, f.co_dAph, g))
     p = sol.x
     pold = p 
 
     z[0,kt+1] = z[0,kt] + dt/m * g['^11']*(p[0])
-    z[1,kt+1] = z[1,kt] + dt/m * g['^22']*(p[1] - qe/c*f.Ath)
-    z[2,kt+1] = z[2,kt] + dt/m * g['^33']*(p[2] - qe/c*f.Aph)
+    z[1,kt+1] = z[1,kt] + dt/m * g['^22']*(p[1] - qe/c*f.co_Ath)
+    z[2,kt+1] = z[2,kt] + dt/m * g['^33']*(p[2] - qe/c*f.co_Aph)
 
     f.evaluate(z[0, kt+1], z[1, kt+1], z[2, kt+1])
     g = metric(z[:,kt+1])
 
-    x = np.sqrt(g['^22']*f.hth*f.hth + g['^33']*f.hph*f.hph)
-    print(x)
-
     p = np.zeros(3)
     p[0] = g['_11']*m*(z[0,kt+1]-z[0,kt])/dt
-    p[1] = g['_22']*m*(z[1,kt+1]-z[1,kt])/dt + qe/c*f.Ath
-    p[2] = g['_33']*m*(z[2,kt+1]-z[2,kt])/dt + qe/c*f.Aph
+    p[1] = g['_22']*m*(z[1,kt+1]-z[1,kt])/dt + qe/c*f.co_Ath
+    p[2] = g['_33']*m*(z[2,kt+1]-z[2,kt])/dt + qe/c*f.co_Aph
 
 
 plot_orbit(z)

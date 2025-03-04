@@ -1,11 +1,22 @@
+# %%
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import root
 from scipy.interpolate import lagrange
-import common
-from common import (f,r0,th0,ph0,pph0,timesteps,get_val,get_der,mu,qe,m,c,)
+from field_correct_test import field
 from plotting import plot_orbit, plot_cost_function
+
+f = field()
+
+qe = 1.0; m = 1.0; c = 1.0 # particle charge, mass and speed of light
+mu = 1e-5 # magnetic moment
+
+# Initial conditions
+r0    = 0.1
+th0   = 1.5
+ph0   = 0
+vpar0 = 0.0
 
 z = np.zeros(3)
 z[0] = r0
@@ -27,8 +38,12 @@ metric = lambda z: {
 g = metric(z[:])
 f.evaluate(r0, th0, ph0)
 
-x = np.sqrt(g['^22']*f.hth*f.hth + g['^33']*f.hph*f.hph)
-y = np.sqrt(g['^33']*f.hph*f.hph)
 
+#x = g['^22']*f.hth*f.hth + g['^33']*f.hph*f.hph
+#y = np.sqrt(g['^33']*f.hph*f.hph)
+#z = np.sqrt(g['^22']*f.hth*f.hth)
+
+x = np.sqrt(g['^22']*f.co_hth*f.co_hth + g['^33']*f.co_hph*f.co_hph)
 print(x)
-print(y)
+print(f.B)
+print(f.B1)
