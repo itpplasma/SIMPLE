@@ -47,31 +47,31 @@ module simple_main
     call init_magfie(VMEC)
 
     !sample starting positions
-    if 1 == startmode then
+    if (1 == startmode) then
       call sample(zstart)
       
-    else if 2 == startmode then
+    else if (2 == startmode) then
       call sample(zstart, START_FILE)
     
-    else if 3 == startmode then
+    else if (3 == startmode) then
       call sample(special_ants_file)
     
-    else if 4 == startmode then
+    else if (4 == startmode) then
       call sample(zstart, reuse_batch) 
     
-    else if 5 == startmode then
-      if 2 < num_surf then
+    else if (5 == startmode) then
+      if (2 < num_surf) then
         print *, 'No surface range for volume sample defined, stopping.'
         stop 
       else
         call sample(zstart, sbeg(1), sbeg(num_surf))
-   
+      endif
     else
       print *, 'Unknown startmode: ', startmode
     endif 
 
 
-    if generate_start_only stop 'stopping after generating start.dat'
+    if (generate_start_only) stop 'stopping after generating start.dat'
 
     call init_magfie(isw_field_type)
 

@@ -3,10 +3,11 @@
 !
   use simple, only : Tracer
   use simple_main, only : init_field
-  use boozer_coordinates_mod, only : use_B_r, use_del_tp_B
   use new_vmec_stuff_mod,   only : nper
-  use boozer_sub, only : splint_boozer_coord, boozer_converter, &
-    delthe_delphi_bv, vmec_to_boozer, boozer_to_vmec
+  use boozer_sub, only : splint_boozer_coord, &
+    delthe_delphi_bv, vmec_to_boozer, boozer_to_vmec, & 
+    get_boozer_coordinates
+  use boozer_coordinates_mod, only : use_B_r, use_del_tp_B
 !
   implicit none
 !
@@ -43,7 +44,7 @@
 !
 !  use_B_r=.false.
   use_B_r=.true.        !important for plotting, not needed for canonical coordinates
-  use_del_tp_B=.false.  !not very important (saves 1 iteration in coord. transform), don't use to save memory
+  use_del_tp_B=.false.  !not very important (saves 1 iteration in coord. transform), do not use to save memory
 !  use_del_tp_B=.true.
 !
   call get_boozer_coordinates

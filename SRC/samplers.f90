@@ -1,15 +1,34 @@
 module samplers
   use util
+  use params, only: zstart
 
   implicit none
 
   character(len=*), parameter :: START_FILE = 'start.dat'
   character(len=*), parameter :: START_FILE_ANTS = 'start_ants.dat'
   character(len=*), parameter :: START_FILE_BATCH = 'batch.dat'
+  
+  ! Interface ################################
+  INTERFACE sample
+       MODULE PROCEDURE sample_read
+       MODULE PROCEDURE sample_surface_fieldline
+       MODULE PROCEDURE sample_volume_single
+       MODULE PROCEDURE sample_random_batch
+       MODULE PROCEDURE sample_points_ants
+  END INTERFACE sample
+
+  
   contains
   ! Functions #################################
   subroutine init_starting_surf
     use alpha_lifetime_sub, only : integrate_mfl_can
+    use params, only: dphi, nper, npoiper, phibeg, thetabeg, volstart, \
+        xstart, sbeg
+
+    integer :: ierr=0
+    double precision :: bmin, bmax, bmod00
+    double precision, dimension(npoiper*nper) :: bstart
+    
 
     xstart=0.d0
     bstart=0.d0
@@ -33,10 +52,10 @@ module samplers
   
   subroutine load_starting_points(zstart, filename)
     double precision, dimension(:,:), intent(inout) :: zstart
-    character(len=*), parameter, intent(in) :: filename = START_FILE
+    character(len=*), intent(in) :: filename
     integer :: ipart
 
-    open(1,file=START_FILE,recl=1024)
+    open(1,file=filename,recl=1024)
     do ipart=1,size(zstart,2)
       read(1,*) zstart(:,ipart)
     enddo
@@ -56,15 +75,15 @@ module samplers
 
   subroutine sample_read(zstart, filename)
       double precision, dimension(:,:), intent(inout) :: zstart
-      character(len=*), parameter, intent(in) :: filename = START_FILE
+      character(len=*), intent(in) :: filename
   
       call load_starting_points(zstart, filename)
   end subroutine
 
   subroutine sample_volume_single(zstart, s_inner, s_outer)
-    use params, only: isw_field_type
-    use boozer_sub, only: boozer_to_ref
-    use get_can_sub, only: can_to_ref
+    use params, only: isw_field_type, num_surf
+    use boozer_sub, only: boozer_to_vmec
+    use get_can_sub, only: can_to_vmec
 
     double precision, intent(in) :: s_inner
     double precision, intent(in) :: s_outer
@@ -75,8 +94,10 @@ module samplers
 
     do ipart=1,size(zstart,2)
       call random_number(tmp_rand)
-      if 0 == num_surf r = xi
-      else r = tmp_rand * (s_outer - s_inner) + s_inner
+      if (0 == num_surf) then 
+        r = tmp_rand
+      else 
+        r = tmp_rand * (s_outer - s_inner) + s_inner
       endif
      
       call random_number(tmp_rand)
@@ -85,12 +106,12 @@ module samplers
       varphi=twopi*tmp_rand
 ! we store starting points in VMEC coordinates:
       if(isw_field_type.eq.0) then
-          call can_to_ref(r,vartheta,varphi,theta_vmec,varphi_vmec)
+          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       elseif(isw_field_type.eq.1) then
           theta_vmec=vartheta
           varphi_vmec=varphi
       elseif(isw_field_type.eq.2) then
-          call boozer_to_ref(r,vartheta,varphi,theta_vmec,varphi_vmec)
+          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       else
           print *,'init_starting_points: unknown field type'
       endif
@@ -111,8 +132,8 @@ module samplers
 
   subroutine sample_surface_fieldline(zstart)
     use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
-    use boozer_sub, only: boozer_to_ref
-    use get_can_sub, only: can_to_ref
+    use boozer_sub, only: boozer_to_vmec
+    use get_can_sub, only: can_to_vmec
     use binsrc_sub, only: binsrc
 
     double precision, dimension(:,:), intent(inout) :: zstart
@@ -133,12 +154,12 @@ module samplers
 
       ! we store starting points in VMEC coordinates:
       if(isw_field_type.eq.0) then
-        call can_to_ref(r,vartheta,varphi,theta_vmec,varphi_vmec)
+        call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       elseif(isw_field_type.eq.1) then
         theta_vmec=vartheta
         varphi_vmec=varphi
       elseif(isw_field_type.eq.2) then
-        call boozer_to_ref(r,vartheta,varphi,theta_vmec,varphi_vmec)
+        call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
       else
         print *,'init_starting_points: unknown field type'
       endif
@@ -155,21 +176,22 @@ module samplers
 
   end subroutine sample_surface_fieldline
 
-  
   subroutine sample_random_batch(zstart, reuse_existing)
   ! Get random batch from preexisting zstart, allows reuse.
-    use params, only: batch_size, ntestpart
+    use params, only: batch_size, ntestpart, zstart_dim1, idx
     
     integer :: ran_begin, ran_end, ipart
-    double precision, dimension(:,:) :: zstart_batch
+    real :: temp_ran
     double precision, dimension(:,:), intent(inout) :: zstart
+    double precision, dimension(zstart_dim1,batch_size) :: zstart_batch
     logical, intent(in) :: reuse_existing
 
-    if (reuse_batch.eq.1) then
+    if (reuse_existing .eqv. .True.) then
       call load_starting_points(zstart_batch, START_FILE_BATCH)
     else
       call load_starting_points(zstart_batch, START_FILE)
-      call random_number(ran_begin)
+      call random_number(temp_ran)
+      ran_begin = DBLE(temp_ran)
       ran_end = ran_begin+batch_size
       if ((ran_end).gt.(ntestpart)) then
         ran_begin = ran_begin - (ran_end-ntestpart)
@@ -183,13 +205,12 @@ module samplers
       read(1,*) zstart(:,ipart)
     enddo
     
-    deallocate(zstart_batch)
-    
   end subroutine
   
   subroutine sample_points_ants(use_special_ants_file)
     use parse_ants, only : process_line
     use get_can_sub, only : vmec_to_can
+    use params, only: ntestpart
     
     logical, intent(in) :: use_special_ants_file
     
@@ -200,10 +221,14 @@ module samplers
     integer :: ipart
 
     do ipart=1,ntestpart
-      if use_special_ants_file then
-        read(START_FILE_ANTS, '(A)') line
+      if (use_special_ants_file) then
+        open (1, file=START_FILE_ANTS, recl=1024)
+        read(1, '(A)') line
+        close(1)
       else
-        read(START_FILE, '(A)') line
+        open(1, file=START_FILE, recl=1024)
+        read(1, '(A)') line
+        close(1)
       endif
 
       call process_line(line, v_par, v_perp, u, v, s)
@@ -217,33 +242,6 @@ module samplers
       zstart(5, ipart) = v_par / sqrt(v_par**2 + v_perp**2)
     enddo
   end subroutine
-  ! Interface #################################
 
-  INTERFACE sample
-    
-    FUNCTION sample_read(zstart, filename)
-      double precision, dimension(:,:), intent(inout) :: zstart
-      character(len=*), parameter, intent(in) :: filename = START_FILE
-    END FUNCTION sample_read
 
-    FUNCTION sample_surface_fieldline(zstart)
-      double precision, dimension(:,:), intent(inout) :: zstart
-    END FUNCTION sample_surface_fieldline
-
-    FUNCTION sample_volume_single(zstart, s_inner, s_outer)!global, mode 5
-      double precision, dimension(:,:), intent(inout) :: zstart
-      real, intent(in) :: s_inner
-      real, intent(in) :: s_outer
-    END FUNCTION sample_volume_single
-    
-    FUNCTION sample_random_batch(zstart, reuse_existing)
-      double precision, dimension(:,:), intent(inout) :: zstart
-      logical, intent(in) :: reuse_existing
-    END FUNCTION
-    
-    FUNCTION sample_points_ants(use_special_ants_file)
-      logical, intent(in) :: use_special_ants_file
-    END FUNCTION
-    
-  END INTERFACE sample
 end module samplers

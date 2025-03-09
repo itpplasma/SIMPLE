@@ -14,6 +14,7 @@ module params
 
   integer          :: nper=1000, ntestpart=1024
   integer          :: loopskip=0
+  integer          :: zstart_dim1 = 5
   double precision :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
   double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
@@ -26,8 +27,9 @@ module params
   double precision, dimension(:), allocatable :: times_lost
   double precision :: contr_pp=-1d0
   integer          :: ibins
-  logical          :: generate_start_only = .False.
+  logical          :: generate_start_only=.False.
   integer          :: startmode=1
+  logical          :: special_ants_file=.False.
 
   integer :: ntau ! number of dtaumin in dtau
 
@@ -183,7 +185,7 @@ contains
           do i=1,batch_size
             read(1,iostat=iostat) batch_file(i)
             if (iostat /= 0) goto 667
-            idx(i) = ichar(batch_file(i)) ! TODO batch_file list is pointless
+            idx(i) = ichar(batch_file(i))
           end do
           deallocate(batch_file)
           close(1)
@@ -229,7 +231,6 @@ contains
 
   subroutine reallocate_arrays
     integer :: npoi
-
     npoi=nper*npoiper ! total number of starting points
 
     if(allocated(zstart))  deallocate(zstart)
@@ -243,8 +244,8 @@ contains
     if(allocated(volstart))  deallocate(volstart)
     if(allocated(confpart_trap))  deallocate(confpart_trap)
     if(allocated(confpart_pass))  deallocate(confpart_pass)
-
-    allocate(zstart(5,ntestpart), zend(5,ntestpart))
+    
+    allocate(zstart(zstart_dim1,ntestpart), zend(zstart_dim1,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))

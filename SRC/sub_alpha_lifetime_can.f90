@@ -282,15 +282,13 @@ if(dodiag) write (123,*) tau2,z
       integer :: i
       integer, intent(in) :: npoi, ierr
       double precision :: phi,phiold
-      double precision , intent(in):: dphi,rbeg,phibeg,zbeg,
+      double precision , intent(in):: dphi,rbeg,phibeg,zbeg
       double precision, dimension(3,npoi), intent(out) :: xstart
       double precision, dimension(npoi), intent(out)   :: bstart,volstart
       double precision, dimension(ndim)   :: y
 !
       double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
-!
-      ierr=0
 !
       phi=phibeg
       y(1)=rbeg
