@@ -21,7 +21,7 @@ program test_samplers
 
         zstart = reshape([(1.0*i, i = 1, 25)], shape(zstart))
         call save_starting_points(zstart)
-        call load_starting_points(zreadout)
+        call load_starting_points(zreadout, START_FILE)
 
         if (any(zstart /= zreadout)) then
             print *, "Error: read and write do not match"
@@ -38,7 +38,7 @@ program test_samplers
         double precision, dimension(5,npart):: zreadout
 
         call sample_volume_single(zstart, s_in, s_out)
-        call load_starting_points(zreadout)
+        call load_starting_points(zreadout, START_FILE)
 
         if (any(zreadout(1,:) < s_in) .or. any(zreadout(1,:) > s_out)) then
             print *, "Error: points are outside the specified volume"
@@ -48,7 +48,6 @@ program test_samplers
     end subroutine test_sample_volume
 
     subroutine test_sample_surface()
-        use simple_main, only: init_starting_surf
         use params, only: sbeg
         ! check if all points are on the specified surface
         integer, parameter :: npart = 100
@@ -62,7 +61,7 @@ program test_samplers
         s_in = sbeg(1)
         call init_starting_surf
         call sample_surface_fieldline(zstart)
-        call load_starting_points(zreadout)
+        call load_starting_points(zreadout, START_FILE)
 
         if (any(zreadout(1,:) /= s_in)) then
             print *, "Error: points are outside the specified volume"
