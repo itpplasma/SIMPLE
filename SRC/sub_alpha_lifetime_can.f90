@@ -279,10 +279,12 @@ if(dodiag) write (123,*) tau2,z
 !
       integer, parameter          :: ndim=5
       double precision, parameter :: relerr=1d-10
-      integer :: npoi,i,ierr
-      double precision :: dphi,rbeg,phibeg,zbeg,phi,phiold
-      double precision, dimension(3,npoi) :: xstart
-      double precision, dimension(npoi)   :: bstart,volstart
+      integer :: i
+      integer, intent(in) :: npoi, ierr
+      double precision :: phi,phiold
+      double precision , intent(in):: dphi,rbeg,phibeg,zbeg,
+      double precision, dimension(3,npoi), intent(out) :: xstart
+      double precision, dimension(npoi), intent(out)   :: bstart,volstart
       double precision, dimension(ndim)   :: y
 !
       double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
