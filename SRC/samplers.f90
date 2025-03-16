@@ -23,10 +23,9 @@ module samplers
   subroutine init_starting_surf
     use alpha_lifetime_sub, only : integrate_mfl_can
     use params, only: dphi, nper, npoiper, phibeg, thetabeg, volstart, \
-        xstart, sbeg
+        xstart, sbeg, bmin, bmax, bmod00
 
     integer :: ierr=0
-    double precision :: bmin, bmax, bmod00
     double precision, dimension(npoiper*nper) :: bstart
     
 
