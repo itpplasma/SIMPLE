@@ -13,7 +13,6 @@ module params
   implicit none
 
   integer          :: nper=1000, ntestpart=1024
-  integer          :: loopskip=0
   integer          :: zstart_dim1 = 5
   double precision :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
   double precision :: tau,dtau,dtaumin,xi
@@ -81,7 +80,7 @@ module params
   character(1000) :: field_input = ''
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-    trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
+    trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, generate_start_only, startmode, special_ants_file, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, vmec_B_scale,             &

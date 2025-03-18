@@ -13,7 +13,6 @@ sbeg = 0.6d0, 0.7d0     ! starting s (normalized toroidal flux) for particles. T
 num_surf = 2             ! number of flux surfaces. Value 0, distributes in volume.
 phibeg = 0.d0            ! starting phi for field line
 thetabeg = 0.d0          ! starting theta for field line
-loopskip = 0             ! loops to skip for random number shift
 contr_pp = -1.0d0        ! control of passing particle fraction
 facE_al = 1.0            ! test particle energy reduction factor
 npoiper2 = 128	         ! points per period for integrator step

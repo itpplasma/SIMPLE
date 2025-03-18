@@ -9,7 +9,7 @@ module simple_main
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
   use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
-    class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
+    class_plot, ntcut, iclass, bmod00, xi, idx, bmin, bmax, dphi, xstart, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
     ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
     field_input, isw_field_type, reuse_batch
