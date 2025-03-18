@@ -49,31 +49,31 @@ module simple_main
     !sample starting positions
     if (1 == startmode) then
       call sample(zstart)
-      
+
     else if (2 == startmode) then
       call sample(zstart, START_FILE)
-    
+
     else if (3 == startmode) then
       call sample(special_ants_file)
-    
+
     else if (4 == startmode) then
-      call sample(zstart, reuse_batch) 
-    
+      call sample(zstart, reuse_batch)
+
     else if (5 == startmode) then
       if (0 == num_surf) then
-        call sample(zstart, 0.0, 1.0) 
+        call sample(zstart, 0.0d0, 1.0d0)
       else if (1 == num_surf) then
-        call sample(zstart, 0,0, sbeg(1))
+        call sample(zstart, 0.0d0, sbeg(1))
       else if (2 == num_surf) then
         call sample(zstart, sbeg(1), sbeg(num_surf))
       else
         print *, 'Invalid surface range for volume sample defined (2 < num_surf), stopping.'
-        stop 
+        stop
       endif
 
     else
       print *, 'Unknown startmode: ', startmode
-    endif 
+    endif
 
 
     if (generate_start_only) stop 'stopping after generating start.dat'
