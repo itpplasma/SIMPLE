@@ -90,15 +90,17 @@ module samplers
     double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
     double precision, dimension(:,:), intent(inout) :: zstart
     integer :: ipart
-
+  
+    ! If user wants to do volume with 0 or 1 surfaces, 
+    !   we "add" the constraints, therefore having 2 surfaces.
+    if (2 /= num_surf) then
+      num_surf = 2
+    endif
+    
     do ipart=1,size(zstart,2)
       call random_number(tmp_rand)
-      if (0 == num_surf) then 
-        r = tmp_rand
-      else 
-        r = tmp_rand * (s_outer - s_inner) + s_inner
-      endif
-     
+      r = tmp_rand * (s_outer - s_inner) + s_inner
+
       call random_number(tmp_rand)
       vartheta=twopi*tmp_rand
       call random_number(tmp_rand)

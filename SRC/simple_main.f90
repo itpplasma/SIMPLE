@@ -60,12 +60,17 @@ module simple_main
       call sample(zstart, reuse_batch) 
     
     else if (5 == startmode) then
-      if (2 < num_surf) then
-        print *, 'No surface range for volume sample defined, stopping.'
-        stop 
-      else
+      if (0 == num_surf) then
+        call sample(zstart, 0.0, 1.0) 
+      else if (1 == num_surf) then
+        call sample(zstart, 0,0, sbeg(1))
+      else if (2 == num_surf) then
         call sample(zstart, sbeg(1), sbeg(num_surf))
+      else
+        print *, 'Invalid surface range for volume sample defined (2 < num_surf), stopping.'
+        stop 
       endif
+
     else
       print *, 'Unknown startmode: ', startmode
     endif 
