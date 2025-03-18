@@ -7,7 +7,7 @@ module samplers
   character(len=*), parameter :: START_FILE = 'start.dat'
   character(len=*), parameter :: START_FILE_ANTS = 'start_ants.dat'
   character(len=*), parameter :: START_FILE_BATCH = 'batch.dat'
-  
+
   ! Interface ################################
   INTERFACE sample
        MODULE PROCEDURE sample_read
@@ -17,7 +17,7 @@ module samplers
        MODULE PROCEDURE sample_points_ants
   END INTERFACE sample
 
-  
+
   contains
   ! Functions #################################
   subroutine init_starting_surf
@@ -27,7 +27,7 @@ module samplers
 
     integer :: ierr=0
     double precision, dimension(npoiper*nper) :: bstart
-    
+
 
     xstart=0.d0
     bstart=0.d0
@@ -48,7 +48,7 @@ module samplers
 
     print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
   end subroutine init_starting_surf
-  
+
   subroutine load_starting_points(zstart, filename)
     double precision, dimension(:,:), intent(inout) :: zstart
     character(len=*), intent(in) :: filename
@@ -75,12 +75,13 @@ module samplers
   subroutine sample_read(zstart, filename)
       double precision, dimension(:,:), intent(inout) :: zstart
       character(len=*), intent(in) :: filename
-  
+
       call load_starting_points(zstart, filename)
   end subroutine
 
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type, num_surf
+    use field_can_mod, only : can_to_ref
 
     double precision, intent(in) :: s_inner
     double precision, intent(in) :: s_outer
@@ -88,13 +89,13 @@ module samplers
     double precision :: r,vartheta,varphi
     double precision, dimension(:,:), intent(inout) :: zstart
     integer :: ipart
-  
-    ! If user wants to do volume with 0 or 1 surfaces, 
+
+    ! If user wants to do volume with 0 or 1 surfaces,
     !   we "add" the constraints, therefore having 2 surfaces.
     if (2 /= num_surf) then
       num_surf = 2
     endif
-    
+
     do ipart=1,size(zstart,2)
       call random_number(tmp_rand)
       r = tmp_rand * (s_outer - s_inner) + s_inner
@@ -103,8 +104,8 @@ module samplers
       vartheta=twopi*tmp_rand
       call random_number(tmp_rand)
       varphi=twopi*tmp_rand
-
-      zstart(1:3,ipart)=xstart(:,ipart)
+      ! we store starting points in reference coordinates:
+      call can_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:
@@ -125,7 +126,7 @@ module samplers
     double precision :: r,vartheta,varphi
     double precision :: xi
     integer :: ipart, i
-    
+
     call init_starting_surf
     do ipart=1,size(zstart,2)
       call random_number(xi)
@@ -149,7 +150,7 @@ module samplers
   subroutine sample_random_batch(zstart, reuse_existing)
   ! Get random batch from preexisting zstart, allows reuse.
     use params, only: batch_size, ntestpart, zstart_dim1, idx
-    
+
     integer :: ran_begin, ran_end, ipart
     real :: temp_ran
     double precision, dimension(:,:), intent(inout) :: zstart
@@ -169,21 +170,21 @@ module samplers
       do ipart=0,batch_size
         zstart(:,ipart) = zstart_batch(:,(ipart+ran_begin))
       enddo
-    endif 
-    
+    endif
+
     do ipart=idx(0),idx(ntestpart)
       read(1,*) zstart(:,ipart)
     enddo
-    
+
   end subroutine
-  
+
   subroutine sample_points_ants(use_special_ants_file)
     use parse_ants, only : process_line
     use get_can_sub, only : vmec_to_can
     use params, only: ntestpart
-    
+
     logical, intent(in) :: use_special_ants_file
-    
+
     integer, parameter :: maxlen = 4096
     character(len=maxlen) :: line
     real(8) :: v_par, v_perp, u, v, s
