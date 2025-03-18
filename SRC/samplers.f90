@@ -133,13 +133,11 @@ module samplers
 
   subroutine sample_surface_fieldline(zstart)
     use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
-    use boozer_sub, only: boozer_to_vmec
-    use get_can_sub, only: can_to_vmec
     use binsrc_sub, only: binsrc
 
     double precision, dimension(:,:), intent(inout) :: zstart
 
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+    double precision :: r,vartheta,varphi
     double precision :: xi
     integer :: ipart, i
     
@@ -153,21 +151,7 @@ module samplers
       vartheta=xstart(2,i)
       varphi=xstart(3,i)
 
-      ! we store starting points in VMEC coordinates:
-      if(isw_field_type.eq.0) then
-        call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.1) then
-        theta_vmec=vartheta
-        varphi_vmec=varphi
-      elseif(isw_field_type.eq.2) then
-        call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      else
-        print *,'init_starting_points: unknown field type'
-      endif
-
-      zstart(1,ipart)=r
-      zstart(2,ipart)=theta_vmec
-      zstart(3,ipart)=varphi_vmec
+      zstart(1:3,ipart)=xstart(:,i)
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
