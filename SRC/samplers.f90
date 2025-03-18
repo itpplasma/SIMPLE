@@ -81,13 +81,11 @@ module samplers
 
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type, num_surf
-    use boozer_sub, only: boozer_to_vmec
-    use get_can_sub, only: can_to_vmec
 
     double precision, intent(in) :: s_inner
     double precision, intent(in) :: s_outer
     double precision :: tmp_rand
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
+    double precision :: r,vartheta,varphi
     double precision, dimension(:,:), intent(inout) :: zstart
     integer :: ipart
   
@@ -105,21 +103,8 @@ module samplers
       vartheta=twopi*tmp_rand
       call random_number(tmp_rand)
       varphi=twopi*tmp_rand
-! we store starting points in VMEC coordinates:
-      if(isw_field_type.eq.0) then
-          call can_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      elseif(isw_field_type.eq.1) then
-          theta_vmec=vartheta
-          varphi_vmec=varphi
-      elseif(isw_field_type.eq.2) then
-          call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-      else
-          print *,'init_starting_points: unknown field type'
-      endif
-  !
-      zstart(1,ipart)=r
-      zstart(2,ipart)=theta_vmec
-      zstart(3,ipart)=varphi_vmec
+
+      zstart(1:3,ipart)=xstart(:,ipart)
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:
