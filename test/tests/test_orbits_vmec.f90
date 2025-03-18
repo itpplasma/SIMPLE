@@ -4,12 +4,14 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
   use boozer_coordinates_mod, only : use_B_r
-  use get_can_sub
-  use boozer_sub
-  use alpha_lifetime_sub
+  use boozer_sub, only : splint_boozer_coord, &
+    delthe_delphi_bv, vmec_to_boozer, boozer_to_vmec, &
+    get_boozer_coordinates
+  use get_can_sub, only: get_canonical_coordinates, &
+    vmec_to_can, can_to_vmec
+  use alpha_lifetime_sub, only : orbit_timestep_axis
   use spline_vmec_sub
   use vmecin_sub, only : stevvo
-use diag_mod, only : icounter
 !
   implicit none
 !
