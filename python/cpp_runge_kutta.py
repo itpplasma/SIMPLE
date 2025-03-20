@@ -37,7 +37,6 @@ def field_Aph(r, th, ph):
     dAph = np.array((-B0*iota0*(r-r**3/a**2), 0, 0))
     return Aph, dAph
 
-
 def field_dB(r, th, ph):
     dB = np.array((iota0*(1-3*r**2/a**2)/(R0+r*np.cos(th)) - iota0*(r-r**3/a**2)/(R0+r*np.cos(th))**2 * np.cos(th) - np.cos(th)/R0, 
                     iota0*(r-r**3/a**2)/(R0+r*np.cos(th))**2 *r*np.sin(th)  + r*np.sin(th), 0))
@@ -92,13 +91,13 @@ def momenta_cpp(t, x):
     return xdot
 
 sol_cpp = solve_ivp(
-    momenta_cpp, [0, 7000], z0_cpp, method="RK45", rtol=1e-9, atol=1e-9,
+    momenta_cpp, [0, 6000], z0_cpp, method="RK45", rtol=1e-6, atol=1e-6,
 )
 
 
 nt = len(sol_cpp.t)
 print(nt)  # This will print the number of time steps the solver used
-print(7000/nt)
+print(6000/nt)
 z = np.zeros([3, nt])
 z[0,:] = sol_cpp.y[0]
 z[1,:] = sol_cpp.y[1]

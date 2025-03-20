@@ -57,8 +57,6 @@ pold = p
 from time import time
 tic = time()
 for kt in range(nt):
-
-
     sol = root(implicit_p, p, method='hybr',tol=1e-12,args=(pold, f.co_Ath, f.co_Aph, f.dB, f.co_dAth, f.co_dAph, g))
     p = sol.x
     pold = p 
@@ -70,10 +68,10 @@ for kt in range(nt):
     f.evaluate(z[0, kt+1], z[1, kt+1], z[2, kt+1])
     g = metric(z[:,kt+1])
 
-    p = np.zeros(3)
-    p[0] = g['_11']*m*(z[0,kt+1]-z[0,kt])/dt
-    p[1] = g['_22']*m*(z[1,kt+1]-z[1,kt])/dt + qe/c*f.co_Ath
-    p[2] = g['_33']*m*(z[2,kt+1]-z[2,kt])/dt + qe/c*f.co_Aph
+    #p = np.zeros(3)
+    #p[0] = g['_11']*m*(z[0,kt+1]-z[0,kt])/dt
+    #p[1] = g['_22']*m*(z[1,kt+1]-z[1,kt])/dt + qe/c*f.co_Ath
+    #p[2] = g['_33']*m*(z[2,kt+1]-z[2,kt])/dt + qe/c*f.co_Aph
 
 
 plot_orbit(z)

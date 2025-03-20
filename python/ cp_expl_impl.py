@@ -13,8 +13,8 @@ print(dt)
 print(nt)
 
 f = field()
-dt = 0.1
-nt = 5000
+dt = 1
+nt = 1000
 
 z = np.zeros([3, nt + 1])
 z[:, 0] = [r0, th0, ph0]
@@ -49,9 +49,9 @@ def implicit_p(p, pold, Ath, Aph, dAth, dAph, g):
 f.evaluate(r0, th0, ph0)
 g = metric(z[:,0])
 ctrv = np.zeros(3)
-ctrv[0] = 0.2 #np.sqrt(g['^11']*mu*2*f.B/3)
-ctrv[1] = 0.2 #-np.sqrt(g['^22']*mu*2*f.B/3)
-ctrv[2] = 0.2 #-np.sqrt(g['^33']*mu*2*f.B/3)
+ctrv[0] = np.sqrt(g['^11']*mu*2*f.B)
+ctrv[1] = 0 #-np.sqrt(g['^22']*mu*2*f.B/3)
+ctrv[2] = 0 #-np.sqrt(g['^33']*mu*2*f.B/3)
 p = np.zeros(3)
 p[0] = g['_11']*ctrv[0]
 p[1] = g['_22']*ctrv[1] + qe/c * f.co_Ath
