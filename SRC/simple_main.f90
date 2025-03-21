@@ -7,7 +7,7 @@ module simple_main
   use binsrc_sub, only : binsrc
   use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
-  use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, dtau, dtaumin, ntau, v0, &
+  use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, grid_density, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, xi, idx, bmin, bmax, dphi, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
@@ -48,7 +48,11 @@ module simple_main
 
     !sample starting positions
     if (1 == startmode) then
-      call sample(zstart)
+      ! if grid_density is set, we override ntestpart!
+      if (0d0 < grid_density) && (1d0 > grid_density) then
+        call sample(zstart, grid_density)
+      else
+        call sample(zstart)
 
     else if (2 == startmode) then
       call sample(zstart, START_FILE)
