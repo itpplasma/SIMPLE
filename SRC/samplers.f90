@@ -1,6 +1,5 @@
 module samplers
   use util
-  use params, only: zstart
 
   implicit none
 
@@ -152,36 +151,37 @@ module samplers
   
   subroutine sample_grid(zstart, grid_density)
     use params, only: ntestpart, zstart_dim1, zend, times_lost, &
-        trap_par, perp_inv
-    
-    double precision, dimension(:,:), intent(inout) :: zstart
+        trap_par, perp_inv, iclass, xstart
+
+    double precision, dimension(:,:), allocatable, intent(inout) :: zstart
     double precision, intent(in) :: grid_density
     double precision :: factor, xi
     integer :: xsize, ipart
     
     call init_starting_surf
-    
     xsize = size(xstart,2)
     factor = xsize * grid_density
     ntestpart = FLOOR(factor)
-    
+
     ! Resize particle coord. arrays and result memory.
     if (allocated(zstart)) deallocate(zstart)
-    if (allocated(zend) deallocate(zend)
+    if (allocated(zend)) deallocate(zend)
     allocate(zstart(zstart_dim1,ntestpart), zend(zstart_dim1,ntestpart))
     if (allocated(times_lost)) deallocate(times_lost)
     if (allocated(trap_par)) deallocate(trap_par)
     if (allocated(perp_inv)) deallocate(perp_inv)
-    if (allocated(iclass) deallocate(iclass)
+    if (allocated(iclass)) deallocate(iclass)
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
     
     do ipart=1,ntestpart
-      zstart(1:3,ipart) = xstart(1:3, (1d0/factor)*ipart) !ToDo check xstart for grid order, possibly reorder angles?
+      zstart(1:3,ipart) = xstart(:, FLOOR((1d0/grid_density)*ipart)) !ToDo check xstart for grid order, possibly reorder angles?
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
     enddo
-    
+
+    call save_starting_points(zstart)
+
   end subroutine sample_grid
 
   subroutine sample_random_batch(zstart, reuse_existing)
@@ -199,7 +199,7 @@ module samplers
     else
       call load_starting_points(zstart_batch, START_FILE)
       call random_number(temp_ran)
-      ran_begin = DBLE(temp_ran)
+      ran_begin = INT(temp_ran)
       ran_end = ran_begin+batch_size
       if ((ran_end).gt.(ntestpart)) then
         ran_begin = ran_begin - (ran_end-ntestpart)

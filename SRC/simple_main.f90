@@ -49,26 +49,27 @@ module simple_main
     !sample starting positions
     if (1 == startmode) then
       ! if grid_density is set, we override ntestpart!
-      if (0d0 < grid_density) && (1d0 > grid_density) then
+      if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
         call sample(zstart, grid_density)
       else
         call sample(zstart)
+      endif
 
-    else if (2 == startmode) then
+    elseif (2 == startmode) then
       call sample(zstart, START_FILE)
 
-    else if (3 == startmode) then
+    elseif (3 == startmode) then
       call sample(special_ants_file)
 
-    else if (4 == startmode) then
+    elseif (4 == startmode) then
       call sample(zstart, reuse_batch)
 
-    else if (5 == startmode) then
+    elseif (5 == startmode) then
       if (0 == num_surf) then
         call sample(zstart, 0.0d0, 1.0d0)
-      else if (1 == num_surf) then
+      elseif (1 == num_surf) then
         call sample(zstart, 0.0d0, sbeg(1))
-      else if (2 == num_surf) then
+      elseif (2 == num_surf) then
         call sample(zstart, sbeg(1), sbeg(num_surf))
       else
         print *, 'Invalid surface range for volume sample defined (2 < num_surf), stopping.'
