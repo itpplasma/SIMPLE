@@ -1,8 +1,7 @@
-
 import numpy as np
 
-OLD_FILE = 'times_lost_old.dat'
-NEW_FILE = 'times_lost_new.dat'
+OLD_FILE = "times_lost_old.dat"
+NEW_FILE = "times_lost_new.dat"
 
 old_lines = []
 new_lines = []
