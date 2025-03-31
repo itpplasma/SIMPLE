@@ -86,10 +86,17 @@ run_cases() {
 
 }
 
-run_comparison() {
-    REF_FILE="$1"
-    CUR_FILE="$2"
-    python "$SCRIPT_DIR/test_against_legacy_behaviour.py" "$REF_FILE" "$CUR_FILE"
+run_comparisons() {
+    local REF_DIR="$1"
+    local CUR_DIR="$2"
+    local TEST_CASES="$3"
+
+    for INPUT in $TEST_CASES; do
+        CASE="${INPUT%.in}"
+        REF_FILE="$REF_DIR/$CASE/times_lost.dat"
+        CUR_FILE="$CUR_DIR/$CASE/times_lost.dat"
+        python "$SCRIPT_DIR/test_against_legacy_behaviour.py" "$REF_FILE" "$CUR_FILE"
+    done
 }
 
 main "$@"
