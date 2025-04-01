@@ -55,7 +55,7 @@ clone() {
 
     cd "$PROJECT_ROOT"
     git fetch --all --quiet
-    git checkout "$VERSION" --quietZ
+    git checkout "$VERSION" --quiet
 }
 
 build() {
