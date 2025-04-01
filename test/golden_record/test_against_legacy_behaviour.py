@@ -10,9 +10,11 @@ new_lines = []
 old_data = np.loadtxt(OLD_FILE)
 new_data = np.loadtxt(NEW_FILE)
 
-i = 0
+non_match_count = 0
 for old, new in zip(old_data, new_data):
     for old_d, new_d in zip(old, new):
         if not np.isclose(old_d, new_d):
-            i += 1
-print(f"Found {i} non-matching entries when comparing times_lost.dat.")
+            non_match_count += 1
+print(
+    f"Found {non_match_count} non-matching entries comparing {OLD_FILE} and {NEW_FILE}."
+)
