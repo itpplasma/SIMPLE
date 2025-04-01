@@ -20,9 +20,7 @@ if non_match_count == 0:
     print(f"Files {OLD_FILE} and {NEW_FILE} match.")
     exit(0)
 
-
 print(
     f"Found {non_match_count} non-matching entries comparing {OLD_FILE} and {NEW_FILE}."
 )
-
 exit(1)
