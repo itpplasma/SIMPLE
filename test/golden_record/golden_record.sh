@@ -95,7 +95,7 @@ run_comparisons() {
         CASE="${INPUT%.in}"
         REF_FILE="$REF_DIR/$CASE/times_lost.dat"
         CUR_FILE="$CUR_DIR/$CASE/times_lost.dat"
-        python "$SCRIPT_DIR/test_against_legacy_behaviour.py" "$REF_FILE" "$CUR_FILE"
+        python "$SCRIPT_DIR/compare_files.py" "$REF_FILE" "$CUR_FILE"
     done
 }
 
