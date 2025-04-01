@@ -2,7 +2,7 @@
 CLONE_URL="https://github.com/itpplasma/SIMPLE.git"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-CUR_VER=$(git -C "$SCRIPT_DIR" describe --always --dirty)
+CUR_VER=$(git -C "$SCRIPT_DIR" describe --tags --always --dirty)
 REF_VER=${1:-"main"}
 TMP_DIR=${2:-"$(mktemp -d)"}
 
