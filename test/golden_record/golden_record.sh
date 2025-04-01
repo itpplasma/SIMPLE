@@ -48,16 +48,14 @@ get_test_data() {
 clone() {
     local VERSION="$1"
     local PROJECT_ROOT="$2"
-    if [ -d "$PROJECT_ROOT" ]; then
-        echo "Directory $PROJECT_ROOT already exists. Just pulling."
-        cd "$PROJECT_ROOT"
-        git fetch --all --quiet
-        git checkout "$VERSION" --quiet
-        git pull origin "$VERSION" --quiet
-    else
+    if [ ! -d "$PROJECT_ROOT" ]; then
         echo "Cloning SIMPLE version $VERSION"
-        git clone --depth 1 --branch "$VERSION" "$CLONE_URL" "$PROJECT_ROOT" --quiet
+        git clone --filter=blob:none --no-checkout "$CLONE_URL" "$PROJECT_ROOT"
     fi
+
+    cd "$PROJECT_ROOT"
+    git fetch --all --quiet
+    git checkout "$VERSION" --quietZ
 }
 
 build() {
