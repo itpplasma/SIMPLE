@@ -62,7 +62,8 @@ build() {
     local PROJECT_ROOT="$1"
     echo "Building SIMPLE in $PROJECT_ROOT"
     cd $PROJECT_ROOT
-    make > $PROJECT_ROOT/build.log 2>&1
+    cmake -S . -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF  > $PROJECT_ROOT/configure.log 2>&1
+    cmake --build build --config Release  > $PROJECT_ROOT/build.log 2>&1
 }
 
 run_cases() {
