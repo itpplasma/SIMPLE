@@ -32,7 +32,7 @@ main() {
     get_test_data
     run_cases "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_CASES"
     run_cases "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_CASES"
-    run_comparisons "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_CASES"
+    run_comparisons "$RUN_DIR_REF" "$RUN_DIR_CUR" "$TEST_CASES"
 }
 
 get_test_data() {
