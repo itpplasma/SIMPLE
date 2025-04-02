@@ -14,11 +14,8 @@ set(SOURCES
     field/psi_transform.f90
     field/field_can_albert.f90
     field_can.f90
-    canonical_coordinates_mod.f90
     magfie.f90
     boozer_converter.f90
-    binsrc.f90
-    plag_coeff.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
     vmecinm_m.f90
@@ -55,8 +52,5 @@ else()
 endif()
 
 target_link_libraries(simple PUBLIC
-    LIBNEO::hdf5_tools
-    LIBNEO::interpolate
-    LIBNEO::field
-    LIBNEO::polylag
+    LIBNEO::neo
 )
