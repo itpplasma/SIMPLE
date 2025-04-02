@@ -26,7 +26,6 @@ set(SOURCES
     sub_alpha_lifetime_can.f90
     vmecinm_m.f90
     spline_vmec_data.f90
-    spl_three_to_five.f90
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.f90
     orbit_symplectic_base.f90
