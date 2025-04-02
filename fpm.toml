@@ -1,0 +1,26 @@
+name = "SIMPLE"
+version = "1.4.0"
+license = "MIT"
+author = "Christopher Albert"
+maintainer = "albert@tugraz.at"
+copyright = "Copyright 2025, Plasma Physics at TU Graz"
+
+[dependencies]
+libneo.git = "https://github.com/itpplasma/libneo.git"
+libneo.tag = "fpm"
+
+[build]
+external-modules = ["netcdf", "mpi", "hdf5", "h5lt", "fftw3.f03"]
+link = ["netcdf", "netcdff", "hdf5", "hdf5_hl", "hdf5_fortran", "hdf5hl_fortran"]
+auto-executables = true
+auto-tests = true
+auto-examples = true
+module-naming = false
+
+[install]
+library = true
+
+[fortran]
+implicit-typing = true
+implicit-external = true
+source-form = "free"

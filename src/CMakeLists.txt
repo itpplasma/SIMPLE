@@ -15,9 +15,6 @@ set(SOURCES
     field/field_can_albert.f90
     field_can.f90
     canonical_coordinates_mod.f90
-    nctools_module.f90
-    #    odeint_allroutines.f   # to use this, copy local version into SRC
-    odeint_rkf45.f90       # interface to contrib/rkf45.f90
     magfie.f90
     boozer_converter.f90
     binsrc.f90
