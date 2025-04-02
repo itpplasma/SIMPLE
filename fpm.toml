@@ -10,8 +10,8 @@ libneo.git = "https://github.com/itpplasma/libneo.git"
 libneo.tag = "fpm"
 
 [build]
-external-modules = ["netcdf", "mpi", "hdf5", "h5lt", "fftw3.f03"]
-link = ["netcdf", "netcdff", "hdf5", "hdf5_hl", "hdf5_fortran", "hdf5hl_fortran"]
+external-modules = ["netcdf", "mpi", "hdf5", "h5lt"]
+link = ["netcdf", "netcdff", "hdf5", "hdf5_hl", "hdf5_fortran", "hdf5hl_fortran", "openblas"]
 auto-executables = true
 auto-tests = true
 auto-examples = true
