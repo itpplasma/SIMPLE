@@ -25,7 +25,7 @@ endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
-option(ENABLE_OPENMP "Enable build for openmp (if off some features are unavailable)." ON)
+option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 
 set(CMAKE_MACOSX_RPATH 1)
 
