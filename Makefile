@@ -23,7 +23,7 @@ doc: configure
 	cmake --build --preset default --target doc
 
 fpm:
-	fpm build --flag "-I$HDF5_INCLUDE -I$NETCDF_FORTRAN_INCLUDE -I$OPENBLAS_INCLUDE -L$OPENBLAS_LIB"
+	fpm build --flag "-I$(HDF5_INCLUDE) -I$(NETCDF_FORTRAN_INCLUDE) -I$(OPENBLAS_INCLUDE) -L$(OPENBLAS_LIB)"
 
 clean:
 	rm -rf $(BUILD_DIR)
