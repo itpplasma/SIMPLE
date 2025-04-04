@@ -76,7 +76,6 @@ set(FILES_TO_WRAP
     field_can.f90
     get_canonical_coordinates.f90
     params.f90
-    canonical_coordinates_mod.f90
     vmecinm_m.f90
     new_vmec_allocation_stuff.f90
     spline_vmec_data.f90
@@ -99,7 +98,7 @@ foreach(file ${FILES_TO_WRAP})
     endif()
 endforeach()
 
-list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/SRC/)
+list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/src/)
 
 set(F2PY_MODULE_NAME "_pysimple")
 

@@ -34,7 +34,7 @@ add_executable (test_boozer.x test_boozer.f90)
 target_link_libraries(test_boozer.x simple)
 add_executable (test_orbits.x test_orbits_vmec.f90)
 target_link_libraries(test_orbits.x simple)
-add_executable (test_collis.x ../../SRC/test_collis.f90)
+add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
 
 add_executable (test_samplers.x test_samplers.f90)

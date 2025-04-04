@@ -1,4 +1,5 @@
 module spline_vmec_sub
+  use spl_three_to_five_sub
 implicit none
 contains
   subroutine spline_vmec_data

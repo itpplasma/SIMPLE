@@ -12,6 +12,8 @@
 
 module get_can_sub
 
+use spl_three_to_five_sub
+
 implicit none
 
 contains
