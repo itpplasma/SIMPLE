@@ -49,9 +49,7 @@ string(STRIP ${NETCDF_FLIBS} NETCDF_FLIBS)
 message(STATUS "NetCDF include path: " ${NETCDFINCLUDE_DIR})
 message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
 message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
-
-# Replace space by semicolon in the Fortran libs
-string(REPLACE " " ";" NETCDF_FLIBS ${NETCDF_FLIBS})
+string(REPLACE " " ";" NETCDF_FLIBS "${NETCDF_FLIBS}")
 
 include_directories(${NETCDFINCLUDE_DIR})
 link_directories(${NETCDFLIB_DIR})
