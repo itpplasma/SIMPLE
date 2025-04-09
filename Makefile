@@ -22,5 +22,8 @@ test: build
 doc: configure
 	cmake --build --preset default --target doc
 
+fpm:
+	fpm build
+
 clean:
 	rm -rf $(BUILD_DIR)

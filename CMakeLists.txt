@@ -113,11 +113,11 @@ else()
 	endif()
 endif()
 
-add_subdirectory(SRC)
-include_directories("${CMAKE_BINARY_DIR}/SRC")
+add_subdirectory(src)
+include_directories("${CMAKE_BINARY_DIR}/src")
 
 add_executable (simple.x
-	SRC/main.f90
+	app/simple.f90
 )
 
 target_link_libraries(simple.x PRIVATE simple)
