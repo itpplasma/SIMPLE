@@ -96,15 +96,9 @@ contains
   subroutine read_config(config_file)
     character(256), intent(in) :: config_file
 
-    integer :: iostat
-    character(1024) :: iomsg
+    open(1, file=config_file, status='old', action='read')
 
-    open(1, file=config_file, recl=1024, iostat=iostat, iomsg=iomsg)
-    if (iostat /= 0) goto 666
-
-    read(1, nml=config, iostat=iostat, iomsg=iomsg)
-    if (iostat /= 0) goto 666
-    close(1)
+    read(1, nml=config)
 
     if(trim(field_input) == '') field_input = netcdffile
 
@@ -113,11 +107,6 @@ contains
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
     endif
-
-    return
-
-    666 print *, iomsg
-    error stop
   end subroutine read_config
 
 
@@ -244,7 +233,7 @@ contains
     if(allocated(volstart))  deallocate(volstart)
     if(allocated(confpart_trap))  deallocate(confpart_trap)
     if(allocated(confpart_pass))  deallocate(confpart_pass)
-    
+
     allocate(zstart(zstart_dim1,ntestpart), zend(zstart_dim1,ntestpart))
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))

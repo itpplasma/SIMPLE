@@ -25,7 +25,7 @@ endif()
 
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
-option(ENABLE_OPENMP "Enable build for openmp (if off some features are unavailable)." ON)
+option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 
 set(CMAKE_MACOSX_RPATH 1)
 
@@ -49,9 +49,7 @@ string(STRIP ${NETCDF_FLIBS} NETCDF_FLIBS)
 message(STATUS "NetCDF include path: " ${NETCDFINCLUDE_DIR})
 message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
 message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
-
-# Replace space by semicolon in the Fortran libs
-string(REPLACE " " ";" NETCDF_FLIBS ${NETCDF_FLIBS})
+string(REPLACE " " ";" NETCDF_FLIBS "${NETCDF_FLIBS}")
 
 include_directories(${NETCDFINCLUDE_DIR})
 link_directories(${NETCDFLIB_DIR})
@@ -115,11 +113,11 @@ else()
 	endif()
 endif()
 
-add_subdirectory(SRC)
-include_directories("${CMAKE_BINARY_DIR}/SRC")
+add_subdirectory(src)
+include_directories("${CMAKE_BINARY_DIR}/src")
 
 add_executable (simple.x
-	SRC/main.f90
+	app/simple.f90
 )
 
 target_link_libraries(simple.x PRIVATE simple)
