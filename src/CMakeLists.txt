@@ -14,19 +14,12 @@ set(SOURCES
     field/psi_transform.f90
     field/field_can_albert.f90
     field_can.f90
-    canonical_coordinates_mod.f90
-    nctools_module.f90
-    #    odeint_allroutines.f   # to use this, copy local version into SRC
-    odeint_rkf45.f90       # interface to contrib/rkf45.f90
     magfie.f90
     boozer_converter.f90
-    binsrc.f90
-    plag_coeff.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
     vmecinm_m.f90
     spline_vmec_data.f90
-    spl_three_to_five.f90
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.f90
     orbit_symplectic_base.f90
@@ -59,8 +52,5 @@ else()
 endif()
 
 target_link_libraries(simple PUBLIC
-    LIBNEO::hdf5_tools
-    LIBNEO::interpolate
-    LIBNEO::field
-    LIBNEO::polylag
+    LIBNEO::neo
 )

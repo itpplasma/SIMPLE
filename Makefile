@@ -19,5 +19,11 @@ build: configure
 test: build
 	cd $(BUILD_DIR) && ctest
 
+doc: configure
+	cmake --build --preset default --target doc
+
+fpm:
+	fpm build
+
 clean:
 	rm -rf $(BUILD_DIR)
