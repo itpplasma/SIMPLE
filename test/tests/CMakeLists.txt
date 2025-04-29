@@ -199,6 +199,9 @@ add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
 # - test_canonical_full_regression.f90
 # - test_canonical_baseline_simple.f90
 
+add_executable (test_booz_xform.x test_booz_xform.f90)
+target_link_libraries(test_booz_xform.x simple)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
