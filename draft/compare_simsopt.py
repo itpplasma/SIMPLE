@@ -24,6 +24,7 @@ th = np.ones_like(s)
 ph = np.ones_like(s)
 
 modB = np.empty(len(s))
+sqrtg = np.empty(len(s))
 dmodBds = np.empty(len(s))
 dmodBdtheta = np.empty(len(s))
 dmodBdzeta = np.empty(len(s))
@@ -32,8 +33,9 @@ Bthetacov = np.empty(len(s))
 Bzetacov = np.empty(len(s))
 for i in range(len(s)):
     x = np.array([s[i], th[i], ph[i]])
-    bmod, sqrtg = pysimple.magfie_sub.magfie_boozer(x, bder, hcovar, hctrvr, hcurl)
-    modB[i] = bmod*GAUSS_IN_TESLA
+    modB[i], sqrtg[i] = pysimple.magfie_sub.magfie_boozer(x, bder, hcovar, hctrvr, hcurl)
+    modB[i] = modB[i]*GAUSS_IN_TESLA
+    sqrtg[i] = sqrtg[i]*CM_IN_M**3
     dmodBds[i] = bder[0]*modB[i]
     dmodBdtheta[i] = bder[1]*modB[i]
     dmodBdzeta[i] = bder[2]*modB[i]
@@ -52,7 +54,8 @@ boozer = BoozerRadialInterpolant(vmec, order=3, mpol=16, ntor=16)
 points = np.array([s, th, ph]).T.copy()
 
 boozer.set_points(points)
-B = boozer.modB()
+modB_simsopt = boozer.modB()
+sqrtg_simsopt = (boozer.G()+boozer.iota()*boozer.I())/modB_simsopt**2
 
 # %%
 plt.figure()
@@ -79,5 +82,15 @@ plt.gca().set_yscale("symlog", linthresh=1e-5)
 plt.xlabel("s")
 plt.ylabel("|B| derivatives [T]")
 plt.legend()
+
+# %%
+plt.figure()
+plt.plot(s, sqrtg_simsopt, label="sqrtg SIMSOPT")
+plt.plot(s, -sqrtg/boozer.psi0, "--", label="-sqrtg SIMPLE")
+#plt.gca().set_yscale("log")
+plt.xlabel("s")
+plt.ylabel("sqrtg [m^3]")
+plt.legend()
+
 
 # %%
