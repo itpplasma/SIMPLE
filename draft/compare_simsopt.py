@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 GAUSS_IN_TESLA = 1e-4
+CM_IN_M = 1e-2
 
 wout_file = "wout.nc"
 # %%
@@ -26,6 +27,9 @@ modB = np.empty(len(s))
 dmodBds = np.empty(len(s))
 dmodBdtheta = np.empty(len(s))
 dmodBdzeta = np.empty(len(s))
+Bscov = np.empty(len(s))
+Bthetacov = np.empty(len(s))
+Bzetacov = np.empty(len(s))
 for i in range(len(s)):
     x = np.array([s[i], th[i], ph[i]])
     bmod, sqrtg = pysimple.magfie_sub.magfie_boozer(x, bder, hcovar, hctrvr, hcurl)
@@ -33,11 +37,13 @@ for i in range(len(s)):
     dmodBds[i] = bder[0]*modB[i]
     dmodBdtheta[i] = bder[1]*modB[i]
     dmodBdzeta[i] = bder[2]*modB[i]
+    Bscov[i] = hcovar[0]*modB[i]*CM_IN_M
+    Bthetacov[i] = hcovar[1]*modB[i]*CM_IN_M
+    Bzetacov[i] = hcovar[2]*modB[i]*CM_IN_M
 
 # %%
 from simsopt.mhd.vmec import Vmec
 from simsopt.field.boozermagneticfield import BoozerRadialInterpolant
-from simsopt.geo import SurfaceRZFourier
 
 vmec = Vmec(wout_file)
 boozer = BoozerRadialInterpolant(vmec, order=3, mpol=16, ntor=16)
@@ -57,6 +63,19 @@ plt.plot(s, dmodBds, "--", label="dmodBds SIMPLE")
 plt.plot(s, dmodBdtheta, "--", label="dmodBdtheta SIMPLE")
 plt.plot(s, dmodBdzeta, "--", label="dmodBdzeta SIMPLE")
 plt.gca().set_yscale("symlog", linthresh=1e-2)
+plt.xlabel("s")
+plt.ylabel("|B| derivatives [T]")
+plt.legend()
+
+# %%
+plt.figure()
+plt.plot(s, boozer.K(), label="Bscov SIMSOPT")
+plt.plot(s, boozer.I(), label="Bthetacov SIMSOPT")
+plt.plot(s, boozer.G(), label="Bzetacov SIMSOPT")
+plt.plot(s, Bscov, "--", label="Bscov SIMPLE (set to zero)")
+plt.plot(s, Bthetacov, "--", label="Bthetacov SIMPLE")
+plt.plot(s, Bzetacov, "--", label="Bzetacov SIMPLE")
+plt.gca().set_yscale("symlog", linthresh=1e-5)
 plt.xlabel("s")
 plt.ylabel("|B| derivatives [T]")
 plt.legend()
