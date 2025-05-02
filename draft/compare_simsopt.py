@@ -2,6 +2,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+GAUSS_IN_TESLA = 1e-4
+
 wout_file = "wout.nc"
 # %%
 import pysimple
@@ -27,17 +29,10 @@ dmodBdzeta = np.empty(len(s))
 for i in range(len(s)):
     x = np.array([s[i], th[i], ph[i]])
     bmod, sqrtg = pysimple.magfie_sub.magfie_boozer(x, bder, hcovar, hctrvr, hcurl)
-    modB[i] = bmod
-    dmodBds[i] = bder[0]
-    dmodBdtheta[i] = bder[1]
-    dmodBdzeta[i] = bder[2]
-
-plt.figure()
-plt.plot(s, dmodBds, label="dmodBds")
-plt.plot(s, dmodBdtheta, label="dmodBdtheta")
-plt.plot(s, dmodBdzeta, label="dmodBdzeta")
-plt.legend()
-
+    modB[i] = bmod*GAUSS_IN_TESLA
+    dmodBds[i] = bder[0]*modB[i]
+    dmodBdtheta[i] = bder[1]*modB[i]
+    dmodBdzeta[i] = bder[2]*modB[i]
 
 # %%
 from simsopt.mhd.vmec import Vmec
@@ -47,19 +42,23 @@ from simsopt.geo import SurfaceRZFourier
 vmec = Vmec(wout_file)
 boozer = BoozerRadialInterpolant(vmec, order=3, mpol=16, ntor=16)
 # %%
-# surf = SurfaceRZFourier.from_wout(wout_file, s=0.5)
-# surf.plot(close=True)
-# %%
 
 points = np.array([s, th, ph]).T.copy()
 
 boozer.set_points(points)
 B = boozer.modB()
 
+# %%
 plt.figure()
-plt.plot(s, boozer.dmodBds(), label="dmodBds")
-plt.plot(s, boozer.dmodBdtheta(), label="dmodBdtheta")
-plt.plot(s, boozer.dmodBdzeta(), label="dmodBdzeta")
+plt.plot(s, boozer.dmodBds(), label="dmodBds SIMSOPT")
+plt.plot(s, boozer.dmodBdtheta(), label="dmodBdtheta SIMSOPT")
+plt.plot(s, boozer.dmodBdzeta(), label="dmodBdzeta SIMSOPT")
+plt.plot(s, dmodBds, "--", label="dmodBds SIMPLE")
+plt.plot(s, dmodBdtheta, "--", label="dmodBdtheta SIMPLE")
+plt.plot(s, dmodBdzeta, "--", label="dmodBdzeta SIMPLE")
+plt.gca().set_yscale("symlog", linthresh=1e-5)
+plt.xlabel("s")
+plt.ylabel("|B| derivatives [T]")
 plt.legend()
 
 # %%
