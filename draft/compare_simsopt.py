@@ -43,6 +43,13 @@ for i in range(len(s)):
     Bthetacov[i] = hcovar[1]*modB[i]*CM_IN_M
     Bzetacov[i] = hcovar[2]*modB[i]*CM_IN_M
 
+print("modB = ", modB[5])
+print("sqrtg = ", sqrtg[5])
+print("Bthetacov = ", Bthetacov[5])
+print("Bzetacov = ", Bzetacov[5])
+
+exit()
+
 # %%
 from simsopt.mhd.vmec import Vmec
 from simsopt.field.boozermagneticfield import BoozerRadialInterpolant
@@ -56,6 +63,7 @@ points = np.array([s, th, ph]).T.copy()
 boozer.set_points(points)
 modB_simsopt = boozer.modB()
 sqrtg_simsopt = (boozer.G()+boozer.iota()*boozer.I())/modB_simsopt**2
+
 
 # %%
 plt.figure()

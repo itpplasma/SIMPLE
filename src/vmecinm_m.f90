@@ -74,6 +74,8 @@ module vmecin_sub
   flux=flux*fac_b*fac_r**2
   phi=phi*fac_b*fac_r**2
   s=phi/flux
+  print *, 'flux=', flux
+  print *, 'phi=', phi
 !
   call nc_get(ncid, 'xm', axm)
   call nc_get(ncid, 'xn', axn)
