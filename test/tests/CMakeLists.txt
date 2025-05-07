@@ -1,8 +1,6 @@
 ##################################################
 # INTERNAL UNIT TEST STUFF
 ##################################################
-add_compile_options(-cpp)
-add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
 add_library(testing_utils ${CMAKE_CURRENT_SOURCE_DIR}/utility.f90 ${CMAKE_CURRENT_SOURCE_DIR}/results.f90)
 
 ##################################################
@@ -46,3 +44,4 @@ add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
 add_subdirectory(field_can)
 add_subdirectory(magfie)
+add_subdirectory(orbit)
