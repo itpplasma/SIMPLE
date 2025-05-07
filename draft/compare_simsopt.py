@@ -165,8 +165,8 @@ plt.legend()
 
 # %%
 plt.figure()
-plt.plot(s, sqrtg_simsopt, label="sqrtg SIMSOPT")
-plt.plot(s, -sqrtg / boozer.psi0, "--", label="-sqrtg SIMPLE")
+plt.plot(s, -sqrtg_simsopt, label="-sqrtg SIMSOPT")
+plt.plot(s, sqrtg / boozer.psi0, "--", label="sqrtg SIMPLE")
 # plt.gca().set_yscale("log")
 plt.xlabel("s")
 plt.ylabel("sqrtg [m^3]")
