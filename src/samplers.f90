@@ -157,7 +157,7 @@ module samplers
     double precision, dimension(:,:), allocatable, intent(inout) :: zstart
     double precision, intent(in) :: grid_density
     double precision :: ngrid, xi
-    integer :: xsize, ipart, lidx
+    integer :: xsize, ipart, jpart, lidx
     
     xsize = (2*pi) * grid_density !angle density
     ngrid = (1 / grid_density) - 1
