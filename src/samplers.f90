@@ -156,12 +156,12 @@ module samplers
 
     double precision, dimension(:,:), allocatable, intent(inout) :: zstart
     double precision, intent(in) :: grid_density
-    double precision :: factor, xi
-    integer :: xsize, ipart
+    double precision :: ngrid, xi
+    integer :: xsize, ipart, lidx
     
     xsize = (2*pi) * grid_density !angle density
-    factor = xsize * (1 / grid_density)
-    ntestpart = FLOOR(factor) ** 2 !number of total angle points
+    ngrid = (1 / grid_density) - 1
+    ntestpart = ngrid ** 2 !number of total angle points
 
     ! Resize particle coord. arrays and result memory.
     if (allocated(zstart)) deallocate(zstart)
@@ -173,13 +173,22 @@ module samplers
     if (allocated(iclass)) deallocate(iclass)
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
     
-    do ipart=1,ntestpart
+    do ipart=1,ngrid
       zstart(1,ipart) = sbeg(1)
       zstart(2,ipart) = xsize * ipart
       zstart(3,ipart) = xsize * ipart
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
+      do jpart=1,ngrid
+        lidx = (jpart-1)*ntestpart+ipart
+        zstart(1,lidx) = sbeg(1)
+        zstart(2,lidx) = xsize * jpart
+        zstart(3,lidx) = xsize * jpart
+        zstart(4,lidx) = 1.d0  ! normalized velocity module z(4) = v / v_0
+        call random_number(xi)
+        zstart(5,lidx)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
+      end do 
     enddo
 
     call save_starting_points(zstart)
