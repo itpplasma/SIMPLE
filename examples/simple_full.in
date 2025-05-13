@@ -30,6 +30,7 @@ startmode = 1            !  mode for initial conditions:
 !                         3=read ANTS and run
 !                         4=read and run a batch,
 !                         5=distribute in volume ("global")
+grid_density = 0d0       ! for startmode 1 only, between 0.0 to 0.99, when 0.0 then no grid is made.
 special_ants_file = .False. ! if .True., a different start file is read (defined in samplers.f90), .False. uses standard filename (defined in samplers.f90)
 integmode = 1            ! mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 relerr = 1d-13           ! tolerance for integrator. Set to 1d-13 for symplectic.

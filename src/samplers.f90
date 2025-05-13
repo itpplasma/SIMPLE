@@ -1,6 +1,5 @@
 module samplers
   use util
-  use params, only: zstart
 
   implicit none
 
@@ -12,6 +11,7 @@ module samplers
   INTERFACE sample
        MODULE PROCEDURE sample_read
        MODULE PROCEDURE sample_surface_fieldline
+       MODULE PROCEDURE sample_grid
        MODULE PROCEDURE sample_volume_single
        MODULE PROCEDURE sample_random_batch
        MODULE PROCEDURE sample_points_ants
@@ -78,7 +78,9 @@ module samplers
 
       call load_starting_points(zstart, filename)
   end subroutine
-
+  
+  
+  ! Samplers ################################
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type, num_surf
     use field_can_mod, only : can_to_ref
@@ -146,6 +148,52 @@ module samplers
     call save_starting_points(zstart)
 
   end subroutine sample_surface_fieldline
+  
+  subroutine sample_grid(zstart, grid_density)
+    use params, only: ntestpart, zstart_dim1, zend, times_lost, &
+        trap_par, perp_inv, iclass, xstart, sbeg
+    use util, only: pi
+
+    double precision, dimension(:,:), allocatable, intent(inout) :: zstart
+    double precision, intent(in) :: grid_density
+    double precision :: ngrid, xi
+    integer :: xsize, ipart, jpart, lidx
+    
+    xsize = (2*pi) * grid_density !angle density
+    ngrid = (1 / grid_density) - 1
+    ntestpart = ngrid ** 2 !number of total angle points
+
+    ! Resize particle coord. arrays and result memory.
+    if (allocated(zstart)) deallocate(zstart)
+    if (allocated(zend)) deallocate(zend)
+    allocate(zstart(zstart_dim1,ntestpart), zend(zstart_dim1,ntestpart))
+    if (allocated(times_lost)) deallocate(times_lost)
+    if (allocated(trap_par)) deallocate(trap_par)
+    if (allocated(perp_inv)) deallocate(perp_inv)
+    if (allocated(iclass)) deallocate(iclass)
+    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+    
+    do ipart=1,ngrid
+      zstart(1,ipart) = sbeg(1)
+      zstart(2,ipart) = xsize * ipart
+      zstart(3,ipart) = xsize * ipart
+      zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
+      call random_number(xi)
+      zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
+      do jpart=1,ngrid
+        lidx = (jpart-1)*ntestpart+ipart
+        zstart(1,lidx) = sbeg(1)
+        zstart(2,lidx) = xsize * ipart
+        zstart(3,lidx) = xsize * jpart
+        zstart(4,lidx) = 1.d0  ! normalized velocity module z(4) = v / v_0
+        call random_number(xi)
+        zstart(5,lidx)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
+      end do 
+    enddo
+
+    call save_starting_points(zstart)
+
+  end subroutine sample_grid
 
   subroutine sample_random_batch(zstart, reuse_existing)
   ! Get random batch from preexisting zstart, allows reuse.
@@ -162,7 +210,7 @@ module samplers
     else
       call load_starting_points(zstart_batch, START_FILE)
       call random_number(temp_ran)
-      ran_begin = DBLE(temp_ran)
+      ran_begin = INT(temp_ran)
       ran_end = ran_begin+batch_size
       if ((ran_end).gt.(ntestpart)) then
         ran_begin = ran_begin - (ran_end-ntestpart)
@@ -176,12 +224,12 @@ module samplers
       read(1,*) zstart(:,ipart)
     enddo
 
-  end subroutine
+  end subroutine sample_random_batch
 
   subroutine sample_points_ants(use_special_ants_file)
     use parse_ants, only : process_line
     use get_can_sub, only : vmec_to_can
-    use params, only: ntestpart
+    use params, only: ntestpart, zstart ! ANTS sampler uses global zstart
 
     logical, intent(in) :: use_special_ants_file
 
@@ -212,7 +260,7 @@ module samplers
       zstart(4, ipart) = 1.d0
       zstart(5, ipart) = v_par / sqrt(v_par**2 + v_perp**2)
     enddo
-  end subroutine
+  end subroutine sample_points_ants
 
 
 end module samplers
