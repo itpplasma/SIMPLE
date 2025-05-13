@@ -161,7 +161,7 @@ module samplers
     
     xsize = (2*pi) * grid_density !angle density
     factor = xsize * (1 / grid_density)
-    ntestpart = FLOOR(factor) * 2 !number of total angle points
+    ntestpart = FLOOR(factor) ** 2 !number of total angle points
 
     ! Resize particle coord. arrays and result memory.
     if (allocated(zstart)) deallocate(zstart)
