@@ -51,6 +51,7 @@ contains
     integer             :: L1i
     double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
 
+    ! TODO: Remove side effects
     netcdffile = vmec_file
     ns_s = ans_s
     ns_tp = ans_tp
