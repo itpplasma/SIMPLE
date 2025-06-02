@@ -31,7 +31,11 @@ module simple_main
 
     self%integmode = aintegmode
     if (self%integmode>=0) then
-      call init_field_can(isw_field_type, field_from_file(field_input))
+      if(trim(field_input) == '') then
+        call init_field_can(isw_field_type, field_from_file(vmec_file))
+      else
+        call init_field_can(isw_field_type, field_from_file(field_input))
+      end if
     end if
   end subroutine init_field
 
