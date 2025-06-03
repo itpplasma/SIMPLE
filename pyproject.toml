@@ -1,0 +1,16 @@
+[build-system]
+requires = ["scikit-build-core", "numpy", "f90wrap"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pysimple"
+version = "1.2.0"
+dependencies = ["numpy"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+]
+
+[tool.scikit-build]
+build-dir = "build"
+build.verbose = true
+cmake.define.CMAKE_CACHE_DIR = "build"
