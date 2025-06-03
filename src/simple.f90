@@ -145,14 +145,6 @@ contains
                           rtol_init, mode_init)
   end subroutine init_sympl
 
-  subroutine init_integrator(self, z0)
-    type(Tracer), intent(inout) :: self
-    double precision, intent(in) :: z0(:)
-
-    call init_sympl(self%si, self%f, z0, self%dtau, self%dtaumin, &
-      self%relerr, self%integmode)
-  end subroutine init_integrator
-
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(Tracer), intent(inout) :: self
     double precision, intent(inout) :: s, th, ph, lam
