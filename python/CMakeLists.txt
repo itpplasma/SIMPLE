@@ -175,3 +175,6 @@ add_custom_target(
     pysimple ALL
     DEPENDS ${CMAKE_BINARY_DIR}/pysimple.py
 )
+
+install(TARGETS ${F2PY_MODULE_NAME} DESTINATION .)
+install(FILES ${CMAKE_BINARY_DIR}/pysimple.py DESTINATION .)

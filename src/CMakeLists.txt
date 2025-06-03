@@ -41,7 +41,7 @@ set(SOURCES
 )
 
 
-add_library (simple SHARED ${SOURCES})
+add_library (simple STATIC ${SOURCES})
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple PRIVATE CONTRIB netcdf netcdff)
