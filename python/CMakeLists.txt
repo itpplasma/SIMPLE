@@ -72,7 +72,9 @@ set(FILES_TO_WRAP
     simple_main.f90
     simple.f90
     cut_detector.f90
+    orbit_symplectic_base.f90
     orbit_symplectic.f90
+    field/field_can_base.f90
     field_can.f90
     get_canonical_coordinates.f90
     params.f90
