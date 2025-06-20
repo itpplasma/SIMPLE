@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Building
 - **Primary build**: `make` - Uses CMake with Ninja generator to build in `build/` directory
-- **Alternative**: `fmp build` - Uses Fortran Package Manager
+- **Alternative**: `fpm build` - Uses Fortran Package Manager
 - **Python package**: Build via scikit-build-core (see pyproject.toml)
 
 ### Testing
@@ -36,7 +36,7 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 
 **Field System** (`src/field/`):
 - Abstract `MagneticField` base class in `field_base.f90`
-- VMEC implementation in `field_vmec.f90` 
+- VMEC implementation in `field_vmec.f90`
 - Canonical coordinates: Boozer, flux, Meiss, Albert variants
 - Runtime field selection via function pointers
 
