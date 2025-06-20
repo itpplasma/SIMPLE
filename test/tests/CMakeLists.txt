@@ -1,4 +1,12 @@
 ##################################################
+# DOWNLOAD TEST DATA
+##################################################
+file(DOWNLOAD
+    https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc
+    ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
+)
+
+##################################################
 # INTERNAL UNIT TEST STUFF
 ##################################################
 add_library(testing_utils ${CMAKE_CURRENT_SOURCE_DIR}/utility.f90 ${CMAKE_CURRENT_SOURCE_DIR}/results.f90)

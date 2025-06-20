@@ -12,7 +12,6 @@ enable_language(C Fortran)
 include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-set	(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
 
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
@@ -124,6 +123,7 @@ add_executable (simple.x
 )
 
 target_link_libraries(simple.x PRIVATE simple)
+set_target_properties(simple.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)
