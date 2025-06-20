@@ -43,3 +43,11 @@ tests/times_lost_*
 */tests/simple.in
 */tests/wout*
 */tests/start.dat
+dcon*.txt
+log.*
+mercier.*
+parvmecinfo.txt
+threed1.*
+threed1.*
+timings.txt
+.aider*

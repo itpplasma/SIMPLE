@@ -4,7 +4,7 @@ set (SOURCES
     # licenced under LGPL (see LICENSE.rkf45)
     minpack.f90
 )
-add_library(CONTRIB SHARED ${SOURCES})
+add_library(CONTRIB STATIC ${SOURCES})
 
 
 

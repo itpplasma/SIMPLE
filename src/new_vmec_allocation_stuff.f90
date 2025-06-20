@@ -12,6 +12,7 @@ contains
 !
   status = nf90_open(netcdffile, NF90_NOWRITE, ncid)
   if(status /= nf90_noerr) then
+    print *, "new_allocate_vmec_stuff: could not find VMEC NetCDF file"
     print *, trim(nf90_strerror(status))
     print *, trim(netcdffile)
     error stop

@@ -72,7 +72,9 @@ set(FILES_TO_WRAP
     simple_main.f90
     simple.f90
     cut_detector.f90
+    orbit_symplectic_base.f90
     orbit_symplectic.f90
+    field/field_can_base.f90
     field_can.f90
     get_canonical_coordinates.f90
     params.f90
@@ -173,3 +175,6 @@ add_custom_target(
     pysimple ALL
     DEPENDS ${CMAKE_BINARY_DIR}/pysimple.py
 )
+
+install(TARGETS ${F2PY_MODULE_NAME} DESTINATION .)
+install(FILES ${CMAKE_BINARY_DIR}/pysimple.py DESTINATION .)

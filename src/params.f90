@@ -97,10 +97,7 @@ contains
     character(256), intent(in) :: config_file
 
     open(1, file=config_file, status='old', action='read')
-
     read(1, nml=config)
-
-    if(trim(field_input) == '') field_input = netcdffile
 
     call reset_seed_if_deterministic
 

@@ -1,5 +1,5 @@
 #%%
-from pysimple import simple, params, orbit_symplectic
+from pysimple import simple_main, simple, params, orbit_symplectic
 from pysimple import get_can_sub as coord
 
 import numpy as np
@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 #%%
 tracy = simple.Tracer()
 
-simple.init_field(tracy, "wout.nc", 3, 3, 3, 1)
-simple.init_params(tracy, 2, 4, 3.5e6, 256, 1, 1e-13)
+simple_main.init_field(tracy, "wout.nc", 3, 3, 3, 1)
+params.params_init()
 
 #%% Initial conditions
 z0_vmec = np.array([0.8, 1.0, 0.2, 1.0, 0.5])   # s, th, ph, v/v_th, v_par/v
@@ -16,7 +16,7 @@ z0_can = z0_vmec.copy()  # s, th_c, ph_c, v/v_th, v_par/v
 
 z0_can[1:3] = coord.vmec_to_can(z0_vmec[0], z0_vmec[1], z0_vmec[2])
 
-simple.init_integrator(tracy, z0_can)
+simple.init_sympl(tracy.si, tracy.f, z0_can, params.dtaumin, params.dtaumin, 1e-13, tracy.integmode)
 
 print(f'B = {tracy.f.bmod}')
 
@@ -30,7 +30,7 @@ z_cyl[0,:2] = coord.vmec_to_cyl(z_vmec[0, 0], z_vmec[0, 1], z_vmec[0, 2])
 z_cyl[0, 2] = z_vmec[0, 2]
 
 for kt in range(nt-1):
-    orbit_symplectic.orbit_timestep_sympl(tracy.si, tracy.f)
+    orbit_symplectic.orbit_timestep_sympl_expl_impl_euler(tracy.si, tracy.f)
     z_integ[kt+1, :] = tracy.si.z
     z_vmec[kt+1, 0] = z_integ[kt+1, 0]
     z_vmec[kt+1, 1:3] = coord.can_to_vmec(

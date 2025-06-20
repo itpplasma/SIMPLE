@@ -51,6 +51,7 @@ contains
     integer             :: L1i
     double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
 
+    ! TODO: Remove side effects
     netcdffile = vmec_file
     ns_s = ans_s
     ns_tp = ans_tp
@@ -143,14 +144,6 @@ contains
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
                           rtol_init, mode_init)
   end subroutine init_sympl
-
-  subroutine init_integrator(self, z0)
-    type(Tracer), intent(inout) :: self
-    double precision, intent(in) :: z0(:)
-
-    call init_sympl(self%si, self%f, z0, self%dtau, self%dtaumin, &
-      self%relerr, self%integmode)
-  end subroutine init_integrator
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(Tracer), intent(inout) :: self
