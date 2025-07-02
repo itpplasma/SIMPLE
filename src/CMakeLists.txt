@@ -54,4 +54,5 @@ endif()
 
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
+    gvec
 )

@@ -23,9 +23,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Change config: `make CONFIG=Debug`
 
 ### Dependencies
-- Required: NetCDF, LAPACK/BLAS, libneo
+- Required: NetCDF, LAPACK/BLAS, libneo, GVEC (minimal)
 - Compilers: GNU Fortran or Intel Fortran
 - Optional: OpenMP (enabled by default)
+
+### GVEC Integration
+- Minimal GVEC library automatically built from `thirdparty/gvec/`
+- Provides B-spline and cubic spline functionality for magnetic field interpolation
+- Used by `field_gvec.f90` for reading `.dat` magnetic field files
+- Library: `libgvec.a` with modules in `gvec_modules/`
 - Python interface: numpy, f90wrap (for building pysimple)
 
 ## Architecture Overview

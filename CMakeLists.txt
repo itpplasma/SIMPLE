@@ -115,6 +115,9 @@ else()
 	endif()
 endif()
 
+# Add GVEC as a minimal library 
+set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
+add_subdirectory(thirdparty/gvec)
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
 
