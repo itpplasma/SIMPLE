@@ -84,9 +84,36 @@ set(FILES_TO_WRAP
     magfie.f90
 )
 
+# Add libneo files to wrap
+if(DEFINED ENV{CODE})
+    set(LIBNEO_SOURCE_DIR $ENV{CODE}/libneo)
+else()
+    set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})
+endif()
+
+list(APPEND FILES_TO_WRAP ${LIBNEO_SOURCE_DIR}/src/canonical_coordinates_mod.f90)
+
 set(EXCLUDE_BASENAMES
     # Empty
 )
+
+# Separate SIMPLE and libneo files
+set(SIMPLE_FILES_TO_WRAP)
+set(LIBNEO_FILES_TO_WRAP)
+
+foreach(file ${FILES_TO_WRAP})
+    if(file MATCHES "^${LIBNEO_SOURCE_DIR}")
+        list(APPEND LIBNEO_FILES_TO_WRAP ${file})
+    else()
+        list(APPEND SIMPLE_FILES_TO_WRAP ${file})
+    endif()
+endforeach()
+
+# Add PROJECT_SOURCE_DIR/src/ prefix to SIMPLE files only
+list(TRANSFORM SIMPLE_FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/src/)
+
+# Combine the lists
+set(FILES_TO_WRAP ${SIMPLE_FILES_TO_WRAP} ${LIBNEO_FILES_TO_WRAP})
 
 foreach(file ${FILES_TO_WRAP})
     get_filename_component(basename ${file} NAME_WE)
@@ -99,8 +126,6 @@ foreach(file ${FILES_TO_WRAP})
         )
     endif()
 endforeach()
-
-list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/src/)
 
 set(F2PY_MODULE_NAME "_pysimple")
 
