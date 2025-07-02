@@ -5,6 +5,7 @@ set(SOURCES
     field/field_base.f90
     field/field_coils.f90
     field/field_vmec.f90
+    field/field_gvec.f90
     field.f90
     field/field_can_base.f90
     field/field_can_test.f90

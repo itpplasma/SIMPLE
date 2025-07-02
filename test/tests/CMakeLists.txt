@@ -50,6 +50,10 @@ add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
+add_executable (test_gvec.x test_gvec.f90)
+target_link_libraries(test_gvec.x simple)
+add_test(NAME test_gvec COMMAND test_gvec.x)
+
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
 add_subdirectory(field_can)
