@@ -8,4 +8,7 @@ file(DOWNLOAD
 add_test(NAME test_vmec
     COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_vmec.py
 )
-set_tests_properties(test_vmec PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}")
+set_tests_properties(test_vmec PROPERTIES 
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}"
+    LABELS "slow"
+)

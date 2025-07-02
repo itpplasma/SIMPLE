@@ -8,9 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Primary build**: `make` - Uses CMake with Ninja generator to build in `build/` directory
 - **Alternative**: `fpm build` - Uses Fortran Package Manager
 - **Python package**: Build via scikit-build-core (see pyproject.toml)
+- **Clean build**: `make clean` - Removes build directory
+- **Reconfigure**: `make reconfigure` - Forces CMake reconfiguration
 
 ### Testing
 - **Run tests**: `make test` - Executes ctest in build directory
+- **Python tests**: Located in `test/python/` directory
+- **Golden record testing**: Use `examples/golden_record.py` to compare against reference behavior
 - Note: Test system is currently under development
 
 ### Build Configuration
@@ -22,6 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Required: NetCDF, LAPACK/BLAS, libneo
 - Compilers: GNU Fortran or Intel Fortran
 - Optional: OpenMP (enabled by default)
+- Python interface: numpy, f90wrap (for building pysimple)
 
 ## Architecture Overview
 
@@ -72,8 +77,14 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 ### Python Interface
 - `pysimple` module built automatically with main library
 - Located in `python/` directory with integration examples
+- Examples: `examples/example.py`, `examples/example_losses.py`
 
 ### Output Files
 - `confined_fraction.dat`: Main confinement statistics over time
 - `times_lost.dat`: Individual particle loss times and classification
 - `start.dat`: Initial conditions (input/output depending on startmode)
+- `fort.6601`: Newton iteration convergence diagnostics
+
+### Example Usage
+- Download test VMEC file: `wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc`
+- Run with example input: `./build/simple.x` (requires `simple.in` in working directory)
