@@ -7,9 +7,14 @@ use MODgvec_cubic_spline, only: t_cubspl
 use MODgvec_rProfile_bspl, only: t_rProfile_bspl
 use MODgvec_globals, only: wp
 use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_iota_r, eval_pres_r, Finalize_ReadState
-use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof
+use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, X1_base_r, X2_base_r, LA_base_r, X1_r, X2_r, LA_r, hmap_r
 implicit none
   
+! GVEC derivative constants (from defines.h)
+integer, parameter :: DERIV_S = 1
+integer, parameter :: DERIV_THET = 2
+integer, parameter :: DERIV_ZETA = 3
+
 private
 public :: GvecField, create_gvec_field
 
@@ -98,21 +103,40 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp), intent(out) :: Bmod
     real(dp), intent(out), optional :: sqgBctr(3)
     
+    ! Local variables for GVEC evaluation
     real(dp) :: r, theta, phi
-    real(dp) :: s_vmec, s_gvec
-    real(dp) :: iota_val, pres_val, phi_val
-    real(dp) :: dLA_dt, dLA_dz  ! derivatives of streamfunction
-    real(dp) :: phiPrime_s      ! toroidal flux derivative
-    real(dp) :: Bthet, Bzeta   ! contravariant field components
+    real(dp) :: s_gvec, theta_star, zeta
     
-    ! Extract coordinates
+    ! GVEC coordinate evaluation variables
+    real(wp) :: gvec_coords(3)  ! (s, theta, zeta)
+    integer :: deriv_flags(2)   ! For derivative specification
+    
+    ! X1, X2, LA values and derivatives
+    real(wp) :: X1_val, X2_val, LA_val
+    real(wp) :: dX1_ds, dX1_dthet, dX1_dzeta
+    real(wp) :: dX2_ds, dX2_dthet, dX2_dzeta
+    real(wp) :: dLA_ds, dLA_dthet, dLA_dzeta
+    
+    ! Profile values
+    real(wp) :: iota_val, phi_val, phiPrime_val
+    
+    ! Coordinate and field computation
+    real(wp) :: R_pos, Z_pos  ! Physical R, Z coordinates
+    real(wp) :: e_thet(3), e_zeta(3), e_s(3)  ! Basis vectors
+    real(wp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
+    real(wp) :: sqrtG  ! Jacobian
+    real(wp) :: B_thet, B_zeta  ! Covariant field components in (s,theta,zeta)
+    real(wp) :: Bx, By, Bz  ! Cartesian field components
+    
+    ! Extract input coordinates
     r = x(1)      ! r = sqrt(s_vmec)
     theta = x(2)  ! theta_vmec  
     phi = x(3)    ! phi_vmec
     
     ! Convert to GVEC flux coordinate
-    s_vmec = r**2   ! VMEC flux coordinate
-    s_gvec = s_vmec ! For now, assume same parameterization
+    s_gvec = r**2   ! VMEC flux coordinate (0 to 1)
+    theta_star = theta  ! Straight field line poloidal angle
+    zeta = phi         ! Toroidal angle
     
     if (.not. self%data_loaded) then
         print *, 'Warning: GVEC data not loaded, returning dummy values'
@@ -124,12 +148,13 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     end if
     
     ! Check if GVEC state is properly initialized before evaluation
-    ! Note: GVEC module variables sometimes get deallocated between calls
-    if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof)) then
+    if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
+        .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. .not. allocated(LA_r)) then
         ! Reload the GVEC state (this is expected behavior due to GVEC module design)
         call ReadState(trim(self%filename))
         
-        if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof)) then
+        if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
+            .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. .not. allocated(LA_r)) then
             print *, 'Error: Failed to initialize GVEC state for field evaluation'
             Acov = 0.0_dp
             hcov = 0.0_dp  
@@ -139,45 +164,129 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         end if
     end if
     
-    ! Use GVEC's native API to evaluate profiles
-    phi_val = eval_phi_r(real(s_gvec, wp))       ! toroidal flux
-    iota_val = eval_iota_r(real(s_gvec, wp))     ! rotational transform  
-    pres_val = eval_pres_r(real(s_gvec, wp))     ! pressure
+    ! Prepare coordinates for GVEC evaluation
+    gvec_coords(1) = real(s_gvec, wp)
+    gvec_coords(2) = real(theta_star, wp)
+    gvec_coords(3) = real(zeta, wp)
     
-    ! Toroidal flux derivative (simplified)
-    phiPrime_s = 0.159154943091895_dp  ! dphi/ds at current surface
+    ! Evaluate X1 (R coordinate) and its derivatives
+    deriv_flags = [0, 0]  ! Function value
+    X1_val = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
     
-    ! For now, use simplified field evaluation
-    ! Real implementation would:
-    ! 1. Evaluate X1, X2 coordinates using Fourier series
-    ! 2. Evaluate LA (streamfunction) and its derivatives
-    ! 3. Compute metric tensor elements
-    ! 4. Transform to desired coordinate system
+    deriv_flags = [DERIV_S, 0]  ! ∂/∂s
+    dX1_ds = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
     
-    ! Simplified streamfunction derivatives (would compute from Fourier modes)
-    dLA_dt = 0.0_dp  ! dLA/dtheta (from Fourier reconstruction)
-    dLA_dz = 0.0_dp  ! dLA/dzeta (from Fourier reconstruction)
+    deriv_flags = [0, DERIV_THET]  ! ∂/∂θ
+    dX1_dthet = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
     
-    ! Contravariant field components in flux coordinates
-    Bthet = (iota_val - dLA_dz) * phiPrime_s   ! B^theta
-    Bzeta = (1.0_dp + dLA_dt) * phiPrime_s     ! B^zeta
+    deriv_flags = [0, DERIV_ZETA]  ! ∂/∂ζ
+    dX1_dzeta = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
     
-    ! Convert to covariant components (simplified - needs metric tensor)
-    ! For cylindrical-like coordinates:
-    Bmod = sqrt(Bthet**2 + Bzeta**2)  ! Simplified magnitude
+    ! Evaluate X2 (Z coordinate) and its derivatives
+    deriv_flags = [0, 0]
+    X2_val = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
     
-    ! Vector potential components (simplified)
-    Acov(1) = 0.0_dp                           ! A_r
-    Acov(2) = phi_val * (1.0_dp + dLA_dt)     ! A_theta
-    Acov(3) = phi_val * (iota_val - dLA_dz)   ! A_phi
+    deriv_flags = [DERIV_S, 0]
+    dX2_ds = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
     
-    ! Scale factors (simplified - would come from coordinate mapping)
-    hcov(1) = 1.0_dp / (1.0_dp + 0.1_dp * cos(theta))  ! h_r (simplified)
-    hcov(2) = r                                          ! h_theta
-    hcov(3) = self%r_major                              ! h_phi
+    deriv_flags = [0, DERIV_THET]
+    dX2_dthet = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
+    
+    deriv_flags = [0, DERIV_ZETA]
+    dX2_dzeta = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
+    
+    ! Evaluate LA (stream function) and its derivatives
+    deriv_flags = [0, 0]
+    LA_val = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+    
+    deriv_flags = [DERIV_S, 0]
+    dLA_ds = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+    
+    deriv_flags = [0, DERIV_THET]
+    dLA_dthet = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+    
+    deriv_flags = [0, DERIV_ZETA]
+    dLA_dzeta = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+    
+    ! Get profile values
+    iota_val = eval_iota_r(real(s_gvec, wp))      ! Rotational transform
+    phi_val = eval_phi_r(real(s_gvec, wp))        ! Toroidal flux
+    
+    ! Compute toroidal flux derivative (approximate for now)
+    if (s_gvec > 0.01_wp) then
+        phiPrime_val = (eval_phi_r(real(s_gvec + 0.01_wp, wp)) - eval_phi_r(real(s_gvec - 0.01_wp, wp))) / 0.02_wp
+    else
+        phiPrime_val = eval_phi_r(0.01_wp) / 0.01_wp
+    end if
+    
+    ! Get physical coordinates
+    R_pos = X1_val
+    Z_pos = X2_val
+    
+    ! Compute basis vectors in Cartesian coordinates
+    ! e_s = ∂r/∂s = (∂X1/∂s, ∂X2/∂s, 0)
+    e_s(1) = dX1_ds
+    e_s(2) = dX2_ds  
+    e_s(3) = 0.0_wp
+    
+    ! e_theta = ∂r/∂θ = (∂X1/∂θ, ∂X2/∂θ, 0)
+    e_thet(1) = dX1_dthet
+    e_thet(2) = dX2_dthet
+    e_thet(3) = 0.0_wp
+    
+    ! e_zeta = ∂r/∂ζ = (∂X1/∂ζ, ∂X2/∂ζ, R) for toroidal coordinate
+    e_zeta(1) = dX1_dzeta
+    e_zeta(2) = dX2_dzeta
+    e_zeta(3) = R_pos  ! R * ∂φ/∂ζ, and ∂φ/∂ζ = 1
+    
+    ! Compute metric tensor components
+    g_ss = dot_product(e_s, e_s)
+    g_tt = dot_product(e_thet, e_thet)
+    g_zz = dot_product(e_zeta, e_zeta)
+    g_st = dot_product(e_s, e_thet)
+    g_sz = dot_product(e_s, e_zeta)
+    g_tz = dot_product(e_thet, e_zeta)
+    
+    ! Compute Jacobian sqrt(g)
+    sqrtG = sqrt(g_ss * (g_tt * g_zz - g_tz**2) + g_st * (2.0_wp * g_sz * g_tz - g_st * g_zz) - g_sz**2 * g_tt)
+    
+    ! Compute covariant magnetic field components using GVEC formula
+    ! B_θ = (ι - ∂Λ/∂ζ) * Φ'/(√g)
+    ! B_ζ = (1 + ∂Λ/∂θ) * Φ'/(√g)
+    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / sqrtG
+    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / sqrtG
+    
+    ! Compute Cartesian field components
+    ! B = B_θ * e_θ + B_ζ * e_ζ (B_s = 0 for divergence-free field)
+    Bx = B_thet * e_thet(1) + B_zeta * e_zeta(1)
+    By = B_thet * e_thet(2) + B_zeta * e_zeta(2)
+    Bz = B_thet * e_thet(3) + B_zeta * e_zeta(3)
+    
+    ! Compute field magnitude
+    Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
+    
+    ! Covariant field components in flux coordinates
+    ! hcov = B · ∇x_i where x_i are the flux coordinates (s, θ, ζ)
+    hcov(1) = real(Bx * e_s(1) + By * e_s(2) + Bz * e_s(3), dp)  ! B_s
+    hcov(2) = real(Bx * e_thet(1) + By * e_thet(2) + Bz * e_thet(3), dp)  ! B_θ 
+    hcov(3) = real(Bx * e_zeta(1) + By * e_zeta(2) + Bz * e_zeta(3), dp)  ! B_ζ
+    
+    ! Vector potential components
+    ! For axisymmetric case: A_s = 0, A_θ = 0, A_φ = ψ(s)/R
+    Acov(1) = 0.0_dp  ! A_s = 0 
+    Acov(2) = 0.0_dp  ! A_θ = 0  
+    
+    ! A_φ = toroidal flux function divided by R
+    if (abs(R_pos) > 1.0e-10_wp) then
+        Acov(3) = real(phi_val / R_pos, dp)
+    else
+        Acov(3) = 0.0_dp
+    end if
     
     if (present(sqgBctr)) then
-        sqgBctr = 0.0_dp  ! Not implemented yet
+        ! sqrt(g) * B^contravariant components (requires metric inversion)
+        ! For now, simplified
+        sqgBctr = 0.0_dp
     end if
     
 end subroutine evaluate
