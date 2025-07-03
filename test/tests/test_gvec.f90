@@ -8,8 +8,8 @@ implicit none
 class(GvecField), allocatable :: gvec_field
 character(len=256) :: test_file
 
-! Test data file path - using relative path from test directory
-test_file = '../test_data/GVEC_elliptok_State_final.dat'
+! Test data file path - using relative path from build/test/tests/ directory
+test_file = '../../../test/test_data/GVEC_elliptok_State_final.dat'
 
 print *, 'Testing GvecField creation...'
 

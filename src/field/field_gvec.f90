@@ -65,9 +65,11 @@ end function create_gvec_field
 
 subroutine load_dat_file(self)
     class(GvecField), intent(inout) :: self
-    integer :: iounit, ios, i
+    integer :: iounit, ios, i, gridType
     character(len=1024) :: line
     logical :: file_exists
+    integer :: outputLevel, fileID
+    integer :: degGP, mn_nyq(2), hmap
     
     inquire(file=trim(self%filename), exist=file_exists)
     if (.not. file_exists) then
@@ -81,42 +83,55 @@ subroutine load_dat_file(self)
         return
     end if
     
-    ! Read basic file structure (simplified parsing)
+    ! Parse GVEC .dat file format
     read(iounit, '(A)', iostat=ios) line  ! Header comment
     if (ios /= 0) goto 100
     
-    read(iounit, *, iostat=ios) ! outputLevel, fileID  
+    read(iounit, *, iostat=ios) outputLevel, fileID  
     if (ios /= 0) goto 100
     
     read(iounit, '(A)', iostat=ios) line  ! grid comment
     if (ios /= 0) goto 100
     
-    read(iounit, *, iostat=ios) self%nElems  ! nElems, gridType
+    read(iounit, *, iostat=ios) self%nElems, gridType
     if (ios /= 0) goto 100
     
-    ! Skip detailed parsing for now - just set basic values
-    self%nfp = 1
+    ! Read grid points sp(0:nElems)
+    read(iounit, '(A)', iostat=ios) line  ! grid sp comment
+    if (ios /= 0) goto 100
+    
+    if (allocated(self%sp)) deallocate(self%sp)
+    allocate(self%sp(0:self%nElems))
+    
+    read(iounit, *, iostat=ios) (self%sp(i), i=0, self%nElems)
+    if (ios /= 0) goto 100
+    
+    ! Read global parameters
+    read(iounit, '(A)', iostat=ios) line  ! global comment
+    if (ios /= 0) goto 100
+    
+    read(iounit, *, iostat=ios) self%nfp, degGP, mn_nyq(1), mn_nyq(2), hmap
+    if (ios /= 0) goto 100
+    
+    ! Set basic geometry parameters (would need more parsing for real values)
     self%r_major = 1.0_dp
-    self%a_minor = 0.5_dp
+    self%a_minor = 0.5_dp 
     self%volume = 1.0_dp
     
-    ! Allocate basic grid
-    if (allocated(self%sp)) deallocate(self%sp)
-    allocate(self%sp(0:max(self%nElems, 1)))
+    print *, 'GVEC file parsed successfully:'
+    print *, '  Grid elements: ', self%nElems
+    print *, '  Field periods: ', self%nfp
+    print *, '  Grid type: ', gridType
+    print *, '  s range: [', self%sp(0), ', ', self%sp(self%nElems), ']'
     
-    ! Simple linear grid for now
-    do i = 0, self%nElems
-        self%sp(i) = real(i, dp) / real(max(self%nElems, 1), dp)
-    end do
-    
-    print *, 'Basic GVEC file structure parsed'
     self%data_loaded = .true.
     
 100 continue
     close(iounit)
     
     if (ios /= 0) then
-        print *, 'Error reading GVEC file format at line: ', trim(line)
+        print *, 'Error reading GVEC file format. Last line: ', trim(line)
+        self%data_loaded = .false.
     end if
     
 end subroutine load_dat_file
