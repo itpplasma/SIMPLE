@@ -123,6 +123,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Coordinate and field computation
     real(wp) :: R_pos, Z_pos  ! Physical R, Z coordinates
     real(wp) :: e_thet(3), e_zeta(3), e_s(3)  ! Basis vectors
+    real(wp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
     real(wp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
     real(wp) :: sqrtG  ! Jacobian
     real(wp) :: B_thet, B_zeta  ! Covariant field components in (s,theta,zeta)
@@ -227,31 +228,20 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     R_pos = X1_val
     Z_pos = X2_val
 
-    ! Use GVEC's hmap to compute basis vectors properly
+    ! Use GVEC's hmap to compute basis vectors
     ! Get the Cartesian derivatives from GVEC's coordinate mapping
-    call hmap_r%get_dx_dqi(gvec_coords, e_s, e_thet, e_zeta)
+    ! hmap_r returns: dx_dq1 = ∂r/∂X1, dx_dq2 = ∂r/∂X2, dx_dq3 = ∂r/∂ζ
+    call hmap_r%get_dx_dqi(gvec_coords, dx_dq1, dx_dq2, dx_dq3)
     
-    ! Scale by the derivatives of the coordinate functions
-    ! e_s needs to be scaled by derivatives of coordinate transformation
+    ! Compute basis vectors for (s,θ,ζ) coordinates using chain rule
     ! For flux coordinates: q1 = X1(s,θ,ζ), q2 = X2(s,θ,ζ), q3 = ζ  
-    ! ∂r/∂s = (∂r/∂q1)*(∂q1/∂s) + (∂r/∂q2)*(∂q2/∂s)
-    ! ∂r/∂θ = (∂r/∂q1)*(∂q1/∂θ) + (∂r/∂q2)*(∂q2/∂θ)  
-    ! ∂r/∂ζ = (∂r/∂q1)*(∂q1/∂ζ) + (∂r/∂q2)*(∂q2/∂ζ) + (∂r/∂q3)
+    ! ∂r/∂s = (∂r/∂X1)*(∂X1/∂s) + (∂r/∂X2)*(∂X2/∂s)
+    ! ∂r/∂θ = (∂r/∂X1)*(∂X1/∂θ) + (∂r/∂X2)*(∂X2/∂θ)  
+    ! ∂r/∂ζ = (∂r/∂X1)*(∂X1/∂ζ) + (∂r/∂X2)*(∂X2/∂ζ) + (∂r/∂ζ)
     
-    ! Recompute basis vectors using chain rule
-    ! e_s_new = e_q1 * dX1_ds + e_q2 * dX2_ds
-    ! e_theta_new = e_q1 * dX1_dthet + e_q2 * dX2_dthet  
-    ! e_zeta_new = e_q1 * dX1_dzeta + e_q2 * dX2_dzeta + e_q3
-    
-    real(wp) :: e_q1(3), e_q2(3), e_q3(3)
-    e_q1 = e_s     ! ∂r/∂X1 (stored in e_s from hmap)
-    e_q2 = e_thet  ! ∂r/∂X2 (stored in e_thet from hmap)  
-    e_q3 = e_zeta  ! ∂r/∂ζ (stored in e_zeta from hmap)
-    
-    ! Now compute the actual basis vectors for (s,θ,ζ) coordinates
-    e_s = e_q1 * dX1_ds + e_q2 * dX2_ds
-    e_thet = e_q1 * dX1_dthet + e_q2 * dX2_dthet  
-    e_zeta = e_q1 * dX1_dzeta + e_q2 * dX2_dzeta + e_q3
+    e_s = dx_dq1 * dX1_ds + dx_dq2 * dX2_ds
+    e_thet = dx_dq1 * dX1_dthet + dx_dq2 * dX2_dthet  
+    e_zeta = dx_dq1 * dX1_dzeta + dx_dq2 * dX2_dzeta + dx_dq3
 
     ! Compute metric tensor components
     g_ss = dot_product(e_s, e_s)
