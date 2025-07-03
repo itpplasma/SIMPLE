@@ -9,6 +9,18 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
+# Fetch GVEC as a minimal library (before setting SIMPLE-specific flags)
+include(FetchContent)
+
+FetchContent_Declare(
+  gvec
+  GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/calbert/gvec.git
+  GIT_TAG        develop
+)
+
+set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
+FetchContent_MakeAvailable(gvec)
+
 include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -70,6 +82,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+# Set SIMPLE-specific compiler flags after GVEC to avoid affecting it
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused)
 	link_libraries("-mkl -qopenmp")
@@ -115,9 +128,6 @@ else()
 	endif()
 endif()
 
-# Add GVEC as a minimal library 
-set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
-add_subdirectory(thirdparty/gvec)
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
 

@@ -52,7 +52,11 @@ else()
 	)
 endif()
 
+target_include_directories(simple PRIVATE 
+    ${gvec_BINARY_DIR}/include
+)
+
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
-    gvec
+    gveclib
 )
