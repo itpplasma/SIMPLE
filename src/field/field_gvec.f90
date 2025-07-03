@@ -165,9 +165,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     end if
     
     ! Prepare coordinates for GVEC evaluation
-    gvec_coords(1) = real(s_gvec, wp)
-    gvec_coords(2) = real(theta_star, wp)
-    gvec_coords(3) = real(zeta, wp)
+    gvec_coords(1) = s_gvec
+    gvec_coords(2) = theta_star
+    gvec_coords(3) = zeta
     
     ! Evaluate X1 (R coordinate) and its derivatives
     deriv_flags = [0, 0]  ! Function value
@@ -208,13 +208,13 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     deriv_flags = [0, DERIV_ZETA]
     dLA_dzeta = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
     
-    ! Get profile values
-    iota_val = eval_iota_r(real(s_gvec, wp))      ! Rotational transform
-    phi_val = eval_phi_r(real(s_gvec, wp))        ! Toroidal flux
+    ! Get profile values  
+    iota_val = eval_iota_r(s_gvec)      ! Rotational transform
+    phi_val = eval_phi_r(s_gvec)        ! Toroidal flux
     
     ! Compute toroidal flux derivative (approximate for now)
     if (s_gvec > 0.01_wp) then
-        phiPrime_val = (eval_phi_r(real(s_gvec + 0.01_wp, wp)) - eval_phi_r(real(s_gvec - 0.01_wp, wp))) / 0.02_wp
+        phiPrime_val = (eval_phi_r(s_gvec + 0.01_wp) - eval_phi_r(s_gvec - 0.01_wp)) / 0.02_wp
     else
         phiPrime_val = eval_phi_r(0.01_wp) / 0.01_wp
     end if
@@ -250,14 +250,15 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Compute Jacobian sqrt(g)
     sqrtG = sqrt(g_ss * (g_tt * g_zz - g_tz**2) + g_st * (2.0_wp * g_sz * g_tz - g_st * g_zz) - g_sz**2 * g_tt)
     
-    ! Compute covariant magnetic field components using GVEC formula
-    ! B_θ = (ι - ∂Λ/∂ζ) * Φ'/(√g)
-    ! B_ζ = (1 + ∂Λ/∂θ) * Φ'/(√g)
-    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / sqrtG
-    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / sqrtG
+    ! Compute contravariant magnetic field components using GVEC formula
+    ! B^θ = (ι - ∂Λ/∂ζ) * Φ'/(√g)
+    ! B^ζ = (1 + ∂Λ/∂θ) * Φ'/(√g)
+    ! B^s = 0 for divergence-free field in flux coordinates
+    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / sqrtG  ! B^θ contravariant
+    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / sqrtG    ! B^ζ contravariant
     
-    ! Compute Cartesian field components
-    ! B = B_θ * e_θ + B_ζ * e_ζ (B_s = 0 for divergence-free field)
+    ! Compute Cartesian field components from contravariant components
+    ! B = B^θ * e_θ + B^ζ * e_ζ (B^s = 0)
     Bx = B_thet * e_thet(1) + B_zeta * e_zeta(1)
     By = B_thet * e_thet(2) + B_zeta * e_zeta(2)
     Bz = B_thet * e_thet(3) + B_zeta * e_zeta(3)
@@ -265,20 +266,33 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Compute field magnitude
     Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
     
-    ! Covariant field components in flux coordinates
-    ! hcov = B · ∇x_i where x_i are the flux coordinates (s, θ, ζ)
-    hcov(1) = real(Bx * e_s(1) + By * e_s(2) + Bz * e_s(3), dp)  ! B_s
-    hcov(2) = real(Bx * e_thet(1) + By * e_thet(2) + Bz * e_thet(3), dp)  ! B_θ 
-    hcov(3) = real(Bx * e_zeta(1) + By * e_zeta(2) + Bz * e_zeta(3), dp)  ! B_ζ
+    ! Compute COVARIANT field components: B_i = g_ij * B^j
+    ! Need to convert contravariant B^θ, B^ζ to covariant B_s, B_θ, B_ζ
+    ! B_s = g_ss*B^s + g_st*B^θ + g_sz*B^ζ = g_st*B^θ + g_sz*B^ζ (since B^s=0)
+    ! B_θ = g_st*B^s + g_tt*B^θ + g_tz*B^ζ = g_tt*B^θ + g_tz*B^ζ
+    ! B_ζ = g_sz*B^s + g_tz*B^θ + g_zz*B^ζ = g_tz*B^θ + g_zz*B^ζ
+    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp)  ! B_s (covariant)
+    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp)  ! B_θ (covariant)
+    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp)  ! B_ζ (covariant)
     
-    ! Vector potential components
-    ! For axisymmetric case: A_s = 0, A_θ = 0, A_φ = ψ(s)/R
-    Acov(1) = 0.0_dp  ! A_s = 0 
-    Acov(2) = 0.0_dp  ! A_θ = 0  
+    ! Vector potential components in magnetic flux coordinates
+    ! Following GVEC's approach: work with magnetic field directly, not vector potential
+    ! In magnetic coordinates with straight field lines, the vector potential is:
+    ! A·∇ζ = ψ(s) - toroidal flux function
+    ! A·∇θ = χ(s,θ,ζ) - poloidal flux-like function including λ corrections
     
-    ! A_φ = toroidal flux function divided by R
+    ! For magnetic coordinates, gauge choice gives A_s = 0
+    Acov(1) = 0.0_dp
+    
+    ! A_θ component: related to poloidal flux and stream function λ
+    ! From ∇×A = B and the constraint that field lines are straight
+    ! A_θ is related to the poloidal flux function and λ corrections
+    Acov(2) = real(-LA_val * phiPrime_val / sqrtG, dp)  ! Stream function contribution
+    
+    ! A_ζ component: primarily the toroidal flux function
+    ! This ensures B·∇ζ = (1 + ∂λ/∂θ) * ∂ψ/∂s / √g matches our B^ζ
     if (abs(R_pos) > 1.0e-10_wp) then
-        Acov(3) = real(phi_val / R_pos, dp)
+        Acov(3) = real(phi_val / R_pos, dp)  ! Toroidal flux contribution
     else
         Acov(3) = 0.0_dp
     end if
