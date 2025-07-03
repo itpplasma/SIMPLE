@@ -224,22 +224,31 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     R_pos = X1_val
     Z_pos = X2_val
 
-    ! Compute basis vectors in Cartesian coordinates
-    ! e_s = ∂r/∂s = (∂X1/∂s, ∂X2/∂s, 0)
-    e_s(1) = dX1_ds
-    e_s(2) = dX2_ds
-    e_s(3) = 0.0_wp
-
-    ! e_theta = ∂r/∂θ = (∂X1/∂θ, ∂X2/∂θ, 0)
-    e_thet(1) = dX1_dthet
-    e_thet(2) = dX2_dthet
-    e_thet(3) = 0.0_wp
-
-    ! e_zeta = ∂r/∂ζ_gvec = (∂X1/∂ζ, ∂X2/∂ζ, R * ∂φ_vmec/∂ζ_gvec)
-    ! Since ζ_gvec = -φ_vmec, we have ∂φ_vmec/∂ζ_gvec = -1
-    e_zeta(1) = dX1_dzeta
-    e_zeta(2) = dX2_dzeta
-    e_zeta(3) = -R_pos  ! R * ∂φ_vmec/∂ζ_gvec = R * (-1)
+    ! Use GVEC's hmap to compute basis vectors properly
+    ! Get the Cartesian derivatives from GVEC's coordinate mapping
+    call hmap_r%get_dx_dqi(gvec_coords, e_s, e_thet, e_zeta)
+    
+    ! Scale by the derivatives of the coordinate functions
+    ! e_s needs to be scaled by derivatives of coordinate transformation
+    ! For flux coordinates: q1 = X1(s,θ,ζ), q2 = X2(s,θ,ζ), q3 = ζ  
+    ! ∂r/∂s = (∂r/∂q1)*(∂q1/∂s) + (∂r/∂q2)*(∂q2/∂s)
+    ! ∂r/∂θ = (∂r/∂q1)*(∂q1/∂θ) + (∂r/∂q2)*(∂q2/∂θ)  
+    ! ∂r/∂ζ = (∂r/∂q1)*(∂q1/∂ζ) + (∂r/∂q2)*(∂q2/∂ζ) + (∂r/∂q3)
+    
+    ! Recompute basis vectors using chain rule
+    ! e_s_new = e_q1 * dX1_ds + e_q2 * dX2_ds
+    ! e_theta_new = e_q1 * dX1_dthet + e_q2 * dX2_dthet  
+    ! e_zeta_new = e_q1 * dX1_dzeta + e_q2 * dX2_dzeta + e_q3
+    
+    real(wp) :: e_q1(3), e_q2(3), e_q3(3)
+    e_q1 = e_s     ! ∂r/∂X1 (stored in e_s from hmap)
+    e_q2 = e_thet  ! ∂r/∂X2 (stored in e_thet from hmap)  
+    e_q3 = e_zeta  ! ∂r/∂ζ (stored in e_zeta from hmap)
+    
+    ! Now compute the actual basis vectors for (s,θ,ζ) coordinates
+    e_s = e_q1 * dX1_ds + e_q2 * dX2_ds
+    e_thet = e_q1 * dX1_dthet + e_q2 * dX2_dthet  
+    e_zeta = e_q1 * dX1_dzeta + e_q2 * dX2_dzeta + e_q3
 
     ! Compute metric tensor components
     g_ss = dot_product(e_s, e_s)
