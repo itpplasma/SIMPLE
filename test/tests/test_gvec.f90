@@ -25,10 +25,40 @@ else
     error stop 1
 end if
 
+! Test the evaluate method
 print *, ''
-print *, 'Test passed!'
-print *, 'GvecField constructor working correctly.'
-print *, 'NOTE: field_from_file(.dat) factory integration also works'
-print *, 'NOTE: evaluate() method is stub and will error when called'
+print *, 'Testing GvecField evaluate method...'
+
+block
+    real(dp) :: x(3), Acov(3), hcov(3), Bmod
+    real(dp) :: s_test, theta_test, phi_test
+    
+    ! Test at a few different flux surfaces
+    s_test = 0.5_dp        ! Half-radius
+    theta_test = 0.0_dp    ! Poloidal angle
+    phi_test = 0.0_dp      ! Toroidal angle
+    
+    x(1) = sqrt(s_test)    ! r = sqrt(s)
+    x(2) = theta_test      ! theta
+    x(3) = phi_test        ! phi
+    
+    call gvec_field%evaluate(x, Acov, hcov, Bmod)
+    
+    print *, 'Field evaluation at s=0.5:'
+    print *, '  Acov = ', Acov
+    print *, '  hcov = ', hcov  
+    print *, '  Bmod = ', Bmod
+    
+    if (Bmod > 0.0_dp) then
+        print *, 'SUCCESS: evaluate() method working'
+    else
+        print *, 'ERROR: evaluate() returned invalid Bmod'
+        error stop 1
+    end if
+end block
+
+print *, ''
+print *, 'All tests passed!'
+print *, 'GvecField constructor and evaluate() working correctly.'
 
 end program test_gvec
