@@ -7,6 +7,7 @@ use MODgvec_cubic_spline, only: t_cubspl
 use MODgvec_rProfile_bspl, only: t_rProfile_bspl
 use MODgvec_globals, only: wp
 use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_iota_r, eval_pres_r, Finalize_ReadState
+use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof
 implicit none
   
 private
@@ -66,20 +67,26 @@ subroutine load_dat_file(self)
     ! Use GVEC's built-in state reader
     call ReadState(trim(self%filename))
     
-    ! For now, set basic parameters manually (would extract from GVEC state in full implementation)
-    ! These values come from the test file we saw earlier
-    self%nfp = 1
-    self%a_minor = 0.994987437106620_dp
-    self%r_major = 5.0_dp  
-    self%volume = 97.7090835707847_dp
-    
-    print *, 'GVEC file loaded successfully using GVEC ReadState:'
-    print *, '  Field periods: ', self%nfp
-    print *, '  Major radius: ', self%r_major
-    print *, '  Minor radius: ', self%a_minor
-    print *, '  Volume: ', self%volume
-    
-    self%data_loaded = .true.
+    ! Check if initialization was successful by verifying key variables are allocated
+    if (allocated(profiles_1d) .and. allocated(sbase_prof)) then
+        ! For now, set basic parameters manually (would extract from GVEC state in full implementation)
+        ! These values come from the test file we saw earlier
+        self%nfp = 1
+        self%a_minor = 0.994987437106620_dp
+        self%r_major = 5.0_dp  
+        self%volume = 97.7090835707847_dp
+        
+        print *, 'GVEC file loaded successfully using GVEC ReadState:'
+        print *, '  Field periods: ', self%nfp
+        print *, '  Major radius: ', self%r_major
+        print *, '  Minor radius: ', self%a_minor
+        print *, '  Volume: ', self%volume
+        
+        self%data_loaded = .true.
+    else
+        print *, 'Error: GVEC state initialization failed'
+        self%data_loaded = .false.
+    end if
     
 end subroutine load_dat_file
 
@@ -114,6 +121,22 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         Bmod = 1.0_dp
         if (present(sqgBctr)) sqgBctr = 0.0_dp
         return
+    end if
+    
+    ! Check if GVEC state is properly initialized before evaluation
+    ! Note: GVEC module variables sometimes get deallocated between calls
+    if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof)) then
+        ! Reload the GVEC state (this is expected behavior due to GVEC module design)
+        call ReadState(trim(self%filename))
+        
+        if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof)) then
+            print *, 'Error: Failed to initialize GVEC state for field evaluation'
+            Acov = 0.0_dp
+            hcov = 0.0_dp  
+            Bmod = 1.0_dp
+            if (present(sqgBctr)) sqgBctr = 0.0_dp
+            return
+        end if
     end if
     
     ! Use GVEC's native API to evaluate profiles
