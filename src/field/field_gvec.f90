@@ -134,10 +134,13 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     phi = x(3)    ! phi_vmec
 
     ! Convert to GVEC flux coordinate system
-    ! GVEC transforms VMEC coordinates: zeta_gvec = -phi_vmec (switchzeta=.TRUE.)
+    ! Note: coordinate transformation depends on the source and conventions
+    ! For VMEC-derived GVEC files: zeta_gvec = -phi_vmec (switchzeta=.TRUE.)
+    ! For G-frame files: this relationship may be different
+    ! TODO: Need to determine coordinate convention from file or make configurable
     s_gvec = r**2       ! VMEC flux coordinate (0 to 1)
     theta_star = theta  ! Straight field line poloidal angle (may need sign change for signgs)
-    zeta = -phi         ! GVEC zeta = -phi_vmec (coordinate transformation)
+    zeta = -phi         ! Assuming VMEC convention: zeta_gvec = -phi_vmec
 
     if (.not. self%data_loaded) then
         print *, 'Warning: GVEC data not loaded, returning dummy values'
