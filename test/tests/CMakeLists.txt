@@ -6,6 +6,31 @@ file(DOWNLOAD
     ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
 )
 
+# Convert VMEC to GVEC format for testing field_vmec vs field_gvec
+# This requires GVEC Python API or command-line tools
+find_program(PYTHON_EXECUTABLE python3)
+if(PYTHON_EXECUTABLE)
+    # Try to convert VMEC to GVEC using Python
+    execute_process(
+        COMMAND ${PYTHON_EXECUTABLE} -c "
+try:
+    import gvec
+    print('GVEC Python module found, converting VMEC to GVEC format...')
+    gvec.read_vmec('${CMAKE_CURRENT_BINARY_DIR}/wout.nc')
+    gvec.save('${CMAKE_CURRENT_BINARY_DIR}/wout_gvec.dat')
+    print('Successfully converted VMEC to GVEC format: wout_gvec.dat')
+except ImportError:
+    print('GVEC Python module not found, skipping VMEC to GVEC conversion')
+except Exception as e:
+    print(f'Failed to convert VMEC to GVEC: {e}')
+"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        RESULT_VARIABLE GVEC_CONVERT_RESULT
+    )
+else()
+    message(STATUS "Python not found, skipping VMEC to GVEC conversion")
+endif()
+
 ##################################################
 # INTERNAL UNIT TEST STUFF
 ##################################################
@@ -53,6 +78,10 @@ add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 add_executable (test_gvec.x test_gvec.f90)
 target_link_libraries(test_gvec.x simple)
 add_test(NAME test_gvec COMMAND test_gvec.x)
+
+add_executable (test_field_vmec_gvec.x test_field_vmec_gvec.f90)
+target_link_libraries(test_field_vmec_gvec.x simple)
+add_test(NAME test_field_vmec_gvec COMMAND test_field_vmec_gvec.x)
 
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
