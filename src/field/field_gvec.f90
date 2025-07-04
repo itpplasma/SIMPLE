@@ -5,7 +5,6 @@ use field_base, only: MagneticField
 ! Use GVEC API for reading state files
 use MODgvec_cubic_spline, only: t_cubspl
 use MODgvec_rProfile_bspl, only: t_rProfile_bspl
-use MODgvec_globals, only: wp
 use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_phiPrime_r, eval_iota_r, eval_pres_r, Finalize_ReadState
 use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, X1_base_r, X2_base_r, LA_base_r, X1_r, X2_r, LA_r, hmap_r
 implicit none
@@ -14,6 +13,8 @@ implicit none
 integer, parameter :: DERIV_S = 1
 integer, parameter :: DERIV_THET = 2
 integer, parameter :: DERIV_ZETA = 3
+
+real(dp), parameter :: TESLA_TO_GAUSS = 10000.0_dp  ! Conversion factor
 
 private
 public :: GvecField, create_gvec_field, convert_vmec_to_gvec
@@ -110,56 +111,42 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     ! Local variables for GVEC evaluation
     real(dp) :: r, theta, phi
-    real(dp) :: s_gvec, theta_star, zeta
+    real(dp) :: theta_star, zeta
 
     ! GVEC coordinate evaluation variables
-    real(wp) :: gvec_coords(3)  ! (s, theta, zeta)
+    real(dp) :: gvec_coords(3)  ! (s, theta, zeta)
     integer :: deriv_flags(2)   ! For derivative specification
 
     ! X1, X2, LA values and derivatives
-    real(wp) :: X1_val, X2_val, LA_val
-    real(wp) :: dX1_ds, dX1_dthet, dX1_dzeta
-    real(wp) :: dX2_ds, dX2_dthet, dX2_dzeta
-    real(wp) :: dLA_ds, dLA_dthet, dLA_dzeta
+    real(dp) :: X1_val, X2_val, LA_val
+    real(dp) :: dX1_ds, dX1_dthet, dX1_dzeta
+    real(dp) :: dX2_ds, dX2_dthet, dX2_dzeta
+    real(dp) :: dLA_ds, dLA_dthet, dLA_dzeta
 
     ! Profile values
-    real(wp) :: iota_val, phi_val, phiPrime_val
+    real(dp) :: iota_val, phi_val, phiPrime_val
 
     ! Coordinate and field computation
-    real(wp) :: R_pos, Z_pos  ! Physical R, Z coordinates
-    real(wp) :: e_thet(3), e_zeta(3), e_s(3)  ! Basis vectors
-    real(wp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
-    real(wp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
-    real(wp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
-    real(wp) :: B_thet, B_zeta  ! Contravariant field components in (s,theta,zeta)
-    real(wp) :: B_cov_theta, B_cov_zeta  ! Covariant field components
-    real(wp) :: B_vec(3)  ! Physical B field vector in cylindrical coordinates
+    real(dp) :: R_pos, Z_pos  ! Physical R, Z coordinates
+    real(dp) :: e_thet(3), e_zeta(3), e_s(3)  ! Basis vectors
+    real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
+    real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
+    real(dp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
+    real(dp) :: Bthctr, Bzetactr  ! Contravariant field components in (s,theta,zeta)
+    real(dp) :: Bthcov, Bzetacov  ! Covariant field components
+    real(dp) :: RZ_coords(3)      ! Coordinates for eval_Jh (R,Z,ζ)
     
     ! Axis regularization variables
-    real(wp), parameter :: s_min_reg = 0.05_wp  ! Regularization threshold
-    real(wp) :: scaling_factor, reg_factor, smooth_factor
+    real(dp), parameter :: s_min_reg = 0.05_dp  ! Regularization threshold
+    real(dp) :: scaling_factor, reg_factor, smooth_factor
 
     ! Extract input coordinates
-    r = x(1)      ! r = sqrt(s_vmec)
+    r = x(1)      ! r = sqrt(s_vmec) - SIMPLE uses r as radial coordinate
     theta = x(2)  ! theta_vmec
     phi = x(3)    ! phi_vmec
 
-    ! Convert to GVEC flux coordinate system
-    ! Note: coordinate transformation depends on the source and conventions
-    ! Testing different conventions to match VMEC
-    s_gvec = r**2       ! VMEC flux coordinate (0 to 1)
-    theta_star = theta  ! Straight field line poloidal angle
-    zeta = phi          ! VMEC uses phi, GVEC uses zeta; with nfp field periods
-    ! The relationship might involve the field periods
-
-    if (.not. self%data_loaded) then
-        print *, 'Warning: GVEC data not loaded, returning dummy values'
-        Acov = 0.0_dp
-        hcov = 0.0_dp
-        Bmod = 1.0_dp
-        if (present(sqgBctr)) sqgBctr = 0.0_dp
-        return
-    end if
+    theta_star = theta
+    zeta = phi
 
     ! Check if GVEC state is properly initialized before evaluation
     if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
@@ -169,17 +156,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
         if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
             .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. .not. allocated(LA_r)) then
-            print *, 'Error: Failed to initialize GVEC state for field evaluation'
-            Acov = 0.0_dp
-            hcov = 0.0_dp
-            Bmod = 1.0_dp
-            if (present(sqgBctr)) sqgBctr = 0.0_dp
-            return
+            error stop 'Failed to initialize GVEC state for field evaluation'
         end if
     end if
 
     ! Prepare coordinates for GVEC evaluation
-    gvec_coords(1) = s_gvec
+    gvec_coords(1) = r
     gvec_coords(2) = theta_star
     gvec_coords(3) = zeta
 
@@ -223,20 +205,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     dLA_dzeta = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
 
     ! Get profile values
-    iota_val = eval_iota_r(s_gvec)      ! Rotational transform
-    phi_val = eval_phi_r(s_gvec)        ! Toroidal flux
+    iota_val = eval_iota_r(r)      ! Rotational transform
+    phi_val = eval_phi_r(r)        ! Toroidal flux
 
     ! Compute toroidal flux derivative properly using GVEC's built-in function
-    phiPrime_val = eval_phiPrime_r(s_gvec)
+    phiPrime_val = eval_phiPrime_r(r)
     
-    ! Debug output disabled - uncomment if needed
-    ! if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp) then
-    !     print *, 'GVEC DEBUG at s=', s_gvec, ', theta=', theta_star, ', zeta=', zeta
-    !     print *, '  phi=', phi_val, ', phiPrime=', phiPrime_val
-    !     print *, '  iota=', iota_val
-    ! end if
-
-    ! Get physical coordinates
     R_pos = X1_val
     Z_pos = X2_val
 
@@ -244,7 +218,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Get the Cartesian derivatives from GVEC's coordinate mapping
     ! hmap_r returns: e_q1 = ∂r/∂X1, e_q2 = ∂r/∂X2, e_q3 = ∂r/∂ζ
     ! These are the basis vectors in the (R,Z,φ) cylindrical system
-    call hmap_r%get_dx_dqi(gvec_coords, dx_dq1, dx_dq2, dx_dq3)
+    ! Note: get_dx_dqi expects (X1, X2, ζ) = (R, Z, ζ) coordinates
+    RZ_coords = [R_pos, Z_pos, zeta]
+    call hmap_r%get_dx_dqi(RZ_coords, dx_dq1, dx_dq2, dx_dq3)
     
     ! Compute basis vectors for (s,θ,ζ) coordinates EXACTLY as GVEC Python does
     ! e_rho = e_q1 * dX1_dr + e_q2 * dX2_dr
@@ -265,86 +241,38 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     ! Compute Jacobian using GVEC's exact formula: Jac = Jac_h * Jac_l
     ! where Jac_l = dX1_dr * dX2_dt - dX1_dt * dX2_dr (logical Jacobian)
-    Jac_h = hmap_r%eval_Jh(gvec_coords)  ! Reference Jacobian from hmap
-    Jac_l = dX1_ds * dX2_dthet - dX1_dthet * dX2_ds  ! Logical Jacobian
-    Jac = Jac_h * Jac_l  ! Full Jacobian as used in GVEC Python
+    ! Note: eval_Jh expects (R,Z,ζ) coordinates, already in RZ_coords
+    Jac_h = hmap_r%eval_Jh(RZ_coords)  ! For torus geometry, Jac_h = R
+    Jac_l = dX1_ds * dX2_dthet - dX1_dthet * dX2_ds
+    Jac = Jac_h * Jac_l
 
-    ! Compute contravariant magnetic field components using GVEC's EXACT formula
-    ! From GVEC Python quantities.py lines 532-533:
-    ! B^θ = (ι - ∂Λ/∂ζ) * ∂Φ/∂r / Jac
-    ! B^ζ = (1 + ∂Λ/∂θ) * ∂Φ/∂r / Jac
-    ! Note: GVEC uses Jac (full Jacobian), not just sqrt(g)
-    
-    ! Compute contravariant magnetic field components EXACTLY as GVEC Python does
-    ! B^θ = (ι - ∂Λ/∂ζ) * ∂Φ/∂r / Jac
-    ! B^ζ = (1 + ∂Λ/∂θ) * ∂Φ/∂r / Jac
-    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / Jac  ! B^θ contravariant
-    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / Jac    ! B^ζ contravariant
-    
-    ! Debug disabled - uncomment if needed
-    ! if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp) then
-    !     print *, '  sqrtG=', sqrtG, ', dLA_dthet=', dLA_dthet, ', dLA_dzeta=', dLA_dzeta
-    !     print *, '  B_thet=', B_thet, ', B_zeta=', B_zeta
-    ! end if
+    ! Following GVEC's mhd3d_evalfunc.f90: contravariant components
+    Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac   ! B^θ contravariant
+    Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac   ! B^ζ contravariant 
 
-    ! Compute physical magnetic field vector B = B^θ e_θ + B^ζ e_ζ
-    ! This matches GVEC Python: ds["B"] = ds.B_contra_t * ds.e_theta + ds.B_contra_z * ds.e_zeta
-    B_vec = B_thet * e_thet + B_zeta * e_zeta
-    
-    ! Compute field magnitude as |B| = sqrt(B·B) in physical space
-    ! This is the magnitude of the physical field vector
-    Bmod = real(sqrt(dot_product(B_vec, B_vec)), dp)
-    
-    ! Also compute covariant components for other uses
-    B_cov_theta = g_tt * B_thet + g_tz * B_zeta
-    B_cov_zeta = g_tz * B_thet + g_zz * B_zeta
-    
-    ! Debug output to understand the issue
-    if (abs(s_gvec - 0.01_wp) < 0.05_wp .and. abs(theta_star) < 0.1_wp) then
-        print *, 'GVEC DEBUG: s=', s_gvec, ', theta=', theta_star, ', zeta=', zeta
-        print *, '  R=', R_pos, ', Z=', Z_pos
-        print *, '  phiPrime=', phiPrime_val, ', Jac=', Jac
-        print *, '  g_tt=', g_tt, ', g_tz=', g_tz, ', g_zz=', g_zz
-        print *, '  B^theta=', B_thet, ', B^zeta=', B_zeta
-        print *, '  B_theta=', B_cov_theta, ', B_zeta=', B_cov_zeta
-        print *, '  |B|=', Bmod
+    if (present(sqgBctr)) then
+        sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
+        sqgBctr(2) = Jac * Bthctr  ! Jac * B^θ
+        sqgBctr(3) = Jac * Bzetactr  ! Jac * B^ζ
     end if
+        
+    Bthcov = g_tt * Bthctr + g_tz * Bzetactr    ! B_θ covariant
+    Bzetacov = g_tz * Bthctr + g_zz * Bzetactr  ! B_ζ covariant
 
-    ! Set covariant field components for output
-    ! B_s = g_ss*B^s + g_st*B^θ + g_sz*B^ζ = g_st*B^θ + g_sz*B^ζ (since B^s=0)
-    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp)  ! B_s (covariant)
-    hcov(2) = real(B_cov_theta, dp)  ! B_θ (covariant) - already computed
-    hcov(3) = real(B_cov_zeta, dp)   ! B_ζ (covariant) - already computed
+    Bmod = sqrt(Bthctr*Bthcov + Bzetactr*Bzetacov)
+    
+    hcov(1) = (g_st * Bthctr + g_sz * Bzetactr) / Bmod
+    hcov(2) = Bthcov / Bmod
+    hcov(3) = Bzetacov / Bmod
 
-    ! Vector potential components in magnetic flux coordinates
-    ! Following GVEC's approach: work with magnetic field directly, not vector potential
-    ! In magnetic coordinates with straight field lines, the vector potential is:
-    ! A·∇ζ = ψ(s) - toroidal flux function
-    ! A·∇θ = χ(s,θ,ζ) - poloidal flux-like function including λ corrections
+    Bmod = Bmod * TESLA_TO_GAUSS
 
-    ! For magnetic coordinates, gauge choice gives A_s = 0
     Acov(1) = 0.0_dp
-
-    ! A_θ component: related to poloidal flux and stream function λ
-    ! From ∇×A = B and the constraint that field lines are straight
-    ! A_θ is related to the poloidal flux function and λ corrections
-    Acov(2) = real(-LA_val * phiPrime_val / Jac, dp)  ! Stream function contribution
-
-    ! A_ζ component: primarily the toroidal flux function
-    ! This ensures B·∇ζ = (1 + ∂λ/∂θ) * ∂ψ/∂s / √g matches our B^ζ
-    if (abs(R_pos) > 1.0e-10_wp) then
+    Acov(2) = real(-LA_val * phiPrime_val / Jac, dp)
+    if (abs(R_pos) > 1.0e-10_dp) then
         Acov(3) = real(phi_val / R_pos, dp)  ! Toroidal flux contribution
     else
         Acov(3) = 0.0_dp
-    end if
-
-    if (present(sqgBctr)) then
-        ! Jac * B^contravariant components (using full Jacobian as in GVEC)
-        ! sqgBctr = Jac * B^i where B^i are contravariant components
-        ! We already have B^θ, B^ζ from GVEC, and B^s = 0
-        sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
-        sqgBctr(2) = real(Jac * B_thet, dp)  ! Jac * B^θ
-        sqgBctr(3) = real(Jac * B_zeta, dp)  ! Jac * B^ζ
     end if
 
 end subroutine evaluate
