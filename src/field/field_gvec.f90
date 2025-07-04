@@ -132,7 +132,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(wp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
     real(wp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
     real(wp) :: B_thet, B_zeta  ! Contravariant field components in (s,theta,zeta)
-    real(wp) :: Bx, By, Bz  ! Cartesian field components
+    real(wp) :: B_cov_theta, B_cov_zeta  ! Covariant field components
+    real(wp) :: B_vec(3)  ! Physical B field vector in cylindrical coordinates
     
     ! Axis regularization variables
     real(wp), parameter :: s_min_reg = 0.05_wp  ! Regularization threshold
@@ -241,14 +242,14 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     ! Use GVEC's hmap to compute basis vectors
     ! Get the Cartesian derivatives from GVEC's coordinate mapping
-    ! hmap_r returns: dx_dq1 = ∂r/∂X1, dx_dq2 = ∂r/∂X2, dx_dq3 = ∂r/∂ζ
+    ! hmap_r returns: e_q1 = ∂r/∂X1, e_q2 = ∂r/∂X2, e_q3 = ∂r/∂ζ
+    ! These are the basis vectors in the (R,Z,φ) cylindrical system
     call hmap_r%get_dx_dqi(gvec_coords, dx_dq1, dx_dq2, dx_dq3)
     
-    ! Compute basis vectors for (s,θ,ζ) coordinates using chain rule
-    ! For flux coordinates: q1 = X1(s,θ,ζ), q2 = X2(s,θ,ζ), q3 = ζ  
-    ! ∂r/∂s = (∂r/∂X1)*(∂X1/∂s) + (∂r/∂X2)*(∂X2/∂s)
-    ! ∂r/∂θ = (∂r/∂X1)*(∂X1/∂θ) + (∂r/∂X2)*(∂X2/∂θ)  
-    ! ∂r/∂ζ = (∂r/∂X1)*(∂X1/∂ζ) + (∂r/∂X2)*(∂X2/∂ζ) + (∂r/∂ζ)
+    ! Compute basis vectors for (s,θ,ζ) coordinates EXACTLY as GVEC Python does
+    ! e_rho = e_q1 * dX1_dr + e_q2 * dX2_dr
+    ! e_theta = e_q1 * dX1_dt + e_q2 * dX2_dt  
+    ! e_zeta = e_q1 * dX1_dz + e_q2 * dX2_dz + e_q3
     
     e_s = dx_dq1 * dX1_ds + dx_dq2 * dX2_ds
     e_thet = dx_dq1 * dX1_dthet + dx_dq2 * dX2_dthet  
@@ -286,29 +287,34 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     !     print *, '  B_thet=', B_thet, ', B_zeta=', B_zeta
     ! end if
 
-    ! Compute Cartesian field components from contravariant components
-    ! B = B^θ * e_θ + B^ζ * e_ζ (B^s = 0)
-    Bx = B_thet * e_thet(1) + B_zeta * e_zeta(1)
-    By = B_thet * e_thet(2) + B_zeta * e_zeta(2)
-    Bz = B_thet * e_thet(3) + B_zeta * e_zeta(3)
-
-    ! Compute field magnitude EXACTLY as GVEC Python does
-    ! |B| = sqrt(B·B) = sqrt(Bx² + By² + Bz²)
-    Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
+    ! Compute physical magnetic field vector B = B^θ e_θ + B^ζ e_ζ
+    ! This matches GVEC Python: ds["B"] = ds.B_contra_t * ds.e_theta + ds.B_contra_z * ds.e_zeta
+    B_vec = B_thet * e_thet + B_zeta * e_zeta
     
-    ! Apply scaling factor determined from field comparison
-    ! VMEC/GVEC ratio analysis shows factor ~1111.5
-    ! This converts GVEC SI units (Tesla) to SIMPLE's internal units
-    Bmod = Bmod * 1111.5_dp
+    ! Compute field magnitude as |B| = sqrt(B·B) in physical space
+    ! This is the magnitude of the physical field vector
+    Bmod = real(sqrt(dot_product(B_vec, B_vec)), dp)
+    
+    ! Also compute covariant components for other uses
+    B_cov_theta = g_tt * B_thet + g_tz * B_zeta
+    B_cov_zeta = g_tz * B_thet + g_zz * B_zeta
+    
+    ! Debug output to understand the issue
+    if (abs(s_gvec - 0.01_wp) < 0.05_wp .and. abs(theta_star) < 0.1_wp) then
+        print *, 'GVEC DEBUG: s=', s_gvec, ', theta=', theta_star, ', zeta=', zeta
+        print *, '  R=', R_pos, ', Z=', Z_pos
+        print *, '  phiPrime=', phiPrime_val, ', Jac=', Jac
+        print *, '  g_tt=', g_tt, ', g_tz=', g_tz, ', g_zz=', g_zz
+        print *, '  B^theta=', B_thet, ', B^zeta=', B_zeta
+        print *, '  B_theta=', B_cov_theta, ', B_zeta=', B_cov_zeta
+        print *, '  |B|=', Bmod
+    end if
 
-    ! Compute COVARIANT field components: B_i = g_ij * B^j
-    ! Need to convert contravariant B^θ, B^ζ to covariant B_s, B_θ, B_ζ
+    ! Set covariant field components for output
     ! B_s = g_ss*B^s + g_st*B^θ + g_sz*B^ζ = g_st*B^θ + g_sz*B^ζ (since B^s=0)
-    ! B_θ = g_st*B^s + g_tt*B^θ + g_tz*B^ζ = g_tt*B^θ + g_tz*B^ζ
-    ! B_ζ = g_sz*B^s + g_tz*B^θ + g_zz*B^ζ = g_tz*B^θ + g_zz*B^ζ
-    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp) * 1111.5_dp  ! B_s (covariant)
-    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp) * 1111.5_dp  ! B_θ (covariant)
-    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp) * 1111.5_dp  ! B_ζ (covariant)
+    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp)  ! B_s (covariant)
+    hcov(2) = real(B_cov_theta, dp)  ! B_θ (covariant) - already computed
+    hcov(3) = real(B_cov_zeta, dp)   ! B_ζ (covariant) - already computed
 
     ! Vector potential components in magnetic flux coordinates
     ! Following GVEC's approach: work with magnetic field directly, not vector potential
@@ -337,8 +343,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         ! sqgBctr = Jac * B^i where B^i are contravariant components
         ! We already have B^θ, B^ζ from GVEC, and B^s = 0
         sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
-        sqgBctr(2) = real(Jac * B_thet, dp) * 1111.5_dp  ! Jac * B^θ
-        sqgBctr(3) = real(Jac * B_zeta, dp) * 1111.5_dp  ! Jac * B^ζ
+        sqgBctr(2) = real(Jac * B_thet, dp)  ! Jac * B^θ
+        sqgBctr(3) = real(Jac * B_zeta, dp)  ! Jac * B^ζ
     end if
 
 end subroutine evaluate
