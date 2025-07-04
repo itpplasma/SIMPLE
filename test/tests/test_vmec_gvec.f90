@@ -267,6 +267,7 @@ program test_vmec_gvec
     call execute_command_line('python3 ../../../test/tests/detailed_field_analysis.py > /dev/null 2>&1', exitstat=i)
     call execute_command_line('python3 ../../../test/tests/create_1d_radial_plots.py > /dev/null 2>&1', exitstat=i)
     call execute_command_line('python3 ../../../test/tests/investigate_field_differences.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/plot_acov_1d.py > /dev/null 2>&1', exitstat=i)
     
     ! Final test result
     print *, ''
@@ -439,6 +440,39 @@ subroutine export_field_1d_data(vmec_field, gvec_field)
         ! Calculate relative error
         write(unit_out, '(5ES16.8)') s, r, Bmod_vmec, Bmod_gvec, &
             abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
+    end do
+    close(unit_out)
+    
+    ! Write vector potential comparison data
+    open(newunit=unit_out, file='acov_comparison.dat', status='replace')
+    write(unit_out, '(A)') '# 1D radial vector potential comparison'
+    write(unit_out, '(A,F8.4,A,F8.4,A)') '# Fixed theta = ', theta_fixed/pi, ' pi, phi = ', phi_fixed/pi, ' pi'
+    write(unit_out, '(A)') '# Columns: s, r, Acov1_VMEC, Acov1_GVEC, Acov2_VMEC, Acov2_GVEC, Acov3_VMEC, Acov3_GVEC'
+    
+    do i = 1, ns
+        ! Use log spacing for better resolution at small s
+        if (i == 1) then
+            s = s_min
+        else
+            ! Log-space from s_min to s_max
+            s = s_min * (s_max/s_min)**((real(i-1,dp))/(real(ns-1,dp)))
+        end if
+        r = sqrt(s)
+        
+        ! Set coordinates (r = sqrt(s), theta, phi)
+        x(1) = r
+        x(2) = theta_fixed
+        x(3) = phi_fixed
+        
+        ! Evaluate fields
+        call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
+        call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
+        
+        ! Write all three components
+        write(unit_out, '(8ES16.8)') s, r, &
+            Acov_vmec(1), Acov_gvec(1), &
+            Acov_vmec(2), Acov_gvec(2), &
+            Acov_vmec(3), Acov_gvec(3)
     end do
     close(unit_out)
     
