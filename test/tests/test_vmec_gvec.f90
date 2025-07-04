@@ -38,15 +38,16 @@ program test_vmec_gvec
 
     ! Test parameters
     real(dp) :: x(3)
-    real(dp) :: Acov_vmec(3), hcov_vmec(3), Bmod_vmec
-    real(dp) :: Acov_gvec(3), hcov_gvec(3), Bmod_gvec
+    real(dp) :: Acov_vmec(3), hcov_vmec(3), Bmod_vmec, sqgBctr_vmec(3)
+    real(dp) :: Acov_gvec(3), hcov_gvec(3), Bmod_gvec, sqgBctr_gvec(3)
     real(dp) :: s_test, theta_test, phi_test
     real(dp) :: rel_tol, abs_tol
-    integer :: ns, nt, np, i, j, k
+    integer :: ns, nt, np, i, j, k, icomp
     real(dp) :: rel_error, abs_error, rel_err_B
     real(dp) :: max_rel_error_Bmod, max_abs_error_Bmod
-    real(dp) :: max_rel_error_Acov, max_abs_error_Acov
-    real(dp) :: max_rel_error_hcov, max_abs_error_hcov
+    real(dp) :: max_rel_error_Acov(3), max_abs_error_Acov(3)
+    real(dp) :: max_rel_error_hcov(3), max_abs_error_hcov(3)
+    real(dp) :: max_rel_error_sqgBctr(3), max_abs_error_sqgBctr(3)
     logical :: test_passed
 
     ! VMEC wout file downloaded by CMake (in build/test/tests directory)
@@ -122,6 +123,8 @@ program test_vmec_gvec
     max_abs_error_Acov = 0.0_dp
     max_rel_error_hcov = 0.0_dp
     max_abs_error_hcov = 0.0_dp
+    max_rel_error_sqgBctr = 0.0_dp
+    max_abs_error_sqgBctr = 0.0_dp
     test_passed = .true.
 
     do i = 1, ns
@@ -146,10 +149,10 @@ program test_vmec_gvec
                 x(3) = phi_test
 
                 ! Evaluate VMEC field
-                call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
+                call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec, sqgBctr_vmec)
 
                 ! Evaluate GVEC field
-                call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
+                call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec, sqgBctr_gvec)
 
                 ! Calculate errors for Bmod
                 abs_error = abs(Bmod_gvec - Bmod_vmec)
@@ -162,27 +165,41 @@ program test_vmec_gvec
                 max_abs_error_Bmod = max(max_abs_error_Bmod, abs_error)
                 max_rel_error_Bmod = max(max_rel_error_Bmod, rel_error)
 
-                ! Calculate errors for Acov (use vector norm)
-                abs_error = sqrt(sum((Acov_gvec - Acov_vmec)**2))
-                if (sqrt(sum(Acov_vmec**2)) > abs_tol) then
-                    rel_error = abs_error / sqrt(sum(Acov_vmec**2))
-                else
-                    rel_error = 0.0_dp
-                end if
+                ! Calculate errors for Acov components
+                do icomp = 1, 3
+                    abs_error = abs(Acov_gvec(icomp) - Acov_vmec(icomp))
+                    if (abs(Acov_vmec(icomp)) > 1.0e-10_dp) then
+                        rel_error = abs_error / abs(Acov_vmec(icomp))
+                    else
+                        rel_error = 0.0_dp
+                    end if
+                    max_abs_error_Acov(icomp) = max(max_abs_error_Acov(icomp), abs_error)
+                    max_rel_error_Acov(icomp) = max(max_rel_error_Acov(icomp), rel_error)
+                end do
 
-                max_abs_error_Acov = max(max_abs_error_Acov, abs_error)
-                max_rel_error_Acov = max(max_rel_error_Acov, rel_error)
+                ! Calculate errors for hcov components
+                do icomp = 1, 3
+                    abs_error = abs(hcov_gvec(icomp) - hcov_vmec(icomp))
+                    if (abs(hcov_vmec(icomp)) > 1.0e-10_dp) then
+                        rel_error = abs_error / abs(hcov_vmec(icomp))
+                    else
+                        rel_error = 0.0_dp
+                    end if
+                    max_abs_error_hcov(icomp) = max(max_abs_error_hcov(icomp), abs_error)
+                    max_rel_error_hcov(icomp) = max(max_rel_error_hcov(icomp), rel_error)
+                end do
 
-                ! Calculate errors for hcov (use vector norm)
-                abs_error = sqrt(sum((hcov_gvec - hcov_vmec)**2))
-                if (sqrt(sum(hcov_vmec**2)) > abs_tol) then
-                    rel_error = abs_error / sqrt(sum(hcov_vmec**2))
-                else
-                    rel_error = 0.0_dp
-                end if
-
-                max_abs_error_hcov = max(max_abs_error_hcov, abs_error)
-                max_rel_error_hcov = max(max_rel_error_hcov, rel_error)
+                ! Calculate errors for sqgBctr components
+                do icomp = 1, 3
+                    abs_error = abs(sqgBctr_gvec(icomp) - sqgBctr_vmec(icomp))
+                    if (abs(sqgBctr_vmec(icomp)) > 1.0e-10_dp) then
+                        rel_error = abs_error / abs(sqgBctr_vmec(icomp))
+                    else
+                        rel_error = 0.0_dp
+                    end if
+                    max_abs_error_sqgBctr(icomp) = max(max_abs_error_sqgBctr(icomp), abs_error)
+                    max_rel_error_sqgBctr(icomp) = max(max_rel_error_sqgBctr(icomp), rel_error)
+                end do
 
                 ! Calculate relative error for |B|
                 rel_err_B = abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
@@ -195,11 +212,49 @@ program test_vmec_gvec
         end do
     end do
 
+    ! Evaluate fields at a representative point for typical values
+    x(1) = sqrt(0.5_dp)  ! r = sqrt(s) at s=0.5
+    x(2) = pi/4.0_dp     ! theta = pi/4
+    x(3) = 0.0_dp        ! phi = 0
+    
+    call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec, sqgBctr_vmec)
+    call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec, sqgBctr_gvec)
+
     ! Print comparison results
     print *, ''
-    print *, 'Field comparison results:'
-    print '(A,ES12.5,A,ES12.5)', '  |B| max error: relative = ', max_rel_error_Bmod, &
+    print *, 'Field comparison at (s,θ,φ) = (0.5, π/4, 0):'
+    print *, '================================================================'
+    print *, '              VMEC              GVEC              Rel. Error'
+    print *, '----------------------------------------------------------------'
+    print '(A,ES16.8,ES16.8,ES16.8)', '  |B|     ', Bmod_vmec, Bmod_gvec, &
+                                         abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
+    print *, ''
+    print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(1) ', Acov_vmec(1), Acov_gvec(1), &
+                                         merge(abs(Acov_gvec(1) - Acov_vmec(1)) / abs(Acov_vmec(1)), 0.0_dp, abs(Acov_vmec(1)) > 1.0e-10_dp)
+    print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(2) ', Acov_vmec(2), Acov_gvec(2), &
+                                         merge(abs(Acov_gvec(2) - Acov_vmec(2)) / abs(Acov_vmec(2)), 0.0_dp, abs(Acov_vmec(2)) > 1.0e-10_dp)
+    print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(3) ', Acov_vmec(3), Acov_gvec(3), &
+                                         merge(abs(Acov_gvec(3) - Acov_vmec(3)) / abs(Acov_vmec(3)), 0.0_dp, abs(Acov_vmec(3)) > 1.0e-10_dp)
+    print *, ''
+    print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(1) ', hcov_vmec(1), hcov_gvec(1), &
+                                         merge(abs(hcov_gvec(1) - hcov_vmec(1)) / abs(hcov_vmec(1)), 0.0_dp, abs(hcov_vmec(1)) > 1.0e-10_dp)
+    print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(2) ', hcov_vmec(2), hcov_gvec(2), &
+                                         merge(abs(hcov_gvec(2) - hcov_vmec(2)) / abs(hcov_vmec(2)), 0.0_dp, abs(hcov_vmec(2)) > 1.0e-10_dp)
+    print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(3) ', hcov_vmec(3), hcov_gvec(3), &
+                                         merge(abs(hcov_gvec(3) - hcov_vmec(3)) / abs(hcov_vmec(3)), 0.0_dp, abs(hcov_vmec(3)) > 1.0e-10_dp)
+    print *, ''
+    print '(A,ES16.8,ES16.8,A)', '  √g·B^s  ', sqgBctr_vmec(1), sqgBctr_gvec(1), '    (VMEC now provides this)'
+    print '(A,ES16.8,ES16.8,ES16.8)', '  √g·B^θ  ', sqgBctr_vmec(2), sqgBctr_gvec(2), &
+                                         merge(abs(sqgBctr_gvec(2) - sqgBctr_vmec(2)) / abs(sqgBctr_vmec(2)), 0.0_dp, abs(sqgBctr_vmec(2)) > 1.0e-10_dp)
+    print '(A,ES16.8,ES16.8,ES16.8)', '  √g·B^φ  ', sqgBctr_vmec(3), sqgBctr_gvec(3), &
+                                         merge(abs(sqgBctr_gvec(3) - sqgBctr_vmec(3)) / abs(sqgBctr_vmec(3)), 0.0_dp, abs(sqgBctr_vmec(3)) > 1.0e-10_dp)
+    print *, '================================================================'
+    print *, ''
+    print *, 'Maximum errors over test grid:'
+    print *, '----------------------------------------------------------------'
+    print '(A,ES12.5,A,ES12.5,A)', '  |B|     max error: relative = ', max_rel_error_Bmod, &
                                 ', absolute = ', max_abs_error_Bmod, ' Gauss'
+    print *, ''
 
     ! Generate field data and plots
     call export_field_2d_data(vmec_field, gvec_field)

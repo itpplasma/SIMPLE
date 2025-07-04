@@ -46,7 +46,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     hcov(3) = (Bcov_phi + Bcov_theta*dl_dp)/Bmod
 
     if (present(sqgBctr)) then
-        error stop 'sqgBctr not implemented'
+        sqgBctr(1) = 0d0
+        sqgBctr(2) = sqg*Bctr_theta
+        sqgBctr(3) = sqg*Bctr_phi
     end if
 end subroutine evaluate
 

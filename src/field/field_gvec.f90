@@ -120,8 +120,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
     real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
     real(dp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
-    real(dp) :: Bthctr, Bzetactr  ! Contravariant field components in (s,theta,zeta)
-    real(dp) :: Bthcov, Bzetacov  ! Covariant field components
+    real(dp) :: Bthctr, Bzetactr, Bphctr  ! Contravariant field components in (s,theta,zeta)
+    real(dp) :: Bthcov, Bzetacov, Bphcov  ! Covariant field components
     real(dp) :: RZ_coords(3)      ! Coordinates for eval_Jh (R,Z,ζ)
     
     ! Axis regularization variables
@@ -134,7 +134,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     phi = x(3)    ! phi_vmec
 
     theta_star = theta
-    zeta = phi
+    zeta = -phi
 
     ! Check if GVEC state is properly initialized before evaluation
     if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
@@ -220,21 +220,22 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     e_zeta = dx_dq1 * dX1_dzeta + dx_dq2 * dX2_dzeta + dx_dq3
 
     ! Compute metric tensor components
-    g_ss = dot_product(e_s, e_s)
-    g_tt = dot_product(e_thet, e_thet)
-    g_zz = dot_product(e_zeta, e_zeta)
-    g_st = dot_product(e_s, e_thet)
-    g_sz = dot_product(e_s, e_zeta)
-    g_tz = dot_product(e_thet, e_zeta)
+    g_ss = dot_product(e_s, e_s) * METER_IN_CM**2
+    g_tt = dot_product(e_thet, e_thet) * METER_IN_CM**2
+    g_zz = dot_product(e_zeta, e_zeta) * METER_IN_CM**2
+    g_st = dot_product(e_s, e_thet) * METER_IN_CM**2
+    g_sz = dot_product(e_s, e_zeta) * METER_IN_CM**2
+    g_tz = dot_product(e_thet, e_zeta) * METER_IN_CM**2
 
     ! Compute Jacobian using VMEC/GVEC formula
     Jac_h = hmap_r%eval_Jh(RZ_coords)
     Jac_l = dX1_ds * dX2_dthet - dX1_dthet * dX2_ds
-    Jac = Jac_h * Jac_l
+    Jac = Jac_h * Jac_l * METER_IN_CM**3
 
     ! Following GVEC mhd3d_evalfunc.f90: contravariant components
-    Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac   ! B^θ contravariant
-    Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac   ! B^ζ contravariant 
+    Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac * TESLA_IN_GAUSS / METER_IN_CM
+    Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac * TESLA_IN_GAUSS / METER_IN_CM
+    Bphctr = -Bzetactr
 
     if (present(sqgBctr)) then
         sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
@@ -242,16 +243,16 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         sqgBctr(3) = Jac * Bzetactr  ! Jac * B^ζ
     end if
         
-    Bthcov = g_tt * Bthctr + g_tz * Bzetactr    ! B_θ covariant
-    Bzetacov = g_tz * Bthctr + g_zz * Bzetactr  ! B_ζ covariant
+    Bthcov = (g_tt * Bthctr + g_tz * Bzetactr)
+    Bzetacov = (g_tz * Bthctr + g_zz * Bzetactr)
+    Bphcov = -Bzetacov
 
-    Bmod = sqrt(Bthctr*Bthcov + Bzetactr*Bzetacov)
+    Bmod = sqrt(Bthctr*Bthcov + Bphctr*Bphcov)
     
     hcov(1) = (g_st * Bthctr + g_sz * Bzetactr) / Bmod
     hcov(2) = Bthcov / Bmod
-    hcov(3) = Bzetacov / Bmod
+    hcov(3) = Bphcov / Bmod
 
-    Bmod = Bmod * TESLA_IN_GAUSS
 
     Acov(1) = 0.0_dp
     Acov(2) = -LA_val * phiPrime_val / Jac * TESLA_IN_GAUSS * METER_IN_CM
