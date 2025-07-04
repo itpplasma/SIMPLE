@@ -6,6 +6,7 @@ program test_field_vmec_gvec
     use spline_vmec_sub, only: spline_vmec_data
     use params, only: pi
     
+    
     implicit none
     
     class(VmecField), allocatable :: vmec_field
@@ -13,9 +14,11 @@ program test_field_vmec_gvec
     character(len=256) :: vmec_file, gvec_temp_file
     logical :: file_exists
     
-    ! Variables for handling the conversion attempt
-    integer :: ios
-    character(len=256) :: error_msg
+    ! Variables for GVEC conversion
+    character(len=256) :: param_file
+    character(len=4096) :: param_strings(20)
+    integer :: num_strings
+    integer :: unit_param
     
     ! Test parameters
     real(dp) :: x(3)
@@ -58,10 +61,51 @@ program test_field_vmec_gvec
     if (file_exists) then
         print *, 'Found GVEC file created by CMake: ', trim(gvec_temp_file)
     else
-        print *, 'GVEC file not found. Attempting direct conversion...'
-        ! This will fail with a clear error message explaining why direct conversion
-        ! is not possible through the SIMPLE interface
-        call convert_vmec_to_gvec(vmec_file, gvec_temp_file)
+        print *, 'GVEC file not found. Creating GVEC state from VMEC...'
+        
+        ! Create a minimal GVEC parameter file for VMEC reading
+        param_file = 'gvec_vmec_params.ini'
+        open(newunit=unit_param, file=param_file, status='replace')
+        write(unit_param, '(A)') '! Minimal GVEC parameter file for VMEC reading'
+        write(unit_param, '(A)') 'whichInitEquilibrium = 1  ! Read from VMEC'
+        write(unit_param, '(A)') 'VMECwoutfile = "' // trim(vmec_file) // '"'
+        write(unit_param, '(A)') 'VMECwoutfile_format = 0   ! NetCDF format'
+        write(unit_param, '(A)') ''
+        write(unit_param, '(A)') '! Minimal grid settings'
+        write(unit_param, '(A)') 'n_sgrid_rho = 10'
+        write(unit_param, '(A)') 'grid_type = 0'
+        write(unit_param, '(A)') ''
+        write(unit_param, '(A)') '! Basis settings'
+        write(unit_param, '(A)') 'X1X2_deg = 3'
+        write(unit_param, '(A)') 'X1X2_cont = 1'
+        write(unit_param, '(A)') 'LA_deg = 3'
+        write(unit_param, '(A)') 'LA_cont = 1'
+        write(unit_param, '(A)') ''
+        write(unit_param, '(A)') '! Output control'
+        write(unit_param, '(A)') 'ProjectName = "test_vmec_gvec"'
+        write(unit_param, '(A)') 'outputIter = 0  ! Output initial state only'
+        write(unit_param, '(A)') 'maxIter = 0     ! No iterations'
+        close(unit_param)
+        
+        print *, 'Created parameter file: ', trim(param_file)
+        print *, 'Running GVEC to create state file...'
+        
+        ! Use execute_command_line to run GVEC
+        ! This will read VMEC and output the state
+        call execute_command_line('../../../build/_deps/gvec-build/bin/gvec ' // trim(param_file), &
+                                  exitstat=num_strings)
+        
+        ! The output file will be named based on ProjectName
+        gvec_temp_file = 'test_vmec_gvec_State_0000_00000000.dat'
+        
+        ! Check if the state file was created
+        inquire(file=gvec_temp_file, exist=file_exists)
+        if (.not. file_exists) then
+            print *, 'ERROR: GVEC state file not created'
+            error stop 1
+        end if
+        
+        print *, 'GVEC state file created successfully'
     end if
     
     ! Step 3: Load GVEC field from converted file
