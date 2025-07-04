@@ -1,4 +1,4 @@
-program test_field_vmec_gvec
+program test_vmec_gvec
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_vmec, only: VmecField
     use field_gvec, only: GvecField, create_gvec_field, convert_vmec_to_gvec
@@ -279,7 +279,7 @@ program test_field_vmec_gvec
         print *, 'Note: Visualization plots were generated despite test failure.'
     end if
 
-end program test_field_vmec_gvec
+end program test_vmec_gvec
 
 subroutine export_field_2d_data(vmec_field, gvec_field)
     use, intrinsic :: iso_fortran_env, only: dp => real64

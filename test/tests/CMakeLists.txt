@@ -101,9 +101,9 @@ target_link_libraries(test_gvec.x simple)
 add_dependencies(test_gvec.x gvec_test_data)
 add_test(NAME test_gvec COMMAND test_gvec.x)
 
-add_executable (test_field_vmec_gvec.x test_field_vmec_gvec.f90)
-target_link_libraries(test_field_vmec_gvec.x simple)
-add_test(NAME test_field_vmec_gvec COMMAND test_field_vmec_gvec.x)
+add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
+target_link_libraries(test_vmec_gvec.x simple)
+add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
 
 # Add 2D field export utility (not a test, but a diagnostic tool)
 add_executable (export_field_2d.x export_field_2d.f90)
