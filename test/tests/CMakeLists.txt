@@ -75,8 +75,30 @@ add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
+# Generate GVEC test data file for test_gvec using elliptic tokamak example
+set(GVEC_TEST_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../build/_deps/gvec-src/test-CI/examples/analytic_gs_elliptok/parameter.ini")
+set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_elliptok_State_final.dat")
+
+# Custom command to generate GVEC state file from elliptic tokamak example
+add_custom_command(
+    OUTPUT ${GVEC_TEST_STATE}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_BINARY_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/../../_deps/gvec-build/bin/gvec ${GVEC_TEST_INPUT}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different 
+            ${CMAKE_CURRENT_BINARY_DIR}/GVEC_SOLOVIEV_ELLIPTOK_State_0000_00000000.dat 
+            ${GVEC_TEST_STATE}
+    DEPENDS gvec
+    COMMENT "Generating GVEC elliptic tokamak test state file"
+    VERBATIM
+)
+
+# Custom target to ensure the state file is generated
+add_custom_target(gvec_test_data DEPENDS ${GVEC_TEST_STATE})
+
 add_executable (test_gvec.x test_gvec.f90)
 target_link_libraries(test_gvec.x simple)
+add_dependencies(test_gvec.x gvec_test_data)
 add_test(NAME test_gvec COMMAND test_gvec.x)
 
 add_executable (test_field_vmec_gvec.x test_field_vmec_gvec.f90)

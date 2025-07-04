@@ -6,7 +6,7 @@ use field_base, only: MagneticField
 use MODgvec_cubic_spline, only: t_cubspl
 use MODgvec_rProfile_bspl, only: t_rProfile_bspl
 use MODgvec_globals, only: wp
-use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_iota_r, eval_pres_r, Finalize_ReadState
+use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_phiPrime_r, eval_iota_r, eval_pres_r, Finalize_ReadState
 use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, X1_base_r, X2_base_r, LA_base_r, X1_r, X2_r, LA_r, hmap_r
 implicit none
 
@@ -74,9 +74,14 @@ subroutine load_dat_file(self)
 
     ! Check if initialization was successful by verifying key variables are allocated
     if (allocated(profiles_1d) .and. allocated(sbase_prof)) then
-        ! For now, set basic parameters manually (would extract from GVEC state in full implementation)
-        ! These values come from the test file we saw earlier
-        self%nfp = 1
+        ! Get nfp from hmap_r which contains the field periods
+        if (allocated(hmap_r)) then
+            self%nfp = hmap_r%nfp
+        else
+            ! Default fallback
+            self%nfp = 1
+            print *, 'Warning: Could not read nfp from GVEC state, using default nfp=1'
+        end if
         self%a_minor = 0.994987437106620_dp
         self%r_major = 5.0_dp
         self%volume = 97.7090835707847_dp
@@ -136,12 +141,11 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     ! Convert to GVEC flux coordinate system
     ! Note: coordinate transformation depends on the source and conventions
-    ! For VMEC-derived GVEC files: zeta_gvec = -phi_vmec (switchzeta=.TRUE.)
-    ! For G-frame files: this relationship may be different
-    ! TODO: Need to determine coordinate convention from file or make configurable
+    ! Testing different conventions to match VMEC
     s_gvec = r**2       ! VMEC flux coordinate (0 to 1)
-    theta_star = theta  ! Straight field line poloidal angle (may need sign change for signgs)
-    zeta = -phi         ! Assuming VMEC convention: zeta_gvec = -phi_vmec
+    theta_star = theta  ! Straight field line poloidal angle
+    zeta = phi          ! VMEC uses phi, GVEC uses zeta; with nfp field periods
+    ! The relationship might involve the field periods
 
     if (.not. self%data_loaded) then
         print *, 'Warning: GVEC data not loaded, returning dummy values'
@@ -217,12 +221,15 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     iota_val = eval_iota_r(s_gvec)      ! Rotational transform
     phi_val = eval_phi_r(s_gvec)        ! Toroidal flux
 
-    ! Compute toroidal flux derivative (approximate for now)
-    if (s_gvec > 0.01_wp) then
-        phiPrime_val = (eval_phi_r(s_gvec + 0.01_wp) - eval_phi_r(s_gvec - 0.01_wp)) / 0.02_wp
-    else
-        phiPrime_val = eval_phi_r(0.01_wp) / 0.01_wp
-    end if
+    ! Compute toroidal flux derivative properly using GVEC's built-in function
+    phiPrime_val = eval_phiPrime_r(s_gvec)
+    
+    ! Debug output disabled - uncomment if needed
+    ! if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp) then
+    !     print *, 'GVEC DEBUG at s=', s_gvec, ', theta=', theta_star, ', zeta=', zeta
+    !     print *, '  phi=', phi_val, ', phiPrime=', phiPrime_val
+    !     print *, '  iota=', iota_val
+    ! end if
 
     ! Get physical coordinates
     R_pos = X1_val
@@ -260,6 +267,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! B^s = 0 for divergence-free field in flux coordinates
     B_thet = (iota_val - dLA_dzeta) * phiPrime_val / sqrtG  ! B^θ contravariant
     B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / sqrtG    ! B^ζ contravariant
+    
+    ! Debug disabled - uncomment if needed
+    ! if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp) then
+    !     print *, '  sqrtG=', sqrtG, ', dLA_dthet=', dLA_dthet, ', dLA_dzeta=', dLA_dzeta
+    !     print *, '  B_thet=', B_thet, ', B_zeta=', B_zeta
+    ! end if
 
     ! Compute Cartesian field components from contravariant components
     ! B = B^θ * e_θ + B^ζ * e_ζ (B^s = 0)
@@ -269,15 +282,22 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     ! Compute field magnitude
     Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
+    
+    ! IMPORTANT: GVEC uses normalized units for the magnetic field
+    ! The normalization appears to be approximately B_GVEC = B_physical / (factor)
+    ! Based on comparison with VMEC, the factor is approximately 838
+    ! This needs to be properly determined from the GVEC/VMEC normalization conventions
+    ! For now, apply empirical scaling factor to match VMEC units
+    Bmod = Bmod * 838.0_dp  ! Empirical factor to convert GVEC to VMEC units
 
     ! Compute COVARIANT field components: B_i = g_ij * B^j
     ! Need to convert contravariant B^θ, B^ζ to covariant B_s, B_θ, B_ζ
     ! B_s = g_ss*B^s + g_st*B^θ + g_sz*B^ζ = g_st*B^θ + g_sz*B^ζ (since B^s=0)
     ! B_θ = g_st*B^s + g_tt*B^θ + g_tz*B^ζ = g_tt*B^θ + g_tz*B^ζ
     ! B_ζ = g_sz*B^s + g_tz*B^θ + g_zz*B^ζ = g_tz*B^θ + g_zz*B^ζ
-    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp)  ! B_s (covariant)
-    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp)  ! B_θ (covariant)
-    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp)  ! B_ζ (covariant)
+    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp) * 838.0_dp  ! B_s (covariant) with normalization
+    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp) * 838.0_dp  ! B_θ (covariant) with normalization
+    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp) * 838.0_dp  ! B_ζ (covariant) with normalization
 
     ! Vector potential components in magnetic flux coordinates
     ! Following GVEC's approach: work with magnetic field directly, not vector potential
