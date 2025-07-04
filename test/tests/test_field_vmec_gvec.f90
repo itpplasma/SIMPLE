@@ -80,13 +80,15 @@ program test_field_vmec_gvec
         write(unit_param, '(A)') 'VMECwoutfile = ' // trim(vmec_file)
         write(unit_param, '(A)') 'VMECwoutfile_format = 0   ! NetCDF format'
         write(unit_param, '(A)') ''
-        write(unit_param, '(A)') '! Minimal grid settings'
-        write(unit_param, '(A)') 'sgrid_nelems = 11'
+        write(unit_param, '(A)') '! Grid settings optimized for axis treatment'
+        write(unit_param, '(A)') 'sgrid_nelems = 21'
         write(unit_param, '(A)') 'sgrid_grid_type = 4'
+        write(unit_param, '(A)') 'sgrid_rmin = 1.0e-6'
+        write(unit_param, '(A)') 'sgrid_rmax = 0.99'
         write(unit_param, '(A)') ''
-        write(unit_param, '(A)') '! Basis settings'
-        write(unit_param, '(A)') 'X1X2_deg = 3'
-        write(unit_param, '(A)') 'LA_deg = 3'
+        write(unit_param, '(A)') '! Basis settings with higher accuracy'
+        write(unit_param, '(A)') 'X1X2_deg = 5'
+        write(unit_param, '(A)') 'LA_deg = 5'
         write(unit_param, '(A)') ''
         write(unit_param, '(A)') '! Output control'
         write(unit_param, '(A)') 'ProjectName = test_vmec_gvec'
@@ -131,8 +133,8 @@ program test_field_vmec_gvec
     rel_tol = 1.0e-2_dp  ! 1% relative tolerance for |B|
     abs_tol = 1.0e-6_dp  ! Small absolute tolerance
 
-    ! Grid for comparison
-    ns = 3   ! Number of flux surfaces
+    ! Grid for comparison including small s values to test axis regularization
+    ns = 5   ! Number of flux surfaces
     nt = 4   ! Number of theta points
     np = 2   ! Number of phi points
 
@@ -148,7 +150,14 @@ program test_field_vmec_gvec
     print *, 'Comparing at grid points:'
 
     do i = 1, ns
-        s_test = 0.1_dp + 0.3_dp * real(i-1, dp) / real(ns-1, dp)  ! s from 0.1 to 0.4
+        ! Test range including small s values: 0.01, 0.05, 0.1, 0.3, 0.6
+        if (i == 1) then
+            s_test = 0.01_dp  ! Very small s to test axis regularization
+        else if (i == 2) then
+            s_test = 0.05_dp  ! Regularization boundary
+        else
+            s_test = 0.1_dp + 0.25_dp * real(i-3, dp) / real(ns-3, dp)  ! s from 0.1 to 0.6
+        end if
 
         do j = 1, nt
             theta_test = 2.0_dp * pi * real(j-1, dp) / real(nt, dp)  ! theta from 0 to 2*pi
@@ -283,10 +292,10 @@ subroutine export_field_2d_data(vmec_field, gvec_field)
     class(VmecField), intent(in) :: vmec_field
     class(GvecField), intent(in) :: gvec_field
     
-    ! Grid parameters
-    integer, parameter :: ns = 30    ! Number of s points
+    ! Grid parameters including small s values
+    integer, parameter :: ns = 40    ! Number of s points
     integer, parameter :: nt = 60    ! Number of theta points
-    real(dp), parameter :: s_min = 0.1_dp
+    real(dp), parameter :: s_min = 0.01_dp  ! Start from very small s
     real(dp), parameter :: s_max = 0.9_dp
     real(dp), parameter :: theta_min = 0.0_dp
     real(dp), parameter :: theta_max = 2.0_dp * pi
