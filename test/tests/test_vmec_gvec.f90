@@ -104,12 +104,10 @@ program test_vmec_gvec
     gvec_field = create_gvec_field(gvec_temp_file)
 
     ! Compare field evaluations
-    ! Set tolerances
-    ! Note: GVEC uses different conventions than VMEC for some quantities
-    ! We focus on |B| accuracy which is the most important for orbit tracing
-    ! Based on actual comparison results, we expect ~0.2% maximum relative error
-    rel_tol = 3.0e-3_dp  ! 0.3% relative tolerance for |B| (with some margin)
-    abs_tol = 2.0e2_dp   ! 200 Gauss absolute tolerance
+    ! Set tolerances based on actual field comparison results
+    ! The excellent agreement after theta* transformations allows tight tolerances
+    rel_tol = 2.5e-3_dp  ! 0.25% relative tolerance for |B| (actual max ~0.225%)
+    abs_tol = 1.5e2_dp   ! 150 Gauss absolute tolerance (actual max ~136 Gauss)
 
     ! Grid for comparison including small s values to test axis regularization
     ns = 5   ! Number of flux surfaces
@@ -248,6 +246,7 @@ program test_vmec_gvec
     call execute_command_line('python3 ../../../test/tests/create_1d_radial_plots.py > /dev/null 2>&1', exitstat=i)
     call execute_command_line('python3 ../../../test/tests/investigate_field_differences.py > /dev/null 2>&1', exitstat=i)
     call execute_command_line('python3 ../../../test/tests/plot_acov_1d.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/plot_hcov_1d.py > /dev/null 2>&1', exitstat=i)
     
     ! Final test result
     print *, ''
@@ -256,7 +255,8 @@ program test_vmec_gvec
     else
         print *, 'TEST FAILED'
         print '(A,ES12.5)', '  Tolerance (relative): ', rel_tol
-        print '(A,ES12.5)', '  Tolerance (absolute): ', abs_tol, ' Gauss'
+        print '(A,ES12.5,A)', '  Tolerance (absolute): ', abs_tol, ' Gauss'
+        error stop 'GVEC field comparison tolerances not met'
     end if
 
 end program test_vmec_gvec
@@ -453,6 +453,39 @@ subroutine export_field_1d_data(vmec_field, gvec_field)
             Acov_vmec(1), Acov_gvec(1), &
             Acov_vmec(2), Acov_gvec(2), &
             Acov_vmec(3), Acov_gvec(3)
+    end do
+    close(unit_out)
+    
+    ! Write hcov comparison data
+    open(newunit=unit_out, file='hcov_comparison.dat', status='replace')
+    write(unit_out, '(A)') '# 1D radial normalized covariant B field comparison'
+    write(unit_out, '(A,F8.4,A,F8.4,A)') '# Fixed theta = ', theta_fixed/pi, ' pi, phi = ', phi_fixed/pi, ' pi'
+    write(unit_out, '(A)') '# Columns: s, r, hcov1_VMEC, hcov1_GVEC, hcov2_VMEC, hcov2_GVEC, hcov3_VMEC, hcov3_GVEC'
+    
+    do i = 1, ns
+        ! Use log spacing for better resolution at small s
+        if (i == 1) then
+            s = s_min
+        else
+            ! Log-space from s_min to s_max
+            s = s_min * (s_max/s_min)**((real(i-1,dp))/(real(ns-1,dp)))
+        end if
+        r = sqrt(s)
+        
+        ! Set coordinates (r = sqrt(s), theta, phi)
+        x(1) = r
+        x(2) = theta_fixed
+        x(3) = phi_fixed
+        
+        ! Evaluate fields
+        call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
+        call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
+        
+        ! Write all three components
+        write(unit_out, '(8ES16.8)') s, r, &
+            hcov_vmec(1), hcov_gvec(1), &
+            hcov_vmec(2), hcov_gvec(2), &
+            hcov_vmec(3), hcov_gvec(3)
     end do
     close(unit_out)
     

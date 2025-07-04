@@ -272,9 +272,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! The GVEC components are in (s,theta,zeta) but SIMPLE expects (r,theta*,phi)
     ! where s = r^2, theta* = theta + Lambda, and phi = -zeta
     ! The transformation requires: ds/dr = 2*r
-    hcov(1) = (Bscov + Bthcov * dLA_ds) / Bmod * 2.0_dp * r
-    hcov(2) = Bthcov * (1.0_dp + dLA_dthet) / Bmod
-    hcov(3) = (Bzetacov + Bthcov * dLA_dzeta) / Bmod
+    hcov(1) = Bscov / Bmod
+    hcov(2) = Bthcov / Bmod
+    hcov(3) = Bzetacov / Bmod
 
     ! Vector potential with theta* transformations
     ! Acov_theta in GVEC is the toroidal flux phi_val
