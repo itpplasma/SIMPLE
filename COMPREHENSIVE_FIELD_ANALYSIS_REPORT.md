@@ -167,7 +167,7 @@ min_radial_coordinate = 1e-6
 ### 1. Diagnostic Tests
 ```bash
 # Run field comparison with detailed output
-make test_vmec_gvec
+make test TEST=test_vmec_gvec VERBOSE=1
 
 # Generate 1D radial profiles
 python3 create_1d_radial_plots.py
