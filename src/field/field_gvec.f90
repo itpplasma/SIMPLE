@@ -194,10 +194,10 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     ! Get profile values
     iota_val = eval_iota_r(r)      ! Rotational transform
-    phi_val = eval_phi_r(r)        ! Toroidal flux
+    phi_val = eval_phi_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2        ! Toroidal flux
 
     ! Compute toroidal flux derivative properly using GVEC's built-in function
-    phiPrime_val = eval_phiPrime_r(r)
+    phiPrime_val = eval_phiPrime_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2
     
     R_pos = X1_val
     Z_pos = X2_val
@@ -233,8 +233,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     Jac = Jac_h * Jac_l * METER_IN_CM**3
 
     ! Following GVEC mhd3d_evalfunc.f90: contravariant components
-    Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac * TESLA_IN_GAUSS / METER_IN_CM
-    Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac * TESLA_IN_GAUSS / METER_IN_CM
+    Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac
+    Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac
     Bphctr = -Bzetactr
 
     if (present(sqgBctr)) then
