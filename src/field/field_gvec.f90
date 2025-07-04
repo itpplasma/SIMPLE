@@ -255,9 +255,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
 
     Acov(1) = 0.0_dp
-    Acov(2) = -LA_val * phiPrime_val / Jac
+    Acov(2) = phi_val
     if (abs(R_pos) > 1.0e-10_dp) then
-        Acov(3) = phi_val / R_pos
+        Acov(3) = 0.0_dp
     else
         Acov(3) = 0.0_dp
     end if
