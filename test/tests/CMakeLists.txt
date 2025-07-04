@@ -105,6 +105,10 @@ add_executable (test_field_vmec_gvec.x test_field_vmec_gvec.f90)
 target_link_libraries(test_field_vmec_gvec.x simple)
 add_test(NAME test_field_vmec_gvec COMMAND test_field_vmec_gvec.x)
 
+# Add 2D field export utility (not a test, but a diagnostic tool)
+add_executable (export_field_2d.x export_field_2d.f90)
+target_link_libraries(export_field_2d.x simple)
+
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
 add_subdirectory(field_can)

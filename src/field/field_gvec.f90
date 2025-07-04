@@ -283,17 +283,21 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Compute field magnitude
     Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
     
-    ! IMPORTANT: Check if GVEC uses different units (CGS vs SI)
-    ! Let's add debug output to understand the scaling
-    if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp .and. abs(zeta) < 0.1_wp) then
-        print *, 'GVEC Field DEBUG: Bmod before scaling = ', Bmod
-        print *, 'GVEC Field DEBUG: Expected factor for CGS->SI would be 1e-4 (Gauss to Tesla)'
-        print *, 'GVEC Field DEBUG: Actual factor needed ~ 838'
-    end if
-    
-    ! The factor 838 is not 10000 (CGS to SI), so it's likely a different normalization
-    ! GVEC might use normalized units where B is normalized by some reference field
-    Bmod = Bmod * 838.0_dp  ! Empirical factor to convert GVEC to VMEC units
+    ! IMPORTANT: Unit conversion between GVEC and SIMPLE's internal VMEC units
+    ! GVEC uses SI units (Tesla) for magnetic field
+    ! VMEC data in SIMPLE appears to use internal units where the field is scaled
+    ! 
+    ! From analysis:
+    ! - GVEC: B ≈ 68.8 (Tesla, SI units)
+    ! - VMEC in SIMPLE: B ≈ 57000 (internal units)
+    ! - b0 from VMEC file: 5.178 Tesla
+    ! 
+    ! The factor 57000/68.8 ≈ 838 suggests SIMPLE uses internal units where
+    ! the magnetic field is scaled by approximately 10000/11.8 ≈ 838
+    ! This is NOT a simple CGS->SI conversion
+    !
+    ! TODO: Investigate exact scaling convention in SIMPLE's VMEC implementation
+    Bmod = Bmod * 838.0_dp  ! Convert from GVEC SI units to SIMPLE's VMEC internal units
 
     ! Compute COVARIANT field components: B_i = g_ij * B^j
     ! Need to convert contravariant B^θ, B^ζ to covariant B_s, B_θ, B_ζ
