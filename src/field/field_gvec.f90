@@ -90,6 +90,20 @@ subroutine load_dat_file(self)
 end subroutine load_dat_file
 
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
+    !> Evaluate magnetic field from GVEC equilibrium data
+    !> Input coordinates x = (r, theta, phi) where:
+    !>   r = sqrt(s) with s the normalized toroidal flux
+    !>   theta = poloidal angle (NOT theta*)
+    !>   phi = toroidal angle
+    !>
+    !> Output field components are in (s, theta*, phi) coordinates where:
+    !>   theta* = theta + Lambda(s,theta,phi)
+    !>   Lambda is the stream function
+    !>
+    !> The transformation from (r,theta,phi) to (s,theta*,phi) components includes:
+    !>   - Factor ds/dr = 2*r for the radial component
+    !>   - Lambda derivatives for coupling between components
+    
     class(GvecField), intent(in) :: self
     real(dp), intent(in) :: x(3)  ! r=sqrt(s_vmec), theta_vmec, phi_vmec
     real(dp), intent(out) :: Acov(3)
@@ -121,7 +135,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
     real(dp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
     real(dp) :: Bthctr, Bzetactr, Bphctr  ! Contravariant field components in (s,theta,zeta)
-    real(dp) :: Bthcov, Bzetacov, Bphcov  ! Covariant field components
+    real(dp) :: Bthcov, Bzetacov, Bphcov, Bscov  ! Covariant field components
     real(dp) :: RZ_coords(3)      ! Coordinates for eval_Jh (R,Z,ζ)
     
     ! Axis regularization variables
@@ -250,16 +264,25 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     Bthcov = (g_tt * Bthctr + g_tz * Bzetactr)
     Bzetacov = (g_tz * Bthctr + g_zz * Bzetactr)
     Bphcov = -Bzetacov
+    
+    ! For theta* coordinates, we need covariant B in s direction
+    Bscov = (g_st * Bthctr + g_sz * Bzetactr)
 
     Bmod = sqrt(Bthctr*Bthcov + Bphctr*Bphcov)
     
-    hcov(1) = (g_st * Bthctr + g_sz * Bzetactr) / Bmod
-    hcov(2) = Bthcov / Bmod
-    hcov(3) = Bphcov / Bmod
+    ! Apply theta* coordinate transformations with Lambda derivatives
+    ! The GVEC components are in (s,theta,zeta) but SIMPLE expects (r,theta*,phi)
+    ! where s = r^2, theta* = theta + Lambda, and phi = -zeta
+    ! The transformation requires: ds/dr = 2*r
+    hcov(1) = (Bscov + Bthcov * dLA_ds) / Bmod * 2.0_dp * r
+    hcov(2) = Bthcov * (1.0_dp + dLA_dthet) / Bmod
+    hcov(3) = (Bphcov + Bthcov * dLA_dzeta) / Bmod
 
-    Acov(1) = 0.0_dp
-    Acov(2) = phi_val
-    Acov(3) = -chi_val
+    ! Vector potential with theta* transformations
+    ! Acov_theta in GVEC is the toroidal flux phi_val
+    Acov(1) = phi_val * dLA_ds * 2.0_dp * r
+    Acov(2) = phi_val * (1.0_dp + dLA_dthet)
+    Acov(3) = -chi_val + phi_val * dLA_dzeta
 
 end subroutine evaluate
 
