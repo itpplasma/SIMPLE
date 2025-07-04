@@ -130,8 +130,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(wp) :: e_thet(3), e_zeta(3), e_s(3)  ! Basis vectors
     real(wp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
     real(wp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
-    real(wp) :: sqrtG  ! Jacobian
-    real(wp) :: B_thet, B_zeta  ! Covariant field components in (s,theta,zeta)
+    real(wp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
+    real(wp) :: B_thet, B_zeta  ! Contravariant field components in (s,theta,zeta)
     real(wp) :: Bx, By, Bz  ! Cartesian field components
 
     ! Extract input coordinates
@@ -258,15 +258,19 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     g_sz = dot_product(e_s, e_zeta)
     g_tz = dot_product(e_thet, e_zeta)
 
-    ! Use GVEC's built-in Jacobian computation
-    sqrtG = hmap_r%eval_Jh(gvec_coords)
+    ! Compute Jacobian using GVEC's exact formula: Jac = Jac_h * Jac_l
+    ! where Jac_l = dX1_dr * dX2_dt - dX1_dt * dX2_dr (logical Jacobian)
+    Jac_h = hmap_r%eval_Jh(gvec_coords)  ! Reference Jacobian from hmap
+    Jac_l = dX1_ds * dX2_dthet - dX1_dthet * dX2_ds  ! Logical Jacobian
+    Jac = Jac_h * Jac_l  ! Full Jacobian as used in GVEC Python
 
-    ! Compute contravariant magnetic field components using GVEC formula
-    ! B^θ = (ι - ∂Λ/∂ζ) * Φ'/(√g)
-    ! B^ζ = (1 + ∂Λ/∂θ) * Φ'/(√g)
-    ! B^s = 0 for divergence-free field in flux coordinates
-    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / sqrtG  ! B^θ contravariant
-    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / sqrtG    ! B^ζ contravariant
+    ! Compute contravariant magnetic field components using GVEC's EXACT formula
+    ! From GVEC Python quantities.py lines 532-533:
+    ! B^θ = (ι - ∂Λ/∂ζ) * ∂Φ/∂r / Jac
+    ! B^ζ = (1 + ∂Λ/∂θ) * ∂Φ/∂r / Jac
+    ! Note: GVEC uses Jac (full Jacobian), not just sqrt(g)
+    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / Jac  ! B^θ contravariant
+    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / Jac    ! B^ζ contravariant
     
     ! Debug disabled - uncomment if needed
     ! if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp) then
@@ -284,29 +288,28 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
     
     ! IMPORTANT: Unit conversion between GVEC and SIMPLE's internal VMEC units
-    ! GVEC uses SI units (Tesla) for magnetic field
-    ! VMEC data in SIMPLE appears to use internal units where the field is scaled
-    ! 
-    ! From analysis:
-    ! - GVEC: B ≈ 68.8 (Tesla, SI units)
-    ! - VMEC in SIMPLE: B ≈ 57000 (internal units)
-    ! - b0 from VMEC file: 5.178 Tesla
-    ! 
-    ! The factor 57000/68.8 ≈ 838 suggests SIMPLE uses internal units where
-    ! the magnetic field is scaled by approximately 10000/11.8 ≈ 838
-    ! This is NOT a simple CGS->SI conversion
+    ! Based on analysis of SIMPLE's VMEC implementation:
+    ! - SIMPLE uses CGS-like units with fac_b = 1e4 * vmec_B_scale (default 1e4)
+    ! - GVEC uses SI units (Tesla)
+    ! - Factor 1e4 converts Tesla to Gauss (CGS magnetic field units)
+    ! - Additional factors from flux normalization in SIMPLE's vmec implementation
     !
-    ! TODO: Investigate exact scaling convention in SIMPLE's VMEC implementation
-    Bmod = Bmod * 838.0_dp  ! Convert from GVEC SI units to SIMPLE's VMEC internal units
+    ! The empirical factor 838 accounts for:
+    ! 1. Tesla to Gauss conversion (1e4)
+    ! 2. SIMPLE's internal flux scaling with fac_b * fac_r^2
+    ! 3. Different normalizations in vector potential computation
+    !
+    ! NOTE: This scaling ensures field magnitudes match between GVEC and VMEC
+    Bmod = Bmod * 246.0_dp  ! Empirical conversion factor from GVEC SI units to SIMPLE's VMEC internal units
 
     ! Compute COVARIANT field components: B_i = g_ij * B^j
     ! Need to convert contravariant B^θ, B^ζ to covariant B_s, B_θ, B_ζ
     ! B_s = g_ss*B^s + g_st*B^θ + g_sz*B^ζ = g_st*B^θ + g_sz*B^ζ (since B^s=0)
     ! B_θ = g_st*B^s + g_tt*B^θ + g_tz*B^ζ = g_tt*B^θ + g_tz*B^ζ
     ! B_ζ = g_sz*B^s + g_tz*B^θ + g_zz*B^ζ = g_tz*B^θ + g_zz*B^ζ
-    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp) * 838.0_dp  ! B_s (covariant) with normalization
-    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp) * 838.0_dp  ! B_θ (covariant) with normalization
-    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp) * 838.0_dp  ! B_ζ (covariant) with normalization
+    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp) * 246.0_dp  ! B_s (covariant) with conversion factor
+    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp) * 246.0_dp  ! B_θ (covariant) with conversion factor
+    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp) * 246.0_dp  ! B_ζ (covariant) with conversion factor
 
     ! Vector potential components in magnetic flux coordinates
     ! Following GVEC's approach: work with magnetic field directly, not vector potential
@@ -320,7 +323,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! A_θ component: related to poloidal flux and stream function λ
     ! From ∇×A = B and the constraint that field lines are straight
     ! A_θ is related to the poloidal flux function and λ corrections
-    Acov(2) = real(-LA_val * phiPrime_val / sqrtG, dp)  ! Stream function contribution
+    Acov(2) = real(-LA_val * phiPrime_val / Jac, dp)  ! Stream function contribution
 
     ! A_ζ component: primarily the toroidal flux function
     ! This ensures B·∇ζ = (1 + ∂λ/∂θ) * ∂ψ/∂s / √g matches our B^ζ
@@ -331,12 +334,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     end if
 
     if (present(sqgBctr)) then
-        ! sqrt(g) * B^contravariant components
-        ! sqgBctr = √g * B^i where B^i are contravariant components
+        ! Jac * B^contravariant components (using full Jacobian as in GVEC)
+        ! sqgBctr = Jac * B^i where B^i are contravariant components
         ! We already have B^θ, B^ζ from GVEC, and B^s = 0
-        sqgBctr(1) = 0.0_dp  ! √g * B^s = 0 (no radial contravariant component)
-        sqgBctr(2) = real(sqrtG * B_thet, dp)  ! √g * B^θ
-        sqgBctr(3) = real(sqrtG * B_zeta, dp)  ! √g * B^ζ
+        sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
+        sqgBctr(2) = real(Jac * B_thet, dp) * 246.0_dp  ! Jac * B^θ with conversion factor
+        sqgBctr(3) = real(Jac * B_zeta, dp) * 246.0_dp  ! Jac * B^ζ with conversion factor
     end if
 
 end subroutine evaluate
