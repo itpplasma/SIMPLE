@@ -112,7 +112,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: dLA_ds, dLA_dthet, dLA_dzeta
 
     ! Profile values
-    real(dp) :: iota_val, phi_val, phiPrime_val
+    real(dp) :: iota_val, phi_val, phiPrime_val, chi_val
 
     ! Coordinate and field computation
     real(dp) :: R_pos, Z_pos  ! Physical R, Z coordinates
@@ -195,10 +195,14 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Get profile values
     iota_val = eval_iota_r(r)      ! Rotational transform
     phi_val = eval_phi_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2        ! Toroidal flux
-
+    
     ! Compute toroidal flux derivative properly using GVEC's built-in function
     phiPrime_val = eval_phiPrime_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2
     
+    ! Get poloidal flux from profiles_1d(:,2)
+    ! profiles_1d indices: 1=phi, 2=chi, 3=iota, 4=pressure
+    chi_val = sbase_prof%evalDOF_s(r, 0, profiles_1d(:,2)) * TESLA_IN_GAUSS * METER_IN_CM**2
+
     R_pos = X1_val
     Z_pos = X2_val
 
@@ -253,14 +257,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     hcov(2) = Bthcov / Bmod
     hcov(3) = Bphcov / Bmod
 
-
     Acov(1) = 0.0_dp
     Acov(2) = phi_val
-    if (abs(R_pos) > 1.0e-10_dp) then
-        Acov(3) = 0.0_dp
-    else
-        Acov(3) = 0.0_dp
-    end if
+    Acov(3) = -chi_val
 
 end subroutine evaluate
 

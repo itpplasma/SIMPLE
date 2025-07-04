@@ -48,9 +48,9 @@ if has_acov_data:
     mask_gvec = np.abs(Acov1_gvec) > 1e-10
     
     if np.any(mask_vmec):
-        ax2.semilogx(s_acov[mask_vmec], Acov1_vmec[mask_vmec]/1e8, 'b-', label='VMEC', linewidth=2)
+        ax2.plot(s_acov[mask_vmec], Acov1_vmec[mask_vmec]/1e8, 'b-', label='VMEC', linewidth=2)
     if np.any(mask_gvec):
-        ax2.semilogx(s_acov[mask_gvec], Acov1_gvec[mask_gvec]/1e8, 'r--', label='GVEC', linewidth=2)
+        ax2.plot(s_acov[mask_gvec], Acov1_gvec[mask_gvec]/1e8, 'r--', label='GVEC', linewidth=2)
     
     ax2.set_ylabel('$A_s$ [$10^8$ Gauss·cm]')
     ax2.set_title('Vector Potential - Radial Component')
@@ -59,8 +59,8 @@ if has_acov_data:
     
     # Plot 3: Acov(2) - poloidal component (main component)
     ax3 = axes[2]
-    ax3.semilogx(s_acov, Acov2_vmec/1e8, 'b-', label='VMEC', linewidth=2)
-    ax3.semilogx(s_acov, Acov2_gvec/1e8, 'r--', label='GVEC', linewidth=2)
+    ax3.plot(s_acov, Acov2_vmec/1e8, 'b-', label='VMEC', linewidth=2)
+    ax3.plot(s_acov, Acov2_gvec/1e8, 'r--', label='GVEC', linewidth=2)
     ax3.set_ylabel('$A_\\theta$ [$10^8$ Gauss·cm]')
     ax3.set_title('Vector Potential - Poloidal Component')
     ax3.legend()
@@ -72,9 +72,9 @@ if has_acov_data:
     mask_gvec = np.abs(Acov3_gvec) > 1e-10
     
     if np.any(mask_vmec):
-        ax4.semilogx(s_acov[mask_vmec], Acov3_vmec[mask_vmec]/1e8, 'b-', label='VMEC', linewidth=2)
+        ax4.plot(s_acov[mask_vmec], Acov3_vmec[mask_vmec]/1e8, 'b-', label='VMEC', linewidth=2)
     if np.any(mask_gvec):
-        ax4.semilogx(s_acov[mask_gvec], Acov3_gvec[mask_gvec]/1e8, 'r--', label='GVEC', linewidth=2)
+        ax4.plot(s_acov[mask_gvec], Acov3_gvec[mask_gvec]/1e8, 'r--', label='GVEC', linewidth=2)
     
     ax4.set_xlabel('s')
     ax4.set_ylabel('$A_\\phi$ [$10^8$ Gauss·cm]')
@@ -116,12 +116,7 @@ if has_acov_data:
     # Add relative error as inset
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
     axins = inset_axes(ax, width="40%", height="40%", loc='lower right')
-    
-    rel_error = np.abs(Acov2_gvec - Acov2_vmec) / np.abs(Acov2_vmec)
-    axins.semilogy(s_acov, rel_error, 'g-', linewidth=2)
-    axins.set_xlabel('s')
-    axins.set_ylabel('Relative Error')
-    axins.grid(True, alpha=0.3)
+
     
     plt.savefig('acov2_detailed_comparison.png', dpi=150, bbox_inches='tight')
     print("Saved: acov2_detailed_comparison.png")
