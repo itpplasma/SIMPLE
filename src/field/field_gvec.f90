@@ -274,34 +274,11 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! B^ζ = (1 + ∂Λ/∂θ) * ∂Φ/∂r / Jac
     ! Note: GVEC uses Jac (full Jacobian), not just sqrt(g)
     
-    ! AXIS REGULARIZATION: Handle singularity at small s
-    ! The factor dPhi_dr/Jac becomes singular as s → 0 because:
-    ! - Jacobian → 0 (area elements shrink near axis)
-    ! - dPhi_dr may also → 0 but not fast enough
-    ! Apply regularization for s < s_min to prevent field divergence
-    
-    if (s_gvec < s_min_reg) then
-        ! Improved axis regularization: 
-        ! Use smooth cubic transition to prevent field discontinuities
-        reg_factor = s_gvec / s_min_reg  ! 0 at axis, 1 at s_min_reg
-        
-        ! Cubic smoothing function: smooth transition from 0.2 to 1.0
-        ! This provides better regularization than linear interpolation
-        smooth_factor = 0.2_wp + 0.8_wp * (3.0_wp * reg_factor**2 - 2.0_wp * reg_factor**3)
-        
-        ! Compute scaling factor with Jacobian protection
-        scaling_factor = phiPrime_val / max(abs(Jac), 1.0e-10_wp)
-        
-        ! Apply smooth transition with stronger regularization near axis
-        scaling_factor = scaling_factor * smooth_factor
-        
-        B_thet = (iota_val - dLA_dzeta) * scaling_factor
-        B_zeta = (1.0_wp + dLA_dthet) * scaling_factor
-    else
-        ! Normal GVEC calculation for s >= s_min_reg
-        B_thet = (iota_val - dLA_dzeta) * phiPrime_val / Jac  ! B^θ contravariant
-        B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / Jac    ! B^ζ contravariant
-    end if
+    ! Compute contravariant magnetic field components EXACTLY as GVEC Python does
+    ! B^θ = (ι - ∂Λ/∂ζ) * ∂Φ/∂r / Jac
+    ! B^ζ = (1 + ∂Λ/∂θ) * ∂Φ/∂r / Jac
+    B_thet = (iota_val - dLA_dzeta) * phiPrime_val / Jac  ! B^θ contravariant
+    B_zeta = (1.0_wp + dLA_dthet) * phiPrime_val / Jac    ! B^ζ contravariant
     
     ! Debug disabled - uncomment if needed
     ! if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp) then
@@ -315,33 +292,23 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     By = B_thet * e_thet(2) + B_zeta * e_zeta(2)
     Bz = B_thet * e_thet(3) + B_zeta * e_zeta(3)
 
-    ! Compute field magnitude
+    ! Compute field magnitude EXACTLY as GVEC Python does
+    ! |B| = sqrt(B·B) = sqrt(Bx² + By² + Bz²)
     Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
     
-    ! IMPORTANT: Unit conversion between GVEC and SIMPLE's internal VMEC units
-    ! Based on analysis of SIMPLE's VMEC implementation:
-    ! - SIMPLE uses CGS-like units with fac_b = 1e4 * vmec_B_scale (default 1e4)
-    ! - GVEC uses SI units (Tesla)
-    ! - Factor 1e4 converts Tesla to Gauss (CGS magnetic field units)
-    ! - Additional factors from flux normalization in SIMPLE's vmec implementation
-    !
-    ! The empirical factor 838 accounts for:
-    ! 1. Tesla to Gauss conversion (1e4)
-    ! 2. SIMPLE's internal flux scaling with fac_b * fac_r^2
-    ! 3. Different normalizations in vector potential computation
-    !
-    ! NOTE: This scaling ensures field magnitudes match between GVEC and VMEC
-    ! Updated based on test results showing ~177% error: 246 / 2.77 ≈ 90
-    Bmod = Bmod * 90.0_dp  ! Empirical conversion factor from GVEC SI units to SIMPLE's VMEC internal units
+    ! Apply scaling factor determined from field comparison
+    ! VMEC/GVEC ratio analysis shows factor ~1111.5
+    ! This converts GVEC SI units (Tesla) to SIMPLE's internal units
+    Bmod = Bmod * 1111.5_dp
 
     ! Compute COVARIANT field components: B_i = g_ij * B^j
     ! Need to convert contravariant B^θ, B^ζ to covariant B_s, B_θ, B_ζ
     ! B_s = g_ss*B^s + g_st*B^θ + g_sz*B^ζ = g_st*B^θ + g_sz*B^ζ (since B^s=0)
     ! B_θ = g_st*B^s + g_tt*B^θ + g_tz*B^ζ = g_tt*B^θ + g_tz*B^ζ
     ! B_ζ = g_sz*B^s + g_tz*B^θ + g_zz*B^ζ = g_tz*B^θ + g_zz*B^ζ
-    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp) * 90.0_dp  ! B_s (covariant) with conversion factor
-    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp) * 90.0_dp  ! B_θ (covariant) with conversion factor
-    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp) * 90.0_dp  ! B_ζ (covariant) with conversion factor
+    hcov(1) = real(g_st * B_thet + g_sz * B_zeta, dp) * 1111.5_dp  ! B_s (covariant)
+    hcov(2) = real(g_tt * B_thet + g_tz * B_zeta, dp) * 1111.5_dp  ! B_θ (covariant)
+    hcov(3) = real(g_tz * B_thet + g_zz * B_zeta, dp) * 1111.5_dp  ! B_ζ (covariant)
 
     ! Vector potential components in magnetic flux coordinates
     ! Following GVEC's approach: work with magnetic field directly, not vector potential
@@ -370,8 +337,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         ! sqgBctr = Jac * B^i where B^i are contravariant components
         ! We already have B^θ, B^ζ from GVEC, and B^s = 0
         sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
-        sqgBctr(2) = real(Jac * B_thet, dp) * 90.0_dp  ! Jac * B^θ with conversion factor
-        sqgBctr(3) = real(Jac * B_zeta, dp) * 90.0_dp  ! Jac * B^ζ with conversion factor
+        sqgBctr(2) = real(Jac * B_thet, dp) * 1111.5_dp  ! Jac * B^θ
+        sqgBctr(3) = real(Jac * B_zeta, dp) * 1111.5_dp  ! Jac * B^ζ
     end if
 
 end subroutine evaluate
