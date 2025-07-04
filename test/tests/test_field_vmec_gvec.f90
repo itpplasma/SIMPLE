@@ -121,8 +121,7 @@ program test_field_vmec_gvec
     ! Set tolerances
     ! Note: GVEC uses different conventions than VMEC for some quantities
     ! We focus on |B| accuracy which is the most important for orbit tracing
-    ! TODO: Improve normalization to achieve better agreement
-    rel_tol = 5.0e-1_dp  ! 50% relative tolerance for |B| (temporary - needs better normalization)
+    rel_tol = 1.0e-2_dp  ! 1% relative tolerance for |B|
     abs_tol = 1.0e-6_dp  ! Small absolute tolerance
     
     ! Grid for comparison

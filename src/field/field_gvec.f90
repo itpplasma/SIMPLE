@@ -283,11 +283,16 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Compute field magnitude
     Bmod = real(sqrt(Bx**2 + By**2 + Bz**2), dp)
     
-    ! IMPORTANT: GVEC uses normalized units for the magnetic field
-    ! The normalization appears to be approximately B_GVEC = B_physical / (factor)
-    ! Based on comparison with VMEC, the factor is approximately 838
-    ! This needs to be properly determined from the GVEC/VMEC normalization conventions
-    ! For now, apply empirical scaling factor to match VMEC units
+    ! IMPORTANT: Check if GVEC uses different units (CGS vs SI)
+    ! Let's add debug output to understand the scaling
+    if (abs(s_gvec - 0.1_wp) < 0.01_wp .and. abs(theta_star) < 0.1_wp .and. abs(zeta) < 0.1_wp) then
+        print *, 'GVEC Field DEBUG: Bmod before scaling = ', Bmod
+        print *, 'GVEC Field DEBUG: Expected factor for CGS->SI would be 1e-4 (Gauss to Tesla)'
+        print *, 'GVEC Field DEBUG: Actual factor needed ~ 838'
+    end if
+    
+    ! The factor 838 is not 10000 (CGS to SI), so it's likely a different normalization
+    ! GVEC might use normalized units where B is normalized by some reference field
     Bmod = Bmod * 838.0_dp  ! Empirical factor to convert GVEC to VMEC units
 
     ! Compute COVARIANT field components: B_i = g_ij * B^j
