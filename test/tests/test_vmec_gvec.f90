@@ -53,31 +53,15 @@ program test_vmec_gvec
     vmec_file = 'wout.nc'
     gvec_temp_file = 'gvec_from_vmec_wout.dat'  ! GVEC state file created from VMEC
 
-    print *, '================================================================'
-    print *, 'Testing field_vmec vs field_gvec with same VMEC equilibrium'
-    print *, '================================================================'
-
-    ! Step 1: Create VMEC field
-    print *, ''
-    print *, 'Step 1: Loading VMEC field from ', trim(vmec_file)
-
     ! Initialize VMEC field using SIMPLE's method
     netcdffile = vmec_file
     multharm = 5
     call spline_vmec_data
     allocate(VmecField :: vmec_field)
-    print *, 'VMEC field loaded successfully in SIMPLE'
-
-    ! Step 2: Check if VMEC to GVEC conversion was done by CMake
-    print *, ''
-    print *, 'Step 2: Checking for GVEC data file'
 
     ! Check if CMake successfully converted the file using Python GVEC API
     inquire(file=gvec_temp_file, exist=file_exists)
-    if (file_exists) then
-        print *, 'Found GVEC file created by CMake: ', trim(gvec_temp_file)
-    else
-        print *, 'GVEC file not found. Creating GVEC state from VMEC...'
+    if (.not. file_exists) then
 
         ! Create a minimal GVEC parameter file for VMEC reading
         param_file = 'gvec_vmec_params.ini'
@@ -103,12 +87,8 @@ program test_vmec_gvec
         write(unit_param, '(A)') 'maxIter = 0     ! No iterations'
         close(unit_param)
 
-        print *, 'Created parameter file: ', trim(param_file)
-        print *, 'Running GVEC to create state file...'
-
         ! Use execute_command_line to run GVEC
-        ! This will read VMEC and output the state
-        call execute_command_line('../../_deps/gvec-build/bin/gvec ' // trim(param_file), &
+        call execute_command_line('../../_deps/gvec-build/bin/gvec ' // trim(param_file) // ' > /dev/null 2>&1', &
                                   exitstat=num_strings)
 
         ! The output file will be named based on ProjectName
@@ -120,20 +100,10 @@ program test_vmec_gvec
             print *, 'ERROR: GVEC state file not created'
             error stop 1
         end if
-
-        print *, 'GVEC state file created successfully'
     end if
-
-    ! Step 3: Load GVEC field from converted file
-    print *, ''
-    print *, 'Step 3: Loading GVEC field from ', trim(gvec_temp_file)
     gvec_field = create_gvec_field(gvec_temp_file)
 
-    ! Step 4: Compare field evaluations
-    print *, ''
-    print *, 'Step 4: Comparing field evaluations at same points'
-    print *, '================================================================'
-
+    ! Compare field evaluations
     ! Set tolerances
     ! Note: GVEC uses different conventions than VMEC for some quantities
     ! We focus on |B| accuracy which is the most important for orbit tracing
@@ -153,9 +123,6 @@ program test_vmec_gvec
     max_rel_error_hcov = 0.0_dp
     max_abs_error_hcov = 0.0_dp
     test_passed = .true.
-
-    print *, ''
-    print *, 'Comparing at grid points:'
 
     do i = 1, ns
         ! Test range including small s values: 0.01, 0.05, 0.1, 0.3, 0.6
@@ -217,16 +184,8 @@ program test_vmec_gvec
                 max_abs_error_hcov = max(max_abs_error_hcov, abs_error)
                 max_rel_error_hcov = max(max_rel_error_hcov, rel_error)
 
-                ! Print detailed comparison only for first few points
+                ! Calculate relative error for |B|
                 rel_err_B = abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
-                if (i == 1 .and. j <= 2 .and. k == 1) then  ! Print first two points only
-                    print '(A,F6.3,A,F6.3,A,F6.3,A)', '  At (s,θ,φ) = (', s_test, ', ', &
-                        theta_test/pi, 'π, ', phi_test/pi, 'π):'
-                    print '(A,ES12.5,A,ES12.5)', '    |B|_VMEC = ', Bmod_vmec, ', |B|_GVEC = ', Bmod_gvec
-                    print '(A,ES12.5)', '    Relative error in |B|: ', &
-                        abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
-                    ! print *, ''
-                end if
 
                 ! Check if errors exceed tolerance
                 if (max_rel_error_Bmod > rel_tol .and. max_abs_error_Bmod > abs_tol) then
@@ -236,101 +195,32 @@ program test_vmec_gvec
         end do
     end do
 
-    ! Note: Not cleaning up since we're using an existing example file
-
+    ! Print comparison results
     print *, ''
-    print *, '================================================================'
-    print *, 'Summary of maximum errors:'
-    print '(A,ES12.5,A,ES12.5)', '  |B|:   relative = ', max_rel_error_Bmod, &
-                                ', absolute = ', max_abs_error_Bmod
-    print '(A,ES12.5,A,ES12.5)', '  Acov:  relative = ', max_rel_error_Acov, &
-                                ', absolute = ', max_abs_error_Acov, ' (NOT CHECKED - different conventions)'
-    print '(A,ES12.5,A,ES12.5)', '  hcov:  relative = ', max_rel_error_hcov, &
-                                ', absolute = ', max_abs_error_hcov, ' (NOT CHECKED - different conventions)'
+    print *, 'Field comparison results:'
+    print '(A,ES12.5,A,ES12.5)', '  |B| max error: relative = ', max_rel_error_Bmod, &
+                                ', absolute = ', max_abs_error_Bmod, ' Gauss'
 
-    ! Step 5: Generate 2D field data for visualization (regardless of test result)
-    print *, ''
-    print *, 'Step 5: Generating 2D field data for visualization'
-    print *, '================================================================'
-    
+    ! Generate field data and plots
     call export_field_2d_data(vmec_field, gvec_field)
     call export_field_1d_data(vmec_field, gvec_field)
     
-    print *, ''
-    print *, 'Step 6: Creating visualization plots'
-    print *, '================================================================'
-    
-    ! Generate 2D field comparison plots
-    call execute_command_line('python3 ../../../test/tests/plot_fields_2d.py', exitstat=i)
-    if (i == 0) then
-        print *, '✓ 2D field comparison plots created'
-        print *, '  - field_comparison_2d.png'
-        print *, '  - field_difference_2d.png'
-        print *, '  - vmec_field_2d.png'
-        print *, '  - gvec_field_2d.png'
-    else
-        print *, 'Warning: plot_fields_2d.py failed (exit code:', i, ')'
-    end if
-    
-    ! Generate 1D radial comparison plots
-    call execute_command_line('python3 ../../../test/tests/plot_1d_field_comparison.py', exitstat=i)
-    if (i == 0) then
-        print *, '✓ 1D radial comparison plot created'
-        print *, '  - field_comparison_1d.png'
-    else
-        print *, 'Warning: plot_1d_field_comparison.py failed (exit code:', i, ')'
-    end if
-    
-    ! Generate small-s behavior analysis
-    call execute_command_line('python3 ../../../test/tests/plot_small_s_behavior.py', exitstat=i)
-    if (i == 0) then
-        print *, '✓ Small-s behavior analysis plot created'
-        print *, '  - small_s_behavior.png'
-    else
-        print *, 'Warning: plot_small_s_behavior.py failed (exit code:', i, ')'
-    end if
-    
-    ! Generate detailed field analysis
-    call execute_command_line('python3 ../../../test/tests/detailed_field_analysis.py', exitstat=i)
-    if (i == 0) then
-        print *, '✓ Detailed field analysis completed'
-        print *, '  - theoretical_field_scaling_analysis.png'
-        print *, '  - field_small_s_behavior.png'
-    else
-        print *, 'Warning: detailed_field_analysis.py failed (exit code:', i, ')'
-    end if
-    
-    ! Generate 1D radial plots
-    call execute_command_line('python3 ../../../test/tests/create_1d_radial_plots.py', exitstat=i)
-    if (i == 0) then
-        print *, '✓ 1D radial plots created'
-        print *, '  - radial_field_comparison.png'
-    else
-        print *, 'Warning: create_1d_radial_plots.py failed (exit code:', i, ')'
-    end if
-    
-    ! Run comprehensive investigation
-    call execute_command_line('python3 ../../../test/tests/investigate_field_differences.py', exitstat=i)
-    if (i == 0) then
-        print *, '✓ Field differences investigation completed'
-        print *, '  - field_comparison_comprehensive.png'
-    else
-        print *, 'Warning: investigate_field_differences.py failed (exit code:', i, ')'
-    end if
-
-    print *, '================================================================'
+    ! Generate plots silently
+    call execute_command_line('python3 ../../../test/tests/plot_fields_2d.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/plot_1d_field_comparison.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/plot_small_s_behavior.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/detailed_field_analysis.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/create_1d_radial_plots.py > /dev/null 2>&1', exitstat=i)
+    call execute_command_line('python3 ../../../test/tests/investigate_field_differences.py > /dev/null 2>&1', exitstat=i)
     
     ! Final test result
+    print *, ''
     if (test_passed) then
-        print *, ''
-        print *, 'TEST PASSED: Magnetic field magnitude |B| matches within tolerance'
+        print *, 'TEST PASSED'
     else
-        print *, ''
-        print *, 'TEST FAILED: Magnetic field magnitude |B| does not match'
+        print *, 'TEST FAILED'
         print '(A,ES12.5)', '  Tolerance (relative): ', rel_tol
-        print '(A,ES12.5)', '  Tolerance (absolute): ', abs_tol
-        print *, ''
-        print *, 'Note: Visualization plots were generated despite test failure.'
+        print '(A,ES12.5)', '  Tolerance (absolute): ', abs_tol, ' Gauss'
     end if
 
 end program test_vmec_gvec
@@ -364,8 +254,7 @@ subroutine export_field_2d_data(vmec_field, gvec_field)
     real(dp) :: s, theta, r
     integer :: i, j, unit_out
     
-    print *, 'Generating 2D field data on ', ns, ' x ', nt, ' grid'
-    print *, 'phi fixed at: ', phi_fixed/pi, 'π'
+    ! Generate 2D field data silently
     
     ! Write VMEC data
     open(newunit=unit_out, file='Bmod_vmec_2d.dat', status='replace')
@@ -434,10 +323,7 @@ subroutine export_field_2d_data(vmec_field, gvec_field)
     write(unit_out, '(ES16.8)') phi_fixed
     close(unit_out)
     
-    print *, 'Field data files generated:'
-    print *, '  - Bmod_vmec_2d.dat'
-    print *, '  - Bmod_gvec_2d.dat'
-    print *, '  - grid_info.dat'
+    ! Field data files generated: Bmod_vmec_2d.dat, Bmod_gvec_2d.dat, grid_info.dat
     
 end subroutine export_field_2d_data
 
@@ -468,8 +354,7 @@ subroutine export_field_1d_data(vmec_field, gvec_field)
     real(dp) :: s, r
     integer :: i, unit_out
     
-    print *, 'Generating 1D radial field data with ', ns, ' points'
-    print *, 'Fixed angles: theta = ', theta_fixed/pi, 'π, phi = ', phi_fixed/pi, 'π'
+    ! Generate 1D radial field data
     
     ! Write combined radial comparison data
     open(newunit=unit_out, file='radial_comparison.dat', status='replace')
@@ -502,7 +387,6 @@ subroutine export_field_1d_data(vmec_field, gvec_field)
     end do
     close(unit_out)
     
-    print *, 'Field data file generated:'
-    print *, '  - radial_comparison.dat'
+    ! Field data file generated: radial_comparison.dat
     
 end subroutine export_field_1d_data

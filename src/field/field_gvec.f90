@@ -14,7 +14,8 @@ integer, parameter :: DERIV_S = 1
 integer, parameter :: DERIV_THET = 2
 integer, parameter :: DERIV_ZETA = 3
 
-real(dp), parameter :: TESLA_TO_GAUSS = 10000.0_dp  ! Conversion factor
+real(dp), parameter :: TESLA_IN_GAUSS = 10000.0_dp
+real(dp), parameter :: METER_IN_CM = 100.0_dp
 
 private
 public :: GvecField, create_gvec_field, convert_vmec_to_gvec
@@ -44,18 +45,11 @@ function create_gvec_field(gvec_file) result(gvec_field)
     allocate(GvecField :: gvec_field)
     gvec_field%filename = gvec_file
 
-    print *, 'Loading GVEC field from: ', gvec_file
-
     ! Load the .dat file
     call gvec_field%load_dat_file()
 
-    if (gvec_field%data_loaded) then
-        print *, 'GVEC field loaded successfully'
-        print *, 'Field periods: ', gvec_field%nfp
-        print *, 'Major radius: ', gvec_field%r_major
-        print *, 'Minor radius: ', gvec_field%a_minor
-    else
-        print *, 'Failed to load GVEC field data'
+    if (.not. gvec_field%data_loaded) then
+        print *, 'ERROR: Failed to load GVEC field from: ', gvec_file
     end if
 
 end function create_gvec_field
@@ -86,12 +80,6 @@ subroutine load_dat_file(self)
         self%a_minor = 0.994987437106620_dp
         self%r_major = 5.0_dp
         self%volume = 97.7090835707847_dp
-
-        print *, 'GVEC file loaded successfully using GVEC ReadState:'
-        print *, '  Field periods: ', self%nfp
-        print *, '  Major radius: ', self%r_major
-        print *, '  Minor radius: ', self%a_minor
-        print *, '  Volume: ', self%volume
 
         self%data_loaded = .true.
     else
@@ -239,14 +227,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     g_sz = dot_product(e_s, e_zeta)
     g_tz = dot_product(e_thet, e_zeta)
 
-    ! Compute Jacobian using GVEC's exact formula: Jac = Jac_h * Jac_l
-    ! where Jac_l = dX1_dr * dX2_dt - dX1_dt * dX2_dr (logical Jacobian)
-    ! Note: eval_Jh expects (R,Z,ζ) coordinates, already in RZ_coords
-    Jac_h = hmap_r%eval_Jh(RZ_coords)  ! For torus geometry, Jac_h = R
+    ! Compute Jacobian using VMEC/GVEC formula
+    Jac_h = hmap_r%eval_Jh(RZ_coords)
     Jac_l = dX1_ds * dX2_dthet - dX1_dthet * dX2_ds
     Jac = Jac_h * Jac_l
 
-    ! Following GVEC's mhd3d_evalfunc.f90: contravariant components
+    ! Following GVEC mhd3d_evalfunc.f90: contravariant components
     Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac   ! B^θ contravariant
     Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac   ! B^ζ contravariant 
 
@@ -265,12 +251,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     hcov(2) = Bthcov / Bmod
     hcov(3) = Bzetacov / Bmod
 
-    Bmod = Bmod * TESLA_TO_GAUSS
+    Bmod = Bmod * TESLA_IN_GAUSS
 
     Acov(1) = 0.0_dp
-    Acov(2) = real(-LA_val * phiPrime_val / Jac, dp)
+    Acov(2) = -LA_val * phiPrime_val / Jac * TESLA_IN_GAUSS * METER_IN_CM
     if (abs(R_pos) > 1.0e-10_dp) then
-        Acov(3) = real(phi_val / R_pos, dp)  ! Toroidal flux contribution
+        Acov(3) = phi_val / R_pos * TESLA_IN_GAUSS * METER_IN_CM
     else
         Acov(3) = 0.0_dp
     end if
