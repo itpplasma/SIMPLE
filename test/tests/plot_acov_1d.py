@@ -34,8 +34,8 @@ fig, axes = plt.subplots(4, 1, figsize=(10, 14))
 
 # Plot 1: |B| comparison
 ax1 = axes[0]
-ax1.loglog(s, B_vmec, 'b-', label='VMEC', linewidth=2)
-ax1.loglog(s, B_gvec, 'r--', label='GVEC', linewidth=2)
+ax1.plot(s, B_vmec, 'b-', label='VMEC', linewidth=2)
+ax1.plot(s, B_gvec, 'r--', label='GVEC', linewidth=2)
 ax1.set_ylabel('|B| [Gauss]')
 ax1.set_title('Magnetic Field Magnitude Comparison')
 ax1.legend()

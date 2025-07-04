@@ -134,8 +134,8 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
     real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
     real(dp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
-    real(dp) :: Bthctr, Bzetactr, Bphctr  ! Contravariant field components in (s,theta,zeta)
-    real(dp) :: Bthcov, Bzetacov, Bphcov, Bscov  ! Covariant field components
+    real(dp) :: Bthctr, Bzetactr  ! Contravariant field components in (s,theta,zeta)
+    real(dp) :: Bthcov, Bzetacov, Bscov  ! Covariant field components
     real(dp) :: RZ_coords(3)      ! Coordinates for eval_Jh (R,Z,ζ)
     
     ! Axis regularization variables
@@ -253,22 +253,20 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Following GVEC mhd3d_evalfunc.f90: contravariant components
     Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac
     Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac
-    Bphctr = -Bzetactr
 
     if (present(sqgBctr)) then
         sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
         sqgBctr(2) = Jac * Bthctr  ! Jac * B^θ
-        sqgBctr(3) = Jac * Bzetactr  ! Jac * B^ζ
+        sqgBctr(3) = -Jac * Bzetactr  ! Jac * B^phi = -Jac * B^ζ
     end if
         
     Bthcov = (g_tt * Bthctr + g_tz * Bzetactr)
     Bzetacov = (g_tz * Bthctr + g_zz * Bzetactr)
-    Bphcov = -Bzetacov
     
     ! For theta* coordinates, we need covariant B in s direction
     Bscov = (g_st * Bthctr + g_sz * Bzetactr)
 
-    Bmod = sqrt(Bthctr*Bthcov + Bphctr*Bphcov)
+    Bmod = sqrt(Bthctr*Bthcov + Bzetactr*Bzetacov)
     
     ! Apply theta* coordinate transformations with Lambda derivatives
     ! The GVEC components are in (s,theta,zeta) but SIMPLE expects (r,theta*,phi)
@@ -276,13 +274,17 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! The transformation requires: ds/dr = 2*r
     hcov(1) = (Bscov + Bthcov * dLA_ds) / Bmod * 2.0_dp * r
     hcov(2) = Bthcov * (1.0_dp + dLA_dthet) / Bmod
-    hcov(3) = (Bphcov + Bthcov * dLA_dzeta) / Bmod
+    hcov(3) = (Bzetacov + Bthcov * dLA_dzeta) / Bmod
 
     ! Vector potential with theta* transformations
     ! Acov_theta in GVEC is the toroidal flux phi_val
     Acov(1) = phi_val * dLA_ds * 2.0_dp * r
     Acov(2) = phi_val * (1.0_dp + dLA_dthet)
     Acov(3) = -chi_val + phi_val * dLA_dzeta
+
+    ! Correct for phi = -zeta
+    hcov(3) = -hcov(3)
+    Acov(3) = -Acov(3)
 
 end subroutine evaluate
 
