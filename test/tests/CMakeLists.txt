@@ -119,6 +119,12 @@ add_subdirectory(orbit)
 # GOLDEN RECORD TESTS
 ##################################################
 
+# Copy test cases to build directory for golden record tests
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer 
+     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical 
+     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
+
 # Golden record test: expected success (main vs main should match)
 add_test(
     NAME golden_record_success
@@ -126,8 +132,9 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(golden_record_success PROPERTIES
-    TIMEOUT 1800  # 30 minutes
-    LABELS "golden_record;regression"
+    TIMEOUT 300  # 5 minutes
+    LABELS "golden_record;regression;slow"
+    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
 
 # Golden record test: expected success (5de27cd vs itself should match)
@@ -137,18 +144,20 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(golden_record_success_5de27cd PROPERTIES
-    TIMEOUT 1800  # 30 minutes
-    LABELS "golden_record;regression"
+    TIMEOUT 300  # 5 minutes
+    LABELS "golden_record;regression;slow"
+    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
 
 # Golden record test: expected failure (current vs old version should not match)
 add_test(
     NAME golden_record_failure
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh e25ca7e "" "true"
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh e25ca7e
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(golden_record_failure PROPERTIES
-    TIMEOUT 1800  # 30 minutes
+    TIMEOUT 300  # 5 minutes
     WILL_FAIL TRUE  # This test is expected to fail
-    LABELS "golden_record;regression"
+    LABELS "golden_record;regression;slow"
+    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )

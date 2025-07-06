@@ -17,9 +17,14 @@ build: configure
 	cmake --build $(BUILD_DIR) --config $(CONFIG)
 
 # Run tests with optional verbose output and single test selection
-# Usage: make test [VERBOSE=1] [TEST=test_name]
+# Usage: make test [VERBOSE=1] [TEST=test_name] [INCLUDE_SLOW=1]
 # Example: make test VERBOSE=1 TEST=test_gvec
+# By default, tests labeled "slow" are excluded. To include them: make test INCLUDE_SLOW=1
 test: build
+	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(VERBOSE),-V) $(if $(TEST),-R $(TEST)) $(if $(INCLUDE_SLOW),,-L "^((?!slow).)*$$")
+
+# Run all tests including slow ones
+test-all: build
 	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(VERBOSE),-V) $(if $(TEST),-R $(TEST))
 
 doc: configure
