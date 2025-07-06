@@ -1,0 +1,25 @@
+ DEBUG: get_canonical_coordinates starting
+ DEBUG: ns_c=          50 n_theta_c=          36 n_phi_c=          81
+ DEBUG: h_theta_c=  0.17951958020513104      h_phi_c=   3.9269908169872414E-002 hs_c=   2.0408163265306117E-002
+ DEBUG: nh_stencil=           3
+ DEBUG: Sample G_c values at i_theta=1, i_phi=1:
+ DEBUG: G_c(1,1,1)=   1.0000000000000000E-008
+ DEBUG: G_c(2,1,1)=   1.0013002228689581E-008
+ DEBUG: G_c(ns_c/2,1,1)=   1.0308521000395352E-008
+ DEBUG: Sample B_vartheta_c at i_theta=n_theta_c/2, i_phi=n_phi_c/2:
+ DEBUG: B_vartheta_c(2,n_theta_c/2,n_phi_c/2)= -0.87359292564360658     
+ DEBUG: B_varphi_c(2,n_theta_c/2,n_phi_c/2)=   52385616.690680191     
+ DEBUG: sqg_c(2,n_theta_c/2,n_phi_c/2)=  -12001106.457769770     
+ DEBUG: spline_can_coord starting, fullset= T
+ DEBUG: Allocated s_sqg_Bt_Bp with shape:           3           6           6           6          50          36          81
+ DEBUG: Allocated s_G_c with shape:           6           6           6          50          36          81
+ DEBUG: spline_can_coord completed
+ DEBUG: Sample s_sqg_Bt_Bp(1,1,1,1,1,1,1)=  -17652693.862207368     
+ DEBUG: Sample s_sqg_Bt_Bp(2,1,1,1,2,1,1)=   2.1729250456264708     
+ DEBUG: Sample s_sqg_Bt_Bp(3,1,1,1,2,1,1)=   76691088.956212446     
+ DEBUG: Sample s_G_c(1,1,1,1,1,1)=   1.0000000000000000E-008
+ DEBUG: get_canonical_coordinates completed
+ DEBUG: fullset= T
+ DEBUG: ns_s_c=           5 ns_tp_c=           5
+ DEBUG: Deallocating arrays of size:      145800      145800      145800      145800
+ DEBUG: ===================================

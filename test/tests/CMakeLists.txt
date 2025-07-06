@@ -124,6 +124,14 @@ add_executable(test_canonical_stencil.x test_canonical_stencil.f90)
 target_link_libraries(test_canonical_stencil.x simple)
 add_test(NAME test_canonical_stencil COMMAND test_canonical_stencil.x)
 
+add_executable(test_canonical_full_regression.x test_canonical_full_regression.f90)
+target_link_libraries(test_canonical_full_regression.x simple)
+add_test(NAME test_canonical_full_regression COMMAND test_canonical_full_regression.x)
+
+add_executable(test_canonical_baseline_simple.x test_canonical_baseline_simple.f90)
+target_link_libraries(test_canonical_baseline_simple.x simple)
+add_test(NAME test_canonical_baseline_simple COMMAND test_canonical_baseline_simple.x)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
