@@ -189,7 +189,8 @@ contains
 
           do i=0,batch_size
             call random_number(ran_tmp)
-            !Create randomized inidces from the amount available, leaving out the upper 1% as margin for later sorting and replacing of duplicates (relevant especially for smaller batches)
+            !Create randomized indices from the amount available, leaving out the upper 1%
+            !as margin for later sorting and replacing of duplicates (relevant for smaller batches)
             idx(i) = floor(ceiling((ntestpart - (ntestpart*0.01))) * ran_tmp)
           end do
 

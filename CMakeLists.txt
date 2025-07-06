@@ -99,6 +99,7 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 else()
 	add_compile_options(-Wall -Wextra -Wimplicit-interface -Wno-external-argument-mismatch -fPIC -fmax-errors=5)
 	add_compile_options(-Wno-unused-dummy-argument)
+	add_compile_options(-ffree-line-length-132)
 	# If not apple
 	if (NOT APPLE)
 		add_link_options(-Wl,-z,noexecstack)
