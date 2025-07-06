@@ -1,4 +1,6 @@
 &config
+multharm = 3             ! Fast but inaccurate splines
+contr_pp = -1e10         ! Trace all passing particles
 trace_time = 1d-4        ! slowing down time, s
 sbeg = 0.3d0             ! starting s (normalzed toroidal flux) for particles.
 ntestpart = 32           ! number of test particles
