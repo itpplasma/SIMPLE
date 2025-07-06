@@ -58,11 +58,6 @@ contains
   h_phi_c=h_phi
   hs_c=hs
   
-  ! DEBUG OUTPUT FOR REGRESSION TESTING
-  print *, "DEBUG: get_canonical_coordinates starting"
-  print *, "DEBUG: ns_c=", ns_c, "n_theta_c=", n_theta_c, "n_phi_c=", n_phi_c
-  print *, "DEBUG: h_theta_c=", h_theta_c, "h_phi_c=", h_phi_c, "hs_c=", hs_c
-  print *, "DEBUG: nh_stencil=", nh_stencil
 !
   ! Initialize derivative stencils using stencil_utils module
   call init_derivative_stencil(nh_stencil, h_theta_c, dstencil_theta)
@@ -186,15 +181,6 @@ i_ctr=0
 !$omp end do
   
 !$omp single
-  ! DEBUG: Output sample values for regression testing
-  print *, "DEBUG: Sample G_c values at i_theta=1, i_phi=1:"
-  print *, "DEBUG: G_c(1,1,1)=", G_c(1,1,1)
-  print *, "DEBUG: G_c(2,1,1)=", G_c(2,1,1)
-  print *, "DEBUG: G_c(ns_c/2,1,1)=", G_c(ns_c/2,1,1)
-  print *, "DEBUG: Sample B_vartheta_c at i_theta=n_theta_c/2, i_phi=n_phi_c/2:"
-  print *, "DEBUG: B_vartheta_c(2,n_theta_c/2,n_phi_c/2)=", B_vartheta_c(2,n_theta_c/2,n_phi_c/2)
-  print *, "DEBUG: B_varphi_c(2,n_theta_c/2,n_phi_c/2)=", B_varphi_c(2,n_theta_c/2,n_phi_c/2)
-  print *, "DEBUG: sqg_c(2,n_theta_c/2,n_phi_c/2)=", sqg_c(2,n_theta_c/2,n_phi_c/2)
 !$omp end single
 !$omp critical
 deallocate(y,dy)
@@ -223,12 +209,6 @@ deallocate(y,dy)
 !stop
   call spline_can_coord(fullset)
   
-  ! DEBUG: Final output for regression testing
-  print *, "DEBUG: get_canonical_coordinates completed"
-  print *, "DEBUG: fullset=", fullset
-  print *, "DEBUG: ns_s_c=", ns_s_c, "ns_tp_c=", ns_tp_c
-  print *, "DEBUG: Deallocating arrays of size:", size(G_c), size(sqg_c), size(B_vartheta_c), size(B_varphi_c)
-  print *, "DEBUG: ==================================="
   
   deallocate(ipoi_t,ipoi_p,sqg_c,B_vartheta_c,B_varphi_c,G_c)
 !
@@ -322,10 +302,6 @@ deallocate(y,dy)
   if(fullset .and. (.not. allocated(s_G_c))) &
     allocate(s_G_c(ns_s_c+1,ns_tp_c+1,ns_tp_c+1,ns_c,n_theta_c,n_phi_c))
     
-  ! DEBUG: spline allocation info
-  print *, "DEBUG: spline_can_coord starting, fullset=", fullset
-  print *, "DEBUG: Allocated s_sqg_Bt_Bp with shape:", shape(s_sqg_Bt_Bp)
-  if(fullset) print *, "DEBUG: Allocated s_G_c with shape:", shape(s_G_c)
 !
   s_sqg_Bt_Bp(1,1,1,1,:,:,:)=sqg_c
   s_sqg_Bt_Bp(2,1,1,1,:,:,:)=B_vartheta_c
@@ -443,13 +419,6 @@ deallocate(y,dy)
   deallocate(splcoe)
 !
   call init_derivative_factors(ns_max, derf1, derf2, derf3)
-  
-  ! DEBUG: Sample final spline values
-  print *, "DEBUG: spline_can_coord completed"
-  print *, "DEBUG: Sample s_sqg_Bt_Bp(1,1,1,1,1,1,1)=", s_sqg_Bt_Bp(1,1,1,1,1,1,1)
-  print *, "DEBUG: Sample s_sqg_Bt_Bp(2,1,1,1,2,1,1)=", s_sqg_Bt_Bp(2,1,1,1,2,1,1)
-  print *, "DEBUG: Sample s_sqg_Bt_Bp(3,1,1,1,2,1,1)=", s_sqg_Bt_Bp(3,1,1,1,2,1,1)
-  if(allocated(s_G_c)) print *, "DEBUG: Sample s_G_c(1,1,1,1,1,1)=", s_G_c(1,1,1,1,1,1)
 !
   end subroutine spline_can_coord
 !
