@@ -214,18 +214,24 @@ program test_vmec_gvec
                                          abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
     print *, ''
     print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(1) ', Acov_vmec(1), Acov_gvec(1), &
-                                         merge(abs(Acov_gvec(1) - Acov_vmec(1)) / abs(Acov_vmec(1)), 0.0_dp, abs(Acov_vmec(1)) > 1.0e-10_dp)
+                                         merge(abs(Acov_gvec(1) - Acov_vmec(1)) / abs(Acov_vmec(1)), &
+                                               0.0_dp, abs(Acov_vmec(1)) > 1.0e-10_dp)
     print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(2) ', Acov_vmec(2), Acov_gvec(2), &
-                                         merge(abs(Acov_gvec(2) - Acov_vmec(2)) / abs(Acov_vmec(2)), 0.0_dp, abs(Acov_vmec(2)) > 1.0e-10_dp)
+                                         merge(abs(Acov_gvec(2) - Acov_vmec(2)) / abs(Acov_vmec(2)), &
+                                               0.0_dp, abs(Acov_vmec(2)) > 1.0e-10_dp)
     print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(3) ', Acov_vmec(3), Acov_gvec(3), &
-                                         merge(abs(Acov_gvec(3) - Acov_vmec(3)) / abs(Acov_vmec(3)), 0.0_dp, abs(Acov_vmec(3)) > 1.0e-10_dp)
+                                         merge(abs(Acov_gvec(3) - Acov_vmec(3)) / abs(Acov_vmec(3)), &
+                                               0.0_dp, abs(Acov_vmec(3)) > 1.0e-10_dp)
     print *, ''
     print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(1) ', hcov_vmec(1), hcov_gvec(1), &
-                                         merge(abs(hcov_gvec(1) - hcov_vmec(1)) / abs(hcov_vmec(1)), 0.0_dp, abs(hcov_vmec(1)) > 1.0e-10_dp)
+                                         merge(abs(hcov_gvec(1) - hcov_vmec(1)) / abs(hcov_vmec(1)), &
+                                               0.0_dp, abs(hcov_vmec(1)) > 1.0e-10_dp)
     print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(2) ', hcov_vmec(2), hcov_gvec(2), &
-                                         merge(abs(hcov_gvec(2) - hcov_vmec(2)) / abs(hcov_vmec(2)), 0.0_dp, abs(hcov_vmec(2)) > 1.0e-10_dp)
+                                         merge(abs(hcov_gvec(2) - hcov_vmec(2)) / abs(hcov_vmec(2)), &
+                                               0.0_dp, abs(hcov_vmec(2)) > 1.0e-10_dp)
     print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(3) ', hcov_vmec(3), hcov_gvec(3), &
-                                         merge(abs(hcov_gvec(3) - hcov_vmec(3)) / abs(hcov_vmec(3)), 0.0_dp, abs(hcov_vmec(3)) > 1.0e-10_dp)
+                                         merge(abs(hcov_gvec(3) - hcov_vmec(3)) / abs(hcov_vmec(3)), &
+                                               0.0_dp, abs(hcov_vmec(3)) > 1.0e-10_dp)
     print *, '================================================================'
     print *, ''
     print *, 'Maximum errors over test grid:'
