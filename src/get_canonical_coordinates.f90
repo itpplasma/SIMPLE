@@ -180,8 +180,6 @@ i_ctr=0
   enddo
 !$omp end do
   
-!$omp single
-!$omp end single
 !$omp critical
 deallocate(y,dy)
 !$omp end critical
