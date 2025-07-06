@@ -1,5 +1,15 @@
 # Refactoring Plan: Abstract Field Support for Flux and Boozer Coordinates
 
+## ⚠️ MANDATORY REQUIREMENTS ⚠️
+
+**🚨 CRITICAL: ALWAYS WORK FROM PROJECT ROOT `/afs/itp.tugraz.at/proj/plasma/CODE/ert/SIMPLE/` 🚨**
+
+- **NEVER use `cd` commands** - Stay in project root at all times
+- **NEVER run executables directly** - Always use `make test` 
+- **NEVER use ctest manually** - Always use `make test`
+- **Use `make test TEST=test_name`** for specific tests
+- **Use `make test VERBOSE=1`** for detailed output
+
 ## Goal
 Refactor Flux and Boozer coordinate implementations to use the abstract `MagneticField` interface, enabling support for GVEC and other field representations beyond VMEC.
 
