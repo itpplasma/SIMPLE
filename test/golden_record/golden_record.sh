@@ -113,8 +113,28 @@ build() {
     local PROJECT_ROOT="$1"
     echo "Building SIMPLE in $PROJECT_ROOT"
     cd $PROJECT_ROOT
-    cmake -S . -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF  > $PROJECT_ROOT/configure.log 2>&1
+    
+    # For older versions, check if libneo is needed as a sibling directory
+    if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then
+        echo "Old project structure detected, setting up libneo..."
+        LIBNEO_PATH="/proj/plasma/CODE/ert/libneo"
+        if [ -d "$LIBNEO_PATH" ]; then
+            # Create symlink to libneo in parent directory
+            ln -sf "$LIBNEO_PATH" "../libneo" 2>/dev/null || true
+        fi
+    fi
+    
+    cmake -S . -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF > $PROJECT_ROOT/configure.log 2>&1
+    if [ $? -ne 0 ]; then
+        echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
+        return 1
+    fi
+    
     cmake --build build --config Release  > $PROJECT_ROOT/build.log 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Build failed. Check $PROJECT_ROOT/build.log"
+        return 1
+    fi
 }
 
 
