@@ -19,6 +19,7 @@ module boozer_sub
   use binsrc_sub, only : binsrc
   use plag_coeff_sub, only : plag_coeff
   use spline_vmec_sub
+  use vmec_field_adapter
 !
   implicit none
 !
@@ -136,7 +137,7 @@ module boozer_sub
       do i_phi=1,n_phi_B
         varphi=dble(i_phi-1)*h_phi_B
 !
-        call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+        call vmec_field_evaluate(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                         sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                         Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
 !

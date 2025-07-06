@@ -219,6 +219,7 @@ deallocate(y,dy)
   use exchange_get_cancoord_mod, only : vartheta_c,varphi_c,sqg,aiota,Bcovar_vartheta,Bcovar_varphi, &
                                         theta,onlytheta
   use spline_vmec_sub
+  use vmec_field_adapter
 !
   implicit none
 !
@@ -233,7 +234,7 @@ deallocate(y,dy)
 !  s=r   !<=OLD
   s=r**2 !<=NEW
 !
-  call splint_iota(s,aiota,daiota_ds)
+  call vmec_iota_interpolate(s,aiota,daiota_ds)
 !
   vartheta=vartheta_c+aiota*y(1)
   varphi=varphi_c+y(1)
@@ -244,7 +245,7 @@ deallocate(y,dy)
 !
   do iter=1,100
 !
-    call splint_lambda(s,theta,varphi,alam,dl_dt)
+    call vmec_lambda_interpolate(s,theta,varphi,alam,dl_dt)
 !
     deltheta = (vartheta-theta-alam)/(1.d0+dl_dt)
     theta = theta + deltheta
@@ -255,7 +256,7 @@ deallocate(y,dy)
 !
   if(onlytheta) return
 !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+  call vmec_field_evaluate(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                   sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                   Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
 !
@@ -952,6 +953,7 @@ icounter=icounter+1
 ! Output: vartheta_c,varphi_c - canonical coordinates
 !
   use spline_vmec_sub
+  use vmec_field_adapter
   implicit none
 !
   double precision, parameter :: epserr=1.d-14
@@ -961,7 +963,7 @@ icounter=icounter+1
   double precision, intent(out) :: vartheta_c,varphi_c
   double precision :: delthe,delphi,alam,dl_dt,vartheta
 !
-  call splint_lambda(r,theta,varphi,alam,dl_dt)
+  call vmec_lambda_interpolate(r,theta,varphi,alam,dl_dt)
 !
   vartheta=theta+alam
 !
@@ -1107,13 +1109,14 @@ icounter=icounter+1
 
   subroutine vmec_to_cyl(s,theta,varphi,Rcyl,Zcyl)
     use spline_vmec_sub
+    use vmec_field_adapter
     double precision, intent(in) :: s,theta,varphi
     double precision, intent(out) :: Rcyl,Zcyl
 
     double precision :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
                         R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
 
-    call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+    call vmec_data_interpolate(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
     R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
 
     Rcyl = R
