@@ -14,14 +14,63 @@ module get_can_sub
 
 use spl_three_to_five_sub
 use stencil_utils
+use field, only: MagneticField
+use field_newton, only: newton_theta_from_canonical
 
 implicit none
+
+! Module variable to store the field for use in subroutines
+class(MagneticField), allocatable :: current_field
+!$omp threadprivate(current_field)
 
 contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
+  subroutine get_canonical_coordinates_with_field(field)
+!
+! Field-agnostic version that accepts a MagneticField object
+!
+  use canonical_coordinates_mod, only : ns_c,n_theta_c,n_phi_c,           &
+                                        hs_c,h_theta_c,h_phi_c,           &
+                                        ns_s_c,ns_tp_c,                   &
+                                        nh_stencil,G_c,sqg_c,             &
+                                        B_vartheta_c,B_varphi_c
+  use vector_potentail_mod, only : ns,hs
+  use exchange_get_cancoord_mod, only : vartheta_c,varphi_c,sqg,aiota,    &
+                                        Bcovar_vartheta,Bcovar_varphi,    &
+                                        onlytheta
+  use new_vmec_stuff_mod, only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
+  use odeint_sub, only : odeint_allroutines
+!
+  implicit none
+!
+  class(MagneticField), intent(in) :: field
+!
+  ! Store field in module variable for use in nested subroutines
+  if (allocated(current_field)) deallocate(current_field)
+  allocate(current_field, source=field)
+  
+  ! Call the actual implementation
+  call get_canonical_coordinates_impl
+  
+  end subroutine get_canonical_coordinates_with_field
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
   subroutine get_canonical_coordinates
+!
+! Backward compatibility wrapper - uses VMEC field by default
+!
+  use field, only: VmecField
+  
+  call get_canonical_coordinates_with_field(VmecField())
+  
+  end subroutine get_canonical_coordinates
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine get_canonical_coordinates_impl
 !
   use canonical_coordinates_mod, only : ns_c,n_theta_c,n_phi_c,           &
                                         hs_c,h_theta_c,h_phi_c,           &
@@ -210,7 +259,7 @@ deallocate(y,dy)
   
   deallocate(ipoi_t,ipoi_p,sqg_c,B_vartheta_c,B_varphi_c,G_c)
 !
-  end subroutine get_canonical_coordinates
+  end subroutine get_canonical_coordinates_impl
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -227,6 +276,7 @@ deallocate(y,dy)
   integer :: iter
   double precision :: s,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,                 &
                       alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,Bcovar_r
+  logical :: converged
 !
   double precision :: r,vartheta,daiota_ds,deltheta
   double precision, dimension(1) :: y,dy
@@ -234,31 +284,46 @@ deallocate(y,dy)
 !  s=r   !<=OLD
   s=r**2 !<=NEW
 !
-  call vmec_iota_interpolate(s,aiota,daiota_ds)
+  if (allocated(current_field)) then
+    call vmec_iota_interpolate_with_field(current_field, s,aiota,daiota_ds)
+  else
+    call vmec_iota_interpolate(s,aiota,daiota_ds)
+  end if
 !
   vartheta=vartheta_c+aiota*y(1)
   varphi=varphi_c+y(1)
 !
-! Begin Newton iteration to find VMEC theta
+! Newton iteration to find field-specific theta from canonical theta
 !
-  theta = vartheta
-!
-  do iter=1,100
-!
-    call vmec_lambda_interpolate(s,theta,varphi,alam,dl_dt)
-!
-    deltheta = (vartheta-theta-alam)/(1.d0+dl_dt)
-    theta = theta + deltheta
-    if(abs(deltheta).lt.epserr) exit
-  enddo
-!
-! End Newton iteration to find VMEC theta
+  if (allocated(current_field)) then
+    ! Use field-agnostic Newton solver
+    theta = vartheta  ! Initial guess
+    call newton_theta_from_canonical(current_field, s, vartheta, varphi, theta, converged)
+    if (.not. converged) then
+      print *, 'WARNING: Newton iteration failed in rhs_cancoord'
+    end if
+  else
+    ! Legacy VMEC-specific Newton iteration
+    theta = vartheta
+    do iter=1,100
+      call vmec_lambda_interpolate(s,theta,varphi,alam,dl_dt)
+      deltheta = (vartheta-theta-alam)/(1.d0+dl_dt)
+      theta = theta + deltheta
+      if(abs(deltheta).lt.epserr) exit
+    enddo
+  end if
 !
   if(onlytheta) return
 !
-  call vmec_field_evaluate(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+  if (allocated(current_field)) then
+    call vmec_field_evaluate_with_field(current_field, s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+                    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+                    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+  else
+    call vmec_field_evaluate(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+                    sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+                    Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+  end if
 !
   dy(1)=-(Bcovar_r+daiota_ds*Bcovar_vartheta*y(1))/(aiota*Bcovar_vartheta+Bcovar_varphi)
   dy(1)=2.d0*r*dy(1)  !<=NEW
@@ -963,7 +1028,11 @@ icounter=icounter+1
   double precision, intent(out) :: vartheta_c,varphi_c
   double precision :: delthe,delphi,alam,dl_dt,vartheta
 !
-  call vmec_lambda_interpolate(r,theta,varphi,alam,dl_dt)
+  if (allocated(current_field)) then
+    call vmec_lambda_interpolate_with_field(current_field, r,theta,varphi,alam,dl_dt)
+  else
+    call vmec_lambda_interpolate(r,theta,varphi,alam,dl_dt)
+  end if
 !
   vartheta=theta+alam
 !
@@ -1116,8 +1185,13 @@ icounter=icounter+1
     double precision :: A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
                         R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp
 
-    call vmec_data_interpolate(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
-    R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+    if (allocated(current_field)) then
+      call vmec_data_interpolate_with_field(current_field, s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+    else
+      call vmec_data_interpolate(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+      R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
+    end if
 
     Rcyl = R
     Zcyl = Z
