@@ -13,6 +13,7 @@
 module get_can_sub
 
 use spl_three_to_five_sub
+use stencil_utils
 
 implicit none
 
@@ -63,29 +64,9 @@ contains
   print *, "DEBUG: h_theta_c=", h_theta_c, "h_phi_c=", h_phi_c, "hs_c=", hs_c
   print *, "DEBUG: nh_stencil=", nh_stencil
 !
-  if(nh_stencil.eq.1) then
-    dstencil_theta(-1)=-0.5d0
-    dstencil_theta(0)=0.0d0
-    dstencil_theta(1)=0.5d0
-  elseif(nh_stencil.eq.2) then
-    dstencil_theta(-2)=1.d0/12.d0
-    dstencil_theta(-1)=-2.d0/3.d0
-    dstencil_theta(0)=0.0d0
-    dstencil_theta(1)=2.d0/3.d0
-    dstencil_theta(2)=-1.d0/12.d0
-  elseif(nh_stencil.eq.3) then
-    dstencil_theta(-3)=-1.d0/60.d0
-    dstencil_theta(-2)=0.15d0
-    dstencil_theta(-1)=-0.75d0
-    dstencil_theta(0)=0.0d0
-    dstencil_theta(1)=0.75d0
-    dstencil_theta(2)=-0.15d0
-    dstencil_theta(3)=1.d0/60.d0
-  endif
-!
-  dstencil_phi=dstencil_theta
-  dstencil_theta=dstencil_theta/h_theta_c
-  dstencil_phi=dstencil_phi/h_phi_c
+  ! Initialize derivative stencils using stencil_utils module
+  call init_derivative_stencil(nh_stencil, h_theta_c, dstencil_theta)
+  call init_derivative_stencil(nh_stencil, h_phi_c, dstencil_phi)
 !
   allocate(ipoi_t(1-nh_stencil:n_theta_c+nh_stencil))
   allocate(ipoi_p(1-nh_stencil:n_phi_c+nh_stencil))
