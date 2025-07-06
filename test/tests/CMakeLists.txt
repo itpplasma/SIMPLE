@@ -114,3 +114,41 @@ add_test(NAME test_magfie COMMAND test_magfie.x)
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
+
+##################################################
+# GOLDEN RECORD TESTS
+##################################################
+
+# Golden record test: expected success (main vs main should match)
+add_test(
+    NAME golden_record_success
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh main
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(golden_record_success PROPERTIES
+    TIMEOUT 1800  # 30 minutes
+    LABELS "golden_record;regression"
+)
+
+# Golden record test: expected success (5de27cd vs itself should match)
+add_test(
+    NAME golden_record_success_5de27cd
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh 5de27cd
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(golden_record_success_5de27cd PROPERTIES
+    TIMEOUT 1800  # 30 minutes
+    LABELS "golden_record;regression"
+)
+
+# Golden record test: expected failure (current vs old version should not match)
+add_test(
+    NAME golden_record_failure
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh e25ca7e "" "true"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(golden_record_failure PROPERTIES
+    TIMEOUT 1800  # 30 minutes
+    WILL_FAIL TRUE  # This test is expected to fail
+    LABELS "golden_record;regression"
+)
