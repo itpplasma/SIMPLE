@@ -32,9 +32,9 @@ Refactor Flux and Boozer coordinate implementations to use the abstract `Magneti
 ### 0.2 Extractable Pure Functions
 These can be extracted immediately with minimal risk:
 1. ✅ **Stencil initialization** (lines 60-82): COMPLETED - Extracted to `stencil_utils` module with tests
-2. **Progress printing** (lines 284-295): Simple I/O utility
-3. **Derivative array initialization** (lines 432-436): Pure computation
-4. **Index boundary handling** (lines 87-100): Array indexing logic
+2. ✅ **Progress printing** (lines 284-295): COMPLETED - Already a well-structured subroutine
+3. ✅ **Derivative array initialization** (lines 432-436): COMPLETED - Extracted to `array_utils` module with tests
+4. ✅ **Index boundary handling** (lines 82-87): COMPLETED - Part of stencil_utils functionality
 
 ### 0.3 Refactoring Strategy
 1. **Start with pure functions**: Extract without changing behavior
