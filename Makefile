@@ -21,7 +21,7 @@ build: configure
 # Example: make test VERBOSE=1 TEST=test_gvec
 # By default, tests labeled "slow" are excluded. To include them: make test INCLUDE_SLOW=1
 test: build
-	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(VERBOSE),-V) $(if $(TEST),-R $(TEST)) $(if $(INCLUDE_SLOW),,-L "^((?!slow).)*$$")
+	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(VERBOSE),-V) $(if $(TEST),-R $(TEST)) $(if $(INCLUDE_SLOW),,-LE "slow")
 
 # Run all tests including slow ones
 test-all: build
