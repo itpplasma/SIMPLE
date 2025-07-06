@@ -8,6 +8,30 @@ Refactor Flux and Boozer coordinate implementations to use the abstract `Magneti
 - **Meiss/Albert**: Use abstract `MagneticField` interface, support any field type
 - **Risk**: High - these are core routines used extensively in production
 
+## Immediate Refactoring Steps (Phase 0)
+
+### 0.1 Analysis of get_canonical_coordinates.f90
+**File size**: 1141 lines (too large!)
+**Key issues identified**:
+1. Monolithic `get_canonical_coordinates` subroutine (lines 23-228, 205 lines!)
+2. Mixed concerns: ODE integration, spline interpolation, coordinate transforms
+3. Global state via threadprivate variables in `exchange_get_cancoord_mod`
+4. Direct VMEC coupling in `rhs_cancoord` via `vmec_field` call
+5. Complex nested interpolation in `splint_can_coord` (lines 442-904, 462 lines!)
+
+### 0.2 Extractable Pure Functions
+These can be extracted immediately with minimal risk:
+1. **Stencil initialization** (lines 60-82): Pure computation, no dependencies
+2. **Progress printing** (lines 284-295): Simple I/O utility
+3. **Derivative array initialization** (lines 432-436): Pure computation
+4. **Index boundary handling** (lines 87-100): Array indexing logic
+
+### 0.3 Refactoring Strategy
+1. **Start with pure functions**: Extract without changing behavior
+2. **Add unit tests immediately**: Test each extracted function
+3. **Gradual decoupling**: Replace direct VMEC calls with interfaces
+4. **Preserve exact numerics**: Use bit-for-bit comparison tests
+
 ## Phase 1: Test Infrastructure (Week 1-2)
 
 ### 1.1 Create Golden Record Tests

@@ -114,6 +114,16 @@ target_link_libraries(export_field_2d.x simple)
 
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
+# Unit tests for refactored modules
+add_executable(test_stencil_utils.x test_stencil_utils.f90)
+target_link_libraries(test_stencil_utils.x simple)
+add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
+
+# Regression tests for canonical coordinates
+add_executable(test_canonical_stencil.x test_canonical_stencil.f90)
+target_link_libraries(test_canonical_stencil.x simple)
+add_test(NAME test_canonical_stencil COMMAND test_canonical_stencil.x)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
