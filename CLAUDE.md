@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ MANDATORY REQUIREMENTS ⚠️
+
+**🚨 CRITICAL: ALWAYS RUN FROM PROJECT ROOT - NO `cd` COMMANDS ALLOWED 🚨**
+
+- **NEVER use `cd` commands** - Always run all commands from `/afs/itp.tugraz.at/proj/plasma/CODE/ert/SIMPLE/`
+- **Use `make test`** - Never run test executables directly or use ctest manually
+- **Use relative paths** - All paths should be relative to project root (e.g., `./build/simple.x`)
+
 ## Build System and Commands
 
 ### Building
