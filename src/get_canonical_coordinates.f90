@@ -308,6 +308,7 @@ deallocate(y,dy)
   use canonical_coordinates_mod, only : ns_c,n_theta_c,n_phi_c,hs_c,h_theta_c,h_phi_c,    &
                                         ns_s_c,ns_tp_c,G_c,sqg_c,B_vartheta_c,B_varphi_c, &
                                         s_sqg_Bt_Bp,s_G_c,ns_max,derf1,derf2,derf3
+  use array_utils, only : init_derivative_factors
 !
   implicit none
 !
@@ -441,11 +442,7 @@ deallocate(y,dy)
 !
   deallocate(splcoe)
 !
-  do k=1,ns_max
-    derf1(k)=dble(k-1)
-    derf2(k)=dble((k-1)*(k-2))
-    derf3(k)=dble((k-1)*(k-2)*(k-3))
-  enddo
+  call init_derivative_factors(ns_max, derf1, derf2, derf3)
   
   ! DEBUG: Sample final spline values
   print *, "DEBUG: spline_can_coord completed"

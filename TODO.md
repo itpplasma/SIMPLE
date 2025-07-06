@@ -31,7 +31,7 @@ Refactor Flux and Boozer coordinate implementations to use the abstract `Magneti
 
 ### 0.2 Extractable Pure Functions
 These can be extracted immediately with minimal risk:
-1. **Stencil initialization** (lines 60-82): Pure computation, no dependencies
+1. ✅ **Stencil initialization** (lines 60-82): COMPLETED - Extracted to `stencil_utils` module with tests
 2. **Progress printing** (lines 284-295): Simple I/O utility
 3. **Derivative array initialization** (lines 432-436): Pure computation
 4. **Index boundary handling** (lines 87-100): Array indexing logic
@@ -39,8 +39,9 @@ These can be extracted immediately with minimal risk:
 ### 0.3 Refactoring Strategy
 1. **Start with pure functions**: Extract without changing behavior
 2. **Add unit tests immediately**: Test each extracted function
-3. **Gradual decoupling**: Replace direct VMEC calls with interfaces
-4. **Preserve exact numerics**: Use bit-for-bit comparison tests
+3. **Run `make test-all` after EVERY change**: Catch regressions immediately
+4. **Gradual decoupling**: Replace direct VMEC calls with interfaces
+5. **Preserve exact numerics**: Use bit-for-bit comparison tests
 
 ## Phase 1: Test Infrastructure (Week 1-2)
 
