@@ -120,17 +120,10 @@ target_link_libraries(test_stencil_utils.x simple)
 add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
 
 # Regression tests for canonical coordinates
-add_executable(test_canonical_stencil.x test_canonical_stencil.f90)
-target_link_libraries(test_canonical_stencil.x simple)
-add_test(NAME test_canonical_stencil COMMAND test_canonical_stencil.x)
-
-add_executable(test_canonical_full_regression.x test_canonical_full_regression.f90)
-target_link_libraries(test_canonical_full_regression.x simple)
-add_test(NAME test_canonical_full_regression COMMAND test_canonical_full_regression.x)
-
-add_executable(test_canonical_baseline_simple.x test_canonical_baseline_simple.f90)
-target_link_libraries(test_canonical_baseline_simple.x simple)
-add_test(NAME test_canonical_baseline_simple COMMAND test_canonical_baseline_simple.x)
+# Note: The following test files were removed as they don't exist yet:
+# - test_canonical_stencil.f90
+# - test_canonical_full_regression.f90  
+# - test_canonical_baseline_simple.f90
 
 add_subdirectory(field_can)
 add_subdirectory(magfie)
