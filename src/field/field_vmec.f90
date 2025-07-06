@@ -12,6 +12,20 @@ end type VmecField
 contains
 
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
+    !> Evaluate magnetic field from VMEC equilibrium
+    !> Input coordinates x = (r, theta, phi) where:
+    !>   r = sqrt(s) with s the normalized toroidal flux
+    !>   theta = poloidal angle (NOT theta*)
+    !>   phi = toroidal angle
+    !>
+    !> Output field components are in (s, theta*, phi) coordinates where:
+    !>   theta* = theta + Lambda(s,theta,phi)
+    !>   Lambda is the stream function
+    !>
+    !> The transformation from (r,theta,phi) to (s,theta*,phi) components includes:
+    !>   - Factor ds/dr = 2*r for the radial component
+    !>   - Lambda derivatives for coupling between components
+    
     use spline_vmec_sub
 
     class(VmecField), intent(in) :: self
@@ -46,7 +60,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     hcov(3) = (Bcov_phi + Bcov_theta*dl_dp)/Bmod
 
     if (present(sqgBctr)) then
-        error stop 'sqgBctr not implemented'
+        error stop "sqgBctr not implemented in VmecField"
     end if
 end subroutine evaluate
 

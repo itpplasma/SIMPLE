@@ -4,6 +4,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_base, only: MagneticField
 use field_vmec, only: VmecField
 use field_coils, only: CoilsField, create_coils_field
+use field_gvec, only: GvecField, create_gvec_field
 
 implicit none
 
@@ -20,6 +21,8 @@ function field_from_file(filename)
         allocate(VmecField :: field_from_file)
     else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
         field_from_file = create_coils_field(filename)
+    else if (endswith(filename, '.dat')) then
+        field_from_file = create_gvec_field(filename)
     else
         print *,  'field_from_file: Unknown file name format ', filename
         error stop

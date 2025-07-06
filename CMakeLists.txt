@@ -3,15 +3,27 @@
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
 cmake_minimum_required (VERSION 3.12)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 project (SIMPLE)
 enable_language(C Fortran)
 
+# Fetch GVEC as a minimal library (before setting SIMPLE-specific flags)
+include(FetchContent)
+
+FetchContent_Declare(
+  gvec
+  GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/calbert/gvec.git
+  GIT_TAG        develop
+)
+
+set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
+FetchContent_MakeAvailable(gvec)
+
 include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-set	(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
 
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
@@ -70,6 +82,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+# Set SIMPLE-specific compiler flags after GVEC to avoid affecting it
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	add_compile_options(-mkl -qopenmp -warn all,nounused)
 	link_libraries("-mkl -qopenmp")
@@ -84,25 +97,27 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
 else()
-	add_compile_options(-Wall -Wextra -Wimplicit-interface -fPIC -fmax-errors=5)
-	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-Wno-unused-dummy-argument>)
-	add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
-	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
+	add_compile_options(-Wall -Wextra -Wimplicit-interface -Wno-external-argument-mismatch -fPIC -fmax-errors=5)
+	add_compile_options(-Wno-unused-dummy-argument)
+	# If not apple
+	if (NOT APPLE)
+		add_link_options(-Wl,-z,noexecstack)
+	endif()
 	if (ENABLE_OPENMP)
-		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-		add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
+		add_compile_options(-fopenmp)
+		add_link_options(-fopenmp)
 	endif()
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
+		add_compile_options(-C)
 		add_compile_options(-O0 -g -ggdb
 			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps
 			-finit-real=nan -fno-omit-frame-pointer -fno-inline)
-			add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fbacktrace>)
+			add_compile_options(-fbacktrace)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 		add_compile_options(-O2 -p -g -shared-libgcc)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
 		add_compile_options(-O3 -g)
-		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fbacktrace>)
+		add_compile_options(-fbacktrace)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
 		add_compile_options(-O3 -ffast-math -ffp-contract=fast -funroll-loops -mtune=native)
 		if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
@@ -121,6 +136,7 @@ add_executable (simple.x
 )
 
 target_link_libraries(simple.x PRIVATE simple)
+set_target_properties(simple.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)

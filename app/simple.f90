@@ -17,6 +17,7 @@ program neo_orb_main
     call get_command_argument(1, config_file)
   end if
 
+  ! Must be called in this order. TODO: Fix
   call read_config(config_file)
   call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
   call params_init

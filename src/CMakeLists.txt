@@ -5,6 +5,7 @@ set(SOURCES
     field/field_base.f90
     field/field_coils.f90
     field/field_vmec.f90
+    field/field_gvec.f90
     field.f90
     field/field_can_base.f90
     field/field_can_test.f90
@@ -41,7 +42,7 @@ set(SOURCES
 )
 
 
-add_library (simple SHARED ${SOURCES})
+add_library (simple STATIC ${SOURCES})
 
 if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	target_link_libraries(simple PRIVATE CONTRIB netcdf netcdff)
@@ -51,6 +52,11 @@ else()
 	)
 endif()
 
+target_include_directories(simple PRIVATE 
+    ${gvec_BINARY_DIR}/include
+)
+
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
+    gveclib
 )

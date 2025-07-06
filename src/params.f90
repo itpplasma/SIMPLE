@@ -28,6 +28,7 @@ module params
   integer          :: ibins
   logical          :: generate_start_only=.False.
   integer          :: startmode=1
+  double precision :: grid_density=0d0
   logical          :: special_ants_file=.False.
 
   integer :: ntau ! number of dtaumin in dtau
@@ -82,7 +83,7 @@ module params
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
-    isw_field_type, generate_start_only, startmode, special_ants_file, integmode, relerr, tcut, debug,           &
+    isw_field_type, generate_start_only, startmode, grid_density, special_ants_file, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
@@ -96,10 +97,7 @@ contains
     character(256), intent(in) :: config_file
 
     open(1, file=config_file, status='old', action='read')
-
     read(1, nml=config)
-
-    if(trim(field_input) == '') field_input = netcdffile
 
     call reset_seed_if_deterministic
 

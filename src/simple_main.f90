@@ -7,7 +7,8 @@ module simple_main
   use binsrc_sub, only : binsrc
   use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
-  use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, dtau, dtaumin, ntau, v0, &
+  use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, &
+    grid_density, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
     class_plot, ntcut, iclass, bmod00, xi, idx, bmin, bmax, dphi, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
@@ -30,7 +31,11 @@ module simple_main
 
     self%integmode = aintegmode
     if (self%integmode>=0) then
-      call init_field_can(isw_field_type, field_from_file(field_input))
+      if(trim(field_input) == '') then
+        call init_field_can(isw_field_type, field_from_file(vmec_file))
+      else
+        call init_field_can(isw_field_type, field_from_file(field_input))
+      end if
     end if
   end subroutine init_field
 
@@ -48,23 +53,28 @@ module simple_main
 
     !sample starting positions
     if (1 == startmode) then
-      call sample(zstart)
+      ! if grid_density is set, we override ntestpart!
+      if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
+        call sample(zstart, grid_density)
+      else
+        call sample(zstart)
+      endif
 
-    else if (2 == startmode) then
+    elseif (2 == startmode) then
       call sample(zstart, START_FILE)
 
-    else if (3 == startmode) then
+    elseif (3 == startmode) then
       call sample(special_ants_file)
 
-    else if (4 == startmode) then
+    elseif (4 == startmode) then
       call sample(zstart, reuse_batch)
 
-    else if (5 == startmode) then
+    elseif (5 == startmode) then
       if (0 == num_surf) then
         call sample(zstart, 0.0d0, 1.0d0)
-      else if (1 == num_surf) then
+      elseif (1 == num_surf) then
         call sample(zstart, 0.0d0, sbeg(1))
-      else if (2 == num_surf) then
+      elseif (2 == num_surf) then
         call sample(zstart, sbeg(1), sbeg(num_surf))
       else
         print *, 'Invalid surface range for volume sample defined (2 < num_surf), stopping.'
