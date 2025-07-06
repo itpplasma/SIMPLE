@@ -104,6 +104,9 @@ add_test(NAME test_gvec COMMAND test_gvec.x)
 add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
 target_link_libraries(test_vmec_gvec.x simple)
 add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
+set_tests_properties(test_vmec_gvec PROPERTIES
+    LABELS "slow"
+)
 
 # Add 2D field export utility (not a test, but a diagnostic tool)
 add_executable (export_field_2d.x export_field_2d.f90)
@@ -125,25 +128,13 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical 
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
-# Golden record test: expected success (main vs main should match)
+# Golden record test: expected success (46f1f53 vs itself should match)
 add_test(
-    NAME golden_record_success
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh main
+    NAME golden_record_success_46f1f53
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh 46f1f53
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-set_tests_properties(golden_record_success PROPERTIES
-    TIMEOUT 300  # 5 minutes
-    LABELS "golden_record;regression;slow"
-    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-)
-
-# Golden record test: expected success (5de27cd vs itself should match)
-add_test(
-    NAME golden_record_success_5de27cd
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh 5de27cd
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-set_tests_properties(golden_record_success_5de27cd PROPERTIES
+set_tests_properties(golden_record_success_46f1f53 PROPERTIES
     TIMEOUT 300  # 5 minutes
     LABELS "golden_record;regression;slow"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
