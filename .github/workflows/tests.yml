@@ -1,0 +1,119 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  test-fast-and-slow:
+    name: Run Fast and Slow Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == true)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gfortran \
+            cmake \
+            ninja-build \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            liblapack-dev \
+            libblas-dev \
+            python3-pip \
+            python3-numpy \
+            python3-scipy
+          pip3 install --user f90wrap scikit-build-core
+
+      - name: Build SIMPLE
+        run: |
+          make clean
+          make
+
+      - name: Run Fast Tests
+        run: make test-fast
+
+      - name: Run Slow Tests
+        run: make test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-fast-slow
+          path: |
+            build/Testing/
+
+  test-all:
+    name: Run All Tests (including regression)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gfortran \
+            cmake \
+            ninja-build \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            liblapack-dev \
+            libblas-dev \
+            python3-pip \
+            python3-numpy \
+            python3-scipy
+          pip3 install --user f90wrap scikit-build-core
+
+      - name: Build SIMPLE
+        run: |
+          make clean
+          make
+
+      - name: Run All Tests (including regression)
+        run: make test-regression
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-all
+          path: |
+            build/Testing/
+
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/itpplasma/texlive:full
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build LaTeX documents
+        run: |
+          cd DOC
+          latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
+          lyx --export pdf2 neo-orb.lyx
+
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: |
+            DOC/canonical_and_boozer_flux_coords_via_VMEC.pdf
+            DOC/neo-orb.pdf
