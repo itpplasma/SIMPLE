@@ -1,0 +1,19 @@
+{
+    "fortran.formatting.formatter": "fprettify",
+    "fortran.formatting.fprettifyArgs": [
+        "-i 4",
+        "--enable-decl",
+        "--whitespace-comma",
+        "--whitespace-assignment",
+        "--whitespace-decl",
+        "--whitespace-relational",
+        "--whitespace-logical",
+        "--whitespace-print",
+        "--whitespace-intrinsics",
+        "--case",
+        "1",
+        "1",
+        "1",
+        "1"
+    ],
+}
