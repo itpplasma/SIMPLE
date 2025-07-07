@@ -31,7 +31,11 @@
 - **NEVER run executables directly** - Always use `make test` 
 - **NEVER use ctest manually** - Always use `make test`
 - **Use `make test TEST=test_name`** for specific tests
-- **Use `make test VERBOSE=1`** for detailed output
+- **Verbose output is now default** - Use `VERBOSE=0` to disable
+- **Test targets**:
+  - `make test` - All tests including slow (excludes regression)
+  - `make test-fast` - Fast tests only (excludes slow and regression)
+  - `make test-regression` - All tests including regression
 
 ## Goal
 Refactor Flux and Boozer coordinate implementations to use the abstract `MagneticField` interface, enabling support for GVEC and other field representations beyond VMEC.

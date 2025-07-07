@@ -20,9 +20,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Reconfigure**: `make reconfigure` - Forces CMake reconfiguration
 
 ### Testing
-- **Run tests**: `make test` - Executes ctest in build directory
+- **Run tests**: `make test` - Runs all tests including slow ones (excludes regression tests)
+- **Fast tests only**: `make test-fast` - Excludes slow and regression tests
+- **All tests**: `make test-regression` - Includes all tests including regression tests
 - **Python tests**: Located in `test/python/` directory
 - **Golden record testing**: Use `examples/golden_record.py` to compare against reference behavior
+- **Verbose output**: Now default for all test targets. Use `VERBOSE=0` to disable
+- **Single test**: `make test TEST=test_name` - Run specific test by name
 - Note: Test system is currently under development
 
 ### Build Configuration
