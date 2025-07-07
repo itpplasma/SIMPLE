@@ -2,7 +2,10 @@ CONFIG ?= Release
 BUILD_DIR := build
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
-.PHONY: all configure reconfigure build test test-fast test-regression install clean
+# Common ctest command with optional verbose and test name filtering
+CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+
+.PHONY: all configure reconfigure build test test-fast test-slow test-regression test-all install clean
 all: build
 
 $(BUILD_NINJA):
@@ -16,20 +19,29 @@ reconfigure:
 build: configure
 	cmake --build $(BUILD_DIR) --config $(CONFIG)
 
-# Run tests including slow ones but excluding regression tests
-# Usage: make test [TEST=test_name]
-# Example: make test TEST=test_gvec
-# Note: Verbose output is now default. Use VERBOSE=0 to disable.
+# Test targets
+# Usage: make [test-target] [TEST=test_name] [VERBOSE=1]
+# Example: make test TEST=test_gvec VERBOSE=1
+
+# Run all tests except regression tests (default)
 test: build
-	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 0,$(VERBOSE)),,-V) $(if $(TEST),-R $(TEST)) -LE "regression"
+	$(CTEST_CMD) -LE "regression"
 
 # Run only fast tests (exclude slow and regression tests)
 test-fast: build
-	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 0,$(VERBOSE)),,-V) $(if $(TEST),-R $(TEST)) -LE "slow|regression"
+	$(CTEST_CMD) -LE "slow|regression"
+
+# Run only slow tests
+test-slow: build
+	$(CTEST_CMD) -L "slow" -LE "regression"
+
+# Run only regression tests
+test-regression: build
+	$(CTEST_CMD) -L "regression"
 
 # Run all tests including regression tests
-test-regression: build
-	cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 0,$(VERBOSE)),,-V) $(if $(TEST),-R $(TEST))
+test-all: build
+	$(CTEST_CMD)
 
 doc: configure
 	cmake --build --preset default --target doc

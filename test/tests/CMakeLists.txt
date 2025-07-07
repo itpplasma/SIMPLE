@@ -180,7 +180,7 @@ add_test(
 )
 set_tests_properties(golden_record_success_46f1f53 PROPERTIES
     TIMEOUT 300  # 5 minutes
-    LABELS "golden_record;regression;slow"
+    LABELS "golden_record;regression"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
 
@@ -193,6 +193,6 @@ add_test(
 set_tests_properties(golden_record_failure PROPERTIES
     TIMEOUT 300  # 5 minutes
     WILL_FAIL TRUE  # This test is expected to fail
-    LABELS "golden_record;regression;slow"
+    LABELS "golden_record;regression"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
