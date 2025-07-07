@@ -18,7 +18,7 @@ real(dp), parameter :: TESLA_IN_GAUSS = 10000.0_dp
 real(dp), parameter :: METER_IN_CM = 100.0_dp
 
 private
-public :: GvecField, create_gvec_field, convert_vmec_to_gvec
+public :: GvecField, create_gvec_field
 
 type, extends(MagneticField) :: GvecField
     character(len=256) :: filename = ''
@@ -294,30 +294,5 @@ subroutine gvec_field_cleanup(self)
         self%data_loaded = .false.
     end if
 end subroutine gvec_field_cleanup
-
-! Note: Direct VMEC to GVEC conversion requires access to GVEC's internal
-! solution structures which are not available through this interface.
-! The conversion must be done using GVEC's own tools or Python API.
-subroutine convert_vmec_to_gvec(vmec_file, gvec_file)
-    character(*), intent(in) :: vmec_file
-    character(*), intent(in) :: gvec_file
-
-    print *, 'ERROR: Direct VMEC to GVEC conversion not available'
-    print *, 'The GVEC WriteState function requires internal solution structures'
-    print *, 'that are not accessible through SIMPLE''s field interface.'
-    print *, ''
-    print *, 'To convert VMEC to GVEC format, use one of these methods:'
-    print *, '1. GVEC Python API:'
-    print *, '   import gvec'
-    print *, '   gvec.read_vmec("', trim(vmec_file), '")'
-    print *, '   gvec.save("', trim(gvec_file), '")'
-    print *, ''
-    print *, '2. GVEC command-line tools with proper parameter file'
-    print *, ''
-    print *, 'Then use create_gvec_field() to load the resulting .dat file'
-
-    error stop 'VMEC to GVEC conversion not implemented'
-
-end subroutine convert_vmec_to_gvec
 
 end module field_gvec

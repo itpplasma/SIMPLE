@@ -1,7 +1,7 @@
 program test_vmec_gvec
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_vmec, only: VmecField
-    use field_gvec, only: GvecField, create_gvec_field, convert_vmec_to_gvec
+    use field_gvec, only: GvecField, create_gvec_field
     use new_vmec_stuff_mod, only: netcdffile, multharm
     use spline_vmec_sub, only: spline_vmec_data
     use params, only: pi
