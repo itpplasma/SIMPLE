@@ -196,10 +196,9 @@ i_ctr=0
     vartheta_c=h_theta_c*dble(i_theta-1)
     do i_phi=1,n_phi_c
       varphi_c=h_phi_c*dble(i_phi-1)
-!      do is=1,ns_c
+
       do is=2,ns_c
-!        r=(hs_c*dble(is-1))**2  !<=OLD
-        r=hs_c*dble(is-1)        !<=NEW
+        r=hs_c*dble(is-1)
         y(1)=G_c(is,i_theta,i_phi)
 
         call rhs_cancoord(r,y,dy)
@@ -212,9 +211,7 @@ i_ctr=0
       enddo
 !First point is=1 (on axis) is bad, extrapolate with parabola:
       sqg_c(1,i_theta,i_phi) = 3.d0*(sqg_c(2,i_theta,i_phi)-sqg_c(3,i_theta,i_phi))                      &
-                             + sqg_c(4,i_theta,i_phi)
-!      B_vartheta_c(1,i_theta,i_phi) = 3.d0*(B_vartheta_c(2,i_theta,i_phi)-B_vartheta_c(3,i_theta,i_phi)) & !<=OLD
-!                                    + B_vartheta_c(4,i_theta,i_phi)                                        !<=OLD
+                             + sqg_c(4,i_theta,i_phi)                                      !<=OLD
       B_vartheta_c(1,i_theta,i_phi) = 0.d0                                                                  !<=NEW
       B_varphi_c(1,i_theta,i_phi) = 3.d0*(B_varphi_c(2,i_theta,i_phi)-B_varphi_c(3,i_theta,i_phi))       &
                                   + B_varphi_c(4,i_theta,i_phi)
@@ -231,24 +228,8 @@ deallocate(y,dy)
   ns_tp_c=ns_tp
   fullset=.true.
 
-!  call deallocate_vmec_spline(1)
-
   onlytheta=.true.
-
-!do is=1,ns_c
-!write(400,*) G_c(is,:,10)
-!write(401,*) B_vartheta_c(is,:,10)
-!write(402,*) B_varphi_c(is,:,10)
-!enddo
-!is=90
-!do i_phi=1,n_phi_c
-!write(500,*) G_c(is,:,i_phi)
-!write(501,*) B_vartheta_c(is,:,i_phi)
-!write(502,*) B_varphi_c(is,:,i_phi)
-!enddo
-!stop
   call spline_can_coord(fullset)
-
 
   deallocate(ipoi_t,ipoi_p,sqg_c,B_vartheta_c,B_varphi_c,G_c)
 
