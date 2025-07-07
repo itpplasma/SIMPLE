@@ -82,12 +82,8 @@ contains
       call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
     
     type is (GvecField)
-      ! For GVEC, Lambda needs to be computed from the field
-      ! This is a placeholder - actual implementation would need
-      ! to extract Lambda from GVEC's LA quantity
-      alam = 0.0_dp
-      dl_dt = 0.0_dp
-      print *, 'WARNING: Stream function not yet implemented for GvecField'
+      ! For GVEC, Lambda is available as LA
+      call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
     
     class default
       ! For other fields, stream function may not be defined

@@ -105,6 +105,10 @@ add_test(NAME test_gvec COMMAND test_gvec.x)
 add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
 target_link_libraries(test_vmec_gvec.x simple)
 add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
+
+add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
+target_link_libraries(test_canonical_gvec.x simple)
+add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
 set_tests_properties(test_vmec_gvec PROPERTIES
     LABELS "slow"
 )
