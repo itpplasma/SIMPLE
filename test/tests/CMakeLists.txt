@@ -173,7 +173,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
-# Golden record test: expected success (46f1f53 vs itself should match)
+# Golden record test: expected success (46f1f53 vs <current_commit> should match)
 add_test(
     NAME golden_record_success_46f1f53
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh 46f1f53
@@ -194,6 +194,18 @@ add_test(
 set_tests_properties(golden_record_failure PROPERTIES
     TIMEOUT 300  # 5 minutes
     WILL_FAIL TRUE  # This test is expected to fail
+    LABELS "golden_record;regression"
+    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
+)
+
+# Golden record test: compare against main branch
+add_test(
+    NAME golden_record_main
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh main
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(golden_record_main PROPERTIES
+    TIMEOUT 300  # 5 minutes
     LABELS "golden_record;regression"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
