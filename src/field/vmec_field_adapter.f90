@@ -265,7 +265,7 @@ contains
     real(dp), intent(out) :: Bctrvr_vartheta, Bctrvr_varphi
     real(dp), intent(out) :: Bcovar_r, Bcovar_vartheta, Bcovar_varphi
 
-    call the existing VMEC routine
+    ! Call the existing VMEC routine
     call vmec_field(s, theta, varphi, &
                     A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
                     sqg, alam, dl_ds, dl_dt, dl_dp, &
@@ -312,7 +312,7 @@ contains
     real(dp), intent(in) :: s
     real(dp), intent(out) :: aiota, daiota_ds
 
-    call the existing VMEC routine
+    ! Call the existing VMEC routine
     call splint_iota(s, aiota, daiota_ds)
   end subroutine vmec_iota_interpolate
 
@@ -364,7 +364,7 @@ contains
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam, dl_dt
 
-    call the existing VMEC routine
+    ! Call the existing VMEC routine
     call splint_lambda(s, theta, varphi, alam, dl_dt)
   end subroutine vmec_lambda_interpolate
 
@@ -532,7 +532,7 @@ contains
     real(dp), intent(out) :: dZ_ds, dZ_dt, dZ_dp
     real(dp), intent(out) :: dl_ds, dl_dt, dl_dp
 
-    call the existing VMEC routine
+    ! Call the existing VMEC routine
     call splint_vmec_data(s, theta, varphi, &
                           A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
                           R, Z, alam, &
