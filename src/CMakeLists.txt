@@ -4,6 +4,7 @@ set(SOURCES
     coordinates/coordinates.f90
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
+    spline_3d_interpolation.f90
     field/field_base.f90
     field/field_coils.f90
     field/field_vmec.f90

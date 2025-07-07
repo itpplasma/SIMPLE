@@ -109,6 +109,33 @@ add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
 add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
 target_link_libraries(test_canonical_gvec.x simple)
 add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
+
+add_executable (test_simple_vmec_gvec.x test_simple_vmec_gvec.f90)
+target_link_libraries(test_simple_vmec_gvec.x simple)
+add_test(NAME test_simple_vmec_gvec COMMAND test_simple_vmec_gvec.x)
+set_tests_properties(test_simple_vmec_gvec PROPERTIES
+    LABELS "slow;integration"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
+target_link_libraries(test_adapter_consistency.x simple)
+add_test(NAME test_adapter_consistency COMMAND test_adapter_consistency.x)
+set_tests_properties(test_adapter_consistency PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable (test_vmec_gvec_adapter.x test_vmec_gvec_adapter.f90)
+target_link_libraries(test_vmec_gvec_adapter.x simple)
+add_test(NAME test_vmec_gvec_adapter COMMAND test_vmec_gvec_adapter.x)
+set_tests_properties(test_vmec_gvec_adapter PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "adapter"
+)
+
+add_executable (test_spline_3d.x test_spline_3d.f90)
+target_link_libraries(test_spline_3d.x simple)
+add_test(NAME test_spline_3d COMMAND test_spline_3d.x)
 set_tests_properties(test_vmec_gvec PROPERTIES
     LABELS "slow"
 )

@@ -204,11 +204,14 @@ contains
       Bcovar_varphi = hcov(3) * Bmod
       
       ! Contravariant components and sqrt(g)
-      if (abs(sqgBctr(2)) > 1e-10) then
-        sqg = abs(sqgBctr(2) / (Bcovar_vartheta / Bmod))
-      else
-        sqg = abs(sqgBctr(3) / (Bcovar_varphi / Bmod))
-      end if
+      ! Use |B|² = B^i * B_i to extract sqrt(g) properly
+      ! We have: sqgBctr = sqrt(g) * B^i and Bcovar = B_i
+      ! Since B^r = 0 in flux coordinates, |B|² = B^θ*B_θ + B^φ*B_φ
+      ! Therefore: |B|² = (sqgBctr(2)/sqrt(g)) * Bcovar_vartheta + (sqgBctr(3)/sqrt(g)) * Bcovar_varphi
+      ! Rearranging: sqrt(g) = (sqgBctr(2)*Bcovar_vartheta + sqgBctr(3)*Bcovar_varphi) / |B|²
+      sqg = (sqgBctr(2)*Bcovar_vartheta + sqgBctr(3)*Bcovar_varphi) / (Bmod*Bmod)
+      
+      ! Now extract the contravariant components
       Bctrvr_vartheta = sqgBctr(2) / sqg
       Bctrvr_varphi = sqgBctr(3) / sqg
       
@@ -245,9 +248,8 @@ contains
       
       ! Contravariant components from sqgBctr
       ! sqgBctr(2) = sqrt(g) * B^theta, sqgBctr(3) = sqrt(g) * B^phi
-      ! We need to extract sqrt(g) to get B^theta and B^phi
-      ! For now, use a simplified approach
-      sqg = abs(sqgBctr(2) / (Bcovar_vartheta / Bmod + 1e-10))
+      ! Use |B|² = B^i * B_i to extract sqrt(g) properly
+      sqg = (sqgBctr(2)*Bcovar_vartheta + sqgBctr(3)*Bcovar_varphi) / (Bmod*Bmod)
       Bctrvr_vartheta = sqgBctr(2) / sqg
       Bctrvr_varphi = sqgBctr(3) / sqg
       

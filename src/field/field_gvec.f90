@@ -103,7 +103,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     !> The transformation from (r,theta,phi) to (s,theta*,phi) components includes:
     !>   - Factor ds/dr = 2*r for the radial component
     !>   - Lambda derivatives for coupling between components
-    
+
     class(GvecField), intent(in) :: self
     real(dp), intent(in) :: x(3)  ! r=sqrt(s_vmec), theta_vmec, phi_vmec
     real(dp), intent(out) :: Acov(3)
@@ -137,7 +137,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: Bthctr, Bzetactr  ! Contravariant field components in (s,theta,zeta)
     real(dp) :: Bthcov, Bzetacov, Bscov  ! Covariant field components
     real(dp) :: RZ_coords(3)      ! Coordinates for eval_Jh (R,Z,ζ)
-    
+
     ! Axis regularization variables
     real(dp), parameter :: s_min_reg = 0.05_dp  ! Regularization threshold
     real(dp) :: scaling_factor, reg_factor, smooth_factor
@@ -209,10 +209,10 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Get profile values
     iota_val = eval_iota_r(r)      ! Rotational transform
     phi_val = eval_phi_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2        ! Toroidal flux
-    
+
     ! Compute toroidal flux derivative properly using GVEC's built-in function
     phiPrime_val = eval_phiPrime_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2
-    
+
     ! Get poloidal flux from profiles_1d(:,2)
     ! profiles_1d indices: 1=phi, 2=chi, 3=iota, 4=pressure
     chi_val = sbase_prof%evalDOF_s(r, 0, profiles_1d(:,2)) * TESLA_IN_GAUSS * METER_IN_CM**2
@@ -227,14 +227,14 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     ! Note: get_dx_dqi expects (X1, X2, ζ) = (R, Z, ζ) coordinates
     RZ_coords = [R_pos, Z_pos, zeta]
     call hmap_r%get_dx_dqi(RZ_coords, dx_dq1, dx_dq2, dx_dq3)
-    
+
     ! Compute basis vectors for (s,θ,ζ) coordinates EXACTLY as GVEC Python does
     ! e_rho = e_q1 * dX1_dr + e_q2 * dX2_dr
-    ! e_theta = e_q1 * dX1_dt + e_q2 * dX2_dt  
+    ! e_theta = e_q1 * dX1_dt + e_q2 * dX2_dt
     ! e_zeta = e_q1 * dX1_dz + e_q2 * dX2_dz + e_q3
-    
+
     e_s = dx_dq1 * dX1_ds + dx_dq2 * dX2_ds
-    e_thet = dx_dq1 * dX1_dthet + dx_dq2 * dX2_dthet  
+    e_thet = dx_dq1 * dX1_dthet + dx_dq2 * dX2_dthet
     e_zeta = dx_dq1 * dX1_dzeta + dx_dq2 * dX2_dzeta + dx_dq3
 
     ! Compute metric tensor components
@@ -255,36 +255,35 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac
 
     if (present(sqgBctr)) then
+        ! Jac switches sign from (s, theta, zeta) to (s, theta, phi)
         sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
-        sqgBctr(2) = Jac * Bthctr  ! Jac * B^θ
-        sqgBctr(3) = -Jac * Bzetactr  ! Jac * B^phi = -Jac * B^ζ
+        sqgBctr(2) = (-Jac) * Bthctr  ! -Jac * B^θ
+        sqgBctr(3) = (-Jac) * (-Bzetactr)  ! = Jac * B^ζ = -Jac * -B^ζ = (-Jac) * B^φ
     end if
-        
+
     Bthcov = (g_tt * Bthctr + g_tz * Bzetactr)
     Bzetacov = (g_tz * Bthctr + g_zz * Bzetactr)
-    
+
     ! For theta* coordinates, we need covariant B in s direction
     Bscov = (g_st * Bthctr + g_sz * Bzetactr)
 
     Bmod = sqrt(Bthctr*Bthcov + Bzetactr*Bzetacov)
-    
+
     ! Apply theta* coordinate transformations with Lambda derivatives
     ! The GVEC components are in (s,theta,zeta) but SIMPLE expects (r,theta*,phi)
     ! where s = r^2, theta* = theta + Lambda, and phi = -zeta
     ! The transformation requires: ds/dr = 2*r
     hcov(1) = Bscov / Bmod
     hcov(2) = Bthcov / Bmod
-    hcov(3) = Bzetacov / Bmod
+    hcov(3) = - Bzetacov / Bmod  ! Minus for phi = -zeta
 
     ! Vector potential with theta* transformations
     ! Acov_theta in GVEC is the toroidal flux phi_val
     Acov(1) = phi_val * dLA_ds * 2.0_dp * r
     Acov(2) = phi_val * (1.0_dp + dLA_dthet)
-    Acov(3) = -chi_val + phi_val * dLA_dzeta
+    Acov(3) = - (-chi_val + phi_val * dLA_dzeta)  ! Minus for phi = -zeta
 
-    ! Correct for phi = -zeta
-    hcov(3) = -hcov(3)
-    Acov(3) = -Acov(3)
+
 
 end subroutine evaluate
 
@@ -302,7 +301,7 @@ end subroutine gvec_field_cleanup
 subroutine convert_vmec_to_gvec(vmec_file, gvec_file)
     character(*), intent(in) :: vmec_file
     character(*), intent(in) :: gvec_file
-    
+
     print *, 'ERROR: Direct VMEC to GVEC conversion not available'
     print *, 'The GVEC WriteState function requires internal solution structures'
     print *, 'that are not accessible through SIMPLE''s field interface.'
@@ -316,9 +315,9 @@ subroutine convert_vmec_to_gvec(vmec_file, gvec_file)
     print *, '2. GVEC command-line tools with proper parameter file'
     print *, ''
     print *, 'Then use create_gvec_field() to load the resulting .dat file'
-    
+
     error stop 'VMEC to GVEC conversion not implemented'
-    
+
 end subroutine convert_vmec_to_gvec
 
 end module field_gvec
