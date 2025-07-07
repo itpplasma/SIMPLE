@@ -86,8 +86,8 @@ set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_ellip
 #     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data
 #     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_BINARY_DIR}
 #             ${CMAKE_CURRENT_BINARY_DIR}/../../_deps/gvec-build/bin/gvec ${GVEC_TEST_INPUT}
-#     COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-#             ${CMAKE_CURRENT_BINARY_DIR}/GVEC_SOLOVIEV_ELLIPTOK_State_0000_00000000.dat 
+#     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+#             ${CMAKE_CURRENT_BINARY_DIR}/GVEC_SOLOVIEV_ELLIPTOK_State_0000_00000000.dat
 #             ${GVEC_TEST_STATE}
 #     DEPENDS gvec
 #     COMMENT "Generating GVEC elliptic tokamak test state file"
@@ -105,10 +105,6 @@ add_test(NAME test_gvec COMMAND test_gvec.x)
 add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
 target_link_libraries(test_vmec_gvec.x simple)
 add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
-set_tests_properties(test_vmec_gvec PROPERTIES
-    LABELS "slow"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
 
 add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
 target_link_libraries(test_canonical_gvec.x simple)
@@ -159,7 +155,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90
-# - test_canonical_full_regression.f90  
+# - test_canonical_full_regression.f90
 # - test_canonical_baseline_simple.f90
 
 add_subdirectory(field_can)
@@ -171,9 +167,9 @@ add_subdirectory(orbit)
 ##################################################
 
 # Copy test cases to build directory for golden record tests
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
 # Golden record test: expected success (46f1f53 vs itself should match)

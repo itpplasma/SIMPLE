@@ -91,6 +91,7 @@ program test_simple_vmec_gvec
     close(unit)
 
     ! Run SIMPLE with GVEC
+    error stop "Requires fully working GVEC field implementation"
     call system('../../simple.x test_gvec.in > test_gvec.log')
 
     ! Read confined fraction

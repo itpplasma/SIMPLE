@@ -14,7 +14,7 @@ data = nc.Dataset(filename)
 v.netcdffile = filename
 v.ns_s = 5
 v.ns_tp = 5
-v.multharm = 7
+v.multharm = 3
 
 spline_vmec_sub.spline_vmec_data()
 
