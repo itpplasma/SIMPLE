@@ -105,6 +105,10 @@ add_test(NAME test_gvec COMMAND test_gvec.x)
 add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
 target_link_libraries(test_vmec_gvec.x simple)
 add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
+set_tests_properties(test_vmec_gvec PROPERTIES
+    LABELS "slow"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
 
 add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
 target_link_libraries(test_canonical_gvec.x simple)
@@ -136,9 +140,6 @@ set_tests_properties(test_vmec_gvec_adapter PROPERTIES
 add_executable (test_spline_3d.x test_spline_3d.f90)
 target_link_libraries(test_spline_3d.x simple)
 add_test(NAME test_spline_3d COMMAND test_spline_3d.x)
-set_tests_properties(test_vmec_gvec PROPERTIES
-    LABELS "slow"
-)
 
 # Add 2D field export utility (not a test, but a diagnostic tool)
 add_executable (export_field_2d.x export_field_2d.f90)

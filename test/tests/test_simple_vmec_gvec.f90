@@ -42,14 +42,11 @@ program test_simple_vmec_gvec
     namelist_file = 'test_vmec.in'
     open(newunit=unit, file=namelist_file, status='replace')
     write(unit, '(A)') '&config'
-    write(unit, '(A)') 'multharm = 3'           ! low order splines
+    write(unit, '(A)') 'multharm = 3            ! low order splines'
     write(unit, '(A)') 'trace_time = 1d-4       ! very short test run'
     write(unit, '(A)') 'sbeg = 0.5d0            ! mid-radius'
     write(unit, '(A)') 'ntestpart = 16          ! minimal for quick test'
-    write(unit, '(A)') 'netcdffile = "wout.nc"  ! VMEC file'
-    write(unit, '(A)') 'isw_field_type = 0      ! canonical coordinates'
-    write(unit, '(A)') 'startmode = 0           ! volume sampling'
-    write(unit, '(A)') 'integmode = 4           ! symplectic integrator'
+    write(unit, '(A)') 'contr_pp  = -1.0d10     ! trace also passing'
     write(unit, '(A)') '/'
     close(unit)
 
