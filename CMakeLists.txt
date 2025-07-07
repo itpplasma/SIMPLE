@@ -78,7 +78,7 @@ endif()
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
-link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS} $ENV{HOME}/.local/lib)
+link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 

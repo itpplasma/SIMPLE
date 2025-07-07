@@ -14,19 +14,6 @@ module boozer_sub
 !
 ! Field-agnostic version that accepts a MagneticField object
 !
-  use vector_potentail_mod,   only : ns,hs
-  use new_vmec_stuff_mod,     only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
-  use boozer_coordinates_mod, only : ns_s_B,ns_tp_B,ns_B,n_theta_B,n_phi_B, &
-                                     hs_B,h_theta_B,h_phi_B,                &
-                                     s_Bcovar_tp_B,                         &
-                                     s_Bmod_B,s_Bcovar_r_B,                 &
-                                     s_delt_delp_V,s_delt_delp_B,           &
-                                     ns_max,derf1,derf2,derf3,              &
-                                     use_B_r, use_del_tp_B
-  use binsrc_sub, only : binsrc
-  use plag_coeff_sub, only : plag_coeff
-  use spline_vmec_sub
-  use vmec_field_adapter
 !
   implicit none
 !
@@ -941,7 +928,7 @@ icounter=icounter+1
   use boozer_coordinates_mod, only : ns_s_B,ns_tp_B,ns_B,n_theta_B,n_phi_B, &
                                      hs_B,h_theta_B,h_phi_B,                &
                                      s_delt_delp_V,s_delt_delp_B,           &
-                                     ns_max,derf1,derf2,derf3,              &
+                                     ns_max,derf1,                          &
                                      use_del_tp_B
   use new_vmec_stuff_mod,   only : nper
   use chamb_mod,            only : rnegflag
@@ -1093,7 +1080,6 @@ icounter=icounter+1
 ! Input : r,vartheta_B,varphi_B - Boozer coordinates
 ! Output: theta,varphi          - VMEC coordinates
 !
-  use new_vmec_stuff_mod,   only : nper
   use boozer_coordinates_mod, only : use_del_tp_B
 !
   implicit none

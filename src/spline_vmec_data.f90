@@ -823,8 +823,6 @@ subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
   !> -------
   !> nheal: integer, number of points to extrapolate at the axis.
 
-  use new_vmec_stuff_mod, only : ns_s
-
   implicit none
 
   ! Lagrange polynomial stencil size for checking the data by extraplation:
@@ -879,7 +877,6 @@ end subroutine determine_nheal_for_axis
   subroutine volume_and_B00(volume,B00)
 !
   use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,nper
-  use vector_potentail_mod, only : ns,hs,torflux,sA_phi
 !
   implicit none
 !
