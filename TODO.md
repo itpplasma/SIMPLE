@@ -1,260 +1,60 @@
-# Refactoring Plan: Abstract Field Support for Flux and Boozer Coordinates
+# TODO: Fix Compiler Warnings
 
-## 📊 Current Status Summary
-**Branch**: `refactor`  
-**Phase 0**: ✅ COMPLETED - All pure functions extracted with unit tests  
-**Phase 1**: ✅ COMPLETED - Test infrastructure complete, all tests passing  
-**Phase 2**: ✅ COMPLETED - Preparatory refactoring done, adapter layer in place
-**Phase 3**: ✅ COMPLETED - Abstract interface implementation done
-  - 3.1: Field-aware coordinate systems implemented
-  - 3.2: Field-agnostic adapter dispatching implemented  
-  - 3.3: Newton iteration abstracted in field_newton module
-**Phase 4**: ✅ COMPLETED - GVEC Support Implementation done
-  - 4.1: Extended GvecField implementation with vector potential derivatives
-  - 4.2: Integration testing successful, canonical coordinates work with GVEC
-**Next Steps**: Phase 5 - Validation and Documentation
+## High Priority (Low Hanging Fruit)
 
-## 🎯 Immediate Action Items
-1. ✅ **Created field-aware coordinate systems** - Both canonical and Boozer coordinates
-2. ✅ **Implemented field dispatching in adapter** - VmecField uses optimized paths, others use generic interface
-3. ✅ **Abstracted Newton iteration** - Created field_newton module for field-agnostic theta finding
-4. ✅ **All tests pass** - bit-for-bit reproducibility maintained
-5. **Begin Phase 4.1** - Extend GvecField implementation
-6. **Extend MagneticField interface** - Add methods for iota, lambda, R/Z evaluation
-7. **Test with GVEC fields** once interface extensions are complete
+### 1. Fix real-to-integer conversion warnings in samplers.f90
+- [ ] Line 176: Fix conversion from REAL(8) to INTEGER(4)
+- [ ] Line 183: Fix conversion from REAL(8) to INTEGER(4)
+- **Solution**: Use explicit `int()` or `nint()` functions for proper conversion
 
-## ⚠️ MANDATORY REQUIREMENTS ⚠️
+## Medium Priority
 
-**🚨 CRITICAL: ALWAYS WORK FROM PROJECT ROOT `/afs/itp.tugraz.at/proj/plasma/CODE/ert/SIMPLE/` 🚨**
+### 2. Fix real equality/inequality comparisons in minpack.f90
+- [ ] Line 139: Replace equality comparison for REAL(8)
+- [ ] Line 149: Replace equality comparison for REAL(8) (2 instances)
+- [ ] Line 280: Replace inequality comparison for REAL(8)
+- [ ] Line 288: Replace equality comparison for REAL(8)
+- [ ] Line 304: Replace equality comparison for REAL(8)
+- [ ] Line 330: Replace inequality comparison for REAL(8)
+- [ ] Line 346: Replace inequality comparison for REAL(8)
+- [ ] Line 358: Replace inequality comparison for REAL(8)
+- [ ] Line 517: Replace inequality comparison for REAL(8)
+- [ ] Line 540: Replace inequality comparison for REAL(8)
+- [ ] Line 544: Replace inequality comparison for REAL(8)
+- [ ] Line 673: Replace equality comparison for REAL(8)
+- [ ] Line 679: Replace equality comparison for REAL(8)
+- [ ] Line 699: Replace equality comparison for REAL(8)
+- [ ] Line 706: Replace equality comparison for REAL(8)
+- [ ] Line 717: Replace equality comparison for REAL(8)
+- [ ] Line 839: Replace equality comparison for REAL(8)
+- [ ] Line 845: Replace equality comparison for REAL(8)
+- [ ] Lines 1080-1535: Multiple real comparisons to fix
+- [ ] Lines 1732-1851: Multiple real comparisons to fix
+- [ ] Lines 4707-4901: Multiple real comparisons to fix
+- [ ] Lines 5364-5474: Multiple real comparisons to fix
+- **Solution**: Use tolerance-based comparisons with `abs(a - b) < epsilon`
 
-- **NEVER use `cd` commands** - Stay in project root at all times
-- **NEVER run executables directly** - Always use `make test` 
-- **NEVER use ctest manually** - Always use `make test`
-- **Use `make test TEST=test_name`** for specific tests
-- **Verbose output is now default** - Use `VERBOSE=0` to disable
-- **Test targets**:
-  - `make test` - All tests including slow (excludes regression)
-  - `make test-fast` - Fast tests only (excludes slow and regression)
-  - `make test-regression` - All tests including regression
+### 3. Fix implicit interface warnings in minpack.f90
+- [ ] Line 326: Add explicit interface for 'enorm' procedure
+- [ ] Line 330: Add explicit interface for 'enorm' procedure
+- [ ] Line 1080: Add explicit interface for 'fcn' procedure
+- [ ] Line 1087: Add explicit interface for 'fcn' procedure
+- [ ] Line 1110: Add explicit interface for 'fcn' procedure
+- [ ] Line 1121: Add explicit interface for 'fcn' procedure
+- [ ] Line 1210: Add explicit interface for 'enorm' procedure
+- [ ] Line 1237: Add explicit interface for 'fdjac1' procedure
+- **Solution**: Add interface blocks or use modules with explicit interfaces
 
-## Goal
-Refactor Flux and Boozer coordinate implementations to use the abstract `MagneticField` interface, enabling support for GVEC and other field representations beyond VMEC.
+## Low Priority
 
-## Current State Analysis
-- **Flux/Boozer**: Directly call `vmec_field` from `spline_vmec_sub`, tightly coupled to VMEC
-- **Meiss/Albert**: Use abstract `MagneticField` interface, support any field type
-- **Risk**: High - these are core routines used extensively in production
-
-## Immediate Refactoring Steps (Phase 0)
-
-### 0.1 Analysis of get_canonical_coordinates.f90
-**File size**: 1141 lines (too large!)
-**Key issues identified**:
-1. Monolithic `get_canonical_coordinates` subroutine (lines 23-228, 205 lines!)
-2. Mixed concerns: ODE integration, spline interpolation, coordinate transforms
-3. Global state via threadprivate variables in `exchange_get_cancoord_mod`
-4. Direct VMEC coupling in `rhs_cancoord` via `vmec_field` call
-5. Complex nested interpolation in `splint_can_coord` (lines 442-904, 462 lines!)
-
-### 0.2 Extractable Pure Functions
-These can be extracted immediately with minimal risk:
-1. ✅ **Stencil initialization** (lines 60-82): COMPLETED - Extracted to `stencil_utils` module with tests
-2. ✅ **Progress printing** (lines 284-295): COMPLETED - Already a well-structured subroutine
-3. ✅ **Derivative array initialization** (lines 432-436): COMPLETED - Extracted to `array_utils` module with tests
-4. ✅ **Index boundary handling** (lines 82-87): COMPLETED - Part of stencil_utils functionality
-
-### 0.3 Refactoring Strategy
-1. **Start with pure functions**: Extract without changing behavior
-2. **Add unit tests immediately**: Test each extracted function
-3. **Run `make test-all` after EVERY change**: Catch regressions immediately
-4. **Gradual decoupling**: Replace direct VMEC calls with interfaces
-5. **Preserve exact numerics**: Use bit-for-bit comparison tests
-
-### 0.4 Phase 0 Status (COMPLETED) ✅
-- ✅ Extracted stencil initialization to `stencil_utils` module
-- ✅ Extracted derivative array initialization to `array_utils` module
-- ✅ Created unit tests for both modules (test_stencil_utils.f90, test_array_utils.f90)
-- ✅ All tests passing
-- ✅ Progress printing and index boundary handling already well-structured
-
-## Phase 1: Test Infrastructure (Week 1-2)
-
-### 1.1 Create Golden Record Tests ✅ COMPLETED
-- [x] Golden record infrastructure already exists:
-  - `test/golden_record/golden_record.sh` - Main test runner
-  - `test/golden_record/compare_files.py` - Numerical comparison with tolerance
-  - `test/golden_record/run_golden_tests.sh` - Individual test runner
-  - `test/golden_record/compare_golden_results.sh` - Results comparison
-- [x] Test cases available:
-  - Canonical coordinates test (`test/golden_record/canonical/`)
-  - Boozer coordinates test (`test/golden_record/boozer/`)
-- [x] All golden record tests passing (verified with `make test-all`)
-- [x] Comparison includes tolerance checking via `np.isclose()`
-
-### 1.2 Unit Tests for Coordinate Transformations
-- [x] Basic test infrastructure exists:
-  - `test/tests/test_boozer.f90` - Tests Boozer coordinate transformations
-  - `test/tests/test_coord_trans.f90` - Integration test for coordinate transformations
-  - `test/tests/test_coordinates.f90` - Simple coordinate transform driver
-- [ ] Expand tests for `vmec_to_can` and `can_to_vmec` for Flux coordinates
-- [x] Test `vmec_to_boozer` and `boozer_to_vmec` transformations (in test_boozer.f90)
-- [ ] Add unit tests for Jacobian calculations and metric tensor components
-- [ ] Test edge cases (axis, boundary, high aspect ratio)
-
-### 1.3 Field Evaluation Tests
-- [x] Field tests already exist:
-  - `test/tests/field_can/test_field_can_transforms.f90` - Field transformations
-  - `test/tests/field_can/test_field_can_meiss.f90` - Meiss coordinate field tests
-  - `test/tests/field_can/test_field_can_albert.f90` - Albert coordinate field tests
-- [ ] Create mock field implementations for abstract interface testing
-- [ ] Add tests for field component interpolation accuracy
-- [ ] Verify derivative calculations (first and second order) for all field types
-
-## Phase 2: Preparatory Refactoring (Week 3-4)
-
-### 2.1 Extract VMEC-Specific Code ✅ COMPLETED
-- [x] Identified all VMEC-specific calls in `get_canonical_coordinates.f90`:
-  - `vmec_field` (line 258-260) - Main field evaluation
-  - `splint_iota` (line 236) - Rotational transform interpolation
-  - `splint_lambda` (lines 247, 964) - Stream function interpolation
-  - `splint_vmec_data` (line 1116) - Complete VMEC data interpolation
-- [x] Identified all VMEC-specific calls in `boozer_converter.f90`:
-  - `vmec_field` (line 139-141) - Main field evaluation
-  - Uses `spline_vmec_sub` module (line 21)
-- [x] Created inventory of required field quantities:
-  - **Magnetic field components**: B^r, B^theta, B^phi (contravariant), B_r, B_theta, B_phi (covariant)
-  - **Vector potentials**: A_theta, A_phi and their derivatives
-  - **Geometric quantities**: sqrt(g) (Jacobian), lambda (stream function), iota (rotational transform)
-  - **Coordinates**: R, Z and their derivatives
-  - **VMEC-specific data**: torflux, ns_A, sA_phi arrays
-
-### 2.2 Create Adapter Layer ✅ COMPLETED
-- [x] Designed `VmecFieldAdapter` module with interfaces for:
-  - `vmec_field_evaluate` - Replaces direct `vmec_field` calls
-  - `vmec_iota_interpolate` - Replaces `splint_iota` calls
-  - `vmec_lambda_interpolate` - Replaces `splint_lambda` calls
-  - `vmec_data_interpolate` - Replaces `splint_vmec_data` calls
-- [x] Implemented adapter using existing VMEC routines (direct pass-through for now)
-- [x] Created overloaded versions with/without field object for future abstraction
-- [x] Verified adapter produces identical results (all golden record tests pass)
-
-### 2.3 Refactor Without Changing Functionality ✅ COMPLETED
-- [x] Replaced all direct VMEC calls with adapter calls:
-  - `get_canonical_coordinates.f90`: 3 calls replaced (vmec_field, splint_iota, splint_lambda, splint_vmec_data)
-  - `boozer_converter.f90`: 1 call replaced (vmec_field)
-- [x] Kept VMEC-only implementation (adapter just wraps existing calls)
-- [x] Ran full test suite - all 9 tests pass
-- [x] Confirmed bit-for-bit reproducibility (golden record tests pass)
-
-## Phase 3: Abstract Interface Implementation (Week 5-6)
-
-### 3.1 Modify Initialization Signatures ✅ COMPLETED
-- [x] Updated `get_canonical_coordinates` to accept `class(MagneticField)`:
-  - Created `get_canonical_coordinates_with_field(field)` - new field-aware version
-  - Kept `get_canonical_coordinates()` as backward compatibility wrapper
-  - Used module variable `current_field` to pass field to nested subroutines
-- [x] Updated `get_boozer_coordinates` following same pattern as canonical
-- [x] Modified `init_field_can` to pass field object to both coordinate systems
-- [x] Updated all adapter calls to use field-aware versions when available
-- [x] All tests pass including golden record tests
-
-### 3.2 Implement Field-Agnostic Algorithms ✅ COMPLETED
-- [x] Modified adapter to dispatch based on field type:
-  - VmecField: Uses existing optimized VMEC routines
-  - Other fields: Uses generic field%evaluate interface
-- [x] Implemented field evaluation mapping:
-  - Extracts A_theta, A_phi from Acov components
-  - Converts normalized h to B components
-  - Computes sqrt(g) from field quantities
-- [x] Added placeholder implementations for non-VMEC fields:
-  - iota, lambda require extended interface or computation
-  - R/Z coordinates need field-specific methods
-- [x] All tests pass with field dispatching enabled
-
-### 3.3 Newton Iteration Refactoring ✅ COMPLETED
-- [x] Created `field_newton` module with abstracted Newton solver
-- [x] Implemented `newton_theta_from_canonical` for field-agnostic theta finding
-- [x] Modified `rhs_cancoord` to use abstracted Newton solver when field object available
-- [x] Maintained backward compatibility with legacy VMEC-specific iteration
-- [x] All tests pass with new Newton abstraction
-
-## Phase 4: GVEC Support Implementation (Week 7-8)
-
-### 4.1 Extend GvecField Implementation ✅ COMPLETED
-- [x] Added vector potential derivatives via numerical differentiation in vmec_field_adapter
-- [x] Enhanced GVEC support for all required field quantities in canonical coordinates
-- [x] Stream function Lambda and all derivatives (dΛ/ds, dΛ/dθ, dΛ/dφ) now available 
-- [x] All golden record tests pass - bit-for-bit reproducibility maintained
-
-### 4.2 Integration Testing ✅ COMPLETED
-- [x] Test Flux coordinates with GVEC fields - Created test_canonical_gvec.f90 integration test
-- [x] All GVEC adapter functions working correctly with canonical coordinates
-- [x] Vector potential derivatives computed via numerical differentiation
-- [x] Stream function Lambda and all derivatives (dΛ/ds, dΛ/dθ, dΛ/dφ) available
-- [x] Rotational transform iota and derivatives available through adapter
-- [x] All adapter interfaces consistent and passing validation
-- [x] GVEC fields fully compatible with canonical coordinate system
-
-### 4.3 Performance Optimization
-- [ ] Profile field evaluation calls
-- [ ] Cache frequently used quantities
-- [ ] Optimize coordinate transformations
-
-## Phase 5: Validation and Documentation (Week 9-10)
-
-### 5.1 Comprehensive Testing
-- [ ] Run full test suite with both VMEC and GVEC
-- [ ] Verify particle confinement statistics
-- [ ] Check conservation of invariants
-- [ ] Test with realistic stellarator configurations
-
-### 5.2 Backwards Compatibility
-- [ ] Ensure old input files still work
-- [ ] Verify performance hasn't degraded
-- [ ] Check memory usage hasn't increased significantly
-
-### 5.3 Documentation Update
-- [ ] Update code comments and docstrings
-- [ ] Document new interfaces in CLAUDE.md
-- [ ] Create migration guide for users
-- [ ] Add examples using GVEC with canonical coordinates
-
-## Technical Challenges to Address
-
-### 1. Coordinate System Mismatch
-- VMEC uses straight field line coordinates
-- GVEC uses theta* (geometric poloidal angle)
-- Need transformation layer or unified coordinate system
-
-### 2. Flux Surface Averaging
-- Currently relies on VMEC's internal representations
-- Need field-agnostic algorithm for surface integrals
-- May require additional methods in MagneticField interface
-
-### 3. Performance Considerations
-- Direct VMEC calls are highly optimized
-- Abstract interface adds overhead
-- Need careful optimization to maintain performance
-
-### 4. Numerical Precision
-- Canonical coordinate construction involves sensitive ODEs
-- Small differences can accumulate
-- Need robust error control and monitoring
-
-## Success Criteria
-- [ ] All existing tests pass with < 1e-10 relative error
-- [ ] Can use GVEC fields with Flux and Boozer coordinates
-- [ ] Performance degradation < 10%
-- [ ] Code is more modular and maintainable
-- [ ] No breaking changes for existing users
-
-## Risk Mitigation
-1. **Feature flags**: Add `use_legacy_vmec = .true.` option to preserve old behavior
-2. **Incremental rollout**: Test thoroughly with volunteer users before release
-3. **Rollback plan**: Git tags at each phase for easy reversion
-4. **Parallel development**: Keep changes in feature branch until fully validated
+### 4. Fix missing terminating character warnings in GVEC library
+- [ ] These are in third-party dependency code (build/_deps/gvec-src/)
+- [ ] Multiple instances in comments with unterminated quotes
+- **Note**: These are in external dependency, may not need fixing
 
 ## Notes
-- Consider reaching out to original authors for historical context
-- May discover additional VMEC dependencies during implementation
-- Be prepared to extend MagneticField interface if needed
+- Total warnings to fix: ~50+
+- Most warnings are in `minpack.f90` (legacy MINPACK library)
+- Real comparison warnings can be fixed using epsilon-based comparisons
+- Implicit interface warnings require adding interface blocks
+- Consider using compiler flags to suppress warnings in legacy code if needed
