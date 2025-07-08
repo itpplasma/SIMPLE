@@ -36,7 +36,7 @@ jobs:
             libopenmpi-dev \
             libgsl-dev \
             libfftw3-dev
-          pip3 install --user scikit-build-core git+https://github.com/jameskermode/f90wrap
+          pip3 install --user scikit-build-core git+https://github.com/jameskermode/f90wrap simsopt
 
       - name: Build SIMPLE
         run: |
