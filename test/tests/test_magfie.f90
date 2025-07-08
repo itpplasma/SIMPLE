@@ -8,6 +8,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, 
 use simple, only: Tracer, init_params, ro0
 use simple_main, only : init_field
 use new_vmec_stuff_mod, only: rmajor
+use lapack_interfaces, only: dgesv
 
 implicit none
 save

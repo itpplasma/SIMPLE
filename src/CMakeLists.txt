@@ -1,6 +1,8 @@
 add_subdirectory(contrib)
 
 set(SOURCES
+    lapack_interfaces.f90
+    sorting_mod.f90
     coordinates/coordinates.f90
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
@@ -57,7 +59,7 @@ else()
 	)
 endif()
 
-target_include_directories(simple PRIVATE 
+target_include_directories(simple PRIVATE
     ${gvec_BINARY_DIR}/include
 )
 
