@@ -10,8 +10,7 @@ set(SOURCES
     field/field_base.f90
     field/field_coils.f90
     field/field_vmec.f90
-    field/field_gvec.f90
-    field/vmec_field_adapter.f90
+    field/vmec_field_eval.f90
     field/field_newton.f90
     field.f90
     field/field_can_base.f90
@@ -48,6 +47,13 @@ set(SOURCES
     simple_main.f90
 )
 
+# Add GVEC-specific sources if enabled
+if(ENABLE_GVEC)
+    list(APPEND SOURCES
+        field/field_gvec.f90
+        field/vmec_field_adapter.f90
+    )
+endif()
 
 add_library (simple STATIC ${SOURCES})
 
@@ -59,11 +65,17 @@ else()
 	)
 endif()
 
-target_include_directories(simple PRIVATE
-    ${gvec_BINARY_DIR}/include
-)
-
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
-    gveclib
 )
+
+# Conditionally link GVEC if enabled
+if(ENABLE_GVEC)
+    target_include_directories(simple PRIVATE
+        ${gvec_BINARY_DIR}/include
+    )
+    target_link_libraries(simple PUBLIC
+        gveclib
+    )
+    target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
+endif()

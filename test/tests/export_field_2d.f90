@@ -1,7 +1,9 @@
 program export_field_2d
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_vmec, only: VmecField
+#ifdef GVEC_AVAILABLE
     use field_gvec, only: GvecField, create_gvec_field
+#endif
     use new_vmec_stuff_mod, only: netcdffile, multharm
     use spline_vmec_sub, only: spline_vmec_data
     use params, only: pi
@@ -9,8 +11,13 @@ program export_field_2d
     implicit none
     
     class(VmecField), allocatable :: vmec_field
+#ifdef GVEC_AVAILABLE
     class(GvecField), allocatable :: gvec_field
-    character(len=256) :: vmec_file, gvec_file
+#endif
+    character(len=256) :: vmec_file
+#ifdef GVEC_AVAILABLE
+    character(len=256) :: gvec_file
+#endif
     
     ! Grid parameters
     integer, parameter :: ns = 50    ! Number of s points
@@ -24,11 +31,16 @@ program export_field_2d
     ! Field evaluation variables
     real(dp) :: x(3)
     real(dp) :: Acov_vmec(3), hcov_vmec(3), Bmod_vmec
+#ifdef GVEC_AVAILABLE
     real(dp) :: Acov_gvec(3), hcov_gvec(3), Bmod_gvec
+#endif
     
     ! Grid variables
     real(dp), allocatable :: s_grid(:), theta_grid(:)
-    real(dp), allocatable :: Bmod_vmec_2d(:,:), Bmod_gvec_2d(:,:)
+    real(dp), allocatable :: Bmod_vmec_2d(:,:)
+#ifdef GVEC_AVAILABLE
+    real(dp), allocatable :: Bmod_gvec_2d(:,:)
+#endif
     real(dp), allocatable :: R_grid(:,:), Z_grid(:,:)
     
     integer :: i, j, unit_out
@@ -36,15 +48,24 @@ program export_field_2d
     
     ! File names
     vmec_file = 'wout.nc'
+#ifdef GVEC_AVAILABLE
     gvec_file = 'test_vmec_gvec_State_0000_00000000.dat'
+#endif
     
     print *, '================================================================'
+#ifdef GVEC_AVAILABLE
     print *, 'Exporting 2D magnetic field data for VMEC and GVEC'
+#else
+    print *, 'Exporting 2D magnetic field data for VMEC'
+#endif
     print *, '================================================================'
     
     ! Allocate grids
     allocate(s_grid(ns), theta_grid(nt))
-    allocate(Bmod_vmec_2d(ns, nt), Bmod_gvec_2d(ns, nt))
+    allocate(Bmod_vmec_2d(ns, nt))
+#ifdef GVEC_AVAILABLE
+    allocate(Bmod_gvec_2d(ns, nt))
+#endif
     allocate(R_grid(ns, nt), Z_grid(ns, nt))
     
     ! Create grids
@@ -64,9 +85,11 @@ program export_field_2d
     call spline_vmec_data
     allocate(VmecField :: vmec_field)
     
+#ifdef GVEC_AVAILABLE
     ! Initialize GVEC field
     print *, 'Loading GVEC field from ', trim(gvec_file)
     gvec_field = create_gvec_field(gvec_file)
+#endif
     
     ! Evaluate fields on 2D grid
     print *, ''
@@ -89,9 +112,11 @@ program export_field_2d
             call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
             Bmod_vmec_2d(i, j) = Bmod_vmec
             
+#ifdef GVEC_AVAILABLE
             ! Evaluate GVEC field
             call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
             Bmod_gvec_2d(i, j) = Bmod_gvec
+#endif
             
             ! For visualization, we'll also need R,Z coordinates
             ! Approximate R,Z for plotting (assuming axisymmetric at phi=0)
@@ -123,6 +148,7 @@ program export_field_2d
     end do
     close(unit_out)
     
+#ifdef GVEC_AVAILABLE
     ! Write GVEC data
     print *, 'Writing GVEC field data to Bmod_gvec_2d.dat'
     open(newunit=unit_out, file='Bmod_gvec_2d.dat', status='replace')
@@ -139,6 +165,7 @@ program export_field_2d
         write(unit_out, *)  ! Empty line for gnuplot
     end do
     close(unit_out)
+#endif
     
     ! Write grid info for Python script
     print *, 'Writing grid information to grid_info.dat'
@@ -153,12 +180,17 @@ program export_field_2d
     print *, 'Field statistics:'
     print '(A,ES12.5,A,ES12.5)', '  VMEC |B| range: ', &
         minval(Bmod_vmec_2d), ' to ', maxval(Bmod_vmec_2d)
+#ifdef GVEC_AVAILABLE
     print '(A,ES12.5,A,ES12.5)', '  GVEC |B| range: ', &
         minval(Bmod_gvec_2d), ' to ', maxval(Bmod_gvec_2d)
+#endif
     
     ! Deallocate
     deallocate(s_grid, theta_grid)
-    deallocate(Bmod_vmec_2d, Bmod_gvec_2d)
+    deallocate(Bmod_vmec_2d)
+#ifdef GVEC_AVAILABLE
+    deallocate(Bmod_gvec_2d)
+#endif
     deallocate(R_grid, Z_grid)
     
     print *, ''

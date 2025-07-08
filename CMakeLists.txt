@@ -10,17 +10,6 @@ project (SIMPLE)
 enable_language(C Fortran)
 
 add_compile_options(-g -fbacktrace)
-# Fetch GVEC as a minimal library (before setting SIMPLE-specific flags)
-include(FetchContent)
-
-FetchContent_Declare(
-  gvec
-  GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/calbert/gvec.git
-  GIT_TAG        develop
-)
-
-set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
-FetchContent_MakeAvailable(gvec)
 
 include(Util)
 
@@ -39,6 +28,22 @@ endif()
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
+option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
+
+# Conditionally fetch GVEC if enabled
+if(ENABLE_GVEC)
+    message(STATUS "GVEC support enabled - fetching GVEC library")
+    include(FetchContent)
+    FetchContent_Declare(
+      gvec
+      GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/calbert/gvec.git
+      GIT_TAG        develop
+    )
+    set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
+    FetchContent_MakeAvailable(gvec)
+else()
+    message(STATUS "GVEC support disabled")
+endif()
 
 set(CMAKE_MACOSX_RPATH 1)
 

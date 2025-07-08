@@ -8,11 +8,12 @@ file(DOWNLOAD
 
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools
-find_program(PYTHON_EXECUTABLE python3)
-if(PYTHON_EXECUTABLE)
-    # Try to convert VMEC to GVEC using Python
-    execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "
+if(ENABLE_GVEC)
+    find_program(PYTHON_EXECUTABLE python3)
+    if(PYTHON_EXECUTABLE)
+        # Try to convert VMEC to GVEC using Python
+        execute_process(
+            COMMAND ${PYTHON_EXECUTABLE} -c "
 try:
     import gvec
     print('GVEC Python module found, converting VMEC to GVEC format...')
@@ -24,11 +25,12 @@ except ImportError:
 except Exception as e:
     print(f'Failed to convert VMEC to GVEC: {e}')
 "
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        RESULT_VARIABLE GVEC_CONVERT_RESULT
-    )
-else()
-    message(STATUS "Python not found, skipping VMEC to GVEC conversion")
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            RESULT_VARIABLE GVEC_CONVERT_RESULT
+        )
+    else()
+        message(STATUS "Python not found, skipping VMEC to GVEC conversion")
+    endif()
 endif()
 
 ##################################################
@@ -97,42 +99,45 @@ set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_ellip
 # Custom target to ensure the state file is generated
 # add_custom_target(gvec_test_data DEPENDS ${GVEC_TEST_STATE})
 
-add_executable (test_gvec.x test_gvec.f90)
-target_link_libraries(test_gvec.x simple)
-# add_dependencies(test_gvec.x gvec_test_data)
-add_test(NAME test_gvec COMMAND test_gvec.x)
+# GVEC-related tests (only if GVEC support is enabled)
+if(ENABLE_GVEC)
+    add_executable (test_gvec.x test_gvec.f90)
+    target_link_libraries(test_gvec.x simple)
+    # add_dependencies(test_gvec.x gvec_test_data)
+    add_test(NAME test_gvec COMMAND test_gvec.x)
 
-add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
-target_link_libraries(test_vmec_gvec.x simple)
-add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
+    add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
+    target_link_libraries(test_vmec_gvec.x simple)
+    add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
 
-add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
-target_link_libraries(test_canonical_gvec.x simple)
-add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
+    add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
+    target_link_libraries(test_canonical_gvec.x simple)
+    add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
 
-add_executable (test_simple_vmec_gvec.x test_simple_vmec_gvec.f90)
-target_link_libraries(test_simple_vmec_gvec.x simple)
-add_test(NAME test_simple_vmec_gvec COMMAND test_simple_vmec_gvec.x)
-set_tests_properties(test_simple_vmec_gvec PROPERTIES
-    LABELS "slow;integration"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    WILL_FAIL TRUE  # Expected to fail
-)
+    add_executable (test_simple_vmec_gvec.x test_simple_vmec_gvec.f90)
+    target_link_libraries(test_simple_vmec_gvec.x simple)
+    add_test(NAME test_simple_vmec_gvec COMMAND test_simple_vmec_gvec.x)
+    set_tests_properties(test_simple_vmec_gvec PROPERTIES
+        LABELS "slow;integration"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        WILL_FAIL TRUE  # Expected to fail
+    )
 
-add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
-target_link_libraries(test_adapter_consistency.x simple)
-add_test(NAME test_adapter_consistency COMMAND test_adapter_consistency.x)
-set_tests_properties(test_adapter_consistency PROPERTIES
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
+    add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
+    target_link_libraries(test_adapter_consistency.x simple)
+    add_test(NAME test_adapter_consistency COMMAND test_adapter_consistency.x)
+    set_tests_properties(test_adapter_consistency PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
 
-add_executable (test_vmec_gvec_adapter.x test_vmec_gvec_adapter.f90)
-target_link_libraries(test_vmec_gvec_adapter.x simple)
-add_test(NAME test_vmec_gvec_adapter COMMAND test_vmec_gvec_adapter.x)
-set_tests_properties(test_vmec_gvec_adapter PROPERTIES
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    LABELS "adapter"
-)
+    add_executable (test_vmec_gvec_adapter.x test_vmec_gvec_adapter.f90)
+    target_link_libraries(test_vmec_gvec_adapter.x simple)
+    add_test(NAME test_vmec_gvec_adapter COMMAND test_vmec_gvec_adapter.x)
+    set_tests_properties(test_vmec_gvec_adapter PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "adapter"
+    )
+endif()
 
 add_executable (test_spline_3d.x test_spline_3d.f90)
 target_link_libraries(test_spline_3d.x simple)

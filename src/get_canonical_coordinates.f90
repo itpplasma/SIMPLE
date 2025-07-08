@@ -238,7 +238,11 @@ contains
       use exchange_get_cancoord_mod, only: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, Bcovar_varphi, &
                                            theta, onlytheta
       use spline_vmec_sub
+#ifdef GVEC_AVAILABLE
       use vmec_field_adapter
+#else
+      use vmec_field_eval
+#endif
 
       implicit none
 
@@ -986,7 +990,11 @@ contains
 ! Output: vartheta_c,varphi_c - canonical coordinates
 
       use spline_vmec_sub
+#ifdef GVEC_AVAILABLE
       use vmec_field_adapter
+#else
+      use vmec_field_eval
+#endif
       implicit none
 
       double precision, parameter :: epserr = 1.d-14
@@ -1146,7 +1154,11 @@ contains
 
    subroutine vmec_to_cyl(s, theta, varphi, Rcyl, Zcyl)
       use spline_vmec_sub
+#ifdef GVEC_AVAILABLE
       use vmec_field_adapter
+#else
+      use vmec_field_eval
+#endif
       double precision, intent(in) :: s, theta, varphi
       double precision, intent(out) :: Rcyl, Zcyl
 
