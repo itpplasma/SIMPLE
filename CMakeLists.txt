@@ -9,6 +9,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
+add_compile_options(-g -fbacktrace)
 # Fetch GVEC as a minimal library (before setting SIMPLE-specific flags)
 include(FetchContent)
 
