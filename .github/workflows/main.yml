@@ -39,8 +39,7 @@ jobs:
       - name: Build SIMPLE
         run: |
           make clean
-          make
-          pip3 install -e . --no-build-isolation
+          pip3 install -e .
 
       - name: Run Fast Tests
         run: make test-fast
