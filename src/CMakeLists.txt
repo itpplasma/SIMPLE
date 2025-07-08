@@ -11,8 +11,8 @@ set(SOURCES
     field/field_coils.f90
     field/field_vmec.f90
     field/vmec_field_eval.f90
-    field/field_newton.f90
-    field.f90
+    field/field_newton.F90
+    field.F90
     field/field_can_base.f90
     field/field_can_test.f90
     field/field_can_flux.f90
@@ -22,17 +22,17 @@ set(SOURCES
     field/field_can_albert.f90
     field_can.f90
     magfie.f90
-    boozer_converter.f90
+    boozer_converter.F90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
     vmecinm_m.f90
     spline_vmec_data.f90
     new_vmec_allocation_stuff.f90
-    get_canonical_coordinates.f90
+    get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
     orbit_symplectic.f90
-    util.f90
+    util.F90
     samplers.f90
     cut_detector.f90
     classification.f90
