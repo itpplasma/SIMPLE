@@ -35,11 +35,13 @@ jobs:
             libopenmpi-dev \
             libgsl-dev \
             libfftw3-dev
+          pip3 install --user scikit-build-core git+https://github.com/jameskermode/f90wrap
 
       - name: Build SIMPLE
         run: |
           make clean
-          pip3 install -e .
+          make
+          pip3 install -e . --no-build-isolation
 
       - name: Run Fast Tests
         run: make test-fast
