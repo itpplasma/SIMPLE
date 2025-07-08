@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-fast-and-slow:
-    name: Run Fast and Slow Tests
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'pull_request'
 
@@ -50,58 +50,15 @@ jobs:
       - name: Run Slow Tests
         run: make test
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-fast-slow
-          path: |
-            build/Testing/
-
-  test-regression:
-    name: Run Regression Tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gfortran \
-            cmake \
-            ninja-build \
-            libnetcdf-dev \
-            libnetcdff-dev \
-            liblapack-dev \
-            libblas-dev \
-            python3-pip \
-            python3-numpy \
-            python3-scipy \
-            python3-matplotlib \
-            python3-netcdf4 \
-            openmpi-bin \
-            libopenmpi-dev \
-            libgsl-dev \
-            libfftw3-dev
-          pip3 install --user scikit-build-core git+https://github.com/jameskermode/f90wrap simsopt
-
-      - name: Build SIMPLE
-        run: |
-          make clean
-          make
-          pip3 install -e . --no-build-isolation
-
       - name: Run Regression Tests
+        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
         run: make test-regression
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-regression
+          name: test-results
           path: |
             build/Testing/
 
