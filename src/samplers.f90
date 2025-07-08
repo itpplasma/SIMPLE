@@ -78,8 +78,8 @@ module samplers
 
       call load_starting_points(zstart, filename)
   end subroutine
-  
-  
+
+
   ! Samplers ################################
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type, num_surf
@@ -148,7 +148,7 @@ module samplers
     call save_starting_points(zstart)
 
   end subroutine sample_surface_fieldline
-  
+
   subroutine sample_grid(zstart, grid_density)
     use params, only: ntestpart, zstart_dim1, zend, times_lost, &
         trap_par, perp_inv, iclass, xstart, sbeg
@@ -156,11 +156,12 @@ module samplers
 
     double precision, dimension(:,:), allocatable, intent(inout) :: zstart
     double precision, intent(in) :: grid_density
-    double precision :: ngrid, xi
-    integer :: xsize, ipart, jpart, lidx
-    
-    xsize = (2*pi) * grid_density !angle density
-    ngrid = (1 / grid_density) - 1
+    double precision :: xi, xsize_real
+    integer :: xsize, ngrid, ipart, jpart, lidx
+
+    xsize_real = (2*pi) * grid_density !angle density
+    xsize = int(xsize_real)
+    ngrid = int((1 / grid_density) - 1)
     ntestpart = ngrid ** 2 !number of total angle points
 
     ! Resize particle coord. arrays and result memory.
@@ -172,23 +173,23 @@ module samplers
     if (allocated(perp_inv)) deallocate(perp_inv)
     if (allocated(iclass)) deallocate(iclass)
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
-    
+
     do ipart=1,ngrid
       zstart(1,ipart) = sbeg(1)
-      zstart(2,ipart) = xsize * ipart
-      zstart(3,ipart) = xsize * ipart
+      zstart(2,ipart) = xsize_real * ipart
+      zstart(3,ipart) = xsize_real * ipart
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
       do jpart=1,ngrid
         lidx = (jpart-1)*ntestpart+ipart
         zstart(1,lidx) = sbeg(1)
-        zstart(2,lidx) = xsize * ipart
-        zstart(3,lidx) = xsize * jpart
+        zstart(2,lidx) = xsize_real * ipart
+        zstart(3,lidx) = xsize_real * jpart
         zstart(4,lidx) = 1.d0  ! normalized velocity module z(4) = v / v_0
         call random_number(xi)
         zstart(5,lidx)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
-      end do 
+      end do
     enddo
 
     call save_starting_points(zstart)

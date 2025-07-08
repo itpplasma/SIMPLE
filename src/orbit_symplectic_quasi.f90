@@ -2,6 +2,7 @@ module orbit_symplectic_quasi
 
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
 use orbit_symplectic_base
+use minpack_interfaces, only: hybrd1
 
 implicit none
 save

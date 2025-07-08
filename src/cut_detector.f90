@@ -88,6 +88,7 @@ module cut_detector
         self%par_inv = self%par_inv+z(5)**2 ! parallel adiabatic invariant
 
         if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
+          ! Note: i is guaranteed to be <= nplagr here, so array access is safe
           self%orb_sten(1:5,i)=z
           self%orb_sten(6,i)=self%par_inv
         else                          !<=normal case, shift stencil
