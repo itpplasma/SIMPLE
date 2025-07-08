@@ -35,13 +35,10 @@ jobs:
             libopenmpi-dev \
             libgsl-dev \
             libfftw3-dev
-
       - name: Build SIMPLE
         run: |
           make clean
           make
-          pip3 install -e . --no-build-isolation
-
       - name: Run Fast Tests
         run: make test-fast
 
@@ -55,7 +52,6 @@ jobs:
           name: test-results-fast-slow
           path: |
             build/Testing/
-
   test-all:
     name: Run All Tests (including regression)
     runs-on: ubuntu-latest
@@ -79,12 +75,10 @@ jobs:
             python3-numpy \
             python3-scipy
           pip3 install --user f90wrap scikit-build-core
-
       - name: Build SIMPLE
         run: |
           make clean
           make
-
       - name: Run All Tests (including regression)
         run: make test-regression
 
@@ -95,7 +89,6 @@ jobs:
           name: test-results-all
           path: |
             build/Testing/
-
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-latest
@@ -108,16 +101,13 @@ jobs:
 
       - name: Install LyX
         run: |
-          echo "LyX installation"
-          apt-get update
-          apt-get install -y lyx
-
+          sudo apt-get update
+          sudo apt-get install -y lyx
       - name: Build LaTeX documents
         run: |
           cd DOC
           latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
           lyx --export pdf2 neo-orb.lyx
-
       - name: Upload documentation artifacts
         uses: actions/upload-artifact@v4
         with:
