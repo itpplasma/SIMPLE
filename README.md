@@ -23,9 +23,8 @@ Required libraries:
 * NetCDF
 * LAPACK/BLAS
 
-Supported compilers:
-* GNU Fortan
-* Intel Fortran
+Required compiler:
+* GNU Fortran (gfortran)
 
 For Python wrappers, do
 ```bash

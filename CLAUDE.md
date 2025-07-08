@@ -36,7 +36,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Dependencies
 - Required: NetCDF, LAPACK/BLAS, libneo, GVEC (minimal)
-- Compilers: GNU Fortran or Intel Fortran
+- Compiler: GNU Fortran (gfortran)
 - Optional: OpenMP (enabled by default)
 
 ### GVEC Integration
