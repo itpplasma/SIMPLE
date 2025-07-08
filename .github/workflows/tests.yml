@@ -40,6 +40,7 @@ jobs:
         run: |
           make clean
           make
+          pip3 install -e . --no-build-isolation
 
       - name: Run Fast Tests
         run: make test-fast
