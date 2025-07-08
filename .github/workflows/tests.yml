@@ -100,13 +100,15 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/itpplasma/texlive:full
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: texlive/texlive:latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install LyX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lyx
 
       - name: Build LaTeX documents
         run: |
