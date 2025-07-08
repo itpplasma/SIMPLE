@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [ main ]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
