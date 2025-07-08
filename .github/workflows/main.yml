@@ -58,10 +58,10 @@ jobs:
           path: |
             build/Testing/
 
-  test-all:
-    name: Run All Tests (including regression)
+  test-regression:
+    name: Run Regression Tests (on ready_for_review)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.action == 'ready_for_review'
 
     steps:
       - uses: actions/checkout@v4
@@ -79,22 +79,29 @@ jobs:
             libblas-dev \
             python3-pip \
             python3-numpy \
-            python3-scipy
-          pip3 install --user f90wrap scikit-build-core
+            python3-scipy \
+            python3-matplotlib \
+            python3-netcdf4 \
+            openmpi-bin \
+            libopenmpi-dev \
+            libgsl-dev \
+            libfftw3-dev
+          pip3 install --user scikit-build-core git+https://github.com/jameskermode/f90wrap simsopt
 
       - name: Build SIMPLE
         run: |
           make clean
           make
+          pip3 install -e . --no-build-isolation
 
-      - name: Run All Tests (including regression)
+      - name: Run Regression Tests
         run: make test-regression
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-all
+          name: test-results-regression
           path: |
             build/Testing/
 
