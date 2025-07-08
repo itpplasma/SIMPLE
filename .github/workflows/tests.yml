@@ -31,7 +31,8 @@ jobs:
             python3-numpy \
             python3-scipy \
             openmpi-bin \
-            libopenmpi-dev
+            libopenmpi-dev \
+            libgsl-dev
 
       - name: Build SIMPLE
         run: |
