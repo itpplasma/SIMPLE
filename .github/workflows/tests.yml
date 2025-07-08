@@ -29,8 +29,9 @@ jobs:
             libblas-dev \
             python3-pip \
             python3-numpy \
-            python3-scipy
-          pip3 install --user f90wrap scikit-build-core
+            python3-scipy \
+            openmpi-bin \
+            libopenmpi-dev
 
       - name: Build SIMPLE
         run: |
