@@ -193,3 +193,14 @@ set_tests_properties(golden_record_multi PROPERTIES
     LABELS "golden_record;regression"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
+
+# Golden record sanity test: tests the comparison system itself
+# This ensures the golden record comparison scripts are working correctly
+add_test(
+    NAME golden_record_sanity
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record_sanity/test_golden_record_sanity_simple.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..
+)
+set_tests_properties(golden_record_sanity PROPERTIES
+    TIMEOUT 60  # 1 minute for sanity checks
+)
