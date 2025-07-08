@@ -6,6 +6,7 @@ module vmec_field_eval
   use field_base, only: MagneticField
   use field_vmec, only: VmecField
   use spline_vmec_sub
+  use spline_vmec_libneo, only: splint_vmec_data_libneo
 
   implicit none
   private
@@ -14,6 +15,9 @@ module vmec_field_eval
   public :: vmec_iota_interpolate, vmec_iota_interpolate_with_field
   public :: vmec_lambda_interpolate, vmec_lambda_interpolate_with_field
   public :: vmec_data_interpolate, vmec_data_interpolate_with_field
+  
+  ! Flag to use libneo splines (can be changed for testing)
+  logical, parameter :: use_libneo_splines = .true.
 
 contains
 
@@ -151,13 +155,22 @@ contains
     real(dp), intent(out) :: dZ_ds, dZ_dt, dZ_dp
     real(dp), intent(out) :: dl_ds, dl_dt, dl_dp
 
-    ! Call the existing VMEC routine
-    call splint_vmec_data(s, theta, varphi, &
-                          A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
-                          R, Z, alam, &
-                          dR_ds, dR_dt, dR_dp, &
-                          dZ_ds, dZ_dt, dZ_dp, &
-                          dl_ds, dl_dt, dl_dp)
+    ! Call the existing VMEC routine or libneo version
+    if (use_libneo_splines) then
+      call splint_vmec_data_libneo(s, theta, varphi, &
+                                   A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
+                                   R, Z, alam, &
+                                   dR_ds, dR_dt, dR_dp, &
+                                   dZ_ds, dZ_dt, dZ_dp, &
+                                   dl_ds, dl_dt, dl_dp)
+    else
+      call splint_vmec_data(s, theta, varphi, &
+                            A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
+                            R, Z, alam, &
+                            dR_ds, dR_dt, dR_dp, &
+                            dZ_ds, dZ_dt, dZ_dp, &
+                            dl_ds, dl_dt, dl_dp)
+    end if
   end subroutine vmec_data_interpolate
 
 end module vmec_field_eval

@@ -17,6 +17,7 @@ contains
 
 subroutine transform_vmec_to_cyl(xfrom, xto, dxto_dxfrom)
     use spline_vmec_sub, only: splint_vmec_data
+    use spline_vmec_libneo, only: splint_vmec_data_libneo
 
     real(dp), intent(in) :: xfrom(3)
     real(dp), intent(out) :: xto(3)
@@ -25,10 +26,18 @@ subroutine transform_vmec_to_cyl(xfrom, xto, dxto_dxfrom)
     real(dp) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
                 R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                 dl_ds, dl_dt, dl_dp
+    
+    logical, parameter :: use_libneo = .true.
 
-    call splint_vmec_data(xfrom(1), xfrom(2), xfrom(3), &
-        A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, R, Z, alam, &
-        dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
+    if (use_libneo) then
+        call splint_vmec_data_libneo(xfrom(1), xfrom(2), xfrom(3), &
+            A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, R, Z, alam, &
+            dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
+    else
+        call splint_vmec_data(xfrom(1), xfrom(2), xfrom(3), &
+            A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, R, Z, alam, &
+            dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
+    end if
 
     xto(1) = R
     xto(2) = xfrom(3)
