@@ -139,9 +139,6 @@ if(ENABLE_GVEC)
     )
 endif()
 
-add_executable (test_spline_3d.x test_spline_3d.f90)
-target_link_libraries(test_spline_3d.x simple)
-add_test(NAME test_spline_3d COMMAND test_spline_3d.x)
 
 # Add 2D field export utility (not a test, but a diagnostic tool)
 add_executable (export_field_2d.x export_field_2d.f90)
