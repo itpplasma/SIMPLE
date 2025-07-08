@@ -27,6 +27,12 @@ Supported compilers:
 * GNU Fortan
 * Intel Fortran
 
+For Python wrappers, do
+```bash
+pip install git+https://github.com/jameskermode/f90wrap
+pip install -e . --no-build-isolation
+```
+
 ## Usage
 
 SIMPLE currently runs on a single node with OpenMP shared memory parallelization with one particle per thread and background
