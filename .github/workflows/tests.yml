@@ -108,6 +108,7 @@ jobs:
 
       - name: Install LyX
         run: |
+          echo "LyX installation"
           apt-get update
           apt-get install -y lyx
 
