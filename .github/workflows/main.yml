@@ -13,10 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/itpplasma/texlive:full
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: texlive/texlive:latest
 
     steps:
       - uses: actions/checkout@v2
