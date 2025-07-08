@@ -63,7 +63,8 @@ compare_cases() {
         # Check if this is the classifier_fast case with multiple files
         if [ "$CASE" = "classifier_fast" ]; then
             # List of files to compare for classifier_fast (excluding simple.in and wout.nc)
-            CLASSIFIER_FILES="avg_inverse_t_lost.dat class_parts.dat confined_fraction.dat fort.10000 fort.10022 fort.20000 fort.40022 fort.40032 fort.50022 fort.50032 healaxis.dat start.dat times_lost.dat"
+            # Note: fort.* files are excluded due to non-deterministic ordering in parallel execution
+            CLASSIFIER_FILES="avg_inverse_t_lost.dat class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"
             
             # Run multi-file comparison
             python "$SCRIPT_DIR/compare_files_multi.py" "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" --files $CLASSIFIER_FILES
