@@ -57,6 +57,9 @@ program test_vmec_gvec_adapter
     
     integer :: i
     
+    ! Dummy variables for field initialization
+    real(dp) :: x_test(3), Acov_dummy(3), hcov_dummy(3), Bmod_dummy
+    
     print *, '======================================================='
     print *, 'Testing vmec_field_adapter for VMEC vs GVEC'
     print *, '======================================================='
@@ -111,6 +114,10 @@ program test_vmec_gvec_adapter
             Bcovar_r_v, Bcovar_vartheta_v, Bcovar_varphi_v)
         
         ! Evaluate with GVEC field through adapter
+        ! First initialize GVEC state by calling field%evaluate
+        x_test = [sqrt(s_test(i)), theta_test(i), phi_test(i)]
+        call gvec_field%evaluate(x_test, Acov_dummy, hcov_dummy, Bmod_dummy)
+        
         call vmec_field_evaluate_with_field(gvec_field, s_test(i), theta_test(i), phi_test(i), &
             A_theta_g, A_phi_g, dA_theta_ds_g, dA_phi_ds_g, aiota_g, &
             sqg_g, alam_g, dl_ds_g, dl_dt_g, dl_dp_g, &

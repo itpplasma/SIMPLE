@@ -35,6 +35,9 @@ program test_canonical_gvec
     ! Test flags
     logical :: test_passed
     
+    ! Dummy variables for field initialization
+    real(dp) :: x_test(3), Acov_dummy(3), hcov_dummy(3), Bmod_dummy
+    
     print *, 'Testing canonical coordinates support with GVEC fields...'
     print *, ''
     
@@ -74,6 +77,10 @@ program test_canonical_gvec
     
     ! Test 1: Full field evaluation with vector potential derivatives
     print *, '1. Testing vmec_field_evaluate_with_field...'
+    
+    ! First initialize GVEC state by calling field%evaluate
+    x_test = [sqrt(s_test), theta_test, varphi_test]
+    call gvec_field%evaluate(x_test, Acov_dummy, hcov_dummy, Bmod_dummy)
     
     call vmec_field_evaluate_with_field(gvec_field, s_test, theta_test, varphi_test, &
                                         A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &

@@ -144,6 +144,14 @@ contains
       r = sqrt(s)
       ds_dr = 2.0_dp * r
 
+      ! Check if GVEC state is properly initialized before evaluation
+      ! This follows the same pattern as field_gvec.f90
+      if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
+          .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. .not. allocated(LA_r)) then
+        ! Need to reinitialize GVEC state
+        error stop 'GVEC state not initialized in vmec_field_adapter - call field%evaluate first'
+      end if
+
       ! Prepare coordinates for GVEC evaluation
       gvec_coords(1) = r
       gvec_coords(2) = theta

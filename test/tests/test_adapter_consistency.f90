@@ -35,6 +35,9 @@ program test_adapter_consistency
     
     real(dp) :: max_diff
     
+    ! Dummy variables for field initialization
+    real(dp) :: x_test(3), Acov_dummy(3), hcov_dummy(3), Bmod_dummy
+    
     print *, '======================================================='
     print *, 'Testing vmec_field_adapter consistency'
     print *, '======================================================='
@@ -87,6 +90,11 @@ program test_adapter_consistency
     
     ! Test 2: Field object call (uses generic field interface)
     print *, '2. Testing field object call (new interface)...'
+    
+    ! First initialize GVEC state by calling field%evaluate
+    x_test = [sqrt(s_test), theta_test, phi_test]
+    call gvec_field%evaluate(x_test, Acov_dummy, hcov_dummy, Bmod_dummy)
+    
     call vmec_field_evaluate_with_field(gvec_field, s_test, theta_test, phi_test, &
         A_theta_2, A_phi_2, dA_theta_ds_2, dA_phi_ds_2, aiota_2, &
         sqg_2, alam_2, dl_ds_2, dl_dt_2, dl_dp_2, &
