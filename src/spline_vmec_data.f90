@@ -1,17 +1,18 @@
 module spline_vmec_sub
+  use iso_fortran_env, only : dp => real64
   use spl_three_to_five_sub
 implicit none
 contains
   subroutine spline_vmec_data
-    double precision, dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
-    double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
+    real(dp), dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
+    real(dp), dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
 
     ! Initialize VMEC data and arrays
     call initialize_vmec_data_and_arrays
 
     ! Perform axis healing
     call perform_axis_healing
-    
+
     ! Get healed data for subsequent operations
     call get_healed_data(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
 
@@ -25,12 +26,12 @@ contains
     ! Spline over phi direction
     call spline_over_phi
 
-    ! Spline over theta direction  
+    ! Spline over theta direction
     call spline_over_theta
 
     ! Spline over s direction
     call spline_over_s
-    
+
     ! Cleanup
     deallocate(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
 !
@@ -64,8 +65,8 @@ contains
     use vector_potentail_mod, only : ns
 
     integer :: i, m, nrho, nheal, iunit_hs
-    double precision, dimension(:,:), allocatable :: almnc_rho, rmnc_rho, zmnc_rho
-    double precision, dimension(:,:), allocatable :: almns_rho, rmns_rho, zmns_rho
+    real(dp), dimension(:,:), allocatable :: almnc_rho, rmnc_rho, zmnc_rho
+    real(dp), dimension(:,:), allocatable :: almns_rho, rmns_rho, zmns_rho
 
     nrho = ns
     allocate(almnc_rho(nstrm,0:nrho-1),rmnc_rho(nstrm,0:nrho-1),zmnc_rho(nstrm,0:nrho-1))
@@ -93,10 +94,10 @@ contains
     enddo
 
     close(iunit_hs)
-    
+
     ! Store healed data back in module variables (temporary arrays used for compatibility)
     call store_healed_data(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
-    
+
     deallocate(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
   end subroutine perform_axis_healing
 !
@@ -105,10 +106,10 @@ contains
   subroutine store_healed_data(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
     use new_vmec_stuff_mod, only : nstrm
     use vector_potentail_mod, only : ns
-    
-    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
-    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmns_rho, zmns_rho, almns_rho
-    
+
+    real(dp), dimension(nstrm,0:ns-1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
+    real(dp), dimension(nstrm,0:ns-1), intent(in) :: rmns_rho, zmns_rho, almns_rho
+
     ! This subroutine stores healed data for later use in Fourier synthesis
     ! For now kept in module-level arrays implicitly used in setup_angular_grid_and_fourier_synthesis
   end subroutine store_healed_data
@@ -118,15 +119,15 @@ contains
   subroutine get_healed_data(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
     use new_vmec_stuff_mod, only : nstrm
     use vector_potentail_mod, only : ns
-    
-    double precision, dimension(:,:), allocatable, intent(out) :: almnc_rho,rmnc_rho,zmnc_rho
-    double precision, dimension(:,:), allocatable, intent(out) :: almns_rho,rmns_rho,zmns_rho
-    
+
+    real(dp), dimension(:,:), allocatable, intent(out) :: almnc_rho,rmnc_rho,zmnc_rho
+    real(dp), dimension(:,:), allocatable, intent(out) :: almns_rho,rmns_rho,zmns_rho
+
     ! For now, we need to re-run the healing process since we don't store it globally
     ! This is a temporary solution to maintain the same logic
     allocate(almnc_rho(nstrm,0:ns-1),rmnc_rho(nstrm,0:ns-1),zmnc_rho(nstrm,0:ns-1))
     allocate(almns_rho(nstrm,0:ns-1),rmns_rho(nstrm,0:ns-1),zmns_rho(nstrm,0:ns-1))
-    
+
     ! Re-perform axis healing to get the healed data
     call perform_axis_healing_internal(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
   end subroutine get_healed_data
@@ -137,23 +138,23 @@ contains
     use new_vmec_stuff_mod, only : rmnc, zmns, almns, rmns, zmnc, almnc, &
                                    axm, axn, nstrm, old_axis_healing_boundary
     use vector_potentail_mod, only : ns
-    
-    double precision, dimension(nstrm,0:ns-1), intent(out) :: rmnc_rho, zmnc_rho, almnc_rho
-    double precision, dimension(nstrm,0:ns-1), intent(out) :: rmns_rho, zmns_rho, almns_rho
-    
+
+    real(dp), dimension(nstrm,0:ns-1), intent(out) :: rmnc_rho, zmnc_rho, almnc_rho
+    real(dp), dimension(nstrm,0:ns-1), intent(out) :: rmns_rho, zmns_rho, almns_rho
+
     integer :: i, m, nrho, nheal
-    
+
     nrho = ns
-    
+
     do i=1,nstrm
       m = nint(abs(axm(i)))
-      
+
       if (old_axis_healing_boundary) then
         nheal = min(m, 4)
       else
         call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
       end if
-      
+
       call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
       call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
       call s_to_rho_healaxis(m,ns,nrho,nheal,almnc(i,:),almnc_rho(i,:))
@@ -171,7 +172,7 @@ contains
     use spl_three_to_five_sub, only : spl_reg
 
     integer :: i, is, k
-    double precision, dimension(:,:), allocatable :: splcoe
+    real(dp), dimension(:,:), allocatable :: splcoe
 
     allocate(splcoe(0:ns_A,ns))
 
@@ -209,12 +210,12 @@ contains
     use vector_potentail_mod, only : ns
     use vmec_alloc_sub, only : new_deallocate_vmec_stuff
 
-    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
-    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmns_rho, zmns_rho, almns_rho
-    
+    real(dp), dimension(nstrm,0:ns-1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
+    real(dp), dimension(nstrm,0:ns-1), intent(in) :: rmns_rho, zmns_rho, almns_rho
+
     integer :: i, m, n, is, i_theta, i_phi, m_max, n_max
     integer :: nsize_exp_imt, nsize_exp_inp, iexpt, iexpp
-    double precision :: twopi, cosphase, sinphase
+    real(dp) :: twopi, cosphase, sinphase
     complex(8) :: base_exp_imt, base_exp_inp, base_exp_inp_inv, expphase
     complex(8), dimension(:), allocatable :: exp_imt, exp_inp
 
@@ -308,7 +309,7 @@ contains
     use spl_three_to_five_sub, only : spl_per
 
     integer :: is, i_theta, k
-    double precision, dimension(:,:), allocatable :: splcoe
+    real(dp), dimension(:,:), allocatable :: splcoe
 
     if (n_phi == 1) then
       print *,'Spline not supported for a Phi period of 1, exiting...'
@@ -352,7 +353,7 @@ contains
     use spl_three_to_five_sub, only : spl_per
 
     integer :: is, i_phi, isp, k
-    double precision, dimension(:,:), allocatable :: splcoe
+    real(dp), dimension(:,:), allocatable :: splcoe
 
 !$omp parallel private(is, i_phi, isp, k, splcoe)
     allocate(splcoe(0:ns_tp,n_theta))
@@ -393,7 +394,7 @@ contains
     use spl_three_to_five_sub, only : spl_reg
 
     integer :: i_theta, i_phi, ist, isp, k
-    double precision, dimension(:,:), allocatable :: splcoe
+    real(dp), dimension(:,:), allocatable :: splcoe
 
 !$omp parallel private(i_theta, i_phi, ist, isp, k, splcoe)
     allocate(splcoe(0:ns_s,ns))
@@ -453,28 +454,28 @@ contains
   subroutine normalize_coordinates(s, theta, varphi, ds, is, dtheta, i_theta, dphi, i_phi)
     use new_vmec_stuff_mod, only : n_theta, n_phi, h_theta, h_phi, nper
     use vector_potentail_mod, only : ns, hs
-    
-    double precision, parameter :: twopi = 2.d0*3.14159265358979d0
-    
-    double precision, intent(in) :: s, theta, varphi
-    double precision, intent(out) :: ds, dtheta, dphi
+
+    real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
+
+    real(dp), intent(in) :: s, theta, varphi
+    real(dp), intent(out) :: ds, dtheta, dphi
     integer, intent(out) :: is, i_theta, i_phi
-    
+
     ds = s/hs
     is = max(0, min(ns-1, int(ds)))
     ds = (ds - dble(is))*hs
     is = is + 1
-    
+
     dtheta = modulo(theta, twopi)/h_theta
     i_theta = max(0, min(n_theta-1, int(dtheta)))
     dtheta = (dtheta - dble(i_theta))*h_theta
     i_theta = i_theta + 1
-    
+
     dphi = modulo(varphi, twopi/dble(nper))/h_phi
     i_phi = max(0, min(n_phi-1, int(dphi)))
     dphi = (dphi - dble(i_phi))*h_phi
     i_phi = i_phi + 1
-    
+
   end subroutine normalize_coordinates
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -482,24 +483,24 @@ contains
   subroutine interpolate_vector_potential(s, ds, is, A_phi, A_theta, dA_phi_ds, dA_theta_ds)
     use vector_potentail_mod, only : ns, hs, torflux, sA_phi
     use new_vmec_stuff_mod, only : ns_A
-    
-    double precision, intent(in) :: s, ds
+
+    real(dp), intent(in) :: s, ds
     integer, intent(in) :: is
-    double precision, intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds
+    real(dp), intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds
     integer :: k
-    
+
     A_theta = torflux*s
     dA_theta_ds = torflux
-    
+
     if (.not. allocated(sA_phi)) call spline_vmec_data
     A_phi = sA_phi(ns_A+1, is)
     dA_phi_ds = 0.d0
-    
+
     do k = ns_A, 1, -1
       A_phi = sA_phi(k, is) + ds*A_phi
       dA_phi_ds = sA_phi(k+1, is)*dble(k) + ds*dA_phi_ds
     enddo
-    
+
   end subroutine interpolate_vector_potential
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -507,21 +508,21 @@ contains
   subroutine get_spline_coefficients_3d(is, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                         dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
     use new_vmec_stuff_mod, only : sR, sZ, slam, ns_s, ns_tp
-    
+
     integer, intent(in) :: is, i_theta, i_phi
-    double precision, dimension(:,:), intent(out) :: stp_R, stp_Z, stp_lam
-    double precision, dimension(:,:), intent(out) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
+    real(dp), dimension(:,:), intent(out) :: stp_R, stp_Z, stp_lam
+    real(dp), dimension(:,:), intent(out) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
     integer :: nstp
-    
+
     nstp = ns_tp + 1
-    
+
     stp_R(1:nstp, 1:nstp) = sR(ns_s+1, :, :, is, i_theta, i_phi)
     dstp_R_ds(1:nstp, 1:nstp) = 0.d0
     stp_Z(1:nstp, 1:nstp) = sZ(ns_s+1, :, :, is, i_theta, i_phi)
     dstp_Z_ds(1:nstp, 1:nstp) = 0.d0
     stp_lam(1:nstp, 1:nstp) = slam(ns_s+1, :, :, is, i_theta, i_phi)
     dstp_lam_ds(1:nstp, 1:nstp) = 0.d0
-    
+
   end subroutine get_spline_coefficients_3d
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -529,15 +530,15 @@ contains
   subroutine interpolate_s_direction(ds, is, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                      dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
     use new_vmec_stuff_mod, only : sR, sZ, slam, ns_s, ns_tp
-    
-    double precision, intent(in) :: ds
+
+    real(dp), intent(in) :: ds
     integer, intent(in) :: is, i_theta, i_phi
-    double precision, dimension(:,:), intent(inout) :: stp_R, stp_Z, stp_lam
-    double precision, dimension(:,:), intent(inout) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
+    real(dp), dimension(:,:), intent(inout) :: stp_R, stp_Z, stp_lam
+    real(dp), dimension(:,:), intent(inout) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
     integer :: k, nstp
-    
+
     nstp = ns_tp + 1
-    
+
     do k = ns_s, 1, -1
       stp_R(1:nstp, 1:nstp) = sR(k, :, :, is, i_theta, i_phi) + ds*stp_R(1:nstp, 1:nstp)
       dstp_R_ds(1:nstp, 1:nstp) = sR(k+1, :, :, is, i_theta, i_phi)*dble(k) + ds*dstp_R_ds(1:nstp, 1:nstp)
@@ -546,7 +547,7 @@ contains
       stp_lam(1:nstp, 1:nstp) = slam(k, :, :, is, i_theta, i_phi) + ds*stp_lam(1:nstp, 1:nstp)
       dstp_lam_ds(1:nstp, 1:nstp) = slam(k+1, :, :, is, i_theta, i_phi)*dble(k) + ds*dstp_lam_ds(1:nstp, 1:nstp)
     enddo
-    
+
   end subroutine interpolate_s_direction
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -555,17 +556,17 @@ contains
                                          sp_R, sp_Z, sp_lam, dsp_R_ds, dsp_Z_ds, dsp_lam_ds, &
                                          dsp_R_dt, dsp_Z_dt, dsp_lam_dt)
     use new_vmec_stuff_mod, only : ns_tp
-    
-    double precision, intent(in) :: dtheta
-    double precision, dimension(:,:), intent(in) :: stp_R, stp_Z, stp_lam
-    double precision, dimension(:,:), intent(in) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
-    double precision, dimension(:), intent(out) :: sp_R, sp_Z, sp_lam
-    double precision, dimension(:), intent(out) :: dsp_R_ds, dsp_Z_ds, dsp_lam_ds
-    double precision, dimension(:), intent(out) :: dsp_R_dt, dsp_Z_dt, dsp_lam_dt
+
+    real(dp), intent(in) :: dtheta
+    real(dp), dimension(:,:), intent(in) :: stp_R, stp_Z, stp_lam
+    real(dp), dimension(:,:), intent(in) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
+    real(dp), dimension(:), intent(out) :: sp_R, sp_Z, sp_lam
+    real(dp), dimension(:), intent(out) :: dsp_R_ds, dsp_Z_ds, dsp_lam_ds
+    real(dp), dimension(:), intent(out) :: dsp_R_dt, dsp_Z_dt, dsp_lam_dt
     integer :: k, nstp
-    
+
     nstp = ns_tp + 1
-    
+
     sp_R(1:nstp) = stp_R(nstp, 1:nstp)
     dsp_R_ds(1:nstp) = dstp_R_ds(nstp, 1:nstp)
     dsp_R_dt(1:nstp) = 0.d0
@@ -575,21 +576,21 @@ contains
     sp_lam(1:nstp) = stp_lam(nstp, 1:nstp)
     dsp_lam_ds(1:nstp) = dstp_lam_ds(nstp, 1:nstp)
     dsp_lam_dt(1:nstp) = 0.d0
-    
+
     do k = ns_tp, 1, -1
       sp_R(1:nstp) = stp_R(k, 1:nstp) + dtheta*sp_R(1:nstp)
       dsp_R_ds(1:nstp) = dstp_R_ds(k, 1:nstp) + dtheta*dsp_R_ds(1:nstp)
       dsp_R_dt(1:nstp) = stp_R(k+1, 1:nstp)*dble(k) + dtheta*dsp_R_dt(1:nstp)
-      
+
       sp_Z(1:nstp) = stp_Z(k, 1:nstp) + dtheta*sp_Z(1:nstp)
       dsp_Z_ds(1:nstp) = dstp_Z_ds(k, 1:nstp) + dtheta*dsp_Z_ds(1:nstp)
       dsp_Z_dt(1:nstp) = stp_Z(k+1, 1:nstp)*dble(k) + dtheta*dsp_Z_dt(1:nstp)
-      
+
       sp_lam(1:nstp) = stp_lam(k, 1:nstp) + dtheta*sp_lam(1:nstp)
       dsp_lam_ds(1:nstp) = dstp_lam_ds(k, 1:nstp) + dtheta*dsp_lam_ds(1:nstp)
       dsp_lam_dt(1:nstp) = stp_lam(k+1, 1:nstp)*dble(k) + dtheta*dsp_lam_dt(1:nstp)
     enddo
-    
+
   end subroutine interpolate_theta_direction
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -599,17 +600,17 @@ contains
                                        R, Z, alam, dR_ds, dZ_ds, dl_ds, dR_dt, dZ_dt, dl_dt, &
                                        dR_dp, dZ_dp, dl_dp)
     use new_vmec_stuff_mod, only : ns_tp
-    
-    double precision, intent(in) :: dphi
-    double precision, dimension(:), intent(in) :: sp_R, sp_Z, sp_lam
-    double precision, dimension(:), intent(in) :: dsp_R_ds, dsp_Z_ds, dsp_lam_ds
-    double precision, dimension(:), intent(in) :: dsp_R_dt, dsp_Z_dt, dsp_lam_dt
-    double precision, intent(out) :: R, Z, alam, dR_ds, dZ_ds, dl_ds
-    double precision, intent(out) :: dR_dt, dZ_dt, dl_dt, dR_dp, dZ_dp, dl_dp
+
+    real(dp), intent(in) :: dphi
+    real(dp), dimension(:), intent(in) :: sp_R, sp_Z, sp_lam
+    real(dp), dimension(:), intent(in) :: dsp_R_ds, dsp_Z_ds, dsp_lam_ds
+    real(dp), dimension(:), intent(in) :: dsp_R_dt, dsp_Z_dt, dsp_lam_dt
+    real(dp), intent(out) :: R, Z, alam, dR_ds, dZ_ds, dl_ds
+    real(dp), intent(out) :: dR_dt, dZ_dt, dl_dt, dR_dp, dZ_dp, dl_dp
     integer :: k, nstp
-    
+
     nstp = ns_tp + 1
-    
+
     R = sp_R(nstp)
     dR_ds = dsp_R_ds(nstp)
     dR_dt = dsp_R_dt(nstp)
@@ -622,24 +623,24 @@ contains
     dl_ds = dsp_lam_ds(nstp)
     dl_dt = dsp_lam_dt(nstp)
     dl_dp = 0.d0
-    
+
     do k = ns_tp, 1, -1
       R = sp_R(k) + dphi*R
       dR_ds = dsp_R_ds(k) + dphi*dR_ds
       dR_dt = dsp_R_dt(k) + dphi*dR_dt
       dR_dp = sp_R(k+1)*dble(k) + dphi*dR_dp
-      
+
       Z = sp_Z(k) + dphi*Z
       dZ_ds = dsp_Z_ds(k) + dphi*dZ_ds
       dZ_dt = dsp_Z_dt(k) + dphi*dZ_dt
       dZ_dp = sp_Z(k+1)*dble(k) + dphi*dZ_dp
-      
+
       alam = sp_lam(k) + dphi*alam
       dl_ds = dsp_lam_ds(k) + dphi*dl_ds
       dl_dt = dsp_lam_dt(k) + dphi*dl_dt
       dl_dp = sp_lam(k+1)*dble(k) + dphi*dl_dp
     enddo
-    
+
   end subroutine interpolate_phi_direction
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -648,63 +649,63 @@ contains
                               R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
     use vector_potentail_mod, only : ns, hs
     use new_vmec_stuff_mod, only : ns_tp
-    
-    double precision, intent(in) :: s, theta, varphi
-    double precision, intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota
-    double precision, intent(out) :: R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
-    double precision, intent(out) :: dl_ds, dl_dt, dl_dp
-    
+
+    real(dp), intent(in) :: s, theta, varphi
+    real(dp), intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota
+    real(dp), intent(out) :: R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
+    real(dp), intent(out) :: dl_ds, dl_dt, dl_dp
+
     integer, parameter :: ns_max = 6
     integer :: is, i_theta, i_phi, is_rho
-    double precision :: ds, dtheta, dphi, ds_rho, rho_tor
-    double precision, dimension(ns_max) :: sp_R, sp_Z, sp_lam
-    double precision, dimension(ns_max) :: dsp_R_ds, dsp_Z_ds, dsp_lam_ds
-    double precision, dimension(ns_max) :: dsp_R_dt, dsp_Z_dt, dsp_lam_dt
-    double precision, dimension(ns_max, ns_max) :: stp_R, stp_Z, stp_lam
-    double precision, dimension(ns_max, ns_max) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
-    
+    real(dp) :: ds, dtheta, dphi, ds_rho, rho_tor
+    real(dp), dimension(ns_max) :: sp_R, sp_Z, sp_lam
+    real(dp), dimension(ns_max) :: dsp_R_ds, dsp_Z_ds, dsp_lam_ds
+    real(dp), dimension(ns_max) :: dsp_R_dt, dsp_Z_dt, dsp_lam_dt
+    real(dp), dimension(ns_max, ns_max) :: stp_R, stp_Z, stp_lam
+    real(dp), dimension(ns_max, ns_max) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
+
     ! Normalize coordinates and compute indices
     call normalize_coordinates(s, theta, varphi, ds, is, dtheta, i_theta, dphi, i_phi)
-    
+
     ! Interpolate vector potential
     call interpolate_vector_potential(s, ds, is, A_phi, A_theta, dA_phi_ds, dA_theta_ds)
-    
+
     ! Compute rotational transform
     aiota = -dA_phi_ds/dA_theta_ds
-    
+
     ! Convert to rho coordinate for R, Z, lambda interpolation
     rho_tor = sqrt(s)
     ds_rho = rho_tor/hs
     is_rho = max(0, min(ns-2, int(ds_rho)))
     ds_rho = (ds_rho - dble(is_rho))*hs
     is_rho = is_rho + 1
-    
+
     ! Get 3D spline coefficients
     call get_spline_coefficients_3d(is_rho, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                     dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
-    
+
     ! Interpolate in s direction
     call interpolate_s_direction(ds_rho, is_rho, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                  dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
-    
+
     ! Interpolate in theta direction
     call interpolate_theta_direction(dtheta, stp_R, stp_Z, stp_lam, &
                                      dstp_R_ds, dstp_Z_ds, dstp_lam_ds, &
                                      sp_R, sp_Z, sp_lam, dsp_R_ds, dsp_Z_ds, dsp_lam_ds, &
                                      dsp_R_dt, dsp_Z_dt, dsp_lam_dt)
-    
+
     ! Interpolate in phi direction
     call interpolate_phi_direction(dphi, sp_R, sp_Z, sp_lam, &
                                    dsp_R_ds, dsp_Z_ds, dsp_lam_ds, &
                                    dsp_R_dt, dsp_Z_dt, dsp_lam_dt, &
                                    R, Z, alam, dR_ds, dZ_ds, dl_ds, &
                                    dR_dt, dZ_dt, dl_dt, dR_dp, dZ_dp, dl_dp)
-    
+
     ! Scale derivatives by rho_tor
     dR_ds = 0.5d0*dR_ds/rho_tor
     dZ_ds = 0.5d0*dZ_ds/rho_tor
     dl_ds = 0.5d0*dl_ds/rho_tor
-    
+
   end subroutine splint_vmec_data
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -713,11 +714,11 @@ contains
                         sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                         Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
 
-  double precision, intent(in) :: s,theta,varphi
-  double precision, intent(out) :: A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+  real(dp), intent(in) :: s,theta,varphi
+  real(dp), intent(out) :: A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
     sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
     Bcovar_r,Bcovar_vartheta,Bcovar_varphi
-  double precision :: R,Z,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp
+  real(dp) :: R,Z,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp
 
   call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,      &
                         R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
@@ -734,12 +735,12 @@ contains
     dA_theta_ds,dA_phi_ds,dl_ds,dl_dt,dl_dp,&
     sqg,Bctrvr_vartheta,Bctrvr_varphi,Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
 
-    double precision, intent(in) :: R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
+    real(dp), intent(in) :: R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
       dA_theta_ds,dA_phi_ds,dl_ds,dl_dt,dl_dp
-    double precision, intent(out) :: sqg,&
+    real(dp), intent(out) :: sqg,&
       Bctrvr_vartheta,Bctrvr_varphi,Bcovar_vartheta,Bcovar_varphi,Bcovar_r
 
-      double precision :: g(3,3)
+      real(dp) :: g(3,3)
 
     call compute_metric_tensor(R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
       dl_ds,dl_dt,dl_dp,g,sqg)
@@ -757,12 +758,12 @@ contains
   subroutine compute_metric_tensor(R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
       dl_ds,dl_dt,dl_dp,g,sqg)
 
-    double precision, intent(in) :: R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
+    real(dp), intent(in) :: R,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp, &
       dl_ds,dl_dt,dl_dp
-    double precision, intent(out) :: g(3,3),sqg
+    real(dp), intent(out) :: g(3,3),sqg
 
-    double precision, dimension(3,3) :: cmat,gV
-    double precision :: cjac,sqgV
+    real(dp), dimension(3,3) :: cmat,gV
+    real(dp) :: cjac,sqgV
 
     gV(1,1)=dR_ds**2+dZ_ds**2
     gV(1,2)=dR_ds*dR_dt+dZ_ds*dZ_dt
@@ -796,11 +797,11 @@ contains
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
   use new_vmec_stuff_mod,   only : ns_A
 !
-  double precision, parameter :: twopi=2.d0*3.14159265358979d0
+  real(dp), parameter :: twopi=2.d0*3.14159265358979d0
 !
   integer :: is,i_theta,i_phi,k
-  double precision :: ds,dtheta,dphi
-  double precision :: s,dA_phi_ds,dA_theta_ds,d2A_phi_ds2,aiota,daiota_ds
+  real(dp) :: ds,dtheta,dphi
+  real(dp) :: s,dA_phi_ds,dA_theta_ds,d2A_phi_ds2,aiota,daiota_ds
 !
   integer, parameter :: ns_max=6
 !
@@ -837,19 +838,19 @@ contains
   use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,slam,nper,ns_s,ns_tp
   use vector_potentail_mod, only : ns,hs
 !
-  double precision, parameter :: twopi=2.d0*3.14159265358979d0
+  real(dp), parameter :: twopi=2.d0*3.14159265358979d0
 !
   integer :: is,i_theta,i_phi,k
-  double precision :: ds,dtheta,dphi
-  double precision :: s,theta,varphi,alam,dl_dt
+  real(dp) :: ds,dtheta,dphi
+  real(dp) :: s,theta,varphi,alam,dl_dt
 !
   integer, parameter :: ns_max=6
 !
   integer :: nstp
 !
-  double precision, dimension(ns_max)        :: sp_lam
-  double precision, dimension(ns_max)        :: dsp_lam_dt
-  double precision, dimension(ns_max,ns_max) :: stp_lam
+  real(dp), dimension(ns_max)        :: sp_lam
+  real(dp), dimension(ns_max)        :: dsp_lam_dt
+  real(dp), dimension(ns_max,ns_max) :: stp_lam
 !
   nstp=ns_tp+1
 !
@@ -925,11 +926,11 @@ contains
 ! ns: integer, size of input array.
 ! nrho: integer, size of output array.
 ! nheal: integer,
-! arr_in: double precision 1d array, with ns elements.
+! arr_in: real(dp) 1d array, with ns elements.
 !
 ! output:
 ! -------
-! arr_out: double precision 1d array, with nrho elements.
+! arr_out: real(dp) 1d array, with nrho elements.
 !
 ! sideeffects:
 ! ------------
@@ -939,12 +940,12 @@ subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
   use new_vmec_stuff_mod, only : ns_s, old_axis_healing
 
   integer, intent(in) :: m, ns, nrho, nheal
-  double precision, dimension(ns), intent(in) :: arr_in
-  double precision, dimension(nrho), intent(out) :: arr_out
+  real(dp), dimension(ns), intent(in) :: arr_in
+  real(dp), dimension(nrho), intent(out) :: arr_out
 
   integer :: irho,is,k,nhe
-  double precision :: hs,hrho,s,ds,rho,a,b,c
-  double precision, dimension(:,:), allocatable :: splcoe
+  real(dp) :: hs,hrho,s,ds,rho,a,b,c
+  real(dp), dimension(:,:), allocatable :: splcoe
 
   hs = 1.d0/dble(ns-1)
   hrho = 1.d0/dble(nrho-1)
@@ -1035,7 +1036,7 @@ subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
   !> ------
   !> m:
   !> ns:
-  !> arr_in: double precision array (ns entries), data from which to
+  !> arr_in: real(dp) array (ns entries), data from which to
   !>   determine the number of points to extrapolate at the axis.
   !>
   !> output:
@@ -1045,20 +1046,20 @@ subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
   ! Lagrange polynomial stencil size for checking the data by extraplation:
   integer, parameter :: nplag = 4
   ! tolerance for Lagrange polynomial extrapolation by one point (to check if data is noisy):
-  double precision, parameter :: tol = 3.d-1
-  double precision, parameter :: tiny = 1.d-200
+  real(dp), parameter :: tol = 3.d-1
+  real(dp), parameter :: tiny = 1.d-200
   ! 3-rd order Lagrange polynomial extrapolation coefficients from points (1,2,3,4) to point 0:
-  double precision, parameter, dimension(nplag) :: weight = (/4.d0,-6.d0,4.d0,-1.d0/)
+  real(dp), parameter, dimension(nplag) :: weight = (/4.d0,-6.d0,4.d0,-1.d0/)
 
   integer, intent(in) :: m,ns
   integer, intent(out) :: nheal
-  double precision, dimension(ns), intent(in) :: arr_in
+  real(dp), dimension(ns), intent(in) :: arr_in
 
   integer :: is,k,nhe,ncheck
 
-  double precision :: hs,s,ds,rho,rho_nonzero,errmax
+  real(dp) :: hs,s,ds,rho,rho_nonzero,errmax
 
-  double precision, dimension(:), allocatable :: arr
+  real(dp), dimension(:), allocatable :: arr
 
   ! We check points which are away by more than 3 stencils from the edge:
   ncheck = ns - 3*nplag
@@ -1096,9 +1097,9 @@ end subroutine determine_nheal_for_axis
   use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,nper
 !
   integer :: is,i_theta,i_phi,k
-  double precision :: volume,B00
-  double precision :: B3,B2,bmod2
-  double precision :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
+  real(dp) :: volume,B00
+  real(dp) :: B3,B2,bmod2
+  real(dp) :: s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
                       R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp, &
                       sqg,Bctrvr_vartheta,Bctrvr_varphi,                              &
                       Bcovar_r,Bcovar_vartheta,Bcovar_varphi
