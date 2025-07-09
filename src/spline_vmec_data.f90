@@ -4,9 +4,12 @@ module spline_vmec_sub
     implicit none
 contains
     subroutine spline_vmec_data
+        call new_allocate_vmec_stuff
         call initialize_vmec_data_and_arrays
         call setup_poloidal_flux_splines
         call setup_angular_grid_and_fourier_synthesis
+        call new_deallocate_vmec_stuff
+
         call spline_over_phi
         call spline_over_theta
         call spline_over_s
@@ -23,53 +26,12 @@ contains
 
         print *, 'Splining VMEC data: ns_A = ', ns_A, '  ns_s = ', ns_s, '  ns_tp = ', ns_tp
 
-        call new_allocate_vmec_stuff
-
         call vmecin(rmnc, zmns, almns, rmns, zmnc, almnc, aiota, phi, sps, axm, axn, s, &
                     nsurfm, nstrm, kpar, torflux)
 
         ns = kpar + 1
         hs = s(2) - s(1)
     end subroutine initialize_vmec_data_and_arrays
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-    subroutine perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
-        use new_vmec_stuff_mod, only: rmnc, zmns, almns, rmns, zmnc, almnc, &
-                                      axm, axn, nstrm, old_axis_healing_boundary
-        use vector_potentail_mod, only: ns
-
-        real(dp), dimension(:, :), allocatable, intent(out) :: almnc_rho, rmnc_rho, zmnc_rho
-        real(dp), dimension(:, :), allocatable, intent(out) :: almns_rho, rmns_rho, zmns_rho
-        integer :: i, m, nrho, nheal, iunit_hs
-
-        nrho = ns
-        allocate (almnc_rho(nstrm, 0:nrho - 1), rmnc_rho(nstrm, 0:nrho - 1), zmnc_rho(nstrm, 0:nrho - 1))
-        allocate (almns_rho(nstrm, 0:nrho - 1), rmns_rho(nstrm, 0:nrho - 1), zmns_rho(nstrm, 0:nrho - 1))
-
-        iunit_hs = 1357
-        open (iunit_hs, file='healaxis.dat')
-
-        do i = 1, nstrm
-            m = nint(abs(axm(i)))
-
-            if (old_axis_healing_boundary) then
-                nheal = min(m, 4)
-            else
-                call determine_nheal_for_axis(m, ns, rmnc(i, :), nheal)
-                write (iunit_hs, *) 'm = ', m, ' n = ', nint(abs(axn(i))), ' skipped ', nheal, ' / ', ns
-            end if
-
-            call s_to_rho_healaxis(m, ns, nrho, nheal, rmnc(i, :), rmnc_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, zmnc(i, :), zmnc_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, almnc(i, :), almnc_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, rmns(i, :), rmns_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, zmns(i, :), zmns_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, almns(i, :), almns_rho(i, :))
-        end do
-
-        close (iunit_hs)
-    end subroutine perform_axis_healing
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -126,7 +88,6 @@ contains
         complex(8) :: base_exp_imt, base_exp_inp, base_exp_inp_inv, expphase
         complex(8), dimension(:), allocatable :: exp_imt, exp_inp
 
-        ! Perform axis healing
         call perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
 
         ! Setup angular grid
@@ -175,8 +136,8 @@ contains
         slam(1, 1, 1, :, :, :) = 0.d0
 
         ! Fourier synthesis to real space
-!$omp parallel private(m, n, i_theta, i_phi, i, is, iexpt, iexpp, expphase, cosphase, sinphase)
-!$omp do
+        !$omp parallel private(m, n, i_theta, i_phi, i, is, iexpt, iexpp, expphase, cosphase, sinphase)
+        !$omp do
         do i_theta = 1, n_theta
             do i_phi = 1, n_phi
                 do i = 1, nstrm
@@ -201,16 +162,52 @@ contains
                 end do
             end do
         end do
-!$omp end do
-!$omp barrier
-!$omp single
-        call new_deallocate_vmec_stuff
-!$omp end single
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
 
         deallocate (exp_imt, exp_inp)
         deallocate (almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
     end subroutine setup_angular_grid_and_fourier_synthesis
+
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+    subroutine perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
+        use new_vmec_stuff_mod, only: rmnc, zmns, almns, rmns, zmnc, almnc, &
+                                      axm, axn, nstrm, old_axis_healing_boundary
+        use vector_potentail_mod, only: ns
+
+        real(dp), dimension(:, :), allocatable, intent(out) :: almnc_rho, rmnc_rho, zmnc_rho
+        real(dp), dimension(:, :), allocatable, intent(out) :: almns_rho, rmns_rho, zmns_rho
+        integer :: i, m, nrho, nheal, iunit_hs
+
+        nrho = ns
+        allocate (almnc_rho(nstrm, 0:nrho - 1), rmnc_rho(nstrm, 0:nrho - 1), zmnc_rho(nstrm, 0:nrho - 1))
+        allocate (almns_rho(nstrm, 0:nrho - 1), rmns_rho(nstrm, 0:nrho - 1), zmns_rho(nstrm, 0:nrho - 1))
+
+        iunit_hs = 1357
+        open (iunit_hs, file='healaxis.dat')
+
+        do i = 1, nstrm
+            m = nint(abs(axm(i)))
+
+            if (old_axis_healing_boundary) then
+                nheal = min(m, 4)
+            else
+                call determine_nheal_for_axis(m, ns, rmnc(i, :), nheal)
+                write (iunit_hs, *) 'm = ', m, ' n = ', nint(abs(axn(i))), ' skipped ', nheal, ' / ', ns
+            end if
+
+            call s_to_rho_healaxis(m, ns, nrho, nheal, rmnc(i, :), rmnc_rho(i, :))
+            call s_to_rho_healaxis(m, ns, nrho, nheal, zmnc(i, :), zmnc_rho(i, :))
+            call s_to_rho_healaxis(m, ns, nrho, nheal, almnc(i, :), almnc_rho(i, :))
+            call s_to_rho_healaxis(m, ns, nrho, nheal, rmns(i, :), rmns_rho(i, :))
+            call s_to_rho_healaxis(m, ns, nrho, nheal, zmns(i, :), zmns_rho(i, :))
+            call s_to_rho_healaxis(m, ns, nrho, nheal, almns(i, :), almns_rho(i, :))
+        end do
+
+        close (iunit_hs)
+    end subroutine perform_axis_healing
+
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
