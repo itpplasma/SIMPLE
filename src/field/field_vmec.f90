@@ -12,19 +12,11 @@ end type VmecField
 contains
 
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-    !> Evaluate magnetic field from VMEC equilibrium
-    !> Input coordinates x = (r, theta, phi) where:
+    !> Evaluate magnetic field components from VMEC equilibrium
+    !> in coordinates x = (r, theta, phi) where:
     !>   r = sqrt(s) with s the normalized toroidal flux
     !>   theta = poloidal angle (NOT theta*)
     !>   phi = toroidal angle
-    !>
-    !> Output field components are in (s, theta*, phi) coordinates where:
-    !>   theta* = theta + Lambda(s,theta,phi)
-    !>   Lambda is the stream function
-    !>
-    !> The transformation from (r,theta,phi) to (s,theta*,phi) components includes:
-    !>   - Factor ds/dr = 2*r for the radial component
-    !>   - Lambda derivatives for coupling between components
     
     use spline_vmec_sub
 
@@ -35,9 +27,9 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp), intent(out), optional :: sqgBctr(3)
 
     real(dp) :: Acov_theta, Acov_phi
-    real(dp) :: dA_theta_ds, dA_phi_ds, Bctr_theta, Bctr_phi
+    real(dp) :: dA_theta_ds, dA_phi_ds, Bctr_vartheta, Bctr_phi
     real(dp) :: aiota, sqg, alam, dl_ds, dl_dt, dl_dp
-    real(dp) :: Bcov_s, Bcov_theta, Bcov_phi
+    real(dp) :: Bcov_s, Bcov_vartheta, Bcov_varphi
     real(dp) :: s, ds_dr
 
     s = x(1)**2
@@ -45,19 +37,21 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     call vmec_field(s, x(2), x(3), Acov_theta, Acov_phi, &
         dA_theta_ds, dA_phi_ds, aiota, sqg, alam, dl_ds, dl_dt, dl_dp, &
-        Bctr_theta, Bctr_phi, Bcov_s, Bcov_theta, Bcov_phi)
+        Bctr_vartheta, Bctr_phi, Bcov_s, Bcov_vartheta, Bcov_varphi)
 
+    ! vmec_field takes (s=r**2, theta, phi) and returns symmetry flux components for A and B.
+    ! Here we convert to VMEC coordinates with transformed radius, (r, theta, phi).
     Acov(1) = Acov_theta*dl_ds
     Acov(1) = Acov(1)*ds_dr
     Acov(2) = Acov_theta*(1d0 + dl_dt)
     Acov(3) = Acov_phi + Acov_theta*dl_dp
 
-    Bmod = sqrt(Bctr_theta*Bcov_theta + Bctr_phi*Bcov_phi)
+    Bmod = sqrt(Bctr_vartheta*Bcov_vartheta + Bctr_phi*Bcov_varphi)
 
-    hcov(1) = (Bcov_s + Bcov_theta*dl_ds)/Bmod
+    hcov(1) = (Bcov_s + Bcov_vartheta*dl_ds)/Bmod
     hcov(1) = hcov(1)*ds_dr
-    hcov(2) = Bcov_theta*(1d0 + dl_dt)/Bmod
-    hcov(3) = (Bcov_phi + Bcov_theta*dl_dp)/Bmod
+    hcov(2) = Bcov_vartheta*(1d0 + dl_dt)/Bmod
+    hcov(3) = (Bcov_varphi + Bcov_vartheta*dl_dp)/Bmod
 
     if (present(sqgBctr)) then
         error stop "sqgBctr not implemented in VmecField"

@@ -221,8 +221,8 @@ contains
             call exit(-1)
         end if
 
-!$omp parallel private(is, i_theta)
-!$omp do
+        !$omp parallel private(is, i_theta)
+        !$omp do
         do is = 1, ns
             do i_theta = 1, n_theta
                 call spline_1d_periodic(sR(1, 1, :, is, i_theta, :), ns_tp, h_phi)
@@ -230,8 +230,8 @@ contains
                 call spline_1d_periodic(slam(1, 1, :, is, i_theta, :), ns_tp, h_phi)
             end do
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
     end subroutine spline_over_phi
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -241,8 +241,8 @@ contains
         use vector_potentail_mod, only: ns
         integer :: is, i_phi, isp
 
-!$omp parallel private(is, i_phi, isp)
-!$omp do
+        !$omp parallel private(is, i_phi, isp)
+        !$omp do
         do is = 1, ns
             do i_phi = 1, n_phi
                 do isp = 1, ns_tp + 1
@@ -252,8 +252,8 @@ contains
                 end do
             end do
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
     end subroutine spline_over_theta
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -588,6 +588,9 @@ contains
     subroutine vmec_field(s, theta, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
                           sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
                           Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+        !> Evaluates A and B components in symmetry flux coordinates (s, vartheta, varphi)
+        !> at a given point in VMEC coordinates (s, theta, varphi). theta is VMEC poloidal angle, 
+        !> vartheta is symmetry flux poloidal angle (also called theta* in VMEC)
 
         real(dp), intent(in) :: s, theta, varphi
         real(dp), intent(out) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &

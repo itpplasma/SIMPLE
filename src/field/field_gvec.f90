@@ -112,7 +112,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp), intent(out), optional :: sqgBctr(3)
 
     ! Local variables for GVEC evaluation
-    real(dp) :: r, theta, phi
+    real(dp) :: r, theta, varphi
     real(dp) :: theta_star, zeta
 
     ! GVEC coordinate evaluation variables
@@ -143,12 +143,12 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp) :: scaling_factor, reg_factor, smooth_factor
 
     ! Extract input coordinates
-    r = x(1)      ! r = sqrt(s_vmec) - SIMPLE uses r as radial coordinate
-    theta = x(2)  ! theta_vmec
-    phi = x(3)    ! phi_vmec
+    r = x(1)      ! r = sqrt(s)
+    theta = x(2)
+    varphi = x(3)
 
     theta_star = theta
-    zeta = -phi
+    zeta = -varphi
 
     ! Check if GVEC state is properly initialized before evaluation
     if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
