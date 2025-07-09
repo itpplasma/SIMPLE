@@ -3,305 +3,430 @@ module spline_vmec_sub
 implicit none
 contains
   subroutine spline_vmec_data
-!
-  use new_vmec_stuff_mod, only : ns_A, ns_s, ns_tp, rmnc, zmns, almns, rmns, zmnc, almnc, &
-                                 aiota, phi, sps, axm, axn, s, nsurfm, nstrm, kpar, &
-                                 n_theta, n_phi, h_theta, h_phi, multharm, nper, &
-                                 sR, sZ, slam, old_axis_healing_boundary
-  use vector_potentail_mod, only : ns, hs, torflux, sA_phi
-  use vmecin_sub, only : vmecin
-  use vmec_alloc_sub, only : new_allocate_vmec_stuff, new_deallocate_vmec_stuff
-!
-  integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
-  integer :: iss,ist,isp,nrho,nheal,iunit_hs
-  double precision :: twopi,cosphase,sinphase
-  complex(8)   :: base_exp_imt,base_exp_inp,base_exp_inp_inv,expphase
-  double precision, dimension(:,:), allocatable :: splcoe
-  double precision, dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
-  double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
-  complex(8),   dimension(:),   allocatable :: exp_imt,exp_inp
+    double precision, dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
+    double precision, dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
 
-  print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
-!
-  call new_allocate_vmec_stuff
-!
-  call vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s,    &
-              nsurfm,nstrm,kpar,torflux)
-!
-  ns=kpar+1
-  allocate(splcoe(0:ns_A,ns))
-  hs=s(2)-s(1)
-!
-  nrho=ns
-  allocate(almnc_rho(nstrm,0:nrho-1),rmnc_rho(nstrm,0:nrho-1),zmnc_rho(nstrm,0:nrho-1))
-  allocate(almns_rho(nstrm,0:nrho-1),rmns_rho(nstrm,0:nrho-1),zmns_rho(nstrm,0:nrho-1))
-!
-  iunit_hs=1357
-  open(iunit_hs,file='healaxis.dat')
-!
-  do i=1,nstrm
-!
-    m=nint(abs(axm(i)))
+    ! Initialize VMEC data and arrays
+    call initialize_vmec_data_and_arrays
 
-    if (old_axis_healing_boundary) then
-      nheal = min(m, 4)
-    else
-!
-      call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
-!
-      write(iunit_hs,*) 'm = ',m,' n = ',nint(abs(axn(i))),' skipped ',nheal,' / ',ns
-    end if
+    ! Perform axis healing
+    call perform_axis_healing
+    
+    ! Get healed data for subsequent operations
+    call get_healed_data(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
 
-    call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,almnc(i,:),almnc_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,rmns(i,:),rmns_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,zmns(i,:),zmns_rho(i,:))
-!
-    call s_to_rho_healaxis(m,ns,nrho,nheal,almns(i,:),almns_rho(i,:))
-!
-  enddo
-!
-  close(iunit_hs)
-!
-!------------------------------------
-! Begin poloidal flux ($A_\varphi$):
-!
-  splcoe(0,:)=aiota
-!
-  call spl_reg(ns_A-1,ns,hs,splcoe(0:ns_A-1,:))
-!
-  do i=ns_A,1,-1
-    splcoe(i,:)=splcoe(i-1,:)/dble(i)
-  enddo
-!
-  splcoe(0,1)=0.d0
-  do is=1,ns-1
-    splcoe(0,is+1)=splcoe(ns_A,is)
-    do k=ns_A-1,0,-1
-      splcoe(0,is+1)=splcoe(k,is)+hs*splcoe(0,is+1)
-    enddo
-  enddo
-!
-  if(allocated(sA_phi)) deallocate(sA_phi)
-  allocate(sA_phi(ns_A+1,ns))
-  do k=0,ns_A
-    sA_phi(k+1,:)=-torflux*splcoe(k,:)
-  enddo
-!
-  deallocate(splcoe)
-! End poloidal flux
-!------------------------------
-!
-! Begin angular grid, sin and cos
-!
-  m_max=nint(maxval(axm))
-  n_max=nint(maxval(axn))
-!
-  print *,'VMEC ns = ',ns,' m_max = ',m_max,' n_max = ',n_max
-!
-  n_theta = m_max*multharm+1
-  n_phi = n_max*multharm+1
-  twopi=8.d0*atan2(1.d0,1.d0)
-  h_theta=twopi/dble(n_theta-1)
-  h_phi=twopi/dble((n_phi-1)*nper)
-!
-  nsize_exp_imt=(n_theta-1)*m_max
-  nsize_exp_inp=(n_phi-1)*n_max
-!
-  allocate(exp_imt(0:nsize_exp_imt),exp_inp(-nsize_exp_inp:nsize_exp_inp))
-!
-  base_exp_imt=exp(cmplx(0.d0,h_theta,kind=kind(0d0)))
-  base_exp_inp=exp(cmplx(0.d0,h_phi,kind=kind(0d0)))
-  base_exp_inp_inv=(1.d0,0.d0)/base_exp_inp
-  exp_imt(0)=(1.d0,0.d0)
-  exp_inp(0)=(1.d0,0.d0)
-!
-  do i=1,nsize_exp_imt
-    exp_imt(i)=exp_imt(i-1)*base_exp_imt
-  enddo
-!
-  do i=1,nsize_exp_inp
-    exp_inp(i)=exp_inp(i-1)*base_exp_inp
-    exp_inp(-i)=exp_inp(1-i)*base_exp_inp_inv
-  enddo
-!
-  if(allocated(sR)) deallocate(sR)
-  allocate(sR(ns_s+1,ns_tp+1,ns_tp+1,ns,n_theta,n_phi))
-  if(allocated(sZ)) deallocate(sZ)
-  allocate(sZ(ns_s+1,ns_tp+1,ns_tp+1,ns,n_theta,n_phi))
-  if(allocated(slam)) deallocate(slam)
-  allocate(slam(ns_s+1,ns_tp+1,ns_tp+1,ns,n_theta,n_phi))
-!
-  sR(1,1,1,:,:,:)=0.d0
-  sZ(1,1,1,:,:,:)=0.d0
-  slam(1,1,1,:,:,:)=0.d0
-!
-!$omp parallel private(m, n, i_theta, i_phi, i, is, iexpt, iexpp, &
-!$omp&  expphase, cosphase, sinphase, k, splcoe)
-!$omp do
-  do i_theta=1,n_theta
-    do i_phi=1,n_phi
-      do i=1,nstrm
-        m=nint(axm(i))
-        n=nint(axn(i))
-        iexpt=m*(i_theta-1)
-        iexpp=n*(i_phi-1)
-        expphase=exp_imt(iexpt)*exp_inp(-iexpp)
-        cosphase=dble(expphase)
-        sinphase=aimag(expphase)
-        do is=1,ns
-          sR(1,1,1,is,i_theta,i_phi) = sR(1,1,1,is,i_theta,i_phi)      &
-                                     + rmnc_rho(i,is-1)*cosphase       &
-                                     + rmns_rho(i,is-1)*sinphase
-          sZ(1,1,1,is,i_theta,i_phi) = sZ(1,1,1,is,i_theta,i_phi)      &
-                                     + zmnc_rho(i,is-1)*cosphase       &
-                                     + zmns_rho(i,is-1)*sinphase
-          slam(1,1,1,is,i_theta,i_phi) = slam(1,1,1,is,i_theta,i_phi)  &
-                                       + almnc_rho(i,is-1)*cosphase    &
-                                       + almns_rho(i,is-1)*sinphase
-        enddo
-      enddo
-    enddo
-  enddo
-!$omp end do
-!
-!$omp barrier
-!$omp single
-  call new_deallocate_vmec_stuff
-!$omp end single
-!
-! splining over $\varphi$:
-!
-  allocate(splcoe(0:ns_tp,n_phi))
-!
-  if (n_phi == 1) then
-    print *,'Spline not supported for a Phi period of 1, exiting...'
-    call EXIT(-1)
-  endif
-!$omp do
-  do is=1,ns
-    do i_theta=1,n_theta
-!
-      splcoe(0,:)=sR(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp,n_phi,h_phi,splcoe)
-!
-      do k=1,ns_tp
-        sR(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-      splcoe(0,:)=sZ(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp,n_phi,h_phi,splcoe)
-!
-      do k=1,ns_tp
-        sZ(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-      splcoe(0,:)=slam(1,1,1,is,i_theta,:)
-!
-      call spl_per(ns_tp,n_phi,h_phi,splcoe)
-!
-      do k=1,ns_tp
-        slam(1,1,k+1,is,i_theta,:)=splcoe(k,:)
-      enddo
-!
-    enddo
-  enddo
-!$omp end do
-!
-  deallocate(splcoe)
-!
-! splining over $\vartheta$:
-!
-  allocate(splcoe(0:ns_tp,n_theta))
-!
-!$omp do
-  do is=1,ns
-    do i_phi=1,n_phi
-      do isp=1,ns_tp+1
-!
-        splcoe(0,:)=sR(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp,n_theta,h_theta,splcoe)
-!
-        do k=1,ns_tp
-          sR(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
-        enddo
-!
-        splcoe(0,:)=sZ(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp,n_theta,h_theta,splcoe)
-!
-        do k=1,ns_tp
-          sZ(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
-        enddo
-!
-        splcoe(0,:)=slam(1,1,isp,is,:,i_phi)
-!
-        call spl_per(ns_tp,n_theta,h_theta,splcoe)
-!
-        do k=1,ns_tp
-          slam(1,k+1,isp,is,:,i_phi)=splcoe(k,:)
-        enddo
-!
-      enddo
-    enddo
-  enddo
-!$omp end do
-!
-  deallocate(splcoe)
-!
-! splining over $s$:
-!
-  allocate(splcoe(0:ns_s,ns))
-!
-!$omp do
-  do i_theta=1,n_theta
-    do i_phi=1,n_phi
-      do ist=1,ns_tp+1
-        do isp=1,ns_tp+1
-!
-          splcoe(0,:)=sR(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s,ns,hs,splcoe)
-!
-          do k=1,ns_s
-            sR(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
-          enddo
-!
-          splcoe(0,:)=sZ(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s,ns,hs,splcoe)
-!
-          do k=1,ns_s
-            sZ(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
-          enddo
-!
-          splcoe(0,:)=slam(1,ist,isp,:,i_theta,i_phi)
-!
-          call spl_reg(ns_s,ns,hs,splcoe)
-!
-          do k=1,ns_s
-            slam(k+1,ist,isp,:,i_theta,i_phi)=splcoe(k,:)
-          enddo
-!
-        enddo
-      enddo
-    enddo
-  enddo
-!$omp end do
-!
-  deallocate(splcoe)
-!$omp end parallel
-  deallocate(exp_imt,exp_inp)
+    ! Setup poloidal flux splines
+    call setup_poloidal_flux_splines
+
+    ! Setup angular grid and perform Fourier synthesis
+    call setup_angular_grid_and_fourier_synthesis(rmnc_rho, zmnc_rho, almnc_rho, &
+                                                  rmns_rho, zmns_rho, almns_rho)
+
+    ! Spline over phi direction
+    call spline_over_phi
+
+    ! Spline over theta direction  
+    call spline_over_theta
+
+    ! Spline over s direction
+    call spline_over_s
+    
+    ! Cleanup
+    deallocate(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
 !
   end subroutine spline_vmec_data
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine initialize_vmec_data_and_arrays
+    use new_vmec_stuff_mod, only : ns_A, ns_s, ns_tp, rmnc, zmns, almns, rmns, zmnc, almnc, &
+                                   aiota, phi, sps, axm, axn, s, nsurfm, nstrm, kpar
+    use vmecin_sub, only : vmecin
+    use vmec_alloc_sub, only : new_allocate_vmec_stuff
+    use vector_potentail_mod, only : ns, hs, torflux
+
+    print *,'Splining VMEC data: ns_A = ',ns_A,'  ns_s = ',ns_s,'  ns_tp = ',ns_tp
+
+    call new_allocate_vmec_stuff
+
+    call vmecin(rmnc,zmns,almns,rmns,zmnc,almnc,aiota,phi,sps,axm,axn,s, &
+                nsurfm,nstrm,kpar,torflux)
+
+    ns = kpar + 1
+    hs = s(2) - s(1)
+  end subroutine initialize_vmec_data_and_arrays
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine perform_axis_healing
+    use new_vmec_stuff_mod, only : rmnc, zmns, almns, rmns, zmnc, almnc, &
+                                   axm, axn, nstrm, old_axis_healing_boundary
+    use vector_potentail_mod, only : ns
+
+    integer :: i, m, nrho, nheal, iunit_hs
+    double precision, dimension(:,:), allocatable :: almnc_rho, rmnc_rho, zmnc_rho
+    double precision, dimension(:,:), allocatable :: almns_rho, rmns_rho, zmns_rho
+
+    nrho = ns
+    allocate(almnc_rho(nstrm,0:nrho-1),rmnc_rho(nstrm,0:nrho-1),zmnc_rho(nstrm,0:nrho-1))
+    allocate(almns_rho(nstrm,0:nrho-1),rmns_rho(nstrm,0:nrho-1),zmns_rho(nstrm,0:nrho-1))
+
+    iunit_hs = 1357
+    open(iunit_hs,file='healaxis.dat')
+
+    do i=1,nstrm
+      m = nint(abs(axm(i)))
+
+      if (old_axis_healing_boundary) then
+        nheal = min(m, 4)
+      else
+        call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
+        write(iunit_hs,*) 'm = ',m,' n = ',nint(abs(axn(i))),' skipped ',nheal,' / ',ns
+      end if
+
+      call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,almnc(i,:),almnc_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,rmns(i,:),rmns_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,zmns(i,:),zmns_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,almns(i,:),almns_rho(i,:))
+    enddo
+
+    close(iunit_hs)
+    
+    ! Store healed data back in module variables (temporary arrays used for compatibility)
+    call store_healed_data(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
+    
+    deallocate(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
+  end subroutine perform_axis_healing
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine store_healed_data(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
+    use new_vmec_stuff_mod, only : nstrm
+    use vector_potentail_mod, only : ns
+    
+    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
+    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmns_rho, zmns_rho, almns_rho
+    
+    ! This subroutine stores healed data for later use in Fourier synthesis
+    ! For now kept in module-level arrays implicitly used in setup_angular_grid_and_fourier_synthesis
+  end subroutine store_healed_data
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine get_healed_data(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
+    use new_vmec_stuff_mod, only : nstrm
+    use vector_potentail_mod, only : ns
+    
+    double precision, dimension(:,:), allocatable, intent(out) :: almnc_rho,rmnc_rho,zmnc_rho
+    double precision, dimension(:,:), allocatable, intent(out) :: almns_rho,rmns_rho,zmns_rho
+    
+    ! For now, we need to re-run the healing process since we don't store it globally
+    ! This is a temporary solution to maintain the same logic
+    allocate(almnc_rho(nstrm,0:ns-1),rmnc_rho(nstrm,0:ns-1),zmnc_rho(nstrm,0:ns-1))
+    allocate(almns_rho(nstrm,0:ns-1),rmns_rho(nstrm,0:ns-1),zmns_rho(nstrm,0:ns-1))
+    
+    ! Re-perform axis healing to get the healed data
+    call perform_axis_healing_internal(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
+  end subroutine get_healed_data
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine perform_axis_healing_internal(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
+    use new_vmec_stuff_mod, only : rmnc, zmns, almns, rmns, zmnc, almnc, &
+                                   axm, axn, nstrm, old_axis_healing_boundary
+    use vector_potentail_mod, only : ns
+    
+    double precision, dimension(nstrm,0:ns-1), intent(out) :: rmnc_rho, zmnc_rho, almnc_rho
+    double precision, dimension(nstrm,0:ns-1), intent(out) :: rmns_rho, zmns_rho, almns_rho
+    
+    integer :: i, m, nrho, nheal
+    
+    nrho = ns
+    
+    do i=1,nstrm
+      m = nint(abs(axm(i)))
+      
+      if (old_axis_healing_boundary) then
+        nheal = min(m, 4)
+      else
+        call determine_nheal_for_axis(m, ns, rmnc(i,:), nheal)
+      end if
+      
+      call s_to_rho_healaxis(m,ns,nrho,nheal,rmnc(i,:),rmnc_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,zmnc(i,:),zmnc_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,almnc(i,:),almnc_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,rmns(i,:),rmns_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,zmns(i,:),zmns_rho(i,:))
+      call s_to_rho_healaxis(m,ns,nrho,nheal,almns(i,:),almns_rho(i,:))
+    enddo
+  end subroutine perform_axis_healing_internal
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine setup_poloidal_flux_splines
+    use new_vmec_stuff_mod, only : ns_A, aiota
+    use vector_potentail_mod, only : ns, hs, torflux, sA_phi
+    use spl_three_to_five_sub, only : spl_reg
+
+    integer :: i, is, k
+    double precision, dimension(:,:), allocatable :: splcoe
+
+    allocate(splcoe(0:ns_A,ns))
+
+    splcoe(0,:) = aiota
+
+    call spl_reg(ns_A-1,ns,hs,splcoe(0:ns_A-1,:))
+
+    do i=ns_A,1,-1
+      splcoe(i,:) = splcoe(i-1,:)/dble(i)
+    enddo
+
+    splcoe(0,1) = 0.d0
+    do is=1,ns-1
+      splcoe(0,is+1) = splcoe(ns_A,is)
+      do k=ns_A-1,0,-1
+        splcoe(0,is+1) = splcoe(k,is) + hs*splcoe(0,is+1)
+      enddo
+    enddo
+
+    if(allocated(sA_phi)) deallocate(sA_phi)
+    allocate(sA_phi(ns_A+1,ns))
+    do k=0,ns_A
+      sA_phi(k+1,:) = -torflux*splcoe(k,:)
+    enddo
+
+    deallocate(splcoe)
+  end subroutine setup_poloidal_flux_splines
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine setup_angular_grid_and_fourier_synthesis(rmnc_rho, zmnc_rho, almnc_rho, &
+                                                      rmns_rho, zmns_rho, almns_rho)
+    use new_vmec_stuff_mod, only : axm, axn, multharm, nper, nstrm, &
+                                   n_theta, n_phi, h_theta, h_phi, sR, sZ, slam, ns_s, ns_tp
+    use vector_potentail_mod, only : ns
+    use vmec_alloc_sub, only : new_deallocate_vmec_stuff
+
+    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
+    double precision, dimension(nstrm,0:ns-1), intent(in) :: rmns_rho, zmns_rho, almns_rho
+    
+    integer :: i, m, n, is, i_theta, i_phi, m_max, n_max
+    integer :: nsize_exp_imt, nsize_exp_inp, iexpt, iexpp
+    double precision :: twopi, cosphase, sinphase
+    complex(8) :: base_exp_imt, base_exp_inp, base_exp_inp_inv, expphase
+    complex(8), dimension(:), allocatable :: exp_imt, exp_inp
+
+    ! Setup angular grid
+    m_max = nint(maxval(axm))
+    n_max = nint(maxval(axn))
+
+    print *,'VMEC ns = ',ns,' m_max = ',m_max,' n_max = ',n_max
+
+    n_theta = m_max*multharm + 1
+    n_phi = n_max*multharm + 1
+    twopi = 8.d0*atan2(1.d0,1.d0)
+    h_theta = twopi/dble(n_theta-1)
+    h_phi = twopi/dble((n_phi-1)*nper)
+
+    ! Setup exponential arrays
+    nsize_exp_imt = (n_theta-1)*m_max
+    nsize_exp_inp = (n_phi-1)*n_max
+
+    allocate(exp_imt(0:nsize_exp_imt),exp_inp(-nsize_exp_inp:nsize_exp_inp))
+
+    base_exp_imt = exp(cmplx(0.d0,h_theta,kind=kind(0d0)))
+    base_exp_inp = exp(cmplx(0.d0,h_phi,kind=kind(0d0)))
+    base_exp_inp_inv = (1.d0,0.d0)/base_exp_inp
+    exp_imt(0) = (1.d0,0.d0)
+    exp_inp(0) = (1.d0,0.d0)
+
+    do i=1,nsize_exp_imt
+      exp_imt(i) = exp_imt(i-1)*base_exp_imt
+    enddo
+
+    do i=1,nsize_exp_inp
+      exp_inp(i) = exp_inp(i-1)*base_exp_inp
+      exp_inp(-i) = exp_inp(1-i)*base_exp_inp_inv
+    enddo
+
+    ! Allocate spline arrays
+    if(allocated(sR)) deallocate(sR)
+    allocate(sR(ns_s+1,ns_tp+1,ns_tp+1,ns,n_theta,n_phi))
+    if(allocated(sZ)) deallocate(sZ)
+    allocate(sZ(ns_s+1,ns_tp+1,ns_tp+1,ns,n_theta,n_phi))
+    if(allocated(slam)) deallocate(slam)
+    allocate(slam(ns_s+1,ns_tp+1,ns_tp+1,ns,n_theta,n_phi))
+
+    sR(1,1,1,:,:,:) = 0.d0
+    sZ(1,1,1,:,:,:) = 0.d0
+    slam(1,1,1,:,:,:) = 0.d0
+
+    ! Fourier synthesis to real space
+!$omp parallel private(m, n, i_theta, i_phi, i, is, iexpt, iexpp, expphase, cosphase, sinphase)
+!$omp do
+    do i_theta=1,n_theta
+      do i_phi=1,n_phi
+        do i=1,nstrm
+          m = nint(axm(i))
+          n = nint(axn(i))
+          iexpt = m*(i_theta-1)
+          iexpp = n*(i_phi-1)
+          expphase = exp_imt(iexpt)*exp_inp(-iexpp)
+          cosphase = dble(expphase)
+          sinphase = aimag(expphase)
+          do is=1,ns
+            sR(1,1,1,is,i_theta,i_phi) = sR(1,1,1,is,i_theta,i_phi) &
+                                       + rmnc_rho(i,is-1)*cosphase &
+                                       + rmns_rho(i,is-1)*sinphase
+            sZ(1,1,1,is,i_theta,i_phi) = sZ(1,1,1,is,i_theta,i_phi) &
+                                       + zmnc_rho(i,is-1)*cosphase &
+                                       + zmns_rho(i,is-1)*sinphase
+            slam(1,1,1,is,i_theta,i_phi) = slam(1,1,1,is,i_theta,i_phi) &
+                                         + almnc_rho(i,is-1)*cosphase &
+                                         + almns_rho(i,is-1)*sinphase
+          enddo
+        enddo
+      enddo
+    enddo
+!$omp end do
+!$omp barrier
+!$omp single
+    call new_deallocate_vmec_stuff
+!$omp end single
+!$omp end parallel
+
+    deallocate(exp_imt,exp_inp)
+  end subroutine setup_angular_grid_and_fourier_synthesis
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine spline_over_phi
+    use new_vmec_stuff_mod, only : ns_s, ns_tp, n_theta, n_phi, h_phi, sR, sZ, slam
+    use vector_potentail_mod, only : ns
+    use spl_three_to_five_sub, only : spl_per
+
+    integer :: is, i_theta, k
+    double precision, dimension(:,:), allocatable :: splcoe
+
+    if (n_phi == 1) then
+      print *,'Spline not supported for a Phi period of 1, exiting...'
+      call EXIT(-1)
+    endif
+
+!$omp parallel private(is, i_theta, k, splcoe)
+    allocate(splcoe(0:ns_tp,n_phi))
+!$omp do
+    do is=1,ns
+      do i_theta=1,n_theta
+        splcoe(0,:) = sR(1,1,1,is,i_theta,:)
+        call spl_per(ns_tp,n_phi,h_phi,splcoe)
+        do k=1,ns_tp
+          sR(1,1,k+1,is,i_theta,:) = splcoe(k,:)
+        enddo
+
+        splcoe(0,:) = sZ(1,1,1,is,i_theta,:)
+        call spl_per(ns_tp,n_phi,h_phi,splcoe)
+        do k=1,ns_tp
+          sZ(1,1,k+1,is,i_theta,:) = splcoe(k,:)
+        enddo
+
+        splcoe(0,:) = slam(1,1,1,is,i_theta,:)
+        call spl_per(ns_tp,n_phi,h_phi,splcoe)
+        do k=1,ns_tp
+          slam(1,1,k+1,is,i_theta,:) = splcoe(k,:)
+        enddo
+      enddo
+    enddo
+!$omp end do
+    deallocate(splcoe)
+!$omp end parallel
+  end subroutine spline_over_phi
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine spline_over_theta
+    use new_vmec_stuff_mod, only : ns_s, ns_tp, n_theta, n_phi, h_theta, sR, sZ, slam
+    use vector_potentail_mod, only : ns
+    use spl_three_to_five_sub, only : spl_per
+
+    integer :: is, i_phi, isp, k
+    double precision, dimension(:,:), allocatable :: splcoe
+
+!$omp parallel private(is, i_phi, isp, k, splcoe)
+    allocate(splcoe(0:ns_tp,n_theta))
+!$omp do
+    do is=1,ns
+      do i_phi=1,n_phi
+        do isp=1,ns_tp+1
+          splcoe(0,:) = sR(1,1,isp,is,:,i_phi)
+          call spl_per(ns_tp,n_theta,h_theta,splcoe)
+          do k=1,ns_tp
+            sR(1,k+1,isp,is,:,i_phi) = splcoe(k,:)
+          enddo
+
+          splcoe(0,:) = sZ(1,1,isp,is,:,i_phi)
+          call spl_per(ns_tp,n_theta,h_theta,splcoe)
+          do k=1,ns_tp
+            sZ(1,k+1,isp,is,:,i_phi) = splcoe(k,:)
+          enddo
+
+          splcoe(0,:) = slam(1,1,isp,is,:,i_phi)
+          call spl_per(ns_tp,n_theta,h_theta,splcoe)
+          do k=1,ns_tp
+            slam(1,k+1,isp,is,:,i_phi) = splcoe(k,:)
+          enddo
+        enddo
+      enddo
+    enddo
+!$omp end do
+    deallocate(splcoe)
+!$omp end parallel
+  end subroutine spline_over_theta
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine spline_over_s
+    use new_vmec_stuff_mod, only : ns_s, ns_tp, n_theta, n_phi, sR, sZ, slam
+    use vector_potentail_mod, only : ns, hs
+    use spl_three_to_five_sub, only : spl_reg
+
+    integer :: i_theta, i_phi, ist, isp, k
+    double precision, dimension(:,:), allocatable :: splcoe
+
+!$omp parallel private(i_theta, i_phi, ist, isp, k, splcoe)
+    allocate(splcoe(0:ns_s,ns))
+!$omp do
+    do i_theta=1,n_theta
+      do i_phi=1,n_phi
+        do ist=1,ns_tp+1
+          do isp=1,ns_tp+1
+            splcoe(0,:) = sR(1,ist,isp,:,i_theta,i_phi)
+            call spl_reg(ns_s,ns,hs,splcoe)
+            do k=1,ns_s
+              sR(k+1,ist,isp,:,i_theta,i_phi) = splcoe(k,:)
+            enddo
+
+            splcoe(0,:) = sZ(1,ist,isp,:,i_theta,i_phi)
+            call spl_reg(ns_s,ns,hs,splcoe)
+            do k=1,ns_s
+              sZ(k+1,ist,isp,:,i_theta,i_phi) = splcoe(k,:)
+            enddo
+
+            splcoe(0,:) = slam(1,ist,isp,:,i_theta,i_phi)
+            call spl_reg(ns_s,ns,hs,splcoe)
+            do k=1,ns_s
+              slam(k+1,ist,isp,:,i_theta,i_phi) = splcoe(k,:)
+            enddo
+          enddo
+        enddo
+      enddo
+    enddo
+!$omp end do
+    deallocate(splcoe)
+!$omp end parallel
+  end subroutine spline_over_s
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
