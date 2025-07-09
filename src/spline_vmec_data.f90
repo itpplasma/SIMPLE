@@ -4,19 +4,12 @@ module spline_vmec_sub
     implicit none
 contains
     subroutine spline_vmec_data
-        real(dp), dimension(:, :), allocatable :: almnc_rho, rmnc_rho, zmnc_rho
-        real(dp), dimension(:, :), allocatable :: almns_rho, rmns_rho, zmns_rho
-
         call initialize_vmec_data_and_arrays
-        call perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
         call setup_poloidal_flux_splines
-        call setup_angular_grid_and_fourier_synthesis(rmnc_rho, zmnc_rho, almnc_rho, &
-                                                      rmns_rho, zmns_rho, almns_rho)
+        call setup_angular_grid_and_fourier_synthesis
         call spline_over_phi
         call spline_over_theta
         call spline_over_s
-
-        deallocate (almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
     end subroutine spline_vmec_data
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -118,21 +111,23 @@ contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-    subroutine setup_angular_grid_and_fourier_synthesis(rmnc_rho, zmnc_rho, almnc_rho, &
-                                                        rmns_rho, zmns_rho, almns_rho)
+    subroutine setup_angular_grid_and_fourier_synthesis
         use new_vmec_stuff_mod, only: axm, axn, multharm, nper, nstrm, &
                                       n_theta, n_phi, h_theta, h_phi, sR, sZ, slam, ns_s, ns_tp
         use vector_potentail_mod, only: ns
         use vmec_alloc_sub, only: new_deallocate_vmec_stuff
 
-        real(dp), dimension(nstrm, 0:ns - 1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
-        real(dp), dimension(nstrm, 0:ns - 1), intent(in) :: rmns_rho, zmns_rho, almns_rho
+        real(dp), dimension(:, :), allocatable :: almnc_rho, rmnc_rho, zmnc_rho
+        real(dp), dimension(:, :), allocatable :: almns_rho, rmns_rho, zmns_rho
 
         integer :: i, m, n, is, i_theta, i_phi, m_max, n_max
         integer :: nsize_exp_imt, nsize_exp_inp, iexpt, iexpp
         real(dp) :: twopi, cosphase, sinphase
         complex(8) :: base_exp_imt, base_exp_inp, base_exp_inp_inv, expphase
         complex(8), dimension(:), allocatable :: exp_imt, exp_inp
+
+        ! Perform axis healing
+        call perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
 
         ! Setup angular grid
         m_max = nint(maxval(axm))
@@ -214,6 +209,7 @@ contains
 !$omp end parallel
 
         deallocate (exp_imt, exp_inp)
+        deallocate (almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
     end subroutine setup_angular_grid_and_fourier_synthesis
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
