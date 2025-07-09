@@ -16,4 +16,5 @@
         "1",
         "1"
     ],
+    "fortran.linter.modOutput": "${workspaceFolder}/.fortls",
 }
