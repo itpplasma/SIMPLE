@@ -1,5 +1,5 @@
 CONFIG ?= Release
-FLAGS ?="
+FLAGS ?=
 BUILD_DIR := build
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
