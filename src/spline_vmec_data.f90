@@ -214,42 +214,23 @@ contains
     subroutine spline_over_phi
         use new_vmec_stuff_mod, only: ns_tp, n_theta, n_phi, h_phi, sR, sZ, slam
         use vector_potentail_mod, only: ns
-        use spl_three_to_five_sub, only: spl_per
-
-        integer :: is, i_theta, k
-        real(dp), dimension(:, :), allocatable :: splcoe
+        integer :: is, i_theta
 
         if (n_phi == 1) then
             print *, 'Spline not supported for a Phi period of 1, exiting...'
             call exit(-1)
         end if
 
-!$omp parallel private(is, i_theta, k, splcoe)
-        allocate (splcoe(0:ns_tp, n_phi))
+!$omp parallel private(is, i_theta)
 !$omp do
         do is = 1, ns
             do i_theta = 1, n_theta
-                splcoe(0, :) = sR(1, 1, 1, is, i_theta, :)
-                call spl_per(ns_tp, n_phi, h_phi, splcoe)
-                do k = 1, ns_tp
-                    sR(1, 1, k + 1, is, i_theta, :) = splcoe(k, :)
-                end do
-
-                splcoe(0, :) = sZ(1, 1, 1, is, i_theta, :)
-                call spl_per(ns_tp, n_phi, h_phi, splcoe)
-                do k = 1, ns_tp
-                    sZ(1, 1, k + 1, is, i_theta, :) = splcoe(k, :)
-                end do
-
-                splcoe(0, :) = slam(1, 1, 1, is, i_theta, :)
-                call spl_per(ns_tp, n_phi, h_phi, splcoe)
-                do k = 1, ns_tp
-                    slam(1, 1, k + 1, is, i_theta, :) = splcoe(k, :)
-                end do
+                call spline_1d_periodic(sR(1, 1, :, is, i_theta, :), ns_tp, h_phi)
+                call spline_1d_periodic(sZ(1, 1, :, is, i_theta, :), ns_tp, h_phi)
+                call spline_1d_periodic(slam(1, 1, :, is, i_theta, :), ns_tp, h_phi)
             end do
         end do
 !$omp end do
-        deallocate (splcoe)
 !$omp end parallel
     end subroutine spline_over_phi
 
@@ -258,39 +239,20 @@ contains
     subroutine spline_over_theta
         use new_vmec_stuff_mod, only: ns_tp, n_theta, n_phi, h_theta, sR, sZ, slam
         use vector_potentail_mod, only: ns
-        use spl_three_to_five_sub, only: spl_per
+        integer :: is, i_phi, isp
 
-        integer :: is, i_phi, isp, k
-        real(dp), dimension(:, :), allocatable :: splcoe
-
-!$omp parallel private(is, i_phi, isp, k, splcoe)
-        allocate (splcoe(0:ns_tp, n_theta))
+!$omp parallel private(is, i_phi, isp)
 !$omp do
         do is = 1, ns
             do i_phi = 1, n_phi
                 do isp = 1, ns_tp + 1
-                    splcoe(0, :) = sR(1, 1, isp, is, :, i_phi)
-                    call spl_per(ns_tp, n_theta, h_theta, splcoe)
-                    do k = 1, ns_tp
-                        sR(1, k + 1, isp, is, :, i_phi) = splcoe(k, :)
-                    end do
-
-                    splcoe(0, :) = sZ(1, 1, isp, is, :, i_phi)
-                    call spl_per(ns_tp, n_theta, h_theta, splcoe)
-                    do k = 1, ns_tp
-                        sZ(1, k + 1, isp, is, :, i_phi) = splcoe(k, :)
-                    end do
-
-                    splcoe(0, :) = slam(1, 1, isp, is, :, i_phi)
-                    call spl_per(ns_tp, n_theta, h_theta, splcoe)
-                    do k = 1, ns_tp
-                        slam(1, k + 1, isp, is, :, i_phi) = splcoe(k, :)
-                    end do
+                    call spline_1d_periodic(sR(1, :, isp, is, :, i_phi), ns_tp, h_theta)
+                    call spline_1d_periodic(sZ(1, :, isp, is, :, i_phi), ns_tp, h_theta)
+                    call spline_1d_periodic(slam(1, :, isp, is, :, i_phi), ns_tp, h_theta)
                 end do
             end do
         end do
 !$omp end do
-        deallocate (splcoe)
 !$omp end parallel
     end subroutine spline_over_theta
 
@@ -299,43 +261,60 @@ contains
     subroutine spline_over_s
         use new_vmec_stuff_mod, only: ns_s, ns_tp, n_theta, n_phi, sR, sZ, slam
         use vector_potentail_mod, only: ns, hs
-        use spl_three_to_five_sub, only: spl_reg
+        integer :: i_theta, i_phi, ist, isp
 
-        integer :: i_theta, i_phi, ist, isp, k
-        real(dp), dimension(:, :), allocatable :: splcoe
-
-!$omp parallel private(i_theta, i_phi, ist, isp, k, splcoe)
-        allocate (splcoe(0:ns_s, ns))
-!$omp do
+        !$omp parallel private(i_theta, i_phi, ist, isp)
+        !$omp do
         do i_theta = 1, n_theta
             do i_phi = 1, n_phi
                 do ist = 1, ns_tp + 1
                     do isp = 1, ns_tp + 1
-                        splcoe(0, :) = sR(1, ist, isp, :, i_theta, i_phi)
-                        call spl_reg(ns_s, ns, hs, splcoe)
-                        do k = 1, ns_s
-                            sR(k + 1, ist, isp, :, i_theta, i_phi) = splcoe(k, :)
-                        end do
-
-                        splcoe(0, :) = sZ(1, ist, isp, :, i_theta, i_phi)
-                        call spl_reg(ns_s, ns, hs, splcoe)
-                        do k = 1, ns_s
-                            sZ(k + 1, ist, isp, :, i_theta, i_phi) = splcoe(k, :)
-                        end do
-
-                        splcoe(0, :) = slam(1, ist, isp, :, i_theta, i_phi)
-                        call spl_reg(ns_s, ns, hs, splcoe)
-                        do k = 1, ns_s
-                            slam(k + 1, ist, isp, :, i_theta, i_phi) = splcoe(k, :)
-                        end do
+                        call spline_1d_regular(sR(:, ist, isp, :, i_theta, i_phi), ns_s, hs)
+                        call spline_1d_regular(sZ(:, ist, isp, :, i_theta, i_phi), ns_s, hs)
+                        call spline_1d_regular(slam(:, ist, isp, :, i_theta, i_phi), ns_s, hs)
                     end do
                 end do
             end do
         end do
-!$omp end do
-        deallocate (splcoe)
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
     end subroutine spline_over_s
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+    subroutine spline_1d_periodic(data_array, ns_order, h_step)
+        use spl_three_to_five_sub, only: spl_per
+
+        real(dp), dimension(:, :), intent(inout) :: data_array
+        integer, intent(in) :: ns_order
+        real(dp), intent(in) :: h_step
+
+        integer :: n_points
+        real(dp), dimension(0:ns_order, size(data_array, 2)) :: splcoe
+
+        n_points = size(data_array, 2)
+        splcoe(0, :) = data_array(1, :)
+        call spl_per(ns_order, n_points, h_step, splcoe)
+        data_array(:, :) = splcoe(:, :)
+    end subroutine spline_1d_periodic
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+    subroutine spline_1d_regular(data_array, ns_order, h_step)
+        use spl_three_to_five_sub, only: spl_reg
+
+        real(dp), dimension(:, :), intent(inout) :: data_array
+        integer, intent(in) :: ns_order
+        real(dp), intent(in) :: h_step
+
+        integer :: n_points
+        real(dp), dimension(0:ns_order, size(data_array, 2)) :: splcoe
+
+        n_points = size(data_array, 2)
+        splcoe(0, :) = data_array(1, :)
+        call spl_reg(ns_order, n_points, h_step, splcoe)
+        data_array(:, :) = splcoe(:, :)
+    end subroutine spline_1d_regular
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
@@ -760,7 +739,7 @@ contains
         dphi = (dphi - dble(i_phi))*h_phi
         i_phi = i_phi + 1
 
-! Begin interpolation over $s$
+        ! Begin interpolation over $s$
 
         stp_lam(1:nstp, 1:nstp) = slam(ns_s + 1, :, :, is, i_theta, i_phi)
 
@@ -768,10 +747,10 @@ contains
             stp_lam(1:nstp, 1:nstp) = slam(k, :, :, is, i_theta, i_phi) + ds*stp_lam(1:nstp, 1:nstp)
         end do
 
-! End interpolation over $s$
-!----------------------------
+        ! End interpolation over $s$
+        !----------------------------
 
-! Begin interpolation over $\theta$
+        ! Begin interpolation over $\theta$
 
         sp_lam(1:nstp) = stp_lam(nstp, 1:nstp)
         dsp_lam_dt(1:nstp) = 0.d0
@@ -781,10 +760,10 @@ contains
             dsp_lam_dt(1:nstp) = stp_lam(k + 1, 1:nstp)*dble(k) + dtheta*dsp_lam_dt(1:nstp)
         end do
 
-! End interpolation over $\theta$
-!--------------------------------
+        ! End interpolation over $\theta$
+        !--------------------------------
 
-! Begin interpolation over $\varphi$
+        ! Begin interpolation over $\varphi$
 
         alam = sp_lam(nstp)
         dl_dt = dsp_lam_dt(nstp)
@@ -798,34 +777,34 @@ contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-! Go from s to rho grid, with special treatment of the axis.
+    ! Go from s to rho grid, with special treatment of the axis.
 
-! Interpolate values from s to rho grid. It is assumed that the
-! innermost points of the input grid are not valid/noisy and thus need
-! special treatment.
-! This is done by extrapolating from values outside of this region to
-! the axis.
-! Extrapolation is done linear (more robust).
-! An intermediate rescaling with rho can be used (might be useful to
-! enforce behaviour near the axis). This will be in effect for
-! extrapolating to the axis and for the interpolation to the new grid.
+    ! Interpolate values from s to rho grid. It is assumed that the
+    ! innermost points of the input grid are not valid/noisy and thus need
+    ! special treatment.
+    ! This is done by extrapolating from values outside of this region to
+    ! the axis.
+    ! Extrapolation is done linear (more robust).
+    ! An intermediate rescaling with rho can be used (might be useful to
+    ! enforce behaviour near the axis). This will be in effect for
+    ! extrapolating to the axis and for the interpolation to the new grid.
 
-! input:
-! ------
-! m: integer, exponent, values <= 0 are ignored. Intermediate scaling of
-!   values is done with rho**m.
-! ns: integer, size of input array.
-! nrho: integer, size of output array.
-! nheal: integer,
-! arr_in: real(dp) 1d array, with ns elements.
+    ! input:
+    ! ------
+    ! m: integer, exponent, values <= 0 are ignored. Intermediate scaling of
+    !   values is done with rho**m.
+    ! ns: integer, size of input array.
+    ! nrho: integer, size of output array.
+    ! nheal: integer,
+    ! arr_in: real(dp) 1d array, with ns elements.
 
-! output:
-! -------
-! arr_out: real(dp) 1d array, with nrho elements.
+    ! output:
+    ! -------
+    ! arr_out: real(dp) 1d array, with nrho elements.
 
-! sideeffects:
-! ------------
-! none
+    ! sideeffects:
+    ! ------------
+    ! none
     subroutine s_to_rho_healaxis(m, ns, nrho, nheal, arr_in, arr_out)
 
         use new_vmec_stuff_mod, only: ns_s, old_axis_healing
