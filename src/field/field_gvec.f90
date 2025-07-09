@@ -1,15 +1,12 @@
 module field_gvec
-
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_base, only: MagneticField
-! Use GVEC API for reading state files
     use MODgvec_cubic_spline, only: t_cubspl
     use MODgvec_rProfile_bspl, only: t_rProfile_bspl
     use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_phiPrime_r, eval_iota_r, eval_pres_r, Finalize_ReadState
     use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, X1_base_r, X2_base_r, LA_base_r, X1_r, X2_r, LA_r, hmap_r
     implicit none
 
-! GVEC derivative constants (from defines.h)
     integer, parameter :: DERIV_R = 1
     integer, parameter :: DERIV_THET = 2
     integer, parameter :: DERIV_ZETA = 3
@@ -73,7 +70,6 @@ contains
             if (allocated(hmap_r)) then
                 self%nfp = hmap_r%nfp
             else
-                ! Default fallback
                 self%nfp = 1
                 print *, 'Warning: Could not read nfp from GVEC state, using default nfp=1'
             end if
@@ -90,70 +86,34 @@ contains
     end subroutine load_dat_file
 
     subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-        !> Evaluate magnetic field from GVEC equilibrium data
-        !> Input coordinates x = (r, theta, phi) where:
-        !>   r = sqrt(s) with s the normalized toroidal flux
-        !>   theta = poloidal angle (NOT theta*)
-        !>   phi = toroidal angle
-        !>
-        !> Output field components are in (s, theta*, phi) coordinates where:
-        !>   theta* = theta + Lambda(s,theta,phi)
-        !>   Lambda is the stream function
-        !>
-        !> The transformation from (r,theta,phi) to (s,theta*,phi) components includes:
-        !>   - Factor ds/dr = 2*r for the radial component
-        !>   - Lambda derivatives for coupling between components
 
         class(GvecField), intent(in) :: self
-        real(dp), intent(in) :: x(3)  ! r=sqrt(s_vmec), theta_vmec, phi_vmec
+        real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: Acov(3)
         real(dp), intent(out) :: hcov(3)
         real(dp), intent(out) :: Bmod
         real(dp), intent(out), optional :: sqgBctr(3)
 
-        ! Local variables for GVEC evaluation
-        real(dp) :: r, theta, varphi
-        real(dp) :: theta_star, zeta
-
-        ! GVEC coordinate evaluation variables
-        real(dp) :: gvec_coords(3)  ! (s, theta, zeta)
-        integer :: deriv_flags(2)   ! For derivative specification
-
-        ! X1, X2, LA values and derivatives
-        real(dp) :: X1_val, X2_val, LA_val
+        real(dp) :: r, theta, varphi, zeta
+        real(dp) :: gvec_coords(3), RZ_coords(3)
+        integer :: deriv_flags(2)
+        real(dp) :: X1_val, X2_val, R_pos, Z_pos
         real(dp) :: dX1_ds, dX1_dthet, dX1_dzeta
         real(dp) :: dX2_ds, dX2_dthet, dX2_dzeta
         real(dp) :: dLA_dr, dLA_dthet, dLA_dzeta
-
-        ! Profile values
         real(dp) :: iota_val, phi_val, phiPrime_val, chi_val
-
-        ! Coordinate and field computation
-        real(dp) :: R_pos, Z_pos  ! Physical R, Z coordinates
-        real(dp) :: e_thet(3), e_zeta(3), e_s(3)  ! Basis vectors
-        real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)  ! Raw derivatives from hmap
-        real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz  ! Metric tensor components
-        real(dp) :: Jac_h, Jac_l, Jac  ! Jacobian components (reference, logical, full)
-        real(dp) :: Bthctr, Bzetactr  ! Contravariant field components in (s,theta,zeta)
-        real(dp) :: Bthcov, Bzetacov, Bscov  ! Covariant field components
-        real(dp) :: RZ_coords(3)      ! Coordinates for eval_Jh (R,Z,ζ)
-
-        ! Axis regularization variables
-        real(dp), parameter :: s_min_reg = 0.05_dp  ! Regularization threshold
-        real(dp) :: scaling_factor, reg_factor, smooth_factor
-
-        ! Extract input coordinates
-        r = x(1)      ! r = sqrt(s)
+        real(dp) :: e_thet(3), e_zeta(3), e_s(3)
+        real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)
+        real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz
+        real(dp) :: Jac_h, Jac_l, Jac
+        real(dp) :: Bthctr, Bzetactr, Bthcov, Bzetacov, Bscov
+        r = x(1)
         theta = x(2)
         varphi = x(3)
 
-        theta_star = theta
         zeta = -varphi
-
-        ! Check if GVEC state is properly initialized before evaluation
         if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
             .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. .not. allocated(LA_r)) then
-            ! Reload the GVEC state (this is expected behavior due to GVEC module design)
             call ReadState(trim(self%filename))
 
             if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
@@ -161,26 +121,21 @@ contains
                 error stop 'Failed to initialize GVEC state for field evaluation'
             end if
         end if
-
-        ! Prepare coordinates for GVEC evaluation
         gvec_coords(1) = r
-        gvec_coords(2) = theta_star
+        gvec_coords(2) = theta
         gvec_coords(3) = zeta
 
-        ! Evaluate X1 (R coordinate) and its derivatives
-        deriv_flags = [0, 0]  ! Function value
+        deriv_flags = [0, 0]
         X1_val = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
 
-        deriv_flags = [DERIV_R, 0]  ! ∂/∂r
+        deriv_flags = [DERIV_R, 0]
         dX1_ds = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
 
-        deriv_flags = [0, DERIV_THET]  ! ∂/∂θ
+        deriv_flags = [0, DERIV_THET]
         dX1_dthet = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
 
-        deriv_flags = [0, DERIV_ZETA]  ! ∂/∂ζ
+        deriv_flags = [0, DERIV_ZETA]
         dX1_dzeta = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
-
-        ! Evaluate X2 (Z coordinate) and its derivatives
         deriv_flags = [0, 0]
         X2_val = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
 
@@ -192,11 +147,6 @@ contains
 
         deriv_flags = [0, DERIV_ZETA]
         dX2_dzeta = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
-
-        ! Evaluate LA (stream function) and its derivatives
-        deriv_flags = [0, 0]
-        LA_val = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
-
         deriv_flags = [DERIV_R, 0]
         dLA_dr = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
 
@@ -206,82 +156,48 @@ contains
         deriv_flags = [0, DERIV_ZETA]
         dLA_dzeta = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
 
-        ! Get profile values
-        iota_val = eval_iota_r(r)      ! Rotational transform
-        phi_val = eval_phi_r(r)*TESLA_IN_GAUSS*METER_IN_CM**2        ! Toroidal flux
-
-        ! Compute toroidal flux derivative properly using GVEC's built-in function
+        iota_val = eval_iota_r(r)
+        phi_val = eval_phi_r(r)*TESLA_IN_GAUSS*METER_IN_CM**2
         phiPrime_val = eval_phiPrime_r(r)*TESLA_IN_GAUSS*METER_IN_CM**2
-
-        ! Get poloidal flux from profiles_1d(:,2)
-        ! profiles_1d indices: 1=phi, 2=chi, 3=iota, 4=pressure
         chi_val = sbase_prof%evalDOF_s(r, 0, profiles_1d(:, 2))*TESLA_IN_GAUSS*METER_IN_CM**2
 
         R_pos = X1_val
         Z_pos = X2_val
-
-        ! Use GVEC's hmap to compute basis vectors
-        ! Get the Cartesian derivatives from GVEC's coordinate mapping
-        ! hmap_r returns: e_q1 = ∂r/∂X1, e_q2 = ∂r/∂X2, e_q3 = ∂r/∂ζ
-        ! These are the basis vectors in the (R,Z,φ) cylindrical system
-        ! Note: get_dx_dqi expects (X1, X2, ζ) = (R, Z, ζ) coordinates
         RZ_coords = [R_pos, Z_pos, zeta]
         call hmap_r%get_dx_dqi(RZ_coords, dx_dq1, dx_dq2, dx_dq3)
-
-        ! Compute basis vectors for (s,θ,ζ) coordinates EXACTLY as GVEC Python does
-        ! e_rho = e_q1 * dX1_dr + e_q2 * dX2_dr
-        ! e_theta = e_q1 * dX1_dt + e_q2 * dX2_dt
-        ! e_zeta = e_q1 * dX1_dz + e_q2 * dX2_dz + e_q3
 
         e_s = dx_dq1*dX1_ds + dx_dq2*dX2_ds
         e_thet = dx_dq1*dX1_dthet + dx_dq2*dX2_dthet
         e_zeta = dx_dq1*dX1_dzeta + dx_dq2*dX2_dzeta + dx_dq3
-
-        ! Compute metric tensor components
         g_ss = dot_product(e_s, e_s)*METER_IN_CM**2
         g_tt = dot_product(e_thet, e_thet)*METER_IN_CM**2
         g_zz = dot_product(e_zeta, e_zeta)*METER_IN_CM**2
         g_st = dot_product(e_s, e_thet)*METER_IN_CM**2
         g_sz = dot_product(e_s, e_zeta)*METER_IN_CM**2
         g_tz = dot_product(e_thet, e_zeta)*METER_IN_CM**2
-
-        ! Compute Jacobian using VMEC/GVEC formula
         Jac_h = hmap_r%eval_Jh(RZ_coords)
         Jac_l = dX1_ds*dX2_dthet - dX1_dthet*dX2_ds
         Jac = Jac_h*Jac_l*METER_IN_CM**3
-
-        ! Following GVEC mhd3d_evalfunc.f90: contravariant components
         Bthctr = (iota_val - dLA_dzeta)*phiPrime_val/Jac
         Bzetactr = (1.0_dp + dLA_dthet)*phiPrime_val/Jac
 
         if (present(sqgBctr)) then
-            ! Jac switches sign from (s, theta, zeta) to (s, theta, phi)
-            sqgBctr(1) = 0.0_dp  ! Jac * B^s = 0 (no radial contravariant component)
-            sqgBctr(2) = (-Jac)*Bthctr  ! -Jac * B^θ
-            sqgBctr(3) = (-Jac)*(-Bzetactr)  ! = Jac * B^ζ = -Jac * -B^ζ = (-Jac) * B^φ
+            sqgBctr(1) = 0.0_dp
+            sqgBctr(2) = (-Jac)*Bthctr
+            sqgBctr(3) = (-Jac)*(-Bzetactr)
         end if
 
         Bthcov = (g_tt*Bthctr + g_tz*Bzetactr)
         Bzetacov = (g_tz*Bthctr + g_zz*Bzetactr)
-
-        ! For theta* coordinates, we need covariant B in s direction
         Bscov = (g_st*Bthctr + g_sz*Bzetactr)
 
         Bmod = sqrt(Bthctr*Bthcov + Bzetactr*Bzetacov)
-
-        ! Apply theta* coordinate transformations with Lambda derivatives
-        ! The GVEC components are in (s,theta,zeta) but SIMPLE expects (r,theta*,phi)
-        ! where s = r^2, theta* = theta + Lambda, and phi = -zeta
-        ! The transformation requires: ds/dr = 2*r
         hcov(1) = Bscov/Bmod
         hcov(2) = Bthcov/Bmod
-        hcov(3) = -Bzetacov/Bmod  ! Minus for phi = -zeta
-
-        ! Vector potential with theta* transformations
-        ! Acov_theta in GVEC is the toroidal flux phi_val
+        hcov(3) = -Bzetacov/Bmod
         Acov(1) = phi_val*dLA_dr
         Acov(2) = phi_val*(1.0_dp + dLA_dthet)
-        Acov(3) = -(-chi_val + phi_val*dLA_dzeta)  ! Minus for phi = -zeta
+        Acov(3) = -(-chi_val + phi_val*dLA_dzeta)
 
     end subroutine evaluate
 
