@@ -24,7 +24,6 @@ set(SOURCES
     boozer_converter.F90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
-    vmecinm_m.f90
     spline_vmec_data.f90
     new_vmec_allocation_stuff.f90
     get_canonical_coordinates.F90
