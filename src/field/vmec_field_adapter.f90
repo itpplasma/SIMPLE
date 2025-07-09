@@ -92,7 +92,7 @@ contains
     real(dp), intent(out) :: Bctrvr_vartheta, Bctrvr_varphi
     real(dp), intent(out) :: Bcovar_r, Bcovar_vartheta, Bcovar_varphi
 
-    real(dp) :: x(3), Acov(3), hcov(3), Bmod
+    real(dp) :: x(3), Acov(3), hcov(3), Bmod, sqgBctr(3)
     real(dp) :: daiota_ds
     integer :: deriv
 
@@ -200,16 +200,16 @@ contains
       ! LA_base_r is the base object, LA_r is the DOF array
       block
         real(dp) :: gvec_coords(3)
-        integer :: deriv_flags(3)
+        integer :: deriv_flags(2)
         
         gvec_coords = [rho, theta, varphi]
         
         ! No derivatives
-        deriv_flags = [0, 0, 0]
+        deriv_flags = [0, 0]
         alam = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
         
-        ! Derivative w.r.t. theta
-        deriv_flags = [0, 1, 0]
+        ! Derivative w.r.t. theta (DERIV_THET = 2)
+        deriv_flags = [0, 2]  ! [radial_deriv, angular_deriv]
         dl_dt = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
       end block
       
