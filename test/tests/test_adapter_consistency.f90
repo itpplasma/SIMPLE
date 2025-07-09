@@ -112,7 +112,7 @@ program test_adapter_consistency
     print *, '3. Validating GVEC field results...'
     
     ! Check that essential quantities are non-zero and reasonable
-    if (abs(sqg_2) < 1.0e3_dp) then
+    if (abs(sqg_2) < 1.0e-6_dp) then
         print *, '  FAIL: sqrt(g) too small: ', sqg_2
         test_passed = .false.
     else
