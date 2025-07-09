@@ -155,8 +155,17 @@ contains
       
     type is (GvecField)
       ! For GVEC, use eval_iota_r
-      aiota = eval_iota_r(sqrt(s), 0)  ! deriv=0 for function value
-      daiota_ds = eval_iota_r(sqrt(s), 1) / (2.0_dp * sqrt(s))  ! Chain rule: d/ds = d/drho * drho/ds
+      ! GVEC eval_iota_r takes only radial coordinate
+      aiota = eval_iota_r(sqrt(s))
+      ! For derivative, use finite difference
+      block
+        real(dp) :: rho, drho, iota_plus, iota_minus
+        rho = sqrt(s)
+        drho = 1.0e-7_dp
+        iota_plus = eval_iota_r(rho + drho)
+        iota_minus = eval_iota_r(rho - drho)
+        daiota_ds = (iota_plus - iota_minus) / (2.0_dp * drho) / (2.0_dp * sqrt(s))  ! Chain rule
+      end block
       
     class default
       error stop 'vmec_iota_interpolate_with_field: Unsupported field type'
@@ -187,9 +196,22 @@ contains
       ! For GVEC, Lambda is available as LA
       rho = sqrt(s)
       
-      ! Use GVEC's Lambda evaluation
-      alam = LA_r%base2D%eval(rho, theta, 0, 0)  ! No derivatives
-      dl_dt = LA_r%base2D%eval(rho, theta, 0, 1)  ! Derivative w.r.t. theta
+      ! Use GVEC's Lambda evaluation following field_gvec.f90 pattern
+      ! LA_base_r is the base object, LA_r is the DOF array
+      block
+        real(dp) :: gvec_coords(3)
+        integer :: deriv_flags(3)
+        
+        gvec_coords = [rho, theta, varphi]
+        
+        ! No derivatives
+        deriv_flags = [0, 0, 0]
+        alam = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+        
+        ! Derivative w.r.t. theta
+        deriv_flags = [0, 1, 0]
+        dl_dt = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+      end block
       
     class default
       error stop 'vmec_lambda_interpolate_with_field: Unsupported field type'

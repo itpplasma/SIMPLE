@@ -587,15 +587,15 @@ contains
 
     subroutine vmec_field(s, theta, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
                           sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
-                          Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+                          Bcovar_s, Bcovar_vartheta, Bcovar_varphi)
         !> Evaluates A and B components in symmetry flux coordinates (s, vartheta, varphi)
-        !> at a given point in VMEC coordinates (s, theta, varphi). theta is VMEC poloidal angle, 
+        !> at a given point in VMEC coordinates (s, theta, varphi). theta is VMEC poloidal angle,
         !> vartheta is symmetry flux poloidal angle (also called theta* in VMEC)
 
         real(dp), intent(in) :: s, theta, varphi
         real(dp), intent(out) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
                                  sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
-                                 Bcovar_r, Bcovar_vartheta, Bcovar_varphi
+                                 Bcovar_s, Bcovar_vartheta, Bcovar_varphi
         real(dp) :: R, Z, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
 
         call splint_vmec_data(s, theta, varphi, A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
@@ -603,7 +603,8 @@ contains
 
         call compute_field_components(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                                       dA_theta_ds, dA_phi_ds, dl_ds, dl_dt, dl_dp, &
-                                      sqg, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+                                      sqg, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_s, &
+                                      Bcovar_vartheta, Bcovar_varphi)
 
     end subroutine vmec_field
 
@@ -611,30 +612,34 @@ contains
 
     subroutine compute_field_components(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                                         dA_theta_ds, dA_phi_ds, dl_ds, dl_dt, dl_dp, &
-                                        sqg, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+                                        sqg, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_s, &
+                                        Bcovar_vartheta, Bcovar_varphi)
 
         real(dp), intent(in) :: R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                                 dA_theta_ds, dA_phi_ds, dl_ds, dl_dt, dl_dp
-        real(dp), intent(out) :: sqg, &
-                                 Bctrvr_vartheta, Bctrvr_varphi, Bcovar_vartheta, Bcovar_varphi, Bcovar_r
+        real(dp), intent(out) :: sqg, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_vartheta, &
+                                 Bcovar_varphi, Bcovar_s
 
         real(dp) :: g(3, 3)
 
-        call compute_metric_tensor(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
+        call metric_tensor_symflux(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                                    dl_ds, dl_dt, dl_dp, g, sqg)
 
         Bctrvr_vartheta = -dA_phi_ds/sqg
         Bctrvr_varphi = dA_theta_ds/sqg
 
-        Bcovar_r = g(1, 2)*Bctrvr_vartheta + g(1, 3)*Bctrvr_varphi
+        Bcovar_s = g(1, 2)*Bctrvr_vartheta + g(1, 3)*Bctrvr_varphi
         Bcovar_vartheta = g(2, 2)*Bctrvr_vartheta + g(2, 3)*Bctrvr_varphi
         Bcovar_varphi = g(3, 2)*Bctrvr_vartheta + g(3, 3)*Bctrvr_varphi
     end subroutine compute_field_components
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-    subroutine compute_metric_tensor(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
+    subroutine metric_tensor_symflux(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                                      dl_ds, dl_dt, dl_dp, g, sqg)
+        !> Computes the metric tensor g and its square root sqg
+        !> in symmetry flux coordinates (s, vartheta, varphi)
+        !> at a given point in VMEC coordinates (s, theta, varphi).
 
         real(dp), intent(in) :: R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
                                 dl_ds, dl_dt, dl_dp
@@ -643,16 +648,7 @@ contains
         real(dp), dimension(3, 3) :: cmat, gV
         real(dp) :: cjac, sqgV
 
-        gV(1, 1) = dR_ds**2 + dZ_ds**2
-        gV(1, 2) = dR_ds*dR_dt + dZ_ds*dZ_dt
-        gV(1, 3) = dR_ds*dR_dp + dZ_ds*dZ_dp
-        gV(2, 1) = gV(1, 2)
-        gV(2, 2) = dR_dt**2 + dZ_dt**2
-        gV(2, 3) = dR_dt*dR_dp + dZ_dt*dZ_dp
-        gV(3, 1) = gV(1, 3)
-        gV(3, 2) = gV(2, 3)
-        gV(3, 3) = R**2 + dR_dp**2 + dZ_dp**2
-        sqgV = R*(dR_dt*dZ_ds - dR_ds*dZ_dt)
+        call metric_tensor_vmec(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, gV, sqgV)
 
         cjac = 1.d0/(1.d0 + dl_dt)
         sqg = sqgV*cjac
@@ -666,7 +662,28 @@ contains
         cmat(2, 3) = -dl_dp*cjac
 
         g = matmul(transpose(cmat), matmul(gV, cmat))
-    end subroutine compute_metric_tensor
+    end subroutine metric_tensor_symflux
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+    subroutine metric_tensor_vmec(R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, gV, sqgV)
+        !> Computes the metric tensor g and its square root sqgV
+        !> in VMEC coordinates (s, theta, varphi).
+
+        real(dp), intent(in) :: R, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
+        real(dp), intent(out) :: gV(3, 3), sqgV
+
+        gV(1, 1) = dR_ds**2 + dZ_ds**2
+        gV(1, 2) = dR_ds*dR_dt + dZ_ds*dZ_dt
+        gV(1, 3) = dR_ds*dR_dp + dZ_ds*dZ_dp
+        gV(2, 1) = gV(1, 2)
+        gV(2, 2) = dR_dt**2 + dZ_dt**2
+        gV(2, 3) = dR_dt*dR_dp + dZ_dt*dZ_dp
+        gV(3, 1) = gV(1, 3)
+        gV(3, 2) = gV(2, 3)
+        gV(3, 3) = R**2 + dR_dp**2 + dZ_dp**2
+        sqgV = R*(dR_dt*dZ_ds - dR_ds*dZ_dt)
+    end subroutine metric_tensor_vmec
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
@@ -975,7 +992,7 @@ contains
         real(dp) :: s, theta, varphi, A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
                     R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp, &
                     sqg, Bctrvr_vartheta, Bctrvr_varphi, &
-                    Bcovar_r, Bcovar_vartheta, Bcovar_varphi
+                    Bcovar_s, Bcovar_vartheta, Bcovar_varphi
 
         s = 0.9999999999d0
         volume = 0.d0
@@ -1003,7 +1020,7 @@ contains
 
             call vmec_field(s, theta, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
                             sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
-                            Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+                            Bcovar_s, Bcovar_vartheta, Bcovar_varphi)
 
             bmod2 = Bctrvr_vartheta*Bcovar_vartheta + Bctrvr_varphi*Bcovar_varphi
             B2 = B2 + bmod2/Bctrvr_varphi
