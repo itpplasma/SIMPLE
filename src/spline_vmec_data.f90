@@ -8,8 +8,7 @@ contains
         real(dp), dimension(:, :), allocatable :: almns_rho, rmns_rho, zmns_rho
 
         call initialize_vmec_data_and_arrays
-        call perform_axis_healing
-        call get_healed_data(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
+        call perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
         call setup_poloidal_flux_splines
         call setup_angular_grid_and_fourier_synthesis(rmnc_rho, zmnc_rho, almnc_rho, &
                                                       rmns_rho, zmns_rho, almns_rho)
@@ -42,14 +41,14 @@ contains
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-    subroutine perform_axis_healing
+    subroutine perform_axis_healing(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
         use new_vmec_stuff_mod, only: rmnc, zmns, almns, rmns, zmnc, almnc, &
                                       axm, axn, nstrm, old_axis_healing_boundary
         use vector_potentail_mod, only: ns
 
+        real(dp), dimension(:, :), allocatable, intent(out) :: almnc_rho, rmnc_rho, zmnc_rho
+        real(dp), dimension(:, :), allocatable, intent(out) :: almns_rho, rmns_rho, zmns_rho
         integer :: i, m, nrho, nheal, iunit_hs
-        real(dp), dimension(:, :), allocatable :: almnc_rho, rmnc_rho, zmnc_rho
-        real(dp), dimension(:, :), allocatable :: almns_rho, rmns_rho, zmns_rho
 
         nrho = ns
         allocate (almnc_rho(nstrm, 0:nrho - 1), rmnc_rho(nstrm, 0:nrho - 1), zmnc_rho(nstrm, 0:nrho - 1))
@@ -77,75 +76,8 @@ contains
         end do
 
         close (iunit_hs)
-
-        ! Store healed data back in module variables (temporary arrays used for compatibility)
-        call store_healed_data(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
-
-        deallocate (almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
     end subroutine perform_axis_healing
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-    subroutine store_healed_data(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
-        use new_vmec_stuff_mod, only: nstrm
-        use vector_potentail_mod, only: ns
-
-        real(dp), dimension(nstrm, 0:ns - 1), intent(in) :: rmnc_rho, zmnc_rho, almnc_rho
-        real(dp), dimension(nstrm, 0:ns - 1), intent(in) :: rmns_rho, zmns_rho, almns_rho
-
-        ! This subroutine stores healed data for later use in Fourier synthesis
-        ! For now kept in module-level arrays implicitly used in setup_angular_grid_and_fourier_synthesis
-    end subroutine store_healed_data
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-    subroutine get_healed_data(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
-        use new_vmec_stuff_mod, only: nstrm
-        use vector_potentail_mod, only: ns
-
-        real(dp), dimension(:, :), allocatable, intent(out) :: almnc_rho, rmnc_rho, zmnc_rho
-        real(dp), dimension(:, :), allocatable, intent(out) :: almns_rho, rmns_rho, zmns_rho
-
-        ! For now, we need to re-run the healing process since we don't store it globally
-        ! This is a temporary solution to maintain the same logic
-        allocate (almnc_rho(nstrm, 0:ns - 1), rmnc_rho(nstrm, 0:ns - 1), zmnc_rho(nstrm, 0:ns - 1))
-        allocate (almns_rho(nstrm, 0:ns - 1), rmns_rho(nstrm, 0:ns - 1), zmns_rho(nstrm, 0:ns - 1))
-
-        ! Re-perform axis healing to get the healed data
-        call perform_axis_healing_internal(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
-    end subroutine get_healed_data
-
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-    subroutine perform_axis_healing_internal(rmnc_rho, zmnc_rho, almnc_rho, rmns_rho, zmns_rho, almns_rho)
-        use new_vmec_stuff_mod, only: rmnc, zmns, almns, rmns, zmnc, almnc, &
-                                      axm, axn, nstrm, old_axis_healing_boundary
-        use vector_potentail_mod, only: ns
-
-        real(dp), dimension(nstrm, 0:ns - 1), intent(out) :: rmnc_rho, zmnc_rho, almnc_rho
-        real(dp), dimension(nstrm, 0:ns - 1), intent(out) :: rmns_rho, zmns_rho, almns_rho
-
-        integer :: i, m, nrho, nheal
-
-        nrho = ns
-
-        do i = 1, nstrm
-            m = nint(abs(axm(i)))
-
-            if (old_axis_healing_boundary) then
-                nheal = min(m, 4)
-            else
-                call determine_nheal_for_axis(m, ns, rmnc(i, :), nheal)
-            end if
-
-            call s_to_rho_healaxis(m, ns, nrho, nheal, rmnc(i, :), rmnc_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, zmnc(i, :), zmnc_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, almnc(i, :), almnc_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, rmns(i, :), rmns_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, zmns(i, :), zmns_rho(i, :))
-            call s_to_rho_healaxis(m, ns, nrho, nheal, almns(i, :), almns_rho(i, :))
-        end do
-    end subroutine perform_axis_healing_internal
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
