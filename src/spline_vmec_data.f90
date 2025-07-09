@@ -7,34 +7,17 @@ contains
     real(dp), dimension(:,:), allocatable :: almnc_rho,rmnc_rho,zmnc_rho
     real(dp), dimension(:,:), allocatable :: almns_rho,rmns_rho,zmns_rho
 
-    ! Initialize VMEC data and arrays
     call initialize_vmec_data_and_arrays
-
-    ! Perform axis healing
     call perform_axis_healing
-
-    ! Get healed data for subsequent operations
     call get_healed_data(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
-
-    ! Setup poloidal flux splines
     call setup_poloidal_flux_splines
-
-    ! Setup angular grid and perform Fourier synthesis
     call setup_angular_grid_and_fourier_synthesis(rmnc_rho, zmnc_rho, almnc_rho, &
                                                   rmns_rho, zmns_rho, almns_rho)
-
-    ! Spline over phi direction
     call spline_over_phi
-
-    ! Spline over theta direction
     call spline_over_theta
-
-    ! Spline over s direction
     call spline_over_s
 
-    ! Cleanup
-    deallocate(almnc_rho,rmnc_rho,zmnc_rho,almns_rho,rmns_rho,zmns_rho)
-!
+    deallocate(almnc_rho, rmnc_rho, zmnc_rho, almns_rho, rmns_rho, zmns_rho)
   end subroutine spline_vmec_data
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -664,44 +647,33 @@ contains
     real(dp), dimension(ns_max, ns_max) :: stp_R, stp_Z, stp_lam
     real(dp), dimension(ns_max, ns_max) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
 
-    ! Normalize coordinates and compute indices
     call normalize_coordinates(s, theta, varphi, ds, is, dtheta, i_theta, dphi, i_phi)
-
-    ! Interpolate vector potential
     call interpolate_vector_potential(s, ds, is, A_phi, A_theta, dA_phi_ds, dA_theta_ds)
 
-    ! Compute rotational transform
     aiota = -dA_phi_ds/dA_theta_ds
-
-    ! Convert to rho coordinate for R, Z, lambda interpolation
     rho_tor = sqrt(s)
     ds_rho = rho_tor/hs
     is_rho = max(0, min(ns-2, int(ds_rho)))
     ds_rho = (ds_rho - dble(is_rho))*hs
     is_rho = is_rho + 1
 
-    ! Get 3D spline coefficients
     call get_spline_coefficients_3d(is_rho, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                     dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
 
-    ! Interpolate in s direction
     call interpolate_s_direction(ds_rho, is_rho, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                  dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
 
-    ! Interpolate in theta direction
     call interpolate_theta_direction(dtheta, stp_R, stp_Z, stp_lam, &
                                      dstp_R_ds, dstp_Z_ds, dstp_lam_ds, &
                                      sp_R, sp_Z, sp_lam, dsp_R_ds, dsp_Z_ds, dsp_lam_ds, &
                                      dsp_R_dt, dsp_Z_dt, dsp_lam_dt)
 
-    ! Interpolate in phi direction
     call interpolate_phi_direction(dphi, sp_R, sp_Z, sp_lam, &
                                    dsp_R_ds, dsp_Z_ds, dsp_lam_ds, &
                                    dsp_R_dt, dsp_Z_dt, dsp_lam_dt, &
                                    R, Z, alam, dR_ds, dZ_ds, dl_ds, &
                                    dR_dt, dZ_dt, dl_dt, dR_dp, dZ_dp, dl_dp)
 
-    ! Scale derivatives by rho_tor
     dR_ds = 0.5d0*dR_ds/rho_tor
     dZ_ds = 0.5d0*dZ_ds/rho_tor
     dl_ds = 0.5d0*dl_ds/rho_tor
