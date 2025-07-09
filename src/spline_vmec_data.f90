@@ -4,12 +4,13 @@ implicit none
 contains
   subroutine spline_vmec_data
 !
-  use new_vmec_stuff_mod
-  use vector_potentail_mod, only : ns,hs,torflux,sA_phi
+  use new_vmec_stuff_mod, only : ns_A, ns_s, ns_tp, rmnc, zmns, almns, rmns, zmnc, almnc, &
+                                 aiota, phi, sps, axm, axn, s, nsurfm, nstrm, kpar, &
+                                 n_theta, n_phi, h_theta, h_phi, multharm, nper, &
+                                 sR, sZ, slam, old_axis_healing_boundary
+  use vector_potentail_mod, only : ns, hs, torflux, sA_phi
   use vmecin_sub, only : vmecin
-  use vmec_alloc_sub
-!
-  implicit none
+  use vmec_alloc_sub, only : new_allocate_vmec_stuff, new_deallocate_vmec_stuff
 !
   integer :: i,k,m,n,is,i_theta,i_phi,m_max,n_max,nsize_exp_imt,nsize_exp_inp,iexpt,iexpp
   integer :: iss,ist,isp,nrho,nheal,iunit_hs
@@ -306,9 +307,7 @@ contains
 !
   subroutine deallocate_vmec_spline(mode)
 !
-  use new_vmec_stuff_mod
-!
-  implicit none
+  use new_vmec_stuff_mod, only : sR, sZ, slam
 !
   integer :: mode
 !
@@ -329,8 +328,6 @@ contains
   subroutine normalize_coordinates(s, theta, varphi, ds, is, dtheta, i_theta, dphi, i_phi)
     use new_vmec_stuff_mod, only : n_theta, n_phi, h_theta, h_phi, nper
     use vector_potentail_mod, only : ns, hs
-    
-    implicit none
     
     double precision, parameter :: twopi = 2.d0*3.14159265358979d0
     
@@ -361,8 +358,6 @@ contains
     use vector_potentail_mod, only : ns, hs, torflux, sA_phi
     use new_vmec_stuff_mod, only : ns_A
     
-    implicit none
-    
     double precision, intent(in) :: s, ds
     integer, intent(in) :: is
     double precision, intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds
@@ -388,8 +383,6 @@ contains
                                         dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
     use new_vmec_stuff_mod, only : sR, sZ, slam, ns_s, ns_tp
     
-    implicit none
-    
     integer, intent(in) :: is, i_theta, i_phi
     double precision, dimension(:,:), intent(out) :: stp_R, stp_Z, stp_lam
     double precision, dimension(:,:), intent(out) :: dstp_R_ds, dstp_Z_ds, dstp_lam_ds
@@ -411,8 +404,6 @@ contains
   subroutine interpolate_s_direction(ds, is, i_theta, i_phi, stp_R, stp_Z, stp_lam, &
                                      dstp_R_ds, dstp_Z_ds, dstp_lam_ds)
     use new_vmec_stuff_mod, only : sR, sZ, slam, ns_s, ns_tp
-    
-    implicit none
     
     double precision, intent(in) :: ds
     integer, intent(in) :: is, i_theta, i_phi
@@ -439,8 +430,6 @@ contains
                                          sp_R, sp_Z, sp_lam, dsp_R_ds, dsp_Z_ds, dsp_lam_ds, &
                                          dsp_R_dt, dsp_Z_dt, dsp_lam_dt)
     use new_vmec_stuff_mod, only : ns_tp
-    
-    implicit none
     
     double precision, intent(in) :: dtheta
     double precision, dimension(:,:), intent(in) :: stp_R, stp_Z, stp_lam
@@ -485,8 +474,6 @@ contains
                                        R, Z, alam, dR_ds, dZ_ds, dl_ds, dR_dt, dZ_dt, dl_dt, &
                                        dR_dp, dZ_dp, dl_dp)
     use new_vmec_stuff_mod, only : ns_tp
-    
-    implicit none
     
     double precision, intent(in) :: dphi
     double precision, dimension(:), intent(in) :: sp_R, sp_Z, sp_lam
@@ -536,8 +523,6 @@ contains
                               R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
     use vector_potentail_mod, only : ns, hs
     use new_vmec_stuff_mod, only : ns_tp
-    
-    implicit none
     
     double precision, intent(in) :: s, theta, varphi
     double precision, intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota
@@ -686,8 +671,6 @@ contains
   use vector_potentail_mod, only : ns,hs,torflux,sA_phi
   use new_vmec_stuff_mod,   only : ns_A
 !
-  implicit none
-!
   double precision, parameter :: twopi=2.d0*3.14159265358979d0
 !
   integer :: is,i_theta,i_phi,k
@@ -728,8 +711,6 @@ contains
 !
   use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,slam,nper,ns_s,ns_tp
   use vector_potentail_mod, only : ns,hs
-!
-  implicit none
 !
   double precision, parameter :: twopi=2.d0*3.14159265358979d0
 !
@@ -831,8 +812,6 @@ contains
 subroutine s_to_rho_healaxis(m,ns,nrho,nheal,arr_in,arr_out)
 
   use new_vmec_stuff_mod, only : ns_s, old_axis_healing
-
-  implicit none
 
   integer, intent(in) :: m, ns, nrho, nheal
   double precision, dimension(ns), intent(in) :: arr_in
@@ -938,8 +917,6 @@ subroutine determine_nheal_for_axis(m,ns,arr_in,nheal)
   !> -------
   !> nheal: integer, number of points to extrapolate at the axis.
 
-  implicit none
-
   ! Lagrange polynomial stencil size for checking the data by extraplation:
   integer, parameter :: nplag = 4
   ! tolerance for Lagrange polynomial extrapolation by one point (to check if data is noisy):
@@ -992,8 +969,6 @@ end subroutine determine_nheal_for_axis
   subroutine volume_and_B00(volume,B00)
 !
   use new_vmec_stuff_mod,   only : n_theta,n_phi,h_theta,h_phi,nper
-!
-  implicit none
 !
   integer :: is,i_theta,i_phi,k
   double precision :: volume,B00
