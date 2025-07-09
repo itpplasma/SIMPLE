@@ -4,7 +4,9 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_base, only: MagneticField
 use field_vmec, only: VmecField
 use field_coils, only: CoilsField, create_coils_field
+#ifdef GVEC_AVAILABLE
 use field_gvec, only: GvecField, create_gvec_field
+#endif
 
 implicit none
 
@@ -22,7 +24,12 @@ function field_from_file(filename)
     else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
         field_from_file = create_coils_field(filename)
     else if (endswith(filename, '.dat')) then
+#ifdef GVEC_AVAILABLE
         field_from_file = create_gvec_field(filename)
+#else
+        print *, 'ERROR: GVEC support not compiled. Rebuild with -DENABLE_GVEC=ON'
+        error stop
+#endif
     else
         print *,  'field_from_file: Unknown file name format ', filename
         error stop

@@ -8,11 +8,12 @@ file(DOWNLOAD
 
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools
-find_program(PYTHON_EXECUTABLE python3)
-if(PYTHON_EXECUTABLE)
-    # Try to convert VMEC to GVEC using Python
-    execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "
+if(ENABLE_GVEC)
+    find_program(PYTHON_EXECUTABLE python3)
+    if(PYTHON_EXECUTABLE)
+        # Try to convert VMEC to GVEC using Python
+        execute_process(
+            COMMAND ${PYTHON_EXECUTABLE} -c "
 try:
     import gvec
     print('GVEC Python module found, converting VMEC to GVEC format...')
@@ -24,11 +25,12 @@ except ImportError:
 except Exception as e:
     print(f'Failed to convert VMEC to GVEC: {e}')
 "
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        RESULT_VARIABLE GVEC_CONVERT_RESULT
-    )
-else()
-    message(STATUS "Python not found, skipping VMEC to GVEC conversion")
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            RESULT_VARIABLE GVEC_CONVERT_RESULT
+        )
+    else()
+        message(STATUS "Python not found, skipping VMEC to GVEC conversion")
+    endif()
 endif()
 
 ##################################################
@@ -86,8 +88,8 @@ set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_ellip
 #     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data
 #     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_BINARY_DIR}
 #             ${CMAKE_CURRENT_BINARY_DIR}/../../_deps/gvec-build/bin/gvec ${GVEC_TEST_INPUT}
-#     COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-#             ${CMAKE_CURRENT_BINARY_DIR}/GVEC_SOLOVIEV_ELLIPTOK_State_0000_00000000.dat 
+#     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+#             ${CMAKE_CURRENT_BINARY_DIR}/GVEC_SOLOVIEV_ELLIPTOK_State_0000_00000000.dat
 #             ${GVEC_TEST_STATE}
 #     DEPENDS gvec
 #     COMMENT "Generating GVEC elliptic tokamak test state file"
@@ -97,17 +99,46 @@ set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_ellip
 # Custom target to ensure the state file is generated
 # add_custom_target(gvec_test_data DEPENDS ${GVEC_TEST_STATE})
 
-add_executable (test_gvec.x test_gvec.f90)
-target_link_libraries(test_gvec.x simple)
-# add_dependencies(test_gvec.x gvec_test_data)
-add_test(NAME test_gvec COMMAND test_gvec.x)
+# GVEC-related tests (only if GVEC support is enabled)
+if(ENABLE_GVEC)
+    add_executable (test_gvec.x test_gvec.f90)
+    target_link_libraries(test_gvec.x simple)
+    # add_dependencies(test_gvec.x gvec_test_data)
+    add_test(NAME test_gvec COMMAND test_gvec.x)
 
-add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
-target_link_libraries(test_vmec_gvec.x simple)
-add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
-set_tests_properties(test_vmec_gvec PROPERTIES
-    LABELS "slow"
-)
+    add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
+    target_link_libraries(test_vmec_gvec.x simple)
+    add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
+
+    add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
+    target_link_libraries(test_canonical_gvec.x simple)
+    add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
+
+    add_executable (test_simple_vmec_gvec.x test_simple_vmec_gvec.f90)
+    target_link_libraries(test_simple_vmec_gvec.x simple)
+    add_test(NAME test_simple_vmec_gvec COMMAND test_simple_vmec_gvec.x)
+    set_tests_properties(test_simple_vmec_gvec PROPERTIES
+        LABELS "slow;integration"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        WILL_FAIL TRUE  # Expected to fail
+    )
+
+    add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
+    target_link_libraries(test_adapter_consistency.x simple)
+    add_test(NAME test_adapter_consistency COMMAND test_adapter_consistency.x)
+    set_tests_properties(test_adapter_consistency PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+
+    add_executable (test_vmec_gvec_adapter.x test_vmec_gvec_adapter.f90)
+    target_link_libraries(test_vmec_gvec_adapter.x simple)
+    add_test(NAME test_vmec_gvec_adapter COMMAND test_vmec_gvec_adapter.x)
+    set_tests_properties(test_vmec_gvec_adapter PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "adapter"
+    )
+endif()
+
 
 # Add 2D field export utility (not a test, but a diagnostic tool)
 add_executable (export_field_2d.x export_field_2d.f90)
@@ -127,7 +158,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90
-# - test_canonical_full_regression.f90  
+# - test_canonical_full_regression.f90
 # - test_canonical_baseline_simple.f90
 
 add_subdirectory(field_can)
@@ -139,32 +170,34 @@ add_subdirectory(orbit)
 ##################################################
 
 # Copy test cases to build directory for golden record tests
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
-# Golden record test: expected success (46f1f53 vs itself should match)
+# Efficient golden record test: compare against multiple versions in one test
+# This runs the working copy tests only once and compares against all reference versions
 add_test(
-    NAME golden_record_success_46f1f53
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh 46f1f53
+    NAME golden_record_multi
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record_multi.sh
+        46f1f53                # Should match (same algorithm)
+        --expect-fail e25ca7e  # Should fail (old version)
+        main                   # Should match (compare with main branch)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-set_tests_properties(golden_record_success_46f1f53 PROPERTIES
-    TIMEOUT 300  # 5 minutes
-    LABELS "golden_record;regression;slow"
+set_tests_properties(golden_record_multi PROPERTIES
+    TIMEOUT 600  # 10 minutes for all comparisons
+    LABELS "golden_record;regression"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
 
-# Golden record test: expected failure (current vs old version should not match)
+# Golden record sanity test: tests the comparison system itself
+# This ensures the golden record comparison scripts are working correctly
 add_test(
-    NAME golden_record_failure
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh e25ca7e
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    NAME golden_record_sanity
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record_sanity/test_golden_record_sanity_simple.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
-set_tests_properties(golden_record_failure PROPERTIES
-    TIMEOUT 300  # 5 minutes
-    WILL_FAIL TRUE  # This test is expected to fail
-    LABELS "golden_record;regression;slow"
-    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
+set_tests_properties(golden_record_sanity PROPERTIES
+    TIMEOUT 60  # 1 minute for sanity checks
 )

@@ -1,0 +1,10 @@
+indent = 4
+line-length = 88
+whitespace-comma = true
+whitespace-assignment = true
+whitespace-decl = true
+whitespace-relational = true
+whitespace-logical = true
+whitespace-plusminus = true
+whitespace-print = true
+whitespace-intrinsics = true

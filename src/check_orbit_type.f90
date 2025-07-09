@@ -23,6 +23,7 @@ contains
                                  pi,twopi, &
                                  fprs,igroup, &
                                  ipermin,iret
+  use sorting_mod, only : sortin
 !
   implicit none
 !

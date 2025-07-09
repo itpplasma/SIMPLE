@@ -2,6 +2,7 @@ module orbit_symplectic_quasi
 
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
 use orbit_symplectic_base
+use minpack_interfaces, only: hybrd1
 
 implicit none
 save
@@ -190,7 +191,6 @@ subroutine timestep_midpoint_quasi(ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
-  integer, parameter :: maxit = 16
 
   double precision, dimension(n) :: x
   double precision :: fvec(n)
@@ -231,7 +231,6 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 2
-  integer, parameter :: maxit = 16
 
   double precision, dimension(n) :: x
   double precision :: fvec(n)
@@ -287,7 +286,6 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 3
-  integer, parameter :: maxit = 16
 
   double precision, dimension(n) :: x
   double precision :: fvec(n)
@@ -336,7 +334,6 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
 !
   integer, intent(out) :: ierr
 
-  integer, parameter :: maxit = 16
 
   integer, intent(in) :: s
   double precision, dimension(4*s) :: x
@@ -394,7 +391,6 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
 !
   integer, intent(out) :: ierr
 
-  integer, parameter :: maxit = 16
 
   integer, intent(in) :: s
   double precision, dimension(4*s-2) :: x

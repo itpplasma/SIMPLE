@@ -16,32 +16,25 @@ use diag_mod, only : icounter
   double precision, parameter :: pi=3.14159265358979d0
   double precision,parameter  :: c=2.9979d10
   double precision,parameter  :: e_charge=4.8032d-10
-  double precision,parameter  :: e_mass=9.1094d-28
   double precision,parameter  :: p_mass=1.6726d-24
   double precision,parameter  :: ev=1.6022d-12
-  double precision,parameter  :: snear_axis=0.05d0
 !
-  logical :: near_axis
-  integer          :: npoi,ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
-  integer          :: ipart,notrace_passing,loopskip,iskip,ilost,it
-  double precision :: dphi,rbeg,phibeg,zbeg,bmod00,rcham,rlarm,bmax,bmin
-  double precision :: tau,dtau,dtaumin,xi,v0,bmod_ref,E_alpha,trace_time
-  double precision :: RT0,R0i,cbfi,bz0i,bf0,trap_par
+  integer          :: ierr,L1i,nper,npoiper,i,ntimstep,ntestpart
+  integer          :: notrace_passing,loopskip
+  double precision :: dphi,phibeg,bmod00,rlarm
+  double precision :: tau,dtau,dtaumin,v0,bmod_ref,E_alpha,trace_time
+  double precision :: RT0,R0i,cbfi,bz0i,bf0
   double precision :: sbeg,thetabeg
-  double precision :: z1,z2
   double precision, dimension(5) :: z
   integer          :: npoiper2
   double precision :: contr_pp
   double precision :: facE_al
-  integer          :: ibins
-  integer          :: n_e,n_d,n_b
+  integer          :: n_e,n_d
   double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,alam0
   double precision :: alam,alam_prev,par_inv
   real :: tstart, tend
-  integer, parameter :: runlen = 1
   logical, parameter :: jparmode = .false.
   integer, parameter :: mode_sympl = 0 ! 0 = Euler1, 1 = Euler2, 2 = Verlet
-  integer :: ntau
 
   double precision, parameter :: relerr = 1d-10
 

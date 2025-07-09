@@ -23,9 +23,14 @@ Required libraries:
 * NetCDF
 * LAPACK/BLAS
 
-Supported compilers:
-* GNU Fortan
-* Intel Fortran
+Required compiler:
+* GNU Fortran (gfortran)
+
+For Python wrappers, do
+```bash
+pip install git+https://github.com/jameskermode/f90wrap
+pip install -e . --no-build-isolation
+```
 
 ## Usage
 

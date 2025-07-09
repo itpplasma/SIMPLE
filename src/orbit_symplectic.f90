@@ -6,6 +6,7 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use vector_potentail_mod, only: torflux
+use lapack_interfaces, only: dgesv
 
 implicit none
 

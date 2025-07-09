@@ -1,14 +1,17 @@
 add_subdirectory(contrib)
 
 set(SOURCES
+    lapack_interfaces.f90
+    sorting_mod.f90
     coordinates/coordinates.f90
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
     field/field_base.f90
     field/field_coils.f90
     field/field_vmec.f90
-    field/field_gvec.f90
-    field.f90
+    field/vmec_field_eval.f90
+    field/field_newton.F90
+    field.F90
     field/field_can_base.f90
     field/field_can_test.f90
     field/field_can_flux.f90
@@ -18,17 +21,17 @@ set(SOURCES
     field/field_can_albert.f90
     field_can.f90
     magfie.f90
-    boozer_converter.f90
+    boozer_converter.F90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
     vmecinm_m.f90
     spline_vmec_data.f90
     new_vmec_allocation_stuff.f90
-    get_canonical_coordinates.f90
+    get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
     orbit_symplectic.f90
-    util.f90
+    util.F90
     samplers.f90
     cut_detector.f90
     classification.f90
@@ -43,22 +46,31 @@ set(SOURCES
     simple_main.f90
 )
 
+# Add GVEC-specific sources if enabled
+if(ENABLE_GVEC)
+    list(APPEND SOURCES
+        field/field_gvec.f90
+        field/vmec_field_adapter.f90
+    )
+endif()
 
 add_library (simple STATIC ${SOURCES})
 
-if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
-	target_link_libraries(simple PRIVATE CONTRIB netcdf netcdff)
-else()
-	target_link_libraries(simple PUBLIC
-		netcdf netcdff CONTRIB BLAS::BLAS LAPACK::LAPACK
-	)
-endif()
-
-target_include_directories(simple PRIVATE 
-    ${gvec_BINARY_DIR}/include
+target_link_libraries(simple PUBLIC
+	netcdf netcdff CONTRIB BLAS::BLAS LAPACK::LAPACK
 )
 
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
-    gveclib
 )
+
+# Conditionally link GVEC if enabled
+if(ENABLE_GVEC)
+    target_include_directories(simple PRIVATE
+        ${gvec_BINARY_DIR}/include
+    )
+    target_link_libraries(simple PUBLIC
+        gveclib
+    )
+    target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
+endif()

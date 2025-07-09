@@ -122,24 +122,28 @@ end function id_from_name
 
 
 subroutine init_field_can(field_id, field_noncan)
-  use get_can_sub, only : get_canonical_coordinates
-  use boozer_sub, only : get_boozer_coordinates
+  use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
+  use boozer_sub, only : get_boozer_coordinates, get_boozer_coordinates_with_field
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
 
   integer, intent(in) :: field_id
   class(MagneticField), intent(in), optional :: field_noncan
+  class(MagneticField), allocatable :: field_to_use
 
   if (present(field_noncan)) then
+    allocate(field_to_use, source=field_noncan)
     call field_can_from_id(field_id, field_noncan)
   else
+    allocate(field_to_use, source=VmecField())
     call field_can_from_id(field_id, VmecField())
   end if
+  
   select case (field_id)
     case (CANFLUX)
-      call get_canonical_coordinates
+      call get_canonical_coordinates_with_field(field_to_use)
     case (BOOZER)
-      call get_boozer_coordinates
+      call get_boozer_coordinates_with_field(field_to_use)
     case (MEISS)
       call get_meiss_coordinates
     case (ALBERT)
@@ -148,6 +152,8 @@ subroutine init_field_can(field_id, field_noncan)
       print *, "init_field_can: Unknown field id ", field_id
       error stop
   end select
+  
+  deallocate(field_to_use)
 end subroutine init_field_can
 
 

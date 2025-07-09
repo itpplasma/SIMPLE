@@ -1,11 +1,18 @@
 module boozer_sub
   use spl_three_to_five_sub
+  use field, only: MagneticField
 
   implicit none
 
+  ! Module variable to store the field for use in subroutines
+  class(MagneticField), allocatable :: current_field
+  !$omp threadprivate(current_field)
+
   contains
 !
-  subroutine get_boozer_coordinates
+  subroutine get_boozer_coordinates_with_field(field)
+!
+! Field-agnostic version that accepts a MagneticField object
 !
   use vector_potentail_mod,   only : ns,hs
   use new_vmec_stuff_mod,     only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
@@ -19,6 +26,56 @@ module boozer_sub
   use binsrc_sub, only : binsrc
   use plag_coeff_sub, only : plag_coeff
   use spline_vmec_sub
+#ifdef GVEC_AVAILABLE
+  use vmec_field_adapter
+#else
+  use vmec_field_eval
+#endif
+!
+  implicit none
+!
+  class(MagneticField), intent(in) :: field
+!
+  ! Store field in module variable for use in nested subroutines
+  if (allocated(current_field)) deallocate(current_field)
+  allocate(current_field, source=field)
+  
+  ! Call the actual implementation
+  call get_boozer_coordinates_impl
+  
+  end subroutine get_boozer_coordinates_with_field
+
+!
+  subroutine get_boozer_coordinates
+!
+! Backward compatibility wrapper - uses VMEC field by default
+!
+  use field, only: VmecField
+  
+  call get_boozer_coordinates_with_field(VmecField())
+  
+  end subroutine get_boozer_coordinates
+
+!
+  subroutine get_boozer_coordinates_impl
+!
+  use vector_potentail_mod,   only : ns,hs
+  use new_vmec_stuff_mod,     only : n_theta,n_phi,h_theta,h_phi,ns_s,ns_tp
+  use boozer_coordinates_mod, only : ns_s_B,ns_tp_B,ns_B,n_theta_B,n_phi_B, &
+                                     hs_B,h_theta_B,h_phi_B,                &
+                                     s_Bcovar_tp_B,                         &
+                                     s_Bmod_B,s_Bcovar_r_B,                 &
+                                     s_delt_delp_V,s_delt_delp_B,           &
+                                     ns_max,derf1,derf2,derf3,              &
+                                     use_B_r, use_del_tp_B
+  use binsrc_sub, only : binsrc
+  use plag_coeff_sub, only : plag_coeff
+  use spline_vmec_sub
+#ifdef GVEC_AVAILABLE
+  use vmec_field_adapter
+#else
+  use vmec_field_eval
+#endif
 !
   implicit none
 !
@@ -136,9 +193,15 @@ module boozer_sub
       do i_phi=1,n_phi_B
         varphi=dble(i_phi-1)*h_phi_B
 !
-        call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                        sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                        Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+        if (allocated(current_field)) then
+          call vmec_field_evaluate_with_field(current_field, s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+                          sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+                          Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+        else
+          call vmec_field_evaluate(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+                          sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
+                          Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
+        end if
 !
         alam_2D(i_theta,i_phi)=alam
         bmod_Vg(i_theta,i_phi)=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
@@ -485,7 +548,7 @@ module boozer_sub
 !
 ! End spline Boozer data
 !
-  end subroutine get_boozer_coordinates
+  end subroutine get_boozer_coordinates_impl
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
