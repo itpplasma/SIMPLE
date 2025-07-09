@@ -212,7 +212,7 @@ contains
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
     subroutine spline_over_phi
-        use new_vmec_stuff_mod, only: ns_s, ns_tp, n_theta, n_phi, h_phi, sR, sZ, slam
+        use new_vmec_stuff_mod, only: ns_tp, n_theta, n_phi, h_phi, sR, sZ, slam
         use vector_potentail_mod, only: ns
         use spl_three_to_five_sub, only: spl_per
 
@@ -256,7 +256,7 @@ contains
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
     subroutine spline_over_theta
-        use new_vmec_stuff_mod, only: ns_s, ns_tp, n_theta, n_phi, h_theta, sR, sZ, slam
+        use new_vmec_stuff_mod, only: ns_tp, n_theta, n_phi, h_theta, sR, sZ, slam
         use vector_potentail_mod, only: ns
         use spl_three_to_five_sub, only: spl_per
 
@@ -556,7 +556,6 @@ contains
     subroutine splint_vmec_data(s, theta, varphi, A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
                                 R, Z, alam, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
         use vector_potentail_mod, only: ns, hs
-        use new_vmec_stuff_mod, only: ns_tp
 
         real(dp), intent(in) :: s, theta, varphi
         real(dp), intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota
@@ -696,13 +695,8 @@ contains
 
         real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
-        integer :: is, i_theta, i_phi, k
-        real(dp) :: ds, dtheta, dphi
-        real(dp) :: s, dA_phi_ds, dA_theta_ds, d2A_phi_ds2, aiota, daiota_ds
-
-        integer, parameter :: ns_max = 6
-
-        integer :: nstp
+        integer :: is, k
+        real(dp) :: s, ds, dA_phi_ds, dA_theta_ds, d2A_phi_ds2, aiota, daiota_ds
 
         dA_theta_ds = torflux
 
@@ -952,9 +946,9 @@ contains
         integer, intent(out) :: nheal
         real(dp), dimension(ns), intent(in) :: arr_in
 
-        integer :: is, k, nhe, ncheck
+        integer :: is, ncheck
 
-        real(dp) :: hs, s, ds, rho, rho_nonzero, errmax
+        real(dp) :: hs, rho, rho_nonzero, errmax
 
         real(dp), dimension(:), allocatable :: arr
 
@@ -993,7 +987,7 @@ contains
 
         use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, nper
 
-        integer :: is, i_theta, i_phi, k
+        integer :: i_theta, i_phi
         real(dp) :: volume, B00
         real(dp) :: B3, B2, bmod2
         real(dp) :: s, theta, varphi, A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
