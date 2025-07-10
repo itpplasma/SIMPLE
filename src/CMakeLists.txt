@@ -1,5 +1,3 @@
-add_subdirectory(contrib)
-
 set(SOURCES
     lapack_interfaces.f90
     sorting_mod.f90
@@ -24,9 +22,6 @@ set(SOURCES
     boozer_converter.F90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
-    vmecinm_m.f90
-    spline_vmec_data.f90
-    new_vmec_allocation_stuff.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90

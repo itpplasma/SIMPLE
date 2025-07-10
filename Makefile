@@ -1,4 +1,5 @@
 CONFIG ?= Release
+FLAGS ?=
 BUILD_DIR := build
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
@@ -9,7 +10,7 @@ CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(
 all: build
 
 $(BUILD_NINJA):
-	cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DCMAKE_COLOR_DIAGNOSTICS=ON
+	cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
 
 configure: $(BUILD_NINJA)
 
