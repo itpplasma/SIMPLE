@@ -20,8 +20,7 @@ module field_gvec
     type, extends(MagneticField) :: GvecField
         character(len=256) :: filename = ''
 
-        ! Basic geometry parameters (read from GVEC state)
-        real(dp) :: a_minor = 0.0_dp, r_major = 0.0_dp, volume = 0.0_dp
+        ! Field periods
         integer :: nfp = 1
 
         ! Data loaded flag
@@ -73,9 +72,6 @@ contains
                 self%nfp = 1
                 print *, 'Warning: Could not read nfp from GVEC state, using default nfp=1'
             end if
-            self%a_minor = 0.994987437106620_dp
-            self%r_major = 5.0_dp
-            self%volume = 97.7090835707847_dp
 
             self%data_loaded = .true.
         else
