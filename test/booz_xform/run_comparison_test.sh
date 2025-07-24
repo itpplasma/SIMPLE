@@ -25,18 +25,24 @@ fi
 cat > simple.in << EOF
 &config
 trace_time = 1d-2
-sbeg = 0.5d0
-send = 0.5d0
+sbeg(1) = 0.5d0
 ntestpart = 1
 netcdffile = 'wout.nc'
 isw_field_type = 2       ! Internal Boozer
-startmode = 1
 /
 EOF
 
+# Get the source directory for the Python script
+if [ -z "$CMAKE_CURRENT_SOURCE_DIR" ]; then
+    # If not set, assume we're in build/test/tests
+    SCRIPT_DIR="../../../test/booz_xform"
+else
+    SCRIPT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../booz_xform"
+fi
+
 # Run the Python comparison script
 echo "Running comparison..."
-python3 ${CMAKE_CURRENT_SOURCE_DIR}/../booz_xform/compare_boozer_coords.py
+python3 ${SCRIPT_DIR}/compare_boozer_coords.py
 
 # Check if output was created
 if [ -f "boozer_comparison.png" ]; then

@@ -8,6 +8,7 @@ set(SOURCES
     field/field_coils.f90
     field/field_vmec.f90
     field/vmec_field_eval.f90
+    field/field_booz_xform.f90
     field/field_newton.F90
     field.F90
     field/field_can_base.f90
