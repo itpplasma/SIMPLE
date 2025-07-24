@@ -75,9 +75,19 @@ Add support for reading Boozer coordinate magnetic fields directly from booz_xfo
 - Profile both approaches for typical use cases
 
 ## Current Status
+### Completed ✓
 - Basic test file created: `test/tests/test_booz_xform.f90`
 - CMake integration ready
 - Existing Boozer infrastructure in place: `field_can_boozer.f90`, `boozer_converter.F90`
+- Created test framework with setup script and comparison plots
+- Implemented `field_booz_xform.f90` module to read BOOZXFORM files
+- Fixed NetCDF interface issues (using nctools_module from libneo)
+- Test passes and generates comparison plots
+
+### In Progress
+- Need to add BOOZXFORM=5 constant to magfie.f90
+- Need to update simple_main.f90 to handle the new field type
+- Need to implement proper evaluate method with coordinate transformation
 
 ## Next Steps
 1. Start with reviewing booz_xform NetCDF format
