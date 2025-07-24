@@ -209,15 +209,18 @@ def plot_comparison(booz_data, s_test, theta_vmec, theta_boozer_simple):
     # Add BOOZXFORM p for comparison at s=0.5
     # We need to reconstruct p from Fourier coefficients
     s_idx = np.argmin(np.abs(booz_data['s'] - 0.5))
-    if s_idx > 0 and s_idx < len(booz_data['jlist']):
-        j_idx = booz_data['jlist'][s_idx-1]  # jlist is 1-indexed
+    # Find the corresponding radial index in the packed data
+    # jlist contains the surface indices for the packed arrays
+    if s_idx < len(booz_data['jlist']):
+        j_idx = s_idx  # Direct indexing for packed arrays
         theta_test = theta_vmec
         p_booz = np.zeros_like(theta_test)
-        # Sum Fourier components
+        # Sum Fourier components for p = theta_VMEC - theta_Boozer
         for k in range(booz_data['mnboz']):
             m = booz_data['ixm'][k]
-            n = booz_data['ixn'][k]
-            if j_idx >= 0 and j_idx < booz_data['pmns'].shape[0]:
+            n = booz_data['ixn'][k] // booz_data['nfp']  # Normalize by nfp
+            if j_idx < booz_data['pmns'].shape[0]:
+                # p_mn is sin(m*theta - n*nfp*zeta) component
                 p_booz += booz_data['pmns'][j_idx, k] * np.sin(m * theta_test)
         ax.plot(theta_vmec, p_booz, 'k--', label='s=0.5 (BOOZXFORM)', linewidth=2)
     
@@ -230,17 +233,21 @@ def plot_comparison(booz_data, s_test, theta_vmec, theta_boozer_simple):
     # Plot 3: Fourier spectrum of |B|
     ax = axes[1, 0]
     # Show first few Fourier modes
-    modes_to_show = 20
-    mode_labels = [f'({booz_data["ixm"][k]},{booz_data["ixn"][k]})' 
-                   for k in range(min(modes_to_show, booz_data['mnboz']))]
+    modes_to_show = min(20, booz_data['mnboz'])
+    # Use middle surface for spectrum
     s_idx = len(booz_data['jlist']) // 2
     if s_idx < booz_data['bmnc'].shape[0]:
         mode_amplitudes = np.abs(booz_data['bmnc'][s_idx, :modes_to_show])
         ax.bar(range(len(mode_amplitudes)), mode_amplitudes)
         ax.set_xlabel('Mode index')
         ax.set_ylabel('|B| Fourier amplitude')
-        ax.set_title(f'|B| Fourier Spectrum at s≈{booz_data["s"][s_idx+1]:.2f}')
+        # Fix indexing for title
+        actual_s = booz_data['s'][min(s_idx, len(booz_data['s'])-1)]
+        ax.set_title(f'|B| Fourier Spectrum at s≈{actual_s:.2f}')
         ax.set_yscale('log')
+    else:
+        ax.text(0.5, 0.5, 'No |B| spectrum data available', 
+                ha='center', va='center', transform=ax.transAxes)
     
     # Plot 4: G and I profiles
     ax = axes[1, 1]
