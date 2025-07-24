@@ -51,6 +51,8 @@ subroutine init_magfie(id)
     magfie => magfie_meiss
   case(ALBERT)
     magfie => magfie_albert
+  case(BOOZXFORM)
+    magfie => magfie_boozxform
   case default
     print *,'init_magfie: unknown id ', id
     error stop
@@ -395,5 +397,41 @@ end subroutine init_magfie
   hcurl(3)=(B_r*bder(2)-B_vartheta_B*bder(1)+dB_vartheta_B-dB_r(2))/sqrtgbmod
   !
   end subroutine magfie_boozer
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine magfie_boozxform(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!
+! Magnetic field evaluation using pre-computed BOOZXFORM data
+! This is a placeholder implementation that loads and evaluates 
+! Boozer coordinate fields from booz_xform NetCDF files
+!
+! Input coordinates: x(1)=s (normalized toroidal flux),
+!                   x(2)=theta_B (Boozer poloidal angle), 
+!                   x(3)=varphi_B (Boozer toroidal angle)
+!
+  double precision, intent(in) :: x(3)
+  double precision, intent(out) :: bmod,sqrtg
+  double precision, intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+  
+  logical, save :: warning_printed = .false.
+  
+  ! TODO: Implement actual field evaluation
+  ! For now, this is a placeholder that returns dummy values
+  if (.not. warning_printed) then
+    print *, 'WARNING: magfie_boozxform not fully implemented yet'
+    print *, '         Returning dummy field values'
+    warning_printed = .true.
+  end if
+  
+  ! Dummy field values - need to implement proper evaluation
+  bmod = 1.0d0
+  sqrtg = 1.0d0
+  bder = 0.0d0
+  hcovar = [0.0d0, 1.0d0, 1.0d0]
+  hctrvr = [0.0d0, 1.0d0, 1.0d0]
+  hcurl = 0.0d0
+  
+  end subroutine magfie_boozxform
 
   end module magfie_sub
