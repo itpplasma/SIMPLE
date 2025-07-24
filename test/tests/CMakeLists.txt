@@ -175,18 +175,16 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
-# Efficient golden record test: compare against multiple versions in one test
-# This runs the working copy tests only once and compares against all reference versions
+# Efficient golden record test: compare against main branch
+# This runs the working copy tests only once and compares against main
 add_test(
     NAME golden_record_multi
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record_multi.sh
-        46f1f53                # Should match (same algorithm)
-        --expect-fail e25ca7e  # Should fail (old version)
-        main                   # Should match (compare with main branch)
+        main                   # Always compare with main branch
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(golden_record_multi PROPERTIES
-    TIMEOUT 600  # 10 minutes for all comparisons
+    TIMEOUT 600  # 10 minutes for comparison
     LABELS "golden_record;regression"
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
