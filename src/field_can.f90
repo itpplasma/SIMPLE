@@ -3,7 +3,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
-use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
+use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT, BOOZXFORM
 use field, only : MagneticField, VmecField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
@@ -56,6 +56,10 @@ subroutine field_can_from_name(field_name, field_noncan)
       evaluate => evaluate_albert
       can_to_ref => can_to_ref_albert
       ref_to_can => ref_to_can_albert
+    case("boozxform")
+      ! BOOZXFORM field evaluation is handled directly in magfie_boozxform
+      ! No canonical coordinate transformation needed
+      ! Use test evaluation as a placeholder (should not be called)
     case default
       print *, "field_can_from_name: Unknown field type ", field_name
       error stop
@@ -92,6 +96,8 @@ function name_from_id(field_id)
       name_from_id = "meiss"
     case(ALBERT)
       name_from_id = "albert"
+    case(BOOZXFORM)
+      name_from_id = "boozxform"
     case default
       print *, "name_from_id: Unknown field id ", field_id
       error stop
@@ -148,6 +154,9 @@ subroutine init_field_can(field_id, field_noncan)
       call get_meiss_coordinates
     case (ALBERT)
       call get_albert_coordinates
+    case (BOOZXFORM)
+      ! BOOZXFORM uses pre-computed Boozer coordinates, no transformation needed
+      ! Field evaluation is handled directly in magfie_boozxform
     case default
       print *, "init_field_can: Unknown field id ", field_id
       error stop
