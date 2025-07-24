@@ -30,7 +30,7 @@ end interface
 
 procedure(magfie_base), pointer :: magfie => null()
 
-integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
+integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, BOOZXFORM=5
 
 contains
 
