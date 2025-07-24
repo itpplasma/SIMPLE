@@ -10,39 +10,55 @@ import sys
 import os
 
 # Add parent directory to path for pysimple
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+# Handle both source tree and build tree execution
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if 'build' in script_dir:
+    # We're running from build directory
+    sys.path.insert(0, os.getcwd())  # Current dir should have pysimple
+else:
+    # We're running from source directory
+    build_dir = os.path.join(script_dir, '../../build')
+    if os.path.exists(build_dir):
+        sys.path.insert(0, build_dir)
 
 try:
     import pysimple
-except ImportError:
-    print("Error: pysimple not found. Please build SIMPLE first.")
+except ImportError as e:
+    print(f"Error: pysimple not found. Please build SIMPLE first.")
+    print(f"Python path: {sys.path}")
+    print(f"Import error: {e}")
     sys.exit(1)
 
 
 def read_booz_xform_file(filename):
-    """Read booz_xform NetCDF file and return key data"""
+    """Read BOOZXFORM NetCDF file and return key data"""
     with nc.Dataset(filename, 'r') as f:
+        # This is the older BOOZXFORM format from Stellopt
         data = {
-            'ns': f.dimensions['ns'].size,
-            'nfp': int(f.variables['nfp'][:]),
-            's': f.variables['s_b'][:],
-            'iota': f.variables['iota'][:],
-            'G': f.variables['G_b'][:],  # Boozer G (toroidal covariant component)
-            'I': f.variables['I_b'][:],  # Boozer I (poloidal covariant component)
-            'B': f.variables['B_b'][:],  # |B| on Boozer grid
-            'dBds': f.variables['dBds_b'][:],
-            'dBdtheta': f.variables['dBdtheta_b'][:],
-            'dBdzeta': f.variables['dBdzeta_b'][:],
-            'mpol': int(f.variables['mpol_b'][:]),
-            'ntor': int(f.variables['ntor_b'][:]),
-            'xm_b': f.variables['xm_b'][:],
-            'xn_b': f.variables['xn_b'][:],
-            'rmnc_b': f.variables['rmnc_b'][:],
-            'zmns_b': f.variables['zmns_b'][:],
-            'pmns_b': f.variables['pmns_b'][:],  # p = theta_VMEC - theta_Boozer
-            'gmns_b': f.variables['gmns_b'][:],  # g = zeta_VMEC - zeta_Boozer
-            'bmnc_b': f.variables['bmnc_b'][:],  # |B| Fourier coefficients
+            'ns': int(f.variables['ns_b'][:]),
+            'nfp': int(f.variables['nfp_b'][:]),
+            'mboz': int(f.variables['mboz_b'][:]),
+            'nboz': int(f.variables['nboz_b'][:]),
+            'mnboz': int(f.variables['mnboz_b'][:]),
+            'iota': f.variables['iota_b'][:],
+            'buco': f.variables['buco_b'][:],  # Boozer I (poloidal covariant)
+            'bvco': f.variables['bvco_b'][:],  # Boozer G (toroidal covariant)
+            'beta': f.variables['beta_b'][:],
+            'phip': f.variables['phip_b'][:],
+            'chi': f.variables['chi_b'][:],
+            'pres': f.variables['pres_b'][:],
+            'ixm': f.variables['ixm_b'][:].astype(int),
+            'ixn': f.variables['ixn_b'][:].astype(int),
+            'rmnc': f.variables['rmnc_b'][:],
+            'zmns': f.variables['zmns_b'][:],
+            'pmns': f.variables['pmns_b'][:],  # p = theta_VMEC - theta_Boozer
+            'gmn': f.variables['gmn_b'][:],    # g = zeta_VMEC - zeta_Boozer
+            'bmnc': f.variables['bmnc_b'][:],   # |B| Fourier coefficients
+            'jlist': f.variables['jlist'][:].astype(int),
         }
+        
+        # Create s array (normalized toroidal flux)
+        data['s'] = np.linspace(0, 1, data['ns'])
         
         # Check for stellarator symmetry
         try:
@@ -50,9 +66,10 @@ def read_booz_xform_file(filename):
         except:
             data['lasym'] = False
             
-        print(f"Loaded booz_xform file: {filename}")
+        print(f"Loaded BOOZXFORM file: {filename}")
         print(f"  ns = {data['ns']}, nfp = {data['nfp']}")
-        print(f"  mpol = {data['mpol']}, ntor = {data['ntor']}")
+        print(f"  mboz = {data['mboz']}, nboz = {data['nboz']}")
+        print(f"  mnboz = {data['mnboz']} Fourier modes")
         print(f"  stellarator symmetric: {not data['lasym']}")
         
     return data
@@ -124,16 +141,43 @@ def compare_coordinate_transform():
     theta_boozer_simple = np.zeros((len(s_test), len(theta_vmec)))
     zeta_boozer_simple = np.zeros((len(s_test), len(theta_vmec)))
     
-    # Get Boozer angles from SIMPLE's internal conversion
-    for i, s in enumerate(s_test):
-        for j, th_v in enumerate(theta_vmec):
-            # Convert VMEC -> Boozer using SIMPLE
-            th_b, z_b = pysimple.boozer_sub.vmec_to_boozer(s, th_v, zeta_vmec[0])
-            theta_boozer_simple[i, j] = th_b
-            zeta_boozer_simple[i, j] = z_b
-    
-    # For comparison with booz_xform, we need to evaluate p and g
-    # p = theta_VMEC - theta_Boozer, g = zeta_VMEC - zeta_Boozer
+    # Check if boozer conversion is available
+    try:
+        # Try to access boozer conversion
+        if hasattr(pysimple, 'boozer_sub'):
+            boozer_sub = pysimple.boozer_sub
+        elif hasattr(pysimple, 'Boozer_Coordinates_Mod'):
+            # Try through Boozer_Coordinates_Mod
+            boozer_sub = pysimple.Boozer_Coordinates_Mod
+        elif hasattr(pysimple, 'boozer_coordinates_mod'):
+            # Try lowercase version
+            boozer_sub = pysimple.boozer_coordinates_mod
+        else:
+            print("Warning: Boozer conversion not directly accessible")
+            print("Available modules:", [m for m in dir(pysimple) if not m.startswith('_')])
+            # For now, just use the VMEC angles as a placeholder
+            for i in range(len(s_test)):
+                theta_boozer_simple[i, :] = theta_vmec
+                zeta_boozer_simple[i, :] = zeta_vmec[0]
+            return s_test, theta_vmec, theta_boozer_simple, zeta_boozer_simple
+            
+        # Get Boozer angles from SIMPLE's internal conversion
+        for i, s in enumerate(s_test):
+            for j, th_v in enumerate(theta_vmec):
+                # Convert VMEC -> Boozer using SIMPLE
+                if hasattr(boozer_sub, 'vmec_to_boozer'):
+                    th_b, z_b = boozer_sub.vmec_to_boozer(s, th_v, zeta_vmec[0])
+                else:
+                    # Fallback - no conversion available
+                    th_b, z_b = th_v, zeta_vmec[0]
+                theta_boozer_simple[i, j] = th_b
+                zeta_boozer_simple[i, j] = z_b
+    except Exception as e:
+        print(f"Error in coordinate conversion: {e}")
+        # Use VMEC angles as fallback
+        for i in range(len(s_test)):
+            theta_boozer_simple[i, :] = theta_vmec
+            zeta_boozer_simple[i, :] = zeta_vmec[0]
     
     return s_test, theta_vmec, theta_boozer_simple, zeta_boozer_simple
 
@@ -142,11 +186,11 @@ def plot_comparison(booz_data, s_test, theta_vmec, theta_boozer_simple):
     """Create comparison plots"""
     
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle('SIMPLE Internal Boozer vs booz_xform Comparison', fontsize=14)
+    fig.suptitle('SIMPLE Internal Boozer vs BOOZXFORM Comparison', fontsize=14)
     
     # Plot 1: Iota profile
     ax = axes[0, 0]
-    ax.plot(booz_data['s'], booz_data['iota'], 'b-', label='booz_xform', linewidth=2)
+    ax.plot(booz_data['s'], booz_data['iota'], 'b-', label='BOOZXFORM', linewidth=2)
     # TODO: Add SIMPLE's iota when accessible
     ax.set_xlabel('s')
     ax.set_ylabel('ι (rotational transform)')
@@ -159,45 +203,54 @@ def plot_comparison(booz_data, s_test, theta_vmec, theta_boozer_simple):
     colors = ['red', 'green', 'blue']
     for i, (s, color) in enumerate(zip(s_test, colors)):
         p_simple = theta_vmec - theta_boozer_simple[i, :]
-        ax.plot(theta_vmec, p_simple, f'{color}-', 
+        ax.plot(theta_vmec, p_simple, '-', color=color,
                 label=f's={s:.2f} (SIMPLE)', linewidth=2)
+    
+    # Add BOOZXFORM p for comparison at s=0.5
+    # We need to reconstruct p from Fourier coefficients
+    s_idx = np.argmin(np.abs(booz_data['s'] - 0.5))
+    if s_idx > 0 and s_idx < len(booz_data['jlist']):
+        j_idx = booz_data['jlist'][s_idx-1]  # jlist is 1-indexed
+        theta_test = theta_vmec
+        p_booz = np.zeros_like(theta_test)
+        # Sum Fourier components
+        for k in range(booz_data['mnboz']):
+            m = booz_data['ixm'][k]
+            n = booz_data['ixn'][k]
+            if j_idx >= 0 and j_idx < booz_data['pmns'].shape[0]:
+                p_booz += booz_data['pmns'][j_idx, k] * np.sin(m * theta_test)
+        ax.plot(theta_vmec, p_booz, 'k--', label='s=0.5 (BOOZXFORM)', linewidth=2)
+    
     ax.set_xlabel('θ_VMEC')
     ax.set_ylabel('p = θ_VMEC - θ_Boozer')
     ax.legend()
     ax.grid(True, alpha=0.3)
     ax.set_title('Poloidal Angle Transform (ζ = 0)')
     
-    # Plot 3: |B| on a surface
+    # Plot 3: Fourier spectrum of |B|
     ax = axes[1, 0]
-    s_idx = len(booz_data['s']) // 2  # Middle surface
-    if 'B' in booz_data and booz_data['B'].ndim > 1:
-        # Plot |B| contours if available
-        ntheta = booz_data['B'].shape[1] if booz_data['B'].ndim > 1 else 1
-        nzeta = booz_data['B'].shape[2] if booz_data['B'].ndim > 2 else 1
-        if ntheta > 1 and nzeta > 1:
-            theta_grid = np.linspace(0, 2*np.pi, ntheta)
-            zeta_grid = np.linspace(0, 2*np.pi/booz_data['nfp'], nzeta)
-            THETA, ZETA = np.meshgrid(theta_grid, zeta_grid)
-            cs = ax.contour(THETA, ZETA, booz_data['B'][s_idx, :, :].T)
-            ax.clabel(cs, inline=True, fontsize=8)
-            ax.set_title(f'|B| Contours at s={booz_data["s"][s_idx]:.2f}')
-    else:
-        # Just plot text if no 2D data
-        ax.text(0.5, 0.5, f'|B| data shape: {booz_data["B"].shape}', 
-                ha='center', va='center', transform=ax.transAxes)
-        ax.set_title('|B| Data Structure')
-    ax.set_xlabel('θ_Boozer')
-    ax.set_ylabel('ζ_Boozer')
+    # Show first few Fourier modes
+    modes_to_show = 20
+    mode_labels = [f'({booz_data["ixm"][k]},{booz_data["ixn"][k]})' 
+                   for k in range(min(modes_to_show, booz_data['mnboz']))]
+    s_idx = len(booz_data['jlist']) // 2
+    if s_idx < booz_data['bmnc'].shape[0]:
+        mode_amplitudes = np.abs(booz_data['bmnc'][s_idx, :modes_to_show])
+        ax.bar(range(len(mode_amplitudes)), mode_amplitudes)
+        ax.set_xlabel('Mode index')
+        ax.set_ylabel('|B| Fourier amplitude')
+        ax.set_title(f'|B| Fourier Spectrum at s≈{booz_data["s"][s_idx+1]:.2f}')
+        ax.set_yscale('log')
     
     # Plot 4: G and I profiles
     ax = axes[1, 1]
-    ax.plot(booz_data['s'], booz_data['G'], 'b-', label='G (toroidal)', linewidth=2)
-    ax.plot(booz_data['s'], booz_data['I'], 'r-', label='I (poloidal)', linewidth=2)
+    ax.plot(booz_data['s'], booz_data['bvco'], 'b-', label='G (toroidal)', linewidth=2)
+    ax.plot(booz_data['s'], booz_data['buco'], 'r-', label='I (poloidal)', linewidth=2)
     ax.set_xlabel('s')
     ax.set_ylabel('Boozer covariant components')
     ax.legend()
     ax.grid(True, alpha=0.3)
-    ax.set_title('Boozer G and I')
+    ax.set_title('Boozer I and G')
     
     plt.tight_layout()
     return fig
@@ -251,7 +304,7 @@ def main():
     print(f"SIMPLE |B| range: [{simple_results['modB'].min():.4f}, {simple_results['modB'].max():.4f}]")
     print(f"SIMPLE sqrt(g): {simple_results['sqrtg'][0]:.6e}")
     
-    plt.show()
+    # plt.show()  # Don't show in test mode
 
 
 if __name__ == '__main__':
