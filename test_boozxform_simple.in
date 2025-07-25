@@ -1,0 +1,8 @@
+&config
+trace_time = 1d-4
+sbeg = 0.5d0
+ntestpart = 1
+netcdffile = 'wout.nc'
+isw_field_type = 5
+boozxform_file = 'boozmn_LandremanPaul2021_QA_lowres.nc'
+/
