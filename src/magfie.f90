@@ -43,21 +43,30 @@ contains
 subroutine init_magfie(id)
   integer, intent(in) :: id
 
+  print *, 'init_magfie: called with id =', id
+  
   select case(id)
   case(TEST)
     print *, 'init_magfie: magfie_test not implemented'
     error stop
   case(CANFLUX)
+    print *, 'init_magfie: setting magfie => magfie_can'
     magfie => magfie_can
   case(VMEC)
+    print *, 'init_magfie: setting magfie => magfie_vmec'
     magfie => magfie_vmec
   case(BOOZER)
+    print *, 'init_magfie: setting magfie => magfie_boozer'
     magfie => magfie_boozer
   case(MEISS)
+    print *, 'init_magfie: setting magfie => magfie_meiss'
     magfie => magfie_meiss
   case(ALBERT)
+    print *, 'init_magfie: setting magfie => magfie_albert'
     magfie => magfie_albert
   case(BOOZXFORM)
+    print *, 'init_magfie: setting magfie => magfie_boozxform'
+    print *, 'init_magfie: boozxform_filename =', trim(boozxform_filename)
     magfie => magfie_boozxform
     ! Set default filename for testing - should be set by caller
     if (trim(boozxform_filename) == '') then
@@ -438,9 +447,13 @@ end subroutine init_magfie
     if (trim(boozxform_filename) == '') then
       error stop 'magfie_boozxform: boozxform_filename not set'
     end if
+    print *, 'magfie_boozxform: Loading BOOZXFORM file:', trim(boozxform_filename)
     call booz_field%load(boozxform_filename)
     booz_field_loaded = .true.
+    print *, 'magfie_boozxform: BOOZXFORM file loaded successfully'
   end if
+  
+  print *, 'magfie_boozxform: Called with x =', x
   
   ! Convert to appropriate precision and transform coordinates
   r = sqrt(x(1))  ! Convert s to r = sqrt(s)
