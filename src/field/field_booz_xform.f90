@@ -61,19 +61,22 @@ contains
 
   !> Load BOOZXFORM data from NetCDF file
   subroutine load_booz_xform(this, filename)
-    use nctools_module, only: nc_open, nc_close, nc_get
-    use netcdf, only: nf90_inquire_dimension, nf90_inq_dimid, nf90_noerr, &
-                      nf90_strerror, nf90_inq_varid, nf90_get_var
+    use netcdf
     class(BoozXformField), intent(inout) :: this
     character(len=*), intent(in) :: filename
     
     integer :: ncid, lasym_int
     integer :: ns_dim, mn_dim, pack_dim
-    integer :: dimid, ierr, i
+    integer :: dimid, ierr, i, varid
     
-    ! Open NetCDF file
-    call nc_open(filename, ncid)
-    print *, 'Opened NetCDF file with ncid =', ncid
+    ! Open NetCDF file using native NetCDF
+    ierr = nf90_open(filename, NF90_NOWRITE, ncid)
+    if (ierr /= nf90_noerr) then
+      print *, 'Error opening file:', trim(filename)
+      print *, 'Error:', trim(nf90_strerror(ierr))
+      error stop
+    end if
+    print *, 'Opened NetCDF file:', trim(filename)
     
     ! Read dimensions using NetCDF directly
     ierr = nf90_inq_dimid(ncid, 'radius', dimid)
@@ -103,27 +106,36 @@ contains
     this%ns_b = ns_dim
     this%mnboz = mn_dim
     
-    ! Read scalar variables (these should match the dimensions)
-    print *, 'Reading nfp_b...'
-    call nc_get(ncid, 'nfp_b', this%nfp_b)
-    print *, 'Reading mboz_b...'
-    call nc_get(ncid, 'mboz_b', this%mboz_b)
-    print *, 'Reading nboz_b...'
-    call nc_get(ncid, 'nboz_b', this%nboz_b)
-    print *, 'Reading aspect_b...'
-    call nc_get(ncid, 'aspect_b', this%aspect_b)
-    print *, 'Reading rmax_b...'
-    call nc_get(ncid, 'rmax_b', this%rmax_b)
-    print *, 'Reading rmin_b...'
-    call nc_get(ncid, 'rmin_b', this%rmin_b)
-    print *, 'Reading betaxis_b...'
-    call nc_get(ncid, 'betaxis_b', this%betaxis_b)
+    ! Read scalar variables using native NetCDF
+    print *, 'Reading scalar variables...'
+    
+    ierr = nf90_inq_varid(ncid, 'nfp_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%nfp_b)
+    
+    ierr = nf90_inq_varid(ncid, 'mboz_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%mboz_b)
+    
+    ierr = nf90_inq_varid(ncid, 'nboz_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%nboz_b)
+    
+    ierr = nf90_inq_varid(ncid, 'aspect_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%aspect_b)
+    
+    ierr = nf90_inq_varid(ncid, 'rmax_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%rmax_b)
+    
+    ierr = nf90_inq_varid(ncid, 'rmin_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%rmin_b)
+    
+    ierr = nf90_inq_varid(ncid, 'betaxis_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%betaxis_b)
     
     ! Check stellarator symmetry
-    print *, 'Reading lasym__logical__...'
-    call nc_get(ncid, 'lasym__logical__', lasym_int)
-    this%lasym_b = (lasym_int == 1)
-    print *, 'lasym_int =', lasym_int, 'lasym_b =', this%lasym_b
+    ierr = nf90_inq_varid(ncid, 'lasym__logical__', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, lasym_int)
+      this%lasym_b = (lasym_int == 1)
+    end if
     
     ! Allocate arrays
     print *, 'Allocating arrays: ns_dim =', ns_dim, 'mn_dim =', mn_dim, 'pack_dim =', pack_dim
@@ -147,51 +159,112 @@ contains
     allocate(this%gmn_b(pack_dim, mn_dim))
     allocate(this%bmnc_b(pack_dim, mn_dim))
     
-    ! Read radial arrays - for now, just initialize with dummy values
-    print *, 'Initializing radial arrays with dummy values for testing...'
-    this%iota_b = 1.0_dp
-    this%buco_b = 1.0_dp
-    this%bvco_b = 1.0_dp
-    this%beta_b = 0.0_dp
-    this%phip_b = 1.0_dp
-    this%chi_b = 0.0_dp
-    this%pres_b = 0.0_dp
-    this%phi_b = 0.0_dp
+    ! Read radial arrays
+    print *, 'Reading radial arrays...'
+    
+    ierr = nf90_inq_varid(ncid, 'iota_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%iota_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading iota_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ierr = nf90_inq_varid(ncid, 'buco_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%buco_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading buco_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ierr = nf90_inq_varid(ncid, 'bvco_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%bvco_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading bvco_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ! Read remaining arrays
+    ierr = nf90_inq_varid(ncid, 'beta_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%beta_b)
+    
+    ierr = nf90_inq_varid(ncid, 'phip_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%phip_b)
+    
+    ierr = nf90_inq_varid(ncid, 'chi_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%chi_b)
+    
+    ierr = nf90_inq_varid(ncid, 'pres_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%pres_b)
+    
+    ierr = nf90_inq_varid(ncid, 'phi_b', varid)
+    if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, this%phi_b)
     
     ! Create s array (normalized toroidal flux)
     this%s_b = [(real(i-1, dp) / real(ns_dim-1, dp), i = 1, ns_dim)]
     
-    ! Initialize arrays with dummy values for testing
-    print *, 'Initializing arrays with dummy values for testing...'
-    ! Mode numbers
-    do i = 1, mn_dim
-      this%ixm_b(i) = mod(i-1, this%mboz_b + 1)
-      this%ixn_b(i) = (i-1) / (this%mboz_b + 1)
-    end do
+    ! Read mode arrays and Fourier coefficients
+    print *, 'Reading mode arrays and Fourier coefficients...'
     
-    ! jlist - map packed indices to surface indices
-    do i = 1, pack_dim
-      this%jlist(i) = i + 1  ! Skip first surface
-    end do
+    ierr = nf90_inq_varid(ncid, 'ixm_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%ixm_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading ixm_b:', trim(nf90_strerror(ierr))
+    end if
     
-    ! Initialize Fourier coefficients with simple values
-    this%rmnc_b = 0.0_dp
-    this%zmns_b = 0.0_dp
-    this%pmns_b = 0.0_dp
-    this%gmn_b = 0.0_dp
-    this%bmnc_b = 0.0_dp
+    ierr = nf90_inq_varid(ncid, 'ixn_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%ixn_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading ixn_b:', trim(nf90_strerror(ierr))
+    end if
     
-    ! Set some non-zero values for testing
-    this%rmnc_b(1,1) = 10.0_dp  ! Major radius
-    this%bmnc_b(:,1) = 1.0_dp    ! Constant B field
+    ierr = nf90_inq_varid(ncid, 'jlist', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%jlist)
+      if (ierr /= nf90_noerr) print *, 'Error reading jlist:', trim(nf90_strerror(ierr))
+    end if
+    
+    ! Read Fourier coefficients
+    ierr = nf90_inq_varid(ncid, 'rmnc_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%rmnc_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading rmnc_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ierr = nf90_inq_varid(ncid, 'zmns_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%zmns_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading zmns_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ierr = nf90_inq_varid(ncid, 'pmns_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%pmns_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading pmns_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ierr = nf90_inq_varid(ncid, 'gmn_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%gmn_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading gmn_b:', trim(nf90_strerror(ierr))
+    end if
+    
+    ierr = nf90_inq_varid(ncid, 'bmnc_b', varid)
+    if (ierr == nf90_noerr) then
+      ierr = nf90_get_var(ncid, varid, this%bmnc_b)
+      if (ierr /= nf90_noerr) print *, 'Error reading bmnc_b:', trim(nf90_strerror(ierr))
+    end if
     
     ! Close file
-    call nc_close(ncid)
+    ierr = nf90_close(ncid)
+    if (ierr /= nf90_noerr) then
+      print *, 'Error closing file:', trim(nf90_strerror(ierr))
+    end if
     
     print *, 'Loaded BOOZXFORM file:', trim(filename)
     print *, '  ns =', this%ns_b, ', nfp =', this%nfp_b
     print *, '  mboz =', this%mboz_b, ', nboz =', this%nboz_b
     print *, '  mnboz =', this%mnboz, ' Fourier modes'
+    print *, '  iota_b(1) =', this%iota_b(1), 'iota_b(ns) =', this%iota_b(this%ns_b)
+    print *, '  First few mode numbers:'
+    print *, '    m =', this%ixm_b(1:min(5,size(this%ixm_b)))
+    print *, '    n =', this%ixn_b(1:min(5,size(this%ixn_b)))
     
   end subroutine load_booz_xform
 
