@@ -6,4 +6,5 @@ ntestpart = 1
 netcdffile = 'wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc'
 boozxform_file = 'boozmn_LandremanPaul2021_QA_reactorScale_lowres_reference.nc'
 isw_field_type = 5
+integmode = 0  ! Use RK integrator which works with magfie interface
 /
