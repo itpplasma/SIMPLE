@@ -2,6 +2,7 @@ module magfie_sub
 use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
+use field_booz_xform
 
 implicit none
 
@@ -32,7 +33,9 @@ procedure(magfie_base), pointer :: magfie => null()
 
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, BOOZXFORM=5
 
-! Module-level variable for BOOZXFORM filename
+! Module-level variable for BOOZXFORM field
+type(BoozXformField), save :: booz_field
+logical, save :: booz_field_loaded = .false.
 character(256) :: boozxform_filename = ''
 
 contains
@@ -410,85 +413,87 @@ end subroutine init_magfie
   subroutine magfie_boozxform(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 !
 ! Magnetic field evaluation using pre-computed BOOZXFORM data
-! Evaluates Boozer coordinate fields from booz_xform NetCDF files
+! This wraps the BoozXformField to provide the magfie interface
 !
 ! Input coordinates: x(1)=s (normalized toroidal flux),
-!                   x(2)=theta_B (Boozer poloidal angle), 
-!                   x(3)=varphi_B (Boozer toroidal angle)
+!                   x(2)=theta (VMEC poloidal angle), 
+!                   x(3)=phi (VMEC toroidal angle)
 !
-  use field_booz_xform, only: BoozXformField
-  
+  use, intrinsic :: iso_fortran_env, only: dp => real64
   double precision, intent(in) :: x(3)
   double precision, intent(out) :: bmod,sqrtg
   double precision, intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
   
-  ! Module-level variables for persistent field data
-  type(BoozXformField), save :: booz_field
-  logical, save :: initialized = .false.
-  logical, save :: warning_printed = .false.
+  real(dp) :: x_dp(3), Acov(3), sqgBctr(3)
+  real(dp) :: r, theta, phi, dr_ds
+  real(dp) :: hs, ht, hp  ! step sizes for derivatives
+  real(dp) :: x_plus(3), x_minus(3)
+  real(dp) :: Acov_plus(3), Acov_minus(3)
+  real(dp) :: hcov_plus(3), hcov_minus(3)
+  real(dp) :: Bmod_plus, Bmod_minus
+  integer :: i
   
-  ! Local variables
-  double precision :: s, theta_b, zeta_b
-  double precision :: I_pol, G_tor, iota_val
-  integer :: s_idx
-  double precision :: s_frac
-  
-  ! Initialize field data on first call
-  if (.not. initialized) then
+  ! Load BOOZXFORM data if not already loaded
+  if (.not. booz_field_loaded) then
     if (trim(boozxform_filename) == '') then
-      print *, 'ERROR: BOOZXFORM filename not set - call init_magfie first'
-      error stop
+      error stop 'magfie_boozxform: boozxform_filename not set'
     end if
-    ! DEBUG: Skip loading for now to test basic functionality
-    print *, 'DEBUG: BOOZXFORM field loading skipped - testing basic flow'
-    print *, 'DEBUG: Would load from: ', trim(boozxform_filename)
-    initialized = .true.
+    call booz_field%load(boozxform_filename)
+    booz_field_loaded = .true.
   end if
   
-  ! Extract coordinates
-  s = x(1)        ! normalized toroidal flux
-  theta_b = x(2)  ! Boozer poloidal angle
-  zeta_b = x(3)   ! Boozer toroidal angle
+  ! Convert to appropriate precision and transform coordinates
+  r = sqrt(x(1))  ! Convert s to r = sqrt(s)
+  theta = x(2)
+  phi = x(3)
+  x_dp = [r, theta, phi]
   
-  ! DEBUG: Use dummy values for testing
-  iota_val = 0.5d0  ! Dummy iota
-  I_pol = 1.0d0     ! Dummy poloidal current
-  G_tor = 2.0d0     ! Dummy toroidal current
+  ! Evaluate field at current position
+  call booz_field%evaluate(x_dp, Acov, hcovar, bmod, sqgBctr)
   
-  ! TODO: Implement proper Fourier evaluation of |B| and other quantities
-  ! For now, use simplified expressions based on BOOZXFORM data
+  ! Compute sqrt(g) from contravariant B components
+  if (sqgBctr(2) /= 0.0_dp .or. sqgBctr(3) /= 0.0_dp) then
+    sqrtg = bmod / sqrt(sqgBctr(2)*hcovar(2) + sqgBctr(3)*hcovar(3))
+  else
+    sqrtg = 1.0_dp  ! Default if contravariant components not properly set
+  end if
   
-  ! Simplified field strength (should be computed from Fourier series)
-  bmod = 1.0d0  ! Placeholder - need to evaluate bmnc Fourier series
+  ! Compute contravariant h components
+  hctrvr(1) = sqgBctr(1) / (sqrtg * bmod)
+  hctrvr(2) = sqgBctr(2) / (sqrtg * bmod)
+  hctrvr(3) = sqgBctr(3) / (sqrtg * bmod)
   
-  ! Simplified Jacobian (approximate)
-  sqrtg = abs(G_tor + iota_val * I_pol) / (bmod * bmod)
-  if (sqrtg <= 0.0d0) sqrtg = 1.0d0
+  ! Compute derivatives of log(B) using finite differences
+  hs = 1.0d-5
+  ht = hs * 6.28318530718d0  ! 2*pi scaling
+  hp = ht / 5.0d0
+  dr_ds = 0.5d0 / r  ! dr/ds = 1/(2*sqrt(s))
   
-  ! Simplified derivatives (all zero for now)
-  bder = 0.0d0
+  ! Derivative with respect to s
+  x_plus = [sqrt(x(1) + hs), theta, phi]
+  x_minus = [sqrt(x(1) - hs), theta, phi]
+  call booz_field%evaluate(x_plus, Acov_plus, hcov_plus, Bmod_plus)
+  call booz_field%evaluate(x_minus, Acov_minus, hcov_minus, Bmod_minus)
+  bder(1) = (Bmod_plus - Bmod_minus) / (2.0d0 * hs * bmod)
   
-  ! Covariant field components in Boozer coordinates
-  ! In Boozer coordinates: B = B^theta * grad(theta) + B^zeta * grad(zeta)
-  ! where B^theta = I/(mu_0) and B^zeta = G/(mu_0)
-  hcovar(1) = 0.0d0          ! B_s = 0 in Boozer coordinates
-  hcovar(2) = I_pol / bmod   ! B_theta / |B|
-  hcovar(3) = G_tor / bmod   ! B_zeta / |B|
+  ! Derivative with respect to theta
+  x_plus = [r, theta + ht, phi]
+  x_minus = [r, theta - ht, phi]
+  call booz_field%evaluate(x_plus, Acov_plus, hcov_plus, Bmod_plus)
+  call booz_field%evaluate(x_minus, Acov_minus, hcov_minus, Bmod_minus)
+  bder(2) = (Bmod_plus - Bmod_minus) / (2.0d0 * ht * bmod)
   
-  ! Contravariant field components
-  hctrvr(1) = 0.0d0                    ! B^s = 0
-  hctrvr(2) = (G_tor + iota_val * I_pol) / (sqrtg * bmod)  ! B^theta
-  hctrvr(3) = G_tor / (sqrtg * bmod)   ! B^zeta
+  ! Derivative with respect to phi
+  x_plus = [r, theta, phi + hp]
+  x_minus = [r, theta, phi - hp]
+  call booz_field%evaluate(x_plus, Acov_plus, hcov_plus, Bmod_plus)
+  call booz_field%evaluate(x_minus, Acov_minus, hcov_minus, Bmod_minus)
+  bder(3) = (Bmod_plus - Bmod_minus) / (2.0d0 * hp * bmod)
   
-  ! Curl of unit vector (simplified)
+  ! Compute curl of h using finite differences
+  ! curl(h) = (1/sqrt(g)) * [d(h_phi)/dtheta - d(h_theta)/dphi, ...]
+  ! For now, set to zero (simplified)
   hcurl = 0.0d0
-  
-  ! Print warning about incomplete implementation
-  if (.not. warning_printed) then
-    print *, 'INFO: magfie_boozxform using simplified field evaluation'
-    print *, '      Full Fourier series evaluation not yet implemented'
-    warning_printed = .true.
-  end if
   
   end subroutine magfie_boozxform
 

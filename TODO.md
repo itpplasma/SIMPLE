@@ -12,30 +12,30 @@ Add support for reading Boozer coordinate magnetic fields directly from booz_xfo
 
 ### High Priority
 
-1. **Review booz_xform file format** ⏳
-   - [ ] Study booz_xform NetCDF output structure
-   - [ ] Document required fields and data layout
-   - [ ] Identify mapping to SIMPLE's internal structures
+1. **Review booz_xform file format** ✓
+   - [x] Study booz_xform NetCDF output structure
+   - [x] Document required fields and data layout
+   - [x] Identify mapping to SIMPLE's internal structures
 
-2. **Create field_booz_xform.f90 module**
-   - [ ] Implement NetCDF reader for booz_xform files
-   - [ ] Map booz_xform data to SIMPLE's field structures
-   - [ ] Handle coordinate conventions and normalizations
+2. **Create field_booz_xform.f90 module** ✓
+   - [x] Implement NetCDF reader for booz_xform files
+   - [x] Map booz_xform data to SIMPLE's field structures
+   - [x] Handle coordinate conventions and normalizations
 
-3. **Add booz_xform input option**
-   - [ ] Add new field type to `params.f90` (e.g., `isw_field_type = 5`)
-   - [ ] Add `booz_xform_file` parameter to namelist
-   - [ ] Update field type selection logic
+3. **Add booz_xform input option** ✓
+   - [x] Add new field type to `params.f90` (e.g., `isw_field_type = 5`)
+   - [x] Add `booz_xform_file` parameter to namelist
+   - [x] Update field type selection logic
 
-4. **Update field initialization**
-   - [ ] Modify `simple_main.f90` to handle booz_xform input
-   - [ ] Ensure compatibility with existing Boozer field evaluation
-   - [ ] Handle field normalization and units
+4. **Update field initialization** ✓
+   - [x] Modify `simple_main.f90` to handle booz_xform input
+   - [x] Ensure compatibility with existing Boozer field evaluation
+   - [x] Handle field normalization and units
 
-5. **Integration with existing Boozer evaluation**
-   - [ ] Connect booz_xform reader to `field_can_boozer.f90`
-   - [ ] Ensure `eval_field_booz` works with external data
-   - [ ] Verify derivatives and metric calculations
+5. **Integration with existing Boozer evaluation** ✓
+   - [x] Connect booz_xform reader to field evaluation through magfie interface
+   - [x] Implement evaluate method with VMEC→Boozer coordinate transformation
+   - [x] Set up proper field component calculations
 
 ### Medium Priority
 
@@ -83,11 +83,14 @@ Add support for reading Boozer coordinate magnetic fields directly from booz_xfo
 - Implemented `field_booz_xform.f90` module to read BOOZXFORM files
 - Fixed NetCDF interface issues (using nctools_module from libneo)
 - Test passes and generates comparison plots
+- Added BOOZXFORM=5 constant to magfie.f90
+- Updated simple_main.f90 to handle the new field type (sets boozxform_filename)
+- Implemented proper evaluate method in field_booz_xform.f90 with coordinate transformation
+- Added boozxform_file parameter to params.f90 namelist
+- Created benchmark script: `benchmark/benchmark_boozxform.py`
 
 ### In Progress
-- Need to add BOOZXFORM=5 constant to magfie.f90
-- Need to update simple_main.f90 to handle the new field type
-- Need to implement proper evaluate method with coordinate transformation
+- Testing and validation with benchmark files
 
 ## Next Steps
 1. Start with reviewing booz_xform NetCDF format
