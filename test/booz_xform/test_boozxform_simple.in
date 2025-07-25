@@ -1,0 +1,12 @@
+&config
+isw_field_type = 5
+netcdffile = 'test/booz_xform/wout.nc'
+boozxform_file = 'test/booz_xform/boozmn_LandremanPaul2021_QA_lowres.nc'
+ntestpart = 1
+trace_time = 1d-4
+ntimstep = 10
+generate_start_only = .true.
+startmode = 5
+num_surf = 1
+sbeg(1) = 0.5
+/
