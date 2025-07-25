@@ -90,9 +90,16 @@ Add support for reading Boozer coordinate magnetic fields directly from booz_xfo
 - Created benchmark script: `benchmark/benchmark_boozxform.py`
 
 ### In Progress
-- Testing and validation with benchmark files
+- Fixed NetCDF loading for scalar and 1D arrays
+- 2D array loading still has issues ("Start+count exceeds dimension bound")
+- Need to implement proper coordinate transformation (pmns/gmn interpretation)
+
+### Known Issues
+- NetCDF 2D array reading fails for Fourier coefficients (rmnc_b, zmns_b, etc.)
+- Coordinate transformation between VMEC and Boozer angles incomplete
+- RKF45 integrator errors due to missing field data
 
 ## Next Steps
-1. Start with reviewing booz_xform NetCDF format
-2. Design data structures for booz_xform input
-3. Implement minimal reader for proof of concept
+1. Fix 2D array NetCDF loading (possibly transpose issue)
+2. Implement proper VMEC↔Boozer coordinate transformation
+3. Complete validation with benchmark files
