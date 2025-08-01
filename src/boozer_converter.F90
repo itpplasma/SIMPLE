@@ -79,36 +79,11 @@ contains
 
         double precision, parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
 
-        integer :: i, k, i_rho, i_theta, i_phi, npoilag, nder, nshift, ibeg, iend, i_qua, nqua, ist, isp
-        double precision :: s, theta, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
-            sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
-            Bcovar_r, Bcovar_vartheta, Bcovar_varphi
-        double precision :: Bcovar_vartheta_B, Bcovar_varphi_B
-        double precision :: denomjac, G00, Gbeg, aper, per_theta, per_phi, gridcellnum
-        double precision, dimension(:), allocatable :: wint_t, wint_p, theta_V, theta_B, &
-            phi_V, phi_B, aiota_arr, rho_tor
-        double precision, dimension(:, :), allocatable :: Bcovar_theta_V, Bcovar_varphi_V, &
-            bmod_Vg, bmod_Bg, alam_2D, &
-            deltheta_BV_Vg, delphi_BV_Vg, &
-            deltheta_BV_Bg, delphi_BV_Bg, &
-            splcoe_r, splcoe_t, splcoe_p, coef, &
-            perqua_t, perqua_p
-        double precision, dimension(:, :, :), allocatable :: perqua_2D, Gfunc
-        double precision, dimension(:, :, :, :), allocatable :: Bcovar_symfl
-
-        nqua = 6
-
         ns_s_B = ns_s
         ns_tp_B = ns_tp
         ns_B = ns
         n_theta_B = n_theta
         n_phi_B = n_phi
-
-        gridcellnum = dble((n_theta_B - 1)*(n_phi_B - 1))
-
-        npoilag = ns_tp_B + 1
-        nder = 0
-        nshift = npoilag/2
 
         hs_B = hs*dble(ns - 1)/dble(ns_B - 1)
         h_theta_B = h_theta*dble(n_theta - 1)/dble(n_theta_B - 1)
@@ -123,7 +98,8 @@ contains
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
     subroutine splint_boozer_coord(r, vartheta_B, varphi_B, &
-                                   A_theta, A_phi, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3, &
+                                   A_theta, A_phi, dA_theta_dr, dA_phi_dr, &
+                                   d2A_phi_dr2, d3A_phi_dr3, &
                                    B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
                                    B_varphi_B, dB_varphi_B, d2B_varphi_B, &
                                    Bmod_B, dBmod_B, d2Bmod_B, &
@@ -158,10 +134,12 @@ contains
 
         double precision :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
         double precision :: qua, dqua_dr, dqua_dt, dqua_dp
-        double precision :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, d2qua_dtdp, d2qua_dp2
+        double precision :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
+            d2qua_dtdp, d2qua_dp2
         double precision, dimension(ns_max) :: sp_all, dsp_all_ds, dsp_all_dt
         double precision, dimension(ns_max) :: d2sp_all_ds2, d2sp_all_dsdt, d2sp_all_dt2
-        double precision, dimension(ns_max, ns_max) :: stp_all, dstp_all_ds, d2stp_all_ds2
+        double precision, dimension(ns_max, ns_max) :: stp_all, dstp_all_ds, &
+            d2stp_all_ds2
 
 !$omp atomic
         icounter = icounter + 1
@@ -237,14 +215,18 @@ contains
         d2stp_all_ds2(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf2(ns_s_p1)
 
         do k = ns_s_B, 3, -1
-            stp_all(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp)
-            dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf1(k) + ds*dstp_all_ds(1:nstp, 1:nstp)
-            d2stp_all_ds2(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf2(k) + ds*d2stp_all_ds2(1:nstp, 1:nstp)
+            stp_all(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi) &
+                + ds*stp_all(1:nstp, 1:nstp)
+            dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf1(k) &
+                + ds*dstp_all_ds(1:nstp, 1:nstp)
+            d2stp_all_ds2(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf2(k) &
+                + ds*d2stp_all_ds2(1:nstp, 1:nstp)
         end do
 
         stp_all(1:nstp, 1:nstp) = s_Bmod_B(1, :, :, is, i_theta, i_phi) &
-                                  + ds*(s_Bmod_B(2, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp))
-        dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(2, :, :, is, i_theta, i_phi) + ds*dstp_all_ds(1:nstp, 1:nstp)
+            + ds*(s_Bmod_B(2, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp))
+        dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(2, :, :, is, i_theta, i_phi) &
+            + ds*dstp_all_ds(1:nstp, 1:nstp)
 
 ! End interpolation of mod-B over $rho$
 !-------------------------------
@@ -260,18 +242,21 @@ contains
         do k = ns_tp_B, 3, -1
             sp_all(1:nstp) = stp_all(k, 1:nstp) + dtheta*sp_all(1:nstp)
             dsp_all_ds(1:nstp) = dstp_all_ds(k, 1:nstp) + dtheta*dsp_all_ds(1:nstp)
-            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp)
+            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) &
+                + dtheta*d2sp_all_ds2(1:nstp)
             dsp_all_dt(1:nstp) = stp_all(k, 1:nstp)*derf1(k) + dtheta*dsp_all_dt(1:nstp)
-            d2sp_all_dsdt(1:nstp) = dstp_all_ds(k, 1:nstp)*derf1(k) + dtheta*d2sp_all_dsdt(1:nstp)
-            d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) + dtheta*d2sp_all_dt2(1:nstp)
+            d2sp_all_dsdt(1:nstp) = dstp_all_ds(k, 1:nstp)*derf1(k) &
+                + dtheta*d2sp_all_dsdt(1:nstp)
+            d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) &
+                + dtheta*d2sp_all_dt2(1:nstp)
         end do
 
         sp_all(1:nstp) = stp_all(1, 1:nstp) &
                          + dtheta*(stp_all(2, 1:nstp) + dtheta*sp_all(1:nstp))
         dsp_all_ds(1:nstp) = dstp_all_ds(1, 1:nstp) &
-                             + dtheta*(dstp_all_ds(2, 1:nstp) + dtheta*dsp_all_ds(1:nstp))
+            + dtheta*(dstp_all_ds(2, 1:nstp) + dtheta*dsp_all_ds(1:nstp))
         d2sp_all_ds2(1:nstp) = d2stp_all_ds2(1, 1:nstp) &
-                               + dtheta*(d2stp_all_ds2(2, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp))
+            + dtheta*(d2stp_all_ds2(2, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp))
         dsp_all_dt(1:nstp) = stp_all(2, 1:nstp) + dtheta*dsp_all_dt(1:nstp)
         d2sp_all_dsdt(1:nstp) = dstp_all_ds(2, 1:nstp) + dtheta*d2sp_all_dsdt(1:nstp)
 
@@ -364,9 +349,11 @@ contains
             d2B_varphi_B = s_Bcovar_tp_B(2, k, is)*derf2(k) + ds*d2B_varphi_B
         end do
 
-        B_vartheta_B = s_Bcovar_tp_B(1, 1, is) + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
+        B_vartheta_B = s_Bcovar_tp_B(1, 1, is) &
+            + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
         dB_vartheta_B = s_Bcovar_tp_B(1, 2, is) + ds*dB_vartheta_B
-        B_varphi_B = s_Bcovar_tp_B(2, 1, is) + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
+        B_varphi_B = s_Bcovar_tp_B(2, 1, is) &
+            + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
         dB_varphi_B = s_Bcovar_tp_B(2, 2, is) + ds*dB_varphi_B
 
         d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
@@ -724,7 +711,7 @@ contains
     end subroutine boozer_to_vmec
 
     subroutine compute_boozer_data
-
+        ! Computes Boozer coordinate transformations and magnetic field data
         use vector_potentail_mod, only: ns, hs
         use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
@@ -765,6 +752,11 @@ contains
         double precision, dimension(:, :, :, :), allocatable :: Bcovar_symfl
 
         nqua = 6
+        gridcellnum = dble((n_theta_B - 1)*(n_phi_B - 1))
+
+        npoilag = ns_tp_B + 1
+        nder = 0
+        nshift = npoilag/2
 
         print *, 'Transforming to Boozer coordinates'
 
@@ -773,12 +765,6 @@ contains
         else
             print *, 'B_r is not computed'
         end if
-
-        gridcellnum = dble((n_theta_B - 1)*(n_phi_B - 1))
-
-        npoilag = ns_tp_B + 1
-        nder = 0
-        nshift = npoilag/2
 
         G00 = 0.d0
 
@@ -801,6 +787,7 @@ contains
 
         allocate (splcoe_t(0:ns_tp_B, n_theta_B), splcoe_p(0:ns_tp_B, n_phi_B))
 
+! allocate spline coefficients for Boozer data:
         if (.not. allocated(s_Bcovar_tp_B)) &
             allocate (s_Bcovar_tp_B(2, ns_s_B + 1, ns_B))
         if (.not. allocated(s_Bmod_B)) &
@@ -817,6 +804,8 @@ contains
             wint_p(i) = h_phi_B**(i + 1)/dble(i + 1)
         end do
 
+        ! Set theta_V and phi_V linear, with value 0 at index 1 and stepsize h.
+        ! Then expand this in both directions beyond 1:n_theta_B.
         do i_theta = 1, n_theta_B
             theta_V(i_theta) = dble(i_theta - 1)*h_theta_B
         end do
@@ -860,6 +849,7 @@ contains
                 end do
             end do
 
+! covariant components $B_\vartheta$ and $B_\varphi$ of Boozer coordinates:
             Bcovar_vartheta_B = sum(Bcovar_theta_V(2:n_theta_B, 2:n_phi_B))/gridcellnum
             Bcovar_varphi_B = sum(Bcovar_varphi_V(2:n_theta_B, 2:n_phi_B))/gridcellnum
             s_Bcovar_tp_B(1, 1, i_rho) = Bcovar_vartheta_B
@@ -876,6 +866,7 @@ contains
             do i_theta = 1, n_theta_B - 1
                 delphi_BV_Vg(i_theta + 1, 1) = delphi_BV_Vg(i_theta, 1) + sum(wint_t*splcoe_t(:, i_theta))
             end do
+            ! Remove linear increasing component from delphi_BV_Vg
             aper = (delphi_BV_Vg(n_theta_B, 1) - delphi_BV_Vg(1, 1))/dble(n_theta_B - 1)
             do i_theta = 2, n_theta_B
                 delphi_BV_Vg(i_theta, 1) = delphi_BV_Vg(i_theta, 1) - aper*dble(i_theta - 1)
@@ -895,17 +886,24 @@ contains
                 end do
             end do
 
+! difference between Boozer and VMEC toroidal angle, $\Delta \varphi_{BV}=\varphi_B-\varphi=G$:
             delphi_BV_Vg = denomjac*delphi_BV_Vg + Gbeg
+! difference between Boozer and VMEC poloidal angle, $\Delta \vartheta_{BV}=\vartheta_B-\theta$:
             deltheta_BV_Vg = aiota*delphi_BV_Vg + alam_2D
 
             s_delt_delp_V(1, 1, 1, 1, i_rho, :, :) = deltheta_BV_Vg
             s_delt_delp_V(2, 1, 1, 1, i_rho, :, :) = delphi_BV_Vg
+
+! At this point, all quantities are specified on equidistant grid in VMEC angles $(\theta,\varphi)$
+
+! Re-interpolate to equidistant grid in $(\vartheta_B,\varphi)$:
 
             do i_phi = 1, n_phi_B
                 perqua_t(1, 1:n_theta_B) = deltheta_BV_Vg(:, i_phi)
                 perqua_t(2, 1:n_theta_B) = delphi_BV_Vg(:, i_phi)
                 perqua_t(3, 1:n_theta_B) = bmod_Vg(:, i_phi)
                 perqua_t(4:6, 1:n_theta_B) = perqua_2D(4:6, :, i_phi)
+                ! Extend range of theta values
                 perqua_t(:, 2 - n_theta_B:0) = perqua_t(:, 1:n_theta_B - 1)
                 perqua_t(:, n_theta_B + 1:2*n_theta_B - 1) = perqua_t(:, 2:n_theta_B)
                 theta_B = theta_V + perqua_t(1, :)
@@ -922,9 +920,14 @@ contains
                 end do
             end do
 
+! End re-interpolate to equidistant grid in $(\vartheta_B,\varphi)$
+
+! Re-interpolate to equidistant grid in $(\vartheta_B,\varphi_B)$:
+
             do i_theta = 1, n_theta_B
                 perqua_p(:, 1:n_phi_B) = perqua_2D(:, i_theta, :)
                 perqua_p(:, 2 - n_phi_B:0) = perqua_p(:, 1:n_phi_B - 1)
+                ! Extend range of phi values
                 perqua_p(:, n_phi_B + 1:2*n_phi_B - 1) = perqua_p(:, 2:n_phi_B)
                 phi_B = phi_V + perqua_p(2, :)
                 do i_phi = 1, n_phi_B
@@ -943,13 +946,18 @@ contains
             if (use_del_tp_B) s_delt_delp_B(:, 1, 1, 1, i_rho, :, :) = perqua_2D(1:2, :, :)
             s_Bmod_B(1, 1, 1, i_rho, :, :) = perqua_2D(3, :, :)
 
+! End re-interpolate to equidistant grid in $(\vartheta_B,\varphi_B)$
+
             if (use_B_r) then
                 aiota_arr(i_rho) = aiota
                 Gfunc(i_rho, :, :) = perqua_2D(2, :, :)
+! covariant components $B_k$ in symmetry flux coordinates on equidistant grid of Boozer coordinates:
                 Bcovar_symfl(:, i_rho, :, :) = perqua_2D(4:6, :, :)
             end if
 
         end do
+
+! Compute radial covariant magnetic field component in Boozer coordinates
 
         if (use_B_r) then
             if (allocated(coef)) deallocate (coef)
@@ -971,6 +979,7 @@ contains
 
                 call plag_coeff(npoilag, nder, rho_tor(i_rho), rho_tor(ibeg:iend), coef)
 
+! We spline covariant component $B_\rho$ instead of $B_s$:
                 do i_phi = 1, n_phi_B
                     s_Bcovar_r_B(1, 1, 1, i_rho, :, i_phi) = 2.d0*rho_tor(i_rho)*Bcovar_symfl(1, i_rho, :, i_phi) &
                                                              - matmul(coef(1, :)*aiota_arr(ibeg:iend), Gfunc(ibeg:iend, :, i_phi)) &
@@ -983,6 +992,8 @@ contains
             deallocate (aiota_arr, Gfunc, Bcovar_symfl)
         end if
 
+! End compute radial covariant magnetic field component in Boozer coordinates
+
         deallocate (Bcovar_theta_V, Bcovar_varphi_V, bmod_Vg, alam_2D, &
                     deltheta_BV_Vg, delphi_BV_Vg, deltheta_BV_Bg, delphi_BV_Bg, &
                     wint_t, wint_p, coef, theta_V, theta_B, phi_V, phi_B, &
@@ -993,7 +1004,7 @@ contains
     end subroutine compute_boozer_data
 
     subroutine spline_boozer_data
-
+        ! Splines Boozer coordinate data over angles and radial direction
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
                                           s_Bcovar_tp_B, &
@@ -1005,7 +1016,7 @@ contains
 
         implicit none
 
-        integer :: k, i_rho, i_theta, i_phi, i_qua, ist, isp
+        integer :: i_rho, i_theta, i_phi, i_qua, k, ist, isp
         double precision, dimension(:, :), allocatable :: splcoe_r, splcoe_t, splcoe_p
 
         print *, 'Splining Boozer data'
@@ -1017,6 +1028,8 @@ contains
         end if
 
         allocate (splcoe_t(0:ns_tp_B, n_theta_B), splcoe_p(0:ns_tp_B, n_phi_B))
+
+! splining over $\varphi$:
 
         do i_rho = 1, ns_B
             do i_theta = 1, n_theta_B
@@ -1061,6 +1074,8 @@ contains
 
             end do
         end do
+
+! splining over $\vartheta$:
 
         do i_rho = 1, ns_B
             do i_phi = 1, n_phi_B
@@ -1107,6 +1122,8 @@ contains
                 end do
             end do
         end do
+
+! splining over $\rho$:
 
         allocate (splcoe_r(0:ns_s_B, ns_B))
 
