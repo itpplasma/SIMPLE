@@ -151,9 +151,15 @@ contains
         A_theta = torflux*r
         dA_theta_dr = torflux
 
-        call normalize_angular_coordinates(vartheta_B, varphi_B, n_theta_B, n_phi_B, &
-                                           h_theta_B, h_phi_B, &
-                                           i_theta, i_phi, dtheta, dphi)
+        dtheta = modulo(vartheta_B, twopi)/h_theta_B
+        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
+        dtheta = (dtheta - dble(i_theta))*h_theta_B
+        i_theta = i_theta + 1
+
+        dphi = modulo(varphi_B, twopi/dble(nper))/h_phi_B
+        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
+        dphi = (dphi - dble(i_phi))*h_phi_B
+        i_phi = i_phi + 1
 
 ! Begin interpolation of vector potentials over $s$
 
@@ -198,16 +204,110 @@ contains
         nstp = ns_tp_B + 1
         ns_s_p1 = ns_s_B + 1
 
-        call interpolate_3d_quantity(ns_s_p1, nstp, hs_B, ns_tp_B, n_theta_B, &
-                                     n_phi_B, h_theta_B, h_phi_B, s_Bmod_B(:, :, :, :, i_theta, i_phi), &
-                                     is, i_theta, i_phi, ds, dtheta, dphi, &
-                                     qua, dqua_dr, dqua_dt, dqua_dp, &
-                                     d2qua_dr2, d2qua_drdt, d2qua_drdp, &
-                                     d2qua_dt2, d2qua_dtdp, d2qua_dp2)
+!--------------------------------
+! Interpolation of mod-B:
+!--------------------------------
 
+! Begin interpolation of mod-B over $rho$
+
+        stp_all(1:nstp, 1:nstp) = s_Bmod_B(ns_s_p1, :, :, is, i_theta, i_phi)
+        dstp_all_ds(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf1(ns_s_p1)
+        d2stp_all_ds2(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf2(ns_s_p1)
+
+        do k = ns_s_B, 3, -1
+            stp_all(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi) &
+                + ds*stp_all(1:nstp, 1:nstp)
+            dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf1(k) &
+                + ds*dstp_all_ds(1:nstp, 1:nstp)
+            d2stp_all_ds2(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf2(k) &
+                + ds*d2stp_all_ds2(1:nstp, 1:nstp)
+        end do
+
+        stp_all(1:nstp, 1:nstp) = s_Bmod_B(1, :, :, is, i_theta, i_phi) &
+            + ds*(s_Bmod_B(2, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp))
+        dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(2, :, :, is, i_theta, i_phi) &
+            + ds*dstp_all_ds(1:nstp, 1:nstp)
+
+! End interpolation of mod-B over $rho$
+!-------------------------------
+! Begin interpolation of mod-B over $\theta$
+
+        sp_all(1:nstp) = stp_all(nstp, 1:nstp)
+        dsp_all_ds(1:nstp) = dstp_all_ds(nstp, 1:nstp)
+        d2sp_all_ds2(1:nstp) = d2stp_all_ds2(nstp, 1:nstp)
+        dsp_all_dt(1:nstp) = sp_all(1:nstp)*derf1(nstp)
+        d2sp_all_dsdt(1:nstp) = dsp_all_ds(1:nstp)*derf1(nstp)
+        d2sp_all_dt2(1:nstp) = sp_all(1:nstp)*derf2(nstp)
+
+        do k = ns_tp_B, 3, -1
+            sp_all(1:nstp) = stp_all(k, 1:nstp) + dtheta*sp_all(1:nstp)
+            dsp_all_ds(1:nstp) = dstp_all_ds(k, 1:nstp) + dtheta*dsp_all_ds(1:nstp)
+            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) &
+                + dtheta*d2sp_all_ds2(1:nstp)
+            dsp_all_dt(1:nstp) = stp_all(k, 1:nstp)*derf1(k) + dtheta*dsp_all_dt(1:nstp)
+            d2sp_all_dsdt(1:nstp) = dstp_all_ds(k, 1:nstp)*derf1(k) &
+                + dtheta*d2sp_all_dsdt(1:nstp)
+            d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) &
+                + dtheta*d2sp_all_dt2(1:nstp)
+        end do
+
+        sp_all(1:nstp) = stp_all(1, 1:nstp) &
+                         + dtheta*(stp_all(2, 1:nstp) + dtheta*sp_all(1:nstp))
+        dsp_all_ds(1:nstp) = dstp_all_ds(1, 1:nstp) &
+            + dtheta*(dstp_all_ds(2, 1:nstp) + dtheta*dsp_all_ds(1:nstp))
+        d2sp_all_ds2(1:nstp) = d2stp_all_ds2(1, 1:nstp) &
+            + dtheta*(d2stp_all_ds2(2, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp))
+        dsp_all_dt(1:nstp) = stp_all(2, 1:nstp) + dtheta*dsp_all_dt(1:nstp)
+        d2sp_all_dsdt(1:nstp) = dstp_all_ds(2, 1:nstp) + dtheta*d2sp_all_dsdt(1:nstp)
+
+! End interpolation of mod-B over $\theta$
+!--------------------------------
+! Begin interpolation of mod-B over $\varphi$
+
+        qua = sp_all(nstp)
+        dqua_dr = dsp_all_ds(nstp)
+        dqua_dt = dsp_all_dt(nstp)
+        dqua_dp = qua*derf1(nstp)
+
+        d2qua_dr2 = d2sp_all_ds2(nstp)
+        d2qua_drdt = d2sp_all_dsdt(nstp)
+        d2qua_drdp = dqua_dr*derf1(nstp)
+        d2qua_dt2 = d2sp_all_dt2(nstp)
+        d2qua_dtdp = dqua_dt*derf1(nstp)
+        d2qua_dp2 = qua*derf2(nstp)
+
+        do k = ns_tp_B, 3, -1
+            qua = sp_all(k) + dphi*qua
+            dqua_dr = dsp_all_ds(k) + dphi*dqua_dr
+            dqua_dt = dsp_all_dt(k) + dphi*dqua_dt
+            dqua_dp = sp_all(k)*derf1(k) + dphi*dqua_dp
+
+            d2qua_dr2 = d2sp_all_ds2(k) + dphi*d2qua_dr2
+            d2qua_drdt = d2sp_all_dsdt(k) + dphi*d2qua_drdt
+            d2qua_drdp = dsp_all_ds(k)*derf1(k) + dphi*d2qua_drdp
+            d2qua_dt2 = d2sp_all_dt2(k) + dphi*d2qua_dt2
+            d2qua_dtdp = dsp_all_dt(k)*derf1(k) + dphi*d2qua_dtdp
+            d2qua_dp2 = sp_all(k)*derf2(k) + dphi*d2qua_dp2
+        end do
+
+        qua = sp_all(1) + dphi*(sp_all(2) + dphi*qua)
+        dqua_dr = dsp_all_ds(1) + dphi*(dsp_all_ds(2) + dphi*dqua_dr)
+        dqua_dt = dsp_all_dt(1) + dphi*(dsp_all_dt(2) + dphi*dqua_dt)
+
+        d2qua_dr2 = d2sp_all_ds2(1) + dphi*(d2sp_all_ds2(2) + dphi*d2qua_dr2)
+        d2qua_drdt = d2sp_all_dsdt(1) + dphi*(d2sp_all_dsdt(2) + dphi*d2qua_drdt)
+        d2qua_dt2 = d2sp_all_dt2(1) + dphi*(d2sp_all_dt2(2) + dphi*d2qua_dt2)
+
+        dqua_dp = sp_all(2) + dphi*dqua_dp
+        d2qua_drdp = dsp_all_ds(2) + dphi*d2qua_drdp
+        d2qua_dtdp = dsp_all_dt(2) + dphi*d2qua_dtdp
+
+! End interpolation of mod-B over $\varphi$
+
+! Coversion coefficients for derivatives over s
         drhods = 0.5d0/rho_tor
         drhods2 = drhods**2
-        d2rhods2m = drhods2/rho_tor
+        d2rhods2m = drhods2/rho_tor    !$-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
 
         d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
         dqua_dr = dqua_dr*drhods
@@ -226,6 +326,9 @@ contains
         d2Bmod_B(4) = d2qua_dt2
         d2Bmod_B(5) = d2qua_dtdp
         d2Bmod_B(6) = d2qua_dp2
+
+!--------------------------------
+! End Interpolation of mod-B
 !--------------------------------
 ! Interpolation of B_\vartheta and B_\varphi:
 !--------------------------------
@@ -247,10 +350,10 @@ contains
         end do
 
         B_vartheta_B = s_Bcovar_tp_B(1, 1, is) &
-                       + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
+            + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
         dB_vartheta_B = s_Bcovar_tp_B(1, 2, is) + ds*dB_vartheta_B
         B_varphi_B = s_Bcovar_tp_B(2, 1, is) &
-                     + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
+            + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
         dB_varphi_B = s_Bcovar_tp_B(2, 2, is) + ds*dB_varphi_B
 
         d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
@@ -266,16 +369,100 @@ contains
 ! Note that splined quantity is $B_\rho$, not $B_s$
 
         if (use_B_r) then
-            call interpolate_3d_quantity(ns_s_p1, nstp, hs_B, ns_tp_B, n_theta_B, &
-                                         n_phi_B, h_theta_B, h_phi_B, s_Bcovar_r_B(:, :, :, :, i_theta, i_phi), &
-                                         is, i_theta, i_phi, ds, dtheta, dphi, &
-                                         qua, dqua_dr, dqua_dt, dqua_dp, &
-                                         d2qua_dr2, d2qua_drdt, d2qua_drdp, &
-                                         d2qua_dt2, d2qua_dtdp, d2qua_dp2)
 
+! Begin interpolation of B_rho over $rho$
+
+            stp_all(1:nstp, 1:nstp) = s_Bcovar_r_B(ns_s_p1, :, :, is, i_theta, i_phi)
+            dstp_all_ds(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf1(ns_s_p1)
+            d2stp_all_ds2(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf2(ns_s_p1)
+
+            do k = ns_s_B, 3, -1
+                stp_all(1:nstp, 1:nstp) = s_Bcovar_r_B(k, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp)
+                dstp_all_ds(1:nstp, 1:nstp) = s_Bcovar_r_B(k, :, :, is, i_theta, i_phi)*derf1(k) + ds*dstp_all_ds(1:nstp, 1:nstp)
+               d2stp_all_ds2(1:nstp, 1:nstp) = s_Bcovar_r_B(k, :, :, is, i_theta, i_phi)*derf2(k) + ds*d2stp_all_ds2(1:nstp, 1:nstp)
+            end do
+
+            stp_all(1:nstp, 1:nstp) = s_Bcovar_r_B(1, :, :, is, i_theta, i_phi) &
+                                      + ds*(s_Bcovar_r_B(2, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp))
+            dstp_all_ds(1:nstp, 1:nstp) = s_Bcovar_r_B(2, :, :, is, i_theta, i_phi) + ds*dstp_all_ds(1:nstp, 1:nstp)
+
+! End interpolation of B_rho over $rho$
+!-------------------------------
+! Begin interpolation of B_rho over $\theta$
+
+            sp_all(1:nstp) = stp_all(nstp, 1:nstp)
+            dsp_all_ds(1:nstp) = dstp_all_ds(nstp, 1:nstp)
+            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(nstp, 1:nstp)
+            dsp_all_dt(1:nstp) = sp_all(1:nstp)*derf1(nstp)
+            d2sp_all_dsdt(1:nstp) = dsp_all_ds(1:nstp)*derf1(nstp)
+            d2sp_all_dt2(1:nstp) = sp_all(1:nstp)*derf2(nstp)
+
+            do k = ns_tp_B, 3, -1
+                sp_all(1:nstp) = stp_all(k, 1:nstp) + dtheta*sp_all(1:nstp)
+                dsp_all_ds(1:nstp) = dstp_all_ds(k, 1:nstp) + dtheta*dsp_all_ds(1:nstp)
+                d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp)
+                dsp_all_dt(1:nstp) = stp_all(k, 1:nstp)*derf1(k) + dtheta*dsp_all_dt(1:nstp)
+                d2sp_all_dsdt(1:nstp) = dstp_all_ds(k, 1:nstp)*derf1(k) + dtheta*d2sp_all_dsdt(1:nstp)
+                d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) + dtheta*d2sp_all_dt2(1:nstp)
+            end do
+
+            sp_all(1:nstp) = stp_all(1, 1:nstp) &
+                             + dtheta*(stp_all(2, 1:nstp) + dtheta*sp_all(1:nstp))
+            dsp_all_ds(1:nstp) = dstp_all_ds(1, 1:nstp) &
+                                 + dtheta*(dstp_all_ds(2, 1:nstp) + dtheta*dsp_all_ds(1:nstp))
+            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(1, 1:nstp) &
+                                   + dtheta*(d2stp_all_ds2(2, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp))
+            dsp_all_dt(1:nstp) = stp_all(2, 1:nstp) + dtheta*dsp_all_dt(1:nstp)
+            d2sp_all_dsdt(1:nstp) = dstp_all_ds(2, 1:nstp) + dtheta*d2sp_all_dsdt(1:nstp)
+
+! End interpolation of B_rho over $\theta$
+!--------------------------------
+! Begin interpolation of B_rho over $\varphi$
+
+            qua = sp_all(nstp)
+            dqua_dr = dsp_all_ds(nstp)
+            dqua_dt = dsp_all_dt(nstp)
+            dqua_dp = qua*derf1(nstp)
+
+            d2qua_dr2 = d2sp_all_ds2(nstp)
+            d2qua_drdt = d2sp_all_dsdt(nstp)
+            d2qua_drdp = dqua_dr*derf1(nstp)
+            d2qua_dt2 = d2sp_all_dt2(nstp)
+            d2qua_dtdp = dqua_dt*derf1(nstp)
+            d2qua_dp2 = qua*derf2(nstp)
+
+            do k = ns_tp_B, 3, -1
+                qua = sp_all(k) + dphi*qua
+                dqua_dr = dsp_all_ds(k) + dphi*dqua_dr
+                dqua_dt = dsp_all_dt(k) + dphi*dqua_dt
+                dqua_dp = sp_all(k)*derf1(k) + dphi*dqua_dp
+
+                d2qua_dr2 = d2sp_all_ds2(k) + dphi*d2qua_dr2
+                d2qua_drdt = d2sp_all_dsdt(k) + dphi*d2qua_drdt
+                d2qua_drdp = dsp_all_ds(k)*derf1(k) + dphi*d2qua_drdp
+                d2qua_dt2 = d2sp_all_dt2(k) + dphi*d2qua_dt2
+                d2qua_dtdp = dsp_all_dt(k)*derf1(k) + dphi*d2qua_dtdp
+                d2qua_dp2 = sp_all(k)*derf2(k) + dphi*d2qua_dp2
+            end do
+
+            qua = sp_all(1) + dphi*(sp_all(2) + dphi*qua)
+            dqua_dr = dsp_all_ds(1) + dphi*(dsp_all_ds(2) + dphi*dqua_dr)
+            dqua_dt = dsp_all_dt(1) + dphi*(dsp_all_dt(2) + dphi*dqua_dt)
+
+            d2qua_dr2 = d2sp_all_ds2(1) + dphi*(d2sp_all_ds2(2) + dphi*d2qua_dr2)
+            d2qua_drdt = d2sp_all_dsdt(1) + dphi*(d2sp_all_dsdt(2) + dphi*d2qua_drdt)
+            d2qua_dt2 = d2sp_all_dt2(1) + dphi*(d2sp_all_dt2(2) + dphi*d2qua_dt2)
+
+            dqua_dp = sp_all(2) + dphi*dqua_dp
+            d2qua_drdp = dsp_all_ds(2) + dphi*d2qua_drdp
+            d2qua_dtdp = dsp_all_dt(2) + dphi*d2qua_dtdp
+
+! End interpolation of B_rho over $\varphi$
+
+! Coversion coefficients for derivatives over s
             drhods = 0.5d0/rho_tor
             drhods2 = drhods**2
-            d2rhods2m = drhods2/rho_tor
+            d2rhods2m = drhods2/rho_tor    !$-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
 
             d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
             dqua_dr = dqua_dr*drhods
@@ -346,9 +533,15 @@ contains
             r = abs(r)
         end if
 
-        call normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
-                                           h_theta_B, h_phi_B, &
-                                           i_theta, i_phi, dtheta, dphi)
+        dtheta = modulo(vartheta, twopi)/h_theta_B
+        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
+        dtheta = (dtheta - dble(i_theta))*h_theta_B
+        i_theta = i_theta + 1
+
+        dphi = modulo(varphi, twopi/dble(nper))/h_phi_B
+        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
+        dphi = (dphi - dble(i_phi))*h_phi_B
+        i_phi = i_phi + 1
 
 !--------------------------------
 
@@ -516,259 +709,6 @@ contains
 !  varphi=modulo(varphi,twopi/dble(nper))
 
     end subroutine boozer_to_vmec
-
-    subroutine interpolate_3d_quantity(ns_s_p1, nstp, hs_B, ns_tp_B, n_theta_B, &
-                                       n_phi_B, h_theta_B, h_phi_B, s_data, &
-                                       is, i_theta, i_phi, ds, dtheta, dphi, &
-                                       qua, dqua_dr, dqua_dt, dqua_dp, &
-                                       d2qua_dr2, d2qua_drdt, d2qua_drdp, &
-                                       d2qua_dt2, d2qua_dtdp, d2qua_dp2)
-
-        use boozer_coordinates_mod, only: ns_max, derf1, derf2
-
-        implicit none
-
-        integer, intent(in) :: ns_s_p1, nstp, ns_tp_B, n_theta_B, n_phi_B, is, &
-                               i_theta, i_phi
-        double precision, intent(in) :: hs_B, h_theta_B, h_phi_B, ds, dtheta, &
-            dphi
-        double precision, intent(in) :: s_data(ns_s_p1, nstp, nstp, *)
-        double precision, intent(out) :: qua, dqua_dr, dqua_dt, dqua_dp, &
-            d2qua_dr2, d2qua_drdt, d2qua_drdp, &
-            d2qua_dt2, d2qua_dtdp, d2qua_dp2
-
-        integer :: k
-        double precision, dimension(ns_max) :: sp_all, dsp_all_ds, dsp_all_dt
-        double precision, dimension(ns_max) :: d2sp_all_ds2, d2sp_all_dsdt, &
-            d2sp_all_dt2
-        double precision, dimension(ns_max, ns_max) :: stp_all, dstp_all_ds, &
-            d2stp_all_ds2
-
-        stp_all(1:nstp, 1:nstp) = s_data(ns_s_p1, :, :, is)
-        dstp_all_ds(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf1(ns_s_p1)
-        d2stp_all_ds2(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf2(ns_s_p1)
-
-        do k = ns_s_p1 - 1, 3, -1
-            stp_all(1:nstp, 1:nstp) = s_data(k, :, :, is) + ds*stp_all(1:nstp, 1:nstp)
-            dstp_all_ds(1:nstp, 1:nstp) = s_data(k, :, :, is)*derf1(k) &
-                                          + ds*dstp_all_ds(1:nstp, 1:nstp)
-            d2stp_all_ds2(1:nstp, 1:nstp) = s_data(k, :, :, is)*derf2(k) &
-                                            + ds*d2stp_all_ds2(1:nstp, 1:nstp)
-        end do
-
-        stp_all(1:nstp, 1:nstp) = s_data(1, :, :, is) &
-                                  + ds*(s_data(2, :, :, is) + ds*stp_all(1:nstp, 1:nstp))
-        dstp_all_ds(1:nstp, 1:nstp) = s_data(2, :, :, is) &
-                                      + ds*dstp_all_ds(1:nstp, 1:nstp)
-
-        sp_all(1:nstp) = stp_all(nstp, 1:nstp)
-        dsp_all_ds(1:nstp) = dstp_all_ds(nstp, 1:nstp)
-        d2sp_all_ds2(1:nstp) = d2stp_all_ds2(nstp, 1:nstp)
-        dsp_all_dt(1:nstp) = sp_all(1:nstp)*derf1(nstp)
-        d2sp_all_dsdt(1:nstp) = dsp_all_ds(1:nstp)*derf1(nstp)
-        d2sp_all_dt2(1:nstp) = sp_all(1:nstp)*derf2(nstp)
-
-        do k = ns_tp_B, 3, -1
-            sp_all(1:nstp) = stp_all(k, 1:nstp) + dtheta*sp_all(1:nstp)
-            dsp_all_ds(1:nstp) = dstp_all_ds(k, 1:nstp) + dtheta*dsp_all_ds(1:nstp)
-            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) &
-                                   + dtheta*d2sp_all_ds2(1:nstp)
-            dsp_all_dt(1:nstp) = stp_all(k, 1:nstp)*derf1(k) &
-                                 + dtheta*dsp_all_dt(1:nstp)
-            d2sp_all_dsdt(1:nstp) = dstp_all_ds(k, 1:nstp)*derf1(k) &
-                                    + dtheta*d2sp_all_dsdt(1:nstp)
-            d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) &
-                                   + dtheta*d2sp_all_dt2(1:nstp)
-        end do
-
-        sp_all(1:nstp) = stp_all(1, 1:nstp) &
-                         + dtheta*(stp_all(2, 1:nstp) + dtheta*sp_all(1:nstp))
-        dsp_all_ds(1:nstp) = dstp_all_ds(1, 1:nstp) &
-                             + dtheta*(dstp_all_ds(2, 1:nstp) + dtheta*dsp_all_ds(1:nstp))
-        d2sp_all_ds2(1:nstp) = d2stp_all_ds2(1, 1:nstp) &
-                               + dtheta*(d2stp_all_ds2(2, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp))
-        dsp_all_dt(1:nstp) = stp_all(2, 1:nstp) + dtheta*dsp_all_dt(1:nstp)
-        d2sp_all_dsdt(1:nstp) = dstp_all_ds(2, 1:nstp) + dtheta*d2sp_all_dsdt(1:nstp)
-
-        qua = sp_all(nstp)
-        dqua_dr = dsp_all_ds(nstp)
-        dqua_dt = dsp_all_dt(nstp)
-        dqua_dp = qua*derf1(nstp)
-
-        d2qua_dr2 = d2sp_all_ds2(nstp)
-        d2qua_drdt = d2sp_all_dsdt(nstp)
-        d2qua_drdp = dqua_dr*derf1(nstp)
-        d2qua_dt2 = d2sp_all_dt2(nstp)
-        d2qua_dtdp = dqua_dt*derf1(nstp)
-        d2qua_dp2 = qua*derf2(nstp)
-
-        do k = ns_tp_B, 3, -1
-            qua = sp_all(k) + dphi*qua
-            dqua_dr = dsp_all_ds(k) + dphi*dqua_dr
-            dqua_dt = dsp_all_dt(k) + dphi*dqua_dt
-            dqua_dp = sp_all(k)*derf1(k) + dphi*dqua_dp
-
-            d2qua_dr2 = d2sp_all_ds2(k) + dphi*d2qua_dr2
-            d2qua_drdt = d2sp_all_dsdt(k) + dphi*d2qua_drdt
-            d2qua_drdp = dsp_all_ds(k)*derf1(k) + dphi*d2qua_drdp
-            d2qua_dt2 = d2sp_all_dt2(k) + dphi*d2qua_dt2
-            d2qua_dtdp = dsp_all_dt(k)*derf1(k) + dphi*d2qua_dtdp
-            d2qua_dp2 = sp_all(k)*derf2(k) + dphi*d2qua_dp2
-        end do
-
-        qua = sp_all(1) + dphi*(sp_all(2) + dphi*qua)
-        dqua_dr = dsp_all_ds(1) + dphi*(dsp_all_ds(2) + dphi*dqua_dr)
-        dqua_dt = dsp_all_dt(1) + dphi*(dsp_all_dt(2) + dphi*dqua_dt)
-
-        d2qua_dr2 = d2sp_all_ds2(1) + dphi*(d2sp_all_ds2(2) + dphi*d2qua_dr2)
-        d2qua_drdt = d2sp_all_dsdt(1) + dphi*(d2sp_all_dsdt(2) + dphi*d2qua_drdt)
-        d2qua_dt2 = d2sp_all_dt2(1) + dphi*(d2sp_all_dt2(2) + dphi*d2qua_dt2)
-
-        dqua_dp = sp_all(2) + dphi*dqua_dp
-        d2qua_drdp = dsp_all_ds(2) + dphi*d2qua_drdp
-        d2qua_dtdp = dsp_all_dt(2) + dphi*d2qua_dtdp
-
-    end subroutine interpolate_3d_quantity
-
-    subroutine normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
-                                             h_theta_B, h_phi_B, &
-                                             i_theta, i_phi, dtheta, dphi)
-
-        use new_vmec_stuff_mod, only: nper
-
-        implicit none
-
-        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
-
-        double precision, intent(in) :: vartheta, varphi, h_theta_B, h_phi_B
-        integer, intent(in) :: n_theta_B, n_phi_B
-        integer, intent(out) :: i_theta, i_phi
-        double precision, intent(out) :: dtheta, dphi
-
-        dtheta = modulo(vartheta, twopi)/h_theta_B
-        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
-        dtheta = (dtheta - dble(i_theta))*h_theta_B
-        i_theta = i_theta + 1
-
-        dphi = modulo(varphi, twopi/dble(nper))/h_phi_B
-        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
-        dphi = (dphi - dble(i_phi))*h_phi_B
-        i_phi = i_phi + 1
-
-    end subroutine normalize_angular_coordinates
-
-    subroutine apply_periodic_spline_and_store(input_data, output_array, &
-                                               ns_tp_B, n_points, h_step, &
-                                               dim_indices)
-
-        use spline_vmec_sub
-
-        implicit none
-
-        integer, intent(in) :: ns_tp_B, n_points, dim_indices(:)
-        double precision, intent(in) :: h_step
-        double precision, intent(in) :: input_data(n_points)
-        double precision, intent(inout) :: output_array(*)
-
-        integer :: k
-        double precision :: temp_coeffs(0:ns_tp_B, n_points)
-
-        temp_coeffs(0, :) = input_data
-        call spl_per(ns_tp_B, n_points, h_step, temp_coeffs)
-
-    end subroutine apply_periodic_spline_and_store
-
-    subroutine spline_phi_direction(i_rho, i_theta)
-
-        use boozer_coordinates_mod, only: ns_tp_B, n_phi_B, h_phi_B, &
-                                          s_delt_delp_V, s_delt_delp_B, &
-                                          s_Bmod_B, s_Bcovar_r_B, &
-                                          use_B_r, use_del_tp_B
-        use spline_vmec_sub
-
-        implicit none
-
-        integer, intent(in) :: i_rho, i_theta
-        integer :: i_qua, k
-        double precision :: splcoe_p(0:ns_tp_B, n_phi_B)
-
-        do i_qua = 1, 2
-            splcoe_p(0, :) = s_delt_delp_V(i_qua, 1, 1, 1, i_rho, i_theta, :)
-            call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
-            do k = 1, ns_tp_B
-                s_delt_delp_V(i_qua, 1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
-            end do
-
-            if (use_del_tp_B) then
-                splcoe_p(0, :) = s_delt_delp_B(i_qua, 1, 1, 1, i_rho, i_theta, :)
-                call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
-                do k = 1, ns_tp_B
-                    s_delt_delp_B(i_qua, 1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
-                end do
-            end if
-        end do
-
-        splcoe_p(0, :) = s_Bmod_B(1, 1, 1, i_rho, i_theta, :)
-        call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
-        do k = 1, ns_tp_B
-            s_Bmod_B(1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
-        end do
-
-        if (use_B_r) then
-            splcoe_p(0, :) = s_Bcovar_r_B(1, 1, 1, i_rho, i_theta, :)
-            call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
-            do k = 1, ns_tp_B
-                s_Bcovar_r_B(1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
-            end do
-        end if
-
-    end subroutine spline_phi_direction
-
-    subroutine spline_theta_direction(i_rho, i_phi, isp)
-
-        use boozer_coordinates_mod, only: ns_tp_B, n_theta_B, h_theta_B, &
-                                          s_delt_delp_V, s_delt_delp_B, &
-                                          s_Bmod_B, s_Bcovar_r_B, &
-                                          use_B_r, use_del_tp_B
-        use spline_vmec_sub
-
-        implicit none
-
-        integer, intent(in) :: i_rho, i_phi, isp
-        integer :: i_qua, k
-        double precision :: splcoe_t(0:ns_tp_B, n_theta_B)
-
-        do i_qua = 1, 2
-            splcoe_t(0, :) = s_delt_delp_V(i_qua, 1, 1, isp, i_rho, :, i_phi)
-            call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
-            do k = 1, ns_tp_B
-                s_delt_delp_V(i_qua, 1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
-            end do
-
-            if (use_del_tp_B) then
-                splcoe_t(0, :) = s_delt_delp_B(i_qua, 1, 1, isp, i_rho, :, i_phi)
-                call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
-                do k = 1, ns_tp_B
-                    s_delt_delp_B(i_qua, 1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
-                end do
-            end if
-        end do
-
-        splcoe_t(0, :) = s_Bmod_B(1, 1, isp, i_rho, :, i_phi)
-        call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
-        do k = 1, ns_tp_B
-            s_Bmod_B(1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
-        end do
-
-        if (use_B_r) then
-            splcoe_t(0, :) = s_Bcovar_r_B(1, 1, isp, i_rho, :, i_phi)
-            call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
-            do k = 1, ns_tp_B
-                s_Bcovar_r_B(1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
-            end do
-        end if
-
-    end subroutine spline_theta_direction
 
     subroutine compute_boozer_data
         ! Computes Boozer coordinate transformations and magnetic field data
@@ -1094,7 +1034,43 @@ contains
         do i_rho = 1, ns_B
             do i_theta = 1, n_theta_B
 
-                call spline_phi_direction(i_rho, i_theta)
+                do i_qua = 1, 2
+                    splcoe_p(0, :) = s_delt_delp_V(i_qua, 1, 1, 1, i_rho, i_theta, :)
+
+                    call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
+
+                    do k = 1, ns_tp_B
+                        s_delt_delp_V(i_qua, 1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
+                    end do
+
+                    if (use_del_tp_B) then
+                        splcoe_p(0, :) = s_delt_delp_B(i_qua, 1, 1, 1, i_rho, i_theta, :)
+
+                        call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
+
+                        do k = 1, ns_tp_B
+                            s_delt_delp_B(i_qua, 1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
+                        end do
+                    end if
+                end do
+
+                splcoe_p(0, :) = s_Bmod_B(1, 1, 1, i_rho, i_theta, :)
+
+                call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
+
+                do k = 1, ns_tp_B
+                    s_Bmod_B(1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
+                end do
+
+                if (use_B_r) then
+                    splcoe_p(0, :) = s_Bcovar_r_B(1, 1, 1, i_rho, i_theta, :)
+
+                    call spl_per(ns_tp_B, n_phi_B, h_phi_B, splcoe_p)
+
+                    do k = 1, ns_tp_B
+                        s_Bcovar_r_B(1, 1, k + 1, i_rho, i_theta, :) = splcoe_p(k, :)
+                    end do
+                end if
 
             end do
         end do
@@ -1104,7 +1080,45 @@ contains
         do i_rho = 1, ns_B
             do i_phi = 1, n_phi_B
                 do isp = 1, ns_tp_B + 1
-                    call spline_theta_direction(i_rho, i_phi, isp)
+
+                    do i_qua = 1, 2
+                        splcoe_t(0, :) = s_delt_delp_V(i_qua, 1, 1, isp, i_rho, :, i_phi)
+
+                        call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
+
+                        do k = 1, ns_tp_B
+                            s_delt_delp_V(i_qua, 1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
+                        end do
+
+                        if (use_del_tp_B) then
+                            splcoe_t(0, :) = s_delt_delp_B(i_qua, 1, 1, isp, i_rho, :, i_phi)
+
+                            call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
+
+                            do k = 1, ns_tp_B
+                                s_delt_delp_B(i_qua, 1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
+                            end do
+                        end if
+                    end do
+
+                    splcoe_t(0, :) = s_Bmod_B(1, 1, isp, i_rho, :, i_phi)
+
+                    call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
+
+                    do k = 1, ns_tp_B
+                        s_Bmod_B(1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
+                    end do
+
+                    if (use_B_r) then
+                        splcoe_t(0, :) = s_Bcovar_r_B(1, 1, isp, i_rho, :, i_phi)
+
+                        call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
+
+                        do k = 1, ns_tp_B
+                            s_Bcovar_r_B(1, k + 1, isp, i_rho, :, i_phi) = splcoe_t(k, :)
+                        end do
+                    end if
+
                 end do
             end do
         end do
