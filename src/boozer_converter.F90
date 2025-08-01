@@ -151,15 +151,9 @@ contains
         A_theta = torflux*r
         dA_theta_dr = torflux
 
-        dtheta = modulo(vartheta_B, twopi)/h_theta_B
-        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
-        dtheta = (dtheta - dble(i_theta))*h_theta_B
-        i_theta = i_theta + 1
-
-        dphi = modulo(varphi_B, twopi/dble(nper))/h_phi_B
-        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
-        dphi = (dphi - dble(i_phi))*h_phi_B
-        i_phi = i_phi + 1
+        call normalize_angular_coordinates(vartheta_B, varphi_B, n_theta_B, n_phi_B, &
+                                           h_theta_B, h_phi_B, &
+                                           i_theta, i_phi, dtheta, dphi)
 
 ! Begin interpolation of vector potentials over $s$
 
@@ -533,15 +527,9 @@ contains
             r = abs(r)
         end if
 
-        dtheta = modulo(vartheta, twopi)/h_theta_B
-        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
-        dtheta = (dtheta - dble(i_theta))*h_theta_B
-        i_theta = i_theta + 1
-
-        dphi = modulo(varphi, twopi/dble(nper))/h_phi_B
-        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
-        dphi = (dphi - dble(i_phi))*h_phi_B
-        i_phi = i_phi + 1
+        call normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
+                                           h_theta_B, h_phi_B, &
+                                           i_theta, i_phi, dtheta, dphi)
 
 !--------------------------------
 
@@ -1196,5 +1184,32 @@ contains
         print *, 'done'
 
     end subroutine spline_boozer_data
+
+    subroutine normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
+                                             h_theta_B, h_phi_B, &
+                                             i_theta, i_phi, dtheta, dphi)
+        use new_vmec_stuff_mod, only: nper
+        
+        implicit none
+        
+        double precision, intent(in) :: vartheta, varphi
+        integer, intent(in) :: n_theta_B, n_phi_B
+        double precision, intent(in) :: h_theta_B, h_phi_B
+        integer, intent(out) :: i_theta, i_phi
+        double precision, intent(out) :: dtheta, dphi
+        
+        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
+        
+        dtheta = modulo(vartheta, twopi)/h_theta_B
+        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
+        dtheta = (dtheta - dble(i_theta))*h_theta_B
+        i_theta = i_theta + 1
+        
+        dphi = modulo(varphi, twopi/dble(nper))/h_phi_B
+        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
+        dphi = (dphi - dble(i_phi))*h_phi_B
+        i_phi = i_phi + 1
+        
+    end subroutine normalize_angular_coordinates
 
 end module boozer_sub
