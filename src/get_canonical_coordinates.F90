@@ -40,7 +40,7 @@ contains
                                            Bcovar_vartheta, Bcovar_varphi, &
                                            onlytheta
       use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
-      use odeint_sub, only: odeint_allroutines
+      use odeint_allroutines_sub, only: odeint_allroutines
 
       implicit none
 
@@ -81,7 +81,7 @@ contains
                                            Bcovar_vartheta, Bcovar_varphi, &
                                            onlytheta
       use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
-      use odeint_sub, only: odeint_allroutines
+      use odeint_allroutines_sub, only: odeint_allroutines
 
       implicit none
 
@@ -244,7 +244,9 @@ contains
       use vmec_field_eval
 #endif
 
-      implicit none
+      double precision, intent(in) :: r
+      double precision, intent(in) :: y(:)
+      double precision, intent(out) :: dy(:)
 
       double precision, parameter :: epserr = 1.d-14
       integer :: iter
@@ -252,8 +254,7 @@ contains
          alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_r
       logical :: converged
 
-      double precision :: r, vartheta, daiota_ds, deltheta
-      double precision, dimension(1) :: y, dy
+      double precision :: vartheta, daiota_ds, deltheta
 
       s = r**2
 

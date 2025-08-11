@@ -7,7 +7,6 @@ use simple
 use simple_main, only : init_field
 use new_vmec_stuff_mod, only: rmajor
 use diag_mod, only : icounter
-use omp_lib
 
 implicit none
 save

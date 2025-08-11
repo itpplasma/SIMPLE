@@ -60,11 +60,12 @@ contains
       use parmot_mod, only : rmu,ro0
       use magfie_sub, only : magfie
 !
-      implicit none
+      double precision, intent(in) :: tau
+      double precision, intent(in) :: z(:)
+      double precision, intent(out) :: vz(:)
 !
       integer :: i
 !
-      double precision tau,z,vz
       double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       double precision derphi
       double precision p,alambd,p2,ovmu,gamma2,gamma,ppar,vpa,coala
@@ -73,8 +74,7 @@ contains
       double precision s_hc,hpstar,phidot,blodot,bra
       double precision pardeb
 !
-      dimension z(5),vz(5)
-      dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
+      dimension x(3), bder(3),hcovar(3),hctrvr(3),hcurl(3)
       dimension derphi(3)
       dimension a_phi(3),a_b(3),a_c(3),hstar(3)
 !
@@ -161,7 +161,7 @@ contains
 !
       subroutine orbit_timestep_can(z,dtau,dtaumin,relerr,ierr)
 use diag_mod, only : dodiag
-use odeint_sub, only : odeint_allroutines
+use odeint_allroutines_sub, only : odeint_allroutines
 use chamb_sub, only : chamb_can
 !
       implicit none
@@ -245,8 +245,9 @@ if(dodiag) write (123,*) tau2,z
 !
       use magfie_sub, only : magfie
 !
-      double precision :: phi
-      double precision, dimension(5) :: y,dery
+      double precision, intent(in) :: phi
+      double precision, intent(in) :: y(:)
+      double precision, intent(out) :: dery(:)
       double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
 !
@@ -269,7 +270,7 @@ if(dodiag) write (123,*) tau2,z
       subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
                                xstart,bstart,volstart,bmod00,ierr)
 !
-      use odeint_sub, only : odeint_allroutines
+      use odeint_allroutines_sub, only : odeint_allroutines
       use chamb_sub, only : chamb_can
       use magfie_sub, only : magfie
 !
@@ -344,10 +345,11 @@ if(dodiag) write (123,*) tau2,z
 ! Here variables z(1)=s and z(2)=theta are replaced with
 ! x_axis(1)=x=sqrt(s)*cos(theta) and x_axis(2)=y=sqrt(s)*sin(theta)
 !
-  implicit none
+  double precision, intent(in) :: tau
+  double precision, intent(in) :: z_axis(:)
+  double precision, intent(out) :: vz_axis(:)
 !
-  double precision :: tau,derlogsqs
-  double precision, dimension(5) :: z,vz,z_axis,vz_axis
+  double precision :: derlogsqs, z(5), vz(5)
 !
 !  z(1)=z_axis(1)**2+z_axis(2)**2
   z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
@@ -368,7 +370,7 @@ if(dodiag) write (123,*) tau2,z
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
       subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
-      use odeint_sub, only : odeint_allroutines
+      use odeint_allroutines_sub, only : odeint_allroutines
       use chamb_sub, only : chamb_can
 !
       implicit none

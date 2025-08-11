@@ -1,5 +1,4 @@
 program test_coord_trans
-  use omp_lib
   use util, only: pi, c, e_charge, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 

@@ -5,7 +5,6 @@ use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
 use field_can_mod
 use diag_mod, only : icounter
-use omp_lib
 
 implicit none
 save

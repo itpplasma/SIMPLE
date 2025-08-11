@@ -1,6 +1,5 @@
 module classification
 
-use omp_lib
 use params
 use util, only: twopi, sqrt2
 use velo_mod,   only : isw_field_type

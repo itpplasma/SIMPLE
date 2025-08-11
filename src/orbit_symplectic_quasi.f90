@@ -475,8 +475,8 @@ subroutine f_ode(tau, z, zdot)
 !
 
   double precision, intent(in)  :: tau
-  double precision, intent(in)  :: z(4)
-  double precision, intent(out) :: zdot(4)
+  double precision, intent(in)  :: z(:)
+  double precision, intent(out) :: zdot(:)
   double precision :: Hprime
 
   call eval_field(f, z(1), z(2), z(3), 0)
@@ -495,7 +495,7 @@ end subroutine f_ode
 !
 subroutine orbit_timestep_rk45(ierr)
 !
-  use odeint_sub, only : odeint_allroutines
+  use odeint_allroutines_sub, only : odeint_allroutines
   integer, intent(out) :: ierr
   integer :: ktau
 

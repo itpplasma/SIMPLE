@@ -179,7 +179,7 @@ subroutine init_transformation
 end subroutine init_transformation
 
 subroutine integrate(i_r, i_th, i_phi, y)
-    use odeint_sub, only: odeint_allroutines
+    use odeint_allroutines_sub, only: odeint_allroutines
 
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
@@ -200,8 +200,8 @@ subroutine integrate(i_r, i_th, i_phi, y)
 
     subroutine rh_can_closure(r_c, z, dz)
         real(dp), intent(in) :: r_c
-        real(dp), dimension(2), intent(in) :: z
-        real(dp), dimension(2), intent(inout) :: dz
+        real(dp), intent(in) :: z(:)
+        real(dp), intent(out) :: dz(:)
 
         call rh_can(r_c, z, dz, i_th, i_phi)
     end subroutine rh_can_closure

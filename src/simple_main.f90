@@ -1,5 +1,4 @@
 module simple_main
-  use omp_lib
   use util, only: pi, twopi, sqrt2
   use simple, only : init_sympl, Tracer
   use diag_mod, only : icounter
@@ -97,7 +96,7 @@ module simple_main
     do i = 1, ntestpart
       !$omp critical
       kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+      print *, kpart, ' / ', ntestpart, 'particle: ', i
       !$omp end critical
       call trace_orbit(norb, i)
     end do
