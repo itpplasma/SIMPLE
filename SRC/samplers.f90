@@ -83,8 +83,8 @@ module samplers
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type, num_surf, xi
     use boozer_sub, only: boozer_to_vmec
-    use get_can_sub, only: can_to_vmec, can_to_ref
-    use field_can_mod, only: ref_to_can
+    use get_can_sub, only: can_to_vmec
+    use field_can_mod, only: ref_to_can, can_to_ref
 
     double precision, intent(in) :: s_inner
     double precision, intent(in) :: s_outer
@@ -132,14 +132,10 @@ module samplers
   end subroutine sample_volume_single
 
   subroutine sample_surface_fieldline(zstart)
-    use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper, xi
-    use boozer_sub, only: boozer_to_vmec
-    use get_can_sub, only: can_to_vmec, can_to_ref
-    use field_can_mod, only: ref_to_can
+    use params, only: volstart, ibins, xstart, npoiper, nper, xi
     use binsrc_sub, only: binsrc
 
     double precision, dimension(:,:), intent(inout) :: zstart
-    double precision :: r,vartheta,varphi,theta_vmec,varphi_vmec
     integer :: ipart, i
     
     call init_starting_surf
@@ -147,26 +143,10 @@ module samplers
       call random_number(xi)
       call binsrc(volstart,1,npoiper*nper,xi,i)
       ibins=i
-      ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
-      r=xstart(1,i)
-      vartheta=xstart(2,i)
-      varphi=xstart(3,i)
-
-      ! we store starting points in reference coordinates:
-      if(isw_field_type.eq.0) then
-        call can_to_ref([r,vartheta,varphi], zstart(1:3,ipart))
-      elseif(isw_field_type.eq.1) then
-        zstart(1,ipart)=r
-        zstart(2,ipart)=vartheta
-        zstart(3,ipart)=varphi
-      elseif(isw_field_type.eq.2) then
-        call boozer_to_vmec(r,vartheta,varphi,theta_vmec,varphi_vmec)
-        zstart(1,ipart)=r
-        zstart(2,ipart)=theta_vmec
-        zstart(3,ipart)=varphi_vmec
-      else
-        print *,'sample_surface_fieldline: unknown field type'
-      endif
+      ! xstart contains VMEC coordinates from integrate_mfl_can
+      ! (because it is called when magfie points to magfie_vmec)
+      ! So we store them directly without any transformation
+      zstart(1:3,ipart) = xstart(1:3,i)
 
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
