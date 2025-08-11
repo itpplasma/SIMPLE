@@ -24,7 +24,9 @@ ns_s = 5                 ! spline order for 3D quantities over s variable
 ns_tp = 5                ! spline order for 3D quantities over theta and phi
 multharm = 5             ! angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
 isw_field_type = 0       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
-startmode = 1            ! mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run, 4=read and run a batch
+generate_start_only = .False. ! If .True., only initialisation is done and particle coordinates are written to file, SIMPLE does not run.
+startmode = 1            !  mode for initial conditions: 1=only on one fieldline ("local"), 2=read and run, 3=read ANTS and run, 4=read and run a batch, 5=distribute in volume ("global")
+special_ants_file = .False. ! if .True., a different start file is read (defined in samplers.f90), .False. uses standard filename (defined in samplers.f90)
 integmode = 1            ! mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 relerr = 1d-13           ! tolerance for integrator. Set to 1d-13 for symplectic.
 tcut = -1d0              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired

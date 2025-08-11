@@ -26,6 +26,8 @@ module params
   double precision, dimension(:), allocatable :: times_lost
   double precision :: contr_pp=-1d0
   integer          :: ibins
+  logical          :: generate_start_only = .False.
+  logical          :: special_ants_file = .False.
   integer          :: startmode=1
 
   integer :: ntau ! number of dtaumin in dtau
@@ -80,7 +82,7 @@ module params
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, loopskip, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
-    isw_field_type, startmode, integmode, relerr, tcut, debug,           &
+    isw_field_type, generate_start_only, startmode, special_ants_file, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &

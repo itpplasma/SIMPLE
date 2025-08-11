@@ -5,14 +5,15 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
-  use samplers, only: sample
+  use samplers, only: sample_surface_fieldline, sample_read, sample_points_ants, &
+                      sample_random_batch, sample_volume_single
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
-  use params, only: swcoll, ntestpart, startmode, num_surf, dtau, dtaumin, ntau, v0, &
+  use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
-    class_plot, ntcut, iclass, bmod00, loopskip, xi, idx, bmin, bmax, dphi, xstart, &
-    zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
-    ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
-    field_input, isw_field_type
+    class_plot, ntcut, iclass, bmod00, bmin, bmax, &
+    zstart, zend, trap_par, perp_inv, sbeg, &
+    ntimstep, ierr, should_skip, reset_seed_if_deterministic, &
+    field_input, isw_field_type, reuse_batch
 
   implicit none
 
@@ -37,6 +38,7 @@ module simple_main
 
   subroutine run(norb)
     use magfie_sub, only : init_magfie, VMEC
+    use samplers, only: START_FILE
     type(Tracer), intent(inout) :: norb
     integer :: i
 
@@ -45,14 +47,27 @@ module simple_main
 
     call init_magfie(VMEC)
 
-    call init_starting_surf
-
-    if(1 == num_surf) then
-      call init_starting_points
+    !sample starting positions
+    if (startmode == 1) then
+      call sample_surface_fieldline(zstart)
+    else if (startmode == 2) then
+      call sample_read(zstart, START_FILE)
+    else if (startmode == 3) then
+      call sample_points_ants(special_ants_file)
+    else if (startmode == 4) then
+      call sample_random_batch(zstart, reuse_batch)
+    else if (startmode == 5) then
+      if (num_surf < 2) then
+        print *, 'No surface range for volume sample defined, stopping.'
+        stop 
+      else
+        call sample_volume_single(zstart, sbeg(1), sbeg(num_surf))
+      endif
     else
-      call init_starting_points_global
+      print *, 'Unknown startmode: ', startmode
     endif
-    if (startmode == 0) stop 'startmode == 0, stopping after generating start.dat'
+
+    if (generate_start_only) stop 'stopping after generating start.dat'
 
     call init_magfie(isw_field_type)
 
@@ -106,174 +121,6 @@ module simple_main
     ! initialize lost times when particles get lost
     times_lost = -1.d0
   end subroutine init_counters
-
-  subroutine init_starting_surf
-    use alpha_lifetime_sub, only : integrate_mfl_can
-
-    xstart=0.d0
-    bstart=0.d0
-    volstart=0.d0 !ToDo add loop for all sbeg, check dimension
-
-    call integrate_mfl_can( &
-      npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
-      xstart,bstart,volstart,bmod00,ierr)
-
-    if(ierr.ne.0) then
-      print *,'starting field line has points outside the chamber'
-      stop
-    endif
-
-  ! maximum value of B module:
-    bmax=maxval(bstart)
-    bmin=minval(bstart)
-
-    print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
-  end subroutine init_starting_surf
-
-  subroutine init_starting_points_ants(unit)
-    use parse_ants, only : process_line
-    use get_can_sub, only : vmec_to_can
-
-    integer, intent(in) :: unit
-
-    integer, parameter :: maxlen = 4096
-    character(len=maxlen) :: line
-    real(8) :: v_par, v_perp, u, v, s
-    real(8) :: th, ph
-    integer :: ipart
-
-    do ipart=1,ntestpart
-      read(unit, '(A)') line
-      call process_line(line, v_par, v_perp, u, v, s)
-      ! In the test case, u runs from 0 to 1 and v from 0 to 4
-      th = 2d0*pi*u
-      ph = 2d0*pi*v/4d0
-      zstart(1, ipart) = s
-      zstart(2, ipart) = th
-      zstart(3, ipart) = ph
-      zstart(4, ipart) = 1.d0
-      zstart(5, ipart) = v_par / sqrt(v_par**2 + v_perp**2)
-    enddo
-  end subroutine
-
-  subroutine init_starting_points
-    use get_can_sub, only: can_to_vmec
-    use samplers, only: START_FILE, load_starting_points, sample_random_batch
-
-    integer :: i, ipart, iskip
-
-    ! skip random numbers according to configuration
-      do iskip=1,loopskip
-        do ipart=1,ntestpart
-          call random_number(xi)
-          call random_number(xi)
-        enddo
-      enddo
-
-    ! files for storing starting coords
-    open(1,file=START_FILE,recl=1024)
-    ! determine the starting point:
-    if (startmode == 0 .or. startmode == 1) then
-      do ipart=1,ntestpart
-        call random_number(xi)
-        call binsrc(volstart,1,npoiper*nper,xi,i)
-        ibins=i
-        zstart(1:3,ipart) = xstart(1:3,i)
-        ! normalized velocity module z(4) = v / v_0:
-        zstart(4,ipart)=1.d0
-        ! starting pitch z(5)=v_\parallel / v:
-        call random_number(xi)
-        zstart(5,ipart)=2.d0*(xi-0.5d0)
-        write(1,*) zstart(:,ipart)
-      enddo
-    else if (startmode == 2) then
-      call load_starting_points(zstart)
-    else if (startmode == 3) then  ! ANTS input mode
-      call init_starting_points_ants(1)
-    else if (startmode == 4) then
-      call sample_random_batch(1, ntestpart, zstart)
-      !idx is no longer needed
-      deallocate(idx)
-    endif
-
-    close(1)
-  end subroutine init_starting_points
-
-  subroutine init_starting_points_global
-
-    use find_bminmax_sub, only : get_bminmax
-    use get_can_sub, only: can_to_vmec
-    use samplers, only: START_FILE, load_starting_points, sample_random_batch
-
-
-    integer, parameter :: ns=1000
-    integer :: ipart,iskip,is,s_idx,parts_per_s
-    double precision :: r,vartheta,varphi
-    double precision :: s,bmin,bmax
-  !
-    open(1,file='bminmax.dat',recl=1024)
-    do is=0,ns
-      s=dble(is)/dble(ns)
-  !
-      call get_bminmax(s,bmin,bmax)
-  !
-      write(1,*) s,bmin,bmax
-    enddo
-    close(1)
-
-    ! skip random numbers according to configuration
-      do iskip=1,loopskip
-        do ipart=1,ntestpart
-          call random_number(xi)
-          call random_number(xi)
-          call random_number(xi)
-          call random_number(xi)
-        enddo
-      enddo
-
-    ! files for storing starting coords
-    open(1,file=START_FILE,recl=1024)
-    ! determine the starting point:
-    if (startmode == 0 .or. startmode == 1) then
-      print *, "Initialising for", num_surf, "surfaces."
-      do ipart=1,ntestpart
-        if (0 == num_surf) then
-          call random_number(xi)
-          r = xi
-        else if (1 < num_surf) then
-          parts_per_s = int(ntestpart/num_surf)
-          s_idx = (ipart/parts_per_s)+1
-          r = sbeg(s_idx)
-        else ! Should not happen (as we are not in "local mode"), however let us catch it anyway.
-          r = sbeg(1)
-        endif
-
-        call random_number(xi)
-        vartheta=twopi*xi
-        call random_number(xi)
-        varphi=twopi*xi
-        ! we store starting points in reference coordinates:
-        call can_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
-        ! normalized velocity module z(4) = v / v_0:
-        zstart(4,ipart)=1.d0
-        ! starting pitch z(5)=v_\parallel / v:
-        call random_number(xi)
-        zstart(5,ipart)=2.d0*(xi-0.5d0)
-        write(1,*) zstart(:,ipart)
-      enddo
-    else if (startmode == 2) then
-      call load_starting_points(zstart)
-    else if (startmode == 3) then  ! ANTS input mode
-      call init_starting_points_ants(1)
-    else if (startmode == 4) then
-      call sample_random_batch(1, ntestpart, zstart)
-      ! indices no longer needed
-      deallocate(idx)
-    endif
-
-    close(1)
-  end subroutine init_starting_points_global
-
 
   subroutine trace_orbit(anorb, ipart)
     use classification, only : trace_orbit_with_classifiers
