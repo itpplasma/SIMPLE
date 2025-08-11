@@ -19,9 +19,12 @@ module samplers
   ! Functions #################################
   
   subroutine init_starting_surf
-    use params, only: xstart, bstart, volstart, npoiper, nper, dphi, sbeg, phibeg, &
-                      thetabeg, bmod00, ierr, bmax, bmin
+    use params, only: xstart, volstart, npoiper, nper, dphi, sbeg, phibeg, &
+                      thetabeg, bmod00, bmax, bmin
     use alpha_lifetime_sub, only : integrate_mfl_can
+
+    integer :: ierr
+    double precision, dimension(npoiper*nper) :: bstart
 
     xstart=0.d0
     bstart=0.d0
@@ -41,11 +44,6 @@ module samplers
     bmin=minval(bstart)
 
     print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
-    print *, 'DEBUG: bstart array size = ', size(bstart)
-    print *, 'DEBUG: First few bstart values = ', bstart(1:min(5,size(bstart)))
-    if (abs(bmax - bmin) < 1.0d-10) then
-      print *, 'WARNING: bmax - bmin is nearly zero!', bmax - bmin
-    endif
   end subroutine init_starting_surf
   
   subroutine load_starting_points(zstart, filename)
@@ -137,15 +135,14 @@ module samplers
   end subroutine sample_volume_single
 
   subroutine sample_surface_fieldline(zstart)
-    use params, only: volstart, ibins, xstart, npoiper, nper, xi
+    use params, only: volstart, ibins, xstart, npoiper, nper
     use binsrc_sub, only: binsrc
 
     double precision, dimension(:,:), intent(inout) :: zstart
+    double precision :: xi
     integer :: ipart, i
     
     call init_starting_surf
-    print *, 'DEBUG: After init_starting_surf, xstart size = ', shape(xstart)
-    print *, 'DEBUG: First xstart point = ', xstart(:,1)
     
     do ipart=1,size(zstart,2)
       call random_number(xi)
@@ -155,12 +152,6 @@ module samplers
       ! (because it is called when magfie points to magfie_vmec)
       ! So we store them directly without any transformation
       zstart(1:3,ipart) = xstart(1:3,i)
-      
-      if (ipart == 1) then
-        print *, 'DEBUG: First particle - index i = ', i
-        print *, 'DEBUG: First particle - xstart(:,i) = ', xstart(:,i)
-        print *, 'DEBUG: First particle - zstart(1:3) = ', zstart(1:3,ipart)
-      endif
 
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
