@@ -10,6 +10,9 @@ use lapack_interfaces, only: dgesv
 
 implicit none
 
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
+
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 
 contains
@@ -22,10 +25,10 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
-  double precision, intent(in) :: z(:)
-  double precision, intent(in) :: dt
+  real(dp), intent(in) :: z(:)
+  real(dp), intent(in) :: dt
   integer, intent(in) :: ntau
-  double precision, intent(in) :: rtol_init
+  real(dp), intent(in) :: rtol_init
   integer, intent(in) :: mode_init
 
   integer :: k
@@ -151,8 +154,8 @@ subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)
+  real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
   call eval_field(f, x(1), si%z(2), si%z(3), 2)
@@ -171,8 +174,8 @@ subroutine jac_sympl_euler1(si, f, x, jac)
   type(SymplecticIntegrator), intent(in) :: si
   type(FieldCan), intent(inout) :: f
 
-  double precision, intent(in)  :: x(2)
-  double precision, intent(out) :: jac(2, 2)
+  real(dp), intent(in)  :: x(2)
+  real(dp), intent(out) :: jac(2, 2)
 
   jac(1,1) = f%d2pth(1)*(f%pth - si%pthold) + f%dpth(1)**2 &
     + si%dt*(f%d2H(2)*f%dpth(1) + f%dH(2)*f%d2pth(1) - f%d2H(1)*f%dpth(2) - f%dH(1)*f%d2pth(2))
@@ -192,8 +195,8 @@ subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)
+  real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
   call eval_field(f, x(1), x(2), x(3), 2)
@@ -212,8 +215,8 @@ subroutine jac_sympl_euler2(si, f, x, jac)
   !
   type(SymplecticIntegrator), intent(in) :: si
   type(FieldCan), intent(inout) :: f
-  double precision, intent(in)  :: x(3)
-  double precision, intent(out) :: jac(3, 3)
+  real(dp), intent(in)  :: x(3)
+  real(dp), intent(out) :: jac(3, 3)
 
   jac(1,:) = f%dpth(1:3)
   jac(2,:) = f%d2pth(1:3)*(x(2) - si%z(2)) - si%dt*f%d2H(1:3)
@@ -232,8 +235,8 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
     type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
-    double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-    double precision, intent(out) :: fvec(n)
+    real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
+    real(dp), intent(out) :: fvec(n)
 
     ! evaluate at midpoint
     call eval_field(f, x(5), 0.5d0*(x(2) + si%z(2)), 0.5d0*(x(3) + si%z(3)), 2)
@@ -253,10 +256,10 @@ subroutine f_midpoint_part2(si, f, n, x, fvec)
     type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
     integer, intent(in) :: n
-    double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-    double precision, intent(out) :: fvec(n)
+    real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
+    real(dp), intent(out) :: fvec(n)
 
-    double precision :: dpthmid, pthdotbar
+    real(dp) :: dpthmid, pthdotbar
 
     ! save evaluation from midpoint
     dpthmid = f%dpth(1)
@@ -275,8 +278,8 @@ subroutine jac_midpoint_part1(si, f, x, jac)
   !
     type(SymplecticIntegrator), intent(in) :: si
     type(FieldCan), intent(inout) :: f
-    double precision, intent(in)  :: x(5)
-    double precision, intent(out) :: jac(5, 5)
+    real(dp), intent(in)  :: x(5)
+    real(dp), intent(out) :: jac(5, 5)
 
     jac(2,1) = 0d0
     jac(2,5) = f%d2pth(1)*(x(2) - si%z(2)) - si%dt*f%d2H(1)
@@ -333,8 +336,8 @@ subroutine jac_midpoint_part2(si, f, fmid, x, jac)
     type(SymplecticIntegrator), intent(in) :: si
     type(FieldCan), intent(inout) :: f
     type(FieldCan), intent(inout) :: fmid
-    double precision, intent(in)  :: x(5)
-    double precision, intent(out) :: jac(5, 5)
+    real(dp), intent(in)  :: x(5)
+    real(dp), intent(out) :: jac(5, 5)
 
     ! fmid%dpth(1)*(f%pth - si%pthold) + si%dt*(fmid%dpth(1)*fmid%dH(2)-fmid%dpth(2)*fmid%dH(1))
 
@@ -362,12 +365,12 @@ subroutine newton1(si, f, x, maxit, xlast)
   type(FieldCan), intent(inout) :: f
   integer, parameter :: n = 2
 
-  double precision, intent(inout) :: x(n)
+  real(dp), intent(inout) :: x(n)
   integer, intent(in) :: maxit
-  double precision, intent(out) :: xlast(n)
+  real(dp), intent(out) :: xlast(n)
 
-  double precision :: fvec(n), fjac(n,n), ijac(n,n)
-  double precision :: tolref(n)
+  real(dp) :: fvec(n), fjac(n,n), ijac(n,n)
+  real(dp) :: tolref(n)
   integer :: kit
 
   tolref(1) = 1d0
@@ -415,16 +418,16 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   integer, parameter :: n = 3
   integer :: kit
 
-  double precision, intent(inout) :: x(n)
-  double precision, intent(in) :: atol, rtol
+  real(dp), intent(inout) :: x(n)
+  real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
-  double precision, intent(out) :: xlast(n)
+  real(dp), intent(out) :: xlast(n)
 
-  double precision :: fvec(n), fjac(n,n), jinv(n,n)
+  real(dp) :: fvec(n), fjac(n,n), jinv(n,n)
   integer :: pivot(n), info
 
-  double precision :: xabs(n), tolref(n), fabs(n)
-  double precision :: det
+  real(dp) :: xabs(n), tolref(n), fabs(n)
+  real(dp) :: det
 
   do kit = 1, maxit
     if(x(1) > 1.0) return
@@ -477,15 +480,15 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   integer, parameter :: n = 5
   integer :: kit
 
-  double precision, intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-  double precision, intent(in) :: atol, rtol
+  real(dp), intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
+  real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
-  double precision, intent(out) :: xlast(n)
+  real(dp), intent(out) :: xlast(n)
 
-  double precision :: fvec(n), fjac(n,n)
+  real(dp) :: fvec(n), fjac(n,n)
   integer :: pivot(n), info
 
-  double precision :: xabs(n), tolref(n), fabs(n)
+  real(dp) :: xabs(n), tolref(n), fabs(n)
 
   tolref(1) = 1d0
   tolref(2) = twopi
@@ -529,10 +532,10 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
   type(SymplecticIntegrator), intent(inout) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(inout) :: fs(:)
-  double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
-  double precision, intent(out) :: fvec(4*s)
+  real(dp), intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
+  real(dp), intent(out) :: fvec(4*s)
 
-  double precision :: a(s,s), b(s), c(s), Hprime(s)
+  real(dp) :: a(s,s), b(s), c(s), Hprime(s)
   integer :: k,l  ! counters
 
   call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
@@ -568,9 +571,9 @@ subroutine jac_rk_gauss(si, fs, s, jac)
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(in) :: fs(:)
-  double precision, intent(out) :: jac(4*s, 4*s)
+  real(dp), intent(out) :: jac(4*s, 4*s)
 
-  double precision :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
+  real(dp) :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
   integer :: k,l,m  ! counters
 
   call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
@@ -647,15 +650,15 @@ subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   type(FieldCan), intent(inout) :: fs(:)
   integer :: kit, ks
 
-  double precision, intent(inout) :: x(4*s)
-  double precision, intent(in) :: atol, rtol
+  real(dp), intent(inout) :: x(4*s)
+  real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
-  double precision, intent(out) :: xlast(4*s)
+  real(dp), intent(out) :: xlast(4*s)
 
-  double precision :: fvec(4*s), fjac(4*s, 4*s)
+  real(dp) :: fvec(4*s), fjac(4*s, 4*s)
   integer :: pivot(4*s), info
 
-  double precision :: xabs(4*s), tolref(4*s), fabs(4*s)
+  real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s)
 
   do kit = 1, maxit
 
@@ -697,19 +700,19 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   type(FieldCan), intent(inout) :: fs(:)
   integer :: kit, ks
 
-  double precision, intent(inout) :: x(4*s)
-  double precision, intent(in) :: atol, rtol
+  real(dp), intent(inout) :: x(4*s)
+  real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
-  double precision, intent(out) :: xlast(4*s)
+  real(dp), intent(out) :: xlast(4*s)
 
-  double precision :: fvec(4*s)
+  real(dp) :: fvec(4*s)
 
-  double precision :: xabs(4*s), tolref(4*s), fabs(4*s)
+  real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s)
 
-  double precision :: a(s,s), b(s), c(s), Hprime(s), dHprimedr(s)
+  real(dp) :: a(s,s), b(s), c(s), Hprime(s), dHprimedr(s)
   integer :: k, l
 
-  double precision :: pthnew, dpthnewdr, damp
+  real(dp) :: pthnew, dpthnewdr, damp
 
   call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
 
@@ -780,9 +783,9 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(in) :: fs(:)
-  double precision, intent(out) :: jac(4*s-2, 4*s-2)
+  real(dp), intent(out) :: jac(4*s-2, 4*s-2)
 
-  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s), dHprime(4*s-2)
+  real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s), dHprime(4*s-2)
   integer :: k,l,m,n  ! counters
 
   call coeff_rk_lobatto(s, a, ahat, b, c)
@@ -920,15 +923,15 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
   type(FieldCan), intent(inout) :: fs(:)
   integer :: kit, ks
 
-  double precision, intent(inout) :: x(4*s-2)
-  double precision, intent(in) :: atol, rtol
+  real(dp), intent(inout) :: x(4*s-2)
+  real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
-  double precision, intent(out) :: xlast(4*s-2)
+  real(dp), intent(out) :: xlast(4*s-2)
 
-  double precision :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
+  real(dp) :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
   integer :: pivot(4*s-2), info
 
-  double precision :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2)
+  real(dp) :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2)
 
   do kit = 1, maxit
 
@@ -999,12 +1002,12 @@ subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   type(MultistageIntegrator), intent(inout) :: mi
   type(FieldCan), intent(inout) :: f
 
-  double precision, intent(in) :: z(:)
-  double precision, intent(in) :: dtau
+  real(dp), intent(in) :: z(:)
+  real(dp), intent(in) :: dtau
   integer, intent(in) :: ntau
-  double precision, intent(in) :: rtol_init
+  real(dp), intent(in) :: rtol_init
 
-  double precision, intent(in) :: alpha(:), beta(:)
+  real(dp), intent(in) :: alpha(:), beta(:)
 
   integer :: ks
 
@@ -1027,12 +1030,12 @@ subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
 
   type(FieldCan), intent(inout) :: f
 
-  double precision, intent(in) :: z(:)
-  double precision, intent(in) :: dtau
+  real(dp), intent(in) :: z(:)
+  real(dp), intent(in) :: dtau
   integer, intent(in) :: ntau
-  double precision, intent(in) :: rtol_init
+  real(dp), intent(in) :: rtol_init
 
-  double precision :: alpha(1), beta(1)
+  real(dp) :: alpha(1), beta(1)
 
   alpha(1) = 0.5d0
   beta(1)  = 0.5d0
@@ -1051,12 +1054,12 @@ subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
 
-    double precision, intent(in) :: z(:)
-    double precision, intent(in) :: dtau
+    real(dp), intent(in) :: z(:)
+    real(dp), intent(in) :: dtau
     integer, intent(in) :: ntau
-    double precision, intent(in) :: rtol_init
+    real(dp), intent(in) :: rtol_init
 
-    double precision :: alpha(5), beta(5)
+    real(dp) :: alpha(5), beta(5)
 
     alpha(1) = 1d0/(2d0*(2d0 - 2d0**(1d0/3d0)))
     alpha(2) = 2d0**(1d0/3d0)/(2d0*(2d0 - 2d0**(1d0/3d0)))
@@ -1078,12 +1081,12 @@ subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
 
-    double precision, intent(in) :: z(:)
-    double precision, intent(in) :: dtau
+    real(dp), intent(in) :: z(:)
+    real(dp), intent(in) :: dtau
     integer, intent(in) :: ntau
-    double precision, intent(in) :: rtol_init
+    real(dp), intent(in) :: rtol_init
 
-    double precision :: alpha(5), beta(5)
+    real(dp) :: alpha(5), beta(5)
 
     alpha(1) = (146d0 + 5d0*dsqrt(19d0))/540d0
     alpha(2) = (-2d0 + 10d0*dsqrt(19d0))/135d0
@@ -1112,12 +1115,12 @@ subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
 
-    double precision, intent(in) :: z(:)
-    double precision, intent(in) :: dtau
+    real(dp), intent(in) :: z(:)
+    real(dp), intent(in) :: dtau
     integer, intent(in) :: ntau
-    double precision, intent(in) :: rtol_init
+    real(dp), intent(in) :: rtol_init
 
-    double precision :: alpha(6), beta(6)
+    real(dp) :: alpha(6), beta(6)
 
     alpha(1) = 0.16231455076687d0
     alpha(2) = 0.37087741497958d0
@@ -1148,12 +1151,12 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
     type(MultistageIntegrator), intent(inout) :: mi
     type(FieldCan), intent(inout) :: f
 
-    double precision, intent(in) :: z(:)
-    double precision, intent(in) :: dtau
+    real(dp), intent(in) :: z(:)
+    real(dp), intent(in) :: dtau
     integer, intent(in) :: ntau
-    double precision, intent(in) :: rtol_init
+    real(dp), intent(in) :: rtol_init
 
-    double precision :: gam(9)
+    real(dp) :: gam(9)
 
     gam(1) = 0.39216144400731413927925056d0
     gam(2) = 0.33259913678935943859974864d0
@@ -1180,12 +1183,12 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
       type(MultistageIntegrator), intent(inout) :: mi
       type(FieldCan), intent(inout) :: f
 
-      double precision, intent(in) :: z(:)
-      double precision, intent(in) :: dtau
+      real(dp), intent(in) :: z(:)
+      real(dp), intent(in) :: dtau
       integer, intent(in) :: ntau
-      double precision, intent(in) :: rtol_init
+      real(dp), intent(in) :: rtol_init
 
-      double precision :: gam(17)
+      real(dp) :: gam(17)
 
       gam(1) =  0.13020248308889008087881763d0
       gam(2) =  0.56116298177510838456196441d0
@@ -1219,7 +1222,7 @@ subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   integer, parameter :: n = 2
   integer, parameter :: maxit = 32
 
-  double precision, dimension(n) :: x, xlast
+  real(dp), dimension(n) :: x, xlast
   integer :: k, ktau
 
   ierr = 0
@@ -1278,7 +1281,7 @@ subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   integer, parameter :: n = 3
   integer, parameter :: maxit = 32
 
-  double precision, dimension(n) :: x, xlast, dz
+  real(dp), dimension(n) :: x, xlast, dz
   integer :: k, ktau
 
   ierr = 0
@@ -1340,7 +1343,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, parameter :: n = 5
   integer, parameter :: maxit = 32
 
-  double precision, dimension(n) :: x, xlast
+  real(dp), dimension(n) :: x, xlast
   integer :: k, ktau
 
   ierr = 0
@@ -1393,11 +1396,11 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   integer, parameter :: maxit = 32
 
   integer, intent(in) :: s
-  double precision, dimension(4*s) :: x, xlast
+  real(dp), dimension(4*s) :: x, xlast
   integer :: k, l, ktau
 
   type(FieldCan) :: fs(s)
-  double precision :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
+  real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
 
   do k = 1,s
     fs(k) = f
@@ -1522,11 +1525,11 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   integer, parameter :: maxit = 32
 
   integer, intent(in) :: s
-  double precision, dimension(4*s-2) :: x, xlast
+  real(dp), dimension(4*s-2) :: x, xlast
   integer :: ktau, k, l
 
   type(FieldCan) :: fs(s)
-  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+  real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
     fs(k) = f
@@ -1578,12 +1581,12 @@ subroutine debug_root(si, f, x0)
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), pointer :: f
 
-  double precision :: x0(2), x(2)
+  real(dp) :: x0(2), x(2)
   integer :: k, l, iflag
   integer, parameter :: n = 100
-  double precision, parameter :: eps = 1d-15
+  real(dp), parameter :: eps = 1d-15
 
-  double precision :: fvec(2)
+  real(dp) :: fvec(2)
 
   do k = -n,n
     do l = -n,n
