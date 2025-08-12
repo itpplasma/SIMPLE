@@ -3,6 +3,9 @@ module samplers
 
   implicit none
 
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
+
   character(len=*), parameter :: START_FILE = 'start.dat'
   character(len=*), parameter :: START_FILE_ANTS = 'start_ants.dat'
   character(len=*), parameter :: START_FILE_BATCH = 'batch.dat'
@@ -26,7 +29,7 @@ module samplers
         xstart, sbeg, bmin, bmax, bmod00
 
     integer :: ierr=0
-    double precision, dimension(npoiper*nper) :: bstart
+    real(dp), dimension(npoiper*nper) :: bstart
 
 
     xstart=0.d0
@@ -50,7 +53,7 @@ module samplers
   end subroutine init_starting_surf
 
   subroutine load_starting_points(zstart, filename)
-    double precision, dimension(:,:), intent(inout) :: zstart
+    real(dp), dimension(:,:), intent(inout) :: zstart
     character(len=*), intent(in) :: filename
     integer :: ipart
 
@@ -62,7 +65,7 @@ module samplers
   end subroutine load_starting_points
 
   subroutine save_starting_points(zstart)
-    double precision, dimension(:,:), intent(in) :: zstart
+    real(dp), dimension(:,:), intent(in) :: zstart
     integer :: ipart
 
     open(1,file=START_FILE,recl=1024)
@@ -73,7 +76,7 @@ module samplers
   end subroutine save_starting_points
 
   subroutine sample_read(zstart, filename)
-      double precision, dimension(:,:), intent(inout) :: zstart
+      real(dp), dimension(:,:), intent(inout) :: zstart
       character(len=*), intent(in) :: filename
 
       call load_starting_points(zstart, filename)
@@ -85,11 +88,11 @@ module samplers
     use params, only: isw_field_type, num_surf
     use field_can_mod, only : can_to_ref
 
-    double precision, intent(in) :: s_inner
-    double precision, intent(in) :: s_outer
-    double precision :: tmp_rand
-    double precision :: r,vartheta,varphi
-    double precision, dimension(:,:), intent(inout) :: zstart
+    real(dp), intent(in) :: s_inner
+    real(dp), intent(in) :: s_outer
+    real(dp) :: tmp_rand
+    real(dp) :: r,vartheta,varphi
+    real(dp), dimension(:,:), intent(inout) :: zstart
     integer :: ipart
 
     ! If user wants to do volume with 0 or 1 surfaces,
@@ -123,10 +126,10 @@ module samplers
     use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
     use binsrc_sub, only: binsrc
 
-    double precision, dimension(:,:), intent(inout) :: zstart
+    real(dp), dimension(:,:), intent(inout) :: zstart
 
-    double precision :: r,vartheta,varphi
-    double precision :: xi
+    real(dp) :: r,vartheta,varphi
+    real(dp) :: xi
     integer :: ipart, i
 
     do ipart=1,size(zstart,2)
@@ -153,9 +156,9 @@ module samplers
         trap_par, perp_inv, iclass, xstart, sbeg
     use util, only: pi
 
-    double precision, dimension(:,:), allocatable, intent(inout) :: zstart
-    double precision, intent(in) :: grid_density
-    double precision :: xi, xsize_real
+    real(dp), dimension(:,:), allocatable, intent(inout) :: zstart
+    real(dp), intent(in) :: grid_density
+    real(dp) :: xi, xsize_real
     integer :: xsize, ngrid, ipart, jpart, lidx
 
     xsize_real = (2*pi) * grid_density !angle density
@@ -201,8 +204,8 @@ module samplers
 
     integer :: ran_begin, ran_end, ipart
     real :: temp_ran
-    double precision, dimension(:,:), intent(inout) :: zstart
-    double precision, dimension(zstart_dim1,batch_size) :: zstart_batch
+    real(dp), dimension(:,:), intent(inout) :: zstart
+    real(dp), dimension(zstart_dim1,batch_size) :: zstart_batch
     logical, intent(in) :: reuse_existing
 
     if (reuse_existing .eqv. .True.) then
