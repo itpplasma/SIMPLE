@@ -13,15 +13,15 @@ integer, parameter :: S_MAX_GAUSS = 3
 type(FieldCan) :: f
 type(FieldCan) :: fs(S_MAX_GAUSS)
 type(SymplecticIntegrator) :: si
-!$omp threadprivate(f, si)
+  !$omp threadprivate(f, si)
 
 procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
 
 contains
 
-!
-! Wrapper routines for ODEPACK
-!
+  !
+  ! Wrapper routines for ODEPACK
+  !
 
 subroutine f_exact_quasi(n, x, fvec, iflag)
   integer, intent(in) :: n
@@ -145,10 +145,10 @@ subroutine f_rk_gauss_quasi(n, x, fvec, iflag)
 
 end subroutine f_rk_gauss_quasi
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! Lobatto (IIIA)-(IIIB) Runge-Kutta method, s stages (n=4*s-2 variables)
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+  ! Lobatto (IIIA)-(IIIB) Runge-Kutta method, s stages (n=4*s-2 variables)
+  !
 subroutine f_rk_lobatto_quasi(n, x, fvec)
   !
   integer, intent(in) :: n
@@ -160,10 +160,10 @@ subroutine f_rk_lobatto_quasi(n, x, fvec)
   end subroutine f_rk_lobatto_quasi
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_multi_quasi(mi, ierr)
-!
+  !
     type(MultistageIntegrator), intent(inout) :: mi
 
     integer, intent(out) :: ierr
@@ -184,10 +184,10 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
 
   end subroutine orbit_timestep_multi_quasi
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine timestep_midpoint_quasi(ierr)
-!
+  !
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
@@ -224,8 +224,8 @@ subroutine timestep_midpoint_quasi(ierr)
 end subroutine timestep_midpoint_quasi
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine timestep_expl_impl_euler_quasi(ierr)
   !
   integer, intent(out) :: ierr
@@ -279,10 +279,10 @@ end subroutine timestep_expl_impl_euler_quasi
 
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine timestep_impl_expl_euler_quasi(ierr)
-!
+  !
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 3
@@ -331,7 +331,7 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
 end subroutine timestep_impl_expl_euler_quasi
 
 subroutine timestep_rk_gauss_quasi(s, ierr)
-!
+  !
   integer, intent(out) :: ierr
 
 
@@ -388,7 +388,7 @@ end subroutine timestep_rk_gauss_quasi
 
 
 subroutine timestep_rk_lobatto_quasi(s, ierr)
-!
+  !
   integer, intent(out) :: ierr
 
 
@@ -469,10 +469,10 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
 end subroutine timestep_rk_lobatto_quasi
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine f_ode(tau, z, zdot)
-!
+  !
 
   double precision, intent(in)  :: tau
   double precision, intent(in)  :: z(4)
@@ -491,10 +491,10 @@ subroutine f_ode(tau, z, zdot)
 
 end subroutine f_ode
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_rk45(ierr)
-!
+  !
   use odeint_sub, only : odeint_allroutines
   integer, intent(out) :: ierr
   integer :: ktau
