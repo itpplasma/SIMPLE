@@ -1,9 +1,9 @@
   !
 module collis_alp
-  use iso_fortran_env, only: real64
   implicit none
 
-  integer, parameter :: wp = real64
+  ! Define real(wp) kind parameter
+  integer, parameter :: wp = kind(1.0d0)
   integer, parameter :: nsorts=3
   real(wp), dimension(nsorts) :: efcolf,velrat,enrat
 
