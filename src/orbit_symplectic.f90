@@ -1,6 +1,5 @@
 module orbit_symplectic
 
-use iso_fortran_env, only: real64
 use util, only: pi, twopi
 use orbit_symplectic_base
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
@@ -11,7 +10,8 @@ use lapack_interfaces, only: dgesv
 
 implicit none
 
-integer, parameter :: dp = real64
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 
