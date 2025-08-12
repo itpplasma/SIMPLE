@@ -1,10 +1,13 @@
 module orbit_symplectic_quasi
 
+use iso_fortran_env, only: real64
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
 use orbit_symplectic_base
 use minpack_interfaces, only: hybrd1
 
 implicit none
+
+integer, parameter :: dp = real64
 save
 
 logical, parameter :: exact_steps = .False.
@@ -25,8 +28,8 @@ contains
 
 subroutine f_exact_quasi(n, x, fvec, iflag)
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)
+  real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
   type(FieldCan) :: f2
@@ -45,8 +48,8 @@ end subroutine f_exact_quasi
 
 subroutine f_euler1_quasi(n, x, fvec, iflag)
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)
+  real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
   call eval_field(f, x(1), si%z(2), si%z(3), 0)
@@ -62,8 +65,8 @@ end subroutine f_euler1_quasi
 
 subroutine f_euler2_quasi(n, x, fvec, iflag)
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)
+  real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
   call eval_field(f, x(1), x(2), x(3), 0)
@@ -79,11 +82,11 @@ end subroutine f_euler2_quasi
 
 subroutine f_midpoint_quasi(n, x, fvec, iflag)
     integer, intent(in) :: n
-    double precision, intent(in) :: x(n)
-    double precision, intent(out) :: fvec(n)
+    real(dp), intent(in) :: x(n)
+    real(dp), intent(out) :: fvec(n)
     integer, intent(in) :: iflag
 
-    double precision :: dpthmid, pthdotbar
+    real(dp) :: dpthmid, pthdotbar
 
     call eval_field(f, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 0)
     call get_derivatives(f, 0.5*(x(4) + si%z(4)))
@@ -111,11 +114,11 @@ end subroutine f_midpoint_quasi
 subroutine f_rk_gauss_quasi(n, x, fvec, iflag)
 
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
+  real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
-  double precision :: a(n/4,n/4), b(n/4), c(n/4), Hprime(n/4)
+  real(dp) :: a(n/4,n/4), b(n/4), c(n/4), Hprime(n/4)
   integer :: k,l  ! counters
 
   call coeff_rk_gauss(n/4, a, b, c)  ! TODO: move this to preprocessing
@@ -152,8 +155,8 @@ end subroutine f_rk_gauss_quasi
 subroutine f_rk_lobatto_quasi(n, x, fvec)
   !
   integer, intent(in) :: n
-  double precision, intent(in) :: x(n)
-  double precision, intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(n)
+  real(dp), intent(out) :: fvec(n)
 
   call f_rk_lobatto(si, fs, (n+2)/4, x, fvec, 0)
 
@@ -192,8 +195,8 @@ subroutine timestep_midpoint_quasi(ierr)
 
   integer, parameter :: n = 5
 
-  double precision, dimension(n) :: x
-  double precision :: fvec(n)
+  real(dp), dimension(n) :: x
+  real(dp) :: fvec(n)
   integer :: ktau, info
 
   ierr = 0
@@ -232,8 +235,8 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
 
   integer, parameter :: n = 2
 
-  double precision, dimension(n) :: x
-  double precision :: fvec(n)
+  real(dp), dimension(n) :: x
+  real(dp) :: fvec(n)
   integer :: ktau, info
 
   ierr = 0
@@ -287,8 +290,8 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
 
   integer, parameter :: n = 3
 
-  double precision, dimension(n) :: x
-  double precision :: fvec(n)
+  real(dp), dimension(n) :: x
+  real(dp) :: fvec(n)
   integer :: ktau, info
 
   ierr = 0
@@ -336,11 +339,11 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
 
 
   integer, intent(in) :: s
-  double precision, dimension(4*s) :: x
-  double precision :: fvec(4*s)
+  real(dp), dimension(4*s) :: x
+  real(dp) :: fvec(4*s)
   integer :: ktau, info, k, l
 
-  double precision :: a(s,s), b(s), c(s), Hprime(s)
+  real(dp) :: a(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
     fs(k) = f
@@ -393,11 +396,11 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
 
 
   integer, intent(in) :: s
-  double precision, dimension(4*s-2) :: x
-  double precision :: fvec(4*s-2)
+  real(dp), dimension(4*s-2) :: x
+  real(dp) :: fvec(4*s-2)
   integer :: ktau, info, k, l
 
-  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+  real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
     fs(k) = f
@@ -474,10 +477,10 @@ end subroutine timestep_rk_lobatto_quasi
 subroutine f_ode(tau, z, zdot)
   !
 
-  double precision, intent(in)  :: tau
-  double precision, intent(in)  :: z(4)
-  double precision, intent(out) :: zdot(4)
-  double precision :: Hprime
+  real(dp), intent(in)  :: tau
+  real(dp), intent(in)  :: z(4)
+  real(dp), intent(out) :: zdot(4)
+  real(dp) :: Hprime
 
   call eval_field(f, z(1), z(2), z(3), 0)
   call get_derivatives(f, z(4))
