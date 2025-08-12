@@ -15,25 +15,25 @@ use check_orbit_type_sub, only : check_orbit_type
 
 implicit none
 
-! output files:
-! iaaa_bou - trapped-passing boundary
-! iaaa_pnt - forced regular passing
-! iaaa_prp - lossed passing
-! iaaa_prt - lossed trapped
-! iaaa_rep - regular passing
-! iaaa_ret - regular trapped
-! iaaa_stp - stochastic passing
-! iaaa_stt - stochastic trapped
+  ! output files:
+  ! iaaa_bou - trapped-passing boundary
+  ! iaaa_pnt - forced regular passing
+  ! iaaa_prp - lossed passing
+  ! iaaa_prt - lossed trapped
+  ! iaaa_rep - regular passing
+  ! iaaa_ret - regular trapped
+  ! iaaa_stp - stochastic passing
+  ! iaaa_stt - stochastic trapped
 integer, parameter :: iaaa_bou=20000, iaaa_pnt=10000, iaaa_prp=10001, iaaa_prt=10002, &
     iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022
 
-! output files:
-! iaaa_jre - regular trapped by J_parallel
-! iaaa_jst - stochastic trapped by J_parallel
-! iaaa_jer - non-classified trapped by J_parallel
-! iaaa_ire - ideal trapped by recurrences and monotonicity
-! iaaa_ist - non-ideal trapped by recurrences and monotonicity
-! iaaa_ier - non-classified trapped by recurrences and monotonicity
+  ! output files:
+  ! iaaa_jre - regular trapped by J_parallel
+  ! iaaa_jst - stochastic trapped by J_parallel
+  ! iaaa_jer - non-classified trapped by J_parallel
+  ! iaaa_ire - ideal trapped by recurrences and monotonicity
+  ! iaaa_ist - non-ideal trapped by recurrences and monotonicity
+  ! iaaa_ier - non-classified trapped by recurrences and monotonicity
 integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
     iaaa_ire=50012, iaaa_ist=50022, iaaa_ier=50032
 
