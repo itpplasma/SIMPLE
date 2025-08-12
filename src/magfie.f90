@@ -7,6 +7,7 @@ implicit none
 
 ! Define real(dp) kind parameter
 integer, parameter :: dp = kind(1.0d0)
+real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
 abstract interface
   subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -59,6 +60,94 @@ end subroutine init_magfie
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
+  ! Helper subroutine to compute finite difference derivatives
+  !
+  subroutine compute_vmec_derivatives(s, theta, varphi, coord_idx, step_size, &
+                                     bmod_deriv, dh_ds, dh_dt, dh_dp)
+    real(dp), intent(in) :: s, theta, varphi
+    integer, intent(in) :: coord_idx  ! 1=s, 2=theta, 3=varphi
+    real(dp), intent(in) :: step_size
+    real(dp), intent(out) :: bmod_deriv
+    real(dp), intent(out), optional :: dh_ds, dh_dt, dh_dp
+    
+    real(dp) :: s_plus, theta_plus, varphi_plus
+    real(dp) :: s_minus, theta_minus, varphi_minus
+    real(dp) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota
+    real(dp) :: sqg, alam, dl_ds, dl_dt, dl_dp
+    real(dp) :: Bctrvr_vartheta, Bctrvr_varphi
+    real(dp) :: Bcovar_r, Bcovar_vartheta, Bcovar_varphi
+    real(dp) :: bmod_plus, bmod_minus
+    real(dp) :: bcov_s_plus, bcov_t_plus, bcov_p_plus
+    real(dp) :: bcov_s_minus, bcov_t_minus, bcov_p_minus
+    
+    ! Initialize coordinates
+    s_plus = s
+    theta_plus = theta  
+    varphi_plus = varphi
+    s_minus = s
+    theta_minus = theta
+    varphi_minus = varphi
+    
+    ! Adjust coordinates based on which derivative we're computing
+    select case(coord_idx)
+    case(1)  ! s derivative
+      s_plus = s + step_size
+      s_minus = s - step_size
+    case(2)  ! theta derivative  
+      theta_plus = theta + step_size
+      theta_minus = theta - step_size
+    case(3)  ! varphi derivative
+      varphi_plus = varphi + step_size
+      varphi_minus = varphi - step_size
+    end select
+    
+    ! Evaluate at plus step
+    call vmec_field(s_plus, theta_plus, varphi_plus, A_theta, A_phi, &
+                    dA_theta_ds, dA_phi_ds, aiota, sqg, alam, &
+                    dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
+                    Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+    
+    bmod_plus = sqrt(Bctrvr_vartheta*Bcovar_vartheta + Bctrvr_varphi*Bcovar_varphi)
+    
+    if (present(dh_ds) .or. present(dh_dt) .or. present(dh_dp)) then
+      bcov_s_plus = Bcovar_r + dl_ds*Bcovar_vartheta
+      bcov_t_plus = (1.d0 + dl_dt)*Bcovar_vartheta
+      bcov_p_plus = Bcovar_varphi + dl_dp*Bcovar_vartheta
+    end if
+    
+    ! Evaluate at minus step
+    call vmec_field(s_minus, theta_minus, varphi_minus, A_theta, A_phi, &
+                    dA_theta_ds, dA_phi_ds, aiota, sqg, alam, &
+                    dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
+                    Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+    
+    bmod_minus = sqrt(Bctrvr_vartheta*Bcovar_vartheta + Bctrvr_varphi*Bcovar_varphi)
+    
+    if (present(dh_ds) .or. present(dh_dt) .or. present(dh_dp)) then
+      bcov_s_minus = Bcovar_r + dl_ds*Bcovar_vartheta
+      bcov_t_minus = (1.d0 + dl_dt)*Bcovar_vartheta
+      bcov_p_minus = Bcovar_varphi + dl_dp*Bcovar_vartheta
+    end if
+    
+    ! Compute central differences
+    bmod_deriv = (bmod_plus - bmod_minus)/(2.d0*step_size)
+    
+    if (present(dh_ds)) then
+      dh_ds = (bcov_s_plus/bmod_plus - bcov_s_minus/bmod_minus)/(2.d0*step_size)
+    end if
+    
+    if (present(dh_dt)) then
+      dh_dt = (bcov_t_plus/bmod_plus - bcov_t_minus/bmod_minus)/(2.d0*step_size)
+    end if
+    
+    if (present(dh_dp)) then
+      dh_dp = (bcov_p_plus/bmod_plus - bcov_p_minus/bmod_minus)/(2.d0*step_size)
+    end if
+    
+  end subroutine compute_vmec_derivatives
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
   subroutine magfie_vmec(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
   !
   ! Computes magnetic field module in units of the magnetic code  - bmod,
@@ -82,11 +171,11 @@ end subroutine init_magfie
   !                     hctrvr(3)        - contra-variant components of unit vector $\bh$ along $\bB$
   !                     hcurl(3)         - contra-variant components of curl of $\bh$
   !
-  !  Called routines: vmec_field
+  !  Called routines: vmec_field, compute_vmec_derivatives
   !
   implicit none
   !
-  real(dp), parameter :: twopi=2.d0*3.14159265358979d0, hs=1.d-3, ht=hs*twopi, hp=ht/5.d0
+  real(dp), parameter :: hs=1.d-3, ht=hs*twopi, hp=ht/5.d0
   !
   real(dp), intent(out) :: bmod,sqrtg
   real(dp) :: s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
@@ -97,114 +186,16 @@ end subroutine init_magfie
   real(dp), dimension(3), intent(in) :: x
   real(dp), dimension(3), intent(out) :: bder,hcovar,hctrvr,hcurl
   !
-  ! Begin derivatives over s
-  !
-  theta=x(2)
-  varphi=x(3)
-  s=x(1)+hs
-  !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  !
-  bmod=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
-  bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
-  bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
-  bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(1)=bmod
-  dht_ds=bcov_t_vmec/bmod
-  dhp_ds=bcov_p_vmec/bmod
-  !
-  s=x(1)-hs
-  !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  !
-  bmod=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
-  bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
-  bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
-  bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(1)=(bder(1)-bmod)/(2.d0*hs)
-  dht_ds=(dht_ds-bcov_t_vmec/bmod)/(2.d0*hs)
-  dhp_ds=(dhp_ds-bcov_p_vmec/bmod)/(2.d0*hs)
-  !
-  ! End derivatives over s
-  !
-  !-------------------------
-  !
-  ! Begin derivatives over theta
-  !
-  s=x(1)
-  theta=x(2)+ht
-  !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  !
-  bmod=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
-  bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
-  bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
-  bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(2)=bmod
-  dhs_dt=bcov_s_vmec/bmod
-  dhp_dt=bcov_p_vmec/bmod
-  !
-  theta=x(2)-ht
-  !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  !
-  bmod=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
-  bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
-  bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
-  bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(2)=(bder(2)-bmod)/(2.d0*ht)
-  dhs_dt=(dhs_dt-bcov_s_vmec/bmod)/(2.d0*ht)
-  dhp_dt=(dhp_dt-bcov_p_vmec/bmod)/(2.d0*ht)
-  !
-  ! End derivatives over theta
-  !
-  !-------------------------
-  !
-  ! Begin derivatives over varphi
-  !
-  theta=x(2)
-  varphi=x(3)+hp
-  !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  !
-  bmod=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
-  bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
-  bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
-  bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(3)=bmod
-  dhs_dp=bcov_s_vmec/bmod
-  dht_dp=bcov_t_vmec/bmod
-  !
-  varphi=x(3)-hp
-  !
-  call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
-                  sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
-                  Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
-  !
-  bmod=sqrt(Bctrvr_vartheta*Bcovar_vartheta+Bctrvr_varphi*Bcovar_varphi)
-  bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
-  bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
-  bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(3)=(bder(3)-bmod)/(2.d0*hp)
-  dhs_dp=(dhs_dp-bcov_s_vmec/bmod)/(2.d0*hp)
-  dht_dp=(dht_dp-bcov_t_vmec/bmod)/(2.d0*hp)
-  !
-  ! End derivatives over varphi
-  !
-  !-------------------------
-  !
-  varphi=x(3)
-  !
+  s = x(1)
+  theta = x(2)
+  varphi = x(3)
+  
+  ! Compute derivatives using helper function
+  call compute_vmec_derivatives(s, theta, varphi, 1, hs, bder(1), dht_ds, dhp_ds)
+  call compute_vmec_derivatives(s, theta, varphi, 2, ht, bder(2), dhs_dt, dhp_dt)
+  call compute_vmec_derivatives(s, theta, varphi, 3, hp, bder(3), dhs_dp, dht_dp)
+  
+  ! Evaluate at the actual point
   call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                   sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                   Bcovar_r,Bcovar_vartheta,Bcovar_varphi)
