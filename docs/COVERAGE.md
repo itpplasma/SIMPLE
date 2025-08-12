@@ -71,8 +71,9 @@ Coverage analysis is automatically performed on pull requests through GitHub Act
 Coverage analysis is controlled by the `ENABLE_COVERAGE` CMake option:
 
 - **Available Build Types**: Debug, Profile (coverage requires one of these)
-- **Compiler Flags**: `--coverage -fprofile-arcs -ftest-coverage`
-- **Linker Flags**: `--coverage -lgcov`
+- **Compiler Flags**: `--coverage -fprofile-arcs -ftest-coverage` (scoped to SIMPLE targets only)
+- **Linker Flags**: `--coverage -lgcov` (scoped to SIMPLE targets only)
+- **Target Scoping**: Coverage flags are applied only to SIMPLE library and test targets, not external dependencies
 
 ### File Exclusions
 

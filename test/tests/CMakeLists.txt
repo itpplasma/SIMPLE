@@ -38,6 +38,11 @@ endif()
 ##################################################
 add_library(testing_utils ${CMAKE_CURRENT_SOURCE_DIR}/utility.f90 ${CMAKE_CURRENT_SOURCE_DIR}/results.f90)
 
+# Link coverage flags to testing utilities when coverage is enabled
+if (ENABLE_COVERAGE AND CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
+    target_link_libraries(testing_utils PUBLIC coverage_flags)
+endif()
+
 ##################################################
 # TEST EXECUTABLES
 ##################################################

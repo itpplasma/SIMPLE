@@ -106,14 +106,15 @@ if (ENABLE_OPENMP)
 	add_link_options(-fopenmp)
 endif()
 
-# Coverage analysis flags (only for Debug/Profile builds)
+# Coverage analysis configuration (only for Debug/Profile builds)
 if (ENABLE_COVERAGE)
     if (CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
         message(STATUS "Coverage analysis enabled for ${CMAKE_BUILD_TYPE} build")
-        add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
-        add_link_options(--coverage -lgcov)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --coverage")
+        
+        # Create interface library for coverage flags to scope them to specific targets
+        add_library(coverage_flags INTERFACE)
+        target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
+        target_link_options(coverage_flags INTERFACE --coverage -lgcov)
         
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)

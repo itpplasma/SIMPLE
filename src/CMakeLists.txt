@@ -70,3 +70,8 @@ if(ENABLE_GVEC)
     )
     target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
 endif()
+
+# Link coverage flags to library when coverage is enabled
+if (ENABLE_COVERAGE AND CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
+    target_link_libraries(simple PUBLIC coverage_flags)
+endif()
