@@ -1,5 +1,5 @@
 module classification
-
+  use iso_fortran_env, only: real64
 use omp_lib
 use params
 use util, only: twopi, sqrt2
@@ -12,6 +12,8 @@ use get_can_sub, only : vmec_to_can
 use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
 use magfie_sub, only : CANFLUX, BOOZER
 use check_orbit_type_sub, only : check_orbit_type
+
+  integer, parameter :: dp = real64
 
 implicit none
 
