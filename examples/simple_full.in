@@ -22,7 +22,7 @@ netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
 ns_s = 5                 ! spline order for 3D quantities over s variable
 ns_tp = 5                ! spline order for 3D quantities over theta and phi
 multharm = 5             ! angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
-isw_field_type = 0       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
+isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer, 3: Meiss, 4: Albert
 generate_start_only = .False. ! If .True., only initialisation is done and particle coordinates are written to file, SIMPLE does not run.
 startmode = 1            !  mode for initial conditions: 
 !                         1=only on one fieldline ("local"),
