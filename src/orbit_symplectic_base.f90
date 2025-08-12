@@ -55,6 +55,179 @@ end interface
 
 contains
 
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize Runge-Kutta coefficients for different orders
+  subroutine init_rk_coefficients(method, s, a, b, c, ahat)
+    integer, intent(in) :: method, s
+    real(dp), intent(out) :: a(s,s), b(s), c(s)
+    real(dp), intent(out), optional :: ahat(s,s)
+    
+    select case (method)
+    case (GAUSS1, GAUSS2, GAUSS3, GAUSS4)
+      call coeff_rk_gauss(s, a, b, c)
+    case (LOBATTO3)
+      if (present(ahat)) then
+        call coeff_rk_lobatto(s, a, ahat, b, c)
+      else
+        error stop 'Lobatto method requires ahat coefficients'
+      end if
+    case default
+      error stop 'Unknown RK method'
+    end select
+  end subroutine init_rk_coefficients
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Validate integration method and stage count
+  logical function is_valid_method(method, s)
+    integer, intent(in) :: method, s
+    
+    is_valid_method = .false.
+    
+    select case (method)
+    case (GAUSS1)
+      is_valid_method = (s == 1)
+    case (GAUSS2)
+      is_valid_method = (s == 2)
+    case (GAUSS3)
+      is_valid_method = (s == 3)
+    case (GAUSS4)
+      is_valid_method = (s == 4)
+    case (LOBATTO3)
+      is_valid_method = (s == 3)
+    case (RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT)
+      is_valid_method = .true.  ! These don't use stage count
+    end select
+  end function is_valid_method
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize symplectic integrator
+  subroutine init_symplectic_integrator(si, z0, dt, atol, rtol)
+    type(SymplecticIntegrator), intent(out) :: si
+    real(dp), dimension(4), intent(in) :: z0
+    real(dp), intent(in) :: dt, atol, rtol
+    
+    si%z = z0
+    si%dt = dt
+    si%atol = atol
+    si%rtol = rtol
+    si%pthold = 0.0d0
+    si%ntau = 1
+    si%pabs = 1.0d0  ! Default normalized momentum
+  end subroutine init_symplectic_integrator
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize multistage integrator
+  subroutine init_multistage_integrator(mi, s, method)
+    type(MultistageIntegrator), intent(out) :: mi
+    integer, intent(in) :: s, method
+    
+    integer :: i
+    
+    if (.not. is_valid_method(method, s)) then
+      error stop 'Invalid method and stage count combination'
+    end if
+    
+    mi%s = s
+    
+    ! Initialize composition coefficients (default to Strang splitting)
+    if (s == 1) then
+      mi%alpha(1) = 1.0d0
+      mi%beta(1) = 1.0d0
+    else
+      ! Simple Strang splitting for demonstration
+      do i = 1, s
+        mi%alpha(i) = 1.0d0 / dble(s)
+        mi%beta(i) = 1.0d0 / dble(s)
+      end do
+    end if
+    
+    ! Initialize all stage integrators with default values
+    do i = 1, 2*s
+      call init_symplectic_integrator(mi%stages(i), [0.0d0, 0.0d0, 0.0d0, 0.0d0], &
+                                     0.0d0, 1.0d-12, 1.0d-12)
+    end do
+  end subroutine init_multistage_integrator
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Set up field evaluation for RK stages
+  subroutine setup_rk_field_evaluation(si, fs, s, x, jactype)
+    type(SymplecticIntegrator), intent(in) :: si
+    type(FieldCan), intent(inout) :: fs(:)
+    integer, intent(in) :: s, jactype
+    real(dp), intent(in) :: x(4*s)
+    
+    integer :: k
+    
+    ! Evaluate field at first stage (special case)
+    call eval_field(fs(1), x(1), si%z(2), si%z(3), jactype)
+    call get_derivatives(fs(1), x(2))
+    
+    ! Evaluate field at remaining stages
+    do k = 2, s
+      call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), jactype)
+      call get_derivatives(fs(k), x(4*k-2))
+    end do
+  end subroutine setup_rk_field_evaluation
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute Hamiltonian derivatives
+  subroutine compute_hamiltonian_derivatives(fs, s, Hprime)
+    type(FieldCan), intent(in) :: fs(:)
+    integer, intent(in) :: s
+    real(dp), intent(out) :: Hprime(s)
+    
+    integer :: k
+    
+    do k = 1, s
+      if (abs(fs(k)%dpth(1)) > epsilon(1.0d0)) then
+        Hprime(k) = fs(k)%dH(1) / fs(k)%dpth(1)
+      else
+        Hprime(k) = 0.0d0  ! Avoid division by zero
+      end if
+    end do
+  end subroutine compute_hamiltonian_derivatives
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute RK stage equations
+  subroutine compute_rk_stage_equations(si, fs, s, x, fvec, a, ahat, Hprime)
+    type(SymplecticIntegrator), intent(in) :: si
+    type(FieldCan), intent(in) :: fs(:)
+    integer, intent(in) :: s
+    real(dp), intent(in) :: x(4*s), a(s,s), ahat(s,s), Hprime(s)
+    real(dp), intent(out) :: fvec(4*s)
+    
+    integer :: k, l
+    
+    ! First stage equations
+    fvec(1) = fs(1)%pth - si%pthold
+    fvec(2) = x(2) - si%z(4)
+    
+    ! Add contributions from all stages to first equations
+    do l = 1, s
+      fvec(1) = fvec(1) + si%dt * ahat(1,l) * (fs(l)%dH(2) - Hprime(l) * fs(l)%dpth(2))
+      fvec(2) = fvec(2) + si%dt * ahat(1,l) * (fs(l)%dH(3) - Hprime(l) * fs(l)%dpth(3))
+    end do
+    
+    ! Remaining stage equations
+    do k = 2, s
+      fvec(4*k-3-2) = fs(k)%pth - si%pthold
+      fvec(4*k-2-2) = x(4*k-2-2) - si%z(2)
+      fvec(4*k-1-2) = x(4*k-1-2) - si%z(3)
+      fvec(4*k-2) = x(4*k-2) - si%z(4)
+      
+      ! Add stage contributions
+      do l = 1, s
+        fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt * ahat(k,l) * &
+                        (fs(l)%dH(2) - Hprime(l) * fs(l)%dpth(2))
+        fvec(4*k-2-2) = fvec(4*k-2-2) - si%dt * a(k,l) * Hprime(l)
+        fvec(4*k-1-2) = fvec(4*k-1-2) - si%dt * a(k,l) * &
+                        (fs(l)%vpar - Hprime(l) * fs(l)%hth) / fs(l)%hph
+        fvec(4*k-2) = fvec(4*k-2) + si%dt * ahat(k,l) * &
+                      (fs(l)%dH(3) - Hprime(l) * fs(l)%dpth(3))
+      end do
+    end do
+  end subroutine compute_rk_stage_equations
+
 subroutine coeff_rk_gauss(n, a, b, c)
   integer, intent(in) :: n
   real(dp), intent(inout) :: a(n,n), b(n), c(n)
@@ -182,7 +355,6 @@ end subroutine coeff_rk_lobatto
   ! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
   !
 subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
-  !
   type(SymplecticIntegrator), intent(inout) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(inout) :: fs(:)
@@ -191,43 +363,18 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   integer, intent(in) :: jactype  ! 0 = no second derivatives, 2 = second derivatives
 
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
-  integer :: k,l  ! counters
 
-  call coeff_rk_lobatto(s, a, ahat, b, c)
+  ! Initialize RK coefficients
+  call init_rk_coefficients(LOBATTO3, s, a, b, c, ahat)
 
-  call eval_field(fs(1), x(1), si%z(2), si%z(3), jactype)
-  call get_derivatives(fs(1), x(2))
+  ! Set up field evaluation at all stages
+  call setup_rk_field_evaluation(si, fs, s, x, jactype)
 
-  do k = 2, s
-    call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), jactype)
-    call get_derivatives(fs(k), x(4*k-2))
-  end do
+  ! Compute Hamiltonian derivatives
+  call compute_hamiltonian_derivatives(fs, s, Hprime)
 
-  Hprime = fs%dH(1)/fs%dpth(1)
-
-  fvec(1) = fs(1)%pth - si%pthold
-  fvec(2) = x(2) - si%z(4)
-
-  do l = 1, s
-      fvec(1) = fvec(1) + si%dt*ahat(1,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(2) = fvec(2) + si%dt*ahat(1,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-  end do
-
-  do k = 2, s
-    fvec(4*k-3-2) = fs(k)%pth - si%pthold
-    fvec(4*k-2-2) = x(4*k-2-2)  - si%z(2)
-    fvec(4*k-1-2) = x(4*k-1-2)  - si%z(3)
-    fvec(4*k-2)   = x(4*k-2)    - si%z(4)
-  end do
-
-  do l = 1, s
-    do k = 2, s
-      fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(4*k-2-2) = fvec(4*k-2-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
-      fvec(4*k-1-2) = fvec(4*k-1-2) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph     ! phdot
-      fvec(4*k-2)   = fvec(4*k-2)   + si%dt*ahat(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-    end do
-  end do
+  ! Compute stage equations
+  call compute_rk_stage_equations(si, fs, s, x, fvec, a, ahat, Hprime)
 
 end subroutine f_rk_lobatto
 
