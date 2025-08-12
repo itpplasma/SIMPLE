@@ -46,25 +46,42 @@ jobs:
       - name: Build SIMPLE
         run: |
           make clean
-          make
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
+            # Build with coverage for non-draft PRs
+            make coverage-build
+          else
+            # Regular build for pushes and draft PRs
+            make
+          fi
 
       - name: Run Fast Tests
-        run: make test-fast
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
+            make CONFIG=Profile test-fast
+          else
+            make test-fast
+          fi
 
       - name: Run Slow Tests
-        run: make test
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
+            make CONFIG=Profile test
+          else
+            make test
+          fi
 
       - name: Run Regression Tests
         if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-        run: make test-regression
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
+            make CONFIG=Profile test-regression
+          else
+            make test-regression
+          fi
 
       - name: Generate coverage data for coverage-action
         if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
         run: |
-          # Build with coverage instrumentation and run tests
-          make coverage-build
-          make CONFIG=Profile test-all
-          
           # Generate lcov coverage data
           lcov --capture --directory build/ --output-file coverage.info \
             --rc branch_coverage=1 \
