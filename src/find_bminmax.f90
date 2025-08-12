@@ -1,17 +1,23 @@
   !
   module bminmax_mod
+  implicit none
+
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
   !
   logical :: prop=.true.
   !
   integer, parameter :: nsbmnx=100
-  double precision                      :: hsbmnx
-  double precision, dimension(0:nsbmnx) :: bmin_arr,bmax_arr
+  real(dp)                      :: hsbmnx
+  real(dp), dimension(0:nsbmnx) :: bmin_arr,bmax_arr
   !
   end module bminmax_mod
   !
 module find_bminmax_sub
-
 implicit none
+
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 contains
 
@@ -26,9 +32,9 @@ contains
   integer,          parameter :: np=100, nt=100
   !
   integer :: it,ip,iter
-  double precision :: s,bmin,bmax,bmod,hp,ht,twopi
-  double precision :: tmin,tmax,pmin,pmax
-  double precision, dimension(3) :: x,bder
+  real(dp) :: s,bmin,bmax,bmod,hp,ht,twopi
+  real(dp) :: tmin,tmax,pmin,pmax
+  real(dp), dimension(3) :: x,bder
   !
   twopi=8.d0*atan(1.d0)
   ht=twopi/dble(nt)
@@ -78,8 +84,8 @@ contains
   !
   implicit none
   !
-  double precision :: sqrtg
-  double precision, dimension(3) :: hcovar, hctrvr, hcurl
+  real(dp) :: sqrtg
+  real(dp), dimension(3) :: hcovar, hctrvr, hcurl
   !
   call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
   !
@@ -92,9 +98,9 @@ contains
   implicit none
   !
   integer,          parameter :: niter=10
-  double precision, parameter :: hdt=1.d-3, hdp=1.d-3
-  double precision :: bt,bp,btt,btp,bpt,bpp,theta,phi,bextr
-  double precision :: det,dtheta,dphi,w
+  real(dp), parameter :: hdt=1.d-3, hdp=1.d-3
+  real(dp) :: bt,bp,btt,btp,bpt,bpp,theta,phi,bextr
+  real(dp) :: det,dtheta,dphi,w
   !
   do iter=1,niter
     x(3)=phi
@@ -156,7 +162,7 @@ contains
   implicit none
   !
   integer :: k
-  double precision :: s,bmin,bmax,ws,s0
+  real(dp) :: s,bmin,bmax,ws,s0
   !
   if(prop) then
     prop=.false.
