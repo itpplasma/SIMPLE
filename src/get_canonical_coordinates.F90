@@ -5,8 +5,8 @@ module exchange_get_cancoord_mod
    logical :: onlytheta
    double precision :: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, &
       Bcovar_varphi, A_theta, A_phi, theta, Bctrvr_vartheta, Bctrvr_varphi
-!$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
-!$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi)
+  !$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
+  !$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi)
 end module exchange_get_cancoord_mod
 
 module get_can_sub
@@ -18,17 +18,17 @@ module get_can_sub
 
    implicit none
 
-! Module variable to store the field for use in subroutines
+  ! Module variable to store the field for use in subroutines
    class(MagneticField), allocatable :: current_field
-!$omp threadprivate(current_field)
+  !$omp threadprivate(current_field)
 
 contains
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine get_canonical_coordinates_with_field(field)
 
-! Field-agnostic version that accepts a MagneticField object
+  ! Field-agnostic version that accepts a MagneticField object
 
       use canonical_coordinates_mod, only: ns_c, n_theta_c, n_phi_c, &
                                            hs_c, h_theta_c, h_phi_c, &
@@ -55,11 +55,11 @@ contains
 
    end subroutine get_canonical_coordinates_with_field
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine get_canonical_coordinates
 
-! Backward compatibility wrapper - uses VMEC field by default
+  ! Backward compatibility wrapper - uses VMEC field by default
 
       use field, only: VmecField
 
@@ -67,7 +67,7 @@ contains
 
    end subroutine get_canonical_coordinates
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine get_canonical_coordinates_impl
 
@@ -133,23 +133,23 @@ contains
 
       onlytheta = .false.
       ndim = 1
-!  is_beg=ns_c/2 !<=OLD
+  !  is_beg=ns_c/2 !<=OLD
       is_beg = 1       !<=NEW
-!  G_beg=1.d-5 !<=OLD
+  !  G_beg=1.d-5 !<=OLD
       G_beg = 1.d-8   !<=NEW
 
       i_ctr = 0
-!$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r, dG_c_dt, dG_c_dp)
-!$omp critical
+  !$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r, dG_c_dt, dG_c_dp)
+  !$omp critical
       allocate (y(ndim), dy(ndim))
-!$omp end critical
+  !$omp end critical
 
-!$omp do
+  !$omp do
       do i_theta = 1, n_theta_c
-!$omp critical
+  !$omp critical
          i_ctr = i_ctr + 1
          call print_progress('integrate ODE: ', i_ctr, n_theta_c)
-!$omp end critical
+  !$omp end critical
          vartheta_c = h_theta_c*dble(i_theta - 1)
          do i_phi = 1, n_phi_c
             varphi_c = h_phi_c*dble(i_phi - 1)
@@ -179,16 +179,16 @@ contains
             end do
          end do
       end do
-!$omp end do
+  !$omp end do
 
       i_ctr = 0
-!$omp barrier
-!$omp do
+  !$omp barrier
+  !$omp do
       do i_theta = 1, n_theta_c
-!$omp critical
+  !$omp critical
          i_ctr = i_ctr + 1
          call print_progress('compute components: ', i_ctr, n_theta_c)
-!$omp end critical
+  !$omp end critical
          vartheta_c = h_theta_c*dble(i_theta - 1)
          do i_phi = 1, n_phi_c
             varphi_c = h_phi_c*dble(i_phi - 1)
@@ -205,7 +205,7 @@ contains
                B_vartheta_c(is, i_theta, i_phi) = Bcovar_vartheta + (aiota*Bcovar_vartheta + Bcovar_varphi)*dG_c_dt
                B_varphi_c(is, i_theta, i_phi) = Bcovar_varphi + (aiota*Bcovar_vartheta + Bcovar_varphi)*dG_c_dp
             end do
-!First point is=1 (on axis) is bad, extrapolate with parabola:
+  !First point is=1 (on axis) is bad, extrapolate with parabola:
             sqg_c(1, i_theta, i_phi) = 3.d0*(sqg_c(2, i_theta, i_phi) - sqg_c(3, i_theta, i_phi)) &
                                        + sqg_c(4, i_theta, i_phi)                                      !<=OLD
             B_vartheta_c(1, i_theta, i_phi) = 0.d0                                                                  !<=NEW
@@ -213,12 +213,12 @@ contains
                                             + B_varphi_c(4, i_theta, i_phi)
          end do
       end do
-!$omp end do
+  !$omp end do
 
-!$omp critical
+  !$omp critical
       deallocate (y, dy)
-!$omp end critical
-!$omp end parallel
+  !$omp end critical
+  !$omp end parallel
 
       ns_s_c = ns_s
       ns_tp_c = ns_tp
@@ -231,7 +231,7 @@ contains
 
    end subroutine get_canonical_coordinates_impl
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine rhs_cancoord(r, y, dy)
 
@@ -266,7 +266,7 @@ contains
       vartheta = vartheta_c + aiota*y(1)
       varphi = varphi_c + y(1)
 
-! Newton iteration to find field-specific theta from canonical theta
+  ! Newton iteration to find field-specific theta from canonical theta
 
       if (allocated(current_field)) then
          ! Use field-agnostic Newton solver
@@ -303,7 +303,7 @@ contains
 
    end subroutine rhs_cancoord
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine print_progress(message, progress, total)
       character(*), intent(in) :: message
@@ -318,7 +318,7 @@ contains
       end if
    end subroutine print_progress
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine spline_can_coord(fullset)
 
@@ -344,7 +344,7 @@ contains
       s_sqg_Bt_Bp(3, 1, 1, 1, :, :, :) = B_varphi_c
       if (fullset) s_G_c(1, 1, 1, :, :, :) = G_c
 
-! splining over $\varphi$:
+  ! splining over $\varphi$:
 
       allocate (splcoe(0:ns_tp_c, n_phi_c))
 
@@ -378,7 +378,7 @@ contains
 
       deallocate (splcoe)
 
-! splining over $\vartheta$:
+  ! splining over $\vartheta$:
 
       allocate (splcoe(0:ns_tp_c, n_theta_c))
 
@@ -415,7 +415,7 @@ contains
 
       deallocate (splcoe)
 
-! splining over $s$:
+  ! splining over $s$:
 
       allocate (splcoe(0:ns_s_c, ns_c))
 
@@ -458,7 +458,7 @@ contains
 
    end subroutine spline_can_coord
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
                                A_theta, A_phi, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3, &
@@ -505,7 +505,7 @@ contains
       double precision, dimension(n_qua, ns_max)        :: sp_all, dsp_all_ds, dsp_all_dt
       double precision, dimension(n_qua, ns_max)        :: d2sp_all_ds2, d2sp_all_dsdt, d2sp_all_dt2
       double precision, dimension(n_qua, ns_max, ns_max) :: stp_all, dstp_all_ds, d2stp_all_ds2
-!$omp atomic
+  !$omp atomic
       icounter = icounter + 1
       if (r .le. 0.d0) then
          rnegflag = .true.
@@ -525,7 +525,7 @@ contains
       dphi = (dphi - dble(i_phi))*h_phi_c
       i_phi = i_phi + 1
 
-! Begin interpolation of vector potentials over $s$
+  ! Begin interpolation of vector potentials over $s$
 
       ds = r/hs
       is = max(0, min(ns - 1, int(ds)))
@@ -555,10 +555,10 @@ contains
 
       end if
 
-! End interpolation of vector potentials over $s$
+  ! End interpolation of vector potentials over $s$
 
-!--------------------------------
-!-------------------------------
+  !--------------------------------
+  !-------------------------------
 
       rho_tor = sqrt(r)
       !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
@@ -571,7 +571,7 @@ contains
 
       if (fullset) then
 
-! Begin interpolation of G over $s$
+  ! Begin interpolation of G over $s$
 
          stp_G(1:nstp, 1:nstp) = s_G_c(ns_s_c + 1, :, :, is, i_theta, i_phi)
 
@@ -579,9 +579,9 @@ contains
             stp_G(1:nstp, 1:nstp) = s_G_c(k, :, :, is, i_theta, i_phi) + ds*stp_G(1:nstp, 1:nstp)
          end do
 
-! End interpolation of G over $s$
-!----------------------------
-! Begin interpolation of G over $\theta$
+  ! End interpolation of G over $s$
+  !----------------------------
+  ! Begin interpolation of G over $\theta$
 
          sp_G(1:nstp) = stp_G(nstp, 1:nstp)
 
@@ -589,9 +589,9 @@ contains
             sp_G(1:nstp) = stp_G(k, 1:nstp) + dtheta*sp_G(1:nstp)
          end do
 
-! End interpolation of G over $\theta$
-!--------------------------------
-! Begin interpolation of G over $\varphi$
+  ! End interpolation of G over $\theta$
+  !--------------------------------
+  ! Begin interpolation of G over $\varphi$
 
          G_c = sp_G(nstp)
 
@@ -599,15 +599,15 @@ contains
             G_c = sp_G(k) + dphi*G_c
          end do
 
-! End interpolation of G over $\varphi$
+  ! End interpolation of G over $\varphi$
 
       end if
 
-!--------------------------------
+  !--------------------------------
       if (mode_secders .eq. 2) then
-!--------------------------------
+  !--------------------------------
 
-! Begin interpolation of all over $s$
+  ! Begin interpolation of all over $s$
 
          ns_s_p1 = ns_s_c + 1
          stp_all(:, 1:nstp, 1:nstp) = s_sqg_Bt_Bp(:, ns_s_p1, :, :, is, i_theta, i_phi)
@@ -624,9 +624,9 @@ contains
                                       + ds*(s_sqg_Bt_Bp(:, 2, :, :, is, i_theta, i_phi) + ds*stp_all(:, 1:nstp, 1:nstp))
          dstp_all_ds(:, 1:nstp, 1:nstp) = s_sqg_Bt_Bp(:, 2, :, :, is, i_theta, i_phi) + ds*dstp_all_ds(:, 1:nstp, 1:nstp)
 
-! End interpolation of all over $s$
-!-------------------------------
-! Begin interpolation of all over $\theta$
+  ! End interpolation of all over $s$
+  !-------------------------------
+  ! Begin interpolation of all over $\theta$
 
          sp_all(:, 1:nstp) = stp_all(:, nstp, 1:nstp)
          dsp_all_ds(:, 1:nstp) = dstp_all_ds(:, nstp, 1:nstp)
@@ -653,9 +653,9 @@ contains
          dsp_all_dt(:, 1:nstp) = stp_all(:, 2, 1:nstp) + dtheta*dsp_all_dt(:, 1:nstp)
          d2sp_all_dsdt(:, 1:nstp) = dstp_all_ds(:, 2, 1:nstp) + dtheta*d2sp_all_dsdt(:, 1:nstp)
 
-! End interpolation of all over $\theta$
-!--------------------------------
-! Begin interpolation of all over $\varphi$
+  ! End interpolation of all over $\theta$
+  !--------------------------------
+  ! Begin interpolation of all over $\varphi$
 
          qua = sp_all(:, nstp)
          dqua_dr = dsp_all_ds(:, nstp)
@@ -695,7 +695,7 @@ contains
          d2qua_drdp = dsp_all_ds(:, 2) + dphi*d2qua_drdp
          d2qua_dtdp = dsp_all_dt(:, 2) + dphi*d2qua_dtdp
 
-! End interpolation of all over $\varphi$
+  ! End interpolation of all over $\varphi$
 
          drhods = 0.5d0/rho_tor
          drhods2 = drhods**2
@@ -746,11 +746,11 @@ contains
          d2bth_pp = d2qua_dp2(2)
          d2bph_pp = d2qua_dp2(3)
 
-!--------------------------------
+  !--------------------------------
       elseif (mode_secders .eq. 1) then
-!--------------------------------
+  !--------------------------------
 
-! Begin interpolation of all over $s$
+  ! Begin interpolation of all over $s$
 
          ns_s_p1 = ns_s_c + 1
          stp_all(:, 1:nstp, 1:nstp) = s_sqg_Bt_Bp(:, ns_s_p1, :, :, is, i_theta, i_phi)
@@ -767,9 +767,9 @@ contains
                                       + ds*(s_sqg_Bt_Bp(:, 2, :, :, is, i_theta, i_phi) + ds*stp_all(:, 1:nstp, 1:nstp))
          dstp_all_ds(:, 1:nstp, 1:nstp) = s_sqg_Bt_Bp(:, 2, :, :, is, i_theta, i_phi) + ds*dstp_all_ds(:, 1:nstp, 1:nstp)
 
-! End interpolation of all over $s$
-!-------------------------------
-! Begin interpolation of all over $\theta$
+  ! End interpolation of all over $s$
+  !-------------------------------
+  ! Begin interpolation of all over $\theta$
 
          sp_all(:, 1:nstp) = stp_all(:, nstp, 1:nstp)
          dsp_all_ds(:, 1:nstp) = dstp_all_ds(:, nstp, 1:nstp)
@@ -787,9 +787,9 @@ contains
          dsp_all_ds(:, 1:nstp) = dstp_all_ds(:, 1, 1:nstp) + dtheta*dsp_all_ds(:, 1:nstp)
          d2sp_all_ds2(:, 1:nstp) = d2stp_all_ds2(:, 1, 1:nstp) + dtheta*d2sp_all_ds2(:, 1:nstp)
 
-! End interpolation of all over $\theta$
-!--------------------------------
-! Begin interpolation of all over $\varphi$
+  ! End interpolation of all over $\theta$
+  !--------------------------------
+  ! Begin interpolation of all over $\varphi$
 
          qua = sp_all(:, nstp)
          dqua_dr = dsp_all_ds(:, nstp)
@@ -813,7 +813,7 @@ contains
 
          d2qua_dr2 = d2sp_all_ds2(:, 1) + dphi*d2qua_dr2
 
-! End interpolation of all over $\varphi$
+  ! End interpolation of all over $\varphi$
 
          drhods = 0.5d0/rho_tor
          drhods2 = drhods**2
@@ -842,11 +842,11 @@ contains
          d2bth_rr = d2qua_dr2(2)
          d2bph_rr = d2qua_dr2(3)
 
-!--------------------------------
+  !--------------------------------
       else
-!--------------------------------
+  !--------------------------------
 
-! Begin interpolation of all over $s$
+  ! Begin interpolation of all over $s$
 
          ns_s_p1 = ns_s_c + 1
          stp_all(:, 1:nstp, 1:nstp) = s_sqg_Bt_Bp(:, ns_s_p1, :, :, is, i_theta, i_phi)
@@ -859,9 +859,9 @@ contains
 
          stp_all(:, 1:nstp, 1:nstp) = s_sqg_Bt_Bp(:, 1, :, :, is, i_theta, i_phi) + ds*stp_all(:, 1:nstp, 1:nstp)
 
-! End interpolation of all over $s$
-!-------------------------------
-! Begin interpolation of all over $\theta$
+  ! End interpolation of all over $s$
+  !-------------------------------
+  ! Begin interpolation of all over $\theta$
 
          sp_all(:, 1:nstp) = stp_all(:, nstp, 1:nstp)
          dsp_all_ds(:, 1:nstp) = dstp_all_ds(:, nstp, 1:nstp)
@@ -876,9 +876,9 @@ contains
          sp_all(:, 1:nstp) = stp_all(:, 1, 1:nstp) + dtheta*sp_all(:, 1:nstp)
          dsp_all_ds(:, 1:nstp) = dstp_all_ds(:, 1, 1:nstp) + dtheta*dsp_all_ds(:, 1:nstp)
 
-! End interpolation of all over $\theta$
-!--------------------------------
-! Begin interpolation of all over $\varphi$
+  ! End interpolation of all over $\theta$
+  !--------------------------------
+  ! Begin interpolation of all over $\varphi$
 
          qua = sp_all(:, nstp)
          dqua_dr = dsp_all_ds(:, nstp)
@@ -896,7 +896,7 @@ contains
          dqua_dr = dsp_all_ds(:, 1) + dphi*dqua_dr
          dqua_dt = dsp_all_dt(:, 1) + dphi*dqua_dt
 
-! End interpolation of all over $\varphi$
+  ! End interpolation of all over $\varphi$
 
          drhods = 0.5d0/rho_tor
 
@@ -918,13 +918,13 @@ contains
          dB_vartheta_c_dp = dqua_dp(2)
          dB_varphi_c_dp = dqua_dp(3)
 
-!--------------------------------
+  !--------------------------------
       end if
-!--------------------------------
+  !--------------------------------
 
    end subroutine splint_can_coord
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine can_to_vmec(r, vartheta_c_in, varphi_c_in, theta_vmec, varphi_vmec)
 
@@ -961,7 +961,7 @@ contains
       varphi_c = varphi_c_in
       y(1) = G_c
 
-!  call rhs_cancoord(r,y,dy)      !<=OLD
+  !  call rhs_cancoord(r,y,dy)      !<=OLD
       call rhs_cancoord(sqrt(r), y, dy) !<=NEW
 
       theta_vmec = theta
@@ -969,7 +969,7 @@ contains
 
    end subroutine can_to_vmec
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine deallocate_can_coord
 
@@ -982,12 +982,12 @@ contains
 
    end subroutine deallocate_can_coord
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
    subroutine vmec_to_can(r, theta, varphi, vartheta_c, varphi_c)
 
-! Input : r,theta,varphi      - VMEC coordinates
-! Output: vartheta_c,varphi_c - canonical coordinates
+  ! Input : r,theta,varphi      - VMEC coordinates
+  ! Output: vartheta_c,varphi_c - canonical coordinates
 
       use spline_vmec_sub
 #ifdef GVEC_AVAILABLE
@@ -1024,11 +1024,11 @@ contains
          if (abs(delthe) + abs(delphi) .lt. epserr) exit
       end do
 
-!------------------------------------------
+  !------------------------------------------
 
    contains
 
-!------------------------------------------
+  !------------------------------------------
 
       subroutine newt_step
 
@@ -1071,7 +1071,7 @@ contains
          dphi = (dphi - dble(i_phi))*h_phi_c
          i_phi = i_phi + 1
 
-! Begin interpolation of vector potentials over $s$
+  ! Begin interpolation of vector potentials over $s$
 
          ds = r/hs
          is = max(0, min(ns - 1, int(ds)))
@@ -1090,7 +1090,7 @@ contains
 
          aiota = -dA_phi_dr/dA_theta_dr
 
-! End interpolation of vector potentials over $s$
+  ! End interpolation of vector potentials over $s$
 
          rho_tor = sqrt(r)
          !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
@@ -1101,7 +1101,7 @@ contains
 
          nstp = ns_tp_c + 1
 
-! Begin interpolation of G over $s$
+  ! Begin interpolation of G over $s$
 
          stp_G(1:nstp, 1:nstp) = s_G_c(ns_s_c + 1, :, :, is, i_theta, i_phi)
 
@@ -1109,8 +1109,8 @@ contains
             stp_G(1:nstp, 1:nstp) = s_G_c(k, :, :, is, i_theta, i_phi) + ds*stp_G(1:nstp, 1:nstp)
          end do
 
-! End interpolation of G over $s$
-! Begin interpolation of G over $\theta$
+  ! End interpolation of G over $s$
+  ! Begin interpolation of G over $\theta$
 
          sp_G(1:nstp) = stp_G(nstp, 1:nstp)
          dsp_G_dt(1:nstp) = sp_G(1:nstp)*derf1(nstp)
@@ -1120,8 +1120,8 @@ contains
             if (k .gt. 1) dsp_G_dt(1:nstp) = stp_G(k, 1:nstp)*derf1(k) + dtheta*dsp_G_dt(1:nstp)
          end do
 
-! End interpolation of G over $\theta$
-! Begin interpolation of G over $\varphi$
+  ! End interpolation of G over $\theta$
+  ! Begin interpolation of G over $\varphi$
 
          G_c = sp_G(nstp)
          dG_c_dt = dsp_G_dt(nstp)
@@ -1133,7 +1133,7 @@ contains
             if (k .gt. 1) dG_c_dp = sp_G(k)*derf1(k) + dphi*dG_c_dp
          end do
 
-! End interpolation of G over $\varphi$
+  ! End interpolation of G over $\varphi$
 
          ts = vartheta_c + aiota*G_c - vartheta
          ps = varphi_c + G_c - varphi
@@ -1148,7 +1148,7 @@ contains
 
       end subroutine newt_step
 
-!------------------------------------------
+  !------------------------------------------
 
    end subroutine vmec_to_can
 
