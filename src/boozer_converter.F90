@@ -753,12 +753,10 @@ contains
         double precision, dimension(:), allocatable :: aiota_arr, rho_tor
         double precision, dimension(:, :), allocatable :: Bcovar_theta_V
         double precision, dimension(:, :), allocatable :: Bcovar_varphi_V
-        double precision, dimension(:, :), allocatable :: bmod_Vg, bmod_Bg
+        double precision, dimension(:, :), allocatable :: bmod_Vg
         double precision, dimension(:, :), allocatable :: alam_2D
         double precision, dimension(:, :), allocatable :: deltheta_BV_Vg
         double precision, dimension(:, :), allocatable :: delphi_BV_Vg
-        double precision, dimension(:, :), allocatable :: deltheta_BV_Bg
-        double precision, dimension(:, :), allocatable :: delphi_BV_Bg
         double precision, dimension(:, :), allocatable :: splcoe_r
         double precision, dimension(:, :), allocatable :: splcoe_t
         double precision, dimension(:, :), allocatable :: splcoe_p, coef
@@ -796,8 +794,6 @@ contains
         allocate (alam_2D(n_theta_B, n_phi_B))
         allocate (deltheta_BV_Vg(n_theta_B, n_phi_B))
         allocate (delphi_BV_Vg(n_theta_B, n_phi_B))
-        allocate (deltheta_BV_Bg(n_theta_B, n_phi_B))
-        allocate (delphi_BV_Bg(n_theta_B, n_phi_B))
         allocate (wint_t(0:ns_tp_B), wint_p(0:ns_tp_B))
         allocate (coef(0:nder, npoilag))
         allocate (theta_V(2 - n_theta_B:2*n_theta_B - 1))
@@ -1046,7 +1042,7 @@ contains
 ! End compute radial covariant magnetic field component in Boozer coordinates
 
         deallocate (Bcovar_theta_V, Bcovar_varphi_V, bmod_Vg, alam_2D, &
-                    deltheta_BV_Vg, delphi_BV_Vg, deltheta_BV_Bg, delphi_BV_Bg, &
+                    deltheta_BV_Vg, delphi_BV_Vg, &
                     wint_t, wint_p, coef, theta_V, theta_B, phi_V, phi_B, &
                     perqua_t, perqua_p, perqua_2D)
 
@@ -1275,5 +1271,6 @@ contains
         i_phi = i_phi + 1
         
     end subroutine normalize_angular_coordinates
+
 
 end module boozer_sub
