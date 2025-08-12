@@ -1,5 +1,5 @@
 module params
-  use util
+  use util, only: pi, c, e_charge, p_mass, ev
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
