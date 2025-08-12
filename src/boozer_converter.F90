@@ -3,6 +3,9 @@ module boozer_sub
     use field, only: MagneticField
 
     implicit none
+    
+    ! Define real(dp) kind parameter
+    integer, parameter :: dp = kind(1.0d0)
 
     ! Module variable to store the field for use in subroutines
     class(MagneticField), allocatable :: current_field
@@ -59,7 +62,7 @@ contains
 
         implicit none
 
-        double precision, parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
+        real(dp), parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
 
         ns_s_B = ns_s
         ns_tp_B = ns_tp
@@ -101,27 +104,26 @@ contains
         implicit none
 
         integer, parameter :: mode_secders = 1
-        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
+        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
         integer :: nstp, ns_A_p1, ns_s_p1
         integer :: k, is, i_theta, i_phi
         integer :: iss, ist, isp
 
-        double precision :: r, vartheta_B, varphi_B, &
+        real(dp) :: r, vartheta_B, varphi_B, &
             A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
             B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
             B_varphi_B, dB_varphi_B, d2B_varphi_B, Bmod_B, B_r
-        double precision, dimension(3) :: dBmod_B, dB_r
-        double precision, dimension(6) :: d2Bmod_B, d2B_r
+        real(dp), dimension(3) :: dBmod_B, dB_r
+        real(dp), dimension(6) :: d2Bmod_B, d2B_r
 
-        double precision :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
-        double precision :: qua, dqua_dr, dqua_dt, dqua_dp
-        double precision :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
+        real(dp) :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
+        real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
+        real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
             d2qua_dtdp, d2qua_dp2
-        double precision, dimension(ns_max) :: sp_all, dsp_all_ds, dsp_all_dt
-        double precision, dimension(ns_max) :: d2sp_all_ds2, d2sp_all_dsdt, d2sp_all_dt2
-        double precision, dimension(ns_max, ns_max) :: stp_all, dstp_all_ds, &
-            d2stp_all_ds2
+        real(dp), dimension(ns_max) :: sp_all, dsp_all_ds, dsp_all_dt
+        real(dp), dimension(ns_max) :: d2sp_all_ds2, d2sp_all_dsdt, d2sp_all_dt2
+        real(dp), dimension(ns_max, ns_max) :: stp_all, dstp_all_ds, d2stp_all_ds2
 
 !$omp atomic
         icounter = icounter + 1
@@ -515,20 +517,20 @@ contains
         implicit none
 
         integer :: isw
-        double precision :: r, vartheta, varphi, deltheta_BV, delphi_BV
-        double precision, dimension(2) :: ddeltheta_BV, ddelphi_BV
+        real(dp) :: r, vartheta, varphi, deltheta_BV, delphi_BV
+        real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
 
         integer, parameter :: n_qua = 2
-        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
+        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
         integer :: nstp, ns_A_p1, ns_s_p1
         integer :: k, is, i_theta, i_phi
         integer :: iss, ist, isp
 
-        double precision :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
+        real(dp) :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
 
-        double precision, dimension(n_qua) :: qua, dqua_dt, dqua_dp
-        double precision, dimension(n_qua, ns_max) :: sp_all, dsp_all_dt
-        double precision, dimension(n_qua, ns_max, ns_max) :: stp_all
+        real(dp), dimension(n_qua) :: qua, dqua_dt, dqua_dp
+        real(dp), dimension(n_qua, ns_max) :: sp_all, dsp_all_dt
+        real(dp), dimension(n_qua, ns_max, ns_max) :: stp_all
 
         if (r .le. 0.d0) then
             rnegflag = .true.
@@ -637,11 +639,11 @@ contains
 
         implicit none
 
-        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
+        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
-        double precision :: r, theta, varphi, vartheta_B, varphi_B
-        double precision :: deltheta_BV, delphi_BV
-        double precision, dimension(2) :: ddeltheta_BV, ddelphi_BV
+        real(dp) :: r, theta, varphi, vartheta_B, varphi_B
+        real(dp) :: deltheta_BV, delphi_BV
+        real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
 
         call delthe_delphi_BV(0, r, theta, varphi, deltheta_BV, delphi_BV, &
                               ddeltheta_BV, ddelphi_BV)
@@ -663,15 +665,15 @@ contains
 
         implicit none
 
-        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
-        double precision, parameter :: epserr = 1.d-14
+        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
+        real(dp), parameter :: epserr = 1.d-14
         integer, parameter :: niter = 100
 
         integer :: iter
-        double precision :: r, theta, varphi, vartheta_B, varphi_B
-        double precision :: deltheta_BV, delphi_BV
-        double precision :: f1, f2, f11, f12, f21, f22, delthe, delphi, det
-        double precision, dimension(2) :: ddeltheta_BV, ddelphi_BV
+        real(dp) :: r, theta, varphi, vartheta_B, varphi_B
+        real(dp) :: deltheta_BV, delphi_BV
+        real(dp) :: f1, f2, f11, f12, f21, f22, delthe, delphi, det
+        real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
 
         if (use_del_tp_B) then
 
@@ -735,34 +737,28 @@ contains
 
         implicit none
 
-        double precision, parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
+        real(dp), parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
 
         integer :: i, k, i_rho, i_theta, i_phi, npoilag, nder, nshift
         integer :: ibeg, iend, i_qua, nqua, ist, isp
-        double precision :: s, theta, varphi, A_theta, A_phi
-        double precision :: dA_theta_ds, dA_phi_ds, aiota
-        double precision :: sqg, alam, dl_ds, dl_dt, dl_dp
-        double precision :: Bctrvr_vartheta, Bctrvr_varphi
-        double precision :: Bcovar_r, Bcovar_vartheta, Bcovar_varphi
-        double precision :: Bcovar_vartheta_B, Bcovar_varphi_B
-        double precision :: denomjac, G00, Gbeg, aper
-        double precision :: per_theta, per_phi, gridcellnum
-        double precision, dimension(:), allocatable :: wint_t, wint_p
-        double precision, dimension(:), allocatable :: theta_V, theta_B
-        double precision, dimension(:), allocatable :: phi_V, phi_B
-        double precision, dimension(:), allocatable :: aiota_arr, rho_tor
-        double precision, dimension(:, :), allocatable :: Bcovar_theta_V
-        double precision, dimension(:, :), allocatable :: Bcovar_varphi_V
-        double precision, dimension(:, :), allocatable :: bmod_Vg
-        double precision, dimension(:, :), allocatable :: alam_2D
-        double precision, dimension(:, :), allocatable :: deltheta_BV_Vg
-        double precision, dimension(:, :), allocatable :: delphi_BV_Vg
-        double precision, dimension(:, :), allocatable :: splcoe_r
-        double precision, dimension(:, :), allocatable :: splcoe_t
-        double precision, dimension(:, :), allocatable :: splcoe_p, coef
-        double precision, dimension(:, :), allocatable :: perqua_t, perqua_p
-        double precision, dimension(:, :, :), allocatable :: perqua_2D, Gfunc
-        double precision, dimension(:, :, :, :), allocatable :: Bcovar_symfl
+        real(dp) :: s, theta, varphi, A_theta, A_phi
+        real(dp) :: dA_theta_ds, dA_phi_ds, aiota
+        real(dp) :: sqg, alam, dl_ds, dl_dt, dl_dp
+        real(dp) :: Bctrvr_vartheta, Bctrvr_varphi
+        real(dp) :: Bcovar_r, Bcovar_vartheta, Bcovar_varphi
+        real(dp) :: Bcovar_vartheta_B, Bcovar_varphi_B
+        real(dp) :: denomjac, G00, Gbeg, aper
+        real(dp) :: per_theta, per_phi, gridcellnum
+        real(dp), allocatable :: wint_t(:), wint_p(:), theta_V(:), theta_B(:)
+        real(dp), allocatable :: phi_V(:), phi_B(:), aiota_arr(:), rho_tor(:)
+        real(dp), allocatable :: Bcovar_theta_V(:, :), Bcovar_varphi_V(:, :)
+        real(dp), allocatable :: bmod_Vg(:, :), alam_2D(:, :)
+        real(dp), allocatable :: deltheta_BV_Vg(:, :), delphi_BV_Vg(:, :)
+        real(dp), allocatable :: splcoe_r(:, :), splcoe_t(:, :)
+        real(dp), allocatable :: splcoe_p(:, :), coef(:, :)
+        real(dp), allocatable :: perqua_t(:, :), perqua_p(:, :)
+        real(dp), allocatable :: perqua_2D(:, :, :), Gfunc(:, :, :)
+        real(dp), allocatable :: Bcovar_symfl(:, :, :, :)
 
         nqua = 6
         gridcellnum = dble((n_theta_B - 1)*(n_phi_B - 1))
@@ -1064,7 +1060,7 @@ contains
         implicit none
 
         integer :: i_rho, i_theta, i_phi, i_qua, k, ist, isp
-        double precision, dimension(:, :), allocatable :: splcoe_r, splcoe_t, splcoe_p
+        real(dp), allocatable :: splcoe_r(:, :), splcoe_t(:, :), splcoe_p(:, :)
 
         print *, 'Splining Boozer data'
 
@@ -1252,13 +1248,13 @@ contains
         
         implicit none
         
-        double precision, intent(in) :: vartheta, varphi
+        real(dp), intent(in) :: vartheta, varphi
         integer, intent(in) :: n_theta_B, n_phi_B
-        double precision, intent(in) :: h_theta_B, h_phi_B
+        real(dp), intent(in) :: h_theta_B, h_phi_B
         integer, intent(out) :: i_theta, i_phi
-        double precision, intent(out) :: dtheta, dphi
+        real(dp), intent(out) :: dtheta, dphi
         
-        double precision, parameter :: twopi = 2.d0*3.14159265358979d0
+        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
         
         dtheta = modulo(vartheta, twopi)/h_theta_B
         i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
