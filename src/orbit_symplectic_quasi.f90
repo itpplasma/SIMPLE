@@ -1,13 +1,13 @@
 module orbit_symplectic_quasi
 
-use iso_fortran_env, only: real64
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
 use orbit_symplectic_base
 use minpack_interfaces, only: hybrd1
 
 implicit none
 
-integer, parameter :: dp = real64
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 save
 
 logical, parameter :: exact_steps = .False.
