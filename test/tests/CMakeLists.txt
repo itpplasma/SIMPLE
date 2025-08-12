@@ -164,6 +164,35 @@ add_executable(test_array_utils.x test_array_utils.f90)
 target_link_libraries(test_array_utils.x simple)
 add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
+# New comprehensive unit tests
+add_executable(test_util_simple.x test_util_simple.f90)
+target_link_libraries(test_util_simple.x simple)
+add_test(NAME test_util_simple COMMAND test_util_simple.x)
+
+add_executable(test_timing.x test_timing.f90)
+target_link_libraries(test_timing.x simple)
+add_test(NAME test_timing COMMAND test_timing.x)
+
+add_executable(test_sorting.x test_sorting.f90)
+target_link_libraries(test_sorting.x simple)
+add_test(NAME test_sorting COMMAND test_sorting.x)
+
+add_executable(test_lapack_interfaces.x test_lapack_interfaces.f90)
+target_link_libraries(test_lapack_interfaces.x simple)
+add_test(NAME test_lapack_interfaces COMMAND test_lapack_interfaces.x)
+
+add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
+target_link_libraries(test_orbit_symplectic_base.x simple)
+add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
+
+add_executable(test_field_base.x test_field_base.f90)
+target_link_libraries(test_field_base.x simple)
+add_test(NAME test_field_base COMMAND test_field_base.x)
+
+add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
+target_link_libraries(test_coordinates_simple.x simple)
+add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
+
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90
