@@ -19,7 +19,7 @@ implicit none
 
 procedure(evaluate_base), pointer :: evaluate => null()
 
-! Conversion to and from reference coordinates - currently VMEC coordinates (s, th, ph)
+  ! Conversion to and from reference coordinates - currently VMEC coordinates (s, th, ph)
 procedure(coordinate_transform), pointer :: can_to_ref => identity_transform
 procedure(coordinate_transform), pointer :: ref_to_can => identity_transform
 
@@ -182,13 +182,13 @@ subroutine FieldCan_init(f, mu, ro0, vpar)
 end subroutine FieldCan_init
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine get_val(f, pphi)
-!
-! computes values of H, pth and vpar at z=(r, th, ph, pphi)
-!
-!
+  !
+  ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
+  !
+  !
   type(FieldCan), intent(inout) :: f
   double precision, intent(in) :: pphi
 
@@ -199,13 +199,13 @@ subroutine get_val(f, pphi)
 end subroutine get_val
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine get_derivatives(f, pphi)
-!
-! computes H, pth and vpar at z=(r, th, ph, pphi) and their derivatives
-!
-!
+  !
+  ! computes H, pth and vpar at z=(r, th, ph, pphi) and their derivatives
+  !
+  !
   type(FieldCan), intent(inout) :: f
   double precision, intent(in) :: pphi
 
@@ -223,15 +223,15 @@ subroutine get_derivatives(f, pphi)
 
 end subroutine get_derivatives
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine get_derivatives2(f, pphi)
-!
-! computes H, pth and vpar at z=(r, th, ph, pphi) up to 2nd derivatives
-! order of second derivatives:
-! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
-! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
-!
+  !
+  ! computes H, pth and vpar at z=(r, th, ph, pphi) up to 2nd derivatives
+  ! order of second derivatives:
+  ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
+  ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
+  !
   type(FieldCan), intent(inout) :: f
   double precision, intent(in) :: pphi
 
