@@ -1,5 +1,39 @@
+module mock_field_module
+  use field_base
+  implicit none
+  
+  ! Mock implementation of MagneticField for testing
+  type, extends(MagneticField) :: MockField
+  contains
+    procedure :: evaluate => mock_evaluate
+  end type MockField
+  
+contains
+
+  subroutine mock_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
+    class(MockField), intent(in) :: self
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: Acov(3)
+    real(dp), intent(out) :: hcov(3)
+    real(dp), intent(out) :: Bmod
+    real(dp), intent(out), optional :: sqgBctr(3)
+    
+    ! Simple mock implementation that returns predictable values
+    Acov = 0.0_dp
+    hcov = 1.0_dp
+    Bmod = 1.0_dp
+    
+    if (present(sqgBctr)) then
+        sqgBctr = x  ! Just return the input coordinates
+    end if
+    
+  end subroutine mock_evaluate
+
+end module mock_field_module
+
 program test_field_base
   use field_base
+  use mock_field_module
   implicit none
   
   integer :: errors
@@ -78,30 +112,3 @@ contains
   end subroutine test_mock_field_implementation
 
 end program test_field_base
-
-! Mock implementation of MagneticField for testing
-type, extends(MagneticField) :: MockField
-contains
-    procedure :: evaluate => mock_evaluate
-end type MockField
-
-contains
-
-subroutine mock_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-    class(MockField), intent(in) :: self
-    real(dp), intent(in) :: x(3)
-    real(dp), intent(out) :: Acov(3)
-    real(dp), intent(out) :: hcov(3)
-    real(dp), intent(out) :: Bmod
-    real(dp), intent(out), optional :: sqgBctr(3)
-    
-    ! Simple mock implementation that returns predictable values
-    Acov = 0.0_dp
-    hcov = 1.0_dp
-    Bmod = 1.0_dp
-    
-    if (present(sqgBctr)) then
-        sqgBctr = x  ! Just return the input coordinates
-    end if
-    
-end subroutine mock_evaluate

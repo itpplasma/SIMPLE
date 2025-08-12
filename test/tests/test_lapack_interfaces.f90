@@ -33,7 +33,8 @@ contains
     
     ! Set up the system: A*x = b where x = [1, 2, 3]
     ! A = [[2, 1, 0], [1, 2, 1], [0, 1, 2]]
-    ! b = [4, 8, 7] (which gives x = [1, 2, 3])
+    ! Fortran stores matrices column-major, so A(i,j) is row i, column j
+    ! b = A*[1,2,3] = [2*1+1*2+0*3, 1*1+2*2+1*3, 0*1+1*2+2*3] = [4, 8, 8]
     
     a(1,1) = 2.0d0; a(1,2) = 1.0d0; a(1,3) = 0.0d0
     a(2,1) = 1.0d0; a(2,2) = 2.0d0; a(2,3) = 1.0d0
@@ -41,7 +42,7 @@ contains
     
     b(1,1) = 4.0d0
     b(2,1) = 8.0d0
-    b(3,1) = 7.0d0
+    b(3,1) = 8.0d0
     
     ! Call DGESV to solve the system
     call dgesv(n, nrhs, a, n, ipiv, b, n, info)
