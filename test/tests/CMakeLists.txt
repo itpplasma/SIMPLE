@@ -86,6 +86,10 @@ add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
+add_executable (test_find_bminmax_refactored.x test_find_bminmax_refactored.f90)
+target_link_libraries(test_find_bminmax_refactored.x simple)
+add_test(NAME test_find_bminmax_refactored COMMAND test_find_bminmax_refactored.x)
+
 # Generate GVEC test data file for test_gvec using elliptic tokamak example
 set(GVEC_TEST_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../build/_deps/gvec-src/test-CI/examples/analytic_gs_elliptok/parameter.ini")
 set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_elliptok_State_final.dat")
