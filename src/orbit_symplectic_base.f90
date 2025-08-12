@@ -167,17 +167,6 @@ contains
   end subroutine setup_rk_field_evaluation
   
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  ! Helper: Compute Hamiltonian derivatives
-  subroutine compute_hamiltonian_derivatives(fs, s, Hprime)
-    type(FieldCan), intent(in) :: fs(:)
-    integer, intent(in) :: s
-    real(dp), intent(out) :: Hprime(s)
-    
-    ! Scalar assignment broadcasts to all array elements in Fortran
-    Hprime = fs(1)%dH(1) / fs(1)%dpth(1)
-  end subroutine compute_hamiltonian_derivatives
-  
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   ! Helper: Compute RK stage equations
   subroutine compute_rk_stage_equations(si, fs, s, x, fvec, a, ahat, Hprime)
     type(SymplecticIntegrator), intent(in) :: si
@@ -358,8 +347,8 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   ! Set up field evaluation at all stages
   call setup_rk_field_evaluation(si, fs, s, x, jactype)
 
-  ! Compute Hamiltonian derivatives
-  call compute_hamiltonian_derivatives(fs, s, Hprime)
+  ! Compute Hamiltonian derivatives (scalar broadcasts to all array elements)
+  Hprime = fs(1)%dH(1) / fs(1)%dpth(1)
 
   ! Compute stage equations
   call compute_rk_stage_equations(si, fs, s, x, fvec, a, ahat, Hprime)
