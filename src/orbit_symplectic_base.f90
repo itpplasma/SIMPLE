@@ -173,15 +173,8 @@ contains
     integer, intent(in) :: s
     real(dp), intent(out) :: Hprime(s)
     
-    integer :: k
-    
-    do k = 1, s
-      if (abs(fs(k)%dpth(1)) > 1.0d-12) then
-        Hprime(k) = fs(k)%dH(1) / fs(k)%dpth(1)
-      else
-        Hprime(k) = 0.0d0  ! Avoid division by zero
-      end if
-    end do
+    ! Scalar assignment broadcasts to all array elements in Fortran
+    Hprime = fs(1)%dH(1) / fs(1)%dpth(1)
   end subroutine compute_hamiltonian_derivatives
   
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
