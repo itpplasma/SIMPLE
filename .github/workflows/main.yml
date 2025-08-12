@@ -34,6 +34,15 @@ jobs:
         with:
           name: repository
 
+      - name: Restore executable permissions
+        run: |
+          chmod +x test/golden_record_sanity/*.sh
+          chmod +x test/golden_record/*.sh 2>/dev/null || true
+          chmod +x test/test_data/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x tools/*.sh 2>/dev/null || true
+          chmod +x *.sh 2>/dev/null || true
+
       - name: Build SIMPLE
         run: |
           make clean
@@ -67,6 +76,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: repository
+
+      - name: Restore executable permissions
+        run: |
+          chmod +x test/golden_record_sanity/*.sh
+          chmod +x test/golden_record/*.sh 2>/dev/null || true
+          chmod +x test/test_data/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x tools/*.sh 2>/dev/null || true
+          chmod +x *.sh 2>/dev/null || true
 
       - name: Build LaTeX documents
         run: |
