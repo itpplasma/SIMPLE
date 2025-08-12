@@ -1,4 +1,5 @@
 module simple_main
+  use iso_fortran_env, only: real64
   use omp_lib
   use util, only: pi, twopi, sqrt2
   use simple, only : init_sympl, Tracer
@@ -15,6 +16,7 @@ module simple_main
     ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
     field_input, isw_field_type, reuse_batch
 
+  integer, parameter :: dp = real64
   implicit none
 
   contains
@@ -120,7 +122,7 @@ module simple_main
     use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
     facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
 
-    real(8) :: v0_coll
+    real(dp) :: v0_coll
 
     call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
       3.5d6/facE_al,v0_coll,dchichi,slowrate,dchichi_norm,slowrate_norm)
@@ -149,7 +151,7 @@ module simple_main
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
 
-    double precision, dimension(5) :: z
+    real(dp), dimension(5) :: z
     integer :: it, ierr_orbit
     integer(8) :: kt
     logical :: passing
@@ -198,7 +200,7 @@ module simple_main
     use orbit_symplectic, only : orbit_timestep_sympl
 
     type(Tracer), intent(inout) :: anorb
-    double precision, intent(inout) :: z(5)
+    real(dp), intent(inout) :: z(5)
     integer(8), intent(inout) :: kt
     integer, intent(out) :: ierr_orbit
 
@@ -220,7 +222,7 @@ module simple_main
 
   subroutine to_standard_z_coordinates(anorb, z)
     type(Tracer), intent(in) :: anorb
-    double precision, intent(inout) :: z(5)
+    real(dp), intent(inout) :: z(5)
 
     z(1:3) = anorb%si%z(1:3)
     z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod+0.5d0*anorb%f%vpar**2)
@@ -243,11 +245,11 @@ module simple_main
   subroutine compute_pitch_angle_params(z, passing, trap_par_, perp_inv_)
     use find_bminmax_sub, only : get_bminmax
 
-    double precision, intent(in) :: z(5)
+    real(dp), intent(in) :: z(5)
     logical, intent(out) :: passing
-    double precision, intent(out) :: trap_par_, perp_inv_
+    real(dp), intent(out) :: trap_par_, perp_inv_
 
-    double precision :: bmod
+    real(dp) :: bmod
 
     !$omp critical
     bmod = compute_bmod(z(1:3))
@@ -263,10 +265,10 @@ module simple_main
   function compute_bmod(z) result(bmod)
     use magfie_sub, only : magfie
 
-    double precision :: bmod
-    double precision, intent(in) :: z(3)
+    real(dp) :: bmod
+    real(dp), intent(in) :: z(3)
 
-    double precision :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+    real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
     call magfie(z(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   end function compute_bmod
@@ -275,7 +277,7 @@ module simple_main
     use orbit_symplectic, only : get_val
 
     type(Tracer), intent(inout) :: anorb
-    double precision, intent(in) :: z(5)
+    real(dp), intent(in) :: z(5)
 
     anorb%si%pabs = z(4)
     anorb%f%vpar = z(4)*z(5)*sqrt2
@@ -286,7 +288,7 @@ module simple_main
   end subroutine update_momentum
 
   subroutine collide(z, dt)
-    double precision, intent(in) :: z(5), dt
+    real(dp), intent(in) :: z(5), dt
     integer :: ierr_coll
 
     call stost(z, dt, 1, ierr_coll)
@@ -299,7 +301,7 @@ module simple_main
   subroutine write_output
 
     integer :: i, num_lost
-    double precision :: inverse_times_lost_sum
+    real(dp) :: inverse_times_lost_sum
 
     open(1,file='times_lost.dat',recl=1024)
     num_lost = 0
