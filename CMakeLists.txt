@@ -93,10 +93,13 @@ add_compile_options(-Wno-unused-dummy-argument)
 add_compile_options(-Wtrampolines)
 add_compile_options(-ffree-line-length-132)
 add_compile_options(-g -fbacktrace)
-# If not apple
-if (NOT APPLE)
-	add_link_options(-Wl,-z,noexecstack)
-endif()
+
+# TODO: We have to allow executable stack until field_can_meiss works without it.
+#       See warnings from -Wtrampolines
+# if (NOT APPLE)
+#     add_link_options(-Wl,-z,noexecstack)
+# endif()
+
 if (ENABLE_OPENMP)
 	add_compile_options(-fopenmp)
 	add_link_options(-fopenmp)
