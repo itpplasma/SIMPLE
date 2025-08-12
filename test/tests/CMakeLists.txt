@@ -90,6 +90,10 @@ add_executable (test_simple_refactored.x ../test_simple_refactored.f90)
 target_link_libraries(test_simple_refactored.x simple)
 add_test(NAME test_simple_refactored COMMAND test_simple_refactored.x)
 
+add_executable (test_cut_detector_refactored.x ../test_cut_detector_refactored.f90)
+target_link_libraries(test_cut_detector_refactored.x simple)
+add_test(NAME test_cut_detector_refactored COMMAND test_cut_detector_refactored.x)
+
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
