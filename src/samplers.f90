@@ -1,9 +1,10 @@
 module samplers
-  use iso_fortran_env, only: real64
   use util
 
-  integer, parameter :: dp = real64
   implicit none
+
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
 
   character(len=*), parameter :: START_FILE = 'start.dat'
   character(len=*), parameter :: START_FILE_ANTS = 'start_ants.dat'
