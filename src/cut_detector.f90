@@ -212,22 +212,29 @@ module cut_detector
     real(dp), intent(in) :: phi
     real(dp), intent(out) :: phiper
     logical, intent(out) :: cut_found
+    logical :: crossed
+    
+    ! Initialize output variables
+    phiper = 0.0d0
+    crossed = .false.
     
     ! Check for period boundary crossings
     if (phi > dble(self%kper + 1) * self%fper) then
       self%iper = 0  ! Reset period counter
       phiper = dble(self%kper + 1) * self%fper
       self%kper = self%kper + 1
+      crossed = .true.
     else if (phi < dble(self%kper) * self%fper) then
       self%iper = 0  ! Reset period counter
       phiper = dble(self%kper) * self%fper
       self%kper = self%kper - 1
+      crossed = .true.
     end if
     
     self%iper = self%iper + 1
     
-    ! Cut found when stencil is complete around period boundary
-    cut_found = (self%iper == nplagr/2)
+    ! Cut found when stencil is complete around period boundary AND crossing occurred
+    cut_found = crossed .and. (self%iper == nplagr/2)
   end subroutine detector_detect_period_crossing
   
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

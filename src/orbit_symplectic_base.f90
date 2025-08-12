@@ -156,16 +156,13 @@ contains
     integer, intent(in) :: s, jactype
     real(dp), intent(in) :: x(4*s)
     
-    integer :: k
+    integer :: k, idx
     
-    ! Evaluate field at first stage (special case)
-    call eval_field(fs(1), x(1), si%z(2), si%z(3), jactype)
-    call get_derivatives(fs(1), x(2))
-    
-    ! Evaluate field at remaining stages
-    do k = 2, s
-      call eval_field(fs(k), x(4*k-3-2), x(4*k-2-2), x(4*k-1-2), jactype)
-      call get_derivatives(fs(k), x(4*k-2))
+    ! Evaluate field and derivatives at all stages using consistent indexing
+    do k = 1, s
+      idx = 4*(k-1)
+      call eval_field(fs(k), x(idx+1), x(idx+2), x(idx+3), jactype)
+      call get_derivatives(fs(k), x(idx+4))
     end do
   end subroutine setup_rk_field_evaluation
   
@@ -179,7 +176,7 @@ contains
     integer :: k
     
     do k = 1, s
-      if (abs(fs(k)%dpth(1)) > epsilon(1.0d0)) then
+      if (abs(fs(k)%dpth(1)) > 1.0d-12) then
         Hprime(k) = fs(k)%dH(1) / fs(k)%dpth(1)
       else
         Hprime(k) = 0.0d0  ! Avoid division by zero
@@ -196,7 +193,7 @@ contains
     real(dp), intent(in) :: x(4*s), a(s,s), ahat(s,s), Hprime(s)
     real(dp), intent(out) :: fvec(4*s)
     
-    integer :: k, l
+    integer :: k, l, idx
     
     ! First stage equations
     fvec(1) = fs(1)%pth - si%pthold
@@ -210,20 +207,18 @@ contains
     
     ! Remaining stage equations
     do k = 2, s
-      fvec(4*k-3-2) = fs(k)%pth - si%pthold
-      fvec(4*k-2-2) = x(4*k-2-2) - si%z(2)
-      fvec(4*k-1-2) = x(4*k-1-2) - si%z(3)
-      fvec(4*k-2) = x(4*k-2) - si%z(4)
+      idx = 4*(k-1)
+      fvec(idx+1) = fs(k)%pth - si%pthold
+      fvec(idx+2) = x(idx+2) - si%z(2)
+      fvec(idx+3) = x(idx+3) - si%z(3)
+      fvec(idx+4) = x(idx+4) - si%z(4)
       
       ! Add stage contributions
       do l = 1, s
-        fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt * ahat(k,l) * &
-                        (fs(l)%dH(2) - Hprime(l) * fs(l)%dpth(2))
-        fvec(4*k-2-2) = fvec(4*k-2-2) - si%dt * a(k,l) * Hprime(l)
-        fvec(4*k-1-2) = fvec(4*k-1-2) - si%dt * a(k,l) * &
-                        (fs(l)%vpar - Hprime(l) * fs(l)%hth) / fs(l)%hph
-        fvec(4*k-2) = fvec(4*k-2) + si%dt * ahat(k,l) * &
-                      (fs(l)%dH(3) - Hprime(l) * fs(l)%dpth(3))
+        fvec(idx+1) = fvec(idx+1) + si%dt * ahat(k,l) * (fs(l)%dH(2) - Hprime(l) * fs(l)%dpth(2))
+        fvec(idx+2) = fvec(idx+2) - si%dt * a(k,l) * Hprime(l)
+        fvec(idx+3) = fvec(idx+3) - si%dt * a(k,l) * (fs(l)%vpar - Hprime(l) * fs(l)%hth) / fs(l)%hph
+        fvec(idx+4) = fvec(idx+4) + si%dt * ahat(k,l) * (fs(l)%dH(3) - Hprime(l) * fs(l)%dpth(3))
       end do
     end do
   end subroutine compute_rk_stage_equations
