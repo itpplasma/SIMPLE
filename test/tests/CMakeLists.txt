@@ -66,6 +66,10 @@ add_executable (test_field_can_refactored.x test_field_can_refactored.f90)
 target_link_libraries(test_field_can_refactored.x simple)
 add_test(NAME test_field_can_refactored COMMAND test_field_can_refactored.x)
 
+add_executable (test_collis_alphas_refactored.x test_collis_alphas_refactored.f90)
+target_link_libraries(test_collis_alphas_refactored.x simple)
+add_test(NAME test_collis_alphas_refactored COMMAND test_collis_alphas_refactored.x)
+
 add_executable (test_poincare1.x test_poincare1.f90)
 target_link_libraries(test_poincare1.x simple)
 add_executable (test_poiplot_classification.x test_poiplot_classification.f90
