@@ -1,5 +1,5 @@
 module params
-  use util
+  use util, only: pi, c, e_charge, p_mass, ev
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
@@ -12,23 +12,25 @@ module params
 
   implicit none
 
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
   integer          :: nper=1000, ntestpart=1024
   integer          :: zstart_dim1 = 5
-  double precision :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
-  double precision :: tau,dtau,dtaumin,xi
-  double precision :: RT0,R0i,cbfi,bz0i,bf0,rbig
-  double precision, dimension(1024) :: sbeg=0.5d0
-  double precision :: thetabeg=0.0d0
-  double precision, dimension(:),   allocatable :: bstart,volstart !where npoi is used, add a dimension at the end for sbeg
-  double precision, dimension(:,:), allocatable :: xstart
-  double precision, dimension(:,:), allocatable :: zstart, zend
-  double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
-  double precision, dimension(:), allocatable :: times_lost
-  double precision :: contr_pp=-1d0
+  real(dp) :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
+  real(dp) :: tau,dtau,dtaumin,xi
+  real(dp) :: RT0,R0i,cbfi,bz0i,bf0,rbig
+  real(dp), dimension(1024) :: sbeg=0.5d0
+  real(dp) :: thetabeg=0.0d0
+  real(dp), dimension(:),   allocatable :: bstart,volstart !where npoi is used, add a dimension at the end for sbeg
+  real(dp), dimension(:,:), allocatable :: xstart
+  real(dp), dimension(:,:), allocatable :: zstart, zend
+  real(dp), dimension(:), allocatable :: confpart_trap,confpart_pass
+  real(dp), dimension(:), allocatable :: times_lost
+  real(dp) :: contr_pp=-1d0
   integer          :: ibins
   logical          :: generate_start_only=.False.
   integer          :: startmode=1
-  double precision :: grid_density=0d0
+  real(dp) :: grid_density=0d0
   logical          :: special_ants_file=.False.
 
   integer :: ntau ! number of dtaumin in dtau
@@ -37,37 +39,37 @@ module params
 
   integer :: kpart = 0 ! progress counter for particles
 
-  double precision :: relerr = 1d-13
+  real(dp) :: relerr = 1d-13
 
-  double precision, allocatable :: trap_par(:), perp_inv(:)
+  real(dp), allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
 
   integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
   integer :: nplagr,nder,npl_half
   integer :: norbper,nfp
-  double precision :: fper, zerolam = 0d0
+  real(dp) :: fper, zerolam = 0d0
 
-  double precision :: tcut = -1d0
+  real(dp) :: tcut = -1d0
   integer :: ntcut
   logical          :: class_plot = .False.    !<=AAA
-  double precision :: cut_in_per = 0d0        !<=AAA
+  real(dp) :: cut_in_per = 0d0        !<=AAA
 
   logical :: fast_class=.False.  !if .true. quit immeadiately after fast classification
 
   ! Colliding with D-T reactor plasma. TODO: Make configurable
   logical :: swcoll = .False.
-  double precision :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
+  real(dp) :: am1=2.0d0, am2=3.0d0, Z1=1.0d0, Z2=1.0d0, &
     densi1=0.5d14, densi2=0.5d14, tempi1=1.0d4, tempi2=1.0d4, tempe=1.0d4
-  double precision :: dchichi,slowrate,dchichi_norm,slowrate_norm
+  real(dp) :: dchichi,slowrate,dchichi_norm,slowrate_norm
   logical :: deterministic = .False.
 
   ! Further configuration parameters
   integer          :: notrace_passing = 0
-  double precision :: facE_al=1d0, trace_time=1d-1
+  real(dp) :: facE_al=1d0, trace_time=1d-1
   integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2
-  double precision :: n_d=4
+  real(dp) :: n_d=4
 
-  double precision :: v0
+  real(dp) :: v0
 
   logical :: debug = .False.
   integer :: ierr
@@ -108,7 +110,7 @@ contains
 
 
   subroutine params_init
-    double precision :: E_alpha
+    real(dp) :: E_alpha
     integer :: L1i
 
     E_alpha = 3.5d6/facE_al
