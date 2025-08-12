@@ -82,12 +82,22 @@ module samplers
   subroutine write_particles_to_file(filename, particles)
     character(len=*), intent(in) :: filename
     real(dp), dimension(:,:), intent(in) :: particles
-    integer :: ipart, unit_num
+    integer :: ipart, unit_num, iostat
     
-    unit_num = 1
-    open(unit_num, file=filename, recl=1024)
+    ! Use newunit for automatic unit allocation
+    open(newunit=unit_num, file=filename, recl=1024, iostat=iostat)
+    if (iostat /= 0) then
+      print *, 'Error opening file for writing: ', trim(filename)
+      error stop 'File I/O error in write_particles_to_file'
+    end if
+    
     do ipart = 1, size(particles, 2)
-      write(unit_num, *) particles(:, ipart)
+      write(unit_num, *, iostat=iostat) particles(:, ipart)
+      if (iostat /= 0) then
+        print *, 'Error writing particle ', ipart
+        close(unit_num)
+        error stop 'Write error in write_particles_to_file'
+      end if
     end do
     close(unit_num)
   end subroutine write_particles_to_file
@@ -97,12 +107,22 @@ module samplers
   subroutine read_particles_from_file(filename, particles)
     character(len=*), intent(in) :: filename
     real(dp), dimension(:,:), intent(out) :: particles
-    integer :: ipart, unit_num
+    integer :: ipart, unit_num, iostat
     
-    unit_num = 1
-    open(unit_num, file=filename, recl=1024)
+    ! Use newunit for automatic unit allocation
+    open(newunit=unit_num, file=filename, recl=1024, iostat=iostat)
+    if (iostat /= 0) then
+      print *, 'Error opening file for reading: ', trim(filename)
+      error stop 'File I/O error in read_particles_from_file'
+    end if
+    
     do ipart = 1, size(particles, 2)
-      read(unit_num, *) particles(:, ipart)
+      read(unit_num, *, iostat=iostat) particles(:, ipart)
+      if (iostat /= 0) then
+        print *, 'Error reading particle ', ipart
+        close(unit_num)
+        error stop 'Read error in read_particles_from_file'
+      end if
     end do
     close(unit_num)
   end subroutine read_particles_from_file
