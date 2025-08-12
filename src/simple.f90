@@ -193,9 +193,17 @@ contains
     class(Tracer), intent(in) :: self
     real(dp), intent(in) :: dtau, dtaumin
     
-    real(dp) :: tolerance = 1d-9
+    real(dp) :: tolerance, r
     
-    is_valid = min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) <= tolerance*dtaumin
+    tolerance = 1.0d-9
+    if (dtaumin <= 0.0d0) then
+      is_valid = .false.
+      return
+    end if
+    
+    r = mod(dtau, dtaumin)
+    if (r < 0.0d0) r = r + dtaumin
+    is_valid = min(dabs(r), dabs(r - dtaumin)) <= tolerance*dtaumin
   end function tracer_validate_timestep
   
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
