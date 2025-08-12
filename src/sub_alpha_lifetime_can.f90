@@ -2,6 +2,9 @@ module alpha_lifetime_sub
 
 implicit none
 
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
+
 contains
 
   !ToDo make module from all global things like this one
@@ -20,8 +23,8 @@ contains
   !             formal:    derphi  -   array of derivatives
   !
       integer :: ierr
-      double precision, dimension(3) :: x,derphi
-      double precision :: r,phi,z,psi,phi_el,phi_el_pr,phi_el_prpr
+      real(dp), dimension(3) :: x,derphi
+      real(dp) :: r,phi,z,psi,phi_el,phi_el_pr,phi_el_prpr
   !
       derphi=0.d0
   !
@@ -64,14 +67,14 @@ contains
   !
       integer :: i
   !
-      double precision tau,z,vz
-      double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
-      double precision derphi
-      double precision p,alambd,p2,ovmu,gamma2,gamma,ppar,vpa,coala
-      double precision rmumag,rovsqg,rosqgb,rovbm
-      double precision a_phi,a_b,a_c,hstar
-      double precision s_hc,hpstar,phidot,blodot,bra
-      double precision pardeb
+      real(dp) tau,z,vz
+      real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
+      real(dp) derphi
+      real(dp) p,alambd,p2,ovmu,gamma2,gamma,ppar,vpa,coala
+      real(dp) rmumag,rovsqg,rosqgb,rovbm
+      real(dp) a_phi,a_b,a_c,hstar
+      real(dp) s_hc,hpstar,phidot,blodot,bra
+      real(dp) pardeb
   !
       dimension z(5),vz(5)
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
@@ -169,11 +172,11 @@ use chamb_sub, only : chamb_can
       integer, parameter          :: ndim=5, nstepmax=1000000
   !
       integer :: ierr,j
-      double precision :: dtau,dtaumin,phi,tau1,tau2
+      real(dp) :: dtau,dtaumin,phi,tau1,tau2
   !
-      double precision, dimension(2)    :: y
-      double precision, dimension(ndim) :: z
-      double precision :: relerr
+      real(dp), dimension(2)    :: y
+      real(dp), dimension(ndim) :: z
+      real(dp) :: relerr
   !
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
@@ -245,9 +248,9 @@ if(dodiag) write (123,*) tau2,z
   !
       use magfie_sub, only : magfie
   !
-      double precision :: phi
-      double precision, dimension(5) :: y,dery
-      double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
+      real(dp) :: phi
+      real(dp), dimension(5) :: y,dery
+      real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
   !
       x(1)=y(1)
@@ -275,19 +278,19 @@ if(dodiag) write (123,*) tau2,z
   !
       implicit none
   !
-      double precision, intent(out) :: bmod00
+      real(dp), intent(out) :: bmod00
   !
       integer, parameter          :: ndim=5
-      double precision, parameter :: relerr=1d-10
+      real(dp), parameter :: relerr=1d-10
       integer :: i
       integer, intent(in) :: npoi, ierr
-      double precision :: phi,phiold
-      double precision , intent(in):: dphi,rbeg,phibeg,zbeg
-      double precision, dimension(3,npoi), intent(out) :: xstart
-      double precision, dimension(npoi), intent(out)   :: bstart,volstart
-      double precision, dimension(ndim)   :: y
+      real(dp) :: phi,phiold
+      real(dp) , intent(in):: dphi,rbeg,phibeg,zbeg
+      real(dp), dimension(3,npoi), intent(out) :: xstart
+      real(dp), dimension(npoi), intent(out)   :: bstart,volstart
+      real(dp), dimension(ndim)   :: y
   !
-      double precision x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
+      real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
   !
       phi=phibeg
@@ -346,8 +349,8 @@ if(dodiag) write (123,*) tau2,z
   !
   implicit none
   !
-  double precision :: tau,derlogsqs
-  double precision, dimension(5) :: z,vz,z_axis,vz_axis
+  real(dp) :: tau,derlogsqs
+  real(dp), dimension(5) :: z,vz,z_axis,vz_axis
   !
   !  z(1)=z_axis(1)**2+z_axis(2)**2
   z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
@@ -374,15 +377,15 @@ if(dodiag) write (123,*) tau2,z
       implicit none
   !
       integer, parameter          :: ndim=5, nstepmax=1000000
-      double precision, parameter :: snear_axis=0.01d0
+      real(dp), parameter :: snear_axis=0.01d0
   !
       logical :: near_axis
       integer :: ierr,j
-      double precision :: dtau,dtaumin,phi,tau1,tau2,z1,z2
-      double precision :: relerr
+      real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2
+      real(dp) :: relerr
   !
-      double precision, dimension(2)    :: y
-      double precision, dimension(ndim) :: z
+      real(dp), dimension(2)    :: y
+      real(dp), dimension(ndim) :: z
   !
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
