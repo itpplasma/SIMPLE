@@ -52,3 +52,12 @@ threed1.*
 timings.txt
 .aider*
 thirdparty/gvec
+
+# Coverage data files
+*.gcda
+*.gcno
+coverage*.info
+cobertura.xml
+coverage_html/
+coverage-badge.svg
+coverage-badge.json
