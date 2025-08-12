@@ -1,6 +1,6 @@
 program test_coord_trans
   use omp_lib
-  use util, only: pi, twopi, c, e_charge, e_mass, p_mass, ev
+  use util, only: pi, c, e_charge, p_mass, ev
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : ro0, rmu
@@ -23,8 +23,6 @@ program test_coord_trans
   double precision, dimension(:),   allocatable :: bstart,volstart
   double precision, dimension(:,:), allocatable :: xstart
   double precision, dimension(:,:), allocatable :: zstart
-  double precision, dimension(:), allocatable :: confpart_trap,confpart_pass
-  double precision, dimension(:), allocatable :: times_lost
   integer          :: npoiper2
   double precision :: contr_pp
   double precision :: facE_al
@@ -35,14 +33,11 @@ program test_coord_trans
   integer :: ntau ! number of dtaumin in dtau
   integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
 
-  integer :: kpart = 0 ! progress counter for particles
 
   double precision :: relerr
 
   type(Tracer) :: norb
-  double precision, allocatable :: trap_par(:)
 
-  integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
   integer :: nplagr,nder,npl_half
   integer :: norbper,nfp
   double precision :: fper, zerolam = 0d0
@@ -228,16 +223,11 @@ subroutine init_starting_points
   close(1)
 end subroutine init_starting_points
 
-end program test_coord_trans
-
 !--------------------------------------------------
 
 subroutine testcoordtrans
 use get_can_sub
 !
-implicit none
-!
-double precision, parameter :: pi=3.14159265358979d0
 integer :: it,ip,nt,np,nper
 double precision :: r,vartheta_c,varphi_c,theta_vmec,varphi_vmec,ht,hp
 double precision :: vartheta_c_back,varphi_c_back
@@ -268,3 +258,5 @@ stop
 end subroutine testcoordtrans
 
 !-----------------------------------------
+
+end program test_coord_trans

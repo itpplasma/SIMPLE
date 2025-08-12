@@ -1,50 +1,54 @@
+CONFIG ?= Release
+FLAGS ?=
 BUILD_DIR := build
-CMAKE_CACHE := $(BUILD_DIR)/CMakeCache.txt
-NUM_PROC := $(nproc)
+BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
-.PHONY: all compile install test fasttest clean
-all: compile
+# Common ctest command with optional verbose and test name filtering
+CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
-install: compile
-	cd $(BUILD_DIR) && make install
+.PHONY: all configure reconfigure build test test-fast test-slow test-regression test-all install clean
+all: build
 
-test: compile
-	ctest --output-on-failure --test-dir $(BUILD_DIR)
+$(BUILD_NINJA):
+	cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
 
-compile: $(CMAKE_CACHE)
-	cmake --build $(BUILD_DIR) -j$(NUM_PROC)
+configure: $(BUILD_NINJA)
 
-$(CMAKE_CACHE): libneo
-	cmake -B $(BUILD_DIR)
+reconfigure:
+	cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DCMAKE_COLOR_DIAGNOSTICS=ON
 
-# Clone libneo if it doesn't exist, or update it if it does
-LIBNEO_PATH := SRC/libneo
-LIBNEO_REPO := https://github.com/itpplasma/libneo.git
-define checkout_branch
-	BRANCH_NAME="$(1)"; \
-	if git fetch origin "$$BRANCH_NAME" >/dev/null 2>&1; then \
-		echo "Branch $$BRANCH_NAME exists upstream. Checking it out..."; \
-		git checkout "$$BRANCH_NAME"; \
-	else \
-		echo "Branch $$BRANCH_NAME does not exist upstream. Checking out main branch..."; \
-		git checkout main; \
-	fi
-endef
-libneo:
-	@SIMPLE_BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
-	if [ ! -d $(LIBNEO_PATH) ]; then \
-		echo "Cloning libneo repository..."; \
-		git clone $(LIBNEO_REPO) $(LIBNEO_PATH); \
-		cd $(LIBNEO_PATH) && $(call checkout_branch,$$SIMPLE_BRANCH); \
-	elif [ -L $(LIBNEO_PATH) ]; then \
-		echo "libneo is a symlink. Skipping clone..."; \
-	elif [ -d $(LIBNEO_PATH)/.git ]; then \
-		echo "libneo exists, pulling latest changes..."; \
-		cd $(LIBNEO_PATH) && $(call checkout_branch,$$SIMPLE_BRANCH); \
-		git pull; \
-	else \
-		echo "libneo already exists as a non-git directory. Skipping update..."; \
-	fi
+build: configure
+	cmake --build $(BUILD_DIR) --config $(CONFIG)
+
+# Test targets
+# Usage: make [test-target] [TEST=test_name] [VERBOSE=1]
+# Example: make test TEST=test_gvec VERBOSE=1
+
+# Run all tests except regression tests (default)
+test: build
+	$(CTEST_CMD) -LE "regression"
+
+# Run only fast tests (exclude slow and regression tests)
+test-fast: build
+	$(CTEST_CMD) -LE "slow|regression"
+
+# Run only slow tests
+test-slow: build
+	$(CTEST_CMD) -L "slow" -LE "regression"
+
+# Run only regression tests
+test-regression: build
+	$(CTEST_CMD) -L "regression"
+
+# Run all tests including regression tests
+test-all: build
+	$(CTEST_CMD)
+
+doc: configure
+	cmake --build --preset default --target doc
+
+fpm:
+	fpm build
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -72,20 +72,47 @@ set(FILES_TO_WRAP
     simple_main.f90
     simple.f90
     cut_detector.f90
+    orbit_symplectic_base.f90
     orbit_symplectic.f90
+    field/field_can_base.f90
     field_can.f90
-    get_canonical_coordinates.f90
+    get_canonical_coordinates.F90
+    coordinates/stencil_utils.f90
+    coordinates/array_utils.f90
     params.f90
-    canonical_coordinates_mod.f90
-    vmecinm_m.f90
-    new_vmec_allocation_stuff.f90
-    spline_vmec_data.f90
     magfie.f90
 )
+
+# Add libneo files to wrap
+if(DEFINED ENV{CODE})
+    set(LIBNEO_SOURCE_DIR $ENV{CODE}/libneo)
+else()
+    set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})
+endif()
+
+list(APPEND FILES_TO_WRAP ${LIBNEO_SOURCE_DIR}/src/canonical_coordinates_mod.f90)
 
 set(EXCLUDE_BASENAMES
     # Empty
 )
+
+# Separate SIMPLE and libneo files
+set(SIMPLE_FILES_TO_WRAP)
+set(LIBNEO_FILES_TO_WRAP)
+
+foreach(file ${FILES_TO_WRAP})
+    if(file MATCHES "^${LIBNEO_SOURCE_DIR}")
+        list(APPEND LIBNEO_FILES_TO_WRAP ${file})
+    else()
+        list(APPEND SIMPLE_FILES_TO_WRAP ${file})
+    endif()
+endforeach()
+
+# Add PROJECT_SOURCE_DIR/src/ prefix to SIMPLE files only
+list(TRANSFORM SIMPLE_FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/src/)
+
+# Combine the lists
+set(FILES_TO_WRAP ${SIMPLE_FILES_TO_WRAP} ${LIBNEO_FILES_TO_WRAP})
 
 foreach(file ${FILES_TO_WRAP})
     get_filename_component(basename ${file} NAME_WE)
@@ -99,15 +126,11 @@ foreach(file ${FILES_TO_WRAP})
     endif()
 endforeach()
 
-list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/SRC/)
-
 set(F2PY_MODULE_NAME "_pysimple")
 
 set(F2PY_MODULE_C "${F2PY_MODULE_NAME}module.c")
 set(GENERATED_MODULE_FILE "${F2PY_MODULE_NAME}.${Python_SOABI}")
 set(F2PY_WRAPPERS "${CMAKE_CURRENT_BINARY_DIR}/${F2PY_MODULE_C}")
-
-add_custom_target(F90WrapOutput)
 
 foreach (file_to_wrap ${FILES_TO_WRAP})
     get_filename_component(basename ${file_to_wrap} NAME_WE)
@@ -176,3 +199,6 @@ add_custom_target(
     pysimple ALL
     DEPENDS ${CMAKE_BINARY_DIR}/pysimple.py
 )
+
+install(TARGETS ${F2PY_MODULE_NAME} DESTINATION .)
+install(FILES ${CMAKE_BINARY_DIR}/pysimple.py DESTINATION .)

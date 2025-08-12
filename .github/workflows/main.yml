@@ -2,33 +2,100 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
-
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  checkout:
+    name: Checkout Code
+    runs-on: self-hosted
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Upload repository as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository
+          path: .
+          retention-days: 1
 
-    container:
-      image: ghcr.io/itpplasma/texlive:full
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+  test:
+    name: Run Tests
+    runs-on: self-hosted
+    needs: checkout
+    
+    steps:
+      - name: Download repository
+        uses: actions/download-artifact@v4
+        with:
+          name: repository
+
+      - name: Restore executable permissions
+        run: |
+          chmod +x test/golden_record_sanity/*.sh
+          chmod +x test/golden_record/*.sh 2>/dev/null || true
+          chmod +x test/test_data/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x tools/*.sh 2>/dev/null || true
+          chmod +x *.sh 2>/dev/null || true
+
+      - name: Build SIMPLE
+        run: |
+          make clean
+          make
+
+      - name: Run Fast Tests
+        run: make test-fast
+
+      - name: Run Slow Tests
+        run: make test
+
+      - name: Run Regression Tests
+        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+        run: make test-regression
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/Testing/
+
+  build-docs:
+    name: Build Documentation
+    runs-on: self-hosted
+    needs: checkout
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Build
-        run: |
-         cd DOC
-         latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
-         lyx --export pdf2 neo-orb.lyx
-      - name: Upload doc artifacts
-        uses: actions/upload-artifact@v2
+      - name: Download repository
+        uses: actions/download-artifact@v4
         with:
-          name: doc
+          name: repository
+
+      - name: Restore executable permissions
+        run: |
+          chmod +x test/golden_record_sanity/*.sh
+          chmod +x test/golden_record/*.sh 2>/dev/null || true
+          chmod +x test/test_data/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x tools/*.sh 2>/dev/null || true
+          chmod +x *.sh 2>/dev/null || true
+
+      - name: Build LaTeX documents
+        run: |
+          cd DOC
+          latexmk -pdf canonical_and_boozer_flux_coords_via_VMEC.tex
+          lyx --export pdf2 neo-orb.lyx
+
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
           path: |
             DOC/canonical_and_boozer_flux_coords_via_VMEC.pdf
             DOC/neo-orb.pdf
