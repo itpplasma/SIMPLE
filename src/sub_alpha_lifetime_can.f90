@@ -5,6 +5,13 @@ implicit none
 ! Define real(dp) kind parameter
 integer, parameter :: dp = kind(1.0d0)
 
+! Physical and numerical constants
+integer, parameter :: ndim = 5
+integer, parameter :: nstepmax = 1000000
+real(dp), parameter :: snear_axis = 0.01d0
+real(dp), parameter :: relerr_default = 1.0e-10_dp
+real(dp), parameter :: s_min = 1.0e-8_dp
+
 contains
 
   !ToDo make module from all global things like this one
@@ -34,131 +41,167 @@ contains
   !
       subroutine velo_can(tau,z,vz)
   !
-  !
-  !  Computes the components of the 5-D velocity          -  vz
-  !  for given set of phase space coordinates             -  z.
-  !
-  !  Warning !!!  The dimensionless time is used (see below)
-  !
-  !  Order of the coordinates is the following:
-  !  z(i) = x(i)  for i=1,2,3     - spatial coordinates with real
-  !                                 dimension of the general covariant
-  !                                 space coordinate system
-  !  z(4) = p                     - momentum  module normalized to
-  !                                 thermal momentum and sqrt(2);
-  !  z(5) = alambd                - cosine of the pitch-angle
-  !
-  !  Input parameters:
-  !            formal:  tau    -   dimensionless time: tau=sqrt(2*T/m)*t
-  !                     z      -   see above
-  !            common:  rmu    -   inverse relativistic temperature
-  !                     ro0    -   Larmor radius for the reference
-  !                                magnetic field and temperature:
-  !                                ro0=sqrt(2*T/m)/(e*B_ref/m*c)
-  !  Output parameters:
-  !            formal:  vz     -   see above
-  !
-  !  Called routines: magfie, elefie_can
+  !  Computes the components of the 5-D velocity for given phase space coordinates
   !
       use parmot_mod, only : rmu,ro0
       use magfie_sub, only : magfie
   !
       implicit none
   !
-      integer :: i
-  !
-      real(dp) tau,z,vz
-      real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
-      real(dp) derphi
-      real(dp) p,alambd,p2,ovmu,gamma2,gamma,ppar,vpa,coala
-      real(dp) rmumag,rovsqg,rosqgb,rovbm
-      real(dp) a_phi,a_b,a_c,hstar
-      real(dp) s_hc,hpstar,phidot,blodot,bra
-      real(dp) pardeb
-  !
-      dimension z(5),vz(5)
-      dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
-      dimension derphi(3)
-      dimension a_phi(3),a_b(3),a_c(3),hstar(3)
-  !
-      do 1 i=1,3
-        x(i)=z(i)
- 1    continue
-  !
-  ! in magfie: x(i)   - set of 3 curvilinear space coordinates (input)
-  !            bmod   - dimensionless magnetic field module: bmod=B/B_ref
-  !            sqrtg  - Jacobian of space coordinates (square root of
-  !                     metric tensor
-  !            bder   - derivatives of logarithm of bmod over space coords
-  !                     (covariant vector)
-  !            hcovar - covariant components of the unit vector along
-  !                     the magnetic field
-  !            hctrvr - contravariant components of the unit vector along
-  !                     the magnetic field
-  !            hcurl  - contravariant components of the curl of this vector
-  !
+      real(dp), intent(in) :: tau
+      real(dp), dimension(5), intent(in) :: z
+      real(dp), dimension(5), intent(out) :: vz
+      
+      real(dp), dimension(3) :: x, bder, hcovar, hctrvr, hcurl, derphi
+      real(dp), dimension(3) :: a_phi, a_b, a_c, hstar
+      real(dp) :: bmod, sqrtg
+      real(dp) :: p, alambd, gamma, ppar, vpa, coala, rmumag
+      real(dp) :: s_hc, hpstar, phidot, blodot
+      
+      ! Extract spatial coordinates
+      x = z(1:3)
+      
+      ! Get magnetic field properties
       call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-  !
-  ! in elefie: x(i)   - space coords (input, see above)
-  !            derphi - derivatives of the dimensionless electric potential
-  !                     phihat=e*phi/T over space coords (covar. vector)
-  !
+      
+      ! Get electric field
       call elefie_can(x,derphi)
-  !
-      p=z(4)
-      alambd=z(5)
-  !
-      p2=p*p
-      ovmu=2.d0/rmu
-      gamma2=p2*ovmu+1.d0
-      gamma=dsqrt(gamma2)
-      ppar=p*alambd
-  ! vpa - dimensionless parallel velocity: vpa=v_parallel/sqrt(2*T/m)
-      vpa=ppar/gamma
-      coala=(1.d0-alambd**2)
-  ! rmumag - magnetic moment
-      rmumag=.5d0*p2*coala/bmod
-  !
-      rovsqg=ro0/sqrtg
-      rosqgb=.5d0*rovsqg/bmod
-      rovbm=ro0/bmod
-  !
-      a_phi(1)=(hcovar(2)*derphi(3)-hcovar(3)*derphi(2))*rosqgb
-      a_b(1)=(hcovar(2)*bder(3)-hcovar(3)*bder(2))*rovsqg
-      a_phi(2)=(hcovar(3)*derphi(1)-hcovar(1)*derphi(3))*rosqgb
-      a_b(2)=(hcovar(3)*bder(1)-hcovar(1)*bder(3))*rovsqg
-      a_phi(3)=(hcovar(1)*derphi(2)-hcovar(2)*derphi(1))*rosqgb
-      a_b(3)=(hcovar(1)*bder(2)-hcovar(2)*bder(1))*rovsqg
-  !
-      s_hc=0.d0
-      do i=1,3
-        a_c(i)=hcurl(i)*rovbm
-        s_hc=s_hc+a_c(i)*hcovar(i)
-        hstar(i)=hctrvr(i)+ppar*a_c(i)
-      enddo
-      hpstar=1.d0+ppar*s_hc
-  !
-  ! velocities in the coordinate space
-  !
-  ! phidot - derivative of the dmls el. potential over dmls time
-  ! blodot - derivative of the logarith of the mag. field module over dmls time
-      phidot=0.d0
-      blodot=0.d0
-      do i=1,3
-        bra=vpa*hstar(i)+a_phi(i)+a_b(i)*rmumag/gamma
-        vz(i)=bra/hpstar
-        phidot=phidot+vz(i)*derphi(i)
-        blodot=blodot+vz(i)*bder(i)
-      enddo
-  !
-  ! velocities in the phase space
-  !
-      vz(4)=-0.5d0*gamma*phidot/p
-  !      vz(5)=coala/(alambd+dsign(1.d-32,alambd))*(vz(4)/p-0.5d0*blodot)
-      vz(5)=-(0.5d0*coala/hpstar)*(sum(hstar*derphi)/p                 &
-            + p*sum(hstar*bder)/gamma+alambd*sum(a_phi*bder))
+      
+      ! Extract momentum coordinates
+      p = z(4)
+      alambd = z(5)
+      
+      ! Compute particle properties
+      call compute_particle_properties(p, alambd, rmu, bmod, &
+                                       gamma, ppar, vpa, coala, rmumag)
+      
+      ! Compute drift velocities
+      call compute_drift_velocities(hcovar, hctrvr, hcurl, derphi, bder, &
+                                    ro0, sqrtg, bmod, ppar, &
+                                    a_phi, a_b, a_c, hstar, s_hc, hpstar)
+      
+      ! Compute spatial velocities
+      call compute_spatial_velocities(vpa, hstar, a_phi, a_b, rmumag, gamma, &
+                                      hpstar, derphi, bder, vz(1:3), phidot, blodot)
+      
+      ! Compute phase space velocities
+      call compute_phase_velocities(gamma, p, alambd, coala, hpstar, phidot, &
+                                    hstar, derphi, bder, a_phi, vz(4:5))
   !
       end subroutine velo_can
+      
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute particle properties
+      subroutine compute_particle_properties(p, alambd, rmu, bmod, &
+                                             gamma, ppar, vpa, coala, rmumag)
+      implicit none
+      
+      real(dp), intent(in) :: p, alambd, rmu, bmod
+      real(dp), intent(out) :: gamma, ppar, vpa, coala, rmumag
+      
+      real(dp) :: p2, ovmu, gamma2
+      
+      p2 = p * p
+      ovmu = 2.0d0 / rmu
+      gamma2 = p2 * ovmu + 1.0d0
+      gamma = sqrt(gamma2)
+      ppar = p * alambd
+      vpa = ppar / gamma  ! dimensionless parallel velocity
+      coala = 1.0d0 - alambd**2
+      rmumag = 0.5d0 * p2 * coala / bmod  ! magnetic moment
+      
+      end subroutine compute_particle_properties
+      
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute drift velocities
+      subroutine compute_drift_velocities(hcovar, hctrvr, hcurl, derphi, bder, &
+                                          ro0, sqrtg, bmod, ppar, &
+                                          a_phi, a_b, a_c, hstar, s_hc, hpstar)
+      implicit none
+      
+      real(dp), dimension(3), intent(in) :: hcovar, hctrvr, hcurl, derphi, bder
+      real(dp), intent(in) :: ro0, sqrtg, bmod, ppar
+      real(dp), dimension(3), intent(out) :: a_phi, a_b, a_c, hstar
+      real(dp), intent(out) :: s_hc, hpstar
+      
+      real(dp) :: rovsqg, rosqgb, rovbm
+      integer :: i
+      
+      rovsqg = ro0 / sqrtg
+      rosqgb = 0.5d0 * rovsqg / bmod
+      rovbm = ro0 / bmod
+      
+      ! Compute cross products for drift terms
+      call compute_cross_products(hcovar, derphi, rosqgb, a_phi)
+      call compute_cross_products(hcovar, bder, rovsqg, a_b)
+      
+      ! Compute curl-related terms
+      s_hc = 0.0d0
+      do i = 1, 3
+        a_c(i) = hcurl(i) * rovbm
+        s_hc = s_hc + a_c(i) * hcovar(i)
+        hstar(i) = hctrvr(i) + ppar * a_c(i)
+      end do
+      hpstar = 1.0d0 + ppar * s_hc
+      
+      end subroutine compute_drift_velocities
+      
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute cross products
+      subroutine compute_cross_products(vec1, vec2, scale, result)
+      implicit none
+      
+      real(dp), dimension(3), intent(in) :: vec1, vec2
+      real(dp), intent(in) :: scale
+      real(dp), dimension(3), intent(out) :: result
+      
+      result(1) = (vec1(2)*vec2(3) - vec1(3)*vec2(2)) * scale
+      result(2) = (vec1(3)*vec2(1) - vec1(1)*vec2(3)) * scale
+      result(3) = (vec1(1)*vec2(2) - vec1(2)*vec2(1)) * scale
+      
+      end subroutine compute_cross_products
+      
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute spatial velocities
+      subroutine compute_spatial_velocities(vpa, hstar, a_phi, a_b, rmumag, gamma, &
+                                            hpstar, derphi, bder, vz, phidot, blodot)
+      implicit none
+      
+      real(dp), intent(in) :: vpa, rmumag, gamma, hpstar
+      real(dp), dimension(3), intent(in) :: hstar, a_phi, a_b, derphi, bder
+      real(dp), dimension(3), intent(out) :: vz
+      real(dp), intent(out) :: phidot, blodot
+      
+      real(dp) :: bra
+      integer :: i
+      
+      phidot = 0.0d0
+      blodot = 0.0d0
+      
+      do i = 1, 3
+        bra = vpa*hstar(i) + a_phi(i) + a_b(i)*rmumag/gamma
+        vz(i) = bra / hpstar
+        phidot = phidot + vz(i)*derphi(i)
+        blodot = blodot + vz(i)*bder(i)
+      end do
+      
+      end subroutine compute_spatial_velocities
+      
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute phase space velocities
+      subroutine compute_phase_velocities(gamma, p, alambd, coala, hpstar, phidot, &
+                                          hstar, derphi, bder, a_phi, vz_phase)
+      implicit none
+      
+      real(dp), intent(in) :: gamma, p, alambd, coala, hpstar, phidot
+      real(dp), dimension(3), intent(in) :: hstar, derphi, bder, a_phi
+      real(dp), dimension(2), intent(out) :: vz_phase
+      
+      vz_phase(1) = -0.5d0 * gamma * phidot / p
+      vz_phase(2) = -(0.5d0*coala/hpstar) * (sum(hstar*derphi)/p &
+                    + p*sum(hstar*bder)/gamma + alambd*sum(a_phi*bder))
+      
+      end subroutine compute_phase_velocities
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -344,29 +387,58 @@ if(dodiag) write (123,*) tau2,z
   !
   subroutine velo_axis(tau,z_axis,vz_axis)
   !
-  ! Here variables z(1)=s and z(2)=theta are replaced with
-  ! x_axis(1)=x=sqrt(s)*cos(theta) and x_axis(2)=y=sqrt(s)*sin(theta)
+  ! Velocity computation near magnetic axis using transformed coordinates
   !
   implicit none
   !
-  real(dp) :: tau,derlogsqs
-  real(dp), dimension(5) :: z,vz,z_axis,vz_axis
-  !
-  !  z(1)=z_axis(1)**2+z_axis(2)**2
-  z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
-  z(1)=max(z(1),1.d-8)
-  z(2)=atan2(z_axis(2),z_axis(1))
-  z(3:5)=z_axis(3:5)
-  !
-  call velo_can(tau,z,vz)
-  !
-  !  derlogsqs=0.5d0*vz(1)/sqrt(z(1))
-  derlogsqs=vz(1)/z(1)
-  vz_axis(1)=derlogsqs*z_axis(1)-vz(2)*z_axis(2)
-  vz_axis(2)=derlogsqs*z_axis(2)+vz(2)*z_axis(1)
-  vz_axis(3:5)=vz(3:5)
+  real(dp), intent(in) :: tau
+  real(dp), dimension(5), intent(in) :: z_axis
+  real(dp), dimension(5), intent(out) :: vz_axis
+  
+  real(dp), dimension(5) :: z, vz
+  
+  ! Transform from axis coordinates to standard coordinates
+  call axis_to_standard_coords(z_axis, z)
+  
+  ! Compute velocity in standard coordinates
+  call velo_can(tau, z, vz)
+  
+  ! Transform velocity back to axis coordinates
+  call velocity_to_axis_coords(z_axis, z, vz, vz_axis)
   !
   end subroutine velo_axis
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Transform axis coordinates to standard coordinates
+  subroutine axis_to_standard_coords(z_axis, z)
+  implicit none
+  
+  real(dp), dimension(5), intent(in) :: z_axis
+  real(dp), dimension(5), intent(out) :: z
+  
+  z(1) = sqrt(z_axis(1)**2 + z_axis(2)**2)
+  z(1) = max(z(1), s_min)
+  z(2) = atan2(z_axis(2), z_axis(1))
+  z(3:5) = z_axis(3:5)
+  
+  end subroutine axis_to_standard_coords
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Transform velocity to axis coordinates
+  subroutine velocity_to_axis_coords(z_axis, z, vz, vz_axis)
+  implicit none
+  
+  real(dp), dimension(5), intent(in) :: z_axis, z, vz
+  real(dp), dimension(5), intent(out) :: vz_axis
+  
+  real(dp) :: derlogsqs
+  
+  derlogsqs = vz(1) / z(1)
+  vz_axis(1) = derlogsqs*z_axis(1) - vz(2)*z_axis(2)
+  vz_axis(2) = derlogsqs*z_axis(2) + vz(2)*z_axis(1)
+  vz_axis(3:5) = vz(3:5)
+  
+  end subroutine velocity_to_axis_coords
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !

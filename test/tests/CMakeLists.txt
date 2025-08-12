@@ -61,6 +61,10 @@ target_link_libraries(test_coord_trans.x simple)
 
 add_executable (test_magfie.x test_magfie.f90)
 target_link_libraries(test_magfie.x simple)
+
+add_executable (test_sub_alpha_lifetime_refactored.x test_sub_alpha_lifetime_refactored.f90)
+target_link_libraries(test_sub_alpha_lifetime_refactored.x simple)
+add_test(NAME test_sub_alpha_lifetime_refactored COMMAND test_sub_alpha_lifetime_refactored.x)
 add_executable (test_poincare1.x test_poincare1.f90)
 target_link_libraries(test_poincare1.x simple)
 add_executable (test_poiplot_classification.x test_poiplot_classification.f90
