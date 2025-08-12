@@ -1,7 +1,8 @@
 module orbit_symplectic_quasi
 
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
-use orbit_symplectic_base
+use orbit_symplectic_base, only: SymplecticIntegrator, MultistageIntegrator, &
+  orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
 use minpack_interfaces, only: hybrd1
 
 implicit none

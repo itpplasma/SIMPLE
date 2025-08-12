@@ -1,7 +1,12 @@
 module orbit_symplectic
 
 use util, only: pi, twopi
-use orbit_symplectic_base
+use field_can_mod, only: FieldCan, get_val, get_derivatives, get_derivatives2, &
+  eval_field => evaluate
+use orbit_symplectic_base, only: SymplecticIntegrator, MultistageIntegrator, &
+  RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
+  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
+  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
