@@ -16,33 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gfortran \
-            cmake \
-            ninja-build \
-            libnetcdf-dev \
-            libnetcdff-dev \
-            liblapack-dev \
-            libblas-dev \
-            python3-pip \
-            python3-numpy \
-            python3-scipy \
-            python3-matplotlib \
-            python3-netcdf4 \
-            openmpi-bin \
-            libopenmpi-dev \
-            libgsl-dev \
-            libfftw3-dev
-          pip3 install --user scikit-build-core git+https://github.com/jameskermode/f90wrap simsopt
-
       - name: Build SIMPLE
         run: |
           make clean
           make
-          pip3 install -e . --no-build-isolation
 
       - name: Run Fast Tests
         run: make test-fast
