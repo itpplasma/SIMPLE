@@ -90,6 +90,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 # GNU Fortran compiler flags
 add_compile_options(-Wall -Wextra -Wimplicit-interface -Wno-external-argument-mismatch -fPIC -fmax-errors=5)
 add_compile_options(-Wno-unused-dummy-argument)
+add_compile_options(-Wtrampolines)
 add_compile_options(-ffree-line-length-132)
 add_compile_options(-g -fbacktrace)
 # If not apple
