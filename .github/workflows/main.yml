@@ -68,12 +68,6 @@ jobs:
         with:
           name: repository
 
-      - name: Install LyX
-        run: |
-          echo "LyX installation"
-          apt-get update
-          apt-get install -y lyx
-
       - name: Build LaTeX documents
         run: |
           cd DOC
