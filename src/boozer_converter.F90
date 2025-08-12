@@ -6,6 +6,7 @@ module boozer_sub
     
     ! Define real(dp) kind parameter
     integer, parameter :: dp = kind(1.0d0)
+    real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
     ! Module variable to store the field for use in subroutines
     class(MagneticField), allocatable :: current_field
@@ -104,7 +105,6 @@ contains
         implicit none
 
         integer, parameter :: mode_secders = 1
-        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
         integer :: nstp, ns_A_p1, ns_s_p1
         integer :: k, is, i_theta, i_phi
@@ -521,7 +521,6 @@ contains
         real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
 
         integer, parameter :: n_qua = 2
-        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
         integer :: nstp, ns_A_p1, ns_s_p1
         integer :: k, is, i_theta, i_phi
         integer :: iss, ist, isp
@@ -639,7 +638,6 @@ contains
 
         implicit none
 
-        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
         real(dp) :: r, theta, varphi, vartheta_B, varphi_B
         real(dp) :: deltheta_BV, delphi_BV
@@ -665,7 +663,6 @@ contains
 
         implicit none
 
-        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
         real(dp), parameter :: epserr = 1.d-14
         integer, parameter :: niter = 100
 
@@ -1254,7 +1251,6 @@ contains
         integer, intent(out) :: i_theta, i_phi
         real(dp), intent(out) :: dtheta, dphi
         
-        real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
         
         dtheta = modulo(vartheta, twopi)/h_theta_B
         i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
