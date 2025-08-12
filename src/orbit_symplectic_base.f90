@@ -1,7 +1,9 @@
 module orbit_symplectic_base
-
+  use iso_fortran_env, only: real64
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_val, get_derivatives, &
   get_derivatives2
+
+  integer, parameter :: dp = real64
 
 implicit none
 
@@ -12,17 +14,17 @@ integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
   MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
 
 type :: SymplecticIntegrator
-  double precision :: atol
-  double precision :: rtol
+  real(dp) :: atol
+  real(dp) :: rtol
 
   ! Current phase-space coordinates z and old pth
-  double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
-  double precision :: pthold
+  real(dp), dimension(4) :: z  ! z = (r, th, ph, pphi)
+  real(dp) :: pthold
 
   ! Timestep and variables from z0
   integer :: ntau
-  double precision :: dt
-  double precision :: pabs
+  real(dp) :: dt
+  real(dp) :: pabs
 end type SymplecticIntegrator
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -32,7 +34,7 @@ end type SymplecticIntegrator
 integer, parameter :: S_MAX = 32
 type :: MultistageIntegrator
   integer :: s
-  double precision :: alpha(S_MAX), beta(S_MAX)
+  real(dp) :: alpha(S_MAX), beta(S_MAX)
   type(SymplecticIntegrator) stages(2*S_MAX)
 end type MultistageIntegrator
 
@@ -55,7 +57,7 @@ contains
 
 subroutine coeff_rk_gauss(n, a, b, c)
   integer, intent(in) :: n
-  double precision, intent(inout) :: a(n,n), b(n), c(n)
+  real(dp), intent(inout) :: a(n,n), b(n), c(n)
 
   if (n == 1) then
     a(1,1) = 0.5d0
@@ -131,7 +133,7 @@ end subroutine coeff_rk_gauss
 
 subroutine coeff_rk_lobatto(n, a, ahat, b, c)
   integer, intent(in) :: n
-  double precision, intent(inout) :: a(n,n), ahat(n,n), b(n), c(n)
+  real(dp), intent(inout) :: a(n,n), ahat(n,n), b(n), c(n)
 
   if (n == 3) then
     a(1,1) =  0d0
@@ -184,11 +186,11 @@ subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   type(SymplecticIntegrator), intent(inout) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(inout) :: fs(:)
-  double precision, intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
-  double precision, intent(out) :: fvec(4*s)
+  real(dp), intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
+  real(dp), intent(out) :: fvec(4*s)
   integer, intent(in) :: jactype  ! 0 = no second derivatives, 2 = second derivatives
 
-  double precision :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+  real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
   integer :: k,l  ! counters
 
   call coeff_rk_lobatto(s, a, ahat, b, c)
