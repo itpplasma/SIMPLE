@@ -111,21 +111,8 @@ jobs:
             --ignore-errors mismatch \
             --ignore-errors unused
           
-          # Convert to Cobertura XML for coverage-action (using existing Python)
-          python3 -c "
-          import subprocess
-          import sys
-          
-          # Install lcov_cobertura if not available
-          try:
-              import lcov_cobertura
-          except ImportError:
-              subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--user', 'lcov_cobertura'])
-              import lcov_cobertura
-          
-          # Convert to XML
-          subprocess.run(['lcov_cobertura', 'coverage_filtered.info', '--output', 'cobertura.xml'])
-          "
+          # Convert to Cobertura XML for coverage-action (using preinstalled lcov_cobertura)
+          lcov_cobertura coverage_filtered.info --output cobertura.xml
           
           # Verify XML was created
           if [ ! -f "cobertura.xml" ]; then
