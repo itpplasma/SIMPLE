@@ -46,14 +46,23 @@ module simple_main
   subroutine run(norb)
     use magfie_sub, only : init_magfie, VMEC
     use samplers, only: sample, START_FILE
+    use timing, only : print_phase_time
     type(Tracer), intent(inout) :: norb
     integer :: i
 
     call print_parameters
-    if (swcoll) call init_collisions
+    call print_phase_time('Parameter printing completed')
+    
+    if (swcoll) then
+      call init_collisions
+      call print_phase_time('Collision initialization completed')
+    endif
 
     call init_magfie(VMEC)
+    call print_phase_time('VMEC magnetic field initialization completed')
+    
     call init_starting_surf
+    call print_phase_time('Starting surface initialization completed')
 
     !sample starting positions
     if (1 == startmode) then
@@ -88,13 +97,16 @@ module simple_main
     else
       print *, 'Unknown startmode: ', startmode
     endif
+    call print_phase_time('Particle sampling completed')
 
 
     if (generate_start_only) stop 'stopping after generating start.dat'
 
     call init_magfie(isw_field_type)
+    call print_phase_time('Field type initialization completed')
 
     call init_counters
+    call print_phase_time('Counter initialization completed')
 
     !$omp parallel firstprivate(norb)
     !$omp do
@@ -107,9 +119,11 @@ module simple_main
     end do
     !$omp end do
     !$omp end parallel
+    call print_phase_time('Parallel particle tracing completed')
 
     confpart_pass=confpart_pass/ntestpart
     confpart_trap=confpart_trap/ntestpart
+    call print_phase_time('Statistics normalization completed')
 
   end subroutine run
 
