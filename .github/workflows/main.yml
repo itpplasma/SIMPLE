@@ -46,42 +46,24 @@ jobs:
       - name: Build SIMPLE
         run: |
           make clean
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
-            # Build with coverage for non-draft PRs
-            make coverage-build
-          else
-            # Regular build for pushes and draft PRs
-            make
-          fi
+          make
 
-      - name: Run Fast Tests
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
-            make CONFIG=Profile test-fast
-          else
-            make test-fast
-          fi
+      - name: Run Fast Tests  
+        run: make test-fast
 
       - name: Run Slow Tests
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
-            make CONFIG=Profile test
-          else
-            make test
-          fi
+        run: make test
 
-      - name: Run Regression Tests
-        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.draft }}" = "false" ]; then
-            make CONFIG=Profile test-regression
-          else
-            make test-regression
-          fi
-
-      - name: Generate coverage data for coverage-action
+      - name: Run Coverage Analysis (PRs only)
         if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
         run: |
+          # Clean and rebuild with coverage for unit/integration tests only
+          make clean
+          make coverage-build
+          # Run fast and slow tests with coverage to generate coverage data
+          make CONFIG=Profile test-fast
+          make CONFIG=Profile test
+          
           # Generate lcov coverage data
           lcov --capture --directory build/ --output-file coverage.info \
             --rc branch_coverage=1 \
@@ -119,6 +101,14 @@ jobs:
             exit 1
           fi
           echo "✅ Coverage data ready for coverage-action"
+          
+          # Rebuild regular version for regression tests
+          make clean
+          make
+
+      - name: Run Regression Tests
+        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+        run: make test-regression
 
       - name: Produce the coverage report
         id: coverage_report
