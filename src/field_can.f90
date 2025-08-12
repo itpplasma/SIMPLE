@@ -1,6 +1,4 @@
 module field_can_mod
-use, intrinsic :: iso_fortran_env, only: dp => real64
-
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
@@ -16,6 +14,9 @@ use field_can_albert, only : evaluate_albert, init_albert, can_to_ref_albert, &
   ref_to_can_albert
 
 implicit none
+
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 procedure(evaluate_base), pointer :: evaluate => null()
 
