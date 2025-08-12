@@ -7,7 +7,7 @@ use simple
 use simple_main, only : init_field
 use new_vmec_stuff_mod, only: rmajor
 use diag_mod, only : icounter
-use omp_lib
+use timing, only: get_wtime
 
 implicit none
 save
@@ -137,7 +137,7 @@ subroutine test_single(si, outname)
 
     out(1:4,1) = z0
     out(5,1) = f%H
-    starttime = omp_get_wtime()
+    starttime = get_wtime()
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_sympl(si, f, ierr)
@@ -148,7 +148,7 @@ subroutine test_single(si, outname)
         out(1:4,kt) = si%z
         out(5,kt) = f%H
     end do
-    endtime = omp_get_wtime()
+    endtime = get_wtime()
     print *, outname(1:10), endtime-starttime, icounter
 
     open(unit=20, file=outname, action='write', recl=4096)
@@ -177,7 +177,7 @@ subroutine test_quasi(si, outname)
     f_quasi = f
     si_quasi = si
 
-    starttime = omp_get_wtime()
+    starttime = get_wtime()
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_quasi(ierr)
@@ -188,7 +188,7 @@ subroutine test_quasi(si, outname)
         out(1:4,kt) = si_quasi%z
         out(5,kt) = f_quasi%H
     end do
-    endtime = omp_get_wtime()
+    endtime = get_wtime()
     print *, outname(1:10), endtime-starttime, icounter
 
     open(unit=20, file=outname, action='write', recl=4096)
@@ -214,7 +214,7 @@ subroutine test_multi(mi, outname)
 
     out(1:4,1) = z0
     out(5,1) = f%H
-    starttime = omp_get_wtime()
+    starttime = get_wtime()
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_sympl_multi(mi, f, ierr)
@@ -222,7 +222,7 @@ subroutine test_multi(mi, outname)
         out(1:4,kt) = mi%stages(1)%z
         out(5,kt) = f%H
     end do
-    endtime = omp_get_wtime()
+    endtime = get_wtime()
     print *, outname(1:10), endtime-starttime, icounter
 
     open(unit=20, file=outname, action='write', recl=4096)
@@ -250,7 +250,7 @@ subroutine test_multi_quasi(mi, outname)
     out(1:4,1) = z0
     out(5,1) = f_quasi%H
 
-    starttime = omp_get_wtime()
+    starttime = get_wtime()
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_multi_quasi(mi, ierr)
@@ -258,7 +258,7 @@ subroutine test_multi_quasi(mi, outname)
         out(1:4,kt) = mi%stages(1)%z
         out(5,kt) = f_quasi%H
     end do
-    endtime = omp_get_wtime()
+    endtime = get_wtime()
     print *, outname(1:10), endtime-starttime, icounter
 
     open(unit=20, file=outname, action='write', recl=4096)
