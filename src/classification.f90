@@ -1,5 +1,4 @@
 module classification
-
 use omp_lib
 use params
 use util, only: twopi, sqrt2
@@ -13,10 +12,10 @@ use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
 use magfie_sub, only : CANFLUX, BOOZER
 use check_orbit_type_sub, only : check_orbit_type
 
-implicit none
+  implicit none
 
-! Define real(dp) kind parameter
-integer, parameter :: dp = kind(1.0d0)
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
 
   ! output files:
   ! iaaa_bou - trapped-passing boundary
