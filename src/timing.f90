@@ -13,13 +13,13 @@ module timing
 contains
 
   subroutine init_timer()
-    real(dp) :: resolution_ms, max_seconds
+    real(dp) :: resolution_sec, max_seconds
     
     call system_clock(program_start_time, clock_rate, clock_max)
     phase_start_time = program_start_time
     
-    ! Calculate resolution in milliseconds
-    resolution_ms = 1000.0_dp / real(clock_rate, dp)
+    ! Calculate resolution in seconds
+    resolution_sec = 1.0_dp / real(clock_rate, dp)
     
     ! Calculate maximum time in seconds before wraparound
     max_seconds = real(clock_max, dp) / real(clock_rate, dp)
@@ -27,23 +27,23 @@ contains
     ! Print timing system information
     write(*,'(A)') 'INFO: Timing system initialized'
     write(*,'(A,I12)') '  Clock rate (ticks per second): ', clock_rate
-    write(*,'(A,F12.6,A)') '  Resolution per tick: ', resolution_ms, ' ms'
-    write(*,'(A,ES12.3,A)') '  Maximum time before wraparound: ', max_seconds, ' seconds'
+    write(*,'(A,F12.9,A)') '  Resolution per tick: ', resolution_sec, ' seconds'
+    write(*,'(A,F12.3,A)') '  Maximum time before wraparound: ', max_seconds, ' seconds'
   end subroutine init_timer
   
   subroutine print_phase_time(phase_name)
     character(*), intent(in) :: phase_name
     integer(kind=8) :: current_time
-    real(dp) :: elapsed_ms, total_ms
+    real(dp) :: elapsed_sec, total_sec
     
     call system_clock(current_time, clock_rate, clock_max)
     
-    ! Convert clock counts to milliseconds
-    elapsed_ms = real(current_time - phase_start_time, dp) / real(clock_rate, dp) * 1000.0_dp
-    total_ms = real(current_time - program_start_time, dp) / real(clock_rate, dp) * 1000.0_dp
+    ! Convert clock counts to seconds
+    elapsed_sec = real(current_time - phase_start_time, dp) / real(clock_rate, dp)
+    total_sec = real(current_time - program_start_time, dp) / real(clock_rate, dp)
     
-    write(*,'(A,A,F12.3,A,F12.3,A)') 'INFO: ', phase_name, elapsed_ms, &
-      ' ms (Total: ', total_ms, ' ms)'
+    write(*,'(A,A,F12.3,A,F12.3,A)') 'INFO: ', phase_name, elapsed_sec, &
+      ' s (Total: ', total_sec, ' s)'
     
     phase_start_time = current_time
   end subroutine print_phase_time
