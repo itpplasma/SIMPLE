@@ -61,6 +61,11 @@ target_link_libraries(test_coord_trans.x simple)
 
 add_executable (test_magfie.x test_magfie.f90)
 target_link_libraries(test_magfie.x simple)
+
+add_executable (test_get_canonical_coordinates_refactored.x test_get_canonical_coordinates_refactored.f90)
+target_link_libraries(test_get_canonical_coordinates_refactored.x simple)
+add_test(NAME test_get_canonical_coordinates_refactored COMMAND test_get_canonical_coordinates_refactored.x)
+
 add_executable (test_poincare1.x test_poincare1.f90)
 target_link_libraries(test_poincare1.x simple)
 add_executable (test_poiplot_classification.x test_poiplot_classification.f90

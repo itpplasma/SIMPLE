@@ -326,6 +326,97 @@ contains
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
+   ! Generic polynomial interpolation utility
+   subroutine interpolate_polynomial_backward(data, n_order, ds, result)
+      implicit none
+      integer, intent(in) :: n_order
+      real(dp), intent(in) :: data(:), ds
+      real(dp), intent(out) :: result
+      integer :: k
+
+      if (n_order < 1) then
+         result = 0.0_dp
+         return
+      end if
+
+      result = data(n_order + 1)
+      do k = n_order, 1, -1
+         result = data(k) + ds * result
+      end do
+   end subroutine interpolate_polynomial_backward
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+   ! Compute derivative factors for interpolation
+   subroutine compute_derivative_factors(data, derf_factors, n_order, ds, result, dresult)
+      implicit none
+      integer, intent(in) :: n_order
+      real(dp), intent(in) :: data(:), derf_factors(:), ds
+      real(dp), intent(out) :: result, dresult
+      integer :: k
+
+      if (n_order < 1) then
+         result = 0.0_dp
+         dresult = 0.0_dp
+         return
+      end if
+
+      result = data(n_order + 1)
+      dresult = result * derf_factors(n_order + 1)
+
+      do k = n_order, 3, -1
+         result = data(k) + ds * result
+         dresult = data(k) * derf_factors(k) + ds * dresult
+      end do
+
+      ! Handle the final two terms separately (common pattern)
+      if (n_order >= 2) then
+         result = data(1) + ds * (data(2) + ds * result)
+         dresult = data(2) + ds * dresult
+      elseif (n_order == 1) then
+         result = data(1) + ds * result
+      end if
+   end subroutine compute_derivative_factors
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+   ! Enhanced version for second derivatives
+   subroutine compute_derivative_factors_2nd(data, derf1, derf2, n_order, ds, result, dresult, d2result)
+      implicit none
+      integer, intent(in) :: n_order
+      real(dp), intent(in) :: data(:), derf1(:), derf2(:), ds
+      real(dp), intent(out) :: result, dresult, d2result
+      integer :: k
+
+      if (n_order < 1) then
+         result = 0.0_dp
+         dresult = 0.0_dp
+         d2result = 0.0_dp
+         return
+      end if
+
+      result = data(n_order + 1)
+      dresult = result * derf1(n_order + 1)
+      d2result = result * derf2(n_order + 1)
+
+      do k = n_order, 3, -1
+         result = data(k) + ds * result
+         dresult = data(k) * derf1(k) + ds * dresult
+         d2result = data(k) * derf2(k) + ds * d2result
+      end do
+
+      ! Handle the final two terms
+      if (n_order >= 2) then
+         result = data(1) + ds * (data(2) + ds * result)
+         dresult = data(2) + ds * dresult
+         d2result = ds * d2result
+      elseif (n_order == 1) then
+         result = data(1) + ds * result
+      end if
+   end subroutine compute_derivative_factors_2nd
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
    subroutine spline_can_coord(fullset)
 
       use canonical_coordinates_mod, only: ns_c, n_theta_c, n_phi_c, hs_c, h_theta_c, h_phi_c, &
@@ -539,26 +630,16 @@ contains
       is = is + 1
 
       ns_A_p1 = ns_A + 1
-      A_phi = sA_phi(ns_A_p1, is)
-      dA_phi_dr = A_phi*derf1(ns_A_p1)
-      d2A_phi_dr2 = A_phi*derf2(ns_A_p1)
-
-      do k = ns_A, 3, -1
-         A_phi = sA_phi(k, is) + ds*A_phi
-         dA_phi_dr = sA_phi(k, is)*derf1(k) + ds*dA_phi_dr
-         d2A_phi_dr2 = sA_phi(k, is)*derf2(k) + ds*d2A_phi_dr2
-      end do
-
-      A_phi = sA_phi(1, is) + ds*(sA_phi(2, is) + ds*A_phi)
-      dA_phi_dr = sA_phi(2, is) + ds*dA_phi_dr
+      
+      ! Use helper function for polynomial interpolation with derivatives
+      call compute_derivative_factors_2nd(sA_phi(:, is), derf1, derf2, ns_A, ds, A_phi, dA_phi_dr, d2A_phi_dr2)
 
       if (mode_secders .gt. 0) then
+         ! Compute third derivative using simple backward interpolation approach
          d3A_phi_dr3 = sA_phi(ns_A_p1, is)*derf3(ns_A_p1)
-
          do k = ns_A, 4, -1
             d3A_phi_dr3 = sA_phi(k, is)*derf3(k) + ds*d3A_phi_dr3
          end do
-
       end if
 
   ! End interpolation of vector potentials over $s$
