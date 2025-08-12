@@ -1,14 +1,15 @@
 module magfie_sub
-use, intrinsic :: iso_fortran_env, only: dp => real64
 use spline_vmec_sub
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 
 implicit none
 
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
+
 abstract interface
   subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     !            x(i)   - set of 3 curvilinear space coordinates (input)
     !            bmod   - dimensionless magnetic field module: bmod=B/B_ref
     !            sqrtg  - Jacobian of space coordinates (square root of
