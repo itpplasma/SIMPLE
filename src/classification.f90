@@ -4,7 +4,7 @@ use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
     ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
     class_plot, ntcut, fast_class, n_tip_vars, nplagr, nder, npl_half, &
     nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
-    integmode, relerr
+    integmode, relerr, ntau, should_skip
 use util, only: twopi, sqrt2
 use velo_mod,   only : isw_field_type
 use orbit_symplectic, only : orbit_timestep_sympl, get_val
