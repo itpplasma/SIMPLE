@@ -15,6 +15,9 @@ use check_orbit_type_sub, only : check_orbit_type
 
 implicit none
 
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
+
   ! output files:
   ! iaaa_bou - trapped-passing boundary
   ! iaaa_pnt - forced regular passing
@@ -48,30 +51,30 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
     integer :: ierr, ierr_coll
-    double precision, dimension(5) :: z
-    double precision :: bmod,sqrtg
-    double precision, dimension(3) :: bder, hcovar, hctrvr, hcurl
+    real(dp), dimension(5) :: z
+    real(dp) :: bmod,sqrtg
+    real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
     integer :: it, ktau
     integer(8) :: kt
     logical :: passing
 
     integer                                       :: ifp_tip,ifp_per
     integer,          dimension(:),   allocatable :: ipoi
-    double precision, dimension(:),   allocatable :: xp
-    double precision, dimension(:,:), allocatable :: coef,orb_sten
-    double precision, dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
-    double precision, dimension(n_tip_vars)       :: var_tip
-    double precision :: phiper, alam_prev, par_inv
+    real(dp), dimension(:),   allocatable :: xp
+    real(dp), dimension(:,:), allocatable :: coef,orb_sten
+    real(dp), dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
+    real(dp), dimension(n_tip_vars)       :: var_tip
+    real(dp) :: phiper, alam_prev, par_inv
     integer :: iper, itip, kper, nfp_tip, nfp_per
 
-    double precision :: fraction
-    double precision :: r,theta_vmec,varphi_vmec
+    real(dp) :: fraction
+    real(dp) :: r,theta_vmec,varphi_vmec
     logical :: regular
 
     ! Variables and settings for classification by J_parallel and ideal orbit condition:
     integer, parameter :: nfp_dim=3, nturns=8
     integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
-    double precision, dimension(nfp_dim) :: fpr_in
+    real(dp), dimension(nfp_dim) :: fpr_in
 
     zend(:,ipart) = 0d0
     !
