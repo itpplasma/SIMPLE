@@ -2,8 +2,10 @@
 module collis_alp
   implicit none
 
+  ! Define real(wp) kind parameter
+  integer, parameter :: wp = kind(1.0d0)
   integer, parameter :: nsorts=3
-  double precision, dimension(nsorts) :: efcolf,velrat,enrat
+  real(wp), dimension(nsorts) :: efcolf,velrat,enrat
 
   contains
   !
@@ -28,7 +30,7 @@ module collis_alp
   !                         deviation in Fokker-Planck eq.)
   !
   integer :: i
-  double precision :: p,dpp,dhh,fpeff,plim,xbeta,dp,dh,dpd
+  real(wp) :: p,dpp,dhh,fpeff,plim,xbeta,dp,dh,dpd
   !
   plim=max(p,1.d-8)
   !
@@ -62,10 +64,10 @@ module collis_alp
   implicit none
   !
   ! square root of pi
-  double precision, parameter :: sqp=1.7724538d0
+  real(wp), parameter :: sqp=1.7724538d0
   ! cons=4./(3.*sqrt(pi))
-  double precision, parameter :: cons=.75225278d0
-  double precision :: v,dp,dh,dpd,v2,v3,ex,er
+  real(wp), parameter :: cons=.75225278d0
+  real(wp) :: v,dp,dh,dpd,v2,v3,ex,er
   !
   v2=v**2
   v3=v2*v
@@ -133,10 +135,10 @@ module collis_alp
   !                enrat  - ratio of initial alpha particle energy to the background species
   !                         energy
   !
-  double precision :: am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,ealpha,dense
-  double precision :: v0,dchichi,slowrate,dchichi_norm,slowrate_norm,vti1,vti2,vte
-  double precision :: pi,pmass,emass,e,ev,alame,frecol_base,alami1,alami2
-  double precision :: p,dpp,dhh,fpeff
+  real(wp) :: am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,ealpha,dense
+  real(wp) :: v0,dchichi,slowrate,dchichi_norm,slowrate_norm,vti1,vti2,vte
+  real(wp) :: pi,pmass,emass,e,ev,alame,frecol_base,alami1,alami2
+  real(wp) :: p,dpp,dhh,fpeff
   !
   pi=3.14159265358979d0
   pmass=1.6726d-24
@@ -206,9 +208,9 @@ module collis_alp
   !                   prescribed minimum, reflection was performed.
   !
   integer :: iswmode,ierr
-  double precision, parameter :: pmin=1.e-8
-  double precision :: dtauc,p,dpp,dhh,fpeff,alam,dalam,coala
-  double precision, dimension(5) :: z
+  real(wp), parameter :: pmin=1.e-8
+  real(wp) :: dtauc,p,dpp,dhh,fpeff,alam,dalam,coala
+  real(wp), dimension(5) :: z
   real :: ur
   !
   p=z(4)
