@@ -1,5 +1,4 @@
 module simple
-  use iso_fortran_env, only: real64
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -14,9 +13,10 @@ module simple
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
-  integer, parameter :: dp = real64
+  implicit none
 
-implicit none
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
 save
 
 public
