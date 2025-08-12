@@ -1,9 +1,9 @@
 
 module exchange_get_cancoord_mod
-   use iso_fortran_env, only: real64
    implicit none
 
-   integer, parameter :: dp = real64
+   ! Define real(dp) kind parameter
+   integer, parameter :: dp = kind(1.0d0)
 
    logical :: onlytheta
    real(dp) :: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, &
@@ -14,7 +14,6 @@ end module exchange_get_cancoord_mod
 
 module get_can_sub
 
-   use iso_fortran_env, only: real64
    use spl_three_to_five_sub
    use stencil_utils
    use field, only: MagneticField
@@ -22,7 +21,8 @@ module get_can_sub
 
    implicit none
 
-   integer, parameter :: dp = real64
+   ! Define real(dp) kind parameter
+   integer, parameter :: dp = kind(1.0d0)
 
   ! Module variable to store the field for use in subroutines
    class(MagneticField), allocatable :: current_field
