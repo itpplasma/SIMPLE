@@ -1,5 +1,4 @@
 module params
-  use iso_fortran_env, only: real64
   use util
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
@@ -13,7 +12,8 @@ module params
 
   implicit none
 
-  integer, parameter :: dp = real64
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
   integer          :: nper=1000, ntestpart=1024
   integer          :: zstart_dim1 = 5
   real(dp) :: dphi,phibeg=0d0,bmod00,rlarm,bmax,bmin
