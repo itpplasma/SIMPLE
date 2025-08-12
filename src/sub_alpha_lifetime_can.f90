@@ -1,9 +1,9 @@
 module alpha_lifetime_sub
 
-use iso_fortran_env, only: real64
 implicit none
 
-integer, parameter :: dp = real64
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 contains
 
