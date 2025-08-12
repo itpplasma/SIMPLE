@@ -86,12 +86,34 @@ end subroutine orbit_sympl_init
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
+  ! Generic Gauss integrator wrapper 
+  !
+  subroutine orbit_timestep_sympl_gauss_generic(si, f, order, ierr)
+    type(SymplecticIntegrator), intent(inout) :: si
+    type(FieldCan), intent(inout) :: f
+    integer, intent(in) :: order
+    integer, intent(out) :: ierr
+    
+    call orbit_timestep_sympl_rk_gauss(si, f, order, ierr)
+  end subroutine orbit_timestep_sympl_gauss_generic
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+  ! Generic quasi Gauss integrator wrapper
+  !
+  subroutine orbit_timestep_quasi_gauss_generic(order, ierr)
+    integer, intent(in) :: order
+    integer, intent(out) :: ierr
+    
+    call timestep_rk_gauss_quasi(order, ierr)
+  end subroutine orbit_timestep_quasi_gauss_generic
+
 subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
 
-  call orbit_timestep_sympl_rk_gauss(si, f, 1, ierr)
+  call orbit_timestep_sympl_gauss_generic(si, f, 1, ierr)
 end subroutine orbit_timestep_sympl_gauss1
 
 subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
@@ -99,7 +121,7 @@ subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
 
-  call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
+  call orbit_timestep_sympl_gauss_generic(si, f, 2, ierr)
 end subroutine orbit_timestep_sympl_gauss2
 
 subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
@@ -107,7 +129,7 @@ subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
 
-  call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
+  call orbit_timestep_sympl_gauss_generic(si, f, 3, ierr)
 end subroutine orbit_timestep_sympl_gauss3
 
 subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
@@ -115,7 +137,7 @@ subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
 
-  call orbit_timestep_sympl_rk_gauss(si, f, 4, ierr)
+  call orbit_timestep_sympl_gauss_generic(si, f, 4, ierr)
 end subroutine orbit_timestep_sympl_gauss4
 
 subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
@@ -128,22 +150,22 @@ end subroutine orbit_timestep_sympl_lobatto3
 
 subroutine orbit_timestep_quasi_gauss1(ierr)
   integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(1, ierr)
+  call orbit_timestep_quasi_gauss_generic(1, ierr)
 end subroutine orbit_timestep_quasi_gauss1
 
 subroutine orbit_timestep_quasi_gauss2(ierr)
   integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(2, ierr)
+  call orbit_timestep_quasi_gauss_generic(2, ierr)
 end subroutine orbit_timestep_quasi_gauss2
 
 subroutine orbit_timestep_quasi_gauss3(ierr)
   integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(3, ierr)
+  call orbit_timestep_quasi_gauss_generic(3, ierr)
 end subroutine orbit_timestep_quasi_gauss3
 
 subroutine orbit_timestep_quasi_gauss4(ierr)
   integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(4, ierr)
+  call orbit_timestep_quasi_gauss_generic(4, ierr)
 end subroutine orbit_timestep_quasi_gauss4
 
 subroutine orbit_timestep_quasi_lobatto3(ierr)
