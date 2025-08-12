@@ -14,10 +14,10 @@ procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 
 contains
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
-!
+  !
   use plag_coeff_sub, only : plag_coeff
 
   type(SymplecticIntegrator), intent(inout) :: si
@@ -76,8 +76,8 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 end subroutine orbit_sympl_init
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
@@ -144,10 +144,10 @@ subroutine orbit_timestep_quasi_lobatto3(ierr)
 end subroutine orbit_timestep_quasi_lobatto3
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(in) :: n
@@ -164,10 +164,10 @@ subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
 end subroutine f_sympl_euler1
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine jac_sympl_euler1(si, f, x, jac)
-!
+  !
   type(SymplecticIntegrator), intent(in) :: si
   type(FieldCan), intent(inout) :: f
 
@@ -185,10 +185,10 @@ subroutine jac_sympl_euler1(si, f, x, jac)
 
 end subroutine jac_sympl_euler1
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(in) :: n
@@ -206,10 +206,10 @@ subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
 end subroutine f_sympl_euler2
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine jac_sympl_euler2(si, f, x, jac)
-!
+  !
   type(SymplecticIntegrator), intent(in) :: si
   type(FieldCan), intent(inout) :: f
   double precision, intent(in)  :: x(3)
@@ -225,8 +225,8 @@ subroutine jac_sympl_euler2(si, f, x, jac)
 end subroutine jac_sympl_euler2
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
     type(SymplecticIntegrator), intent(inout) :: si
@@ -246,8 +246,8 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
 
   end subroutine f_midpoint_part1
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
     type(SymplecticIntegrator), intent(inout) :: si
@@ -269,8 +269,8 @@ subroutine f_midpoint_part2(si, f, n, x, fvec)
 
   end subroutine f_midpoint_part2
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine jac_midpoint_part1(si, f, x, jac)
   !
     type(SymplecticIntegrator), intent(in) :: si
@@ -326,8 +326,8 @@ subroutine jac_midpoint_part1(si, f, x, jac)
 
 end subroutine jac_midpoint_part1
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine jac_midpoint_part2(si, f, fmid, x, jac)
   !
     type(SymplecticIntegrator), intent(in) :: si
@@ -354,10 +354,10 @@ subroutine jac_midpoint_part2(si, f, fmid, x, jac)
 
 end subroutine jac_midpoint_part2
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine newton1(si, f, x, maxit, xlast)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, parameter :: n = 2
@@ -520,10 +520,10 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   ! TODO fix criterion for convergence
 end subroutine
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! Gauss-Legendre Runge-Kutta method with s internal stages (n=4*s variables)
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+  ! Gauss-Legendre Runge-Kutta method with s internal stages (n=4*s variables)
+  !
 subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
   type(SymplecticIntegrator), intent(inout) :: si
@@ -561,10 +561,10 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
 
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine jac_rk_gauss(si, fs, s, jac)
-!
+  !
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(in) :: fs(:)
@@ -773,10 +773,10 @@ subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 end subroutine fixpoint_rk_gauss
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine jac_rk_lobatto(si, fs, s, jac)
-!
+  !
   type(SymplecticIntegrator), intent(in) :: si
   integer, intent(in) :: s
   type(FieldCan), intent(in) :: fs(:)
@@ -967,10 +967,10 @@ subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
 end subroutine newton_rk_lobatto
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_multi(mi, f, ierr)
-!
+  !
   type(MultistageIntegrator), intent(inout) :: mi
   type(FieldCan), intent(inout) :: f
 
@@ -992,10 +992,10 @@ subroutine orbit_timestep_sympl_multi(mi, f, ierr)
 end subroutine orbit_timestep_sympl_multi
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
-!
+  !
   type(MultistageIntegrator), intent(inout) :: mi
   type(FieldCan), intent(inout) :: f
 
@@ -1019,10 +1019,10 @@ subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
 end subroutine orbit_sympl_init_multi
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
-!
+  !
   type(MultistageIntegrator), intent(inout) :: mi
 
   type(FieldCan), intent(inout) :: f
@@ -1041,8 +1041,8 @@ subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
 end subroutine orbit_sympl_init_verlet
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 4 with s=3
@@ -1068,8 +1068,8 @@ subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
   end subroutine orbit_sympl_init_order4
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 4 with s=5 by McLachlan (1995)
@@ -1101,8 +1101,8 @@ subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
   end subroutine orbit_sympl_init_mclachlan4
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 4 with s=6 by Blanes&Moan (2002)
@@ -1137,8 +1137,8 @@ subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
   end subroutine orbit_sympl_init_blanes4
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 6 with s=9 by Kahan&Li (1995)
@@ -1208,10 +1208,10 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
       call orbit_sympl_init_multi(mi,f,z,dtau,ntau,rtol_init,gam/2d0,gam/2d0)
     end subroutine orbit_sympl_init_kahan8
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
@@ -1266,10 +1266,10 @@ subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
 end subroutine orbit_timestep_sympl_expl_impl_euler
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
 
@@ -1328,10 +1328,10 @@ subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
 end subroutine orbit_timestep_sympl_impl_expl_euler
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
 
@@ -1381,10 +1381,10 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 end subroutine orbit_timestep_sympl_midpoint
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
 
@@ -1511,10 +1511,10 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 end subroutine orbit_timestep_sympl_rk_gauss
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
 subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
-!
+  !
   type(SymplecticIntegrator), intent(inout) :: si
   type(FieldCan), intent(inout) :: f
   integer, intent(out) :: ierr
