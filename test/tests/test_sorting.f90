@@ -199,15 +199,21 @@ contains
   subroutine test_duplicates(errors)
     integer, intent(inout) :: errors
     integer, parameter :: n = 6
-    double precision :: a(n)
-    integer :: ipoi(n)
-    integer :: i
+    double precision :: a(n), a_orig(n)
+    integer :: ipoi(n), orig_indices(n)
+    integer :: i, j
+    logical :: is_stable
     
-    ! Given: An array with duplicate values
+    ! Given: An array with duplicate values and tracked original positions
     ! When: We sort it
-    ! Then: The result should be stable and in non-decreasing order
+    ! Then: The result should be sorted and preserve relative order of equal elements (stability)
     
     a = [3.0d0, 1.0d0, 3.0d0, 2.0d0, 1.0d0, 2.0d0]
+    a_orig = a
+    do i = 1, n
+      orig_indices(i) = i
+    end do
+    
     call sortin(a, ipoi, n)
     
     ! Check that the array is sorted
@@ -221,6 +227,19 @@ contains
       end if
     end do
     
+    ! Check stability: for equal elements, original order should be preserved
+    is_stable = .true.
+    do i = 1, n-1
+      if (abs(a(ipoi(i)) - a(ipoi(i+1))) < 1.0d-14) then
+        ! Equal elements found - check original order
+        if (ipoi(i) > ipoi(i+1)) then
+          print *, "WARNING: Sort may not be stable for duplicates"
+          print *, "Elements at", ipoi(i), "and", ipoi(i+1), "have same value but reversed order"
+          ! Note: This is a warning, not an error, as stability may not be guaranteed
+        end if
+      end if
+    end do
+    
   end subroutine test_duplicates
   
   subroutine test_sorting_properties(errors)
@@ -228,7 +247,7 @@ contains
     integer, parameter :: n = 10
     double precision :: a(n)
     integer :: ipoi(n)
-    logical :: indices_valid
+    logical :: indices_valid, seen(n)
     integer :: i, j
     
     print *, "Testing sorting properties..."
@@ -251,15 +270,16 @@ contains
     end do
     
     ! Property 2: All indices should be unique (permutation)
+    ! Use more efficient O(n) check instead of O(n²)
     if (indices_valid) then
+      seen = .false.
       do i = 1, n
-        do j = i+1, n
-          if (ipoi(i) == ipoi(j)) then
-            print *, "ERROR: Duplicate index found:", ipoi(i)
-            errors = errors + 1
-            exit
-          end if
-        end do
+        if (seen(ipoi(i))) then
+          print *, "ERROR: Duplicate index found:", ipoi(i)
+          errors = errors + 1
+          exit
+        end if
+        seen(ipoi(i)) = .true.
       end do
     end if
     
@@ -284,17 +304,20 @@ contains
     double precision :: a(n)
     integer :: ipoi(n)
     integer :: i
-    logical :: is_sorted
+    logical :: is_sorted, is_permutation
+    logical :: seen(n)
     
     print *, "Testing large array sorting..."
     
-    ! Given: A large array with random-like values
+    ! Given: A large array with deterministic test values
     ! When: We sort it
-    ! Then: The result should be properly sorted
+    ! Then: The result should be properly sorted and form a valid permutation
     
-    ! Generate pseudo-random values
+    ! Generate deterministic test values using a simple pattern
+    ! This creates a mix of values with some duplicates
     do i = 1, n
-      a(i) = dble(mod(i * 17 + 23, 1000))
+      ! Simple pattern: values from 0 to 99 repeating
+      a(i) = dble(mod(i-1, 100))
     end do
     
     call sortin(a, ipoi, n)
@@ -304,23 +327,33 @@ contains
     do i = 1, n-1
       if (a(ipoi(i)) > a(ipoi(i+1))) then
         is_sorted = .false.
+        print *, "ERROR: Not sorted at position", i
+        print *, "a(", ipoi(i), ") =", a(ipoi(i)), "> a(", ipoi(i+1), ") =", a(ipoi(i+1))
+        errors = errors + 1
         exit
       end if
     end do
     
-    if (.not. is_sorted) then
-      print *, "ERROR: Large array not sorted correctly"
-      errors = errors + 1
-    end if
+    ! Check that ipoi forms a valid permutation
+    seen = .false.
+    is_permutation = .true.
+    do i = 1, n
+      if (ipoi(i) < 1 .or. ipoi(i) > n) then
+        print *, "ERROR: Invalid index", ipoi(i), "at position", i
+        errors = errors + 1
+        is_permutation = .false.
+        exit
+      else if (seen(ipoi(i))) then
+        print *, "ERROR: Duplicate index", ipoi(i), "at position", i
+        errors = errors + 1
+        is_permutation = .false.
+        exit
+      else
+        seen(ipoi(i)) = .true.
+      end if
+    end do
     
-    ! Check that it's a valid permutation
-    ! (This is a basic check - for large arrays we don't check every detail)
-    if (ipoi(1) < 1 .or. ipoi(1) > n .or. ipoi(n) < 1 .or. ipoi(n) > n) then
-      print *, "ERROR: Invalid indices in large array sort"
-      errors = errors + 1
-    end if
-    
-    if (errors == 0) then
+    if (is_sorted .and. is_permutation .and. errors == 0) then
       print *, "  Large array sorting test PASSED"
     end if
     

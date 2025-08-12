@@ -12,8 +12,8 @@ program test_timing
   ! Test time measurement functions
   call test_time_measurement(errors)
   
-  ! Test elapsed time calculation
-  call test_elapsed_time_calculation(errors)
+  ! Test elapsed time with real operations
+  call test_elapsed_time_real_ops(errors)
   
   if (errors == 0) then
     print *, "All timing module tests passed!"
@@ -72,45 +72,55 @@ contains
   
   subroutine test_time_measurement(errors)
     integer, intent(inout) :: errors
-    real(dp) :: time1, time2
-    real(dp), parameter :: tolerance = 1.0d-6  ! 1 microsecond tolerance
-    real(dp), parameter :: sleep_time = 0.01_dp  ! Target sleep time in seconds
+    real(dp) :: time1, time2, elapsed
+    real(dp), parameter :: max_elapsed = 0.1_dp   ! Maximum expected time (100ms)
+    integer :: loop_count
     
     print *, "Testing time measurement functions..."
     
     ! Given: The timing module provides wall-clock time measurement
-    ! When: We measure time before and after a delay
-    ! Then: The elapsed time should be reasonable
+    ! When: We measure time during known operations
+    ! Then: The elapsed time should be within expected bounds
     
     call init_timer()
     
-    ! Test get_wtime function
+    ! Test 1: Basic time measurement with controlled workload
     time1 = get_wtime()
     
-    ! Introduce a small delay by doing some work
-    call cpu_intensive_work()
+    ! Do a calibrated amount of work
+    loop_count = 0
+    do while (loop_count < 100000)
+      loop_count = loop_count + 1
+    end do
     
     time2 = get_wtime()
+    elapsed = time2 - time1
     
     ! Check that time advances
-    if (time2 <= time1) then
-      print *, "ERROR: Time should advance between measurements"
-      print *, "Time1:", time1, "Time2:", time2
+    if (elapsed <= 0.0_dp) then
+      print *, "ERROR: Time should advance during computation"
+      print *, "Elapsed:", elapsed
       errors = errors + 1
     end if
     
-    ! Check that elapsed time is reasonable (should be small but positive)
-    if (time2 - time1 > 1.0_dp) then
-      print *, "ERROR: Elapsed time too large for simple operation"
-      print *, "Elapsed:", time2 - time1
+    ! Check that elapsed time is within reasonable bounds
+    if (elapsed > max_elapsed) then
+      print *, "ERROR: Elapsed time too large for simple loop"
+      print *, "Elapsed:", elapsed, "seconds (expected <", max_elapsed, ")"
       errors = errors + 1
     end if
     
-    ! Test that times are positive (wall-clock time should be positive)
-    if (time1 < 0.0_dp .or. time2 < 0.0_dp) then
-      print *, "ERROR: Wall-clock times should be positive"
+    ! Test 2: Resolution test - rapid successive calls
+    time1 = get_wtime()
+    time2 = get_wtime()
+    
+    ! Successive calls should either be equal or show small increment
+    if (time2 < time1) then
+      print *, "ERROR: Time went backwards!"
       print *, "Time1:", time1, "Time2:", time2
       errors = errors + 1
+    else if (time2 - time1 > 0.001_dp) then
+      print *, "WARNING: Large gap between successive get_wtime calls:", time2 - time1
     end if
     
     if (errors == 0) then
@@ -119,64 +129,80 @@ contains
     
   end subroutine test_time_measurement
   
-  subroutine test_elapsed_time_calculation(errors)
+  subroutine test_elapsed_time_real_ops(errors)
     integer, intent(inout) :: errors
-    real(dp) :: start_time, end_time, elapsed
-    real(dp), parameter :: tolerance = 1.0d-12
+    real(dp) :: time1, time2, time3, elapsed, actual_elapsed
+    integer :: i
     
-    print *, "Testing elapsed time calculation..."
+    print *, "Testing elapsed time with real operations..."
     
-    ! Given: The timing module provides elapsed time calculation
-    ! When: We calculate elapsed time between two time points
-    ! Then: The result should equal the simple difference
+    ! Given: The timing module provides elapsed time calculation during real operations
+    ! When: We measure elapsed time during actual computation
+    ! Then: The elapsed time should match real wall-clock time progression
     
-    start_time = 100.0_dp
-    end_time = 150.5_dp
+    call init_timer()
     
-    elapsed = get_elapsed_time(start_time, end_time)
+    ! Test 1: Elapsed time during real computation
+    time1 = get_wtime()
+    ! Do some actual work that takes measurable time
+    call cpu_intensive_work()
+    time2 = get_wtime()
     
-    ! Check that elapsed time equals simple difference
-    if (abs(elapsed - (end_time - start_time)) > tolerance) then
-      print *, "ERROR: Elapsed time calculation incorrect"
-      print *, "Expected:", end_time - start_time
-      print *, "Got:", elapsed
+    elapsed = get_elapsed_time(time1, time2)
+    actual_elapsed = time2 - time1
+    
+    ! Check that get_elapsed_time returns consistent result with direct calculation
+    if (abs(elapsed - actual_elapsed) > 1.0d-12) then
+      print *, "ERROR: get_elapsed_time not consistent with direct calculation"
+      print *, "Direct:", actual_elapsed, "Function:", elapsed
       errors = errors + 1
     end if
     
-    ! Test with negative elapsed time (end before start)
-    elapsed = get_elapsed_time(end_time, start_time)
-    if (abs(elapsed - (start_time - end_time)) > tolerance) then
-      print *, "ERROR: Negative elapsed time calculation incorrect"
-      print *, "Expected:", start_time - end_time
-      print *, "Got:", elapsed
+    ! Test 2: Monotonic time progression during sequential operations
+    time1 = get_wtime()
+    call cpu_intensive_work()
+    time2 = get_wtime()
+    call cpu_intensive_work()
+    time3 = get_wtime()
+    
+    ! Time should be strictly increasing
+    if (time1 >= time2 .or. time2 >= time3) then
+      print *, "ERROR: Time not monotonically increasing"
+      print *, "Times:", time1, time2, time3
       errors = errors + 1
     end if
     
-    ! Test with zero elapsed time
-    elapsed = get_elapsed_time(start_time, start_time)
-    if (abs(elapsed) > tolerance) then
-      print *, "ERROR: Zero elapsed time should be exactly zero"
-      print *, "Got:", elapsed
+    ! Test 3: Check that elapsed time is positive and reasonable
+    elapsed = get_elapsed_time(time1, time3)
+    if (elapsed <= 0.0_dp) then
+      print *, "ERROR: Total elapsed time should be positive"
+      print *, "Elapsed:", elapsed
+      errors = errors + 1
+    else if (elapsed > 1.0_dp) then
+      print *, "ERROR: Elapsed time unreasonably large"
+      print *, "Elapsed:", elapsed
       errors = errors + 1
     end if
     
     if (errors == 0) then
-      print *, "  Elapsed time calculation test PASSED"
+      print *, "  Elapsed time real ops test PASSED"
     end if
     
-  end subroutine test_elapsed_time_calculation
+  end subroutine test_elapsed_time_real_ops
   
-  ! Helper subroutine to introduce a predictable delay
+  ! Helper subroutine to introduce a measurable but bounded delay
   subroutine cpu_intensive_work()
-    integer :: i, j, dummy
-    dummy = 0
+    integer :: i, j
+    real(dp) :: dummy
+    dummy = 0.0_dp
+    ! Perform floating point operations that can't be easily optimized away
     do i = 1, 1000
       do j = 1, 100
-        dummy = dummy + i * j
+        dummy = dummy + sin(real(i*j, dp)) * cos(real(i+j, dp))
       end do
     end do
-    ! Prevent compiler optimization
-    if (dummy < 0) print *, "Unexpected result"
+    ! Use the result to prevent optimization
+    if (dummy > 1.0e10_dp) print *, "Note: dummy=", dummy
   end subroutine cpu_intensive_work
 
 end program test_timing

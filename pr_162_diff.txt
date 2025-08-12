@@ -1,0 +1,1605 @@
+diff --git a/test/tests/CMakeLists.txt b/test/tests/CMakeLists.txt
+index d7891f77..9025a5e8 100644
+--- a/test/tests/CMakeLists.txt
++++ b/test/tests/CMakeLists.txt
+@@ -164,6 +164,35 @@ add_executable(test_array_utils.x test_array_utils.f90)
+ target_link_libraries(test_array_utils.x simple)
+ add_test(NAME test_array_utils COMMAND test_array_utils.x)
+ 
++# New comprehensive unit tests
++add_executable(test_util_simple.x test_util_simple.f90)
++target_link_libraries(test_util_simple.x simple)
++add_test(NAME test_util_simple COMMAND test_util_simple.x)
++
++add_executable(test_timing.x test_timing.f90)
++target_link_libraries(test_timing.x simple)
++add_test(NAME test_timing COMMAND test_timing.x)
++
++add_executable(test_sorting.x test_sorting.f90)
++target_link_libraries(test_sorting.x simple)
++add_test(NAME test_sorting COMMAND test_sorting.x)
++
++add_executable(test_lapack_interfaces.x test_lapack_interfaces.f90)
++target_link_libraries(test_lapack_interfaces.x simple)
++add_test(NAME test_lapack_interfaces COMMAND test_lapack_interfaces.x)
++
++add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
++target_link_libraries(test_orbit_symplectic_base.x simple)
++add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
++
++add_executable(test_field_base.x test_field_base.f90)
++target_link_libraries(test_field_base.x simple)
++add_test(NAME test_field_base COMMAND test_field_base.x)
++
++add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
++target_link_libraries(test_coordinates_simple.x simple)
++add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
++
+ # Regression tests for canonical coordinates
+ # Note: The following test files were removed as they don't exist yet:
+ # - test_canonical_stencil.f90
+diff --git a/test/tests/test_coordinates_simple.f90 b/test/tests/test_coordinates_simple.f90
+new file mode 100644
+index 00000000..00c7eb4b
+--- /dev/null
++++ b/test/tests/test_coordinates_simple.f90
+@@ -0,0 +1,198 @@
++program test_coordinates
++  use simple_coordinates
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test cylindrical to cartesian transformation
++  call test_cyl_to_cart_transform(errors)
++  
++  ! Test coordinate transformation function pointer system
++  call test_transform_function_pointers(errors)
++  
++  if (errors == 0) then
++    print *, "All coordinates module tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_cyl_to_cart_transform(errors)
++    integer, intent(inout) :: errors
++    real(dp) :: xfrom(3), xto(3), dxto_dxfrom(3,3)
++    real(dp), parameter :: tolerance = 1.0d-14
++    real(dp), parameter :: pi = 3.14159265358979d0
++    
++    print *, "Testing cylindrical to cartesian transformation..."
++    
++    ! Given: Cylindrical coordinates (r, phi, z)
++    ! When: We transform to cartesian coordinates
++    ! Then: The result should follow x = r*cos(phi), y = r*sin(phi), z = z
++    
++    ! Test case 1: Simple point on x-axis
++    xfrom = [2.0_dp, 0.0_dp, 1.0_dp]  ! (r=2, phi=0, z=1)
++    call transform_cyl_to_cart(xfrom, xto, dxto_dxfrom)
++    
++    ! Expected: (x=2, y=0, z=1)
++    if (abs(xto(1) - 2.0_dp) > tolerance) then
++      print *, "ERROR: Cyl to cart x-coordinate incorrect for phi=0"
++      print *, "Expected: 2.0, Got:", xto(1)
++      errors = errors + 1
++    end if
++    
++    if (abs(xto(2)) > tolerance) then
++      print *, "ERROR: Cyl to cart y-coordinate should be 0 for phi=0"
++      print *, "Got:", xto(2)
++      errors = errors + 1
++    end if
++    
++    if (abs(xto(3) - 1.0_dp) > tolerance) then
++      print *, "ERROR: Cyl to cart z-coordinate should be unchanged"
++      print *, "Expected: 1.0, Got:", xto(3)
++      errors = errors + 1
++    end if
++    
++    ! Test case 2: Point on y-axis
++    xfrom = [3.0_dp, pi/2.0_dp, 2.0_dp]  ! (r=3, phi=pi/2, z=2)
++    call transform_cyl_to_cart(xfrom, xto)
++    
++    ! Expected: (x=0, y=3, z=2)
++    if (abs(xto(1)) > tolerance) then
++      print *, "ERROR: Cyl to cart x-coordinate should be 0 for phi=pi/2"
++      print *, "Got:", xto(1)
++      errors = errors + 1
++    end if
++    
++    if (abs(xto(2) - 3.0_dp) > tolerance) then
++      print *, "ERROR: Cyl to cart y-coordinate incorrect for phi=pi/2"
++      print *, "Expected: 3.0, Got:", xto(2)
++      errors = errors + 1
++    end if
++    
++    ! Test case 3: Check Jacobian matrix
++    xfrom = [1.0_dp, pi/4.0_dp, 0.0_dp]  ! (r=1, phi=45°, z=0)
++    call transform_cyl_to_cart(xfrom, xto, dxto_dxfrom)
++    
++    ! Check Jacobian elements
++    ! dx/dr = cos(phi)
++    if (abs(dxto_dxfrom(1,1) - cos(pi/4.0_dp)) > tolerance) then
++      print *, "ERROR: Jacobian dx/dr incorrect"
++      print *, "Expected:", cos(pi/4.0_dp), "Got:", dxto_dxfrom(1,1)
++      errors = errors + 1
++    end if
++    
++    ! dx/dphi = -r*sin(phi)
++    if (abs(dxto_dxfrom(1,2) - (-1.0_dp*sin(pi/4.0_dp))) > tolerance) then
++      print *, "ERROR: Jacobian dx/dphi incorrect"
++      print *, "Expected:", -sin(pi/4.0_dp), "Got:", dxto_dxfrom(1,2)
++      errors = errors + 1
++    end if
++    
++    ! dx/dz = 0
++    if (abs(dxto_dxfrom(1,3)) > tolerance) then
++      print *, "ERROR: Jacobian dx/dz should be 0"
++      print *, "Got:", dxto_dxfrom(1,3)
++      errors = errors + 1
++    end if
++    
++    ! dz/dz = 1
++    if (abs(dxto_dxfrom(3,3) - 1.0_dp) > tolerance) then
++      print *, "ERROR: Jacobian dz/dz should be 1"
++      print *, "Got:", dxto_dxfrom(3,3)
++      errors = errors + 1
++    end if
++    
++    ! Test invariant properties
++    call test_cyl_to_cart_invariants(errors)
++    
++    if (errors == 0) then
++      print *, "  Cylindrical to cartesian transformation test PASSED"
++    end if
++    
++  end subroutine test_cyl_to_cart_transform
++  
++  subroutine test_cyl_to_cart_invariants(errors)
++    integer, intent(inout) :: errors
++    real(dp) :: xfrom(3), xto(3)
++    real(dp), parameter :: tolerance = 1.0d-13
++    real(dp) :: r_original, r_computed
++    
++    ! Given: Cylindrical coordinates
++    ! When: We transform to cartesian and compute the radius
++    ! Then: The radius should be preserved (r = sqrt(x^2 + y^2))
++    
++    xfrom = [2.5_dp, 1.2_dp, -0.8_dp]  ! Arbitrary point
++    r_original = xfrom(1)
++    
++    call transform_cyl_to_cart(xfrom, xto)
++    r_computed = sqrt(xto(1)**2 + xto(2)**2)
++    
++    if (abs(r_computed - r_original) > tolerance) then
++      print *, "ERROR: Radius not preserved in cyl->cart transformation"
++      print *, "Original r:", r_original, "Computed r:", r_computed
++      errors = errors + 1
++    end if
++    
++    ! Check that z-coordinate is preserved
++    if (abs(xto(3) - xfrom(3)) > tolerance) then
++      print *, "ERROR: Z-coordinate not preserved in cyl->cart transformation"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_cyl_to_cart_invariants
++  
++  subroutine test_transform_function_pointers(errors)
++    integer, intent(inout) :: errors
++    procedure(transform_i), pointer :: transform_ptr
++    
++    print *, "Testing coordinate transformation function pointers..."
++    
++    ! Given: The get_transform function
++    ! When: We request valid transformations
++    ! Then: It should return appropriate function pointers
++    
++    ! Test valid transformation: cyl to cart
++    transform_ptr => get_transform('cyl', 'cart')
++    if (.not. associated(transform_ptr)) then
++      print *, "ERROR: get_transform should return associated pointer for cyl->cart"
++      errors = errors + 1
++    else
++      ! Test that the function pointer works
++      call test_function_pointer_execution(transform_ptr, errors)
++    end if
++    
++    if (errors == 0) then
++      print *, "  Transform function pointers test PASSED"
++    end if
++    
++  end subroutine test_transform_function_pointers
++  
++  subroutine test_function_pointer_execution(transform_ptr, errors)
++    procedure(transform_i), pointer, intent(in) :: transform_ptr
++    integer, intent(inout) :: errors
++    real(dp) :: xfrom(3), xto(3)
++    real(dp), parameter :: tolerance = 1.0d-14
++    
++    ! Given: A function pointer to a coordinate transformation
++    ! When: We execute it with test coordinates
++    ! Then: It should produce the expected result
++    
++    xfrom = [1.0_dp, 0.0_dp, 0.0_dp]  ! (r=1, phi=0, z=0)
++    call transform_ptr(xfrom, xto)
++    
++    ! For cyl->cart with (1,0,0), we expect (1,0,0)
++    if (abs(xto(1) - 1.0_dp) > tolerance .or. &
++        abs(xto(2)) > tolerance .or. &
++        abs(xto(3)) > tolerance) then
++      print *, "ERROR: Function pointer execution failed"
++      print *, "Expected: [1,0,0], Got:", xto
++      errors = errors + 1
++    end if
++    
++  end subroutine test_function_pointer_execution
++
++end program test_coordinates
+\ No newline at end of file
+diff --git a/test/tests/test_field_base.f90 b/test/tests/test_field_base.f90
+new file mode 100644
+index 00000000..c15b3f2c
+--- /dev/null
++++ b/test/tests/test_field_base.f90
+@@ -0,0 +1,114 @@
++module mock_field_module
++  use field_base
++  implicit none
++  
++  ! Mock implementation of MagneticField for testing
++  type, extends(MagneticField) :: MockField
++  contains
++    procedure :: evaluate => mock_evaluate
++  end type MockField
++  
++contains
++
++  subroutine mock_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
++    class(MockField), intent(in) :: self
++    real(dp), intent(in) :: x(3)
++    real(dp), intent(out) :: Acov(3)
++    real(dp), intent(out) :: hcov(3)
++    real(dp), intent(out) :: Bmod
++    real(dp), intent(out), optional :: sqgBctr(3)
++    
++    ! Simple mock implementation that returns predictable values
++    Acov = 0.0_dp
++    hcov = 1.0_dp
++    Bmod = 1.0_dp
++    
++    if (present(sqgBctr)) then
++        sqgBctr = x  ! Just return the input coordinates
++    end if
++    
++  end subroutine mock_evaluate
++
++end module mock_field_module
++
++program test_field_base
++  use field_base
++  use mock_field_module
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test abstract interface definition
++  call test_abstract_interface(errors)
++  
++  if (errors == 0) then
++    print *, "All field_base module tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_abstract_interface(errors)
++    integer, intent(inout) :: errors
++    
++    print *, "Testing abstract MagneticField interface..."
++    
++    ! Given: The field_base module defines an abstract MagneticField type
++    ! When: We create a concrete implementation
++    ! Then: It should satisfy the interface requirements
++    
++    ! Test that we can create a mock field and verify interface
++    call test_mock_field_implementation(errors)
++    
++    if (errors == 0) then
++      print *, "  Abstract interface test PASSED"
++    end if
++    
++  end subroutine test_abstract_interface
++  
++  subroutine test_mock_field_implementation(errors)
++    integer, intent(inout) :: errors
++    type(MockField) :: mock_field
++    real(dp) :: x(3), Acov(3), hcov(3), Bmod, sqgBctr(3)
++    real(dp), parameter :: tolerance = 1.0d-14
++    
++    ! Given: A mock implementation of MagneticField
++    ! When: We call the evaluate method
++    ! Then: It should return predictable values
++    
++    x = [0.5_dp, 0.0_dp, 0.0_dp]
++    
++    call mock_field%evaluate(x, Acov, hcov, Bmod, sqgBctr)
++    
++    ! Check that the mock field produces expected values
++    if (abs(Bmod - 1.0_dp) > tolerance) then
++      print *, "ERROR: Mock field Bmod incorrect"
++      print *, "Expected: 1.0, Got:", Bmod
++      errors = errors + 1
++    end if
++    
++    if (any(abs(Acov - 0.0_dp) > tolerance)) then
++      print *, "ERROR: Mock field Acov should be zero"
++      errors = errors + 1
++    end if
++    
++    if (any(abs(hcov - 1.0_dp) > tolerance)) then
++      print *, "ERROR: Mock field hcov should be unity"
++      errors = errors + 1
++    end if
++    
++    ! Test call without optional argument
++    call mock_field%evaluate(x, Acov, hcov, Bmod)
++    
++    if (abs(Bmod - 1.0_dp) > tolerance) then
++      print *, "ERROR: Mock field call without optional argument failed"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_mock_field_implementation
++
++end program test_field_base
+\ No newline at end of file
+diff --git a/test/tests/test_lapack_interfaces.f90 b/test/tests/test_lapack_interfaces.f90
+new file mode 100644
+index 00000000..dcdb6985
+--- /dev/null
++++ b/test/tests/test_lapack_interfaces.f90
+@@ -0,0 +1,123 @@
++program test_lapack_interfaces
++  use lapack_interfaces
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test DGESV interface with simple linear system
++  call test_dgesv_interface(errors)
++  
++  if (errors == 0) then
++    print *, "All LAPACK interfaces tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_dgesv_interface(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 3, nrhs = 1
++    real(8) :: a(n,n), b(n,nrhs)
++    integer :: ipiv(n), info
++    real(8), parameter :: tolerance = 1.0d-12
++    
++    print *, "Testing DGESV interface..."
++    
++    ! Given: A simple 3x3 linear system Ax = b
++    ! When: We solve it using DGESV
++    ! Then: The solution should be correct and info should indicate success
++    
++    ! Set up the system: A*x = b where x = [1, 2, 3]
++    ! A = [[2, 1, 0], [1, 2, 1], [0, 1, 2]]
++    ! Fortran stores matrices column-major, so A(i,j) is row i, column j
++    ! b = A*[1,2,3] = [2*1+1*2+0*3, 1*1+2*2+1*3, 0*1+1*2+2*3] = [4, 8, 8]
++    
++    a(1,1) = 2.0d0; a(1,2) = 1.0d0; a(1,3) = 0.0d0
++    a(2,1) = 1.0d0; a(2,2) = 2.0d0; a(2,3) = 1.0d0
++    a(3,1) = 0.0d0; a(3,2) = 1.0d0; a(3,3) = 2.0d0
++    
++    b(1,1) = 4.0d0
++    b(2,1) = 8.0d0
++    b(3,1) = 8.0d0
++    
++    ! Call DGESV to solve the system
++    call dgesv(n, nrhs, a, n, ipiv, b, n, info)
++    
++    ! Check that the solution completed successfully
++    if (info /= 0) then
++      print *, "ERROR: DGESV failed with info =", info
++      errors = errors + 1
++      return
++    end if
++    
++    ! Check that the solution is correct (x = [1, 2, 3])
++    if (abs(b(1,1) - 1.0d0) > tolerance) then
++      print *, "ERROR: Incorrect solution for x(1)"
++      print *, "Expected: 1.0, Got:", b(1,1)
++      errors = errors + 1
++    end if
++    
++    if (abs(b(2,1) - 2.0d0) > tolerance) then
++      print *, "ERROR: Incorrect solution for x(2)"
++      print *, "Expected: 2.0, Got:", b(2,1)
++      errors = errors + 1
++    end if
++    
++    if (abs(b(3,1) - 3.0d0) > tolerance) then
++      print *, "ERROR: Incorrect solution for x(3)"
++      print *, "Expected: 3.0, Got:", b(3,1)
++      errors = errors + 1
++    end if
++    
++    ! Check that pivot array contains valid indices
++    if (any(ipiv < 1) .or. any(ipiv > n)) then
++      print *, "ERROR: Invalid pivot indices"
++      print *, "Pivot array:", ipiv
++      errors = errors + 1
++    end if
++    
++    ! Test edge case: singular matrix (should fail gracefully)
++    call test_singular_matrix(errors)
++    
++    if (errors == 0) then
++      print *, "  DGESV interface test PASSED"
++    end if
++    
++  end subroutine test_dgesv_interface
++  
++  subroutine test_singular_matrix(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 2, nrhs = 1
++    real(8) :: a(n,n), b(n,nrhs)
++    integer :: ipiv(n), info
++    
++    print *, "Testing DGESV with singular matrix..."
++    
++    ! Given: A singular matrix (non-invertible)
++    ! When: We try to solve the system
++    ! Then: DGESV should return a non-zero info value
++    
++    ! Create a singular matrix (row 2 = 2 * row 1)
++    a(1,1) = 1.0d0; a(1,2) = 2.0d0
++    a(2,1) = 2.0d0; a(2,2) = 4.0d0
++    
++    b(1,1) = 1.0d0
++    b(2,1) = 2.0d0
++    
++    call dgesv(n, nrhs, a, n, ipiv, b, n, info)
++    
++    ! For a singular matrix, info should be > 0
++    if (info == 0) then
++      print *, "ERROR: DGESV should detect singular matrix"
++      errors = errors + 1
++    else
++      print *, "  Singular matrix correctly detected (info =", info, ")"
++    end if
++    
++  end subroutine test_singular_matrix
++
++end program test_lapack_interfaces
+\ No newline at end of file
+diff --git a/test/tests/test_orbit_symplectic_base.f90 b/test/tests/test_orbit_symplectic_base.f90
+new file mode 100644
+index 00000000..5db7c1fe
+--- /dev/null
++++ b/test/tests/test_orbit_symplectic_base.f90
+@@ -0,0 +1,408 @@
++program test_orbit_symplectic_base
++  use orbit_symplectic_base
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test integration method constants
++  call test_integration_constants(errors)
++  
++  ! Test Runge-Kutta Gauss coefficients
++  call test_rk_gauss_coefficients(errors)
++  
++  ! Test Runge-Kutta Lobatto coefficients  
++  call test_rk_lobatto_coefficients(errors)
++  
++  ! Test SymplecticIntegrator type initialization
++  call test_symplectic_integrator_type(errors)
++  
++  if (errors == 0) then
++    print *, "All orbit_symplectic_base module tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_integration_constants(errors)
++    integer, intent(inout) :: errors
++    
++    print *, "Testing integration method constants..."
++    
++    ! Given: The module defines constants for different integration methods
++    ! When: We check the constant values
++    ! Then: They should have the expected values
++    
++    if (RK45 /= 0) then
++      print *, "ERROR: RK45 constant should be 0"
++      errors = errors + 1
++    end if
++    
++    if (EXPL_IMPL_EULER /= 1) then
++      print *, "ERROR: EXPL_IMPL_EULER constant should be 1"
++      errors = errors + 1
++    end if
++    
++    if (IMPL_EXPL_EULER /= 2) then
++      print *, "ERROR: IMPL_EXPL_EULER constant should be 2"
++      errors = errors + 1
++    end if
++    
++    if (MIDPOINT /= 3) then
++      print *, "ERROR: MIDPOINT constant should be 3"
++      errors = errors + 1
++    end if
++    
++    if (GAUSS1 /= 4) then
++      print *, "ERROR: GAUSS1 constant should be 4"
++      errors = errors + 1
++    end if
++    
++    if (LOBATTO3 /= 15) then
++      print *, "ERROR: LOBATTO3 constant should be 15"
++      errors = errors + 1
++    end if
++    
++    if (S_MAX /= 32) then
++      print *, "ERROR: S_MAX constant should be 32"
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Integration constants test PASSED"
++    end if
++    
++  end subroutine test_integration_constants
++  
++  subroutine test_rk_gauss_coefficients(errors)
++    integer, intent(inout) :: errors
++    
++    print *, "Testing Runge-Kutta Gauss coefficients..."
++    
++    ! Test 1-stage Gauss method (order 2)
++    call test_gauss_n1(errors)
++    
++    ! Test 2-stage Gauss method (order 4)
++    call test_gauss_n2(errors)
++    
++    ! Test 3-stage Gauss method (order 6)
++    call test_gauss_n3(errors)
++    
++    ! Test 4-stage Gauss method (order 8)
++    call test_gauss_n4(errors)
++    
++    ! Test unsupported stage count
++    call test_gauss_unsupported(errors)
++    
++    if (errors == 0) then
++      print *, "  RK Gauss coefficients test PASSED"
++    end if
++    
++  end subroutine test_rk_gauss_coefficients
++  
++  subroutine test_gauss_n1(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 1
++    real(dp) :: a(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-14
++    
++    ! Given: A 1-stage Gauss method
++    ! When: We compute the coefficients
++    ! Then: They should match the known 1-stage Gauss values
++    
++    call coeff_rk_gauss(n, a, b, c)
++    
++    ! Check a coefficients
++    if (abs(a(1,1) - 0.5d0) > tol) then
++      print *, "ERROR: 1-stage Gauss a(1,1) incorrect"
++      print *, "Expected: 0.5, Got:", a(1,1)
++      errors = errors + 1
++    end if
++    
++    ! Check b coefficients
++    if (abs(b(1) - 1.0d0) > tol) then
++      print *, "ERROR: 1-stage Gauss b(1) incorrect"
++      print *, "Expected: 1.0, Got:", b(1)
++      errors = errors + 1
++    end if
++    
++    ! Check c coefficients
++    if (abs(c(1) - 0.5d0) > tol) then
++      print *, "ERROR: 1-stage Gauss c(1) incorrect"
++      print *, "Expected: 0.5, Got:", c(1)
++      errors = errors + 1
++    end if
++    
++  end subroutine test_gauss_n1
++  
++  subroutine test_gauss_n2(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 2
++    real(dp) :: a(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-14
++    
++    ! Given: A 2-stage Gauss method
++    ! When: We compute the coefficients
++    ! Then: They should satisfy Gauss method properties
++    
++    call coeff_rk_gauss(n, a, b, c)
++    
++    ! Check symmetry properties
++    if (abs(a(1,1) - a(2,2)) > tol) then
++      print *, "ERROR: 2-stage Gauss should have a(1,1) = a(2,2)"
++      errors = errors + 1
++    end if
++    
++    ! Check that b coefficients sum to 1
++    if (abs(sum(b) - 1.0d0) > tol) then
++      print *, "ERROR: 2-stage Gauss b coefficients should sum to 1"
++      print *, "Sum:", sum(b)
++      errors = errors + 1
++    end if
++    
++    ! Check that b coefficients are symmetric
++    if (abs(b(1) - b(2)) > tol) then
++      print *, "ERROR: 2-stage Gauss b coefficients should be symmetric"
++      errors = errors + 1
++    end if
++    
++    ! Check c coefficient symmetry
++    if (abs(c(1) + c(2) - 1.0d0) > tol) then
++      print *, "ERROR: 2-stage Gauss c coefficients should sum to 1"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_gauss_n2
++  
++  subroutine test_gauss_n3(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 3
++    real(dp) :: a(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-12  ! Slightly looser tolerance for 3-stage
++    
++    call coeff_rk_gauss(n, a, b, c)
++    
++    ! Check symmetry of diagonal elements
++    if (abs(a(1,1) - a(3,3)) > tol) then
++      print *, "ERROR: 3-stage Gauss should have a(1,1) = a(3,3)"
++      errors = errors + 1
++    end if
++    
++    ! Check that b coefficients sum to 1
++    if (abs(sum(b) - 1.0d0) > tol) then
++      print *, "ERROR: 3-stage Gauss b coefficients should sum to 1"
++      print *, "Sum:", sum(b)
++      errors = errors + 1
++    end if
++    
++    ! Check symmetry of b coefficients
++    if (abs(b(1) - b(3)) > tol) then
++      print *, "ERROR: 3-stage Gauss b(1) should equal b(3)"
++      errors = errors + 1
++    end if
++    
++    ! Check that c(2) = 0.5 for symmetric methods
++    if (abs(c(2) - 0.5d0) > tol) then
++      print *, "ERROR: 3-stage Gauss c(2) should be 0.5"
++      print *, "Got:", c(2)
++      errors = errors + 1
++    end if
++    
++  end subroutine test_gauss_n3
++  
++  subroutine test_gauss_n4(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 4
++    real(dp) :: a(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-12
++    
++    call coeff_rk_gauss(n, a, b, c)
++    
++    ! Check that b coefficients sum to 1
++    if (abs(sum(b) - 1.0d0) > tol) then
++      print *, "ERROR: 4-stage Gauss b coefficients should sum to 1"
++      print *, "Sum:", sum(b)
++      errors = errors + 1
++    end if
++    
++    ! Check symmetry of b coefficients
++    if (abs(b(1) - b(4)) > tol .or. abs(b(2) - b(3)) > tol) then
++      print *, "ERROR: 4-stage Gauss b coefficients should be symmetric"
++      errors = errors + 1
++    end if
++    
++    ! Check that c coefficients are in [0,1]
++    if (any(c < 0.0d0) .or. any(c > 1.0d0)) then
++      print *, "ERROR: 4-stage Gauss c coefficients should be in [0,1]"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_gauss_n4
++  
++  subroutine test_gauss_unsupported(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 5  ! Unsupported stage count
++    real(dp) :: a(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-14
++    
++    ! Given: An unsupported stage count
++    ! When: We call coeff_rk_gauss
++    ! Then: All coefficients should be zero
++    
++    call coeff_rk_gauss(n, a, b, c)
++    
++    if (any(abs(a) > tol) .or. any(abs(b) > tol) .or. any(abs(c) > tol)) then
++      print *, "ERROR: Unsupported Gauss stage count should give zero coefficients"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_gauss_unsupported
++  
++  subroutine test_rk_lobatto_coefficients(errors)
++    integer, intent(inout) :: errors
++    
++    print *, "Testing Runge-Kutta Lobatto coefficients..."
++    
++    ! Test 3-stage Lobatto method
++    call test_lobatto_n3(errors)
++    
++    ! Test unsupported stage count
++    call test_lobatto_unsupported(errors)
++    
++    if (errors == 0) then
++      print *, "  RK Lobatto coefficients test PASSED"
++    end if
++    
++  end subroutine test_rk_lobatto_coefficients
++  
++  subroutine test_lobatto_n3(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 3
++    real(dp) :: a(n,n), ahat(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-14
++    
++    ! Given: A 3-stage Lobatto method
++    ! When: We compute the coefficients
++    ! Then: They should satisfy Lobatto method properties
++    
++    call coeff_rk_lobatto(n, a, ahat, b, c)
++    
++    ! Check that b coefficients sum to 1
++    if (abs(sum(b) - 1.0d0) > tol) then
++      print *, "ERROR: 3-stage Lobatto b coefficients should sum to 1"
++      print *, "Sum:", sum(b)
++      errors = errors + 1
++    end if
++    
++    ! Check Lobatto property: c(1) = 0, c(n) = 1
++    if (abs(c(1)) > tol) then
++      print *, "ERROR: Lobatto c(1) should be 0"
++      print *, "Got:", c(1)
++      errors = errors + 1
++    end if
++    
++    if (abs(c(3) - 1.0d0) > tol) then
++      print *, "ERROR: Lobatto c(3) should be 1"
++      print *, "Got:", c(3)
++      errors = errors + 1
++    end if
++    
++    ! Check that first row of a is zero (Lobatto IIIA property)
++    if (any(abs(a(1,:)) > tol)) then
++      print *, "ERROR: First row of Lobatto a matrix should be zero"
++      errors = errors + 1
++    end if
++    
++    ! Check symmetry of b coefficients for 3-stage
++    if (abs(b(1) - b(3)) > tol) then
++      print *, "ERROR: Lobatto b(1) should equal b(3)"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_lobatto_n3
++  
++  subroutine test_lobatto_unsupported(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 4  ! Unsupported stage count for Lobatto
++    real(dp) :: a(n,n), ahat(n,n), b(n), c(n)
++    real(dp), parameter :: tol = 1.0d-14
++    
++    ! Given: An unsupported stage count for Lobatto
++    ! When: We call coeff_rk_lobatto
++    ! Then: Arrays remain uninitialized (implementation specific behavior)
++    
++    ! Initialize arrays to zero before the call
++    a = 0.0_dp
++    ahat = 0.0_dp
++    b = 0.0_dp
++    c = 0.0_dp
++    
++    call coeff_rk_lobatto(n, a, ahat, b, c)
++    
++    ! Since only n=3 is supported, arrays should remain zero for n=4
++    if (any(abs(a) > tol) .or. any(abs(ahat) > tol) .or. &
++        any(abs(b) > tol) .or. any(abs(c) > tol)) then
++      print *, "ERROR: Unsupported Lobatto stage count should leave coefficients unchanged"
++      errors = errors + 1
++    end if
++    
++  end subroutine test_lobatto_unsupported
++  
++  subroutine test_symplectic_integrator_type(errors)
++    integer, intent(inout) :: errors
++    type(SymplecticIntegrator) :: si
++    type(MultistageIntegrator) :: mi
++    
++    print *, "Testing SymplecticIntegrator type..."
++    
++    ! Given: The SymplecticIntegrator and MultistageIntegrator types
++    ! When: We initialize them with default values
++    ! Then: They should have the expected structure
++    
++    ! Test SymplecticIntegrator initialization
++    si%atol = 1.0d-10
++    si%rtol = 1.0d-8
++    si%z = [1.0_dp, 0.0_dp, 0.0_dp, 0.1_dp]
++    si%pthold = 0.0_dp
++    si%ntau = 1000
++    si%dt = 1.0d-3
++    si%pabs = 0.1_dp
++    
++    ! Basic checks on data integrity
++    if (si%atol /= 1.0d-10) then
++      print *, "ERROR: SymplecticIntegrator atol assignment failed"
++      errors = errors + 1
++    end if
++    
++    if (size(si%z) /= 4) then
++      print *, "ERROR: SymplecticIntegrator z should have 4 components"
++      errors = errors + 1
++    end if
++    
++    ! Test MultistageIntegrator initialization
++    mi%s = 3
++    if (mi%s /= 3) then
++      print *, "ERROR: MultistageIntegrator s assignment failed"
++      errors = errors + 1
++    end if
++    
++    if (size(mi%alpha) /= S_MAX) then
++      print *, "ERROR: MultistageIntegrator alpha array size incorrect"
++      errors = errors + 1
++    end if
++    
++    if (size(mi%stages) /= 2*S_MAX) then
++      print *, "ERROR: MultistageIntegrator stages array size incorrect"
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  SymplecticIntegrator type test PASSED"
++    end if
++    
++  end subroutine test_symplectic_integrator_type
++
++end program test_orbit_symplectic_base
+\ No newline at end of file
+diff --git a/test/tests/test_sorting.f90 b/test/tests/test_sorting.f90
+new file mode 100644
+index 00000000..4fcfac49
+--- /dev/null
++++ b/test/tests/test_sorting.f90
+@@ -0,0 +1,329 @@
++program test_sorting
++  use sorting_mod
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test basic sorting functionality
++  call test_basic_sorting(errors)
++  
++  ! Test edge cases
++  call test_edge_cases(errors)
++  
++  ! Test sorting properties
++  call test_sorting_properties(errors)
++  
++  ! Test large arrays
++  call test_large_array_sorting(errors)
++  
++  if (errors == 0) then
++    print *, "All sorting module tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_basic_sorting(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 5
++    double precision :: a(n)
++    integer :: ipoi(n)
++    integer :: i
++    
++    print *, "Testing basic sorting functionality..."
++    
++    ! Given: An unsorted array with known values
++    ! When: We call sortin to get sorted indices
++    ! Then: The indices should point to elements in ascending order
++    
++    ! Test case 1: Simple unsorted array
++    a = [3.0d0, 1.0d0, 4.0d0, 2.0d0, 5.0d0]
++    
++    call sortin(a, ipoi, n)
++    
++    ! Check that indices point to values in ascending order
++    do i = 1, n-1
++      if (a(ipoi(i)) > a(ipoi(i+1))) then
++        print *, "ERROR: Array not sorted correctly"
++        print *, "Position", i, ": a(", ipoi(i), ") =", a(ipoi(i))
++        print *, "Position", i+1, ": a(", ipoi(i+1), ") =", a(ipoi(i+1))
++        errors = errors + 1
++        exit
++      end if
++    end do
++    
++    ! Verify that the sorted order is correct for this specific case
++    if (ipoi(1) /= 2 .or. ipoi(2) /= 4 .or. ipoi(3) /= 1 .or. &
++        ipoi(4) /= 3 .or. ipoi(5) /= 5) then
++      print *, "ERROR: Incorrect sorted indices for test case"
++      print *, "Expected: [2, 4, 1, 3, 5]"
++      print *, "Got:", ipoi
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Basic sorting test PASSED"
++    end if
++    
++  end subroutine test_basic_sorting
++  
++  subroutine test_edge_cases(errors)
++    integer, intent(inout) :: errors
++    
++    print *, "Testing edge cases..."
++    
++    ! Test single element array
++    call test_single_element(errors)
++    
++    ! Test two element arrays
++    call test_two_elements(errors)
++    
++    ! Test already sorted array
++    call test_already_sorted(errors)
++    
++    ! Test reverse sorted array
++    call test_reverse_sorted(errors)
++    
++    ! Test array with duplicate values
++    call test_duplicates(errors)
++    
++    if (errors == 0) then
++      print *, "  Edge cases test PASSED"
++    end if
++    
++  end subroutine test_edge_cases
++  
++  subroutine test_single_element(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 1
++    double precision :: a(n)
++    integer :: ipoi(n)
++    
++    ! Given: A single element array
++    ! When: We sort it
++    ! Then: The index should point to the only element
++    
++    a(1) = 42.0d0
++    call sortin(a, ipoi, n)
++    
++    if (ipoi(1) /= 1) then
++      print *, "ERROR: Single element array not handled correctly"
++      print *, "Expected: 1, Got:", ipoi(1)
++      errors = errors + 1
++    end if
++    
++  end subroutine test_single_element
++  
++  subroutine test_two_elements(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 2
++    double precision :: a(n)
++    integer :: ipoi(n)
++    
++    ! Test case 1: already in order
++    a = [1.0d0, 2.0d0]
++    call sortin(a, ipoi, n)
++    
++    if (ipoi(1) /= 1 .or. ipoi(2) /= 2) then
++      print *, "ERROR: Two element array (in order) not handled correctly"
++      print *, "Expected: [1, 2], Got:", ipoi
++      errors = errors + 1
++    end if
++    
++    ! Test case 2: reverse order
++    a = [2.0d0, 1.0d0]
++    call sortin(a, ipoi, n)
++    
++    if (ipoi(1) /= 2 .or. ipoi(2) /= 1) then
++      print *, "ERROR: Two element array (reverse order) not handled correctly"
++      print *, "Expected: [2, 1], Got:", ipoi
++      errors = errors + 1
++    end if
++    
++  end subroutine test_two_elements
++  
++  subroutine test_already_sorted(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 6
++    double precision :: a(n)
++    integer :: ipoi(n)
++    integer :: i
++    
++    ! Given: An already sorted array
++    ! When: We sort it
++    ! Then: The indices should be [1, 2, 3, ..., n]
++    
++    a = [1.0d0, 2.0d0, 3.0d0, 4.0d0, 5.0d0, 6.0d0]
++    call sortin(a, ipoi, n)
++    
++    do i = 1, n
++      if (ipoi(i) /= i) then
++        print *, "ERROR: Already sorted array not preserved"
++        print *, "Position", i, "expected", i, "got", ipoi(i)
++        errors = errors + 1
++        exit
++      end if
++    end do
++    
++  end subroutine test_already_sorted
++  
++  subroutine test_reverse_sorted(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 5
++    double precision :: a(n)
++    integer :: ipoi(n)
++    integer :: i
++    
++    ! Given: A reverse sorted array
++    ! When: We sort it
++    ! Then: The indices should be [n, n-1, ..., 2, 1]
++    
++    a = [5.0d0, 4.0d0, 3.0d0, 2.0d0, 1.0d0]
++    call sortin(a, ipoi, n)
++    
++    do i = 1, n
++      if (ipoi(i) /= n + 1 - i) then
++        print *, "ERROR: Reverse sorted array not handled correctly"
++        print *, "Position", i, "expected", n + 1 - i, "got", ipoi(i)
++        errors = errors + 1
++        exit
++      end if
++    end do
++    
++  end subroutine test_reverse_sorted
++  
++  subroutine test_duplicates(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 6
++    double precision :: a(n)
++    integer :: ipoi(n)
++    integer :: i
++    
++    ! Given: An array with duplicate values
++    ! When: We sort it
++    ! Then: The result should be stable and in non-decreasing order
++    
++    a = [3.0d0, 1.0d0, 3.0d0, 2.0d0, 1.0d0, 2.0d0]
++    call sortin(a, ipoi, n)
++    
++    ! Check that the array is sorted
++    do i = 1, n-1
++      if (a(ipoi(i)) > a(ipoi(i+1))) then
++        print *, "ERROR: Array with duplicates not sorted correctly"
++        print *, "Position", i, ": a(", ipoi(i), ") =", a(ipoi(i))
++        print *, "Position", i+1, ": a(", ipoi(i+1), ") =", a(ipoi(i+1))
++        errors = errors + 1
++        exit
++      end if
++    end do
++    
++  end subroutine test_duplicates
++  
++  subroutine test_sorting_properties(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 10
++    double precision :: a(n)
++    integer :: ipoi(n)
++    logical :: indices_valid
++    integer :: i, j
++    
++    print *, "Testing sorting properties..."
++    
++    ! Given: An arbitrary array
++    ! When: We sort it
++    ! Then: The sorting should satisfy fundamental properties
++    
++    a = [7.5d0, 2.3d0, 9.1d0, 1.8d0, 5.6d0, 3.4d0, 8.2d0, 4.7d0, 6.9d0, 0.5d0]
++    call sortin(a, ipoi, n)
++    
++    ! Property 1: All indices should be valid (between 1 and n)
++    indices_valid = .true.
++    do i = 1, n
++      if (ipoi(i) < 1 .or. ipoi(i) > n) then
++        indices_valid = .false.
++        print *, "ERROR: Invalid index found:", ipoi(i)
++        errors = errors + 1
++      end if
++    end do
++    
++    ! Property 2: All indices should be unique (permutation)
++    if (indices_valid) then
++      do i = 1, n
++        do j = i+1, n
++          if (ipoi(i) == ipoi(j)) then
++            print *, "ERROR: Duplicate index found:", ipoi(i)
++            errors = errors + 1
++            exit
++          end if
++        end do
++      end do
++    end if
++    
++    ! Property 3: The array should be sorted according to the indices
++    do i = 1, n-1
++      if (a(ipoi(i)) > a(ipoi(i+1))) then
++        print *, "ERROR: Sorting property violated"
++        errors = errors + 1
++        exit
++      end if
++    end do
++    
++    if (errors == 0) then
++      print *, "  Sorting properties test PASSED"
++    end if
++    
++  end subroutine test_sorting_properties
++  
++  subroutine test_large_array_sorting(errors)
++    integer, intent(inout) :: errors
++    integer, parameter :: n = 1000
++    double precision :: a(n)
++    integer :: ipoi(n)
++    integer :: i
++    logical :: is_sorted
++    
++    print *, "Testing large array sorting..."
++    
++    ! Given: A large array with random-like values
++    ! When: We sort it
++    ! Then: The result should be properly sorted
++    
++    ! Generate pseudo-random values
++    do i = 1, n
++      a(i) = dble(mod(i * 17 + 23, 1000))
++    end do
++    
++    call sortin(a, ipoi, n)
++    
++    ! Check that the result is sorted
++    is_sorted = .true.
++    do i = 1, n-1
++      if (a(ipoi(i)) > a(ipoi(i+1))) then
++        is_sorted = .false.
++        exit
++      end if
++    end do
++    
++    if (.not. is_sorted) then
++      print *, "ERROR: Large array not sorted correctly"
++      errors = errors + 1
++    end if
++    
++    ! Check that it's a valid permutation
++    ! (This is a basic check - for large arrays we don't check every detail)
++    if (ipoi(1) < 1 .or. ipoi(1) > n .or. ipoi(n) < 1 .or. ipoi(n) > n) then
++      print *, "ERROR: Invalid indices in large array sort"
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Large array sorting test PASSED"
++    end if
++    
++  end subroutine test_large_array_sorting
++
++end program test_sorting
+\ No newline at end of file
+diff --git a/test/tests/test_timing.f90 b/test/tests/test_timing.f90
+new file mode 100644
+index 00000000..3b189103
+--- /dev/null
++++ b/test/tests/test_timing.f90
+@@ -0,0 +1,182 @@
++program test_timing
++  use timing
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test timer initialization
++  call test_timer_initialization(errors)
++  
++  ! Test time measurement functions
++  call test_time_measurement(errors)
++  
++  ! Test elapsed time calculation
++  call test_elapsed_time_calculation(errors)
++  
++  if (errors == 0) then
++    print *, "All timing module tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_timer_initialization(errors)
++    integer, intent(inout) :: errors
++    
++    print *, "Testing timer initialization..."
++    
++    ! Given: The timing module provides timer initialization
++    ! When: We call init_timer
++    ! Then: The timer should be properly initialized with reasonable values
++    
++    call init_timer()
++    
++    ! Check that clock_rate is positive (system should have a working clock)
++    if (clock_rate <= 0) then
++      print *, "ERROR: Clock rate should be positive after initialization"
++      print *, "Got:", clock_rate
++      errors = errors + 1
++    end if
++    
++    ! Check that clock_max is positive
++    if (clock_max <= 0) then
++      print *, "ERROR: Clock max should be positive after initialization"
++      print *, "Got:", clock_max
++      errors = errors + 1
++    end if
++    
++    ! Check that program_start_time is non-negative
++    if (program_start_time < 0) then
++      print *, "ERROR: Program start time should be non-negative"
++      print *, "Got:", program_start_time
++      errors = errors + 1
++    end if
++    
++    ! Check that phase_start_time is initialized to program_start_time
++    if (phase_start_time /= program_start_time) then
++      print *, "ERROR: Phase start time should equal program start time initially"
++      print *, "Program start:", program_start_time
++      print *, "Phase start:", phase_start_time
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Timer initialization test PASSED"
++    end if
++    
++  end subroutine test_timer_initialization
++  
++  subroutine test_time_measurement(errors)
++    integer, intent(inout) :: errors
++    real(dp) :: time1, time2
++    real(dp), parameter :: tolerance = 1.0d-6  ! 1 microsecond tolerance
++    real(dp), parameter :: sleep_time = 0.01_dp  ! Target sleep time in seconds
++    
++    print *, "Testing time measurement functions..."
++    
++    ! Given: The timing module provides wall-clock time measurement
++    ! When: We measure time before and after a delay
++    ! Then: The elapsed time should be reasonable
++    
++    call init_timer()
++    
++    ! Test get_wtime function
++    time1 = get_wtime()
++    
++    ! Introduce a small delay by doing some work
++    call cpu_intensive_work()
++    
++    time2 = get_wtime()
++    
++    ! Check that time advances
++    if (time2 <= time1) then
++      print *, "ERROR: Time should advance between measurements"
++      print *, "Time1:", time1, "Time2:", time2
++      errors = errors + 1
++    end if
++    
++    ! Check that elapsed time is reasonable (should be small but positive)
++    if (time2 - time1 > 1.0_dp) then
++      print *, "ERROR: Elapsed time too large for simple operation"
++      print *, "Elapsed:", time2 - time1
++      errors = errors + 1
++    end if
++    
++    ! Test that times are positive (wall-clock time should be positive)
++    if (time1 < 0.0_dp .or. time2 < 0.0_dp) then
++      print *, "ERROR: Wall-clock times should be positive"
++      print *, "Time1:", time1, "Time2:", time2
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Time measurement test PASSED"
++    end if
++    
++  end subroutine test_time_measurement
++  
++  subroutine test_elapsed_time_calculation(errors)
++    integer, intent(inout) :: errors
++    real(dp) :: start_time, end_time, elapsed
++    real(dp), parameter :: tolerance = 1.0d-12
++    
++    print *, "Testing elapsed time calculation..."
++    
++    ! Given: The timing module provides elapsed time calculation
++    ! When: We calculate elapsed time between two time points
++    ! Then: The result should equal the simple difference
++    
++    start_time = 100.0_dp
++    end_time = 150.5_dp
++    
++    elapsed = get_elapsed_time(start_time, end_time)
++    
++    ! Check that elapsed time equals simple difference
++    if (abs(elapsed - (end_time - start_time)) > tolerance) then
++      print *, "ERROR: Elapsed time calculation incorrect"
++      print *, "Expected:", end_time - start_time
++      print *, "Got:", elapsed
++      errors = errors + 1
++    end if
++    
++    ! Test with negative elapsed time (end before start)
++    elapsed = get_elapsed_time(end_time, start_time)
++    if (abs(elapsed - (start_time - end_time)) > tolerance) then
++      print *, "ERROR: Negative elapsed time calculation incorrect"
++      print *, "Expected:", start_time - end_time
++      print *, "Got:", elapsed
++      errors = errors + 1
++    end if
++    
++    ! Test with zero elapsed time
++    elapsed = get_elapsed_time(start_time, start_time)
++    if (abs(elapsed) > tolerance) then
++      print *, "ERROR: Zero elapsed time should be exactly zero"
++      print *, "Got:", elapsed
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Elapsed time calculation test PASSED"
++    end if
++    
++  end subroutine test_elapsed_time_calculation
++  
++  ! Helper subroutine to introduce a predictable delay
++  subroutine cpu_intensive_work()
++    integer :: i, j, dummy
++    dummy = 0
++    do i = 1, 1000
++      do j = 1, 100
++        dummy = dummy + i * j
++      end do
++    end do
++    ! Prevent compiler optimization
++    if (dummy < 0) print *, "Unexpected result"
++  end subroutine cpu_intensive_work
++
++end program test_timing
+\ No newline at end of file
+diff --git a/test/tests/test_util_simple.f90 b/test/tests/test_util_simple.f90
+new file mode 100644
+index 00000000..d8b82200
+--- /dev/null
++++ b/test/tests/test_util_simple.f90
+@@ -0,0 +1,162 @@
++program test_util
++  use util
++  implicit none
++  
++  integer :: errors
++  
++  errors = 0
++  
++  ! Test mathematical constants
++  call test_constants(errors)
++  
++  ! Test newunit function
++  call test_newunit_function(errors)
++  
++  if (errors == 0) then
++    print *, "All util module tests passed!"
++  else
++    print *, "ERROR: ", errors, " test(s) failed!"
++    stop 1
++  end if
++  
++contains
++
++  subroutine test_constants(errors)
++    integer, intent(inout) :: errors
++    double precision, parameter :: tolerance = 1.0d-14
++    
++    print *, "Testing mathematical and physical constants..."
++    
++    ! Given: The util module defines mathematical and physical constants
++    ! When: We check the values against known constants
++    ! Then: The values should match expected physical constants
++    
++    ! Test pi value
++    if (abs(pi - 3.14159265358979d0) > tolerance) then
++      print *, "ERROR: pi constant incorrect"
++      print *, "Expected: 3.14159265358979d0, Got:", pi
++      errors = errors + 1
++    end if
++    
++    ! Test twopi value (should be 2*pi)
++    if (abs(twopi - 2.0d0*pi) > tolerance) then
++      print *, "ERROR: twopi should equal 2*pi"
++      print *, "Expected:", 2.0d0*pi, "Got:", twopi
++      errors = errors + 1
++    end if
++    
++    ! Test sqrt2 value
++    if (abs(sqrt2 - dsqrt(2.0d0)) > tolerance) then
++      print *, "ERROR: sqrt2 constant incorrect"
++      print *, "Expected:", dsqrt(2.0d0), "Got:", sqrt2
++      errors = errors + 1
++    end if
++    
++    ! Test physical constants (basic sanity checks)
++    ! Speed of light should be positive and reasonable
++    if (c <= 0.0d0 .or. c < 1.0d10 .or. c > 1.0d11) then
++      print *, "ERROR: Speed of light constant unreasonable"
++      print *, "Got:", c
++      errors = errors + 1
++    end if
++    
++    ! Electron charge should be positive and reasonable
++    if (e_charge <= 0.0d0 .or. e_charge < 1.0d-11 .or. e_charge > 1.0d-9) then
++      print *, "ERROR: Electron charge constant unreasonable"
++      print *, "Got:", e_charge
++      errors = errors + 1
++    end if
++    
++    ! Electron mass should be positive and reasonable
++    if (e_mass <= 0.0d0 .or. e_mass < 1.0d-29 .or. e_mass > 1.0d-27) then
++      print *, "ERROR: Electron mass constant unreasonable"
++      print *, "Got:", e_mass
++      errors = errors + 1
++    end if
++    
++    ! Proton mass should be positive and reasonable
++    if (p_mass <= 0.0d0 .or. p_mass < 1.0d-25 .or. p_mass > 1.0d-23) then
++      print *, "ERROR: Proton mass constant unreasonable"
++      print *, "Got:", p_mass
++      errors = errors + 1
++    end if
++    
++    ! Electron volt should be positive and reasonable
++    if (ev <= 0.0d0 .or. ev < 1.0d-13 .or. ev > 1.0d-11) then
++      print *, "ERROR: Electron volt constant unreasonable"
++      print *, "Got:", ev
++      errors = errors + 1
++    end if
++    
++    if (errors == 0) then
++      print *, "  Constants test PASSED"
++    end if
++    
++  end subroutine test_constants
++  
++  subroutine test_newunit_function(errors)
++    integer, intent(inout) :: errors
++    integer :: unit1, unit2, unit3
++    logical :: opened
++    
++    print *, "Testing newunit function..."
++    
++    ! Given: The newunit function should find available logical unit numbers
++    ! When: We call newunit multiple times
++    ! Then: Each call should return a different available unit number
++    
++    ! Get first available unit
++    unit1 = newunit()
++    if (unit1 < 10 .or. unit1 > 1000) then
++      print *, "ERROR: newunit returned unit outside expected range [10,1000]"
++      print *, "Got:", unit1
++      errors = errors + 1
++      return
++    end if
++    
++    ! Check that the unit is indeed available
++    inquire(unit=unit1, opened=opened)
++    if (opened) then
++      print *, "ERROR: newunit returned a unit that is already opened"
++      print *, "Unit:", unit1
++      errors = errors + 1
++    end if
++    
++    ! Open the unit to make it unavailable
++    open(unit=unit1, file='/dev/null', status='old')
++    
++    ! Get second available unit
++    unit2 = newunit()
++    if (unit2 == unit1) then
++      print *, "ERROR: newunit returned the same unit twice"
++      print *, "Unit:", unit2
++      errors = errors + 1
++    end if
++    
++    if (unit2 < 10 .or. unit2 > 1000) then
++      print *, "ERROR: second newunit call returned unit outside expected range"
++      print *, "Got:", unit2
++      errors = errors + 1
++    end if
++    
++    ! Test optional argument
++    unit3 = newunit(unit=unit3)
++    if (unit3 /= newunit()) then
++      print *, "WARNING: newunit function may not be deterministic"
++      ! This is not necessarily an error, just a note
++    end if
++    
++    ! Clean up
++    if (unit1 > 0) close(unit1)
++    if (unit2 > 0) close(unit2)
++    
++    ! Test edge case: when many units are occupied
++    ! This is a behavioral test to ensure the function handles near-exhaustion gracefully
++    
++    if (errors == 0) then
++      print *, "  Newunit function test PASSED"
++    end if
++    
++  end subroutine test_newunit_function
++
++end program test_util
+\ No newline at end of file

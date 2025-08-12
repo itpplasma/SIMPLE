@@ -38,10 +38,10 @@ contains
       errors = errors + 1
     end if
     
-    ! Test twopi value (should be 2*pi)
-    if (abs(twopi - 2.0d0*pi) > tolerance) then
-      print *, "ERROR: twopi should equal 2*pi"
-      print *, "Expected:", 2.0d0*pi, "Got:", twopi
+    ! Test twopi value (should be approximately 2*pi = 6.28318530717958)
+    if (abs(twopi - 6.28318530717958d0) > tolerance) then
+      print *, "ERROR: twopi constant incorrect"
+      print *, "Expected: 6.28318530717958d0, Got:", twopi
       errors = errors + 1
     end if
     
@@ -52,39 +52,39 @@ contains
       errors = errors + 1
     end if
     
-    ! Test physical constants (basic sanity checks)
-    ! Speed of light should be positive and reasonable
-    if (c <= 0.0d0 .or. c < 1.0d10 .or. c > 1.0d11) then
-      print *, "ERROR: Speed of light constant unreasonable"
-      print *, "Got:", c
+    ! Test physical constants against their defined values in util.F90
+    ! Speed of light in cm/s (defined as 2.9979d10)
+    if (abs(c - 2.9979d10) > 1.0d6) then
+      print *, "ERROR: Speed of light constant incorrect"
+      print *, "Expected: 2.9979e10 cm/s, Got:", c
       errors = errors + 1
     end if
     
-    ! Electron charge should be positive and reasonable
-    if (e_charge <= 0.0d0 .or. e_charge < 1.0d-11 .or. e_charge > 1.0d-9) then
-      print *, "ERROR: Electron charge constant unreasonable"
-      print *, "Got:", e_charge
+    ! Electron charge in CGS units (4.8032e-10 esu)
+    if (abs(e_charge - 4.8032d-10) > 1.0d-13) then
+      print *, "ERROR: Electron charge constant incorrect"
+      print *, "Expected: 4.8032e-10 esu, Got:", e_charge
       errors = errors + 1
     end if
     
-    ! Electron mass should be positive and reasonable
-    if (e_mass <= 0.0d0 .or. e_mass < 1.0d-29 .or. e_mass > 1.0d-27) then
-      print *, "ERROR: Electron mass constant unreasonable"
-      print *, "Got:", e_mass
+    ! Electron mass in grams (9.1094e-28 g)
+    if (abs(e_mass - 9.1094d-28) > 1.0d-32) then
+      print *, "ERROR: Electron mass constant incorrect"
+      print *, "Expected: 9.1094e-28 g, Got:", e_mass
       errors = errors + 1
     end if
     
-    ! Proton mass should be positive and reasonable
-    if (p_mass <= 0.0d0 .or. p_mass < 1.0d-25 .or. p_mass > 1.0d-23) then
-      print *, "ERROR: Proton mass constant unreasonable"
-      print *, "Got:", p_mass
+    ! Proton mass in grams (1.6726e-24 g)
+    if (abs(p_mass - 1.6726d-24) > 1.0d-28) then
+      print *, "ERROR: Proton mass constant incorrect"
+      print *, "Expected: 1.6726e-24 g, Got:", p_mass
       errors = errors + 1
     end if
     
-    ! Electron volt should be positive and reasonable
-    if (ev <= 0.0d0 .or. ev < 1.0d-13 .or. ev > 1.0d-11) then
-      print *, "ERROR: Electron volt constant unreasonable"
-      print *, "Got:", ev
+    ! Electron volt in ergs (1.6022e-12 erg)
+    if (abs(ev - 1.6022d-12) > 1.0d-16) then
+      print *, "ERROR: Electron volt constant incorrect"
+      print *, "Expected: 1.6022e-12 erg, Got:", ev
       errors = errors + 1
     end if
     
@@ -96,7 +96,7 @@ contains
   
   subroutine test_newunit_function(errors)
     integer, intent(inout) :: errors
-    integer :: unit1, unit2, unit3
+    integer :: unit1, unit2, unit3, unit_opt
     logical :: opened
     
     print *, "Testing newunit function..."
@@ -122,8 +122,8 @@ contains
       errors = errors + 1
     end if
     
-    ! Open the unit to make it unavailable
-    open(unit=unit1, file='/dev/null', status='old')
+    ! Open the unit to make it unavailable (portable scratch file)
+    open(unit=unit1, status='scratch', action='readwrite')
     
     ! Get second available unit
     unit2 = newunit()
@@ -139,16 +139,27 @@ contains
       errors = errors + 1
     end if
     
-    ! Test optional argument
-    unit3 = newunit(unit=unit3)
-    if (unit3 /= newunit()) then
-      print *, "WARNING: newunit function may not be deterministic"
-      ! This is not necessarily an error, just a note
+    ! Close unit1 first to free it up
+    if (unit1 > 0) close(unit1)
+    
+    ! Test optional argument (avoid undefined behavior)
+    unit_opt = -1  ! Initialize to invalid value
+    unit3 = newunit(unit=unit_opt)
+    if (unit3 /= unit_opt) then
+      print *, "ERROR: newunit should return same value in optional argument"
+      print *, "Returned:", unit3, "Optional:", unit_opt
+      errors = errors + 1
     end if
     
-    ! Clean up
-    if (unit1 > 0) close(unit1)
+    ! Verify unit3 is different from unit2 (unit1 is closed so could be reused)
+    if (unit3 == unit2) then
+      print *, "ERROR: newunit returned unit2 which should still be unavailable"
+      errors = errors + 1
+    end if
+    
+    ! Clean up remaining units
     if (unit2 > 0) close(unit2)
+    if (unit3 > 0) close(unit3)
     
     ! Test edge case: when many units are occupied
     ! This is a behavioral test to ensure the function handles near-exhaustion gracefully

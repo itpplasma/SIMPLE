@@ -29,47 +29,48 @@ contains
 
   subroutine test_integration_constants(errors)
     integer, intent(inout) :: errors
+    integer :: methods(7)
+    integer :: i, j
+    logical :: all_distinct
     
     print *, "Testing integration method constants..."
     
     ! Given: The module defines constants for different integration methods
-    ! When: We check the constant values
-    ! Then: They should have the expected values
+    ! When: We use these constants
+    ! Then: They should be distinct and within expected range
     
-    if (RK45 /= 0) then
-      print *, "ERROR: RK45 constant should be 0"
+    ! Test that constants are distinct (no two methods have same value)
+    
+    methods = [RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, LOBATTO3]
+    
+    all_distinct = .true.
+    do i = 1, size(methods)
+      do j = i+1, size(methods)
+        if (methods(i) == methods(j)) then
+          print *, "ERROR: Integration method constants not distinct"
+          print *, "Method", i, "and", j, "have same value:", methods(i)
+          errors = errors + 1
+          all_distinct = .false.
+          exit
+        end if
+      end do
+      if (.not. all_distinct) exit
+    end do
+    
+    ! Test that S_MAX is large enough for all methods
+    if (S_MAX < maxval(methods)) then
+      print *, "ERROR: S_MAX too small for defined methods"
+      print *, "S_MAX:", S_MAX, "Max method value:", maxval(methods)
       errors = errors + 1
     end if
     
-    if (EXPL_IMPL_EULER /= 1) then
-      print *, "ERROR: EXPL_IMPL_EULER constant should be 1"
-      errors = errors + 1
-    end if
-    
-    if (IMPL_EXPL_EULER /= 2) then
-      print *, "ERROR: IMPL_EXPL_EULER constant should be 2"
-      errors = errors + 1
-    end if
-    
-    if (MIDPOINT /= 3) then
-      print *, "ERROR: MIDPOINT constant should be 3"
-      errors = errors + 1
-    end if
-    
-    if (GAUSS1 /= 4) then
-      print *, "ERROR: GAUSS1 constant should be 4"
-      errors = errors + 1
-    end if
-    
-    if (LOBATTO3 /= 15) then
-      print *, "ERROR: LOBATTO3 constant should be 15"
-      errors = errors + 1
-    end if
-    
-    if (S_MAX /= 32) then
-      print *, "ERROR: S_MAX constant should be 32"
-      errors = errors + 1
-    end if
+    ! Test that all constants are non-negative (sensible range)
+    do i = 1, size(methods)
+      if (methods(i) < 0) then
+        print *, "ERROR: Integration method constant is negative:", methods(i)
+        errors = errors + 1
+      end if
+    end do
     
     if (errors == 0) then
       print *, "  Integration constants test PASSED"

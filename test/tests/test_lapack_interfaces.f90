@@ -22,6 +22,7 @@ contains
     integer, intent(inout) :: errors
     integer, parameter :: n = 3, nrhs = 1
     real(8) :: a(n,n), b(n,nrhs)
+    real(8) :: a_work(n,n), b_work(n,nrhs)  ! Working copies to preserve originals
     integer :: ipiv(n), info
     real(8), parameter :: tolerance = 1.0d-12
     
@@ -44,8 +45,12 @@ contains
     b(2,1) = 8.0d0
     b(3,1) = 8.0d0
     
-    ! Call DGESV to solve the system
-    call dgesv(n, nrhs, a, n, ipiv, b, n, info)
+    ! Create working copies since DGESV modifies inputs
+    a_work = a
+    b_work = b
+    
+    ! Call DGESV to solve the system (using working copies)
+    call dgesv(n, nrhs, a_work, n, ipiv, b_work, n, info)
     
     ! Check that the solution completed successfully
     if (info /= 0) then
@@ -55,21 +60,21 @@ contains
     end if
     
     ! Check that the solution is correct (x = [1, 2, 3])
-    if (abs(b(1,1) - 1.0d0) > tolerance) then
+    if (abs(b_work(1,1) - 1.0d0) > tolerance) then
       print *, "ERROR: Incorrect solution for x(1)"
-      print *, "Expected: 1.0, Got:", b(1,1)
+      print *, "Expected: 1.0, Got:", b_work(1,1)
       errors = errors + 1
     end if
     
-    if (abs(b(2,1) - 2.0d0) > tolerance) then
+    if (abs(b_work(2,1) - 2.0d0) > tolerance) then
       print *, "ERROR: Incorrect solution for x(2)"
-      print *, "Expected: 2.0, Got:", b(2,1)
+      print *, "Expected: 2.0, Got:", b_work(2,1)
       errors = errors + 1
     end if
     
-    if (abs(b(3,1) - 3.0d0) > tolerance) then
+    if (abs(b_work(3,1) - 3.0d0) > tolerance) then
       print *, "ERROR: Incorrect solution for x(3)"
-      print *, "Expected: 3.0, Got:", b(3,1)
+      print *, "Expected: 3.0, Got:", b_work(3,1)
       errors = errors + 1
     end if
     
