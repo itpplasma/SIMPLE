@@ -10,7 +10,7 @@ on:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'push' || github.event_name == 'pull_request'
 
     steps:
@@ -64,7 +64,7 @@ jobs:
 
   build-docs:
     name: Build Documentation
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     container:
       image: texlive/texlive:latest
