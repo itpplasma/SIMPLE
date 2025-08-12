@@ -23,31 +23,135 @@ module samplers
 
   contains
   ! Functions #################################
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Generate random value in range
+  function random_in_range(min_val, max_val) result(value)
+    real(dp), intent(in) :: min_val, max_val
+    real(dp) :: value, rand_val
+    
+    call random_number(rand_val)
+    value = rand_val * (max_val - min_val) + min_val
+  end function random_in_range
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Generate random pitch angle
+  function random_pitch() result(pitch)
+    real(dp) :: pitch, rand_val
+    
+    call random_number(rand_val)
+    pitch = 2.0_dp * (rand_val - 0.5_dp)
+  end function random_pitch
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Generate random angles (theta and phi)
+  subroutine random_angles(theta, phi)
+    real(dp), intent(out) :: theta, phi
+    real(dp) :: rand_val
+    
+    call random_number(rand_val)
+    theta = twopi * rand_val
+    
+    call random_number(rand_val)
+    phi = twopi * rand_val
+  end subroutine random_angles
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize particle velocity
+  subroutine initialize_particle_velocity(z, normalized_v, pitch)
+    real(dp), dimension(:), intent(inout) :: z
+    real(dp), intent(in), optional :: normalized_v, pitch
+    
+    ! Set normalized velocity (default to 1.0)
+    if (present(normalized_v)) then
+      z(4) = normalized_v
+    else
+      z(4) = 1.0_dp
+    end if
+    
+    ! Set pitch angle (random if not provided)
+    if (present(pitch)) then
+      z(5) = pitch
+    else
+      z(5) = random_pitch()
+    end if
+  end subroutine initialize_particle_velocity
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Write particles to file
+  subroutine write_particles_to_file(filename, particles)
+    character(len=*), intent(in) :: filename
+    real(dp), dimension(:,:), intent(in) :: particles
+    integer :: ipart, unit_num
+    
+    unit_num = 1
+    open(unit_num, file=filename, recl=1024)
+    do ipart = 1, size(particles, 2)
+      write(unit_num, *) particles(:, ipart)
+    end do
+    close(unit_num)
+  end subroutine write_particles_to_file
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Read particles from file
+  subroutine read_particles_from_file(filename, particles)
+    character(len=*), intent(in) :: filename
+    real(dp), dimension(:,:), intent(out) :: particles
+    integer :: ipart, unit_num
+    
+    unit_num = 1
+    open(unit_num, file=filename, recl=1024)
+    do ipart = 1, size(particles, 2)
+      read(unit_num, *) particles(:, ipart)
+    end do
+    close(unit_num)
+  end subroutine read_particles_from_file
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute B field extrema
+  subroutine compute_b_extrema(bstart, bmin, bmax)
+    real(dp), dimension(:), intent(in) :: bstart
+    real(dp), intent(out) :: bmin, bmax
+    
+    bmax = maxval(bstart)
+    bmin = minval(bstart)
+  end subroutine compute_b_extrema
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Calculate grid parameters
+  subroutine calculate_grid_params(grid_density, xsize, ngrid, ntestpart)
+    real(dp), intent(in) :: grid_density
+    real(dp), intent(out) :: xsize
+    integer, intent(out) :: ngrid, ntestpart
+    
+    xsize = 2.0_dp * pi * grid_density  ! angle density
+    ngrid = int(1.0_dp / grid_density - 1.0_dp)
+    ntestpart = ngrid * ngrid  ! total angle points
+  end subroutine calculate_grid_params
   subroutine init_starting_surf
     use alpha_lifetime_sub, only : integrate_mfl_can
     use params, only: dphi, nper, npoiper, phibeg, thetabeg, volstart, &
         xstart, sbeg, bmin, bmax, bmod00
 
-    integer :: ierr=0
+    integer :: ierr = 0
     real(dp), dimension(npoiper*nper) :: bstart
 
+    ! Initialize arrays
+    xstart = 0.0_dp
+    bstart = 0.0_dp
+    volstart = 0.0_dp
 
-    xstart=0.d0
-    bstart=0.d0
-    volstart=0.d0
-
+    ! Integrate along magnetic field line
     call integrate_mfl_can( &
-      npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
-      xstart,bstart,volstart,bmod00,ierr)
+      npoiper*nper, dphi, sbeg(1), phibeg, thetabeg, &
+      xstart, bstart, volstart, bmod00, ierr)
 
-    if(ierr.ne.0) then
-      print *,'starting field line has points outside the chamber'
-      stop
-    endif
+    if (ierr /= 0) then
+      error stop 'Starting field line has points outside the chamber'
+    end if
 
-  ! maximum value of B module:
-    bmax=maxval(bstart)
-    bmin=minval(bstart)
+    ! Compute B field extrema
+    call compute_b_extrema(bstart, bmin, bmax)
 
     print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
   end subroutine init_starting_surf
@@ -55,24 +159,14 @@ module samplers
   subroutine load_starting_points(zstart, filename)
     real(dp), dimension(:,:), intent(inout) :: zstart
     character(len=*), intent(in) :: filename
-    integer :: ipart
-
-    open(1,file=filename,recl=1024)
-    do ipart=1,size(zstart,2)
-      read(1,*) zstart(:,ipart)
-    enddo
-    close(1)
+    
+    call read_particles_from_file(filename, zstart)
   end subroutine load_starting_points
 
   subroutine save_starting_points(zstart)
     real(dp), dimension(:,:), intent(in) :: zstart
-    integer :: ipart
-
-    open(1,file=START_FILE,recl=1024)
-    do ipart=1,size(zstart,2)
-      write(1,*) zstart(:,ipart)
-    enddo
-    close(1)
+    
+    call write_particles_to_file(START_FILE, zstart)
   end subroutine save_starting_points
 
   subroutine sample_read(zstart, filename)
@@ -88,35 +182,29 @@ module samplers
     use params, only: isw_field_type, num_surf
     use field_can_mod, only : can_to_ref
 
-    real(dp), intent(in) :: s_inner
-    real(dp), intent(in) :: s_outer
-    real(dp) :: tmp_rand
-    real(dp) :: r,vartheta,varphi
+    real(dp), intent(in) :: s_inner, s_outer
     real(dp), dimension(:,:), intent(inout) :: zstart
+    real(dp) :: r, vartheta, varphi
     integer :: ipart
 
-    ! If user wants to do volume with 0 or 1 surfaces,
-    !   we "add" the constraints, therefore having 2 surfaces.
-    if (2 /= num_surf) then
+    ! Ensure we have 2 surfaces for volume sampling
+    if (num_surf /= 2) then
       num_surf = 2
-    endif
+    end if
 
-    do ipart=1,size(zstart,2)
-      call random_number(tmp_rand)
-      r = tmp_rand * (s_outer - s_inner) + s_inner
-
-      call random_number(tmp_rand)
-      vartheta=twopi*tmp_rand
-      call random_number(tmp_rand)
-      varphi=twopi*tmp_rand
-      ! we store starting points in reference coordinates:
-      call can_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
-      ! normalized velocity module z(4) = v / v_0:
-      zstart(4,ipart)=1.d0
-      ! starting pitch z(5)=v_\parallel / v:
-      call random_number(tmp_rand)
-      zstart(5,ipart)=2.d0*(tmp_rand-0.5d0)
-    enddo
+    do ipart = 1, size(zstart, 2)
+      ! Generate random radius within range
+      r = random_in_range(s_inner, s_outer)
+      
+      ! Generate random angles
+      call random_angles(vartheta, varphi)
+      
+      ! Convert to reference coordinates
+      call can_to_ref([r, vartheta, varphi], zstart(1:3, ipart))
+      
+      ! Initialize particle velocity
+      call initialize_particle_velocity(zstart(:, ipart))
+    end do
 
     call save_starting_points(zstart)
 
@@ -127,25 +215,21 @@ module samplers
     use binsrc_sub, only: binsrc
 
     real(dp), dimension(:,:), intent(inout) :: zstart
-
-    real(dp) :: r,vartheta,varphi
     real(dp) :: xi
     integer :: ipart, i
 
-    do ipart=1,size(zstart,2)
+    do ipart = 1, size(zstart, 2)
+      ! Select random point on field line surface
       call random_number(xi)
-      call binsrc(volstart,1,npoiper*nper,xi,i)
-      ibins=i
-      ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
-      r=xstart(1,i)
-      vartheta=xstart(2,i)
-      varphi=xstart(3,i)
-
-      zstart(1:3,ipart)=xstart(:,i)
-      zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
-      call random_number(xi)
-      zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
-    enddo
+      call binsrc(volstart, 1, npoiper*nper, xi, i)
+      ibins = i
+      
+      ! Copy coordinates from starting surface
+      zstart(1:3, ipart) = xstart(:, i)
+      
+      ! Initialize particle velocity
+      call initialize_particle_velocity(zstart(:, ipart))
+    end do
 
     call save_starting_points(zstart)
 
@@ -158,45 +242,54 @@ module samplers
 
     real(dp), dimension(:,:), allocatable, intent(inout) :: zstart
     real(dp), intent(in) :: grid_density
-    real(dp) :: xi, xsize_real
-    integer :: xsize, ngrid, ipart, jpart, lidx
+    real(dp) :: xsize
+    integer :: ngrid, ipart, jpart, lidx
 
-    xsize_real = (2*pi) * grid_density !angle density
-    xsize = int(xsize_real)
-    ngrid = int((1 / grid_density) - 1)
-    ntestpart = ngrid ** 2 !number of total angle points
+    ! Calculate grid parameters
+    call calculate_grid_params(grid_density, xsize, ngrid, ntestpart)
 
-    ! Resize particle coord. arrays and result memory.
-    if (allocated(zstart)) deallocate(zstart)
-    if (allocated(zend)) deallocate(zend)
-    allocate(zstart(zstart_dim1,ntestpart), zend(zstart_dim1,ntestpart))
-    if (allocated(times_lost)) deallocate(times_lost)
-    if (allocated(trap_par)) deallocate(trap_par)
-    if (allocated(perp_inv)) deallocate(perp_inv)
-    if (allocated(iclass)) deallocate(iclass)
-    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+    ! Reallocate arrays for new particle count
+    call reallocate_grid_arrays(zstart, ntestpart)
 
-    do ipart=1,ngrid
-      zstart(1,ipart) = sbeg(1)
-      zstart(2,ipart) = xsize_real * ipart
-      zstart(3,ipart) = xsize_real * ipart
-      zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
-      call random_number(xi)
-      zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
-      do jpart=1,ngrid
-        lidx = (jpart-1)*ntestpart+ipart
-        zstart(1,lidx) = sbeg(1)
-        zstart(2,lidx) = xsize_real * ipart
-        zstart(3,lidx) = xsize_real * jpart
-        zstart(4,lidx) = 1.d0  ! normalized velocity module z(4) = v / v_0
-        call random_number(xi)
-        zstart(5,lidx)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
+    ! Generate grid of particles
+    do ipart = 1, ngrid
+      do jpart = 1, ngrid
+        lidx = (jpart - 1) * ngrid + ipart
+        zstart(1, lidx) = sbeg(1)
+        zstart(2, lidx) = xsize * ipart
+        zstart(3, lidx) = xsize * jpart
+        call initialize_particle_velocity(zstart(:, lidx))
       end do
-    enddo
+    end do
 
     call save_starting_points(zstart)
 
   end subroutine sample_grid
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Reallocate arrays for grid sampling
+  subroutine reallocate_grid_arrays(zstart, ntestpart_new)
+    use params, only: zstart_dim1, zend, times_lost, trap_par, perp_inv, iclass
+    
+    real(dp), dimension(:,:), allocatable, intent(inout) :: zstart
+    integer, intent(in) :: ntestpart_new
+    
+    ! Deallocate existing arrays
+    if (allocated(zstart)) deallocate(zstart)
+    if (allocated(zend)) deallocate(zend)
+    if (allocated(times_lost)) deallocate(times_lost)
+    if (allocated(trap_par)) deallocate(trap_par)
+    if (allocated(perp_inv)) deallocate(perp_inv)
+    if (allocated(iclass)) deallocate(iclass)
+    
+    ! Allocate with new size
+    allocate(zstart(zstart_dim1, ntestpart_new))
+    allocate(zend(zstart_dim1, ntestpart_new))
+    allocate(times_lost(ntestpart_new))
+    allocate(trap_par(ntestpart_new))
+    allocate(perp_inv(ntestpart_new))
+    allocate(iclass(3, ntestpart_new))
+  end subroutine reallocate_grid_arrays
 
   subroutine sample_random_batch(zstart, reuse_existing)
   ! Get random batch from preexisting zstart, allows reuse.

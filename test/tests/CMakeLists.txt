@@ -82,6 +82,10 @@ target_link_libraries(test_collis.x simple)
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
 
+add_executable (test_samplers_refactored.x test_samplers_refactored.f90)
+target_link_libraries(test_samplers_refactored.x simple)
+add_test(NAME test_samplers_refactored COMMAND test_samplers_refactored.x)
+
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
