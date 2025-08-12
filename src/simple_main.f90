@@ -22,6 +22,185 @@ module simple_main
 
   contains
 
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize simulation environment
+  subroutine initialize_simulation_environment()
+    use magfie_sub, only : init_magfie, VMEC
+    use timing, only : print_phase_time
+    
+    call print_parameters()
+    call print_phase_time('Parameter printing completed')
+    
+    if (swcoll) then
+      call init_collisions()
+      call print_phase_time('Collision initialization completed')
+    endif
+    
+    call init_magfie(VMEC)
+    call print_phase_time('VMEC magnetic field initialization completed')
+    
+    call init_starting_surf()
+    call print_phase_time('Starting surface initialization completed')
+  end subroutine initialize_simulation_environment
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Sample particles based on start mode
+  subroutine sample_particles_by_mode()
+    use samplers, only: sample, START_FILE
+    use timing, only : print_phase_time
+    
+    select case(startmode)
+    case(1)
+      call sample_grid_or_default()
+    case(2)
+      call sample(zstart, START_FILE)
+    case(3)
+      call sample(special_ants_file)
+    case(4)
+      call sample(zstart, reuse_batch)
+    case(5)
+      call sample_volume_range()
+    case default
+      error stop 'Unknown startmode'
+    end select
+    
+    call print_phase_time('Particle sampling completed')
+  end subroutine sample_particles_by_mode
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Sample particles on grid or default
+  subroutine sample_grid_or_default()
+    use samplers, only: sample
+    
+    if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
+      call sample(zstart, grid_density)
+    else
+      call sample(zstart)
+    endif
+  end subroutine sample_grid_or_default
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Sample particles in volume range
+  subroutine sample_volume_range()
+    use samplers, only: sample
+    
+    select case(num_surf)
+    case(0)
+      call sample(zstart, 0.0d0, 1.0d0)
+    case(1)
+      call sample(zstart, 0.0d0, sbeg(1))
+    case(2)
+      call sample(zstart, sbeg(1), sbeg(num_surf))
+    case default
+      error stop 'Invalid surface range for volume sample (num_surf > 2)'
+    end select
+  end subroutine sample_volume_range
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Trace all particle orbits in parallel
+  subroutine trace_all_orbits(norb)
+    use timing, only : print_phase_time
+    
+    type(Tracer), intent(inout) :: norb
+    integer :: i
+    
+    !$omp parallel firstprivate(norb)
+    !$omp do
+    do i = 1, ntestpart
+      call report_progress(i)
+      call trace_orbit(norb, i)
+    end do
+    !$omp end do
+    !$omp end parallel
+    
+    call print_phase_time('Parallel particle tracing completed')
+  end subroutine trace_all_orbits
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Report particle tracing progress
+  subroutine report_progress(particle_index)
+    integer, intent(in) :: particle_index
+    
+    !$omp critical
+    kpart = kpart + 1
+    print *, kpart, ' / ', ntestpart, 'particle: ', particle_index, &
+             'thread: ', omp_get_thread_num()
+    !$omp end critical
+  end subroutine report_progress
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Normalize confinement statistics
+  subroutine normalize_statistics()
+    use timing, only : print_phase_time
+    
+    confpart_pass = confpart_pass / ntestpart
+    confpart_trap = confpart_trap / ntestpart
+    
+    call print_phase_time('Statistics normalization completed')
+  end subroutine normalize_statistics
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Write loss times to file
+  subroutine write_loss_times()
+    integer :: i
+    
+    open(1, file='times_lost.dat', recl=1024)
+    do i = 1, ntestpart
+      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), &
+                 perp_inv(i), zend(:,i)
+    enddo
+    close(1)
+  end subroutine write_loss_times
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Calculate and write average inverse loss time
+  subroutine write_average_inverse_loss_time()
+    integer :: i, num_lost
+    real(dp) :: inverse_times_lost_sum
+    
+    num_lost = 0
+    inverse_times_lost_sum = 0.0d0
+    
+    do i = 1, ntestpart
+      if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
+        num_lost = num_lost + 1
+        inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
+      end if
+    enddo
+    
+    if (num_lost > 0) then
+      open(1, file='avg_inverse_t_lost.dat', recl=1024)
+      write(1,*) inverse_times_lost_sum / num_lost
+      close(1)
+    endif
+  end subroutine write_average_inverse_loss_time
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Write confinement fraction time series
+  subroutine write_confinement_fraction()
+    integer :: i
+    
+    open(1, file='confined_fraction.dat', recl=1024)
+    do i = 1, ntimstep
+      write(1,*) dble(i-1)*dtau/v0, confpart_pass(i), confpart_trap(i), ntestpart
+    enddo
+    close(1)
+  end subroutine write_confinement_fraction
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Write classification data if needed
+  subroutine write_classification_data()
+    integer :: i
+    
+    if (ntcut > 0 .or. class_plot) then
+      open(1, file='class_parts.dat', recl=1024)
+      do i = 1, ntestpart
+        write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
+      enddo
+      close(1)
+    endif
+  end subroutine write_classification_data
+
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use field, only : field_from_file
     use simple, only : init_vmec
@@ -44,86 +223,32 @@ module simple_main
 
 
   subroutine run(norb)
-    use magfie_sub, only : init_magfie, VMEC
-    use samplers, only: sample, START_FILE
+    use magfie_sub, only : init_magfie
     use timing, only : print_phase_time
+    
     type(Tracer), intent(inout) :: norb
-    integer :: i
-
-    call print_parameters
-    call print_phase_time('Parameter printing completed')
     
-    if (swcoll) then
-      call init_collisions
-      call print_phase_time('Collision initialization completed')
-    endif
-
-    call init_magfie(VMEC)
-    call print_phase_time('VMEC magnetic field initialization completed')
+    ! Initialize simulation environment
+    call initialize_simulation_environment()
     
-    call init_starting_surf
-    call print_phase_time('Starting surface initialization completed')
-
-    !sample starting positions
-    if (1 == startmode) then
-      ! if grid_density is set, we override ntestpart!
-      if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
-        call sample(zstart, grid_density)
-      else
-        call sample(zstart)
-      endif
-
-    elseif (2 == startmode) then
-      call sample(zstart, START_FILE)
-
-    elseif (3 == startmode) then
-      call sample(special_ants_file)
-
-    elseif (4 == startmode) then
-      call sample(zstart, reuse_batch)
-
-    elseif (5 == startmode) then
-      if (0 == num_surf) then
-        call sample(zstart, 0.0d0, 1.0d0)
-      elseif (1 == num_surf) then
-        call sample(zstart, 0.0d0, sbeg(1))
-      elseif (2 == num_surf) then
-        call sample(zstart, sbeg(1), sbeg(num_surf))
-      else
-        print *, 'Invalid surface range for volume sample defined (2 < num_surf), stopping.'
-        stop
-      endif
-
-    else
-      print *, 'Unknown startmode: ', startmode
-    endif
-    call print_phase_time('Particle sampling completed')
-
-
+    ! Sample particles based on configuration
+    call sample_particles_by_mode()
+    
     if (generate_start_only) stop 'stopping after generating start.dat'
-
+    
+    ! Initialize field for orbit integration
     call init_magfie(isw_field_type)
     call print_phase_time('Field type initialization completed')
-
-    call init_counters
+    
+    ! Initialize counters for statistics
+    call init_counters()
     call print_phase_time('Counter initialization completed')
-
-    !$omp parallel firstprivate(norb)
-    !$omp do
-    do i = 1, ntestpart
-      !$omp critical
-      kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
-      !$omp end critical
-      call trace_orbit(norb, i)
-    end do
-    !$omp end do
-    !$omp end parallel
-    call print_phase_time('Parallel particle tracing completed')
-
-    confpart_pass=confpart_pass/ntestpart
-    confpart_trap=confpart_trap/ntestpart
-    call print_phase_time('Statistics normalization completed')
+    
+    ! Trace all particle orbits in parallel
+    call trace_all_orbits(norb)
+    
+    ! Normalize statistics
+    call normalize_statistics()
 
   end subroutine run
 
@@ -314,42 +439,13 @@ module simple_main
 
 
   subroutine write_output
-
-    integer :: i, num_lost
-    real(dp) :: inverse_times_lost_sum
-
-    open(1,file='times_lost.dat',recl=1024)
-    num_lost = 0
-    inverse_times_lost_sum = 0.0d0
-    do i=1,ntestpart
-      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
-      if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
-        num_lost = num_lost + 1
-        inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
-      end if
-    enddo
-    close(1)
-
-    if (num_lost > 0) then
-      open(1,file='avg_inverse_t_lost.dat',recl=1024) ! Write average loss time
-      write(1,*) inverse_times_lost_sum/num_lost
-      close(1)
-    endif
-
-    open(1,file='confined_fraction.dat',recl=1024)
-    do i=1,ntimstep
-      write(1,*) dble(i-1)*dtau/v0,confpart_pass(i),confpart_trap(i),ntestpart
-    enddo
-    close(1)
-
-    if (ntcut>0 .or. class_plot) then
-        open(1,file='class_parts.dat',recl=1024)
-        do i=1,ntestpart
-        write(1,*) i, zstart(1,i), perp_inv(i), iclass(:,i)
-        enddo
-        close(1)
-    endif
-
+    ! Write all simulation output files
+    
+    call write_loss_times()
+    call write_average_inverse_loss_time()
+    call write_confinement_fraction()
+    call write_classification_data()
+    
   end subroutine write_output
 
 end module simple_main
