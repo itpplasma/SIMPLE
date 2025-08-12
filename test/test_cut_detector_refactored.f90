@@ -151,11 +151,18 @@ contains
         if (cd%kper /= 3) test_passed = .false.
         if (abs(phiper - 3.0d0) > 1.0d-15) test_passed = .false.
         
-        ! Advance to cut detection point
+        ! Test that cut is NOT found without actual crossing
         cd%iper = nplagr/2 - 1
         call cd%detect_period_crossing(3.0d0, phiper, cut_found)
         
-        ! Should find cut when counter reaches nplagr/2
+        ! Should NOT find cut without crossing (correct behavior)
+        if (cut_found) test_passed = .false.
+        
+        ! Now test with actual crossing at the right counter value
+        cd%iper = nplagr/2 - 1
+        call cd%detect_period_crossing(3.1d0, phiper, cut_found)
+        
+        ! Should find cut with both crossing AND counter at nplagr/2
         if (.not. cut_found) test_passed = .false.
         
         if (test_passed) then
