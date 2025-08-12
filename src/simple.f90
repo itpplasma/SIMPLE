@@ -1,4 +1,5 @@
 module simple
+  use iso_fortran_env, only: real64
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -13,18 +14,20 @@ module simple
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
+  integer, parameter :: dp = real64
+
 implicit none
 save
 
 public
 
   type :: Tracer
-    double precision :: fper
-    double precision :: dtau, dtaumin, v0
+    real(dp) :: fper
+    real(dp) :: dtau, dtaumin, v0
     integer          :: n_e, n_d
 
     integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-    double precision :: relerr
+    real(dp) :: relerr
 
     type(FieldCan) :: f
     type(SymplecticIntegrator) :: si
@@ -46,10 +49,10 @@ contains
 
     character(*), intent(in) :: vmec_file
     integer, intent(in) :: ans_s, ans_tp, amultharm
-    double precision, intent(out) :: fper
+    real(dp), intent(out) :: fper
 
     integer             :: L1i
-    double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
+    real(dp)    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
 
     ! TODO: Remove side effects
     netcdffile = vmec_file
@@ -73,12 +76,12 @@ contains
 
     type(Tracer) :: self
     integer, intent(in), optional :: Z_charge, m_mass
-    double precision, intent(in), optional :: E_kin
+    real(dp), intent(in), optional :: E_kin
     integer, intent(in), optional :: npoints  ! Integrator resolution. Number of
     ! integration points for strongly passing particles around the torus
 
     integer, intent(in), optional :: store_step       ! Store every X timesteps
-    double precision, intent(in), optional :: relerr  ! Relative error
+    real(dp), intent(in), optional :: relerr  ! Relative error
 
     if (present(Z_charge)) self%n_e = Z_charge
     if (present(m_mass)) self%n_d = m_mass
@@ -116,12 +119,12 @@ contains
     !
     type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
-    double precision, intent(in) :: z0(:)
-    double precision, intent(in) :: dtau, dtaumin
-    double precision, intent(in) :: rtol_init
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(in) :: dtau, dtaumin
+    real(dp), intent(in) :: rtol_init
     integer, intent(in) :: mode_init ! 1 = expl.-impl. Euler, 2 = impl.-expl. Euler, 3 = Midpoint
 
-    double precision :: z(4)
+    real(dp) :: z(4)
 
     if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
       print *, 'dtau = ', dtau, ' dtaumin = ', dtaumin
@@ -147,10 +150,10 @@ contains
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(Tracer), intent(inout) :: self
-    double precision, intent(inout) :: s, th, ph, lam
+    real(dp), intent(inout) :: s, th, ph, lam
     integer, intent(out) :: ierr
 
-    double precision, dimension(5) :: z
+    real(dp), dimension(5) :: z
 
     z(1) = s
     z(2) = th
@@ -170,7 +173,7 @@ contains
     use alpha_lifetime_sub, only : orbit_timestep_axis
 
     type(Tracer), intent(inout) :: self
-    double precision, intent(inout) :: z(:)
+    real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
     call orbit_timestep_axis(z, self%dtau, self%dtau, self%relerr, ierr)
@@ -179,7 +182,7 @@ contains
   subroutine timestep_sympl_z(si, f, z, ierr)
     type(SymplecticIntegrator), intent(inout) :: si
     type(FieldCan), intent(inout) :: f
-    double precision, intent(inout) :: z(:)
+    real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
     if (z(1) < 0.0 .or. z(1) > 1.0) then
