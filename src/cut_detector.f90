@@ -52,9 +52,8 @@ module cut_detector
       !---------------------------------------------------------------------------
       ! Prepare calculation of orbit tip by interpolation and buffer for Poincare plot:
 
-      do i=1,nplagr
-        self%ipoi(i)=i
-      enddo
+      ! Initialize ipoi array for circular buffer indexing
+      self%ipoi = [(i, i=1,nplagr)]
 
       !--------------------------------
       ! Initialize tip detector
@@ -72,9 +71,6 @@ module cut_detector
       ! End initialize period crossing detector
       !--------------------------------
       self%par_inv = 0.0d0
-      
-      ! Initialize ipoi array for circular buffer indexing
-      self%ipoi = [(i, i=1,nplagr)]
       !
 
       ! End prepare calculation of orbit tip by interpolation
