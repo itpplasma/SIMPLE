@@ -95,17 +95,157 @@ module params
 
 contains
 
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Validate configuration parameters
+  subroutine validate_configuration()
+    ! Validates that configuration parameters are within acceptable ranges
+    
+    ! Check for incompatible settings
+    if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
+      error stop 'Collisions are incompatible with classification'
+    endif
+    
+    ! Validate physical parameters
+    if (ntestpart <= 0) then
+      error stop 'Number of test particles must be positive'
+    endif
+    
+    if (ntimstep <= 0) then
+      error stop 'Number of time steps must be positive'
+    endif
+    
+    if (trace_time <= 0.0d0) then
+      error stop 'Trace time must be positive'
+    endif
+    
+    if (relerr <= 0.0d0 .or. relerr >= 1.0d0) then
+      error stop 'Relative error must be between 0 and 1'
+    endif
+    
+    ! Validate batch parameters
+    if (batch_size <= 0) then
+      error stop 'Batch size must be positive'
+    endif
+    
+    if (batch_size > ntestpart .and. batch_size /= 2000000000) then
+      print *, 'Warning: batch_size exceeds ntestpart, batch mode disabled'
+    endif
+  end subroutine validate_configuration
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Calculate derived parameters
+  subroutine calculate_derived_params(E_alpha, L1i)
+    real(dp), intent(in) :: E_alpha
+    integer, intent(in) :: L1i
+    
+    ! Calculate velocity and Larmor radius
+    v0 = sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
+    rlarm = v0*n_d*p_mass*c/(n_e*e_charge)
+    ro0 = rlarm
+    
+    ! Set inverse relativistic temperature (neglect relativistic effects)
+    rmu = 1d8
+    
+    ! Calculate time parameters
+    tau = trace_time*v0
+    dtau = tau/dble(ntimstep-1)
+    
+    ! Field line integration parameters
+    dphi = 2.d0*pi/(L1i*npoiper)
+    dtaumin = 2.d0*pi*rbig/npoiper2
+    ntau = ceiling(dtau/dtaumin)
+    dtaumin = dtau/ntau
+    
+    ! Other derived parameters
+    ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
+    norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
+    nfp = L1i*norbper
+    fper = 2d0*pi/dble(L1i)
+    
+    ! Initialize Lagrange interpolation parameters
+    zerolam = 0.d0
+    nplagr = 4
+    nder = 0
+    npl_half = nplagr/2
+  end subroutine calculate_derived_params
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Load batch indices from file
+  function load_batch_indices(batch_size) result(success)
+    integer, intent(in) :: batch_size
+    logical :: success
+    integer :: iostat, i
+    character, dimension(:), allocatable :: batch_file
+    
+    success = .false.
+    
+    allocate(batch_file(batch_size))
+    allocate(idx(batch_size))
+    
+    open(1, file='batch.dat', recl=batch_size, iostat=iostat)
+    if (iostat /= 0) then
+      deallocate(batch_file)
+      deallocate(idx)
+      return
+    endif
+    
+    do i = 1, batch_size
+      read(1, iostat=iostat) batch_file(i)
+      if (iostat /= 0) then
+        close(1)
+        deallocate(batch_file)
+        deallocate(idx)
+        return
+      endif
+      idx(i) = ichar(batch_file(i))
+    end do
+    
+    close(1)
+    deallocate(batch_file)
+    success = .true.
+  end function load_batch_indices
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Generate random batch indices
+  subroutine generate_batch_indices(batch_size, ntestpart_in)
+    integer, intent(in) :: batch_size, ntestpart_in
+    integer :: i, n, iostat
+    real :: ran_tmp
+    
+    allocate(idx(batch_size))
+    
+    call srand(ran_seed)
+    
+    ! Generate random indices, leaving out upper 1% as margin
+    do i = 0, batch_size
+      call random_number(ran_tmp)
+      idx(i) = floor(ceiling((ntestpart_in - (ntestpart_in*0.01))) * ran_tmp)
+    end do
+    
+    ! Sort and remove duplicates
+    call sort_idx(idx, batch_size)
+    
+    ! Save to file
+    open(1, file='batch.dat', recl=batch_size*2, iostat=iostat)
+    if (iostat == 0) then
+      do n = 1, batch_size
+        write(1, *) idx(n)
+      end do
+      close(1)
+    else
+      print *, 'Warning: Could not save batch indices to file'
+    endif
+  end subroutine generate_batch_indices
+
   subroutine read_config(config_file)
     character(256), intent(in) :: config_file
 
     open(1, file=config_file, status='old', action='read')
     read(1, nml=config)
+    close(1)
 
     call reset_seed_if_deterministic
-
-    if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
-      error stop 'Collisions are incompatible with classification'
-    endif
+    call validate_configuration
   end subroutine read_config
 
 
@@ -113,109 +253,52 @@ contains
     real(dp) :: E_alpha
     integer :: L1i
 
+    ! Calculate alpha particle energy
     E_alpha = 3.5d6/facE_al
 
-  ! set alpha energy, velocity, and Larmor radius
-    v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
-    rlarm=v0*n_d*p_mass*c/(n_e*e_charge)
-    ro0=rlarm
+    ! Get vacuum chamber parameters
+    call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)
+    rbig = rt0
+    
+    ! Calculate all derived parameters
+    call calculate_derived_params(E_alpha, L1i)
 
-  ! Neglect relativistic effects by large inverse relativistic temperature
-    rmu=1d8
-
-  ! normalized slowing down time:
-    tau=trace_time*v0
-  ! normalized time step:
-    dtau=tau/dble(ntimstep-1)
-  ! parameters for the vacuum chamber:
-    call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) ! TODO: why again?
-    rbig=rt0
-  ! field line integration step step over phi (to check chamber wall crossing)
-    dphi=2.d0*pi/(L1i*npoiper)
-  ! orbit integration time step (to check chamber wall crossing)
-    dtaumin=2.d0*pi*rbig/npoiper2  ! ntimstep =
-    ntau=ceiling(dtau/dtaumin)
-    dtaumin=dtau/ntau
-
-    ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
-
-    norbper=ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
-    nfp=L1i*norbper         !<= guess for footprint number
-
-    zerolam=0.d0
-    nplagr=4
-    nder=0
-    npl_half=nplagr/2
-
-    fper = 2d0*pi/dble(L1i)   !<= field period
-
+    ! Initialize batch processing if needed
     call init_batch
+    
+    ! Allocate arrays based on configuration
     call reallocate_arrays
   end subroutine params_init
 
   subroutine init_batch
-    integer :: iostat, i, n
-    real :: ran_tmp
-    character, dimension (:), allocatable :: batch_file
-    logical :: old_batch
+    logical :: old_batch, batch_loaded
 
-    !See if batch is wanted, if yes find random or re-use from previous file.
-    if (ntestpart > batch_size) then
-      if (reuse_batch) then
-        inquire(file="batch.dat", exist=old_batch)
-
-        if (old_batch) then
-          allocate(batch_file(batch_size))
-          allocate(idx(batch_size))
-          open(1, file='batch.dat', recl=batch_size, iostat=iostat)
-          if (iostat /= 0) goto 666
-
-          do i=1,batch_size
-            read(1,iostat=iostat) batch_file(i)
-            if (iostat /= 0) goto 667
-            idx(i) = ichar(batch_file(i))
-          end do
-          deallocate(batch_file)
-          close(1)
-        else !old_batch
-          ! no old batch file found, so we pretend the user knew this and set the flag to :False.
-          reuse_batch = .False.
-        endif !old_batch
-      endif !reuse_batch
-
-      if (.not.reuse_batch) then
-        !Create a random list(batch_size) of indices using ran_seed.
-          allocate(idx(batch_size))
-
-          call srand(ran_seed)
-
-          do i=0,batch_size
-            call random_number(ran_tmp)
-            !Create randomized indices from the amount available, leaving out the upper 1%
-            !as margin for later sorting and replacing of duplicates (relevant for smaller batches)
-            idx(i) = floor(ceiling((ntestpart - (ntestpart*0.01))) * ran_tmp)
-          end do
-
-          call sort_idx(idx, batch_size)
-
-          open(1, file='batch.dat', recl=batch_size*2, iostat=iostat)
-
-          do n=1, batch_size
-            write(1, *) idx(n)
-          end do
-          close(1)
-      endif !reuse_batch again
-
-      !Set ntestpart to batch_size for rest of the run.
-      ntestpart = batch_size
-    endif !batches wanted
-
-    return
-
-    666 print *, iostat
-    error stop
-    667 print *, iostat
-    error stop
+    ! Check if batch processing is needed
+    if (ntestpart <= batch_size) return
+    
+    if (reuse_batch) then
+      ! Try to reuse existing batch file
+      inquire(file="batch.dat", exist=old_batch)
+      
+      if (old_batch) then
+        batch_loaded = load_batch_indices(batch_size)
+        if (.not. batch_loaded) then
+          print *, 'Warning: Could not load batch file, generating new indices'
+          reuse_batch = .false.
+        endif
+      else
+        ! No batch file found, generate new one
+        reuse_batch = .false.
+      endif
+    endif
+    
+    if (.not. reuse_batch) then
+      ! Generate new random batch indices
+      call generate_batch_indices(batch_size, ntestpart)
+    endif
+    
+    ! Update ntestpart to batch_size for the rest of the run
+    ntestpart = batch_size
   end subroutine init_batch
 
   subroutine reallocate_arrays
