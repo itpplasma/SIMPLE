@@ -17,9 +17,6 @@ use check_orbit_type_sub, only : check_orbit_type
   ! Define real(dp) kind parameter
   integer, parameter :: dp = kind(1.0d0)
 
-! Define real(dp) kind parameter
-integer, parameter :: dp = kind(1.0d0)
-
   ! output files:
   ! iaaa_bou - trapped-passing boundary
   ! iaaa_pnt - forced regular passing
