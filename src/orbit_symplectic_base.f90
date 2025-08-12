@@ -7,7 +7,7 @@ implicit none
 
 logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
-! Integration methods
+  ! Integration methods
 integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
   MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
 
@@ -15,7 +15,7 @@ type :: SymplecticIntegrator
   double precision :: atol
   double precision :: rtol
 
-! Current phase-space coordinates z and old pth
+  ! Current phase-space coordinates z and old pth
   double precision, dimension(4) :: z  ! z = (r, th, ph, pphi)
   double precision :: pthold
 
@@ -25,10 +25,10 @@ type :: SymplecticIntegrator
   double precision :: pabs
 end type SymplecticIntegrator
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! Composition method with 2s internal stages according to Hairer, 2002 V.3.1
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+  ! Composition method with 2s internal stages according to Hairer, 2002 V.3.1
+  !
 integer, parameter :: S_MAX = 32
 type :: MultistageIntegrator
   integer :: s
@@ -175,10 +175,10 @@ subroutine coeff_rk_lobatto(n, a, ahat, b, c)
 end subroutine coeff_rk_lobatto
 
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
-! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
-!
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+  ! Lobatto (IIIA)-(IIIB) Runge-Kutta method with s internal stages (n=4*s variables)
+  !
 subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   !
   type(SymplecticIntegrator), intent(inout) :: si
