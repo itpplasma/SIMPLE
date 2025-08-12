@@ -1,5 +1,4 @@
 module simple_main
-  use iso_fortran_env, only: real64
   use omp_lib
   use util, only: pi, twopi, sqrt2
   use simple, only : init_sympl, Tracer
@@ -16,8 +15,10 @@ module simple_main
     ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
     field_input, isw_field_type, reuse_batch
 
-  integer, parameter :: dp = real64
   implicit none
+
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
 
   contains
 
