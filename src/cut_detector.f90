@@ -72,6 +72,9 @@ module cut_detector
       ! End initialize period crossing detector
       !--------------------------------
       self%par_inv = 0.0d0
+      
+      ! Initialize ipoi array for circular buffer indexing
+      self%ipoi = [(i, i=1,nplagr)]
       !
 
       ! End prepare calculation of orbit tip by interpolation
