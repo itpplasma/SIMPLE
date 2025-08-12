@@ -1,5 +1,5 @@
 module magfie_sub
-use, intrinsic :: iso_fortran_env, only: dp_kind => real64
+use, intrinsic :: iso_fortran_env, only: dp => real64
 use spline_vmec_sub
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
@@ -8,7 +8,7 @@ implicit none
 
 abstract interface
   subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-    use, intrinsic :: iso_fortran_env, only: dp_kind => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     !            x(i)   - set of 3 curvilinear space coordinates (input)
     !            bmod   - dimensionless magnetic field module: bmod=B/B_ref
     !            sqrtg  - Jacobian of space coordinates (square root of
@@ -20,9 +20,9 @@ abstract interface
     !            hctrvr - contravariant components of the unit vector along
     !                     the magnetic field
     !            hcurl  - contravariant components of the curl of this vector
-    real(dp_kind), intent(in) :: x(3)
-    real(dp_kind), intent(out) :: bmod,sqrtg
-    real(dp_kind), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: bmod,sqrtg
+    real(dp), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
   end subroutine magfie_base
 end interface
 
@@ -84,16 +84,16 @@ end subroutine init_magfie
   !
   implicit none
   !
-  real(dp_kind), parameter :: twopi=2.d0*3.14159265358979d0, hs=1.d-3, ht=hs*twopi, hp=ht/5.d0
+  real(dp), parameter :: twopi=2.d0*3.14159265358979d0, hs=1.d-3, ht=hs*twopi, hp=ht/5.d0
   !
-  real(dp_kind), intent(out) :: bmod,sqrtg
-  real(dp_kind) :: s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
+  real(dp), intent(out) :: bmod,sqrtg
+  real(dp) :: s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                       sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                       Bcovar_r,Bcovar_vartheta,Bcovar_varphi
-  real(dp_kind) :: cjac,bcov_s_vmec,bcov_t_vmec,bcov_p_vmec
-  real(dp_kind) :: dhs_dt,dhs_dp,dht_ds,dht_dp,dhp_ds,dhp_dt
-  real(dp_kind), dimension(3), intent(in) :: x
-  real(dp_kind), dimension(3), intent(out) :: bder,hcovar,hctrvr,hcurl
+  real(dp) :: cjac,bcov_s_vmec,bcov_t_vmec,bcov_p_vmec
+  real(dp) :: dhs_dt,dhs_dp,dht_ds,dht_dp,dhp_ds,dhp_dt
+  real(dp), dimension(3), intent(in) :: x
+  real(dp), dimension(3), intent(out) :: bder,hcovar,hctrvr,hcurl
   !
   ! Begin derivatives over s
   !
@@ -257,13 +257,13 @@ end subroutine init_magfie
   !  Called routines: canonical_field
   !
   !
-  real(dp_kind), intent(in) :: x(3)
-  real(dp_kind), intent(out) :: bmod,sqrtg
-  real(dp_kind), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod,sqrtg
+  real(dp), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
 
   logical :: fullset
   integer :: mode_secders
-  real(dp_kind) :: r,vartheta_c,varphi_c,                                           &
+  real(dp) :: r,vartheta_c,varphi_c,                                           &
                       A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                       sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
                       B_vartheta_c,dB_vartheta_c_dr,dB_vartheta_c_dt,dB_vartheta_c_dp, &
@@ -271,7 +271,7 @@ end subroutine init_magfie
                       d2sqg_rr,d2sqg_rt,d2sqg_rp,d2sqg_tt,d2sqg_tp,d2sqg_pp,           &
                       d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
                       d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp
-  real(dp_kind) :: Bctr_vartheta,Bctr_varphi,bmod2
+  real(dp) :: Bctr_vartheta,Bctr_varphi,bmod2
   !
   r=x(1)
   vartheta_c=x(2)
@@ -346,18 +346,18 @@ end subroutine init_magfie
   use vector_potentail_mod, only : torflux
   use boozer_sub, only : splint_boozer_coord
   !
-  real(dp_kind), intent(in) :: x(3)
-  real(dp_kind), intent(out) :: bmod,sqrtg
-  real(dp_kind), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod,sqrtg
+  real(dp), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
   !
-  real(dp_kind) :: r,vartheta_B,varphi_B,                                       &
+  real(dp) :: r,vartheta_B,varphi_B,                                       &
                       A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3, &
                       B_vartheta_B,dB_vartheta_B,d2B_vartheta_B,                   &
                       B_varphi_B,dB_varphi_B,d2B_varphi_B,Bmod_B,B_r
-  real(dp_kind), dimension(3) :: dBmod_B,dB_r
-  real(dp_kind), dimension(6) :: d2Bmod_B,d2B_r
+  real(dp), dimension(3) :: dBmod_B,dB_r
+  real(dp), dimension(6) :: d2Bmod_B,d2B_r
   !
-  real(dp_kind) :: aiota,Bctrvr_theta,Bctrvr_phi,sqrtgbmod
+  real(dp) :: aiota,Bctrvr_theta,Bctrvr_phi,sqrtgbmod
   !
   r=x(1)
   vartheta_B=x(2)
