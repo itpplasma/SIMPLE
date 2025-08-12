@@ -1,13 +1,14 @@
 module cut_detector
-    use iso_fortran_env, only: real64
     use util, only: twopi
     use simple, only: tstep
     use orbit_symplectic, only: SymplecticIntegrator
     use field_can_mod, only: FieldCan
     use params, only: debug
 
-    integer, parameter :: dp = real64
     implicit none
+
+    ! Define real(dp) kind parameter
+    integer, parameter :: dp = kind(1.0d0)
     save
 
     integer, parameter :: n_tip_vars = 6
