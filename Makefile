@@ -6,7 +6,7 @@ BUILD_NINJA := $(BUILD_DIR)/build.ninja
 # Common ctest command with optional verbose and test name filtering
 CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
-.PHONY: all configure reconfigure build test test-fast test-slow test-regression test-all install clean
+.PHONY: all configure reconfigure build test test-fast test-slow test-regression test-all install clean coverage coverage-build coverage-clean
 all: build
 
 $(BUILD_NINJA):
@@ -49,6 +49,23 @@ doc: configure
 
 fpm:
 	fpm build
+
+# Coverage targets
+# Build with coverage instrumentation using Profile build type  
+coverage-build:
+	$(MAKE) CONFIG=Profile FLAGS="-DENABLE_COVERAGE=ON"
+
+# Generate coverage report after running tests
+coverage: coverage-build
+	$(MAKE) CONFIG=Profile test-all
+	cmake --build $(BUILD_DIR) --target coverage
+	@echo "✅ Coverage data generated in $(BUILD_DIR)/coverage_filtered.info"
+
+# Clean coverage data
+coverage-clean:
+	find $(BUILD_DIR) -name "*.gcda" -delete
+	find $(BUILD_DIR) -name "*.gcno" -delete
+	rm -f $(BUILD_DIR)/coverage*.info
 
 clean:
 	rm -rf $(BUILD_DIR)
