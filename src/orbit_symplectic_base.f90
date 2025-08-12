@@ -1,11 +1,11 @@
 module orbit_symplectic_base
-  use iso_fortran_env, only: real64
 use field_can_mod, only: eval_field => evaluate, FieldCan, get_val, get_derivatives, &
   get_derivatives2
 
-  integer, parameter :: dp = real64
-
 implicit none
+
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
