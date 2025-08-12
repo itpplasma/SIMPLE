@@ -129,7 +129,6 @@ module samplers
     double precision :: xi
     integer :: ipart, i
 
-    call init_starting_surf
     do ipart=1,size(zstart,2)
       call random_number(xi)
       call binsrc(volstart,1,npoiper*nper,xi,i)

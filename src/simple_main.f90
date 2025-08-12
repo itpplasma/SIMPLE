@@ -5,7 +5,7 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
-  use samplers, only: sample
+  use samplers, only: sample, init_starting_surf
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
   use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
@@ -50,6 +50,7 @@ module simple_main
     if (swcoll) call init_collisions
 
     call init_magfie(VMEC)
+    call init_starting_surf
 
     !sample starting positions
     if (1 == startmode) then
