@@ -22,16 +22,26 @@ save
 public
 
   type :: Tracer
-    real(dp) :: fper
-    real(dp) :: dtau, dtaumin, v0
-    integer          :: n_e, n_d
-
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-    real(dp) :: relerr
-
+    ! Physical parameters
+    real(dp) :: fper              ! Field period
+    real(dp) :: v0                ! Reference velocity
+    integer  :: n_e, n_d          ! Charge and mass numbers
+    
+    ! Integration parameters
+    real(dp) :: dtau, dtaumin     ! Time steps
+    real(dp) :: relerr            ! Relative error tolerance
+    integer  :: integmode = 0     ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+    
+    ! Field and integrators
     type(FieldCan) :: f
     type(SymplecticIntegrator) :: si
     type(MultistageIntegrator) :: mi
+  contains
+    ! Improved type-bound procedures for better encapsulation
+    procedure :: init_parameters => tracer_init_parameters
+    procedure :: validate_timestep => tracer_validate_timestep
+    procedure :: normalize_velocity => tracer_normalize_velocity
+    procedure :: compute_larmor_radius => tracer_compute_larmor_radius
   end type Tracer
 
   interface tstep
@@ -44,35 +54,28 @@ contains
 
 
   subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)
-    use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
-    use vmecin_sub, only : stevvo
+    use spline_vmec_sub, only : spline_vmec_data
 
     character(*), intent(in) :: vmec_file
     integer, intent(in) :: ans_s, ans_tp, amultharm
     real(dp), intent(out) :: fper
 
-    integer             :: L1i
-    real(dp)    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
+    integer :: L1i
+    real(dp) :: RT0, R0i, cbfi, bz0i, bf0
 
-    ! TODO: Remove side effects
-    netcdffile = vmec_file
-    ns_s = ans_s
-    ns_tp = ans_tp
-    multharm = amultharm
+    ! Initialize VMEC parameters
+    call init_vmec_parameters(vmec_file, ans_s, ans_tp, amultharm)
 
     call spline_vmec_data ! initialize splines for VMEC field
-    call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
-    fper = twopi/dble(L1i)   !<= field period
-    print *, 'R0 = ', RT0, ' cm, fper = ', fper
-    call volume_and_B00(volume,B00)
-    print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
+    
+    ! Compute field geometry
+    call compute_field_geometry(RT0, R0i, L1i, cbfi, bz0i, bf0, fper)
   end subroutine init_vmec
 
 
   subroutine init_params(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
     ! Initializes normalization for velocity and Larmor radius based on kinetic energy
     ! of plasma particles (= temperature for thermal particles).
-    use new_vmec_stuff_mod, only : rmajor
 
     type(Tracer) :: self
     integer, intent(in), optional :: Z_charge, m_mass
@@ -83,36 +86,8 @@ contains
     integer, intent(in), optional :: store_step       ! Store every X timesteps
     real(dp), intent(in), optional :: relerr  ! Relative error
 
-    if (present(Z_charge)) self%n_e = Z_charge
-    if (present(m_mass)) self%n_d = m_mass
-    if (present(relerr)) self%relerr = relerr
-
-    ! Neglect relativistic effects by large inverse relativistic temperature
-    rmu=1d8
-
-    ! Reference velocity and normalized Larmor radius
-    if (present(E_kin)) then
-      self%v0 = sqrt(2.d0*E_kin*ev/(self%n_d*p_mass))
-    else
-      self%v0 = sqrt(2.d0*3.5d6*ev/(self%n_d*p_mass))
-    end if
-
-    ! Larmor radius times magnetic field:
-    ro0=self%v0*self%n_d*p_mass*c/(self%n_e*e_charge)
-
-    if (present(npoints)) then
-      self%dtaumin=twopi*rmajor*1.0d2/npoints
-    else
-      self%dtaumin=twopi*rmajor*1.0d2/256.0d0
-    end if
-
-   ! timestep where to get results
-    if (present(store_step)) then
-      self%dtau = store_step*self%dtaumin
-    else
-      self%dtau = self%dtaumin
-    end if
-
+    ! Use the new type-bound procedure for better encapsulation
+    call self%init_parameters(Z_charge, m_mass, E_kin, npoints, store_step, relerr)
   end subroutine init_params
 
   subroutine init_sympl(si, f, z0, dtau, dtaumin, rtol_init, mode_init)
@@ -126,19 +101,14 @@ contains
 
     real(dp) :: z(4)
 
+    ! Validate timestep parameters
     if(min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) > 1d-9*dtaumin) then
       print *, 'dtau = ', dtau, ' dtaumin = ', dtaumin
       error stop 'orbit_sympl_init - error: dtau/dtaumin not integer'
     endif
 
-    ! Initialize symplectic integrator
-    call eval_field(f, z0(1), z0(2), z0(3), 0)
-
-    si%pabs = z0(4)
-
-    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
-    f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
-    f%vpar = z0(4)*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+    ! Initialize symplectic field configuration
+    call init_symplectic_field(f, z0, si)
 
     z(1:3) = z0(1:3)  ! s, th, ph
     z(4) = f%vpar*f%hph + f%Aph/f%ro0 ! pphi
@@ -196,5 +166,135 @@ contains
     z(5) = f%vpar/(si%pabs*dsqrt(2d0))  ! alambda
 
   end subroutine timestep_sympl_z
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize Tracer parameters with validation
+  subroutine tracer_init_parameters(self, Z_charge, m_mass, E_kin, npoints, store_step, relerr)
+    use new_vmec_stuff_mod, only : rmajor
+    
+    class(Tracer), intent(inout) :: self
+    integer, intent(in), optional :: Z_charge, m_mass, npoints, store_step
+    real(dp), intent(in), optional :: E_kin, relerr
+    
+    ! Set parameters with defaults
+    if (present(Z_charge)) self%n_e = Z_charge
+    if (present(m_mass)) self%n_d = m_mass
+    if (present(relerr)) self%relerr = relerr
+    
+    ! Compute velocity and time stepping parameters
+    call self%normalize_velocity(E_kin)
+    call self%compute_larmor_radius()
+    call compute_timestep_parameters(self, npoints, store_step)
+  end subroutine tracer_init_parameters
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Validate timestep parameters
+  logical function tracer_validate_timestep(self, dtau, dtaumin) result(is_valid)
+    class(Tracer), intent(in) :: self
+    real(dp), intent(in) :: dtau, dtaumin
+    
+    real(dp) :: tolerance = 1d-9
+    
+    is_valid = min(dabs(mod(dtau, dtaumin)), dabs(mod(dtau, dtaumin)-dtaumin)) <= tolerance*dtaumin
+  end function tracer_validate_timestep
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Normalize velocity based on kinetic energy
+  subroutine tracer_normalize_velocity(self, E_kin)
+    class(Tracer), intent(inout) :: self
+    real(dp), intent(in), optional :: E_kin
+    
+    real(dp) :: energy
+    
+    ! Set energy with default for thermal particles
+    energy = 3.5d6*ev  ! Default thermal energy
+    if (present(E_kin)) energy = E_kin
+    
+    ! Neglect relativistic effects by large inverse relativistic temperature
+    rmu = 1d8
+    
+    ! Reference velocity
+    self%v0 = sqrt(2.d0*energy/(self%n_d*p_mass))
+  end subroutine tracer_normalize_velocity
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute Larmor radius
+  subroutine tracer_compute_larmor_radius(self)
+    class(Tracer), intent(in) :: self
+    
+    ! Larmor radius times magnetic field:
+    ro0 = self%v0*self%n_d*p_mass*c/(self%n_e*e_charge)
+  end subroutine tracer_compute_larmor_radius
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute timestep parameters for integration
+  subroutine compute_timestep_parameters(self, npoints, store_step)
+    use new_vmec_stuff_mod, only : rmajor
+    
+    type(Tracer), intent(inout) :: self
+    integer, intent(in), optional :: npoints, store_step
+    
+    integer :: n_integration_points = 256
+    
+    ! Set integration resolution
+    if (present(npoints)) n_integration_points = npoints
+    
+    self%dtaumin = twopi*rmajor*1.0d2/n_integration_points
+    
+    ! Set output timestep
+    if (present(store_step)) then
+      self%dtau = store_step*self%dtaumin
+    else
+      self%dtau = self%dtaumin
+    end if
+  end subroutine compute_timestep_parameters
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize VMEC field parameters
+  subroutine init_vmec_parameters(vmec_file, ans_s, ans_tp, amultharm)
+    character(*), intent(in) :: vmec_file
+    integer, intent(in) :: ans_s, ans_tp, amultharm
+    
+    ! TODO: Remove side effects - these should be passed as parameters
+    netcdffile = vmec_file
+    ns_s = ans_s
+    ns_tp = ans_tp
+    multharm = amultharm
+  end subroutine init_vmec_parameters
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Compute field geometry parameters
+  subroutine compute_field_geometry(RT0, R0i, L1i, cbfi, bz0i, bf0, fper)
+    use spline_vmec_sub, only : volume_and_B00
+    use vmecin_sub, only : stevvo
+    
+    real(dp), intent(out) :: RT0, R0i, cbfi, bz0i, bf0, fper
+    integer, intent(out) :: L1i
+    real(dp) :: volume, B00
+    
+    call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
+    fper = twopi/dble(L1i)   !<= field period
+    print *, 'R0 = ', RT0, ' cm, fper = ', fper
+    
+    call volume_and_B00(volume, B00)
+    print *, 'volume = ', volume, ' cm^3,  B_00 = ', B00, ' G'
+  end subroutine compute_field_geometry
+  
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  ! Helper: Initialize symplectic field configuration
+  subroutine init_symplectic_field(f, z0, si)
+    type(FieldCan), intent(inout) :: f
+    real(dp), intent(in) :: z0(:)
+    type(SymplecticIntegrator), intent(inout) :: si
+    
+    ! Initialize symplectic integrator
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+    
+    si%pabs = z0(4)
+    
+    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
+    f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
+    f%vpar = z0(4)*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
+  end subroutine init_symplectic_field
 
 end module simple
