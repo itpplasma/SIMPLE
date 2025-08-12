@@ -6,6 +6,9 @@ module cut_detector
     use params, only: debug
 
     implicit none
+
+    ! Define real(dp) kind parameter
+    integer, parameter :: dp = kind(1.0d0)
     save
 
     integer, parameter :: n_tip_vars = 6
@@ -15,13 +18,13 @@ module cut_detector
     public
 
     type :: CutDetector
-      double precision :: fper  ! field period
+      real(dp) :: fper  ! field period
 
       ! for Poincare cuts
-      double precision :: alam_prev, par_inv
+      real(dp) :: alam_prev, par_inv
       integer          :: iper, itip, kper
 
-      double precision :: orb_sten(6,nplagr), coef(0:nder,nplagr)
+      real(dp) :: orb_sten(6,nplagr), coef(0:nder,nplagr)
       integer :: ipoi(nplagr)
     end type CutDetector
 
@@ -29,8 +32,8 @@ module cut_detector
 
     subroutine init(self, fper, z)
       type(CutDetector) :: self
-      double precision, intent(in) :: fper
-      double precision, intent(in) :: z(:)
+      real(dp), intent(in) :: fper
+      real(dp), intent(in) :: z(:)
       integer :: i
 
       self%fper = fper
@@ -71,15 +74,15 @@ module cut_detector
       type(SymplecticIntegrator) :: si
       type(FieldCan) :: f
 
-      double precision, intent(inout) :: z(:)
+      real(dp), intent(inout) :: z(:)
       ! variables to evaluate at tip: z(1..5), par_inv
-      double precision, dimension(:), intent(inout) :: var_cut
+      real(dp), dimension(:), intent(inout) :: var_cut
       integer, intent(out) :: cut_type
       integer, intent(out) :: ierr
 
       integer, parameter :: nstep_max = 1000000000
       integer :: i
-      double precision :: phiper = 0.0d0
+      real(dp) :: phiper = 0.0d0
 
       do i=1, nstep_max
         call tstep(si, f, z, ierr)
@@ -152,8 +155,8 @@ module cut_detector
 
       integer, parameter :: iunit=1003
       integer :: itr,ntr,ngrid,nrefine,irefine,kr,kt,nboxes
-      double precision :: fraction,rmax,rmin,tmax,tmin,hr,ht
-      double precision, dimension(2,ntr)              :: rt!0, rt
+      real(dp) :: fraction,rmax,rmin,tmax,tmin,hr,ht
+      real(dp), dimension(2,ntr)              :: rt!0, rt
       logical,          dimension(:,:),   allocatable :: free
 
   ! TODO: check if this works better on tips only
