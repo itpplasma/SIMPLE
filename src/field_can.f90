@@ -162,25 +162,26 @@ subroutine FieldCan_init(f, mu, ro0, vpar)
   type(FieldCan), intent(inout) :: f
   real(dp), intent(in), optional  :: mu, ro0, vpar
 
-  if (present(mu)) then
-    f%mu = mu
-  else
-    f%mu = 0d0
-  end if
-
-  if (present(ro0)) then
-    f%ro0 = ro0
-  else
-    f%ro0 = 0d0
-  end if
-
-  if (present(vpar)) then
-    f%vpar = vpar
-  else
-    f%vpar = 0d0
-  end if
+  ! Use helper function for optional parameter initialization
+  f%mu = optional_or_default(mu, 0d0)
+  f%ro0 = optional_or_default(ro0, 0d0)
+  f%vpar = optional_or_default(vpar, 0d0)
 
 end subroutine FieldCan_init
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper function for optional parameters
+function optional_or_default(opt_val, default_val) result(val)
+  real(dp), intent(in), optional :: opt_val
+  real(dp), intent(in) :: default_val
+  real(dp) :: val
+  
+  if (present(opt_val)) then
+    val = opt_val
+  else
+    val = default_val
+  end if
+end function optional_or_default
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -238,36 +239,68 @@ subroutine get_derivatives2(f, pphi)
 
   call get_derivatives(f, pphi)
 
-  f%d2vpar(1:6) = -f%d2Aph/f%ro0 - f%d2hph*f%vpar
-  f%d2vpar(1) = f%d2vpar(1) - 2d0*f%dhph(1)*f%dvpar(1)
-  f%d2vpar(2) = f%d2vpar(2) - (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
-  f%d2vpar(3) = f%d2vpar(3) - (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
-  f%d2vpar(4) = f%d2vpar(4) - 2d0*f%dhph(2)*f%dvpar(2)
-  f%d2vpar(5) = f%d2vpar(5) - (f%dhph(2)*f%dvpar(3) + f%dhph(3)*f%dvpar(2))
-  f%d2vpar(6) = f%d2vpar(6) - 2d0*f%dhph(3)*f%dvpar(3)
-  f%d2vpar(1:6) = f%d2vpar(1:6)/f%hph
+  ! Use helper subroutine for second derivative calculations
+  call compute_d2vpar(f%d2vpar(1:6), f%d2Aph, f%d2hph, f%dhph, f%dvpar, &
+                      f%vpar, f%ro0, f%hph)
 
-  f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod ! + qi*d2Phie
-  f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
-  f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
-  f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
-  f%d2H(4) = f%d2H(4) + f%dvpar(2)**2
-  f%d2H(5) = f%d2H(5) + f%dvpar(2)*f%dvpar(3)
-  f%d2H(6) = f%d2H(6) + f%dvpar(3)**2
-
-  f%d2pth(1:6) = f%d2vpar(1:6)*f%hth + f%vpar*f%d2hth + f%d2Ath/f%ro0
-  f%d2pth(1) = f%d2pth(1) + 2d0*f%dvpar(1)*f%dhth(1)
-  f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + f%dvpar(2)*f%dhth(1)
-  f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + f%dvpar(3)*f%dhth(1)
-  f%d2pth(4) = f%d2pth(4) + 2d0*f%dvpar(2)*f%dhth(2)
-  f%d2pth(5) = f%d2pth(5) + f%dvpar(2)*f%dhth(3) + f%dvpar(3)*f%dhth(2)
-  f%d2pth(6) = f%d2pth(6) + 2d0*f%dvpar(3)*f%dhth(3)
+  ! Use helper subroutines for H and pth second derivatives
+  call compute_d2H(f%d2H(1:6), f%vpar, f%d2vpar(1:6), f%mu, f%d2Bmod, f%dvpar)
+  call compute_d2pth(f%d2pth(1:6), f%d2vpar(1:6), f%hth, f%vpar, f%d2hth, &
+                     f%d2Ath, f%ro0, f%dvpar, f%dhth)
 
   f%d2vpar(7:9) = -f%dhph/f%hph**2
   f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
   f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
 
 end subroutine get_derivatives2
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper subroutine for computing d2vpar
+subroutine compute_d2vpar(d2vpar, d2Aph, d2hph, dhph, dvpar, vpar, ro0, hph)
+  real(dp), intent(out) :: d2vpar(6)
+  real(dp), intent(in) :: d2Aph(6), d2hph(6), dhph(3), dvpar(3)
+  real(dp), intent(in) :: vpar, ro0, hph
+  
+  d2vpar = -d2Aph/ro0 - d2hph*vpar
+  d2vpar(1) = d2vpar(1) - 2d0*dhph(1)*dvpar(1)
+  d2vpar(2) = d2vpar(2) - (dhph(1)*dvpar(2) + dhph(2)*dvpar(1))
+  d2vpar(3) = d2vpar(3) - (dhph(1)*dvpar(3) + dhph(3)*dvpar(1))
+  d2vpar(4) = d2vpar(4) - 2d0*dhph(2)*dvpar(2)
+  d2vpar(5) = d2vpar(5) - (dhph(2)*dvpar(3) + dhph(3)*dvpar(2))
+  d2vpar(6) = d2vpar(6) - 2d0*dhph(3)*dvpar(3)
+  d2vpar = d2vpar/hph
+end subroutine compute_d2vpar
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper subroutine for computing d2H
+subroutine compute_d2H(d2H, vpar, d2vpar, mu, d2Bmod, dvpar)
+  real(dp), intent(out) :: d2H(6)
+  real(dp), intent(in) :: vpar, d2vpar(6), mu, d2Bmod(6), dvpar(3)
+  
+  d2H = vpar*d2vpar + mu*d2Bmod
+  d2H(1) = d2H(1) + dvpar(1)**2
+  d2H(2) = d2H(2) + dvpar(1)*dvpar(2)
+  d2H(3) = d2H(3) + dvpar(1)*dvpar(3)
+  d2H(4) = d2H(4) + dvpar(2)**2
+  d2H(5) = d2H(5) + dvpar(2)*dvpar(3)
+  d2H(6) = d2H(6) + dvpar(3)**2
+end subroutine compute_d2H
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper subroutine for computing d2pth
+subroutine compute_d2pth(d2pth, d2vpar, hth, vpar, d2hth, d2Ath, ro0, dvpar, dhth)
+  real(dp), intent(out) :: d2pth(6)
+  real(dp), intent(in) :: d2vpar(6), hth, vpar, d2hth(6), d2Ath(6)
+  real(dp), intent(in) :: ro0, dvpar(3), dhth(3)
+  
+  d2pth = d2vpar*hth + vpar*d2hth + d2Ath/ro0
+  d2pth(1) = d2pth(1) + 2d0*dvpar(1)*dhth(1)
+  d2pth(2) = d2pth(2) + dvpar(1)*dhth(2) + dvpar(2)*dhth(1)
+  d2pth(3) = d2pth(3) + dvpar(1)*dhth(3) + dvpar(3)*dhth(1)
+  d2pth(4) = d2pth(4) + 2d0*dvpar(2)*dhth(2)
+  d2pth(5) = d2pth(5) + dvpar(2)*dhth(3) + dvpar(3)*dhth(2)
+  d2pth(6) = d2pth(6) + 2d0*dvpar(3)*dhth(3)
+end subroutine compute_d2pth
 
 
 end module field_can_mod
