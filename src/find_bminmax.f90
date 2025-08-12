@@ -1,7 +1,9 @@
   !
   module bminmax_mod
-  use iso_fortran_env, only: real64
-  integer, parameter :: dp = real64
+  implicit none
+
+  ! Define real(dp) kind parameter
+  integer, parameter :: dp = kind(1.0d0)
   !
   logical :: prop=.true.
   !
@@ -12,10 +14,10 @@
   end module bminmax_mod
   !
 module find_bminmax_sub
-  use iso_fortran_env, only: real64
-  integer, parameter :: dp = real64
-
 implicit none
+
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 contains
 
