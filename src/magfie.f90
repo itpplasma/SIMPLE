@@ -33,6 +33,9 @@ procedure(magfie_base), pointer :: magfie => null()
 
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
 
+! Make field type constants public
+public :: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+
 contains
 
 subroutine init_magfie(id)
@@ -80,6 +83,11 @@ end subroutine init_magfie
     real(dp) :: bcov_s_plus, bcov_t_plus, bcov_p_plus
     real(dp) :: bcov_s_minus, bcov_t_minus, bcov_p_minus
     
+    ! Check s bounds (must be in [0,1] for VMEC)
+    if (s < 0.0d0 .or. s > 1.0d0) then
+      error stop 'compute_vmec_derivatives: s out of bounds [0,1]'
+    end if
+    
     ! Initialize coordinates
     s_plus = s
     theta_plus = theta  
@@ -91,8 +99,8 @@ end subroutine init_magfie
     ! Adjust coordinates based on which derivative we're computing
     select case(coord_idx)
     case(1)  ! s derivative
-      s_plus = s + step_size
-      s_minus = s - step_size
+      s_plus = min(1.0d0, s + step_size)
+      s_minus = max(0.0d0, s - step_size)
     case(2)  ! theta derivative  
       theta_plus = theta + step_size
       theta_minus = theta - step_size
