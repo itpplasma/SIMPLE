@@ -1,6 +1,4 @@
 module field_can_mod
-use, intrinsic :: iso_fortran_env, only: dp => real64
-
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
@@ -16,6 +14,9 @@ use field_can_albert, only : evaluate_albert, init_albert, can_to_ref_albert, &
   ref_to_can_albert
 
 implicit none
+
+! Define real(dp) kind parameter
+integer, parameter :: dp = kind(1.0d0)
 
 procedure(evaluate_base), pointer :: evaluate => null()
 
@@ -159,7 +160,7 @@ end subroutine init_field_can
 
 subroutine FieldCan_init(f, mu, ro0, vpar)
   type(FieldCan), intent(inout) :: f
-  double precision, intent(in), optional  :: mu, ro0, vpar
+  real(dp), intent(in), optional  :: mu, ro0, vpar
 
   if (present(mu)) then
     f%mu = mu
@@ -190,7 +191,7 @@ subroutine get_val(f, pphi)
   !
   !
   type(FieldCan), intent(inout) :: f
-  double precision, intent(in) :: pphi
+  real(dp), intent(in) :: pphi
 
   f%vpar = (pphi - f%Aph/f%ro0)/f%hph
   f%H = f%vpar**2/2d0 + f%mu*f%Bmod
@@ -207,7 +208,7 @@ subroutine get_derivatives(f, pphi)
   !
   !
   type(FieldCan), intent(inout) :: f
-  double precision, intent(in) :: pphi
+  real(dp), intent(in) :: pphi
 
   call get_val(f, pphi)
 
@@ -233,7 +234,7 @@ subroutine get_derivatives2(f, pphi)
   ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
   !
   type(FieldCan), intent(inout) :: f
-  double precision, intent(in) :: pphi
+  real(dp), intent(in) :: pphi
 
   call get_derivatives(f, pphi)
 
