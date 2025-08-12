@@ -1,5 +1,5 @@
 module magfie_sub
-use spline_vmec_sub
+use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 
@@ -10,6 +10,7 @@ integer, parameter :: dp = kind(1.0d0)
 
 abstract interface
   subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+    import :: dp
     !            x(i)   - set of 3 curvilinear space coordinates (input)
     !            bmod   - dimensionless magnetic field module: bmod=B/B_ref
     !            sqrtg  - Jacobian of space coordinates (square root of
