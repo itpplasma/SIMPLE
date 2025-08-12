@@ -11,8 +11,11 @@ implicit none
 integer, parameter :: dp = kind(1.0d0)
 save
 
+! Module parameters
 logical, parameter :: exact_steps = .False.
 integer, parameter :: S_MAX_GAUSS = 3
+real(dp), parameter :: R_MIN = 0.01_dp  ! Minimum radius
+real(dp), parameter :: R_MAX = 1.0_dp   ! Maximum radius
 
 type(FieldCan) :: f
 type(FieldCan) :: fs(S_MAX_GAUSS)
@@ -88,28 +91,56 @@ subroutine f_midpoint_quasi(n, x, fvec, iflag)
     integer, intent(in) :: iflag
 
     real(dp) :: dpthmid, pthdotbar
-
-    call eval_field(f, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 0)
+    real(dp) :: midpoint_coords(3)
+    
+    ! Compute midpoint coordinates
+    call compute_midpoint_coords(x, si%z, midpoint_coords)
+    
+    ! Evaluate field at midpoint
+    call eval_field(f, x(5), midpoint_coords(1), midpoint_coords(2), 0)
     call get_derivatives(f, 0.5*(x(4) + si%z(4)))
 
-    fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-    fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) &
-      - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
-    fvec(4) = f%dpth(1)*(x(4) - si%z(4)) &
-      + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-    fvec(5) = f%dpth(1)*(f%pth - si%pthold) &
-      + si%dt/2.0d0*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
+    ! Compute residuals
+    call compute_midpoint_residuals(f, si, x, fvec(2:5), dpthmid, pthdotbar)
 
-    ! save evaluation from midpoint
-    dpthmid = f%dpth(1)
-    pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
-
-    ! evaluate at endpoint
+    ! Evaluate at endpoint
     call eval_field(f, x(1), x(2), x(3), 0)
     call get_derivatives(f, x(4))
     fvec(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
 
 end subroutine f_midpoint_quasi
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Compute midpoint coordinates
+subroutine compute_midpoint_coords(x, z, midpoint)
+    real(dp), intent(in) :: x(:), z(:)
+    real(dp), intent(out) :: midpoint(3)
+    
+    midpoint(1) = 0.5*(x(2) + z(2))
+    midpoint(2) = 0.5*(x(3) + z(3))
+    midpoint(3) = 0.5*(x(4) + z(4))
+end subroutine compute_midpoint_coords
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Compute midpoint method residuals
+subroutine compute_midpoint_residuals(field, integrator, x, fvec, dpthmid, pthdotbar)
+    type(FieldCan), intent(in) :: field
+    type(SymplecticIntegrator), intent(in) :: integrator
+    real(dp), intent(in) :: x(:)
+    real(dp), intent(out) :: fvec(4), dpthmid, pthdotbar
+    
+    fvec(1) = field%dpth(1)*(x(2) - integrator%z(2)) - integrator%dt*field%dH(1)
+    fvec(2) = field%dpth(1)*field%hph*(x(3) - integrator%z(3)) &
+      - integrator%dt*(field%dpth(1)*field%vpar - field%dH(1)*field%hth)
+    fvec(3) = field%dpth(1)*(x(4) - integrator%z(4)) &
+      + integrator%dt*(field%dH(3)*field%dpth(1) - field%dH(1)*field%dpth(3))
+    fvec(4) = field%dpth(1)*(field%pth - integrator%pthold) &
+      + integrator%dt/2.0d0*(field%dpth(1)*field%dH(2)-field%dpth(2)*field%dH(1))
+    
+    ! Save midpoint values
+    dpthmid = field%dpth(1)
+    pthdotbar = field%dpth(1)*field%dH(2) - field%dpth(2)*field%dH(1)
+end subroutine compute_midpoint_residuals
 
 
 subroutine f_rk_gauss_quasi(n, x, fvec, iflag)
@@ -205,20 +236,17 @@ subroutine timestep_midpoint_quasi(ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    x(1:4) = si%z
-    x(5) = si%z(1)
+    ! Initialize solution vector
+    call initialize_solution_vector(si%z, x)
 
+    ! Solve nonlinear system
     call hybrd1(f_midpoint_quasi, n, x, fvec, si%rtol, info)
 
-    if (x(1) > 1.0) then
-      ierr = 1
-      return
-    end if
-
-    if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
-    end if
+    ! Check and enforce boundary conditions
+    call check_radius_bounds(x(1), ierr)
+    if (ierr /= 0) return
+    
+    call enforce_radius_bounds(x(1), si%z)
 
     si%z = x(1:4)
 
@@ -226,6 +254,41 @@ subroutine timestep_midpoint_quasi(ierr)
   enddo
 
 end subroutine timestep_midpoint_quasi
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Initialize solution vector for midpoint method
+subroutine initialize_solution_vector(z, x)
+    real(dp), intent(in) :: z(4)
+    real(dp), intent(out) :: x(5)
+    
+    x(1:4) = z
+    x(5) = z(1)  ! Initial guess for r at midpoint
+end subroutine initialize_solution_vector
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Check radius bounds
+subroutine check_radius_bounds(r, ierr)
+    real(dp), intent(in) :: r
+    integer, intent(out) :: ierr
+    
+    if (r > R_MAX) then
+        ierr = 1
+    else
+        ierr = 0
+    end if
+end subroutine check_radius_bounds
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Enforce radius bounds
+subroutine enforce_radius_bounds(r, z)
+    real(dp), intent(inout) :: r
+    real(dp), intent(in) :: z(:)
+    
+    if (r < 0.0_dp) then
+        print *, 'r<0, z = ', r, z(2), z(3), z(4)
+        r = R_MIN
+    end if
+end subroutine enforce_radius_bounds
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -336,59 +399,99 @@ end subroutine timestep_impl_expl_euler_quasi
 
 subroutine timestep_rk_gauss_quasi(s, ierr)
   !
+  integer, intent(in) :: s
   integer, intent(out) :: ierr
 
-
-  integer, intent(in) :: s
   real(dp), dimension(4*s) :: x
   real(dp) :: fvec(4*s)
-  integer :: ktau, info, k, l
+  integer :: ktau, info
 
   real(dp) :: a(s,s), b(s), c(s), Hprime(s)
 
-  do k = 1,s
-    fs(k) = f
-  end do
+  ! Initialize field structures
+  call initialize_field_stages(s, fs, f)
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    do k = 1,s
-      x((4*k-3):(4*k)) = si%z
-    end do
+    ! Initialize solution vector for all stages
+    call initialize_rk_solution(s, si%z, x)
 
+    ! Solve nonlinear system
     call hybrd1(f_rk_gauss_quasi, 4*s, x, fvec, si%rtol, info)
 
-    if (x(1) > 1.0) then
-      ierr = 1
-      return
-    end if
+    ! Check boundary conditions
+    call check_radius_bounds(x(1), ierr)
+    if (ierr /= 0) return
+    
+    call enforce_radius_bounds(x(1), si%z)
 
-    if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
-    end if
-
-    call coeff_rk_gauss(s, a, b, c)
-
-    f = fs(s)
-    f%pth = si%pthold
-    si%z(1) = x(4*s-3)
-
-    do l = 1, s
-      Hprime(l) = fs(l)%dH(1)/fs(l)%dpth(1)
-      f%pth = f%pth - si%dt*b(l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))
-      si%z(2) = si%z(2) + si%dt*b(l)*Hprime(l)
-      si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
-      si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
-    end do
+    ! Update solution using RK coefficients
+    call update_rk_gauss_solution(s, si, fs, x, Hprime, f)
 
     ktau = ktau+1
   enddo
 
 end subroutine timestep_rk_gauss_quasi
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Initialize field stages
+subroutine initialize_field_stages(s, field_stages, field)
+    integer, intent(in) :: s
+    type(FieldCan), intent(out) :: field_stages(S_MAX_GAUSS)
+    type(FieldCan), intent(in) :: field
+    
+    integer :: k
+    
+    do k = 1, s
+        field_stages(k) = field
+    end do
+end subroutine initialize_field_stages
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Initialize RK solution vector
+subroutine initialize_rk_solution(s, z, x)
+    integer, intent(in) :: s
+    real(dp), intent(in) :: z(4)
+    real(dp), intent(out) :: x(4*s)
+    
+    integer :: k
+    
+    do k = 1, s
+        x((4*k-3):(4*k)) = z
+    end do
+end subroutine initialize_rk_solution
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Update RK Gauss solution
+subroutine update_rk_gauss_solution(s, integrator, field_stages, x, Hprime, field)
+    integer, intent(in) :: s
+    type(SymplecticIntegrator), intent(inout) :: integrator
+    type(FieldCan), intent(in) :: field_stages(S_MAX_GAUSS)
+    real(dp), intent(in) :: x(:)
+    real(dp), intent(out) :: Hprime(s)
+    type(FieldCan), intent(inout) :: field
+    
+    real(dp) :: a(s,s), b(s), c(s)
+    integer :: l
+    
+    call coeff_rk_gauss(s, a, b, c)
+    
+    field = field_stages(s)
+    field%pth = integrator%pthold
+    integrator%z(1) = x(4*s-3)
+    
+    do l = 1, s
+        Hprime(l) = field_stages(l)%dH(1) / field_stages(l)%dpth(1)
+        field%pth = field%pth - integrator%dt*b(l)*(field_stages(l)%dH(2) - Hprime(l)*field_stages(l)%dpth(2))
+        integrator%z(2) = integrator%z(2) + integrator%dt*b(l)*Hprime(l)
+        integrator%z(3) = integrator%z(3) + integrator%dt*b(l)* &
+                          (field_stages(l)%vpar-Hprime(l)*field_stages(l)%hth)/field_stages(l)%hph
+        integrator%z(4) = integrator%z(4) - integrator%dt*b(l)*(field_stages(l)%dH(3) - Hprime(l)*field_stages(l)%dpth(3))
+    end do
+end subroutine update_rk_gauss_solution
 
 
 subroutine timestep_rk_lobatto_quasi(s, ierr)
@@ -477,23 +580,43 @@ end subroutine timestep_rk_lobatto_quasi
   !
 subroutine f_ode(tau, z, zdot)
   !
-
   real(dp), intent(in)  :: tau
   real(dp), intent(in)  :: z(4)
   real(dp), intent(out) :: zdot(4)
-  real(dp) :: Hprime
-
-  call eval_field(f, z(1), z(2), z(3), 0)
-  call get_derivatives(f, z(4))
-
-  Hprime = f%dH(1)/f%dpth(1)
-
-  zdot(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
-  zdot(2) = Hprime
-  zdot(3) = (f%vpar-Hprime*f%hth)/f%hph
-  zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
+  
+  ! Evaluate field and derivatives
+  call evaluate_field_and_derivatives(z, f)
+  
+  ! Compute ODE right-hand side
+  call compute_ode_rhs(f, zdot)
 
 end subroutine f_ode
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Evaluate field and derivatives at given position
+subroutine evaluate_field_and_derivatives(z, field)
+    real(dp), intent(in) :: z(4)
+    type(FieldCan), intent(inout) :: field
+    
+    call eval_field(field, z(1), z(2), z(3), 0)
+    call get_derivatives(field, z(4))
+end subroutine evaluate_field_and_derivatives
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! Helper: Compute ODE right-hand side
+subroutine compute_ode_rhs(field, zdot)
+    type(FieldCan), intent(in) :: field
+    real(dp), intent(out) :: zdot(4)
+    
+    real(dp) :: Hprime
+    
+    Hprime = field%dH(1) / field%dpth(1)
+    
+    zdot(1) = -(field%dH(2) - field%hth/field%hph*field%dH(3)) / field%dpth(1)
+    zdot(2) = Hprime
+    zdot(3) = (field%vpar - Hprime*field%hth) / field%hph
+    zdot(4) = -(field%dH(3) - Hprime*field%dpth(3))
+end subroutine compute_ode_rhs
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
