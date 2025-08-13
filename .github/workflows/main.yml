@@ -79,12 +79,10 @@ jobs:
             --ignore-errors unused || echo "⚠️ LCOV capture had warnings"
           
           echo "🔍 Filtering coverage data..."
+          # Use same exclusions as CMake coverage target
           lcov --remove coverage.info \
-            'build/dependencies/*' \
-            'build/libneo/*' \
-            'build/_deps/*' \
             '*/libneo/*' \
-            'test/*' \
+            '*/test/*' \
             '/usr/*' \
             --output-file coverage_filtered.info \
             --rc branch_coverage=1 \
