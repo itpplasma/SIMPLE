@@ -30,46 +30,6 @@ jobs:
           path: .
           retention-days: 1
 
-  test:
-    name: Run Unit Tests
-    runs-on: self-hosted
-    needs: checkout
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == true)
-    
-    steps:
-      - name: Download repository
-        uses: actions/download-artifact@v4
-        with:
-          name: repository
-
-      - name: Restore executable permissions
-        run: |
-          chmod +x test/golden_record_sanity/*.sh
-          chmod +x test/golden_record/*.sh 2>/dev/null || true
-          chmod +x test/test_data/*.sh 2>/dev/null || true
-          chmod +x scripts/*.sh 2>/dev/null || true
-          chmod +x tools/*.sh 2>/dev/null || true
-          chmod +x *.sh 2>/dev/null || true
-
-      - name: Build SIMPLE
-        run: |
-          make clean
-          make
-
-      - name: Run Fast Tests  
-        run: make test-fast
-
-      - name: Run Slow Tests
-        run: make test
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-results
-          path: |
-            build/Testing/
-
   coverage:
     name: Run Tests + Generate Coverage
     runs-on: self-hosted
