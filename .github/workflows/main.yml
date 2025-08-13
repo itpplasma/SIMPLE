@@ -95,6 +95,9 @@ jobs:
         run: |
           make clean
           make coverage-build
+          # Verify coverage build was successful
+          echo "🔍 Checking for coverage instrumentation files..."
+          find build/ -name "*.gcno" -type f | wc -l || echo "Warning: No .gcno files found"
 
       - name: Run Tests with Coverage
         run: |
@@ -104,6 +107,15 @@ jobs:
       - name: Generate Coverage Reports
         run: |
           set -euo pipefail
+          
+          # Fix locale settings to prevent Perl warnings
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          
+          # Debug: Check for coverage data files
+          echo "🔍 Checking for coverage data files..."
+          find build/ -name "*.gcda" -type f | head -20 || echo "No .gcda files found"
+          find build/ -name "*.gcno" -type f | head -20 || echo "No .gcno files found"
           
           # Generate lcov coverage data
           echo "📊 Generating LCOV coverage data..."
@@ -133,6 +145,8 @@ jobs:
           
           # Convert to Cobertura XML for coverage-action (using preinstalled lcov_cobertura)
           echo "🔄 Converting to Cobertura XML..."
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
           if ! lcov_cobertura coverage_filtered.info --output cobertura.xml; then
             echo "❌ Cobertura conversion failed"
             exit 1
@@ -140,6 +154,8 @@ jobs:
           
           # Generate HTML coverage report
           echo "📄 Generating HTML coverage report..."
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
           if ! genhtml coverage_filtered.info --branch-coverage --prefix "$(pwd)" --output-directory coverage_html; then
             echo "❌ HTML coverage generation failed"
             exit 1
