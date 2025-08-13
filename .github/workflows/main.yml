@@ -132,6 +132,8 @@ jobs:
           togglable-report: true
           # Include detailed coverage with percentages and positions
           exclude-detailed-coverage: false
+          # Use markdown format for better readability
+          report-format: markdown
           # Add token explicitly for PR comments
           token: ${{ secrets.GITHUB_TOKEN }}
 
