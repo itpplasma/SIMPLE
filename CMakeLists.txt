@@ -128,11 +128,10 @@ if (ENABLE_COVERAGE)
                     --ignore-errors mismatch 
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
-                    '*/libneo/*'
-                    '*code/libneo/*'
-                    '*/../*'
-                    '*/test/*'
-                    '/usr/*'
+                    "/home/ert/code/libneo/*"
+                    "*/libneo/*"
+                    "*/test/*"
+                    "/usr/*"
                     --output-file coverage_filtered.info
                     --rc branch_coverage=1
                     --ignore-errors mismatch
