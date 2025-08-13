@@ -239,7 +239,8 @@ contains
     real(dp) :: dummy
     dummy = 0.0_dp
     ! Perform floating point operations that can't be easily optimized away
-    do i = 1, 1000
+    ! Increased by 10x to make timing more visible (was 1000 x 100)
+    do i = 1, 10000
       do j = 1, 100
         dummy = dummy + sin(real(i*j, dp)) * cos(real(i+j, dp))
       end do
