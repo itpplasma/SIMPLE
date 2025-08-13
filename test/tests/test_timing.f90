@@ -176,7 +176,6 @@ contains
   subroutine test_elapsed_time_real_ops(errors)
     integer, intent(inout) :: errors
     real(dp) :: time1, time2, time3, elapsed, actual_elapsed
-    integer :: i
     
     print *, "Testing elapsed time with real operations..."
     

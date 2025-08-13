@@ -1,5 +1,6 @@
 program test_stencil_utils
   use stencil_utils
+  use, intrinsic :: iso_fortran_env, only: dp => real64
   implicit none
   
   call test_stencil_order_2()
