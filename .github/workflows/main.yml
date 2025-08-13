@@ -191,7 +191,6 @@ jobs:
       - name: Produce the coverage report
         id: coverage_report
         uses: krystophny/coverage-action@main
-        continue-on-error: true
         with:
           # Path to the Cobertura XML report.
           path: ./cobertura.xml
@@ -215,102 +214,6 @@ jobs:
           exclude-detailed-coverage: false
           # Add token explicitly for PR comments
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Coverage Comment Manually (Fallback)
-        if: github.event_name == 'pull_request' && failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const { execSync } = require('child_process');
-            
-            // Check if cobertura.xml exists
-            if (!fs.existsSync('cobertura.xml')) {
-              console.log('❌ cobertura.xml not found');
-              return;
-            }
-            
-            // Read and parse coverage data
-            const xml = fs.readFileSync('cobertura.xml', 'utf8');
-            const coverageMatch = xml.match(/line-rate="([0-9.]+)"/);
-            const branchMatch = xml.match(/branch-rate="([0-9.]+)"/);
-            
-            const lineCoverage = coverageMatch ? (parseFloat(coverageMatch[1]) * 100).toFixed(2) : '0.00';
-            const branchCoverage = branchMatch ? (parseFloat(branchMatch[1]) * 100).toFixed(2) : '0.00';
-            
-            // Generate coverage report using pycobertura
-            let diffReport = '';
-            try {
-              // Try to get diff coverage if we have a base branch
-              const baseBranch = 'main';
-              execSync(`git fetch origin ${baseBranch}:${baseBranch}`, { stdio: 'inherit' });
-              
-              // Generate text report
-              const textReport = execSync('pycobertura show cobertura.xml', { encoding: 'utf8' });
-              
-              // Build the comment body
-              let commentBody = `## 📊 Code Coverage Summary\n\n`;
-              commentBody += `| Metric | Coverage |\n`;
-              commentBody += `|--------|----------|\n`;
-              commentBody += `| **Line Coverage** | ${lineCoverage}% |\n`;
-              commentBody += `| **Branch Coverage** | ${branchCoverage}% |\n\n`;
-              
-              // Add threshold status
-              const threshold = 70;
-              const passed = parseFloat(lineCoverage) >= threshold;
-              if (passed) {
-                commentBody += `✅ **Coverage meets the ${threshold}% threshold**\n\n`;
-              } else {
-                commentBody += `❌ **Coverage ${lineCoverage}% is below the ${threshold}% threshold**\n\n`;
-              }
-              
-              // Add detailed report in collapsible section
-              commentBody += `<details>\n<summary>📋 Detailed Coverage Report</summary>\n\n`;
-              commentBody += '```\n';
-              commentBody += textReport.substring(0, 5000); // Limit size
-              if (textReport.length > 5000) {
-                commentBody += '\n... (truncated)\n';
-              }
-              commentBody += '```\n';
-              commentBody += `</details>\n\n`;
-              
-              commentBody += `---\n`;
-              commentBody += `_Coverage report generated for commit ${context.sha.substring(0, 7)}_`;
-              
-              // Find existing comment
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-              });
-              
-              const botComment = comments.find(comment => 
-                comment.user.type === 'Bot' && 
-                comment.body.includes('Code Coverage Summary')
-              );
-              
-              if (botComment) {
-                // Update existing comment
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: botComment.id,
-                  body: commentBody
-                });
-                console.log('✅ Updated existing coverage comment');
-              } else {
-                // Create new comment
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: commentBody
-                });
-                console.log('✅ Created new coverage comment');
-              }
-            } catch (error) {
-              console.log('Error generating coverage report:', error.message);
-            }
 
       - name: Create coverage checks
         uses: actions/github-script@v7
