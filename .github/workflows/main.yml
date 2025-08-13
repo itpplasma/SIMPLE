@@ -83,6 +83,7 @@ jobs:
             'build/dependencies/*' \
             'build/libneo/*' \
             'build/_deps/*' \
+            '*/libneo/*' \
             'test/*' \
             '/usr/*' \
             --output-file coverage_filtered.info \

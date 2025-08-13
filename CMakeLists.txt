@@ -131,6 +131,7 @@ if (ENABLE_COVERAGE)
                     '${CMAKE_BINARY_DIR}/dependencies/*'
                     '${CMAKE_BINARY_DIR}/libneo/*'
                     '${CMAKE_BINARY_DIR}/_deps/*'
+                    '*/libneo/*'
                     '${CMAKE_SOURCE_DIR}/test/*'
                     '/usr/*'
                     --output-file coverage_filtered.info
