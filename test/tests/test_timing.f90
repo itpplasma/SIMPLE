@@ -107,13 +107,16 @@ contains
     time2 = get_wtime()
     elapsed = time2 - time1
     
-    ! Check that time advances (allow for very fast systems but ensure non-zero)
-    ! Note: We'll do a more thorough test below if this shows zero
+    ! Check that time advances properly
+    ! With the substantial workload (10000x100 operations), we must detect non-zero elapsed time
     if (elapsed <= 0.0_dp) then
-      print *, "WARNING: Initial timing test showed zero elapsed time"
-      print *, "Elapsed:", elapsed
-      print *, "Time1:", time1, "Time2:", time2
-      ! Don't count as error yet - will retry with longer operation
+      print *, "ERROR: Timer failed to measure elapsed time for substantial workload"
+      print *, "This indicates a serious timing system problem"
+      print *, "Elapsed:", elapsed, "Time1:", time1, "Time2:", time2
+      errors = errors + 1
+    else if (elapsed < 1.0d-6) then
+      print *, "WARNING: Very small elapsed time detected:", elapsed
+      print *, "This may indicate insufficient workload or high-resolution timer"
     end if
     
     ! Check that elapsed time is within reasonable bounds
@@ -136,34 +139,40 @@ contains
       print *, "WARNING: Large gap between successive get_wtime calls:", time2 - time1
     end if
     
-    ! Test 3: If elapsed was zero, try a more expensive operation
-    if (elapsed <= 0.0_dp) then
-      print *, "Retrying with longer operation due to zero elapsed time..."
+    ! Test 3: Additional stress test for timing precision
+    if (elapsed > 0.0_dp .and. elapsed < 1.0d-4) then
+      print *, "Running additional precision test with even more expensive operations..."
       time1 = get_wtime()
       
-      ! Even more expensive operation - should definitely take measurable time
+      ! Even more expensive operation to test timer precision limits
       dummy_work = 0.0_dp
-      do i = 1, 100000
-        do j = 1, 100
+      do i = 1, 50000
+        do j = 1, 200
           dummy_work = dummy_work + sqrt(abs(real(i*j, dp)) + 1.0_dp) 
           dummy_work = dummy_work + log(max(1.0_dp, real(i+j, dp)))
+          dummy_work = dummy_work + exp(min(1.0_dp, real(i, dp)*1.0d-6))
         end do
       end do
       ! Force use of result
       if (dummy_work > 1.0e30_dp .or. dummy_work < -1.0e30_dp) then
-        print *, "Dummy work result:", dummy_work
+        print *, "Note: Extended precision test result:", dummy_work
       end if
       
       time2 = get_wtime()
       elapsed = time2 - time1
       
       if (elapsed <= 0.0_dp) then
-        print *, "ERROR: Timer still shows zero elapsed after expensive operation"
-        print *, "This may indicate a problem with the timing implementation"
-        print *, "Final elapsed:", elapsed, "Time1:", time1, "Time2:", time2
+        print *, "ERROR: Extended precision test still shows zero elapsed time"
+        print *, "This indicates a fundamental timing system problem"
+        print *, "Extended elapsed:", elapsed, "Time1:", time1, "Time2:", time2
         errors = errors + 1
       else
-        print *, "Success: Longer operation measured elapsed time:", elapsed
+        print *, "Success: Extended precision test measured elapsed time:", elapsed
+        
+        ! Verify extended operation took longer than basic operation
+        if (elapsed < 1.0d-5) then
+          print *, "WARNING: Extended operation elapsed time unexpectedly small:", elapsed
+        end if
       end if
     end if
     

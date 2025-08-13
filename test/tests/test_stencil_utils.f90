@@ -85,19 +85,79 @@ contains
     
     call init_derivative_stencil(3, h_grid, stencil)
     
-    ! Check symmetry
+    ! Check explicit coefficient values against mathematical theory
+    ! 6th order centered finite difference coefficients are:
+    ! [-1/60, 9/60, -45/60, 0, 45/60, -9/60, 1/60] / h_grid
+    
+    ! Check stencil(-3) = -1/60 / h_grid
+    if (abs(stencil(-3) - (-1.d0/60.d0/h_grid)) > tol) then
+      print *, "ERROR: stencil(-3) incorrect for order 6"
+      print *, "Expected:", -1.d0/60.d0/h_grid, "Got:", stencil(-3)
+      error stop 1
+    end if
+    
+    ! Check stencil(-2) = 9/60 / h_grid = 0.15 / h_grid
+    if (abs(stencil(-2) - (9.d0/60.d0/h_grid)) > tol) then
+      print *, "ERROR: stencil(-2) incorrect for order 6"
+      print *, "Expected:", 9.d0/60.d0/h_grid, "Got:", stencil(-2)
+      error stop 1
+    end if
+    
+    ! Check stencil(-1) = -45/60 / h_grid = -0.75 / h_grid
+    if (abs(stencil(-1) - (-45.d0/60.d0/h_grid)) > tol) then
+      print *, "ERROR: stencil(-1) incorrect for order 6"
+      print *, "Expected:", -45.d0/60.d0/h_grid, "Got:", stencil(-1)
+      error stop 1
+    end if
+    
+    ! Check stencil(0) = 0
+    if (abs(stencil(0)) > tol) then
+      print *, "ERROR: stencil(0) should be zero for order 6"
+      print *, "Got:", stencil(0)
+      error stop 1
+    end if
+    
+    ! Check stencil(1) = 45/60 / h_grid = 0.75 / h_grid
+    if (abs(stencil(1) - (45.d0/60.d0/h_grid)) > tol) then
+      print *, "ERROR: stencil(1) incorrect for order 6"
+      print *, "Expected:", 45.d0/60.d0/h_grid, "Got:", stencil(1)
+      error stop 1
+    end if
+    
+    ! Check stencil(2) = -9/60 / h_grid = -0.15 / h_grid
+    if (abs(stencil(2) - (-9.d0/60.d0/h_grid)) > tol) then
+      print *, "ERROR: stencil(2) incorrect for order 6"
+      print *, "Expected:", -9.d0/60.d0/h_grid, "Got:", stencil(2)
+      error stop 1
+    end if
+    
+    ! Check stencil(3) = 1/60 / h_grid
+    if (abs(stencil(3) - (1.d0/60.d0/h_grid)) > tol) then
+      print *, "ERROR: stencil(3) incorrect for order 6"
+      print *, "Expected:", 1.d0/60.d0/h_grid, "Got:", stencil(3)
+      error stop 1
+    end if
+    
+    ! Verify antisymmetry property as additional check
     if (abs(stencil(-3) + stencil(3)) > tol) then
-      print *, "ERROR: stencil not antisymmetric for order 6"
+      print *, "ERROR: stencil not antisymmetric for indices ±3"
       error stop 1
     end if
     
     if (abs(stencil(-2) + stencil(2)) > tol) then
-      print *, "ERROR: stencil not antisymmetric for order 6"
+      print *, "ERROR: stencil not antisymmetric for indices ±2"
       error stop 1
     end if
     
     if (abs(stencil(-1) + stencil(1)) > tol) then
-      print *, "ERROR: stencil not antisymmetric for order 6"
+      print *, "ERROR: stencil not antisymmetric for indices ±1"
+      error stop 1
+    end if
+    
+    ! Verify sum equals zero (necessary condition for derivative stencil)
+    if (abs(sum(stencil)) > tol) then
+      print *, "ERROR: stencil coefficients should sum to zero"
+      print *, "Sum:", sum(stencil)
       error stop 1
     end if
     
