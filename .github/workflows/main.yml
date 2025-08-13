@@ -70,32 +70,17 @@ jobs:
           export LANG=C.UTF-8
           export LC_ALL=C.UTF-8
           
-          # Generate lcov coverage data
-          echo "📊 Generating LCOV coverage data..."
-          lcov --capture --directory build/ --output-file coverage.info \
-            --rc branch_coverage=1 \
-            --ignore-errors inconsistent \
-            --ignore-errors mismatch \
-            --ignore-errors unused || echo "⚠️ LCOV capture had warnings"
-          
-          echo "🔍 Filtering coverage data..."
-          # Use same exclusions as CMake coverage target
-          lcov --remove coverage.info \
-            '*/libneo/*' \
-            '*/test/*' \
-            '/usr/*' \
-            --output-file coverage_filtered.info \
-            --rc branch_coverage=1 \
-            --ignore-errors mismatch \
-            --ignore-errors unused || echo "⚠️ LCOV filtering had warnings"
+          # Use the CMake coverage target which has all the correct exclusions
+          echo "📊 Generating coverage data using CMake target..."
+          cmake --build build --target coverage
           
           # Convert to Cobertura XML for coverage-action (using preinstalled lcov_cobertura)
           echo "🔄 Converting to Cobertura XML..."
-          lcov_cobertura coverage_filtered.info --output cobertura.xml
+          lcov_cobertura build/coverage_filtered.info --output cobertura.xml
           
           # Generate HTML coverage report
           echo "📄 Generating HTML coverage report..."
-          genhtml coverage_filtered.info --branch-coverage --prefix "$(pwd)" --output-directory coverage_html || echo "⚠️ HTML generation had warnings"
+          genhtml build/coverage_filtered.info --branch-coverage --prefix "$(pwd)" --output-directory coverage_html || echo "⚠️ HTML generation had warnings"
           
           echo "✅ Coverage reports generated"
 
