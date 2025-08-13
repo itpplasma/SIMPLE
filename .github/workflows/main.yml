@@ -119,6 +119,8 @@ jobs:
           echo "🔍 Filtering coverage data..."
           if ! lcov --remove coverage.info \
             'build/dependencies/*' \
+            'build/libneo/*' \
+            'build/_deps/*' \
             'test/*' \
             '/usr/*' \
             --output-file coverage_filtered.info \

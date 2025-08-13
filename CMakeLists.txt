@@ -76,6 +76,7 @@ add_link_options(${NETCDF_FLIBS})
 
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
+
 find_or_fetch(libneo)
 
 if (SIMPLE_TESTING)
@@ -128,6 +129,8 @@ if (ENABLE_COVERAGE)
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
                     '${CMAKE_BINARY_DIR}/dependencies/*'
+                    '${CMAKE_BINARY_DIR}/libneo/*'
+                    '${CMAKE_BINARY_DIR}/_deps/*'
                     '${CMAKE_SOURCE_DIR}/test/*'
                     '/usr/*'
                     --output-file coverage_filtered.info
