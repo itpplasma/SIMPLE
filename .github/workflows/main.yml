@@ -167,13 +167,14 @@ jobs:
       - name: Produce the coverage report
         id: coverage_report
         uses: krystophny/coverage-action@main
+        continue-on-error: true
         with:
           # Path to the Cobertura XML report.
           path: ./cobertura.xml
           # Minimum total coverage threshold
           threshold: 70
           # Fail if coverage below threshold (but continue workflow)
-          fail: false
+          fail: true
           # Publish the rendered output as a PR comment
           publish: true
           # Enable diff coverage with storage branch
