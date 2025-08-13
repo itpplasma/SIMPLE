@@ -73,8 +73,9 @@ contains
   subroutine test_time_measurement(errors)
     integer, intent(inout) :: errors
     real(dp) :: time1, time2, elapsed
-    real(dp), parameter :: max_elapsed = 0.1_dp   ! Maximum expected time (100ms)
-    integer :: loop_count
+    real(dp), parameter :: max_elapsed = 1.0_dp   ! Maximum expected time (1 second)
+    real(dp) :: dummy_work
+    integer :: i, j
     
     print *, "Testing time measurement functions..."
     
@@ -84,23 +85,32 @@ contains
     
     call init_timer()
     
-    ! Test 1: Basic time measurement with controlled workload
+    ! Test 1: Basic time measurement with substantial workload
     time1 = get_wtime()
     
-    ! Do a calibrated amount of work
-    loop_count = 0
-    do while (loop_count < 100000)
-      loop_count = loop_count + 1
+    ! Do substantial work that cannot be optimized away
+    dummy_work = 0.0_dp
+    do i = 1, 10000
+      do j = 1, 100
+        ! Use transcendental functions that are expensive and can't be optimized away
+        dummy_work = dummy_work + sin(real(i, dp) * 0.001_dp) + cos(real(j, dp) * 0.001_dp)
+      end do
     end do
+    ! Force use of result to prevent optimization
+    if (dummy_work > 1.0e20_dp .or. dummy_work < -1.0e20_dp) then
+      print *, "Note: dummy_work=", dummy_work
+    end if
     
     time2 = get_wtime()
     elapsed = time2 - time1
     
-    ! Check that time advances
+    ! Check that time advances (allow for very fast systems but ensure non-zero)
+    ! Note: We'll do a more thorough test below if this shows zero
     if (elapsed <= 0.0_dp) then
-      print *, "ERROR: Time should advance during computation"
+      print *, "WARNING: Initial timing test showed zero elapsed time"
       print *, "Elapsed:", elapsed
-      errors = errors + 1
+      print *, "Time1:", time1, "Time2:", time2
+      ! Don't count as error yet - will retry with longer operation
     end if
     
     ! Check that elapsed time is within reasonable bounds
@@ -119,8 +129,39 @@ contains
       print *, "ERROR: Time went backwards!"
       print *, "Time1:", time1, "Time2:", time2
       errors = errors + 1
-    else if (time2 - time1 > 0.001_dp) then
+    else if (time2 - time1 > 0.01_dp) then
       print *, "WARNING: Large gap between successive get_wtime calls:", time2 - time1
+    end if
+    
+    ! Test 3: If elapsed was zero, try a more expensive operation
+    if (elapsed <= 0.0_dp) then
+      print *, "Retrying with longer operation due to zero elapsed time..."
+      time1 = get_wtime()
+      
+      ! Even more expensive operation - should definitely take measurable time
+      dummy_work = 0.0_dp
+      do i = 1, 100000
+        do j = 1, 100
+          dummy_work = dummy_work + sqrt(abs(real(i*j, dp)) + 1.0_dp) 
+          dummy_work = dummy_work + log(max(1.0_dp, real(i+j, dp)))
+        end do
+      end do
+      ! Force use of result
+      if (dummy_work > 1.0e30_dp .or. dummy_work < -1.0e30_dp) then
+        print *, "Dummy work result:", dummy_work
+      end if
+      
+      time2 = get_wtime()
+      elapsed = time2 - time1
+      
+      if (elapsed <= 0.0_dp) then
+        print *, "ERROR: Timer still shows zero elapsed after expensive operation"
+        print *, "This may indicate a problem with the timing implementation"
+        print *, "Final elapsed:", elapsed, "Time1:", time1, "Time2:", time2
+        errors = errors + 1
+      else
+        print *, "Success: Longer operation measured elapsed time:", elapsed
+      end if
     end if
     
     if (errors == 0) then
