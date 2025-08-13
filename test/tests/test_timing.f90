@@ -15,6 +15,9 @@ program test_timing
   ! Test elapsed time with real operations
   call test_elapsed_time_real_ops(errors)
   
+  ! Test phase time printing (covers lines 34-49)
+  call test_phase_time_printing(errors)
+  
   if (errors == 0) then
     print *, "All timing module tests passed!"
   else
@@ -245,5 +248,70 @@ contains
     ! Use the result to prevent optimization
     if (dummy > 1.0e10_dp) print *, "Note: dummy=", dummy
   end subroutine cpu_intensive_work
+
+  subroutine test_phase_time_printing(errors)
+    integer, intent(inout) :: errors
+    integer(kind=8) :: start_phase, end_phase, saved_start, saved_phase
+    
+    print *, "Testing phase time printing (covers lines 34-49)..."
+    
+    ! Given: The timing module provides phase timing output
+    ! When: We call print_phase_time with different phase names
+    ! Then: It should print timing information and update phase_start_time
+    
+    call init_timer()
+    
+    ! Save original timing state
+    saved_start = program_start_time
+    saved_phase = phase_start_time
+    
+    ! Test 1: Basic phase timing with work between phases
+    print *, "  Testing basic phase timing output..."
+    
+    call cpu_intensive_work()  ! Do some work before first phase
+    call print_phase_time("Phase A")
+    
+    ! Check that phase_start_time was updated (should be different from program start)
+    if (phase_start_time == saved_start) then
+      print *, "ERROR: phase_start_time should be updated after print_phase_time"
+      errors = errors + 1
+    end if
+    
+    start_phase = phase_start_time
+    call cpu_intensive_work()  ! Do more work
+    call print_phase_time("Phase B")
+    
+    ! Check that phase_start_time was updated again
+    if (phase_start_time == start_phase) then
+      print *, "ERROR: phase_start_time should be updated after second print_phase_time"
+      errors = errors + 1
+    end if
+    
+    ! Test 2: Phase timing with longer phase name
+    call print_phase_time("Long Phase Name With Spaces")
+    
+    ! Test 3: Phase timing with special characters (but not problematic ones)
+    call print_phase_time("Phase_3-Final")
+    
+    ! Test 4: Minimal phase timing (empty work)
+    call print_phase_time("Quick Phase")
+    
+    ! Test 5: Check phase progression is monotonic
+    start_phase = phase_start_time
+    call cpu_intensive_work()
+    call print_phase_time("Final Phase")
+    end_phase = phase_start_time
+    
+    if (end_phase <= start_phase) then
+      print *, "ERROR: Phase times should be monotonic"
+      print *, "Start phase:", start_phase, "End phase:", end_phase
+      errors = errors + 1
+    end if
+    
+    if (errors == 0) then
+      print *, "  Phase time printing test PASSED"
+    end if
+    
+  end subroutine test_phase_time_printing
 
 end program test_timing
