@@ -186,16 +186,36 @@ jobs:
             echo "❌ coverage_filtered.info not found"
           fi
 
-      - name: Setup Python (use existing)
-        run: |
-          echo "Using pre-installed Python 3.13"
-          python3 --version
-          pip3 --version
-          # Install pycobertura for the coverage action
-          pip3 install pycobertura
+      - name: Produce the coverage report
+        id: coverage_report
+        uses: krystophny/coverage-action@main
+        continue-on-error: true
+        with:
+          # Path to the Cobertura XML report.
+          path: ./cobertura.xml
+          # Minimum total coverage threshold
+          threshold: 70
+          # Fail if coverage below threshold (but continue workflow)
+          fail: true
+          # Publish the rendered output as a PR comment
+          publish: true
+          # Enable diff coverage with storage branch
+          diff: true
+          # Branch to diff against
+          diff-branch: main
+          # Storage branch for coverage history (lightweight XML files only)
+          diff-storage: _coverage_storage
+          # Custom title for the coverage summary
+          coverage-summary-title: "Code Coverage Summary"
+          # Enable togglable report for organized sections
+          togglable-report: true
+          # Include detailed coverage with percentages and positions
+          exclude-detailed-coverage: false
+          # Add token explicitly for PR comments
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Coverage Comment Manually
-        if: github.event_name == 'pull_request'
+      - name: Generate Coverage Comment Manually (Fallback)
+        if: github.event_name == 'pull_request' && failure()
         uses: actions/github-script@v7
         with:
           script: |
