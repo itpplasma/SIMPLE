@@ -7,6 +7,13 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: write
+  actions: read
+
 jobs:
   checkout:
     name: Checkout Code
@@ -160,6 +167,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Debug - Check coverage file
+        run: |
+          echo "📊 Checking coverage files..."
+          if [ -f "cobertura.xml" ]; then
+            echo "✅ cobertura.xml exists"
+            echo "File size: $(ls -lh cobertura.xml | awk '{print $5}')"
+            echo "First 10 lines:"
+            head -10 cobertura.xml
+          else
+            echo "❌ cobertura.xml not found"
+          fi
+          
+          if [ -f "coverage_filtered.info" ]; then
+            echo "✅ coverage_filtered.info exists"
+            echo "File size: $(ls -lh coverage_filtered.info | awk '{print $5}')"
+          else
+            echo "❌ coverage_filtered.info not found"
+          fi
+
       - name: Produce the coverage report
         id: coverage_report
         uses: insightsengineering/coverage-action@v3
@@ -185,6 +211,8 @@ jobs:
           togglable-report: true
           # Include detailed coverage with percentages and positions
           exclude-detailed-coverage: false
+          # Add token explicitly for PR comments
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create coverage checks
         uses: actions/github-script@v7
