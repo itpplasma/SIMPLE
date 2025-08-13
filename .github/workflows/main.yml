@@ -34,7 +34,7 @@ jobs:
     name: Run Tests + Generate Coverage
     runs-on: self-hosted
     needs: checkout
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     
     steps:
       - name: Download repository

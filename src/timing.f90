@@ -54,6 +54,8 @@ contains
     integer(kind=8) :: current_time
     integer(kind=8) :: rate, max
     
+    ! Get current time with rate to ensure consistency
+    ! Note: We get rate each time in case get_wtime is called before init_timer
     call system_clock(current_time, rate, max)
     wtime = real(current_time, dp) / real(rate, dp)
   end function get_wtime
