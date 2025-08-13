@@ -2,6 +2,7 @@ program test_util
   use util
   implicit none
   
+  integer, parameter :: dp = kind(1.0d0)
   integer :: errors
   
   errors = 0
@@ -23,28 +24,28 @@ contains
 
   subroutine test_constants(errors)
     integer, intent(inout) :: errors
-    double precision, parameter :: math_tolerance = 1.0d-14
-    double precision, parameter :: physics_tolerance = 1.0d-10  ! Looser for physical constants
+    real(dp), parameter :: math_tolerance = 1.0d-14
+    real(dp), parameter :: physics_tolerance = 1.0d-10  ! Looser for physical constants
     
     ! Independent calculations of mathematical constants for verification
-    double precision, parameter :: pi_independent = 4.0d0 * atan(1.0d0)
-    double precision, parameter :: pi_leibniz = 4.0d0 * (1.0d0 - 1.0d0/3.0d0 + 1.0d0/5.0d0 - 1.0d0/7.0d0 + 1.0d0/9.0d0 &
+    real(dp), parameter :: pi_independent = 4.0d0 * atan(1.0d0)
+    real(dp), parameter :: pi_leibniz = 4.0d0 * (1.0d0 - 1.0d0/3.0d0 + 1.0d0/5.0d0 - 1.0d0/7.0d0 + 1.0d0/9.0d0 &
                                                         - 1.0d0/11.0d0 + 1.0d0/13.0d0 - 1.0d0/15.0d0 + 1.0d0/17.0d0 &
                                                         - 1.0d0/19.0d0 + 1.0d0/21.0d0 - 1.0d0/23.0d0 + 1.0d0/25.0d0)
     
     ! NIST/CODATA 2018 fundamental physical constants (exact values where defined)
-    double precision, parameter :: c_exact_si = 299792458.0d0           ! m/s (exact by definition)
-    double precision, parameter :: c_cgs = c_exact_si * 100.0d0         ! cm/s conversion
-    double precision, parameter :: e_charge_exact_si = 1.602176634d-19   ! Coulomb (exact by definition)
-    double precision, parameter :: e_mass_exact_kg = 9.1093837015d-31    ! kg (CODATA 2018)
-    double precision, parameter :: p_mass_exact_kg = 1.67262192369d-27   ! kg (CODATA 2018)
-    double precision, parameter :: ev_exact_joule = 1.602176634d-19      ! Joule (exact by definition)
+    real(dp), parameter :: c_exact_si = 299792458.0d0           ! m/s (exact by definition)
+    real(dp), parameter :: c_cgs = c_exact_si * 100.0d0         ! cm/s conversion
+    real(dp), parameter :: e_charge_exact_si = 1.602176634d-19   ! Coulomb (exact by definition)
+    real(dp), parameter :: e_mass_exact_kg = 9.1093837015d-31    ! kg (CODATA 2018)
+    real(dp), parameter :: p_mass_exact_kg = 1.67262192369d-27   ! kg (CODATA 2018)
+    real(dp), parameter :: ev_exact_joule = 1.602176634d-19      ! Joule (exact by definition)
     
     ! Converted CGS values
-    double precision, parameter :: e_charge_cgs_exact = 4.80320425d-10   ! Modern precise value
-    double precision, parameter :: e_mass_cgs_exact = e_mass_exact_kg * 1000.0d0  ! kg to g
-    double precision, parameter :: p_mass_cgs_exact = p_mass_exact_kg * 1000.0d0  ! kg to g
-    double precision, parameter :: ev_cgs_exact = ev_exact_joule * 1.0d7  ! Joule to erg (1 J = 10^7 erg)
+    real(dp), parameter :: e_charge_cgs_exact = 4.80320425d-10   ! Modern precise value
+    real(dp), parameter :: e_mass_cgs_exact = e_mass_exact_kg * 1000.0d0  ! kg to g
+    real(dp), parameter :: p_mass_cgs_exact = p_mass_exact_kg * 1000.0d0  ! kg to g
+    real(dp), parameter :: ev_cgs_exact = ev_exact_joule * 1.0d7  ! Joule to erg (1 J = 10^7 erg)
     
     print *, "Testing mathematical and physical constants against independent calculations..."
     
@@ -74,11 +75,18 @@ contains
       errors = errors + 1
     end if
     
-    ! Test sqrt2 computed independently
-    if (abs(sqrt2 - dsqrt(2.0d0)) > math_tolerance) then
-      print *, "ERROR: sqrt2 doesn't match sqrt(2.0) calculation"
-      print *, "Module sqrt2:", sqrt2, "sqrt(2.0):", dsqrt(2.0d0)
-      print *, "Difference:", abs(sqrt2 - dsqrt(2.0d0))
+    ! Test sqrt2 by verifying it satisfies mathematical properties
+    ! sqrt(2) * sqrt(2) should equal 2.0
+    if (abs(sqrt2 * sqrt2 - 2.0d0) > math_tolerance) then
+      print *, "ERROR: sqrt2 * sqrt2 doesn't equal 2.0"
+      print *, "sqrt2^2:", sqrt2 * sqrt2, "Expected: 2.0"
+      print *, "Difference:", abs(sqrt2 * sqrt2 - 2.0d0)
+      errors = errors + 1
+    end if
+    
+    ! Also verify sqrt2 is approximately 1.414213562...
+    if (abs(sqrt2 - 1.41421356237309504880d0) > math_tolerance) then
+      print *, "ERROR: sqrt2 doesn't match known value to high precision"
       errors = errors + 1
     end if
     
@@ -148,15 +156,15 @@ contains
   
   subroutine test_constant_usage(errors)
     integer, intent(inout) :: errors
-    double precision, parameter :: tolerance = 1.0d-12
-    double precision, parameter :: pi_independent = 4.0d0 * atan(1.0d0)
+    real(dp), parameter :: tolerance = 1.0d-12
+    real(dp), parameter :: pi_independent = 4.0d0 * atan(1.0d0)
     
     ! Variable declarations
-    double precision :: B_field, omega_cyclotron_expected, omega_cyclotron_computed
-    double precision :: energy_ev, energy_erg_expected, energy_erg_computed
-    double precision :: mass_ratio_expected, mass_ratio_computed
-    double precision :: radius, circumference_expected, circumference_computed
-    double precision :: side, diagonal_expected, diagonal_computed
+    real(dp) :: B_field, omega_cyclotron_expected, omega_cyclotron_computed
+    real(dp) :: energy_ev, energy_erg_expected, energy_erg_computed
+    real(dp) :: mass_ratio_expected, mass_ratio_computed
+    real(dp) :: radius, circumference_expected, circumference_computed
+    real(dp) :: side, diagonal_expected, diagonal_computed
     
     ! Test constants in typical physics computations
     
@@ -211,7 +219,7 @@ contains
     
     ! Test 5: Pythagorean theorem using sqrt2
     side = 3.0d0
-    diagonal_expected = side * dsqrt(2.0d0)  ! Independent calculation
+    diagonal_expected = side * 1.41421356237309504880d0  ! Known high-precision value
     diagonal_computed = side * sqrt2
     
     if (abs(diagonal_computed - diagonal_expected) > tolerance) then
