@@ -61,3 +61,4 @@ cobertura.xml
 coverage_html/
 coverage-badge.svg
 coverage-badge.json
+threed*.default

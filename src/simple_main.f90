@@ -13,7 +13,7 @@ module simple_main
     class_plot, ntcut, iclass, bmod00, xi, idx, bmin, bmax, dphi, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
     ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
-    field_input, isw_field_type, reuse_batch
+    field_input, isw_field_type, reuse_batch, boozxform_file
 
   implicit none
 
@@ -44,7 +44,7 @@ module simple_main
 
 
   subroutine run(norb)
-    use magfie_sub, only : init_magfie, VMEC
+    use magfie_sub, only : init_magfie, VMEC, BOOZXFORM, boozxform_filename
     use samplers, only: sample, START_FILE
     use timing, only : print_phase_time
     type(Tracer), intent(inout) :: norb
@@ -57,6 +57,14 @@ module simple_main
       call init_collisions
       call print_phase_time('Collision initialization completed')
     endif
+
+    ! Set BOOZXFORM filename if using that field type
+    if (isw_field_type == BOOZXFORM) then
+      if (trim(boozxform_file) == '') then
+        error stop 'BOOZXFORM field type requires boozxform_file to be set in namelist'
+      end if
+      boozxform_filename = boozxform_file
+    end if
 
     call init_magfie(VMEC)
     call print_phase_time('VMEC magnetic field initialization completed')
