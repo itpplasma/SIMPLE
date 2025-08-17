@@ -10,8 +10,9 @@ from plotale import plot_orbit, plot_mani, plot_cost_function
 
 f = field()
 
-dt = 1000
-nt = 600
+dt = 1.9
+
+nt = 4000
 
 metric = lambda z: {
     "_ii":  np.array([1, z[0]**2, (1 + z[0]*np.cos(z[1]))**2]),
@@ -27,21 +28,18 @@ def dLdx(v, dAth, dAph, dB, g):
     return ret
 
 
-def F(x, xold, pold):
-    global p
+def F(p, xold, pold):
+    global A
+
     ret = np.zeros(3)
-
-    xmid = (x + xold)/2
-    vmid = (x - xold)/dt
-
-    f.evaluate(xmid[0], xmid[1], xmid[2])
-    Amid = np.array([0, f.co_Ath, f.co_Aph])
-    g = metric(xmid)
-    pmid = pold + dt/2 * dLdx(vmid, f.co_dAth, f.co_dAph, f.dB, g)
-    p = pold + dt * dLdx(vmid, f.co_dAth, f.co_dAph, f.dB, g)
-    # d/dt p = d/dt dL/dq. = dL/dq
-    ret = x - xold - dt/m*g['^ii']*(pmid - qe/c*Amid)
+    f.evaluate(xold[0], xold[1], xold[2])
+    g = metric(xold)
+    A = np.array([0, f.co_Ath, f.co_Aph])
+    v = 1/m * g['^ii'] *(p - qe/c * A)
+    
+    ret = p - pold - dt * dLdx(v, f.co_dAth, f.co_dAph, f.dB, g)
     return ret
+    
 
 
 # Initial Conditions
@@ -62,18 +60,20 @@ tic = time()
 for kt in range(nt):
     pold = p
 
-    sol = root(F, z[:,kt], method='hybr',tol=1e-12,args=(z[:,kt], pold))
-    z[:,kt+1] = sol.x
+    sol = root(F, p, method='hybr',tol=1e-12,args=(z[:,kt], pold))
+    p = sol.x
+
+    z[:,kt+1] = z[:,kt] + dt/m * g['^ii']*(p - qe/c * A)
 
 
 
 
-#plot_orbit(z)
-#plt.plot(z[0,:5]*np.cos(z[1,:5]), z[0,:5]*np.sin(z[1,:5]), "o")
-#plt.show()
+plot_orbit(z)
+plt.plot(z[0,:5]*np.cos(z[1,:5]), z[0,:5]*np.sin(z[1,:5]), "o")
+plt.show()
 
-#plot_mani(z)
-#plt.show()
+plot_mani(z)
+plt.show()
 
 
 # %%
