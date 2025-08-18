@@ -1,64 +1,45 @@
 """
-ParticleBatch class providing zero-copy access to existing Fortran SoA arrays.
+Pure interface wrapper around existing Fortran zstart arrays.
 
-This module implements the core batch processing API that wraps existing
-zstart(5, n_particles) arrays from SIMPLE's Fortran implementation,
-providing cache-friendly column access with <5% performance overhead.
+Zero-copy access to existing SoA layout without independent computation.
+All particle initialization delegated to proven samplers.f90 functions.
 """
 
 import numpy as np
-from typing import Dict, Any, Optional, NamedTuple
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from ..backends.fortran import get_backend, FortranArrayWrapper
 
 
 @dataclass
 class Coordinates:
-    """Structured access to particle coordinates"""
+    """Zero-copy structured access to existing Fortran coordinate arrays"""
     s: np.ndarray       # Flux surface coordinate
     theta: np.ndarray   # Poloidal angle
     phi: np.ndarray     # Toroidal angle
     v_par: np.ndarray   # Parallel velocity
     mu: np.ndarray      # Magnetic moment
     
-    def __post_init__(self):
-        """Validate coordinate arrays"""
-        arrays = [self.s, self.theta, self.phi, self.v_par, self.mu]
-        shapes = [arr.shape for arr in arrays]
-        
-        if not all(shape == shapes[0] for shape in shapes):
-            raise ValueError("All coordinate arrays must have the same shape")
-        
-        self.n_particles = self.s.shape[0] if self.s.ndim == 1 else self.s.shape[-1]
+    @property
+    def n_particles(self) -> int:
+        """Number of particles from array size"""
+        return self.s.shape[0] if self.s.ndim == 1 else self.s.shape[-1]
 
 
 class ParticleBatch:
     """
-    Batch container for particle data using existing SoA layout.
+    Zero-copy wrapper around existing zstart(5, n_particles) arrays.
     
-    Provides zero-copy access to existing zstart(5, n_particles) arrays
-    with cache-friendly column access patterns optimized for HPC workflows.
-    
-    Memory Layout:
-        positions[0, :] = s coordinates (flux surface)
-        positions[1, :] = theta coordinates (poloidal angle)
-        positions[2, :] = phi coordinates (toroidal angle)
-        positions[3, :] = v_par coordinates (parallel velocity)
-        positions[4, :] = mu coordinates (magnetic moment)
-    
-    Performance Characteristics:
-        - Zero-copy access to Fortran arrays
-        - Cache-friendly column access (positions[:, particle_id])
-        - Contiguous memory layout for GPU transfer
-        - <5% overhead vs direct Fortran execution
+    Pure interface to existing Fortran SoA layout - no independent computation.
+    All functionality delegates to proven Fortran implementations.
     """
     
     def __init__(self, n_particles: int):
         """
-        Initialize batch with existing zstart(5, n_particles) layout.
+        Create wrapper around existing Fortran allocation.
         
         Args:
-            n_particles: Number of particles in the batch
+            n_particles: Number of particles
         """
         if n_particles <= 0:
             raise ValueError("Number of particles must be positive")
@@ -66,61 +47,46 @@ class ParticleBatch:
         self.n_particles = n_particles
         self._backend = get_backend()
         self._arrays = self._backend.allocate_particle_arrays(n_particles)
-        
-        # Validate SoA layout on initialization
-        self._validate_soa_layout()
     
-    def _validate_soa_layout(self):
-        """Validate SoA memory layout efficiency"""
-        try:
-            positions = self.positions
+    @classmethod
+    def from_fortran_arrays(cls, fortran_arrays: np.ndarray) -> 'ParticleBatch':
+        """
+        Create batch from existing Fortran arrays.
+        
+        Args:
+            fortran_arrays: Existing zstart array from Fortran
             
-            # Test 1: Contiguous memory layout
-            if not positions.flags.c_contiguous:
-                print("Warning: SoA layout is not C-contiguous")
-            
-            # Test 2: Verify shape
-            expected_shape = (5, self.n_particles)
-            if positions.shape != expected_shape:
-                print(f"Warning: positions shape {positions.shape} != expected {expected_shape}")
-            
-            # Test 3: Memory strides verification
-            if hasattr(positions, 'strides'):
-                stride_coords = positions.strides[0]  # Stride between coordinates
-                stride_particles = positions.strides[1]  # Stride between particles
-                
-                # For optimal SoA access, particle stride should be element size
-                element_size = positions.itemsize
-                if stride_particles != element_size:
-                    print(f"Warning: particle stride {stride_particles} != element size {element_size}")
-                
-                print(f"SoA validation: shape={positions.shape}, strides={positions.strides}")
-            
-        except Exception as e:
-            print(f"SoA validation warning: {e}")
+        Returns:
+            ParticleBatch: Wrapper around existing arrays
+        """
+        if fortran_arrays.shape[0] != 5:
+            raise ValueError("Fortran arrays must have shape (5, n_particles)")
+        
+        n_particles = fortran_arrays.shape[1]
+        batch = cls(n_particles)
+        
+        # Copy data into Fortran-allocated arrays
+        batch.positions[:] = fortran_arrays
+        
+        return batch
     
     @property
     def positions(self) -> np.ndarray:
         """
-        Zero-copy view of zstart array.
+        Zero-copy view of existing zstart array.
         
         Returns:
-            np.ndarray: Shape (5, n_particles) with SoA layout
-                - Row 0: s coordinates (flux surface)
-                - Row 1: theta coordinates (poloidal angle)  
-                - Row 2: phi coordinates (toroidal angle)
-                - Row 3: v_par coordinates (parallel velocity)
-                - Row 4: mu coordinates (magnetic moment)
+            np.ndarray: Shape (5, n_particles) SoA layout from Fortran
         """
         return self._arrays.get_zstart_view()
     
     @property
     def coordinates(self) -> Coordinates:
         """
-        Structured access to particle coordinates.
+        Structured access to existing coordinate arrays.
         
         Returns:
-            Coordinates: Named access to coordinate arrays
+            Coordinates: Zero-copy access to coordinate components
         """
         pos = self.positions
         return Coordinates(
@@ -131,74 +97,48 @@ class ParticleBatch:
             mu=pos[4, :]        # Magnetic moment
         )
     
-    def initialize_surface(self, vmec_file: str, s: float, **kwargs):
+    def initialize_from_samplers(self, vmec_file: str, method: str = 'surface', **kwargs):
         """
-        Initialize particles on flux surface using existing samplers.
+        Initialize using existing samplers.f90 functions.
         
         Args:
             vmec_file: Path to VMEC equilibrium file
-            s: Flux surface coordinate (0 < s < 1)
-            **kwargs: Additional sampling parameters
+            method: Sampling method ('surface', 'volume', 'file')
+            **kwargs: Method-specific parameters
         """
-        if not (0 < s < 1):
-            raise ValueError("Flux surface coordinate s must be between 0 and 1")
+        if method == 'surface':
+            from ..samplers import SurfaceSampler
+            sampler = SurfaceSampler(vmec_file)
+            particle_data = sampler.sample_surface_fieldline(self.n_particles)
+            
+        elif method == 'volume':
+            from ..samplers import VolumeSampler
+            sampler = VolumeSampler(vmec_file)
+            s_inner = kwargs.get('s_inner', 0.1)
+            s_outer = kwargs.get('s_outer', 0.9)
+            particle_data = sampler.sample_volume_single(self.n_particles, s_inner, s_outer)
+            
+        elif method == 'file':
+            from ..samplers import FileSampler
+            sampler = FileSampler(vmec_file)
+            filename = kwargs.get('filename', 'start.dat')
+            particle_data = sampler.load_from_file(filename)
+            
+        else:
+            raise ValueError(f"Unknown method '{method}'. Use 'surface', 'volume', or 'file'")
         
-        try:
-            # For now, initialize with simple test pattern
-            # TODO: Integrate with existing samplers.f90 functions
-            pos = self.positions
-            
-            # Initialize with deterministic pattern for testing
-            np.random.seed(42)  # Deterministic for testing
-            pos[0, :] = s + 0.1 * (np.random.random(self.n_particles) - 0.5)  # s ± 0.05
-            pos[1, :] = np.random.uniform(0, 2*np.pi, self.n_particles)       # theta
-            pos[2, :] = np.random.uniform(0, 2*np.pi, self.n_particles)       # phi
-            pos[3, :] = np.random.uniform(-1, 1, self.n_particles)            # v_par
-            pos[4, :] = np.random.uniform(0, 1, self.n_particles)             # mu
-            
-            print(f"Initialized {self.n_particles} particles on surface s={s}")
-            
-        except Exception as e:
-            raise RuntimeError(f"Surface initialization failed: {e}")
-    
-    def initialize_volume(self, vmec_file: str, s_min: float, s_max: float):
-        """
-        Volume sampling using existing implementation.
-        
-        Args:
-            vmec_file: Path to VMEC equilibrium file
-            s_min: Minimum flux surface coordinate
-            s_max: Maximum flux surface coordinate
-        """
-        if not (0 < s_min < s_max < 1):
-            raise ValueError("Must have 0 < s_min < s_max < 1")
-        
-        try:
-            # For now, initialize with simple volume pattern
-            # TODO: Integrate with existing samplers.f90 functions
-            pos = self.positions
-            
-            np.random.seed(42)  # Deterministic for testing
-            pos[0, :] = np.random.uniform(s_min, s_max, self.n_particles)     # s
-            pos[1, :] = np.random.uniform(0, 2*np.pi, self.n_particles)       # theta
-            pos[2, :] = np.random.uniform(0, 2*np.pi, self.n_particles)       # phi
-            pos[3, :] = np.random.uniform(-1, 1, self.n_particles)            # v_par
-            pos[4, :] = np.random.uniform(0, 1, self.n_particles)             # mu
-            
-            print(f"Initialized {self.n_particles} particles in volume s∈[{s_min}, {s_max}]")
-            
-        except Exception as e:
-            raise RuntimeError(f"Volume initialization failed: {e}")
+        # Copy Fortran-generated data into our arrays
+        self.positions[:] = particle_data
     
     def initialize_from_array(self, particle_data: np.ndarray):
         """
-        Initialize particles from existing array data.
+        Initialize from existing array data.
         
         Args:
             particle_data: Array with shape (5, n_particles) or (n_particles, 5)
         """
         if particle_data.shape == (5, self.n_particles):
-            # SoA format
+            # SoA format - direct copy
             self.positions[:] = particle_data
         elif particle_data.shape == (self.n_particles, 5):
             # AoS format - transpose to SoA
@@ -212,7 +152,7 @@ class ParticleBatch:
         Export data for serialization/analysis.
         
         Returns:
-            Dict: Serializable representation of particle data
+            Dict: Serializable representation
         """
         return {
             'coordinates': self.positions.copy(),
@@ -237,7 +177,7 @@ class ParticleBatch:
     
     def copy(self) -> 'ParticleBatch':
         """
-        Create a deep copy of the particle batch.
+        Create independent copy.
         
         Returns:
             ParticleBatch: Independent copy with own memory
@@ -248,14 +188,14 @@ class ParticleBatch:
     
     def slice(self, start: int, end: Optional[int] = None) -> 'ParticleBatch':
         """
-        Create a new batch containing a subset of particles.
+        Create subset batch.
         
         Args:
             start: Starting particle index
             end: Ending particle index (exclusive)
             
         Returns:
-            ParticleBatch: New batch with subset of particles
+            ParticleBatch: New batch with subset
         """
         if end is None:
             end = self.n_particles
@@ -271,7 +211,7 @@ class ParticleBatch:
     
     def get_particle(self, index: int) -> np.ndarray:
         """
-        Get coordinates for a single particle (cache-friendly column access).
+        Get single particle coordinates (cache-friendly column access).
         
         Args:
             index: Particle index
@@ -282,16 +222,15 @@ class ParticleBatch:
         if not (0 <= index < self.n_particles):
             raise IndexError(f"Particle index {index} out of range [0, {self.n_particles})")
         
-        # Cache-friendly column access - existing SoA optimization
         return self.positions[:, index].copy()
     
     def set_particle(self, index: int, coordinates: np.ndarray):
         """
-        Set coordinates for a single particle.
+        Set single particle coordinates.
         
         Args:
             index: Particle index
-            coordinates: Array with shape (5,) containing [s, theta, phi, v_par, mu]
+            coordinates: Array with shape (5,)
         """
         if not (0 <= index < self.n_particles):
             raise IndexError(f"Particle index {index} out of range [0, {self.n_particles})")
@@ -301,12 +240,29 @@ class ParticleBatch:
         
         self.positions[:, index] = coordinates
     
+    def validate_layout(self) -> Dict[str, Any]:
+        """
+        Validate SoA memory layout.
+        
+        Returns:
+            Dict: Layout validation results
+        """
+        positions = self.positions
+        
+        return {
+            'shape': positions.shape,
+            'c_contiguous': positions.flags.c_contiguous,
+            'strides': getattr(positions, 'strides', None),
+            'dtype': positions.dtype,
+            'fortran_allocated': True  # Always true - from backend
+        }
+    
     def __len__(self) -> int:
-        """Return number of particles in batch"""
+        """Return number of particles"""
         return self.n_particles
     
     def __repr__(self) -> str:
-        """String representation of particle batch"""
+        """String representation"""
         return f"ParticleBatch(n_particles={self.n_particles})"
     
     def __str__(self) -> str:
@@ -318,57 +274,60 @@ class ParticleBatch:
                 f"  SoA shape: {self.positions.shape}")
 
 
-# Performance validation utilities
-def validate_soa_performance(batch: ParticleBatch, verbose: bool = True) -> Dict[str, Any]:
+# Convenience functions for common initialization patterns
+def create_surface_batch(n_particles: int, vmec_file: str, s: float = 0.9) -> ParticleBatch:
     """
-    Validate SoA memory layout performance characteristics.
+    Create batch using existing surface sampling.
     
     Args:
-        batch: ParticleBatch to validate
-        verbose: Print detailed validation results
+        n_particles: Number of particles
+        vmec_file: VMEC equilibrium file
+        s: Flux surface coordinate
         
     Returns:
-        Dict: Performance validation results
+        ParticleBatch: Initialized batch
     """
-    import time
+    batch = ParticleBatch(n_particles)
+    batch.initialize_from_samplers(vmec_file, method='surface', s=s)
+    return batch
+
+
+def create_volume_batch(
+    n_particles: int, 
+    vmec_file: str, 
+    s_inner: float = 0.1, 
+    s_outer: float = 0.9
+) -> ParticleBatch:
+    """
+    Create batch using existing volume sampling.
     
-    results = {}
-    positions = batch.positions
+    Args:
+        n_particles: Number of particles
+        vmec_file: VMEC equilibrium file
+        s_inner: Inner flux surface
+        s_outer: Outer flux surface
+        
+    Returns:
+        ParticleBatch: Initialized batch
+    """
+    batch = ParticleBatch(n_particles)
+    batch.initialize_from_samplers(vmec_file, method='volume', s_inner=s_inner, s_outer=s_outer)
+    return batch
+
+
+def load_batch_from_file(vmec_file: str, filename: str) -> ParticleBatch:
+    """
+    Load batch using existing file loading.
     
-    # Test 1: Memory layout validation
-    results['c_contiguous'] = positions.flags.c_contiguous
-    results['shape'] = positions.shape
-    results['strides'] = getattr(positions, 'strides', None)
+    Args:
+        vmec_file: VMEC equilibrium file
+        filename: File containing particle data
+        
+    Returns:
+        ParticleBatch: Loaded batch
+    """
+    from ..samplers import FileSampler
+    sampler = FileSampler(vmec_file)
+    particle_data = sampler.load_from_file(filename)
     
-    # Test 2: Column access performance (cache-friendly)
-    n_samples = min(1000, batch.n_particles)
-    start_time = time.perf_counter()
-    for i in range(n_samples):
-        particle_coords = positions[:, i]  # Column access
-    column_time = time.perf_counter() - start_time
-    results['column_access_time'] = column_time
-    
-    # Test 3: Row access performance (should be slower)
-    start_time = time.perf_counter()
-    for j in range(5):
-        coord_array = positions[j, :n_samples]  # Row access
-    row_time = time.perf_counter() - start_time
-    results['row_access_time'] = row_time
-    
-    # Calculate access pattern efficiency
-    if row_time > 0:
-        results['soa_efficiency'] = column_time / row_time
-        results['cache_friendly'] = column_time < row_time * 0.5
-    else:
-        results['soa_efficiency'] = 0
-        results['cache_friendly'] = True
-    
-    if verbose:
-        print(f"SoA Performance Validation:")
-        print(f"  Shape: {results['shape']}")
-        print(f"  C-contiguous: {results['c_contiguous']}")
-        print(f"  Column access time: {column_time:.6f}s")
-        print(f"  Row access time: {row_time:.6f}s")
-        print(f"  Cache-friendly: {results['cache_friendly']}")
-    
-    return results
+    return ParticleBatch.from_fortran_arrays(particle_data)
