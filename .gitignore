@@ -26,6 +26,7 @@ Release
 Fast
 _*.c
 *.pyc
+__pycache__/
 python/launch*
 .DS_Store
 RUN_*
