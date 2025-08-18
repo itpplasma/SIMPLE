@@ -6,10 +6,15 @@ Modules:
 - visualization: Batch visualization tools (future)
 """
 
-from .memory import ParticleBatchStream, process_large_simulation, StreamResults
+from .memory import (
+    process_large_simulation, estimate_memory_usage,
+    optimize_batch_size, MemoryMonitor, run_million_particle_simulation
+)
 
 __all__ = [
-    "ParticleBatchStream",
     "process_large_simulation",
-    "StreamResults"
+    "estimate_memory_usage", 
+    "optimize_batch_size",
+    "MemoryMonitor",
+    "run_million_particle_simulation"
 ]

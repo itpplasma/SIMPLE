@@ -398,6 +398,20 @@ class BatchResults:
     def __str__(self) -> str:
         """Detailed string representation"""
         return self.summary()
+    
+    def compare_with(self, other: 'BatchResults', rtol: float = 1e-10, atol: float = 1e-12) -> Dict[str, bool]:
+        """
+        Compare with another BatchResults instance.
+        
+        Args:
+            other: Other BatchResults to compare with
+            rtol: Relative tolerance
+            atol: Absolute tolerance
+            
+        Returns:
+            Dict: Comparison results
+        """
+        return compare_results(self, other, rtol=rtol, atol=atol)
 
 
 # Analysis utilities
