@@ -18,9 +18,15 @@ Performance Guarantees:
 
 from .core.batch import ParticleBatch
 from .core.results import BatchResults, ConfinementStats
-from .core.simulation import trace_orbits, create_configuration
+from .core.simulation import (
+    trace_orbits, create_configuration, benchmark_performance, 
+    validate_golden_record, quick_simulation, parameter_sweep
+)
 from .samplers import SurfaceSampler, VolumeSampler, FileSampler
-from .utils.memory import ParticleBatchStream, process_large_simulation
+from .utils.memory import (
+    ParticleBatchStream, process_large_simulation, estimate_memory_usage,
+    optimize_batch_size, MemoryMonitor
+)
 
 __version__ = "1.0.0"
 __all__ = [
@@ -29,9 +35,16 @@ __all__ = [
     "ConfinementStats",
     "trace_orbits",
     "create_configuration",
+    "benchmark_performance",
+    "validate_golden_record", 
+    "quick_simulation",
+    "parameter_sweep",
     "SurfaceSampler",
     "VolumeSampler", 
     "FileSampler",
     "ParticleBatchStream",
-    "process_large_simulation"
+    "process_large_simulation",
+    "estimate_memory_usage",
+    "optimize_batch_size",
+    "MemoryMonitor"
 ]
