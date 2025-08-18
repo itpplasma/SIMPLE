@@ -67,21 +67,73 @@ class FortranBackend:
         
         # Set parameters using existing namelist system
         params_module = self._pysimple.params
-        for key, value in config.items():
+        
+        # Set essential parameters with defaults
+        essential_params = {
+            'ntestpart': config.get('ntestpart', arrays.n_particles),
+            'trace_time': config.get('tmax', 1e-2),
+            'integmode': config.get('integmode', 2),
+            'dtau': config.get('dtau', 1e-6),
+            'dtaumin': config.get('dtaumin', 1e-7),
+            'ntau': config.get('ntau', 100),
+            'ntimstep': config.get('ntimstep', 1000),
+            'startmode': config.get('startmode', 1),
+            'sbeg': config.get('sbeg', 0.9),
+            'isw_field_type': config.get('isw_field_type', 2),  # Boozer coordinates
+            'v0': config.get('v0', 1e7),
+            'relerr': config.get('relerr', 1e-12),
+        }
+        
+        for key, value in essential_params.items():
             if hasattr(params_module, key):
                 setattr(params_module, key, value)
+                print(f"Set {key} = {value}")
             else:
                 print(f"Warning: parameter '{key}' not found in params module")
         
+        # Ensure zstart array is properly set in params
+        zstart_view = arrays.get_zstart_view()
+        if hasattr(params_module, 'zstart'):
+            # Copy data to Fortran array
+            fortran_zstart = params_module.zstart
+            if hasattr(fortran_zstart, 'shape'):
+                if fortran_zstart.shape == zstart_view.shape:
+                    fortran_zstart[:, :] = zstart_view
+                else:
+                    print(f"Warning: zstart shape mismatch: {fortran_zstart.shape} vs {zstart_view.shape}")
+                    # Copy what we can
+                    min_coords = min(fortran_zstart.shape[0], zstart_view.shape[0])
+                    min_particles = min(fortran_zstart.shape[1], zstart_view.shape[1])
+                    fortran_zstart[:min_coords, :min_particles] = zstart_view[:min_coords, :min_particles]
+        
         # Call existing main simulation loop
         try:
-            # This would call the existing OpenMP parallelized execution
-            # For now, we'll prepare the infrastructure
             print(f"Running simulation with {config.get('ntestpart', 0)} particles")
-            print(f"Simulation parameters: tmax={config.get('tmax', 0)}")
+            print(f"Simulation parameters: tmax={config.get('tmax', 0)}, integmode={config.get('integmode', 2)}")
             
-            # TODO: Uncomment when ready to run actual simulation
-            # self._pysimple.simple_main.run_simple()
+            # Create tracer object for simulation
+            tracer = self._pysimple.simple.Tracer()
+            
+            # Initialize field using VMEC file if available
+            vmec_file = config.get('vmec_file', 'wout.nc')
+            if hasattr(self._pysimple.simple_main, 'init_field'):
+                # Initialize field with default parameters
+                # Parameters: vmec_file, ns_s, ns_tp, multharm, integmode
+                ns_s = config.get('ns_s', 5)
+                ns_tp = config.get('ns_tp', 5)
+                multharm = config.get('multharm', 5)
+                integmode = config.get('integmode', 2)
+                
+                print(f"Initializing field from {vmec_file}")
+                self._pysimple.simple_main.init_field(tracer, vmec_file, ns_s, ns_tp, multharm, integmode)
+            
+            # Initialize required components
+            self._pysimple.simple_main.init_counters()
+            
+            # Run the main simulation
+            self._pysimple.simple_main.run(tracer)
+            
+            print("Simulation completed successfully")
             
         except Exception as e:
             raise RuntimeError(f"Simulation execution failed: {e}")
@@ -140,11 +192,12 @@ class FortranArrayWrapper:
                     # Correct first dimension, adjust second dimension
                     available_particles = zstart.shape[1]
                     if available_particles >= self.n_particles:
-                        # Take subset
-                        return zstart[:, :self.n_particles]
+                        # Take subset and ensure C-contiguous
+                        subset = zstart[:, :self.n_particles]
+                        return np.ascontiguousarray(subset)
                     else:
                         # Expand array (create new array and copy)
-                        expanded = np.zeros((5, self.n_particles), dtype=zstart.dtype)
+                        expanded = np.zeros((5, self.n_particles), dtype=zstart.dtype, order='C')
                         expanded[:, :available_particles] = zstart
                         return expanded
                 else:
@@ -152,13 +205,17 @@ class FortranArrayWrapper:
                     if zstart.size >= 5 * self.n_particles:
                         # Take first elements and reshape
                         flat_data = zstart.flatten()[:5 * self.n_particles]
-                        return flat_data.reshape(expected_shape)
+                        return np.ascontiguousarray(flat_data.reshape(expected_shape))
                     else:
                         # Create new array with available data
-                        expanded = np.zeros((5, self.n_particles), dtype=np.float64)
+                        expanded = np.zeros((5, self.n_particles), dtype=np.float64, order='C')
                         available_elements = min(zstart.size, 5 * self.n_particles)
                         expanded.flat[:available_elements] = zstart.flat[:available_elements]
                         return expanded
+        
+        # Ensure returned array is C-contiguous
+        if hasattr(zstart, 'flags') and not zstart.flags.c_contiguous:
+            return np.ascontiguousarray(zstart)
         
         return zstart
     
@@ -227,13 +284,19 @@ class FortranResultWrapper:
             if hasattr(zend, 'shape'):
                 if zend.shape != expected_shape:
                     if zend.size == 5 * self.n_particles:
-                        return zend.reshape(expected_shape)
+                        reshaped = zend.reshape(expected_shape)
+                        return np.ascontiguousarray(reshaped)
                     else:
                         raise ValueError(f"zend size {zend.size} incompatible with expected shape {expected_shape}")
+                
+                # Ensure C-contiguous
+                if not zend.flags.c_contiguous:
+                    return np.ascontiguousarray(zend)
+                
             return zend
         else:
             # Return default array if not available
-            return np.zeros((5, self.n_particles), dtype=np.float64)
+            return np.zeros((5, self.n_particles), dtype=np.float64, order='C')
     
     def get_trap_par_view(self) -> np.ndarray:
         """Direct view of existing trap_par array"""

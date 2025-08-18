@@ -189,19 +189,18 @@ class BatchResults:
             loss_time_distribution=loss_time_distribution
         )
     
-    def get_confined_particles(self) -> Tuple[np.ndarray, np.ndarray]:
+    def get_confined_particles(self) -> np.ndarray:
         """
-        Get initial and final positions for confined particles only.
+        Get final positions for confined particles only.
         
         Returns:
-            Tuple[np.ndarray, np.ndarray]: (initial_positions, final_positions)
-                Both arrays have shape (5, n_confined)
+            np.ndarray: Final positions with shape (5, n_confined)
         """
         confined_mask = self.confined_mask
         n_confined = confined_mask.sum()
         
         if n_confined == 0:
-            return np.zeros((5, 0)), np.zeros((5, 0))
+            return np.zeros((5, 0))
         
         # Extract confined particle data
         confined_final = self.final_positions[:, confined_mask]
