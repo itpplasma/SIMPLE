@@ -1,0 +1,8 @@
+&config
+multharm = 3         ! Fast but inaccurate splines
+ntestpart = 32
+trace_time = 1e-3
+contr_pp = -1e10     ! Trace all passing passing
+startmode = 2        ! Read start file
+! Otherwise default values, see params.f90
+/
