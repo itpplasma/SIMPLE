@@ -14,14 +14,18 @@ def main():
     # Check if SIMPLE is available
     simple.info()
     
+    # Load VMEC file once for whole simulation
+    print("Loading VMEC equilibrium...")
+    simple.load_vmec('wout.nc')
+    
     # Sample particles on flux surface
     print("Sampling 1000 particles on s=0.9 surface...")
-    particles = simple.sample_surface('wout.nc', n_particles=1000, s=0.9)
+    particles = simple.sample_surface(n_particles=1000, s=0.9)
     print(f"Sampled particles shape: {particles.shape}")
     
     # Trace orbits
     print("Tracing particle orbits...")
-    results = simple.trace_particles('wout.nc', particles, tmax=100.0)
+    results = simple.trace(particles, tmax=100.0)
     
     # Analyze results
     confined = simple.get_confined(results)
@@ -34,7 +38,7 @@ def main():
     
     # Volume sampling
     print("\nVolume sampling example...")
-    volume_particles = simple.sample_volume('wout.nc', n_particles=500)
+    volume_particles = simple.sample_volume(n_particles=500)
     print(f"Volume particles shape: {volume_particles.shape}")
 
 
