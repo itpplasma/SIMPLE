@@ -14,9 +14,9 @@ def main():
     # Check if SIMPLE is available
     simple.info()
     
-    # Load VMEC file once for whole simulation
-    print("Loading VMEC equilibrium...")
-    simple.load_vmec('wout.nc')
+    # Load field once for whole simulation
+    print("Loading field from VMEC equilibrium...")
+    simple.load_field('wout.nc')
     
     # Sample particles on flux surface
     print("Sampling 1000 particles on s=0.9 surface...")

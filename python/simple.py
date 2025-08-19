@@ -14,9 +14,9 @@ except ImportError:
     raise ImportError("pysimple module not found. Build SIMPLE with Python support.")
 
 
-def load_vmec(vmec_file):
+def load_field(vmec_file):
     """
-    Load VMEC equilibrium file for the whole simulation.
+    Load field from VMEC equilibrium file for the whole simulation.
     Must be called before sampling or tracing.
     
     Args:
