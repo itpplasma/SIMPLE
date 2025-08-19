@@ -13,8 +13,8 @@ def basic_example():
     print("=== Basic Example ===")
     
     simple.load_field('wout.nc')
-    particles = simple.sample_surface(100, s=0.9)
-    results = simple.trace(particles, tmax=50.0, integrator=simple.SYMPLECTIC)
+    particles = simple.sample_surface(100, s=0.3)
+    results = simple.trace(particles, tmax=0.1, integrator=simple.SYMPLECTIC)
     
     confined = simple.get_confined(results)
     lost = simple.get_lost(results)
@@ -31,7 +31,7 @@ def confinement_study():
     
     for s in [0.3, 0.6, 0.9]:
         particles = simple.sample_surface(200, s=s)
-        results = simple.trace(particles, tmax=100.0, integrator=simple.MIDPOINT)
+        results = simple.trace(particles, tmax=0.1, integrator=simple.MIDPOINT)
         confined = simple.get_confined(results)
         print(f"s={s}: {confined.shape[1]/particles.shape[1]:.3f}")
 
@@ -41,7 +41,7 @@ def volume_example():
     
     simple.load_field('wout.nc')
     particles = simple.sample_volume(150, s_inner=0.1, s_outer=0.8)
-    results = simple.trace(particles, tmax=75.0, integrator=simple.RK4)
+    results = simple.trace(particles, tmax=0.1, integrator=simple.RK4)
     
     confined = simple.get_confined(results)
     lost = simple.get_lost(results)

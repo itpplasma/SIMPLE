@@ -24,7 +24,7 @@ def load_field(vmec_file):
     # Initialize field properly
     pysimple.params.params_init()
 
-def sample_surface(n_particles, s=0.9):
+def sample_surface(n_particles, s=0.3):
     """Sample particles on flux surface using existing samplers.f90."""
     # Set up for surface sampling
     pysimple.params.ntestpart = n_particles
@@ -48,7 +48,7 @@ def load_particles(particle_file):
     # Call existing file loading
     return np.random.randn(5, n_particles) * 0.1
 
-def trace(particles, tmax=100.0, integrator=MIDPOINT):
+def trace(particles, tmax=0.1, integrator=MIDPOINT):
     """Trace particle orbits using existing SIMPLE Fortran implementation."""
     particles = np.asarray(particles)
     if particles.shape[0] != 5:
@@ -72,7 +72,7 @@ def trace(particles, tmax=100.0, integrator=MIDPOINT):
 def get_confined(results, t_threshold=None):
     """Get confined particles from simulation results."""
     if t_threshold is None:
-        t_threshold = results.get('tmax', 100.0)
+        t_threshold = results.get('tmax', 0.1)
     
     loss_times = results['loss_times']
     confined_mask = loss_times >= t_threshold
@@ -82,7 +82,7 @@ def get_confined(results, t_threshold=None):
 def get_lost(results, t_threshold=None):
     """Get lost particles from simulation results."""
     if t_threshold is None:
-        t_threshold = results.get('tmax', 100.0)
+        t_threshold = results.get('tmax', 0.1)
     
     loss_times = results['loss_times']
     lost_mask = loss_times < t_threshold
