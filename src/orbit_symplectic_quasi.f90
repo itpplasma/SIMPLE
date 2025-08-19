@@ -479,8 +479,8 @@ subroutine f_ode(tau, z, zdot)
   !
 
   real(dp), intent(in)  :: tau
-  real(dp), intent(in)  :: z(4)
-  real(dp), intent(out) :: zdot(4)
+  real(dp), intent(in)  :: z(:)
+  real(dp), intent(out) :: zdot(:)
   real(dp) :: Hprime
 
   call eval_field(f, z(1), z(2), z(3), 0)

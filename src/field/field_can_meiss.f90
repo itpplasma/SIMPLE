@@ -9,6 +9,10 @@ use field, only: MagneticField
 
 implicit none
 
+type :: grid_indices_t
+    integer :: i_th, i_phi
+end type grid_indices_t
+
 class(MagneticField), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
@@ -31,23 +35,19 @@ contains
 
 subroutine rh_can_wrapper(r_c, z, dz, context)
     real(dp), intent(in) :: r_c
-    real(dp), dimension(2), intent(in) :: z
-    real(dp), dimension(2), intent(inout) :: dz
-    class(*), intent(in), optional :: context
+    real(dp), dimension(:), intent(in) :: z
+    real(dp), dimension(:), intent(out) :: dz
+    class(*), intent(in) :: context
     
     integer :: i_th, i_phi
     
-    if (present(context)) then
-        select type(context)
-        type is (integer, dimension(2))
-            i_th = context(1)
-            i_phi = context(2)
-        class default
-            error stop "Expected integer(2) array context in rh_can_wrapper"
-        end select
-    else
-        error stop "Context required for rh_can_wrapper"
-    end if
+    select type(context)
+    type is (grid_indices_t)
+        i_th = context%i_th
+        i_phi = context%i_phi
+    class default
+        error stop "Expected grid_indices_t context in rh_can_wrapper"
+    end select
     
     call rh_can(r_c, z, dz, i_th, i_phi)
 end subroutine rh_can_wrapper
@@ -210,13 +210,13 @@ subroutine integrate(i_r, i_th, i_phi, y)
     real(dp), parameter :: relerr=1d-11
     real(dp) :: r1, r2
     integer :: ndim=2
-    integer, dimension(2) :: context
+    type(grid_indices_t) :: context
 
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
     
-    context = [i_th, i_phi]
-    call odeint_allroutines(y, ndim, r1, r2, relerr, rh_can_wrapper, context)
+    context = grid_indices_t(i_th, i_phi)
+    call odeint_allroutines(y, ndim, context, r1, r2, relerr, rh_can_wrapper)
 
     lam_phi(i_r, i_th, i_phi) = y(1)
     chi_gauge(i_r, i_th, i_phi) = y(2)
@@ -226,7 +226,7 @@ end subroutine integrate
 subroutine rh_can(r_c, z, dz, i_th, i_phi)
     real(dp), intent(in) :: r_c
     real(dp), dimension(2), intent(in) :: z  ! lam_phi, chi_gauge
-    real(dp), dimension(2), intent(inout) :: dz
+    real(dp), dimension(2), intent(out) :: dz
     integer, intent(in) :: i_th, i_phi
     real(dp) :: phi_c
     real(dp) :: Ar, Ap, hr, hp
