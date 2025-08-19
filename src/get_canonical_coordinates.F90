@@ -251,6 +251,10 @@ contains
 #endif
 
       implicit none
+      
+      real(dp), intent(in) :: r
+      real(dp), intent(in) :: y(:)
+      real(dp), intent(out) :: dy(:)
 
       real(dp), parameter :: epserr = 1.d-14
       integer :: iter
@@ -258,8 +262,7 @@ contains
          alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_r
       logical :: converged
 
-      real(dp) :: r, vartheta, daiota_ds, deltheta
-      real(dp), dimension(1) :: y, dy
+      real(dp) :: vartheta, daiota_ds, deltheta
 
       s = r**2
 
