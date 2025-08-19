@@ -18,13 +18,19 @@ MIDPOINT = 2
 SYMPLECTIC = 3
 RK4 = 4
 
+# Default values
+DEFAULT_TMAX = 0.1
+DEFAULT_SURFACE = 0.3
+DEFAULT_S_INNER = 0.1
+DEFAULT_S_OUTER = 0.9
+
 def load_field(vmec_file):
     """Load field from VMEC equilibrium file."""
     pysimple.params.vmec_file = str(vmec_file)
     # Initialize field properly
     pysimple.params.params_init()
 
-def sample_surface(n_particles, s=0.3):
+def sample_surface(n_particles, s=DEFAULT_SURFACE):
     """Sample particles on flux surface using existing samplers.f90."""
     # Set up for surface sampling
     pysimple.params.ntestpart = n_particles
@@ -33,7 +39,7 @@ def sample_surface(n_particles, s=0.3):
     # For now return test data until proper integration
     return np.random.randn(5, n_particles) * 0.1
 
-def sample_volume(n_particles, s_inner=0.1, s_outer=0.9):
+def sample_volume(n_particles, s_inner=DEFAULT_S_INNER, s_outer=DEFAULT_S_OUTER):
     """Sample particles in volume using existing samplers.f90."""
     pysimple.params.ntestpart = n_particles
     pysimple.params.startmode = 3  # Volume sampling
@@ -48,7 +54,7 @@ def load_particles(particle_file):
     # Call existing file loading
     return np.random.randn(5, n_particles) * 0.1
 
-def trace(particles, tmax=0.1, integrator=MIDPOINT):
+def trace(particles, tmax=DEFAULT_TMAX, integrator=MIDPOINT):
     """Trace particle orbits using existing SIMPLE Fortran implementation."""
     particles = np.asarray(particles)
     if particles.shape[0] != 5:
@@ -72,7 +78,7 @@ def trace(particles, tmax=0.1, integrator=MIDPOINT):
 def get_confined(results, t_threshold=None):
     """Get confined particles from simulation results."""
     if t_threshold is None:
-        t_threshold = results.get('tmax', 0.1)
+        t_threshold = results.get('tmax', DEFAULT_TMAX)
     
     loss_times = results['loss_times']
     confined_mask = loss_times >= t_threshold
@@ -82,7 +88,7 @@ def get_confined(results, t_threshold=None):
 def get_lost(results, t_threshold=None):
     """Get lost particles from simulation results."""
     if t_threshold is None:
-        t_threshold = results.get('tmax', 0.1)
+        t_threshold = results.get('tmax', DEFAULT_TMAX)
     
     loss_times = results['loss_times']
     lost_mask = loss_times < t_threshold
