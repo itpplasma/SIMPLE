@@ -29,6 +29,29 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
 
+subroutine rh_can_wrapper(r_c, z, dz, context)
+    real(dp), intent(in) :: r_c
+    real(dp), dimension(2), intent(in) :: z
+    real(dp), dimension(2), intent(inout) :: dz
+    class(*), intent(in), optional :: context
+    
+    integer :: i_th, i_phi
+    
+    if (present(context)) then
+        select type(context)
+        type is (integer, dimension(2))
+            i_th = context(1)
+            i_phi = context(2)
+        class default
+            error stop "Expected integer(2) array context in rh_can_wrapper"
+        end select
+    else
+        error stop "Context required for rh_can_wrapper"
+    end if
+    
+    call rh_can(r_c, z, dz, i_th, i_phi)
+end subroutine rh_can_wrapper
+
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     use new_vmec_stuff_mod, only : nper
 
@@ -179,7 +202,7 @@ subroutine init_transformation
 end subroutine init_transformation
 
 subroutine integrate(i_r, i_th, i_phi, y)
-    use odeint_sub, only: odeint_allroutines
+    use odeint_allroutines_sub, only: odeint_allroutines
 
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
@@ -187,24 +210,16 @@ subroutine integrate(i_r, i_th, i_phi, y)
     real(dp), parameter :: relerr=1d-11
     real(dp) :: r1, r2
     integer :: ndim=2
+    integer, dimension(2) :: context
 
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
-
-    call odeint_allroutines(y, ndim, r1, r2, relerr, rh_can_closure)
+    
+    context = [i_th, i_phi]
+    call odeint_allroutines(y, ndim, r1, r2, relerr, rh_can_wrapper, context)
 
     lam_phi(i_r, i_th, i_phi) = y(1)
     chi_gauge(i_r, i_th, i_phi) = y(2)
-
-    contains
-
-    subroutine rh_can_closure(r_c, z, dz)
-        real(dp), intent(in) :: r_c
-        real(dp), dimension(2), intent(in) :: z
-        real(dp), dimension(2), intent(inout) :: dz
-
-        call rh_can(r_c, z, dz, i_th, i_phi)
-    end subroutine rh_can_closure
 
 end subroutine integrate
 

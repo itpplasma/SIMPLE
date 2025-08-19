@@ -11,6 +11,16 @@ enable_language(C Fortran)
 
 add_compile_options(-g -fbacktrace)
 
+# Disable executable stack for security (trampolines/closures create execstack)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    # Make trampolines a hard error - they would create executable stack
+    add_compile_options(-Wtrampolines -Werror=trampolines)
+    # Apple's linker doesn't support -z,noexecstack (uses different security model)
+    if(NOT APPLE)
+        add_link_options(-Wl,-z,noexecstack)
+    endif()
+endif()
+
 include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
