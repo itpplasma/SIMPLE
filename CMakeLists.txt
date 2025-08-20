@@ -13,13 +13,14 @@ add_compile_options(-g -fbacktrace)
 
 # Disable executable stack for security (trampolines/closures create execstack)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    # Make trampolines a hard error - they would create executable stack
-    add_compile_options(-Wtrampolines -Werror=trampolines)
     # Apple's linker doesn't support -z,noexecstack (uses different security model)
     if(NOT APPLE)
         add_link_options(-Wl,-z,noexecstack)
     endif()
 endif()
+
+# Note: Trampoline warnings are applied per-target to SIMPLE code only,
+# not globally, to avoid affecting subprojects like fortplot
 
 include(Util)
 
@@ -89,6 +90,11 @@ find_package(LAPACK REQUIRED)
 
 find_or_fetch(libneo)
 
+# Add fortplot as subdirectory for diagnostic plotting
+if(NOT TARGET fortplot::fortplot)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../fortplot" fortplot)
+endif()
+
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
 endif()
@@ -99,14 +105,16 @@ include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 # Set SIMPLE-specific compiler flags after GVEC to avoid affecting it
-# GNU Fortran compiler flags
-add_compile_options(-Wall -Wextra -fPIC -g)
-add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wimplicit-interface>)
-add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wno-external-argument-mismatch>)
-add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>)
-add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>)
-add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-132>)
-add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>)
+# GNU Fortran compiler flags (but not applied to subprojects)
+set(SIMPLE_COMPILE_OPTIONS
+    -Wall -Wextra -fPIC -g
+    $<$<COMPILE_LANGUAGE:Fortran>:-Wimplicit-interface>
+    $<$<COMPILE_LANGUAGE:Fortran>:-Wno-external-argument-mismatch>
+    $<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>
+    $<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
+    $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-132>
+    $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
+)
 
 if (ENABLE_OPENMP)
 	add_compile_options(-fopenmp)
@@ -165,19 +173,30 @@ elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 	add_compile_options(-O2 -p -shared-libgcc)
 elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	# Common optimization flags for Release and Fast builds
-	add_compile_options(-O3 -ffast-math -ffp-contract=fast -funroll-loops)
+	list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
 	
 	# Architecture-specific flags
 	if (CMAKE_BUILD_TYPE MATCHES Fast OR CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
 		# Fast mode or ARM: use native architecture (no portable baseline for ARM)
-		add_compile_options(-march=native -mtune=native)
+		list(APPEND SIMPLE_COMPILE_OPTIONS -march=native -mtune=native)
 	else()
 		# Release on x86-64: use v2 baseline for broad compatibility
-		add_compile_options(-march=x86-64-v2 -mtune=native)
+		list(APPEND SIMPLE_COMPILE_OPTIONS -march=x86-64-v2 -mtune=native)
 	endif()
+elseif (CMAKE_BUILD_TYPE MATCHES Debug)
+	list(APPEND SIMPLE_COMPILE_OPTIONS -O0 -ggdb -fno-omit-frame-pointer -fno-inline)
+	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-C>)
+	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-ffpe-trap=invalid,zero,overflow>)
+	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fbounds-check>)
+	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
+	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
+elseif (CMAKE_BUILD_TYPE MATCHES Profile)
+	list(APPEND SIMPLE_COMPILE_OPTIONS -O2 -p -shared-libgcc)
 else()
     message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
 endif()
+
+# Trampoline error flags will be applied per-target to avoid affecting subprojects
 
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
@@ -186,8 +205,42 @@ add_executable (simple.x
 	app/simple.f90
 )
 
+# Add diagnostic executable
+add_executable(diag_meiss.x
+    app/simple_diag_meiss.f90
+)
+
+# Apply SIMPLE-specific compile options to executable
+target_compile_options(simple.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+
+# Apply trampoline error flags only to SIMPLE executable (not subprojects like fortplot)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(simple.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+
 target_link_libraries(simple.x PRIVATE simple)
 set_target_properties(simple.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# Configure diagnostic executable
+# Apply SIMPLE-specific compile options to diagnostic executable
+target_compile_options(diag_meiss.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+
+# Apply trampoline error flags only to SIMPLE executable (not subprojects like fortplot)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(diag_meiss.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+
+target_link_libraries(diag_meiss.x PRIVATE simple)
+set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# Ensure fortplot is built before diag_meiss
+add_dependencies(diag_meiss.x fortplot)
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)
