@@ -100,10 +100,13 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 # Set SIMPLE-specific compiler flags after GVEC to avoid affecting it
 # GNU Fortran compiler flags
-add_compile_options(-Wall -Wextra -Wimplicit-interface -Wno-external-argument-mismatch -fPIC -fmax-errors=5)
-add_compile_options(-Wno-unused-dummy-argument)
-add_compile_options(-ffree-line-length-132)
-add_compile_options(-g -fbacktrace)
+add_compile_options(-Wall -Wextra -fPIC -g)
+add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wimplicit-interface>)
+add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wno-external-argument-mismatch>)
+add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>)
+add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>)
+add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-132>)
+add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>)
 
 if (ENABLE_OPENMP)
 	add_compile_options(-fopenmp)
@@ -152,21 +155,28 @@ if (ENABLE_COVERAGE)
 endif()
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
-	add_compile_options(-C)
-	add_compile_options(-O0 -ggdb
-		-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps
-		-finit-real=nan -fno-omit-frame-pointer -fno-inline)
+	add_compile_options(-O0 -ggdb -fno-omit-frame-pointer -fno-inline)
+	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-C>)
+	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-ffpe-trap=invalid,zero,overflow>)
+	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fbounds-check>)
+	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
+	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
 elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 	add_compile_options(-O2 -p -shared-libgcc)
-elseif (CMAKE_BUILD_TYPE MATCHES Release)
-	add_compile_options(-O3)
-elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-	add_compile_options(-O3 -ffast-math -ffp-contract=fast -funroll-loops -mtune=native)
-	if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
-			add_compile_options(-march=native)
+elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
+	# Common optimization flags for Release and Fast builds
+	add_compile_options(-O3 -ffast-math -ffp-contract=fast -funroll-loops)
+	
+	# Architecture-specific flags
+	if (CMAKE_BUILD_TYPE MATCHES Fast OR CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+		# Fast mode or ARM: use native architecture (no portable baseline for ARM)
+		add_compile_options(-march=native -mtune=native)
 	else()
-	add_compile_options(-march=haswell)
+		# Release on x86-64: use v2 baseline for broad compatibility
+		add_compile_options(-march=x86-64-v2 -mtune=native)
 	endif()
+else()
+    message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
 endif()
 
 add_subdirectory(src)
