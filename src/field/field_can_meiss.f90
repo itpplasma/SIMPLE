@@ -45,8 +45,6 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
     type is (grid_indices_t)
         i_th = context%i_th
         i_phi = context%i_phi
-    class default
-        error stop "Expected grid_indices_t context in rh_can_wrapper"
     end select
     
     call rh_can(r_c, z, dz, i_th, i_phi)
@@ -176,6 +174,8 @@ subroutine init_transformation
         !$omp critical
         i_ctr = i_ctr + 1
         call print_progress
+        print *, ""
+        print *, i_phi
         !$omp end critical
         do i_th=1,n_th
             lam_phi(1, i_th, i_phi) = 0d0
