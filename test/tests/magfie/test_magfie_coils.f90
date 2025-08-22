@@ -18,7 +18,7 @@ isw_field_type = VMEC
 
 call init_vmec('wout.nc', 5, 5, 5, dummy)
 allocate(vmec_field)
-coils_field = create_coils_field('coils.5C')
+call create_coils_field('coils.5C', coils_field)
 
 x = [0.3d0, 0.2d0, 0.1d0]
 
