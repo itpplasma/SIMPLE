@@ -32,7 +32,7 @@
             "program": "${workspaceFolder}/build/simple.x",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/RUN/alan/",
+            "cwd": "${workspaceFolder}/RUN/current/",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

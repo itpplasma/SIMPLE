@@ -79,9 +79,9 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine evaluate_direct
 
 
-function create_coils_field(coils_file, should_spline) result(coils_field)
-    class(CoilsField), allocatable :: coils_field
+subroutine create_coils_field(coils_file, coils_field, should_spline)
     character(*), intent(in) :: coils_file
+    class(CoilsField), allocatable, intent(out) :: coils_field
     logical, intent(in), optional :: should_spline
 
     real(dp), parameter :: M_TO_CM = 100.0d0
@@ -99,7 +99,7 @@ function create_coils_field(coils_file, should_spline) result(coils_field)
 
     if(present(should_spline)) should_spline_ = should_spline
     if(should_spline_) call coils_field%init_splines
-end function create_coils_field
+end subroutine create_coils_field
 
 
 subroutine init_splines(self)

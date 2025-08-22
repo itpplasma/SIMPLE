@@ -89,7 +89,7 @@ program test_vmec_gvec_adapter
     allocate(VmecField :: vmec_field)
     
     ! Initialize GVEC field
-    gvec_field = create_gvec_field(gvec_file)
+    call create_gvec_field(gvec_file, gvec_field)
     
     ! Define test points covering different regions
     s_test = [0.1_dp, 0.3_dp, 0.5_dp, 0.7_dp, 0.9_dp]

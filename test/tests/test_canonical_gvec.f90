@@ -5,6 +5,7 @@ program test_canonical_gvec
     
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_gvec, only: GvecField, create_gvec_field
+    use field_base, only: MagneticField
     use vmec_field_adapter, only: vmec_field_evaluate_with_field, &
                                    vmec_lambda_interpolate_with_field, &
                                    vmec_iota_interpolate_with_field
@@ -57,7 +58,7 @@ program test_canonical_gvec
     end if
     
     ! Load GVEC field
-    gvec_field = create_gvec_field(gvec_file)
+    call create_gvec_field(gvec_file, gvec_field)
     
     if (.not. gvec_field%data_loaded) then
         print *, 'ERROR: Failed to load GVEC field data'

@@ -67,7 +67,9 @@ contains
   !
       integer :: i
   !
-      real(dp) tau,z,vz
+      real(dp), intent(in) :: tau
+      real(dp), intent(in) :: z(:)
+      real(dp), intent(out) :: vz(:)
       real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       real(dp) derphi
       real(dp) p,alambd,p2,ovmu,gamma2,gamma,ppar,vpa,coala
@@ -76,7 +78,6 @@ contains
       real(dp) s_hc,hpstar,phidot,blodot,bra
       real(dp) pardeb
   !
-      dimension z(5),vz(5)
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
       dimension derphi(3)
       dimension a_phi(3),a_b(3),a_c(3),hstar(3)
@@ -164,7 +165,7 @@ contains
   !
       subroutine orbit_timestep_can(z,dtau,dtaumin,relerr,ierr)
 use diag_mod, only : dodiag
-use odeint_sub, only : odeint_allroutines
+use odeint_allroutines_sub, only : odeint_allroutines
 use chamb_sub, only : chamb_can
   !
       implicit none
@@ -248,8 +249,9 @@ if(dodiag) write (123,*) tau2,z
   !
       use magfie_sub, only : magfie
   !
-      real(dp) :: phi
-      real(dp), dimension(5) :: y,dery
+      real(dp), intent(in) :: phi
+      real(dp), intent(in) :: y(:)
+      real(dp), intent(out) :: dery(:)
       real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
   !
@@ -272,7 +274,7 @@ if(dodiag) write (123,*) tau2,z
       subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
                                xstart,bstart,volstart,bmod00,ierr)
   !
-      use odeint_sub, only : odeint_allroutines
+      use odeint_allroutines_sub, only : odeint_allroutines
       use chamb_sub, only : chamb_can
       use magfie_sub, only : magfie
   !
@@ -349,8 +351,11 @@ if(dodiag) write (123,*) tau2,z
   !
   implicit none
   !
-  real(dp) :: tau,derlogsqs
-  real(dp), dimension(5) :: z,vz,z_axis,vz_axis
+  real(dp), intent(in) :: tau
+  real(dp), intent(in) :: z_axis(:)
+  real(dp), intent(out) :: vz_axis(:)
+  real(dp) :: derlogsqs
+  real(dp), dimension(5) :: z,vz
   !
   !  z(1)=z_axis(1)**2+z_axis(2)**2
   z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
@@ -371,7 +376,7 @@ if(dodiag) write (123,*) tau2,z
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
       subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
-      use odeint_sub, only : odeint_allroutines
+      use odeint_allroutines_sub, only : odeint_allroutines
       use chamb_sub, only : chamb_can
   !
       implicit none

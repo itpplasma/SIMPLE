@@ -5,12 +5,12 @@ program test_adapter_consistency
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use vmec_field_adapter, only: vmec_field_evaluate, vmec_field_evaluate_with_field
     use field_gvec, only: GvecField, create_gvec_field
-    use field, only: MagneticField
+    use field_base, only: MagneticField
     use params, only: pi
     
     implicit none
     
-    class(MagneticField), allocatable :: gvec_field
+    class(GvecField), allocatable :: gvec_field
     character(len=256) :: gvec_file
     logical :: file_exists, test_passed
     
@@ -52,7 +52,7 @@ program test_adapter_consistency
     end if
     
     ! Load GVEC field
-    gvec_field = create_gvec_field(gvec_file)
+    call create_gvec_field(gvec_file, gvec_field)
     
     select type(field => gvec_field)
     type is (GvecField)

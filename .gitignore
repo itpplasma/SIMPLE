@@ -26,6 +26,7 @@ Release
 Fast
 _*.c
 *.pyc
+__pycache__/
 python/launch*
 .DS_Store
 RUN_*
@@ -61,3 +62,5 @@ cobertura.xml
 coverage_html/
 coverage-badge.svg
 coverage-badge.json
+
+*.html

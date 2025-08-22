@@ -13,3 +13,43 @@ file(DOWNLOAD
 #     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}"
 #     LABELS "slow"
 # )
+
+# Simple functional API tests for Issue #90
+add_test(NAME test_simple_api
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_api.py -v
+)
+set_tests_properties(test_simple_api PROPERTIES 
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
+    LABELS "python;simple_api"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Legacy batch API tests (keeping for reference)
+add_test(NAME test_batch_api
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_batch_api.py -v
+)
+set_tests_properties(test_batch_api PROPERTIES 
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}"
+    LABELS "python;batch_api;legacy"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Performance and scalability tests (marked as slow)
+add_test(NAME test_batch_api_performance
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_batch_api.py::TestPerformanceBenchmarking -v
+)
+set_tests_properties(test_batch_api_performance PROPERTIES 
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}"
+    LABELS "python;batch_api;slow;performance"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Scalability tests (marked as slow and requiring large memory)
+add_test(NAME test_batch_api_scalability
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_batch_api.py -k "scalability" -v
+)
+set_tests_properties(test_batch_api_scalability PROPERTIES 
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}"
+    LABELS "python;batch_api;slow;scalability"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)

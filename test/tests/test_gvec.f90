@@ -15,7 +15,7 @@ print *, 'Testing GvecField creation...'
 
 ! Test: Create GvecField using constructor
 print *, 'Creating GvecField with create_gvec_field...'
-gvec_field = create_gvec_field(test_file)
+call create_gvec_field(test_file, gvec_field)
 
 if (allocated(gvec_field)) then
     print *, 'SUCCESS: GvecField created successfully'

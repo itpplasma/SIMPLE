@@ -12,20 +12,27 @@ implicit none
 
 contains
 
-function field_from_file(filename)
-    class(MagneticField), allocatable :: field_from_file
+subroutine field_from_file(filename, field)
     character(*), intent(in) :: filename
+    class(MagneticField), allocatable, intent(out) :: field
 
     character(len(filename)) :: stripped_name
+    class(CoilsField), allocatable :: coils_temp
+#ifdef GVEC_AVAILABLE
+    class(GvecField), allocatable :: gvec_temp
+#endif
+
     stripped_name = strip_directory(filename)
 
     if (endswith(filename, '.nc')) then
-        allocate(VmecField :: field_from_file)
+        allocate(VmecField :: field)
     else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
-        field_from_file = create_coils_field(filename)
+        call create_coils_field(filename, coils_temp)
+        call move_alloc(coils_temp, field)
     else if (endswith(filename, '.dat')) then
 #ifdef GVEC_AVAILABLE
-        field_from_file = create_gvec_field(filename)
+        call create_gvec_field(filename, gvec_temp)
+        call move_alloc(gvec_temp, field)
 #else
         print *, 'ERROR: GVEC support not compiled. Rebuild with -DENABLE_GVEC=ON'
         error stop
@@ -34,7 +41,7 @@ function field_from_file(filename)
         print *,  'field_from_file: Unknown file name format ', filename
         error stop
     end if
-end function field_from_file
+end subroutine field_from_file
 
 
 function startswidth(text, start)

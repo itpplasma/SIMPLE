@@ -9,6 +9,10 @@ use field, only: MagneticField
 
 implicit none
 
+type :: grid_indices_t
+    integer :: i_th, i_phi
+end type grid_indices_t
+
 class(MagneticField), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
@@ -28,6 +32,23 @@ integer, parameter :: order(3) = [5, 5, 5]
 logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
+
+subroutine rh_can_wrapper(r_c, z, dz, context)
+    real(dp), intent(in) :: r_c
+    real(dp), dimension(:), intent(in) :: z
+    real(dp), dimension(:), intent(out) :: dz
+    class(*), intent(in) :: context
+    
+    integer :: i_th, i_phi
+    
+    select type(context)
+    type is (grid_indices_t)
+        i_th = context%i_th
+        i_phi = context%i_phi
+    end select
+    
+    call rh_can(r_c, z, dz, i_th, i_phi)
+end subroutine rh_can_wrapper
 
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     use new_vmec_stuff_mod, only : nper
@@ -139,11 +160,24 @@ end subroutine get_meiss_coordinates
 
 
 subroutine init_transformation
-    real(dp) :: y(2)
-    integer :: i_r, i_th, i_phi, i_ctr
+    call init_transformation_arrays()
+    call compute_transformation()
+end subroutine init_transformation
 
+subroutine init_transformation_arrays()
+!> Initialize transformation arrays - can be called separately for diagnostics
     if (allocated(lam_phi)) deallocate(lam_phi, chi_gauge)
     allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
+    
+    ! Initialize to zero (boundary conditions)
+    lam_phi = 0.0_dp
+    chi_gauge = 0.0_dp
+end subroutine init_transformation_arrays
+
+subroutine compute_transformation()
+!> Compute transformation data via integration (expensive operation)
+    real(dp) :: y(2)
+    integer :: i_r, i_th, i_phi, i_ctr
 
     i_ctr = 0
 
@@ -158,9 +192,20 @@ subroutine init_transformation
             lam_phi(1, i_th, i_phi) = 0d0
             chi_gauge(1, i_th, i_phi) = 0d0
             y = 0d0
-            do i_r=2,n_r
-                call integrate(i_r, i_th, i_phi, y)
-            enddo
+            
+            ! Check if hr ≈ 0 along the entire radial slice
+            if (is_hr_zero_on_slice(i_th, i_phi)) then
+                ! Set identity transformation for entire radial slice
+                do i_r=2,n_r
+                    lam_phi(i_r, i_th, i_phi) = 0d0
+                    chi_gauge(i_r, i_th, i_phi) = 0d0
+                enddo
+            else
+                ! Normal integration along radial direction
+                do i_r=2,n_r
+                    call integrate(i_r, i_th, i_phi, y)
+                enddo
+            endif
         enddo
     enddo
     !$omp end do
@@ -176,42 +221,49 @@ subroutine init_transformation
             write(*, *)
         end if
     end subroutine print_progress
-end subroutine init_transformation
+end subroutine compute_transformation
 
 subroutine integrate(i_r, i_th, i_phi, y)
-    use odeint_sub, only: odeint_allroutines
+    use odeint_allroutines_sub, only: odeint_allroutines
 
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
 
     real(dp), parameter :: relerr=1d-11
-    real(dp) :: r1, r2
+    real(dp), parameter :: hr_threshold=1d-12  ! Threshold for detecting hr ≈ 0
+    real(dp) :: r1, r2, hr_test, hp_test, phi_c, Ar_test, Ap_test
+    real(dp) :: relaxed_relerr
     integer :: ndim=2
+    type(grid_indices_t) :: context
 
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
-
-    call odeint_allroutines(y, ndim, r1, r2, relerr, rh_can_closure)
+    
+    ! Check if hr is near zero at the starting point to detect problematic cases
+    phi_c = xmin(3) + h_phi*(i_phi-1)
+    call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
+    
+    if (abs(hr_test) < hr_threshold) then
+        ! hr is essentially zero - use relaxed tolerance or analytical treatment
+        print *, "Warning: hr ≈ 0 at grid point (", i_r, i_th, i_phi, "), hr =", hr_test
+        print *, "Using relaxed tolerance for ODE integration"
+        relaxed_relerr = max(1d-6, abs(hr_test) * 1d6)  ! Scale tolerance with hr magnitude
+    else
+        relaxed_relerr = relerr
+    end if
+    
+    context = grid_indices_t(i_th, i_phi)
+    call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)
 
     lam_phi(i_r, i_th, i_phi) = y(1)
     chi_gauge(i_r, i_th, i_phi) = y(2)
-
-    contains
-
-    subroutine rh_can_closure(r_c, z, dz)
-        real(dp), intent(in) :: r_c
-        real(dp), dimension(2), intent(in) :: z
-        real(dp), dimension(2), intent(inout) :: dz
-
-        call rh_can(r_c, z, dz, i_th, i_phi)
-    end subroutine rh_can_closure
 
 end subroutine integrate
 
 subroutine rh_can(r_c, z, dz, i_th, i_phi)
     real(dp), intent(in) :: r_c
     real(dp), dimension(2), intent(in) :: z  ! lam_phi, chi_gauge
-    real(dp), dimension(2), intent(inout) :: dz
+    real(dp), dimension(2), intent(out) :: dz
     integer, intent(in) :: i_th, i_phi
     real(dp) :: phi_c
     real(dp) :: Ar, Ap, hr, hp
@@ -249,6 +301,37 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     hr = hcov(1)
     hp = hcov(3)
 end subroutine ah_cov_on_slice
+
+logical function is_hr_zero_on_slice(i_th, i_phi) result(is_zero)
+!> Check if hr ≈ 0 along the entire radial direction for given (i_th, i_phi)
+!> Sample hr at several radial points to make this determination
+    integer, intent(in) :: i_th, i_phi
+    
+    real(dp), parameter :: hr_slice_threshold = 1d-9
+    integer, parameter :: n_sample_points = 32
+    real(dp) :: r_sample, phi_c, Ar, Ap, hr, hp
+    integer :: i_sample
+    logical :: all_zero
+    
+    phi_c = xmin(3) + h_phi*(i_phi-1)
+    all_zero = .true.
+    
+    ! Sample hr at several radial points
+    do i_sample = 1, n_sample_points
+        ! Distribute sample points across radial range
+        r_sample = xmin(1) + (xmax(1) - xmin(1)) * real(i_sample-1, dp) / real(n_sample_points-1, dp)
+        
+        ! Evaluate field at this point (using lam_phi=0 for sampling)
+        call ah_cov_on_slice(r_sample, phi_c, i_th, Ar, Ap, hr, hp)
+        
+        if (abs(hr) >= hr_slice_threshold) then
+            all_zero = .false.
+            exit  ! Found non-zero hr, no need to check further
+        endif
+    enddo
+    
+    is_zero = all_zero
+end function is_hr_zero_on_slice
 
 
 subroutine init_canonical_field_components

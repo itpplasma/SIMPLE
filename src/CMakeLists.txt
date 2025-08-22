@@ -42,6 +42,11 @@ set(SOURCES
     simple_main.f90
 )
 
+# Add diagnostic sources
+list(APPEND SOURCES
+    diag/diag_meiss.f90
+)
+
 # Add GVEC-specific sources if enabled
 if(ENABLE_GVEC)
     list(APPEND SOURCES
@@ -51,6 +56,17 @@ if(ENABLE_GVEC)
 endif()
 
 add_library (simple STATIC ${SOURCES})
+
+# Apply SIMPLE-specific compile options
+target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+
+# Apply trampoline error flags only to SIMPLE library (not subprojects like fortplot)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(simple PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
 
 target_link_libraries(simple PUBLIC
 	netcdf netcdff CONTRIB BLAS::BLAS LAPACK::LAPACK
@@ -70,6 +86,11 @@ if(ENABLE_GVEC)
     )
     target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
 endif()
+
+# Link fortplot
+target_link_libraries(simple PUBLIC
+    fortplot::fortplot
+)
 
 # Link coverage flags to library when coverage is enabled
 if (ENABLE_COVERAGE AND CMAKE_BUILD_TYPE MATCHES "Debug|Profile")

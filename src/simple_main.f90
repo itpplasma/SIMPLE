@@ -1,7 +1,7 @@
 module simple_main
   use omp_lib
   use util, only: pi, twopi, sqrt2
-  use simple, only : init_sympl, Tracer
+  use simple, only : init_vmec, init_sympl, Tracer
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use binsrc_sub, only : binsrc
@@ -23,22 +23,31 @@ module simple_main
   contains
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+    use field_base, only : MagneticField
     use field, only : field_from_file
-    use simple, only : init_vmec
+    use timing, only : print_phase_time
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
+    class(MagneticField), allocatable :: field_temp
 
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
+    call print_phase_time('VMEC initialization completed')
 
     self%integmode = aintegmode
-    if (self%integmode>=0) then
+    if (self%integmode >= 0) then
       if(trim(field_input) == '') then
-        call init_field_can(isw_field_type, field_from_file(vmec_file))
+        call field_from_file(vmec_file, field_temp)
       else
-        call init_field_can(isw_field_type, field_from_file(field_input))
+        call field_from_file(field_input, field_temp)
       end if
+      call print_phase_time('Field from file loading completed')
+    end if
+
+    if (isw_field_type == 0 .or. isw_field_type >= 2) then
+      call init_field_can(isw_field_type, field_temp)
+      call print_phase_time('Canonical field initialization completed')
     end if
   end subroutine init_field
 
