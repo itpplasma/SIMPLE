@@ -101,7 +101,7 @@ program test_vmec_gvec
             error stop 1
         end if
     end if
-    gvec_field = create_gvec_field(gvec_temp_file)
+    call create_gvec_field(gvec_temp_file, gvec_field)
 
     ! Compare field evaluations
     ! Set tolerances based on actual field comparison results

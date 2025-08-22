@@ -88,7 +88,7 @@ program export_field_2d
 #ifdef GVEC_AVAILABLE
     ! Initialize GVEC field
     print *, 'Loading GVEC field from ', trim(gvec_file)
-    gvec_field = create_gvec_field(gvec_file)
+    call create_gvec_field(gvec_file, gvec_field)
 #endif
     
     ! Evaluate fields on 2D grid

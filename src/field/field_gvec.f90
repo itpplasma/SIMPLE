@@ -34,9 +34,9 @@ module field_gvec
 
 contains
 
-    function create_gvec_field(gvec_file) result(gvec_field)
-        class(GvecField), allocatable :: gvec_field
+    subroutine create_gvec_field(gvec_file, gvec_field)
         character(*), intent(in) :: gvec_file
+        class(GvecField), allocatable, intent(out) :: gvec_field
 
         allocate (GvecField :: gvec_field)
         gvec_field%filename = gvec_file
@@ -48,7 +48,7 @@ contains
             print *, 'ERROR: Failed to load GVEC field from: ', gvec_file
         end if
 
-    end function create_gvec_field
+    end subroutine create_gvec_field
 
     subroutine load_dat_file(self)
         class(GvecField), intent(inout) :: self
