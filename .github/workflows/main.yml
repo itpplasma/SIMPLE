@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
@@ -15,41 +15,15 @@ permissions:
   actions: read
 
 jobs:
-  checkout:
-    name: Checkout Code
-    runs-on: self-hosted
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Upload repository as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: repository
-          path: .
-          retention-days: 1
-
   coverage:
     name: Run Tests + Generate Coverage
     runs-on: self-hosted
-    needs: checkout
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-    
-    steps:
-      - name: Download repository
-        uses: actions/download-artifact@v4
-        with:
-          name: repository
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
 
-      - name: Restore executable permissions
-        run: |
-          chmod +x test/golden_record_sanity/*.sh
-          chmod +x test/golden_record/*.sh 2>/dev/null || true
-          chmod +x test/test_data/*.sh 2>/dev/null || true
-          chmod +x scripts/*.sh 2>/dev/null || true
-          chmod +x tools/*.sh 2>/dev/null || true
-          chmod +x *.sh 2>/dev/null || true
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Build SIMPLE with Coverage
         run: |
@@ -69,19 +43,20 @@ jobs:
           # Fix locale settings to prevent Perl warnings
           export LANG=C.UTF-8
           export LC_ALL=C.UTF-8
-          
+
           # Use the CMake coverage target which has all the correct exclusions
           echo "📊 Generating coverage data using CMake target..."
           cmake --build build --target coverage
-          
+
           # Convert to Cobertura XML for coverage-action (using preinstalled lcov_cobertura)
           echo "🔄 Converting to Cobertura XML..."
           lcov_cobertura build/coverage_filtered.info --output cobertura.xml
-          
+
           # Generate HTML coverage report
           echo "📄 Generating HTML coverage report..."
-          genhtml build/coverage_filtered.info --branch-coverage --prefix "$(pwd)" --output-directory coverage_html || echo "⚠️ HTML generation had warnings"
-          
+          genhtml build/coverage_filtered.info --branch-coverage --prefix "$(pwd)" \
+            --output-directory coverage_html || echo "⚠️ HTML generation had warnings"
+
           echo "✅ Coverage reports generated"
 
       - name: Configure git for diff storage
@@ -100,7 +75,7 @@ jobs:
           else
             echo "❌ cobertura.xml not found"
           fi
-          
+
           if [ -f "coverage_filtered.info" ]; then
             echo "✅ coverage_filtered.info exists"
             echo "File size: $(ls -lh coverage_filtered.info | awk '{print $5}')"
@@ -143,11 +118,11 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             // Guard against missing coverage file
             if (!fs.existsSync('cobertura.xml')) {
               console.log('❌ cobertura.xml not found, setting neutral checks');
-              
+
               // Create neutral checks when coverage data unavailable
               const neutralCheck = {
                 owner: context.repo.owner,
@@ -161,17 +136,17 @@ jobs:
                   text: 'Coverage report generation failed. Check coverage job logs for details.'
                 }
               };
-              
+
               await github.rest.checks.create({...neutralCheck, name: 'coverage/project'});
               await github.rest.checks.create({...neutralCheck, name: 'coverage/patch'});
               return;
             }
-            
+
             let xml, projectCoverage = '0.00';
-            
+
             try {
               xml = fs.readFileSync('cobertura.xml', 'utf8');
-              
+
               // Guard against invalid XML or missing coverage data
               const coverageMatch = xml.match(/line-rate="([0-9.]+)"/);
               if (coverageMatch && coverageMatch[1]) {
@@ -183,17 +158,17 @@ jobs:
               console.log('❌ Error reading coverage file:', error.message);
               projectCoverage = '0.00';
             }
-            
+
             // For patch coverage, we'll use a simplified approach for now
             // In a full implementation, this would analyze only changed lines
             const patchCoverage = projectCoverage; // Simplified - normally would calculate differently
-            
+
             const projectThreshold = 70;
             const patchThreshold = 70;
-            
+
             const projectPassed = parseFloat(projectCoverage) >= projectThreshold;
             const patchPassed = parseFloat(patchCoverage) >= patchThreshold;
-            
+
             try {
               // Create project coverage check
               await github.rest.checks.create({
@@ -205,14 +180,14 @@ jobs:
                 conclusion: projectPassed ? 'success' : 'failure',
                 output: {
                   title: projectPassed ? `OK - ${projectCoverage}%` : `FAIL - ${projectCoverage}%`,
-                  summary: projectPassed 
+                  summary: projectPassed
                     ? `✅ Project coverage ${projectCoverage}% meets the ${projectThreshold}.00% threshold`
                     : `❌ Project coverage ${projectCoverage}% is below the ${projectThreshold}.00% threshold`,
                   text: `Current project coverage: ${projectCoverage}%\nRequired threshold: ${projectThreshold}.00%`
                 }
               });
-              
-              // Create patch coverage check  
+
+              // Create patch coverage check
               await github.rest.checks.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -222,13 +197,13 @@ jobs:
                 conclusion: patchPassed ? 'success' : 'failure',
                 output: {
                   title: patchPassed ? `OK - ${patchCoverage}%` : `FAIL - ${patchCoverage}%`,
-                  summary: patchPassed 
+                  summary: patchPassed
                     ? `✅ Patch coverage ${patchCoverage}% meets the ${patchThreshold}.00% threshold`
                     : `❌ Patch coverage ${patchCoverage}% is below the ${patchThreshold}.00% threshold`,
                   text: `Current patch coverage: ${patchCoverage}%\nRequired threshold: ${patchThreshold}.00%\n\nNote: Patch coverage analyzes only the lines changed in this PR.`
                 }
               });
-              
+
               console.log('✅ Coverage checks created successfully');
             } catch (error) {
               console.log('❌ Error creating coverage checks:', error.message);
@@ -249,23 +224,12 @@ jobs:
   regression:
     name: Run Regression Tests
     runs-on: self-hosted
-    needs: checkout
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-    
-    steps:
-      - name: Download repository
-        uses: actions/download-artifact@v4
-        with:
-          name: repository
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
 
-      - name: Restore executable permissions
-        run: |
-          chmod +x test/golden_record_sanity/*.sh
-          chmod +x test/golden_record/*.sh 2>/dev/null || true
-          chmod +x test/test_data/*.sh 2>/dev/null || true
-          chmod +x scripts/*.sh 2>/dev/null || true
-          chmod +x tools/*.sh 2>/dev/null || true
-          chmod +x *.sh 2>/dev/null || true
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Build SIMPLE
         run: |
@@ -286,22 +250,9 @@ jobs:
   build-docs:
     name: Build Documentation
     runs-on: self-hosted
-    needs: checkout
 
     steps:
-      - name: Download repository
-        uses: actions/download-artifact@v4
-        with:
-          name: repository
-
-      - name: Restore executable permissions
-        run: |
-          chmod +x test/golden_record_sanity/*.sh
-          chmod +x test/golden_record/*.sh 2>/dev/null || true
-          chmod +x test/test_data/*.sh 2>/dev/null || true
-          chmod +x scripts/*.sh 2>/dev/null || true
-          chmod +x tools/*.sh 2>/dev/null || true
-          chmod +x *.sh 2>/dev/null || true
+      - uses: actions/checkout@v4
 
       - name: Build LaTeX documents
         run: |
