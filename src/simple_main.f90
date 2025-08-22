@@ -43,15 +43,11 @@ module simple_main
         call field_from_file(field_input, field_temp)
       end if
       call print_phase_time('Field from file loading completed')
-    else
-      call print_phase_time('Field from file loading completed (skipped)')
     end if
 
     if (isw_field_type == 0 .or. isw_field_type >= 2) then
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
-    else
-      call print_phase_time('Canonical field initialization completed (skipped)')
     end if
   end subroutine init_field
 
