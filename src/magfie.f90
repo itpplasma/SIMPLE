@@ -2,6 +2,7 @@ module magfie_sub
 use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
+use field_booz_xform
 
 implicit none
 
@@ -30,27 +31,47 @@ end interface
 
 procedure(magfie_base), pointer :: magfie => null()
 
-integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
+integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, BOOZXFORM=5
+
+! Module-level variable for BOOZXFORM field
+type(BoozXformField), save :: booz_field
+logical, save :: booz_field_loaded = .false.
+character(256) :: boozxform_filename = ''
 
 contains
 
 subroutine init_magfie(id)
   integer, intent(in) :: id
 
+  print *, 'init_magfie: called with id =', id
+  
   select case(id)
   case(TEST)
     print *, 'init_magfie: magfie_test not implemented'
     error stop
   case(CANFLUX)
+    print *, 'init_magfie: setting magfie => magfie_can'
     magfie => magfie_can
   case(VMEC)
+    print *, 'init_magfie: setting magfie => magfie_vmec'
     magfie => magfie_vmec
   case(BOOZER)
+    print *, 'init_magfie: setting magfie => magfie_boozer'
     magfie => magfie_boozer
   case(MEISS)
+    print *, 'init_magfie: setting magfie => magfie_meiss'
     magfie => magfie_meiss
   case(ALBERT)
+    print *, 'init_magfie: setting magfie => magfie_albert'
     magfie => magfie_albert
+  case(BOOZXFORM)
+    print *, 'init_magfie: setting magfie => magfie_boozxform'
+    print *, 'init_magfie: boozxform_filename =', trim(boozxform_filename)
+    magfie => magfie_boozxform
+    ! Set default filename for testing - should be set by caller
+    if (trim(boozxform_filename) == '') then
+      boozxform_filename = 'boozmn_LandremanPaul2021_QA_lowres.nc'
+    end if
   case default
     print *,'init_magfie: unknown id ', id
     error stop
@@ -395,5 +416,98 @@ end subroutine init_magfie
   hcurl(3)=(B_r*bder(2)-B_vartheta_B*bder(1)+dB_vartheta_B-dB_r(2))/sqrtgbmod
   !
   end subroutine magfie_boozer
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine magfie_boozxform(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+!
+! Magnetic field evaluation using pre-computed BOOZXFORM data
+! This wraps the BoozXformField to provide the magfie interface
+!
+! Input coordinates: x(1)=s (normalized toroidal flux),
+!                   x(2)=theta (VMEC poloidal angle), 
+!                   x(3)=phi (VMEC toroidal angle)
+!
+  use, intrinsic :: iso_fortran_env, only: dp => real64
+  double precision, intent(in) :: x(3)
+  double precision, intent(out) :: bmod,sqrtg
+  double precision, intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
+  
+  real(dp) :: x_dp(3), Acov(3), sqgBctr(3)
+  real(dp) :: r, theta, phi, dr_ds
+  real(dp) :: hs, ht, hp  ! step sizes for derivatives
+  real(dp) :: x_plus(3), x_minus(3)
+  real(dp) :: Acov_plus(3), Acov_minus(3)
+  real(dp) :: hcov_plus(3), hcov_minus(3)
+  real(dp) :: Bmod_plus, Bmod_minus
+  integer :: i
+  
+  ! Load BOOZXFORM data if not already loaded
+  if (.not. booz_field_loaded) then
+    if (trim(boozxform_filename) == '') then
+      error stop 'magfie_boozxform: boozxform_filename not set'
+    end if
+    print *, 'magfie_boozxform: Loading BOOZXFORM file:', trim(boozxform_filename)
+    call booz_field%load(boozxform_filename)
+    booz_field_loaded = .true.
+    print *, 'magfie_boozxform: BOOZXFORM file loaded successfully'
+  end if
+  
+  print *, 'magfie_boozxform: Called with x =', x
+  
+  ! Convert to appropriate precision and transform coordinates
+  r = sqrt(x(1))  ! Convert s to r = sqrt(s)
+  theta = x(2)
+  phi = x(3)
+  x_dp = [r, theta, phi]
+  
+  ! Evaluate field at current position
+  call booz_field%evaluate(x_dp, Acov, hcovar, bmod, sqgBctr)
+  
+  ! Compute sqrt(g) from contravariant B components
+  if (sqgBctr(2) /= 0.0_dp .or. sqgBctr(3) /= 0.0_dp) then
+    sqrtg = bmod / sqrt(sqgBctr(2)*hcovar(2) + sqgBctr(3)*hcovar(3))
+  else
+    sqrtg = 1.0_dp  ! Default if contravariant components not properly set
+  end if
+  
+  ! Compute contravariant h components
+  hctrvr(1) = sqgBctr(1) / (sqrtg * bmod)
+  hctrvr(2) = sqgBctr(2) / (sqrtg * bmod)
+  hctrvr(3) = sqgBctr(3) / (sqrtg * bmod)
+  
+  ! Compute derivatives of log(B) using finite differences
+  hs = 1.0d-5
+  ht = hs * 6.28318530718d0  ! 2*pi scaling
+  hp = ht / 5.0d0
+  dr_ds = 0.5d0 / r  ! dr/ds = 1/(2*sqrt(s))
+  
+  ! Derivative with respect to s
+  x_plus = [sqrt(x(1) + hs), theta, phi]
+  x_minus = [sqrt(x(1) - hs), theta, phi]
+  call booz_field%evaluate(x_plus, Acov_plus, hcov_plus, Bmod_plus)
+  call booz_field%evaluate(x_minus, Acov_minus, hcov_minus, Bmod_minus)
+  bder(1) = (Bmod_plus - Bmod_minus) / (2.0d0 * hs * bmod)
+  
+  ! Derivative with respect to theta
+  x_plus = [r, theta + ht, phi]
+  x_minus = [r, theta - ht, phi]
+  call booz_field%evaluate(x_plus, Acov_plus, hcov_plus, Bmod_plus)
+  call booz_field%evaluate(x_minus, Acov_minus, hcov_minus, Bmod_minus)
+  bder(2) = (Bmod_plus - Bmod_minus) / (2.0d0 * ht * bmod)
+  
+  ! Derivative with respect to phi
+  x_plus = [r, theta, phi + hp]
+  x_minus = [r, theta, phi - hp]
+  call booz_field%evaluate(x_plus, Acov_plus, hcov_plus, Bmod_plus)
+  call booz_field%evaluate(x_minus, Acov_minus, hcov_minus, Bmod_minus)
+  bder(3) = (Bmod_plus - Bmod_minus) / (2.0d0 * hp * bmod)
+  
+  ! Compute curl of h using finite differences
+  ! curl(h) = (1/sqrt(g)) * [d(h_phi)/dtheta - d(h_theta)/dphi, ...]
+  ! For now, set to zero (simplified)
+  hcurl = 0.0d0
+  
+  end subroutine magfie_boozxform
 
   end module magfie_sub

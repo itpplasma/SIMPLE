@@ -81,6 +81,7 @@ module params
   integer, dimension (:), allocatable :: idx
 
   character(1000) :: field_input = ''
+  character(256) :: boozxform_file = ''  ! BOOZXFORM NetCDF file
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
@@ -90,7 +91,7 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
-    batch_size, ran_seed, reuse_batch, field_input, &
+    batch_size, ran_seed, reuse_batch, field_input, boozxform_file, &
     output_error, output_orbits_macrostep  ! callback
 
 contains
