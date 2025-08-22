@@ -90,10 +90,14 @@ find_package(LAPACK REQUIRED)
 
 find_or_fetch(libneo)
 
-# Add fortplot as subdirectory for diagnostic plotting
-if(NOT TARGET fortplot::fortplot)
-    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../fortplot" fortplot)
-endif()
+# Fetch fortplot for diagnostic plotting
+include(FetchContent)
+FetchContent_Declare(
+    fortplot
+    GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(fortplot)
 
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
