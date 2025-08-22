@@ -24,20 +24,24 @@ module simple_main
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use field, only : field_from_file
+    use field_base, only : MagneticField
     use simple, only : init_vmec
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
+    class(MagneticField), allocatable :: field_temp
 
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
 
     self%integmode = aintegmode
     if (self%integmode>=0) then
       if(trim(field_input) == '') then
-        call init_field_can(isw_field_type, field_from_file(vmec_file))
+        call field_from_file(vmec_file, field_temp)
+        call init_field_can(isw_field_type, field_temp)
       else
-        call init_field_can(isw_field_type, field_from_file(field_input))
+        call field_from_file(field_input, field_temp)
+        call init_field_can(isw_field_type, field_temp)
       end if
     end if
   end subroutine init_field
