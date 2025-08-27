@@ -193,6 +193,14 @@ add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
 target_link_libraries(test_coordinates_simple.x simple)
 add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
 
+# Batch spline optimization test
+add_executable(test_batch_splines.x ../test_batch_splines.f90)
+target_link_libraries(test_batch_splines.x simple testing_utils)
+add_test(NAME test_batch_splines COMMAND test_batch_splines.x)
+set_tests_properties(test_batch_splines PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 60
+)
 
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:

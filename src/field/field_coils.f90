@@ -18,11 +18,13 @@ type, extends(MagneticField) :: CoilsField
     
     ! Batch spline for optimized field evaluation (7 components: Ar, Ath, Aphi, hr, hth, hphi, Bmod)
     type(BatchSplineData3D) :: spl_coils_batch
+    logical :: splines_initialized = .false.
 contains
     procedure :: evaluate
     procedure :: evaluate_direct
     procedure :: init_splines
     procedure :: evaluate_coils_batch
+    final :: coils_field_cleanup
 end type CoilsField
 
 contains
@@ -172,6 +174,7 @@ subroutine init_splines(self)
     y_batch(:,:,:,7) = Bmod
     
     call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, self%spl_coils_batch)
+    self%splines_initialized = .true.
 
     contains
 
@@ -224,5 +227,18 @@ subroutine evaluate_coils_batch(self, x, Acov, hcov, Bmod)
     
     Bmod = y_batch(7)
 end subroutine evaluate_coils_batch
+
+
+subroutine coils_field_cleanup(self)
+    ! Clean up batch splines when CoilsField is destroyed
+    use interpolate, only: destroy_batch_splines_3d
+    
+    type(CoilsField), intent(inout) :: self
+    
+    if (self%splines_initialized) then
+        call destroy_batch_splines_3d(self%spl_coils_batch)
+        self%splines_initialized = .false.
+    end if
+end subroutine coils_field_cleanup
 
 end module field_coils

@@ -33,7 +33,7 @@ real(dp), dimension(:,:,:), allocatable :: lam_phi, chi_gauge
 type(BatchSplineData3D) :: spl_transform_batch
 logical :: transform_splines_initialized = .false.
 
-integer, parameter :: order(3) = [3, 3, 3]  ! Reduced from [5,5,5] to avoid spl_three_to_five array bounds issue
+integer, parameter :: order(3) = [5, 5, 5]  ! Restored to original 5th order for accuracy
 logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
@@ -61,13 +61,39 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     class(MagneticField), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
+    
+    integer, parameter :: MIN_GRID_FOR_ORDER5 = 6
 
     if (allocated(field_noncan)) deallocate(field_noncan)
     allocate(field_noncan, source=field_noncan_)
 
-    if (present(n_r_)) n_r = n_r_
-    if (present(n_th_)) n_th = n_th_
-    if (present(n_phi_)) n_phi = n_phi_
+    ! Apply minimum grid size for 5th order splines
+    if (present(n_r_)) then
+        if (n_r_ < MIN_GRID_FOR_ORDER5) then
+            print *, 'WARNING: n_r increased from', n_r_, 'to', MIN_GRID_FOR_ORDER5, 'for 5th order splines'
+            n_r = MIN_GRID_FOR_ORDER5
+        else
+            n_r = n_r_
+        end if
+    end if
+    
+    if (present(n_th_)) then
+        if (n_th_ < MIN_GRID_FOR_ORDER5) then
+            print *, 'WARNING: n_th increased from', n_th_, 'to', MIN_GRID_FOR_ORDER5, 'for 5th order splines'
+            n_th = MIN_GRID_FOR_ORDER5
+        else
+            n_th = n_th_
+        end if
+    end if
+    
+    if (present(n_phi_)) then
+        if (n_phi_ < MIN_GRID_FOR_ORDER5) then
+            print *, 'WARNING: n_phi increased from', n_phi_, 'to', MIN_GRID_FOR_ORDER5, 'for 5th order splines'
+            n_phi = MIN_GRID_FOR_ORDER5
+        else
+            n_phi = n_phi_
+        end if
+    end if
 
     if (present(rmin)) xmin(1) = rmin
     if (present(rmax)) xmax(1) = rmax
@@ -79,6 +105,27 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     h_th = (xmax(2)-xmin(2))/(n_th-1)
     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
 end subroutine init_meiss
+
+
+subroutine cleanup_meiss()
+    ! Clean up batch splines to prevent memory leaks
+    use interpolate, only: destroy_batch_splines_3d
+    
+    if (batch_splines_initialized) then
+        call destroy_batch_splines_3d(spl_field_batch)
+        batch_splines_initialized = .false.
+    end if
+    
+    if (transform_splines_initialized) then
+        call destroy_batch_splines_3d(spl_transform_batch)
+        transform_splines_initialized = .false.
+    end if
+    
+    ! Clean up allocated arrays
+    if (allocated(lam_phi)) deallocate(lam_phi)
+    if (allocated(chi_gauge)) deallocate(chi_gauge)
+    if (allocated(field_noncan)) deallocate(field_noncan)
+end subroutine cleanup_meiss
 
 
 subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
