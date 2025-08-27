@@ -2,7 +2,9 @@ module field_coils
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
+    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2, &
+    BatchSplineData3D, construct_batch_splines_3d, evaluate_batch_splines_3d, &
+    evaluate_batch_splines_3d_der, evaluate_batch_splines_3d_der2
 use util, only: twopi
 use neo_biotsavart, only: coils_t, load_coils_from_file, &
     compute_vector_potential, compute_magnetic_field
@@ -13,11 +15,14 @@ implicit none
 
 type, extends(MagneticField) :: CoilsField
     type(coils_t) :: coils
-    type(SplineData3D) :: spl_Ar, spl_Ath, spl_Aphi, spl_hr, spl_hth, spl_hphi, spl_Bmod
+    
+    ! Batch spline for optimized field evaluation (7 components: Ar, Ath, Aphi, hr, hth, hphi, Bmod)
+    type(BatchSplineData3D) :: spl_coils_batch
 contains
     procedure :: evaluate
     procedure :: evaluate_direct
     procedure :: init_splines
+    procedure :: evaluate_coils_batch
 end type CoilsField
 
 contains
@@ -29,15 +34,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     real(dp), intent(out) :: Bmod
     real(dp), intent(out), optional :: sqgBctr(3)
 
-    call evaluate_splines_3d(self%spl_Ar, x, Acov(1))
-    call evaluate_splines_3d(self%spl_Ath, x, Acov(2))
-    call evaluate_splines_3d(self%spl_Aphi, x, Acov(3))
-
-    call evaluate_splines_3d(self%spl_hr, x, hcov(1))
-    call evaluate_splines_3d(self%spl_hth, x, hcov(2))
-    call evaluate_splines_3d(self%spl_hphi, x, hcov(3))
-
-    call evaluate_splines_3d(self%spl_Bmod, x, Bmod)
+    call self%evaluate_coils_batch(x, Acov, hcov, Bmod)
 
     if (present(sqgBctr)) then
         error stop 'sqgBctr not implemented'
@@ -118,8 +115,9 @@ subroutine init_splines(self)
 
     real(dp) :: x(3)
     real(dp), dimension(:,:,:), allocatable :: Ar, Ath, Aphi, hr, hth, hphi, Bmod
-    real(dp) :: Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
-    integer :: i_r, i_th, i_phi, i_ctr
+    real(dp), dimension(:,:,:,:), allocatable :: y_batch
+    real(dp) :: Acov(3), hcov(3)
+    integer :: i_r, i_th, i_phi, i_ctr, dims(3)
 
     xmax(3) = twopi/nper
 
@@ -161,13 +159,19 @@ subroutine init_splines(self)
     Ath = Ath - Ath(1,1,1)
     Aphi = Aphi - Aphi(1,1,1)
 
-    call construct_splines_3d(xmin, xmax, Ar, order, periodic, self%spl_Ar)
-    call construct_splines_3d(xmin, xmax, Ath, order, periodic, self%spl_Ath)
-    call construct_splines_3d(xmin, xmax, Aphi, order, periodic, self%spl_Aphi)
-    call construct_splines_3d(xmin, xmax, hr, order, periodic, self%spl_hr)
-    call construct_splines_3d(xmin, xmax, hth, order, periodic, self%spl_hth)
-    call construct_splines_3d(xmin, xmax, hphi, order, periodic, self%spl_hphi)
-    call construct_splines_3d(xmin, xmax, Bmod, order, periodic, self%spl_Bmod)
+    ! Construct batch spline for all 7 field components: [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
+    dims = shape(Ar)
+    allocate(y_batch(dims(1), dims(2), dims(3), 7))
+    
+    y_batch(:,:,:,1) = Ar
+    y_batch(:,:,:,2) = Ath
+    y_batch(:,:,:,3) = Aphi
+    y_batch(:,:,:,4) = hr
+    y_batch(:,:,:,5) = hth
+    y_batch(:,:,:,6) = hphi
+    y_batch(:,:,:,7) = Bmod
+    
+    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, self%spl_coils_batch)
 
     contains
 
@@ -182,17 +186,43 @@ subroutine init_splines(self)
     ]
     end function get_grid_point
 
-    subroutine print_progress(i_ctr_)
-        integer, intent(in) :: i_ctr_
+    subroutine print_progress(i)
+        integer, intent(in) :: i
         !$omp critical
-        write(*,'(A, I4, A, I4)',advance='no') 'Biot-Savart: ', i_ctr_, ' of ', n_phi
-        if (i_ctr_ < n_phi) then
-            write(*, '(A)', advance="no") char(13)
+        if (mod(i, n_phi / 10) == 0) then
+            write(*, '(a,f6.2,a)', advance='no') char(13), 100.0*i/n_phi, ' %'
+            call flush(6)
         else
             write(*, *)
         end if
         !$omp end critical
     end subroutine print_progress
 end subroutine init_splines
+
+
+subroutine evaluate_coils_batch(self, x, Acov, hcov, Bmod)
+    class(CoilsField), intent(in) :: self
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out), dimension(3) :: Acov, hcov
+    real(dp), intent(out) :: Bmod
+    
+    real(dp) :: y_batch(7)
+    
+    if (self%spl_coils_batch%num_quantities /= 7) then
+        error stop 'Coils batch spline must have exactly 7 quantities'
+    end if
+    call evaluate_batch_splines_3d(self%spl_coils_batch, x, y_batch)
+    
+    ! Unpack results: order is [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
+    Acov(1) = y_batch(1)
+    Acov(2) = y_batch(2)
+    Acov(3) = y_batch(3)
+    
+    hcov(1) = y_batch(4)
+    hcov(2) = y_batch(5)
+    hcov(3) = y_batch(6)
+    
+    Bmod = y_batch(7)
+end subroutine evaluate_coils_batch
 
 end module field_coils

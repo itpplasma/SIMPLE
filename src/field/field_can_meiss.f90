@@ -2,7 +2,9 @@ module field_can_meiss
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
+    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2, &
+    BatchSplineData3D, construct_batch_splines_3d, evaluate_batch_splines_3d_der, &
+    evaluate_batch_splines_3d_der2
 use util, only: twopi
 use field_can_base, only: FieldCan, n_field_evaluations
 use field, only: MagneticField
@@ -20,15 +22,16 @@ real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
 
-! For splining covariant vector potential, h=B/Bmod and Bmod over canonical coordinates
-type(SplineData3D) :: spl_Bmod, spl_Ath, spl_Aph, spl_hth, spl_hph
+! Batch spline for optimized field evaluation (5 components: Ath, Aph, hth, hph, Bmod)
+type(BatchSplineData3D) :: spl_field_batch
+logical :: batch_splines_initialized = .false.
 
 ! For splining lambda (difference between canonical and toroidal cylinder angle)
 ! and chi (gauge transformation)
 real(dp), dimension(:,:,:), allocatable :: lam_phi, chi_gauge
 type(SplineData3D) :: spl_lam_phi, spl_chi_gauge
 
-integer, parameter :: order(3) = [5, 5, 5]
+integer, parameter :: order(3) = [3, 3, 3]  ! Reduced from [5,5,5] to avoid spl_three_to_five array bounds issue
 logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 contains
@@ -88,25 +91,19 @@ subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
     x = [r, th_c, ph_c]
 
     if (mode_secders > 0) then
-
-        call evaluate_splines_3d_der2(spl_Ath, x, f%Ath, f%dAth, f%d2Ath)
-        call evaluate_splines_3d_der2(spl_Aph, x, f%Aph, f%dAph, f%d2Aph)
-
-        call evaluate_splines_3d_der2(spl_hth, x, f%hth, f%dhth, f%d2hth)
-        call evaluate_splines_3d_der2(spl_hph, x, f%hph, f%dhph, f%d2hph)
-
-        call evaluate_splines_3d_der2(spl_Bmod, x, f%Bmod, f%dBmod, f%d2Bmod)
-
+        if (batch_splines_initialized) then
+            call evaluate_meiss_batch_der2(f, x)
+        else
+            error stop 'Batch spline not initialized for mode_secders > 0'
+        end if
         return
     end if
 
-    call evaluate_splines_3d_der(spl_Ath, x, f%Ath, f%dAth)
-    call evaluate_splines_3d_der(spl_Aph, x, f%Aph, f%dAph)
-
-    call evaluate_splines_3d_der(spl_hth, x, f%hth, f%dhth)
-    call evaluate_splines_3d_der(spl_hph, x, f%hph, f%dhph)
-
-    call evaluate_splines_3d_der(spl_Bmod, x, f%Bmod, f%dBmod)
+    if (batch_splines_initialized) then
+        call evaluate_meiss_batch_der(f, x)
+    else
+        error stop 'Batch spline not initialized'
+    end if
 end subroutine evaluate_meiss
 
 
@@ -176,52 +173,75 @@ end subroutine init_transformation_arrays
 
 subroutine compute_transformation()
 !> Compute transformation data via integration (expensive operation)
-    real(dp) :: y(2)
-    integer :: i_r, i_th, i_phi, i_ctr
+    integer :: i_ctr
 
     i_ctr = 0
 
-    !$omp parallel private(i_r, i_th, i_phi, y)
+    !$omp parallel private(i_ctr)
     !$omp do
-    do i_phi=1,n_phi
-        !$omp critical
-        i_ctr = i_ctr + 1
-        call print_progress
-        !$omp end critical
-        do i_th=1,n_th
-            lam_phi(1, i_th, i_phi) = 0d0
-            chi_gauge(1, i_th, i_phi) = 0d0
-            y = 0d0
-            
-            ! Check if hr ≈ 0 along the entire radial slice
-            if (is_hr_zero_on_slice(i_th, i_phi)) then
-                ! Set identity transformation for entire radial slice
-                do i_r=2,n_r
-                    lam_phi(i_r, i_th, i_phi) = 0d0
-                    chi_gauge(i_r, i_th, i_phi) = 0d0
-                enddo
-            else
-                ! Normal integration along radial direction
-                do i_r=2,n_r
-                    call integrate(i_r, i_th, i_phi, y)
-                enddo
-            endif
-        enddo
+    do i_ctr = 1, n_phi
+        call compute_phi_slice(i_ctr)
     enddo
     !$omp end do
     !$omp end parallel
-
-    contains
-
-    subroutine print_progress
-        write(*,'(A, I4, A, I4)',advance='no') 'integrate ODE: ', i_ctr, ' of ', n_phi
-        if (i_ctr < n_phi) then
-            write(*, '(A)', advance="no") char(13)
-        else
-            write(*, *)
-        end if
-    end subroutine print_progress
 end subroutine compute_transformation
+
+subroutine compute_phi_slice(i_phi)
+!> Compute transformation for single phi slice
+    integer, intent(in) :: i_phi
+    real(dp) :: y(2)
+    integer :: i_th
+
+    call print_progress(i_phi)
+    
+    do i_th = 1, n_th
+        lam_phi(1, i_th, i_phi) = 0d0
+        chi_gauge(1, i_th, i_phi) = 0d0
+        y = 0d0
+        
+        if (is_hr_zero_on_slice(i_th, i_phi)) then
+            call set_identity_slice(i_th, i_phi)
+        else
+            call integrate_radial_slice(i_th, i_phi, y)
+        endif
+    enddo
+end subroutine compute_phi_slice
+
+subroutine set_identity_slice(i_th, i_phi)
+!> Set identity transformation for radial slice where hr ≈ 0
+    integer, intent(in) :: i_th, i_phi
+    integer :: i_r
+    
+    do i_r = 2, n_r
+        lam_phi(i_r, i_th, i_phi) = 0d0
+        chi_gauge(i_r, i_th, i_phi) = 0d0
+    enddo
+end subroutine set_identity_slice
+
+subroutine integrate_radial_slice(i_th, i_phi, y)
+!> Integrate along radial direction for given (i_th, i_phi)
+    integer, intent(in) :: i_th, i_phi
+    real(dp), intent(inout) :: y(2)
+    integer :: i_r
+    
+    do i_r = 2, n_r
+        call integrate(i_r, i_th, i_phi, y)
+    enddo
+end subroutine integrate_radial_slice
+
+subroutine print_progress(i_phi)
+!> Print integration progress
+    integer, intent(in) :: i_phi
+    
+    !$omp critical
+    write(*,'(A, I4, A, I4)',advance='no') 'integrate ODE: ', i_phi, ' of ', n_phi
+    if (i_phi < n_phi) then
+        write(*, '(A)', advance="no") char(13)
+    else
+        write(*, *)
+    end if
+    !$omp end critical
+end subroutine print_progress
 
 subroutine integrate(i_r, i_th, i_phi, y)
     use odeint_allroutines_sub, only: odeint_allroutines
@@ -337,8 +357,9 @@ end function is_hr_zero_on_slice
 subroutine init_canonical_field_components
     real(dp) :: xcan(3)
     real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
+    real(dp), dimension(:,:,:,:), allocatable :: y_batch
     real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
-    integer :: i_r, i_th, i_phi
+    integer :: i_r, i_th, i_phi, dims(3)
 
     allocate(Ath(n_r,n_th,n_phi), Aphi(n_r,n_th,n_phi))
     allocate(hth(n_r,n_th,n_phi), hphi(n_r,n_th,n_phi))
@@ -366,11 +387,18 @@ subroutine init_canonical_field_components
         end do
     end do
 
-    call construct_splines_3d(xmin, xmax, Ath, order, periodic, spl_Ath)
-    call construct_splines_3d(xmin, xmax, Aphi, order, periodic, spl_Aph)
-    call construct_splines_3d(xmin, xmax, hth, order, periodic, spl_hth)
-    call construct_splines_3d(xmin, xmax, hphi, order, periodic, spl_hph)
-    call construct_splines_3d(xmin, xmax, Bmod, order, periodic, spl_Bmod)
+    ! Construct batch spline for all 5 field components: [Ath, Aph, hth, hph, Bmod]
+    dims = shape(Ath)
+    allocate(y_batch(dims(1), dims(2), dims(3), 5))
+    
+    y_batch(:,:,:,1) = Ath
+    y_batch(:,:,:,2) = Aphi
+    y_batch(:,:,:,3) = hth
+    y_batch(:,:,:,4) = hphi
+    y_batch(:,:,:,5) = Bmod
+    
+    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_field_batch)
+    batch_splines_initialized = .true.
 end subroutine init_canonical_field_components
 
 
@@ -425,5 +453,59 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     hcurl(2) = -f%dhph(1)/sqrtg
     hcurl(3) = f%dhth(1)/sqrtg
 end subroutine magfie_meiss
+
+
+! Batch evaluation helper for first derivatives
+subroutine evaluate_meiss_batch_der(f, x)
+    type(FieldCan), intent(inout) :: f
+    real(dp), intent(in) :: x(3)
+    
+    real(dp) :: y_batch(5), dy_batch(5, 3)
+    
+    call evaluate_batch_splines_3d_der(spl_field_batch, x, y_batch, dy_batch)
+    
+    ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
+    f%Ath = y_batch(1)
+    f%Aph = y_batch(2) 
+    f%hth = y_batch(3)
+    f%hph = y_batch(4)
+    f%Bmod = y_batch(5)
+    
+    f%dAth = dy_batch(1, :)
+    f%dAph = dy_batch(2, :)
+    f%dhth = dy_batch(3, :)
+    f%dhph = dy_batch(4, :)
+    f%dBmod = dy_batch(5, :)
+end subroutine evaluate_meiss_batch_der
+
+
+! Batch evaluation helper for second derivatives  
+subroutine evaluate_meiss_batch_der2(f, x)
+    type(FieldCan), intent(inout) :: f
+    real(dp), intent(in) :: x(3)
+    
+    real(dp) :: y_batch(5), dy_batch(5, 3), d2y_batch(5, 6)
+    
+    call evaluate_batch_splines_3d_der2(spl_field_batch, x, y_batch, dy_batch, d2y_batch)
+    
+    ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
+    f%Ath = y_batch(1)
+    f%Aph = y_batch(2)
+    f%hth = y_batch(3) 
+    f%hph = y_batch(4)
+    f%Bmod = y_batch(5)
+    
+    f%dAth = dy_batch(1, :)
+    f%dAph = dy_batch(2, :)
+    f%dhth = dy_batch(3, :)
+    f%dhph = dy_batch(4, :)
+    f%dBmod = dy_batch(5, :)
+    
+    f%d2Ath = d2y_batch(1, :)
+    f%d2Aph = d2y_batch(2, :)
+    f%d2hth = d2y_batch(3, :)
+    f%d2hph = d2y_batch(4, :)
+    f%d2Bmod = d2y_batch(5, :)
+end subroutine evaluate_meiss_batch_der2
 
 end module field_can_meiss

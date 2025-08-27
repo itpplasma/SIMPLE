@@ -58,7 +58,7 @@ subroutine evaluate_albert_batch(f, r, th_c, ph_c, mode_secders)
     integer, intent(in) :: mode_secders
 
     real(dp) :: x(3)
-    real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
+    real(dp) :: y_batch(5), dy_batch(5, 3), d2y_batch(5, 6)
 
     n_field_evaluations = n_field_evaluations + 1
 
@@ -73,42 +73,48 @@ subroutine evaluate_albert_batch(f, r, th_c, ph_c, mode_secders)
         
         ! Evaluate batch splines for other components with second derivatives
         ! Note: We don't need r_of_xc here, only components 2-5
+        if (spl_albert_batch%num_quantities /= 5) then
+            error stop 'Albert batch spline must have exactly 5 quantities'
+        end if
         call evaluate_batch_splines_3d_der2(spl_albert_batch, x, &
             y_batch, dy_batch, d2y_batch)
         
         f%Aph = y_batch(IDX_APHI)
-        f%dAph = dy_batch(:, IDX_APHI)
-        f%d2Aph = d2y_batch(:, IDX_APHI)
+        f%dAph = dy_batch(IDX_APHI, :)
+        f%d2Aph = d2y_batch(IDX_APHI, :)
         
         f%hth = y_batch(IDX_HTH)
-        f%dhth = dy_batch(:, IDX_HTH)
-        f%d2hth = d2y_batch(:, IDX_HTH)
+        f%dhth = dy_batch(IDX_HTH, :)
+        f%d2hth = d2y_batch(IDX_HTH, :)
         
         f%hph = y_batch(IDX_HPH)
-        f%dhph = dy_batch(:, IDX_HPH)
-        f%d2hph = d2y_batch(:, IDX_HPH)
+        f%dhph = dy_batch(IDX_HPH, :)
+        f%d2hph = d2y_batch(IDX_HPH, :)
         
         f%Bmod = y_batch(IDX_BMOD)
-        f%dBmod = dy_batch(:, IDX_BMOD)
-        f%d2Bmod = d2y_batch(:, IDX_BMOD)
+        f%dBmod = dy_batch(IDX_BMOD, :)
+        f%d2Bmod = d2y_batch(IDX_BMOD, :)
         
         return
     end if
 
     ! Evaluate batch splines with first derivatives only
+    if (spl_albert_batch%num_quantities /= 5) then
+        error stop 'Albert batch spline must have exactly 5 quantities'
+    end if
     call evaluate_batch_splines_3d_der(spl_albert_batch, x, y_batch, dy_batch)
     
     f%Aph = y_batch(IDX_APHI)
-    f%dAph = dy_batch(:, IDX_APHI)
+    f%dAph = dy_batch(IDX_APHI, :)
     
     f%hth = y_batch(IDX_HTH)
-    f%dhth = dy_batch(:, IDX_HTH)
+    f%dhth = dy_batch(IDX_HTH, :)
     
     f%hph = y_batch(IDX_HPH)
-    f%dhph = dy_batch(:, IDX_HPH)
+    f%dhph = dy_batch(IDX_HPH, :)
     
     f%Bmod = y_batch(IDX_BMOD)
-    f%dBmod = dy_batch(:, IDX_BMOD)
+    f%dBmod = dy_batch(IDX_BMOD, :)
 end subroutine evaluate_albert_batch
 
 
@@ -118,7 +124,6 @@ subroutine can_to_ref_albert_batch(xcan, xref)
     real(dp), intent(in) :: xcan(3)
     real(dp), intent(out) :: xref(3) 
     real(dp) :: xmeiss(3)
-    real(dp) :: y_batch(5)
     
     ! Get r_of_xc from batch spline (only first component)
     call evaluate_batch_splines_3d_single(spl_albert_batch, xcan, IDX_R, xmeiss(1))
@@ -128,17 +133,18 @@ end subroutine can_to_ref_albert_batch
     
 
 subroutine ref_to_can_albert_batch(xref, xcan)
-    use field_can_meiss, only: ref_to_can_meiss, spl_Ath
+    use field_can_meiss, only: ref_to_can_meiss, spl_field_batch
     use interpolate, only: SplineData3D, evaluate_splines_3d
     
     real(dp), intent(in) :: xref(3)
     real(dp), intent(out) :: xcan(3)
  
-    real(dp) :: Ath, xmeiss(3)
+    real(dp) :: Ath, xmeiss(3), y_batch(5)
 
     call ref_to_can_meiss(xref, xmeiss)   
-    ! Need to evaluate Meiss Ath spline here
-    call evaluate_splines_3d(spl_Ath, xmeiss, Ath)
+    ! Extract Ath from batch spline (component 1)
+    call evaluate_batch_splines_3d(spl_field_batch, xmeiss, y_batch)
+    Ath = y_batch(1)
     xcan(1) = Ath/Ath_norm
     xcan(2:3) = xmeiss(2:3)
 end subroutine ref_to_can_albert_batch
@@ -185,10 +191,10 @@ end subroutine init_splines_with_psi_batch
 
 
 subroutine init_psi_grid_batch
-    use field_can_meiss, only: spl_Ath
+    use field_can_meiss, only: spl_field_batch
     
     integer :: i_r, i_th, i_phi
-    real(dp) :: x(3)
+    real(dp) :: x(3), y_batch_local(5)
     
     allocate(psi_of_x(n_r, n_th, n_phi), psi_grid(n_r))
     
@@ -199,7 +205,9 @@ subroutine init_psi_grid_batch
                 x = [xmin(1) + (i_r-1)*(xmax(1)-xmin(1))/(n_r-1), &
                      xmin(2) + (i_th-1)*(xmax(2)-xmin(2))/(n_th-1), &
                      xmin(3) + (i_phi-1)*(xmax(3)-xmin(3))/(n_phi-1)]
-                call evaluate_splines_3d(spl_Ath, x, psi_of_x(i_r, i_th, i_phi))
+                ! Extract Ath from batch spline (component 1) 
+                call evaluate_batch_splines_3d(spl_field_batch, x, y_batch_local)
+                psi_of_x(i_r, i_th, i_phi) = y_batch_local(1)
             enddo
         enddo
     enddo
