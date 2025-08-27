@@ -1,10 +1,10 @@
 module field_coils
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2, &
-    BatchSplineData3D, construct_batch_splines_3d, evaluate_batch_splines_3d, &
-    evaluate_batch_splines_3d_der, evaluate_batch_splines_3d_der2
+use interpolate, only: &
+    BatchSplineData3D, construct_batch_splines_3d, &
+    evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
+    evaluate_batch_splines_3d_der2
 use util, only: twopi
 use neo_biotsavart, only: coils_t, load_coils_from_file, &
     compute_vector_potential, compute_magnetic_field

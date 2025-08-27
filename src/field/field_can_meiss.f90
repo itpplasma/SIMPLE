@@ -1,9 +1,9 @@
 module field_can_meiss
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2, &
-    BatchSplineData3D, construct_batch_splines_3d, evaluate_batch_splines_3d_der, &
+use interpolate, only: &
+    BatchSplineData3D, construct_batch_splines_3d, &
+    evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
 use util, only: twopi
 use field_can_base, only: FieldCan, n_field_evaluations
@@ -29,7 +29,9 @@ logical :: batch_splines_initialized = .false.
 ! For splining lambda (difference between canonical and toroidal cylinder angle)
 ! and chi (gauge transformation)
 real(dp), dimension(:,:,:), allocatable :: lam_phi, chi_gauge
-type(SplineData3D) :: spl_lam_phi, spl_chi_gauge
+! Batch spline for transformation components (2 components: lam_phi, chi_gauge)
+type(BatchSplineData3D) :: spl_transform_batch
+logical :: transform_splines_initialized = .false.
 
 integer, parameter :: order(3) = [3, 3, 3]  ! Reduced from [5,5,5] to avoid spl_three_to_five array bounds issue
 logical, parameter :: periodic(3) = [.False., .True., .True.]
@@ -110,12 +112,15 @@ end subroutine evaluate_meiss
 subroutine can_to_ref_meiss(xcan, xref)
     real(dp), intent(in) :: xcan(3)
     real(dp), intent(out) :: xref(3)
-    real(dp) :: lam
+    real(dp) :: y_batch(2)  ! lam_phi, chi_gauge
 
-    call evaluate_splines_3d(spl_lam_phi, xcan, lam)
+    if (.not. transform_splines_initialized) then
+        error stop 'Transform splines not initialized in can_to_ref_meiss'
+    end if
+    call evaluate_batch_splines_3d(spl_transform_batch, xcan, y_batch)
     xref(1) = xcan(1)**2
     xref(2) = modulo(xcan(2), twopi)
-    xref(3) = modulo(xcan(3) + lam, twopi)
+    xref(3) = modulo(xcan(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
 end subroutine can_to_ref_meiss
 
 
@@ -126,17 +131,22 @@ subroutine ref_to_can_meiss(xref, xcan)
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: lam, dlam(3), phi_can_prev
+    real(dp) :: y_batch(2), dy_batch(2, 3), phi_can_prev
     integer :: i
+
+    if (.not. transform_splines_initialized) then
+        error stop 'Transform splines not initialized in ref_to_can_meiss'
+    end if
 
     xcan(1) = sqrt(xref(1))
     xcan(2) = modulo(xref(2), twopi)
     xcan(3) = modulo(xref(3), twopi)
 
     do i=1, MAX_ITER
-        call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
+        call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_batch, dy_batch)
         phi_can_prev = xcan(3)
-        xcan(3) = phi_can_prev - (phi_can_prev + lam - xref(3))/(1d0 + dlam(3))
+        ! y_batch(1) is lam_phi, dy_batch(1,3) is d(lam_phi)/d(phi)
+        xcan(3) = phi_can_prev - (phi_can_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(1,3))
 !print *, abs(xcan(3) - phi_can_prev)
         if (abs(xcan(3) - phi_can_prev) < TOL) return
     enddo
@@ -297,8 +307,18 @@ end subroutine rh_can
 
 
 subroutine spline_transformation
-    call construct_splines_3d(xmin, xmax, lam_phi, order, periodic, spl_lam_phi)
-    call construct_splines_3d(xmin, xmax, chi_gauge, order, periodic, spl_chi_gauge)
+    real(dp), dimension(:,:,:,:), allocatable :: y_batch
+    integer :: dims(3)
+    
+    ! Construct batch spline for transformation components (2: lam_phi, chi_gauge)
+    dims = shape(lam_phi)
+    allocate(y_batch(dims(1), dims(2), dims(3), 2))
+    
+    y_batch(:,:,:,1) = lam_phi
+    y_batch(:,:,:,2) = chi_gauge
+    
+    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_transform_batch)
+    transform_splines_initialized = .true.
 end subroutine spline_transformation
 
 
@@ -370,8 +390,19 @@ subroutine init_canonical_field_components
             do i_r=1,n_r
                 xcan = get_grid_point(i_r, i_th, i_phi)
 
-                call evaluate_splines_3d_der(spl_lam_phi, xcan, lam, dlam)
-                call evaluate_splines_3d_der(spl_chi_gauge, xcan, chi, dchi)
+                ! Use batch evaluation for both transformation components
+                if (.not. transform_splines_initialized) then
+                    error stop 'Transform splines not initialized in init_canonical_field_components'
+                end if
+                
+                block
+                    real(dp) :: y_trans(2), dy_trans(2,3)
+                    call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)
+                    lam = y_trans(1)    ! lam_phi
+                    chi = y_trans(2)    ! chi_gauge  
+                    dlam = dy_trans(1,:)  ! derivatives of lam_phi
+                    dchi = dy_trans(2,:)  ! derivatives of chi_gauge
+                end block
 
                 xref(1) = xcan(1)
                 xref(2) = modulo(xcan(2), twopi)

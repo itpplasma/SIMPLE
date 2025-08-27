@@ -1,10 +1,10 @@
 module field_can_albert
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2, &
-    BatchSplineData3D, construct_batch_splines_3d, evaluate_batch_splines_3d_der, &
-    evaluate_batch_splines_3d, evaluate_batch_splines_3d_der2
+use interpolate, only: &
+    BatchSplineData3D, construct_batch_splines_3d, &
+    evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
+    evaluate_batch_splines_3d_der2
 use field_can_base, only: FieldCan, n_field_evaluations
 use field_can_meiss, only: xmin, xmax, n_r, n_th, n_phi, order, periodic, twopi, &
     get_grid_point, &
@@ -24,7 +24,8 @@ logical :: dpsi_dr_positive
 real(dp), dimension(:,:,:), allocatable :: r_of_xc, &
 Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc
 
-type(SplineData3D) :: spl_r_of_xc
+! Batch spline for r_of_xc transformation (1 component: r)
+type(BatchSplineData3D) :: spl_r_batch
 
 ! Batch spline for optimized field evaluation (4 components: Aphi, hth, hph, Bmod)
 type(BatchSplineData3D) :: spl_albert_batch
@@ -62,9 +63,10 @@ subroutine can_to_ref_albert(xcan, xref)
 
     real(dp), intent(in) :: xcan(3)
     real(dp), intent(out) :: xref(3) 
-    real(dp) :: xmeiss(3)
+    real(dp) :: xmeiss(3), y_batch(1)
 
-    call evaluate_splines_3d(spl_r_of_xc, xcan, xmeiss(1))
+    call evaluate_batch_splines_3d(spl_r_batch, xcan, y_batch)
+    xmeiss(1) = y_batch(1)  ! r component
     xmeiss(2:3) = xcan(2:3)
     call can_to_ref_meiss(xmeiss, xref)
 end subroutine can_to_ref_albert
@@ -142,8 +144,15 @@ subroutine init_splines_with_psi
     call grid_r_to_psi(xmin(1), xmax(1), psi_inner, psi_outer, psi_of_x, &
         Aphi_grid, hth_grid, hph_grid, Bmod_grid, r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc)
 
-    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
-        [psi_outer, xmax(2), xmax(3)], r_of_xc, order, periodic, spl_r_of_xc)
+    ! Construct batch spline for r_of_xc (1 component: r)
+    block
+        real(dp), dimension(:,:,:,:), allocatable :: y_r_batch
+        dims = shape(r_of_xc)
+        allocate(y_r_batch(dims(1), dims(2), dims(3), 1))
+        y_r_batch(:,:,:,1) = r_of_xc
+        call construct_batch_splines_3d([psi_inner, xmin(2), xmin(3)], &
+            [psi_outer, xmax(2), xmax(3)], y_r_batch, order, periodic, spl_r_batch)
+    end block
     
     ! Construct batch spline for 4 Albert field components: [Aphi, hth, hph, Bmod]
     dims = shape(Aph_of_xc)
