@@ -443,12 +443,12 @@ subroutine init_canonical_field_components
                 end if
                 
                 block
-                    real(dp) :: y_trans(2), dy_trans(2,3)
+                    real(dp) :: y_trans(2), dy_trans(3,2)
                     call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)
                     lam = y_trans(1)    ! lam_phi
                     chi = y_trans(2)    ! chi_gauge  
-                    dlam = dy_trans(1,:)  ! derivatives of lam_phi
-                    dchi = dy_trans(2,:)  ! derivatives of chi_gauge
+                    dlam = dy_trans(:,1)  ! derivatives of lam_phi
+                    dchi = dy_trans(:,2)  ! derivatives of chi_gauge
                 end block
 
                 xref(1) = xcan(1)
