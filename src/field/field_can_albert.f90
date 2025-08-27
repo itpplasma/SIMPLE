@@ -261,7 +261,7 @@ subroutine evaluate_albert_batch_der(f, x)
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
-    real(dp) :: y_batch(4), dy_batch(4, 3)
+    real(dp) :: y_batch(4), dy_batch(3, 4)
     
     call evaluate_batch_splines_3d_der(spl_albert_batch, x, y_batch, dy_batch)
     
@@ -271,10 +271,10 @@ subroutine evaluate_albert_batch_der(f, x)
     f%hph = y_batch(3)
     f%Bmod = y_batch(4)
     
-    f%dAph = dy_batch(1, :)
-    f%dhth = dy_batch(2, :)
-    f%dhph = dy_batch(3, :)
-    f%dBmod = dy_batch(4, :)
+    f%dAph = dy_batch(:, 1)
+    f%dhth = dy_batch(:, 2)
+    f%dhph = dy_batch(:, 3)
+    f%dBmod = dy_batch(:, 4)
 end subroutine evaluate_albert_batch_der
 
 
@@ -283,7 +283,7 @@ subroutine evaluate_albert_batch_der2(f, x)
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
-    real(dp) :: y_batch(4), dy_batch(4, 3), d2y_batch(4, 6)
+    real(dp) :: y_batch(4), dy_batch(3, 4), d2y_batch(6, 4)
     
     call evaluate_batch_splines_3d_der2(spl_albert_batch, x, y_batch, dy_batch, d2y_batch)
     
@@ -293,15 +293,15 @@ subroutine evaluate_albert_batch_der2(f, x)
     f%hph = y_batch(3)
     f%Bmod = y_batch(4)
     
-    f%dAph = dy_batch(1, :)
-    f%dhth = dy_batch(2, :)
-    f%dhph = dy_batch(3, :)
-    f%dBmod = dy_batch(4, :)
+    f%dAph = dy_batch(:, 1)
+    f%dhth = dy_batch(:, 2)
+    f%dhph = dy_batch(:, 3)
+    f%dBmod = dy_batch(:, 4)
     
-    f%d2Aph = d2y_batch(1, :)
-    f%d2hth = d2y_batch(2, :)
-    f%d2hph = d2y_batch(3, :)
-    f%d2Bmod = d2y_batch(4, :)
+    f%d2Aph = d2y_batch(:, 1)
+    f%d2hth = d2y_batch(:, 2)
+    f%d2hph = d2y_batch(:, 3)
+    f%d2Bmod = d2y_batch(:, 4)
 end subroutine evaluate_albert_batch_der2
 
 end module field_can_albert

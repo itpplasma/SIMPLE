@@ -66,8 +66,8 @@ contains
         
         ! Test points
         real(dp) :: x_test(3), y_individual(5), y_batch(5)
-        real(dp) :: dy_individual(5, 3), dy_batch(5, 3)
-        real(dp) :: d2y_individual(5, 6), d2y_batch(5, 6)
+        real(dp) :: dy_individual(5, 3), dy_batch(3, 5)
+        real(dp) :: d2y_individual(5, 6), d2y_batch(6, 5)
         
         integer :: i_r, i_th, i_phi, i, j, k
         real(dp) :: r, th, phi, h_r, h_th, h_phi
@@ -156,10 +156,10 @@ contains
             ! Check derivatives match
             do j = 1, n_components
                 do k = 1, 3
-                    if (abs(dy_individual(j,k) - dy_batch(j,k)) > TOL) then
+                    if (abs(dy_individual(j,k) - dy_batch(k,j)) > TOL) then
                         print *, 'ERROR: Derivative mismatch at test', i, 'component', j, 'dim', k
                         print *, '  Individual:', dy_individual(j,k)
-                        print *, '  Batch:', dy_batch(j,k)
+                        print *, '  Batch:', dy_batch(k,j)
                         stop 1
                     end if
                 end do
@@ -182,10 +182,10 @@ contains
             ! Check second derivatives match
             do j = 1, n_components
                 do k = 1, 6
-                    if (abs(d2y_individual(j,k) - d2y_batch(j,k)) > TOL) then
+                    if (abs(d2y_individual(j,k) - d2y_batch(k,j)) > TOL) then
                         print *, 'ERROR: Second derivative mismatch at test', i, 'component', j, 'dim', k
                         print *, '  Individual:', d2y_individual(j,k)
-                        print *, '  Batch:', d2y_batch(j,k)
+                        print *, '  Batch:', d2y_batch(k,j)
                         stop 1
                     end if
                 end do
@@ -215,7 +215,7 @@ contains
         
         type(BatchSplineData3D) :: spl_batch
         real(dp), allocatable :: albert_batch(:,:,:,:)
-        real(dp) :: x_test(3), y_batch(5), dy_batch(5, 3)
+        real(dp) :: x_test(3), y_batch(5), dy_batch(3, 5)
         integer :: i
         
         ! Allocate and fill test data
@@ -237,7 +237,7 @@ contains
                 print *, 'ERROR: Unreasonable value magnitude for component', i, ':', y_batch(i)
                 stop 1
             end if
-            if (maxval(abs(dy_batch(i,:))) >= 100.0d0) then
+            if (maxval(abs(dy_batch(:,i))) >= 100.0d0) then
                 print *, 'ERROR: Unreasonable derivative magnitude for component', i
                 stop 1
             end if

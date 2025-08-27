@@ -178,7 +178,7 @@ subroutine ref_to_can_meiss(xref, xcan)
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: y_batch(2), dy_batch(2, 3), phi_can_prev
+    real(dp) :: y_batch(2), dy_batch(3, 2), phi_can_prev
     integer :: i
 
     if (.not. transform_splines_initialized) then
@@ -192,8 +192,8 @@ subroutine ref_to_can_meiss(xref, xcan)
     do i=1, MAX_ITER
         call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_batch, dy_batch)
         phi_can_prev = xcan(3)
-        ! y_batch(1) is lam_phi, dy_batch(1,3) is d(lam_phi)/d(phi)
-        xcan(3) = phi_can_prev - (phi_can_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(1,3))
+        ! y_batch(1) is lam_phi, dy_batch(3,1) is d(lam_phi)/d(phi)
+        xcan(3) = phi_can_prev - (phi_can_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(3,1))
 !print *, abs(xcan(3) - phi_can_prev)
         if (abs(xcan(3) - phi_can_prev) < TOL) return
     enddo
@@ -538,7 +538,7 @@ subroutine evaluate_meiss_batch_der(f, x)
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
-    real(dp) :: y_batch(5), dy_batch(5, 3)
+    real(dp) :: y_batch(5), dy_batch(3, 5)
     
     call evaluate_batch_splines_3d_der(spl_field_batch, x, y_batch, dy_batch)
     
@@ -549,11 +549,11 @@ subroutine evaluate_meiss_batch_der(f, x)
     f%hph = y_batch(4)
     f%Bmod = y_batch(5)
     
-    f%dAth = dy_batch(1, :)
-    f%dAph = dy_batch(2, :)
-    f%dhth = dy_batch(3, :)
-    f%dhph = dy_batch(4, :)
-    f%dBmod = dy_batch(5, :)
+    f%dAth = dy_batch(:, 1)
+    f%dAph = dy_batch(:, 2)
+    f%dhth = dy_batch(:, 3)
+    f%dhph = dy_batch(:, 4)
+    f%dBmod = dy_batch(:, 5)
 end subroutine evaluate_meiss_batch_der
 
 
@@ -562,7 +562,7 @@ subroutine evaluate_meiss_batch_der2(f, x)
     type(FieldCan), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
-    real(dp) :: y_batch(5), dy_batch(5, 3), d2y_batch(5, 6)
+    real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
     
     call evaluate_batch_splines_3d_der2(spl_field_batch, x, y_batch, dy_batch, d2y_batch)
     
@@ -573,17 +573,17 @@ subroutine evaluate_meiss_batch_der2(f, x)
     f%hph = y_batch(4)
     f%Bmod = y_batch(5)
     
-    f%dAth = dy_batch(1, :)
-    f%dAph = dy_batch(2, :)
-    f%dhth = dy_batch(3, :)
-    f%dhph = dy_batch(4, :)
-    f%dBmod = dy_batch(5, :)
+    f%dAth = dy_batch(:, 1)
+    f%dAph = dy_batch(:, 2)
+    f%dhth = dy_batch(:, 3)
+    f%dhph = dy_batch(:, 4)
+    f%dBmod = dy_batch(:, 5)
     
-    f%d2Ath = d2y_batch(1, :)
-    f%d2Aph = d2y_batch(2, :)
-    f%d2hth = d2y_batch(3, :)
-    f%d2hph = d2y_batch(4, :)
-    f%d2Bmod = d2y_batch(5, :)
+    f%d2Ath = d2y_batch(:, 1)
+    f%d2Aph = d2y_batch(:, 2)
+    f%d2hth = d2y_batch(:, 3)
+    f%d2hph = d2y_batch(:, 4)
+    f%d2Bmod = d2y_batch(:, 5)
 end subroutine evaluate_meiss_batch_der2
 
 end module field_can_meiss
