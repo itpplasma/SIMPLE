@@ -180,8 +180,12 @@ elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
 	
 	# Architecture-specific flags
-	if (CMAKE_BUILD_TYPE MATCHES Fast OR CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-		# Fast mode or ARM: use native architecture (no portable baseline for ARM)
+	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+		# ARM processors (e.g., Apple Silicon): gfortran doesn't support -march=native
+		# Use -mcpu=native instead for ARM
+		list(APPEND SIMPLE_COMPILE_OPTIONS -mcpu=native)
+	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
+		# Fast mode on x86: use native architecture
 		list(APPEND SIMPLE_COMPILE_OPTIONS -march=native -mtune=native)
 	else()
 		# Release on x86-64: use v2 baseline for broad compatibility

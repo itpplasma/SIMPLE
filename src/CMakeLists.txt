@@ -15,8 +15,13 @@ set(SOURCES
     field/field_can_flux.f90
     field/field_can_boozer.f90
     field/field_can_meiss.f90
+    field/field_can_meiss_batch.f90
     field/psi_transform.f90
     field/field_can_albert.f90
+    field/field_can_albert_batch.f90
+    field/field_coils_batch.f90
+    field/batch_spline_migration.f90
+    field/batch_spline_helpers.f90
     field_can.f90
     magfie.f90
     boozer_converter.F90
