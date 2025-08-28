@@ -46,7 +46,7 @@ def sample_surface(n_particles, s=DEFAULT_SURFACE):
     
     # Call existing surface sampling through Samplers class
     samplers = pysimple.Samplers()
-    samplers.sample_surface_fieldline(pysimple.params.zstart)
+    samplers._sample_surface_fieldline(pysimple.params.zstart)
     
     # Return copy of zstart array
     return np.copy(pysimple.params.zstart)
@@ -59,7 +59,7 @@ def sample_volume(n_particles, s_inner=DEFAULT_S_INNER, s_outer=DEFAULT_S_OUTER)
     
     # Call existing volume sampling through Samplers class
     samplers = pysimple.Samplers()
-    samplers.sample_volume_single(pysimple.params.zstart, s_inner, s_outer)
+    samplers._sample_volume_single(pysimple.params.zstart, s_inner, s_outer)
     
     # Return copy of zstart array
     return np.copy(pysimple.params.zstart)
@@ -73,7 +73,7 @@ def load_particles(particle_file):
     
     # Call existing file loading through Samplers class
     samplers = pysimple.Samplers()
-    samplers.sample_read(pysimple.params.zstart, str(particle_file))
+    samplers._sample_read(pysimple.params.zstart, str(particle_file))
     
     # Return copy of zstart array
     return np.copy(pysimple.params.zstart)
