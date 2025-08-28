@@ -95,7 +95,7 @@ include(FetchContent)
 FetchContent_Declare(
     fortplot
     GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-    GIT_TAG main
+    GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
 )
 FetchContent_MakeAvailable(fortplot)
 
@@ -175,6 +175,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
 	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
 elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 	add_compile_options(-Og -pg -shared-libgcc)
+	add_link_options(-pg -shared-libgcc)
 elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	# Common optimization flags for Release and Fast builds
 	list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
