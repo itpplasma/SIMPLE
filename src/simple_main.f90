@@ -323,9 +323,19 @@ module simple_main
 
 
   subroutine write_output
+    use field_can_base, only: n_field_evaluations
 
     integer :: i, num_lost
     real(dp) :: inverse_times_lost_sum
+    integer(8) :: total_field_evaluations
+
+    ! Sum field evaluations across all threads
+    total_field_evaluations = 0
+    !$omp parallel reduction(+:total_field_evaluations)
+    total_field_evaluations = total_field_evaluations + n_field_evaluations
+    !$omp end parallel
+    
+    print *, "Total field evaluations: ", total_field_evaluations
 
     open(1,file='times_lost.dat',recl=1024)
     num_lost = 0
