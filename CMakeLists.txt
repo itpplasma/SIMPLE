@@ -174,7 +174,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
 	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
 	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
 elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-	add_compile_options(-O2 -p -shared-libgcc)
+	add_compile_options(-Og -pg -shared-libgcc)
 elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	# Common optimization flags for Release and Fast builds
 	list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
