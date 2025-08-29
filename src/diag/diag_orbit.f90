@@ -39,11 +39,19 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
   integer :: pivot(n), info
   real(dp) :: xabs(n), tolref(n), fabs(n)
   
+  ! Buffers to store all iteration data (only printed if max iterations reached)
+  real(dp) :: x_buffer(n,maxit), fabs_buffer(n,maxit), xabs_buffer(n,maxit)
+  real(dp) :: x_initial(n)
+  integer :: k
+  
   tolref(1) = 1d0
   tolref(2) = twopi
   tolref(3) = twopi
   tolref(4) = dabs(1d1*torflux/f%ro0)
   tolref(5) = 1d0
+  
+  ! Store initial conditions
+  x_initial = x
   
   do kit = 1, maxit
     if(x(1) > 1.0) then
@@ -67,6 +75,11 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
     xabs = dabs(x - xlast)
     tolref(4) = max(dabs(x(4)), tolref(4))
     
+    ! Store iteration data in buffers
+    x_buffer(:,kit) = x
+    fabs_buffer(:,kit) = fabs
+    xabs_buffer(:,kit) = xabs
+    
     if (all(fabs < atol)) then
         iterations = kit
         return
@@ -77,7 +90,37 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
     end if
   enddo
   
+  ! Maximum iterations reached - print complete iteration history
+  write(*,'(A)') '=== NEWTON SOLVER FAILURE: MAXIMUM ITERATIONS REACHED ==='
+  write(*,'(A,I0)') 'Maximum iterations: ', maxit
+  write(*,'(A,5ES12.5)') 'Initial x = [', x_initial, ']'
+  write(*,*)
+  write(*,'(A)') 'Complete iteration history:'
+  write(*,'(A)') 'Iter |    max(fabs)    |    max(xabs)    | Result'
+  write(*,'(A)') '-----|----------------|----------------|-------'
+  
+  do k = 1, maxit
+    write(*,'(I4,A,ES12.5,A,ES12.5,A)',advance='no') k, ' | ', maxval(fabs_buffer(:,k)), &
+        ' | ', maxval(xabs_buffer(:,k)), ' | '
+    
+    if (all(fabs_buffer(:,k) < atol)) then
+        write(*,'(A)') 'fabs < atol'
+    elseif (all(xabs_buffer(:,k) < rtol*tolref)) then
+        write(*,'(A)') 'xabs < rtol*tolref'
+    else
+        write(*,'(A)') 'continuing...'
+    end if
+  enddo
+  
+  write(*,*)
+  write(*,'(A,5ES12.5)') 'Final fabs = [', fabs_buffer(:,maxit), ']'
+  write(*,'(A,5ES12.5)') 'Final xabs = [', xabs_buffer(:,maxit), ']'
+  write(*,'(A,5ES12.5)') 'rtol*tolref= [', rtol*tolref, ']'
+  write(*,'(A,5ES12.5)') 'Final x    = [', x_buffer(:,maxit), ']'
+  write(*,*)
+  
   iterations = maxit
+  error stop 'Newton solver failed to converge within maximum iterations'
 end function newton_midpoint_count_iterations
 
 !> Integration wrapper that plots the trajectory of the Nth particle
