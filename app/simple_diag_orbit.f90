@@ -6,7 +6,7 @@ program diag_orbit_main
 !> and provides detailed orbit trajectory plotting for the Nth particle
 
 use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
-    integmode, params_init, isw_field_type, dtaumin, relerr, ntestpart, &
+    integmode, params_init, isw_field_type, dtaumin, relerr, ntestpart, ntimstep, ntau, &
     zstart, startmode, grid_density, special_ants_file, reuse_batch, num_surf, sbeg
 use simple, only: Tracer, init_sympl
 use simple_main, only: init_field
@@ -27,7 +27,6 @@ type(Tracer) :: norb
 type(SymplecticIntegrator) :: si
 type(FieldCan) :: field_can
 integer :: particle_number
-integer, parameter :: NUM_DEBUG_STEPS = 100
 real(dp), dimension(5) :: z
 
 ! Initialize timing
@@ -123,7 +122,7 @@ print '(A,A)', "Configuration file: ", trim(config_file)
 print '(A,I0,A,I0)', "Selected particle: ", particle_number, " out of ", ntestpart
 print '(A,I0)', "Field type (isw_field_type): ", isw_field_type
 print '(A,I0)', "Integration mode: ", integmode
-print '(A,I0,A)', "Integration: ", NUM_DEBUG_STEPS, " time steps"
+print '(A,I0,A,I0,A,I0,A)', "Integration: ", ntimstep, " macrosteps × ", ntau, " substeps = ", ntimstep*ntau, " total timesteps"
 print *
 
 ! Initialize default starting conditions (will be overridden by sampling)
@@ -143,7 +142,7 @@ print '(A,ES12.5)', 'Relative tolerance: ', si%rtol
 print *
 
 ! Perform orbit trajectory diagnostic integration
-call integrate_orbit_with_trajectory_debug(si, field_can, particle_number, NUM_DEBUG_STEPS)
+call integrate_orbit_with_trajectory_debug(si, field_can, particle_number)
 
 call print_phase_time('Orbit trajectory diagnostic analysis completed')
 
