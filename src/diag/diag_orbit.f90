@@ -73,13 +73,13 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
     call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
     x = x - fvec
     xabs = dabs(x - xlast)
-    tolref(4) = max(dabs(x(4)), tolref(4))
     
     ! Store iteration data in buffers
     x_buffer(:,kit) = x
     fabs_buffer(:,kit) = fabs
     xabs_buffer(:,kit) = xabs
     
+    ! Use reasonable absolute tolerance instead of machine epsilon
     if (all(fabs < atol)) then
         iterations = kit
         return
