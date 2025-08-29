@@ -1,11 +1,11 @@
 module diag_albert
 !> Diagnostic routines for Albert canonical coordinate system
-!> Provides line plots of vector potential and magnetic field strength
+!> Provides contour plots of vector potential and magnetic field strength
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use fortplot, only: figure, plot, savefig, xlabel, ylabel, title
-use field_can_albert, only: Aph_of_xc, Bmod_of_xc, n_r, n_th, n_phi, &
-    xmin, xmax
+use pyplot_module, only: pyplot
+use field_can_albert, only: Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc, &
+    n_r, n_th, n_phi, xmin, xmax
 
 implicit none
 private
@@ -15,26 +15,22 @@ public :: plot_albert_contours
 contains
 
 subroutine plot_albert_contours()
-    !> Generate line plots of Aph_of_xc and Bmod_of_xc vs theta and phi
-    !> for three radial slices (inner, middle, outer)
+    !> Generate contour plots of Aph_of_xc, hth_of_xc, hph_of_xc, and Bmod_of_xc
+    !> over theta and phi for three radial slices (inner, middle, outer)
 
+    type(pyplot) :: plt
     integer :: i_r_inner, i_r_middle, i_r_outer
-    integer :: i_th, i_ph
     real(dp), dimension(:), allocatable :: th_array, ph_array
-    real(dp), dimension(:), allocatable :: profile_values
+    real(dp), dimension(:,:), allocatable :: contour_data
     character(len=100) :: filename
     character(len=80) :: plot_title_str
     real(dp) :: s_inner, s_middle, s_outer
-    integer :: i_ph_mid, i_th_mid
+    integer :: i_th, i_ph
 
     ! Define radial slice indices - inner (25%), middle (50%), outer (75%)
     i_r_inner = max(1, n_r / 4)
     i_r_middle = n_r / 2
     i_r_outer = max(1, 3 * n_r / 4)
-    
-    ! Middle indices for profiles
-    i_th_mid = n_th / 2
-    i_ph_mid = n_phi / 2
     
     ! Calculate corresponding s values
     s_inner = xmin(1) + (xmax(1) - xmin(1)) * real(i_r_inner - 1, dp) / &
@@ -44,10 +40,10 @@ subroutine plot_albert_contours()
     s_outer = xmin(1) + (xmax(1) - xmin(1)) * real(i_r_outer - 1, dp) / &
         real(n_r - 1, dp)
 
-    ! Allocate arrays
+    ! Allocate coordinate arrays
     allocate(th_array(n_th))
     allocate(ph_array(n_phi))
-    allocate(profile_values(max(n_th, n_phi)))
+    allocate(contour_data(n_th, n_phi))
 
     ! Create coordinate arrays
     do i_th = 1, n_th
@@ -60,125 +56,168 @@ subroutine plot_albert_contours()
             real(i_ph - 1, dp) / real(n_phi - 1, dp)
     end do
 
-    ! Generate plots for inner slice
+    ! Generate contour plots for each radial slice and field component
+    ! Order: Aph, hth, hph, Bmod for each radial slice
     
-    ! Aph_of_xc vs theta (inner slice)
-    profile_values(1:n_th) = Aph_of_xc(i_r_inner, :, i_ph_mid)
-    filename = "albert_Aph_inner_theta.png"
+    ! Inner slice - Aph_of_xc contour
+    contour_data = Aph_of_xc(i_r_inner, :, :)
+    filename = "albert_Aph_inner_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Aph_of_xc vs theta at s=", s_inner, " (Albert)"
+        "Aph_of_xc contour at s=", s_inner, " (Albert)"
     
-    call figure()
-    call plot(th_array, profile_values(1:n_th))
-    call xlabel("theta")
-    call ylabel("Aph_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_aph_inner.py')
 
-    ! Aph_of_xc vs phi (inner slice)
-    profile_values(1:n_phi) = Aph_of_xc(i_r_inner, i_th_mid, :)
-    filename = "albert_Aph_inner_phi.png"
+    ! Inner slice - hth_of_xc contour
+    contour_data = hth_of_xc(i_r_inner, :, :)
+    filename = "albert_hth_inner_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Aph_of_xc vs phi at s=", s_inner, " (Albert)"
+        "hth_of_xc contour at s=", s_inner, " (Albert)"
     
-    call figure()
-    call plot(ph_array, profile_values(1:n_phi))
-    call xlabel("phi")
-    call ylabel("Aph_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_hth_inner.py')
 
-    ! Bmod_of_xc vs theta (inner slice)
-    profile_values(1:n_th) = Bmod_of_xc(i_r_inner, :, i_ph_mid)
-    filename = "albert_Bmod_inner_theta.png"
+    ! Inner slice - hph_of_xc contour
+    contour_data = hph_of_xc(i_r_inner, :, :)
+    filename = "albert_hph_inner_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Bmod_of_xc vs theta at s=", s_inner, " (Albert)"
+        "hph_of_xc contour at s=", s_inner, " (Albert)"
     
-    call figure()
-    call plot(th_array, profile_values(1:n_th))
-    call xlabel("theta")
-    call ylabel("Bmod_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_hph_inner.py')
 
-    ! Bmod_of_xc vs phi (inner slice)
-    profile_values(1:n_phi) = Bmod_of_xc(i_r_inner, i_th_mid, :)
-    filename = "albert_Bmod_inner_phi.png"
+    ! Inner slice - Bmod_of_xc contour
+    contour_data = Bmod_of_xc(i_r_inner, :, :)
+    filename = "albert_Bmod_inner_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Bmod_of_xc vs phi at s=", s_inner, " (Albert)"
+        "Bmod_of_xc contour at s=", s_inner, " (Albert)"
     
-    call figure()
-    call plot(ph_array, profile_values(1:n_phi))
-    call xlabel("phi")
-    call ylabel("Bmod_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_bmod_inner.py')
 
-    ! Generate plots for middle slice
-    
-    ! Aph_of_xc vs theta (middle slice)
-    profile_values(1:n_th) = Aph_of_xc(i_r_middle, :, i_ph_mid)
-    filename = "albert_Aph_middle_theta.png"
+    ! Middle slice - Aph_of_xc contour
+    contour_data = Aph_of_xc(i_r_middle, :, :)
+    filename = "albert_Aph_middle_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Aph_of_xc vs theta at s=", s_middle, " (Albert)"
+        "Aph_of_xc contour at s=", s_middle, " (Albert)"
     
-    call figure()
-    call plot(th_array, profile_values(1:n_th))
-    call xlabel("theta")
-    call ylabel("Aph_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_aph_middle.py')
 
-    ! Aph_of_xc vs phi (middle slice)
-    profile_values(1:n_phi) = Aph_of_xc(i_r_middle, i_th_mid, :)
-    filename = "albert_Aph_middle_phi.png"
+    ! Middle slice - hth_of_xc contour
+    contour_data = hth_of_xc(i_r_middle, :, :)
+    filename = "albert_hth_middle_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Aph_of_xc vs phi at s=", s_middle, " (Albert)"
+        "hth_of_xc contour at s=", s_middle, " (Albert)"
     
-    call figure()
-    call plot(ph_array, profile_values(1:n_phi))
-    call xlabel("phi")
-    call ylabel("Aph_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_hth_middle.py')
 
-    ! Generate plots for outer slice
-    
-    ! Aph_of_xc vs theta (outer slice)
-    profile_values(1:n_th) = Aph_of_xc(i_r_outer, :, i_ph_mid)
-    filename = "albert_Aph_outer_theta.png"
+    ! Middle slice - hph_of_xc contour
+    contour_data = hph_of_xc(i_r_middle, :, :)
+    filename = "albert_hph_middle_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Aph_of_xc vs theta at s=", s_outer, " (Albert)"
+        "hph_of_xc contour at s=", s_middle, " (Albert)"
     
-    call figure()
-    call plot(th_array, profile_values(1:n_th))
-    call xlabel("theta")
-    call ylabel("Aph_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_hph_middle.py')
 
-    ! Bmod_of_xc vs theta (outer slice)
-    profile_values(1:n_th) = Bmod_of_xc(i_r_outer, :, i_ph_mid)
-    filename = "albert_Bmod_outer_theta.png"
+    ! Middle slice - Bmod_of_xc contour
+    contour_data = Bmod_of_xc(i_r_middle, :, :)
+    filename = "albert_Bmod_middle_contour.png"
     write(plot_title_str, '(A,F5.3,A)') &
-        "Bmod_of_xc vs theta at s=", s_outer, " (Albert)"
+        "Bmod_of_xc contour at s=", s_middle, " (Albert)"
     
-    call figure()
-    call plot(th_array, profile_values(1:n_th))
-    call xlabel("theta")
-    call ylabel("Bmod_of_xc") 
-    call title(trim(plot_title_str))
-    call savefig(trim(filename))
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_bmod_middle.py')
+
+    ! Outer slice - Aph_of_xc contour
+    contour_data = Aph_of_xc(i_r_outer, :, :)
+    filename = "albert_Aph_outer_contour.png"
+    write(plot_title_str, '(A,F5.3,A)') &
+        "Aph_of_xc contour at s=", s_outer, " (Albert)"
+    
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_aph_outer.py')
+
+    ! Outer slice - hth_of_xc contour
+    contour_data = hth_of_xc(i_r_outer, :, :)
+    filename = "albert_hth_outer_contour.png"
+    write(plot_title_str, '(A,F5.3,A)') &
+        "hth_of_xc contour at s=", s_outer, " (Albert)"
+    
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_hth_outer.py')
+
+    ! Outer slice - hph_of_xc contour
+    contour_data = hph_of_xc(i_r_outer, :, :)
+    filename = "albert_hph_outer_contour.png"
+    write(plot_title_str, '(A,F5.3,A)') &
+        "hph_of_xc contour at s=", s_outer, " (Albert)"
+    
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_hph_outer.py')
+
+    ! Outer slice - Bmod_of_xc contour
+    contour_data = Bmod_of_xc(i_r_outer, :, :)
+    filename = "albert_Bmod_outer_contour.png"
+    write(plot_title_str, '(A,F5.3,A)') &
+        "Bmod_of_xc contour at s=", s_outer, " (Albert)"
+    
+    call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+        title=trim(plot_title_str), figsize=[10,8])
+    call plt%add_contour(th_array, ph_array, contour_data, &
+        linestyle='-', colorbar=.true.)
+    call plt%savefig(trim(filename), pyfile='albert_bmod_outer.py')
 
     ! Cleanup
-    deallocate(th_array, ph_array, profile_values)
+    deallocate(th_array, ph_array, contour_data)
 
     print *, "Albert coordinate diagnostic plots generated successfully!"
     print *, "Files created:"
-    print *, "  Inner slice: albert_Aph_inner_theta.png, albert_Aph_inner_phi.png"
-    print *, "              albert_Bmod_inner_theta.png, albert_Bmod_inner_phi.png"
-    print *, "  Middle slice: albert_Aph_middle_theta.png, albert_Aph_middle_phi.png"
-    print *, "  Outer slice: albert_Aph_outer_theta.png, albert_Bmod_outer_theta.png"
+    print *, "  Inner slice:"
+    print *, "    albert_Aph_inner_contour.png, albert_hth_inner_contour.png"
+    print *, "    albert_hph_inner_contour.png, albert_Bmod_inner_contour.png"
+    print *, "  Middle slice:"
+    print *, "    albert_Aph_middle_contour.png, albert_hth_middle_contour.png"
+    print *, "    albert_hph_middle_contour.png, albert_Bmod_middle_contour.png"
+    print *, "  Outer slice:"
+    print *, "    albert_Aph_outer_contour.png, albert_hth_outer_contour.png"
+    print *, "    albert_hph_outer_contour.png, albert_Bmod_outer_contour.png"
+    print *, "Also generated Python files for reproducibility."
 
 end subroutine plot_albert_contours
 

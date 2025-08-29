@@ -53,6 +53,7 @@ threed1.*
 timings.txt
 .aider*
 thirdparty/gvec
+thirdparty/pyplot_module.F90
 
 # Coverage data files
 *.gcda

@@ -58,6 +58,9 @@ endif()
 
 add_library (simple STATIC ${SOURCES})
 
+# Link pyplot library to SIMPLE
+target_link_libraries(simple PUBLIC pyplot)
+
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 

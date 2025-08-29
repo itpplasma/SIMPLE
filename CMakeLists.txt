@@ -207,6 +207,28 @@ endif()
 
 # Trampoline error flags will be applied per-target to avoid affecting subprojects
 
+# Auto-download pyplot-fortran single file during build
+set(PYPLOT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
+set(PYPLOT_MODULE_FILE ${PYPLOT_SOURCE_DIR}/pyplot_module.F90)
+
+# Download pyplot_module.F90 if it doesn't exist
+if(NOT EXISTS ${PYPLOT_MODULE_FILE})
+    message(STATUS "Downloading pyplot_module.F90...")
+    file(MAKE_DIRECTORY ${PYPLOT_SOURCE_DIR})
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/jacobwilliams/pyplot-fortran/refs/heads/master/src/pyplot_module.F90"
+        ${PYPLOT_MODULE_FILE}
+        SHOW_PROGRESS
+    )
+endif()
+
+# Create pyplot library from downloaded source
+add_library(pyplot STATIC ${PYPLOT_MODULE_FILE})
+set_target_properties(pyplot PROPERTIES
+    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
+)
+target_include_directories(pyplot PUBLIC ${CMAKE_BINARY_DIR}/include)
+
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
 
