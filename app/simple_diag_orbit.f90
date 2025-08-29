@@ -125,21 +125,13 @@ print '(A,I0)', "Integration mode: ", integmode
 print '(A,I0,A,I0,A,I0,A)', "Integration: ", ntimstep, " macrosteps × ", ntau, " substeps = ", ntimstep*ntau, " total timesteps"
 print *
 
-! Initialize default starting conditions (will be overridden by sampling)
-z(1) = 0.6_dp      ! s = 0.6
-z(2) = 0.0_dp      ! theta = 0
-z(3) = 0.0_dp      ! phi = 0
-z(4) = 0.0_dp      ! pphi = 0 (trapped orbit with vpar=0)  
-z(5) = 0.0_dp      ! lambda = 0 (vpar=0)
-
-! Initialize symplectic integrator EXACTLY like simple_main.f90
-if (integmode > 0) call init_sympl(si, field_can, z, dtaumin, dtaumin, relerr, integmode)
-
-print '(A,ES12.5)', 'dtaumin (integration time step): ', si%dt
-print '(A,I0)', 'ntau (substeps per dtau): ', si%ntau
-print '(A,ES12.5)', 'Absolute tolerance: ', si%atol
-print '(A,ES12.5)', 'Relative tolerance: ', si%rtol
+print '(A,ES12.5)', 'dtaumin (integration time step): ', dtaumin
+print '(A,I0)', 'ntau (substeps per dtau): ', ntau
+print '(A,ES12.5)', 'Relative tolerance: ', relerr
 print *
+
+! NOTE: Symplectic integrator initialization happens per-particle in integrate_orbit_with_trajectory_debug
+! following the exact same sequence as simple_main.f90 trace_orbit()
 
 ! Perform orbit trajectory diagnostic integration
 call integrate_orbit_with_trajectory_debug(si, field_can, particle_number)

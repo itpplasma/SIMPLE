@@ -5,12 +5,13 @@ module diag_orbit
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use params, only: dtau, dtaumin, ntestpart, ntimstep, ntau, zstart, startmode, grid_density, &
-    special_ants_file, reuse_batch, num_surf, sbeg
+    special_ants_file, reuse_batch, num_surf, sbeg, integmode, relerr, reset_seed_if_deterministic
 use samplers, only: sample, START_FILE
-use field_can_mod, only: FieldCan, get_val, eval_field => evaluate
-use orbit_symplectic_base, only: SymplecticIntegrator
+use field_can_mod, only: FieldCan, get_val, eval_field => evaluate, ref_to_can
+use orbit_symplectic_base, only: SymplecticIntegrator, extrap_field
 use orbit_symplectic, only: orbit_timestep_sympl, f_midpoint_part1, f_midpoint_part2, &
     jac_midpoint_part1, jac_midpoint_part2
+use simple, only: init_sympl
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use util, only: twopi
@@ -75,6 +76,7 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
         return
     end if
   enddo
+  
   iterations = maxit
 end function newton_midpoint_count_iterations
 
@@ -88,7 +90,7 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
     real(dp), allocatable :: pphi_traj(:)
     integer, allocatable :: newton_iter_traj(:)
     real(dp), dimension(5) :: z, xlast
-    integer :: it, ktau, point_idx, newton_iters
+    integer :: it, ktau, point_idx, newton_iters, ierr_orbit
     integer, parameter :: maxit = 32
     real(dp) :: current_time
     integer :: total_points, field_eval_count
@@ -100,9 +102,19 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
         return
     end if
     
-    ! Get the Nth particle's initial conditions (assumed to be pre-initialized)
-    z = zstart(:, particle_number)
-    si%z = z(1:4)
+    ! CRITICAL: Follow simple_main.f90 trace_orbit EXACTLY
+    ! 1. Reset random seed if deterministic
+    call reset_seed_if_deterministic
+    
+    ! 2. Get particle coordinates and transform ref -> can (CRITICAL STEP MISSING!)
+    call ref_to_can(zstart(1:3, particle_number), z(1:3))
+    z(4:5) = zstart(4:5, particle_number)
+    
+    ! 3. Initialize symplectic integrator with TRANSFORMED coordinates
+    if (integmode > 0) then
+        call init_sympl(si, f, z, dtaumin, dtaumin, relerr, integmode)
+    end if
+    
     current_time = 0.0_dp
     
     ! Calculate total number of timesteps (macrosteps * substeps + initial)
@@ -132,7 +144,11 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
     
     point_idx = 1
     
-    ! Nested loop structure like simple_main
+    ! Initialize xlast for field extrapolation to current coordinates
+    xlast(1:4) = si%z
+    xlast(5) = si%z(1)
+    
+    ! Use our custom Newton solver to get iteration counts (but with proper initialization now)
     do it = 1, ntimstep
         do ktau = 1, ntau
             si%pthold = f%pth
@@ -147,12 +163,6 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
             current_time = current_time + dtaumin
             
             if (z(1) > 1.0_dp) then
-                print *, 'DEBUG: Particle escaped at timestep', it, 'substep', ktau, 's =', z(1)
-                exit
-            end if
-            
-            if (newton_iters >= maxit) then
-                print *, 'DEBUG: Newton solver failed to converge at timestep', it, 'substep', ktau, 's =', z(1)
                 exit
             end if
             
@@ -168,10 +178,17 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
             newton_iter_traj(point_idx) = newton_iters
             time_traj(point_idx) = current_time
             
-            ! Update field
-            call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
-            call get_val(f, si%z(4))
-            field_eval_count = field_eval_count + 1
+            ! Update field with extrapolation like production integrator
+            if (extrap_field) then
+                f%pth = f%pth + f%dpth(1)*(z(1)-xlast(1) + z(5) - xlast(5)) &  ! d/dr
+                              + f%dpth(2)*(z(2)-xlast(2)) &  ! d/dth
+                              + f%dpth(3)*(z(3)-xlast(3)) &  ! d/dph
+                              + f%dpth(4)*(z(4)-xlast(4))    ! d/dpph
+            else
+                call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+                call get_val(f, si%z(4))
+                field_eval_count = field_eval_count + 1
+            endif
         end do
         if (z(1) > 1.0_dp) exit
     end do
