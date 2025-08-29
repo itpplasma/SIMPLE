@@ -214,9 +214,13 @@ add_executable (simple.x
 	app/simple.f90
 )
 
-# Add diagnostic executable
+# Add diagnostic executables
 add_executable(diag_meiss.x
     app/simple_diag_meiss.f90
+)
+
+add_executable(diag_albert.x
+    app/simple_diag_albert.f90
 )
 
 # Apply SIMPLE-specific compile options to executable
@@ -233,9 +237,10 @@ endif()
 target_link_libraries(simple.x PRIVATE simple)
 set_target_properties(simple.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Configure diagnostic executable
-# Apply SIMPLE-specific compile options to diagnostic executable
+# Configure diagnostic executables
+# Apply SIMPLE-specific compile options to diagnostic executables
 target_compile_options(diag_meiss.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+target_compile_options(diag_albert.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
 # Apply trampoline error flags only to SIMPLE executable (not subprojects like fortplot)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -243,13 +248,20 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
         $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
     )
+    target_compile_options(diag_albert.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
 endif()
 
 target_link_libraries(diag_meiss.x PRIVATE simple)
+target_link_libraries(diag_albert.x PRIVATE simple)
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Ensure fortplot is built before diag_meiss
+# Ensure fortplot is built before diagnostics
 add_dependencies(diag_meiss.x fortplot)
+add_dependencies(diag_albert.x fortplot)
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)
