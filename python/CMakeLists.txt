@@ -75,13 +75,11 @@ set(FILES_TO_WRAP
     cut_detector.f90
     orbit_symplectic_base.f90
     orbit_symplectic.f90
-    field/field_can_base.f90
     field_can.f90
     get_canonical_coordinates.F90
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
     params.f90
-    magfie.f90
 )
 
 # Add libneo files to wrap

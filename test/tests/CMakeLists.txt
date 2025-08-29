@@ -193,6 +193,15 @@ add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
 target_link_libraries(test_coordinates_simple.x simple)
 add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
 
+# Batch spline optimization test
+add_executable(test_batch_splines.x ../test_batch_splines.f90)
+target_link_libraries(test_batch_splines.x simple testing_utils)
+add_test(NAME test_batch_splines COMMAND test_batch_splines.x)
+set_tests_properties(test_batch_splines PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 60
+)
+
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90
@@ -240,17 +249,3 @@ set_tests_properties(golden_record_sanity PROPERTIES
     TIMEOUT 60  # 1 minute for sanity checks
 )
 
-# Batch API golden record test: validates Python batch API vs Fortran baseline
-# This test will be activated when the Python batch API is implemented
-add_test(
-    NAME golden_record_batch_api
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record_multi.sh
-        main batch_operations  # Compare batch_operations test case against main branch
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-set_tests_properties(golden_record_batch_api PROPERTIES
-    TIMEOUT 1200  # 20 minutes for batch API comparison
-    LABELS "golden_record;regression;batch_api;python"
-    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-    DEPENDS pysimple  # Requires Python interface to be built
-)

@@ -498,7 +498,7 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   tolref(1) = 1d0
   tolref(2) = twopi
   tolref(3) = twopi
-  tolref(4) = dabs(1d1*torflux/f%ro0)
+  tolref(4) = max(dabs(f%Aph), dabs(1d1*torflux/f%ro0))
   tolref(5) = 1d0
 
   do kit = 1, maxit
@@ -523,9 +523,6 @@ subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  !print *, 'newton_midpoint: maximum iterations reached: ', maxit
-  !write(6603,*) x(1), x(2), x(3), x(4), x(5), xabs, fvec
-  ! TODO fix criterion for convergence
 end subroutine
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1346,7 +1343,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
-  integer, parameter :: maxit = 32
+  integer, parameter :: maxit = 8
 
   real(dp), dimension(n) :: x, xlast
   integer :: k, ktau

@@ -45,6 +45,9 @@ set(SOURCES
 # Add diagnostic sources
 list(APPEND SOURCES
     diag/diag_meiss.f90
+    diag/diag_albert.f90
+    diag/diag_newton.f90
+    diag/diag_orbit.f90
 )
 
 # Add GVEC-specific sources if enabled
@@ -56,6 +59,9 @@ if(ENABLE_GVEC)
 endif()
 
 add_library (simple STATIC ${SOURCES})
+
+# Link pyplot library to SIMPLE
+target_link_libraries(simple PUBLIC pyplot)
 
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
