@@ -39,7 +39,7 @@ module params
 
   integer :: kpart = 0 ! progress counter for particles
 
-  real(dp) :: relerr = 5d-13
+  real(dp) :: relerr = 1d-13
 
   real(dp), allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
