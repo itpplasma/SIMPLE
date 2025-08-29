@@ -47,7 +47,7 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
   tolref(1) = 1d0
   tolref(2) = twopi
   tolref(3) = twopi
-  tolref(4) = dabs(1d1*torflux/f%ro0)
+  tolref(4) = max(dabs(f%Aph), dabs(1d1*torflux/f%ro0))  ! Use actual Aph from field
   tolref(5) = 1d0
   
   ! Store initial conditions
