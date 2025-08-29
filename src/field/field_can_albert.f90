@@ -141,8 +141,12 @@ subroutine init_splines_with_psi
         end do
     end do
 
+    ! Center Aphi around zero
+    Aphi_grid = Aphi_grid - 0.5d0*sum(Aphi_grid)/real(n_r*n_th*n_phi, dp)
+
     call grid_r_to_psi(xmin(1), xmax(1), psi_inner, psi_outer, psi_of_x, &
-        Aphi_grid, hth_grid, hph_grid, Bmod_grid, r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc)
+        Aphi_grid, hth_grid, hph_grid, Bmod_grid, r_of_xc, Aph_of_xc, &
+        hth_of_xc, hph_of_xc, Bmod_of_xc)
 
     ! Construct batch spline for r_of_xc (1 component: r)
     block

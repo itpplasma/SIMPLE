@@ -47,6 +47,7 @@ list(APPEND SOURCES
     diag/diag_meiss.f90
     diag/diag_albert.f90
     diag/diag_newton.f90
+    diag/diag_orbit.f90
 )
 
 # Add GVEC-specific sources if enabled
