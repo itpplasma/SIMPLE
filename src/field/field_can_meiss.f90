@@ -61,39 +61,13 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     class(MagneticField), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
-    
-    integer, parameter :: MIN_GRID_FOR_ORDER5 = 6
 
     if (allocated(field_noncan)) deallocate(field_noncan)
     allocate(field_noncan, source=field_noncan_)
 
-    ! Apply minimum grid size for 5th order splines
-    if (present(n_r_)) then
-        if (n_r_ < MIN_GRID_FOR_ORDER5) then
-            print *, 'WARNING: n_r increased from', n_r_, 'to', MIN_GRID_FOR_ORDER5, 'for 5th order splines'
-            n_r = MIN_GRID_FOR_ORDER5
-        else
-            n_r = n_r_
-        end if
-    end if
-    
-    if (present(n_th_)) then
-        if (n_th_ < MIN_GRID_FOR_ORDER5) then
-            print *, 'WARNING: n_th increased from', n_th_, 'to', MIN_GRID_FOR_ORDER5, 'for 5th order splines'
-            n_th = MIN_GRID_FOR_ORDER5
-        else
-            n_th = n_th_
-        end if
-    end if
-    
-    if (present(n_phi_)) then
-        if (n_phi_ < MIN_GRID_FOR_ORDER5) then
-            print *, 'WARNING: n_phi increased from', n_phi_, 'to', MIN_GRID_FOR_ORDER5, 'for 5th order splines'
-            n_phi = MIN_GRID_FOR_ORDER5
-        else
-            n_phi = n_phi_
-        end if
-    end if
+    if (present(n_r_)) n_r = n_r_
+    if (present(n_th_)) n_th = n_th_
+    if (present(n_phi_)) n_phi = n_phi_
 
     if (present(rmin)) xmin(1) = rmin
     if (present(rmax)) xmax(1) = rmax
@@ -140,19 +114,11 @@ subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
     x = [r, th_c, ph_c]
 
     if (mode_secders > 0) then
-        if (batch_splines_initialized) then
-            call evaluate_meiss_batch_der2(f, x)
-        else
-            error stop 'Batch spline not initialized for mode_secders > 0'
-        end if
+        call evaluate_meiss_batch_der2(f, x)
         return
     end if
 
-    if (batch_splines_initialized) then
-        call evaluate_meiss_batch_der(f, x)
-    else
-        error stop 'Batch spline not initialized'
-    end if
+    call evaluate_meiss_batch_der(f, x)
 end subroutine evaluate_meiss
 
 
@@ -161,9 +127,6 @@ subroutine can_to_ref_meiss(xcan, xref)
     real(dp), intent(out) :: xref(3)
     real(dp) :: y_batch(2)  ! lam_phi, chi_gauge
 
-    if (.not. transform_splines_initialized) then
-        error stop 'Transform splines not initialized in can_to_ref_meiss'
-    end if
     call evaluate_batch_splines_3d(spl_transform_batch, xcan, y_batch)
     xref(1) = xcan(1)**2
     xref(2) = modulo(xcan(2), twopi)
@@ -180,10 +143,6 @@ subroutine ref_to_can_meiss(xref, xcan)
 
     real(dp) :: y_batch(2), dy_batch(3, 2), phi_can_prev
     integer :: i
-
-    if (.not. transform_splines_initialized) then
-        error stop 'Transform splines not initialized in ref_to_can_meiss'
-    end if
 
     xcan(1) = sqrt(xref(1))
     xcan(2) = modulo(xref(2), twopi)
@@ -438,10 +397,6 @@ subroutine init_canonical_field_components
                 xcan = get_grid_point(i_r, i_th, i_phi)
 
                 ! Use batch evaluation for both transformation components
-                if (.not. transform_splines_initialized) then
-                    error stop 'Transform splines not initialized in init_canonical_field_components'
-                end if
-                
                 block
                     real(dp) :: y_trans(2), dy_trans(3,2)
                     call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)

@@ -176,11 +176,6 @@ subroutine init_psi_grid
     use field_can_meiss, only: spl_field_batch
     real(dp) :: x(3), y_batch_local(5)
     integer :: i_r, i_th, i_phi
-    
-    ! Check that the Meiss batch spline has the expected number of quantities
-    if (spl_field_batch%num_quantities /= 5) then
-        error stop 'Albert expects Meiss batch spline to have 5 quantities'
-    end if
 
     allocate(psi_of_x(n_r, n_th, n_phi), psi_grid(n_r))
 

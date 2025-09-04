@@ -211,9 +211,6 @@ subroutine evaluate_coils_batch(self, x, Acov, hcov, Bmod)
     
     real(dp) :: y_batch(7)
     
-    if (self%spl_coils_batch%num_quantities /= 7) then
-        error stop 'Coils batch spline must have exactly 7 quantities'
-    end if
     call evaluate_batch_splines_3d(self%spl_coils_batch, x, y_batch)
     
     ! Unpack results: order is [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
