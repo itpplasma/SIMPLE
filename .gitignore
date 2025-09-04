@@ -65,3 +65,4 @@ coverage-badge.svg
 coverage-badge.json
 
 *.html
+.claude
