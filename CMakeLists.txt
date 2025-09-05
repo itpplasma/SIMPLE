@@ -182,9 +182,9 @@ elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	
 	# Architecture-specific flags
 	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-		# ARM processors (e.g., Apple Silicon): gfortran doesn't support -march=native
-		# Use -mcpu=native instead for ARM
-		list(APPEND SIMPLE_COMPILE_OPTIONS -mcpu=native)
+		# ARM processors: skip architecture-specific flags to avoid performance issues
+		# -mcpu=native can cause problems on some ARM64 systems (especially in CI)
+		# Let the compiler use its default ARM64 settings
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
 		# Fast mode on x86: use native architecture
 		list(APPEND SIMPLE_COMPILE_OPTIONS -march=native -mtune=native)
