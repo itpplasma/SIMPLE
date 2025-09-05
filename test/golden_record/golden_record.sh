@@ -162,7 +162,18 @@ build() {
         setup_libneo "$PROJECT_ROOT"
     fi
 
-    cmake -S . -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF > $PROJECT_ROOT/configure.log 2>&1
+    # Check if CMakeLists.txt has fortplot dependency and adjust accordingly
+    local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF"
+    
+    if grep -q "fortplot" CMakeLists.txt 2>/dev/null; then
+        echo "Detected fortplot dependency in CMakeLists.txt"
+        # Don't disable GVEC if fortplot is present, as they might be related
+    else
+        # For older versions without fortplot, disable GVEC
+        CMAKE_OPTS="$CMAKE_OPTS -DENABLE_GVEC=OFF"
+    fi
+
+    cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
         echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
         return 1
