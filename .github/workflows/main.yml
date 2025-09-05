@@ -15,8 +15,8 @@ permissions:
   actions: read
 
 jobs:
-  coverage:
-    name: Run Tests + Generate Coverage
+  test:
+    name: Run Tests
     runs-on: self-hosted
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
@@ -25,203 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build SIMPLE with Coverage
+      - name: Build SIMPLE
         run: |
           make clean
-          make coverage-build
-          # Verify coverage build was successful
-          echo "🔍 Checking for coverage instrumentation files..."
-          find build/ -name "*.gcno" -type f | wc -l || echo "Warning: No .gcno files found"
+          make
 
-      - name: Run Tests with Coverage
+      - name: Run Tests
         run: |
-          # Note: Profile configuration is excluded from CI testing due to Python API segfaults
-          # Tests run with Release configuration instead
           make test-fast
           make test
-
-      - name: Generate Coverage Reports
-        run: |
-          # Fix locale settings to prevent Perl warnings
-          export LANG=C.UTF-8
-          export LC_ALL=C.UTF-8
-
-          # Use the CMake coverage target which has all the correct exclusions
-          echo "📊 Generating coverage data using CMake target..."
-          cmake --build build --target coverage
-
-          # Convert to Cobertura XML for coverage-action (using preinstalled lcov_cobertura)
-          echo "🔄 Converting to Cobertura XML..."
-          lcov_cobertura build/coverage_filtered.info --output cobertura.xml
-
-          # Generate HTML coverage report
-          echo "📄 Generating HTML coverage report..."
-          genhtml build/coverage_filtered.info --branch-coverage --prefix "$(pwd)" \
-            --output-directory coverage_html || echo "⚠️ HTML generation had warnings"
-
-          echo "✅ Coverage reports generated"
-
-      - name: Configure git for diff storage
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Debug - Check coverage file
-        run: |
-          echo "📊 Checking coverage files..."
-          if [ -f "cobertura.xml" ]; then
-            echo "✅ cobertura.xml exists"
-            echo "File size: $(ls -lh cobertura.xml | awk '{print $5}')"
-            echo "First 10 lines:"
-            head -10 cobertura.xml
-          else
-            echo "❌ cobertura.xml not found"
-          fi
-
-          if [ -f "coverage_filtered.info" ]; then
-            echo "✅ coverage_filtered.info exists"
-            echo "File size: $(ls -lh coverage_filtered.info | awk '{print $5}')"
-          else
-            echo "❌ coverage_filtered.info not found"
-          fi
-
-      - name: Produce the coverage report
-        id: coverage_report
-        uses: krystophny/coverage-action@main
-        with:
-          # Path to the Cobertura XML report.
-          path: ./cobertura.xml
-          # Minimum total coverage threshold
-          threshold: 70
-          # Fail if coverage below threshold (but continue workflow)
-          fail: false
-          # Publish the rendered output as a PR comment
-          publish: true
-          # Enable diff coverage with storage branch
-          diff: true
-          # Branch to diff against
-          diff-branch: main
-          # Storage branch for coverage history (lightweight XML files only)
-          diff-storage: _coverage_storage
-          # Custom title for the coverage summary
-          coverage-summary-title: "Code Coverage Summary"
-          # Enable togglable report for organized sections
-          togglable-report: true
-          # Include detailed coverage with percentages and positions
-          exclude-detailed-coverage: false
-          # Use markdown format for better readability
-          report-format: markdown
-          # Add token explicitly for PR comments
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create coverage checks
-        uses: actions/github-script@v7
-        continue-on-error: true
-        with:
-          script: |
-            const fs = require('fs');
-
-            // Guard against missing coverage file
-            if (!fs.existsSync('cobertura.xml')) {
-              console.log('❌ cobertura.xml not found, setting neutral checks');
-
-              // Create neutral checks when coverage data unavailable
-              const neutralCheck = {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head_sha: context.payload.pull_request.head.sha,
-                status: 'completed',
-                conclusion: 'neutral',
-                output: {
-                  title: 'Coverage data unavailable',
-                  summary: '⚠️ Coverage analysis could not be completed due to missing data',
-                  text: 'Coverage report generation failed. Check coverage job logs for details.'
-                }
-              };
-
-              await github.rest.checks.create({...neutralCheck, name: 'coverage/project'});
-              await github.rest.checks.create({...neutralCheck, name: 'coverage/patch'});
-              return;
-            }
-
-            let xml, projectCoverage = '0.00';
-
-            try {
-              xml = fs.readFileSync('cobertura.xml', 'utf8');
-
-              // Guard against invalid XML or missing coverage data
-              const coverageMatch = xml.match(/line-rate="([0-9.]+)"/);
-              if (coverageMatch && coverageMatch[1]) {
-                projectCoverage = (parseFloat(coverageMatch[1]) * 100).toFixed(2);
-              } else {
-                console.log('⚠️ No coverage data found in XML, using 0.00%');
-              }
-            } catch (error) {
-              console.log('❌ Error reading coverage file:', error.message);
-              projectCoverage = '0.00';
-            }
-
-            // For patch coverage, we'll use a simplified approach for now
-            // In a full implementation, this would analyze only changed lines
-            const patchCoverage = projectCoverage; // Simplified - normally would calculate differently
-
-            const projectThreshold = 70;
-            const patchThreshold = 70;
-
-            const projectPassed = parseFloat(projectCoverage) >= projectThreshold;
-            const patchPassed = parseFloat(patchCoverage) >= patchThreshold;
-
-            try {
-              // Create project coverage check
-              await github.rest.checks.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                name: 'coverage/project',
-                head_sha: context.payload.pull_request.head.sha,
-                status: 'completed',
-                conclusion: projectPassed ? 'success' : 'failure',
-                output: {
-                  title: projectPassed ? `OK - ${projectCoverage}%` : `FAIL - ${projectCoverage}%`,
-                  summary: projectPassed
-                    ? `✅ Project coverage ${projectCoverage}% meets the ${projectThreshold}.00% threshold`
-                    : `❌ Project coverage ${projectCoverage}% is below the ${projectThreshold}.00% threshold`,
-                  text: `Current project coverage: ${projectCoverage}%\nRequired threshold: ${projectThreshold}.00%`
-                }
-              });
-
-              // Create patch coverage check
-              await github.rest.checks.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                name: 'coverage/patch',
-                head_sha: context.payload.pull_request.head.sha,
-                status: 'completed',
-                conclusion: patchPassed ? 'success' : 'failure',
-                output: {
-                  title: patchPassed ? `OK - ${patchCoverage}%` : `FAIL - ${patchCoverage}%`,
-                  summary: patchPassed
-                    ? `✅ Patch coverage ${patchCoverage}% meets the ${patchThreshold}.00% threshold`
-                    : `❌ Patch coverage ${patchCoverage}% is below the ${patchThreshold}.00% threshold`,
-                  text: `Current patch coverage: ${patchCoverage}%\nRequired threshold: ${patchThreshold}.00%\n\nNote: Patch coverage analyzes only the lines changed in this PR.`
-                }
-              });
-
-              console.log('✅ Coverage checks created successfully');
-            } catch (error) {
-              console.log('❌ Error creating coverage checks:', error.message);
-            }
-
-      - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: |
-            coverage_filtered.info
-            coverage_html/
-            coverage-badge.svg
-            coverage-badge.json
-            cobertura.xml
-          retention-days: 30
 
   regression:
     name: Run Regression Tests

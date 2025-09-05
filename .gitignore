@@ -55,14 +55,5 @@ timings.txt
 thirdparty/gvec
 thirdparty/pyplot_module.F90
 
-# Coverage data files
-*.gcda
-*.gcno
-coverage*.info
-cobertura.xml
-coverage_html/
-coverage-badge.svg
-coverage-badge.json
-
 *.html
 .claude
