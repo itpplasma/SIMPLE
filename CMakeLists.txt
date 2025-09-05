@@ -95,7 +95,7 @@ include(FetchContent)
 FetchContent_Declare(
     fortplot
     GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-    GIT_TAG main
+    GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
 )
 FetchContent_MakeAvailable(fortplot)
 
@@ -174,14 +174,19 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
 	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
 	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
 elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-	add_compile_options(-O2 -p -shared-libgcc)
+	add_compile_options(-Og -pg)
+	add_link_options(-pg)
 elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	# Common optimization flags for Release and Fast builds
 	list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
 	
 	# Architecture-specific flags
-	if (CMAKE_BUILD_TYPE MATCHES Fast OR CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-		# Fast mode or ARM: use native architecture (no portable baseline for ARM)
+	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+		# ARM processors (e.g., Apple Silicon): gfortran doesn't support -march=native
+		# Use -mcpu=native instead for ARM
+		list(APPEND SIMPLE_COMPILE_OPTIONS -mcpu=native)
+	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
+		# Fast mode on x86: use native architecture
 		list(APPEND SIMPLE_COMPILE_OPTIONS -march=native -mtune=native)
 	else()
 		# Release on x86-64: use v2 baseline for broad compatibility
@@ -195,12 +200,34 @@ elseif (CMAKE_BUILD_TYPE MATCHES Debug)
 	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
 	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
 elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-	list(APPEND SIMPLE_COMPILE_OPTIONS -O2 -p -shared-libgcc)
+	list(APPEND SIMPLE_COMPILE_OPTIONS -O2 -p)
 else()
     message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
 endif()
 
 # Trampoline error flags will be applied per-target to avoid affecting subprojects
+
+# Auto-download pyplot-fortran single file during build
+set(PYPLOT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
+set(PYPLOT_MODULE_FILE ${PYPLOT_SOURCE_DIR}/pyplot_module.F90)
+
+# Download pyplot_module.F90 if it doesn't exist
+if(NOT EXISTS ${PYPLOT_MODULE_FILE})
+    message(STATUS "Downloading pyplot_module.F90...")
+    file(MAKE_DIRECTORY ${PYPLOT_SOURCE_DIR})
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/jacobwilliams/pyplot-fortran/refs/heads/master/src/pyplot_module.F90"
+        ${PYPLOT_MODULE_FILE}
+        SHOW_PROGRESS
+    )
+endif()
+
+# Create pyplot library from downloaded source
+add_library(pyplot STATIC ${PYPLOT_MODULE_FILE})
+set_target_properties(pyplot PROPERTIES
+    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
+)
+target_include_directories(pyplot PUBLIC ${CMAKE_BINARY_DIR}/include)
 
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
@@ -209,9 +236,21 @@ add_executable (simple.x
 	app/simple.f90
 )
 
-# Add diagnostic executable
+# Add diagnostic executables
 add_executable(diag_meiss.x
     app/simple_diag_meiss.f90
+)
+
+add_executable(diag_albert.x
+    app/simple_diag_albert.f90
+)
+
+add_executable(diag_newton.x
+    app/simple_diag_newton.f90
+)
+
+add_executable(diag_orbit.x
+    app/simple_diag_orbit.f90
 )
 
 # Apply SIMPLE-specific compile options to executable
@@ -228,9 +267,11 @@ endif()
 target_link_libraries(simple.x PRIVATE simple)
 set_target_properties(simple.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Configure diagnostic executable
-# Apply SIMPLE-specific compile options to diagnostic executable
+# Configure diagnostic executables
+# Apply SIMPLE-specific compile options to diagnostic executables
 target_compile_options(diag_meiss.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+target_compile_options(diag_albert.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+target_compile_options(diag_orbit.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
 # Apply trampoline error flags only to SIMPLE executable (not subprojects like fortplot)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -238,13 +279,30 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
         $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
     )
+    target_compile_options(diag_albert.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+    target_compile_options(diag_orbit.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
 endif()
 
 target_link_libraries(diag_meiss.x PRIVATE simple)
+target_link_libraries(diag_albert.x PRIVATE simple)
+target_link_libraries(diag_newton.x PRIVATE simple)
+target_link_libraries(diag_orbit.x PRIVATE simple)
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set_target_properties(diag_orbit.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Ensure fortplot is built before diag_meiss
+# Ensure fortplot is built before diagnostics
 add_dependencies(diag_meiss.x fortplot)
+add_dependencies(diag_newton.x fortplot)
+add_dependencies(diag_albert.x fortplot)
+add_dependencies(diag_orbit.x fortplot)
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)

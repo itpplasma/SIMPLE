@@ -1,11 +1,13 @@
 module field_can_albert
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use interpolate, only: SplineData3D, construct_splines_3d, &
-    evaluate_splines_3d, evaluate_splines_3d_der, evaluate_splines_3d_der2
+use interpolate, only: &
+    BatchSplineData3D, construct_batch_splines_3d, &
+    evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
+    evaluate_batch_splines_3d_der2
 use field_can_base, only: FieldCan, n_field_evaluations
 use field_can_meiss, only: xmin, xmax, n_r, n_th, n_phi, order, periodic, twopi, &
-    get_grid_point, spl_Ath, spl_Aph, spl_hth, spl_hph, spl_Bmod, &
+    get_grid_point, &
     init_albert => init_meiss, init_transformation, spline_transformation, &
     init_canonical_field_components
 use psi_transform, only: grid_r_to_psi
@@ -22,8 +24,11 @@ logical :: dpsi_dr_positive
 real(dp), dimension(:,:,:), allocatable :: r_of_xc, &
 Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc
 
-type(SplineData3D) :: spl_r_of_xc, &
-spl_Aphi_of_xc, spl_hth_of_xc, spl_hph_of_xc, spl_Bmod_of_xc
+! Batch spline for r_of_xc transformation (1 component: r)
+type(BatchSplineData3D) :: spl_r_batch
+
+! Batch spline for optimized field evaluation (4 components: Aphi, hth, hph, Bmod)
+type(BatchSplineData3D) :: spl_albert_batch
 
 real(8) :: Ath_norm
 
@@ -45,22 +50,11 @@ subroutine evaluate_albert(f, r, th_c, ph_c, mode_secders)
 
     if (mode_secders > 0) then
         f%d2Ath = 0d0
-        call evaluate_splines_3d_der2(spl_Aphi_of_xc, x, f%Aph, f%dAph, f%d2Aph)
-
-        call evaluate_splines_3d_der2(spl_hth_of_xc, x, f%hth, f%dhth, f%d2hth)
-        call evaluate_splines_3d_der2(spl_hph_of_xc, x, f%hph, f%dhph, f%d2hph)
-
-        call evaluate_splines_3d_der2(spl_Bmod_of_xc, x, f%Bmod, f%dBmod, f%d2Bmod)
-
+        call evaluate_albert_batch_der2(f, x)
         return
     end if
 
-    call evaluate_splines_3d_der(spl_Aphi_of_xc, x, f%Aph, f%dAph)
-
-    call evaluate_splines_3d_der(spl_hth_of_xc, x, f%hth, f%dhth)
-    call evaluate_splines_3d_der(spl_hph_of_xc, x, f%hph, f%dhph)
-
-    call evaluate_splines_3d_der(spl_Bmod_of_xc, x, f%Bmod, f%dBmod)
+    call evaluate_albert_batch_der(f, x)
 end subroutine evaluate_albert
 
 
@@ -69,24 +63,26 @@ subroutine can_to_ref_albert(xcan, xref)
 
     real(dp), intent(in) :: xcan(3)
     real(dp), intent(out) :: xref(3) 
-    real(dp) :: xmeiss(3)
+    real(dp) :: xmeiss(3), y_batch(1)
 
-    call evaluate_splines_3d(spl_r_of_xc, xcan, xmeiss(1))
+    call evaluate_batch_splines_3d(spl_r_batch, xcan, y_batch)
+    xmeiss(1) = y_batch(1)  ! r component
     xmeiss(2:3) = xcan(2:3)
     call can_to_ref_meiss(xmeiss, xref)
 end subroutine can_to_ref_albert
     
 
 subroutine ref_to_can_albert(xref, xcan)
-    use field_can_meiss, only: ref_to_can_meiss
+    use field_can_meiss, only: ref_to_can_meiss, spl_field_batch
 
     real(dp), intent(in) :: xref(3)
     real(dp), intent(out) :: xcan(3)
  
-    real(dp) :: Ath, xmeiss(3)
+    real(dp) :: Ath, xmeiss(3), y_batch_local(5)
 
     call ref_to_can_meiss(xref, xmeiss)   
-    call evaluate_splines_3d(spl_Ath, xmeiss, Ath)
+    call evaluate_batch_splines_3d(spl_field_batch, xmeiss, y_batch_local)
+    Ath = y_batch_local(1)  ! Extract Ath component
     xcan(1) = Ath/Ath_norm
     xcan(2:3) = xmeiss(2:3)
 end subroutine ref_to_can_albert
@@ -109,8 +105,11 @@ end subroutine get_albert_coordinates
 
 subroutine init_splines_with_psi
     use psi_transform, only: grid_r_to_psi
-    real(dp) :: x(3)
-    integer :: i_r, i_th, i_phi
+    use field_can_meiss, only: spl_field_batch
+    real(dp), dimension(:,:,:,:), allocatable :: y_batch
+    real(dp), dimension(:,:,:), allocatable :: Aphi_grid, hth_grid, hph_grid, Bmod_grid
+    real(dp) :: x_grid(3), y_batch_temp(5)
+    integer :: i_r, i_th, i_phi, dims(3)
 
     allocate( &
         r_of_xc(n_r, n_th, n_phi), &
@@ -122,35 +121,77 @@ subroutine init_splines_with_psi
 
     call init_psi_grid
 
-    associate(Aphi => spl_Aph%coeff(order(1), 0, 0, :, :, :), &
-        hth => spl_hth%coeff(order(1), 0, 0, :, :, :), &
-        hph => spl_hph%coeff(order(1), 0, 0, :, :, :), &
-        Bmod => spl_Bmod%coeff(order(1), 0, 0, :, :, :))
+    ! For Albert coordinates, we need to reconstruct the field components from Meiss
+    ! This requires grid evaluation - let's compute them explicitly    
+    allocate(Aphi_grid(n_r,n_th,n_phi), hth_grid(n_r,n_th,n_phi), hph_grid(n_r,n_th,n_phi), Bmod_grid(n_r,n_th,n_phi))
+    
+    ! Evaluate Meiss batch spline on grid to get field components
+    do i_phi = 1, n_phi
+        do i_th = 1, n_th
+            do i_r = 1, n_r
+                x_grid = [xmin(1) + (i_r-1)*(xmax(1)-xmin(1))/(n_r-1), &
+                         xmin(2) + (i_th-1)*(xmax(2)-xmin(2))/(n_th-1), &
+                         xmin(3) + (i_phi-1)*(xmax(3)-xmin(3))/(n_phi-1)]
+                call evaluate_batch_splines_3d(spl_field_batch, x_grid, y_batch_temp)
+                Aphi_grid(i_r,i_th,i_phi) = y_batch_temp(2)  ! Aph component
+                hth_grid(i_r,i_th,i_phi) = y_batch_temp(3)   ! hth component  
+                hph_grid(i_r,i_th,i_phi) = y_batch_temp(4)   ! hph component
+                Bmod_grid(i_r,i_th,i_phi) = y_batch_temp(5)  ! Bmod component
+            end do
+        end do
+    end do
 
-        call grid_r_to_psi(xmin(1), xmax(1), psi_inner, psi_outer, psi_of_x, &
-            Aphi, hth, hph, Bmod, r_of_xc, Aph_of_xc, hth_of_xc, hph_of_xc, Bmod_of_xc)
-    end associate
+    ! Center Aphi around zero
+    Aphi_grid = Aphi_grid - 0.5d0*sum(Aphi_grid)/real(n_r*n_th*n_phi, dp)
 
-    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
-        [psi_outer, xmax(2), xmax(3)], r_of_xc, order, periodic, spl_r_of_xc)
-    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
-        [psi_outer, xmax(2), xmax(3)], Aph_of_xc, order, periodic, spl_Aphi_of_xc)
-    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
-        [psi_outer, xmax(2), xmax(3)], hth_of_xc, order, periodic, spl_hth_of_xc)
-    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
-        [psi_outer, xmax(2), xmax(3)], hph_of_xc, order, periodic, spl_hph_of_xc)
-    call construct_splines_3d([psi_inner, xmin(2), xmin(3)], &
-        [psi_outer, xmax(2), xmax(3)], Bmod_of_xc, order, periodic, spl_Bmod_of_xc)
+    call grid_r_to_psi(xmin(1), xmax(1), psi_inner, psi_outer, psi_of_x, &
+        Aphi_grid, hth_grid, hph_grid, Bmod_grid, r_of_xc, Aph_of_xc, &
+        hth_of_xc, hph_of_xc, Bmod_of_xc)
+
+    ! Construct batch spline for r_of_xc (1 component: r)
+    block
+        real(dp), dimension(:,:,:,:), allocatable :: y_r_batch
+        dims = shape(r_of_xc)
+        allocate(y_r_batch(dims(1), dims(2), dims(3), 1))
+        y_r_batch(:,:,:,1) = r_of_xc
+        call construct_batch_splines_3d([psi_inner, xmin(2), xmin(3)], &
+            [psi_outer, xmax(2), xmax(3)], y_r_batch, order, periodic, spl_r_batch)
+    end block
+    
+    ! Construct batch spline for 4 Albert field components: [Aphi, hth, hph, Bmod]
+    dims = shape(Aph_of_xc)
+    allocate(y_batch(dims(1), dims(2), dims(3), 4))
+    
+    y_batch(:,:,:,1) = Aph_of_xc
+    y_batch(:,:,:,2) = hth_of_xc
+    y_batch(:,:,:,3) = hph_of_xc
+    y_batch(:,:,:,4) = Bmod_of_xc
+    
+    call construct_batch_splines_3d([psi_inner, xmin(2), xmin(3)], &
+        [psi_outer, xmax(2), xmax(3)], y_batch, order, periodic, spl_albert_batch)
 end subroutine init_splines_with_psi
 
 
 subroutine init_psi_grid
-    real(dp) :: x(3)
+    use field_can_meiss, only: spl_field_batch
+    real(dp) :: x(3), y_batch_local(5)
     integer :: i_r, i_th, i_phi
 
     allocate(psi_of_x(n_r, n_th, n_phi), psi_grid(n_r))
 
-    psi_of_x(:, :, :) = spl_Ath%coeff(order(1), 0, 0, :, :, :)
+    ! Evaluate Meiss batch spline to get Ath (component 1) on grid
+    do i_phi = 1, n_phi
+        do i_th = 1, n_th
+            do i_r = 1, n_r
+                x = [xmin(1) + (i_r-1)*(xmax(1)-xmin(1))/(n_r-1), &
+                     xmin(2) + (i_th-1)*(xmax(2)-xmin(2))/(n_th-1), &
+                     xmin(3) + (i_phi-1)*(xmax(3)-xmin(3))/(n_phi-1)]
+                call evaluate_batch_splines_3d(spl_field_batch, x, y_batch_local)
+                psi_of_x(i_r, i_th, i_phi) = y_batch_local(1)  ! Ath component
+            end do
+        end do
+    end do
+    
     Ath_norm = sign(maxval(abs(psi_of_x)), psi_of_x(n_r, n_th/2, n_phi/2))
     psi_of_x = psi_of_x / Ath_norm
 
@@ -212,5 +253,54 @@ subroutine magfie_albert(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     hcurl(2) = -f%dhph(1)/sqrtg
     hcurl(3) = f%dhth(1)/sqrtg
 end subroutine magfie_albert
+
+
+! Batch evaluation helper for first derivatives
+subroutine evaluate_albert_batch_der(f, x)
+    type(FieldCan), intent(inout) :: f
+    real(dp), intent(in) :: x(3)
+    
+    real(dp) :: y_batch(4), dy_batch(3, 4)
+    
+    call evaluate_batch_splines_3d_der(spl_albert_batch, x, y_batch, dy_batch)
+    
+    ! Unpack results: order is [Aphi, hth, hph, Bmod]
+    f%Aph = y_batch(1)
+    f%hth = y_batch(2)
+    f%hph = y_batch(3)
+    f%Bmod = y_batch(4)
+    
+    f%dAph = dy_batch(:, 1)
+    f%dhth = dy_batch(:, 2)
+    f%dhph = dy_batch(:, 3)
+    f%dBmod = dy_batch(:, 4)
+end subroutine evaluate_albert_batch_der
+
+
+! Batch evaluation helper for second derivatives
+subroutine evaluate_albert_batch_der2(f, x)
+    type(FieldCan), intent(inout) :: f
+    real(dp), intent(in) :: x(3)
+    
+    real(dp) :: y_batch(4), dy_batch(3, 4), d2y_batch(6, 4)
+    
+    call evaluate_batch_splines_3d_der2(spl_albert_batch, x, y_batch, dy_batch, d2y_batch)
+    
+    ! Unpack results: order is [Aphi, hth, hph, Bmod]
+    f%Aph = y_batch(1)
+    f%hth = y_batch(2)
+    f%hph = y_batch(3)
+    f%Bmod = y_batch(4)
+    
+    f%dAph = dy_batch(:, 1)
+    f%dhth = dy_batch(:, 2)
+    f%dhph = dy_batch(:, 3)
+    f%dBmod = dy_batch(:, 4)
+    
+    f%d2Aph = d2y_batch(:, 1)
+    f%d2hth = d2y_batch(:, 2)
+    f%d2hph = d2y_batch(:, 3)
+    f%d2Bmod = d2y_batch(:, 4)
+end subroutine evaluate_albert_batch_der2
 
 end module field_can_albert

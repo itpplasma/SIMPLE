@@ -110,7 +110,7 @@ end subroutine test_magfie_curve
 
 
 subroutine magfie_coils(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-    use interpolate, only: evaluate_splines_3d_der
+    use interpolate, only: evaluate_batch_splines_3d_der
 
     real(dp), intent(in) :: x(3)
     real(dp), intent(out) :: bmod, sqrtg
@@ -118,18 +118,21 @@ subroutine magfie_coils(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
     real(dp) :: Ar, Ath, Aphi, hr, hth, hphi
     real(dp), dimension(3) :: dAr, dAth, dAphi, dhr, dhth, dhphi
+    real(dp) :: y_batch(7), dy_batch(3, 7)
 
     real(dp) :: sqrtg_bmod
 
-    call evaluate_splines_3d_der(coils_field%spl_Ar, x, Ar, dAr)
-    call evaluate_splines_3d_der(coils_field%spl_Ath, x, Ath, dAth)
-    call evaluate_splines_3d_der(coils_field%spl_Aphi, x, Aphi, dAphi)
-
-    call evaluate_splines_3d_der(coils_field%spl_hr, x, hr, dhr)
-    call evaluate_splines_3d_der(coils_field%spl_hth, x, hth, dhth)
-    call evaluate_splines_3d_der(coils_field%spl_hphi, x, hphi, dhphi)
-
-    call evaluate_splines_3d_der(coils_field%spl_Bmod, x, bmod, bder)
+    ! Use batch spline evaluation for all 7 components
+    call evaluate_batch_splines_3d_der(coils_field%spl_coils_batch, x, y_batch, dy_batch)
+    
+    ! Unpack results: order is [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
+    Ar = y_batch(1);    dAr = dy_batch(:, 1)
+    Ath = y_batch(2);   dAth = dy_batch(:, 2)
+    Aphi = y_batch(3);  dAphi = dy_batch(:, 3)
+    hr = y_batch(4);    dhr = dy_batch(:, 4)
+    hth = y_batch(5);   dhth = dy_batch(:, 5)
+    hphi = y_batch(6);  dhphi = dy_batch(:, 6)
+    bmod = y_batch(7);  bder = dy_batch(:, 7)
     bder = bder/bmod
 
     sqrtg_bmod = dAth(1)*hphi - dAphi(1)*hth + &
