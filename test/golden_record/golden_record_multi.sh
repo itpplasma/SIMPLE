@@ -51,6 +51,49 @@ echo "Reference versions to compare: ${REFS[@]}"
 echo "Expected failures: ${EXPECT_FAIL[@]}"
 echo ""
 
+# Determine and check out appropriate libneo version for historical builds
+setup_libneo() {
+    local PROJECT_ROOT="$1"
+    local BASE_DIR="$(dirname "$PROJECT_ROOT")"
+    local LIBNEO_URL="https://github.com/itpplasma/libneo.git"
+
+    local SIMPLE_TS
+    SIMPLE_TS=$(git -C "$PROJECT_ROOT" log -1 --format=%ct)
+
+    local LIBNEO_TAGS_DIR="$BASE_DIR/libneo_tags"
+    if [ ! -d "$LIBNEO_TAGS_DIR/.git" ]; then
+        git clone --quiet --no-checkout "$LIBNEO_URL" "$LIBNEO_TAGS_DIR"
+    else
+        git -C "$LIBNEO_TAGS_DIR" fetch --tags --quiet
+    fi
+
+    # Use creatordate which works for both annotated and lightweight tags
+    local LIBNEO_TAG
+    LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=-creatordate \
+        --format '%(refname:short) %(creatordate:unix)' refs/tags | while read tag ts; do
+            # Check that timestamp is not empty and is valid
+            if [ -n "$ts" ] && [ "$ts" -le "$SIMPLE_TS" ] 2>/dev/null; then
+                echo "$tag"
+                break
+            fi
+        done)
+
+    if [ -z "$LIBNEO_TAG" ]; then
+        echo "  No suitable libneo tag found; using oldest available for compatibility"
+        # Use oldest tag for better compatibility with historical commits
+        LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=creatordate \
+            --format '%(refname:short)' refs/tags | head -n 1)
+    fi
+
+    echo "  Using libneo tag: $LIBNEO_TAG"
+    local LIBNEO_TAG_DIR="$BASE_DIR/libneo_$LIBNEO_TAG"
+    if [ ! -d "$LIBNEO_TAG_DIR/.git" ]; then
+        git clone --quiet --branch "$LIBNEO_TAG" --depth 1 "$LIBNEO_URL" "$LIBNEO_TAG_DIR"
+    fi
+
+    ln -sfn "$LIBNEO_TAG_DIR" "$BASE_DIR/libneo"
+}
+
 # Function to clone and build a reference version
 prepare_reference() {
     local ref_ver="$1"
@@ -74,10 +117,7 @@ prepare_reference() {
 
         # Handle old project structure with libneo
         if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then
-            LIBNEO_PATH="/proj/plasma/CODE/ert/libneo"
-            if [ -d "$LIBNEO_PATH" ]; then
-                ln -sf "$LIBNEO_PATH" "../libneo" 2>/dev/null || true
-            fi
+            setup_libneo "$project_root"
         fi
 
         cmake -S . -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF > configure.log 2>&1

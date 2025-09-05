@@ -73,7 +73,9 @@ target_link_libraries(test_boozer.x simple)
 
 add_executable (test_boozer_refactoring.x test_boozer_refactoring.f90)
 target_link_libraries(test_boozer_refactoring.x simple)
-add_test(NAME test_boozer_refactoring COMMAND test_boozer_refactoring.x)
+add_test(NAME test_boozer_refactoring 
+    COMMAND test_boozer_refactoring.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_executable (test_orbits.x test_orbits_vmec.f90)
 target_link_libraries(test_orbits.x simple)
 add_executable (test_collis.x ../../src/test_collis.f90)
@@ -220,8 +222,6 @@ add_subdirectory(orbit)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
-     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/batch_operations
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
 # Efficient golden record test: compare against main branch
