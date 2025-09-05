@@ -25,10 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python dependencies
-        run: |
-          pip install --user pytest numpy
-
       - name: Build SIMPLE with Coverage
         run: |
           make clean
@@ -234,10 +230,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Python dependencies
-        run: |
-          pip install --user pytest numpy
 
       - name: Build SIMPLE
         run: |
