@@ -14,7 +14,16 @@ program test_boozer_refactoring
     double precision, parameter :: twopi = 2.d0*3.14159265358979d0
     double precision, parameter :: tol = 1.d-14
     
+    logical :: file_exists
     test_failed = 0
+    
+    ! Check if VMEC file exists
+    inquire(file='wout.nc', exist=file_exists)
+    if (.not. file_exists) then
+        print *, 'SKIP: No VMEC file (wout.nc) found in working directory'
+        print *, 'Test requires wout.nc to be present'
+        stop 77  ! Special exit code for skipped tests
+    end if
     
     ! Initialize timer before any timing calls
     call init_timer()
