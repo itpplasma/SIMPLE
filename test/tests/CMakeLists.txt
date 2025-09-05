@@ -221,8 +221,6 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/batch_operations
-     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
 # Efficient golden record test: compare against main branch
 # This runs the working copy tests only once and compares against main
