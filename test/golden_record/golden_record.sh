@@ -56,13 +56,55 @@ handle_failure() {
     exit $exit_code
 }
 
+# Determine and check out appropriate libneo version for historical builds
+setup_libneo() {
+    local PROJECT_ROOT="$1"
+    local BASE_DIR="$(dirname "$PROJECT_ROOT")"
+    local LIBNEO_URL="https://github.com/itpplasma/libneo.git"
+
+    # Timestamp of SIMPLE commit
+    local SIMPLE_TS
+    SIMPLE_TS=$(git -C "$PROJECT_ROOT" log -1 --format=%ct)
+
+    # Cache repository with all tags for lookup
+    local LIBNEO_TAGS_DIR="$BASE_DIR/libneo_tags"
+    if [ ! -d "$LIBNEO_TAGS_DIR/.git" ]; then
+        git clone --quiet --no-checkout "$LIBNEO_URL" "$LIBNEO_TAGS_DIR"
+    else
+        git -C "$LIBNEO_TAGS_DIR" fetch --tags --quiet
+    fi
+
+    # Find newest tag not newer than SIMPLE commit
+    local LIBNEO_TAG
+    LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=-taggerdate \
+        --format '%(refname:short) %(taggerdate:unix)' refs/tags | while read tag ts; do
+            if [ "$ts" -le "$SIMPLE_TS" ]; then
+                echo "$tag"
+                break
+            fi
+        done)
+
+    if [ -z "$LIBNEO_TAG" ]; then
+        echo "No suitable libneo tag found; using latest available"
+        LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" describe --tags --abbrev=0)
+    fi
+
+    echo "Using libneo tag: $LIBNEO_TAG"
+    local LIBNEO_TAG_DIR="$BASE_DIR/libneo_$LIBNEO_TAG"
+    if [ ! -d "$LIBNEO_TAG_DIR/.git" ]; then
+        git clone --quiet --branch "$LIBNEO_TAG" --depth 1 "$LIBNEO_URL" "$LIBNEO_TAG_DIR"
+    fi
+
+    ln -sfn "$LIBNEO_TAG_DIR" "$BASE_DIR/libneo"
+}
+
 main() {
     set -e  # Exit on any error
-    
+
     # Create base directories
     mkdir -p "$GOLDEN_RECORD_BASE_DIR"
     mkdir -p "$TEST_DATA_DIR"
-    
+
     # Check if we need to build reference version
     if [ ! -f "$PROJECT_ROOT_REF/build/simple.x" ]; then
         echo "Reference build not found, cloning and building..."
@@ -71,7 +113,7 @@ main() {
     else
         echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
     fi
-    
+
     # Check if current version needs building (it should already be built)
     if [ ! -f "$PROJECT_ROOT_CUR/build/simple.x" ]; then
         echo "Current build not found at: $PROJECT_ROOT_CUR/build/simple.x"
@@ -79,15 +121,15 @@ main() {
     else
         echo "Using current build at: $PROJECT_ROOT_CUR/build/simple.x"
     fi
-    
+
     # Use the new scripts to run tests and compare
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" || handle_failure $?
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" || handle_failure $?
-    
+
     # Compare results
     "$SCRIPT_DIR/compare_golden_results.sh" "$RUN_DIR_REF" "$RUN_DIR_CUR"
     comparison_result=$?
-    
+
     if [ $comparison_result -eq 0 ]; then
         handle_success
     else
@@ -113,23 +155,19 @@ build() {
     local PROJECT_ROOT="$1"
     echo "Building SIMPLE in $PROJECT_ROOT"
     cd $PROJECT_ROOT
-    
+
     # For older versions, check if libneo is needed as a sibling directory
     if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then
         echo "Old project structure detected, setting up libneo..."
-        LIBNEO_PATH="/proj/plasma/CODE/ert/libneo"
-        if [ -d "$LIBNEO_PATH" ]; then
-            # Create symlink to libneo in parent directory
-            ln -sf "$LIBNEO_PATH" "../libneo" 2>/dev/null || true
-        fi
+        setup_libneo "$PROJECT_ROOT"
     fi
-    
+
     cmake -S . -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
         echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
         return 1
     fi
-    
+
     cmake --build build --config Release  > $PROJECT_ROOT/build.log 2>&1
     if [ $? -ne 0 ]; then
         echo "Build failed. Check $PROJECT_ROOT/build.log"
