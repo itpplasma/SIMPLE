@@ -75,18 +75,22 @@ setup_libneo() {
     fi
 
     # Find newest tag not newer than SIMPLE commit
+    # Use creatordate which works for both annotated and lightweight tags
     local LIBNEO_TAG
-    LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=-taggerdate \
-        --format '%(refname:short) %(taggerdate:unix)' refs/tags | while read tag ts; do
-            if [ "$ts" -le "$SIMPLE_TS" ]; then
+    LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=-creatordate \
+        --format '%(refname:short) %(creatordate:unix)' refs/tags | while read tag ts; do
+            # Check that timestamp is not empty and is valid
+            if [ -n "$ts" ] && [ "$ts" -le "$SIMPLE_TS" ] 2>/dev/null; then
                 echo "$tag"
                 break
             fi
         done)
 
     if [ -z "$LIBNEO_TAG" ]; then
-        echo "No suitable libneo tag found; using latest available"
-        LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" describe --tags --abbrev=0)
+        echo "No suitable libneo tag found; using oldest available for compatibility"
+        # Use oldest tag for better compatibility with historical commits
+        LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=creatordate \
+            --format '%(refname:short)' refs/tags | head -n 1)
     fi
 
     echo "Using libneo tag: $LIBNEO_TAG"
