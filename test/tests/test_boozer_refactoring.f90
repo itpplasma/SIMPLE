@@ -4,6 +4,7 @@ program test_boozer_refactoring
     use boozer_sub, only: normalize_angular_coordinates
     use boozer_coordinates_mod, only: n_theta_B, n_phi_B, h_theta_B, h_phi_B
     use new_vmec_stuff_mod, only: nper
+    use timing, only: init_timer
     
     implicit none
     
@@ -14,6 +15,9 @@ program test_boozer_refactoring
     double precision, parameter :: tol = 1.d-14
     
     test_failed = 0
+    
+    ! Initialize timer before any timing calls
+    call init_timer()
     
     ! Initialize field (needed for module initialization)
     call init_field(norb, 'wout.nc', 5, 5, 5, -1)
