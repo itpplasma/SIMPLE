@@ -3,11 +3,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.pyplot import figure, plot, xlabel, ylabel, subplot, grid, legend
 
-def plot_orbit(z):
-    figure()
-    plot(z[0,:]*cos(z[1,:]), z[0,:]*sin(z[1,:]),',')
-    xlabel(r'$R-R_0$')
-    ylabel(r'$Z$')
+
+
+def plot_orbit(z, ax):
+
+    ax.plot(z[0, :] * cos(z[1, :]),
+            z[0, :] * sin(z[1, :]),
+            'o', markersize=1)
+
+    ax.set_xlabel(r'$R-R_0$')
+    ax.set_ylabel(r'$Z$')
+    return ax
+
 
 def plot_mani(z):
     # Torus parameters
@@ -27,7 +34,7 @@ def plot_mani(z):
     # Plotting
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(X, Y, Z, cmap='plasma', edgecolor='none')
+    #ax.plot_surface(X, Y, Z, cmap='plasma', edgecolor='none')
 
     x = (R0 + z[0,:]*cos(z[1,:]))*cos(z[2,:])
     y = (R0 + z[0,:]*cos(z[1,:]))*sin(z[2,:])

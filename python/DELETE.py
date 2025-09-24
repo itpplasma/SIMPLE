@@ -2,36 +2,43 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import common
-from common import (r0,th0,ph0,pph0,timesteps,get_val,get_der,mu,qe,m,c,)
+from cpp_sym_midpoint import cpp_sym_mid
+from common import (r0,th0,ph0,vpar0,timesteps,get_val,get_der,mu,qe,m,c,)
 from field_correct_test import field
 from plotale import plot_orbit, plot_mani, plot_cost_function
-from cpp_sym_midpoint import z
-from manifolds import surf_R
+#from manifolds import surf_R
 
-print(z.shape)
-print(surf_R[:,0])
+f = field() 
 
-R0 = 1
-z0 = 1
+dt = 600
+nt = 1000
+
+# Initial Conditions
+z = np.zeros([3, nt + 1])
+z[:, 0] = [r0, th0, ph0]
+
+f.evaluate(r0, th0, ph0)
+v = np.zeros(3)
+p = np.zeros(3)
+
+v[0] = vpar0*f.co_hr
+v[1] = vpar0*f.co_hth
+v[2] = vpar0*f.co_hph
+p[0] = v[0] 
+p[1] = v[1] + qe/c*f.co_Ath
+p[2] = v[2] + qe/c*f.co_Aph
+
+P = np.zeros([3,nt+1])
+P[:,0] = p
+
+print(P)
+
+# Symplectic midpoint
+for kt in range(nt):
+
+    z[:,kt+1] = cpp_sym_mid(z[:,kt])
 
 
-# Plotting
-#fig = plt.figure(figsize=(8, 6))
-#ax = fig.add_subplot(111, projection='3d')
-#ax.plot_surface(X, Y, Z, cmap='plasma', edgecolor='none')
-
-x = (R0 + z[0,:]*np.cos(z[1,:]))*np.cos(z[2,:])
-y = (R0 + z[0,:]*np.cos(z[1,:]))*np.sin(z[2,:])
-z = z0 + z[0,:]*np.sin(z[1,:])
-#ax.set_zlim([-1,1])
-
-
-fig = plt.figure()
-
-ax = fig.add_subplot(111, projection='3d')
-
-sc = ax.scatter(surf_R[:,0], surf_R[:,1], surf_R[:,2], c='b', s=0.1)
-
-sc = ax.scatter(x,y,z)
-
+plot_orbit(z)
+plt.plot(z[0,:5]*np.cos(z[1,:5]), z[0,:5]*np.sin(z[1,:5]), "o")
 plt.show()
