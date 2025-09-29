@@ -121,8 +121,10 @@ set(SIMPLE_COMPILE_OPTIONS
 )
 
 if (ENABLE_OPENMP)
-	add_compile_options(-fopenmp)
-	add_link_options(-fopenmp)
+	# add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fopenmp>)
+	# add_link_options(-fopenmp)
+    find_package(OpenMP REQUIRED)
+    link_libraries(OpenMP::OpenMP_Fortran)
 endif()
 
 # Coverage analysis configuration (only for Debug/Profile builds)
