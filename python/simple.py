@@ -32,9 +32,38 @@ DEFAULT_INTEGRATOR = EXPL_IMPL_EULER  # integmode default
 DEFAULT_NTESTPART = 1024    # ntestpart=1024
 DEFAULT_NTIMSTEP = 10000    # ntimstep=10000
 
-def load_field(vmec_file):
-    """Load field from VMEC equilibrium file."""
+def load_field(vmec_file, ns_s=5, ns_tp=5, multharm=5):
+    """Load field from VMEC equilibrium file.
+
+    This follows the initialization sequence from app/simple.f90:
+    1. Set netcdf file path
+    2. Initialize field (init_field)
+    3. Initialize parameters (params_init)
+
+    Args:
+        vmec_file: Path to VMEC NetCDF file
+        ns_s: Spline order for 3D quantities over s variable (default: 5)
+        ns_tp: Spline order for 3D quantities over theta and phi (default: 5)
+        multharm: Angular grid factor (default: 5)
+    """
+    # Create a tracer object for field initialization
+    tracer = pysimple.simple.Tracer()
+
+    # Set VMEC file path
     pysimple.params.netcdffile = str(vmec_file)
+
+    # Initialize field with VMEC file (equivalent to init_field call in app/simple.f90:29)
+    # Uses standard defaults: ns_s=5, ns_tp=5, multharm=5 (from examples/simple_full.in)
+    pysimple.simple_main.init_field(
+        tracer,
+        str(vmec_file),
+        ns_s,
+        ns_tp,
+        multharm,
+        pysimple.params.integmode
+    )
+
+    # Initialize parameters (equivalent to params_init call in app/simple.f90:32)
     pysimple.params.params_init()
 
 def sample_surface(n_particles, s=DEFAULT_SURFACE):
@@ -43,26 +72,26 @@ def sample_surface(n_particles, s=DEFAULT_SURFACE):
     pysimple.params.startmode = 2  # Surface sampling
     pysimple.params.sbeg[0] = s  # Set surface
     pysimple.params.reallocate_arrays()
-    
+
     # Call existing surface sampling through Samplers class
     samplers = pysimple.Samplers()
-    samplers._sample_surface_fieldline(pysimple.params.zstart)
-    
-    # Return copy of zstart array
-    return np.copy(pysimple.params.zstart)
+    samplers.sample_surface_fieldline(pysimple.params.zstart)
+
+    # Return copy of zstart array (only the requested number of particles)
+    return np.copy(pysimple.params.zstart[:, :n_particles])
 
 def sample_volume(n_particles, s_inner=DEFAULT_S_INNER, s_outer=DEFAULT_S_OUTER):
     """Sample particles in volume using existing samplers.f90."""
     pysimple.params.ntestpart = n_particles
     pysimple.params.startmode = 3  # Volume sampling
     pysimple.params.reallocate_arrays()
-    
+
     # Call existing volume sampling through Samplers class
     samplers = pysimple.Samplers()
-    samplers._sample_volume_single(pysimple.params.zstart, s_inner, s_outer)
-    
-    # Return copy of zstart array
-    return np.copy(pysimple.params.zstart)
+    samplers.sample_volume_single(pysimple.params.zstart, s_inner, s_outer)
+
+    # Return copy of zstart array (only the requested number of particles)
+    return np.copy(pysimple.params.zstart[:, :n_particles])
 
 def load_particles(particle_file):
     """Load particles from file using existing samplers.f90."""
@@ -70,13 +99,13 @@ def load_particles(particle_file):
     pysimple.params.ntestpart = n_particles
     pysimple.params.startmode = 1  # File loading
     pysimple.params.reallocate_arrays()
-    
+
     # Call existing file loading through Samplers class
     samplers = pysimple.Samplers()
-    samplers._sample_read(pysimple.params.zstart, str(particle_file))
-    
-    # Return copy of zstart array
-    return np.copy(pysimple.params.zstart)
+    samplers.sample_read(pysimple.params.zstart, str(particle_file))
+
+    # Return copy of zstart array (only the requested number of particles)
+    return np.copy(pysimple.params.zstart[:, :n_particles])
 
 def trace(particles, tmax=DEFAULT_TMAX, integrator=DEFAULT_INTEGRATOR):
     """Trace particle orbits using existing SIMPLE Fortran implementation."""

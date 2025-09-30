@@ -37,7 +37,9 @@ contains
 
     logical :: fullset
     integer :: mode_secders
-    real(dp) :: bmod,sqrtg
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: bmod,sqrtg
+    real(dp), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
     real(dp) :: r,vartheta_c,varphi_c,                                       &
                         A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3,     &
                         sqg_c,dsqg_c_dr,dsqg_c_dt,dsqg_c_dp,                             &
@@ -47,7 +49,6 @@ contains
                         d2bth_rr,d2bth_rt,d2bth_rp,d2bth_tt,d2bth_tp,d2bth_pp,           &
                         d2bph_rr,d2bph_rt,d2bph_rp,d2bph_tt,d2bph_tp,d2bph_pp
     real(dp) :: Bctr_vartheta,Bctr_varphi,bmod2
-    real(dp), dimension(3) :: x,bder,hcovar,hctrvr,hcurl
 
     r=x(1)
     vartheta_c=x(2)
@@ -119,8 +120,9 @@ contains
 
     implicit none
 
-    real(dp) :: bmod,sqrtg
-    real(dp), dimension(3) :: x,bder,hcovar,hctrvr,hcurl
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: bmod,sqrtg
+    real(dp), intent(out) :: bder(3),hcovar(3),hctrvr(3),hcurl(3)
 
     real(dp) :: r,vartheta_B,varphi_B,                                   &
                         A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3, &
