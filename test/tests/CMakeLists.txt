@@ -1,10 +1,21 @@
 ##################################################
 # DOWNLOAD TEST DATA
 ##################################################
-file(DOWNLOAD
-    https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc
-    ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
-)
+# Download VMEC test file to unified test_data directory (shared with Python tests)
+set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/test/test_data")
+set(WOUT_FILE "${TEST_DATA_DIR}/wout.nc")
+set(WOUT_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc")
+
+# Download if not present
+if(NOT EXISTS "${WOUT_FILE}")
+    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
+    message(STATUS "Downloading VMEC test file to ${WOUT_FILE}...")
+    file(DOWNLOAD "${WOUT_URL}" "${WOUT_FILE}")
+    message(STATUS "Downloaded VMEC test file")
+endif()
+
+# Create symlink in test binary directory for backward compatibility
+file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools

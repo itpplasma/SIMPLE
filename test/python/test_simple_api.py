@@ -20,23 +20,7 @@ except ImportError as e:
     SIMPLE_AVAILABLE = False
     print(f"Warning: simple module not available: {e}")
 
-
-@pytest.fixture
-def vmec_file():
-    """Get path to test VMEC file."""
-    # Try multiple locations where wout.nc might be
-    candidates = [
-        Path(__file__).parent / "wout.nc",
-        Path(__file__).parent.parent.parent / "wout.nc", 
-        Path(__file__).parent.parent.parent / "examples" / "wout.nc",
-        Path(__file__).parent.parent / "golden_record" / "classifier_fast" / "wout.nc"
-    ]
-    
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-    
-    pytest.skip("No wout.nc test file found")
+# Note: vmec_file fixture is provided by test/conftest.py
 
 
 @pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")

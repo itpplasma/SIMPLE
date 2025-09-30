@@ -33,6 +33,8 @@ RUN_*
 *.[0-9]*.[0-9]*.[0-9]*
 TMP
 */test_data/simple_*/
+test/test_data/
+!test/test_data/.gitkeep
 *.geany
 examples/test1/
 examples/test2/

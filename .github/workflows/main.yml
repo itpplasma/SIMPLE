@@ -14,6 +14,9 @@ permissions:
   checks: write
   actions: read
 
+env:
+  LIBNEO_BRANCH: ${{ github.head_ref || github.ref_name }}
+
 jobs:
   test:
     name: Run Tests
