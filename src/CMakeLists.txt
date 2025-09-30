@@ -83,6 +83,8 @@ target_link_libraries(simple PUBLIC
     LIBNEO::neo
 )
 
+add_dependencies(simple neo)
+
 # Conditionally link GVEC if enabled
 if(ENABLE_GVEC)
     target_include_directories(simple PRIVATE
