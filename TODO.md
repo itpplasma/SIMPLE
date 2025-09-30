@@ -18,6 +18,105 @@ This significantly reduces implementation effort compared to reimplementing GEQD
 
 ---
 
+## Summary: 3D Field Superposition Capability
+
+### What field_divB0 Provides
+
+The `field_divB0` module in libneo supports **3D non-axisymmetric perturbations** on top of axisymmetric equilibria through the `ipert` parameter:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `ipert=0` | Axisymmetric equilibrium only | Basic tokamak physics, initial GEQDSK implementation |
+| `ipert=1` | Vacuum perturbation (Biot-Savart) | RMPs, error fields, test coils (no plasma response) |
+| `ipert=2` | Vacuum + plasma response | Linear MHD response (fast, no derivatives) |
+| `ipert=3` | Vacuum + plasma response + derivatives | Full linear MHD (7× slower) |
+
+**Key insight**: Reference coordinates remain axisymmetric (based on equilibrium), while the magnetic field includes 3D perturbations.
+
+### How It Works
+
+**Vacuum Perturbation Mode (ipert=1)**:
+1. Pre-compute 3D coil field on cylindrical (R, φ, Z) grid using **vacfield.x**
+2. Store in `pfile` (format controlled by `icftype`)
+3. `field_divB0` converts to divergence-free Fourier representation (up to `ntor` harmonics)
+4. At runtime: `B_total = B_equilibrium + ampl * B_perturbation`
+
+**Generating Coil Fields**:
+```bash
+# Use libneo's vacfield.x program
+vacfield.x AUG 2 coil_file1.dat coil_file2.dat Bvac grid.inp output.h5
+```
+
+Supported coil formats:
+- **AUG**: ASDEX Upgrade format
+- **GPEC**: General Perturbation Equilibrium Code
+- **Nemov**: Wendelstein 7-X format
+- **STELLOPT**: Filament format (coils.c09r00)
+
+**Plasma Response Mode (ipert=2,3)**:
+- Requires pre-computed linear MHD response in flux coordinates
+- Typically from GPEC, MARS-F, or similar codes
+- Reads Fourier harmonics from `fluxdatapath`
+- Uses `field_fourier` / `field_fourier_derivs` for evaluation
+
+### Tools Available
+
+**Fortran**:
+- `coil_tools.f90`: Coil I/O, Biot-Savart evaluation
+- `coil_convert.x`: Convert between coil file formats
+- `vacfield.x`: Generate field files from coil geometries
+- `bdivfree.f90`: Divergence-free field representation
+
+**Python**:
+- `libneo.coils`: Read/write coil files, metadata extraction
+- `libneo.mgrid`: STELLOPT M-grid format handling
+
+### Current Status
+
+**✅ Fully Implemented**:
+- All 4 modes working in production codes
+- Coil geometry readers for multiple formats
+- Biot-Savart field computation
+- Fourier decomposition and evaluation
+
+**❌ Missing**:
+- No automated regression tests (all test files have `ipert=0`)
+- No example workflows documented
+- No validation suite for 3D modes
+
+**📋 For SIMPLE+GEQDSK**:
+1. **Phase 1 (Priority 1)**: Implement pure equilibrium (`ipert=0`)
+   - Focus on coordinate transformations and canonical coordinates
+   - Get basic tokamak orbit tracing working
+2. **Phase 2 (Future)**: Add RMP capability (`ipert=1`)
+   - Interface SIMPLE with pre-computed coil fields
+   - Enable RMP and error field studies
+   - Requires: grid generation, `pfile` format support
+3. **Phase 3 (Advanced)**: Full plasma response (`ipert=2,3`)
+   - Couple to GPEC or MARS-F outputs
+   - Study self-consistent perturbed equilibria
+   - Out of scope for initial implementation
+
+### Integration References
+
+**In field_divB0.inp**:
+```fortran
+0                  ipert        ! 0=eq only, 1=vac, 2,3=vac+plas
+1                  iequil       ! 0=pert. alone, 1=with equil.
+1.00               ampl         ! amplitude of perturbation, a.u.
+72                 ntor         ! number of toroidal harmonics
+0.99               cutoff       ! inner cutoff in psi/psi_a units
+4                  icftype      ! type of coil file
+'test.geqdsk'      gfile        ! equilibrium file
+'coils.dat'        pfile        ! coil field file
+'convexwall.dat'   convexfile   ! convex file for stretchcoords
+'fluxdata/'        fluxdatapath ! directory with plasma response
+```
+
+**Simpson rule for flux integration**: Reference implementation in `fix-integration` branch of itpplasma/KAMEL repo. Plan: extract to libneo utility module, then update KAMEL to use as library routine.
+
+---
+
 ## Phase 1: libneo - Geoflux Reference Coordinate System
 
 ### 1.1 Create Geoflux Coordinate Module in libneo
