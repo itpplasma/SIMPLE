@@ -201,6 +201,63 @@ end module geoflux_field
 - Reference coordinates (s_tor, θ_geo, φ) remain based on the axisymmetric equilibrium
 - This allows studying non-axisymmetric effects without losing the clean flux coordinate system
 
+**How 3D perturbations work in field_divB0**:
+
+The `ipert` switch controls perturbation mode:
+- `ipert=0`: Axisymmetric equilibrium only (what we need for basic geoflux implementation)
+- `ipert=1`: Vacuum perturbation (cylindrical coil field via Biot-Savart)
+- `ipert=2`: Vacuum + plasma response (no derivatives, uses Fourier representation)
+- `ipert=3`: Vacuum + plasma response with full derivatives (7× slower)
+
+The `iequil` switch controls whether equilibrium is included:
+- `iequil=0`: Perturbation field alone (useful for debugging)
+- `iequil=1`: Total field = equilibrium + perturbation (normal mode)
+
+**Vacuum perturbation workflow** (`ipert=1`):
+1. Read 3D coil field from `pfile` on cylindrical (R, φ, Z) grid
+2. Supported file formats (`icftype`):
+   - Type 1-3: Legacy formats with fixed grid sizes
+   - Type 4: Simple format with header: `nr np nz`, `rmin rmax`, `pmin pmax`, `zmin zmax`, then `Br Bp Bz` values
+3. Convert field to divergence-free representation via vector potentials (`vector_potentials`)
+   - Decomposes into Fourier harmonics (up to `ntor` modes)
+   - Uses stretch coordinates to handle complex geometry
+4. Evaluate perturbation field at any point via `field_divfree`
+5. Add to equilibrium field with amplitude scaling: `B_total = B_eq + ampl * B_pert`
+
+**Plasma response workflow** (`ipert=2,3`):
+- Reads pre-computed plasma response in flux coordinates (`fluxdatapath`)
+- Uses `field_fourier` / `field_fourier_derivs` for evaluation
+- Requires `inthecore` cutoff to define region where plasma response is valid
+
+**Generating vacuum field files**:
+- Use `vacfield.x` program from libneo to compute coil fields
+- Reads coil geometries in various formats:
+  - AUG format (ASDEX Upgrade convention)
+  - GPEC format (General Perturbation Equilibrium Code)
+  - Nemov format (Wendelstein 7-X convention)
+  - STELLOPT/MAKEGRID filament format (coils.c09r00)
+- Computes Biot-Savart field on specified (R, φ, Z) grid
+- Can output either real-space field or Fourier representation
+
+**Coil geometry tools**:
+- `coil_tools.f90` module provides coil I/O and Biot-Savart routines
+- `coil_convert.x` program converts between coil file formats
+- Python interface via `libneo.coils` module
+
+**Current status in libneo tests**:
+- All `field_divB0.inp` test files have `ipert=0` (equilibrium only)
+- No automated tests for 3D field superposition exist yet
+- The infrastructure is implemented and used in production codes, but not regression-tested
+
+**For SIMPLE+GEQDSK implementation**:
+1. Phase 1 (basic): Use `ipert=0` for pure axisymmetric equilibrium
+2. Phase 2 (advanced): Enable `ipert=1` for RMP/error field studies
+   - Requires pre-computing coil fields on appropriate grid
+   - Use `vacfield.x` to generate field files from coil geometries
+3. Phase 3 (full): Add `ipert=2,3` for self-consistent plasma response
+   - Requires coupling to GPEC, MARS-F, or similar MHD codes
+   - Out of scope for initial implementation
+
 **Trade-offs on GEQDSK infrastructure**:
 
 Option A: **Use `field_divB0` entirely** (RECOMMENDED)
