@@ -113,7 +113,16 @@ main() {
     if [ ! -f "$PROJECT_ROOT_REF/build/simple.x" ]; then
         echo "Reference build not found, cloning and building..."
         clone "$REF_VER" "$PROJECT_ROOT_REF" || handle_failure $?
+        LIBNEO_BRANCH_BACKUP="${LIBNEO_BRANCH-}"
+        LIBNEO_BRANCH="main"
+        export LIBNEO_BRANCH
         build "$PROJECT_ROOT_REF" || handle_failure $?
+        if [ -n "$LIBNEO_BRANCH_BACKUP" ]; then
+            LIBNEO_BRANCH="$LIBNEO_BRANCH_BACKUP"
+            export LIBNEO_BRANCH
+        else
+            unset LIBNEO_BRANCH
+        fi
     else
         echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
     fi
