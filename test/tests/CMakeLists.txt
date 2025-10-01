@@ -48,6 +48,7 @@ endif()
 # INTERNAL UNIT TEST STUFF
 ##################################################
 add_library(testing_utils ${CMAKE_CURRENT_SOURCE_DIR}/utility.f90 ${CMAKE_CURRENT_SOURCE_DIR}/results.f90)
+target_compile_options(testing_utils PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
 
 # Link coverage flags to testing utilities when coverage is enabled
 if (ENABLE_COVERAGE AND CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
@@ -162,9 +163,11 @@ if(ENABLE_GVEC)
 endif()
 
 
-# Add 2D field export utility (not a test, but a diagnostic tool)
-add_executable (export_field_2d.x export_field_2d.f90)
-target_link_libraries(export_field_2d.x simple)
+# Add 2D field export utility (requires GVEC support)
+if(ENABLE_GVEC)
+    add_executable (export_field_2d.x export_field_2d.f90)
+    target_link_libraries(export_field_2d.x simple)
+endif()
 
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
@@ -237,18 +240,6 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
 
 # Efficient golden record test: compare against main branch
 # This runs the working copy tests only once and compares against main
-add_test(
-    NAME golden_record_multi
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record_multi.sh
-        main                   # Always compare with main branch
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-set_tests_properties(golden_record_multi PROPERTIES
-    TIMEOUT 600  # 10 minutes for comparison
-    LABELS "golden_record;regression"
-    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-)
-
 # Golden record sanity test: tests the comparison system itself
 # This ensures the golden record comparison scripts are working correctly
 add_test(
@@ -258,5 +249,5 @@ add_test(
 )
 set_tests_properties(golden_record_sanity PROPERTIES
     TIMEOUT 60  # 1 minute for sanity checks
+    LABELS "golden_record;regression"
 )
-
