@@ -89,7 +89,7 @@ prepare_reference() {
     local resolved_sha
     resolved_sha=$(resolve_reference)
 
-    if [ ! -f "$PROJECT_ROOT_REF/.git" ]; then
+    if [ ! -e "$PROJECT_ROOT_REF/.git" ]; then
         rm -rf "$PROJECT_ROOT_REF"
         log "Creating reference worktree for $REF_SPEC"
         git -C "$PROJECT_ROOT_CUR_DEFAULT" worktree add --force --detach "$PROJECT_ROOT_REF" "$resolved_sha" >/dev/null
