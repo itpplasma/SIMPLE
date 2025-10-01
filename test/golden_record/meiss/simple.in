@@ -1,0 +1,9 @@
+&config
+multharm = 3             ! reduced spline order for speed
+trace_time = 1d-4        ! short integration time for fast golden test
+sbeg = 0.3d0             ! starting normalized toroidal flux
+ntestpart = 32           ! number of test particles
+netcdffile = 'wout.nc'   ! VMEC equilibrium used for golden record
+isw_field_type = 3       ! Meiss canonical field evaluation
+deterministic = .true.   ! ensure reproducible random seeds
+/
