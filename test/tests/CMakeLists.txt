@@ -48,6 +48,7 @@ endif()
 # INTERNAL UNIT TEST STUFF
 ##################################################
 add_library(testing_utils ${CMAKE_CURRENT_SOURCE_DIR}/utility.f90 ${CMAKE_CURRENT_SOURCE_DIR}/results.f90)
+target_compile_options(testing_utils PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
 
 # Link coverage flags to testing utilities when coverage is enabled
 if (ENABLE_COVERAGE AND CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
@@ -162,9 +163,11 @@ if(ENABLE_GVEC)
 endif()
 
 
-# Add 2D field export utility (not a test, but a diagnostic tool)
-add_executable (export_field_2d.x export_field_2d.f90)
-target_link_libraries(export_field_2d.x simple)
+# Add 2D field export utility (requires GVEC support)
+if(ENABLE_GVEC)
+    add_executable (export_field_2d.x export_field_2d.f90)
+    target_link_libraries(export_field_2d.x simple)
+endif()
 
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
@@ -259,4 +262,3 @@ add_test(
 set_tests_properties(golden_record_sanity PROPERTIES
     TIMEOUT 60  # 1 minute for sanity checks
 )
-
