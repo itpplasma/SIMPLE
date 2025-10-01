@@ -57,8 +57,17 @@ compare_cases() {
     
     for CASE in $TEST_CASES; do
         total_cases=$((total_cases + 1))
-        
         echo "Comparing $CASE case..."
+
+        if [ ! -d "$REFERENCE_DIR/$CASE" ]; then
+            echo "  ⚠ Skipping (missing in reference run)"
+            continue
+        fi
+        if [ ! -d "$CURRENT_DIR/$CASE" ]; then
+            echo "  ✗ Current run missing directory: $CURRENT_DIR/$CASE"
+            missing_cases=$((missing_cases + 1))
+            continue
+        fi
         
         # Check if this is the classifier_fast case with multiple files
         if [ "$CASE" = "classifier_fast" ]; then

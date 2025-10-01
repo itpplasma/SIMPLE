@@ -1,194 +1,170 @@
 #!/bin/bash
-CLONE_URL="https://github.com/itpplasma/SIMPLE.git"
+set -euo pipefail
+
+# Golden record comparison against a single reference (default: main)
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-CUR_VER=$(git -C "$SCRIPT_DIR" describe --tags --always --dirty)
-REF_VER=${1:-"main"}
+PROJECT_ROOT_CUR_DEFAULT=$(cd "$SCRIPT_DIR/../.." && pwd)
+REF_SPEC=${1:-main}
 
-# Allow override of directories via environment variables
+REMOTE_URL=$(git -C "$PROJECT_ROOT_CUR_DEFAULT" remote get-url origin 2>/dev/null || echo "git@github.com:itpplasma/SIMPLE.git")
+if [[ "$REMOTE_URL" == https://github.com/* ]]; then
+    REPO_PREFIX="https://github.com/itpplasma"
+else
+    REPO_PREFIX="git@github.com:itpplasma"
+fi
+LIBNEO_URL="${REPO_PREFIX%/}/libneo.git"
+
 GOLDEN_RECORD_BASE_DIR=${GOLDEN_RECORD_BASE_DIR:-"$(pwd)/golden_record"}
-GOLDEN_RECORD_REF_DIR=${GOLDEN_RECORD_REF_DIR:-""}
-GOLDEN_RECORD_CUR_DIR=${GOLDEN_RECORD_CUR_DIR:-""}
+PROJECT_ROOT_CUR=${GOLDEN_RECORD_CUR_DIR:-$PROJECT_ROOT_CUR_DEFAULT}
+PROJECT_ROOT_REF=${GOLDEN_RECORD_REF_DIR:-"$GOLDEN_RECORD_BASE_DIR/reference_$REF_SPEC"}
 
-# Set up deterministic directories
-if [ -z "$GOLDEN_RECORD_REF_DIR" ]; then
-    PROJECT_ROOT_REF="$GOLDEN_RECORD_BASE_DIR/simple_$REF_VER"
-else
-    PROJECT_ROOT_REF="$GOLDEN_RECORD_REF_DIR"
-fi
-
-if [ -z "$GOLDEN_RECORD_CUR_DIR" ]; then
-    PROJECT_ROOT_CUR=$(cd "$SCRIPT_DIR/../.." && pwd)
-else
-    PROJECT_ROOT_CUR="$GOLDEN_RECORD_CUR_DIR"
-fi
-
-RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_$REF_VER"
-RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
+RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_current"
+RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_reference"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
 
-# Find test cases - they should be copied by CMake to the golden_record directory
-if [ -d "$GOLDEN_RECORD_BASE_DIR/test_cases" ]; then
-    TEST_CASES="$(cd "$GOLDEN_RECORD_BASE_DIR/test_cases" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | sort)"
-else
-    # Fallback to original location if CMake hasn't copied them yet
-    TEST_CASES="$(cd "$SCRIPT_DIR" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | sort)"
-fi
-
-echo "Golden record base directory: $GOLDEN_RECORD_BASE_DIR"
-echo "Reference version: $REF_VER"
-echo "Current version: $CUR_VER"
-echo "Project root (reference): $PROJECT_ROOT_REF"
-echo "Project root (current): $PROJECT_ROOT_CUR"
-echo "Test run directories:"
-echo "  Current: $RUN_DIR_CUR"
-echo "  Reference: $RUN_DIR_REF"
-
-handle_success() {
-    echo "Tests completed successfully."
-    echo "Results preserved in: $GOLDEN_RECORD_BASE_DIR"
+log() {
+    echo "[golden] $*"
 }
 
-handle_failure() {
-    local exit_code=$1
-    echo "Tests failed with exit code: $exit_code"
-    echo "Results preserved for debugging in: $GOLDEN_RECORD_BASE_DIR"
-    exit $exit_code
-}
-
-# Determine and check out appropriate libneo version for historical builds
 setup_libneo() {
-    local PROJECT_ROOT="$1"
-    local BASE_DIR="$(dirname "$PROJECT_ROOT")"
-    local LIBNEO_URL="https://github.com/itpplasma/libneo.git"
+    local project_root="$1"
+    local base_dir
+    base_dir="$(dirname "$project_root")"
 
-    # Timestamp of SIMPLE commit
-    local SIMPLE_TS
-    SIMPLE_TS=$(git -C "$PROJECT_ROOT" log -1 --format=%ct)
+    local simple_ts
+    simple_ts=$(git -C "$project_root" log -1 --format=%ct)
 
-    # Cache repository with all tags for lookup
-    local LIBNEO_TAGS_DIR="$BASE_DIR/libneo_tags"
-    if [ ! -d "$LIBNEO_TAGS_DIR/.git" ]; then
-        git clone --quiet --no-checkout "$LIBNEO_URL" "$LIBNEO_TAGS_DIR"
+    local tags_dir="$base_dir/libneo_tags"
+    if [ ! -d "$tags_dir/.git" ]; then
+        git clone --quiet --no-checkout "$LIBNEO_URL" "$tags_dir"
     else
-        git -C "$LIBNEO_TAGS_DIR" fetch --tags --quiet
+        git -C "$tags_dir" fetch --tags --quiet
     fi
 
-    # Find newest tag not newer than SIMPLE commit
-    # Use creatordate which works for both annotated and lightweight tags
-    local LIBNEO_TAG
-    LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=-creatordate \
-        --format '%(refname:short) %(creatordate:unix)' refs/tags | while read tag ts; do
-            # Check that timestamp is not empty and is valid
-            if [ -n "$ts" ] && [ "$ts" -le "$SIMPLE_TS" ] 2>/dev/null; then
+    local libneo_tag
+    libneo_tag=$(git -C "$tags_dir" for-each-ref --sort=-creatordate \
+        --format '%(refname:short) %(creatordate:unix)' refs/tags | while read -r tag ts; do
+            if [ -n "$ts" ] && [ "$ts" -le "$simple_ts" ] 2>/dev/null; then
                 echo "$tag"
                 break
             fi
         done)
 
-    if [ -z "$LIBNEO_TAG" ]; then
-        echo "No suitable libneo tag found; using oldest available for compatibility"
-        # Use oldest tag for better compatibility with historical commits
-        LIBNEO_TAG=$(git -C "$LIBNEO_TAGS_DIR" for-each-ref --sort=creatordate \
+    if [ -z "$libneo_tag" ]; then
+        log "No libneo tag older than commit timestamp; falling back to oldest"
+        libneo_tag=$(git -C "$tags_dir" for-each-ref --sort=creatordate \
             --format '%(refname:short)' refs/tags | head -n 1)
     fi
 
-    echo "Using libneo tag: $LIBNEO_TAG"
-    local LIBNEO_TAG_DIR="$BASE_DIR/libneo_$LIBNEO_TAG"
-    if [ ! -d "$LIBNEO_TAG_DIR/.git" ]; then
-        git clone --quiet --branch "$LIBNEO_TAG" --depth 1 "$LIBNEO_URL" "$LIBNEO_TAG_DIR"
+    log "Using libneo tag: $libneo_tag"
+    local libneo_dir="$base_dir/libneo_$libneo_tag"
+    if [ ! -d "$libneo_dir/.git" ]; then
+        git clone --quiet --branch "$libneo_tag" --depth 1 "$LIBNEO_URL" "$libneo_dir"
     fi
 
-    ln -sfn "$LIBNEO_TAG_DIR" "$BASE_DIR/libneo"
+    ln -sfn "$libneo_dir" "$base_dir/libneo"
+}
+
+resolve_reference() {
+    git -C "$PROJECT_ROOT_CUR_DEFAULT" fetch --tags --quiet origin || true
+
+    if git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse --verify --quiet "$REF_SPEC^{commit}" >/dev/null; then
+        git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse "$REF_SPEC"
+        return
+    fi
+
+    if git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse --verify --quiet "origin/$REF_SPEC^{commit}" >/dev/null; then
+        git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse "origin/$REF_SPEC"
+        return
+    fi
+
+    log "Reference '$REF_SPEC' not found locally or on origin"
+    exit 1
+}
+
+prepare_reference() {
+    mkdir -p "$GOLDEN_RECORD_BASE_DIR"
+
+    local resolved_sha
+    resolved_sha=$(resolve_reference)
+
+    if [ ! -e "$PROJECT_ROOT_REF/.git" ]; then
+        rm -rf "$PROJECT_ROOT_REF"
+        log "Creating reference worktree for $REF_SPEC"
+        git -C "$PROJECT_ROOT_CUR_DEFAULT" worktree add --force --detach "$PROJECT_ROOT_REF" "$resolved_sha" >/dev/null
+    else
+        log "Updating reference worktree to $resolved_sha"
+        git -C "$PROJECT_ROOT_REF" reset --hard "$resolved_sha" --quiet
+    fi
+
+    local build_dir="$PROJECT_ROOT_REF/build"
+    local marker_file="$build_dir/.golden_reference_sha"
+
+    if [ -f "$marker_file" ] && [ -f "$build_dir/simple.x" ] && \
+            [ "$(cat "$marker_file")" = "$resolved_sha" ]; then
+        log "Reference build @$resolved_sha already prepared"
+        return
+    fi
+
+    log "Building reference SIMPLE at $resolved_sha"
+    rm -rf "$build_dir"
+
+    if [ -f "$PROJECT_ROOT_REF/SRC/CMakeLists.txt" ] && \
+            grep -q "../libneo" "$PROJECT_ROOT_REF/SRC/CMakeLists.txt" 2>/dev/null; then
+        setup_libneo "$PROJECT_ROOT_REF"
+    fi
+
+    (
+        export LIBNEO_BRANCH="main"
+
+        if ! cmake -S "$PROJECT_ROOT_REF" -B "$build_dir" -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF \
+                > "$PROJECT_ROOT_REF/configure.log" 2>&1; then
+            log "CMake configuration failed; see $PROJECT_ROOT_REF/configure.log"
+            tail -n 50 "$PROJECT_ROOT_REF/configure.log"
+            exit 1
+        fi
+
+        if ! cmake --build "$build_dir" --config Release > "$PROJECT_ROOT_REF/build.log" 2>&1; then
+            log "Build failed; see $PROJECT_ROOT_REF/build.log"
+            tail -n 50 "$PROJECT_ROOT_REF/build.log"
+            exit 1
+        fi
+    ) || exit 1
+
+    echo "$resolved_sha" > "$marker_file"
+}
+
+run_suite() {
+    local project_root="$1"
+    local run_dir="$2"
+
+    "$SCRIPT_DIR/run_golden_tests.sh" "$project_root" "$run_dir" "$TEST_DATA_DIR"
 }
 
 main() {
-    set -e  # Exit on any error
+    mkdir -p "$GOLDEN_RECORD_BASE_DIR" "$TEST_DATA_DIR"
 
-    # Create base directories
-    mkdir -p "$GOLDEN_RECORD_BASE_DIR"
-    mkdir -p "$TEST_DATA_DIR"
-
-    # Check if we need to build reference version
-    if [ ! -f "$PROJECT_ROOT_REF/build/simple.x" ]; then
-        echo "Reference build not found, cloning and building..."
-        clone "$REF_VER" "$PROJECT_ROOT_REF" || handle_failure $?
-        build "$PROJECT_ROOT_REF" || handle_failure $?
-    else
-        echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
-    fi
-
-    # Check if current version needs building (it should already be built)
     if [ ! -f "$PROJECT_ROOT_CUR/build/simple.x" ]; then
-        echo "Current build not found at: $PROJECT_ROOT_CUR/build/simple.x"
-        handle_failure 1
-    else
-        echo "Using current build at: $PROJECT_ROOT_CUR/build/simple.x"
+        log "Current build missing at $PROJECT_ROOT_CUR/build/simple.x"
+        exit 1
     fi
 
-    # Use the new scripts to run tests and compare
-    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" || handle_failure $?
-    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" || handle_failure $?
+    prepare_reference
 
-    # Compare results
+    local ref_sha
+    ref_sha=$(git -C "$PROJECT_ROOT_REF" rev-parse HEAD)
+    local cur_sha
+    cur_sha=$(git -C "$PROJECT_ROOT_CUR" rev-parse HEAD 2>/dev/null || echo "working-tree")
+
+    log "Reference: $REF_SPEC @ $ref_sha"
+    log "Current:   $cur_sha"
+
+    run_suite "$PROJECT_ROOT_REF" "$RUN_DIR_REF"
+    run_suite "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR"
+
     "$SCRIPT_DIR/compare_golden_results.sh" "$RUN_DIR_REF" "$RUN_DIR_CUR"
-    comparison_result=$?
-
-    if [ $comparison_result -eq 0 ]; then
-        handle_success
-    else
-        handle_failure $comparison_result
-    fi
 }
-
-
-clone() {
-    local VERSION="$1"
-    local PROJECT_ROOT="$2"
-    if [ ! -d "$PROJECT_ROOT" ]; then
-        echo "Cloning SIMPLE version $VERSION"
-        git clone --filter=blob:none --no-checkout "$CLONE_URL" "$PROJECT_ROOT"
-    fi
-
-    cd "$PROJECT_ROOT"
-    git fetch --all --quiet
-    git checkout "$VERSION" --quiet
-}
-
-build() {
-    local PROJECT_ROOT="$1"
-    echo "Building SIMPLE in $PROJECT_ROOT"
-    cd $PROJECT_ROOT
-
-    # For older versions, check if libneo is needed as a sibling directory
-    if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then
-        echo "Old project structure detected, setting up libneo..."
-        setup_libneo "$PROJECT_ROOT"
-    fi
-
-    # Check if CMakeLists.txt has fortplot dependency and adjust accordingly
-    local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF"
-    
-    if grep -q "fortplot" CMakeLists.txt 2>/dev/null; then
-        echo "Detected fortplot dependency in CMakeLists.txt"
-        # Don't disable GVEC if fortplot is present, as they might be related
-    else
-        # For older versions without fortplot, disable GVEC
-        CMAKE_OPTS="$CMAKE_OPTS -DENABLE_GVEC=OFF"
-    fi
-
-    cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
-    if [ $? -ne 0 ]; then
-        echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
-        return 1
-    fi
-
-    cmake --build build --config Release  > $PROJECT_ROOT/build.log 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Build failed. Check $PROJECT_ROOT/build.log"
-        return 1
-    fi
-}
-
 
 main "$@"

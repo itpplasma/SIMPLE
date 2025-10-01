@@ -16,6 +16,19 @@ function(find_or_fetch DEPENDENCY)
             endif()
         endif()
 
+        if(NOT REMOTE_BRANCH STREQUAL "")
+            execute_process(
+                COMMAND git ls-remote --heads ${REPO_URL} ${REMOTE_BRANCH}
+                OUTPUT_VARIABLE _branch_exists
+                RESULT_VARIABLE _ls_result
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+            if(NOT _ls_result EQUAL 0 OR _branch_exists STREQUAL "")
+                message(WARNING "Requested branch ${REMOTE_BRANCH} not found in ${REPO_URL}; falling back to auto-detected branch")
+                set(REMOTE_BRANCH "")
+            endif()
+        endif()
+
         if(REMOTE_BRANCH STREQUAL "")
             get_branch_or_main(${REPO_URL} REMOTE_BRANCH)
         endif()
