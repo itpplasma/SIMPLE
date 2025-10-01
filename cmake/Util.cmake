@@ -1,5 +1,4 @@
 include(FetchContent)
-
 function(get_branch_or_main REPO_URL REMOTE_BRANCH)
     execute_process(
         COMMAND git rev-parse --abbrev-ref HEAD

@@ -46,13 +46,21 @@ contains
   subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)
     use spline_vmec_sub, only : spline_vmec_data, volume_and_B00
     use vmecin_sub, only : stevvo
+    use field, only : is_geqdsk
+    use field_geoflux, only : initialize_geoflux_field, geoflux_ready
+    use geoflux_coordinates, only : geoflux_get_axis
+    use geoflux_field, only : splint_geoflux_field
+    use new_vmec_stuff_mod, only : nper, rmajor, vmec_B_scale, vmec_RZ_scale
 
     character(*), intent(in) :: vmec_file
     integer, intent(in) :: ans_s, ans_tp, amultharm
     real(dp), intent(out) :: fper
 
-    integer             :: L1i
-    real(dp)    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
+    integer :: L1i
+    real(dp) :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
+    real(dp) :: R_axis, Z_axis
+    real(dp) :: Acov_axis(3), hcov_axis(3), B_axis
+    real(dp) :: sqg_axis(3)
 
     ! TODO: Remove side effects
     netcdffile = vmec_file
@@ -60,11 +68,25 @@ contains
     ns_tp = ans_tp
     multharm = amultharm
 
+    if (is_geqdsk(vmec_file)) then
+      call initialize_geoflux_field(vmec_file)
+      call geoflux_get_axis(R_axis, Z_axis)
+      nper = 1
+      rmajor = R_axis
+      fper = twopi
+      vmec_B_scale = 1.0d0
+      vmec_RZ_scale = 1.0d0
+      call splint_geoflux_field(0.0_dp, 0.0_dp, 0.0_dp, Acov_axis, hcov_axis, B_axis, sqg_axis)
+      print *, 'GEQDSK equilibrium loaded. R_axis = ', R_axis, ' cm, fper = ', fper
+      print *, 'B_axis = ', B_axis, ' G'
+      return
+    end if
+
     call spline_vmec_data ! initialize splines for VMEC field
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0) ! initialize periods and major radius
     fper = twopi/dble(L1i)   !<= field period
     print *, 'R0 = ', RT0, ' cm, fper = ', fper
-    call volume_and_B00(volume,B00)
+    call volume_and_B00(volume, B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
   end subroutine init_vmec
 
