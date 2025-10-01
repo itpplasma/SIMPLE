@@ -80,11 +80,32 @@ function(find_or_fetch DEPENDENCY)
     if("${_dep_lower}" STREQUAL "libneo")
         set(_repo_url "https://github.com/itpplasma/libneo.git")
         set(_branch "")
+        set(_branch_source "")
         if(DEFINED LIBNEO_BRANCH AND NOT "${LIBNEO_BRANCH}" STREQUAL "")
-            set(_branch "${LIBNEO_BRANCH}")
+            string(STRIP "${LIBNEO_BRANCH}" _branch)
+            set(_branch_source "cache")
         elseif(DEFINED ENV{LIBNEO_BRANCH} AND NOT "$ENV{LIBNEO_BRANCH}" STREQUAL "")
-            set(_branch "$ENV{LIBNEO_BRANCH}")
+            string(STRIP "$ENV{LIBNEO_BRANCH}" _branch)
+            set(_branch_source "env")
         endif()
+
+        if(NOT _branch STREQUAL "")
+            execute_process(
+                COMMAND git ls-remote --heads ${_repo_url} ${_branch}
+                OUTPUT_VARIABLE _branch_exists
+                RESULT_VARIABLE _branch_check_status
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+            set(_branch_valid FALSE)
+            if(_branch_check_status EQUAL 0 AND NOT _branch_exists STREQUAL "")
+                set(_branch_valid TRUE)
+            endif()
+            if(NOT _branch_valid)
+                message(WARNING "LIBNEO branch '${_branch}' (source: ${_branch_source}) not found; falling back to main")
+                set(_branch "")
+            endif()
+        endif()
+
         if(_branch STREQUAL "")
             get_branch_or_main(${_repo_url} _branch)
         endif()
