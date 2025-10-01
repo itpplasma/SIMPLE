@@ -3,15 +3,21 @@ set -euo pipefail
 
 # Golden record comparison against a single reference (default: main)
 
-CLONE_URL="git@github.com:itpplasma/SIMPLE.git"
-
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT_CUR_DEFAULT=$(cd "$SCRIPT_DIR/../.." && pwd)
 REF_SPEC=${1:-main}
 
+REMOTE_URL=$(git -C "$PROJECT_ROOT_CUR_DEFAULT" remote get-url origin 2>/dev/null || echo "git@github.com:itpplasma/SIMPLE.git")
+if [[ "$REMOTE_URL" == https://github.com/* ]]; then
+    REPO_PREFIX="https://github.com/itpplasma"
+else
+    REPO_PREFIX="git@github.com:itpplasma"
+fi
+LIBNEO_URL="${REPO_PREFIX%/}/libneo.git"
+
 GOLDEN_RECORD_BASE_DIR=${GOLDEN_RECORD_BASE_DIR:-"$(pwd)/golden_record"}
 PROJECT_ROOT_CUR=${GOLDEN_RECORD_CUR_DIR:-$PROJECT_ROOT_CUR_DEFAULT}
-PROJECT_ROOT_REF=${GOLDEN_RECORD_REF_DIR:-"$GOLDEN_RECORD_BASE_DIR/simple_$REF_SPEC"}
+PROJECT_ROOT_REF=${GOLDEN_RECORD_REF_DIR:-"$GOLDEN_RECORD_BASE_DIR/reference_$REF_SPEC"}
 
 RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_current"
 RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_reference"
@@ -25,14 +31,13 @@ setup_libneo() {
     local project_root="$1"
     local base_dir
     base_dir="$(dirname "$project_root")"
-    local libneo_url="git@github.com:itpplasma/libneo.git"
 
     local simple_ts
     simple_ts=$(git -C "$project_root" log -1 --format=%ct)
 
     local tags_dir="$base_dir/libneo_tags"
     if [ ! -d "$tags_dir/.git" ]; then
-        git clone --quiet --no-checkout "$libneo_url" "$tags_dir"
+        git clone --quiet --no-checkout "$LIBNEO_URL" "$tags_dir"
     else
         git -C "$tags_dir" fetch --tags --quiet
     fi
@@ -55,69 +60,80 @@ setup_libneo() {
     log "Using libneo tag: $libneo_tag"
     local libneo_dir="$base_dir/libneo_$libneo_tag"
     if [ ! -d "$libneo_dir/.git" ]; then
-        git clone --quiet --branch "$libneo_tag" --depth 1 "$libneo_url" "$libneo_dir"
+        git clone --quiet --branch "$libneo_tag" --depth 1 "$LIBNEO_URL" "$libneo_dir"
     fi
 
     ln -sfn "$libneo_dir" "$base_dir/libneo"
 }
 
-prepare_reference() {
-    mkdir -p "$GOLDEN_RECORD_BASE_DIR"
-    mkdir -p "$(dirname "$PROJECT_ROOT_REF")"
+resolve_reference() {
+    git -C "$PROJECT_ROOT_CUR_DEFAULT" fetch --tags --quiet origin || true
 
-    if [ ! -d "$PROJECT_ROOT_REF/.git" ]; then
-        log "Cloning reference tree for $REF_SPEC"
-        git clone --filter=blob:none --no-checkout "$CLONE_URL" "$PROJECT_ROOT_REF"
-    fi
-
-    cd "$PROJECT_ROOT_REF" >/dev/null
-    git remote set-url origin "$CLONE_URL" >/dev/null 2>&1 || true
-    git fetch --all --tags --prune --quiet
-
-    local target_ref
-    if [ "$REF_SPEC" = "main" ]; then
-        target_ref="origin/main"
-        git checkout --force -B main "$target_ref" --quiet
-    else
-        target_ref="$REF_SPEC"
-        git checkout "$target_ref" --quiet
-    fi
-    git reset --hard "$target_ref" --quiet
-
-    local build_dir="$PROJECT_ROOT_REF/build"
-    local marker_file="$build_dir/.golden_reference_sha"
-    local current_sha
-    current_sha=$(git rev-parse HEAD)
-
-    if [ -f "$marker_file" ] && [ -f "$build_dir/simple.x" ] && \
-            [ "$(cat "$marker_file")" = "$current_sha" ]; then
-        log "Reference build @${current_sha} already prepared"
-        cd "$SCRIPT_DIR"
+    if git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse --verify --quiet "$REF_SPEC^{commit}" >/dev/null; then
+        git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse "$REF_SPEC"
         return
     fi
 
-    log "Building reference SIMPLE at $current_sha"
-    rm -rf "$build_dir"
-    git clean -fdx -q
+    if git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse --verify --quiet "origin/$REF_SPEC^{commit}" >/dev/null; then
+        git -C "$PROJECT_ROOT_CUR_DEFAULT" rev-parse "origin/$REF_SPEC"
+        return
+    fi
 
-    if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then
+    log "Reference '$REF_SPEC' not found locally or on origin"
+    exit 1
+}
+
+prepare_reference() {
+    mkdir -p "$GOLDEN_RECORD_BASE_DIR"
+
+    local resolved_sha
+    resolved_sha=$(resolve_reference)
+
+    if [ ! -f "$PROJECT_ROOT_REF/.git" ]; then
+        rm -rf "$PROJECT_ROOT_REF"
+        log "Creating reference worktree for $REF_SPEC"
+        git -C "$PROJECT_ROOT_CUR_DEFAULT" worktree add --force --detach "$PROJECT_ROOT_REF" "$resolved_sha" >/dev/null
+    else
+        log "Updating reference worktree to $resolved_sha"
+        git -C "$PROJECT_ROOT_REF" reset --hard "$resolved_sha" --quiet
+    fi
+
+    local build_dir="$PROJECT_ROOT_REF/build"
+    local marker_file="$build_dir/.golden_reference_sha"
+
+    if [ -f "$marker_file" ] && [ -f "$build_dir/simple.x" ] && \
+            [ "$(cat "$marker_file")" = "$resolved_sha" ]; then
+        log "Reference build @$resolved_sha already prepared"
+        return
+    fi
+
+    log "Building reference SIMPLE at $resolved_sha"
+    rm -rf "$build_dir"
+
+    if [ -f "$PROJECT_ROOT_REF/SRC/CMakeLists.txt" ] && \
+            grep -q "../libneo" "$PROJECT_ROOT_REF/SRC/CMakeLists.txt" 2>/dev/null; then
         setup_libneo "$PROJECT_ROOT_REF"
     fi
 
-    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF > configure.log 2>&1
-    if [ $? -ne 0 ]; then
-        log "CMake configuration failed; see $PROJECT_ROOT_REF/configure.log"
-        exit 1
-    fi
+    (
+        export LIBNEO_BRANCH="main"
 
-    cmake --build build --config Release > build.log 2>&1
-    if [ $? -ne 0 ]; then
-        log "Build failed; see $PROJECT_ROOT_REF/build.log"
-        exit 1
-    fi
+        if ! cmake -S "$PROJECT_ROOT_REF" -B "$build_dir" -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DENABLE_GVEC=OFF \
+                > "$PROJECT_ROOT_REF/configure.log" 2>&1; then
+            log "CMake configuration failed; see $PROJECT_ROOT_REF/configure.log"
+            tail -n 50 "$PROJECT_ROOT_REF/configure.log"
+            exit 1
+        fi
 
-    echo "$current_sha" > "$marker_file"
-    cd "$SCRIPT_DIR"
+        if ! cmake --build "$build_dir" --config Release > "$PROJECT_ROOT_REF/build.log" 2>&1; then
+            log "Build failed; see $PROJECT_ROOT_REF/build.log"
+            tail -n 50 "$PROJECT_ROOT_REF/build.log"
+            exit 1
+        fi
+    ) || exit 1
+
+    echo "$resolved_sha" > "$marker_file"
 }
 
 run_suite() {
