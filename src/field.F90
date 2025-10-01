@@ -3,6 +3,7 @@ module field
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_base, only: MagneticField
 use field_vmec, only: VmecField
+use field_geoflux, only: GeofluxField, initialize_geoflux_field
 use field_coils, only: CoilsField, create_coils_field
 #ifdef GVEC_AVAILABLE
 use field_gvec, only: GvecField, create_gvec_field
@@ -24,7 +25,10 @@ subroutine field_from_file(filename, field)
 
     stripped_name = strip_directory(filename)
 
-    if (endswith(filename, '.nc')) then
+    if (is_geqdsk(filename)) then
+        call initialize_geoflux_field(trim(filename))
+        allocate(GeofluxField :: field)
+    else if (endswith(filename, '.nc')) then
         allocate(VmecField :: field)
     else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
         call create_coils_field(filename, coils_temp)
@@ -93,6 +97,35 @@ function strip_directory(filename)
         end if
     end do
 end function strip_directory
+
+
+logical function is_geqdsk(filename)
+    character(*), intent(in) :: filename
+
+    character(:), allocatable :: lower_name
+
+    lower_name = to_lower(trim(filename))
+
+    is_geqdsk = endswith(lower_name, '.geqdsk') .or. endswith(lower_name, '.eqdsk')
+    if (.not. is_geqdsk) then
+        is_geqdsk = startswidth(strip_directory(lower_name), 'geqdsk')
+    end if
+end function is_geqdsk
+
+
+function to_lower(text) result(lower)
+    character(*), intent(in) :: text
+    character(len(text)) :: lower
+    integer :: i
+
+    lower = text
+    do i = 1, len(text)
+        select case (text(i:i))
+        case ('A':'Z')
+            lower(i:i) = achar(iachar(text(i:i)) + 32)
+        end select
+    end do
+end function to_lower
 
 
 end module field

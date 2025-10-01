@@ -11,6 +11,20 @@ enable_language(C Fortran)
 
 add_compile_options(-g -fbacktrace)
 
+# Prefer local libneo checkout on sibling path; fall back to configured branch
+if (NOT DEFINED libneo_SOURCE_DIR)
+    set(_local_libneo "${CMAKE_SOURCE_DIR}/../libneo")
+    if (EXISTS "${_local_libneo}/CMakeLists.txt")
+        get_filename_component(_libneo_abs "${_local_libneo}" ABSOLUTE)
+        set(libneo_SOURCE_DIR "${_libneo_abs}")
+        message(STATUS "Detected local libneo checkout at ${libneo_SOURCE_DIR}")
+    endif()
+endif()
+
+if (NOT DEFINED LIBNEO_BRANCH)
+    set(LIBNEO_BRANCH "tokamak" CACHE STRING "libneo branch to fetch when no local checkout is present")
+endif()
+
 # Disable executable stack for security (trampolines/closures create execstack)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # Apple's linker doesn't support -z,noexecstack (uses different security model)
