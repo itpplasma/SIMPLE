@@ -6,7 +6,7 @@ maintainer = "albert@tugraz.at"
 copyright = "Copyright 2025, Plasma Physics at TU Graz"
 
 [dependencies]
-libneo.git = "https://github.com/itpplasma/libneo.git"
+libneo.git = { url = "https://github.com/itpplasma/libneo.git", branch = "tokamak" }
 openmp = "*"
 hdf5 = "*"
 netcdf = "*"
