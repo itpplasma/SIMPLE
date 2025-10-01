@@ -29,6 +29,7 @@ function(find_or_fetch DEPENDENCY)
 
     if(_use_local)
         message(STATUS "Using ${_dep_lower} in ${_source_dir}")
+        set(${_dep_upper}_SOURCE_DIR "${_source_dir}" CACHE PATH "" FORCE)
         if("${_dep_lower}" STREQUAL "libneo")
             set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
         endif()
@@ -36,8 +37,14 @@ function(find_or_fetch DEPENDENCY)
         return()
     endif()
 
+    set(_repo_url "https://github.com/itpplasma/${_dep_lower}.git")
+    set(_repo_var "${_dep_upper}_REPO_URL")
+    if(DEFINED ${_repo_var} AND NOT "${${_repo_var}}" STREQUAL "")
+        set(_repo_url "${${_repo_var}}")
+    elseif(DEFINED ENV{${_repo_var}} AND NOT "$ENV{${_repo_var}}" STREQUAL "")
+        set(_repo_url "$ENV{${_repo_var}}")
+    endif()
     if("${_dep_lower}" STREQUAL "libneo")
-        set(_repo_url "https://github.com/itpplasma/libneo.git")
         set(_branch "")
         set(_branch_source "")
         if(DEFINED LIBNEO_BRANCH AND NOT "${LIBNEO_BRANCH}" STREQUAL "")
@@ -72,18 +79,29 @@ function(find_or_fetch DEPENDENCY)
         message(STATUS "Using ${_dep_lower} branch ${_branch} from ${_repo_url}")
 
         set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    else()
+        set(_branch "")
+        set(_branch_var "${_dep_upper}_BRANCH")
+        if(DEFINED ${_branch_var} AND NOT "${${_branch_var}}" STREQUAL "")
+            string(STRIP "${${_branch_var}}" _branch)
+        elseif(DEFINED ENV{${_branch_var}} AND NOT "$ENV{${_branch_var}}" STREQUAL "")
+            string(STRIP "$ENV{${_branch_var}}" _branch)
+        endif()
 
-        FetchContent_Declare(${_dep_lower}
-            GIT_REPOSITORY ${_repo_url}
-            GIT_TAG ${_branch}
-            GIT_PROGRESS TRUE
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        )
-        FetchContent_MakeAvailable(${_dep_lower})
-        return()
+        if(_branch STREQUAL "")
+            get_branch_or_main(${_repo_url} _branch)
+        endif()
+
+        message(STATUS "Using ${_dep_lower} branch ${_branch} from ${_repo_url}")
     endif()
 
-    message(FATAL_ERROR "find_or_fetch does not know how to fetch dependency '${DEPENDENCY}'")
+    FetchContent_Declare(${_dep_lower}
+        GIT_REPOSITORY ${_repo_url}
+        GIT_TAG ${_branch}
+        GIT_PROGRESS TRUE
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(${_dep_lower})
 endfunction()
 
 
