@@ -82,6 +82,15 @@ module params
 
   character(1000) :: field_input = ''
 
+  ! Analytical tokamak parameters
+  real(dp) :: tok_R0 = 6.2d0, tok_epsilon = 0.32d0
+  real(dp) :: tok_kappa = 1.0d0, tok_delta = 0.0d0
+  real(dp) :: tok_A_param = -0.142d0, tok_B0 = 5.3d0
+  integer :: tok_Nripple = 0
+  real(dp) :: tok_a0 = 1.984d0, tok_alpha0 = 2.0d0
+  real(dp) :: tok_delta0 = 0.0d0, tok_z0 = 0.0d0
+  character(1000) :: tokamak_input = 'tokamak.in'
+
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
@@ -90,7 +99,9 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
-    batch_size, ran_seed, reuse_batch, field_input, &
+    batch_size, ran_seed, reuse_batch, field_input, tokamak_input, &
+    tok_R0, tok_epsilon, tok_kappa, tok_delta, tok_A_param, tok_B0, &
+    tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0, &
     output_error, output_orbits_macrostep  ! callback
 
 contains
@@ -106,7 +117,29 @@ contains
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
     endif
+
+    ! Load tokamak parameters if analytical field requested
+    if (index(field_input, 'analytical') > 0 .or. index(field_input, 'tokamak') > 0) then
+      call read_tokamak_config()
+    end if
   end subroutine read_config
+
+
+  subroutine read_tokamak_config()
+    logical :: exists
+    namelist /tokamak_params/ tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+      tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
+
+    inquire(file=trim(tokamak_input), exist=exists)
+    if (exists) then
+      open(1, file=trim(tokamak_input), status='old', action='read')
+      read(1, nml=tokamak_params)
+      close(1)
+      print *, 'Loaded tokamak parameters from ', trim(tokamak_input)
+    else
+      print *, 'Using default tokamak parameters (no ', trim(tokamak_input), ' found)'
+    end if
+  end subroutine read_tokamak_config
 
 
   subroutine params_init

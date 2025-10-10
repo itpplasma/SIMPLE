@@ -1,136 +1,373 @@
-# TODO: Meiss Canonical Coordinates on EQDSK/Geoflux — Full Implementation & Robust Testing
+# TODO: Analytical GS Field Integration for SIMPLE
 
-_Last updated: 2025-09-30_
+## Overview
+Integrate libneo's analytical Grad-Shafranov equilibrium solver (with TF ripple) into SIMPLE's three-level coordinate/field system. Focus on Meiss canonical coordinates on top of analytical GS.
 
-This is an exhaustive execution guide. Every step includes file names, code snippets, commands, and validation criteria. The emphasis is on **precise, fast, non-tautological tests** and **system-level regressions**.
+## Three Levels in SIMPLE
+1. **Reference Coordinates**: Define flux surfaces (VMEC, GEOFLUX, or **ANALYTICAL GS**)
+2. **Evaluation Field**: Compute B(x) at points (VMEC, GEOFLUX, coils, GVEC, or **ANALYTICAL GS**)
+3. **Canonicalized Coordinates**: Transform for integration (focus on **MEISS = 3**)
 
----
-## 0. Baseline Safety Net (Tests Only)
-1. **Ensure clean trees** (SIMPLE + libneo):
-   ```bash
-   git status
-   cd ../libneo && git status
-   cd ../SIMPLE
-   ```
+## Context from Existing Work
+- Meiss coordinates already work on VMEC and GEOFLUX
+- `coordinate_system_t` from libneo provides unified geometry interface
+- `geoflux_ready()` pattern distinguishes VMEC vs GEOFLUX
+- Golden record tests validate system-level behavior
 
-2. **VMEC Meiss guard** (`test/tests/test_field_can_meiss_vmec.f90`)
-   - Implement as described previously **but add analytic invariants**:
-     - After `evaluate_meiss`, compute energy `H = 0.5*vpar^2 + mu*Bmod` and ensure matches reference value from prior run (hard-code expected value with tolerance 1e-10).
-     - Validate orthogonality: `dot_product(hcov, tracer%f%dhth)` should be near zero (tolerance 1e-12).
-   - Register in CMake and run: `ctest -R test_field_can_meiss_vmec`.
+## Tasks
 
-3. **EQDSK guard (WILL_FAIL initially)** (`test/tests/test_field_can_meiss_eqdsk.f90`)
-   - Implement same checks as VMEC guard; currently expect failure.
-   - Mark test `WILL_FAIL TRUE` in CMake.
-   - Run: `ctest -R test_field_can_meiss_eqdsk` and confirm it fails but suite continues.
+### 1. Add ANALYTICAL constant to magfie module
+**File**: `src/magfie.f90`
 
-4. **Geoflux field smoke** (`ctest -R test_magfie_geoflux`) – must pass.
+- [ ] Add constant after GEOFLUX:
+  ```fortran
+  integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, GEOFLUX=5, ANALYTICAL=6
+  ```
+- [ ] Verify export in module
 
-5. **Golden record awareness**
-   - Inspect `test/golden_record/canonical/simple.in` – note it uses `isw_field_type=0` (canonical flux).
-   - Plan to add new golden case for Meiss EQDSK later (see §4).
+**Test**: `grep "ANALYTICAL=6" src/magfie.f90`
 
----
-## 1. libneo Coordinate System (follow ../libneo/TODO.md)
-Complete libneo work first. Do not proceed until `../libneo/build/ctest -R test_coordinate_systems` passes and exposes `make_vmec_coordinate_system` / `make_geoflux_coordinate_system`.
+### 2. Create tokamak.in namelist file
+**File**: `examples/tokamak/tokamak.in`
 
----
-## 2. Integrate coordinate_system_t (no wrappers)
+- [ ] Define namelist structure:
+  ```fortran
+  &tokamak_params
+    ! Equilibrium parameters (Cerfon-Freidberg)
+    R0 = 6.2d0        ! Major radius [m]
+    epsilon = 0.32d0  ! Inverse aspect ratio
+    kappa = 1.0d0     ! Elongation (1.0 = circular)
+    delta = 0.0d0     ! Triangularity (0.0 = no triangularity)
+    A_param = -0.142d0  ! Shafranov parameter (pressure)
+    B0 = 5.3d0        ! Toroidal field on axis [T]
 
-1. **Imports**
-   - Add `use libneo_coordinates` wherever geometry is needed: `src/field/field_can_meiss.f90`, `src/field_can.f90`, `app/simple_diag_meiss.f90`, `src/diag/diag_meiss.f90`, and any helper modules use the geometry.
+    ! TF ripple parameters (optional)
+    Nripple = 0       ! Number of TF coils (0 = axisymmetric)
+    delta0 = 0.0d0    ! Ripple amplitude
+    alpha0 = 2.0d0    ! Ripple radial exponent
+    a0 = 1.984d0      ! Ripple reference radius [m] (= epsilon*R0)
+    z0 = 0.0d0        ! Ripple vertical center [m]
+  /
+  ```
 
-2. **Global storage** (`field_can_meiss`):
-   - Replace `field_noncan` with:
-     ```fortran
-     class(coordinate_system_t), allocatable :: meiss_coords
-     class(MagneticField), allocatable :: source_field
-     ```
+- [ ] Add example with 9-coil ripple (delta0=0.10, Nripple=9)
+- [ ] Document parameters in comments
 
-3. **Initialise coordinate system** (`init_meiss`)
-   - After storing incoming magnetic field, allocate coordinate system directly:
-     ```fortran
-     if (allocated(meiss_coords)) deallocate(meiss_coords)
-     if (geoflux_ready()) then
-       call make_geoflux_coordinate_system(meiss_coords)
-     else
-       call make_vmec_coordinate_system(meiss_coords)
-     end if
-     ```
-   - Note: `geoflux_ready()` should be a new public function from `field_geoflux`. Add it if missing (e.g., module procedure returning logical flag).
+**Test**: `cat examples/tokamak/tokamak.in`
 
-4. **Use coordinate system** across the module:
-   - Replace all VMEC-specific data access (e.g., global arrays `lam_phi`, `h_cov`, etc.) with method calls:
-     - `meiss_coords%evaluate_point(u, position)`.
-     - `meiss_coords%covariant_basis(u, basis)` to compute derivatives.
-     - `meiss_coords%metric_tensor(u, g, ginv, sqrtg)`.
-   - Compute derivatives/invariants using the returned basis/metric—*no* direct `splint_vmec_data` or `geoflux_to_cyl` inside SIMPLE.
+### 3. Add tokamak parameters to params module
+**File**: `src/params.f90`
 
-5. **Magnetic field sampling**
-   - Continue using the existing `MagneticField` polymorphic object (`source_field`) for `evaluate` calls. Geometry now depends solely on `meiss_coords`.
+- [ ] Add module variables after existing field params:
+  ```fortran
+  ! Analytical tokamak parameters
+  real(dp) :: tok_R0 = 6.2d0, tok_epsilon = 0.32d0
+  real(dp) :: tok_kappa = 1.0d0, tok_delta = 0.0d0
+  real(dp) :: tok_A_param = -0.142d0, tok_B0 = 5.3d0
+  integer :: tok_Nripple = 0
+  real(dp) :: tok_a0 = 1.984d0, tok_alpha0 = 2.0d0
+  real(dp) :: tok_delta0 = 0.0d0, tok_z0 = 0.0d0
+  character(1000) :: tokamak_input = 'tokamak.in'
+  ```
 
-6. **Entry points update** (`src/field_can.f90`)
-   - Ensure `init_field_can` passes the magnetic field so `init_meiss` can allocate the right coordinate system.
-   - No new SIMPLE types are created; everything uses libneo’s `coordinate_system_t` instance.
+- [ ] Add to config namelist:
+  ```fortran
+  namelist /config/ ..., tokamak_input, &
+    tok_R0, tok_epsilon, tok_kappa, tok_delta, tok_A_param, tok_B0, &
+    tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
+  ```
 
-7. **Diagnostics**
-   - In `app/simple_diag_meiss.f90`, after reading config, call `field_from_file` and then `init_meiss(field)`; remove direct `init_vmec` + manual cache calls.
-   - `src/diag/diag_meiss.f90` simply relies on `rh_can`; confirm that `rh_can` internally uses `meiss_coords`.
+- [ ] Add read_tokamak_config subroutine:
+  ```fortran
+  subroutine read_tokamak_config
+    logical :: exists
+    namelist /tokamak_params/ tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+      tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
 
-8. **Upgrade EQDSK test**
-   - Remove `WILL_FAIL TRUE` from EQDSK test once refactor is complete.
-   - Enhance checks in both VMEC and EQDSK tests to compare outputs against reference values stored in a small JSON/Fortran data file (e.g., `test/reference/meiss_expected.dat`). Populate this file by running the old VMEC pipeline and recording `Bmod`, `hth`, `hph` for a few canonical points; these become the expected values with tolerance.
+    inquire(file=trim(tokamak_input), exist=exists)
+    if (exists) then
+      open(1, file=trim(tokamak_input), status='old', action='read')
+      read(1, nml=tokamak_params)
+      close(1)
+      print *, 'Loaded tokamak parameters from ', trim(tokamak_input)
+    else
+      print *, 'Using default tokamak parameters (no tokamak.in found)'
+    end if
+  end subroutine read_tokamak_config
+  ```
 
-9. **Run focused unit tests**
-   ```bash
-   cmake --build build --target test_field_can_meiss_vmec.x test_field_can_meiss_eqdsk.x
-   ctest -R test_field_can_meiss_vmec
-   ctest -R test_field_can_meiss_eqdsk
-   ctest -R test_magfie_geoflux
-   ```
-   All must pass (<1s each).
+- [ ] Call from read_config when `isw_field_type == ANALYTICAL` or `field_input` contains "analytical"
 
----
-## 3. Regression Tests & Golden Record
-1. **Add Meiss EQDSK golden test**
-   - Create `test/golden_record/meiss_eqdsk/simple.in` with EQDSK-specific configuration (e.g., `netcdffile='EQDSK_I.geqdsk'`, `isw_field_type=3` to request Meiss, set deterministic seeds).
-   - Update `test/golden_record/run_golden_tests.sh` so it copies the EQDSK file into each test case directory (download once to `$TEST_DATA_DIR/EQDSK_I.geqdsk`).
-   - Ensure symlink/hard copy placed in each run directory (similar to `wout.nc`).
-   - Add validation at the end of each run: check `diag_meiss_*` outputs exist if expected.
+**Test**: Compile, check namelist reads correctly
 
-2. **Golden record reference update**
-   - Generate reference outputs by running `test/golden_record/golden_record.sh main` (or chosen reference commit) after new code is in place. Keep `RUN_DIR_REF` results for diff.
-   - Ensure `compare_golden_results.sh` accounts for new files (update script to include Meiss-specific outputs).
+### 4. Rewrite field_analytical_gs for coordinate system interface
+**File**: `src/field/field_analytical_gs.f90`
 
-3. **System regression command**
-   - After every change, run:
-     ```bash
-     ./test/golden_record/golden_record.sh main
-     ```
-     and ensure the current run matches reference (no diffs aside from known improvements).
+Currently uses simple circular mapping. Need to:
 
----
-## 4. Diagnostics Automation
-1. **CTest driver** `test/diag/run_diag_meiss.cmake` (see prior template). Extend to check *both* VMEC and EQDSK outputs and to verify key numeric summaries (e.g., parse `diag_meiss_*.pdf` metadata using a small Python script or check associated data files if generated).
-2. **Register test** `diag_meiss_runs` with `TIMEOUT 120`.
-3. **Run** `ctest -R diag_meiss_runs`.
+- [ ] Import libneo coordinate utilities:
+  ```fortran
+  use analytical_tokamak_field, only: analytical_circular_eq_t
+  use libneo_coordinates, only: coordinate_system_t
+  ```
 
----
-## 5. Examples & Documentation
-1. **Makefile** `examples/tokamak/Makefile` – ensure targets `all`, `run`, `diag`, `clean` as previously outlined.
-2. **README** `examples/tokamak/README.md` must include:
-   - Download step (`make`).
-   - Execution (`make run`), expected runtime, note about OpenMP threads.
-   - Diagnostics (`make diag`), location of generated plots.
-   - Troubleshooting tips (e.g., missing libneo branch).
-3. **Manual run**: follow README to completion; confirm outputs align with documentation.
+- [ ] Add coordinate system to type:
+  ```fortran
+  type, extends(MagneticField) :: AnalyticalGSField
+      type(analytical_circular_eq_t) :: eq
+      class(coordinate_system_t), allocatable :: coords
+      logical :: initialized = .false.
+  contains
+      procedure :: evaluate
+      procedure :: init_coordinates
+  end type
+  ```
 
----
-## 6. Final Regression Sweep
-1. **Unit tests**: `ctest --output-on-failure` in SIMPLE repo.
-2. **System tests**: `./test/golden_record/golden_record.sh main` (ensure 0 exit code).
-3. **libneo tests**: `ninja -C ../libneo/build && ctest`.
-4. **Clean status**: `git status` (SIMPLE + libneo).
-5. **Document** results (changelog, PR summary).
+- [ ] Implement proper flux surface mapping:
+  - Define flux label s = ψ_normalized (0 at axis, 1 at separatrix)
+  - Map (s, theta, phi) → (R, phi, Z) following flux surfaces
+  - Compute metric tensor from coordinate Jacobian
 
-Completion criteria: unit & system tests all green, new golden record case passes, diagnostics produce EQDSK Meiss plots, documentation updated.
+- [ ] Keep eval_bfield_ripple for evaluation but transform coordinates first
+
+**Note**: This may require extending libneo's analytical_tokamak_field to provide coordinate_system_t interface. Check if `make_analytical_coordinate_system` exists in libneo first.
+
+**Test**: Check libneo has analytical coordinate system support
+
+### 5. Add analytical field initialization to field.F90
+**File**: `src/field.F90`
+
+- [ ] Add import:
+  ```fortran
+  use field_analytical_gs, only: AnalyticalGSField, create_analytical_gs_field
+  ```
+
+- [ ] Extend `field_from_file` detection:
+  ```fortran
+  else if (index(filename, 'analytical') > 0 .or. index(filename, 'tokamak') > 0) then
+      call create_analytical_gs_field_from_params(field)
+  ```
+
+- [ ] Implement `create_analytical_gs_field_from_params`:
+  ```fortran
+  subroutine create_analytical_gs_field_from_params(field)
+      use params, only: tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+                        tok_A_param, tok_B0, tok_Nripple, tok_a0, &
+                        tok_alpha0, tok_delta0, tok_z0
+
+      class(MagneticField), allocatable, intent(out) :: field
+      class(AnalyticalGSField), allocatable :: gs_temp
+
+      call create_analytical_gs_field(tok_R0, tok_epsilon, &
+          kappa=tok_kappa, delta=tok_delta, &
+          A_param=tok_A_param, B0=tok_B0, &
+          Nripple=tok_Nripple, a0_ripple=tok_a0, &
+          alpha0=tok_alpha0, delta0=tok_delta0, z0=tok_z0, &
+          gs_field=gs_temp)
+
+      call move_alloc(gs_temp, field)
+  end subroutine
+  ```
+
+**Test**: Compile and check factory works
+
+### 6. Add magfie_analytical to magfie.f90
+**File**: `src/magfie.f90`
+
+Follow `magfie_geoflux` pattern closely:
+
+- [ ] Add subroutine after `magfie_geoflux`:
+  ```fortran
+  subroutine magfie_analytical(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+    real(dp), intent(in) :: x(3)  ! (s, theta, phi)
+    real(dp), intent(out) :: bmod, sqrtg
+    real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+    ! Similar structure to magfie_geoflux:
+    ! 1. Clip/validate coordinates
+    ! 2. Map (s,theta,phi) → (R,phi,Z) via analytical equilibrium
+    ! 3. Evaluate B field with ripple at (R,phi,Z)
+    ! 4. Compute metric tensor from coordinate Jacobian
+    ! 5. Transform B to covariant components in (s,theta,phi)
+    ! 6. Compute derivatives via finite differences
+    ! 7. Compute curl from derivatives
+
+    ! TODO: Implement following geoflux_eval_point pattern
+    error stop 'magfie_analytical: not yet implemented'
+  end subroutine magfie_analytical
+  ```
+
+- [ ] Add case to `init_magfie`:
+  ```fortran
+  case(ANALYTICAL)
+    magfie => magfie_analytical
+  ```
+
+- [ ] Add helper functions following geoflux pattern:
+  - `analytical_eval_point` (full evaluation with metric)
+  - `analytical_eval_basic` (just B field)
+
+**Test**: Compile, check init_magfie accepts ANALYTICAL
+
+### 7. Add analytical_ready() function
+**File**: `src/field/field_analytical_gs.f90`
+
+Follow `geoflux_ready()` pattern:
+
+- [ ] Add module variable:
+  ```fortran
+  logical, save :: analytical_initialized = .false.
+  ```
+
+- [ ] Add public function:
+  ```fortran
+  function analytical_ready()
+    logical :: analytical_ready
+    analytical_ready = analytical_initialized
+  end function
+  ```
+
+- [ ] Set flag in `create_analytical_gs_field`
+
+**Test**: Function callable from other modules
+
+### 8. Update simple_main.f90 for analytical field
+**File**: `src/simple_main.f90`
+
+- [ ] Check if analytical case needs special handling in `init_field_can`
+- [ ] Ensure analytical field loaded when `field_input` contains "analytical"
+- [ ] Verify `init_magfie(ANALYTICAL)` called correctly
+
+**Test**: Run with analytical field
+
+### 9. Test: Circular tokamak without ripple
+**File**: `test/tests/test_field_analytical.f90`
+
+- [ ] Create test similar to `test_field_geoflux.f90`:
+  ```fortran
+  program test_field_analytical
+    use field_analytical_gs
+    use params, only: tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+                      tok_A_param, tok_B0, tok_Nripple
+
+    ! Set circular parameters
+    tok_R0 = 6.2d0
+    tok_epsilon = 0.32d0
+    tok_kappa = 1.0d0
+    tok_delta = 0.0d0
+    tok_A_param = -0.142d0
+    tok_B0 = 5.3d0
+    tok_Nripple = 0  ! No ripple
+
+    ! Create field
+    ! Evaluate at test points
+    ! Check B field values are reasonable
+    ! Check flux surfaces are nested
+
+    print *, 'Analytical field test PASSED'
+  end program
+  ```
+
+- [ ] Add to `test/tests/CMakeLists.txt`
+- [ ] Run: `ctest -R test_field_analytical`
+
+**Test**: Must pass, <1s runtime
+
+### 10. Test: 9-coil ripple
+**File**: `test/tests/test_field_analytical_ripple.f90`
+
+- [ ] Same as test 9 but with:
+  ```fortran
+  tok_Nripple = 9
+  tok_delta0 = 0.10d0
+  ```
+
+- [ ] Verify ripple pattern has 9-fold symmetry
+- [ ] Check peak-to-peak variation ~12-13%
+- [ ] Scan toroidal angle, check periodicity
+
+**Test**: Must pass
+
+### 11. Test: Meiss coordinates on analytical GS
+**File**: `test/tests/test_field_can_meiss_analytical.f90`
+
+Follow `test_field_can_meiss_vmec.f90` / `test_field_can_meiss_eqdsk.f90` pattern:
+
+- [ ] Initialize analytical field
+- [ ] Initialize Meiss coordinates via `init_field_can(MEISS, field)`
+- [ ] Evaluate at test points
+- [ ] Check invariants:
+  - Energy conservation: `H = 0.5*vpar^2 + mu*Bmod`
+  - Orthogonality: `dot_product(hcov, dhth) ≈ 0`
+- [ ] Compare with reference values (tolerance 1e-10)
+
+**Test**: Must pass
+
+### 12. Example: Circular tokamak orbit integration
+**Directory**: `examples/tokamak/`
+
+- [ ] Create `simple.in` with:
+  ```
+  &config
+    field_input = 'analytical'
+    tokamak_input = 'tokamak.in'
+    isw_field_type = 3  ! Meiss
+    nper = 100
+    ntimstep = 1000
+    ...
+  /
+  ```
+
+- [ ] Create `tokamak.in` (circular, no ripple)
+- [ ] Create `Makefile` with targets: `all`, `run`, `clean`
+- [ ] Run and verify orbits look reasonable
+
+**Test**: Example runs to completion
+
+### 13. Example: 9-coil ripple orbit integration
+**Directory**: `examples/tokamak_ripple/`
+
+- [ ] Same as example 12 but with ripple enabled
+- [ ] Visualize orbits showing ripple perturbation effects
+- [ ] Document expected behavior
+
+**Test**: Example runs, ripple visible in orbit traces
+
+### 14. Documentation
+**Files**: `README.md`, `examples/tokamak/README.md`
+
+- [ ] Update main README with analytical field option
+- [ ] Document tokamak.in format and parameters
+- [ ] Add usage examples
+- [ ] Explain coordinate system conventions
+- [ ] Note compatibility with Meiss/Albert canonical coordinates
+
+**Test**: Documentation is clear and complete
+
+## Implementation Order
+
+Execute tasks 1-14 sequentially. After each task:
+1. Commit changes with clear message
+2. Run relevant tests
+3. Verify no regressions
+
+## Key Dependencies
+
+- libneo must have analytical_tokamak_field with field_t interface ✓ (PR #149)
+- SIMPLE must have working Meiss coordinates on GEOFLUX (current TODO.md context suggests this exists)
+- Coordinate system interface must support analytical equilibrium (may need libneo extension)
+
+## Success Criteria
+
+- [ ] All unit tests pass (`ctest --output-on-failure`)
+- [ ] Analytical field works with Meiss canonical coordinates
+- [ ] Ripple perturbation validated against libneo tests
+- [ ] Examples run and produce physical results
+- [ ] Documentation complete
+
+## Notes
+
+- Analytical field serves BOTH as reference (flux surfaces) AND evaluation (B field)
+- Coordinate mapping must be consistent with VMEC/GEOFLUX conventions
+- Focus on Meiss coordinates (MEISS=3) for canonical transforms
+- Ripple is optional: Nripple=0 gives axisymmetric equilibrium
