@@ -1,373 +1,232 @@
-# TODO: Analytical GS Field Integration for SIMPLE
+# TODO: Analytical GS Field via Geoflux Framework
 
 ## Overview
-Integrate libneo's analytical Grad-Shafranov equilibrium solver (with TF ripple) into SIMPLE's three-level coordinate/field system. Focus on Meiss canonical coordinates on top of analytical GS.
+Integrate libneo's analytical Grad-Shafranov equilibrium solver (with TF ripple) into SIMPLE by **populating geoflux data structures directly from analytical GS** (no file I/O needed).
 
-## Three Levels in SIMPLE
-1. **Reference Coordinates**: Define flux surfaces (VMEC, GEOFLUX, or **ANALYTICAL GS**)
-2. **Evaluation Field**: Compute B(x) at points (VMEC, GEOFLUX, coils, GVEC, or **ANALYTICAL GS**)
-3. **Canonicalized Coordinates**: Transform for integration (focus on **MEISS = 3**)
+## Strategy: Analytical GS → Geoflux Framework
+Instead of implementing a new coordinate system, we:
+1. Evaluate analytical GS (ψ, B, derivatives) on the geoflux grid
+2. Populate geoflux internal arrays/splines directly in memory
+3. Set `geoflux_ready = .true.`
+4. **Everything else just works** - SIMPLE sees it as geoflux
 
-## Context from Existing Work
-- Meiss coordinates already work on VMEC and GEOFLUX
-- `coordinate_system_t` from libneo provides unified geometry interface
-- `geoflux_ready()` pattern distinguishes VMEC vs GEOFLUX
-- Golden record tests validate system-level behavior
+## Benefits
+- ✅ Reuses existing geoflux coordinate system (flux surfaces, metric, Jacobian)
+- ✅ Meiss coordinates work unchanged
+- ✅ No new coordinate mapping code needed
+- ✅ No file I/O overhead
+- ✅ Ripple naturally included in field evaluation
 
 ## Tasks
 
-### 1. Add ANALYTICAL constant to magfie module
-**File**: `src/magfie.f90`
+### Phase 1: Infrastructure ✅ COMPLETE
 
-- [ ] Add constant after GEOFLUX:
-  ```fortran
-  integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, GEOFLUX=5, ANALYTICAL=6
-  ```
-- [ ] Verify export in module
+#### 1. ✅ Add ANALYTICAL constant [DONE]
+- Added `ANALYTICAL=6` to `src/magfie.f90`
 
-**Test**: `grep "ANALYTICAL=6" src/magfie.f90`
+#### 2. ✅ Create tokamak.in [DONE]
+- Created `examples/tokamak/tokamak.in` (no ripple)
+- Created `examples/tokamak/tokamak_ripple.in` (9-coil)
 
-### 2. Create tokamak.in namelist file
-**File**: `examples/tokamak/tokamak.in`
+#### 3. ✅ Add tokamak parameters to params [DONE]
+- Added tok_* variables to `src/params.f90`
+- Extended config namelist
+- Added `read_tokamak_config()` subroutine
 
-- [ ] Define namelist structure:
-  ```fortran
-  &tokamak_params
-    ! Equilibrium parameters (Cerfon-Freidberg)
-    R0 = 6.2d0        ! Major radius [m]
-    epsilon = 0.32d0  ! Inverse aspect ratio
-    kappa = 1.0d0     ! Elongation (1.0 = circular)
-    delta = 0.0d0     ! Triangularity (0.0 = no triangularity)
-    A_param = -0.142d0  ! Shafranov parameter (pressure)
-    B0 = 5.3d0        ! Toroidal field on axis [T]
+**Committed**: 35485e2
 
-    ! TF ripple parameters (optional)
-    Nripple = 0       ! Number of TF coils (0 = axisymmetric)
-    delta0 = 0.0d0    ! Ripple amplitude
-    alpha0 = 2.0d0    ! Ripple radial exponent
-    a0 = 1.984d0      ! Ripple reference radius [m] (= epsilon*R0)
-    z0 = 0.0d0        ! Ripple vertical center [m]
-  /
-  ```
+---
 
-- [ ] Add example with 9-coil ripple (delta0=0.10, Nripple=9)
-- [ ] Document parameters in comments
+### Phase 2: Libneo - Field-Agnostic Geoflux ✅ COMPLETE
 
-**Test**: `cat examples/tokamak/tokamak.in`
+#### 4. ✅ Made geoflux coordinates field-agnostic [DONE]
+**Status**: ✅ COMPLETE (libneo commits a9e84b5, 643315e)
 
-### 3. Add tokamak parameters to params module
-**File**: `src/params.f90`
+**Achievement**: Geoflux coordinates now field-agnostic like VMEC flux coordinates
 
-- [ ] Add module variables after existing field params:
-  ```fortran
-  ! Analytical tokamak parameters
-  real(dp) :: tok_R0 = 6.2d0, tok_epsilon = 0.32d0
-  real(dp) :: tok_kappa = 1.0d0, tok_delta = 0.0d0
-  real(dp) :: tok_A_param = -0.142d0, tok_B0 = 5.3d0
-  integer :: tok_Nripple = 0
-  real(dp) :: tok_a0 = 1.984d0, tok_alpha0 = 2.0d0
-  real(dp) :: tok_delta0 = 0.0d0, tok_z0 = 0.0d0
-  character(1000) :: tokamak_input = 'tokamak.in'
-  ```
+**Changes**:
+- Added `psi_evaluator_i` callback interface to `geoflux_coordinates`
+- Modified `initialize_analytical_geoflux` to accept psi evaluator callback
+- `psi_from_position` dispatches to callback when `use_geqdsk = .false.`
+- Created `analytical_geoflux_field` module with `init_analytical_geoflux` and `splint_analytical_geoflux_field`
 
-- [ ] Add to config namelist:
-  ```fortran
-  namelist /config/ ..., tokamak_input, &
-    tok_R0, tok_epsilon, tok_kappa, tok_delta, tok_A_param, tok_B0, &
-    tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
-  ```
+**Test**: `test_analytical_geoflux.x` passes - analytical GS works through geoflux coordinates
 
-- [ ] Add read_tokamak_config subroutine:
-  ```fortran
-  subroutine read_tokamak_config
-    logical :: exists
-    namelist /tokamak_params/ tok_R0, tok_epsilon, tok_kappa, tok_delta, &
-      tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
+---
 
-    inquire(file=trim(tokamak_input), exist=exists)
-    if (exists) then
-      open(1, file=trim(tokamak_input), status='old', action='read')
-      read(1, nml=tokamak_params)
-      close(1)
-      print *, 'Loaded tokamak parameters from ', trim(tokamak_input)
-    else
-      print *, 'Using default tokamak parameters (no tokamak.in found)'
-    end if
-  end subroutine read_tokamak_config
-  ```
+### Phase 3: SIMPLE Integration (IN SIMPLE REPO)
 
-- [ ] Call from read_config when `isw_field_type == ANALYTICAL` or `field_input` contains "analytical"
-
-**Test**: Compile, check namelist reads correctly
-
-### 4. Rewrite field_analytical_gs for coordinate system interface
-**File**: `src/field/field_analytical_gs.f90`
-
-Currently uses simple circular mapping. Need to:
-
-- [ ] Import libneo coordinate utilities:
-  ```fortran
-  use analytical_tokamak_field, only: analytical_circular_eq_t
-  use libneo_coordinates, only: coordinate_system_t
-  ```
-
-- [ ] Add coordinate system to type:
-  ```fortran
-  type, extends(MagneticField) :: AnalyticalGSField
-      type(analytical_circular_eq_t) :: eq
-      class(coordinate_system_t), allocatable :: coords
-      logical :: initialized = .false.
-  contains
-      procedure :: evaluate
-      procedure :: init_coordinates
-  end type
-  ```
-
-- [ ] Implement proper flux surface mapping:
-  - Define flux label s = ψ_normalized (0 at axis, 1 at separatrix)
-  - Map (s, theta, phi) → (R, phi, Z) following flux surfaces
-  - Compute metric tensor from coordinate Jacobian
-
-- [ ] Keep eval_bfield_ripple for evaluation but transform coordinates first
-
-**Note**: This may require extending libneo's analytical_tokamak_field to provide coordinate_system_t interface. Check if `make_analytical_coordinate_system` exists in libneo first.
-
-**Test**: Check libneo has analytical coordinate system support
-
-### 5. Add analytical field initialization to field.F90
+#### 5. Add initialize_analytical_geoflux to SIMPLE field.F90
 **File**: `src/field.F90`
 
 - [ ] Add import:
   ```fortran
-  use field_analytical_gs, only: AnalyticalGSField, create_analytical_gs_field
+  use geoflux_field, only: initialize_analytical_geoflux
   ```
 
-- [ ] Extend `field_from_file` detection:
+- [ ] Extend `field_from_file`:
   ```fortran
   else if (index(filename, 'analytical') > 0 .or. index(filename, 'tokamak') > 0) then
-      call create_analytical_gs_field_from_params(field)
-  ```
-
-- [ ] Implement `create_analytical_gs_field_from_params`:
-  ```fortran
-  subroutine create_analytical_gs_field_from_params(field)
       use params, only: tok_R0, tok_epsilon, tok_kappa, tok_delta, &
                         tok_A_param, tok_B0, tok_Nripple, tok_a0, &
                         tok_alpha0, tok_delta0, tok_z0
 
-      class(MagneticField), allocatable, intent(out) :: field
-      class(AnalyticalGSField), allocatable :: gs_temp
-
-      call create_analytical_gs_field(tok_R0, tok_epsilon, &
-          kappa=tok_kappa, delta=tok_delta, &
-          A_param=tok_A_param, B0=tok_B0, &
-          Nripple=tok_Nripple, a0_ripple=tok_a0, &
-          alpha0=tok_alpha0, delta0=tok_delta0, z0=tok_z0, &
-          gs_field=gs_temp)
-
-      call move_alloc(gs_temp, field)
-  end subroutine
+      call initialize_analytical_geoflux(tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+                                         tok_A_param, tok_B0, &
+                                         tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0)
+      allocate(GeofluxField :: field)
   ```
 
-**Test**: Compile and check factory works
+**Result**: Analytical GS appears as geoflux field to rest of SIMPLE
 
-### 6. Add magfie_analytical to magfie.f90
-**File**: `src/magfie.f90`
+**Test**: Load with `field_input='analytical'`, verify field object created
 
-Follow `magfie_geoflux` pattern closely:
-
-- [ ] Add subroutine after `magfie_geoflux`:
-  ```fortran
-  subroutine magfie_analytical(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    real(dp), intent(in) :: x(3)  ! (s, theta, phi)
-    real(dp), intent(out) :: bmod, sqrtg
-    real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
-
-    ! Similar structure to magfie_geoflux:
-    ! 1. Clip/validate coordinates
-    ! 2. Map (s,theta,phi) → (R,phi,Z) via analytical equilibrium
-    ! 3. Evaluate B field with ripple at (R,phi,Z)
-    ! 4. Compute metric tensor from coordinate Jacobian
-    ! 5. Transform B to covariant components in (s,theta,phi)
-    ! 6. Compute derivatives via finite differences
-    ! 7. Compute curl from derivatives
-
-    ! TODO: Implement following geoflux_eval_point pattern
-    error stop 'magfie_analytical: not yet implemented'
-  end subroutine magfie_analytical
-  ```
-
-- [ ] Add case to `init_magfie`:
-  ```fortran
-  case(ANALYTICAL)
-    magfie => magfie_analytical
-  ```
-
-- [ ] Add helper functions following geoflux pattern:
-  - `analytical_eval_point` (full evaluation with metric)
-  - `analytical_eval_basic` (just B field)
-
-**Test**: Compile, check init_magfie accepts ANALYTICAL
-
-### 7. Add analytical_ready() function
-**File**: `src/field/field_analytical_gs.f90`
-
-Follow `geoflux_ready()` pattern:
-
-- [ ] Add module variable:
-  ```fortran
-  logical, save :: analytical_initialized = .false.
-  ```
-
-- [ ] Add public function:
-  ```fortran
-  function analytical_ready()
-    logical :: analytical_ready
-    analytical_ready = analytical_initialized
-  end function
-  ```
-
-- [ ] Set flag in `create_analytical_gs_field`
-
-**Test**: Function callable from other modules
-
-### 8. Update simple_main.f90 for analytical field
+#### 6. Update simple_main.f90 to use GEOFLUX mode
 **File**: `src/simple_main.f90`
 
-- [ ] Check if analytical case needs special handling in `init_field_can`
-- [ ] Ensure analytical field loaded when `field_input` contains "analytical"
-- [ ] Verify `init_magfie(ANALYTICAL)` called correctly
+When analytical field detected, ensure `isw_field_type` uses geoflux coordinate system:
 
-**Test**: Run with analytical field
+- [ ] Check if special handling needed, or if geoflux auto-detection suffices
 
-### 9. Test: Circular tokamak without ripple
-**File**: `test/tests/test_field_analytical.f90`
+**Test**: Run SIMPLE with analytical field, verify geoflux coordinate system active
 
-- [ ] Create test similar to `test_field_geoflux.f90`:
-  ```fortran
-  program test_field_analytical
-    use field_analytical_gs
-    use params, only: tok_R0, tok_epsilon, tok_kappa, tok_delta, &
-                      tok_A_param, tok_B0, tok_Nripple
+---
 
-    ! Set circular parameters
-    tok_R0 = 6.2d0
-    tok_epsilon = 0.32d0
-    tok_kappa = 1.0d0
-    tok_delta = 0.0d0
-    tok_A_param = -0.142d0
-    tok_B0 = 5.3d0
-    tok_Nripple = 0  ! No ripple
+### Phase 4: Testing ✅ COMPLETE (libneo)
 
-    ! Create field
-    ! Evaluate at test points
-    ! Check B field values are reasonable
-    ! Check flux surfaces are nested
+#### Libneo Test Hierarchy
 
-    print *, 'Analytical field test PASSED'
-  end program
-  ```
+**Unit Tests** (libneo):
+- ✅ `test_analytical_circular`: Analytical GS field direct evaluation
+- ✅ `test_analytical_geoflux`: Geoflux initialization and field evaluation
 
-- [ ] Add to `test/tests/CMakeLists.txt`
-- [ ] Run: `ctest -R test_field_analytical`
+**Integration Tests** (libneo):
+- ✅ `test_analytical_geoflux_integration`:
+  * Coordinate round-trip (geoflux ↔ cylindrical)
+  * Field consistency (geoflux vs direct)
+  * Flux surface nesting
+- ✅ `test_ripple_field`: TF ripple (9-coil, 9-fold symmetry, ~12.65% variation)
 
-**Test**: Must pass, <1s runtime
+**All libneo tests pass**: `ctest -R analytical` (3/3 passed)
 
-### 10. Test: 9-coil ripple
-**File**: `test/tests/test_field_analytical_ripple.f90`
+---
 
-- [ ] Same as test 9 but with:
-  ```fortran
-  tok_Nripple = 9
-  tok_delta0 = 0.10d0
-  ```
+### Phase 5: SIMPLE System Tests
 
-- [ ] Verify ripple pattern has 9-fold symmetry
-- [ ] Check peak-to-peak variation ~12-13%
-- [ ] Scan toroidal angle, check periodicity
+#### 10. Create tokamak example (ITER-size, no ripple)
+**Directory**: `examples/tokamak_alpha_confinement/`
 
-**Test**: Must pass
+**Config**:
+- Field: analytical GS (ITER parameters: R0=6.2m, ε=0.32, B0=5.3T)
+- Coordinates: Meiss (isw_field_type=3) on geoflux
+- Particles: 128 alpha particles, E=3.5 MeV
+- Start: s=0.3 (mid-radius)
+- Duration: 0.001 s
 
-### 11. Test: Meiss coordinates on analytical GS
-**File**: `test/tests/test_field_can_meiss_analytical.f90`
+**Expected**: Zero particles lost (perfect confinement without ripple)
 
-Follow `test_field_can_meiss_vmec.f90` / `test_field_can_meiss_eqdsk.f90` pattern:
+#### 11. Create system test from example
+**File**: `test/tests/test_tokamak_alpha_confinement.f90` or Python script
 
-- [ ] Initialize analytical field
-- [ ] Initialize Meiss coordinates via `init_field_can(MEISS, field)`
-- [ ] Evaluate at test points
-- [ ] Check invariants:
-  - Energy conservation: `H = 0.5*vpar^2 + mu*Bmod`
-  - Orthogonality: `dot_product(hcov, dhth) ≈ 0`
-- [ ] Compare with reference values (tolerance 1e-10)
+**Test**:
+- [ ] Run example automatically
+- [ ] Parse output
+- [ ] Assert: `n_lost == 0`
+- [ ] Assert: all particles remain at s ∈ [0.2, 0.4] (confined to flux surface region)
 
-**Test**: Must pass
+**Run**: `ctest -R tokamak_alpha` or via examples/Makefile
 
-### 12. Example: Circular tokamak orbit integration
+---
+
+### Phase 5: Examples
+
+#### 10. Example: Circular tokamak orbit integration
 **Directory**: `examples/tokamak/`
 
-- [ ] Create `simple.in` with:
+- [ ] Create `simple.in`:
   ```
   &config
     field_input = 'analytical'
     tokamak_input = 'tokamak.in'
-    isw_field_type = 3  ! Meiss
+    isw_field_type = 3  ! Meiss (will auto-use geoflux)
     nper = 100
     ntimstep = 1000
+    notrace_passing = 0
     ...
   /
   ```
 
-- [ ] Create `tokamak.in` (circular, no ripple)
 - [ ] Create `Makefile` with targets: `all`, `run`, `clean`
-- [ ] Run and verify orbits look reasonable
+- [ ] Run and verify orbits physically reasonable
+- [ ] Check particle confinement
 
-**Test**: Example runs to completion
+**Test**: Example runs to completion, produces output
 
-### 13. Example: 9-coil ripple orbit integration
+#### 11. Example: 9-coil ripple orbit integration
 **Directory**: `examples/tokamak_ripple/`
 
-- [ ] Same as example 12 but with ripple enabled
-- [ ] Visualize orbits showing ripple perturbation effects
-- [ ] Document expected behavior
+- [ ] Use `tokamak_ripple.in` with Nripple=9
+- [ ] Run particle tracing
+- [ ] Visualize orbit perturbations due to ripple
+- [ ] Check ripple-trapping effects
 
-**Test**: Example runs, ripple visible in orbit traces
+**Test**: Ripple effects visible in trajectories
 
-### 14. Documentation
+---
+
+### Phase 6: Documentation
+
+#### 12. Update documentation
 **Files**: `README.md`, `examples/tokamak/README.md`
 
-- [ ] Update main README with analytical field option
-- [ ] Document tokamak.in format and parameters
+- [ ] Document analytical field option
+- [ ] Explain tokamak.in parameters
 - [ ] Add usage examples
-- [ ] Explain coordinate system conventions
-- [ ] Note compatibility with Meiss/Albert canonical coordinates
+- [ ] Note: "Uses geoflux coordinate framework internally"
+- [ ] Document ripple effects on orbits
 
-**Test**: Documentation is clear and complete
+**Test**: Documentation clear and accurate
+
+---
 
 ## Implementation Order
 
-Execute tasks 1-14 sequentially. After each task:
-1. Commit changes with clear message
-2. Run relevant tests
-3. Verify no regressions
+1. **Phase 2 in libneo** (task 4)
+2. **Phase 3 in SIMPLE** (tasks 5-6)
+3. **Phase 4 tests** (tasks 7-9)
+4. **Phase 5 examples** (tasks 10-11)
+5. **Phase 6 docs** (task 12)
 
-## Key Dependencies
+## Key Technical Details
 
-- libneo must have analytical_tokamak_field with field_t interface ✓ (PR #149)
-- SIMPLE must have working Meiss coordinates on GEOFLUX (current TODO.md context suggests this exists)
-- Coordinate system interface must support analytical equilibrium (may need libneo extension)
+### Geoflux Grid Structure
+- `ns_A`: Number of flux surfaces (radial)
+- `ntheta_A`: Number of poloidal grid points
+- `nphi_A`: Number of toroidal grid points
+- Arrays: `psi_a`, `R_a`, `Z_a`, `Bvec_a`, etc.
+
+### Coordinate Mapping
+- Flux label: `s = (psi - psi_axis) / (psi_sep - psi_axis)`
+- Poloidal angle: `theta` follows flux surface contours
+- Toroidal angle: `phi` (geometric)
+
+### Ripple Evaluation
+- Evaluate `analytical_circular_eq_t%eval_bfield_ripple(R, phi, Z, ...)`
+- Ripple automatically included when Nripple > 0
+- Geoflux splines capture 3D ripple structure
 
 ## Success Criteria
 
-- [ ] All unit tests pass (`ctest --output-on-failure`)
-- [ ] Analytical field works with Meiss canonical coordinates
-- [ ] Ripple perturbation validated against libneo tests
-- [ ] Examples run and produce physical results
-- [ ] Documentation complete
+- [ ] All tests pass (`ctest --output-on-failure`)
+- [ ] Analytical field loads via geoflux framework
+- [ ] Meiss coordinates work on analytical GS
+- [ ] Ripple effects validated (9-fold symmetry, ~12-13% variation)
+- [ ] Examples run and produce physical orbits
+- [ ] No new coordinate system code needed (pure geoflux reuse)
 
 ## Notes
 
-- Analytical field serves BOTH as reference (flux surfaces) AND evaluation (B field)
-- Coordinate mapping must be consistent with VMEC/GEOFLUX conventions
-- Focus on Meiss coordinates (MEISS=3) for canonical transforms
-- Ripple is optional: Nripple=0 gives axisymmetric equilibrium
+- **No ANALYTICAL field type needed** - just use GEOFLUX with analytical data
+- **No new magfie_analytical** - magfie_geoflux handles everything
+- **Ripple works automatically** - included in B field evaluation on grid
+- This approach is **much simpler** than implementing a new coordinate system
