@@ -21,53 +21,67 @@ contains
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     !> Evaluate analytical GS field
     !>
-    !> Note: This field uses cylindrical coordinates (R, phi, Z) instead of
-    !> flux coordinates. Input x is interpreted as:
-    !>   x(1) = (R - R0)/a  (normalized radial distance from axis)
-    !>   x(2) = theta       (poloidal angle, unused for axisymmetric field)
+    !> Note: The equilibrium is defined in cylindrical coordinates (R, phi, Z),
+    !> but the SIMPLE interface supplies flux-like coordinates. Input x is
+    !> interpreted as:
+    !>   x(1) = rho         (normalized minor radius r/a)
+    !>   x(2) = theta       (poloidal angle)
     !>   x(3) = phi         (toroidal angle)
     !>
-    !> Output is magnetic field in cylindrical coordinates
+    !> Output provides covariant components of the unit magnetic field vector
+    !> in the (rho, theta, phi) coordinate basis used by SIMPLE.
     class(AnalyticalGSField), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
     real(dp), intent(out) :: Bmod
     real(dp), intent(out), optional :: sqgBctr(3)
 
-    real(dp) :: R, phi, Z
+    real(dp) :: rho, theta, phi
+    real(dp) :: cost, sint
+    real(dp) :: R, Z
     real(dp) :: B_R, B_Z, B_phi, B_mod_local
-    real(dp) :: theta
+    real(dp) :: Bcov_rho, Bcov_theta, Bcov_phi
 
     if (.not. self%initialized) then
         error stop 'AnalyticalGSField: field not initialized'
     end if
 
     ! Convert from normalized flux-like coordinates to cylindrical
-    ! x(1) is normalized radial coordinate: rho = (R - R0)/a
+    ! x(1) is normalized minor radius rho = r/a
     ! x(2) is poloidal angle theta
     ! x(3) is toroidal angle phi
 
+    rho = x(1)
     theta = x(2)
     phi = x(3)
+    cost = cos(theta)
+    sint = sin(theta)
 
     ! For circular tokamak: R = R0 + rho*a*cos(theta), Z = rho*a*sin(theta)
-    R = self%R0 + x(1) * self%a * cos(theta)
-    Z = x(1) * self%a * sin(theta)
+    R = self%R0 + rho * self%a * cost
+    Z = rho * self%a * sint
 
     ! Evaluate field in cylindrical coordinates
     call compute_analytical_field_cylindrical(self%eq, R, phi, Z, &
                                               B_R, B_Z, B_phi, B_mod_local)
 
-    ! For now, return field components in cylindrical basis
-    ! (transformation to flux coordinates would require knowing the actual flux surfaces)
-    Acov = 0.0_dp  ! Vector potential not implemented
-
-    ! Magnetic field unit vector in cylindrical coordinates
-    hcov(1) = B_R
-    hcov(2) = B_phi
-    hcov(3) = B_Z
+    ! Vector potential is not yet provided for this field
+    Acov = 0.0_dp
 
     Bmod = B_mod_local
+    if (Bmod <= 0.0_dp) then
+        error stop 'AnalyticalGSField: |B| must be positive'
+    end if
+
+    ! Convert cylindrical components to covariant basis vectors g_rho, g_theta, g_phi
+    Bcov_rho = self%a * (cost * B_R + sint * B_Z)
+    Bcov_theta = rho * self%a * (-sint * B_R + cost * B_Z)
+    Bcov_phi = R * B_phi
+
+    ! Normalize to obtain covariant components of unit vector along B
+    hcov(1) = Bcov_rho / Bmod
+    hcov(2) = Bcov_theta / Bmod
+    hcov(3) = Bcov_phi / Bmod
 
     if (present(sqgBctr)) then
         error stop 'sqgBctr not implemented for AnalyticalGSField'
