@@ -193,12 +193,6 @@ subroutine compute_transformation()
 !> Compute transformation data via integration (expensive operation)
     integer :: i_ctr
 
-    if (geoflux_is_analytical()) then
-        lam_phi = 0.0_dp
-        chi_gauge = 0.0_dp
-        return
-    end if
-
     i_ctr = 0
 
     !$omp parallel private(i_ctr)
