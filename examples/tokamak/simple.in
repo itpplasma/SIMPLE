@@ -4,7 +4,7 @@
 ! Analytical GS field with 9-coil, 10% TF ripple
 field_input    = 'tokamak_ripple'
 tokamak_input  = 'tokamak_ripple.in'
-isw_field_type = 3                ! Meiss canonical coordinates on geoflux
+isw_field_type = 3                ! Meiss canonical coordinates on geoflux (required)
 
 ! Particle ensemble (alpha-like guiding centers)
 ntestpart   = 1024

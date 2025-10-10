@@ -16,6 +16,7 @@ module simple_main
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
     ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
     field_input, isw_field_type, reuse_batch
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 
   implicit none
 
@@ -364,10 +365,19 @@ module simple_main
     num_lost = 0
     inverse_times_lost_sum = 0.0d0
     do i=1,ntestpart
-      write(1,*) i, times_lost(i), trap_par(i), zstart(1,i), perp_inv(i), zend(:,i)
+      real(dp) :: time_val, trap_val, perp_val, zend_row(5)
+
+      time_val = sanitize_scalar(times_lost(i))
+      trap_val = sanitize_scalar(trap_par(i))
+      perp_val = sanitize_scalar(perp_inv(i))
+      zend_row = sanitize_vector(zend(:,i))
+
+      write(1,*) i, time_val, trap_val, zstart(1,i), perp_val, zend_row
       if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
         num_lost = num_lost + 1
-        inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
+        if (times_lost(i) > 0.0_dp) then
+          inverse_times_lost_sum = inverse_times_lost_sum + 1.0d0/times_lost(i)
+        end if
       end if
     enddo
     close(1)
@@ -393,5 +403,30 @@ module simple_main
     endif
 
   end subroutine write_output
+
+  pure function sanitize_scalar(value) result(clean)
+    real(dp), intent(in) :: value
+    real(dp) :: clean
+
+    if (ieee_is_finite(value)) then
+      clean = value
+    else
+      clean = 0.0_dp
+    end if
+  end function sanitize_scalar
+
+  pure function sanitize_vector(vec_in) result(vec_out)
+    real(dp), intent(in) :: vec_in(:)
+    real(dp) :: vec_out(size(vec_in))
+    integer :: j
+
+    do j = 1, size(vec_in)
+      if (ieee_is_finite(vec_in(j))) then
+        vec_out(j) = vec_in(j)
+      else
+        vec_out(j) = 0.0_dp
+      end if
+    end do
+  end function sanitize_vector
 
 end module simple_main

@@ -117,6 +117,10 @@ contains
     ! Load tokamak parameters if analytical field requested
     if (index(field_input, 'analytical') > 0 .or. index(field_input, 'tokamak') > 0) then
       call read_tokamak_config()
+      if (.not. (isw_field_type == 3)) then
+        print *, 'Analytical tokamak configurations currently require Meiss canonical field (isw_field_type=3)'
+        error stop 'Invalid field type for analytical tokamak run'
+      end if
     end if
   end subroutine read_config
 

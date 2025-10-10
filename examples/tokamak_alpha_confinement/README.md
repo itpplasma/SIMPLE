@@ -26,7 +26,8 @@ This example tests alpha particle confinement in an ITER-size analytical tokamak
 
 **Coordinate system**:
 - Field: Analytical GS via field-agnostic geoflux
-- Orbit coordinates: Meiss canonical (isw_field_type=3)
+- Orbit coordinates: Meiss canonical (isw_field_type=3). Other field evaluators
+  are not yet supported for analytical tokamak runs.
 
 ## Expected Result
 
