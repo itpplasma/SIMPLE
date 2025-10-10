@@ -5,9 +5,10 @@ use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use util, only: twopi
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use field_geoflux, only: geoflux_ready
+use field_geoflux, only: geoflux_ready, geoflux_is_analytical
 use geoflux_coordinates, only: geoflux_to_cyl
 use geoflux_field, only: splint_geoflux_field
+use analytical_geoflux_field, only: splint_analytical_geoflux_field
 
 implicit none
 
@@ -370,7 +371,12 @@ end subroutine init_magfie
     s_geo = r_clip * r_clip
 
     call geoflux_to_cyl((/ s_geo, theta, phi /), cyl_tmp, jac_tmp)
-    call splint_geoflux_field(s_geo, theta, phi, acov_tmp, hcov_tmp, bmod, sqg_tmp)
+    if (geoflux_is_analytical()) then
+        call splint_analytical_geoflux_field(s_geo, theta, phi, acov_tmp, hcov_tmp, &
+            bmod, sqg_tmp)
+    else
+        call splint_geoflux_field(s_geo, theta, phi, acov_tmp, hcov_tmp, bmod, sqg_tmp)
+    end if
 
     ds_dr = max(2.0_dp * max(r_clip, 0.0_dp), 1.0d-8)
     hcov(1) = hcov_tmp(1) * ds_dr

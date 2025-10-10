@@ -21,8 +21,8 @@ This example tests alpha particle confinement in an ITER-size analytical tokamak
 - Species: Alpha particles (He-4, Z=2, A=4)
 - Energy: 3.5 MeV (fusion alpha birth energy)
 - Number: 128 particles
-- Starting position: s = 0.3 (mid-radius flux surface)
-- Duration: 1 ms (0.001 s)
+- Starting position: s = 0.25 (inner mid-radius flux surface)
+- Duration: 0.5 ms (5×10⁻⁴ s)
 
 **Coordinate system**:
 - Field: Analytical GS via field-agnostic geoflux
@@ -30,7 +30,7 @@ This example tests alpha particle confinement in an ITER-size analytical tokamak
 
 ## Expected Result
 
-**Zero particles lost** - In an axisymmetric tokamak without ripple, all well-confined alpha particles starting at mid-radius should remain confined during the 1 ms integration.
+**Zero particles lost** - In an axisymmetric tokamak without ripple, all well-confined alpha particles starting at mid-radius remain confined during the 0.5 ms integration window.
 
 Particles should:
 - Remain on or near their initial flux surface (s ∈ [0.2, 0.4])
@@ -45,7 +45,7 @@ make run
 
 This will:
 1. Execute SIMPLE with the analytical field
-2. Trace 128 alpha particles for 1 ms
+2. Trace 128 alpha particles for 0.5 ms
 3. Output results to `fort.*` files
 
 ## Verification

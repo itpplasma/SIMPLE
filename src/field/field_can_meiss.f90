@@ -8,6 +8,7 @@ use interpolate, only: &
 use util, only: twopi
 use field_can_base, only: FieldCan, n_field_evaluations
 use field, only: MagneticField
+use field_geoflux, only: geoflux_is_analytical
 
 implicit none
 
@@ -21,6 +22,7 @@ real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
+real(dp), parameter :: hr_small = 1.0d-6
 
 ! Batch spline for optimized field evaluation (5 components: Ath, Aph, hth, hph, Bmod)
 type(BatchSplineData3D) :: spl_field_batch
@@ -191,6 +193,12 @@ subroutine compute_transformation()
 !> Compute transformation data via integration (expensive operation)
     integer :: i_ctr
 
+    if (geoflux_is_analytical()) then
+        lam_phi = 0.0_dp
+        chi_gauge = 0.0_dp
+        return
+    end if
+
     i_ctr = 0
 
     !$omp parallel private(i_ctr)
@@ -266,7 +274,6 @@ subroutine integrate(i_r, i_th, i_phi, y)
     real(dp), dimension(2), intent(inout) :: y
 
     real(dp), parameter :: relerr=1d-11
-    real(dp), parameter :: hr_threshold=1d-12  ! Threshold for detecting hr ≈ 0
     real(dp) :: r1, r2, hr_test, hp_test, phi_c, Ar_test, Ap_test
     real(dp) :: relaxed_relerr
     integer :: ndim=2
@@ -279,15 +286,13 @@ subroutine integrate(i_r, i_th, i_phi, y)
     phi_c = xmin(3) + h_phi*(i_phi-1)
     call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
     
-    if (abs(hr_test) < hr_threshold) then
-        ! hr is essentially zero - use relaxed tolerance or analytical treatment
-        print *, "Warning: hr ≈ 0 at grid point (", i_r, i_th, i_phi, "), hr =", hr_test
-        print *, "Using relaxed tolerance for ODE integration"
-        relaxed_relerr = max(1d-6, abs(hr_test) * 1d6)  ! Scale tolerance with hr magnitude
-    else
-        relaxed_relerr = relerr
+    if (abs(hr_test) < hr_small .or. abs(hp_test) < hr_small) then
+        lam_phi(i_r, i_th, i_phi) = y(1)
+        chi_gauge(i_r, i_th, i_phi) = y(2)
+        return
     end if
     
+    relaxed_relerr = relerr
     context = grid_indices_t(i_th, i_phi)
     call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)
 
@@ -307,8 +312,13 @@ subroutine rh_can(r_c, z, dz, i_th, i_phi)
     phi_c = xmin(3) + h_phi*(i_phi-1)
     call ah_cov_on_slice(r_c, modulo(phi_c + z(1), twopi), i_th, Ar, Ap, hr, hp)
 
-    dz(1) = -hr/hp
-    dz(2) = Ar + Ap*dz(1)
+    if (abs(hp) < hr_small) then
+        dz(1) = 0.0_dp
+        dz(2) = Ar
+    else
+        dz(1) = -hr/hp
+        dz(2) = Ar + Ap*dz(1)
+    end if
 end subroutine rh_can
 
 

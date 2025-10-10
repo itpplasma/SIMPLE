@@ -38,6 +38,7 @@ set(SOURCES
     collis_alphas.f90
     netcdf_orbit_output.f90
     callback.f90
+    tokamak_config.f90
     params.f90
     sorting.f90
     check_orbit_type.f90

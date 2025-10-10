@@ -3,6 +3,7 @@ module field_geoflux
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_base, only: MagneticField
 use geoflux_field, only: spline_geoflux_data, splint_geoflux_field
+use analytical_geoflux_field, only: splint_analytical_geoflux_field
 
 implicit none
 
@@ -15,6 +16,7 @@ character(len=:), allocatable :: cached_geqdsk
 logical :: geoflux_ready = .false.
 integer, parameter :: default_ns_cache = 128
 integer, parameter :: default_ntheta_cache = 256
+logical :: analytical_mode = .false.
 
 contains
 
@@ -40,9 +42,23 @@ subroutine initialize_geoflux_field(geqdsk_file, ns_cache, ntheta_cache)
 
     call spline_geoflux_data(normalized_path, ns_val, ntheta_val)
 
-    cached_geqdsk = normalized_path
-    geoflux_ready = .true.
+    call mark_geoflux_initialized(normalized_path, .false.)
 end subroutine initialize_geoflux_field
+
+
+subroutine mark_geoflux_initialized(cache_key, use_analytical)
+    character(len=*), intent(in), optional :: cache_key
+    logical, intent(in), optional :: use_analytical
+
+    if (present(cache_key)) then
+        cached_geqdsk = trim(adjustl(cache_key))
+    end if
+
+    analytical_mode = .false.
+    if (present(use_analytical)) analytical_mode = use_analytical
+
+    geoflux_ready = .true.
+end subroutine mark_geoflux_initialized
 
 
 subroutine geoflux_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
@@ -67,10 +83,22 @@ subroutine geoflux_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     phi_geo = x(3)
     ds_dr = 2.0_dp * x(1)
 
-    if (present(sqgBctr)) then
-        call splint_geoflux_field(geo_s, theta_geo, phi_geo, Acov_geo, hcov_geo, Bmod, sqgBctr_geo)
+    if (analytical_mode) then
+        if (present(sqgBctr)) then
+            call splint_analytical_geoflux_field(geo_s, theta_geo, phi_geo, &
+                Acov_geo, hcov_geo, Bmod, sqgBctr_geo)
+        else
+            call splint_analytical_geoflux_field(geo_s, theta_geo, phi_geo, &
+                Acov_geo, hcov_geo, Bmod)
+        end if
     else
-        call splint_geoflux_field(geo_s, theta_geo, phi_geo, Acov_geo, hcov_geo, Bmod)
+        if (present(sqgBctr)) then
+            call splint_geoflux_field(geo_s, theta_geo, phi_geo, Acov_geo, hcov_geo, &
+                Bmod, sqgBctr_geo)
+        else
+            call splint_geoflux_field(geo_s, theta_geo, phi_geo, Acov_geo, hcov_geo, &
+                Bmod)
+        end if
     end if
 
     Acov = Acov_geo
@@ -84,5 +112,10 @@ subroutine geoflux_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         sqgBctr(1) = sqgBctr(1) * ds_dr
     end if
 end subroutine geoflux_evaluate
+
+
+logical function geoflux_is_analytical()
+    geoflux_is_analytical = analytical_mode
+end function geoflux_is_analytical
 
 end module field_geoflux

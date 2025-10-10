@@ -9,6 +9,8 @@ module params
     EXPL_IMPL_EULER
   use vmecin_sub, only : stevvo
   use callback, only : output_error, output_orbits_macrostep
+  use tokamak_config_mod, only : tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+    tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
 
   implicit none
 
@@ -82,13 +84,7 @@ module params
 
   character(1000) :: field_input = ''
 
-  ! Analytical tokamak parameters
-  real(dp) :: tok_R0 = 6.2d0, tok_epsilon = 0.32d0
-  real(dp) :: tok_kappa = 1.0d0, tok_delta = 0.0d0
-  real(dp) :: tok_A_param = -0.142d0, tok_B0 = 5.3d0
-  integer :: tok_Nripple = 0
-  real(dp) :: tok_a0 = 1.984d0, tok_alpha0 = 2.0d0
-  real(dp) :: tok_delta0 = 0.0d0, tok_z0 = 0.0d0
+  ! Analytical tokamak parameters provided by tokamak_config_mod
   character(1000) :: tokamak_input = 'tokamak.in'
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &

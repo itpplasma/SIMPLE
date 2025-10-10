@@ -3,7 +3,9 @@ module field
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_base, only: MagneticField
 use field_vmec, only: VmecField
-use field_geoflux, only: GeofluxField, initialize_geoflux_field
+use field_geoflux, only: GeofluxField, initialize_geoflux_field, &
+    mark_geoflux_initialized
+use analytical_geoflux_field, only: init_analytical_geoflux
 use field_coils, only: CoilsField, create_coils_field
 #ifdef GVEC_AVAILABLE
 use field_gvec, only: GvecField, create_gvec_field
@@ -14,19 +16,33 @@ implicit none
 contains
 
 subroutine field_from_file(filename, field)
+    use tokamak_config_mod, only: tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+        tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, &
+        tok_z0
     character(*), intent(in) :: filename
     class(MagneticField), allocatable, intent(out) :: field
 
     character(len(filename)) :: stripped_name
+    character(len(filename)) :: lower_name
+    logical :: use_analytical_field
     class(CoilsField), allocatable :: coils_temp
 #ifdef GVEC_AVAILABLE
     class(GvecField), allocatable :: gvec_temp
 #endif
 
     stripped_name = strip_directory(filename)
+    lower_name = to_lower(filename)
+    use_analytical_field = index(lower_name, 'analytical') > 0 .or. &
+        index(lower_name, 'tokamak') > 0
 
     if (is_geqdsk(filename)) then
         call initialize_geoflux_field(trim(filename))
+        allocate(GeofluxField :: field)
+    else if (use_analytical_field) then
+        call init_analytical_geoflux(tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+            tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, &
+            tok_z0)
+        call mark_geoflux_initialized(trim(lower_name), .true.)
         allocate(GeofluxField :: field)
     else if (endswith(filename, '.nc')) then
         allocate(VmecField :: field)
