@@ -5,6 +5,7 @@ set(SOURCES
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
     field/field_base.f90
+    field/field_analytical_gs.f90
     field/field_coils.f90
     field/field_vmec.f90
     field/field_geoflux.f90
