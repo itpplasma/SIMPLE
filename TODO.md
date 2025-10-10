@@ -111,10 +111,11 @@ When analytical field detected, ensure `isw_field_type` uses geoflux coordinate 
 
 ---
 
-### Phase 5: SIMPLE System Tests
+### Phase 5: SIMPLE System Tests ⏸️ READY (waiting on Phase 3)
 
-#### 10. Create tokamak example (ITER-size, no ripple)
+#### 10. ✅ Create tokamak example (ITER-size, no ripple) [DONE]
 **Directory**: `examples/tokamak_alpha_confinement/`
+**Status**: ✅ COMPLETE (commit b024955)
 
 **Config**:
 - Field: analytical GS (ITER parameters: R0=6.2m, ε=0.32, B0=5.3T)
@@ -125,16 +126,29 @@ When analytical field detected, ensure `isw_field_type` uses geoflux coordinate 
 
 **Expected**: Zero particles lost (perfect confinement without ripple)
 
-#### 11. Create system test from example
-**File**: `test/tests/test_tokamak_alpha_confinement.f90` or Python script
+**Files created**:
+- `simple.in`: SIMPLE configuration
+- `tokamak.in`: ITER parameters
+- `Makefile`: Build/run automation
+- `README.md`: Documentation
+- `.gitignore`: Output files
+
+#### 11. ✅ Create system test from example [DONE]
+**File**: `test/tests/test_tokamak_alpha_confinement.f90`
+**Status**: ✅ COMPLETE (commit 0b9a140)
 
 **Test**:
+- ✅ Scaffold created and integrated with CMake
+- ✅ Marked `WILL_FAIL TRUE` until field integration complete
+- ⏸️ Will activate once field.F90 updated (Phase 3 task 5)
+
+**Checks** (when activated):
 - [ ] Run example automatically
 - [ ] Parse output
 - [ ] Assert: `n_lost == 0`
-- [ ] Assert: all particles remain at s ∈ [0.2, 0.4] (confined to flux surface region)
+- [ ] Assert: all particles remain at s ∈ [0.2, 0.4]
 
-**Run**: `ctest -R tokamak_alpha` or via examples/Makefile
+**Run**: `ctest -R tokamak_alpha` (currently expected to fail)
 
 ---
 
