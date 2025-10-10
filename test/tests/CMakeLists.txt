@@ -251,6 +251,18 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# System test: Alpha confinement in analytical tokamak
+add_executable(test_tokamak_alpha_confinement.x test_tokamak_alpha_confinement.f90)
+target_link_libraries(test_tokamak_alpha_confinement.x simple)
+add_test(NAME test_tokamak_alpha_confinement
+    COMMAND test_tokamak_alpha_confinement.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_alpha_confinement PROPERTIES
+    LABELS "system;integration;analytical"
+    TIMEOUT 120
+    WILL_FAIL TRUE  # Expected to fail until analytical field integration complete
+)
+
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90
