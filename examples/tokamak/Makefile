@@ -8,7 +8,7 @@ all: $(EQDSK)
 
 $(EQDSK):
 	@printf 'Downloading %s...\n' $(EQDSK)
-	@curl -L --fail --show-error --output $(EQDSK).tmp $(URL)
+	@curl -k -L --fail --show-error --output $(EQDSK).tmp $(URL)
 	@mv $(EQDSK).tmp $(EQDSK)
 	@printf 'Saved %s\n' $(EQDSK)
 
