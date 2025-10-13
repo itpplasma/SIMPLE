@@ -195,8 +195,8 @@ contains
             if (ios /= 0) exit
             coords = [s, theta, phi]
             call geoflux_to_cyl(coords, cyl)
-            R(i) = cyl(1) * 1.0d2
-            Z(i) = cyl(3) * 1.0d2
+            R(i) = cyl(1)
+            Z(i) = cyl(3)
         end do
         close(unit)
     end subroutine load_orbit
