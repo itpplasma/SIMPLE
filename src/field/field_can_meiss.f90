@@ -18,11 +18,12 @@ end type grid_indices_t
 
 class(MagneticField), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-3, 0d0, 0d0]  ! Avoid singular behavior at s -> 0
+real(dp) :: xmin(3) = [1d-3, 0d0, 0d0]
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
-real(dp), parameter :: hr_small = 1.0d-3
+real(dp), parameter :: hr_small = 1.0d-6
+real(dp), parameter :: s_min_integration = 1.0d-3
 
 ! Batch spline for optimized field evaluation (5 components: Ath, Aph, hth, hph, Bmod)
 type(BatchSplineData3D) :: spl_field_batch
@@ -273,8 +274,8 @@ subroutine integrate(i_r, i_th, i_phi, y)
     integer :: ndim=2
     type(grid_indices_t) :: context
 
-    r1 = xmin(1) + h_r*(i_r-2)
-    r2 = xmin(1) + h_r*(i_r-1)
+    r1 = max(xmin(1) + h_r*(i_r-2), s_min_integration)
+    r2 = max(xmin(1) + h_r*(i_r-1), s_min_integration)
     
     ! Check if hr is near zero at the starting point to detect problematic cases
     phi_c = xmin(3) + h_phi*(i_phi-1)
