@@ -18,11 +18,11 @@ end type grid_indices_t
 
 class(MagneticField), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
+real(dp) :: xmin(3) = [1d-3, 0d0, 0d0]  ! Avoid singular behavior at s -> 0
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
-real(dp), parameter :: hr_small = 1.0d-6
+real(dp), parameter :: hr_small = 1.0d-3
 
 ! Batch spline for optimized field evaluation (5 components: Ath, Aph, hth, hph, Bmod)
 type(BatchSplineData3D) :: spl_field_batch
@@ -285,7 +285,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
         chi_gauge(i_r, i_th, i_phi) = y(2)
         return
     end if
-    
+
     relaxed_relerr = relerr
     context = grid_indices_t(i_th, i_phi)
     call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)

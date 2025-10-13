@@ -15,7 +15,7 @@ module simple_main
     class_plot, ntcut, iclass, bmod00, xi, idx, bmin, bmax, dphi, &
     zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
     ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
-    field_input, isw_field_type, reuse_batch
+    field_input, isw_field_type, use_analytical_field, reuse_batch
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 
   implicit none
@@ -49,7 +49,7 @@ module simple_main
 
     self%integmode = aintegmode
     if (self%integmode >= 0 .or. isw_field_type >= 2 .or. isw_field_type == 0) then
-      call field_from_file(source_file, field_temp)
+      call field_from_file(source_file, field_temp, use_analytical_field)
       call print_phase_time('Field from file loading completed')
     end if
 
@@ -351,6 +351,8 @@ module simple_main
 
     integer :: i, num_lost
     real(dp) :: inverse_times_lost_sum
+    real(dp) :: time_val, trap_val, perp_val
+    real(dp), dimension(5) :: zend_row
     integer(8) :: total_field_evaluations
 
     ! Sum field evaluations across all threads
@@ -365,8 +367,6 @@ module simple_main
     num_lost = 0
     inverse_times_lost_sum = 0.0d0
     do i=1,ntestpart
-      real(dp) :: time_val, trap_val, perp_val, zend_row(5)
-
       time_val = sanitize_scalar(times_lost(i))
       trap_val = sanitize_scalar(trap_par(i))
       perp_val = sanitize_scalar(perp_inv(i))

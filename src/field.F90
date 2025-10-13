@@ -15,16 +15,17 @@ implicit none
 
 contains
 
-subroutine field_from_file(filename, field)
+subroutine field_from_file(filename, field, analytical_override)
     use tokamak_config_mod, only: tok_R0, tok_epsilon, tok_kappa, tok_delta, &
         tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, &
         tok_z0
     character(*), intent(in) :: filename
     class(MagneticField), allocatable, intent(out) :: field
+    logical, intent(in), optional :: analytical_override
 
     character(len(filename)) :: stripped_name
     character(len(filename)) :: lower_name
-    logical :: use_analytical_field
+    logical :: analytical_mode
     class(CoilsField), allocatable :: coils_temp
 #ifdef GVEC_AVAILABLE
     class(GvecField), allocatable :: gvec_temp
@@ -32,17 +33,17 @@ subroutine field_from_file(filename, field)
 
     stripped_name = strip_directory(filename)
     lower_name = to_lower(filename)
-    use_analytical_field = index(lower_name, 'analytical') > 0 .or. &
-        index(lower_name, 'tokamak') > 0
+    analytical_mode = .false.
+    if (present(analytical_override)) analytical_mode = analytical_override
 
-    if (is_geqdsk(filename)) then
-        call initialize_geoflux_field(trim(filename))
-        allocate(GeofluxField :: field)
-    else if (use_analytical_field) then
+    if (analytical_mode) then
         call init_analytical_geoflux(tok_R0, tok_epsilon, tok_kappa, tok_delta, &
             tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, &
             tok_z0)
         call mark_geoflux_initialized(trim(lower_name), .true.)
+        allocate(GeofluxField :: field)
+    else if (is_geqdsk(filename)) then
+        call initialize_geoflux_field(trim(filename))
         allocate(GeofluxField :: field)
     else if (endswith(filename, '.nc')) then
         allocate(VmecField :: field)

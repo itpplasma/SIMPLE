@@ -5,6 +5,7 @@
 ! Field configuration
 field_input = 'analytical'
 tokamak_input = 'tokamak.in'
+use_analytical_field = .true.
 isw_field_type = 3              ! Meiss canonical coordinates on geoflux
 
 ! Particle configuration

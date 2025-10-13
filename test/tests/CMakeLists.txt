@@ -259,6 +259,27 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# Analytical tokamak Meiss integrand diagnostic
+add_executable(test_tokamak_meiss_transform.x test_tokamak_meiss_transform.f90)
+target_link_libraries(test_tokamak_meiss_transform.x simple)
+add_test(NAME test_tokamak_meiss_transform
+    COMMAND test_tokamak_meiss_transform.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_meiss_transform PROPERTIES
+    LABELS "unit;analytical"
+    TIMEOUT 120
+)
+
+add_executable(test_vmec_meiss_transform.x test_vmec_meiss_transform.f90)
+target_link_libraries(test_vmec_meiss_transform.x simple)
+add_test(NAME test_vmec_meiss_transform
+    COMMAND test_vmec_meiss_transform.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_vmec_meiss_transform PROPERTIES
+    LABELS "unit;analytical;stellarator"
+    TIMEOUT 180
+)
+
 # Analytical tokamak integration check
 add_executable(test_tokamak_alpha_confinement.x test_tokamak_alpha_confinement.f90)
 target_link_libraries(test_tokamak_alpha_confinement.x simple)

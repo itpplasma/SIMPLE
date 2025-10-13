@@ -10,7 +10,7 @@ program test_field_analytical_geoflux
     class(MagneticField), allocatable :: field_obj
     real(dp) :: x(3), Acov(3), hcov(3), Bmod
 
-    call field_from_file('analytical', field_obj)
+    call field_from_file('analytical', field_obj, .true.)
 
     if (.not. geoflux_ready) then
         error stop 'Analytical geoflux field failed to initialize'

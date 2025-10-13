@@ -28,7 +28,7 @@ program test_tokamak_alpha_confinement
         error stop 'Tokamak config must enable Meiss canonical field'
     end if
 
-    call field_from_file('analytical', field_obj)
+    call field_from_file('analytical', field_obj, .true.)
 
     if (.not. geoflux_ready) then
         error stop 'Analytical geoflux field not initialized'
