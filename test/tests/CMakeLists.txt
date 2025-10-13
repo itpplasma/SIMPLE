@@ -301,6 +301,17 @@ set_tests_properties(test_tokamak_alpha_example PROPERTIES
     TIMEOUT 300
 )
 
+# Tokamak diagnostic plotting (poloidal RZ projection)
+add_executable(test_tokamak_alpha_diagnostic.x test_tokamak_alpha_diagnostic.f90)
+target_link_libraries(test_tokamak_alpha_diagnostic.x simple)
+add_test(NAME test_tokamak_alpha_diagnostic
+    COMMAND test_tokamak_alpha_diagnostic.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_alpha_diagnostic PROPERTIES
+    LABELS "system;analytical"
+    TIMEOUT 300
+)
+
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90
