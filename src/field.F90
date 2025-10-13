@@ -37,9 +37,9 @@ subroutine field_from_file(filename, field, analytical_override)
     if (present(analytical_override)) analytical_mode = analytical_override
 
     if (analytical_mode) then
-        call init_analytical_geoflux(tok_R0, tok_epsilon, tok_kappa, tok_delta, &
-            tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, &
-            tok_z0)
+        call init_analytical_geoflux(tok_R0*1.0d-2, tok_epsilon, tok_kappa, tok_delta, &
+            tok_A_param, tok_B0*1.0d-4, tok_Nripple, tok_a0*1.0d-2, tok_alpha0, tok_delta0, &
+            tok_z0*1.0d-2)
         call mark_geoflux_initialized(trim(lower_name), .true.)
         allocate(GeofluxField :: field)
     else if (is_geqdsk(filename)) then

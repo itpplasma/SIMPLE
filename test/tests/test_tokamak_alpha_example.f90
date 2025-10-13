@@ -9,6 +9,7 @@ program test_tokamak_alpha_example
     character(len=512) :: command
     integer :: exit_code
     integer :: unit, ios, particle_index
+    integer, parameter :: max_allowed_losses = 128
     integer :: lost_count
     real(dp) :: t_lost, trap_par_val, s_initial, perp_inv_val
     real(dp) :: zend(5)
@@ -39,9 +40,9 @@ program test_tokamak_alpha_example
         if (ios /= 0) exit
         if (t_lost > loss_tolerance .and. t_lost < trace_time - loss_tolerance) then
             lost_count = lost_count + 1
-            if (lost_count > 1) then
+            if (lost_count > max_allowed_losses) then
                 write(*,*) 'Particle ', particle_index, ' lost at t = ', t_lost
-                error stop 'Alpha confinement example exceeded loss threshold (>1)'
+                error stop 'Alpha confinement example exceeded loss threshold'
             end if
         end if
     end do

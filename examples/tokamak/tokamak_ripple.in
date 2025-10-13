@@ -1,16 +1,16 @@
 &tokamak_params
   ! Equilibrium parameters (Cerfon-Freidberg analytical GS solution)
-  tok_R0 = 6.2d0          ! Major radius [m]
+  tok_R0 = 6.2d2          ! Major radius [cm]
   tok_epsilon = 0.32d0    ! Inverse aspect ratio (a/R0)
   tok_kappa = 1.0d0       ! Elongation (1.0 = circular)
   tok_delta = 0.0d0       ! Triangularity (0.0 = no triangularity)
   tok_A_param = -0.142d0  ! Shafranov parameter (related to pressure)
-  tok_B0 = 5.3d0          ! Toroidal field on axis [T]
+  tok_B0 = 5.3d4          ! Toroidal field on axis [G]
 
   ! TF ripple parameters (9-coil configuration)
   tok_Nripple = 9         ! Number of TF coils (9 coils, 9 ripple periods)
   tok_delta0 = 0.10d0     ! Ripple amplitude (ASCOT wallload_ripple)
   tok_alpha0 = 0.20d0     ! Ripple radial exponent (ASCOT wallload_ripple)
-  tok_a0 = 2.0d0          ! Ripple reference radius [m]
-  tok_z0 = 0.0d0          ! Ripple vertical center [m]
+  tok_a0 = 2.0d2          ! Ripple reference radius [cm]
+  tok_z0 = 0.0d0          ! Ripple vertical center [cm]
 /

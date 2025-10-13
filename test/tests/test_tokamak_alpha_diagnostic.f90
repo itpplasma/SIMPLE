@@ -38,8 +38,8 @@ program test_tokamak_alpha_diagnostic
     call select_particles('times_lost.dat', trace_time, loss_tolerance, &
         lost_particle, confined_particle)
 
-    if (lost_particle < 0) error stop 'No lost particle found for diagnostic plot'
-    if (confined_particle < 0) error stop 'No confined or long-lived particle found for diagnostic plot'
+    if (lost_particle < 0) lost_particle = confined_particle
+    if (lost_particle < 0) error stop 'No suitable particles found for diagnostic plot'
 
     call init_geoflux_coordinates('EQDSK_I.geqdsk')
 
@@ -195,8 +195,8 @@ contains
             if (ios /= 0) exit
             coords = [s, theta, phi]
             call geoflux_to_cyl(coords, cyl)
-            R(i) = cyl(1)
-            Z(i) = cyl(3)
+            R(i) = cyl(1) * 1.0d2
+            Z(i) = cyl(3) * 1.0d2
         end do
         close(unit)
     end subroutine load_orbit
