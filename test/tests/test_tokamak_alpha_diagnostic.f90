@@ -2,7 +2,10 @@ program test_tokamak_alpha_diagnostic
 
     use, intrinsic :: iso_fortran_env, only : dp => real64
     use pyplot_module, only : pyplot, pyplot_wp
-    use geoflux_coordinates, only : geoflux_to_cyl, init_geoflux_coordinates
+    use geoflux_coordinates, only : geoflux_to_cyl, geoflux_get_axis
+    use analytical_geoflux_field, only : init_analytical_geoflux
+    use params, only : read_config
+    use tokamak_config_mod, only : tok_R0, tok_epsilon, tok_kappa, tok_delta, tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
 
     implicit none
 
@@ -21,10 +24,13 @@ program test_tokamak_alpha_diagnostic
     type(pyplot) :: plt
     real(dp), allocatable :: time_lost(:), R_lost(:), Z_lost(:)
     real(dp), allocatable :: time_conf(:), R_conf(:), Z_conf(:)
+    real(dp) :: axis_R, axis_Z
 
     call prepare_diagnostic_config(template_cfg, diag_cfg)
     call copy_file('../../../examples/tokamak_alpha_confinement/tokamak.in', 'tokamak.in')
     call copy_file('../../../examples/tokamak/EQDSK_I.geqdsk', 'EQDSK_I.geqdsk')
+
+    call read_config(diag_cfg)
 
     call execute_command_line(trim(simple_exec)//' '//trim(diag_cfg), exitstat=exit_code)
     if (exit_code /= 0) then
@@ -41,10 +47,17 @@ program test_tokamak_alpha_diagnostic
     if (lost_particle < 0) lost_particle = confined_particle
     if (lost_particle < 0) error stop 'No suitable particles found for diagnostic plot'
 
-    call init_geoflux_coordinates('EQDSK_I.geqdsk')
+    call init_analytical_geoflux(tok_R0*1.0d-2, tok_epsilon, tok_kappa, tok_delta, &
+        tok_A_param, tok_B0*1.0d-4, tok_Nripple, tok_a0*1.0d-2, tok_alpha0, tok_delta0, &
+        tok_z0*1.0d-2)
+    call geoflux_get_axis(axis_R, axis_Z)
+    print *, 'Axis (cm):', axis_R*1.0d2, axis_Z*1.0d2
 
     call load_orbit(lost_particle, time_lost, R_lost, Z_lost)
     call load_orbit(confined_particle, time_conf, R_conf, Z_conf)
+
+    print *, 'Confined R range (cm):', minval(R_conf), maxval(R_conf)
+    print *, 'Confined Z range (cm):', minval(Z_conf), maxval(Z_conf)
 
     call plt%initialize(grid=.true., xlabel='R [cm]', ylabel='Z [cm]', &
         title='Tokamak Poloidal Orbits', legend=.true., axis_equal=.true.)
@@ -195,8 +208,8 @@ contains
             if (ios /= 0) exit
             coords = [s, theta, phi]
             call geoflux_to_cyl(coords, cyl)
-            R(i) = cyl(1)
-            Z(i) = cyl(3)
+            R(i) = cyl(1) * 1.0d2
+            Z(i) = cyl(3) * 1.0d2
         end do
         close(unit)
     end subroutine load_orbit
