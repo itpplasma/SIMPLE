@@ -14,15 +14,15 @@ module netcdf_orbit_output
     logical :: netcdf_initialized = .false.
     real(dp) :: fill_value
     integer :: n_timesteps_max
+    integer :: n_particles_total
 
-    ! Per-thread orbit buffers
-    real(dp), allocatable :: buffer_time(:,:)
-    real(dp), allocatable :: buffer_s(:,:)
-    real(dp), allocatable :: buffer_theta(:,:)
-    real(dp), allocatable :: buffer_phi(:,:)
-    real(dp), allocatable :: buffer_p_abs(:,:)
-    real(dp), allocatable :: buffer_v_par(:,:)
-    !$omp threadprivate(buffer_time, buffer_s, buffer_theta, buffer_phi, buffer_p_abs, buffer_v_par)
+    ! Shared buffer for all particles (write in one shot)
+    real(dp), allocatable :: shared_buffer_time(:,:)
+    real(dp), allocatable :: shared_buffer_s(:,:)
+    real(dp), allocatable :: shared_buffer_theta(:,:)
+    real(dp), allocatable :: shared_buffer_phi(:,:)
+    real(dp), allocatable :: shared_buffer_p_abs(:,:)
+    real(dp), allocatable :: shared_buffer_v_par(:,:)
 
 contains
 
@@ -124,8 +124,23 @@ contains
         ! Write coordinate variables
         call write_coordinates(n_particles, n_timesteps)
 
-        ! Store max timesteps for buffer allocation
+        ! Store dimensions and allocate shared buffer
         n_timesteps_max = n_timesteps
+        n_particles_total = n_particles
+
+        allocate(shared_buffer_time(n_particles, n_timesteps))
+        allocate(shared_buffer_s(n_particles, n_timesteps))
+        allocate(shared_buffer_theta(n_particles, n_timesteps))
+        allocate(shared_buffer_phi(n_particles, n_timesteps))
+        allocate(shared_buffer_p_abs(n_particles, n_timesteps))
+        allocate(shared_buffer_v_par(n_particles, n_timesteps))
+
+        shared_buffer_time(:,:) = fill_value
+        shared_buffer_s(:,:) = fill_value
+        shared_buffer_theta(:,:) = fill_value
+        shared_buffer_phi(:,:) = fill_value
+        shared_buffer_p_abs(:,:) = fill_value
+        shared_buffer_v_par(:,:) = fill_value
 
         netcdf_initialized = .true.
     end subroutine init_orbit_netcdf
@@ -170,81 +185,56 @@ contains
             error stop 'write_orbit_step: NetCDF not initialized'
         end if
 
-        ! Allocate thread-local buffer on first use
-        if (.not. allocated(buffer_time)) then
-            allocate(buffer_time(1, n_timesteps_max))
-            allocate(buffer_s(1, n_timesteps_max))
-            allocate(buffer_theta(1, n_timesteps_max))
-            allocate(buffer_phi(1, n_timesteps_max))
-            allocate(buffer_p_abs(1, n_timesteps_max))
-            allocate(buffer_v_par(1, n_timesteps_max))
-            buffer_time(:,:) = fill_value
-            buffer_s(:,:) = fill_value
-            buffer_theta(:,:) = fill_value
-            buffer_phi(:,:) = fill_value
-            buffer_p_abs(:,:) = fill_value
-            buffer_v_par(:,:) = fill_value
-        end if
-
-        ! Store data in thread-local buffer
-        buffer_time(1, istep) = t
-        buffer_s(1, istep) = xref(1)
-        buffer_theta(1, istep) = xref(2)
-        buffer_phi(1, istep) = xref(3)
-        buffer_p_abs(1, istep) = p_abs
-        buffer_v_par(1, istep) = v_par
+        ! Write directly to shared buffer (no critical section needed for different particles)
+        shared_buffer_time(ipart, istep) = t
+        shared_buffer_s(ipart, istep) = xref(1)
+        shared_buffer_theta(ipart, istep) = xref(2)
+        shared_buffer_phi(ipart, istep) = xref(3)
+        shared_buffer_p_abs(ipart, istep) = p_abs
+        shared_buffer_v_par(ipart, istep) = v_par
 
     end subroutine write_orbit_step
 
 
     subroutine flush_orbit(ipart)
         integer, intent(in) :: ipart
-        integer :: status
-        integer :: start(2), count(2)
-
-        if (.not. netcdf_initialized) then
-            error stop 'flush_orbit: NetCDF not initialized'
-        end if
-
-        if (.not. allocated(buffer_time)) then
-            return  ! No data to flush
-        end if
-
-        ! Write entire orbit at once
-        start = [ipart, 1]
-        count = [1, n_timesteps_max]
-
-        !$omp critical (netcdf_write)
-
-        status = nf90_put_var(ncid, varid_time, buffer_time, start=start, count=count)
-        call check_nc(status, 'nf90_put_var time')
-
-        status = nf90_put_var(ncid, varid_s, buffer_s, start=start, count=count)
-        call check_nc(status, 'nf90_put_var s')
-
-        status = nf90_put_var(ncid, varid_theta, buffer_theta, start=start, count=count)
-        call check_nc(status, 'nf90_put_var theta')
-
-        status = nf90_put_var(ncid, varid_phi, buffer_phi, start=start, count=count)
-        call check_nc(status, 'nf90_put_var phi')
-
-        status = nf90_put_var(ncid, varid_p_abs, buffer_p_abs, start=start, count=count)
-        call check_nc(status, 'nf90_put_var p_abs')
-
-        status = nf90_put_var(ncid, varid_v_par, buffer_v_par, start=start, count=count)
-        call check_nc(status, 'nf90_put_var v_par')
-
-        !$omp end critical (netcdf_write)
-
+        ! No-op: data is already in shared buffer, will be written in close_orbit_netcdf
     end subroutine flush_orbit
 
 
     subroutine close_orbit_netcdf()
+        use timing, only: get_wtime
         integer :: status
+        real(dp) :: t_start, t_end
 
         if (.not. netcdf_initialized) then
             return  ! Not an error, just nothing to close
         end if
+
+        ! Write entire buffer in one massive operation
+        t_start = get_wtime()
+        print *, 'Writing all orbit data to NetCDF...'
+
+        status = nf90_put_var(ncid, varid_time, shared_buffer_time)
+        call check_nc(status, 'nf90_put_var time (full)')
+
+        status = nf90_put_var(ncid, varid_s, shared_buffer_s)
+        call check_nc(status, 'nf90_put_var s (full)')
+
+        status = nf90_put_var(ncid, varid_theta, shared_buffer_theta)
+        call check_nc(status, 'nf90_put_var theta (full)')
+
+        status = nf90_put_var(ncid, varid_phi, shared_buffer_phi)
+        call check_nc(status, 'nf90_put_var phi (full)')
+
+        status = nf90_put_var(ncid, varid_p_abs, shared_buffer_p_abs)
+        call check_nc(status, 'nf90_put_var p_abs (full)')
+
+        status = nf90_put_var(ncid, varid_v_par, shared_buffer_v_par)
+        call check_nc(status, 'nf90_put_var v_par (full)')
+
+        t_end = get_wtime()
+        print '(A,F8.3,A)', 'NetCDF write completed in ', t_end - t_start, ' s'
 
         status = nf90_close(ncid)
         call check_nc(status, 'nf90_close')
