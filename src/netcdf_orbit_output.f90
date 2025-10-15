@@ -6,6 +6,10 @@ module netcdf_orbit_output
 
     private
     public :: init_orbit_netcdf, write_orbit_step, flush_orbit, close_orbit_netcdf
+    public :: netcdf_compression_level
+
+    ! Compression level: 0=none, 1-9=deflate (4 recommended, 0 for speed)
+    integer :: netcdf_compression_level = 0
 
     ! NetCDF file handle and variable IDs
     integer :: ncid
@@ -69,36 +73,60 @@ contains
         status = nf90_def_var(ncid, 'time', nf90_double, &
             [dimid_particle, dimid_timestep], varid_time)
         call check_nc(status, 'nf90_def_var time')
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid_time, 1, 1, netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate time')
+        end if
         status = nf90_put_att(ncid, varid_time, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att time _FillValue')
 
         status = nf90_def_var(ncid, 's', nf90_double, &
             [dimid_particle, dimid_timestep], varid_s)
         call check_nc(status, 'nf90_def_var s')
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid_s, 1, 1, netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate s')
+        end if
         status = nf90_put_att(ncid, varid_s, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att s _FillValue')
 
         status = nf90_def_var(ncid, 'theta', nf90_double, &
             [dimid_particle, dimid_timestep], varid_theta)
         call check_nc(status, 'nf90_def_var theta')
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid_theta, 1, 1, netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate theta')
+        end if
         status = nf90_put_att(ncid, varid_theta, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att theta _FillValue')
 
         status = nf90_def_var(ncid, 'phi', nf90_double, &
             [dimid_particle, dimid_timestep], varid_phi)
         call check_nc(status, 'nf90_def_var phi')
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid_phi, 1, 1, netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate phi')
+        end if
         status = nf90_put_att(ncid, varid_phi, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att phi _FillValue')
 
         status = nf90_def_var(ncid, 'p_abs', nf90_double, &
             [dimid_particle, dimid_timestep], varid_p_abs)
         call check_nc(status, 'nf90_def_var p_abs')
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid_p_abs, 1, 1, netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate p_abs')
+        end if
         status = nf90_put_att(ncid, varid_p_abs, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att p_abs _FillValue')
 
         status = nf90_def_var(ncid, 'v_par', nf90_double, &
             [dimid_particle, dimid_timestep], varid_v_par)
         call check_nc(status, 'nf90_def_var v_par')
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid_v_par, 1, 1, netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate v_par')
+        end if
         status = nf90_put_att(ncid, varid_v_par, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att v_par _FillValue')
 
