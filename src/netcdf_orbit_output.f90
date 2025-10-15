@@ -8,8 +8,8 @@ module netcdf_orbit_output
     public :: init_orbit_netcdf, write_orbit_step, flush_orbit, close_orbit_netcdf
     public :: netcdf_compression_level
 
-    ! Compression level: 0=none, 1-9=deflate (4 recommended, 0 for speed)
-    integer :: netcdf_compression_level = 0
+    ! Compression level: 0=none, 1-9=deflate (4 recommended)
+    integer :: netcdf_compression_level = 4
 
     ! NetCDF file handle and variable IDs
     integer :: ncid
