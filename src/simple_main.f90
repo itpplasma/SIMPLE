@@ -7,6 +7,8 @@ module simple_main
   use binsrc_sub, only : binsrc
   use samplers, only: sample, init_starting_surf
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
+  use netcdf_orbit_output, only : init_orbit_netcdf, flush_orbit, close_orbit_netcdf
+  use callback, only : output_orbits_macrostep
   use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
@@ -117,6 +119,11 @@ module simple_main
     call init_counters
     call print_phase_time('Counter initialization completed')
 
+    if (output_orbits_macrostep) then
+      call init_orbit_netcdf(ntestpart, ntimstep)
+      call print_phase_time('NetCDF orbit output initialization completed')
+    end if
+
     !$omp parallel firstprivate(norb)
     !$omp do
     do i = 1, ntestpart
@@ -129,6 +136,11 @@ module simple_main
     !$omp end do
     !$omp end parallel
     call print_phase_time('Parallel particle tracing completed')
+
+    if (output_orbits_macrostep) then
+      call close_orbit_netcdf()
+      call print_phase_time('NetCDF orbit output finalization completed')
+    end if
 
     confpart_pass=confpart_pass/ntestpart
     confpart_trap=confpart_trap/ntestpart
@@ -217,6 +229,8 @@ module simple_main
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
+
+    if (output_orbits_macrostep) call flush_orbit(ipart)
   end subroutine trace_orbit
 
   subroutine macrostep(anorb, z, kt, ierr_orbit)

@@ -2,6 +2,7 @@ module callback
 
 use simple, only : Tracer
 use field_can_mod, only : can_to_ref
+use netcdf_orbit_output, only : write_orbit_step
 
 implicit none
 
@@ -19,7 +20,7 @@ subroutine callbacks_macrostep(tracer_, ipart, itime, t, z, ierr_orbit)
     if (output_error .and. ierr_orbit /= 0) then
         call write_error(tracer_, ipart, itime, t, z, ierr_orbit)
     end if
-    if (output_orbits_macrostep) call write_position(ipart, t, z)
+    if (output_orbits_macrostep) call write_position(ipart, itime, t, z)
 end subroutine callbacks_macrostep
 
 
@@ -41,17 +42,16 @@ subroutine write_error(tracer_, ipart, itime, t, z, ierr_orbit)
 end subroutine write_error
 
 
-subroutine write_position(ipart, t, z)
-    integer, intent(in) :: ipart
+subroutine write_position(ipart, itime, t, z)
+    integer, intent(in) :: ipart, itime
     double precision, intent(in) :: t, z(:)
 
     double precision :: xref(3)
 
     call can_to_ref(z(1:3), xref)
 
-    !$omp critical
-    write(90000+ipart, *) t, xref, z(4), z(5)
-    !$omp end critical
+    ! Write to NetCDF file (thread-safe via critical section in write_orbit_step)
+    call write_orbit_step(ipart, itime, t, xref, z(4), z(5))
 end subroutine write_position
 
 end module callback

@@ -34,6 +34,7 @@ set(SOURCES
     simple.f90
     parse_ants.f90
     collis_alphas.f90
+    netcdf_orbit_output.f90
     callback.f90
     params.f90
     sorting.f90
