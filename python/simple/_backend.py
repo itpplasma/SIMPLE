@@ -255,3 +255,31 @@ def get_params(*names: str) -> dict[str, float | int | bool]:
     if not names:
         raise ValueError("Specify at least one parameter name")
     return {name: getattr(pysimple.params, name) for name in names}
+
+
+def snapshot_classification(n_particles: int) -> np.ndarray:
+    """Copy the ``iclass`` array for the leading particles."""
+    assert_vmec_loaded()
+    return np.array(
+        pysimple.params.iclass[:, :n_particles],
+        copy=True,
+        dtype=np.int64,
+    )
+
+
+def snapshot_trap_parameter(n_particles: int) -> np.ndarray:
+    """Copy the trapped-parameter array for the leading particles."""
+    assert_vmec_loaded()
+    return np.array(pysimple.params.trap_par[:n_particles], copy=True)
+
+
+def snapshot_loss_times(n_particles: int) -> np.ndarray:
+    """Copy the loss-time array for the leading particles."""
+    assert_vmec_loaded()
+    return np.array(pysimple.params.times_lost[:n_particles], copy=True)
+
+
+def snapshot_start_positions(n_particles: int) -> np.ndarray:
+    """Copy the current ``zstart`` array for the leading particles."""
+    assert_vmec_loaded()
+    return np.array(pysimple.params.zstart[:, :n_particles], copy=True)

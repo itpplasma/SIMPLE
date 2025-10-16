@@ -12,3 +12,11 @@ Simple VMEC run
    :language: python
    :caption: examples/simple_api.py
    :linenos:
+
+Fast classification
+-------------------
+
+.. literalinclude:: ../examples/classify_fast.py
+   :language: python
+   :caption: examples/classify_fast.py
+   :linenos:

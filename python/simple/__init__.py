@@ -4,6 +4,8 @@ Public entry-point for the cleaned SIMPLE Python API.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import Path
 from typing import Any, Optional
 
@@ -137,6 +139,99 @@ def get_lost(
     return results.lost(t_threshold)
 
 
+class JParallelClass(IntEnum):
+    """Classification labels for the :math:`J_\\parallel` heuristic."""
+
+    UNCLASSIFIED = 0
+    REGULAR = 1
+    STOCHASTIC = 2
+
+
+class TopologyClass(IntEnum):
+    """Classification labels for the topological ideal/non-ideal heuristic."""
+
+    UNCLASSIFIED = 0
+    IDEAL = 1
+    NON_IDEAL = 2
+
+
+class MinkowskiClass(IntEnum):
+    """Classification labels for the Minkowski fractal-dimension heuristic."""
+
+    UNCLASSIFIED = 0
+    REGULAR = 1
+    STOCHASTIC = 2
+
+
+@dataclass(slots=True)
+class FastClassificationResult:
+    """Container for fast classifier outputs."""
+
+    j_parallel: np.ndarray
+    topology: np.ndarray
+    minkowski: np.ndarray
+    trap_parameter: np.ndarray
+    loss_times: np.ndarray
+
+    def as_enums(
+        self,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return the classification arrays cast to their enum types."""
+        return (
+            self.j_parallel.astype(JParallelClass),
+            self.topology.astype(TopologyClass),
+            self.minkowski.astype(MinkowskiClass),
+        )
+
+
+def classify_fast(
+    particles: ParticleBatch | np.ndarray,
+    *,
+    tcut: float = 0.1,
+    vmec_file: str | Path | None = None,
+    integrator: str | int | None = None,
+    write_files: bool = False,
+) -> FastClassificationResult:
+    """
+    Run the fast (J_parallel and topological) classifiers and return their labels.
+
+    The function temporarily enables ``fast_class`` and sets ``tcut`` to ensure
+    that :mod:`classification` is executed, restoring the original configuration
+    afterwards.  Set ``write_files=True`` to emit the legacy ``fort.*`` outputs.
+    """
+    if vmec_file is not None:
+        load_vmec(vmec_file)
+    else:
+        _backend.assert_vmec_loaded()
+
+    batch = _as_batch(particles)
+    n_particles = batch.n_particles
+
+    original = get_parameters("tcut", "fast_class", "class_plot", "trace_time")
+    try:
+        set_parameters(tcut=tcut, fast_class=True, class_plot=write_files)
+        trace_orbits(
+            batch,
+            tmax=tcut,
+            integrator=integrator,
+            vmec_file=None,
+            verbose=False,
+        )
+        iclass = _backend.snapshot_classification(n_particles)
+        trap_parameter = _backend.snapshot_trap_parameter(n_particles)
+        loss_times = _backend.snapshot_loss_times(n_particles)
+    finally:
+        set_parameters(**original)
+
+    return FastClassificationResult(
+        j_parallel=iclass[0, :].astype(np.int64, copy=False),
+        topology=iclass[1, :].astype(np.int64, copy=False),
+        minkowski=iclass[2, :].astype(np.int64, copy=False),
+        trap_parameter=trap_parameter,
+        loss_times=loss_times,
+    )
+
+
 __all__ = [
     "ParticleBatch",
     "BatchResults",
@@ -163,5 +258,10 @@ __all__ = [
     "GAUSS3",
     "GAUSS4",
     "LOBATTO3",
+    "JParallelClass",
+    "TopologyClass",
+    "MinkowskiClass",
+    "FastClassificationResult",
+    "classify_fast",
     "load_particle_file",
 ]

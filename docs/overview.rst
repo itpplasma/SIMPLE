@@ -13,6 +13,8 @@ Key concepts
 * :class:`simple.BatchResults` exposes immutable access to simulation outputs,
   including convenience helpers for confinement analysis.
 * :func:`simple.trace_orbits` runs the Fortran integrator for a prepared batch.
+* :func:`simple.classify_fast` runs the fast classifiers and returns their labels
+  without generating legacy ``fort.*`` files.
 * :class:`simple.SurfaceSampler` and :class:`simple.VolumeSampler` provide
   access to the Fortran sampling routines while keeping data in the new API
   types.
