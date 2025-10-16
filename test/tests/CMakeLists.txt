@@ -229,6 +229,53 @@ add_subdirectory(magfie)
 add_subdirectory(orbit)
 
 ##################################################
+# ORBIT NETCDF OUTPUT SYSTEM TEST
+##################################################
+
+# Build test executable
+add_executable(test_orbit_netcdf_output.x test_orbit_netcdf_output.f90)
+target_link_libraries(test_orbit_netcdf_output.x simple)
+
+# Create symlink to wout.nc in example directory
+file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_SOURCE_DIR}/examples/orbit_output_test/wout.nc" SYMBOLIC)
+
+# System test: Run SIMPLE to generate orbits.nc, then verify
+add_test(
+    NAME orbit_netcdf_output
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/examples/orbit_output_test
+        ${CMAKE_COMMAND} -E env
+        $<TARGET_FILE:simple.x>
+)
+set_tests_properties(orbit_netcdf_output PROPERTIES
+    TIMEOUT 120
+    LABELS "system;integration"
+)
+
+# Verification test: Check that orbits.nc is valid
+add_test(
+    NAME orbit_netcdf_verify
+    COMMAND test_orbit_netcdf_output.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(orbit_netcdf_verify PROPERTIES
+    DEPENDS orbit_netcdf_output
+    TIMEOUT 30
+    LABELS "system;integration"
+)
+
+# Plot test: Generate orbit plot for visual inspection (particle 3 has valid data)
+add_test(
+    NAME orbit_netcdf_plot
+    COMMAND ${CMAKE_COMMAND} -E env python3 ${CMAKE_CURRENT_SOURCE_DIR}/plot_orbit.py 3
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(orbit_netcdf_plot PROPERTIES
+    DEPENDS orbit_netcdf_output
+    TIMEOUT 30
+    LABELS "system;integration;plot"
+)
+
+##################################################
 # GOLDEN RECORD TESTS
 ##################################################
 
