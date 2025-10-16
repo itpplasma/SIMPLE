@@ -8,10 +8,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-docs:
+  build:
     if: github.ref != 'refs/heads/gh-pages'
     runs-on: ubuntu-latest
     steps:
@@ -31,30 +37,43 @@ jobs:
       - name: Build Sphinx docs
         run: sphinx-build -b html docs docs/_build/html
 
-      - name: Upload docs artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-html
-          path: docs/_build/html
-
-      - name: Determine destination directory
-        if: github.event_name == 'push'
+      - name: Compute destination directory
         id: destination
         run: |
-          REF_NAME="${GITHUB_REF_NAME}"
-          if [ "$REF_NAME" = "main" ]; then
-            DEST_DIR="latest"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DEST_DIR="previews/pr-${{ github.event.number }}"
           else
-            DEST_DIR="branches/${REF_NAME//\//-}"
+            if [ "${GITHUB_REF_NAME}" = "main" ]; then
+              DEST_DIR="latest"
+            else
+              DEST_DIR="branches/${GITHUB_REF_NAME//\//-}"
+            fi
           fi
-          echo "dest_dir=${DEST_DIR}" >> $GITHUB_OUTPUT
+          echo "dest_dir=${DEST_DIR}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push'
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Stage site output
+        run: |
+          DEST="${{ steps.destination.outputs.dest_dir }}"
+          mkdir -p site/"$DEST"
+          rsync -a --delete docs/_build/html/ site/"$DEST"/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: docs/_build/html
-          destination_dir: ${{ steps.destination.outputs.dest_dir }}
-          keep_files: true
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
