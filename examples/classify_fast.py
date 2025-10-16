@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal example showing the fast Python classification API."""
+"""Minimal example showing the fast classification API."""
 
 from __future__ import annotations
 
@@ -11,26 +11,36 @@ import simple
 
 
 def main() -> None:
-    vmec_file = Path("wout.nc")
-    if not vmec_file.exists():
-        print(
-            "Download VMEC file first:\n"
-            "  wget https://github.com/hiddenSymmetries/simsopt/raw/master/"
-            "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc "
-            "-O wout.nc"
-        )
-        return
+    vmec = simple.ensure_example_vmec()
+    session = simple.SimpleSession(vmec)
 
-    simple.load_vmec(vmec_file)
+    batch = session.sample_surface(16, surface=0.4)
 
-    batch = simple.ParticleBatch(16)
-    batch.initialize_from_samplers(vmec_file, method="surface", s=0.4)
+    result = session.classify_fast(
+        batch,
+        classification_time=0.1,
+        assume_passing_confined=True,
+        legacy_files=False,
+    )
 
-    result = simple.classify_fast(batch)
-
-    labels = np.stack([result.j_parallel, result.topology, result.minkowski], axis=1)
+    labels = np.vstack([result.j_parallel, result.topology, result.minkowski]).T
     print("Classification codes (J_parallel, topology, Minkowski):")
     print(labels)
+
+    print("Counts:")
+    for category, counts in result.counts().items():
+        print(f"  {category}: {counts}")
+
+    # Write legacy fort.* outputs for comparison
+    output_dir = Path("classification_output")
+    session.classify_fast(
+        batch,
+        classification_time=0.1,
+        assume_passing_confined=True,
+        legacy_files=True,
+        output_dir=output_dir,
+    )
+    print(f"Legacy fort.* outputs written to {output_dir.resolve()}")
 
 
 if __name__ == "__main__":

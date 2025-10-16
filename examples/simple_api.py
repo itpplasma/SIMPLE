@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Example using the cleaned SIMPLE Python API.
-"""
+"""Example using the higher-level SIMPLE Python session API."""
 
 from __future__ import annotations
 
@@ -17,34 +15,18 @@ import simple  # noqa: E402  pylint: disable=wrong-import-position
 
 
 def main() -> None:
-    vmec_file = Path("wout.nc")
-    if not vmec_file.exists():
-        print(
-            "Download VMEC file first:\n"
-            "  wget https://github.com/hiddenSymmetries/simsopt/raw/master/"
-            "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc "
-            "-O wout.nc"
-        )
-        return
+    vmec_file = simple.ensure_example_vmec()
 
-    print("Loading VMEC equilibrium...")
-    simple.load_vmec(vmec_file)
+    session = simple.SimpleSession(vmec_file)
+    batch = session.sample_surface(100, surface=0.3)
 
-    print("Sampling particles on s=0.3 surface...")
-    sampler = simple.SurfaceSampler(vmec_file)
-    raw_particles = sampler.sample_surface_fieldline(100, s=0.3)
-    batch = simple.ParticleBatch.from_fortran_arrays(raw_particles)
-
-    print("Tracing orbits with symplectic midpoint integrator...")
-    results = simple.trace_orbits(
-        batch, tmax=0.1, integrator="symplectic_midpoint", verbose=False
-    )
+    results = session.trace(batch, tmax=0.1, integrator="symplectic_midpoint")
 
     confined = results.confined()
     lost = results.lost()
     print(
         f"Results: {confined.shape[1]} confined, "
-        f"{lost['loss_times'].size} lost out of {results.n_particles}"
+        f"{lost['loss_times'].size} lost out of {results.n_particles} particles"
     )
 
     loss_times = results.loss_times

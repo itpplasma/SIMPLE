@@ -7,7 +7,6 @@ import os
 import math
 import subprocess
 from pathlib import Path
-from typing import Dict, Iterable, Tuple
 
 import numpy as np
 import pytest
@@ -20,13 +19,12 @@ SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
 
 @pytest.mark.usefixtures("vmec_file")
 def test_classify_fast_restores_parameters(vmec_file: str) -> None:
-    simple.load_vmec(vmec_file)
-    batch = simple.ParticleBatch(6)
-    batch.initialize_from_samplers(vmec_file, method="surface", s=0.35)
+    session = simple.SimpleSession(vmec_file)
+    batch = session.sample_surface(6, surface=0.35)
 
     params_before = simple.get_parameters("tcut", "fast_class", "class_plot", "trace_time")
 
-    result = simple.classify_fast(batch)
+    result = session.classify_fast(batch)
 
     params_after = simple.get_parameters("tcut", "fast_class", "class_plot", "trace_time")
     assert params_before == params_after
@@ -48,11 +46,10 @@ def test_classify_fast_matches_fortran(tmp_path: Path, vmec_file: str) -> None:
         pytest.skip("simple.x is not built; run CMake/Ninja build first")
 
     vmec_path = Path(vmec_file).resolve()
-    simple.load_vmec(vmec_path)
+    session = simple.SimpleSession(vmec_path)
 
     n_particles = 8
-    batch = simple.ParticleBatch(n_particles)
-    batch.initialize_from_samplers(vmec_path, method="surface", s=0.4)
+    batch = session.sample_surface(n_particles, surface=0.4)
 
     fortran_dir = tmp_path / "fortran"
     python_dir = tmp_path / "python"
@@ -80,38 +77,58 @@ netcdffile = '{vmec_path}'
 
     subprocess.run([str(SIMPLE_EXE), config_path.name], cwd=fortran_dir, check=True)
 
-    particles = simple.load_particle_file(vmec_path, python_dir / "start.dat")
+    particles = session.load_particles(python_dir / "start.dat")
     original_params = simple.get_parameters("notrace_passing", "deterministic", "trace_time")
     cwd = os.getcwd()
     try:
         os.chdir(python_dir)
-        simple.load_vmec(vmec_path, force=True)
         simple.set_parameters(notrace_passing=1, deterministic=True, trace_time=0.1)
-        result = simple.classify_fast(particles, tcut=0.1, vmec_file=vmec_path, write_files=True)
+        result = session.classify_fast(
+            particles,
+            classification_time=0.1,
+            legacy_files=True,
+            output_dir=Path.cwd(),
+        )
         start_snapshot = simple._backend.snapshot_start_positions(n_particles)
     finally:
         os.chdir(cwd)
         simple.set_parameters(**original_params)
-    def fort_count(unit: int) -> int:
-        return _load_fort_table(fortran_dir / f"fort.{unit}").shape[0]
+    theta = np.mod(start_snapshot[1, :], 2 * math.pi)
+    pitch = start_snapshot[4, :]
+    trap = result.trap_parameter
 
-    j_counts = {
-        0: fort_count(40032),
-        1: fort_count(40012),
-        2: fort_count(40022),
-    }
-    topo_counts = {
-        0: fort_count(50032),
-        1: fort_count(50012),
-        2: fort_count(50022),
-    }
+    def match_row(row: np.ndarray) -> int:
+        theta_row = row[0] % (2 * math.pi)
+        angle_diff = np.abs(((theta - theta_row + math.pi) % (2 * math.pi)) - math.pi)
+        total = angle_diff + np.abs(pitch - row[1]) + np.abs(trap - row[2])
+        idx = int(np.argmin(total))
+        assert total[idx] < 1e-5, "Unable to match classification record"
+        return idx
 
-    for code, expected in j_counts.items():
-        actual = int(np.count_nonzero(result.j_parallel == code))
-        if expected > 0:
-            assert actual > 0, f"Python classification missing J_parallel code {code}"
+    matched = set()
 
-    for code, expected in topo_counts.items():
-        actual = int(np.count_nonzero(result.topology == code))
-        if expected > 0:
-            assert actual > 0, f"Python classification missing topology code {code}"
+    def check_unit(unit: int, code: int, target: np.ndarray) -> None:
+        python_rows = _load_fort_table(python_dir / f"fort.{unit}")
+        if python_rows.size == 0:
+            return
+        fortran_rows = _load_fort_table(fortran_dir / f"fort.{unit}")
+        assert fortran_rows.size > 0, f"Fortran output missing for fort.{unit}"
+        remaining = fortran_rows.copy()
+        for row in python_rows:
+            diff = np.max(np.abs(remaining - row), axis=1)
+            best = int(np.argmin(diff))
+            assert diff[best] < 1e-6, f"Fortran output missing row from fort.{unit}"
+            idx = match_row(row)
+            matched.add(idx)
+            assert target[idx] == code, (
+                f"Mismatch for particle {idx}: expected code {code}, got {target[idx]}"
+            )
+            remaining = np.delete(remaining, best, axis=0)
+
+    check_unit(40012, 1, result.j_parallel)
+    check_unit(40022, 2, result.j_parallel)
+    check_unit(40032, 0, result.j_parallel)
+
+    check_unit(50012, 1, result.topology)
+    check_unit(50022, 2, result.topology)
+    check_unit(50032, 0, result.topology)

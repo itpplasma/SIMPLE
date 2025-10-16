@@ -7,9 +7,12 @@ bindings so the public API can remain small and well tested.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
+
+import os
 
 import numpy as np
 
@@ -283,3 +286,36 @@ def snapshot_start_positions(n_particles: int) -> np.ndarray:
     """Copy the current ``zstart`` array for the leading particles."""
     assert_vmec_loaded()
     return np.array(pysimple.params.zstart[:, :n_particles], copy=True)
+
+
+@contextmanager
+def temporary_parameters(**overrides: float | int | bool) -> Iterator[None]:
+    """Temporarily modify Fortran parameters within a context."""
+    if not overrides:
+        yield
+        return
+
+    names = tuple(overrides.keys())
+    original = get_params(*names)
+    set_params(**overrides)
+    try:
+        yield
+    finally:
+        set_params(**original)
+
+
+@contextmanager
+def working_directory(path: Optional[Path]) -> Iterator[None]:
+    """Context manager that changes the current working directory."""
+    if path is None:
+        yield
+        return
+
+    target = Path(path).expanduser().resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    prev = Path.cwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(prev)
