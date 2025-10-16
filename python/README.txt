@@ -1,26 +1,59 @@
-Created: 2019-03-07
-Author:  Christopher Albert <albert@alumni.tugraz.at>
+Clean SIMPLE Python API
+=======================
 
-This dataset contains code examples for different symplectic integrators
-with non-canonical quadrature points described in [1]. Here
-guiding-center motion is implemented in its axisymmetric variant for 
-tokamak magnetic fields in canonicalized flux coordinates.
-All implementations except "expl_impl_euler_optim.py" use
-SciPy library routines with approximate Jacobian for root-finding.
+The ``simple`` package provides a modern, batch-oriented interface to the
+high-performance SIMPLE Fortran backend.  It mirrors the structure-of-arrays
+memory layout used in Fortran, enabling zero-copy interaction while keeping the
+public API concise.
 
-Common functionality
-* common.py: computation of derivatives, and Newton iterations
-* field_test.py: simple magnetic configuration for testing
-* plotting.py: helper routines for plotting
+Key modules
+-----------
 
-Integrators:
-* expl_impl_euler.py: Explicit-implicit Euler method
-* expl_impl_euler_optim.py: Optimized explicit-implicit Euler method with user-supplied Jacobian
-* impl_expl_euler.py: Implicit-explicit Euler method
-* impl_midpoint.py: Implicit midpoint rule
-* verlet.py: Stoermer-Verlet/leap-frog method
-* rk.py: Adaptive Runge-Kutta 4/5 from SciPy library
+``simple.__init__``
+    Public entry point exporting :class:`ParticleBatch`, :class:`BatchResults`,
+    :class:`SurfaceSampler`, :class:`VolumeSampler`, and the :func:`trace_orbits`
+    convenience function.
 
-[1] C. G. Albert, S. V. Kasilov, and W. Kernbichler, 
-   Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices, 
-   Mar. 2019, arXiv:1903.06885. Submitted to J. Comp. Phys
+``simple.particles``
+    Structure-of-arrays container that wraps particle phase-space coordinates.
+    Provides helpers for sampling and for constructing batches from raw numpy
+    arrays returned by the Fortran samplers.
+
+``simple.results``
+    Immutable view over the Fortran output arrays with convenience methods for
+    confinement analysis.
+
+``simple.samplers``
+    Lightweight wrappers over the Fortran ``samplers`` module, exposing a
+    Pythonic interface for surface/volume sampling as well as file-based
+    particle loading.
+
+Quick start
+-----------
+
+.. code-block:: python
+
+    import simple
+
+    vmec = "wout.nc"
+    simple.load_vmec(vmec)
+
+    sampler = simple.SurfaceSampler(vmec)
+    batch = simple.ParticleBatch.from_fortran_arrays(
+        sampler.sample_surface_fieldline(1024, s=0.4)
+    )
+
+    results = simple.trace_orbits(
+        batch,
+        tmax=0.2,
+        integrator="symplectic_midpoint",
+    )
+
+    confined_fraction = results.confined_mask().mean()
+    print(f"Confined fraction: {confined_fraction:.2%}")
+
+Testing
+-------
+
+See ``test/python`` for pytest-based validation of the API.  All tests load the
+same VMEC equilibrium through the shared fixture in ``test/conftest.py``.
