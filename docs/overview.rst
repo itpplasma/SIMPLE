@@ -34,3 +34,30 @@ workflow is:
 3. Use the session to sample particles, trace orbits, and perform
    classification, optionally writing the fort-style diagnostics for
    cross-checks with ``simple.x``.
+
+Getting started
+---------------
+
+Expose the package from the repository (or install it) and run your first
+simulation:
+
+.. code-block:: bash
+
+   export PYTHONPATH=$PWD/python:$PYTHONPATH
+
+.. code-block:: python
+
+   import simple
+
+   session = simple.SimpleSession(simple.ensure_example_vmec())
+   batch = session.sample_surface(32, surface=0.3)
+   results = session.trace(batch, tmax=0.05)
+
+   confined = results.confined_mask().sum()
+   lost = results.lost_mask().sum()
+   print(f"Confined: {confined}, lost: {lost}")
+
+Physicists can stay close to the legacy ``simple.x`` workflow by enabling
+``legacy_files=True`` on :meth:`simple.SimpleSession.classify_fast`, while
+software engineers can integrate the batch-oriented API directly with NumPy and
+custom tooling.

@@ -31,23 +31,27 @@ Key modules
 Quick start
 -----------
 
+When working directly from the repository, expose the package via
+``PYTHONPATH`` (or install it in editable mode) so that ``import simple``
+resolves correctly:
+
+.. code-block:: bash
+
+    export PYTHONPATH=$PWD/python:$PYTHONPATH
+
+If you prefer an installed package, use ``python -m pip install .`` which will
+build the bindings and expose the same ``simple`` module.
+
+The high-level :class:`simple.SimpleSession` takes care of VMEC loading and
+keeps the Fortran globals in sync:
+
 .. code-block:: python
 
     import simple
 
-    vmec = "wout.nc"
-    simple.load_vmec(vmec)
-
-    sampler = simple.SurfaceSampler(vmec)
-    batch = simple.ParticleBatch.from_fortran_arrays(
-        sampler.sample_surface_fieldline(1024, s=0.4)
-    )
-
-    results = simple.trace_orbits(
-        batch,
-        tmax=0.2,
-        integrator="symplectic_midpoint",
-    )
+    session = simple.SimpleSession(simple.ensure_example_vmec())
+    batch = session.sample_surface(1024, surface=0.4)
+    results = session.trace(batch, tmax=0.2, integrator="symplectic_midpoint")
 
     confined_fraction = results.confined_mask().mean()
     print(f"Confined fraction: {confined_fraction:.2%}")

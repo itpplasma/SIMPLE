@@ -3,15 +3,9 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
-
-sys.path.append("../python")
-
-import simple  # noqa: E402  pylint: disable=wrong-import-position
+import simple
 
 
 def main() -> None:
