@@ -22,5 +22,5 @@ Fast classification
    :linenos:
 
 Both examples expose helper functions (:func:`run_trace_example` and
-:func:`run_fast_classification`) that are exercised directly in the pytest suite,
+:func:`classify_fast_example`) that are exercised directly in the pytest suite,
 so the documentation mirrors the tested code paths one-to-one.

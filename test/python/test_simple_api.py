@@ -21,7 +21,7 @@ examples_dir = Path(__file__).resolve().parents[2] / "examples"
 sys.path.insert(0, str(examples_dir))
 
 import simple  # noqa: E402  pylint: disable=wrong-import-position
-from classify_fast import run_fast_classification  # noqa: E402
+from classify_fast import classify_fast_example  # noqa: E402
 from simple_api import run_trace_example  # noqa: E402
 
 
@@ -107,13 +107,8 @@ class TestParameterHelpers:
 
 class TestExampleModules:
     def test_fast_classification_example_disables_minkowski(self, vmec_file: str):
-        result = run_fast_classification(
-            vmec_file,
-            n_particles=8,
-            classification_time=0.015,
-            include_minkowski=False,
-        )
+        result = classify_fast_example(vmec_file)
 
-        assert result.j_parallel.shape == (8,)
-        assert result.topology.shape == (8,)
-        assert np.all(result.minkowski == 0)
+        assert result.j_parallel.shape == (16,)
+        assert result.topology.shape == (16,)
+        assert result.minkowski is None

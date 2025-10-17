@@ -179,21 +179,13 @@ class TopologyClass(IntEnum):
     NON_IDEAL = 2
 
 
-class MinkowskiClass(IntEnum):
-    """Classification labels for the Minkowski fractal-dimension heuristic."""
-
-    UNCLASSIFIED = 0
-    REGULAR = 1
-    STOCHASTIC = 2
-
-
 @dataclass(slots=True)
 class ClassificationResult:
     """Container for classifier outputs."""
 
     j_parallel: np.ndarray
     topology: np.ndarray
-    minkowski: np.ndarray
+    minkowski: Optional[np.ndarray]
     trap_parameter: np.ndarray
     loss_times: np.ndarray
 
@@ -201,11 +193,13 @@ class ClassificationResult:
         self,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return the classification arrays cast to their enum types."""
-        return (
+        enums = [
             self.j_parallel.astype(JParallelClass),
             self.topology.astype(TopologyClass),
-            self.minkowski.astype(MinkowskiClass),
-        )
+        ]
+        if self.minkowski is not None:
+            enums.append(self.minkowski.astype(int))
+        return tuple(enums)
 
     def counts(self) -> Dict[str, Dict[int, int]]:
         """Return histogram-style counts for each classifier."""
@@ -214,11 +208,13 @@ class ClassificationResult:
             labels, counts = np.unique(values.astype(int), return_counts=True)
             return {int(label): int(count) for label, count in zip(labels, counts)}
 
-        return {
+        result = {
             "j_parallel": hist(self.j_parallel),
             "topology": hist(self.topology),
-            "minkowski": hist(self.minkowski),
         }
+        if self.minkowski is not None:
+            result["minkowski"] = hist(self.minkowski)
+        return result
 
 
 # Backwards compatibility name
@@ -232,7 +228,6 @@ def classify_fast(
     vmec_file: str | Path | None = None,
     integrator: str | int | None = None,
     write_files: bool = False,
-    include_minkowski: bool = True,
 ) -> ClassificationResult:
     """Run the fast classifiers using an ephemeral :class:`SimpleSession`."""
 
@@ -248,7 +243,6 @@ def classify_fast(
         output_dir=None,
         assume_passing_confined=True,
         integrator=integrator,
-        include_minkowski=include_minkowski,
     )
 
 
@@ -317,7 +311,6 @@ class SimpleSession:
         assume_passing_confined: bool = True,
         legacy_files: bool = False,
         output_dir: Path | None = None,
-        include_minkowski: bool = True,
     ) -> ClassificationResult:
         """
         Run the fast classifiers and return their labels.
@@ -337,9 +330,6 @@ class SimpleSession:
             When ``True`` the legacy ``fort.*`` outputs are produced in ``output_dir``.
         output_dir:
             Target directory for legacy outputs.
-        include_minkowski:
-            Set to ``False`` to skip the Minkowski fractal-dimension classifier and run
-            only the fast J_parallel/topology heuristics.
         """
         batch = _as_batch(particles)
         n_particles = batch.n_particles
@@ -347,11 +337,8 @@ class SimpleSession:
         overrides: Dict[str, float | int | bool] = {
             "fast_class": True,
             "class_plot": legacy_files,
+            "tcut": -1.0,
         }
-        if include_minkowski:
-            overrides["tcut"] = classification_time
-        else:
-            overrides["tcut"] = -1.0
 
         if assume_passing_confined:
             overrides["notrace_passing"] = 1
@@ -373,13 +360,12 @@ class SimpleSession:
                 trap_parameter = _backend.snapshot_trap_parameter(n_particles)
                 loss_times = _backend.snapshot_loss_times(n_particles)
 
-        if not include_minkowski:
-            iclass[2, :] = 0
+        iclass[2, :] = 0
 
         return ClassificationResult(
             j_parallel=iclass[0, :].astype(np.int64, copy=False),
             topology=iclass[1, :].astype(np.int64, copy=False),
-            minkowski=iclass[2, :].astype(np.int64, copy=False),
+            minkowski=None,
             trap_parameter=trap_parameter,
             loss_times=loss_times,
         )
@@ -416,7 +402,6 @@ __all__ = [
     "LOBATTO3",
     "JParallelClass",
     "TopologyClass",
-    "MinkowskiClass",
     "ClassificationResult",
     "FastClassificationResult",
     "SimpleSession",

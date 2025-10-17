@@ -31,7 +31,7 @@ def test_classify_fast_restores_parameters(vmec_file: str) -> None:
 
     assert result.j_parallel.shape == (batch.n_particles,)
     assert result.topology.shape == (batch.n_particles,)
-    assert result.minkowski.shape == (batch.n_particles,)
+    assert result.minkowski is None
 
 
 def _load_fort_table(path: Path) -> np.ndarray:
