@@ -372,6 +372,7 @@ class SimpleSession:
 
 
 temporary_parameters = _backend.temporary_parameters
+macrostep_output = _backend.macrostep_output
 
 
 __all__ = [
@@ -407,6 +408,7 @@ __all__ = [
     "SimpleSession",
     "ensure_example_vmec",
     "temporary_parameters",
+    "macrostep_output",
     "classify_fast",
     "load_particle_file",
 ]

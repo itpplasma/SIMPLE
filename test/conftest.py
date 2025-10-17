@@ -5,10 +5,44 @@ Provides shared test data management, including automatic download
 of VMEC equilibrium file.
 """
 
-import pytest
+import importlib.machinery
+import importlib.util
+import sys
 from pathlib import Path
 import urllib.request
-import hashlib
+import pytest
+
+
+def _load_local_pysimple() -> None:
+    """Force tests to prefer the freshly built pysimple bindings."""
+    build_dir = Path(__file__).resolve().parents[1] / "build"
+    candidate = build_dir / "pysimple.py"
+    if not candidate.exists():
+        return
+
+    so_candidates = list(build_dir.glob("_pysimple*.so"))
+    if not so_candidates:
+        return
+
+    so_path = so_candidates[0]
+    loader = importlib.machinery.ExtensionFileLoader("_pysimple", str(so_path))
+    spec_ext = importlib.util.spec_from_file_location("_pysimple", str(so_path), loader=loader)
+    if spec_ext is None:
+        return
+    module_ext = importlib.util.module_from_spec(spec_ext)
+    loader.exec_module(module_ext)
+    sys.modules["_pysimple"] = module_ext
+
+    spec = importlib.util.spec_from_file_location("pysimple", candidate)
+    if spec is None or spec.loader is None:
+        return
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules["pysimple"] = module
+
+
+_load_local_pysimple()
 
 # Test data location - single source of truth for all tests
 TEST_DATA_DIR = Path(__file__).parent / "test_data"

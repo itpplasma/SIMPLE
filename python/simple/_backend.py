@@ -156,6 +156,26 @@ def collect_results(tmax: float) -> SimulationArrays:
     )
 
 
+def _callback_module_available() -> bool:
+    return hasattr(pysimple, "callback") and hasattr(pysimple.callback, "set_output_orbits_macrostep")
+
+
+def set_macrostep_output(enabled: bool) -> None:
+    if not _callback_module_available():
+        raise RuntimeError("Macrostep orbit output not available in this build of SIMPLE")
+    pysimple.callback.set_output_orbits_macrostep(bool(enabled))
+    if hasattr(pysimple.params, "output_orbits_macrostep"):
+        pysimple.params.output_orbits_macrostep = bool(enabled)
+
+
+def get_macrostep_output() -> bool:
+    if not _callback_module_available():
+        return False
+    if hasattr(pysimple.params, "output_orbits_macrostep"):
+        return bool(pysimple.params.output_orbits_macrostep)
+    return bool(pysimple.callback.get_output_orbits_macrostep())
+
+
 def run_simulation(
     positions: np.ndarray,
     tmax: float,
@@ -319,3 +339,19 @@ def working_directory(path: Optional[Path]) -> Iterator[None]:
         yield
     finally:
         os.chdir(prev)
+
+
+@contextmanager
+def macrostep_output(enabled: bool = True) -> Iterator[None]:
+    if not _callback_module_available():
+        if enabled:
+            raise RuntimeError("Macrostep orbit output not available in this build of SIMPLE")
+        yield
+        return
+
+    previous = get_macrostep_output()
+    set_macrostep_output(enabled)
+    try:
+        yield
+    finally:
+        set_macrostep_output(previous)

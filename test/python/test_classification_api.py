@@ -11,7 +11,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytest.importorskip("pysimple", reason="pysimple module not available")
+
 import simple
+pytest.importorskip("pysimple", reason="pysimple module not available")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"

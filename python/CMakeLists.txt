@@ -73,6 +73,7 @@ set(FILES_TO_WRAP
     simple.f90
     samplers.f90
     cut_detector.f90
+    callback.f90
     orbit_symplectic_base.f90
     orbit_symplectic.f90
     field_can.f90

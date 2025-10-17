@@ -9,6 +9,10 @@ implicit none
 logical :: output_error = .False.
 logical :: output_orbits_macrostep = .False.
 
+public :: callbacks_macrostep
+public :: set_output_orbits_macrostep
+public :: get_output_orbits_macrostep
+
 contains
 
 subroutine callbacks_macrostep(tracer_, ipart, itime, t, z, ierr_orbit)
@@ -53,5 +57,14 @@ subroutine write_position(ipart, itime, t, z)
     ! Write to NetCDF file (thread-safe via critical section in write_orbit_step)
     call write_orbit_step(ipart, itime, t, xref, z(4), z(5))
 end subroutine write_position
+
+subroutine set_output_orbits_macrostep(flag)
+    logical, intent(in) :: flag
+    output_orbits_macrostep = flag
+end subroutine set_output_orbits_macrostep
+
+logical function get_output_orbits_macrostep()
+    get_output_orbits_macrostep = output_orbits_macrostep
+end function get_output_orbits_macrostep
 
 end module callback

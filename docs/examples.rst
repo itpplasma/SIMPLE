@@ -21,6 +21,14 @@ Fast classification
    :caption: examples/classify_fast.py
    :linenos:
 
+Macrostep orbit trace
+---------------------
+
+.. literalinclude:: ../examples/orbit_macro.py
+   :language: python
+   :caption: examples/orbit_macro.py
+   :linenos:
+
 Both examples expose helper functions (:func:`run_trace_example` and
 :func:`classify_fast_example`) that are exercised directly in the pytest suite,
 so the documentation mirrors the tested code paths one-to-one.
