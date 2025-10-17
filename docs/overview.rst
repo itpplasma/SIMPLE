@@ -58,7 +58,7 @@ simulation:
    lost = results.lost_mask().sum()
    print(f"Confined: {confined}, lost: {lost}")
 
-Physicists can stay close to the legacy ``simple.x`` workflow by enabling
-``legacy_files=True`` on :meth:`simple.SimpleSession.classify_fast`, while
-software engineers can integrate the batch-oriented API directly with NumPy and
-custom tooling.
+Enable ``legacy_files=True`` on :meth:`simple.SimpleSession.classify_fast`
+whenever you need the historical ``fort.*`` diagnostics for cross-checks with
+``simple.x``.  Otherwise the batch-oriented API works directly with NumPy
+arrays for quick scripting and integration in larger pipelines.
