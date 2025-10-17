@@ -5,42 +5,59 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-
 import simple
 
 
-def main() -> None:
-    vmec = simple.ensure_example_vmec()
+def run_fast_classification(
+    vmec_file: str | None = None,
+    *,
+    n_particles: int = 16,
+    classification_time: float = 0.015,
+    include_minkowski: bool = False,
+    output_dir: str | None = None,
+) -> simple.ClassificationResult:
+    """
+    Classify a small batch of particles using the fast classifiers.
+
+    Parameters
+    ----------
+    vmec_file:
+        Optional VMEC equilibrium.  Falls back to :func:`simple.ensure_example_vmec`.
+    n_particles:
+        Number of particles sampled on the surface.
+    classification_time:
+        Duration of the fast classification trace.
+    include_minkowski:
+        Whether to run the Minkowski fractal-dimension classifier.  Disabling it keeps
+        the classification focused on the fast J_parallel/topology heuristics.
+    output_dir:
+        Optional directory for legacy ``fort.*`` files (mirrors ``simple.x`` output).
+    """
+
+    vmec = vmec_file or simple.ensure_example_vmec()
     session = simple.SimpleSession(vmec)
+    batch = session.sample_surface(n_particles, surface=0.4)
 
-    batch = session.sample_surface(16, surface=0.4)
+    output_path = None if output_dir is None else Path(output_dir)
 
-    result = session.classify_fast(
+    return session.classify_fast(
         batch,
-        classification_time=0.1,
+        classification_time=classification_time,
         assume_passing_confined=True,
-        legacy_files=False,
+        legacy_files=output_path is not None,
+        output_dir=output_path,
+        include_minkowski=include_minkowski,
     )
 
-    labels = np.vstack([result.j_parallel, result.topology, result.minkowski]).T
-    print("Classification codes (J_parallel, topology, Minkowski):")
-    print(labels)
 
-    print("Counts:")
+def main() -> None:
+    result = run_fast_classification()
+
+    print("Classification counts (fast modes only):")
     for category, counts in result.counts().items():
+        if category == "minkowski":
+            continue
         print(f"  {category}: {counts}")
-
-    # Write legacy fort.* outputs for comparison
-    output_dir = Path("classification_output")
-    session.classify_fast(
-        batch,
-        classification_time=0.1,
-        assume_passing_confined=True,
-        legacy_files=True,
-        output_dir=output_dir,
-    )
-    print(f"Legacy fort.* outputs written to {output_dir.resolve()}")
 
 
 if __name__ == "__main__":

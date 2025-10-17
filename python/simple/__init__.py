@@ -232,9 +232,9 @@ def classify_fast(
     vmec_file: str | Path | None = None,
     integrator: str | int | None = None,
     write_files: bool = False,
+    include_minkowski: bool = True,
 ) -> ClassificationResult:
-    """
-    Compatibility wrapper around :class:`SimpleSession.classify_fast`."""
+    """Run the fast classifiers using an ephemeral :class:`SimpleSession`."""
 
     vmec = vmec_file or current_vmec()
     if vmec is None:
@@ -248,6 +248,7 @@ def classify_fast(
         output_dir=None,
         assume_passing_confined=True,
         integrator=integrator,
+        include_minkowski=include_minkowski,
     )
 
 
@@ -316,15 +317,41 @@ class SimpleSession:
         assume_passing_confined: bool = True,
         legacy_files: bool = False,
         output_dir: Path | None = None,
+        include_minkowski: bool = True,
     ) -> ClassificationResult:
+        """
+        Run the fast classifiers and return their labels.
+
+        Parameters
+        ----------
+        particles:
+            Particle batch or array containing initial conditions.
+        classification_time:
+            Duration of the fast classification trace.
+        integrator:
+            Optional integrator override.
+        assume_passing_confined:
+            If ``True`` (default) passing particles are marked as confined without
+            tracing the full orbit.
+        legacy_files:
+            When ``True`` the legacy ``fort.*`` outputs are produced in ``output_dir``.
+        output_dir:
+            Target directory for legacy outputs.
+        include_minkowski:
+            Set to ``False`` to skip the Minkowski fractal-dimension classifier and run
+            only the fast J_parallel/topology heuristics.
+        """
         batch = _as_batch(particles)
         n_particles = batch.n_particles
 
         overrides: Dict[str, float | int | bool] = {
-            "tcut": classification_time,
             "fast_class": True,
             "class_plot": legacy_files,
         }
+        if include_minkowski:
+            overrides["tcut"] = classification_time
+        else:
+            overrides["tcut"] = -1.0
 
         if assume_passing_confined:
             overrides["notrace_passing"] = 1
@@ -345,6 +372,9 @@ class SimpleSession:
                 iclass = _backend.snapshot_classification(n_particles)
                 trap_parameter = _backend.snapshot_trap_parameter(n_particles)
                 loss_times = _backend.snapshot_loss_times(n_particles)
+
+        if not include_minkowski:
+            iclass[2, :] = 0
 
         return ClassificationResult(
             j_parallel=iclass[0, :].astype(np.int64, copy=False),

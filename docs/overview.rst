@@ -19,7 +19,8 @@ Key concepts
 * :func:`simple.classify_fast` and
   :meth:`simple.SimpleSession.classify_fast` run the fast classifiers and, if
   requested, emit the legacy ``fort.*`` diagnostic files in a controlled
-  directory.
+  directory.  Pass ``include_minkowski=False`` when you only need the quick
+  J_parallel/topology heuristics.
 * :class:`simple.SurfaceSampler` and :class:`simple.VolumeSampler` provide
   access to the Fortran sampling routines while keeping data in the new API
   types.

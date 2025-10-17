@@ -17,7 +17,12 @@ import sys
 
 sys.path.insert(0, str(python_dir))
 
+examples_dir = Path(__file__).resolve().parents[2] / "examples"
+sys.path.insert(0, str(examples_dir))
+
 import simple  # noqa: E402  pylint: disable=wrong-import-position
+from classify_fast import run_fast_classification  # noqa: E402
+from simple_api import run_trace_example  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -68,14 +73,7 @@ class TestParticleBatch:
 
 class TestTraceOrbits:
     def test_trace_returns_batch_results(self, vmec_file: str):
-        batch = simple.ParticleBatch(4)
-        batch.initialize_from_samplers(vmec_file, method="surface", s=0.4)
-
-        results = simple.trace_orbits(
-            batch,
-            tmax=1e-4,
-            integrator="symplectic_midpoint",
-        )
+        results = run_trace_example(vmec_file, n_particles=4, tmax=1e-4)
 
         assert isinstance(results, simple.BatchResults)
         assert results.n_particles == 4
@@ -84,10 +82,7 @@ class TestTraceOrbits:
         assert results.tmax == pytest.approx(1e-4)
 
     def test_confined_and_lost_helpers(self, vmec_file: str):
-        batch = simple.ParticleBatch(3)
-        batch.initialize_from_samplers(vmec_file, method="surface", s=0.3)
-
-        results = simple.trace_orbits(batch, tmax=5e-5, integrator="midpoint")
+        results = run_trace_example(vmec_file, n_particles=3, tmax=5e-5)
 
         confined = simple.get_confined(results)
         lost = simple.get_lost(results)
@@ -108,3 +103,17 @@ class TestParameterHelpers:
             assert params["ntimstep"] == 2048
         finally:
             simple.set_parameters(ntimstep=original)
+
+
+class TestExampleModules:
+    def test_fast_classification_example_disables_minkowski(self, vmec_file: str):
+        result = run_fast_classification(
+            vmec_file,
+            n_particles=8,
+            classification_time=0.015,
+            include_minkowski=False,
+        )
+
+        assert result.j_parallel.shape == (8,)
+        assert result.topology.shape == (8,)
+        assert np.all(result.minkowski == 0)

@@ -1,42 +1,36 @@
 #!/usr/bin/env python3
-"""Example using the higher-level SIMPLE Python session API."""
+"""Trace a small batch of particles with :class:`simple.SimpleSession`."""
 
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
-import numpy as np
+from pathlib import Path
+
 import simple
 
 
+def run_trace_example(
+    vmec_file: str | Path | None = None,
+    *,
+    n_particles: int = 32,
+    surface: float = 0.3,
+    tmax: float = 5e-5,
+) -> simple.BatchResults:
+    """Trace a batch of particles and return the raw :class:`BatchResults`."""
+
+    vmec = vmec_file or simple.ensure_example_vmec()
+    session = simple.SimpleSession(vmec)
+    batch = session.sample_surface(n_particles, surface=surface)
+    return session.trace(batch, tmax=tmax, integrator="symplectic_midpoint")
+
+
 def main() -> None:
-    vmec_file = simple.ensure_example_vmec()
-
-    session = simple.SimpleSession(vmec_file)
-    batch = session.sample_surface(100, surface=0.3)
-
-    results = session.trace(batch, tmax=0.1, integrator="symplectic_midpoint")
-
-    confined = results.confined()
-    lost = results.lost()
+    results = run_trace_example()
+    confined = results.confined_mask().sum()
+    lost = results.lost_mask().sum()
     print(
-        f"Results: {confined.shape[1]} confined, "
-        f"{lost['loss_times'].size} lost out of {results.n_particles} particles"
+        f"Traced {results.n_particles} particles for {results.tmax:.2e} s: "
+        f"confined={confined}, lost={lost}"
     )
-
-    loss_times = results.loss_times
-    time_points = np.linspace(0.0, results.tmax, 100)
-    confined_fraction = [
-        np.sum(loss_times >= t) / loss_times.size for t in time_points
-    ]
-
-    plt.figure(figsize=(8, 6))
-    plt.plot(time_points, confined_fraction)
-    plt.xlabel("Time [normalized]")
-    plt.ylabel("Confined fraction")
-    plt.title("Particle confinement vs time")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
 
 
 if __name__ == "__main__":
