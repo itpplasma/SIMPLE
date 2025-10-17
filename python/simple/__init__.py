@@ -135,8 +135,7 @@ def trace_orbits(
     batch = _as_batch(particles)
     integrator_code = _resolve_integrator(integrator)
 
-    _backend.update_start_positions(batch.positions)
-    _backend.run_simulation(tmax, integrator_code, verbose=verbose)
+    _backend.run_simulation(batch.positions, tmax, integrator_code, verbose=verbose)
     arrays = _backend.collect_results(tmax)
 
     return BatchResults.from_backend(arrays)

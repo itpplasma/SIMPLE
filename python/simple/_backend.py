@@ -112,23 +112,13 @@ def assert_vmec_loaded() -> None:
 
 def configure_batch(n_particles: int) -> None:
     """
-    Resize all Fortran-side batch arrays to the requested particle count.
+    Resize Fortran-side arrays for the requested particle count.
     """
     assert_vmec_loaded()
 
-    pysimple.params.ntestpart = int(n_particles)
+    count = int(n_particles)
+    pysimple.params.ntestpart = count
     pysimple.params.reallocate_arrays()
-
-
-def update_start_positions(positions: np.ndarray) -> None:
-    """
-    Copy particle initial conditions into Fortran ``zstart`` arrays.
-    """
-    assert_vmec_loaded()
-
-    n_particles = positions.shape[1]
-    configure_batch(n_particles)
-    pysimple.params.zstart[:, :n_particles] = positions
 
 
 def collect_results(tmax: float) -> SimulationArrays:
@@ -166,15 +156,25 @@ def collect_results(tmax: float) -> SimulationArrays:
     )
 
 
-def run_simulation(tmax: float, integrator_code: int, verbose: bool = False) -> None:
+def run_simulation(
+    positions: np.ndarray,
+    tmax: float,
+    integrator_code: int,
+    verbose: bool = False,
+) -> None:
     """
     Execute the SIMPLE Fortran integrator for the current batch.
     """
     assert_vmec_loaded()
 
+    batch_positions = np.ascontiguousarray(positions, dtype=np.float64)
+    n_particles = batch_positions.shape[1]
+
+    configure_batch(n_particles)
     pysimple.params.trace_time = float(tmax)
     pysimple.params.integmode = int(integrator_code)
-    pysimple.params.init_batch()
+    pysimple.params.params_init()
+    pysimple.params.zstart[:, :n_particles] = batch_positions
 
     tracer = pysimple.simple.Tracer()
     pysimple.simple_main.run(tracer)
