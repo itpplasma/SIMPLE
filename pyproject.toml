@@ -3,7 +3,7 @@ requires = ["scikit-build-core", "numpy", "f90wrap@git+https://github.com/jamesk
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "pysimple"
+name = "simple"
 version = "1.2.0"
 dependencies = ["numpy"]
 classifiers = [
