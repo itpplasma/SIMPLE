@@ -13,7 +13,7 @@ import pytest
 
 pytest.importorskip("pysimple", reason="pysimple module not available")
 
-import simple
+import pysimple
 pytest.importorskip("pysimple", reason="pysimple module not available")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -22,14 +22,14 @@ SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
 
 @pytest.mark.usefixtures("vmec_file")
 def test_classify_fast_restores_parameters(vmec_file: str) -> None:
-    session = simple.SimpleSession(vmec_file)
+    session = pysimple.SimpleSession(vmec_file)
     batch = session.sample_surface(6, surface=0.35)
 
-    params_before = simple.get_parameters("tcut", "fast_class", "class_plot", "trace_time")
+    params_before = pysimple.get_parameters("tcut", "fast_class", "class_plot", "trace_time")
 
     result = session.classify_fast(batch)
 
-    params_after = simple.get_parameters("tcut", "fast_class", "class_plot", "trace_time")
+    params_after = pysimple.get_parameters("tcut", "fast_class", "class_plot", "trace_time")
     assert params_before == params_after
 
     assert result.j_parallel.shape == (batch.n_particles,)
@@ -49,7 +49,7 @@ def test_classify_fast_matches_fortran(tmp_path: Path, vmec_file: str) -> None:
         pytest.skip("simple.x is not built; run CMake/Ninja build first")
 
     vmec_path = Path(vmec_file).resolve()
-    session = simple.SimpleSession(vmec_path)
+    session = pysimple.SimpleSession(vmec_path)
 
     n_particles = 8
     batch = session.sample_surface(n_particles, surface=0.4)
@@ -81,21 +81,21 @@ netcdffile = '{vmec_path}'
     subprocess.run([str(SIMPLE_EXE), config_path.name], cwd=fortran_dir, check=True)
 
     particles = session.load_particles(python_dir / "start.dat")
-    original_params = simple.get_parameters("notrace_passing", "deterministic", "trace_time")
+    original_params = pysimple.get_parameters("notrace_passing", "deterministic", "trace_time")
     cwd = os.getcwd()
     try:
         os.chdir(python_dir)
-        simple.set_parameters(notrace_passing=1, deterministic=True, trace_time=0.1)
+        pysimple.set_parameters(notrace_passing=1, deterministic=True, trace_time=0.1)
         result = session.classify_fast(
             particles,
             classification_time=0.1,
             legacy_files=True,
             output_dir=Path.cwd(),
         )
-        start_snapshot = simple._backend.snapshot_start_positions(n_particles)
+        start_snapshot = pysimple._backend.snapshot_start_positions(n_particles)
     finally:
         os.chdir(cwd)
-        simple.set_parameters(**original_params)
+        pysimple.set_parameters(**original_params)
     theta = np.mod(start_snapshot[1, :], 2 * math.pi)
     pitch = start_snapshot[4, :]
     trap = result.trap_parameter

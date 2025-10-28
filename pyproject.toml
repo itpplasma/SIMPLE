@@ -14,4 +14,4 @@ classifiers = [
 build-dir = "build"
 build.verbose = true
 cmake.define.CMAKE_CACHE_DIR = "build"
-wheel.packages = ["python/simple"]
+wheel.packages = ["python/pysimple"]

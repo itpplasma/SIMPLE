@@ -13,16 +13,16 @@ import sys
 import os
 from pathlib import Path
 
-# Add build directory to Python path for pysimple import
+# Add build directory to Python path for simple_backend import
 build_dir = Path(__file__).parent.parent.parent / "build"
 if build_dir.exists():
     sys.path.insert(0, str(build_dir))
 
 try:
-    import pysimple
-    PYSIMPLE_AVAILABLE = True
+    import simple_backend
+    SIMPLE_BACKEND_AVAILABLE = True
 except ImportError:
-    PYSIMPLE_AVAILABLE = False
+    SIMPLE_BACKEND_AVAILABLE = False
 
 # Add Python API to path
 python_dir = Path(__file__).parent.parent.parent / "python"
@@ -30,14 +30,14 @@ if python_dir.exists():
     sys.path.insert(0, str(python_dir))
 
 try:
-    import simple
+    import pysimple
     SIMPLE_API_AVAILABLE = True
 except ImportError:
     SIMPLE_API_AVAILABLE = False
 
 
-@pytest.mark.skipif(not (PYSIMPLE_AVAILABLE and SIMPLE_API_AVAILABLE), 
-                   reason="Both pysimple and Python API required")
+@pytest.mark.skipif(not (SIMPLE_BACKEND_AVAILABLE and SIMPLE_API_AVAILABLE),
+                   reason="Both simple_backend and Python API required")
 class TestPerformanceValidation:
     """Test suite for Python API performance validation"""
     
@@ -59,16 +59,16 @@ class TestPerformanceValidation:
         Then: Python interface overhead should be <5%
         """
         # Create test particles using existing sampling
-        sampler = simple.SurfaceSampler(str(self.vmec_file))
+        sampler = pysimple.SurfaceSampler(str(self.vmec_file))
         particle_data = sampler.sample_surface_fieldline(self.n_particles)
-        particles = simple.ParticleBatch.from_fortran_arrays(particle_data)
+        particles = pysimple.ParticleBatch.from_fortran_arrays(particle_data)
         
         # Measure Python API execution times
         python_times = []
         for run in range(self.n_runs):
             start_time = time.perf_counter()
             
-            results = simple.trace_orbits(
+            results = pysimple.trace_orbits(
                 particles.copy(),
                 tmax=self.tmax,
                 integrator='symplectic_midpoint',
@@ -99,7 +99,7 @@ class TestPerformanceValidation:
         When: Accessing coordinate arrays
         Then: Column access should be cache-friendly
         """
-        particles = simple.ParticleBatch(10000)
+        particles = pysimple.ParticleBatch(10000)
         particles.initialize_from_samplers(str(self.vmec_file), method='surface')
         
         positions = particles.positions
@@ -130,7 +130,7 @@ class TestPerformanceValidation:
         When: Accessing position data
         Then: Should provide zero-copy access
         """
-        particles = simple.ParticleBatch(1000)
+        particles = pysimple.ParticleBatch(1000)
         particles.initialize_from_samplers(str(self.vmec_file), method='surface')
         
         # Get position array
@@ -159,11 +159,11 @@ class TestPerformanceValidation:
         """
         # Create deterministic particles
         np.random.seed(42)
-        particles1 = simple.ParticleBatch(100)
+        particles1 = pysimple.ParticleBatch(100)
         particles1.initialize_from_samplers(str(self.vmec_file), method='surface')
         
         np.random.seed(42)
-        particles2 = simple.ParticleBatch(100)
+        particles2 = pysimple.ParticleBatch(100)
         particles2.initialize_from_samplers(str(self.vmec_file), method='surface')
         
         # Verify identical initialization
@@ -173,8 +173,8 @@ class TestPerformanceValidation:
         # Run simulations
         config = {'tmax': 50.0, 'integrator': 'symplectic_midpoint'}
         
-        results1 = simple.trace_orbits(particles1, **config, verbose=False)
-        results2 = simple.trace_orbits(particles2, **config, verbose=False)
+        results1 = pysimple.trace_orbits(particles1, **config, verbose=False)
+        results2 = pysimple.trace_orbits(particles2, **config, verbose=False)
         
         # Compare results (should be identical with deterministic execution)
         times1 = results1.loss_times
@@ -194,11 +194,11 @@ class TestPerformanceValidation:
         # would require calling Fortran directly for each particle
         
         # Create small batch for testing
-        particles = simple.ParticleBatch(10)
+        particles = pysimple.ParticleBatch(10)
         particles.initialize_from_samplers(str(self.vmec_file), method='surface')
         
         # Run batch simulation
-        batch_results = simple.trace_orbits(
+        batch_results = pysimple.trace_orbits(
             particles,
             tmax=50.0,
             integrator='symplectic_midpoint',

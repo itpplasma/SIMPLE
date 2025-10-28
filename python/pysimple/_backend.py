@@ -1,7 +1,7 @@
 """
 Internal helper utilities for the cleaned SIMPLE Python API.
 
-This module centralizes all direct interactions with the ``pysimple`` f90wrap
+This module centralizes all direct interactions with the ``simple_backend`` f90wrap
 bindings so the public API can remain small and well tested.
 """
 
@@ -17,10 +17,10 @@ import os
 import numpy as np
 
 try:
-    import pysimple  # type: ignore
+    import simple_backend as pysimple  # type: ignore
 except ImportError as exc:  # pragma: no cover - exercised in test skips
     raise ImportError(
-        "pysimple module not found. Build SIMPLE with Python bindings enabled."
+        "simple_backend module not found. Build SIMPLE with Python bindings enabled."
     ) from exc
 
 

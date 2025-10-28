@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Trace a small batch of particles with :class:`simple.SimpleSession`."""
+"""Trace a small batch of particles with :class:`pysimple.SimpleSession`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import simple
+import pysimple
 
 
 def run_trace_example(
@@ -18,7 +18,7 @@ def run_trace_example(
     """Trace a batch of particles and return the raw :class:`BatchResults`."""
 
     vmec = vmec_file or simple.ensure_example_vmec()
-    session = simple.SimpleSession(vmec)
+    session = pysimple.SimpleSession(vmec)
     batch = session.sample_surface(n_particles, surface=surface)
     return session.trace(batch, tmax=tmax, integrator="symplectic_midpoint")
 

@@ -7,13 +7,13 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import simple
+import pysimple
 
 
 def trace_macrostep_example(
     vmec_file: Optional[str] = None,
     *,
-    batch: Optional[simple.ParticleBatch] = None,
+    batch: Optional[pysimple.ParticleBatch] = None,
     n_particles: int = 8,
     surface: float = 0.35,
     tmax: float = 1.0e-3,
@@ -22,7 +22,7 @@ def trace_macrostep_example(
     """Trace a batch of particles and emit ``orbits.nc`` macrostep output."""
 
     vmec = vmec_file or simple.ensure_example_vmec()
-    session = simple.SimpleSession(vmec)
+    session = pysimple.SimpleSession(vmec)
 
     if batch is None:
         particles = session.sample_surface(n_particles, surface=surface)
@@ -35,7 +35,7 @@ def trace_macrostep_example(
     cwd = Path.cwd()
     try:
         os.chdir(output_path)
-        with simple.macrostep_output(True):
+        with pysimple.macrostep_output(True):
             results = session.trace(particles, tmax=tmax)
     finally:
         os.chdir(cwd)

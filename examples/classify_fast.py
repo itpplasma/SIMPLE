@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-import simple
+import pysimple
 
 
 def classify_fast_example(vmec_file: str | None = None) -> simple.ClassificationResult:
     """Run the fast topological and J_parallel classifiers for a small batch."""
     vmec = vmec_file or simple.ensure_example_vmec()
-    session = simple.SimpleSession(vmec)
+    session = pysimple.SimpleSession(vmec)
     batch = session.sample_surface(16, surface=0.4)
     return session.classify_fast(batch, classification_time=0.015)
 

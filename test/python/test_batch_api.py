@@ -17,12 +17,12 @@ import sys
 
 sys.path.insert(0, str(python_dir))
 
-import simple  # noqa: E402  pylint: disable=wrong-import-position
+import pysimple  # noqa: E402  pylint: disable=wrong-import-position
 
 
 class TestSoALayout:
     def test_numpy_layout(self, vmec_file: str):
-        batch = simple.ParticleBatch(32)
+        batch = pysimple.ParticleBatch(32)
         batch.initialize_from_samplers(vmec_file, method="surface", s=0.55)
 
         positions = batch.positions
@@ -35,7 +35,7 @@ class TestSoALayout:
         assert phi_coords.size == 32
 
     def test_zero_copy_write(self, vmec_file: str):
-        batch = simple.ParticleBatch(4)
+        batch = pysimple.ParticleBatch(4)
         batch.initialize_from_samplers(vmec_file, method="surface", s=0.2)
 
         view = batch.positions
@@ -45,10 +45,10 @@ class TestSoALayout:
 
 class TestBatchResults:
     def test_confined_statistics(self, vmec_file: str):
-        batch = simple.ParticleBatch(10)
+        batch = pysimple.ParticleBatch(10)
         batch.initialize_from_samplers(vmec_file, method="surface", s=0.5)
 
-        results = simple.trace_orbits(batch, tmax=1e-4, integrator="midpoint")
+        results = pysimple.trace_orbits(batch, tmax=1e-4, integrator="midpoint")
 
         confined_mask = results.confined_mask()
         assert confined_mask.shape == (10,)
@@ -59,10 +59,10 @@ class TestBatchResults:
         assert lost["loss_times"].ndim == 1
 
     def test_to_dict(self, vmec_file: str):
-        batch = simple.ParticleBatch(3)
+        batch = pysimple.ParticleBatch(3)
         batch.initialize_from_samplers(vmec_file, method="surface", s=0.3)
 
-        results = simple.trace_orbits(batch, tmax=5e-5, integrator="midpoint")
+        results = pysimple.trace_orbits(batch, tmax=5e-5, integrator="midpoint")
         payload = results.to_dict()
 
         assert set(payload) == {

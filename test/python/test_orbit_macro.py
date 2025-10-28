@@ -15,7 +15,7 @@ pytest.importorskip("netCDF4", reason="netCDF4 module not available")
 
 import netCDF4 as nc
 
-import simple
+import pysimple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
@@ -56,7 +56,7 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         pytest.skip("simple.x is not built; run CMake/Ninja build first")
 
     vmec_path = Path(vmec_file).resolve()
-    session = simple.SimpleSession(vmec_path)
+    session = pysimple.SimpleSession(vmec_path)
 
     n_particles = 4
 
@@ -67,8 +67,8 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
 
     _write_simple_in(fortran_dir, vmec_path, n_particles, 1.0e-3)
 
-    with simple.field_type(0):
-        with simple.temporary_parameters(deterministic=True):
+    with pysimple.field_type(0):
+        with pysimple.temporary_parameters(deterministic=True):
             batch = session.sample_surface(n_particles, surface=0.35)
 
         np.savetxt(fortran_dir / "start.dat", batch.positions.T, fmt="%.18e")
@@ -84,12 +84,12 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         cwd = os.getcwd()
         try:
             os.chdir(python_dir)
-            with simple.temporary_parameters(
+            with pysimple.temporary_parameters(
                 notrace_passing=0,
                 npoiper2=64,
                 deterministic=True,
             ):
-                with simple.macrostep_output(True):
+                with pysimple.macrostep_output(True):
                     results = session.trace(
                         particles, tmax=1.0e-3, integrator="midpoint"
                     )

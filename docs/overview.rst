@@ -1,7 +1,7 @@
 Overview
 ========
 
-The SIMPLE Python package provides a thin, batch-oriented wrapper around the
+The pysimple package provides a thin, batch-oriented wrapper around the
 Fortran core.  The public API is intentionally small to reflect the underlying
 high-performance code path.
 
@@ -48,7 +48,7 @@ simulation:
 
 .. code-block:: python
 
-   import simple
+   import pysimple
 
    session = simple.SimpleSession(simple.ensure_example_vmec())
    batch = session.sample_surface(32, surface=0.3)
