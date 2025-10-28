@@ -21,9 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
 
 
-def _write_simple_in(path: Path, vmec: Path, n_particles: int, trace_time: float) -> None:
+def _write_simple_in(path: Path, vmec: Path, n_particles: int, trace_time: float, surface: float) -> None:
     text = f"""&config
-startmode = 2
+startmode = 1
 ntestpart = {n_particles}
 trace_time = {trace_time:.1e}
 npoiper2 = 64
@@ -33,6 +33,8 @@ isw_field_type = 0
 integmode = 3
 netcdffile = '{vmec}'
 deterministic = .true.
+sbeg(1) = {surface}
+num_surf = 1
 /
 """
     (path / "simple.in").write_text(text)
@@ -56,57 +58,74 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         pytest.skip("simple.x is not built; run CMake/Ninja build first")
 
     vmec_path = Path(vmec_file).resolve()
-    session = pysimple.SimpleSession(vmec_path)
-
     n_particles = 4
+    surface = 0.35
 
     fortran_dir = tmp_path / "fortran"
     python_dir = tmp_path / "python"
     fortran_dir.mkdir()
     python_dir.mkdir()
 
-    _write_simple_in(fortran_dir, vmec_path, n_particles, 1.0e-3)
+    # Run Fortran executable
+    _write_simple_in(fortran_dir, vmec_path, n_particles, 1.0e-3, surface)
+    subprocess.run([str(SIMPLE_EXE), "simple.in"], cwd=fortran_dir, check=True)
+    assert (fortran_dir / "orbits.nc").exists()
 
-    with pysimple.field_type(0):
-        with pysimple.temporary_parameters(deterministic=True):
-            batch = session.sample_surface(n_particles, surface=0.35)
+    # Use same start.dat for Python to ensure exact parity
+    start_path = python_dir / "start.dat"
+    start_path.write_text((fortran_dir / "start.dat").read_text())
 
-        np.savetxt(fortran_dir / "start.dat", batch.positions.T, fmt="%.18e")
+    # Run Python API (clean module-level state)
+    pysimple.init(
+        vmec_path,
+        deterministic=True,
+        notrace_passing=0,
+        npoiper2=64,
+        num_surf=1,
+    )
+    pysimple.params.sbeg[0] = surface
 
-        subprocess.run([str(SIMPLE_EXE), "simple.in"], cwd=fortran_dir, check=True)
-        assert (fortran_dir / "orbits.nc").exists()
+    particles = pysimple.load_particles(start_path)
 
-        # Reuse the exact start file consumed by simple.x to drive the Python API
-        start_path = python_dir / "start.dat"
-        start_path.write_text((fortran_dir / "start.dat").read_text())
+    # Read Fortran NetCDF output
+    fortran_orbits = _read_orbits_nc(fortran_dir / "orbits.nc")
 
-        particles = session.load_particles(start_path)
-        cwd = os.getcwd()
-        try:
-            os.chdir(python_dir)
-            with pysimple.temporary_parameters(
-                notrace_passing=0,
-                npoiper2=64,
-                deterministic=True,
-            ):
-                with pysimple.macrostep_output(True):
-                    results = session.trace(
-                        particles, tmax=1.0e-3, integrator="midpoint"
-                    )
-        finally:
-            os.chdir(cwd)
+    # Trace particles in Python and collect trajectories
+    python_orbits = {
+        "time": [],
+        "s": [],
+        "theta": [],
+        "phi": [],
+        "p_abs": [],
+        "v_par": [],
+    }
 
-    assert (python_dir / "orbits.nc").exists()
-    assert results.n_particles == n_particles
+    for i in range(n_particles):
+        result = pysimple.trace_orbit(
+            particles[:, i],
+            tmax=1.0e-3,
+            integrator="midpoint",
+            return_trajectory=True,
+        )
 
-    fortran_data = _read_orbits_nc(fortran_dir / "orbits.nc")
-    python_data = _read_orbits_nc(python_dir / "orbits.nc")
+        # Stack trajectories
+        python_orbits["time"].append(result["times"])
+        python_orbits["s"].append(result["trajectory"][0, :])
+        python_orbits["theta"].append(result["trajectory"][1, :])
+        python_orbits["phi"].append(result["trajectory"][2, :])
+        python_orbits["p_abs"].append(result["trajectory"][3, :])
+        python_orbits["v_par"].append(result["trajectory"][4, :])
 
-    for key in ("time", "s", "theta", "phi", "p_abs", "v_par"):
-        mask = ~np.isnan(python_data[key]) & ~np.isnan(fortran_data[key])
+    # Convert lists to arrays (particle, timestep) to match Fortran output
+    for key in python_orbits:
+        python_orbits[key] = np.array(python_orbits[key])
+
+    # Compare trajectories between Fortran and Python
+    for key in ["time", "s", "theta", "phi", "p_abs", "v_par"]:
         np.testing.assert_allclose(
-            python_data[key][mask],
-            fortran_data[key][mask],
+            python_orbits[key],
+            fortran_orbits[key],
             rtol=1e-10,
             atol=1e-12,
+            err_msg=f"Mismatch in {key}",
         )

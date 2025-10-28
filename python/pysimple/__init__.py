@@ -1,23 +1,30 @@
 """
-Public entry-point for the cleaned SIMPLE Python API.
+Simple module-level API for SIMPLE - mirroring Fortran global state.
+
+Usage:
+    import pysimple
+
+    pysimple.init('wout.nc', deterministic=True, ntestpart=100)
+    particles = pysimple.sample_surface(100, s=0.5)
+    pysimple.trace(particles, tmax=1e-3)
+
+    # Direct parameter access
+    pysimple.params.trace_time = 2e-3
 """
 
 from __future__ import annotations
 
-import os
-import urllib.request
-from contextlib import nullcontext
-from dataclasses import dataclass
-from enum import IntEnum
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
-from . import _backend
-from .particles import ParticleBatch
-from .results import BatchResults
-from .samplers import SurfaceSampler, VolumeSampler, load_particle_file
+try:
+    import simple_backend as _backend
+except ImportError as exc:
+    raise ImportError(
+        "simple_backend module not found. Build SIMPLE with Python bindings enabled."
+    ) from exc
 
 # Integration mode constants (mirroring orbit_symplectic_base.f90)
 RK45 = 0
@@ -29,12 +36,6 @@ GAUSS2 = 5
 GAUSS3 = 6
 GAUSS4 = 7
 LOBATTO3 = 15
-
-DEFAULT_TMAX = 0.1
-DEFAULT_SURFACE = 0.5
-DEFAULT_S_INNER = 0.1
-DEFAULT_S_OUTER = 0.9
-DEFAULT_INTEGRATOR = MIDPOINT
 
 _INTEGRATOR_ALIASES: dict[str, int] = {
     "rk45": RK45,
@@ -51,382 +52,407 @@ _INTEGRATOR_ALIASES: dict[str, int] = {
     "lobatto3": LOBATTO3,
 }
 
-DEFAULT_VMEC_URL = (
-    "https://github.com/hiddenSymmetries/simsopt/raw/master/"
-    "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
-)
+# Default spline orders used by Fortran
+DEFAULT_NS_S = 5
+DEFAULT_NS_TP = 5
+DEFAULT_MULTHARM = 5
+
+# Direct access to Fortran params module
+params = _backend.params
+
+# Module-level simple_main instance (Fortran module exposed as class by f90wrap)
+_simple_main = _backend.Simple_Main()
+
+# Module state
+_initialized = False
+_current_vmec: str | None = None
+_tracer: _backend.simple.Tracer | None = None
 
 
-def load_vmec(
+def init(
     vmec_file: str | Path,
     *,
-    ns_s: int = _backend.DEFAULT_NS_S,
-    ns_tp: int = _backend.DEFAULT_NS_TP,
-    multharm: int = _backend.DEFAULT_MULTHARM,
-    integrator: int | None = None,
-    force: bool = False,
+    ns_s: int = DEFAULT_NS_S,
+    ns_tp: int = DEFAULT_NS_TP,
+    multharm: int = DEFAULT_MULTHARM,
+    integmode: int = MIDPOINT,
+    **param_overrides: Any,
 ) -> None:
-    """Load or re-load a VMEC equilibrium into the Fortran backend."""
-    _backend.ensure_vmec_loaded(
-        vmec_file,
-        ns_s=ns_s,
-        ns_tp=ns_tp,
-        multharm=multharm,
-        integrator=integrator,
-        force=force,
+    """
+    Initialize SIMPLE with VMEC file and parameters.
+
+    Follows the same initialization sequence as simple_main::main():
+    1. Set parameters (replaces read_config, without file I/O)
+    2. init_field() - loads VMEC, initializes field evaluation
+    3. params_init() - computes derived parameters, resets seed if deterministic
+
+    Parameters
+    ----------
+    vmec_file : str | Path
+        Path to VMEC equilibrium NetCDF file
+    ns_s : int
+        Spline order for radial coordinate (default: 5)
+    ns_tp : int
+        Spline order for theta/phi coordinates (default: 5)
+    multharm : int
+        Multiharmonic order (default: 5)
+    integmode : int
+        Integration mode (default: MIDPOINT)
+    **param_overrides
+        Additional Fortran parameters to set (e.g., deterministic=True, ntestpart=100)
+
+    Example
+    -------
+    >>> import pysimple
+    >>> pysimple.init('wout.nc', deterministic=True, ntestpart=1000, trace_time=1e-3)
+    """
+    global _initialized, _current_vmec, _tracer
+
+    vmec_path = str(Path(vmec_file).expanduser().resolve())
+
+    # Step 1: Set parameters (replaces read_config without file I/O)
+    params.netcdffile = vmec_path
+    params.ns_s = int(ns_s)
+    params.ns_tp = int(ns_tp)
+    params.multharm = int(multharm)
+    params.integmode = int(integmode)
+
+    # Apply user parameter overrides
+    for key, value in param_overrides.items():
+        if not hasattr(params, key):
+            raise ValueError(f"Unknown SIMPLE parameter: {key}")
+        setattr(params, key, value)
+
+    # Step 2: init_field (same as Fortran main())
+    _tracer = _backend.simple.Tracer()
+    _simple_main.init_field(
+        _tracer,
+        vmec_path,
+        params.ns_s,
+        params.ns_tp,
+        params.multharm,
+        params.integmode,
     )
 
+    # Step 3: params_init (same as Fortran main())
+    # This calls reset_seed_if_deterministic() internally!
+    params.params_init()
 
-def current_vmec() -> Optional[str]:
-    """Return the currently loaded VMEC equilibrium path, if any."""
-    return _backend.current_vmec()
-
-
-def ensure_example_vmec(
-    destination: str | Path = "wout.nc", *, source_url: str = DEFAULT_VMEC_URL
-) -> Path:
-    """Download the reference VMEC file if it is not yet available."""
-
-    dest = Path(destination).expanduser()
-    if dest.is_dir():
-        dest = dest / "wout.nc"
-
-    if dest.exists():
-        return dest
-
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(source_url, dest)
-    return dest
+    _initialized = True
+    _current_vmec = vmec_path
 
 
-def _resolve_integrator(integrator: str | int | None) -> int:
-    if integrator is None:
-        return DEFAULT_INTEGRATOR
-    if isinstance(integrator, int):
-        return integrator
-    key = integrator.lower()
-    if key not in _INTEGRATOR_ALIASES:
-        raise ValueError(f"Unknown integrator '{integrator}'")
-    return _INTEGRATOR_ALIASES[key]
-
-
-def _as_batch(particles: ParticleBatch | np.ndarray) -> ParticleBatch:
-    if isinstance(particles, ParticleBatch):
-        return particles
-    return ParticleBatch.from_array(np.asarray(particles))
-
-
-def trace_orbits(
-    particles: ParticleBatch | np.ndarray,
-    *,
-    tmax: float = DEFAULT_TMAX,
-    integrator: str | int | None = None,
-    vmec_file: str | Path | None = None,
-    verbose: bool = False,
-) -> BatchResults:
+def sample_surface(n_particles: int, s: float) -> np.ndarray:
     """
-    Trace particle orbits using the SIMPLE Fortran backend.
+    Sample particles on a flux surface.
+
+    Parameters
+    ----------
+    n_particles : int
+        Number of particles to sample
+    s : float
+        Normalized toroidal flux coordinate (0 to 1)
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (5, n_particles) containing particle positions
+
+    Example
+    -------
+    >>> particles = pysimple.sample_surface(100, s=0.5)
     """
-    if vmec_file is not None:
-        load_vmec(vmec_file)
-    else:
-        _backend.assert_vmec_loaded()
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
 
-    batch = _as_batch(particles)
-    integrator_code = _resolve_integrator(integrator)
+    params.ntestpart = int(n_particles)
+    params.reallocate_arrays()
+    params.startmode = 2
+    params.sbeg[0] = float(s)
 
-    _backend.run_simulation(batch.positions, tmax, integrator_code, verbose=verbose)
-    arrays = _backend.collect_results(tmax)
+    samplers = _backend.Samplers()
+    samplers.sample_surface_fieldline(params.zstart)
 
-    return BatchResults.from_backend(arrays)
-
-
-def set_parameters(**kwargs: Any) -> None:
-    """Set Fortran parameters by delegating to the backend module."""
-    _backend.set_params(**kwargs)
+    return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
 
 
-def get_parameters(*names: str) -> dict[str, Any]:
-    """Fetch one or more Fortran parameters."""
-    return _backend.get_params(*names)
+def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarray:
+    """
+    Sample particles in a volume between two flux surfaces.
+
+    Parameters
+    ----------
+    n_particles : int
+        Number of particles to sample
+    s_inner : float
+        Inner flux surface (0 to 1)
+    s_outer : float
+        Outer flux surface (0 to 1)
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (5, n_particles) containing particle positions
+
+    Example
+    -------
+    >>> particles = pysimple.sample_volume(1000, s_inner=0.1, s_outer=0.9)
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    params.ntestpart = int(n_particles)
+    params.reallocate_arrays()
+    params.startmode = 3
+
+    samplers = _backend.Samplers()
+    samplers.sample_volume_single(params.zstart, float(s_inner), float(s_outer))
+
+    return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
 
 
-def get_field_type() -> int:
-    """Return the currently active field-type flag."""
-    return _backend.get_field_type()
+def load_particles(particle_file: str | Path) -> np.ndarray:
+    """
+    Load particles from a text file.
+
+    Parameters
+    ----------
+    particle_file : str | Path
+        Path to particle file (e.g., start.dat)
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (5, n_particles) containing particle positions
+
+    Example
+    -------
+    >>> particles = pysimple.load_particles('start.dat')
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    particle_path = Path(particle_file).expanduser().resolve()
+
+    # Count non-comment lines
+    with particle_path.open("r", encoding="utf-8") as handle:
+        n_particles = sum(
+            1 for line in handle if line.strip() and not line.lstrip().startswith("#")
+        )
+
+    if n_particles == 0:
+        return np.zeros((5, 0), dtype=np.float64, order="C")
+
+    params.ntestpart = n_particles
+    params.reallocate_arrays()
+    params.startmode = 1
+
+    samplers = _backend.Samplers()
+    samplers.sample_read(params.zstart, str(particle_path))
+
+    return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
 
 
-def set_field_type(value: int, *, reload: bool = True) -> None:
-    """Update the field-type flag, optionally forcing a VMEC reload."""
-    _backend.set_field_type(value, reload=reload)
-
-
-def field_type(value: int):
-    """Context manager that temporarily switches the field-type flag."""
-    return _backend.field_type(value)
-
-
-def get_confined(results: BatchResults, t_threshold: float | None = None) -> np.ndarray:
-    """Convenience wrapper for :meth:`BatchResults.confined`."""
-    return results.confined(t_threshold)
-
-
-def get_lost(
-    results: BatchResults, t_threshold: float | None = None
+def trace_orbit(
+    position: np.ndarray,
+    tmax: float,
+    integrator: str | int = MIDPOINT,
+    return_trajectory: bool = False,
 ) -> dict[str, np.ndarray]:
-    """Convenience wrapper for :meth:`BatchResults.lost`."""
-    return results.lost(t_threshold)
+    """
+    Trace a single particle orbit.
 
+    Parameters
+    ----------
+    position : np.ndarray
+        Array of shape (5,) containing initial position
+    tmax : float
+        Maximum trace time
+    integrator : str | int
+        Integration method (default: MIDPOINT)
+    return_trajectory : bool
+        If True, return full trajectory arrays
 
-class JParallelClass(IntEnum):
-    """Classification labels for the :math:`J_\\parallel` heuristic."""
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Dictionary containing:
+        - 'final_position': array of shape (5,)
+        - 'loss_time': float
+        - 'trajectory': array of shape (5, ntimstep) if return_trajectory=True
+        - 'times': array of shape (ntimstep,) if return_trajectory=True
 
-    UNCLASSIFIED = 0
-    REGULAR = 1
-    STOCHASTIC = 2
+    Example
+    -------
+    >>> result = pysimple.trace_orbit(position, tmax=1e-3, return_trajectory=True)
+    >>> trajectory = result['trajectory']
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
 
+    # Resolve integrator
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
 
-class TopologyClass(IntEnum):
-    """Classification labels for the topological ideal/non-ideal heuristic."""
+    position = np.ascontiguousarray(position, dtype=np.float64)
+    if position.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {position.shape}")
 
-    UNCLASSIFIED = 0
-    IDEAL = 1
-    NON_IDEAL = 2
+    # Set up simulation for single particle
+    params.ntestpart = 1
+    params.reallocate_arrays()
+    params.trace_time = float(tmax)
+    params.integmode = integrator_code
+    params.zstart[:, 0] = position
 
+    if return_trajectory:
+        # Allocate trajectory arrays (canonical coordinates)
+        traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order='F')
+        times = np.zeros(params.ntimstep, dtype=np.float64)
 
-@dataclass(slots=True)
-class ClassificationResult:
-    """Container for classifier outputs."""
+        # Call trace_orbit with trajectory output (use initialized tracer)
+        _simple_main.trace_orbit(_tracer, 1, traj_can, times)
 
-    j_parallel: np.ndarray
-    topology: np.ndarray
-    minkowski: Optional[np.ndarray]
-    trap_parameter: np.ndarray
-    loss_times: np.ndarray
+        # Convert canonical to reference coordinates (match Fortran NetCDF output)
+        traj_ref = np.zeros((5, params.ntimstep), dtype=np.float64, order='C')
+        xref = np.zeros(3, dtype=np.float64)
 
-    def as_enums(
-        self,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Return the classification arrays cast to their enum types."""
-        enums = [
-            self.j_parallel.astype(JParallelClass),
-            self.topology.astype(TopologyClass),
-        ]
-        if self.minkowski is not None:
-            enums.append(self.minkowski.astype(int))
-        return tuple(enums)
+        for it in range(params.ntimstep):
+            _backend.field_can_mod.can_to_ref(traj_can[0:3, it], xref)
+            traj_ref[0, it] = xref[0]  # s
+            traj_ref[1, it] = xref[1]  # theta
+            traj_ref[2, it] = xref[2]  # phi
+            traj_ref[3, it] = traj_can[3, it]  # p_abs
+            traj_ref[4, it] = traj_can[4, it]  # v_par
 
-    def counts(self) -> Dict[str, Dict[int, int]]:
-        """Return histogram-style counts for each classifier."""
-
-        def hist(values: np.ndarray) -> Dict[int, int]:
-            labels, counts = np.unique(values.astype(int), return_counts=True)
-            return {int(label): int(count) for label, count in zip(labels, counts)}
-
-        result = {
-            "j_parallel": hist(self.j_parallel),
-            "topology": hist(self.topology),
+        return {
+            'final_position': np.ascontiguousarray(params.zend[:, 0]),
+            'loss_time': float(params.times_lost[0]),
+            'trajectory': traj_ref,
+            'times': times,
         }
-        if self.minkowski is not None:
-            result["minkowski"] = hist(self.minkowski)
-        return result
+    else:
+        # Call trace_orbit without trajectory (just allocate dummy arrays)
+        traj = np.zeros((5, params.ntimstep), dtype=np.float64, order='F')
+        times = np.zeros(params.ntimstep, dtype=np.float64)
+        _simple_main.trace_orbit(_tracer, 1, traj, times)
 
-
-# Backwards compatibility name
-FastClassificationResult = ClassificationResult
-
-
-def classify_fast(
-    particles: ParticleBatch | np.ndarray,
-    *,
-    tcut: float = 0.1,
-    vmec_file: str | Path | None = None,
-    integrator: str | int | None = None,
-    write_files: bool = False,
-) -> ClassificationResult:
-    """Run the fast classifiers using an ephemeral :class:`SimpleSession`."""
-
-    vmec = vmec_file or current_vmec()
-    if vmec is None:
-        raise RuntimeError("VMEC equilibrium not initialized. Provide vmec_file.")
-
-    session = SimpleSession(vmec, integrator=integrator)
-    return session.classify_fast(
-        particles,
-        classification_time=tcut,
-        legacy_files=write_files,
-        output_dir=None,
-        assume_passing_confined=True,
-        integrator=integrator,
-    )
-
-
-class SimpleSession:
-    """High-level helper wrapping VMEC loading and API calls."""
-
-    def __init__(
-        self,
-        vmec_file: str | Path,
-        *,
-        integrator: str | int | None = None,
-    ) -> None:
-        self.vmec_file = Path(vmec_file).expanduser()
-        load_vmec(self.vmec_file)
-        self._integrator = integrator
-
-    def _integrator_choice(self, integrator: str | int | None) -> str | int | None:
-        return integrator if integrator is not None else self._integrator
-
-    def sample_surface(
-        self, n_particles: int, *, surface: float = DEFAULT_SURFACE
-    ) -> ParticleBatch:
-        batch = ParticleBatch(n_particles)
-        batch.initialize_from_samplers(self.vmec_file, method="surface", s=surface)
-        return batch
-
-    def sample_volume(
-        self,
-        n_particles: int,
-        *,
-        s_inner: float = DEFAULT_S_INNER,
-        s_outer: float = DEFAULT_S_OUTER,
-    ) -> ParticleBatch:
-        batch = ParticleBatch(n_particles)
-        batch.initialize_from_samplers(
-            self.vmec_file, method="volume", s_inner=s_inner, s_outer=s_outer
-        )
-        return batch
-
-    def load_particles(self, particle_file: str | Path) -> ParticleBatch:
-        data = load_particle_file(self.vmec_file, particle_file)
-        return ParticleBatch.from_fortran_arrays(data)
-
-    def trace(
-        self,
-        particles: ParticleBatch | np.ndarray,
-        *,
-        tmax: float = DEFAULT_TMAX,
-        integrator: str | int | None = None,
-        verbose: bool = False,
-    ) -> BatchResults:
-        return trace_orbits(
-            particles,
-            tmax=tmax,
-            integrator=self._integrator_choice(integrator),
-            vmec_file=self.vmec_file,
-            verbose=verbose,
-        )
-
-    def classify_fast(
-        self,
-        particles: ParticleBatch | np.ndarray,
-        *,
-        classification_time: float = 0.1,
-        integrator: str | int | None = None,
-        assume_passing_confined: bool = True,
-        legacy_files: bool = False,
-        output_dir: Path | None = None,
-    ) -> ClassificationResult:
-        """
-        Run the fast classifiers and return their labels.
-
-        Parameters
-        ----------
-        particles:
-            Particle batch or array containing initial conditions.
-        classification_time:
-            Duration of the fast classification trace.
-        integrator:
-            Optional integrator override.
-        assume_passing_confined:
-            If ``True`` (default) passing particles are marked as confined without
-            tracing the full orbit.
-        legacy_files:
-            When ``True`` the legacy ``fort.*`` outputs are produced in ``output_dir``.
-        output_dir:
-            Target directory for legacy outputs.
-        """
-        batch = _as_batch(particles)
-        n_particles = batch.n_particles
-
-        overrides: Dict[str, float | int | bool] = {
-            "fast_class": True,
-            "class_plot": legacy_files,
-            "tcut": -1.0,
+        return {
+            'final_position': np.ascontiguousarray(params.zend[:, 0]),
+            'loss_time': float(params.times_lost[0]),
         }
 
-        if assume_passing_confined:
-            overrides["notrace_passing"] = 1
 
-        trace_params = get_parameters("trace_time")
-        if trace_params["trace_time"] < classification_time:
-            overrides["trace_time"] = classification_time
+def trace_parallel(
+    positions: np.ndarray,
+    tmax: float,
+    integrator: str | int = MIDPOINT,
+) -> dict[str, np.ndarray]:
+    """
+    Trace multiple particle orbits in parallel (no trajectory output).
 
-        with _backend.working_directory(output_dir):
-            with _backend.temporary_parameters(**overrides):
-                trace_orbits(
-                    batch,
-                    tmax=classification_time,
-                    integrator=self._integrator_choice(integrator),
-                    vmec_file=None,
-                    verbose=False,
-                )
-                iclass = _backend.snapshot_classification(n_particles)
-                trap_parameter = _backend.snapshot_trap_parameter(n_particles)
-                loss_times = _backend.snapshot_loss_times(n_particles)
+    Parameters
+    ----------
+    positions : np.ndarray
+        Array of shape (5, n_particles) containing initial positions
+    tmax : float
+        Maximum trace time
+    integrator : str | int
+        Integration method (default: MIDPOINT)
 
-        iclass[2, :] = 0
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Dictionary containing:
+        - 'final_positions': array of shape (5, n_particles)
+        - 'loss_times': array of shape (n_particles,)
+        - 'trap_parameter': array of shape (n_particles,) if available
+        - 'perpendicular_invariant': array of shape (n_particles,) if available
 
-        return ClassificationResult(
-            j_parallel=iclass[0, :].astype(np.int64, copy=False),
-            topology=iclass[1, :].astype(np.int64, copy=False),
-            minkowski=None,
-            trap_parameter=trap_parameter,
-            loss_times=loss_times,
+    Example
+    -------
+    >>> results = pysimple.trace_parallel(particles, tmax=1e-3)
+    >>> lost_mask = results['loss_times'] < 1e-3
+
+    Notes
+    -----
+    For trajectory output, use trace_orbit() for single particles or loop over particles.
+    This function uses the parallel Fortran implementation for speed.
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    # Resolve integrator
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
+
+    positions = np.ascontiguousarray(positions, dtype=np.float64)
+    n_particles = positions.shape[1]
+
+    # Set up simulation
+    params.ntestpart = n_particles
+    params.reallocate_arrays()
+    params.trace_time = float(tmax)
+    params.integmode = integrator_code
+    params.zstart[:, :n_particles] = positions
+
+    # Run parallel simulation (calls trace_parallel in Fortran, uses initialized tracer)
+    _simple_main.trace_parallel(_tracer)
+
+    # Collect results
+    results = {
+        'final_positions': np.ascontiguousarray(
+            params.zend[:, :n_particles], dtype=np.float64
+        ),
+        'loss_times': np.ascontiguousarray(
+            params.times_lost[:n_particles], dtype=np.float64
+        ),
+    }
+
+    if hasattr(params, 'trap_par'):
+        results['trap_parameter'] = np.ascontiguousarray(
+            params.trap_par[:n_particles], dtype=np.float64
         )
 
+    if hasattr(params, 'perp_inv'):
+        results['perpendicular_invariant'] = np.ascontiguousarray(
+            params.perp_inv[:n_particles], dtype=np.float64
+        )
 
-temporary_parameters = _backend.temporary_parameters
-macrostep_output = _backend.macrostep_output
+    return results
+
+
+def current_vmec() -> str | None:
+    """Return the currently loaded VMEC file path."""
+    return _current_vmec
 
 
 __all__ = [
-    "ParticleBatch",
-    "BatchResults",
-    "SurfaceSampler",
-    "VolumeSampler",
-    "trace_orbits",
-    "load_vmec",
-    "current_vmec",
-    "set_parameters",
-    "get_parameters",
-    "set_field_type",
-    "get_field_type",
-    "get_confined",
-    "get_lost",
-    "DEFAULT_TMAX",
-    "DEFAULT_SURFACE",
-    "DEFAULT_S_INNER",
-    "DEFAULT_S_OUTER",
-    "DEFAULT_INTEGRATOR",
-    "RK45",
-    "EXPL_IMPL_EULER",
-    "IMPL_EXPL_EULER",
-    "MIDPOINT",
-    "GAUSS1",
-    "GAUSS2",
-    "GAUSS3",
-    "GAUSS4",
-    "LOBATTO3",
-    "JParallelClass",
-    "TopologyClass",
-    "ClassificationResult",
-    "FastClassificationResult",
-    "SimpleSession",
-    "ensure_example_vmec",
-    "temporary_parameters",
-    "macrostep_output",
-    "field_type",
-    "classify_fast",
-    "load_particle_file",
+    'init',
+    'sample_surface',
+    'sample_volume',
+    'load_particles',
+    'trace_orbit',
+    'trace_parallel',
+    'current_vmec',
+    'params',
+    'RK45',
+    'EXPL_IMPL_EULER',
+    'IMPL_EXPL_EULER',
+    'MIDPOINT',
+    'GAUSS1',
+    'GAUSS2',
+    'GAUSS3',
+    'GAUSS4',
+    'LOBATTO3',
 ]
