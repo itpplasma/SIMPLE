@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Python dependencies
+        run: python3 -m pip install --user f90wrap
+
       - name: Build SIMPLE
         run: |
           make clean
@@ -47,6 +50,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Python dependencies
+        run: python3 -m pip install --user f90wrap
 
       - name: Build SIMPLE
         run: |

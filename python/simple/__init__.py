@@ -151,6 +151,21 @@ def get_parameters(*names: str) -> dict[str, Any]:
     return _backend.get_params(*names)
 
 
+def get_field_type() -> int:
+    """Return the currently active field-type flag."""
+    return _backend.get_field_type()
+
+
+def set_field_type(value: int, *, reload: bool = True) -> None:
+    """Update the field-type flag, optionally forcing a VMEC reload."""
+    _backend.set_field_type(value, reload=reload)
+
+
+def field_type(value: int):
+    """Context manager that temporarily switches the field-type flag."""
+    return _backend.field_type(value)
+
+
 def get_confined(results: BatchResults, t_threshold: float | None = None) -> np.ndarray:
     """Convenience wrapper for :meth:`BatchResults.confined`."""
     return results.confined(t_threshold)
@@ -385,6 +400,8 @@ __all__ = [
     "current_vmec",
     "set_parameters",
     "get_parameters",
+    "set_field_type",
+    "get_field_type",
     "get_confined",
     "get_lost",
     "DEFAULT_TMAX",
@@ -409,6 +426,7 @@ __all__ = [
     "ensure_example_vmec",
     "temporary_parameters",
     "macrostep_output",
+    "field_type",
     "classify_fast",
     "load_particle_file",
 ]

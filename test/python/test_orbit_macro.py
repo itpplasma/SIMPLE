@@ -16,12 +16,6 @@ pytest.importorskip("netCDF4", reason="netCDF4 module not available")
 import netCDF4 as nc
 
 import simple
-import sys
-
-examples_dir = Path(__file__).resolve().parents[2] / "examples"
-sys.path.insert(0, str(examples_dir))
-
-from orbit_macro import trace_macrostep_example
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
@@ -35,7 +29,8 @@ trace_time = {trace_time:.1e}
 npoiper2 = 64
 output_orbits_macrostep = .true.
 notrace_passing = 0
-isw_field_type = 2
+isw_field_type = 0
+integmode = 3
 netcdffile = '{vmec}'
 deterministic = .true.
 /
@@ -64,29 +59,42 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
     session = simple.SimpleSession(vmec_path)
 
     n_particles = 4
-    batch = session.sample_surface(n_particles, surface=0.35)
 
     fortran_dir = tmp_path / "fortran"
     python_dir = tmp_path / "python"
     fortran_dir.mkdir()
     python_dir.mkdir()
 
-    np.savetxt(fortran_dir / "start.dat", batch.positions.T, fmt="%.18e")
-    np.savetxt(python_dir / "start.dat", batch.positions.T, fmt="%.18e")
-
     _write_simple_in(fortran_dir, vmec_path, n_particles, 1.0e-3)
 
-    subprocess.run([str(SIMPLE_EXE), "simple.in"], cwd=fortran_dir, check=True)
-    assert (fortran_dir / "orbits.nc").exists()
+    with simple.field_type(0):
+        with simple.temporary_parameters(deterministic=True):
+            batch = session.sample_surface(n_particles, surface=0.35)
 
-    particles = session.load_particles(python_dir / "start.dat")
-    cwd = os.getcwd()
-    try:
-        os.chdir(python_dir)
-        with simple.macrostep_output(True):
-            results = session.trace(particles, tmax=1.0e-3)
-    finally:
-        os.chdir(cwd)
+        np.savetxt(fortran_dir / "start.dat", batch.positions.T, fmt="%.18e")
+
+        subprocess.run([str(SIMPLE_EXE), "simple.in"], cwd=fortran_dir, check=True)
+        assert (fortran_dir / "orbits.nc").exists()
+
+        # Reuse the exact start file consumed by simple.x to drive the Python API
+        start_path = python_dir / "start.dat"
+        start_path.write_text((fortran_dir / "start.dat").read_text())
+
+        particles = session.load_particles(start_path)
+        cwd = os.getcwd()
+        try:
+            os.chdir(python_dir)
+            with simple.temporary_parameters(
+                notrace_passing=0,
+                npoiper2=64,
+                deterministic=True,
+            ):
+                with simple.macrostep_output(True):
+                    results = session.trace(
+                        particles, tmax=1.0e-3, integrator="midpoint"
+                    )
+        finally:
+            os.chdir(cwd)
 
     assert (python_dir / "orbits.nc").exists()
     assert results.n_particles == n_particles

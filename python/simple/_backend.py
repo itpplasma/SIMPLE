@@ -104,6 +104,25 @@ def ensure_vmec_loaded(
     _current_vmec = vmec_path
 
 
+def get_field_type() -> int:
+    """Return the currently active field-type flag."""
+    return int(pysimple.velo_mod.isw_field_type)
+
+
+def set_field_type(value: int, *, reload: bool = True) -> None:
+    """
+    Update the field-type flag, optionally forcing a VMEC reload.
+    """
+    target = int(value)
+    if get_field_type() == target and not reload:
+        return
+
+    pysimple.velo_mod.isw_field_type = target
+
+    if reload and _current_vmec is not None:
+        ensure_vmec_loaded(_current_vmec, force=True)
+
+
 def assert_vmec_loaded() -> None:
     """Raise if no VMEC equilibrium has been initialized."""
     if _current_vmec is None:
@@ -355,3 +374,22 @@ def macrostep_output(enabled: bool = True) -> Iterator[None]:
         yield
     finally:
         set_macrostep_output(previous)
+
+
+@contextmanager
+def field_type(value: int) -> Iterator[None]:
+    """
+    Temporarily switch the field-type flag in a safe manner.
+    """
+    previous = get_field_type()
+    target = int(value)
+
+    if previous == target:
+        yield
+        return
+
+    set_field_type(target, reload=True)
+    try:
+        yield
+    finally:
+        set_field_type(previous, reload=True)
