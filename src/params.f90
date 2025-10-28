@@ -5,10 +5,13 @@ module params
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
   use field_can_mod, only : eval_field => evaluate, FieldCan
+  use field, only : is_geqdsk
   use orbit_symplectic_base, only : SymplecticIntegrator, MultistageIntegrator, &
     EXPL_IMPL_EULER
   use vmecin_sub, only : stevvo
   use callback, only : output_error, output_orbits_macrostep
+  use tokamak_config_mod, only : tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+    tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
 
   implicit none
 
@@ -81,6 +84,10 @@ module params
   integer, dimension (:), allocatable :: idx
 
   character(1000) :: field_input = ''
+  logical :: use_analytical_field = .false.
+
+  ! Analytical tokamak parameters provided by tokamak_config_mod
+  character(1000) :: tokamak_input = 'tokamak.in'
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
@@ -90,13 +97,21 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
-    batch_size, ran_seed, reuse_batch, field_input, &
+    batch_size, ran_seed, reuse_batch, field_input, use_analytical_field, tokamak_input, &
+    tok_R0, tok_epsilon, tok_kappa, tok_delta, tok_A_param, tok_B0, &
+    tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0, &
     output_error, output_orbits_macrostep  ! callback
 
 contains
 
   subroutine read_config(config_file)
     character(256), intent(in) :: config_file
+    logical :: requires_tokamak_params
+    logical :: tok_exists
+    character(len(field_input)) :: field_source
+    character(len(config_file)) :: config_dir
+    character(len(config_file) + len(field_input)) :: tok_candidate
+    integer :: slash_pos, i
 
     open(1, file=config_file, status='old', action='read')
     read(1, nml=config)
@@ -106,7 +121,64 @@ contains
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
     endif
+
+    field_source = trim(field_input)
+    if (use_analytical_field .and. len_trim(field_source) == 0) then
+      field_input = 'analytical'
+      field_source = trim(field_input)
+    end if
+    config_dir = ''
+    slash_pos = 0
+    do i = len_trim(config_file), 1, -1
+      if (config_file(i:i) == '/') then
+        slash_pos = i
+        exit
+      end if
+    end do
+    if (slash_pos > 0) then
+      config_dir = config_file(1:slash_pos)
+    end if
+
+    inquire(file=trim(tokamak_input), exist=tok_exists)
+    if (.not. tok_exists) then
+      tok_candidate = ''
+      if (slash_pos > 0) then
+        tok_candidate = trim(config_dir)//trim(tokamak_input)
+        inquire(file=trim(tok_candidate), exist=tok_exists)
+        if (tok_exists) then
+          tokamak_input = trim(tok_candidate)
+        end if
+      end if
+    end if
+
+    ! Load tokamak parameters if analytical field requested
+    requires_tokamak_params = use_analytical_field
+
+    if (requires_tokamak_params) then
+      call read_tokamak_config()
+      if (.not. (isw_field_type == 3)) then
+        print *, 'Analytical tokamak configurations currently require Meiss canonical field (isw_field_type=3)'
+        error stop 'Invalid field type for analytical tokamak run'
+      end if
+    end if
   end subroutine read_config
+
+
+  subroutine read_tokamak_config()
+    logical :: exists
+    namelist /tokamak_params/ tok_R0, tok_epsilon, tok_kappa, tok_delta, &
+      tok_A_param, tok_B0, tok_Nripple, tok_a0, tok_alpha0, tok_delta0, tok_z0
+
+    inquire(file=trim(tokamak_input), exist=exists)
+    if (exists) then
+      open(1, file=trim(tokamak_input), status='old', action='read')
+      read(1, nml=tokamak_params)
+      close(1)
+      print *, 'Loaded tokamak parameters from ', trim(tokamak_input)
+    else
+      print *, 'Using default tokamak parameters (no ', trim(tokamak_input), ' found)'
+    end if
+  end subroutine read_tokamak_config
 
 
   subroutine params_init

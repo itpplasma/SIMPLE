@@ -17,6 +17,18 @@ endif()
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 
+set(GEOFLUX_FILE "${TEST_DATA_DIR}/EQDSK_I.geqdsk")
+set(GEOFLUX_URL "https://crppwww.epfl.ch/~sauter/benchmark/EQDSK_I")
+
+if(NOT EXISTS "${GEOFLUX_FILE}")
+    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
+    message(STATUS "Downloading GEQDSK test file to ${GEOFLUX_FILE}...")
+    file(DOWNLOAD "${GEOFLUX_URL}" "${GEOFLUX_FILE}" TLS_VERIFY OFF)
+    message(STATUS "Downloaded GEQDSK test file")
+endif()
+
+file(CREATE_LINK "${GEOFLUX_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk" SYMBOLIC)
+
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools
 if(ENABLE_GVEC)
@@ -99,6 +111,35 @@ target_link_libraries(test_samplers.x simple)
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
+
+add_executable (test_field_geoflux.x test_field_geoflux.f90)
+target_link_libraries(test_field_geoflux.x simple)
+add_test(NAME test_field_geoflux COMMAND test_field_geoflux.x)
+set_tests_properties(test_field_geoflux PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable(test_field_analytical_geoflux.x test_field_analytical_geoflux.f90)
+target_link_libraries(test_field_analytical_geoflux.x simple)
+add_test(NAME test_field_analytical_geoflux COMMAND test_field_analytical_geoflux.x)
+set_tests_properties(test_field_analytical_geoflux PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "analytical;unit"
+)
+
+add_executable (test_field_vmec.x test_field_vmec.f90)
+target_link_libraries(test_field_vmec.x simple)
+add_test(NAME test_field_vmec COMMAND test_field_vmec.x)
+set_tests_properties(test_field_vmec PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable (test_magfie_geoflux.x test_magfie_geoflux.f90)
+target_link_libraries(test_magfie_geoflux.x simple)
+add_test(NAME test_magfie_geoflux COMMAND test_magfie_geoflux.x)
+set_tests_properties(test_magfie_geoflux PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
 
 # Generate GVEC test data file for test_gvec using elliptic tokamak example
 set(GVEC_TEST_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../build/_deps/gvec-src/test-CI/examples/analytic_gs_elliptok/parameter.ini")
@@ -216,6 +257,59 @@ add_test(NAME test_batch_splines COMMAND test_batch_splines.x)
 set_tests_properties(test_batch_splines PROPERTIES
     LABELS "unit;performance"
     TIMEOUT 60
+)
+
+# Analytical tokamak Meiss integrand diagnostic
+add_executable(test_tokamak_meiss_transform.x test_tokamak_meiss_transform.f90)
+target_link_libraries(test_tokamak_meiss_transform.x simple)
+add_test(NAME test_tokamak_meiss_transform
+    COMMAND test_tokamak_meiss_transform.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_meiss_transform PROPERTIES
+    LABELS "unit;analytical"
+    TIMEOUT 120
+)
+
+add_executable(test_vmec_meiss_transform.x test_vmec_meiss_transform.f90)
+target_link_libraries(test_vmec_meiss_transform.x simple)
+add_test(NAME test_vmec_meiss_transform
+    COMMAND test_vmec_meiss_transform.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_vmec_meiss_transform PROPERTIES
+    LABELS "unit;analytical;stellarator"
+    TIMEOUT 180
+)
+
+# Analytical tokamak integration check
+add_executable(test_tokamak_alpha_confinement.x test_tokamak_alpha_confinement.f90)
+target_link_libraries(test_tokamak_alpha_confinement.x simple)
+add_test(NAME test_tokamak_alpha_confinement
+    COMMAND test_tokamak_alpha_confinement.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_alpha_confinement PROPERTIES
+    LABELS "integration;analytical"
+    TIMEOUT 120
+)
+
+# System test: run full alpha confinement example
+add_executable(test_tokamak_alpha_example.x test_tokamak_alpha_example.f90)
+add_test(NAME test_tokamak_alpha_example
+    COMMAND test_tokamak_alpha_example.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_alpha_example PROPERTIES
+    LABELS "system;analytical"
+    TIMEOUT 300
+)
+
+# Tokamak diagnostic plotting (poloidal RZ projection)
+add_executable(test_tokamak_alpha_diagnostic.x test_tokamak_alpha_diagnostic.f90)
+target_link_libraries(test_tokamak_alpha_diagnostic.x simple)
+add_test(NAME test_tokamak_alpha_diagnostic
+    COMMAND test_tokamak_alpha_diagnostic.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_tokamak_alpha_diagnostic PROPERTIES
+    LABELS "system;analytical"
+    TIMEOUT 300
 )
 
 # Regression tests for canonical coordinates

@@ -1,0 +1,39 @@
+&config
+! Alpha particle confinement test in ITER-size tokamak without ripple
+! Expected: Zero particles lost (perfect confinement)
+
+! Field configuration
+field_input = 'analytical'
+tokamak_input = 'tokamak.in'
+use_analytical_field = .true.
+isw_field_type = 3              ! Meiss canonical coordinates on geoflux
+
+! Particle configuration
+ntestpart = 128                 ! 128 alpha particles
+n_e = 2                         ! Alpha particle charge (Z=2)
+n_d = 4                         ! Alpha particle mass (A=4)
+facE_al = 1.0                   ! Full alpha energy (3.5 MeV)
+
+! Starting conditions
+sbeg = 0.25d0                   ! Start slightly inside mid-radius for stability
+num_surf = 1                    ! Single flux surface
+phibeg = 0.d0                   ! Starting toroidal angle
+thetabeg = 0.d0                 ! Starting poloidal angle
+startmode = 1                   ! Local mode (single fieldline)
+
+! Integration parameters
+trace_time = 5d-4               ! 0.5 ms integration window
+ntimstep = 5000                 ! Maintain same dt as original setup
+integmode = 1                   ! Euler1 integrator
+relerr = 1d-13                  ! Tolerance for symplectic integrator
+
+! Field line parameters
+nper = 1000                     ! Periods for initial field line
+npoiper = 100                   ! Points per period
+npoiper2 = 128                  ! Points per period for integrator
+
+! Output and control
+notrace_passing = 0             ! Trace all particles
+deterministic = .True.          ! Reproducible results
+fast_class = .False.            ! Full orbit integration
+/

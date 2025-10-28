@@ -1,0 +1,16 @@
+&tokamak_params
+  ! ITER-like equilibrium parameters (Cerfon-Freidberg analytical GS solution)
+  tok_R0 = 6.2d2          ! Major radius [cm]
+  tok_epsilon = 0.32d0    ! Inverse aspect ratio (a/R0)
+  tok_kappa = 1.0d0       ! Elongation (1.0 = circular)
+  tok_delta = 0.0d0       ! Triangularity (0.0 = no triangularity)
+  tok_A_param = -0.142d0  ! Shafranov parameter (related to pressure)
+  tok_B0 = 5.3d4          ! Toroidal field on axis [G]
+
+  ! TF ripple parameters - NO RIPPLE for perfect confinement test
+  tok_Nripple = 0         ! Number of TF coils (0 = axisymmetric, no ripple)
+  tok_delta0 = 0.0d0      ! Ripple amplitude (fraction)
+  tok_alpha0 = 2.0d0      ! Ripple radial exponent
+  tok_a0 = 1.984d2        ! Ripple reference radius [cm] (= epsilon*R0)
+  tok_z0 = 0.0d0          ! Ripple vertical center [cm]
+/

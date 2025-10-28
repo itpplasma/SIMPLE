@@ -1,0 +1,39 @@
+&config
+! TF ripple benchmark matching ASCOT wallload_ripple coil settings
+
+! Analytical GS field with 9-coil, 10% TF ripple
+field_input    = 'tokamak_ripple'
+tokamak_input  = 'tokamak_ripple.in'
+use_analytical_field = .true.
+isw_field_type = 3                ! Meiss canonical coordinates on geoflux (required)
+
+! Particle ensemble (alpha-like guiding centers)
+ntestpart   = 1024
+n_e         = 2
+n_d         = 4
+facE_al     = 1.0
+
+! VMEC/GEQDSK reference (downloaded via Makefile)
+netcdffile = 'EQDSK_I.geqdsk'
+
+! Sample a single flux surface to highlight ripple-induced diffusion
+startmode = 1
+sbeg      = 0.70d0
+
+! Orbit integration controls (0.1 ms window with fine steps)
+trace_time = 1.0d-4
+ntimstep   = 2000
+integmode  = 1
+relerr     = 1.0d-13
+
+! Field-line resolution for initialization
+nper     = 200
+npoiper  = 128
+npoiper2 = 128
+phibeg   = 0.0d0
+thetabeg = 0.0d0
+
+! Deterministic sampling, trace all orbits
+notrace_passing = 0
+deterministic   = .true.
+/
