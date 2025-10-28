@@ -35,6 +35,7 @@ jobs:
         run: |
           make clean
           make
+          python3 -m pip install -e . --no-build-isolation --break-system-packages
 
       - name: Run Tests
         run: |
@@ -58,6 +59,7 @@ jobs:
         run: |
           make clean
           make
+          python3 -m pip install -e . --no-build-isolation --break-system-packages
 
       - name: Run Regression Tests
         run: make test-regression
