@@ -81,6 +81,7 @@ set(FILES_TO_WRAP
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
     params.f90
+    magfie.f90
 )
 
 # Add libneo files to wrap

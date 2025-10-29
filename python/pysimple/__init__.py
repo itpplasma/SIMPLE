@@ -136,7 +136,16 @@ def init(
 
     # Step 3: params_init (same as Fortran main())
     # This calls reset_seed_if_deterministic() internally!
+    # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
     params.params_init()
+
+    # Step 4: init_magfie(VMEC) - set function pointer for magnetic field evaluation
+    _backend.magfie_sub.init_magfie(_backend.magfie_sub.vmec)
+
+    # Step 5: init_starting_surf (MUST be called before sampling particles!)
+    # This integrates the magnetic field line to compute bmin, bmax
+    samplers = _backend.Samplers()
+    samplers.init_starting_surf()
 
     _initialized = True
     _current_vmec = vmec_path
@@ -253,6 +262,28 @@ def load_particles(particle_file: str | Path) -> np.ndarray:
     return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
 
 
+_trace_initialized = False
+
+def _init_before_trace():
+    """Initialize components needed before tracing (call once before first trace).
+
+    This mimics lines 78-81 from simple_main::main():
+    - init_magfie(isw_field_type) - not exposed, skipped
+    - init_counters - resets counters
+
+    Note: init_starting_surf is called during init(), not here!
+    """
+    global _trace_initialized
+
+    if _trace_initialized:
+        return
+
+    # init_counters - reset counters
+    _simple_main.init_counters()
+
+    _trace_initialized = True
+
+
 def trace_orbit(
     position: np.ndarray,
     tmax: float,
@@ -289,6 +320,9 @@ def trace_orbit(
     """
     if not _initialized:
         raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    # Initialize components needed before first trace
+    _init_before_trace()
 
     # Resolve integrator
     if isinstance(integrator, str):
@@ -387,6 +421,9 @@ def trace_parallel(
     if not _initialized:
         raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
 
+    # Initialize components needed before first trace
+    _init_before_trace()
+
     # Resolve integrator
     if isinstance(integrator, str):
         key = integrator.lower()
@@ -408,7 +445,6 @@ def trace_parallel(
 
     # Run parallel simulation (calls trace_parallel in Fortran, uses initialized tracer)
     _simple_main.trace_parallel(_tracer)
-
     # Collect results
     results = {
         'final_positions': np.ascontiguousarray(
