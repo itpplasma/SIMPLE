@@ -285,18 +285,39 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/canonical
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/golden_record/test_cases/)
 
-# Golden record test: compare working copy against main branch
-add_test(
-    NAME golden_record_main
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
-        main
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+# Find all golden record test cases dynamically by scanning for simple.in files
+file(GLOB GOLDEN_RECORD_CASES
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record
+    ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/*/simple.in
 )
-set_tests_properties(golden_record_main PROPERTIES
-    TIMEOUT 600  # 10 minutes for comparison
-    LABELS "golden_record;regression"
-    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-)
+
+# Extract test case names (directory names)
+set(GOLDEN_RECORD_TEST_CASES)
+foreach(CASE_PATH ${GOLDEN_RECORD_CASES})
+    get_filename_component(CASE_NAME ${CASE_PATH} DIRECTORY)
+    list(APPEND GOLDEN_RECORD_TEST_CASES ${CASE_NAME})
+endforeach()
+
+if(GOLDEN_RECORD_TEST_CASES)
+    message(STATUS "Golden record test cases found: ${GOLDEN_RECORD_TEST_CASES}")
+else()
+    message(WARNING "No golden record test cases found in test/golden_record/")
+endif()
+
+# Create individual tests for each case against main branch
+foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
+    add_test(
+        NAME golden_record_main_${CASE}
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
+            main ${CASE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+    set_tests_properties(golden_record_main_${CASE} PROPERTIES
+        TIMEOUT 300  # 5 minutes per case
+        LABELS "golden_record;regression;golden_main"
+        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
+    )
+endforeach()
 
 # Find latest tag dynamically at configure time
 execute_process(
@@ -311,21 +332,22 @@ list(GET GIT_TAG_LIST 0 LATEST_TAG)
 
 if(LATEST_TAG)
     message(STATUS "Latest tag found: ${LATEST_TAG}")
-    # Golden record test: compare working copy against latest stable tag
-    # Tag v2025.08.1 is the earliest commit compatible with current libneo
-    add_test(
-        NAME golden_record_tag
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
-            ${LATEST_TAG}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-    set_tests_properties(golden_record_tag PROPERTIES
-        TIMEOUT 600  # 10 minutes for comparison
-        LABELS "golden_record;regression"
-        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-    )
+    # Create individual tests for each case against latest tag
+    foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
+        add_test(
+            NAME golden_record_tag_${CASE}
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
+                ${LATEST_TAG} ${CASE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        )
+        set_tests_properties(golden_record_tag_${CASE} PROPERTIES
+            TIMEOUT 300  # 5 minutes per case
+            LABELS "golden_record;regression;golden_tag"
+            ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
+        )
+    endforeach()
 else()
-    message(WARNING "No git tags found, skipping golden_record_tag test")
+    message(WARNING "No git tags found, skipping golden_record_tag tests")
 endif()
 
 # Golden record sanity test: tests the comparison system itself

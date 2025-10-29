@@ -4,6 +4,7 @@ CLONE_URL="https://github.com/itpplasma/SIMPLE.git"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CUR_VER=$(git -C "$SCRIPT_DIR" describe --tags --always --dirty)
 REF_VER=${1:-"main"}
+SINGLE_CASE=${2:-""}  # Optional: specific test case to run
 
 # Allow override of directories via environment variables
 GOLDEN_RECORD_BASE_DIR=${GOLDEN_RECORD_BASE_DIR:-"$(pwd)/golden_record"}
@@ -28,7 +29,10 @@ RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
 
 # Find test cases - they should be copied by CMake to the golden_record directory
-if [ -d "$GOLDEN_RECORD_BASE_DIR/test_cases" ]; then
+if [ -n "$SINGLE_CASE" ]; then
+    # Single test case specified
+    TEST_CASES="$SINGLE_CASE"
+elif [ -d "$GOLDEN_RECORD_BASE_DIR/test_cases" ]; then
     TEST_CASES="$(cd "$GOLDEN_RECORD_BASE_DIR/test_cases" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | sort)"
 else
     # Fallback to original location if CMake hasn't copied them yet
