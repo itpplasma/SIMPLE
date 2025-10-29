@@ -37,6 +37,7 @@ set(SOURCES
     netcdf_orbit_output.f90
     callback.f90
     params.f90
+    params_wrapper.f90
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90

@@ -140,7 +140,7 @@ def init(
     params.params_init()
 
     # Step 4: init_magfie(VMEC) - set function pointer for magnetic field evaluation
-    _backend.magfie_sub.init_magfie(_backend.magfie_sub.vmec)
+    _backend.magfie_wrapper.init_magfie(_backend.magfie_wrapper.vmec)
 
     # Step 5: init_starting_surf (MUST be called before sampling particles!)
     # This integrates the magnetic field line to compute bmin, bmax
@@ -177,12 +177,16 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
     params.ntestpart = int(n_particles)
     params.reallocate_arrays()
     params.startmode = 2
-    params.sbeg[0] = float(s)
+
+    # Use wrapper to avoid f90wrap array bug
+    _backend.params_wrapper.set_sbeg(1, float(s))
 
     samplers = _backend.Samplers()
-    samplers.sample_surface_fieldline(params.zstart)
+    # Create zstart array and pass to sampler
+    zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
+    samplers.sample_surface_fieldline(zstart)
 
-    return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarray:
@@ -279,7 +283,7 @@ def _init_before_trace():
         return
 
     # init_magfie(isw_field_type) - set field evaluation to configured type
-    _backend.magfie_sub.init_magfie(_backend.velo_mod.isw_field_type)
+    _backend.magfie_wrapper.init_magfie(_backend.velo_mod.isw_field_type)
 
     # init_counters - reset counters
     _simple_main.init_counters()
