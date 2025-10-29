@@ -180,7 +180,8 @@ class TestTraceOrbits:
 
     def test_trace_with_trajectory(self, vmec_file: str):
         """Test trace_orbit with trajectory output"""
-        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
+        # Re-init to avoid test interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=1)
         particles = pysimple.sample_surface(1, s=0.5)
         particle = particles[:, 0]
 
