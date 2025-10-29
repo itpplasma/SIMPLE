@@ -367,7 +367,15 @@ def trace_orbit(
     params.ntestpart = 1
     params.reallocate_arrays()
     params.integmode = integrator_code
-    params.zstart[:, 0] = position
+
+    # Handle f90wrap dimension quirk: with ntestpart=1, arrays may be wrapped as 1D
+    zstart = np.asarray(params.zstart)
+    if zstart.ndim == 1:
+        zstart = zstart.reshape(5, 1)
+        zstart[:, 0] = position
+        params.zstart = zstart.ravel()
+    else:
+        params.zstart[:, 0] = position
 
     if return_trajectory:
         # Allocate trajectory arrays (canonical coordinates)
@@ -389,8 +397,12 @@ def trace_orbit(
             traj_ref[3, it] = traj_can[3, it]  # p_abs
             traj_ref[4, it] = traj_can[4, it]  # v_par
 
+        # Extract final position (handle f90wrap dimension quirk)
+        zend = np.asarray(params.zend)
+        final_pos = zend.reshape(5, -1)[:, 0] if zend.ndim == 1 else zend[:, 0]
+
         return {
-            'final_position': np.ascontiguousarray(params.zend[:, 0]),
+            'final_position': np.ascontiguousarray(final_pos),
             'loss_time': float(params.times_lost[0]),
             'trajectory': traj_ref,
             'times': times,
@@ -401,8 +413,12 @@ def trace_orbit(
         times = np.zeros(params.ntimstep, dtype=np.float64)
         _simple_main.trace_orbit(_tracer, 1, traj, times)
 
+        # Extract final position (handle f90wrap dimension quirk)
+        zend = np.asarray(params.zend)
+        final_pos = zend.reshape(5, -1)[:, 0] if zend.ndim == 1 else zend[:, 0]
+
         return {
-            'final_position': np.ascontiguousarray(params.zend[:, 0]),
+            'final_position': np.ascontiguousarray(final_pos),
             'loss_time': float(params.times_lost[0]),
         }
 
