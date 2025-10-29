@@ -3,52 +3,44 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Optional
 
 import pysimple
 
 
 def trace_macrostep_example(
-    vmec_file: Optional[str] = None,
-    *,
-    batch: Optional[pysimple.ParticleBatch] = None,
+    vmec_file: str | Path,
     n_particles: int = 8,
-    surface: float = 0.35,
-    tmax: float = 1.0e-3,
-    output_dir: str | Path = "orbit_macro_output",
-) -> simple.BatchResults:
-    """Trace a batch of particles and emit ``orbits.nc`` macrostep output."""
+) -> dict:
+    """Trace particles with single orbit trajectory output."""
+    pysimple.init(
+        vmec_file,
+        deterministic=True,
+        trace_time=1e-4,
+        ntestpart=1,
+    )
 
-    vmec = vmec_file or simple.ensure_example_vmec()
-    session = pysimple.SimpleSession(vmec)
+    particles = pysimple.sample_surface(1, s=0.35)
+    particle = particles[:, 0]
 
-    if batch is None:
-        particles = session.sample_surface(n_particles, surface=surface)
-    else:
-        particles = batch
+    result = pysimple.trace_orbit(particle, integrator="midpoint", return_trajectory=True)
 
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    n_timesteps = result['times'].shape[0]
+    print(f"Traced 1 particle with {n_timesteps} timesteps")
+    print(f"Loss time: {result['loss_time']:.3e}s")
 
-    cwd = Path.cwd()
-    try:
-        os.chdir(output_path)
-        with pysimple.macrostep_output(True):
-            results = session.trace(particles, tmax=tmax)
-    finally:
-        os.chdir(cwd)
-
-    return results
+    return result
 
 
 def main() -> None:
-    results = trace_macrostep_example()
-    print(
-        f"Traced {results.n_particles} particles for {results.tmax:.3e}s. "
-        "Macrostep output written to orbit_macro_output/orbits.nc"
-    )
+    repo_root = Path(__file__).resolve().parents[1]
+    vmec_file = repo_root / "test" / "test_data" / "wout.nc"
+
+    if not vmec_file.exists():
+        print(f"VMEC file not found: {vmec_file}")
+        return
+
+    trace_macrostep_example(vmec_file)
 
 
 if __name__ == "__main__":

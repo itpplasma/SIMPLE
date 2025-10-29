@@ -110,28 +110,14 @@ If `return_trajectory=True`, returns full trajectory arrays.
 
 **`pysimple.classify_parallel(positions, integrator='midpoint')`**
 
-Classify particle orbits (trapped/passing, regular/chaotic).
+Classify particle orbits as trapped or passing.
 
 Returns dictionary including all trace_parallel outputs plus:
 - `'passing'`: `(n_particles,)` boolean (True=passing, False=trapped)
 - `'lost'`: `(n_particles,)` boolean
 - `'jpar'`: `(n_particles,)` J-parallel conservation (0-2)
 - `'topology'`: `(n_particles,)` topological classification (0-2)
-- `'minkowski'`: `(n_particles,)` Minkowski dimension (0=unclassified, 1=regular, 2=chaotic)
-
-Example:
-```python
-pysimple.init('wout.nc', tcut=0.1, deterministic=True, trace_time=1e-3)
-particles = pysimple.sample_surface(1000, s=0.5)
-classified = pysimple.classify_parallel(particles)
-
-regular = classified['minkowski'] == 1
-chaotic = classified['minkowski'] == 2
-trapped = ~classified['passing']
-
-print(f"Regular: {regular.sum()}, Chaotic: {chaotic.sum()}")
-print(f"Trapped: {trapped.sum()}, Passing: {(~trapped).sum()}")
-```
+- `'minkowski'`: `(n_particles,)` Minkowski dimension (0-3)
 
 #### Integrator Constants
 

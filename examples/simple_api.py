@@ -12,7 +12,7 @@ def trace_example(vmec_file: str | Path, n_particles: int = 32) -> None:
     """Trace particles and report confinement statistics."""
 
     # Initialize SIMPLE with VMEC file
-    pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
+    pysimple.init(vmec_file, deterministic=True, trace_time=5e-5, ntestpart=n_particles)
 
     # Sample particles on a flux surface
     particles = pysimple.sample_surface(n_particles, s=0.3)
@@ -30,7 +30,7 @@ def classify_example(vmec_file: str | Path, n_particles: int = 32) -> None:
     """Classify particle orbits as trapped/passing and regular/chaotic."""
 
     # Initialize with classification enabled (tcut > 0)
-    pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, tcut=0.1)
+    pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, tcut=0.1, ntestpart=n_particles)
 
     # Sample particles
     particles = pysimple.sample_surface(n_particles, s=0.5)
