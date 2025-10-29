@@ -298,40 +298,35 @@ set_tests_properties(golden_record_main PROPERTIES
     ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
 )
 
-# TODO: Re-enable golden_record_tag test once libneo versioning is fixed
-# Issue: v2025.08.18 tag fails to build because it needs an old libneo version
-# but doesn't trigger the historical libneo workaround in golden_record.sh
-# (workaround only runs for ancient SRC/ structure).
-# Options: (1) Fix golden_record.sh to handle this case, (2) Create new tag
-#
-# # Find latest tag dynamically at configure time
-# execute_process(
-#     COMMAND git tag --sort=-creatordate
-#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..
-#     OUTPUT_VARIABLE GIT_TAGS
-#     OUTPUT_STRIP_TRAILING_WHITESPACE
-#     ERROR_QUIET
-# )
-# string(REPLACE "\n" ";" GIT_TAG_LIST "${GIT_TAGS}")
-# list(GET GIT_TAG_LIST 0 LATEST_TAG)
-#
-# if(LATEST_TAG)
-#     message(STATUS "Latest tag found: ${LATEST_TAG}")
-#     # Golden record test: compare working copy against latest stable tag
-#     add_test(
-#         NAME golden_record_tag
-#         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
-#             ${LATEST_TAG}
-#         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-#     )
-#     set_tests_properties(golden_record_tag PROPERTIES
-#         TIMEOUT 600  # 10 minutes for comparison
-#         LABELS "golden_record;regression"
-#         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-#     )
-# else()
-#     message(WARNING "No git tags found, skipping golden_record_tag test")
-# endif()
+# Find latest tag dynamically at configure time
+execute_process(
+    COMMAND git tag --sort=-creatordate
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..
+    OUTPUT_VARIABLE GIT_TAGS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+string(REPLACE "\n" ";" GIT_TAG_LIST "${GIT_TAGS}")
+list(GET GIT_TAG_LIST 0 LATEST_TAG)
+
+if(LATEST_TAG)
+    message(STATUS "Latest tag found: ${LATEST_TAG}")
+    # Golden record test: compare working copy against latest stable tag
+    # Tag v2025.08.1 is the earliest commit compatible with current libneo
+    add_test(
+        NAME golden_record_tag
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
+            ${LATEST_TAG}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+    set_tests_properties(golden_record_tag PROPERTIES
+        TIMEOUT 600  # 10 minutes for comparison
+        LABELS "golden_record;regression"
+        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
+    )
+else()
+    message(WARNING "No git tags found, skipping golden_record_tag test")
+endif()
 
 # Golden record sanity test: tests the comparison system itself
 # This ensures the golden record comparison scripts are working correctly
