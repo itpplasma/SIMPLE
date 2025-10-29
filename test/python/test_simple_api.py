@@ -136,7 +136,8 @@ class TestSampleSurface:
 
 class TestTraceOrbits:
     def test_trace_returns_dict_results(self, vmec_file: str):
-        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=4)
         particles = pysimple.sample_surface(4, s=0.3)
         results = pysimple.trace_parallel(particles)
 
@@ -147,7 +148,8 @@ class TestTraceOrbits:
         assert results['perpendicular_invariant'].shape == (4,)
 
     def test_confined_and_lost_filters(self, vmec_file: str):
-        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5, ntestpart=3)
         particles = pysimple.sample_surface(3, s=0.3)
         results = pysimple.trace_parallel(particles)
 
@@ -159,7 +161,8 @@ class TestTraceOrbits:
 
     def test_different_integrators(self, vmec_file: str):
         """Test different integrator methods"""
-        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=2)
         particles = pysimple.sample_surface(2, s=0.5)
 
         # Test various integrators
