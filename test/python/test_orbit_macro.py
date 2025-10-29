@@ -76,6 +76,7 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
     start_path.write_text((fortran_dir / "start.dat").read_text())
 
     # Run Python API (clean module-level state)
+    # Use isw_field_type=0 (TEST) to match Fortran config
     pysimple.init(
         vmec_path,
         deterministic=True,
@@ -83,6 +84,7 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         npoiper2=64,
         num_surf=1,
         trace_time=1.0e-3,
+        isw_field_type=0,
     )
     # Use wrapper to set sbeg (f90wrap array access workaround)
     pysimple._backend.params_wrapper.set_sbeg(1, surface)

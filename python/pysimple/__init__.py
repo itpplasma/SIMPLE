@@ -119,9 +119,13 @@ def init(
 
     # Apply user parameter overrides
     for key, value in param_overrides.items():
-        if not hasattr(params, key):
+        # Handle isw_field_type specially - it's in velo_mod, not params
+        if key == 'isw_field_type':
+            _backend.velo_mod.isw_field_type = int(value)
+        elif not hasattr(params, key):
             raise ValueError(f"Unknown SIMPLE parameter: {key}")
-        setattr(params, key, value)
+        else:
+            setattr(params, key, value)
 
     # Step 2: init_field (same as Fortran main())
     _tracer = _backend.simple.Tracer()
@@ -139,9 +143,10 @@ def init(
     # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
     params.params_init()
 
-    # Step 4: init_magfie(VMEC) - set function pointer for magnetic field evaluation
-    vmec_type = _backend.magfie_wrapper.get_field_type_vmec()
-    _backend.magfie_wrapper.wrapper_init_magfie(vmec_type)
+    # Step 4: init_magfie - set function pointer for magnetic field evaluation
+    # Use isw_field_type from velo_mod (set via param_overrides above)
+    field_type = int(_backend.velo_mod.isw_field_type)
+    _backend.magfie_wrapper.wrapper_init_magfie(field_type)
 
     # Step 5: init_starting_surf (MUST be called before sampling particles!)
     # This integrates the magnetic field line to compute bmin, bmax
@@ -251,30 +256,24 @@ def load_particles(particle_file: str | Path) -> np.ndarray:
 
     particle_path = Path(particle_file).expanduser().resolve()
 
-    # Count non-comment lines
+    # Read file directly in Python to avoid Fortran hardcoded 'start.dat' path
+    particles_list = []
     with particle_path.open("r", encoding="utf-8") as handle:
-        n_particles = sum(
-            1 for line in handle if line.strip() and not line.lstrip().startswith("#")
-        )
+        for line in handle:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                values = [float(x) for x in line.split()]
+                if len(values) != 5:
+                    raise ValueError(f"Expected 5 values per line, got {len(values)}")
+                particles_list.append(values)
 
-    if n_particles == 0:
+    if len(particles_list) == 0:
         return np.zeros((5, 0), dtype=np.float64, order="C")
 
-    params.ntestpart = n_particles
-    params.reallocate_arrays()
-    params.startmode = 1
+    # Convert to (5, n_particles) array
+    particles = np.array(particles_list, dtype=np.float64).T
 
-    # Load particles directly into params.zstart via file I/O
-    # sample() with startmode=2 reads from start.dat
-    params.startmode = 2
-    samplers = _backend.Samplers()
-    samplers.sample(params.zstart)
-
-    # Get results using wrapper to avoid array access bug
-    zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
-    _backend.params_wrapper.get_zstart_bulk(n_particles, zstart)
-
-    return np.ascontiguousarray(zstart, dtype=np.float64)
+    return np.ascontiguousarray(particles, dtype=np.float64)
 
 
 _trace_initialized = False
