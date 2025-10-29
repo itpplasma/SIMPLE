@@ -1,37 +1,10 @@
-simple package
-==============
+pysimple package
+================
 
-Top-level helpers
------------------
+Python API
+----------
 
-.. automodule:: simple
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-Particle batches
-----------------
-
-.. automodule:: simple.particles
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-Simulation results
-------------------
-
-.. automodule:: simple.results
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-Sampling helpers
-----------------
-
-.. automodule:: simple.samplers
+.. automodule:: pysimple
    :members:
    :undoc-members:
    :show-inheritance:

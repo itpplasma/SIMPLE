@@ -40,12 +40,8 @@ exclude_patterns: list[str] = ["_build", "Thumbs.db", ".DS_Store"]
 
 autodoc_class_signature = "separated"
 autodoc_member_order = "bysource"
-autodoc_mock_imports = ["pysimple"]
+autodoc_mock_imports = ["_simple_main", "_simple_backend"]
 autodoc_typehints = "description"
-autodoc_type_aliases = {
-    "ParticleBatch": "simple.particles.ParticleBatch",
-    "BatchResults": "simple.results.BatchResults",
-}
 
 autosummary_generate = True
 
