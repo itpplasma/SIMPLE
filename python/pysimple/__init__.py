@@ -143,6 +143,11 @@ def init(
     # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
     params.params_init()
 
+    # Force reallocation if ntestpart was changed
+    # This is needed when reinitializing with a different ntestpart value
+    if 'ntestpart' in param_overrides:
+        params.reallocate_arrays()
+
     # Step 4: init_magfie - set function pointer for magnetic field evaluation
     # Use isw_field_type from velo_mod (set via param_overrides above)
     field_type = int(_backend.velo_mod.isw_field_type)
