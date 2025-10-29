@@ -128,5 +128,6 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
             fortran_orbits[key].T,
             rtol=1e-10,
             atol=1e-12,
+            equal_nan=True,  # Allow NaN == NaN for skipped particles
             err_msg=f"Mismatch in {key}",
         )

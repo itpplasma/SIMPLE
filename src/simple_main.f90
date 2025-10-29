@@ -230,6 +230,7 @@ module simple_main
 
   subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
     use classification, only : trace_orbit_with_classifiers
+    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
@@ -237,7 +238,7 @@ module simple_main
     real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
 
     real(dp), dimension(5) :: z
-    integer :: it, ierr_orbit
+    integer :: it, ierr_orbit, it_final
     integer(8) :: kt
     logical :: passing
 
@@ -259,6 +260,9 @@ module simple_main
     call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
     if(passing .and. should_skip(ipart)) then
+      ! Fill trajectory arrays with NaN since we're not tracing this particle
+      orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
+      orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
       !$omp critical
       confpart_pass=confpart_pass+1.d0
       !$omp end critical
@@ -266,15 +270,20 @@ module simple_main
     endif
 
     kt = 0
+    it_final = 0
     do it = 1, ntimstep
       if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
-      if(ierr_orbit .ne. 0) exit
+      if(ierr_orbit .ne. 0) then
+        it_final = it
+        exit
+      endif
 
       ! Store trajectory data (after macrostep so time is correct)
       orbit_traj(:, it) = z
       orbit_times(it) = kt*dtaumin/v0
 
       call increase_confined_count(it, passing)
+      it_final = it
     enddo
 
     !$omp critical
