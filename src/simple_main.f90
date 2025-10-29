@@ -229,7 +229,7 @@ module simple_main
   end subroutine init_counters
 
   subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
-    use classification, only : trace_orbit_with_classifiers
+    use classification, only : trace_orbit_with_classifiers, classification_result_t, write_classification_results
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
     type(Tracer), intent(inout) :: anorb
@@ -241,13 +241,17 @@ module simple_main
     integer :: it, ierr_orbit, it_final
     integer(8) :: kt
     logical :: passing
+    type(classification_result_t) :: class_result
 
     ierr_orbit = 0
 
     call reset_seed_if_deterministic
 
     if (ntcut>0 .or. class_plot) then
-      call trace_orbit_with_classifiers(anorb, ipart)
+      call trace_orbit_with_classifiers(anorb, ipart, class_result)
+      if(class_plot) then
+        call write_classification_results(ipart, class_result)
+      endif
       return
     endif
 

@@ -56,7 +56,7 @@ integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
 
 contains
 
-subroutine trace_orbit_with_classifiers(anorb, ipart)
+subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     use find_bminmax_sub, only : get_bminmax
     use magfie_sub, only : magfie
     use plag_coeff_sub, only : plag_coeff
@@ -64,6 +64,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
+    type(classification_result_t), intent(out) :: class_result
     integer :: ierr, ierr_coll
     real(dp), dimension(5) :: z
     real(dp) :: bmod,sqrtg
@@ -95,6 +96,13 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     iangvar=2
     ! End variables and settings for classification by J_parallel and ideal orbit condition
     !
+
+    ! Initialize classification result - all unclassified
+    class_result%passing = .false.
+    class_result%lost = .false.
+    class_result%minkowski = 0
+    class_result%jpar = 0
+    class_result%topology = 0
 
     !  open(unit=10000+ipart, iostat=stat, status='old')
     !  if (stat == 0) close(10000+ipart, status='delete')
@@ -147,6 +155,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     iclass(:,ipart) = 0
     !$omp end critical
 
+    ! Store passing status in result
+    class_result%passing = passing
+
     ! Forced classification of passing as regular:
     if(passing .and. should_skip(ipart)) then
         !$omp critical
@@ -158,6 +169,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
             !$omp end critical
         endif
         iclass(:,ipart) = 1
+        ! Mark as regular passing (minkowski=1) and not lost
+        class_result%minkowski = 1
+        class_result%lost = .false.
         return
     endif
     ! End forced classification of passing as regular
@@ -241,12 +255,15 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
             endif
 
             ! Write starting data for orbits which were lost in case of classification plot
-            if(class_plot .and. ierr.ne.0) then
-                call output_lost_orbit_starting_data(ipart, passing)
+            ! Mark orbit as lost if integration failed
+            if(ierr.ne.0) then
+                class_result%lost = .true.
+                if(class_plot) then
+                    call output_lost_orbit_starting_data(ipart, passing)
+                endif
+                exit
             endif
-            ! End write starting data for orbits which were lost in case of classification plot
-
-            if(ierr.ne.0) exit
+            ! End handling of lost orbits
             kt = kt+1
 
             par_inv = par_inv+z(5)**2*dtaumin ! parallel adiabatic invariant
@@ -305,6 +322,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
                     !
                     iclass(1,ipart) = ijpar
                     iclass(2,ipart) = ideal
+                    ! Store in classification result
+                    class_result%jpar = ijpar
+                    class_result%topology = ideal
                     if(fast_class) ierr=ierr_cot
                     !
                     ! End classification by J_parallel and ideal orbit conditions
@@ -384,6 +404,13 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
                         print *, ipart, ' regular tip ', ifp_tip
                         iclass(3,ipart) = 1
                     endif
+                endif
+
+                ! Store Minkowski classification in result
+                if(regular) then
+                    class_result%minkowski = 1
+                else
+                    class_result%minkowski = 2
                 endif
 
                 if(class_plot) then
