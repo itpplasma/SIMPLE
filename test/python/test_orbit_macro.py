@@ -121,10 +121,11 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         python_orbits[key] = np.array(python_orbits[key])
 
     # Compare trajectories between Fortran and Python
+    # Note: Python has shape (n_particles, ntimstep), Fortran has (ntimstep, n_particles)
     for key in ["time", "s", "theta", "phi", "p_abs", "v_par"]:
         np.testing.assert_allclose(
             python_orbits[key],
-            fortran_orbits[key],
+            fortran_orbits[key].T,
             rtol=1e-10,
             atol=1e-12,
             err_msg=f"Mismatch in {key}",

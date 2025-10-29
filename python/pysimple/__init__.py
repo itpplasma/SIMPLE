@@ -268,7 +268,7 @@ def _init_before_trace():
     """Initialize components needed before tracing (call once before first trace).
 
     This mimics lines 78-81 from simple_main::main():
-    - init_magfie(isw_field_type) - not exposed, skipped
+    - init_magfie(isw_field_type) - sets magfie pointer to correct field type
     - init_counters - resets counters
 
     Note: init_starting_surf is called during init(), not here!
@@ -277,6 +277,9 @@ def _init_before_trace():
 
     if _trace_initialized:
         return
+
+    # init_magfie(isw_field_type) - set field evaluation to configured type
+    _backend.magfie_sub.init_magfie(_backend.velo_mod.isw_field_type)
 
     # init_counters - reset counters
     _simple_main.init_counters()
@@ -357,7 +360,7 @@ def trace_orbit(
         xref = np.zeros(3, dtype=np.float64)
 
         for it in range(params.ntimstep):
-            _backend.field_can_mod.can_to_ref(traj_can[0:3, it], xref)
+            _backend.field_can_mod.can_to_ref_wrapper(traj_can[0:3, it], xref)
             traj_ref[0, it] = xref[0]  # s
             traj_ref[1, it] = xref[1]  # theta
             traj_ref[2, it] = xref[2]  # phi

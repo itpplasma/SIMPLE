@@ -267,12 +267,13 @@ module simple_main
 
     kt = 0
     do it = 1, ntimstep
-      ! Store trajectory data
+      if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
+      if(ierr_orbit .ne. 0) exit
+
+      ! Store trajectory data (after macrostep so time is correct)
       orbit_traj(:, it) = z
       orbit_times(it) = kt*dtaumin/v0
 
-      if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
-      if(ierr_orbit .ne. 0) exit
       call increase_confined_count(it, passing)
     enddo
 
