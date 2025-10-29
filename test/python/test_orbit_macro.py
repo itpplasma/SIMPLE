@@ -82,6 +82,7 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         notrace_passing=0,
         npoiper2=64,
         num_surf=1,
+        trace_time=1.0e-3,
     )
     pysimple.params.sbeg[0] = surface
 
@@ -103,7 +104,6 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
     for i in range(n_particles):
         result = pysimple.trace_orbit(
             particles[:, i],
-            tmax=1.0e-3,
             integrator="midpoint",
             return_trajectory=True,
         )

@@ -286,6 +286,14 @@ module simple_main
       it_final = it
     enddo
 
+    ! Fill remaining timesteps with NaN if particle left domain early
+    if (it_final < ntimstep) then
+      do it = it_final + 1, ntimstep
+        orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+        orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+      enddo
+    endif
+
     !$omp critical
     call can_to_ref(z(1:3), zend(1:3,ipart))
     zend(4:5, ipart) = z(4:5)

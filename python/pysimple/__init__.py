@@ -289,7 +289,6 @@ def _init_before_trace():
 
 def trace_orbit(
     position: np.ndarray,
-    tmax: float,
     integrator: str | int = MIDPOINT,
     return_trajectory: bool = False,
 ) -> dict[str, np.ndarray]:
@@ -300,8 +299,6 @@ def trace_orbit(
     ----------
     position : np.ndarray
         Array of shape (5,) containing initial position
-    tmax : float
-        Maximum trace time
     integrator : str | int
         Integration method (default: MIDPOINT)
     return_trajectory : bool
@@ -316,9 +313,15 @@ def trace_orbit(
         - 'trajectory': array of shape (5, ntimstep) if return_trajectory=True
         - 'times': array of shape (ntimstep,) if return_trajectory=True
 
+    Note
+    ----
+    The trace time is determined by the `trace_time` parameter passed to `init()`.
+    To change trace time, call `init()` again with a different `trace_time` value.
+
     Example
     -------
-    >>> result = pysimple.trace_orbit(position, tmax=1e-3, return_trajectory=True)
+    >>> pysimple.init('wout.nc', trace_time=1e-3)
+    >>> result = pysimple.trace_orbit(position, return_trajectory=True)
     >>> trajectory = result['trajectory']
     """
     if not _initialized:
@@ -343,7 +346,6 @@ def trace_orbit(
     # Set up simulation for single particle
     params.ntestpart = 1
     params.reallocate_arrays()
-    params.trace_time = float(tmax)
     params.integmode = integrator_code
     params.zstart[:, 0] = position
 
@@ -387,7 +389,6 @@ def trace_orbit(
 
 def trace_parallel(
     positions: np.ndarray,
-    tmax: float,
     integrator: str | int = MIDPOINT,
 ) -> dict[str, np.ndarray]:
     """
@@ -397,8 +398,6 @@ def trace_parallel(
     ----------
     positions : np.ndarray
         Array of shape (5, n_particles) containing initial positions
-    tmax : float
-        Maximum trace time
     integrator : str | int
         Integration method (default: MIDPOINT)
 
@@ -411,10 +410,16 @@ def trace_parallel(
         - 'trap_parameter': array of shape (n_particles,) if available
         - 'perpendicular_invariant': array of shape (n_particles,) if available
 
+    Note
+    ----
+    The trace time is determined by the `trace_time` parameter passed to `init()`.
+    To change trace time, call `init()` again with a different `trace_time` value.
+
     Example
     -------
-    >>> results = pysimple.trace_parallel(particles, tmax=1e-3)
-    >>> lost_mask = results['loss_times'] < 1e-3
+    >>> pysimple.init('wout.nc', trace_time=1e-3)
+    >>> results = pysimple.trace_parallel(particles)
+    >>> lost_mask = results['loss_times'] < pysimple.params.trace_time
 
     Notes
     -----
@@ -442,7 +447,6 @@ def trace_parallel(
     # Set up simulation
     params.ntestpart = n_particles
     params.reallocate_arrays()
-    params.trace_time = float(tmax)
     params.integmode = integrator_code
     params.zstart[:, :n_particles] = positions
 
