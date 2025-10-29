@@ -32,6 +32,33 @@ pip install git+https://github.com/jameskermode/f90wrap
 pip install -e . --no-build-isolation
 ```
 
+### Python API
+
+SIMPLE provides a clean module-level Python API for orbit tracing and classification:
+
+```python
+import pysimple
+
+# Initialize with VMEC file and parameters
+pysimple.init('wout.nc', deterministic=True, trace_time=1e-3)
+
+# Sample particles on a flux surface
+particles = pysimple.sample_surface(100, s=0.5)
+
+# Trace orbits in parallel
+results = pysimple.trace_parallel(particles)
+print(f"Lost: {(results['loss_times'] < 1e-3).sum()} particles")
+
+# Classify orbits (trapped/passing, regular/chaotic)
+pysimple.init('wout.nc', tcut=0.1, deterministic=True, trace_time=1e-3)
+classified = pysimple.classify_parallel(particles)
+regular = classified['minkowski'] == 1
+chaotic = classified['minkowski'] == 2
+trapped = ~classified['passing']
+```
+
+See `examples/simple_api.py` for complete examples.
+
 ## Usage
 
 SIMPLE currently runs on a single node with OpenMP shared memory parallelization with one particle per thread and background
