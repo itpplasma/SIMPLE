@@ -28,8 +28,8 @@ use check_orbit_type_sub, only : check_orbit_type
     logical :: passing           ! Trapped (false) or passing (true)
     logical :: lost              ! Orbit lost (true) or confined (false)
     integer :: minkowski         ! Minkowski: 0=unclassified, 1=regular, 2=chaotic
-    integer :: ijpar             ! J_parallel: 0=unclassified, 1=regular, 2=stochastic
-    integer :: ideal             ! Topological: 0=unclassified, 1=ideal, 2=non-ideal
+    integer :: jpar              ! J_parallel: 0=unclassified, 1=regular, 2=stochastic
+    integer :: topology          ! Topology: 0=unclassified, 1=ideal, 2=non-ideal
   end type classification_result_t
 
   ! output files:
@@ -519,11 +519,11 @@ subroutine write_classification_results(ipart, class_result)
     ! Write J_parallel and topological classification if computed
     ! These are only done for trapped orbits
     if(.not. class_result%passing) then
-        if(class_result%ijpar /= 0) then
-            call output_jpar_class(ipart, class_result%ijpar)
+        if(class_result%jpar /= 0) then
+            call output_jpar_class(ipart, class_result%jpar)
         endif
-        if(class_result%ideal /= 0) then
-            call output_topological_class(ipart, class_result%ideal)
+        if(class_result%topology /= 0) then
+            call output_topological_class(ipart, class_result%topology)
         endif
     endif
 
