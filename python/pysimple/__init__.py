@@ -389,8 +389,14 @@ def trace_orbit(
             traj_ref[3, it] = traj_can[3, it]  # p_abs
             traj_ref[4, it] = traj_can[4, it]  # v_par
 
+        # Extract final position - handle both 1D and 2D zend arrays
+        if params.zend.ndim == 2:
+            final_pos = np.ascontiguousarray(params.zend[:, 0])
+        else:
+            final_pos = np.ascontiguousarray(params.zend)
+
         return {
-            'final_position': np.ascontiguousarray(params.zend[:, 0]),
+            'final_position': final_pos,
             'loss_time': float(params.times_lost[0]),
             'trajectory': traj_ref,
             'times': times,
@@ -401,8 +407,14 @@ def trace_orbit(
         times = np.zeros(params.ntimstep, dtype=np.float64)
         _simple_main.trace_orbit(_tracer, 1, traj, times)
 
+        # Extract final position - handle both 1D and 2D zend arrays
+        if params.zend.ndim == 2:
+            final_pos = np.ascontiguousarray(params.zend[:, 0])
+        else:
+            final_pos = np.ascontiguousarray(params.zend)
+
         return {
-            'final_position': np.ascontiguousarray(params.zend[:, 0]),
+            'final_position': final_pos,
             'loss_time': float(params.times_lost[0]),
         }
 
