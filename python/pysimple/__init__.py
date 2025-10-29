@@ -140,7 +140,8 @@ def init(
     params.params_init()
 
     # Step 4: init_magfie(VMEC) - set function pointer for magnetic field evaluation
-    _backend.magfie_wrapper.init_magfie(_backend.magfie_wrapper.vmec)
+    vmec_type = _backend.magfie_wrapper.get_field_type_vmec()
+    _backend.magfie_wrapper.wrapper_init_magfie(vmec_type)
 
     # Step 5: init_starting_surf (MUST be called before sampling particles!)
     # This integrates the magnetic field line to compute bmin, bmax
@@ -182,9 +183,12 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
     _backend.params_wrapper.set_sbeg(1, float(s))
 
     samplers = _backend.Samplers()
-    # Create zstart array and pass to sampler
+    # Sample directly into params.zstart (using wrapper for bulk access)
+    samplers.sample(params.zstart)
+
+    # Get results using wrapper to avoid array access bug
     zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
-    samplers.sample_surface_fieldline(zstart)
+    _backend.params_wrapper.get_zstart_bulk(n_particles, zstart)
 
     return np.ascontiguousarray(zstart, dtype=np.float64)
 
@@ -260,10 +264,17 @@ def load_particles(particle_file: str | Path) -> np.ndarray:
     params.reallocate_arrays()
     params.startmode = 1
 
+    # Load particles directly into params.zstart via file I/O
+    # sample() with startmode=2 reads from start.dat
+    params.startmode = 2
     samplers = _backend.Samplers()
-    samplers.sample_read(params.zstart, str(particle_path))
+    samplers.sample(params.zstart)
 
-    return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
+    # Get results using wrapper to avoid array access bug
+    zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
+    _backend.params_wrapper.get_zstart_bulk(n_particles, zstart)
+
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 _trace_initialized = False
@@ -283,7 +294,7 @@ def _init_before_trace():
         return
 
     # init_magfie(isw_field_type) - set field evaluation to configured type
-    _backend.magfie_wrapper.init_magfie(_backend.velo_mod.isw_field_type)
+    _backend.magfie_wrapper.wrapper_init_magfie(_backend.velo_mod.isw_field_type)
 
     # init_counters - reset counters
     _simple_main.init_counters()

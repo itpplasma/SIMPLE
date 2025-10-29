@@ -19,6 +19,7 @@ set(SOURCES
     field/field_can_albert.f90
     field_can.f90
     magfie.f90
+    magfie_wrapper.f90
     magfie_can_boozer.f90
     boozer_converter.F90
     chamb_m.f90
