@@ -243,6 +243,13 @@ contains
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
     allocate(iclass(3,ntestpart))
     allocate(class_passing(ntestpart), class_lost(ntestpart))
+
+    times_lost = 0.0d0
+    trap_par = 0.0d0
+    perp_inv = 0.0d0
+    iclass = 0
+    class_passing = .false.
+    class_lost = .false.
   end subroutine reallocate_arrays
 
 
