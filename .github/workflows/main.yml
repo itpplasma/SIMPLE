@@ -31,7 +31,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python3 -m pip install --user --break-system-packages scikit-build-core
-          python3 -m pip install --user --break-system-packages git+https://github.com/jameskermode/f90wrap.git
+          python3 -m pip install --user --break-system-packages git+https://github.com/jameskermode/f90wrap.git@v0.2.16
 
       - name: Build SIMPLE
         run: |
@@ -57,7 +57,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python3 -m pip install --user --break-system-packages scikit-build-core
-          python3 -m pip install --user --break-system-packages git+https://github.com/jameskermode/f90wrap.git
+          python3 -m pip install --user --break-system-packages git+https://github.com/jameskermode/f90wrap.git@v0.2.16
 
       - name: Build SIMPLE
         run: |
