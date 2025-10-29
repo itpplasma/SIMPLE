@@ -34,7 +34,9 @@ pip install -e . --no-build-isolation
 
 ### Python API
 
-SIMPLE provides a clean module-level Python API for orbit tracing and classification:
+SIMPLE provides a clean module-level Python API for orbit tracing and classification.
+
+#### Basic Usage
 
 ```python
 import pysimple
@@ -48,16 +50,101 @@ particles = pysimple.sample_surface(100, s=0.5)
 # Trace orbits in parallel
 results = pysimple.trace_parallel(particles)
 print(f"Lost: {(results['loss_times'] < 1e-3).sum()} particles")
+```
 
-# Classify orbits (trapped/passing, regular/chaotic)
+#### Initialization
+
+**`pysimple.init(vmec_file, **params)`**
+
+Initialize SIMPLE with a VMEC equilibrium file and optional parameters.
+
+Parameters:
+- `vmec_file`: Path to VMEC NetCDF file (wout.nc)
+- `deterministic=True`: Use fixed random seed for reproducibility
+- `trace_time=1e-3`: Integration time in seconds
+- `ntestpart=100`: Number of test particles
+- `npoiper2=64`: Integration steps per poloidal transit
+- `integmode`: Integration method (default: MIDPOINT)
+- `isw_field_type`: Field type (0=TEST, 2=VMEC, 3=BOOZER, etc.)
+- Any other Fortran parameter from params.f90
+
+#### Particle Sampling
+
+**`pysimple.sample_surface(n_particles, s)`**
+
+Sample particles uniformly on a flux surface.
+
+Returns: `(5, n_particles)` array with columns `[s, theta, phi, p_abs, v_par]`
+
+**`pysimple.sample_volume(n_particles, s_inner, s_outer)`**
+
+Sample particles uniformly in a volume between two flux surfaces.
+
+**`pysimple.load_particles(filename)`**
+
+Load particles from a text file (e.g., start.dat format).
+
+#### Orbit Tracing
+
+**`pysimple.trace_parallel(positions, integrator='midpoint')`**
+
+Trace multiple particle orbits in parallel.
+
+Parameters:
+- `positions`: `(5, n_particles)` array of initial conditions
+- `integrator`: Integration method ('midpoint', 'rk45', 'gauss2', etc.)
+
+Returns dictionary:
+- `'final_positions'`: `(5, n_particles)` final positions
+- `'loss_times'`: `(n_particles,)` loss times
+- `'trap_parameter'`: `(n_particles,)` trapping parameter
+- `'perpendicular_invariant'`: `(n_particles,)` perpendicular invariant
+
+**`pysimple.trace_orbit(position, integrator='midpoint', return_trajectory=False)`**
+
+Trace a single particle orbit.
+
+If `return_trajectory=True`, returns full trajectory arrays.
+
+#### Orbit Classification
+
+**`pysimple.classify_parallel(positions, integrator='midpoint')`**
+
+Classify particle orbits (trapped/passing, regular/chaotic).
+
+Returns dictionary including all trace_parallel outputs plus:
+- `'passing'`: `(n_particles,)` boolean (True=passing, False=trapped)
+- `'lost'`: `(n_particles,)` boolean
+- `'jpar'`: `(n_particles,)` J-parallel conservation (0-2)
+- `'topology'`: `(n_particles,)` topological classification (0-2)
+- `'minkowski'`: `(n_particles,)` Minkowski dimension (0=unclassified, 1=regular, 2=chaotic)
+
+Example:
+```python
 pysimple.init('wout.nc', tcut=0.1, deterministic=True, trace_time=1e-3)
+particles = pysimple.sample_surface(1000, s=0.5)
 classified = pysimple.classify_parallel(particles)
+
 regular = classified['minkowski'] == 1
 chaotic = classified['minkowski'] == 2
 trapped = ~classified['passing']
+
+print(f"Regular: {regular.sum()}, Chaotic: {chaotic.sum()}")
+print(f"Trapped: {trapped.sum()}, Passing: {(~trapped).sum()}")
 ```
 
-See `examples/simple_api.py` for complete examples.
+#### Integrator Constants
+
+Available integrators (from `orbit_symplectic_base.f90`):
+- `pysimple.RK45` (0): Runge-Kutta 4/5
+- `pysimple.MIDPOINT` (3): Symplectic midpoint (default)
+- `pysimple.GAUSS1` (4): Gauss 1st order
+- `pysimple.GAUSS2` (5): Gauss 2nd order
+- `pysimple.LOBATTO3` (15): Lobatto 3rd order
+
+#### Complete Examples
+
+See `examples/simple_api.py` for complete working examples.
 
 ## Usage
 

@@ -225,12 +225,16 @@ def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarra
 
     params.ntestpart = int(n_particles)
     params.reallocate_arrays()
-    params.startmode = 3
+    params.startmode = 5  # Volume sampling mode
 
     samplers = _backend.Samplers()
-    samplers.sample_volume_single(params.zstart, float(s_inner), float(s_outer))
+    samplers.sample(params.zstart, float(s_inner), float(s_outer))
 
-    return np.ascontiguousarray(params.zstart[:, :n_particles], dtype=np.float64)
+    # Use wrapper to get results
+    zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
+    _backend.params_wrapper.get_zstart_bulk(n_particles, zstart)
+
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 def load_particles(particle_file: str | Path) -> np.ndarray:
