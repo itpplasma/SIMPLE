@@ -328,7 +328,12 @@ execute_process(
     ERROR_QUIET
 )
 string(REPLACE "\n" ";" GIT_TAG_LIST "${GIT_TAGS}")
-list(GET GIT_TAG_LIST 0 LATEST_TAG)
+
+if(GIT_TAG_LIST)
+    list(GET GIT_TAG_LIST 0 LATEST_TAG)
+else()
+    set(LATEST_TAG "")
+endif()
 
 if(LATEST_TAG)
     message(STATUS "Latest tag found: ${LATEST_TAG}")
