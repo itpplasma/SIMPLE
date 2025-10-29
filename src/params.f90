@@ -43,6 +43,7 @@ module params
 
   real(dp), allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
+  logical,          allocatable :: class_passing(:), class_lost(:)
 
   integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
   integer :: nplagr,nder,npl_half
@@ -228,6 +229,8 @@ contains
     if(allocated(trap_par))  deallocate(trap_par)
     if(allocated(perp_inv))  deallocate(perp_inv)
     if(allocated(iclass))  deallocate(iclass)
+    if(allocated(class_passing))  deallocate(class_passing)
+    if(allocated(class_lost))  deallocate(class_lost)
     if(allocated(xstart))  deallocate(xstart)
     if(allocated(bstart))  deallocate(bstart)
     if(allocated(volstart))  deallocate(volstart)
@@ -239,6 +242,7 @@ contains
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
     allocate(iclass(3,ntestpart))
+    allocate(class_passing(ntestpart), class_lost(ntestpart))
   end subroutine reallocate_arrays
 
 

@@ -160,6 +160,35 @@ module simple_main
     endif
   end subroutine trace_parallel
 
+  subroutine classify_parallel(norb)
+    use classification, only: trace_orbit_with_classifiers, classification_result_t
+    use params, only: class_passing, class_lost
+
+    type(Tracer), intent(inout) :: norb
+    integer :: i
+    type(classification_result_t) :: class_result
+
+    !$omp parallel firstprivate(norb) private(class_result, i)
+    !$omp do
+    do i = 1, ntestpart
+      !$omp critical
+      kpart = kpart+1
+      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+      !$omp end critical
+
+      call reset_seed_if_deterministic
+      call trace_orbit_with_classifiers(norb, i, class_result)
+
+      ! Store classification flags in params arrays
+      class_passing(i) = class_result%passing
+      class_lost(i) = class_result%lost
+      ! iclass already populated by trace_orbit_with_classifiers
+      ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
+    end do
+    !$omp end do
+    !$omp end parallel
+  end subroutine classify_parallel
+
   subroutine print_parameters
     print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
                       dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau

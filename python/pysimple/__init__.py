@@ -475,6 +475,114 @@ def trace_parallel(
     return results
 
 
+def classify_parallel(
+    positions: np.ndarray,
+    integrator: str | int = MIDPOINT,
+) -> dict[str, np.ndarray]:
+    """
+    Trace and classify multiple particle orbits in parallel.
+
+    Performs orbit classification including:
+    - Trapped/passing determination
+    - Minkowski fractal dimension (regular vs chaotic)
+    - J_parallel conservation (trapped only)
+    - Topological classification (trapped only)
+
+    Parameters
+    ----------
+    positions : np.ndarray
+        Array of shape (5, n_particles) containing initial positions
+    integrator : str | int
+        Integration method (default: MIDPOINT)
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Dictionary containing:
+        - 'final_positions': array of shape (5, n_particles)
+        - 'loss_times': array of shape (n_particles,)
+        - 'trap_parameter': array of shape (n_particles,)
+        - 'perpendicular_invariant': array of shape (n_particles,)
+        - 'passing': boolean array (True=passing, False=trapped)
+        - 'lost': boolean array (True=lost, False=confined)
+        - 'minkowski': int array (0=unclassified, 1=regular, 2=chaotic)
+        - 'jpar': int array (0=unclassified, 1=regular, 2=stochastic)
+        - 'topology': int array (0=unclassified, 1=ideal, 2=non-ideal)
+
+    Note
+    ----
+    Classification requires params.ntcut > 0 to be set via init().
+    The trace time is determined by params.trace_time.
+
+    Example
+    -------
+    >>> pysimple.init('wout.nc', ntcut=3, deterministic=True, trace_time=1e-3)
+    >>> particles = pysimple.sample_surface(100, s=0.5)
+    >>> results = pysimple.classify_parallel(particles)
+    >>> regular = results['minkowski'] == 1
+    >>> chaotic = results['minkowski'] == 2
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    # Initialize components needed before first trace
+    _init_before_trace()
+
+    # Resolve integrator
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
+
+    positions = np.ascontiguousarray(positions, dtype=np.float64)
+    n_particles = positions.shape[1]
+
+    # Set up simulation
+    params.ntestpart = n_particles
+    params.reallocate_arrays()
+    params.integmode = integrator_code
+    params.zstart[:, :n_particles] = positions
+
+    # Run parallel classification (calls classify_parallel in Fortran)
+    _simple_main.classify_parallel(_tracer)
+
+    # Collect results
+    results = {
+        'final_positions': np.ascontiguousarray(
+            params.zend[:, :n_particles], dtype=np.float64
+        ),
+        'loss_times': np.ascontiguousarray(
+            params.times_lost[:n_particles], dtype=np.float64
+        ),
+        'trap_parameter': np.ascontiguousarray(
+            params.trap_par[:n_particles], dtype=np.float64
+        ),
+        'perpendicular_invariant': np.ascontiguousarray(
+            params.perp_inv[:n_particles], dtype=np.float64
+        ),
+        'passing': np.ascontiguousarray(
+            params.class_passing[:n_particles], dtype=bool
+        ),
+        'lost': np.ascontiguousarray(
+            params.class_lost[:n_particles], dtype=bool
+        ),
+        'jpar': np.ascontiguousarray(
+            params.iclass[0, :n_particles], dtype=np.int32
+        ),
+        'topology': np.ascontiguousarray(
+            params.iclass[1, :n_particles], dtype=np.int32
+        ),
+        'minkowski': np.ascontiguousarray(
+            params.iclass[2, :n_particles], dtype=np.int32
+        ),
+    }
+
+    return results
+
+
 def current_vmec() -> str | None:
     """Return the currently loaded VMEC file path."""
     return _current_vmec
@@ -487,6 +595,7 @@ __all__ = [
     'load_particles',
     'trace_orbit',
     'trace_parallel',
+    'classify_parallel',
     'current_vmec',
     'params',
     'RK45',
