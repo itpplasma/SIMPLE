@@ -21,6 +21,17 @@ use check_orbit_type_sub, only : check_orbit_type
   ! Define real(dp) kind parameter
   integer, parameter :: dp = kind(1.0d0)
 
+  ! Classification result type - separates data from I/O
+  ! Note: 0=unclassified means the classification was not computed
+  ! This depends on orbit type (trapped/passing) and class_plot flag
+  type :: classification_result_t
+    logical :: passing           ! Trapped (false) or passing (true)
+    logical :: lost              ! Orbit lost (true) or confined (false)
+    integer :: minkowski         ! Minkowski: 0=unclassified, 1=regular, 2=chaotic
+    integer :: ijpar             ! J_parallel: 0=unclassified, 1=regular, 2=stochastic
+    integer :: ideal             ! Topological: 0=unclassified, 1=ideal, 2=non-ideal
+  end type classification_result_t
+
   ! output files:
   ! iaaa_bou - trapped-passing boundary
   ! iaaa_pnt - forced regular passing
@@ -483,5 +494,39 @@ subroutine write_output_line(iunit, ipart)
     write (iunit, *) zstart(2,ipart), zstart(5,ipart), trap_par(ipart)
     !$omp end critical
 end subroutine write_output_line
+
+
+! Write classification results to fort.* files
+! This subroutine centralizes all classification file I/O
+! Note: Only writes classifications that were computed (non-zero values)
+subroutine write_classification_results(ipart, class_result)
+    integer, intent(in) :: ipart
+    type(classification_result_t), intent(in) :: class_result
+    logical :: regular
+
+    ! Write lost orbits
+    if(class_result%lost) then
+        call output_lost_orbit_starting_data(ipart, class_result%passing)
+        return
+    endif
+
+    ! Write Minkowski classification if computed
+    if(class_result%minkowski /= 0) then
+        regular = (class_result%minkowski == 1)
+        call output_minkowsky_class(ipart, regular, class_result%passing)
+    endif
+
+    ! Write J_parallel and topological classification if computed
+    ! These are only done for trapped orbits
+    if(.not. class_result%passing) then
+        if(class_result%ijpar /= 0) then
+            call output_jpar_class(ipart, class_result%ijpar)
+        endif
+        if(class_result%ideal /= 0) then
+            call output_topological_class(ipart, class_result%ideal)
+        endif
+    endif
+
+end subroutine write_classification_results
 
 end module classification
