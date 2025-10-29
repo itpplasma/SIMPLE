@@ -117,7 +117,8 @@ def init(
     params.multharm = int(multharm)
     params.integmode = int(integmode)
 
-    # Apply user parameter overrides
+    # Apply user parameter overrides BEFORE params_init
+    # This ensures ntestpart is set correctly before array allocation
     for key, value in param_overrides.items():
         # Handle isw_field_type specially - it's in velo_mod, not params
         if key == 'isw_field_type':
@@ -141,12 +142,8 @@ def init(
     # Step 3: params_init (same as Fortran main())
     # This calls reset_seed_if_deterministic() internally!
     # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
+    # NOTE: params_init() will use the ntestpart value set above
     params.params_init()
-
-    # Force reallocation if ntestpart was changed
-    # This is needed when reinitializing with a different ntestpart value
-    if 'ntestpart' in param_overrides:
-        params.reallocate_arrays()
 
     # Step 4: init_magfie - set function pointer for magnetic field evaluation
     # Use isw_field_type from velo_mod (set via param_overrides above)

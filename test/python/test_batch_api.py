@@ -22,7 +22,8 @@ import pysimple  # noqa: E402  pylint: disable=wrong-import-position
 
 class TestSoALayout:
     def test_numpy_layout(self, vmec_file: str):
-        pysimple.init(vmec_file, deterministic=True)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, ntestpart=32)
         positions = pysimple.sample_surface(32, s=0.55)
 
         assert positions.flags.c_contiguous
@@ -34,7 +35,8 @@ class TestSoALayout:
         assert phi_coords.size == 32
 
     def test_zero_copy_write(self, vmec_file: str):
-        pysimple.init(vmec_file, deterministic=True)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, ntestpart=4)
         positions = pysimple.sample_surface(4, s=0.2)
 
         original_value = positions[1, 0]
@@ -44,7 +46,8 @@ class TestSoALayout:
 
 class TestBatchResults:
     def test_confined_statistics(self, vmec_file: str):
-        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=10)
         particles = pysimple.sample_surface(10, s=0.5)
         results = pysimple.trace_parallel(particles, integrator="midpoint")
 
@@ -57,7 +60,8 @@ class TestBatchResults:
         assert lost_positions.shape[0] == 5
 
     def test_to_dict(self, vmec_file: str):
-        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5, ntestpart=3)
         particles = pysimple.sample_surface(3, s=0.3)
         results = pysimple.trace_parallel(particles, integrator="midpoint")
 

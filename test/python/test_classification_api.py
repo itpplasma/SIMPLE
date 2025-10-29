@@ -21,7 +21,8 @@ SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
 
 @pytest.mark.usefixtures("vmec_file")
 def test_classify_parallel_api(vmec_file: str) -> None:
-    pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, tcut=0.1)
+    # Explicitly set ntestpart to avoid interference
+    pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, tcut=0.1, ntestpart=6)
     particles = pysimple.sample_surface(6, s=0.35)
 
     results = pysimple.classify_parallel(particles)
@@ -33,7 +34,8 @@ def test_classify_parallel_api(vmec_file: str) -> None:
 
 
 def test_classification_values(vmec_file: str) -> None:
-    pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, tcut=0.1)
+    # Explicitly set ntestpart to avoid interference
+    pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, tcut=0.1, ntestpart=8)
     particles = pysimple.sample_surface(8, s=0.4)
 
     results = pysimple.classify_parallel(particles)
