@@ -131,11 +131,11 @@ main() {
     fi
 
     # Use the new scripts to run tests and compare
-    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" || handle_failure $?
-    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" || handle_failure $?
+    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
+    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
 
     # Compare results
-    "$SCRIPT_DIR/compare_golden_results.sh" "$RUN_DIR_REF" "$RUN_DIR_CUR"
+    "$SCRIPT_DIR/compare_golden_results.sh" "$RUN_DIR_REF" "$RUN_DIR_CUR" "$TEST_CASES"
     comparison_result=$?
 
     if [ $comparison_result -eq 0 ]; then
