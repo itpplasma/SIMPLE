@@ -147,6 +147,31 @@ class TestTraceOrbits:
         assert results['trap_parameter'].shape == (4,)
         assert results['perpendicular_invariant'].shape == (4,)
 
+    def test_trace_with_vmec_field(self, vmec_file: str):
+        """Test tracing with VMEC field (isw_field_type=2)"""
+        # Initialize with VMEC field type explicitly
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=3, isw_field_type=2)
+        particles = pysimple.sample_surface(3, s=0.4)
+        results = pysimple.trace_parallel(particles, integrator="midpoint")
+
+        assert isinstance(results, dict)
+        assert results['final_positions'].shape == (5, 3)
+        assert results['loss_times'].shape == (3,)
+        # Verify that trace completed (results are returned)
+        assert 'trap_parameter' in results
+        assert 'perpendicular_invariant' in results
+
+    def test_trace_with_boozer_field(self, vmec_file: str):
+        """Test tracing with Boozer canonical coordinates (isw_field_type=3)"""
+        # Initialize with Boozer field type
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=2, isw_field_type=3)
+        particles = pysimple.sample_surface(2, s=0.5)
+        results = pysimple.trace_parallel(particles, integrator="midpoint")
+
+        assert isinstance(results, dict)
+        assert results['final_positions'].shape == (5, 2)
+        assert results['loss_times'].shape == (2,)
+
     def test_confined_and_lost_filters(self, vmec_file: str):
         # Explicitly set ntestpart to avoid interference
         pysimple.init(vmec_file, deterministic=True, trace_time=5e-5, ntestpart=3)

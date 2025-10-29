@@ -366,6 +366,12 @@ def trace_orbit(
     # Set up simulation for single particle
     params.ntestpart = 1
     params.reallocate_arrays()
+
+    # Initialize arrays to zero after reallocation (Fortran doesn't zero-initialize)
+    params.times_lost[0] = 0.0
+    params.trap_par[0] = 0.0
+    params.perp_inv[0] = 0.0
+
     params.integmode = integrator_code
     params.zstart[:, 0] = position
 
@@ -467,11 +473,18 @@ def trace_parallel(
     # Set up simulation
     params.ntestpart = n_particles
     params.reallocate_arrays()
+
+    # Initialize arrays to zero after reallocation (Fortran doesn't zero-initialize)
+    params.times_lost[:n_particles] = 0.0
+    params.trap_par[:n_particles] = 0.0
+    params.perp_inv[:n_particles] = 0.0
+
     params.integmode = integrator_code
     params.zstart[:, :n_particles] = positions
 
     # Run parallel simulation (calls trace_parallel in Fortran, uses initialized tracer)
     _simple_main.trace_parallel(_tracer)
+
     # Collect results
     results = {
         'final_positions': np.ascontiguousarray(
@@ -563,6 +576,13 @@ def classify_parallel(
     # Set up simulation
     params.ntestpart = n_particles
     params.reallocate_arrays()
+
+    # Initialize arrays to zero after reallocation (Fortran doesn't zero-initialize)
+    params.times_lost[:n_particles] = 0.0
+    params.trap_par[:n_particles] = 0.0
+    params.perp_inv[:n_particles] = 0.0
+    params.iclass[:, :n_particles] = 0
+
     params.integmode = integrator_code
     params.zstart[:, :n_particles] = positions
 
