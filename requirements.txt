@@ -1,0 +1,18 @@
+# Python dependencies for SIMPLE
+# Pin exact versions for reproducibility in CI
+
+# Core dependencies
+numpy==2.2.6
+scikit-build-core==0.10.0
+
+# F90wrap - pinned to release version
+git+https://github.com/jameskermode/f90wrap.git@v0.2.16
+
+# Optional dependencies for testing
+pytest==7.4.3
+pytest-cov==6.2.1
+netCDF4==1.7.2
+
+# Optional dependencies for examples/plotting
+matplotlib==3.9.4
+scipy==1.15.2
