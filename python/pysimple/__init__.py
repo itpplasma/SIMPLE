@@ -106,7 +106,10 @@ def init(
     >>> import pysimple
     >>> pysimple.init('wout.nc', deterministic=True, ntestpart=1000, trace_time=1e-3)
     """
-    global _initialized, _current_vmec, _tracer
+    global _initialized, _current_vmec, _tracer, _trace_initialized
+
+    # Reset trace initialization flag to ensure field pointers are updated
+    _trace_initialized = False
 
     vmec_path = str(Path(vmec_file).expanduser().resolve())
 
