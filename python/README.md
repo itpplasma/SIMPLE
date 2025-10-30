@@ -6,6 +6,10 @@ high-performance SIMPLE Fortran backend.  It mirrors the structure-of-arrays
 memory layout used in Fortran, enabling zero-copy interaction while keeping the
 public API concise.
 
+Legacy proof-of-concept notebooks and scripts that originally lived here are
+now preserved under ``concept/`` so the Python directory focuses purely on the
+supported interface.
+
 Key modules
 -----------
 
