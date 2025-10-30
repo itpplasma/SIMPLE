@@ -87,8 +87,9 @@ module params
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
-    isw_field_type, generate_start_only, startmode, grid_density, special_ants_file, integmode, relerr, tcut, nturns, debug,           &
-    class_plot, cut_in_per, fast_class, vmec_B_scale,             &
+    isw_field_type, generate_start_only, startmode, grid_density,        &
+    special_ants_file, integmode, relerr, tcut, nturns, debug,           &
+    class_plot, cut_in_per, fast_class, vmec_B_scale,                    &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &

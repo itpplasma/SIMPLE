@@ -117,6 +117,7 @@ set(SIMPLE_COMPILE_OPTIONS
     $<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>
     $<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
     $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-132>
+    $<$<COMPILE_LANGUAGE:Fortran>:-Werror=line-truncation>
     $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
 )
 
