@@ -521,7 +521,7 @@ def classify_parallel(
 
     Performs orbit classification including:
     - Trapped/passing determination
-    - Minkowski fractal dimension (regular vs chaotic)
+    - Fractal dimension (regular vs chaotic)
     - J_parallel conservation (trapped only)
     - Topological classification (trapped only)
 
@@ -542,7 +542,7 @@ def classify_parallel(
         - 'perpendicular_invariant': array of shape (n_particles,)
         - 'passing': boolean array (True=passing, False=trapped)
         - 'lost': boolean array (True=lost, False=confined)
-        - 'minkowski': int array (0=unclassified, 1=regular, 2=chaotic)
+        - 'fractal': int array (0=unclassified, 1=regular, 2=chaotic)
         - 'jpar': int array (0=unclassified, 1=regular, 2=stochastic)
         - 'topology': int array (0=unclassified, 1=ideal, 2=non-ideal)
 
@@ -553,11 +553,11 @@ def classify_parallel(
 
     Example
     -------
-    >>> pysimple.init('wout.nc', ntcut=3, deterministic=True, trace_time=1e-3)
+    >>> pysimple.init('wout.nc', deterministic=True, trace_time=1e-3)
     >>> particles = pysimple.sample_surface(100, s=0.5)
     >>> results = pysimple.classify_parallel(particles)
-    >>> regular = results['minkowski'] == 1
-    >>> chaotic = results['minkowski'] == 2
+    >>> regular = results['fractal'] == 1
+    >>> chaotic = results['fractal'] == 2
     """
     if not _initialized:
         raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
@@ -612,12 +612,113 @@ def classify_parallel(
         'topology': np.ascontiguousarray(
             params.iclass[1, :n_particles], dtype=np.int32
         ),
-        'minkowski': np.ascontiguousarray(
+        'fractal': np.ascontiguousarray(
             params.iclass[2, :n_particles], dtype=np.int32
         ),
     }
 
     return results
+
+
+def classify_fast(
+    positions: np.ndarray,
+    nturns: int = 8,
+    integrator: str | int = MIDPOINT,
+) -> dict[str, np.ndarray]:
+    """
+    Fast classification using jpar and topology only (stops after nturns).
+
+    This sets fast_class=True internally, causing integration to stop after
+    nturns recurrence periods when jpar/topology classification completes.
+    Fractal classification is disabled.
+
+    Parameters
+    ----------
+    positions : np.ndarray
+        Array of shape (5, n_particles) containing initial positions
+    nturns : int
+        Number of recurrence periods for jpar/topology (default: 8)
+    integrator : str | int
+        Integration method (default: MIDPOINT)
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Dictionary containing:
+        - 'jpar': J-parallel conservation (0=unclassified, 1=regular, 2=stochastic)
+        - 'topology': Topological classification (0=unclassified, 1=ideal, 2=non-ideal)
+        - 'passing': boolean array
+        - 'lost': boolean array
+        - Other trace results
+
+    Example
+    -------
+    >>> pysimple.init('wout.nc', deterministic=True)
+    >>> particles = pysimple.sample_surface(100, s=0.5)
+    >>> results = pysimple.classify_fast(particles, nturns=8)
+    >>> jpar_regular = (results['jpar'] == 1).sum()
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    params.nturns = int(nturns)
+    params.fast_class = True
+    params.tcut = -1.0
+
+    return classify_parallel(positions, integrator=integrator)
+
+
+def classify_fractal(
+    positions: np.ndarray,
+    tcut: float = 0.1,
+    integrator: str | int = MIDPOINT,
+) -> dict[str, np.ndarray]:
+    """
+    Fractal classification using fractal dimension only.
+
+    Computes fractal dimension at time tcut. Integration continues
+    to full trace_time. jpar/topology classifiers are NOT run (fast_class disabled).
+
+    Parameters
+    ----------
+    positions : np.ndarray
+        Array of shape (5, n_particles) containing initial positions
+    tcut : float
+        Time cutoff for fractal classification (default: 0.1)
+    integrator : str | int
+        Integration method (default: MIDPOINT)
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Dictionary containing:
+        - 'fractal': Fractal dimension (0=unclassified, 1=regular, 2=chaotic)
+        - 'jpar': Will be 0 (unclassified) - not computed
+        - 'topology': Will be 0 (unclassified) - not computed
+        - 'passing': boolean array
+        - 'lost': boolean array
+        - Other trace results
+
+    Note
+    ----
+    Fractal dimension needs many more footprints than jpar/topology, so tcut is
+    typically larger (0.1 or more).
+
+    Example
+    -------
+    >>> pysimple.init('wout.nc', deterministic=True, trace_time=1e-3)
+    >>> particles = pysimple.sample_surface(100, s=0.5)
+    >>> results = pysimple.classify_fractal(particles, tcut=0.1)
+    >>> fractal_regular = (results['fractal'] == 1).sum()
+    >>> fractal_chaotic = (results['fractal'] == 2).sum()
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    params.tcut = float(tcut)
+    params.fast_class = False
+
+    return classify_parallel(positions, integrator=integrator)
 
 
 def current_vmec() -> str | None:
@@ -633,6 +734,8 @@ __all__ = [
     'trace_orbit',
     'trace_parallel',
     'classify_parallel',
+    'classify_fast',
+    'classify_fractal',
     'current_vmec',
     'params',
     'RK45',

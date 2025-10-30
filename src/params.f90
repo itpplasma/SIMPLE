@@ -52,6 +52,7 @@ module params
 
   real(dp) :: tcut = -1d0
   integer :: ntcut
+  integer :: nturns = 8
   logical          :: class_plot = .False.    !<=AAA
   real(dp) :: cut_in_per = 0d0        !<=AAA
 
@@ -86,7 +87,7 @@ module params
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
-    isw_field_type, generate_start_only, startmode, grid_density, special_ants_file, integmode, relerr, tcut, debug,           &
+    isw_field_type, generate_start_only, startmode, grid_density, special_ants_file, integmode, relerr, tcut, nturns, debug,           &
     class_plot, cut_in_per, fast_class, vmec_B_scale,             &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
@@ -106,6 +107,10 @@ contains
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
+    endif
+
+    if (fast_class .and. tcut > 0.0d0) then
+      error stop 'fast_class and positive tcut are mutually exclusive'
     endif
   end subroutine read_config
 

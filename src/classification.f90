@@ -2,7 +2,7 @@ module classification
 use omp_lib
 use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
     ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
-    class_plot, ntcut, fast_class, n_tip_vars, nplagr, nder, npl_half, &
+    class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &
     nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
     integmode, relerr, ntau, should_skip
 use util, only: twopi, sqrt2
@@ -27,7 +27,7 @@ use check_orbit_type_sub, only : check_orbit_type
   type :: classification_result_t
     logical :: passing           ! Trapped (false) or passing (true)
     logical :: lost              ! Orbit lost (true) or confined (false)
-    integer :: minkowski         ! Minkowski: 0=unclassified, 1=regular, 2=chaotic
+    integer :: fractal           ! Fractal: 0=unclassified, 1=regular, 2=chaotic
     integer :: jpar              ! J_parallel: 0=unclassified, 1=regular, 2=stochastic
     integer :: topology          ! Topology: 0=unclassified, 1=ideal, 2=non-ideal
   end type classification_result_t
@@ -87,7 +87,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     logical :: regular
 
     ! Variables and settings for classification by J_parallel and ideal orbit condition:
-    integer, parameter :: nfp_dim=3, nturns=8
+    integer, parameter :: nfp_dim=3
     integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
     real(dp), dimension(nfp_dim) :: fpr_in
 
@@ -100,7 +100,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     ! Initialize classification result - all unclassified
     class_result%passing = .false.
     class_result%lost = .false.
-    class_result%minkowski = 0
+    class_result%fractal = 0
     class_result%jpar = 0
     class_result%topology = 0
 
@@ -169,8 +169,8 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
             !$omp end critical
         endif
         iclass(:,ipart) = 1
-        ! Mark as regular passing (minkowski=1) and not lost
-        class_result%minkowski = 1
+        ! Mark as regular passing (fractal=1) and not lost
+        class_result%fractal = 1
         class_result%lost = .false.
         return
     endif
@@ -406,11 +406,11 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
                     endif
                 endif
 
-                ! Store Minkowski classification in result
+                ! Store fractal classification in result
                 if(regular) then
-                    class_result%minkowski = 1
+                    class_result%fractal = 1
                 else
-                    class_result%minkowski = 2
+                    class_result%fractal = 2
                 endif
 
                 if(class_plot) then
@@ -537,9 +537,9 @@ subroutine write_classification_results(ipart, class_result)
         return
     endif
 
-    ! Write Minkowski classification if computed
-    if(class_result%minkowski /= 0) then
-        regular = (class_result%minkowski == 1)
+    ! Write fractal classification if computed
+    if(class_result%fractal /= 0) then
+        regular = (class_result%fractal == 1)
         call output_minkowsky_class(ipart, regular, class_result%passing)
     endif
 
