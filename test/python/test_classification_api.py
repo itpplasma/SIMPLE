@@ -29,7 +29,7 @@ def test_classify_parallel_api(vmec_file: str) -> None:
 
     assert results['jpar'].shape == (6,)
     assert results['topology'].shape == (6,)
-    assert results['minkowski'].shape == (6,)
+    assert results['fractal'].shape == (6,)
     assert results['passing'].shape == (6,)
 
 
@@ -44,5 +44,5 @@ def test_classification_values(vmec_file: str) -> None:
     assert results['jpar'].max() <= 2
     assert results['topology'].min() >= 0
     assert results['topology'].max() <= 2
-    assert results['minkowski'].min() >= 0
-    assert results['minkowski'].max() <= 3
+    assert results['fractal'].min() >= 0
+    assert results['fractal'].max() <= 3
