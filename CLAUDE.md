@@ -93,8 +93,8 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 - Example inputs in `examples/simple.in` and downloadable `wout.nc`
 
 ### Python Interface
-- `simple` module (`python/simple.py`) - functional API wrapping existing Fortran code
-- Example: `python/example_simple_usage.py` - minimal usage demonstration
+- `simple` package (`python/simple/`) - batch-oriented API with `ParticleBatch`, `BatchResults`, and `trace_orbits`
+- Example: `examples/simple_api.py` - minimal usage demonstration with the cleaned API
 
 ### Output Files
 - `confined_fraction.dat`: Main confinement statistics over time

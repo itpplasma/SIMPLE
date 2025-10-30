@@ -43,6 +43,7 @@ module params
 
   real(dp), allocatable :: trap_par(:), perp_inv(:)
   integer,          allocatable :: iclass(:,:)
+  logical,          allocatable :: class_passing(:), class_lost(:)
 
   integer, parameter :: n_tip_vars = 6  ! variables to evaluate at tip: z(1..5), par_inv
   integer :: nplagr,nder,npl_half
@@ -51,6 +52,7 @@ module params
 
   real(dp) :: tcut = -1d0
   integer :: ntcut
+  integer :: nturns = 8
   logical          :: class_plot = .False.    !<=AAA
   real(dp) :: cut_in_per = 0d0        !<=AAA
 
@@ -85,8 +87,9 @@ module params
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
-    isw_field_type, generate_start_only, startmode, grid_density, special_ants_file, integmode, relerr, tcut, debug,           &
-    class_plot, cut_in_per, fast_class, vmec_B_scale,             &
+    isw_field_type, generate_start_only, startmode, grid_density,        &
+    special_ants_file, integmode, relerr, tcut, nturns, debug,           &
+    class_plot, cut_in_per, fast_class, vmec_B_scale,                    &
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
@@ -105,6 +108,10 @@ contains
 
     if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
       error stop 'Collisions are incompatible with classification'
+    endif
+
+    if (fast_class .and. tcut > 0.0d0) then
+      error stop 'fast_class and positive tcut are mutually exclusive'
     endif
   end subroutine read_config
 
@@ -228,6 +235,8 @@ contains
     if(allocated(trap_par))  deallocate(trap_par)
     if(allocated(perp_inv))  deallocate(perp_inv)
     if(allocated(iclass))  deallocate(iclass)
+    if(allocated(class_passing))  deallocate(class_passing)
+    if(allocated(class_lost))  deallocate(class_lost)
     if(allocated(xstart))  deallocate(xstart)
     if(allocated(bstart))  deallocate(bstart)
     if(allocated(volstart))  deallocate(volstart)
@@ -239,6 +248,14 @@ contains
     allocate(xstart(3,npoi),bstart(npoi),volstart(npoi))
     allocate(confpart_trap(ntimstep),confpart_pass(ntimstep))
     allocate(iclass(3,ntestpart))
+    allocate(class_passing(ntestpart), class_lost(ntestpart))
+
+    times_lost = 0.0d0
+    trap_par = 0.0d0
+    perp_inv = 0.0d0
+    iclass = 0
+    class_passing = .false.
+    class_lost = .false.
   end subroutine reallocate_arrays
 
 

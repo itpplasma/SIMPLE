@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "numpy", "f90wrap@git+https://github.com/jameskermode/f90wrap.git"]
+requires = ["scikit-build-core", "numpy", "f90wrap==0.2.16"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -14,3 +14,4 @@ classifiers = [
 build-dir = "build"
 build.verbose = true
 cmake.define.CMAKE_CACHE_DIR = "build"
+wheel.packages = ["python/pysimple"]

@@ -12,4 +12,4 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
      python3-pip gfortran cmake libnetcdf-dev libnetcdff-dev libopenmpi-dev \
      libopenblas-dev wget
 
-RUN pip install numpy scipy matplotlib f90wrap fortls black
+RUN pip install numpy scipy matplotlib fortls black git+https://github.com/jameskermode/f90wrap.git@v0.2.16

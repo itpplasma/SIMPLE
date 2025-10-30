@@ -9,7 +9,7 @@ Created on Wed Feb 13 12:35:03 2019
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from pysimple import simple, params, orbit_symplectic, cut_detector, \
+from simple_backend import simple, params, orbit_symplectic, cut_detector, \
     get_can_sub, spline_vmec_data
 
 from mpl_toolkits.mplot3d import Axes3D

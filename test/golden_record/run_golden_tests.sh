@@ -1,16 +1,17 @@
 #!/bin/bash
 
 # Run golden record tests for a SIMPLE build
-# Usage: run_golden_tests.sh <project_root> <run_dir> <test_data_dir>
+# Usage: run_golden_tests.sh <project_root> <run_dir> <test_data_dir> [single_case]
 
 set -e
 
 PROJECT_ROOT="$1"
 RUN_DIR="$2"
 TEST_DATA_DIR="$3"
+SINGLE_CASE="$4"  # Optional: specific test case to run
 
 if [ -z "$PROJECT_ROOT" ] || [ -z "$RUN_DIR" ] || [ -z "$TEST_DATA_DIR" ]; then
-    echo "Usage: $0 <project_root> <run_dir> <test_data_dir>"
+    echo "Usage: $0 <project_root> <run_dir> <test_data_dir> [single_case]"
     exit 1
 fi
 
@@ -26,7 +27,13 @@ fi
 mkdir -p "$RUN_DIR"
 
 # Find test cases
-TEST_CASES=$(cd "$SCRIPT_DIR" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | grep -v "^\.$" | sort)
+if [ -n "$SINGLE_CASE" ]; then
+    TEST_CASES="$SINGLE_CASE"
+    echo "Running single test case: $SINGLE_CASE"
+else
+    TEST_CASES=$(cd "$SCRIPT_DIR" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | grep -v "^\.$" | sort)
+    echo "Running all test cases"
+fi
 
 echo "Running tests for: $PROJECT_ROOT"
 echo "Output directory: $RUN_DIR"

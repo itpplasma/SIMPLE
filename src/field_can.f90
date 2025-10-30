@@ -269,5 +269,17 @@ subroutine get_derivatives2(f, pphi)
 
 end subroutine get_derivatives2
 
+! Wrapper subroutines to expose function pointers to Python
+subroutine can_to_ref_wrapper(xcan, xref)
+  real(dp), intent(in) :: xcan(3)
+  real(dp), intent(out) :: xref(3)
+  call can_to_ref(xcan, xref)
+end subroutine can_to_ref_wrapper
+
+subroutine ref_to_can_wrapper(xref, xcan)
+  real(dp), intent(in) :: xref(3)
+  real(dp), intent(out) :: xcan(3)
+  call ref_to_can(xref, xcan)
+end subroutine ref_to_can_wrapper
 
 end module field_can_mod

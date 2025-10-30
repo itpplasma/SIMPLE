@@ -1,20 +1,18 @@
 module simple_main
   use omp_lib
-  use util, only: pi, twopi, sqrt2
+  use util, only: sqrt2
   use simple, only : init_vmec, init_sympl, Tracer
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
-  use binsrc_sub, only : binsrc
-  use samplers, only: sample, init_starting_surf
+  use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
-  use netcdf_orbit_output, only : init_orbit_netcdf, flush_orbit, close_orbit_netcdf
   use callback, only : output_orbits_macrostep
-  use params, only: swcoll, ntestpart, generate_start_only, startmode, special_ants_file, num_surf, &
+  use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
     kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
-    class_plot, ntcut, iclass, bmod00, xi, idx, bmin, bmax, dphi, &
-    zstart, zend, trap_par, perp_inv, volstart, sbeg, thetabeg, phibeg, npoiper, nper, &
-    ntimstep, bstart, ibins, ierr, should_skip, reset_seed_if_deterministic, &
+    class_plot, ntcut, iclass, bmin, bmax, &
+    zstart, zend, trap_par, perp_inv, sbeg, &
+    ntimstep, should_skip, reset_seed_if_deterministic, &
     field_input, isw_field_type, reuse_batch
 
   implicit none
@@ -23,6 +21,76 @@ module simple_main
   integer, parameter :: dp = kind(1.0d0)
 
   contains
+
+  subroutine main
+    use params, only : read_config, netcdffile, ns_s, ns_tp, multharm, &
+      integmode, params_init, swcoll, generate_start_only, isw_field_type, &
+      ntestpart, ntimstep
+    use timing, only : init_timer, print_phase_time
+    use magfie_sub, only : VMEC, init_magfie
+    use samplers, only : init_starting_surf
+
+    implicit none
+
+    character(256) :: config_file
+    type(Tracer) :: norb
+
+    ! Initialize timing
+    call init_timer()
+
+    ! read configuration file name from command line arguments
+    if (command_argument_count() == 0) then
+      config_file = 'simple.in'
+    else
+      call get_command_argument(1, config_file)
+    end if
+    call print_phase_time('Command line parsing completed')
+
+    ! Must be called in this order. TODO: Fix
+    call read_config(config_file)
+    call print_phase_time('Configuration reading completed')
+    
+    call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
+    call print_phase_time('Field initialization completed')
+    
+    call params_init
+    call print_phase_time('Parameter initialization completed')
+
+    call print_parameters
+    call print_phase_time('Parameter printing completed')
+    
+    if (swcoll) then
+      call init_collisions
+      call print_phase_time('Collision initialization completed')
+    endif
+
+    call init_magfie(VMEC)
+    call print_phase_time('VMEC magnetic field initialization completed')
+    
+    call init_starting_surf
+    call print_phase_time('Starting surface initialization completed')
+
+    call sample_particles
+    call print_phase_time('Particle sampling completed')
+
+    if (generate_start_only) stop 'stopping after generating start.dat'
+
+    call init_magfie(isw_field_type)
+    call print_phase_time('Field type initialization completed')
+
+    call init_counters
+    call print_phase_time('Counter initialization completed')
+
+    call trace_parallel(norb)
+    call print_phase_time('Parallel particle tracing completed')
+
+    confpart_pass=confpart_pass/ntestpart
+    confpart_trap=confpart_trap/ntestpart
+    call print_phase_time('Statistics normalization completed')
+    
+    call write_output
+    call print_phase_time('Output writing completed')
+  end subroutine main
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
     use field_base, only : MagneticField
@@ -54,30 +122,97 @@ module simple_main
   end subroutine init_field
 
 
-  subroutine run(norb)
-    use magfie_sub, only : init_magfie, VMEC
-    use samplers, only: sample, START_FILE
-    use timing, only : print_phase_time
+  subroutine trace_parallel(norb)
+    use netcdf_orbit_output, only : init_orbit_netcdf, close_orbit_netcdf, &
+                                     write_orbit_to_netcdf
+
     type(Tracer), intent(inout) :: norb
     integer :: i
+    real(dp), allocatable :: traj(:,:), times(:)
 
-    call print_parameters
-    call print_phase_time('Parameter printing completed')
-    
-    if (swcoll) then
-      call init_collisions
-      call print_phase_time('Collision initialization completed')
+    if (output_orbits_macrostep) then
+      call init_orbit_netcdf(ntestpart, ntimstep)
     endif
 
-    call init_magfie(VMEC)
-    call print_phase_time('VMEC magnetic field initialization completed')
-    
-    call init_starting_surf
-    call print_phase_time('Starting surface initialization completed')
+    !$omp parallel firstprivate(norb) private(traj, times, i)
+    allocate(traj(5, ntimstep), times(ntimstep))
 
-    !sample starting positions
+    !$omp do
+    do i = 1, ntestpart
+      !$omp critical
+      kpart = kpart+1
+      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+      !$omp end critical
+
+      call trace_orbit(norb, i, traj, times)
+
+      if (output_orbits_macrostep) then
+        !$omp critical
+        call write_orbit_to_netcdf(i, traj, times)
+        !$omp end critical
+      endif
+    end do
+    !$omp end do
+    !$omp end parallel
+
+    if (output_orbits_macrostep) then
+      call close_orbit_netcdf()
+    endif
+  end subroutine trace_parallel
+
+  subroutine classify_parallel(norb)
+    use classification, only: trace_orbit_with_classifiers, classification_result_t
+    use params, only: class_passing, class_lost
+
+    type(Tracer), intent(inout) :: norb
+    integer :: i
+    type(classification_result_t) :: class_result
+
+    !$omp parallel firstprivate(norb) private(class_result, i)
+    !$omp do
+    do i = 1, ntestpart
+      !$omp critical
+      kpart = kpart+1
+      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+      !$omp end critical
+
+      call reset_seed_if_deterministic
+      call trace_orbit_with_classifiers(norb, i, class_result)
+
+      ! Store classification flags in params arrays
+      class_passing(i) = class_result%passing
+      class_lost(i) = class_result%lost
+      ! iclass already populated by trace_orbit_with_classifiers
+      ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
+    end do
+    !$omp end do
+    !$omp end parallel
+  end subroutine classify_parallel
+
+  subroutine print_parameters
+    print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
+                      dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
+    print *, 'v0 = ', v0
+  end subroutine print_parameters
+
+  subroutine init_collisions
+    use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
+    facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
+
+    real(dp) :: v0_coll
+
+    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
+      3.5d6/facE_al,v0_coll,dchichi,slowrate,dchichi_norm,slowrate_norm)
+
+    if (abs(v0_coll - v0) > 1d-6) then
+      error stop 'simple_main.init_collisions: v0_coll != v0'
+    end if
+  end subroutine init_collisions
+
+  subroutine sample_particles
+    use samplers, only: sample, START_FILE
+
     if (1 == startmode) then
-      ! if grid_density is set, we override ntestpart!
       if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
         call sample(zstart, grid_density)
       else
@@ -108,65 +243,7 @@ module simple_main
     else
       print *, 'Unknown startmode: ', startmode
     endif
-    call print_phase_time('Particle sampling completed')
-
-
-    if (generate_start_only) stop 'stopping after generating start.dat'
-
-    call init_magfie(isw_field_type)
-    call print_phase_time('Field type initialization completed')
-
-    call init_counters
-    call print_phase_time('Counter initialization completed')
-
-    if (output_orbits_macrostep) then
-      call init_orbit_netcdf(ntestpart, ntimstep)
-      call print_phase_time('NetCDF orbit output initialization completed')
-    end if
-
-    !$omp parallel firstprivate(norb)
-    !$omp do
-    do i = 1, ntestpart
-      !$omp critical
-      kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
-      !$omp end critical
-      call trace_orbit(norb, i)
-    end do
-    !$omp end do
-    !$omp end parallel
-    call print_phase_time('Parallel particle tracing completed')
-
-    if (output_orbits_macrostep) then
-      call close_orbit_netcdf()
-      call print_phase_time('NetCDF orbit output finalization completed')
-    end if
-
-    confpart_pass=confpart_pass/ntestpart
-    confpart_trap=confpart_trap/ntestpart
-    call print_phase_time('Statistics normalization completed')
-
-  end subroutine run
-
-  subroutine print_parameters
-    print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
-                      dabs(mod(dtau, dtaumin)-dtaumin))/dtaumin, ntau
-    print *, 'v0 = ', v0
-  end subroutine print_parameters
-
-  subroutine init_collisions
-    use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-    facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
-
-    real(dp) :: v0_coll
-
-    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
-      3.5d6/facE_al,v0_coll,dchichi,slowrate,dchichi_norm,slowrate_norm)
-
-    if (abs(v0_coll - v0) > 1d-6) then
-      error stop 'simple_main.init_collisions: v0_coll != v0'
-    end if
-  end subroutine init_collisions
+  end subroutine sample_particles
 
   subroutine init_counters
     icounter=0 ! evaluation counter
@@ -180,24 +257,30 @@ module simple_main
     times_lost = -1.d0
   end subroutine init_counters
 
-  subroutine trace_orbit(anorb, ipart)
-    use classification, only : trace_orbit_with_classifiers
-    use callback, only : callbacks_macrostep
+  subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
+    use classification, only : trace_orbit_with_classifiers, classification_result_t, write_classification_results
+    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
+    real(dp), intent(out) :: orbit_traj(:,:)  ! (5, ntimstep)
+    real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
 
     real(dp), dimension(5) :: z
-    integer :: it, ierr_orbit
+    integer :: it, ierr_orbit, it_final
     integer(8) :: kt
     logical :: passing
+    type(classification_result_t) :: class_result
 
     ierr_orbit = 0
 
     call reset_seed_if_deterministic
 
     if (ntcut>0 .or. class_plot) then
-      call trace_orbit_with_classifiers(anorb, ipart)
+      call trace_orbit_with_classifiers(anorb, ipart, class_result)
+      if(class_plot) then
+        call write_classification_results(ipart, class_result)
+      endif
       return
     endif
 
@@ -210,6 +293,9 @@ module simple_main
     call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
     if(passing .and. should_skip(ipart)) then
+      ! Fill trajectory arrays with NaN since we're not tracing this particle
+      orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
+      orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
       !$omp critical
       confpart_pass=confpart_pass+1.d0
       !$omp end critical
@@ -217,20 +303,35 @@ module simple_main
     endif
 
     kt = 0
+    it_final = 0
     do it = 1, ntimstep
       if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
-      call callbacks_macrostep(anorb, ipart, it, kt*dtaumin/v0, z, ierr_orbit)
-      if(ierr_orbit .ne. 0) exit
+      if(ierr_orbit .ne. 0) then
+        it_final = it
+        exit
+      endif
+
+      ! Store trajectory data (after macrostep so time is correct)
+      orbit_traj(:, it) = z
+      orbit_times(it) = kt*dtaumin/v0
+
       call increase_confined_count(it, passing)
+      it_final = it
     enddo
+
+    ! Fill remaining timesteps with NaN if particle left domain early
+    if (it_final < ntimstep) then
+      do it = it_final + 1, ntimstep
+        orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+        orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+      enddo
+    endif
 
     !$omp critical
     call can_to_ref(z(1:3), zend(1:3,ipart))
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
-
-    if (output_orbits_macrostep) call flush_orbit(ipart)
   end subroutine trace_orbit
 
   subroutine macrostep(anorb, z, kt, ierr_orbit)

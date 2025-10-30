@@ -1,289 +1,221 @@
 #!/usr/bin/env python3
 """
-Real unit tests for simple Python API using pytest and TDD.
-Tests actual Fortran behavior without defensive programming.
+Tests for the cleaned SIMPLE Python API.
 """
 
-import pytest
-import numpy as np
-import sys
+from __future__ import annotations
+
 from pathlib import Path
 
-# Add python directory to path for simple import
+import numpy as np
+import pytest
+
 python_dir = Path(__file__).parent.parent.parent / "python"
+pytest.importorskip("pysimple", reason="pysimple module not available")
+
+import sys
+
 sys.path.insert(0, str(python_dir))
 
-try:
-    import simple
-    SIMPLE_AVAILABLE = True
-except ImportError as e:
-    SIMPLE_AVAILABLE = False
-    print(f"Warning: simple module not available: {e}")
+examples_dir = Path(__file__).resolve().parents[2] / "examples"
+sys.path.insert(0, str(examples_dir))
 
-# Note: vmec_file fixture is provided by test/conftest.py
+import pysimple  # noqa: E402  pylint: disable=wrong-import-position
 
 
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")
-class TestSimpleConstants:
+class TestConstants:
     """Test integration constants match Fortran."""
-    
+
     def test_integration_constants(self):
-        """
-        Given: orbit_symplectic_base.f90 constants
-        When: Importing simple module
-        Then: Constants match Fortran values exactly
-        """
-        # From orbit_symplectic_base.f90:
-        # integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
-        #   MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
-        
-        assert simple.RK45 == 0
-        assert simple.EXPL_IMPL_EULER == 1
-        assert simple.IMPL_EXPL_EULER == 2
-        assert simple.MIDPOINT == 3
-        assert simple.GAUSS1 == 4
-        assert simple.GAUSS2 == 5
-        assert simple.GAUSS3 == 6
-        assert simple.GAUSS4 == 7
-        assert simple.LOBATTO3 == 15
-    
+        """Verify integrator constants match orbit_symplectic_base.f90"""
+        assert pysimple.RK45 == 0
+        assert pysimple.EXPL_IMPL_EULER == 1
+        assert pysimple.IMPL_EXPL_EULER == 2
+        assert pysimple.MIDPOINT == 3
+        assert pysimple.GAUSS1 == 4
+        assert pysimple.GAUSS2 == 5
+        assert pysimple.GAUSS3 == 6
+        assert pysimple.GAUSS4 == 7
+        assert pysimple.LOBATTO3 == 15
+
     def test_default_values(self):
-        """
-        Given: params.f90 default values
-        When: Importing simple module  
-        Then: Defaults match Fortran
-        """
-        # From params.f90: sbeg=0.5d0, trace_time=1d-1, integmode = EXPL_IMPL_EULER
-        assert simple.DEFAULT_SURFACE == 0.5
-        assert simple.DEFAULT_TMAX == 0.1
-        assert simple.DEFAULT_INTEGRATOR == simple.EXPL_IMPL_EULER
+        """Verify default values match params.f90"""
+        assert pysimple.DEFAULT_NS_S == 5
+        assert pysimple.DEFAULT_NS_TP == 5
+        assert pysimple.DEFAULT_MULTHARM == 5
 
 
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")  
-class TestFieldLoading:
-    """Test field loading behavior."""
-    
-    def test_load_field_basic(self, vmec_file):
-        """
-        Given: Valid VMEC file
-        When: Loading field
-        Then: No exceptions raised
-        """
-        simple.load_field(vmec_file)
-        # If we get here, loading succeeded
+class TestInitialization:
+    """Test init() behavior."""
 
-    def test_load_field_double_init(self, vmec_file):
-        """
-        Given: Field already loaded  
-        When: Loading field again
-        Then: Reinitializes without crash (TDD: test actual behavior)
-        """
-        simple.load_field(vmec_file)
-        # Load again - should reinitialize, not crash
-        simple.load_field(vmec_file)
+    def test_init_basic(self, vmec_file: str):
+        """Basic initialization should succeed"""
+        pysimple.init(vmec_file, deterministic=True)
+
+    def test_init_with_parameters(self, vmec_file: str):
+        """init() should accept parameter overrides"""
+        pysimple.init(
+            vmec_file,
+            deterministic=True,
+            trace_time=1e-3,
+            ntestpart=100,
+            npoiper2=64
+        )
+
+    def test_multiple_reinitializations(self, vmec_file: str):
+        """Multiple init() calls should work without crash"""
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-3)
+        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
 
 
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")
+class TestIntegratorSelection:
+    def test_alias_resolution(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
+        particles = pysimple.sample_surface(2, s=0.42)
+
+        pysimple.trace_parallel(particles.copy(), integrator="symplectic_midpoint")
+        pysimple.trace_parallel(particles.copy(), integrator="rk45")
+
+        with pytest.raises(ValueError):
+            pysimple.trace_parallel(particles.copy(), integrator="does_not_exist")
+
+
 class TestSampling:
     """Test particle sampling functions."""
-    
-    def test_sample_surface_basic(self, vmec_file):
-        """
-        Given: Loaded field
-        When: Sampling particles on surface
-        Then: Returns proper (5, n_particles) array
-        """
-        simple.load_field(vmec_file)
-        
-        n_particles = 10
-        particles = simple.sample_surface(n_particles, s=0.8)
-        
-        assert particles.shape == (5, n_particles)
-        assert isinstance(particles, np.ndarray)
-        # Check that we got actual particle data (not zeros)
-        assert not np.allclose(particles, 0)
-    
-    def test_sample_volume_basic(self, vmec_file):
-        """
-        Given: Loaded field
-        When: Sampling particles in volume
-        Then: Returns proper (5, n_particles) array  
-        """
-        simple.load_field(vmec_file)
-        
-        n_particles = 5
-        particles = simple.sample_volume(n_particles, s_inner=0.2, s_outer=0.8)
-        
-        assert particles.shape == (5, n_particles)
-        assert isinstance(particles, np.ndarray)
-        assert not np.allclose(particles, 0)
-    
-    def test_sample_different_sizes(self, vmec_file):
-        """
-        Given: Loaded field
-        When: Sampling different numbers of particles
-        Then: Arrays have correct sizes
-        """
-        simple.load_field(vmec_file)
-        
-        for n in [1, 5, 20, 100]:
-            particles = simple.sample_surface(n)
+
+    def test_surface_sampler_shape(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True)
+        particles = pysimple.sample_surface(8, s=0.4)
+        assert particles.shape == (5, 8)
+        assert particles.flags.c_contiguous
+
+    def test_sample_different_sizes(self, vmec_file: str):
+        """Sample different numbers of particles"""
+        pysimple.init(vmec_file, deterministic=True)
+        for n in [1, 5, 20, 50]:
+            particles = pysimple.sample_surface(n, s=0.5)
             assert particles.shape == (5, n)
+            assert not np.allclose(particles, 0.0)
+
+    def test_sample_volume(self, vmec_file: str):
+        """Test volume sampling"""
+        pysimple.init(vmec_file, deterministic=True)
+        n_particles = 10
+        particles = pysimple.sample_volume(n_particles, s_inner=0.2, s_outer=0.8)
+
+        assert particles.shape == (5, n_particles)
+        assert not np.allclose(particles, 0.0)
+        # Check that s values are in expected range
+        s_values = particles[0, :]
+        assert np.all(s_values >= 0.2)
+        assert np.all(s_values <= 0.8)
 
 
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")
-class TestTracing:
-    """Test orbit tracing."""
-    
-    def test_trace_basic(self, vmec_file):
-        """
-        Given: Particles and loaded field
-        When: Tracing orbits with short time
-        Then: Returns results dictionary
-        """
-        simple.load_field(vmec_file)
-        
-        # Use short integration time for tests
-        particles = simple.sample_surface(5, s=0.8)
-        results = simple.trace(particles, tmax=1e-4, integrator=simple.EXPL_IMPL_EULER)
-        
+class TestSampleSurface:
+    def test_sample_surface(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True)
+        particles = pysimple.sample_surface(12, s=0.35)
+
+        assert particles.shape == (5, 12)
+        assert not np.allclose(particles, 0.0)
+
+        original = particles[0, 0]
+        particles[0, 0] = original + 1.0
+        assert particles[0, 0] == original + 1.0
+
+    def test_particles_can_be_copied(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True)
+        particles = pysimple.sample_surface(6, s=0.5)
+
+        clone = particles.copy()
+        np.testing.assert_allclose(particles, clone)
+        clone[0, 0] += 0.1
+        assert clone[0, 0] != particles[0, 0]
+
+
+class TestTraceOrbits:
+    def test_trace_returns_dict_results(self, vmec_file: str):
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=4)
+        particles = pysimple.sample_surface(4, s=0.3)
+        results = pysimple.trace_parallel(particles)
+
         assert isinstance(results, dict)
-        assert 'final_positions' in results
-        assert 'loss_times' in results
-        assert 'tmax' in results
-        
-        # Check shapes
-        assert results['final_positions'].shape == particles.shape
-        assert results['loss_times'].shape == (particles.shape[1],)
-        assert results['tmax'] == 1e-4
-    
-    def test_trace_different_integrators(self, vmec_file):
-        """
-        Given: Particles and loaded field
-        When: Using different integrators
-        Then: All complete without crash
-        """
-        simple.load_field(vmec_file)
-        particles = simple.sample_surface(3, s=0.8)
-        
-        integrators = [simple.RK45, simple.EXPL_IMPL_EULER, simple.MIDPOINT]
-        
-        for integrator in integrators:
-            results = simple.trace(particles, tmax=1e-4, integrator=integrator)
-            assert isinstance(results, dict)
-    
-    def test_trace_array_transpose(self, vmec_file):
-        """
-        Given: Particles in wrong orientation 
-        When: Tracing orbits
-        Then: Automatically transposes and works
-        """
-        simple.load_field(vmec_file)
-        
-        # Create particles in (n_particles, 5) format instead of (5, n_particles)
-        particles_wrong = np.random.rand(3, 5) * 0.1 + [0.5, 0, 0, 1, 0.5]
-        
-        # Should automatically transpose
-        results = simple.trace(particles_wrong, tmax=1e-4)
+        assert results['final_positions'].shape == (5, 4)
+        assert results['loss_times'].shape == (4,)
+        assert results['trap_parameter'].shape == (4,)
+        assert results['perpendicular_invariant'].shape == (4,)
+
+    def test_trace_with_vmec_field(self, vmec_file: str):
+        """Test tracing with VMEC field (isw_field_type=2)"""
+        # Initialize with VMEC field type explicitly
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=3, isw_field_type=2)
+        particles = pysimple.sample_surface(3, s=0.4)
+        results = pysimple.trace_parallel(particles, integrator="midpoint")
+
         assert isinstance(results, dict)
+        assert results['final_positions'].shape == (5, 3)
+        assert results['loss_times'].shape == (3,)
+        # Verify that trace completed (results are returned)
+        assert 'trap_parameter' in results
+        assert 'perpendicular_invariant' in results
 
+    def test_trace_with_boozer_field(self, vmec_file: str):
+        """Test tracing with Boozer canonical coordinates (isw_field_type=3)"""
+        # Initialize with Boozer field type
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=2, isw_field_type=3)
+        particles = pysimple.sample_surface(2, s=0.5)
+        results = pysimple.trace_parallel(particles, integrator="midpoint")
 
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")
-class TestConfinementAnalysis:
-    """Test confinement analysis functions."""
-    
-    def test_get_confined_and_lost(self, vmec_file):
-        """
-        Given: Simulation results
-        When: Analyzing confinement
-        Then: Can separate confined and lost particles
-        """
-        simple.load_field(vmec_file)
-        
-        particles = simple.sample_surface(10, s=0.9)
-        results = simple.trace(particles, tmax=1e-4)
-        
-        confined = simple.get_confined(results)
-        lost = simple.get_lost(results)
-        
-        assert isinstance(confined, np.ndarray)
-        assert isinstance(lost, dict)
-        assert 'positions' in lost
-        assert 'loss_times' in lost
-        
-        # Check that total particles = confined + lost
-        n_confined = confined.shape[1] if confined.size > 0 else 0
-        n_lost = lost['positions'].shape[1] if lost['positions'].size > 0 else 0
-        assert n_confined + n_lost == particles.shape[1]
-
-
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")
-class TestParameterAccess:
-    """Test parameter get/set functions."""
-    
-    def test_set_get_parameters(self):
-        """
-        Given: Parameter functions
-        When: Setting and getting parameters
-        Then: Values are correctly stored and retrieved
-        """
-        # Test setting parameters
-        simple.set_parameters(ntimstep=5000, relerr=1e-12)
-        
-        # Test getting specific parameters
-        ntimstep = simple.get_parameters('ntimstep')
-        assert ntimstep == 5000
-        
-        # Test getting multiple parameters
-        params = simple.get_parameters('ntimstep', 'relerr')
-        assert params['ntimstep'] == 5000
-        assert params['relerr'] == 1e-12
-        
-        # Test getting all common parameters
-        all_params = simple.get_parameters()
-        assert isinstance(all_params, dict)
-        assert 'ntimstep' in all_params
-
-
-@pytest.mark.skipif(not SIMPLE_AVAILABLE, reason="simple module not available")
-class TestRobustness:
-    """Test robustness and edge cases."""
-    
-    def test_multiple_reinitializations(self, vmec_file):
-        """
-        Given: Loaded field
-        When: Multiple reinitializations
-        Then: No crashes, last initialization takes effect
-        """
-        # Test multiple calls to load_field
-        for _ in range(3):
-            simple.load_field(vmec_file)
-        
-        # Should still work
-        particles = simple.sample_surface(5)
-        results = simple.trace(particles, tmax=1e-4)
         assert isinstance(results, dict)
-    
-    def test_parameter_changes_between_runs(self, vmec_file):
-        """
-        Given: Loaded field
-        When: Changing parameters between runs
-        Then: New parameters take effect
-        """
-        simple.load_field(vmec_file)
-        particles = simple.sample_surface(5)
-        
-        # First run with default integrator
-        results1 = simple.trace(particles, tmax=1e-4, integrator=simple.EXPL_IMPL_EULER)
-        
-        # Second run with different integrator  
-        results2 = simple.trace(particles, tmax=1e-4, integrator=simple.MIDPOINT)
-        
-        # Both should succeed
-        assert isinstance(results1, dict)
-        assert isinstance(results2, dict)
+        assert results['final_positions'].shape == (5, 2)
+        assert results['loss_times'].shape == (2,)
 
+    def test_confined_and_lost_filters(self, vmec_file: str):
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=5e-5, ntestpart=3)
+        particles = pysimple.sample_surface(3, s=0.3)
+        results = pysimple.trace_parallel(particles)
 
-if __name__ == "__main__":
-    # Run tests directly for development
-    pytest.main([__file__, "-v", "--tb=short"])
+        confined_mask = results['loss_times'] >= 5e-5
+        lost_mask = results['loss_times'] < 5e-5
+
+        assert confined_mask.shape == (3,)
+        assert lost_mask.shape == (3,)
+
+    def test_different_integrators(self, vmec_file: str):
+        """Test different integrator methods"""
+        # Explicitly set ntestpart to avoid interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=2)
+        particles = pysimple.sample_surface(2, s=0.5)
+
+        # Test various integrators
+        for integrator in ["midpoint", "rk45", "gauss2"]:
+            results = pysimple.trace_parallel(particles.copy(), integrator=integrator)
+            assert results['final_positions'].shape == (5, 2)
+            assert results['loss_times'].shape == (2,)
+
+    def test_trace_single_orbit(self, vmec_file: str):
+        """Test trace_orbit for single particle"""
+        # Re-init to avoid test interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=1)
+        particles = pysimple.sample_surface(1, s=0.5)
+        particle = particles[:, 0]
+
+        result = pysimple.trace_orbit(particle, integrator="midpoint")
+        assert result['final_position'].shape == (5,)
+        assert isinstance(result['loss_time'], float)
+
+    def test_trace_with_trajectory(self, vmec_file: str):
+        """Test trace_orbit with trajectory output"""
+        # Re-init to avoid test interference
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=1)
+        particles = pysimple.sample_surface(1, s=0.5)
+        particle = particles[:, 0]
+
+        result = pysimple.trace_orbit(particle, integrator="midpoint", return_trajectory=True)
+        assert 'trajectory' in result
+        assert 'times' in result
+        assert result['trajectory'].shape[0] == 5
+        assert result['times'].shape[0] == result['trajectory'].shape[1]

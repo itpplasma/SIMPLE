@@ -461,7 +461,7 @@ pysimple.params_init()
 pysimple.run()
 
 # Target: Clean high-level interface  
-import simple
+import pysimple
 config = {'vmec_file': 'wout.nc', 'nparticles': 10000}
 sim = simple.Simulation(config)
 results = sim.run()
@@ -553,7 +553,7 @@ src/api/
 ### 1. **Batch-Oriented API Design**
 ```python
 # LEVERAGES EXISTING: SoA data structures, OpenMP parallelization
-import simple
+import pysimple
 
 # Batch processing (primary use case)
 particles = simple.ParticleBatch.from_vmec_surface(
@@ -630,7 +630,7 @@ def process_large_simulation(n_total: int, batch_size: int = 100_000):
 ### 3. **Scientific Computing Integration**
 ```python
 # Clean integration with scientific Python ecosystem
-import simple
+import pysimple
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -839,7 +839,7 @@ Each implementation step must:
 ```python
 # Verify existing SoA patterns are preserved and accessible
 def validate_soa_performance():
-    import simple
+    import pysimple
     import numpy as np
     import time
     
@@ -869,7 +869,7 @@ def validate_soa_performance():
 # Test 4: OpenMP scaling validation
 def validate_openmp_scaling():
     """Verify existing OpenMP performance is preserved"""
-    import simple
+    import pysimple
     import os
     
     results_1_thread = {}
@@ -898,7 +898,7 @@ def validate_openmp_scaling():
 def validate_memory_efficiency():
     """Ensure no memory overhead vs existing implementation"""
     import psutil
-    import simple
+    import pysimple
     
     # Baseline memory usage
     process = psutil.Process()
@@ -969,7 +969,7 @@ def benchmark_memory_scaling():
 ```python
 def validate_gpu_readiness():
     """Ensure SoA layout is optimal for future GPU acceleration"""
-    import simple
+    import pysimple
     
     batch = simple.ParticleBatch(100_000)
     positions = batch.positions  # Shape: (5, n_particles)

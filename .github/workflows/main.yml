@@ -28,10 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --user --break-system-packages -r requirements.txt
+
       - name: Build SIMPLE
         run: |
           make clean
           make
+          python3 -m pip install -e . --no-build-isolation --break-system-packages
 
       - name: Run Tests
         run: |
@@ -47,11 +52,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --user --break-system-packages -r requirements.txt
 
       - name: Build SIMPLE
         run: |
           make clean
           make
+          python3 -m pip install -e . --no-build-isolation --break-system-packages
 
       - name: Run Regression Tests
         run: make test-regression

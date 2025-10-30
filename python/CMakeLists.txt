@@ -73,6 +73,7 @@ set(FILES_TO_WRAP
     simple.f90
     samplers.f90
     cut_detector.f90
+    callback.f90
     orbit_symplectic_base.f90
     orbit_symplectic.f90
     field_can.f90
@@ -80,6 +81,8 @@ set(FILES_TO_WRAP
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
     params.f90
+    params_wrapper.f90
+    magfie_wrapper.f90
 )
 
 # Add libneo files to wrap
@@ -125,7 +128,7 @@ foreach(file ${FILES_TO_WRAP})
     endif()
 endforeach()
 
-set(F2PY_MODULE_NAME "_pysimple")
+set(F2PY_MODULE_NAME "_simple_backend")
 
 set(F2PY_MODULE_C "${F2PY_MODULE_NAME}module.c")
 set(GENERATED_MODULE_FILE "${F2PY_MODULE_NAME}.${Python_SOABI}")
@@ -145,7 +148,7 @@ add_custom_command(OUTPUT ${F90WRAP_OUTPUT}
 	COMMAND ${Python_EXECUTABLE}
         -m f90wrap
         --f90wrap
-        -m pysimple
+        -m simple_backend
         -k ${CMAKE_CURRENT_SOURCE_DIR}/f2py_f2cmap
         ${CMAKE_CURRENT_BINARY_DIR}/*.f90.i
         > ${CMAKE_CURRENT_BINARY_DIR}/f90wrap.log 2>&1
@@ -186,18 +189,18 @@ set_target_properties(
 )
 
 add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/pysimple.py
+    OUTPUT ${CMAKE_BINARY_DIR}/simple_backend.py
     DEPENDS "${F2PY_MODULE_NAME}"
     COMMENT "copying file"
     COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_BINARY_DIR}/pysimple.py
-            ${CMAKE_BINARY_DIR}/pysimple.py
+            ${CMAKE_CURRENT_BINARY_DIR}/simple_backend.py
+            ${CMAKE_BINARY_DIR}/simple_backend.py
 )
 
 add_custom_target(
-    pysimple ALL
-    DEPENDS ${CMAKE_BINARY_DIR}/pysimple.py
+    simple_backend ALL
+    DEPENDS ${CMAKE_BINARY_DIR}/simple_backend.py
 )
 
 install(TARGETS ${F2PY_MODULE_NAME} DESTINATION .)
-install(FILES ${CMAKE_BINARY_DIR}/pysimple.py DESTINATION .)
+install(FILES ${CMAKE_BINARY_DIR}/simple_backend.py DESTINATION .)

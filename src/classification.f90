@@ -2,7 +2,7 @@ module classification
 use omp_lib
 use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
     ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
-    class_plot, ntcut, fast_class, n_tip_vars, nplagr, nder, npl_half, &
+    class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &
     nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
     integmode, relerr, ntau, should_skip
 use util, only: twopi, sqrt2
@@ -20,6 +20,17 @@ use check_orbit_type_sub, only : check_orbit_type
 
   ! Define real(dp) kind parameter
   integer, parameter :: dp = kind(1.0d0)
+
+  ! Classification result type - separates data from I/O
+  ! Note: 0=unclassified means the classification was not computed
+  ! This depends on orbit type (trapped/passing) and class_plot flag
+  type :: classification_result_t
+    logical :: passing           ! Trapped (false) or passing (true)
+    logical :: lost              ! Orbit lost (true) or confined (false)
+    integer :: fractal           ! Fractal: 0=unclassified, 1=regular, 2=chaotic
+    integer :: jpar              ! J_parallel: 0=unclassified, 1=regular, 2=stochastic
+    integer :: topology          ! Topology: 0=unclassified, 1=ideal, 2=non-ideal
+  end type classification_result_t
 
   ! output files:
   ! iaaa_bou - trapped-passing boundary
@@ -45,7 +56,7 @@ integer, parameter :: iaaa_jre=40012, iaaa_jst=40022, iaaa_jer=40032, &
 
 contains
 
-subroutine trace_orbit_with_classifiers(anorb, ipart)
+subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     use find_bminmax_sub, only : get_bminmax
     use magfie_sub, only : magfie
     use plag_coeff_sub, only : plag_coeff
@@ -53,6 +64,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
+    type(classification_result_t), intent(out) :: class_result
     integer :: ierr, ierr_coll
     real(dp), dimension(5) :: z
     real(dp) :: bmod,sqrtg
@@ -75,7 +87,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     logical :: regular
 
     ! Variables and settings for classification by J_parallel and ideal orbit condition:
-    integer, parameter :: nfp_dim=3, nturns=8
+    integer, parameter :: nfp_dim=3
     integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
     real(dp), dimension(nfp_dim) :: fpr_in
 
@@ -84,6 +96,13 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     iangvar=2
     ! End variables and settings for classification by J_parallel and ideal orbit condition
     !
+
+    ! Initialize classification result - all unclassified
+    class_result%passing = .false.
+    class_result%lost = .false.
+    class_result%fractal = 0
+    class_result%jpar = 0
+    class_result%topology = 0
 
     !  open(unit=10000+ipart, iostat=stat, status='old')
     !  if (stat == 0) close(10000+ipart, status='delete')
@@ -136,6 +155,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
     iclass(:,ipart) = 0
     !$omp end critical
 
+    ! Store passing status in result
+    class_result%passing = passing
+
     ! Forced classification of passing as regular:
     if(passing .and. should_skip(ipart)) then
         !$omp critical
@@ -147,6 +169,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
             !$omp end critical
         endif
         iclass(:,ipart) = 1
+        ! Mark as regular passing (fractal=1) and not lost
+        class_result%fractal = 1
+        class_result%lost = .false.
         return
     endif
     ! End forced classification of passing as regular
@@ -230,12 +255,15 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
             endif
 
             ! Write starting data for orbits which were lost in case of classification plot
-            if(class_plot .and. ierr.ne.0) then
-                call output_lost_orbit_starting_data(ipart, passing)
+            ! Mark orbit as lost if integration failed
+            if(ierr.ne.0) then
+                class_result%lost = .true.
+                if(class_plot) then
+                    call output_lost_orbit_starting_data(ipart, passing)
+                endif
+                exit
             endif
-            ! End write starting data for orbits which were lost in case of classification plot
-
-            if(ierr.ne.0) exit
+            ! End handling of lost orbits
             kt = kt+1
 
             par_inv = par_inv+z(5)**2*dtaumin ! parallel adiabatic invariant
@@ -294,6 +322,9 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
                     !
                     iclass(1,ipart) = ijpar
                     iclass(2,ipart) = ideal
+                    ! Store in classification result
+                    class_result%jpar = ijpar
+                    class_result%topology = ideal
                     if(fast_class) ierr=ierr_cot
                     !
                     ! End classification by J_parallel and ideal orbit conditions
@@ -373,6 +404,13 @@ subroutine trace_orbit_with_classifiers(anorb, ipart)
                         print *, ipart, ' regular tip ', ifp_tip
                         iclass(3,ipart) = 1
                     endif
+                endif
+
+                ! Store fractal classification in result
+                if(regular) then
+                    class_result%fractal = 1
+                else
+                    class_result%fractal = 2
                 endif
 
                 if(class_plot) then
@@ -483,5 +521,39 @@ subroutine write_output_line(iunit, ipart)
     write (iunit, *) zstart(2,ipart), zstart(5,ipart), trap_par(ipart)
     !$omp end critical
 end subroutine write_output_line
+
+
+! Write classification results to fort.* files
+! This subroutine centralizes all classification file I/O
+! Note: Only writes classifications that were computed (non-zero values)
+subroutine write_classification_results(ipart, class_result)
+    integer, intent(in) :: ipart
+    type(classification_result_t), intent(in) :: class_result
+    logical :: regular
+
+    ! Write lost orbits
+    if(class_result%lost) then
+        call output_lost_orbit_starting_data(ipart, class_result%passing)
+        return
+    endif
+
+    ! Write fractal classification if computed
+    if(class_result%fractal /= 0) then
+        regular = (class_result%fractal == 1)
+        call output_minkowsky_class(ipart, regular, class_result%passing)
+    endif
+
+    ! Write J_parallel and topological classification if computed
+    ! These are only done for trapped orbits
+    if(.not. class_result%passing) then
+        if(class_result%jpar /= 0) then
+            call output_jpar_class(ipart, class_result%jpar)
+        endif
+        if(class_result%topology /= 0) then
+            call output_topological_class(ipart, class_result%topology)
+        endif
+    endif
+
+end subroutine write_classification_results
 
 end module classification

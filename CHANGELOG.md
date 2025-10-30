@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing output | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| N | (unreleased) | Python interface refactored to ParticleBatch/BatchResults API (#183) |
 | Y | 5de27cd 2024-08-04 | Change sign of VMEC toroidal flux
 | Y | e25ca7e 2024-08-24 | Remove zzg and rng.f - starting pitch gets double precision random number xi now |
 | Y | c2bb751 2024-08-19 | Restore behavior of `release/1.3` branch |

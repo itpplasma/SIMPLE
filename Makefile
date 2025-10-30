@@ -6,7 +6,7 @@ BUILD_NINJA := $(BUILD_DIR)/build.ninja
 # Common ctest command with optional verbose and test name filtering
 CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
-.PHONY: all configure reconfigure build test test-fast test-slow test-regression test-all install clean
+.PHONY: all configure reconfigure build test test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean
 all: build
 
 $(BUILD_NINJA):
@@ -23,6 +23,7 @@ build: configure
 # Test targets
 # Usage: make [test-target] [TEST=test_name] [VERBOSE=1]
 # Example: make test TEST=test_gvec VERBOSE=1
+# Example: make test-golden-main TEST=classifier VERBOSE=1
 
 # Run all tests except regression tests (default)
 test: build
@@ -43,6 +44,19 @@ test-regression: build
 # Run all tests including regression tests
 test-all: build
 	$(CTEST_CMD)
+
+# Golden record test targets
+# Run all golden record tests against main branch
+test-golden-main: build
+	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_main" $(if $(TEST),-R $(TEST))
+
+# Run all golden record tests against latest tag
+test-golden-tag: build
+	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_tag" $(if $(TEST),-R $(TEST))
+
+# Run all golden record tests (main + tag + sanity)
+test-golden: build
+	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R $(TEST))
 
 doc: configure
 	cmake --build --preset default --target doc
