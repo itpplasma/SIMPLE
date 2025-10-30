@@ -56,6 +56,20 @@ jobs:
           DEST="${{ steps.destination.outputs.dest_dir }}"
           mkdir -p site/"$DEST"
           rsync -a --delete docs/_build/html/ site/"$DEST"/
+          cat > site/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta http-equiv="refresh" content="0; url=latest/" />
+              <title>SIMPLE Documentation</title>
+              <link rel="canonical" href="latest/" />
+            </head>
+            <body>
+              <p>Redirecting to the <a href="latest/">latest SIMPLE documentation</a>…</p>
+            </body>
+          </html>
+          EOF
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
