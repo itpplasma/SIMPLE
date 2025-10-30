@@ -30,6 +30,17 @@ class TestExamples:
         )
         assert result.returncode == 0, f"Script failed: {result.stderr}"
 
+    def test_classify_fast_example(self, vmec_file: str):
+        """Test classify_fast.py example executes."""
+        examples_dir = Path(__file__).resolve().parents[2] / "examples"
+        result = subprocess.run(
+            [sys.executable, str(examples_dir / "classify_fast.py")],
+            capture_output=True,
+            text=True,
+            cwd=str(examples_dir),
+        )
+        assert result.returncode == 0, f"Script failed: {result.stderr}"
+
     def test_classify_fractal_example(self, vmec_file: str):
         """Test classify_fractal.py example executes."""
         examples_dir = Path(__file__).resolve().parents[2] / "examples"

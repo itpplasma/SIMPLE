@@ -21,6 +21,14 @@ Fast classification
    :caption: examples/classify_fast.py
    :linenos:
 
+Fractal classification
+----------------------
+
+.. literalinclude:: ../examples/classify_fractal.py
+   :language: python
+   :caption: examples/classify_fractal.py
+   :linenos:
+
 Macrostep orbit trace
 ---------------------
 
@@ -29,6 +37,5 @@ Macrostep orbit trace
    :caption: examples/orbit_macro.py
    :linenos:
 
-Both examples expose helper functions (:func:`run_trace_example` and
-:func:`classify_fast_example`) that are exercised directly in the pytest suite,
+All examples are exercised directly in the pytest suite,
 so the documentation mirrors the tested code paths one-to-one.
