@@ -28,7 +28,7 @@ Required compiler:
 
 For Python wrappers, do
 ```bash
-pip install git+https://github.com/jameskermode/f90wrap
+pip install f90wrap==0.2.16
 pip install -e . --no-build-isolation
 ```
 
