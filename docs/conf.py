@@ -12,8 +12,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SRC = REPO_ROOT / "python"
-
-sys.path.insert(0, str(PYTHON_SRC))
+PYTHON_SRC_STR = str(PYTHON_SRC)
+if PYTHON_SRC_STR not in sys.path:
+    sys.path.insert(0, PYTHON_SRC_STR)
 
 
 # -- Project information -------------------------------------------------------
@@ -40,7 +41,7 @@ exclude_patterns: list[str] = ["_build", "Thumbs.db", ".DS_Store"]
 
 autodoc_class_signature = "separated"
 autodoc_member_order = "bysource"
-autodoc_mock_imports = ["_simple_main", "_simple_backend"]
+autodoc_mock_imports = ["simple_backend", "_simple_main", "_simple_backend"]
 autodoc_typehints = "description"
 
 autosummary_generate = True
