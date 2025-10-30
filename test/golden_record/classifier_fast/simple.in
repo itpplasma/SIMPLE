@@ -7,7 +7,7 @@ npoiper2 = 128           ! integration steps per field period
 netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
 isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
 trace_time = 1.5d-2      ! tracing time
-tcut = 1d-2              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+tcut = -1.0              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
 class_plot = .True.      ! write starting points at phi=const cut for classification plot (.True./.False.)
 cut_in_per = 0d0         ! normalized phi-cut position within field period, [0:1], used if class_plot=.True.
 fast_class = .True.      ! if .True. quit immeadiately after fast classification and don't trace orbits to the end
