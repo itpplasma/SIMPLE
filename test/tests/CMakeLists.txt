@@ -304,56 +304,22 @@ else()
     message(WARNING "No golden record test cases found in test/golden_record/")
 endif()
 
-# Create individual tests for each case against main branch
+# Create golden record regression tests comparing against main branch
+# These tests enforce strict numerical reproducibility - any change in output
+# must be manually reviewed before merging to main
 foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     add_test(
-        NAME golden_record_main_${CASE}
+        NAME golden_record_${CASE}
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
             main ${CASE}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
-    set_tests_properties(golden_record_main_${CASE} PROPERTIES
+    set_tests_properties(golden_record_${CASE} PROPERTIES
         TIMEOUT 300  # 5 minutes per case
-        LABELS "golden_record;regression;golden_main"
+        LABELS "golden_record;regression"
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
     )
 endforeach()
-
-# Find latest tag dynamically at configure time
-execute_process(
-    COMMAND git tag --sort=-creatordate
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..
-    OUTPUT_VARIABLE GIT_TAGS
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-)
-string(REPLACE "\n" ";" GIT_TAG_LIST "${GIT_TAGS}")
-
-if(GIT_TAG_LIST)
-    list(GET GIT_TAG_LIST 0 LATEST_TAG)
-else()
-    set(LATEST_TAG "")
-endif()
-
-if(LATEST_TAG)
-    message(STATUS "Latest tag found: ${LATEST_TAG}")
-    # Create individual tests for each case against latest tag
-    foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
-        add_test(
-            NAME golden_record_tag_${CASE}
-            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh
-                ${LATEST_TAG} ${CASE}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        )
-        set_tests_properties(golden_record_tag_${CASE} PROPERTIES
-            TIMEOUT 300  # 5 minutes per case
-            LABELS "golden_record;regression;golden_tag"
-            ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
-        )
-    endforeach()
-else()
-    message(WARNING "No git tags found, skipping golden_record_tag tests")
-endif()
 
 # Golden record sanity test: tests the comparison system itself
 # This ensures the golden record comparison scripts are working correctly

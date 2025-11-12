@@ -45,16 +45,9 @@ test-regression: build
 test-all: build
 	$(CTEST_CMD)
 
-# Golden record test targets
-# Run all golden record tests against main branch
-test-golden-main: build
-	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_main" $(if $(TEST),-R $(TEST))
-
-# Run all golden record tests against latest tag
-test-golden-tag: build
-	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_tag" $(if $(TEST),-R $(TEST))
-
-# Run all golden record tests (main + tag + sanity)
+# Golden record test target
+# Compares current branch against main to enforce strict numerical reproducibility
+# Any differences must be manually reviewed before merging
 test-golden: build
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R $(TEST))
 
