@@ -19,35 +19,10 @@ env:
 
 jobs:
   test:
-    name: Run Tests
+    name: Build and Test
     runs-on: self-hosted
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install --user --break-system-packages -r requirements.txt
-
-      - name: Build SIMPLE
-        run: |
-          make clean
-          make
-          python3 -m pip install -e . --no-build-isolation --break-system-packages
-
-      - name: Run Tests
-        run: |
-          make test-fast
-          make test
-
-  regression:
-    name: Run Regression Tests
-    runs-on: self-hosted
-    if: >-
-      github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
 
     steps:
@@ -63,16 +38,24 @@ jobs:
         run: |
           make clean
           make
-          python3 -m pip install -e . --no-build-isolation --break-system-packages
 
-      - name: Run Regression Tests
+      - name: Run Fast Tests (Fortran only)
+        run: make test-fast
+
+      - name: Install Python package
+        run: python3 -m pip install -e . --no-build-isolation --break-system-packages
+
+      - name: Run Slow Tests (Python)
+        run: make test-slow
+
+      - name: Run Regression Tests (Golden Record)
         run: make test-regression
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: regression-test-results
+          name: test-results
           path: |
             build/Testing/
 

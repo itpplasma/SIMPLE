@@ -18,18 +18,18 @@ file(DOWNLOAD
 add_test(NAME test_simple_api
     COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_api.py -v
 )
-set_tests_properties(test_simple_api PROPERTIES 
+set_tests_properties(test_simple_api PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;simple_api"
+    LABELS "python;simple_api;slow"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_test(NAME test_batch_api
     COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_batch_api.py -v
 )
-set_tests_properties(test_batch_api PROPERTIES 
+set_tests_properties(test_batch_api PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;batch_api"
+    LABELS "python;batch_api;slow"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -38,7 +38,7 @@ add_test(NAME test_classification_api
 )
 set_tests_properties(test_classification_api PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;classification"
+    LABELS "python;classification;slow"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -47,7 +47,7 @@ add_test(NAME test_orbit_macro
 )
 set_tests_properties(test_orbit_macro PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;orbit"
+    LABELS "python;orbit;slow"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -56,7 +56,7 @@ add_test(NAME test_examples
 )
 set_tests_properties(test_examples PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;examples"
+    LABELS "python;examples;slow"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
