@@ -1,0 +1,10 @@
+&config
+multharm = 3             ! Fast but inaccurate splines
+contr_pp = -1e10         ! Trace all passing particles
+trace_time = 1d-4        ! slowing down time, s
+sbeg = 0.3d0             ! starting s (normalzed toroidal flux) for particles.
+ntestpart = 32           ! number of test particles
+netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
+isw_field_type = 3       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer, 3: Meiss, 4: Albert
+deterministic = .True.   ! if .True. put seed for the same random walk
+/
