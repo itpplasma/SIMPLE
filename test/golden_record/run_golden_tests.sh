@@ -112,6 +112,9 @@ for test_case in $TEST_CASES; do
         # Coils test cases use NCSX wout and coils files
         ln -sf "$WOUT_NCSX_FILE" "$test_dir/wout.nc"
         ln -sf "$COILS_SIMPLE" "$test_dir/coils.simple"
+    elif [[ "$test_case" == *"_ncsx"* ]]; then
+        # NCSX test cases use NCSX wout without coils
+        ln -sf "$WOUT_NCSX_FILE" "$test_dir/wout.nc"
     else
         # Regular test cases use standard wout
         ln -sf "$WOUT_FILE" "$test_dir/wout.nc"
