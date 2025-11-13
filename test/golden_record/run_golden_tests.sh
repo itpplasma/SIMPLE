@@ -66,9 +66,9 @@ if [ ! -f "$COILS_SIMPLE" ]; then
         python3 -m libneo.convert_coils_to_simple "$COILS_STELLOPT" "$COILS_SIMPLE" 2>/dev/null || {
             # Fallback: manual conversion
             echo "Warning: libneo converter not available, using manual conversion"
-            python3 - <<'EOF'
+            python3 - "$COILS_STELLOPT" "$COILS_SIMPLE" <<'EOF'
 import sys
-with open("$COILS_STELLOPT", "r") as f:
+with open(sys.argv[1], "r") as f:
     coords = []
     currents = []
     in_filament = False
@@ -87,7 +87,7 @@ with open("$COILS_STELLOPT", "r") as f:
                     currents.append(I)
                 except ValueError:
                     pass
-with open("$COILS_SIMPLE", "w") as f:
+with open(sys.argv[2], "w") as f:
     f.write(f"{len(coords)}\n")
     for (x, y, z), I in zip(coords, currents):
         f.write(f"{x:.14E}   {y:.14E}   {z:.14E}   {I:.14E}\n")
