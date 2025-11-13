@@ -46,20 +46,80 @@ if [ ! -f "$WOUT_FILE" ]; then
     wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O "$WOUT_FILE"
 fi
 
+# Download NCSX wout.nc for coils tests
+WOUT_NCSX_FILE="$TEST_DATA_DIR/wout_ncsx.nc"
+if [ ! -f "$WOUT_NCSX_FILE" ]; then
+    echo "Downloading NCSX wout.nc..."
+    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc -O "$WOUT_NCSX_FILE"
+fi
+
+# Download and convert NCSX coils file
+COILS_STELLOPT="$TEST_DATA_DIR/coils.c09r00"
+COILS_SIMPLE="$TEST_DATA_DIR/coils.c09r00.simple"
+if [ ! -f "$COILS_SIMPLE" ]; then
+    echo "Downloading NCSX coils file..."
+    wget -q https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00 -O "$COILS_STELLOPT"
+
+    echo "Converting coils to simple format..."
+    if command -v python3 &> /dev/null; then
+        # Try using libneo converter if available
+        python3 -m libneo.convert_coils_to_simple "$COILS_STELLOPT" "$COILS_SIMPLE" 2>/dev/null || {
+            # Fallback: manual conversion
+            echo "Warning: libneo converter not available, using manual conversion"
+            python3 - "$COILS_STELLOPT" "$COILS_SIMPLE" <<'EOF'
+import sys
+with open(sys.argv[1], "r") as f:
+    coords = []
+    currents = []
+    in_filament = False
+    for line in f:
+        line = line.strip()
+        if "begin filament" in line.lower():
+            in_filament = True
+        elif not in_filament or not line or line.startswith("#"):
+            continue
+        else:
+            parts = line.split()
+            if len(parts) >= 4:
+                try:
+                    x, y, z, I = float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])
+                    coords.append([x, y, z])
+                    currents.append(I)
+                except ValueError:
+                    pass
+with open(sys.argv[2], "w") as f:
+    f.write(f"{len(coords)}\n")
+    for (x, y, z), I in zip(coords, currents):
+        f.write(f"{x:.14E}   {y:.14E}   {z:.14E}   {I:.14E}\n")
+EOF
+        }
+    fi
+fi
+
 # Run each test case
 for test_case in $TEST_CASES; do
     echo "Running test case: $test_case"
-    
+
     # Create test case directory
     test_dir="$RUN_DIR/$test_case"
     mkdir -p "$test_dir"
-    
+
     # Copy input file
     cp "$SCRIPT_DIR/$test_case/simple.in" "$test_dir/"
-    
-    # Create symlink to wout.nc
-    ln -sf "$WOUT_FILE" "$test_dir/wout.nc"
-    
+
+    # Determine which wout and coils files to use based on test case
+    if [[ "$test_case" == *"_coils"* ]]; then
+        # Coils test cases use NCSX wout and coils files
+        ln -sf "$WOUT_NCSX_FILE" "$test_dir/wout.nc"
+        ln -sf "$COILS_SIMPLE" "$test_dir/coils.simple"
+    elif [[ "$test_case" == *"_ncsx"* ]]; then
+        # NCSX test cases use NCSX wout without coils
+        ln -sf "$WOUT_NCSX_FILE" "$test_dir/wout.nc"
+    else
+        # Regular test cases use standard wout
+        ln -sf "$WOUT_FILE" "$test_dir/wout.nc"
+    fi
+
     # Run SIMPLE
     cd "$test_dir"
     "$SIMPLE_EXE" > simple.log 2>&1
