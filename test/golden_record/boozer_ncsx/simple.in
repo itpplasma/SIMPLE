@@ -7,4 +7,5 @@ ntestpart = 32
 netcdffile = 'wout.nc'
 isw_field_type = 2       ! Boozer coordinates
 deterministic = .True.
+facE_al = 100.0d0        ! Energy scale factor (E_alpha / facE_al)
 /

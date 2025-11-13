@@ -8,4 +8,5 @@ netcdffile = 'wout.nc'
 isw_field_type = 3       ! Meiss coordinates
 deterministic = .True.
 field_input = 'coils.simple'
+facE_al = 100.0d0        ! Energy scale factor (E_alpha / facE_al)
 /
