@@ -3,9 +3,9 @@ This file contains a (possibly non-exhaustive) list of important changes.
 Changes marked with "Y" in the Differing Output column may yield different output when run on the same input
 compared to earlier versions.
 
-| Differing output | commit hash / tag and timestamp | Summary |
+| Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
-| Y | 1c38cfa 2024-10-16 | Buffered NetCDF orbit output system - replaces fort.9000X files with orbits.nc |
+| N | 1c38cfa 2024-10-16 | Buffered NetCDF orbit output system - replaces fort.9000X files with orbits.nc |
 | N | v1.4.0 (493afe3) 2024-09-05 -> `release/1.4` | Batch spline optimization (2.86x speedup), Meiss-Hazeltine and Albert coordinates |
 | Y | 5de27cd 2024-08-04 | Change sign of VMEC toroidal flux (v1.3.1 on release/1.3: ac3ba6b)
 | Y | e25ca7e 2024-08-24 | Remove zzg and rng.f - starting pitch gets double precision random number xi now |
