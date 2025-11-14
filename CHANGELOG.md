@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing output | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| N | v1.4.0 (493afe3) 2024-09-05 -> `release/1.4` | Batch spline optimization (2.86x speedup), Meiss-Hazeltine and Albert coordinates |
 | Y | 5de27cd 2024-08-04 | Change sign of VMEC toroidal flux (v1.3.1 on release/1.3: ac3ba6b)
 | Y | e25ca7e 2024-08-24 | Remove zzg and rng.f - starting pitch gets double precision random number xi now |
 | Y | c2bb751 2024-08-19 | Restore behavior of `release/1.3` branch |
