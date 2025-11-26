@@ -145,6 +145,11 @@ module simple_main
         error stop 'Full orbit models require field_input (coils file)'
       endif
       call load_coils_from_file(field_input, coils_for_full_orbit)
+      ! Convert from SI (meters, Amperes) to CGS (cm, statamperes)
+      coils_for_full_orbit%x = coils_for_full_orbit%x * 100.0d0
+      coils_for_full_orbit%y = coils_for_full_orbit%y * 100.0d0
+      coils_for_full_orbit%z = coils_for_full_orbit%z * 100.0d0
+      coils_for_full_orbit%current = coils_for_full_orbit%current * 2997924536.8431d0
       call set_active_coils(coils_for_full_orbit)
       call print_phase_time('Coils loaded for full orbit integration')
     endif

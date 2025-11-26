@@ -57,7 +57,11 @@ contains
 
         call evaluate_cyl(R, phi_cyl, Z, A_cyl, B_cyl, Bmod, gradB)
 
-        b_unit = B_cyl / Bmod
+        ! B_cyl from field_coils_cyl is (B_R, R*B_phi, B_Z) - covariant-like
+        ! Convert to physical/contravariant for unit vector: (B_R, B_phi, B_Z)
+        b_unit(1) = B_cyl(1) / Bmod
+        b_unit(2) = B_cyl(2) / (R * Bmod)
+        b_unit(3) = B_cyl(3) / Bmod
 
         v_par = lambda * v
         v_perp = v * sqrt(max(0d0, 1d0 - lambda**2))
@@ -72,6 +76,8 @@ contains
             call compute_fallback_perpendicular(b_unit, e_perp)
         endif
 
+        ! v_cyl is physical velocity: (v_R, v_phi_physical, v_Z)
+        ! where v_phi_physical = R * omega (linear velocity in phi direction)
         v_cyl = v_par * b_unit + v_perp * e_perp
 
         if (orbit_model == 1) then
@@ -83,8 +89,12 @@ contains
         state%z(1) = R
         state%z(2) = phi_cyl
         state%z(3) = Z
+        ! Canonical momenta: p_R = m*v_R + (q/c)*A_R
+        !                    p_phi = m*R*v_phi_phys + (q/c)*R*A_phi = m*R*v_cyl(2) + (q/c)*A_cyl(2)
+        !                    p_Z = m*v_Z + (q/c)*A_Z
+        ! Note: A_cyl(2) = R*A_phi (covariant)
         state%z(4) = state%m * v_cyl(1) + (state%q / c) * A_cyl(1)
-        state%z(5) = state%m * R**2 * v_cyl(2) + (state%q / c) * A_cyl(2)
+        state%z(5) = state%m * R * v_cyl(2) + (state%q / c) * A_cyl(2)
         state%z(6) = state%m * v_cyl(3) + (state%q / c) * A_cyl(3)
 
     end subroutine init_full_orbit_state
@@ -353,7 +363,9 @@ contains
 
         v_mag = sqrt(v_R**2 + R**2 * v_phi**2 + v_Z**2)
 
-        v_par = (v_R * B_cyl(1) + R**2 * v_phi * B_cyl(2) + v_Z * B_cyl(3)) / Bmod
+        ! B_cyl is (B_R, R*B_phi, B_Z), v_phi is angular velocity
+        ! v_par = v dot b = v_R*B_R + (R*v_phi)*(B_cyl(2)/R) + v_Z*B_Z
+        v_par = (v_R * B_cyl(1) + v_phi * B_cyl(2) + v_Z * B_cyl(3)) / Bmod
 
         x_cyl = [R, phi_cyl, Z]
         call transform_cyl_to_vmec(x_cyl, x_vmec, ierr)

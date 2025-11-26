@@ -71,6 +71,8 @@ contains
     print *, 'R0 = ', RT0, ' cm, fper = ', fper
     call volume_and_B00(volume,B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
+    ! Store B00 for use by full orbit integrator
+    vmec_B_scale = B00
   end subroutine init_vmec
 
 
@@ -204,12 +206,15 @@ contains
 
 
   subroutine init_full(fo, z0, dtau, v0, n_e, n_d, orbit_model)
+    use new_vmec_stuff_mod, only: vmec_B_scale
     type(FullOrbitState), intent(out) :: fo
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtau, v0
     integer, intent(in) :: n_e, n_d, orbit_model
 
     real(dp) :: s, theta, phi, lambda, v
+    real(dp) :: B_typical, omega_c, T_c, dt_cyclotron
+    integer, parameter :: STEPS_PER_CYCLOTRON = 50
 
     s = z0(1)
     theta = z0(2)
@@ -217,9 +222,23 @@ contains
     v = z0(4)
     lambda = z0(5)
 
+    ! Compute appropriate timestep based on cyclotron frequency
+    ! omega_c = q*B/(m*c), T_c = 2*pi/omega_c
+    ! Use B_00 from VMEC as typical field strength (in Gauss)
+    B_typical = vmec_B_scale
+    if (B_typical < 1d3) B_typical = 1d5  ! default 10 kG if not set
+
+    ! omega_c = q*B/(m*c) in CGS: q in statC, B in G, m in g, c in cm/s
+    omega_c = real(n_e, dp) * e_charge * B_typical / &
+              (real(n_d, dp) * p_mass * c)
+    T_c = twopi / omega_c  ! cyclotron period in seconds
+
+    ! Use timestep = T_c / STEPS_PER_CYCLOTRON, normalized by v0
+    dt_cyclotron = (T_c * v0) / real(STEPS_PER_CYCLOTRON, dp)
+
     call init_full_orbit_state(fo, s, theta, phi, lambda, v, &
                                orbit_model, real(n_d, dp), real(n_e, dp), &
-                               dtau / sqrt(2d0), v0)
+                               dt_cyclotron, v0)
 
   end subroutine init_full
 
