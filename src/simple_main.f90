@@ -96,7 +96,7 @@ module simple_main
     use field_base, only : MagneticField
     use field, only : field_from_file
     use timing, only : print_phase_time
-    use magfie_sub, only : CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -116,13 +116,21 @@ module simple_main
       call print_phase_time('Field from file loading completed')
     end if
 
-    if (self%integmode > 0 .and. isw_field_type == VMEC) then
-      error stop 'Symplectic guiding-center integrators require canonical field ' &
-        //'representation (set isw_field_type to CANFLUX, BOOZER, MEISS, or ALBERT)'
+    if (self%integmode > 0) then
+      select case (isw_field_type)
+      case (VMEC)
+        error stop 'Symplectic guiding-center integrators require canonical field ' &
+          //'representation (set isw_field_type to TEST, CANFLUX, BOOZER, MEISS, or ALBERT)'
+      case (TEST, CANFLUX, BOOZER, MEISS, ALBERT)
+        continue
+      case default
+        error stop 'Unknown canonical field type for symplectic guiding-center integrator'
+      end select
     end if
 
-    if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
-        isw_field_type == MEISS .or. isw_field_type == ALBERT) then
+    if (isw_field_type == TEST .or. isw_field_type == CANFLUX .or. &
+        isw_field_type == BOOZER .or. isw_field_type == MEISS .or. &
+        isw_field_type == ALBERT) then
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
     end if

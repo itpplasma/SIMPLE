@@ -141,6 +141,8 @@ subroutine init_field_can(field_id, field_noncan)
   end if
   
   select case (field_id)
+    case (TEST)
+      call field_can_from_id(field_id, field_to_use)
     case (CANFLUX)
       call get_canonical_coordinates_with_field(field_to_use)
     case (BOOZER)
