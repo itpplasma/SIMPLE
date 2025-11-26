@@ -11,7 +11,7 @@ use orbit_symplectic, only : orbit_timestep_sympl, get_val
 use simple, only : init_sympl, Tracer
 use cut_detector, only : fract_dimension
 use diag_mod, only : icounter
-use get_can_sub, only : vmec_to_can
+use get_can_sub, only : vmec_to_can, can_to_vmec
 use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
 use magfie_sub, only : CANFLUX, BOOZER
 use check_orbit_type_sub, only : check_orbit_type
@@ -441,8 +441,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     !$omp critical
     zend(:,ipart) = z
     if(isw_field_type .eq. CANFLUX) then
-        ! TODO need to add can_to_vmec
-        ! call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
+        call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
     elseif(isw_field_type .eq. BOOZER) then
         call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
     endif
