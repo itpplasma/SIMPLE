@@ -1,7 +1,9 @@
 module simple_main
   use omp_lib
+  use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: sqrt2
-  use simple, only : init_vmec, init_sympl, Tracer
+  use simple, only : init_vmec, init_sympl, init_full, Tracer, &
+    timestep_full_z, FullOrbitState
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use samplers, only: sample
@@ -13,12 +15,10 @@ module simple_main
     class_plot, ntcut, iclass, bmin, bmax, &
     zstart, zend, trap_par, perp_inv, sbeg, &
     ntimstep, should_skip, reset_seed_if_deterministic, &
-    field_input, isw_field_type, reuse_batch
+    field_input, isw_field_type, reuse_batch, &
+    orbit_model, ORBIT_GUIDING_CENTER, ORBIT_PAULI_PARTICLE, ORBIT_PARTICLE
 
   implicit none
-
-  ! Define real(dp) kind parameter
-  integer, parameter :: dp = kind(1.0d0)
 
   contains
 
@@ -97,16 +97,21 @@ module simple_main
     use field, only : field_from_file
     use timing, only : print_phase_time
     use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use neo_biotsavart, only : coils_t, load_coils_from_file
+    use field_coils_cyl, only : set_active_coils
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     class(MagneticField), allocatable :: field_temp
+    type(coils_t), target, save :: coils_for_full_orbit
 
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
     call print_phase_time('VMEC initialization completed')
 
     self%integmode = aintegmode
+    self%orbit_model = orbit_model
+
     if (self%integmode >= 0) then
       if(trim(field_input) == '') then
         call field_from_file(vmec_file, field_temp)
@@ -134,6 +139,15 @@ module simple_main
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
     end if
+
+    if (orbit_model /= ORBIT_GUIDING_CENTER) then
+      if (len_trim(field_input) == 0) then
+        error stop 'Full orbit models require field_input (coils file)'
+      endif
+      call load_coils_from_file(field_input, coils_for_full_orbit)
+      call set_active_coils(coils_for_full_orbit)
+      call print_phase_time('Coils loaded for full orbit integration')
+    endif
   end subroutine init_field
 
 
@@ -307,14 +321,15 @@ module simple_main
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
-    if (integmode > 0) then
+    if (anorb%orbit_model /= ORBIT_GUIDING_CENTER) then
+      call init_full(anorb%fo, z, dtaumin, v0, anorb%n_e, anorb%n_d, anorb%orbit_model)
+    elseif (integmode > 0) then
       call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
-    end if
+    endif
 
     call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
     if(passing .and. should_skip(ipart)) then
-      ! Fill trajectory arrays with NaN since we're not tracing this particle
       orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
       orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
       !$omp critical
@@ -332,7 +347,6 @@ module simple_main
         exit
       endif
 
-      ! Store trajectory data (after macrostep so time is correct)
       orbit_traj(:, it) = z
       orbit_times(it) = kt*dtaumin/v0
 
@@ -340,7 +354,6 @@ module simple_main
       it_final = it
     enddo
 
-    ! Fill remaining timesteps with NaN if particle left domain early
     if (it_final < ntimstep) then
       do it = it_final + 1, ntimstep
         orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
@@ -367,14 +380,18 @@ module simple_main
     integer :: ktau
 
     do ktau=1,ntau
-      if (integmode <= 0) then
+      if (anorb%orbit_model /= ORBIT_GUIDING_CENTER) then
+        call timestep_full_z(anorb%fo, z, ierr_orbit)
+      elseif (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
       else
         if (swcoll) call update_momentum(anorb, z)
         call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
         call to_standard_z_coordinates(anorb, z)
       endif
-      if (swcoll) call collide(z, dtaumin) ! Collisions
+      if (swcoll .and. anorb%orbit_model == ORBIT_GUIDING_CENTER) then
+        call collide(z, dtaumin)
+      endif
       if (ierr_orbit .ne. 0) exit
       kt = kt+1
     enddo
