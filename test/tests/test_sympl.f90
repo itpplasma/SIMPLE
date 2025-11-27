@@ -1,293 +1,109 @@
 program test_sympl
+  use, intrinsic :: iso_fortran_env, only : dp => real64
+  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, &
+    orbit_timestep_sympl, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS4
+  use field_can_mod, only : FieldCan, FieldCan_init, eval_field => evaluate, &
+    field_can_from_name
+  use timing, only : get_wtime
 
-use orbit_symplectic
-use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
-    orbit_timestep_quasi, orbit_timestep_multi_quasi
-use field_can_mod
-use diag_mod, only : icounter
-use timing, only: get_wtime
+  implicit none
 
-implicit none
-save
+  integer, parameter :: steps_per_bounce = 8
+  integer, parameter :: nbounce = 30
+  integer, parameter :: ntau = 1
+  real(dp), parameter :: taub = 7800.0_dp
 
-double precision, parameter :: qe = 1d0, m = 1d0, c = 1d0, mu = 1d-5
-integer :: steps_per_bounce, nbounce
+  type(FieldCan) :: f
+  type(SymplecticIntegrator) :: integ
+  real(dp) :: z0(4)
+  real(dp) :: dt, h0, hmin, hmax, rel_drift, rel_tol, denom
+  real(dp) :: starttime, endtime
+  integer :: nt, k, ierr, unit, i
+  integer, parameter :: nmode = 4
+  integer, dimension(nmode) :: mode_ids
+  character(len=12), dimension(nmode) :: labels
+  character(len=40) :: outfile
+  real(dp), allocatable :: orbit(:, :)
 
-integer :: ierr, kt
+  dt = taub/real(steps_per_bounce, dp)
+  nt = steps_per_bounce*nbounce
+  mode_ids = (/EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS4/)
+  labels = (/'euler1     ', 'euler2     ', 'midpoint   ', 'gauss4     '/)
 
-double precision :: z0(4), vpar0, dt, taub
+  allocate(orbit(5, nt))
 
-type(FieldCan) :: f
+  do i = 1, nmode
+    call field_can_from_name('test')
+    call FieldCan_init(f, 1.0e-5_dp, 1.0_dp, 0.0_dp)
 
-type(SymplecticIntegrator) :: integ_euler1, integ_euler2, integ_midpoint, integ_gauss2, &
-    integ_gauss4, integ_lobatto4, integ_gauss6, integ_gauss8
-type(MultistageIntegrator) :: verlet, mclachlan4, blanes4, kahan6, kahan8
+    z0 = (/0.1_dp, 1.5_dp, 0.0_dp, 0.0_dp/)
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+    z0(4) = f%vpar*f%hph + f%Aph/f%ro0
 
-! Initial conditions
-z0(1) = 0.1d0  ! r
-z0(2) = 1.5d0  ! theta
-z0(3) = 0.0d0  ! phi
-vpar0 = 0.0d0  ! parallel velocity
+    rel_tol = select_tol(mode_ids(i))
+    call orbit_sympl_init(integ, f, z0, dt, ntau, 1.0e-12_dp, mode_ids(i))
 
-call field_can_from_name('test')
-call FieldCan_init(f, mu, c*m/qe, vpar0)
+    orbit(:, 1) = (/z0, f%H/)
+    h0 = f%H
+    hmin = h0
+    hmax = h0
 
-! Compute toroidal momentum from initial conditions
-call eval_field(f, z0(1), z0(2), z0(3), 0)
-z0(4) = m*vpar0*f%hph + qe/c*f%Aph  ! p_phi
+    starttime = get_wtime()
+    do k = 2, nt
+      ierr = 0
+      call orbit_timestep_sympl(integ, f, ierr)
+      if (ierr /= 0) then
+        write(*, '(a, i0, a)') 'orbit_timestep_sympl error ', ierr, &
+          ' in '//trim(labels(i))
+        error stop 1
+      end if
+      orbit(1:4, k) = integ%z
+      orbit(5, k) = f%H
+      hmax = max(hmax, f%H)
+      hmin = min(hmin, f%H)
+    end do
+    endtime = get_wtime()
 
-taub = 7800d0  ! estimated bounce time
-nbounce = 1000
+    denom = abs(h0)
+    if (denom < 1.0e-14_dp) denom = 1.0_dp
+    rel_drift = (hmax - hmin)/denom
+    if (rel_drift > rel_tol) then
+      write(*, '(a, a, a, 1pE10.3, a, 1pE10.3)') 'Hamiltonian spread for ', &
+        trim(labels(i)), ' exceeds tolerance: ', rel_drift, ' > ', rel_tol
+      error stop 1
+    end if
 
+    write(*, '(a, a, a, f9.5, a, 1pE10.3)') 'tokamak ', trim(labels(i)), ': ', &
+      endtime - starttime, ' s, max dH/H=', rel_drift
 
-steps_per_bounce = 8
-dt = taub/steps_per_bounce
+    write(outfile, '(a, a)') 'tokamak_testfield_', trim(labels(i))//'.dat'
+    open(newunit=unit, file=trim(outfile), action='write', status='replace', &
+      recl=4096)
+    do k = 1, nt
+      write(unit, *) orbit(:, k)
+    end do
+    close(unit)
+  end do
 
-print *, 'timesteps: ', nbounce*steps_per_bounce
-
-call orbit_sympl_init(integ_euler1, f, z0, dt, 1, 1d-12, 1)
-call test_single(integ_euler1, 'euler1.out')
-
-stop
-call orbit_sympl_init(integ_euler2, f, z0, dt, 1, 1d-12, 2)
-call test_single(integ_euler2, 'euler2.out')
-print *, ''
-
-call orbit_sympl_init(integ_gauss2, f, z0, dt, 1, 1d-12, 4)
-call test_single(integ_gauss2, 'gauss2.out')
-call orbit_sympl_init(integ_midpoint, f, z0, dt, 1, 1d-12, 3)
-call test_single(integ_midpoint, 'midpoint.out')
-call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
-call test_multi(verlet, 'verlet.out')
-print *, ''
-
-call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_single(integ_gauss4, 'gauss4.out')
-call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
-call test_multi(mclachlan4, 'mclachlan4.out')
-call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
-call test_multi(blanes4, 'blanes4.out')
-call orbit_sympl_init(integ_lobatto4, f, z0, dt, 1, 1d-12, 15)
-call test_single(integ_lobatto4, 'lobatto4.out')
-call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_single(integ_gauss6, 'gauss6.out')
-print *, ''
-
-call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_quasi(integ_gauss4, 'gauss4q.out')
-call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_quasi(integ_gauss6, 'gauss6q.out')
-call orbit_sympl_init(integ_lobatto4, f, z0, dt, 1, 1d-12, 15)
-call test_quasi(integ_lobatto4, 'lobatto4q.out')
-print *, ''
-
-call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_single(integ_gauss4, 'gauss4.out')
-print *, ''
-
-call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
-call test_multi(kahan6, 'kahan6.out')
-call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_single(integ_gauss6, 'gauss6.out')
-print *, ''
-
-call orbit_sympl_init_kahan8(kahan8, f, z0, dt, 1, 1d-12)
-call test_multi(kahan8, 'kahan8.out')
-call orbit_sympl_init(integ_gauss8, f, z0, dt, 1, 1d-12, 7)
-call test_single(integ_gauss8, 'gauss8.out')
-print *, ''
-
-call orbit_sympl_init(integ_euler1, f, z0, dt, 1, 1d-12, 1)
-call test_quasi(integ_euler1, 'euler1q.out')
-call orbit_sympl_init(integ_euler2, f, z0, dt, 1, 1d-12, 2)
-call test_quasi(integ_euler2, 'euler2q.out')
-print *, ''
-
-call orbit_sympl_init_verlet(verlet, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(verlet, 'verletq.out')
-call orbit_sympl_init(integ_midpoint, f, z0, dt, 1, 1d-12, 3)
-call test_quasi(integ_midpoint, 'midpointq.out')
-call orbit_sympl_init(integ_gauss2, f, z0, dt, 1, 1d-12, 4)
-call test_quasi(integ_gauss2, 'gauss2q.out')
-print *, ''
-
-call orbit_sympl_init(integ_lobatto4, f, z0, dt, 1, 1d-12, 15)
-call test_quasi(integ_lobatto4, 'lobatto4q.out')
-call orbit_sympl_init_mclachlan4(mclachlan4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(mclachlan4, 'mclachlan4q.out')
-call orbit_sympl_init_blanes4(blanes4, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(blanes4, 'blanes4q.out')
-call orbit_sympl_init(integ_gauss4, f, z0, dt, 1, 1d-12, 5)
-call test_quasi(integ_gauss4, 'gauss4q.out')
-print *, ''
-
-call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(kahan6, 'kahan6q.out')
-call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
-call test_quasi(integ_gauss6, 'gauss6q.out')
-print *, ''
-
-call orbit_sympl_init_kahan8(kahan8, f, z0, dt, 1, 1d-12)
-call test_multi_quasi(kahan8, 'kahan8q.out')
-call orbit_sympl_init(integ_gauss8, f, z0, dt, 1, 1d-12, 7)
-call test_quasi(integ_gauss8, 'gauss8q.out')
-print *, ''
+  deallocate(orbit)
 
 contains
 
-subroutine test_single(si, outname)
-    type(SymplecticIntegrator) :: si
-    character(*) :: outname
+  function select_tol(mode) result(tol)
+    integer, intent(in) :: mode
+    real(dp) :: tol
 
-    integer :: nt
-    double precision :: starttime, endtime
-    double precision, allocatable :: out(:, :)
-
-    nt = nbounce*steps_per_bounce
-    allocate(out(5,nt))
-
-    icounter = 0
-    out(:,1:)=0d0
-
-    out(1:4,1) = z0
-    out(5,1) = f%H
-    starttime = get_wtime()
-    do kt = 2, nt
-        ierr = 0
-        call orbit_timestep_sympl(si, f, ierr)
-        if (.not. ierr==0) then
-            print *, si%z
-            exit
-        endif
-        out(1:4,kt) = si%z
-        out(5,kt) = f%H
-    end do
-    endtime = get_wtime()
-    print *, outname(1:10), endtime-starttime, icounter
-
-    open(unit=20, file=outname, action='write', recl=4096)
-    do kt = 1, nt
-        write(20,*) out(:,kt)
-    end do
-    close(20)
-    deallocate(out)
-end subroutine test_single
-
-subroutine test_quasi(si, outname)
-    type(SymplecticIntegrator) :: si
-    character(*) :: outname
-
-    integer :: nt
-    double precision :: starttime, endtime
-    double precision, allocatable :: out(:, :)
-
-    nt = nbounce*steps_per_bounce
-    allocate(out(5,nt))
-
-    icounter = 0
-    out(:,1:)=0d0
-
-    out(1:4,1) = z0
-    out(5,1) = f%H
-
-    f_quasi = f
-    si_quasi = si
-
-    starttime = get_wtime()
-    do kt = 2, nt
-        ierr = 0
-        call orbit_timestep_quasi(ierr)
-        if (.not. ierr==0) then
-            print *, si%z
-            exit
-        endif
-        out(1:4,kt) = si_quasi%z
-        out(5,kt) = f_quasi%H
-    end do
-    endtime = get_wtime()
-    print *, outname(1:10), endtime-starttime, icounter
-
-    open(unit=20, file=outname, action='write', recl=4096)
-    do kt = 1, nt
-        write(20,*) out(:,kt)
-    end do
-    close(20)
-    deallocate(out)
-
-end subroutine test_quasi
-
-subroutine test_multi(mi, outname)
-    type(MultistageIntegrator) :: mi
-    character(*) :: outname
-
-    integer :: nt
-    double precision :: starttime, endtime
-    double precision, allocatable :: out(:, :)
-
-    nt = nbounce*steps_per_bounce
-    allocate(out(5,nt))
-
-    icounter = 0
-    out(:,1:nbounce*steps_per_bounce)=0d0
-
-    out(1:4,1) = z0
-    out(5,1) = f%H
-
-    starttime = get_wtime()
-    do kt = 2, nbounce*steps_per_bounce
-        ierr = 0
-        call orbit_timestep_sympl_multi(mi, f, ierr)
-        if (.not. ierr==0) stop 'Error'
-        out(1:4,kt) = mi%stages(1)%z
-        out(5,kt) = f%H
-    end do
-    endtime = get_wtime()
-    print *, outname(1:10), endtime-starttime, icounter
-
-    open(unit=20, file=outname, action='write', recl=4096)
-    do kt = 1, nbounce*steps_per_bounce
-        write(20,*) out(:,kt)
-    end do
-    close(20)
-    deallocate(out)
-end subroutine test_multi
-
-subroutine test_multi_quasi(mi, outname)
-    type(MultistageIntegrator) :: mi
-    character(*) :: outname
-
-    integer :: nt
-    double precision :: starttime, endtime
-    double precision, allocatable :: out(:, :)
-
-    f_quasi = f
-
-    nt = nbounce*steps_per_bounce
-    allocate(out(5,nt))
-
-    icounter = 0
-    out(:,1:nbounce*steps_per_bounce)=0d0
-
-    out(1:4,1) = z0
-    out(5,1) = f_quasi%H
-
-    starttime = get_wtime()
-    do kt = 2, nbounce*steps_per_bounce
-        ierr = 0
-        call orbit_timestep_multi_quasi(mi, ierr)
-        if (.not. ierr==0) stop 'Error'
-        out(1:4,kt) = mi%stages(1)%z
-        out(5,kt) = f_quasi%H
-    end do
-    endtime = get_wtime()
-    print *, outname(1:10), endtime-starttime, icounter
-
-    open(unit=20, file=outname, action='write', recl=4096)
-    do kt = 1, nbounce*steps_per_bounce
-       write(20,*) out(:,kt)
-    end do
-    close(20)
-    deallocate(out)
-end subroutine test_multi_quasi
-
+    select case (mode)
+    case (EXPL_IMPL_EULER)
+      tol = 1.24e-1_dp
+    case (IMPL_EXPL_EULER)
+      tol = 1.20e-1_dp
+    case (MIDPOINT)
+      tol = 5.3e-3_dp
+    case (GAUSS4)
+      tol = 4.5e-5_dp
+    case default
+      tol = 1.0e-5_dp
+    end select
+  end function select_tol
 end program test_sympl
