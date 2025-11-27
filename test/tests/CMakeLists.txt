@@ -64,6 +64,20 @@ target_link_libraries(utility_test.x testing_utils)
 if (ENABLE_OPENMP)
     add_executable (test_sympl_tok.x test_sympl.f90)
     target_link_libraries(test_sympl_tok.x simple)
+    add_test(NAME test_sympl_tokamak
+        COMMAND test_sympl_tok.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_sympl_tokamak PROPERTIES
+        LABELS "integration")
+
+    add_test(NAME test_sympl_tokamak_plot
+        COMMAND ${CMAKE_COMMAND} -E env python3
+            ${CMAKE_CURRENT_SOURCE_DIR}/plot_tokamak_testfield.py
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_sympl_tokamak_plot PROPERTIES
+        DEPENDS test_sympl_tokamak
+        LABELS "integration;plot")
+
     add_executable (test_sympl.x test_sympl_stell.f90)
     target_link_libraries(test_sympl.x simple)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)

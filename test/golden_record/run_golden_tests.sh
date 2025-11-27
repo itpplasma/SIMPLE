@@ -38,6 +38,7 @@ fi
 echo "Running tests for: $PROJECT_ROOT"
 echo "Output directory: $RUN_DIR"
 echo "Test cases: $TEST_CASES"
+echo "Checking for optional symplectic tokamak regression..."
 
 # Download wout.nc if not present in test data directory
 WOUT_FILE="$TEST_DATA_DIR/wout.nc"
@@ -143,5 +144,24 @@ for test_case in $TEST_CASES; do
     
     echo "Test case $test_case completed successfully"
 done
+
+#
+# Optional symplectic tokamak regression (test_sympl_tok.x)
+#
+SYMP_TOK_BIN="$PROJECT_ROOT/build/test/tests/test_sympl_tok.x"
+SYMP_TOK_DIR="$RUN_DIR/sympl_tokamak"
+if [ -x "$SYMP_TOK_BIN" ]; then
+    echo "Running symplectic tokamak regression via test_sympl_tok.x"
+    mkdir -p "$SYMP_TOK_DIR"
+    cd "$SYMP_TOK_DIR"
+    "$SYMP_TOK_BIN" > sympl_tokamak.log 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: test_sympl_tok.x failed; see $SYMP_TOK_DIR/sympl_tokamak.log"
+        exit 1
+    fi
+    echo "Symplectic tokamak regression completed."
+else
+    echo "Skipping symplectic tokamak regression (binary not found at $SYMP_TOK_BIN)"
+fi
 
 echo "All tests completed successfully"

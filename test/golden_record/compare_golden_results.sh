@@ -124,14 +124,38 @@ compare_cases() {
     fi
 }
 
+compare_sympl_tokamak() {
+    local case_dir="sympl_tokamak"
+    local ref_dir="$REFERENCE_DIR/$case_dir"
+    local cur_dir="$CURRENT_DIR/$case_dir"
+
+    if [ ! -d "$ref_dir" ] || [ ! -d "$cur_dir" ]; then
+        echo "Skipping symplectic tokamak comparison (missing outputs)."
+        return 0
+    fi
+
+    echo "Comparing symplectic tokamak outputs..."
+    local files="tokamak_testfield_euler1.dat tokamak_testfield_euler2.dat tokamak_testfield_midpoint.dat tokamak_testfield_gauss4.dat"
+    python "$SCRIPT_DIR/compare_files_multi.py" "$ref_dir" "$cur_dir" --files $files
+    return $?
+}
+
 # Main execution
 compare_cases
 exit_code=$?
 
-if [ $exit_code -eq 0 ]; then
+sympl_exit=0
+compare_sympl_tokamak || sympl_exit=$?
+
+final_exit=$exit_code
+if [ $sympl_exit -ne 0 ]; then
+    final_exit=$sympl_exit
+fi
+
+if [ $final_exit -eq 0 ]; then
     echo "All tests passed!"
 else
     echo "Some tests failed or had missing files."
 fi
 
-exit $exit_code
+exit $final_exit
