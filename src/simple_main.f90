@@ -96,6 +96,7 @@ module simple_main
     use field_base, only : MagneticField
     use field, only : field_from_file
     use timing, only : print_phase_time
+    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -115,7 +116,21 @@ module simple_main
       call print_phase_time('Field from file loading completed')
     end if
 
-    if (isw_field_type == 0 .or. isw_field_type >= 2) then
+    if (self%integmode > 0) then
+      select case (isw_field_type)
+      case (VMEC)
+        error stop 'Symplectic guiding-center integrators require canonical field ' &
+          //'representation (set isw_field_type to TEST, CANFLUX, BOOZER, MEISS, or ALBERT)'
+      case (TEST, CANFLUX, BOOZER, MEISS, ALBERT)
+        continue
+      case default
+        error stop 'Unknown canonical field type for symplectic guiding-center integrator'
+      end select
+    end if
+
+    if (isw_field_type == TEST .or. isw_field_type == CANFLUX .or. &
+        isw_field_type == BOOZER .or. isw_field_type == MEISS .or. &
+        isw_field_type == ALBERT) then
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
     end if
@@ -141,7 +156,8 @@ module simple_main
     do i = 1, ntestpart
       !$omp critical
       kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
+        omp_get_thread_num()
       !$omp end critical
 
       call trace_orbit(norb, i, traj, times)
@@ -173,7 +189,8 @@ module simple_main
     do i = 1, ntestpart
       !$omp critical
       kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', omp_get_thread_num()
+      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
+        omp_get_thread_num()
       !$omp end critical
 
       call reset_seed_if_deterministic
@@ -236,7 +253,8 @@ module simple_main
       elseif (2 == num_surf) then
         call sample(zstart, sbeg(1), sbeg(num_surf))
       else
-        print *, 'Invalid surface range for volume sample defined (2 < num_surf), stopping.'
+        print *, 'Invalid surface range for volume sample defined (2 < num_surf),', &
+          ' stopping.'
         stop
       endif
 
@@ -258,7 +276,8 @@ module simple_main
   end subroutine init_counters
 
   subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
-    use classification, only : trace_orbit_with_classifiers, classification_result_t, write_classification_results
+    use classification, only : trace_orbit_with_classifiers, classification_result_t, &
+      write_classification_results
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
     type(Tracer), intent(inout) :: anorb
@@ -288,7 +307,9 @@ module simple_main
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
-    if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
+    if (integmode > 0) then
+      call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
+    end if
 
     call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 

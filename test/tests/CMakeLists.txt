@@ -66,6 +66,13 @@ if (ENABLE_OPENMP)
     target_link_libraries(test_sympl_tok.x simple)
     add_executable (test_sympl.x test_sympl_stell.f90)
     target_link_libraries(test_sympl.x simple)
+    add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
+    target_link_libraries(test_sympl_testfield.x simple)
+    target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
+    target_compile_definitions(test_sympl_testfield.x PRIVATE WOUT_FILE="${WOUT_FILE}")
+    add_test(NAME test_sympl_testfield
+        COMMAND test_sympl_testfield.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 add_executable (test_coord_trans.x test_coord_trans.f90)
