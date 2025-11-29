@@ -110,9 +110,6 @@ contains
       error stop 'Collisions are incompatible with classification'
     endif
 
-    if (fast_class .and. tcut > 0.0d0) then
-      error stop 'fast_class and positive tcut are mutually exclusive'
-    endif
   end subroutine read_config
 
 
