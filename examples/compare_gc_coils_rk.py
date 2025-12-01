@@ -54,15 +54,13 @@ def run_simple(config_text: str, work_dir: str, tag: str):
     if not os.path.exists(orbits_path):
         print(f"orbits.nc not found for run '{tag}'")
         return None
-
     with nc.Dataset(orbits_path, 'r') as ds:
-        # Variables are stored as (timestep, particle) on main
+        # Variables are stored as (timestep, particle)
         s = ds.variables['s'][:, 0]
         theta = ds.variables['theta'][:, 0]
         phi = ds.variables['phi'][:, 0]
-        time = ds.variables['time'][:, 0]
 
-    return {"s": s, "theta": theta, "phi": phi, "time": time}
+    return {"s": s, "theta": theta, "phi": phi}
 
 
 def main():
@@ -133,32 +131,33 @@ output_orbits_macrostep = .True.
     s_vmec = vmec_traj["s"]
     theta_vmec = np.mod(vmec_traj["theta"], 2.0 * np.pi)
     phi_vmec = np.mod(vmec_traj["phi"], 2.0 * np.pi)
-    t_vmec = vmec_traj["time"]
-
     s_coils = coils_traj["s"]
     theta_coils = np.mod(coils_traj["theta"], 2.0 * np.pi)
     phi_coils = np.mod(coils_traj["phi"], 2.0 * np.pi)
-    t_coils = coils_traj["time"]
+
+    # Reconstruct physical time from trace_time and number of steps
+    n_steps = s_vmec.shape[0]
+    t_axis = np.linspace(0.0, trace_time, n_steps)
 
     mask_vmec = ~np.isnan(s_vmec)
     mask_coils = ~np.isnan(s_coils)
 
     fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
 
-    axes[0].plot(t_vmec[mask_vmec], s_vmec[mask_vmec], "b-", label="VMEC RK")
-    axes[0].plot(t_coils[mask_coils], s_coils[mask_coils], "r--", label="Coils RK")
+    axes[0].plot(t_axis[mask_vmec], s_vmec[mask_vmec], "b-", label="VMEC RK")
+    axes[0].plot(t_axis[mask_coils], s_coils[mask_coils], "r--", label="Coils RK")
     axes[0].set_ylabel("s")
     axes[0].set_title("Guiding-center RK: VMEC vs coils (VMEC reference coords)")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].plot(t_vmec[mask_vmec], theta_vmec[mask_vmec], "b-")
-    axes[1].plot(t_coils[mask_coils], theta_coils[mask_coils], "r--")
+    axes[1].plot(t_axis[mask_vmec], theta_vmec[mask_vmec], "b-")
+    axes[1].plot(t_axis[mask_coils], theta_coils[mask_coils], "r--")
     axes[1].set_ylabel("theta mod 2π")
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].plot(t_vmec[mask_vmec], phi_vmec[mask_vmec], "b-")
-    axes[2].plot(t_coils[mask_coils], phi_coils[mask_coils], "r--")
+    axes[2].plot(t_axis[mask_vmec], phi_vmec[mask_vmec], "b-")
+    axes[2].plot(t_axis[mask_coils], phi_coils[mask_coils], "r--")
     axes[2].set_ylabel("phi mod 2π")
     axes[2].set_xlabel("time")
     axes[2].grid(True, alpha=0.3)
