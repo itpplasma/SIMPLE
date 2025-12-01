@@ -37,6 +37,12 @@ module params
 
   integer :: integmode = EXPL_IMPL_EULER
 
+  ! Orbit model selection
+  integer, parameter :: ORBIT_GUIDING_CENTER = 0
+  integer, parameter :: ORBIT_PAULI_PARTICLE = 1
+  integer, parameter :: ORBIT_FULL_ORBIT = 2
+  integer :: orbit_model = ORBIT_GUIDING_CENTER
+
   integer :: kpart = 0 ! progress counter for particles
 
   real(dp) :: relerr = 1d-13
@@ -94,7 +100,8 @@ module params
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
     batch_size, ran_seed, reuse_batch, field_input, &
-    output_error, output_orbits_macrostep  ! callback
+    output_error, output_orbits_macrostep,  &  ! callback
+    orbit_model  ! 0=guiding-center, 1=Pauli particle, 2=full orbit
 
 contains
 
@@ -112,6 +119,19 @@ contains
 
     if (fast_class .and. tcut > 0.0d0) then
       error stop 'fast_class and positive tcut are mutually exclusive'
+    endif
+
+    if (orbit_model < 0 .or. orbit_model > 2) then
+      error stop 'orbit_model must be 0 (guiding-center), 1 (Pauli), or 2 (full orbit)'
+    endif
+
+    if (orbit_model /= ORBIT_GUIDING_CENTER) then
+      if (len_trim(field_input) == 0) then
+        error stop 'Full orbit models require field_input (coils file)'
+      endif
+      if (swcoll) then
+        error stop 'Collisions not supported for full orbit models'
+      endif
     endif
   end subroutine read_config
 

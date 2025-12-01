@@ -1,4 +1,5 @@
 module simple
+  use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -8,15 +9,15 @@ module simple
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_timestep_sympl
+  use orbit_full, only : FullOrbitState, init_full_orbit_state, &
+    timestep_full_orbit, convert_full_to_gc, compute_energy
+  use neo_biotsavart, only : coils_t
   use field, only : VmecField
   use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
   implicit none
-
-  ! Define real(dp) kind parameter
-  integer, parameter :: dp = kind(1.0d0)
 save
 
 public
@@ -27,17 +28,21 @@ public
     integer          :: n_e, n_d
 
     integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+    integer :: orbit_model = 0 ! 0 = guiding-center, 1 = Pauli, 2 = full orbit
     real(dp) :: relerr
 
     type(FieldCan) :: f
     type(SymplecticIntegrator) :: si
     type(MultistageIntegrator) :: mi
+    type(FullOrbitState) :: fo
+    type(coils_t) :: coils
   end type Tracer
 
   interface tstep
       module procedure timestep
       module procedure timestep_z
       module procedure timestep_sympl_z
+      module procedure timestep_full_z
    end interface tstep
 
 contains
@@ -66,6 +71,8 @@ contains
     print *, 'R0 = ', RT0, ' cm, fper = ', fper
     call volume_and_B00(volume,B00)
     print *,'volume = ',volume,' cm^3,  B_00 = ',B00,' G'
+    ! Store B00 for use by full orbit integrator
+    vmec_B_scale = B00
   end subroutine init_vmec
 
 
@@ -196,5 +203,65 @@ contains
     z(5) = f%vpar/(si%pabs*dsqrt(2d0))  ! alambda
 
   end subroutine timestep_sympl_z
+
+
+  subroutine init_full(fo, z0, dtau, v0, n_e, n_d, orbit_model, coils)
+    use new_vmec_stuff_mod, only: vmec_B_scale
+    type(FullOrbitState), intent(out) :: fo
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(in) :: dtau, v0
+    integer, intent(in) :: n_e, n_d, orbit_model
+    type(coils_t), intent(in) :: coils
+
+    real(dp) :: s, theta, phi, lambda, v
+    real(dp) :: B_typical, omega_c, T_c, dt_cyclotron
+    integer, parameter :: STEPS_PER_CYCLOTRON = 50
+
+    s = z0(1)
+    theta = z0(2)
+    phi = z0(3)
+    v = z0(4)
+    lambda = z0(5)
+
+    ! Compute appropriate timestep based on cyclotron frequency
+    ! omega_c = q*B/(m*c), T_c = 2*pi/omega_c
+    ! Use B_00 from VMEC as typical field strength (in Gauss)
+    B_typical = vmec_B_scale
+    if (B_typical < 1d3) B_typical = 1d5  ! default 10 kG if not set
+
+    ! omega_c = q*B/(m*c) in CGS: q in statC, B in G, m in g, c in cm/s
+    omega_c = real(n_e, dp) * e_charge * B_typical / &
+              (real(n_d, dp) * p_mass * c)
+    T_c = twopi / omega_c  ! cyclotron period in seconds
+
+    ! Use timestep = T_c / STEPS_PER_CYCLOTRON, normalized by v0
+    dt_cyclotron = (T_c * v0) / real(STEPS_PER_CYCLOTRON, dp)
+
+    call init_full_orbit_state(fo, s, theta, phi, lambda, v, &
+                               orbit_model, real(n_d, dp), &
+                               real(n_e, dp), dt_cyclotron, coils)
+
+  end subroutine init_full
+
+
+  subroutine timestep_full_z(fo, z, ierr)
+    type(FullOrbitState), intent(inout) :: fo
+    real(dp), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+
+    real(dp) :: s, theta, phi, lambda, v
+
+    call timestep_full_orbit(fo, ierr)
+    if (ierr /= 0) return
+
+    call convert_full_to_gc(fo, s, theta, phi, lambda, v)
+
+    z(1) = s
+    z(2) = theta
+    z(3) = phi
+    z(4) = v
+    z(5) = lambda
+
+  end subroutine timestep_full_z
 
 end module simple
