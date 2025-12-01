@@ -228,6 +228,65 @@ if(dodiag) write (123,*) tau2,z
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
+      subroutine orbit_timestep_rk4(z, dtau, ierr)
+  !
+  ! Fixed-step RK4 guiding-center integrator in canonical coordinates.
+  ! Uses velo_can for the right-hand side and chamb_can for wall checks.
+  !
+      use chamb_sub, only : chamb_can
+  !
+      implicit none
+  !
+      integer, parameter :: ndim = 5
+      real(dp), intent(inout) :: z(:)
+      real(dp), intent(in) :: dtau
+      integer, intent(out) :: ierr
+  !
+      real(dp) :: tau
+      real(dp), dimension(ndim) :: k1, k2, k3, k4, ztmp
+      real(dp), dimension(2) :: y
+      real(dp) :: phi
+  !
+      if (size(z) /= ndim) then
+        ierr = 1
+        return
+      end if
+  !
+      ierr = 0
+  !
+  ! Chamber check at starting point
+      y(1) = z(1)
+      y(2) = z(2)
+      phi = z(3)
+      call chamb_can(y, phi, ierr)
+      if (ierr /= 0) return
+  !
+      tau = 0.0_dp
+  !
+  ! Classic RK4 step for z' = velo_can(tau, z)
+      call velo_can(tau, z, k1)
+  !
+      ztmp = z + 0.5_dp*dtau*k1
+      call velo_can(tau + 0.5_dp*dtau, ztmp, k2)
+  !
+      ztmp = z + 0.5_dp*dtau*k2
+      call velo_can(tau + 0.5_dp*dtau, ztmp, k3)
+  !
+      ztmp = z + dtau*k3
+      call velo_can(tau + dtau, ztmp, k4)
+  !
+      z = z + dtau*(k1 + 2.0_dp*k2 + 2.0_dp*k3 + k4)/6.0_dp
+  !
+  ! Chamber check at end point
+      y(1) = z(1)
+      y(2) = z(2)
+      phi = z(3)
+      call chamb_can(y, phi, ierr)
+  !
+      end subroutine orbit_timestep_rk4
+  !
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
       subroutine rhs_mflint_can(phi,y,dery)
   !
   ! Computes the right hand side of the magnetic field line equation for

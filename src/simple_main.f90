@@ -365,7 +365,7 @@ module simple_main
   end subroutine trace_orbit
 
   subroutine macrostep(anorb, z, kt, ierr_orbit)
-    use alpha_lifetime_sub, only : orbit_timestep_axis
+    use alpha_lifetime_sub, only : orbit_timestep_axis, orbit_timestep_rk4
     use orbit_symplectic, only : orbit_timestep_sympl
 
     type(Tracer), intent(inout) :: anorb
@@ -376,7 +376,9 @@ module simple_main
     integer :: ktau
 
     do ktau=1,ntau
-      if (integmode <= 0) then
+      if (integmode == -2) then
+        call orbit_timestep_rk4(z, dtaumin, ierr_orbit)
+      else if (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
       else
         if (swcoll) call update_momentum(anorb, z)

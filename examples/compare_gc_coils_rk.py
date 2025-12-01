@@ -74,7 +74,7 @@ def main():
     work_dir = os.path.abspath(work_dir)
     print(f"Working directory: {work_dir}")
 
-    for f in ("wout.nc",):
+    for f in ("wout.nc", "coils.simple"):
         if not os.path.exists(os.path.join(work_dir, f)):
             print(f"Error: Required file {f} not found in {work_dir}")
             sys.exit(1)
@@ -90,7 +90,7 @@ ntestpart = 1
 ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 1        ! VMEC
-integmode = -1            ! VMEC RK
+integmode = -2            ! Fixed-step RK4 in VMEC field
 npoiper2 = 128
 deterministic = .True.
 contr_pp = -1000d0
@@ -98,20 +98,18 @@ output_orbits_macrostep = .True.
 /
 """
 
-    # 2) Coils RK guiding-center: Meiss canonical field built from coils
+    # 2) Coils RK guiding-center: coils magfie backend in VMEC reference frame
     coils_config = f"""&config
 trace_time = {trace_time}
 sbeg = 0.6d0
 ntestpart = 1
 ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
-isw_field_type = 3        ! Meiss canonical coordinates
-integmode = -1
+isw_field_type = 5        ! Coils magfie backend (VMEC reference coordinates)
+integmode = -2
 npoiper2 = 128
 deterministic = .True.
-field_input = 'coils.5C'
-n_e = 2
-n_d = 4
+field_input = 'coils.simple'
 contr_pp = -1000d0
 output_orbits_macrostep = .True.
 /
@@ -120,7 +118,7 @@ output_orbits_macrostep = .True.
     print("Running VMEC RK guiding-center orbit...")
     vmec_traj = run_simple(vmec_config, work_dir, "vmec_rk")
 
-    print("Running coils RK guiding-center orbit (Meiss canonical)...")
+    print("Running coils RK guiding-center orbit (coils backend)...")
     coils_traj = run_simple(coils_config, work_dir, "coils_rk")
 
     if vmec_traj is None or coils_traj is None:
