@@ -6,6 +6,7 @@ use magfie_sub, only : VMEC
 use velo_mod, only: isw_field_type
 use field, only: VmecField, CoilsField, create_coils_field
 use magfie_sub, only: magfie_vmec
+use magfie_coils_sub, only: init_magfie_coils_from_file, magfie_coils
 use util, only: twopi
 
 implicit none
@@ -19,6 +20,7 @@ isw_field_type = VMEC
 call init_vmec('wout.nc', 5, 5, 5, dummy)
 allocate(vmec_field)
 call create_coils_field('coils.5C', coils_field)
+call init_magfie_coils_from_file('coils.5C')
 
 x = [0.3d0, 0.2d0, 0.1d0]
 
@@ -108,51 +110,6 @@ subroutine test_magfie_curve
     end do
 end subroutine test_magfie_curve
 
-
-subroutine magfie_coils(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-    use interpolate, only: evaluate_batch_splines_3d_der
-
-    real(dp), intent(in) :: x(3)
-    real(dp), intent(out) :: bmod, sqrtg
-    real(dp), dimension(3), intent(out) :: bder, hcovar, hctrvr, hcurl
-
-    real(dp) :: Ar, Ath, Aphi, hr, hth, hphi
-    real(dp), dimension(3) :: dAr, dAth, dAphi, dhr, dhth, dhphi
-    real(dp) :: y_batch(7), dy_batch(3, 7)
-
-    real(dp) :: sqrtg_bmod
-
-    ! Use batch spline evaluation for all 7 components
-    call evaluate_batch_splines_3d_der(coils_field%spl_coils_batch, x, y_batch, dy_batch)
-    
-    ! Unpack results: order is [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
-    Ar = y_batch(1);    dAr = dy_batch(:, 1)
-    Ath = y_batch(2);   dAth = dy_batch(:, 2)
-    Aphi = y_batch(3);  dAphi = dy_batch(:, 3)
-    hr = y_batch(4);    dhr = dy_batch(:, 4)
-    hth = y_batch(5);   dhth = dy_batch(:, 5)
-    hphi = y_batch(6);  dhphi = dy_batch(:, 6)
-    bmod = y_batch(7);  bder = dy_batch(:, 7)
-    bder = bder/bmod
-
-    sqrtg_bmod = dAth(1)*hphi - dAphi(1)*hth + &
-                 dAphi(2)*hr - dAr(2)*hphi + &
-                 dAr(3)*hth - dAth(3)*hr
-
-    sqrtg = sqrtg_bmod/bmod
-
-    hcovar(1) = hr
-    hcovar(2) = hth
-    hcovar(3) = hphi
-
-    hctrvr(1) = (dAphi(2) - dAth(3))/sqrtg_bmod
-    hctrvr(2) = (dAr(3) - dAphi(1))/sqrtg_bmod
-    hctrvr(3) = (dAth(1) - dAr(2))/sqrtg_bmod
-
-    hcurl(1) = (dhphi(2) - dhth(3))/sqrtg
-    hcurl(2) = (dhr(3) - dhphi(1))/sqrtg
-    hcurl(3) = (dhth(1) - dhr(2))/sqrtg
-end subroutine magfie_coils
 
 
 subroutine test_can

@@ -2,8 +2,8 @@
 """Compare RK guiding-center orbits: VMEC vs coils field.
 
 This script runs SIMPLE twice:
-  1) VMEC RK guiding-center (integmode = -1, orbit_model = 0)
-  2) Coil-based RK guiding-center using Meiss canonical coordinates
+  1) VMEC RK guiding-center (integmode = -1)
+  2) Coil-based RK guiding-center using coils magfie backend
 Both runs use VMEC reference coordinates (s, theta, phi) via NetCDF output.
 """
 
@@ -93,7 +93,6 @@ isw_field_type = 1        ! VMEC
 integmode = -1            ! VMEC RK
 npoiper2 = 128
 deterministic = .True.
-orbit_model = 0
 contr_pp = -1000d0
 output_orbits_macrostep = .True.
 /
@@ -111,7 +110,6 @@ integmode = -1
 npoiper2 = 128
 deterministic = .True.
 field_input = 'coils.5C'
-orbit_model = 0
 n_e = 2
 n_d = 4
 contr_pp = -1000d0

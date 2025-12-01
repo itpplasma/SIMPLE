@@ -96,7 +96,8 @@ module simple_main
     use field_base, only : MagneticField
     use field, only : field_from_file
     use timing, only : print_phase_time
-    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, COILS
+    use magfie_coils_sub, only : init_magfie_coils_from_file
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -108,7 +109,7 @@ module simple_main
 
     self%integmode = aintegmode
     if (self%integmode >= 0) then
-      if(trim(field_input) == '') then
+      if (trim(field_input) == '') then
         call field_from_file(vmec_file, field_temp)
       else
         call field_from_file(field_input, field_temp)
@@ -133,6 +134,14 @@ module simple_main
         isw_field_type == ALBERT) then
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
+    end if
+
+    if (self%integmode <= 0 .and. isw_field_type == COILS) then
+      if (len_trim(field_input) == 0) then
+        error stop 'GC coils mode requires field_input (coils file)'
+      end if
+      call init_magfie_coils_from_file(field_input)
+      call print_phase_time('Coils magfie initialization completed')
     end if
   end subroutine init_field
 
