@@ -133,27 +133,37 @@ output_orbits_macrostep = .True.
         print("matplotlib not available; not plotting")
         sys.exit(0)
 
-    # Mask out NaNs
-    mask_vmec = ~np.isnan(vmec_traj["s"])
-    mask_coils = ~np.isnan(coils_traj["s"])
+    # Mask out NaNs and wrap angles
+    s_vmec = vmec_traj["s"]
+    theta_vmec = np.mod(vmec_traj["theta"], 2.0 * np.pi)
+    phi_vmec = np.mod(vmec_traj["phi"], 2.0 * np.pi)
+    t_vmec = vmec_traj["time"]
+
+    s_coils = coils_traj["s"]
+    theta_coils = np.mod(coils_traj["theta"], 2.0 * np.pi)
+    phi_coils = np.mod(coils_traj["phi"], 2.0 * np.pi)
+    t_coils = coils_traj["time"]
+
+    mask_vmec = ~np.isnan(s_vmec)
+    mask_coils = ~np.isnan(s_coils)
 
     fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
 
-    axes[0].plot(vmec_traj["time"][mask_vmec], vmec_traj["s"][mask_vmec], "b-", label="VMEC RK")
-    axes[0].plot(coils_traj["time"][mask_coils], coils_traj["s"][mask_coils], "r--", label="Coils RK")
+    axes[0].plot(t_vmec[mask_vmec], s_vmec[mask_vmec], "b-", label="VMEC RK")
+    axes[0].plot(t_coils[mask_coils], s_coils[mask_coils], "r--", label="Coils RK")
     axes[0].set_ylabel("s")
     axes[0].set_title("Guiding-center RK: VMEC vs coils (VMEC reference coords)")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].plot(vmec_traj["time"][mask_vmec], vmec_traj["theta"][mask_vmec], "b-")
-    axes[1].plot(coils_traj["time"][mask_coils], coils_traj["theta"][mask_coils], "r--")
-    axes[1].set_ylabel("theta")
+    axes[1].plot(t_vmec[mask_vmec], theta_vmec[mask_vmec], "b-")
+    axes[1].plot(t_coils[mask_coils], theta_coils[mask_coils], "r--")
+    axes[1].set_ylabel("theta mod 2π")
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].plot(vmec_traj["time"][mask_vmec], vmec_traj["phi"][mask_vmec], "b-")
-    axes[2].plot(coils_traj["time"][mask_coils], coils_traj["phi"][mask_coils], "r--")
-    axes[2].set_ylabel("phi")
+    axes[2].plot(t_vmec[mask_vmec], phi_vmec[mask_vmec], "b-")
+    axes[2].plot(t_coils[mask_coils], phi_coils[mask_coils], "r--")
+    axes[2].set_ylabel("phi mod 2π")
     axes[2].set_xlabel("time")
     axes[2].grid(True, alpha=0.3)
 
@@ -167,4 +177,3 @@ output_orbits_macrostep = .True.
 
 if __name__ == "__main__":
     main()
-
