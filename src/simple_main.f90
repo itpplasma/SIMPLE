@@ -108,14 +108,17 @@ module simple_main
     call print_phase_time('VMEC initialization completed')
 
     self%integmode = aintegmode
-    if (self%integmode >= 0) then
-      if (trim(field_input) == '') then
-        call field_from_file(vmec_file, field_temp)
-      else
-        call field_from_file(field_input, field_temp)
-      end if
-      call print_phase_time('Field from file loading completed')
+
+    ! Always construct a non-canonical field representation. It is used
+    ! for canonical coordinate construction (Meiss, Albert, Boozer, flux).
+    ! For coils guiding-centre mode we only allocate it but do not use it
+    ! in the magfie backend.
+    if (trim(field_input) == '') then
+      call field_from_file(vmec_file, field_temp)
+    else
+      call field_from_file(field_input, field_temp)
     end if
+    call print_phase_time('Field from file loading completed')
 
     if (self%integmode > 0) then
       select case (isw_field_type)
