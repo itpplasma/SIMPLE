@@ -47,11 +47,11 @@ if [ ! -f "$WOUT_FILE" ]; then
     wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O "$WOUT_FILE"
 fi
 
-# Download NCSX wout.nc for coils tests
+# Download NCSX wout.nc for coils tests (free-boundary DIAGNO_TEST equilibrium)
 WOUT_NCSX_FILE="$TEST_DATA_DIR/wout_ncsx.nc"
 if [ ! -f "$WOUT_NCSX_FILE" ]; then
-    echo "Downloading NCSX wout.nc..."
-    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc -O "$WOUT_NCSX_FILE"
+    echo "Downloading NCSX wout_ncsx.nc (free-boundary DIAGNO_TEST)..."
+    wget -q https://github.com/PrincetonUniversity/STELLOPT/raw/master/BENCHMARKS/DIAGNO_TEST/wout_ncsx.nc -O "$WOUT_NCSX_FILE"
 fi
 
 # Download and convert NCSX coils file
