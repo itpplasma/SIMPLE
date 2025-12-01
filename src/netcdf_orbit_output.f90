@@ -182,6 +182,9 @@ contains
 
     subroutine write_orbit_to_netcdf(ipart, orbit_traj, orbit_times)
         use field_can_mod, only : can_to_ref
+        use velo_mod, only : isw_field_type
+        use magfie_sub, only : COILS
+        use simple_coordinates, only : transform_cart_to_vmec
         integer, intent(in) :: ipart
         real(kind(1.0d0)), intent(in) :: orbit_traj(:,:)  ! (5, ntimstep)
         real(kind(1.0d0)), intent(in) :: orbit_times(:)   ! (ntimstep)
@@ -199,7 +202,11 @@ contains
 
         ! Convert canonical to reference coordinates
         do it = 1, n_times
-            call can_to_ref(orbit_traj(1:3, it), xref)
+            if (isw_field_type == COILS) then
+                call transform_cart_to_vmec(orbit_traj(1:3, it), xref)
+            else
+                call can_to_ref(orbit_traj(1:3, it), xref)
+            end if
             s_array(it) = xref(1)
             theta_array(it) = xref(2)
             phi_array(it) = xref(3)

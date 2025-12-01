@@ -6,6 +6,7 @@ module simple_main
   use collis_alp, only : loacol_alpha, stost
   use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
+  use simple_coordinates, only : transform_vmec_to_cart, transform_cart_to_vmec
   use callback, only : output_orbits_macrostep
   use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
@@ -143,6 +144,7 @@ module simple_main
       if (len_trim(field_input) == 0) then
         error stop 'GC coils mode requires field_input (coils file)'
       end if
+
       call init_magfie_coils_from_file(field_input)
       call print_phase_time('Coils magfie initialization completed')
     end if
@@ -315,7 +317,11 @@ module simple_main
       return
     endif
 
-    call ref_to_can(zstart(1:3, ipart), z(1:3))
+    if (isw_field_type == 5 .and. integmode <= 0) then
+      call transform_vmec_to_cart(zstart(1:3, ipart), z(1:3))
+    else
+      call ref_to_can(zstart(1:3, ipart), z(1:3))
+    end if
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
@@ -360,7 +366,11 @@ module simple_main
     endif
 
     !$omp critical
-    call can_to_ref(z(1:3), zend(1:3,ipart))
+    if (isw_field_type == 5 .and. integmode <= 0) then
+      call transform_cart_to_vmec(z(1:3), zend(1:3,ipart))
+    else
+      call can_to_ref(z(1:3), zend(1:3,ipart))
+    end if
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
