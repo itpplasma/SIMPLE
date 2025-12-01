@@ -79,6 +79,7 @@ def main():
 
     trace_time = 1e-4
     ntimstep = 1000
+    facE_al = 1000.0  # Reduce orbit energy by factor 1000
 
     # 1) VMEC RK guiding-center: VMEC field, no field_input
     vmec_config = f"""&config
@@ -91,6 +92,7 @@ isw_field_type = 1        ! VMEC
 integmode = -2            ! Fixed-step RK4 in VMEC field
 npoiper2 = 128
 deterministic = .True.
+facE_al = {facE_al}
 contr_pp = -1000d0
 output_orbits_macrostep = .True.
 /
@@ -107,6 +109,7 @@ isw_field_type = 5        ! Coils magfie backend (VMEC reference coordinates)
 integmode = -2
 npoiper2 = 128
 deterministic = .True.
+facE_al = {facE_al}
 field_input = 'coils.simple'
 contr_pp = -1000d0
 output_orbits_macrostep = .True.
