@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Compare guiding-center orbits: VMEC vs coils field, RK4 vs Cash–Karp RK.
 
-This script runs SIMPLE four times:
-  1) VMEC GC, fixed-step RK4           (integmode = -2)
-  2) Coils GC, fixed-step RK4          (integmode = -2, coils magfie backend)
-  3) VMEC GC, adaptive Cash–Karp RK5(4) (integmode = -1)
-  4) Coils GC, adaptive Cash–Karp RK5(4) (integmode = -1, coils magfie backend)
+This script runs SIMPLE six times:
+  1) VMEC GC, fixed-step RK4                  (integmode = -2, isw_field_type = 1)
+  2) Coils GC, fixed-step RK4 (direct coils)  (integmode = -2, isw_field_type = 5)
+  3) VMEC GC, adaptive Cash–Karp RK5(4)       (integmode = -1, isw_field_type = 1)
+  4) Coils GC, adaptive Cash–Karp RK5(4)      (integmode = -1, isw_field_type = 5)
+  5) Coils GC, fixed-step RK4 (Meiss)         (integmode = -2, isw_field_type = 3)
+  6) Coils GC, adaptive Cash–Karp RK5(4)      (integmode = -1, isw_field_type = 3)
+
 All runs use VMEC reference coordinates (s, theta, phi) via NetCDF output.
 """
 
@@ -201,17 +204,55 @@ contr_pp = -1000d0
 output_orbits_macrostep = .True.
 /
 """
+
+    # 5) Coils GC, fixed-step RK4 using Meiss canonical field from coils
+    meiss_config_rk4 = f"""&config
+trace_time = {trace_time}
+sbeg = 0.6d0
+ntestpart = 1
+ntimstep = {ntimstep}
+netcdffile = 'wout.nc'
+isw_field_type = 3        ! Meiss canonical coordinates (coils)
+integmode = -2
+npoiper2 = 128
+deterministic = .True.
+facE_al = {facE_al}
+field_input = 'coils.simple'
+contr_pp = -1000d0
+output_orbits_macrostep = .True.
+/
+"""
+
+    # 6) Coils GC, adaptive Cash–Karp RK5(4) using Meiss canonical field
+    meiss_config_ck = f"""&config
+trace_time = {trace_time}
+sbeg = 0.6d0
+ntestpart = 1
+ntimstep = {ntimstep}
+netcdffile = 'wout.nc'
+isw_field_type = 3        ! Meiss canonical coordinates (coils)
+integmode = -1
+npoiper2 = 128
+deterministic = .True.
+facE_al = {facE_al}
+field_input = 'coils.simple'
+contr_pp = -1000d0
+output_orbits_macrostep = .True.
+/
+"""
     simple_exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "build", "simple.x"))
     if not os.path.exists(simple_exe):
         print(f"Error: SIMPLE executable not found at {simple_exe}")
         sys.exit(1)
 
-    # Run all four cases in parallel, each in its own subdirectory
+    # Run all cases in parallel, each in its own subdirectory
     configs = {
         "vmec_rk4": vmec_config_rk4,
         "coils_rk4": coils_config_rk4,
         "vmec_ck": vmec_config_ck,
         "coils_ck": coils_config_ck,
+        "meiss_rk4": meiss_config_rk4,
+        "meiss_ck": meiss_config_ck,
     }
 
     print("Running GC orbits (RK4 and Cash–Karp) in parallel...")
@@ -233,8 +274,13 @@ output_orbits_macrostep = .True.
     coils_rk4_traj = read_orbit(os.path.join(work_dir, "coils_rk4"))
     vmec_ck_traj = read_orbit(os.path.join(work_dir, "vmec_ck"))
     coils_ck_traj = read_orbit(os.path.join(work_dir, "coils_ck"))
+    meiss_rk4_traj = read_orbit(os.path.join(work_dir, "meiss_rk4"))
+    meiss_ck_traj = read_orbit(os.path.join(work_dir, "meiss_ck"))
 
-    if any(traj is None for traj in (vmec_rk4_traj, coils_rk4_traj, vmec_ck_traj, coils_ck_traj)):
+    if any(
+        traj is None
+        for traj in (vmec_rk4_traj, coils_rk4_traj, vmec_ck_traj, coils_ck_traj, meiss_rk4_traj, meiss_ck_traj)
+    ):
         print("One of the runs failed or produced no orbits; no plot generated")
         sys.exit(1)
 
@@ -259,6 +305,14 @@ output_orbits_macrostep = .True.
     theta_coils_ck = np.mod(coils_ck_traj["theta"], 2.0 * np.pi)
     phi_coils_ck = np.mod(coils_ck_traj["phi"], 2.0 * np.pi)
 
+    s_meiss_rk4 = meiss_rk4_traj["s"]
+    theta_meiss_rk4 = np.mod(meiss_rk4_traj["theta"], 2.0 * np.pi)
+    phi_meiss_rk4 = np.mod(meiss_rk4_traj["phi"], 2.0 * np.pi)
+
+    s_meiss_ck = meiss_ck_traj["s"]
+    theta_meiss_ck = np.mod(meiss_ck_traj["theta"], 2.0 * np.pi)
+    phi_meiss_ck = np.mod(meiss_ck_traj["phi"], 2.0 * np.pi)
+
     # Reconstruct physical time from trace_time and number of steps
     n_steps = s_vmec_rk4.shape[0]
     t_axis = np.linspace(0.0, trace_time, n_steps)
@@ -267,6 +321,8 @@ output_orbits_macrostep = .True.
     mask_coils_rk4 = ~np.isnan(s_coils_rk4)
     mask_vmec_ck = ~np.isnan(s_vmec_ck)
     mask_coils_ck = ~np.isnan(s_coils_ck)
+    mask_meiss_rk4 = ~np.isnan(s_meiss_rk4)
+    mask_meiss_ck = ~np.isnan(s_meiss_ck)
 
     fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
 
@@ -279,6 +335,10 @@ output_orbits_macrostep = .True.
                  color="C2", linestyle="-.", linewidth=1.4, label="VMEC Cash–Karp")
     axes[0].plot(t_axis[mask_coils_ck], s_coils_ck[mask_coils_ck],
                  color="C3", linestyle=":", linewidth=1.4, label="Coils Cash–Karp")
+    axes[0].plot(t_axis[mask_meiss_rk4], s_meiss_rk4[mask_meiss_rk4],
+                 color="C4", linestyle="-.", linewidth=1.8, label="Meiss RK4")
+    axes[0].plot(t_axis[mask_meiss_ck], s_meiss_ck[mask_meiss_ck],
+                 color="C5", linestyle="--", linewidth=1.4, label="Meiss Cash–Karp")
     axes[0].set_ylabel("s")
     axes[0].set_title("Guiding-center RK: VMEC vs coils (VMEC reference coords)")
     axes[0].legend()
@@ -292,6 +352,10 @@ output_orbits_macrostep = .True.
                  color="C2", linestyle="-.", linewidth=1.4)
     axes[1].plot(t_axis[mask_coils_ck], theta_coils_ck[mask_coils_ck],
                  color="C3", linestyle=":", linewidth=1.4)
+    axes[1].plot(t_axis[mask_meiss_rk4], theta_meiss_rk4[mask_meiss_rk4],
+                 color="C4", linestyle="-.", linewidth=1.8)
+    axes[1].plot(t_axis[mask_meiss_ck], theta_meiss_ck[mask_meiss_ck],
+                 color="C5", linestyle="--", linewidth=1.4)
     axes[1].set_ylabel("theta mod 2π")
     axes[1].grid(True, alpha=0.3)
 
@@ -303,6 +367,10 @@ output_orbits_macrostep = .True.
                  color="C2", linestyle="-.", linewidth=1.4)
     axes[2].plot(t_axis[mask_coils_ck], phi_coils_ck[mask_coils_ck],
                  color="C3", linestyle=":", linewidth=1.4)
+    axes[2].plot(t_axis[mask_meiss_rk4], phi_meiss_rk4[mask_meiss_rk4],
+                 color="C4", linestyle="-.", linewidth=1.8)
+    axes[2].plot(t_axis[mask_meiss_ck], phi_meiss_ck[mask_meiss_ck],
+                 color="C5", linestyle="--", linewidth=1.4)
     axes[2].set_ylabel("phi mod 2π")
     axes[2].set_xlabel("time")
     axes[2].grid(True, alpha=0.3)
