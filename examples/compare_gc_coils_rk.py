@@ -270,26 +270,39 @@ output_orbits_macrostep = .True.
 
     fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
 
-    axes[0].plot(t_axis[mask_vmec_rk4], s_vmec_rk4[mask_vmec_rk4], "b-", label="VMEC RK4")
-    axes[0].plot(t_axis[mask_coils_rk4], s_coils_rk4[mask_coils_rk4], "r--", label="Coils RK4")
-    axes[0].plot(t_axis[mask_vmec_ck], s_vmec_ck[mask_vmec_ck], "b:", label="VMEC Cash–Karp")
-    axes[0].plot(t_axis[mask_coils_ck], s_coils_ck[mask_coils_ck], "r-.", label="Coils Cash–Karp")
+    # Use distinct colors/linestyles to make overlaps visible
+    axes[0].plot(t_axis[mask_vmec_rk4], s_vmec_rk4[mask_vmec_rk4],
+                 color="C0", linestyle="-", linewidth=1.8, label="VMEC RK4")
+    axes[0].plot(t_axis[mask_coils_rk4], s_coils_rk4[mask_coils_rk4],
+                 color="C1", linestyle="--", linewidth=1.8, label="Coils RK4")
+    axes[0].plot(t_axis[mask_vmec_ck], s_vmec_ck[mask_vmec_ck],
+                 color="C2", linestyle="-.", linewidth=1.4, label="VMEC Cash–Karp")
+    axes[0].plot(t_axis[mask_coils_ck], s_coils_ck[mask_coils_ck],
+                 color="C3", linestyle=":", linewidth=1.4, label="Coils Cash–Karp")
     axes[0].set_ylabel("s")
     axes[0].set_title("Guiding-center RK: VMEC vs coils (VMEC reference coords)")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].plot(t_axis[mask_vmec_rk4], theta_vmec_rk4[mask_vmec_rk4], "b-")
-    axes[1].plot(t_axis[mask_coils_rk4], theta_coils_rk4[mask_coils_rk4], "r--")
-    axes[1].plot(t_axis[mask_vmec_ck], theta_vmec_ck[mask_vmec_ck], "b:")
-    axes[1].plot(t_axis[mask_coils_ck], theta_coils_ck[mask_coils_ck], "r-.")
+    axes[1].plot(t_axis[mask_vmec_rk4], theta_vmec_rk4[mask_vmec_rk4],
+                 color="C0", linestyle="-", linewidth=1.8)
+    axes[1].plot(t_axis[mask_coils_rk4], theta_coils_rk4[mask_coils_rk4],
+                 color="C1", linestyle="--", linewidth=1.8)
+    axes[1].plot(t_axis[mask_vmec_ck], theta_vmec_ck[mask_vmec_ck],
+                 color="C2", linestyle="-.", linewidth=1.4)
+    axes[1].plot(t_axis[mask_coils_ck], theta_coils_ck[mask_coils_ck],
+                 color="C3", linestyle=":", linewidth=1.4)
     axes[1].set_ylabel("theta mod 2π")
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].plot(t_axis[mask_vmec_rk4], phi_vmec_rk4[mask_vmec_rk4], "b-")
-    axes[2].plot(t_axis[mask_coils_rk4], phi_coils_rk4[mask_coils_rk4], "r--")
-    axes[2].plot(t_axis[mask_vmec_ck], phi_vmec_ck[mask_vmec_ck], "b:")
-    axes[2].plot(t_axis[mask_coils_ck], phi_coils_ck[mask_coils_ck], "r-.")
+    axes[2].plot(t_axis[mask_vmec_rk4], phi_vmec_rk4[mask_vmec_rk4],
+                 color="C0", linestyle="-", linewidth=1.8)
+    axes[2].plot(t_axis[mask_coils_rk4], phi_coils_rk4[mask_coils_rk4],
+                 color="C1", linestyle="--", linewidth=1.8)
+    axes[2].plot(t_axis[mask_vmec_ck], phi_vmec_ck[mask_vmec_ck],
+                 color="C2", linestyle="-.", linewidth=1.4)
+    axes[2].plot(t_axis[mask_coils_ck], phi_coils_ck[mask_coils_ck],
+                 color="C3", linestyle=":", linewidth=1.4)
     axes[2].set_ylabel("phi mod 2π")
     axes[2].set_xlabel("time")
     axes[2].grid(True, alpha=0.3)
