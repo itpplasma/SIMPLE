@@ -1,7 +1,9 @@
 module orbit_full
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
-    use util, only: pi, twopi, c, e_charge, p_mass
+    use util, only: c, e_charge, p_mass
+    use neo_biotsavart, only: coils_t, compute_vector_potential, &
+                               compute_magnetic_field
 
     implicit none
 
@@ -11,33 +13,34 @@ module orbit_full
     real(dp), parameter :: FD_STEP = 1d-8
 
     type :: FullOrbitState
-        real(dp) :: z(6)           ! (R, phi, Z, p_R, p_phi, p_Z) in cylindrical
-        real(dp) :: z_gc(5)        ! (s, theta, phi, lambda, v) guiding-center
-        real(dp) :: mu             ! Magnetic moment (constant for Pauli, 0 for particle)
-        real(dp) :: m              ! Particle mass [g]
-        real(dp) :: q              ! Particle charge [statcoulomb]
-        real(dp) :: dt             ! Timestep [normalized]
-        real(dp) :: v0             ! Reference velocity for normalization
-        integer :: orbit_model     ! 1=PAULI_PARTICLE, 2=PARTICLE
+        real(dp) :: z(6)        ! (x, y, z, p_x, p_y, p_z) in Cartesian
+        real(dp) :: z_gc(5)     ! (s, theta, phi, lambda, v) guiding-center
+        real(dp) :: mu          ! Magnetic moment (Pauli), 0 for full orbit
+        real(dp) :: m           ! Particle mass [g]
+        real(dp) :: q           ! Particle charge [statcoulomb]
+        real(dp) :: dt          ! Timestep [normalized]
+        real(dp) :: v0          ! Reference velocity for normalization
+        integer :: orbit_model  ! 1=Pauli particle, 2=full orbit
+        type(coils_t) :: coils  ! Coil geometry in CGS units
     end type FullOrbitState
 
 contains
 
     subroutine init_full_orbit_state(state, s, theta, phi, lambda, v, &
-                                      orbit_model, mass_amu, charge_e, dt, v0)
-        use simple_coordinates, only: transform_vmec_to_cyl
-        use field_coils_cyl, only: evaluate_cyl
+                                      orbit_model, mass_amu, charge_e, dt, v0, &
+                                      coils)
+        use simple_coordinates, only: transform_vmec_to_cart
 
         type(FullOrbitState), intent(out) :: state
         real(dp), intent(in) :: s, theta, phi, lambda, v
         integer, intent(in) :: orbit_model
         real(dp), intent(in) :: mass_amu, charge_e, dt, v0
+        type(coils_t), intent(in) :: coils
 
-        real(dp) :: x_vmec(3), x_cyl(3), jac_vmec_cyl(3,3)
-        real(dp) :: R, phi_cyl, Z
-        real(dp) :: B_cyl(3), Bmod, A_cyl(3), gradB(3)
+        real(dp) :: x_vmec(3), x_cart(3)
+        real(dp) :: A_cart(3), B_cart(3), Bmod, gradB(3)
         real(dp) :: b_unit(3), e_perp(3), gradB_cross_b(3)
-        real(dp) :: v_par, v_perp, v_cyl(3)
+        real(dp) :: v_par, v_perp, v_vec(3)
         real(dp) :: norm_gcb
 
         state%orbit_model = orbit_model
@@ -45,23 +48,16 @@ contains
         state%q = charge_e * e_charge
         state%dt = dt
         state%v0 = v0
+        state%coils = coils
 
         state%z_gc = [s, theta, phi, lambda, v]
 
         x_vmec = [s**2, theta, phi]
-        call transform_vmec_to_cyl(x_vmec, x_cyl, jac_vmec_cyl)
+        call transform_vmec_to_cart(x_vmec, x_cart)
 
-        R = x_cyl(1)
-        phi_cyl = x_cyl(2)
-        Z = x_cyl(3)
+        call evaluate_field_and_gradB(state, x_cart, A_cart, B_cart, Bmod, gradB)
 
-        call evaluate_cyl(R, phi_cyl, Z, A_cyl, B_cyl, Bmod, gradB)
-
-        ! B_cyl from field_coils_cyl is (B_R, R*B_phi, B_Z) - covariant-like
-        ! Convert to physical/contravariant for unit vector: (B_R, B_phi, B_Z)
-        b_unit(1) = B_cyl(1) / Bmod
-        b_unit(2) = B_cyl(2) / (R * Bmod)
-        b_unit(3) = B_cyl(3) / Bmod
+        b_unit = B_cart / Bmod
 
         v_par = lambda * v
         v_perp = v * sqrt(max(0d0, 1d0 - lambda**2))
@@ -76,9 +72,7 @@ contains
             call compute_fallback_perpendicular(b_unit, e_perp)
         endif
 
-        ! v_cyl is physical velocity: (v_R, v_phi_physical, v_Z)
-        ! where v_phi_physical = R * omega (linear velocity in phi direction)
-        v_cyl = v_par * b_unit + v_perp * e_perp
+        v_vec = v_par * b_unit + v_perp * e_perp
 
         if (orbit_model == 1) then
             state%mu = state%m * v_perp**2 / (2d0 * Bmod)
@@ -86,16 +80,8 @@ contains
             state%mu = 0d0
         endif
 
-        state%z(1) = R
-        state%z(2) = phi_cyl
-        state%z(3) = Z
-        ! Canonical momenta: p_R = m*v_R + (q/c)*A_R
-        !                    p_phi = m*R*v_phi_phys + (q/c)*R*A_phi = m*R*v_cyl(2) + (q/c)*A_cyl(2)
-        !                    p_Z = m*v_Z + (q/c)*A_Z
-        ! Note: A_cyl(2) = R*A_phi (covariant)
-        state%z(4) = state%m * v_cyl(1) + (state%q / c) * A_cyl(1)
-        state%z(5) = state%m * R * v_cyl(2) + (state%q / c) * A_cyl(2)
-        state%z(6) = state%m * v_cyl(3) + (state%q / c) * A_cyl(3)
+        state%z(1:3) = x_cart
+        state%z(4:6) = state%m * v_vec + (state%q / c) * A_cart
 
     end subroutine init_full_orbit_state
 
@@ -129,6 +115,35 @@ contains
         norm = sqrt(e_perp(1)**2 + e_perp(2)**2 + e_perp(3)**2)
         e_perp = e_perp / norm
     end subroutine compute_fallback_perpendicular
+
+
+    subroutine evaluate_field_and_gradB(state, x, A_cart, B_cart, Bmod, gradB)
+        type(FullOrbitState), intent(in) :: state
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: A_cart(3), B_cart(3), Bmod, gradB(3)
+
+        real(dp) :: x_pert(3), Bp(3), Bm(3)
+        real(dp) :: h, Bp_mod, Bm_mod
+        integer :: i
+
+        A_cart = compute_vector_potential(state%coils, x)
+        B_cart = compute_magnetic_field(state%coils, x)
+        Bmod = sqrt(B_cart(1)**2 + B_cart(2)**2 + B_cart(3)**2)
+
+        do i = 1, 3
+            x_pert = x
+            h = max(1d-6 * max(abs(x(i)), 1d0), 1d-6)
+            x_pert(i) = x(i) + h
+            Bp = compute_magnetic_field(state%coils, x_pert)
+            Bp_mod = sqrt(Bp(1)**2 + Bp(2)**2 + Bp(3)**2)
+
+            x_pert(i) = x(i) - h
+            Bm = compute_magnetic_field(state%coils, x_pert)
+            Bm_mod = sqrt(Bm(1)**2 + Bm(2)**2 + Bm(3)**2)
+
+            gradB(i) = (Bp_mod - Bm_mod) / (2d0 * h)
+        enddo
+    end subroutine evaluate_field_and_gradB
 
 
     subroutine timestep_full_orbit(state, ierr)
@@ -179,11 +194,6 @@ contains
             return
         endif
 
-        if (z_new(1) <= 0d0) then
-            ierr = 4
-            return
-        endif
-
         do i = 1, 6
             if (ieee_is_nan(z_new(i))) then
                 ierr = 5
@@ -197,114 +207,47 @@ contains
 
 
     subroutine explicit_euler_step(state, z_old, z_new)
-        use field_coils_cyl, only: evaluate_cyl
-
         type(FullOrbitState), intent(in) :: state
         real(dp), intent(in) :: z_old(6)
         real(dp), intent(out) :: z_new(6)
 
-        real(dp) :: R, phi, Z, p_R, p_phi, p_Z
-        real(dp) :: A_cyl(3), B_cyl(3), Bmod, gradB(3), dA(3,3)
-        real(dp) :: v_R, v_phi, v_Z, v_cyl(3)
-        real(dp) :: dp_R, dp_phi, dp_Z
-        integer :: i
+        real(dp) :: x_old(3), p_old(3)
+        real(dp) :: xdot(3), pdot(3)
 
-        R = z_old(1)
-        phi = z_old(2)
-        Z = z_old(3)
-        p_R = z_old(4)
-        p_phi = z_old(5)
-        p_Z = z_old(6)
+        x_old = z_old(1:3)
+        p_old = z_old(4:6)
 
-        call evaluate_cyl(R, phi, Z, A_cyl, B_cyl, Bmod, gradB, dA)
+        call compute_rhs(state, x_old, p_old, xdot, pdot)
 
-        v_R = (p_R - (state%q / c) * A_cyl(1)) / state%m
-        v_phi = (p_phi - (state%q / c) * A_cyl(2)) / (state%m * R**2)
-        v_Z = (p_Z - (state%q / c) * A_cyl(3)) / state%m
-        v_cyl = [v_R, v_phi, v_Z]
-
-        dp_R = state%m * R * v_phi**2
-        do i = 1, 3
-            dp_R = dp_R + (state%q / c) * dA(i, 1) * v_cyl(i)
-        enddo
-        dp_R = dp_R - state%mu * gradB(1)
-
-        dp_phi = 0d0
-        do i = 1, 3
-            dp_phi = dp_phi + (state%q / c) * dA(i, 2) * v_cyl(i)
-        enddo
-        dp_phi = dp_phi - state%mu * gradB(2)
-
-        dp_Z = 0d0
-        do i = 1, 3
-            dp_Z = dp_Z + (state%q / c) * dA(i, 3) * v_cyl(i)
-        enddo
-        dp_Z = dp_Z - state%mu * gradB(3)
-
-        z_new(1) = R + state%dt * v_R
-        z_new(2) = phi + state%dt * v_phi
-        z_new(3) = Z + state%dt * v_Z
-        z_new(4) = p_R + state%dt * dp_R
-        z_new(5) = p_phi + state%dt * dp_phi
-        z_new(6) = p_Z + state%dt * dp_Z
+        z_new(1:3) = x_old + state%dt * xdot
+        z_new(4:6) = p_old + state%dt * pdot
 
     end subroutine explicit_euler_step
 
 
     subroutine eval_midpoint_residual(state, z_old, z_new, fvec)
-        use field_coils_cyl, only: evaluate_cyl
-
         type(FullOrbitState), intent(in) :: state
         real(dp), intent(in) :: z_old(6), z_new(6)
         real(dp), intent(out) :: fvec(6)
 
-        real(dp) :: state_mid(6)
-        real(dp) :: R_mid, phi_mid, Z_cyl_mid
-        real(dp) :: p_R_mid, p_phi_mid, p_Z_mid
-        real(dp) :: A_cyl(3), B_cyl(3), Bmod, gradB(3), dA(3,3)
-        real(dp) :: v_R, v_phi, v_Z, v_cyl(3)
-        real(dp) :: dp_R, dp_phi, dp_Z
-        integer :: i
+        real(dp) :: x_old(3), p_old(3)
+        real(dp) :: x_new(3), p_new(3)
+        real(dp) :: x_mid(3), p_mid(3)
+        real(dp) :: xdot(3), pdot(3)
 
-        state_mid = 0.5d0 * (z_old + z_new)
-        R_mid = state_mid(1)
-        phi_mid = state_mid(2)
-        Z_cyl_mid = state_mid(3)
-        p_R_mid = state_mid(4)
-        p_phi_mid = state_mid(5)
-        p_Z_mid = state_mid(6)
+        x_old = z_old(1:3)
+        p_old = z_old(4:6)
 
-        call evaluate_cyl(R_mid, phi_mid, Z_cyl_mid, A_cyl, B_cyl, Bmod, gradB, dA)
+        x_new = z_new(1:3)
+        p_new = z_new(4:6)
 
-        v_R = (p_R_mid - (state%q / c) * A_cyl(1)) / state%m
-        v_phi = (p_phi_mid - (state%q / c) * A_cyl(2)) / (state%m * R_mid**2)
-        v_Z = (p_Z_mid - (state%q / c) * A_cyl(3)) / state%m
-        v_cyl = [v_R, v_phi, v_Z]
+        x_mid = 0.5d0 * (x_old + x_new)
+        p_mid = 0.5d0 * (p_old + p_new)
 
-        dp_R = state%m * R_mid * v_phi**2
-        do i = 1, 3
-            dp_R = dp_R + (state%q / c) * dA(i, 1) * v_cyl(i)
-        enddo
-        dp_R = dp_R - state%mu * gradB(1)
+        call compute_rhs(state, x_mid, p_mid, xdot, pdot)
 
-        dp_phi = 0d0
-        do i = 1, 3
-            dp_phi = dp_phi + (state%q / c) * dA(i, 2) * v_cyl(i)
-        enddo
-        dp_phi = dp_phi - state%mu * gradB(2)
-
-        dp_Z = 0d0
-        do i = 1, 3
-            dp_Z = dp_Z + (state%q / c) * dA(i, 3) * v_cyl(i)
-        enddo
-        dp_Z = dp_Z - state%mu * gradB(3)
-
-        fvec(1) = z_new(1) - z_old(1) - state%dt * v_R
-        fvec(2) = z_new(2) - z_old(2) - state%dt * v_phi
-        fvec(3) = z_new(3) - z_old(3) - state%dt * v_Z
-        fvec(4) = z_new(4) - z_old(4) - state%dt * dp_R
-        fvec(5) = z_new(5) - z_old(5) - state%dt * dp_phi
-        fvec(6) = z_new(6) - z_old(6) - state%dt * dp_Z
+        fvec(1:3) = x_new - x_old - state%dt * xdot
+        fvec(4:6) = p_new - p_old - state%dt * pdot
 
     end subroutine eval_midpoint_residual
 
@@ -334,46 +277,38 @@ contains
 
 
     subroutine convert_full_to_gc(state, s, theta, phi, lambda, v)
-        use simple_coordinates, only: transform_cyl_to_vmec
-        use field_coils_cyl, only: evaluate_cyl
+        use simple_coordinates, only: transform_cart_to_cyl, &
+                                      transform_cyl_to_vmec
 
         type(FullOrbitState), intent(in) :: state
         real(dp), intent(out) :: s, theta, phi, lambda, v
 
-        real(dp) :: R, phi_cyl, Z
-        real(dp) :: p_R, p_phi, p_Z
-        real(dp) :: A_cyl(3), B_cyl(3), Bmod, gradB(3)
-        real(dp) :: v_R, v_phi, v_Z
+        real(dp) :: x_cart(3), p(3)
+        real(dp) :: A_cart(3), B_cart(3), Bmod, gradB(3)
+        real(dp) :: v_vec(3)
         real(dp) :: v_par, v_mag
         real(dp) :: x_cyl(3), x_vmec(3)
         integer :: ierr
 
-        R = state%z(1)
-        phi_cyl = state%z(2)
-        Z = state%z(3)
-        p_R = state%z(4)
-        p_phi = state%z(5)
-        p_Z = state%z(6)
+        x_cart = state%z(1:3)
+        p = state%z(4:6)
 
-        call evaluate_cyl(R, phi_cyl, Z, A_cyl, B_cyl, Bmod, gradB)
+        call evaluate_field_and_gradB(state, x_cart, A_cart, B_cart, Bmod, gradB)
 
-        v_R = (p_R - (state%q / c) * A_cyl(1)) / state%m
-        v_phi = (p_phi - (state%q / c) * A_cyl(2)) / (state%m * R**2)
-        v_Z = (p_Z - (state%q / c) * A_cyl(3)) / state%m
+        v_vec = (p - (state%q / c) * A_cart) / state%m
 
-        v_mag = sqrt(v_R**2 + R**2 * v_phi**2 + v_Z**2)
+        v_mag = sqrt(v_vec(1)**2 + v_vec(2)**2 + v_vec(3)**2)
 
-        ! B_cyl is (B_R, R*B_phi, B_Z), v_phi is angular velocity
-        ! v_par = v dot b = v_R*B_R + (R*v_phi)*(B_cyl(2)/R) + v_Z*B_Z
-        v_par = (v_R * B_cyl(1) + v_phi * B_cyl(2) + v_Z * B_cyl(3)) / Bmod
+        v_par = (v_vec(1) * B_cart(1) + v_vec(2) * B_cart(2) + &
+                 v_vec(3) * B_cart(3)) / Bmod
 
-        x_cyl = [R, phi_cyl, Z]
+        call transform_cart_to_cyl(x_cart, x_cyl)
         call transform_cyl_to_vmec(x_cyl, x_vmec, ierr)
 
         if (ierr /= 0) then
             s = -1d0
             theta = 0d0
-            phi = phi_cyl
+            phi = x_cyl(2)
         else
             s = x_vmec(1)
             theta = x_vmec(2)
@@ -391,32 +326,60 @@ contains
 
 
     function compute_energy(state) result(H)
-        use field_coils_cyl, only: evaluate_cyl
-
         type(FullOrbitState), intent(in) :: state
         real(dp) :: H
 
-        real(dp) :: R, phi, Z, p_R, p_phi, p_Z
-        real(dp) :: A_cyl(3), B_cyl(3), Bmod, gradB(3)
-        real(dp) :: v_R, v_phi, v_Z, v_sq
+        real(dp) :: x_cart(3), p(3)
+        real(dp) :: A_cart(3), B_cart(3), Bmod, gradB(3)
+        real(dp) :: v_vec(3), v_sq
 
-        R = state%z(1)
-        phi = state%z(2)
-        Z = state%z(3)
-        p_R = state%z(4)
-        p_phi = state%z(5)
-        p_Z = state%z(6)
+        x_cart = state%z(1:3)
+        p = state%z(4:6)
 
-        call evaluate_cyl(R, phi, Z, A_cyl, B_cyl, Bmod, gradB)
+        call evaluate_field_and_gradB(state, x_cart, A_cart, B_cart, Bmod, gradB)
 
-        v_R = (p_R - (state%q / c) * A_cyl(1)) / state%m
-        v_phi = (p_phi - (state%q / c) * A_cyl(2)) / (state%m * R**2)
-        v_Z = (p_Z - (state%q / c) * A_cyl(3)) / state%m
+        v_vec = (p - (state%q / c) * A_cart) / state%m
 
-        v_sq = v_R**2 + R**2 * v_phi**2 + v_Z**2
+        v_sq = v_vec(1)**2 + v_vec(2)**2 + v_vec(3)**2
 
         H = 0.5d0 * state%m * v_sq + state%mu * Bmod
 
     end function compute_energy
+
+
+    subroutine compute_rhs(state, x, p, xdot, pdot)
+        type(FullOrbitState), intent(in) :: state
+        real(dp), intent(in) :: x(3), p(3)
+        real(dp), intent(out) :: xdot(3), pdot(3)
+
+        real(dp) :: A_cart(3), B_cart(3), Bmod, gradB(3)
+        real(dp) :: v(3), v_cross_B(3)
+        real(dp) :: q_over_c
+
+        call evaluate_field_and_gradB(state, x, A_cart, B_cart, Bmod, gradB)
+
+        v = (p - (state%q / c) * A_cart) / state%m
+
+        q_over_c = state%q / c
+
+        call cross_product3(v, B_cart, v_cross_B)
+
+        pdot = q_over_c * v_cross_B
+        if (state%mu /= 0d0) then
+            pdot = pdot - state%mu * gradB
+        endif
+
+        xdot = v
+    end subroutine compute_rhs
+
+
+    subroutine cross_product3(a, b, c)
+        real(dp), intent(in) :: a(3), b(3)
+        real(dp), intent(out) :: c(3)
+
+        c(1) = a(2) * b(3) - a(3) * b(2)
+        c(2) = a(3) * b(1) - a(1) * b(3)
+        c(3) = a(1) * b(2) - a(2) * b(1)
+    end subroutine cross_product3
 
 end module orbit_full

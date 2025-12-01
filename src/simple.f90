@@ -1,4 +1,5 @@
 module simple
+  use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: c, e_charge, p_mass, ev, twopi
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp, &
                                  vmec_B_scale, vmec_RZ_scale
@@ -10,15 +11,13 @@ module simple
     orbit_sympl_init, orbit_timestep_sympl
   use orbit_full, only : FullOrbitState, init_full_orbit_state, &
     timestep_full_orbit, convert_full_to_gc, compute_energy
+  use neo_biotsavart, only : coils_t
   use field, only : VmecField
   use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
   implicit none
-
-  ! Define real(dp) kind parameter
-  integer, parameter :: dp = kind(1.0d0)
 save
 
 public
@@ -29,13 +28,14 @@ public
     integer          :: n_e, n_d
 
     integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
-    integer :: orbit_model = 0 ! 0 = guiding-center, 1 = Pauli, 2 = particle
+    integer :: orbit_model = 0 ! 0 = guiding-center, 1 = Pauli, 2 = full orbit
     real(dp) :: relerr
 
     type(FieldCan) :: f
     type(SymplecticIntegrator) :: si
     type(MultistageIntegrator) :: mi
     type(FullOrbitState) :: fo
+    type(coils_t) :: coils
   end type Tracer
 
   interface tstep
@@ -205,12 +205,13 @@ contains
   end subroutine timestep_sympl_z
 
 
-  subroutine init_full(fo, z0, dtau, v0, n_e, n_d, orbit_model)
+  subroutine init_full(fo, z0, dtau, v0, n_e, n_d, orbit_model, coils)
     use new_vmec_stuff_mod, only: vmec_B_scale
     type(FullOrbitState), intent(out) :: fo
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtau, v0
     integer, intent(in) :: n_e, n_d, orbit_model
+    type(coils_t), intent(in) :: coils
 
     real(dp) :: s, theta, phi, lambda, v
     real(dp) :: B_typical, omega_c, T_c, dt_cyclotron
@@ -237,8 +238,8 @@ contains
     dt_cyclotron = (T_c * v0) / real(STEPS_PER_CYCLOTRON, dp)
 
     call init_full_orbit_state(fo, s, theta, phi, lambda, v, &
-                               orbit_model, real(n_d, dp), real(n_e, dp), &
-                               dt_cyclotron, v0)
+                               orbit_model, real(n_d, dp), &
+                               real(n_e, dp), dt_cyclotron, v0, coils)
 
   end subroutine init_full
 

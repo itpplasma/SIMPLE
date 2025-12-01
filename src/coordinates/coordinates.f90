@@ -1,9 +1,10 @@
 module simple_coordinates
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use vmec_coordinates, only: vmec_to_cyl_lib => vmec_to_cyl, &
+    use vmec_coordinates, only: vmec_to_cyl_lib  => vmec_to_cyl, &
                                  vmec_to_cart_lib => vmec_to_cart, &
                                  cyl_to_cart_lib  => cyl_to_cart
+    use cylindrical_cartesian, only: cart_to_cyl_lib => cart_to_cyl
 
     implicit none
 
@@ -34,6 +35,15 @@ subroutine transform_vmec_to_cart(xfrom, xto, dxto_dxfrom)
 
     call vmec_to_cart_lib(xfrom, xto, dxto_dxfrom)
 end subroutine transform_vmec_to_cart
+
+
+subroutine transform_cart_to_cyl(xfrom, xto, dxto_dxfrom)
+    real(dp), intent(in) :: xfrom(3)
+    real(dp), intent(out) :: xto(3)
+    real(dp), intent(out), optional :: dxto_dxfrom(3,3)
+
+    call cart_to_cyl_lib(xfrom, xto, dxto_dxfrom)
+end subroutine transform_cart_to_cyl
 
 
 subroutine transform_cyl_to_cart(xfrom, xto, dxto_dxfrom)

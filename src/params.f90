@@ -40,7 +40,7 @@ module params
   ! Orbit model selection
   integer, parameter :: ORBIT_GUIDING_CENTER = 0
   integer, parameter :: ORBIT_PAULI_PARTICLE = 1
-  integer, parameter :: ORBIT_PARTICLE = 2
+  integer, parameter :: ORBIT_FULL_ORBIT = 2
   integer :: orbit_model = ORBIT_GUIDING_CENTER
 
   integer :: kpart = 0 ! progress counter for particles
@@ -101,7 +101,7 @@ module params
     densi1, densi2, tempi1, tempi2, tempe, &
     batch_size, ran_seed, reuse_batch, field_input, &
     output_error, output_orbits_macrostep,  &  ! callback
-    orbit_model  ! 0=guiding-center, 1=Pauli particle, 2=particle
+    orbit_model  ! 0=guiding-center, 1=Pauli particle, 2=full orbit
 
 contains
 
@@ -122,7 +122,7 @@ contains
     endif
 
     if (orbit_model < 0 .or. orbit_model > 2) then
-      error stop 'orbit_model must be 0 (guiding-center), 1 (Pauli), or 2 (particle)'
+      error stop 'orbit_model must be 0 (guiding-center), 1 (Pauli), or 2 (full orbit)'
     endif
 
     if (orbit_model /= ORBIT_GUIDING_CENTER) then

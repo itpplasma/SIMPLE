@@ -16,7 +16,7 @@ module simple_main
     zstart, zend, trap_par, perp_inv, sbeg, &
     ntimstep, should_skip, reset_seed_if_deterministic, &
     field_input, isw_field_type, reuse_batch, &
-    orbit_model, ORBIT_GUIDING_CENTER, ORBIT_PAULI_PARTICLE, ORBIT_PARTICLE
+    orbit_model, ORBIT_GUIDING_CENTER, ORBIT_PAULI_PARTICLE, ORBIT_FULL_ORBIT
 
   implicit none
 
@@ -98,7 +98,6 @@ module simple_main
     use timing, only : print_phase_time
     use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
     use neo_biotsavart, only : coils_t, load_coils_from_file
-    use field_coils_cyl, only : set_active_coils
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -150,7 +149,7 @@ module simple_main
       coils_for_full_orbit%y = coils_for_full_orbit%y * 100.0d0
       coils_for_full_orbit%z = coils_for_full_orbit%z * 100.0d0
       coils_for_full_orbit%current = coils_for_full_orbit%current * 2997924536.8431d0
-      call set_active_coils(coils_for_full_orbit)
+      self%coils = coils_for_full_orbit
       call print_phase_time('Coils loaded for full orbit integration')
     endif
   end subroutine init_field
@@ -327,7 +326,8 @@ module simple_main
     zend(:,ipart) = 0d0
 
     if (anorb%orbit_model /= ORBIT_GUIDING_CENTER) then
-      call init_full(anorb%fo, z, dtaumin, v0, anorb%n_e, anorb%n_d, anorb%orbit_model)
+      call init_full(anorb%fo, z, dtaumin, v0, anorb%n_e, anorb%n_d, &
+                     anorb%orbit_model, anorb%coils)
     elseif (integmode > 0) then
       call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
     endif
