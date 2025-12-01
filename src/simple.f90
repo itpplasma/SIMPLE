@@ -239,7 +239,7 @@ contains
 
     call init_full_orbit_state(fo, s, theta, phi, lambda, v, &
                                orbit_model, real(n_d, dp), &
-                               real(n_e, dp), dt_cyclotron, v0, coils)
+                               real(n_e, dp), dt_cyclotron, coils)
 
   end subroutine init_full
 

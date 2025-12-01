@@ -67,7 +67,7 @@ program test_full_orbit
 
     ! orbit_model=1 for Pauli particle, mass=4 AMU (alpha), charge=2e
     call init_full_orbit_state(state, s, theta, phi, lambda, v, &
-                               1, 4.0d0, 2.0d0, 1d-10, v, coils)
+                               1, 4.0d0, 2.0d0, 1d-10, coils)
 
     print *, ''
     print *, 'Initial Cartesian state:'

@@ -3,7 +3,7 @@ module orbit_full
     use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
     use util, only: c, e_charge, p_mass
     use neo_biotsavart, only: coils_t, compute_vector_potential, &
-                               compute_magnetic_field
+                               compute_magnetic_field, cross_product
 
     implicit none
 
@@ -14,27 +14,24 @@ module orbit_full
 
     type :: FullOrbitState
         real(dp) :: z(6)        ! (x, y, z, p_x, p_y, p_z) in Cartesian
-        real(dp) :: z_gc(5)     ! (s, theta, phi, lambda, v) guiding-center
         real(dp) :: mu          ! Magnetic moment (Pauli), 0 for full orbit
         real(dp) :: m           ! Particle mass [g]
         real(dp) :: q           ! Particle charge [statcoulomb]
         real(dp) :: dt          ! Timestep [normalized]
-        real(dp) :: v0          ! Reference velocity for normalization
-        integer :: orbit_model  ! 1=Pauli particle, 2=full orbit
         type(coils_t) :: coils  ! Coil geometry in CGS units
     end type FullOrbitState
 
 contains
 
     subroutine init_full_orbit_state(state, s, theta, phi, lambda, v, &
-                                      orbit_model, mass_amu, charge_e, dt, v0, &
+                                      orbit_model, mass_amu, charge_e, dt, &
                                       coils)
         use simple_coordinates, only: transform_vmec_to_cart
 
         type(FullOrbitState), intent(out) :: state
         real(dp), intent(in) :: s, theta, phi, lambda, v
         integer, intent(in) :: orbit_model
-        real(dp), intent(in) :: mass_amu, charge_e, dt, v0
+        real(dp), intent(in) :: mass_amu, charge_e, dt
         type(coils_t), intent(in) :: coils
 
         real(dp) :: x_vmec(3), x_cart(3)
@@ -43,14 +40,10 @@ contains
         real(dp) :: v_par, v_perp, v_vec(3)
         real(dp) :: norm_gcb
 
-        state%orbit_model = orbit_model
         state%m = mass_amu * p_mass
         state%q = charge_e * e_charge
         state%dt = dt
-        state%v0 = v0
         state%coils = coils
-
-        state%z_gc = [s, theta, phi, lambda, v]
 
         x_vmec = [s**2, theta, phi]
         call transform_vmec_to_cart(x_vmec, x_cart)
@@ -362,7 +355,7 @@ contains
 
         q_over_c = state%q / c
 
-        call cross_product3(v, B_cart, v_cross_B)
+        v_cross_B = cross_product(v, B_cart)
 
         pdot = q_over_c * v_cross_B
         if (state%mu /= 0d0) then
@@ -371,15 +364,5 @@ contains
 
         xdot = v
     end subroutine compute_rhs
-
-
-    subroutine cross_product3(a, b, c)
-        real(dp), intent(in) :: a(3), b(3)
-        real(dp), intent(out) :: c(3)
-
-        c(1) = a(2) * b(3) - a(3) * b(2)
-        c(2) = a(3) * b(1) - a(1) * b(3)
-        c(3) = a(1) * b(2) - a(2) * b(1)
-    end subroutine cross_product3
 
 end module orbit_full
