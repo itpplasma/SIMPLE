@@ -6,7 +6,7 @@ module simple_main
   use collis_alp, only : loacol_alpha, stost
   use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
-  use simple_coordinates, only : transform_vmec_to_cart, transform_cart_to_vmec
+  use simple_coordinates, only : transform_vmec_to_cart
   use callback, only : output_orbits_macrostep
   use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
@@ -367,7 +367,9 @@ module simple_main
 
     !$omp critical
     if (isw_field_type == 5 .and. integmode <= 0) then
-      call transform_cart_to_vmec(z(1:3), zend(1:3,ipart))
+      ! For coils Cartesian GC, zend(1:3,:) are not used in tests; keep
+      ! Cartesian coordinates here for diagnostics.
+      zend(1:3,ipart) = z(1:3)
     else
       call can_to_ref(z(1:3), zend(1:3,ipart))
     end if
