@@ -337,7 +337,6 @@ module simple_main
     do it = 1, ntimstep
       if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
       if(ierr_orbit .ne. 0) then
-        it_final = it
         exit
       endif
 
