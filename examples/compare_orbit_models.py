@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compare guiding-center, Pauli, and full orbit models.
+"""Plot a single VMEC RK guiding-center orbit.
 
-This script runs SIMPLE with different orbit_model settings and plots
-the trajectories in R-Z and R-phi projections for comparison.
+This script runs SIMPLE in VMEC Runge–Kutta (integmode = -1) mode
+for a single particle and produces a simple diagnostic plot.
 
 Usage:
     python compare_orbit_models.py [working_directory]
@@ -16,95 +16,112 @@ The working directory must contain:
 import os
 import sys
 import subprocess
-import tempfile
-import shutil
 import numpy as np
-import matplotlib.pyplot as plt
+
+try:
+    import netCDF4 as nc
+except ImportError:
+    nc = None
+
+try:
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
 
 
-def run_simple(work_dir, orbit_model, ntimstep=100, trace_time=1e-4):
-    """Run SIMPLE with specified orbit model and return trajectory."""
+def run_simple_vmec_rk(work_dir, ntimstep=200, trace_time=1e-4):
+    """Run SIMPLE in VMEC RK mode (integmode = -1, orbit_model = 0)."""
 
-    # Read original config
-    config_path = os.path.join(work_dir, 'simple.in')
-    with open(config_path, 'r') as f:
-        original_config = f.read()
+    config = f"""&config
+trace_time = {trace_time}
+sbeg = 0.6d0
+ntestpart = 1
+ntimstep = {ntimstep}
+netcdffile = 'wout.nc'
+isw_field_type = 1
+integmode = -1
+npoiper2 = 128
+deterministic = .True.
+orbit_model = 0
+n_e = 2
+n_d = 4
+contr_pp = -1000d0
+output_orbits_macrostep = .True.
+/
+"""
 
-    # Create modified config with orbit_model
-    # Parse and modify
-    lines = original_config.strip().split('\n')
-    new_lines = []
-    has_orbit_model = False
-    has_ntimstep = False
-    has_trace_time = False
-    has_ntestpart = False
-
-    for line in lines:
-        # Skip existing orbit_model, ntimstep, trace_time lines
-        if 'orbit_model' in line.lower() and '=' in line:
-            has_orbit_model = True
-            new_lines.append(f'orbit_model = {orbit_model}')
-            continue
-        if 'ntimstep' in line.lower() and '=' in line:
-            has_ntimstep = True
-            new_lines.append(f'ntimstep = {ntimstep}')
-            continue
-        if 'trace_time' in line.lower() and '=' in line:
-            has_trace_time = True
-            new_lines.append(f'trace_time = {trace_time}')
-            continue
-        if 'ntestpart' in line.lower() and '=' in line:
-            has_ntestpart = True
-            new_lines.append('ntestpart = 1')
-            continue
-        if line.strip() == '/':
-            # Add missing parameters before closing
-            if not has_orbit_model:
-                new_lines.append(f'orbit_model = {orbit_model}')
-            if not has_ntimstep:
-                new_lines.append(f'ntimstep = {ntimstep}')
-            if not has_trace_time:
-                new_lines.append(f'trace_time = {trace_time}')
-            if not has_ntestpart:
-                new_lines.append('ntestpart = 1')
-        new_lines.append(line)
-
-    modified_config = '\n'.join(new_lines)
-
-    # Write modified config
+    config_path = os.path.join(work_dir, 'simple_vmec_rk.in')
     with open(config_path, 'w') as f:
-        f.write(modified_config)
+        f.write(config)
 
-    try:
-        # Run SIMPLE
-        simple_exe = os.path.join(os.path.dirname(__file__), '..', 'build', 'simple.x')
-        result = subprocess.run(
-            [simple_exe],
-            cwd=work_dir,
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
+    simple_exe = os.path.join(os.path.dirname(__file__), '..', 'build', 'simple.x')
+    result = subprocess.run(
+        [simple_exe, config_path],
+        cwd=work_dir,
+        capture_output=True,
+        text=True,
+        timeout=300
+    )
 
-        if result.returncode != 0:
-            print(f"SIMPLE failed with orbit_model={orbit_model}")
-            print("STDOUT:", result.stdout[-2000:] if len(result.stdout) > 2000 else result.stdout)
-            print("STDERR:", result.stderr[-2000:] if len(result.stderr) > 2000 else result.stderr)
-            return None
-
-        # Read trajectory from times_lost.dat or start.dat
-        # For now, just check if it ran successfully
-        times_lost_path = os.path.join(work_dir, 'times_lost.dat')
-        if os.path.exists(times_lost_path):
-            data = np.loadtxt(times_lost_path)
-            return data
-
+    if result.returncode != 0:
+        print("SIMPLE VMEC RK run failed")
+        print("STDOUT:", result.stdout[-2000:] if len(result.stdout) > 2000 else result.stdout)
+        print("STDERR:", result.stderr[-2000:] if len(result.stderr) > 2000 else result.stderr)
         return None
 
-    finally:
-        # Restore original config
-        with open(config_path, 'w') as f:
-            f.write(original_config)
+    orbits_path = os.path.join(work_dir, 'orbits.nc')
+    if nc is None or not os.path.exists(orbits_path):
+        print("orbits.nc not found or netCDF4 not available")
+        return None
+
+    with nc.Dataset(orbits_path, 'r') as ds:
+        # Variables are stored as (timestep, particle)
+        s = ds.variables['s'][:, 0]
+        theta = ds.variables['theta'][:, 0]
+        phi = ds.variables['phi'][:, 0]
+        time = ds.variables['time'][:, 0]
+
+    return {
+        's': s,
+        'theta': theta,
+        'phi': phi,
+        'time': time,
+    }
+
+
+def plot_vmec_rk(traj, output_file):
+    """Plot VMEC RK orbit (s, theta, phi vs time)."""
+    if not HAS_MATPLOTLIB:
+        print("matplotlib not available; skipping plot generation")
+        return
+
+    s = traj['s']
+    theta = traj['theta']
+    phi = traj['phi']
+    time = traj['time']
+
+    mask = ~np.isnan(s)
+
+    fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
+
+    axes[0].plot(time[mask], s[mask], 'b-')
+    axes[0].set_ylabel('s')
+    axes[0].set_title('VMEC RK orbit: s, theta, phi vs time')
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(time[mask], theta[mask], 'r-')
+    axes[1].set_ylabel('theta')
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].plot(time[mask], phi[mask], 'g-')
+    axes[2].set_ylabel('phi')
+    axes[2].set_xlabel('time')
+    axes[2].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=150)
+    plt.close()
 
 
 def main():
@@ -128,23 +145,20 @@ def main():
             print(f"Error: Required file {f} not found in {work_dir}")
             sys.exit(1)
 
-    # Run with guiding-center (orbit_model=0)
-    print("Running with guiding-center orbit model (orbit_model=0)...")
-    gc_result = run_simple(work_dir, orbit_model=0, ntimstep=1000, trace_time=1e-3)
+    trace_time = 1e-4
+    ntimstep = 1000
 
-    # Run with Pauli particle (orbit_model=1)
-    print("Running with Pauli particle orbit model (orbit_model=1)...")
-    pauli_result = run_simple(work_dir, orbit_model=1, ntimstep=1000, trace_time=1e-3)
+    print("Running VMEC RK guiding-center orbit (integmode = -1, orbit_model = 0)...")
+    traj = run_simple_vmec_rk(work_dir, ntimstep=ntimstep, trace_time=trace_time)
 
-    # Run with full orbit (orbit_model=2)
-    print("Running with full orbit model (orbit_model=2)...")
-    full_result = run_simple(work_dir, orbit_model=2, ntimstep=1000, trace_time=1e-3)
+    if traj is None:
+        print("VMEC RK run failed; no plot generated")
+        sys.exit(1)
 
-    print()
-    print("Results:")
-    print(f"  Guiding-center: {'OK' if gc_result is not None else 'FAILED'}")
-    print(f"  Pauli particle: {'OK' if pauli_result is not None else 'FAILED'}")
-    print(f"  Full orbit: {'OK' if full_result is not None else 'FAILED'}")
+    output_file = os.path.join(work_dir, 'vmec_rk_orbit.png')
+    plot_vmec_rk(traj, output_file)
+    if HAS_MATPLOTLIB:
+        print(f"  Plot written to: {output_file}")
 
 
 if __name__ == '__main__':
