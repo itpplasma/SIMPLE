@@ -6,6 +6,7 @@ module simple_main
   use collis_alp, only : loacol_alpha, stost
   use samplers, only: sample
   use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
+  use simple_coordinates, only : transform_vmec_to_cart
   use callback, only : output_orbits_macrostep
   use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
@@ -96,7 +97,8 @@ module simple_main
     use field_base, only : MagneticField
     use field, only : field_from_file
     use timing, only : print_phase_time
-    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, COILS
+    use magfie_coils_sub, only : init_magfie_coils_from_file
 
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
@@ -107,14 +109,17 @@ module simple_main
     call print_phase_time('VMEC initialization completed')
 
     self%integmode = aintegmode
-    if (self%integmode >= 0) then
-      if(trim(field_input) == '') then
-        call field_from_file(vmec_file, field_temp)
-      else
-        call field_from_file(field_input, field_temp)
-      end if
-      call print_phase_time('Field from file loading completed')
+
+    ! Always construct a non-canonical field representation. It is used
+    ! for canonical coordinate construction (Meiss, Albert, Boozer, flux).
+    ! For coils guiding-centre mode we only allocate it but do not use it
+    ! in the magfie backend.
+    if (trim(field_input) == '') then
+      call field_from_file(vmec_file, field_temp)
+    else
+      call field_from_file(field_input, field_temp)
     end if
+    call print_phase_time('Field from file loading completed')
 
     if (self%integmode > 0) then
       select case (isw_field_type)
@@ -133,6 +138,15 @@ module simple_main
         isw_field_type == ALBERT) then
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
+    end if
+
+    if (self%integmode <= 0 .and. isw_field_type == COILS) then
+      if (len_trim(field_input) == 0) then
+        error stop 'GC coils mode requires field_input (coils file)'
+      end if
+
+      call init_magfie_coils_from_file(field_input)
+      call print_phase_time('Coils magfie initialization completed')
     end if
   end subroutine init_field
 
@@ -303,7 +317,11 @@ module simple_main
       return
     endif
 
-    call ref_to_can(zstart(1:3, ipart), z(1:3))
+    if (isw_field_type == 5 .and. integmode <= 0) then
+      call transform_vmec_to_cart(zstart(1:3, ipart), z(1:3))
+    else
+      call ref_to_can(zstart(1:3, ipart), z(1:3))
+    end if
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
@@ -328,7 +346,6 @@ module simple_main
     do it = 1, ntimstep
       if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
       if(ierr_orbit .ne. 0) then
-        it_final = it
         exit
       endif
 
@@ -349,14 +366,20 @@ module simple_main
     endif
 
     !$omp critical
-    call can_to_ref(z(1:3), zend(1:3,ipart))
+    if (isw_field_type == 5 .and. integmode <= 0) then
+      ! For coils Cartesian GC, zend(1:3,:) are not used in tests; keep
+      ! Cartesian coordinates here for diagnostics.
+      zend(1:3,ipart) = z(1:3)
+    else
+      call can_to_ref(z(1:3), zend(1:3,ipart))
+    end if
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical
   end subroutine trace_orbit
 
   subroutine macrostep(anorb, z, kt, ierr_orbit)
-    use alpha_lifetime_sub, only : orbit_timestep_axis
+    use alpha_lifetime_sub, only : orbit_timestep_axis, orbit_timestep_rk4, orbit_timestep_can
     use orbit_symplectic, only : orbit_timestep_sympl
 
     type(Tracer), intent(inout) :: anorb
@@ -367,7 +390,11 @@ module simple_main
     integer :: ktau
 
     do ktau=1,ntau
-      if (integmode <= 0) then
+      if (integmode == -2) then
+        call orbit_timestep_rk4(z, dtaumin, ierr_orbit)
+      else if (integmode == -1) then
+        call orbit_timestep_can(z, dtaumin, dtaumin, relerr, ierr_orbit)
+      else if (integmode <= 0) then
         call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
       else
         if (swcoll) call update_momentum(anorb, z)

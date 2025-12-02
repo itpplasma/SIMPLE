@@ -60,7 +60,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     use find_bminmax_sub, only : get_bminmax
     use magfie_sub, only : magfie
     use plag_coeff_sub, only : plag_coeff
-    use alpha_lifetime_sub, only : orbit_timestep_axis
+  use alpha_lifetime_sub, only : orbit_timestep_axis, orbit_timestep_rk4, orbit_timestep_can
 
     type(Tracer), intent(inout) :: anorb
     integer, intent(in) :: ipart
@@ -245,7 +245,11 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
             cycle
         endif
         do ktau=1,ntau
-            if (integmode <= 0) then
+            if (integmode == -2) then
+                call orbit_timestep_rk4(z, dtaumin, ierr)
+            else if (integmode == -1) then
+                call orbit_timestep_can(z, dtaumin, dtaumin, relerr, ierr)
+            else if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
             else
                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr)

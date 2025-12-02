@@ -3,6 +3,7 @@ use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
+use magfie_coils_sub, only: magfie_coils
 
 implicit none
 
@@ -31,7 +32,7 @@ end interface
 
 procedure(magfie_base), pointer :: magfie => null()
 
-integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
+integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, COILS=5
 
 contains
 
@@ -52,6 +53,8 @@ subroutine init_magfie(id)
     magfie => magfie_meiss
   case(ALBERT)
     magfie => magfie_albert
+  case(COILS)
+    magfie => magfie_coils
   case default
     print *,'init_magfie: unknown id ', id
     error stop

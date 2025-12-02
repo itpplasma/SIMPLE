@@ -28,6 +28,7 @@ set(SOURCES
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
     orbit_symplectic.f90
+    magfie_coils.f90
     util.F90
     samplers.f90
     cut_detector.f90

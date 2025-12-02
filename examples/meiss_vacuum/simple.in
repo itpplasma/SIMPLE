@@ -1,0 +1,15 @@
+&config
+trace_time = 0.0001
+sbeg = 0.6d0
+ntestpart = 1
+ntimstep = 1000
+netcdffile = 'wout.nc'
+isw_field_type = 3        ! Meiss canonical coordinates
+integmode = -1            ! Cash-Karp RK5(4)
+npoiper2 = 128
+deterministic = .True.
+facE_al = 1000.0
+field_input = 'coils.simple'
+contr_pp = -1000d0
+output_orbits_macrostep = .True.
+/

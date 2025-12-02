@@ -182,12 +182,20 @@ contains
 
     subroutine write_orbit_to_netcdf(ipart, orbit_traj, orbit_times)
         use field_can_mod, only : can_to_ref
+        use velo_mod, only : isw_field_type
+        use magfie_sub, only : COILS
+        use params, only : zstart
+        use vmec_coordinates, only : vmec_to_cart_lib => vmec_to_cart
         integer, intent(in) :: ipart
         real(kind(1.0d0)), intent(in) :: orbit_traj(:,:)  ! (5, ntimstep)
         real(kind(1.0d0)), intent(in) :: orbit_times(:)   ! (ntimstep)
 
-        integer :: it, status, n_times
-        real(kind(1.0d0)) :: xref(3)
+        integer :: it, status, n_times, newton_iter
+        real(kind(1.0d0)) :: xref(3), xref_prev(3)
+        real(kind(1.0d0)) :: xcart(3), x_eval(3)
+        real(kind(1.0d0)) :: J(3,3), rhs(3), Jinv(3,3), delta(3), res_norm
+        integer, parameter :: max_iter = 10
+        real(kind(1.0d0)), parameter :: tol = 1.0d-10
         real(kind(1.0d0)), allocatable :: s_array(:), theta_array(:), phi_array(:)
 
         if (.not. netcdf_initialized) then
@@ -197,13 +205,46 @@ contains
         n_times = size(orbit_times)
         allocate(s_array(n_times), theta_array(n_times), phi_array(n_times))
 
-        ! Convert canonical to reference coordinates
-        do it = 1, n_times
-            call can_to_ref(orbit_traj(1:3, it), xref)
-            s_array(it) = xref(1)
-            theta_array(it) = xref(2)
-            phi_array(it) = xref(3)
-        enddo
+        if (isw_field_type == COILS) then
+            ! Coils GC mode: orbit_traj(1:3,:) are Cartesian (x,y,z).
+            ! Recover VMEC reference coordinates (s,theta,phi) via Newton iteration,
+            ! using previous VMEC point as initial guess. For the first timestep,
+            ! use the starting VMEC position from zstart.
+            xref_prev(:) = zstart(1:3, ipart)
+
+            do it = 1, n_times
+                xcart = orbit_traj(1:3, it)
+                xref = xref_prev
+
+                do newton_iter = 1, max_iter
+                    call vmec_to_cart_lib(xref, x_eval, J)
+                    rhs = x_eval - xcart
+                    res_norm = sqrt(rhs(1)**2 + rhs(2)**2 + rhs(3)**2)
+                    if (res_norm < tol) exit
+
+                    call invert_3x3_local(J, Jinv)
+                    delta = matmul(Jinv, rhs)
+                    xref = xref - delta
+
+                    xref(1) = max(0.0d0, min(1.0d0, xref(1)))
+                    xref(2) = modulo(xref(2), 2.0d0*3.14159265358979d0)
+                    xref(3) = modulo(xref(3), 2.0d0*3.14159265358979d0)
+                end do
+
+                xref_prev = xref
+                s_array(it) = xref(1)
+                theta_array(it) = xref(2)
+                phi_array(it) = xref(3)
+            end do
+        else
+            ! Convert canonical to reference coordinates for non-coils modes
+            do it = 1, n_times
+                call can_to_ref(orbit_traj(1:3, it), xref)
+                s_array(it) = xref(1)
+                theta_array(it) = xref(2)
+                phi_array(it) = xref(3)
+            enddo
+        end if
 
         ! Write entire orbit to NetCDF in one shot
         status = nf90_put_var(ncid, varid_time, orbit_times, start=[ipart, 1], count=[1, n_times])
@@ -224,6 +265,34 @@ contains
         status = nf90_put_var(ncid, varid_v_par, orbit_traj(5, :), start=[ipart, 1], count=[1, n_times])
         call check_nc(status, 'nf90_put_var v_par')
     end subroutine write_orbit_to_netcdf
+
+
+    subroutine invert_3x3_local(a, a_inv)
+        real(dp), intent(in) :: a(3,3)
+        real(dp), intent(out) :: a_inv(3,3)
+        real(dp) :: det
+
+        det = a(1,1)*(a(2,2)*a(3,3)-a(2,3)*a(3,2)) - &
+              a(1,2)*(a(2,1)*a(3,3)-a(2,3)*a(3,1)) + &
+              a(1,3)*(a(2,1)*a(3,2)-a(2,2)*a(3,1))
+
+        if (abs(det) < 1.0d-20) then
+            print *, "invert_3x3_local: singular matrix"
+            error stop
+        end if
+
+        a_inv(1,1) = (a(2,2)*a(3,3)-a(2,3)*a(3,2))/det
+        a_inv(1,2) = (a(1,3)*a(3,2)-a(1,2)*a(3,3))/det
+        a_inv(1,3) = (a(1,2)*a(2,3)-a(1,3)*a(2,2))/det
+
+        a_inv(2,1) = (a(2,3)*a(3,1)-a(2,1)*a(3,3))/det
+        a_inv(2,2) = (a(1,1)*a(3,3)-a(1,3)*a(3,1))/det
+        a_inv(2,3) = (a(1,3)*a(2,1)-a(1,1)*a(2,3))/det
+
+        a_inv(3,1) = (a(2,1)*a(3,2)-a(2,2)*a(3,1))/det
+        a_inv(3,2) = (a(1,2)*a(3,1)-a(1,1)*a(3,2))/det
+        a_inv(3,3) = (a(1,1)*a(2,2)-a(1,2)*a(2,1))/det
+    end subroutine invert_3x3_local
 
 
     subroutine close_orbit_netcdf()

@@ -7,6 +7,7 @@ fort.*
 *~
 *.nc
 *.nc.*
+!golden_record/test_data/wout_ncsx_vacuum.nc
 *.x
 *.png
 *.o

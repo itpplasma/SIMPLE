@@ -297,6 +297,21 @@ set_tests_properties(orbit_netcdf_plot PROPERTIES
 )
 
 ##################################################
+# NCSX GC RK4 COMPARISON TEST (VMEC vs COILS)
+##################################################
+
+add_test(
+    NAME gc_rk4_ncsx_vmec_vs_coils
+    COMMAND ${CMAKE_COMMAND} -E env python3
+        ${CMAKE_SOURCE_DIR}/examples/compare_gc_coils_rk.py
+        ${CMAKE_BINARY_DIR}/test/ncsx_gc_coils_rk
+)
+set_tests_properties(gc_rk4_ncsx_vmec_vs_coils PROPERTIES
+    TIMEOUT 300
+    LABELS "system;integration;plot;slow"
+)
+
+##################################################
 # GOLDEN RECORD TESTS
 ##################################################
 
