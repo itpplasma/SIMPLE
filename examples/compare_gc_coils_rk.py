@@ -132,7 +132,10 @@ def main():
             sys.exit(1)
 
     trace_time = 1e-4
-    ntimstep = 1000
+    # Use a modest number of time steps so the
+    # six GC runs stay comfortably within the
+    # test timeout on typical CI hardware.
+    ntimstep = 400
     facE_al = 1000.0  # Reduce orbit energy by factor 1000
 
     # 1) VMEC GC, fixed-step RK4 (no field_input)
@@ -144,7 +147,7 @@ ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 1        ! VMEC
 integmode = -2            ! Fixed-step RK4 in VMEC field
-npoiper2 = 128
+npoiper2 = 64
 deterministic = .True.
 facE_al = {facE_al}
 contr_pp = -1000d0
@@ -161,7 +164,7 @@ ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 5        ! Coils magfie backend (VMEC reference coordinates)
 integmode = -2
-npoiper2 = 128
+npoiper2 = 64
 deterministic = .True.
 facE_al = {facE_al}
 field_input = 'coils.simple'
@@ -179,7 +182,7 @@ ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 1        ! VMEC
 integmode = -1            ! Adaptive Cash–Karp RK5(4) in VMEC field
-npoiper2 = 128
+npoiper2 = 64
 deterministic = .True.
 facE_al = {facE_al}
 contr_pp = -1000d0
@@ -196,7 +199,7 @@ ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 5        ! Coils magfie backend (VMEC reference coordinates)
 integmode = -1
-npoiper2 = 128
+npoiper2 = 64
 deterministic = .True.
 facE_al = {facE_al}
 field_input = 'coils.simple'
@@ -214,7 +217,7 @@ ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 3        ! Meiss canonical coordinates (coils)
 integmode = -2
-npoiper2 = 128
+npoiper2 = 64
 deterministic = .True.
 facE_al = {facE_al}
 field_input = 'coils.simple'
@@ -232,7 +235,7 @@ ntimstep = {ntimstep}
 netcdffile = 'wout.nc'
 isw_field_type = 3        ! Meiss canonical coordinates (coils)
 integmode = -1
-npoiper2 = 128
+npoiper2 = 64
 deterministic = .True.
 facE_al = {facE_al}
 field_input = 'coils.simple'
@@ -324,53 +327,149 @@ output_orbits_macrostep = .True.
     mask_meiss_rk4 = ~np.isnan(s_meiss_rk4)
     mask_meiss_ck = ~np.isnan(s_meiss_ck)
 
-    fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
 
-    # Use distinct colors/linestyles to make overlaps visible
-    axes[0].plot(t_axis[mask_vmec_rk4], s_vmec_rk4[mask_vmec_rk4],
-                 color="C0", linestyle="-", linewidth=1.8, label="VMEC RK4")
-    axes[0].plot(t_axis[mask_coils_rk4], s_coils_rk4[mask_coils_rk4],
-                 color="C1", linestyle="--", linewidth=1.8, label="Coils RK4")
-    axes[0].plot(t_axis[mask_vmec_ck], s_vmec_ck[mask_vmec_ck],
-                 color="C2", linestyle="-.", linewidth=1.4, label="VMEC Cash–Karp")
-    axes[0].plot(t_axis[mask_coils_ck], s_coils_ck[mask_coils_ck],
-                 color="C3", linestyle=":", linewidth=1.4, label="Coils Cash–Karp")
-    axes[0].plot(t_axis[mask_meiss_rk4], s_meiss_rk4[mask_meiss_rk4],
-                 color="C4", linestyle="-.", linewidth=1.8, label="Meiss RK4")
-    axes[0].plot(t_axis[mask_meiss_ck], s_meiss_ck[mask_meiss_ck],
-                 color="C5", linestyle="--", linewidth=1.4, label="Meiss Cash–Karp")
+    # Consistent styling: colour encodes field backend, linestyle encodes RK solver.
+    styles = {
+        "vmec_rk4": {
+            "color": "tab:blue",
+            "linestyle": "-",
+            "linewidth": 2.0,
+            "label": "VMEC RK4",
+        },
+        "vmec_ck": {
+            "color": "tab:blue",
+            "linestyle": "--",
+            "linewidth": 1.8,
+            "label": "VMEC Cash–Karp",
+        },
+        "coils_rk4": {
+            "color": "tab:orange",
+            "linestyle": "-",
+            "linewidth": 2.0,
+            "label": "Coils RK4",
+        },
+        "coils_ck": {
+            "color": "tab:orange",
+            "linestyle": "--",
+            "linewidth": 1.8,
+            "label": "Coils Cash–Karp",
+        },
+        "meiss_rk4": {
+            "color": "tab:green",
+            "linestyle": "-",
+            "linewidth": 2.0,
+            "label": "Meiss RK4",
+        },
+        "meiss_ck": {
+            "color": "tab:green",
+            "linestyle": "--",
+            "linewidth": 1.8,
+            "label": "Meiss Cash–Karp",
+        },
+    }
+
+    # s coordinate
+    axes[0].plot(
+        t_axis[mask_vmec_rk4],
+        s_vmec_rk4[mask_vmec_rk4],
+        **styles["vmec_rk4"],
+    )
+    axes[0].plot(
+        t_axis[mask_vmec_ck],
+        s_vmec_ck[mask_vmec_ck],
+        **styles["vmec_ck"],
+    )
+    axes[0].plot(
+        t_axis[mask_coils_rk4],
+        s_coils_rk4[mask_coils_rk4],
+        **styles["coils_rk4"],
+    )
+    axes[0].plot(
+        t_axis[mask_coils_ck],
+        s_coils_ck[mask_coils_ck],
+        **styles["coils_ck"],
+    )
+    axes[0].plot(
+        t_axis[mask_meiss_rk4],
+        s_meiss_rk4[mask_meiss_rk4],
+        **styles["meiss_rk4"],
+    )
+    axes[0].plot(
+        t_axis[mask_meiss_ck],
+        s_meiss_ck[mask_meiss_ck],
+        **styles["meiss_ck"],
+    )
     axes[0].set_ylabel("s")
     axes[0].set_title("Guiding-center RK: VMEC vs coils (VMEC reference coords)")
-    axes[0].legend()
+    axes[0].legend(loc="best", ncol=2)
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].plot(t_axis[mask_vmec_rk4], theta_vmec_rk4[mask_vmec_rk4],
-                 color="C0", linestyle="-", linewidth=1.8)
-    axes[1].plot(t_axis[mask_coils_rk4], theta_coils_rk4[mask_coils_rk4],
-                 color="C1", linestyle="--", linewidth=1.8)
-    axes[1].plot(t_axis[mask_vmec_ck], theta_vmec_ck[mask_vmec_ck],
-                 color="C2", linestyle="-.", linewidth=1.4)
-    axes[1].plot(t_axis[mask_coils_ck], theta_coils_ck[mask_coils_ck],
-                 color="C3", linestyle=":", linewidth=1.4)
-    axes[1].plot(t_axis[mask_meiss_rk4], theta_meiss_rk4[mask_meiss_rk4],
-                 color="C4", linestyle="-.", linewidth=1.8)
-    axes[1].plot(t_axis[mask_meiss_ck], theta_meiss_ck[mask_meiss_ck],
-                 color="C5", linestyle="--", linewidth=1.4)
+    # theta coordinate
+    axes[1].plot(
+        t_axis[mask_vmec_rk4],
+        theta_vmec_rk4[mask_vmec_rk4],
+        **{k: v for k, v in styles["vmec_rk4"].items() if k != "label"},
+    )
+    axes[1].plot(
+        t_axis[mask_vmec_ck],
+        theta_vmec_ck[mask_vmec_ck],
+        **{k: v for k, v in styles["vmec_ck"].items() if k != "label"},
+    )
+    axes[1].plot(
+        t_axis[mask_coils_rk4],
+        theta_coils_rk4[mask_coils_rk4],
+        **{k: v for k, v in styles["coils_rk4"].items() if k != "label"},
+    )
+    axes[1].plot(
+        t_axis[mask_coils_ck],
+        theta_coils_ck[mask_coils_ck],
+        **{k: v for k, v in styles["coils_ck"].items() if k != "label"},
+    )
+    axes[1].plot(
+        t_axis[mask_meiss_rk4],
+        theta_meiss_rk4[mask_meiss_rk4],
+        **{k: v for k, v in styles["meiss_rk4"].items() if k != "label"},
+    )
+    axes[1].plot(
+        t_axis[mask_meiss_ck],
+        theta_meiss_ck[mask_meiss_ck],
+        **{k: v for k, v in styles["meiss_ck"].items() if k != "label"},
+    )
     axes[1].set_ylabel("theta mod 2π")
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].plot(t_axis[mask_vmec_rk4], phi_vmec_rk4[mask_vmec_rk4],
-                 color="C0", linestyle="-", linewidth=1.8)
-    axes[2].plot(t_axis[mask_coils_rk4], phi_coils_rk4[mask_coils_rk4],
-                 color="C1", linestyle="--", linewidth=1.8)
-    axes[2].plot(t_axis[mask_vmec_ck], phi_vmec_ck[mask_vmec_ck],
-                 color="C2", linestyle="-.", linewidth=1.4)
-    axes[2].plot(t_axis[mask_coils_ck], phi_coils_ck[mask_coils_ck],
-                 color="C3", linestyle=":", linewidth=1.4)
-    axes[2].plot(t_axis[mask_meiss_rk4], phi_meiss_rk4[mask_meiss_rk4],
-                 color="C4", linestyle="-.", linewidth=1.8)
-    axes[2].plot(t_axis[mask_meiss_ck], phi_meiss_ck[mask_meiss_ck],
-                 color="C5", linestyle="--", linewidth=1.4)
+    # phi coordinate
+    axes[2].plot(
+        t_axis[mask_vmec_rk4],
+        phi_vmec_rk4[mask_vmec_rk4],
+        **{k: v for k, v in styles["vmec_rk4"].items() if k != "label"},
+    )
+    axes[2].plot(
+        t_axis[mask_vmec_ck],
+        phi_vmec_ck[mask_vmec_ck],
+        **{k: v for k, v in styles["vmec_ck"].items() if k != "label"},
+    )
+    axes[2].plot(
+        t_axis[mask_coils_rk4],
+        phi_coils_rk4[mask_coils_rk4],
+        **{k: v for k, v in styles["coils_rk4"].items() if k != "label"},
+    )
+    axes[2].plot(
+        t_axis[mask_coils_ck],
+        phi_coils_ck[mask_coils_ck],
+        **{k: v for k, v in styles["coils_ck"].items() if k != "label"},
+    )
+    axes[2].plot(
+        t_axis[mask_meiss_rk4],
+        phi_meiss_rk4[mask_meiss_rk4],
+        **{k: v for k, v in styles["meiss_rk4"].items() if k != "label"},
+    )
+    axes[2].plot(
+        t_axis[mask_meiss_ck],
+        phi_meiss_ck[mask_meiss_ck],
+        **{k: v for k, v in styles["meiss_ck"].items() if k != "label"},
+    )
     axes[2].set_ylabel("phi mod 2π")
     axes[2].set_xlabel("time")
     axes[2].grid(True, alpha=0.3)
