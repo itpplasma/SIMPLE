@@ -325,20 +325,30 @@ contains
     ! Priority: new name > deprecated alias > default
     !
     ! Aliases:
-    !   netcdffile -> field_input (deprecated)
+    !   netcdffile -> fallback for field_input and coord_input (deprecated)
     !   isw_field_type -> integ_coords (deprecated)
     !
-    ! Fallback:
-    !   coord_input defaults to field_input if not set
+    ! Fallback chain:
+    !   field_input: explicit > netcdffile > ''
+    !   coord_input: explicit > netcdffile > field_input > ''
 
-    ! netcdffile is deprecated alias for field_input
-    if (field_input == '' .and. netcdffile /= 'wout.nc') then
+    ! netcdffile serves as fallback for both field_input and coord_input
+    if (field_input == '' .and. len_trim(netcdffile) > 0) then
       field_input = netcdffile
     end if
 
-    ! If field_input was set, sync back to netcdffile for libneo compatibility
-    if (field_input /= '') then
-      netcdffile = field_input
+    if (coord_input == '' .and. len_trim(netcdffile) > 0) then
+      coord_input = netcdffile
+    end if
+
+    ! coord_input falls back to field_input if still not set
+    if (coord_input == '') then
+      coord_input = field_input
+    end if
+
+    ! Sync coord_input back to netcdffile for libneo compatibility
+    if (len_trim(coord_input) > 0) then
+      netcdffile = coord_input
     end if
 
     ! isw_field_type is deprecated alias for integ_coords
@@ -347,11 +357,6 @@ contains
       integ_coords = isw_field_type
     else
       isw_field_type = integ_coords
-    end if
-
-    ! coord_input defaults to field_input if not set
-    if (coord_input == '') then
-      coord_input = field_input
     end if
   end subroutine apply_config_aliases
 
