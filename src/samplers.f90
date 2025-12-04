@@ -90,7 +90,8 @@ module samplers
 
     real(dp), intent(in) :: s_inner
     real(dp), intent(in) :: s_outer
-    real(dp) :: tmp_rand
+    real(dp), parameter :: s_min = 0.01d0
+    real(dp) :: tmp_rand, s_lo, s_hi
     real(dp) :: r,vartheta,varphi
     real(dp), dimension(:,:), intent(inout) :: zstart
     integer :: ipart
@@ -101,9 +102,13 @@ module samplers
       num_surf = 2
     endif
 
+    ! Clamp lower bound to s_min to avoid axis singularity
+    s_lo = max(s_inner, s_min)
+    s_hi = max(s_outer, s_min)
+
     do ipart=1,size(zstart,2)
       call random_number(tmp_rand)
-      r = tmp_rand * (s_outer - s_inner) + s_inner
+      r = tmp_rand * (s_hi - s_lo) + s_lo
 
       call random_number(tmp_rand)
       vartheta=twopi*tmp_rand
