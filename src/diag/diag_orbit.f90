@@ -7,7 +7,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use params, only: dtau, dtaumin, ntestpart, ntimstep, ntau, zstart, startmode, grid_density, &
     special_ants_file, reuse_batch, num_surf, sbeg, integmode, relerr, reset_seed_if_deterministic
 use samplers, only: sample, START_FILE
-use field_can_mod, only: FieldCan, get_val, eval_field => evaluate, ref_to_can
+use field_can_mod, only: FieldCan, get_val, eval_field => evaluate, ref_to_integ
 use orbit_symplectic_base, only: SymplecticIntegrator, extrap_field
 use orbit_symplectic, only: orbit_timestep_sympl, f_midpoint_part1, f_midpoint_part2, &
     jac_midpoint_part1, jac_midpoint_part2
@@ -149,8 +149,8 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
     ! 1. Reset random seed if deterministic
     call reset_seed_if_deterministic
     
-    ! 2. Get particle coordinates and transform ref -> can (CRITICAL STEP MISSING!)
-    call ref_to_can(zstart(1:3, particle_number), z(1:3))
+    ! 2. Get particle coordinates and transform ref -> integ (CRITICAL STEP MISSING!)
+    call ref_to_integ(zstart(1:3, particle_number), z(1:3))
     z(4:5) = zstart(4:5, particle_number)
     
     ! 3. Initialize symplectic integrator with TRANSFORMED coordinates

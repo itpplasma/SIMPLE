@@ -95,7 +95,7 @@ else if (endswith(filename, '.dat')) then
 
 ### Coordinate Transformation System
 - Function pointers for runtime coordinate selection
-- `can_to_ref` and `ref_to_can` transformation procedures
+- `integ_to_ref` and `ref_to_integ` transformation procedures
 - Identity transforms for test/flux coordinates
 - Specialized transforms for Boozer/Meiss/Albert coordinates
 

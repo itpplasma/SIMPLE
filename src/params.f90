@@ -83,6 +83,8 @@ module params
   integer, dimension (:), allocatable :: idx
 
   character(1000) :: field_input = ''
+  character(1000) :: coord_input = ''
+  integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
 
   namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
     trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp,              &
@@ -93,7 +95,8 @@ module params
     vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
     old_axis_healing_boundary, am1, am2, Z1, Z2, &
     densi1, densi2, tempi1, tempi2, tempe, &
-    batch_size, ran_seed, reuse_batch, field_input, &
+    batch_size, ran_seed, reuse_batch, field_input, coord_input, &
+    integ_coords, &
     output_error, output_orbits_macrostep  ! callback
 
 contains
@@ -103,6 +106,9 @@ contains
 
     open(1, file=config_file, status='old', action='read')
     read(1, nml=config)
+    close(1)
+
+    call apply_config_aliases
 
     call reset_seed_if_deterministic
 
@@ -312,6 +318,47 @@ contains
 
     should_skip = (notrace_passing .eq. 1) .or. (trap_par(ipart) .le. contr_pp)
   end function should_skip
+
+
+  subroutine apply_config_aliases
+    ! Handle deprecated aliases and apply fallback logic for config parameters.
+    ! Priority: new name > deprecated alias > default
+    !
+    ! Aliases:
+    !   netcdffile -> fallback for field_input and coord_input (deprecated)
+    !   isw_field_type -> integ_coords (deprecated)
+    !
+    ! Fallback chain:
+    !   field_input: explicit > netcdffile > ''
+    !   coord_input: explicit > netcdffile > field_input > ''
+
+    ! netcdffile serves as fallback for both field_input and coord_input
+    if (field_input == '' .and. len_trim(netcdffile) > 0) then
+      field_input = netcdffile
+    end if
+
+    if (coord_input == '' .and. len_trim(netcdffile) > 0) then
+      coord_input = netcdffile
+    end if
+
+    ! coord_input falls back to field_input if still not set
+    if (coord_input == '') then
+      coord_input = field_input
+    end if
+
+    ! Sync coord_input back to netcdffile for libneo compatibility
+    if (len_trim(coord_input) > 0) then
+      netcdffile = coord_input
+    end if
+
+    ! isw_field_type is deprecated alias for integ_coords
+    ! integ_coords == -1000 means user did not set it
+    if (integ_coords == -1000) then
+      integ_coords = isw_field_type
+    else
+      isw_field_type = integ_coords
+    end if
+  end subroutine apply_config_aliases
 
 
   subroutine reset_seed_if_deterministic

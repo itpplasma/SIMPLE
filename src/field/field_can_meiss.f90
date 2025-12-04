@@ -122,42 +122,41 @@ subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
 end subroutine evaluate_meiss
 
 
-subroutine can_to_ref_meiss(xcan, xref)
-    real(dp), intent(in) :: xcan(3)
+subroutine integ_to_ref_meiss(xinteg, xref)
+    real(dp), intent(in) :: xinteg(3)
     real(dp), intent(out) :: xref(3)
     real(dp) :: y_batch(2)  ! lam_phi, chi_gauge
 
-    call evaluate_batch_splines_3d(spl_transform_batch, xcan, y_batch)
-    xref(1) = xcan(1)**2
-    xref(2) = modulo(xcan(2), twopi)
-    xref(3) = modulo(xcan(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
-end subroutine can_to_ref_meiss
+    call evaluate_batch_splines_3d(spl_transform_batch, xinteg, y_batch)
+    xref(1) = xinteg(1)**2
+    xref(2) = modulo(xinteg(2), twopi)
+    xref(3) = modulo(xinteg(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
+end subroutine integ_to_ref_meiss
 
 
-subroutine ref_to_can_meiss(xref, xcan)
+subroutine ref_to_integ_meiss(xref, xinteg)
     real(dp), intent(in) :: xref(3)
-    real(dp), intent(out) :: xcan(3)
+    real(dp), intent(out) :: xinteg(3)
 
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: y_batch(2), dy_batch(3, 2), phi_can_prev
+    real(dp) :: y_batch(2), dy_batch(3, 2), phi_integ_prev
     integer :: i
 
-    xcan(1) = sqrt(xref(1))
-    xcan(2) = modulo(xref(2), twopi)
-    xcan(3) = modulo(xref(3), twopi)
+    xinteg(1) = sqrt(xref(1))
+    xinteg(2) = modulo(xref(2), twopi)
+    xinteg(3) = modulo(xref(3), twopi)
 
     do i=1, MAX_ITER
-        call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_batch, dy_batch)
-        phi_can_prev = xcan(3)
+        call evaluate_batch_splines_3d_der(spl_transform_batch, xinteg, y_batch, dy_batch)
+        phi_integ_prev = xinteg(3)
         ! y_batch(1) is lam_phi, dy_batch(3,1) is d(lam_phi)/d(phi)
-        xcan(3) = phi_can_prev - (phi_can_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(3,1))
-!print *, abs(xcan(3) - phi_can_prev)
-        if (abs(xcan(3) - phi_can_prev) < TOL) return
+        xinteg(3) = phi_integ_prev - (phi_integ_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(3,1))
+        if (abs(xinteg(3) - phi_integ_prev) < TOL) return
     enddo
-    print *, 'WARNING: ref_to_can_meiss did not converge after', MAX_ITER, 'iterations'
-end subroutine ref_to_can_meiss
+    print *, 'WARNING: ref_to_integ_meiss did not converge after', MAX_ITER, 'iterations'
+end subroutine ref_to_integ_meiss
 
 
 subroutine get_meiss_coordinates

@@ -5,7 +5,7 @@ module simple_main
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use samplers, only: sample
-  use field_can_mod, only : can_to_ref, ref_to_can, init_field_can
+  use field_can_mod, only : integ_to_ref, ref_to_integ, init_field_can
   use callback, only : output_orbits_macrostep
   use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
     grid_density, dtau, dtaumin, ntau, v0, &
@@ -303,7 +303,7 @@ module simple_main
       return
     endif
 
-    call ref_to_can(zstart(1:3, ipart), z(1:3))
+    call ref_to_integ(zstart(1:3, ipart), z(1:3))
     z(4:5) = zstart(4:5, ipart)
     zend(:,ipart) = 0d0
 
@@ -349,7 +349,7 @@ module simple_main
     endif
 
     !$omp critical
-    call can_to_ref(z(1:3), zend(1:3,ipart))
+    call integ_to_ref(z(1:3), zend(1:3,ipart))
     zend(4:5, ipart) = z(4:5)
     times_lost(ipart) = kt*dtaumin/v0
     !$omp end critical

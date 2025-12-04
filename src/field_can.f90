@@ -6,12 +6,12 @@ use field, only : MagneticField, VmecField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan
 use field_can_test, only : evaluate_test
-use field_can_flux, only : evaluate_flux, can_to_ref_flux, ref_to_can_flux
-use field_can_boozer, only : evaluate_boozer, can_to_ref_boozer, ref_to_can_boozer
+use field_can_flux, only : evaluate_flux, integ_to_ref_flux, ref_to_integ_flux
+use field_can_boozer, only : evaluate_boozer, integ_to_ref_boozer, ref_to_integ_boozer
 use field_can_meiss, only : init_meiss, evaluate_meiss, &
-  can_to_ref_meiss, ref_to_can_meiss
-use field_can_albert, only : evaluate_albert, init_albert, can_to_ref_albert, &
-  ref_to_can_albert
+  integ_to_ref_meiss, ref_to_integ_meiss
+use field_can_albert, only : evaluate_albert, init_albert, integ_to_ref_albert, &
+  ref_to_integ_albert
 
 implicit none
 
@@ -21,8 +21,8 @@ integer, parameter :: dp = kind(1.0d0)
 procedure(evaluate_base), pointer :: evaluate => null()
 
   ! Conversion to and from reference coordinates - currently VMEC coordinates (s, th, ph)
-procedure(coordinate_transform), pointer :: can_to_ref => identity_transform
-procedure(coordinate_transform), pointer :: ref_to_can => identity_transform
+procedure(coordinate_transform), pointer :: integ_to_ref => identity_transform
+procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 
 contains
 
@@ -37,26 +37,26 @@ subroutine field_can_from_name(field_name, field_noncan)
       evaluate => evaluate_test
     case("flux")
       evaluate => evaluate_flux
-      can_to_ref => can_to_ref_flux
-      ref_to_can => ref_to_can_flux
+      integ_to_ref => integ_to_ref_flux
+      ref_to_integ => ref_to_integ_flux
     case("boozer")
       evaluate => evaluate_boozer
-      can_to_ref => can_to_ref_boozer
-      ref_to_can => ref_to_can_boozer
+      integ_to_ref => integ_to_ref_boozer
+      ref_to_integ => ref_to_integ_boozer
     case("meiss")
       if (present(field_noncan)) then
         call init_meiss(field_noncan)
       end if
       evaluate => evaluate_meiss
-      can_to_ref => can_to_ref_meiss
-      ref_to_can => ref_to_can_meiss
+      integ_to_ref => integ_to_ref_meiss
+      ref_to_integ => ref_to_integ_meiss
     case("albert")
       if (present(field_noncan)) then
         call init_albert(field_noncan)
       end if
       evaluate => evaluate_albert
-      can_to_ref => can_to_ref_albert
-      ref_to_can => ref_to_can_albert
+      integ_to_ref => integ_to_ref_albert
+      ref_to_integ => ref_to_integ_albert
     case default
       print *, "field_can_from_name: Unknown field type ", field_name
       error stop
@@ -272,16 +272,16 @@ subroutine get_derivatives2(f, pphi)
 end subroutine get_derivatives2
 
 ! Wrapper subroutines to expose function pointers to Python
-subroutine can_to_ref_wrapper(xcan, xref)
-  real(dp), intent(in) :: xcan(3)
+subroutine integ_to_ref_wrapper(xinteg, xref)
+  real(dp), intent(in) :: xinteg(3)
   real(dp), intent(out) :: xref(3)
-  call can_to_ref(xcan, xref)
-end subroutine can_to_ref_wrapper
+  call integ_to_ref(xinteg, xref)
+end subroutine integ_to_ref_wrapper
 
-subroutine ref_to_can_wrapper(xref, xcan)
+subroutine ref_to_integ_wrapper(xref, xinteg)
   real(dp), intent(in) :: xref(3)
-  real(dp), intent(out) :: xcan(3)
-  call ref_to_can(xref, xcan)
-end subroutine ref_to_can_wrapper
+  real(dp), intent(out) :: xinteg(3)
+  call ref_to_integ(xref, xinteg)
+end subroutine ref_to_integ_wrapper
 
 end module field_can_mod
