@@ -86,7 +86,7 @@ module samplers
   ! Samplers ################################
   subroutine sample_volume_single(zstart, s_inner, s_outer)
     use params, only: isw_field_type, num_surf
-    use field_can_mod, only : can_to_ref
+    use field_can_mod, only : integ_to_ref
 
     real(dp), intent(in) :: s_inner
     real(dp), intent(in) :: s_outer
@@ -110,7 +110,7 @@ module samplers
       call random_number(tmp_rand)
       varphi=twopi*tmp_rand
       ! we store starting points in reference coordinates:
-      call can_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
+      call integ_to_ref([r, vartheta, varphi], zstart(1:3,ipart))
       ! normalized velocity module z(4) = v / v_0:
       zstart(4,ipart)=1.d0
       ! starting pitch z(5)=v_\parallel / v:

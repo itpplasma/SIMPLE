@@ -388,12 +388,12 @@ def trace_orbit(
         # Call trace_orbit with trajectory output (use initialized tracer)
         _simple_main.trace_orbit(_tracer, 1, traj_can, times)
 
-        # Convert canonical to reference coordinates (match Fortran NetCDF output)
+        # Convert integrator to reference coordinates (match Fortran NetCDF output)
         traj_ref = np.zeros((5, params.ntimstep), dtype=np.float64, order='C')
         xref = np.zeros(3, dtype=np.float64)
 
         for it in range(params.ntimstep):
-            _backend.field_can_mod.can_to_ref_wrapper(traj_can[0:3, it], xref)
+            _backend.field_can_mod.integ_to_ref_wrapper(traj_can[0:3, it], xref)
             traj_ref[0, it] = xref[0]  # s
             traj_ref[1, it] = xref[1]  # theta
             traj_ref[2, it] = xref[2]  # phi

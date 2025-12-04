@@ -58,34 +58,34 @@ subroutine evaluate_albert(f, r, th_c, ph_c, mode_secders)
 end subroutine evaluate_albert
 
 
-subroutine can_to_ref_albert(xcan, xref)
-    use field_can_meiss, only: can_to_ref_meiss
+subroutine integ_to_ref_albert(xinteg, xref)
+    use field_can_meiss, only: integ_to_ref_meiss
 
-    real(dp), intent(in) :: xcan(3)
-    real(dp), intent(out) :: xref(3) 
+    real(dp), intent(in) :: xinteg(3)
+    real(dp), intent(out) :: xref(3)
     real(dp) :: xmeiss(3), y_batch(1)
 
-    call evaluate_batch_splines_3d(spl_r_batch, xcan, y_batch)
+    call evaluate_batch_splines_3d(spl_r_batch, xinteg, y_batch)
     xmeiss(1) = y_batch(1)  ! r component
-    xmeiss(2:3) = xcan(2:3)
-    call can_to_ref_meiss(xmeiss, xref)
-end subroutine can_to_ref_albert
-    
+    xmeiss(2:3) = xinteg(2:3)
+    call integ_to_ref_meiss(xmeiss, xref)
+end subroutine integ_to_ref_albert
 
-subroutine ref_to_can_albert(xref, xcan)
-    use field_can_meiss, only: ref_to_can_meiss, spl_field_batch
+
+subroutine ref_to_integ_albert(xref, xinteg)
+    use field_can_meiss, only: ref_to_integ_meiss, spl_field_batch
 
     real(dp), intent(in) :: xref(3)
-    real(dp), intent(out) :: xcan(3)
- 
+    real(dp), intent(out) :: xinteg(3)
+
     real(dp) :: Ath, xmeiss(3), y_batch_local(5)
 
-    call ref_to_can_meiss(xref, xmeiss)   
+    call ref_to_integ_meiss(xref, xmeiss)
     call evaluate_batch_splines_3d(spl_field_batch, xmeiss, y_batch_local)
     Ath = y_batch_local(1)  ! Extract Ath component
-    xcan(1) = Ath/Ath_norm
-    xcan(2:3) = xmeiss(2:3)
-end subroutine ref_to_can_albert
+    xinteg(1) = Ath/Ath_norm
+    xinteg(2:3) = xmeiss(2:3)
+end subroutine ref_to_integ_albert
 
 
 subroutine get_albert_coordinates

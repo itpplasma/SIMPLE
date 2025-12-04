@@ -17,30 +17,30 @@ subroutine evaluate_boozer(f, r, th_c, ph_c, mode_secders)
 end subroutine evaluate_boozer
 
 
-subroutine can_to_ref_boozer(xcan, xref)
+subroutine integ_to_ref_boozer(xinteg, xref)
     use boozer_sub, only: boozer_to_vmec
-    real(dp), intent(in) :: xcan(3)
+    real(dp), intent(in) :: xinteg(3)
     real(dp), intent(out) :: xref(3)
 
-    xref(1) = xcan(1)
+    xref(1) = xinteg(1)
     call boozer_to_vmec( &
-        xcan(1), mod(xcan(2), twopi), mod(xcan(3), twopi), xref(2), xref(3))
+        xinteg(1), mod(xinteg(2), twopi), mod(xinteg(3), twopi), xref(2), xref(3))
     xref(2) = mod(xref(2), twopi)
     xref(3) = mod(xref(3), twopi)
-end subroutine can_to_ref_boozer
+end subroutine integ_to_ref_boozer
 
 
-subroutine ref_to_can_boozer(xref, xcan)
+subroutine ref_to_integ_boozer(xref, xinteg)
     use boozer_sub, only: vmec_to_boozer
     real(dp), intent(in) :: xref(3)
-    real(dp), intent(out) :: xcan(3)
+    real(dp), intent(out) :: xinteg(3)
 
-    xcan(1) = xref(1)
+    xinteg(1) = xref(1)
     call vmec_to_boozer( &
-        xref(1), mod(xref(2), twopi), mod(xref(3), twopi), xcan(2), xcan(3))
-    xcan(2) = mod(xcan(2), twopi)
-    xcan(3) = mod(xcan(3), twopi)
-end subroutine ref_to_can_boozer
+        xref(1), mod(xref(2), twopi), mod(xref(3), twopi), xinteg(2), xinteg(3))
+    xinteg(2) = mod(xinteg(2), twopi)
+    xinteg(3) = mod(xinteg(3), twopi)
+end subroutine ref_to_integ_boozer
 
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

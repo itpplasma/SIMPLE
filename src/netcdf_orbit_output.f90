@@ -181,7 +181,7 @@ contains
 
 
     subroutine write_orbit_to_netcdf(ipart, orbit_traj, orbit_times)
-        use field_can_mod, only : can_to_ref
+        use field_can_mod, only : integ_to_ref
         integer, intent(in) :: ipart
         real(kind(1.0d0)), intent(in) :: orbit_traj(:,:)  ! (5, ntimstep)
         real(kind(1.0d0)), intent(in) :: orbit_times(:)   ! (ntimstep)
@@ -197,9 +197,9 @@ contains
         n_times = size(orbit_times)
         allocate(s_array(n_times), theta_array(n_times), phi_array(n_times))
 
-        ! Convert canonical to reference coordinates
+        ! Convert integrator to reference coordinates
         do it = 1, n_times
-            call can_to_ref(orbit_traj(1:3, it), xref)
+            call integ_to_ref(orbit_traj(1:3, it), xref)
             s_array(it) = xref(1)
             theta_array(it) = xref(2)
             phi_array(it) = xref(3)
