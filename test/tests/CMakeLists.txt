@@ -114,6 +114,11 @@ target_link_libraries(test_orbits.x simple)
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
 
+add_executable (test_profiles.x test_profiles.f90)
+target_link_libraries(test_profiles.x simple)
+add_test(NAME test_profiles COMMAND test_profiles.x)
+set_tests_properties(test_profiles PROPERTIES LABELS "unit")
+
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
 
