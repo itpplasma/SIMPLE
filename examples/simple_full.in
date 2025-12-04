@@ -60,3 +60,28 @@ reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored i
 output_orbits_macrostep = .False. ! Output orbit positions to fort.9XXXX
 output_error = .False. ! Output additional error diagnostics
 /
+
+&profiles
+! Radial plasma profiles for collision calculations.
+! profile_type can be "power_series" or "two_power".
+! Default values give uniform profiles matching the old scalar parameters above.
+profile_type = "two_power"
+
+! Scale factors (on-axis values)
+Te_scale = 1.0d4      ! electron temperature in eV
+Ti1_scale = 1.0d4     ! ion species 1 temperature in eV
+Ti2_scale = 1.0d4     ! ion species 2 temperature in eV
+ni1_scale = 0.5d20    ! ion species 1 density in m^-3
+ni2_scale = 0.5d20    ! ion species 2 density in m^-3
+
+! Two-power profile: f(s) = scale * (1 - s^p1)^p2
+! p2 = 0 gives flat profile, p2 > 0 gives peaked profile
+Te_p1 = 1.0d0,  Te_p2 = 0.0d0   ! flat electron temperature
+Ti1_p1 = 1.0d0, Ti1_p2 = 0.0d0  ! flat ion 1 temperature
+Ti2_p1 = 1.0d0, Ti2_p2 = 0.0d0  ! flat ion 2 temperature
+ni1_p1 = 1.0d0, ni1_p2 = 0.0d0  ! flat ion 1 density
+ni2_p1 = 1.0d0, ni2_p2 = 0.0d0  ! flat ion 2 density
+
+! Power series profile: f(s) = scale * sum(coef(n) * s^(n-1))
+! Te_coef = 1.0d0, 0.0d0, ...  ! coefficient array (up to 10 terms)
+/
