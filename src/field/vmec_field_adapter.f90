@@ -2,9 +2,9 @@ module vmec_field_adapter
   !> Module providing GVEC field evaluation functions with VMEC-compatible interface
   !> This module extends vmec_field_eval to support GVEC fields
 
-  use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: MagneticField
-  use field, only: VmecField, GvecField
+  use, intrinsic :: iso_fortran_env, only : dp => real64
+  use field_base, only : magnetic_field_t
+  use field, only : VmecField, GvecField
   use spline_vmec_sub
   use MODgvec_ReadState, only: eval_iota_r
   use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, &
@@ -29,7 +29,7 @@ contains
 
   ! Compute vector potential derivatives for GVEC field via numerical differentiation
   subroutine compute_vector_potential_derivatives_gvec(field, s, theta, varphi, dA_theta_ds, dA_phi_ds)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: dA_theta_ds, dA_phi_ds
     
@@ -84,7 +84,7 @@ contains
                                             sqg, alam, dl_ds, dl_dt, dl_dp, &
                                             Bctrvr_vartheta, Bctrvr_varphi, &
                                             Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds
     real(dp), intent(out) :: aiota, sqg, alam
@@ -145,7 +145,7 @@ contains
 
   !> Override iota interpolation to handle GVEC fields
   subroutine vmec_iota_interpolate_with_field(field, s, aiota, daiota_ds)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s
     real(dp), intent(out) :: aiota, daiota_ds
 
@@ -182,7 +182,7 @@ contains
 
   !> Override lambda interpolation to handle GVEC fields
   subroutine vmec_lambda_interpolate_with_field(field, s, theta, varphi, alam, dl_dt)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam, dl_dt
     
@@ -233,7 +233,7 @@ contains
                                                 dR_ds, dR_dt, dR_dp, &
                                                 dZ_ds, dZ_dt, dZ_dp, &
                                                 dl_ds, dl_dt, dl_dp)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds
     real(dp), intent(out) :: aiota, R, Z, alam

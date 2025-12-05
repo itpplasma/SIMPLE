@@ -1,6 +1,6 @@
 module field_gvec
-    use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_base, only: MagneticField
+    use, intrinsic :: iso_fortran_env, only : dp => real64
+    use field_base, only : magnetic_field_t
     use MODgvec_cubic_spline, only: t_cubspl
     use MODgvec_rProfile_bspl, only: t_rProfile_bspl
     use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_phiPrime_r, eval_iota_r, eval_pres_r, Finalize_ReadState
@@ -17,7 +17,7 @@ module field_gvec
     private
     public :: GvecField, create_gvec_field
 
-    type, extends(MagneticField) :: GvecField
+    type, extends(magnetic_field_t) :: GvecField
         character(len=256) :: filename = ''
 
         ! Field periods

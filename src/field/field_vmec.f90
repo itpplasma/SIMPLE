@@ -1,11 +1,11 @@
 module field_vmec
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_base, only: MagneticField
+use, intrinsic :: iso_fortran_env, only : dp => real64
+use field_base, only : magnetic_field_t
 
 implicit none
 
-type, extends(MagneticField) :: VmecField
+type, extends(magnetic_field_t) :: VmecField
 contains
     procedure :: evaluate
 end type VmecField

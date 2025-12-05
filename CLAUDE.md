@@ -58,7 +58,7 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 - `params.f90`: Centralized configuration via namelist input
 
 **Field System** (`src/field/`):
-- Abstract `MagneticField` base class in `field_base.f90`
+- Abstract `magnetic_field_t` base class in `field_base.f90`
 - VMEC implementation in `field_vmec.f90`
 - Canonical coordinates: Boozer, flux, Meiss, Albert variants
 - Runtime field selection via function pointers

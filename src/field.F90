@@ -1,11 +1,11 @@
 module field
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_base, only: MagneticField
-use field_vmec, only: VmecField
-use field_coils, only: CoilsField, create_coils_field
+use, intrinsic :: iso_fortran_env, only : dp => real64
+use field_base, only : magnetic_field_t
+use field_vmec, only : VmecField
+use field_coils, only : CoilsField, create_coils_field
 #ifdef GVEC_AVAILABLE
-use field_gvec, only: GvecField, create_gvec_field
+use field_gvec, only : GvecField, create_gvec_field
 #endif
 
 implicit none
@@ -14,7 +14,7 @@ contains
 
 subroutine field_from_file(filename, field)
     character(*), intent(in) :: filename
-    class(MagneticField), allocatable, intent(out) :: field
+    class(magnetic_field_t), allocatable, intent(out) :: field
 
     character(len(filename)) :: stripped_name
     class(CoilsField), allocatable :: coils_temp

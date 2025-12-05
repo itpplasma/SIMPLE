@@ -73,7 +73,7 @@ Five canonical coordinate variants selected via `isw_field_type` parameter:
 ## Implementation Architecture
 
 ### Abstract Field Interface
-- Base class: `MagneticField` in `src/field/field_base.f90`
+- Base class: `magnetic_field_t` in `src/field/field_base.f90`
 - Abstract `evaluate()` method for polymorphic field evaluation
 - Common interface: `evaluate(x, Acov, hcov, Bmod, sqgBctr)`
 
@@ -90,7 +90,7 @@ else if (endswith(filename, '.dat')) then
 
 ### Canonical Coordinate Initialization
 - Function: `init_field_can(field_id, field_noncan)` in `src/field_can.f90`
-- Field-agnostic initialization via polymorphic `MagneticField` interface
+- Field-agnostic initialization via polymorphic `magnetic_field_t` interface
 - Meiss and Albert coordinates require non-canonical field input for spline construction
 
 ### Coordinate Transformation System

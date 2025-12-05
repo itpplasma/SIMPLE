@@ -2,8 +2,8 @@ module mock_field_module
   use field_base
   implicit none
   
-  ! Mock implementation of MagneticField for testing
-  type, extends(MagneticField) :: MockField
+  ! Mock implementation of magnetic_field_t for testing
+  type, extends(magnetic_field_t) :: MockField
   contains
     procedure :: evaluate => mock_evaluate
   end type MockField
@@ -55,9 +55,9 @@ contains
   subroutine test_abstract_interface(errors)
     integer, intent(inout) :: errors
     
-    print *, "Testing abstract MagneticField interface..."
+    print *, "Testing abstract magnetic_field_t interface..."
     
-    ! Given: The field_base module defines an abstract MagneticField type
+    ! Given: The field_base module defines an abstract magnetic_field_t type
     ! When: We create a concrete implementation
     ! Then: It should satisfy the interface requirements
     
@@ -76,7 +76,7 @@ contains
     real(dp) :: x(3), Acov(3), hcov(3), Bmod, sqgBctr(3)
     real(dp), parameter :: tolerance = 1.0d-14
     
-    ! Given: A mock implementation of MagneticField
+    ! Given: A mock implementation of magnetic_field_t
     ! When: We call the evaluate method
     ! Then: It should return predictable values
     

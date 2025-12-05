@@ -1,13 +1,13 @@
 module field_can_meiss
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-use interpolate, only: &
+use, intrinsic :: iso_fortran_env, only : dp => real64
+use interpolate, only : &
     BatchSplineData3D, construct_batch_splines_3d, &
     evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
-use util, only: twopi
-use field_can_base, only: FieldCan, n_field_evaluations
-use field, only: MagneticField
+use util, only : twopi
+use field_can_base, only : FieldCan, n_field_evaluations
+use field, only : magnetic_field_t
 
 implicit none
 
@@ -15,7 +15,7 @@ type :: grid_indices_t
     integer :: i_th, i_phi
 end type grid_indices_t
 
-class(MagneticField), allocatable :: field_noncan
+class(magnetic_field_t), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
@@ -58,7 +58,7 @@ end subroutine rh_can_wrapper
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     use new_vmec_stuff_mod, only : nper
 
-    class(MagneticField), intent(in) :: field_noncan_
+    class(magnetic_field_t), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
 

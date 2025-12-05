@@ -115,6 +115,10 @@ def init(
 
     # Step 1: Set parameters (replaces read_config without file I/O)
     params.netcdffile = vmec_path
+    if hasattr(params, "coord_input"):
+        params.coord_input = vmec_path
+    if hasattr(params, "field_input"):
+        params.field_input = vmec_path
     params.ns_s = int(ns_s)
     params.ns_tp = int(ns_tp)
     params.multharm = int(multharm)

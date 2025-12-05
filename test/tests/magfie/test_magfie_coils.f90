@@ -5,6 +5,7 @@ use simple, only : init_vmec
 use magfie_sub, only : VMEC
 use velo_mod, only: isw_field_type
 use field, only: VmecField, CoilsField, create_coils_field
+use reference_coordinates, only: init_reference_coordinates
 use magfie_sub, only: magfie_vmec
 use util, only: twopi
 
@@ -17,6 +18,7 @@ real(dp) :: dummy, x(3), Acov(3), hcov(3), Bmod
 isw_field_type = VMEC
 
 call init_vmec('wout.nc', 5, 5, 5, dummy)
+call init_reference_coordinates('wout.nc')
 allocate(vmec_field)
 call create_coils_field('coils.5C', coils_field)
 

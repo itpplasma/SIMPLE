@@ -2,8 +2,8 @@ module field_newton
   !> Module for field-agnostic Newton iterations
   !> Provides Newton solvers for coordinate transformations
   
-  use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: MagneticField
+  use, intrinsic :: iso_fortran_env, only : dp => real64
+  use field_base, only : magnetic_field_t
   
   implicit none
   private
@@ -17,7 +17,7 @@ contains
   !> where Lambda is the stream function that depends on the field type
   subroutine newton_theta_from_canonical(field, s, vartheta_canonical, varphi, &
                                           theta, converged, iter_count)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s              ! Normalized flux coordinate
     real(dp), intent(in) :: vartheta_canonical  ! Canonical poloidal angle
     real(dp), intent(in) :: varphi         ! Toroidal angle
@@ -75,7 +75,7 @@ contains
     use vmec_field_eval, only: vmec_lambda_interpolate_with_field
 #endif
     
-    class(MagneticField), intent(in) :: mag_field
+    class(magnetic_field_t), intent(in) :: mag_field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam   ! Stream function Lambda
     real(dp), intent(out) :: dl_dt  ! dLambda/dtheta
