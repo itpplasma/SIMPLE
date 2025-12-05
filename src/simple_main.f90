@@ -120,6 +120,10 @@ module simple_main
 
       ! For VMEC fields we require that coord_input and field_input agree
       ! so that we can safely use the VMEC pass-through path.
+      ! Pass-through optimization: When both coord_input and field_input point to
+      ! the same VMEC file, VmecField directly uses the libneo VMEC splines loaded
+      ! by init_vmec rather than re-splining the field data. This preserves both
+      ! performance and backward compatibility.
       block
         character(:), allocatable :: coord_file, field_file
         logical :: is_vmec_field
