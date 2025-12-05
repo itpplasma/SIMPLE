@@ -2,7 +2,7 @@ module field_coils
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: &
-    BatchSplineData3D, construct_batch_splines_3d, &
+    BatchSplineData3D, &
     evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
 use util, only: twopi
@@ -15,13 +15,14 @@ implicit none
 
 type, extends(magnetic_field_t) :: CoilsField
     type(coils_t) :: coils
-    
-    ! Batch spline for optimized field evaluation (7 components: Ar, Ath, Aphi, hr, hth, hphi, Bmod)
+
+    ! Batch spline for optimized field evaluation
+    ! 7 components: Ar, Ath, Aphi, hr, hth, hphi, Bmod
     type(BatchSplineData3D) :: spl_coils_batch
     logical :: splines_initialized = .false.
 contains
     procedure :: evaluate
-    procedure :: evaluate_direct
+    procedure :: evaluate_spline_input
     procedure :: init_splines
     procedure :: evaluate_coils_batch
     final :: coils_field_cleanup
@@ -44,16 +45,14 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine evaluate
 
 
-subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
+subroutine evaluate_spline_input(self, x, Acov, hcov, Bmod)
+    !> Direct Biot-Savart evaluation for spline construction.
     class(CoilsField), intent(in) :: self
     real(dp), intent(in) :: x(3)
-    real(dp), intent(out), dimension(3) :: Acov, hcov
-    real(dp), intent(out) :: Bmod
-    real(dp), intent(out), optional :: sqgBctr(3)
+    real(dp), intent(out) :: Acov(3), hcov(3), Bmod
 
     real(dp) :: xcart(3), dxcart_dxvmec(3,3)
     real(dp), dimension(3) :: Acart, Bcart
-
     real(dp) :: s, ds_dr
 
     s = x(1)**2
@@ -71,11 +70,7 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
 
     hcov = matmul(Bcart, dxcart_dxvmec)/Bmod
     hcov(1) = hcov(1)*ds_dr
-
-    if (present(sqgBctr)) then
-        error stop 'sqgBctr not implemented'
-    end if
-end subroutine evaluate_direct
+end subroutine evaluate_spline_input
 
 
 subroutine create_coils_field(coils_file, coils_field, should_spline)
@@ -102,7 +97,8 @@ end subroutine create_coils_field
 
 
 subroutine init_splines(self)
-    use new_vmec_stuff_mod, only : nper
+    use new_vmec_stuff_mod, only: nper
+    use interpolate, only: construct_batch_splines_3d
 
     class(CoilsField), intent(inout) :: self
 
@@ -131,7 +127,7 @@ subroutine init_splines(self)
     allocate(hr(n_r,n_th,n_phi), hth(n_r,n_th,n_phi), hphi(n_r,n_th,n_phi))
     allocate(Bmod(n_r,n_th,n_phi))
 
-    i_ctr = 0d0
+    i_ctr = 0
     !$omp parallel private(i_r, i_th, i_phi, x, Acov, hcov)
     !$omp do
     do i_phi=1,n_phi
@@ -142,7 +138,7 @@ subroutine init_splines(self)
             do i_r=1,n_r
                 x = get_grid_point(i_r, i_th, i_phi)
 
-                call self%evaluate_direct(x, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                call self%evaluate_spline_input(x, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
                 Ar(i_r, i_th, i_phi) = Acov(1)
                 Ath(i_r, i_th, i_phi) = Acov(2)
@@ -161,10 +157,9 @@ subroutine init_splines(self)
     Ath = Ath - Ath(1,1,1)
     Aphi = Aphi - Aphi(1,1,1)
 
-    ! Construct batch spline for all 7 field components: [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
     dims = shape(Ar)
     allocate(y_batch(dims(1), dims(2), dims(3), 7))
-    
+
     y_batch(:,:,:,1) = Ar
     y_batch(:,:,:,2) = Ath
     y_batch(:,:,:,3) = Aphi
@@ -172,7 +167,7 @@ subroutine init_splines(self)
     y_batch(:,:,:,5) = hth
     y_batch(:,:,:,6) = hphi
     y_batch(:,:,:,7) = Bmod
-    
+
     call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, self%spl_coils_batch)
     self%splines_initialized = .true.
 

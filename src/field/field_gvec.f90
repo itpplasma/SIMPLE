@@ -28,6 +28,7 @@ module field_gvec
 
     contains
         procedure :: evaluate
+        procedure :: evaluate_spline_input
         procedure :: load_dat_file
         final :: gvec_field_cleanup
     end type GvecField
@@ -196,6 +197,17 @@ contains
         Acov(3) = -(-chi_val + phi_val*dLA_dzeta)
 
     end subroutine evaluate
+
+
+    subroutine evaluate_spline_input(self, x, Acov, hcov, Bmod)
+        !> Evaluate field for spline construction (calls evaluate).
+        class(GvecField), intent(in) :: self
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+
+        call self%evaluate(x, Acov, hcov, Bmod)
+    end subroutine evaluate_spline_input
+
 
     subroutine gvec_field_cleanup(self)
         type(GvecField), intent(inout) :: self

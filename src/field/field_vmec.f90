@@ -8,6 +8,7 @@ implicit none
 type, extends(magnetic_field_t) :: VmecField
 contains
     procedure :: evaluate
+    procedure :: evaluate_spline_input
 end type VmecField
 
 contains
@@ -68,5 +69,15 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         error stop "sqgBctr not implemented in VmecField"
     end if
 end subroutine evaluate
+
+
+subroutine evaluate_spline_input(self, x, Acov, hcov, Bmod)
+    !> Evaluate field for spline construction (calls evaluate).
+    class(VmecField), intent(in) :: self
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+
+    call self%evaluate(x, Acov, hcov, Bmod)
+end subroutine evaluate_spline_input
 
 end module field_vmec

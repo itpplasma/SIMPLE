@@ -192,7 +192,7 @@ contains
       x = [0.2_dp + 0.1_dp * i, 0.5_dp + 0.3_dp * i, 0.2_dp + 0.1_dp * i]
 
       call coils_field%evaluate(x, Acov_spline, hcov_spline, Bmod_spline)
-      call coils_field%evaluate_direct(x, Acov_direct, hcov_direct, Bmod_direct)
+      call coils_field%evaluate_spline_input(x, Acov_direct, hcov_direct, Bmod_direct)
 
       ! Check relative error for Bmod
       if (abs(Bmod_spline - Bmod_direct) / Bmod_direct > tol_rel) then

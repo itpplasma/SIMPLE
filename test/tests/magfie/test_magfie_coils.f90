@@ -32,8 +32,8 @@ print *, 'A = ', Acov
 print *, 'h = ', hcov
 print *, 'B = ', Bmod
 
-call coils_field%evaluate_direct(x, Acov, hcov, Bmod)
-print *, 'coils_field%evaluate_direct'
+call coils_field%evaluate_spline_input(x, Acov, hcov, Bmod)
+print *, 'coils_field%evaluate_spline_input'
 print *, 'A = ', Acov
 print *, 'h = ', hcov
 print *, 'B = ', Bmod
