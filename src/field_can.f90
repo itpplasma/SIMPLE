@@ -1,7 +1,7 @@
 module field_can_mod
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
-use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
+use coords, only: TEST, CANFLUX, BOOZER, MEISS, ALBERT
 use field, only : MagneticField, VmecField
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, FieldCan

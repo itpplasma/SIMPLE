@@ -3,6 +3,7 @@ use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
+use coords, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
 
 implicit none
 
@@ -30,8 +31,6 @@ abstract interface
 end interface
 
 procedure(magfie_base), pointer :: magfie => null()
-
-integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
 
 contains
 
