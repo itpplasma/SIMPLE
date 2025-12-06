@@ -69,7 +69,7 @@ subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
 
     Bmod = sqrt(Bcart(1)**2 + Bcart(2)**2 + Bcart(3)**2)
 
-    hcov = matmul(Bcart, dxcart_dxvmec)/Bmod
+    hcov = matmul(Bcart/Bmod, dxcart_dxvmec)
     hcov(1) = hcov(1)*ds_dr
 
     if (present(sqgBctr)) then
