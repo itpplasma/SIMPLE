@@ -6,3 +6,6 @@ target_link_libraries(test_field_can_albert.x simple)
 
 add_executable (test_field_can_transforms.x test_field_can_transforms.f90)
 target_link_libraries(test_field_can_transforms.x simple)
+
+add_executable (test_field_can_diagnostics.x test_field_can_diagnostics.f90)
+target_link_libraries(test_field_can_diagnostics.x simple)
