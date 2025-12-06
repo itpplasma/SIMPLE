@@ -2,8 +2,16 @@
 """Plot the canonical tokamak TEST-field orbit used in symplectic benchmarks."""
 
 from pathlib import Path
-import numpy as np
-import matplotlib.pyplot as plt
+import sys
+
+try:
+    import numpy as np
+    import matplotlib.pyplot as plt
+except ImportError as exc:
+    # Allow this script to be used as an optional plot helper in test
+    # environments where matplotlib/numpy may not be installed.
+    print(f"Skipping tokamak TEST-field plot (missing dependency: {exc})")
+    raise SystemExit(0)
 
 
 OUT_FILE = Path("tokamak_testfield_orbit.png")

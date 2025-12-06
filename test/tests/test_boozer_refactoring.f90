@@ -1,10 +1,11 @@
 program test_boozer_refactoring
-    use simple, only: tracer_t
-    use simple_main, only: init_field
-    use boozer_sub, only: normalize_angular_coordinates
-    use boozer_coordinates_mod, only: n_theta_B, n_phi_B, h_theta_B, h_phi_B
-    use new_vmec_stuff_mod, only: nper
-    use timing, only: init_timer
+    use simple, only : tracer_t
+    use simple_main, only : init_field
+    use boozer_sub, only : normalize_angular_coordinates
+    use boozer_coordinates_mod, only : n_theta_B, n_phi_B, h_theta_B, h_phi_B
+    use new_vmec_stuff_mod, only : nper
+    use timing, only : init_timer
+    use params, only : coord_input
     
     implicit none
     
@@ -29,6 +30,7 @@ program test_boozer_refactoring
     call init_timer()
     
     ! Initialize field (needed for module initialization)
+    coord_input = 'wout.nc'
     call init_field(norb, 'wout.nc', 5, 5, 5, -1)
     
     print *, 'Testing normalize_angular_coordinates subroutine'

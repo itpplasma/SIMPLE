@@ -230,6 +230,19 @@ add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
 target_link_libraries(test_coordinates_simple.x simple)
 add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
 
+add_executable(test_coordinate_scaling.x test_coordinate_scaling.f90)
+target_link_libraries(test_coordinate_scaling.x simple)
+add_test(NAME test_coordinate_scaling COMMAND test_coordinate_scaling.x)
+set_tests_properties(test_coordinate_scaling PROPERTIES LABELS "unit")
+
+add_executable(test_coordinate_refactoring.x test_coordinate_refactoring.f90)
+target_link_libraries(test_coordinate_refactoring.x simple)
+add_test(NAME test_coordinate_refactoring
+    COMMAND test_coordinate_refactoring.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_coordinate_refactoring PROPERTIES
+    LABELS "integration")
+
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)
 target_link_libraries(test_batch_splines.x simple testing_utils)
