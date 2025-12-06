@@ -1,10 +1,10 @@
 module vmec_field_eval
-  !> Module providing VMEC field evaluation functions that work with MagneticField classes
+  !> Module providing VMEC field evaluation functions that work with magnetic_field_t classes
   !> This module is always available regardless of GVEC support
 
-  use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: MagneticField
-  use field_vmec, only: VmecField
+  use, intrinsic :: iso_fortran_env, only : dp => real64
+  use field_base, only : magnetic_field_t
+  use field_vmec, only : VmecField
   use spline_vmec_sub
 
   implicit none
@@ -23,7 +23,7 @@ contains
                                             sqg, alam, dl_ds, dl_dt, dl_dp, &
                                             Bctrvr_vartheta, Bctrvr_varphi, &
                                             Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds
     real(dp), intent(out) :: aiota, sqg, alam
@@ -67,7 +67,7 @@ contains
 
   !> Interpolate rotational transform with field object
   subroutine vmec_iota_interpolate_with_field(field, s, aiota, daiota_ds)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s
     real(dp), intent(out) :: aiota, daiota_ds
 
@@ -89,7 +89,7 @@ contains
 
   !> Interpolate stream function Lambda with field object
   subroutine vmec_lambda_interpolate_with_field(field, s, theta, varphi, alam, dl_dt)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam, dl_dt
 
@@ -116,7 +116,7 @@ contains
                                                 dR_ds, dR_dt, dR_dp, &
                                                 dZ_ds, dZ_dt, dZ_dp, &
                                                 dl_ds, dl_dt, dl_dp)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds
     real(dp), intent(out) :: aiota, R, Z, alam
