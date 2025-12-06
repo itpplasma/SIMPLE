@@ -9,3 +9,9 @@ target_link_libraries(test_field_can_transforms.x simple)
 
 add_executable (test_field_can_diagnostics.x test_field_can_diagnostics.f90)
 target_link_libraries(test_field_can_diagnostics.x simple)
+
+add_executable (test_field_can_albert_coils_diagnostic.x test_field_can_albert_coils_diagnostic.f90)
+target_link_libraries(test_field_can_albert_coils_diagnostic.x simple)
+
+add_executable (test_albert_intermediate.x test_albert_intermediate.f90)
+target_link_libraries(test_albert_intermediate.x simple)
