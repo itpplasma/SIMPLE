@@ -41,6 +41,7 @@ option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
+option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 
 # Conditionally fetch GVEC if enabled
 if(ENABLE_GVEC)
@@ -181,8 +182,14 @@ elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 	add_link_options(-pg)
 elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	# Common optimization flags for Release and Fast builds
-	list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
-	
+	if(SIMPLE_DETERMINISTIC_FP)
+		# Deterministic floating-point: no fast-math, strict contract
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffp-contract=off -funroll-loops)
+		message(STATUS "Deterministic FP mode: disabled fast-math for reproducibility")
+	else()
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
+	endif()
+
 	# Architecture-specific flags
 	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
 		# ARM processors (e.g., Apple Silicon): gfortran doesn't support -march=native
