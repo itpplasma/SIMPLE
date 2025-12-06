@@ -34,10 +34,10 @@ jobs:
         run: |
           python3 -m pip install --user --break-system-packages -r requirements.txt
 
-      - name: Build SIMPLE
+      - name: Build SIMPLE (deterministic FP for reproducibility)
         run: |
           make clean
-          make
+          make build-deterministic
 
       - name: Run Fast Tests (Fortran only)
         run: make test-fast

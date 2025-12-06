@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
+"""Compare multiple numerical files for bit-identical results.
+
+With deterministic floating-point builds (-ffp-contract=off, no -ffast-math),
+golden record tests should produce bit-identical results. By default, this
+script requires exact equality. Use --rtol and --atol flags to allow tolerances
+if needed for specific cases.
+"""
 import sys
 import os
 import numpy as np
 import argparse
 import json
 
-def compare_numerical_files(old_file, new_file, rtol=1e-5, atol=1e-8):
-    """Compare two numerical files using numpy's isclose"""
+def compare_numerical_files(old_file, new_file, rtol=0.0, atol=0.0):
+    """Compare two numerical files. Default is bit-identical (rtol=0, atol=0)."""
     try:
         old_data = np.loadtxt(old_file)
         new_data = np.loadtxt(new_file)
@@ -76,11 +83,14 @@ def get_file_comparison_method(filename):
     # Default to binary for unknown files
     return 'binary'
 
-def compare_file_lists(ref_dir, cur_dir, file_list, skip_files=None):
-    """Compare a list of files between two directories"""
+def compare_file_lists(ref_dir, cur_dir, file_list, skip_files=None, rtol=0.0, atol=0.0):
+    """Compare a list of files between two directories.
+
+    Default is bit-identical comparison (rtol=0, atol=0) for deterministic FP builds.
+    """
     if skip_files is None:
         skip_files = ['simple.in', 'wout.nc']  # Default files to skip
-    
+
     results = {}
     summary = {
         'total': 0,
@@ -89,35 +99,35 @@ def compare_file_lists(ref_dir, cur_dir, file_list, skip_files=None):
         'missing': 0,
         'skipped': 0
     }
-    
+
     for filename in file_list:
         if filename in skip_files:
             results[filename] = {'status': 'skipped', 'message': 'File in skip list'}
             summary['skipped'] += 1
             continue
-            
+
         summary['total'] += 1
-        
+
         ref_file = os.path.join(ref_dir, filename)
         cur_file = os.path.join(cur_dir, filename)
-        
+
         # Check if files exist
         if not os.path.exists(ref_file):
             results[filename] = {'status': 'missing', 'message': f'Reference file missing: {ref_file}'}
             summary['missing'] += 1
             continue
-            
+
         if not os.path.exists(cur_file):
             results[filename] = {'status': 'missing', 'message': f'Current file missing: {cur_file}'}
             summary['missing'] += 1
             continue
-        
+
         # Determine comparison method
         method = get_file_comparison_method(filename)
-        
+
         # Compare files
         if method == 'numerical':
-            match, message = compare_numerical_files(ref_file, cur_file)
+            match, message = compare_numerical_files(ref_file, cur_file, rtol=rtol, atol=atol)
         else:
             match, message = compare_binary_files(ref_file, cur_file)
         
@@ -138,8 +148,10 @@ def main():
     parser.add_argument('--skip', nargs='+', default=['simple.in', 'wout.nc'], 
                        help='Files to skip (default: simple.in wout.nc)')
     parser.add_argument('--json', action='store_true', help='Output results as JSON')
-    parser.add_argument('--rtol', type=float, default=1e-5, help='Relative tolerance for numerical comparison')
-    parser.add_argument('--atol', type=float, default=1e-8, help='Absolute tolerance for numerical comparison')
+    parser.add_argument('--rtol', type=float, default=0.0,
+                       help='Relative tolerance (default: 0.0 for bit-identical)')
+    parser.add_argument('--atol', type=float, default=0.0,
+                       help='Absolute tolerance (default: 0.0 for bit-identical)')
     
     args = parser.parse_args()
     
@@ -151,8 +163,11 @@ def main():
             print(f"Error: Current directory not found: {args.cur_dir}")
             sys.exit(1)
     
-    # Compare files
-    results, summary = compare_file_lists(args.ref_dir, args.cur_dir, args.files, args.skip)
+    # Compare files (default: bit-identical for deterministic FP builds)
+    results, summary = compare_file_lists(
+        args.ref_dir, args.cur_dir, args.files, args.skip,
+        rtol=args.rtol, atol=args.atol
+    )
     
     # Output results
     if args.json:
