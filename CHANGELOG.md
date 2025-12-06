@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 7f24b57 2024-12-06 | Change hcov computation order from matmul(B,J)/|B| to matmul(B/|B|,J) - ~1e-12 rounding differences in coils field |
 | N | 1c38cfa 2024-10-16 | Buffered NetCDF orbit output system - replaces fort.9000X files with orbits.nc |
 | N | v1.4.0 (493afe3) 2024-09-05 -> `release/1.4` | Batch spline optimization (2.86x speedup), Meiss-Hazeltine and Albert coordinates |
 | Y | 5de27cd 2024-08-04 | Change sign of VMEC toroidal flux (v1.3.1 on release/1.3: ac3ba6b)
