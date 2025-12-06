@@ -2,11 +2,11 @@ program test_adapter_consistency
     !> Test that vmec_field_adapter gives consistent results
     !> between direct VMEC calls and field object calls
     
-    use, intrinsic :: iso_fortran_env, only: dp => real64
-    use vmec_field_adapter, only: vmec_field_evaluate, vmec_field_evaluate_with_field
-    use field_gvec, only: gvec_field_t, create_gvec_field
-    use field_base, only: magnetic_field_t
-    use params, only: pi
+    use, intrinsic :: iso_fortran_env, only : dp => real64
+    use vmec_field_adapter, only : vmec_field_evaluate, vmec_field_evaluate_with_field
+    use field_gvec, only : gvec_field_t, create_gvec_field
+    use field_base, only : magnetic_field_t
+    use params, only : pi
     
     implicit none
     

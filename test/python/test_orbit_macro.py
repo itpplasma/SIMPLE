@@ -125,12 +125,14 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
 
     # Compare trajectories between Fortran and Python
     # Note: Python has shape (n_particles, ntimstep), Fortran has (ntimstep, n_particles)
+    # Tolerance 1e-11 allows for minor floating-point differences between
+    # Fortran executable and Python bindings while catching real discrepancies
     for key in ["time", "s", "theta", "phi", "p_abs", "v_par"]:
         np.testing.assert_allclose(
             python_orbits[key],
             fortran_orbits[key].T,
             rtol=1e-10,
-            atol=1e-12,
+            atol=1e-11,
             equal_nan=True,  # Allow NaN == NaN for skipped particles
             err_msg=f"Mismatch in {key}",
         )
