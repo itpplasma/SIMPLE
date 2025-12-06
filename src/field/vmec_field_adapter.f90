@@ -2,9 +2,9 @@ module vmec_field_adapter
   !> Module providing GVEC field evaluation functions with VMEC-compatible interface
   !> This module extends vmec_field_eval to support GVEC fields
 
-  use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: magnetic_field_t
-  use field, only: vmec_field_t, gvec_field_t
+  use, intrinsic :: iso_fortran_env, only : dp => real64
+  use field_base, only : magnetic_field_t
+  use field, only : vmec_field_t, gvec_field_t
   use spline_vmec_sub
   use MODgvec_ReadState, only: eval_iota_r
   use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, &

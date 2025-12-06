@@ -1,6 +1,6 @@
 module simple_main
   use omp_lib
-  use util, only: sqrt2
+  use util, only : sqrt2
   use simple, only : init_vmec, init_sympl, tracer_t
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
@@ -25,7 +25,7 @@ module simple_main
   subroutine main
     use params, only : read_config, netcdffile, ns_s, ns_tp, multharm, &
       integmode, params_init, swcoll, generate_start_only, isw_field_type, &
-      ntestpart, ntimstep
+      ntestpart, ntimstep, coord_input
     use timing, only : init_timer, print_phase_time
     use magfie_sub, only : VMEC, init_magfie
     use samplers, only : init_starting_surf
@@ -97,6 +97,8 @@ module simple_main
     use field, only : field_from_file
     use timing, only : print_phase_time
     use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use reference_coordinates, only : init_reference_coordinates
+    use params, only : coord_input, field_input
 
     character(*), intent(in) :: vmec_file
     type(tracer_t), intent(inout) :: self
@@ -106,13 +108,51 @@ module simple_main
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
     call print_phase_time('VMEC initialization completed')
 
+    call init_reference_coordinates(coord_input)
+    call print_phase_time('Reference coordinate system initialization completed')
+
     self%integmode = aintegmode
     if (self%integmode >= 0) then
-      if(trim(field_input) == '') then
-        call field_from_file(vmec_file, field_temp)
-      else
-        call field_from_file(field_input, field_temp)
+      if (trim(field_input) == '') then
+        print *, 'simple_main.init_field: field_input must be set (see params.apply_config_aliases)'
+        error stop
       end if
+
+      ! For VMEC fields we require that coord_input and field_input agree
+      ! so that we can safely use the VMEC pass-through path.
+      ! Pass-through optimization: When both coord_input and field_input point to
+      ! the same VMEC file, vmec_field_t directly uses the libneo VMEC splines loaded
+      ! by init_vmec rather than re-splining the field data. This preserves both
+      ! performance and backward compatibility.
+      block
+        character(:), allocatable :: coord_file, field_file
+        logical :: is_vmec_field
+
+        coord_file = trim(coord_input)
+        field_file = trim(field_input)
+
+        is_vmec_field = .false.
+        if (len_trim(field_file) >= 3) then
+          if (field_file(len_trim(field_file)-2:len_trim(field_file)) == '.nc') then
+            is_vmec_field = .true.
+          end if
+        end if
+
+        if (is_vmec_field) then
+          if (len_trim(coord_file) == 0) then
+            print *, 'simple_main.init_field: coord_input must be set when using VMEC field_input'
+            error stop
+          end if
+          if (coord_file /= field_file) then
+            print *, 'simple_main.init_field: VMEC coord_input and field_input must match for VMEC pass-through'
+            print *, '  coord_input = ', coord_file
+            print *, '  field_input = ', field_file
+            error stop
+          end if
+        end if
+      end block
+
+      call field_from_file(field_input, field_temp)
       call print_phase_time('Field from file loading completed')
     end if
 
