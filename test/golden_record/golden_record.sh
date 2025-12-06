@@ -114,23 +114,12 @@ main() {
     mkdir -p "$TEST_DATA_DIR"
 
     # Check if we need to build reference version
-    # Force rebuild if the CMakeLists.txt hasn't been patched for deterministic FP
-    local needs_rebuild=false
     if [ ! -f "$PROJECT_ROOT_REF/build/simple.x" ]; then
-        needs_rebuild=true
-        echo "Reference build not found, will build..."
-    elif [ -f "$PROJECT_ROOT_REF/CMakeLists.txt" ] && \
-         grep -q "\-ffast-math" "$PROJECT_ROOT_REF/CMakeLists.txt" 2>/dev/null; then
-        needs_rebuild=true
-        echo "Reference build found but not patched for deterministic FP, rebuilding..."
-        rm -rf "$PROJECT_ROOT_REF/build"
-    fi
-
-    if [ "$needs_rebuild" = true ]; then
+        echo "Reference build not found, cloning and building..."
         clone "$REF_VER" "$PROJECT_ROOT_REF" || handle_failure $?
         build "$PROJECT_ROOT_REF" || handle_failure $?
     else
-        echo "Using existing deterministic reference build at: $PROJECT_ROOT_REF/build/simple.x"
+        echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
     fi
 
     # Check if current version needs building (it should already be built)
@@ -181,9 +170,6 @@ build() {
         setup_libneo "$PROJECT_ROOT"
     fi
 
-    # Patch SIMPLE CMakeLists.txt for deterministic FP before cmake configure
-    patch_cmake_for_deterministic_fp "$PROJECT_ROOT/CMakeLists.txt"
-
     # Check if CMakeLists.txt has fortplot dependency and adjust accordingly
     local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF"
 
@@ -203,9 +189,10 @@ build() {
     fi
 
     # Patch libneo CMakeLists.txt after cmake fetches it, then reconfigure
+    # (libneo doesn't have SIMPLE_DETERMINISTIC_FP, so we patch -ffast-math directly)
     local LIBNEO_CMAKE="$PROJECT_ROOT/build/_deps/libneo-src/CMakeLists.txt"
     if [ -f "$LIBNEO_CMAKE" ]; then
-        if patch_cmake_for_deterministic_fp "$LIBNEO_CMAKE"; then
+        if patch_libneo_for_deterministic_fp "$LIBNEO_CMAKE"; then
             echo "Reconfiguring after libneo patch..."
             cmake -S . -Bbuild -GNinja $CMAKE_OPTS >> $PROJECT_ROOT/configure.log 2>&1
         fi
@@ -219,33 +206,27 @@ build() {
 }
 
 
-# Patch a CMakeLists.txt file for deterministic floating-point
+# Patch libneo CMakeLists.txt for deterministic floating-point
 # Returns 0 (success) if patching was done, 1 if no patching needed
-patch_cmake_for_deterministic_fp() {
+patch_libneo_for_deterministic_fp() {
     local CMAKE_FILE="$1"
 
     if [ ! -f "$CMAKE_FILE" ]; then
         return 1
     fi
 
-    # Check if already has deterministic FP option or already patched
-    if grep -q "SIMPLE_DETERMINISTIC_FP" "$CMAKE_FILE" 2>/dev/null; then
-        echo "Deterministic FP option already present in $CMAKE_FILE"
-        return 1
-    fi
-
-    # Check if -ffast-math is present
+    # Check if -ffast-math is present (needs patching)
     if ! grep -q "\-ffast-math" "$CMAKE_FILE" 2>/dev/null; then
         return 1
     fi
 
-    echo "Patching $CMAKE_FILE for deterministic floating-point..."
+    echo "Patching libneo for deterministic floating-point..."
 
     # Replace -ffast-math -ffp-contract=fast with -ffp-contract=off
     sed -i.bak 's/-ffast-math[[:space:]]*-ffp-contract=fast/-ffp-contract=off/g' "$CMAKE_FILE"
     # Replace remaining standalone -ffast-math
     sed -i.bak 's/-ffast-math/-ffp-contract=off/g' "$CMAKE_FILE"
-    echo "Patched: Replaced -ffast-math with -ffp-contract=off in $CMAKE_FILE"
+    echo "Patched: Replaced -ffast-math with -ffp-contract=off in libneo"
     return 0
 }
 
