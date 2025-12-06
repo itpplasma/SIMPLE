@@ -1,24 +1,28 @@
 module field_base
+    !> Abstract base type for magnetic field implementations.
+    !> Every field has a coordinate system in which it naturally evaluates.
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-implicit none
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use libneo_coordinates, only: coordinate_system_t
 
-type, abstract :: MagneticField
-contains
-    procedure(evaluate), deferred :: evaluate
-end type MagneticField
+    implicit none
 
-abstract interface
-    subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-        import :: dp, MagneticField
-        class(MagneticField), intent(in) :: self
-        real(dp), intent(in) :: x(3)  ! r=sqrt(s_vmec), theta_vmec, phi_vmec
-        real(dp), intent(out) :: Acov(3)
-        real(dp), intent(out) :: hcov(3)
-        real(dp), intent(out) :: Bmod
-        real(dp), intent(out), optional :: sqgBctr(3)
-    end subroutine evaluate
-end interface
+    type, abstract :: magnetic_field_t
+        class(coordinate_system_t), allocatable :: coords
+    contains
+        procedure(evaluate_iface), deferred :: evaluate
+    end type magnetic_field_t
 
+    abstract interface
+        subroutine evaluate_iface(self, x, Acov, hcov, Bmod, sqgBctr)
+            !> Evaluate field at x (in self%coords coordinate system).
+            !> Returns covariant components in self%coords.
+            import :: dp, magnetic_field_t
+            class(magnetic_field_t), intent(in) :: self
+            real(dp), intent(in) :: x(3)
+            real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+            real(dp), intent(out), optional :: sqgBctr(3)
+        end subroutine evaluate_iface
+    end interface
 
 end module field_base

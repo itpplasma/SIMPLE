@@ -12,9 +12,16 @@ Creates four subplots:
 """
 
 import sys
-import xarray as xr
-import matplotlib.pyplot as plt
-import numpy as np
+
+try:
+    import xarray as xr
+    import matplotlib.pyplot as plt
+    import numpy as np
+except ImportError as exc:
+    # Allow this script to act as an optional plotting helper in
+    # environments where xarray/matplotlib/numpy are not installed.
+    print(f"Skipping orbit plot (missing dependency: {exc})")
+    sys.exit(0)
 
 
 def main():
