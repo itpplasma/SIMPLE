@@ -114,6 +114,12 @@ def ensure_vmec_loaded(
         backend.params.integmode = int(integrator)
 
     backend.params.netcdffile = vmec_path
+    # Keep new-style config in sync for Fortran drivers:
+    # coord_input selects reference coordinates, field_input the field source.
+    if hasattr(backend.params, "coord_input"):
+        backend.params.coord_input = vmec_path
+    if hasattr(backend.params, "field_input"):
+        backend.params.field_input = vmec_path
 
     tracer = backend.simple.tracer_t()
     backend.simple_main.init_field(

@@ -1,13 +1,13 @@
 module field_can_meiss
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-use interpolate, only: &
+use, intrinsic :: iso_fortran_env, only : dp => real64
+use interpolate, only : &
     BatchSplineData3D, construct_batch_splines_3d, &
     evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
-use util, only: twopi
-use field_can_base, only: field_can_t, n_field_evaluations
-use field, only: magnetic_field_t
+use util, only : twopi
+use field_can_base, only : field_can_t, n_field_evaluations
+use field, only : magnetic_field_t
 
 implicit none
 

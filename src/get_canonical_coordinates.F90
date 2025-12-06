@@ -16,8 +16,8 @@ module get_can_sub
 
    use spl_three_to_five_sub
    use stencil_utils
-   use field, only: magnetic_field_t
-   use field_newton, only: newton_theta_from_canonical
+   use field, only : magnetic_field_t, vmec_field_t
+   use field_newton, only : newton_theta_from_canonical
 
    implicit none
 
@@ -66,8 +66,6 @@ contains
    subroutine get_canonical_coordinates
 
   ! Backward compatibility wrapper - uses VMEC field by default
-
-      use field, only: vmec_field_t
 
       call get_canonical_coordinates_with_field(vmec_field_t())
 

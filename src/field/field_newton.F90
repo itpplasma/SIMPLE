@@ -2,8 +2,8 @@ module field_newton
   !> Module for field-agnostic Newton iterations
   !> Provides Newton solvers for coordinate transformations
   
-  use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: magnetic_field_t
+  use, intrinsic :: iso_fortran_env, only : dp => real64
+  use field_base, only : magnetic_field_t
   
   implicit none
   private

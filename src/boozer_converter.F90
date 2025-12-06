@@ -1,6 +1,6 @@
 module boozer_sub
     use spl_three_to_five_sub
-    use field, only: magnetic_field_t
+    use field, only : magnetic_field_t
 
     implicit none
     

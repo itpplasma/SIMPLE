@@ -115,6 +115,10 @@ def init(
 
     # Step 1: Set parameters (replaces read_config without file I/O)
     params.netcdffile = vmec_path
+    if hasattr(params, "coord_input"):
+        params.coord_input = vmec_path
+    if hasattr(params, "field_input"):
+        params.field_input = vmec_path
     params.ns_s = int(ns_s)
     params.ns_tp = int(ns_tp)
     params.multharm = int(multharm)
@@ -193,8 +197,7 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
     _backend.params_wrapper.set_sbeg(1, float(s))
 
     samplers = _backend.Samplers()
-    # Sample directly into params.zstart (using wrapper for bulk access)
-    samplers.sample(params.zstart)
+    samplers.sample_surface_fieldline(params.zstart)
 
     # Get results using wrapper to avoid array access bug
     zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
@@ -233,7 +236,7 @@ def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarra
     params.startmode = 5  # Volume sampling mode
 
     samplers = _backend.Samplers()
-    samplers.sample(params.zstart, float(s_inner), float(s_outer))
+    samplers.sample_volume_single(params.zstart, float(s_inner), float(s_outer))
 
     # Use wrapper to get results
     zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
