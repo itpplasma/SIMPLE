@@ -144,9 +144,20 @@ subroutine init_splines_with_psi
     ! Center Aphi around zero
     Aphi_grid = Aphi_grid - 0.5d0*sum(Aphi_grid)/real(n_r*n_th*n_phi, dp)
 
+    print '(A,ES22.15)', ' ALBERT_DIAG: Aphi_grid(32,32,32) = ', Aphi_grid(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: hth_grid(32,32,32) = ', hth_grid(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: hph_grid(32,32,32) = ', hph_grid(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: Bmod_grid(32,32,32) = ', Bmod_grid(32,32,32)
+
     call grid_r_to_psi(xmin(1), xmax(1), psi_inner, psi_outer, psi_of_x, &
         Aphi_grid, hth_grid, hph_grid, Bmod_grid, r_of_xc, Aph_of_xc, &
         hth_of_xc, hph_of_xc, Bmod_of_xc)
+
+    print '(A,ES22.15)', ' ALBERT_DIAG: r_of_xc(32,32,32) = ', r_of_xc(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: Aph_of_xc(32,32,32) = ', Aph_of_xc(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: hth_of_xc(32,32,32) = ', hth_of_xc(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: hph_of_xc(32,32,32) = ', hph_of_xc(32,32,32)
+    print '(A,ES22.15)', ' ALBERT_DIAG: Bmod_of_xc(32,32,32) = ', Bmod_of_xc(32,32,32)
 
     ! Construct batch spline for r_of_xc (1 component: r)
     block

@@ -94,7 +94,7 @@ contains
         real(dp) :: h_r, h_th, h_phi
         real(dp) :: x_spline(3), x_ref(3), x_cart(3)
         real(dp) :: dxcart_dxvmec(3, 3), scaling_jac(3)
-        real(dp) :: A_cart(3), h_cart(3), Bmod
+        real(dp) :: A_cart(3), B_cart(3), Bmod
         real(dp) :: Acov(3), hcov(3)
 
         real(dp), dimension(:,:,:), allocatable :: Ar, Ath, Aphi, hr, hth, hphi
@@ -129,7 +129,7 @@ contains
 
         i_ctr = 0
         !$omp parallel private(i_r, i_th, i_phi, x_spline, x_ref, x_cart, &
-        !$omp&                  dxcart_dxvmec, scaling_jac, A_cart, h_cart, Bmod, &
+        !$omp&                  dxcart_dxvmec, scaling_jac, A_cart, B_cart, Bmod, &
         !$omp&                  Acov, hcov)
         !$omp do
         do i_phi = 1, n_phi
@@ -145,10 +145,29 @@ contains
                     call scaling_ptr%inverse(x_spline, x_ref, scaling_jac)
 
                     call evaluate_at_ref_point(source, x_ref, x_cart, &
-                                              dxcart_dxvmec, A_cart, h_cart, Bmod)
+                                              dxcart_dxvmec, A_cart, B_cart, Bmod)
 
-                    call transform_to_ref(A_cart, h_cart, dxcart_dxvmec, &
-                                         scaling_jac, Acov, hcov)
+                    call transform_to_ref(A_cart, B_cart, dxcart_dxvmec, &
+                                         scaling_jac, Bmod, Acov, hcov)
+
+                    if (i_r == 32 .and. i_th == 32 .and. i_phi == 32) then
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: x_spline = ', x_spline
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: x_ref = ', x_ref
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: x_cart = ', x_cart
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: A_cart = ', A_cart
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: B_cart = ', B_cart
+                        print '(A,ES22.15)', ' SPLINED_DIAG: Bmod = ', Bmod
+                        print '(A,ES22.15)', ' SPLINED_DIAG: scaling_jac(1) = ', &
+                            scaling_jac(1)
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: Acov = ', Acov
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: hcov = ', hcov
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: dxcart_dxvmec(:,1) = ', &
+                            dxcart_dxvmec(:,1)
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: dxcart_dxvmec(:,2) = ', &
+                            dxcart_dxvmec(:,2)
+                        print '(A,3ES22.15)', ' SPLINED_DIAG: dxcart_dxvmec(:,3) = ', &
+                            dxcart_dxvmec(:,3)
+                    end if
 
                     Ar(i_r, i_th, i_phi) = Acov(1)
                     Ath(i_r, i_th, i_phi) = Acov(2)
@@ -169,6 +188,9 @@ contains
         Ath = Ath - Ath(1, 1, 1)
         Aphi = Aphi - Aphi(1, 1, 1)
 
+        print '(A,ES22.15)', ' SPLINED_DIAG: hth(32,32,32) = ', hth(32,32,32)
+        print '(A,ES22.15)', ' SPLINED_DIAG: hr(32,32,32) = ', hr(32,32,32)
+
         dims = shape(Ar)
         allocate(y_batch(dims(1), dims(2), dims(3), 7))
 
@@ -181,6 +203,17 @@ contains
         y_batch(:,:,:,7) = Bmod_arr
 
         call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl)
+
+        ! Diagnostic: print VMEC spline coefficient to verify identical splines
+        block
+            use new_vmec_stuff_mod, only: sR, sZ
+            if (size(sR) > 0) then
+                print '(A,ES22.15)', ' VMEC_SPLINE_DIAG: sR(1,1,1,32,32,32) = ', &
+                    sR(1,1,1,32,32,32)
+                print '(A,ES22.15)', ' VMEC_SPLINE_DIAG: sZ(1,1,1,32,32,32) = ', &
+                    sZ(1,1,1,32,32,32)
+            end if
+        end block
 
     contains
 
@@ -200,38 +233,42 @@ contains
 
 
     subroutine evaluate_at_ref_point(source, x_ref, x_cart, dxcart_dxvmec, &
-                                      A_cart, h_cart, Bmod)
+                                      A_cart, B_cart, Bmod)
         !> Evaluate source field at a point given in VMEC ref coords (s, theta, phi).
         !> Returns Cartesian field values and the Jacobian for transformation.
-        !> Note: source%evaluate returns h = B/|B| already, not raw B.
+        !> Note: Returns raw B_cart (not normalized) to match main branch operation order.
         class(magnetic_field_t), intent(in) :: source
         real(dp), intent(in) :: x_ref(3)
         real(dp), intent(out) :: x_cart(3), dxcart_dxvmec(3, 3)
-        real(dp), intent(out) :: A_cart(3), h_cart(3), Bmod
+        real(dp), intent(out) :: A_cart(3), B_cart(3), Bmod
+
+        real(dp) :: h_unused(3)
 
         select type (coords => source%coords)
         type is (cartesian_coordinate_system_t)
             call transform_vmec_to_cart(x_ref, x_cart, dxcart_dxvmec)
-            call source%evaluate(x_cart, A_cart, h_cart, Bmod)
+            call source%evaluate(x_cart, A_cart, h_unused, Bmod, B_cart)
         class default
             error stop "evaluate_at_ref_point: non-Cartesian source not yet supported"
         end select
     end subroutine evaluate_at_ref_point
 
 
-    subroutine transform_to_ref(A_cart, h_cart, dxcart_dxvmec, scaling_jac, &
-                               Acov, hcov)
+    subroutine transform_to_ref(A_cart, B_cart, dxcart_dxvmec, scaling_jac, &
+                               Bmod, Acov, hcov)
         !> Transform covariant vectors from Cartesian to ref coords.
         !> Uses the correct transformation: A_ref_j = sum_i A_cart_i * dxcart_dxvmec(i,j)
-        real(dp), intent(in) :: A_cart(3), h_cart(3)
+        !> For h, we use matmul(B, J)/Bmod to match main branch operation order.
+        real(dp), intent(in) :: A_cart(3), B_cart(3)
         real(dp), intent(in) :: dxcart_dxvmec(3, 3)
         real(dp), intent(in) :: scaling_jac(3)
+        real(dp), intent(in) :: Bmod
         real(dp), intent(out) :: Acov(3), hcov(3)
 
         Acov = matmul(A_cart, dxcart_dxvmec)
         Acov(1) = Acov(1) * scaling_jac(1)
 
-        hcov = matmul(h_cart, dxcart_dxvmec)
+        hcov = matmul(B_cart, dxcart_dxvmec) / Bmod
         hcov(1) = hcov(1) * scaling_jac(1)
     end subroutine transform_to_ref
 

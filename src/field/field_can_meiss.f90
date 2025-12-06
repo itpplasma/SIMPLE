@@ -411,6 +411,14 @@ subroutine init_canonical_field_components
 
                 call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
 
+                if (i_r == 32 .and. i_th == 32 .and. i_phi == 32) then
+                    print '(A,3ES22.15)', ' MEISS_DIAG: xcan = ', xcan
+                    print '(A,3ES22.15)', ' MEISS_DIAG: xref = ', xref
+                    print '(A,3ES22.15)', ' MEISS_DIAG: hcov = ', hcov
+                    print '(A,ES22.15)', ' MEISS_DIAG: Bmod = ', Bmod(i_r,i_th,i_phi)
+                    print '(A,ES22.15)', ' MEISS_DIAG: dlam(2) = ', dlam(2)
+                end if
+
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
                 hth(i_r, i_th, i_phi) = hcov(2) + hcov(3)*dlam(2)
