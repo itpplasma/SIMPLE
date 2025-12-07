@@ -6,7 +6,7 @@
 - **Primary stellarator equilibrium format**
 - NetCDF files from VMEC code
 - Contains magnetic field data in flux coordinates (s, θ, φ)
-- Implemented in `src/field/field_vmec.f90` via `VmecField` class
+- Implemented in `src/field/field_vmec.f90` via `vmec_field_t` class
 - Uses spline interpolation from `spline_vmec_sub`
 
 ### 2. Coil Files (.coils or files starting with "coils")
@@ -81,7 +81,7 @@ Five canonical coordinate variants selected via `isw_field_type` parameter:
 Runtime field format detection in `field_from_file()` (`src/field.F90`):
 ```fortran
 if (endswith(filename, '.nc')) then
-    allocate(VmecField :: field_from_file)
+    allocate(vmec_field_t :: field_from_file)
 else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
     field_from_file = create_coils_field(filename)
 else if (endswith(filename, '.dat')) then
