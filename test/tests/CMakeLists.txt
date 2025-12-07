@@ -243,6 +243,14 @@ add_test(NAME test_coordinate_refactoring
 set_tests_properties(test_coordinate_refactoring PROPERTIES
     LABELS "integration")
 
+add_executable(test_chartmap_reference.x test_chartmap_reference.f90)
+target_link_libraries(test_chartmap_reference.x simple)
+add_test(NAME test_chartmap_reference
+    COMMAND test_chartmap_reference.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_reference PROPERTIES
+    LABELS "integration")
+
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)
 target_link_libraries(test_batch_splines.x simple testing_utils)
