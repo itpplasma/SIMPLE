@@ -2,11 +2,11 @@ program test_field_can_meiss
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use params, only: read_config
-use simple, only: Tracer
+use simple, only: tracer_t
 use simple_main, only: init_field
 use velo_mod, only: isw_field_type
 use field, only: vmec_field_t
-use field_can_mod, only: eval_field => evaluate, FieldCan, FieldCan_init
+use field_can_mod, only: eval_field => evaluate, field_can_t, field_can_init
 use magfie_sub, only: MEISS
 use field_can_meiss, only: init_meiss, init_transformation, &
     spline_transformation, init_canonical_field_components, &
@@ -16,7 +16,7 @@ implicit none
 
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
-type(Tracer) :: norb
+type(tracer_t) :: norb
 class(vmec_field_t), allocatable :: magfie
 
 isw_field_type = MEISS
@@ -117,7 +117,7 @@ end subroutine test_evaluate_vmec
 
 subroutine test_evaluate_meiss
     real(dp) :: r, phi, th
-    type(FieldCan) :: f
+    type(field_can_t) :: f
     integer :: i_r, i_phi, i_th
     integer :: funit
 

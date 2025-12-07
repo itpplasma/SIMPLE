@@ -1,5 +1,5 @@
 program test_boozer_refactoring
-    use simple, only: Tracer
+    use simple, only: tracer_t
     use simple_main, only: init_field
     use boozer_sub, only: normalize_angular_coordinates
     use boozer_coordinates_mod, only: n_theta_B, n_phi_B, h_theta_B, h_phi_B
@@ -8,7 +8,7 @@ program test_boozer_refactoring
     
     implicit none
     
-    type(Tracer) :: norb
+    type(tracer_t) :: norb
     integer :: i_theta, i_phi, test_failed
     double precision :: vartheta, varphi, dtheta, dphi
     double precision, parameter :: twopi = 2.d0*3.14159265358979d0

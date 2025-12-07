@@ -2,7 +2,7 @@ program test_field_can_albert
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 
-use simple, only: Tracer
+use simple, only: tracer_t
 use simple_main, only: init_field
 use magfie_sub, only: ALBERT
 use velo_mod, only: isw_field_type
@@ -13,7 +13,7 @@ implicit none
 
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
-type(Tracer) :: norb
+type(tracer_t) :: norb
 class(vmec_field_t), allocatable :: magfie
 
 isw_field_type = ALBERT

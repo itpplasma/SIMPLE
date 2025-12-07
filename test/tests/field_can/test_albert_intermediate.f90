@@ -14,7 +14,7 @@ program test_albert_intermediate
     !>   8. Final Albert spline values (spl_albert_batch)
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use simple, only: Tracer
+    use simple, only: tracer_t
     use simple_main, only: init_field
     use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, field_input
     use field_can_meiss, only: spl_field_batch, xmin, xmax, n_r, n_th, n_phi, order
@@ -25,7 +25,7 @@ program test_albert_intermediate
 
     implicit none
 
-    type(Tracer) :: norb
+    type(tracer_t) :: norb
     integer :: i_r, i_th, i_phi, unit_id
     real(dp) :: x(3), y_batch_meiss(5), y_batch_albert(4)
     real(dp) :: r, th, ph, psi

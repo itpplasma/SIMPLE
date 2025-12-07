@@ -1,9 +1,9 @@
 module orbit_symplectic
 
 use util, only: pi, twopi
-use field_can_mod, only: FieldCan, get_val, get_derivatives, get_derivatives2, &
+use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
   eval_field => evaluate
-use orbit_symplectic_base, only: SymplecticIntegrator, MultistageIntegrator, &
+use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
   LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
   coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
@@ -28,8 +28,8 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   !
   use plag_coeff_sub, only : plag_coeff
 
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: z(:)
   real(dp), intent(in) :: dt
   integer, intent(in) :: ntau
@@ -87,40 +87,40 @@ end subroutine orbit_sympl_init
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   call orbit_timestep_sympl_rk_gauss(si, f, 1, ierr)
 end subroutine orbit_timestep_sympl_gauss1
 
 subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
 end subroutine orbit_timestep_sympl_gauss2
 
 subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
 end subroutine orbit_timestep_sympl_gauss3
 
 subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   call orbit_timestep_sympl_rk_gauss(si, f, 4, ierr)
 end subroutine orbit_timestep_sympl_gauss4
 
 subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   call orbit_timestep_sympl_rk_lobatto(si, f, 3, ierr)
@@ -156,8 +156,8 @@ end subroutine orbit_timestep_quasi_lobatto3
   !
 subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(in) :: n
   real(dp), intent(in) :: x(n)
   real(dp), intent(out) :: fvec(n)
@@ -176,8 +176,8 @@ end subroutine f_sympl_euler1
   !
 subroutine jac_sympl_euler1(si, f, x, jac)
   !
-  type(SymplecticIntegrator), intent(in) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(in) :: si
+  type(field_can_t), intent(inout) :: f
 
   real(dp), intent(in)  :: x(2)
   real(dp), intent(out) :: jac(2, 2)
@@ -197,8 +197,8 @@ end subroutine jac_sympl_euler1
   !
 subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(in) :: n
   real(dp), intent(in) :: x(n)
   real(dp), intent(out) :: fvec(n)
@@ -218,8 +218,8 @@ end subroutine f_sympl_euler2
   !
 subroutine jac_sympl_euler2(si, f, x, jac)
   !
-  type(SymplecticIntegrator), intent(in) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(in) :: si
+  type(field_can_t), intent(inout) :: f
   real(dp), intent(in)  :: x(3)
   real(dp), intent(out) :: jac(3, 3)
 
@@ -237,8 +237,8 @@ end subroutine jac_sympl_euler2
   !
 subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     integer, intent(in) :: n
     real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
     real(dp), intent(out) :: fvec(n)
@@ -258,8 +258,8 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
 subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     integer, intent(in) :: n
     real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
     real(dp), intent(out) :: fvec(n)
@@ -281,8 +281,8 @@ subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
 subroutine jac_midpoint_part1(si, f, x, jac)
   !
-    type(SymplecticIntegrator), intent(in) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(in) :: si
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in)  :: x(5)
     real(dp), intent(out) :: jac(5, 5)
 
@@ -338,9 +338,9 @@ end subroutine jac_midpoint_part1
   !
 subroutine jac_midpoint_part2(si, f, fmid, x, jac)
   !
-    type(SymplecticIntegrator), intent(in) :: si
-    type(FieldCan), intent(inout) :: f
-    type(FieldCan), intent(inout) :: fmid
+    type(symplectic_integrator_t), intent(in) :: si
+    type(field_can_t), intent(inout) :: f
+    type(field_can_t), intent(inout) :: fmid
     real(dp), intent(in)  :: x(5)
     real(dp), intent(out) :: jac(5, 5)
 
@@ -366,8 +366,8 @@ end subroutine jac_midpoint_part2
   !
 subroutine newton1(si, f, x, maxit, xlast)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, parameter :: n = 2
 
   real(dp), intent(inout) :: x(n)
@@ -417,8 +417,8 @@ subroutine newton1(si, f, x, maxit, xlast)
 end subroutine
 
 subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
 
   integer, parameter :: n = 3
   integer :: kit
@@ -477,10 +477,10 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
 end subroutine
 
 subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
 
-  type(FieldCan) :: fmid
+  type(field_can_t) :: fmid
 
   integer, parameter :: n = 5
   integer :: kit
@@ -531,9 +531,9 @@ end subroutine
   !
 subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
+  type(symplectic_integrator_t), intent(inout) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(:)
+  type(field_can_t), intent(inout) :: fs(:)
   real(dp), intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
   real(dp), intent(out) :: fvec(4*s)
 
@@ -570,9 +570,9 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
 subroutine jac_rk_gauss(si, fs, s, jac)
   !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(symplectic_integrator_t), intent(in) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(in) :: fs(:)
+  type(field_can_t), intent(in) :: fs(:)
   real(dp), intent(out) :: jac(4*s, 4*s)
 
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
@@ -646,10 +646,10 @@ subroutine jac_rk_gauss(si, fs, s, jac)
 end subroutine jac_rk_gauss
 
 subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
-  type(SymplecticIntegrator), intent(inout) :: si
+  type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(:)
+  type(field_can_t), intent(inout) :: fs(:)
   integer :: kit, ks
 
   real(dp), intent(inout) :: x(4*s)
@@ -696,10 +696,10 @@ end subroutine newton_rk_gauss
 
 subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   ! TODO: this doesn't work well yet
-  type(SymplecticIntegrator), intent(inout) :: si
+  type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(:)
+  type(field_can_t), intent(inout) :: fs(:)
   integer :: kit, ks
 
   real(dp), intent(inout) :: x(4*s)
@@ -782,9 +782,9 @@ end subroutine fixpoint_rk_gauss
   !
 subroutine jac_rk_lobatto(si, fs, s, jac)
   !
-  type(SymplecticIntegrator), intent(in) :: si
+  type(symplectic_integrator_t), intent(in) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(in) :: fs(:)
+  type(field_can_t), intent(in) :: fs(:)
   real(dp), intent(out) :: jac(4*s-2, 4*s-2)
 
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s), dHprime(4*s-2)
@@ -919,10 +919,10 @@ end subroutine jac_rk_lobatto
 
 
 subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
-  type(SymplecticIntegrator), intent(inout) :: si
+  type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(:)
+  type(field_can_t), intent(inout) :: fs(:)
   integer :: kit, ks
 
   real(dp), intent(inout) :: x(4*s-2)
@@ -976,8 +976,8 @@ end subroutine newton_rk_lobatto
   !
 subroutine orbit_timestep_sympl_multi(mi, f, ierr)
   !
-  type(MultistageIntegrator), intent(inout) :: mi
-  type(FieldCan), intent(inout) :: f
+  type(multistage_integrator_t), intent(inout) :: mi
+  type(field_can_t), intent(inout) :: f
 
   integer, intent(out) :: ierr
 
@@ -1001,8 +1001,8 @@ end subroutine orbit_timestep_sympl_multi
   !
 subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   !
-  type(MultistageIntegrator), intent(inout) :: mi
-  type(FieldCan), intent(inout) :: f
+  type(multistage_integrator_t), intent(inout) :: mi
+  type(field_can_t), intent(inout) :: f
 
   real(dp), intent(in) :: z(:)
   real(dp), intent(in) :: dtau
@@ -1028,9 +1028,9 @@ end subroutine orbit_sympl_init_multi
   !
 subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
   !
-  type(MultistageIntegrator), intent(inout) :: mi
+  type(multistage_integrator_t), intent(inout) :: mi
 
-  type(FieldCan), intent(inout) :: f
+  type(field_can_t), intent(inout) :: f
 
   real(dp), intent(in) :: z(:)
   real(dp), intent(in) :: dtau
@@ -1053,8 +1053,8 @@ subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
   ! Composition method of order 4 with s=3
   !
   !
-    type(MultistageIntegrator), intent(inout) :: mi
-    type(FieldCan), intent(inout) :: f
+    type(multistage_integrator_t), intent(inout) :: mi
+    type(field_can_t), intent(inout) :: f
 
     real(dp), intent(in) :: z(:)
     real(dp), intent(in) :: dtau
@@ -1080,8 +1080,8 @@ subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
   ! Composition method of order 4 with s=5 by McLachlan (1995)
   !
   !
-    type(MultistageIntegrator), intent(inout) :: mi
-    type(FieldCan), intent(inout) :: f
+    type(multistage_integrator_t), intent(inout) :: mi
+    type(field_can_t), intent(inout) :: f
 
     real(dp), intent(in) :: z(:)
     real(dp), intent(in) :: dtau
@@ -1114,8 +1114,8 @@ subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
   ! with coefficients in the form of Hairer (2002)
   !
   !
-    type(MultistageIntegrator), intent(inout) :: mi
-    type(FieldCan), intent(inout) :: f
+    type(multistage_integrator_t), intent(inout) :: mi
+    type(field_can_t), intent(inout) :: f
 
     real(dp), intent(in) :: z(:)
     real(dp), intent(in) :: dtau
@@ -1150,8 +1150,8 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   ! with coefficients in the form of Hairer (2002)
   !
   !
-    type(MultistageIntegrator), intent(inout) :: mi
-    type(FieldCan), intent(inout) :: f
+    type(multistage_integrator_t), intent(inout) :: mi
+    type(field_can_t), intent(inout) :: f
 
     real(dp), intent(in) :: z(:)
     real(dp), intent(in) :: dtau
@@ -1182,8 +1182,8 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
     ! with coefficients in the form of Hairer (2002)
     !
     !
-      type(MultistageIntegrator), intent(inout) :: mi
-      type(FieldCan), intent(inout) :: f
+      type(multistage_integrator_t), intent(inout) :: mi
+      type(field_can_t), intent(inout) :: f
 
       real(dp), intent(in) :: z(:)
       real(dp), intent(in) :: dtau
@@ -1217,8 +1217,8 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   !
 subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 2
@@ -1275,8 +1275,8 @@ end subroutine orbit_timestep_sympl_expl_impl_euler
   !
 subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
 
   integer, intent(out) :: ierr
 
@@ -1337,8 +1337,8 @@ end subroutine orbit_timestep_sympl_impl_expl_euler
   !
 subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
 
   integer, intent(out) :: ierr
 
@@ -1390,8 +1390,8 @@ end subroutine orbit_timestep_sympl_midpoint
   !
 subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
 
   integer, intent(out) :: ierr
 
@@ -1401,7 +1401,7 @@ subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   real(dp), dimension(4*s) :: x, xlast
   integer :: k, l, ktau
 
-  type(FieldCan) :: fs(s)
+  type(field_can_t) :: fs(s)
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
 
   do k = 1,s
@@ -1520,8 +1520,8 @@ end subroutine orbit_timestep_sympl_rk_gauss
   !
 subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
   integer, parameter :: maxit = 32
@@ -1530,7 +1530,7 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   real(dp), dimension(4*s-2) :: x, xlast
   integer :: ktau, k, l
 
-  type(FieldCan) :: fs(s)
+  type(field_can_t) :: fs(s)
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
@@ -1580,8 +1580,8 @@ end subroutine orbit_timestep_sympl_rk_lobatto
 
 
 subroutine debug_root(si, f, x0)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), pointer :: f
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), pointer :: f
 
   real(dp) :: x0(2), x(2)
   integer :: k, l, iflag

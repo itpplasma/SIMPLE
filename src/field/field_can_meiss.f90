@@ -6,7 +6,7 @@ use interpolate, only: &
     evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
 use util, only: twopi
-use field_can_base, only: FieldCan, n_field_evaluations
+use field_can_base, only: field_can_t, n_field_evaluations
 use field, only: magnetic_field_t
 
 implicit none
@@ -103,7 +103,7 @@ end subroutine cleanup_meiss
 
 
 subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
@@ -462,7 +462,7 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     real(dp), intent(out) :: bmod, sqrtg
     real(dp), dimension(3), intent(out) :: bder, hcovar, hctrvr, hcurl
 
-    type(FieldCan) :: f
+    type(field_can_t) :: f
     real(dp) :: sqrtg_bmod
 
     call evaluate_meiss(f, x(1), x(2), x(3), 0)
@@ -489,7 +489,7 @@ end subroutine magfie_meiss
 
 ! Batch evaluation helper for first derivatives
 subroutine evaluate_meiss_batch_der(f, x)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
     real(dp) :: y_batch(5), dy_batch(3, 5)
@@ -513,7 +513,7 @@ end subroutine evaluate_meiss_batch_der
 
 ! Batch evaluation helper for second derivatives  
 subroutine evaluate_meiss_batch_der2(f, x)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
     real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)

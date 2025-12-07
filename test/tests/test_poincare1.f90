@@ -3,8 +3,8 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-  use field_can_mod, only : eval_field => evaluate, field_can_from_name, FieldCan
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
+  use field_can_mod, only : eval_field => evaluate, field_can_from_name, field_can_t
+  use orbit_symplectic, only : symplectic_integrator_t, orbit_timestep_sympl
   use simple, only : init_sympl
   use get_can_sub, only : can_to_vmec, get_canonical_coordinates
   use alpha_lifetime_sub, only : orbit_timestep_axis
@@ -38,8 +38,8 @@ use diag_mod, only : icounter
 
   double precision, parameter :: relerr = 1d-10
 
-  type(FieldCan) :: f
-  type(SymplecticIntegrator) :: si
+  type(field_can_t) :: f
+  type(symplectic_integrator_t) :: si
 !
   open(1,file='alpha_lifetime_m.inp', recl=1024)
   read (1,*) notrace_passing   !skip tracing passing prts if notrace_passing=1

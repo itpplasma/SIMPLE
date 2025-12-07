@@ -156,10 +156,10 @@ end subroutine magfie_coils
 
 
 subroutine test_can
-    use field_can_mod, only: FieldCan
+    use field_can_mod, only: field_can_t
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, evaluate_meiss
 
-    type(FieldCan) :: f
+    type(field_can_t) :: f
     real(dp) :: r, th, ph
 
     r = 0.3d0
@@ -187,10 +187,10 @@ end subroutine test_can
 
 
 subroutine test_can_curve
-    use field_can_mod, only: FieldCan
+    use field_can_mod, only: field_can_t
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, evaluate_meiss
 
-    type(FieldCan) :: f
+    type(field_can_t) :: f
     real(dp) :: r, th, ph
     integer :: i, N=1000
 

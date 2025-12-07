@@ -4,8 +4,8 @@ program test_magfie
 ! use parmot_mod, only : rmu,ro0
 use velo_mod,   only: isw_field_type
 use orbit_symplectic
-use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, FieldCan_init
-use simple, only: Tracer, init_params, ro0
+use field_can_mod, only: eval_field => evaluate, field_can_from_name, field_can_t, field_can_init
+use simple, only: tracer_t, init_params, ro0
 use simple_main, only : init_field
 use new_vmec_stuff_mod, only: rmajor
 use lapack_interfaces, only: dgesv
@@ -14,9 +14,9 @@ implicit none
 save
 
 double precision :: z0(4), vpar0
-type(Tracer) :: norb
+type(tracer_t) :: norb
 
-type(FieldCan) :: f
+type(field_can_t) :: f
 
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
@@ -30,7 +30,7 @@ z0(3) = 0.1d0  ! phi
 vpar0 = 0.8d0  ! parallel velocity
 
 if (isw_field_type == -1) then
-  call FieldCan_init(f, 1d-5, 1d0, vpar0)
+  call field_can_init(f, 1d-5, 1d0, vpar0)
   call field_can_from_name('test')
   call eval_field(f, z0(1), z0(2), z0(3), 0)
 else
@@ -51,7 +51,7 @@ else
 
   ! ro0 = mc/e*v0, different by sqrt(2) from other modules
   ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-  call FieldCan_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0))
+  call field_can_init(f, 0d0, ro0/dsqrt(2d0), vpar0*dsqrt(2d0))
   call eval_field(f, z0(1), z0(2), z0(3), 0)
   f%mu = .5d0**2*(1.d0-vpar0**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
 end if
@@ -73,8 +73,8 @@ subroutine der2(x0, pphi, i, j)
     double precision, intent(in) :: x0(3)
     integer, intent(in) :: i, j
     double precision hi, hj
-    type(FieldCan) :: f00, f01, f10, f11
-    type(FieldCan) :: d2fnum
+    type(field_can_t) :: f00, f01, f10, f11
+    type(field_can_t) :: d2fnum
     double precision :: pphi, x(3), dxi(3), dxj(3)
     double precision, dimension(10) ::  d2vparnum, d2Hnum, d2pthnum
     double precision :: vpar00, vpar11, vpar10, vpar01, &
@@ -161,7 +161,7 @@ subroutine der2(x0, pphi, i, j)
 end subroutine der2
 
 subroutine test_jac1(si)
-  type(SymplecticIntegrator) :: si
+  type(symplectic_integrator_t) :: si
   double precision :: x1(2), dx1(2), jac1(2,2), x10(2), h1(2), jac1num(2,2), fvec1(2)
   integer :: k
 
@@ -194,7 +194,7 @@ subroutine test_jac1(si)
 end subroutine test_jac1
 
 subroutine test_jac2(si)
-  type(SymplecticIntegrator) :: si
+  type(symplectic_integrator_t) :: si
   double precision ::x2(3), dx2(3),  jac2(3,3), x20(3), h2(3), jac2num(3,3), fvec2(3)
   integer :: k
 
@@ -233,8 +233,8 @@ subroutine test_jac2(si)
 end subroutine test_jac2
 
 subroutine test_jac_midpoint(si)
-  type(SymplecticIntegrator) :: si
-  type(FieldCan) :: fmid
+  type(symplectic_integrator_t) :: si
+  type(field_can_t) :: fmid
   double precision :: x2(5), dx2(5), jac2(5,5), x20(5), h2(5), jac2num(5,5), fvec2(5)
   integer :: k
 
@@ -299,8 +299,8 @@ end subroutine test_jac_midpoint
 subroutine test_jac_grk(si)
   integer, parameter :: n = 2
 
-  type(SymplecticIntegrator) :: si
-  type(FieldCan) :: fs(n)
+  type(symplectic_integrator_t) :: si
+  type(field_can_t) :: fs(n)
   double precision :: x(4*n), dx(4*n), jac(4*n,4*n), x0(4*n), h(4*n), jacnum(4*n,4*n), fvec(4*n)
   integer :: k, l
 
@@ -342,8 +342,8 @@ end subroutine test_jac_grk
 subroutine test_jac_lob(si)
   integer, parameter :: n = 3
 
-  type(SymplecticIntegrator) :: si
-  type(FieldCan) :: fs(n)
+  type(symplectic_integrator_t) :: si
+  type(field_can_t) :: fs(n)
   double precision :: x(4*n-2), dx(4*n-2), jac(4*n-2,4*n-2), x0(4*n-2), &
     h(4*n-2), jacnum(4*n-2,4*n-2), fvec(4*n-2)
   integer :: k, l
@@ -387,7 +387,7 @@ end subroutine test_jac_lob
 
 
 subroutine test_newton(si)
-  type(SymplecticIntegrator) :: si
+  type(symplectic_integrator_t) :: si
   integer, parameter :: n = 2
   double precision :: x(n), fvec(n), fjac(n,n), ijac(n,n)
   integer :: k
@@ -411,7 +411,7 @@ end subroutine
 
 
 subroutine test_newton2(si)
-  type(SymplecticIntegrator) :: si
+  type(symplectic_integrator_t) :: si
   integer, parameter :: n = 3
   double precision :: x(n)
   double precision :: fvec(n), fjac(n,n)
@@ -435,12 +435,12 @@ end subroutine
 
 subroutine do_test()
 
-    type(SymplecticIntegrator) :: euler1, euler2, midpoint, gauss4, lobatto4
+    type(symplectic_integrator_t) :: euler1, euler2, midpoint, gauss4, lobatto4
 
     double precision :: dz(4)
     integer :: i, j, k
     double precision :: dx
-    type(FieldCan) :: dfnum
+    type(field_can_t) :: dfnum
     double precision :: dvparnum(4), dHnum(4), dpthnum(4)
 
     print *, 'f\t', 'derivative\t', 'numerical derivative\t', 'relative error'

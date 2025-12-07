@@ -377,13 +377,13 @@ module new_can
     use new_vmec_stuff_mod,   only : nper,ns_A
     use chamb_mod,            only : rnegflag
     use diag_mod, only : icounter
-    use field_can_mod, only : FieldCan
+    use field_can_mod, only : field_can_t
 
     implicit none
 
     double precision, intent(inout) :: r
     double precision, intent(in) :: vartheta_c,varphi_c
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     double precision, intent(out) :: Delta_varphi_c
 
     double precision, parameter :: twopi=2.d0*3.14159265358979d0
