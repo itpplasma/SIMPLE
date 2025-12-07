@@ -263,6 +263,10 @@ add_executable(diag_orbit.x
     app/simple_diag_orbit.f90
 )
 
+add_executable(diag_chartmap.x
+    app/simple_diag_chartmap.f90
+)
+
 # Apply SIMPLE-specific compile options to executable
 target_compile_options(simple.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
@@ -282,6 +286,7 @@ set_target_properties(simple.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINAR
 target_compile_options(diag_meiss.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 target_compile_options(diag_albert.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 target_compile_options(diag_orbit.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+target_compile_options(diag_chartmap.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
 # Apply trampoline error flags only to SIMPLE executable (not subprojects like fortplot)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -297,16 +302,22 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
         $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
     )
+    target_compile_options(diag_chartmap.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
 endif()
 
 target_link_libraries(diag_meiss.x PRIVATE simple)
 target_link_libraries(diag_albert.x PRIVATE simple)
 target_link_libraries(diag_newton.x PRIVATE simple)
 target_link_libraries(diag_orbit.x PRIVATE simple)
+target_link_libraries(diag_chartmap.x PRIVATE simple)
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_orbit.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set_target_properties(diag_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # VMEC to chartmap converter utility
 add_executable(vmec_to_chartmap.x
@@ -320,6 +331,7 @@ add_dependencies(diag_meiss.x fortplot)
 add_dependencies(diag_newton.x fortplot)
 add_dependencies(diag_albert.x fortplot)
 add_dependencies(diag_orbit.x fortplot)
+add_dependencies(diag_chartmap.x fortplot)
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)

@@ -272,7 +272,12 @@ def write_chartmap(
     Z: np.ndarray,
     nfp: int = 1,
 ) -> None:
-    """Write chartmap NetCDF file in libneo format."""
+    """Write chartmap NetCDF file in libneo format.
+
+    NetCDF uses C (row-major) order, Fortran uses column-major order.
+    Dimensions appear reversed: Python ("zeta", "theta", "rho") is read by
+    Fortran as (rho, theta, zeta) with rho varying fastest.
+    """
     with Dataset(outfile, "w") as ds:
         nrho = len(rho)
         ntheta = len(theta)
@@ -286,6 +291,7 @@ def write_chartmap(
         v_theta = ds.createVariable("theta", "f8", ("theta",))
         v_zeta = ds.createVariable("zeta", "f8", ("zeta",))
 
+        # Reversed dimension order for Fortran column-major reading
         v_x = ds.createVariable("x", "f8", ("zeta", "theta", "rho"))
         v_y = ds.createVariable("y", "f8", ("zeta", "theta", "rho"))
         v_z = ds.createVariable("z", "f8", ("zeta", "theta", "rho"))
@@ -295,6 +301,7 @@ def write_chartmap(
         v_theta[:] = theta
         v_zeta[:] = zeta
 
+        # X has shape (nrho, ntheta, nzeta), transpose to (nzeta, ntheta, nrho)
         v_x[:, :, :] = np.transpose(X, (2, 1, 0))
         v_y[:, :, :] = np.transpose(Y, (2, 1, 0))
         v_z[:, :, :] = np.transpose(Z, (2, 1, 0))
