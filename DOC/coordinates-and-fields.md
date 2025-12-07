@@ -6,7 +6,7 @@
 - **Primary stellarator equilibrium format**
 - NetCDF files from VMEC code
 - Contains magnetic field data in flux coordinates (s, θ, φ)
-- Implemented in `src/field/field_vmec.f90` via `VmecField` class
+- Implemented in `src/field/field_vmec.f90` via `vmec_field_t` class
 - Uses spline interpolation from `spline_vmec_sub`
 
 ### 2. Coil Files (.coils or files starting with "coils")
@@ -73,7 +73,7 @@ Five canonical coordinate variants selected via `isw_field_type` parameter:
 ## Implementation Architecture
 
 ### Abstract Field Interface
-- Base class: `MagneticField` in `src/field/field_base.f90`
+- Base class: `magnetic_field_t` in `src/field/field_base.f90`
 - Abstract `evaluate()` method for polymorphic field evaluation
 - Common interface: `evaluate(x, Acov, hcov, Bmod, sqgBctr)`
 
@@ -81,7 +81,7 @@ Five canonical coordinate variants selected via `isw_field_type` parameter:
 Runtime field format detection in `field_from_file()` (`src/field.F90`):
 ```fortran
 if (endswith(filename, '.nc')) then
-    allocate(VmecField :: field_from_file)
+    allocate(vmec_field_t :: field_from_file)
 else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
     field_from_file = create_coils_field(filename)
 else if (endswith(filename, '.dat')) then
@@ -90,7 +90,7 @@ else if (endswith(filename, '.dat')) then
 
 ### Canonical Coordinate Initialization
 - Function: `init_field_can(field_id, field_noncan)` in `src/field_can.f90`
-- Field-agnostic initialization via polymorphic `MagneticField` interface
+- Field-agnostic initialization via polymorphic `magnetic_field_t` interface
 - Meiss and Albert coordinates require non-canonical field input for spline construction
 
 ### Coordinate Transformation System

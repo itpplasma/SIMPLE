@@ -1,222 +1,155 @@
 program test_magfie_coils
+    !> Test coils field evaluation comparing VMEC field, raw Biot-Savart,
+    !> and splined field with real assertions.
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-use simple, only : init_vmec
-use magfie_sub, only : VMEC
-use velo_mod, only: isw_field_type
-use field, only: vmec_field_t, coils_field_t, create_coils_field
-use magfie_sub, only: magfie_vmec
-use util, only: twopi
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use simple, only: init_vmec
+    use magfie_sub, only: VMEC
+    use velo_mod, only: isw_field_type
+    use field_base, only: magnetic_field_t
+    use field_vmec, only: vmec_field_t
+    use field_coils, only: coils_field_t, create_coils_field
+    use field_splined, only: splined_field_t, create_splined_field
+    use reference_coordinates, only: init_reference_coordinates, ref_coords
+    use magfie_sub, only: magfie_vmec
+    use util, only: twopi
+    use cylindrical_cartesian, only: cyl_to_cart
 
-implicit none
+    implicit none
 
-class(vmec_field_t), allocatable :: vmec_field
-class(coils_field_t), allocatable :: coils_field
-real(dp) :: dummy, x(3), Acov(3), hcov(3), Bmod
+    type(vmec_field_t) :: vmec_field
+    type(coils_field_t) :: raw_coils
+    type(splined_field_t) :: splined_coils
+    real(dp) :: dummy, x(3), Acov(3), hcov(3), Bmod
+    real(dp) :: Acov_raw(3), hcov_raw(3), Bmod_raw
+    real(dp) :: Acov_spl(3), hcov_spl(3), Bmod_spl
+    integer :: n_failed
 
-isw_field_type = VMEC
+    logical :: wout_exists, coils_exists
 
-call init_vmec('wout.nc', 5, 5, 5, dummy)
-allocate(vmec_field)
-call create_coils_field('coils.5C', coils_field)
+    n_failed = 0
+    isw_field_type = VMEC
 
-x = [0.3d0, 0.2d0, 0.1d0]
+    inquire(file='wout.nc', exist=wout_exists)
+    inquire(file='coils.simple', exist=coils_exists)
+    if (.not. wout_exists) then
+        print *, 'FAILED: Required VMEC file (wout.nc) not found'
+        error stop 1
+    end if
+    if (.not. coils_exists) then
+        print *, 'FAILED: Required coils file (coils.simple) not found'
+        error stop 1
+    end if
 
-print *, 'x = ', x
+    call init_vmec('wout.nc', 5, 5, 5, dummy)
+    call init_reference_coordinates('wout.nc')
 
-call vmec_field%evaluate(x, Acov, hcov, Bmod)
-print *, 'vmec_field%evaluate'
-print *, 'A = ', Acov
-print *, 'h = ', hcov
-print *, 'B = ', Bmod
+    call create_coils_field('coils.simple', raw_coils)
+    call create_splined_field(raw_coils, ref_coords, splined_coils)
 
-call coils_field%evaluate_direct(x, Acov, hcov, Bmod)
-print *, 'coils_field%evaluate_direct'
-print *, 'A = ', Acov
-print *, 'h = ', hcov
-print *, 'B = ', Bmod
+    x = [0.5d0, 0.3d0, 0.2d0]
 
-call coils_field%evaluate(x, Acov, hcov, Bmod)
-print *, 'coils_field%evaluate'
-print *, 'A = ', Acov
-print *, 'h = ', hcov
-print *, 'B = ', Bmod
+    ! Test 1: VMEC field returns physically valid values
+    print *, 'Test 1: VMEC field evaluation'
+    call vmec_field%evaluate(x, Acov, hcov, Bmod)
 
-call test_curve
-call test_magfie
-call test_magfie_curve
-call test_can
-call test_can_curve
+    if (Bmod <= 0.0_dp) then
+        print *, '  FAILED: vmec_field Bmod must be positive, got ', Bmod
+        n_failed = n_failed + 1
+    end if
+
+    if (Bmod > 200000.0_dp) then
+        print *, '  FAILED: vmec_field Bmod unreasonably large (CGS) ', Bmod
+        n_failed = n_failed + 1
+    end if
+
+    ! Test 2: Splined coils field returns positive Bmod
+    print *, 'Test 2: Splined coils field evaluation'
+    call splined_coils%evaluate(x, Acov_spl, hcov_spl, Bmod_spl)
+
+    if (Bmod_spl <= 0.0_dp) then
+        print *, '  FAILED: splined_coils Bmod must be positive, got ', Bmod_spl
+        n_failed = n_failed + 1
+    end if
+
+    ! Test 3: Raw Biot-Savart at reference point
+    print *, 'Test 3: Raw Biot-Savart evaluation'
+    call evaluate_raw_at_ref(raw_coils, x, Acov_raw, hcov_raw, Bmod_raw)
+
+    if (Bmod_raw <= 0.0_dp) then
+        print *, '  FAILED: raw_coils Bmod must be positive, got ', Bmod_raw
+        n_failed = n_failed + 1
+    end if
+
+    ! Test 4: Splined and raw should agree within 1%
+    print *, 'Test 4: Splined vs raw Biot-Savart agreement'
+    if (abs(Bmod_spl - Bmod_raw) / Bmod_raw > 0.01_dp) then
+        print *, '  FAILED: Bmod_spl and Bmod_raw differ by more than 1%'
+        print *, '    Bmod_spl = ', Bmod_spl, ' Bmod_raw = ', Bmod_raw
+        n_failed = n_failed + 1
+    end if
+
+    ! Test 5: hcov should be normalized (|h| ~ 1 since h = B/|B|)
+    print *, 'Test 5: hcov normalization'
+    if (abs(sqrt(sum(hcov**2)) - 1.0_dp) > 0.1_dp) then
+        print *, '  FAILED: vmec_field hcov not normalized, |h| = ', sqrt(sum(hcov**2))
+        n_failed = n_failed + 1
+    end if
+
+    ! Test 6: magfie_vmec consistency
+    print *, 'Test 6: magfie_vmec evaluation'
+    call test_magfie(n_failed)
+
+    if (n_failed == 0) then
+        print *, '================================'
+        print *, 'All magfie_coils tests PASSED'
+        print *, '================================'
+        stop 0
+    else
+        print *, '================================'
+        print *, n_failed, ' tests FAILED'
+        print *, '================================'
+        error stop 1
+    end if
 
 contains
 
-subroutine test_curve
-    real(dp) :: x(3), Acov(3), hcov(3), Bmod
-    integer :: i, N=1000
+    subroutine evaluate_raw_at_ref(field, x_spline, Acov, hcov, Bmod)
+        !> Helper to evaluate raw coils at a spline coordinate point.
+        !> x_spline is in (r, theta, phi) where r = sqrt(s).
+        !> ref_coords expects VMEC coords (s, theta, phi).
+        type(coils_field_t), intent(in) :: field
+        real(dp), intent(in) :: x_spline(3)
+        real(dp), intent(out) :: Acov(3), hcov(3), Bmod
 
-    x = [0.3d0, 0.2d0, 0.0d0]
+        real(dp) :: x_vmec(3), x_cyl(3), x_cart(3)
 
-    do i = 0, N
-        x(3) = x(3) + twopi/N
-        call vmec_field%evaluate(x, Acov, hcov, Bmod)
-        write(1, *) x, Acov, hcov, Bmod
-        call coils_field%evaluate(x, Acov, hcov, Bmod)
-        write(2, *) x, Acov, hcov, Bmod
-    end do
-end subroutine test_curve
-
-
-subroutine test_magfie
-
-    real(dp) :: bmod, sqrtg
-    real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
-
-    call magfie_vmec(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    print *, 'magfie_vmec'
-    print *, 'B = ', bmod
-    print *, 'sqrtg = ', sqrtg
-    print *, 'Bder = ', bder
-    print *, 'hcovar = ', hcovar
-    print *, 'hctrvr = ', hctrvr
-    print *, 'hcurl = ', hcurl
-
-    call magfie_coils(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    print *, 'magfie_coils'
-    print *, 'B = ', bmod
-    print *, 'sqrtg = ', sqrtg
-    print *, 'Bder = ', bder
-    print *, 'hcovar = ', hcovar
-    print *, 'hctrvr = ', hctrvr
-    print *, 'hcurl = ', hcurl
-
-end subroutine test_magfie
+        ! Convert spline coords (r, theta, phi) to VMEC coords (s, theta, phi)
+        x_vmec = [x_spline(1)**2, x_spline(2), x_spline(3)]
+        call ref_coords%evaluate_point(x_vmec, x_cyl)
+        call cyl_to_cart(x_cyl, x_cart)
+        call field%evaluate(x_cart, Acov, hcov, Bmod)
+    end subroutine evaluate_raw_at_ref
 
 
-subroutine test_magfie_curve
-    real(dp) :: bmod, sqrtg
-    real(dp), dimension(3) :: x, bder, hcovar, hctrvr, hcurl
-    integer :: i, N=1000
+    subroutine test_magfie(n_failed)
+        integer, intent(inout) :: n_failed
+        real(dp) :: bmod, sqrtg
+        real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
 
-    x = [0.3d0, 0.2d0, 0.0d0]
-
-    do i = 0, N
-        x(3) = x(3) + twopi/N
         call magfie_vmec(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-        write(11, *) x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl
-        call magfie_coils(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-        write(12, *) x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl
-    end do
-end subroutine test_magfie_curve
 
+        ! Bmod must be positive
+        if (bmod <= 0.0_dp) then
+            print *, '  FAILED: magfie_vmec bmod must be positive, got ', bmod
+            n_failed = n_failed + 1
+        end if
 
-subroutine magfie_coils(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-    use interpolate, only: evaluate_batch_splines_3d_der
-
-    real(dp), intent(in) :: x(3)
-    real(dp), intent(out) :: bmod, sqrtg
-    real(dp), dimension(3), intent(out) :: bder, hcovar, hctrvr, hcurl
-
-    real(dp) :: Ar, Ath, Aphi, hr, hth, hphi
-    real(dp), dimension(3) :: dAr, dAth, dAphi, dhr, dhth, dhphi
-    real(dp) :: y_batch(7), dy_batch(3, 7)
-
-    real(dp) :: sqrtg_bmod
-
-    ! Use batch spline evaluation for all 7 components
-    call evaluate_batch_splines_3d_der(coils_field%spl_coils_batch, x, y_batch, dy_batch)
-    
-    ! Unpack results: order is [Ar, Ath, Aphi, hr, hth, hphi, Bmod]
-    Ar = y_batch(1);    dAr = dy_batch(:, 1)
-    Ath = y_batch(2);   dAth = dy_batch(:, 2)
-    Aphi = y_batch(3);  dAphi = dy_batch(:, 3)
-    hr = y_batch(4);    dhr = dy_batch(:, 4)
-    hth = y_batch(5);   dhth = dy_batch(:, 5)
-    hphi = y_batch(6);  dhphi = dy_batch(:, 6)
-    bmod = y_batch(7);  bder = dy_batch(:, 7)
-    bder = bder/bmod
-
-    sqrtg_bmod = dAth(1)*hphi - dAphi(1)*hth + &
-                 dAphi(2)*hr - dAr(2)*hphi + &
-                 dAr(3)*hth - dAth(3)*hr
-
-    sqrtg = sqrtg_bmod/bmod
-
-    hcovar(1) = hr
-    hcovar(2) = hth
-    hcovar(3) = hphi
-
-    hctrvr(1) = (dAphi(2) - dAth(3))/sqrtg_bmod
-    hctrvr(2) = (dAr(3) - dAphi(1))/sqrtg_bmod
-    hctrvr(3) = (dAth(1) - dAr(2))/sqrtg_bmod
-
-    hcurl(1) = (dhphi(2) - dhth(3))/sqrtg
-    hcurl(2) = (dhr(3) - dhphi(1))/sqrtg
-    hcurl(3) = (dhth(1) - dhr(2))/sqrtg
-end subroutine magfie_coils
-
-
-subroutine test_can
-    use field_can_mod, only: field_can_t
-    use field_can_meiss, only: init_meiss, get_meiss_coordinates, evaluate_meiss
-
-    type(field_can_t) :: f
-    real(dp) :: r, th, ph
-
-    r = 0.3d0
-    th = 0.2d0
-    ph = 0.1d0
-
-    call init_meiss(coils_field)
-    call get_meiss_coordinates
-    call evaluate_meiss(f, r, th, ph, 0)
-    print *, 'field_can_meiss(coils_field)'
-    print *, 'A = ', f%Ath, f%Aph
-    print *, 'h = ', f%hth, f%hph
-    print *, 'B = ', f%Bmod
-    print *, 'sqrtgBctr = ', f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
-
-    call init_meiss(vmec_field)
-    call get_meiss_coordinates
-    call evaluate_meiss(f, r, th, ph, 0)
-    print *, 'field_can_meiss(vmec_field)'
-    print *, 'A = ', f%Ath, f%Aph
-    print *, 'h = ', f%hth, f%hph
-    print *, 'B = ', f%Bmod
-    print *, 'sqrtgBctr = ', f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
-end subroutine test_can
-
-
-subroutine test_can_curve
-    use field_can_mod, only: field_can_t
-    use field_can_meiss, only: init_meiss, get_meiss_coordinates, evaluate_meiss
-
-    type(field_can_t) :: f
-    real(dp) :: r, th, ph
-    integer :: i, N=1000
-
-    r = 0.1d0
-    th = 0.2d0
-
-    call init_meiss(coils_field)
-    call get_meiss_coordinates
-
-    do i = 0, N
-        ph = i*twopi/N
-        call evaluate_meiss(f, r, th, ph, 0)
-        write(21, *) r, th, ph, f%Ath, f%Aph, f%hth, f%hph, f%Bmod
-        write(31, *) r, th, ph, f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
-    end do
-
-    call init_meiss(vmec_field)
-    call get_meiss_coordinates
-
-    do i = 0, N
-        ph = i*twopi/N
-        call evaluate_meiss(f, r, th, ph, 0)
-        write(22, *) r, th, ph, f%Ath, f%Aph, f%hth, f%hph, f%Bmod
-        write(32, *) r, th, ph, f%dAph(2) - f%dAth(3), -f%dAph(1), f%dAth(1)
-    end do
-end subroutine test_can_curve
-
+        ! sqrtg (Jacobian) must be positive for proper orientation
+        if (sqrtg <= 0.0_dp) then
+            print *, '  FAILED: magfie_vmec sqrtg must be positive, got ', sqrtg
+            n_failed = n_failed + 1
+        end if
+    end subroutine test_magfie
 
 end program test_magfie_coils

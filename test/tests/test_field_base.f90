@@ -1,13 +1,13 @@
 module mock_field_module
   use field_base
   implicit none
-  
+
   ! Mock implementation of magnetic_field_t for testing
   type, extends(magnetic_field_t) :: MockField
   contains
     procedure :: evaluate => mock_evaluate
   end type MockField
-  
+
 contains
 
   subroutine mock_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
@@ -17,16 +17,16 @@ contains
     real(dp), intent(out) :: hcov(3)
     real(dp), intent(out) :: Bmod
     real(dp), intent(out), optional :: sqgBctr(3)
-    
+
     ! Simple mock implementation that returns predictable values
     Acov = 0.0_dp
     hcov = 1.0_dp
     Bmod = 1.0_dp
-    
+
     if (present(sqgBctr)) then
         sqgBctr = x  ! Just return the input coordinates
     end if
-    
+
   end subroutine mock_evaluate
 
 end module mock_field_module
