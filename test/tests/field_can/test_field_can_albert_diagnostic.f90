@@ -3,11 +3,11 @@ program test_field_can_albert_diagnostic
     !> Run with both main and current branch to compare.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use simple, only: Tracer
+    use simple, only: tracer_t
     use simple_main, only: init_field
     use magfie_sub, only: ALBERT
     use velo_mod, only: isw_field_type
-    use field, only: VmecField
+    use field, only: vmec_field_t
     use field_can_albert, only: init_albert, psi_inner, psi_outer, &
         psi_of_x, Ath_norm, dpsi_dr_positive
     use field_can_meiss, only: spl_field_batch, xmin, xmax, n_r, n_th, n_phi
@@ -15,13 +15,13 @@ program test_field_can_albert_diagnostic
 
     implicit none
 
-    type(Tracer) :: norb
-    class(VmecField), allocatable :: magfie
+    type(tracer_t) :: norb
+    class(vmec_field_t), allocatable :: magfie
     integer :: i_r, i_th, i_phi, unit_id
     real(dp) :: x(3), y_batch(5)
 
     isw_field_type = ALBERT
-    magfie = VmecField()
+    magfie = vmec_field_t()
 
     print *, 'Initializing field with Albert coordinates...'
     call init_field(norb, 'wout.nc', 5, 5, 3, 0)
