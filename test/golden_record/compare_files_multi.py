@@ -13,10 +13,14 @@ import argparse
 import json
 
 def compare_numerical_files(old_file, new_file, rtol=0.0, atol=0.0):
-    """Compare two numerical files. Default is bit-identical (rtol=0, atol=0)."""
+    """Compare two numerical files. Default is bit-identical (rtol=0, atol=0).
+
+    Lines starting with '=' or '#' are treated as comments and skipped.
+    """
     try:
-        old_data = np.loadtxt(old_file)
-        new_data = np.loadtxt(new_file)
+        # Skip lines starting with '=' (section headers) or '#' (comments)
+        old_data = np.loadtxt(old_file, comments=['#', '='])
+        new_data = np.loadtxt(new_file, comments=['#', '='])
         
         # Handle scalar values
         if old_data.ndim == 0:
