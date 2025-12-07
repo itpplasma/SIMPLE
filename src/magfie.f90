@@ -62,6 +62,11 @@ subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   !> Magnetic field for analytic circular tokamak (TEST field).
   !> Coordinates: x(1)=r (minor radius), x(2)=theta (poloidal), x(3)=phi (toroidal)
   !> Uses same geometry as field_can_test: B0=1, R0=1, a=0.5, iota=1
+  !>
+  !> WARNING: hcurl is set to zero (curvature drift not computed).
+  !> This is acceptable for symplectic integration (integmode > 0) which uses
+  !> field_can_test instead. For RK45 integration (integmode=0), curvature
+  !> drift would be missing - use symplectic integration with TEST field.
   implicit none
 
   real(dp), intent(in) :: x(3)
