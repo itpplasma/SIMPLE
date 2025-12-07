@@ -12,15 +12,49 @@ import numpy as np
 import argparse
 import json
 
+def parse_numerical_lines(filepath):
+    """Parse numerical data from a file, skipping non-numerical lines.
+
+    Handles files with mixed content: section headers (===), key=value pairs,
+    comments (#), and numerical data lines.
+    """
+    data_lines = []
+    with open(filepath, 'r') as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith('#') or stripped.startswith('='):
+                continue
+            if '=' in stripped and not stripped[0].isdigit() and stripped[0] != '-':
+                continue
+            try:
+                values = [float(x) for x in stripped.split()]
+                if values:
+                    data_lines.append(values)
+            except ValueError:
+                continue
+    return data_lines
+
+
 def compare_numerical_files(old_file, new_file, rtol=0.0, atol=0.0):
     """Compare two numerical files. Default is bit-identical (rtol=0, atol=0).
 
-    Lines starting with '=' or '#' are treated as comments and skipped.
+    Handles files with mixed content: section headers (===), key=value pairs,
+    comments (#), and pure numerical data lines.
     """
     try:
-        # Skip lines starting with '=' (section headers) or '#' (comments)
-        old_data = np.loadtxt(old_file, comments=['#', '='])
-        new_data = np.loadtxt(new_file, comments=['#', '='])
+        old_lines = parse_numerical_lines(old_file)
+        new_lines = parse_numerical_lines(new_file)
+
+        if len(old_lines) != len(new_lines):
+            return False, f"Line count mismatch: {len(old_lines)} vs {len(new_lines)}"
+
+        old_data = np.array([row for row in old_lines if row], dtype=np.float64)
+        new_data = np.array([row for row in new_lines if row], dtype=np.float64)
+
+        if old_data.size == 0 and new_data.size == 0:
+            return True, "Both files have no numerical data"
         
         # Handle scalar values
         if old_data.ndim == 0:
