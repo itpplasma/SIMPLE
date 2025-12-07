@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-Convert VMEC equilibrium to chartmap coordinate file.
+Convert VMEC equilibrium to chartmap coordinate file using map2disc.
 
 Creates a tabulated (rho, theta, zeta) -> (X, Y, Z) mapping from VMEC data
-that can be used as reference coordinates in SIMPLE. The output is a NetCDF
-file compatible with libneo chartmap_coordinate_system_t.
+using boundary-conforming conformal mappings via map2disc. The output is a
+NetCDF file compatible with libneo chartmap_coordinate_system_t.
+
+The map2disc library creates conformal mappings from a unit disk to the
+flux surface cross-section, ensuring good coordinate properties (orthogonality
+near the boundary, smooth behavior at the magnetic axis).
 
 Usage:
     python vmec_to_chartmap.py wout.nc chartmap.nc --nrho 64 --ntheta 65 --nzeta 66
+
+Requirements:
+    pip install map2disc netCDF4 numpy
 """
 
 from __future__ import annotations
@@ -18,8 +25,137 @@ from pathlib import Path
 import numpy as np
 from netCDF4 import Dataset
 
+try:
+    from map2disc import map as m2d
+    HAS_MAP2DISC = True
+except ImportError:
+    HAS_MAP2DISC = False
 
-def vmec_to_cartesian(
+
+# Conversion factor: VMEC R,Z are in meters, libneo uses cm
+M_TO_CM = 100.0
+
+
+def get_vmec_boundary(vmec_file: str, zeta: float = 0.0) -> tuple[np.ndarray, int]:
+    """Extract VMEC boundary (R, Z) at given toroidal angle.
+
+    Returns boundary curve function and nfp.
+    """
+    with Dataset(vmec_file, "r") as ds:
+        xm = ds.variables["xm"][:]
+        xn = ds.variables["xn"][:]
+        rmnc = ds.variables["rmnc"][-1, :]  # Last flux surface = boundary
+        zmns = ds.variables["zmns"][-1, :]
+        nfp = int(ds.variables["nfp"][:])
+
+        lasym = ds.variables.get("lasym__logical__")
+        if lasym is not None:
+            lasym = bool(lasym[:])
+        else:
+            lasym = False
+
+        if lasym:
+            rmns = ds.variables["rmns"][-1, :]
+            zmnc = ds.variables["zmnc"][-1, :]
+        else:
+            rmns = None
+            zmnc = None
+
+    def boundary_curve(theta: np.ndarray) -> np.ndarray:
+        """Return (R, Z) boundary points for given theta array."""
+        R = np.zeros_like(theta)
+        Z = np.zeros_like(theta)
+        for im in range(len(xm)):
+            m = xm[im]
+            n = xn[im] / nfp
+            angle = m * theta - n * zeta
+            R += rmnc[im] * np.cos(angle)
+            Z += zmns[im] * np.sin(angle)
+            if lasym and rmns is not None and zmnc is not None:
+                R += rmns[im] * np.sin(angle)
+                Z += zmnc[im] * np.cos(angle)
+        return np.array([R * M_TO_CM, Z * M_TO_CM])
+
+    return boundary_curve, nfp
+
+
+def vmec_to_chartmap_map2disc(
+    vmec_file: str,
+    output_file: str,
+    nrho: int = 64,
+    ntheta: int = 65,
+    nzeta: int = 66,
+    M: int = 16,
+    Nt: int = 256,
+    Ng: tuple[int, int] = (256, 256),
+) -> None:
+    """Convert VMEC to chartmap using map2disc conformal mapping.
+
+    Args:
+        vmec_file: Input VMEC wout file
+        output_file: Output chartmap NetCDF file
+        nrho: Number of radial points
+        ntheta: Number of poloidal points
+        nzeta: Number of toroidal points
+        M: map2disc Fourier truncation parameter
+        Nt: map2disc boundary discretization
+        Ng: map2disc grid size for solver
+    """
+    if not HAS_MAP2DISC:
+        raise ImportError(
+            "map2disc not installed. Install with: pip install map2disc\n"
+            "Or use --simple mode for direct VMEC evaluation."
+        )
+
+    # Get VMEC boundary and nfp
+    _, nfp = get_vmec_boundary(vmec_file, zeta=0.0)
+
+    rho = np.linspace(0.0, 1.0, nrho)
+    theta = np.linspace(0.0, 2.0 * np.pi, ntheta, endpoint=False)
+    zeta_grid = np.linspace(0.0, 2.0 * np.pi / nfp, nzeta, endpoint=False)
+
+    print(f"Reading VMEC file: {vmec_file}")
+    print(f"Grid: {nrho} x {ntheta} x {nzeta} (rho x theta x zeta)")
+    print(f"Number of field periods: {nfp}")
+    print(f"Using map2disc conformal mapping (M={M}, Nt={Nt})")
+
+    X = np.zeros((nrho, ntheta, nzeta))
+    Y = np.zeros((nrho, ntheta, nzeta))
+    Z = np.zeros((nrho, ntheta, nzeta))
+
+    for iz, zeta_val in enumerate(zeta_grid):
+        print(f"  Processing zeta slice {iz + 1}/{nzeta} (zeta={zeta_val:.4f})")
+
+        # Get boundary curve at this toroidal angle
+        boundary_curve, _ = get_vmec_boundary(vmec_file, zeta=zeta_val)
+
+        # Create map2disc conformal mapping for this slice
+        bcm = m2d.BoundaryConformingMapping(
+            curve=boundary_curve,
+            M=M,
+            Nt=Nt,
+            Ng=Ng,
+        )
+        bcm.solve_domain2disk()
+        bcm.solve_disk2domain()
+
+        # Evaluate mapping: (rho, theta) -> (R, Z) in poloidal plane
+        # eval_rt_1d returns shape (2, nrho, ntheta)
+        rz = bcm.eval_rt_1d(rho, theta)
+        R_2d = rz[0]  # shape (nrho, ntheta), already in cm
+        Z_2d = rz[1]  # shape (nrho, ntheta), already in cm
+
+        # Convert to Cartesian (X, Y, Z)
+        X[:, :, iz] = R_2d * np.cos(zeta_val)
+        Y[:, :, iz] = R_2d * np.sin(zeta_val)
+        Z[:, :, iz] = Z_2d
+
+    print(f"Writing chartmap file: {output_file}")
+    write_chartmap(Path(output_file), rho, theta, zeta_grid, X, Y, Z, nfp)
+    print("Done.")
+
+
+def vmec_to_cartesian_simple(
     vmec_file: str,
     s: np.ndarray,
     theta: np.ndarray,
@@ -28,12 +164,10 @@ def vmec_to_cartesian(
     """
     Evaluate VMEC coordinates at given (s, theta, zeta) grid points.
 
+    This is the simple/direct method without map2disc conformal mapping.
     Returns Cartesian (X, Y, Z) arrays with shape (ns, ntheta, nzeta).
     Units are in cm (same as libneo VMEC splines).
     """
-    # Conversion factor: VMEC R,Z are in meters, libneo uses cm
-    M_TO_CM = 100.0
-
     with Dataset(vmec_file, "r") as ds:
         xm = ds.variables["xm"][:]
         xn = ds.variables["xn"][:]
@@ -158,14 +292,17 @@ def write_chartmap(
         v_nfp.assignValue(nfp)
 
 
-def vmec_to_chartmap(
+def vmec_to_chartmap_simple(
     vmec_file: str,
     output_file: str,
     nrho: int = 64,
     ntheta: int = 65,
     nzeta: int = 66,
 ) -> None:
-    """Convert VMEC file to chartmap format.
+    """Convert VMEC file to chartmap format using direct evaluation.
+
+    This is a simpler method that directly evaluates VMEC coordinates without
+    the conformal mapping from map2disc. Use --simple flag to enable this mode.
 
     Note: Although the chartmap format uses 'rho' as the variable name,
     we store the data at VMEC s values (s = psi/psi_edge, the normalized
@@ -186,8 +323,9 @@ def vmec_to_chartmap(
     print(f"Reading VMEC file: {vmec_file}")
     print(f"Grid: {nrho} x {ntheta} x {nzeta} (rho x theta x zeta)")
     print(f"Number of field periods: {nfp}")
+    print("Using simple/direct VMEC evaluation (no map2disc)")
 
-    X, Y, Z = vmec_to_cartesian(vmec_file, s, theta, zeta)
+    X, Y, Z = vmec_to_cartesian_simple(vmec_file, s, theta, zeta)
 
     print(f"Writing chartmap file: {output_file}")
     write_chartmap(Path(output_file), rho, theta, zeta, X, Y, Z, nfp)
@@ -207,16 +345,40 @@ def main(argv: list[str] | None = None) -> int:
         "--ntheta", type=int, default=65, help="Number of theta points"
     )
     parser.add_argument("--nzeta", type=int, default=66, help="Number of zeta points")
+    parser.add_argument(
+        "--simple",
+        action="store_true",
+        help="Use simple/direct VMEC evaluation instead of map2disc",
+    )
+    parser.add_argument(
+        "--M", type=int, default=16, help="map2disc Fourier truncation (default: 16)"
+    )
+    parser.add_argument(
+        "--Nt", type=int, default=256, help="map2disc boundary discretization"
+    )
 
     args = parser.parse_args(argv)
 
-    vmec_to_chartmap(
-        args.vmec_file,
-        args.output_file,
-        nrho=args.nrho,
-        ntheta=args.ntheta,
-        nzeta=args.nzeta,
-    )
+    if args.simple or not HAS_MAP2DISC:
+        if not args.simple and not HAS_MAP2DISC:
+            print("Warning: map2disc not available, falling back to simple mode")
+        vmec_to_chartmap_simple(
+            args.vmec_file,
+            args.output_file,
+            nrho=args.nrho,
+            ntheta=args.ntheta,
+            nzeta=args.nzeta,
+        )
+    else:
+        vmec_to_chartmap_map2disc(
+            args.vmec_file,
+            args.output_file,
+            nrho=args.nrho,
+            ntheta=args.ntheta,
+            nzeta=args.nzeta,
+            M=args.M,
+            Nt=args.Nt,
+        )
 
     return 0
 
