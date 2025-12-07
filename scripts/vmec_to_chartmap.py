@@ -71,8 +71,9 @@ def get_vmec_boundary(vmec_file: str, zeta: float = 0.0) -> tuple[np.ndarray, in
 
     def boundary_curve(theta: np.ndarray) -> np.ndarray:
         """Return (R, Z) boundary points for given theta array."""
-        R = np.zeros_like(theta)
-        Z = np.zeros_like(theta)
+        theta = np.atleast_1d(np.asarray(theta, dtype=np.float64))
+        R = np.zeros_like(theta, dtype=np.float64)
+        Z = np.zeros_like(theta, dtype=np.float64)
         for im in range(len(xm)):
             m = xm[im]
             n = xn[im] / nfp
