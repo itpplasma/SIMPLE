@@ -125,10 +125,10 @@ contains
         class(coordinate_system_t), allocatable :: vmec_coords, chartmap_coords
         real(dp) :: u(3), x_vmec_cyl(3), x_vmec_cart(3), x_chartmap(3)
         real(dp) :: diff, max_diff
-        ! Note: Tolerance is large because chartmap uses simple linear VMEC evaluation
-        ! while libneo VMEC uses sophisticated spline interpolation. This test verifies
-        ! the coordinate systems are in the same ballpark (same geometry, units).
-        real(dp), parameter :: tol = 500.0_dp  ! 500 cm tolerance for geometry verification
+        ! Tolerance for passthrough mode: both use the same libneo VMEC splines,
+        ! so difference is only from chartmap's B-spline interpolation of the
+        ! tabulated values. Should be small (< 1 cm for reasonable grid).
+        real(dp), parameter :: tol = 1.0_dp  ! 1 cm tolerance
         logical :: vmec_exists, chartmap_exists
         integer :: ir, ith, iphi
         integer :: nr, nth, nphi
@@ -136,7 +136,7 @@ contains
         print *, 'Test 3: Chartmap vs VMEC evaluate_point comparison'
 
         inquire(file='wout.nc', exist=vmec_exists)
-        inquire(file='wout.chartmap.nc', exist=chartmap_exists)
+        inquire(file='wout.chartmap.passthrough.nc', exist=chartmap_exists)
 
         if (.not. vmec_exists) then
             print *, '  FAILED: Required VMEC file (wout.nc) not found'
@@ -145,7 +145,8 @@ contains
         end if
 
         if (.not. chartmap_exists) then
-            print *, '  SKIPPED: Optional chartmap file (wout.chartmap.nc) not found'
+            print *, '  SKIPPED: Chartmap file (wout.chartmap.passthrough.nc) not found'
+            print *, '  (Generate with: vmec_to_chartmap.x wout.nc wout.chartmap.passthrough.nc --passthrough)'
             return
         end if
 
@@ -156,7 +157,7 @@ contains
 
         ! Create both coordinate systems
         call make_vmec_coordinate_system(vmec_coords)
-        call make_chartmap_coordinate_system(chartmap_coords, 'wout.chartmap.nc')
+        call make_chartmap_coordinate_system(chartmap_coords, 'wout.chartmap.passthrough.nc')
 
         max_diff = 0.0_dp
         nr = 5

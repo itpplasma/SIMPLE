@@ -246,11 +246,11 @@ set_tests_properties(test_coordinate_refactoring PROPERTIES
 add_executable(test_chartmap_reference.x test_chartmap_reference.f90)
 target_link_libraries(test_chartmap_reference.x simple)
 
-# Generate chartmap file from VMEC for test (passthrough mode)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+# Generate chartmap file from VMEC using Fortran passthrough (uses same libneo splines)
 add_test(NAME test_chartmap_reference_setup_passthrough
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/vmec_to_chartmap.py
-            wout.nc wout.chartmap.nc --passthrough
+    COMMAND ${CMAKE_BINARY_DIR}/vmec_to_chartmap.x
+            wout.nc wout.chartmap.passthrough.nc --passthrough
+            --nrho 64 --ntheta 65 --nzeta 33
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_reference_setup_passthrough PROPERTIES
     FIXTURES_SETUP chartmap_file_passthrough
@@ -263,7 +263,8 @@ set_tests_properties(test_chartmap_reference PROPERTIES
     FIXTURES_REQUIRED "chartmap_file_passthrough;chartmap_file_map2disc"
     LABELS "integration;slow")
 
-# Generate chartmap file using map2disc conformal mapping (slow test)
+# Generate chartmap file using map2disc conformal mapping (calls Python)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME test_chartmap_reference_setup_map2disc
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/vmec_to_chartmap.py
             wout.nc wout.chartmap.map2disc.nc --map2disc

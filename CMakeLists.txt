@@ -308,6 +308,13 @@ set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_orbit.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# VMEC to chartmap converter utility
+add_executable(vmec_to_chartmap.x
+    src/util/vmec_to_chartmap.f90
+)
+target_link_libraries(vmec_to_chartmap.x PRIVATE simple)
+set_target_properties(vmec_to_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # Ensure fortplot is built before diagnostics
 add_dependencies(diag_meiss.x fortplot)
 add_dependencies(diag_newton.x fortplot)
