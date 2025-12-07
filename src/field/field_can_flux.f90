@@ -1,14 +1,14 @@
 module field_can_flux
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: FieldCan, n_field_evaluations, twopi
+use field_can_base, only: field_can_t, n_field_evaluations, twopi
 
 implicit none
 
 contains
 
 subroutine evaluate_flux(f, r, th_c, ph_c, mode_secders)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
@@ -59,7 +59,7 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 
     use get_can_sub, only : splint_can_coord
 
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     double precision, intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 

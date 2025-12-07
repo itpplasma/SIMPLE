@@ -1,8 +1,8 @@
 program export_field_2d
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_vmec, only: VmecField
+    use field_vmec, only: vmec_field_t
 #ifdef GVEC_AVAILABLE
-    use field_gvec, only: GvecField, create_gvec_field
+    use field_gvec, only: gvec_field_t, create_gvec_field
 #endif
     use new_vmec_stuff_mod, only: netcdffile, multharm
     use spline_vmec_sub, only: spline_vmec_data
@@ -10,9 +10,9 @@ program export_field_2d
     
     implicit none
     
-    class(VmecField), allocatable :: vmec_field
+    class(vmec_field_t), allocatable :: vmec_field
 #ifdef GVEC_AVAILABLE
-    class(GvecField), allocatable :: gvec_field
+    class(gvec_field_t), allocatable :: gvec_field
 #endif
     character(len=256) :: vmec_file
 #ifdef GVEC_AVAILABLE
@@ -83,7 +83,7 @@ program export_field_2d
     netcdffile = vmec_file
     multharm = 7
     call spline_vmec_data
-    allocate(VmecField :: vmec_field)
+    allocate(vmec_field_t :: vmec_field)
     
 #ifdef GVEC_AVAILABLE
     ! Initialize GVEC field

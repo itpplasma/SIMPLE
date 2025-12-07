@@ -4,9 +4,9 @@ program test_coord_trans
   use new_vmec_stuff_mod, only : netcdffile, multharm, ns_s, ns_tp
 
   use parmot_mod, only : ro0, rmu
-  use field_can_mod, only : FieldCan
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
-  use simple, only : Tracer, init_sympl
+  use field_can_mod, only : field_can_t
+  use orbit_symplectic, only : symplectic_integrator_t, orbit_timestep_sympl
+  use simple, only : tracer_t, init_sympl
   use simple_main, only : init_field
   use cut_detector, only : fract_dimension
   use params, only : debug
@@ -36,7 +36,7 @@ program test_coord_trans
 
   double precision :: relerr
 
-  type(Tracer) :: norb
+  type(tracer_t) :: norb
 
   integer :: nplagr,nder,npl_half
   integer :: norbper,nfp

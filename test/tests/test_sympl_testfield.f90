@@ -1,22 +1,23 @@
 program test_sympl_testfield
   use, intrinsic :: iso_fortran_env, only : dp => real64
   use simple_main, only : init_field
-  use simple, only : Tracer, init_sympl
-  use params, only : isw_field_type, field_input, integmode
+  use simple, only : tracer_t, init_sympl
+  use params, only : isw_field_type, field_input, coord_input, integmode
   use magfie_sub, only : TEST
   use field_can_mod, only : evaluate
   use orbit_symplectic, only : orbit_timestep_sympl
 
   implicit none
 
-  type(Tracer) :: norb
+  type(tracer_t) :: norb
   character(*), parameter :: vmec_file = WOUT_FILE
   integer, parameter :: ans_s = 5, ans_tp = 5, amultharm = 5
   integer :: ierr
 
   ! Configure symplectic GC with TEST field to ensure initialization succeeds
   isw_field_type = TEST
-  field_input = ''
+  field_input = vmec_file
+  coord_input = vmec_file
   integmode = 1
 
   call init_field(norb, vmec_file, ans_s, ans_tp, amultharm, integmode)

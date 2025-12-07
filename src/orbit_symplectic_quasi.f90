@@ -1,7 +1,7 @@
 module orbit_symplectic_quasi
 
-use field_can_mod, only: eval_field => evaluate, FieldCan, get_derivatives
-use orbit_symplectic_base, only: SymplecticIntegrator, MultistageIntegrator, &
+use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives
+use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
 use minpack_interfaces, only: hybrd1
 
@@ -14,9 +14,9 @@ save
 logical, parameter :: exact_steps = .False.
 integer, parameter :: S_MAX_GAUSS = 3
 
-type(FieldCan) :: f
-type(FieldCan) :: fs(S_MAX_GAUSS)
-type(SymplecticIntegrator) :: si
+type(field_can_t) :: f
+type(field_can_t) :: fs(S_MAX_GAUSS)
+type(symplectic_integrator_t) :: si
   !$omp threadprivate(f, si)
 
 procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
@@ -33,7 +33,7 @@ subroutine f_exact_quasi(n, x, fvec, iflag)
   real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
-  type(FieldCan) :: f2
+  type(field_can_t) :: f2
 
   f2 = f
 
@@ -168,7 +168,7 @@ subroutine f_rk_lobatto_quasi(n, x, fvec)
   !
 subroutine orbit_timestep_multi_quasi(mi, ierr)
   !
-    type(MultistageIntegrator), intent(inout) :: mi
+    type(multistage_integrator_t), intent(inout) :: mi
 
     integer, intent(out) :: ierr
 

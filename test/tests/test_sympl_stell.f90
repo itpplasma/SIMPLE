@@ -16,11 +16,11 @@ integer :: ierr, kt
 
 double precision :: z0(4), vpar0, dt
 
-type(FieldCan) :: f
-type(SymplecticIntegrator) :: integ_euler1, integ_euler2, integ_midpoint, integ_gauss2, &
+type(field_can_t) :: f
+type(symplectic_integrator_t) :: integ_euler1, integ_euler2, integ_midpoint, integ_gauss2, &
     integ_gauss4, integ_gauss6, integ_lobatto4
-type(MultistageIntegrator) :: verlet, order4, mclachlan4, blanes4, kahan6
-type(Tracer) :: norb
+type(multistage_integrator_t) :: verlet, order4, mclachlan4, blanes4, kahan6
+type(tracer_t) :: norb
 
 integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
@@ -124,7 +124,7 @@ print *, ''
 contains
 
 subroutine test_single(si, outname)
-    type(SymplecticIntegrator) :: si
+    type(symplectic_integrator_t) :: si
     character(*) :: outname
 
     double precision :: starttime, endtime
@@ -160,7 +160,7 @@ subroutine test_single(si, outname)
 end subroutine test_single
 
 subroutine test_quasi(si, outname)
-    type(SymplecticIntegrator) :: si
+    type(symplectic_integrator_t) :: si
     character(*) :: outname
 
     double precision :: starttime, endtime
@@ -201,7 +201,7 @@ subroutine test_quasi(si, outname)
 end subroutine test_quasi
 
 subroutine test_multi(mi, outname)
-    type(MultistageIntegrator) :: mi
+    type(multistage_integrator_t) :: mi
     character(*) :: outname
 
     double precision :: starttime, endtime
@@ -234,7 +234,7 @@ subroutine test_multi(mi, outname)
 end subroutine test_multi
 
 subroutine test_multi_quasi(mi, outname)
-    type(MultistageIntegrator) :: mi
+    type(multistage_integrator_t) :: mi
     character(*) :: outname
 
     double precision :: starttime, endtime

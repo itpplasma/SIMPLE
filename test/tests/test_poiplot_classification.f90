@@ -4,8 +4,8 @@
   use parmot_mod, only : rmu,ro0,eeff
   use velo_mod,   only : isw_field_type
 use diag_mod, only : icounter
-use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, FieldCan_init
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_timestep_sympl
+use field_can_mod, only: eval_field => evaluate, field_can_from_name, field_can_t, field_can_init
+  use orbit_symplectic, only : symplectic_integrator_t, orbit_timestep_sympl
   use simple, only : init_sympl
   use plag_coeff_sub, only : plag_coeff
   use get_can_sub
@@ -50,8 +50,8 @@ use field_can_mod, only: eval_field => evaluate, field_can_from_name, FieldCan, 
   double precision, dimension(:),   allocatable :: xp
   double precision, dimension(:,:), allocatable :: coef,orb_sten
 !
-  type(FieldCan) :: f
-  type(SymplecticIntegrator) :: si
+  type(field_can_t) :: f
+  type(symplectic_integrator_t) :: si
 
   zerolam=0.d0
   twopi=2.d0*pi

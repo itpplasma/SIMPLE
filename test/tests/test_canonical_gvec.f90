@@ -3,17 +3,17 @@ program test_canonical_gvec
     !> Tests that the vmec_field_adapter properly handles GVEC fields
     !> and that vector potential derivatives are computed correctly
     
-    use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_gvec, only: GvecField, create_gvec_field
-    use field_base, only: MagneticField
-    use vmec_field_adapter, only: vmec_field_evaluate_with_field, &
+    use, intrinsic :: iso_fortran_env, only : dp => real64
+    use field_gvec, only : gvec_field_t, create_gvec_field
+    use field_base, only : magnetic_field_t
+    use vmec_field_adapter, only : vmec_field_evaluate_with_field, &
                                    vmec_lambda_interpolate_with_field, &
                                    vmec_iota_interpolate_with_field
-    use params, only: pi
+    use params, only : pi
     
     implicit none
     
-    class(GvecField), allocatable :: gvec_field
+    class(gvec_field_t), allocatable :: gvec_field
     character(len=256) :: gvec_file
     logical :: file_exists
     

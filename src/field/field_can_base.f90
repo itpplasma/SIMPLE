@@ -9,7 +9,7 @@ integer(8) :: n_field_evaluations = 0
 
 !$omp threadprivate(n_field_evaluations)
 
-type :: FieldCan
+type :: field_can_t
     real(dp) :: Ath, Aph
     real(dp) :: hth, hph
     real(dp) :: Bmod
@@ -32,13 +32,13 @@ type :: FieldCan
     real(dp), dimension(10) :: d2vpar, d2H, d2pth
 
     real(dp) :: mu, ro0
-end type FieldCan
+end type field_can_t
 
 
 abstract interface
     subroutine evaluate(f, r, th_c, ph_c, mode_secders)
-        import FieldCan, dp
-        type(FieldCan), intent(inout) :: f
+        import field_can_t, dp
+        type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
         integer, intent(in) :: mode_secders
     end subroutine evaluate

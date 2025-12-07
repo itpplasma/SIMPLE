@@ -2,7 +2,7 @@ module test_highlevel
     use simple
     use util, only: pi
     use funit
-    use simple, only : Tracer
+    use simple, only : tracer_t
     use simple_main, only : init_field
     use new_vmec_stuff_mod
     use vmecin_sub, only : stevvo
@@ -17,7 +17,7 @@ contains
     @test
     subroutine test_initfield()
         integer :: ans_s, ans_tp, amultharm, aintegmode
-        type(Tracer) :: self
+        type(tracer_t) :: self
         ans_s = 5
         ans_tp = 5
         amultharm = 7
@@ -31,7 +31,7 @@ contains
     subroutine test_volume_and_B00()
         integer             :: L1i
         double precision    :: RT0, R0i, cbfi, bz0i, bf0, volume, B00
-        type(Tracer) :: self
+        type(tracer_t) :: self
 
         print *, 'test_volume_and_B00'
 

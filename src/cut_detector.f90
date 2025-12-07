@@ -1,8 +1,8 @@
 module cut_detector
     use util, only: twopi
     use simple, only: tstep
-    use orbit_symplectic, only: SymplecticIntegrator
-    use field_can_mod, only: FieldCan
+    use orbit_symplectic, only: symplectic_integrator_t
+    use field_can_mod, only: field_can_t
     use params, only: debug
 
     implicit none
@@ -17,7 +17,7 @@ module cut_detector
 
     public
 
-    type :: CutDetector
+    type :: cut_detector_t
       real(dp) :: fper  ! field period
 
       ! for Poincare cuts
@@ -26,12 +26,12 @@ module cut_detector
 
       real(dp) :: orb_sten(6,nplagr), coef(0:nder,nplagr)
       integer :: ipoi(nplagr)
-    end type CutDetector
+    end type cut_detector_t
 
   contains
 
     subroutine init(self, fper, z)
-      type(CutDetector) :: self
+      type(cut_detector_t) :: self
       real(dp), intent(in) :: fper
       real(dp), intent(in) :: z(:)
       integer :: i
@@ -70,9 +70,9 @@ module cut_detector
     subroutine trace_to_cut(self, si, f, z, var_cut, cut_type, ierr)
       use plag_coeff_sub, only : plag_coeff
 
-      type(CutDetector) :: self
-      type(SymplecticIntegrator) :: si
-      type(FieldCan) :: f
+      type(cut_detector_t) :: self
+      type(symplectic_integrator_t) :: si
+      type(field_can_t) :: f
 
       real(dp), intent(inout) :: z(:)
       ! variables to evaluate at tip: z(1..5), par_inv

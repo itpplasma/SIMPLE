@@ -5,17 +5,17 @@ program diag_meiss_main
 !> initializes the field, and generates diagnostic plots for canonical coordinates
 
 use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, integmode, params_init, isw_field_type
-use simple, only: Tracer, init_vmec
+use simple, only: tracer_t, init_vmec
 use timing, only: init_timer, print_phase_time
 use diag_meiss, only: plot_rh_can_vs_rc
 use field_can_mod, only: field_can_from_id
-use field, only: field_from_file, VmecField
+use field, only: field_from_file, vmec_field_t
 use field_can_meiss, only: init_transformation_arrays
 
 implicit none
 
 character(256) :: config_file
-type(Tracer) :: norb
+type(tracer_t) :: norb
 
 ! Initialize timing
 call init_timer()
@@ -41,7 +41,7 @@ call print_phase_time('Integration mode set')
 
 ! Initialize field_can system up to the point before expensive computation
 if (norb%integmode >= 0) then
-    call field_can_from_id(isw_field_type, VmecField())
+    call field_can_from_id(isw_field_type, vmec_field_t())
     call print_phase_time('Field canonical setup completed')
     
     ! Initialize only the transformation arrays (without expensive computation)

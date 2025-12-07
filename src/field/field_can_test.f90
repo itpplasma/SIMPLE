@@ -1,14 +1,14 @@
 module field_can_test
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: FieldCan, n_field_evaluations
+use field_can_base, only: field_can_t, n_field_evaluations
 
 implicit none
 
 contains
 
 subroutine evaluate_test(f, r, th_c, ph_c, mode_secders)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
 
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
@@ -21,7 +21,7 @@ end subroutine evaluate_test
 
 ! for testing -> circular tokamak
 subroutine eval_field_test(f, r, th, ph, mode_secders)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     double precision, intent(in) :: r, th, ph
     integer, intent(in) :: mode_secders
 

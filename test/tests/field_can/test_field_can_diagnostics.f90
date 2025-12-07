@@ -14,17 +14,17 @@ program test_field_can_diagnostics
     !> Usage: Run in directory with simple.in and wout.nc (and coils.simple for ALBERT)
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use simple, only: Tracer
+    use simple, only: tracer_t
     use simple_main, only: init_field
     use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
         integ_coords, field_input
-    use field_can_mod, only: FieldCan, evaluate, integ_to_ref, ref_to_integ, &
+    use field_can_mod, only: field_can_t, evaluate, integ_to_ref, ref_to_integ, &
         init_field_can
     use magfie_sub, only: CANFLUX, BOOZER, MEISS, ALBERT
 
     implicit none
 
-    type(Tracer) :: norb
+    type(tracer_t) :: norb
     integer :: mode, unit_id
     character(len=32) :: mode_name
     character(len=64) :: output_file
@@ -279,7 +279,7 @@ contains
 
     subroutine dump_field_evaluation_diagnostics(unit_id, mode)
         integer, intent(in) :: unit_id, mode
-        type(FieldCan) :: f
+        type(field_can_t) :: f
         real(dp) :: test_points(3, 5)
         integer :: i
 

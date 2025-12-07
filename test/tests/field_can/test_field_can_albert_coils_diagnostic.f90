@@ -9,7 +9,7 @@ program test_field_can_albert_coils_diagnostic
     !>   netcdffile = 'wout.nc'
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use simple, only: Tracer
+    use simple, only: tracer_t
     use simple_main, only: init_field
     use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
         field_input
@@ -20,7 +20,7 @@ program test_field_can_albert_coils_diagnostic
 
     implicit none
 
-    type(Tracer) :: norb
+    type(tracer_t) :: norb
     integer :: i_r, i_th, i_phi, unit_id
     real(dp) :: x(3), y_batch(5)
     integer :: mid_r, mid_th, mid_phi

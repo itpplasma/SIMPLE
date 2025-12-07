@@ -4,9 +4,13 @@ set(SOURCES
     coordinates/coordinates.f90
     coordinates/stencil_utils.f90
     coordinates/array_utils.f90
+    coordinates/reference_coordinates.f90
+    coordinates/coordinate_scaling.f90
+    coordinates/cartesian_coordinates.f90
     field/field_base.f90
     field/field_coils.f90
     field/field_vmec.f90
+    field/field_splined.f90
     field/vmec_field_eval.f90
     field/field_newton.F90
     field.F90

@@ -8,14 +8,14 @@ program diag_orbit_main
 use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
     integmode, params_init, isw_field_type, dtaumin, relerr, ntestpart, ntimstep, ntau, &
     zstart, startmode, grid_density, special_ants_file, reuse_batch, num_surf, sbeg
-use simple, only: Tracer, init_sympl
+use simple, only: tracer_t, init_sympl
 use simple_main, only: init_field
 use magfie_sub, only: init_magfie, VMEC
 use samplers, only: init_starting_surf, sample, START_FILE
 use timing, only: init_timer, print_phase_time
 use diag_orbit, only: integrate_orbit_with_trajectory_debug
-use orbit_symplectic_base, only: SymplecticIntegrator
-use field_can_mod, only: FieldCan, get_val, eval_field => evaluate
+use orbit_symplectic_base, only: symplectic_integrator_t
+use field_can_mod, only: field_can_t, get_val, eval_field => evaluate
 
 implicit none
 
@@ -23,9 +23,9 @@ implicit none
 integer, parameter :: dp = kind(1.0d0)
 
 character(256) :: config_file, particle_arg
-type(Tracer) :: norb
-type(SymplecticIntegrator) :: si
-type(FieldCan) :: field_can
+type(tracer_t) :: norb
+type(symplectic_integrator_t) :: si
+type(field_can_t) :: field_can
 integer :: particle_number
 real(dp), dimension(5) :: z
 

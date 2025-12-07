@@ -60,8 +60,52 @@ compare_cases() {
         
         echo "Comparing $CASE case..."
         
+        # Check if this is albert_coils case with diagnostic file
+        if [ "$CASE" = "albert_coils" ]; then
+            # Albert coordinates with coils field: compare diagnostic files
+            # With deterministic FP builds, results should be bit-identical
+            REF_DIAG="$REFERENCE_DIR/$CASE/albert_coils_diagnostic.dat"
+            CUR_DIAG="$CURRENT_DIR/$CASE/albert_coils_diagnostic.dat"
+            REF_INTER="$REFERENCE_DIR/$CASE/albert_intermediate.dat"
+            CUR_INTER="$CURRENT_DIR/$CASE/albert_intermediate.dat"
+
+            if [ -f "$REF_DIAG" ] && [ -f "$CUR_DIAG" ]; then
+                echo "  (comparing Albert coordinate diagnostic - bit-identical)"
+                python "$SCRIPT_DIR/compare_files_multi.py" \
+                    "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                    --files albert_coils_diagnostic.dat
+                result=$?
+                if [ -f "$REF_INTER" ] && [ -f "$CUR_INTER" ]; then
+                    echo "  (also comparing intermediate values - bit-identical)"
+                    python "$SCRIPT_DIR/compare_files_multi.py" \
+                        "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                        --files albert_intermediate.dat
+                    inter_result=$?
+                    if [ $inter_result -ne 0 ]; then
+                        echo "  FAILED: Intermediate values differ"
+                        result=$inter_result
+                    fi
+                fi
+            elif [ ! -f "$REF_DIAG" ] && [ -f "$CUR_DIAG" ]; then
+                echo "  (reference lacks diagnostic - SKIPPING albert_coils)"
+                result=0
+            else
+                echo "  (no diagnostic, comparing times_lost.dat - bit-identical)"
+                python "$SCRIPT_DIR/compare_files_multi.py" \
+                    "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                    --files times_lost.dat
+                result=$?
+            fi
+
+            if [ $result -eq 0 ]; then
+                echo "  ✓ PASSED"
+                passed_cases=$((passed_cases + 1))
+            else
+                echo "  ✗ FAILED"
+                failed_cases=$((failed_cases + 1))
+            fi
         # Check if this is the classifier_fast case with multiple files
-        if [ "$CASE" = "classifier_fast" ]; then
+        elif [ "$CASE" = "classifier_fast" ]; then
             # List of files to compare for classifier_fast (excluding simple.in and wout.nc)
             # Note: fort.* files are excluded due to non-deterministic ordering in parallel execution
             CLASSIFIER_FILES="avg_inverse_t_lost.dat class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"

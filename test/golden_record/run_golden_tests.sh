@@ -124,24 +124,45 @@ for test_case in $TEST_CASES; do
     # Run SIMPLE
     cd "$test_dir"
     "$SIMPLE_EXE" > simple.log 2>&1
-    
+
     if [ $? -ne 0 ]; then
         echo "Error: SIMPLE failed for test case $test_case"
         cat simple.log
         exit 1
     fi
-    
+
     # Check for expected output files
     if [ ! -f "confined_fraction.dat" ]; then
         echo "Error: confined_fraction.dat not found for test case $test_case"
         exit 1
     fi
-    
+
     if [ ! -f "times_lost.dat" ]; then
         echo "Error: times_lost.dat not found for test case $test_case"
         exit 1
     fi
-    
+
+    # Run albert diagnostic for albert_coils test cases
+    if [[ "$test_case" == "albert_coils" ]]; then
+        ALBERT_DIAG_BIN="$PROJECT_ROOT/build/test/tests/field_can/test_field_can_albert_coils_diagnostic.x"
+        if [ -x "$ALBERT_DIAG_BIN" ]; then
+            echo "Running Albert coordinate diagnostic..."
+            "$ALBERT_DIAG_BIN" >> simple.log 2>&1
+            if [ $? -ne 0 ]; then
+                echo "Warning: Albert diagnostic failed (non-fatal)"
+            fi
+        fi
+        # Also run intermediate values test for detailed regression tracking
+        ALBERT_INTER_BIN="$PROJECT_ROOT/build/test/tests/field_can/test_albert_intermediate.x"
+        if [ -x "$ALBERT_INTER_BIN" ]; then
+            echo "Running Albert intermediate values diagnostic..."
+            "$ALBERT_INTER_BIN" >> simple.log 2>&1
+            if [ $? -ne 0 ]; then
+                echo "Warning: Albert intermediate diagnostic failed (non-fatal)"
+            fi
+        fi
+    fi
+
     echo "Test case $test_case completed successfully"
 done
 
