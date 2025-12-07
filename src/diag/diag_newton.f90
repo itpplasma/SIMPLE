@@ -5,8 +5,8 @@ module diag_newton
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use util, only: pi, twopi
-use field_can_mod, only: FieldCan, get_val, eval_field => evaluate
-use orbit_symplectic_base, only: SymplecticIntegrator
+use field_can_mod, only: field_can_t, get_val, eval_field => evaluate
+use orbit_symplectic_base, only: symplectic_integrator_t
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use params, only: dtau
@@ -22,9 +22,9 @@ contains
 
 !> EXACT copy of newton_midpoint from orbit_symplectic.f90 with debug output
 subroutine newton_midpoint_debug(si, f, x, atol, rtol, maxit, xlast, step_num)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
-  type(FieldCan) :: fmid
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  type(field_can_t) :: fmid
   integer, parameter :: n = 5
   integer :: kit
   real(dp), intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
@@ -93,8 +93,8 @@ end subroutine newton_midpoint_debug
 
 !> Integration wrapper that calls debug newton_midpoint for specified number of steps
 subroutine integrate_orbit_with_newton_debug(si, f, num_steps)
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     integer, intent(in) :: num_steps
     
     integer, parameter :: n = 5, maxit = 32

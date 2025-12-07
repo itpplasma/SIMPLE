@@ -4,13 +4,13 @@ program test_adapter_consistency
     
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use vmec_field_adapter, only: vmec_field_evaluate, vmec_field_evaluate_with_field
-    use field_gvec, only: GvecField, create_gvec_field
-    use field_base, only: MagneticField
+    use field_gvec, only: gvec_field_t, create_gvec_field
+    use field_base, only: magnetic_field_t
     use params, only: pi
     
     implicit none
     
-    class(GvecField), allocatable :: gvec_field
+    class(gvec_field_t), allocatable :: gvec_field
     character(len=256) :: gvec_file
     logical :: file_exists, test_passed
     
@@ -55,7 +55,7 @@ program test_adapter_consistency
     call create_gvec_field(gvec_file, gvec_field)
     
     select type(field => gvec_field)
-    type is (GvecField)
+    type is (gvec_field_t)
         if (.not. field%data_loaded) then
             print *, 'ERROR: Failed to load GVEC field data'
             error stop 1

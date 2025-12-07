@@ -8,7 +8,7 @@ use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
 use util, only: twopi, sqrt2
 use velo_mod,   only : isw_field_type
 use orbit_symplectic, only : orbit_timestep_sympl, get_val
-use simple, only : init_sympl, Tracer
+use simple, only : init_sympl, tracer_t
 use cut_detector, only : fract_dimension
 use diag_mod, only : icounter
 use get_can_sub, only : vmec_to_can, can_to_vmec
@@ -62,7 +62,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     use plag_coeff_sub, only : plag_coeff
     use alpha_lifetime_sub, only : orbit_timestep_axis
 
-    type(Tracer), intent(inout) :: anorb
+    type(tracer_t), intent(inout) :: anorb
     integer, intent(in) :: ipart
     type(classification_result_t), intent(out) :: class_result
     integer :: ierr, ierr_coll

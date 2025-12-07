@@ -3,8 +3,8 @@ module vmec_field_adapter
   !> This module extends vmec_field_eval to support GVEC fields
 
   use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: MagneticField
-  use field, only: VmecField, GvecField
+  use field_base, only: magnetic_field_t
+  use field, only: vmec_field_t, gvec_field_t
   use spline_vmec_sub
   use MODgvec_ReadState, only: eval_iota_r
   use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, &
@@ -29,7 +29,7 @@ contains
 
   ! Compute vector potential derivatives for GVEC field via numerical differentiation
   subroutine compute_vector_potential_derivatives_gvec(field, s, theta, varphi, dA_theta_ds, dA_phi_ds)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: dA_theta_ds, dA_phi_ds
     
@@ -84,7 +84,7 @@ contains
                                             sqg, alam, dl_ds, dl_dt, dl_dp, &
                                             Bctrvr_vartheta, Bctrvr_varphi, &
                                             Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds
     real(dp), intent(out) :: aiota, sqg, alam
@@ -97,7 +97,7 @@ contains
     integer :: deriv
 
     select type (field)
-    type is (VmecField)
+    type is (vmec_field_t)
       ! For VMEC fields, use the existing spline-based evaluation
       call vmec_field_evaluate(s, theta, varphi, &
                               A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
@@ -105,7 +105,7 @@ contains
                               Bctrvr_vartheta, Bctrvr_varphi, &
                               Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
 
-    type is (GvecField)
+    type is (gvec_field_t)
       ! For GVEC fields, we need to translate to GVEC coordinates and evaluate
       x = [sqrt(s), theta, varphi]
       
@@ -145,15 +145,15 @@ contains
 
   !> Override iota interpolation to handle GVEC fields
   subroutine vmec_iota_interpolate_with_field(field, s, aiota, daiota_ds)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s
     real(dp), intent(out) :: aiota, daiota_ds
 
     select type (field)
-    type is (VmecField)
+    type is (vmec_field_t)
       call vmec_iota_interpolate(s, aiota, daiota_ds)
       
-    type is (GvecField)
+    type is (gvec_field_t)
       ! For GVEC, use eval_iota_r
       ! GVEC eval_iota_r takes only radial coordinate
       aiota = eval_iota_r(sqrt(s))
@@ -182,17 +182,17 @@ contains
 
   !> Override lambda interpolation to handle GVEC fields
   subroutine vmec_lambda_interpolate_with_field(field, s, theta, varphi, alam, dl_dt)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam, dl_dt
     
     real(dp) :: rho
 
     select type (field)
-    type is (VmecField)
+    type is (vmec_field_t)
       call vmec_lambda_interpolate(s, theta, varphi, alam, dl_dt)
       
-    type is (GvecField)
+    type is (gvec_field_t)
       ! For GVEC, Lambda is available as LA
       rho = sqrt(s)
       
@@ -233,7 +233,7 @@ contains
                                                 dR_ds, dR_dt, dR_dp, &
                                                 dZ_ds, dZ_dt, dZ_dp, &
                                                 dl_ds, dl_dt, dl_dp)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds
     real(dp), intent(out) :: aiota, R, Z, alam
@@ -245,7 +245,7 @@ contains
     real(dp) :: daiota_ds
 
     select type (field)
-    type is (VmecField)
+    type is (vmec_field_t)
       call vmec_data_interpolate(s, theta, varphi, &
                                   A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
                                   R, Z, alam, &
@@ -253,7 +253,7 @@ contains
                                   dZ_ds, dZ_dt, dZ_dp, &
                                   dl_ds, dl_dt, dl_dp)
 
-    type is (GvecField)
+    type is (gvec_field_t)
       ! For GVEC fields, we need to extract these from the field evaluation
       x = [sqrt(s), theta, varphi]
       call field%evaluate(x, Acov, hcov, Bmod)

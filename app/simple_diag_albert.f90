@@ -7,7 +7,7 @@ program diag_albert_main
 
 use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
     integmode, params_init, isw_field_type
-use simple, only: Tracer
+use simple, only: tracer_t
 use simple_main, only: init_field
 use timing, only: init_timer, print_phase_time
 use diag_albert, only: plot_albert_contours
@@ -15,7 +15,7 @@ use diag_albert, only: plot_albert_contours
 implicit none
 
 character(256) :: config_file
-type(Tracer) :: norb
+type(tracer_t) :: norb
 integer, parameter :: ALBERT_FIELD_TYPE = 4
 
 ! Initialize timing

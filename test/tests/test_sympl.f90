@@ -1,8 +1,8 @@
 program test_sympl
   use, intrinsic :: iso_fortran_env, only : dp => real64
-  use orbit_symplectic, only : SymplecticIntegrator, orbit_sympl_init, &
+  use orbit_symplectic, only : symplectic_integrator_t, orbit_sympl_init, &
     orbit_timestep_sympl, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS4
-  use field_can_mod, only : FieldCan, FieldCan_init, eval_field => evaluate, &
+  use field_can_mod, only : field_can_t, field_can_init, eval_field => evaluate, &
     field_can_from_name
   use timing, only : get_wtime
 
@@ -13,8 +13,8 @@ program test_sympl
   integer, parameter :: ntau = 1
   real(dp), parameter :: taub = 7800.0_dp
 
-  type(FieldCan) :: f
-  type(SymplecticIntegrator) :: integ
+  type(field_can_t) :: f
+  type(symplectic_integrator_t) :: integ
   real(dp) :: z0(4)
   real(dp) :: dt, h0, hmin, hmax, rel_drift, rel_tol, denom
   real(dp) :: starttime, endtime
@@ -34,7 +34,7 @@ program test_sympl
 
   do i = 1, nmode
     call field_can_from_name('test')
-    call FieldCan_init(f, 1.0e-5_dp, 1.0_dp, 0.0_dp)
+    call field_can_init(f, 1.0e-5_dp, 1.0_dp, 0.0_dp)
 
     z0 = (/0.1_dp, 1.5_dp, 0.0_dp, 0.0_dp/)
     call eval_field(f, z0(1), z0(2), z0(3), 0)

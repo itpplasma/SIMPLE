@@ -1,7 +1,7 @@
 program test_sympl_testfield
   use, intrinsic :: iso_fortran_env, only : dp => real64
   use simple_main, only : init_field
-  use simple, only : Tracer, init_sympl
+  use simple, only : tracer_t, init_sympl
   use params, only : isw_field_type, field_input, integmode
   use magfie_sub, only : TEST
   use field_can_mod, only : evaluate
@@ -9,7 +9,7 @@ program test_sympl_testfield
 
   implicit none
 
-  type(Tracer) :: norb
+  type(tracer_t) :: norb
   character(*), parameter :: vmec_file = WOUT_FILE
   integer, parameter :: ans_s = 5, ans_tp = 5, amultharm = 5
   integer :: ierr

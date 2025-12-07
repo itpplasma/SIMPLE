@@ -66,7 +66,7 @@ _simple_main = _backend.Simple_Main()
 # Module state
 _initialized = False
 _current_vmec: str | None = None
-_tracer: _backend.simple.Tracer | None = None
+_tracer: "_backend.simple.tracer_t | None" = None
 
 
 def init(
@@ -132,7 +132,7 @@ def init(
             setattr(params, key, value)
 
     # Step 2: init_field (same as Fortran main())
-    _tracer = _backend.simple.Tracer()
+    _tracer = _backend.simple.tracer_t()
     _simple_main.init_field(
         _tracer,
         vmec_path,

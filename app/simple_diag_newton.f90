@@ -7,12 +7,12 @@ program diag_newton_main
 
 use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
     integmode, params_init, isw_field_type, dtaumin, dtau, ntau, relerr
-use simple, only: Tracer, init_sympl
+use simple, only: tracer_t, init_sympl
 use simple_main, only: init_field
 use timing, only: init_timer, print_phase_time
 use diag_newton, only: integrate_orbit_with_newton_debug
-use orbit_symplectic_base, only: SymplecticIntegrator, MIDPOINT
-use field_can_mod, only: FieldCan, get_val, eval_field => evaluate
+use orbit_symplectic_base, only: symplectic_integrator_t, MIDPOINT
+use field_can_mod, only: field_can_t, get_val, eval_field => evaluate
 
 implicit none
 
@@ -20,9 +20,9 @@ implicit none
 integer, parameter :: dp = kind(1.0d0)
 
 character(256) :: config_file
-type(Tracer) :: norb
-type(SymplecticIntegrator) :: si
-type(FieldCan) :: field_can
+type(tracer_t) :: norb
+type(symplectic_integrator_t) :: si
+type(field_can_t) :: field_can
 integer, parameter :: NUM_DEBUG_STEPS = 10
 real(dp), dimension(5) :: z
 

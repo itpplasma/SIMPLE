@@ -1,14 +1,14 @@
 module field_vmec
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_base, only: MagneticField
+use field_base, only: magnetic_field_t
 
 implicit none
 
-type, extends(MagneticField) :: VmecField
+type, extends(magnetic_field_t) :: vmec_field_t
 contains
     procedure :: evaluate
-end type VmecField
+end type vmec_field_t
 
 contains
 
@@ -21,7 +21,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
     use spline_vmec_sub, only: splint_vmec_data, compute_field_components, metric_tensor_vmec
 
-    class(VmecField), intent(in) :: self
+    class(vmec_field_t), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
     real(dp), intent(out) :: Bmod
@@ -65,7 +65,7 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
     hcov(3) = (Bcov_varphi + Bcov_vartheta*dl_dp)/Bmod
 
     if (present(sqgBctr)) then
-        error stop "sqgBctr not implemented in VmecField"
+        error stop "sqgBctr not implemented in vmec_field_t"
     end if
 end subroutine evaluate
 

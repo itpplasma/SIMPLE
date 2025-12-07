@@ -5,11 +5,11 @@ module simple
 
   use parmot_mod, only : rmu, ro0
   use velo_mod,   only : isw_field_type
-  use field_can_mod, only : FieldCan
-  use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
+  use field_can_mod, only : field_can_t
+  use orbit_symplectic, only : symplectic_integrator_t, multistage_integrator_t, &
     orbit_sympl_init, orbit_timestep_sympl
-  use field, only : VmecField
-  use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
+  use field, only : vmec_field_t
+  use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -21,7 +21,7 @@ save
 
 public
 
-  type :: Tracer
+  type :: tracer_t
     real(dp) :: fper
     real(dp) :: dtau, dtaumin, v0
     integer          :: n_e, n_d
@@ -29,10 +29,10 @@ public
     integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
     real(dp) :: relerr
 
-    type(FieldCan) :: f
-    type(SymplecticIntegrator) :: si
-    type(MultistageIntegrator) :: mi
-  end type Tracer
+    type(field_can_t) :: f
+    type(symplectic_integrator_t) :: si
+    type(multistage_integrator_t) :: mi
+  end type tracer_t
 
   interface tstep
       module procedure timestep
@@ -74,7 +74,7 @@ contains
     ! of plasma particles (= temperature for thermal particles).
     use new_vmec_stuff_mod, only : rmajor
 
-    type(Tracer) :: self
+    type(tracer_t) :: self
     integer, intent(in), optional :: Z_charge, m_mass
     real(dp), intent(in), optional :: E_kin
     integer, intent(in), optional :: npoints  ! Integrator resolution. Number of
@@ -117,8 +117,8 @@ contains
 
   subroutine init_sympl(si, f, z0, dtau, dtaumin, rtol_init, mode_init)
     !
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtau, dtaumin
     real(dp), intent(in) :: rtol_init
@@ -149,7 +149,7 @@ contains
   end subroutine init_sympl
 
   subroutine timestep(self, s, th, ph, lam, ierr)
-    type(Tracer), intent(inout) :: self
+    type(tracer_t), intent(inout) :: self
     real(dp), intent(inout) :: s, th, ph, lam
     integer, intent(out) :: ierr
 
@@ -172,7 +172,7 @@ contains
   subroutine timestep_z(self, z, ierr)
     use alpha_lifetime_sub, only : orbit_timestep_axis
 
-    type(Tracer), intent(inout) :: self
+    type(tracer_t), intent(inout) :: self
     real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 
@@ -180,8 +180,8 @@ contains
   end subroutine timestep_z
 
   subroutine timestep_sympl_z(si, f, z, ierr)
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
 

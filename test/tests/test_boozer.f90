@@ -1,7 +1,7 @@
 !
   program test_boozer
 !
-  use simple, only : Tracer
+  use simple, only : tracer_t
   use simple_main, only : init_field
   use new_vmec_stuff_mod,   only : nper
   use boozer_sub, only : splint_boozer_coord, &
@@ -11,7 +11,7 @@
 !
   implicit none
 !
-  type(Tracer) :: norb
+  type(tracer_t) :: norb
 !
   double precision :: r,vartheta_B,varphi_B,                                       &
                       A_phi,A_theta,dA_phi_dr,dA_theta_dr,d2A_phi_dr2,d3A_phi_dr3, &

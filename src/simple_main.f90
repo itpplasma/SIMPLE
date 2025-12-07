@@ -1,7 +1,7 @@
 module simple_main
   use omp_lib
   use util, only: sqrt2
-  use simple, only : init_vmec, init_sympl, Tracer
+  use simple, only : init_vmec, init_sympl, tracer_t
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
   use samplers, only: sample
@@ -33,7 +33,7 @@ module simple_main
     implicit none
 
     character(256) :: config_file
-    type(Tracer) :: norb
+    type(tracer_t) :: norb
 
     ! Initialize timing
     call init_timer()
@@ -93,15 +93,15 @@ module simple_main
   end subroutine main
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use field_base, only : MagneticField
+    use field_base, only : magnetic_field_t
     use field, only : field_from_file
     use timing, only : print_phase_time
     use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
 
     character(*), intent(in) :: vmec_file
-    type(Tracer), intent(inout) :: self
+    type(tracer_t), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-    class(MagneticField), allocatable :: field_temp
+    class(magnetic_field_t), allocatable :: field_temp
 
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
     call print_phase_time('VMEC initialization completed')
@@ -141,7 +141,7 @@ module simple_main
     use netcdf_orbit_output, only : init_orbit_netcdf, close_orbit_netcdf, &
                                      write_orbit_to_netcdf
 
-    type(Tracer), intent(inout) :: norb
+    type(tracer_t), intent(inout) :: norb
     integer :: i
     real(dp), allocatable :: traj(:,:), times(:)
 
@@ -180,7 +180,7 @@ module simple_main
     use classification, only: trace_orbit_with_classifiers, classification_result_t
     use params, only: class_passing, class_lost
 
-    type(Tracer), intent(inout) :: norb
+    type(tracer_t), intent(inout) :: norb
     integer :: i
     type(classification_result_t) :: class_result
 
@@ -280,7 +280,7 @@ module simple_main
       write_classification_results
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
-    type(Tracer), intent(inout) :: anorb
+    type(tracer_t), intent(inout) :: anorb
     integer, intent(in) :: ipart
     real(dp), intent(out) :: orbit_traj(:,:)  ! (5, ntimstep)
     real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
@@ -359,7 +359,7 @@ module simple_main
     use alpha_lifetime_sub, only : orbit_timestep_axis
     use orbit_symplectic, only : orbit_timestep_sympl
 
-    type(Tracer), intent(inout) :: anorb
+    type(tracer_t), intent(inout) :: anorb
     real(dp), intent(inout) :: z(5)
     integer(8), intent(inout) :: kt
     integer, intent(out) :: ierr_orbit
@@ -381,7 +381,7 @@ module simple_main
   end subroutine macrostep
 
   subroutine to_standard_z_coordinates(anorb, z)
-    type(Tracer), intent(in) :: anorb
+    type(tracer_t), intent(in) :: anorb
     real(dp), intent(inout) :: z(5)
 
     z(1:3) = anorb%si%z(1:3)
@@ -436,7 +436,7 @@ module simple_main
   subroutine update_momentum(anorb, z)
     use orbit_symplectic, only : get_val
 
-    type(Tracer), intent(inout) :: anorb
+    type(tracer_t), intent(inout) :: anorb
     real(dp), intent(in) :: z(5)
 
     anorb%si%pabs = z(4)

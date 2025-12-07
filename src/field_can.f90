@@ -2,9 +2,9 @@ module field_can_mod
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
 use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
-use field, only : MagneticField, VmecField
+use field, only : magnetic_field_t, vmec_field_t
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
-  identity_transform, FieldCan
+  identity_transform, field_can_t
 use field_can_test, only : evaluate_test
 use field_can_flux, only : evaluate_flux, integ_to_ref_flux, ref_to_integ_flux
 use field_can_boozer, only : evaluate_boozer, integ_to_ref_boozer, ref_to_integ_boozer
@@ -29,8 +29,8 @@ contains
 subroutine field_can_from_name(field_name, field_noncan)
 
   character(*), intent(in) :: field_name
-  !> For FieldCanMeiss
-  class(MagneticField), intent(in), optional :: field_noncan
+  !> For field_can_tMeiss
+  class(magnetic_field_t), intent(in), optional :: field_noncan
 
   select case(trim(field_name))
     case("test")
@@ -66,8 +66,8 @@ end subroutine field_can_from_name
 
 subroutine field_can_from_id(field_id, field_noncan)
   integer, intent(in) :: field_id
-  !> For FieldCanMeiss
-  class(MagneticField), intent(in), optional :: field_noncan
+  !> For field_can_tMeiss
+  class(magnetic_field_t), intent(in), optional :: field_noncan
 
   if (present(field_noncan)) then
     call field_can_from_name(name_from_id(field_id), field_noncan)
@@ -129,15 +129,15 @@ subroutine init_field_can(field_id, field_noncan)
   use field_can_albert, only : get_albert_coordinates
 
   integer, intent(in) :: field_id
-  class(MagneticField), intent(in), optional :: field_noncan
-  class(MagneticField), allocatable :: field_to_use
+  class(magnetic_field_t), intent(in), optional :: field_noncan
+  class(magnetic_field_t), allocatable :: field_to_use
 
   if (present(field_noncan)) then
     allocate(field_to_use, source=field_noncan)
     call field_can_from_id(field_id, field_noncan)
   else
-    allocate(field_to_use, source=VmecField())
-    call field_can_from_id(field_id, VmecField())
+    allocate(field_to_use, source=vmec_field_t())
+    call field_can_from_id(field_id, vmec_field_t())
   end if
   
   select case (field_id)
@@ -160,8 +160,8 @@ subroutine init_field_can(field_id, field_noncan)
 end subroutine init_field_can
 
 
-subroutine FieldCan_init(f, mu, ro0, vpar)
-  type(FieldCan), intent(inout) :: f
+subroutine field_can_init(f, mu, ro0, vpar)
+  type(field_can_t), intent(inout) :: f
   real(dp), intent(in), optional  :: mu, ro0, vpar
 
   if (present(mu)) then
@@ -182,7 +182,7 @@ subroutine FieldCan_init(f, mu, ro0, vpar)
     f%vpar = 0d0
   end if
 
-end subroutine FieldCan_init
+end subroutine field_can_init
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -192,7 +192,7 @@ subroutine get_val(f, pphi)
   ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
   !
   !
-  type(FieldCan), intent(inout) :: f
+  type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: pphi
 
   f%vpar = (pphi - f%Aph/f%ro0)/f%hph
@@ -209,7 +209,7 @@ subroutine get_derivatives(f, pphi)
   ! computes H, pth and vpar at z=(r, th, ph, pphi) and their derivatives
   !
   !
-  type(FieldCan), intent(inout) :: f
+  type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: pphi
 
   call get_val(f, pphi)
@@ -235,7 +235,7 @@ subroutine get_derivatives2(f, pphi)
   ! d2dr2, d2drdth, d2drph, d2dth2, d2dthdph, d2dph2,
   ! d2dpphdr, d2dpphdth, d2dpphdph, d2dpph2
   !
-  type(FieldCan), intent(inout) :: f
+  type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: pphi
 
   call get_derivatives(f, pphi)

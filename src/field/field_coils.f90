@@ -8,12 +8,12 @@ use interpolate, only: &
 use util, only: twopi
 use neo_biotsavart, only: coils_t, load_coils_from_file, &
     compute_vector_potential, compute_magnetic_field
-use field_base, only: MagneticField
+use field_base, only: magnetic_field_t
 use simple_coordinates, only: transform_vmec_to_cart
 
 implicit none
 
-type, extends(MagneticField) :: CoilsField
+type, extends(magnetic_field_t) :: coils_field_t
     type(coils_t) :: coils
     
     ! Batch spline for optimized field evaluation (7 components: Ar, Ath, Aphi, hr, hth, hphi, Bmod)
@@ -25,12 +25,12 @@ contains
     procedure :: init_splines
     procedure :: evaluate_coils_batch
     final :: coils_field_cleanup
-end type CoilsField
+end type coils_field_t
 
 contains
 
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-    class(CoilsField), intent(in) :: self
+    class(coils_field_t), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
     real(dp), intent(out) :: Bmod
@@ -45,7 +45,7 @@ end subroutine evaluate
 
 
 subroutine evaluate_direct(self, x, Acov, hcov, Bmod, sqgBctr)
-    class(CoilsField), intent(in) :: self
+    class(coils_field_t), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
     real(dp), intent(out) :: Bmod
@@ -80,7 +80,7 @@ end subroutine evaluate_direct
 
 subroutine create_coils_field(coils_file, coils_field, should_spline)
     character(*), intent(in) :: coils_file
-    class(CoilsField), allocatable, intent(out) :: coils_field
+    class(coils_field_t), allocatable, intent(out) :: coils_field
     logical, intent(in), optional :: should_spline
 
     real(dp), parameter :: M_TO_CM = 100.0d0
@@ -88,7 +88,7 @@ subroutine create_coils_field(coils_file, coils_field, should_spline)
 
     logical :: should_spline_ = .True.
 
-    allocate(CoilsField :: coils_field)
+    allocate(coils_field_t :: coils_field)
     call load_coils_from_file(coils_file, coils_field%coils)
 
     coils_field%coils%x = coils_field%coils%x * M_TO_CM
@@ -104,7 +104,7 @@ end subroutine create_coils_field
 subroutine init_splines(self)
     use new_vmec_stuff_mod, only : nper
 
-    class(CoilsField), intent(inout) :: self
+    class(coils_field_t), intent(inout) :: self
 
     integer :: n_r=62, n_th=63, n_phi=64
     real(dp) :: xmin(3) = [1d-12, 0d0, 0d0]
@@ -204,7 +204,7 @@ end subroutine init_splines
 
 
 subroutine evaluate_coils_batch(self, x, Acov, hcov, Bmod)
-    class(CoilsField), intent(in) :: self
+    class(coils_field_t), intent(in) :: self
     real(dp), intent(in) :: x(3)
     real(dp), intent(out), dimension(3) :: Acov, hcov
     real(dp), intent(out) :: Bmod
@@ -227,10 +227,10 @@ end subroutine evaluate_coils_batch
 
 
 subroutine coils_field_cleanup(self)
-    ! Clean up batch splines when CoilsField is destroyed
+    ! Clean up batch splines when coils_field_t is destroyed
     use interpolate, only: destroy_batch_splines_3d
     
-    type(CoilsField), intent(inout) :: self
+    type(coils_field_t), intent(inout) :: self
     
     if (self%splines_initialized) then
         call destroy_batch_splines_3d(self%spl_coils_batch)

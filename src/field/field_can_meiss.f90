@@ -6,8 +6,8 @@ use interpolate, only: &
     evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
 use util, only: twopi
-use field_can_base, only: FieldCan, n_field_evaluations
-use field, only: MagneticField
+use field_can_base, only: field_can_t, n_field_evaluations
+use field, only: magnetic_field_t
 
 implicit none
 
@@ -15,7 +15,7 @@ type :: grid_indices_t
     integer :: i_th, i_phi
 end type grid_indices_t
 
-class(MagneticField), allocatable :: field_noncan
+class(magnetic_field_t), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
@@ -58,7 +58,7 @@ end subroutine rh_can_wrapper
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
     use new_vmec_stuff_mod, only : nper
 
-    class(MagneticField), intent(in) :: field_noncan_
+    class(magnetic_field_t), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
 
@@ -103,7 +103,7 @@ end subroutine cleanup_meiss
 
 
 subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
@@ -462,7 +462,7 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     real(dp), intent(out) :: bmod, sqrtg
     real(dp), dimension(3), intent(out) :: bder, hcovar, hctrvr, hcurl
 
-    type(FieldCan) :: f
+    type(field_can_t) :: f
     real(dp) :: sqrtg_bmod
 
     call evaluate_meiss(f, x(1), x(2), x(3), 0)
@@ -489,7 +489,7 @@ end subroutine magfie_meiss
 
 ! Batch evaluation helper for first derivatives
 subroutine evaluate_meiss_batch_der(f, x)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
     real(dp) :: y_batch(5), dy_batch(3, 5)
@@ -513,7 +513,7 @@ end subroutine evaluate_meiss_batch_der
 
 ! Batch evaluation helper for second derivatives  
 subroutine evaluate_meiss_batch_der2(f, x)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
     
     real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)

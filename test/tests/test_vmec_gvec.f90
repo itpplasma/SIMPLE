@@ -1,7 +1,7 @@
 program test_vmec_gvec
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_vmec, only: VmecField
-    use field_gvec, only: GvecField, create_gvec_field
+    use field_vmec, only: vmec_field_t
+    use field_gvec, only: gvec_field_t, create_gvec_field
     use new_vmec_stuff_mod, only: netcdffile, multharm
     use spline_vmec_sub, only: spline_vmec_data
     use params, only: pi
@@ -9,22 +9,22 @@ program test_vmec_gvec
 
     implicit none
 
-    class(VmecField), allocatable :: vmec_field
-    class(GvecField), allocatable :: gvec_field
+    class(vmec_field_t), allocatable :: vmec_field
+    class(gvec_field_t), allocatable :: gvec_field
 
     interface
         subroutine export_field_2d_data(vmec_field, gvec_field)
-            use field_vmec, only: VmecField
-            use field_gvec, only: GvecField
-            class(VmecField), intent(in) :: vmec_field
-            class(GvecField), intent(in) :: gvec_field
+            use field_vmec, only: vmec_field_t
+            use field_gvec, only: gvec_field_t
+            class(vmec_field_t), intent(in) :: vmec_field
+            class(gvec_field_t), intent(in) :: gvec_field
         end subroutine export_field_2d_data
 
         subroutine export_field_1d_data(vmec_field, gvec_field)
-            use field_vmec, only: VmecField
-            use field_gvec, only: GvecField
-            class(VmecField), intent(in) :: vmec_field
-            class(GvecField), intent(in) :: gvec_field
+            use field_vmec, only: vmec_field_t
+            use field_gvec, only: gvec_field_t
+            class(vmec_field_t), intent(in) :: vmec_field
+            class(gvec_field_t), intent(in) :: gvec_field
         end subroutine export_field_1d_data
     end interface
     character(len=256) :: vmec_file, gvec_temp_file
@@ -57,7 +57,7 @@ program test_vmec_gvec
     netcdffile = vmec_file
     multharm = 3  ! Use low order splines for faster testing
     call spline_vmec_data
-    allocate(VmecField :: vmec_field)
+    allocate(vmec_field_t :: vmec_field)
 
     ! Check if CMake successfully converted the file using Python GVEC API
     inquire(file=gvec_temp_file, exist=file_exists)

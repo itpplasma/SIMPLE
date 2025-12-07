@@ -1,13 +1,13 @@
 module field_can_boozer
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: FieldCan, n_field_evaluations, twopi
+use field_can_base, only: field_can_t, n_field_evaluations, twopi
 
 implicit none
 
 contains
 
 subroutine evaluate_boozer(f, r, th_c, ph_c, mode_secders)
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
@@ -60,7 +60,7 @@ subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
     ! tested in test_magfie.f90, 2018-10-23, C. Albert <albert@alumni.tugraz.at>
     !
 
-    type(FieldCan), intent(inout) :: f
+    type(field_can_t), intent(inout) :: f
     double precision, intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 

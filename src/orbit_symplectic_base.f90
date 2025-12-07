@@ -1,5 +1,5 @@
 module orbit_symplectic_base
-use field_can_mod, only: eval_field => evaluate, FieldCan, get_val, get_derivatives, &
+use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_derivatives, &
   get_derivatives2
 
 implicit none
@@ -13,7 +13,7 @@ logical, parameter :: extrap_field = .True.  ! do extrapolation after final iter
 integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
   MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
 
-type :: SymplecticIntegrator
+type :: symplectic_integrator_t
   real(dp) :: atol
   real(dp) :: rtol
 
@@ -25,24 +25,24 @@ type :: SymplecticIntegrator
   integer :: ntau
   real(dp) :: dt
   real(dp) :: pabs
-end type SymplecticIntegrator
+end type symplectic_integrator_t
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
   ! Composition method with 2s internal stages according to Hairer, 2002 V.3.1
   !
 integer, parameter :: S_MAX = 32
-type :: MultistageIntegrator
+type :: multistage_integrator_t
   integer :: s
   real(dp) :: alpha(S_MAX), beta(S_MAX)
-  type(SymplecticIntegrator) stages(2*S_MAX)
-end type MultistageIntegrator
+  type(symplectic_integrator_t) stages(2*S_MAX)
+end type multistage_integrator_t
 
 abstract interface
   subroutine orbit_timestep_sympl_i(si, f, ierr)
-    import :: SymplecticIntegrator, FieldCan
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    import :: symplectic_integrator_t, field_can_t
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     integer, intent(out) :: ierr
   end subroutine orbit_timestep_sympl_i
 end interface
@@ -183,9 +183,9 @@ end subroutine coeff_rk_lobatto
   !
 subroutine f_rk_lobatto(si, fs, s, x, fvec, jactype)
   !
-  type(SymplecticIntegrator), intent(inout) :: si
+  type(symplectic_integrator_t), intent(inout) :: si
   integer, intent(in) :: s
-  type(FieldCan), intent(inout) :: fs(:)
+  type(field_can_t), intent(inout) :: fs(:)
   real(dp), intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
   real(dp), intent(out) :: fvec(4*s)
   integer, intent(in) :: jactype  ! 0 = no second derivatives, 2 = second derivatives

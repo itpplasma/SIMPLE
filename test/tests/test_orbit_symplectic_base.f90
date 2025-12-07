@@ -15,7 +15,7 @@ program test_orbit_symplectic_base
   ! Test Runge-Kutta Lobatto coefficients  
   call test_rk_lobatto_coefficients(errors)
   
-  ! Test SymplecticIntegrator type initialization
+  ! Test symplectic_integrator_t type initialization
   call test_symplectic_integrator_type(errors)
   
   if (errors == 0) then
@@ -354,16 +354,16 @@ contains
   
   subroutine test_symplectic_integrator_type(errors)
     integer, intent(inout) :: errors
-    type(SymplecticIntegrator) :: si
-    type(MultistageIntegrator) :: mi
+    type(symplectic_integrator_t) :: si
+    type(multistage_integrator_t) :: mi
     
-    print *, "Testing SymplecticIntegrator type..."
+    print *, "Testing symplectic_integrator_t type..."
     
-    ! Given: The SymplecticIntegrator and MultistageIntegrator types
+    ! Given: The symplectic_integrator_t and multistage_integrator_t types
     ! When: We initialize them with default values
     ! Then: They should have the expected structure
     
-    ! Test SymplecticIntegrator initialization
+    ! Test symplectic_integrator_t initialization
     si%atol = 1.0d-10
     si%rtol = 1.0d-8
     si%z = [1.0_dp, 0.0_dp, 0.0_dp, 0.1_dp]
@@ -374,34 +374,34 @@ contains
     
     ! Basic checks on data integrity
     if (si%atol /= 1.0d-10) then
-      print *, "ERROR: SymplecticIntegrator atol assignment failed"
+      print *, "ERROR: symplectic_integrator_t atol assignment failed"
       errors = errors + 1
     end if
     
     if (size(si%z) /= 4) then
-      print *, "ERROR: SymplecticIntegrator z should have 4 components"
+      print *, "ERROR: symplectic_integrator_t z should have 4 components"
       errors = errors + 1
     end if
     
-    ! Test MultistageIntegrator initialization
+    ! Test multistage_integrator_t initialization
     mi%s = 3
     if (mi%s /= 3) then
-      print *, "ERROR: MultistageIntegrator s assignment failed"
+      print *, "ERROR: multistage_integrator_t s assignment failed"
       errors = errors + 1
     end if
     
     if (size(mi%alpha) /= S_MAX) then
-      print *, "ERROR: MultistageIntegrator alpha array size incorrect"
+      print *, "ERROR: multistage_integrator_t alpha array size incorrect"
       errors = errors + 1
     end if
     
     if (size(mi%stages) /= 2*S_MAX) then
-      print *, "ERROR: MultistageIntegrator stages array size incorrect"
+      print *, "ERROR: multistage_integrator_t stages array size incorrect"
       errors = errors + 1
     end if
     
     if (errors == 0) then
-      print *, "  SymplecticIntegrator type test PASSED"
+      print *, "  symplectic_integrator_t type test PASSED"
     end if
     
   end subroutine test_symplectic_integrator_type

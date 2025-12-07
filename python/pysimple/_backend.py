@@ -115,7 +115,7 @@ def ensure_vmec_loaded(
 
     backend.params.netcdffile = vmec_path
 
-    tracer = backend.simple.Tracer()
+    tracer = backend.simple.tracer_t()
     backend.simple_main.init_field(
         tracer,
         vmec_path,
@@ -251,7 +251,7 @@ def run_simulation(
     backend.params.params_init()
     backend.params.zstart[:, :n_particles] = batch_positions
 
-    tracer = backend.simple.Tracer()
+    tracer = backend.simple.tracer_t()
     backend.simple_main.run(tracer)
 
     if verbose:

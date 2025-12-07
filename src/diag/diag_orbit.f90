@@ -7,8 +7,8 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use params, only: dtau, dtaumin, ntestpart, ntimstep, ntau, zstart, startmode, grid_density, &
     special_ants_file, reuse_batch, num_surf, sbeg, integmode, relerr, reset_seed_if_deterministic
 use samplers, only: sample, START_FILE
-use field_can_mod, only: FieldCan, get_val, eval_field => evaluate, ref_to_integ
-use orbit_symplectic_base, only: SymplecticIntegrator, extrap_field
+use field_can_mod, only: field_can_t, get_val, eval_field => evaluate, ref_to_integ
+use orbit_symplectic_base, only: symplectic_integrator_t, extrap_field
 use orbit_symplectic, only: orbit_timestep_sympl, f_midpoint_part1, f_midpoint_part2, &
     jac_midpoint_part1, jac_midpoint_part2
 use simple, only: init_sympl
@@ -25,9 +25,9 @@ contains
 
 !> Newton midpoint solver that returns iteration count (no debug output)
 function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, field_evals) result(iterations)
-  type(SymplecticIntegrator), intent(inout) :: si
-  type(FieldCan), intent(inout) :: f
-  type(FieldCan) :: fmid
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  type(field_can_t) :: fmid
   integer, parameter :: n = 5
   integer :: kit, iterations
   real(dp), intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
@@ -125,8 +125,8 @@ end function newton_midpoint_count_iterations
 
 !> Integration wrapper that plots the trajectory of the Nth particle
 subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
-    type(SymplecticIntegrator), intent(inout) :: si
-    type(FieldCan), intent(inout) :: f
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
     integer, intent(in) :: particle_number
     
     real(dp), allocatable :: s_traj(:), theta_traj(:), phi_traj(:), time_traj(:)
