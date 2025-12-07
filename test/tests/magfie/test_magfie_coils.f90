@@ -58,8 +58,8 @@ program test_magfie_coils
         n_failed = n_failed + 1
     end if
 
-    if (Bmod > 20.0_dp) then
-        print *, '  FAILED: vmec_field Bmod unreasonably large ', Bmod
+    if (Bmod > 200000.0_dp) then
+        print *, '  FAILED: vmec_field Bmod unreasonably large (CGS) ', Bmod
         n_failed = n_failed + 1
     end if
 

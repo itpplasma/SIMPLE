@@ -12,6 +12,7 @@ program test_field_can_albert_diagnostic
         psi_of_x, Ath_norm, dpsi_dr_positive
     use field_can_meiss, only: spl_field_batch, xmin, xmax, n_r, n_th, n_phi
     use interpolate, only: evaluate_batch_splines_3d
+    use params, only: coord_input
 
     implicit none
 
@@ -33,6 +34,7 @@ program test_field_can_albert_diagnostic
         error stop 1
     end if
 
+    coord_input = 'wout.nc'
     magfie = vmec_field_t()
     call init_field(norb, 'wout.nc', 5, 5, 3, 0)
 
@@ -96,8 +98,8 @@ program test_field_can_albert_diagnostic
         n_failed = n_failed + 1
     end if
 
-    if (Bmod_max > 50.0_dp) then
-        print *, '  FAILED: Bmod unreasonably large, max=', Bmod_max
+    if (Bmod_max > 200000.0_dp) then
+        print *, '  FAILED: Bmod unreasonably large (CGS), max=', Bmod_max
         n_failed = n_failed + 1
     end if
 
