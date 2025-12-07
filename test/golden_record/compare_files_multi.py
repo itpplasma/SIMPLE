@@ -41,7 +41,8 @@ def compare_numerical_files(old_file, new_file, rtol=0.0, atol=0.0):
     """Compare two numerical files. Default is bit-identical (rtol=0, atol=0).
 
     Handles files with mixed content: section headers (===), key=value pairs,
-    comments (#), and pure numerical data lines.
+    comments (#), and pure numerical data lines. Supports rows with varying
+    numbers of columns.
     """
     try:
         old_lines = parse_numerical_lines(old_file)
@@ -50,39 +51,22 @@ def compare_numerical_files(old_file, new_file, rtol=0.0, atol=0.0):
         if len(old_lines) != len(new_lines):
             return False, f"Line count mismatch: {len(old_lines)} vs {len(new_lines)}"
 
-        old_data = np.array([row for row in old_lines if row], dtype=np.float64)
-        new_data = np.array([row for row in new_lines if row], dtype=np.float64)
-
-        if old_data.size == 0 and new_data.size == 0:
+        if not old_lines and not new_lines:
             return True, "Both files have no numerical data"
-        
-        # Handle scalar values
-        if old_data.ndim == 0:
-            old_data = old_data.reshape(1, 1)
-        elif old_data.ndim == 1:
-            old_data = old_data.reshape(-1, 1)
-            
-        if new_data.ndim == 0:
-            new_data = new_data.reshape(1, 1)
-        elif new_data.ndim == 1:
-            new_data = new_data.reshape(-1, 1)
-        
-        # Check shape
-        if old_data.shape != new_data.shape:
-            return False, f"Shape mismatch: {old_data.shape} vs {new_data.shape}"
-        
-        # Compare values
+
         non_match_count = 0
-        for old_row, new_row in zip(old_data, new_data):
+        for row_idx, (old_row, new_row) in enumerate(zip(old_lines, new_lines)):
+            if len(old_row) != len(new_row):
+                return False, f"Column count mismatch at row {row_idx}: {len(old_row)} vs {len(new_row)}"
             for old_val, new_val in zip(old_row, new_row):
                 if not np.isclose(old_val, new_val, rtol=rtol, atol=atol):
                     non_match_count += 1
-        
+
         if non_match_count > 0:
             return False, f"Found {non_match_count} non-matching entries"
-        
+
         return True, "Files match"
-        
+
     except Exception as e:
         return False, f"Error comparing files: {str(e)}"
 
