@@ -92,7 +92,7 @@ contains
         inquire(file='wout.chartmap.nc', exist=file_exists)
         if (.not. file_exists) then
             print *, '  SKIPPED: Optional chartmap file (wout.chartmap.nc) not found'
-            print *, '  (Generate with: python scripts/vmec_to_chartmap.py wout.nc wout.chartmap.nc)'
+            print *, '  (Generate with: python scripts/vmec_to_chartmap.py wout.nc wout.chartmap.nc --passthrough)'
             return
         end if
 

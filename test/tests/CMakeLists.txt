@@ -245,10 +245,22 @@ set_tests_properties(test_coordinate_refactoring PROPERTIES
 
 add_executable(test_chartmap_reference.x test_chartmap_reference.f90)
 target_link_libraries(test_chartmap_reference.x simple)
+
+# Generate chartmap file from VMEC for test
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME test_chartmap_reference_setup
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/vmec_to_chartmap.py
+            wout.nc wout.chartmap.nc --passthrough
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_reference_setup PROPERTIES
+    FIXTURES_SETUP chartmap_file
+    LABELS "integration")
+
 add_test(NAME test_chartmap_reference
     COMMAND test_chartmap_reference.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_reference PROPERTIES
+    FIXTURES_REQUIRED chartmap_file
     LABELS "integration")
 
 # Batch spline optimization test

@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
 """
-Convert VMEC equilibrium to chartmap coordinate file using map2disc.
+Convert VMEC equilibrium to chartmap coordinate file.
 
-Creates a tabulated (rho, theta, zeta) -> (X, Y, Z) mapping from VMEC data
-using boundary-conforming conformal mappings via map2disc. The output is a
-NetCDF file compatible with libneo chartmap_coordinate_system_t.
+Creates a tabulated (rho, theta, zeta) -> (X, Y, Z) mapping from VMEC data.
+The output is a NetCDF file compatible with libneo chartmap_coordinate_system_t.
 
-The map2disc library creates conformal mappings from a unit disk to the
-flux surface cross-section, ensuring good coordinate properties (orthogonality
-near the boundary, smooth behavior at the magnetic axis).
+Two modes are available (one must be specified):
+
+  --map2disc: Uses boundary-conforming conformal mappings via map2disc.
+              Creates conformal mappings from a unit disk to the flux surface
+              cross-section, ensuring good coordinate properties (orthogonality
+              near the boundary, smooth behavior at the magnetic axis).
+              Requires: pip install map2disc
+
+  --passthrough: Direct VMEC Fourier evaluation without conformal mapping.
+                 Simply evaluates VMEC coordinates on a regular grid.
 
 Usage:
-    python vmec_to_chartmap.py wout.nc chartmap.nc --nrho 64 --ntheta 65 --nzeta 66
+    python vmec_to_chartmap.py wout.nc chartmap.nc --map2disc
+    python vmec_to_chartmap.py wout.nc chartmap.nc --passthrough
 
 Requirements:
-    pip install map2disc netCDF4 numpy
+    pip install netCDF4 numpy
+    pip install map2disc  # only for --map2disc mode
 """
 
 from __future__ import annotations
@@ -345,11 +353,19 @@ def main(argv: list[str] | None = None) -> int:
         "--ntheta", type=int, default=65, help="Number of theta points"
     )
     parser.add_argument("--nzeta", type=int, default=66, help="Number of zeta points")
-    parser.add_argument(
-        "--simple",
+
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        "--map2disc",
         action="store_true",
-        help="Use simple/direct VMEC evaluation instead of map2disc",
+        help="Use map2disc boundary-conforming conformal mapping (requires map2disc)",
     )
+    mode_group.add_argument(
+        "--passthrough",
+        action="store_true",
+        help="Use direct VMEC Fourier evaluation (no conformal mapping)",
+    )
+
     parser.add_argument(
         "--M", type=int, default=16, help="map2disc Fourier truncation (default: 16)"
     )
@@ -359,17 +375,10 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if args.simple or not HAS_MAP2DISC:
-        if not args.simple and not HAS_MAP2DISC:
-            print("Warning: map2disc not available, falling back to simple mode")
-        vmec_to_chartmap_simple(
-            args.vmec_file,
-            args.output_file,
-            nrho=args.nrho,
-            ntheta=args.ntheta,
-            nzeta=args.nzeta,
-        )
-    else:
+    if args.map2disc:
+        if not HAS_MAP2DISC:
+            print("Error: map2disc not installed. Install with: pip install map2disc")
+            return 1
         vmec_to_chartmap_map2disc(
             args.vmec_file,
             args.output_file,
@@ -378,6 +387,14 @@ def main(argv: list[str] | None = None) -> int:
             nzeta=args.nzeta,
             M=args.M,
             Nt=args.Nt,
+        )
+    else:  # args.passthrough
+        vmec_to_chartmap_simple(
+            args.vmec_file,
+            args.output_file,
+            nrho=args.nrho,
+            ntheta=args.ntheta,
+            nzeta=args.nzeta,
         )
 
     return 0
