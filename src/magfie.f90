@@ -40,8 +40,7 @@ subroutine init_magfie(id)
 
   select case(id)
   case(TEST)
-    print *, 'init_magfie: magfie_test not implemented'
-    error stop
+    magfie => magfie_test
   case(CANFLUX)
     magfie => magfie_can
   case(VMEC)
@@ -57,6 +56,59 @@ subroutine init_magfie(id)
     error stop
   end select
 end subroutine init_magfie
+
+
+subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+  !> Magnetic field for analytic circular tokamak (TEST field).
+  !> Coordinates: x(1)=r (minor radius), x(2)=theta (poloidal), x(3)=phi (toroidal)
+  !> Uses same geometry as field_can_test: B0=1, R0=1, a=0.5, iota=1
+  implicit none
+
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+  real(dp), parameter :: B0 = 1.0_dp, R0 = 1.0_dp, a = 0.5_dp, iota0 = 1.0_dp
+  real(dp) :: r, theta, cth, sth, R_cyl, dBmod_dr, dBmod_dth
+
+  r = x(1)
+  theta = x(2)
+  cth = cos(theta)
+  sth = sin(theta)
+
+  ! Major radius at this point
+  R_cyl = R0 + r * cth
+
+  ! Magnetic field magnitude: B = B0 * (1 - r/R0 * cos(theta))
+  bmod = B0 * (1.0_dp - r / R0 * cth)
+
+  ! Jacobian sqrt(g) = r * R for circular tokamak
+  sqrtg = r * R_cyl
+
+  ! Derivatives of log(B)
+  dBmod_dr = -B0 / R0 * cth
+  dBmod_dth = B0 * r / R0 * sth
+  bder(1) = dBmod_dr / bmod
+  bder(2) = dBmod_dth / bmod
+  bder(3) = 0.0_dp
+
+  ! Covariant components of unit vector h = B/|B|
+  ! In (r, theta, phi) coordinates for circular tokamak with iota=1
+  hcovar(1) = 0.0_dp
+  hcovar(2) = iota0 * (1.0_dp - r**2 / a**2) * r**2 / R0 / bmod
+  hcovar(3) = R_cyl / bmod
+
+  ! Contravariant components
+  hctrvr(1) = 0.0_dp
+  hctrvr(2) = B0 * iota0 / (r * R_cyl * bmod)
+  hctrvr(3) = B0 / (r * R_cyl * bmod)
+
+  ! Curl of h (simplified - not fully computed for TEST field)
+  hcurl(1) = 0.0_dp
+  hcurl(2) = 0.0_dp
+  hcurl(3) = 0.0_dp
+
+end subroutine magfie_test
+
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !

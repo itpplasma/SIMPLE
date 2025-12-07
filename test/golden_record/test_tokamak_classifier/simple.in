@@ -1,0 +1,10 @@
+&config
+multharm = 3             ! Not used for TEST field but set for consistency
+contr_pp = -1e10         ! Trace all passing particles
+trace_time = 1d-2        ! longer trace time for classification
+sbeg = 0.3d0             ! starting s for particles
+ntestpart = 32           ! number of test particles
+isw_field_type = -1      ! TEST: analytic circular tokamak (no input files needed)
+deterministic = .True.   ! reproducible random walk
+tcut = 0.5d-2            ! classification cut time
+/

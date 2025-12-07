@@ -27,7 +27,7 @@ module simple_main
       integmode, params_init, swcoll, generate_start_only, isw_field_type, &
       ntestpart, ntimstep
     use timing, only : init_timer, print_phase_time
-    use magfie_sub, only : VMEC, init_magfie
+    use magfie_sub, only : TEST, VMEC, init_magfie
     use samplers, only : init_starting_surf
 
     implicit none
@@ -64,19 +64,27 @@ module simple_main
       call print_phase_time('Collision initialization completed')
     endif
 
-    call init_magfie(VMEC)
-    call print_phase_time('VMEC magnetic field initialization completed')
-    
-    call init_starting_surf
-    call print_phase_time('Starting surface initialization completed')
+    if (isw_field_type == TEST) then
+      ! TEST field uses analytic tokamak - no VMEC needed for sampling
+      call init_magfie(TEST)
+      call print_phase_time('TEST field initialization completed')
+      call sample_particles_test_field
+      call print_phase_time('TEST field particle sampling completed')
+    else
+      call init_magfie(VMEC)
+      call print_phase_time('VMEC magnetic field initialization completed')
 
-    call sample_particles
-    call print_phase_time('Particle sampling completed')
+      call init_starting_surf
+      call print_phase_time('Starting surface initialization completed')
 
-    if (generate_start_only) stop 'stopping after generating start.dat'
+      call sample_particles
+      call print_phase_time('Particle sampling completed')
 
-    call init_magfie(isw_field_type)
-    call print_phase_time('Field type initialization completed')
+      if (generate_start_only) stop 'stopping after generating start.dat'
+
+      call init_magfie(isw_field_type)
+      call print_phase_time('Field type initialization completed')
+    end if
 
     call init_counters
     call print_phase_time('Counter initialization completed')
@@ -97,23 +105,31 @@ module simple_main
     use field, only : field_from_file
     use timing, only : print_phase_time
     use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use util, only : twopi
 
     character(*), intent(in) :: vmec_file
     type(tracer_t), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
     class(magnetic_field_t), allocatable :: field_temp
 
-    call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
-    call print_phase_time('VMEC initialization completed')
-
     self%integmode = aintegmode
-    if (self%integmode >= 0) then
-      if(trim(field_input) == '') then
-        call field_from_file(vmec_file, field_temp)
-      else
-        call field_from_file(field_input, field_temp)
+
+    ! TEST field is analytic - no VMEC or field files needed
+    if (isw_field_type == TEST) then
+      self%fper = twopi  ! Full torus for analytic tokamak
+      call print_phase_time('TEST field mode - no input files required')
+    else
+      call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
+      call print_phase_time('VMEC initialization completed')
+
+      if (self%integmode >= 0) then
+        if (trim(field_input) == '') then
+          call field_from_file(vmec_file, field_temp)
+        else
+          call field_from_file(field_input, field_temp)
+        end if
+        call print_phase_time('Field from file loading completed')
       end if
-      call print_phase_time('Field from file loading completed')
     end if
 
     if (self%integmode > 0) then
@@ -128,9 +144,12 @@ module simple_main
       end select
     end if
 
-    if (isw_field_type == TEST .or. isw_field_type == CANFLUX .or. &
-        isw_field_type == BOOZER .or. isw_field_type == MEISS .or. &
-        isw_field_type == ALBERT) then
+    if (isw_field_type == TEST) then
+      ! TEST field is fully analytic - no field file needed
+      call init_field_can(isw_field_type)
+      call print_phase_time('Canonical field initialization completed')
+    else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
+             isw_field_type == MEISS .or. isw_field_type == ALBERT) then
       call init_field_can(isw_field_type, field_temp)
       call print_phase_time('Canonical field initialization completed')
     end if
@@ -262,6 +281,61 @@ module simple_main
       print *, 'Unknown startmode: ', startmode
     endif
   end subroutine sample_particles
+
+  subroutine sample_particles_test_field
+    !> Sample particles for the analytic circular tokamak TEST field.
+    !> TEST field uses (r, theta, phi) coordinates with B0=1, R0=1, a=0.5, iota=1.
+    !> bmod = B0 * (1 - r/R0 * cos(theta))
+    use util, only : twopi
+    use params, only : ntestpart, sbeg, bmod00, bmin, bmax, zstart, &
+      reset_seed_if_deterministic
+
+    real(dp), parameter :: B0 = 1.0d0, R0 = 1.0d0, a = 0.5d0
+    real(dp) :: r_start, tmp_rand
+    integer :: ipart
+
+    ! Use sbeg(1) as the starting minor radius (mapped to r for tokamak)
+    ! sbeg(1) is input as a flux-like value; for TEST field, interpret as r/a
+    r_start = sbeg(1) * a
+
+    ! Set magnetic field bounds for this r value
+    ! bmod = B0*(1 - r/R0*cos(theta))
+    ! Maximum at theta=pi: bmax = B0*(1 + r/R0)
+    ! Minimum at theta=0:  bmin = B0*(1 - r/R0)
+    bmod00 = B0
+    bmax = B0 * (1.0d0 + r_start / R0)
+    bmin = B0 * (1.0d0 - r_start / R0)
+
+    print *, 'TEST field: bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
+
+    call reset_seed_if_deterministic
+
+    ! Sample particles uniformly in (theta, phi) at fixed r
+    do ipart = 1, ntestpart
+      zstart(1, ipart) = r_start
+      call random_number(tmp_rand)
+      zstart(2, ipart) = twopi * tmp_rand
+      call random_number(tmp_rand)
+      zstart(3, ipart) = twopi * tmp_rand
+      zstart(4, ipart) = 1.0d0
+      call random_number(tmp_rand)
+      zstart(5, ipart) = 2.0d0 * (tmp_rand - 0.5d0)
+    end do
+
+    call save_starting_points_test(zstart)
+
+  contains
+    subroutine save_starting_points_test(zs)
+      real(dp), intent(in) :: zs(:,:)
+      integer :: i, unit
+
+      open(newunit=unit, file='start.dat', recl=1024)
+      do i = 1, size(zs, 2)
+        write(unit, *) zs(:, i)
+      end do
+      close(unit)
+    end subroutine save_starting_points_test
+  end subroutine sample_particles_test_field
 
   subroutine init_counters
     icounter=0 ! evaluation counter
