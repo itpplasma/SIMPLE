@@ -1,14 +1,14 @@
 program test_coordinate_refactoring
   !> Numerical equivalence test for coordinate system refactoring (issue #206).
   !> Verifies that:
-  !>   1. VmecField evaluation produces identical results before/after refactoring
+  !>   1. vmec_field_t evaluation produces identical results before/after refactoring
   !>   2. Coordinate transforms integ_to_ref/ref_to_integ are inverses
   !>   3. splined_field_t accuracy matches raw coils_field_t
 
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use simple, only: init_vmec
   use field_base, only: magnetic_field_t
-  use field_vmec, only: VmecField
+  use field_vmec, only: vmec_field_t
   use field_coils, only: coils_field_t, create_coils_field
   use field_splined, only: splined_field_t, create_splined_field
   use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -48,14 +48,14 @@ contains
 
   subroutine test_vmec_field_consistency(n_failed)
     integer, intent(inout) :: n_failed
-    type(VmecField) :: vmec_field
+    type(vmec_field_t) :: vmec_field
     real(dp) :: x(3), Acov(3), hcov(3), Bmod
     real(dp) :: Acov_ref(3), hcov_ref(3), Bmod_ref
     real(dp), parameter :: tol = 1.0e-10_dp
     logical :: file_exists
     integer :: i
 
-    print *, 'Test 1: VmecField evaluation consistency'
+    print *, 'Test 1: vmec_field_t evaluation consistency'
 
     inquire(file='wout.nc', exist=file_exists)
     if (.not. file_exists) then
@@ -95,7 +95,7 @@ contains
       end if
     end do
 
-    print *, '  PASSED: VmecField produces consistent results'
+    print *, '  PASSED: vmec_field_t produces consistent results'
   end subroutine test_vmec_field_consistency
 
 
