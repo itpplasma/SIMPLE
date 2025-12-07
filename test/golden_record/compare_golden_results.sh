@@ -54,12 +54,21 @@ compare_cases() {
     local passed_cases=0
     local failed_cases=0
     local missing_cases=0
-    
+    local skipped_cases=0
+
     for CASE in $TEST_CASES; do
         total_cases=$((total_cases + 1))
-        
+
         echo "Comparing $CASE case..."
-        
+
+        # Check if reference has this test case (new tests may not exist in reference)
+        if [ ! -d "$REFERENCE_DIR/$CASE" ]; then
+            echo "  ○ SKIPPED (not present in reference version)"
+            skipped_cases=$((skipped_cases + 1))
+            echo ""
+            continue
+        fi
+
         # Check if this is the classifier_fast case with multiple files
         if [ "$CASE" = "classifier_fast" ]; then
             # List of files to compare for classifier_fast (excluding simple.in and wout.nc)
@@ -113,6 +122,7 @@ compare_cases() {
     echo "  Total test cases: $total_cases"
     echo "  Passed: $passed_cases"
     echo "  Failed: $failed_cases"
+    echo "  Skipped (new tests): $skipped_cases"
     echo "  Missing files: $missing_cases"
     echo "========================================="
     
