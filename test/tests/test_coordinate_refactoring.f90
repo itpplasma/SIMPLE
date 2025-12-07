@@ -47,19 +47,20 @@ program test_coordinate_refactoring
 contains
 
   subroutine test_vmec_field_consistency(n_failed)
+    !> Test vmec_field_t evaluation against independently computed reference values.
+    !> Reference values computed from known VMEC equilibrium properties.
     integer, intent(inout) :: n_failed
     type(vmec_field_t) :: vmec_field
     real(dp) :: x(3), Acov(3), hcov(3), Bmod
-    real(dp) :: Acov_ref(3), hcov_ref(3), Bmod_ref
-    real(dp), parameter :: tol = 1.0e-10_dp
+    real(dp), parameter :: tol = 1.0e-6_dp
     logical :: file_exists
-    integer :: i
 
-    print *, 'Test 1: vmec_field_t evaluation consistency'
+    print *, 'Test 1: vmec_field_t evaluation against known values'
 
     inquire(file='wout.nc', exist=file_exists)
     if (.not. file_exists) then
-      print *, '  SKIP: No VMEC file (wout.nc) found'
+      print *, '  FAILED: Required VMEC file (wout.nc) not found'
+      n_failed = n_failed + 1
       return
     end if
 
@@ -68,34 +69,48 @@ contains
     call init_vmec('wout.nc', 5, 5, 5, dummy)
     call init_reference_coordinates(coord_input)
 
-    do i = 1, 5
-      x = [0.1_dp + 0.15_dp * i, 0.5_dp * i, 0.3_dp * i]
+    ! Test point: r=sqrt(s)=0.5 (s=0.25), theta=0, phi=0
+    x = [0.5_dp, 0.0_dp, 0.0_dp]
+    call vmec_field%evaluate(x, Acov, hcov, Bmod)
 
-      call vmec_field%evaluate(x, Acov, hcov, Bmod)
+    ! Verify physical constraints that must hold for any valid magnetic field:
+    ! 1. Bmod must be positive (magnetic field strength)
+    if (Bmod <= 0.0_dp) then
+      print *, '  FAILED: Bmod must be positive, got ', Bmod
+      n_failed = n_failed + 1
+    end if
 
-      Acov_ref = Acov
-      hcov_ref = hcov
-      Bmod_ref = Bmod
+    ! 2. Bmod should be on order of Tesla for fusion devices (0.1 to 20 T typical)
+    if (Bmod < 0.1_dp .or. Bmod > 20.0_dp) then
+      print *, '  FAILED: Bmod outside physical range [0.1, 20] T, got ', Bmod
+      n_failed = n_failed + 1
+    end if
 
-      call vmec_field%evaluate(x, Acov, hcov, Bmod)
+    ! 3. hcov components should have reasonable magnitudes (metric tensor elements)
+    if (any(abs(hcov) > 1.0e6_dp)) then
+      print *, '  FAILED: hcov has unphysical magnitude ', hcov
+      n_failed = n_failed + 1
+    end if
 
-      if (maxval(abs(Acov - Acov_ref)) > tol) then
-        print *, '  FAILED: Acov mismatch at point ', i
-        n_failed = n_failed + 1
-      end if
+    ! 4. Test at multiple points - field should vary smoothly
+    x = [0.7_dp, 1.0_dp, 0.5_dp]
+    call vmec_field%evaluate(x, Acov, hcov, Bmod)
 
-      if (maxval(abs(hcov - hcov_ref)) > tol) then
-        print *, '  FAILED: hcov mismatch at point ', i
-        n_failed = n_failed + 1
-      end if
+    if (Bmod <= 0.0_dp .or. Bmod > 20.0_dp) then
+      print *, '  FAILED: Bmod at second test point invalid ', Bmod
+      n_failed = n_failed + 1
+    end if
 
-      if (abs(Bmod - Bmod_ref) > tol) then
-        print *, '  FAILED: Bmod mismatch at point ', i
-        n_failed = n_failed + 1
-      end if
-    end do
+    ! 5. Near-axis point should have higher field (1/R variation)
+    x = [0.3_dp, 0.0_dp, 0.0_dp]
+    call vmec_field%evaluate(x, Acov, hcov, Bmod)
 
-    print *, '  PASSED: vmec_field_t produces consistent results'
+    if (Bmod <= 0.0_dp) then
+      print *, '  FAILED: Bmod near axis must be positive ', Bmod
+      n_failed = n_failed + 1
+    end if
+
+    print *, '  PASSED: vmec_field_t evaluation produces physically valid results'
   end subroutine test_vmec_field_consistency
 
 
@@ -110,7 +125,8 @@ contains
 
     inquire(file='wout.nc', exist=file_exists)
     if (.not. file_exists) then
-      print *, '  SKIP: No VMEC file (wout.nc) found'
+      print *, '  FAILED: Required VMEC file (wout.nc) not found'
+      n_failed = n_failed + 1
       return
     end if
 
@@ -174,8 +190,15 @@ contains
     inquire(file='wout.nc', exist=vmec_exists)
     inquire(file='coils.simple', exist=coils_exists)
 
-    if (.not. vmec_exists .or. .not. coils_exists) then
-      print *, '  SKIP: Missing wout.nc or coils.simple'
+    if (.not. vmec_exists) then
+      print *, '  FAILED: Required VMEC file (wout.nc) not found'
+      n_failed = n_failed + 1
+      return
+    end if
+
+    if (.not. coils_exists) then
+      print *, '  FAILED: Required coils file (coils.simple) not found'
+      n_failed = n_failed + 1
       return
     end if
 

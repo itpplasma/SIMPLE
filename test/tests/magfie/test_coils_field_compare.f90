@@ -30,9 +30,13 @@ program test_coils_field_compare
 
     inquire(file='wout.nc', exist=wout_exists)
     inquire(file='coils.simple', exist=coils_exists)
-    if (.not. wout_exists .or. .not. coils_exists) then
-        print *, 'SKIP: Missing wout.nc or coils.simple'
-        stop 0
+    if (.not. wout_exists) then
+        print *, 'FAILED: Required VMEC file (wout.nc) not found'
+        error stop 1
+    end if
+    if (.not. coils_exists) then
+        print *, 'FAILED: Required coils file (coils.simple) not found'
+        error stop 1
     end if
 
     call init_vmec('wout.nc', 5, 5, 5, dummy)
