@@ -4,6 +4,7 @@ module params
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
     netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
   use velo_mod,   only : isw_field_type
+  use magfie_sub, only : TEST
   use field_can_mod, only : eval_field => evaluate, field_can_t
   use orbit_symplectic_base, only : symplectic_integrator_t, multistage_integrator_t, &
     EXPL_IMPL_EULER
@@ -126,41 +127,54 @@ contains
     real(dp) :: E_alpha
     integer :: L1i
 
-    E_alpha = 3.5d6/facE_al
-
-  ! set alpha energy, velocity, and Larmor radius
-    v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
-    rlarm=v0*n_d*p_mass*c/(n_e*e_charge)
-    ro0=rlarm
-
-  ! Neglect relativistic effects by large inverse relativistic temperature
-    rmu=1d8
-
-  ! normalized slowing down time:
-    tau=trace_time*v0
-  ! normalized time step:
-    dtau=tau/dble(ntimstep-1)
-  ! parameters for the vacuum chamber:
-    call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0) ! TODO: why again?
-    rbig=rt0
-  ! field line integration step step over phi (to check chamber wall crossing)
-    dphi=2.d0*pi/(L1i*npoiper)
-  ! orbit integration time step (to check chamber wall crossing)
-    dtaumin=2.d0*pi*rbig/npoiper2  ! ntimstep =
-    ntau=ceiling(dtau/dtaumin)
-    dtaumin=dtau/ntau
+    if (isw_field_type == TEST) then
+      ! TEST field uses normalized units: B0=1, R0=1, a=0.5
+      ! Use normalized parameters for orbit integration
+      v0 = 1.0d0          ! Normalized velocity
+      rlarm = 1.0d0       ! Normalized Larmor radius (will be scaled by ro0)
+      ro0 = 1.0d0         ! Normalized ro0 = mc/e * v0
+      rmu = 1d8           ! Large inverse relativistic temperature
+      tau = trace_time    ! Already in normalized units
+      dtau = tau/dble(ntimstep-1)
+      L1i = 1             ! One field period (full torus)
+      rbig = 1.0d0        ! Major radius R0=1
+      dphi = 2.d0*pi/(L1i*npoiper)
+      dtaumin = 2.d0*pi*rbig/npoiper2
+      ntau = ceiling(dtau/dtaumin)
+      dtaumin = dtau/ntau
+      fper = 2d0*pi       ! Full torus
+    else
+      E_alpha = 3.5d6/facE_al
+      ! set alpha energy, velocity, and Larmor radius
+      v0=sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
+      rlarm=v0*n_d*p_mass*c/(n_e*e_charge)
+      ro0=rlarm
+      ! Neglect relativistic effects by large inverse relativistic temperature
+      rmu=1d8
+      ! normalized slowing down time:
+      tau=trace_time*v0
+      ! normalized time step:
+      dtau=tau/dble(ntimstep-1)
+      ! parameters for the vacuum chamber:
+      call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)
+      rbig=rt0
+      ! field line integration step step over phi (to check chamber wall crossing)
+      dphi=2.d0*pi/(L1i*npoiper)
+      ! orbit integration time step (to check chamber wall crossing)
+      dtaumin=2.d0*pi*rbig/npoiper2
+      ntau=ceiling(dtau/dtaumin)
+      dtaumin=dtau/ntau
+      fper = 2d0*pi/dble(L1i)
+    end if
 
     ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
-
     norbper=ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
-    nfp=L1i*norbper         !<= guess for footprint number
+    nfp=L1i*norbper
 
     zerolam=0.d0
     nplagr=4
     nder=0
     npl_half=nplagr/2
-
-    fper = 2d0*pi/dble(L1i)   !<= field period
 
     call init_batch
     call reallocate_arrays

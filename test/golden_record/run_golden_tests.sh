@@ -18,6 +18,9 @@ fi
 SIMPLE_EXE="$PROJECT_ROOT/build/simple.x"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# Test case directory in the project being tested
+PROJECT_TEST_DIR="$PROJECT_ROOT/test/golden_record"
+
 if [ ! -f "$SIMPLE_EXE" ]; then
     echo "Error: SIMPLE executable not found at $SIMPLE_EXE"
     exit 1
@@ -26,12 +29,18 @@ fi
 # Create run directory
 mkdir -p "$RUN_DIR"
 
-# Find test cases
+# Find test cases from the project being tested (not from caller's source tree)
 if [ -n "$SINGLE_CASE" ]; then
+    # Check if requested test case exists in this project version
+    if [ ! -f "$PROJECT_TEST_DIR/$SINGLE_CASE/simple.in" ]; then
+        echo "Test case $SINGLE_CASE not present in this version, skipping."
+        echo "All tests completed successfully"
+        exit 0
+    fi
     TEST_CASES="$SINGLE_CASE"
     echo "Running single test case: $SINGLE_CASE"
 else
-    TEST_CASES=$(cd "$SCRIPT_DIR" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | grep -v "^\.$" | sort)
+    TEST_CASES=$(cd "$PROJECT_TEST_DIR" && find . -name simple.in -exec dirname {} \; | sed 's|^\./||' | grep -v "^\.$" | sort)
     echo "Running all test cases"
 fi
 
@@ -101,12 +110,18 @@ fi
 for test_case in $TEST_CASES; do
     echo "Running test case: $test_case"
 
+    # Check if test case exists in project being tested
+    if [ ! -f "$PROJECT_TEST_DIR/$test_case/simple.in" ]; then
+        echo "Skipping test case $test_case (not present in this version)"
+        continue
+    fi
+
     # Create test case directory
     test_dir="$RUN_DIR/$test_case"
     mkdir -p "$test_dir"
 
-    # Copy input file
-    cp "$SCRIPT_DIR/$test_case/simple.in" "$test_dir/"
+    # Copy input file from project being tested
+    cp "$PROJECT_TEST_DIR/$test_case/simple.in" "$test_dir/"
 
     # Determine which wout and coils files to use based on test case
     if [[ "$test_case" == *"_coils"* ]]; then
