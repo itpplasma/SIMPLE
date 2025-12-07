@@ -3,7 +3,7 @@ module field_newton
   !> Provides Newton solvers for coordinate transformations
   
   use, intrinsic :: iso_fortran_env, only: dp => real64
-  use field_base, only: MagneticField
+  use field_base, only: magnetic_field_t
   
   implicit none
   private
@@ -17,7 +17,7 @@ contains
   !> where Lambda is the stream function that depends on the field type
   subroutine newton_theta_from_canonical(field, s, vartheta_canonical, varphi, &
                                           theta, converged, iter_count)
-    class(MagneticField), intent(in) :: field
+    class(magnetic_field_t), intent(in) :: field
     real(dp), intent(in) :: s              ! Normalized flux coordinate
     real(dp), intent(in) :: vartheta_canonical  ! Canonical poloidal angle
     real(dp), intent(in) :: varphi         ! Toroidal angle
@@ -67,27 +67,27 @@ contains
   !> Get stream function Lambda and its derivative for a given field
   !> This abstracts the field-specific stream function evaluation
   subroutine get_stream_function(mag_field, s, theta, varphi, alam, dl_dt)
-    use field, only: VmecField
+    use field, only: vmec_field_t
 #ifdef GVEC_AVAILABLE
-    use field, only: GvecField
+    use field, only: gvec_field_t
     use vmec_field_adapter, only: vmec_lambda_interpolate_with_field
 #else
     use vmec_field_eval, only: vmec_lambda_interpolate_with_field
 #endif
     
-    class(MagneticField), intent(in) :: mag_field
+    class(magnetic_field_t), intent(in) :: mag_field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam   ! Stream function Lambda
     real(dp), intent(out) :: dl_dt  ! dLambda/dtheta
     
     ! Dispatch based on field type
     select type (mag_field)
-    type is (VmecField)
+    type is (vmec_field_t)
       ! For VMEC, use the existing lambda interpolation
       call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
     
 #ifdef GVEC_AVAILABLE
-    type is (GvecField)
+    type is (gvec_field_t)
       ! For GVEC, Lambda is available as LA
       call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
 #endif

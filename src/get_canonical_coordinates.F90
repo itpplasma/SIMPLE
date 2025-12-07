@@ -16,7 +16,7 @@ module get_can_sub
 
    use spl_three_to_five_sub
    use stencil_utils
-   use field, only: MagneticField
+   use field, only: magnetic_field_t
    use field_newton, only: newton_theta_from_canonical
 
    implicit none
@@ -25,7 +25,7 @@ module get_can_sub
    integer, parameter :: dp = kind(1.0d0)
 
   ! Module variable to store the field for use in subroutines
-   class(MagneticField), allocatable :: current_field
+   class(magnetic_field_t), allocatable :: current_field
   !$omp threadprivate(current_field)
 
 contains
@@ -34,7 +34,7 @@ contains
 
    subroutine get_canonical_coordinates_with_field(field)
 
-  ! Field-agnostic version that accepts a MagneticField object
+  ! Field-agnostic version that accepts a magnetic_field_t object
 
       use canonical_coordinates_mod, only: ns_c, n_theta_c, n_phi_c, &
                                            hs_c, h_theta_c, h_phi_c, &
@@ -50,7 +50,7 @@ contains
 
       implicit none
 
-      class(MagneticField), intent(in) :: field
+      class(magnetic_field_t), intent(in) :: field
 
       ! Store field in module variable for use in nested subroutines
       if (allocated(current_field)) deallocate (current_field)
@@ -67,9 +67,9 @@ contains
 
   ! Backward compatibility wrapper - uses VMEC field by default
 
-      use field, only: VmecField
+      use field, only: vmec_field_t
 
-      call get_canonical_coordinates_with_field(VmecField())
+      call get_canonical_coordinates_with_field(vmec_field_t())
 
    end subroutine get_canonical_coordinates
 

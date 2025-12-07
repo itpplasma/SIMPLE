@@ -4,14 +4,14 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use simple, only : init_vmec
 use magfie_sub, only : VMEC
 use velo_mod, only: isw_field_type
-use field, only: VmecField, CoilsField, create_coils_field
+use field, only: vmec_field_t, coils_field_t, create_coils_field
 use magfie_sub, only: magfie_vmec
 use util, only: twopi
 
 implicit none
 
-class(VmecField), allocatable :: vmec_field
-class(CoilsField), allocatable :: coils_field
+class(vmec_field_t), allocatable :: vmec_field
+class(coils_field_t), allocatable :: coils_field
 real(dp) :: dummy, x(3), Acov(3), hcov(3), Bmod
 
 isw_field_type = VMEC

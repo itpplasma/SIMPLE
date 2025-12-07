@@ -1,11 +1,11 @@
 module field
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_base, only: MagneticField
-use field_vmec, only: VmecField
-use field_coils, only: CoilsField, create_coils_field
+use field_base, only: magnetic_field_t
+use field_vmec, only: vmec_field_t
+use field_coils, only: coils_field_t, create_coils_field
 #ifdef GVEC_AVAILABLE
-use field_gvec, only: GvecField, create_gvec_field
+use field_gvec, only: gvec_field_t, create_gvec_field
 #endif
 
 implicit none
@@ -14,18 +14,18 @@ contains
 
 subroutine field_from_file(filename, field)
     character(*), intent(in) :: filename
-    class(MagneticField), allocatable, intent(out) :: field
+    class(magnetic_field_t), allocatable, intent(out) :: field
 
     character(len(filename)) :: stripped_name
-    class(CoilsField), allocatable :: coils_temp
+    class(coils_field_t), allocatable :: coils_temp
 #ifdef GVEC_AVAILABLE
-    class(GvecField), allocatable :: gvec_temp
+    class(gvec_field_t), allocatable :: gvec_temp
 #endif
 
     stripped_name = strip_directory(filename)
 
     if (endswith(filename, '.nc')) then
-        allocate(VmecField :: field)
+        allocate(vmec_field_t :: field)
     else if (startswidth(stripped_name, 'coils') .or. endswith(filename, '.coils')) then
         call create_coils_field(filename, coils_temp)
         call move_alloc(coils_temp, field)

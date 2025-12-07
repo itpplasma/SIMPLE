@@ -1,33 +1,33 @@
 program test_gvec
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_gvec, only: GvecField, create_gvec_field
+use field_gvec, only: gvec_field_t, create_gvec_field
 
 implicit none
 
-class(GvecField), allocatable :: gvec_field
+class(gvec_field_t), allocatable :: gvec_field
 character(len=256) :: test_file
 
 ! Test data file path - using relative path from build/test/tests/ directory
 test_file = '../../../test/test_data/GVEC_elliptok_State_final.dat'
 
-print *, 'Testing GvecField creation...'
+print *, 'Testing gvec_field_t creation...'
 
-! Test: Create GvecField using constructor
-print *, 'Creating GvecField with create_gvec_field...'
+! Test: Create gvec_field_t using constructor
+print *, 'Creating gvec_field_t with create_gvec_field...'
 call create_gvec_field(test_file, gvec_field)
 
 if (allocated(gvec_field)) then
-    print *, 'SUCCESS: GvecField created successfully'
+    print *, 'SUCCESS: gvec_field_t created successfully'
     print *, 'Filename stored: ', trim(gvec_field%filename)
 else
-    print *, 'FAILED: GvecField creation failed'
+    print *, 'FAILED: gvec_field_t creation failed'
     error stop 1
 end if
 
 ! Test the evaluate method
 print *, ''
-print *, 'Testing GvecField evaluate method...'
+print *, 'Testing gvec_field_t evaluate method...'
 
 block
     real(dp) :: x(3), Acov(3), hcov(3), Bmod
@@ -59,6 +59,6 @@ end block
 
 print *, ''
 print *, 'All tests passed!'
-print *, 'GvecField constructor and evaluate() working correctly.'
+print *, 'gvec_field_t constructor and evaluate() working correctly.'
 
 end program test_gvec

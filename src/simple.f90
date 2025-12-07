@@ -8,7 +8,7 @@ module simple
   use field_can_mod, only : FieldCan
   use orbit_symplectic, only : SymplecticIntegrator, MultistageIntegrator, &
     orbit_sympl_init, orbit_timestep_sympl
-  use field, only : VmecField
+  use field, only : vmec_field_t
   use field_can_mod, only : eval_field => evaluate, init_field_can, FieldCan
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can

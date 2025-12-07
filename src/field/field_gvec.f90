@@ -1,6 +1,6 @@
 module field_gvec
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_base, only: MagneticField
+    use field_base, only: magnetic_field_t
     use MODgvec_cubic_spline, only: t_cubspl
     use MODgvec_rProfile_bspl, only: t_rProfile_bspl
     use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_phiPrime_r, eval_iota_r, eval_pres_r, Finalize_ReadState
@@ -15,9 +15,9 @@ module field_gvec
     real(dp), parameter :: METER_IN_CM = 100.0_dp
 
     private
-    public :: GvecField, create_gvec_field
+    public :: gvec_field_t, create_gvec_field
 
-    type, extends(MagneticField) :: GvecField
+    type, extends(magnetic_field_t) :: gvec_field_t
         character(len=256) :: filename = ''
 
         ! Field periods
@@ -30,15 +30,15 @@ module field_gvec
         procedure :: evaluate
         procedure :: load_dat_file
         final :: gvec_field_cleanup
-    end type GvecField
+    end type gvec_field_t
 
 contains
 
     subroutine create_gvec_field(gvec_file, gvec_field)
         character(*), intent(in) :: gvec_file
-        class(GvecField), allocatable, intent(out) :: gvec_field
+        class(gvec_field_t), allocatable, intent(out) :: gvec_field
 
-        allocate (GvecField :: gvec_field)
+        allocate (gvec_field_t :: gvec_field)
         gvec_field%filename = gvec_file
 
         ! Load the .dat file
@@ -51,7 +51,7 @@ contains
     end subroutine create_gvec_field
 
     subroutine load_dat_file(self)
-        class(GvecField), intent(inout) :: self
+        class(gvec_field_t), intent(inout) :: self
         logical :: file_exists
 
         inquire (file=trim(self%filename), exist=file_exists)
@@ -83,7 +83,7 @@ contains
 
     subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 
-        class(GvecField), intent(in) :: self
+        class(gvec_field_t), intent(in) :: self
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: Acov(3)
         real(dp), intent(out) :: hcov(3)
@@ -198,7 +198,7 @@ contains
     end subroutine evaluate
 
     subroutine gvec_field_cleanup(self)
-        type(GvecField), intent(inout) :: self
+        type(gvec_field_t), intent(inout) :: self
         if (self%data_loaded) then
             call Finalize_ReadState()
             self%data_loaded = .false.

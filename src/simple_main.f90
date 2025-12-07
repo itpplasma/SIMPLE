@@ -93,7 +93,7 @@ module simple_main
   end subroutine main
 
   subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
-    use field_base, only : MagneticField
+    use field_base, only : magnetic_field_t
     use field, only : field_from_file
     use timing, only : print_phase_time
     use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
@@ -101,7 +101,7 @@ module simple_main
     character(*), intent(in) :: vmec_file
     type(Tracer), intent(inout) :: self
     integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-    class(MagneticField), allocatable :: field_temp
+    class(magnetic_field_t), allocatable :: field_temp
 
     call init_vmec(vmec_file, ans_s, ans_tp, amultharm, self%fper)
     call print_phase_time('VMEC initialization completed')

@@ -1,6 +1,6 @@
 module boozer_sub
     use spl_three_to_five_sub
-    use field, only: MagneticField
+    use field, only: magnetic_field_t
 
     implicit none
     
@@ -9,18 +9,18 @@ module boozer_sub
     real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
     ! Module variable to store the field for use in subroutines
-    class(MagneticField), allocatable :: current_field
+    class(magnetic_field_t), allocatable :: current_field
     !$omp threadprivate(current_field)
 
 contains
 
     subroutine get_boozer_coordinates_with_field(field)
 
-! Field-agnostic version that accepts a MagneticField object
+! Field-agnostic version that accepts a magnetic_field_t object
 
         implicit none
 
-        class(MagneticField), intent(in) :: field
+        class(magnetic_field_t), intent(in) :: field
 
         ! Store field in module variable for use in nested subroutines
         if (allocated(current_field)) deallocate (current_field)
@@ -35,9 +35,9 @@ contains
 
 ! Backward compatibility wrapper - uses VMEC field by default
 
-        use field, only: VmecField
+        use field, only: vmec_field_t
 
-        call get_boozer_coordinates_with_field(VmecField())
+        call get_boozer_coordinates_with_field(vmec_field_t())
 
     end subroutine get_boozer_coordinates
 
