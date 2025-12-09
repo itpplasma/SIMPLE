@@ -646,6 +646,124 @@ def plot_confined_fraction(
     return fig
 
 
+def plot_energy_loss_vs_jperp(
+    data_coll: LossData,
+    data_nocoll: Optional[LossData] = None,
+    output_path: Optional[str | Path] = None,
+    show: bool = True,
+    figsize: Tuple[float, float] = (7, 6),
+    title: Optional[str] = None,
+    xlim: Optional[float] = None,
+    nperp: int = 100,
+    smooth_sigma: float = 2.0,
+) -> Figure:
+    """
+    Plot lost energy fraction vs J_perp in ISHW 2022 style.
+
+    Uses the NEW approach: energy carried away by lost particles = final_p^2
+    (where final_p = v/v0 at loss time from times_lost.dat column 9).
+
+    The energy is binned by J_perp and normalized by particle count from
+    the collisional run (same normalization as ISHW 2022 Matlab code).
+
+    Parameters
+    ----------
+    data_coll : LossData
+        Loss statistics from run WITH collisions.
+    data_nocoll : LossData, optional
+        Loss statistics from run WITHOUT collisions.
+    output_path : str or Path, optional
+        If provided, save figure to this path.
+    show : bool
+        If True, display the figure.
+    figsize : tuple
+        Figure size in inches.
+    title : str, optional
+        Plot title.
+    xlim : float, optional
+        X-axis limit for lost energy fraction.
+    nperp : int
+        Number of J_perp bins (default 100, same as ISHW 2022).
+    smooth_sigma : float
+        Gaussian smoothing sigma for curves (default 2.0).
+
+    Returns
+    -------
+    Figure
+        Matplotlib figure object.
+    """
+    if not HAS_PLOTTING:
+        raise ImportError("Plotting requires matplotlib and scipy")
+
+    from scipy.ndimage import gaussian_filter1d
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    def compute_binned_energy(data: LossData, pmax: float, hp: float):
+        """Bin particles and energy by J_perp."""
+        part_distr = np.zeros(nperp)
+        energ_distr = np.zeros(nperp)
+
+        for i in range(data.n_particles):
+            k = int(np.ceil(data.perp_invariant[i] / hp)) - 1
+            k = min(nperp - 1, max(0, k))
+            part_distr[k] += 1
+
+            if data.lost_mask[i]:
+                energ_distr[k] += data.final_p[i] ** 2
+
+        return part_distr, energ_distr
+
+    pmax = np.max(data_coll.perp_invariant)
+    if data_nocoll is not None:
+        pmax = max(pmax, np.max(data_nocoll.perp_invariant))
+    hp = pmax / nperp
+
+    part_c, energ_c = compute_binned_energy(data_coll, pmax, hp)
+
+    if data_nocoll is not None:
+        _, energ_n = compute_binned_energy(data_nocoll, pmax, hp)
+    else:
+        energ_n = None
+
+    part_c_safe = np.where(part_c > 0, part_c, 1)
+    jperp = np.arange(1, nperp + 1) / nperp
+
+    enl_coll = gaussian_filter1d(energ_c / part_c_safe, smooth_sigma)
+
+    max_f = np.max(enl_coll)
+
+    if energ_n is not None:
+        enl_nocoll = gaussian_filter1d(energ_n / part_c_safe, smooth_sigma)
+        ax.plot(enl_nocoll, jperp, "b-", lw=2, label="No coll")
+        max_f = max(max_f, np.max(enl_nocoll))
+
+    ax.plot(enl_coll, jperp, "r-", lw=2, label="With coll")
+
+    ax.set_ylim([0, 1])
+    if xlim is not None:
+        ax.set_xlim([0, xlim])
+    else:
+        ax.set_xlim([0, max_f * 1.1])
+
+    ax.set_xlabel("lost energy fraction")
+    ax.set_ylabel(r"$J_\perp$")
+    ax.legend()
+
+    if title:
+        ax.set_title(title)
+
+    plt.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+
+    if show:
+        plt.show()
+
+    return fig
+
+
 def plot_kde_loss_density(
     data: LossData,
     output_path: Optional[str | Path] = None,
