@@ -15,3 +15,8 @@ build-dir = "build"
 build.verbose = true
 cmake.define.CMAKE_CACHE_DIR = "build"
 wheel.packages = ["python/pysimple"]
+wheel.install-dir = "pysimple"
+wheel.exclude = []
+
+[project.package-data]
+pysimple = ["data/*.dat"]

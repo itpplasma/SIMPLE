@@ -247,6 +247,7 @@ def load_loss_data(directory: str | Path) -> LossData:
 def compute_energy_confined_fraction(
     data: LossData,
     time_grid: Optional[np.ndarray] = None,
+    slowing_down_curve: Optional[Tuple[np.ndarray, np.ndarray]] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute energy confined fraction over time.
@@ -255,15 +256,15 @@ def compute_energy_confined_fraction(
     lost early carry away more energy than those lost late (after
     slowing down via collisions).
 
-    Energy at loss time = final_p**2 where final_p = v/v0 is the
-    normalized velocity from times_lost.dat column 9.
-
     Parameters
     ----------
     data : LossData
         Loss statistics data from load_loss_data().
     time_grid : np.ndarray, optional
         Time points to evaluate. Defaults to data.time_grid.
+    slowing_down_curve : tuple of (times, energy), optional
+        If provided, use theoretical energy from slowing-down curve lookup.
+        Otherwise use actual final_p^2 from simulation.
 
     Returns
     -------
@@ -275,23 +276,26 @@ def compute_energy_confined_fraction(
     if time_grid is None:
         time_grid = data.time_grid
 
-    # Total initial energy (normalized: each particle has E=1 at birth)
     e_total = float(data.n_particles)
 
-    # Energy carried away by each lost particle = final_p**2
-    # For confined particles or skipped particles, they don't contribute to loss
-    energy_at_loss = data.final_p**2
+    if slowing_down_curve is not None:
+        times_sd, energy_sd = slowing_down_curve
+        dt_sd = times_sd[1] - times_sd[0]
+        ntimes_sd = len(times_sd)
+        energy_at_loss = np.zeros(data.n_particles)
+        for i in range(data.n_particles):
+            if data.lost_mask[i]:
+                j = int(round(data.loss_times[i] / dt_sd))
+                j = max(0, min(ntimes_sd - 1, j))
+                energy_at_loss[i] = energy_sd[j]
+    else:
+        energy_at_loss = data.final_p**2
 
     energy_fraction = np.zeros_like(time_grid)
 
     for i, t in enumerate(time_grid):
-        # Particles lost before time t
         lost_before_t = (data.loss_times > 0) & (data.loss_times < t)
-
-        # Energy lost = sum of energy carried away by lost particles
         e_lost = np.sum(energy_at_loss[lost_before_t])
-
-        # Energy confined = total - lost
         energy_fraction[i] = (e_total - e_lost) / e_total
 
     return time_grid, energy_fraction
@@ -583,9 +587,15 @@ def plot_confined_fraction(
     output_path: Optional[str | Path] = None,
     show: bool = True,
     include_energy: bool = True,
+    slowing_down_curve: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (7, 5),
 ) -> Figure:
     """
-    Simple plot of confined fraction vs time.
+    Plot confined fraction vs time for particles and energy.
+
+    Supports both actual energy (from final_p^2) and theoretical energy
+    (from slowing-down curve lookup).
 
     Parameters
     ----------
@@ -597,6 +607,13 @@ def plot_confined_fraction(
         If True, display the figure.
     include_energy : bool
         If True, also plot energy confined fraction.
+    slowing_down_curve : tuple of (times, energy), optional
+        If provided along with include_energy=True, plots both actual
+        and theoretical energy confined fractions.
+    title : str, optional
+        Plot title.
+    figsize : tuple
+        Figure size in inches.
 
     Returns
     -------
@@ -606,7 +623,7 @@ def plot_confined_fraction(
     if not HAS_PLOTTING:
         raise ImportError("Plotting requires matplotlib")
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=figsize)
 
     t_conf = data.time_grid
     valid_t = t_conf > 0
@@ -614,8 +631,8 @@ def plot_confined_fraction(
     ax.semilogx(
         t_conf[valid_t],
         data.confined_fraction[valid_t],
-        "r-",
-        linewidth=1.5,
+        "k-",
+        linewidth=2,
         label="Particles",
     )
 
@@ -625,15 +642,30 @@ def plot_confined_fraction(
             t_energy[valid_t],
             energy_frac[valid_t],
             "b-",
-            linewidth=1.5,
-            label="Energy",
+            linewidth=2,
+            label="Energy (actual)",
         )
+
+        if slowing_down_curve is not None:
+            _, energy_frac_theo = compute_energy_confined_fraction(
+                data, slowing_down_curve=slowing_down_curve
+            )
+            ax.semilogx(
+                t_energy[valid_t],
+                energy_frac_theo[valid_t],
+                "b--",
+                linewidth=1.5,
+                label="Energy (theoretical)",
+            )
 
     ax.set_xlabel(r"Time $t$ / s")
     ax.set_ylabel("Confined fraction")
     ax.set_ylim([0, 1.05])
-    ax.legend()
+    ax.legend(loc="lower left")
     ax.grid(True, alpha=0.3)
+
+    if title:
+        ax.set_title(title)
 
     plt.tight_layout()
 
@@ -646,6 +678,61 @@ def plot_confined_fraction(
     return fig
 
 
+def get_slowing_down_curve_path() -> Path:
+    """
+    Get path to bundled slowing-down energy curve data file.
+
+    Returns the path to energyslow_aver.dat included with pysimple.
+    This file contains the theoretical alpha particle slowing-down
+    curve for 3.5 MeV alphas in a DT plasma.
+
+    Returns
+    -------
+    Path
+        Path to the bundled energyslow_aver.dat file.
+    """
+    import importlib.resources
+
+    try:
+        # Python 3.9+
+        return importlib.resources.files("pysimple").joinpath("data/energyslow_aver.dat")
+    except AttributeError:
+        # Fallback for older Python
+        import pkg_resources
+
+        return Path(
+            pkg_resources.resource_filename("pysimple", "data/energyslow_aver.dat")
+        )
+
+
+def load_slowing_down_curve(
+    filepath: Optional[str | Path] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load theoretical slowing-down energy curve.
+
+    The file contains time vs normalized energy (E/E0) for alpha particles
+    slowing down in a DT plasma over one slowing-down time.
+
+    Parameters
+    ----------
+    filepath : str or Path, optional
+        Path to energyslow_aver.dat file. If None, uses the bundled
+        data file included with pysimple.
+
+    Returns
+    -------
+    times : np.ndarray
+        Time grid [s], normalized to slowing-down time (0 to 1).
+    energy : np.ndarray
+        Normalized energy at each time (1 at t=0, decreasing to thermal).
+    """
+    if filepath is None:
+        filepath = get_slowing_down_curve_path()
+    data = np.loadtxt(filepath)
+    return data[:, 0], data[:, 1]
+
+
 def plot_energy_loss_vs_jperp(
     data_coll: LossData,
     data_nocoll: Optional[LossData] = None,
@@ -656,15 +743,19 @@ def plot_energy_loss_vs_jperp(
     xlim: Optional[float] = None,
     nperp: int = 100,
     smooth_sigma: float = 2.0,
+    slowing_down_curve: Optional[Tuple[np.ndarray, np.ndarray]] = None,
 ) -> Figure:
     """
     Plot lost energy fraction vs J_perp in ISHW 2022 style.
 
-    Uses the NEW approach: energy carried away by lost particles = final_p^2
-    (where final_p = v/v0 at loss time from times_lost.dat column 9).
+    Supports up to four curves:
+    1. COLL (actual): Energy from final_p^2 (actual velocity at loss)
+    2. NOCOLL (actual): Energy from final_p^2 (should be ~1 without collisions)
+    3. COLL (theoretical): Energy from slowing-down curve lookup by loss time
+    4. NOCOLL (theoretical): Energy from slowing-down curve lookup by loss time
 
-    The energy is binned by J_perp and normalized by particle count from
-    the collisional run (same normalization as ISHW 2022 Matlab code).
+    The NEW approach uses final_p^2 from times_lost.dat column 9.
+    The OLD approach (ISHW 2022) used energyslow_aver.dat lookup by loss time.
 
     Parameters
     ----------
@@ -686,6 +777,10 @@ def plot_energy_loss_vs_jperp(
         Number of J_perp bins (default 100, same as ISHW 2022).
     smooth_sigma : float
         Gaussian smoothing sigma for curves (default 2.0).
+    slowing_down_curve : tuple of (times, energy), optional
+        Theoretical slowing-down curve from load_slowing_down_curve().
+        If provided, adds two additional curves using theoretical energy
+        lookup instead of actual final_p^2.
 
     Returns
     -------
@@ -699,8 +794,8 @@ def plot_energy_loss_vs_jperp(
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    def compute_binned_energy(data: LossData, pmax: float, hp: float):
-        """Bin particles and energy by J_perp."""
+    def compute_binned_energy_actual(data: LossData, pmax: float, hp: float):
+        """Bin particles and energy by J_perp using actual final_p^2."""
         part_distr = np.zeros(nperp)
         energ_distr = np.zeros(nperp)
 
@@ -714,31 +809,83 @@ def plot_energy_loss_vs_jperp(
 
         return part_distr, energ_distr
 
+    def compute_binned_energy_theoretical(
+        data: LossData, pmax: float, hp: float, times: np.ndarray, energy: np.ndarray
+    ):
+        """Bin particles and energy by J_perp using theoretical slowing-down."""
+        part_distr = np.zeros(nperp)
+        energ_distr = np.zeros(nperp)
+
+        dt = times[1] - times[0]
+        ntimes = len(times)
+
+        # Subtract thermal energy like the original Fortran code:
+        # energ = energ - 1.5d0*1d4/3.5d6
+        thermal = 1.5e4 / 3.5e6
+        energy_adj = energy - thermal
+
+        for i in range(data.n_particles):
+            k = int(np.ceil(data.perp_invariant[i] / hp)) - 1
+            k = min(nperp - 1, max(0, k))
+            part_distr[k] += 1
+
+            if data.lost_mask[i]:
+                t_loss = data.loss_times[i]
+                j = int(round(t_loss / dt))
+                j = max(0, min(ntimes - 1, j))
+                energ_distr[k] += energy_adj[j]
+
+        return part_distr, energ_distr
+
     pmax = np.max(data_coll.perp_invariant)
     if data_nocoll is not None:
         pmax = max(pmax, np.max(data_nocoll.perp_invariant))
     hp = pmax / nperp
 
-    part_c, energ_c = compute_binned_energy(data_coll, pmax, hp)
+    part_c, energ_c = compute_binned_energy_actual(data_coll, pmax, hp)
 
     if data_nocoll is not None:
-        _, energ_n = compute_binned_energy(data_nocoll, pmax, hp)
+        part_n, energ_n = compute_binned_energy_actual(data_nocoll, pmax, hp)
     else:
-        energ_n = None
+        part_n, energ_n = None, None
+
+    if slowing_down_curve is not None:
+        times_sd, energy_sd = slowing_down_curve
+        _, energ_c_theo = compute_binned_energy_theoretical(
+            data_coll, pmax, hp, times_sd, energy_sd
+        )
+        if data_nocoll is not None:
+            _, energ_n_theo = compute_binned_energy_theoretical(
+                data_nocoll, pmax, hp, times_sd, energy_sd
+            )
+        else:
+            energ_n_theo = None
+    else:
+        energ_c_theo, energ_n_theo = None, None
 
     part_c_safe = np.where(part_c > 0, part_c, 1)
     jperp = np.arange(1, nperp + 1) / nperp
 
-    enl_coll = gaussian_filter1d(energ_c / part_c_safe, smooth_sigma)
+    max_f = 0.0
 
-    max_f = np.max(enl_coll)
+    enl_coll = energ_c / part_c_safe
+    ax.plot(enl_coll, jperp, "r-", lw=2, label="COLL (actual)")
+    max_f = max(max_f, np.max(enl_coll))
 
     if energ_n is not None:
-        enl_nocoll = gaussian_filter1d(energ_n / part_c_safe, smooth_sigma)
-        ax.plot(enl_nocoll, jperp, "b-", lw=2, label="No coll")
+        enl_nocoll = energ_n / part_c_safe
+        ax.plot(enl_nocoll, jperp, "b-", lw=2, label="NOCOLL (actual)")
         max_f = max(max_f, np.max(enl_nocoll))
 
-    ax.plot(enl_coll, jperp, "r-", lw=2, label="With coll")
+    if energ_c_theo is not None:
+        enl_coll_theo = energ_c_theo / part_c_safe
+        ax.plot(enl_coll_theo, jperp, "r--", lw=1.5, label="COLL (theoretical)")
+        max_f = max(max_f, np.max(enl_coll_theo))
+
+    if energ_n_theo is not None:
+        enl_nocoll_theo = energ_n_theo / part_c_safe
+        ax.plot(enl_nocoll_theo, jperp, "b--", lw=1.5, label="NOCOLL (theoretical)")
+        max_f = max(max_f, np.max(enl_nocoll_theo))
 
     ax.set_ylim([0, 1])
     if xlim is not None:
@@ -748,7 +895,7 @@ def plot_energy_loss_vs_jperp(
 
     ax.set_xlabel("lost energy fraction")
     ax.set_ylabel(r"$J_\perp$")
-    ax.legend()
+    ax.legend(loc="lower right")
 
     if title:
         ax.set_title(title)
