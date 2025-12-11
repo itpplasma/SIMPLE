@@ -72,6 +72,11 @@ except ImportError:
     HAS_PLOTTING = False
     Figure = None
 
+# Physics constants for alpha particle slowing down in DT plasma
+ALPHA_BIRTH_ENERGY_EV = 3.5e6  # eV - DT fusion alpha particle birth energy
+THERMAL_ENERGY_EV = 1.5e4  # eV - typical thermal energy at 10 keV
+THERMAL_ENERGY_FRACTION = THERMAL_ENERGY_EV / ALPHA_BIRTH_ENERGY_EV
+
 
 @dataclass
 class LossData:
@@ -280,19 +285,15 @@ def compute_energy_confined_fraction(
 
     if slowing_down_curve is not None:
         times_sd, energy_sd = slowing_down_curve
-        dt_sd = times_sd[1] - times_sd[0]
-        ntimes_sd = len(times_sd)
-        energy_at_loss = np.zeros(data.n_particles)
-        for i in range(data.n_particles):
-            if data.lost_mask[i]:
-                j = int(round(data.loss_times[i] / dt_sd))
-                j = max(0, min(ntimes_sd - 1, j))
-                energy_at_loss[i] = energy_sd[j]
+        energy_at_loss = np.where(
+            data.lost_mask,
+            np.interp(data.loss_times, times_sd, energy_sd, left=energy_sd[0], right=energy_sd[-1]),
+            0.0,
+        )
     else:
         energy_at_loss = data.final_p**2
 
     energy_fraction = np.zeros_like(time_grid)
-
     for i, t in enumerate(time_grid):
         lost_before_t = (data.loss_times > 0) & (data.loss_times < t)
         e_lost = np.sum(energy_at_loss[lost_before_t])
@@ -349,6 +350,93 @@ def compute_energy_loss_distribution(
     return bin_centers, particle_count.astype(float), energy_lost
 
 
+def _plot_confined_fraction_panel(ax, data: LossData) -> None:
+    """Plot confined fraction vs time panel (particles and energy)."""
+    t_conf = data.time_grid
+    conf_frac = data.confined_fraction
+    t_energy, energy_frac = compute_energy_confined_fraction(data)
+
+    valid_t = t_conf > 0
+    ax.semilogx(t_conf[valid_t], conf_frac[valid_t], "r-", linewidth=1.5, label="Particles")
+    ax.semilogx(t_energy[valid_t], energy_frac[valid_t], "b-", linewidth=1.5, label="Energy")
+
+    ax.set_xlabel(r"Time $t$ / s")
+    ax.set_ylabel("Confined fraction")
+    ax.set_ylim([0, 1.05])
+    ax.legend(loc="lower left")
+    ax.grid(True, alpha=0.3)
+    ax.set_title("(a) Confined fraction vs time")
+
+
+def _plot_kde_density_panel(ax, data: LossData) -> None:
+    """Plot KDE density of loss time vs trapping parameter panel."""
+    lost = data.lost_mask
+    tlost = np.abs(data.loss_times[lost])
+    trap_par = data.trap_parameter[lost]
+    t_threshold = 0.99 * data.trace_time
+    kde_mask = tlost < t_threshold
+
+    if np.sum(kde_mask) > 10:
+        log_tlost = np.log10(tlost[kde_mask])
+        trap_kde = trap_par[kde_mask]
+        try:
+            kde = gaussian_kde([log_tlost, trap_kde])
+            X, Y = np.mgrid[-5:0:100j, -2:1:150j]
+            positions = np.vstack([X.ravel(), Y.ravel()])
+            Z = np.reshape(kde(positions).T, X.shape)
+            ax.imshow(np.rot90(Z), cmap=plt.cm.Blues, extent=[-5, 0, -2, 1], aspect="auto")
+        except np.linalg.LinAlgError:
+            pass
+
+    if np.sum(lost) > 0:
+        ax.plot(np.log10(tlost), trap_par, "k,", markersize=0.5, alpha=0.5)
+
+    ax.axhline(y=0, color="k", linestyle="--", linewidth=0.8)
+    ax.set_ylim([-2.1, 1.0])
+    ax.set_xlim([-5.0, 0.1])
+    ax.set_ylabel("Trapping parameter $\\eta$")
+    ax.set_xlabel(r"Loss time $t$ / s")
+    ax.set_xticks([-5, -4, -3, -2, -1, 0])
+    ax.set_xticklabels([r"$10^{-5}$", r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$", r"$10^{-1}$", r"$1$"])
+
+    ax_twin = ax.twinx()
+    t_conf = data.time_grid
+    valid_t = t_conf > 0
+    ax_twin.plot(np.log10(t_conf[valid_t]), data.confined_fraction[valid_t], color="tab:red", lw=1.5)
+    ax_twin.set_ylim([0.5, 1.25])
+    ax_twin.set_ylabel("Confined fraction", color="tab:red")
+    ax_twin.tick_params("y", colors="tab:red")
+    ax.set_title("(b) Loss time vs trapping parameter (KDE)")
+
+
+def _plot_energy_loss_panel(ax, data: LossData) -> None:
+    """Plot energy loss distribution vs J_perp panel."""
+    jperp_bins, particle_count, energy_lost = compute_energy_loss_distribution(data)
+    total = data.n_particles if data.n_particles > 0 else 1
+    energy_frac = energy_lost / total
+    particle_frac = particle_count / total
+
+    ax.bar(jperp_bins, energy_frac, width=1.0 / len(jperp_bins), alpha=0.7, label="Energy", color="tab:blue")
+    ax.bar(jperp_bins, particle_frac, width=1.0 / len(jperp_bins), alpha=0.4, label="Particles", color="tab:red")
+    ax.set_xlabel(r"$J_\perp$ (normalized)")
+    ax.set_ylabel("Lost fraction per bin")
+    ax.legend()
+    ax.set_title("(c) Loss distribution vs $J_\\perp$")
+
+
+def _plot_starting_positions_panel(ax, data: LossData) -> None:
+    """Plot starting positions colored by loss time panel."""
+    tlost_all = np.maximum(np.abs(data.loss_times), 1e-10)
+    scatter = ax.scatter(data.start_theta, data.start_pitch, c=np.log10(tlost_all), s=1, cmap="viridis", vmin=-5, vmax=0)
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label(r"$\log_{10}(t_{\mathrm{loss}})$")
+    ax.set_xlabel(r"$\theta$ (poloidal angle)")
+    ax.set_ylabel(r"$\lambda = v_\parallel / v$ (pitch)")
+    ax.set_xlim([0, 2 * np.pi])
+    ax.set_ylim([-1, 1])
+    ax.set_title("(d) Starting positions colored by loss time")
+
+
 def plot_loss_statistics(
     data: LossData,
     output_path: Optional[str | Path] = None,
@@ -360,14 +448,10 @@ def plot_loss_statistics(
     Create comprehensive loss statistics figure with 4 panels.
 
     Panel layout:
-    +----------------------------------+----------------------------------+
-    | (a) Confined Fraction vs Time    | (b) KDE: Loss Time vs Trap Param |
-    |     - Red: particle fraction     |     - Blue KDE density           |
-    |     - Blue: energy fraction      |     - Red: confined fraction     |
-    +----------------------------------+----------------------------------+
-    | (c) Energy Loss vs J_perp        | (d) Starting Positions           |
-    |                                  |     θ vs λ colored by loss time  |
-    +----------------------------------+----------------------------------+
+    - (a) Confined fraction vs time (particles and energy)
+    - (b) KDE density: loss time vs trapping parameter
+    - (c) Energy loss distribution vs J_perp
+    - (d) Starting positions colored by loss time
 
     Parameters
     ----------
@@ -386,199 +470,21 @@ def plot_loss_statistics(
     -------
     Figure
         Matplotlib figure object.
-
-    Raises
-    ------
-    ImportError
-        If matplotlib or scipy are not available.
     """
     if not HAS_PLOTTING:
-        raise ImportError(
-            "Plotting requires matplotlib and scipy. "
-            "Install with: pip install matplotlib scipy"
-        )
+        raise ImportError("Plotting requires matplotlib and scipy.")
 
     fig, axes = plt.subplots(2, 2, figsize=figsize)
+    _plot_confined_fraction_panel(axes[0, 0], data)
+    _plot_kde_density_panel(axes[0, 1], data)
+    _plot_energy_loss_panel(axes[1, 0], data)
+    _plot_starting_positions_panel(axes[1, 1], data)
 
-    # =========================================================================
-    # Panel (a): Confined fraction vs time - particles AND energy
-    # =========================================================================
-    ax_conf = axes[0, 0]
-
-    # Particle confined fraction (from confined_fraction.dat)
-    t_conf = data.time_grid
-    conf_frac = data.confined_fraction
-
-    # Energy confined fraction (computed from final velocities)
-    t_energy, energy_frac = compute_energy_confined_fraction(data)
-
-    # Plot with log scale on x-axis
-    valid_t = t_conf > 0
-    ax_conf.semilogx(t_conf[valid_t], conf_frac[valid_t], "r-", linewidth=1.5, label="Particles")
-    ax_conf.semilogx(t_energy[valid_t], energy_frac[valid_t], "b-", linewidth=1.5, label="Energy")
-
-    ax_conf.set_xlabel(r"Time $t$ / s")
-    ax_conf.set_ylabel("Confined fraction")
-    ax_conf.set_ylim([0, 1.05])
-    ax_conf.legend(loc="lower left")
-    ax_conf.grid(True, alpha=0.3)
-    ax_conf.set_title("(a) Confined fraction vs time")
-
-    # =========================================================================
-    # Panel (b): KDE density plot - loss time vs trapping parameter
-    # This is the "Brazilian flag" style plot from ISHW papers
-    # =========================================================================
-    ax_kde = axes[0, 1]
-
-    # Filter to lost particles only (exclude confined and skipped)
-    lost = data.lost_mask
-    tlost = np.abs(data.loss_times[lost])
-    trap_par = data.trap_parameter[lost]
-
-    # Further filter to reasonable loss times for KDE
-    t_threshold = 0.99 * data.trace_time
-    kde_mask = tlost < t_threshold
-
-    if np.sum(kde_mask) > 10:
-        # Compute 2D KDE (Kernel Density Estimate)
-        # This shows the density of particles in (log10(t_lost), trap_par) space
-        log_tlost = np.log10(tlost[kde_mask])
-        trap_kde = trap_par[kde_mask]
-
-        try:
-            kde = gaussian_kde([log_tlost, trap_kde])
-
-            # Create evaluation grid
-            # X: log10(time) from 10^-5 to 10^0 (1 second)
-            # Y: trapping parameter from -2 to 1
-            X, Y = np.mgrid[-5:0:100j, -2:1:150j]
-            positions = np.vstack([X.ravel(), Y.ravel()])
-            Z = np.reshape(kde(positions).T, X.shape)
-
-            # Plot KDE as image
-            ax_kde.imshow(
-                np.rot90(Z),
-                cmap=plt.cm.Blues,
-                extent=[-5, 0, -2, 1],
-                aspect="auto",
-            )
-        except np.linalg.LinAlgError:
-            # KDE can fail if data is degenerate
-            pass
-
-    # Overlay scatter of individual particles
-    if np.sum(lost) > 0:
-        ax_kde.plot(
-            np.log10(tlost),
-            trap_par,
-            "k,",
-            markersize=0.5,
-            alpha=0.5,
-        )
-
-    # Dashed line at trap_par = 0 (trapped-passing boundary)
-    ax_kde.axhline(y=0, color="k", linestyle="--", linewidth=0.8)
-
-    ax_kde.set_ylim([-2.1, 1.0])
-    ax_kde.set_xlim([-5.0, 0.1])
-    ax_kde.set_ylabel("Trapping parameter $\\eta$")
-    ax_kde.set_xlabel(r"Loss time $t$ / s")
-
-    # Custom x-axis labels showing powers of 10
-    ax_kde.set_xticks([-5, -4, -3, -2, -1, 0])
-    ax_kde.set_xticklabels(
-        [r"$10^{-5}$", r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$", r"$10^{-1}$", r"$1$"]
-    )
-
-    # Add confined fraction on twin y-axis (red curve)
-    ax_conf2 = ax_kde.twinx()
-    valid_t = t_conf > 0
-    ax_conf2.plot(np.log10(t_conf[valid_t]), conf_frac[valid_t], color="tab:red", linewidth=1.5)
-    ax_conf2.set_ylim([0.5, 1.25])
-    ax_conf2.set_ylabel("Confined fraction", color="tab:red")
-    ax_conf2.tick_params("y", colors="tab:red")
-
-    ax_kde.set_title("(b) Loss time vs trapping parameter (KDE)")
-
-    # =========================================================================
-    # Panel (c): Energy loss distribution vs J_perp
-    # =========================================================================
-    ax_energy = axes[1, 0]
-
-    jperp_bins, particle_count, energy_lost = compute_energy_loss_distribution(data)
-
-    # Normalize energy lost to get fraction
-    total_particles = data.n_particles
-    if total_particles > 0:
-        energy_frac_per_bin = energy_lost / total_particles
-        particle_frac_per_bin = particle_count / total_particles
-    else:
-        energy_frac_per_bin = energy_lost
-        particle_frac_per_bin = particle_count
-
-    ax_energy.bar(
-        jperp_bins,
-        energy_frac_per_bin,
-        width=1.0 / len(jperp_bins),
-        alpha=0.7,
-        label="Energy lost",
-        color="tab:blue",
-    )
-    ax_energy.bar(
-        jperp_bins,
-        particle_frac_per_bin,
-        width=1.0 / len(jperp_bins),
-        alpha=0.4,
-        label="Particles lost",
-        color="tab:red",
-    )
-
-    ax_energy.set_xlabel(r"$J_\perp$ (normalized)")
-    ax_energy.set_ylabel("Lost fraction per bin")
-    ax_energy.legend()
-    ax_energy.set_title("(c) Loss distribution vs $J_\\perp$")
-
-    # =========================================================================
-    # Panel (d): Starting positions - theta vs pitch colored by loss time
-    # =========================================================================
-    ax_start = axes[1, 1]
-
-    # Color by log10 of loss time
-    # Confined particles (tlost = trace_time) will be yellow
-    # Early losses will be dark (purple/blue)
-    tlost_all = np.abs(data.loss_times)
-    tlost_all = np.maximum(tlost_all, 1e-10)  # Avoid log(0)
-
-    scatter = ax_start.scatter(
-        data.start_theta,
-        data.start_pitch,
-        c=np.log10(tlost_all),
-        s=1,
-        cmap="viridis",
-        vmin=-5,
-        vmax=0,
-    )
-
-    cbar = plt.colorbar(scatter, ax=ax_start)
-    cbar.set_label(r"$\log_{10}(t_{\mathrm{loss}})$")
-
-    ax_start.set_xlabel(r"$\theta$ (poloidal angle)")
-    ax_start.set_ylabel(r"$\lambda = v_\parallel / v$ (pitch)")
-    ax_start.set_xlim([0, 2 * np.pi])
-    ax_start.set_ylim([-1, 1])
-    ax_start.set_title("(d) Starting positions colored by loss time")
-
-    # =========================================================================
-    # Finalize
-    # =========================================================================
     plt.tight_layout()
-
     if output_path is not None:
         fig.savefig(output_path, dpi=dpi, bbox_inches="tight")
-
     if show:
         plt.show()
-
     return fig
 
 
@@ -733,6 +639,41 @@ def load_slowing_down_curve(
     return data[:, 0], data[:, 1]
 
 
+def _compute_bin_indices(perp_invariant: np.ndarray, hp: float, nperp: int) -> np.ndarray:
+    """Compute J_perp bin indices for all particles (vectorized)."""
+    k = np.ceil(perp_invariant / hp).astype(int) - 1
+    return np.clip(k, 0, nperp - 1)
+
+
+def _bin_energy_actual(
+    data: LossData, hp: float, nperp: int
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Bin particles and energy by J_perp using actual final_p^2 (vectorized)."""
+    k = _compute_bin_indices(data.perp_invariant, hp, nperp)
+    part_distr = np.bincount(k, minlength=nperp).astype(float)
+    energy_weights = np.where(data.lost_mask, data.final_p**2, 0.0)
+    energ_distr = np.bincount(k, weights=energy_weights, minlength=nperp)
+    return part_distr, energ_distr
+
+
+def _bin_energy_theoretical(
+    data: LossData,
+    hp: float,
+    nperp: int,
+    times_sd: np.ndarray,
+    energy_sd: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Bin particles and energy by J_perp using theoretical slowing-down (vectorized)."""
+    k = _compute_bin_indices(data.perp_invariant, hp, nperp)
+    part_distr = np.bincount(k, minlength=nperp).astype(float)
+
+    energy_adj = energy_sd - THERMAL_ENERGY_FRACTION
+    energy_at_loss = np.interp(data.loss_times, times_sd, energy_adj, left=energy_adj[0], right=energy_adj[-1])
+    energy_weights = np.where(data.lost_mask, energy_at_loss, 0.0)
+    energ_distr = np.bincount(k, weights=energy_weights, minlength=nperp)
+    return part_distr, energ_distr
+
+
 def plot_energy_loss_vs_jperp(
     data_coll: LossData,
     data_nocoll: Optional[LossData] = None,
@@ -742,7 +683,6 @@ def plot_energy_loss_vs_jperp(
     title: Optional[str] = None,
     xlim: Optional[float] = None,
     nperp: int = 100,
-    smooth_sigma: float = 2.0,
     slowing_down_curve: Optional[Tuple[np.ndarray, np.ndarray]] = None,
 ) -> Figure:
     """
@@ -753,9 +693,6 @@ def plot_energy_loss_vs_jperp(
     2. NOCOLL (actual): Energy from final_p^2 (should be ~1 without collisions)
     3. COLL (theoretical): Energy from slowing-down curve lookup by loss time
     4. NOCOLL (theoretical): Energy from slowing-down curve lookup by loss time
-
-    The NEW approach uses final_p^2 from times_lost.dat column 9.
-    The OLD approach (ISHW 2022) used energyslow_aver.dat lookup by loss time.
 
     Parameters
     ----------
@@ -775,8 +712,6 @@ def plot_energy_loss_vs_jperp(
         X-axis limit for lost energy fraction.
     nperp : int
         Number of J_perp bins (default 100, same as ISHW 2022).
-    smooth_sigma : float
-        Gaussian smoothing sigma for curves (default 2.0).
     slowing_down_curve : tuple of (times, energy), optional
         Theoretical slowing-down curve from load_slowing_down_curve().
         If provided, adds two additional curves using theoretical energy
@@ -790,124 +725,52 @@ def plot_energy_loss_vs_jperp(
     if not HAS_PLOTTING:
         raise ImportError("Plotting requires matplotlib and scipy")
 
-    from scipy.ndimage import gaussian_filter1d
-
     fig, ax = plt.subplots(figsize=figsize)
-
-    def compute_binned_energy_actual(data: LossData, pmax: float, hp: float):
-        """Bin particles and energy by J_perp using actual final_p^2."""
-        part_distr = np.zeros(nperp)
-        energ_distr = np.zeros(nperp)
-
-        for i in range(data.n_particles):
-            k = int(np.ceil(data.perp_invariant[i] / hp)) - 1
-            k = min(nperp - 1, max(0, k))
-            part_distr[k] += 1
-
-            if data.lost_mask[i]:
-                energ_distr[k] += data.final_p[i] ** 2
-
-        return part_distr, energ_distr
-
-    def compute_binned_energy_theoretical(
-        data: LossData, pmax: float, hp: float, times: np.ndarray, energy: np.ndarray
-    ):
-        """Bin particles and energy by J_perp using theoretical slowing-down."""
-        part_distr = np.zeros(nperp)
-        energ_distr = np.zeros(nperp)
-
-        dt = times[1] - times[0]
-        ntimes = len(times)
-
-        # Subtract thermal energy like the original Fortran code:
-        # energ = energ - 1.5d0*1d4/3.5d6
-        thermal = 1.5e4 / 3.5e6
-        energy_adj = energy - thermal
-
-        for i in range(data.n_particles):
-            k = int(np.ceil(data.perp_invariant[i] / hp)) - 1
-            k = min(nperp - 1, max(0, k))
-            part_distr[k] += 1
-
-            if data.lost_mask[i]:
-                t_loss = data.loss_times[i]
-                j = int(round(t_loss / dt))
-                j = max(0, min(ntimes - 1, j))
-                energ_distr[k] += energy_adj[j]
-
-        return part_distr, energ_distr
 
     pmax = np.max(data_coll.perp_invariant)
     if data_nocoll is not None:
         pmax = max(pmax, np.max(data_nocoll.perp_invariant))
     hp = pmax / nperp
 
-    part_c, energ_c = compute_binned_energy_actual(data_coll, pmax, hp)
+    part_c, energ_c = _bin_energy_actual(data_coll, hp, nperp)
+    part_n, energ_n = _bin_energy_actual(data_nocoll, hp, nperp) if data_nocoll else (None, None)
 
-    if data_nocoll is not None:
-        part_n, energ_n = compute_binned_energy_actual(data_nocoll, pmax, hp)
-    else:
-        part_n, energ_n = None, None
-
+    energ_c_theo, energ_n_theo = None, None
     if slowing_down_curve is not None:
         times_sd, energy_sd = slowing_down_curve
-        _, energ_c_theo = compute_binned_energy_theoretical(
-            data_coll, pmax, hp, times_sd, energy_sd
-        )
+        _, energ_c_theo = _bin_energy_theoretical(data_coll, hp, nperp, times_sd, energy_sd)
         if data_nocoll is not None:
-            _, energ_n_theo = compute_binned_energy_theoretical(
-                data_nocoll, pmax, hp, times_sd, energy_sd
-            )
-        else:
-            energ_n_theo = None
-    else:
-        energ_c_theo, energ_n_theo = None, None
+            _, energ_n_theo = _bin_energy_theoretical(data_nocoll, hp, nperp, times_sd, energy_sd)
 
     part_c_safe = np.where(part_c > 0, part_c, 1)
     jperp = np.arange(1, nperp + 1) / nperp
 
+    curves = [
+        (energ_c / part_c_safe, "r-", 2, "COLL (actual)"),
+        (energ_n / part_c_safe if energ_n is not None else None, "b-", 2, "NOCOLL (actual)"),
+        (energ_c_theo / part_c_safe if energ_c_theo is not None else None, "r--", 1.5, "COLL (theoretical)"),
+        (energ_n_theo / part_c_safe if energ_n_theo is not None else None, "b--", 1.5, "NOCOLL (theoretical)"),
+    ]
+
     max_f = 0.0
-
-    enl_coll = energ_c / part_c_safe
-    ax.plot(enl_coll, jperp, "r-", lw=2, label="COLL (actual)")
-    max_f = max(max_f, np.max(enl_coll))
-
-    if energ_n is not None:
-        enl_nocoll = energ_n / part_c_safe
-        ax.plot(enl_nocoll, jperp, "b-", lw=2, label="NOCOLL (actual)")
-        max_f = max(max_f, np.max(enl_nocoll))
-
-    if energ_c_theo is not None:
-        enl_coll_theo = energ_c_theo / part_c_safe
-        ax.plot(enl_coll_theo, jperp, "r--", lw=1.5, label="COLL (theoretical)")
-        max_f = max(max_f, np.max(enl_coll_theo))
-
-    if energ_n_theo is not None:
-        enl_nocoll_theo = energ_n_theo / part_c_safe
-        ax.plot(enl_nocoll_theo, jperp, "b--", lw=1.5, label="NOCOLL (theoretical)")
-        max_f = max(max_f, np.max(enl_nocoll_theo))
+    for y_data, style, lw, label in curves:
+        if y_data is not None:
+            ax.plot(y_data, jperp, style, lw=lw, label=label)
+            max_f = max(max_f, np.max(y_data))
 
     ax.set_ylim([0, 1])
-    if xlim is not None:
-        ax.set_xlim([0, xlim])
-    else:
-        ax.set_xlim([0, max_f * 1.1])
-
+    ax.set_xlim([0, xlim if xlim is not None else max_f * 1.1])
     ax.set_xlabel("lost energy fraction")
     ax.set_ylabel(r"$J_\perp$")
     ax.legend(loc="lower right")
-
     if title:
         ax.set_title(title)
 
     plt.tight_layout()
-
     if output_path is not None:
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
-
     if show:
         plt.show()
-
     return fig
 
 

@@ -23,8 +23,14 @@ from pysimple.plotting import (
     load_slowing_down_curve,
     get_slowing_down_curve_path,
     compute_energy_confined_fraction,
+    compute_energy_loss_distribution,
     plot_energy_loss_vs_jperp,
     plot_confined_fraction,
+    plot_loss_statistics,
+    plot_kde_loss_density,
+    ALPHA_BIRTH_ENERGY_EV,
+    THERMAL_ENERGY_EV,
+    THERMAL_ENERGY_FRACTION,
 )
 
 
@@ -276,3 +282,140 @@ class TestPlotting:
 
         assert output_path.exists()
         assert fig is not None
+
+
+class TestPhysicsConstants:
+    """Test physics constants are correctly defined."""
+
+    def test_alpha_birth_energy(self):
+        """Test alpha birth energy is 3.5 MeV."""
+        assert ALPHA_BIRTH_ENERGY_EV == 3.5e6
+
+    def test_thermal_energy(self):
+        """Test thermal energy is 15 keV."""
+        assert THERMAL_ENERGY_EV == 1.5e4
+
+    def test_thermal_fraction(self):
+        """Test thermal fraction is correctly computed."""
+        assert np.isclose(THERMAL_ENERGY_FRACTION, 1.5e4 / 3.5e6)
+
+
+class TestComputeEnergyLossDistribution:
+    """Test compute_energy_loss_distribution function."""
+
+    @pytest.fixture
+    def mock_data(self):
+        """Create mock LossData for testing."""
+        n = 100
+        loss_times = np.concatenate([
+            np.full(20, -1),  # skipped
+            np.linspace(0.1, 0.9, 60),  # lost
+            np.full(20, 1.0),  # confined
+        ])
+        return LossData(
+            n_particles=n,
+            loss_times=loss_times,
+            trap_parameter=np.random.uniform(-1, 1, n),
+            perp_invariant=np.random.uniform(0, 1e-5, n),
+            start_s=np.full(n, 0.25),
+            start_theta=np.random.uniform(0, 2 * np.pi, n),
+            start_phi=np.random.uniform(0, 2 * np.pi, n),
+            start_pitch=np.random.uniform(-1, 1, n),
+            final_p=np.random.uniform(0.2, 0.9, n),
+            time_grid=np.logspace(-5, 0, 100),
+            confined_pass=np.linspace(0.3, 0.25, 100),
+            confined_trap=np.linspace(0.6, 0.55, 100),
+            trace_time=1.0,
+        )
+
+    def test_returns_correct_shapes(self, mock_data):
+        """Test that function returns arrays of correct shape."""
+        jperp_bins, particle_count, energy_lost = compute_energy_loss_distribution(mock_data, n_bins=50)
+        assert len(jperp_bins) == 50
+        assert len(particle_count) == 50
+        assert len(energy_lost) == 50
+
+    def test_particle_count_nonnegative(self, mock_data):
+        """Test that particle counts are non-negative."""
+        _, particle_count, _ = compute_energy_loss_distribution(mock_data)
+        assert np.all(particle_count >= 0)
+
+    def test_energy_lost_nonnegative(self, mock_data):
+        """Test that energy lost values are non-negative."""
+        _, _, energy_lost = compute_energy_loss_distribution(mock_data)
+        assert np.all(energy_lost >= 0)
+
+
+class TestPlotLossStatistics:
+    """Test plot_loss_statistics function."""
+
+    @pytest.fixture
+    def mock_data(self):
+        """Create mock LossData for testing."""
+        n = 100
+        loss_times = np.concatenate([
+            np.full(20, -1),  # skipped
+            np.linspace(0.01, 0.9, 60),  # lost
+            np.full(20, 1.0),  # confined
+        ])
+        return LossData(
+            n_particles=n,
+            loss_times=loss_times,
+            trap_parameter=np.random.uniform(-1, 1, n),
+            perp_invariant=np.random.uniform(0, 1e-5, n),
+            start_s=np.full(n, 0.25),
+            start_theta=np.random.uniform(0, 2 * np.pi, n),
+            start_phi=np.random.uniform(0, 2 * np.pi, n),
+            start_pitch=np.random.uniform(-1, 1, n),
+            final_p=np.random.uniform(0.2, 0.9, n),
+            time_grid=np.logspace(-5, 0, 100),
+            confined_pass=np.linspace(0.3, 0.25, 100),
+            confined_trap=np.linspace(0.6, 0.55, 100),
+            trace_time=1.0,
+        )
+
+    def test_plot_generation(self, mock_data, tmp_path):
+        """Test that plot_loss_statistics creates a figure."""
+        pytest.importorskip("matplotlib")
+        output_path = tmp_path / "loss_stats.png"
+        fig = plot_loss_statistics(mock_data, output_path=output_path, show=False)
+        assert fig is not None
+        assert output_path.exists()
+
+
+class TestPlotKdeLossDensity:
+    """Test plot_kde_loss_density function."""
+
+    @pytest.fixture
+    def mock_data(self):
+        """Create mock LossData for testing."""
+        n = 200
+        loss_times = np.concatenate([
+            np.full(30, -1),  # skipped
+            np.random.uniform(0.001, 0.9, 150),  # lost
+            np.full(20, 1.0),  # confined
+        ])
+        return LossData(
+            n_particles=n,
+            loss_times=loss_times,
+            trap_parameter=np.random.uniform(-1, 1, n),
+            perp_invariant=np.random.uniform(0, 1e-5, n),
+            start_s=np.full(n, 0.25),
+            start_theta=np.random.uniform(0, 2 * np.pi, n),
+            start_phi=np.random.uniform(0, 2 * np.pi, n),
+            start_pitch=np.random.uniform(-1, 1, n),
+            final_p=np.random.uniform(0.2, 0.9, n),
+            time_grid=np.logspace(-5, 0, 100),
+            confined_pass=np.linspace(0.3, 0.25, 100),
+            confined_trap=np.linspace(0.6, 0.55, 100),
+            trace_time=1.0,
+        )
+
+    def test_plot_generation(self, mock_data, tmp_path):
+        """Test that plot_kde_loss_density creates a figure."""
+        pytest.importorskip("matplotlib")
+        pytest.importorskip("scipy")
+        output_path = tmp_path / "kde_density.png"
+        fig = plot_kde_loss_density(mock_data, output_path=output_path, show=False)
+        assert fig is not None
+        assert output_path.exists()
