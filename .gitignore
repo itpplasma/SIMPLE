@@ -3,6 +3,7 @@ OBJS/
 fort.*
 *.log
 *.dat
+!python/pysimple/data/*.dat
 *.out
 *~
 *.nc
