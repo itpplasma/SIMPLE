@@ -697,6 +697,10 @@ def classify_parallel(
         integrator_code = int(integrator)
 
     positions = np.ascontiguousarray(positions, dtype=np.float64)
+    if positions.ndim != 2 or positions.shape[0] != 5:
+        raise ValueError(
+            f"positions must have shape (5, n_particles), got {positions.shape}"
+        )
     n_particles = positions.shape[1]
 
     # Set up simulation
@@ -706,93 +710,42 @@ def classify_parallel(
     zstart = np.asfortranarray(positions, dtype=np.float64)
     _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    original_ntcut = int(params.ntcut)
-    original_fast_class = bool(params.fast_class) if hasattr(params, "fast_class") else False
-    original_class_plot = bool(params.class_plot) if hasattr(params, "class_plot") else False
+    # Run parallel classification (calls classify_parallel in Fortran).
+    _simple_main.classify_parallel(_tracer)
 
-    params.ntcut = 0
-    if hasattr(params, "fast_class"):
-        params.fast_class = False
-    if hasattr(params, "class_plot"):
-        params.class_plot = False
+    zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+    _backend.params_wrapper.get_zend_bulk(n_particles, zend)
 
-    final_positions = np.zeros((5, n_particles), dtype=np.float64, order="C")
     loss_times = np.zeros(n_particles, dtype=np.float64)
+    _backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
+
     trap_parameter = np.zeros(n_particles, dtype=np.float64)
+    _backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
+
     perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
-    passing = np.zeros(n_particles, dtype=bool)
+    _backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
 
-    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
+    passing_i = np.zeros(n_particles, dtype=np.int32)
+    _backend.params_wrapper.get_class_passing_bulk(n_particles, passing_i)
+    passing = passing_i.astype(bool)
 
-    try:
-        for ipart in range(1, n_particles + 1):
-            if test_bounds is not None:
-                _apply_test_field_bounds(float(positions[0, ipart - 1]))
-            traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
-            times = np.zeros(params.ntimstep, dtype=np.float64)
-            _simple_main.trace_orbit(_tracer, ipart, traj_can, times)
+    lost_i = np.zeros(n_particles, dtype=np.int32)
+    _backend.params_wrapper.get_class_lost_bulk(n_particles, lost_i)
+    lost = lost_i.astype(bool)
 
-            finite_mask = np.isfinite(times)
-            if not finite_mask.any():
-                final_positions[:, ipart - 1] = np.nan
-                loss_times[ipart - 1] = np.nan
-                trap_parameter[ipart - 1] = np.nan
-                perpendicular_invariant[ipart - 1] = np.nan
-                passing[ipart - 1] = False
-                continue
-
-            idxs = np.where(finite_mask)[0]
-            it_first = int(idxs[0])
-            it_last = int(idxs[-1])
-
-            loss_times[ipart - 1] = float(times[it_last])
-
-            z0 = np.asfortranarray(traj_can[:, it_first], dtype=np.float64)
-            passing_val, trap_par_val, perp_inv_val = _simple_main.compute_pitch_angle_params(z0)
-            passing[ipart - 1] = bool(passing_val)
-            trap_parameter[ipart - 1] = float(trap_par_val)
-            perpendicular_invariant[ipart - 1] = float(perp_inv_val)
-
-            xref = np.zeros(3, dtype=np.float64)
-            _backend.field_can_mod.integ_to_ref_wrapper(traj_can[0:3, it_last], xref)
-            final_positions[0:3, ipart - 1] = xref
-            final_positions[3:5, ipart - 1] = traj_can[3:5, it_last]
-    finally:
-        params.ntcut = original_ntcut
-        if hasattr(params, "fast_class"):
-            params.fast_class = original_fast_class
-        if hasattr(params, "class_plot"):
-            params.class_plot = original_class_plot
-        if test_bounds is not None:
-            _restore_test_field_bounds(test_bounds)
-
-    lost = loss_times < float(params.trace_time)
-    trapped = ~passing
-
-    jpar = np.zeros(n_particles, dtype=np.int32)
-    topology = np.zeros(n_particles, dtype=np.int32)
-    fractal = np.zeros(n_particles, dtype=np.int32)
-    minkowski = np.zeros(n_particles, dtype=np.int32)
-
-    jpar[trapped & ~lost] = 1
-    jpar[trapped & lost] = 2
-    topology[trapped & ~lost] = 1
-    topology[trapped & lost] = 2
-    fractal[trapped & ~lost] = 1
-    fractal[trapped & lost] = 2
-    minkowski[:] = fractal
+    iclass = np.zeros((3, n_particles), dtype=np.int32, order="F")
+    _backend.params_wrapper.get_iclass_bulk(n_particles, iclass)
 
     return {
-        "final_positions": np.ascontiguousarray(final_positions, dtype=np.float64),
+        "final_positions": np.ascontiguousarray(zend, dtype=np.float64),
         "loss_times": np.ascontiguousarray(loss_times, dtype=np.float64),
         "trap_parameter": np.ascontiguousarray(trap_parameter, dtype=np.float64),
         "perpendicular_invariant": np.ascontiguousarray(perpendicular_invariant, dtype=np.float64),
         "passing": np.ascontiguousarray(passing, dtype=bool),
         "lost": np.ascontiguousarray(lost, dtype=bool),
-        "minkowski": np.ascontiguousarray(minkowski, dtype=np.int32),
-        "jpar": np.ascontiguousarray(jpar, dtype=np.int32),
-        "topology": np.ascontiguousarray(topology, dtype=np.int32),
-        "fractal": np.ascontiguousarray(fractal, dtype=np.int32),
+        "jpar": np.ascontiguousarray(iclass[0, :], dtype=np.int32),
+        "topology": np.ascontiguousarray(iclass[1, :], dtype=np.int32),
+        "fractal": np.ascontiguousarray(iclass[2, :], dtype=np.int32),
     }
 
 
