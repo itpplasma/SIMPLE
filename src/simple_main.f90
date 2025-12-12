@@ -4,16 +4,16 @@ module simple_main
   use simple, only : init_vmec, init_sympl, tracer_t
   use diag_mod, only : icounter
   use collis_alp, only : loacol_alpha, stost
-  use samplers, only: sample
-  use field_can_mod, only : integ_to_ref, ref_to_integ, init_field_can
-  use callback, only : output_orbits_macrostep
-  use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
-    grid_density, dtau, dtaumin, ntau, v0, &
-    kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
-    class_plot, ntcut, iclass, bmin, bmax, &
-    zstart, zend, trap_par, perp_inv, sbeg, &
-    ntimstep, should_skip, reset_seed_if_deterministic, &
-    field_input, isw_field_type, reuse_batch
+    use samplers, only: sample
+    use field_can_mod, only : integ_to_ref, ref_to_integ, init_field_can
+    use callback, only : output_orbits_macrostep
+    use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
+      grid_density, dtau, dtaumin, ntau, v0, &
+      kpart, confpart_pass, confpart_trap, times_lost, integmode, relerr, trace_time, &
+      class_plot, ntcut, iclass, bmin, bmax, &
+      zstart, zend, trap_par, perp_inv, sbeg, &
+      ntimstep, should_skip, reset_seed_if_deterministic, &
+      field_input, isw_field_type, reuse_batch, deterministic
 
   implicit none
 
@@ -104,17 +104,23 @@ module simple_main
     use field_base, only : magnetic_field_t
     use field, only : field_from_file
     use timing, only : print_phase_time
-    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
-    use util, only : twopi
-    use reference_coordinates, only : init_reference_coordinates
-    use params, only : coord_input, field_input
+      use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+      use util, only : twopi
+      use reference_coordinates, only : init_reference_coordinates
+      use params, only : coord_input, field_input
+      use exchange_get_cancoord_mod, only : theta
+      use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
     character(*), intent(in) :: vmec_file
     type(tracer_t), intent(inout) :: self
-    integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
-    class(magnetic_field_t), allocatable :: field_temp
-
-    self%integmode = aintegmode
+      integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
+      class(magnetic_field_t), allocatable :: field_temp
+  
+      if (deterministic) then
+        call omp_set_num_threads(1)
+      end if
+  
+      self%integmode = aintegmode
 
     ! TEST field is analytic - no VMEC or field files needed
     if (isw_field_type == TEST) then
@@ -188,82 +194,121 @@ module simple_main
       ! TEST field is fully analytic - no field file needed
       call init_field_can(isw_field_type)
       call print_phase_time('Canonical field initialization completed')
-    else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
-             isw_field_type == MEISS .or. isw_field_type == ALBERT) then
-      call init_field_can(isw_field_type, field_temp)
-      call print_phase_time('Canonical field initialization completed')
-    end if
-  end subroutine init_field
+      else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
+               isw_field_type == MEISS .or. isw_field_type == ALBERT) then
+        call init_field_can(isw_field_type, field_temp)
+        call print_phase_time('Canonical field initialization completed')
+      end if
+  
+      if (deterministic) then
+        theta = ieee_value(0.0_dp, ieee_quiet_nan)
+      end if
+    end subroutine init_field
 
 
-  subroutine trace_parallel(norb)
-    use netcdf_orbit_output, only : init_orbit_netcdf, close_orbit_netcdf, &
-                                     write_orbit_to_netcdf
-
-    type(tracer_t), intent(inout) :: norb
-    integer :: i
-    real(dp), allocatable :: traj(:,:), times(:)
-
-    if (output_orbits_macrostep) then
-      call init_orbit_netcdf(ntestpart, ntimstep)
-    endif
-
-    !$omp parallel firstprivate(norb) private(traj, times, i)
-    allocate(traj(5, ntimstep), times(ntimstep))
-
-    !$omp do
-    do i = 1, ntestpart
-      !$omp critical
-      kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-        omp_get_thread_num()
-      !$omp end critical
-
-      call trace_orbit(norb, i, traj, times)
-
+    subroutine trace_parallel(norb)
+      use netcdf_orbit_output, only : init_orbit_netcdf, close_orbit_netcdf, &
+                                       write_orbit_to_netcdf
+  
+      type(tracer_t), intent(inout) :: norb
+      integer :: i
+      real(dp), allocatable :: traj(:,:), times(:)
+  
       if (output_orbits_macrostep) then
-        !$omp critical
-        call write_orbit_to_netcdf(i, traj, times)
-        !$omp end critical
+        call init_orbit_netcdf(ntestpart, ntimstep)
       endif
-    end do
-    !$omp end do
-    !$omp end parallel
+  
+      if (deterministic) then
+        allocate(traj(5, ntimstep), times(ntimstep))
+  
+        do i = 1, ntestpart
+          kpart = kpart + 1
+          print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
+            omp_get_thread_num()
+  
+          call trace_orbit(norb, i, traj, times)
+  
+          if (output_orbits_macrostep) then
+            call write_orbit_to_netcdf(i, traj, times)
+          endif
+        end do
+  
+        deallocate(traj, times)
+      else
+        !$omp parallel firstprivate(norb) private(traj, times, i)
+        allocate(traj(5, ntimstep), times(ntimstep))
+  
+        !$omp do
+        do i = 1, ntestpart
+          !$omp critical
+          kpart = kpart + 1
+          print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
+            omp_get_thread_num()
+          !$omp end critical
+  
+          call trace_orbit(norb, i, traj, times)
+  
+          if (output_orbits_macrostep) then
+            !$omp critical
+            call write_orbit_to_netcdf(i, traj, times)
+            !$omp end critical
+          endif
+        end do
+        !$omp end do
+        !$omp end parallel
+      end if
+  
+      if (output_orbits_macrostep) then
+        call close_orbit_netcdf()
+      endif
+    end subroutine trace_parallel
 
-    if (output_orbits_macrostep) then
-      call close_orbit_netcdf()
-    endif
-  end subroutine trace_parallel
-
-  subroutine classify_parallel(norb)
-    use classification, only: trace_orbit_with_classifiers, classification_result_t
-    use params, only: class_passing, class_lost
-
-    type(tracer_t), intent(inout) :: norb
-    integer :: i
-    type(classification_result_t) :: class_result
-
-    !$omp parallel firstprivate(norb) private(class_result, i)
-    !$omp do
-    do i = 1, ntestpart
-      !$omp critical
-      kpart = kpart+1
-      print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-        omp_get_thread_num()
-      !$omp end critical
-
-      call reset_seed_if_deterministic
-      call trace_orbit_with_classifiers(norb, i, class_result)
-
-      ! Store classification flags in params arrays
-      class_passing(i) = class_result%passing
-      class_lost(i) = class_result%lost
-      ! iclass already populated by trace_orbit_with_classifiers
-      ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
-    end do
-    !$omp end do
-    !$omp end parallel
-  end subroutine classify_parallel
+    subroutine classify_parallel(norb)
+      use classification, only: trace_orbit_with_classifiers, classification_result_t
+      use params, only: class_passing, class_lost
+  
+      type(tracer_t), intent(inout) :: norb
+      integer :: i
+      type(classification_result_t) :: class_result
+  
+      if (deterministic) then
+        do i = 1, ntestpart
+          kpart = kpart + 1
+          print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
+            omp_get_thread_num()
+  
+          call reset_seed_if_deterministic
+          call trace_orbit_with_classifiers(norb, i, class_result)
+  
+          ! Store classification flags in params arrays
+          class_passing(i) = class_result%passing
+          class_lost(i) = class_result%lost
+          ! iclass already populated by trace_orbit_with_classifiers
+          ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
+        end do
+      else
+        !$omp parallel firstprivate(norb) private(class_result, i)
+        !$omp do
+        do i = 1, ntestpart
+          !$omp critical
+          kpart = kpart + 1
+          print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
+            omp_get_thread_num()
+          !$omp end critical
+  
+          call reset_seed_if_deterministic
+          call trace_orbit_with_classifiers(norb, i, class_result)
+  
+          ! Store classification flags in params arrays
+          class_passing(i) = class_result%passing
+          class_lost(i) = class_result%lost
+          ! iclass already populated by trace_orbit_with_classifiers
+          ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
+        end do
+        !$omp end do
+        !$omp end parallel
+      end if
+    end subroutine classify_parallel
 
   subroutine print_parameters
     print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
@@ -377,9 +422,13 @@ module simple_main
     end subroutine save_starting_points_test
   end subroutine sample_particles_test_field
 
-  subroutine init_counters
-    icounter=0 ! evaluation counter
-    kpart=0
+    subroutine init_counters
+      if (deterministic) then
+        call omp_set_num_threads(1)
+      end if
+  
+      icounter=0 ! evaluation counter
+      kpart=0
 
     ! initialize array of confined particle percentage
     confpart_trap=0.d0

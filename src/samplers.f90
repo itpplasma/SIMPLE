@@ -70,7 +70,7 @@ module samplers
 
     open(1,file=START_FILE,recl=1024)
     do ipart=1,size(zstart,2)
-      write(1,*) zstart(:,ipart)
+      write(1,'(5(ES25.17E3,1X))') zstart(:, ipart)
     enddo
     close(1)
   end subroutine save_starting_points
@@ -158,8 +158,8 @@ module samplers
 
   subroutine sample_grid(zstart, grid_density)
     use params, only: ntestpart, zstart_dim1, zend, times_lost, &
-        trap_par, perp_inv, iclass, xstart, sbeg
-    use util, only: pi
+        trap_par, perp_inv, iclass, sbeg
+    use util, only: pi, twopi
 
     real(dp), dimension(:,:), allocatable, intent(inout) :: zstart
     real(dp), intent(in) :: grid_density
@@ -183,16 +183,16 @@ module samplers
 
     do ipart=1,ngrid
       zstart(1,ipart) = sbeg(1)
-      zstart(2,ipart) = xsize_real * ipart
-      zstart(3,ipart) = xsize_real * ipart
+      zstart(2,ipart) = modulo(xsize_real * ipart, twopi)
+      zstart(3,ipart) = modulo(xsize_real * ipart, twopi)
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
       do jpart=1,ngrid
         lidx = (jpart-1)*ntestpart+ipart
         zstart(1,lidx) = sbeg(1)
-        zstart(2,lidx) = xsize_real * ipart
-        zstart(3,lidx) = xsize_real * jpart
+        zstart(2,lidx) = modulo(xsize_real * ipart, twopi)
+        zstart(3,lidx) = modulo(xsize_real * jpart, twopi)
         zstart(4,lidx) = 1.d0  ! normalized velocity module z(4) = v / v_0
         call random_number(xi)
         zstart(5,lidx)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v

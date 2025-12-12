@@ -36,8 +36,6 @@ subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   real(dp), intent(in) :: rtol_init
   integer, intent(in) :: mode_init
 
-  integer :: k
-
   si%atol = 1d-15
   si%rtol = rtol_init
 
@@ -429,7 +427,6 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   real(dp), intent(out) :: xlast(n)
 
   real(dp) :: fvec(n), fjac(n,n), jinv(n,n)
-  integer :: pivot(n), info
 
   real(dp) :: xabs(n), tolref(n), fabs(n)
   real(dp) :: det
@@ -793,10 +790,14 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
   call coeff_rk_lobatto(s, a, ahat, b, c)
   jac = 0d0
 
-  Hprime = fs%dH(1)/fs%dpth(1)
+  Hprime = 0d0
+  dHprime = 0d0
+
+  Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
   dHprime(1) = (fs(1)%d2H(1)-Hprime(1)*fs(1)%d2pth(1))/fs(1)%dpth(1)  ! d/dr
   dHprime(2) = (fs(1)%d2H(7)-Hprime(1)*fs(1)%d2pth(7))/fs(1)%dpth(1)  ! d/dpph
   do k = 2, s
+    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
     m = 4*k-2
     dHprime(m-3)=(fs(k)%d2H(1)-Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
     dHprime(m-2)=(fs(k)%d2H(2)-Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
@@ -1225,7 +1226,7 @@ subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
@@ -1284,7 +1285,7 @@ subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast, dz
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
@@ -1346,7 +1347,7 @@ subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, parameter :: maxit = 8
 
   real(dp), dimension(n) :: x, xlast
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0

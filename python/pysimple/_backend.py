@@ -182,24 +182,42 @@ def collect_results(tmax: float) -> SimulationArrays:
     backend = _load_backend()
 
     n_particles = int(backend.params.ntestpart)
-    final_positions = np.ascontiguousarray(
-        backend.params.zend[:, :n_particles], dtype=np.float64
-    )
-    loss_times = np.ascontiguousarray(
-        backend.params.times_lost[:n_particles], dtype=np.float64
-    )
+    zend = np.zeros((backend.params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+    backend.params_wrapper.get_zend_bulk(n_particles, zend)
+    final_positions = np.ascontiguousarray(zend, dtype=np.float64)
+    try:
+        loss_times = np.ascontiguousarray(
+            backend.params.times_lost[:n_particles], dtype=np.float64
+        )
+    except Exception as exc:  # pragma: no cover - depends on f90wrap build
+        raise RuntimeError(
+            "times_lost array is not accessible via this f90wrap build. "
+            "Use pysimple.trace_parallel for batch tracing."
+        ) from exc
 
     trap_parameter = None
     if hasattr(backend.params, "trap_par"):
-        trap_parameter = np.ascontiguousarray(
-            backend.params.trap_par[:n_particles], dtype=np.float64
-        )
+        try:
+            trap_parameter = np.ascontiguousarray(
+                backend.params.trap_par[:n_particles], dtype=np.float64
+            )
+        except Exception as exc:  # pragma: no cover - depends on f90wrap build
+            raise RuntimeError(
+                "trap_par array is not accessible via this f90wrap build. "
+                "Use pysimple.trace_parallel for batch tracing."
+            ) from exc
 
     perpendicular_invariant = None
     if hasattr(backend.params, "perp_inv"):
-        perpendicular_invariant = np.ascontiguousarray(
-            backend.params.perp_inv[:n_particles], dtype=np.float64
-        )
+        try:
+            perpendicular_invariant = np.ascontiguousarray(
+                backend.params.perp_inv[:n_particles], dtype=np.float64
+            )
+        except Exception as exc:  # pragma: no cover - depends on f90wrap build
+            raise RuntimeError(
+                "perp_inv array is not accessible via this f90wrap build. "
+                "Use pysimple.trace_parallel for batch tracing."
+            ) from exc
 
     return SimulationArrays(
         final_positions=final_positions,
@@ -255,7 +273,8 @@ def run_simulation(
     backend.params.trace_time = float(tmax)
     backend.params.integmode = int(integrator_code)
     backend.params.params_init()
-    backend.params.zstart[:, :n_particles] = batch_positions
+    zstart = np.asfortranarray(batch_positions, dtype=np.float64)
+    backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     tracer = backend.simple.tracer_t()
     backend.simple_main.run(tracer)
@@ -277,11 +296,11 @@ def surface_sample(n_particles: int, s: float) -> np.ndarray:
     backend.params.sbeg[0] = float(s)
     backend.params.generate_start_only = False
 
-    samplers.sample_surface_fieldline(backend.params.zstart)
+    zstart = np.zeros((backend.params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+    samplers.sample(zstart)
+    backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    return np.ascontiguousarray(
-        backend.params.zstart[:, :n_particles], dtype=np.float64
-    )
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 def volume_sample(n_particles: int, s_inner: float, s_outer: float) -> np.ndarray:
@@ -296,13 +315,11 @@ def volume_sample(n_particles: int, s_inner: float, s_outer: float) -> np.ndarra
     backend.params.startmode = 3
     backend.params.generate_start_only = False
 
-    samplers.sample_volume_single(
-        backend.params.zstart, float(s_inner), float(s_outer)
-    )
+    zstart = np.zeros((backend.params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+    samplers.sample(zstart, float(s_inner), float(s_outer))
+    backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    return np.ascontiguousarray(
-        backend.params.zstart[:, :n_particles], dtype=np.float64
-    )
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 def load_particle_file(particle_file: str | Path) -> np.ndarray:
@@ -327,11 +344,11 @@ def load_particle_file(particle_file: str | Path) -> np.ndarray:
     backend.params.startmode = 1
     backend.params.generate_start_only = False
 
-    samplers.sample_read(backend.params.zstart, str(particle_path))
+    zstart = np.zeros((backend.params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+    samplers.sample(zstart, str(particle_path))
+    backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    return np.ascontiguousarray(
-        backend.params.zstart[:, :n_particles], dtype=np.float64
-    )
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 def set_params(**kwargs: float | int | bool) -> None:
@@ -359,32 +376,52 @@ def snapshot_classification(n_particles: int) -> np.ndarray:
     """Copy the ``iclass`` array for the leading particles."""
     assert_vmec_loaded()
     backend = _load_backend()
-    return np.array(
-        backend.params.iclass[:, :n_particles],
-        copy=True,
-        dtype=np.int64,
-    )
+    try:
+        return np.array(
+            backend.params.iclass[:, :n_particles],
+            copy=True,
+            dtype=np.int64,
+        )
+    except Exception as exc:  # pragma: no cover - depends on f90wrap build
+        raise RuntimeError(
+            "iclass array is not accessible via this f90wrap build. "
+            "Use pysimple.classify_parallel for classification."
+        ) from exc
 
 
 def snapshot_trap_parameter(n_particles: int) -> np.ndarray:
     """Copy the trapped-parameter array for the leading particles."""
     assert_vmec_loaded()
     backend = _load_backend()
-    return np.array(backend.params.trap_par[:n_particles], copy=True)
+    try:
+        return np.array(backend.params.trap_par[:n_particles], copy=True)
+    except Exception as exc:  # pragma: no cover - depends on f90wrap build
+        raise RuntimeError(
+            "trap_par array is not accessible via this f90wrap build. "
+            "Use pysimple.trace_parallel for batch tracing."
+        ) from exc
 
 
 def snapshot_loss_times(n_particles: int) -> np.ndarray:
     """Copy the loss-time array for the leading particles."""
     assert_vmec_loaded()
     backend = _load_backend()
-    return np.array(backend.params.times_lost[:n_particles], copy=True)
+    try:
+        return np.array(backend.params.times_lost[:n_particles], copy=True)
+    except Exception as exc:  # pragma: no cover - depends on f90wrap build
+        raise RuntimeError(
+            "times_lost array is not accessible via this f90wrap build. "
+            "Use pysimple.trace_parallel for batch tracing."
+        ) from exc
 
 
 def snapshot_start_positions(n_particles: int) -> np.ndarray:
     """Copy the current ``zstart`` array for the leading particles."""
     assert_vmec_loaded()
     backend = _load_backend()
-    return np.array(backend.params.zstart[:, :n_particles], copy=True)
+    zstart = np.zeros((backend.params.zstart_dim1, int(n_particles)), dtype=np.float64, order="F")
+    backend.params_wrapper.get_zstart_bulk(int(n_particles), zstart)
+    return np.ascontiguousarray(zstart, dtype=np.float64)
 
 
 @contextmanager

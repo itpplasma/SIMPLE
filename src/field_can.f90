@@ -35,6 +35,8 @@ subroutine field_can_from_name(field_name, field_noncan)
   select case(trim(field_name))
     case("test")
       evaluate => evaluate_test
+      integ_to_ref => integ_to_ref_flux
+      ref_to_integ => ref_to_integ_flux
     case("flux")
       evaluate => evaluate_flux
       integ_to_ref => integ_to_ref_flux
@@ -143,6 +145,7 @@ subroutine init_field_can(field_id, field_noncan)
   select case (field_id)
     case (TEST)
       call field_can_from_id(field_id, field_to_use)
+      call get_canonical_coordinates_with_field(field_to_use)
     case (CANFLUX)
       call get_canonical_coordinates_with_field(field_to_use)
     case (BOOZER)

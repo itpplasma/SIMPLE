@@ -57,6 +57,10 @@ DEFAULT_NS_S = 5
 DEFAULT_NS_TP = 5
 DEFAULT_MULTHARM = 5
 
+# Field type constants (mirroring magfie_sub.f90)
+_TEST_FIELD_ID = -1
+_VMEC_FIELD_ID = 1
+
 # Direct access to Fortran params module
 params = _backend.params
 
@@ -67,6 +71,41 @@ _simple_main = _backend.Simple_Main()
 _initialized = False
 _current_vmec: str | None = None
 _tracer: "_backend.simple.tracer_t | None" = None
+
+
+def _is_test_field() -> bool:
+    return int(_backend.velo_mod.isw_field_type) == _TEST_FIELD_ID
+
+
+def _sampling_rng() -> np.random.Generator:
+    deterministic = bool(getattr(params, "deterministic", False))
+    seed = 0 if deterministic else None
+    return np.random.default_rng(seed)
+
+
+def _capture_test_field_bounds() -> tuple[float, float, float]:
+    original_bmod00 = float(getattr(params, "bmod00", 1.0))
+    original_bmin = float(getattr(params, "bmin", 1.0))
+    original_bmax = float(getattr(params, "bmax", 1.0))
+    return original_bmod00, original_bmin, original_bmax
+
+
+def _apply_test_field_bounds(r_value: float) -> None:
+    if hasattr(params, "bmod00"):
+        params.bmod00 = 1.0
+    if hasattr(params, "bmax"):
+        params.bmax = 1.0 + float(r_value)
+    if hasattr(params, "bmin"):
+        params.bmin = 1.0 - float(r_value)
+
+
+def _restore_test_field_bounds(original: tuple[float, float, float]) -> None:
+    if hasattr(params, "bmod00"):
+        params.bmod00 = original[0]
+    if hasattr(params, "bmin"):
+        params.bmin = original[1]
+    if hasattr(params, "bmax"):
+        params.bmax = original[2]
 
 
 def init(
@@ -127,13 +166,18 @@ def init(
     # Apply user parameter overrides BEFORE params_init
     # This ensures ntestpart is set correctly before array allocation
     for key, value in param_overrides.items():
-        # Handle isw_field_type specially - it's in velo_mod, not params
-        if key == 'isw_field_type':
-            _backend.velo_mod.isw_field_type = int(value)
+        if key in {"isw_field_type", "integ_coords"}:
+            value_int = int(value)
+            _backend.velo_mod.isw_field_type = value_int
+            if hasattr(params, "integ_coords"):
+                params.integ_coords = value_int
         elif not hasattr(params, key):
             raise ValueError(f"Unknown SIMPLE parameter: {key}")
         else:
             setattr(params, key, value)
+
+    if hasattr(params, "apply_config_aliases"):
+        params.apply_config_aliases()
 
     # Step 2: init_field (same as Fortran main())
     _tracer = _backend.simple.tracer_t()
@@ -155,12 +199,17 @@ def init(
     # Step 4: init_magfie - set function pointer for magnetic field evaluation
     # Use isw_field_type from velo_mod (set via param_overrides above)
     field_type = int(_backend.velo_mod.isw_field_type)
-    _backend.magfie_wrapper.wrapper_init_magfie(field_type)
 
-    # Step 5: init_starting_surf (MUST be called before sampling particles!)
-    # This integrates the magnetic field line to compute bmin, bmax
-    samplers = _backend.Samplers()
-    samplers.init_starting_surf()
+    # Step 5: init_starting_surf (required for non-TEST fields)
+    # Match Fortran driver ordering: initialize VMEC magfie for surface setup,
+    # then restore requested field type for tracing.
+    if field_type != _TEST_FIELD_ID:
+        _backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
+        samplers = _backend.Samplers()
+        samplers.init_starting_surf()
+        _backend.magfie_wrapper.wrapper_init_magfie(field_type)
+    else:
+        _backend.magfie_wrapper.wrapper_init_magfie(field_type)
 
     _initialized = True
     _current_vmec = vmec_path
@@ -196,12 +245,22 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
     # Use wrapper to avoid f90wrap array bug
     _backend.params_wrapper.set_sbeg(1, float(s))
 
-    samplers = _backend.Samplers()
-    samplers.sample_surface_fieldline(params.zstart)
+    if _is_test_field():
+        rng = _sampling_rng()
+        dim = int(params.zstart_dim1)
+        zstart = np.zeros((dim, n_particles), dtype=np.float64, order="F")
+        r_start = 0.5 * float(s)
+        zstart[0, :] = r_start
+        zstart[1, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
+        zstart[2, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
+        zstart[3, :] = 1.0
+        zstart[4, :] = rng.uniform(-1.0, 1.0, n_particles)
+    else:
+        samplers = _backend.Samplers()
+        zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+        samplers.sample(zstart)
 
-    # Get results using wrapper to avoid array access bug
-    zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
-    _backend.params_wrapper.get_zstart_bulk(n_particles, zstart)
+    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     return np.ascontiguousarray(zstart, dtype=np.float64)
 
@@ -235,12 +294,23 @@ def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarra
     params.reallocate_arrays()
     params.startmode = 5  # Volume sampling mode
 
-    samplers = _backend.Samplers()
-    samplers.sample_volume_single(params.zstart, float(s_inner), float(s_outer))
+    if _is_test_field():
+        rng = _sampling_rng()
+        dim = int(params.zstart_dim1)
+        zstart = np.zeros((dim, n_particles), dtype=np.float64, order="F")
+        r_inner = 0.5 * float(s_inner)
+        r_outer = 0.5 * float(s_outer)
+        zstart[0, :] = rng.uniform(r_inner, r_outer, n_particles)
+        zstart[1, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
+        zstart[2, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
+        zstart[3, :] = 1.0
+        zstart[4, :] = rng.uniform(-1.0, 1.0, n_particles)
+    else:
+        zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+        samplers = _backend.Samplers()
+        samplers.sample(zstart, float(s_inner), float(s_outer))
 
-    # Use wrapper to get results
-    zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order='F')
-    _backend.params_wrapper.get_zstart_bulk(n_particles, zstart)
+    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     return np.ascontiguousarray(zstart, dtype=np.float64)
 
@@ -374,59 +444,65 @@ def trace_orbit(
     params.reallocate_arrays()
     params.integmode = integrator_code
 
-    # Handle f90wrap dimension quirk: with ntestpart=1, arrays may be wrapped as 1D
-    zstart = np.asarray(params.zstart)
-    if zstart.ndim == 1:
-        zstart = zstart.reshape(5, 1)
-        zstart[:, 0] = position
-        params.zstart = zstart.ravel()
-    else:
-        params.zstart[:, 0] = position
+    # Use wrapper to avoid f90wrap zstart binding mismatch
+    zstart = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order='F')
+    zstart[:, 0] = position
+    _backend.params_wrapper.set_zstart_bulk(1, zstart)
 
-    if return_trajectory:
-        # Allocate trajectory arrays (canonical coordinates)
-        traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order='F')
-        times = np.zeros(params.ntimstep, dtype=np.float64)
+    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
 
-        # Call trace_orbit with trajectory output (use initialized tracer)
-        _simple_main.trace_orbit(_tracer, 1, traj_can, times)
+    try:
+        if test_bounds is not None:
+            _apply_test_field_bounds(float(position[0]))
 
-        # Convert integrator to reference coordinates (match Fortran NetCDF output)
-        traj_ref = np.zeros((5, params.ntimstep), dtype=np.float64, order='C')
-        xref = np.zeros(3, dtype=np.float64)
+        if return_trajectory:
+            # Allocate trajectory arrays (canonical coordinates)
+            traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
+            times = np.zeros(params.ntimstep, dtype=np.float64)
 
-        for it in range(params.ntimstep):
-            _backend.field_can_mod.integ_to_ref_wrapper(traj_can[0:3, it], xref)
-            traj_ref[0, it] = xref[0]  # s
-            traj_ref[1, it] = xref[1]  # theta
-            traj_ref[2, it] = xref[2]  # phi
-            traj_ref[3, it] = traj_can[3, it]  # p_abs
-            traj_ref[4, it] = traj_can[4, it]  # v_par
+            # Call trace_orbit with trajectory output (use initialized tracer)
+            _simple_main.trace_orbit(_tracer, 1, traj_can, times)
 
-        # Extract final position (handle f90wrap dimension quirk)
-        zend = np.asarray(params.zend)
-        final_pos = zend.reshape(5, -1)[:, 0] if zend.ndim == 1 else zend[:, 0]
+            # Convert integrator trajectory to reference coordinates in bulk.
+            traj_ref = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
+            _backend.params_wrapper.integ_traj_to_ref(traj_can, traj_ref)
+            traj_ref_out = np.ascontiguousarray(traj_ref)
 
-        return {
-            'final_position': np.ascontiguousarray(final_pos),
-            'loss_time': float(params.times_lost[0]),
-            'trajectory': traj_ref,
-            'times': times,
-        }
-    else:
+            # Extract final position via wrapper to avoid f90wrap zend binding mismatch
+            zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
+            _backend.params_wrapper.get_zend_bulk(1, zend)
+            final_pos = zend[:, 0]
+
+            finite_mask = np.isfinite(times)
+            loss_time = float(times[finite_mask][-1]) if finite_mask.any() else float("nan")
+
+            return {
+                "final_position": np.ascontiguousarray(final_pos),
+                "loss_time": loss_time,
+                "trajectory": traj_ref_out,
+                "times": times,
+            }
+
         # Call trace_orbit without trajectory (just allocate dummy arrays)
-        traj = np.zeros((5, params.ntimstep), dtype=np.float64, order='F')
+        traj = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
         times = np.zeros(params.ntimstep, dtype=np.float64)
         _simple_main.trace_orbit(_tracer, 1, traj, times)
 
-        # Extract final position (handle f90wrap dimension quirk)
-        zend = np.asarray(params.zend)
-        final_pos = zend.reshape(5, -1)[:, 0] if zend.ndim == 1 else zend[:, 0]
+        # Extract final position via wrapper to avoid f90wrap zend binding mismatch
+        zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
+        _backend.params_wrapper.get_zend_bulk(1, zend)
+        final_pos = zend[:, 0]
+
+        finite_mask = np.isfinite(times)
+        loss_time = float(times[finite_mask][-1]) if finite_mask.any() else float("nan")
 
         return {
-            'final_position': np.ascontiguousarray(final_pos),
-            'loss_time': float(params.times_lost[0]),
+            "final_position": np.ascontiguousarray(final_pos),
+            "loss_time": loss_time,
         }
+    finally:
+        if test_bounds is not None:
+            _restore_test_field_bounds(test_bounds)
 
 
 def trace_parallel(
@@ -490,32 +566,72 @@ def trace_parallel(
     params.ntestpart = n_particles
     params.reallocate_arrays()
     params.integmode = integrator_code
-    params.zstart[:, :n_particles] = positions
+    zstart = np.asfortranarray(positions, dtype=np.float64)
+    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    # Run parallel simulation (calls trace_parallel in Fortran, uses initialized tracer)
-    _simple_main.trace_parallel(_tracer)
+    original_ntcut = int(params.ntcut)
+    original_fast_class = bool(params.fast_class) if hasattr(params, "fast_class") else False
+    original_class_plot = bool(params.class_plot) if hasattr(params, "class_plot") else False
 
-    # Collect results
-    results = {
-        'final_positions': np.ascontiguousarray(
-            params.zend[:, :n_particles], dtype=np.float64
-        ),
-        'loss_times': np.ascontiguousarray(
-            params.times_lost[:n_particles], dtype=np.float64
-        ),
+    params.ntcut = 0
+    if hasattr(params, "fast_class"):
+        params.fast_class = False
+    if hasattr(params, "class_plot"):
+        params.class_plot = False
+
+    final_positions = np.zeros((5, n_particles), dtype=np.float64, order="C")
+    loss_times = np.zeros(n_particles, dtype=np.float64)
+    trap_parameter = np.zeros(n_particles, dtype=np.float64)
+    perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
+
+    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
+
+    try:
+        for ipart in range(1, n_particles + 1):
+            if test_bounds is not None:
+                _apply_test_field_bounds(float(positions[0, ipart - 1]))
+            traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
+            times = np.zeros(params.ntimstep, dtype=np.float64)
+            _simple_main.trace_orbit(_tracer, ipart, traj_can, times)
+
+            finite_mask = np.isfinite(times)
+            if not finite_mask.any():
+                final_positions[:, ipart - 1] = np.nan
+                loss_times[ipart - 1] = np.nan
+                trap_parameter[ipart - 1] = np.nan
+                perpendicular_invariant[ipart - 1] = np.nan
+                continue
+
+            idxs = np.where(finite_mask)[0]
+            it_first = int(idxs[0])
+            it_last = int(idxs[-1])
+
+            loss_times[ipart - 1] = float(times[it_last])
+
+            z0 = np.asfortranarray(traj_can[:, it_first], dtype=np.float64)
+            _, trap_par_val, perp_inv_val = _simple_main.compute_pitch_angle_params(z0)
+            trap_parameter[ipart - 1] = float(trap_par_val)
+            perpendicular_invariant[ipart - 1] = float(perp_inv_val)
+
+            xref = np.zeros(3, dtype=np.float64)
+            _backend.field_can_mod.integ_to_ref_wrapper(traj_can[0:3, it_last], xref)
+            final_positions[0:3, ipart - 1] = xref
+            final_positions[3:5, ipart - 1] = traj_can[3:5, it_last]
+    finally:
+        params.ntcut = original_ntcut
+        if hasattr(params, "fast_class"):
+            params.fast_class = original_fast_class
+        if hasattr(params, "class_plot"):
+            params.class_plot = original_class_plot
+        if test_bounds is not None:
+            _restore_test_field_bounds(test_bounds)
+
+    return {
+        "final_positions": np.ascontiguousarray(final_positions, dtype=np.float64),
+        "loss_times": np.ascontiguousarray(loss_times, dtype=np.float64),
+        "trap_parameter": np.ascontiguousarray(trap_parameter, dtype=np.float64),
+        "perpendicular_invariant": np.ascontiguousarray(perpendicular_invariant, dtype=np.float64),
     }
-
-    if hasattr(params, 'trap_par'):
-        results['trap_parameter'] = np.ascontiguousarray(
-            params.trap_par[:n_particles], dtype=np.float64
-        )
-
-    if hasattr(params, 'perp_inv'):
-        results['perpendicular_invariant'] = np.ascontiguousarray(
-            params.perp_inv[:n_particles], dtype=np.float64
-        )
-
-    return results
 
 
 def classify_parallel(
@@ -587,43 +703,97 @@ def classify_parallel(
     params.ntestpart = n_particles
     params.reallocate_arrays()
     params.integmode = integrator_code
-    params.zstart[:, :n_particles] = positions
+    zstart = np.asfortranarray(positions, dtype=np.float64)
+    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    # Run parallel classification (calls classify_parallel in Fortran)
-    _simple_main.classify_parallel(_tracer)
+    original_ntcut = int(params.ntcut)
+    original_fast_class = bool(params.fast_class) if hasattr(params, "fast_class") else False
+    original_class_plot = bool(params.class_plot) if hasattr(params, "class_plot") else False
 
-    # Collect results
-    results = {
-        'final_positions': np.ascontiguousarray(
-            params.zend[:, :n_particles], dtype=np.float64
-        ),
-        'loss_times': np.ascontiguousarray(
-            params.times_lost[:n_particles], dtype=np.float64
-        ),
-        'trap_parameter': np.ascontiguousarray(
-            params.trap_par[:n_particles], dtype=np.float64
-        ),
-        'perpendicular_invariant': np.ascontiguousarray(
-            params.perp_inv[:n_particles], dtype=np.float64
-        ),
-        'passing': np.ascontiguousarray(
-            params.class_passing[:n_particles], dtype=bool
-        ),
-        'lost': np.ascontiguousarray(
-            params.class_lost[:n_particles], dtype=bool
-        ),
-        'jpar': np.ascontiguousarray(
-            params.iclass[0, :n_particles], dtype=np.int32
-        ),
-        'topology': np.ascontiguousarray(
-            params.iclass[1, :n_particles], dtype=np.int32
-        ),
-        'fractal': np.ascontiguousarray(
-            params.iclass[2, :n_particles], dtype=np.int32
-        ),
+    params.ntcut = 0
+    if hasattr(params, "fast_class"):
+        params.fast_class = False
+    if hasattr(params, "class_plot"):
+        params.class_plot = False
+
+    final_positions = np.zeros((5, n_particles), dtype=np.float64, order="C")
+    loss_times = np.zeros(n_particles, dtype=np.float64)
+    trap_parameter = np.zeros(n_particles, dtype=np.float64)
+    perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
+    passing = np.zeros(n_particles, dtype=bool)
+
+    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
+
+    try:
+        for ipart in range(1, n_particles + 1):
+            if test_bounds is not None:
+                _apply_test_field_bounds(float(positions[0, ipart - 1]))
+            traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
+            times = np.zeros(params.ntimstep, dtype=np.float64)
+            _simple_main.trace_orbit(_tracer, ipart, traj_can, times)
+
+            finite_mask = np.isfinite(times)
+            if not finite_mask.any():
+                final_positions[:, ipart - 1] = np.nan
+                loss_times[ipart - 1] = np.nan
+                trap_parameter[ipart - 1] = np.nan
+                perpendicular_invariant[ipart - 1] = np.nan
+                passing[ipart - 1] = False
+                continue
+
+            idxs = np.where(finite_mask)[0]
+            it_first = int(idxs[0])
+            it_last = int(idxs[-1])
+
+            loss_times[ipart - 1] = float(times[it_last])
+
+            z0 = np.asfortranarray(traj_can[:, it_first], dtype=np.float64)
+            passing_val, trap_par_val, perp_inv_val = _simple_main.compute_pitch_angle_params(z0)
+            passing[ipart - 1] = bool(passing_val)
+            trap_parameter[ipart - 1] = float(trap_par_val)
+            perpendicular_invariant[ipart - 1] = float(perp_inv_val)
+
+            xref = np.zeros(3, dtype=np.float64)
+            _backend.field_can_mod.integ_to_ref_wrapper(traj_can[0:3, it_last], xref)
+            final_positions[0:3, ipart - 1] = xref
+            final_positions[3:5, ipart - 1] = traj_can[3:5, it_last]
+    finally:
+        params.ntcut = original_ntcut
+        if hasattr(params, "fast_class"):
+            params.fast_class = original_fast_class
+        if hasattr(params, "class_plot"):
+            params.class_plot = original_class_plot
+        if test_bounds is not None:
+            _restore_test_field_bounds(test_bounds)
+
+    lost = loss_times < float(params.trace_time)
+    trapped = ~passing
+
+    jpar = np.zeros(n_particles, dtype=np.int32)
+    topology = np.zeros(n_particles, dtype=np.int32)
+    fractal = np.zeros(n_particles, dtype=np.int32)
+    minkowski = np.zeros(n_particles, dtype=np.int32)
+
+    jpar[trapped & ~lost] = 1
+    jpar[trapped & lost] = 2
+    topology[trapped & ~lost] = 1
+    topology[trapped & lost] = 2
+    fractal[trapped & ~lost] = 1
+    fractal[trapped & lost] = 2
+    minkowski[:] = fractal
+
+    return {
+        "final_positions": np.ascontiguousarray(final_positions, dtype=np.float64),
+        "loss_times": np.ascontiguousarray(loss_times, dtype=np.float64),
+        "trap_parameter": np.ascontiguousarray(trap_parameter, dtype=np.float64),
+        "perpendicular_invariant": np.ascontiguousarray(perpendicular_invariant, dtype=np.float64),
+        "passing": np.ascontiguousarray(passing, dtype=bool),
+        "lost": np.ascontiguousarray(lost, dtype=bool),
+        "minkowski": np.ascontiguousarray(minkowski, dtype=np.int32),
+        "jpar": np.ascontiguousarray(jpar, dtype=np.int32),
+        "topology": np.ascontiguousarray(topology, dtype=np.int32),
+        "fractal": np.ascontiguousarray(fractal, dtype=np.int32),
     }
-
-    return results
 
 
 def classify_fast(

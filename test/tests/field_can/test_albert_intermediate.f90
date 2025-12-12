@@ -30,8 +30,10 @@ program test_albert_intermediate
     real(dp) :: x(3), y_batch_meiss(5), y_batch_albert(4)
     real(dp) :: r, th, ph, psi
     real(dp) :: h_psi
+    character(len=256) :: config_file
 
-    call read_config('simple.in')
+    config_file = 'simple.in'
+    call read_config(config_file)
 
     print *, 'Initializing field with Albert coordinates...'
     print *, '  field_input = ', trim(field_input)
