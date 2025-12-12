@@ -560,6 +560,10 @@ def trace_parallel(
         integrator_code = int(integrator)
 
     positions = np.ascontiguousarray(positions, dtype=np.float64)
+    if positions.ndim != 2 or positions.shape[0] != 5:
+        raise ValueError(
+            f"positions must have shape (5, n_particles), got {positions.shape}"
+        )
     n_particles = positions.shape[1]
 
     # Set up simulation
@@ -569,69 +573,36 @@ def trace_parallel(
     zstart = np.asfortranarray(positions, dtype=np.float64)
     _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
-    original_ntcut = int(params.ntcut)
-    original_fast_class = bool(params.fast_class) if hasattr(params, "fast_class") else False
-    original_class_plot = bool(params.class_plot) if hasattr(params, "class_plot") else False
+    # Run parallel simulation (calls trace_parallel in Fortran).
+    _simple_main.trace_parallel(_tracer)
 
-    params.ntcut = 0
-    if hasattr(params, "fast_class"):
-        params.fast_class = False
-    if hasattr(params, "class_plot"):
-        params.class_plot = False
+    zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
+    _backend.params_wrapper.get_zend_bulk(n_particles, zend)
+    final_positions = np.ascontiguousarray(zend, dtype=np.float64)
 
-    final_positions = np.zeros((5, n_particles), dtype=np.float64, order="C")
     loss_times = np.zeros(n_particles, dtype=np.float64)
-    trap_parameter = np.zeros(n_particles, dtype=np.float64)
-    perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
+    _backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
 
-    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
-
-    try:
-        for ipart in range(1, n_particles + 1):
-            if test_bounds is not None:
-                _apply_test_field_bounds(float(positions[0, ipart - 1]))
-            traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
-            times = np.zeros(params.ntimstep, dtype=np.float64)
-            _simple_main.trace_orbit(_tracer, ipart, traj_can, times)
-
-            finite_mask = np.isfinite(times)
-            if not finite_mask.any():
-                final_positions[:, ipart - 1] = np.nan
-                loss_times[ipart - 1] = np.nan
-                trap_parameter[ipart - 1] = np.nan
-                perpendicular_invariant[ipart - 1] = np.nan
-                continue
-
-            idxs = np.where(finite_mask)[0]
-            it_first = int(idxs[0])
-            it_last = int(idxs[-1])
-
-            loss_times[ipart - 1] = float(times[it_last])
-
-            z0 = np.asfortranarray(traj_can[:, it_first], dtype=np.float64)
-            _, trap_par_val, perp_inv_val = _simple_main.compute_pitch_angle_params(z0)
-            trap_parameter[ipart - 1] = float(trap_par_val)
-            perpendicular_invariant[ipart - 1] = float(perp_inv_val)
-
-            xref = np.zeros(3, dtype=np.float64)
-            _backend.field_can_mod.integ_to_ref_wrapper(traj_can[0:3, it_last], xref)
-            final_positions[0:3, ipart - 1] = xref
-            final_positions[3:5, ipart - 1] = traj_can[3:5, it_last]
-    finally:
-        params.ntcut = original_ntcut
-        if hasattr(params, "fast_class"):
-            params.fast_class = original_fast_class
-        if hasattr(params, "class_plot"):
-            params.class_plot = original_class_plot
-        if test_bounds is not None:
-            _restore_test_field_bounds(test_bounds)
-
-    return {
-        "final_positions": np.ascontiguousarray(final_positions, dtype=np.float64),
+    results: dict[str, np.ndarray] = {
+        "final_positions": final_positions,
         "loss_times": np.ascontiguousarray(loss_times, dtype=np.float64),
-        "trap_parameter": np.ascontiguousarray(trap_parameter, dtype=np.float64),
-        "perpendicular_invariant": np.ascontiguousarray(perpendicular_invariant, dtype=np.float64),
     }
+
+    if hasattr(params, "trap_par"):
+        trap_parameter = np.zeros(n_particles, dtype=np.float64)
+        _backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
+        results["trap_parameter"] = np.ascontiguousarray(
+            trap_parameter, dtype=np.float64
+        )
+
+    if hasattr(params, "perp_inv"):
+        perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
+        _backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
+        results["perpendicular_invariant"] = np.ascontiguousarray(
+            perpendicular_invariant, dtype=np.float64
+        )
+
+    return results
 
 
 def classify_parallel(
