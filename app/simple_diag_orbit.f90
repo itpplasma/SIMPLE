@@ -19,11 +19,15 @@ use field_can_mod, only: field_can_t, get_val, eval_field => evaluate
 
 implicit none
 
+! Define dp kind parameter
+integer, parameter :: dp = kind(1.0d0)
+
 character(256) :: config_file, particle_arg
 type(tracer_t) :: norb
 type(symplectic_integrator_t) :: si
 type(field_can_t) :: field_can
 integer :: particle_number
+real(dp), dimension(5) :: z
 
 ! Initialize timing
 call init_timer()

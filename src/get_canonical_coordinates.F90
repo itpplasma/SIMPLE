@@ -36,6 +36,18 @@ contains
 
   ! Field-agnostic version that accepts a magnetic_field_t object
 
+      use canonical_coordinates_mod, only: ns_c, n_theta_c, n_phi_c, &
+                                           hs_c, h_theta_c, h_phi_c, &
+                                           ns_s_c, ns_tp_c, &
+                                           nh_stencil, G_c, sqg_c, &
+                                           B_vartheta_c, B_varphi_c
+      use vector_potentail_mod, only: ns, hs
+      use exchange_get_cancoord_mod, only: vartheta_c, varphi_c, sqg, aiota, &
+                                           Bcovar_vartheta, Bcovar_varphi, &
+                                           onlytheta
+      use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
+      use odeint_allroutines_sub, only: odeint_allroutines
+
       implicit none
 
       class(magnetic_field_t), intent(in) :: field
@@ -78,7 +90,7 @@ contains
       implicit none
 
       logical :: fullset
-        real(dp), parameter :: relerr = 1d-10
+      real(dp), parameter :: relerr = 1d-10
       integer :: i_theta, i_phi, i_sten, ndim, is_beg
       integer, dimension(:), allocatable :: ipoi_t, ipoi_p
       real(dp), dimension(:), allocatable :: y, dy
@@ -229,13 +241,11 @@ contains
 
       use exchange_get_cancoord_mod, only: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, Bcovar_varphi, &
                                            theta, onlytheta
-        use spline_vmec_sub
-        use util, only: twopi
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      use spline_vmec_sub
 #ifdef GVEC_AVAILABLE
-        use vmec_field_adapter
+      use vmec_field_adapter
 #else
-        use vmec_field_eval
+      use vmec_field_eval
 #endif
 
       implicit none
@@ -263,43 +273,24 @@ contains
       vartheta = vartheta_c + aiota*y(1)
       varphi = varphi_c + y(1)
 
-      vartheta = modulo(vartheta, twopi)
-      varphi = modulo(varphi, twopi)
-
   ! Newton iteration to find field-specific theta from canonical theta
 
-        if (allocated(current_field)) then
-           ! Use field-agnostic Newton solver
-           if (.not. onlytheta) then
-              theta = vartheta
-           else if (.not. ieee_is_finite(theta)) then
-              theta = vartheta
-           end if
-           call newton_theta_from_canonical(current_field, s, vartheta, varphi, theta, converged)
-           if (.not. converged) then
-              print *, 'WARNING: Newton iteration failed in rhs_cancoord'
-           end if
-        else
-           ! Legacy VMEC-specific Newton iteration
-           if (.not. onlytheta) then
-              theta = vartheta
-           else if (.not. ieee_is_finite(theta)) then
-              theta = vartheta
-           end if
-           converged = .false.
-           do iter = 1, 100
-              call vmec_lambda_interpolate(s, theta, varphi, alam, dl_dt)
+      if (allocated(current_field)) then
+         ! Use field-agnostic Newton solver
+         theta = vartheta  ! Initial guess
+         call newton_theta_from_canonical(current_field, s, vartheta, varphi, theta, converged)
+         if (.not. converged) then
+            print *, 'WARNING: Newton iteration failed in rhs_cancoord'
+         end if
+      else
+         ! Legacy VMEC-specific Newton iteration
+         theta = vartheta
+         do iter = 1, 100
+            call vmec_lambda_interpolate(s, theta, varphi, alam, dl_dt)
             deltheta = (vartheta - theta - alam)/(1.d0 + dl_dt)
             theta = theta + deltheta
-            if (abs(deltheta) .lt. epserr) then
-               converged = .true.
-               exit
-            end if
+            if (abs(deltheta) .lt. epserr) exit
          end do
-         if (.not. converged) then
-            theta = vartheta
-            print *, 'WARNING: Newton iteration for theta did not converge'
-         end if
       end if
 
       if (onlytheta) return
@@ -347,7 +338,7 @@ contains
 
       logical :: fullset
       integer :: k, is, i_theta, i_phi, i_qua
-      integer :: ist, isp
+      integer :: iss, ist, isp
       real(dp), dimension(:, :), allocatable :: splcoe
 
       if (.not. allocated(s_sqg_Bt_Bp)) &
@@ -501,7 +492,7 @@ contains
 
       integer :: mode_secders, nstp, ns_A_p1, ns_s_p1
       integer :: k, is, i_theta, i_phi
-      ! ist, isp declared in loops below
+      integer :: iss, ist, isp
 
       real(dp) :: r, vartheta_c, varphi_c, &
          A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
@@ -511,7 +502,7 @@ contains
          d2sqg_rr, d2sqg_rt, d2sqg_rp, d2sqg_tt, d2sqg_tp, d2sqg_pp, &
          d2bth_rr, d2bth_rt, d2bth_rp, d2bth_tt, d2bth_tp, d2bth_pp, &
          d2bph_rr, d2bph_rt, d2bph_rp, d2bph_tt, d2bph_tp, d2bph_pp
-      real(dp) :: ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
+      real(dp) :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
 
       real(dp), dimension(ns_max)              :: sp_G
       real(dp), dimension(ns_max, ns_max)       :: stp_G
@@ -944,20 +935,11 @@ contains
 
    subroutine can_to_vmec(r, vartheta_c_in, varphi_c_in, theta_vmec, varphi_vmec)
 
-        use exchange_get_cancoord_mod, only: vartheta_c, varphi_c
-        use field_newton, only: newton_theta_from_canonical
-        use field, only: vmec_field_t
-#ifdef GVEC_AVAILABLE
-        use vmec_field_adapter, only: vmec_iota_interpolate_with_field, vmec_iota_interpolate
-#else
-        use vmec_field_eval, only: vmec_iota_interpolate_with_field, vmec_iota_interpolate
-#endif
-        use util, only: twopi
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
+      use exchange_get_cancoord_mod, only: vartheta_c, varphi_c, theta
 
       implicit none
 
-        logical :: fullset
+      logical :: fullset
       integer :: mode_secders
       real(dp), intent(in) :: r, vartheta_c_in, varphi_c_in
       real(dp), intent(out) :: theta_vmec, varphi_vmec
@@ -968,16 +950,7 @@ contains
          d2sqg_rr, d2sqg_rt, d2sqg_rp, d2sqg_tt, d2sqg_tp, d2sqg_pp, &
          d2bth_rr, d2bth_rt, d2bth_rp, d2bth_tt, d2bth_tp, d2bth_pp, &
          d2bph_rr, d2bph_rt, d2bph_rp, d2bph_tt, d2bph_tp, d2bph_pp
-      real(dp) :: s, aiota_loc, daiota_ds, vartheta_loc, varphi_loc, theta_loc
-      logical :: converged
-      type(vmec_field_t) :: field_tmp
-
-      if (.not. ieee_is_finite(r) .or. .not. ieee_is_finite(vartheta_c_in) .or. &
-          .not. ieee_is_finite(varphi_c_in)) then
-        theta_vmec = ieee_value(0.0_dp, ieee_quiet_nan)
-        varphi_vmec = ieee_value(0.0_dp, ieee_quiet_nan)
-        return
-      end if
+      real(dp), dimension(1) :: y, dy
 
       fullset = .true.
       mode_secders = 0
@@ -993,28 +966,12 @@ contains
 
       vartheta_c = vartheta_c_in
       varphi_c = varphi_c_in
+      y(1) = G_c
 
-      s = r
-      if (allocated(current_field)) then
-        call vmec_iota_interpolate_with_field(current_field, s, aiota_loc, daiota_ds)
-      else
-        call vmec_iota_interpolate(s, aiota_loc, daiota_ds)
-      end if
+  !  call rhs_cancoord(r,y,dy)      !<=OLD
+      call rhs_cancoord(sqrt(r), y, dy) !<=NEW
 
-      vartheta_loc = modulo(vartheta_c_in + aiota_loc*G_c, twopi)
-      varphi_loc = modulo(varphi_c_in + G_c, twopi)
-
-      theta_loc = vartheta_loc
-      if (allocated(current_field)) then
-        call newton_theta_from_canonical(current_field, s, vartheta_loc, varphi_loc, theta_loc, converged)
-      else
-        field_tmp = vmec_field_t()
-        call newton_theta_from_canonical(field_tmp, s, vartheta_loc, varphi_loc, theta_loc, converged)
-      end if
-      if (.not. converged) then
-        if (.not. ieee_is_finite(theta_loc)) theta_loc = vartheta_loc
-      end if
-      theta_vmec = theta_loc
+      theta_vmec = theta
       varphi_vmec = varphi_c_in + G_c
 
    end subroutine can_to_vmec
@@ -1092,12 +1049,12 @@ contains
 
          real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
 
-         integer :: nstp, ns_A_p1
+         integer :: nstp, ns_A_p1, ns_s_p1
          integer :: k, is, i_theta, i_phi
-         ! no additional loop indices needed here
+         integer :: iss, ist, isp
 
-         real(dp) :: A_phi, dA_phi_dr, dA_theta_dr
-         real(dp) :: ds, dtheta, dphi, rho_tor
+         real(dp) :: A_phi, A_theta, dA_phi_dr, dA_theta_dr
+         real(dp) :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
          real(dp) :: aiota, G_c, dG_c_dt, dG_c_dp
          real(dp) :: ts, ps, dts_dtc, dts_dpc, dps_dtc, dps_dpc, det
 

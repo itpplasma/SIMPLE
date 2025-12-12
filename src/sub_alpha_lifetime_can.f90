@@ -10,7 +10,7 @@ contains
   !ToDo make module from all global things like this one
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-      subroutine elefie_can(x, derphi)
+      subroutine elefie_can(x,derphi)
   !
   ! Computes the derivatives of the electrostatic potential over
   ! coordinates (covariant electric field). Potential is normalized
@@ -22,11 +22,12 @@ contains
   !   Output parameters:
   !             formal:    derphi  -   array of derivatives
   !
-      real(dp), intent(in) :: x(3)
-      real(dp), intent(out) :: derphi(3)
-      !
-      derphi = 0.0_dp
-      !
+      integer :: ierr
+      real(dp), dimension(3) :: x,derphi
+      real(dp) :: r,phi,z,psi,phi_el,phi_el_pr,phi_el_prpr
+  !
+      derphi=0.d0
+  !
       end subroutine elefie_can
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -75,6 +76,7 @@ contains
       real(dp) rmumag,rovsqg,rosqgb,rovbm
       real(dp) a_phi,a_b,a_c,hstar
       real(dp) s_hc,hpstar,phidot,blodot,bra
+      real(dp) pardeb
   !
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
       dimension derphi(3)
@@ -170,12 +172,12 @@ use chamb_sub, only : chamb_can
   !
       integer, parameter          :: ndim=5, nstepmax=1000000
   !
-      integer, intent(out) :: ierr
-      real(dp), intent(in) :: dtau, dtaumin, relerr
-      real(dp), intent(inout) :: z(ndim)
-      real(dp) :: phi, tau1, tau2
-      !
-      real(dp) :: y(2)
+      integer :: ierr,j
+      real(dp) :: dtau,dtaumin,phi,tau1,tau2
+  !
+      real(dp), dimension(2)    :: y
+      real(dp), dimension(ndim) :: z
+      real(dp) :: relerr
   !
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
@@ -382,13 +384,13 @@ if(dodiag) write (123,*) tau2,z
       integer, parameter          :: ndim=5, nstepmax=1000000
       real(dp), parameter :: snear_axis=0.01d0
   !
-      integer, intent(out) :: ierr
-      real(dp), intent(in) :: dtau, dtaumin, relerr
-      real(dp), intent(inout) :: z(ndim)
       logical :: near_axis
-      real(dp) :: phi, tau1, tau2, z1, z2
-      !
-      real(dp) :: y(2)
+      integer :: ierr,j
+      real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2
+      real(dp) :: relerr
+  !
+      real(dp), dimension(2)    :: y
+      real(dp), dimension(ndim) :: z
   !
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2

@@ -65,7 +65,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     type(tracer_t), intent(inout) :: anorb
     integer, intent(in) :: ipart
     type(classification_result_t), intent(out) :: class_result
-    integer :: ierr
+    integer :: ierr, ierr_coll
     real(dp), dimension(5) :: z
     real(dp) :: bmod,sqrtg
     real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl

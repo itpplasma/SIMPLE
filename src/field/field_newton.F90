@@ -3,7 +3,6 @@ module field_newton
   !> Provides Newton solvers for coordinate transformations
   
   use, intrinsic :: iso_fortran_env, only : dp => real64
-  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use field_base, only : magnetic_field_t
   
   implicit none
@@ -22,16 +21,15 @@ contains
     real(dp), intent(in) :: s              ! Normalized flux coordinate
     real(dp), intent(in) :: vartheta_canonical  ! Canonical poloidal angle
     real(dp), intent(in) :: varphi         ! Toroidal angle
-    real(dp), intent(inout) :: theta       ! Field-specific theta, initial guess
+    real(dp), intent(inout) :: theta       ! Field-specific theta (initial guess on input)
     logical, intent(out) :: converged      ! Convergence flag
     integer, intent(out), optional :: iter_count  ! Number of iterations
     
     ! Local variables
-      real(dp), parameter :: epserr = 1.0e-12_dp  ! Convergence tolerance
-      real(dp), parameter :: refine_threshold = 1.0e-8_dp
-      integer, parameter :: max_iter = 100
-      real(dp) :: alam, dl_dt, deltheta
-      integer :: iter
+    real(dp), parameter :: epserr = 1.0e-12_dp  ! Convergence tolerance
+    integer, parameter :: max_iter = 100
+    real(dp) :: alam, dl_dt, deltheta
+    integer :: iter
     
     ! Initialize
     converged = .false.
@@ -40,13 +38,13 @@ contains
     do iter = 1, max_iter
       ! Get stream function and its theta derivative for current field
       call get_stream_function(field, s, theta, varphi, alam, dl_dt)
-
+      
       ! Newton update: solve vartheta = theta + Lambda
       ! f(theta) = theta + Lambda(theta) - vartheta = 0
       ! f'(theta) = 1 + dLambda/dtheta
       deltheta = (vartheta_canonical - theta - alam) / (1.0_dp + dl_dt)
       theta = theta + deltheta
-
+      
       ! Check convergence
       if (abs(deltheta) < epserr) then
         converged = .true.
@@ -56,18 +54,6 @@ contains
     
     if (present(iter_count)) iter_count = iter
     
-    if (converged .or. (ieee_is_finite(deltheta) .and. &
-        abs(deltheta) < refine_threshold)) then
-      call get_stream_function(field, s, theta, varphi, alam, dl_dt)
-      deltheta = (vartheta_canonical - theta - alam) / (1.0_dp + dl_dt)
-      theta = theta + deltheta
-      if (abs(deltheta) > epserr) then
-        call get_stream_function(field, s, theta, varphi, alam, dl_dt)
-        deltheta = (vartheta_canonical - theta - alam) / (1.0_dp + dl_dt)
-        theta = theta + deltheta
-      end if
-    end if
-
     ! Warn if not converged
     if (.not. converged) then
       print *, 'WARNING: Newton iteration for theta did not converge'

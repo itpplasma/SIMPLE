@@ -46,14 +46,14 @@ test-regression: build-deterministic
 # Patches libneo to also use deterministic FP (no -ffast-math)
 build-deterministic:
 	@echo "Building with deterministic FP (CODE unset to use FetchContent for libneo)..."
-	unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
+	unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DENABLE_PYTHON_INTERFACE=OFF -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
 	@LIBNEO_CMAKE="$(BUILD_DIR)/_deps/libneo-src/CMakeLists.txt"; \
 	if [ -f "$$LIBNEO_CMAKE" ] && grep -q "\-ffast-math" "$$LIBNEO_CMAKE" 2>/dev/null; then \
 		echo "Patching libneo for deterministic FP..."; \
 		sed 's/-ffast-math[[:space:]]*-ffp-contract=fast/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
 		sed 's/-ffast-math/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
 		echo "Reconfiguring after libneo patch..."; \
-		unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS); \
+		unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DENABLE_PYTHON_INTERFACE=OFF -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS); \
 	fi
 	cmake --build $(BUILD_DIR) --config $(CONFIG)
 

@@ -22,10 +22,11 @@ subroutine integ_to_ref_flux(xinteg, xref)
     use get_can_sub, only: can_to_vmec
     real(dp), intent(in) :: xinteg(3)
     real(dp), intent(out) :: xref(3)
+
     xref(1) = xinteg(1)
     call can_to_vmec(xinteg(1), xinteg(2), xinteg(3), xref(2), xref(3))
-    xref(2) = modulo(xref(2), twopi)
-    xref(3) = modulo(xref(3), twopi)
+    xref(2) = mod(xref(2), twopi)
+    xref(3) = mod(xref(3), twopi)
 end subroutine integ_to_ref_flux
 
 
@@ -36,8 +37,8 @@ subroutine ref_to_integ_flux(xref, xinteg)
 
     xinteg(1) = xref(1)
     call vmec_to_can(xref(1), xref(2), xref(3), xinteg(2), xinteg(3))
-    xinteg(2) = modulo(xinteg(2), twopi)
-    xinteg(3) = modulo(xinteg(3), twopi)
+    xinteg(2) = mod(xinteg(2), twopi)
+    xinteg(3) = mod(xinteg(3), twopi)
 end subroutine ref_to_integ_flux
 
 
@@ -68,8 +69,7 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 
     ! Count evaluations for profiling
 
-    ! initialize to zero: no angular derivatives set for
-    ! straight field line Ath(r) Aph(r)
+    ! initialize to zero - no angular derivatives will be set due to straight field line Ath(r) Aph(r)
     f%dAth = 0d0
     f%dAph = 0d0
 
@@ -110,36 +110,27 @@ subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
 
     if(mode_secders > 0) then
     ! d2dr2
-    f%d2Bmod(1) = (d2Bph(1)*f%dAth(1) - d2Bth(1)*f%dAph(1) &
-                   - 2.d0*dBth(1)*f%d2Aph(1) - f%Bmod*f%hth*d3Aphdr3 &
-                   - 2.d0*dsqg(1)*dbmod2(1) - bmod2*d2sqg(1)) / sqg
+    f%d2Bmod(1)=(d2Bph(1)*f%dAth(1)-d2Bth(1)*f%dAph(1)-2.d0*dBth(1)*f%d2Aph(1)-f%Bmod*f%hth*d3Aphdr3 &
+                - 2.d0*dsqg(1)*dbmod2(1)-bmod2*d2sqg(1))/sqg
 
     f%d2Bmod(1)=f%d2Bmod(1)/twobmod-f%dBmod(1)**2/f%Bmod
 
-    f%d2hth(1) = d2Bth(1)/f%Bmod - 2d0*dBth(1)*f%dBmod(1)/bmod2 &
-                 + Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-    f%d2hph(1) = d2Bph(1)/f%Bmod - 2d0*dBph(1)*f%dBmod(1)/bmod2 &
-                 + Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+    f%d2hth(1) = d2Bth(1)/f%Bmod - 2d0*dBth(1)*f%dBmod(1)/bmod2 + Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+    f%d2hph(1) = d2Bph(1)/f%Bmod - 2d0*dBph(1)*f%dBmod(1)/bmod2 + Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
     endif
 
     if(mode_secders.eq.2) then
     ! d2dth2, d2dph2
-    f%d2Bmod(4) = (d2Bph(4)*f%dAth(1) - d2Bth(4)*f%dAph(1) &
-                   - 2.d0*dsqg(2)*dbmod2(2) - bmod2*d2sqg(4)) / sqg
-    f%d2Bmod(6) = (d2Bph(6)*f%dAth(1) - d2Bth(6)*f%dAph(1) &
-                   - 2.d0*dsqg(3)*dbmod2(3) - bmod2*d2sqg(6)) / sqg
+    f%d2Bmod(4)=(d2Bph(4)*f%dAth(1)-d2Bth(4)*f%dAph(1)-2.d0*dsqg(2)*dbmod2(2)-bmod2*d2sqg(4))/sqg
+    f%d2Bmod(6)=(d2Bph(6)*f%dAth(1)-d2Bth(6)*f%dAph(1)-2.d0*dsqg(3)*dbmod2(3)-bmod2*d2sqg(6))/sqg
 
     f%d2Bmod(4) = f%d2Bmod(4)/twobmod - f%dBmod(2)**2/f%Bmod
     f%d2Bmod(6) = f%d2Bmod(6)/twobmod - f%dBmod(3)**2/f%Bmod
 
-    f%d2hth((/4,6/)) = d2Bth((/4,6/))/f%Bmod &
-                       - 2d0*dBth((/2,3/))*f%dBmod((/2,3/))/bmod2 &
-                       + Bth/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - &
-                                    f%d2Bmod((/4,6/)))
-    f%d2hph((/4,6/)) = d2Bph((/4,6/))/f%Bmod &
-                       - 2d0*dBph((/2,3/))*f%dBmod((/2,3/))/bmod2 &
-                       + Bph/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - &
-                                    f%d2Bmod((/4,6/)))
+    f%d2hth((/4,6/)) = d2Bth((/4,6/))/f%Bmod - 2d0*dBth((/2,3/))*f%dBmod((/2,3/))/bmod2 &
+    + Bth/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
+    f%d2hph((/4,6/)) = d2Bph((/4,6/))/f%Bmod - 2d0*dBph((/2,3/))*f%dBmod((/2,3/))/bmod2 &
+    + Bph/bmod2*(2d0*f%dBmod((/2,3/))**2/f%Bmod - f%d2Bmod((/4,6/)))
 
     ! d2drdth, d2drdph, d2dthdph
     f%d2Bmod(2)=(d2Bph(2)*f%dAth(1)-d2Bth(2)*f%dAph(1)-dBth(2)*f%d2Aph(1) &
