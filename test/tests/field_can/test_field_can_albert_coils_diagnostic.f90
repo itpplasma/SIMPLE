@@ -24,8 +24,10 @@ program test_field_can_albert_coils_diagnostic
     integer :: i_r, i_th, i_phi, unit_id
     real(dp) :: x(3), y_batch(5)
     integer :: mid_r, mid_th, mid_phi
+    character(len=256) :: config_file
 
-    call read_config('simple.in')
+    config_file = 'simple.in'
+    call read_config(config_file)
 
     print *, 'Initializing field with Albert coordinates...'
     print *, '  field_input = ', trim(field_input)

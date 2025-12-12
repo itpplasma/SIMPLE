@@ -9,7 +9,10 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
-add_compile_options(-g -fbacktrace)
+add_compile_options(
+    -g
+    $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
+)
 
 # Disable executable stack for security (trampolines/closures create execstack)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")

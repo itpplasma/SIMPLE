@@ -29,8 +29,10 @@ program test_field_can_diagnostics
     character(len=32) :: mode_name
     character(len=64) :: output_file
     logical :: success
+    character(len=256) :: config_file
 
-    call read_config('simple.in')
+    config_file = 'simple.in'
+    call read_config(config_file)
 
     mode = integ_coords
     call get_mode_name(mode, mode_name)

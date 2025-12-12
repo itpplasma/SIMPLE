@@ -182,7 +182,7 @@ build() {
     # Enable deterministic floating-point for reproducible golden record tests
     CMAKE_OPTS="$CMAKE_OPTS -DSIMPLE_DETERMINISTIC_FP=ON"
 
-    cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
+    unset CODE && cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
         echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
         return 1
@@ -194,7 +194,7 @@ build() {
     if [ -f "$LIBNEO_CMAKE" ]; then
         if patch_libneo_for_deterministic_fp "$LIBNEO_CMAKE"; then
             echo "Reconfiguring after libneo patch..."
-            cmake -S . -Bbuild -GNinja $CMAKE_OPTS >> $PROJECT_ROOT/configure.log 2>&1
+            unset CODE && cmake -S . -Bbuild -GNinja $CMAKE_OPTS >> $PROJECT_ROOT/configure.log 2>&1
         fi
     fi
 
