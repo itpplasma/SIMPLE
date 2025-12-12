@@ -6,7 +6,7 @@ BUILD_NINJA := $(BUILD_DIR)/build.ninja
 # Common ctest command with optional verbose and test name filtering
 CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
-.PHONY: all configure reconfigure build build-deterministic test test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean
+.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean
 all: build
 
 $(BUILD_NINJA):
@@ -37,8 +37,8 @@ test-fast: build
 test-slow: build
 	$(CTEST_CMD) -L "slow" -LE "regression"
 
-# Run only regression tests (requires deterministic FP build)
-test-regression: build-deterministic
+# Run only regression tests (requires deterministic FP build without Python interface)
+test-regression: build-deterministic-nopy
 	$(CTEST_CMD) -L "regression"
 
 # Build with deterministic floating-point for regression tests
@@ -46,6 +46,20 @@ test-regression: build-deterministic
 # Patches libneo to also use deterministic FP (no -ffast-math)
 build-deterministic:
 	@echo "Building with deterministic FP (CODE unset to use FetchContent for libneo)..."
+	unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
+	@LIBNEO_CMAKE="$(BUILD_DIR)/_deps/libneo-src/CMakeLists.txt"; \
+	if [ -f "$$LIBNEO_CMAKE" ] && grep -q "\-ffast-math" "$$LIBNEO_CMAKE" 2>/dev/null; then \
+		echo "Patching libneo for deterministic FP..."; \
+		sed 's/-ffast-math[[:space:]]*-ffp-contract=fast/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
+		sed 's/-ffast-math/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
+		echo "Reconfiguring after libneo patch..."; \
+		unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS); \
+	fi
+	cmake --build $(BUILD_DIR) --config $(CONFIG)
+
+# Deterministic build matching golden record reference configuration (Python OFF)
+build-deterministic-nopy:
+	@echo "Building with deterministic FP and Python interface OFF (golden record reference)..."
 	unset CODE && cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DENABLE_PYTHON_INTERFACE=OFF -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
 	@LIBNEO_CMAKE="$(BUILD_DIR)/_deps/libneo-src/CMakeLists.txt"; \
 	if [ -f "$$LIBNEO_CMAKE" ] && grep -q "\-ffast-math" "$$LIBNEO_CMAKE" 2>/dev/null; then \
