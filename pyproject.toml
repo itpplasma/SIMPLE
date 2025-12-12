@@ -1,22 +1,18 @@
 [build-system]
-requires = ["scikit-build-core", "numpy", "f90wrap==0.2.16"]
+requires = ["scikit-build-core", "numpy", "f90wrap"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "pysimple"
 version = "1.2.0"
-dependencies = ["numpy"]
+dependencies = ["numpy", "f90wrap"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 
 [tool.scikit-build]
-build-dir = "build"
 build.verbose = true
-cmake.define.CMAKE_CACHE_DIR = "build"
+build-dir = "_skbuild"
 wheel.packages = ["python/pysimple"]
-wheel.install-dir = "pysimple"
-wheel.exclude = []
-
-[project.package-data]
-pysimple = ["data/*.dat"]
+wheel.exclude = ["**/__pycache__/**", "**/*.pyc"]
+sdist.include = ["python/pysimple/data/*.dat"]
