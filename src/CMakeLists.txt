@@ -69,19 +69,6 @@ endif()
 
 add_library (simple STATIC ${SOURCES})
 
-set(_magfie_stamp "${CMAKE_BINARY_DIR}/magfie_modules.stamp")
-add_custom_command(
-    OUTPUT ${_magfie_stamp}
-    COMMAND ${CMAKE_COMMAND} -E touch ${_magfie_stamp}
-    DEPENDS magfie
-)
-add_custom_target(prepare_magfie_modules DEPENDS ${_magfie_stamp})
-
-set_source_files_properties(field/field_geoflux.f90
-    PROPERTIES OBJECT_DEPENDS ${_magfie_stamp})
-set_source_files_properties(coordinates/coordinates.f90
-    PROPERTIES OBJECT_DEPENDS ${_magfie_stamp})
-
 
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
@@ -105,8 +92,6 @@ target_link_libraries(simple PUBLIC
     LIBNEO::neo
     LIBNEO::magfie
 )
-
-add_dependencies(simple neo prepare_magfie_modules)
 
 # Conditionally link GVEC if enabled
 if(ENABLE_GVEC)

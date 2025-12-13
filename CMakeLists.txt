@@ -14,20 +14,6 @@ add_compile_options(
     $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
 )
 
-# Prefer local libneo checkout on sibling path; fall back to configured branch
-if (NOT DEFINED libneo_SOURCE_DIR)
-    set(_local_libneo "${CMAKE_SOURCE_DIR}/../libneo")
-    if (EXISTS "${_local_libneo}/CMakeLists.txt")
-        get_filename_component(_libneo_abs "${_local_libneo}" ABSOLUTE)
-        set(libneo_SOURCE_DIR "${_libneo_abs}")
-        message(STATUS "Detected local libneo checkout at ${libneo_SOURCE_DIR}")
-    endif()
-endif()
-
-if (NOT DEFINED LIBNEO_BRANCH)
-    set(LIBNEO_BRANCH "tokamak" CACHE STRING "libneo branch to fetch when no local checkout is present")
-endif()
-
 # Disable executable stack for security (trampolines/closures create execstack)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # Apple's linker doesn't support -z,noexecstack (uses different security model)
@@ -59,6 +45,11 @@ option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
+
+# Golden record regression tests require deterministic floating-point output.
+if (SIMPLE_TESTING)
+    set(SIMPLE_DETERMINISTIC_FP ON CACHE BOOL "Disable fast-math for reproducible floating-point" FORCE)
+endif()
 
 # Conditionally fetch GVEC if enabled
 if(ENABLE_GVEC)
@@ -106,7 +97,52 @@ add_link_options(${NETCDF_FLIBS})
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 
+if (SIMPLE_TESTING)
+    # Golden record tests (and CI) must not silently pick up local checkouts via
+    # the CODE environment variable, otherwise the current build can differ from
+    # the reference build even without code changes.
+    if (DEFINED ENV{CODE} AND NOT "$ENV{CODE}" STREQUAL "")
+        message(STATUS "SIMPLE_TESTING: ignoring CODE=$ENV{CODE} for reproducible dependency resolution")
+        set(ENV{CODE} "")
+    endif()
+endif()
+
 find_or_fetch(libneo)
+
+# libneo enables -ffast-math in Release/Fast by default, which breaks strict
+# reproducibility. In deterministic mode, strip fast-math options from the libneo
+# targets that SIMPLE links against.
+if (SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    function(_simple_strip_libneo_fast_math target_name)
+        if (NOT TARGET ${target_name})
+            return()
+        endif()
+
+        get_target_property(_opts ${target_name} COMPILE_OPTIONS)
+        if (NOT _opts)
+            target_compile_options(${target_name} PRIVATE -ffp-contract=off)
+            return()
+        endif()
+
+        set(_new_opts "")
+        foreach(_opt IN LISTS _opts)
+            if (_opt STREQUAL "-ffast-math")
+                continue()
+            endif()
+            if (_opt STREQUAL "-ffp-contract=fast")
+                continue()
+            endif()
+            list(APPEND _new_opts "${_opt}")
+        endforeach()
+
+        set_target_properties(${target_name} PROPERTIES COMPILE_OPTIONS "${_new_opts}")
+        target_compile_options(${target_name} PRIVATE -ffp-contract=off)
+    endfunction()
+
+    foreach(_libneo_target neo neo_field interpolate neo_polylag hdf5_tools CONTRIB magfie)
+        _simple_strip_libneo_fast_math(${_libneo_target})
+    endforeach()
+endif()
 
 # Fetch fortplot for diagnostic plotting
 include(FetchContent)
