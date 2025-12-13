@@ -159,8 +159,8 @@ target_link_libraries(test_geoflux_rk45_orbit_plot.x simple)
 add_test(NAME test_geoflux_rk45_orbit_plot COMMAND test_geoflux_rk45_orbit_plot.x)
 set_tests_properties(test_geoflux_rk45_orbit_plot PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    LABELS "regression;plot"
-    ENVIRONMENT "LIBNEO_TEST_GEQDSK=${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk;SIMPLE_VISUAL_DIR=${CMAKE_CURRENT_BINARY_DIR}/visual_artifacts"
+    LABELS "plot;geoflux;rk45"
+    ENVIRONMENT "LIBNEO_TEST_GEQDSK=${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk;SIMPLE_ARTIFACT_DIR=${CMAKE_BINARY_DIR}/artifacts"
 )
 
 # Generate GVEC test data file for test_gvec using elliptic tokamak example
