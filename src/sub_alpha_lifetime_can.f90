@@ -356,17 +356,17 @@ if(dodiag) write (123,*) tau2,z
   real(dp), intent(out) :: vz_axis(:)
   real(dp) :: derlogsqs
   real(dp), dimension(5) :: z,vz
+  real(dp) :: s_safe
   !
-  !  z(1)=z_axis(1)**2+z_axis(2)**2
-  z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
-  z(1)=max(z(1),1.d-8)
+  z(1)=z_axis(1)**2+z_axis(2)**2
+  z(1)=max(z(1),1.d-16)
   z(2)=atan2(z_axis(2),z_axis(1))
   z(3:5)=z_axis(3:5)
   !
   call velo_can(tau,z,vz)
   !
-  !  derlogsqs=0.5d0*vz(1)/sqrt(z(1))
-  derlogsqs=vz(1)/z(1)
+  s_safe = max(z(1), 1.d-16)
+  derlogsqs=0.5d0*vz(1)/s_safe
   vz_axis(1)=derlogsqs*z_axis(1)-vz(2)*z_axis(2)
   vz_axis(2)=derlogsqs*z_axis(2)+vz(2)*z_axis(1)
   vz_axis(3:5)=vz(3:5)
@@ -415,7 +415,7 @@ if(dodiag) write (123,*) tau2,z
         if(near_axis) then
           if(z(1)**2+z(2)**2.gt.snear_axis**2) then
             near_axis=.false.
-            z1=sqrt(z(1)**2+z(2)**2)
+            z1=z(1)**2+z(2)**2
             z2=atan2(z(2),z(1))
             z(1)=z1
             z(2)=z2
@@ -437,8 +437,8 @@ if(dodiag) write (123,*) tau2,z
         else
           if(z(1).lt.snear_axis) then
             near_axis=.true.
-            z1=z(1)*cos(z(2))
-            z2=z(1)*sin(z(2))
+            z1=sqrt(max(z(1), 0.d0))*cos(z(2))
+            z2=sqrt(max(z(1), 0.d0))*sin(z(2))
             z(1)=z1
             z(2)=z2
   !
@@ -467,7 +467,7 @@ if(dodiag) write (123,*) tau2,z
       if(near_axis) then
         if(z(1)**2+z(2)**2.gt.snear_axis**2) then
           near_axis=.false.
-          z1=sqrt(z(1)**2+z(2)**2)
+          z1=z(1)**2+z(2)**2
           z2=atan2(z(2),z(1))
           z(1)=z1
           z(2)=z2
@@ -489,8 +489,8 @@ if(dodiag) write (123,*) tau2,z
       else
         if(z(1).lt.snear_axis) then
           near_axis=.true.
-          z1=z(1)*cos(z(2))
-          z2=z(1)*sin(z(2))
+          z1=sqrt(max(z(1), 0.d0))*cos(z(2))
+          z2=sqrt(max(z(1), 0.d0))*sin(z(2))
           z(1)=z1
           z(2)=z2
   !
@@ -512,7 +512,7 @@ if(dodiag) write (123,*) tau2,z
       endif
   !
       if(near_axis) then
-        z1=sqrt(z(1)**2+z(2)**2)
+        z1=z(1)**2+z(2)**2
         z2=atan2(z(2),z(1))
         z(1)=z1
         z(2)=z2
