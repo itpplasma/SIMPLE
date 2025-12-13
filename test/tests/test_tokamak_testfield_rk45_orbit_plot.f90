@@ -262,6 +262,7 @@ contains
 
     subroutine plot_orbit_and_diagnostics()
         character(len=1024) :: png_orbit_rz
+        character(len=1024) :: png_poincare_phi0
 
         png_orbit_rz = trim(out_orbit)//'/orbit_RZ.png'
         call plt%initialize(grid=.true., xlabel='R', ylabel='Z', &
@@ -269,6 +270,9 @@ contains
         call plt%add_plot(r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
         call plt%add_plot(r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
         call plt%savefig(trim(png_orbit_rz), pyfile=trim(out_orbit)//'/orbit_RZ.py')
+
+        png_poincare_phi0 = trim(out_orbit)//'/orbit_poincare_phi0.png'
+        call plot_poincare_phi0(plt, trim(png_poincare_phi0), trim(out_orbit)//'/orbit_poincare_phi0.py', color_pass, color_trap)
 
         call plt%initialize(grid=.true., xlabel='t (s) [scaled]', ylabel='s', &
             title='TEST tokamak RK45 orbit: s(t)', figsize=[10, 6])
@@ -321,6 +325,7 @@ contains
         real(dp) :: rmin_g, rmax_g, zmin_g, zmax_g, dr, dz
         real(dp) :: rgrid(nr), zgrid(nz)
         real(dp) :: bmod_map(nr, nz), br_map(nr, nz), bphi_map(nr, nz), bz_map(nr, nz)
+        real(dp) :: bmod_st(nsurf_plot, ntheta_plot)
         real(dp) :: x_geo(3), x_cyl(3)
         logical :: inside
         integer :: isurf, itheta, iR, iZ
@@ -336,6 +341,8 @@ contains
                 call testfield_to_cyl((/surf_s(isurf), theta_grid(itheta), 0.0_dp/), x_cyl)
                 r_surf(itheta, isurf) = x_cyl(1)
                 z_surf(itheta, isurf) = x_cyl(3)
+
+                call eval_testfield_bmod(surf_s(isurf), theta_grid(itheta), 0.0_dp, bmod_st(isurf, itheta))
             end do
         end do
 
@@ -405,10 +412,16 @@ contains
             title='TEST tokamak Bz(R,Z) at phi=0', legend=.false., figsize=[10, 8])
         call plt%add_contour(rgrid, zgrid, bz_map, linestyle='-', colorbar=.false.)
         call plt%savefig(trim(out_field)//'/Bz_RZ_phi0.png', pyfile=trim(out_field)//'/Bz_RZ_phi0.py')
+
+        call plt%initialize(grid=.true., xlabel='theta (rad)', ylabel='surface index', &
+            title='TEST tokamak Bmod(s,theta) at phi=0 (sampled on flux surfaces)', figsize=[10, 6])
+        call plt%add_imshow(bmod_st)
+        call plt%savefig(trim(out_field)//'/Bmod_s_theta_phi0.png', pyfile=trim(out_field)//'/Bmod_s_theta_phi0.py')
     end subroutine plot_flux_surfaces_and_fields
 
     subroutine print_artifacts()
         print *, 'ARTIFACT: ', trim(out_orbit)//'/orbit_RZ.png'
+        print *, 'ARTIFACT: ', trim(out_orbit)//'/orbit_poincare_phi0.png'
         print *, 'ARTIFACT: ', trim(out_orbit)//'/orbit_s_t.png'
         print *, 'ARTIFACT: ', trim(out_orbit)//'/orbit_theta_t.png'
         print *, 'ARTIFACT: ', trim(out_orbit)//'/orbit_phi_t.png'
@@ -418,9 +431,61 @@ contains
         print *, 'ARTIFACT: ', trim(out_orbit)//'/orbit_mu_t.png'
         print *, 'ARTIFACT: ', trim(out_flux)//'/flux_surfaces_RZ_phi0.png'
         print *, 'ARTIFACT: ', trim(out_field)//'/Bmod_RZ_phi0.png'
+        print *, 'ARTIFACT: ', trim(out_field)//'/Bmod_s_theta_phi0.png'
         print *, 'ARTIFACT: ', trim(out_field)//'/Br_RZ_phi0.png'
         print *, 'ARTIFACT: ', trim(out_field)//'/Bphi_RZ_phi0.png'
         print *, 'ARTIFACT: ', trim(out_field)//'/Bz_RZ_phi0.png'
     end subroutine print_artifacts
+
+    subroutine plot_poincare_phi0(plt, png_path, py_path, color_pass, color_trap)
+        type(pyplot), intent(inout) :: plt
+        character(len=*), intent(in) :: png_path, py_path
+        real(dp), intent(in) :: color_pass(3), color_trap(3)
+
+        integer, parameter :: max_points = 5000
+        real(dp), parameter :: tol = 2.0d-2
+        real(dp) :: phi_wrapped, phase
+        real(dp) :: r_pts_pass(max_points), z_pts_pass(max_points)
+        real(dp) :: r_pts_trap(max_points), z_pts_trap(max_points)
+        integer :: i, n_pass, n_trap
+
+        n_pass = 0
+        do i = 1, n_used(1)
+            phi_wrapped = modulo(phi_traj(i, 1), twopi)
+            phase = phi_wrapped
+            if (phase > 0.5_dp*twopi) phase = phase - twopi
+            if (abs(phase) < tol) then
+                if (n_pass < max_points) then
+                    n_pass = n_pass + 1
+                    r_pts_pass(n_pass) = r_traj(i, 1)
+                    z_pts_pass(n_pass) = z_traj(i, 1)
+                end if
+            end if
+        end do
+
+        n_trap = 0
+        do i = 1, n_used(2)
+            phi_wrapped = modulo(phi_traj(i, 2), twopi)
+            phase = phi_wrapped
+            if (phase > 0.5_dp*twopi) phase = phase - twopi
+            if (abs(phase) < tol) then
+                if (n_trap < max_points) then
+                    n_trap = n_trap + 1
+                    r_pts_trap(n_trap) = r_traj(i, 2)
+                    z_pts_trap(n_trap) = z_traj(i, 2)
+                end if
+            end if
+        end do
+
+        call plt%initialize(grid=.true., xlabel='R', ylabel='Z', &
+            title='Poincare section at phi≈0', legend=.true., figsize=[10, 8])
+        if (n_pass > 0) then
+            call plt%add_plot(r_pts_pass(1:n_pass), z_pts_pass(1:n_pass), label='passing', linestyle='o', color=color_pass, markersize=2)
+        end if
+        if (n_trap > 0) then
+            call plt%add_plot(r_pts_trap(1:n_trap), z_pts_trap(1:n_trap), label='trapped', linestyle='o', color=color_trap, markersize=2)
+        end if
+        call plt%savefig(trim(png_path), pyfile=trim(py_path))
+    end subroutine plot_poincare_phi0
 
 end program test_tokamak_testfield_rk45_orbit_plot
