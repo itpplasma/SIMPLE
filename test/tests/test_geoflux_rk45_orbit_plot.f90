@@ -19,16 +19,21 @@ program test_geoflux_rk45_orbit_plot
     type(tracer_t) :: norb
     type(pyplot) :: plt
     character(len=1024) :: out_root, out_dir, out_orbit, out_flux, out_field
-    character(len=1024) :: config_file, start_file, geqdsk_file
+    character(len=1024) :: config_file, start_pass_file, start_trap_file, geqdsk_file
+    character(len=256) :: config_file_256
     character(len=1024) :: png_orbit_rz, png_s_t, png_theta_t, png_phi_t, png_bmod_t
     character(len=1024) :: png_flux_rz, png_psi_rz, png_bmod_st
     character(len=1024) :: png_bmod_rz, png_br_rz, png_bphi_rz, png_bz_rz
     character(len=1024) :: traj_dat
     character(len=1024) :: cmd
-    integer :: status, ierr, i, itheta, isurf, nmax, n_used, mkdir_stat
+    integer, parameter :: norbits = 2
+    integer :: status, ierr, i, itheta, isurf, nmax, mkdir_stat
+    integer :: iorb
+    integer :: n_used(norbits)
     integer :: ntheta_plot, nsurf_plot, ns_plot
-    real(dp), allocatable :: s_traj(:), theta_traj(:), phi_traj(:), time_traj(:)
-    real(dp), allocatable :: r_traj(:), z_traj(:), bmod_traj(:)
+    real(dp), allocatable :: time_traj(:)
+    real(dp), allocatable :: s_traj(:, :), theta_traj(:, :), phi_traj(:, :)
+    real(dp), allocatable :: r_traj(:, :), z_traj(:, :), bmod_traj(:, :)
     real(dp), allocatable :: theta_grid(:), s_grid(:)
     real(dp), allocatable :: bmod_grid(:, :)
     real(dp), allocatable :: r_surf(:, :), z_surf(:, :)
@@ -39,6 +44,8 @@ program test_geoflux_rk45_orbit_plot
     real(dp) :: z(5), xcyl(3)
     real(dp) :: acov_tmp(3), hcov_tmp(3), sqg_tmp(3)
     real(dp) :: smin, smax, rmin, rmax, zmin, zmax
+    real(dp) :: color_pass(3), color_trap(3)
+    character(len=32) :: orbit_label(norbits)
     logical :: exists
 
     out_root = ''
@@ -65,50 +72,49 @@ program test_geoflux_rk45_orbit_plot
     end if
 
     config_file = trim(out_dir)//'/simple_geoflux_rk45_plot.in'
-    start_file = trim(out_dir)//'/start.dat'
+    start_pass_file = trim(out_dir)//'/start_passing.dat'
+    start_trap_file = trim(out_dir)//'/start_trapped.dat'
 
     call write_config(trim(config_file), trim(geqdsk_file))
-    call write_start(trim(start_file))
+    call write_start(trim(start_pass_file), 0.25_dp, 0.1_dp*twopi, 0.0_dp, 1.0_dp, 0.7_dp)
+    call write_start(trim(start_trap_file), 0.25_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp)
 
-    call read_config(trim(config_file))
+    config_file_256 = trim(config_file)
+    call read_config(config_file_256)
     call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
     call params_init
     call init_magfie(isw_field_type)
 
-    call load_starting_points(zstart, trim(start_file))
-    z = zstart(:, 1)
+    orbit_label(1) = 'passing'
+    orbit_label(2) = 'trapped'
+    color_pass = [0.0_dp, 0.0_dp, 1.0_dp]
+    color_trap = [1.0_dp, 0.0_dp, 0.0_dp]
 
     nmax = ntimstep
-    allocate(s_traj(nmax), theta_traj(nmax), phi_traj(nmax), time_traj(nmax))
-    allocate(r_traj(nmax), z_traj(nmax), bmod_traj(nmax))
+    allocate(time_traj(nmax))
+    allocate(s_traj(nmax, norbits), theta_traj(nmax, norbits), phi_traj(nmax, norbits))
+    allocate(r_traj(nmax, norbits), z_traj(nmax, norbits), bmod_traj(nmax, norbits))
 
-    ierr = 0
-    n_used = 0
     do i = 1, nmax
-        s_traj(i) = z(1)
-        theta_traj(i) = z(2)
-        phi_traj(i) = z(3)
         time_traj(i) = real(i - 1, dp) * dtaumin / max(v0, 1.0d-12)
-
-        call geoflux_to_cyl((/ z(1), z(2), z(3) /), xcyl)
-        r_traj(i) = xcyl(1)
-        z_traj(i) = xcyl(3)
-        call splint_geoflux_field(z(1), z(2), z(3), acov_tmp, hcov_tmp, bmod_traj(i), sqg_tmp)
-
-        n_used = i
-        call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
-        if (ierr /= 0) exit
-        if (z(1) < 0.0_dp .or. z(1) > 1.0_dp) exit
     end do
 
-    if (n_used < 50) then
-        error stop 'test_geoflux_rk45_orbit_plot: orbit produced too few points'
-    end if
+    call integrate_orbit_from_start(trim(start_pass_file), 1)
+    call integrate_orbit_from_start(trim(start_trap_file), 2)
 
-    call compute_ranges(s_traj(1:n_used), r_traj(1:n_used), z_traj(1:n_used), smin, smax, rmin, rmax, zmin, zmax)
-    if (.not. (rmax > rmin .and. zmax > zmin .and. smax > smin)) then
-        error stop 'test_geoflux_rk45_orbit_plot: orbit appears degenerate'
-    end if
+    do iorb = 1, norbits
+        if (n_used(iorb) < 50) then
+            error stop 'test_geoflux_rk45_orbit_plot: orbit produced too few points'
+        end if
+    end do
+
+    do iorb = 1, norbits
+        call compute_ranges(s_traj(1:n_used(iorb), iorb), r_traj(1:n_used(iorb), iorb), z_traj(1:n_used(iorb), iorb), &
+            smin, smax, rmin, rmax, zmin, zmax)
+        if (.not. (rmax > rmin .and. zmax > zmin .and. smax > smin)) then
+            error stop 'test_geoflux_rk45_orbit_plot: orbit appears degenerate'
+        end if
+    end do
 
     png_orbit_rz = trim(out_orbit)//'/orbit_RZ.png'
     png_s_t = trim(out_orbit)//'/orbit_s_t.png'
@@ -119,30 +125,37 @@ program test_geoflux_rk45_orbit_plot
 
     call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
         title='GEQDSK geoflux RK45 orbit projection (R,Z)', legend=.true., figsize=[10, 8])
-    call plt%add_plot(r_traj(1:n_used), z_traj(1:n_used), label='orbit', linestyle='-')
+    call plt%add_plot(r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
+    call plt%add_plot(r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_orbit_rz), pyfile=trim(out_orbit)//'/orbit_RZ.py')
 
-    call write_trajectory_table(traj_dat, time_traj(1:n_used), s_traj(1:n_used), theta_traj(1:n_used), &
-        phi_traj(1:n_used), r_traj(1:n_used), z_traj(1:n_used), bmod_traj(1:n_used))
+    call write_trajectory_table(trim(out_orbit)//'/trajectory_passing.dat', time_traj(1:n_used(1)), s_traj(1:n_used(1), 1), &
+        theta_traj(1:n_used(1), 1), phi_traj(1:n_used(1), 1), r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), bmod_traj(1:n_used(1), 1))
+    call write_trajectory_table(trim(out_orbit)//'/trajectory_trapped.dat', time_traj(1:n_used(2)), s_traj(1:n_used(2), 2), &
+        theta_traj(1:n_used(2), 2), phi_traj(1:n_used(2), 2), r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), bmod_traj(1:n_used(2), 2))
 
     call plt%initialize(grid=.true., xlabel='t (s) [scaled]', ylabel='s', &
         title='GEQDSK geoflux RK45 orbit: s(t)', figsize=[10, 6])
-    call plt%add_plot(time_traj(1:n_used), s_traj(1:n_used), label='s', linestyle='-')
+    call plt%add_plot(time_traj(1:n_used(1)), s_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
+    call plt%add_plot(time_traj(1:n_used(2)), s_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_s_t), pyfile=trim(out_orbit)//'/orbit_s_t.py')
 
     call plt%initialize(grid=.true., xlabel='t (s) [scaled]', ylabel='theta (rad)', &
         title='GEQDSK geoflux RK45 orbit: theta(t)', figsize=[10, 6])
-    call plt%add_plot(time_traj(1:n_used), theta_traj(1:n_used), label='theta', linestyle='-')
+    call plt%add_plot(time_traj(1:n_used(1)), theta_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
+    call plt%add_plot(time_traj(1:n_used(2)), theta_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_theta_t), pyfile=trim(out_orbit)//'/orbit_theta_t.py')
 
     call plt%initialize(grid=.true., xlabel='t (s) [scaled]', ylabel='phi (rad)', &
         title='GEQDSK geoflux RK45 orbit: phi(t)', figsize=[10, 6])
-    call plt%add_plot(time_traj(1:n_used), phi_traj(1:n_used), label='phi', linestyle='-')
+    call plt%add_plot(time_traj(1:n_used(1)), phi_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
+    call plt%add_plot(time_traj(1:n_used(2)), phi_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_phi_t), pyfile=trim(out_orbit)//'/orbit_phi_t.py')
 
     call plt%initialize(grid=.true., xlabel='t (s) [scaled]', ylabel='Bmod (G)', &
         title='GEQDSK geoflux RK45 orbit: Bmod(t)', figsize=[10, 6])
-    call plt%add_plot(time_traj(1:n_used), bmod_traj(1:n_used), label='Bmod', linestyle='-')
+    call plt%add_plot(time_traj(1:n_used(1)), bmod_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
+    call plt%add_plot(time_traj(1:n_used(2)), bmod_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_bmod_t), pyfile=trim(out_orbit)//'/orbit_Bmod_t.py')
 
     png_flux_rz = trim(out_flux)//'/flux_surfaces_RZ_phi0.png'
@@ -172,11 +185,13 @@ program test_geoflux_rk45_orbit_plot
     do isurf = 1, nsurf_plot
         call plt%add_plot(r_surf(:, isurf), z_surf(:, isurf), label='surface', linestyle='-')
     end do
-    call plt%add_plot(r_traj(1:n_used), z_traj(1:n_used), label='orbit', linestyle='-')
+    call plt%add_plot(r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
+    call plt%add_plot(r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_flux_rz), pyfile=trim(out_flux)//'/flux_surfaces_overlay.py')
 
     call build_rz_field_maps(plt, out_field, out_flux, r_surf(:, nsurf_plot), z_surf(:, nsurf_plot), &
-        r_traj(1:n_used), z_traj(1:n_used))
+        r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), &
+        color_pass, color_trap)
 
     allocate(s_grid(ns_plot))
     allocate(bmod_grid(nsurf_plot, ntheta_plot))
@@ -209,7 +224,8 @@ program test_geoflux_rk45_orbit_plot
     print *, 'ARTIFACT: ', trim(png_bmod_t)
     print *, 'ARTIFACT: ', trim(png_flux_rz)
     print *, 'ARTIFACT: ', trim(png_bmod_st)
-    print *, 'ARTIFACT: ', trim(traj_dat)
+    print *, 'ARTIFACT: ', trim(out_orbit)//'/trajectory_passing.dat'
+    print *, 'ARTIFACT: ', trim(out_orbit)//'/trajectory_trapped.dat'
 
 contains
 
@@ -234,16 +250,10 @@ contains
         close(unit)
     end subroutine write_config
 
-    subroutine write_start(path)
+    subroutine write_start(path, s0, th0, ph0, p0, lam0)
         character(len=*), intent(in) :: path
+        real(dp), intent(in) :: s0, th0, ph0, p0, lam0
         integer :: unit
-        real(dp) :: s0, th0, ph0, p0, lam0
-
-        s0 = 0.25_dp
-        th0 = 0.1_dp * twopi
-        ph0 = 0.0_dp
-        p0 = 1.0_dp
-        lam0 = 0.7_dp
 
         open(newunit=unit, file=trim(path), status='replace', action='write')
         write(unit, *) s0, th0, ph0, p0, lam0
@@ -275,11 +285,14 @@ contains
         close(unit)
     end subroutine write_trajectory_table
 
-    subroutine build_rz_field_maps(plt, out_field_dir, out_flux_dir, r_lcfs, z_lcfs, r_orbit, z_orbit)
+    subroutine build_rz_field_maps(plt, out_field_dir, out_flux_dir, r_lcfs, z_lcfs, &
+        r_orbit_pass, z_orbit_pass, r_orbit_trap, z_orbit_trap, color_pass, color_trap)
         type(pyplot), intent(inout) :: plt
         character(len=*), intent(in) :: out_field_dir, out_flux_dir
         real(dp), intent(in) :: r_lcfs(:), z_lcfs(:)
-        real(dp), intent(in) :: r_orbit(:), z_orbit(:)
+        real(dp), intent(in) :: r_orbit_pass(:), z_orbit_pass(:)
+        real(dp), intent(in) :: r_orbit_trap(:), z_orbit_trap(:)
+        real(dp), intent(in) :: color_pass(3), color_trap(3)
 
         integer, parameter :: nr = 220, nz = 220
         real(dp) :: rmin_g, rmax_g, zmin_g, zmax_g, dr, dz
@@ -292,10 +305,10 @@ contains
 
         phi0 = 0.0_dp
 
-        rmin_g = min(minval(r_lcfs), minval(r_orbit))
-        rmax_g = max(maxval(r_lcfs), maxval(r_orbit))
-        zmin_g = min(minval(z_lcfs), minval(z_orbit))
-        zmax_g = max(maxval(z_lcfs), maxval(z_orbit))
+        rmin_g = min(minval(r_lcfs), min(minval(r_orbit_pass), minval(r_orbit_trap)))
+        rmax_g = max(maxval(r_lcfs), max(maxval(r_orbit_pass), maxval(r_orbit_trap)))
+        zmin_g = min(minval(z_lcfs), min(minval(z_orbit_pass), minval(z_orbit_trap)))
+        zmax_g = max(maxval(z_lcfs), max(maxval(z_orbit_pass), maxval(z_orbit_trap)))
 
         rmin_g = rmin_g - 0.1_dp * (rmax_g - rmin_g)
         rmax_g = rmax_g + 0.1_dp * (rmax_g - rmin_g)
@@ -331,14 +344,16 @@ contains
             title='GEQDSK psi(R,Z) contours at phi=0 with orbit overlay', legend=.true., figsize=[10, 8])
         call plt%add_contour(rgrid, zgrid, psi_map, linestyle='-', colorbar=.false.)
         call plt%add_plot(r_lcfs, z_lcfs, label='LCFS approx', linestyle='-')
-        call plt%add_plot(r_orbit, z_orbit, label='orbit', linestyle='-')
+        call plt%add_plot(r_orbit_pass, z_orbit_pass, label='passing', linestyle='-', color=color_pass)
+        call plt%add_plot(r_orbit_trap, z_orbit_trap, label='trapped', linestyle='-', color=color_trap)
         call plt%savefig(trim(out_flux_dir)//'/psi_contours_RZ_phi0.png', pyfile=trim(out_flux_dir)//'/psi_contours_RZ_phi0.py')
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
             title='GEQDSK |B|(R,Z) at phi=0 with orbit overlay', legend=.true., figsize=[10, 8])
         call plt%add_contour(rgrid, zgrid, bmod_map, linestyle='-', colorbar=.false.)
         call plt%add_plot(r_lcfs, z_lcfs, label='LCFS approx', linestyle='-')
-        call plt%add_plot(r_orbit, z_orbit, label='orbit', linestyle='-')
+        call plt%add_plot(r_orbit_pass, z_orbit_pass, label='passing', linestyle='-', color=color_pass)
+        call plt%add_plot(r_orbit_trap, z_orbit_trap, label='trapped', linestyle='-', color=color_trap)
         call plt%savefig(trim(out_field_dir)//'/Bmod_RZ_phi0.png', pyfile=trim(out_field_dir)//'/Bmod_RZ_phi0.py')
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
@@ -358,5 +373,35 @@ contains
 
         deallocate(rgrid, zgrid, psi_map, bmod_map, br_map, bphi_map, bz_map)
     end subroutine build_rz_field_maps
+
+    subroutine integrate_orbit_from_start(start_path, orbit_index)
+        character(len=*), intent(in) :: start_path
+        integer, intent(in) :: orbit_index
+
+        integer :: i_local
+        real(dp) :: z_local(5)
+        integer :: ierr_local
+
+        call load_starting_points(zstart, trim(start_path))
+        z_local = zstart(:, 1)
+
+        ierr_local = 0
+        n_used(orbit_index) = 0
+        do i_local = 1, nmax
+            s_traj(i_local, orbit_index) = z_local(1)
+            theta_traj(i_local, orbit_index) = z_local(2)
+            phi_traj(i_local, orbit_index) = z_local(3)
+
+            call geoflux_to_cyl((/ z_local(1), z_local(2), z_local(3) /), xcyl)
+            r_traj(i_local, orbit_index) = xcyl(1)
+            z_traj(i_local, orbit_index) = xcyl(3)
+            call splint_geoflux_field(z_local(1), z_local(2), z_local(3), acov_tmp, hcov_tmp, bmod_traj(i_local, orbit_index), sqg_tmp)
+
+            n_used(orbit_index) = i_local
+            call orbit_timestep_axis(z_local, dtaumin, dtaumin, relerr, ierr_local)
+            if (ierr_local /= 0) exit
+            if (z_local(1) < 0.0_dp .or. z_local(1) > 1.0_dp) exit
+        end do
+    end subroutine integrate_orbit_from_start
 
 end program test_geoflux_rk45_orbit_plot
