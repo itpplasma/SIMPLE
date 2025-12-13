@@ -154,6 +154,15 @@ set_tests_properties(test_magfie_geoflux PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+add_executable(test_geoflux_rk45_orbit_plot.x test_geoflux_rk45_orbit_plot.f90)
+target_link_libraries(test_geoflux_rk45_orbit_plot.x simple)
+add_test(NAME test_geoflux_rk45_orbit_plot COMMAND test_geoflux_rk45_orbit_plot.x)
+set_tests_properties(test_geoflux_rk45_orbit_plot PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "regression;plot"
+    ENVIRONMENT "LIBNEO_TEST_GEQDSK=${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk;SIMPLE_VISUAL_DIR=${CMAKE_CURRENT_BINARY_DIR}/visual_artifacts"
+)
+
 # Generate GVEC test data file for test_gvec using elliptic tokamak example
 set(GVEC_TEST_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../build/_deps/gvec-src/test-CI/examples/analytic_gs_elliptok/parameter.ini")
 set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_elliptok_State_final.dat")
