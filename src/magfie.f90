@@ -386,15 +386,16 @@ contains
 
         bder = bder/max(bmod, 1.0d-12)
 
-        hctrvr = matmul(ginv, hcovar)
+    hctrvr = matmul(ginv, hcovar)
 
-        if (sqrtg > 0.0_dp) then
-            hcurl(1) = (dh_dp(3) - dh_dt(3))/sqrtg
-            hcurl(2) = (dh_dp(1) - dh_ds(3))/sqrtg
-            hcurl(3) = (dh_ds(2) - dh_dt(1))/sqrtg
-        else
-            hcurl = 0.0_dp
-        end if
+    if (sqrtg > 0.0_dp) then
+      ! curl(h)^s = (∂_θ h_φ - ∂_φ h_θ) / sqrtg
+      hcurl(1) = (dh_dt(3) - dh_dp(2))/sqrtg
+      hcurl(2) = (dh_dp(1) - dh_ds(3))/sqrtg
+      hcurl(3) = (dh_ds(2) - dh_dt(1))/sqrtg
+    else
+      hcurl = 0.0_dp
+    end if
 
     end subroutine magfie_geoflux
 
