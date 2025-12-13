@@ -22,6 +22,7 @@ program test_geoflux_rk45_orbit_plot
     character(len=1024) :: config_file, start_pass_file, start_trap_file, geqdsk_file
     character(len=256) :: config_file_256
     character(len=1024) :: png_orbit_rz, png_s_t, png_theta_t, png_phi_t, png_bmod_t
+    character(len=1024) :: png_poincare_phi0
     character(len=1024) :: png_flux_rz, png_psi_rz, png_bmod_st
     character(len=1024) :: png_bmod_rz, png_br_rz, png_bphi_rz, png_bz_rz
     character(len=1024) :: traj_dat
@@ -122,6 +123,7 @@ program test_geoflux_rk45_orbit_plot
     png_theta_t = trim(out_orbit)//'/orbit_theta_t.png'
     png_phi_t = trim(out_orbit)//'/orbit_phi_t.png'
     png_bmod_t = trim(out_orbit)//'/orbit_Bmod_t.png'
+    png_poincare_phi0 = trim(out_orbit)//'/orbit_poincare_phi0.png'
     traj_dat = trim(out_orbit)//'/trajectory.dat'
 
     call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
@@ -129,6 +131,8 @@ program test_geoflux_rk45_orbit_plot
     call plt%add_plot(r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
     call plt%add_plot(r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
     call plt%savefig(trim(png_orbit_rz), pyfile=trim(out_orbit)//'/orbit_RZ.py')
+
+    call plot_poincare_phi0(plt, png_poincare_phi0, trim(out_orbit)//'/orbit_poincare_phi0.py')
 
     call write_trajectory_table(trim(out_orbit)//'/trajectory_passing.dat', time_traj(1:n_used(1)), s_traj(1:n_used(1), 1), &
         theta_traj(1:n_used(1), 1), phi_traj(1:n_used(1), 1), r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), bmod_traj(1:n_used(1), 1))
@@ -219,6 +223,7 @@ program test_geoflux_rk45_orbit_plot
 
     print *, 'ARTIFACT_DIR: ', trim(out_dir)
     print *, 'ARTIFACT: ', trim(png_orbit_rz)
+    print *, 'ARTIFACT: ', trim(png_poincare_phi0)
     print *, 'ARTIFACT: ', trim(png_s_t)
     print *, 'ARTIFACT: ', trim(png_theta_t)
     print *, 'ARTIFACT: ', trim(png_phi_t)
@@ -435,5 +440,55 @@ contains
             if (z_local(1) < 0.0_dp .or. z_local(1) > 1.0_dp) exit
         end do
     end subroutine integrate_orbit_from_start
+
+    subroutine plot_poincare_phi0(plt, png_path, py_path)
+        type(pyplot), intent(inout) :: plt
+        character(len=*), intent(in) :: png_path, py_path
+
+        integer, parameter :: max_points = 5000
+        real(dp), parameter :: tol = 2.0d-2
+        real(dp) :: phi_wrapped, phase
+        real(dp) :: r_pts_pass(max_points), z_pts_pass(max_points)
+        real(dp) :: r_pts_trap(max_points), z_pts_trap(max_points)
+        integer :: i, n_pass, n_trap
+
+        n_pass = 0
+        do i = 1, n_used(1)
+            phi_wrapped = modulo(phi_traj(i, 1), twopi)
+            phase = phi_wrapped
+            if (phase > 0.5_dp*twopi) phase = phase - twopi
+            if (abs(phase) < tol) then
+                if (n_pass < max_points) then
+                    n_pass = n_pass + 1
+                    r_pts_pass(n_pass) = r_traj(i, 1)
+                    z_pts_pass(n_pass) = z_traj(i, 1)
+                end if
+            end if
+        end do
+
+        n_trap = 0
+        do i = 1, n_used(2)
+            phi_wrapped = modulo(phi_traj(i, 2), twopi)
+            phase = phi_wrapped
+            if (phase > 0.5_dp*twopi) phase = phase - twopi
+            if (abs(phase) < tol) then
+                if (n_trap < max_points) then
+                    n_trap = n_trap + 1
+                    r_pts_trap(n_trap) = r_traj(i, 2)
+                    z_pts_trap(n_trap) = z_traj(i, 2)
+                end if
+            end if
+        end do
+
+        call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
+            title='Poincare section at phi≈0 (shows banana)', legend=.true., figsize=[10, 8])
+        if (n_pass > 0) then
+            call plt%add_plot(r_pts_pass(1:n_pass), z_pts_pass(1:n_pass), label='passing', linestyle='o', color=color_pass, markersize=2)
+        end if
+        if (n_trap > 0) then
+            call plt%add_plot(r_pts_trap(1:n_trap), z_pts_trap(1:n_trap), label='trapped', linestyle='o', color=color_trap, markersize=2)
+        end if
+        call plt%savefig(trim(png_path), pyfile=trim(py_path))
+    end subroutine plot_poincare_phi0
 
 end program test_geoflux_rk45_orbit_plot
