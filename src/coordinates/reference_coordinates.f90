@@ -1,29 +1,101 @@
 module reference_coordinates
 
-  use, intrinsic :: iso_fortran_env, only : dp => real64
-  use libneo_coordinates, only : coordinate_system_t, make_vmec_coordinate_system
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
+                                  make_geoflux_coordinate_system
 
-  implicit none
+    implicit none
 
-  class(coordinate_system_t), allocatable, public :: ref_coords
+    class(coordinate_system_t), allocatable, public :: ref_coords
 
 contains
 
-  subroutine init_reference_coordinates(coord_input)
-    character(*), intent(in) :: coord_input
+    subroutine init_reference_coordinates(coord_input)
+        character(*), intent(in) :: coord_input
 
-    if (len_trim(coord_input) == 0) then
-      print *, 'reference_coordinates.init_reference_coordinates: ', &
-          'coord_input must be set (see params.apply_config_aliases)'
-      error stop
-    end if
+        if (len_trim(coord_input) == 0) then
+            print *, 'reference_coordinates.init_reference_coordinates: ', &
+                'coord_input must be set (see params.apply_config_aliases)'
+            error stop
+        end if
 
-    if (allocated(ref_coords)) deallocate(ref_coords)
+        if (allocated(ref_coords)) deallocate (ref_coords)
 
-    ! For now we always use VMEC reference coordinates. The params module
-    ! is responsible for resolving coord_input versus legacy netcdffile
-    ! and field_input; here we only rely on the final coord_input value.
-    call make_vmec_coordinate_system(ref_coords)
-  end subroutine init_reference_coordinates
+        if (is_geqdsk_name(coord_input)) then
+            call make_geoflux_coordinate_system(ref_coords)
+        else
+            call make_vmec_coordinate_system(ref_coords)
+        end if
+    end subroutine init_reference_coordinates
+
+    logical function is_geqdsk_name(filename)
+        character(*), intent(in) :: filename
+
+        character(:), allocatable :: lower_name
+
+        lower_name = to_lower(trim(filename))
+
+        is_geqdsk_name = endswith(lower_name, '.geqdsk') .or. &
+            endswith(lower_name, '.eqdsk')
+        if (.not. is_geqdsk_name) then
+            is_geqdsk_name = startswith(strip_directory(lower_name), 'geqdsk')
+        end if
+    end function is_geqdsk_name
+
+    logical function startswith(text, start)
+        character(*), intent(in) :: text
+        character(*), intent(in) :: start
+        integer :: len_text, len_start
+
+        len_text = len_trim(text)
+        len_start = len_trim(start)
+
+        startswith = .false.
+        if (len_text >= len_start) then
+            startswith = (text(1:len_start) == start)
+        end if
+    end function startswith
+
+    logical function endswith(text, ending)
+        character(*), intent(in) :: text
+        character(*), intent(in) :: ending
+        integer :: len_text, len_end
+
+        len_text = len_trim(text)
+        len_end = len_trim(ending)
+
+        endswith = .false.
+        if (len_text >= len_end) then
+            endswith = (text(len_text - len_end + 1:len_text) == ending)
+        end if
+    end function endswith
+
+    function strip_directory(filename)
+        character(*), intent(in) :: filename
+        character(len(filename)) :: strip_directory
+        integer :: i
+
+        strip_directory = filename
+        do i = len(filename), 1, -1
+            if (filename(i:i) == '/') then
+                strip_directory = filename(i + 1:len(filename))
+                return
+            end if
+        end do
+    end function strip_directory
+
+    function to_lower(text) result(lower)
+        character(*), intent(in) :: text
+        character(len(text)) :: lower
+        integer :: i
+
+        lower = text
+        do i = 1, len(text)
+            select case (text(i:i))
+            case ('A':'Z')
+                lower(i:i) = achar(iachar(text(i:i)) + 32)
+            end select
+        end do
+    end function to_lower
 
 end module reference_coordinates

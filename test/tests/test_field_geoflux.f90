@@ -23,7 +23,7 @@ program test_field_geoflux
 
     select type(field_obj)
     type is (geoflux_field_t)
-        x = [sqrt(0.25_dp), 0.3_dp, 0.0_dp]
+        x = [0.25_dp, 0.3_dp, 0.0_dp]
         call field_obj%evaluate(x, Acov, hcov, Bmod)
 
         if (Bmod <= 0.0_dp) then
