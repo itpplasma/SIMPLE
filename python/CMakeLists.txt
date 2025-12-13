@@ -85,8 +85,10 @@ set(FILES_TO_WRAP
     magfie_wrapper.f90
 )
 
-# Add libneo files to wrap
-if(DEFINED ENV{CODE})
+# Add libneo files to wrap.
+# Prefer explicit CODE only when it is non-empty; otherwise use the resolved
+# libneo checkout from FetchContent (libneo_SOURCE_DIR).
+if(DEFINED ENV{CODE} AND NOT "$ENV{CODE}" STREQUAL "")
     set(LIBNEO_SOURCE_DIR $ENV{CODE}/libneo)
 else()
     set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})

@@ -11,6 +11,7 @@ set(SOURCES
     field/field_coils.f90
     field/field_vmec.f90
     field/field_splined.f90
+    field/field_geoflux.f90
     field/vmec_field_eval.f90
     field/field_newton.F90
     field.F90
@@ -68,6 +69,7 @@ endif()
 
 add_library (simple STATIC ${SOURCES})
 
+
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
 
@@ -88,6 +90,7 @@ target_link_libraries(simple PUBLIC
 
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
+    LIBNEO::magfie
 )
 
 # Conditionally link GVEC if enabled

@@ -4,6 +4,8 @@ module field
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t, create_vmec_field
+    use field_geoflux, only: geoflux_field_t, create_geoflux_field, &
+        initialize_geoflux_field
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
 #ifdef GVEC_AVAILABLE
@@ -26,13 +28,18 @@ contains
         type(coils_field_t) :: raw_coils
         type(splined_field_t), allocatable :: splined_coils
         type(vmec_field_t) :: vmec_field
+        type(geoflux_field_t) :: geoflux_field
 #ifdef GVEC_AVAILABLE
         class(gvec_field_t), allocatable :: gvec_temp
 #endif
 
         stripped_name = strip_directory(filename)
 
-        if (endswith(filename, '.nc')) then
+        if (is_geqdsk(filename)) then
+            call initialize_geoflux_field(trim(filename))
+            call create_geoflux_field(geoflux_field)
+            allocate(field, source=geoflux_field)
+        else if (endswith(filename, '.nc')) then
             call create_vmec_field(vmec_field)
             allocate(field, source=vmec_field)
         else if (startswidth(stripped_name, 'coils') .or. &
@@ -105,5 +112,34 @@ contains
             end if
         end do
     end function strip_directory
+
+
+    logical function is_geqdsk(filename)
+        character(*), intent(in) :: filename
+
+        character(:), allocatable :: lower_name
+
+        lower_name = to_lower(trim(filename))
+
+        is_geqdsk = endswith(lower_name, '.geqdsk') .or. endswith(lower_name, '.eqdsk')
+        if (.not. is_geqdsk) then
+            is_geqdsk = startswidth(strip_directory(lower_name), 'geqdsk')
+        end if
+    end function is_geqdsk
+
+
+    function to_lower(text) result(lower)
+        character(*), intent(in) :: text
+        character(len(text)) :: lower
+        integer :: i
+
+        lower = text
+        do i = 1, len(text)
+            select case (text(i:i))
+            case ('A':'Z')
+                lower(i:i) = achar(iachar(text(i:i)) + 32)
+            end select
+        end do
+    end function to_lower
 
 end module field

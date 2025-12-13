@@ -17,6 +17,18 @@ endif()
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 
+set(GEOFLUX_FILE "${TEST_DATA_DIR}/EQDSK_I.geqdsk")
+set(GEOFLUX_URL "https://crppwww.epfl.ch/~sauter/benchmark/EQDSK_I")
+
+if(NOT EXISTS "${GEOFLUX_FILE}")
+    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
+    message(STATUS "Downloading GEQDSK test file to ${GEOFLUX_FILE}...")
+    file(DOWNLOAD "${GEOFLUX_URL}" "${GEOFLUX_FILE}" TLS_VERIFY OFF)
+    message(STATUS "Downloaded GEQDSK test file")
+endif()
+
+file(CREATE_LINK "${GEOFLUX_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk" SYMBOLIC)
+
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools
 if(ENABLE_GVEC)
@@ -120,6 +132,54 @@ target_link_libraries(test_samplers.x simple)
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
+
+add_executable (test_field_geoflux.x test_field_geoflux.f90)
+target_link_libraries(test_field_geoflux.x simple)
+add_test(NAME test_field_geoflux COMMAND test_field_geoflux.x)
+set_tests_properties(test_field_geoflux PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable (test_field_vmec.x test_field_vmec.f90)
+target_link_libraries(test_field_vmec.x simple)
+add_test(NAME test_field_vmec COMMAND test_field_vmec.x)
+set_tests_properties(test_field_vmec PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable (test_magfie_geoflux.x test_magfie_geoflux.f90)
+target_link_libraries(test_magfie_geoflux.x simple)
+add_test(NAME test_magfie_geoflux COMMAND test_magfie_geoflux.x)
+set_tests_properties(test_magfie_geoflux PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable(test_geoflux_rk45_orbit_plot.x test_geoflux_rk45_orbit_plot.f90)
+target_link_libraries(test_geoflux_rk45_orbit_plot.x simple)
+add_test(NAME test_geoflux_rk45_orbit_plot COMMAND test_geoflux_rk45_orbit_plot.x)
+set_tests_properties(test_geoflux_rk45_orbit_plot PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "plot;geoflux;rk45"
+    ENVIRONMENT "LIBNEO_TEST_GEQDSK=${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk;SIMPLE_ARTIFACT_DIR=${CMAKE_BINARY_DIR}/artifacts"
+)
+
+add_executable(test_tokamak_testfield_rk45_orbit_plot.x test_tokamak_testfield_rk45_orbit_plot.f90)
+target_link_libraries(test_tokamak_testfield_rk45_orbit_plot.x simple)
+add_test(NAME test_tokamak_testfield_rk45_orbit_plot COMMAND test_tokamak_testfield_rk45_orbit_plot.x)
+set_tests_properties(test_tokamak_testfield_rk45_orbit_plot PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "plot;rk45;tokamak;testfield"
+    ENVIRONMENT "SIMPLE_ARTIFACT_DIR=${CMAKE_BINARY_DIR}/artifacts"
+)
+
+add_executable(test_geoflux_rk45_orbit_plot_chartmap_compare.x test_geoflux_rk45_orbit_plot_chartmap_compare.f90)
+target_link_libraries(test_geoflux_rk45_orbit_plot_chartmap_compare.x simple)
+add_test(NAME test_geoflux_rk45_orbit_plot_chartmap_compare COMMAND test_geoflux_rk45_orbit_plot_chartmap_compare.x)
+set_tests_properties(test_geoflux_rk45_orbit_plot_chartmap_compare PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "plot;rk45;geoflux;chartmap"
+    ENVIRONMENT "LIBNEO_TEST_GEQDSK=${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk;SIMPLE_ARTIFACT_DIR=${CMAKE_BINARY_DIR}/artifacts"
+)
 
 # Generate GVEC test data file for test_gvec using elliptic tokamak example
 set(GVEC_TEST_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../build/_deps/gvec-src/test-CI/examples/analytic_gs_elliptok/parameter.ini")
