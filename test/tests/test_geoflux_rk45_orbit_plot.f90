@@ -329,31 +329,31 @@ contains
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
             title='GEQDSK psi(R,Z) contours at phi=0 with orbit overlay', legend=.true., figsize=[10, 8])
-        call plt%add_contour(rgrid, zgrid, transpose(psi_map), linestyle='-', colorbar=.false.)
+        call plt%add_contour(rgrid, zgrid, psi_map, linestyle='-', colorbar=.false.)
         call plt%add_plot(r_lcfs, z_lcfs, label='LCFS approx', linestyle='-')
         call plt%add_plot(r_orbit, z_orbit, label='orbit', linestyle='-')
         call plt%savefig(trim(out_flux_dir)//'/psi_contours_RZ_phi0.png', pyfile=trim(out_flux_dir)//'/psi_contours_RZ_phi0.py')
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
             title='GEQDSK |B|(R,Z) at phi=0 with orbit overlay', legend=.true., figsize=[10, 8])
-        call plt%add_contour(rgrid, zgrid, transpose(bmod_map), linestyle='-', colorbar=.false.)
+        call plt%add_contour(rgrid, zgrid, bmod_map, linestyle='-', colorbar=.false.)
         call plt%add_plot(r_lcfs, z_lcfs, label='LCFS approx', linestyle='-')
         call plt%add_plot(r_orbit, z_orbit, label='orbit', linestyle='-')
         call plt%savefig(trim(out_field_dir)//'/Bmod_RZ_phi0.png', pyfile=trim(out_field_dir)//'/Bmod_RZ_phi0.py')
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
             title='GEQDSK Br(R,Z) at phi=0', legend=.false., figsize=[10, 8])
-        call plt%add_contour(rgrid, zgrid, transpose(br_map), linestyle='-', colorbar=.false.)
+        call plt%add_contour(rgrid, zgrid, br_map, linestyle='-', colorbar=.false.)
         call plt%savefig(trim(out_field_dir)//'/Br_RZ_phi0.png', pyfile=trim(out_field_dir)//'/Br_RZ_phi0.py')
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
             title='GEQDSK Bphi(R,Z) at phi=0', legend=.false., figsize=[10, 8])
-        call plt%add_contour(rgrid, zgrid, transpose(bphi_map), linestyle='-', colorbar=.false.)
+        call plt%add_contour(rgrid, zgrid, bphi_map, linestyle='-', colorbar=.false.)
         call plt%savefig(trim(out_field_dir)//'/Bphi_RZ_phi0.png', pyfile=trim(out_field_dir)//'/Bphi_RZ_phi0.py')
 
         call plt%initialize(grid=.true., xlabel='R (cm)', ylabel='Z (cm)', &
             title='GEQDSK Bz(R,Z) at phi=0', legend=.false., figsize=[10, 8])
-        call plt%add_contour(rgrid, zgrid, transpose(bz_map), linestyle='-', colorbar=.false.)
+        call plt%add_contour(rgrid, zgrid, bz_map, linestyle='-', colorbar=.false.)
         call plt%savefig(trim(out_field_dir)//'/Bz_RZ_phi0.png', pyfile=trim(out_field_dir)//'/Bz_RZ_phi0.py')
 
         deallocate(rgrid, zgrid, psi_map, bmod_map, br_map, bphi_map, bz_map)
