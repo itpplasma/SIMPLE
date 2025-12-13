@@ -76,14 +76,15 @@ program test_geoflux_rk45_orbit_plot
     start_trap_file = trim(out_dir)//'/start_trapped.dat'
 
     call write_config(trim(config_file), trim(geqdsk_file))
-    call write_start(trim(start_pass_file), 0.25_dp, 0.1_dp*twopi, 0.0_dp, 1.0_dp, 0.7_dp)
-    call write_start(trim(start_trap_file), 0.25_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp)
 
     config_file_256 = trim(config_file)
     call read_config(config_file_256)
     call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
     call params_init
     call init_magfie(isw_field_type)
+
+    call write_passing_start(trim(start_pass_file))
+    call write_trapped_start_at_bmax(trim(start_trap_file))
 
     orbit_label(1) = 'passing'
     orbit_label(2) = 'trapped'
@@ -259,6 +260,37 @@ contains
         write(unit, *) s0, th0, ph0, p0, lam0
         close(unit)
     end subroutine write_start
+
+    subroutine write_passing_start(path)
+        character(len=*), intent(in) :: path
+        call write_start(path, 0.25_dp, 0.1_dp*twopi, 0.0_dp, 1.0_dp, 0.7_dp)
+    end subroutine write_passing_start
+
+    subroutine write_trapped_start_at_bmax(path)
+        character(len=*), intent(in) :: path
+
+        integer, parameter :: ntheta_scan = 721
+        real(dp) :: s0, phi0
+        real(dp) :: theta_scan, bmod_val, bmod_best, theta_best
+        integer :: i
+        real(dp) :: acov_local(3), hcov_local(3), sqg_local(3)
+
+        s0 = 0.25_dp
+        phi0 = 0.0_dp
+
+        theta_best = 0.0_dp
+        bmod_best = -1.0_dp
+        do i = 1, ntheta_scan
+            theta_scan = (real(i - 1, dp) / real(ntheta_scan - 1, dp)) * twopi
+            call splint_geoflux_field(s0, theta_scan, phi0, acov_local, hcov_local, bmod_val, sqg_local)
+            if (bmod_val > bmod_best) then
+                bmod_best = bmod_val
+                theta_best = theta_scan
+            end if
+        end do
+
+        call write_start(path, s0, theta_best, phi0, 1.0_dp, 0.0_dp)
+    end subroutine write_trapped_start_at_bmax
 
     subroutine compute_ranges(s_arr, r_arr, z_arr, smin, smax, rmin, rmax, zmin, zmax)
         real(dp), intent(in) :: s_arr(:), r_arr(:), z_arr(:)
