@@ -356,7 +356,9 @@ contains
     !   field_input: explicit > netcdffile > ''
     !   coord_input: explicit > netcdffile > field_input > ''
 
-    ! netcdffile serves as fallback for both field_input and coord_input
+    ! netcdffile serves as fallback for both field_input and coord_input.
+    ! It also remains the equilibrium source used by init_vmec(). Do not overwrite it
+    ! when coord_input differs (e.g., chartmap coordinate files with GEQDSK fields).
     if (field_input == '' .and. len_trim(netcdffile) > 0) then
       field_input = netcdffile
     end if
@@ -370,9 +372,14 @@ contains
       coord_input = field_input
     end if
 
-    ! Sync coord_input back to netcdffile for libneo compatibility
-    if (len_trim(coord_input) > 0) then
-      netcdffile = coord_input
+    ! Backward-compatibility: if netcdffile is unset, fall back to field_input,
+    ! then coord_input.
+    if (len_trim(netcdffile) == 0) then
+      if (len_trim(field_input) > 0) then
+        netcdffile = field_input
+      else if (len_trim(coord_input) > 0) then
+        netcdffile = coord_input
+      end if
     end if
 
     ! isw_field_type is deprecated alias for integ_coords

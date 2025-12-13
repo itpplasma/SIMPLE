@@ -2,7 +2,7 @@ module reference_coordinates
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
-                                  make_geoflux_coordinate_system
+                                  make_geoflux_coordinate_system, make_chartmap_coordinate_system
 
     implicit none
 
@@ -21,12 +21,24 @@ contains
 
         if (allocated(ref_coords)) deallocate (ref_coords)
 
-        if (is_geqdsk_name(coord_input)) then
+        if (is_chartmap_name(coord_input)) then
+            call make_chartmap_coordinate_system(ref_coords, trim(coord_input))
+        else if (is_geqdsk_name(coord_input)) then
             call make_geoflux_coordinate_system(ref_coords)
         else
             call make_vmec_coordinate_system(ref_coords)
         end if
     end subroutine init_reference_coordinates
+
+    logical function is_chartmap_name(filename)
+        character(*), intent(in) :: filename
+
+        character(:), allocatable :: lower_name
+
+        lower_name = to_lower(trim(filename))
+
+        is_chartmap_name = index(strip_directory(lower_name), 'chartmap') > 0
+    end function is_chartmap_name
 
     logical function is_geqdsk_name(filename)
         character(*), intent(in) :: filename

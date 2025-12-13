@@ -8,6 +8,9 @@ module magfie_sub
     use field_geoflux, only: geoflux_ready
     use geoflux_coordinates, only: geoflux_to_cyl
     use geoflux_field, only: splint_geoflux_field
+    use reference_coordinates, only: ref_coords
+    use libneo_coordinates, only: chartmap_coordinate_system_t
+    use field_sub, only: field_eq, psif
 
     implicit none
 
@@ -51,6 +54,19 @@ contains
         case (CANFLUX)
             magfie => magfie_can
         case (VMEC)
+            if (allocated(ref_coords)) then
+                select type (ref_coords)
+                type is (chartmap_coordinate_system_t)
+                    if (.not. geoflux_ready) then
+                        error stop 'init_magfie: chartmap coordinates require GEQDSK/geoflux field'
+                    end if
+                    magfie => magfie_chartmap
+                    return
+                class default
+                    continue
+                end select
+            end if
+
             if (geoflux_ready) then
                 magfie => magfie_geoflux
             else
@@ -498,6 +514,153 @@ contains
     end if
 
     end subroutine magfie_geoflux
+
+    subroutine magfie_chartmap(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, sqrtg
+        real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        real(dp) :: u(3)
+        real(dp) :: g(3, 3), ginv(3, 3), sqrtg_local
+        real(dp) :: xyz(3), e_cov(3, 3)
+        real(dp) :: xcyl(3)
+        real(dp) :: Br, Bphi, Bz
+        real(dp) :: d1, d2, d3, d4, d5, d6, d7, d8, d9
+        real(dp) :: bvec(3)
+        real(dp) :: ds_fwd, ds_bwd, ds_den
+        real(dp) :: dt_step, dp_step
+        real(dp) :: bmod_plus, bmod_minus
+        real(dp) :: bmod_theta_plus, bmod_theta_minus
+        real(dp) :: bmod_phi_plus, bmod_phi_minus
+        real(dp) :: hcov_plus(3), hcov_minus(3)
+        real(dp) :: hcov_theta_plus(3), hcov_theta_minus(3)
+        real(dp) :: hcov_phi_plus(3), hcov_phi_minus(3)
+        real(dp) :: dh_ds(3), dh_dt(3), dh_dp(3)
+        real(dp) :: u_plus(3), u_minus(3)
+
+        u(1) = max(0.0_dp, min(1.0_dp, x(1)))
+        u(2) = modulo(x(2), twopi)
+        u(3) = modulo(x(3), twopi)
+
+        call ref_coords%evaluate_point(u, xyz)
+        call ref_coords%covariant_basis(u, e_cov)
+        call ref_coords%metric_tensor(u, g, ginv, sqrtg_local)
+        sqrtg = max(sqrtg_local, 1.0d-12)
+
+        call cart_to_cyl(xyz, xcyl)
+        call field_eq(xcyl(1), xcyl(2), xcyl(3), Br, Bphi, Bz, d1, d2, d3, d4, d5, d6, d7, d8, d9)
+
+        bmod = sqrt(Br*Br + Bphi*Bphi + Bz*Bz)
+        bmod = max(bmod, 1.0d-14)
+
+        call cylB_to_cartB(xcyl(2), Br, Bphi, Bz, bvec)
+
+        hcovar(1) = dot_product(bvec, e_cov(:, 1))/bmod
+        hcovar(2) = dot_product(bvec, e_cov(:, 2))/bmod
+        hcovar(3) = dot_product(bvec, e_cov(:, 3))/bmod
+
+        hctrvr = matmul(ginv, hcovar)
+
+        ds_fwd = min(1.0d-3, 1.0_dp - u(1))
+        ds_bwd = min(1.0d-3, u(1))
+        dt_step = 1.0d-3*twopi
+        dp_step = dt_step
+
+        u_plus = u
+        u_minus = u
+        u_plus(1) = u(1) + ds_fwd
+        u_minus(1) = u(1) - ds_bwd
+        call chartmap_eval_basic(u_plus, bmod_plus, hcov_plus)
+        call chartmap_eval_basic(u_minus, bmod_minus, hcov_minus)
+
+        ds_den = ds_fwd + ds_bwd
+        if (ds_den > 1.0d-12) then
+            bder(1) = (bmod_plus - bmod_minus)/ds_den
+            dh_ds = (hcov_plus - hcov_minus)/ds_den
+        else
+            bder(1) = 0.0_dp
+            dh_ds = 0.0_dp
+        end if
+
+        u_plus = u
+        u_minus = u
+        u_plus(2) = modulo(u(2) + dt_step, twopi)
+        u_minus(2) = modulo(u(2) - dt_step, twopi)
+        call chartmap_eval_basic(u_plus, bmod_theta_plus, hcov_theta_plus)
+        call chartmap_eval_basic(u_minus, bmod_theta_minus, hcov_theta_minus)
+        bder(2) = (bmod_theta_plus - bmod_theta_minus)/(2.0_dp*dt_step)
+        dh_dt = (hcov_theta_plus - hcov_theta_minus)/(2.0_dp*dt_step)
+
+        u_plus = u
+        u_minus = u
+        u_plus(3) = modulo(u(3) + dp_step, twopi)
+        u_minus(3) = modulo(u(3) - dp_step, twopi)
+        call chartmap_eval_basic(u_plus, bmod_phi_plus, hcov_phi_plus)
+        call chartmap_eval_basic(u_minus, bmod_phi_minus, hcov_phi_minus)
+        bder(3) = (bmod_phi_plus - bmod_phi_minus)/(2.0_dp*dp_step)
+        dh_dp = (hcov_phi_plus - hcov_phi_minus)/(2.0_dp*dp_step)
+
+        bder = bder/bmod
+
+        if (sqrtg > 0.0_dp) then
+            hcurl(1) = (dh_dt(3) - dh_dp(2))/sqrtg
+            hcurl(2) = (dh_dp(1) - dh_ds(3))/sqrtg
+            hcurl(3) = (dh_ds(2) - dh_dt(1))/sqrtg
+        else
+            hcurl = 0.0_dp
+        end if
+    end subroutine magfie_chartmap
+
+    subroutine chartmap_eval_basic(u, bmod, hcov)
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: bmod
+        real(dp), intent(out) :: hcov(3)
+
+        real(dp) :: xyz(3), e_cov(3, 3)
+        real(dp) :: xcyl(3)
+        real(dp) :: Br, Bphi, Bz
+        real(dp) :: d1, d2, d3, d4, d5, d6, d7, d8, d9
+        real(dp) :: bvec(3)
+        real(dp) :: uu(3)
+
+        uu(1) = max(0.0_dp, min(1.0_dp, u(1)))
+        uu(2) = modulo(u(2), twopi)
+        uu(3) = modulo(u(3), twopi)
+
+        call ref_coords%evaluate_point(uu, xyz)
+        call ref_coords%covariant_basis(uu, e_cov)
+        call cart_to_cyl(xyz, xcyl)
+        call field_eq(xcyl(1), xcyl(2), xcyl(3), Br, Bphi, Bz, d1, d2, d3, d4, d5, d6, d7, d8, d9)
+
+        bmod = sqrt(Br*Br + Bphi*Bphi + Bz*Bz)
+        bmod = max(bmod, 1.0d-14)
+
+        call cylB_to_cartB(xcyl(2), Br, Bphi, Bz, bvec)
+        hcov(1) = dot_product(bvec, e_cov(:, 1))/bmod
+        hcov(2) = dot_product(bvec, e_cov(:, 2))/bmod
+        hcov(3) = dot_product(bvec, e_cov(:, 3))/bmod
+    end subroutine chartmap_eval_basic
+
+    subroutine cart_to_cyl(xyz, xcyl)
+        real(dp), intent(in) :: xyz(3)
+        real(dp), intent(out) :: xcyl(3)
+
+        xcyl(1) = sqrt(xyz(1)*xyz(1) + xyz(2)*xyz(2))
+        xcyl(2) = atan2(xyz(2), xyz(1))
+        xcyl(3) = xyz(3)
+    end subroutine cart_to_cyl
+
+    subroutine cylB_to_cartB(phi, Br, Bphi, Bz, bvec)
+        real(dp), intent(in) :: phi, Br, Bphi, Bz
+        real(dp), intent(out) :: bvec(3)
+        real(dp) :: cph, sph
+
+        cph = cos(phi)
+        sph = sin(phi)
+        bvec(1) = Br*cph - Bphi*sph
+        bvec(2) = Br*sph + Bphi*cph
+        bvec(3) = Bz
+    end subroutine cylB_to_cartB
 
     subroutine geoflux_eval_point(s, theta, phi, bmod, hcov, sqrtg, basis, g, ginv, &
                                   detg, sqrtg_geom)

@@ -172,6 +172,15 @@ set_tests_properties(test_tokamak_testfield_rk45_orbit_plot PROPERTIES
     ENVIRONMENT "SIMPLE_ARTIFACT_DIR=${CMAKE_BINARY_DIR}/artifacts"
 )
 
+add_executable(test_geoflux_rk45_orbit_plot_chartmap_compare.x test_geoflux_rk45_orbit_plot_chartmap_compare.f90)
+target_link_libraries(test_geoflux_rk45_orbit_plot_chartmap_compare.x simple)
+add_test(NAME test_geoflux_rk45_orbit_plot_chartmap_compare COMMAND test_geoflux_rk45_orbit_plot_chartmap_compare.x)
+set_tests_properties(test_geoflux_rk45_orbit_plot_chartmap_compare PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    LABELS "plot;rk45;geoflux;chartmap"
+    ENVIRONMENT "LIBNEO_TEST_GEQDSK=${CMAKE_CURRENT_BINARY_DIR}/EQDSK_I.geqdsk;SIMPLE_ARTIFACT_DIR=${CMAKE_BINARY_DIR}/artifacts"
+)
+
 # Generate GVEC test data file for test_gvec using elliptic tokamak example
 set(GVEC_TEST_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../build/_deps/gvec-src/test-CI/examples/analytic_gs_elliptok/parameter.ini")
 set(GVEC_TEST_STATE "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test_data/GVEC_elliptok_State_final.dat")
