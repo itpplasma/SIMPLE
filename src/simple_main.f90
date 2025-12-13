@@ -327,16 +327,17 @@ module simple_main
     !> TEST field uses (r, theta, phi) coordinates with B0=1, R0=1, a=0.5, iota=1.
     !> bmod = B0 * (1 - r/R0 * cos(theta))
     use util, only : twopi
-    use params, only : ntestpart, sbeg, bmod00, bmin, bmax, zstart, &
+    use params, only : ntestpart, sbeg, bmod00, bmin, bmax, zstart, integmode, &
       reset_seed_if_deterministic
 
     real(dp), parameter :: B0 = 1.0d0, R0 = 1.0d0, a = 0.5d0
-    real(dp) :: r_start, tmp_rand
+    real(dp) :: r_start, s_start, tmp_rand
     integer :: ipart
 
-    ! Use sbeg(1) as the starting minor radius (mapped to r for tokamak)
-    ! sbeg(1) is input as a flux-like value; for TEST field, interpret as r/a
+    ! Use sbeg(1) as the starting minor radius (mapped to r for tokamak).
+    ! sbeg(1) is input as a flux-like value; for TEST field, interpret as r/a.
     r_start = sbeg(1) * a
+    s_start = (r_start/a)**2
 
     ! Set magnetic field bounds for this r value
     ! bmod = B0*(1 - r/R0*cos(theta))
@@ -352,7 +353,12 @@ module simple_main
 
     ! Sample particles uniformly in (theta, phi) at fixed r
     do ipart = 1, ntestpart
-      zstart(1, ipart) = r_start
+      if (integmode == 0) then
+        ! RK45 uses the non-canonical magfie interface which expects x(1)=s.
+        zstart(1, ipart) = s_start
+      else
+        zstart(1, ipart) = r_start
+      end if
       call random_number(tmp_rand)
       zstart(2, ipart) = twopi * tmp_rand
       call random_number(tmp_rand)

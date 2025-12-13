@@ -72,59 +72,159 @@ contains
 
     subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
         !> Magnetic field for analytic circular tokamak (TEST field).
-       !> Coordinates: x(1)=r (minor radius), x(2)=theta (poloidal), x(3)=phi (toroidal)
-        !> Uses same geometry as field_can_test: B0=1, R0=1, a=0.5, iota=1
         !>
-        !> WARNING: hcurl is set to zero (curvature drift not computed).
-        !> This is acceptable for symplectic integration (integmode > 0) which uses
-        !> field_can_test instead. For RK45 integration (integmode=0), curvature
-        !> drift would be missing - use symplectic integration with TEST field.
+        !> Coordinates: x(1)=s (flux-like), x(2)=theta (poloidal), x(3)=phi (toroidal).
+        !> Mapping to minor radius: r = a*sqrt(s), with B0=1, R0=1, a=0.5, iota=1.
+        !>
+        !> This routine provides the full magfie interface (including hcurl) so that
+        !> RK45 guiding-center integration has a consistent test field baseline.
         implicit none
 
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
         real(dp), parameter :: B0 = 1.0_dp, R0 = 1.0_dp, a = 0.5_dp, iota0 = 1.0_dp
-        real(dp) :: r, theta, cth, sth, R_cyl, dBmod_dr, dBmod_dth
+        real(dp), parameter :: hs = 1.0d-4, ht = 1.0d-3*twopi
+        real(dp) :: s, theta, phi, r, cth, sth, R_cyl
+        real(dp) :: Ath, Aph, dAth_dr, dAph_dr
+        real(dp) :: ds_fwd, ds_bwd, ds_den
+        real(dp) :: bmod_plus, bmod_minus, bmod_tplus, bmod_tminus
+        real(dp) :: hcov_plus(3), hcov_minus(3)
+        real(dp) :: hcov_tplus(3), hcov_tminus(3)
+        real(dp) :: dh_ds(3), dh_dt(3)
+        real(dp) :: gss, gtt, gpp
+        real(dp) :: Bsup_theta, Bsup_phi
+        real(dp) :: Bcov_theta, Bcov_phi
+        real(dp) :: sqrtg_geom
 
-        r = x(1)
+        s = max(0.0_dp, min(1.0_dp, x(1)))
         theta = x(2)
+        phi = x(3)
         cth = cos(theta)
         sth = sin(theta)
 
-        ! Major radius at this point
+        r = a*sqrt(s)
         R_cyl = R0 + r*cth
 
-        ! Magnetic field magnitude: B = B0 * (1 - r/R0 * cos(theta))
-        bmod = B0*(1.0_dp - r/R0*cth)
+        ! Covariant vector potential (Ath, Aph) from field_can_test.
+        Ath = B0*(r**2/2.0_dp - r**3/(3.0_dp*R0)*cth)
+        Aph = -B0*iota0*(r**2/2.0_dp - r**4/(4.0_dp*a**2))
 
-        ! Jacobian sqrt(g) = r * R for circular tokamak
-        sqrtg = r*R_cyl
+        ! Derivatives w.r.t r
+        dAth_dr = B0*(r - r**2/R0*cth)
+        dAph_dr = -B0*iota0*(r - r**3/a**2)
 
-        ! Derivatives of log(B)
-        dBmod_dr = -B0/R0*cth
-        dBmod_dth = B0*r/R0*sth
-        bder(1) = dBmod_dr/bmod
-        bder(2) = dBmod_dth/bmod
+        ! Jacobian for (s,theta,phi) with r=a*sqrt(s):
+        ! dV = (a^2/2) * R(s,theta) ds dtheta dphi.
+        sqrtg_geom = 0.5_dp*a*a*R_cyl
+        sqrtg = max(sqrtg_geom, 1.0d-14)
+
+        ! Contravariant components of B = curl(A) in (s,theta,phi):
+        ! B^s = (∂_θ A_φ - ∂_φ A_θ)/sqrtg = 0 for axisym + Aph(r).
+        ! B^θ = -(∂_s A_φ)/sqrtg, B^φ = (∂_s A_θ)/sqrtg.
+        if (s > 0.0_dp) then
+            Bsup_theta = -(dAph_dr * (a/(2.0_dp*sqrt(s)))) / sqrtg
+            Bsup_phi = (dAth_dr * (a/(2.0_dp*sqrt(s)))) / sqrtg
+        else
+            Bsup_theta = (B0*iota0)/max(R_cyl, 1.0d-12)
+            Bsup_phi = B0/max(R_cyl, 1.0d-12)
+        end if
+
+        gss = (a*a)/(4.0_dp*max(s, 1.0d-14))
+        gtt = r*r
+        gpp = R_cyl*R_cyl
+
+        Bcov_theta = gtt*Bsup_theta
+        Bcov_phi = gpp*Bsup_phi
+
+        bmod = sqrt((Bsup_theta*Bcov_theta) + (Bsup_phi*Bcov_phi))
+        bmod = max(bmod, 1.0d-14)
+
+        hcovar = 0.0_dp
+        hcovar(2) = Bcov_theta/bmod
+        hcovar(3) = Bcov_phi/bmod
+
+        hctrvr = 0.0_dp
+        hctrvr(2) = Bsup_theta/bmod
+        hctrvr(3) = Bsup_phi/bmod
+
+        ! Finite-difference derivatives for bder = ∂ ln(B)/∂x^i, and curl(h)^i.
+        ds_fwd = min(hs, 1.0_dp - s)
+        ds_bwd = min(hs, s)
+        ds_den = ds_fwd + ds_bwd
+
+        call magfie_test_eval_basic(s + ds_fwd, theta, phi, bmod_plus, hcov_plus)
+        call magfie_test_eval_basic(s - ds_bwd, theta, phi, bmod_minus, hcov_minus)
+
+        if (ds_den > 1.0d-16) then
+            bder(1) = (bmod_plus - bmod_minus)/ds_den
+            dh_ds = (hcov_plus - hcov_minus)/ds_den
+        else
+            bder(1) = 0.0_dp
+            dh_ds = 0.0_dp
+        end if
+
+        call magfie_test_eval_basic(s, theta + ht, phi, bmod_tplus, hcov_tplus)
+        call magfie_test_eval_basic(s, theta - ht, phi, bmod_tminus, hcov_tminus)
+        bder(2) = (bmod_tplus - bmod_tminus)/(2.0_dp*ht)
+        dh_dt = (hcov_tplus - hcov_tminus)/(2.0_dp*ht)
+
         bder(3) = 0.0_dp
 
-        ! Covariant components of unit vector h = B/|B|
-        ! In (r, theta, phi) coordinates for circular tokamak with iota=1
-        hcovar(1) = 0.0_dp
-        hcovar(2) = iota0*(1.0_dp - r**2/a**2)*r**2/R0/bmod
-        hcovar(3) = R_cyl/bmod
+        bder = bder/bmod
 
-        ! Contravariant components
-        hctrvr(1) = 0.0_dp
-        hctrvr(2) = B0*iota0/(r*R_cyl*bmod)
-        hctrvr(3) = B0/(r*R_cyl*bmod)
-
-        ! Curl of h (simplified - not fully computed for TEST field)
-        hcurl(1) = 0.0_dp
-        hcurl(2) = 0.0_dp
-        hcurl(3) = 0.0_dp
+        ! curl(h)^s = (∂_θ h_φ - ∂_φ h_θ)/sqrtg, axisymmetric -> ∂_φ = 0.
+        hcurl = 0.0_dp
+        hcurl(1) = dh_dt(3)/sqrtg
+        hcurl(2) = -dh_ds(3)/sqrtg
+        hcurl(3) = dh_ds(2)/sqrtg
 
     end subroutine magfie_test
+
+    subroutine magfie_test_eval_basic(s, theta, phi, bmod, hcov)
+        real(dp), intent(in) :: s, theta, phi
+        real(dp), intent(out) :: bmod, hcov(3)
+
+        real(dp), parameter :: B0 = 1.0_dp, R0 = 1.0_dp, a = 0.5_dp, iota0 = 1.0_dp
+        real(dp) :: s_clip, r, R_cyl, cth
+        real(dp) :: Ath, Aph, dAth_dr, dAph_dr
+        real(dp) :: sqrtg, gss, gtt, gpp
+        real(dp) :: Bsup_theta, Bsup_phi, Bcov_theta, Bcov_phi
+
+        s_clip = max(0.0_dp, min(1.0_dp, s))
+        r = a*sqrt(s_clip)
+        cth = cos(theta)
+        R_cyl = R0 + r*cth
+
+        Ath = B0*(r**2/2.0_dp - r**3/(3.0_dp*R0)*cth)
+        Aph = -B0*iota0*(r**2/2.0_dp - r**4/(4.0_dp*a**2))
+        dAth_dr = B0*(r - r**2/R0*cth)
+        dAph_dr = -B0*iota0*(r - r**3/a**2)
+
+        sqrtg = max(0.5_dp*a*a*R_cyl, 1.0d-14)
+
+        if (s_clip > 0.0_dp) then
+            Bsup_theta = -(dAph_dr * (a/(2.0_dp*sqrt(s_clip)))) / sqrtg
+            Bsup_phi = (dAth_dr * (a/(2.0_dp*sqrt(s_clip)))) / sqrtg
+        else
+            Bsup_theta = (B0*iota0)/max(R_cyl, 1.0d-12)
+            Bsup_phi = B0/max(R_cyl, 1.0d-12)
+        end if
+
+        gss = (a*a)/(4.0_dp*max(s_clip, 1.0d-14))
+        gtt = r*r
+        gpp = R_cyl*R_cyl
+
+        Bcov_theta = gtt*Bsup_theta
+        Bcov_phi = gpp*Bsup_phi
+
+        bmod = sqrt((Bsup_theta*Bcov_theta) + (Bsup_phi*Bcov_phi))
+        bmod = max(bmod, 1.0d-14)
+
+        hcov = 0.0_dp
+        hcov(2) = Bcov_theta/bmod
+        hcov(3) = Bcov_phi/bmod
+    end subroutine magfie_test_eval_basic
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
     !
