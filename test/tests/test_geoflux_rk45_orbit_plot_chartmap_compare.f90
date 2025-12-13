@@ -24,8 +24,7 @@ program test_geoflux_rk45_orbit_plot_chartmap_compare
     character(len=1024) :: cfg_geoflux, cfg_chartmap
     character(len=1024) :: start_pass, start_trap
     character(len=1024) :: geqdsk_file, chartmap_file, chartmap_env
-    character(len=256) :: cfg256
-    integer :: status, mkdir_stat
+    integer :: status
 
     integer, parameter :: norbits = 2
     integer, parameter :: ntheta_plot = 361
@@ -82,7 +81,7 @@ program test_geoflux_rk45_orbit_plot_chartmap_compare
     call write_config_geoflux(cfg_geoflux, geqdsk_file)
     call write_config_chartmap(cfg_chartmap, geqdsk_file, chartmap_file)
 
-    call init_case(cfg_geoflux, 'geoflux')
+    call load_case(cfg_geoflux)
     if (.not. (status == 0 .and. len_trim(chartmap_env) > 0)) then
         call write_chartmap_from_geoflux(trim(chartmap_file), 65, 129, 65)
     end if
@@ -98,30 +97,29 @@ program test_geoflux_rk45_orbit_plot_chartmap_compare
     allocate(s_cm(nmax, norbits), th_cm(nmax, norbits), ph_cm(nmax, norbits))
     allocate(R_cm(nmax, norbits), Z_cm(nmax, norbits), B_cm(nmax, norbits))
 
-    call integrate_orbit(cfg_geoflux, start_pass, 1, n_used_geo, s_geo, th_geo, ph_geo, R_geo, Z_geo, B_geo)
-    call integrate_orbit(cfg_geoflux, start_trap, 2, n_used_geo, s_geo, th_geo, ph_geo, R_geo, Z_geo, B_geo)
+    call integrate_orbit_from_start(start_pass, 1, n_used_geo, s_geo, th_geo, ph_geo, R_geo, Z_geo, B_geo)
+    call integrate_orbit_from_start(start_trap, 2, n_used_geo, s_geo, th_geo, ph_geo, R_geo, Z_geo, B_geo)
 
-    call integrate_orbit(cfg_chartmap, start_pass, 1, n_used_cm, s_cm, th_cm, ph_cm, R_cm, Z_cm, B_cm)
-    call integrate_orbit(cfg_chartmap, start_trap, 2, n_used_cm, s_cm, th_cm, ph_cm, R_cm, Z_cm, B_cm)
+    color_geo = [0.0_dp, 0.0_dp, 1.0_dp]
+    color_cm = [1.0_dp, 0.0_dp, 0.0_dp]
+
+    call build_theta_surf_grids(theta_grid, surf_s)
+    call build_flux_surfaces(theta_grid, surf_s, R_surf_geo, Z_surf_geo)
+    call plot_case(out_geoflux, 'geoflux reference', time_traj, n_used_geo, R_geo, Z_geo, s_geo, th_geo, ph_geo, B_geo, &
+        R_surf_geo, Z_surf_geo, theta_grid, surf_s)
+
+    call load_case(cfg_chartmap)
+    call integrate_orbit_from_start(start_pass, 1, n_used_cm, s_cm, th_cm, ph_cm, R_cm, Z_cm, B_cm)
+    call integrate_orbit_from_start(start_trap, 2, n_used_cm, s_cm, th_cm, ph_cm, R_cm, Z_cm, B_cm)
+    call build_flux_surfaces(theta_grid, surf_s, R_surf_cm, Z_surf_cm)
+    call plot_case(out_chartmap, 'chartmap reference', time_traj, n_used_cm, R_cm, Z_cm, s_cm, th_cm, ph_cm, B_cm, &
+        R_surf_cm, Z_surf_cm, theta_grid, surf_s)
 
     do iorb = 1, norbits
         if (min(n_used_geo(iorb), n_used_cm(iorb)) < 50) then
             error stop 'test_geoflux_rk45_orbit_plot_chartmap_compare: orbit produced too few points'
         end if
     end do
-
-    color_geo = [0.0_dp, 0.0_dp, 1.0_dp]
-    color_cm = [1.0_dp, 0.0_dp, 0.0_dp]
-
-    call build_theta_surf_grids(theta_grid, surf_s)
-    call build_flux_surfaces(cfg_geoflux, theta_grid, surf_s, R_surf_geo, Z_surf_geo)
-    call build_flux_surfaces(cfg_chartmap, theta_grid, surf_s, R_surf_cm, Z_surf_cm)
-
-    call plot_case(out_geoflux, 'geoflux reference', time_traj, n_used_geo, R_geo, Z_geo, s_geo, th_geo, ph_geo, B_geo, &
-        R_surf_geo, Z_surf_geo, theta_grid, surf_s)
-
-    call plot_case(out_chartmap, 'chartmap reference', time_traj, n_used_cm, R_cm, Z_cm, s_cm, th_cm, ph_cm, B_cm, &
-        R_surf_cm, Z_surf_cm, theta_grid, surf_s)
 
     call plot_compare(out_compare, time_traj, n_used_geo, n_used_cm, R_geo, Z_geo, R_cm, Z_cm, color_geo, color_cm)
 
@@ -194,9 +192,8 @@ contains
         close(unit)
     end subroutine write_config_chartmap
 
-    subroutine init_case(config_path, label)
+    subroutine load_case(config_path)
         character(len=*), intent(in) :: config_path
-        character(len=*), intent(in) :: label
         character(len=256) :: cfg_local
 
         cfg_local = trim(config_path)
@@ -204,14 +201,10 @@ contains
         call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
         call params_init
         call init_magfie(VMEC)
+    end subroutine load_case
 
-        if (label == '') then
-            continue
-        end if
-    end subroutine init_case
-
-    subroutine integrate_orbit(cfg_path, start_path, orbit_index, n_used, s_arr, th_arr, ph_arr, R_arr, Z_arr, B_arr)
-        character(len=*), intent(in) :: cfg_path, start_path
+    subroutine integrate_orbit_from_start(start_path, orbit_index, n_used, s_arr, th_arr, ph_arr, R_arr, Z_arr, B_arr)
+        character(len=*), intent(in) :: start_path
         integer, intent(in) :: orbit_index
         integer, intent(inout) :: n_used(norbits)
         real(dp), intent(inout) :: s_arr(:, :), th_arr(:, :), ph_arr(:, :)
@@ -222,13 +215,6 @@ contains
         real(dp) :: xyz(3), xcyl(3)
         real(dp) :: bmod_local, sqrtg_local
         real(dp) :: bder(3), hcov(3), hctrvr(3), hcurl(3)
-        character(len=256) :: cfg_local
-
-        cfg_local = trim(cfg_path)
-        call read_config(cfg_local)
-        call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-        call params_init
-        call init_magfie(VMEC)
 
         call load_starting_points(zstart, trim(start_path))
         z_local = zstart(:, 1)
@@ -253,7 +239,7 @@ contains
             if (ierr_local /= 0) exit
             if (z_local(1) < 0.0_dp .or. z_local(1) > 1.0_dp) exit
         end do
-    end subroutine integrate_orbit
+    end subroutine integrate_orbit_from_start
 
     subroutine cart_to_cyl(xyz, xcyl)
         real(dp), intent(in) :: xyz(3)
@@ -275,8 +261,7 @@ contains
         svals = [0.10_dp, 0.25_dp, 0.40_dp, 0.60_dp, 0.80_dp, 0.95_dp]
     end subroutine build_theta_surf_grids
 
-    subroutine build_flux_surfaces(cfg_path, theta, svals, R_surf, Z_surf)
-        character(len=*), intent(in) :: cfg_path
+    subroutine build_flux_surfaces(theta, svals, R_surf, Z_surf)
         real(dp), intent(in) :: theta(ntheta_plot)
         real(dp), intent(in) :: svals(nsurf_plot)
         real(dp), intent(out) :: R_surf(ntheta_plot, nsurf_plot)
@@ -284,13 +269,6 @@ contains
 
         integer :: isurf, it
         real(dp) :: xyz(3), xcyl(3)
-        character(len=256) :: cfg_local
-
-        cfg_local = trim(cfg_path)
-        call read_config(cfg_local)
-        call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-        call params_init
-        call init_magfie(VMEC)
 
         do isurf = 1, nsurf_plot
             do it = 1, ntheta_plot

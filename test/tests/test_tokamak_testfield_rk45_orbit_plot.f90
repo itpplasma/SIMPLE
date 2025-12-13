@@ -23,15 +23,22 @@ program test_tokamak_testfield_rk45_orbit_plot
     integer :: status, mkdir_stat
 
     integer, parameter :: norbits = 2
+    integer, parameter :: nsurf_plot = 6
+    integer, parameter :: ntheta_plot = 361
     integer :: nmax, i, iorb, ierr
     integer :: n_used(norbits)
     character(len=16) :: orbit_label(norbits)
     real(dp) :: color_pass(3), color_trap(3)
+    real(dp) :: color_surf(3)
 
     real(dp), allocatable :: time_traj(:)
     real(dp), allocatable :: s_traj(:, :), theta_traj(:, :), phi_traj(:, :)
     real(dp), allocatable :: r_traj(:, :), z_traj(:, :), bmod_traj(:, :)
     real(dp), allocatable :: p_traj(:, :), lam_traj(:, :), mu_traj(:, :)
+    real(dp) :: surf_s(nsurf_plot)
+    real(dp) :: theta_grid(ntheta_plot)
+    real(dp) :: r_surf(ntheta_plot, nsurf_plot), z_surf(ntheta_plot, nsurf_plot)
+    real(dp) :: bmod_st(nsurf_plot, ntheta_plot)
 
     out_root = ''
     call get_environment_variable('SIMPLE_ARTIFACT_DIR', value=out_root, status=status)
@@ -69,6 +76,7 @@ program test_tokamak_testfield_rk45_orbit_plot
     orbit_label(2) = 'trapped'
     color_pass = [0.0_dp, 0.0_dp, 1.0_dp]
     color_trap = [1.0_dp, 0.0_dp, 0.0_dp]
+    color_surf = [0.7_dp, 0.7_dp, 0.7_dp]
 
     nmax = ntimstep
     allocate(time_traj(nmax))
@@ -88,6 +96,8 @@ program test_tokamak_testfield_rk45_orbit_plot
             error stop 'test_tokamak_testfield_rk45_orbit_plot: orbit produced too few points'
         end if
     end do
+
+    call compute_flux_surface_data()
 
     call plot_orbit_and_diagnostics()
     call plot_flux_surfaces_and_fields()
@@ -263,10 +273,14 @@ contains
     subroutine plot_orbit_and_diagnostics()
         character(len=1024) :: png_orbit_rz
         character(len=1024) :: png_poincare_phi0
+        integer :: isurf
 
         png_orbit_rz = trim(out_orbit)//'/orbit_RZ.png'
         call plt%initialize(grid=.true., xlabel='R', ylabel='Z', &
             title='TEST tokamak RK45 orbit projection (R,Z)', legend=.true., figsize=[10, 8])
+        do isurf = 1, nsurf_plot
+            call plt%add_plot(r_surf(:, isurf), z_surf(:, isurf), label='', linestyle='-', color=color_surf)
+        end do
         call plt%add_plot(r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
         call plt%add_plot(r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
         call plt%savefig(trim(png_orbit_rz), pyfile=trim(out_orbit)//'/orbit_RZ.py')
@@ -317,19 +331,9 @@ contains
         call plt%savefig(trim(out_orbit)//'/orbit_mu_t.png', pyfile=trim(out_orbit)//'/orbit_mu_t.py')
     end subroutine plot_orbit_and_diagnostics
 
-    subroutine plot_flux_surfaces_and_fields()
-        integer, parameter :: nsurf_plot = 6, ntheta_plot = 361
-        integer, parameter :: nr = 240, nz = 240
-        real(dp) :: surf_s(nsurf_plot), theta_grid(ntheta_plot)
-        real(dp) :: r_surf(ntheta_plot, nsurf_plot), z_surf(ntheta_plot, nsurf_plot)
-        real(dp) :: rmin_g, rmax_g, zmin_g, zmax_g, dr, dz
-        real(dp) :: rgrid(nr), zgrid(nz)
-        real(dp) :: bmod_map(nr, nz), br_map(nr, nz), bphi_map(nr, nz), bz_map(nr, nz)
-        real(dp) :: bmod_st(nsurf_plot, ntheta_plot)
-        real(dp) :: x_geo(3), x_cyl(3)
-        logical :: inside
-        integer :: isurf, itheta, iR, iZ
-        real(dp) :: Br, Bphi, Bz, Bmod
+    subroutine compute_flux_surface_data()
+        integer :: isurf, itheta
+        real(dp) :: x_cyl(3)
 
         surf_s = [0.05_dp, 0.15_dp, 0.25_dp, 0.45_dp, 0.70_dp, 0.95_dp]
         do itheta = 1, ntheta_plot
@@ -345,11 +349,22 @@ contains
                 call eval_testfield_bmod(surf_s(isurf), theta_grid(itheta), 0.0_dp, bmod_st(isurf, itheta))
             end do
         end do
+    end subroutine compute_flux_surface_data
+
+    subroutine plot_flux_surfaces_and_fields()
+        integer, parameter :: nr = 240, nz = 240
+        real(dp) :: rmin_g, rmax_g, zmin_g, zmax_g, dr, dz
+        real(dp) :: rgrid(nr), zgrid(nz)
+        real(dp) :: bmod_map(nr, nz), br_map(nr, nz), bphi_map(nr, nz), bz_map(nr, nz)
+        real(dp) :: x_geo(3), x_cyl(3)
+        logical :: inside
+        integer :: isurf, iR, iZ
+        real(dp) :: Br, Bphi, Bz, Bmod
 
         call plt%initialize(grid=.true., xlabel='R', ylabel='Z', &
             title='TEST tokamak flux surfaces at phi=0 with orbit overlay', legend=.true., figsize=[10, 8])
         do isurf = 1, nsurf_plot
-            call plt%add_plot(r_surf(:, isurf), z_surf(:, isurf), label='surface', linestyle='-')
+            call plt%add_plot(r_surf(:, isurf), z_surf(:, isurf), label='', linestyle='-', color=color_surf)
         end do
         call plt%add_plot(r_traj(1:n_used(1), 1), z_traj(1:n_used(1), 1), label='passing', linestyle='-', color=color_pass)
         call plt%add_plot(r_traj(1:n_used(2), 2), z_traj(1:n_used(2), 2), label='trapped', linestyle='-', color=color_trap)
