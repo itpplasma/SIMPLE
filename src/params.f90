@@ -2,13 +2,14 @@ module params
   use util, only: pi, c, e_charge, p_mass, ev
   use parmot_mod, only : ro0, rmu
   use new_vmec_stuff_mod, only : old_axis_healing, old_axis_healing_boundary, &
-    netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale
+    netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, vmec_RZ_scale, rmajor
   use velo_mod,   only : isw_field_type
   use magfie_sub, only : TEST
   use field_can_mod, only : eval_field => evaluate, field_can_t
   use orbit_symplectic_base, only : symplectic_integrator_t, multistage_integrator_t, &
     EXPL_IMPL_EULER
   use vmecin_sub, only : stevvo
+  use field, only : is_geqdsk
   use callback, only : output_error, output_orbits_macrostep
 
   implicit none
@@ -126,6 +127,7 @@ contains
   subroutine params_init
     real(dp) :: E_alpha
     integer :: L1i
+    real(dp) :: RT0_local
 
     if (isw_field_type == TEST) then
       ! TEST field uses normalized units: B0=1, R0=1, a=0.5
@@ -156,8 +158,16 @@ contains
       ! normalized time step:
       dtau=tau/dble(ntimstep-1)
       ! parameters for the vacuum chamber:
-      call stevvo(RT0,R0i,L1i,cbfi,bz0i,bf0)
-      rbig=rt0
+      if (is_geqdsk(netcdffile)) then
+        ! GEQDSK/geoflux mode: use axis major radius set during init_vmec.
+        ! VMEC stevvo parameters are not valid here.
+        RT0_local = rmajor
+        L1i = 1
+        rbig = RT0_local
+      else
+        call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
+        rbig = RT0
+      end if
       ! field line integration step step over phi (to check chamber wall crossing)
       dphi=2.d0*pi/(L1i*npoiper)
       ! orbit integration time step (to check chamber wall crossing)
