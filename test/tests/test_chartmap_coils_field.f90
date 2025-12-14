@@ -155,6 +155,8 @@ contains
         max_hcov_err = 0d0
         n_points = 0
 
+        print *, '  Verification: checking physical positions match...'
+
         ! Sample points across the volume
         ! Add small offsets to avoid exact spline knots
         do i_phi = 1, 4
@@ -178,8 +180,24 @@ contains
                     call field_chart%evaluate(x_chart, Acov_chart, hcov_chart, Bmod_chart)
 
                     ! Check that we're at the same physical location
+                    ! VMEC coords evaluate_point expects: (s, theta, phi) where s = r^2
+                    ! Chartmap coords evaluate_point expects: (rho, theta, zeta) where rho = sqrt(s)
+                    ! So we pass s to VMEC, but rho to chartmap
                     call vmec_coords%evaluate_point([s, x_vmec(2), x_vmec(3)], x_phys_vmec)
-                    call chart_coords%evaluate_point(x_chart, x_phys_chart)
+                    call chart_coords%evaluate_point([rho, x_chart(2), x_chart(3)], x_phys_chart)
+
+                    ! Print first point for verification
+                    if (n_points == 0) then
+                        print *, '  First test point verification:'
+                        print *, '    VMEC input: r, theta, phi =', x_vmec
+                        print *, '    Chart input: rho, theta, zeta =', x_chart
+                        print *, '    VMEC physical (X,Y,Z) =', x_phys_vmec
+                        print *, '    Chart physical (X,Y,Z) =', x_phys_chart
+                        print *, '    Physical position error:', &
+                            maxval(abs(x_phys_vmec - x_phys_chart))
+                        print *, '    VMEC Bmod =', Bmod_vmec
+                        print *, '    Chart Bmod =', Bmod_chart
+                    end if
 
                     ! Compute errors
                     Bmod_err = abs(Bmod_vmec - Bmod_chart) / max(1d-10, Bmod_vmec)

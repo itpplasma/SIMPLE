@@ -99,7 +99,7 @@ def vmec_to_chartmap_passthrough(
                 # Sum Fourier series
                 for im in range(nmodes):
                     m = xm[im]
-                    n = xn[im] / nfp
+                    n = xn[im]
                     angle = m * theta_val - n * zeta_val
 
                     # Interpolate Fourier coefficients

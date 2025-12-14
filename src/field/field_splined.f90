@@ -78,7 +78,7 @@ contains
         integer, intent(in), optional :: n_r, n_th, n_phi
         real(dp), intent(in), optional :: xmin(3), xmax(3)
 
-        call build_splines(source, field%splines, scaling, &
+        call build_splines(source, ref_coords, field%splines, scaling, &
                           n_r, n_th, n_phi, xmin, xmax)
 
         allocate(field%coords, source=ref_coords)
@@ -86,7 +86,7 @@ contains
     end subroutine create_splined_field
 
 
-    subroutine build_splines(source, spl, scaling, &
+    subroutine build_splines(source, ref_coords, spl, scaling, &
                             n_r_in, n_th_in, n_phi_in, xmin_in, xmax_in)
         !> Build splines by sampling source field on uniform grid.
         !> Grid is in scaled coordinates. Default scaling: r = sqrt(s).
@@ -94,6 +94,7 @@ contains
         use util, only: twopi
 
         class(magnetic_field_t), intent(in) :: source
+        class(coordinate_system_t), intent(in) :: ref_coords
         type(BatchSplineData3D), intent(out) :: spl
         class(coordinate_scaling_t), intent(in), optional, target :: scaling
         integer, intent(in), optional :: n_r_in, n_th_in, n_phi_in
@@ -160,7 +161,7 @@ contains
 
                     call scaling_ptr%inverse(x_scaled, x_ref, scaling_jac)
 
-                    call evaluate_at_ref_coords(source, x_ref, x_cart, &
+                    call evaluate_at_ref_coords(source, ref_coords, x_ref, x_cart, &
                                                dxcart_dxref, Acov, hcov, Bmod)
 
                     Acov(1) = Acov(1) * scaling_jac(1)
@@ -213,21 +214,47 @@ contains
     end subroutine build_splines
 
 
-    subroutine evaluate_at_ref_coords(source, x_ref, x_cart, dxcart_dxref, &
-                                      Acov, hcov, Bmod)
+    subroutine evaluate_at_ref_coords(source, ref_coords, x_ref, x_cart, &
+                                      dxcart_dxref, Acov, hcov, Bmod)
         !> Evaluate source field at reference coordinates x_ref = (s, theta, phi).
         !> Transforms to source coordinates (Cartesian), evaluates, transforms back.
         !> Returns covariant components in reference coordinates.
+        use libneo_coordinates, only: vmec_coordinate_system_t
         class(magnetic_field_t), intent(in) :: source
+        class(coordinate_system_t), intent(in) :: ref_coords
         real(dp), intent(in) :: x_ref(3)
         real(dp), intent(out) :: x_cart(3), dxcart_dxref(3, 3)
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
 
         real(dp) :: A_cart(3), h_cart(3)
+        real(dp) :: x_pos(3), R, phi, Z
+        logical :: is_vmec
 
         select type (coords => source%coords)
         type is (cartesian_coordinate_system_t)
-            call transform_vmec_to_cart(x_ref, x_cart, dxcart_dxref)
+            call ref_coords%evaluate_point(x_ref, x_pos)
+            call ref_coords%covariant_basis(x_ref, dxcart_dxref)
+
+            ! Convert to Cartesian if needed (VMEC returns cylindrical)
+            is_vmec = .false.
+            select type (ref => ref_coords)
+            type is (vmec_coordinate_system_t)
+                is_vmec = .true.
+            end select
+
+            if (is_vmec) then
+                ! x_pos is (R, phi, Z), convert to (X, Y, Z)
+                R = x_pos(1)
+                phi = x_pos(2)
+                Z = x_pos(3)
+                x_cart(1) = R * cos(phi)
+                x_cart(2) = R * sin(phi)
+                x_cart(3) = Z
+            else
+                ! Already Cartesian (e.g., chartmap)
+                x_cart = x_pos
+            end if
+
             call source%evaluate(x_cart, A_cart, h_cart, Bmod)
             Acov = matmul(A_cart, dxcart_dxref)
             hcov = matmul(h_cart, dxcart_dxref)
