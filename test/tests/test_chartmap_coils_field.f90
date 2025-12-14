@@ -17,6 +17,7 @@ program test_chartmap_coils_field
     use libneo_coordinates, only: coordinate_system_t, &
         make_vmec_coordinate_system, make_chartmap_coordinate_system
     use util, only: twopi
+    use pyplot_module, only: pyplot
 
     implicit none
 
@@ -30,9 +31,9 @@ program test_chartmap_coils_field
     logical :: wout_exists, coils_exists, chartmap_exists
     logical :: passed
 
-    real(dp), parameter :: tol_Bmod = 1.0e-6_dp
-    real(dp), parameter :: tol_Acov = 1.0e-5_dp
-    real(dp), parameter :: tol_hcov = 1.0e-5_dp
+    real(dp), parameter :: tol_Bmod = 1.0e-10_dp
+    real(dp), parameter :: tol_Acov = 1.0e-10_dp
+    real(dp), parameter :: tol_hcov = 1.0e-10_dp
 
     ! Check required files
     inquire(file='wout.nc', exist=wout_exists)
@@ -101,6 +102,10 @@ program test_chartmap_coils_field
     print '(A,ES12.4)', 'Tolerance Acov: ', tol_Acov
     print '(A,ES12.4)', 'Tolerance hcov: ', tol_hcov
     print *
+
+    ! Generate comparison plots
+    print *, 'Generating comparison plots...'
+    call generate_comparison_plots(field_vmec_ref, field_chartmap_ref)
 
     ! Check tolerances
     passed = .true.
@@ -190,5 +195,77 @@ contains
             end do
         end do
     end subroutine compare_fields
+
+
+    subroutine generate_comparison_plots(field_vmec, field_chart)
+        type(splined_field_t), intent(in) :: field_vmec, field_chart
+
+        type(pyplot) :: plt
+        integer, parameter :: nth = 50, nphi = 50
+        real(dp) :: theta_arr(nth), phi_arr(nphi)
+        real(dp) :: Bmod_vmec_grid(nth, nphi), Bmod_chart_grid(nth, nphi)
+        real(dp) :: Bmod_err_grid(nth, nphi)
+        real(dp) :: x_vmec(3), x_chart(3), Acov(3), hcov(3), Bmod
+        real(dp) :: s, rho
+        integer :: ith, iphi
+
+        ! Fixed radial position: r = 0.5
+        s = 0.5d0**2
+        rho = sqrt(s)
+
+        ! Create grids
+        do ith = 1, nth
+            theta_arr(ith) = twopi * (ith - 1) / real(nth - 1, dp)
+        end do
+
+        do iphi = 1, nphi
+            phi_arr(iphi) = twopi * (iphi - 1) / real(nphi - 1, dp) / 4d0  ! 1/4 period
+        end do
+
+        ! Evaluate on grid
+        do ith = 1, nth
+            do iphi = 1, nphi
+                x_vmec = [sqrt(s), theta_arr(ith), phi_arr(iphi)]
+                x_chart = [rho, theta_arr(ith), phi_arr(iphi)]
+
+                call field_vmec%evaluate(x_vmec, Acov, hcov, Bmod)
+                Bmod_vmec_grid(ith, iphi) = Bmod
+
+                call field_chart%evaluate(x_chart, Acov, hcov, Bmod)
+                Bmod_chart_grid(ith, iphi) = Bmod
+
+                Bmod_err_grid(ith, iphi) = abs(Bmod_vmec_grid(ith, iphi) - &
+                                               Bmod_chart_grid(ith, iphi))
+            end do
+        end do
+
+        ! Plot 1: VMEC reference Bmod
+        call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+            title='Bmod with VMEC reference (r=0.5)', figsize=[10,8])
+        call plt%add_contour(theta_arr, phi_arr, transpose(Bmod_vmec_grid), &
+            linestyle='-', colorbar=.true., filled=.true.)
+        call plt%savefig('test_chartmap_bmod_vmec.png', &
+            pyfile='test_chartmap_bmod_vmec.py')
+        print *, '  Saved: test_chartmap_bmod_vmec.png'
+
+        ! Plot 2: Chartmap reference Bmod
+        call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+            title='Bmod with chartmap reference (r=0.5)', figsize=[10,8])
+        call plt%add_contour(theta_arr, phi_arr, transpose(Bmod_chart_grid), &
+            linestyle='-', colorbar=.true., filled=.true.)
+        call plt%savefig('test_chartmap_bmod_chart.png', &
+            pyfile='test_chartmap_bmod_chart.py')
+        print *, '  Saved: test_chartmap_bmod_chart.png'
+
+        ! Plot 3: Absolute error
+        call plt%initialize(grid=.true., xlabel='theta', ylabel='phi', &
+            title='Absolute Bmod error |VMEC - chartmap| (r=0.5)', figsize=[10,8])
+        call plt%add_contour(theta_arr, phi_arr, transpose(Bmod_err_grid), &
+            linestyle='-', colorbar=.true., filled=.true.)
+        call plt%savefig('test_chartmap_bmod_error.png', &
+            pyfile='test_chartmap_bmod_error.py')
+        print *, '  Saved: test_chartmap_bmod_error.png'
+
+    end subroutine generate_comparison_plots
 
 end program test_chartmap_coils_field
