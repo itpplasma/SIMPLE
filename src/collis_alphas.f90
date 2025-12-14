@@ -1,301 +1,274 @@
-  !
 module collis_alp
-  implicit none
+    use, intrinsic :: iso_fortran_env, only: wp => real64
+    implicit none
 
-  ! Define real(wp) kind parameter
-  integer, parameter :: wp = kind(1.0d0)
-  integer, parameter :: nsorts=3
-  real(wp), dimension(nsorts) :: efcolf,velrat,enrat
+    integer, parameter :: nsorts = 3
+    integer, parameter :: N_S_GRID = 101
 
-  contains
-  !
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-  subroutine coleff(p,dpp,dhh,fpeff)
-  !
-  !  Computes local values of dimensionless contravariant components
-  !  of collisional diffusion tensor and friction force for nonrelativistic
-  !  plasma. Backgound temperature is the same for all sorts.
-  !
-  !     Input variables:
-  !        formal: p      - dimensionless momentum module (p/(sqrt(2)*p_T)
-  !        common: efcolf - dmls collision frequencies
-  !                velrat - ratio of test species thermal velocity to
-  !                         background species thermal velocity
-  !     Output variables:
-  !        formal: dpp    - dimensionless momentum module diffusion
-  !                         coefficient
-  !                dhh    - dimensionless pitch angle diffusion coeff.
-  !                fpeff  - effective dimensionless drag force (prop. to linear
-  !                         deviation in Fokker-Planck eq.)
-  !
-  integer :: i
-  real(wp) :: p,dpp,dhh,fpeff,plim,xbeta,dp,dh,dpd
-  !
-  plim=max(p,1.d-8)
-  !
-  dpp=0.0d0
-  dhh=0.0d0
-  fpeff=0.0d0
-  !
-  do i=1,nsorts
-    xbeta=p*velrat(i)
-  !
-    call onseff(xbeta,dp,dh,dpd)
-  !
-    dpp=dpp+dp*efcolf(i)
-    dhh=dhh+dh*efcolf(i)
-    fpeff=fpeff+(dpd/plim-2.0*dp*p*enrat(i))*efcolf(i)
-  enddo
-  !
-  dhh=dhh/plim**2
-  !
-  return
-  end
-  !
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-  subroutine onseff(v,dp,dh,dpd)
-  !
-  !  dp - dimensionless dpp
-  !  dh - dhh*p^2     (p - dmls)
-  !  dpd - (1/p)(d/dp)p^2*dp   (p - dmls)
-  !
-  implicit none
-  !
-  ! square root of pi
-  real(wp), parameter :: sqp=1.7724538d0
-  ! cons=4./(3.*sqrt(pi))
-  real(wp), parameter :: cons=.75225278d0
-  real(wp) :: v,dp,dh,dpd,v2,v3,ex,er
-  !
-  v2=v**2
-  v3=v2*v
-  if(v.lt.0.01d0) then
-    dp=cons*(1.d0-0.6d0*v2)
-    dh=cons*(1.d0-0.2d0*v2)
-    dpd=2.d0*cons*(1.d0-1.2d0*v2)
-  elseif(v.gt.6.d0) then
-    dp=1.d0/v3
-    dh=(1.d0-0.5d0/v2)/v
-    dpd=-1.d0/v3
-  else
-    ex=exp(-v2)/sqp
-    er=erf(v)
-    dp=er/v3-2.d0*ex/v2
-    dh=er*(1.d0-0.5d0/v2)/v+ex/v2
-    dpd=4.d0*ex-dp
-  endif
-  !
-  return
-  end
-  !
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !      FUNCTION ERF(X)
-  !      PARAMETER  ( A1 = 0.07052 30784, A2 = 0.04228 20123,
-  !     ,             A3 = 0.00927 05272, A4 = 0.00015 10143,
-  !     ,             A5 = 0.00027 65672, A6 = 0.00004 30638 )
-  !      F(T) = 1./((1.+T*(A1+T*(A2+T*(A3+T*(A4+T*(A5+T*A6))))))**4)**4
-  !      W = 1. - F(ABS(X))
-  !      ERF = SIGN(W,X)
-  !      RETURN
-  !      END
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-  subroutine loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,ealpha, &
-                          v0,dchichi,slowrate,dchichi_norm,slowrate_norm)
-  !
-  !   Performs precomputation of the constants for Coulomb collision
-  !   operator for alpha-particles colliding with 2 sorts of ions and electrons
-  !
-  !
-  !   Normalisation: test particle (alpha) velocity is normalized by v0, alpha-particle
-  !   birth velocity, time is multiplied with v0 and has a meaning of free path of alpha
-  !   particle with v0. Respectively, collision frequencies have the meaning of inverse
-  !   mean free paths.
-  !
-  !   Input variables:
-  !        formal: am1,am2       - mass numbers of the first and second background ion species
-  !                Z1,Z2         - charge numbers of these species
-  !                densi1,densi2 - densities of these species, 1/cm**3
-  !                tempi1,tempi2,tempe - temperatures of two ion species and electrons, eV
-  !                ealpha        - initial alpha particle energy, eV
-  !   Output variables:
-  !        formal: v0            - initial alpha particle velocity, cm/s
-  !                dchichi       - pitch angle scattering frequency, $D^{\chi\chi}$, of alpha
-  !                                particle with initial velocity, 1/s
-  !                slowrate      - slowing down rate, $F^v / v_0$, of alpha particle with
-  !                                initial velocity, 1/s
-  !                dchichi_norim - normalized pitch angle scattering frequency, 1/cm
-  !                slowrate_norm - normalized slowing down rate, 1/cm
-  !        module collis_alp:
-  !                efcolf - normalized collision frequencies
-  !                velrat - ratio of initial alpha particle velocity v0 to the
-  !                         specific background particle thermal velocity $v_{t}=\sqrt(2T/m)$
-  !                enrat  - ratio of initial alpha particle energy to the background species
-  !                         energy
-  !
-  real(wp) :: am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe,ealpha,dense
-  real(wp) :: v0,dchichi,slowrate,dchichi_norm,slowrate_norm,vti1,vti2,vte
-  real(wp) :: pi,pmass,emass,e,ev,alame,frecol_base,alami1,alami2
-  real(wp) :: p,dpp,dhh,fpeff
-  !
-  pi=3.14159265358979d0
-  pmass=1.6726d-24
-  emass=9.1094d-28
-  e=4.8032d-10
-  ev=1.6022d-12
-  !
-  enrat(1)=ealpha/tempi1
-  enrat(2)=ealpha/tempi2
-  enrat(3)=ealpha/tempe
-  !
-  v0=sqrt(2.d0*ealpha*ev/(4.d0*pmass))
-  vti1=sqrt(2.d0*tempi1*ev/(pmass*am1))
-  vti2=sqrt(2.d0*tempi2*ev/(pmass*am2))
-  vte=sqrt(2.d0*tempe*ev/emass)
-  !
-  velrat(1)=v0/vti1
-  velrat(2)=v0/vti2
-  velrat(3)=v0/vte
-  !
-  dense=densi1*Z1+densi2*Z2
-  alami1=23.d0-log(max(epsilon(1.d0), &
-         sqrt(densi1*Z1**2/tempi1)*2.d0*Z1*(4.d0+am1)/(4.d0*tempi1+am1*ealpha)))
-  alami2=23.d0-log(max(epsilon(1.d0), &
-         sqrt(densi2*Z2**2/tempi2)*2.d0*Z2*(4.d0+am2)/(4.d0*tempi2+am2*ealpha)))
-  alame=24.d0-log(sqrt(dense)/tempe)
-  frecol_base=2.d0*pi*dense*e**4*2.d0**2/((4.d0*pmass)**2*v0**3) !usual
-  frecol_base=frecol_base/v0                                     !normalized
-  !
-  efcolf(1)=frecol_base*Z1**2*alami1*densi1/dense
-  efcolf(2)=frecol_base*Z2**2*alami2*densi2/dense
-  efcolf(3)=frecol_base*alame
-  !
-  efcolf=efcolf*velrat
-  !
-  p=1.d0
-  !
-  call coleff(p,dpp,dhh,fpeff)
-  !
-  dchichi=dhh*v0
-  slowrate=abs(fpeff)*v0
-  dchichi_norm=dhh
-  slowrate_norm=abs(fpeff)
-  return
-  end
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-  subroutine stost(z,dtauc,iswmode,ierr)
-  !
-  !  z(1:5)   - phase space coordinates: z(1:3) - spatial position,
-  !                                      z(4)   - normalized
-  !                                      z(5)   - pitch parameter
-  !  dtauc    - normalized time step: dtauc=dtau*v0 - has the dimension of length
-  !  iswmode  - switch of the collision mode:
-  !               1 - full operator (pitch-angle and energy scattering and drag)
-  !               2 - energy scattering and drag only
-  !               3 - drag only
-  !               4 - pitch-angle scattering only
-  !  ierr     - error code:
-  !               0 - good,
-  !               1 - bad argument (pitch |z(5)| > 1 ),
-  !               2 - step over pitch exceeds 1 (pitch was
-  !                   replaced by randomly distributed on [-1,1]),
-  !               3 - new pitch module exceeds 1, reflection from
-  !                   the boudary was performed,
-  !               10 or >10 - new momentum module is less then
-  !                   prescribed minimum, reflection was performed.
-  !
-  integer :: iswmode,ierr
-  real(wp), parameter :: pmin=1.e-8
-  real(wp) :: dtauc,p,dpp,dhh,fpeff,alam,dalam,coala
-  real(wp), dimension(5) :: z
-  real :: ur
-  !
-  p=z(4)
-  !
-  call coleff(p,dpp,dhh,fpeff)
-  !
-  ierr=0
-  !
-  if(iswmode.eq.1.or.iswmode.eq.4) then
-    alam=z(5)
-    coala=1.d0-alam**2
-  !
-    if(coala.lt.0.d0) then
-      ierr=1
-      return
-    endif
-  !
-    call getran(1,ur)
-  !
-    dalam=sqrt(2.d0*dhh*coala*dtauc)*dble(ur)-2.d0*alam*dhh*dtauc
-  !
-    if(abs(dalam).gt.1.d0) then
-      ierr=2
-  !
-      call random_number(ur)
-  !
-      alam=2.d0*(dble(ur)-0.5d0)
-    else
-      alam=alam+dalam
-      if(alam.gt.1.d0) then
-        ierr=3
-        alam=2.d0-alam
-      elseif(alam.lt.-1.d0) then
-        ierr=3
-        alam=-2.d0-alam
-      endif
-    endif
-  !
-    z(5)=alam
-    if(iswmode.eq.4) return
-  endif
-  !
-  if(iswmode.lt.3) then
-  !
-    call getran(0,ur)
-  !
-    z(4)=z(4)+sqrt(abs(2.d0*dpp*dtauc))*dble(ur)+fpeff*dtauc
-  else
-    z(4)=z(4)+fpeff*dtauc
-  endif
-  !
-  if(z(4).lt.pmin) then
-    ierr=ierr+10
-    z(4)=pmin+abs(pmin-z(4))
-  endif
-  !
-  return
-  end
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    real(wp), dimension(nsorts) :: efcolf, velrat, enrat
+    real(wp), dimension(nsorts, N_S_GRID) :: efcolf_grid, velrat_grid, enrat_grid
 
-  subroutine getran(irand,ur)
-  !
-  !  Produces the random number with zero deviation and unit square
-  !  deviation
-  !
-  !  Input parameters: irand - 0 for continious, 1 for +1 -1,
-  !  Output parameters: ur   - random number
-  !
-    integer, intent(in) :: irand
-    real, intent(out) :: ur
-  !
-    call random_number(ur)
-  !
-    if(irand.eq.0) then
-    ! continiuos random number, constant is sqrt(12)
-      ur=3.464102*(ur-.5)
-    else
-    ! discrete random number
-      if(ur.gt..5) then
-        ur=1.
-      else
-        ur=-1.
-      endif
-    endif
-  end
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+contains
+
+    subroutine coleff(p, dpp, dhh, fpeff)
+        real(wp), intent(in) :: p
+        real(wp), intent(out) :: dpp, dhh, fpeff
+
+        call coleff_local(p, efcolf, velrat, enrat, dpp, dhh, fpeff)
+    end subroutine coleff
+
+    subroutine coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
+        real(wp), intent(in) :: p
+        real(wp), intent(in) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+        real(wp), intent(out) :: dpp, dhh, fpeff
+
+        integer :: i
+        real(wp) :: plim, xbeta, dp, dh, dpd
+
+        plim = max(p, 1.d-8)
+
+        dpp = 0.0d0
+        dhh = 0.0d0
+        fpeff = 0.0d0
+
+        do i = 1, nsorts
+            xbeta = p*velrat_loc(i)
+            call onseff(xbeta, dp, dh, dpd)
+            dpp = dpp + dp*efcolf_loc(i)
+            dhh = dhh + dh*efcolf_loc(i)
+            fpeff = fpeff + (dpd/plim - 2.0d0*dp*p*enrat_loc(i))*efcolf_loc(i)
+        end do
+
+        dhh = dhh/plim**2
+    end subroutine coleff_local
+
+    subroutine onseff(v, dp, dh, dpd)
+        real(wp), intent(in) :: v
+        real(wp), intent(out) :: dp, dh, dpd
+
+        real(wp), parameter :: sqp = 1.7724538d0
+        real(wp), parameter :: cons = 0.75225278d0
+        real(wp) :: v2, v3, ex, er
+
+        v2 = v**2
+        v3 = v2*v
+        if (v < 0.01d0) then
+            dp = cons*(1.d0 - 0.6d0*v2)
+            dh = cons*(1.d0 - 0.2d0*v2)
+            dpd = 2.d0*cons*(1.d0 - 1.2d0*v2)
+        else if (v > 6.d0) then
+            dp = 1.d0/v3
+            dh = (1.d0 - 0.5d0/v2)/v
+            dpd = -1.d0/v3
+        else
+            ex = exp(-v2)/sqp
+            er = erf(v)
+            dp = er/v3 - 2.d0*ex/v2
+            dh = er*(1.d0 - 0.5d0/v2)/v + ex/v2
+            dpd = 4.d0*ex - dp
+        end if
+    end subroutine onseff
+
+    subroutine loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, &
+                            tempe, ealpha, v0, dchichi, slowrate, &
+                            dchichi_norm, slowrate_norm)
+        real(wp), intent(in) :: am1, am2, Z1, Z2, densi1, densi2
+        real(wp), intent(in) :: tempi1, tempi2, tempe, ealpha
+        real(wp), intent(out) :: v0, dchichi, slowrate, dchichi_norm, slowrate_norm
+
+        call compute_collision_coeffs(am1, am2, Z1, Z2, densi1, densi2, &
+                                      tempi1, tempi2, tempe, ealpha, v0, &
+                                      efcolf, velrat, enrat)
+
+        call compute_rates(v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+    end subroutine loacol_alpha
+
+    subroutine compute_collision_coeffs(am1, am2, Z1, Z2, densi1, densi2, &
+                                        tempi1, tempi2, tempe, ealpha, v0, &
+                                        efcolf_out, velrat_out, enrat_out)
+        real(wp), intent(in) :: am1, am2, Z1, Z2, densi1, densi2
+        real(wp), intent(in) :: tempi1, tempi2, tempe, ealpha
+        real(wp), intent(out) :: v0
+        real(wp), intent(out) :: efcolf_out(nsorts), velrat_out(nsorts), enrat_out(nsorts)
+
+        real(wp), parameter :: pi = 3.14159265358979d0
+        real(wp), parameter :: pmass = 1.6726d-24
+        real(wp), parameter :: emass = 9.1094d-28
+        real(wp), parameter :: e_cgs = 4.8032d-10
+        real(wp), parameter :: ev_cgs = 1.6022d-12
+
+        real(wp) :: dense, vti1, vti2, vte
+        real(wp) :: alami1, alami2, alame, frecol_base
+
+        enrat_out(1) = ealpha/tempi1
+        enrat_out(2) = ealpha/tempi2
+        enrat_out(3) = ealpha/tempe
+
+        v0 = sqrt(2.d0*ealpha*ev_cgs/(4.d0*pmass))
+        vti1 = sqrt(2.d0*tempi1*ev_cgs/(pmass*am1))
+        vti2 = sqrt(2.d0*tempi2*ev_cgs/(pmass*am2))
+        vte = sqrt(2.d0*tempe*ev_cgs/emass)
+
+        velrat_out(1) = v0/vti1
+        velrat_out(2) = v0/vti2
+        velrat_out(3) = v0/vte
+
+        dense = densi1*Z1 + densi2*Z2
+        alami1 = 23.d0 - log(max(epsilon(1.d0), &
+                                 sqrt(densi1*Z1**2/tempi1)*2.d0*Z1*(4.d0 + am1)/(4.d0*tempi1 + am1*ealpha)))
+        alami2 = 23.d0 - log(max(epsilon(1.d0), &
+                                 sqrt(densi2*Z2**2/tempi2)*2.d0*Z2*(4.d0 + am2)/(4.d0*tempi2 + am2*ealpha)))
+        alame = 24.d0 - log(sqrt(dense)/tempe)
+
+        frecol_base = 2.d0*pi*dense*e_cgs**4*2.d0**2/((4.d0*pmass)**2*v0**3)
+        frecol_base = frecol_base/v0
+
+        efcolf_out(1) = frecol_base*Z1**2*alami1*densi1/dense
+        efcolf_out(2) = frecol_base*Z2**2*alami2*densi2/dense
+        efcolf_out(3) = frecol_base*alame
+
+        efcolf_out = efcolf_out*velrat_out
+    end subroutine compute_collision_coeffs
+
+    subroutine compute_rates(v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+        real(wp), intent(in) :: v0
+        real(wp), intent(out) :: dchichi, slowrate, dchichi_norm, slowrate_norm
+
+        real(wp) :: p, dpp, dhh, fpeff
+
+        p = 1.d0
+        call coleff(p, dpp, dhh, fpeff)
+
+        dchichi = dhh*v0
+        slowrate = abs(fpeff)*v0
+        dchichi_norm = dhh
+        slowrate_norm = abs(fpeff)
+    end subroutine compute_rates
+
+    subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
+        use simple_profiles, only: get_plasma_params
+
+        real(wp), intent(in) :: am1, am2, Z1, Z2, ealpha, v0
+        real(wp) :: s, Te, Ti1, Ti2, ni1, ni2
+        real(wp) :: densi1_loc, densi2_loc, tempi1_loc, tempi2_loc, tempe_loc
+        real(wp) :: v0_loc
+        integer :: i
+
+        do i = 1, N_S_GRID
+            s = dble(i - 1)/dble(N_S_GRID - 1)
+
+            call get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
+
+            tempe_loc = max(Te, 1.0d0)
+            tempi1_loc = max(Ti1, 1.0d0)
+            tempi2_loc = max(Ti2, 1.0d0)
+            densi1_loc = max(ni1*1.0d-6, 1.0d0)
+            densi2_loc = max(ni2*1.0d-6, 1.0d0)
+
+            call compute_collision_coeffs(am1, am2, Z1, Z2, &
+                                          densi1_loc, densi2_loc, &
+                                          tempi1_loc, tempi2_loc, tempe_loc, &
+                                          ealpha, v0_loc, &
+                                          efcolf_grid(:, i), velrat_grid(:, i), enrat_grid(:, i))
+        end do
+    end subroutine init_collision_profiles
+
+    subroutine get_local_coeffs(s, efcolf_loc, velrat_loc, enrat_loc)
+        real(wp), intent(in) :: s
+        real(wp), intent(out) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+
+        real(wp) :: s_clamped, s_norm, weight
+        integer :: idx_lo, idx_hi
+
+        s_clamped = max(0.0d0, min(1.0d0, s))
+        s_norm = s_clamped*dble(N_S_GRID - 1)
+        idx_lo = max(1, min(N_S_GRID - 1, int(s_norm) + 1))
+        idx_hi = idx_lo + 1
+        weight = s_norm - dble(idx_lo - 1)
+
+        efcolf_loc = (1.0d0 - weight)*efcolf_grid(:, idx_lo) + weight*efcolf_grid(:, idx_hi)
+        velrat_loc = (1.0d0 - weight)*velrat_grid(:, idx_lo) + weight*velrat_grid(:, idx_hi)
+        enrat_loc = (1.0d0 - weight)*enrat_grid(:, idx_lo) + weight*enrat_grid(:, idx_hi)
+    end subroutine get_local_coeffs
+
+    subroutine stost(z, dtauc, iswmode, ierr)
+        integer, intent(in) :: iswmode
+        real(wp), intent(in) :: dtauc
+        real(wp), intent(inout) :: z(5)
+        integer, intent(out) :: ierr
+
+        real(wp), parameter :: pmin = 1.d-8
+        real(wp) :: p, dpp, dhh, fpeff, alam, dalam, coala
+        real(wp) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+        real :: ur
+
+        p = z(4)
+
+        call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+        call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
+
+        ierr = 0
+
+        if (iswmode == 1 .or. iswmode == 4) then
+            alam = z(5)
+            coala = 1.d0 - alam**2
+
+            if (coala < 0.d0) then
+                ierr = 1
+                return
+            end if
+
+            call getran(1, ur)
+
+            dalam = sqrt(2.d0*dhh*coala*dtauc)*dble(ur) - 2.d0*alam*dhh*dtauc
+
+            if (abs(dalam) > 1.d0) then
+                ierr = 2
+                call random_number(ur)
+                alam = 2.d0*(dble(ur) - 0.5d0)
+            else
+                alam = alam + dalam
+                if (alam > 1.d0) then
+                    ierr = 3
+                    alam = 2.d0 - alam
+                else if (alam < -1.d0) then
+                    ierr = 3
+                    alam = -2.d0 - alam
+                end if
+            end if
+
+            z(5) = alam
+            if (iswmode == 4) return
+        end if
+
+        if (iswmode < 3) then
+            call getran(0, ur)
+            z(4) = z(4) + sqrt(abs(2.d0*dpp*dtauc))*dble(ur) + fpeff*dtauc
+        else
+            z(4) = z(4) + fpeff*dtauc
+        end if
+
+        if (z(4) < pmin) then
+            ierr = ierr + 10
+            z(4) = pmin + abs(pmin - z(4))
+        end if
+    end subroutine stost
+
+    subroutine getran(irand, ur)
+        integer, intent(in) :: irand
+        real, intent(out) :: ur
+
+        call random_number(ur)
+
+        if (irand == 0) then
+            ur = 3.464102*(ur - 0.5)
+        else
+            if (ur > 0.5) then
+                ur = 1.0
+            else
+                ur = -1.0
+            end if
+        end if
+    end subroutine getran
 
 end module collis_alp

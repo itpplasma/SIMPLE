@@ -3,7 +3,7 @@ module simple_main
   use util, only : sqrt2
   use simple, only : init_vmec, init_sympl, tracer_t
   use diag_mod, only : icounter
-  use collis_alp, only : loacol_alpha, stost
+  use collis_alp, only : loacol_alpha, stost, init_collision_profiles
   use samplers, only: sample
   use field_can_mod, only : integ_to_ref, ref_to_integ, init_field_can
   use callback, only : output_orbits_macrostep
@@ -49,6 +49,9 @@ module simple_main
     ! Must be called in this order. TODO: Fix
     call read_config(config_file)
     call print_phase_time('Configuration reading completed')
+
+    call read_profiles_config(config_file)
+    call print_phase_time('Profiles configuration reading completed')
     
     call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
     call print_phase_time('Field initialization completed')
@@ -271,18 +274,40 @@ module simple_main
     print *, 'v0 = ', v0
   end subroutine print_parameters
 
+  subroutine read_profiles_config(config_file)
+    use simple_profiles, only: read_profiles
+
+    character(256), intent(in) :: config_file
+
+    call read_profiles(config_file)
+  end subroutine read_profiles_config
+
+
   subroutine init_collisions
-    use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-    facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
+    use params, only: am1, am2, Z1, Z2, facE_al, dchichi, slowrate, &
+      dchichi_norm, slowrate_norm, v0
+    use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
+      ni1_scale, ni2_scale
 
-    real(dp) :: v0_coll
+    real(dp) :: v0_coll, ealpha
+    real(dp) :: densi1, densi2, tempi1, tempi2, tempe
 
-    call loacol_alpha(am1,am2,Z1,Z2,densi1,densi2,tempi1,tempi2,tempe, &
-      3.5d6/facE_al,v0_coll,dchichi,slowrate,dchichi_norm,slowrate_norm)
+    ealpha = 3.5d6 / facE_al
+
+    densi1 = ni1_scale * 1.0d-6
+    densi2 = ni2_scale * 1.0d-6
+    tempi1 = Ti1_scale
+    tempi2 = Ti2_scale
+    tempe = Te_scale
+
+    call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
+      ealpha, v0_coll, dchichi, slowrate, dchichi_norm, slowrate_norm)
 
     if (abs(v0_coll - v0) > 1d-6) then
       error stop 'simple_main.init_collisions: v0_coll != v0'
     end if
+
+    call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
   end subroutine init_collisions
 
   subroutine sample_particles
@@ -562,7 +587,8 @@ module simple_main
   end subroutine update_momentum
 
   subroutine collide(z, dt)
-    real(dp), intent(in) :: z(5), dt
+    real(dp), intent(inout) :: z(5)
+    real(dp), intent(in) :: dt
     integer :: ierr_coll
 
     call stost(z, dt, 1, ierr_coll)

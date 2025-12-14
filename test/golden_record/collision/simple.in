@@ -1,0 +1,11 @@
+&config
+multharm = 3
+contr_pp = -1e10
+trace_time = 1d-4
+sbeg = 0.3d0
+ntestpart = 32
+netcdffile = 'wout.nc'
+isw_field_type = 2
+deterministic = .True.
+swcoll = .True.
+/
