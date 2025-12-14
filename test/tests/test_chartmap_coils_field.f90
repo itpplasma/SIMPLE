@@ -151,13 +151,15 @@ contains
         n_points = 0
 
         ! Sample points across the volume
+        ! Add small offsets to avoid exact spline knots
         do i_phi = 1, 4
             do i_th = 1, 5
                 do i_r = 1, 5
                     ! VMEC coordinates: r = sqrt(s), theta, phi
-                    x_vmec(1) = 0.15d0 + 0.15d0 * (i_r - 1)  ! r
-                    x_vmec(2) = twopi * (i_th - 1) / 4d0     ! theta
-                    x_vmec(3) = twopi * (i_phi - 1) / 12d0   ! phi (1/3 period)
+                    ! Add π/100 offset to avoid exact knot positions
+                    x_vmec(1) = 0.15d0 + 0.15d0 * (i_r - 1) + 0.01d0  ! r + offset
+                    x_vmec(2) = twopi * (i_th - 1) / 4d0 + 0.0314d0   ! theta + π/100
+                    x_vmec(3) = twopi * (i_phi - 1) / 12d0 + 0.0157d0 ! phi + π/200
 
                     ! Chartmap coordinates: rho, theta, zeta
                     s = x_vmec(1)**2
