@@ -252,6 +252,28 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# Chartmap reference coordinates test
+add_executable(test_chartmap_coils_field.x test_chartmap_coils_field.f90)
+target_link_libraries(test_chartmap_coils_field.x simple)
+
+# Generate chartmap file from VMEC (test fixture)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME test_chartmap_setup
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/vmec_to_chartmap.py
+            wout.nc wout.chartmap.nc --nrho 64 --ntheta 65 --nzeta 33
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_setup PROPERTIES
+    FIXTURES_SETUP chartmap_file
+    LABELS "integration")
+
+# Run chartmap coils field comparison test
+add_test(NAME test_chartmap_coils_field
+    COMMAND test_chartmap_coils_field.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_coils_field PROPERTIES
+    FIXTURES_REQUIRED "chartmap_file"
+    LABELS "integration;plot")
+
 # Regression tests for canonical coordinates
 # Note: The following test files were removed as they don't exist yet:
 # - test_canonical_stencil.f90

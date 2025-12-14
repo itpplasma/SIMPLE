@@ -335,6 +335,7 @@ contains
 
 
   subroutine apply_config_aliases
+    use reference_coordinates, only: is_chartmap_file
     ! Handle deprecated aliases and apply fallback logic for config parameters.
     ! Priority: new name > deprecated alias > default
     !
@@ -360,9 +361,13 @@ contains
       coord_input = field_input
     end if
 
-    ! Sync coord_input back to netcdffile for libneo compatibility
+    ! Sync coord_input back to netcdffile for libneo compatibility.
+    ! BUT: don't sync if coord_input is chartmap (not a VMEC file).
+    ! netcdffile is used for init_vmec and must be a valid VMEC file.
     if (len_trim(coord_input) > 0) then
-      netcdffile = coord_input
+      if (.not. is_chartmap_file(coord_input)) then
+        netcdffile = coord_input
+      end if
     end if
 
     ! isw_field_type is deprecated alias for integ_coords
