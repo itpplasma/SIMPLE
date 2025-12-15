@@ -17,6 +17,19 @@ endif()
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 
+# Generate chartmap file from VMEC for testing chartmap coordinate detection
+# Uses libneo's vmec_to_chartmap tool built as part of dependencies
+set(CHARTMAP_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.nc")
+
+add_custom_command(
+    OUTPUT ${CHARTMAP_FILE}
+    COMMAND $<TARGET_FILE:vmec_to_chartmap.x> ${WOUT_FILE} ${CHARTMAP_FILE} 17 33 33
+    DEPENDS ${WOUT_FILE} vmec_to_chartmap.x
+    COMMENT "Generating chartmap test file from VMEC"
+    VERBATIM
+)
+add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
+
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools
 if(ENABLE_GVEC)
@@ -242,6 +255,15 @@ add_test(NAME test_coordinate_refactoring
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_coordinate_refactoring PROPERTIES
     LABELS "integration")
+
+add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
+target_link_libraries(test_refcoords_file_detection.x simple)
+add_dependencies(test_refcoords_file_detection.x chartmap_test_data)
+add_test(NAME test_refcoords_file_detection
+    COMMAND test_refcoords_file_detection.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_refcoords_file_detection PROPERTIES
+    LABELS "unit")
 
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)
