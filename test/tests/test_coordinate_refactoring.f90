@@ -218,7 +218,7 @@ contains
 
       ! Convert to VMEC coords (s, theta, phi) for ref_coords
       x_vmec = [x_spline(1)**2, x_spline(2), x_spline(3)]
-      call ref_coords%evaluate_point(x_vmec, x_cyl)
+      call ref_coords%evaluate_cyl(x_vmec, x_cyl)
       call cyl_to_cart(x_cyl, x_cart)
       call raw_coils%evaluate(x_cart, Acov_direct, hcov_direct, Bmod_direct)
 

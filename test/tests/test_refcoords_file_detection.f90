@@ -145,16 +145,16 @@ contains
         end if
 
         u = [0.5_dp, 0.0_dp, 0.0_dp]
-        call ref_coords%evaluate_point(u, x)
+        call ref_coords%evaluate_cyl(u, x)
 
         if (x(1) <= 0.0_dp) then
-            print *, '  FAILED: chartmap evaluate_point returned invalid R=', x(1)
+            print *, '  FAILED: chartmap evaluate_cyl returned invalid R=', x(1)
             nerrors = nerrors + 1
             return
         end if
 
         print *, '  PASSED: ref_coords allocated and functional for chartmap file'
-        print *, '    evaluate_point([0.5, 0, 0]) -> x =', x
+        print *, '    evaluate_cyl([0.5, 0, 0]) -> x =', x
     end subroutine test_init_reference_coords_chartmap
 
 end program test_refcoords_file_detection
