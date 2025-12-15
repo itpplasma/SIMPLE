@@ -126,7 +126,7 @@ contains
 
         ! Convert spline coords (r, theta, phi) to VMEC coords (s, theta, phi)
         x_vmec = [x_spline(1)**2, x_spline(2), x_spline(3)]
-        call ref_coords%evaluate_point(x_vmec, x_cyl)
+        call ref_coords%evaluate_cyl(x_vmec, x_cyl)
         call cyl_to_cart(x_cyl, x_cart)
         call field%evaluate(x_cart, Acov, hcov, Bmod)
     end subroutine evaluate_raw_at_ref
