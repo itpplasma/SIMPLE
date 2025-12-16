@@ -29,6 +29,7 @@ module field_splined
         evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
         destroy_batch_splines_3d
     use field_base, only: magnetic_field_t
+    use field_vmec, only: vmec_field_t
     use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
         RHO_TOR, RHO_POL
     use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, &
@@ -164,6 +165,7 @@ contains
         real(dp) :: e_cov(3, 3), scaling_jac(3)
         real(dp) :: Bmod
         real(dp) :: Acov(3), hcov(3)
+        logical :: needs_scaling
 
         real(dp), dimension(:,:,:), allocatable :: Ar, Ath, Aphi, hr, hth, hphi
         real(dp), dimension(:,:,:), allocatable :: Bmod_arr
@@ -198,7 +200,7 @@ contains
 
         i_ctr = 0
         !$omp parallel private(i_r, i_th, i_phi, x_scaled, x_ref, x_cart, &
-        !$omp&                  e_cov, scaling_jac, Bmod, Acov, hcov)
+        !$omp&                  e_cov, scaling_jac, Bmod, Acov, hcov, needs_scaling)
         !$omp do
         do i_phi = 1, n_phi
             !$omp atomic
@@ -212,11 +214,14 @@ contains
 
                     call scaling_ptr%inverse(x_scaled, x_ref, scaling_jac)
 
-                    call evaluate_at_ref_coords(source, ref_coords, x_ref, &
-                                               x_cart, e_cov, Acov, hcov, Bmod)
+                    call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
+                                               x_ref, x_cart, e_cov, Acov, hcov, Bmod, &
+                                               needs_scaling)
 
-                    Acov(1) = Acov(1) * scaling_jac(1)
-                    hcov(1) = hcov(1) * scaling_jac(1)
+                    if (needs_scaling) then
+                        Acov(1) = Acov(1) * scaling_jac(1)
+                        hcov(1) = hcov(1) * scaling_jac(1)
+                    end if
 
                     Ar(i_r, i_th, i_phi) = Acov(1)
                     Ath(i_r, i_th, i_phi) = Acov(2)
@@ -265,18 +270,37 @@ contains
     end subroutine build_splines
 
 
-    subroutine evaluate_at_ref_coords(source, ref_coords, x_ref, x_cart, &
-                                      e_cov, Acov, hcov, Bmod)
-        !> Evaluate source field at reference coordinates x_ref = (s, theta, phi).
-        !> Transforms to source coordinates (Cartesian), evaluates, transforms back.
-        !> Returns covariant components in reference coordinates.
+    subroutine evaluate_at_ref_coords(source, ref_coords, x_scaled, x_ref, x_cart, &
+                                      e_cov, Acov, hcov, Bmod, needs_scaling)
+        !> Evaluate source field for spline sampling.
+        !>
+        !> Two supported source modes:
+        !>   1. Cartesian source: evaluate at x_ref and return covariant components
+        !>      in reference coordinates (s, theta, phi). Caller must apply scaling
+        !>      to obtain covariant components in scaled coordinates.
+        !>   2. VMEC source: evaluate directly at x_scaled = (rho, theta, phi) and
+        !>      return covariant components already in scaled coordinates. Caller
+        !>      must not apply scaling.
         class(magnetic_field_t), intent(in) :: source
         class(coordinate_system_t), intent(in) :: ref_coords
+        real(dp), intent(in) :: x_scaled(3)
         real(dp), intent(in) :: x_ref(3)
         real(dp), intent(out) :: x_cart(3), e_cov(3, 3)
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+        logical, intent(out) :: needs_scaling
 
         real(dp) :: A_cart(3), h_cart(3)
+
+        select type (source)
+        type is (vmec_field_t)
+            call source%evaluate(x_scaled, Acov, hcov, Bmod)
+            x_cart = 0d0
+            e_cov = 0d0
+            needs_scaling = .false.
+            return
+        class default
+            continue
+        end select
 
         select type (coords => source%coords)
         type is (cartesian_coordinate_system_t)
@@ -285,8 +309,9 @@ contains
             call source%evaluate(x_cart, A_cart, h_cart, Bmod)
             Acov = matmul(A_cart, e_cov)
             hcov = matmul(h_cart, e_cov)
+            needs_scaling = .true.
         class default
-            error stop "evaluate_at_ref_coords: source must be in Cartesian coords"
+            error stop "evaluate_at_ref_coords: unsupported source coordinate system"
         end select
     end subroutine evaluate_at_ref_coords
 

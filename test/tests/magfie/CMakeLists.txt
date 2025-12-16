@@ -19,6 +19,9 @@ target_link_libraries(test_hcurl_from_dhcov_splines.x simple)
 add_executable(test_magfie_refcoords_splines.x test_magfie_refcoords_splines.f90)
 target_link_libraries(test_magfie_refcoords_splines.x simple)
 
+add_executable(test_orbit_refcoords_rk45.x test_orbit_refcoords_rk45.f90)
+target_link_libraries(test_orbit_refcoords_rk45.x simple)
+
 add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
@@ -42,4 +45,20 @@ add_test(NAME test_hcurl_from_dhcov_splines
 add_test(NAME test_magfie_refcoords_splines
     COMMAND $<TARGET_FILE:test_magfie_refcoords_splines.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+
+add_test(NAME test_orbit_refcoords_rk45
+    COMMAND $<TARGET_FILE:test_orbit_refcoords_rk45.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+
+add_test(NAME test_orbit_refcoords_rk45_plot
+    COMMAND ${CMAKE_COMMAND} -E env python3
+        ${CMAKE_CURRENT_SOURCE_DIR}/plot_orbit_refcoords_comparison.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_orbit_refcoords_rk45_plot PROPERTIES
+    DEPENDS test_orbit_refcoords_rk45
+    TIMEOUT 30
+    LABELS "integration;plot"
 )
