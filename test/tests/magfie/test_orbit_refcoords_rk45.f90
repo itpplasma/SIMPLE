@@ -183,7 +183,8 @@ program test_orbit_refcoords_rk45
     end if
 
     print *, '================================'
-    print *, 'PASSED: RK45 orbit trajectories match between magfie_vmec and magfie_refcoords'
+    print *, 'PASSED: RK45 orbit trajectories match between magfie_vmec &
+        &and magfie_refcoords'
     print *, '================================'
 
 contains
@@ -242,7 +243,8 @@ contains
         character(len=*), intent(in) :: location
 
         if (status /= nf90_noerr) then
-            print *, 'NetCDF error at ', trim(location), ': ', trim(nf90_strerror(status))
+            print *, 'NetCDF error at ', trim(location), ': ', &
+                trim(nf90_strerror(status))
             error stop 'NetCDF operation failed'
         end if
     end subroutine check_nc
@@ -250,93 +252,106 @@ contains
 
     subroutine write_orbits_netcdf(traj_vmec, traj_refcoords, time_arr, &
                                    mu_vmec, mu_refcoords, n_points)
-        real(dp), intent(in) :: traj_vmec(5, n_points), traj_refcoords(5, n_points)
-        real(dp), intent(in) :: time_arr(n_points)
-        real(dp), intent(in) :: mu_vmec(n_points), mu_refcoords(n_points)
+        real(dp), intent(in) :: traj_vmec(5, n_points)
+        real(dp), intent(in) :: traj_refcoords(5, n_points)
+        real(dp), intent(in) :: time_arr(n_points), mu_vmec(n_points)
+        real(dp), intent(in) :: mu_refcoords(n_points)
         integer, intent(in) :: n_points
 
-        integer :: ncid, dimid_time, status
-        integer :: varid_time, varid_s_vmec, varid_th_vmec, varid_phi_vmec
-        integer :: varid_s_ref, varid_th_ref, varid_phi_ref
-        integer :: varid_mu_vmec, varid_mu_ref
-        integer :: varid_p_vmec, varid_lambda_vmec
-        integer :: varid_p_ref, varid_lambda_ref
+        integer :: ncid, dimid_time
+        integer :: varids_vmec(6), varids_ref(6)
 
-        status = nf90_create('orbit_refcoords_comparison.nc', nf90_netcdf4, ncid)
+        call nc_create_file(ncid, dimid_time, n_points)
+        call nc_define_variables(ncid, dimid_time, varids_vmec, varids_ref)
+        call nc_write_data(ncid, varids_vmec, varids_ref, traj_vmec, &
+                          traj_refcoords, time_arr, mu_vmec, mu_refcoords)
+        call check_nc(nf90_close(ncid), 'nf90_close')
+    end subroutine write_orbits_netcdf
+
+
+    subroutine nc_create_file(ncid, dimid_time, n_points)
+        integer, intent(out) :: ncid, dimid_time
+        integer, intent(in) :: n_points
+        integer :: status, varid_time
+
+        status = nf90_create('orbit_refcoords_comparison.nc', &
+                            nf90_netcdf4, ncid)
         call check_nc(status, 'nf90_create')
-
         status = nf90_def_dim(ncid, 'time', n_points, dimid_time)
-        call check_nc(status, 'nf90_def_dim time')
-
-        status = nf90_def_var(ncid, 'time', nf90_double, [dimid_time], varid_time)
+        call check_nc(status, 'nf90_def_dim')
+        status = nf90_def_var(ncid, 'time', nf90_double, &
+                             [dimid_time], varid_time)
         call check_nc(status, 'nf90_def_var time')
         status = nf90_put_att(ncid, varid_time, 'units', 'normalized')
-        call check_nc(status, 'nf90_put_att time units')
-
-        status = nf90_def_var(ncid, 's_vmec', nf90_double, [dimid_time], varid_s_vmec)
-        call check_nc(status, 'nf90_def_var s_vmec')
-        status = nf90_def_var(ncid, 'theta_vmec', nf90_double, [dimid_time], varid_th_vmec)
-        call check_nc(status, 'nf90_def_var theta_vmec')
-        status = nf90_def_var(ncid, 'phi_vmec', nf90_double, [dimid_time], varid_phi_vmec)
-        call check_nc(status, 'nf90_def_var phi_vmec')
-        status = nf90_def_var(ncid, 'p_vmec', nf90_double, [dimid_time], varid_p_vmec)
-        call check_nc(status, 'nf90_def_var p_vmec')
-        status = nf90_def_var(ncid, 'lambda_vmec', nf90_double, [dimid_time], varid_lambda_vmec)
-        call check_nc(status, 'nf90_def_var lambda_vmec')
-        status = nf90_def_var(ncid, 'mu_vmec', nf90_double, [dimid_time], varid_mu_vmec)
-        call check_nc(status, 'nf90_def_var mu_vmec')
-
-        status = nf90_def_var(ncid, 's_refcoords', nf90_double, [dimid_time], varid_s_ref)
-        call check_nc(status, 'nf90_def_var s_refcoords')
-        status = nf90_def_var(ncid, 'theta_refcoords', nf90_double, [dimid_time], varid_th_ref)
-        call check_nc(status, 'nf90_def_var theta_refcoords')
-        status = nf90_def_var(ncid, 'phi_refcoords', nf90_double, [dimid_time], varid_phi_ref)
-        call check_nc(status, 'nf90_def_var phi_refcoords')
-        status = nf90_def_var(ncid, 'p_refcoords', nf90_double, [dimid_time], varid_p_ref)
-        call check_nc(status, 'nf90_def_var p_refcoords')
-        status = nf90_def_var(ncid, 'lambda_refcoords', nf90_double, [dimid_time], varid_lambda_ref)
-        call check_nc(status, 'nf90_def_var lambda_refcoords')
-        status = nf90_def_var(ncid, 'mu_refcoords', nf90_double, [dimid_time], varid_mu_ref)
-        call check_nc(status, 'nf90_def_var mu_refcoords')
-
+        call check_nc(status, 'nf90_put_att units')
         status = nf90_put_att(ncid, nf90_global, 'description', &
             'RK45 orbit comparison: magfie_vmec vs magfie_refcoords')
         call check_nc(status, 'nf90_put_att description')
+    end subroutine nc_create_file
 
-        status = nf90_enddef(ncid)
-        call check_nc(status, 'nf90_enddef')
 
-        status = nf90_put_var(ncid, varid_time, time_arr)
-        call check_nc(status, 'nf90_put_var time')
+    subroutine nc_define_variables(ncid, dimid, varids_vmec, varids_ref)
+        integer, intent(in) :: ncid, dimid
+        integer, intent(out) :: varids_vmec(6), varids_ref(6)
 
-        status = nf90_put_var(ncid, varid_s_vmec, traj_vmec(1, :))
-        call check_nc(status, 'nf90_put_var s_vmec')
-        status = nf90_put_var(ncid, varid_th_vmec, traj_vmec(2, :))
-        call check_nc(status, 'nf90_put_var theta_vmec')
-        status = nf90_put_var(ncid, varid_phi_vmec, traj_vmec(3, :))
-        call check_nc(status, 'nf90_put_var phi_vmec')
-        status = nf90_put_var(ncid, varid_p_vmec, traj_vmec(4, :))
-        call check_nc(status, 'nf90_put_var p_vmec')
-        status = nf90_put_var(ncid, varid_lambda_vmec, traj_vmec(5, :))
-        call check_nc(status, 'nf90_put_var lambda_vmec')
-        status = nf90_put_var(ncid, varid_mu_vmec, mu_vmec)
-        call check_nc(status, 'nf90_put_var mu_vmec')
+        call nc_def_trajectory_vars(ncid, dimid, 'vmec', varids_vmec)
+        call nc_def_trajectory_vars(ncid, dimid, 'refcoords', varids_ref)
+        call check_nc(nf90_enddef(ncid), 'nf90_enddef')
+    end subroutine nc_define_variables
 
-        status = nf90_put_var(ncid, varid_s_ref, traj_refcoords(1, :))
-        call check_nc(status, 'nf90_put_var s_refcoords')
-        status = nf90_put_var(ncid, varid_th_ref, traj_refcoords(2, :))
-        call check_nc(status, 'nf90_put_var theta_refcoords')
-        status = nf90_put_var(ncid, varid_phi_ref, traj_refcoords(3, :))
-        call check_nc(status, 'nf90_put_var phi_refcoords')
-        status = nf90_put_var(ncid, varid_p_ref, traj_refcoords(4, :))
-        call check_nc(status, 'nf90_put_var p_refcoords')
-        status = nf90_put_var(ncid, varid_lambda_ref, traj_refcoords(5, :))
-        call check_nc(status, 'nf90_put_var lambda_refcoords')
-        status = nf90_put_var(ncid, varid_mu_ref, mu_refcoords)
-        call check_nc(status, 'nf90_put_var mu_refcoords')
 
-        status = nf90_close(ncid)
-        call check_nc(status, 'nf90_close')
-    end subroutine write_orbits_netcdf
+    subroutine nc_def_trajectory_vars(ncid, dimid, suffix, varids)
+        integer, intent(in) :: ncid, dimid
+        character(len=*), intent(in) :: suffix
+        integer, intent(out) :: varids(6)
+        character(len=64) :: varname
+
+        varname = 's_' // trim(suffix)
+        call check_nc(nf90_def_var(ncid, varname, nf90_double, &
+                                   [dimid], varids(1)), varname)
+        varname = 'theta_' // trim(suffix)
+        call check_nc(nf90_def_var(ncid, varname, nf90_double, &
+                                   [dimid], varids(2)), varname)
+        varname = 'phi_' // trim(suffix)
+        call check_nc(nf90_def_var(ncid, varname, nf90_double, &
+                                   [dimid], varids(3)), varname)
+        varname = 'p_' // trim(suffix)
+        call check_nc(nf90_def_var(ncid, varname, nf90_double, &
+                                   [dimid], varids(4)), varname)
+        varname = 'lambda_' // trim(suffix)
+        call check_nc(nf90_def_var(ncid, varname, nf90_double, &
+                                   [dimid], varids(5)), varname)
+        varname = 'mu_' // trim(suffix)
+        call check_nc(nf90_def_var(ncid, varname, nf90_double, &
+                                   [dimid], varids(6)), varname)
+    end subroutine nc_def_trajectory_vars
+
+
+    subroutine nc_write_data(ncid, varids_vmec, varids_ref, traj_vmec, &
+                            traj_ref, time_arr, mu_vmec, mu_ref)
+        integer, intent(in) :: ncid, varids_vmec(6), varids_ref(6)
+        real(dp), intent(in) :: traj_vmec(:, :), traj_ref(:, :)
+        real(dp), intent(in) :: time_arr(:), mu_vmec(:), mu_ref(:)
+        integer :: varid_time, status
+
+        status = nf90_inq_varid(ncid, 'time', varid_time)
+        call check_nc(status, 'nf90_inq_varid time')
+        call check_nc(nf90_put_var(ncid, varid_time, time_arr), 'time')
+        call nc_write_trajectory(ncid, varids_vmec, traj_vmec, mu_vmec)
+        call nc_write_trajectory(ncid, varids_ref, traj_ref, mu_ref)
+    end subroutine nc_write_data
+
+
+    subroutine nc_write_trajectory(ncid, varids, traj, mu)
+        integer, intent(in) :: ncid, varids(6)
+        real(dp), intent(in) :: traj(:, :), mu(:)
+
+        call check_nc(nf90_put_var(ncid, varids(1), traj(1, :)), 's')
+        call check_nc(nf90_put_var(ncid, varids(2), traj(2, :)), 'theta')
+        call check_nc(nf90_put_var(ncid, varids(3), traj(3, :)), 'phi')
+        call check_nc(nf90_put_var(ncid, varids(4), traj(4, :)), 'p')
+        call check_nc(nf90_put_var(ncid, varids(5), traj(5, :)), 'lambda')
+        call check_nc(nf90_put_var(ncid, varids(6), mu), 'mu')
+    end subroutine nc_write_trajectory
 
 end program test_orbit_refcoords_rk45
