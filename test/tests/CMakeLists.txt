@@ -313,6 +313,15 @@ add_test(NAME test_splined_field_derivatives
 set_tests_properties(test_splined_field_derivatives PROPERTIES
     LABELS "integration")
 
+add_executable(test_bder_from_splines.x test_bder_from_splines.f90)
+target_link_libraries(test_bder_from_splines.x simple)
+add_dependencies(test_bder_from_splines.x ncsx_test_data)
+add_test(NAME test_bder_from_splines
+    COMMAND test_bder_from_splines.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_bder_from_splines PROPERTIES
+    LABELS "integration")
+
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
 add_dependencies(test_refcoords_file_detection.x chartmap_test_data)
