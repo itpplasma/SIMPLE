@@ -110,8 +110,14 @@ contains
         print *, 'Test A: coordinate mapping roundtrip'
 
         call check_test_files(vmec_exists, chartmap_exists)
-        if (.not. vmec_exists .or. .not. chartmap_exists) then
-            print *, '  SKIPPED: VMEC/chartmap files not found'
+        if (.not. vmec_exists) then
+            print *, '  FAIL: ', VMEC_FILE, ' not found'
+            nerrors = nerrors + 1
+            return
+        end if
+        if (.not. chartmap_exists) then
+            print *, '  FAIL: ', CHARTMAP_FILE, ' not found'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -121,7 +127,7 @@ contains
         allocate (err_vmec_grid(N_TH_GRID, N_R_GRID), &
                   err_chart_grid(N_TH_GRID, N_R_GRID))
 
-        phi = 0.0_dp
+        phi = 0.5_dp  ! Avoid phi=0 which is at periodicity boundary for FD
         n_vmec_fail = 0
         n_chart_fail = 0
 
@@ -206,8 +212,14 @@ contains
         print *, 'Test B: covariant_basis finite-difference consistency'
 
         call check_test_files(vmec_exists, chartmap_exists)
-        if (.not. vmec_exists .or. .not. chartmap_exists) then
-            print *, '  SKIPPED: VMEC/chartmap files not found'
+        if (.not. vmec_exists) then
+            print *, '  FAIL: ', VMEC_FILE, ' not found'
+            nerrors = nerrors + 1
+            return
+        end if
+        if (.not. chartmap_exists) then
+            print *, '  FAIL: ', CHARTMAP_FILE, ' not found'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -217,7 +229,7 @@ contains
         allocate (err_vmec_grid(N_TH_GRID, N_R_GRID), &
                   err_chart_grid(N_TH_GRID, N_R_GRID))
 
-        phi = 0.0_dp
+        phi = 0.5_dp  ! Avoid phi=0 which is at periodicity boundary for FD
 
         do i = 1, N_R_GRID
             r = 0.5_dp*(r_grid(i) + r_grid(i + 1))
@@ -298,8 +310,14 @@ contains
         print *, 'Test C: Cartesian <-> ref basis tensor transform identity'
 
         call check_test_files(vmec_exists, chartmap_exists)
-        if (.not. vmec_exists .or. .not. chartmap_exists) then
-            print *, '  SKIPPED: VMEC/chartmap files not found'
+        if (.not. vmec_exists) then
+            print *, '  FAIL: ', VMEC_FILE, ' not found'
+            nerrors = nerrors + 1
+            return
+        end if
+        if (.not. chartmap_exists) then
+            print *, '  FAIL: ', CHARTMAP_FILE, ' not found'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -309,7 +327,7 @@ contains
         allocate (err_vmec_grid(N_TH_GRID, N_R_GRID), &
                   err_chart_grid(N_TH_GRID, N_R_GRID))
 
-        phi = 0.0_dp
+        phi = 0.5_dp  ! Avoid phi=0 which is at periodicity boundary for FD
         v_cart = [1.0_dp, 2.0_dp, 3.0_dp]
 
         do i = 1, N_R_GRID

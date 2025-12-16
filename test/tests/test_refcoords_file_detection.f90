@@ -44,7 +44,8 @@ contains
 
         inquire(file='wout.nc', exist=file_exists)
         if (.not. file_exists) then
-            print *, '  SKIPPED: wout.nc not found in test directory'
+            print *, '  FAIL: wout.nc not found in test directory'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -75,7 +76,8 @@ contains
 
         inquire(file='wout.chartmap.nc', exist=file_exists)
         if (.not. file_exists) then
-            print *, '  SKIPPED: wout.chartmap.nc not found in test directory'
+            print *, '  FAIL: wout.chartmap.nc not found in test directory'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -104,7 +106,8 @@ contains
 
         inquire(file='wout.nc', exist=file_exists)
         if (.not. file_exists) then
-            print *, '  SKIPPED: wout.nc not found in test directory'
+            print *, '  FAIL: wout.nc not found in test directory'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -131,7 +134,8 @@ contains
 
         inquire(file='wout.chartmap.nc', exist=file_exists)
         if (.not. file_exists) then
-            print *, '  SKIPPED: wout.chartmap.nc not found in test directory'
+            print *, '  FAIL: wout.chartmap.nc not found in test directory'
+            nerrors = nerrors + 1
             return
         end if
 

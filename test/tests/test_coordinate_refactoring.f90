@@ -197,8 +197,9 @@ contains
     end if
 
     if (.not. coils_exists) then
-      print *, '  SKIPPED: Optional coils file (coils.simple) not found'
+      print *, '  FAIL: coils.simple not found'
       print *, '  (Coils tests require coils.simple - run in golden_record directory)'
+      n_failed = n_failed + 1
       return
     end if
 

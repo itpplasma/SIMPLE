@@ -67,12 +67,14 @@ contains
         inquire (file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
 
         if (.not. vmec_exists) then
-            print *, '  SKIPPED: wout_ncsx.nc not found'
+            print *, '  FAIL: wout_ncsx.nc not found'
+            nerrors = nerrors + 1
             return
         end if
 
         if (.not. chartmap_exists) then
-            print *, '  SKIPPED: wout_ncsx.chartmap.nc not found'
+            print *, '  FAIL: wout_ncsx.chartmap.nc not found'
+            nerrors = nerrors + 1
             return
         end if
 
@@ -160,18 +162,21 @@ contains
         inquire (file='coils.simple', exist=coils_exists)
 
         if (.not. vmec_exists) then
-            print *, '  SKIPPED: wout_ncsx.nc not found'
+            print *, '  FAIL: wout_ncsx.nc not found'
+            nerrors = nerrors + 1
             return
         end if
 
         if (.not. chartmap_exists) then
-            print *, '  SKIPPED: wout_ncsx.chartmap.nc not found'
+            print *, '  FAIL: wout_ncsx.chartmap.nc not found'
+            nerrors = nerrors + 1
             return
         end if
 
         if (.not. coils_exists) then
-            print *, '  SKIPPED: coils.simple not found'
+            print *, '  FAIL: coils.simple not found'
             print *, '  (Run in directory with coils file or golden_record test dir)'
+            nerrors = nerrors + 1
             return
         end if
 
