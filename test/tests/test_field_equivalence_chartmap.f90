@@ -15,7 +15,7 @@ program test_field_equivalence_chartmap
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
-        make_chartmap_coordinate_system, chartmap_from_cyl_ok
+                                  make_chartmap_coordinate_system, chartmap_from_cyl_ok
     use simple, only: init_vmec
     use timing, only: init_timer
     use field_coils, only: coils_field_t, create_coils_field
@@ -63,8 +63,8 @@ contains
 
         print *, 'Test 1: Coordinate mapping consistency (VMEC -> cyl -> chartmap)'
 
-        inquire(file='wout_ncsx.nc', exist=vmec_exists)
-        inquire(file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
+        inquire (file='wout_ncsx.nc', exist=vmec_exists)
+        inquire (file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
 
         if (.not. vmec_exists) then
             print *, '  SKIPPED: wout_ncsx.nc not found'
@@ -85,11 +85,11 @@ contains
         n_phi = 4
 
         do i = 1, n_r
-            r = 0.2_dp + 0.15_dp * real(i - 1, dp)
+            r = 0.2_dp + 0.15_dp*real(i - 1, dp)
             do j = 1, n_th
-                theta = twopi * real(j - 1, dp) / real(n_th, dp)
+                theta = twopi*real(j - 1, dp)/real(n_th, dp)
                 do k = 1, n_phi
-                    phi = twopi * real(k - 1, dp) / real(n_phi, dp) / 3.0_dp
+                    phi = twopi*real(k - 1, dp)/real(n_phi, dp)/3.0_dp
 
                     u_vmec = [r**2, theta, phi]
 
@@ -122,7 +122,6 @@ contains
         print *, '  PASSED: Coordinate mapping consistent within tolerance ', tol
     end subroutine test_coordinate_mapping_consistency
 
-
     subroutine test_coils_field_equivalence(nerrors)
         !> Test that splined coils fields accurately reproduce the raw field.
         !> Each splined field is built on its own coordinate grid (VMEC or chartmap)
@@ -147,18 +146,18 @@ contains
         integer :: n_tested, n_failed_mapping
 
         real(dp), allocatable :: r_grid(:), theta_grid(:)
-        real(dp), allocatable :: vmec_err_grid(:,:), chart_err_grid(:,:)
-        real(dp), allocatable :: Bmod_vmec_grid(:,:), Bmod_chart_grid(:,:)
-        real(dp), allocatable :: Bmod_direct_grid(:,:)
-        real(dp), allocatable :: R_vmec_2d(:,:), Z_vmec_2d(:,:)
-        real(dp), allocatable :: R_chart_2d(:,:), Z_chart_2d(:,:)
+        real(dp), allocatable :: vmec_err_grid(:, :), chart_err_grid(:, :)
+        real(dp), allocatable :: Bmod_vmec_grid(:, :), Bmod_chart_grid(:, :)
+        real(dp), allocatable :: Bmod_direct_grid(:, :)
+        real(dp), allocatable :: R_vmec_2d(:, :), Z_vmec_2d(:, :)
+        real(dp), allocatable :: R_chart_2d(:, :), Z_chart_2d(:, :)
         real(dp) :: xcyl_chart(3)
 
         print *, 'Test 2: Coils field equivalence (VMEC-ref vs chartmap-ref)'
 
-        inquire(file='wout_ncsx.nc', exist=vmec_exists)
-        inquire(file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
-        inquire(file='coils.simple', exist=coils_exists)
+        inquire (file='wout_ncsx.nc', exist=vmec_exists)
+        inquire (file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
+        inquire (file='coils.simple', exist=coils_exists)
 
         if (.not. vmec_exists) then
             print *, '  SKIPPED: wout_ncsx.nc not found'
@@ -185,18 +184,18 @@ contains
         call create_splined_field(raw_coils, vmec_cs, splined_vmec)
         call create_splined_field(raw_coils, chart_cs, splined_chart)
 
-        allocate(r_grid(n_r + 1), theta_grid(n_th + 1))
-        allocate(vmec_err_grid(n_th, n_r), chart_err_grid(n_th, n_r))
-        allocate(Bmod_vmec_grid(n_th, n_r), Bmod_chart_grid(n_th, n_r))
-        allocate(Bmod_direct_grid(n_th, n_r))
-        allocate(R_vmec_2d(n_th, n_r), Z_vmec_2d(n_th, n_r))
-        allocate(R_chart_2d(n_th, n_r), Z_chart_2d(n_th, n_r))
+        allocate (r_grid(n_r + 1), theta_grid(n_th + 1))
+        allocate (vmec_err_grid(n_th, n_r), chart_err_grid(n_th, n_r))
+        allocate (Bmod_vmec_grid(n_th, n_r), Bmod_chart_grid(n_th, n_r))
+        allocate (Bmod_direct_grid(n_th, n_r))
+        allocate (R_vmec_2d(n_th, n_r), Z_vmec_2d(n_th, n_r))
+        allocate (R_chart_2d(n_th, n_r), Z_chart_2d(n_th, n_r))
 
         do i = 1, n_r + 1
-            r_grid(i) = 0.25_dp + 0.5_dp * real(i - 1, dp) / real(n_r, dp)
+            r_grid(i) = 0.25_dp + 0.5_dp*real(i - 1, dp)/real(n_r, dp)
         end do
         do j = 1, n_th + 1
-            theta_grid(j) = twopi * real(j - 1, dp) / real(n_th, dp)
+            theta_grid(j) = twopi*real(j - 1, dp)/real(n_th, dp)
         end do
 
         max_rel_diff_vmec = 0.0_dp
@@ -207,9 +206,9 @@ contains
         phi = 0.0_dp
 
         do i = 1, n_r
-            r = 0.5_dp * (r_grid(i) + r_grid(i + 1))
+            r = 0.5_dp*(r_grid(i) + r_grid(i + 1))
             do j = 1, n_th
-                theta = 0.5_dp * (theta_grid(j) + theta_grid(j + 1))
+                theta = 0.5_dp*(theta_grid(j) + theta_grid(j + 1))
 
                 u_vmec = [r, theta, phi]
 
@@ -246,9 +245,9 @@ contains
                 Bmod_chart_grid(j, i) = Bmod_chart
                 Bmod_direct_grid(j, i) = Bmod_direct
 
-                rel_diff_vmec = abs(Bmod_vmec - Bmod_direct) / Bmod_direct
-                rel_diff_chart = abs(Bmod_chart - Bmod_direct) / Bmod_direct
-                rel_diff_mutual = abs(Bmod_vmec - Bmod_chart) / Bmod_direct
+                rel_diff_vmec = abs(Bmod_vmec - Bmod_direct)/Bmod_direct
+                rel_diff_chart = abs(Bmod_chart - Bmod_direct)/Bmod_direct
+                rel_diff_mutual = abs(Bmod_vmec - Bmod_chart)/Bmod_direct
 
                 vmec_err_grid(j, i) = log10(max(rel_diff_vmec, 1.0e-10_dp))
                 chart_err_grid(j, i) = log10(max(rel_diff_chart, 1.0e-10_dp))
@@ -285,16 +284,16 @@ contains
         print *, '  Max mutual difference (VMEC vs chartmap): ', max_rel_diff_mutual
 
         call write_error_csv('field_equiv_vmec_error.csv', r_grid, theta_grid, &
-            vmec_err_grid)
+                             vmec_err_grid)
         call write_error_csv('field_equiv_chart_error.csv', r_grid, theta_grid, &
-            chart_err_grid)
+                             chart_err_grid)
         print *, '  CSV files written: field_equiv_vmec_error.csv, ', &
             'field_equiv_chart_error.csv'
 
         call write_plot_data('field_equiv', r_grid, theta_grid, &
-            R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d, &
-            Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid, &
-            vmec_err_grid, chart_err_grid)
+                             R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d, &
+                             Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid, &
+                             vmec_err_grid, chart_err_grid)
         call generate_plots_python()
         print *, '  Comparison plots written: field_equiv_comparison.png, ', &
             'field_equiv_flux_surface.png'
@@ -305,101 +304,98 @@ contains
                 tol_spline
         end if
 
-        deallocate(r_grid, theta_grid, vmec_err_grid, chart_err_grid)
-        deallocate(Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid)
-        deallocate(R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d)
+        deallocate (r_grid, theta_grid, vmec_err_grid, chart_err_grid)
+        deallocate (Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid)
+        deallocate (R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d)
     end subroutine test_coils_field_equivalence
-
 
     subroutine write_error_csv(filename, r_grid, theta_grid, err_grid)
         character(len=*), intent(in) :: filename
-        real(dp), intent(in) :: r_grid(:), theta_grid(:), err_grid(:,:)
+        real(dp), intent(in) :: r_grid(:), theta_grid(:), err_grid(:, :)
         integer :: i, j, unit_num
 
-        open(newunit=unit_num, file=filename, status='replace', action='write')
-        write(unit_num, '(A)') '# r, theta, log10_rel_error'
+        open (newunit=unit_num, file=filename, status='replace', action='write')
+        write (unit_num, '(A)') '# r, theta, log10_rel_error'
         do i = 1, size(err_grid, 2)
             do j = 1, size(err_grid, 1)
-                write(unit_num, '(3(ES16.8, A))') &
-                    0.5_dp * (r_grid(i) + r_grid(i + 1)), ',', &
-                    0.5_dp * (theta_grid(j) + theta_grid(j + 1)), ',', &
+                write (unit_num, '(3(ES16.8, A))') &
+                    0.5_dp*(r_grid(i) + r_grid(i + 1)), ',', &
+                    0.5_dp*(theta_grid(j) + theta_grid(j + 1)), ',', &
                     err_grid(j, i), ''
             end do
         end do
-        close(unit_num)
+        close (unit_num)
     end subroutine write_error_csv
 
-
     subroutine write_plot_data(prefix, r_grid, theta_grid, &
-            R_vmec, Z_vmec, R_chart, Z_chart, &
-            Bmod_vmec, Bmod_chart, Bmod_direct, err_vmec, err_chart)
+                               R_vmec, Z_vmec, R_chart, Z_chart, &
+                               Bmod_vmec, Bmod_chart, Bmod_direct, err_vmec, err_chart)
         !> Write binary data files for Python plotting.
         character(len=*), intent(in) :: prefix
         real(dp), intent(in) :: r_grid(:), theta_grid(:)
-        real(dp), intent(in) :: R_vmec(:,:), Z_vmec(:,:)
-        real(dp), intent(in) :: R_chart(:,:), Z_chart(:,:)
-        real(dp), intent(in) :: Bmod_vmec(:,:), Bmod_chart(:,:), Bmod_direct(:,:)
-        real(dp), intent(in) :: err_vmec(:,:), err_chart(:,:)
+        real(dp), intent(in) :: R_vmec(:, :), Z_vmec(:, :)
+        real(dp), intent(in) :: R_chart(:, :), Z_chart(:, :)
+        real(dp), intent(in) :: Bmod_vmec(:, :), Bmod_chart(:, :), Bmod_direct(:, :)
+        real(dp), intent(in) :: err_vmec(:, :), err_chart(:, :)
 
         integer :: unit_num
 
-        open(newunit=unit_num, file=trim(prefix)//'_r_grid.bin', &
-            access='stream', status='replace')
-        write(unit_num) r_grid
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_r_grid.bin', &
+              access='stream', status='replace')
+        write (unit_num) r_grid
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_theta_grid.bin', &
-            access='stream', status='replace')
-        write(unit_num) theta_grid
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_theta_grid.bin', &
+              access='stream', status='replace')
+        write (unit_num) theta_grid
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_Bmod_direct.bin', &
-            access='stream', status='replace')
-        write(unit_num) Bmod_direct
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_Bmod_direct.bin', &
+              access='stream', status='replace')
+        write (unit_num) Bmod_direct
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_Bmod_vmec.bin', &
-            access='stream', status='replace')
-        write(unit_num) Bmod_vmec
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_Bmod_vmec.bin', &
+              access='stream', status='replace')
+        write (unit_num) Bmod_vmec
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_Bmod_chart.bin', &
-            access='stream', status='replace')
-        write(unit_num) Bmod_chart
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_Bmod_chart.bin', &
+              access='stream', status='replace')
+        write (unit_num) Bmod_chart
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_err_vmec.bin', &
-            access='stream', status='replace')
-        write(unit_num) err_vmec
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_err_vmec.bin', &
+              access='stream', status='replace')
+        write (unit_num) err_vmec
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_err_chart.bin', &
-            access='stream', status='replace')
-        write(unit_num) err_chart
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_err_chart.bin', &
+              access='stream', status='replace')
+        write (unit_num) err_chart
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_R_vmec.bin', &
-            access='stream', status='replace')
-        write(unit_num) R_vmec
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_R_vmec.bin', &
+              access='stream', status='replace')
+        write (unit_num) R_vmec
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_Z_vmec.bin', &
-            access='stream', status='replace')
-        write(unit_num) Z_vmec
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_Z_vmec.bin', &
+              access='stream', status='replace')
+        write (unit_num) Z_vmec
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_R_chart.bin', &
-            access='stream', status='replace')
-        write(unit_num) R_chart
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_R_chart.bin', &
+              access='stream', status='replace')
+        write (unit_num) R_chart
+        close (unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_Z_chart.bin', &
-            access='stream', status='replace')
-        write(unit_num) Z_chart
-        close(unit_num)
+        open (newunit=unit_num, file=trim(prefix)//'_Z_chart.bin', &
+              access='stream', status='replace')
+        write (unit_num) Z_chart
+        close (unit_num)
 
     end subroutine write_plot_data
-
 
     subroutine generate_plots_python()
         !> Call Python script to generate plots from binary data.
