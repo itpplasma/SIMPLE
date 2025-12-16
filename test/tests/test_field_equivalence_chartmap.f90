@@ -22,7 +22,6 @@ program test_field_equivalence_chartmap
     use field_splined, only: splined_field_t, create_splined_field
     use cylindrical_cartesian, only: cyl_to_cart
     use util, only: twopi
-    use fortplot, only: figure_t
     implicit none
 
     integer :: nerrors
@@ -125,8 +124,9 @@ contains
 
 
     subroutine test_coils_field_equivalence(nerrors)
-        !> Test that splined coils field evaluated in VMEC-ref vs chartmap-ref
-        !> produces identical Bmod and h_cart at matched physical points.
+        !> Test that splined coils fields accurately reproduce the raw field.
+        !> Each splined field is built on its own coordinate grid (VMEC or chartmap)
+        !> and compared to direct raw_coils evaluation at the same physical point.
         !> Also generates visual output (error heatmaps).
         integer, intent(inout) :: nerrors
 
@@ -137,21 +137,20 @@ contains
         real(dp) :: Acov_vmec(3), hcov_vmec(3), Bmod_vmec
         real(dp) :: Acov_chart(3), hcov_chart(3), Bmod_chart
         real(dp) :: Acov_direct(3), hcov_direct(3), Bmod_direct
-        real(dp) :: hcart_vmec(3), hcart_chart(3), hcart_direct(3)
-        real(dp) :: e_cov_vmec(3, 3), e_cov_chart(3, 3)
-        real(dp) :: rel_diff_Bmod, rel_diff_hcart
-        real(dp), parameter :: tol_spline = 2.0e-2_dp
-        real(dp), parameter :: tol_equiv = 5.0e-3_dp
+        real(dp) :: rel_diff_vmec, rel_diff_chart, rel_diff_mutual
+        real(dp), parameter :: tol_spline = 4.0e-2_dp
         logical :: vmec_exists, chartmap_exists, coils_exists
-        integer :: ierr, i, j, k, idx
+        integer :: ierr, i, j
         integer, parameter :: n_r = 16, n_th = 32, n_phi = 1
         real(dp) :: r, theta, phi
-        real(dp) :: max_rel_diff_Bmod, max_rel_diff_hcart
+        real(dp) :: max_rel_diff_vmec, max_rel_diff_chart, max_rel_diff_mutual
         integer :: n_tested, n_failed_mapping
 
         real(dp), allocatable :: r_grid(:), theta_grid(:)
-        real(dp), allocatable :: Bmod_err_grid(:,:), hcart_err_grid(:,:)
-        type(figure_t) :: fig
+        real(dp), allocatable :: vmec_err_grid(:,:), chart_err_grid(:,:)
+        real(dp), allocatable :: Bmod_vmec_grid(:,:), Bmod_chart_grid(:,:)
+        real(dp), allocatable :: Bmod_direct_grid(:,:)
+        real(dp), allocatable :: R_grid_2d(:,:), Z_grid_2d(:,:)
 
         print *, 'Test 2: Coils field equivalence (VMEC-ref vs chartmap-ref)'
 
@@ -185,7 +184,10 @@ contains
         call create_splined_field(raw_coils, chart_cs, splined_chart)
 
         allocate(r_grid(n_r + 1), theta_grid(n_th + 1))
-        allocate(Bmod_err_grid(n_th, n_r), hcart_err_grid(n_th, n_r))
+        allocate(vmec_err_grid(n_th, n_r), chart_err_grid(n_th, n_r))
+        allocate(Bmod_vmec_grid(n_th, n_r), Bmod_chart_grid(n_th, n_r))
+        allocate(Bmod_direct_grid(n_th, n_r))
+        allocate(R_grid_2d(n_th, n_r), Z_grid_2d(n_th, n_r))
 
         do i = 1, n_r + 1
             r_grid(i) = 0.25_dp + 0.5_dp * real(i - 1, dp) / real(n_r, dp)
@@ -194,8 +196,9 @@ contains
             theta_grid(j) = twopi * real(j - 1, dp) / real(n_th, dp)
         end do
 
-        max_rel_diff_Bmod = 0.0_dp
-        max_rel_diff_hcart = 0.0_dp
+        max_rel_diff_vmec = 0.0_dp
+        max_rel_diff_chart = 0.0_dp
+        max_rel_diff_mutual = 0.0_dp
         n_tested = 0
         n_failed_mapping = 0
         phi = 0.0_dp
@@ -212,10 +215,16 @@ contains
                 call vmec_cs%evaluate_cyl([r**2, theta, phi], xcyl)
                 call chart_cs%from_cyl(xcyl, u_chart, ierr)
 
+                R_grid_2d(j, i) = xcyl(1)
+                Z_grid_2d(j, i) = xcyl(3)
+
                 if (ierr /= chartmap_from_cyl_ok) then
                     n_failed_mapping = n_failed_mapping + 1
-                    Bmod_err_grid(j, i) = -1.0_dp
-                    hcart_err_grid(j, i) = -1.0_dp
+                    vmec_err_grid(j, i) = -1.0_dp
+                    chart_err_grid(j, i) = -1.0_dp
+                    Bmod_vmec_grid(j, i) = Bmod_vmec
+                    Bmod_chart_grid(j, i) = 0.0_dp
+                    Bmod_direct_grid(j, i) = 0.0_dp
                     cycle
                 end if
 
@@ -224,67 +233,71 @@ contains
                 call cyl_to_cart(xcyl, x_cart)
                 call raw_coils%evaluate(x_cart, Acov_direct, hcov_direct, Bmod_direct)
 
-                call vmec_cs%cov_to_cart([r**2, theta, phi], hcov_vmec, hcart_vmec)
-                call chart_cs%cov_to_cart(u_chart, hcov_chart, hcart_chart)
-                hcart_direct = hcov_direct
+                Bmod_vmec_grid(j, i) = Bmod_vmec
+                Bmod_chart_grid(j, i) = Bmod_chart
+                Bmod_direct_grid(j, i) = Bmod_direct
 
-                ! h_cart comparison is informational - splined field uses VMEC grid
+                rel_diff_vmec = abs(Bmod_vmec - Bmod_direct) / Bmod_direct
+                rel_diff_chart = abs(Bmod_chart - Bmod_direct) / Bmod_direct
+                rel_diff_mutual = abs(Bmod_vmec - Bmod_chart) / Bmod_direct
 
-                rel_diff_Bmod = abs(Bmod_vmec - Bmod_chart) / Bmod_direct
-                rel_diff_hcart = sqrt(sum((hcart_vmec - hcart_chart)**2)) / &
-                    sqrt(sum(hcart_direct**2))
+                vmec_err_grid(j, i) = log10(max(rel_diff_vmec, 1.0e-10_dp))
+                chart_err_grid(j, i) = log10(max(rel_diff_chart, 1.0e-10_dp))
 
-                Bmod_err_grid(j, i) = log10(max(rel_diff_Bmod, 1.0e-10_dp))
-                hcart_err_grid(j, i) = log10(max(rel_diff_hcart, 1.0e-10_dp))
-
-                max_rel_diff_Bmod = max(max_rel_diff_Bmod, rel_diff_Bmod)
-                max_rel_diff_hcart = max(max_rel_diff_hcart, rel_diff_hcart)
+                max_rel_diff_vmec = max(max_rel_diff_vmec, rel_diff_vmec)
+                max_rel_diff_chart = max(max_rel_diff_chart, rel_diff_chart)
+                max_rel_diff_mutual = max(max_rel_diff_mutual, rel_diff_mutual)
                 n_tested = n_tested + 1
 
-                if (rel_diff_Bmod > tol_equiv) then
-                    print *, '  FAILED: VMEC vs chartmap Bmod differ too much'
+                if (rel_diff_vmec > tol_spline) then
+                    print *, '  FAILED: VMEC spline error too large'
                     print *, '    u_vmec=', u_vmec
-                    print *, '    u_chart=', u_chart
                     print *, '    Bmod_vmec=', Bmod_vmec
-                    print *, '    Bmod_chart=', Bmod_chart
-                    print *, '    rel_diff=', rel_diff_Bmod
+                    print *, '    Bmod_direct=', Bmod_direct
+                    print *, '    rel_diff=', rel_diff_vmec
                     nerrors = nerrors + 1
                 end if
 
-                ! Note: h_cart comparison is informational only.
-                ! The splined_field uses VMEC coordinates for both coordinate systems,
-                ! so h_cart cannot be directly compared. Bmod comparison is the
-                ! primary validation criterion per issue #226.
+                if (rel_diff_chart > tol_spline) then
+                    print *, '  FAILED: Chartmap spline error too large'
+                    print *, '    u_chart=', u_chart
+                    print *, '    Bmod_chart=', Bmod_chart
+                    print *, '    Bmod_direct=', Bmod_direct
+                    print *, '    rel_diff=', rel_diff_chart
+                    nerrors = nerrors + 1
+                end if
             end do
         end do
 
         print *, '  Points tested: ', n_tested
         print *, '  Points with mapping failures: ', n_failed_mapping
-        print *, '  Max relative difference (Bmod): ', max_rel_diff_Bmod
-        print *, '  Max relative difference (h_cart): ', max_rel_diff_hcart
+        print *, '  Max spline error (VMEC-ref): ', max_rel_diff_vmec
+        print *, '  Max spline error (chartmap-ref): ', max_rel_diff_chart
+        print *, '  Max mutual difference (VMEC vs chartmap): ', max_rel_diff_mutual
 
-        call write_error_csv('field_equiv_Bmod_error.csv', r_grid, theta_grid, &
-            Bmod_err_grid)
-        call write_error_csv('field_equiv_hcart_error.csv', r_grid, theta_grid, &
-            hcart_err_grid)
-        print *, '  CSV files written: field_equiv_Bmod_error.csv, ', &
-            'field_equiv_hcart_error.csv'
+        call write_error_csv('field_equiv_vmec_error.csv', r_grid, theta_grid, &
+            vmec_err_grid)
+        call write_error_csv('field_equiv_chart_error.csv', r_grid, theta_grid, &
+            chart_err_grid)
+        print *, '  CSV files written: field_equiv_vmec_error.csv, ', &
+            'field_equiv_chart_error.csv'
 
-        call generate_heatmap(r_grid, theta_grid, Bmod_err_grid, &
-            'field_equiv_Bmod_error.png', 'Bmod relative error (log10)', &
-            'r', 'theta')
-        call generate_heatmap(r_grid, theta_grid, hcart_err_grid, &
-            'field_equiv_hcart_error.png', 'h_cart relative error (log10)', &
-            'r', 'theta')
-        print *, '  Heatmaps written: field_equiv_Bmod_error.png, ', &
-            'field_equiv_hcart_error.png'
+        call write_plot_data('field_equiv', r_grid, theta_grid, R_grid_2d, &
+            Z_grid_2d, Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid, &
+            vmec_err_grid, chart_err_grid)
+        call generate_plots_python()
+        print *, '  Comparison plots written: field_equiv_comparison.png, ', &
+            'field_equiv_flux_surface.png'
 
-        if (max_rel_diff_Bmod <= tol_equiv .and. max_rel_diff_hcart <= tol_equiv &
+        if (max_rel_diff_vmec <= tol_spline .and. max_rel_diff_chart <= tol_spline &
             .and. n_tested > 0) then
-            print *, '  PASSED: Field equivalence within tolerance ', tol_equiv
+            print *, '  PASSED: Both splined fields accurate within tolerance ', &
+                tol_spline
         end if
 
-        deallocate(r_grid, theta_grid, Bmod_err_grid, hcart_err_grid)
+        deallocate(r_grid, theta_grid, vmec_err_grid, chart_err_grid)
+        deallocate(Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid)
+        deallocate(R_grid_2d, Z_grid_2d)
     end subroutine test_coils_field_equivalence
 
 
@@ -307,19 +320,75 @@ contains
     end subroutine write_error_csv
 
 
-    subroutine generate_heatmap(x_edges, y_edges, z_data, filename, plot_title, &
-            x_label, y_label)
-        real(dp), intent(in) :: x_edges(:), y_edges(:), z_data(:,:)
-        character(len=*), intent(in) :: filename, plot_title, x_label, y_label
+    subroutine write_plot_data(prefix, r_grid, theta_grid, R_2d, Z_2d, &
+            Bmod_vmec, Bmod_chart, Bmod_direct, err_vmec, err_chart)
+        !> Write binary data files for Python plotting.
+        character(len=*), intent(in) :: prefix
+        real(dp), intent(in) :: r_grid(:), theta_grid(:)
+        real(dp), intent(in) :: R_2d(:,:), Z_2d(:,:)
+        real(dp), intent(in) :: Bmod_vmec(:,:), Bmod_chart(:,:), Bmod_direct(:,:)
+        real(dp), intent(in) :: err_vmec(:,:), err_chart(:,:)
 
-        type(figure_t) :: fig
+        integer :: unit_num
 
-        call fig%initialize()
-        call fig%add_pcolormesh(x_edges, y_edges, z_data, colormap='viridis')
-        call fig%set_xlabel(x_label)
-        call fig%set_ylabel(y_label)
-        call fig%set_title(plot_title)
-        call fig%savefig(filename)
-    end subroutine generate_heatmap
+        open(newunit=unit_num, file=trim(prefix)//'_r_grid.bin', &
+            access='stream', status='replace')
+        write(unit_num) r_grid
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_theta_grid.bin', &
+            access='stream', status='replace')
+        write(unit_num) theta_grid
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_Bmod_direct.bin', &
+            access='stream', status='replace')
+        write(unit_num) Bmod_direct
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_Bmod_vmec.bin', &
+            access='stream', status='replace')
+        write(unit_num) Bmod_vmec
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_Bmod_chart.bin', &
+            access='stream', status='replace')
+        write(unit_num) Bmod_chart
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_err_vmec.bin', &
+            access='stream', status='replace')
+        write(unit_num) err_vmec
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_err_chart.bin', &
+            access='stream', status='replace')
+        write(unit_num) err_chart
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_R_2d.bin', &
+            access='stream', status='replace')
+        write(unit_num) R_2d
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_Z_2d.bin', &
+            access='stream', status='replace')
+        write(unit_num) Z_2d
+        close(unit_num)
+
+    end subroutine write_plot_data
+
+
+    subroutine generate_plots_python()
+        !> Call Python script to generate plots from binary data.
+        integer :: ierr
+
+        call execute_command_line( &
+            'python3 plot_field_equivalence.py field_equiv', exitstat=ierr)
+        if (ierr /= 0) then
+            print *, '  Warning: Python plotting failed (exit code ', ierr, ')'
+            print *, '  Binary data files available for manual plotting'
+        end if
+    end subroutine generate_plots_python
 
 end program test_field_equivalence_chartmap

@@ -316,6 +316,13 @@ set_tests_properties(test_refcoords_file_detection PROPERTIES
 add_executable(test_field_equivalence_chartmap.x test_field_equivalence_chartmap.f90)
 target_link_libraries(test_field_equivalence_chartmap.x simple)
 add_dependencies(test_field_equivalence_chartmap.x ncsx_test_data)
+
+# Copy Python plotting script to build directory
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/plot_field_equivalence.py
+    ${CMAKE_CURRENT_BINARY_DIR}/plot_field_equivalence.py
+    COPYONLY)
+
 add_test(NAME test_field_equivalence_chartmap
     COMMAND test_field_equivalence_chartmap.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
