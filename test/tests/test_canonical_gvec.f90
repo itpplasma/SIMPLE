@@ -53,8 +53,8 @@ program test_canonical_gvec
     end if
     
     if (.not. file_exists) then
-        print *, 'SKIP: No GVEC test file found. Run test_vmec_gvec first.'
-        stop 0  ! Skip test, don't fail
+        print *, 'FAIL: No GVEC test file found. Run test_vmec_gvec first.'
+        error stop 1
     end if
     
     ! Load GVEC field

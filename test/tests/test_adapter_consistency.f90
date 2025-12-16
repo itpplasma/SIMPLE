@@ -47,8 +47,8 @@ program test_adapter_consistency
     gvec_file = 'test_vmec_gvec_State_0000_00000000.dat'
     inquire(file=gvec_file, exist=file_exists)
     if (.not. file_exists) then
-        print *, 'SKIP: No GVEC file found. Run test_vmec_gvec first.'
-        stop 0
+        print *, 'FAIL: No GVEC file found. Run test_vmec_gvec first.'
+        error stop 1
     end if
     
     ! Load GVEC field

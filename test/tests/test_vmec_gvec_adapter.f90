@@ -72,14 +72,14 @@ program test_vmec_gvec_adapter
     ! Check files exist
     inquire(file=vmec_file, exist=file_exists)
     if (.not. file_exists) then
-        print *, 'SKIP: No VMEC file found'
-        stop 0
+        print *, 'FAIL: No VMEC file found'
+        error stop 1
     end if
-    
+
     inquire(file=gvec_file, exist=file_exists)
     if (.not. file_exists) then
-        print *, 'SKIP: No GVEC file found. Run test_vmec_gvec first.'
-        stop 0
+        print *, 'FAIL: No GVEC file found. Run test_vmec_gvec first.'
+        error stop 1
     end if
     
     ! Initialize VMEC field

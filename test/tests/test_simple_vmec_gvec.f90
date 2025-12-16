@@ -23,16 +23,16 @@ program test_simple_vmec_gvec
     vmec_file = 'wout.nc'
     inquire(file=vmec_file, exist=file_exists)
     if (.not. file_exists) then
-        print *, 'SKIP: No VMEC file (wout.nc) found in working directory'
-        stop 0
+        print *, 'FAIL: No VMEC file (wout.nc) found in working directory'
+        error stop 1
     end if
 
     ! Look for existing GVEC file created by test_vmec_gvec
     gvec_file = 'test_vmec_gvec_State_0000_00000000.dat'
     inquire(file=gvec_file, exist=file_exists)
     if (.not. file_exists) then
-        print *, 'SKIP: No GVEC test file found. Run test_vmec_gvec first.'
-        stop 0
+        print *, 'FAIL: No GVEC test file found. Run test_vmec_gvec first.'
+        error stop 1
     end if
 
     ! Test 1: Run with VMEC field (canonical coordinates)

@@ -21,9 +21,9 @@ program test_boozer_refactoring
     ! Check if VMEC file exists
     inquire(file='wout.nc', exist=file_exists)
     if (.not. file_exists) then
-        print *, 'SKIP: No VMEC file (wout.nc) found in working directory'
+        print *, 'FAIL: No VMEC file (wout.nc) found in working directory'
         print *, 'Test requires wout.nc to be present'
-        stop 77  ! Special exit code for skipped tests
+        error stop 1
     end if
     
     ! Initialize timer before any timing calls
