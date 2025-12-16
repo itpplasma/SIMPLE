@@ -36,10 +36,10 @@ program test_magfie_refcoords_vmec
     real(dp) :: x_r(3), x_s(3)
     real(dp) :: bmod_or, sqrtg_or
     real(dp) :: bder_or(3), hcov_or(3), hctr_or(3), hcurl_or(3)
-    real(dp) :: bmod_fd, sqrtg_fd
+    real(dp) :: bmod_fd, sqrtg_fd, sqrtg_signed
     real(dp) :: bder_fd(3), hcov_fd(3), hctr_fd(3), hcurl_fd(3)
-    real(dp) :: sqrtg_or_abs, sgn_sqrtg
     real(dp) :: g_s(3, 3), ginv_s(3, 3), ginv_r(3, 3), sqrtg_s
+    real(dp) :: e_cov_s(3, 3)
     real(dp) :: dh(3, 3), dBdx(3)
     real(dp) :: J, dr, ht, hp
     integer :: i_r, i_th, i_ph
@@ -69,29 +69,27 @@ program test_magfie_refcoords_vmec
                 dr = hs/J
 
                 call vmec_cs%metric_tensor(x_s, g_s, ginv_s, sqrtg_s)
+                call vmec_cs%covariant_basis(x_s, e_cov_s)
                 call metric_inverse_scaled(J, ginv_s, ginv_r)
-                sqrtg_fd = sqrtg_s*J
+                sqrtg_signed = signed_jacobian(e_cov_s)*J
+                sqrtg_fd = sqrtg_signed
 
                 call magfie_refcoords_fd(field, x_r, dr, ht, hp, phi_period, &
-                                         bmod_fd, bder_fd, hcov_fd, hctr_fd, &
-                                         hcurl_fd, dBdx, dh)
+                                         ginv_r, sqrtg_fd, bmod_fd, bder_fd, &
+                                         hcov_fd, hctr_fd, hcurl_fd, dBdx, dh)
 
                 call magfie_vmec(x_s, bmod_or, sqrtg_or, bder_or, hcov_or, hctr_or, &
                                  hcurl_or)
                 call transform_magfie_s_to_r(J, bmod_or, sqrtg_or, bder_or, hcov_or, &
                                              hctr_or, hcurl_or)
 
-                sgn_sqrtg = sign(1.0_dp, sqrtg_or)
-                sqrtg_or_abs = abs(sqrtg_or)
-                hcurl_or = hcurl_or*sgn_sqrtg
-
                 if (.not. approx_rel_or_abs(bmod_fd, bmod_or, tol_bmod, &
                                             1.0e-12_dp)) then
                     call report_fail('bmod', x_r, bmod_fd, bmod_or, tol_bmod, n_failed)
                 end if
-                if (.not. approx_rel_or_abs(sqrtg_fd, sqrtg_or_abs, tol_sqrtg, &
+                if (.not. approx_rel_or_abs(sqrtg_fd, sqrtg_or, tol_sqrtg, &
                                             1.0e-10_dp)) then
-                    call report_fail('sqrtg', x_r, sqrtg_fd, sqrtg_or_abs, &
+                    call report_fail('sqrtg', x_r, sqrtg_fd, sqrtg_or, &
                                      tol_sqrtg, n_failed)
                 end if
                 call check_vec('bder', x_r, bder_fd, bder_or, tol_bder, 1.0e-10_dp, &
@@ -119,10 +117,11 @@ program test_magfie_refcoords_vmec
 
 contains
 
-    subroutine magfie_refcoords_fd(field, x, dr, dth, dph, phi_period, bmod, bder, &
-                                   hcov, hctr, hcurl, dBdx, dh)
+    subroutine magfie_refcoords_fd(field, x, dr, dth, dph, phi_period, ginv, sqrtg, &
+                                   bmod, bder, hcov, hctr, hcurl, dBdx, dh)
         type(vmec_field_t), intent(in) :: field
         real(dp), intent(in) :: x(3), dr, dth, dph, phi_period
+        real(dp), intent(in) :: ginv(3, 3), sqrtg
         real(dp), intent(out) :: bmod, bder(3), hcov(3), hctr(3), hcurl(3)
         real(dp), intent(out) :: dBdx(3), dh(3, 3)
 
@@ -171,9 +170,9 @@ contains
 
         bder = dBdx/max(bmod, 1.0e-30_dp)
 
-        call compute_hcurl(sqrtg_fd, dh, hcurl)
+        call compute_hcurl(sqrtg, dh, hcurl)
 
-        hctr = matmul(ginv_r, hcov)
+        hctr = matmul(ginv, hcov)
     end subroutine magfie_refcoords_fd
 
 
@@ -217,7 +216,7 @@ contains
         real(dp), intent(in) :: dh(3, 3)
         real(dp), intent(out) :: hcurl(3)
 
-        if (.not. (sqrtg > 0.0_dp)) error stop 'compute_hcurl: sqrtg must be positive'
+        if (abs(sqrtg) <= 0.0_dp) error stop 'compute_hcurl: sqrtg must be nonzero'
 
         hcurl(1) = (dh(2, 3) - dh(3, 2))/sqrtg
         hcurl(2) = (dh(3, 1) - dh(1, 3))/sqrtg
@@ -271,5 +270,25 @@ contains
 
         write(s, '(i0)') i
     end function int_to_str
+
+
+    pure function signed_jacobian(e_cov) result(jac)
+        real(dp), intent(in) :: e_cov(3, 3)
+        real(dp) :: jac
+        real(dp) :: c(3)
+
+        c = cross_product(e_cov(:, 2), e_cov(:, 3))
+        jac = dot_product(e_cov(:, 1), c)
+    end function signed_jacobian
+
+
+    pure function cross_product(a, b) result(c)
+        real(dp), intent(in) :: a(3), b(3)
+        real(dp) :: c(3)
+
+        c(1) = a(2)*b(3) - a(3)*b(2)
+        c(2) = a(3)*b(1) - a(1)*b(3)
+        c(3) = a(1)*b(2) - a(2)*b(1)
+    end function cross_product
 
 end program test_magfie_refcoords_vmec
