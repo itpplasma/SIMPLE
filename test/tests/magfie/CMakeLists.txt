@@ -16,6 +16,9 @@ target_link_libraries(test_hctr_from_metric_vmec.x simple)
 add_executable(test_hcurl_from_dhcov_splines.x test_hcurl_from_dhcov_splines.f90)
 target_link_libraries(test_hcurl_from_dhcov_splines.x simple)
 
+add_executable(test_magfie_refcoords_splines.x test_magfie_refcoords_splines.f90)
+target_link_libraries(test_magfie_refcoords_splines.x simple)
+
 add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
@@ -33,5 +36,10 @@ add_test(NAME test_hctr_from_metric_vmec
 
 add_test(NAME test_hcurl_from_dhcov_splines
     COMMAND $<TARGET_FILE:test_hcurl_from_dhcov_splines.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+
+add_test(NAME test_magfie_refcoords_splines
+    COMMAND $<TARGET_FILE:test_magfie_refcoords_splines.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )

@@ -11,6 +11,7 @@ module magfie_wrapper
     integer, parameter :: field_type_boozer = BOOZER
     integer, parameter :: field_type_meiss = MEISS
     integer, parameter :: field_type_albert = ALBERT
+    integer, parameter :: field_type_refcoords = REFCOORDS
 
 contains
 
@@ -55,5 +56,10 @@ contains
         integer :: ftype
         ftype = TEST
     end function get_field_type_test
+
+    function get_field_type_refcoords() result(ftype)
+        integer :: ftype
+        ftype = REFCOORDS
+    end function get_field_type_refcoords
 
 end module magfie_wrapper

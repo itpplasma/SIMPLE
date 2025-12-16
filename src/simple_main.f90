@@ -104,7 +104,9 @@ module simple_main
     use field_base, only : magnetic_field_t
     use field, only : field_from_file
     use timing, only : print_phase_time
-    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT
+    use magfie_sub, only : TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
+                           REFCOORDS, set_magfie_refcoords_field
+    use field_splined, only : splined_field_t
     use util, only : twopi
     use reference_coordinates, only : init_reference_coordinates
     use params, only : coord_input, field_input
@@ -169,6 +171,17 @@ module simple_main
 
         call field_from_file(field_input, field_temp)
         call print_phase_time('Field from file loading completed')
+
+        if (isw_field_type == REFCOORDS) then
+          select type (field_temp)
+          type is (splined_field_t)
+            call set_magfie_refcoords_field(field_temp)
+          class default
+            print *, 'simple_main.init_field: REFCOORDS requires a splined field'
+            print *, 'Use a coils or other cartesian field input that is splined'
+            error stop
+          end select
+        end if
       end if
     end if
 
