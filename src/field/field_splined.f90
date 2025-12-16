@@ -26,7 +26,8 @@ module field_splined
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use interpolate, only: BatchSplineData3D, construct_batch_splines_3d, &
-        evaluate_batch_splines_3d, destroy_batch_splines_3d
+        evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
+        destroy_batch_splines_3d
     use field_base, only: magnetic_field_t
     use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
         RHO_TOR, RHO_POL
@@ -41,6 +42,7 @@ module field_splined
         logical :: initialized = .false.
     contains
         procedure :: evaluate => splined_evaluate
+        procedure :: evaluate_with_der => splined_evaluate_with_der
         final :: splined_field_cleanup
     end type splined_field_t
 
@@ -71,6 +73,47 @@ contains
             error stop "sqgBctr not implemented for splined_field_t"
         end if
     end subroutine splined_evaluate
+
+
+    subroutine splined_evaluate_with_der(self, x, Acov, hcov, Bmod, dAcov, dhcov, &
+                                         dBmod, sqgBctr)
+        !> Evaluate splined field at x in scaled coordinates and return
+        !> first derivatives with respect to the same coordinates x.
+        class(splined_field_t), intent(in) :: self
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+        real(dp), intent(out) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
+        real(dp), intent(out), optional :: sqgBctr(3)
+
+        real(dp) :: y_batch(7)
+        real(dp) :: dy_batch(3, 7)
+
+        call evaluate_batch_splines_3d_der(self%splines, x, y_batch, dy_batch)
+
+        Acov(1) = y_batch(1)
+        Acov(2) = y_batch(2)
+        Acov(3) = y_batch(3)
+
+        hcov(1) = y_batch(4)
+        hcov(2) = y_batch(5)
+        hcov(3) = y_batch(6)
+
+        Bmod = y_batch(7)
+
+        dAcov(:, 1) = dy_batch(:, 1)
+        dAcov(:, 2) = dy_batch(:, 2)
+        dAcov(:, 3) = dy_batch(:, 3)
+
+        dhcov(:, 1) = dy_batch(:, 4)
+        dhcov(:, 2) = dy_batch(:, 5)
+        dhcov(:, 3) = dy_batch(:, 6)
+
+        dBmod = dy_batch(:, 7)
+
+        if (present(sqgBctr)) then
+            error stop "sqgBctr not implemented for splined_field_t"
+        end if
+    end subroutine splined_evaluate_with_der
 
 
     subroutine create_splined_field(source, ref_coords, field, scaling, &
