@@ -304,6 +304,15 @@ add_test(NAME test_coordinate_refactoring
 set_tests_properties(test_coordinate_refactoring PROPERTIES
     LABELS "integration")
 
+add_executable(test_splined_field_derivatives.x test_splined_field_derivatives.f90)
+target_link_libraries(test_splined_field_derivatives.x simple)
+add_dependencies(test_splined_field_derivatives.x ncsx_test_data)
+add_test(NAME test_splined_field_derivatives
+    COMMAND test_splined_field_derivatives.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_splined_field_derivatives PROPERTIES
+    LABELS "integration")
+
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
 add_dependencies(test_refcoords_file_detection.x chartmap_test_data)
