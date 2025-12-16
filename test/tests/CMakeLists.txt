@@ -30,6 +30,54 @@ add_custom_command(
 )
 add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
 
+# Download NCSX test data for field equivalence tests (coils + wout)
+set(WOUT_NCSX_FILE "${TEST_DATA_DIR}/wout_ncsx.nc")
+set(WOUT_NCSX_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc")
+set(COILS_STELLOPT_FILE "${TEST_DATA_DIR}/coils.c09r00")
+set(COILS_STELLOPT_URL "https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00")
+
+if(NOT EXISTS "${WOUT_NCSX_FILE}")
+    message(STATUS "Downloading NCSX VMEC file to ${WOUT_NCSX_FILE}...")
+    file(DOWNLOAD "${WOUT_NCSX_URL}" "${WOUT_NCSX_FILE}")
+endif()
+
+if(NOT EXISTS "${COILS_STELLOPT_FILE}")
+    message(STATUS "Downloading NCSX coils file to ${COILS_STELLOPT_FILE}...")
+    file(DOWNLOAD "${COILS_STELLOPT_URL}" "${COILS_STELLOPT_FILE}")
+endif()
+
+# Generate chartmap from NCSX VMEC and convert coils for field equivalence test
+set(CHARTMAP_NCSX_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.nc")
+set(COILS_SIMPLE_FILE "${CMAKE_CURRENT_BINARY_DIR}/coils.simple")
+
+add_custom_command(
+    OUTPUT ${CHARTMAP_NCSX_FILE}
+    COMMAND $<TARGET_FILE:vmec_to_chartmap.x> ${WOUT_NCSX_FILE} ${CHARTMAP_NCSX_FILE} 17 33 33
+    DEPENDS ${WOUT_NCSX_FILE} vmec_to_chartmap.x
+    COMMENT "Generating NCSX chartmap test file from VMEC"
+    VERBATIM
+)
+
+# Convert STELLOPT coils format to SIMPLE format using Python
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_FOUND)
+    add_custom_command(
+        OUTPUT ${COILS_SIMPLE_FILE}
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/convert_coils_stellopt_to_simple.py
+            ${COILS_STELLOPT_FILE} ${COILS_SIMPLE_FILE}
+        DEPENDS ${COILS_STELLOPT_FILE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/convert_coils_stellopt_to_simple.py
+        COMMENT "Converting STELLOPT coils to SIMPLE format"
+        VERBATIM
+    )
+endif()
+
+add_custom_target(ncsx_test_data DEPENDS ${CHARTMAP_NCSX_FILE} ${COILS_SIMPLE_FILE})
+
+# Symlinks for NCSX test data
+file(CREATE_LINK "${WOUT_NCSX_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc" SYMBOLIC)
+
 # Convert VMEC to GVEC format for testing field_vmec vs field_gvec
 # This requires GVEC Python API or command-line tools
 if(ENABLE_GVEC)
@@ -264,6 +312,23 @@ add_test(NAME test_refcoords_file_detection
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
+
+add_executable(test_field_equivalence_chartmap.x test_field_equivalence_chartmap.f90)
+target_link_libraries(test_field_equivalence_chartmap.x simple)
+add_dependencies(test_field_equivalence_chartmap.x ncsx_test_data)
+
+# Copy Python plotting script to build directory
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/plot_field_equivalence.py
+    ${CMAKE_CURRENT_BINARY_DIR}/plot_field_equivalence.py
+    COPYONLY)
+
+add_test(NAME test_field_equivalence_chartmap
+    COMMAND test_field_equivalence_chartmap.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_field_equivalence_chartmap PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120)
 
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)

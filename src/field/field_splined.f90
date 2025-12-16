@@ -5,6 +5,11 @@ module field_splined
     !> Splines are built in scaled coordinates (default: r = sqrt(s) for better
     !> resolution near axis, matching libneo convention).
     !>
+    !> The reference coordinate system (ref_coords) is used for:
+    !>   - Mapping from reference coordinates to Cartesian (evaluate_cart)
+    !>   - Computing covariant basis vectors (covariant_basis)
+    !> This allows proper support for VMEC, chartmap, or any coordinate system.
+    !>
     !> Usage:
     !>   type(coils_field_t) :: raw_coils
     !>   type(splined_field_t) :: splined
@@ -23,10 +28,11 @@ module field_splined
     use interpolate, only: BatchSplineData3D, construct_batch_splines_3d, &
         evaluate_batch_splines_3d, destroy_batch_splines_3d
     use field_base, only: magnetic_field_t
-    use libneo_coordinates, only: coordinate_system_t
-    use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t
+    use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
+        RHO_TOR, RHO_POL
+    use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, &
+        identity_scaling_t
     use cartesian_coordinates, only: cartesian_coordinate_system_t
-    use simple_coordinates, only: transform_vmec_to_cart
 
     implicit none
 
@@ -78,7 +84,7 @@ contains
         integer, intent(in), optional :: n_r, n_th, n_phi
         real(dp), intent(in), optional :: xmin(3), xmax(3)
 
-        call build_splines(source, field%splines, scaling, &
+        call build_splines(source, ref_coords, field%splines, scaling, &
                           n_r, n_th, n_phi, xmin, xmax)
 
         allocate(field%coords, source=ref_coords)
@@ -86,7 +92,7 @@ contains
     end subroutine create_splined_field
 
 
-    subroutine build_splines(source, spl, scaling, &
+    subroutine build_splines(source, ref_coords, spl, scaling, &
                             n_r_in, n_th_in, n_phi_in, xmin_in, xmax_in)
         !> Build splines by sampling source field on uniform grid.
         !> Grid is in scaled coordinates. Default scaling: r = sqrt(s).
@@ -94,13 +100,15 @@ contains
         use util, only: twopi
 
         class(magnetic_field_t), intent(in) :: source
+        class(coordinate_system_t), intent(in) :: ref_coords
         type(BatchSplineData3D), intent(out) :: spl
         class(coordinate_scaling_t), intent(in), optional, target :: scaling
         integer, intent(in), optional :: n_r_in, n_th_in, n_phi_in
         real(dp), intent(in), optional :: xmin_in(3), xmax_in(3)
 
         class(coordinate_scaling_t), pointer :: scaling_ptr
-        type(sqrt_s_scaling_t), target :: default_scaling
+        type(sqrt_s_scaling_t), target :: sqrt_s_scaling
+        type(identity_scaling_t), target :: identity_scaling
 
         integer :: n_r, n_th, n_phi
         real(dp) :: xmin(3), xmax(3)
@@ -110,7 +118,7 @@ contains
 
         real(dp) :: h_r, h_th, h_phi
         real(dp) :: x_scaled(3), x_ref(3), x_cart(3)
-        real(dp) :: dxcart_dxref(3, 3), scaling_jac(3)
+        real(dp) :: e_cov(3, 3), scaling_jac(3)
         real(dp) :: Bmod
         real(dp) :: Acov(3), hcov(3)
 
@@ -131,7 +139,8 @@ contains
         if (present(scaling)) then
             scaling_ptr => scaling
         else
-            scaling_ptr => default_scaling
+            scaling_ptr => get_default_scaling(ref_coords, sqrt_s_scaling, &
+                                               identity_scaling)
         end if
 
         h_r = (xmax(1) - xmin(1)) / (n_r - 1)
@@ -146,7 +155,7 @@ contains
 
         i_ctr = 0
         !$omp parallel private(i_r, i_th, i_phi, x_scaled, x_ref, x_cart, &
-        !$omp&                  dxcart_dxref, scaling_jac, Bmod, Acov, hcov)
+        !$omp&                  e_cov, scaling_jac, Bmod, Acov, hcov)
         !$omp do
         do i_phi = 1, n_phi
             !$omp atomic
@@ -160,8 +169,8 @@ contains
 
                     call scaling_ptr%inverse(x_scaled, x_ref, scaling_jac)
 
-                    call evaluate_at_ref_coords(source, x_ref, x_cart, &
-                                               dxcart_dxref, Acov, hcov, Bmod)
+                    call evaluate_at_ref_coords(source, ref_coords, x_ref, &
+                                               x_cart, e_cov, Acov, hcov, Bmod)
 
                     Acov(1) = Acov(1) * scaling_jac(1)
                     hcov(1) = hcov(1) * scaling_jac(1)
@@ -213,24 +222,26 @@ contains
     end subroutine build_splines
 
 
-    subroutine evaluate_at_ref_coords(source, x_ref, x_cart, dxcart_dxref, &
-                                      Acov, hcov, Bmod)
+    subroutine evaluate_at_ref_coords(source, ref_coords, x_ref, x_cart, &
+                                      e_cov, Acov, hcov, Bmod)
         !> Evaluate source field at reference coordinates x_ref = (s, theta, phi).
         !> Transforms to source coordinates (Cartesian), evaluates, transforms back.
         !> Returns covariant components in reference coordinates.
         class(magnetic_field_t), intent(in) :: source
+        class(coordinate_system_t), intent(in) :: ref_coords
         real(dp), intent(in) :: x_ref(3)
-        real(dp), intent(out) :: x_cart(3), dxcart_dxref(3, 3)
+        real(dp), intent(out) :: x_cart(3), e_cov(3, 3)
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
 
         real(dp) :: A_cart(3), h_cart(3)
 
         select type (coords => source%coords)
         type is (cartesian_coordinate_system_t)
-            call transform_vmec_to_cart(x_ref, x_cart, dxcart_dxref)
+            call ref_coords%evaluate_cart(x_ref, x_cart)
+            call ref_coords%covariant_basis(x_ref, e_cov)
             call source%evaluate(x_cart, A_cart, h_cart, Bmod)
-            Acov = matmul(A_cart, dxcart_dxref)
-            hcov = matmul(h_cart, dxcart_dxref)
+            Acov = matmul(A_cart, e_cov)
+            hcov = matmul(h_cart, e_cov)
         class default
             error stop "evaluate_at_ref_coords: source must be in Cartesian coords"
         end select
@@ -245,5 +256,29 @@ contains
             self%initialized = .false.
         end if
     end subroutine splined_field_cleanup
+
+
+    function get_default_scaling(ref_coords, sqrt_s_scaling, identity_scaling) &
+            result(scaling_ptr)
+        !> Select default scaling based on coordinate system rho_convention.
+        !> RHO_TOR/RHO_POL: identity (coords already in rho = sqrt(s))
+        !> PSI_TOR_NORM/other: sqrt_s (coords in s, need to transform)
+        class(coordinate_system_t), intent(in) :: ref_coords
+        type(sqrt_s_scaling_t), intent(in), target :: sqrt_s_scaling
+        type(identity_scaling_t), intent(in), target :: identity_scaling
+        class(coordinate_scaling_t), pointer :: scaling_ptr
+
+        select type (cs => ref_coords)
+        type is (chartmap_coordinate_system_t)
+            if (cs%rho_convention == RHO_TOR .or. &
+                cs%rho_convention == RHO_POL) then
+                scaling_ptr => identity_scaling
+            else
+                scaling_ptr => sqrt_s_scaling
+            end if
+        class default
+            scaling_ptr => sqrt_s_scaling
+        end select
+    end function get_default_scaling
 
 end module field_splined
