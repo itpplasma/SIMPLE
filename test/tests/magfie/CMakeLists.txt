@@ -10,6 +10,9 @@ target_link_libraries(test_magfie_refcoords_vmec.x simple)
 add_executable(test_jacobian_conventions_vmec.x test_jacobian_conventions_vmec.f90)
 target_link_libraries(test_jacobian_conventions_vmec.x simple)
 
+add_executable(test_hctr_from_metric_vmec.x test_hctr_from_metric_vmec.f90)
+target_link_libraries(test_hctr_from_metric_vmec.x simple)
+
 add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
@@ -17,5 +20,10 @@ add_test(NAME test_magfie_refcoords_vmec
 
 add_test(NAME test_jacobian_conventions_vmec
     COMMAND $<TARGET_FILE:test_jacobian_conventions_vmec.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+
+add_test(NAME test_hctr_from_metric_vmec
+    COMMAND $<TARGET_FILE:test_hctr_from_metric_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
