@@ -330,6 +330,23 @@ set_tests_properties(test_field_equivalence_chartmap PROPERTIES
     LABELS "integration"
     TIMEOUT 120)
 
+# Chartmap pipeline unit tests (issue #227)
+add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)
+target_link_libraries(test_chartmap_pipeline.x simple)
+add_dependencies(test_chartmap_pipeline.x ncsx_test_data)
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/plot_chartmap_pipeline.py
+    ${CMAKE_CURRENT_BINARY_DIR}/plot_chartmap_pipeline.py
+    COPYONLY)
+
+add_test(NAME test_chartmap_pipeline
+    COMMAND test_chartmap_pipeline.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_pipeline PROPERTIES
+    LABELS "unit"
+    TIMEOUT 60)
+
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)
 target_link_libraries(test_batch_splines.x simple testing_utils)
