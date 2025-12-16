@@ -3,6 +3,9 @@ use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
+use field_splined, only: splined_field_t
+use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
+                              RHO_TOR, RHO_POL
 
 implicit none
 
@@ -31,9 +34,19 @@ end interface
 
 procedure(magfie_base), pointer :: magfie => null()
 
-integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4
+integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
+                      REFCOORDS=5
+
+type(splined_field_t), allocatable :: refcoords_field
 
 contains
+
+subroutine set_magfie_refcoords_field(field)
+  type(splined_field_t), intent(in) :: field
+
+  if (allocated(refcoords_field)) deallocate (refcoords_field)
+  allocate (refcoords_field, source=field)
+end subroutine set_magfie_refcoords_field
 
 subroutine init_magfie(id)
   integer, intent(in) :: id
@@ -51,6 +64,8 @@ subroutine init_magfie(id)
     magfie => magfie_meiss
   case(ALBERT)
     magfie => magfie_albert
+  case(REFCOORDS)
+    magfie => magfie_refcoords
   case default
     print *,'init_magfie: unknown id ', id
     error stop
@@ -114,6 +129,118 @@ subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 
 end subroutine magfie_test
 
+
+subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+  !> magfie in reference coordinates using analytic spline derivatives.
+  !>
+  !> Input x is in the splined_field_t coordinate system (typically
+  !> (rho, theta, phi) where rho = sqrt(s) for VMEC coordinate systems).
+  !
+  implicit none
+
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod, sqrtg
+  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+  real(dp) :: Acov(3), Bmod_local
+  real(dp) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
+  real(dp) :: g(3, 3), ginv_u(3, 3), ginv_x(3, 3)
+  real(dp) :: u_ref(3), J
+  real(dp) :: e_cov(3, 3), jac_signed
+  real(dp) :: sqrtg_abs
+
+  if (.not. allocated(refcoords_field)) then
+    print *, 'magfie_refcoords: refcoords_field not set'
+    print *, 'Call set_magfie_refcoords_field before init_magfie(REFCOORDS)'
+    error stop
+  end if
+
+  call refcoords_field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, &
+                                         dhcov, dBmod)
+  bmod = Bmod_local
+  bder = dBmod/max(bmod, 1.0d-30)
+
+  call scaled_to_ref_coords(refcoords_field%coords, x, u_ref, J)
+  call refcoords_field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
+  call refcoords_field%coords%covariant_basis(u_ref, e_cov)
+
+  jac_signed = signed_jacobian(e_cov)
+  sqrtg = jac_signed*J
+
+  call inverse_metric_scaled(J, ginv_u, ginv_x)
+  hctrvr = matmul(ginv_x, hcovar)
+
+  call compute_hcurl(sqrtg, dhcov, hcurl)
+end subroutine magfie_refcoords
+
+
+subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
+  class(coordinate_system_t), intent(in) :: coords
+  real(dp), intent(in) :: x_scaled(3)
+  real(dp), intent(out) :: u_ref(3)
+  real(dp), intent(out) :: J
+
+  select type (coords)
+  type is (chartmap_coordinate_system_t)
+    if (coords%rho_convention == RHO_TOR .or. coords%rho_convention == RHO_POL) then
+      u_ref = x_scaled
+      J = 1.0d0
+    else
+      u_ref = [x_scaled(1)**2, x_scaled(2), x_scaled(3)]
+      J = 2.0d0*x_scaled(1)
+    end if
+  class default
+    u_ref = [x_scaled(1)**2, x_scaled(2), x_scaled(3)]
+    J = 2.0d0*x_scaled(1)
+  end select
+end subroutine scaled_to_ref_coords
+
+
+subroutine inverse_metric_scaled(J, ginv_u, ginv_x)
+  real(dp), intent(in) :: J
+  real(dp), intent(in) :: ginv_u(3, 3)
+  real(dp), intent(out) :: ginv_x(3, 3)
+
+  ginv_x = ginv_u
+  ginv_x(1, 1) = ginv_u(1, 1)/(J*J)
+  ginv_x(1, 2) = ginv_u(1, 2)/J
+  ginv_x(1, 3) = ginv_u(1, 3)/J
+  ginv_x(2, 1) = ginv_u(2, 1)/J
+  ginv_x(3, 1) = ginv_u(3, 1)/J
+end subroutine inverse_metric_scaled
+
+
+subroutine compute_hcurl(sqrtg, dh, hcurl)
+  real(dp), intent(in) :: sqrtg
+  real(dp), intent(in) :: dh(3, 3)
+  real(dp), intent(out) :: hcurl(3)
+
+  if (abs(sqrtg) <= 0.0d0) error stop 'compute_hcurl: sqrtg must be nonzero'
+
+  hcurl(1) = (dh(2, 3) - dh(3, 2))/sqrtg
+  hcurl(2) = (dh(3, 1) - dh(1, 3))/sqrtg
+  hcurl(3) = (dh(1, 2) - dh(2, 1))/sqrtg
+end subroutine compute_hcurl
+
+
+pure function signed_jacobian(e_cov) result(jac)
+  real(dp), intent(in) :: e_cov(3, 3)
+  real(dp) :: jac
+  real(dp) :: c(3)
+
+  c = cross_product(e_cov(:, 2), e_cov(:, 3))
+  jac = dot_product(e_cov(:, 1), c)
+end function signed_jacobian
+
+
+pure function cross_product(a, b) result(c)
+  real(dp), intent(in) :: a(3), b(3)
+  real(dp) :: c(3)
+
+  c(1) = a(2)*b(3) - a(3)*b(2)
+  c(2) = a(3)*b(1) - a(1)*b(3)
+  c(3) = a(1)*b(2) - a(2)*b(1)
+end function cross_product
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
