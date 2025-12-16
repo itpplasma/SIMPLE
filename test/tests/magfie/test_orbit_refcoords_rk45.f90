@@ -11,12 +11,14 @@ program test_orbit_refcoords_rk45
     !>   2. Integrate for N timesteps using both magfie implementations
     !>   3. Compare trajectories at final position
     !>   4. Check mu conservation along each trajectory separately
+    !>   5. Write trajectories to NetCDF for plotting
     !>
     !> The test uses the VMEC equilibrium as source for both paths - the difference
     !> is whether we use direct VMEC splines (magfie_vmec) or re-splined field
     !> with analytic derivatives (magfie_refcoords).
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use netcdf
     use simple, only: init_vmec
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
@@ -48,6 +50,9 @@ program test_orbit_refcoords_rk45
     real(dp) :: dev_s, dev_th, dev_phi
     real(dp) :: mu_drift_vmec, mu_drift_refcoords
 
+    real(dp) :: traj_vmec(5, n_steps+1), traj_refcoords(5, n_steps+1)
+    real(dp) :: time_arr(n_steps+1), mu_vmec_arr(n_steps+1), mu_refcoords_arr(n_steps+1)
+
     n_failed = 0
 
     print *, '================================'
@@ -75,6 +80,9 @@ program test_orbit_refcoords_rk45
     call init_magfie(VMEC)
     mu0_vmec = compute_mu_at_point(z0)
     z_vmec = z0
+    traj_vmec(:, 1) = z_vmec
+    time_arr(1) = 0.0_dp
+    mu_vmec_arr(1) = mu0_vmec
 
     do i = 1, n_steps
         call orbit_timestep_axis(z_vmec, dtaumin, dtaumin, relerr, ierr)
@@ -82,6 +90,9 @@ program test_orbit_refcoords_rk45
             print *, 'magfie_vmec: particle left domain at step ', i
             exit
         end if
+        traj_vmec(:, i+1) = z_vmec
+        time_arr(i+1) = i * dtaumin
+        mu_vmec_arr(i+1) = compute_mu_at_point(z_vmec)
     end do
     mu_vmec_final = compute_mu_at_point(z_vmec)
     mu_drift_vmec = abs(mu_vmec_final - mu0_vmec)/mu0_vmec
@@ -96,6 +107,8 @@ program test_orbit_refcoords_rk45
     call init_magfie(REFCOORDS)
     mu0_refcoords = compute_mu_at_point(z0)
     z_refcoords = z0
+    traj_refcoords(:, 1) = z_refcoords
+    mu_refcoords_arr(1) = mu0_refcoords
 
     do i = 1, n_steps
         call orbit_timestep_axis(z_refcoords, dtaumin, dtaumin, relerr, ierr)
@@ -103,6 +116,8 @@ program test_orbit_refcoords_rk45
             print *, 'magfie_refcoords: particle left domain at step ', i
             exit
         end if
+        traj_refcoords(:, i+1) = z_refcoords
+        mu_refcoords_arr(i+1) = compute_mu_at_point(z_refcoords)
     end do
     mu_refcoords_final = compute_mu_at_point(z_refcoords)
     mu_drift_refcoords = abs(mu_refcoords_final - mu0_refcoords)/mu0_refcoords
@@ -128,6 +143,11 @@ program test_orbit_refcoords_rk45
     print *, 'Invariant (mu) conservation:'
     print '(A,ES12.4)', '  vmec mu drift:      ', mu_drift_vmec
     print '(A,ES12.4)', '  refcoords mu drift: ', mu_drift_refcoords
+    print *
+
+    call write_orbits_netcdf(traj_vmec, traj_refcoords, time_arr, &
+                             mu_vmec_arr, mu_refcoords_arr, n_steps+1)
+    print *, 'Wrote orbit comparison to orbit_refcoords_comparison.nc'
     print *
 
     if (dev_s/max(z0(1), 1d-30) > tol_pos_rel) then
@@ -215,5 +235,108 @@ contains
         call magfie(z(1:3), bmod, sqrtg, bder, hcov, hctr, hcurl)
         mu = compute_mu(z, bmod)
     end function compute_mu_at_point
+
+
+    subroutine check_nc(status, location)
+        integer, intent(in) :: status
+        character(len=*), intent(in) :: location
+
+        if (status /= nf90_noerr) then
+            print *, 'NetCDF error at ', trim(location), ': ', trim(nf90_strerror(status))
+            error stop 'NetCDF operation failed'
+        end if
+    end subroutine check_nc
+
+
+    subroutine write_orbits_netcdf(traj_vmec, traj_refcoords, time_arr, &
+                                   mu_vmec, mu_refcoords, n_points)
+        real(dp), intent(in) :: traj_vmec(5, n_points), traj_refcoords(5, n_points)
+        real(dp), intent(in) :: time_arr(n_points)
+        real(dp), intent(in) :: mu_vmec(n_points), mu_refcoords(n_points)
+        integer, intent(in) :: n_points
+
+        integer :: ncid, dimid_time, status
+        integer :: varid_time, varid_s_vmec, varid_th_vmec, varid_phi_vmec
+        integer :: varid_s_ref, varid_th_ref, varid_phi_ref
+        integer :: varid_mu_vmec, varid_mu_ref
+        integer :: varid_p_vmec, varid_lambda_vmec
+        integer :: varid_p_ref, varid_lambda_ref
+
+        status = nf90_create('orbit_refcoords_comparison.nc', nf90_netcdf4, ncid)
+        call check_nc(status, 'nf90_create')
+
+        status = nf90_def_dim(ncid, 'time', n_points, dimid_time)
+        call check_nc(status, 'nf90_def_dim time')
+
+        status = nf90_def_var(ncid, 'time', nf90_double, [dimid_time], varid_time)
+        call check_nc(status, 'nf90_def_var time')
+        status = nf90_put_att(ncid, varid_time, 'units', 'normalized')
+        call check_nc(status, 'nf90_put_att time units')
+
+        status = nf90_def_var(ncid, 's_vmec', nf90_double, [dimid_time], varid_s_vmec)
+        call check_nc(status, 'nf90_def_var s_vmec')
+        status = nf90_def_var(ncid, 'theta_vmec', nf90_double, [dimid_time], varid_th_vmec)
+        call check_nc(status, 'nf90_def_var theta_vmec')
+        status = nf90_def_var(ncid, 'phi_vmec', nf90_double, [dimid_time], varid_phi_vmec)
+        call check_nc(status, 'nf90_def_var phi_vmec')
+        status = nf90_def_var(ncid, 'p_vmec', nf90_double, [dimid_time], varid_p_vmec)
+        call check_nc(status, 'nf90_def_var p_vmec')
+        status = nf90_def_var(ncid, 'lambda_vmec', nf90_double, [dimid_time], varid_lambda_vmec)
+        call check_nc(status, 'nf90_def_var lambda_vmec')
+        status = nf90_def_var(ncid, 'mu_vmec', nf90_double, [dimid_time], varid_mu_vmec)
+        call check_nc(status, 'nf90_def_var mu_vmec')
+
+        status = nf90_def_var(ncid, 's_refcoords', nf90_double, [dimid_time], varid_s_ref)
+        call check_nc(status, 'nf90_def_var s_refcoords')
+        status = nf90_def_var(ncid, 'theta_refcoords', nf90_double, [dimid_time], varid_th_ref)
+        call check_nc(status, 'nf90_def_var theta_refcoords')
+        status = nf90_def_var(ncid, 'phi_refcoords', nf90_double, [dimid_time], varid_phi_ref)
+        call check_nc(status, 'nf90_def_var phi_refcoords')
+        status = nf90_def_var(ncid, 'p_refcoords', nf90_double, [dimid_time], varid_p_ref)
+        call check_nc(status, 'nf90_def_var p_refcoords')
+        status = nf90_def_var(ncid, 'lambda_refcoords', nf90_double, [dimid_time], varid_lambda_ref)
+        call check_nc(status, 'nf90_def_var lambda_refcoords')
+        status = nf90_def_var(ncid, 'mu_refcoords', nf90_double, [dimid_time], varid_mu_ref)
+        call check_nc(status, 'nf90_def_var mu_refcoords')
+
+        status = nf90_put_att(ncid, nf90_global, 'description', &
+            'RK45 orbit comparison: magfie_vmec vs magfie_refcoords')
+        call check_nc(status, 'nf90_put_att description')
+
+        status = nf90_enddef(ncid)
+        call check_nc(status, 'nf90_enddef')
+
+        status = nf90_put_var(ncid, varid_time, time_arr)
+        call check_nc(status, 'nf90_put_var time')
+
+        status = nf90_put_var(ncid, varid_s_vmec, traj_vmec(1, :))
+        call check_nc(status, 'nf90_put_var s_vmec')
+        status = nf90_put_var(ncid, varid_th_vmec, traj_vmec(2, :))
+        call check_nc(status, 'nf90_put_var theta_vmec')
+        status = nf90_put_var(ncid, varid_phi_vmec, traj_vmec(3, :))
+        call check_nc(status, 'nf90_put_var phi_vmec')
+        status = nf90_put_var(ncid, varid_p_vmec, traj_vmec(4, :))
+        call check_nc(status, 'nf90_put_var p_vmec')
+        status = nf90_put_var(ncid, varid_lambda_vmec, traj_vmec(5, :))
+        call check_nc(status, 'nf90_put_var lambda_vmec')
+        status = nf90_put_var(ncid, varid_mu_vmec, mu_vmec)
+        call check_nc(status, 'nf90_put_var mu_vmec')
+
+        status = nf90_put_var(ncid, varid_s_ref, traj_refcoords(1, :))
+        call check_nc(status, 'nf90_put_var s_refcoords')
+        status = nf90_put_var(ncid, varid_th_ref, traj_refcoords(2, :))
+        call check_nc(status, 'nf90_put_var theta_refcoords')
+        status = nf90_put_var(ncid, varid_phi_ref, traj_refcoords(3, :))
+        call check_nc(status, 'nf90_put_var phi_refcoords')
+        status = nf90_put_var(ncid, varid_p_ref, traj_refcoords(4, :))
+        call check_nc(status, 'nf90_put_var p_refcoords')
+        status = nf90_put_var(ncid, varid_lambda_ref, traj_refcoords(5, :))
+        call check_nc(status, 'nf90_put_var lambda_refcoords')
+        status = nf90_put_var(ncid, varid_mu_ref, mu_refcoords)
+        call check_nc(status, 'nf90_put_var mu_refcoords')
+
+        status = nf90_close(ncid)
+        call check_nc(status, 'nf90_close')
+    end subroutine write_orbits_netcdf
 
 end program test_orbit_refcoords_rk45

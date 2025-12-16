@@ -51,3 +51,14 @@ add_test(NAME test_orbit_refcoords_rk45
     COMMAND $<TARGET_FILE:test_orbit_refcoords_rk45.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
+
+add_test(NAME test_orbit_refcoords_rk45_plot
+    COMMAND ${CMAKE_COMMAND} -E env python3
+        ${CMAKE_CURRENT_SOURCE_DIR}/plot_orbit_refcoords_comparison.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_orbit_refcoords_rk45_plot PROPERTIES
+    DEPENDS test_orbit_refcoords_rk45
+    TIMEOUT 30
+    LABELS "integration;plot"
+)
