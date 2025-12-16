@@ -150,7 +150,9 @@ contains
         real(dp), allocatable :: vmec_err_grid(:,:), chart_err_grid(:,:)
         real(dp), allocatable :: Bmod_vmec_grid(:,:), Bmod_chart_grid(:,:)
         real(dp), allocatable :: Bmod_direct_grid(:,:)
-        real(dp), allocatable :: R_grid_2d(:,:), Z_grid_2d(:,:)
+        real(dp), allocatable :: R_vmec_2d(:,:), Z_vmec_2d(:,:)
+        real(dp), allocatable :: R_chart_2d(:,:), Z_chart_2d(:,:)
+        real(dp) :: xcyl_chart(3)
 
         print *, 'Test 2: Coils field equivalence (VMEC-ref vs chartmap-ref)'
 
@@ -187,7 +189,8 @@ contains
         allocate(vmec_err_grid(n_th, n_r), chart_err_grid(n_th, n_r))
         allocate(Bmod_vmec_grid(n_th, n_r), Bmod_chart_grid(n_th, n_r))
         allocate(Bmod_direct_grid(n_th, n_r))
-        allocate(R_grid_2d(n_th, n_r), Z_grid_2d(n_th, n_r))
+        allocate(R_vmec_2d(n_th, n_r), Z_vmec_2d(n_th, n_r))
+        allocate(R_chart_2d(n_th, n_r), Z_chart_2d(n_th, n_r))
 
         do i = 1, n_r + 1
             r_grid(i) = 0.25_dp + 0.5_dp * real(i - 1, dp) / real(n_r, dp)
@@ -215,8 +218,8 @@ contains
                 call vmec_cs%evaluate_cyl([r**2, theta, phi], xcyl)
                 call chart_cs%from_cyl(xcyl, u_chart, ierr)
 
-                R_grid_2d(j, i) = xcyl(1)
-                Z_grid_2d(j, i) = xcyl(3)
+                R_vmec_2d(j, i) = xcyl(1)
+                Z_vmec_2d(j, i) = xcyl(3)
 
                 if (ierr /= chartmap_from_cyl_ok) then
                     n_failed_mapping = n_failed_mapping + 1
@@ -225,8 +228,14 @@ contains
                     Bmod_vmec_grid(j, i) = Bmod_vmec
                     Bmod_chart_grid(j, i) = 0.0_dp
                     Bmod_direct_grid(j, i) = 0.0_dp
+                    R_chart_2d(j, i) = xcyl(1)
+                    Z_chart_2d(j, i) = xcyl(3)
                     cycle
                 end if
+
+                call chart_cs%evaluate_cyl(u_chart, xcyl_chart)
+                R_chart_2d(j, i) = xcyl_chart(1)
+                Z_chart_2d(j, i) = xcyl_chart(3)
 
                 call splined_chart%evaluate(u_chart, Acov_chart, hcov_chart, Bmod_chart)
 
@@ -282,8 +291,9 @@ contains
         print *, '  CSV files written: field_equiv_vmec_error.csv, ', &
             'field_equiv_chart_error.csv'
 
-        call write_plot_data('field_equiv', r_grid, theta_grid, R_grid_2d, &
-            Z_grid_2d, Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid, &
+        call write_plot_data('field_equiv', r_grid, theta_grid, &
+            R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d, &
+            Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid, &
             vmec_err_grid, chart_err_grid)
         call generate_plots_python()
         print *, '  Comparison plots written: field_equiv_comparison.png, ', &
@@ -297,7 +307,7 @@ contains
 
         deallocate(r_grid, theta_grid, vmec_err_grid, chart_err_grid)
         deallocate(Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid)
-        deallocate(R_grid_2d, Z_grid_2d)
+        deallocate(R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d)
     end subroutine test_coils_field_equivalence
 
 
@@ -320,12 +330,14 @@ contains
     end subroutine write_error_csv
 
 
-    subroutine write_plot_data(prefix, r_grid, theta_grid, R_2d, Z_2d, &
+    subroutine write_plot_data(prefix, r_grid, theta_grid, &
+            R_vmec, Z_vmec, R_chart, Z_chart, &
             Bmod_vmec, Bmod_chart, Bmod_direct, err_vmec, err_chart)
         !> Write binary data files for Python plotting.
         character(len=*), intent(in) :: prefix
         real(dp), intent(in) :: r_grid(:), theta_grid(:)
-        real(dp), intent(in) :: R_2d(:,:), Z_2d(:,:)
+        real(dp), intent(in) :: R_vmec(:,:), Z_vmec(:,:)
+        real(dp), intent(in) :: R_chart(:,:), Z_chart(:,:)
         real(dp), intent(in) :: Bmod_vmec(:,:), Bmod_chart(:,:), Bmod_direct(:,:)
         real(dp), intent(in) :: err_vmec(:,:), err_chart(:,:)
 
@@ -366,14 +378,24 @@ contains
         write(unit_num) err_chart
         close(unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_R_2d.bin', &
+        open(newunit=unit_num, file=trim(prefix)//'_R_vmec.bin', &
             access='stream', status='replace')
-        write(unit_num) R_2d
+        write(unit_num) R_vmec
         close(unit_num)
 
-        open(newunit=unit_num, file=trim(prefix)//'_Z_2d.bin', &
+        open(newunit=unit_num, file=trim(prefix)//'_Z_vmec.bin', &
             access='stream', status='replace')
-        write(unit_num) Z_2d
+        write(unit_num) Z_vmec
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_R_chart.bin', &
+            access='stream', status='replace')
+        write(unit_num) R_chart
+        close(unit_num)
+
+        open(newunit=unit_num, file=trim(prefix)//'_Z_chart.bin', &
+            access='stream', status='replace')
+        write(unit_num) Z_chart
         close(unit_num)
 
     end subroutine write_plot_data
