@@ -21,8 +21,8 @@ program test_jacobian_conventions_vmec
     integer, parameter :: n_th = 8
     integer, parameter :: n_ph = 6
 
-    real(dp), parameter :: tol_signed = 5.0e-12_dp
-    real(dp), parameter :: tol_abs = 5.0e-12_dp
+    real(dp), parameter :: tol_signed = 1.0e-13_dp
+    real(dp), parameter :: tol_abs = 1.0e-13_dp
 
     real(dp) :: r, theta, phi, phi_period
     real(dp) :: x_s(3)
