@@ -137,6 +137,9 @@ contains
 
     subroutine magfie_refcoords_fd(field, x, hs, dth, dph, phi_period, ginv, sqrtg, &
                                    bmod, bder, hcov, hctr, hcurl, dBdx, dh)
+        !> Evaluate field in r-coordinates using FD for derivatives.
+        !> Input x = (r, theta, phi) where r = sqrt(s).
+        !> Output is in r-coordinates.
         type(vmec_field_t), intent(in) :: field
         real(dp), intent(in) :: x(3), hs, dth, dph, phi_period
         real(dp), intent(in) :: ginv(3, 3), sqrtg
@@ -145,18 +148,24 @@ contains
 
         real(dp) :: B0, Bp, Bm
         real(dp) :: h0(3), hpv(3), hmv(3)
-        real(dp) :: x_plus(3), x_minus(3)
+        real(dp) :: x_plus(3), x_minus(3), x_s(3)
         real(dp) :: Acov_tmp(3)
-        real(dp) :: s0, r0, r_plus, r_minus
+        real(dp) :: s0, r0, r_plus, r_minus, ds_dr
         real(dp) :: db_ds, dh_ds(3)
         integer :: i
 
-        call field%evaluate(x, Acov_tmp, h0, B0)
-        bmod = B0
-        hcov = h0
-
         r0 = x(1)
         s0 = r0**2
+        ds_dr = 2.0_dp*r0
+
+        ! vmec_field_t now expects s-coordinates
+        x_s = [s0, x(2), x(3)]
+        call field%evaluate(x_s, Acov_tmp, h0, B0)
+        bmod = B0
+        ! Convert hcov from s-coords to r-coords: h_r = h_s * ds/dr
+        hcov(1) = h0(1)*ds_dr
+        hcov(2:3) = h0(2:3)
+
         r_plus = sqrt(s0 + hs)
         r_minus = sqrt(max(s0 - hs, 1.0e-16_dp))
 
@@ -177,8 +186,12 @@ contains
                 error stop 'magfie_refcoords_fd: invalid coordinate index'
             end select
 
-            call field%evaluate(x_plus, Acov_tmp, hpv, Bp)
-            call field%evaluate(x_minus, Acov_tmp, hmv, Bm)
+            ! Convert to s-coordinates for field evaluation
+            call field%evaluate([x_plus(1)**2, x_plus(2), x_plus(3)], Acov_tmp, hpv, Bp)
+            call field%evaluate([x_minus(1)**2, x_minus(2), x_minus(3)], Acov_tmp, hmv, Bm)
+            ! Convert h from s-coords to r-coords
+            hpv(1) = hpv(1)*2.0_dp*x_plus(1)
+            hmv(1) = hmv(1)*2.0_dp*x_minus(1)
 
             select case (i)
             case (1)

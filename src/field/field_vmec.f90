@@ -17,8 +17,8 @@ contains
 
     subroutine vmec_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         !> Evaluate magnetic field from VMEC equilibrium.
-        !> x = (r, theta, phi) where r = sqrt(s), s = normalized toroidal flux.
-        !> Returns covariant components in (r, theta, phi) coordinates.
+        !> x = (s, theta, phi) where s = normalized toroidal flux.
+        !> Returns covariant components in (s, theta, phi) coordinates.
         use spline_vmec_sub, only: splint_vmec_data, compute_field_components
 
         class(vmec_field_t), intent(in) :: self
@@ -30,11 +30,10 @@ contains
         real(dp) :: dA_theta_ds, dA_phi_ds, Bctr_vartheta, Bctr_varphi
         real(dp) :: aiota, sqg, alam, dl_ds, dl_dt, dl_dp
         real(dp) :: Bcov_s, Bcov_vartheta, Bcov_varphi
-        real(dp) :: s, ds_dr
+        real(dp) :: s
         real(dp) :: R, Z, dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
 
-        s = x(1)**2
-        ds_dr = 2d0 * x(1)
+        s = x(1)
 
         call splint_vmec_data(s, x(2), x(3), Acov_varphi, Acov_vartheta, &
                               dA_phi_ds, dA_theta_ds, aiota, R, Z, alam, &
@@ -46,13 +45,13 @@ contains
                                       sqg, Bctr_vartheta, Bctr_varphi, Bcov_s, &
                                       Bcov_vartheta, Bcov_varphi)
 
-        Acov(1) = Acov_vartheta * dl_ds * ds_dr
+        Acov(1) = Acov_vartheta * dl_ds
         Acov(2) = Acov_vartheta * (1d0 + dl_dt)
         Acov(3) = Acov_varphi + Acov_vartheta * dl_dp
 
         Bmod = sqrt(Bctr_vartheta * Bcov_vartheta + Bctr_varphi * Bcov_varphi)
 
-        hcov(1) = (Bcov_s + Bcov_vartheta * dl_ds) / Bmod * ds_dr
+        hcov(1) = (Bcov_s + Bcov_vartheta * dl_ds) / Bmod
         hcov(2) = Bcov_vartheta * (1d0 + dl_dt) / Bmod
         hcov(3) = (Bcov_varphi + Bcov_vartheta * dl_dp) / Bmod
 
