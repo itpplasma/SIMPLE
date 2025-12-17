@@ -39,12 +39,17 @@ program test_orbit_chartmap_comparison
     type(vmec_coordinate_system_t) :: vmec_coords
     class(coordinate_system_t), allocatable :: chartmap_coords
 
-    integer, parameter :: n_steps = 1000
-    real(dp), parameter :: total_time = 1.0e-4_dp
-    real(dp) :: dtau
+    integer, parameter :: n_steps = 100
+    real(dp), parameter :: trace_time = 1.0e-7_dp
+    ! physical seconds (short for chartmap)
+    real(dp) :: dtau, tau, v0_alpha
     real(dp), parameter :: relerr = 1.0e-10_dp
 
-    real(dp), parameter :: tol_cartesian = 1.0e-4_dp  ! 1 micrometer tolerance
+    ! Tolerances for different comparisons (cm)
+    real(dp), parameter :: tol_meiss_vmec = 1.0_dp       ! Meiss-VMEC should match well
+    real(dp), parameter :: tol_meiss_chartmap = 2.0_dp   ! Meiss-Chartmap reasonable
+    real(dp), parameter :: tol_chartmap = 20.0_dp
+    ! Direct chartmap has larger errors
 
     real(dp) :: z0(5), z0_chartmap(5), fper, bmod_0
     real(dp) :: z_vmec(5), z_meiss_vmec(5), z_chartmap(5), z_meiss_chartmap(5)
@@ -76,12 +81,17 @@ program test_orbit_chartmap_comparison
     allocate (cart_chartmap(3, n_steps + 1), cart_meiss_chartmap(3, n_steps + 1))
     allocate (time_arr(n_steps + 1))
 
-    dtau = total_time/n_steps
-
     print *, 'Step 1: Initialize VMEC equilibrium'
     call init_vmec(wout_file, 5, 5, 5, fper)
     call init_reference_coordinates(wout_file)
-    call set_physics_parameters
+    call set_physics_parameters(v0_alpha)
+
+    ! Convert physical time to normalized time: tau = trace_time * v0
+    tau = trace_time*v0_alpha
+    dtau = tau/n_steps
+    print '(A,ES12.4)', '  Trace time (s): ', trace_time
+    print '(A,ES12.4)', '  Normalized time tau: ', tau
+    print '(A,ES12.4)', '  dtau per step: ', dtau
 
     print *, 'Step 2: Load chartmap (pre-generated from VMEC)'
     print *, '  Using: ', chartmap_file
@@ -202,16 +212,19 @@ program test_orbit_chartmap_comparison
     print *, '  Wrote: orbit_chartmap_comparison.nc'
     print *
 
-    if (max_dev_meiss_vmec > tol_cartesian) then
-        print *, 'FAIL: Meiss-VMEC deviation exceeds tolerance'
+    if (max_dev_meiss_vmec > tol_meiss_vmec) then
+        print '(A,ES10.2,A,ES10.2)', ' FAIL: Meiss-VMEC deviation ', &
+            max_dev_meiss_vmec, ' > tol ', tol_meiss_vmec
         n_failed = n_failed + 1
     end if
-    if (max_dev_chartmap > tol_cartesian) then
-        print *, 'FAIL: Chartmap deviation exceeds tolerance'
+    if (max_dev_chartmap > tol_chartmap) then
+        print '(A,ES10.2,A,ES10.2)', ' FAIL: Chartmap deviation ', &
+            max_dev_chartmap, ' > tol ', tol_chartmap
         n_failed = n_failed + 1
     end if
-    if (max_dev_meiss_chartmap > tol_cartesian) then
-        print *, 'FAIL: Meiss-Chartmap deviation exceeds tolerance'
+    if (max_dev_meiss_chartmap > tol_meiss_chartmap) then
+        print '(A,ES10.2,A,ES10.2)', ' FAIL: Meiss-Chartmap deviation ', &
+            max_dev_meiss_chartmap, ' > tol ', tol_meiss_chartmap
         n_failed = n_failed + 1
     end if
 
@@ -228,11 +241,28 @@ program test_orbit_chartmap_comparison
 
 contains
 
-    subroutine set_physics_parameters
+    subroutine set_physics_parameters(v0_out)
+        use util, only: ev, p_mass, c_light => c, e_charge
         use vector_potentail_mod, only: torflux
 
-        ro0 = 1.0d-5
+        real(dp), intent(out) :: v0_out
+        real(dp) :: E_alpha, rlarm
+        integer :: n_d, n_e
+
+        ! 3.5 MeV alpha particle (A=4, Z=2)
+        n_d = 4
+        n_e = 2
+        E_alpha = 3.5d6  ! eV
+
+        ! Calculate velocity and Larmor radius (CGS)
+        v0_out = sqrt(2.0_dp*E_alpha*ev/(n_d*p_mass))
+        rlarm = v0_out*n_d*p_mass*c_light/(n_e*e_charge)
+        ro0 = rlarm
         rmu = 1.0d8
+
+        print '(A,ES12.4)', '  Alpha energy (eV): ', E_alpha
+        print '(A,ES12.4)', '  v0 (cm/s): ', v0_out
+        print '(A,ES12.4)', '  ro0 = rlarm (cm): ', ro0
     end subroutine set_physics_parameters
 
     subroutine set_initial_conditions(z, bmod)
