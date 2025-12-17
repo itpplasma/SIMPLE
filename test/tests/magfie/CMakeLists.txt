@@ -72,8 +72,8 @@ add_test(NAME test_orbit_chartmap_comparison
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 set_tests_properties(test_orbit_chartmap_comparison PROPERTIES
-    TIMEOUT 600
-    LABELS "integration;slow"
+    TIMEOUT 120
+    LABELS "integration"
 )
 
 add_test(NAME test_orbit_chartmap_comparison_plot

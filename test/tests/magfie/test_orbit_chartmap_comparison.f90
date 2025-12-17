@@ -27,7 +27,7 @@ program test_orbit_chartmap_comparison
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
-        make_chartmap_coordinate_system
+                                  make_chartmap_coordinate_system
 
     implicit none
 
@@ -39,22 +39,20 @@ program test_orbit_chartmap_comparison
     type(vmec_coordinate_system_t) :: vmec_coords
     class(coordinate_system_t), allocatable :: chartmap_coords
 
-    real(dp) :: fper
-
     integer, parameter :: n_steps = 1000
     real(dp), parameter :: total_time = 1.0e-4_dp
     real(dp) :: dtau
     real(dp), parameter :: relerr = 1.0e-10_dp
 
-    real(dp), parameter :: tol_cartesian = 1.0e-2_dp
+    real(dp), parameter :: tol_cartesian = 1.0e-4_dp  ! 1 micrometer tolerance
 
-    real(dp) :: z0(5), z0_chartmap(5), bmod_0
+    real(dp) :: z0(5), z0_chartmap(5), fper, bmod_0
     real(dp) :: z_vmec(5), z_meiss_vmec(5), z_chartmap(5), z_meiss_chartmap(5)
 
-    real(dp), allocatable :: traj_vmec(:,:), traj_meiss_vmec(:,:)
-    real(dp), allocatable :: traj_chartmap(:,:), traj_meiss_chartmap(:,:)
-    real(dp), allocatable :: cart_vmec(:,:), cart_meiss_vmec(:,:)
-    real(dp), allocatable :: cart_chartmap(:,:), cart_meiss_chartmap(:,:)
+    real(dp), allocatable :: traj_vmec(:, :), traj_meiss_vmec(:, :)
+    real(dp), allocatable :: traj_chartmap(:, :), traj_meiss_chartmap(:, :)
+    real(dp), allocatable :: cart_vmec(:, :), cart_meiss_vmec(:, :)
+    real(dp), allocatable :: cart_chartmap(:, :), cart_meiss_chartmap(:, :)
     real(dp), allocatable :: time_arr(:)
 
     integer :: i, ierr, n_failed
@@ -72,13 +70,13 @@ program test_orbit_chartmap_comparison
     print *, '========================================================'
     print *
 
-    allocate(traj_vmec(5, n_steps+1), traj_meiss_vmec(5, n_steps+1))
-    allocate(traj_chartmap(5, n_steps+1), traj_meiss_chartmap(5, n_steps+1))
-    allocate(cart_vmec(3, n_steps+1), cart_meiss_vmec(3, n_steps+1))
-    allocate(cart_chartmap(3, n_steps+1), cart_meiss_chartmap(3, n_steps+1))
-    allocate(time_arr(n_steps+1))
+    allocate (traj_vmec(5, n_steps + 1), traj_meiss_vmec(5, n_steps + 1))
+    allocate (traj_chartmap(5, n_steps + 1), traj_meiss_chartmap(5, n_steps + 1))
+    allocate (cart_vmec(3, n_steps + 1), cart_meiss_vmec(3, n_steps + 1))
+    allocate (cart_chartmap(3, n_steps + 1), cart_meiss_chartmap(3, n_steps + 1))
+    allocate (time_arr(n_steps + 1))
 
-    dtau = total_time / n_steps
+    dtau = total_time/n_steps
 
     print *, 'Step 1: Initialize VMEC equilibrium'
     call init_vmec(wout_file, 5, 5, 5, fper)
@@ -121,8 +119,8 @@ program test_orbit_chartmap_comparison
             print *, '  Particle left domain at step ', i
             exit
         end if
-        traj_vmec(:, i+1) = z_vmec
-        time_arr(i+1) = i * dtau
+        traj_vmec(:, i + 1) = z_vmec
+        time_arr(i + 1) = i*dtau
     end do
     print '(A,3ES14.6)', '  Final position: ', z_vmec(1:3)
 
@@ -139,7 +137,7 @@ program test_orbit_chartmap_comparison
             print *, '  Particle left domain at step ', i
             exit
         end if
-        traj_meiss_vmec(:, i+1) = z_meiss_vmec
+        traj_meiss_vmec(:, i + 1) = z_meiss_vmec
     end do
     print '(A,3ES14.6)', '  Final position (canonical): ', z_meiss_vmec(1:3)
     call cleanup_meiss
@@ -155,7 +153,7 @@ program test_orbit_chartmap_comparison
             print *, '  Particle left domain at step ', i
             exit
         end if
-        traj_chartmap(:, i+1) = z_chartmap
+        traj_chartmap(:, i + 1) = z_chartmap
     end do
     print '(A,3ES14.6)', '  Final position: ', z_chartmap(1:3)
 
@@ -174,7 +172,7 @@ program test_orbit_chartmap_comparison
             print *, '  Particle left domain at step ', i
             exit
         end if
-        traj_meiss_chartmap(:, i+1) = z_meiss_chartmap
+        traj_meiss_chartmap(:, i + 1) = z_meiss_chartmap
     end do
     print '(A,3ES14.6)', '  Final position (canonical): ', z_meiss_chartmap(1:3)
     call cleanup_meiss
@@ -188,11 +186,13 @@ program test_orbit_chartmap_comparison
     print *, '========================================================'
     print *, 'Comparing trajectories in Cartesian space...'
     print *, '========================================================'
-    call compute_deviations(max_dev_meiss_vmec, max_dev_chartmap, max_dev_meiss_chartmap)
+    call compute_deviations(max_dev_meiss_vmec, max_dev_chartmap, &
+                            max_dev_meiss_chartmap)
 
     print '(A,ES12.4)', '  Max deviation (Meiss-VMEC vs VMEC):     ', max_dev_meiss_vmec
     print '(A,ES12.4)', '  Max deviation (Chartmap vs VMEC):       ', max_dev_chartmap
-    print '(A,ES12.4)', '  Max deviation (Meiss-Chartmap vs VMEC): ', max_dev_meiss_chartmap
+    print '(A,ES12.4)', '  Max deviation (Meiss-Chartmap vs VMEC): ', &
+        max_dev_meiss_chartmap
     print *
 
     print *, '========================================================'
@@ -255,38 +255,58 @@ contains
         real(dp), intent(in) :: z_vmec(3)
         real(dp), intent(out) :: z_chart(3)
 
-        real(dp) :: x_target(3), x_test(3), error(3)
-        real(dp) :: J(3,3), J_inv(3,3), dx(3), det
+        real(dp) :: x_target(3), x_test(3), err_vec(3), err_norm
+        real(dp) :: J(3, 3), J_inv(3, 3), dx(3)
         real(dp), parameter :: tol = 1.0e-10_dp
         integer, parameter :: max_iter = 50
-        integer :: i, info
+        integer :: iter, info
         integer :: ipiv(3)
-        real(dp) :: work(3)
+        real(dp) :: work(9)
+        logical :: converged
 
         call ref_coords%evaluate_cart(z_vmec, x_target)
         z_chart = z_vmec
+        converged = .false.
 
-        do i = 1, max_iter
+        do iter = 1, max_iter
             call chartmap_coords%evaluate_cart(z_chart, x_test)
-            error = x_test - x_target
+            err_vec = x_test - x_target
+            err_norm = sqrt(sum(err_vec**2))
 
-            if (sqrt(sum(error**2)) < tol) exit
+            if (err_norm < tol) then
+                converged = .true.
+                exit
+            end if
 
             call compute_jacobian_cart(chartmap_coords, z_chart, J)
 
             J_inv = J
             call dgetrf(3, 3, J_inv, 3, ipiv, info)
-            call dgetri(3, J_inv, 3, ipiv, work, 3, info)
+            if (info /= 0) then
+                print *, 'ERROR: Jacobian LU factorization failed, info =', info
+                error stop 'Newton iteration: singular Jacobian'
+            end if
+            call dgetri(3, J_inv, 3, ipiv, work, 9, info)
+            if (info /= 0) then
+                print *, 'ERROR: Jacobian inversion failed, info =', info
+                error stop 'Newton iteration: matrix inversion failed'
+            end if
 
-            dx = -matmul(J_inv, error)
+            dx = -matmul(J_inv, err_vec)
             z_chart = z_chart + dx
         end do
+
+        if (.not. converged) then
+            print *, 'ERROR: Newton iteration did not converge'
+            print *, '  Final error norm:', err_norm
+            error stop 'Chartmap coordinate search failed to converge'
+        end if
     end subroutine find_chartmap_coords_for_vmec_point
 
     subroutine compute_jacobian_cart(coords, x, J)
         class(coordinate_system_t), intent(in) :: coords
         real(dp), intent(in) :: x(3)
-        real(dp), intent(out) :: J(3,3)
+        real(dp), intent(out) :: J(3, 3)
 
         real(dp), parameter :: eps = 1.0e-6_dp
         real(dp) :: x_plus(3), x_minus(3), cart_plus(3), cart_minus(3)
@@ -299,7 +319,7 @@ contains
             x_minus(i) = x(i) - eps
             call coords%evaluate_cart(x_plus, cart_plus)
             call coords%evaluate_cart(x_minus, cart_minus)
-            J(:, i) = (cart_plus - cart_minus) / (2.0_dp * eps)
+            J(:, i) = (cart_plus - cart_minus)/(2.0_dp*eps)
         end do
     end subroutine compute_jacobian_cart
 
@@ -354,19 +374,19 @@ contains
         dev_meiss_chart = 0.0_dp
 
         do j = 1, n_steps + 1
-            d = sqrt(sum((cart_meiss_vmec(:,j) - cart_vmec(:,j))**2))
+            d = sqrt(sum((cart_meiss_vmec(:, j) - cart_vmec(:, j))**2))
             dev_meiss = max(dev_meiss, d)
 
-            d = sqrt(sum((cart_chartmap(:,j) - cart_vmec(:,j))**2))
+            d = sqrt(sum((cart_chartmap(:, j) - cart_vmec(:, j))**2))
             dev_chart = max(dev_chart, d)
 
-            d = sqrt(sum((cart_meiss_chartmap(:,j) - cart_vmec(:,j))**2))
+            d = sqrt(sum((cart_meiss_chartmap(:, j) - cart_vmec(:, j))**2))
             dev_meiss_chart = max(dev_meiss_chart, d)
         end do
     end subroutine compute_deviations
 
     subroutine write_comparison_netcdf
-        integer :: ncid, dimid_time, dimid_xyz
+        integer :: ncid, dimid_time
         integer :: varid_time, varid_x_vmec, varid_y_vmec, varid_z_vmec
         integer :: varid_x_meiss, varid_y_meiss, varid_z_meiss
         integer :: varid_x_chart, varid_y_chart, varid_z_chart
@@ -376,11 +396,11 @@ contains
         status = nf90_create('orbit_chartmap_comparison.nc', nf90_netcdf4, ncid)
         call check_nc(status, 'create')
 
-        status = nf90_def_dim(ncid, 'time', n_steps+1, dimid_time)
+        status = nf90_def_dim(ncid, 'time', n_steps + 1, dimid_time)
         call check_nc(status, 'def_dim time')
 
         status = nf90_put_att(ncid, nf90_global, 'description', &
-            'Orbit comparison: VMEC vs Meiss-VMEC vs Chartmap vs Meiss-Chartmap')
+                   'Orbit comparison: VMEC vs Meiss-VMEC vs Chartmap vs Meiss-Chartmap')
         call check_nc(status, 'put_att')
 
         status = nf90_def_var(ncid, 'time', nf90_double, [dimid_time], varid_time)
@@ -393,28 +413,34 @@ contains
         status = nf90_def_var(ncid, 'z_vmec', nf90_double, [dimid_time], varid_z_vmec)
         call check_nc(status, 'def_var z_vmec')
 
-        status = nf90_def_var(ncid, 'x_meiss_vmec', nf90_double, [dimid_time], varid_x_meiss)
+        status = nf90_def_var(ncid, 'x_meiss_vmec', nf90_double, [dimid_time], &
+                              varid_x_meiss)
         call check_nc(status, 'def_var x_meiss')
-        status = nf90_def_var(ncid, 'y_meiss_vmec', nf90_double, [dimid_time], varid_y_meiss)
+        status = nf90_def_var(ncid, 'y_meiss_vmec', nf90_double, [dimid_time], &
+                              varid_y_meiss)
         call check_nc(status, 'def_var y_meiss')
-        status = nf90_def_var(ncid, 'z_meiss_vmec', nf90_double, [dimid_time], varid_z_meiss)
+        status = nf90_def_var(ncid, 'z_meiss_vmec', nf90_double, [dimid_time], &
+                              varid_z_meiss)
         call check_nc(status, 'def_var z_meiss')
 
-        status = nf90_def_var(ncid, 'x_chartmap', nf90_double, [dimid_time], varid_x_chart)
+        status = nf90_def_var(ncid, 'x_chartmap', nf90_double, [dimid_time], &
+                              varid_x_chart)
         call check_nc(status, 'def_var x_chart')
-        status = nf90_def_var(ncid, 'y_chartmap', nf90_double, [dimid_time], varid_y_chart)
+        status = nf90_def_var(ncid, 'y_chartmap', nf90_double, [dimid_time], &
+                              varid_y_chart)
         call check_nc(status, 'def_var y_chart')
-        status = nf90_def_var(ncid, 'z_chartmap', nf90_double, [dimid_time], varid_z_chart)
+        status = nf90_def_var(ncid, 'z_chartmap', nf90_double, [dimid_time], &
+                              varid_z_chart)
         call check_nc(status, 'def_var z_chart')
 
         status = nf90_def_var(ncid, 'x_meiss_chartmap', nf90_double, &
-                             [dimid_time], varid_x_meiss_chart)
+                              [dimid_time], varid_x_meiss_chart)
         call check_nc(status, 'def_var x_meiss_chart')
         status = nf90_def_var(ncid, 'y_meiss_chartmap', nf90_double, &
-                             [dimid_time], varid_y_meiss_chart)
+                              [dimid_time], varid_y_meiss_chart)
         call check_nc(status, 'def_var y_meiss_chart')
         status = nf90_def_var(ncid, 'z_meiss_chartmap', nf90_double, &
-                             [dimid_time], varid_z_meiss_chart)
+                              [dimid_time], varid_z_meiss_chart)
         call check_nc(status, 'def_var z_meiss_chart')
 
         status = nf90_enddef(ncid)
@@ -423,32 +449,32 @@ contains
         status = nf90_put_var(ncid, varid_time, time_arr)
         call check_nc(status, 'put_var time')
 
-        status = nf90_put_var(ncid, varid_x_vmec, cart_vmec(1,:))
+        status = nf90_put_var(ncid, varid_x_vmec, cart_vmec(1, :))
         call check_nc(status, 'put_var x_vmec')
-        status = nf90_put_var(ncid, varid_y_vmec, cart_vmec(2,:))
+        status = nf90_put_var(ncid, varid_y_vmec, cart_vmec(2, :))
         call check_nc(status, 'put_var y_vmec')
-        status = nf90_put_var(ncid, varid_z_vmec, cart_vmec(3,:))
+        status = nf90_put_var(ncid, varid_z_vmec, cart_vmec(3, :))
         call check_nc(status, 'put_var z_vmec')
 
-        status = nf90_put_var(ncid, varid_x_meiss, cart_meiss_vmec(1,:))
+        status = nf90_put_var(ncid, varid_x_meiss, cart_meiss_vmec(1, :))
         call check_nc(status, 'put_var x_meiss')
-        status = nf90_put_var(ncid, varid_y_meiss, cart_meiss_vmec(2,:))
+        status = nf90_put_var(ncid, varid_y_meiss, cart_meiss_vmec(2, :))
         call check_nc(status, 'put_var y_meiss')
-        status = nf90_put_var(ncid, varid_z_meiss, cart_meiss_vmec(3,:))
+        status = nf90_put_var(ncid, varid_z_meiss, cart_meiss_vmec(3, :))
         call check_nc(status, 'put_var z_meiss')
 
-        status = nf90_put_var(ncid, varid_x_chart, cart_chartmap(1,:))
+        status = nf90_put_var(ncid, varid_x_chart, cart_chartmap(1, :))
         call check_nc(status, 'put_var x_chart')
-        status = nf90_put_var(ncid, varid_y_chart, cart_chartmap(2,:))
+        status = nf90_put_var(ncid, varid_y_chart, cart_chartmap(2, :))
         call check_nc(status, 'put_var y_chart')
-        status = nf90_put_var(ncid, varid_z_chart, cart_chartmap(3,:))
+        status = nf90_put_var(ncid, varid_z_chart, cart_chartmap(3, :))
         call check_nc(status, 'put_var z_chart')
 
-        status = nf90_put_var(ncid, varid_x_meiss_chart, cart_meiss_chartmap(1,:))
+        status = nf90_put_var(ncid, varid_x_meiss_chart, cart_meiss_chartmap(1, :))
         call check_nc(status, 'put_var x_meiss_chart')
-        status = nf90_put_var(ncid, varid_y_meiss_chart, cart_meiss_chartmap(2,:))
+        status = nf90_put_var(ncid, varid_y_meiss_chart, cart_meiss_chartmap(2, :))
         call check_nc(status, 'put_var y_meiss_chart')
-        status = nf90_put_var(ncid, varid_z_meiss_chart, cart_meiss_chartmap(3,:))
+        status = nf90_put_var(ncid, varid_z_meiss_chart, cart_meiss_chartmap(3, :))
         call check_nc(status, 'put_var z_meiss_chart')
 
         status = nf90_close(ncid)
