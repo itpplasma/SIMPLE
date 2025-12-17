@@ -1,4 +1,33 @@
 module field_can_meiss
+    !> Meiss canonical coordinates for magnetic field evaluation.
+    !>
+    !> This module implements Meiss-type canonical coordinates (r, theta_c, phi_c)
+    !> where the magnetic field has the simple covariant form h = (0, hth, hph).
+    !> The transformation to canonical coordinates is computed via ODE integration.
+    !>
+    !> Coordinate conventions:
+    !>   - r: Integrator radial coordinate (= sqrt(s) by default)
+    !>   - theta_c, phi_c: Canonical poloidal and toroidal angles
+    !>   - s: Reference flux coordinate (normalized toroidal flux)
+    !>
+    !> Field source handling:
+    !>   - vmec_field_t: Expects s-coordinates, returns components in s-coords.
+    !>     This module converts r->s and applies Jacobian ds/dr = 2r.
+    !>   - splined_field_t and others: Expected to operate in r-coordinates
+    !>     directly, no coordinate transformation needed.
+    !>
+    !> The coordinate_scaling abstraction (default: sqrt_s_scaling_t) handles
+    !> the s <-> r transformation systematically.
+    !>
+    !> Key subroutines:
+    !>   - init_meiss: Initialize with field source and grid parameters
+    !>   - get_meiss_coordinates: Build canonical coordinate transformation
+    !>   - evaluate_meiss: Fast splined field evaluation in canonical coords
+    !>   - cleanup_meiss: Release resources
+    !>
+    !> Related modules:
+    !>   - field_can_albert: Extends Meiss with psi-based radial coordinate
+    !>   - coordinate_scaling: Abstraction for s <-> r transforms
 
 use, intrinsic :: iso_fortran_env, only : dp => real64
 use interpolate, only : &
@@ -18,7 +47,7 @@ end type grid_indices_t
 
 class(magnetic_field_t), allocatable :: field_noncan
 integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]  ! TODO check limits
+real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
@@ -351,7 +380,6 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     real(dp) :: Bmod
     real(dp) :: th
 
-    ! TODO: Make this more efficient with slices
     th = xmin(2) + h_th*(i_th-1)
     x_integ = [r, th, phi]
 

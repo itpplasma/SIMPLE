@@ -1,4 +1,24 @@
 module field_can_albert
+    !> Albert canonical coordinates extending Meiss coordinates.
+    !>
+    !> This module builds on field_can_meiss to provide Albert-type canonical
+    !> coordinates (psi, theta_c, phi_c) where psi is proportional to the
+    !> poloidal magnetic flux A_theta, giving the simple form A = (0, psi, Aphi).
+    !>
+    !> The Albert coordinates differ from Meiss in the radial coordinate:
+    !>   - Meiss: r = sqrt(s), fixed radial coordinate
+    !>   - Albert: psi ~ A_theta, flux-based radial coordinate
+    !>
+    !> The transformation is built by:
+    !>   1. Computing Meiss coordinates via field_can_meiss
+    !>   2. Regridding onto a uniform psi grid via psi_transform
+    !>
+    !> Key subroutines:
+    !>   - get_albert_coordinates: Build full transformation (calls Meiss first)
+    !>   - evaluate_albert: Fast splined field evaluation in Albert coords
+    !>   - integ_to_ref_albert: Convert integrator coords to reference (s,th,ph)
+    !>
+    !> The Albert form simplifies the symplectic integrator since dA_theta/dr = 0.
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use interpolate, only: &
@@ -30,7 +50,7 @@ type(BatchSplineData3D) :: spl_r_batch
 ! Batch spline for optimized field evaluation (4 components: Aphi, hth, hph, Bmod)
 type(BatchSplineData3D) :: spl_albert_batch
 
-real(8) :: Ath_norm
+real(dp) :: Ath_norm
 
 contains
 
