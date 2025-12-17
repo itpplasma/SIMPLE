@@ -99,3 +99,37 @@ set_tests_properties(test_orbit_chartmap_comparison_plot PROPERTIES
     TIMEOUT 60
     LABELS "integration;plot"
 )
+
+add_test(NAME test_orbit_chartmap_comparison_map2disc
+    COMMAND $<TARGET_FILE:test_orbit_chartmap_comparison.x>
+        wout.chartmap.map2disc.nc orbit_chartmap_comparison_map2disc.nc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_orbit_chartmap_comparison_map2disc PROPERTIES
+    DEPENDS "generate_chartmap_map2disc"
+    TIMEOUT 300
+    LABELS "integration"
+)
+
+add_test(NAME test_orbit_chartmap_comparison_plot_map2disc
+    COMMAND ${CMAKE_COMMAND} -E env python3
+        ${CMAKE_CURRENT_SOURCE_DIR}/plot_orbit_chartmap_comparison.py
+        orbit_chartmap_comparison_map2disc.nc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_orbit_chartmap_comparison_plot_map2disc PROPERTIES
+    DEPENDS test_orbit_chartmap_comparison_map2disc
+    TIMEOUT 60
+    LABELS "integration;plot"
+)
+
+add_test(NAME test_chartmap_refcoords_config_map2disc
+    COMMAND $<TARGET_FILE:test_chartmap_refcoords_config.x>
+        wout.chartmap.map2disc.nc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_chartmap_refcoords_config_map2disc PROPERTIES
+    DEPENDS "generate_chartmap_map2disc"
+    TIMEOUT 120
+    LABELS "integration"
+)

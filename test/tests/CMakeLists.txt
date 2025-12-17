@@ -30,6 +30,82 @@ add_custom_command(
 )
 add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
 
+# map2disc-based chartmap generation (via libneo Python API)
+# These tests are required and run in the default test set.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(CHARTMAP_MAP2DISC_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.map2disc.nc")
+set(CHARTMAP_NCSX_MAP2DISC_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.map2disc.nc")
+
+set(LIBNEO_PYTHON_DIR "" CACHE PATH "Path to libneo/python directory containing the libneo Python package")
+if(LIBNEO_PYTHON_DIR STREQUAL "")
+    if(DEFINED libneo_SOURCE_DIR AND EXISTS "${libneo_SOURCE_DIR}/python/libneo/chartmap.py")
+        set(LIBNEO_PYTHON_DIR "${libneo_SOURCE_DIR}/python")
+    elseif(DEFINED LIBNEO_SOURCE_DIR AND EXISTS "${LIBNEO_SOURCE_DIR}/python/libneo/chartmap.py")
+        set(LIBNEO_PYTHON_DIR "${LIBNEO_SOURCE_DIR}/python")
+    elseif(DEFINED ENV{CODE} AND EXISTS "$ENV{CODE}/libneo/python/libneo/chartmap.py")
+        set(LIBNEO_PYTHON_DIR "$ENV{CODE}/libneo/python")
+    endif()
+
+    if(NOT LIBNEO_PYTHON_DIR STREQUAL "")
+        set(LIBNEO_PYTHON_DIR "${LIBNEO_PYTHON_DIR}" CACHE PATH
+            "Path to libneo/python directory containing the libneo Python package" FORCE)
+    endif()
+endif()
+
+if(LIBNEO_PYTHON_DIR STREQUAL "")
+    message(FATAL_ERROR
+        "LIBNEO_PYTHON_DIR is empty but map2disc-based chartmap tests are required. "
+        "Set -DLIBNEO_PYTHON_DIR=/path/to/libneo/python.")
+endif()
+
+if(NOT EXISTS "${LIBNEO_PYTHON_DIR}/libneo/chartmap.py")
+    message(FATAL_ERROR
+        "libneo Python chartmap API not found at '${LIBNEO_PYTHON_DIR}/libneo/chartmap.py'. "
+        "Set -DLIBNEO_PYTHON_DIR=/path/to/libneo/python or update the libneo dependency.")
+endif()
+
+add_test(NAME generate_chartmap_map2disc
+    COMMAND ${CMAKE_COMMAND} -E env
+        PYTHONPATH=${LIBNEO_PYTHON_DIR}
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/generate_chartmap_map2disc.py
+        --libneo-python ${LIBNEO_PYTHON_DIR}
+        --wout ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
+        --out ${CHARTMAP_MAP2DISC_FILE}
+        --nrho 17 --ntheta 33 --nzeta 33
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(generate_chartmap_map2disc PROPERTIES
+    LABELS "integration"
+    TIMEOUT 600)
+
+add_test(NAME generate_chartmap_ncsx_map2disc
+    COMMAND ${CMAKE_COMMAND} -E env
+        PYTHONPATH=${LIBNEO_PYTHON_DIR}
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/generate_chartmap_map2disc.py
+        --libneo-python ${LIBNEO_PYTHON_DIR}
+        --wout ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+        --out ${CHARTMAP_NCSX_MAP2DISC_FILE}
+        --nrho 17 --ntheta 33 --nzeta 33
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(generate_chartmap_ncsx_map2disc PROPERTIES
+    LABELS "integration"
+    TIMEOUT 600)
+
+add_test(NAME plot_chartmap_vmec_vs_map2disc
+    COMMAND ${CMAKE_COMMAND} -E env
+        PYTHONPATH=${LIBNEO_PYTHON_DIR}
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/plot_chartmap_compare_map2disc.py
+        --vmec ${CHARTMAP_FILE}
+        --map2disc ${CHARTMAP_MAP2DISC_FILE}
+        --out ${CMAKE_CURRENT_BINARY_DIR}/chartmap_vmec_vs_map2disc_slices.png
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(plot_chartmap_vmec_vs_map2disc PROPERTIES
+    DEPENDS "chartmap_test_data;generate_chartmap_map2disc"
+    LABELS "integration;plot"
+    TIMEOUT 120)
+
 # Download NCSX test data for field equivalence tests (coils + wout)
 set(WOUT_NCSX_FILE "${TEST_DATA_DIR}/wout_ncsx.nc")
 set(WOUT_NCSX_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc")
@@ -347,6 +423,14 @@ add_test(NAME test_field_equivalence_chartmap
 set_tests_properties(test_field_equivalence_chartmap PROPERTIES
     LABELS "integration"
     TIMEOUT 120)
+
+add_test(NAME test_field_equivalence_chartmap_map2disc
+    COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_field_equivalence_chartmap_map2disc PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120
+    DEPENDS "generate_chartmap_ncsx_map2disc")
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)

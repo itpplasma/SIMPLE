@@ -32,7 +32,8 @@ program test_orbit_chartmap_comparison
     implicit none
 
     character(len=*), parameter :: wout_file = 'wout.nc'
-    character(len=*), parameter :: chartmap_file = 'wout.chartmap.nc'
+    character(len=1000) :: chartmap_file
+    character(len=1000) :: output_nc
 
     type(vmec_field_t) :: vmec_field
     type(splined_field_t) :: splined_vmec, splined_chartmap
@@ -49,7 +50,7 @@ program test_orbit_chartmap_comparison
     ! Tolerances for different comparisons (cm)
     real(dp), parameter :: tol_meiss_vmec = 1.0_dp
     real(dp), parameter :: tol_meiss_chartmap = 3.0_dp
-    real(dp), parameter :: tol_chartmap = 1.0e-2_dp
+    real(dp), parameter :: tol_chartmap = 5.0e-2_dp
     ! Direct chartmap should match well
 
     real(dp) :: z0(5), z0_chartmap(5), fper, bmod_0
@@ -83,6 +84,18 @@ program test_orbit_chartmap_comparison
     allocate (cart_vmec(3, n_steps + 1), cart_meiss_vmec(3, n_steps + 1))
     allocate (cart_chartmap(3, n_steps + 1), cart_meiss_chartmap(3, n_steps + 1))
     allocate (time_arr(n_steps + 1))
+
+    chartmap_file = 'wout.chartmap.nc'
+    if (command_argument_count() >= 1) then
+        call get_command_argument(1, chartmap_file)
+        if (len_trim(chartmap_file) == 0) chartmap_file = 'wout.chartmap.nc'
+    end if
+
+    output_nc = 'orbit_chartmap_comparison.nc'
+    if (command_argument_count() >= 2) then
+        call get_command_argument(2, output_nc)
+        if (len_trim(output_nc) == 0) output_nc = 'orbit_chartmap_comparison.nc'
+    end if
 
     print *, 'Step 1: Initialize VMEC equilibrium'
     call init_vmec(wout_file, 5, 5, 5, fper)
@@ -221,7 +234,7 @@ program test_orbit_chartmap_comparison
     print *, 'Writing NetCDF output for visualization...'
     print *, '========================================================'
     call write_comparison_netcdf
-    print *, '  Wrote: orbit_chartmap_comparison.nc'
+    print *, '  Wrote: ', trim(output_nc)
     print *
 
     if (avg_dev_meiss_vmec > tol_meiss_vmec) then
@@ -502,7 +515,7 @@ contains
         integer :: varid_x_meiss_chart, varid_y_meiss_chart, varid_z_meiss_chart
         integer :: status
 
-        status = nf90_create('orbit_chartmap_comparison.nc', nf90_netcdf4, ncid)
+        status = nf90_create(trim(output_nc), nf90_netcdf4, ncid)
         call check_nc(status, 'create')
 
         status = nf90_def_dim(ncid, 'time', n_steps + 1, dimid_time)

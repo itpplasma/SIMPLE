@@ -16,3 +16,7 @@ netCDF4==1.7.2
 # Optional dependencies for examples/plotting
 matplotlib==3.9.4
 scipy==1.15.2
+
+# map2disc is required for map2disc-based chartmap generation via libneo
+# Pin to a specific commit for reproducibility.
+map2disc @ git+https://gitlab.mpcdf.mpg.de/gvec-group/map2disc.git@14da2f094ab2505a639b9cd04af57f5c0dbfaa54
