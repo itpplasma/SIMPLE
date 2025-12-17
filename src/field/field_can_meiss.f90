@@ -8,6 +8,7 @@ use interpolate, only : &
 use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
 use field, only : magnetic_field_t
+use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t
 
 implicit none
 
@@ -36,6 +37,9 @@ logical :: transform_splines_initialized = .false.
 integer, parameter :: order(3) = [5, 5, 5]  ! Restored to original 5th order for accuracy
 logical, parameter :: periodic(3) = [.False., .True., .True.]
 
+! Coordinate scaling for s <-> r transform (default: r = sqrt(s))
+class(coordinate_scaling_t), allocatable :: coord_scaling
+
 contains
 
 subroutine rh_can_wrapper(r_c, z, dz, context)
@@ -55,15 +59,25 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
     call rh_can(r_c, z, dz, i_th, i_phi)
 end subroutine rh_can_wrapper
 
-subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax)
+subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax, &
+                      scaling)
     use new_vmec_stuff_mod, only : nper
 
     class(magnetic_field_t), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
+    class(coordinate_scaling_t), intent(in), optional :: scaling
 
     if (allocated(field_noncan)) deallocate(field_noncan)
     allocate(field_noncan, source=field_noncan_)
+
+    ! Initialize coordinate scaling (default: sqrt_s_scaling_t)
+    if (allocated(coord_scaling)) deallocate(coord_scaling)
+    if (present(scaling)) then
+        allocate(coord_scaling, source=scaling)
+    else
+        allocate(sqrt_s_scaling_t :: coord_scaling)
+    end if
 
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
@@ -99,6 +113,7 @@ subroutine cleanup_meiss()
     if (allocated(lam_phi)) deallocate(lam_phi)
     if (allocated(chi_gauge)) deallocate(chi_gauge)
     if (allocated(field_noncan)) deallocate(field_noncan)
+    if (allocated(coord_scaling)) deallocate(coord_scaling)
 end subroutine cleanup_meiss
 
 
@@ -128,7 +143,7 @@ subroutine integ_to_ref_meiss(xinteg, xref)
     real(dp) :: y_batch(2)  ! lam_phi, chi_gauge
 
     call evaluate_batch_splines_3d(spl_transform_batch, xinteg, y_batch)
-    xref(1) = xinteg(1)**2
+    call coord_scaling%inverse(xinteg, xref)  ! r -> s (integrator -> reference)
     xref(2) = modulo(xinteg(2), twopi)
     xref(3) = modulo(xinteg(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
 end subroutine integ_to_ref_meiss
@@ -144,7 +159,7 @@ subroutine ref_to_integ_meiss(xref, xinteg)
     real(dp) :: y_batch(2), dy_batch(3, 2), phi_integ_prev
     integer :: i
 
-    xinteg(1) = sqrt(xref(1))
+    call coord_scaling%transform(xref, xinteg)  ! s -> r (reference -> integrator)
     xinteg(2) = modulo(xref(2), twopi)
     xinteg(3) = modulo(xref(3), twopi)
 
