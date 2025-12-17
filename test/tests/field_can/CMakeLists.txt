@@ -31,3 +31,13 @@ set_tests_properties(test_coord_transform_roundtrip PROPERTIES
 
 add_executable(test_albert_transform_diagnostic.x test_albert_transform_diagnostic.f90)
 target_link_libraries(test_albert_transform_diagnostic.x simple)
+
+add_executable(test_scaling_abstraction.x test_scaling_abstraction.f90)
+target_link_libraries(test_scaling_abstraction.x simple)
+
+add_test(NAME test_scaling_abstraction
+    COMMAND $<TARGET_FILE:test_scaling_abstraction.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_scaling_abstraction PROPERTIES
+    LABELS "integration;slow"
+    TIMEOUT 300)
