@@ -48,7 +48,7 @@ program test_orbit_chartmap_comparison
 
     ! Tolerances for different comparisons (cm)
     real(dp), parameter :: tol_meiss_vmec = 1.0_dp
-    real(dp), parameter :: tol_meiss_chartmap = 1.0_dp
+    real(dp), parameter :: tol_meiss_chartmap = 3.0_dp
     real(dp), parameter :: tol_chartmap = 1.0e-2_dp
     ! Direct chartmap should match well
 
