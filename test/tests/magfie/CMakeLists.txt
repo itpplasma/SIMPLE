@@ -22,6 +22,14 @@ target_link_libraries(test_magfie_refcoords_splines.x simple)
 add_executable(test_orbit_refcoords_rk45.x test_orbit_refcoords_rk45.f90)
 target_link_libraries(test_orbit_refcoords_rk45.x simple)
 
+add_executable(test_orbit_chartmap_comparison.x test_orbit_chartmap_comparison.f90)
+target_link_libraries(test_orbit_chartmap_comparison.x simple)
+add_dependencies(test_orbit_chartmap_comparison.x chartmap_test_data)
+
+add_executable(test_chartmap_refcoords_config.x test_chartmap_refcoords_config.f90)
+target_link_libraries(test_chartmap_refcoords_config.x simple)
+add_dependencies(test_chartmap_refcoords_config.x chartmap_test_data)
+
 add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
@@ -60,5 +68,34 @@ add_test(NAME test_orbit_refcoords_rk45_plot
 set_tests_properties(test_orbit_refcoords_rk45_plot PROPERTIES
     DEPENDS test_orbit_refcoords_rk45
     TIMEOUT 30
+    LABELS "integration;plot"
+)
+
+add_test(NAME test_orbit_chartmap_comparison
+    COMMAND $<TARGET_FILE:test_orbit_chartmap_comparison.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_orbit_chartmap_comparison PROPERTIES
+    TIMEOUT 120
+    LABELS "integration"
+)
+
+add_test(NAME test_chartmap_refcoords_config
+    COMMAND $<TARGET_FILE:test_chartmap_refcoords_config.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_chartmap_refcoords_config PROPERTIES
+    TIMEOUT 120
+    LABELS "integration"
+)
+
+add_test(NAME test_orbit_chartmap_comparison_plot
+    COMMAND ${CMAKE_COMMAND} -E env python3
+        ${CMAKE_CURRENT_SOURCE_DIR}/plot_orbit_chartmap_comparison.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_orbit_chartmap_comparison_plot PROPERTIES
+    DEPENDS test_orbit_chartmap_comparison
+    TIMEOUT 60
     LABELS "integration;plot"
 )
