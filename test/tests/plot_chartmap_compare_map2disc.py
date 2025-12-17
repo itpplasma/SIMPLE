@@ -37,6 +37,35 @@ def _closed(arr: np.ndarray) -> np.ndarray:
     return np.concatenate([arr, arr[:1]])
 
 
+def _sort_theta(theta: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    theta = np.asarray(theta, dtype=float)
+    values = np.asarray(values, dtype=float)
+    theta = np.mod(theta, 2.0 * np.pi)
+    order = np.argsort(theta)
+    theta_s = theta[order]
+    values_s = values[order]
+
+    # Guard against duplicate theta entries (keep first occurrence).
+    theta_u, idx = np.unique(theta_s, return_index=True)
+    return theta_u, values_s[idx]
+
+
+def _interp_periodic(theta_src: np.ndarray, values_src: np.ndarray, theta_tgt: np.ndarray) -> np.ndarray:
+    theta_src = np.asarray(theta_src, dtype=float)
+    values_src = np.asarray(values_src, dtype=float)
+    theta_tgt = np.asarray(theta_tgt, dtype=float)
+
+    if theta_src.size < 2:
+        return np.full_like(theta_tgt, float(values_src[0]))
+
+    theta_src_s, values_src_s = _sort_theta(theta_src, values_src)
+    theta_tgt_m = np.mod(theta_tgt, 2.0 * np.pi)
+
+    theta_ext = np.concatenate([theta_src_s, theta_src_s + 2.0 * np.pi])
+    values_ext = np.concatenate([values_src_s, values_src_s])
+    return np.interp(theta_tgt_m, theta_ext, values_ext)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="plot_chartmap_compare_map2disc")
     p.add_argument("--vmec", type=Path, required=True, help="VMEC->chartmap NetCDF file")
@@ -63,12 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     rho_v, theta_v, zeta_v, r_v, z_v = _load_boundary_rz(vmec_path)
     rho_m, theta_m, zeta_m, r_m, z_m = _load_boundary_rz(map2disc_path)
 
-    if rho_v.shape != rho_m.shape or not np.allclose(rho_v, rho_m, rtol=0.0, atol=0.0):
-        raise SystemExit("rho grids differ between chartmaps")
-    if theta_v.shape != theta_m.shape or not np.allclose(theta_v, theta_m, rtol=0.0, atol=0.0):
-        raise SystemExit("theta grids differ between chartmaps")
-    if zeta_v.shape != zeta_m.shape or not np.allclose(zeta_v, zeta_m, rtol=0.0, atol=0.0):
-        raise SystemExit("zeta grids differ between chartmaps")
+    # Grids may differ slightly between generators (theta or zeta sampling).
+    # For visualization we only require that the files are internally consistent.
 
     iz_list = _select_zeta_indices(int(zeta_v.size))
 
@@ -82,11 +107,15 @@ def main(argv: list[str] | None = None) -> int:
     if not rho_levels:
         raise SystemExit("no valid --rho levels in [0,1]")
 
-    ir_list: list[int] = []
+    ir_list_v: list[int] = []
+    ir_list_m: list[int] = []
     for rho_target in rho_levels:
-        ir = int(np.argmin(np.abs(rho_v - rho_target)))
-        if ir not in ir_list:
-            ir_list.append(ir)
+        ir_v = int(np.argmin(np.abs(rho_v - rho_target)))
+        ir_m = int(np.argmin(np.abs(rho_m - rho_target)))
+        if ir_v not in ir_list_v:
+            ir_list_v.append(ir_v)
+        if ir_m not in ir_list_m:
+            ir_list_m.append(ir_m)
 
     nrows = len(iz_list)
     fig, axes = plt.subplots(
@@ -102,29 +131,35 @@ def main(argv: list[str] | None = None) -> int:
         ax_rz = axes[row, 0]
         ax_d = axes[row, 1]
 
-        for ir in ir_list:
-            rv = _closed(r_v[iz, :, ir])
-            zv = _closed(z_v[iz, :, ir])
-            rm = _closed(r_m[iz, :, ir])
-            zm = _closed(z_m[iz, :, ir])
+        zeta_target = float(zeta_v[iz])
+        iz_m = int(np.argmin(np.abs(zeta_m - zeta_target)))
 
-            lab_v = "VMEC->chartmap" if ir == ir_list[-1] else None
-            lab_m = "map2disc" if ir == ir_list[-1] else None
+        for ir_v, ir_m in zip(ir_list_v, ir_list_m, strict=False):
+            rv = _closed(r_v[iz, :, ir_v])
+            zv = _closed(z_v[iz, :, ir_v])
+            rm = _closed(r_m[iz_m, :, ir_m])
+            zm = _closed(z_m[iz_m, :, ir_m])
+
+            lab_v = "VMEC->chartmap" if ir_v == ir_list_v[-1] else None
+            lab_m = "map2disc" if ir_m == ir_list_m[-1] else None
 
             ax_rz.plot(rv, zv, "-", lw=1.0, alpha=0.85, label=lab_v)
             ax_rz.plot(rm, zm, "--", lw=1.0, alpha=0.85, label=lab_m)
         ax_rz.set_aspect("equal", adjustable="box")
         ax_rz.set_xlabel("R [cm]")
         ax_rz.set_ylabel("Z [cm]")
-        ax_rz.set_title(f"zeta={zeta_v[iz]:.6f} rad (multiple rho contours)")
+        ax_rz.set_title(f"zeta={zeta_target:.6f} rad (multiple rho contours)")
         if row == 0:
             ax_rz.legend(loc="best", fontsize=9)
 
-        ir = ir_list[-1]
-        rv = r_v[iz, :, ir]
-        zv = z_v[iz, :, ir]
-        rm = r_m[iz, :, ir]
-        zm = z_m[iz, :, ir]
+        ir_v = ir_list_v[-1]
+        ir_m = ir_list_m[-1]
+        theta_target = theta_v
+
+        rv = r_v[iz, :, ir_v]
+        zv = z_v[iz, :, ir_v]
+        rm = _interp_periodic(theta_m, r_m[iz_m, :, ir_m], theta_target)
+        zm = _interp_periodic(theta_m, z_m[iz_m, :, ir_m], theta_target)
 
         dr = rm - rv
         dz = zm - zv
@@ -135,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         ax_d.set_ylabel("Δ [cm]")
         ax_d.set_title(
             "rho≈{:.3f}: max|ΔR|={:.3e} cm  max|ΔZ|={:.3e} cm".format(
-                float(rho_v[ir]),
+                float(rho_v[ir_v]),
                 float(np.max(np.abs(dr))),
                 float(np.max(np.abs(dz))),
             )
