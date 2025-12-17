@@ -274,13 +274,14 @@ contains
                                       e_cov, Acov, hcov, Bmod, needs_scaling)
         !> Evaluate source field for spline sampling.
         !>
-        !> Two supported source modes:
-        !>   1. Cartesian source: evaluate at x_ref and return covariant components
-        !>      in reference coordinates (s, theta, phi). Caller must apply scaling
-        !>      to obtain covariant components in scaled coordinates.
-        !>   2. VMEC source: evaluate directly at x_scaled = (rho, theta, phi) and
-        !>      return covariant components already in scaled coordinates. Caller
-        !>      must not apply scaling.
+        !> Supported source modes:
+        !>   1. VMEC source: evaluate at x_ref = (s, theta, phi) and return covariant
+        !>      components in reference coordinates. Caller must apply scaling.
+        !>   2. Cartesian source: evaluate at x_cart and transform to reference
+        !>      coordinates (s, theta, phi). Caller must apply scaling.
+        !>
+        !> All sources now return components in reference coordinates (s, theta, phi).
+        !> Caller applies coordinate scaling to obtain components in scaled coords.
         class(magnetic_field_t), intent(in) :: source
         class(coordinate_system_t), intent(in) :: ref_coords
         real(dp), intent(in) :: x_scaled(3)
@@ -293,10 +294,11 @@ contains
 
         select type (source)
         type is (vmec_field_t)
-            call source%evaluate(x_scaled, Acov, hcov, Bmod)
+            ! VMEC field now expects (s, theta, phi) and returns in s-coordinates
+            call source%evaluate(x_ref, Acov, hcov, Bmod)
             x_cart = 0d0
             e_cov = 0d0
-            needs_scaling = .false.
+            needs_scaling = .true.
             return
         class default
             continue

@@ -7,7 +7,7 @@ use interpolate, only : &
     evaluate_batch_splines_3d_der2
 use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
-use field, only : magnetic_field_t
+use field, only : magnetic_field_t, vmec_field_t
 use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t
 
 implicit none
@@ -347,19 +347,32 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     integer, intent(in) :: i_th
     real(dp), intent(out) :: Ar, Ap, hr, hp
 
-    real(dp), dimension(3) :: Acov, hcov
+    real(dp), dimension(3) :: Acov, hcov, x_integ, x_ref, jac
     real(dp) :: Bmod
     real(dp) :: th
 
     ! TODO: Make this more efficient with slices
-    ! TODO: Support not only VMEC field
     th = xmin(2) + h_th*(i_th-1)
-    call field_noncan%evaluate([r, th, phi], Acov, hcov, Bmod)
+    x_integ = [r, th, phi]
 
-    Ar = Acov(1)
-    Ap = Acov(3)
-    hr = hcov(1)
-    hp = hcov(3)
+    select type (fld => field_noncan)
+    type is (vmec_field_t)
+        ! vmec_field_t expects s-coordinates, so convert r->s and apply Jacobian
+        call coord_scaling%inverse(x_integ, x_ref, jac)
+        call fld%evaluate(x_ref, Acov, hcov, Bmod)
+        ! Convert output from s-coords to r-coords: A_r = A_s * ds/dr
+        Ar = Acov(1) * jac(1)
+        Ap = Acov(3)
+        hr = hcov(1) * jac(1)
+        hp = hcov(3)
+    class default
+        ! Other fields (e.g., splined_field_t) operate in r-coordinates
+        call field_noncan%evaluate(x_integ, Acov, hcov, Bmod)
+        Ar = Acov(1)
+        Ap = Acov(3)
+        hr = hcov(1)
+        hp = hcov(3)
+    end select
 end subroutine ah_cov_on_slice
 
 logical function is_hr_zero_on_slice(i_th, i_phi) result(is_zero)
@@ -420,11 +433,24 @@ subroutine init_canonical_field_components
                     dchi = dy_trans(:,2)  ! derivatives of chi_gauge
                 end block
 
-                xref(1) = xcan(1)
-                xref(2) = modulo(xcan(2), twopi)
-                xref(3) = modulo(xcan(3) + lam, twopi)
+                ! xcan is in integrator coords (r, th, phi)
+                xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, twopi)]
 
-                call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                select type (fld => field_noncan)
+                type is (vmec_field_t)
+                    ! vmec_field_t expects s-coordinates
+                    block
+                        real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
+                        x_integ_local = xref
+                        call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
+                        call fld%evaluate(x_ref_local, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                    end block
+                class default
+                    ! Other fields (e.g., splined_field_t) operate in r-coordinates
+                    call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                end select
+
+                ! Note: We only use theta/phi components of Acov/hcov below
 
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
