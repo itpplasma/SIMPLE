@@ -5,7 +5,7 @@ use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use field_splined, only: splined_field_t
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
-                              RHO_TOR, RHO_POL
+                              RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
 
 implicit none
 
@@ -182,12 +182,13 @@ subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
 
   select type (coords)
   type is (chartmap_coordinate_system_t)
-    if (coords%rho_convention == RHO_TOR .or. coords%rho_convention == RHO_POL) then
-      u_ref = x_scaled
-      J = 1.0d0
-    else
+    if (coords%rho_convention == PSI_TOR_NORM .or. &
+        coords%rho_convention == PSI_POL_NORM) then
       u_ref = [x_scaled(1)**2, x_scaled(2), x_scaled(3)]
       J = 2.0d0*x_scaled(1)
+    else
+      u_ref = x_scaled
+      J = 1.0d0
     end if
   class default
     u_ref = [x_scaled(1)**2, x_scaled(2), x_scaled(3)]

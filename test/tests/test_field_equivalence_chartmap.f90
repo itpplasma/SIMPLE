@@ -26,10 +26,17 @@ program test_field_equivalence_chartmap
 
     integer :: nerrors
     real(dp) :: dummy
+    character(len=1000) :: chartmap_file
 
     nerrors = 0
 
     call init_timer()
+
+    chartmap_file = 'wout_ncsx.chartmap.nc'
+    if (command_argument_count() >= 1) then
+        call get_command_argument(1, chartmap_file)
+        if (len_trim(chartmap_file) == 0) chartmap_file = 'wout_ncsx.chartmap.nc'
+    end if
 
     call test_coordinate_mapping_consistency(nerrors)
     call test_coils_field_equivalence(nerrors)
@@ -57,14 +64,14 @@ contains
         real(dp) :: diff
         real(dp), parameter :: tol = 1.0e-6_dp
         logical :: vmec_exists, chartmap_exists
-        integer :: ierr, i, j, k
-        integer :: n_r, n_th, n_phi
-        real(dp) :: r, theta, phi
+	        integer :: ierr, i, j, k
+	        integer :: n_r, n_th, n_phi
+	        real(dp) :: r, theta, phi
 
-        print *, 'Test 1: Coordinate mapping consistency (VMEC -> cyl -> chartmap)'
+	        print *, 'Test 1: Coordinate mapping consistency (VMEC -> cyl -> chartmap)'
 
         inquire (file='wout_ncsx.nc', exist=vmec_exists)
-        inquire (file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
+        inquire (file=trim(chartmap_file), exist=chartmap_exists)
 
         if (.not. vmec_exists) then
             print *, '  FAIL: wout_ncsx.nc not found'
@@ -73,27 +80,27 @@ contains
         end if
 
         if (.not. chartmap_exists) then
-            print *, '  FAIL: wout_ncsx.chartmap.nc not found'
+            print *, '  FAIL: chartmap file not found: ', trim(chartmap_file)
             nerrors = nerrors + 1
             return
         end if
 
-        call init_vmec('wout_ncsx.nc', 5, 5, 5, dummy)
-        call make_vmec_coordinate_system(vmec_cs)
-        call make_chartmap_coordinate_system(chart_cs, 'wout_ncsx.chartmap.nc')
+	        call init_vmec('wout_ncsx.nc', 5, 5, 5, dummy)
+	        call make_vmec_coordinate_system(vmec_cs)
+	        call make_chartmap_coordinate_system(chart_cs, trim(chartmap_file))
 
-        n_r = 5
-        n_th = 8
-        n_phi = 4
+	        n_r = 5
+	        n_th = 8
+	        n_phi = 4
 
-        do i = 1, n_r
-            r = 0.2_dp + 0.15_dp*real(i - 1, dp)
-            do j = 1, n_th
-                theta = twopi*real(j - 1, dp)/real(n_th, dp)
-                do k = 1, n_phi
-                    phi = twopi*real(k - 1, dp)/real(n_phi, dp)/3.0_dp
+	        do i = 1, n_r
+	            r = 0.2_dp + 0.15_dp*real(i - 1, dp)
+	            do j = 1, n_th
+	                theta = twopi*real(j - 1, dp)/real(n_th, dp)
+	                do k = 1, n_phi
+	                    phi = twopi*real(k - 1, dp)/real(n_phi, dp)/3.0_dp
 
-                    u_vmec = [r**2, theta, phi]
+	                    u_vmec = [r**2, theta, phi]
 
                     call vmec_cs%evaluate_cyl(u_vmec, xcyl_vmec)
 
@@ -158,7 +165,7 @@ contains
         print *, 'Test 2: Coils field equivalence (VMEC-ref vs chartmap-ref)'
 
         inquire (file='wout_ncsx.nc', exist=vmec_exists)
-        inquire (file='wout_ncsx.chartmap.nc', exist=chartmap_exists)
+        inquire (file=trim(chartmap_file), exist=chartmap_exists)
         inquire (file='coils.simple', exist=coils_exists)
 
         if (.not. vmec_exists) then
@@ -168,7 +175,7 @@ contains
         end if
 
         if (.not. chartmap_exists) then
-            print *, '  FAIL: wout_ncsx.chartmap.nc not found'
+            print *, '  FAIL: chartmap file not found: ', trim(chartmap_file)
             nerrors = nerrors + 1
             return
         end if
@@ -182,7 +189,7 @@ contains
 
         call init_vmec('wout_ncsx.nc', 5, 5, 5, dummy)
         call make_vmec_coordinate_system(vmec_cs)
-        call make_chartmap_coordinate_system(chart_cs, 'wout_ncsx.chartmap.nc')
+        call make_chartmap_coordinate_system(chart_cs, trim(chartmap_file))
 
         call create_coils_field('coils.simple', raw_coils)
 

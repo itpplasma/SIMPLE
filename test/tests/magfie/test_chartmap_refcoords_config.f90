@@ -17,20 +17,27 @@ program test_chartmap_refcoords_config
     real(dp) :: u(3)
     real(dp) :: bmod, sqrtg
     real(dp) :: bder(3), hcov(3), hctr(3), hcurl(3)
+    character(len=1000) :: chartmap_file
 
     inquire (file='wout.nc', exist=has_wout)
-    inquire (file='wout.chartmap.nc', exist=has_chartmap)
+    chartmap_file = 'wout.chartmap.nc'
+    if (command_argument_count() >= 1) then
+        call get_command_argument(1, chartmap_file)
+        if (len_trim(chartmap_file) == 0) chartmap_file = 'wout.chartmap.nc'
+    end if
+
+    inquire (file=trim(chartmap_file), exist=has_chartmap)
     if (.not. has_wout) then
         print *, 'FAIL: wout.nc not found in test directory'
         error stop 1
     end if
     if (.not. has_chartmap) then
-        print *, 'FAIL: wout.chartmap.nc not found in test directory'
+        print *, 'FAIL: chartmap file not found: ', trim(chartmap_file)
         error stop 1
     end if
 
     field_input = 'wout.nc'
-    coord_input = 'wout.chartmap.nc'
+    coord_input = trim(chartmap_file)
     isw_field_type = REFCOORDS
 
     call init_field(tracer, coord_input, 5, 5, 5, 0)

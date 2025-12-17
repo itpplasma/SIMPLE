@@ -227,7 +227,12 @@ def plot_final_comparison(data, deviations, output_file):
 
 def main():
     nc_file = 'orbit_chartmap_comparison.nc'
+    if len(sys.argv) > 1:
+        nc_file = sys.argv[1]
     n_eval_steps = 10
+    output_prefix = "orbit_chartmap"
+    if nc_file != "orbit_chartmap_comparison.nc":
+        output_prefix = Path(nc_file).with_suffix("").name
 
     if not Path(nc_file).exists():
         print(f'Error: {nc_file} not found')
@@ -250,9 +255,9 @@ def main():
         )
 
     print('\nGenerating plots...')
-    plot_3d_trajectories(data, 'orbit_chartmap_3d.png')
-    plot_deviations(data, deviations, 'orbit_chartmap_deviations.png')
-    plot_final_comparison(data, deviations, 'orbit_chartmap_summary.png')
+    plot_3d_trajectories(data, f'{output_prefix}_3d.png')
+    plot_deviations(data, deviations, f'{output_prefix}_deviations.png')
+    plot_final_comparison(data, deviations, f'{output_prefix}_summary.png')
 
     print('\nDone!')
 
