@@ -28,3 +28,6 @@ add_test(NAME test_coord_transform_roundtrip
 set_tests_properties(test_coord_transform_roundtrip PROPERTIES
     LABELS "integration;slow"
     TIMEOUT 300)
+
+add_executable(test_albert_transform_diagnostic.x test_albert_transform_diagnostic.f90)
+target_link_libraries(test_albert_transform_diagnostic.x simple)
