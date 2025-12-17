@@ -169,20 +169,23 @@ def plot_deviations(data, deviations, output_file):
 def plot_final_comparison(data, deviations, output_file):
     """Create summary comparison plot."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    n_eval_steps = 10
 
     ax = axes[0]
     names = list(deviations.keys())
-    max_devs = [np.max(deviations[n]) for n in names]
-    mean_devs = [np.mean(deviations[n]) for n in names]
+    max_devs = [np.max(deviations[n][1:n_eval_steps + 1]) for n in names]
+    mean_devs = [np.mean(deviations[n][1:n_eval_steps + 1]) for n in names]
 
     x = np.arange(len(names))
     width = 0.35
 
-    bars1 = ax.bar(x - width/2, max_devs, width, label='Max deviation', color='coral')
-    bars2 = ax.bar(x + width/2, mean_devs, width, label='Mean deviation', color='steelblue')
+    bars1 = ax.bar(x - width/2, max_devs, width, label='Max (first 10 steps)',
+                   color='coral')
+    bars2 = ax.bar(x + width/2, mean_devs, width, label='Mean (first 10 steps)',
+                   color='steelblue')
 
     ax.set_ylabel('Deviation [cm]')
-    ax.set_title('Trajectory Deviations from VMEC Reference')
+    ax.set_title('Trajectory Deviations from VMEC Reference\n(First 10 steps)')
     ax.set_xticks(x)
     ax.set_xticklabels([n.replace('_', '\n') for n in names])
     ax.legend()
@@ -224,6 +227,7 @@ def plot_final_comparison(data, deviations, output_file):
 
 def main():
     nc_file = 'orbit_chartmap_comparison.nc'
+    n_eval_steps = 10
 
     if not Path(nc_file).exists():
         print(f'Error: {nc_file} not found')
@@ -238,7 +242,12 @@ def main():
 
     print('\nDeviation statistics (from VMEC reference):')
     for name, dev in deviations.items():
-        print(f'  {name:20s}: max={np.max(dev):.4e} cm, mean={np.mean(dev):.4e} cm')
+        dev_early = dev[1:n_eval_steps + 1]
+        print(
+            f'  {name:20s}: max={np.max(dev):.4e} cm, '
+            f'mean={np.mean(dev):.4e} cm, '
+            f'mean_first_{n_eval_steps}_steps={np.mean(dev_early):.4e} cm'
+        )
 
     print('\nGenerating plots...')
     plot_3d_trajectories(data, 'orbit_chartmap_3d.png')

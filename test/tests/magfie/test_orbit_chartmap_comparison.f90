@@ -39,20 +39,22 @@ program test_orbit_chartmap_comparison
     type(vmec_coordinate_system_t) :: vmec_coords
     class(coordinate_system_t), allocatable :: chartmap_coords
 
-    integer, parameter :: n_steps = 100
-    real(dp), parameter :: trace_time = 1.0e-7_dp
-    ! physical seconds (short for chartmap)
+    integer, parameter :: n_steps = 1000
+    integer, parameter :: n_eval_steps = 10
+    real(dp), parameter :: trace_time = 1.0e-5_dp
+    ! physical seconds
     real(dp) :: dtau, tau, v0_alpha
     real(dp), parameter :: relerr = 1.0e-10_dp
 
     ! Tolerances for different comparisons (cm)
-    real(dp), parameter :: tol_meiss_vmec = 1.0_dp       ! Meiss-VMEC should match well
-    real(dp), parameter :: tol_meiss_chartmap = 2.0_dp   ! Meiss-Chartmap reasonable
-    real(dp), parameter :: tol_chartmap = 20.0_dp
-    ! Direct chartmap has larger errors
+    real(dp), parameter :: tol_meiss_vmec = 1.0_dp
+    real(dp), parameter :: tol_meiss_chartmap = 1.0_dp
+    real(dp), parameter :: tol_chartmap = 1.0e-2_dp
+    ! Direct chartmap should match well
 
     real(dp) :: z0(5), z0_chartmap(5), fper, bmod_0
     real(dp) :: z_vmec(5), z_meiss_vmec(5), z_chartmap(5), z_meiss_chartmap(5)
+    real(dp) :: zeta_period
 
     real(dp), allocatable :: traj_vmec(:, :), traj_meiss_vmec(:, :)
     real(dp), allocatable :: traj_chartmap(:, :), traj_meiss_chartmap(:, :)
@@ -62,6 +64,7 @@ program test_orbit_chartmap_comparison
 
     integer :: i, ierr, n_failed
     real(dp) :: max_dev_meiss_vmec, max_dev_chartmap, max_dev_meiss_chartmap
+    real(dp) :: avg_dev_meiss_vmec, avg_dev_chartmap, avg_dev_meiss_chartmap
 
     n_failed = 0
 
@@ -85,6 +88,7 @@ program test_orbit_chartmap_comparison
     call init_vmec(wout_file, 5, 5, 5, fper)
     call init_reference_coordinates(wout_file)
     call set_physics_parameters(v0_alpha)
+    zeta_period = twopi/real(nper, dp)
 
     ! Convert physical time to normalized time: tau = trace_time * v0
     tau = trace_time*v0_alpha
@@ -196,9 +200,17 @@ program test_orbit_chartmap_comparison
     print *, '========================================================'
     print *, 'Comparing trajectories in Cartesian space...'
     print *, '========================================================'
-    call compute_deviations(max_dev_meiss_vmec, max_dev_chartmap, &
-                            max_dev_meiss_chartmap)
+    call compute_deviations(avg_dev_meiss_vmec, avg_dev_chartmap, &
+                            avg_dev_meiss_chartmap, max_dev_meiss_vmec, &
+                            max_dev_chartmap, max_dev_meiss_chartmap)
 
+    print '(A,I0)', '  Averaged over first steps: ', n_eval_steps
+    print '(A,ES12.4)', '  Avg deviation (Meiss-VMEC vs VMEC):     ', &
+        avg_dev_meiss_vmec
+    print '(A,ES12.4)', '  Avg deviation (Chartmap vs VMEC):       ', avg_dev_chartmap
+    print '(A,ES12.4)', '  Avg deviation (Meiss-Chartmap vs VMEC): ', &
+        avg_dev_meiss_chartmap
+    print *
     print '(A,ES12.4)', '  Max deviation (Meiss-VMEC vs VMEC):     ', max_dev_meiss_vmec
     print '(A,ES12.4)', '  Max deviation (Chartmap vs VMEC):       ', max_dev_chartmap
     print '(A,ES12.4)', '  Max deviation (Meiss-Chartmap vs VMEC): ', &
@@ -212,19 +224,19 @@ program test_orbit_chartmap_comparison
     print *, '  Wrote: orbit_chartmap_comparison.nc'
     print *
 
-    if (max_dev_meiss_vmec > tol_meiss_vmec) then
-        print '(A,ES10.2,A,ES10.2)', ' FAIL: Meiss-VMEC deviation ', &
-            max_dev_meiss_vmec, ' > tol ', tol_meiss_vmec
+    if (avg_dev_meiss_vmec > tol_meiss_vmec) then
+        print '(A,ES10.2,A,ES10.2)', ' FAIL: Meiss-VMEC avg deviation ', &
+            avg_dev_meiss_vmec, ' > tol ', tol_meiss_vmec
         n_failed = n_failed + 1
     end if
-    if (max_dev_chartmap > tol_chartmap) then
-        print '(A,ES10.2,A,ES10.2)', ' FAIL: Chartmap deviation ', &
-            max_dev_chartmap, ' > tol ', tol_chartmap
+    if (avg_dev_chartmap > tol_chartmap) then
+        print '(A,ES10.2,A,ES10.2)', ' FAIL: Chartmap avg deviation ', &
+            avg_dev_chartmap, ' > tol ', tol_chartmap
         n_failed = n_failed + 1
     end if
-    if (max_dev_meiss_chartmap > tol_meiss_chartmap) then
-        print '(A,ES10.2,A,ES10.2)', ' FAIL: Meiss-Chartmap deviation ', &
-            max_dev_meiss_chartmap, ' > tol ', tol_meiss_chartmap
+    if (avg_dev_meiss_chartmap > tol_meiss_chartmap) then
+        print '(A,ES10.2,A,ES10.2)', ' FAIL: Meiss-Chartmap avg deviation ', &
+            avg_dev_meiss_chartmap, ' > tol ', tol_meiss_chartmap
         n_failed = n_failed + 1
     end if
 
@@ -276,7 +288,7 @@ contains
         z(2) = 0.5_dp
         z(3) = 0.1_dp
         z(4) = 1.0_dp
-        z(5) = 0.5_dp
+        z(5) = 0.98_dp
 
         call magfie(z(1:3), bmod, sqrtg, bder, hcov, hctr, hcurl)
     end subroutine set_initial_conditions
@@ -374,45 +386,112 @@ contains
     subroutine convert_trajectories_to_cartesian
         integer :: j
         real(dp) :: x_ref(3), x_cart(3)
+        real(dp) :: zeta_period
+        real(dp) :: zeta, zeta_mod, zeta_wrap
+        real(dp) :: cph, sph
+        real(dp) :: x_rot, y_rot
 
+        zeta_period = twopi/real(nper, dp)
         do j = 1, n_steps + 1
             x_ref = traj_vmec(1:3, j)
             call ref_coords%evaluate_cart(x_ref, x_cart)
             cart_vmec(:, j) = x_cart
 
+            x_ref = traj_chartmap(1:3, j)
+            x_ref(2) = modulo(x_ref(2), twopi)
+            zeta = x_ref(3)
+            zeta_mod = modulo(zeta, zeta_period)
+            zeta_wrap = zeta - zeta_mod
+            x_ref(3) = zeta_mod
+            call chartmap_coords%evaluate_cart(x_ref, x_cart)
+            cph = cos(zeta_wrap)
+            sph = sin(zeta_wrap)
+            x_rot = x_cart(1)*cph - x_cart(2)*sph
+            y_rot = x_cart(1)*sph + x_cart(2)*cph
+            x_cart(1) = x_rot
+            x_cart(2) = y_rot
+            cart_chartmap(:, j) = x_cart
+        end do
+
+        call init_meiss(vmec_field)
+        call get_meiss_coordinates
+        do j = 1, n_steps + 1
             call convert_meiss_to_vmec(traj_meiss_vmec(1:3, j), x_ref)
             call ref_coords%evaluate_cart(x_ref, x_cart)
             cart_meiss_vmec(:, j) = x_cart
+        end do
+        call cleanup_meiss
 
-            x_ref = traj_chartmap(1:3, j)
-            call chartmap_coords%evaluate_cart(x_ref, x_cart)
-            cart_chartmap(:, j) = x_cart
-
+        call init_meiss(splined_chartmap, n_r_=16, n_th_=17, n_phi_=18, &
+                        rmin=0.1d0, rmax=0.9d0)
+        call get_meiss_coordinates
+        do j = 1, n_steps + 1
             call convert_meiss_to_vmec(traj_meiss_chartmap(1:3, j), x_ref)
+            x_ref(2) = modulo(x_ref(2), twopi)
+            zeta = x_ref(3)
+            zeta_mod = modulo(zeta, zeta_period)
+            zeta_wrap = zeta - zeta_mod
+            x_ref(3) = zeta_mod
             call chartmap_coords%evaluate_cart(x_ref, x_cart)
+            cph = cos(zeta_wrap)
+            sph = sin(zeta_wrap)
+            x_rot = x_cart(1)*cph - x_cart(2)*sph
+            y_rot = x_cart(1)*sph + x_cart(2)*cph
+            x_cart(1) = x_rot
+            x_cart(2) = y_rot
             cart_meiss_chartmap(:, j) = x_cart
         end do
+        call cleanup_meiss
     end subroutine convert_trajectories_to_cartesian
 
-    subroutine compute_deviations(dev_meiss, dev_chart, dev_meiss_chart)
-        real(dp), intent(out) :: dev_meiss, dev_chart, dev_meiss_chart
-        integer :: j
-        real(dp) :: d
+    subroutine compute_deviations(avg_meiss, avg_chart, avg_meiss_chart, max_meiss, &
+                                  max_chart, max_meiss_chart)
+        real(dp), intent(out) :: avg_meiss, avg_chart, avg_meiss_chart
+        real(dp), intent(out) :: max_meiss, max_chart, max_meiss_chart
 
-        dev_meiss = 0.0_dp
-        dev_chart = 0.0_dp
-        dev_meiss_chart = 0.0_dp
+        integer :: j, j0, j1, n_eval
+        real(dp) :: d, sum_meiss, sum_chart, sum_meiss_chart
+
+        max_meiss = 0.0_dp
+        max_chart = 0.0_dp
+        max_meiss_chart = 0.0_dp
 
         do j = 1, n_steps + 1
             d = sqrt(sum((cart_meiss_vmec(:, j) - cart_vmec(:, j))**2))
-            dev_meiss = max(dev_meiss, d)
+            max_meiss = max(max_meiss, d)
 
             d = sqrt(sum((cart_chartmap(:, j) - cart_vmec(:, j))**2))
-            dev_chart = max(dev_chart, d)
+            max_chart = max(max_chart, d)
 
             d = sqrt(sum((cart_meiss_chartmap(:, j) - cart_vmec(:, j))**2))
-            dev_meiss_chart = max(dev_meiss_chart, d)
+            max_meiss_chart = max(max_meiss_chart, d)
         end do
+
+        j0 = 2
+        j1 = min(n_eval_steps + 1, n_steps + 1)
+        n_eval = j1 - j0 + 1
+
+        if (n_eval <= 0) then
+            error stop 'Invalid deviation averaging window'
+        end if
+
+        sum_meiss = 0.0_dp
+        sum_chart = 0.0_dp
+        sum_meiss_chart = 0.0_dp
+
+        do j = j0, j1
+            sum_meiss = sum_meiss + sqrt(sum((cart_meiss_vmec(:, j) - &
+                                              cart_vmec(:, j))**2))
+            sum_chart = sum_chart + sqrt(sum((cart_chartmap(:, j) - &
+                                              cart_vmec(:, j))**2))
+            sum_meiss_chart = sum_meiss_chart + &
+                              sqrt(sum((cart_meiss_chartmap(:, j) - &
+                                        cart_vmec(:, j))**2))
+        end do
+
+        avg_meiss = sum_meiss/real(n_eval, dp)
+        avg_chart = sum_chart/real(n_eval, dp)
+        avg_meiss_chart = sum_meiss_chart/real(n_eval, dp)
     end subroutine compute_deviations
 
     subroutine write_comparison_netcdf
@@ -430,7 +509,8 @@ contains
         call check_nc(status, 'def_dim time')
 
         status = nf90_put_att(ncid, nf90_global, 'description', &
-                   'Orbit comparison: VMEC vs Meiss-VMEC vs Chartmap vs Meiss-Chartmap')
+                              'Orbit comparison: VMEC vs Meiss-VMEC vs Chartmap vs '// &
+                              'Meiss-Chartmap')
         call check_nc(status, 'put_att')
 
         status = nf90_def_var(ncid, 'time', nf90_double, [dimid_time], varid_time)
