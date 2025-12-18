@@ -40,7 +40,7 @@
 !
 !  use_B_r=.false.
   use_B_r=.true.        !important for plotting, not needed for canonical coordinates
-  use_del_tp_B=.false.  !not very important (saves 1 iteration in coord. transform), don't use to save memory
+  use_del_tp_B=.false.  !not very important (saves 1 iteration in coord. transform), do not use to save memory
 !  use_del_tp_B=.true.
 !
   call boozer_converter

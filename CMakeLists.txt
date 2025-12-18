@@ -54,19 +54,20 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
 		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
-else()
-	add_compile_options(
-		$<$<COMPILE_LANGUAGE:Fortran>:-Wall>
-		$<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused>
-		$<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
-		$<$<COMPILE_LANGUAGE:C>:-Wall>
-		$<$<COMPILE_LANGUAGE:C>:-Wno-unused>
-	)
-	if (CMAKE_BUILD_TYPE MATCHES Debug)
-		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
+	else()
 		add_compile_options(
-			$<$<COMPILE_LANGUAGE:Fortran>:-O0>
-			$<$<COMPILE_LANGUAGE:Fortran>:-g>
+			$<$<COMPILE_LANGUAGE:Fortran>:-Wall>
+			$<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused>
+			$<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
+			$<$<COMPILE_LANGUAGE:C>:-Wall>
+			$<$<COMPILE_LANGUAGE:C>:-Wno-unused>
+		)
+		add_link_options($<$<LINK_LANGUAGE:Fortran>:-fopenmp>)
+		if (CMAKE_BUILD_TYPE MATCHES Debug)
+			add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
+			add_compile_options(
+				$<$<COMPILE_LANGUAGE:Fortran>:-O0>
+				$<$<COMPILE_LANGUAGE:Fortran>:-g>
 			$<$<COMPILE_LANGUAGE:Fortran>:-ggdb>
 			$<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
 			$<$<COMPILE_LANGUAGE:Fortran>:-ffpe-trap=invalid,zero,overflow>

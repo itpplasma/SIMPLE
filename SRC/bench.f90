@@ -179,7 +179,7 @@ subroutine test_cuts(nplagr)
             elseif (quasi) then
                 call orbit_timestep_quasi(ierr)
                 z = si_quasi%z
-                ! evaluate field, but don't count
+                ! evaluate field, but do not count
                 temptime = omp_get_wtime()
                 call eval_field(f, z(1), z(2), z(3), 0)
                 call get_derivatives(f, z(4))
