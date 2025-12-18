@@ -51,7 +51,7 @@
   call nc_open(netcdffile, ncid)
 !
   call nc_get(ncid, 'phi', phi)
-  phi = phi/(2*pi)  ! added by Christopher Albert, 2019-09-16 for correct normalization
+  phi = -phi/(2*pi)  ! added by Christopher Albert, 2019-09-16 for correct normalization
 !
   flux=phi(kparb)
   flux=flux*fac_b*fac_r**2
