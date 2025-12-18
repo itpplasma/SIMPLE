@@ -96,7 +96,7 @@ def plot_comparison(prefix):
     plt.colorbar(im5, ax=axes[1, 2])
 
     plt.tight_layout()
-    plt.savefig('field_equiv_comparison.png', dpi=150)
+    plt.savefig(f'{prefix}_comparison.png', dpi=150)
     plt.close()
 
     # Flux surface plot: VMEC vs Chartmap overlaid
@@ -126,7 +126,7 @@ def plot_comparison(prefix):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('field_equiv_flux_surface.png', dpi=150)
+    plt.savefig(f'{prefix}_flux_surface.png', dpi=150)
     plt.close()
 
     # Additional plot: Position difference between VMEC and chartmap
@@ -150,11 +150,13 @@ def plot_comparison(prefix):
     plt.colorbar(im1, ax=axes[1])
 
     plt.tight_layout()
-    plt.savefig('field_equiv_position_diff.png', dpi=150)
+    plt.savefig(f'{prefix}_position_diff.png', dpi=150)
     plt.close()
 
-    print('Plots saved: field_equiv_comparison.png, field_equiv_flux_surface.png, '
-          'field_equiv_position_diff.png')
+    print(
+        f'Plots saved: {prefix}_comparison.png, {prefix}_flux_surface.png, '
+        f'{prefix}_position_diff.png'
+    )
 
 
 if __name__ == '__main__':
