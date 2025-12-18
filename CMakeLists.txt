@@ -55,22 +55,53 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
 else()
-	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wall -Wno-unused -Wno-unused-dummy-argument>)
-	add_compile_options($<$<COMPILE_LANGUAGE:C>:-Wall -Wno-unused>)
+	add_compile_options(
+		$<$<COMPILE_LANGUAGE:Fortran>:-Wall>
+		$<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused>
+		$<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
+		$<$<COMPILE_LANGUAGE:C>:-Wall>
+		$<$<COMPILE_LANGUAGE:C>:-Wno-unused>
+	)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
-		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O0 -g -ggdb -fbacktrace
-			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps>)
-		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O0 -g -ggdb>)
+		add_compile_options(
+			$<$<COMPILE_LANGUAGE:Fortran>:-O0>
+			$<$<COMPILE_LANGUAGE:Fortran>:-g>
+			$<$<COMPILE_LANGUAGE:Fortran>:-ggdb>
+			$<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
+			$<$<COMPILE_LANGUAGE:Fortran>:-ffpe-trap=invalid,zero,overflow>
+			$<$<COMPILE_LANGUAGE:Fortran>:-fbounds-check>
+			$<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>
+			$<$<COMPILE_LANGUAGE:C>:-O0>
+			$<$<COMPILE_LANGUAGE:C>:-g>
+			$<$<COMPILE_LANGUAGE:C>:-ggdb>
+		)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O2 -p -g -shared-libgcc>)
-		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O2 -g>)
+		add_compile_options(
+			$<$<COMPILE_LANGUAGE:Fortran>:-O2>
+			$<$<COMPILE_LANGUAGE:Fortran>:-p>
+			$<$<COMPILE_LANGUAGE:Fortran>:-g>
+			$<$<COMPILE_LANGUAGE:Fortran>:-shared-libgcc>
+			$<$<COMPILE_LANGUAGE:C>:-O2>
+			$<$<COMPILE_LANGUAGE:C>:-g>
+		)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
-		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O3 -g -fbacktrace>)
-		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O3 -g>)
+		add_compile_options(
+			$<$<COMPILE_LANGUAGE:Fortran>:-O3>
+			$<$<COMPILE_LANGUAGE:Fortran>:-g>
+			$<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
+			$<$<COMPILE_LANGUAGE:C>:-O3>
+			$<$<COMPILE_LANGUAGE:C>:-g>
+		)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O3 -march=native -mtune=native>)
-		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O3 -march=native -mtune=native>)
+		add_compile_options(
+			$<$<COMPILE_LANGUAGE:Fortran>:-O3>
+			$<$<COMPILE_LANGUAGE:Fortran>:-march=native>
+			$<$<COMPILE_LANGUAGE:Fortran>:-mtune=native>
+			$<$<COMPILE_LANGUAGE:C>:-O3>
+			$<$<COMPILE_LANGUAGE:C>:-march=native>
+			$<$<COMPILE_LANGUAGE:C>:-mtune=native>
+		)
 	endif()
 endif()
 
