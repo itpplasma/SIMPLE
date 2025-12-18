@@ -17,6 +17,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--nrho", type=int, default=17)
     p.add_argument("--ntheta", type=int, default=33)
     p.add_argument("--nzeta", type=int, default=33)
+    p.add_argument(
+        "--s-boundary",
+        type=float,
+        default=1.0,
+        help="VMEC surface selector s in (0, 1]; 1.0 is LCFS.",
+    )
+    p.add_argument(
+        "--boundary-offset",
+        type=float,
+        default=0.0,
+        help="Outward offset of VMEC boundary in meters, applied before map2disc.",
+    )
     p.add_argument("--M", type=int, default=16)
     p.add_argument("--Nt", type=int, default=256)
     p.add_argument("--Ng", type=int, nargs=2, default=(256, 256))
@@ -49,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
         nrho=int(args.nrho),
         ntheta=int(args.ntheta),
         nzeta=int(args.nzeta),
+        s_boundary=float(args.s_boundary),
+        boundary_offset=float(args.boundary_offset),
         M=int(args.M),
         Nt=int(args.Nt),
         Ng=(int(args.Ng[0]), int(args.Ng[1])),

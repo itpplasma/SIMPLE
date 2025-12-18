@@ -27,19 +27,25 @@ program test_field_equivalence_chartmap
     integer :: nerrors
     real(dp) :: dummy
     character(len=1000) :: chartmap_file
+    character(len=1000) :: plot_prefix
 
     nerrors = 0
 
     call init_timer()
 
     chartmap_file = 'wout_ncsx.chartmap.nc'
+    plot_prefix = 'field_equiv'
     if (command_argument_count() >= 1) then
         call get_command_argument(1, chartmap_file)
         if (len_trim(chartmap_file) == 0) chartmap_file = 'wout_ncsx.chartmap.nc'
     end if
+    if (command_argument_count() >= 2) then
+        call get_command_argument(2, plot_prefix)
+        if (len_trim(plot_prefix) == 0) plot_prefix = 'field_equiv'
+    end if
 
     call test_coordinate_mapping_consistency(nerrors)
-    call test_coils_field_equivalence(nerrors)
+    call test_coils_field_equivalence(nerrors, trim(plot_prefix))
 
     if (nerrors > 0) then
         print *, '================================'
@@ -131,12 +137,13 @@ contains
         print *, '  PASSED: Coordinate mapping consistent within tolerance ', tol
     end subroutine test_coordinate_mapping_consistency
 
-    subroutine test_coils_field_equivalence(nerrors)
+    subroutine test_coils_field_equivalence(nerrors, prefix)
         !> Test that splined coils fields accurately reproduce the raw field.
         !> Each splined field is built on its own coordinate grid (VMEC or chartmap)
         !> and compared to direct raw_coils evaluation at the same physical point.
         !> Also generates visual output (error heatmaps).
         integer, intent(inout) :: nerrors
+        character(len=*), intent(in) :: prefix
 
         class(coordinate_system_t), allocatable :: vmec_cs, chart_cs
         type(coils_field_t) :: raw_coils
@@ -161,6 +168,7 @@ contains
         real(dp), allocatable :: R_vmec_2d(:, :), Z_vmec_2d(:, :)
         real(dp), allocatable :: R_chart_2d(:, :), Z_chart_2d(:, :)
         real(dp) :: xcyl_chart(3)
+        character(len=2048) :: vmec_csv, chart_csv
 
         print *, 'Test 2: Coils field equivalence (VMEC-ref vs chartmap-ref)'
 
@@ -232,6 +240,10 @@ contains
                 R_vmec_2d(j, i) = xcyl(1)
                 Z_vmec_2d(j, i) = xcyl(3)
 
+                call chart_cs%evaluate_cyl([r, theta, phi], xcyl_chart)
+                R_chart_2d(j, i) = xcyl_chart(1)
+                Z_chart_2d(j, i) = xcyl_chart(3)
+
                 if (ierr /= chartmap_from_cyl_ok) then
                     n_failed_mapping = n_failed_mapping + 1
                     vmec_err_grid(j, i) = -1.0_dp
@@ -239,14 +251,8 @@ contains
                     Bmod_vmec_grid(j, i) = Bmod_vmec
                     Bmod_chart_grid(j, i) = 0.0_dp
                     Bmod_direct_grid(j, i) = 0.0_dp
-                    R_chart_2d(j, i) = xcyl(1)
-                    Z_chart_2d(j, i) = xcyl(3)
                     cycle
                 end if
-
-                call chart_cs%evaluate_cyl(u_chart, xcyl_chart)
-                R_chart_2d(j, i) = xcyl_chart(1)
-                Z_chart_2d(j, i) = xcyl_chart(3)
 
                 call splined_chart%evaluate(u_chart, Acov_chart, hcov_chart, Bmod_chart)
 
@@ -295,20 +301,22 @@ contains
         print *, '  Max spline error (chartmap-ref): ', max_rel_diff_chart
         print *, '  Max mutual difference (VMEC vs chartmap): ', max_rel_diff_mutual
 
-        call write_error_csv('field_equiv_vmec_error.csv', r_grid, theta_grid, &
-                             vmec_err_grid)
-        call write_error_csv('field_equiv_chart_error.csv', r_grid, theta_grid, &
-                             chart_err_grid)
-        print *, '  CSV files written: field_equiv_vmec_error.csv, ', &
-            'field_equiv_chart_error.csv'
+        vmec_csv = trim(prefix)//'_vmec_error.csv'
+        chart_csv = trim(prefix)//'_chart_error.csv'
 
-        call write_plot_data('field_equiv', r_grid, theta_grid, &
+        call write_error_csv(trim(vmec_csv), r_grid, theta_grid, &
+                             vmec_err_grid)
+        call write_error_csv(trim(chart_csv), r_grid, theta_grid, &
+                             chart_err_grid)
+        print *, '  CSV files written: ', trim(vmec_csv), ', ', trim(chart_csv)
+
+        call write_plot_data(trim(prefix), r_grid, theta_grid, &
                              R_vmec_2d, Z_vmec_2d, R_chart_2d, Z_chart_2d, &
                              Bmod_vmec_grid, Bmod_chart_grid, Bmod_direct_grid, &
                              vmec_err_grid, chart_err_grid)
-        call generate_plots_python()
-        print *, '  Comparison plots written: field_equiv_comparison.png, ', &
-            'field_equiv_flux_surface.png'
+        call generate_plots_python(trim(prefix))
+        print *, '  Comparison plots written: ', trim(prefix), '_comparison.png, ', &
+            trim(prefix), '_flux_surface.png'
 
         if (max_rel_diff_vmec <= tol_spline .and. max_rel_diff_chart <= tol_spline &
             .and. n_tested > 0) then
@@ -409,12 +417,13 @@ contains
 
     end subroutine write_plot_data
 
-    subroutine generate_plots_python()
+    subroutine generate_plots_python(prefix)
         !> Call Python script to generate plots from binary data.
+        character(len=*), intent(in) :: prefix
         integer :: ierr
 
         call execute_command_line( &
-            'python3 plot_field_equivalence.py field_equiv', exitstat=ierr)
+            'python3 plot_field_equivalence.py ' // trim(prefix), exitstat=ierr)
         if (ierr /= 0) then
             print *, '  Warning: Python plotting failed (exit code ', ierr, ')'
             print *, '  Binary data files available for manual plotting'

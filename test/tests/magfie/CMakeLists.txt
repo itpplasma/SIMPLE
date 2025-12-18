@@ -109,6 +109,7 @@ set_tests_properties(test_orbit_chartmap_comparison_map2disc PROPERTIES
     DEPENDS "generate_chartmap_map2disc"
     TIMEOUT 300
     LABELS "integration"
+    FIXTURES_REQUIRED chartmap_map2disc
 )
 
 add_test(NAME test_orbit_chartmap_comparison_plot_map2disc
@@ -132,4 +133,5 @@ set_tests_properties(test_chartmap_refcoords_config_map2disc PROPERTIES
     DEPENDS "generate_chartmap_map2disc"
     TIMEOUT 120
     LABELS "integration"
+    FIXTURES_REQUIRED chartmap_map2disc
 )

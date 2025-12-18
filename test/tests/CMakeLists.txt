@@ -35,6 +35,7 @@ add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(CHARTMAP_MAP2DISC_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.map2disc.nc")
 set(CHARTMAP_NCSX_MAP2DISC_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.map2disc.nc")
+set(CHARTMAP_NCSX_MAP2DISC_WALL_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.map2disc.wall0p1m.nc")
 
 set(LIBNEO_PYTHON_DIR "" CACHE PATH "Path to libneo/python directory containing the libneo Python package")
 if(LIBNEO_PYTHON_DIR STREQUAL "")
@@ -73,10 +74,13 @@ add_test(NAME generate_chartmap_map2disc
         --wout ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
         --out ${CHARTMAP_MAP2DISC_FILE}
         --nrho 17 --ntheta 33 --nzeta 33
+        --s-boundary 1.0
+        --boundary-offset 0.0
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(generate_chartmap_map2disc PROPERTIES
     LABELS "integration"
-    TIMEOUT 600)
+    TIMEOUT 600
+    FIXTURES_SETUP chartmap_map2disc)
 
 add_test(NAME generate_chartmap_ncsx_map2disc
     COMMAND ${CMAKE_COMMAND} -E env
@@ -87,10 +91,30 @@ add_test(NAME generate_chartmap_ncsx_map2disc
         --wout ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
         --out ${CHARTMAP_NCSX_MAP2DISC_FILE}
         --nrho 17 --ntheta 33 --nzeta 33
+        --s-boundary 1.0
+        --boundary-offset 0.0
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(generate_chartmap_ncsx_map2disc PROPERTIES
     LABELS "integration"
-    TIMEOUT 600)
+    TIMEOUT 600
+    FIXTURES_SETUP chartmap_ncsx_map2disc)
+
+add_test(NAME generate_chartmap_ncsx_map2disc_wall
+    COMMAND ${CMAKE_COMMAND} -E env
+        PYTHONPATH=${LIBNEO_PYTHON_DIR}
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/generate_chartmap_map2disc.py
+        --libneo-python ${LIBNEO_PYTHON_DIR}
+        --wout ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+        --out ${CHARTMAP_NCSX_MAP2DISC_WALL_FILE}
+        --nrho 17 --ntheta 33 --nzeta 33
+        --s-boundary 1.0
+        --boundary-offset 0.1
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(generate_chartmap_ncsx_map2disc_wall PROPERTIES
+    LABELS "integration"
+    TIMEOUT 600
+    FIXTURES_SETUP chartmap_ncsx_map2disc_wall)
 
 add_test(NAME plot_chartmap_vmec_vs_map2disc
     COMMAND ${CMAKE_COMMAND} -E env
@@ -104,7 +128,8 @@ add_test(NAME plot_chartmap_vmec_vs_map2disc
 set_tests_properties(plot_chartmap_vmec_vs_map2disc PROPERTIES
     DEPENDS "chartmap_test_data;generate_chartmap_map2disc"
     LABELS "integration;plot"
-    TIMEOUT 120)
+    TIMEOUT 120
+    FIXTURES_REQUIRED chartmap_map2disc)
 
 # Download NCSX test data for field equivalence tests (coils + wout)
 set(WOUT_NCSX_FILE "${TEST_DATA_DIR}/wout_ncsx.nc")
@@ -425,12 +450,22 @@ set_tests_properties(test_field_equivalence_chartmap PROPERTIES
     TIMEOUT 120)
 
 add_test(NAME test_field_equivalence_chartmap_map2disc
-    COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc
+    COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc field_equiv_map2disc
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_field_equivalence_chartmap_map2disc PROPERTIES
     LABELS "integration"
     TIMEOUT 120
-    DEPENDS "generate_chartmap_ncsx_map2disc")
+    DEPENDS "generate_chartmap_ncsx_map2disc"
+    FIXTURES_REQUIRED chartmap_ncsx_map2disc)
+
+add_test(NAME test_field_equivalence_chartmap_map2disc_wall
+    COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.wall0p1m.nc field_equiv_map2disc_wall
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_field_equivalence_chartmap_map2disc_wall PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120
+    DEPENDS "generate_chartmap_ncsx_map2disc_wall"
+    FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)
