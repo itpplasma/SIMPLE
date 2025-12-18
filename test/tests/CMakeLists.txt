@@ -116,6 +116,21 @@ set_tests_properties(generate_chartmap_ncsx_map2disc_wall PROPERTIES
     TIMEOUT 600
     FIXTURES_SETUP chartmap_ncsx_map2disc_wall)
 
+add_test(NAME test_chartmap_ncsx_map2disc_wall_offset
+    COMMAND ${CMAKE_COMMAND} -E env
+        PYTHONPATH=${LIBNEO_PYTHON_DIR}
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/plot_chartmap_wall_offset_check.py
+        --wout ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+        --chartmap ${CHARTMAP_NCSX_MAP2DISC_WALL_FILE}
+        --out ${CMAKE_CURRENT_BINARY_DIR}/chartmap_wall_offset_check.png
+        --offset 0.1
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_ncsx_map2disc_wall_offset PROPERTIES
+    LABELS "integration;plot"
+    TIMEOUT 180
+    FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
+
 add_test(NAME plot_chartmap_vmec_vs_map2disc
     COMMAND ${CMAKE_COMMAND} -E env
         PYTHONPATH=${LIBNEO_PYTHON_DIR}
