@@ -1,7 +1,7 @@
 # CMakeLists files in this project can
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
-cmake_minimum_required (VERSION 3.7)
+cmake_minimum_required (VERSION 3.10)
 project (SIMPLE Fortran C)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -55,19 +55,22 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 		add_compile_options(-O3 -march=native -mtune=native)
 	endif()
 else()
-	add_compile_options(-Wall -Wno-unused -Wno-unused-dummy-argument)
-	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-fopenmp>)
-	add_link_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-cpp>)
+	add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Wall -Wno-unused -Wno-unused-dummy-argument>)
+	add_compile_options($<$<COMPILE_LANGUAGE:C>:-Wall -Wno-unused>)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
 		add_compile_options($<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-C>)
-		add_compile_options(-O0 -g -ggdb -fbacktrace
-			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps)
+		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O0 -g -ggdb -fbacktrace
+			-ffpe-trap=invalid,zero,overflow -fbounds-check -fcheck=all,no-array-temps>)
+		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O0 -g -ggdb>)
 	elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-		add_compile_options(-O2 -p -g -shared-libgcc)
+		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O2 -p -g -shared-libgcc>)
+		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O2 -g>)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
-		add_compile_options(-O3 -g -fbacktrace)
+		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O3 -g -fbacktrace>)
+		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O3 -g>)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		add_compile_options(-O3 -march=native -mtune=native)
+		add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-O3 -march=native -mtune=native>)
+		add_compile_options($<$<COMPILE_LANGUAGE:C>:-O3 -march=native -mtune=native>)
 	endif()
 endif()
 
@@ -242,21 +245,23 @@ set(preprocessed_sources
 	${CMAKE_BINARY_DIR}/bench.f90.i
 )
 
-add_custom_target(preprocessed_sources
-	DEPENDS ${files_to_wrap}
-)
-
 foreach (file_to_wrap ${files_to_wrap})
 	file(RELATIVE_PATH
 		basename ${CMAKE_CURRENT_LIST_DIR}/SRC/ ${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
 		)
-	add_custom_command(TARGET preprocessed_sources
+	add_custom_command(
+		OUTPUT ${CMAKE_BINARY_DIR}/${basename}.i
 		COMMAND gfortran -E -cpp
 			-o ${CMAKE_BINARY_DIR}/${basename}.i
 			${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
-		DEPENDS ${files_to_wrap}
+		DEPENDS ${CMAKE_CURRENT_LIST_DIR}/${file_to_wrap}
+		VERBATIM
 	)
 endforeach()
+
+add_custom_target(preprocessed_sources
+	DEPENDS ${preprocessed_sources}
+)
 
 
 # Vars
