@@ -75,6 +75,7 @@ module params
   integer          :: notrace_passing = 0
   double precision :: facE_al=1d0, trace_time=1d-1
   integer :: ntimstep=10000, npoiper=100, npoiper2=256, n_e=2, n_d=4
+  integer :: nturns = 8
 
   double precision :: v0
 
@@ -94,7 +95,7 @@ module params
     facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm,      &
     isw_field_type, startmode, integmode, relerr, tcut, debug,           &
     class_plot, cut_in_per, fast_class, local, vmec_B_scale,             &
-    vmec_RZ_scale, swcoll, deterministic, old_axis_healing,              &
+    vmec_RZ_scale, swcoll, deterministic, nturns, old_axis_healing,      &
     old_axis_healing_boundary
 
 contains

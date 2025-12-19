@@ -814,7 +814,7 @@ subroutine trace_orbit(anorb, ipart)
                         iaaa_rep=10011, iaaa_ret=10012, iaaa_stp=10021, iaaa_stt=10022     !<=AAA
 
 ! Variables and settings for classification by J_parallel and ideal orbit condition:
-  integer, parameter :: nfp_dim=3, nturns=8
+  integer, parameter :: nfp_dim=3
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in
   logical :: stop_fast_class
