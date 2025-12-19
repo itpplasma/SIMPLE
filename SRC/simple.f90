@@ -817,6 +817,7 @@ subroutine trace_orbit(anorb, ipart)
   integer, parameter :: nfp_dim=3, nturns=8
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in
+  integer, parameter :: ierr_fast_class_done = 99
 ! output files:
 ! iaaa_jre - regular trapped by J_parallel
 ! iaaa_jst - stochastic trapped by J_parallel
@@ -1024,7 +1025,7 @@ subroutine trace_orbit(anorb, ipart)
 
       ! Write starting data for orbits which were lost in case of classification plot
       if(class_plot) then
-        if(ierr.ne.0) then
+        if(ierr.ne.0 .and. ierr.ne.ierr_fast_class_done) then
           !$omp critical
           if(passing) then
             write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
@@ -1095,7 +1096,7 @@ subroutine trace_orbit(anorb, ipart)
 !
           iclass(1,ipart) = ijpar
           iclass(2,ipart) = ideal
-          if(fast_class) ierr=ierr_cot
+          if(fast_class .and. ijpar.ne.0 .and. ideal.ne.0) ierr=ierr_fast_class_done
 !
 ! End classification by J_parallel and ideal orbit conditions
         endif
@@ -1148,53 +1149,57 @@ subroutine trace_orbit(anorb, ipart)
 
       ! Cut classification into regular or chaotic
       if (kt == ntcut) then
-        regular = .True.
+        if(fast_class) then
+          ierr=ierr_fast_class_done
+        else
+          regular = .True.
 
-        if(ifp_per > 0) then
+          if(ifp_per > 0) then
 
-          call fract_dimension(ifp_per,zpoipl_per(:,1:ifp_per),fraction)
+            call fract_dimension(ifp_per,zpoipl_per(:,1:ifp_per),fraction)
 
-          if(fraction.gt.0.2d0) then
-            ! print *, ipart, ' chaotic per ', ifp_per
-            regular = .False.
-          ! else
-          !   print *, ipart, ' regular per', ifp_per
+            if(fraction.gt.0.2d0) then
+              ! print *, ipart, ' chaotic per ', ifp_per
+              regular = .False.
+            ! else
+            !   print *, ipart, ' regular per', ifp_per
+            endif
           endif
-        endif
 
-        if(ifp_tip > 0) then
+          if(ifp_tip > 0) then
 
-          call fract_dimension(ifp_tip,zpoipl_tip(:,1:ifp_tip),fraction)
+            call fract_dimension(ifp_tip,zpoipl_tip(:,1:ifp_tip),fraction)
 
-          if(fraction.gt.0.2d0) then
-            ! print *, ipart, ' chaotic tip ', ifp_tip
-            regular = .False.
-            iclass(3,ipart) = 2
-          else
-            ! print *, ipart, ' regular tip ', ifp_tip
-            iclass(3,ipart) = 1
+            if(fraction.gt.0.2d0) then
+              ! print *, ipart, ' chaotic tip ', ifp_tip
+              regular = .False.
+              iclass(3,ipart) = 2
+            else
+              ! print *, ipart, ' regular tip ', ifp_tip
+              iclass(3,ipart) = 1
+            endif
           endif
-        endif
 
-        if(class_plot) then
+          if(class_plot) then
 !$omp critical
 ! Output of classification by Minkowsky dimension:
-          if(regular) then
-            if(passing) then
-              write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+            if(regular) then
+              if(passing) then
+                write (iaaa_rep,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+              else
+                write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+              endif
             else
-              write (iaaa_ret,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+              if(passing) then
+                write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+              else
+                write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
+              endif
             endif
-          else
-            if(passing) then
-              write (iaaa_stp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            else
-              write (iaaa_stt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
-            endif
-          endif
 !End output of classification by Minkowsky dimension
 !$omp end critical
-          ierr=1
+            ierr=1
+          endif
         endif
       endif
 !
