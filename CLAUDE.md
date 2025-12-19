@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ⚠️ MANDATORY REQUIREMENTS ⚠️
 
-**🚨 CRITICAL: ALWAYS RUN FROM PROJECT ROOT - NO `cd` COMMANDS ALLOWED 🚨**
+**🚨 CRITICAL: ALWAYS RUN FROM PROJECT ROOT 🚨**
 
-- **NEVER use `cd` commands** - Always run all commands from `/afs/itp.tugraz.at/proj/plasma/CODE/ert/SIMPLE/`
+- Always run all commands from the repository root
 - **Use `make test`** - Never run test executables directly or use ctest manually
 - **Use relative paths** - All paths should be relative to project root (e.g., `./build/simple.x`)
 
