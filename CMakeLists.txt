@@ -89,9 +89,15 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 	elseif (CMAKE_BUILD_TYPE MATCHES Release)
 		add_compile_options(
 			$<$<COMPILE_LANGUAGE:Fortran>:-O3>
+			$<$<COMPILE_LANGUAGE:Fortran>:-march=native>
+			$<$<COMPILE_LANGUAGE:Fortran>:-mtune=native>
+			$<$<COMPILE_LANGUAGE:Fortran>:-ffast-math>
 			$<$<COMPILE_LANGUAGE:Fortran>:-g>
 			$<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
 			$<$<COMPILE_LANGUAGE:C>:-O3>
+			$<$<COMPILE_LANGUAGE:C>:-march=native>
+			$<$<COMPILE_LANGUAGE:C>:-mtune=native>
+			$<$<COMPILE_LANGUAGE:C>:-ffast-math>
 			$<$<COMPILE_LANGUAGE:C>:-g>
 		)
 	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
@@ -99,9 +105,11 @@ if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
 			$<$<COMPILE_LANGUAGE:Fortran>:-O3>
 			$<$<COMPILE_LANGUAGE:Fortran>:-march=native>
 			$<$<COMPILE_LANGUAGE:Fortran>:-mtune=native>
+			$<$<COMPILE_LANGUAGE:Fortran>:-ffast-math>
 			$<$<COMPILE_LANGUAGE:C>:-O3>
 			$<$<COMPILE_LANGUAGE:C>:-march=native>
 			$<$<COMPILE_LANGUAGE:C>:-mtune=native>
+			$<$<COMPILE_LANGUAGE:C>:-ffast-math>
 		)
 	endif()
 endif()
