@@ -817,7 +817,7 @@ subroutine trace_orbit(anorb, ipart)
   integer, parameter :: nfp_dim=3, nturns=8
   integer :: nfp_cot,ideal,ijpar,ierr_cot,iangvar
   double precision, dimension(nfp_dim) :: fpr_in
-  integer, parameter :: ierr_fast_class_done = 99
+  logical :: stop_fast_class
 ! output files:
 ! iaaa_jre - regular trapped by J_parallel
 ! iaaa_jst - stochastic trapped by J_parallel
@@ -985,6 +985,7 @@ subroutine trace_orbit(anorb, ipart)
 !
   par_inv = 0d0
   regular = .False.
+  stop_fast_class = .False.
   do it=2,ntimstep
     if (regular) then  ! regular orbit, will not be lost
       if(passing) then
@@ -1025,7 +1026,7 @@ subroutine trace_orbit(anorb, ipart)
 
       ! Write starting data for orbits which were lost in case of classification plot
       if(class_plot) then
-        if(ierr.ne.0 .and. ierr.ne.ierr_fast_class_done) then
+        if(ierr.ne.0) then
           !$omp critical
           if(passing) then
             write (iaaa_prp,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
@@ -1096,7 +1097,7 @@ subroutine trace_orbit(anorb, ipart)
 !
           iclass(1,ipart) = ijpar
           iclass(2,ipart) = ideal
-          if(fast_class .and. ijpar.ne.0 .and. ideal.ne.0) ierr=ierr_fast_class_done
+          if(fast_class .and. ijpar.ne.0 .and. ideal.ne.0) stop_fast_class = .True.
 !
 ! End classification by J_parallel and ideal orbit conditions
         endif
@@ -1150,7 +1151,7 @@ subroutine trace_orbit(anorb, ipart)
       ! Cut classification into regular or chaotic
       if (kt == ntcut) then
         if(fast_class) then
-          ierr=ierr_fast_class_done
+          stop_fast_class = .True.
         else
           regular = .True.
 
@@ -1203,6 +1204,7 @@ subroutine trace_orbit(anorb, ipart)
         endif
       endif
 !
+      if (stop_fast_class) exit
       if(ierr.ne.0) then
         if(class_plot) then
 ! Output of classification by J_parallel and ideal orbit condition:
@@ -1233,7 +1235,7 @@ subroutine trace_orbit(anorb, ipart)
       endif
 !    write(999, *) kt*dtaumin/v0, z
     enddo
-    if(ierr.ne.0) exit
+    if(ierr.ne.0 .or. stop_fast_class) exit
     if(passing) then
       !$omp atomic
       confpart_pass(it)=confpart_pass(it)+1.d0
