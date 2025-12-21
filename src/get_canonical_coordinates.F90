@@ -24,6 +24,7 @@ module get_can_sub
     use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
                            construct_batch_splines_1d, construct_batch_splines_3d, &
                            evaluate_batch_splines_1d_der2, &
+                           evaluate_batch_splines_1d_der3, &
                            evaluate_batch_splines_3d_der, &
                            evaluate_batch_splines_3d_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
@@ -529,17 +530,22 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
         error stop "splint_can_coord: Aphi batch spline not initialized"
     end if
 
-    call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, y1d, dy1d, d2y1d)
+    if (mode_secders > 0) then
+        ! Need third derivative - use der3 which computes all derivatives in one pass
+        block
+            real(dp) :: d3y1d(1)
+            call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
+                                                y1d, dy1d, d2y1d, d3y1d)
+            d3A_phi_dr3 = d3y1d(1)
+        end block
+    else
+        call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, &
+                                            y1d, dy1d, d2y1d)
+        d3A_phi_dr3 = 0.0_dp
+    end if
     A_phi = y1d(1)
     dA_phi_dr = dy1d(1)
     d2A_phi_dr2 = d2y1d(1)
-
-    if (mode_secders > 0) then
-        call evaluate_batch_splines_1d_der3_single(aphi_batch_spline, r_eval, &
-                                                   d3A_phi_dr3)
-    else
-        d3A_phi_dr3 = 0.0_dp
-    end if
 
     ! Prepare coordinates for 3D interpolation
     rho_tor = sqrt(r_eval)
@@ -551,9 +557,10 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
     x_eval(3) = phi_wrapped
 
     ! Chain rule coefficients for rho -> s conversion
+    ! rho = sqrt(s), drho/ds = 0.5/rho, d2rho/ds2 = -0.25/rho^3
     drhods = 0.5_dp/rho_tor
     drhods2 = drhods**2
-    d2rhods2m = drhods2/rho_tor
+    d2rhods2m = drhods2/rho_tor  ! -d2rho/ds2 (negated for chain rule)
 
     ! Interpolate G if needed
     if (fullset) then
@@ -713,42 +720,6 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
     end if
 
 end subroutine splint_can_coord
-
-
-subroutine evaluate_batch_splines_1d_der3_single(spl, x, d3y)
-    type(BatchSplineData1D), intent(in) :: spl
-    real(dp), intent(in) :: x
-    real(dp), intent(out) :: d3y
-
-    real(dp) :: x_norm, x_local, xj
-    integer :: interval_index, k_power
-    integer :: N
-
-    N = spl%order
-    if (N < 3) then
-        d3y = 0.0_dp
-        return
-    end if
-
-    if (spl%periodic) then
-        xj = modulo(x - spl%x_min, spl%h_step*(spl%num_points - 1)) + spl%x_min
-    else
-        xj = x
-    end if
-
-    x_norm = (xj - spl%x_min)/spl%h_step
-    interval_index = max(0, min(spl%num_points - 2, int(x_norm)))
-    x_local = (x_norm - real(interval_index, dp))*spl%h_step
-
-    d3y = 0.0_dp
-    if (N >= 3) then
-        d3y = N*(N - 1)*(N - 2)*spl%coeff(1, N, interval_index + 1)
-        do k_power = N - 1, 3, -1
-            d3y = k_power*(k_power - 1)*(k_power - 2)* &
-                  spl%coeff(1, k_power, interval_index + 1) + x_local*d3y
-        end do
-    end if
-end subroutine evaluate_batch_splines_1d_der3_single
 
 
 subroutine can_to_vmec(r, vartheta_c_in, varphi_c_in, theta_vmec, varphi_vmec)
