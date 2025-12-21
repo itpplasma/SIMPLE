@@ -1,7 +1,7 @@
 module boozer_sub
     use spl_three_to_five_sub
     use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
-                           construct_batch_splines_3d, &
+                           construct_batch_splines_1d, construct_batch_splines_3d, &
                            evaluate_batch_splines_1d_der2, &
                            evaluate_batch_splines_3d_der, evaluate_batch_splines_3d_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
@@ -89,7 +89,6 @@ contains
 
         call compute_boozer_data
 
-        call spline_boozer_data
         call build_boozer_aphi_batch_spline
         call build_boozer_bcovar_tp_batch_spline
         call build_boozer_bmod_batch_spline
@@ -1120,6 +1119,8 @@ contains
         use boozer_coordinates_mod, only: ns_s_B, ns_B, hs_B, s_Bcovar_tp_B
 
         integer :: order
+        real(dp) :: x_min, x_max
+        real(dp), allocatable :: y_batch(:, :)
 
         if (bcovar_tp_batch_spline_ready) then
             call destroy_batch_splines_1d(bcovar_tp_batch_spline)
@@ -1131,18 +1132,17 @@ contains
             error stop "build_boozer_bcovar_tp_batch_spline: spline order must be 3..5"
         end if
 
-        bcovar_tp_batch_spline%order = order
-        bcovar_tp_batch_spline%num_points = ns_B
-        bcovar_tp_batch_spline%periodic = .false.
-        bcovar_tp_batch_spline%x_min = 0.0_dp
-        bcovar_tp_batch_spline%h_step = hs_B
-        bcovar_tp_batch_spline%num_quantities = 2
+        x_min = 0.0_dp
+        x_max = hs_B*dble(ns_B - 1)
 
-        allocate (bcovar_tp_batch_spline%coeff(2, 0:order, ns_B))
-        bcovar_tp_batch_spline%coeff(1, 0:order, :) = s_Bcovar_tp_B(1, 1:order + 1, :)
-        bcovar_tp_batch_spline%coeff(2, 0:order, :) = s_Bcovar_tp_B(2, 1:order + 1, :)
+        allocate (y_batch(ns_B, 2))
+        y_batch(:, 1) = s_Bcovar_tp_B(1, 1, :)
+        y_batch(:, 2) = s_Bcovar_tp_B(2, 1, :)
 
+        call construct_batch_splines_1d(x_min, x_max, y_batch, order, .false., &
+                                        bcovar_tp_batch_spline)
         bcovar_tp_batch_spline_ready = .true.
+        deallocate (y_batch)
     end subroutine build_boozer_bcovar_tp_batch_spline
 
     subroutine build_boozer_bmod_batch_spline
