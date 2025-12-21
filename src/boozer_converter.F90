@@ -1,16 +1,25 @@
 module boozer_sub
     use spl_three_to_five_sub
+    use interpolate, only: BatchSplineData3D, construct_batch_splines_3d, &
+                           evaluate_batch_splines_3d_der2, destroy_batch_splines_3d
     use field, only : magnetic_field_t
+    use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
-    
-    ! Define real(dp) kind parameter
-    integer, parameter :: dp = kind(1.0d0)
-    real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
+
+    real(dp), parameter :: twopi = 2.0_dp*3.14159265358979_dp
 
     ! Module variable to store the field for use in subroutines
     class(magnetic_field_t), allocatable :: current_field
     !$omp threadprivate(current_field)
+
+    type(BatchSplineData3D), save :: bmod_batch_spline
+    logical, save :: bmod_batch_spline_ready = .false.
+    real(dp), allocatable, save :: bmod_grid(:, :, :)
+
+    type(BatchSplineData3D), save :: br_batch_spline
+    logical, save :: br_batch_spline_ready = .false.
+    real(dp), allocatable, save :: br_grid(:, :, :)
 
 contains
 
@@ -25,6 +34,7 @@ contains
         ! Store field in module variable for use in nested subroutines
         if (allocated(current_field)) deallocate (current_field)
         allocate (current_field, source=field)
+        call reset_boozer_batch_splines
 
         ! Call the actual implementation
         call get_boozer_coordinates_impl
@@ -46,24 +56,9 @@ contains
         use vector_potentail_mod, only: ns, hs
         use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B, &
-                                          s_Bcovar_tp_B, &
-                                          s_Bmod_B, s_Bcovar_r_B, &
-                                          s_delt_delp_V, s_delt_delp_B, &
-                                          ns_max, derf1, derf2, derf3, &
-                                          use_B_r, use_del_tp_B
-        use binsrc_sub, only: binsrc
-        use plag_coeff_sub, only: plag_coeff
-        use spline_vmec_sub
-#ifdef GVEC_AVAILABLE
-        use vmec_field_adapter
-#else
-        use vmec_field_eval
-#endif
+                                          hs_B, h_theta_B, h_phi_B, use_B_r
 
         implicit none
-
-        real(dp), parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
 
         ns_s_B = ns_s
         ns_tp_B = ns_tp
@@ -78,6 +73,8 @@ contains
         call compute_boozer_data
 
         call spline_boozer_data
+        call build_boozer_bmod_batch_spline
+        if (use_B_r) call build_boozer_br_batch_spline
 
     end subroutine get_boozer_coordinates_impl
 
@@ -94,8 +91,7 @@ contains
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
                                           s_Bcovar_tp_B, &
-                                          s_Bmod_B, s_Bcovar_r_B, &
-                                          ns_max, derf1, derf2, derf3, &
+                                          derf1, derf2, derf3, &
                                           use_B_r
         use vector_potentail_mod, only: ns, hs, torflux, sA_phi
         use new_vmec_stuff_mod, only: nper, ns_A
@@ -108,7 +104,6 @@ contains
 
         integer :: nstp, ns_A_p1, ns_s_p1
         integer :: k, is, i_theta, i_phi
-        integer :: iss, ist, isp
 
         real(dp) :: r, vartheta_B, varphi_B, &
             A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
@@ -117,13 +112,12 @@ contains
         real(dp), dimension(3) :: dBmod_B, dB_r
         real(dp), dimension(6) :: d2Bmod_B, d2B_r
 
-        real(dp) :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
+        real(dp) :: ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
         real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
         real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
             d2qua_dtdp, d2qua_dp2
-        real(dp), dimension(ns_max) :: sp_all, dsp_all_ds, dsp_all_dt
-        real(dp), dimension(ns_max) :: d2sp_all_ds2, d2sp_all_dsdt, d2sp_all_dt2
-        real(dp), dimension(ns_max, ns_max) :: stp_all, dstp_all_ds, d2stp_all_ds2
+        real(dp) :: x_eval(3), y_eval(1), dy_eval(3, 1), d2y_eval(6, 1)
+        real(dp) :: theta_wrapped, phi_wrapped
 
 !$omp atomic
         icounter = icounter + 1
@@ -186,103 +180,30 @@ contains
 ! Interpolation of mod-B:
 !--------------------------------
 
-! Begin interpolation of mod-B over $rho$
+        theta_wrapped = modulo(vartheta_B, twopi)
+        phi_wrapped = modulo(varphi_B, twopi/dble(nper))
 
-        stp_all(1:nstp, 1:nstp) = s_Bmod_B(ns_s_p1, :, :, is, i_theta, i_phi)
-        dstp_all_ds(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf1(ns_s_p1)
-        d2stp_all_ds2(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf2(ns_s_p1)
+        if (.not. bmod_batch_spline_ready) then
+            error stop "splint_boozer_coord: Bmod batch spline not initialized"
+        end if
 
-        do k = ns_s_B, 3, -1
-            stp_all(1:nstp, 1:nstp) = s_Bmod_B(k, :, :, is, i_theta, i_phi) &
-                + ds*stp_all(1:nstp, 1:nstp)
-            dstp_all_ds(1:nstp, 1:nstp) = &
-                s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf1(k) &
-                + ds*dstp_all_ds(1:nstp, 1:nstp)
-            d2stp_all_ds2(1:nstp, 1:nstp) = &
-                s_Bmod_B(k, :, :, is, i_theta, i_phi)*derf2(k) &
-                + ds*d2stp_all_ds2(1:nstp, 1:nstp)
-        end do
+        x_eval(1) = rho_tor
+        x_eval(2) = theta_wrapped
+        x_eval(3) = phi_wrapped
+        call evaluate_batch_splines_3d_der2(bmod_batch_spline, x_eval, y_eval, &
+                                            dy_eval, d2y_eval)
 
-        stp_all(1:nstp, 1:nstp) = s_Bmod_B(1, :, :, is, i_theta, i_phi) &
-            + ds*(s_Bmod_B(2, :, :, is, i_theta, i_phi) + ds*stp_all(1:nstp, 1:nstp))
-        dstp_all_ds(1:nstp, 1:nstp) = s_Bmod_B(2, :, :, is, i_theta, i_phi) &
-            + ds*dstp_all_ds(1:nstp, 1:nstp)
+        qua = y_eval(1)
+        dqua_dr = dy_eval(1, 1)
+        dqua_dt = dy_eval(2, 1)
+        dqua_dp = dy_eval(3, 1)
 
-! End interpolation of mod-B over $rho$
-!-------------------------------
-! Begin interpolation of mod-B over $\theta$
-
-        sp_all(1:nstp) = stp_all(nstp, 1:nstp)
-        dsp_all_ds(1:nstp) = dstp_all_ds(nstp, 1:nstp)
-        d2sp_all_ds2(1:nstp) = d2stp_all_ds2(nstp, 1:nstp)
-        dsp_all_dt(1:nstp) = sp_all(1:nstp)*derf1(nstp)
-        d2sp_all_dsdt(1:nstp) = dsp_all_ds(1:nstp)*derf1(nstp)
-        d2sp_all_dt2(1:nstp) = sp_all(1:nstp)*derf2(nstp)
-
-        do k = ns_tp_B, 3, -1
-            sp_all(1:nstp) = stp_all(k, 1:nstp) + dtheta*sp_all(1:nstp)
-            dsp_all_ds(1:nstp) = dstp_all_ds(k, 1:nstp) + dtheta*dsp_all_ds(1:nstp)
-            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) &
-                + dtheta*d2sp_all_ds2(1:nstp)
-            dsp_all_dt(1:nstp) = stp_all(k, 1:nstp)*derf1(k) + dtheta*dsp_all_dt(1:nstp)
-            d2sp_all_dsdt(1:nstp) = dstp_all_ds(k, 1:nstp)*derf1(k) &
-                + dtheta*d2sp_all_dsdt(1:nstp)
-            d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) &
-                + dtheta*d2sp_all_dt2(1:nstp)
-        end do
-
-        sp_all(1:nstp) = stp_all(1, 1:nstp) &
-                         + dtheta*(stp_all(2, 1:nstp) + dtheta*sp_all(1:nstp))
-        dsp_all_ds(1:nstp) = dstp_all_ds(1, 1:nstp) &
-            + dtheta*(dstp_all_ds(2, 1:nstp) + dtheta*dsp_all_ds(1:nstp))
-        d2sp_all_ds2(1:nstp) = d2stp_all_ds2(1, 1:nstp) &
-            + dtheta*(d2stp_all_ds2(2, 1:nstp) + dtheta*d2sp_all_ds2(1:nstp))
-        dsp_all_dt(1:nstp) = stp_all(2, 1:nstp) + dtheta*dsp_all_dt(1:nstp)
-        d2sp_all_dsdt(1:nstp) = dstp_all_ds(2, 1:nstp) + dtheta*d2sp_all_dsdt(1:nstp)
-
-! End interpolation of mod-B over $\theta$
-!--------------------------------
-! Begin interpolation of mod-B over $\varphi$
-
-        qua = sp_all(nstp)
-        dqua_dr = dsp_all_ds(nstp)
-        dqua_dt = dsp_all_dt(nstp)
-        dqua_dp = qua*derf1(nstp)
-
-        d2qua_dr2 = d2sp_all_ds2(nstp)
-        d2qua_drdt = d2sp_all_dsdt(nstp)
-        d2qua_drdp = dqua_dr*derf1(nstp)
-        d2qua_dt2 = d2sp_all_dt2(nstp)
-        d2qua_dtdp = dqua_dt*derf1(nstp)
-        d2qua_dp2 = qua*derf2(nstp)
-
-        do k = ns_tp_B, 3, -1
-            qua = sp_all(k) + dphi*qua
-            dqua_dr = dsp_all_ds(k) + dphi*dqua_dr
-            dqua_dt = dsp_all_dt(k) + dphi*dqua_dt
-            dqua_dp = sp_all(k)*derf1(k) + dphi*dqua_dp
-
-            d2qua_dr2 = d2sp_all_ds2(k) + dphi*d2qua_dr2
-            d2qua_drdt = d2sp_all_dsdt(k) + dphi*d2qua_drdt
-            d2qua_drdp = dsp_all_ds(k)*derf1(k) + dphi*d2qua_drdp
-            d2qua_dt2 = d2sp_all_dt2(k) + dphi*d2qua_dt2
-            d2qua_dtdp = dsp_all_dt(k)*derf1(k) + dphi*d2qua_dtdp
-            d2qua_dp2 = sp_all(k)*derf2(k) + dphi*d2qua_dp2
-        end do
-
-        qua = sp_all(1) + dphi*(sp_all(2) + dphi*qua)
-        dqua_dr = dsp_all_ds(1) + dphi*(dsp_all_ds(2) + dphi*dqua_dr)
-        dqua_dt = dsp_all_dt(1) + dphi*(dsp_all_dt(2) + dphi*dqua_dt)
-
-        d2qua_dr2 = d2sp_all_ds2(1) + dphi*(d2sp_all_ds2(2) + dphi*d2qua_dr2)
-        d2qua_drdt = d2sp_all_dsdt(1) + dphi*(d2sp_all_dsdt(2) + dphi*d2qua_drdt)
-        d2qua_dt2 = d2sp_all_dt2(1) + dphi*(d2sp_all_dt2(2) + dphi*d2qua_dt2)
-
-        dqua_dp = sp_all(2) + dphi*dqua_dp
-        d2qua_drdp = dsp_all_ds(2) + dphi*d2qua_drdp
-        d2qua_dtdp = dsp_all_dt(2) + dphi*d2qua_dtdp
-
-! End interpolation of mod-B over $\varphi$
+        d2qua_dr2 = d2y_eval(1, 1)
+        d2qua_drdt = d2y_eval(2, 1)
+        d2qua_drdp = d2y_eval(3, 1)
+        d2qua_dt2 = d2y_eval(4, 1)
+        d2qua_dtdp = d2y_eval(5, 1)
+        d2qua_dp2 = d2y_eval(6, 1)
 
 ! Coversion coefficients for derivatives over s
         drhods = 0.5d0/rho_tor
@@ -351,121 +272,33 @@ contains
 
         if (use_B_r) then
 
-! Begin interpolation of B_rho over $rho$
+            if (.not. br_batch_spline_ready) then
+                error stop "splint_boozer_coord: Br batch spline not initialized"
+            end if
 
-            stp_all(1:nstp, 1:nstp) = s_Bcovar_r_B(ns_s_p1, :, :, is, i_theta, i_phi)
-            dstp_all_ds(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf1(ns_s_p1)
-            d2stp_all_ds2(1:nstp, 1:nstp) = stp_all(1:nstp, 1:nstp)*derf2(ns_s_p1)
+            x_eval(1) = rho_tor
+            x_eval(2) = theta_wrapped
+            x_eval(3) = phi_wrapped
+            call evaluate_batch_splines_3d_der2(br_batch_spline, x_eval, y_eval, &
+                                                dy_eval, d2y_eval)
 
-            do k = ns_s_B, 3, -1
-                stp_all(1:nstp, 1:nstp) = &
-                    s_Bcovar_r_B(k, :, :, is, i_theta, i_phi) &
-                    + ds*stp_all(1:nstp, 1:nstp)
-                dstp_all_ds(1:nstp, 1:nstp) = &
-                    s_Bcovar_r_B(k, :, :, is, i_theta, i_phi)*derf1(k) &
-                    + ds*dstp_all_ds(1:nstp, 1:nstp)
-               d2stp_all_ds2(1:nstp, 1:nstp) = &
-                    s_Bcovar_r_B(k, :, :, is, i_theta, i_phi)*derf2(k) &
-                    + ds*d2stp_all_ds2(1:nstp, 1:nstp)
-            end do
+            qua = y_eval(1)
+            dqua_dr = dy_eval(1, 1)
+            dqua_dt = dy_eval(2, 1)
+            dqua_dp = dy_eval(3, 1)
 
-            stp_all(1:nstp, 1:nstp) = &
-                s_Bcovar_r_B(1, :, :, is, i_theta, i_phi) &
-                + ds*(s_Bcovar_r_B(2, :, :, is, i_theta, i_phi) &
-                + ds*stp_all(1:nstp, 1:nstp))
-            dstp_all_ds(1:nstp, 1:nstp) = &
-                s_Bcovar_r_B(2, :, :, is, i_theta, i_phi) &
-                + ds*dstp_all_ds(1:nstp, 1:nstp)
+            d2qua_dr2 = d2y_eval(1, 1)
+            d2qua_drdt = d2y_eval(2, 1)
+            d2qua_drdp = d2y_eval(3, 1)
+            d2qua_dt2 = d2y_eval(4, 1)
+            d2qua_dtdp = d2y_eval(5, 1)
+            d2qua_dp2 = d2y_eval(6, 1)
 
-! End interpolation of B_rho over $rho$
-!-------------------------------
-! Begin interpolation of B_rho over $\theta$
-
-            sp_all(1:nstp) = stp_all(nstp, 1:nstp)
-            dsp_all_ds(1:nstp) = dstp_all_ds(nstp, 1:nstp)
-            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(nstp, 1:nstp)
-            dsp_all_dt(1:nstp) = sp_all(1:nstp)*derf1(nstp)
-            d2sp_all_dsdt(1:nstp) = dsp_all_ds(1:nstp)*derf1(nstp)
-            d2sp_all_dt2(1:nstp) = sp_all(1:nstp)*derf2(nstp)
-
-            do k = ns_tp_B, 3, -1
-                sp_all(1:nstp) = stp_all(k, 1:nstp) &
-                    + dtheta*sp_all(1:nstp)
-                dsp_all_ds(1:nstp) = dstp_all_ds(k, 1:nstp) &
-                    + dtheta*dsp_all_ds(1:nstp)
-                d2sp_all_ds2(1:nstp) = d2stp_all_ds2(k, 1:nstp) &
-                    + dtheta*d2sp_all_ds2(1:nstp)
-                dsp_all_dt(1:nstp) = stp_all(k, 1:nstp)*derf1(k) &
-                    + dtheta*dsp_all_dt(1:nstp)
-                d2sp_all_dsdt(1:nstp) = &
-                    dstp_all_ds(k, 1:nstp)*derf1(k) &
-                    + dtheta*d2sp_all_dsdt(1:nstp)
-                d2sp_all_dt2(1:nstp) = stp_all(k, 1:nstp)*derf2(k) &
-                    + dtheta*d2sp_all_dt2(1:nstp)
-            end do
-
-            sp_all(1:nstp) = stp_all(1, 1:nstp) &
-                + dtheta*(stp_all(2, 1:nstp) + dtheta*sp_all(1:nstp))
-            dsp_all_ds(1:nstp) = dstp_all_ds(1, 1:nstp) &
-                + dtheta*(dstp_all_ds(2, 1:nstp) &
-                + dtheta*dsp_all_ds(1:nstp))
-            d2sp_all_ds2(1:nstp) = d2stp_all_ds2(1, 1:nstp) &
-                + dtheta*(d2stp_all_ds2(2, 1:nstp) &
-                + dtheta*d2sp_all_ds2(1:nstp))
-            dsp_all_dt(1:nstp) = stp_all(2, 1:nstp) &
-                + dtheta*dsp_all_dt(1:nstp)
-            d2sp_all_dsdt(1:nstp) = dstp_all_ds(2, 1:nstp) &
-                + dtheta*d2sp_all_dsdt(1:nstp)
-
-! End interpolation of B_rho over $\theta$
-!--------------------------------
-! Begin interpolation of B_rho over $\varphi$
-
-            qua = sp_all(nstp)
-            dqua_dr = dsp_all_ds(nstp)
-            dqua_dt = dsp_all_dt(nstp)
-            dqua_dp = qua*derf1(nstp)
-
-            d2qua_dr2 = d2sp_all_ds2(nstp)
-            d2qua_drdt = d2sp_all_dsdt(nstp)
-            d2qua_drdp = dqua_dr*derf1(nstp)
-            d2qua_dt2 = d2sp_all_dt2(nstp)
-            d2qua_dtdp = dqua_dt*derf1(nstp)
-            d2qua_dp2 = qua*derf2(nstp)
-
-            do k = ns_tp_B, 3, -1
-                qua = sp_all(k) + dphi*qua
-                dqua_dr = dsp_all_ds(k) + dphi*dqua_dr
-                dqua_dt = dsp_all_dt(k) + dphi*dqua_dt
-                dqua_dp = sp_all(k)*derf1(k) + dphi*dqua_dp
-
-                d2qua_dr2 = d2sp_all_ds2(k) + dphi*d2qua_dr2
-                d2qua_drdt = d2sp_all_dsdt(k) + dphi*d2qua_drdt
-                d2qua_drdp = dsp_all_ds(k)*derf1(k) + dphi*d2qua_drdp
-                d2qua_dt2 = d2sp_all_dt2(k) + dphi*d2qua_dt2
-                d2qua_dtdp = dsp_all_dt(k)*derf1(k) + dphi*d2qua_dtdp
-                d2qua_dp2 = sp_all(k)*derf2(k) + dphi*d2qua_dp2
-            end do
-
-            qua = sp_all(1) + dphi*(sp_all(2) + dphi*qua)
-            dqua_dr = dsp_all_ds(1) + dphi*(dsp_all_ds(2) + dphi*dqua_dr)
-            dqua_dt = dsp_all_dt(1) + dphi*(dsp_all_dt(2) + dphi*dqua_dt)
-
-            d2qua_dr2 = d2sp_all_ds2(1) + dphi*(d2sp_all_ds2(2) + dphi*d2qua_dr2)
-            d2qua_drdt = d2sp_all_dsdt(1) + dphi*(d2sp_all_dsdt(2) + dphi*d2qua_drdt)
-            d2qua_dt2 = d2sp_all_dt2(1) + dphi*(d2sp_all_dt2(2) + dphi*d2qua_dt2)
-
-            dqua_dp = sp_all(2) + dphi*dqua_dp
-            d2qua_drdp = dsp_all_ds(2) + dphi*d2qua_drdp
-            d2qua_dtdp = dsp_all_dt(2) + dphi*d2qua_dtdp
-
-! End interpolation of B_rho over $\varphi$
-
-! Coversion coefficients for derivatives over s
+! Convert coefficients for derivatives over s
             drhods = 0.5d0/rho_tor
             drhods2 = drhods**2
             ! $-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
-        d2rhods2m = drhods2/rho_tor
+            d2rhods2m = drhods2/rho_tor
 
             d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
             dqua_dr = dqua_dr*drhods
@@ -478,7 +311,8 @@ contains
             dB_r(2) = dqua_dt*drhods
             dB_r(3) = dqua_dp*drhods
 
-            d2B_r(1) = d2qua_dr2*drhods - 2.d0*dqua_dr*d2rhods2m + qua*drhods*3.d0/r**2
+            d2B_r(1) = d2qua_dr2*drhods - 2.d0*dqua_dr*d2rhods2m + &
+                       qua*drhods*(3.d0/4.d0)/r**2
             d2B_r(2) = d2qua_drdt*drhods - dqua_dt*d2rhods2m
             d2B_r(3) = d2qua_drdp*drhods - dqua_dp*d2rhods2m
             d2B_r(4) = d2qua_dt2*drhods
@@ -509,9 +343,8 @@ contains
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
                                           s_delt_delp_V, s_delt_delp_B, &
-                                          ns_max, derf1, derf2, derf3, &
+                                          ns_max, derf1, &
                                           use_del_tp_B
-        use new_vmec_stuff_mod, only: nper
         use chamb_mod, only: rnegflag
 
         implicit none
@@ -521,15 +354,18 @@ contains
         real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
 
         integer, parameter :: n_qua = 2
-        integer :: nstp, ns_A_p1, ns_s_p1
+        integer :: nstp, ns_s_p1
         integer :: k, is, i_theta, i_phi
-        integer :: iss, ist, isp
 
-        real(dp) :: s, ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
+        real(dp) :: ds, dtheta, dphi, rho_tor
 
         real(dp), dimension(n_qua) :: qua, dqua_dt, dqua_dp
         real(dp), dimension(n_qua, ns_max) :: sp_all, dsp_all_dt
         real(dp), dimension(n_qua, ns_max, ns_max) :: stp_all
+
+        sp_all = 0.0_dp
+        dsp_all_dt = 0.0_dp
+        stp_all = 0.0_dp
 
         if (r .le. 0.d0) then
             rnegflag = .true.
@@ -658,7 +494,6 @@ contains
 ! Input : r,vartheta_B,varphi_B - Boozer coordinates
 ! Output: theta,varphi          - VMEC coordinates
 
-        use new_vmec_stuff_mod, only: nper
         use boozer_coordinates_mod, only: use_del_tp_B
 
         implicit none
@@ -714,14 +549,11 @@ contains
 
     subroutine compute_boozer_data
         ! Computes Boozer coordinate transformations and magnetic field data
-        use vector_potentail_mod, only: ns, hs
-        use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
                                           s_Bcovar_tp_B, &
                                           s_Bmod_B, s_Bcovar_r_B, &
                                           s_delt_delp_V, s_delt_delp_B, &
-                                          ns_max, derf1, derf2, derf3, &
                                           use_B_r, use_del_tp_B
         use binsrc_sub, only: binsrc
         use plag_coeff_sub, only: plag_coeff
@@ -736,8 +568,8 @@ contains
 
         real(dp), parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
 
-        integer :: i, k, i_rho, i_theta, i_phi, npoilag, nder, nshift
-        integer :: ibeg, iend, i_qua, nqua, ist, isp
+        integer :: i, i_rho, i_theta, i_phi, npoilag, nder, nshift
+        integer :: ibeg, iend, nqua
         real(dp) :: s, theta, varphi, A_theta, A_phi
         real(dp) :: dA_theta_ds, dA_phi_ds, aiota
         real(dp) :: sqg, alam, dl_ds, dl_dt, dl_dp
@@ -751,7 +583,7 @@ contains
         real(dp), allocatable :: Bcovar_theta_V(:, :), Bcovar_varphi_V(:, :)
         real(dp), allocatable :: bmod_Vg(:, :), alam_2D(:, :)
         real(dp), allocatable :: deltheta_BV_Vg(:, :), delphi_BV_Vg(:, :)
-        real(dp), allocatable :: splcoe_r(:, :), splcoe_t(:, :)
+        real(dp), allocatable :: splcoe_t(:, :)
         real(dp), allocatable :: splcoe_p(:, :), coef(:, :)
         real(dp), allocatable :: perqua_t(:, :), perqua_p(:, :)
         real(dp), allocatable :: perqua_2D(:, :, :), Gfunc(:, :, :)
@@ -775,7 +607,11 @@ contains
         G00 = 0.d0
 
         allocate (rho_tor(ns_B))
+        allocate (aiota_arr(1))
+        allocate (Gfunc(1, 1, 1))
+        allocate (Bcovar_symfl(1, 1, 1, 1))
         if (use_B_r) then
+            deallocate (aiota_arr, Gfunc, Bcovar_symfl)
             allocate (aiota_arr(ns_B))
             allocate (Gfunc(ns_B, n_theta_B, n_phi_B))
             allocate (Bcovar_symfl(3, ns_B, n_theta_B, n_phi_B))
@@ -806,6 +642,12 @@ contains
         if (.not. allocated(s_Bmod_B)) &
             allocate (s_Bmod_B(ns_s_B + 1, ns_tp_B + 1, ns_tp_B + 1, &
                 ns_B, n_theta_B, n_phi_B))
+        if (.not. allocated(bmod_grid)) then
+            allocate (bmod_grid(ns_B, n_theta_B, n_phi_B))
+        else if (any(shape(bmod_grid) /= [ns_B, n_theta_B, n_phi_B])) then
+            deallocate (bmod_grid)
+            allocate (bmod_grid(ns_B, n_theta_B, n_phi_B))
+        end if
         if (use_B_r .and. .not. allocated(s_Bcovar_r_B)) &
             allocate (s_Bcovar_r_B(ns_s_B + 1, ns_tp_B + 1, &
                 ns_tp_B + 1, ns_B, n_theta_B, n_phi_B))
@@ -982,6 +824,7 @@ contains
 
             if (use_del_tp_B) s_delt_delp_B(:, 1, 1, 1, i_rho, :, :) = perqua_2D(1:2, :, :)
             s_Bmod_B(1, 1, 1, i_rho, :, :) = perqua_2D(3, :, :)
+            bmod_grid(i_rho, :, :) = perqua_2D(3, :, :)
 
 ! End re-interpolate to equidistant grid in $(\vartheta_B,\varphi_B)$
 
@@ -1030,6 +873,15 @@ contains
 
             end do
             deallocate (aiota_arr, Gfunc, Bcovar_symfl)
+
+            if (.not. allocated(br_grid)) then
+                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
+            else if (any(shape(br_grid) /= [ns_B, n_theta_B, n_phi_B])) then
+                deallocate (br_grid)
+                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
+            end if
+
+            br_grid(:, :, :) = s_Bcovar_r_B(1, 1, 1, :, :, :)
         end if
 
 ! End compute radial covariant magnetic field component in Boozer coordinates
@@ -1237,6 +1089,103 @@ contains
         print *, 'done'
 
     end subroutine spline_boozer_data
+
+    subroutine reset_boozer_batch_splines
+        if (bmod_batch_spline_ready) then
+            call destroy_batch_splines_3d(bmod_batch_spline)
+            bmod_batch_spline_ready = .false.
+        end if
+        if (allocated(bmod_grid)) then
+            deallocate (bmod_grid)
+        end if
+        if (br_batch_spline_ready) then
+            call destroy_batch_splines_3d(br_batch_spline)
+            br_batch_spline_ready = .false.
+        end if
+        if (allocated(br_grid)) then
+            deallocate (br_grid)
+        end if
+    end subroutine reset_boozer_batch_splines
+
+    subroutine build_boozer_bmod_batch_spline
+        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
+                                          hs_B, h_theta_B, h_phi_B
+
+        real(dp) :: x_min(3), x_max(3)
+        real(dp), allocatable :: y_batch(:, :, :, :)
+        integer :: order(3)
+        logical :: periodic(3)
+
+        if (.not. allocated(bmod_grid)) then
+            error stop "build_boozer_bmod_batch_spline: bmod_grid not allocated"
+        end if
+
+        if (bmod_batch_spline_ready) then
+            call destroy_batch_splines_3d(bmod_batch_spline)
+            bmod_batch_spline_ready = .false.
+        end if
+
+        order = [ns_s_B, ns_tp_B, ns_tp_B]
+        if (any(order < 3) .or. any(order > 5)) then
+            error stop "build_boozer_bmod_batch_spline: spline order must be 3..5"
+        end if
+
+        x_min = [0.0d0, 0.0d0, 0.0d0]
+        x_max(1) = hs_B*dble(ns_B - 1)
+        x_max(2) = h_theta_B*dble(n_theta_B - 1)
+        x_max(3) = h_phi_B*dble(n_phi_B - 1)
+
+        periodic = [.false., .true., .true.]
+
+        allocate (y_batch(ns_B, n_theta_B, n_phi_B, 1))
+        y_batch(:, :, :, 1) = bmod_grid(:, :, :)
+
+        call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
+                                        bmod_batch_spline)
+        bmod_batch_spline_ready = .true.
+    end subroutine build_boozer_bmod_batch_spline
+
+    subroutine build_boozer_br_batch_spline
+        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
+                                          hs_B, h_theta_B, h_phi_B, use_B_r
+
+        real(dp) :: x_min(3), x_max(3)
+        real(dp), allocatable :: y_batch(:, :, :, :)
+        integer :: order(3)
+        logical :: periodic(3)
+
+        if (.not. use_B_r) then
+            return
+        end if
+
+        if (.not. allocated(br_grid)) then
+            error stop "build_boozer_br_batch_spline: br_grid not allocated"
+        end if
+
+        if (br_batch_spline_ready) then
+            call destroy_batch_splines_3d(br_batch_spline)
+            br_batch_spline_ready = .false.
+        end if
+
+        order = [ns_s_B, ns_tp_B, ns_tp_B]
+        if (any(order < 3) .or. any(order > 5)) then
+            error stop "build_boozer_br_batch_spline: spline order must be 3..5"
+        end if
+
+        x_min = [0.0_dp, 0.0_dp, 0.0_dp]
+        x_max(1) = hs_B*dble(ns_B - 1)
+        x_max(2) = h_theta_B*dble(n_theta_B - 1)
+        x_max(3) = h_phi_B*dble(n_phi_B - 1)
+
+        periodic = [.false., .true., .true.]
+
+        allocate (y_batch(ns_B, n_theta_B, n_phi_B, 1))
+        y_batch(:, :, :, 1) = br_grid(:, :, :)
+
+        call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
+                                        br_batch_spline)
+        br_batch_spline_ready = .true.
+    end subroutine build_boozer_br_batch_spline
 
     subroutine normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
                                              h_theta_B, h_phi_B, &
