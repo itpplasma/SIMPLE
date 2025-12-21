@@ -2,7 +2,8 @@ module boozer_sub
     use spl_three_to_five_sub
     use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
                            construct_batch_splines_3d, &
-                           evaluate_batch_splines_1d_der2, evaluate_batch_splines_3d_der2, &
+                           evaluate_batch_splines_1d_der2, &
+                           evaluate_batch_splines_3d_der, evaluate_batch_splines_3d_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
     use field, only : magnetic_field_t
     use, intrinsic :: iso_fortran_env, only: dp => real64
@@ -28,6 +29,14 @@ module boozer_sub
 
     type(BatchSplineData1D), save :: bcovar_tp_batch_spline
     logical, save :: bcovar_tp_batch_spline_ready = .false.
+
+    type(BatchSplineData3D), save :: delt_delp_V_batch_spline
+    logical, save :: delt_delp_V_batch_spline_ready = .false.
+    real(dp), allocatable, save :: delt_delp_V_grid(:, :, :)
+
+    type(BatchSplineData3D), save :: delt_delp_B_batch_spline
+    logical, save :: delt_delp_B_batch_spline_ready = .false.
+    real(dp), allocatable, save :: delt_delp_B_grid(:, :, :)
 
 contains
 
@@ -85,6 +94,7 @@ contains
         call build_boozer_bcovar_tp_batch_spline
         call build_boozer_bmod_batch_spline
         if (use_B_r) call build_boozer_br_batch_spline
+        call build_boozer_delt_delp_batch_splines
 
     end subroutine get_boozer_coordinates_impl
 
@@ -356,126 +366,58 @@ contains
 ! isw=0 - if they are given as functions of VMEC coordinates (r,vartheta,varphi)
 ! isw=1 - if they are given as functions of Boozer coordinates (r,vartheta,varphi)
 
-        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B, &
-                                          s_delt_delp_V, s_delt_delp_B, &
-                                          ns_max, derf1, &
-                                          use_del_tp_B
+        use boozer_coordinates_mod, only: use_del_tp_B
         use chamb_mod, only: rnegflag
 
         implicit none
 
-        integer :: isw
-        real(dp) :: r, vartheta, varphi, deltheta_BV, delphi_BV
-        real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
+        integer, intent(in) :: isw
+        real(dp), intent(inout) :: r
+        real(dp), intent(in) :: vartheta, varphi
+        real(dp), intent(out) :: deltheta_BV, delphi_BV
+        real(dp), dimension(2), intent(out) :: ddeltheta_BV, ddelphi_BV
 
-        integer, parameter :: n_qua = 2
-        integer :: nstp, ns_s_p1
-        integer :: k, is, i_theta, i_phi
+        real(dp) :: rho_tor, x_eval(3), y_eval(2), dy_eval(3, 2)
 
-        real(dp) :: ds, dtheta, dphi, rho_tor
-
-        real(dp), dimension(n_qua) :: qua, dqua_dt, dqua_dp
-        real(dp), dimension(n_qua, ns_max) :: sp_all, dsp_all_dt
-        real(dp), dimension(n_qua, ns_max, ns_max) :: stp_all
-
-        sp_all = 0.0_dp
-        dsp_all_dt = 0.0_dp
-        stp_all = 0.0_dp
-
-        if (r .le. 0.d0) then
+        if (r .le. 0.0_dp) then
             rnegflag = .true.
             r = abs(r)
         end if
 
-        call normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
-                                           h_theta_B, h_phi_B, &
-                                           i_theta, i_phi, dtheta, dphi)
-
-!--------------------------------
-
         rho_tor = sqrt(r)
-        ds = rho_tor/hs_B
-        is = max(0, min(ns_B - 1, int(ds)))
-        ds = (ds - dble(is))*hs_B
-        is = is + 1
-
-        nstp = ns_tp_B + 1
-        ns_s_p1 = ns_s_B + 1
-
-!--------------------------------
-
-! Begin interpolation of all over $rho$
+        x_eval(1) = rho_tor
+        x_eval(2) = vartheta
+        x_eval(3) = varphi
 
         if (isw .eq. 0) then
-            stp_all(:, 1:nstp, 1:nstp) = &
-                s_delt_delp_V(:, ns_s_p1, :, :, is, i_theta, i_phi)
-
-            do k = ns_s_B, 1, -1
-                stp_all(:, 1:nstp, 1:nstp) = &
-                    s_delt_delp_V(:, k, :, :, is, i_theta, i_phi) &
-                    + ds*stp_all(:, 1:nstp, 1:nstp)
-            end do
+            if (.not. delt_delp_V_batch_spline_ready) then
+                error stop "delthe_delphi_BV: V batch spline not initialized"
+            end if
+            call evaluate_batch_splines_3d_der(delt_delp_V_batch_spline, x_eval, &
+                                               y_eval, dy_eval)
         elseif (isw .eq. 1) then
             if (.not. use_del_tp_B) then
                 print *, 'delthe_delphi_BV : Boozer data is not loaded'
                 return
             end if
-            stp_all(:, 1:nstp, 1:nstp) = &
-                s_delt_delp_B(:, ns_s_p1, :, :, is, i_theta, i_phi)
-
-            do k = ns_s_B, 1, -1
-                stp_all(:, 1:nstp, 1:nstp) = &
-                    s_delt_delp_B(:, k, :, :, is, i_theta, i_phi) &
-                    + ds*stp_all(:, 1:nstp, 1:nstp)
-            end do
+            if (.not. delt_delp_B_batch_spline_ready) then
+                error stop "delthe_delphi_BV: B batch spline not initialized"
+            end if
+            call evaluate_batch_splines_3d_der(delt_delp_B_batch_spline, x_eval, &
+                                               y_eval, dy_eval)
         else
             print *, 'delthe_delphi_BV : unknown value of switch isw'
             return
         end if
 
-! End interpolation of all over $rho$
-!-------------------------------
-! Begin interpolation of all over $\theta$
+        deltheta_BV = y_eval(1)
+        delphi_BV = y_eval(2)
 
-        sp_all(:, 1:nstp) = stp_all(:, nstp, 1:nstp)
-        dsp_all_dt(:, 1:nstp) = sp_all(:, 1:nstp)*derf1(nstp)
+        ddeltheta_BV(1) = dy_eval(2, 1)
+        ddelphi_BV(1) = dy_eval(2, 2)
 
-        do k = ns_tp_B, 2, -1
-            sp_all(:, 1:nstp) = stp_all(:, k, 1:nstp) + dtheta*sp_all(:, 1:nstp)
-            dsp_all_dt(:, 1:nstp) = stp_all(:, k, 1:nstp)*derf1(k) &
-                + dtheta*dsp_all_dt(:, 1:nstp)
-        end do
-
-        sp_all(:, 1:nstp) = stp_all(:, 1, 1:nstp) + dtheta*sp_all(:, 1:nstp)
-
-! End interpolation of all over $\theta$
-!--------------------------------
-! Begin interpolation of all over $\varphi$
-
-        qua = sp_all(:, nstp)
-        dqua_dt = dsp_all_dt(:, nstp)
-        dqua_dp = qua*derf1(nstp)
-
-        do k = ns_tp_B, 2, -1
-            qua = sp_all(:, k) + dphi*qua
-            dqua_dt = dsp_all_dt(:, k) + dphi*dqua_dt
-            dqua_dp = sp_all(:, k)*derf1(k) + dphi*dqua_dp
-        end do
-
-        qua = sp_all(:, 1) + dphi*qua
-        dqua_dt = dsp_all_dt(:, 1) + dphi*dqua_dt
-
-! End interpolation of all over $\varphi$
-
-        deltheta_BV = qua(1)
-        delphi_BV = qua(2)
-
-        ddeltheta_BV(1) = dqua_dt(1)
-        ddelphi_BV(1) = dqua_dt(2)
-
-        ddeltheta_BV(2) = dqua_dp(1)
-        ddelphi_BV(2) = dqua_dp(2)
+        ddeltheta_BV(2) = dy_eval(3, 1)
+        ddelphi_BV(2) = dy_eval(3, 2)
 
     end subroutine delthe_delphi_BV
 
@@ -1129,6 +1071,20 @@ contains
         if (allocated(br_grid)) then
             deallocate (br_grid)
         end if
+        if (delt_delp_V_batch_spline_ready) then
+            call destroy_batch_splines_3d(delt_delp_V_batch_spline)
+            delt_delp_V_batch_spline_ready = .false.
+        end if
+        if (allocated(delt_delp_V_grid)) then
+            deallocate (delt_delp_V_grid)
+        end if
+        if (delt_delp_B_batch_spline_ready) then
+            call destroy_batch_splines_3d(delt_delp_B_batch_spline)
+            delt_delp_B_batch_spline_ready = .false.
+        end if
+        if (allocated(delt_delp_B_grid)) then
+            deallocate (delt_delp_B_grid)
+        end if
     end subroutine reset_boozer_batch_splines
 
     subroutine build_boozer_aphi_batch_spline
@@ -1268,6 +1224,82 @@ contains
                                         br_batch_spline)
         br_batch_spline_ready = .true.
     end subroutine build_boozer_br_batch_spline
+
+    subroutine build_boozer_delt_delp_batch_splines
+        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
+                                          hs_B, h_theta_B, h_phi_B, &
+                                          s_delt_delp_V, s_delt_delp_B, &
+                                          use_del_tp_B
+
+        integer :: order(3)
+        real(dp) :: x_min(3), x_max(3)
+        logical :: periodic(3)
+        real(dp), allocatable :: y_batch(:, :, :, :)
+        integer :: i_rho, i_theta, i_phi
+
+        if (delt_delp_V_batch_spline_ready) then
+            call destroy_batch_splines_3d(delt_delp_V_batch_spline)
+            delt_delp_V_batch_spline_ready = .false.
+        end if
+        if (allocated(delt_delp_V_grid)) deallocate (delt_delp_V_grid)
+
+        order = [ns_s_B, ns_tp_B, ns_tp_B]
+        if (any(order < 3) .or. any(order > 5)) then
+            error stop "build_boozer_delt_delp_batch_splines: order must be 3..5"
+        end if
+
+        x_min = [0.0_dp, 0.0_dp, 0.0_dp]
+        x_max(1) = hs_B*dble(ns_B - 1)
+        x_max(2) = h_theta_B*dble(n_theta_B - 1)
+        x_max(3) = h_phi_B*dble(n_phi_B - 1)
+
+        periodic = [.false., .true., .true.]
+
+        allocate (delt_delp_V_grid(ns_B, n_theta_B, n_phi_B))
+        allocate (y_batch(ns_B, n_theta_B, n_phi_B, 2))
+
+        do i_phi = 1, n_phi_B
+            do i_theta = 1, n_theta_B
+                do i_rho = 1, ns_B
+                    y_batch(i_rho, i_theta, i_phi, 1) = &
+                        s_delt_delp_V(1, 1, 1, 1, i_rho, i_theta, i_phi)
+                    y_batch(i_rho, i_theta, i_phi, 2) = &
+                        s_delt_delp_V(2, 1, 1, 1, i_rho, i_theta, i_phi)
+                end do
+            end do
+        end do
+
+        call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
+                                        delt_delp_V_batch_spline)
+        delt_delp_V_batch_spline_ready = .true.
+
+        if (use_del_tp_B) then
+            if (delt_delp_B_batch_spline_ready) then
+                call destroy_batch_splines_3d(delt_delp_B_batch_spline)
+                delt_delp_B_batch_spline_ready = .false.
+            end if
+            if (allocated(delt_delp_B_grid)) deallocate (delt_delp_B_grid)
+
+            allocate (delt_delp_B_grid(ns_B, n_theta_B, n_phi_B))
+
+            do i_phi = 1, n_phi_B
+                do i_theta = 1, n_theta_B
+                    do i_rho = 1, ns_B
+                        y_batch(i_rho, i_theta, i_phi, 1) = &
+                            s_delt_delp_B(1, 1, 1, 1, i_rho, i_theta, i_phi)
+                        y_batch(i_rho, i_theta, i_phi, 2) = &
+                            s_delt_delp_B(2, 1, 1, 1, i_rho, i_theta, i_phi)
+                    end do
+                end do
+            end do
+
+            call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
+                                            delt_delp_B_batch_spline)
+            delt_delp_B_batch_spline_ready = .true.
+        end if
+
+        deallocate (y_batch)
+    end subroutine build_boozer_delt_delp_batch_splines
 
     subroutine normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
                                              h_theta_B, h_phi_B, &
