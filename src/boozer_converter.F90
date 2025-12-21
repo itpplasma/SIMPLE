@@ -10,27 +10,38 @@ module boozer_sub
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
+    private
 
-    real(dp), parameter :: twopi = 2.0_dp*3.14159265358979_dp
+    ! Public API
+    public :: get_boozer_coordinates, get_boozer_coordinates_with_field
+    public :: splint_boozer_coord
+    public :: vmec_to_boozer, boozer_to_vmec
+    public :: delthe_delphi_BV
+    public :: reset_boozer_batch_splines
 
-    ! Module variable to store the field for use in subroutines
+    ! Constants
+    real(dp), parameter :: TWOPI = 2.0_dp*3.14159265358979_dp
+
+    ! Field storage for nested subroutine calls
     class(magnetic_field_t), allocatable :: current_field
 !$omp threadprivate(current_field)
 
-    ! Combined Bmod + Br batch spline (1 or 2 quantities depending on use_B_r)
+    ! Batch spline data for Bmod and B_r interpolation
     type(BatchSplineData3D), save :: bmod_br_batch_spline
     logical, save :: bmod_br_batch_spline_ready = .false.
     integer, save :: bmod_br_num_quantities = 0
     real(dp), allocatable, save :: bmod_grid(:, :, :)
     real(dp), allocatable, save :: br_grid(:, :, :)
 
+    ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
 
+    ! Batch spline for B_theta, B_phi covariant components
     type(BatchSplineData1D), save :: bcovar_tp_batch_spline
     logical, save :: bcovar_tp_batch_spline_ready = .false.
 
-    ! Combined delta_theta + delta_phi grids (2 quantities each)
+    ! Batch splines for coordinate transformations (VMEC <-> Boozer)
     type(BatchSplineData3D), save :: delt_delp_V_batch_spline
     logical, save :: delt_delp_V_batch_spline_ready = .false.
     real(dp), allocatable, save :: delt_delp_V_grid(:, :, :, :)
@@ -41,11 +52,8 @@ module boozer_sub
 
 contains
 
+    !> Initialize Boozer coordinates using given magnetic field
     subroutine get_boozer_coordinates_with_field(field)
-
-! Field-agnostic version that accepts a magnetic_field_t object
-
-        implicit none
 
         class(magnetic_field_t), intent(in) :: field
 
@@ -59,10 +67,8 @@ contains
 
     end subroutine get_boozer_coordinates_with_field
 
+    !> Initialize Boozer coordinates using VMEC field (backward compatibility)
     subroutine get_boozer_coordinates
-
-! Backward compatibility wrapper - uses VMEC field by default
-
         use field, only: vmec_field_t
 
         call get_boozer_coordinates_with_field(vmec_field_t())
@@ -84,9 +90,9 @@ contains
         n_theta_B = n_theta
         n_phi_B = n_phi
 
-        hs_B = hs*dble(ns - 1)/dble(ns_B - 1)
-        h_theta_B = h_theta*dble(n_theta - 1)/dble(n_theta_B - 1)
-        h_phi_B = h_phi*dble(n_phi - 1)/dble(n_phi_B - 1)
+        hs_B = hs*real(ns - 1, dp)/real(ns_B - 1, dp)
+        h_theta_B = h_theta*real(n_theta - 1, dp)/real(n_theta_B - 1, dp)
+        h_phi_B = h_phi*real(n_phi - 1, dp)/real(n_phi_B - 1, dp)
 
         call compute_boozer_data
 
@@ -140,7 +146,7 @@ contains
         A_theta = torflux*r
         dA_theta_dr = torflux
 
-! Interpolation of A_phi over s (batch spline 1D)
+        ! Interpolate A_phi over s (batch spline 1D)
         if (.not. aphi_batch_spline_ready) then
             error stop "splint_boozer_coord: Aphi batch spline not initialized"
         end if
@@ -159,8 +165,8 @@ contains
 
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r)
-        theta_wrapped = modulo(vartheta_B, twopi)
-        phi_wrapped = modulo(varphi_B, twopi/dble(nper))
+        theta_wrapped = modulo(vartheta_B, TWOPI)
+        phi_wrapped = modulo(varphi_B, TWOPI/real(nper, dp))
 
         if (.not. bmod_br_batch_spline_ready) then
             error stop "splint_boozer_coord: Bmod/Br batch spline not initialized"
@@ -174,13 +180,12 @@ contains
                                             dy_eval(:, 1:bmod_br_num_quantities), &
                                             d2y_eval(:, 1:bmod_br_num_quantities))
 
-! Coversion coefficients for derivatives over s
-        drhods = 0.5d0/rho_tor
+        ! Chain rule coefficients for rho -> s conversion
+        drhods = 0.5_dp/rho_tor
         drhods2 = drhods**2
-        ! $-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
-        d2rhods2m = drhods2/rho_tor
+        d2rhods2m = drhods2/rho_tor  ! -d2rho/ds2 (negative of second derivative)
 
-! Extract Bmod (quantity 1)
+        ! Extract Bmod (quantity 1)
         qua = y_eval(1)
         dqua_dr = dy_eval(1, 1)
         dqua_dt = dy_eval(2, 1)
@@ -211,7 +216,7 @@ contains
         d2Bmod_B(5) = d2qua_dtdp
         d2Bmod_B(6) = d2qua_dp2
 
-! Extract B_r (quantity 2, if present)
+        ! Extract B_r (quantity 2, if present)
         if (use_B_r) then
             qua = y_eval(2)
             dqua_dr = dy_eval(1, 2)
@@ -293,7 +298,7 @@ contains
 
         x_norm = (xj - spl%x_min)/spl%h_step
         interval_index = max(0, min(spl%num_points - 2, int(x_norm)))
-        x_local = (x_norm - dble(interval_index))*spl%h_step
+        x_local = (x_norm - real(interval_index, dp))*spl%h_step
 
         d3y = 0.0_dp
         if (N >= 3) then
@@ -377,8 +382,8 @@ contains
         call delthe_delphi_BV(0, r, theta, varphi, deltheta_BV, delphi_BV, &
                               ddeltheta_BV, ddelphi_BV)
 
-        vartheta_B = modulo(theta + deltheta_BV, twopi)
-        varphi_B = modulo(varphi + delphi_BV, twopi/dble(nper))
+        vartheta_B = modulo(theta + deltheta_BV, TWOPI)
+        varphi_B = modulo(varphi + delphi_BV, TWOPI/real(nper, dp))
 
     end subroutine vmec_to_boozer
 
@@ -432,8 +437,8 @@ contains
             if (abs(delthe) + abs(delphi) .lt. epserr) exit
         end do
 
-!  theta=modulo(theta,twopi)
-!  varphi=modulo(varphi,twopi/dble(nper))
+!  theta=modulo(theta,TWOPI)
+!  varphi=modulo(varphi,TWOPI/real(nper, dp))
 
     end subroutine boozer_to_vmec
 
@@ -478,7 +483,7 @@ contains
         real(dp), allocatable :: Bcovar_symfl(:, :, :, :)
 
         nqua = 6
-        gridcellnum = dble((n_theta_B - 1)*(n_phi_B - 1))
+        gridcellnum = real((n_theta_B - 1)*(n_phi_B - 1), dp)
 
         npoilag = ns_tp_B + 1
         nder = 0
@@ -528,70 +533,41 @@ contains
         if (.not. allocated(s_Bcovar_tp_B)) &
             allocate (s_Bcovar_tp_B(2, ns_s_B + 1, ns_B))
 
-        ! Allocate simple 3D grid for Bmod
-        if (.not. allocated(bmod_grid)) then
-            allocate (bmod_grid(ns_B, n_theta_B, n_phi_B))
-        else if (any(shape(bmod_grid) /= [ns_B, n_theta_B, n_phi_B])) then
-            deallocate (bmod_grid)
-            allocate (bmod_grid(ns_B, n_theta_B, n_phi_B))
-        end if
-
-        ! Allocate simple 3D grid for B_r (if needed)
-        if (use_B_r) then
-            if (.not. allocated(br_grid)) then
-                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
-            else if (any(shape(br_grid) /= [ns_B, n_theta_B, n_phi_B])) then
-                deallocate (br_grid)
-                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
-            end if
-        end if
-
-        ! Allocate simple 4D grids for delta_theta/delta_phi
-        if (.not. allocated(delt_delp_V_grid)) then
-            allocate (delt_delp_V_grid(ns_B, n_theta_B, n_phi_B, 2))
-        else if (any(shape(delt_delp_V_grid) /= [ns_B, n_theta_B, n_phi_B, 2])) then
-            deallocate (delt_delp_V_grid)
-            allocate (delt_delp_V_grid(ns_B, n_theta_B, n_phi_B, 2))
-        end if
-
-        if (use_del_tp_B) then
-            if (.not. allocated(delt_delp_B_grid)) then
-                allocate (delt_delp_B_grid(ns_B, n_theta_B, n_phi_B, 2))
-            else if (any(shape(delt_delp_B_grid) /= [ns_B, n_theta_B, n_phi_B, 2])) then
-                deallocate (delt_delp_B_grid)
-                allocate (delt_delp_B_grid(ns_B, n_theta_B, n_phi_B, 2))
-            end if
-        end if
+        ! Allocate module-level grids
+        call ensure_grid_3d(bmod_grid, ns_B, n_theta_B, n_phi_B)
+        if (use_B_r) call ensure_grid_3d(br_grid, ns_B, n_theta_B, n_phi_B)
+        call ensure_grid_4d(delt_delp_V_grid, ns_B, n_theta_B, n_phi_B, 2)
+        if (use_del_tp_B) call ensure_grid_4d(delt_delp_B_grid, ns_B, n_theta_B, n_phi_B, 2)
 
         do i = 0, ns_tp_B
-            wint_t(i) = h_theta_B**(i + 1)/dble(i + 1)
-            wint_p(i) = h_phi_B**(i + 1)/dble(i + 1)
+            wint_t(i) = h_theta_B**(i + 1)/real(i + 1, dp)
+            wint_p(i) = h_phi_B**(i + 1)/real(i + 1, dp)
         end do
 
         ! Set theta_V and phi_V linear, with value 0 at index 1 and stepsize h.
         ! Then expand this in both directions beyond 1:n_theta_B.
         do i_theta = 1, n_theta_B
-            theta_V(i_theta) = dble(i_theta - 1)*h_theta_B
+            theta_V(i_theta) = real(i_theta - 1, dp)*h_theta_B
         end do
-        per_theta = dble(n_theta_B - 1)*h_theta_B
+        per_theta = real(n_theta_B - 1, dp)*h_theta_B
         theta_V(2 - n_theta_B:0) = theta_V(1:n_theta_B - 1) - per_theta
         theta_V(n_theta_B + 1:2*n_theta_B - 1) = theta_V(2:n_theta_B) + per_theta
 
         do i_phi = 1, n_phi_B
-            phi_V(i_phi) = dble(i_phi - 1)*h_phi_B
+            phi_V(i_phi) = real(i_phi - 1, dp)*h_phi_B
         end do
-        per_phi = dble(n_phi_B - 1)*h_phi_B
+        per_phi = real(n_phi_B - 1, dp)*h_phi_B
         phi_V(2 - n_phi_B:0) = phi_V(1:n_phi_B - 1) - per_phi
         phi_V(n_phi_B + 1:2*n_phi_B - 1) = phi_V(2:n_phi_B) + per_phi
 
         do i_rho = 1, ns_B
-            rho_tor(i_rho) = max(dble(i_rho - 1)*hs_B, rho_min)
+            rho_tor(i_rho) = max(real(i_rho - 1, dp)*hs_B, rho_min)
             s = rho_tor(i_rho)**2
 
             do i_theta = 1, n_theta_B
-                theta = dble(i_theta - 1)*h_theta_B
+                theta = real(i_theta - 1, dp)*h_theta_B
                 do i_phi = 1, n_phi_B
-                    varphi = dble(i_phi - 1)*h_phi_B
+                    varphi = real(i_phi - 1, dp)*h_phi_B
 
                     if (allocated(current_field)) then
                         call vmec_field_evaluate_with_field(current_field, &
@@ -649,10 +625,10 @@ contains
             end do
             ! Remove linear increasing component from delphi_BV_Vg
             aper = (delphi_BV_Vg(n_theta_B, 1) &
-                    - delphi_BV_Vg(1, 1))/dble(n_theta_B - 1)
+                    - delphi_BV_Vg(1, 1))/real(n_theta_B - 1, dp)
             do i_theta = 2, n_theta_B
                 delphi_BV_Vg(i_theta, 1) = &
-                    delphi_BV_Vg(i_theta, 1) - aper*dble(i_theta - 1)
+                    delphi_BV_Vg(i_theta, 1) - aper*real(i_theta - 1, dp)
             end do
 
             do i_theta = 1, n_theta_B
@@ -666,11 +642,11 @@ contains
                         + sum(wint_p*splcoe_p(:, i_phi))
                 end do
                 aper = (delphi_BV_Vg(i_theta, n_phi_B) &
-                        - delphi_BV_Vg(i_theta, 1))/dble(n_phi_B - 1)
+                        - delphi_BV_Vg(i_theta, 1))/real(n_phi_B - 1, dp)
                 do i_phi = 2, n_phi_B
                     delphi_BV_Vg(i_theta, i_phi) = &
                         delphi_BV_Vg(i_theta, i_phi) &
-                        - aper*dble(i_phi - 1)
+                        - aper*real(i_phi - 1, dp)
                 end do
             end do
 
@@ -755,46 +731,10 @@ contains
 
         end do
 
-! Compute radial covariant magnetic field component in Boozer coordinates
-! Write directly to br_grid
-
         if (use_B_r) then
-            if (allocated(coef)) deallocate (coef)
-            nder = 1
-            npoilag = 5
-            nshift = npoilag/2
-            allocate (coef(0:nder, npoilag))
-
-            do i_rho = 1, ns_B
-                ibeg = i_rho - nshift
-                iend = ibeg + npoilag - 1
-                if (ibeg .lt. 1) then
-                    ibeg = 1
-                    iend = ibeg + npoilag - 1
-                elseif (iend .gt. ns_B) then
-                    iend = ns_B
-                    ibeg = iend - npoilag + 1
-                end if
-
-                call plag_coeff(npoilag, nder, rho_tor(i_rho), rho_tor(ibeg:iend), coef)
-
-! We spline covariant component $B_\rho$ instead of $B_s$:
-                do i_phi = 1, n_phi_B
-                    br_grid(i_rho, :, i_phi) = &
-                        2.0_dp*rho_tor(i_rho) &
-                        *Bcovar_symfl(1, i_rho, :, i_phi) &
-                        - matmul(coef(1, :)*aiota_arr(ibeg:iend), &
-                                 Gfunc(ibeg:iend, :, i_phi)) &
-                        *Bcovar_symfl(2, i_rho, :, i_phi) &
-                        - matmul(coef(1, :), Gfunc(ibeg:iend, :, i_phi)) &
-                        *Bcovar_symfl(3, i_rho, :, i_phi)
-                end do
-
-            end do
+            call compute_br_from_symflux(rho_tor, aiota_arr, Gfunc, Bcovar_symfl)
             deallocate (aiota_arr, Gfunc, Bcovar_symfl)
         end if
-
-! End compute radial covariant magnetic field component in Boozer coordinates
 
         deallocate (Bcovar_theta_V, Bcovar_varphi_V, bmod_Vg, alam_2D, &
                     deltheta_BV_Vg, delphi_BV_Vg, &
@@ -804,6 +744,76 @@ contains
         print *, 'done'
 
     end subroutine compute_boozer_data
+
+    !> Compute radial covariant magnetic field B_rho from symmetry flux coordinates
+    subroutine compute_br_from_symflux(rho_tor, aiota_arr, Gfunc, Bcovar_symfl)
+        use boozer_coordinates_mod, only: ns_B, n_theta_B, n_phi_B
+        use plag_coeff_sub, only: plag_coeff
+
+        real(dp), intent(in) :: rho_tor(:)
+        real(dp), intent(in) :: aiota_arr(:)
+        real(dp), intent(in) :: Gfunc(:, :, :)
+        real(dp), intent(in) :: Bcovar_symfl(:, :, :, :)
+
+        integer, parameter :: NPOILAG = 5
+        integer, parameter :: NDER = 1
+
+        integer :: i_rho, i_phi, ibeg, iend, nshift
+        real(dp) :: coef(0:NDER, NPOILAG)
+
+        nshift = NPOILAG/2
+
+        do i_rho = 1, ns_B
+            ibeg = i_rho - nshift
+            iend = ibeg + NPOILAG - 1
+            if (ibeg < 1) then
+                ibeg = 1
+                iend = ibeg + NPOILAG - 1
+            else if (iend > ns_B) then
+                iend = ns_B
+                ibeg = iend - NPOILAG + 1
+            end if
+
+            call plag_coeff(NPOILAG, NDER, rho_tor(i_rho), rho_tor(ibeg:iend), coef)
+
+            ! Compute B_rho (we spline covariant component B_rho instead of B_s)
+            do i_phi = 1, n_phi_B
+                br_grid(i_rho, :, i_phi) = &
+                    2.0_dp*rho_tor(i_rho)*Bcovar_symfl(1, i_rho, :, i_phi) &
+                    - matmul(coef(1, :)*aiota_arr(ibeg:iend), Gfunc(ibeg:iend, :, i_phi)) &
+                      *Bcovar_symfl(2, i_rho, :, i_phi) &
+                    - matmul(coef(1, :), Gfunc(ibeg:iend, :, i_phi)) &
+                      *Bcovar_symfl(3, i_rho, :, i_phi)
+            end do
+        end do
+
+    end subroutine compute_br_from_symflux
+
+    !> Ensure 3D grid is allocated with correct dimensions
+    subroutine ensure_grid_3d(grid, n1, n2, n3)
+        real(dp), allocatable, intent(inout) :: grid(:, :, :)
+        integer, intent(in) :: n1, n2, n3
+
+        if (.not. allocated(grid)) then
+            allocate(grid(n1, n2, n3))
+        else if (any(shape(grid) /= [n1, n2, n3])) then
+            deallocate(grid)
+            allocate(grid(n1, n2, n3))
+        end if
+    end subroutine ensure_grid_3d
+
+    !> Ensure 4D grid is allocated with correct dimensions
+    subroutine ensure_grid_4d(grid, n1, n2, n3, n4)
+        real(dp), allocatable, intent(inout) :: grid(:, :, :, :)
+        integer, intent(in) :: n1, n2, n3, n4
+
+        if (.not. allocated(grid)) then
+            allocate(grid(n1, n2, n3, n4))
+        else if (any(shape(grid) /= [n1, n2, n3, n4])) then
+            deallocate(grid)
+            allocate(grid(n1, n2, n3, n4))
+        end if
+    end subroutine ensure_grid_4d
 
     subroutine reset_boozer_batch_splines
         if (aphi_batch_spline_ready) then
@@ -880,7 +890,7 @@ contains
         end if
 
         x_min = 0.0_dp
-        x_max = hs_B*dble(ns_B - 1)
+        x_max = hs_B*real(ns_B - 1, dp)
 
         allocate (y_batch(ns_B, 2))
         y_batch(:, 1) = s_Bcovar_tp_B(1, 1, :)
@@ -921,9 +931,9 @@ contains
         end if
 
         x_min = [0.0_dp, 0.0_dp, 0.0_dp]
-        x_max(1) = hs_B*dble(ns_B - 1)
-        x_max(2) = h_theta_B*dble(n_theta_B - 1)
-        x_max(3) = h_phi_B*dble(n_phi_B - 1)
+        x_max(1) = hs_B*real(ns_B - 1, dp)
+        x_max(2) = h_theta_B*real(n_theta_B - 1, dp)
+        x_max(3) = h_phi_B*real(n_phi_B - 1, dp)
 
         periodic = [.false., .true., .true.]
 
@@ -973,9 +983,9 @@ contains
         end if
 
         x_min = [0.0_dp, 0.0_dp, 0.0_dp]
-        x_max(1) = hs_B*dble(ns_B - 1)
-        x_max(2) = h_theta_B*dble(n_theta_B - 1)
-        x_max(3) = h_phi_B*dble(n_phi_B - 1)
+        x_max(1) = hs_B*real(ns_B - 1, dp)
+        x_max(2) = h_theta_B*real(n_theta_B - 1, dp)
+        x_max(3) = h_phi_B*real(n_phi_B - 1, dp)
 
         periodic = [.false., .true., .true.]
 
