@@ -138,9 +138,16 @@ for test_case in $TEST_CASES; do
 
     # Run SIMPLE
     cd "$test_dir"
+    start_ns=$(date +%s%N)
     "$SIMPLE_EXE" > simple.log 2>&1
+    run_rc=$?
+    end_ns=$(date +%s%N)
 
-    if [ $? -ne 0 ]; then
+    runtime_s=$(python -c "print((${end_ns} - ${start_ns})/1.0e9)")
+    echo "$runtime_s" > runtime_seconds.txt
+    printf "%s\t%s\n" "$test_case" "$runtime_s" >> "$RUN_DIR/runtime_seconds.tsv"
+
+    if [ $run_rc -ne 0 ]; then
         echo "Error: SIMPLE failed for test case $test_case"
         cat simple.log
         exit 1

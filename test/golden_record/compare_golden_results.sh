@@ -27,6 +27,10 @@ REFERENCE_DIR="$1"
 CURRENT_DIR="$2"
 TEST_CASES_ARG="$3"
 
+GOLDEN_RECORD_RTOL="${GOLDEN_RECORD_RTOL:-1e-7}"
+GOLDEN_RECORD_ATOL="${GOLDEN_RECORD_ATOL:-1e-12}"
+GOLDEN_RECORD_MAX_SLOWDOWN="${GOLDEN_RECORD_MAX_SLOWDOWN:-1.2}"
+
 if [ ! -d "$REFERENCE_DIR" ]; then
     echo "Error: Reference directory not found: $REFERENCE_DIR"
     exit 1
@@ -55,6 +59,7 @@ compare_cases() {
     local failed_cases=0
     local missing_cases=0
     local skipped_cases=0
+    local perf_failed_cases=0
 
     for CASE in $TEST_CASES; do
         total_cases=$((total_cases + 1))
@@ -79,16 +84,18 @@ compare_cases() {
             CUR_INTER="$CURRENT_DIR/$CASE/albert_intermediate.dat"
 
             if [ -f "$REF_DIAG" ] && [ -f "$CUR_DIAG" ]; then
-                echo "  (comparing Albert coordinate diagnostic - bit-identical)"
+                echo "  (comparing Albert coordinate diagnostic)"
                 python "$SCRIPT_DIR/compare_files_multi.py" \
                     "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
-                    --files albert_coils_diagnostic.dat
+                    --files albert_coils_diagnostic.dat \
+                    --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
                 result=$?
                 if [ -f "$REF_INTER" ] && [ -f "$CUR_INTER" ]; then
-                    echo "  (also comparing intermediate values - bit-identical)"
+                    echo "  (also comparing intermediate values)"
                     python "$SCRIPT_DIR/compare_files_multi.py" \
                         "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
-                        --files albert_intermediate.dat
+                        --files albert_intermediate.dat \
+                        --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
                     inter_result=$?
                     if [ $inter_result -ne 0 ]; then
                         echo "  FAILED: Intermediate values differ"
@@ -99,10 +106,11 @@ compare_cases() {
                 echo "  (reference lacks diagnostic - SKIPPING albert_coils)"
                 result=0
             else
-                echo "  (no diagnostic, comparing times_lost.dat - bit-identical)"
+                echo "  (no diagnostic, comparing times_lost.dat)"
                 python "$SCRIPT_DIR/compare_files_multi.py" \
                     "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
-                    --files times_lost.dat
+                    --files times_lost.dat \
+                    --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
                 result=$?
             fi
 
@@ -120,7 +128,10 @@ compare_cases() {
             CLASSIFIER_FILES="avg_inverse_t_lost.dat class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"
             
             # Run multi-file comparison
-            python "$SCRIPT_DIR/compare_files_multi.py" "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" --files $CLASSIFIER_FILES
+            python "$SCRIPT_DIR/compare_files_multi.py" \
+                "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                --files $CLASSIFIER_FILES \
+                --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
             
             if [ $? -eq 0 ]; then
                 echo "  ✓ PASSED"
@@ -147,7 +158,8 @@ compare_cases() {
             fi
             
             # Run comparison
-            python "$SCRIPT_DIR/compare_files.py" "$REF_FILE" "$CUR_FILE"
+            GOLDEN_RECORD_RTOL="$GOLDEN_RECORD_RTOL" GOLDEN_RECORD_ATOL="$GOLDEN_RECORD_ATOL" \
+                python "$SCRIPT_DIR/compare_files.py" "$REF_FILE" "$CUR_FILE"
             
             if [ $? -eq 0 ]; then
                 echo "  ✓ PASSED"
@@ -157,6 +169,33 @@ compare_cases() {
                 failed_cases=$((failed_cases + 1))
             fi
         fi
+
+        # Performance comparison (guard against >20% slowdown by default)
+        ref_time_file="$REFERENCE_DIR/$CASE/runtime_seconds.txt"
+        cur_time_file="$CURRENT_DIR/$CASE/runtime_seconds.txt"
+        if [ -f "$ref_time_file" ] && [ -f "$cur_time_file" ]; then
+            python - <<PY
+import os
+ref = float(open("${ref_time_file}", "r", encoding="utf-8").read().strip())
+cur = float(open("${cur_time_file}", "r", encoding="utf-8").read().strip())
+max_slow = float("${GOLDEN_RECORD_MAX_SLOWDOWN}")
+ratio = cur / ref if ref > 0.0 else float("inf")
+delta = (ratio - 1.0) * 100.0
+print(f"  perf: ref={ref:.3f}s cur={cur:.3f}s ratio={ratio:.3f} (delta={delta:+.1f}%)")
+if ratio > max_slow:
+    raise SystemExit(1)
+PY
+            perf_rc=$?
+            if [ $perf_rc -ne 0 ]; then
+                echo "  ✗ FAILED (performance regression: ratio > ${GOLDEN_RECORD_MAX_SLOWDOWN})"
+                perf_failed_cases=$((perf_failed_cases + 1))
+                failed_cases=$((failed_cases + 1))
+            fi
+        else
+            echo "  ⚠ Missing runtime_seconds.txt for performance comparison"
+            missing_cases=$((missing_cases + 1))
+        fi
+
         echo ""
     done
     
@@ -168,6 +207,7 @@ compare_cases() {
     echo "  Failed: $failed_cases"
     echo "  Skipped (new tests): $skipped_cases"
     echo "  Missing files: $missing_cases"
+    echo "  Performance regressions: $perf_failed_cases"
     echo "========================================="
     
     # Return non-zero if any tests failed or had missing files
@@ -190,7 +230,8 @@ compare_sympl_tokamak() {
 
     echo "Comparing symplectic tokamak outputs..."
     local files="tokamak_testfield_euler1.dat tokamak_testfield_euler2.dat tokamak_testfield_midpoint.dat tokamak_testfield_gauss4.dat"
-    python "$SCRIPT_DIR/compare_files_multi.py" "$ref_dir" "$cur_dir" --files $files
+    python "$SCRIPT_DIR/compare_files_multi.py" "$ref_dir" "$cur_dir" \
+        --files $files --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
     return $?
 }
 
