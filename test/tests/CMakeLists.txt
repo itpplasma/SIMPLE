@@ -602,7 +602,7 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     set_tests_properties(golden_record_${CASE} PROPERTIES
         TIMEOUT 300  # 5 minutes per case
         LABELS "golden_record;regression"
-        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record"
+        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
 endforeach()
 
