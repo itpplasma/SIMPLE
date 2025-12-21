@@ -1,38 +1,43 @@
-
 module exchange_get_cancoord_mod
-   implicit none
+    use, intrinsic :: iso_fortran_env, only: dp => real64
 
-   ! Define real(dp) kind parameter
-   integer, parameter :: dp = kind(1.0d0)
+    implicit none
+    private
 
-   logical :: onlytheta
-   real(dp) :: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, &
-      Bcovar_varphi, A_theta, A_phi, theta, Bctrvr_vartheta, Bctrvr_varphi
-  !$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
-  !$omp threadprivate(Bcovar_vartheta,Bcovar_varphi,A_theta,A_phi,theta,Bctrvr_vartheta,Bctrvr_varphi)
+    logical, public :: onlytheta
+    real(dp), public :: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, &
+        Bcovar_varphi, A_theta, A_phi, theta, Bctrvr_vartheta, Bctrvr_varphi
+
+    !$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
+    !$omp threadprivate(Bcovar_vartheta, Bcovar_varphi, A_theta, A_phi)
+    !$omp threadprivate(theta, Bctrvr_vartheta, Bctrvr_varphi)
+
 end module exchange_get_cancoord_mod
 
+
 module get_can_sub
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use spl_three_to_five_sub
+    use stencil_utils
+    use field, only: magnetic_field_t, vmec_field_t
+    use field_newton, only: newton_theta_from_canonical
 
-   use spl_three_to_five_sub
-   use stencil_utils
-   use field, only : magnetic_field_t, vmec_field_t
-   use field_newton, only : newton_theta_from_canonical
+    implicit none
+    private
 
-   implicit none
+    public :: get_canonical_coordinates, get_canonical_coordinates_with_field
+    public :: splint_can_coord
+    public :: can_to_vmec, vmec_to_can, vmec_to_cyl
+    public :: deallocate_can_coord
 
-   ! Define real(dp) kind parameter
-   integer, parameter :: dp = kind(1.0d0)
-
-  ! Module variable to store the field for use in subroutines
-   class(magnetic_field_t), allocatable :: current_field
-  !$omp threadprivate(current_field)
+    ! Module variable to store the field for use in subroutines
+    class(magnetic_field_t), allocatable :: current_field
+    !$omp threadprivate(current_field)
 
 contains
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine get_canonical_coordinates_with_field(field)
+subroutine get_canonical_coordinates_with_field(field)
 
   ! Field-agnostic version that accepts a magnetic_field_t object
 
@@ -59,21 +64,16 @@ contains
       ! Call the actual implementation
       call get_canonical_coordinates_impl
 
-   end subroutine get_canonical_coordinates_with_field
+end subroutine get_canonical_coordinates_with_field
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine get_canonical_coordinates
+subroutine get_canonical_coordinates
+    ! Backward compatibility wrapper - uses VMEC field by default
+    call get_canonical_coordinates_with_field(vmec_field_t())
+end subroutine get_canonical_coordinates
 
-  ! Backward compatibility wrapper - uses VMEC field by default
 
-      call get_canonical_coordinates_with_field(vmec_field_t())
-
-   end subroutine get_canonical_coordinates
-
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-   subroutine get_canonical_coordinates_impl
+subroutine get_canonical_coordinates_impl
 
       use canonical_coordinates_mod, only: ns_c, n_theta_c, n_phi_c, &
                                            hs_c, h_theta_c, h_phi_c, &
@@ -90,7 +90,7 @@ contains
       implicit none
 
       logical :: fullset
-      real(dp), parameter :: relerr = 1d-10
+      real(dp), parameter :: relerr = 1.0e-10_dp
       integer :: i_theta, i_phi, i_sten, ndim, is_beg
       integer, dimension(:), allocatable :: ipoi_t, ipoi_p
       real(dp), dimension(:), allocatable :: y, dy
@@ -137,10 +137,8 @@ contains
 
       onlytheta = .false.
       ndim = 1
-  !  is_beg=ns_c/2 !<=OLD
-      is_beg = 1       !<=NEW
-  !  G_beg=1.d-5 !<=OLD
-      G_beg = 1.d-8   !<=NEW
+      is_beg = 1
+      G_beg = 1.0e-8_dp
 
       i_ctr = 0
   !$omp parallel private(y, dy, i_theta, i_phi, is, r1, r2, r, dG_c_dt, dG_c_dp)
@@ -154,16 +152,16 @@ contains
          i_ctr = i_ctr + 1
          call print_progress('integrate ODE: ', i_ctr, n_theta_c)
   !$omp end critical
-         vartheta_c = h_theta_c*dble(i_theta - 1)
+         vartheta_c = h_theta_c*real(i_theta - 1, dp)
          do i_phi = 1, n_phi_c
-            varphi_c = h_phi_c*dble(i_phi - 1)
+            varphi_c = h_phi_c*real(i_phi - 1, dp)
 
             G_c(is_beg, i_theta, i_phi) = G_beg
             y(1) = G_beg
 
             do is = is_beg - 1, 2, -1
-               r1 = hs_c*dble(is)
-               r2 = hs_c*dble(is - 1)
+               r1 = hs_c*real(is, dp)
+               r2 = hs_c*real(is - 1, dp)
 
                call odeint_allroutines(y, ndim, r1, r2, relerr, rhs_cancoord)
 
@@ -173,9 +171,9 @@ contains
             y(1) = G_beg
 
             do is = is_beg + 1, ns_c
-               r1 = hs_c*dble(is - 2)
-               r2 = hs_c*dble(is - 1)
-               if (is .eq. 2) r1 = 1.d-8
+               r1 = hs_c*real(is - 2, dp)
+               r2 = hs_c*real(is - 1, dp)
+               if (is == 2) r1 = 1.0e-8_dp
 
                call odeint_allroutines(y, ndim, r1, r2, relerr, rhs_cancoord)
 
@@ -193,28 +191,28 @@ contains
          i_ctr = i_ctr + 1
          call print_progress('compute components: ', i_ctr, n_theta_c)
   !$omp end critical
-         vartheta_c = h_theta_c*dble(i_theta - 1)
+         vartheta_c = h_theta_c*real(i_theta - 1, dp)
          do i_phi = 1, n_phi_c
-            varphi_c = h_phi_c*dble(i_phi - 1)
+            varphi_c = h_phi_c*real(i_phi - 1, dp)
 
             do is = 2, ns_c
-               r = hs_c*dble(is - 1)
+               r = hs_c*real(is - 1, dp)
                y(1) = G_c(is, i_theta, i_phi)
 
                call rhs_cancoord(r, y, dy)
 
                dG_c_dt = sum(dstencil_theta*G_c(is, ipoi_t(i_theta - nh_stencil:i_theta + nh_stencil), i_phi))
                dG_c_dp = sum(dstencil_phi*G_c(is, i_theta, ipoi_p(i_phi - nh_stencil:i_phi + nh_stencil)))
-               sqg_c(is, i_theta, i_phi) = sqg*(1.d0 + aiota*dG_c_dt + dG_c_dp)
+               sqg_c(is, i_theta, i_phi) = sqg*(1.0_dp + aiota*dG_c_dt + dG_c_dp)
                B_vartheta_c(is, i_theta, i_phi) = Bcovar_vartheta + (aiota*Bcovar_vartheta + Bcovar_varphi)*dG_c_dt
                B_varphi_c(is, i_theta, i_phi) = Bcovar_varphi + (aiota*Bcovar_vartheta + Bcovar_varphi)*dG_c_dp
             end do
-  !First point is=1 (on axis) is bad, extrapolate with parabola:
-            sqg_c(1, i_theta, i_phi) = 3.d0*(sqg_c(2, i_theta, i_phi) - sqg_c(3, i_theta, i_phi)) &
-                                       + sqg_c(4, i_theta, i_phi)                                      !<=OLD
-            B_vartheta_c(1, i_theta, i_phi) = 0.d0                                                                  !<=NEW
-            B_varphi_c(1, i_theta, i_phi) = 3.d0*(B_varphi_c(2, i_theta, i_phi) - B_varphi_c(3, i_theta, i_phi)) &
-                                            + B_varphi_c(4, i_theta, i_phi)
+              ! Extrapolate on-axis point (is=1) with parabola
+            sqg_c(1, i_theta, i_phi) = 3.0_dp*(sqg_c(2, i_theta, i_phi) &
+                - sqg_c(3, i_theta, i_phi)) + sqg_c(4, i_theta, i_phi)
+            B_vartheta_c(1, i_theta, i_phi) = 0.0_dp
+            B_varphi_c(1, i_theta, i_phi) = 3.0_dp*(B_varphi_c(2, i_theta, i_phi) &
+                - B_varphi_c(3, i_theta, i_phi)) + B_varphi_c(4, i_theta, i_phi)
          end do
       end do
   !$omp end do
@@ -235,9 +233,8 @@ contains
 
    end subroutine get_canonical_coordinates_impl
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine rhs_cancoord(r, y, dy)
+subroutine rhs_cancoord(r, y, dy)
 
       use exchange_get_cancoord_mod, only: vartheta_c, varphi_c, sqg, aiota, Bcovar_vartheta, Bcovar_varphi, &
                                            theta, onlytheta
@@ -254,7 +251,7 @@ contains
       real(dp), intent(in) :: y(:)
       real(dp), intent(out) :: dy(:)
 
-      real(dp), parameter :: epserr = 1.d-14
+      real(dp), parameter :: epserr = 1.0e-14_dp
       integer :: iter
       real(dp) :: s, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, &
          alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_r
@@ -287,9 +284,9 @@ contains
          theta = vartheta
          do iter = 1, 100
             call vmec_lambda_interpolate(s, theta, varphi, alam, dl_dt)
-            deltheta = (vartheta - theta - alam)/(1.d0 + dl_dt)
+            deltheta = (vartheta - theta - alam)/(1.0_dp + dl_dt)
             theta = theta + deltheta
-            if (abs(deltheta) .lt. epserr) exit
+            if (abs(deltheta) < epserr) exit
          end do
       end if
 
@@ -306,13 +303,12 @@ contains
       end if
 
       dy(1) = -(Bcovar_r + daiota_ds*Bcovar_vartheta*y(1))/(aiota*Bcovar_vartheta + Bcovar_varphi)
-      dy(1) = 2.d0*r*dy(1)
+      dy(1) = 2.0_dp*r*dy(1)
 
    end subroutine rhs_cancoord
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine print_progress(message, progress, total)
+subroutine print_progress(message, progress, total)
       character(*), intent(in) :: message
       integer, intent(in) :: progress, total
 
@@ -325,9 +321,8 @@ contains
       end if
    end subroutine print_progress
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine spline_can_coord(fullset)
+subroutine spline_can_coord(fullset)
 
       use canonical_coordinates_mod, only: ns_c, n_theta_c, n_phi_c, hs_c, h_theta_c, h_phi_c, &
                                            ns_s_c, ns_tp_c, G_c, sqg_c, B_vartheta_c, B_varphi_c, &
@@ -465,9 +460,8 @@ contains
 
    end subroutine spline_can_coord
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
+subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
                                A_theta, A_phi, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3, &
                                sqg_c, dsqg_c_dr, dsqg_c_dt, dsqg_c_dp, &
                                B_vartheta_c, dB_vartheta_c_dr, dB_vartheta_c_dt, dB_vartheta_c_dp, &
@@ -486,7 +480,7 @@ contains
 
       implicit none
 
-      real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
+      real(dp), parameter :: twopi = 2.0_dp*3.14159265358979_dp
 
       logical :: fullset
 
@@ -514,7 +508,7 @@ contains
       real(dp), dimension(n_qua, ns_max, ns_max) :: stp_all, dstp_all_ds, d2stp_all_ds2
   !$omp atomic
       icounter = icounter + 1
-      if (r .le. 0.d0) then
+      if (r <= 0.0_dp) then
          rnegflag = .true.
          r = abs(r)
       end if
@@ -524,19 +518,18 @@ contains
 
       dtheta = modulo(vartheta_c, twopi)/h_theta_c
       i_theta = max(0, min(n_theta_c - 1, int(dtheta)))
-      dtheta = (dtheta - dble(i_theta))*h_theta_c
+      dtheta = (dtheta - real(i_theta, dp))*h_theta_c
       i_theta = i_theta + 1
 
-      dphi = modulo(varphi_c, twopi/dble(nper))/h_phi_c
+      dphi = modulo(varphi_c, twopi/real(nper, dp))/h_phi_c
       i_phi = max(0, min(n_phi_c - 1, int(dphi)))
-      dphi = (dphi - dble(i_phi))*h_phi_c
+      dphi = (dphi - real(i_phi, dp))*h_phi_c
       i_phi = i_phi + 1
 
-  ! Begin interpolation of vector potentials over $s$
-
+      ! Interpolation of vector potentials over s
       ds = r/hs
       is = max(0, min(ns - 1, int(ds)))
-      ds = (ds - dble(is))*hs
+      ds = (ds - real(is, dp))*hs
       is = is + 1
 
       ns_A_p1 = ns_A + 1
@@ -553,7 +546,7 @@ contains
       A_phi = sA_phi(1, is) + ds*(sA_phi(2, is) + ds*A_phi)
       dA_phi_dr = sA_phi(2, is) + ds*dA_phi_dr
 
-      if (mode_secders .gt. 0) then
+      if (mode_secders > 0) then
          d3A_phi_dr3 = sA_phi(ns_A_p1, is)*derf3(ns_A_p1)
 
          do k = ns_A, 4, -1
@@ -568,10 +561,9 @@ contains
   !-------------------------------
 
       rho_tor = sqrt(r)
-      !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
       ds = rho_tor/hs_c
       is = max(0, min(ns_c - 1, int(ds)))
-      ds = (ds - dble(is))*hs_c
+      ds = (ds - real(is, dp))*hs_c
       is = is + 1
 
       nstp = ns_tp_c + 1
@@ -611,7 +603,7 @@ contains
       end if
 
   !--------------------------------
-      if (mode_secders .eq. 2) then
+      if (mode_secders == 2) then
   !--------------------------------
 
   ! Begin interpolation of all over $s$
@@ -754,7 +746,7 @@ contains
          d2bph_pp = d2qua_dp2(3)
 
   !--------------------------------
-      elseif (mode_secders .eq. 1) then
+      elseif (mode_secders == 1) then
   !--------------------------------
 
   ! Begin interpolation of all over $s$
@@ -931,9 +923,8 @@ contains
 
    end subroutine splint_can_coord
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine can_to_vmec(r, vartheta_c_in, varphi_c_in, theta_vmec, varphi_vmec)
+subroutine can_to_vmec(r, vartheta_c_in, varphi_c_in, theta_vmec, varphi_vmec)
 
       use exchange_get_cancoord_mod, only: vartheta_c, varphi_c, theta
 
@@ -968,17 +959,16 @@ contains
       varphi_c = varphi_c_in
       y(1) = G_c
 
-  !  call rhs_cancoord(r,y,dy)      !<=OLD
-      call rhs_cancoord(sqrt(r), y, dy) !<=NEW
+      ! Transform from r (toroidal flux) to rho_tor for ODE integration
+      call rhs_cancoord(sqrt(r), y, dy)
 
       theta_vmec = theta
       varphi_vmec = varphi_c_in + G_c
 
    end subroutine can_to_vmec
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine deallocate_can_coord
+subroutine deallocate_can_coord
 
       use canonical_coordinates_mod, only: s_sqg_Bt_Bp, s_G_c
 
@@ -989,9 +979,8 @@ contains
 
    end subroutine deallocate_can_coord
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-   subroutine vmec_to_can(r, theta, varphi, vartheta_c, varphi_c)
+subroutine vmec_to_can(r, theta, varphi, vartheta_c, varphi_c)
 
   ! Input : r,theta,varphi      - VMEC coordinates
   ! Output: vartheta_c,varphi_c - canonical coordinates
@@ -1004,7 +993,7 @@ contains
 #endif
       implicit none
 
-      real(dp), parameter :: epserr = 1.d-14
+      real(dp), parameter :: epserr = 1.0e-14_dp
       integer, parameter :: niter = 100
       integer          :: iter
       real(dp) :: r, theta, varphi
@@ -1028,7 +1017,7 @@ contains
 
          vartheta_c = vartheta_c + delthe
          varphi_c = varphi_c + delphi
-         if (abs(delthe) + abs(delphi) .lt. epserr) exit
+         if (abs(delthe) + abs(delphi) < epserr) exit
       end do
 
   !------------------------------------------
@@ -1047,7 +1036,7 @@ contains
 
          implicit none
 
-         real(dp), parameter :: twopi = 2.d0*3.14159265358979d0
+         real(dp), parameter :: twopi = 2.0_dp*3.14159265358979_dp
 
          integer :: nstp, ns_A_p1, ns_s_p1
          integer :: k, is, i_theta, i_phi
@@ -1061,7 +1050,7 @@ contains
          real(dp), dimension(ns_max)              :: sp_G, dsp_G_dt
          real(dp), dimension(ns_max, ns_max)       :: stp_G
 
-         if (r .le. 0.d0) then
+         if (r <= 0.0_dp) then
             rnegflag = .true.
             r = abs(r)
          end if
@@ -1070,19 +1059,18 @@ contains
 
          dtheta = modulo(vartheta_c, twopi)/h_theta_c
          i_theta = max(0, min(n_theta_c - 1, int(dtheta)))
-         dtheta = (dtheta - dble(i_theta))*h_theta_c
+         dtheta = (dtheta - real(i_theta, dp))*h_theta_c
          i_theta = i_theta + 1
 
-         dphi = modulo(varphi_c, twopi/dble(nper))/h_phi_c
+         dphi = modulo(varphi_c, twopi/real(nper, dp))/h_phi_c
          i_phi = max(0, min(n_phi_c - 1, int(dphi)))
-         dphi = (dphi - dble(i_phi))*h_phi_c
+         dphi = (dphi - real(i_phi, dp))*h_phi_c
          i_phi = i_phi + 1
 
-  ! Begin interpolation of vector potentials over $s$
-
+         ! Interpolation of vector potentials over s
          ds = r/hs
          is = max(0, min(ns - 1, int(ds)))
-         ds = (ds - dble(is))*hs
+         ds = (ds - real(is, dp))*hs
          is = is + 1
 
          ns_A_p1 = ns_A + 1
@@ -1100,10 +1088,9 @@ contains
   ! End interpolation of vector potentials over $s$
 
          rho_tor = sqrt(r)
-         !hs_c=hs !added by Johanna in alalogy to get_canonical_coordinites to make test_orbits_vmec working
          ds = rho_tor/hs_c
          is = max(0, min(ns_c - 1, int(ds)))
-         ds = (ds - dble(is))*hs_c
+         ds = (ds - real(is, dp))*hs_c
          is = is + 1
 
          nstp = ns_tp_c + 1
@@ -1124,7 +1111,7 @@ contains
 
          do k = ns_tp_c, 1, -1
             sp_G(1:nstp) = stp_G(k, 1:nstp) + dtheta*sp_G(1:nstp)
-            if (k .gt. 1) dsp_G_dt(1:nstp) = stp_G(k, 1:nstp)*derf1(k) + dtheta*dsp_G_dt(1:nstp)
+            if (k > 1) dsp_G_dt(1:nstp) = stp_G(k, 1:nstp)*derf1(k) + dtheta*dsp_G_dt(1:nstp)
          end do
 
   ! End interpolation of G over $\theta$
@@ -1137,18 +1124,18 @@ contains
          do k = ns_tp_c, 1, -1
             G_c = sp_G(k) + dphi*G_c
             dG_c_dt = dsp_G_dt(k) + dphi*dG_c_dt
-            if (k .gt. 1) dG_c_dp = sp_G(k)*derf1(k) + dphi*dG_c_dp
+            if (k > 1) dG_c_dp = sp_G(k)*derf1(k) + dphi*dG_c_dp
          end do
 
   ! End interpolation of G over $\varphi$
 
          ts = vartheta_c + aiota*G_c - vartheta
          ps = varphi_c + G_c - varphi
-         dts_dtc = 1.d0 + aiota*dG_c_dt
+         dts_dtc = 1.0_dp + aiota*dG_c_dt
          dts_dpc = aiota*dG_c_dp
          dps_dtc = dG_c_dt
-         dps_dpc = 1.d0 + dG_c_dp
-         det = 1.d0 + aiota*dG_c_dt + dG_c_dp
+         dps_dpc = 1.0_dp + dG_c_dp
+         det = 1.0_dp + aiota*dG_c_dt + dG_c_dp
 
          delthe = (ps*dts_dpc - ts*dps_dpc)/det
          delphi = (ts*dps_dtc - ps*dts_dtc)/det
