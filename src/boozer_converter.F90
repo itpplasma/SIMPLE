@@ -3,9 +3,10 @@ module boozer_sub
     use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
                            construct_batch_splines_1d, construct_batch_splines_3d, &
                            evaluate_batch_splines_1d_der2, &
-                           evaluate_batch_splines_3d_der, evaluate_batch_splines_3d_der2, &
+                           evaluate_batch_splines_3d_der, &
+                           evaluate_batch_splines_3d_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
-    use field, only : magnetic_field_t
+    use field, only: magnetic_field_t
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
@@ -14,7 +15,7 @@ module boozer_sub
 
     ! Module variable to store the field for use in subroutines
     class(magnetic_field_t), allocatable :: current_field
-    !$omp threadprivate(current_field)
+!$omp threadprivate(current_field)
 
     ! Combined Bmod + Br batch spline (1 or 2 quantities depending on use_B_r)
     type(BatchSplineData3D), save :: bmod_br_batch_spline
@@ -106,9 +107,7 @@ contains
                                    Bmod_B, dBmod_B, d2Bmod_B, &
                                    B_r, dB_r, d2B_r)
 
-        use boozer_coordinates_mod, only: ns_s_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B, &
-                                          use_B_r
+        use boozer_coordinates_mod, only: use_B_r
         use vector_potentail_mod, only: torflux
         use new_vmec_stuff_mod, only: nper
         use chamb_mod, only: rnegflag
@@ -118,20 +117,17 @@ contains
 
         integer, parameter :: mode_secders = 1
 
-        integer :: ns_s_p1
-        integer :: is, i_theta, i_phi
-
         real(dp) :: r, vartheta_B, varphi_B, &
-            A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
-            B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
-            B_varphi_B, dB_varphi_B, d2B_varphi_B, Bmod_B, B_r
+                    A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
+                    B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
+                    B_varphi_B, dB_varphi_B, d2B_varphi_B, Bmod_B, B_r
         real(dp), dimension(3) :: dBmod_B, dB_r
         real(dp), dimension(6) :: d2Bmod_B, d2B_r
 
-        real(dp) :: ds, dtheta, dphi, rho_tor, drhods, drhods2, d2rhods2m
+        real(dp) :: rho_tor, drhods, drhods2, d2rhods2m
         real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
         real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
-            d2qua_dtdp, d2qua_dp2
+                    d2qua_dtdp, d2qua_dp2
         real(dp) :: x_eval(3), y_eval(2), dy_eval(3, 2), d2y_eval(6, 2)
         real(dp) :: theta_wrapped, phi_wrapped
         real(dp) :: y1d(2), dy1d(2), d2y1d(2)
@@ -146,10 +142,6 @@ contains
         A_theta = torflux*r
         dA_theta_dr = torflux
 
-        call normalize_angular_coordinates(vartheta_B, varphi_B, n_theta_B, n_phi_B, &
-                                           h_theta_B, h_phi_B, &
-                                           i_theta, i_phi, dtheta, dphi)
-
 ! Interpolation of A_phi over s (batch spline 1D)
         if (.not. aphi_batch_spline_ready) then
             error stop "splint_boozer_coord: Aphi batch spline not initialized"
@@ -161,25 +153,17 @@ contains
         dA_phi_dr = dy1d(1)
         d2A_phi_dr2 = d2y1d(1)
         if (mode_secders .gt. 0) then
-            call evaluate_batch_splines_1d_der3_single(aphi_batch_spline, r, d3A_phi_dr3)
+            call evaluate_batch_splines_1d_der3_single(aphi_batch_spline, r, &
+                                                       d3A_phi_dr3)
         else
             d3A_phi_dr3 = 0.0_dp
         end if
 
 !--------------------------------
-
-        rho_tor = sqrt(r)
-        ds = rho_tor/hs_B
-        is = max(0, min(ns_B - 1, int(ds)))
-        ds = (ds - dble(is))*hs_B
-        is = is + 1
-
-        ns_s_p1 = ns_s_B + 1
-
-!--------------------------------
 ! Interpolation of mod-B (and B_r if use_B_r):
 !--------------------------------
 
+        rho_tor = sqrt(r)
         theta_wrapped = modulo(vartheta_B, twopi)
         phi_wrapped = modulo(varphi_B, twopi/dble(nper))
 
@@ -280,7 +264,8 @@ contains
             error stop "splint_boozer_coord: Bcovar_tp batch spline not initialized"
         end if
 
-        call evaluate_batch_splines_1d_der2(bcovar_tp_batch_spline, rho_tor, y1d, dy1d, d2y1d)
+        call evaluate_batch_splines_1d_der2(bcovar_tp_batch_spline, rho_tor, y1d, &
+                                            dy1d, d2y1d)
         B_vartheta_B = y1d(1)
         dB_vartheta_B = dy1d(1)
         d2B_vartheta_B = d2y1d(1)
@@ -409,7 +394,6 @@ contains
         use new_vmec_stuff_mod, only: nper
 
         implicit none
-
 
         real(dp) :: r, theta, varphi, vartheta_B, varphi_B
         real(dp) :: deltheta_BV, delphi_BV
@@ -640,24 +624,31 @@ contains
                     varphi = dble(i_phi - 1)*h_phi_B
 
                     if (allocated(current_field)) then
-               call vmec_field_evaluate_with_field(current_field, &
-                    s, theta, varphi, A_theta, A_phi, &
-                    dA_theta_ds, dA_phi_ds, aiota, &
-                    sqg, alam, dl_ds, dl_dt, dl_dp, &
-                    Bctrvr_vartheta, Bctrvr_varphi, &
-                    Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+                        call vmec_field_evaluate_with_field(current_field, &
+                                                            s, theta, varphi, &
+                                                                A_theta, A_phi, &
+                                                            dA_theta_ds, &
+                                                                dA_phi_ds, aiota, &
+                                                            sqg, alam, dl_ds, &
+                                                                dl_dt, dl_dp, &
+                                                            Bctrvr_vartheta, &
+                                                                Bctrvr_varphi, &
+                                                            Bcovar_r, Bcovar_vartheta, &
+                                                                Bcovar_varphi)
                     else
                         call vmec_field_evaluate(s, theta, varphi, &
-                            A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
-                            sqg, alam, dl_ds, dl_dt, dl_dp, &
-                            Bctrvr_vartheta, Bctrvr_varphi, &
-                            Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+                                                 A_theta, A_phi, dA_theta_ds, &
+                                                     dA_phi_ds, aiota, &
+                                                 sqg, alam, dl_ds, dl_dt, dl_dp, &
+                                                 Bctrvr_vartheta, Bctrvr_varphi, &
+                                                 Bcovar_r, Bcovar_vartheta, &
+                                                     Bcovar_varphi)
                     end if
 
                     alam_2D(i_theta, i_phi) = alam
                     bmod_Vg(i_theta, i_phi) = &
                         sqrt(Bctrvr_vartheta*Bcovar_vartheta &
-                        + Bctrvr_varphi*Bcovar_varphi)
+                             + Bctrvr_varphi*Bcovar_varphi)
                     Bcovar_theta_V(i_theta, i_phi) = Bcovar_vartheta*(1.d0 + dl_dt)
                     Bcovar_varphi_V(i_theta, i_phi) = &
                         Bcovar_varphi + Bcovar_vartheta*dl_dp
@@ -688,7 +679,7 @@ contains
             end do
             ! Remove linear increasing component from delphi_BV_Vg
             aper = (delphi_BV_Vg(n_theta_B, 1) &
-                - delphi_BV_Vg(1, 1))/dble(n_theta_B - 1)
+                    - delphi_BV_Vg(1, 1))/dble(n_theta_B - 1)
             do i_theta = 2, n_theta_B
                 delphi_BV_Vg(i_theta, 1) = &
                     delphi_BV_Vg(i_theta, 1) - aper*dble(i_theta - 1)
@@ -705,7 +696,7 @@ contains
                         + sum(wint_p*splcoe_p(:, i_phi))
                 end do
                 aper = (delphi_BV_Vg(i_theta, n_phi_B) &
-                    - delphi_BV_Vg(i_theta, 1))/dble(n_phi_B - 1)
+                        - delphi_BV_Vg(i_theta, 1))/dble(n_phi_B - 1)
                 do i_phi = 2, n_phi_B
                     delphi_BV_Vg(i_theta, i_phi) = &
                         delphi_BV_Vg(i_theta, i_phi) &
@@ -739,14 +730,17 @@ contains
                 theta_B = theta_V + perqua_t(1, :)
                 do i_theta = 1, n_theta_B
 
-                    call binsrc(theta_B, 2 - n_theta_B, 2*n_theta_B - 1, theta_V(i_theta), i)
+                    call binsrc(theta_B, 2 - n_theta_B, 2*n_theta_B - 1, &
+                                theta_V(i_theta), i)
 
                     ibeg = i - nshift
                     iend = ibeg + ns_tp_B
 
-                    call plag_coeff(npoilag, nder, theta_V(i_theta), theta_B(ibeg:iend), coef)
+                    call plag_coeff(npoilag, nder, theta_V(i_theta), &
+                                    theta_B(ibeg:iend), coef)
 
-                    perqua_2D(:, i_theta, i_phi) = matmul(perqua_t(:, ibeg:iend), coef(0, :))
+                    perqua_2D(:, i_theta, i_phi) = matmul(perqua_t(:, ibeg:iend), &
+                                                          coef(0, :))
                 end do
             end do
 
@@ -769,7 +763,8 @@ contains
 
                     call plag_coeff(npoilag, nder, phi_V(i_phi), phi_B(ibeg:iend), coef)
 
-                    perqua_2D(:, i_theta, i_phi) = matmul(perqua_p(:, ibeg:iend), coef(0, :))
+                    perqua_2D(:, i_theta, i_phi) = matmul(perqua_p(:, ibeg:iend), &
+                                                          coef(0, :))
                 end do
             end do
 
@@ -819,7 +814,7 @@ contains
                         2.d0*rho_tor(i_rho) &
                         *Bcovar_symfl(1, i_rho, :, i_phi) &
                         - matmul(coef(1, :)*aiota_arr(ibeg:iend), &
-                            Gfunc(ibeg:iend, :, i_phi)) &
+                                 Gfunc(ibeg:iend, :, i_phi)) &
                         *Bcovar_symfl(2, i_rho, :, i_phi) &
                         - matmul(coef(1, :), Gfunc(ibeg:iend, :, i_phi)) &
                         *Bcovar_symfl(3, i_rho, :, i_phi)
@@ -993,7 +988,8 @@ contains
         real(dp), allocatable :: y_batch(:, :, :, :)
 
         if (.not. allocated(delt_delp_V_grid)) then
-            error stop "build_boozer_delt_delp_batch_splines: delt_delp_V_grid not allocated"
+            error stop &
+                "build_boozer_delt_delp_batch_splines: delt_delp_V_grid not allocated"
         end if
 
         if (delt_delp_V_batch_spline_ready) then
@@ -1024,7 +1020,7 @@ contains
 
         if (use_del_tp_B) then
             if (.not. allocated(delt_delp_B_grid)) then
-                error stop "build_boozer_delt_delp_batch_splines: delt_delp_B_grid not allocated"
+       error stop "build_boozer_delt_delp_batch_splines: delt_delp_B_grid not allocated"
             end if
 
             if (delt_delp_B_batch_spline_ready) then
@@ -1042,32 +1038,5 @@ contains
 
         deallocate (y_batch)
     end subroutine build_boozer_delt_delp_batch_splines
-
-    subroutine normalize_angular_coordinates(vartheta, varphi, n_theta_B, n_phi_B, &
-                                             h_theta_B, h_phi_B, &
-                                             i_theta, i_phi, dtheta, dphi)
-        use new_vmec_stuff_mod, only: nper
-        
-        implicit none
-        
-        real(dp), intent(in) :: vartheta, varphi
-        integer, intent(in) :: n_theta_B, n_phi_B
-        real(dp), intent(in) :: h_theta_B, h_phi_B
-        integer, intent(out) :: i_theta, i_phi
-        real(dp), intent(out) :: dtheta, dphi
-        
-        
-        dtheta = modulo(vartheta, twopi)/h_theta_B
-        i_theta = max(0, min(n_theta_B - 1, int(dtheta)))
-        dtheta = (dtheta - dble(i_theta))*h_theta_B
-        i_theta = i_theta + 1
-        
-        dphi = modulo(varphi, twopi/dble(nper))/h_phi_B
-        i_phi = max(0, min(n_phi_B - 1, int(dphi)))
-        dphi = (dphi - dble(i_phi))*h_phi_B
-        i_phi = i_phi + 1
-        
-    end subroutine normalize_angular_coordinates
-
 
 end module boozer_sub
