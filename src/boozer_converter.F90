@@ -1,7 +1,9 @@
 module boozer_sub
     use spl_three_to_five_sub
-    use interpolate, only: BatchSplineData3D, construct_batch_splines_3d, &
-                           evaluate_batch_splines_3d_der2, destroy_batch_splines_3d
+    use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
+                           construct_batch_splines_3d, &
+                           evaluate_batch_splines_1d_der2, evaluate_batch_splines_3d_der2, &
+                           destroy_batch_splines_1d, destroy_batch_splines_3d
     use field, only : magnetic_field_t
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
@@ -20,6 +22,12 @@ module boozer_sub
     type(BatchSplineData3D), save :: br_batch_spline
     logical, save :: br_batch_spline_ready = .false.
     real(dp), allocatable, save :: br_grid(:, :, :)
+
+    type(BatchSplineData1D), save :: aphi_batch_spline
+    logical, save :: aphi_batch_spline_ready = .false.
+
+    type(BatchSplineData1D), save :: bcovar_tp_batch_spline
+    logical, save :: bcovar_tp_batch_spline_ready = .false.
 
 contains
 
@@ -73,6 +81,8 @@ contains
         call compute_boozer_data
 
         call spline_boozer_data
+        call build_boozer_aphi_batch_spline
+        call build_boozer_bcovar_tp_batch_spline
         call build_boozer_bmod_batch_spline
         if (use_B_r) call build_boozer_br_batch_spline
 
@@ -88,13 +98,11 @@ contains
                                    Bmod_B, dBmod_B, d2Bmod_B, &
                                    B_r, dB_r, d2B_r)
 
-        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
+        use boozer_coordinates_mod, only: ns_s_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
-                                          s_Bcovar_tp_B, &
-                                          derf1, derf2, derf3, &
                                           use_B_r
-        use vector_potentail_mod, only: ns, hs, torflux, sA_phi
-        use new_vmec_stuff_mod, only: nper, ns_A
+        use vector_potentail_mod, only: torflux
+        use new_vmec_stuff_mod, only: nper
         use chamb_mod, only: rnegflag
         use diag_mod, only: icounter
 
@@ -118,6 +126,7 @@ contains
             d2qua_dtdp, d2qua_dp2
         real(dp) :: x_eval(3), y_eval(1), dy_eval(3, 1), d2y_eval(6, 1)
         real(dp) :: theta_wrapped, phi_wrapped
+        real(dp) :: y1d(2), dy1d(2), d2y1d(2)
 
 !$omp atomic
         icounter = icounter + 1
@@ -133,11 +142,21 @@ contains
                                            h_theta_B, h_phi_B, &
                                            i_theta, i_phi, dtheta, dphi)
 
-! Interpolation of vector potentials over $s$
+! Interpolation of A_phi over s (batch spline 1D)
+        if (.not. aphi_batch_spline_ready) then
+            error stop "splint_boozer_coord: Aphi batch spline not initialized"
+        end if
 
-        call evaluate_A_phi_over_s(r, ns, hs, ns_A, derf1, derf2, derf3, sA_phi, &
-                                   mode_secders, A_phi, dA_phi_dr, d2A_phi_dr2, &
-                                   d3A_phi_dr3)
+        call evaluate_batch_splines_1d_der2(aphi_batch_spline, r, y1d(1:1), &
+                                            dy1d(1:1), d2y1d(1:1))
+        A_phi = y1d(1)
+        dA_phi_dr = dy1d(1)
+        d2A_phi_dr2 = d2y1d(1)
+        if (mode_secders .gt. 0) then
+            call evaluate_batch_splines_1d_der3_single(aphi_batch_spline, r, d3A_phi_dr3)
+        else
+            d3A_phi_dr3 = 0.0_dp
+        end if
 
 !--------------------------------
 
@@ -205,13 +224,25 @@ contains
 !--------------------------------
 ! End Interpolation of mod-B
 !--------------------------------
-! Interpolation of B_\vartheta and B_\varphi:
+! Interpolation of B_\vartheta and B_\varphi (flux functions, batch spline 1D):
 !--------------------------------
 
-        call evaluate_Bcovar_tp_over_s(ds, is, ns_s_B, ns_s_p1, derf1, derf2, &
-                                       s_Bcovar_tp_B, drhods, drhods2, d2rhods2m, &
-                                       B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
-                                       B_varphi_B, dB_varphi_B, d2B_varphi_B)
+        if (.not. bcovar_tp_batch_spline_ready) then
+            error stop "splint_boozer_coord: Bcovar_tp batch spline not initialized"
+        end if
+
+        call evaluate_batch_splines_1d_der2(bcovar_tp_batch_spline, rho_tor, y1d, dy1d, d2y1d)
+        B_vartheta_B = y1d(1)
+        dB_vartheta_B = dy1d(1)
+        d2B_vartheta_B = d2y1d(1)
+        B_varphi_B = y1d(2)
+        dB_varphi_B = dy1d(2)
+        d2B_varphi_B = d2y1d(2)
+
+        d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
+        d2B_varphi_B = d2B_varphi_B*drhods2 - dB_varphi_B*d2rhods2m
+        dB_vartheta_B = dB_vartheta_B*drhods
+        dB_varphi_B = dB_varphi_B*drhods
 
 !--------------------------------
 ! End interpolation of B_\vartheta and B_\varphi
@@ -279,90 +310,40 @@ contains
 !--------------------------------
     end subroutine splint_boozer_coord
 
-    subroutine evaluate_A_phi_over_s(r, ns, hs, ns_A, derf1, derf2, derf3, sA_phi, &
-                                     mode_secders, A_phi, dA_phi_dr, d2A_phi_dr2, &
-                                     d3A_phi_dr3)
-        integer, intent(in) :: ns, ns_A, mode_secders
-        real(dp), intent(in) :: r, hs
-        real(dp), intent(in) :: derf1(:), derf2(:), derf3(:)
-        real(dp), intent(in) :: sA_phi(:, :)
-        real(dp), intent(out) :: A_phi, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3
+    subroutine evaluate_batch_splines_1d_der3_single(spl, x, d3y)
+        type(BatchSplineData1D), intent(in) :: spl
+        real(dp), intent(in) :: x
+        real(dp), intent(out) :: d3y
 
-        integer :: k
-        integer :: ns_A_p1, is
-        real(dp) :: ds
+        real(dp) :: x_norm, x_local, xj
+        integer :: interval_index, k_power
+        integer :: N
 
-        ds = r/hs
-        is = max(0, min(ns - 1, int(ds)))
-        ds = (ds - dble(is))*hs
-        is = is + 1
-
-        ns_A_p1 = ns_A + 1
-        A_phi = sA_phi(ns_A_p1, is)
-        dA_phi_dr = A_phi*derf1(ns_A_p1)
-        d2A_phi_dr2 = A_phi*derf2(ns_A_p1)
-
-        do k = ns_A, 3, -1
-            A_phi = sA_phi(k, is) + ds*A_phi
-            dA_phi_dr = sA_phi(k, is)*derf1(k) + ds*dA_phi_dr
-            d2A_phi_dr2 = sA_phi(k, is)*derf2(k) + ds*d2A_phi_dr2
-        end do
-
-        A_phi = sA_phi(1, is) + ds*(sA_phi(2, is) + ds*A_phi)
-        dA_phi_dr = sA_phi(2, is) + ds*dA_phi_dr
-
-        if (mode_secders .gt. 0) then
-            d3A_phi_dr3 = sA_phi(ns_A_p1, is)*derf3(ns_A_p1)
-
-            do k = ns_A, 4, -1
-                d3A_phi_dr3 = sA_phi(k, is)*derf3(k) + ds*d3A_phi_dr3
-            end do
-        else
-            d3A_phi_dr3 = 0.0_dp
+        N = spl%order
+        if (N < 3) then
+            d3y = 0.0_dp
+            return
         end if
-    end subroutine evaluate_A_phi_over_s
 
-    subroutine evaluate_Bcovar_tp_over_s(ds, is, ns_s_B, ns_s_p1, derf1, derf2, &
-                                         s_Bcovar_tp_B, drhods, drhods2, d2rhods2m, &
-                                         B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
-                                         B_varphi_B, dB_varphi_B, d2B_varphi_B)
-        integer, intent(in) :: is, ns_s_B, ns_s_p1
-        real(dp), intent(in) :: ds, drhods, drhods2, d2rhods2m
-        real(dp), intent(in) :: derf1(:), derf2(:)
-        real(dp), intent(in) :: s_Bcovar_tp_B(:, :, :)
-        real(dp), intent(out) :: B_vartheta_B, dB_vartheta_B, d2B_vartheta_B
-        real(dp), intent(out) :: B_varphi_B, dB_varphi_B, d2B_varphi_B
+        if (spl%periodic) then
+            xj = modulo(x - spl%x_min, spl%h_step*(spl%num_points - 1)) + spl%x_min
+        else
+            xj = x
+        end if
 
-        integer :: k
+        x_norm = (xj - spl%x_min)/spl%h_step
+        interval_index = max(0, min(spl%num_points - 2, int(x_norm)))
+        x_local = (x_norm - dble(interval_index))*spl%h_step
 
-        B_vartheta_B = s_Bcovar_tp_B(1, ns_s_p1, is)
-        dB_vartheta_B = B_vartheta_B*derf1(ns_s_p1)
-        d2B_vartheta_B = B_vartheta_B*derf2(ns_s_p1)
-        B_varphi_B = s_Bcovar_tp_B(2, ns_s_p1, is)
-        dB_varphi_B = B_varphi_B*derf1(ns_s_p1)
-        d2B_varphi_B = B_varphi_B*derf2(ns_s_p1)
-
-        do k = ns_s_B, 3, -1
-            B_vartheta_B = s_Bcovar_tp_B(1, k, is) + ds*B_vartheta_B
-            dB_vartheta_B = s_Bcovar_tp_B(1, k, is)*derf1(k) + ds*dB_vartheta_B
-            d2B_vartheta_B = s_Bcovar_tp_B(1, k, is)*derf2(k) + ds*d2B_vartheta_B
-            B_varphi_B = s_Bcovar_tp_B(2, k, is) + ds*B_varphi_B
-            dB_varphi_B = s_Bcovar_tp_B(2, k, is)*derf1(k) + ds*dB_varphi_B
-            d2B_varphi_B = s_Bcovar_tp_B(2, k, is)*derf2(k) + ds*d2B_varphi_B
-        end do
-
-        B_vartheta_B = s_Bcovar_tp_B(1, 1, is) &
-            + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
-        dB_vartheta_B = s_Bcovar_tp_B(1, 2, is) + ds*dB_vartheta_B
-        B_varphi_B = s_Bcovar_tp_B(2, 1, is) &
-            + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
-        dB_varphi_B = s_Bcovar_tp_B(2, 2, is) + ds*dB_varphi_B
-
-        d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
-        d2B_varphi_B = d2B_varphi_B*drhods2 - dB_varphi_B*d2rhods2m
-        dB_vartheta_B = dB_vartheta_B*drhods
-        dB_varphi_B = dB_varphi_B*drhods
-    end subroutine evaluate_Bcovar_tp_over_s
+        d3y = 0.0_dp
+        if (N >= 3) then
+            d3y = N*(N - 1)*(N - 2)*spl%coeff(1, N, interval_index + 1)
+            do k_power = N - 1, 3, -1
+                d3y = k_power*(k_power - 1)*(k_power - 2)* &
+                      spl%coeff(1, k_power, interval_index + 1) + x_local*d3y
+            end do
+        end if
+    end subroutine evaluate_batch_splines_1d_der3_single
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
@@ -1126,6 +1107,14 @@ contains
     end subroutine spline_boozer_data
 
     subroutine reset_boozer_batch_splines
+        if (aphi_batch_spline_ready) then
+            call destroy_batch_splines_1d(aphi_batch_spline)
+            aphi_batch_spline_ready = .false.
+        end if
+        if (bcovar_tp_batch_spline_ready) then
+            call destroy_batch_splines_1d(bcovar_tp_batch_spline)
+            bcovar_tp_batch_spline_ready = .false.
+        end if
         if (bmod_batch_spline_ready) then
             call destroy_batch_splines_3d(bmod_batch_spline)
             bmod_batch_spline_ready = .false.
@@ -1141,6 +1130,64 @@ contains
             deallocate (br_grid)
         end if
     end subroutine reset_boozer_batch_splines
+
+    subroutine build_boozer_aphi_batch_spline
+        use vector_potentail_mod, only: ns, hs, sA_phi
+        use new_vmec_stuff_mod, only: ns_A
+
+        integer :: order
+
+        if (aphi_batch_spline_ready) then
+            call destroy_batch_splines_1d(aphi_batch_spline)
+            aphi_batch_spline_ready = .false.
+        end if
+
+        order = ns_A
+        if (order < 3 .or. order > 5) then
+            error stop "build_boozer_aphi_batch_spline: spline order must be 3..5"
+        end if
+
+        aphi_batch_spline%order = order
+        aphi_batch_spline%num_points = ns
+        aphi_batch_spline%periodic = .false.
+        aphi_batch_spline%x_min = 0.0_dp
+        aphi_batch_spline%h_step = hs
+        aphi_batch_spline%num_quantities = 1
+
+        allocate (aphi_batch_spline%coeff(1, 0:order, ns))
+        aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
+
+        aphi_batch_spline_ready = .true.
+    end subroutine build_boozer_aphi_batch_spline
+
+    subroutine build_boozer_bcovar_tp_batch_spline
+        use boozer_coordinates_mod, only: ns_s_B, ns_B, hs_B, s_Bcovar_tp_B
+
+        integer :: order
+
+        if (bcovar_tp_batch_spline_ready) then
+            call destroy_batch_splines_1d(bcovar_tp_batch_spline)
+            bcovar_tp_batch_spline_ready = .false.
+        end if
+
+        order = ns_s_B
+        if (order < 3 .or. order > 5) then
+            error stop "build_boozer_bcovar_tp_batch_spline: spline order must be 3..5"
+        end if
+
+        bcovar_tp_batch_spline%order = order
+        bcovar_tp_batch_spline%num_points = ns_B
+        bcovar_tp_batch_spline%periodic = .false.
+        bcovar_tp_batch_spline%x_min = 0.0_dp
+        bcovar_tp_batch_spline%h_step = hs_B
+        bcovar_tp_batch_spline%num_quantities = 2
+
+        allocate (bcovar_tp_batch_spline%coeff(2, 0:order, ns_B))
+        bcovar_tp_batch_spline%coeff(1, 0:order, :) = s_Bcovar_tp_B(1, 1:order + 1, :)
+        bcovar_tp_batch_spline%coeff(2, 0:order, :) = s_Bcovar_tp_B(2, 1:order + 1, :)
+
+        bcovar_tp_batch_spline_ready = .true.
+    end subroutine build_boozer_bcovar_tp_batch_spline
 
     subroutine build_boozer_bmod_batch_spline
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
