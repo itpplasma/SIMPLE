@@ -102,8 +102,8 @@ contains
 
         integer, parameter :: mode_secders = 1
 
-        integer :: nstp, ns_A_p1, ns_s_p1
-        integer :: k, is, i_theta, i_phi
+        integer :: ns_s_p1
+        integer :: is, i_theta, i_phi
 
         real(dp) :: r, vartheta_B, varphi_B, &
             A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
@@ -133,37 +133,11 @@ contains
                                            h_theta_B, h_phi_B, &
                                            i_theta, i_phi, dtheta, dphi)
 
-! Begin interpolation of vector potentials over $s$
+! Interpolation of vector potentials over $s$
 
-        ds = r/hs
-        is = max(0, min(ns - 1, int(ds)))
-        ds = (ds - dble(is))*hs
-        is = is + 1
-
-        ns_A_p1 = ns_A + 1
-        A_phi = sA_phi(ns_A_p1, is)
-        dA_phi_dr = A_phi*derf1(ns_A_p1)
-        d2A_phi_dr2 = A_phi*derf2(ns_A_p1)
-
-        do k = ns_A, 3, -1
-            A_phi = sA_phi(k, is) + ds*A_phi
-            dA_phi_dr = sA_phi(k, is)*derf1(k) + ds*dA_phi_dr
-            d2A_phi_dr2 = sA_phi(k, is)*derf2(k) + ds*d2A_phi_dr2
-        end do
-
-        A_phi = sA_phi(1, is) + ds*(sA_phi(2, is) + ds*A_phi)
-        dA_phi_dr = sA_phi(2, is) + ds*dA_phi_dr
-
-        if (mode_secders .gt. 0) then
-            d3A_phi_dr3 = sA_phi(ns_A_p1, is)*derf3(ns_A_p1)
-
-            do k = ns_A, 4, -1
-                d3A_phi_dr3 = sA_phi(k, is)*derf3(k) + ds*d3A_phi_dr3
-            end do
-
-        end if
-
-! End interpolation of vector potentials over $s$
+        call evaluate_A_phi_over_s(r, ns, hs, ns_A, derf1, derf2, derf3, sA_phi, &
+                                   mode_secders, A_phi, dA_phi_dr, d2A_phi_dr2, &
+                                   d3A_phi_dr3)
 
 !--------------------------------
 
@@ -173,7 +147,6 @@ contains
         ds = (ds - dble(is))*hs_B
         is = is + 1
 
-        nstp = ns_tp_B + 1
         ns_s_p1 = ns_s_B + 1
 
 !--------------------------------
@@ -235,33 +208,10 @@ contains
 ! Interpolation of B_\vartheta and B_\varphi:
 !--------------------------------
 
-        B_vartheta_B = s_Bcovar_tp_B(1, ns_s_p1, is)
-        dB_vartheta_B = B_vartheta_B*derf1(ns_s_p1)
-        d2B_vartheta_B = B_vartheta_B*derf2(ns_s_p1)
-        B_varphi_B = s_Bcovar_tp_B(2, ns_s_p1, is)
-        dB_varphi_B = B_varphi_B*derf1(ns_s_p1)
-        d2B_varphi_B = B_varphi_B*derf2(ns_s_p1)
-
-        do k = ns_s_B, 3, -1
-            B_vartheta_B = s_Bcovar_tp_B(1, k, is) + ds*B_vartheta_B
-            dB_vartheta_B = s_Bcovar_tp_B(1, k, is)*derf1(k) + ds*dB_vartheta_B
-            d2B_vartheta_B = s_Bcovar_tp_B(1, k, is)*derf2(k) + ds*d2B_vartheta_B
-            B_varphi_B = s_Bcovar_tp_B(2, k, is) + ds*B_varphi_B
-            dB_varphi_B = s_Bcovar_tp_B(2, k, is)*derf1(k) + ds*dB_varphi_B
-            d2B_varphi_B = s_Bcovar_tp_B(2, k, is)*derf2(k) + ds*d2B_varphi_B
-        end do
-
-        B_vartheta_B = s_Bcovar_tp_B(1, 1, is) &
-            + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
-        dB_vartheta_B = s_Bcovar_tp_B(1, 2, is) + ds*dB_vartheta_B
-        B_varphi_B = s_Bcovar_tp_B(2, 1, is) &
-            + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
-        dB_varphi_B = s_Bcovar_tp_B(2, 2, is) + ds*dB_varphi_B
-
-        d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
-        d2B_varphi_B = d2B_varphi_B*drhods2 - dB_varphi_B*d2rhods2m
-        dB_vartheta_B = dB_vartheta_B*drhods
-        dB_varphi_B = dB_varphi_B*drhods
+        call evaluate_Bcovar_tp_over_s(ds, is, ns_s_B, ns_s_p1, derf1, derf2, &
+                                       s_Bcovar_tp_B, drhods, drhods2, d2rhods2m, &
+                                       B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
+                                       B_varphi_B, dB_varphi_B, d2B_varphi_B)
 
 !--------------------------------
 ! End interpolation of B_\vartheta and B_\varphi
@@ -328,6 +278,91 @@ contains
 ! End interpolation of B_r
 !--------------------------------
     end subroutine splint_boozer_coord
+
+    subroutine evaluate_A_phi_over_s(r, ns, hs, ns_A, derf1, derf2, derf3, sA_phi, &
+                                     mode_secders, A_phi, dA_phi_dr, d2A_phi_dr2, &
+                                     d3A_phi_dr3)
+        integer, intent(in) :: ns, ns_A, mode_secders
+        real(dp), intent(in) :: r, hs
+        real(dp), intent(in) :: derf1(:), derf2(:), derf3(:)
+        real(dp), intent(in) :: sA_phi(:, :)
+        real(dp), intent(out) :: A_phi, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3
+
+        integer :: k
+        integer :: ns_A_p1, is
+        real(dp) :: ds
+
+        ds = r/hs
+        is = max(0, min(ns - 1, int(ds)))
+        ds = (ds - dble(is))*hs
+        is = is + 1
+
+        ns_A_p1 = ns_A + 1
+        A_phi = sA_phi(ns_A_p1, is)
+        dA_phi_dr = A_phi*derf1(ns_A_p1)
+        d2A_phi_dr2 = A_phi*derf2(ns_A_p1)
+
+        do k = ns_A, 3, -1
+            A_phi = sA_phi(k, is) + ds*A_phi
+            dA_phi_dr = sA_phi(k, is)*derf1(k) + ds*dA_phi_dr
+            d2A_phi_dr2 = sA_phi(k, is)*derf2(k) + ds*d2A_phi_dr2
+        end do
+
+        A_phi = sA_phi(1, is) + ds*(sA_phi(2, is) + ds*A_phi)
+        dA_phi_dr = sA_phi(2, is) + ds*dA_phi_dr
+
+        if (mode_secders .gt. 0) then
+            d3A_phi_dr3 = sA_phi(ns_A_p1, is)*derf3(ns_A_p1)
+
+            do k = ns_A, 4, -1
+                d3A_phi_dr3 = sA_phi(k, is)*derf3(k) + ds*d3A_phi_dr3
+            end do
+        else
+            d3A_phi_dr3 = 0.0_dp
+        end if
+    end subroutine evaluate_A_phi_over_s
+
+    subroutine evaluate_Bcovar_tp_over_s(ds, is, ns_s_B, ns_s_p1, derf1, derf2, &
+                                         s_Bcovar_tp_B, drhods, drhods2, d2rhods2m, &
+                                         B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
+                                         B_varphi_B, dB_varphi_B, d2B_varphi_B)
+        integer, intent(in) :: is, ns_s_B, ns_s_p1
+        real(dp), intent(in) :: ds, drhods, drhods2, d2rhods2m
+        real(dp), intent(in) :: derf1(:), derf2(:)
+        real(dp), intent(in) :: s_Bcovar_tp_B(:, :, :)
+        real(dp), intent(out) :: B_vartheta_B, dB_vartheta_B, d2B_vartheta_B
+        real(dp), intent(out) :: B_varphi_B, dB_varphi_B, d2B_varphi_B
+
+        integer :: k
+
+        B_vartheta_B = s_Bcovar_tp_B(1, ns_s_p1, is)
+        dB_vartheta_B = B_vartheta_B*derf1(ns_s_p1)
+        d2B_vartheta_B = B_vartheta_B*derf2(ns_s_p1)
+        B_varphi_B = s_Bcovar_tp_B(2, ns_s_p1, is)
+        dB_varphi_B = B_varphi_B*derf1(ns_s_p1)
+        d2B_varphi_B = B_varphi_B*derf2(ns_s_p1)
+
+        do k = ns_s_B, 3, -1
+            B_vartheta_B = s_Bcovar_tp_B(1, k, is) + ds*B_vartheta_B
+            dB_vartheta_B = s_Bcovar_tp_B(1, k, is)*derf1(k) + ds*dB_vartheta_B
+            d2B_vartheta_B = s_Bcovar_tp_B(1, k, is)*derf2(k) + ds*d2B_vartheta_B
+            B_varphi_B = s_Bcovar_tp_B(2, k, is) + ds*B_varphi_B
+            dB_varphi_B = s_Bcovar_tp_B(2, k, is)*derf1(k) + ds*dB_varphi_B
+            d2B_varphi_B = s_Bcovar_tp_B(2, k, is)*derf2(k) + ds*d2B_varphi_B
+        end do
+
+        B_vartheta_B = s_Bcovar_tp_B(1, 1, is) &
+            + ds*(s_Bcovar_tp_B(1, 2, is) + ds*B_vartheta_B)
+        dB_vartheta_B = s_Bcovar_tp_B(1, 2, is) + ds*dB_vartheta_B
+        B_varphi_B = s_Bcovar_tp_B(2, 1, is) &
+            + ds*(s_Bcovar_tp_B(2, 2, is) + ds*B_varphi_B)
+        dB_varphi_B = s_Bcovar_tp_B(2, 2, is) + ds*dB_varphi_B
+
+        d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
+        d2B_varphi_B = d2B_varphi_B*drhods2 - dB_varphi_B*d2rhods2m
+        dB_vartheta_B = dB_vartheta_B*drhods
+        dB_varphi_B = dB_varphi_B*drhods
+    end subroutine evaluate_Bcovar_tp_over_s
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
