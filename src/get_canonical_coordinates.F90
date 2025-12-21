@@ -51,14 +51,10 @@ module get_can_sub
     ! Batch spline for G_c (generating function)
     type(BatchSplineData3D), save :: G_batch_spline
     logical, save :: G_batch_spline_ready = .false.
-    real(dp), allocatable, save :: G_grid(:, :, :)
 
     ! Batch spline for sqg_c, B_vartheta_c, B_varphi_c (3 quantities)
     type(BatchSplineData3D), save :: sqg_Bt_Bp_batch_spline
     logical, save :: sqg_Bt_Bp_batch_spline_ready = .false.
-    real(dp), allocatable, save :: sqg_grid(:, :, :)
-    real(dp), allocatable, save :: Bt_grid(:, :, :)
-    real(dp), allocatable, save :: Bp_grid(:, :, :)
 
 contains
 
@@ -99,10 +95,6 @@ subroutine reset_canflux_batch_splines
         call destroy_batch_splines_3d(sqg_Bt_Bp_batch_spline)
         sqg_Bt_Bp_batch_spline_ready = .false.
     end if
-    if (allocated(G_grid)) deallocate(G_grid)
-    if (allocated(sqg_grid)) deallocate(sqg_grid)
-    if (allocated(Bt_grid)) deallocate(Bt_grid)
-    if (allocated(Bp_grid)) deallocate(Bp_grid)
 end subroutine reset_canflux_batch_splines
 
 
@@ -317,10 +309,6 @@ subroutine build_canflux_G_batch_spline
         G_batch_spline_ready = .false.
     end if
 
-    ! Store grid for later use
-    if (.not. allocated(G_grid)) allocate(G_grid(ns_c, n_theta_c, n_phi_c))
-    G_grid = G_c
-
     order = [ns_s_c, ns_tp_c, ns_tp_c]
     if (any(order < 3) .or. any(order > 5)) then
         error stop "build_canflux_G_batch_spline: spline order must be 3..5"
@@ -358,14 +346,6 @@ subroutine build_canflux_sqg_Bt_Bp_batch_spline
         call destroy_batch_splines_3d(sqg_Bt_Bp_batch_spline)
         sqg_Bt_Bp_batch_spline_ready = .false.
     end if
-
-    ! Store grids for later use
-    if (.not. allocated(sqg_grid)) allocate(sqg_grid(ns_c, n_theta_c, n_phi_c))
-    if (.not. allocated(Bt_grid)) allocate(Bt_grid(ns_c, n_theta_c, n_phi_c))
-    if (.not. allocated(Bp_grid)) allocate(Bp_grid(ns_c, n_theta_c, n_phi_c))
-    sqg_grid = sqg_c
-    Bt_grid = B_vartheta_c
-    Bp_grid = B_varphi_c
 
     order = [ns_s_c, ns_tp_c, ns_tp_c]
     if (any(order < 3) .or. any(order > 5)) then
