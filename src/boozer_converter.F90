@@ -16,12 +16,11 @@ module boozer_sub
     class(magnetic_field_t), allocatable :: current_field
     !$omp threadprivate(current_field)
 
-    type(BatchSplineData3D), save :: bmod_batch_spline
-    logical, save :: bmod_batch_spline_ready = .false.
+    ! Combined Bmod + Br batch spline (1 or 2 quantities depending on use_B_r)
+    type(BatchSplineData3D), save :: bmod_br_batch_spline
+    logical, save :: bmod_br_batch_spline_ready = .false.
+    integer, save :: bmod_br_num_quantities = 0
     real(dp), allocatable, save :: bmod_grid(:, :, :)
-
-    type(BatchSplineData3D), save :: br_batch_spline
-    logical, save :: br_batch_spline_ready = .false.
     real(dp), allocatable, save :: br_grid(:, :, :)
 
     type(BatchSplineData1D), save :: aphi_batch_spline
@@ -30,13 +29,14 @@ module boozer_sub
     type(BatchSplineData1D), save :: bcovar_tp_batch_spline
     logical, save :: bcovar_tp_batch_spline_ready = .false.
 
+    ! Combined delta_theta + delta_phi grids (2 quantities each)
     type(BatchSplineData3D), save :: delt_delp_V_batch_spline
     logical, save :: delt_delp_V_batch_spline_ready = .false.
-    real(dp), allocatable, save :: delt_delp_V_grid(:, :, :)
+    real(dp), allocatable, save :: delt_delp_V_grid(:, :, :, :)
 
     type(BatchSplineData3D), save :: delt_delp_B_batch_spline
     logical, save :: delt_delp_B_batch_spline_ready = .false.
-    real(dp), allocatable, save :: delt_delp_B_grid(:, :, :)
+    real(dp), allocatable, save :: delt_delp_B_grid(:, :, :, :)
 
 contains
 
@@ -91,8 +91,7 @@ contains
 
         call build_boozer_aphi_batch_spline
         call build_boozer_bcovar_tp_batch_spline
-        call build_boozer_bmod_batch_spline
-        if (use_B_r) call build_boozer_br_batch_spline
+        call build_boozer_bmod_br_batch_spline
         call build_boozer_delt_delp_batch_splines
 
     end subroutine get_boozer_coordinates_impl
@@ -133,7 +132,7 @@ contains
         real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
         real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
             d2qua_dtdp, d2qua_dp2
-        real(dp) :: x_eval(3), y_eval(1), dy_eval(3, 1), d2y_eval(6, 1)
+        real(dp) :: x_eval(3), y_eval(2), dy_eval(3, 2), d2y_eval(6, 2)
         real(dp) :: theta_wrapped, phi_wrapped
         real(dp) :: y1d(2), dy1d(2), d2y1d(2)
 
@@ -178,22 +177,31 @@ contains
         ns_s_p1 = ns_s_B + 1
 
 !--------------------------------
-! Interpolation of mod-B:
+! Interpolation of mod-B (and B_r if use_B_r):
 !--------------------------------
 
         theta_wrapped = modulo(vartheta_B, twopi)
         phi_wrapped = modulo(varphi_B, twopi/dble(nper))
 
-        if (.not. bmod_batch_spline_ready) then
-            error stop "splint_boozer_coord: Bmod batch spline not initialized"
+        if (.not. bmod_br_batch_spline_ready) then
+            error stop "splint_boozer_coord: Bmod/Br batch spline not initialized"
         end if
 
         x_eval(1) = rho_tor
         x_eval(2) = theta_wrapped
         x_eval(3) = phi_wrapped
-        call evaluate_batch_splines_3d_der2(bmod_batch_spline, x_eval, y_eval, &
-                                            dy_eval, d2y_eval)
+        call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
+                                            y_eval(1:bmod_br_num_quantities), &
+                                            dy_eval(:, 1:bmod_br_num_quantities), &
+                                            d2y_eval(:, 1:bmod_br_num_quantities))
 
+! Coversion coefficients for derivatives over s
+        drhods = 0.5d0/rho_tor
+        drhods2 = drhods**2
+        ! $-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
+        d2rhods2m = drhods2/rho_tor
+
+! Extract Bmod (quantity 1)
         qua = y_eval(1)
         dqua_dr = dy_eval(1, 1)
         dqua_dt = dy_eval(2, 1)
@@ -205,12 +213,6 @@ contains
         d2qua_dt2 = d2y_eval(4, 1)
         d2qua_dtdp = d2y_eval(5, 1)
         d2qua_dp2 = d2y_eval(6, 1)
-
-! Coversion coefficients for derivatives over s
-        drhods = 0.5d0/rho_tor
-        drhods2 = drhods**2
-        ! $-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
-        d2rhods2m = drhods2/rho_tor
 
         d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
         dqua_dr = dqua_dr*drhods
@@ -230,8 +232,46 @@ contains
         d2Bmod_B(5) = d2qua_dtdp
         d2Bmod_B(6) = d2qua_dp2
 
+! Extract B_r (quantity 2, if present)
+        if (use_B_r) then
+            qua = y_eval(2)
+            dqua_dr = dy_eval(1, 2)
+            dqua_dt = dy_eval(2, 2)
+            dqua_dp = dy_eval(3, 2)
+
+            d2qua_dr2 = d2y_eval(1, 2)
+            d2qua_drdt = d2y_eval(2, 2)
+            d2qua_drdp = d2y_eval(3, 2)
+            d2qua_dt2 = d2y_eval(4, 2)
+            d2qua_dtdp = d2y_eval(5, 2)
+            d2qua_dp2 = d2y_eval(6, 2)
+
+            d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
+            dqua_dr = dqua_dr*drhods
+            d2qua_drdt = d2qua_drdt*drhods
+            d2qua_drdp = d2qua_drdp*drhods
+
+            B_r = qua*drhods
+
+            dB_r(1) = dqua_dr*drhods - qua*d2rhods2m
+            dB_r(2) = dqua_dt*drhods
+            dB_r(3) = dqua_dp*drhods
+
+            d2B_r(1) = d2qua_dr2*drhods - 2.d0*dqua_dr*d2rhods2m + &
+                       qua*drhods*(3.d0/4.d0)/r**2
+            d2B_r(2) = d2qua_drdt*drhods - dqua_dt*d2rhods2m
+            d2B_r(3) = d2qua_drdp*drhods - dqua_dp*d2rhods2m
+            d2B_r(4) = d2qua_dt2*drhods
+            d2B_r(5) = d2qua_dtdp*drhods
+            d2B_r(6) = d2qua_dp2*drhods
+        else
+            B_r = 0.d0
+            dB_r = 0.d0
+            d2B_r = 0.d0
+        end if
+
 !--------------------------------
-! End Interpolation of mod-B
+! End Interpolation of mod-B and B_r
 !--------------------------------
 ! Interpolation of B_\vartheta and B_\varphi (flux functions, batch spline 1D):
 !--------------------------------
@@ -255,67 +295,6 @@ contains
 
 !--------------------------------
 ! End interpolation of B_\vartheta and B_\varphi
-!--------------------------------
-! Interpolation of B_r:
-!--------------------------------
-! Note that splined quantity is $B_\rho$, not $B_s$
-
-        if (use_B_r) then
-
-            if (.not. br_batch_spline_ready) then
-                error stop "splint_boozer_coord: Br batch spline not initialized"
-            end if
-
-            x_eval(1) = rho_tor
-            x_eval(2) = theta_wrapped
-            x_eval(3) = phi_wrapped
-            call evaluate_batch_splines_3d_der2(br_batch_spline, x_eval, y_eval, &
-                                                dy_eval, d2y_eval)
-
-            qua = y_eval(1)
-            dqua_dr = dy_eval(1, 1)
-            dqua_dt = dy_eval(2, 1)
-            dqua_dp = dy_eval(3, 1)
-
-            d2qua_dr2 = d2y_eval(1, 1)
-            d2qua_drdt = d2y_eval(2, 1)
-            d2qua_drdp = d2y_eval(3, 1)
-            d2qua_dt2 = d2y_eval(4, 1)
-            d2qua_dtdp = d2y_eval(5, 1)
-            d2qua_dp2 = d2y_eval(6, 1)
-
-! Convert coefficients for derivatives over s
-            drhods = 0.5d0/rho_tor
-            drhods2 = drhods**2
-            ! $-\dr^2 \rho / \rd s^2$ (second derivative with minus sign)
-            d2rhods2m = drhods2/rho_tor
-
-            d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
-            dqua_dr = dqua_dr*drhods
-            d2qua_drdt = d2qua_drdt*drhods
-            d2qua_drdp = d2qua_drdp*drhods
-
-            B_r = qua*drhods
-
-            dB_r(1) = dqua_dr*drhods - qua*d2rhods2m
-            dB_r(2) = dqua_dt*drhods
-            dB_r(3) = dqua_dp*drhods
-
-            d2B_r(1) = d2qua_dr2*drhods - 2.d0*dqua_dr*d2rhods2m + &
-                       qua*drhods*(3.d0/4.d0)/r**2
-            d2B_r(2) = d2qua_drdt*drhods - dqua_dt*d2rhods2m
-            d2B_r(3) = d2qua_drdp*drhods - dqua_dp*d2rhods2m
-            d2B_r(4) = d2qua_dt2*drhods
-            d2B_r(5) = d2qua_dtdp*drhods
-            d2B_r(6) = d2qua_dp2*drhods
-
-        else
-            B_r = 0.d0
-            dB_r = 0.d0
-            d2B_r = 0.d0
-        end if
-!--------------------------------
-! End interpolation of B_r
 !--------------------------------
     end subroutine splint_boozer_coord
 
@@ -509,8 +488,6 @@ contains
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
                                           s_Bcovar_tp_B, &
-                                          s_Bmod_B, s_Bcovar_r_B, &
-                                          s_delt_delp_V, s_delt_delp_B, &
                                           use_B_r, use_del_tp_B
         use binsrc_sub, only: binsrc
         use plag_coeff_sub, only: plag_coeff
@@ -593,27 +570,44 @@ contains
         allocate (splcoe_t(0:ns_tp_B, n_theta_B))
         allocate (splcoe_p(0:ns_tp_B, n_phi_B))
 
-! allocate spline coefficients for Boozer data:
+! allocate data arrays for Boozer data:
         if (.not. allocated(s_Bcovar_tp_B)) &
             allocate (s_Bcovar_tp_B(2, ns_s_B + 1, ns_B))
-        if (.not. allocated(s_Bmod_B)) &
-            allocate (s_Bmod_B(ns_s_B + 1, ns_tp_B + 1, ns_tp_B + 1, &
-                ns_B, n_theta_B, n_phi_B))
+
+        ! Allocate simple 3D grid for Bmod
         if (.not. allocated(bmod_grid)) then
             allocate (bmod_grid(ns_B, n_theta_B, n_phi_B))
         else if (any(shape(bmod_grid) /= [ns_B, n_theta_B, n_phi_B])) then
             deallocate (bmod_grid)
             allocate (bmod_grid(ns_B, n_theta_B, n_phi_B))
         end if
-        if (use_B_r .and. .not. allocated(s_Bcovar_r_B)) &
-            allocate (s_Bcovar_r_B(ns_s_B + 1, ns_tp_B + 1, &
-                ns_tp_B + 1, ns_B, n_theta_B, n_phi_B))
-        if (.not. allocated(s_delt_delp_V)) &
-            allocate (s_delt_delp_V(2, ns_s_B + 1, ns_tp_B + 1, &
-                ns_tp_B + 1, ns_B, n_theta_B, n_phi_B))
-        if (use_del_tp_B .and. .not. allocated(s_delt_delp_B)) &
-            allocate (s_delt_delp_B(2, ns_s_B + 1, ns_tp_B + 1, &
-                ns_tp_B + 1, ns_B, n_theta_B, n_phi_B))
+
+        ! Allocate simple 3D grid for B_r (if needed)
+        if (use_B_r) then
+            if (.not. allocated(br_grid)) then
+                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
+            else if (any(shape(br_grid) /= [ns_B, n_theta_B, n_phi_B])) then
+                deallocate (br_grid)
+                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
+            end if
+        end if
+
+        ! Allocate simple 4D grids for delta_theta/delta_phi
+        if (.not. allocated(delt_delp_V_grid)) then
+            allocate (delt_delp_V_grid(ns_B, n_theta_B, n_phi_B, 2))
+        else if (any(shape(delt_delp_V_grid) /= [ns_B, n_theta_B, n_phi_B, 2])) then
+            deallocate (delt_delp_V_grid)
+            allocate (delt_delp_V_grid(ns_B, n_theta_B, n_phi_B, 2))
+        end if
+
+        if (use_del_tp_B) then
+            if (.not. allocated(delt_delp_B_grid)) then
+                allocate (delt_delp_B_grid(ns_B, n_theta_B, n_phi_B, 2))
+            else if (any(shape(delt_delp_B_grid) /= [ns_B, n_theta_B, n_phi_B, 2])) then
+                deallocate (delt_delp_B_grid)
+                allocate (delt_delp_B_grid(ns_B, n_theta_B, n_phi_B, 2))
+            end if
+        end if
 
         do i = 0, ns_tp_B
             wint_t(i) = h_theta_B**(i + 1)/dble(i + 1)
@@ -726,8 +720,8 @@ contains
 ! $\Delta \vartheta_{BV}=\vartheta_B-\theta$:
             deltheta_BV_Vg = aiota*delphi_BV_Vg + alam_2D
 
-            s_delt_delp_V(1, 1, 1, 1, i_rho, :, :) = deltheta_BV_Vg
-            s_delt_delp_V(2, 1, 1, 1, i_rho, :, :) = delphi_BV_Vg
+            delt_delp_V_grid(i_rho, :, :, 1) = deltheta_BV_Vg
+            delt_delp_V_grid(i_rho, :, :, 2) = delphi_BV_Vg
 
 ! At this point, all quantities are specified on
 ! equidistant grid in VMEC angles $(\theta,\varphi)$
@@ -779,8 +773,10 @@ contains
                 end do
             end do
 
-            if (use_del_tp_B) s_delt_delp_B(:, 1, 1, 1, i_rho, :, :) = perqua_2D(1:2, :, :)
-            s_Bmod_B(1, 1, 1, i_rho, :, :) = perqua_2D(3, :, :)
+            if (use_del_tp_B) then
+                delt_delp_B_grid(i_rho, :, :, 1) = perqua_2D(1, :, :)
+                delt_delp_B_grid(i_rho, :, :, 2) = perqua_2D(2, :, :)
+            end if
             bmod_grid(i_rho, :, :) = perqua_2D(3, :, :)
 
 ! End re-interpolate to equidistant grid in $(\vartheta_B,\varphi_B)$
@@ -795,6 +791,7 @@ contains
         end do
 
 ! Compute radial covariant magnetic field component in Boozer coordinates
+! Write directly to br_grid
 
         if (use_B_r) then
             if (allocated(coef)) deallocate (coef)
@@ -818,7 +815,7 @@ contains
 
 ! We spline covariant component $B_\rho$ instead of $B_s$:
                 do i_phi = 1, n_phi_B
-                    s_Bcovar_r_B(1, 1, 1, i_rho, :, i_phi) = &
+                    br_grid(i_rho, :, i_phi) = &
                         2.d0*rho_tor(i_rho) &
                         *Bcovar_symfl(1, i_rho, :, i_phi) &
                         - matmul(coef(1, :)*aiota_arr(ibeg:iend), &
@@ -830,15 +827,6 @@ contains
 
             end do
             deallocate (aiota_arr, Gfunc, Bcovar_symfl)
-
-            if (.not. allocated(br_grid)) then
-                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
-            else if (any(shape(br_grid) /= [ns_B, n_theta_B, n_phi_B])) then
-                deallocate (br_grid)
-                allocate (br_grid(ns_B, n_theta_B, n_phi_B))
-            end if
-
-            br_grid(:, :, :) = s_Bcovar_r_B(1, 1, 1, :, :, :)
         end if
 
 ! End compute radial covariant magnetic field component in Boozer coordinates
@@ -861,34 +849,23 @@ contains
             call destroy_batch_splines_1d(bcovar_tp_batch_spline)
             bcovar_tp_batch_spline_ready = .false.
         end if
-        if (bmod_batch_spline_ready) then
-            call destroy_batch_splines_3d(bmod_batch_spline)
-            bmod_batch_spline_ready = .false.
+        if (bmod_br_batch_spline_ready) then
+            call destroy_batch_splines_3d(bmod_br_batch_spline)
+            bmod_br_batch_spline_ready = .false.
+            bmod_br_num_quantities = 0
         end if
-        if (allocated(bmod_grid)) then
-            deallocate (bmod_grid)
-        end if
-        if (br_batch_spline_ready) then
-            call destroy_batch_splines_3d(br_batch_spline)
-            br_batch_spline_ready = .false.
-        end if
-        if (allocated(br_grid)) then
-            deallocate (br_grid)
-        end if
+        if (allocated(bmod_grid)) deallocate (bmod_grid)
+        if (allocated(br_grid)) deallocate (br_grid)
         if (delt_delp_V_batch_spline_ready) then
             call destroy_batch_splines_3d(delt_delp_V_batch_spline)
             delt_delp_V_batch_spline_ready = .false.
         end if
-        if (allocated(delt_delp_V_grid)) then
-            deallocate (delt_delp_V_grid)
-        end if
+        if (allocated(delt_delp_V_grid)) deallocate (delt_delp_V_grid)
         if (delt_delp_B_batch_spline_ready) then
             call destroy_batch_splines_3d(delt_delp_B_batch_spline)
             delt_delp_B_batch_spline_ready = .false.
         end if
-        if (allocated(delt_delp_B_grid)) then
-            deallocate (delt_delp_B_grid)
-        end if
+        if (allocated(delt_delp_B_grid)) deallocate (delt_delp_B_grid)
     end subroutine reset_boozer_batch_splines
 
     subroutine build_boozer_aphi_batch_spline
@@ -950,69 +927,32 @@ contains
         deallocate (y_batch)
     end subroutine build_boozer_bcovar_tp_batch_spline
 
-    subroutine build_boozer_bmod_batch_spline
-        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B
-
-        real(dp) :: x_min(3), x_max(3)
-        real(dp), allocatable :: y_batch(:, :, :, :)
-        integer :: order(3)
-        logical :: periodic(3)
-
-        if (.not. allocated(bmod_grid)) then
-            error stop "build_boozer_bmod_batch_spline: bmod_grid not allocated"
-        end if
-
-        if (bmod_batch_spline_ready) then
-            call destroy_batch_splines_3d(bmod_batch_spline)
-            bmod_batch_spline_ready = .false.
-        end if
-
-        order = [ns_s_B, ns_tp_B, ns_tp_B]
-        if (any(order < 3) .or. any(order > 5)) then
-            error stop "build_boozer_bmod_batch_spline: spline order must be 3..5"
-        end if
-
-        x_min = [0.0d0, 0.0d0, 0.0d0]
-        x_max(1) = hs_B*dble(ns_B - 1)
-        x_max(2) = h_theta_B*dble(n_theta_B - 1)
-        x_max(3) = h_phi_B*dble(n_phi_B - 1)
-
-        periodic = [.false., .true., .true.]
-
-        allocate (y_batch(ns_B, n_theta_B, n_phi_B, 1))
-        y_batch(:, :, :, 1) = bmod_grid(:, :, :)
-
-        call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
-                                        bmod_batch_spline)
-        bmod_batch_spline_ready = .true.
-    end subroutine build_boozer_bmod_batch_spline
-
-    subroutine build_boozer_br_batch_spline
+    subroutine build_boozer_bmod_br_batch_spline
+        ! Combined Bmod + Br batch spline (1 or 2 quantities depending on use_B_r)
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, use_B_r
 
         real(dp) :: x_min(3), x_max(3)
         real(dp), allocatable :: y_batch(:, :, :, :)
-        integer :: order(3)
+        integer :: order(3), nq
         logical :: periodic(3)
 
-        if (.not. use_B_r) then
-            return
+        if (.not. allocated(bmod_grid)) then
+            error stop "build_boozer_bmod_br_batch_spline: bmod_grid not allocated"
+        end if
+        if (use_B_r .and. .not. allocated(br_grid)) then
+            error stop "build_boozer_bmod_br_batch_spline: br_grid not allocated"
         end if
 
-        if (.not. allocated(br_grid)) then
-            error stop "build_boozer_br_batch_spline: br_grid not allocated"
-        end if
-
-        if (br_batch_spline_ready) then
-            call destroy_batch_splines_3d(br_batch_spline)
-            br_batch_spline_ready = .false.
+        if (bmod_br_batch_spline_ready) then
+            call destroy_batch_splines_3d(bmod_br_batch_spline)
+            bmod_br_batch_spline_ready = .false.
+            bmod_br_num_quantities = 0
         end if
 
         order = [ns_s_B, ns_tp_B, ns_tp_B]
         if (any(order < 3) .or. any(order > 5)) then
-            error stop "build_boozer_br_batch_spline: spline order must be 3..5"
+            error stop "build_boozer_bmod_br_batch_spline: spline order must be 3..5"
         end if
 
         x_min = [0.0_dp, 0.0_dp, 0.0_dp]
@@ -1022,31 +962,44 @@ contains
 
         periodic = [.false., .true., .true.]
 
-        allocate (y_batch(ns_B, n_theta_B, n_phi_B, 1))
-        y_batch(:, :, :, 1) = br_grid(:, :, :)
+        ! Determine number of quantities: 1 (Bmod only) or 2 (Bmod + Br)
+        if (use_B_r) then
+            nq = 2
+        else
+            nq = 1
+        end if
+
+        allocate (y_batch(ns_B, n_theta_B, n_phi_B, nq))
+        y_batch(:, :, :, 1) = bmod_grid(:, :, :)
+        if (use_B_r) then
+            y_batch(:, :, :, 2) = br_grid(:, :, :)
+        end if
 
         call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
-                                        br_batch_spline)
-        br_batch_spline_ready = .true.
-    end subroutine build_boozer_br_batch_spline
+                                        bmod_br_batch_spline)
+        bmod_br_batch_spline_ready = .true.
+        bmod_br_num_quantities = nq
+        deallocate (y_batch)
+    end subroutine build_boozer_bmod_br_batch_spline
 
     subroutine build_boozer_delt_delp_batch_splines
+        ! Use the simple 4D grids populated in compute_boozer_data
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B, &
-                                          s_delt_delp_V, s_delt_delp_B, &
-                                          use_del_tp_B
+                                          hs_B, h_theta_B, h_phi_B, use_del_tp_B
 
         integer :: order(3)
         real(dp) :: x_min(3), x_max(3)
         logical :: periodic(3)
         real(dp), allocatable :: y_batch(:, :, :, :)
-        integer :: i_rho, i_theta, i_phi
+
+        if (.not. allocated(delt_delp_V_grid)) then
+            error stop "build_boozer_delt_delp_batch_splines: delt_delp_V_grid not allocated"
+        end if
 
         if (delt_delp_V_batch_spline_ready) then
             call destroy_batch_splines_3d(delt_delp_V_batch_spline)
             delt_delp_V_batch_spline_ready = .false.
         end if
-        if (allocated(delt_delp_V_grid)) deallocate (delt_delp_V_grid)
 
         order = [ns_s_B, ns_tp_B, ns_tp_B]
         if (any(order < 3) .or. any(order > 5)) then
@@ -1060,43 +1013,27 @@ contains
 
         periodic = [.false., .true., .true.]
 
-        allocate (delt_delp_V_grid(ns_B, n_theta_B, n_phi_B))
+        ! Build spline directly from 4D grid (already populated in compute_boozer_data)
         allocate (y_batch(ns_B, n_theta_B, n_phi_B, 2))
-
-        do i_phi = 1, n_phi_B
-            do i_theta = 1, n_theta_B
-                do i_rho = 1, ns_B
-                    y_batch(i_rho, i_theta, i_phi, 1) = &
-                        s_delt_delp_V(1, 1, 1, 1, i_rho, i_theta, i_phi)
-                    y_batch(i_rho, i_theta, i_phi, 2) = &
-                        s_delt_delp_V(2, 1, 1, 1, i_rho, i_theta, i_phi)
-                end do
-            end do
-        end do
+        y_batch(:, :, :, 1) = delt_delp_V_grid(:, :, :, 1)
+        y_batch(:, :, :, 2) = delt_delp_V_grid(:, :, :, 2)
 
         call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
                                         delt_delp_V_batch_spline)
         delt_delp_V_batch_spline_ready = .true.
 
         if (use_del_tp_B) then
+            if (.not. allocated(delt_delp_B_grid)) then
+                error stop "build_boozer_delt_delp_batch_splines: delt_delp_B_grid not allocated"
+            end if
+
             if (delt_delp_B_batch_spline_ready) then
                 call destroy_batch_splines_3d(delt_delp_B_batch_spline)
                 delt_delp_B_batch_spline_ready = .false.
             end if
-            if (allocated(delt_delp_B_grid)) deallocate (delt_delp_B_grid)
 
-            allocate (delt_delp_B_grid(ns_B, n_theta_B, n_phi_B))
-
-            do i_phi = 1, n_phi_B
-                do i_theta = 1, n_theta_B
-                    do i_rho = 1, ns_B
-                        y_batch(i_rho, i_theta, i_phi, 1) = &
-                            s_delt_delp_B(1, 1, 1, 1, i_rho, i_theta, i_phi)
-                        y_batch(i_rho, i_theta, i_phi, 2) = &
-                            s_delt_delp_B(2, 1, 1, 1, i_rho, i_theta, i_phi)
-                    end do
-                end do
-            end do
+            y_batch(:, :, :, 1) = delt_delp_B_grid(:, :, :, 1)
+            y_batch(:, :, :, 2) = delt_delp_B_grid(:, :, :, 2)
 
             call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
                                             delt_delp_B_batch_spline)
