@@ -97,8 +97,6 @@ contains
 
     end subroutine get_boozer_coordinates_impl
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
     subroutine splint_boozer_coord(r, vartheta_B, varphi_B, &
                                    A_theta, A_phi, dA_theta_dr, dA_phi_dr, &
                                    d2A_phi_dr2, d3A_phi_dr3, &
@@ -134,7 +132,7 @@ contains
 
 !$omp atomic
         icounter = icounter + 1
-        if (r .le. 0.d0) then
+        if (r .le. 0.0_dp) then
             rnegflag = .true.
             r = abs(r)
         end if
@@ -159,10 +157,7 @@ contains
             d3A_phi_dr3 = 0.0_dp
         end if
 
-!--------------------------------
-! Interpolation of mod-B (and B_r if use_B_r):
-!--------------------------------
-
+        ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r)
         theta_wrapped = modulo(vartheta_B, twopi)
         phi_wrapped = modulo(varphi_B, twopi/dble(nper))
@@ -241,25 +236,20 @@ contains
             dB_r(2) = dqua_dt*drhods
             dB_r(3) = dqua_dp*drhods
 
-            d2B_r(1) = d2qua_dr2*drhods - 2.d0*dqua_dr*d2rhods2m + &
-                       qua*drhods*(3.d0/4.d0)/r**2
+            d2B_r(1) = d2qua_dr2*drhods - 2.0_dp*dqua_dr*d2rhods2m + &
+                       qua*drhods*(3.0_dp/4.0_dp)/r**2
             d2B_r(2) = d2qua_drdt*drhods - dqua_dt*d2rhods2m
             d2B_r(3) = d2qua_drdp*drhods - dqua_dp*d2rhods2m
             d2B_r(4) = d2qua_dt2*drhods
             d2B_r(5) = d2qua_dtdp*drhods
             d2B_r(6) = d2qua_dp2*drhods
         else
-            B_r = 0.d0
-            dB_r = 0.d0
-            d2B_r = 0.d0
+            B_r = 0.0_dp
+            dB_r = 0.0_dp
+            d2B_r = 0.0_dp
         end if
 
-!--------------------------------
-! End Interpolation of mod-B and B_r
-!--------------------------------
-! Interpolation of B_\vartheta and B_\varphi (flux functions, batch spline 1D):
-!--------------------------------
-
+        ! Interpolation of B_\vartheta and B_\varphi (flux functions)
         if (.not. bcovar_tp_batch_spline_ready) then
             error stop "splint_boozer_coord: Bcovar_tp batch spline not initialized"
         end if
@@ -278,9 +268,6 @@ contains
         dB_vartheta_B = dB_vartheta_B*drhods
         dB_varphi_B = dB_varphi_B*drhods
 
-!--------------------------------
-! End interpolation of B_\vartheta and B_\varphi
-!--------------------------------
     end subroutine splint_boozer_coord
 
     subroutine evaluate_batch_splines_1d_der3_single(spl, x, d3y)
@@ -318,36 +305,30 @@ contains
         end if
     end subroutine evaluate_batch_splines_1d_der3_single
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
+    !> Computes delta_vartheta = vartheta_B - theta_V and delta_varphi = varphi_B - varphi_V
+    !> and their first derivatives over angles.
+    !> isw=0: given as functions of VMEC coordinates (r, vartheta, varphi)
+    !> isw=1: given as functions of Boozer coordinates (r, vartheta, varphi)
     subroutine delthe_delphi_BV(isw, r, vartheta, varphi, deltheta_BV, delphi_BV, &
                                 ddeltheta_BV, ddelphi_BV)
-
-! Computes $\Delta \vartheta = \vartheta_B - \theta_V$ and
-! $\Delta \varphi = \varphi_B - \varphi_V$
-! and their first derivatives over angles for two cases:
-! isw=0 - if they are given as functions of VMEC coordinates (r,vartheta,varphi)
-! isw=1 - if they are given as functions of Boozer coordinates (r,vartheta,varphi)
-
         use boozer_coordinates_mod, only: use_del_tp_B
         use chamb_mod, only: rnegflag
 
-        implicit none
-
         integer, intent(in) :: isw
-        real(dp), intent(inout) :: r
-        real(dp), intent(in) :: vartheta, varphi
+        real(dp), intent(in) :: r, vartheta, varphi
         real(dp), intent(out) :: deltheta_BV, delphi_BV
         real(dp), dimension(2), intent(out) :: ddeltheta_BV, ddelphi_BV
 
         real(dp) :: rho_tor, x_eval(3), y_eval(2), dy_eval(3, 2)
+        real(dp) :: r_local
 
-        if (r .le. 0.0_dp) then
+        r_local = r
+        if (r_local <= 0.0_dp) then
             rnegflag = .true.
-            r = abs(r)
+            r_local = abs(r_local)
         end if
 
-        rho_tor = sqrt(r)
+        rho_tor = sqrt(r_local)
         x_eval(1) = rho_tor
         x_eval(2) = vartheta
         x_eval(3) = varphi
@@ -384,18 +365,12 @@ contains
 
     end subroutine delthe_delphi_BV
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
+    !> Convert VMEC coordinates (r, theta, varphi) to Boozer coordinates (vartheta_B, varphi_B)
     subroutine vmec_to_boozer(r, theta, varphi, vartheta_B, varphi_B)
-
-! Input : r,theta,varphi      - VMEC coordinates
-! Output: vartheta_B,varphi_B - Boozer coordinates
-
         use new_vmec_stuff_mod, only: nper
 
-        implicit none
-
-        real(dp) :: r, theta, varphi, vartheta_B, varphi_B
+        real(dp), intent(in) :: r, theta, varphi
+        real(dp), intent(out) :: vartheta_B, varphi_B
         real(dp) :: deltheta_BV, delphi_BV
         real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
 
@@ -407,22 +382,17 @@ contains
 
     end subroutine vmec_to_boozer
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
+    !> Convert Boozer coordinates (r, vartheta_B, varphi_B) to VMEC coordinates (theta, varphi)
     subroutine boozer_to_vmec(r, vartheta_B, varphi_B, theta, varphi)
-
-! Input : r,vartheta_B,varphi_B - Boozer coordinates
-! Output: theta,varphi          - VMEC coordinates
-
         use boozer_coordinates_mod, only: use_del_tp_B
 
-        implicit none
+        real(dp), intent(in) :: r, vartheta_B, varphi_B
+        real(dp), intent(out) :: theta, varphi
 
-        real(dp), parameter :: epserr = 1.d-14
+        real(dp), parameter :: epserr = 1.0e-14_dp
         integer, parameter :: niter = 100
 
         integer :: iter
-        real(dp) :: r, theta, varphi, vartheta_B, varphi_B
         real(dp) :: deltheta_BV, delphi_BV
         real(dp) :: f1, f2, f11, f12, f21, f22, delthe, delphi, det
         real(dp), dimension(2) :: ddeltheta_BV, ddelphi_BV
@@ -448,10 +418,10 @@ contains
 
             f1 = theta + deltheta_BV - vartheta_B
             f2 = varphi + delphi_BV - varphi_B
-            f11 = 1.d0 + ddeltheta_BV(1)
+            f11 = 1.0_dp + ddeltheta_BV(1)
             f12 = ddeltheta_BV(2)
             f21 = ddelphi_BV(1)
-            f22 = 1.d0 + ddelphi_BV(2)
+            f22 = 1.0_dp + ddelphi_BV(2)
 
             det = f11*f22 - f12*f21
             delthe = (f2*f12 - f1*f22)/det
@@ -484,7 +454,7 @@ contains
 
         implicit none
 
-        real(dp), parameter :: s_min = 1.d-6, rho_min = sqrt(s_min)
+        real(dp), parameter :: s_min = 1.0e-6_dp, rho_min = sqrt(s_min)
 
         integer :: i, i_rho, i_theta, i_phi, npoilag, nder, nshift
         integer :: ibeg, iend, nqua
@@ -522,7 +492,7 @@ contains
             print *, 'B_r is not computed'
         end if
 
-        G00 = 0.d0
+        G00 = 0.0_dp
 
         allocate (rho_tor(ns_B))
         allocate (aiota_arr(1))
@@ -649,7 +619,7 @@ contains
                     bmod_Vg(i_theta, i_phi) = &
                         sqrt(Bctrvr_vartheta*Bcovar_vartheta &
                              + Bctrvr_varphi*Bcovar_varphi)
-                    Bcovar_theta_V(i_theta, i_phi) = Bcovar_vartheta*(1.d0 + dl_dt)
+                    Bcovar_theta_V(i_theta, i_phi) = Bcovar_vartheta*(1.0_dp + dl_dt)
                     Bcovar_varphi_V(i_theta, i_phi) = &
                         Bcovar_varphi + Bcovar_vartheta*dl_dp
                     perqua_2D(4, i_theta, i_phi) = Bcovar_r
@@ -664,14 +634,14 @@ contains
             s_Bcovar_tp_B(1, 1, i_rho) = Bcovar_vartheta_B
             s_Bcovar_tp_B(2, 1, i_rho) = Bcovar_varphi_B
 
-            denomjac = 1.d0/(aiota*Bcovar_vartheta_B + Bcovar_varphi_B)
+            denomjac = 1.0_dp/(aiota*Bcovar_vartheta_B + Bcovar_varphi_B)
             Gbeg = G00 + Bcovar_vartheta_B*denomjac*alam_2D(1, 1)
 
             splcoe_t(0, :) = Bcovar_theta_V(:, 1)
 
             call spl_per(ns_tp_B, n_theta_B, h_theta_B, splcoe_t)
 
-            delphi_BV_Vg(1, 1) = 0.d0
+            delphi_BV_Vg(1, 1) = 0.0_dp
             do i_theta = 1, n_theta_B - 1
                 delphi_BV_Vg(i_theta + 1, 1) = &
                     delphi_BV_Vg(i_theta, 1) &
@@ -811,7 +781,7 @@ contains
 ! We spline covariant component $B_\rho$ instead of $B_s$:
                 do i_phi = 1, n_phi_B
                     br_grid(i_rho, :, i_phi) = &
-                        2.d0*rho_tor(i_rho) &
+                        2.0_dp*rho_tor(i_rho) &
                         *Bcovar_symfl(1, i_rho, :, i_phi) &
                         - matmul(coef(1, :)*aiota_arr(ibeg:iend), &
                                  Gfunc(ibeg:iend, :, i_phi)) &
