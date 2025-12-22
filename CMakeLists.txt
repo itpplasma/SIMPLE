@@ -54,6 +54,7 @@ option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
+option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # NVHPC/nvfortran: disable all Python integration/tools by default.
@@ -67,6 +68,20 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set(SIMPLE_ENABLE_PYTHON_TOOLS OFF CACHE BOOL
         "Enable Python helpers (tests/data generation)" FORCE)
     add_compile_definitions(SIMPLE_NVHPC)
+
+    if(SIMPLE_ENABLE_OPENACC)
+        message(STATUS "OpenACC enabled for NVHPC compiler")
+        add_compile_options(
+            $<$<COMPILE_LANGUAGE:Fortran>:-acc>
+            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative>
+            $<$<COMPILE_LANGUAGE:C>:-acc>
+            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative>
+        )
+        add_link_options(
+            -acc
+            -gpu=ccnative
+        )
+    endif()
 endif()
 
 # Conditionally fetch GVEC if enabled

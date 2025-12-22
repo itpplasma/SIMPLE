@@ -12,8 +12,10 @@ NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0
 NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11
 NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
 NVHPC_BUILD_DIR := build_nvfortran
+NVHPC_ACC_BUILD_DIR := build_nvfortran_acc
 
 .PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
+.PHONY: nvfortran-acc nvfortran-acc-test nvfortran-acc-test-nopy nvfortran-acc-configure nvfortran-acc-clean
 all: build
 
 $(BUILD_NINJA):
@@ -131,3 +133,33 @@ nvfortran-test: nvfortran
 
 nvfortran-clean:
 	rm -rf $(NVHPC_BUILD_DIR)
+
+nvfortran-acc-configure:
+	NVHPC_CUDA_HOME=/opt/cuda \
+	cmake -S . -B$(NVHPC_ACC_BUILD_DIR) -GNinja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_Fortran_COMPILER=nvfortran \
+		-DCMAKE_C_COMPILER=nvc \
+		-DMPI_HOME=$(NVHPC_HPCX) \
+		-DMPI_C_COMPILER=$(NVHPC_HPCX)/bin/mpicc \
+		-DMPI_Fortran_COMPILER=$(NVHPC_HPCX)/bin/mpifort \
+		-DSIMPLE_DETERMINISTIC_FP=ON \
+		-DSIMPLE_ENABLE_OPENACC=ON \
+		-DENABLE_PYTHON_INTERFACE=OFF \
+		-DSIMPLE_ENABLE_PYTHON_TOOLS=OFF \
+		-DCMAKE_COLOR_DIAGNOSTICS=ON \
+		$(FLAGS)
+
+nvfortran-acc: nvfortran-acc-configure
+	NVHPC_CUDA_HOME=/opt/cuda cmake --build $(NVHPC_ACC_BUILD_DIR) --config $(CONFIG)
+
+nvfortran-acc-test-nopy: nvfortran-acc
+	cd $(NVHPC_ACC_BUILD_DIR) && ACC_DEVICE_TYPE=NVIDIA ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 \
+		ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST)) -LE "python|regression"
+
+nvfortran-acc-test: nvfortran-acc
+	cd $(NVHPC_ACC_BUILD_DIR) && ACC_DEVICE_TYPE=NVIDIA ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 \
+		ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST)) -LE "regression"
+
+nvfortran-acc-clean:
+	rm -rf $(NVHPC_ACC_BUILD_DIR)
