@@ -16,10 +16,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>)
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-traceback>)
-    # Allow multiple definitions for nvfortran type descriptor symbols
-    # nvfortran generates duplicate type descriptors when modules are used
-    # transitively in both libraries and executables
-    add_link_options(-Wl,--allow-multiple-definition)
 endif()
 
 # Disable executable stack for security (trampolines/closures create execstack)
