@@ -41,7 +41,23 @@ module coordinate_scaling
         procedure :: inverse => identity_inverse
     end type identity_scaling_t
 
-contains
+    contains
+    
+        subroutine coordinate_scaling_clone(source, dest)
+            class(coordinate_scaling_t), intent(in) :: source
+            class(coordinate_scaling_t), allocatable, intent(out) :: dest
+    
+            select type (source)
+            type is (sqrt_s_scaling_t)
+                allocate (sqrt_s_scaling_t :: dest)
+                dest = source
+            type is (identity_scaling_t)
+                allocate (identity_scaling_t :: dest)
+                dest = source
+            class default
+                error stop 'coordinate_scaling_clone: Unsupported scaling type'
+            end select
+        end subroutine coordinate_scaling_clone
 
     pure subroutine sqrt_s_transform(self, x_in, x_out, jacobian)
         !> Transform (s, theta, phi) -> (r=sqrt(s), theta, phi).

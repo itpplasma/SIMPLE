@@ -50,6 +50,14 @@ option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 
+# NVHPC/nvfortran: disable Python interface to avoid toolchain compatibility issues
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    if(ENABLE_PYTHON_INTERFACE)
+        message(STATUS "Python interface disabled for NVHPC compiler")
+    endif()
+    set(ENABLE_PYTHON_INTERFACE OFF CACHE BOOL "Enables the Python-Wrapper." FORCE)
+endif()
+
 # Conditionally fetch GVEC if enabled
 if(ENABLE_GVEC)
     message(STATUS "GVEC support enabled - fetching GVEC library")

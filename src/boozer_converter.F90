@@ -7,7 +7,7 @@ module boozer_sub
                            evaluate_batch_splines_3d_der, &
                            evaluate_batch_splines_3d_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
-    use field, only: magnetic_field_t
+	    use field, only: magnetic_field_t, field_clone
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
@@ -23,9 +23,9 @@ module boozer_sub
     ! Constants
     real(dp), parameter :: TWOPI = 2.0_dp*3.14159265358979_dp
 
-    ! Field storage for nested subroutine calls
-    class(magnetic_field_t), allocatable :: current_field
-!$omp threadprivate(current_field)
+	    ! Field storage for nested subroutine calls
+	    class(magnetic_field_t), allocatable :: current_field
+	!$omp threadprivate(current_field)
 
     ! Batch spline data for Bmod and B_r interpolation
     type(BatchSplineData3D), save :: bmod_br_batch_spline
@@ -54,19 +54,18 @@ module boozer_sub
 contains
 
     !> Initialize Boozer coordinates using given magnetic field
-    subroutine get_boozer_coordinates_with_field(field)
+	    subroutine get_boozer_coordinates_with_field(field)
 
-        class(magnetic_field_t), intent(in) :: field
+	        class(magnetic_field_t), intent(in) :: field
 
-        ! Store field in module variable for use in nested subroutines
-        if (allocated(current_field)) deallocate (current_field)
-        allocate (current_field, source=field)
-        call reset_boozer_batch_splines
+	        ! Store field in module variable for use in nested subroutines
+	        call field_clone(field, current_field)
+	        call reset_boozer_batch_splines
 
-        ! Call the actual implementation
-        call get_boozer_coordinates_impl
+	        ! Call the actual implementation
+	        call get_boozer_coordinates_impl
 
-    end subroutine get_boozer_coordinates_with_field
+	    end subroutine get_boozer_coordinates_with_field
 
     !> Initialize Boozer coordinates using VMEC field (backward compatibility)
     subroutine get_boozer_coordinates
@@ -543,27 +542,27 @@ contains
                 do i_phi = 1, n_phi_B
                     varphi = real(i_phi - 1, dp)*h_phi_B
 
-                    if (allocated(current_field)) then
-                        call vmec_field_evaluate_with_field(current_field, &
-                                                            s, theta, varphi, &
-                                                                A_theta, A_phi, &
-                                                            dA_theta_ds, &
-                                                                dA_phi_ds, aiota, &
-                                                            sqg, alam, dl_ds, &
-                                                                dl_dt, dl_dp, &
-                                                            Bctrvr_vartheta, &
-                                                                Bctrvr_varphi, &
-                                                            Bcovar_r, Bcovar_vartheta, &
-                                                                Bcovar_varphi)
-                    else
-                        call vmec_field_evaluate(s, theta, varphi, &
-                                                 A_theta, A_phi, dA_theta_ds, &
-                                                     dA_phi_ds, aiota, &
-                                                 sqg, alam, dl_ds, dl_dt, dl_dp, &
-                                                 Bctrvr_vartheta, Bctrvr_varphi, &
-                                                 Bcovar_r, Bcovar_vartheta, &
-                                                     Bcovar_varphi)
-                    end if
+	                    if (allocated(current_field)) then
+	                        call vmec_field_evaluate_with_field(current_field, &
+	                                                            s, theta, varphi, &
+	                                                                A_theta, A_phi, &
+	                                                            dA_theta_ds, &
+	                                                                dA_phi_ds, aiota, &
+	                                                            sqg, alam, dl_ds, &
+	                                                                dl_dt, dl_dp, &
+	                                                            Bctrvr_vartheta, &
+	                                                                Bctrvr_varphi, &
+	                                                            Bcovar_r, Bcovar_vartheta, &
+	                                                                Bcovar_varphi)
+	                    else
+	                        call vmec_field_evaluate(s, theta, varphi, &
+	                                                 A_theta, A_phi, dA_theta_ds, &
+	                                                     dA_phi_ds, aiota, &
+	                                                 sqg, alam, dl_ds, dl_dt, dl_dp, &
+	                                                 Bctrvr_vartheta, Bctrvr_varphi, &
+	                                                 Bcovar_r, Bcovar_vartheta, &
+	                                                     Bcovar_varphi)
+	                    end if
 
                     alam_2D(i_theta, i_phi) = alam
                     bmod_Vg(i_theta, i_phi) = &

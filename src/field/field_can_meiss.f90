@@ -36,8 +36,9 @@ use interpolate, only : &
     evaluate_batch_splines_3d_der2
 use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
-use field, only : magnetic_field_t, vmec_field_t
-use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t
+	use field, only : magnetic_field_t, vmec_field_t, field_clone
+	use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
+	                               coordinate_scaling_clone
 
 implicit none
 
@@ -97,16 +98,15 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
     class(coordinate_scaling_t), intent(in), optional :: scaling
 
-    if (allocated(field_noncan)) deallocate(field_noncan)
-    allocate(field_noncan, source=field_noncan_)
+	    call field_clone(field_noncan_, field_noncan)
 
     ! Initialize coordinate scaling (default: sqrt_s_scaling_t)
     if (allocated(coord_scaling)) deallocate(coord_scaling)
-    if (present(scaling)) then
-        allocate(coord_scaling, source=scaling)
-    else
-        allocate(sqrt_s_scaling_t :: coord_scaling)
-    end if
+	    if (present(scaling)) then
+	        call coordinate_scaling_clone(scaling, coord_scaling)
+	    else
+	        allocate(sqrt_s_scaling_t :: coord_scaling)
+	    end if
 
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_

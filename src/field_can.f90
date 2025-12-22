@@ -130,35 +130,49 @@ subroutine init_field_can(field_id, field_noncan)
 
   integer, intent(in) :: field_id
   class(magnetic_field_t), intent(in), optional :: field_noncan
-  class(magnetic_field_t), allocatable :: field_to_use
   type(vmec_field_t) :: vmec_field
 
   if (present(field_noncan)) then
-    allocate(field_to_use, source=field_noncan)
     call field_can_from_id(field_id, field_noncan)
-  else
-    call create_vmec_field(vmec_field)
-    allocate(field_to_use, source=vmec_field)
-    call field_can_from_id(field_id, vmec_field)
+    select case (field_id)
+      case (TEST)
+        continue
+      case (CANFLUX)
+        call get_canonical_coordinates_with_field(field_noncan)
+      case (BOOZER)
+        call get_boozer_coordinates_with_field(field_noncan)
+      case (MEISS)
+        call get_meiss_coordinates
+      case (ALBERT)
+        call get_albert_coordinates
+      case default
+        print *, "init_field_can: Unknown field id ", field_id
+        error stop
+    end select
+    return
   end if
-  
+
   select case (field_id)
     case (TEST)
-      call field_can_from_id(field_id, field_to_use)
+      call field_can_from_id(field_id)
     case (CANFLUX)
-      call get_canonical_coordinates_with_field(field_to_use)
+      call field_can_from_id(field_id)
+      call get_canonical_coordinates
     case (BOOZER)
-      call get_boozer_coordinates_with_field(field_to_use)
+      call field_can_from_id(field_id)
+      call get_boozer_coordinates
     case (MEISS)
+      call create_vmec_field(vmec_field)
+      call field_can_from_id(field_id, vmec_field)
       call get_meiss_coordinates
     case (ALBERT)
+      call create_vmec_field(vmec_field)
+      call field_can_from_id(field_id, vmec_field)
       call get_albert_coordinates
     case default
       print *, "init_field_can: Unknown field id ", field_id
       error stop
   end select
-  
-  deallocate(field_to_use)
 end subroutine init_field_can
 
 

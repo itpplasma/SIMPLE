@@ -11,7 +11,7 @@ NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11
 NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
 NVHPC_BUILD_DIR := build_nvfortran
 
-.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-configure nvfortran-clean
+.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-configure nvfortran-clean
 all: build
 
 $(BUILD_NINJA):
@@ -33,6 +33,10 @@ build: configure
 # Run all tests except regression tests (default)
 test: build
 	$(CTEST_CMD) -LE "regression"
+
+# Run all non-Python tests (exclude python + regression)
+test-nopy: build
+	$(CTEST_CMD) -LE "python|regression"
 
 # Run only fast tests (exclude slow and regression tests)
 test-fast: build

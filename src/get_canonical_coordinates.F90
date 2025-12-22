@@ -19,7 +19,7 @@ module get_can_sub
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use spl_three_to_five_sub
     use stencil_utils
-    use field, only: magnetic_field_t, vmec_field_t, create_vmec_field
+    use field, only: magnetic_field_t, vmec_field_t, create_vmec_field, field_clone
     use field_newton, only: newton_theta_from_canonical
     use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
                            construct_batch_splines_1d, construct_batch_splines_3d, &
@@ -66,8 +66,7 @@ subroutine get_canonical_coordinates_with_field(field)
     class(magnetic_field_t), intent(in) :: field
 
     ! Store field in module variable for use in nested subroutines
-    if (allocated(current_field)) deallocate(current_field)
-    allocate(current_field, source=field)
+    call field_clone(field, current_field)
 
     call reset_canflux_batch_splines
 

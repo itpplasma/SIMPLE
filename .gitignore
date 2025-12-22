@@ -61,3 +61,4 @@ thirdparty/pyplot_module.F90
 *.html
 .claude
 docs/_build/
+build*/
