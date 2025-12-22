@@ -12,20 +12,20 @@ program test_scaling_abstraction
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss, &
         integ_to_ref_meiss, ref_to_integ_meiss, twopi
     use simple, only: init_vmec
-    use field, only: vmec_field_t
+    use field, only: vmec_field_t, create_vmec_field
 
     implicit none
 
     integer :: n_failed
     real(dp) :: fper
-    class(vmec_field_t), allocatable :: magfie
+    type(vmec_field_t) :: magfie
 
     n_failed = 0
 
     print *, 'Initializing VMEC...'
     call init_vmec('wout.nc', 5, 5, 5, fper)
 
-    magfie = vmec_field_t()
+    call create_vmec_field(magfie)
 
     print *, ''
     print *, '=== Testing default sqrt_s_scaling_t ==='

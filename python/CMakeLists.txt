@@ -134,14 +134,33 @@ set(F2PY_MODULE_C "${F2PY_MODULE_NAME}module.c")
 set(GENERATED_MODULE_FILE "${F2PY_MODULE_NAME}.${Python_SOABI}")
 set(F2PY_WRAPPERS "${CMAKE_CURRENT_BINARY_DIR}/${F2PY_MODULE_C}")
 
+set(SIMPLE_F90PP_DEFINES)
+if(ENABLE_GVEC)
+    list(APPEND SIMPLE_F90PP_DEFINES -DGVEC_AVAILABLE)
+endif()
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    list(APPEND SIMPLE_F90PP_DEFINES -DSIMPLE_NVHPC)
+endif()
+
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    set(SIMPLE_F90PP_FLAGS -Mpreprocess -E)
+elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    set(SIMPLE_F90PP_FLAGS -E -cpp)
+else()
+    set(SIMPLE_F90PP_FLAGS -E)
+endif()
+
+string(JOIN " " SIMPLE_F90PP_FLAGS_STR ${SIMPLE_F90PP_FLAGS})
+string(JOIN " " SIMPLE_F90PP_DEFINES_STR ${SIMPLE_F90PP_DEFINES})
+
 foreach (file_to_wrap ${FILES_TO_WRAP})
     get_filename_component(basename ${file_to_wrap} NAME_WE)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
-        COMMAND gfortran -E -cpp
-            -o ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
-            ${file_to_wrap}
-    DEPENDS ${file_to_wrap}
-)
+        COMMAND bash -c
+            "${CMAKE_Fortran_COMPILER} ${SIMPLE_F90PP_FLAGS_STR} ${SIMPLE_F90PP_DEFINES_STR} \"${file_to_wrap}\" > \"${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i\""
+        DEPENDS ${file_to_wrap}
+        VERBATIM
+    )
 endforeach()
 
 add_custom_command(OUTPUT ${F90WRAP_OUTPUT}

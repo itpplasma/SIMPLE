@@ -5,13 +5,15 @@ BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
 # Common ctest command with optional verbose and test name filtering
 CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+CTEST_CMD_NOPY = cd $(BUILD_DIR) && SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
 # NVIDIA HPC SDK paths for nvfortran builds
 NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11
 NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
 NVHPC_BUILD_DIR := build_nvfortran
 
-.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-configure nvfortran-clean
+.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
 all: build
 
 $(BUILD_NINJA):
@@ -36,7 +38,7 @@ test: build
 
 # Run all non-Python tests (exclude python + regression)
 test-nopy: build
-	$(CTEST_CMD) -LE "python|regression"
+	$(CTEST_CMD_NOPY) -LE "python|regression"
 
 # Run only fast tests (exclude slow and regression tests)
 test-fast: build
@@ -112,11 +114,20 @@ nvfortran-configure:
 		-DMPI_Fortran_COMPILER=$(NVHPC_HPCX)/bin/mpifort \
 		-DSIMPLE_DETERMINISTIC_FP=ON \
 		-DENABLE_PYTHON_INTERFACE=OFF \
+		-DSIMPLE_ENABLE_PYTHON_TOOLS=OFF \
 		-DCMAKE_COLOR_DIAGNOSTICS=ON \
 		$(FLAGS)
 
 nvfortran: nvfortran-configure
 	NVHPC_CUDA_HOME=/opt/cuda cmake --build $(NVHPC_BUILD_DIR) --config $(CONFIG)
+
+nvfortran-test-nopy: nvfortran
+	$(NVHPC_CTEST_CMD) -LE "python|regression"
+
+# NVHPC test target with optional filtering.
+# Usage: make nvfortran-test [TEST=test_name] [VERBOSE=1]
+nvfortran-test: nvfortran
+	$(NVHPC_CTEST_CMD) -LE "regression"
 
 nvfortran-clean:
 	rm -rf $(NVHPC_BUILD_DIR)

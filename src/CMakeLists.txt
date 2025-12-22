@@ -48,6 +48,7 @@ set(SOURCES
     find_bminmax.f90
     timing.f90
     simple_main.f90
+    simple_entry.f90
 )
 
 # Add diagnostic sources

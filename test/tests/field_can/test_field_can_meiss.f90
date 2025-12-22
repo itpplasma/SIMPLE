@@ -5,7 +5,7 @@ use params, only: read_config
 use simple, only: tracer_t
 use simple_main, only: init_field
 use velo_mod, only: isw_field_type
-use field, only: vmec_field_t
+use field, only: vmec_field_t, create_vmec_field
 use field_can_mod, only: eval_field => evaluate, field_can_t, field_can_init
 use magfie_sub, only: MEISS
 use field_can_meiss, only: init_meiss, init_transformation, &
@@ -17,10 +17,10 @@ implicit none
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
 type(tracer_t) :: norb
-class(vmec_field_t), allocatable :: magfie
+type(vmec_field_t) :: magfie
 
 isw_field_type = MEISS
-magfie = vmec_field_t()
+call create_vmec_field(magfie)
 
 print *, 'init_field'
 call init_field(norb, 'wout.nc', 5, 5, 3, 0)

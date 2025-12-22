@@ -23,17 +23,37 @@ contains
         select type (source)
         type is (vmec_field_t)
             allocate (vmec_field_t :: dest)
-            dest = source
+            select type (dest)
+            type is (vmec_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (vmec)'
+            end select
         type is (coils_field_t)
             allocate (coils_field_t :: dest)
-            dest = source
+            select type (dest)
+            type is (coils_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (coils)'
+            end select
         type is (splined_field_t)
             allocate (splined_field_t :: dest)
-            dest = source
+            select type (dest)
+            type is (splined_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (splined)'
+            end select
 #ifdef GVEC_AVAILABLE
         type is (gvec_field_t)
             allocate (gvec_field_t :: dest)
-            dest = source
+            select type (dest)
+            type is (gvec_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (gvec)'
+            end select
 #endif
         class default
             error stop 'field_clone: Unsupported field type'

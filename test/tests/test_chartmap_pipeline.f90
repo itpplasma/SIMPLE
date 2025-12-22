@@ -410,6 +410,8 @@ contains
 
     subroutine plot_test_A()
         integer :: ierr
+
+        if (.not. python_tools_enabled()) return
         call execute_command_line( &
             'python3 plot_chartmap_pipeline.py A', exitstat=ierr)
         if (ierr /= 0) print *, '  Warning: Python plotting failed'
@@ -417,6 +419,8 @@ contains
 
     subroutine plot_test_B()
         integer :: ierr
+
+        if (.not. python_tools_enabled()) return
         call execute_command_line( &
             'python3 plot_chartmap_pipeline.py B', exitstat=ierr)
         if (ierr /= 0) print *, '  Warning: Python plotting failed'
@@ -424,9 +428,29 @@ contains
 
     subroutine plot_test_C()
         integer :: ierr
+
+        if (.not. python_tools_enabled()) return
         call execute_command_line( &
             'python3 plot_chartmap_pipeline.py C', exitstat=ierr)
         if (ierr /= 0) print *, '  Warning: Python plotting failed'
     end subroutine plot_test_C
+
+    logical function python_tools_enabled()
+        character(len=32) :: env
+        integer :: n, stat
+
+        python_tools_enabled = .true.
+        call get_environment_variable("SIMPLE_ENABLE_PYTHON_TOOLS", env, length=n, status=stat)
+        if (stat == 0) then
+            if (n == 0) then
+                python_tools_enabled = .false.
+            else
+                select case (env(1:1))
+                case ('0', 'f', 'F', 'n', 'N')
+                    python_tools_enabled = .false.
+                end select
+            end if
+        end if
+    end function python_tools_enabled
 
 end program test_chartmap_pipeline

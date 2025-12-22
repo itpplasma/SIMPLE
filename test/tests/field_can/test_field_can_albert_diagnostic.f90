@@ -7,7 +7,7 @@ program test_field_can_albert_diagnostic
     use simple_main, only: init_field
     use magfie_sub, only: ALBERT
     use velo_mod, only: isw_field_type
-    use field, only: vmec_field_t
+    use field, only: vmec_field_t, create_vmec_field
     use field_can_albert, only: init_albert, psi_inner, psi_outer, &
         psi_of_x, Ath_norm, dpsi_dr_positive
     use field_can_meiss, only: spl_field_batch, xmin, xmax, n_r, n_th, n_phi
@@ -17,7 +17,7 @@ program test_field_can_albert_diagnostic
     implicit none
 
     type(tracer_t) :: norb
-    class(vmec_field_t), allocatable :: magfie
+    type(vmec_field_t) :: magfie
     integer :: i_r, i_th, i_phi, n_failed
     real(dp) :: x(3), y_batch(5)
     real(dp) :: Bmod_min, Bmod_max
@@ -35,7 +35,7 @@ program test_field_can_albert_diagnostic
     end if
 
     coord_input = 'wout.nc'
-    magfie = vmec_field_t()
+    call create_vmec_field(magfie)
     call init_field(norb, 'wout.nc', 5, 5, 3, 0)
 
     ! Test 1: Grid dimensions must be positive

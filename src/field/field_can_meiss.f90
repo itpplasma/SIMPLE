@@ -36,9 +36,9 @@ use interpolate, only : &
     evaluate_batch_splines_3d_der2
 use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
-	use field, only : magnetic_field_t, vmec_field_t, field_clone
-	use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
-	                               coordinate_scaling_clone
+    use field, only : magnetic_field_t, vmec_field_t, field_clone
+    use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
+                                   coordinate_scaling_clone
 
 implicit none
 
@@ -97,16 +97,17 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
     class(coordinate_scaling_t), intent(in), optional :: scaling
+    class(coordinate_scaling_t), allocatable :: coord_scaling_new
 
-	    call field_clone(field_noncan_, field_noncan)
+        call field_clone(field_noncan_, field_noncan)
 
     ! Initialize coordinate scaling (default: sqrt_s_scaling_t)
-    if (allocated(coord_scaling)) deallocate(coord_scaling)
-	    if (present(scaling)) then
-	        call coordinate_scaling_clone(scaling, coord_scaling)
-	    else
-	        allocate(sqrt_s_scaling_t :: coord_scaling)
-	    end if
+    if (present(scaling)) then
+        call coordinate_scaling_clone(scaling, coord_scaling_new)
+    else
+        allocate(sqrt_s_scaling_t :: coord_scaling_new)
+    end if
+    call move_alloc(coord_scaling_new, coord_scaling)
 
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
@@ -127,6 +128,9 @@ end subroutine init_meiss
 subroutine cleanup_meiss()
     ! Clean up batch splines to prevent memory leaks
     use interpolate, only: destroy_batch_splines_3d
+    class(magnetic_field_t), allocatable :: field_noncan_old
+    class(coordinate_scaling_t), allocatable :: coord_scaling_old
+    real(dp), allocatable :: lam_phi_old(:, :, :), chi_gauge_old(:, :, :)
     
     if (batch_splines_initialized) then
         call destroy_batch_splines_3d(spl_field_batch)
@@ -139,10 +143,10 @@ subroutine cleanup_meiss()
     end if
     
     ! Clean up allocated arrays
-    if (allocated(lam_phi)) deallocate(lam_phi)
-    if (allocated(chi_gauge)) deallocate(chi_gauge)
-    if (allocated(field_noncan)) deallocate(field_noncan)
-    if (allocated(coord_scaling)) deallocate(coord_scaling)
+    if (allocated(lam_phi)) call move_alloc(lam_phi, lam_phi_old)
+    if (allocated(chi_gauge)) call move_alloc(chi_gauge, chi_gauge_old)
+    if (allocated(field_noncan)) call move_alloc(field_noncan, field_noncan_old)
+    if (allocated(coord_scaling)) call move_alloc(coord_scaling, coord_scaling_old)
 end subroutine cleanup_meiss
 
 
@@ -222,8 +226,11 @@ end subroutine init_transformation
 
 subroutine init_transformation_arrays()
 !> Initialize transformation arrays - can be called separately for diagnostics
-    if (allocated(lam_phi)) deallocate(lam_phi, chi_gauge)
-    allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
+    real(dp), allocatable :: lam_phi_new(:, :, :), chi_gauge_new(:, :, :)
+
+    allocate(lam_phi_new(n_r, n_th, n_phi), chi_gauge_new(n_r, n_th, n_phi))
+    call move_alloc(lam_phi_new, lam_phi)
+    call move_alloc(chi_gauge_new, chi_gauge)
     
     ! Initialize to zero (boundary conditions)
     lam_phi = 0.0_dp
@@ -308,29 +315,31 @@ subroutine integrate(i_r, i_th, i_phi, y)
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
 
-    real(dp), parameter :: relerr=1d-11
-    real(dp), parameter :: hr_threshold=1d-12  ! Threshold for detecting hr ≈ 0
-    real(dp) :: r1, r2, hr_test, hp_test, phi_c, Ar_test, Ap_test
+    real(dp), parameter :: relerr_default = 1d-11
+    integer, parameter :: ndim = 2
+    real(dp) :: r1, r2
     real(dp) :: relaxed_relerr
-    integer :: ndim=2
     type(grid_indices_t) :: context
+#ifdef SIMPLE_NVHPC
+    real(dp), parameter :: hp_threshold = 1d-12
+    real(dp) :: phi_c, Ar_test, Ap_test, hr_test, hp_test
+#endif
 
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
-    
-    ! Check if hr is near zero at the starting point to detect problematic cases
+
+    relaxed_relerr = relerr_default
+
+#ifdef SIMPLE_NVHPC
+    ! NVHPC/nvfortran: avoid ODE step-size underflow near singular points by
+    ! relaxing tolerance when hp is very small at the start of the step.
     phi_c = xmin(3) + h_phi*(i_phi-1)
     call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
-    
-    if (abs(hr_test) < hr_threshold) then
-        ! hr is essentially zero - use relaxed tolerance or analytical treatment
-        print *, "Warning: hr ≈ 0 at grid point (", i_r, i_th, i_phi, "), hr =", hr_test
-        print *, "Using relaxed tolerance for ODE integration"
-        relaxed_relerr = max(1d-6, abs(hr_test) * 1d6)  ! Scale tolerance with hr magnitude
-    else
-        relaxed_relerr = relerr
+    if (abs(hp_test) < hp_threshold) then
+        relaxed_relerr = 1d-8
     end if
-    
+#endif
+
     context = grid_indices_t(i_th, i_phi)
     call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)
 
@@ -346,12 +355,19 @@ subroutine rh_can(r_c, z, dz, i_th, i_phi)
     integer, intent(in) :: i_th, i_phi
     real(dp) :: phi_c
     real(dp) :: Ar, Ap, hr, hp
+    real(dp), parameter :: hp_min = 1d-14
+    real(dp) :: hp_safe
 
     phi_c = xmin(3) + h_phi*(i_phi-1)
     call ah_cov_on_slice(r_c, modulo(phi_c + z(1), twopi), i_th, Ar, Ap, hr, hp)
 
-    dz(1) = -hr/hp
-    dz(2) = Ar + Ap*dz(1)
+    hp_safe = hp
+    if (abs(hp_safe) < hp_min) then
+        hp_safe = sign(hp_min, hp_safe + 0.5d0*hp_min)
+    end if
+
+    dz(1) = -hr / hp_safe
+    dz(2) = Ar + Ap * dz(1)
 end subroutine rh_can
 
 

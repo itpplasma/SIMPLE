@@ -14,7 +14,7 @@ program test_albert_transform_diagnostic
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
-    use field, only: vmec_field_t
+    use field, only: vmec_field_t, create_vmec_field
     use simple, only: init_vmec
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss, &
         spl_field_batch, xmin, xmax, n_r, n_th, n_phi, twopi
@@ -26,11 +26,11 @@ program test_albert_transform_diagnostic
     implicit none
 
     real(dp) :: fper
-    class(vmec_field_t), allocatable :: magfie
+    type(vmec_field_t) :: magfie
 
     print *, 'Initializing VMEC...'
     call init_vmec('wout.nc', 5, 5, 5, fper)
-    magfie = vmec_field_t()
+    call create_vmec_field(magfie)
 
     print *, ''
     print *, 'Initializing Meiss and Albert coordinates (32^3 grid)...'

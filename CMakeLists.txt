@@ -16,6 +16,10 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>)
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-traceback>)
+    # Keep denormals and IEEE division semantics for numerical robustness.
+    # Needed across SIMPLE and Fortran dependencies (e.g., libneo ODE integrators).
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Mnoflushz>)
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Kieee>)
 endif()
 
 # Disable executable stack for security (trampolines/closures create execstack)
@@ -49,13 +53,20 @@ option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
+option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 
-# NVHPC/nvfortran: disable Python interface to avoid toolchain compatibility issues
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    # NVHPC/nvfortran: disable all Python integration/tools by default.
     if(ENABLE_PYTHON_INTERFACE)
         message(STATUS "Python interface disabled for NVHPC compiler")
     endif()
     set(ENABLE_PYTHON_INTERFACE OFF CACHE BOOL "Enables the Python-Wrapper." FORCE)
+    if(SIMPLE_ENABLE_PYTHON_TOOLS)
+        message(STATUS "Python tools disabled for NVHPC compiler")
+    endif()
+    set(SIMPLE_ENABLE_PYTHON_TOOLS OFF CACHE BOOL
+        "Enable Python helpers (tests/data generation)" FORCE)
+    add_compile_definitions(SIMPLE_NVHPC)
 endif()
 
 # Conditionally fetch GVEC if enabled
@@ -106,8 +117,42 @@ endif()
 link_directories(${NETCDFLIB_DIR})
 add_link_options(${NETCDF_FLIBS})
 
-find_package(BLAS REQUIRED)
-find_package(LAPACK REQUIRED)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    # Use NVHPC-provided BLAS/LAPACK to avoid pulling in libgomp via system OpenBLAS.
+    get_filename_component(_nvhpc_bin_dir "${CMAKE_Fortran_COMPILER}" DIRECTORY)
+    get_filename_component(_nvhpc_compilers_dir "${_nvhpc_bin_dir}/.." REALPATH)
+    set(_nvhpc_lib_dir "${_nvhpc_compilers_dir}/lib")
+
+    find_library(NVHPC_BLAS_LIBRARY
+        NAMES blas_lp64
+        PATHS "${_nvhpc_lib_dir}"
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+    find_library(NVHPC_LAPACK_LIBRARY
+        NAMES lapack_lp64
+        PATHS "${_nvhpc_lib_dir}"
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+
+    if(NOT TARGET BLAS::BLAS)
+        add_library(BLAS::BLAS INTERFACE IMPORTED)
+    endif()
+    set_target_properties(BLAS::BLAS PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${NVHPC_BLAS_LIBRARY}"
+    )
+
+    if(NOT TARGET LAPACK::LAPACK)
+        add_library(LAPACK::LAPACK INTERFACE IMPORTED)
+    endif()
+    set_target_properties(LAPACK::LAPACK PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${NVHPC_LAPACK_LIBRARY}"
+    )
+else()
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+endif()
 
 find_or_fetch(libneo)
 
@@ -151,6 +196,10 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set(SIMPLE_COMPILE_OPTIONS
         -fPIC -g
         $<$<COMPILE_LANGUAGE:Fortran>:-Mpreprocess>
+        # Avoid flush-to-zero altering numerics (notably chartmap/Meiss ODE integration).
+        $<$<COMPILE_LANGUAGE:Fortran>:-Mnoflushz>
+        # Use IEEE division semantics for numerical robustness.
+        $<$<COMPILE_LANGUAGE:Fortran>:-Kieee>
         $<$<COMPILE_LANGUAGE:Fortran>:-traceback>
     )
 else()
@@ -380,10 +429,7 @@ if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)
 endif ()
 
-# Testing disabled for NVHPC due to preprocessor macro compatibility issues in test utilities
-if (SIMPLE_TESTING AND NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+if (SIMPLE_TESTING)
 	enable_testing()
     add_subdirectory(test)
-elseif(SIMPLE_TESTING AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    message(STATUS "Testing disabled for NVHPC compiler (preprocessor compatibility issues)")
 endif ()
