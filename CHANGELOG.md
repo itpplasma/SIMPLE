@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 6ae316f 2025-12-22 | Deterministic mode: change RNG seed from 0 to 42 |
 | Y | 7f24b57 2024-12-06 | Change hcov computation order from matmul(B,J)/|B| to matmul(B/|B|,J) - ~1e-12 rounding differences in coils field |
 | N | 1c38cfa 2024-10-16 | Buffered NetCDF orbit output system - replaces fort.9000X files with orbits.nc |
 | N | v1.4.0 (493afe3) 2024-09-05 -> `release/1.4` | Batch spline optimization (2.86x speedup), Meiss-Hazeltine and Albert coordinates |
