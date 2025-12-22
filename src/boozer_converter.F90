@@ -70,9 +70,11 @@ contains
 
     !> Initialize Boozer coordinates using VMEC field (backward compatibility)
     subroutine get_boozer_coordinates
-        use field, only: vmec_field_t
+        use field, only: vmec_field_t, create_vmec_field
 
-        call get_boozer_coordinates_with_field(vmec_field_t())
+        type(vmec_field_t) :: vmec_field
+        call create_vmec_field(vmec_field)
+        call get_boozer_coordinates_with_field(vmec_field)
 
     end subroutine get_boozer_coordinates
 
