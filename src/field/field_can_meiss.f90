@@ -97,17 +97,16 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
     class(coordinate_scaling_t), intent(in), optional :: scaling
-    class(coordinate_scaling_t), allocatable :: coord_scaling_new
 
         call field_clone(field_noncan_, field_noncan)
 
     ! Initialize coordinate scaling (default: sqrt_s_scaling_t)
+    if (allocated(coord_scaling)) deallocate(coord_scaling)
     if (present(scaling)) then
-        call coordinate_scaling_clone(scaling, coord_scaling_new)
+        call coordinate_scaling_clone(scaling, coord_scaling)
     else
-        allocate(sqrt_s_scaling_t :: coord_scaling_new)
+        allocate(sqrt_s_scaling_t :: coord_scaling)
     end if
-    call move_alloc(coord_scaling_new, coord_scaling)
 
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
@@ -128,9 +127,6 @@ end subroutine init_meiss
 subroutine cleanup_meiss()
     ! Clean up batch splines to prevent memory leaks
     use interpolate, only: destroy_batch_splines_3d
-    class(magnetic_field_t), allocatable :: field_noncan_old
-    class(coordinate_scaling_t), allocatable :: coord_scaling_old
-    real(dp), allocatable :: lam_phi_old(:, :, :), chi_gauge_old(:, :, :)
     
     if (batch_splines_initialized) then
         call destroy_batch_splines_3d(spl_field_batch)
@@ -143,10 +139,10 @@ subroutine cleanup_meiss()
     end if
     
     ! Clean up allocated arrays
-    if (allocated(lam_phi)) call move_alloc(lam_phi, lam_phi_old)
-    if (allocated(chi_gauge)) call move_alloc(chi_gauge, chi_gauge_old)
-    if (allocated(field_noncan)) call move_alloc(field_noncan, field_noncan_old)
-    if (allocated(coord_scaling)) call move_alloc(coord_scaling, coord_scaling_old)
+    if (allocated(lam_phi)) deallocate(lam_phi)
+    if (allocated(chi_gauge)) deallocate(chi_gauge)
+    if (allocated(field_noncan)) deallocate(field_noncan)
+    if (allocated(coord_scaling)) deallocate(coord_scaling)
 end subroutine cleanup_meiss
 
 
@@ -226,11 +222,9 @@ end subroutine init_transformation
 
 subroutine init_transformation_arrays()
 !> Initialize transformation arrays - can be called separately for diagnostics
-    real(dp), allocatable :: lam_phi_new(:, :, :), chi_gauge_new(:, :, :)
-
-    allocate(lam_phi_new(n_r, n_th, n_phi), chi_gauge_new(n_r, n_th, n_phi))
-    call move_alloc(lam_phi_new, lam_phi)
-    call move_alloc(chi_gauge_new, chi_gauge)
+    if (allocated(lam_phi)) deallocate(lam_phi)
+    if (allocated(chi_gauge)) deallocate(chi_gauge)
+    allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
     
     ! Initialize to zero (boundary conditions)
     lam_phi = 0.0_dp
