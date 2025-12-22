@@ -386,7 +386,7 @@ contains
         if (deterministic) then
             call random_seed(size=seedsize)
             if (.not. allocated(seed)) allocate (seed(seedsize))
-            seed = 0
+            seed = 42
             call random_seed(put=seed)
         end if
     end subroutine reset_seed_if_deterministic
