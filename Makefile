@@ -6,7 +6,12 @@ BUILD_NINJA := $(BUILD_DIR)/build.ninja
 # Common ctest command with optional verbose and test name filtering
 CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
-.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean
+# NVIDIA HPC SDK paths for nvfortran builds
+NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11
+NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
+NVHPC_BUILD_DIR := build_nvfortran
+
+.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-configure nvfortran-clean
 all: build
 
 $(BUILD_NINJA):
@@ -89,3 +94,23 @@ fpm:
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+# NVIDIA nvfortran build targets
+# Uses NVIDIA HPC SDK with HPC-X MPI and proper CUDA setup
+nvfortran-configure:
+	NVHPC_CUDA_HOME=/opt/cuda \
+	cmake -S . -B$(NVHPC_BUILD_DIR) -GNinja \
+		-DCMAKE_BUILD_TYPE=$(CONFIG) \
+		-DCMAKE_Fortran_COMPILER=nvfortran \
+		-DCMAKE_C_COMPILER=nvc \
+		-DMPI_HOME=$(NVHPC_HPCX) \
+		-DMPI_C_COMPILER=$(NVHPC_HPCX)/bin/mpicc \
+		-DMPI_Fortran_COMPILER=$(NVHPC_HPCX)/bin/mpifort \
+		-DCMAKE_COLOR_DIAGNOSTICS=ON \
+		$(FLAGS)
+
+nvfortran: nvfortran-configure
+	NVHPC_CUDA_HOME=/opt/cuda cmake --build $(NVHPC_BUILD_DIR) --config $(CONFIG)
+
+nvfortran-clean:
+	rm -rf $(NVHPC_BUILD_DIR)
