@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing output | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| N | v1.4.2 (release/1.4) 2025-12-23 | Use atomic updates for the confined pass/trap counters so each branch increment stays thread-safe without a surrounding critical section. |
 | N | v1.4.1 2025-12-07 | Bug fixes: axis singularity in startmode=5, can_to_vmec in classifier |
 | Y | 5de27cd 2024-08-04 | Change sign of VMEC toroidal flux
 | Y | e25ca7e 2024-08-24 | Remove zzg and rng.f - starting pitch gets double precision random number xi now |
