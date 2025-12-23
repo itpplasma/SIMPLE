@@ -5,6 +5,8 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| N | v1.5.1 (release/1.5) 2025-12-23 | Use atomic updates when incrementing the confined pass/trap counters so each branch stays thread-safe without enclosing the entire branch in an OpenMP critical region. |
+| N | v1.4.2 (release/1.4) 2025-12-23 | Backport the atomic-update behavior for confined counters so release/1.4 matches v1.5.1’s threading sync. |
 | Y | 6ae316f 2025-12-22 | Deterministic mode: change RNG seed from 0 to 42 |
 | Y | 7f24b57 2024-12-06 | Change hcov computation order from matmul(B,J)/|B| to matmul(B/|B|,J) - ~1e-12 rounding differences in coils field |
 | N | 1c38cfa 2024-10-16 | Buffered NetCDF orbit output system - replaces fort.9000X files with orbits.nc |
