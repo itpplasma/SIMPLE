@@ -257,13 +257,13 @@ module simple_main
     integer, intent(in) :: it
     logical, intent(in) :: passing
 
-    !$omp critical
     if (passing) then
-      confpart_pass(it) = confpart_pass(it) + 1.d0
+        !$omp atomic update
+        confpart_pass(it) = confpart_pass(it) + 1.d0
     else
-      confpart_trap(it) = confpart_trap(it) + 1.d0
+        !$omp atomic update
+        confpart_trap(it) = confpart_trap(it) + 1.d0
     end if
-    !$omp end critical
   end subroutine increase_confined_count
 
   subroutine compute_pitch_angle_params(z, passing, trap_par_, perp_inv_)
