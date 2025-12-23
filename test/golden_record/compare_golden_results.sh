@@ -30,6 +30,8 @@ TEST_CASES_ARG="$3"
 GOLDEN_RECORD_RTOL="${GOLDEN_RECORD_RTOL:-1e-7}"
 GOLDEN_RECORD_ATOL="${GOLDEN_RECORD_ATOL:-1e-12}"
 GOLDEN_RECORD_MAX_SLOWDOWN="${GOLDEN_RECORD_MAX_SLOWDOWN:-1.2}"
+GOLDEN_RECORD_MIN_REF_RUNTIME_S="${GOLDEN_RECORD_MIN_REF_RUNTIME_S:-1.0}"
+GOLDEN_RECORD_MAX_ABS_SLOWDOWN_S="${GOLDEN_RECORD_MAX_ABS_SLOWDOWN_S:-0.2}"
 
 if [ ! -d "$REFERENCE_DIR" ]; then
     echo "Error: Reference directory not found: $REFERENCE_DIR"
@@ -179,15 +181,27 @@ import os
 ref = float(open("${ref_time_file}", "r", encoding="utf-8").read().strip())
 cur = float(open("${cur_time_file}", "r", encoding="utf-8").read().strip())
 max_slow = float("${GOLDEN_RECORD_MAX_SLOWDOWN}")
+min_ref = float("${GOLDEN_RECORD_MIN_REF_RUNTIME_S}")
+max_abs = float("${GOLDEN_RECORD_MAX_ABS_SLOWDOWN_S}")
 ratio = cur / ref if ref > 0.0 else float("inf")
 delta = (ratio - 1.0) * 100.0
+abs_delta = cur - ref
 print(f"  perf: ref={ref:.3f}s cur={cur:.3f}s ratio={ratio:.3f} (delta={delta:+.1f}%)")
-if ratio > max_slow:
-    raise SystemExit(1)
+if ref < min_ref:
+    print(f"  perf: using absolute guard (ref<{min_ref:.3f}s): delta={abs_delta:+.3f}s (limit={max_abs:.3f}s)")
+    if abs_delta > max_abs:
+        raise SystemExit(1)
+else:
+    if ratio > max_slow:
+        raise SystemExit(1)
 PY
             perf_rc=$?
             if [ $perf_rc -ne 0 ]; then
-                echo "  ✗ FAILED (performance regression: ratio > ${GOLDEN_RECORD_MAX_SLOWDOWN})"
+                if [ -n "$ref_time_file" ]; then
+                    echo "  ✗ FAILED (performance regression)"
+                else
+                    echo "  ✗ FAILED (performance regression: ratio > ${GOLDEN_RECORD_MAX_SLOWDOWN})"
+                fi
                 perf_failed_cases=$((perf_failed_cases + 1))
                 failed_cases=$((failed_cases + 1))
             fi

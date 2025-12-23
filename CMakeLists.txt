@@ -9,10 +9,18 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
-add_compile_options(
-    -g
-    $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
-)
+add_compile_options(-g)
+
+# Compiler-specific flags
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>)
+elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-traceback>)
+    # Keep denormals and IEEE division semantics for numerical robustness.
+    # Needed across SIMPLE and Fortran dependencies (e.g., libneo ODE integrators).
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Mnoflushz>)
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Kieee>)
+endif()
 
 # Disable executable stack for security (trampolines/closures create execstack)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -45,6 +53,36 @@ option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
+option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
+option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    # NVHPC/nvfortran: disable all Python integration/tools by default.
+    if(ENABLE_PYTHON_INTERFACE)
+        message(STATUS "Python interface disabled for NVHPC compiler")
+    endif()
+    set(ENABLE_PYTHON_INTERFACE OFF CACHE BOOL "Enables the Python-Wrapper." FORCE)
+    if(SIMPLE_ENABLE_PYTHON_TOOLS)
+        message(STATUS "Python tools disabled for NVHPC compiler")
+    endif()
+    set(SIMPLE_ENABLE_PYTHON_TOOLS OFF CACHE BOOL
+        "Enable Python helpers (tests/data generation)" FORCE)
+    add_compile_definitions(SIMPLE_NVHPC)
+
+    if(SIMPLE_ENABLE_OPENACC)
+        message(STATUS "OpenACC enabled for NVHPC compiler")
+        add_compile_options(
+            $<$<COMPILE_LANGUAGE:Fortran>:-acc>
+            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative>
+            $<$<COMPILE_LANGUAGE:C>:-acc>
+            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative>
+        )
+        add_link_options(
+            -acc
+            -gpu=ccnative
+        )
+    endif()
+endif()
 
 # Conditionally fetch GVEC if enabled
 if(ENABLE_GVEC)
@@ -85,23 +123,67 @@ message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
 message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
 string(REPLACE " " ";" NETCDF_FLIBS "${NETCDF_FLIBS}")
 
-include_directories(${NETCDFINCLUDE_DIR})
+# For NVHPC compiler: avoid global include of /usr/include as it contains
+# gfortran-compiled HDF5 modules incompatible with nvfortran
+# NetCDF includes will be added target-specifically later
+if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    include_directories(${NETCDFINCLUDE_DIR})
+endif()
 link_directories(${NETCDFLIB_DIR})
 add_link_options(${NETCDF_FLIBS})
 
-find_package(BLAS REQUIRED)
-find_package(LAPACK REQUIRED)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    # Use NVHPC-provided BLAS/LAPACK to avoid pulling in libgomp via system OpenBLAS.
+    get_filename_component(_nvhpc_bin_dir "${CMAKE_Fortran_COMPILER}" DIRECTORY)
+    get_filename_component(_nvhpc_compilers_dir "${_nvhpc_bin_dir}/.." REALPATH)
+    set(_nvhpc_lib_dir "${_nvhpc_compilers_dir}/lib")
+
+    find_library(NVHPC_BLAS_LIBRARY
+        NAMES blas_lp64
+        PATHS "${_nvhpc_lib_dir}"
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+    find_library(NVHPC_LAPACK_LIBRARY
+        NAMES lapack_lp64
+        PATHS "${_nvhpc_lib_dir}"
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+
+    if(NOT TARGET BLAS::BLAS)
+        add_library(BLAS::BLAS INTERFACE IMPORTED)
+    endif()
+    set_target_properties(BLAS::BLAS PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${NVHPC_BLAS_LIBRARY}"
+    )
+
+    if(NOT TARGET LAPACK::LAPACK)
+        add_library(LAPACK::LAPACK INTERFACE IMPORTED)
+    endif()
+    set_target_properties(LAPACK::LAPACK PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${NVHPC_LAPACK_LIBRARY}"
+    )
+else()
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+endif()
 
 find_or_fetch(libneo)
 
-# Fetch fortplot for diagnostic plotting
-include(FetchContent)
-FetchContent_Declare(
-    fortplot
-    GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-    GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
-)
-FetchContent_MakeAvailable(fortplot)
+# Fetch fortplot for diagnostic plotting (disabled for nvfortran due to compatibility issues)
+if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    include(FetchContent)
+    FetchContent_Declare(
+        fortplot
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
+        GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
+    )
+    FetchContent_MakeAvailable(fortplot)
+    add_compile_definitions(USE_FORTPLOT)
+else()
+    message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")
+endif()
 
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
@@ -113,17 +195,31 @@ include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 # Set SIMPLE-specific compiler flags after GVEC to avoid affecting it
-# GNU Fortran compiler flags (but not applied to subprojects)
-set(SIMPLE_COMPILE_OPTIONS
-    -Wall -Wextra -fPIC -g
-    $<$<COMPILE_LANGUAGE:Fortran>:-Wimplicit-interface>
-    $<$<COMPILE_LANGUAGE:Fortran>:-Wno-external-argument-mismatch>
-    $<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>
-    $<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
-    $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-132>
-    $<$<COMPILE_LANGUAGE:Fortran>:-Werror=line-truncation>
-    $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
-)
+# Compiler-specific flags (not applied to subprojects)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    set(SIMPLE_COMPILE_OPTIONS
+        -Wall -Wextra -fPIC -g
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wimplicit-interface>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wno-external-argument-mismatch>
+        $<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wno-unused-dummy-argument>
+        $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-132>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=line-truncation>
+        $<$<COMPILE_LANGUAGE:Fortran>:-fbacktrace>
+    )
+elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    set(SIMPLE_COMPILE_OPTIONS
+        -fPIC -g
+        $<$<COMPILE_LANGUAGE:Fortran>:-Mpreprocess>
+        # Avoid flush-to-zero altering numerics (notably chartmap/Meiss ODE integration).
+        $<$<COMPILE_LANGUAGE:Fortran>:-Mnoflushz>
+        # Use IEEE division semantics for numerical robustness.
+        $<$<COMPILE_LANGUAGE:Fortran>:-Kieee>
+        $<$<COMPILE_LANGUAGE:Fortran>:-traceback>
+    )
+else()
+    set(SIMPLE_COMPILE_OPTIONS -fPIC -g)
+endif()
 
 if (ENABLE_OPENMP)
 	# add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fopenmp>)
@@ -185,35 +281,60 @@ elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 	add_link_options(-pg)
 elseif (CMAKE_BUILD_TYPE MATCHES "Release|Fast")
 	# Common optimization flags for Release and Fast builds
-	if(SIMPLE_DETERMINISTIC_FP)
-		# Deterministic floating-point: no fast-math, strict contract
-		list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffp-contract=off -funroll-loops)
-		message(STATUS "Deterministic FP mode: disabled fast-math for reproducibility")
-	else()
-		list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
-	endif()
+	if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+		if(SIMPLE_DETERMINISTIC_FP)
+			# Deterministic floating-point: no fast-math, strict contract
+			list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffp-contract=off -funroll-loops)
+			message(STATUS "Deterministic FP mode: disabled fast-math for reproducibility")
+		else()
+			list(APPEND SIMPLE_COMPILE_OPTIONS -O3 -ffast-math -ffp-contract=fast -funroll-loops)
+		endif()
 
-	# Architecture-specific flags
-	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-		# ARM processors (e.g., Apple Silicon): gfortran doesn't support -march=native
-		# Use -mcpu=native instead for ARM
-		list(APPEND SIMPLE_COMPILE_OPTIONS -mcpu=native)
-	elseif (CMAKE_BUILD_TYPE MATCHES Fast)
-		# Fast mode on x86: use native architecture
-		list(APPEND SIMPLE_COMPILE_OPTIONS -march=native -mtune=native)
+		# Architecture-specific flags for GNU
+		if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+			# ARM processors (e.g., Apple Silicon): gfortran doesn't support -march=native
+			# Use -mcpu=native instead for ARM
+			list(APPEND SIMPLE_COMPILE_OPTIONS -mcpu=native)
+		elseif (CMAKE_BUILD_TYPE MATCHES Fast)
+			# Fast mode on x86: use native architecture
+			list(APPEND SIMPLE_COMPILE_OPTIONS -march=native -mtune=native)
+		else()
+			# Release on x86-64: use v2 baseline for broad compatibility
+			list(APPEND SIMPLE_COMPILE_OPTIONS -march=x86-64-v2 -mtune=native)
+		endif()
+	elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+		# NVHPC optimization flags
+		if(SIMPLE_DETERMINISTIC_FP)
+			# Deterministic floating-point: no fast-math, strict IEEE
+			list(APPEND SIMPLE_COMPILE_OPTIONS -O3)
+			message(STATUS "Deterministic FP mode: disabled fast-math for reproducibility (NVHPC)")
+		else()
+			list(APPEND SIMPLE_COMPILE_OPTIONS -fast -O3 -Mfprelaxed)
+		endif()
 	else()
-		# Release on x86-64: use v2 baseline for broad compatibility
-		list(APPEND SIMPLE_COMPILE_OPTIONS -march=x86-64-v2 -mtune=native)
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O3)
 	endif()
 elseif (CMAKE_BUILD_TYPE MATCHES Debug)
-	list(APPEND SIMPLE_COMPILE_OPTIONS -O0 -ggdb -fno-omit-frame-pointer -fno-inline)
-	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-C>)
-	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-ffpe-trap=invalid,zero,overflow>)
-	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fbounds-check>)
-	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
-	list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
+	if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O0 -ggdb -fno-omit-frame-pointer -fno-inline)
+		list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-C>)
+		list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-ffpe-trap=invalid,zero,overflow>)
+		list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fbounds-check>)
+		list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-fcheck=all,no-array-temps>)
+		list(APPEND SIMPLE_COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:Fortran>:-finit-real=nan>)
+	elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O0 -g -Mbounds -Mchkptr)
+	else()
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O0 -g)
+	endif()
 elseif (CMAKE_BUILD_TYPE MATCHES Profile)
-	list(APPEND SIMPLE_COMPILE_OPTIONS -O2 -p)
+	if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O2 -p)
+	elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O2 -Mprof=ccff)
+	else()
+		list(APPEND SIMPLE_COMPILE_OPTIONS -O2)
+	endif()
 else()
     message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
 endif()
@@ -311,11 +432,13 @@ set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_orbit.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Ensure fortplot is built before diagnostics
-add_dependencies(diag_meiss.x fortplot)
-add_dependencies(diag_newton.x fortplot)
-add_dependencies(diag_albert.x fortplot)
-add_dependencies(diag_orbit.x fortplot)
+# Ensure fortplot is built before diagnostics (when available)
+if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    add_dependencies(diag_meiss.x fortplot)
+    add_dependencies(diag_newton.x fortplot)
+    add_dependencies(diag_albert.x fortplot)
+    add_dependencies(diag_orbit.x fortplot)
+endif()
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)

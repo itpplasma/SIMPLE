@@ -422,6 +422,8 @@ contains
         character(len=*), intent(in) :: prefix
         integer :: ierr
 
+        if (.not. python_tools_enabled()) return
+
         call execute_command_line( &
             'python3 plot_field_equivalence.py ' // trim(prefix), exitstat=ierr)
         if (ierr /= 0) then
@@ -429,5 +431,23 @@ contains
             print *, '  Binary data files available for manual plotting'
         end if
     end subroutine generate_plots_python
+
+    logical function python_tools_enabled()
+        character(len=32) :: env
+        integer :: n, stat
+
+        python_tools_enabled = .true.
+        call get_environment_variable("SIMPLE_ENABLE_PYTHON_TOOLS", env, length=n, status=stat)
+        if (stat == 0) then
+            if (n == 0) then
+                python_tools_enabled = .false.
+            else
+                select case (env(1:1))
+                case ('0', 'f', 'F', 'n', 'N')
+                    python_tools_enabled = .false.
+                end select
+            end if
+        end if
+    end function python_tools_enabled
 
 end program test_field_equivalence_chartmap

@@ -16,6 +16,50 @@ module field
 
 contains
 
+    subroutine field_clone(source, dest)
+        class(magnetic_field_t), intent(in) :: source
+        class(magnetic_field_t), allocatable, intent(out) :: dest
+
+        select type (source)
+        type is (vmec_field_t)
+            allocate (vmec_field_t :: dest)
+            select type (dest)
+            type is (vmec_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (vmec)'
+            end select
+        type is (coils_field_t)
+            allocate (coils_field_t :: dest)
+            select type (dest)
+            type is (coils_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (coils)'
+            end select
+        type is (splined_field_t)
+            allocate (splined_field_t :: dest)
+            select type (dest)
+            type is (splined_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (splined)'
+            end select
+#ifdef GVEC_AVAILABLE
+        type is (gvec_field_t)
+            allocate (gvec_field_t :: dest)
+            select type (dest)
+            type is (gvec_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (gvec)'
+            end select
+#endif
+        class default
+            error stop 'field_clone: Unsupported field type'
+        end select
+    end subroutine field_clone
+
     subroutine field_from_file(filename, field)
         !> Create appropriate field type from file.
         !> For coils files, creates a splined_field_t wrapping coils_field_t.
@@ -48,7 +92,7 @@ contains
             select case (file_type)
             case (refcoords_file_vmec_wout)
                 call create_vmec_field(vmec_field)
-                allocate (field, source=vmec_field)
+                call field_clone(vmec_field, field)
             case (refcoords_file_chartmap)
                 print *, &
                     'field_from_file: chartmap NetCDF is a coordinate system file,', &

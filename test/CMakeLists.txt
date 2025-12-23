@@ -1,2 +1,4 @@
 add_subdirectory(tests)
-add_subdirectory(python)
+if(ENABLE_PYTHON_INTERFACE)
+    add_subdirectory(python)
+endif()

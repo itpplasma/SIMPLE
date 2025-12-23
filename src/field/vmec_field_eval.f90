@@ -4,7 +4,6 @@ module vmec_field_eval
 
   use, intrinsic :: iso_fortran_env, only : dp => real64
   use field_base, only : magnetic_field_t
-  use field_vmec, only : vmec_field_t
   use spline_vmec_sub
 
   implicit none
@@ -31,17 +30,14 @@ contains
     real(dp), intent(out) :: Bctrvr_vartheta, Bctrvr_varphi
     real(dp), intent(out) :: Bcovar_r, Bcovar_vartheta, Bcovar_varphi
 
-    ! For VMEC fields, use the existing spline-based evaluation
-    select type (field)
-    type is (vmec_field_t)
-      call vmec_field_evaluate(s, theta, varphi, &
-                              A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
-                              sqg, alam, dl_ds, dl_dt, dl_dp, &
-                              Bctrvr_vartheta, Bctrvr_varphi, &
-                              Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
-    class default
-      error stop 'vmec_field_evaluate_with_field: Unsupported field type'
-    end select
+    associate(dummy => field)
+    end associate
+
+    call vmec_field_evaluate(s, theta, varphi, &
+                             A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
+                             sqg, alam, dl_ds, dl_dt, dl_dp, &
+                             Bctrvr_vartheta, Bctrvr_varphi, &
+                             Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
   end subroutine vmec_field_evaluate_with_field
 
   !> Original VMEC field evaluation using global splines (boozer_converter interface)
@@ -71,12 +67,10 @@ contains
     real(dp), intent(in) :: s
     real(dp), intent(out) :: aiota, daiota_ds
 
-    select type (field)
-    type is (vmec_field_t)
-      call vmec_iota_interpolate(s, aiota, daiota_ds)
-    class default
-      error stop 'vmec_iota_interpolate_with_field: Unsupported field type'
-    end select
+    associate(dummy => field)
+    end associate
+
+    call vmec_iota_interpolate(s, aiota, daiota_ds)
   end subroutine vmec_iota_interpolate_with_field
 
   !> Original VMEC iota interpolation
@@ -93,12 +87,10 @@ contains
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam, dl_dt
 
-    select type (field)
-    type is (vmec_field_t)
-      call vmec_lambda_interpolate(s, theta, varphi, alam, dl_dt)
-    class default
-      error stop 'vmec_lambda_interpolate_with_field: Unsupported field type'
-    end select
+    associate(dummy => field)
+    end associate
+
+    call vmec_lambda_interpolate(s, theta, varphi, alam, dl_dt)
   end subroutine vmec_lambda_interpolate_with_field
 
   !> Original VMEC lambda interpolation
@@ -124,17 +116,15 @@ contains
     real(dp), intent(out) :: dZ_ds, dZ_dt, dZ_dp
     real(dp), intent(out) :: dl_ds, dl_dt, dl_dp
 
-    select type (field)
-    type is (vmec_field_t)
-      call vmec_data_interpolate(s, theta, varphi, &
-                                  A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
-                                  R, Z, alam, &
-                                  dR_ds, dR_dt, dR_dp, &
-                                  dZ_ds, dZ_dt, dZ_dp, &
-                                  dl_ds, dl_dt, dl_dp)
-    class default
-      error stop 'vmec_data_interpolate_with_field: Unsupported field type'
-    end select
+    associate(dummy => field)
+    end associate
+
+    call vmec_data_interpolate(s, theta, varphi, &
+                               A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota, &
+                               R, Z, alam, &
+                               dR_ds, dR_dt, dR_dp, &
+                               dZ_ds, dZ_dt, dZ_dp, &
+                               dl_ds, dl_dt, dl_dp)
   end subroutine vmec_data_interpolate_with_field
 
   !> Original VMEC data interpolation

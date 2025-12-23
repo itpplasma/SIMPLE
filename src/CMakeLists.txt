@@ -48,6 +48,7 @@ set(SOURCES
     find_bminmax.f90
     timing.f90
     simple_main.f90
+    simple_entry.f90
 )
 
 # Add diagnostic sources
@@ -90,6 +91,13 @@ target_link_libraries(simple PUBLIC
     LIBNEO::neo
 )
 
+# For NVHPC: add built deps includes first to avoid gfortran-compiled modules in /usr/include
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    target_include_directories(simple BEFORE PUBLIC
+        ${CMAKE_BINARY_DIR}/deps/include
+    )
+endif()
+
 # Conditionally link GVEC if enabled
 if(ENABLE_GVEC)
     target_include_directories(simple PRIVATE
@@ -101,10 +109,12 @@ if(ENABLE_GVEC)
     target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
 endif()
 
-# Link fortplot
-target_link_libraries(simple PUBLIC
-    fortplot::fortplot
-)
+# Link fortplot (when available)
+if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    target_link_libraries(simple PUBLIC
+        fortplot::fortplot
+    )
+endif()
 
 # Link coverage flags to library when coverage is enabled
 if (ENABLE_COVERAGE AND CMAKE_BUILD_TYPE MATCHES "Debug|Profile")

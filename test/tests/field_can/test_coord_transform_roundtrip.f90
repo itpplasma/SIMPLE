@@ -17,20 +17,20 @@ program test_coord_transform_roundtrip
     use field_can_meiss, only: integ_to_ref_meiss, ref_to_integ_meiss, twopi
     use field_can_albert, only: integ_to_ref_albert, ref_to_integ_albert
     use simple, only: init_vmec
-    use field, only: vmec_field_t
+    use field, only: vmec_field_t, create_vmec_field
 
     implicit none
 
     integer :: n_failed
     real(dp) :: fper
-    class(vmec_field_t), allocatable :: magfie
+    type(vmec_field_t) :: magfie
 
     n_failed = 0
 
     print *, 'Initializing VMEC...'
     call init_vmec('wout.nc', 5, 5, 5, fper)
 
-    magfie = vmec_field_t()
+    call create_vmec_field(magfie)
 
     print *, ''
     print *, '=== Testing Meiss coordinate transforms ==='
