@@ -25,6 +25,7 @@ subroutine get_derivatives_many(npts, ro0, mu, pphi, &
 
     integer :: i
 
+    !$acc parallel loop
     do i = 1, npts
         vpar(i) = (pphi(i) - Aph(i) / ro0) / hph(i)
         dvpar(1, i) = (-dAph_dr(i) / ro0 - dhph(1, i) * vpar(i)) / hph(i)
@@ -44,6 +45,7 @@ subroutine get_derivatives_many(npts, ro0, mu, pphi, &
         dH(3, i) = vpar(i) * dvpar(3, i) + mu(i) * dBmod(3, i)
         dH(4, i) = vpar(i) * dvpar(4, i)
     end do
+    !$acc end parallel loop
 end subroutine get_derivatives_many
 
 
@@ -72,6 +74,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
         Ath, Aph, dAth_dr, dAph_dr, hth, hph, dhth, dhph, Bmod, dBmod, &
         vpar, dvpar, pth, dpth, H, dH)
 
+    !$acc parallel loop
     do i = 1, npts
         d2vpar(1, i) = (-d2Aph_dr2(i) / ro0 - d2hph_dr2(i) * vpar(i)) / hph(i) &
             - 2.0d0 * dhph(1, i) * dvpar(1, i) / hph(i)
@@ -92,6 +95,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
         d2pth(8, i) = dvpar(4, i) * dhth(2, i)
         d2pth(9, i) = dvpar(4, i) * dhth(3, i)
     end do
+    !$acc end parallel loop
 end subroutine get_derivatives2_many
 
 
@@ -129,12 +133,14 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
         Bmod, dBmod, d2Bmod, &
         vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
+    !$acc parallel loop
     do i = 1, npts
         fvec(1, i) = dpth(1, i) * (pth(i) - pthold(i)) &
             + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
         fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_ph(i)) &
             + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
     end do
+    !$acc end parallel loop
 end subroutine f_sympl_euler1_many
 
 
@@ -171,6 +177,7 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
         Bmod, dBmod, d2Bmod, &
         vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
+    !$acc parallel loop
     do i = 1, npts
         fjac(1, 1, i) = d2pth(1, i) * (pth(i) - pthold(i)) + dpth(1, i)**2 &
             + dt * (d2H(2, i) * dpth(1, i) + dH(2, i) * d2pth(1, i) &
@@ -185,6 +192,7 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
             + dt * (d2H(9, i) * dpth(1, i) + dH(3, i) * d2pth(7, i) &
                   - d2H(7, i) * dpth(3, i) - dH(1, i) * d2pth(9, i))
     end do
+    !$acc end parallel loop
 end subroutine jac_sympl_euler1_many
 
 
