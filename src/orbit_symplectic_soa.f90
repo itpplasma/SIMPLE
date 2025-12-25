@@ -25,7 +25,7 @@ subroutine get_derivatives_many(npts, ro0, mu, pphi, &
 
     integer :: i
 
-    !$acc parallel loop
+    !$omp simd
     do i = 1, npts
         vpar(i) = (pphi(i) - Aph(i) / ro0) / hph(i)
         dvpar(1, i) = (-dAph_dr(i) / ro0 - dhph(1, i) * vpar(i)) / hph(i)
@@ -45,7 +45,7 @@ subroutine get_derivatives_many(npts, ro0, mu, pphi, &
         dH(3, i) = vpar(i) * dvpar(3, i) + mu(i) * dBmod(3, i)
         dH(4, i) = vpar(i) * dvpar(4, i)
     end do
-    !$acc end parallel loop
+    !$omp end simd
 end subroutine get_derivatives_many
 
 
@@ -74,7 +74,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
         Ath, Aph, dAth_dr, dAph_dr, hth, hph, dhth, dhph, Bmod, dBmod, &
         vpar, dvpar, pth, dpth, H, dH)
 
-    !$acc parallel loop
+    !$omp simd
     do i = 1, npts
         d2vpar(1, i) = (-d2Aph_dr2(i) / ro0 - d2hph_dr2(i) * vpar(i)) / hph(i) &
             - 2.0d0 * dhph(1, i) * dvpar(1, i) / hph(i)
@@ -95,7 +95,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
         d2pth(8, i) = dvpar(4, i) * dhth(2, i)
         d2pth(9, i) = dvpar(4, i) * dhth(3, i)
     end do
-    !$acc end parallel loop
+    !$omp end simd
 end subroutine get_derivatives2_many
 
 
@@ -133,14 +133,14 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
         Bmod, dBmod, d2Bmod, &
         vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
-    !$acc parallel loop
+    !$omp simd
     do i = 1, npts
         fvec(1, i) = dpth(1, i) * (pth(i) - pthold(i)) &
             + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
         fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_ph(i)) &
             + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
     end do
-    !$acc end parallel loop
+    !$omp end simd
 end subroutine f_sympl_euler1_many
 
 
@@ -177,7 +177,7 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
         Bmod, dBmod, d2Bmod, &
         vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
-    !$acc parallel loop
+    !$omp simd
     do i = 1, npts
         fjac(1, 1, i) = d2pth(1, i) * (pth(i) - pthold(i)) + dpth(1, i)**2 &
             + dt * (d2H(2, i) * dpth(1, i) + dH(2, i) * d2pth(1, i) &
@@ -192,7 +192,7 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
             + dt * (d2H(9, i) * dpth(1, i) + dH(3, i) * d2pth(7, i) &
                   - d2H(7, i) * dpth(3, i) - dH(1, i) * d2pth(9, i))
     end do
-    !$acc end parallel loop
+    !$omp end simd
 end subroutine jac_sympl_euler1_many
 
 
@@ -252,6 +252,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
         xlast_r = x_r
         xlast_pphi = x_pphi
 
+        !$omp simd private(det, ijac11, ijac12, ijac21, ijac22, dx_r, dx_pphi)
         do i = 1, npts
             if (converged(i)) cycle
 
@@ -278,6 +279,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
                 converged(i) = .true.
             end if
         end do
+        !$omp end simd
 
         if (all(converged)) exit
     end do
@@ -331,6 +333,7 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
         call newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged)
 
+        !$omp simd
         do i = 1, npts
             if (escaped(i)) cycle
 
@@ -345,6 +348,7 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
             z_r(i) = x_r(i)
             z_pphi(i) = x_pphi(i)
         end do
+        !$omp end simd
 
         call eval_field_booz_many(npts, z_r, z_th, z_ph, &
             Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
@@ -355,11 +359,13 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
             Ath, Aph, dAth_dr, dAph_dr, hth, hph, dhth, dhph, Bmod, dBmod, &
             vpar, dvpar, pth, dpth, H, dH)
 
+        !$omp simd
         do i = 1, npts
             if (escaped(i)) cycle
             z_th(i) = z_th(i) + dt * dH(1, i) / dpth(1, i)
             z_ph(i) = z_ph(i) + dt * (vpar(i) - dH(1, i) / dpth(1, i) * hth(i)) / hph(i)
         end do
+        !$omp end simd
     end do
 end subroutine orbit_timestep_euler1_soa
 
@@ -409,11 +415,13 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod)
 
+    !$omp simd
     do i = 1, npts
         mu(i) = 0.5d0 * pabs(i)**2 * (1.0d0 - zstart(5, i)**2) / Bmod(i) * 2.0d0
         vpar(i) = pabs(i) * zstart(5, i) * dsqrt(2.0d0)
         z_pphi(i) = vpar(i) * hph(i) + Aph(i) / ro0_norm
     end do
+    !$omp end simd
 
     escaped = .false.
     ierr = 0
@@ -423,11 +431,13 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         call orbit_timestep_euler1_soa(npts, dt, ntau, ro0_norm, mu, &
             atol, rtol, maxit, z_r, z_th, z_ph, z_pphi, escaped, ierr)
 
+        !$omp simd
         do i = 1, npts
             if (escaped(i) .and. times_lost(i) < 1.0d-30) then
                 times_lost(i) = real(it * ntau, dp) * dt_norm
             end if
         end do
+        !$omp end simd
 
         if (all(escaped)) exit
     end do
@@ -437,6 +447,7 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod)
 
+    !$omp simd
     do i = 1, npts
         z_final(1, i) = z_r(i)
         z_final(2, i) = z_th(i)
@@ -445,6 +456,7 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         z_final(4, i) = dsqrt(mu(i) * Bmod(i) + 0.5d0 * vpar(i)**2)
         z_final(5, i) = vpar(i) / (z_final(4, i) * dsqrt(2.0d0))
     end do
+    !$omp end simd
 end subroutine trace_orbit_soa
 
 end module orbit_symplectic_soa
