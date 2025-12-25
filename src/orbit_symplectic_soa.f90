@@ -25,6 +25,8 @@ subroutine get_derivatives_many(npts, ro0, mu, pphi, &
 
     integer :: i
 
+    !$acc kernels present(mu, pphi, Ath, Aph, dAth_dr, dAph_dr, hth, hph, &
+    !$acc&                dhth, dhph, Bmod, dBmod, vpar, dvpar, pth, dpth, H, dH)
     !$omp simd
     do i = 1, npts
         vpar(i) = (pphi(i) - Aph(i) / ro0) / hph(i)
@@ -46,6 +48,7 @@ subroutine get_derivatives_many(npts, ro0, mu, pphi, &
         dH(4, i) = vpar(i) * dvpar(4, i)
     end do
     !$omp end simd
+    !$acc end kernels
 end subroutine get_derivatives_many
 
 
@@ -74,6 +77,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
         Ath, Aph, dAth_dr, dAph_dr, hth, hph, dhth, dhph, Bmod, dBmod, &
         vpar, dvpar, pth, dpth, H, dH)
 
+    !$acc kernels
     !$omp simd
     do i = 1, npts
         d2vpar(1, i) = (-d2Aph_dr2(i) / ro0 - d2hph_dr2(i) * vpar(i)) / hph(i) &
@@ -96,6 +100,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
         d2pth(9, i) = dvpar(4, i) * dhth(3, i)
     end do
     !$omp end simd
+    !$acc end kernels
 end subroutine get_derivatives2_many
 
 
@@ -133,6 +138,7 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
         Bmod, dBmod, d2Bmod, &
         vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
+    !$acc kernels
     !$omp simd
     do i = 1, npts
         fvec(1, i) = dpth(1, i) * (pth(i) - pthold(i)) &
@@ -141,6 +147,7 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
             + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
     end do
     !$omp end simd
+    !$acc end kernels
 end subroutine f_sympl_euler1_many
 
 
@@ -177,6 +184,7 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
         Bmod, dBmod, d2Bmod, &
         vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
+    !$acc kernels
     !$omp simd
     do i = 1, npts
         fjac(1, 1, i) = d2pth(1, i) * (pth(i) - pthold(i)) + dpth(1, i)**2 &
@@ -193,6 +201,7 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
                   - d2H(7, i) * dpth(3, i) - dH(1, i) * d2pth(9, i))
     end do
     !$omp end simd
+    !$acc end kernels
 end subroutine jac_sympl_euler1_many
 
 
@@ -415,6 +424,7 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod)
 
+    !$acc kernels
     !$omp simd
     do i = 1, npts
         mu(i) = 0.5d0 * pabs(i)**2 * (1.0d0 - zstart(5, i)**2) / Bmod(i) * 2.0d0
@@ -422,6 +432,7 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         z_pphi(i) = vpar(i) * hph(i) + Aph(i) / ro0_norm
     end do
     !$omp end simd
+    !$acc end kernels
 
     escaped = .false.
     ierr = 0
@@ -447,6 +458,7 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod)
 
+    !$acc kernels
     !$omp simd
     do i = 1, npts
         z_final(1, i) = z_r(i)
@@ -457,6 +469,127 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         z_final(5, i) = vpar(i) / (z_final(4, i) * dsqrt(2.0d0))
     end do
     !$omp end simd
+    !$acc end kernels
 end subroutine trace_orbit_soa
+
+
+subroutine trace_orbit_soa_omp(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
+        atol, rtol, maxit, z_final, times_lost, ierr)
+    use boozer_sub, only: vmec_to_boozer
+    integer, intent(in) :: npts, ntimstep, ntau, maxit
+    real(dp), intent(in) :: zstart(5, npts)
+    real(dp), intent(in) :: dt_norm, ro0_in, atol, rtol
+    real(dp), intent(out) :: z_final(5, npts)
+    real(dp), intent(out) :: times_lost(npts)
+    integer, intent(out) :: ierr(npts)
+
+    integer :: istart, iend, npts_chunk, thread_id, nthreads
+    integer :: omp_get_thread_num, omp_get_num_threads
+
+    !$omp parallel private(istart, iend, npts_chunk, thread_id) &
+    !$omp& shared(nthreads)
+    thread_id = 0
+    nthreads = 1
+    !$ thread_id = omp_get_thread_num()
+    !$ nthreads = omp_get_num_threads()
+
+    npts_chunk = (npts + nthreads - 1) / nthreads
+    istart = thread_id * npts_chunk + 1
+    iend = min(istart + npts_chunk - 1, npts)
+
+    if (istart <= npts) then
+        call trace_orbit_soa_chunk(iend - istart + 1, &
+            zstart(:, istart:iend), ntimstep, ntau, dt_norm, ro0_in, &
+            atol, rtol, maxit, z_final(:, istart:iend), &
+            times_lost(istart:iend), ierr(istart:iend))
+    end if
+    !$omp end parallel
+end subroutine trace_orbit_soa_omp
+
+
+subroutine trace_orbit_soa_chunk(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
+        atol, rtol, maxit, z_final, times_lost, ierr)
+    use boozer_sub, only: vmec_to_boozer
+    integer, intent(in) :: npts, ntimstep, ntau, maxit
+    real(dp), intent(in) :: zstart(5, npts)
+    real(dp), intent(in) :: dt_norm, ro0_in, atol, rtol
+    real(dp), intent(out) :: z_final(5, npts)
+    real(dp), intent(out) :: times_lost(npts)
+    integer, intent(out) :: ierr(npts)
+
+    real(dp), allocatable :: z_r(:), z_th(:), z_ph(:), z_pphi(:)
+    real(dp), allocatable :: mu(:), pabs(:), vpar(:)
+    real(dp), allocatable :: Ath(:), Aph(:), dAth_dr(:), dAph_dr(:), d2Aph_dr2(:)
+    real(dp), allocatable :: hth(:), hph(:), dhth(:,:), dhph(:,:)
+    real(dp), allocatable :: d2hth_dr2(:), d2hph_dr2(:)
+    real(dp), allocatable :: Bmod(:), dBmod(:,:), d2Bmod(:,:)
+    logical, allocatable :: escaped(:)
+    real(dp) :: ro0_norm, dt, theta_B, phi_B
+    integer :: i, it
+
+    if (npts <= 0) return
+
+    allocate(z_r(npts), z_th(npts), z_ph(npts), z_pphi(npts))
+    allocate(mu(npts), pabs(npts), vpar(npts))
+    allocate(Ath(npts), Aph(npts), dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts))
+    allocate(hth(npts), hph(npts), dhth(3, npts), dhph(3, npts))
+    allocate(d2hth_dr2(npts), d2hph_dr2(npts))
+    allocate(Bmod(npts), dBmod(3, npts), d2Bmod(6, npts))
+    allocate(escaped(npts))
+
+    ro0_norm = ro0_in / dsqrt(2.0d0)
+    dt = dt_norm / dsqrt(2.0d0)
+
+    do i = 1, npts
+        z_r(i) = zstart(1, i)
+        call vmec_to_boozer(zstart(1, i), mod(zstart(2, i), 6.283185307179586d0), &
+            mod(zstart(3, i), 6.283185307179586d0), theta_B, phi_B)
+        z_th(i) = mod(theta_B, 6.283185307179586d0)
+        z_ph(i) = mod(phi_B, 6.283185307179586d0)
+        pabs(i) = zstart(4, i)
+    end do
+
+    call eval_field_booz_many(npts, z_r, z_th, z_ph, &
+        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
+        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
+        Bmod, dBmod, d2Bmod)
+
+    do i = 1, npts
+        mu(i) = 0.5d0 * pabs(i)**2 * (1.0d0 - zstart(5, i)**2) / Bmod(i) * 2.0d0
+        vpar(i) = pabs(i) * zstart(5, i) * dsqrt(2.0d0)
+        z_pphi(i) = vpar(i) * hph(i) + Aph(i) / ro0_norm
+    end do
+
+    escaped = .false.
+    ierr = 0
+    times_lost = 0.0d0
+
+    do it = 1, ntimstep
+        call orbit_timestep_euler1_soa(npts, dt, ntau, ro0_norm, mu, &
+            atol, rtol, maxit, z_r, z_th, z_ph, z_pphi, escaped, ierr)
+
+        do i = 1, npts
+            if (escaped(i) .and. times_lost(i) < 1.0d-30) then
+                times_lost(i) = real(it * ntau, dp) * dt_norm
+            end if
+        end do
+
+        if (all(escaped)) exit
+    end do
+
+    call eval_field_booz_many(npts, z_r, z_th, z_ph, &
+        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
+        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
+        Bmod, dBmod, d2Bmod)
+
+    do i = 1, npts
+        z_final(1, i) = z_r(i)
+        z_final(2, i) = z_th(i)
+        z_final(3, i) = z_ph(i)
+        vpar(i) = (z_pphi(i) - Aph(i) / ro0_norm) / hph(i)
+        z_final(4, i) = dsqrt(mu(i) * Bmod(i) + 0.5d0 * vpar(i)**2)
+        z_final(5, i) = vpar(i) / (z_final(4, i) * dsqrt(2.0d0))
+    end do
+end subroutine trace_orbit_soa_chunk
 
 end module orbit_symplectic_soa

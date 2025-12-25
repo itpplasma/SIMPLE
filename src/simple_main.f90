@@ -298,7 +298,9 @@ contains
         !> SoA batched orbit tracing using trace_orbit_soa from orbit_symplectic_soa.
         !> This is a drop-in replacement for trace_parallel using batched field evaluation.
         !> Parameter norb is kept for interface consistency but currently unused.
-        use orbit_symplectic_soa, only: trace_orbit_soa
+        !> Uses trace_orbit_soa_omp for CPU threading (particles divided into batches).
+        !> Use trace_orbit_soa directly for GPU with OpenACC.
+        use orbit_symplectic_soa, only: trace_orbit_soa_omp
         use parmot_mod, only: ro0
 
         type(tracer_t), intent(inout) :: norb
@@ -318,13 +320,13 @@ contains
         allocate (soa_times_lost(ntestpart))
         allocate (soa_ierr(ntestpart))
 
-        print *, 'Running SoA batched orbit tracing...'
+        print *, 'Running SoA batched orbit tracing (OpenMP threaded)...'
         print *, '  ntestpart = ', ntestpart
         print *, '  ntimstep = ', ntimstep
         print *, '  ntau = ', ntau
 
-        call trace_orbit_soa(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
-                            atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
+        call trace_orbit_soa_omp(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
+                                atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
 
         do i = 1, ntestpart
             zend(1:3, i) = z_final(1:3, i)
