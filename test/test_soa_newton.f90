@@ -24,8 +24,9 @@ program test_soa_newton
     real(dp), allocatable :: x_r(:), x_pphi(:), x_r_ref(:), x_pphi_ref(:)
     real(dp), allocatable :: xlast(:,:)
     logical, allocatable :: converged(:)
+    real(dp), allocatable :: mu(:)
     real(dp) :: x(2), xlast_single(2)
-    real(dp) :: dt, ro0, mu, atol, rtol_newton
+    real(dp) :: dt, ro0, mu_scalar, atol, rtol_newton
     integer :: maxit
 
     print *, '=========================================='
@@ -47,6 +48,7 @@ program test_soa_newton
     allocate(x_r(npts), x_pphi(npts), x_r_ref(npts), x_pphi_ref(npts))
     allocate(xlast(2, npts))
     allocate(converged(npts))
+    allocate(mu(npts))
 
     do i = 1, npts
         z_r(i) = 0.2d0 + 0.6d0 * real(i-1, dp) / real(npts-1, dp)
@@ -56,7 +58,8 @@ program test_soa_newton
 
     call eval_field(f, z_r(1), z_th(1), z_ph(1), 0)
     ro0 = f%ro0
-    mu = f%mu
+    mu_scalar = f%mu
+    mu = mu_scalar
 
     do i = 1, npts
         call eval_field(f, z_r(i), z_th(i), z_ph(i), 0)
