@@ -21,9 +21,10 @@ program test_soa_timestep
 
     real(dp), allocatable :: z_r(:), z_th(:), z_ph(:), z_pphi(:)
     real(dp), allocatable :: z_r_ref(:), z_th_ref(:), z_ph_ref(:), z_pphi_ref(:)
+    real(dp), allocatable :: mu(:)
     logical, allocatable :: escaped(:)
     integer, allocatable :: ierr(:)
-    real(dp) :: dt, ro0, mu, atol, rtol_newton
+    real(dp) :: dt, ro0, mu_scalar, atol, rtol_newton
     integer :: maxit
 
     print *, '=========================================='
@@ -45,6 +46,7 @@ program test_soa_timestep
     allocate(z_r(npts), z_th(npts), z_ph(npts), z_pphi(npts))
     allocate(z_r_ref(npts), z_th_ref(npts), z_ph_ref(npts), z_pphi_ref(npts))
     allocate(escaped(npts), ierr(npts))
+    allocate(mu(npts))
 
     do i = 1, npts
         z_r(i) = 0.3d0 + 0.4d0 * real(i-1, dp) / real(npts-1, dp)
@@ -54,7 +56,8 @@ program test_soa_timestep
 
     call eval_field(f, z_r(1), z_th(1), z_ph(1), 0)
     ro0 = f%ro0
-    mu = f%mu
+    mu_scalar = f%mu
+    mu = mu_scalar
 
     do i = 1, npts
         call eval_field(f, z_r(i), z_th(i), z_ph(i), 0)

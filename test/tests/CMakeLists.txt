@@ -560,6 +560,17 @@ set_tests_properties(test_soa_timestep PROPERTIES
     TIMEOUT 60
 )
 
+# SoA trace test
+add_executable(test_soa_trace.x ../test_soa_trace.f90)
+target_link_libraries(test_soa_trace.x simple)
+add_test(NAME test_soa_trace
+    COMMAND test_soa_trace.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_soa_trace PROPERTIES
+    LABELS "integration;soa"
+    TIMEOUT 120
+)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
