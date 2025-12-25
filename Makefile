@@ -163,3 +163,30 @@ nvfortran-acc-test: nvfortran-acc
 
 nvfortran-acc-clean:
 	rm -rf $(NVHPC_ACC_BUILD_DIR)
+
+# GCC OpenACC build targets (requires GCC 16+ with nvptx offload support)
+GCC16_ROOT := /temp/AG-plasma/opt/gcc16
+GCC_ACC_BUILD_DIR := build_gcc_acc
+
+.PHONY: gcc-acc gcc-acc-test gcc-acc-configure gcc-acc-clean
+
+gcc-acc-configure:
+	cmake -S . -B$(GCC_ACC_BUILD_DIR) -GNinja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_Fortran_COMPILER=$(GCC16_ROOT)/bin/gfortran \
+		-DCMAKE_C_COMPILER=$(GCC16_ROOT)/bin/gcc \
+		-DSIMPLE_ENABLE_OPENACC=ON \
+		-DSIMPLE_OPENACC_OFFLOAD_TARGET=nvptx \
+		-DENABLE_PYTHON_INTERFACE=OFF \
+		-DCMAKE_COLOR_DIAGNOSTICS=ON \
+		$(FLAGS)
+
+gcc-acc: gcc-acc-configure
+	LD_LIBRARY_PATH=$(GCC16_ROOT)/lib64:$$LD_LIBRARY_PATH cmake --build $(GCC_ACC_BUILD_DIR) --config $(CONFIG)
+
+gcc-acc-test: gcc-acc
+	cd $(GCC_ACC_BUILD_DIR) && LD_LIBRARY_PATH=$(GCC16_ROOT)/lib64:$$LD_LIBRARY_PATH \
+		ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST)) -LE "python|regression"
+
+gcc-acc-clean:
+	rm -rf $(GCC_ACC_BUILD_DIR)
