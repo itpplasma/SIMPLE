@@ -170,8 +170,11 @@ subroutine integ_to_ref_meiss(xinteg, xref)
     real(dp), intent(in) :: xinteg(3)
     real(dp), intent(out) :: xref(3)
     real(dp) :: y_batch(2)  ! lam_phi, chi_gauge
+    real(dp) :: x_spl(3)
 
-    call evaluate_batch_splines_3d(spl_transform_batch, xinteg, y_batch)
+    ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
+    x_spl = [xinteg(3), xinteg(2), xinteg(1)]
+    call evaluate_batch_splines_3d(spl_transform_batch, x_spl, y_batch)
     call coord_scaling%inverse(xinteg, xref)  ! r -> s (integrator -> reference)
     xref(2) = modulo(xinteg(2), twopi)
     xref(3) = modulo(xinteg(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
@@ -186,19 +189,24 @@ subroutine ref_to_integ_meiss(xref, xinteg)
     integer, parameter :: MAX_ITER = 16
 
     real(dp) :: y_batch(2), dy_batch(3, 2), phi_integ_prev
+    real(dp) :: x_spl(3)
     integer :: i
 
     call coord_scaling%transform(xref, xinteg)  ! s -> r (reference -> integrator)
     xinteg(2) = modulo(xref(2), twopi)
     xinteg(3) = modulo(xref(3), twopi)
 
-    do i=1, MAX_ITER
-        call evaluate_batch_splines_3d_der(spl_transform_batch, xinteg, y_batch, dy_batch)
+    do i = 1, MAX_ITER
+        ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
+        x_spl = [xinteg(3), xinteg(2), xinteg(1)]
+        call evaluate_batch_splines_3d_der(spl_transform_batch, x_spl, y_batch, dy_batch)
         phi_integ_prev = xinteg(3)
-        ! y_batch(1) is lam_phi, dy_batch(3,1) is d(lam_phi)/d(phi)
-        xinteg(3) = phi_integ_prev - (phi_integ_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(3,1))
+        ! y_batch(1) is lam_phi
+        ! dy_batch(1, 1) is d(lam_phi)/d(phi) in swapped [phi, th, r] ordering
+        xinteg(3) = phi_integ_prev - (phi_integ_prev + y_batch(1) - xref(3)) &
+                    /(1d0 + dy_batch(1, 1))
         if (abs(xinteg(3) - phi_integ_prev) < TOL) return
-    enddo
+    end do
     print *, 'WARNING: ref_to_integ_meiss did not converge after', MAX_ITER, 'iterations'
 end subroutine ref_to_integ_meiss
 
@@ -367,16 +375,32 @@ end subroutine rh_can
 
 subroutine spline_transformation
     real(dp), dimension(:,:,:,:), allocatable :: y_batch
-    integer :: dims(3)
-    
-    ! Construct batch spline for transformation components (2: lam_phi, chi_gauge)
-    dims = shape(lam_phi)
-    allocate(y_batch(dims(1), dims(2), dims(3), 2))
-    
-    y_batch(:,:,:,1) = lam_phi
-    y_batch(:,:,:,2) = chi_gauge
-    
-    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_transform_batch)
+    real(dp) :: xmin_spl(3), xmax_spl(3)
+    logical :: periodic_spl(3)
+    integer :: i_r, i_th, i_phi
+
+    ! Transpose for cache-optimal layout: (n_r, n_th, n_phi) -> (n_phi, n_th, n_r)
+    ! Physics: particles move fastest in phi, slowest in r
+    ! With this layout, consecutive phi evaluations access contiguous memory
+    allocate(y_batch(n_phi, n_th, n_r, 2))
+
+    do i_phi = 1, n_phi
+        do i_th = 1, n_th
+            do i_r = 1, n_r
+                y_batch(i_phi, i_th, i_r, 1) = lam_phi(i_r, i_th, i_phi)
+                y_batch(i_phi, i_th, i_r, 2) = chi_gauge(i_r, i_th, i_phi)
+            end do
+        end do
+    end do
+
+    ! Swap coordinate bounds and periodic flags: [r, th, phi] -> [phi, th, r]
+    xmin_spl = [xmin(3), xmin(2), xmin(1)]
+    xmax_spl = [xmax(3), xmax(2), xmax(1)]
+    periodic_spl = [periodic(3), periodic(2), periodic(1)]
+
+    call construct_batch_splines_3d(xmin_spl, xmax_spl, y_batch, &
+                                    [order(3), order(2), order(1)], &
+                                    periodic_spl, spl_transform_batch)
     transform_splines_initialized = .true.
 end subroutine spline_transformation
 
@@ -446,29 +470,36 @@ end function is_hr_zero_on_slice
 
 
 subroutine init_canonical_field_components
-    real(dp) :: xcan(3)
+    real(dp) :: xcan(3), x_spl(3)
     real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
     real(dp), dimension(:,:,:,:), allocatable :: y_batch
     real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
-    integer :: i_r, i_th, i_phi, dims(3)
+    real(dp) :: xmin_spl(3), xmax_spl(3)
+    logical :: periodic_spl(3)
+    integer :: i_r, i_th, i_phi
 
-    allocate(Ath(n_r,n_th,n_phi), Aphi(n_r,n_th,n_phi))
-    allocate(hth(n_r,n_th,n_phi), hphi(n_r,n_th,n_phi))
-    allocate(Bmod(n_r,n_th,n_phi))
+    allocate(Ath(n_r, n_th, n_phi), Aphi(n_r, n_th, n_phi))
+    allocate(hth(n_r, n_th, n_phi), hphi(n_r, n_th, n_phi))
+    allocate(Bmod(n_r, n_th, n_phi))
 
-    do i_phi=1,n_phi
-        do i_th=1,n_th
-            do i_r=1,n_r
+    do i_phi = 1, n_phi
+        do i_th = 1, n_th
+            do i_r = 1, n_r
                 xcan = get_grid_point(i_r, i_th, i_phi)
 
-                ! Use batch evaluation for both transformation components
+                ! Use batch evaluation for transformation components
+                ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
                 block
-                    real(dp) :: y_trans(2), dy_trans(3,2)
-                    call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)
+                    real(dp) :: y_trans(2), dy_trans(3, 2)
+                    x_spl = [xcan(3), xcan(2), xcan(1)]
+                    call evaluate_batch_splines_3d_der(spl_transform_batch, x_spl, &
+                                                       y_trans, dy_trans)
                     lam = y_trans(1)    ! lam_phi
-                    chi = y_trans(2)    ! chi_gauge  
-                    dlam = dy_trans(:,1)  ! derivatives of lam_phi
-                    dchi = dy_trans(:,2)  ! derivatives of chi_gauge
+                    chi = y_trans(2)    ! chi_gauge
+                    ! Unswap derivatives: spline [phi, th, r] -> physics [r, th, phi]
+                    ! dy_trans(1,:) = d/dphi, dy_trans(2,:) = d/dth, dy_trans(3,:) = d/dr
+                    dlam = [dy_trans(3, 1), dy_trans(2, 1), dy_trans(1, 1)]
+                    dchi = [dy_trans(3, 2), dy_trans(2, 2), dy_trans(1, 2)]
                 end block
 
                 ! xcan is in integrator coords (r, th, phi)
@@ -488,8 +519,6 @@ subroutine init_canonical_field_components
                     call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
                 end select
 
-                ! Note: We only use theta/phi components of Acov/hcov below
-
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
                 Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
                 hth(i_r, i_th, i_phi) = hcov(2) + hcov(3)*dlam(2)
@@ -498,17 +527,29 @@ subroutine init_canonical_field_components
         end do
     end do
 
-    ! Construct batch spline for all 5 field components: [Ath, Aph, hth, hph, Bmod]
-    dims = shape(Ath)
-    allocate(y_batch(dims(1), dims(2), dims(3), 5))
-    
-    y_batch(:,:,:,1) = Ath
-    y_batch(:,:,:,2) = Aphi
-    y_batch(:,:,:,3) = hth
-    y_batch(:,:,:,4) = hphi
-    y_batch(:,:,:,5) = Bmod
-    
-    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_field_batch)
+    ! Transpose for cache-optimal layout: (n_r, n_th, n_phi) -> (n_phi, n_th, n_r)
+    allocate(y_batch(n_phi, n_th, n_r, 5))
+
+    do i_phi = 1, n_phi
+        do i_th = 1, n_th
+            do i_r = 1, n_r
+                y_batch(i_phi, i_th, i_r, 1) = Ath(i_r, i_th, i_phi)
+                y_batch(i_phi, i_th, i_r, 2) = Aphi(i_r, i_th, i_phi)
+                y_batch(i_phi, i_th, i_r, 3) = hth(i_r, i_th, i_phi)
+                y_batch(i_phi, i_th, i_r, 4) = hphi(i_r, i_th, i_phi)
+                y_batch(i_phi, i_th, i_r, 5) = Bmod(i_r, i_th, i_phi)
+            end do
+        end do
+    end do
+
+    ! Swap coordinate bounds and periodic flags: [r, th, phi] -> [phi, th, r]
+    xmin_spl = [xmin(3), xmin(2), xmin(1)]
+    xmax_spl = [xmax(3), xmax(2), xmax(1)]
+    periodic_spl = [periodic(3), periodic(2), periodic(1)]
+
+    call construct_batch_splines_3d(xmin_spl, xmax_spl, y_batch, &
+                                    [order(3), order(2), order(1)], &
+                                    periodic_spl, spl_field_batch)
     batch_splines_initialized = .true.
 end subroutine init_canonical_field_components
 
@@ -570,53 +611,73 @@ end subroutine magfie_meiss
 subroutine evaluate_meiss_batch_der(f, x)
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
-    
+
+    real(dp) :: x_spl(3)
     real(dp) :: y_batch(5), dy_batch(3, 5)
-    
-    call evaluate_batch_splines_3d_der(spl_field_batch, x, y_batch, dy_batch)
-    
-    ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
-    f%Ath = y_batch(1)
-    f%Aph = y_batch(2) 
-    f%hth = y_batch(3)
-    f%hph = y_batch(4)
-    f%Bmod = y_batch(5)
-    
-    f%dAth = dy_batch(:, 1)
-    f%dAph = dy_batch(:, 2)
-    f%dhth = dy_batch(:, 3)
-    f%dhph = dy_batch(:, 4)
-    f%dBmod = dy_batch(:, 5)
-end subroutine evaluate_meiss_batch_der
 
+    ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
+    x_spl(1) = x(3)
+    x_spl(2) = x(2)
+    x_spl(3) = x(1)
+    call evaluate_batch_splines_3d_der(spl_field_batch, x_spl, y_batch, dy_batch)
 
-! Batch evaluation helper for second derivatives  
-subroutine evaluate_meiss_batch_der2(f, x)
-    type(field_can_t), intent(inout) :: f
-    real(dp), intent(in) :: x(3)
-    
-    real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
-    
-    call evaluate_batch_splines_3d_der2(spl_field_batch, x, y_batch, dy_batch, d2y_batch)
-    
     ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
     f%Ath = y_batch(1)
     f%Aph = y_batch(2)
-    f%hth = y_batch(3) 
+    f%hth = y_batch(3)
     f%hph = y_batch(4)
     f%Bmod = y_batch(5)
-    
-    f%dAth = dy_batch(:, 1)
-    f%dAph = dy_batch(:, 2)
-    f%dhth = dy_batch(:, 3)
-    f%dhph = dy_batch(:, 4)
-    f%dBmod = dy_batch(:, 5)
-    
-    f%d2Ath = d2y_batch(:, 1)
-    f%d2Aph = d2y_batch(:, 2)
-    f%d2hth = d2y_batch(:, 3)
-    f%d2hph = d2y_batch(:, 4)
-    f%d2Bmod = d2y_batch(:, 5)
+
+    ! Unswap derivatives: spline [phi, th, r] -> physics [r, th, phi]
+    ! dy_batch(1,:) = d/dphi, dy_batch(2,:) = d/dth, dy_batch(3,:) = d/dr
+    f%dAth(1) = dy_batch(3, 1); f%dAth(2) = dy_batch(2, 1); f%dAth(3) = dy_batch(1, 1)
+    f%dAph(1) = dy_batch(3, 2); f%dAph(2) = dy_batch(2, 2); f%dAph(3) = dy_batch(1, 2)
+    f%dhth(1) = dy_batch(3, 3); f%dhth(2) = dy_batch(2, 3); f%dhth(3) = dy_batch(1, 3)
+    f%dhph(1) = dy_batch(3, 4); f%dhph(2) = dy_batch(2, 4); f%dhph(3) = dy_batch(1, 4)
+    f%dBmod(1) = dy_batch(3, 5); f%dBmod(2) = dy_batch(2, 5); f%dBmod(3) = dy_batch(1, 5)
+end subroutine evaluate_meiss_batch_der
+
+
+! Batch evaluation helper for second derivatives
+subroutine evaluate_meiss_batch_der2(f, x)
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(in) :: x(3)
+
+    real(dp) :: x_spl(3)
+    real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
+
+    ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
+    x_spl = [x(3), x(2), x(1)]
+    call evaluate_batch_splines_3d_der2(spl_field_batch, x_spl, y_batch, dy_batch, &
+                                        d2y_batch)
+
+    ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
+    f%Ath = y_batch(1)
+    f%Aph = y_batch(2)
+    f%hth = y_batch(3)
+    f%hph = y_batch(4)
+    f%Bmod = y_batch(5)
+
+    ! Unswap first derivatives: spline [phi, th, r] -> physics [r, th, phi]
+    f%dAth = [dy_batch(3, 1), dy_batch(2, 1), dy_batch(1, 1)]
+    f%dAph = [dy_batch(3, 2), dy_batch(2, 2), dy_batch(1, 2)]
+    f%dhth = [dy_batch(3, 3), dy_batch(2, 3), dy_batch(1, 3)]
+    f%dhph = [dy_batch(3, 4), dy_batch(2, 4), dy_batch(1, 4)]
+    f%dBmod = [dy_batch(3, 5), dy_batch(2, 5), dy_batch(1, 5)]
+
+    ! Unswap second derivatives: spline [phi,th,r] order to physics [r,th,phi]
+    ! Spline: (1)=phi-phi, (2)=phi-th, (3)=phi-r, (4)=th-th, (5)=th-r, (6)=r-r
+    ! Physics: (1)=r-r, (2)=r-th, (3)=r-phi, (4)=th-th, (5)=th-phi, (6)=phi-phi
+    f%d2Ath = [d2y_batch(6, 1), d2y_batch(5, 1), d2y_batch(3, 1), &
+               d2y_batch(4, 1), d2y_batch(2, 1), d2y_batch(1, 1)]
+    f%d2Aph = [d2y_batch(6, 2), d2y_batch(5, 2), d2y_batch(3, 2), &
+               d2y_batch(4, 2), d2y_batch(2, 2), d2y_batch(1, 2)]
+    f%d2hth = [d2y_batch(6, 3), d2y_batch(5, 3), d2y_batch(3, 3), &
+               d2y_batch(4, 3), d2y_batch(2, 3), d2y_batch(1, 3)]
+    f%d2hph = [d2y_batch(6, 4), d2y_batch(5, 4), d2y_batch(3, 4), &
+               d2y_batch(4, 4), d2y_batch(2, 4), d2y_batch(1, 4)]
+    f%d2Bmod = [d2y_batch(6, 5), d2y_batch(5, 5), d2y_batch(3, 5), &
+                d2y_batch(4, 5), d2y_batch(2, 5), d2y_batch(1, 5)]
 end subroutine evaluate_meiss_batch_der2
 
 end module field_can_meiss

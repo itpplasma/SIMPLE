@@ -57,9 +57,12 @@ contains
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
         real(dp), intent(out), optional :: sqgBctr(3)
 
+        real(dp) :: x_spl(3)
         real(dp) :: y_batch(7)
 
-        call evaluate_batch_splines_3d(self%splines, x, y_batch)
+        ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
+        x_spl = [x(3), x(2), x(1)]
+        call evaluate_batch_splines_3d(self%splines, x_spl, y_batch)
 
         Acov(1) = y_batch(1)
         Acov(2) = y_batch(2)
@@ -86,10 +89,13 @@ contains
         real(dp), intent(out) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
         real(dp), intent(out), optional :: sqgBctr(3)
 
+        real(dp) :: x_spl(3)
         real(dp) :: y_batch(7)
         real(dp) :: dy_batch(3, 7)
 
-        call evaluate_batch_splines_3d_der(self%splines, x, y_batch, dy_batch)
+        ! Swap coordinates for spline: physics [r, th, phi] -> spline [phi, th, r]
+        x_spl = [x(3), x(2), x(1)]
+        call evaluate_batch_splines_3d_der(self%splines, x_spl, y_batch, dy_batch)
 
         Acov(1) = y_batch(1)
         Acov(2) = y_batch(2)
@@ -101,15 +107,23 @@ contains
 
         Bmod = y_batch(7)
 
-        dAcov(:, 1) = dy_batch(:, 1)
-        dAcov(:, 2) = dy_batch(:, 2)
-        dAcov(:, 3) = dy_batch(:, 3)
+        ! Unswap derivatives: spline [phi, th, r] -> physics [r, th, phi]
+        ! dy_batch(1,:) = d/dphi, dy_batch(2,:) = d/dth, dy_batch(3,:) = d/dr
+        dAcov(1, 1) = dy_batch(3, 1); dAcov(2, 1) = dy_batch(2, 1)
+        dAcov(3, 1) = dy_batch(1, 1)
+        dAcov(1, 2) = dy_batch(3, 2); dAcov(2, 2) = dy_batch(2, 2)
+        dAcov(3, 2) = dy_batch(1, 2)
+        dAcov(1, 3) = dy_batch(3, 3); dAcov(2, 3) = dy_batch(2, 3)
+        dAcov(3, 3) = dy_batch(1, 3)
 
-        dhcov(:, 1) = dy_batch(:, 4)
-        dhcov(:, 2) = dy_batch(:, 5)
-        dhcov(:, 3) = dy_batch(:, 6)
+        dhcov(1, 1) = dy_batch(3, 4); dhcov(2, 1) = dy_batch(2, 4)
+        dhcov(3, 1) = dy_batch(1, 4)
+        dhcov(1, 2) = dy_batch(3, 5); dhcov(2, 2) = dy_batch(2, 5)
+        dhcov(3, 2) = dy_batch(1, 5)
+        dhcov(1, 3) = dy_batch(3, 6); dhcov(2, 3) = dy_batch(2, 6)
+        dhcov(3, 3) = dy_batch(1, 6)
 
-        dBmod = dy_batch(:, 7)
+        dBmod = [dy_batch(3, 7), dy_batch(2, 7), dy_batch(1, 7)]
 
         if (present(sqgBctr)) then
             error stop "sqgBctr not implemented for splined_field_t"
@@ -151,6 +165,8 @@ contains
 
         integer :: n_r, n_th, n_phi
         real(dp) :: xmin(3), xmax(3)
+        real(dp) :: xmin_spl(3), xmax_spl(3)
+        logical :: periodic_spl(3)
 
         integer, parameter :: order(3) = [5, 5, 5]
         logical, parameter :: periodic(3) = [.False., .True., .True.]
@@ -160,7 +176,7 @@ contains
         real(dp), dimension(:, :, :), allocatable :: Ar, Ath, Aphi, hr, hth, hphi
         real(dp), dimension(:, :, :), allocatable :: Bmod_arr
         real(dp), dimension(:, :, :, :), allocatable :: y_batch
-        integer :: dims(3)
+        integer :: i_r, i_th, i_phi
 
         call configure_spline_grid(ref_coords, n_r_in, n_th_in, n_phi_in, xmin_in, &
                                    xmax_in, n_r, n_th, n_phi, xmin, xmax)
@@ -180,18 +196,31 @@ contains
                                   xmin, h_r, h_th, h_phi, Ar, Ath, Aphi, hr, hth, &
                                   hphi, Bmod_arr)
 
-        dims = shape(Ar)
-        allocate (y_batch(dims(1), dims(2), dims(3), 7))
+        ! Transpose for cache-optimal layout: (n_r, n_th, n_phi) -> (n_phi, n_th, n_r)
+        allocate(y_batch(n_phi, n_th, n_r, 7))
 
-        y_batch(:, :, :, 1) = Ar
-        y_batch(:, :, :, 2) = Ath
-        y_batch(:, :, :, 3) = Aphi
-        y_batch(:, :, :, 4) = hr
-        y_batch(:, :, :, 5) = hth
-        y_batch(:, :, :, 6) = hphi
-        y_batch(:, :, :, 7) = Bmod_arr
+        do i_phi = 1, n_phi
+            do i_th = 1, n_th
+                do i_r = 1, n_r
+                    y_batch(i_phi, i_th, i_r, 1) = Ar(i_r, i_th, i_phi)
+                    y_batch(i_phi, i_th, i_r, 2) = Ath(i_r, i_th, i_phi)
+                    y_batch(i_phi, i_th, i_r, 3) = Aphi(i_r, i_th, i_phi)
+                    y_batch(i_phi, i_th, i_r, 4) = hr(i_r, i_th, i_phi)
+                    y_batch(i_phi, i_th, i_r, 5) = hth(i_r, i_th, i_phi)
+                    y_batch(i_phi, i_th, i_r, 6) = hphi(i_r, i_th, i_phi)
+                    y_batch(i_phi, i_th, i_r, 7) = Bmod_arr(i_r, i_th, i_phi)
+                end do
+            end do
+        end do
 
-        call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl)
+        ! Swap coordinate bounds and periodic flags: [r, th, phi] -> [phi, th, r]
+        xmin_spl = [xmin(3), xmin(2), xmin(1)]
+        xmax_spl = [xmax(3), xmax(2), xmax(1)]
+        periodic_spl = [periodic(3), periodic(2), periodic(1)]
+
+        call construct_batch_splines_3d(xmin_spl, xmax_spl, y_batch, &
+                                        [order(3), order(2), order(1)], &
+                                        periodic_spl, spl)
 
     end subroutine build_splines
 
