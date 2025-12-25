@@ -43,6 +43,56 @@ subroutine ref_to_integ_boozer(xref, xinteg)
 end subroutine ref_to_integ_boozer
 
 
+subroutine eval_field_booz_many(npts, r, th_c, ph_c, &
+        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
+        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
+        Bmod, dBmod, d2Bmod)
+    use boozer_sub, only: splint_boozer_coord_many
+
+    integer, intent(in) :: npts
+    real(dp), intent(in) :: r(npts), th_c(npts), ph_c(npts)
+    real(dp), intent(out) :: Ath(npts), Aph(npts)
+    real(dp), intent(out) :: dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts)
+    real(dp), intent(out) :: hth(npts), hph(npts)
+    real(dp), intent(out) :: dhth(3, npts), dhph(3, npts)
+    real(dp), intent(out) :: d2hth_dr2(npts), d2hph_dr2(npts)
+    real(dp), intent(out) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
+
+    real(dp), allocatable :: r_local(:), d3Aph_dr3(:)
+    real(dp), allocatable :: Bth(:), Bph(:), dBth(:), dBph(:), d2Bth(:), d2Bph(:)
+    real(dp) :: bmod2
+    integer :: i
+
+    allocate(r_local(npts), d3Aph_dr3(npts))
+    allocate(Bth(npts), Bph(npts), dBth(npts), dBph(npts), d2Bth(npts), d2Bph(npts))
+    r_local = r
+
+    call splint_boozer_coord_many(npts, r_local, th_c, ph_c, &
+        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, d3Aph_dr3, &
+        Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+        Bmod, dBmod, d2Bmod)
+
+    do i = 1, npts
+        bmod2 = Bmod(i)**2
+
+        hth(i) = Bth(i) / Bmod(i)
+        hph(i) = Bph(i) / Bmod(i)
+
+        dhth(1, i) = dBth(i) / Bmod(i) - Bth(i) * dBmod(1, i) / bmod2
+        dhph(1, i) = dBph(i) / Bmod(i) - Bph(i) * dBmod(1, i) / bmod2
+        dhth(2, i) = -Bth(i) * dBmod(2, i) / bmod2
+        dhth(3, i) = -Bth(i) * dBmod(3, i) / bmod2
+        dhph(2, i) = -Bph(i) * dBmod(2, i) / bmod2
+        dhph(3, i) = -Bph(i) * dBmod(3, i) / bmod2
+
+        d2hth_dr2(i) = d2Bth(i) / Bmod(i) - 2.0d0 * dBth(i) * dBmod(1, i) / bmod2 &
+            + Bth(i) / bmod2 * (2.0d0 * dBmod(1, i)**2 / Bmod(i) - d2Bmod(1, i))
+        d2hph_dr2(i) = d2Bph(i) / Bmod(i) - 2.0d0 * dBph(i) * dBmod(1, i) / bmod2 &
+            + Bph(i) / bmod2 * (2.0d0 * dBmod(1, i)**2 / Bmod(i) - d2Bmod(1, i))
+    end do
+end subroutine eval_field_booz_many
+
+
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)

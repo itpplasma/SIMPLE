@@ -512,6 +512,54 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# SoA Boozer spline test
+add_executable(test_soa_boozer_spline.x ../test_soa_boozer_spline.f90)
+target_link_libraries(test_soa_boozer_spline.x simple)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer/simple.in
+    ${CMAKE_CURRENT_BINARY_DIR}/simple.in
+    COPYONLY)
+add_test(NAME test_soa_boozer_spline
+    COMMAND test_soa_boozer_spline.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_soa_boozer_spline PROPERTIES
+    LABELS "unit;soa"
+    TIMEOUT 60
+)
+
+# SoA field evaluation test
+add_executable(test_soa_field_eval.x ../test_soa_field_eval.f90)
+target_link_libraries(test_soa_field_eval.x simple)
+add_test(NAME test_soa_field_eval
+    COMMAND test_soa_field_eval.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_soa_field_eval PROPERTIES
+    LABELS "unit;soa"
+    TIMEOUT 60
+)
+
+# SoA Newton iteration test
+add_executable(test_soa_newton.x ../test_soa_newton.f90)
+target_link_libraries(test_soa_newton.x simple)
+add_test(NAME test_soa_newton
+    COMMAND test_soa_newton.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_soa_newton PROPERTIES
+    LABELS "unit;soa"
+    TIMEOUT 60
+)
+
+# SoA timestep test
+add_executable(test_soa_timestep.x ../test_soa_timestep.f90)
+target_link_libraries(test_soa_timestep.x simple)
+add_test(NAME test_soa_timestep
+    COMMAND test_soa_timestep.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_soa_timestep PROPERTIES
+    LABELS "unit;soa"
+    TIMEOUT 60
+)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
