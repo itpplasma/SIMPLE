@@ -27,7 +27,7 @@ program test_albert_intermediate
 
     type(tracer_t) :: norb
     integer :: i_r, i_th, i_phi, unit_id
-    real(dp) :: x(3), y_batch_meiss(5), y_batch_albert(4)
+    real(dp) :: x(3), x_spl(3), y_batch_meiss(5), y_batch_albert(4)
     real(dp) :: r, th, ph, psi
     real(dp) :: h_psi
     character(len=256) :: config_file
@@ -74,7 +74,11 @@ program test_albert_intermediate
             do i_r = 1, n_r, max(1, (n_r-1)/4)
                 r = xmin(1) + (i_r - 1) * (xmax(1) - xmin(1)) / (n_r - 1)
                 x = [r, th, ph]
-                call evaluate_batch_splines_3d(spl_field_batch, x, y_batch_meiss)
+                ! Swap coordinates: physics [r, th, phi] -> spline [phi, th, r]
+                x_spl(1) = x(3)
+                x_spl(2) = x(2)
+                x_spl(3) = x(1)
+                call evaluate_batch_splines_3d(spl_field_batch, x_spl, y_batch_meiss)
                 write(unit_id, '(3I6,8E25.17)') i_r, i_th, i_phi, r, th, ph, &
                     y_batch_meiss(1), y_batch_meiss(2), y_batch_meiss(3), &
                     y_batch_meiss(4), y_batch_meiss(5)
@@ -150,7 +154,11 @@ program test_albert_intermediate
             do i_r = 1, 5
                 psi = psi_inner + (i_r - 1) * (psi_outer - psi_inner) / 4
                 x = [psi, th, ph]
-                call evaluate_batch_splines_3d(spl_albert_batch, x, y_batch_albert)
+                ! Swap coordinates: physics [psi, th, phi] -> spline [phi, th, psi]
+                x_spl(1) = x(3)
+                x_spl(2) = x(2)
+                x_spl(3) = x(1)
+                call evaluate_batch_splines_3d(spl_albert_batch, x_spl, y_batch_albert)
                 write(unit_id, '(7E25.17)') psi, th, ph, &
                     y_batch_albert(1), y_batch_albert(2), &
                     y_batch_albert(3), y_batch_albert(4)

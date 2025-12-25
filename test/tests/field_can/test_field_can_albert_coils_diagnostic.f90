@@ -22,7 +22,7 @@ program test_field_can_albert_coils_diagnostic
 
     type(tracer_t) :: norb
     integer :: i_r, i_th, i_phi, unit_id
-    real(dp) :: x(3), y_batch(5)
+    real(dp) :: x(3), x_spl(3), y_batch(5)
     integer :: mid_r, mid_th, mid_phi
     character(len=256) :: config_file
 
@@ -75,7 +75,11 @@ program test_field_can_albert_coils_diagnostic
                 x(1) = xmin(1) + (i_r-1)*(xmax(1)-xmin(1))/(n_r-1)
                 x(2) = xmin(2) + (i_th-1)*(xmax(2)-xmin(2))/(n_th-1)
                 x(3) = xmin(3) + (i_phi-1)*(xmax(3)-xmin(3))/(n_phi-1)
-                call evaluate_batch_splines_3d(spl_field_batch, x, y_batch)
+                ! Swap coordinates: physics [r, th, phi] -> spline [phi, th, r]
+                x_spl(1) = x(3)
+                x_spl(2) = x(2)
+                x_spl(3) = x(1)
+                call evaluate_batch_splines_3d(spl_field_batch, x_spl, y_batch)
                 write(unit_id, '(3I5,8E24.16)') i_r, i_th, i_phi, &
                     x(1), x(2), x(3), &
                     y_batch(1), y_batch(2), y_batch(3), y_batch(4), y_batch(5)

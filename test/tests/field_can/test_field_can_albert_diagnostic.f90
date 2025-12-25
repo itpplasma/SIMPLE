@@ -19,7 +19,7 @@ program test_field_can_albert_diagnostic
     type(tracer_t) :: norb
     type(vmec_field_t) :: magfie
     integer :: i_r, i_th, i_phi, n_failed
-    real(dp) :: x(3), y_batch(5)
+    real(dp) :: x(3), x_spl(3), y_batch(5)
     real(dp) :: Bmod_min, Bmod_max
     logical :: file_exists
 
@@ -85,7 +85,11 @@ program test_field_can_albert_diagnostic
                 x(1) = xmin(1) + (i_r-1)*(xmax(1)-xmin(1))/(n_r-1)
                 x(2) = xmin(2) + (i_th-1)*(xmax(2)-xmin(2))/(n_th-1)
                 x(3) = xmin(3) + (i_phi-1)*(xmax(3)-xmin(3))/(n_phi-1)
-                call evaluate_batch_splines_3d(spl_field_batch, x, y_batch)
+                ! Swap coordinates: physics [r, th, phi] -> spline [phi, th, r]
+                x_spl(1) = x(3)
+                x_spl(2) = x(2)
+                x_spl(3) = x(1)
+                call evaluate_batch_splines_3d(spl_field_batch, x_spl, y_batch)
                 ! y_batch(5) is Bmod
                 Bmod_min = min(Bmod_min, y_batch(5))
                 Bmod_max = max(Bmod_max, y_batch(5))

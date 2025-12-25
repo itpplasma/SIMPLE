@@ -127,7 +127,7 @@ contains
             spl_field_batch
         use interpolate, only: evaluate_batch_splines_3d
         integer, intent(in) :: unit_id
-        real(dp) :: x(3), y_batch(5)
+        real(dp) :: x(3), x_spl(3), y_batch(5)
         integer :: i_r, i_th, i_phi
 
         write(unit_id, '(A)') '=== MEISS Specific Diagnostics ==='
@@ -146,7 +146,11 @@ contains
                     x(1) = xmin(1) + (i_r - 1) * (xmax(1) - xmin(1)) / (n_r - 1)
                     x(2) = xmin(2) + (i_th - 1) * (xmax(2) - xmin(2)) / (n_th - 1)
                     x(3) = xmin(3) + (i_phi - 1) * (xmax(3) - xmin(3)) / (n_phi - 1)
-                    call evaluate_batch_splines_3d(spl_field_batch, x, y_batch)
+                    ! Swap coordinates: physics [r, th, phi] -> spline [phi, th, r]
+                    x_spl(1) = x(3)
+                    x_spl(2) = x(2)
+                    x_spl(3) = x(1)
+                    call evaluate_batch_splines_3d(spl_field_batch, x_spl, y_batch)
                     write(unit_id, '(3I6,8E25.17)') i_r, i_th, i_phi, &
                         x(1), x(2), x(3), &
                         y_batch(1), y_batch(2), y_batch(3), y_batch(4), y_batch(5)
@@ -165,7 +169,7 @@ contains
             Bmod_of_xc, spl_albert_batch
         use interpolate, only: evaluate_batch_splines_3d
         integer, intent(in) :: unit_id
-        real(dp) :: x(3), y_batch_meiss(5), y_batch_albert(4), psi, h_psi
+        real(dp) :: x(3), x_spl(3), y_batch_meiss(5), y_batch_albert(4), psi, h_psi
         integer :: i_r, i_th, i_phi
 
         write(unit_id, '(A)') '=== ALBERT Specific Diagnostics ==='
@@ -206,7 +210,11 @@ contains
                     x(1) = xmin(1) + (i_r - 1) * (xmax(1) - xmin(1)) / (n_r - 1)
                     x(2) = xmin(2) + (i_th - 1) * (xmax(2) - xmin(2)) / (n_th - 1)
                     x(3) = xmin(3) + (i_phi - 1) * (xmax(3) - xmin(3)) / (n_phi - 1)
-                    call evaluate_batch_splines_3d(spl_field_batch, x, y_batch_meiss)
+                    ! Swap coordinates: physics [r, th, phi] -> spline [phi, th, r]
+                    x_spl(1) = x(3)
+                    x_spl(2) = x(2)
+                    x_spl(3) = x(1)
+                    call evaluate_batch_splines_3d(spl_field_batch, x_spl, y_batch_meiss)
                     write(unit_id, '(3I6,8E25.17)') i_r, i_th, i_phi, &
                         x(1), x(2), x(3), y_batch_meiss(1), y_batch_meiss(2), &
                         y_batch_meiss(3), y_batch_meiss(4), y_batch_meiss(5)
@@ -257,7 +265,11 @@ contains
                     x = [psi, &
                          xmin(2) + (i_th - 1) * (xmax(2) - xmin(2)) / 2, &
                          xmin(3) + (i_phi - 1) * (xmax(3) - xmin(3)) / 2]
-                    call evaluate_batch_splines_3d(spl_albert_batch, x, y_batch_albert)
+                    ! Swap coordinates: physics [psi, th, phi] -> spline [phi, th, psi]
+                    x_spl(1) = x(3)
+                    x_spl(2) = x(2)
+                    x_spl(3) = x(1)
+                    call evaluate_batch_splines_3d(spl_albert_batch, x_spl, y_batch_albert)
                     write(unit_id, '(7E25.17)') x(1), x(2), x(3), &
                         y_batch_albert(1), y_batch_albert(2), &
                         y_batch_albert(3), y_batch_albert(4)

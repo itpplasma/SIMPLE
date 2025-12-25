@@ -83,7 +83,7 @@ contains
         use field_can_meiss, only: ref_to_integ_meiss, integ_to_ref_meiss
 
         real(dp) :: x_ref(3), x_meiss(3), x_meiss_back(3), x_ref_back(3)
-        real(dp) :: x_albert(3)
+        real(dp) :: x_albert(3), x_spl(3)
         real(dp) :: psi_forward, r_inverse
         real(dp) :: y_ath(5), y_r(1)
         real(dp) :: err_meiss, err_ath_spline, err_r_spline, err_total
@@ -102,14 +102,22 @@ contains
         print *, '    r =', x_meiss(1), ' (expected', sqrt(x_ref(1)), ')'
 
         ! Step 2: Evaluate Ath spline at meiss coords
-        call evaluate_batch_splines_3d(spl_field_batch, x_meiss, y_ath)
+        ! Swap coordinates: physics [r, th, phi] -> spline [phi, th, r]
+        x_spl(1) = x_meiss(3)
+        x_spl(2) = x_meiss(2)
+        x_spl(3) = x_meiss(1)
+        call evaluate_batch_splines_3d(spl_field_batch, x_spl, y_ath)
         psi_forward = y_ath(1) / Ath_norm
         print *, '  Step 2 - Ath spline evaluation:'
         print *, '    Ath =', y_ath(1), ' psi = Ath/Ath_norm =', psi_forward
 
         ! Step 3: Evaluate r spline at (psi, th, ph) - this is the inverse
         x_albert = [psi_forward, x_meiss(2), x_meiss(3)]
-        call evaluate_batch_splines_3d(spl_r_batch, x_albert, y_r)
+        ! Swap coordinates: physics [psi, th, phi] -> spline [phi, th, psi]
+        x_spl(1) = x_albert(3)
+        x_spl(2) = x_albert(2)
+        x_spl(3) = x_albert(1)
+        call evaluate_batch_splines_3d(spl_r_batch, x_spl, y_r)
         r_inverse = y_r(1)
         print *, '  Step 3 - r_of_xc spline evaluation:'
         print *, '    r_inverse =', r_inverse, ' (expected', x_meiss(1), ')'
