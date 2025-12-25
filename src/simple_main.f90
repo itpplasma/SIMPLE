@@ -14,7 +14,7 @@ module simple_main
                       class_plot, ntcut, iclass, bmin, bmax, &
                       zstart, zend, trap_par, perp_inv, sbeg, &
                       ntimstep, should_skip, reset_seed_if_deterministic, &
-                      field_input, isw_field_type, reuse_batch
+                      field_input, isw_field_type, reuse_batch, use_soa
 
     implicit none
 
@@ -91,8 +91,13 @@ contains
         call init_counters
         call print_phase_time('Counter initialization completed')
 
-        call trace_parallel(norb)
-        call print_phase_time('Parallel particle tracing completed')
+        if (use_soa) then
+            call trace_parallel_soa(norb)
+            call print_phase_time('SoA batched particle tracing completed')
+        else
+            call trace_parallel(norb)
+            call print_phase_time('Parallel particle tracing completed')
+        end if
 
         confpart_pass = confpart_pass/ntestpart
         confpart_trap = confpart_trap/ntestpart
@@ -288,6 +293,51 @@ contains
             call close_orbit_netcdf()
         end if
     end subroutine trace_parallel
+
+    subroutine trace_parallel_soa(norb)
+        use orbit_symplectic_soa, only: trace_orbit_soa
+        use parmot_mod, only: ro0
+
+        type(tracer_t), intent(inout) :: norb
+        integer :: i
+        real(dp), allocatable :: z_final(:,:)
+        real(dp), allocatable :: soa_times_lost(:)
+        integer, allocatable :: soa_ierr(:)
+        real(dp) :: atol, rtol_newton
+        integer :: maxit
+
+        atol = 1.0d-15
+        rtol_newton = relerr
+        maxit = 32
+
+        allocate(z_final(5, ntestpart))
+        allocate(soa_times_lost(ntestpart))
+        allocate(soa_ierr(ntestpart))
+
+        print *, 'Running SoA batched orbit tracing...'
+        print *, '  ntestpart = ', ntestpart
+        print *, '  ntimstep = ', ntimstep
+        print *, '  ntau = ', ntau
+
+        call trace_orbit_soa(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
+            atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
+
+        do i = 1, ntestpart
+            zend(1:3, i) = z_final(1:3, i)
+            zend(4:5, i) = z_final(4:5, i)
+            if (soa_times_lost(i) < 1.0d-30) then
+                times_lost(i) = trace_time
+            else
+                times_lost(i) = soa_times_lost(i)
+            end if
+
+            if (soa_ierr(i) == 0) then
+                confpart_pass(ntimstep) = confpart_pass(ntimstep) + 1.0d0
+            end if
+        end do
+
+        print *, 'SoA tracing completed.'
+    end subroutine trace_parallel_soa
 
     subroutine classify_parallel(norb)
         use classification, only: trace_orbit_with_classifiers, classification_result_t
