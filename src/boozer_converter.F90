@@ -4,8 +4,11 @@ module boozer_sub
                            construct_batch_splines_1d, construct_batch_splines_3d, &
                            evaluate_batch_splines_1d_der2, &
                            evaluate_batch_splines_1d_der3, &
+                           evaluate_batch_splines_1d_many_der2, &
+                           evaluate_batch_splines_1d_many_der3, &
                            evaluate_batch_splines_3d_der, &
                            evaluate_batch_splines_3d_der2, &
+                           evaluate_batch_splines_3d_many_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
 	    use field, only: magnetic_field_t, field_clone
     use, intrinsic :: iso_fortran_env, only: dp => real64
@@ -15,7 +18,7 @@ module boozer_sub
 
     ! Public API
     public :: get_boozer_coordinates, get_boozer_coordinates_with_field
-    public :: splint_boozer_coord
+    public :: splint_boozer_coord, splint_boozer_coord_many
     public :: vmec_to_boozer, boozer_to_vmec
     public :: delthe_delphi_BV
     public :: reset_boozer_batch_splines
@@ -282,6 +285,110 @@ contains
         dB_varphi_B = dB_varphi_B*drhods
 
     end subroutine splint_boozer_coord
+
+    subroutine splint_boozer_coord_many(npts, r, vartheta_B, varphi_B, &
+                                        A_theta, A_phi, dA_theta_dr, dA_phi_dr, &
+                                        d2A_phi_dr2, d3A_phi_dr3, &
+                                        B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
+                                        B_varphi_B, dB_varphi_B, d2B_varphi_B, &
+                                        Bmod_B, dBmod_B, d2Bmod_B)
+        use boozer_coordinates_mod, only: use_B_r
+        use vector_potentail_mod, only: torflux
+        use new_vmec_stuff_mod, only: nper
+        use chamb_mod, only: rnegflag
+        use diag_mod, only: icounter
+
+        integer, intent(in) :: npts
+        real(dp), intent(inout) :: r(npts)
+        real(dp), intent(in) :: vartheta_B(npts), varphi_B(npts)
+        real(dp), intent(out) :: A_phi(npts), A_theta(npts)
+        real(dp), intent(out) :: dA_phi_dr(npts), dA_theta_dr(npts)
+        real(dp), intent(out) :: d2A_phi_dr2(npts), d3A_phi_dr3(npts)
+        real(dp), intent(out) :: B_vartheta_B(npts), dB_vartheta_B(npts)
+        real(dp), intent(out) :: d2B_vartheta_B(npts)
+        real(dp), intent(out) :: B_varphi_B(npts), dB_varphi_B(npts), d2B_varphi_B(npts)
+        real(dp), intent(out) :: Bmod_B(npts)
+        real(dp), intent(out) :: dBmod_B(3, npts), d2Bmod_B(6, npts)
+
+        integer :: ipt
+        real(dp) :: rho_tor(npts), drhods(npts), drhods2(npts), d2rhods2m(npts)
+        real(dp) :: theta_wrapped(npts), phi_wrapped(npts)
+        real(dp) :: x_eval(3, npts)
+        real(dp) :: y_aphi(1, npts), dy_aphi(1, npts), d2y_aphi(1, npts)
+        real(dp) :: d3y_aphi(1, npts)
+        real(dp) :: y_bmod(2, npts), dy_bmod(3, 2, npts), d2y_bmod(6, 2, npts)
+        real(dp) :: y_btp(2, npts), dy_btp(2, npts), d2y_btp(2, npts)
+
+        if (.not. aphi_batch_spline_ready) then
+            error stop "splint_boozer_coord_many: Aphi batch spline not initialized"
+        end if
+        if (.not. bmod_br_batch_spline_ready) then
+            error stop "splint_boozer_coord_many: Bmod/Br batch spline not initialized"
+        end if
+        if (.not. bcovar_tp_batch_spline_ready) then
+            error stop "splint_boozer_coord_many: Bcovar_tp batch spline not initialized"
+        end if
+
+        do ipt = 1, npts
+            if (r(ipt) <= 0.0_dp) then
+                rnegflag = .true.
+                r(ipt) = abs(r(ipt))
+            end if
+        end do
+
+        A_theta = torflux*r
+        dA_theta_dr = torflux
+
+        call evaluate_batch_splines_1d_many_der3(aphi_batch_spline, r, &
+                                                 y_aphi, dy_aphi, d2y_aphi, d3y_aphi)
+        A_phi = y_aphi(1, :)
+        dA_phi_dr = dy_aphi(1, :)
+        d2A_phi_dr2 = d2y_aphi(1, :)
+        d3A_phi_dr3 = d3y_aphi(1, :)
+
+        rho_tor = sqrt(r)
+        do ipt = 1, npts
+            theta_wrapped(ipt) = modulo(vartheta_B(ipt), TWOPI)
+            phi_wrapped(ipt) = modulo(varphi_B(ipt), TWOPI/real(nper, dp))
+        end do
+
+        x_eval(1, :) = rho_tor
+        x_eval(2, :) = theta_wrapped
+        x_eval(3, :) = phi_wrapped
+        call evaluate_batch_splines_3d_many_der2(bmod_br_batch_spline, x_eval, &
+                                                 y_bmod(1:bmod_br_num_quantities, :), &
+                                                 dy_bmod(:, 1:bmod_br_num_quantities, :), &
+                                                 d2y_bmod(:, 1:bmod_br_num_quantities, :))
+
+        drhods = 0.5_dp/rho_tor
+        drhods2 = drhods**2
+        d2rhods2m = drhods2/rho_tor
+
+        Bmod_B = y_bmod(1, :)
+        dBmod_B(1, :) = dy_bmod(1, 1, :)*drhods
+        dBmod_B(2, :) = dy_bmod(2, 1, :)
+        dBmod_B(3, :) = dy_bmod(3, 1, :)
+
+        d2Bmod_B(1, :) = d2y_bmod(1, 1, :)*drhods2 - dy_bmod(1, 1, :)*d2rhods2m
+        d2Bmod_B(2, :) = d2y_bmod(2, 1, :)*drhods
+        d2Bmod_B(3, :) = d2y_bmod(3, 1, :)*drhods
+        d2Bmod_B(4, :) = d2y_bmod(4, 1, :)
+        d2Bmod_B(5, :) = d2y_bmod(5, 1, :)
+        d2Bmod_B(6, :) = d2y_bmod(6, 1, :)
+
+        call evaluate_batch_splines_1d_many_der2(bcovar_tp_batch_spline, rho_tor, &
+                                                 y_btp, dy_btp, d2y_btp)
+        B_vartheta_B = y_btp(1, :)
+        dB_vartheta_B = dy_btp(1, :)*drhods
+        d2B_vartheta_B = d2y_btp(1, :)*drhods2 - dy_btp(1, :)*d2rhods2m
+        B_varphi_B = y_btp(2, :)
+        dB_varphi_B = dy_btp(2, :)*drhods
+        d2B_varphi_B = d2y_btp(2, :)*drhods2 - dy_btp(2, :)*d2rhods2m
+
+!$omp atomic
+        icounter = icounter + npts
+
+    end subroutine splint_boozer_coord_many
 
     !> Computes delta_vartheta = vartheta_B - theta_V and delta_varphi = varphi_B - varphi_V
     !> and their first derivatives over angles.
