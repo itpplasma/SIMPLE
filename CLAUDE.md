@@ -39,6 +39,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Compiler: GNU Fortran (gfortran)
 - Optional: OpenMP (enabled by default)
 
+### OpenACC GPU Builds
+SIMPLE supports GPU acceleration via OpenACC with two compiler options:
+
+**GCC 16+ with nvptx offload** (experimental):
+- Requires: GCC 16+ built with `--enable-offload-targets=nvptx-none`
+- Location: `/temp/AG-plasma/opt/gcc16`
+- Build: `make gcc-acc`
+- Test: `make gcc-acc-test`
+- Clean: `make gcc-acc-clean`
+- Note: GPU offloading has known memory issues with GCC 16 nvptx. Use `ACC_DEVICE_TYPE=host` for host fallback.
+
+**NVHPC/nvfortran**:
+- Requires: NVIDIA HPC SDK (nvfortran)
+- Build: `make nvfortran-acc`
+- Test: `make nvfortran-acc-test`
+- Clean: `make nvfortran-acc-clean`
+
+**CMake options for OpenACC**:
+```bash
+cmake -S . -B build -GNinja \
+    -DSIMPLE_ENABLE_OPENACC=ON \
+    -DSIMPLE_OPENACC_OFFLOAD_TARGET=nvptx \
+    -DCMAKE_Fortran_COMPILER=/temp/AG-plasma/opt/gcc16/bin/gfortran
+```
+
 ### GVEC Integration
 - Minimal GVEC library automatically built from `thirdparty/gvec/`
 - Provides B-spline and cubic spline functionality for magnetic field interpolation
