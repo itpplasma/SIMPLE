@@ -54,7 +54,23 @@ option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
-option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC or GCC with nvptx)" OFF)
+set(SIMPLE_OPENACC_OFFLOAD_TARGET "none" CACHE STRING "OpenACC offload target for GCC (none|nvptx)")
+set_property(CACHE SIMPLE_OPENACC_OFFLOAD_TARGET PROPERTY STRINGS none nvptx)
+
+# GCC OpenACC support (must be before NVHPC block to set flags early)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND SIMPLE_ENABLE_OPENACC)
+    message(STATUS "OpenACC enabled for GCC compiler")
+    add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fopenacc>)
+    add_link_options(-fopenacc)
+    if(SIMPLE_OPENACC_OFFLOAD_TARGET STREQUAL "nvptx")
+        message(STATUS "OpenACC offload target: nvptx-none (GPU)")
+        add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-foffload=nvptx-none>)
+        add_link_options(-foffload=nvptx-none)
+    else()
+        message(STATUS "OpenACC offload target: none (host fallback)")
+    endif()
+endif()
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # NVHPC/nvfortran: disable all Python integration/tools by default.
@@ -232,21 +248,21 @@ endif()
 if (ENABLE_COVERAGE)
     if (CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
         message(STATUS "Coverage analysis enabled for ${CMAKE_BUILD_TYPE} build")
-        
+
         # Create interface library for coverage flags to scope them to specific targets
         add_library(coverage_flags INTERFACE)
         target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
         target_link_options(coverage_flags INTERFACE --coverage -lgcov)
-        
+
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)
         if(LCOV_PATH)
             add_custom_target(coverage
                 COMMAND ${CMAKE_COMMAND} -E echo "Generating coverage data..."
                 COMMAND ${LCOV_PATH} --capture --directory ${CMAKE_BINARY_DIR} --output-file coverage.info
-                    --rc branch_coverage=1 
-                    --ignore-errors inconsistent 
-                    --ignore-errors mismatch 
+                    --rc branch_coverage=1
+                    --ignore-errors inconsistent
+                    --ignore-errors mismatch
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
                     "/home/ert/code/libneo/*"
