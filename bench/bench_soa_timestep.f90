@@ -19,7 +19,7 @@ program bench_soa_timestep
     character(len=256) :: config_file
     integer :: i, npts, nerrors, ntimstep, ntau, ierr_single, kt
 
-    real(dp), allocatable :: zstart(:,:), z_final(:,:), z_final_ref(:,:)
+    real(dp), allocatable :: zstart(:, :), z_final(:, :), z_final_ref(:, :)
     real(dp), allocatable :: times_lost(:), times_lost_ref(:)
     integer, allocatable :: ierr(:), ierr_ref(:)
     real(dp) :: z(5), dt, atol, rtol_newton, theta_B, phi_B
@@ -49,18 +49,18 @@ program bench_soa_timestep
     print *, 'ntimstep = ', ntimstep
     print *, 'ntau = ', ntau
     print *, 'nreps = ', nreps
-    print *, 'Total timesteps per particle per rep = ', ntimstep * ntau
+    print *, 'Total timesteps per particle per rep = ', ntimstep*ntau
 
-    allocate(zstart(5, npts), z_final(5, npts), z_final_ref(5, npts))
-    allocate(times_lost(npts), times_lost_ref(npts))
-    allocate(ierr(npts), ierr_ref(npts))
+    allocate (zstart(5, npts), z_final(5, npts), z_final_ref(5, npts))
+    allocate (times_lost(npts), times_lost_ref(npts))
+    allocate (ierr(npts), ierr_ref(npts))
 
     do i = 1, npts
-        zstart(1, i) = 0.3d0 + 0.3d0 * real(i-1, dp) / real(npts-1, dp)
-        zstart(2, i) = 6.28318530718d0 * real(i, dp) / real(npts, dp)
-        zstart(3, i) = 3.14159265359d0 * real(i, dp) / real(npts, dp)
+        zstart(1, i) = 0.3d0 + 0.3d0*real(i - 1, dp)/real(npts - 1, dp)
+        zstart(2, i) = 6.28318530718d0*real(i, dp)/real(npts, dp)
+        zstart(3, i) = 3.14159265359d0*real(i, dp)/real(npts, dp)
         zstart(4, i) = 1.0d0
-        zstart(5, i) = 0.3d0 + 0.4d0 * real(i-1, dp) / real(npts-1, dp)
+        zstart(5, i) = 0.3d0 + 0.4d0*real(i - 1, dp)/real(npts - 1, dp)
     end do
 
     print *, ''
@@ -70,7 +70,7 @@ program bench_soa_timestep
         do i = 1, npts
             z(1) = zstart(1, i)
             call vmec_to_boozer(zstart(1, i), mod(zstart(2, i), 6.283185307179586d0), &
-                mod(zstart(3, i), 6.283185307179586d0), theta_B, phi_B)
+                                mod(zstart(3, i), 6.283185307179586d0), theta_B, phi_B)
             z(2) = mod(theta_B, 6.283185307179586d0)
             z(3) = mod(phi_B, 6.283185307179586d0)
             z(4) = zstart(4, i)
@@ -88,7 +88,7 @@ program bench_soa_timestep
                     kt = kt + 1
                 end do
                 if (ierr_single /= 0) then
-                    times_lost_ref(i) = real(kt, dp) * dt
+                    times_lost_ref(i) = real(kt, dp)*dt
                     exit
                 end if
             end do
@@ -97,22 +97,22 @@ program bench_soa_timestep
             z_final_ref(1, i) = norb%si%z(1)
             z_final_ref(2, i) = norb%si%z(2)
             z_final_ref(3, i) = norb%si%z(3)
-            z_final_ref(4, i) = dsqrt(norb%f%mu * norb%f%Bmod + 0.5d0 * norb%f%vpar**2)
-            z_final_ref(5, i) = norb%f%vpar / (z_final_ref(4, i) * dsqrt(2.0d0))
+            z_final_ref(4, i) = dsqrt(norb%f%mu*norb%f%Bmod + 0.5d0*norb%f%vpar**2)
+            z_final_ref(5, i) = norb%f%vpar/(z_final_ref(4, i)*dsqrt(2.0d0))
         end do
     end do
     call system_clock(count_end)
-    t_single = real(count_end - count_start, dp) / real(count_rate, dp)
+    t_single = real(count_end - count_start, dp)/real(count_rate, dp)
 
     print *, ''
     print *, 'Benchmarking SoA version (trace_orbit_soa)...'
     call system_clock(count_start, count_rate)
     do rep = 1, nreps
         call trace_orbit_soa(npts, zstart, ntimstep, ntau, dt, ro0, &
-            atol, rtol_newton, maxit, z_final, times_lost, ierr)
+                             atol, rtol_newton, maxit, z_final, times_lost, ierr)
     end do
     call system_clock(count_end)
-    t_soa = real(count_end - count_start, dp) / real(count_rate, dp)
+    t_soa = real(count_end - count_start, dp)/real(count_rate, dp)
 
     print *, ''
     print *, '=========================================='
@@ -121,11 +121,11 @@ program bench_soa_timestep
     print *, 'SoA time:         ', t_soa, ' s'
     print *, 'Single-point time:', t_single, ' s'
     if (t_soa > 0.0d0) then
-        print *, 'Speedup:          ', t_single / t_soa, 'x'
+        print *, 'Speedup:          ', t_single/t_soa, 'x'
     end if
     print *, ''
     print *, 'Time per particle-trace:'
-    print *, '  SoA:         ', t_soa / real(nreps * npts, dp) * 1.0d6, ' us'
-    print *, '  Single-point:', t_single / real(nreps * npts, dp) * 1.0d6, ' us'
+    print *, '  SoA:         ', t_soa/real(nreps*npts, dp)*1.0d6, ' us'
+    print *, '  Single-point:', t_single/real(nreps*npts, dp)*1.0d6, ' us'
 
 end program bench_soa_timestep

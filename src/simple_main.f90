@@ -295,24 +295,28 @@ contains
     end subroutine trace_parallel
 
     subroutine trace_parallel_soa(norb)
+        !> SoA batched orbit tracing using trace_orbit_soa from orbit_symplectic_soa.
+        !> This is a drop-in replacement for trace_parallel using batched field evaluation.
+        !> Parameter norb is kept for interface consistency but currently unused.
         use orbit_symplectic_soa, only: trace_orbit_soa
         use parmot_mod, only: ro0
 
         type(tracer_t), intent(inout) :: norb
         integer :: i
-        real(dp), allocatable :: z_final(:,:)
+        real(dp), allocatable :: z_final(:, :)
         real(dp), allocatable :: soa_times_lost(:)
         integer, allocatable :: soa_ierr(:)
         real(dp) :: atol, rtol_newton
         integer :: maxit
+        real(dp), parameter :: time_threshold = 1.0d-30
 
         atol = 1.0d-15
         rtol_newton = relerr
         maxit = 32
 
-        allocate(z_final(5, ntestpart))
-        allocate(soa_times_lost(ntestpart))
-        allocate(soa_ierr(ntestpart))
+        allocate (z_final(5, ntestpart))
+        allocate (soa_times_lost(ntestpart))
+        allocate (soa_ierr(ntestpart))
 
         print *, 'Running SoA batched orbit tracing...'
         print *, '  ntestpart = ', ntestpart
@@ -320,12 +324,12 @@ contains
         print *, '  ntau = ', ntau
 
         call trace_orbit_soa(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
-            atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
+                            atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
 
         do i = 1, ntestpart
             zend(1:3, i) = z_final(1:3, i)
             zend(4:5, i) = z_final(4:5, i)
-            if (soa_times_lost(i) < 1.0d-30) then
+            if (soa_times_lost(i) < time_threshold) then
                 times_lost(i) = trace_time
             else
                 times_lost(i) = soa_times_lost(i)
@@ -335,6 +339,10 @@ contains
                 confpart_pass(ntimstep) = confpart_pass(ntimstep) + 1.0d0
             end if
         end do
+
+        deallocate (z_final)
+        deallocate (soa_times_lost)
+        deallocate (soa_ierr)
 
         print *, 'SoA tracing completed.'
     end subroutine trace_parallel_soa
