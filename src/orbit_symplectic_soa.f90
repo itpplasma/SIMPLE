@@ -3,7 +3,7 @@ use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_can_boozer, only: eval_field_booz_many
 #ifdef SIMPLE_PROFILE_COUNTERS
 use profile_counters, only: prof_add_soa_newton_call, prof_add_soa_newton_iter, &
-    prof_add_soa_eval_pre, prof_add_soa_eval_newton
+    prof_add_soa_eval_newton
 #endif
 use vector_potentail_mod, only: torflux
 
@@ -114,56 +114,9 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
 end subroutine get_derivatives2_many
 
 
-subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
-        x_r, x_pphi, fvec, &
-        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-        Bmod, dBmod, d2Bmod, &
-        pth, dpth, d2pth_out, H, dH, d2H_out, vpar, dvpar)
-    integer, intent(in) :: npts
-    real(dp), intent(in) :: dt, ro0
-    real(dp), intent(in) :: mu(npts)
-    real(dp), intent(in) :: z_th(npts), z_pphi(npts), pthold(npts)
-    real(dp), intent(in) :: x_r(npts), x_pphi(npts)
-    real(dp), intent(out) :: fvec(2, npts)
-    real(dp), intent(in) :: Ath(npts), Aph(npts)
-    real(dp), intent(in) :: dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts)
-    real(dp), intent(in) :: hth(npts), hph(npts)
-    real(dp), intent(in) :: dhth(3, npts), dhph(3, npts)
-    real(dp), intent(in) :: d2hth_dr2(npts), d2hph_dr2(npts)
-    real(dp), intent(in) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
-    real(dp), intent(out) :: pth(npts), dpth(4, npts)
-    real(dp), intent(out) :: d2pth_out(10, npts)
-    real(dp), intent(out) :: H(npts), dH(4, npts)
-    real(dp), intent(out) :: d2H_out(10, npts)
-    real(dp), intent(out) :: vpar(npts), dvpar(4, npts)
-
-    real(dp) :: d2vpar(10, BATCH_PTS)
-    integer :: i
-
-    call get_derivatives2_many(npts, ro0, mu, x_pphi, &
-        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-        Bmod, dBmod, d2Bmod, &
-        vpar, dvpar, d2vpar, pth, dpth, d2pth_out, H, dH, d2H_out)
-
-    !$acc kernels
-    !$omp simd
-    do i = 1, npts
-        fvec(1, i) = dpth(1, i) * (pth(i) - pthold(i)) &
-            + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
-        fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_pphi(i)) &
-            + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
-    end do
-    !$omp end simd
-    !$acc end kernels
-end subroutine f_sympl_euler1_many
-
-
 subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, x_pphi, fjac, &
         pth, dpth, d2pth, dH, d2H)
-    !> Compute Jacobian using precomputed values from f_sympl_euler1_many.
-    !> This avoids redundant derivative calculations.
+    !> Compute Jacobian using precomputed values (get_derivatives2_many).
     integer, intent(in) :: npts
     real(dp), intent(in) :: dt
     real(dp), intent(in) :: z_pphi(npts), pthold(npts)
@@ -196,7 +149,7 @@ end subroutine jac_sympl_euler1_many
 
 
 subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
-        z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged, &
+        z_r, z_th, z_ph, z_pphi, pthold_in, x_r, x_pphi, converged, &
         xlast_r_out, xlast_pphi_out, &
         pth_out, dpth_out, dH_out, d2pth_1_out, d2pth_7_out, d2H_1_out, d2H_7_out, &
         vpar_out, dvpar_out, hth_out, hph_out, dhth_out, dhph_out)
@@ -204,7 +157,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     real(dp), intent(in) :: dt, ro0, atol, rtol
     real(dp), intent(in) :: mu(npts)
     real(dp), intent(in) :: z_r(npts), z_th(npts), z_ph(npts), z_pphi(npts)
-    real(dp), intent(in) :: pthold(npts)
+    real(dp), intent(in), optional :: pthold_in(npts)
     real(dp), intent(inout) :: x_r(npts), x_pphi(npts)
     logical, intent(out) :: converged(npts)
     real(dp), intent(out) :: xlast_r_out(npts), xlast_pphi_out(npts)
@@ -227,6 +180,8 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS)
     real(dp) :: fvec(2, BATCH_PTS), fjac(2, 2, BATCH_PTS)
     real(dp) :: xlast_r(BATCH_PTS), xlast_pphi(BATCH_PTS)
+    real(dp) :: pthold_local(BATCH_PTS)
+    real(dp) :: d2vpar(10, BATCH_PTS)
     real(dp) :: tolref_pphi(BATCH_PTS)
     logical :: just_converged
     real(dp) :: det, ijac11, ijac12, ijac21, ijac22
@@ -235,6 +190,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
 
     converged(1:npts) = .false.
     tolref_pphi(1:npts) = abs(10.0d0 * torflux / ro0)
+    if (present(pthold_in)) pthold_local(1:npts) = pthold_in(1:npts)
 
 #ifdef SIMPLE_PROFILE_COUNTERS
     call prof_add_soa_newton_call
@@ -249,14 +205,28 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod)
 
-        call f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
-            x_r, x_pphi, fvec, &
+        call get_derivatives2_many(npts, ro0, mu, x_pphi, &
             Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod, &
-            pth, dpth, d2pth, H, dH, d2H, vpar, dvpar)
+            vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
-        call jac_sympl_euler1_many(npts, dt, z_pphi, pthold, x_pphi, fjac, &
+        if ((.not. present(pthold_in)) .and. kit == 1) then
+            pthold_local(1:npts) = pth(1:npts)
+        end if
+
+        !$acc kernels
+        !$omp simd
+        do i = 1, npts
+            fvec(1, i) = dpth(1, i) * (pth(i) - pthold_local(i)) &
+                + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
+            fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_pphi(i)) &
+                + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
+        end do
+        !$omp end simd
+        !$acc end kernels
+
+        call jac_sympl_euler1_many(npts, dt, z_pphi, pthold_local, x_pphi, fjac, &
             pth, dpth, d2pth, dH, d2H)
 
         do i = 1, npts
@@ -353,14 +323,10 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
 
     real(dp) :: pthold(BATCH_PTS), x_r(BATCH_PTS), x_pphi(BATCH_PTS)
     real(dp) :: xlast_r(BATCH_PTS), xlast_pphi(BATCH_PTS)
-    real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
-    real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
     real(dp) :: hth(BATCH_PTS), hph(BATCH_PTS)
     real(dp) :: dhth(3, BATCH_PTS), dhph(3, BATCH_PTS)
-    real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
-    real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
     real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS)
-    real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), H(BATCH_PTS), dH(4, BATCH_PTS)
+    real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), dH(4, BATCH_PTS)
     real(dp) :: d2pth_1(BATCH_PTS), d2pth_7(BATCH_PTS)
     real(dp) :: d2H_1(BATCH_PTS), d2H_7(BATCH_PTS)
     logical :: converged(BATCH_PTS)
@@ -370,29 +336,27 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
     escaped = .false.
     ierr = 0
 
-#ifdef SIMPLE_PROFILE_COUNTERS
-    call prof_add_soa_eval_pre(npts)
-#endif
-    call eval_field_booz_many(npts, z_r, z_th, z_ph, &
-        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-        Bmod, dBmod, d2Bmod)
-
-    call get_derivatives_many(npts, ro0, mu, z_pphi, &
-        Ath, Aph, dAth_dr, dAph_dr, hth, hph, dhth, dhph, Bmod, dBmod, &
-        vpar, dvpar, pth, dpth, H, dH)
-
     do ktau = 1, ntau
-        pthold(1:npts) = pth(1:npts)
-
         x_r(1:npts) = z_r(1:npts)
         x_pphi(1:npts) = z_pphi(1:npts)
 
-        call newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
-            z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged, &
-            xlast_r, xlast_pphi, &
-            pth, dpth, dH, d2pth_1, d2pth_7, d2H_1, d2H_7, &
-            vpar, dvpar, hth, hph, dhth, dhph)
+        if (ktau > 1) pthold(1:npts) = pth(1:npts)
+
+        if (ktau == 1) then
+            call newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
+                z_r, z_th, z_ph, z_pphi, x_r=x_r, x_pphi=x_pphi, converged=converged, &
+                xlast_r_out=xlast_r, xlast_pphi_out=xlast_pphi, &
+                pth_out=pth, dpth_out=dpth, dH_out=dH, &
+                d2pth_1_out=d2pth_1, d2pth_7_out=d2pth_7, d2H_1_out=d2H_1, d2H_7_out=d2H_7, &
+                vpar_out=vpar, dvpar_out=dvpar, hth_out=hth, hph_out=hph, dhth_out=dhth, dhph_out=dhph)
+        else
+            call newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
+                z_r, z_th, z_ph, z_pphi, pthold_in=pthold, x_r=x_r, x_pphi=x_pphi, converged=converged, &
+                xlast_r_out=xlast_r, xlast_pphi_out=xlast_pphi, &
+                pth_out=pth, dpth_out=dpth, dH_out=dH, &
+                d2pth_1_out=d2pth_1, d2pth_7_out=d2pth_7, d2H_1_out=d2H_1, d2H_7_out=d2H_7, &
+                vpar_out=vpar, dvpar_out=dvpar, hth_out=hth, hph_out=hph, dhth_out=dhth, dhph_out=dhph)
+        end if
 
         !$omp simd private(dr, dpphi)
         do i = 1, npts
