@@ -1,6 +1,10 @@
 module orbit_symplectic_soa
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_can_boozer, only: eval_field_booz_many
+#ifdef SIMPLE_PROFILE_COUNTERS
+use profile_counters, only: prof_add_soa_newton_call, prof_add_soa_newton_iter, &
+    prof_add_soa_eval_pre, prof_add_soa_eval_newton
+#endif
 use vector_potentail_mod, only: torflux
 
 implicit none
@@ -232,7 +236,14 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     converged(1:npts) = .false.
     tolref_pphi(1:npts) = abs(10.0d0 * torflux / ro0)
 
+#ifdef SIMPLE_PROFILE_COUNTERS
+    call prof_add_soa_newton_call
+#endif
     do kit = 1, maxit
+#ifdef SIMPLE_PROFILE_COUNTERS
+        call prof_add_soa_newton_iter(kit)
+        call prof_add_soa_eval_newton(npts)
+#endif
         call eval_field_booz_many(npts, x_r, z_th, z_ph, &
             Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
@@ -359,6 +370,9 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
     escaped = .false.
     ierr = 0
 
+#ifdef SIMPLE_PROFILE_COUNTERS
+    call prof_add_soa_eval_pre(npts)
+#endif
     call eval_field_booz_many(npts, z_r, z_th, z_ph, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &

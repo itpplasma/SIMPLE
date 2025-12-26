@@ -3,6 +3,10 @@ module orbit_symplectic
 use util, only: pi, twopi
 use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
   eval_field => evaluate
+#ifdef SIMPLE_PROFILE_COUNTERS
+use profile_counters, only: prof_add_old_newton_call, prof_add_old_newton_iter, &
+  prof_add_old_f_eval
+#endif
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
   LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
@@ -163,6 +167,9 @@ subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
   real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
+#ifdef SIMPLE_PROFILE_COUNTERS
+  call prof_add_old_f_eval
+#endif
   call eval_field(f, x(1), si%z(2), si%z(3), 2)
   call get_derivatives2(f, x(2))
 
@@ -378,10 +385,16 @@ subroutine newton1(si, f, x, maxit, xlast)
   real(dp) :: tolref(n)
   integer :: kit
 
+#ifdef SIMPLE_PROFILE_COUNTERS
+  call prof_add_old_newton_call
+#endif
   tolref(1) = 1d0
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
+#ifdef SIMPLE_PROFILE_COUNTERS
+    call prof_add_old_newton_iter(kit)
+#endif
     if(x(1) > 1d0) return
     if(x(1) < 0d0) x(1) = 0.01d0
 

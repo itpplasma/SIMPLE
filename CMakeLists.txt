@@ -55,6 +55,7 @@ option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+option(SIMPLE_PROFILE_COUNTERS "Enable internal performance counters" OFF)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # NVHPC/nvfortran: disable all Python integration/tools by default.

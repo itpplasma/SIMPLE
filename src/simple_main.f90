@@ -98,6 +98,9 @@ contains
             call trace_parallel(norb)
             call print_phase_time('Parallel particle tracing completed')
         end if
+#ifdef SIMPLE_PROFILE_COUNTERS
+        call maybe_print_profile_counters
+#endif
 
         confpart_pass = confpart_pass/ntestpart
         confpart_trap = confpart_trap/ntestpart
@@ -106,6 +109,13 @@ contains
         call write_output
         call print_phase_time('Output writing completed')
     end subroutine main
+
+#ifdef SIMPLE_PROFILE_COUNTERS
+    subroutine maybe_print_profile_counters
+        use profile_counters, only: prof_print
+        call prof_print()
+    end subroutine maybe_print_profile_counters
+#endif
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t

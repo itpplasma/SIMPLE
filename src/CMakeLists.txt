@@ -33,6 +33,7 @@ set(SOURCES
     orbit_symplectic_quasi.f90
     orbit_symplectic.f90
     orbit_symplectic_soa.f90
+    profile_counters.f90
     util.F90
     samplers.f90
     cut_detector.f90
@@ -72,6 +73,11 @@ add_library (simple STATIC ${SOURCES})
 
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
+
+# Optional internal counters (compile-time, zero overhead when OFF).
+if(SIMPLE_PROFILE_COUNTERS)
+    target_compile_definitions(simple PRIVATE SIMPLE_PROFILE_COUNTERS)
+endif()
 
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
