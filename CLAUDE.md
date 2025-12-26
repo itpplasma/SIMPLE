@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **🚨 CRITICAL: ALWAYS RUN FROM PROJECT ROOT 🚨**
 
 - Always run all commands from the repository root
+- **Build with CMake via `make` (REQUIRED)** - This repo’s supported build is CMake+Ninja driven by `make`
+- **Do not use fpm (EXPERIMENTAL ONLY)** - `fpm` is present for experiments and is not supported for normal development or CI parity
 - **Use `make test`** - Never run test executables directly or use ctest manually
 - **Use relative paths** - All paths should be relative to project root (e.g., `./build/simple.x`)
 
@@ -14,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Building
 - **Primary build (REQUIRED)**: `make` - Uses CMake with Ninja generator to build in `build/` directory
-- **Do not use fpm**: `fpm build` is experimental in this repo and is not supported for normal development or CI parity.
+- **Do not use fpm**: `fpm build` is experimental in this repo; do not use it for development or benchmarking
 - **Python package**: Build via scikit-build-core (see pyproject.toml)
 - **Clean build**: `make clean` - Removes build directory
 - **Reconfigure**: `make reconfigure` - Forces CMake reconfiguration
