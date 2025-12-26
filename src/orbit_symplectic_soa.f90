@@ -115,7 +115,7 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod, &
-        pth, dpth, d2pth_1, d2pth_7, H, dH, d2H_1, d2H_7, vpar, dvpar)
+        pth, dpth, d2pth_out, H, dH, d2H_out, vpar, dvpar)
     integer, intent(in) :: npts
     real(dp), intent(in) :: dt, ro0
     real(dp), intent(in) :: mu(npts)
@@ -129,20 +129,19 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
     real(dp), intent(in) :: d2hth_dr2(npts), d2hph_dr2(npts)
     real(dp), intent(in) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
     real(dp), intent(out) :: pth(npts), dpth(4, npts)
-    real(dp), intent(out) :: d2pth_1(npts), d2pth_7(npts)
+    real(dp), intent(out) :: d2pth_out(10, npts)
     real(dp), intent(out) :: H(npts), dH(4, npts)
-    real(dp), intent(out) :: d2H_1(npts), d2H_7(npts)
+    real(dp), intent(out) :: d2H_out(10, npts)
     real(dp), intent(out) :: vpar(npts), dvpar(4, npts)
 
     real(dp) :: d2vpar(10, BATCH_PTS)
-    real(dp) :: d2pth(10, BATCH_PTS), d2H(10, BATCH_PTS)
     integer :: i
 
     call get_derivatives2_many(npts, ro0, mu, x_pphi, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod, &
-        vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
+        vpar, dvpar, d2vpar, pth, dpth, d2pth_out, H, dH, d2H_out)
 
     !$acc kernels
     !$omp simd
@@ -151,44 +150,25 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
             + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
         fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_pphi(i)) &
             + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
-        d2pth_1(i) = d2pth(1, i)
-        d2pth_7(i) = d2pth(7, i)
-        d2H_1(i) = d2H(1, i)
-        d2H_7(i) = d2H(7, i)
     end do
     !$omp end simd
     !$acc end kernels
 end subroutine f_sympl_euler1_many
 
 
-subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
-        x_r, x_pphi, fjac, &
-        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-        Bmod, dBmod, d2Bmod)
+subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, x_pphi, fjac, &
+        pth, dpth, d2pth, dH, d2H)
+    !> Compute Jacobian using precomputed values from f_sympl_euler1_many.
+    !> This avoids redundant derivative calculations.
     integer, intent(in) :: npts
-    real(dp), intent(in) :: dt, ro0
-    real(dp), intent(in) :: mu(npts)
+    real(dp), intent(in) :: dt
     real(dp), intent(in) :: z_pphi(npts), pthold(npts)
-    real(dp), intent(in) :: x_r(npts), x_pphi(npts)
+    real(dp), intent(in) :: x_pphi(npts)
     real(dp), intent(out) :: fjac(2, 2, npts)
-    real(dp), intent(in) :: Ath(npts), Aph(npts)
-    real(dp), intent(in) :: dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts)
-    real(dp), intent(in) :: hth(npts), hph(npts)
-    real(dp), intent(in) :: dhth(3, npts), dhph(3, npts)
-    real(dp), intent(in) :: d2hth_dr2(npts), d2hph_dr2(npts)
-    real(dp), intent(in) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
+    real(dp), intent(in) :: pth(npts), dpth(4, npts), d2pth(10, npts)
+    real(dp), intent(in) :: dH(4, npts), d2H(10, npts)
 
-    real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS), d2vpar(10, BATCH_PTS)
-    real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), d2pth(10, BATCH_PTS)
-    real(dp) :: H(BATCH_PTS), dH(4, BATCH_PTS), d2H(10, BATCH_PTS)
     integer :: i
-
-    call get_derivatives2_many(npts, ro0, mu, x_pphi, &
-        Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-        hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-        Bmod, dBmod, d2Bmod, &
-        vpar, dvpar, d2vpar, pth, dpth, d2pth, H, dH, d2H)
 
     !$acc kernels
     !$omp simd
@@ -239,8 +219,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
     real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
     real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), H(BATCH_PTS), dH(4, BATCH_PTS)
-    real(dp) :: d2pth_1(BATCH_PTS), d2pth_7(BATCH_PTS)
-    real(dp) :: d2H_1(BATCH_PTS), d2H_7(BATCH_PTS)
+    real(dp) :: d2pth(10, BATCH_PTS), d2H(10, BATCH_PTS)
     real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS)
     real(dp) :: fvec(2, BATCH_PTS), fjac(2, 2, BATCH_PTS)
     real(dp) :: xlast_r(BATCH_PTS), xlast_pphi(BATCH_PTS)
@@ -264,13 +243,10 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod, &
-            pth, dpth, d2pth_1, d2pth_7, H, dH, d2H_1, d2H_7, vpar, dvpar)
+            pth, dpth, d2pth, H, dH, d2H, vpar, dvpar)
 
-        call jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
-            x_r, x_pphi, fjac, &
-            Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-            hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-            Bmod, dBmod, d2Bmod)
+        call jac_sympl_euler1_many(npts, dt, z_pphi, pthold, x_pphi, fjac, &
+            pth, dpth, d2pth, dH, d2H)
 
         do i = 1, npts
             if (converged(i)) cycle
@@ -312,10 +288,10 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
                     dH_out(j, i) = dH(j, i)
                     dvpar_out(j, i) = dvpar(j, i)
                 end do
-                d2pth_1_out(i) = d2pth_1(i)
-                d2pth_7_out(i) = d2pth_7(i)
-                d2H_1_out(i) = d2H_1(i)
-                d2H_7_out(i) = d2H_7(i)
+                d2pth_1_out(i) = d2pth(1, i)
+                d2pth_7_out(i) = d2pth(7, i)
+                d2H_1_out(i) = d2H(1, i)
+                d2H_7_out(i) = d2H(7, i)
                 vpar_out(i) = vpar(i)
                 hth_out(i) = hth(i)
                 hph_out(i) = hph(i)
@@ -339,10 +315,10 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
                 dH_out(j, i) = dH(j, i)
                 dvpar_out(j, i) = dvpar(j, i)
             end do
-            d2pth_1_out(i) = d2pth_1(i)
-            d2pth_7_out(i) = d2pth_7(i)
-            d2H_1_out(i) = d2H_1(i)
-            d2H_7_out(i) = d2H_7(i)
+            d2pth_1_out(i) = d2pth(1, i)
+            d2pth_7_out(i) = d2pth(7, i)
+            d2H_1_out(i) = d2H(1, i)
+            d2H_7_out(i) = d2H(7, i)
             vpar_out(i) = vpar(i)
             hth_out(i) = hth(i)
             hph_out(i) = hph(i)

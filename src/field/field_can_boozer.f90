@@ -58,13 +58,11 @@ subroutine eval_field_booz_many(npts, r, th_c, ph_c, &
     real(dp), intent(out) :: d2hth_dr2(npts), d2hph_dr2(npts)
     real(dp), intent(out) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
 
-    real(dp), allocatable :: r_local(:), d3Aph_dr3(:)
-    real(dp), allocatable :: Bth(:), Bph(:), dBth(:), dBph(:), d2Bth(:), d2Bph(:)
+    real(dp) :: r_local(npts), d3Aph_dr3(npts)
+    real(dp) :: Bth(npts), Bph(npts), dBth(npts), dBph(npts), d2Bth(npts), d2Bph(npts)
     real(dp) :: bmod2
     integer :: i
 
-    allocate(r_local(npts), d3Aph_dr3(npts))
-    allocate(Bth(npts), Bph(npts), dBth(npts), dBph(npts), d2Bth(npts), d2Bph(npts))
     r_local = r
 
     call splint_boozer_coord_many(npts, r_local, th_c, ph_c, &
