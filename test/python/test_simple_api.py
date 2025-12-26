@@ -5,22 +5,20 @@ Tests for the cleaned SIMPLE Python API.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 python_dir = Path(__file__).parent.parent.parent / "python"
-pytest.importorskip("pysimple", reason="pysimple module not available")
-
-import sys
-
 sys.path.insert(0, str(python_dir))
 
 examples_dir = Path(__file__).resolve().parents[2] / "examples"
 sys.path.insert(0, str(examples_dir))
 
-import pysimple  # noqa: E402  pylint: disable=wrong-import-position
+sys.modules.pop("pysimple", None)
+pysimple = pytest.importorskip("pysimple", reason="pysimple module not available")
 
 
 class TestConstants:

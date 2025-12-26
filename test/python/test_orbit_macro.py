@@ -5,19 +5,21 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-pytest.importorskip("pysimple", reason="pysimple module not available")
 pytest.importorskip("netCDF4", reason="netCDF4 module not available")
 
 import netCDF4 as nc
 
-import pysimple
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "python"))
+sys.modules.pop("pysimple", None)
+pysimple = pytest.importorskip("pysimple", reason="pysimple module not available")
+
 SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
 
 
