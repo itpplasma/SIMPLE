@@ -115,7 +115,7 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
         Bmod, dBmod, d2Bmod, &
-        pth, dpth, H, dH)
+        pth, dpth, d2pth_1, d2pth_7, H, dH, d2H_1, d2H_7, vpar, dvpar)
     integer, intent(in) :: npts
     real(dp), intent(in) :: dt, ro0
     real(dp), intent(in) :: mu(npts)
@@ -129,9 +129,12 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
     real(dp), intent(in) :: d2hth_dr2(npts), d2hph_dr2(npts)
     real(dp), intent(in) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
     real(dp), intent(out) :: pth(npts), dpth(4, npts)
+    real(dp), intent(out) :: d2pth_1(npts), d2pth_7(npts)
     real(dp), intent(out) :: H(npts), dH(4, npts)
+    real(dp), intent(out) :: d2H_1(npts), d2H_7(npts)
+    real(dp), intent(out) :: vpar(npts), dvpar(4, npts)
 
-    real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS), d2vpar(10, BATCH_PTS)
+    real(dp) :: d2vpar(10, BATCH_PTS)
     real(dp) :: d2pth(10, BATCH_PTS), d2H(10, BATCH_PTS)
     integer :: i
 
@@ -148,6 +151,10 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
             + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
         fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_pphi(i)) &
             + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
+        d2pth_1(i) = d2pth(1, i)
+        d2pth_7(i) = d2pth(7, i)
+        d2H_1(i) = d2H(1, i)
+        d2H_7(i) = d2H(7, i)
     end do
     !$omp end simd
     !$acc end kernels
@@ -205,7 +212,10 @@ end subroutine jac_sympl_euler1_many
 
 
 subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
-        z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged)
+        z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged, &
+        xlast_r_out, xlast_pphi_out, &
+        pth_out, dpth_out, dH_out, d2pth_1_out, d2pth_7_out, d2H_1_out, d2H_7_out, &
+        vpar_out, dvpar_out, hth_out, hph_out, dhth_out, dhph_out)
     integer, intent(in) :: npts, maxit
     real(dp), intent(in) :: dt, ro0, atol, rtol
     real(dp), intent(in) :: mu(npts)
@@ -213,6 +223,14 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     real(dp), intent(in) :: pthold(npts)
     real(dp), intent(inout) :: x_r(npts), x_pphi(npts)
     logical, intent(out) :: converged(npts)
+    real(dp), intent(out) :: xlast_r_out(npts), xlast_pphi_out(npts)
+    real(dp), intent(out) :: pth_out(npts), dpth_out(4, npts)
+    real(dp), intent(out) :: dH_out(4, npts)
+    real(dp), intent(out) :: d2pth_1_out(npts), d2pth_7_out(npts)
+    real(dp), intent(out) :: d2H_1_out(npts), d2H_7_out(npts)
+    real(dp), intent(out) :: vpar_out(npts), dvpar_out(4, npts)
+    real(dp), intent(out) :: hth_out(npts), hph_out(npts)
+    real(dp), intent(out) :: dhth_out(3, npts), dhph_out(3, npts)
 
     real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
     real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
@@ -221,12 +239,16 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
     real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
     real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), H(BATCH_PTS), dH(4, BATCH_PTS)
+    real(dp) :: d2pth_1(BATCH_PTS), d2pth_7(BATCH_PTS)
+    real(dp) :: d2H_1(BATCH_PTS), d2H_7(BATCH_PTS)
+    real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS)
     real(dp) :: fvec(2, BATCH_PTS), fjac(2, 2, BATCH_PTS)
     real(dp) :: xlast_r(BATCH_PTS), xlast_pphi(BATCH_PTS)
     real(dp) :: tolref_pphi(BATCH_PTS)
+    logical :: just_converged
     real(dp) :: det, ijac11, ijac12, ijac21, ijac22
     real(dp) :: dx_r, dx_pphi
-    integer :: kit, i
+    integer :: kit, i, j
 
     converged(1:npts) = .false.
     tolref_pphi(1:npts) = abs(10.0d0 * torflux / ro0)
@@ -242,7 +264,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod, &
-            pth, dpth, H, dH)
+            pth, dpth, d2pth_1, d2pth_7, H, dH, d2H_1, d2H_7, vpar, dvpar)
 
         call jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
             x_r, x_pphi, fjac, &
@@ -250,12 +272,11 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod)
 
-        xlast_r(1:npts) = x_r(1:npts)
-        xlast_pphi(1:npts) = x_pphi(1:npts)
-
-        !$omp simd private(det, ijac11, ijac12, ijac21, ijac22, dx_r, dx_pphi)
         do i = 1, npts
             if (converged(i)) cycle
+
+            xlast_r(i) = x_r(i)
+            xlast_pphi(i) = x_pphi(i)
 
             det = fjac(1, 1, i) * fjac(2, 2, i) - fjac(1, 2, i) * fjac(2, 1, i)
             ijac11 = fjac(2, 2, i) / det
@@ -273,16 +294,63 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
 
             tolref_pphi(i) = max(abs(x_pphi(i)), tolref_pphi(i))
 
+            just_converged = .false.
             if (abs(fvec(1, i)) < atol .and. abs(fvec(2, i)) < atol) then
-                converged(i) = .true.
+                just_converged = .true.
             else if (abs(x_r(i) - xlast_r(i)) < rtol .and. &
                      abs(x_pphi(i) - xlast_pphi(i)) < rtol * tolref_pphi(i)) then
+                just_converged = .true.
+            end if
+
+            if (just_converged) then
                 converged(i) = .true.
+                xlast_r_out(i) = xlast_r(i)
+                xlast_pphi_out(i) = xlast_pphi(i)
+                pth_out(i) = pth(i)
+                do j = 1, 4
+                    dpth_out(j, i) = dpth(j, i)
+                    dH_out(j, i) = dH(j, i)
+                    dvpar_out(j, i) = dvpar(j, i)
+                end do
+                d2pth_1_out(i) = d2pth_1(i)
+                d2pth_7_out(i) = d2pth_7(i)
+                d2H_1_out(i) = d2H_1(i)
+                d2H_7_out(i) = d2H_7(i)
+                vpar_out(i) = vpar(i)
+                hth_out(i) = hth(i)
+                hph_out(i) = hph(i)
+                do j = 1, 3
+                    dhth_out(j, i) = dhth(j, i)
+                    dhph_out(j, i) = dhph(j, i)
+                end do
             end if
         end do
-        !$omp end simd
 
         if (all(converged)) exit
+    end do
+
+    do i = 1, npts
+        if (.not. converged(i)) then
+            xlast_r_out(i) = xlast_r(i)
+            xlast_pphi_out(i) = xlast_pphi(i)
+            pth_out(i) = pth(i)
+            do j = 1, 4
+                dpth_out(j, i) = dpth(j, i)
+                dH_out(j, i) = dH(j, i)
+                dvpar_out(j, i) = dvpar(j, i)
+            end do
+            d2pth_1_out(i) = d2pth_1(i)
+            d2pth_7_out(i) = d2pth_7(i)
+            d2H_1_out(i) = d2H_1(i)
+            d2H_7_out(i) = d2H_7(i)
+            vpar_out(i) = vpar(i)
+            hth_out(i) = hth(i)
+            hph_out(i) = hph(i)
+            do j = 1, 3
+                dhth_out(j, i) = dhth(j, i)
+                dhph_out(j, i) = dhph(j, i)
+            end do
+        end if
     end do
 end subroutine newton1_soa
 
@@ -297,6 +365,7 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
     integer, intent(out) :: ierr(npts)
 
     real(dp) :: pthold(BATCH_PTS), x_r(BATCH_PTS), x_pphi(BATCH_PTS)
+    real(dp) :: xlast_r(BATCH_PTS), xlast_pphi(BATCH_PTS)
     real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
     real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
     real(dp) :: hth(BATCH_PTS), hph(BATCH_PTS)
@@ -305,7 +374,10 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
     real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
     real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS)
     real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), H(BATCH_PTS), dH(4, BATCH_PTS)
+    real(dp) :: d2pth_1(BATCH_PTS), d2pth_7(BATCH_PTS)
+    real(dp) :: d2H_1(BATCH_PTS), d2H_7(BATCH_PTS)
     logical :: converged(BATCH_PTS)
+    real(dp) :: dr, dpphi
     integer :: ktau, i
 
     escaped = .false.
@@ -327,9 +399,12 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
         x_pphi(1:npts) = z_pphi(1:npts)
 
         call newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
-            z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged)
+            z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged, &
+            xlast_r, xlast_pphi, &
+            pth, dpth, dH, d2pth_1, d2pth_7, d2H_1, d2H_7, &
+            vpar, dvpar, hth, hph, dhth, dhph)
 
-        !$omp simd
+        !$omp simd private(dr, dpphi)
         do i = 1, npts
             if (escaped(i)) cycle
 
@@ -343,17 +418,17 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
 
             z_r(i) = x_r(i)
             z_pphi(i) = x_pphi(i)
+
+            dr = x_r(i) - xlast_r(i)
+            dpphi = x_pphi(i) - xlast_pphi(i)
+            pth(i) = pth(i) + dpth(1, i) * dr + dpth(4, i) * dpphi
+            dH(1, i) = dH(1, i) + d2H_1(i) * dr + d2H_7(i) * dpphi
+            dpth(1, i) = dpth(1, i) + d2pth_1(i) * dr + d2pth_7(i) * dpphi
+            vpar(i) = vpar(i) + dvpar(1, i) * dr + dvpar(4, i) * dpphi
+            hth(i) = hth(i) + dhth(1, i) * dr
+            hph(i) = hph(i) + dhph(1, i) * dr
         end do
         !$omp end simd
-
-        call eval_field_booz_many(npts, z_r, z_th, z_ph, &
-            Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
-            hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
-            Bmod, dBmod, d2Bmod)
-
-        call get_derivatives_many(npts, ro0, mu, z_pphi, &
-            Ath, Aph, dAth_dr, dAph_dr, hth, hph, dhth, dhph, Bmod, dBmod, &
-            vpar, dvpar, pth, dpth, H, dH)
 
         !$omp simd
         do i = 1, npts

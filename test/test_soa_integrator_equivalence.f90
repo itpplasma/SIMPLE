@@ -13,7 +13,7 @@ program test_soa_integrator_equivalence
 
     implicit none
 
-    real(dp), parameter :: RTOL_FIRST_STEPS = 1.0d-12
+    real(dp), parameter :: RTOL_FIRST_STEPS = 1.0d-14
     type(tracer_t) :: norb
     character(len=256) :: config_file
     integer :: i, npts, nerrors, ntimstep, ierr_single, kt
