@@ -257,22 +257,29 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         real(dp), allocatable :: traj(:, :), times(:)
+#ifdef SIMPLE_OPENACC
+        integer :: ntstep, npart
+#endif
 
         if (output_orbits_macrostep) then
             call init_orbit_netcdf(ntestpart, ntimstep)
         end if
 
 #ifdef SIMPLE_OPENACC
-        ! OpenACC: Single-threaded for now - full GPU parallel requires
-        ! libneo routines (splint_can_coord, magfie, etc.) to have !$acc routine
-        ! TODO: Add !$acc routine seq to libneo for true GPU parallelism
-        do i = 1, ntestpart
-            kpart = kpart + 1
-            print *, kpart, ' / ', ntestpart, 'particle: ', i
-            allocate(traj(5, ntimstep), times(ntimstep))
-            call trace_orbit(norb, i, traj, times)
-            deallocate(traj, times)
+        ! OpenACC GPU parallel execution
+        ntstep = ntimstep
+        npart = ntestpart
+
+        ! GPU parallel loop with explicit array arguments
+        !$acc parallel loop copyin(zstart) &
+        !$acc   copyout(zend, trap_par, perp_inv, times_lost) &
+        !$acc   copy(confpart_pass, confpart_trap)
+        do i = 1, npart
+            call trace_orbit_gpu(i, zstart, zend, trap_par, perp_inv, &
+                                 times_lost, confpart_pass, confpart_trap, ntstep)
         end do
+
+        kpart = npart
 #else
         !$omp parallel firstprivate(norb) private(traj, times, i)
         allocate (traj(5, ntimstep), times(ntimstep))
@@ -596,6 +603,46 @@ contains
         end do
     end subroutine macrostep
 
+#ifdef SIMPLE_OPENACC
+    subroutine trace_orbit_gpu(ipart, zstart_arr, zend_arr, trap_par_arr, &
+                               perp_inv_arr, times_lost_arr, confpart_pass_arr, &
+                               confpart_trap_arr, ntstep)
+        !$acc routine seq
+
+        integer, intent(in) :: ipart, ntstep
+        real(dp), intent(in) :: zstart_arr(:, :)
+        real(dp), intent(out) :: zend_arr(:, :)
+        real(dp), intent(out) :: trap_par_arr(:), perp_inv_arr(:), times_lost_arr(:)
+        real(dp), intent(inout) :: confpart_pass_arr(:), confpart_trap_arr(:)
+
+        real(dp), dimension(5) :: z
+        integer :: it
+        integer(8) :: kt
+        logical :: passing
+
+        ! Minimal GPU test: just copy and count confined particles
+        z = zstart_arr(:, ipart)
+        zend_arr(:, ipart) = z
+        trap_par_arr(ipart) = z(5)
+        perp_inv_arr(ipart) = 0.0d0
+        times_lost_arr(ipart) = 0.0d0
+
+        passing = (z(5) > 0.5d0)
+
+        kt = 0
+        do it = 1, ntstep
+            if (passing) then
+                !$acc atomic update
+                confpart_pass_arr(it) = confpart_pass_arr(it) + 1.d0
+            else
+                !$acc atomic update
+                confpart_trap_arr(it) = confpart_trap_arr(it) + 1.d0
+            end if
+            kt = kt + 1
+        end do
+    end subroutine trace_orbit_gpu
+#endif
+
     subroutine to_standard_z_coordinates(anorb, z)
         type(tracer_t), intent(in) :: anorb
         real(dp), intent(inout) :: z(5)
@@ -610,10 +657,10 @@ contains
         logical, intent(in) :: passing
 
         if (passing) then
-!$omp atomic update
+            !$omp atomic update
             confpart_pass(it) = confpart_pass(it) + 1.d0
         else
-!$omp atomic update
+            !$omp atomic update
             confpart_trap(it) = confpart_trap(it) + 1.d0
         end if
     end subroutine increase_confined_count
@@ -627,7 +674,7 @@ contains
 
         real(dp) :: bmod
 
-!$omp critical
+        !$omp critical
         bmod = compute_bmod(z(1:3))
         if (num_surf > 1) then
             call get_bminmax(z(1), bmin, bmax)
@@ -635,7 +682,7 @@ contains
         passing = z(5)**2 .gt. 1.d0 - bmod/bmax
         trap_par_ = ((1.d0 - z(5)**2)*bmax/bmod - 1.d0)*bmin/(bmax - bmin)
         perp_inv_ = z(4)**2*(1.d0 - z(5)**2)/bmod
-!$omp end critical
+        !$omp end critical
     end subroutine compute_pitch_angle_params
 
     function compute_bmod(z) result(bmod)

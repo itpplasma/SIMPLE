@@ -48,17 +48,21 @@ module get_can_sub
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
-    ! Note: spline data is copied to GPU via explicit enter data in build functions
 
     ! Batch spline for G_c (generating function)
     type(BatchSplineData3D), save :: G_batch_spline
     logical, save :: G_batch_spline_ready = .false.
-    ! Note: spline data is copied to GPU via explicit enter data in build functions
 
     ! Batch spline for sqg_c, B_vartheta_c, B_varphi_c (3 quantities)
     type(BatchSplineData3D), save :: sqg_Bt_Bp_batch_spline
     logical, save :: sqg_Bt_Bp_batch_spline_ready = .false.
-    ! Note: spline data is copied to GPU via explicit enter data in build functions
+
+#ifdef SIMPLE_OPENACC
+    ! OpenACC declare for batch spline module variables used in !$acc routine seq
+    !$acc declare create(aphi_batch_spline, aphi_batch_spline_ready)
+    !$acc declare create(G_batch_spline, G_batch_spline_ready)
+    !$acc declare create(sqg_Bt_Bp_batch_spline, sqg_Bt_Bp_batch_spline_ready)
+#endif
 
 contains
 
@@ -504,8 +508,7 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
                             d2bth_tt, d2bth_tp, d2bth_pp, &
                             d2bph_rr, d2bph_rt, d2bph_rp, &
                             d2bph_tt, d2bph_tp, d2bph_pp, G_c)
-    ! Note: !$acc routine seq removed - module variables not available on GPU
-    ! due to GCC 16 ICE with !$acc declare and !$omp threadprivate
+    !$acc routine seq
     use vector_potentail_mod, only: torflux
     use new_vmec_stuff_mod, only: nper
     use chamb_mod, only: rnegflag
@@ -538,13 +541,13 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
     real(dp) :: x_eval(3)
     real(dp) :: y_eval(3), dy_eval(3, 3), d2y_eval(6, 3)
     real(dp) :: y_G(1), dy_G(3, 1)
-    real(dp) :: y1d(1), dy1d(1), d2y1d(1)
+    real(dp) :: y1d(1), dy1d(1), d2y1d(1), d3y1d(1)
     real(dp) :: theta_wrapped, phi_wrapped
     real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
     real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp
     real(dp) :: d2qua_dt2, d2qua_dtdp, d2qua_dp2
 
-!$omp atomic
+!$acc atomic
     icounter = icounter + 1
     r_eval = r
     if (r_eval <= 0.0_dp) then
@@ -556,18 +559,11 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
     dA_theta_dr = torflux
 
     ! Interpolate A_phi using batch spline (1D)
-    if (.not. aphi_batch_spline_ready) then
-        error stop "splint_can_coord: Aphi batch spline not initialized"
-    end if
-
     if (mode_secders > 0) then
         ! Need third derivative - use der3 which computes all derivatives in one pass
-        block
-            real(dp) :: d3y1d(1)
-            call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
-                                                y1d, dy1d, d2y1d, d3y1d)
-            d3A_phi_dr3 = d3y1d(1)
-        end block
+        call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
+                                            y1d, dy1d, d2y1d, d3y1d)
+        d3A_phi_dr3 = d3y1d(1)
     else
         call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, &
                                             y1d, dy1d, d2y1d)
@@ -594,9 +590,6 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
 
     ! Interpolate G if needed
     if (fullset) then
-        if (.not. G_batch_spline_ready) then
-            error stop "splint_can_coord: G batch spline not initialized"
-        end if
         call evaluate_batch_splines_3d_der(G_batch_spline, x_eval, y_G, dy_G)
         G_c = y_G(1)
     else
@@ -604,10 +597,6 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
     end if
 
     ! Interpolate sqg, B_vartheta, B_varphi (3 quantities)
-    if (.not. sqg_Bt_Bp_batch_spline_ready) then
-        error stop "splint_can_coord: sqg_Bt_Bp batch spline not initialized"
-    end if
-
     if (mode_secders == 2) then
         call evaluate_batch_splines_3d_der2(sqg_Bt_Bp_batch_spline, x_eval, &
                                             y_eval, dy_eval, d2y_eval)

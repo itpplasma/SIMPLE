@@ -105,6 +105,16 @@ module params
         integ_coords, &
         output_error, output_orbits_macrostep  ! callback
 
+#ifdef SIMPLE_OPENACC
+    ! OpenACC device variable declarations for GPU-accessible scalars
+    !$acc declare create(ntestpart, ntimstep, ntau, ntcut)
+    !$acc declare create(integmode, notrace_passing)
+    !$acc declare create(dtaumin, relerr, v0, contr_pp)
+    !$acc declare create(class_plot)
+    ! Allocatable arrays used in !$acc routine seq functions
+    !$acc declare create(trap_par)
+#endif
+
 contains
 
     subroutine read_config(config_file)
@@ -182,6 +192,14 @@ contains
 
         call init_batch
         call reallocate_arrays
+
+#ifdef SIMPLE_OPENACC
+        ! Copy scalar params to GPU device
+        !$acc update device(ntestpart, ntimstep, ntau, ntcut)
+        !$acc update device(integmode, notrace_passing)
+        !$acc update device(dtaumin, relerr, v0, contr_pp)
+        !$acc update device(class_plot)
+#endif
     end subroutine params_init
 
     subroutine init_batch
@@ -330,6 +348,9 @@ contains
     end subroutine sort_idx
 
     function should_skip(ipart)
+#ifdef SIMPLE_OPENACC
+        !$acc routine seq
+#endif
         ! notrace_passing: no tracing of passing particles, assume that all are confined
         ! or skip strongly passing particles that are certainly confined
         logical :: should_skip

@@ -40,29 +40,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Optional: OpenMP (enabled by default)
 
 ### OpenACC GPU Builds
-SIMPLE supports GPU acceleration via OpenACC with two compiler options:
+SIMPLE supports GPU acceleration via OpenACC using GCC 16+ with nvptx offload.
 
-**GCC 16+ with nvptx offload** (experimental):
-- Requires: GCC 16+ built with `--enable-offload-targets=nvptx-none`
+**GCC 16 with nvptx offload** (experimental):
 - Location: `/temp/AG-plasma/opt/gcc16`
-- Build: `make gcc-acc`
-- Test: `make gcc-acc-test`
-- Clean: `make gcc-acc-clean`
-- Note: GPU offloading has known memory issues with GCC 16 nvptx. Use `ACC_DEVICE_TYPE=host` for host fallback.
+- RTX 4090 GPU available for testing
+- CRITICAL: OpenMP must be disabled - nvptx mkoffload cannot handle both -fopenacc AND -fopenmp
 
-**NVHPC/nvfortran**:
-- Requires: NVIDIA HPC SDK (nvfortran)
-- Build: `make nvfortran-acc`
-- Test: `make nvfortran-acc-test`
-- Clean: `make nvfortran-acc-clean`
-
-**CMake options for OpenACC**:
+**Manual build with GCC 16 OpenACC**:
 ```bash
-cmake -S . -B build -GNinja \
-    -DSIMPLE_ENABLE_OPENACC=ON \
-    -DSIMPLE_OPENACC_OFFLOAD_TARGET=nvptx \
-    -DCMAKE_Fortran_COMPILER=/temp/AG-plasma/opt/gcc16/bin/gfortran
+cmake -S . -B build -G Ninja \
+  -DCMAKE_Fortran_COMPILER=/temp/AG-plasma/opt/gcc16/bin/gfortran \
+  -DCMAKE_C_COMPILER=/temp/AG-plasma/opt/gcc16/bin/gcc \
+  -DCMAKE_CXX_COMPILER=/temp/AG-plasma/opt/gcc16/bin/g++ \
+  -DCMAKE_Fortran_FLAGS="-fopenacc -foffload=nvptx-none -O2 -DSIMPLE_OPENACC" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_OPENMP=OFF
+
+cmake --build build -j
 ```
+
+**Running with OpenACC**:
+```bash
+LD_LIBRARY_PATH=/temp/AG-plasma/opt/gcc16/lib64:$LD_LIBRARY_PATH ./build/simple.x
+```
+
+**OpenACC implementation status**:
+- Module variables with `!$acc declare create(...)` in params.f90 and get_canonical_coordinates.F90
+- Preprocessor macro `SIMPLE_OPENACC` for conditional compilation
+- Batch spline evaluation routines in libneo have `!$acc routine seq` directives
+- GPU particle loop stub in simple_main.f90 (needs full integration implementation)
 
 ### GVEC Integration
 - Minimal GVEC library automatically built from `thirdparty/gvec/`

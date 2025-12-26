@@ -12,14 +12,14 @@ public :: twopi
 contains
 
 subroutine evaluate_flux(f, r, th_c, ph_c, mode_secders)
-    ! Note: !$acc routine seq removed - n_field_evaluations is threadprivate
+    !$acc routine seq
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
     call eval_field_can(f, r, th_c, ph_c, mode_secders)
 
-    ! Note: !$acc atomic removed - n_field_evaluations is threadprivate
+    !$acc atomic
     n_field_evaluations = n_field_evaluations + 1
 end subroutine evaluate_flux
 
@@ -54,7 +54,7 @@ end subroutine ref_to_integ_flux
 !> mode_secders = 1: second derivatives only in d/dr^2
 !> mode_secders = 2: all second derivatives, including mixed
 subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
-    ! Note: !$acc routine seq removed - splint_can_coord uses threadprivate variables
+    !$acc routine seq
     use get_can_sub, only: splint_can_coord
 
     type(field_can_t), intent(inout) :: f
