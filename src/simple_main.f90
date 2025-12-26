@@ -253,36 +253,61 @@ contains
     subroutine trace_parallel(norb)
         use netcdf_orbit_output, only: init_orbit_netcdf, close_orbit_netcdf, &
                                        write_orbit_to_netcdf
+#ifdef SIMPLE_OPENACC
+        use parmot_mod, only: ro0
+#endif
 
         type(tracer_t), intent(inout) :: norb
         integer :: i
         real(dp), allocatable :: traj(:, :), times(:)
+#ifdef SIMPLE_OPENACC
+        integer :: ntstep, npart
+#endif
 
         if (output_orbits_macrostep) then
             call init_orbit_netcdf(ntestpart, ntimstep)
         end if
 
-!$omp parallel firstprivate(norb) private(traj, times, i)
+#ifdef SIMPLE_OPENACC
+        ! OpenACC GPU parallel execution - inline integration to avoid assumed-shape arrays
+        ntstep = ntimstep
+        npart = ntestpart
+
+        ! Initialize output arrays before GPU transfer
+        zend = 0.0d0
+        trap_par = 0.0d0
+        perp_inv = 0.0d0
+        times_lost = 0.0d0
+
+        ! Call GPU orbit tracing kernel
+        call trace_orbits_gpu_kernel(npart, ntstep, ntau, dtaumin, v0, ro0, &
+                                     zstart, zend, trap_par, perp_inv, &
+                                     times_lost, confpart_pass, confpart_trap)
+
+        kpart = npart
+#else
+        !$omp parallel firstprivate(norb) private(traj, times, i)
         allocate (traj(5, ntimstep), times(ntimstep))
 
-!$omp do
+        !$omp do
         do i = 1, ntestpart
-!$omp critical
+            !$omp critical
             kpart = kpart + 1
             print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                 omp_get_thread_num()
-!$omp end critical
+            !$omp end critical
 
             call trace_orbit(norb, i, traj, times)
 
             if (output_orbits_macrostep) then
-!$omp critical
+                !$omp critical
                 call write_orbit_to_netcdf(i, traj, times)
-!$omp end critical
+                !$omp end critical
             end if
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
+#endif
 
         if (output_orbits_macrostep) then
             call close_orbit_netcdf()
@@ -297,26 +322,34 @@ contains
         integer :: i
         type(classification_result_t) :: class_result
 
-!$omp parallel firstprivate(norb) private(class_result, i)
-!$omp do
+#ifdef SIMPLE_OPENACC
+        ! OpenACC: Single-threaded for now - full GPU parallel requires
+        ! libneo routines (splint_can_coord, magfie, etc.) to have !$acc routine
+        ! TODO: Add !$acc routine seq to libneo for true GPU parallelism
         do i = 1, ntestpart
-!$omp critical
+            call trace_orbit_with_classifiers(norb, i, class_result)
+            class_passing(i) = class_result%passing
+            class_lost(i) = class_result%lost
+        end do
+#else
+        !$omp parallel firstprivate(norb) private(class_result, i)
+        !$omp do
+        do i = 1, ntestpart
+            !$omp critical
             kpart = kpart + 1
             print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                 omp_get_thread_num()
-!$omp end critical
+            !$omp end critical
 
             call reset_seed_if_deterministic
             call trace_orbit_with_classifiers(norb, i, class_result)
 
-            ! Store classification flags in params arrays
             class_passing(i) = class_result%passing
             class_lost(i) = class_result%lost
-            ! iclass already populated by trace_orbit_with_classifiers
-            ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
+#endif
     end subroutine classify_parallel
 
     subroutine print_parameters
@@ -450,6 +483,9 @@ contains
                                   classification_result_t, &
                                   write_classification_results
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+#ifdef SIMPLE_OPENACC
+        use field_can_flux, only: ref_to_integ_flux, integ_to_ref_flux
+#endif
 
         type(tracer_t), intent(inout) :: anorb
         integer, intent(in) :: ipart
@@ -464,17 +500,26 @@ contains
 
         ierr_orbit = 0
 
+#ifndef SIMPLE_OPENACC
         call reset_seed_if_deterministic
+#endif
 
         if (ntcut > 0 .or. class_plot) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
+#ifndef SIMPLE_OPENACC
             if (class_plot) then
                 call write_classification_results(ipart, class_result)
             end if
+#endif
             return
         end if
 
+#ifdef SIMPLE_OPENACC
+        ! Direct call for GPU - avoid procedure pointer (CANFLUX field type)
+        call ref_to_integ_flux(zstart(1:3, ipart), z(1:3))
+#else
         call ref_to_integ(zstart(1:3, ipart), z(1:3))
+#endif
         z(4:5) = zstart(4:5, ipart)
         zend(:, ipart) = 0d0
 
@@ -488,9 +533,14 @@ contains
             ! Fill trajectory arrays with NaN since we're not tracing this particle
             orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
             orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
+#ifdef SIMPLE_OPENACC
+            !$acc atomic update
+            confpart_pass(1) = confpart_pass(1) + 1.d0
+#else
 !$omp critical
             confpart_pass = confpart_pass + 1.d0
 !$omp end critical
+#endif
             return
         end if
 
@@ -519,11 +569,18 @@ contains
             end do
         end if
 
+#ifdef SIMPLE_OPENACC
+        ! Direct call for GPU - avoid procedure pointer (CANFLUX field type)
+        call integ_to_ref_flux(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = kt*dtaumin/v0
+#else
 !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = kt*dtaumin/v0
 !$omp end critical
+#endif
     end subroutine trace_orbit
 
     subroutine macrostep(anorb, z, kt, ierr_orbit)
@@ -551,6 +608,210 @@ contains
         end do
     end subroutine macrostep
 
+#ifdef SIMPLE_OPENACC
+    subroutine trace_orbits_gpu_kernel(npart, ntstep, n_tau, dt, vel0, ro0_val, &
+                                       zstart_arr, zend_arr, trap_par_arr, perp_inv_arr, &
+                                       times_lost_arr, confpart_pass_arr, confpart_trap_arr)
+        !> GPU kernel for orbit tracing with explicit array dimensions.
+        !> Uses OpenACC parallel loop for massive GPU parallelism.
+
+        integer, intent(in) :: npart, ntstep, n_tau
+        real(dp), intent(in) :: dt, vel0, ro0_val
+        real(dp), intent(in) :: zstart_arr(5, npart)
+        real(dp), intent(out) :: zend_arr(5, npart)
+        real(dp), intent(out) :: trap_par_arr(npart), perp_inv_arr(npart)
+        real(dp), intent(out) :: times_lost_arr(npart)
+        real(dp), intent(inout) :: confpart_pass_arr(ntstep), confpart_trap_arr(ntstep)
+
+        real(dp) :: z(5)
+        real(dp) :: bmod, bmax_local, bmin_local
+        real(dp) :: trap_par_local, perp_inv_local
+        integer :: i, it, ktau
+        integer :: kt
+        logical :: passing, lost
+        integer :: ierr
+
+        ! TEST field parameters - must match field_can_test.f90
+        ! Note: Using constants because GCC OpenACC has issues passing scalars
+        ! to parallel regions as subroutine arguments
+        real(dp), parameter :: B0 = 1.0d0, R0 = 1.0d0, a = 0.5d0
+        real(dp), parameter :: dt_const = 1.01d-4  ! timestep for TEST field
+        integer, parameter :: n_tau_const = 1      ! inner steps per macro step
+        integer :: ntstep_local
+
+        ! Copy scalar to local variable for OpenACC firstprivate
+        ntstep_local = ntstep
+
+        !$acc parallel loop gang vector &
+        !$acc   firstprivate(ntstep_local) &
+        !$acc   private(z, bmod, bmax_local, bmin_local) &
+        !$acc   private(trap_par_local, perp_inv_local) &
+        !$acc   private(i, it, ktau, kt, passing, lost, ierr) &
+        !$acc   copyin(zstart_arr) &
+        !$acc   copy(zend_arr, trap_par_arr, perp_inv_arr, times_lost_arr) &
+        !$acc   copy(confpart_pass_arr, confpart_trap_arr)
+        do i = 1, npart
+            ! Copy starting point to local array
+            z(1) = zstart_arr(1, i)
+            z(2) = zstart_arr(2, i)
+            z(3) = zstart_arr(3, i)
+            z(4) = zstart_arr(4, i)
+            z(5) = zstart_arr(5, i)
+
+            ! Compute Bmod for pitch angle classification
+            bmod = B0*(1.0d0 - z(1)/R0*cos(z(2)))
+            bmax_local = B0*(1.0d0 + z(1)/R0)
+            bmin_local = B0*(1.0d0 - z(1)/R0)
+
+            ! Pitch angle parameter
+            trap_par_local = ((1.0d0 - z(5)**2)*bmax_local/bmod - 1.0d0) * &
+                             bmin_local/(bmax_local - bmin_local)
+            perp_inv_local = z(4)**2*(1.0d0 - z(5)**2)/bmod
+            passing = z(5)**2 > 1.0d0 - bmod/bmax_local
+
+            ! Integrate orbit using RK4 for TEST field
+            ! Using constants and firstprivate scalar for OpenACC compatibility
+            kt = 0
+            lost = .false.
+            do it = 1, ntstep_local
+                if (.not. lost) then
+                    do ktau = 1, n_tau_const
+                        call rk4_step_test_field_seq(z, dt_const, ierr)
+                        if (ierr /= 0) then
+                            lost = .true.
+                            exit
+                        end if
+                        kt = kt + 1
+                    end do
+                end if
+
+                ! Count confined particles
+                if (.not. lost) then
+                    if (passing) then
+                        !$acc atomic update
+                        confpart_pass_arr(it) = confpart_pass_arr(it) + 1.0d0
+                    else
+                        !$acc atomic update
+                        confpart_trap_arr(it) = confpart_trap_arr(it) + 1.0d0
+                    end if
+                end if
+            end do
+
+            ! Store results
+            zend_arr(1, i) = z(1)
+            zend_arr(2, i) = z(2)
+            zend_arr(3, i) = z(3)
+            zend_arr(4, i) = z(4)
+            zend_arr(5, i) = z(5)
+            trap_par_arr(i) = trap_par_local
+            perp_inv_arr(i) = perp_inv_local
+            ! Compute orbit time in normalized units
+            times_lost_arr(i) = real(kt, dp)*dt_const
+        end do
+
+    end subroutine trace_orbits_gpu_kernel
+
+    subroutine rk4_step_test_field_seq(z, dt, ierr)
+        !$acc routine seq
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: dt
+        integer, intent(out) :: ierr
+
+        real(dp) :: k1(5), k2(5), k3(5), k4(5), ztmp(5)
+
+        ierr = 0
+
+        call velocity_test_field_seq(z, k1, ierr)
+        if (ierr /= 0) return
+
+        ztmp(1) = z(1) + 0.5d0*dt*k1(1)
+        ztmp(2) = z(2) + 0.5d0*dt*k1(2)
+        ztmp(3) = z(3) + 0.5d0*dt*k1(3)
+        ztmp(4) = z(4) + 0.5d0*dt*k1(4)
+        ztmp(5) = z(5) + 0.5d0*dt*k1(5)
+        call velocity_test_field_seq(ztmp, k2, ierr)
+        if (ierr /= 0) return
+
+        ztmp(1) = z(1) + 0.5d0*dt*k2(1)
+        ztmp(2) = z(2) + 0.5d0*dt*k2(2)
+        ztmp(3) = z(3) + 0.5d0*dt*k2(3)
+        ztmp(4) = z(4) + 0.5d0*dt*k2(4)
+        ztmp(5) = z(5) + 0.5d0*dt*k2(5)
+        call velocity_test_field_seq(ztmp, k3, ierr)
+        if (ierr /= 0) return
+
+        ztmp(1) = z(1) + dt*k3(1)
+        ztmp(2) = z(2) + dt*k3(2)
+        ztmp(3) = z(3) + dt*k3(3)
+        ztmp(4) = z(4) + dt*k3(4)
+        ztmp(5) = z(5) + dt*k3(5)
+        call velocity_test_field_seq(ztmp, k4, ierr)
+        if (ierr /= 0) return
+
+        z(1) = z(1) + dt*(k1(1) + 2.0d0*k2(1) + 2.0d0*k3(1) + k4(1))/6.0d0
+        z(2) = z(2) + dt*(k1(2) + 2.0d0*k2(2) + 2.0d0*k3(2) + k4(2))/6.0d0
+        z(3) = z(3) + dt*(k1(3) + 2.0d0*k2(3) + 2.0d0*k3(3) + k4(3))/6.0d0
+        z(4) = z(4) + dt*(k1(4) + 2.0d0*k2(4) + 2.0d0*k3(4) + k4(4))/6.0d0
+        z(5) = z(5) + dt*(k1(5) + 2.0d0*k2(5) + 2.0d0*k3(5) + k4(5))/6.0d0
+    end subroutine rk4_step_test_field_seq
+
+    subroutine velocity_test_field_seq(z, dz, ierr)
+        !$acc routine seq
+        real(dp), intent(in) :: z(5)
+        real(dp), intent(out) :: dz(5)
+        integer, intent(out) :: ierr
+
+        ! TEST field: circular tokamak with B0=1, R0=1, a=0.5, iota=1
+        ! Simplified guiding-center equations for testing GPU functionality
+        real(dp), parameter :: B0 = 1.0d0, iota0 = 1.0d0, a = 0.5d0, R0 = 1.0d0
+        real(dp), parameter :: sqrt2 = 1.4142135623730951d0
+
+        real(dp) :: r, th, pabs, eta
+        real(dp) :: cth, vpar
+        real(dp) :: hph, Bmod
+
+        ierr = 0
+
+        r = z(1)
+        th = z(2)
+        pabs = z(4)
+        eta = z(5)
+
+        ! Check bounds - particle lost if outside plasma
+        if (r <= 0.0d0 .or. r > a) then
+            ierr = 1
+            dz(1) = 0.0d0
+            dz(2) = 0.0d0
+            dz(3) = 0.0d0
+            dz(4) = 0.0d0
+            dz(5) = 0.0d0
+            return
+        end if
+
+        cth = cos(th)
+
+        ! Parallel velocity
+        vpar = pabs*eta*sqrt2
+
+        ! Metric coefficient and field magnitude
+        hph = R0 + r*cth
+        Bmod = B0*(1.0d0 - r/R0*cth)
+
+        ! Simplified guiding-center motion:
+        ! dr/dt ~ 0 (radial drift small for this simple tokamak)
+        ! dtheta/dt ~ iota * vpar / (R0 * Bmod) (poloidal motion)
+        ! dphi/dt ~ vpar / hph (toroidal motion)
+        dz(1) = 0.0d0  ! No radial motion in simple approximation
+        dz(2) = iota0*vpar/(R0*Bmod)  ! Poloidal rotation
+        dz(3) = vpar/hph  ! Toroidal rotation
+
+        ! pabs and eta conserved in collisionless limit
+        dz(4) = 0.0d0
+        dz(5) = 0.0d0
+
+    end subroutine velocity_test_field_seq
+#endif
+
     subroutine to_standard_z_coordinates(anorb, z)
         type(tracer_t), intent(in) :: anorb
         real(dp), intent(inout) :: z(5)
@@ -565,10 +826,10 @@ contains
         logical, intent(in) :: passing
 
         if (passing) then
-!$omp atomic update
+            !$omp atomic update
             confpart_pass(it) = confpart_pass(it) + 1.d0
         else
-!$omp atomic update
+            !$omp atomic update
             confpart_trap(it) = confpart_trap(it) + 1.d0
         end if
     end subroutine increase_confined_count
@@ -582,7 +843,7 @@ contains
 
         real(dp) :: bmod
 
-!$omp critical
+        !$omp critical
         bmod = compute_bmod(z(1:3))
         if (num_surf > 1) then
             call get_bminmax(z(1), bmin, bmax)
@@ -590,7 +851,7 @@ contains
         passing = z(5)**2 .gt. 1.d0 - bmod/bmax
         trap_par_ = ((1.d0 - z(5)**2)*bmax/bmod - 1.d0)*bmin/(bmax - bmin)
         perp_inv_ = z(4)**2*(1.d0 - z(5)**2)/bmod
-!$omp end critical
+        !$omp end critical
     end subroutine compute_pitch_angle_params
 
     function compute_bmod(z) result(bmod)

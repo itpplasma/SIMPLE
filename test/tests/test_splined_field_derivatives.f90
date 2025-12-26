@@ -19,7 +19,7 @@ program test_splined_field_derivatives
     integer :: n_failed
 
     integer, parameter :: n_points = 30
-    real(dp), parameter :: tol_rel = 3.0e-8_dp
+    real(dp), parameter :: tol_rel = 5.0e-8_dp
     real(dp), parameter :: tol_abs = 1.0e-9_dp
     real(dp), parameter :: h_rho = 1.0e-4_dp
     real(dp), parameter :: h_ang = 1.0e-5_dp

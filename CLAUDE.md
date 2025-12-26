@@ -39,6 +39,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Compiler: GNU Fortran (gfortran)
 - Optional: OpenMP (enabled by default)
 
+### OpenACC GPU Builds
+SIMPLE supports GPU acceleration via OpenACC using GCC 16+ with nvptx offload.
+
+**GCC 16 with nvptx offload** (experimental):
+- Location: `/temp/AG-plasma/opt/gcc16`
+- RTX 4090 GPU available for testing
+- CRITICAL: OpenMP must be disabled - nvptx mkoffload cannot handle both -fopenacc AND -fopenmp
+
+**Manual build with GCC 16 OpenACC**:
+```bash
+cmake -S . -B build -G Ninja \
+  -DCMAKE_Fortran_COMPILER=/temp/AG-plasma/opt/gcc16/bin/gfortran \
+  -DCMAKE_C_COMPILER=/temp/AG-plasma/opt/gcc16/bin/gcc \
+  -DCMAKE_CXX_COMPILER=/temp/AG-plasma/opt/gcc16/bin/g++ \
+  -DCMAKE_Fortran_FLAGS="-fopenacc -foffload=nvptx-none -O2 -DSIMPLE_OPENACC" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_OPENMP=OFF
+
+cmake --build build -j
+```
+
+**Running with OpenACC**:
+```bash
+LD_LIBRARY_PATH=/temp/AG-plasma/opt/gcc16/lib64:$LD_LIBRARY_PATH ./build/simple.x
+```
+
+**OpenACC implementation status**:
+- Module variables with `!$acc declare create(...)` in params.f90 and get_canonical_coordinates.F90
+- Preprocessor macro `SIMPLE_OPENACC` for conditional compilation
+- Batch spline evaluation routines in libneo have `!$acc routine seq` directives
+- GPU particle loop stub in simple_main.f90 (needs full integration implementation)
+
 ### GVEC Integration
 - Minimal GVEC library automatically built from `thirdparty/gvec/`
 - Provides B-spline and cubic spline functionality for magnetic field interpolation

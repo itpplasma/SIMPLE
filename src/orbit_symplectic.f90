@@ -155,6 +155,10 @@ end subroutine orbit_timestep_quasi_lobatto3
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
+  !$acc routine seq
+#ifdef SIMPLE_OPENACC
+  use field_can_flux, only: evaluate_flux
+#endif
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -163,7 +167,12 @@ subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
   real(dp), intent(out) :: fvec(n)
   integer, intent(in) :: iflag
 
+#ifdef SIMPLE_OPENACC
+  ! Direct call for GPU - avoid procedure pointer (CANFLUX field type)
+  call evaluate_flux(f, x(1), si%z(2), si%z(3), 2)
+#else
   call eval_field(f, x(1), si%z(2), si%z(3), 2)
+#endif
   call get_derivatives2(f, x(2))
 
   fvec(1) = f%dpth(1)*(f%pth - si%pthold) + si%dt*(f%dH(2)*f%dpth(1) - f%dH(1)*f%dpth(2))
@@ -175,6 +184,7 @@ end subroutine f_sympl_euler1
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine jac_sympl_euler1(si, f, x, jac)
+  !$acc routine seq
   !
   type(symplectic_integrator_t), intent(in) :: si
   type(field_can_t), intent(inout) :: f
@@ -365,6 +375,7 @@ end subroutine jac_midpoint_part2
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine newton1(si, f, x, maxit, xlast)
+  !$acc routine seq
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -400,6 +411,7 @@ subroutine newton1(si, f, x, maxit, xlast)
     if (all(dabs(fvec) < si%atol)) return
     if (all(dabs(x-xlast) < si%rtol*tolref)) return
   enddo
+#ifndef SIMPLE_OPENACC
   print *, 'newton1: maximum iterations reached: ', maxit
   write(6601,*) x(1), x(2)
   write(6601,*) x-xlast
@@ -414,6 +426,7 @@ subroutine newton1(si, f, x, maxit, xlast)
   write(6601,*) si%z(2), si%z(3)
   write(6601,*) ''
   write(6601,*) ''
+#endif
 end subroutine
 
 subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
@@ -1216,6 +1229,10 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
+  !$acc routine seq
+#ifdef SIMPLE_OPENACC
+  use field_can_flux, only: evaluate_flux
+#endif
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1243,7 +1260,9 @@ subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     end if
 
     if (x(1) < 0.0d0) then
+#ifndef SIMPLE_OPENACC
       print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+#endif
       x(1) = 0.01d0
     end if
 
@@ -1258,7 +1277,12 @@ subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
       f%hth = f%hth + f%dhth(1)*(x(1)-xlast(1))
       f%hph = f%hph + f%dhph(1)*(x(1)-xlast(1))
     else
+#ifdef SIMPLE_OPENACC
+      ! Direct call for GPU - avoid procedure pointer (CANFLUX field type)
+      call evaluate_flux(f, si%z(1), si%z(2), si%z(3), 0)
+#else
       call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+#endif
       call get_derivatives(f, si%z(4))
     endif
 
