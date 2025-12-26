@@ -5,6 +5,12 @@ use vector_potentail_mod, only: torflux
 
 implicit none
 
+#ifdef BATCH_SIZE
+integer, parameter :: BATCH_PTS = BATCH_SIZE
+#else
+integer, parameter :: BATCH_PTS = 256
+#endif
+
 contains
 
 subroutine get_derivatives_many(npts, ro0, mu, pphi, &
@@ -104,7 +110,7 @@ subroutine get_derivatives2_many(npts, ro0, mu, pphi, &
 end subroutine get_derivatives2_many
 
 
-subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
+subroutine f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
         x_r, x_pphi, fvec, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
         hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
@@ -113,7 +119,7 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
     integer, intent(in) :: npts
     real(dp), intent(in) :: dt, ro0
     real(dp), intent(in) :: mu(npts)
-    real(dp), intent(in) :: z_th(npts), z_ph(npts), pthold(npts)
+    real(dp), intent(in) :: z_th(npts), z_pphi(npts), pthold(npts)
     real(dp), intent(in) :: x_r(npts), x_pphi(npts)
     real(dp), intent(out) :: fvec(2, npts)
     real(dp), intent(in) :: Ath(npts), Aph(npts)
@@ -125,12 +131,9 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
     real(dp), intent(out) :: pth(npts), dpth(4, npts)
     real(dp), intent(out) :: H(npts), dH(4, npts)
 
-    real(dp), allocatable :: vpar(:), dvpar(:,:), d2vpar(:,:)
-    real(dp), allocatable :: d2pth(:,:), d2H(:,:)
+    real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS), d2vpar(10, BATCH_PTS)
+    real(dp) :: d2pth(10, BATCH_PTS), d2H(10, BATCH_PTS)
     integer :: i
-
-    allocate(vpar(npts), dvpar(4, npts), d2vpar(10, npts))
-    allocate(d2pth(10, npts), d2H(10, npts))
 
     call get_derivatives2_many(npts, ro0, mu, x_pphi, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
@@ -143,7 +146,7 @@ subroutine f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
     do i = 1, npts
         fvec(1, i) = dpth(1, i) * (pth(i) - pthold(i)) &
             + dt * (dH(2, i) * dpth(1, i) - dH(1, i) * dpth(2, i))
-        fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_ph(i)) &
+        fvec(2, i) = dpth(1, i) * (x_pphi(i) - z_pphi(i)) &
             + dt * (dH(3, i) * dpth(1, i) - dH(1, i) * dpth(3, i))
     end do
     !$omp end simd
@@ -169,14 +172,10 @@ subroutine jac_sympl_euler1_many(npts, dt, z_pphi, pthold, ro0, mu, &
     real(dp), intent(in) :: d2hth_dr2(npts), d2hph_dr2(npts)
     real(dp), intent(in) :: Bmod(npts), dBmod(3, npts), d2Bmod(6, npts)
 
-    real(dp), allocatable :: vpar(:), dvpar(:,:), d2vpar(:,:)
-    real(dp), allocatable :: pth(:), dpth(:,:), d2pth(:,:)
-    real(dp), allocatable :: H(:), dH(:,:), d2H(:,:)
+    real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS), d2vpar(10, BATCH_PTS)
+    real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), d2pth(10, BATCH_PTS)
+    real(dp) :: H(BATCH_PTS), dH(4, BATCH_PTS), d2H(10, BATCH_PTS)
     integer :: i
-
-    allocate(vpar(npts), dvpar(4, npts), d2vpar(10, npts))
-    allocate(pth(npts), dpth(4, npts), d2pth(10, npts))
-    allocate(H(npts), dH(4, npts), d2H(10, npts))
 
     call get_derivatives2_many(npts, ro0, mu, x_pphi, &
         Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
@@ -215,29 +214,22 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
     real(dp), intent(inout) :: x_r(npts), x_pphi(npts)
     logical, intent(out) :: converged(npts)
 
-    real(dp), allocatable :: Ath(:), Aph(:), dAth_dr(:), dAph_dr(:), d2Aph_dr2(:)
-    real(dp), allocatable :: hth(:), hph(:), dhth(:,:), dhph(:,:)
-    real(dp), allocatable :: d2hth_dr2(:), d2hph_dr2(:)
-    real(dp), allocatable :: Bmod(:), dBmod(:,:), d2Bmod(:,:)
-    real(dp), allocatable :: pth(:), dpth(:,:), H(:), dH(:,:)
-    real(dp), allocatable :: fvec(:,:), fjac(:,:,:)
-    real(dp), allocatable :: xlast_r(:), xlast_pphi(:)
-    real(dp), allocatable :: tolref_pphi(:)
+    real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
+    real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
+    real(dp) :: hth(BATCH_PTS), hph(BATCH_PTS)
+    real(dp) :: dhth(3, BATCH_PTS), dhph(3, BATCH_PTS)
+    real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
+    real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
+    real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), H(BATCH_PTS), dH(4, BATCH_PTS)
+    real(dp) :: fvec(2, BATCH_PTS), fjac(2, 2, BATCH_PTS)
+    real(dp) :: xlast_r(BATCH_PTS), xlast_pphi(BATCH_PTS)
+    real(dp) :: tolref_pphi(BATCH_PTS)
     real(dp) :: det, ijac11, ijac12, ijac21, ijac22
     real(dp) :: dx_r, dx_pphi
     integer :: kit, i
 
-    allocate(Ath(npts), Aph(npts), dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts))
-    allocate(hth(npts), hph(npts), dhth(3, npts), dhph(3, npts))
-    allocate(d2hth_dr2(npts), d2hph_dr2(npts))
-    allocate(Bmod(npts), dBmod(3, npts), d2Bmod(6, npts))
-    allocate(pth(npts), dpth(4, npts), H(npts), dH(4, npts))
-    allocate(fvec(2, npts), fjac(2, 2, npts))
-    allocate(xlast_r(npts), xlast_pphi(npts))
-    allocate(tolref_pphi(npts))
-
-    converged = .false.
-    tolref_pphi = abs(10.0d0 * torflux / ro0)
+    converged(1:npts) = .false.
+    tolref_pphi(1:npts) = abs(10.0d0 * torflux / ro0)
 
     do kit = 1, maxit
         call eval_field_booz_many(npts, x_r, z_th, z_ph, &
@@ -245,7 +237,7 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod)
 
-        call f_sympl_euler1_many(npts, dt, z_th, z_ph, pthold, ro0, mu, &
+        call f_sympl_euler1_many(npts, dt, z_th, z_pphi, pthold, ro0, mu, &
             x_r, x_pphi, fvec, &
             Ath, Aph, dAth_dr, dAph_dr, d2Aph_dr2, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
@@ -258,8 +250,8 @@ subroutine newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             hth, hph, dhth, dhph, d2hth_dr2, d2hph_dr2, &
             Bmod, dBmod, d2Bmod)
 
-        xlast_r = x_r
-        xlast_pphi = x_pphi
+        xlast_r(1:npts) = x_r(1:npts)
+        xlast_pphi(1:npts) = x_pphi(1:npts)
 
         !$omp simd private(det, ijac11, ijac12, ijac21, ijac22, dx_r, dx_pphi)
         do i = 1, npts
@@ -304,22 +296,17 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
     logical, intent(out) :: escaped(npts)
     integer, intent(out) :: ierr(npts)
 
-    real(dp), allocatable :: pthold(:), x_r(:), x_pphi(:)
-    real(dp), allocatable :: Ath(:), Aph(:), dAth_dr(:), dAph_dr(:), d2Aph_dr2(:)
-    real(dp), allocatable :: hth(:), hph(:), dhth(:,:), dhph(:,:)
-    real(dp), allocatable :: d2hth_dr2(:), d2hph_dr2(:)
-    real(dp), allocatable :: Bmod(:), dBmod(:,:), d2Bmod(:,:)
-    real(dp), allocatable :: vpar(:), dvpar(:,:), pth(:), dpth(:,:), H(:), dH(:,:)
-    logical, allocatable :: converged(:)
+    real(dp) :: pthold(BATCH_PTS), x_r(BATCH_PTS), x_pphi(BATCH_PTS)
+    real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
+    real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
+    real(dp) :: hth(BATCH_PTS), hph(BATCH_PTS)
+    real(dp) :: dhth(3, BATCH_PTS), dhph(3, BATCH_PTS)
+    real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
+    real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
+    real(dp) :: vpar(BATCH_PTS), dvpar(4, BATCH_PTS)
+    real(dp) :: pth(BATCH_PTS), dpth(4, BATCH_PTS), H(BATCH_PTS), dH(4, BATCH_PTS)
+    logical :: converged(BATCH_PTS)
     integer :: ktau, i
-
-    allocate(pthold(npts), x_r(npts), x_pphi(npts))
-    allocate(Ath(npts), Aph(npts), dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts))
-    allocate(hth(npts), hph(npts), dhth(3, npts), dhph(3, npts))
-    allocate(d2hth_dr2(npts), d2hph_dr2(npts))
-    allocate(Bmod(npts), dBmod(3, npts), d2Bmod(6, npts))
-    allocate(vpar(npts), dvpar(4, npts), pth(npts), dpth(4, npts), H(npts), dH(4, npts))
-    allocate(converged(npts))
 
     escaped = .false.
     ierr = 0
@@ -334,10 +321,10 @@ subroutine orbit_timestep_euler1_soa(npts, dt, ntau, ro0, mu, atol, rtol, maxit,
         vpar, dvpar, pth, dpth, H, dH)
 
     do ktau = 1, ntau
-        pthold = pth
+        pthold(1:npts) = pth(1:npts)
 
-        x_r = z_r
-        x_pphi = z_pphi
+        x_r(1:npts) = z_r(1:npts)
+        x_pphi(1:npts) = z_pphi(1:npts)
 
         call newton1_soa(npts, dt, ro0, mu, atol, rtol, maxit, &
             z_r, z_th, z_ph, z_pphi, pthold, x_r, x_pphi, converged)
@@ -389,23 +376,17 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
     real(dp), intent(out) :: times_lost(npts)
     integer, intent(out) :: ierr(npts)
 
-    real(dp), allocatable :: z_r(:), z_th(:), z_ph(:), z_pphi(:)
-    real(dp), allocatable :: mu(:), pabs(:), vpar(:)
-    real(dp), allocatable :: Ath(:), Aph(:), dAth_dr(:), dAph_dr(:), d2Aph_dr2(:)
-    real(dp), allocatable :: hth(:), hph(:), dhth(:,:), dhph(:,:)
-    real(dp), allocatable :: d2hth_dr2(:), d2hph_dr2(:)
-    real(dp), allocatable :: Bmod(:), dBmod(:,:), d2Bmod(:,:)
-    logical, allocatable :: escaped(:)
+    real(dp) :: z_r(BATCH_PTS), z_th(BATCH_PTS), z_ph(BATCH_PTS), z_pphi(BATCH_PTS)
+    real(dp) :: mu(BATCH_PTS), pabs(BATCH_PTS), vpar(BATCH_PTS)
+    real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
+    real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
+    real(dp) :: hth(BATCH_PTS), hph(BATCH_PTS)
+    real(dp) :: dhth(3, BATCH_PTS), dhph(3, BATCH_PTS)
+    real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
+    real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
+    logical :: escaped(BATCH_PTS)
     real(dp) :: ro0_norm, dt, theta_B, phi_B
     integer :: i, it
-
-    allocate(z_r(npts), z_th(npts), z_ph(npts), z_pphi(npts))
-    allocate(mu(npts), pabs(npts), vpar(npts))
-    allocate(Ath(npts), Aph(npts), dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts))
-    allocate(hth(npts), hph(npts), dhth(3, npts), dhph(3, npts))
-    allocate(d2hth_dr2(npts), d2hph_dr2(npts))
-    allocate(Bmod(npts), dBmod(3, npts), d2Bmod(6, npts))
-    allocate(escaped(npts))
 
     ro0_norm = ro0_in / dsqrt(2.0d0)
     dt = dt_norm / dsqrt(2.0d0)
@@ -434,9 +415,9 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
     !$omp end simd
     !$acc end kernels
 
-    escaped = .false.
-    ierr = 0
-    times_lost = 0.0d0
+    escaped(1:npts) = .false.
+    ierr(1:npts) = 0
+    times_lost(1:npts) = 0.0d0
 
     do it = 1, ntimstep
         call orbit_timestep_euler1_soa(npts, dt, ntau, ro0_norm, mu, &
@@ -450,7 +431,7 @@ subroutine trace_orbit_soa(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         end do
         !$omp end simd
 
-        if (all(escaped)) exit
+        if (all(escaped(1:npts))) exit
     end do
 
     call eval_field_booz_many(npts, z_r, z_th, z_ph, &
@@ -507,6 +488,29 @@ subroutine trace_orbit_soa_omp(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
 end subroutine trace_orbit_soa_omp
 
 
+subroutine trace_orbit_soa_omp1(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
+        atol, rtol, maxit, z_final, times_lost, ierr)
+    !> OMP parallel do over particles with batch size 1.
+    !> Each thread processes exactly 1 particle - equivalent memory access to AoS.
+    integer, intent(in) :: npts, ntimstep, ntau, maxit
+    real(dp), intent(in) :: zstart(5, npts)
+    real(dp), intent(in) :: dt_norm, ro0_in, atol, rtol
+    real(dp), intent(out) :: z_final(5, npts)
+    real(dp), intent(out) :: times_lost(npts)
+    integer, intent(out) :: ierr(npts)
+
+    integer :: i
+
+    !$omp parallel do schedule(dynamic)
+    do i = 1, npts
+        call trace_orbit_soa_chunk(1, zstart(:, i:i), ntimstep, ntau, &
+            dt_norm, ro0_in, atol, rtol, maxit, z_final(:, i:i), &
+            times_lost(i:i), ierr(i:i))
+    end do
+    !$omp end parallel do
+end subroutine trace_orbit_soa_omp1
+
+
 subroutine trace_orbit_soa_chunk(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, &
         atol, rtol, maxit, z_final, times_lost, ierr)
     use boozer_sub, only: vmec_to_boozer
@@ -517,25 +521,19 @@ subroutine trace_orbit_soa_chunk(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, 
     real(dp), intent(out) :: times_lost(npts)
     integer, intent(out) :: ierr(npts)
 
-    real(dp), allocatable :: z_r(:), z_th(:), z_ph(:), z_pphi(:)
-    real(dp), allocatable :: mu(:), pabs(:), vpar(:)
-    real(dp), allocatable :: Ath(:), Aph(:), dAth_dr(:), dAph_dr(:), d2Aph_dr2(:)
-    real(dp), allocatable :: hth(:), hph(:), dhth(:,:), dhph(:,:)
-    real(dp), allocatable :: d2hth_dr2(:), d2hph_dr2(:)
-    real(dp), allocatable :: Bmod(:), dBmod(:,:), d2Bmod(:,:)
-    logical, allocatable :: escaped(:)
+    real(dp) :: z_r(BATCH_PTS), z_th(BATCH_PTS), z_ph(BATCH_PTS), z_pphi(BATCH_PTS)
+    real(dp) :: mu(BATCH_PTS), pabs(BATCH_PTS), vpar(BATCH_PTS)
+    real(dp) :: Ath(BATCH_PTS), Aph(BATCH_PTS), dAth_dr(BATCH_PTS)
+    real(dp) :: dAph_dr(BATCH_PTS), d2Aph_dr2(BATCH_PTS)
+    real(dp) :: hth(BATCH_PTS), hph(BATCH_PTS)
+    real(dp) :: dhth(3, BATCH_PTS), dhph(3, BATCH_PTS)
+    real(dp) :: d2hth_dr2(BATCH_PTS), d2hph_dr2(BATCH_PTS)
+    real(dp) :: Bmod(BATCH_PTS), dBmod(3, BATCH_PTS), d2Bmod(6, BATCH_PTS)
+    logical :: escaped(BATCH_PTS)
     real(dp) :: ro0_norm, dt, theta_B, phi_B
     integer :: i, it
 
     if (npts <= 0) return
-
-    allocate(z_r(npts), z_th(npts), z_ph(npts), z_pphi(npts))
-    allocate(mu(npts), pabs(npts), vpar(npts))
-    allocate(Ath(npts), Aph(npts), dAth_dr(npts), dAph_dr(npts), d2Aph_dr2(npts))
-    allocate(hth(npts), hph(npts), dhth(3, npts), dhph(3, npts))
-    allocate(d2hth_dr2(npts), d2hph_dr2(npts))
-    allocate(Bmod(npts), dBmod(3, npts), d2Bmod(6, npts))
-    allocate(escaped(npts))
 
     ro0_norm = ro0_in / dsqrt(2.0d0)
     dt = dt_norm / dsqrt(2.0d0)
@@ -560,7 +558,7 @@ subroutine trace_orbit_soa_chunk(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, 
         z_pphi(i) = vpar(i) * hph(i) + Aph(i) / ro0_norm
     end do
 
-    escaped = .false.
+    escaped(1:npts) = .false.
     ierr = 0
     times_lost = 0.0d0
 
@@ -574,7 +572,7 @@ subroutine trace_orbit_soa_chunk(npts, zstart, ntimstep, ntau, dt_norm, ro0_in, 
             end if
         end do
 
-        if (all(escaped)) exit
+        if (all(escaped(1:npts))) exit
     end do
 
     call eval_field_booz_many(npts, z_r, z_th, z_ph, &
