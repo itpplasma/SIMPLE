@@ -199,6 +199,7 @@ contains
         !$acc update device(integmode, notrace_passing)
         !$acc update device(dtaumin, relerr, v0, contr_pp)
         !$acc update device(class_plot)
+        !$acc update device(ro0)
 #endif
     end subroutine params_init
 

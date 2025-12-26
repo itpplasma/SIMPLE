@@ -1,0 +1,7 @@
+&config
+trace_time = 1d-2
+sbeg = 0.3d0
+ntestpart = 1024
+isw_field_type = -1
+ntimstep = 100
+/
