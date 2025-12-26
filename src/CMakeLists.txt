@@ -25,6 +25,7 @@ set(SOURCES
     magfie.f90
     magfie_wrapper.f90
     magfie_can_boozer.f90
+    boozer_data_mod.F90
     boozer_converter.F90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
@@ -98,7 +99,7 @@ target_link_libraries(simple PUBLIC
     LIBNEO::neo
 )
 
-# For NVHPC: add built deps includes first to avoid gfortran-compiled modules in /usr/include
+# For NVHPC: put built dep includes first to avoid gfortran modules in /usr/include
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     target_include_directories(simple BEFORE PUBLIC
         ${CMAKE_BINARY_DIR}/deps/include
