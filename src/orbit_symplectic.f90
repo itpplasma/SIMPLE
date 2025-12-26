@@ -155,7 +155,7 @@ end subroutine orbit_timestep_quasi_lobatto3
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
-  !$acc routine seq
+  ! Note: !$acc routine seq removed - module variables not available on GPU
 #ifdef SIMPLE_OPENACC
   use field_can_flux, only: evaluate_flux
 #endif
@@ -184,7 +184,7 @@ end subroutine f_sympl_euler1
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine jac_sympl_euler1(si, f, x, jac)
-  !$acc routine seq
+  ! Note: !$acc routine seq removed - module variables not available on GPU
   !
   type(symplectic_integrator_t), intent(in) :: si
   type(field_can_t), intent(inout) :: f
@@ -375,7 +375,7 @@ end subroutine jac_midpoint_part2
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine newton1(si, f, x, maxit, xlast)
-  !$acc routine seq
+  ! Note: !$acc routine seq removed - module variables not available on GPU
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1229,7 +1229,7 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
-  !$acc routine seq
+  ! Note: !$acc routine seq removed - module variables not available on GPU
 #ifdef SIMPLE_OPENACC
   use field_can_flux, only: evaluate_flux
 #endif

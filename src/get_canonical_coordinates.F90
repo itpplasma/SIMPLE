@@ -48,17 +48,17 @@ module get_can_sub
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
-    !$acc declare create(aphi_batch_spline, aphi_batch_spline_ready)
+    ! Note: spline data is copied to GPU via explicit enter data in build functions
 
     ! Batch spline for G_c (generating function)
     type(BatchSplineData3D), save :: G_batch_spline
     logical, save :: G_batch_spline_ready = .false.
-    !$acc declare create(G_batch_spline, G_batch_spline_ready)
+    ! Note: spline data is copied to GPU via explicit enter data in build functions
 
     ! Batch spline for sqg_c, B_vartheta_c, B_varphi_c (3 quantities)
     type(BatchSplineData3D), save :: sqg_Bt_Bp_batch_spline
     logical, save :: sqg_Bt_Bp_batch_spline_ready = .false.
-    !$acc declare create(sqg_Bt_Bp_batch_spline, sqg_Bt_Bp_batch_spline_ready)
+    ! Note: spline data is copied to GPU via explicit enter data in build functions
 
 contains
 
@@ -265,9 +265,21 @@ subroutine get_canonical_coordinates_impl
     call build_canflux_G_batch_spline
     call build_canflux_sqg_Bt_Bp_batch_spline
 
+    ! Update device copies of module variables used in splint_can_coord
+    call update_canflux_device_data
+
     deallocate(ipoi_t, ipoi_p, sqg_c, B_vartheta_c, B_varphi_c, G_c)
 
 end subroutine get_canonical_coordinates_impl
+
+
+subroutine update_canflux_device_data
+    use new_vmec_stuff_mod, only: nper
+    use vector_potentail_mod, only: torflux
+
+    ! Copy module variables to GPU device (set at runtime during VMEC loading)
+    !$acc enter data copyin(nper, torflux)
+end subroutine update_canflux_device_data
 
 
 subroutine build_canflux_aphi_batch_spline
@@ -297,6 +309,10 @@ subroutine build_canflux_aphi_batch_spline
     aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
 
     aphi_batch_spline_ready = .true.
+
+    ! Copy spline data to GPU device
+    !$acc enter data copyin(aphi_batch_spline, aphi_batch_spline_ready)
+    !$acc enter data copyin(aphi_batch_spline%coeff)
 end subroutine build_canflux_aphi_batch_spline
 
 
@@ -334,6 +350,10 @@ subroutine build_canflux_G_batch_spline
                                     G_batch_spline)
     G_batch_spline_ready = .true.
     deallocate(y_batch)
+
+    ! Copy spline data to GPU device
+    !$acc enter data copyin(G_batch_spline, G_batch_spline_ready)
+    !$acc enter data copyin(G_batch_spline%coeff)
 end subroutine build_canflux_G_batch_spline
 
 
@@ -374,6 +394,10 @@ subroutine build_canflux_sqg_Bt_Bp_batch_spline
                                     sqg_Bt_Bp_batch_spline)
     sqg_Bt_Bp_batch_spline_ready = .true.
     deallocate(y_batch)
+
+    ! Copy spline data to GPU device
+    !$acc enter data copyin(sqg_Bt_Bp_batch_spline, sqg_Bt_Bp_batch_spline_ready)
+    !$acc enter data copyin(sqg_Bt_Bp_batch_spline%coeff)
 end subroutine build_canflux_sqg_Bt_Bp_batch_spline
 
 
@@ -480,7 +504,8 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
                             d2bth_tt, d2bth_tp, d2bth_pp, &
                             d2bph_rr, d2bph_rt, d2bph_rp, &
                             d2bph_tt, d2bph_tp, d2bph_pp, G_c)
-    !$acc routine seq
+    ! Note: !$acc routine seq removed - module variables not available on GPU
+    ! due to GCC 16 ICE with !$acc declare and !$omp threadprivate
     use vector_potentail_mod, only: torflux
     use new_vmec_stuff_mod, only: nper
     use chamb_mod, only: rnegflag
