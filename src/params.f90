@@ -80,6 +80,7 @@ module params
     real(dp) :: v0
 
     logical :: debug = .False.
+    logical :: use_soa = .False.  ! Use SoA batched orbit integration
     integer :: ierr
 
     integer :: batch_size = 2000000000  ! Initialize large so batch mode is not default
@@ -102,7 +103,7 @@ module params
         old_axis_healing_boundary, am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        integ_coords, &
+        integ_coords, use_soa, &
         output_error, output_orbits_macrostep  ! callback
 
 contains

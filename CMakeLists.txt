@@ -55,6 +55,7 @@ option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+option(SIMPLE_PROFILE_COUNTERS "Enable internal performance counters" OFF)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # NVHPC/nvfortran: disable all Python integration/tools by default.
@@ -439,6 +440,11 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_dependencies(diag_albert.x fortplot)
     add_dependencies(diag_orbit.x fortplot)
 endif()
+
+# SoA benchmark
+add_executable(bench_soa_timestep.x bench/bench_soa_timestep.f90)
+target_link_libraries(bench_soa_timestep.x PRIVATE simple)
+set_target_properties(bench_soa_timestep.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)

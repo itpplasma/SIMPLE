@@ -4,9 +4,9 @@ BUILD_DIR := build
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
 # Common ctest command with optional verbose and test name filtering
-CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
-CTEST_CMD_NOPY = cd $(BUILD_DIR) && SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
-NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+CTEST_CMD = cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+CTEST_CMD_NOPY = cd $(BUILD_DIR) && SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
 
 # NVIDIA HPC SDK paths for nvfortran builds
 NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11

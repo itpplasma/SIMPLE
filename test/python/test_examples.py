@@ -13,6 +13,9 @@ from pathlib import Path
 
 import pytest
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "python"))
+sys.modules.pop("pysimple", None)
 pytest.importorskip("pysimple", reason="pysimple module not available")
 
 

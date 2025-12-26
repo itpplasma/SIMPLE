@@ -25,6 +25,7 @@ set(SOURCES
     magfie.f90
     magfie_wrapper.f90
     magfie_can_boozer.f90
+    boozer_data_mod.F90
     boozer_converter.F90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
@@ -32,6 +33,8 @@ set(SOURCES
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
     orbit_symplectic.f90
+    orbit_symplectic_soa.f90
+    profile_counters.f90
     util.F90
     samplers.f90
     cut_detector.f90
@@ -72,6 +75,11 @@ add_library (simple STATIC ${SOURCES})
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
 
+# Optional internal counters (compile-time, zero overhead when OFF).
+if(SIMPLE_PROFILE_COUNTERS)
+    target_compile_definitions(simple PRIVATE SIMPLE_PROFILE_COUNTERS)
+endif()
+
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
@@ -91,7 +99,7 @@ target_link_libraries(simple PUBLIC
     LIBNEO::neo
 )
 
-# For NVHPC: add built deps includes first to avoid gfortran-compiled modules in /usr/include
+# For NVHPC: put built dep includes first to avoid gfortran modules in /usr/include
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     target_include_directories(simple BEFORE PUBLIC
         ${CMAKE_BINARY_DIR}/deps/include

@@ -14,7 +14,7 @@ module simple_main
                       class_plot, ntcut, iclass, bmin, bmax, &
                       zstart, zend, trap_par, perp_inv, sbeg, &
                       ntimstep, should_skip, reset_seed_if_deterministic, &
-                      field_input, isw_field_type, reuse_batch
+                      field_input, isw_field_type, reuse_batch, use_soa
 
     implicit none
 
@@ -91,8 +91,16 @@ contains
         call init_counters
         call print_phase_time('Counter initialization completed')
 
-        call trace_parallel(norb)
-        call print_phase_time('Parallel particle tracing completed')
+        if (use_soa) then
+            call trace_parallel_soa(norb)
+            call print_phase_time('SoA batched particle tracing completed')
+        else
+            call trace_parallel(norb)
+            call print_phase_time('Parallel particle tracing completed')
+        end if
+#ifdef SIMPLE_PROFILE_COUNTERS
+        call maybe_print_profile_counters
+#endif
 
         confpart_pass = confpart_pass/ntestpart
         confpart_trap = confpart_trap/ntestpart
@@ -101,6 +109,13 @@ contains
         call write_output
         call print_phase_time('Output writing completed')
     end subroutine main
+
+#ifdef SIMPLE_PROFILE_COUNTERS
+    subroutine maybe_print_profile_counters
+        use profile_counters, only: prof_print
+        call prof_print()
+    end subroutine maybe_print_profile_counters
+#endif
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
@@ -288,6 +303,63 @@ contains
             call close_orbit_netcdf()
         end if
     end subroutine trace_parallel
+
+    subroutine trace_parallel_soa(norb)
+        !> SoA batched orbit tracing using trace_orbit_soa from orbit_symplectic_soa.
+        !> This is a drop-in replacement for trace_parallel using batched field evaluation.
+        !> Parameter norb is kept for interface consistency but currently unused.
+        !> Uses trace_orbit_soa_omp for CPU threading (batch per thread).
+        !> Use trace_orbit_soa directly for GPU with OpenACC.
+        use orbit_symplectic_soa, only: trace_orbit_soa_omp
+        use parmot_mod, only: ro0
+        use field_can_mod, only: integ_to_ref
+        use params, only: v0
+
+        type(tracer_t), intent(inout) :: norb
+        integer :: i
+        real(dp), allocatable :: z_final(:, :)
+        real(dp), allocatable :: soa_times_lost(:)
+        integer, allocatable :: soa_ierr(:)
+        real(dp) :: atol, rtol_newton
+        integer :: maxit
+        real(dp), parameter :: time_threshold = 1.0d-30
+
+        atol = 1.0d-15
+        rtol_newton = relerr
+        maxit = 32
+
+        allocate (z_final(5, ntestpart))
+        allocate (soa_times_lost(ntestpart))
+        allocate (soa_ierr(ntestpart))
+
+        print *, 'Running SoA batched orbit tracing (OpenMP threaded)...'
+        print *, '  ntestpart = ', ntestpart
+        print *, '  ntimstep = ', ntimstep
+        print *, '  ntau = ', ntau
+
+        call trace_orbit_soa_omp(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
+                                atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
+
+        do i = 1, ntestpart
+            call integ_to_ref(z_final(1:3, i), zend(1:3, i))
+            zend(4:5, i) = z_final(4:5, i)
+            if (soa_times_lost(i) < time_threshold) then
+                times_lost(i) = trace_time
+            else
+                times_lost(i) = soa_times_lost(i) / v0
+            end if
+
+            if (soa_ierr(i) == 0) then
+                confpart_pass(ntimstep) = confpart_pass(ntimstep) + 1.0d0
+            end if
+        end do
+
+        deallocate (z_final)
+        deallocate (soa_times_lost)
+        deallocate (soa_ierr)
+
+        print *, 'SoA tracing completed.'
+    end subroutine trace_parallel_soa
 
     subroutine classify_parallel(norb)
         use classification, only: trace_orbit_with_classifiers, classification_result_t
