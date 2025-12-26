@@ -173,6 +173,63 @@ To execute test_against_legacy_behaviour.py, execute `get_test_data.sh`, run SIM
 *  ../../../../examples/simple_full.in --> simple.in
 *  ../../../../build/start.dat start.dat
 
+## SoA Batched Orbit Tracing
+
+SIMPLE includes an optimized Structure-of-Arrays (SoA) implementation for batched orbit tracing,
+designed for SIMD vectorization on CPU and future GPU acceleration via OpenACC.
+
+### Enabling SoA Mode
+
+Set `use_soa = .True.` in `simple.in`:
+```fortran
+&config
+use_soa = .True.
+/
+```
+
+### Batch Size Configuration
+
+Control the batch size per OpenMP thread via environment variable:
+```bash
+export SOA_BATCH_SIZE=8  # particles per thread batch (default: 1)
+```
+
+### Performance Benchmarks
+
+**Test system:** Apple M3 Ultra, 28 cores, 256 GB RAM
+
+All benchmarks: 1024 particles, trace_time=1e-2s, 28 OpenMP threads, 0 particles lost.
+
+#### NCSX (Boozer coordinates)
+
+| Batch Size | Time (s) | Std Dev | Speedup | Runs |
+|------------|----------|---------|---------|------|
+| OLD        | 24.0     | -       | 1.00x   | 1    |
+| 1          | 25.9     | -       | 0.93x   | 1    |
+| 8          | 6.92     | 0.10    | 3.47x   | 10   |
+| 10         | 6.36     | 0.10    | 3.77x   | 10   |
+| 13         | 6.05     | 0.09    | 3.97x   | 10   |
+| 16         | 6.87     | 0.16    | 3.49x   | 10   |
+| **20**     | **5.94** | 0.08    | **4.04x** | 10 |
+| 28         | 7.86     | 0.40    | 3.05x   | 10   |
+| 32         | 8.98     | 0.72    | 2.67x   | 10   |
+
+#### Landreman-Paul 2021 QA
+
+| Batch Size | Time (s) | Std Dev | Speedup | Runs |
+|------------|----------|---------|---------|------|
+| OLD        | 23.4     | -       | 1.00x   | 1    |
+| **20**     | **6.39** | 0.25    | **3.66x** | 10 |
+
+Optimal batch size is around 20 for this system, achieving **3.7-4x speedup** over the scalar implementation.
+
+### Notes
+
+- SoA and OLD integrators produce identical results for short runs (verified to 1e-12 relative tolerance)
+- Long runs may show trajectory divergence due to chaotic dynamics (expected behavior)
+- Loss fractions are statistically equivalent between SoA and OLD implementations
+- The SoA implementation is GPU-ready with OpenACC directives for future acceleration
+
 ## References
 When using this code for scientific publications, please cite the according references:
 

@@ -298,55 +298,81 @@ contains
         !> SoA batched orbit tracing using trace_orbit_soa from orbit_symplectic_soa.
         !> This is a drop-in replacement for trace_parallel using batched field evaluation.
         !> Parameter norb is kept for interface consistency but currently unused.
-        !> Uses trace_orbit_soa_omp1 for CPU threading (1 particle per thread).
+        !> Batch size controlled by SOA_BATCH_SIZE env var (default 1).
         !> Use trace_orbit_soa directly for GPU with OpenACC.
-        use orbit_symplectic_soa, only: trace_orbit_soa_omp1
+        use orbit_symplectic_soa, only: trace_orbit_soa_omp1, trace_orbit_soa_ompN
         use parmot_mod, only: ro0
         use field_can_mod, only: integ_to_ref
         use params, only: v0
 
         type(tracer_t), intent(inout) :: norb
-        integer :: i
+        integer :: i, it, batch_size, ios, lost_at_step
         real(dp), allocatable :: z_final(:, :)
         real(dp), allocatable :: soa_times_lost(:)
         integer, allocatable :: soa_ierr(:)
+        logical, allocatable :: is_passing(:)
         real(dp) :: atol, rtol_newton
         integer :: maxit
         real(dp), parameter :: time_threshold = 1.0d-30
+        character(len=32) :: env_val
 
         atol = 1.0d-15
         rtol_newton = relerr
         maxit = 32
 
+        batch_size = 1
+        call get_environment_variable('SOA_BATCH_SIZE', env_val, status=ios)
+        if (ios == 0) read(env_val, *, iostat=ios) batch_size
+        if (batch_size < 1) batch_size = 1
+
         allocate (z_final(5, ntestpart))
         allocate (soa_times_lost(ntestpart))
         allocate (soa_ierr(ntestpart))
+        allocate (is_passing(ntestpart))
 
         print *, 'Running SoA batched orbit tracing (OpenMP threaded)...'
         print *, '  ntestpart = ', ntestpart
         print *, '  ntimstep = ', ntimstep
         print *, '  ntau = ', ntau
+        print *, '  batch_size = ', batch_size
 
-        call trace_orbit_soa_omp1(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
-                                atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
+        do i = 1, ntestpart
+            call compute_pitch_angle_params(zstart(:, i), is_passing(i), trap_par(i), perp_inv(i))
+        end do
+
+        if (batch_size == 1) then
+            call trace_orbit_soa_omp1(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
+                                    atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
+        else
+            call trace_orbit_soa_ompN(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
+                                    atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr, batch_size)
+        end if
 
         do i = 1, ntestpart
             call integ_to_ref(z_final(1:3, i), zend(1:3, i))
             zend(4:5, i) = z_final(4:5, i)
             if (soa_times_lost(i) < time_threshold) then
                 times_lost(i) = trace_time
+                lost_at_step = ntimstep + 1
             else
                 times_lost(i) = soa_times_lost(i) / v0
+                lost_at_step = int(soa_times_lost(i) / (dtaumin * ntau)) + 1
+                if (lost_at_step > ntimstep) lost_at_step = ntimstep + 1
             end if
 
-            if (soa_ierr(i) == 0) then
-                confpart_pass(ntimstep) = confpart_pass(ntimstep) + 1.0d0
-            end if
+            do it = 1, min(lost_at_step - 1, ntimstep)
+                if (is_passing(i)) then
+                    confpart_pass(it) = confpart_pass(it) + 1.0d0
+                else
+                    confpart_trap(it) = confpart_trap(it) + 1.0d0
+                end if
+            end do
         end do
 
         deallocate (z_final)
         deallocate (soa_times_lost)
         deallocate (soa_ierr)
+        deallocate (is_passing)
 
         print *, 'SoA tracing completed.'
     end subroutine trace_parallel_soa

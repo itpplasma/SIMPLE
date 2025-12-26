@@ -1,11 +1,12 @@
 &config
 multharm = 3
 contr_pp = -1e10
-trace_time = 1d-4
+trace_time = 1d-2
 sbeg = 0.3d0
-ntestpart = 32
+ntestpart = 1024
 netcdffile = 'wout.nc'
-isw_field_type = 2       ! Boozer coordinates
+isw_field_type = 2
 deterministic = .True.
-facE_al = 100.0d0        ! Energy scale factor (E_alpha / facE_al)
+facE_al = 100.0d0
+use_soa = .True.
 /
