@@ -26,24 +26,29 @@ program bench_soa_timestep
     integer :: maxit, ktau, it, rep, nreps
     real(dp) :: t_soa, t_single
     integer :: count_start, count_end, count_rate
+    character(len=16) :: mode
 
     print *, '=========================================='
     print *, 'Benchmarking SoA vs single-point tracing'
     print *, '=========================================='
+
+    mode = 'both'
+    call parse_args(mode, npts, ntimstep, ntau, nreps)
 
     config_file = 'simple.in'
     call read_config(config_file)
     call init_field(norb, netcdffile, ns_s, ns_tp, multharm, 0)
     call get_boozer_coordinates()
 
-    npts = 32
-    ntimstep = 10
-    ntau = 5
+    if (npts <= 0) npts = 32
+    if (ntimstep <= 0) ntimstep = 10
+    if (ntau <= 0) ntau = 5
+    if (nreps <= 0) nreps = 10
+
     dt = 1.0d-5
     maxit = 32
     atol = 1.0d-15
     rtol_newton = 1.0d-10
-    nreps = 10
 
     print *, 'npts = ', npts
     print *, 'ntimstep = ', ntimstep
@@ -63,69 +68,135 @@ program bench_soa_timestep
         zstart(5, i) = 0.3d0 + 0.4d0*real(i - 1, dp)/real(npts - 1, dp)
     end do
 
-    print *, ''
-    print *, 'Benchmarking single-point loop version...'
-    call system_clock(count_start, count_rate)
-    do rep = 1, nreps
-        do i = 1, npts
-            z(1) = zstart(1, i)
-            call vmec_to_boozer(zstart(1, i), mod(zstart(2, i), 6.283185307179586d0), &
-                                mod(zstart(3, i), 6.283185307179586d0), theta_B, phi_B)
-            z(2) = mod(theta_B, 6.283185307179586d0)
-            z(3) = mod(phi_B, 6.283185307179586d0)
-            z(4) = zstart(4, i)
-            z(5) = zstart(5, i)
+    t_single = -1.0d0
+    if (trim(mode) == 'both' .or. trim(mode) == 'single') then
+        print *, ''
+        print *, 'Benchmarking single-point loop version...'
+        call system_clock(count_start, count_rate)
+        do rep = 1, nreps
+            do i = 1, npts
+                z(1) = zstart(1, i)
+                call vmec_to_boozer(zstart(1, i), &
+                                    mod(zstart(2, i), 6.283185307179586d0), &
+                                    mod(zstart(3, i), 6.283185307179586d0), &
+                                    theta_B, phi_B)
+                z(2) = mod(theta_B, 6.283185307179586d0)
+                z(3) = mod(phi_B, 6.283185307179586d0)
+                z(4) = zstart(4, i)
+                z(5) = zstart(5, i)
 
-            call init_sympl(norb%si, norb%f, z, dt, dt, rtol_newton, 1)
+                call init_sympl(norb%si, norb%f, z, dt, dt, rtol_newton, 1)
 
-            ierr_single = 0
-            times_lost_ref(i) = 0.0d0
-            kt = 0
-            do it = 1, ntimstep
-                do ktau = 1, ntau
-                    call orbit_timestep_sympl(norb%si, norb%f, ierr_single)
-                    if (ierr_single /= 0) exit
-                    kt = kt + 1
+                ierr_single = 0
+                times_lost_ref(i) = 0.0d0
+                kt = 0
+                do it = 1, ntimstep
+                    do ktau = 1, ntau
+                        call orbit_timestep_sympl(norb%si, norb%f, ierr_single)
+                        if (ierr_single /= 0) exit
+                        kt = kt + 1
+                    end do
+                    if (ierr_single /= 0) then
+                        times_lost_ref(i) = real(kt, dp)*dt
+                        exit
+                    end if
                 end do
-                if (ierr_single /= 0) then
-                    times_lost_ref(i) = real(kt, dp)*dt
-                    exit
-                end if
+                ierr_ref(i) = ierr_single
+
+                z_final_ref(1, i) = norb%si%z(1)
+                z_final_ref(2, i) = norb%si%z(2)
+                z_final_ref(3, i) = norb%si%z(3)
+                z_final_ref(4, i) = dsqrt(norb%f%mu*norb%f%Bmod + &
+                                          0.5d0*norb%f%vpar**2)
+                z_final_ref(5, i) = norb%f%vpar/(z_final_ref(4, i)*dsqrt(2.0d0))
             end do
-            ierr_ref(i) = ierr_single
-
-            z_final_ref(1, i) = norb%si%z(1)
-            z_final_ref(2, i) = norb%si%z(2)
-            z_final_ref(3, i) = norb%si%z(3)
-            z_final_ref(4, i) = dsqrt(norb%f%mu*norb%f%Bmod + 0.5d0*norb%f%vpar**2)
-            z_final_ref(5, i) = norb%f%vpar/(z_final_ref(4, i)*dsqrt(2.0d0))
         end do
-    end do
-    call system_clock(count_end)
-    t_single = real(count_end - count_start, dp)/real(count_rate, dp)
+        call system_clock(count_end)
+        t_single = real(count_end - count_start, dp)/real(count_rate, dp)
+    end if
 
-    print *, ''
-    print *, 'Benchmarking SoA version (trace_orbit_soa)...'
-    call system_clock(count_start, count_rate)
-    do rep = 1, nreps
-        call trace_orbit_soa(npts, zstart, ntimstep, ntau, dt, ro0, &
-                             atol, rtol_newton, maxit, z_final, times_lost, ierr)
-    end do
-    call system_clock(count_end)
-    t_soa = real(count_end - count_start, dp)/real(count_rate, dp)
+    t_soa = -1.0d0
+    if (trim(mode) == 'both' .or. trim(mode) == 'soa') then
+        print *, ''
+        print *, 'Benchmarking SoA version (trace_orbit_soa)...'
+        call system_clock(count_start, count_rate)
+        do rep = 1, nreps
+            call trace_orbit_soa(npts, zstart, ntimstep, ntau, dt, ro0, &
+                                 atol, rtol_newton, maxit, z_final, times_lost, ierr)
+        end do
+        call system_clock(count_end)
+        t_soa = real(count_end - count_start, dp)/real(count_rate, dp)
+    end if
 
     print *, ''
     print *, '=========================================='
     print *, 'RESULTS'
     print *, '=========================================='
-    print *, 'SoA time:         ', t_soa, ' s'
-    print *, 'Single-point time:', t_single, ' s'
+    print *, 'Mode: ', trim(mode)
     if (t_soa > 0.0d0) then
+        print *, 'SoA time:         ', t_soa, ' s'
+        print *, '  per particle:   ', t_soa/real(nreps*npts, dp)*1.0d6, ' us'
+    end if
+    if (t_single > 0.0d0) then
+        print *, 'Single-point time:', t_single, ' s'
+        print *, '  per particle:   ', t_single/real(nreps*npts, dp)*1.0d6, ' us'
+    end if
+    if (t_soa > 0.0d0 .and. t_single > 0.0d0) then
         print *, 'Speedup:          ', t_single/t_soa, 'x'
     end if
-    print *, ''
-    print *, 'Time per particle-trace:'
-    print *, '  SoA:         ', t_soa/real(nreps*npts, dp)*1.0d6, ' us'
-    print *, '  Single-point:', t_single/real(nreps*npts, dp)*1.0d6, ' us'
+
+contains
+
+    subroutine parse_args(mode, npts, ntimstep, ntau, nreps)
+        use, intrinsic :: iso_fortran_env, only: error_unit
+        implicit none
+        character(len=*), intent(inout) :: mode
+        integer, intent(inout) :: npts, ntimstep, ntau, nreps
+
+        integer :: iarg, nargs, ierr
+        character(len=256) :: arg, value
+        integer :: eqpos
+
+        npts = -1
+        ntimstep = -1
+        ntau = -1
+        nreps = -1
+
+        nargs = command_argument_count()
+        do iarg = 1, nargs
+            call get_command_argument(iarg, arg)
+            eqpos = index(arg, '=')
+            if (eqpos <= 0) cycle
+
+            value = adjustl(arg(eqpos + 1:))
+            select case (trim(arg(:eqpos - 1)))
+            case ('--mode')
+                if (trim(value) == 'both' .or. trim(value) == 'single' .or. &
+                    trim(value) == 'soa') then
+                    mode = trim(value)
+                else
+                    write (error_unit, *) 'bench_soa_timestep: invalid --mode=', &
+                        trim(value)
+                    error stop
+                end if
+            case ('--npts')
+                read (value, *, iostat=ierr) npts
+            case ('--ntimstep')
+                read (value, *, iostat=ierr) ntimstep
+            case ('--ntau')
+                read (value, *, iostat=ierr) ntau
+            case ('--nreps')
+                read (value, *, iostat=ierr) nreps
+            case default
+                cycle
+            end select
+
+            if ((trim(arg(:eqpos - 1)) /= '--mode') .and. ierr /= 0) then
+                write (error_unit, *) 'bench_soa_timestep: failed to parse ', &
+                    trim(arg)
+                error stop
+            end if
+        end do
+    end subroutine parse_args
 
 end program bench_soa_timestep
