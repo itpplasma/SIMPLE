@@ -298,10 +298,12 @@ contains
         !> SoA batched orbit tracing using trace_orbit_soa from orbit_symplectic_soa.
         !> This is a drop-in replacement for trace_parallel using batched field evaluation.
         !> Parameter norb is kept for interface consistency but currently unused.
-        !> Uses trace_orbit_soa_omp for CPU threading (particles divided into batches).
+        !> Uses trace_orbit_soa_omp1 for CPU threading (1 particle per thread).
         !> Use trace_orbit_soa directly for GPU with OpenACC.
-        use orbit_symplectic_soa, only: trace_orbit_soa_omp
+        use orbit_symplectic_soa, only: trace_orbit_soa_omp1
         use parmot_mod, only: ro0
+        use field_can_mod, only: integ_to_ref
+        use params, only: v0
 
         type(tracer_t), intent(inout) :: norb
         integer :: i
@@ -325,16 +327,16 @@ contains
         print *, '  ntimstep = ', ntimstep
         print *, '  ntau = ', ntau
 
-        call trace_orbit_soa_omp(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
+        call trace_orbit_soa_omp1(ntestpart, zstart, ntimstep, ntau, dtaumin, ro0, &
                                 atol, rtol_newton, maxit, z_final, soa_times_lost, soa_ierr)
 
         do i = 1, ntestpart
-            zend(1:3, i) = z_final(1:3, i)
+            call integ_to_ref(z_final(1:3, i), zend(1:3, i))
             zend(4:5, i) = z_final(4:5, i)
             if (soa_times_lost(i) < time_threshold) then
                 times_lost(i) = trace_time
             else
-                times_lost(i) = soa_times_lost(i)
+                times_lost(i) = soa_times_lost(i) / v0
             end if
 
             if (soa_ierr(i) == 0) then

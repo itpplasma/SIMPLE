@@ -571,6 +571,17 @@ set_tests_properties(test_soa_trace PROPERTIES
     TIMEOUT 120
 )
 
+# SoA integrator equivalence test - verifies SoA matches old integrator to floating point precision
+add_executable(test_soa_integrator_equivalence.x ../test_soa_integrator_equivalence.f90)
+target_link_libraries(test_soa_integrator_equivalence.x simple)
+add_test(NAME test_soa_integrator_equivalence
+    COMMAND test_soa_integrator_equivalence.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_soa_integrator_equivalence PROPERTIES
+    LABELS "integration;soa;regression"
+    TIMEOUT 120
+)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
