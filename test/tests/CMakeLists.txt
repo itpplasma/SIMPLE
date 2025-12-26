@@ -541,11 +541,15 @@ set_tests_properties(test_soa_field_eval PROPERTIES
 # SoA integrator equivalence test - verifies SoA matches old integrator to floating point precision
 add_executable(test_soa_integrator_equivalence.x ../test_soa_integrator_equivalence.f90)
 target_link_libraries(test_soa_integrator_equivalence.x simple)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/boozer/simple.in
+    ${CMAKE_CURRENT_BINARY_DIR}/simple.in
+    COPYONLY)
 add_test(NAME test_soa_integrator_equivalence
     COMMAND test_soa_integrator_equivalence.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_soa_integrator_equivalence PROPERTIES
-    LABELS "integration;soa;regression"
+    LABELS "unit;soa"
     TIMEOUT 120
 )
 
