@@ -48,14 +48,17 @@ module get_can_sub
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
+    !$acc declare create(aphi_batch_spline, aphi_batch_spline_ready)
 
     ! Batch spline for G_c (generating function)
     type(BatchSplineData3D), save :: G_batch_spline
     logical, save :: G_batch_spline_ready = .false.
+    !$acc declare create(G_batch_spline, G_batch_spline_ready)
 
     ! Batch spline for sqg_c, B_vartheta_c, B_varphi_c (3 quantities)
     type(BatchSplineData3D), save :: sqg_Bt_Bp_batch_spline
     logical, save :: sqg_Bt_Bp_batch_spline_ready = .false.
+    !$acc declare create(sqg_Bt_Bp_batch_spline, sqg_Bt_Bp_batch_spline_ready)
 
 contains
 
@@ -477,7 +480,7 @@ subroutine splint_can_coord(fullset, mode_secders, r, vartheta_c, varphi_c, &
                             d2bth_tt, d2bth_tp, d2bth_pp, &
                             d2bph_rr, d2bph_rt, d2bph_rp, &
                             d2bph_tt, d2bph_tp, d2bph_pp, G_c)
-
+    !$acc routine seq
     use vector_potentail_mod, only: torflux
     use new_vmec_stuff_mod, only: nper
     use chamb_mod, only: rnegflag

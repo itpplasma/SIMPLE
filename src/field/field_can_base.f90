@@ -8,6 +8,7 @@ real(dp), parameter :: twopi = atan(1.d0)*8.d0
 integer(8) :: n_field_evaluations = 0
 
 !$omp threadprivate(n_field_evaluations)
+!$acc declare create(n_field_evaluations)
 
 type :: field_can_t
     real(dp) :: Ath, Aph

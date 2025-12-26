@@ -204,6 +204,7 @@ end subroutine field_can_init
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine get_val(f, pphi)
+  !$acc routine seq
   !
   ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
   !
@@ -221,6 +222,7 @@ end subroutine get_val
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine get_derivatives(f, pphi)
+  !$acc routine seq
   !
   ! computes H, pth and vpar at z=(r, th, ph, pphi) and their derivatives
   !
@@ -245,6 +247,7 @@ end subroutine get_derivatives
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 subroutine get_derivatives2(f, pphi)
+  !$acc routine seq
   !
   ! computes H, pth and vpar at z=(r, th, ph, pphi) up to 2nd derivatives
   ! order of second derivatives:

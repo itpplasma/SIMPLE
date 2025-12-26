@@ -262,27 +262,40 @@ contains
             call init_orbit_netcdf(ntestpart, ntimstep)
         end if
 
-!$omp parallel firstprivate(norb) private(traj, times, i)
+#ifdef SIMPLE_OPENACC
+        ! OpenACC: Single-threaded for now - full GPU parallel requires
+        ! libneo routines (splint_can_coord, magfie, etc.) to have !$acc routine
+        ! TODO: Add !$acc routine seq to libneo for true GPU parallelism
+        do i = 1, ntestpart
+            kpart = kpart + 1
+            print *, kpart, ' / ', ntestpart, 'particle: ', i
+            allocate(traj(5, ntimstep), times(ntimstep))
+            call trace_orbit(norb, i, traj, times)
+            deallocate(traj, times)
+        end do
+#else
+        !$omp parallel firstprivate(norb) private(traj, times, i)
         allocate (traj(5, ntimstep), times(ntimstep))
 
-!$omp do
+        !$omp do
         do i = 1, ntestpart
-!$omp critical
+            !$omp critical
             kpart = kpart + 1
             print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                 omp_get_thread_num()
-!$omp end critical
+            !$omp end critical
 
             call trace_orbit(norb, i, traj, times)
 
             if (output_orbits_macrostep) then
-!$omp critical
+                !$omp critical
                 call write_orbit_to_netcdf(i, traj, times)
-!$omp end critical
+                !$omp end critical
             end if
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
+#endif
 
         if (output_orbits_macrostep) then
             call close_orbit_netcdf()
@@ -297,26 +310,34 @@ contains
         integer :: i
         type(classification_result_t) :: class_result
 
-!$omp parallel firstprivate(norb) private(class_result, i)
-!$omp do
+#ifdef SIMPLE_OPENACC
+        ! OpenACC: Single-threaded for now - full GPU parallel requires
+        ! libneo routines (splint_can_coord, magfie, etc.) to have !$acc routine
+        ! TODO: Add !$acc routine seq to libneo for true GPU parallelism
         do i = 1, ntestpart
-!$omp critical
+            call trace_orbit_with_classifiers(norb, i, class_result)
+            class_passing(i) = class_result%passing
+            class_lost(i) = class_result%lost
+        end do
+#else
+        !$omp parallel firstprivate(norb) private(class_result, i)
+        !$omp do
+        do i = 1, ntestpart
+            !$omp critical
             kpart = kpart + 1
             print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                 omp_get_thread_num()
-!$omp end critical
+            !$omp end critical
 
             call reset_seed_if_deterministic
             call trace_orbit_with_classifiers(norb, i, class_result)
 
-            ! Store classification flags in params arrays
             class_passing(i) = class_result%passing
             class_lost(i) = class_result%lost
-            ! iclass already populated by trace_orbit_with_classifiers
-            ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
+#endif
     end subroutine classify_parallel
 
     subroutine print_parameters
@@ -450,6 +471,9 @@ contains
                                   classification_result_t, &
                                   write_classification_results
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+#ifdef SIMPLE_OPENACC
+        use field_can_flux, only: ref_to_integ_flux, integ_to_ref_flux
+#endif
 
         type(tracer_t), intent(inout) :: anorb
         integer, intent(in) :: ipart
@@ -464,17 +488,26 @@ contains
 
         ierr_orbit = 0
 
+#ifndef SIMPLE_OPENACC
         call reset_seed_if_deterministic
+#endif
 
         if (ntcut > 0 .or. class_plot) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
+#ifndef SIMPLE_OPENACC
             if (class_plot) then
                 call write_classification_results(ipart, class_result)
             end if
+#endif
             return
         end if
 
+#ifdef SIMPLE_OPENACC
+        ! Direct call for GPU - avoid procedure pointer (CANFLUX field type)
+        call ref_to_integ_flux(zstart(1:3, ipart), z(1:3))
+#else
         call ref_to_integ(zstart(1:3, ipart), z(1:3))
+#endif
         z(4:5) = zstart(4:5, ipart)
         zend(:, ipart) = 0d0
 
@@ -488,9 +521,14 @@ contains
             ! Fill trajectory arrays with NaN since we're not tracing this particle
             orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
             orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
+#ifdef SIMPLE_OPENACC
+            !$acc atomic update
+            confpart_pass(1) = confpart_pass(1) + 1.d0
+#else
 !$omp critical
             confpart_pass = confpart_pass + 1.d0
 !$omp end critical
+#endif
             return
         end if
 
@@ -519,11 +557,18 @@ contains
             end do
         end if
 
+#ifdef SIMPLE_OPENACC
+        ! Direct call for GPU - avoid procedure pointer (CANFLUX field type)
+        call integ_to_ref_flux(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = kt*dtaumin/v0
+#else
 !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = kt*dtaumin/v0
 !$omp end critical
+#endif
     end subroutine trace_orbit
 
     subroutine macrostep(anorb, z, kt, ierr_orbit)
