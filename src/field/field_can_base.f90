@@ -5,6 +5,12 @@ implicit none
 
 real(dp), parameter :: twopi = atan(1.d0)*8.d0
 
+! Configuration options for which second derivatives are evaluated.
+integer, parameter :: SECDERS_NONE = 0
+integer, parameter :: SECDERS_DR2_ONLY = 1
+integer, parameter :: SECDERS_ALL = 2
+integer, parameter :: SECDERS_RMIX = 3
+
 integer(8) :: n_field_evaluations = 0
 
 !$omp threadprivate(n_field_evaluations)

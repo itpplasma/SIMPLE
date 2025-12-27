@@ -1,7 +1,7 @@
 module field_can_test
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: field_can_t, n_field_evaluations
+use field_can_base, only: field_can_t, n_field_evaluations, SECDERS_NONE
 
 implicit none
 
@@ -61,7 +61,7 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
     f%dBmod(2) = B0*r/R0*sth
     f%dBmod(3) = 0d0
 
-    if (mode_secders <= 0) return
+    if (mode_secders == SECDERS_NONE) return
 
     f%d2Ath(1) = B0*(1d0 - 2d0*r/R0*cth)
     f%d2Ath(4) = B0*r**3*cth/(3d0*R0)
