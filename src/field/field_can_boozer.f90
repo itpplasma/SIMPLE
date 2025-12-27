@@ -1,8 +1,6 @@
 module field_can_boozer
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_base, only: field_can_t, n_field_evaluations, twopi, &
-                              SECDERS_NONE, SECDERS_DR2_ONLY, SECDERS_ALL, &
-                              SECDERS_RMIX
+    use field_can_base, only: field_can_t, n_field_evaluations, twopi
 
     implicit none
 
@@ -52,10 +50,9 @@ contains
         ! and stores results in variable f
         ! Works for A_th linear in r (toroidal flux as radial variable)
         !
-        ! mode_secders = SECDERS_NONE: no second derivatives
-        ! mode_secders = SECDERS_DR2_ONLY: second derivatives only in d/dr^2
-        ! mode_secders = SECDERS_ALL: all second derivatives, including mixed
-        ! mode_secders = SECDERS_RMIX: second derivatives involving d/dr only
+        ! mode_secders = 0: no second derivatives
+        ! mode_secders = 1: second derivatives only in d/dr^2
+        ! mode_secders = 2: all second derivatives, including mixed
         !
         ! tested in test_magfie.f90, 2018-10-23, C. Albert <albert@alumni.tugraz.at>
         !
@@ -101,14 +98,14 @@ contains
         f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
         f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
 
-        if (mode_secders .ne. SECDERS_NONE) then
+        if (mode_secders > 0) then
             f%d2hth(1) = d2Bth/f%Bmod - 2d0*dBth*f%dBmod(1)/bmod2 + &
                          Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
             f%d2hph(1) = d2Bph/f%Bmod - 2d0*dBph*f%dBmod(1)/bmod2 + &
                          Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
         end if
 
-        if (mode_secders .eq. SECDERS_ALL) then
+        if (mode_secders .eq. 2) then
             f%d2hth((/4, 6/)) = Bth/bmod2*(2d0*f%dBmod((/2, 3/))**2/f%Bmod - &
                                            f%d2Bmod((/4, 6/)))
             f%d2hph((/4, 6/)) = Bph/bmod2*(2d0*f%dBmod((/2, 3/))**2/f%Bmod - &
@@ -126,7 +123,7 @@ contains
 
             f%d2hth(5) = Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
             f%d2hph(5) = Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
-        elseif (mode_secders .eq. SECDERS_RMIX) then
+        elseif (mode_secders .eq. 3) then
             f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 &
                          + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
             f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 &

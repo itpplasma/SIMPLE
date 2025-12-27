@@ -1,9 +1,7 @@
 module field_can_flux
 
    use, intrinsic :: iso_fortran_env, only: dp => real64
-   use field_can_base, only: field_can_t, n_field_evaluations, twopi, &
-                             SECDERS_NONE, SECDERS_DR2_ONLY, SECDERS_ALL, &
-                             SECDERS_RMIX
+   use field_can_base, only: field_can_t, n_field_evaluations, twopi
 
    implicit none
    private
@@ -47,10 +45,9 @@ contains
 
 !> Evaluate magnetic field in canonical coordinates (r, th_c, ph_c)
 !> Works for A_th linear in r (toroidal flux as radial variable)
-!> mode_secders = SECDERS_NONE: no second derivatives
-!> mode_secders = SECDERS_DR2_ONLY: second derivatives only in d/dr^2
-!> mode_secders = SECDERS_ALL: all second derivatives, including mixed
-!> mode_secders = SECDERS_RMIX: second derivatives involving d/dr only
+!> mode_secders = 0: no second derivatives
+!> mode_secders = 1: second derivatives only in d/dr^2
+!> mode_secders = 2: all second derivatives, including mixed
    subroutine eval_field_can(f, r, th_c, ph_c, mode_secders)
       use get_can_sub, only: splint_can_coord
 
@@ -105,7 +102,7 @@ contains
       f%dhth = dBth/f%Bmod - Bth*f%dBmod/bmod2
       f%dhph = dBph/f%Bmod - Bph*f%dBmod/bmod2
 
-      if (mode_secders /= SECDERS_NONE) then
+      if (mode_secders > 0) then
          ! d2dr2
          f%d2Bmod(1) = (d2Bph(1)*f%dAth(1) - d2Bth(1)*f%dAph(1) &
                         - 2.0_dp*dBth(1)*f%d2Aph(1) - f%Bmod*f%hth*d3Aphdr3 &
@@ -119,7 +116,7 @@ contains
                       + Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
       end if
 
-      if (mode_secders == SECDERS_ALL) then
+      if (mode_secders == 2) then
          ! d2dth2, d2dph2
          f%d2Bmod(4) = (d2Bph(4)*f%dAth(1) - d2Bth(4)*f%dAph(1) &
                         - 2.0_dp*dsqg(2)*dbmod2(2) - bmod2*d2sqg(4))/sqg
@@ -139,7 +136,7 @@ contains
                                           f%d2Bmod((/4, 6/)))
       end if
 
-      if (mode_secders == SECDERS_ALL .or. mode_secders == SECDERS_RMIX) then
+      if (mode_secders == 2 .or. mode_secders == 3) then
          ! d2drdth, d2drdph
          f%d2Bmod(2) = (d2Bph(2)*f%dAth(1) - d2Bth(2)*f%dAph(1) &
                         - dBth(2)*f%d2Aph(1) - dsqg(1)*dbmod2(2) &
@@ -165,7 +162,7 @@ contains
                       - (dBph(1)*f%dBmod(3) + dBph(3)*f%dBmod(1))/bmod2 &
                       + Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
 
-         if (mode_secders == SECDERS_ALL) then
+         if (mode_secders == 2) then
             ! d2dthdph
             f%d2Bmod(5) = (d2Bph(5)*f%dAth(1) - d2Bth(5)*f%dAph(1) &
                            - dsqg(2)*dbmod2(3) - dsqg(3)*dbmod2(2) - &
