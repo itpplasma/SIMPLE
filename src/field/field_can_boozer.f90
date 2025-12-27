@@ -123,6 +123,16 @@ contains
 
             f%d2hth(5) = Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
             f%d2hph(5) = Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+        elseif (mode_secders .eq. 3) then
+            f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 &
+                         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+            f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 &
+                         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+
+            f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 &
+                         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+            f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 &
+                         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
         end if
     end subroutine eval_field_booz
 

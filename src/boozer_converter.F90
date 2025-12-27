@@ -6,6 +6,7 @@ module boozer_sub
                            evaluate_batch_splines_1d_der3, &
                            evaluate_batch_splines_3d_der, &
                            evaluate_batch_splines_3d_der2, &
+                           evaluate_batch_splines_3d_der2_rmix, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
     use field, only: magnetic_field_t, field_clone
     use, intrinsic :: iso_fortran_env, only: dp => real64
@@ -137,6 +138,7 @@ contains
         real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
                     d2qua_dtdp, d2qua_dp2
         real(dp) :: x_eval(3), y_eval(2), dy_eval(3, 2), d2y_eval(6, 2)
+        real(dp) :: d2y_rmix_eval(3, 2)
         real(dp) :: theta_wrapped, phi_wrapped
         real(dp) :: y1d(2), dy1d(2), d2y1d(2)
 
@@ -268,6 +270,54 @@ contains
                 dB_r = 0.0_dp
                 d2B_r = 0.0_dp
             end if
+        elseif (mode_secders == 3) then
+            call evaluate_batch_splines_3d_der2_rmix( &
+                bmod_br_batch_spline, x_eval, &
+                y_eval(1:bmod_br_num_quantities), &
+                dy_eval(:, 1:bmod_br_num_quantities), &
+                d2y_rmix_eval(:, 1:bmod_br_num_quantities) &
+                )
+
+            ! Extract Bmod (quantity 1)
+            qua = y_eval(1)
+            dqua_dr = dy_eval(1, 1)
+            dqua_dt = dy_eval(2, 1)
+            dqua_dp = dy_eval(3, 1)
+
+            d2qua_dr2 = d2y_rmix_eval(1, 1)
+            d2qua_drdt = d2y_rmix_eval(2, 1)
+            d2qua_drdp = d2y_rmix_eval(3, 1)
+            d2qua_dt2 = 0.0_dp
+            d2qua_dtdp = 0.0_dp
+            d2qua_dp2 = 0.0_dp
+
+            d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
+            dqua_dr = dqua_dr*drhods
+            d2qua_drdt = d2qua_drdt*drhods
+            d2qua_drdp = d2qua_drdp*drhods
+
+            Bmod_B = qua
+
+            dBmod_B(1) = dqua_dr
+            dBmod_B(2) = dqua_dt
+            dBmod_B(3) = dqua_dp
+
+            d2Bmod_B(1) = d2qua_dr2
+            d2Bmod_B(2) = d2qua_drdt
+            d2Bmod_B(3) = d2qua_drdp
+            d2Bmod_B(4) = 0.0_dp
+            d2Bmod_B(5) = 0.0_dp
+            d2Bmod_B(6) = 0.0_dp
+
+            if (use_B_r) then
+                error stop &
+                    "splint_boozer_coord: mode_secders=3 not implemented "// &
+                    "for B_r"
+            else
+                B_r = 0.0_dp
+                dB_r = 0.0_dp
+                d2B_r = 0.0_dp
+            end if
         else
             call evaluate_batch_splines_3d_der(bmod_br_batch_spline, x_eval, &
                                                y_eval(1:bmod_br_num_quantities), &
@@ -281,12 +331,12 @@ contains
             d2Bmod_B = 0.0_dp
 
             if (mode_secders == 1) then
-                call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                    y_eval(1:bmod_br_num_quantities), &
-                                                    dy_eval(:, &
-                                                            1:bmod_br_num_quantities), &
-                                                    d2y_eval(:, &
-                                                             1:bmod_br_num_quantities))
+                call evaluate_batch_splines_3d_der2( &
+                    bmod_br_batch_spline, x_eval, &
+                    y_eval(1:bmod_br_num_quantities), &
+                    dy_eval(:, 1:bmod_br_num_quantities), &
+                    d2y_eval(:, 1:bmod_br_num_quantities) &
+                    )
                 d2Bmod_B(1) = d2y_eval(1, 1)*drhods2 - dy_eval(1, 1)*d2rhods2m
             end if
 
@@ -339,7 +389,8 @@ contains
 
     end subroutine splint_boozer_coord
 
-!> Computes delta_vartheta = vartheta_B - theta_V and delta_varphi = varphi_B - varphi_V
+!> Computes delta_vartheta = vartheta_B - theta_V and
+!> delta_varphi = varphi_B - varphi_V
     !> and their first derivatives over angles.
     !> isw=0: given as functions of VMEC coordinates (r, vartheta, varphi)
     !> isw=1: given as functions of Boozer coordinates (r, vartheta, varphi)
@@ -613,7 +664,8 @@ contains
                                                             dl_dt, dl_dp, &
                                                             Bctrvr_vartheta, &
                                                             Bctrvr_varphi, &
-                                                            Bcovar_r, Bcovar_vartheta, &
+                                                            Bcovar_r, &
+                                                            Bcovar_vartheta, &
                                                             Bcovar_varphi)
                     else
                         call vmec_field_evaluate(s, theta, varphi, &
@@ -743,7 +795,8 @@ contains
                     ibeg = i - nshift
                     iend = ibeg + ns_tp_B
 
-                    call plag_coeff(npoilag, nder, phi_V(i_phi), phi_B(ibeg:iend), coef)
+                    call plag_coeff(npoilag, nder, phi_V(i_phi), phi_B(ibeg:iend), &
+                                    coef)
 
                     perqua_2D(:, i_theta, i_phi) = matmul(perqua_p(:, ibeg:iend), &
                                                           coef(0, :))
@@ -1038,7 +1091,9 @@ contains
 
         if (use_del_tp_B) then
             if (.not. allocated(delt_delp_B_grid)) then
-       error stop "build_boozer_delt_delp_batch_splines: delt_delp_B_grid not allocated"
+                error stop &
+                    "build_boozer_delt_delp_batch_splines: delt_delp_B_grid "// &
+                    "not allocated"
             end if
 
             if (delt_delp_B_batch_spline_ready) then
