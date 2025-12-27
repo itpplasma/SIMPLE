@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Building
 - **Primary build**: `make` - Uses CMake with Ninja generator to build in `build/` directory
-- **Alternative**: `fpm build` - Uses Fortran Package Manager
+- **IMPORTANT**: `fpm` support is experimental and must not be used for development, testing, or performance work in this repository.
 - **Python package**: Build via scikit-build-core (see pyproject.toml)
 - **Clean build**: `make clean` - Removes build directory
 - **Reconfigure**: `make reconfigure` - Forces CMake reconfiguration

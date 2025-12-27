@@ -71,7 +71,8 @@ contains
         th = 0.1_dp + (twopi - 0.2_dp)*real(mod(37*i, 991), dp)/991.0_dp
         ph = 0.1_dp + (phi_period - 0.2_dp)*real(mod(41*i, 983), dp)/983.0_dp
 
-        call splint_boozer_coord(s, th, ph, A_theta, A_phi, dA_theta_ds, dA_phi_ds, &
+        call splint_boozer_coord(s, th, ph, 2, A_theta, A_phi, dA_theta_ds, &
+                                 dA_phi_ds, &
                                  d2A_phi_ds2, d3A_phi_ds3, Bth, dBth, d2Bth, Bph, &
                                  dBph, d2Bph, Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
 
@@ -88,7 +89,6 @@ contains
         call check_vec('d2Br  (diag)', [d2Br(1), d2Br(4), d2Br(6)], d2Br_fd, &
                        tol2_rel, s, th, ph, n_failed)
     end subroutine check_point
-
 
     subroutine fd_first_derivatives(s, th, ph, phi_period, Bmod0, Br0, dBmod, dBr)
         real(dp), intent(in) :: s, th, ph, phi_period, Bmod0, Br0
@@ -117,7 +117,6 @@ contains
         end if
     end subroutine fd_first_derivatives
 
-
     subroutine fd_second_diag(s, th, ph, phi_period, Bmod0, Br0, d2Bmod, d2Br)
         real(dp), intent(in) :: s, th, ph, phi_period, Bmod0, Br0
         real(dp), intent(out) :: d2Bmod(3), d2Br(3)
@@ -129,30 +128,29 @@ contains
         call eval_B_only(s - h2_s, th, ph, Bm1, Brm1)
         call eval_B_only(s + 2.0_dp*h2_s, th, ph, Bp2, Brp2)
         call eval_B_only(s - 2.0_dp*h2_s, th, ph, Bm2, Brm2)
-        d2Bmod(1) = (-Bp2 + 16.0_dp*Bp1 - 30.0_dp*Bmod0 + 16.0_dp*Bm1 - Bm2) / &
+        d2Bmod(1) = (-Bp2 + 16.0_dp*Bp1 - 30.0_dp*Bmod0 + 16.0_dp*Bm1 - Bm2)/ &
                     (12.0_dp*h2_s*h2_s)
-        d2Br(1) = (-Brp2 + 16.0_dp*Brp1 - 30.0_dp*Br0 + 16.0_dp*Brm1 - Brm2) / &
+        d2Br(1) = (-Brp2 + 16.0_dp*Brp1 - 30.0_dp*Br0 + 16.0_dp*Brm1 - Brm2)/ &
                   (12.0_dp*h2_s*h2_s)
 
         call eval_B_only(s, wrap_angle(th + h2_th, twopi), ph, Bp1, Brp1)
         call eval_B_only(s, wrap_angle(th - h2_th, twopi), ph, Bm1, Brm1)
         call eval_B_only(s, wrap_angle(th + 2.0_dp*h2_th, twopi), ph, Bp2, Brp2)
         call eval_B_only(s, wrap_angle(th - 2.0_dp*h2_th, twopi), ph, Bm2, Brm2)
-        d2Bmod(2) = (-Bp2 + 16.0_dp*Bp1 - 30.0_dp*Bmod0 + 16.0_dp*Bm1 - Bm2) / &
+        d2Bmod(2) = (-Bp2 + 16.0_dp*Bp1 - 30.0_dp*Bmod0 + 16.0_dp*Bm1 - Bm2)/ &
                     (12.0_dp*h2_th*h2_th)
-        d2Br(2) = (-Brp2 + 16.0_dp*Brp1 - 30.0_dp*Br0 + 16.0_dp*Brm1 - Brm2) / &
+        d2Br(2) = (-Brp2 + 16.0_dp*Brp1 - 30.0_dp*Br0 + 16.0_dp*Brm1 - Brm2)/ &
                   (12.0_dp*h2_th*h2_th)
 
         call eval_B_only(s, th, wrap_angle(ph + h2_ph, phi_period), Bp1, Brp1)
         call eval_B_only(s, th, wrap_angle(ph - h2_ph, phi_period), Bm1, Brm1)
         call eval_B_only(s, th, wrap_angle(ph + 2.0_dp*h2_ph, phi_period), Bp2, Brp2)
         call eval_B_only(s, th, wrap_angle(ph - 2.0_dp*h2_ph, phi_period), Bm2, Brm2)
-        d2Bmod(3) = (-Bp2 + 16.0_dp*Bp1 - 30.0_dp*Bmod0 + 16.0_dp*Bm1 - Bm2) / &
+        d2Bmod(3) = (-Bp2 + 16.0_dp*Bp1 - 30.0_dp*Bmod0 + 16.0_dp*Bm1 - Bm2)/ &
                     (12.0_dp*h2_ph*h2_ph)
-        d2Br(3) = (-Brp2 + 16.0_dp*Brp1 - 30.0_dp*Br0 + 16.0_dp*Brm1 - Brm2) / &
+        d2Br(3) = (-Brp2 + 16.0_dp*Brp1 - 30.0_dp*Br0 + 16.0_dp*Brm1 - Brm2)/ &
                   (12.0_dp*h2_ph*h2_ph)
     end subroutine fd_second_diag
-
 
     subroutine eval_B_only(s, th, ph, Bmod, Br)
         real(dp), intent(in) :: s, th, ph
@@ -164,11 +162,11 @@ contains
         real(dp) :: dBmod(3), dBr(3)
         real(dp) :: d2Bmod(6), d2Br(6)
 
-        call splint_boozer_coord(s, th, ph, A_theta, A_phi, dA_theta_ds, dA_phi_ds, &
+        call splint_boozer_coord(s, th, ph, 2, A_theta, A_phi, dA_theta_ds, &
+                                 dA_phi_ds, &
                                  d2A_phi_ds2, d3A_phi_ds3, Bth, dBth, d2Bth, Bph, &
                                  dBph, d2Bph, Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
     end subroutine eval_B_only
-
 
     subroutine check_vec(name, a, b, tol_rel, s, th, ph, n_failed)
         character(*), intent(in) :: name
@@ -191,14 +189,12 @@ contains
         end do
     end subroutine check_vec
 
-
     pure real(dp) function wrap_angle(angle, period) result(wrapped)
         real(dp), intent(in) :: angle, period
 
         wrapped = modulo(angle, period)
         if (wrapped < 0.0_dp) wrapped = wrapped + period
     end function wrap_angle
-
 
     pure logical function is_finite(x) result(ok)
         real(dp), intent(in) :: x
