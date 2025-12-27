@@ -182,10 +182,12 @@ contains
 
 !$omp do
       do i_theta = 1, n_theta_c
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
 !$omp critical
          i_ctr = i_ctr + 1
          call print_progress('integrate ODE: ', i_ctr, n_theta_c)
 !$omp end critical
+#endif
          vartheta_c = h_theta_c*real(i_theta - 1, dp)
          do i_phi = 1, n_phi_c
             varphi_c = h_phi_c*real(i_phi - 1, dp)
@@ -221,10 +223,12 @@ contains
 !$omp barrier
 !$omp do
       do i_theta = 1, n_theta_c
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
 !$omp critical
          i_ctr = i_ctr + 1
          call print_progress('compute components: ', i_ctr, n_theta_c)
 !$omp end critical
+#endif
          vartheta_c = h_theta_c*real(i_theta - 1, dp)
          do i_phi = 1, n_phi_c
             varphi_c = h_phi_c*real(i_phi - 1, dp)
@@ -484,6 +488,10 @@ contains
    subroutine print_progress(message, progress, total)
       character(*), intent(in) :: message
       integer, intent(in) :: progress, total
+
+#ifndef SIMPLE_ENABLE_DEBUG_OUTPUT
+      return
+#endif
 
       write (*, '(A, I4, A, I4)', advance='no') message, progress, ' of ', total
 

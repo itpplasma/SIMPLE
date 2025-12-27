@@ -237,6 +237,9 @@ contains
 
     subroutine print_progress(i, n)
         integer, intent(in) :: i, n
+#ifndef SIMPLE_ENABLE_DEBUG_OUTPUT
+        return
+#endif
 !$omp critical
         if (mod(i, max(1, n/10)) == 0) then
             write (*, '(a,f6.2,a)', advance='no') char(13), 100.0*i/n, ' %'
@@ -286,8 +289,10 @@ contains
 
 #ifdef SIMPLE_NVHPC
             do i_phi = 1, n_phi
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
                 i_ctr = i_ctr + 1
                 call print_progress(i_ctr, n_phi)
+#endif
                 do i_th = 1, n_th
                     do i_r = 1, n_r
                         x_scaled(1) = xmin(1) + h_r*dble(i_r - 1)
@@ -329,9 +334,11 @@ contains
 !$omp&                  e_cov, scaling_jac, Bmod, Acov, hcov, needs_scaling)
 !$omp do
             do i_phi = 1, n_phi
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
 !$omp atomic
                 i_ctr = i_ctr + 1
                 call print_progress(i_ctr, n_phi)
+#endif
                 do i_th = 1, n_th
                     do i_r = 1, n_r
                         x_scaled(1) = xmin(1) + h_r*dble(i_r - 1)

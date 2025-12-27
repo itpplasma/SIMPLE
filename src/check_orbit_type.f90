@@ -70,7 +70,9 @@ contains
 !
   nfp=nfp+1
   if(nfp.gt.nfp_max) then
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *,'detect_oneline: nfp > nfp_max, nturns not reached'
+#endif
     ierr=1
     return
   endif
@@ -88,13 +90,17 @@ contains
     if(iper.eq.0) then
       iper=nfp
       if(iper.le.ipermin) then
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
         print *,'detect_oneline: stochastic, iper < ipermin'
+#endif
         ideal=2
         ijpar=2
         igroup=nturns
         return
       endif
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
       print *,'detect_oneline: return period',iper-1
+#endif
       igroup=1
     else
       igroup=igroup+1

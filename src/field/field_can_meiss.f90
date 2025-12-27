@@ -204,13 +204,19 @@ end subroutine ref_to_integ_meiss
 
 
 subroutine get_meiss_coordinates
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.init_transformation'
+#endif
     call init_transformation
 
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.spline_transformation'
+#endif
     call spline_transformation
 
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.init_canonical_field_components'
+#endif
     call init_canonical_field_components
 end subroutine get_meiss_coordinates
 
@@ -252,7 +258,9 @@ subroutine compute_phi_slice(i_phi)
     real(dp) :: y(2)
     integer :: i_th
 
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     call print_progress(i_phi)
+#endif
     
     do i_th = 1, n_th
         lam_phi(1, i_th, i_phi) = 0d0
@@ -293,6 +301,10 @@ subroutine print_progress(i_phi)
 !> Print integration progress
     integer, intent(in) :: i_phi
     
+#ifndef SIMPLE_ENABLE_DEBUG_OUTPUT
+    return
+#endif
+
     !$omp critical
     write(*,'(A, I4, A, I4)',advance='no') 'integrate ODE: ', i_phi, ' of ', n_phi
     if (i_phi < n_phi) then
