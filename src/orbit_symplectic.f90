@@ -3,7 +3,6 @@ module orbit_symplectic
     use util, only: pi, twopi
     use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
                              eval_field => evaluate
-    use magfie_sub, only: BOOZER
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t
     use orbit_symplectic_base, only: RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT
     use orbit_symplectic_base, only: GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3, S_MAX
@@ -16,7 +15,6 @@ module orbit_symplectic
                                       orbit_timestep_rk45, &
                                       timestep_rk_gauss_quasi, &
                                       timestep_rk_lobatto_quasi
-    use params, only: isw_field_type
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use vector_potentail_mod, only: torflux
     use lapack_interfaces, only: dgesv
@@ -166,11 +164,7 @@ contains
         real(dp), intent(out) :: fvec(n)
         integer, intent(in) :: iflag
 
-        if (isw_field_type == BOOZER) then
-            call eval_field(f, x(1), si%z(2), si%z(3), 3)
-        else
-            call eval_field(f, x(1), si%z(2), si%z(3), 2)
-        end if
+        call eval_field(f, x(1), si%z(2), si%z(3), 3)
         call get_derivatives2(f, x(2))
 
         fvec(1) = f%dpth(1)*(f%pth - si%pthold) + si%dt*(f%dH(2)*f%dpth(1) - &
@@ -675,21 +669,21 @@ contains
                 ! d/dr
                 jac(m - 1, 4*l - 3) = jac(m - 1, 4*l - 3) - si%dt*a(k, l)*( &
                                       -fs(l)%dhph(1)*(fs(l)%vpar - &
-                                                   Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
+                                          Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
                                       (fs(l)%dvpar(1) - dHprime(4*l - 3)*fs(l)%hth - &
                                        Hprime(l)*fs(l)%dhth(1))/fs(l)%hph &
                                       )
                 ! d/dth
                 jac(m - 1, 4*l - 2) = jac(m - 1, 4*l - 2) - si%dt*a(k, l)*( &
                                       -fs(l)%dhph(2)*(fs(l)%vpar - &
-                                                   Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
+                                          Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
                                       (fs(l)%dvpar(2) - dHprime(4*l - 2)*fs(l)%hth - &
                                        Hprime(l)*fs(l)%dhth(2))/fs(l)%hph &
                                       )
                 ! d/dph
                 jac(m - 1, 4*l - 1) = jac(m - 1, 4*l - 1) - si%dt*a(k, l)*( &
                                       -fs(l)%dhph(3)*(fs(l)%vpar - &
-                                                   Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
+                                          Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
                                       (fs(l)%dvpar(3) - dHprime(4*l - 1)*fs(l)%hth - &
                                        Hprime(l)*fs(l)%dhth(3))/fs(l)%hph &
                                       )
@@ -1001,21 +995,21 @@ contains
                 ! d/dr
                 jac(m - 1, n - 3) = jac(m - 1, n - 3) - si%dt*a(k, l)*( &
                                     -fs(l)%dhph(1)*(fs(l)%vpar - &
-                                                   Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
+                                        Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
                                     (fs(l)%dvpar(1) - dHprime(n - 3)*fs(l)%hth - &
                                      Hprime(l)*fs(l)%dhth(1))/fs(l)%hph &
                                     )
                 ! d/dth
                 jac(m - 1, n - 2) = jac(m - 1, n - 2) - si%dt*a(k, l)*( &
                                     -fs(l)%dhph(2)*(fs(l)%vpar - &
-                                                   Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
+                                        Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
                                     (fs(l)%dvpar(2) - dHprime(n - 2)*fs(l)%hth - &
                                      Hprime(l)*fs(l)%dhth(2))/fs(l)%hph &
                                     )
                 ! d/dph
                 jac(m - 1, n - 1) = jac(m - 1, n - 1) - si%dt*a(k, l)*( &
                                     -fs(l)%dhph(3)*(fs(l)%vpar - &
-                                                   Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
+                                        Hprime(l)*fs(l)%hth)/fs(l)%hph**2 + &
                                     (fs(l)%dvpar(3) - dHprime(n - 1)*fs(l)%hth - &
                                      Hprime(l)*fs(l)%dhth(3))/fs(l)%hph &
                                     )
