@@ -253,7 +253,9 @@ contains
    subroutine trace_parallel(norb)
       use netcdf_orbit_output, only: init_orbit_netcdf, close_orbit_netcdf, &
                                      write_orbit_to_netcdf
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
       use params, only: debug
+#endif
 
       type(tracer_t), intent(inout) :: norb
       integer :: i
@@ -268,6 +270,7 @@ contains
 
 !$omp do
       do i = 1, ntestpart
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
          if (debug) then
 !$omp critical
             kpart = kpart + 1
@@ -275,6 +278,7 @@ contains
                omp_get_thread_num()
 !$omp end critical
          end if
+#endif
 
          call trace_orbit(norb, i, traj, times)
 
@@ -295,7 +299,9 @@ contains
    subroutine classify_parallel(norb)
       use classification, only: trace_orbit_with_classifiers, classification_result_t
       use params, only: class_passing, class_lost
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
       use params, only: debug
+#endif
 
       type(tracer_t), intent(inout) :: norb
       integer :: i
@@ -304,6 +310,7 @@ contains
 !$omp parallel firstprivate(norb) private(class_result, i)
 !$omp do
       do i = 1, ntestpart
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
          if (debug) then
 !$omp critical
             kpart = kpart + 1
@@ -311,6 +318,7 @@ contains
                omp_get_thread_num()
 !$omp end critical
          end if
+#endif
 
          if (swcoll) call reset_seed_if_deterministic
          call trace_orbit_with_classifiers(norb, i, class_result)
