@@ -7,7 +7,7 @@ module boozer_sub
                            evaluate_batch_splines_3d_der, &
                            evaluate_batch_splines_3d_der2, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
-    use field, only: magnetic_field_t, field_clone
+	    use field, only: magnetic_field_t, field_clone
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
@@ -23,9 +23,9 @@ module boozer_sub
     ! Constants
     real(dp), parameter :: TWOPI = 2.0_dp*3.14159265358979_dp
 
-    ! Field storage for nested subroutine calls
-    class(magnetic_field_t), allocatable :: current_field
-!$omp threadprivate(current_field)
+	    ! Field storage for nested subroutine calls
+	    class(magnetic_field_t), allocatable :: current_field
+	!$omp threadprivate(current_field)
 
     ! Batch spline data for Bmod and B_r interpolation
     type(BatchSplineData3D), save :: bmod_br_batch_spline
@@ -54,18 +54,18 @@ module boozer_sub
 contains
 
     !> Initialize Boozer coordinates using given magnetic field
-    subroutine get_boozer_coordinates_with_field(field)
+	    subroutine get_boozer_coordinates_with_field(field)
 
-        class(magnetic_field_t), intent(in) :: field
+	        class(magnetic_field_t), intent(in) :: field
 
-        ! Store field in module variable for use in nested subroutines
-        call field_clone(field, current_field)
-        call reset_boozer_batch_splines
+	        ! Store field in module variable for use in nested subroutines
+	        call field_clone(field, current_field)
+	        call reset_boozer_batch_splines
 
-        ! Call the actual implementation
-        call get_boozer_coordinates_impl
+	        ! Call the actual implementation
+	        call get_boozer_coordinates_impl
 
-    end subroutine get_boozer_coordinates_with_field
+	    end subroutine get_boozer_coordinates_with_field
 
     !> Initialize Boozer coordinates using VMEC field (backward compatibility)
     subroutine get_boozer_coordinates
@@ -105,7 +105,7 @@ contains
 
     end subroutine get_boozer_coordinates_impl
 
-    subroutine splint_boozer_coord(r, vartheta_B, varphi_B, mode_secders, &
+    subroutine splint_boozer_coord(r, vartheta_B, varphi_B, &
                                    A_theta, A_phi, dA_theta_dr, dA_phi_dr, &
                                    d2A_phi_dr2, d3A_phi_dr3, &
                                    B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
@@ -117,22 +117,20 @@ contains
         use vector_potentail_mod, only: torflux
         use new_vmec_stuff_mod, only: nper
         use chamb_mod, only: rnegflag
-        use diag_mod, only: dodiag, icounter
+        use diag_mod, only: icounter
 
         implicit none
 
-        integer, intent(in) :: mode_secders
+        integer, parameter :: mode_secders = 1
 
-        real(dp), intent(in) :: r, vartheta_B, varphi_B
-        real(dp), intent(out) :: A_phi, A_theta, dA_phi_dr, dA_theta_dr
-        real(dp), intent(out) :: d2A_phi_dr2, d3A_phi_dr3
-        real(dp), intent(out) :: B_vartheta_B, dB_vartheta_B, d2B_vartheta_B
-        real(dp), intent(out) :: B_varphi_B, dB_varphi_B, d2B_varphi_B
-        real(dp), intent(out) :: Bmod_B, B_r
-        real(dp), intent(out) :: dBmod_B(3), dB_r(3)
-        real(dp), intent(out) :: d2Bmod_B(6), d2B_r(6)
+        real(dp) :: r, vartheta_B, varphi_B, &
+                    A_phi, A_theta, dA_phi_dr, dA_theta_dr, d2A_phi_dr2, d3A_phi_dr3, &
+                    B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
+                    B_varphi_B, dB_varphi_B, d2B_varphi_B, Bmod_B, B_r
+        real(dp), dimension(3) :: dBmod_B, dB_r
+        real(dp), dimension(6) :: d2Bmod_B, d2B_r
 
-        real(dp) :: r_eval, rho_tor, drhods, drhods2, d2rhods2m
+        real(dp) :: rho_tor, drhods, drhods2, d2rhods2m
         real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
         real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp, d2qua_dt2, &
                     d2qua_dtdp, d2qua_dp2
@@ -140,17 +138,14 @@ contains
         real(dp) :: theta_wrapped, phi_wrapped
         real(dp) :: y1d(2), dy1d(2), d2y1d(2)
 
-        if (dodiag) then
 !$omp atomic
-            icounter = icounter + 1
-        end if
-        r_eval = r
-        if (r_eval .le. 0.0_dp) then
+        icounter = icounter + 1
+        if (r .le. 0.0_dp) then
             rnegflag = .true.
-            r_eval = abs(r_eval)
+            r = abs(r)
         end if
 
-        A_theta = torflux*r_eval
+        A_theta = torflux*r
         dA_theta_dr = torflux
 
         ! Interpolate A_phi over s (batch spline 1D)
@@ -162,13 +157,13 @@ contains
             ! Need third derivative - use der3 which computes all in one pass
             block
                 real(dp) :: d3y1d(1)
-                call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
+                call evaluate_batch_splines_1d_der3(aphi_batch_spline, r, &
                                                     y1d(1:1), dy1d(1:1), &
                                                     d2y1d(1:1), d3y1d)
                 d3A_phi_dr3 = d3y1d(1)
             end block
         else
-            call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, y1d(1:1), &
+            call evaluate_batch_splines_1d_der2(aphi_batch_spline, r, y1d(1:1), &
                                                 dy1d(1:1), d2y1d(1:1))
             d3A_phi_dr3 = 0.0_dp
         end if
@@ -177,7 +172,7 @@ contains
         d2A_phi_dr2 = d2y1d(1)
 
         ! Interpolation of mod-B (and B_r if use_B_r)
-        rho_tor = sqrt(r_eval)
+        rho_tor = sqrt(r)
         theta_wrapped = modulo(vartheta_B, TWOPI)
         phi_wrapped = modulo(varphi_B, TWOPI/real(nper, dp))
 
@@ -188,132 +183,83 @@ contains
         x_eval(1) = rho_tor
         x_eval(2) = theta_wrapped
         x_eval(3) = phi_wrapped
+        call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
+                                            y_eval(1:bmod_br_num_quantities), &
+                                            dy_eval(:, 1:bmod_br_num_quantities), &
+                                            d2y_eval(:, 1:bmod_br_num_quantities))
 
         ! Chain rule coefficients for rho -> s conversion
         drhods = 0.5_dp/rho_tor
         drhods2 = drhods**2
         d2rhods2m = drhods2/rho_tor  ! -d2rho/ds2 (negative of second derivative)
 
-        if (mode_secders == 2) then
-            call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                y_eval(1:bmod_br_num_quantities), &
-                                                dy_eval(:, 1:bmod_br_num_quantities), &
-                                                d2y_eval(:, 1:bmod_br_num_quantities))
+        ! Extract Bmod (quantity 1)
+        qua = y_eval(1)
+        dqua_dr = dy_eval(1, 1)
+        dqua_dt = dy_eval(2, 1)
+        dqua_dp = dy_eval(3, 1)
 
-            ! Extract Bmod (quantity 1)
-            qua = y_eval(1)
-            dqua_dr = dy_eval(1, 1)
-            dqua_dt = dy_eval(2, 1)
-            dqua_dp = dy_eval(3, 1)
+        d2qua_dr2 = d2y_eval(1, 1)
+        d2qua_drdt = d2y_eval(2, 1)
+        d2qua_drdp = d2y_eval(3, 1)
+        d2qua_dt2 = d2y_eval(4, 1)
+        d2qua_dtdp = d2y_eval(5, 1)
+        d2qua_dp2 = d2y_eval(6, 1)
 
-            d2qua_dr2 = d2y_eval(1, 1)
-            d2qua_drdt = d2y_eval(2, 1)
-            d2qua_drdp = d2y_eval(3, 1)
-            d2qua_dt2 = d2y_eval(4, 1)
-            d2qua_dtdp = d2y_eval(5, 1)
-            d2qua_dp2 = d2y_eval(6, 1)
+        d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
+        dqua_dr = dqua_dr*drhods
+        d2qua_drdt = d2qua_drdt*drhods
+        d2qua_drdp = d2qua_drdp*drhods
+
+        Bmod_B = qua
+
+        dBmod_B(1) = dqua_dr
+        dBmod_B(2) = dqua_dt
+        dBmod_B(3) = dqua_dp
+
+        d2Bmod_B(1) = d2qua_dr2
+        d2Bmod_B(2) = d2qua_drdt
+        d2Bmod_B(3) = d2qua_drdp
+        d2Bmod_B(4) = d2qua_dt2
+        d2Bmod_B(5) = d2qua_dtdp
+        d2Bmod_B(6) = d2qua_dp2
+
+        ! Extract B_r (quantity 2, if present)
+        if (use_B_r) then
+            qua = y_eval(2)
+            dqua_dr = dy_eval(1, 2)
+            dqua_dt = dy_eval(2, 2)
+            dqua_dp = dy_eval(3, 2)
+
+            d2qua_dr2 = d2y_eval(1, 2)
+            d2qua_drdt = d2y_eval(2, 2)
+            d2qua_drdp = d2y_eval(3, 2)
+            d2qua_dt2 = d2y_eval(4, 2)
+            d2qua_dtdp = d2y_eval(5, 2)
+            d2qua_dp2 = d2y_eval(6, 2)
 
             d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
             dqua_dr = dqua_dr*drhods
             d2qua_drdt = d2qua_drdt*drhods
             d2qua_drdp = d2qua_drdp*drhods
 
-            Bmod_B = qua
+            B_r = qua*drhods
 
-            dBmod_B(1) = dqua_dr
-            dBmod_B(2) = dqua_dt
-            dBmod_B(3) = dqua_dp
+            dB_r(1) = dqua_dr*drhods - qua*d2rhods2m
+            dB_r(2) = dqua_dt*drhods
+            dB_r(3) = dqua_dp*drhods
 
-            d2Bmod_B(1) = d2qua_dr2
-            d2Bmod_B(2) = d2qua_drdt
-            d2Bmod_B(3) = d2qua_drdp
-            d2Bmod_B(4) = d2qua_dt2
-            d2Bmod_B(5) = d2qua_dtdp
-            d2Bmod_B(6) = d2qua_dp2
-
-            ! Extract B_r (quantity 2, if present)
-            if (use_B_r) then
-                qua = y_eval(2)
-                dqua_dr = dy_eval(1, 2)
-                dqua_dt = dy_eval(2, 2)
-                dqua_dp = dy_eval(3, 2)
-
-                d2qua_dr2 = d2y_eval(1, 2)
-                d2qua_drdt = d2y_eval(2, 2)
-                d2qua_drdp = d2y_eval(3, 2)
-                d2qua_dt2 = d2y_eval(4, 2)
-                d2qua_dtdp = d2y_eval(5, 2)
-                d2qua_dp2 = d2y_eval(6, 2)
-
-                d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
-                dqua_dr = dqua_dr*drhods
-                d2qua_drdt = d2qua_drdt*drhods
-                d2qua_drdp = d2qua_drdp*drhods
-
-                B_r = qua*drhods
-
-                dB_r(1) = dqua_dr*drhods - qua*d2rhods2m
-                dB_r(2) = dqua_dt*drhods
-                dB_r(3) = dqua_dp*drhods
-
-                d2B_r(1) = d2qua_dr2*drhods - 2.0_dp*dqua_dr*d2rhods2m + &
-                           qua*drhods*(3.0_dp/4.0_dp)/r_eval**2
-                d2B_r(2) = d2qua_drdt*drhods - dqua_dt*d2rhods2m
-                d2B_r(3) = d2qua_drdp*drhods - dqua_dp*d2rhods2m
-                d2B_r(4) = d2qua_dt2*drhods
-                d2B_r(5) = d2qua_dtdp*drhods
-                d2B_r(6) = d2qua_dp2*drhods
-            else
-                B_r = 0.0_dp
-                dB_r = 0.0_dp
-                d2B_r = 0.0_dp
-            end if
+            d2B_r(1) = d2qua_dr2*drhods - 2.0_dp*dqua_dr*d2rhods2m + &
+                       qua*drhods*(3.0_dp/4.0_dp)/r**2
+            d2B_r(2) = d2qua_drdt*drhods - dqua_dt*d2rhods2m
+            d2B_r(3) = d2qua_drdp*drhods - dqua_dp*d2rhods2m
+            d2B_r(4) = d2qua_dt2*drhods
+            d2B_r(5) = d2qua_dtdp*drhods
+            d2B_r(6) = d2qua_dp2*drhods
         else
-            call evaluate_batch_splines_3d_der(bmod_br_batch_spline, x_eval, &
-                                               y_eval(1:bmod_br_num_quantities), &
-                                               dy_eval(:, 1:bmod_br_num_quantities))
-
-            Bmod_B = y_eval(1)
-            dBmod_B(1) = dy_eval(1, 1)*drhods
-            dBmod_B(2) = dy_eval(2, 1)
-            dBmod_B(3) = dy_eval(3, 1)
-
-            d2Bmod_B = 0.0_dp
-
-            if (mode_secders == 1) then
-                call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                    y_eval(1:bmod_br_num_quantities), &
-                                                    dy_eval(:, &
-                                                            1:bmod_br_num_quantities), &
-                                                    d2y_eval(:, &
-                                                             1:bmod_br_num_quantities))
-                d2Bmod_B(1) = d2y_eval(1, 1)*drhods2 - dy_eval(1, 1)*d2rhods2m
-            end if
-
-            if (use_B_r) then
-                qua = y_eval(2)
-                dqua_dr = dy_eval(1, 2)
-                dqua_dt = dy_eval(2, 2)
-                dqua_dp = dy_eval(3, 2)
-
-                dqua_dr = dqua_dr*drhods
-                B_r = qua*drhods
-
-                dB_r(1) = dqua_dr*drhods - qua*d2rhods2m
-                dB_r(2) = dqua_dt*drhods
-                dB_r(3) = dqua_dp*drhods
-
-                d2B_r = 0.0_dp
-                if (mode_secders == 1) then
-                    d2qua_dr2 = d2y_eval(1, 2)*drhods2 - dy_eval(1, 2)*d2rhods2m
-                    d2B_r(1) = d2qua_dr2*drhods - 2.0_dp*dqua_dr*d2rhods2m + &
-                               qua*drhods*(3.0_dp/4.0_dp)/r_eval**2
-                end if
-            else
-                B_r = 0.0_dp
-                dB_r = 0.0_dp
-                d2B_r = 0.0_dp
-            end if
+            B_r = 0.0_dp
+            dB_r = 0.0_dp
+            d2B_r = 0.0_dp
         end if
 
         ! Interpolation of B_\vartheta and B_\varphi (flux functions)
@@ -325,21 +271,19 @@ contains
                                             dy1d, d2y1d)
         B_vartheta_B = y1d(1)
         dB_vartheta_B = dy1d(1)
+        d2B_vartheta_B = d2y1d(1)
         B_varphi_B = y1d(2)
         dB_varphi_B = dy1d(2)
+        d2B_varphi_B = d2y1d(2)
+
+        d2B_vartheta_B = d2B_vartheta_B*drhods2 - dB_vartheta_B*d2rhods2m
+        d2B_varphi_B = d2B_varphi_B*drhods2 - dB_varphi_B*d2rhods2m
         dB_vartheta_B = dB_vartheta_B*drhods
         dB_varphi_B = dB_varphi_B*drhods
-        if (mode_secders > 0) then
-            d2B_vartheta_B = d2y1d(1)*drhods2 - dy1d(1)*d2rhods2m
-            d2B_varphi_B = d2y1d(2)*drhods2 - dy1d(2)*d2rhods2m
-        else
-            d2B_vartheta_B = 0.0_dp
-            d2B_varphi_B = 0.0_dp
-        end if
 
     end subroutine splint_boozer_coord
 
-!> Computes delta_vartheta = vartheta_B - theta_V and delta_varphi = varphi_B - varphi_V
+    !> Computes delta_vartheta = vartheta_B - theta_V and delta_varphi = varphi_B - varphi_V
     !> and their first derivatives over angles.
     !> isw=0: given as functions of VMEC coordinates (r, vartheta, varphi)
     !> isw=1: given as functions of Boozer coordinates (r, vartheta, varphi)
@@ -399,8 +343,7 @@ contains
 
     end subroutine delthe_delphi_BV
 
-!> Convert VMEC coordinates (r, theta, varphi) to Boozer coordinates (vartheta_B,
-!> varphi_B)
+    !> Convert VMEC coordinates (r, theta, varphi) to Boozer coordinates (vartheta_B, varphi_B)
     subroutine vmec_to_boozer(r, theta, varphi, vartheta_B, varphi_B)
         use new_vmec_stuff_mod, only: nper
 
@@ -417,8 +360,7 @@ contains
 
     end subroutine vmec_to_boozer
 
-!> Convert Boozer coordinates (r, vartheta_B, varphi_B) to VMEC coordinates (theta,
-!> varphi)
+    !> Convert Boozer coordinates (r, vartheta_B, varphi_B) to VMEC coordinates (theta, varphi)
     subroutine boozer_to_vmec(r, vartheta_B, varphi_B, theta, varphi)
         use boozer_coordinates_mod, only: use_del_tp_B
 
@@ -568,8 +510,7 @@ contains
         call ensure_grid_3d(bmod_grid, ns_B, n_theta_B, n_phi_B)
         if (use_B_r) call ensure_grid_3d(br_grid, ns_B, n_theta_B, n_phi_B)
         call ensure_grid_4d(delt_delp_V_grid, ns_B, n_theta_B, n_phi_B, 2)
-        if (use_del_tp_B) call ensure_grid_4d(delt_delp_B_grid, ns_B, n_theta_B, &
-                                              n_phi_B, 2)
+        if (use_del_tp_B) call ensure_grid_4d(delt_delp_B_grid, ns_B, n_theta_B, n_phi_B, 2)
 
         do i = 0, ns_tp_B
             wint_t(i) = h_theta_B**(i + 1)/real(i + 1, dp)
@@ -601,31 +542,27 @@ contains
                 do i_phi = 1, n_phi_B
                     varphi = real(i_phi - 1, dp)*h_phi_B
 
-                    if (allocated(current_field)) then
-                        call vmec_field_evaluate_with_field(current_field, &
-                                                            s, theta, varphi, &
-                                                            A_theta, &
-                                                            A_phi, &
-                                                            dA_theta_ds, &
-                                                            dA_phi_ds, &
-                                                            aiota, &
-                                                            sqg, alam, dl_ds, &
-                                                            dl_dt, dl_dp, &
-                                                            Bctrvr_vartheta, &
-                                                            Bctrvr_varphi, &
-                                                            Bcovar_r, Bcovar_vartheta, &
-                                                            Bcovar_varphi)
-                    else
-                        call vmec_field_evaluate(s, theta, varphi, &
-                                                 A_theta, A_phi, dA_theta_ds, &
-                                                 dA_phi_ds, aiota, &
-                                                 sqg, alam, dl_ds, &
-                                                 dl_dt, dl_dp, &
-                                                 Bctrvr_vartheta, &
-                                                 Bctrvr_varphi, &
-                                                 Bcovar_r, Bcovar_vartheta, &
-                                                 Bcovar_varphi)
-                    end if
+	                    if (allocated(current_field)) then
+	                        call vmec_field_evaluate_with_field(current_field, &
+	                                                            s, theta, varphi, &
+	                                                                A_theta, A_phi, &
+	                                                            dA_theta_ds, &
+	                                                                dA_phi_ds, aiota, &
+	                                                            sqg, alam, dl_ds, &
+	                                                                dl_dt, dl_dp, &
+	                                                            Bctrvr_vartheta, &
+	                                                                Bctrvr_varphi, &
+	                                                            Bcovar_r, Bcovar_vartheta, &
+	                                                                Bcovar_varphi)
+	                    else
+	                        call vmec_field_evaluate(s, theta, varphi, &
+	                                                 A_theta, A_phi, dA_theta_ds, &
+	                                                     dA_phi_ds, aiota, &
+	                                                 sqg, alam, dl_ds, dl_dt, dl_dp, &
+	                                                 Bctrvr_vartheta, Bctrvr_varphi, &
+	                                                 Bcovar_r, Bcovar_vartheta, &
+	                                                     Bcovar_varphi)
+	                    end if
 
                     alam_2D(i_theta, i_phi) = alam
                     bmod_Vg(i_theta, i_phi) = &
@@ -761,8 +698,7 @@ contains
             if (use_B_r) then
                 aiota_arr(i_rho) = aiota
                 Gfunc(i_rho, :, :) = perqua_2D(2, :, :)
-! covariant components $B_k$ in symmetry flux coordinates on equidistant grid of
-! Boozer coordinates:
+! covariant components $B_k$ in symmetry flux coordinates on equidistant grid of Boozer coordinates:
                 Bcovar_symfl(:, i_rho, :, :) = perqua_2D(4:6, :, :)
             end if
 
@@ -817,11 +753,10 @@ contains
             do i_phi = 1, n_phi_B
                 br_grid(i_rho, :, i_phi) = &
                     2.0_dp*rho_tor(i_rho)*Bcovar_symfl(1, i_rho, :, i_phi) &
-                    - matmul(coef(1, :)*aiota_arr(ibeg:iend), Gfunc(ibeg:iend, &
-                                                                    :, i_phi)) &
-                    *Bcovar_symfl(2, i_rho, :, i_phi) &
+                    - matmul(coef(1, :)*aiota_arr(ibeg:iend), Gfunc(ibeg:iend, :, i_phi)) &
+                      *Bcovar_symfl(2, i_rho, :, i_phi) &
                     - matmul(coef(1, :), Gfunc(ibeg:iend, :, i_phi)) &
-                    *Bcovar_symfl(3, i_rho, :, i_phi)
+                      *Bcovar_symfl(3, i_rho, :, i_phi)
             end do
         end do
 
@@ -833,10 +768,10 @@ contains
         integer, intent(in) :: n1, n2, n3
 
         if (.not. allocated(grid)) then
-            allocate (grid(n1, n2, n3))
+            allocate(grid(n1, n2, n3))
         else if (any(shape(grid) /= [n1, n2, n3])) then
-            deallocate (grid)
-            allocate (grid(n1, n2, n3))
+            deallocate(grid)
+            allocate(grid(n1, n2, n3))
         end if
     end subroutine ensure_grid_3d
 
@@ -846,10 +781,10 @@ contains
         integer, intent(in) :: n1, n2, n3, n4
 
         if (.not. allocated(grid)) then
-            allocate (grid(n1, n2, n3, n4))
+            allocate(grid(n1, n2, n3, n4))
         else if (any(shape(grid) /= [n1, n2, n3, n4])) then
-            deallocate (grid)
-            allocate (grid(n1, n2, n3, n4))
+            deallocate(grid)
+            allocate(grid(n1, n2, n3, n4))
         end if
     end subroutine ensure_grid_4d
 
