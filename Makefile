@@ -91,7 +91,11 @@ test-all: build
 # Golden record test target
 # Compares current branch against main to enforce strict numerical reproducibility
 # Any differences must be manually reviewed before merging
-test-golden: build
+test-golden: build-deterministic-nopy
+	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R $(TEST))
+
+# Golden record tests without deterministic FP (faster, for local iteration only)
+test-golden-fast: build
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R $(TEST))
 
 doc: configure

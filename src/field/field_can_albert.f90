@@ -109,16 +109,24 @@ end subroutine ref_to_integ_albert
 
 
 subroutine get_albert_coordinates
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.init_transformation'
+#endif
     call init_transformation
 
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.spline_transformation'
+#endif
     call spline_transformation
 
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.init_canonical_field_components'
+#endif
     call init_canonical_field_components
 
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_albert.init_splines_with_psi'
+#endif
     call init_splines_with_psi
 end subroutine get_albert_coordinates
 

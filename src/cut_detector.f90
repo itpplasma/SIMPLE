@@ -3,7 +3,9 @@ module cut_detector
     use simple, only: tstep
     use orbit_symplectic, only: symplectic_integrator_t
     use field_can_mod, only: field_can_t
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     use params, only: debug
+#endif
 
     implicit none
 
@@ -194,6 +196,7 @@ module cut_detector
   !$omp critical
         deallocate(free)
   !$omp end critical
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
         if(debug) then
   !$omp critical
           !
@@ -205,6 +208,7 @@ module cut_detector
                          log(1d0*nboxes)/log(1d0*ngrid), 2d0 + log(0.2d0)/log(1d0*ngrid)
   !$omp end critical
         end if
+#endif
         if(irefine.eq.nrefine-3) fraction=dble(nboxes)/dble(ngrid**2)
       enddo
       close(iunit)

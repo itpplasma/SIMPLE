@@ -9,12 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Always run all commands from the repository root
 - **Use `make test`** - Never run test executables directly or use ctest manually
 - **Use relative paths** - All paths should be relative to project root (e.g., `./build/simple.x`)
+- **Build system is CMake via `make`** (CMake + Ninja in `build/`)
+- **Do not use `fpm`** - `fpm` support is experimental and must not be used for development, testing, or performance work
 
 ## Build System and Commands
 
 ### Building
 - **Primary build**: `make` - Uses CMake with Ninja generator to build in `build/` directory
-- **Alternative**: `fpm build` - Uses Fortran Package Manager
 - **Python package**: Build via scikit-build-core (see pyproject.toml)
 - **Clean build**: `make clean` - Removes build directory
 - **Reconfigure**: `make reconfigure` - Forces CMake reconfiguration
