@@ -110,6 +110,9 @@ worktree_ensure() {
   local dir
   dir="$(worktree_dir_for_ref "$ref")"
   if [[ -d "$dir" ]]; then
+    git -C "$dir" checkout --detach "$ref" >/dev/null 2>&1 || true
+    git -C "$dir" reset --hard >/dev/null 2>&1 || true
+    git -C "$dir" clean -fdx >/dev/null 2>&1 || true
     echo "$dir"
     return
   fi
@@ -164,6 +167,9 @@ def ensure_print_disabled(msg_prefix):
     guarded = "if (.false.) print *,'" + msg_prefix
     if needle in text and guarded not in text:
         text = text.replace(needle, guarded, 1)
+        return
+    # If the exact print line is absent, treat it as already removed/suppressed.
+    if msg_prefix not in text:
         return
     raise RuntimeError(f"{path}: expected print line for: {msg_prefix}")
 
