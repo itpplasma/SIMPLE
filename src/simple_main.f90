@@ -312,7 +312,7 @@ contains
 !$omp end critical
          end if
 
-         call reset_seed_if_deterministic
+         if (swcoll) call reset_seed_if_deterministic
          call trace_orbit_with_classifiers(norb, i, class_result)
 
          ! Store classification flags in params arrays
@@ -470,7 +470,7 @@ contains
 
       ierr_orbit = 0
 
-      call reset_seed_if_deterministic
+      if (swcoll) call reset_seed_if_deterministic
 
       if (ntcut > 0 .or. class_plot) then
          call trace_orbit_with_classifiers(anorb, ipart, class_result)
