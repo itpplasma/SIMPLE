@@ -40,9 +40,9 @@ program test_chartmap_wall_losses
 
     integer, parameter :: n_particles = 64
     integer, parameter :: n_steps = 2000
-    real(dp), parameter :: trace_time = 1.0e-4_dp
+    real(dp), parameter :: trace_time = 1.0e-3_dp
     real(dp), parameter :: relerr = 1.0e-10_dp
-    real(dp), parameter :: s_start = 0.3_dp
+    real(dp), parameter :: s_start = 0.6_dp
 
     real(dp) :: dtau, tau, v0_alpha, fper, zeta_period
     real(dp) :: z0(5, n_particles)
