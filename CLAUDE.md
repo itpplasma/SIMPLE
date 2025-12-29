@@ -63,6 +63,15 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 - VMEC implementation in `field_vmec.f90`
 - Canonical coordinates: Boozer, flux, Meiss, Albert variants
 - Runtime field selection via function pointers
+- **Detailed documentation**: See `DOC/coordinates-and-fields.md` for comprehensive coverage of coordinate systems, field representations, magfie interface, splined fields, canonical coordinates, and libneo integration
+
+**⚠️ MAINTENANCE REQUIREMENT**: When changing or refactoring ANY code related to coordinates or fields, you MUST revise `DOC/coordinates-and-fields.md` to reflect the current reality. This includes changes to:
+- Coordinate system implementations (VMEC, chartmap, Cartesian)
+- Magnetic field classes and their evaluation
+- magfie interface modes and procedure pointers
+- Splined field construction or evaluation
+- Canonical coordinate transformations
+- libneo coordinate API usage
 
 **Integration System:**
 - `orbit_symplectic_base.f90`: Base integrator types and RK coefficients
