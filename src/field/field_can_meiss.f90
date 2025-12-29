@@ -37,8 +37,11 @@ use interpolate, only : &
 use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
     use field, only : magnetic_field_t, vmec_field_t, field_clone
+    use field_splined, only: splined_field_t
     use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
-                                   coordinate_scaling_clone
+                                   identity_scaling_t, coordinate_scaling_clone
+    use libneo_coordinates, only: chartmap_coordinate_system_t, UNKNOWN, &
+                                  PSI_TOR_NORM, PSI_POL_NORM
 
 implicit none
 
@@ -100,12 +103,17 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
 
         call field_clone(field_noncan_, field_noncan)
 
-    ! Initialize coordinate scaling (default: sqrt_s_scaling_t)
+    ! Initialize coordinate scaling based on field type
     if (allocated(coord_scaling)) deallocate(coord_scaling)
     if (present(scaling)) then
         call coordinate_scaling_clone(scaling, coord_scaling)
     else
-        allocate(sqrt_s_scaling_t :: coord_scaling)
+        ! Choose scaling based on field's coordinate system:
+        ! - VMEC field: uses s-coordinates, needs sqrt_s_scaling (r = sqrt(s))
+        ! - Splined field with RHO_TOR/RHO_POL: uses rho = sqrt(s), needs sqrt_s_scaling
+        ! - Splined field with UNKNOWN/geometric: uses geometric rho, needs identity_scaling
+        ! - Splined field with PSI_TOR_NORM: uses s-coordinates, needs sqrt_s_scaling
+        call choose_default_scaling(field_noncan_, coord_scaling)
     end if
 
     if (present(n_r_)) n_r = n_r_
@@ -122,6 +130,37 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     h_th = (xmax(2)-xmin(2))/(n_th-1)
     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
 end subroutine init_meiss
+
+
+subroutine choose_default_scaling(field, scaling)
+    !> Choose appropriate coordinate scaling based on field type.
+    !> For geometric/UNKNOWN chartmaps, use identity scaling.
+    !> For flux-based coords (VMEC, RHO_TOR, PSI_TOR_NORM), use sqrt_s scaling.
+    class(magnetic_field_t), intent(in) :: field
+    class(coordinate_scaling_t), allocatable, intent(out) :: scaling
+
+    logical :: use_identity
+
+    use_identity = .false.
+
+    select type (fld => field)
+    type is (splined_field_t)
+        ! Check if splined field uses geometric coordinates
+        select type (cs => fld%coords)
+        type is (chartmap_coordinate_system_t)
+            ! UNKNOWN means geometric radius (not flux-based)
+            if (cs%rho_convention == UNKNOWN) then
+                use_identity = .true.
+            end if
+        end select
+    end select
+
+    if (use_identity) then
+        allocate(identity_scaling_t :: scaling)
+    else
+        allocate(sqrt_s_scaling_t :: scaling)
+    end if
+end subroutine choose_default_scaling
 
 
 subroutine cleanup_meiss()
@@ -405,24 +444,15 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     th = xmin(2) + h_th*(i_th-1)
     x_integ = [r, th, phi]
 
-    select type (fld => field_noncan)
-    type is (vmec_field_t)
-        ! vmec_field_t expects s-coordinates, so convert r->s and apply Jacobian
-        call coord_scaling%inverse(x_integ, x_ref, jac)
-        call fld%evaluate(x_ref, Acov, hcov, Bmod)
-        ! Convert output from s-coords to r-coords: A_r = A_s * ds/dr
-        Ar = Acov(1) * jac(1)
-        Ap = Acov(3)
-        hr = hcov(1) * jac(1)
-        hp = hcov(3)
-    class default
-        ! Other fields (e.g., splined_field_t) operate in r-coordinates
-        call field_noncan%evaluate(x_integ, Acov, hcov, Bmod)
-        Ar = Acov(1)
-        Ap = Acov(3)
-        hr = hcov(1)
-        hp = hcov(3)
-    end select
+    ! Convert integrator coords (r) to reference coords (s for VMEC, rho for chartmap)
+    ! The inverse transform: x_ref(1) = r^2 for sqrt_s_scaling
+    call coord_scaling%inverse(x_integ, x_ref, jac)
+    call field_noncan%evaluate(x_ref, Acov, hcov, Bmod)
+    ! Convert output from reference coords to integrator coords: A_r = A_ref * d(ref)/dr
+    Ar = Acov(1) * jac(1)
+    Ap = Acov(3)
+    hr = hcov(1) * jac(1)
+    hp = hcov(3)
 end subroutine ah_cov_on_slice
 
 logical function is_hr_zero_on_slice(i_th, i_phi) result(is_zero)
@@ -484,21 +514,16 @@ subroutine init_canonical_field_components
                 end block
 
                 ! xcan is in integrator coords (r, th, phi)
+                ! xref here is the non-canonical angle coords (th, phi + lam)
                 xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, twopi)]
 
-                select type (fld => field_noncan)
-                type is (vmec_field_t)
-                    ! vmec_field_t expects s-coordinates
-                    block
-                        real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
-                        x_integ_local = xref
-                        call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
-                        call fld%evaluate(x_ref_local, Acov, hcov, Bmod(i_r, i_th, i_phi))
-                    end block
-                class default
-                    ! Other fields (e.g., splined_field_t) operate in r-coordinates
-                    call field_noncan%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
-                end select
+                ! Convert integrator coords to reference coords for field evaluation
+                block
+                    real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
+                    x_integ_local = xref
+                    call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
+                    call field_noncan%evaluate(x_ref_local, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                end block
 
                 ! Note: We only use theta/phi components of Acov/hcov below
 
