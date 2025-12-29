@@ -536,7 +536,9 @@ contains
 
     subroutine trace_particles_meiss_vmec_sympl(z0, loss_times, loss_pos, lost_step)
         !> Trace particles using Meiss coords from VMEC with midpoint symplectic.
+        !> Uses npoiper2=256 for proper timestep based on major radius.
         use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+        use new_vmec_stuff_mod, only: rmajor
 
         real(dp), intent(in) :: z0(5, n_particles)
         real(dp), intent(out) :: loss_times(n_particles)
@@ -546,14 +548,18 @@ contains
         type(field_can_t) :: f
         type(symplectic_integrator_t) :: integ
         real(dp) :: z(4), z5(5), x_ref(3), x_integ(3)
-        real(dp) :: dtau_sympl
-        integer :: i, j, ierr
+        real(dp) :: rbig, dtaumin, dtau_sympl
+        integer, parameter :: npoiper2 = 256
+        integer :: i, j, ierr, ntau_substeps
 
         loss_times = trace_time
         loss_pos = 0.0_dp
         lost_step = n_steps
 
-        dtau_sympl = dtau/sqrt(2.0_dp)
+        rbig = rmajor*1.0d2
+        dtaumin = twopi*rbig/real(npoiper2, dp)
+        ntau_substeps = max(1, ceiling(dtau/dtaumin))
+        dtau_sympl = dtaumin/sqrt(2.0_dp)
 
         do i = 1, n_particles
             x_ref = z0(1:3, i)
@@ -567,7 +573,7 @@ contains
             f%vpar = z5(4)*z5(5)*sqrt(2.0_dp)
             z(1:3) = z5(1:3)
             z(4) = f%vpar*f%hph + f%Aph/f%ro0
-            call orbit_sympl_init(integ, f, z, dtau_sympl, 1, 1.0e-12_dp, MIDPOINT)
+            call orbit_sympl_init(integ, f, z, dtau_sympl, ntau_substeps, 1.0e-12_dp, MIDPOINT)
 
             do j = 1, n_steps
                 ierr = 0
@@ -585,7 +591,9 @@ contains
 
     subroutine trace_particles_meiss_chart_sympl(z0, loss_times, loss_pos, lost_step)
         !> Trace particles using Meiss coords from chartmap with midpoint symplectic.
+        !> Uses npoiper2=256 for proper timestep based on major radius.
         use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+        use new_vmec_stuff_mod, only: rmajor
 
         real(dp), intent(in) :: z0(5, n_particles)
         real(dp), intent(out) :: loss_times(n_particles)
@@ -595,14 +603,18 @@ contains
         type(field_can_t) :: f
         type(symplectic_integrator_t) :: integ
         real(dp) :: z(4), z5(5), z_chart(5), x_ref(3), x_integ(3)
-        real(dp) :: dtau_sympl
-        integer :: i, j, ierr
+        real(dp) :: rbig, dtaumin, dtau_sympl
+        integer, parameter :: npoiper2 = 256
+        integer :: i, j, ierr, ntau_substeps
 
         loss_times = trace_time
         loss_pos = 0.0_dp
         lost_step = n_steps
 
-        dtau_sympl = dtau/sqrt(2.0_dp)
+        rbig = rmajor*1.0d2
+        dtaumin = twopi*rbig/real(npoiper2, dp)
+        ntau_substeps = max(1, ceiling(dtau/dtaumin))
+        dtau_sympl = dtaumin/sqrt(2.0_dp)
 
         do i = 1, n_particles
             call vmec_to_chartmap(z0(:, i), z_chart)
@@ -617,7 +629,7 @@ contains
             f%vpar = z5(4)*z5(5)*sqrt(2.0_dp)
             z(1:3) = z5(1:3)
             z(4) = f%vpar*f%hph + f%Aph/f%ro0
-            call orbit_sympl_init(integ, f, z, dtau_sympl, 1, 1.0e-12_dp, MIDPOINT)
+            call orbit_sympl_init(integ, f, z, dtau_sympl, ntau_substeps, 1.0e-12_dp, MIDPOINT)
 
             do j = 1, n_steps
                 ierr = 0
