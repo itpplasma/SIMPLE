@@ -444,15 +444,27 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
     th = xmin(2) + h_th*(i_th-1)
     x_integ = [r, th, phi]
 
-    ! Convert integrator coords (r) to reference coords (s for VMEC, rho for chartmap)
-    ! The inverse transform: x_ref(1) = r^2 for sqrt_s_scaling
-    call coord_scaling%inverse(x_integ, x_ref, jac)
-    call field_noncan%evaluate(x_ref, Acov, hcov, Bmod)
-    ! Convert output from reference coords to integrator coords: A_r = A_ref * d(ref)/dr
-    Ar = Acov(1) * jac(1)
-    Ap = Acov(3)
-    hr = hcov(1) * jac(1)
-    hp = hcov(3)
+    select type (fld => field_noncan)
+    type is (vmec_field_t)
+        ! VMEC field expects s-coordinates, so convert r->s and apply Jacobian
+        call coord_scaling%inverse(x_integ, x_ref, jac)
+        call fld%evaluate(x_ref, Acov, hcov, Bmod)
+        ! Convert output from s-coords to r-coords: A_r = A_s * ds/dr
+        Ar = Acov(1) * jac(1)
+        Ap = Acov(3)
+        hr = hcov(1) * jac(1)
+        hp = hcov(3)
+    type is (splined_field_t)
+        ! Splined field already stores data in scaled coordinates (r = sqrt(s))
+        ! matching the Meiss integrator coordinates - no conversion needed
+        call fld%evaluate(x_integ, Acov, hcov, Bmod)
+        Ar = Acov(1)
+        Ap = Acov(3)
+        hr = hcov(1)
+        hp = hcov(3)
+    class default
+        error stop "ah_cov_on_slice: unsupported field type"
+    end select
 end subroutine ah_cov_on_slice
 
 logical function is_hr_zero_on_slice(i_th, i_phi) result(is_zero)
@@ -517,13 +529,21 @@ subroutine init_canonical_field_components
                 ! xref here is the non-canonical angle coords (th, phi + lam)
                 xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, twopi)]
 
-                ! Convert integrator coords to reference coords for field evaluation
-                block
-                    real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
-                    x_integ_local = xref
-                    call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
-                    call field_noncan%evaluate(x_ref_local, Acov, hcov, Bmod(i_r, i_th, i_phi))
-                end block
+                select type (fld => field_noncan)
+                type is (vmec_field_t)
+                    ! VMEC field expects s-coordinates
+                    block
+                        real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
+                        x_integ_local = xref
+                        call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
+                        call fld%evaluate(x_ref_local, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                    end block
+                type is (splined_field_t)
+                    ! Splined field already in scaled coordinates
+                    call fld%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                class default
+                    error stop "init_canonical_field_components: unsupported field type"
+                end select
 
                 ! Note: We only use theta/phi components of Acov/hcov below
 
