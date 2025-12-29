@@ -278,14 +278,12 @@ contains
 
             do j = 1, n_steps
                 call orbit_timestep_axis(z, dtau, dtau, relerr, ierr)
-                if (ierr /= 0) then
-                    call integ_to_ref(z(1:3), x_ref)
-                    if (x_ref(1) >= 1.0_dp) then
-                        loss_times(i) = real(j, dp)*dtau/v0_alpha
-                        loss_pos(:, i) = x_ref
-                        lost_step(i) = j
-                        exit
-                    end if
+                call integ_to_ref(z(1:3), x_ref)
+                if (ierr /= 0 .or. x_ref(1) >= 1.0_dp) then
+                    loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    loss_pos(:, i) = x_ref
+                    lost_step(i) = j
+                    exit
                 end if
             end do
         end do
