@@ -121,7 +121,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_chartmap_wall_losses_plot PROPERTIES
         DEPENDS test_chartmap_wall_losses
         TIMEOUT 60
-        LABELS "integration;plot;python"
+        LABELS "integration;plot;python;slow"
     )
 endif()
 
@@ -196,6 +196,6 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_chartmap_wall_losses_plot_map2disc PROPERTIES
         DEPENDS test_chartmap_wall_losses_map2disc
         TIMEOUT 60
-        LABELS "integration;plot;python"
+        LABELS "integration;plot;python;slow"
     )
 endif()
