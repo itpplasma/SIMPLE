@@ -107,20 +107,20 @@ subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   ! Derivatives of log(B)
   dBmod_dr = -B0 / R0 * cth
   dBmod_dth = B0 * r / R0 * sth
-  bder(1) = dBmod_dr / bmod
-  bder(2) = dBmod_dth / bmod
+  bder(1) = dBmod_dr / max(bmod, 1.0d-30)
+  bder(2) = dBmod_dth / max(bmod, 1.0d-30)
   bder(3) = 0.0_dp
 
   ! Covariant components of unit vector h = B/|B|
   ! In (r, theta, phi) coordinates for circular tokamak with iota=1
   hcovar(1) = 0.0_dp
-  hcovar(2) = iota0 * (1.0_dp - r**2 / a**2) * r**2 / R0 / bmod
-  hcovar(3) = R_cyl / bmod
+  hcovar(2) = iota0 * (1.0_dp - r**2 / a**2) * r**2 / R0 / max(bmod, 1.0d-30)
+  hcovar(3) = R_cyl / max(bmod, 1.0d-30)
 
   ! Contravariant components
   hctrvr(1) = 0.0_dp
-  hctrvr(2) = B0 * iota0 / (r * R_cyl * bmod)
-  hctrvr(3) = B0 / (r * R_cyl * bmod)
+  hctrvr(2) = B0 * iota0 / (r * R_cyl * max(bmod, 1.0d-30))
+  hctrvr(3) = B0 / (r * R_cyl * max(bmod, 1.0d-30))
 
   ! Curl of h (simplified - not fully computed for TEST field)
   hcurl(1) = 0.0_dp
