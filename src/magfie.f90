@@ -182,15 +182,12 @@ subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
 
   select type (coords)
   type is (chartmap_coordinate_system_t)
-    if (coords%rho_convention == PSI_TOR_NORM .or. &
-        coords%rho_convention == PSI_POL_NORM) then
-      u_ref = [x_scaled(1)**2, x_scaled(2), x_scaled(3)]
-      J = 2.0d0*x_scaled(1)
-    else
-      u_ref = x_scaled
-      J = 1.0d0
-    end if
+    ! Chartmap methods (metric_tensor, covariant_basis) expect native rho coords,
+    ! not s = rho^2. The chartmap splines are stored on a rho grid.
+    u_ref = x_scaled
+    J = 1.0d0
   class default
+    ! VMEC coordinate system: integration uses sqrt(s), VMEC methods expect s
     u_ref = [x_scaled(1)**2, x_scaled(2), x_scaled(3)]
     J = 2.0d0*x_scaled(1)
   end select
