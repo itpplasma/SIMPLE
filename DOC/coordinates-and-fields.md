@@ -810,11 +810,13 @@ handling of Jacobians and component transformations.
 **Complication**: Easy to miss scaling factors when adding new coordinate
 systems or field types.
 
-### A.3 Global State in Canonical Coordinates
+### A.3 Single-Instance Canonical Coordinates
 
-**Issue**: Meiss/Albert use module-level global variables for splines and
-coordinate data.
-**Complication**: Cannot have multiple canonical field instances simultaneously.
+**Issue**: Meiss/Albert use module-level variables for splines and coordinate data.
+**Note**: This is not a thread-safety issue since variables are written only at
+initialization, then read-only during parallel particle tracing.
+**Limitation**: Cannot have multiple canonical field instances with different
+configurations simultaneously.
 
 ### A.4 VMEC from_cyl Newton Iteration
 
