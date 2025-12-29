@@ -1,13 +1,20 @@
 program test_chartmap_wall_losses
     !> Test chartmap wall boundary loss computations.
     !>
-    !> Compares loss fractions between:
-    !>   1. VMEC coordinates with RK45 integration
-    !>   2. Chartmap reference coordinates with RK45 integration
-    !>   3. Chartmap with Meiss canonical coordinates
+    !> Compares loss fractions between 5 coordinate systems:
+    !>   Mode 1: VMEC coordinates with RK45 integration
+    !>   Mode 2: Chartmap reference coordinates with RK45 integration
+    !>   Mode 3: Boozer canonical coordinates
+    !>   Mode 4: Meiss canonical from VMEC field
+    !>   Mode 5: Meiss canonical from chartmap field
     !>
-    !> Also tests wall offset: traces particles to chartmap boundary at rho=1,
-    !> which can be the VMEC LCFS or an offset wall surface.
+    !> Coordinate conventions:
+    !>   - VMEC:    z(1) = s (normalized toroidal flux), boundary at s=1
+    !>   - Chartmap: z(1) = rho = sqrt(s), boundary at rho=1
+    !>   - Boozer:  z(1) = s (same as VMEC), only angles transformed
+    !>   - Meiss:   z(1) = r with sqrt_s_scaling, so r = sqrt(s_ref)
+    !>              For Meiss-VMEC: s_ref = s, boundary at r=1 means s=1
+    !>              For Meiss-Chart: s_ref = rho, boundary at r=1 means rho=1
     !>
     !> Outputs NetCDF file for visualization of loss positions and times.
 
@@ -16,7 +23,7 @@ program test_chartmap_wall_losses
     use simple, only: init_vmec
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
-    use magfie_sub, only: init_magfie, magfie, VMEC, MEISS, REFCOORDS, &
+    use magfie_sub, only: init_magfie, magfie, VMEC, BOOZER, MEISS, REFCOORDS, &
                           set_magfie_refcoords_field
     use alpha_lifetime_sub, only: orbit_timestep_axis
     use parmot_mod, only: ro0, rmu
@@ -24,6 +31,7 @@ program test_chartmap_wall_losses
     use field_splined, only: splined_field_t, create_splined_field
     use field_can_mod, only: init_field_can, integ_to_ref
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss
+    use boozer_sub, only: vmec_to_boozer, boozer_to_vmec, get_boozer_coordinates
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
                                   make_chartmap_coordinate_system
@@ -47,14 +55,15 @@ program test_chartmap_wall_losses
     real(dp) :: dtau, tau, v0_alpha, fper, zeta_period
     real(dp) :: z0(5, n_particles)
 
-    real(dp), allocatable :: loss_times_vmec(:), loss_times_chart(:)
+    real(dp), allocatable :: loss_times_vmec(:), loss_times_chart(:), loss_times_boozer(:)
     real(dp), allocatable :: loss_times_meiss_vmec(:), loss_times_meiss_chart(:)
-    real(dp), allocatable :: loss_pos_vmec(:, :), loss_pos_chart(:, :)
+    real(dp), allocatable :: loss_pos_vmec(:, :), loss_pos_chart(:, :), loss_pos_boozer(:, :)
     real(dp), allocatable :: loss_pos_meiss_vmec(:, :), loss_pos_meiss_chart(:, :)
-    integer, allocatable :: lost_step_vmec(:), lost_step_chart(:)
+    integer, allocatable :: lost_step_vmec(:), lost_step_chart(:), lost_step_boozer(:)
     integer, allocatable :: lost_step_meiss_vmec(:), lost_step_meiss_chart(:)
 
-    real(dp) :: confined_vmec, confined_chart, confined_meiss_vmec, confined_meiss_chart
+    real(dp) :: confined_vmec, confined_chart, confined_boozer
+    real(dp) :: confined_meiss_vmec, confined_meiss_chart
     integer :: i, ierr, n_failed
 
     n_failed = 0
@@ -77,10 +86,13 @@ program test_chartmap_wall_losses
     end if
 
     allocate (loss_times_vmec(n_particles), loss_times_chart(n_particles))
+    allocate (loss_times_boozer(n_particles))
     allocate (loss_times_meiss_vmec(n_particles), loss_times_meiss_chart(n_particles))
     allocate (loss_pos_vmec(3, n_particles), loss_pos_chart(3, n_particles))
+    allocate (loss_pos_boozer(3, n_particles))
     allocate (loss_pos_meiss_vmec(3, n_particles), loss_pos_meiss_chart(3, n_particles))
     allocate (lost_step_vmec(n_particles), lost_step_chart(n_particles))
+    allocate (lost_step_boozer(n_particles))
     allocate (lost_step_meiss_vmec(n_particles), lost_step_meiss_chart(n_particles))
 
     print *, 'Step 1: Initialize VMEC equilibrium'
@@ -124,7 +136,14 @@ program test_chartmap_wall_losses
     confined_chart = count_confined(loss_times_chart)
     print '(A,F6.2,A)', '  Confined fraction: ', confined_chart*100.0_dp, '%'
 
-    print *, 'Mode 3: Meiss canonical from VMEC (RK45)'
+    print *, 'Mode 3: Boozer canonical coordinates (RK45)'
+    call get_boozer_coordinates
+    call init_magfie(BOOZER)
+    call trace_particles_boozer(z0, loss_times_boozer, loss_pos_boozer, lost_step_boozer)
+    confined_boozer = count_confined(loss_times_boozer)
+    print '(A,F6.2,A)', '  Confined fraction: ', confined_boozer*100.0_dp, '%'
+
+    print *, 'Mode 4: Meiss canonical from VMEC (RK45)'
     call init_meiss(vmec_field, n_r_=16, n_th_=17, n_phi_=18, &
                     rmin=0.1d0, rmax=0.99d0)
     call get_meiss_coordinates
@@ -135,7 +154,7 @@ program test_chartmap_wall_losses
     confined_meiss_vmec = count_confined(loss_times_meiss_vmec)
     print '(A,F6.2,A)', '  Confined fraction: ', confined_meiss_vmec*100.0_dp, '%'
 
-    print *, 'Mode 4: Meiss canonical from chartmap (RK45)'
+    print *, 'Mode 5: Meiss canonical from chartmap (RK45)'
     call init_meiss(splined_chartmap, n_r_=16, n_th_=17, n_phi_=18, &
                     rmin=0.1d0, rmax=0.99d0)
     call get_meiss_coordinates
@@ -152,6 +171,7 @@ program test_chartmap_wall_losses
     print *, '========================================================'
     print '(A,F6.2,A)', '  VMEC confined:          ', confined_vmec*100.0_dp, '%'
     print '(A,F6.2,A)', '  Chartmap confined:      ', confined_chart*100.0_dp, '%'
+    print '(A,F6.2,A)', '  Boozer confined:        ', confined_boozer*100.0_dp, '%'
     print '(A,F6.2,A)', '  Meiss(VMEC) confined:   ', confined_meiss_vmec*100.0_dp, '%'
     print '(A,F6.2,A)', '  Meiss(Chart) confined:  ', confined_meiss_chart*100.0_dp, '%'
 
@@ -269,6 +289,42 @@ contains
             end do
         end do
     end subroutine trace_particles_chartmap
+
+    subroutine trace_particles_boozer(z0, loss_times, loss_pos, lost_step)
+        !> Trace particles using Boozer canonical coordinates.
+        !> Boozer coords: z(1) = s (same as VMEC), angles transformed.
+        !> Boundary at s >= 1.0
+        real(dp), intent(in) :: z0(5, n_particles)
+        real(dp), intent(out) :: loss_times(n_particles)
+        real(dp), intent(out) :: loss_pos(3, n_particles)
+        integer, intent(out) :: lost_step(n_particles)
+
+        real(dp) :: z(5), theta_b, phi_b, theta_v, phi_v
+        integer :: i, j, ierr
+
+        loss_times = trace_time
+        loss_pos = 0.0_dp
+        lost_step = n_steps
+
+        do i = 1, n_particles
+            z = z0(:, i)
+            call vmec_to_boozer(z(1), z(2), z(3), theta_b, phi_b)
+            z(2) = theta_b
+            z(3) = phi_b
+            do j = 1, n_steps
+                call orbit_timestep_axis(z, dtau, dtau, relerr, ierr)
+                if (ierr /= 0 .or. z(1) >= 1.0_dp) then
+                    loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    call boozer_to_vmec(z(1), z(2), z(3), theta_v, phi_v)
+                    loss_pos(1, i) = z(1)
+                    loss_pos(2, i) = theta_v
+                    loss_pos(3, i) = phi_v
+                    lost_step(i) = j
+                    exit
+                end if
+            end do
+        end do
+    end subroutine trace_particles_boozer
 
     subroutine trace_particles_meiss(z0, loss_times, loss_pos, lost_step)
         use field_can_mod, only: ref_to_integ
@@ -400,9 +456,12 @@ contains
 
     subroutine write_output_netcdf
         integer :: ncid, dimid_part
-        integer :: varid_lt_vmec, varid_lt_chart, varid_lt_meiss_v, varid_lt_meiss_c
-        integer :: varid_lp_vmec, varid_lp_chart, varid_lp_meiss_v, varid_lp_meiss_c
-        integer :: varid_ls_vmec, varid_ls_chart, varid_ls_meiss_v, varid_ls_meiss_c
+        integer :: varid_lt_vmec, varid_lt_chart, varid_lt_boozer
+        integer :: varid_lt_meiss_v, varid_lt_meiss_c
+        integer :: varid_lp_vmec, varid_lp_chart, varid_lp_boozer
+        integer :: varid_lp_meiss_v, varid_lp_meiss_c
+        integer :: varid_ls_vmec, varid_ls_chart, varid_ls_boozer
+        integer :: varid_ls_meiss_v, varid_ls_meiss_c
         integer :: varid_z0
         integer :: dimid_5, dimid_3
         integer :: status
@@ -424,6 +483,8 @@ contains
                               varid_lt_vmec)
         status = nf90_def_var(ncid, 'loss_time_chartmap', nf90_double, [dimid_part], &
                               varid_lt_chart)
+        status = nf90_def_var(ncid, 'loss_time_boozer', nf90_double, [dimid_part], &
+                              varid_lt_boozer)
         status = nf90_def_var(ncid, 'loss_time_meiss_vmec', nf90_double, [dimid_part], &
                               varid_lt_meiss_v)
         status = nf90_def_var(ncid, 'loss_time_meiss_chart', nf90_double, [dimid_part], &
@@ -432,6 +493,8 @@ contains
                               [dimid_3, dimid_part], varid_lp_vmec)
         status = nf90_def_var(ncid, 'loss_pos_chartmap', nf90_double, &
                               [dimid_3, dimid_part], varid_lp_chart)
+        status = nf90_def_var(ncid, 'loss_pos_boozer', nf90_double, &
+                              [dimid_3, dimid_part], varid_lp_boozer)
         status = nf90_def_var(ncid, 'loss_pos_meiss_vmec', nf90_double, &
                               [dimid_3, dimid_part], varid_lp_meiss_v)
         status = nf90_def_var(ncid, 'loss_pos_meiss_chart', nf90_double, &
@@ -440,6 +503,8 @@ contains
                               varid_ls_vmec)
         status = nf90_def_var(ncid, 'lost_step_chartmap', nf90_int, [dimid_part], &
                               varid_ls_chart)
+        status = nf90_def_var(ncid, 'lost_step_boozer', nf90_int, [dimid_part], &
+                              varid_ls_boozer)
         status = nf90_def_var(ncid, 'lost_step_meiss_vmec', nf90_int, [dimid_part], &
                               varid_ls_meiss_v)
         status = nf90_def_var(ncid, 'lost_step_meiss_chart', nf90_int, [dimid_part], &
@@ -450,14 +515,17 @@ contains
         status = nf90_put_var(ncid, varid_z0, z0)
         status = nf90_put_var(ncid, varid_lt_vmec, loss_times_vmec)
         status = nf90_put_var(ncid, varid_lt_chart, loss_times_chart)
+        status = nf90_put_var(ncid, varid_lt_boozer, loss_times_boozer)
         status = nf90_put_var(ncid, varid_lt_meiss_v, loss_times_meiss_vmec)
         status = nf90_put_var(ncid, varid_lt_meiss_c, loss_times_meiss_chart)
         status = nf90_put_var(ncid, varid_lp_vmec, loss_pos_vmec)
         status = nf90_put_var(ncid, varid_lp_chart, loss_pos_chart)
+        status = nf90_put_var(ncid, varid_lp_boozer, loss_pos_boozer)
         status = nf90_put_var(ncid, varid_lp_meiss_v, loss_pos_meiss_vmec)
         status = nf90_put_var(ncid, varid_lp_meiss_c, loss_pos_meiss_chart)
         status = nf90_put_var(ncid, varid_ls_vmec, lost_step_vmec)
         status = nf90_put_var(ncid, varid_ls_chart, lost_step_chart)
+        status = nf90_put_var(ncid, varid_ls_boozer, lost_step_boozer)
         status = nf90_put_var(ncid, varid_ls_meiss_v, lost_step_meiss_vmec)
         status = nf90_put_var(ncid, varid_ls_meiss_c, lost_step_meiss_chart)
 
