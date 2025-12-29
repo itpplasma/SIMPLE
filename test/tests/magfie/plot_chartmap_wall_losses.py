@@ -33,10 +33,15 @@ def load_data(filename):
             'loss_pos': ds.variables['loss_pos_chartmap'][:],
             'lost_step': ds.variables['lost_step_chartmap'][:]
         },
-        'meiss': {
-            'loss_time': ds.variables['loss_time_meiss'][:],
-            'loss_pos': ds.variables['loss_pos_meiss'][:],
-            'lost_step': ds.variables['lost_step_meiss'][:]
+        'meiss_vmec': {
+            'loss_time': ds.variables['loss_time_meiss_vmec'][:],
+            'loss_pos': ds.variables['loss_pos_meiss_vmec'][:],
+            'lost_step': ds.variables['lost_step_meiss_vmec'][:]
+        },
+        'meiss_chart': {
+            'loss_time': ds.variables['loss_time_meiss_chart'][:],
+            'loss_pos': ds.variables['loss_pos_meiss_chart'][:],
+            'lost_step': ds.variables['lost_step_meiss_chart'][:]
         }
     }
 
@@ -53,7 +58,7 @@ def compute_loss_curves(data):
     time = np.linspace(0, trace_time, n_steps)
     curves = {}
 
-    for name in ['vmec', 'chartmap', 'meiss']:
+    for name in ['vmec', 'chartmap', 'meiss_vmec', 'meiss_chart']:
         loss_times = data[name]['loss_time']
         lost_fraction = np.zeros(n_steps)
         for i, t in enumerate(time):
@@ -71,15 +76,16 @@ def plot_loss_over_time(curves, output_file):
     """Plot loss and confined fractions over time."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    colors = {'vmec': 'black', 'chartmap': 'red', 'meiss': 'blue'}
+    colors = {'vmec': 'black', 'chartmap': 'red', 'meiss_vmec': 'blue', 'meiss_chart': 'green'}
     labels = {
         'vmec': 'VMEC (RK45)',
         'chartmap': 'Chartmap (RK45)',
-        'meiss': 'Meiss from Chartmap'
+        'meiss_vmec': 'Meiss from VMEC',
+        'meiss_chart': 'Meiss from Chartmap'
     }
 
     ax = axes[0]
-    for name in ['vmec', 'chartmap', 'meiss']:
+    for name in ['vmec', 'chartmap', 'meiss_vmec', 'meiss_chart']:
         curve = curves[name]
         ax.plot(curve['time'] * 1e6, curve['lost'] * 100,
                 color=colors[name], linewidth=2, label=labels[name])
@@ -91,7 +97,7 @@ def plot_loss_over_time(curves, output_file):
     ax.set_ylim([0, 100])
 
     ax = axes[1]
-    for name in ['vmec', 'chartmap', 'meiss']:
+    for name in ['vmec', 'chartmap', 'meiss_vmec', 'meiss_chart']:
         curve = curves[name]
         ax.plot(curve['time'] * 1e6, curve['confined'] * 100,
                 color=colors[name], linewidth=2, label=labels[name])
@@ -110,17 +116,19 @@ def plot_loss_over_time(curves, output_file):
 
 def plot_loss_positions(data, output_file):
     """Plot loss positions on wall in (theta, phi) coordinates."""
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
 
     titles = {
         'vmec': 'VMEC (RK45)',
         'chartmap': 'Chartmap (RK45)',
-        'meiss': 'Meiss from Chartmap'
+        'meiss_vmec': 'Meiss from VMEC',
+        'meiss_chart': 'Meiss from Chartmap'
     }
 
     trace_time = data['trace_time']
 
-    for i, name in enumerate(['vmec', 'chartmap', 'meiss']):
+    for i, name in enumerate(['vmec', 'chartmap', 'meiss_vmec', 'meiss_chart']):
         ax = axes[i]
         loss_pos = data[name]['loss_pos']
         loss_time = data[name]['loss_time']
@@ -153,11 +161,11 @@ def plot_loss_positions(data, output_file):
 
 def plot_summary(data, curves, output_file):
     """Create summary comparison plot."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    names = ['vmec', 'chartmap', 'meiss']
-    labels = ['VMEC\n(RK45)', 'Chartmap\n(RK45)', 'Meiss\nfrom Chartmap']
-    colors = ['black', 'red', 'blue']
+    names = ['vmec', 'chartmap', 'meiss_vmec', 'meiss_chart']
+    labels = ['VMEC\n(RK45)', 'Chartmap\n(RK45)', 'Meiss\n(VMEC)', 'Meiss\n(Chart)']
+    colors = ['black', 'red', 'blue', 'green']
 
     confined_frac = [curves[n]['confined'][-1] * 100 for n in names]
 
@@ -171,7 +179,7 @@ def plot_summary(data, curves, output_file):
 
     for bar, val in zip(bars, confined_frac):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
-                f'{val:.1f}%', ha='center', va='bottom', fontsize=11)
+                f'{val:.1f}%', ha='center', va='bottom', fontsize=10)
 
     ax = axes[1]
     n_particles = len(data['vmec']['loss_time'])
@@ -205,13 +213,20 @@ def print_statistics(data, curves):
     trace_time = data['trace_time']
     n_particles = len(data['vmec']['loss_time'])
 
-    for name in ['vmec', 'chartmap', 'meiss']:
+    labels = {
+        'vmec': 'VMEC (RK45)',
+        'chartmap': 'Chartmap',
+        'meiss_vmec': 'Meiss(VMEC)',
+        'meiss_chart': 'Meiss(Chart)'
+    }
+
+    for name in ['vmec', 'chartmap', 'meiss_vmec', 'meiss_chart']:
         loss_times = data[name]['loss_time']
         lost_mask = loss_times < trace_time * 0.999
         n_lost = np.sum(lost_mask)
         confined = curves[name]['confined'][-1] * 100
 
-        print(f'  {name.upper():12s}: {n_lost:3d}/{n_particles} lost '
+        print(f'  {labels[name]:14s}: {n_lost:3d}/{n_particles} lost '
               f'({100 - confined:.1f}%), {confined:.1f}% confined')
 
         if n_lost > 0:
