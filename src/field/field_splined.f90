@@ -228,8 +228,12 @@ contains
 
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
+            ! Use rho range [0.1, 0.99] to include most of the plasma volume
+            ! while avoiding the exact boundary where VMEC coordinate inversion fails.
+            ! The previous limit of 0.9 caused particles near the edge to use
+            ! extrapolated field values, leading to incorrect drift velocities.
             if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0)
-            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.9d0)
+            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0)
         class default
             continue
         end select
