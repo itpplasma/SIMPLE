@@ -127,9 +127,10 @@ def plot_loss_positions(data, output_file):
 
         lost_mask = loss_time < trace_time * 0.999
         if np.any(lost_mask):
-            s_lost = loss_pos[0, lost_mask]
-            theta_lost = loss_pos[1, lost_mask]
-            phi_lost = loss_pos[2, lost_mask]
+            # NetCDF stores as (dim3, n_particles), Python reads as (n_particles, dim3)
+            s_lost = loss_pos[lost_mask, 0]
+            theta_lost = loss_pos[lost_mask, 1]
+            phi_lost = loss_pos[lost_mask, 2]
             time_lost = loss_time[lost_mask]
 
             sc = ax.scatter(np.degrees(phi_lost), np.degrees(theta_lost),
