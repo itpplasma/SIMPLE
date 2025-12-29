@@ -29,7 +29,8 @@ program test_chartmap_wall_losses
     use parmot_mod, only: ro0, rmu
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
-    use field_can_mod, only: init_field_can, integ_to_ref
+    use field_can_mod, only: init_field_can, integ_to_ref, ref_to_integ, &
+                             field_can_from_id
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss
     use boozer_sub, only: vmec_to_boozer, boozer_to_vmec, get_boozer_coordinates
     use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -147,6 +148,7 @@ program test_chartmap_wall_losses
     call init_meiss(vmec_field, n_r_=16, n_th_=17, n_phi_=18, &
                     rmin=0.1d0, rmax=0.99d0)
     call get_meiss_coordinates
+    call field_can_from_id(MEISS)  ! Set up ref_to_integ/integ_to_ref pointers
     call init_magfie(MEISS)
     call trace_particles_meiss_vmec(z0, loss_times_meiss_vmec, loss_pos_meiss_vmec, &
                                     lost_step_meiss_vmec)
@@ -158,6 +160,7 @@ program test_chartmap_wall_losses
     call init_meiss(splined_chartmap, n_r_=16, n_th_=17, n_phi_=18, &
                     rmin=0.1d0, rmax=0.99d0)
     call get_meiss_coordinates
+    call field_can_from_id(MEISS)  ! Set up ref_to_integ/integ_to_ref pointers
     call init_magfie(MEISS)
     call trace_particles_meiss(z0, loss_times_meiss_chart, loss_pos_meiss_chart, &
                                lost_step_meiss_chart)
@@ -327,6 +330,9 @@ contains
     end subroutine trace_particles_boozer
 
     subroutine trace_particles_meiss(z0, loss_times, loss_pos, lost_step)
+        !> Trace particles using Meiss coords built from chartmap field.
+        !> Meiss coords: z(1) = r = sqrt(rho) where rho = sqrt(s).
+        !> Boundary at r >= 1.0 (which means rho=1, i.e., s=1).
         use field_can_mod, only: ref_to_integ
 
         real(dp), intent(in) :: z0(5, n_particles)
@@ -350,9 +356,10 @@ contains
 
             do j = 1, n_steps
                 call orbit_timestep_axis(z, dtau, dtau, relerr, ierr)
-                call integ_to_ref(z(1:3), x_ref)
-                if (ierr /= 0 .or. x_ref(1) >= 1.0_dp) then
+                ! Check integrator coord directly: r >= 1.0 means rho >= 1 (boundary)
+                if (ierr /= 0 .or. z(1) >= 1.0_dp) then
                     loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    call integ_to_ref(z(1:3), x_ref)
                     loss_pos(:, i) = x_ref
                     lost_step(i) = j
                     exit
@@ -363,8 +370,8 @@ contains
 
     subroutine trace_particles_meiss_vmec(z0, loss_times, loss_pos, lost_step)
         !> Trace particles using Meiss coords built from VMEC field.
-        !> Starts from VMEC coordinates directly (no chartmap conversion).
-        use field_can_mod, only: ref_to_integ
+        !> Meiss coords: z(1) = r = sqrt(s) where s is VMEC flux coord.
+        !> Boundary at r >= 1.0 (which means s >= 1).
 
         real(dp), intent(in) :: z0(5, n_particles)
         real(dp), intent(out) :: loss_times(n_particles)
@@ -386,9 +393,10 @@ contains
 
             do j = 1, n_steps
                 call orbit_timestep_axis(z, dtau, dtau, relerr, ierr)
-                call integ_to_ref(z(1:3), x_ref)
-                if (ierr /= 0 .or. x_ref(1) >= 1.0_dp) then
+                ! Check integrator coord directly: r >= 1.0 means s >= 1 (boundary)
+                if (ierr /= 0 .or. z(1) >= 1.0_dp) then
                     loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    call integ_to_ref(z(1:3), x_ref)
                     loss_pos(:, i) = x_ref
                     lost_step(i) = j
                     exit
