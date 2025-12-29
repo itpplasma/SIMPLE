@@ -27,6 +27,9 @@ program test_chartmap_wall_losses
                           set_magfie_refcoords_field
     use alpha_lifetime_sub, only: orbit_timestep_axis
     use parmot_mod, only: ro0, rmu
+    use orbit_symplectic_base, only: symplectic_integrator_t, MIDPOINT
+    use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
+    use field_can_mod, only: field_can_t, eval_field => evaluate
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
     use field_can_mod, only: init_field_can, integ_to_ref, ref_to_integ, &
@@ -65,6 +68,16 @@ program test_chartmap_wall_losses
 
     real(dp) :: confined_vmec, confined_chart, confined_boozer
     real(dp) :: confined_meiss_vmec, confined_meiss_chart
+    real(dp) :: confined_boozer_mid, confined_meiss_vmec_mid, confined_meiss_chart_mid
+    real(dp) :: t_vmec, t_chart, t_boozer, t_meiss_vmec, t_meiss_chart
+    real(dp) :: t_boozer_mid, t_meiss_vmec_mid, t_meiss_chart_mid
+    real(dp) :: t_start, t_end
+    real(dp), allocatable :: loss_times_boozer_mid(:), loss_times_meiss_vmec_mid(:)
+    real(dp), allocatable :: loss_times_meiss_chart_mid(:)
+    real(dp), allocatable :: loss_pos_boozer_mid(:, :), loss_pos_meiss_vmec_mid(:, :)
+    real(dp), allocatable :: loss_pos_meiss_chart_mid(:, :)
+    integer, allocatable :: lost_step_boozer_mid(:), lost_step_meiss_vmec_mid(:)
+    integer, allocatable :: lost_step_meiss_chart_mid(:)
     integer :: i, ierr, n_failed
 
     n_failed = 0
@@ -95,6 +108,12 @@ program test_chartmap_wall_losses
     allocate (lost_step_vmec(n_particles), lost_step_chart(n_particles))
     allocate (lost_step_boozer(n_particles))
     allocate (lost_step_meiss_vmec(n_particles), lost_step_meiss_chart(n_particles))
+    allocate (loss_times_boozer_mid(n_particles))
+    allocate (loss_times_meiss_vmec_mid(n_particles), loss_times_meiss_chart_mid(n_particles))
+    allocate (loss_pos_boozer_mid(3, n_particles))
+    allocate (loss_pos_meiss_vmec_mid(3, n_particles), loss_pos_meiss_chart_mid(3, n_particles))
+    allocate (lost_step_boozer_mid(n_particles))
+    allocate (lost_step_meiss_vmec_mid(n_particles), lost_step_meiss_chart_mid(n_particles))
 
     print *, 'Step 1: Initialize VMEC equilibrium'
     call init_vmec(wout_file, 5, 5, 5, fper)
@@ -126,23 +145,32 @@ program test_chartmap_wall_losses
 
     print *, 'Mode 1: VMEC coordinates (RK45)'
     call init_magfie(VMEC)
+    call cpu_time(t_start)
     call trace_particles_vmec(z0, loss_times_vmec, loss_pos_vmec, lost_step_vmec)
+    call cpu_time(t_end)
+    t_vmec = t_end - t_start
     confined_vmec = count_confined(loss_times_vmec)
-    print '(A,F6.2,A)', '  Confined fraction: ', confined_vmec*100.0_dp, '%'
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_vmec*100.0_dp, '%  (', t_vmec, ' s)'
 
     print *, 'Mode 2: Chartmap reference coordinates (RK45)'
     call set_magfie_refcoords_field(splined_chartmap)
     call init_magfie(REFCOORDS)
+    call cpu_time(t_start)
     call trace_particles_chartmap(z0, loss_times_chart, loss_pos_chart, lost_step_chart)
+    call cpu_time(t_end)
+    t_chart = t_end - t_start
     confined_chart = count_confined(loss_times_chart)
-    print '(A,F6.2,A)', '  Confined fraction: ', confined_chart*100.0_dp, '%'
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_chart*100.0_dp, '%  (', t_chart, ' s)'
 
     print *, 'Mode 3: Boozer canonical coordinates (RK45)'
     call get_boozer_coordinates
     call init_magfie(BOOZER)
+    call cpu_time(t_start)
     call trace_particles_boozer(z0, loss_times_boozer, loss_pos_boozer, lost_step_boozer)
+    call cpu_time(t_end)
+    t_boozer = t_end - t_start
     confined_boozer = count_confined(loss_times_boozer)
-    print '(A,F6.2,A)', '  Confined fraction: ', confined_boozer*100.0_dp, '%'
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_boozer*100.0_dp, '%  (', t_boozer, ' s)'
 
     print *, 'Mode 4: Meiss canonical from VMEC (RK45)'
     call init_meiss(vmec_field, n_r_=16, n_th_=17, n_phi_=18, &
@@ -150,11 +178,14 @@ program test_chartmap_wall_losses
     call get_meiss_coordinates
     call field_can_from_id(MEISS)  ! Set up ref_to_integ/integ_to_ref pointers
     call init_magfie(MEISS)
+    call cpu_time(t_start)
     call trace_particles_meiss_vmec(z0, loss_times_meiss_vmec, loss_pos_meiss_vmec, &
                                     lost_step_meiss_vmec)
+    call cpu_time(t_end)
+    t_meiss_vmec = t_end - t_start
     call cleanup_meiss
     confined_meiss_vmec = count_confined(loss_times_meiss_vmec)
-    print '(A,F6.2,A)', '  Confined fraction: ', confined_meiss_vmec*100.0_dp, '%'
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_meiss_vmec*100.0_dp, '%  (', t_meiss_vmec, ' s)'
 
     print *, 'Mode 5: Meiss canonical from chartmap (RK45)'
     call init_meiss(splined_chartmap, n_r_=16, n_th_=17, n_phi_=18, &
@@ -162,21 +193,68 @@ program test_chartmap_wall_losses
     call get_meiss_coordinates
     call field_can_from_id(MEISS)  ! Set up ref_to_integ/integ_to_ref pointers
     call init_magfie(MEISS)
+    call cpu_time(t_start)
     call trace_particles_meiss(z0, loss_times_meiss_chart, loss_pos_meiss_chart, &
                                lost_step_meiss_chart)
+    call cpu_time(t_end)
+    t_meiss_chart = t_end - t_start
     call cleanup_meiss
     confined_meiss_chart = count_confined(loss_times_meiss_chart)
-    print '(A,F6.2,A)', '  Confined fraction: ', confined_meiss_chart*100.0_dp, '%'
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_meiss_chart*100.0_dp, '%  (', t_meiss_chart, ' s)'
+
+    print *, 'Mode 6: Boozer canonical coordinates (MIDPOINT)'
+    call get_boozer_coordinates
+    call field_can_from_id(BOOZER)
+    call cpu_time(t_start)
+    call trace_particles_boozer_sympl(z0, loss_times_boozer_mid, loss_pos_boozer_mid, &
+                                      lost_step_boozer_mid)
+    call cpu_time(t_end)
+    t_boozer_mid = t_end - t_start
+    confined_boozer_mid = count_confined(loss_times_boozer_mid)
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_boozer_mid*100.0_dp, '%  (', t_boozer_mid, ' s)'
+
+    print *, 'Mode 7: Meiss canonical from VMEC (MIDPOINT)'
+    call init_meiss(vmec_field, n_r_=16, n_th_=17, n_phi_=18, &
+                    rmin=0.1d0, rmax=0.99d0)
+    call get_meiss_coordinates
+    call field_can_from_id(MEISS)
+    call cpu_time(t_start)
+    call trace_particles_meiss_vmec_sympl(z0, loss_times_meiss_vmec_mid, &
+                                          loss_pos_meiss_vmec_mid, lost_step_meiss_vmec_mid)
+    call cpu_time(t_end)
+    t_meiss_vmec_mid = t_end - t_start
+    call cleanup_meiss
+    confined_meiss_vmec_mid = count_confined(loss_times_meiss_vmec_mid)
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_meiss_vmec_mid*100.0_dp, '%  (', t_meiss_vmec_mid, ' s)'
+
+    print *, 'Mode 8: Meiss canonical from chartmap (MIDPOINT)'
+    call init_meiss(splined_chartmap, n_r_=16, n_th_=17, n_phi_=18, &
+                    rmin=0.1d0, rmax=0.99d0)
+    call get_meiss_coordinates
+    call field_can_from_id(MEISS)
+    call cpu_time(t_start)
+    call trace_particles_meiss_chart_sympl(z0, loss_times_meiss_chart_mid, &
+                                           loss_pos_meiss_chart_mid, lost_step_meiss_chart_mid)
+    call cpu_time(t_end)
+    t_meiss_chart_mid = t_end - t_start
+    call cleanup_meiss
+    confined_meiss_chart_mid = count_confined(loss_times_meiss_chart_mid)
+    print '(A,F6.2,A,F8.3,A)', '  Confined fraction: ', confined_meiss_chart_mid*100.0_dp, '%  (', t_meiss_chart_mid, ' s)'
 
     print *
     print *, '========================================================'
     print *, 'Results Summary'
     print *, '========================================================'
-    print '(A,F6.2,A)', '  VMEC confined:          ', confined_vmec*100.0_dp, '%'
-    print '(A,F6.2,A)', '  Chartmap confined:      ', confined_chart*100.0_dp, '%'
-    print '(A,F6.2,A)', '  Boozer confined:        ', confined_boozer*100.0_dp, '%'
-    print '(A,F6.2,A)', '  Meiss(VMEC) confined:   ', confined_meiss_vmec*100.0_dp, '%'
-    print '(A,F6.2,A)', '  Meiss(Chart) confined:  ', confined_meiss_chart*100.0_dp, '%'
+    print '(A)', '  RK45 integrator:'
+    print '(A,F6.2,A)', '    VMEC confined:         ', confined_vmec*100.0_dp, '%'
+    print '(A,F6.2,A)', '    Chartmap confined:     ', confined_chart*100.0_dp, '%'
+    print '(A,F6.2,A)', '    Boozer confined:       ', confined_boozer*100.0_dp, '%'
+    print '(A,F6.2,A)', '    Meiss(VMEC) confined:  ', confined_meiss_vmec*100.0_dp, '%'
+    print '(A,F6.2,A)', '    Meiss(Chart) confined: ', confined_meiss_chart*100.0_dp, '%'
+    print '(A)', '  Midpoint symplectic:'
+    print '(A,F6.2,A)', '    Boozer confined:       ', confined_boozer_mid*100.0_dp, '%'
+    print '(A,F6.2,A)', '    Meiss(VMEC) confined:  ', confined_meiss_vmec_mid*100.0_dp, '%'
+    print '(A,F6.2,A)', '    Meiss(Chart) confined: ', confined_meiss_chart_mid*100.0_dp, '%'
 
     print *, 'Step 5: Write output for visualization'
     call write_output_netcdf
@@ -404,6 +482,156 @@ contains
             end do
         end do
     end subroutine trace_particles_meiss_vmec
+
+    subroutine trace_particles_boozer_sympl(z0, loss_times, loss_pos, lost_step)
+        !> Trace particles using Boozer canonical coordinates with midpoint symplectic.
+        use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+
+        real(dp), intent(in) :: z0(5, n_particles)
+        real(dp), intent(out) :: loss_times(n_particles)
+        real(dp), intent(out) :: loss_pos(3, n_particles)
+        integer, intent(out) :: lost_step(n_particles)
+
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: integ
+        real(dp) :: z(4), z5(5), theta_b, phi_b, theta_v, phi_v
+        real(dp) :: dtau_sympl
+        integer :: i, j, ierr
+
+        loss_times = trace_time
+        loss_pos = 0.0_dp
+        lost_step = n_steps
+
+        dtau_sympl = dtau/sqrt(2.0_dp)
+
+        do i = 1, n_particles
+            z5 = z0(:, i)
+            call vmec_to_boozer(z5(1), z5(2), z5(3), theta_b, phi_b)
+            z5(2) = theta_b
+            z5(3) = phi_b
+
+            call eval_field(f, z5(1), z5(2), z5(3), 0)
+            f%mu = 0.5_dp*z5(4)**2*(1.0_dp - z5(5)**2)/f%Bmod*2.0_dp
+            f%ro0 = ro0/sqrt(2.0_dp)
+            f%vpar = z5(4)*z5(5)*sqrt(2.0_dp)
+            z(1:3) = z5(1:3)
+            z(4) = f%vpar*f%hph + f%Aph/f%ro0
+            call orbit_sympl_init(integ, f, z, dtau_sympl, 1, 1.0e-12_dp, MIDPOINT)
+
+            do j = 1, n_steps
+                ierr = 0
+                call orbit_timestep_sympl(integ, f, ierr)
+                if (ierr /= 0 .or. integ%z(1) >= 1.0_dp) then
+                    loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    call boozer_to_vmec(integ%z(1), integ%z(2), integ%z(3), theta_v, phi_v)
+                    loss_pos(1, i) = integ%z(1)
+                    loss_pos(2, i) = theta_v
+                    loss_pos(3, i) = phi_v
+                    lost_step(i) = j
+                    exit
+                end if
+            end do
+        end do
+    end subroutine trace_particles_boozer_sympl
+
+    subroutine trace_particles_meiss_vmec_sympl(z0, loss_times, loss_pos, lost_step)
+        !> Trace particles using Meiss coords from VMEC with midpoint symplectic.
+        use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+
+        real(dp), intent(in) :: z0(5, n_particles)
+        real(dp), intent(out) :: loss_times(n_particles)
+        real(dp), intent(out) :: loss_pos(3, n_particles)
+        integer, intent(out) :: lost_step(n_particles)
+
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: integ
+        real(dp) :: z(4), z5(5), x_ref(3), x_integ(3)
+        real(dp) :: dtau_sympl
+        integer :: i, j, ierr
+
+        loss_times = trace_time
+        loss_pos = 0.0_dp
+        lost_step = n_steps
+
+        dtau_sympl = dtau/sqrt(2.0_dp)
+
+        do i = 1, n_particles
+            x_ref = z0(1:3, i)
+            call ref_to_integ(x_ref, x_integ)
+            z5(1:3) = x_integ
+            z5(4:5) = z0(4:5, i)
+
+            call eval_field(f, z5(1), z5(2), z5(3), 0)
+            f%mu = 0.5_dp*z5(4)**2*(1.0_dp - z5(5)**2)/f%Bmod*2.0_dp
+            f%ro0 = ro0/sqrt(2.0_dp)
+            f%vpar = z5(4)*z5(5)*sqrt(2.0_dp)
+            z(1:3) = z5(1:3)
+            z(4) = f%vpar*f%hph + f%Aph/f%ro0
+            call orbit_sympl_init(integ, f, z, dtau_sympl, 1, 1.0e-12_dp, MIDPOINT)
+
+            do j = 1, n_steps
+                ierr = 0
+                call orbit_timestep_sympl(integ, f, ierr)
+                if (ierr /= 0 .or. integ%z(1) >= 1.0_dp) then
+                    loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    call integ_to_ref(integ%z(1:3), x_ref)
+                    loss_pos(:, i) = x_ref
+                    lost_step(i) = j
+                    exit
+                end if
+            end do
+        end do
+    end subroutine trace_particles_meiss_vmec_sympl
+
+    subroutine trace_particles_meiss_chart_sympl(z0, loss_times, loss_pos, lost_step)
+        !> Trace particles using Meiss coords from chartmap with midpoint symplectic.
+        use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+
+        real(dp), intent(in) :: z0(5, n_particles)
+        real(dp), intent(out) :: loss_times(n_particles)
+        real(dp), intent(out) :: loss_pos(3, n_particles)
+        integer, intent(out) :: lost_step(n_particles)
+
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: integ
+        real(dp) :: z(4), z5(5), z_chart(5), x_ref(3), x_integ(3)
+        real(dp) :: dtau_sympl
+        integer :: i, j, ierr
+
+        loss_times = trace_time
+        loss_pos = 0.0_dp
+        lost_step = n_steps
+
+        dtau_sympl = dtau/sqrt(2.0_dp)
+
+        do i = 1, n_particles
+            call vmec_to_chartmap(z0(:, i), z_chart)
+            x_ref = z_chart(1:3)
+            call ref_to_integ(x_ref, x_integ)
+            z5(1:3) = x_integ
+            z5(4:5) = z_chart(4:5)
+
+            call eval_field(f, z5(1), z5(2), z5(3), 0)
+            f%mu = 0.5_dp*z5(4)**2*(1.0_dp - z5(5)**2)/f%Bmod*2.0_dp
+            f%ro0 = ro0/sqrt(2.0_dp)
+            f%vpar = z5(4)*z5(5)*sqrt(2.0_dp)
+            z(1:3) = z5(1:3)
+            z(4) = f%vpar*f%hph + f%Aph/f%ro0
+            call orbit_sympl_init(integ, f, z, dtau_sympl, 1, 1.0e-12_dp, MIDPOINT)
+
+            do j = 1, n_steps
+                ierr = 0
+                call orbit_timestep_sympl(integ, f, ierr)
+                if (ierr /= 0 .or. integ%z(1) >= 1.0_dp) then
+                    loss_times(i) = real(j, dp)*dtau/v0_alpha
+                    call integ_to_ref(integ%z(1:3), x_ref)
+                    loss_pos(:, i) = x_ref
+                    lost_step(i) = j
+                    exit
+                end if
+            end do
+        end do
+    end subroutine trace_particles_meiss_chart_sympl
 
     subroutine vmec_to_chartmap(z_vmec, z_chart)
         real(dp), intent(in) :: z_vmec(5)
