@@ -192,7 +192,7 @@ use chamb_sub, only : chamb_can
   !
       call chamb_can(y,phi,ierr)
   !
-      if(ierr.ne.0) return
+      if(ierr.eq.1) return
       tau1=0.d0
       tau2=dtaumin
   !
@@ -207,7 +207,7 @@ if(dodiag) write (123,*) tau2,z
   !
         call chamb_can(y,phi,ierr)
   !
-        if(ierr.ne.0) return
+        if(ierr.eq.1) return
         tau1=tau2
         tau2=tau2+dtaumin
       enddo
@@ -222,7 +222,7 @@ if(dodiag) write (123,*) tau2,z
   !
       call chamb_can(y,phi,ierr)
   !
-      if(ierr.ne.0) return
+      if(ierr.eq.1) return
   !
       end subroutine orbit_timestep_can
   !
@@ -302,7 +302,7 @@ if(dodiag) write (123,*) tau2,z
   !
       call chamb_can(y(1:2),phi,ierr)
   !
-      if(ierr.ne.0) return
+      if(ierr.eq.1) return
       x(1)=y(1)
       x(2)=y(2)
       x(3)=phi
@@ -321,7 +321,7 @@ if(dodiag) write (123,*) tau2,z
   !
         call chamb_can(y(1:2),phi,ierr)
   !
-        if(ierr.ne.0) return
+        if(ierr.eq.1) return
         x(1)=y(1)
         x(2)=y(2)
         x(3)=phi
@@ -405,7 +405,7 @@ if(dodiag) write (123,*) tau2,z
   !
       call chamb_can(y,phi,ierr)
   !
-      if(ierr.ne.0) return
+      if(ierr.eq.1) return
       tau1=0.d0
       tau2=dtaumin
   !
@@ -428,7 +428,7 @@ if(dodiag) write (123,*) tau2,z
   !
             call chamb_can(y,phi,ierr)
   !
-            if(ierr.ne.0) return
+            if(ierr.eq.1) return
           else
   !
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
@@ -454,7 +454,7 @@ if(dodiag) write (123,*) tau2,z
   !
             call chamb_can(y,phi,ierr)
   !
-            if(ierr.ne.0) return
+            if(ierr.eq.1) return
   !
           endif
         endif
@@ -480,7 +480,7 @@ if(dodiag) write (123,*) tau2,z
   !
           call chamb_can(y,phi,ierr)
   !
-          if(ierr.ne.0) return
+          if(ierr.eq.1) return
         else
   !
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
@@ -506,7 +506,7 @@ if(dodiag) write (123,*) tau2,z
   !
           call chamb_can(y,phi,ierr)
   !
-          if(ierr.ne.0) return
+          if(ierr.eq.1) return
   !
         endif
       endif

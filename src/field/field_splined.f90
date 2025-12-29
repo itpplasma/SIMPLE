@@ -228,8 +228,12 @@ contains
 
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
+            ! Use rho range [0.1, 0.99] to include most of the plasma volume
+            ! while avoiding the exact boundary where VMEC coordinate inversion fails.
+            ! The previous limit of 0.9 caused particles near the edge to use
+            ! extrapolated field values, leading to incorrect drift velocities.
             if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0)
-            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.9d0)
+            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0)
         class default
             continue
         end select
@@ -248,144 +252,148 @@ contains
 !$omp end critical
     end subroutine print_progress
 
-        subroutine sample_spline_arrays(source, ref_coords, scaling_ptr, n_r, n_th, n_phi, &
-                                        xmin, h_r, h_th, h_phi, Ar, Ath, Aphi, hr, hth, &
-                                        hphi, Bmod_arr)
-            class(magnetic_field_t), intent(in) :: source
-            class(coordinate_system_t), intent(in) :: ref_coords
-            class(coordinate_scaling_t), pointer, intent(in) :: scaling_ptr
-            integer, intent(in) :: n_r, n_th, n_phi
-            real(dp), intent(in) :: xmin(3), h_r, h_th, h_phi
-            real(dp), allocatable, intent(out) :: Ar(:, :, :), Ath(:, :, :), Aphi(:, :, :)
-            real(dp), allocatable, intent(out) :: hr(:, :, :), hth(:, :, :), hphi(:, :, :)
-            real(dp), allocatable, intent(out) :: Bmod_arr(:, :, :)
+    subroutine sample_spline_arrays(source, ref_coords, scaling_ptr, n_r, &
+                                    n_th, n_phi, &
+                                    xmin, h_r, h_th, h_phi, Ar, Ath, &
+                                    Aphi, hr, hth, &
+                                    hphi, Bmod_arr)
+        class(magnetic_field_t), intent(in) :: source
+        class(coordinate_system_t), intent(in) :: ref_coords
+        class(coordinate_scaling_t), pointer, intent(in) :: scaling_ptr
+        integer, intent(in) :: n_r, n_th, n_phi
+        real(dp), intent(in) :: xmin(3), h_r, h_th, h_phi
+        real(dp), allocatable, intent(out) :: Ar(:, :, :), Ath(:, :, :), &
+                                              Aphi(:, :, :)
+        real(dp), allocatable, intent(out) :: hr(:, :, :), hth(:, :, :), &
+                                              hphi(:, :, :)
+        real(dp), allocatable, intent(out) :: Bmod_arr(:, :, :)
 
-            real(dp) :: x_scaled(3), x_ref(3), x_cart(3)
-            real(dp) :: e_cov(3, 3), scaling_jac(3)
-            real(dp) :: Bmod
-            real(dp) :: Acov(3), hcov(3)
-            logical :: needs_scaling
-            logical :: is_identity_scaling, is_sqrt_s_scaling
-            integer :: i_r, i_th, i_phi, i_ctr
+        real(dp) :: x_scaled(3), x_ref(3), x_cart(3)
+        real(dp) :: e_cov(3, 3), scaling_jac(3)
+        real(dp) :: Bmod
+        real(dp) :: Acov(3), hcov(3)
+        logical :: needs_scaling
+        logical :: is_identity_scaling, is_sqrt_s_scaling
+        integer :: i_r, i_th, i_phi, i_ctr
 
         allocate (Ar(n_r, n_th, n_phi), Ath(n_r, n_th, n_phi))
         allocate (Aphi(n_r, n_th, n_phi))
         allocate (hr(n_r, n_th, n_phi), hth(n_r, n_th, n_phi))
-            allocate (hphi(n_r, n_th, n_phi))
-            allocate (Bmod_arr(n_r, n_th, n_phi))
+        allocate (hphi(n_r, n_th, n_phi))
+        allocate (Bmod_arr(n_r, n_th, n_phi))
 
-            is_identity_scaling = .false.
-            is_sqrt_s_scaling = .false.
-            select type (scaling_ptr)
-            type is (identity_scaling_t)
-                is_identity_scaling = .true.
-            type is (sqrt_s_scaling_t)
-                is_sqrt_s_scaling = .true.
-            class default
-                error stop 'sample_spline_arrays: Unsupported scaling type'
-            end select
+        is_identity_scaling = .false.
+        is_sqrt_s_scaling = .false.
+        select type (scaling_ptr)
+        type is (identity_scaling_t)
+            is_identity_scaling = .true.
+        type is (sqrt_s_scaling_t)
+            is_sqrt_s_scaling = .true.
+        class default
+            error stop 'sample_spline_arrays: Unsupported scaling type'
+        end select
 
-            i_ctr = 0
+        i_ctr = 0
 
 #ifdef SIMPLE_NVHPC
-            do i_phi = 1, n_phi
+        do i_phi = 1, n_phi
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
-                i_ctr = i_ctr + 1
-                call print_progress(i_ctr, n_phi)
+            i_ctr = i_ctr + 1
+            call print_progress(i_ctr, n_phi)
 #endif
-                do i_th = 1, n_th
-                    do i_r = 1, n_r
-                        x_scaled(1) = xmin(1) + h_r*dble(i_r - 1)
-                        x_scaled(2) = xmin(2) + h_th*dble(i_th - 1)
-                        x_scaled(3) = xmin(3) + h_phi*dble(i_phi - 1)
+            do i_th = 1, n_th
+                do i_r = 1, n_r
+                    x_scaled(1) = xmin(1) + h_r*dble(i_r - 1)
+                    x_scaled(2) = xmin(2) + h_th*dble(i_th - 1)
+                    x_scaled(3) = xmin(3) + h_phi*dble(i_phi - 1)
 
-                        scaling_jac = 1d0
-                        if (is_identity_scaling) then
-                            x_ref = x_scaled
-                        else if (is_sqrt_s_scaling) then
-                            x_ref(1) = x_scaled(1)**2
-                            x_ref(2) = x_scaled(2)
-                            x_ref(3) = x_scaled(3)
-                            scaling_jac(1) = 2d0 * x_scaled(1)
-                        end if
+                    scaling_jac = 1d0
+                    if (is_identity_scaling) then
+                        x_ref = x_scaled
+                    else if (is_sqrt_s_scaling) then
+                        x_ref(1) = x_scaled(1)**2
+                        x_ref(2) = x_scaled(2)
+                        x_ref(3) = x_scaled(3)
+                        scaling_jac(1) = 2d0*x_scaled(1)
+                    end if
 
-                        call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
-                                                    x_ref, x_cart, e_cov, Acov, &
-                                                    hcov, Bmod, needs_scaling)
-                        if (needs_scaling) then
-                            Acov(1) = Acov(1)*scaling_jac(1)
-                            hcov(1) = hcov(1)*scaling_jac(1)
-                        end if
+                    call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
+                                                x_ref, x_cart, e_cov, Acov, &
+                                                hcov, Bmod, needs_scaling)
+                    if (needs_scaling) then
+                        Acov(1) = Acov(1)*scaling_jac(1)
+                        hcov(1) = hcov(1)*scaling_jac(1)
+                    end if
 
-                        Ar(i_r, i_th, i_phi) = Acov(1)
-                        Ath(i_r, i_th, i_phi) = Acov(2)
-                        Aphi(i_r, i_th, i_phi) = Acov(3)
+                    Ar(i_r, i_th, i_phi) = Acov(1)
+                    Ath(i_r, i_th, i_phi) = Acov(2)
+                    Aphi(i_r, i_th, i_phi) = Acov(3)
 
-                        hr(i_r, i_th, i_phi) = hcov(1)
-                        hth(i_r, i_th, i_phi) = hcov(2)
-                        hphi(i_r, i_th, i_phi) = hcov(3)
+                    hr(i_r, i_th, i_phi) = hcov(1)
+                    hth(i_r, i_th, i_phi) = hcov(2)
+                    hphi(i_r, i_th, i_phi) = hcov(3)
 
-                        Bmod_arr(i_r, i_th, i_phi) = Bmod
-                    end do
+                    Bmod_arr(i_r, i_th, i_phi) = Bmod
                 end do
             end do
+        end do
 #else
 !$omp parallel private(i_r, i_th, i_phi, x_scaled, x_ref, x_cart, &
 !$omp&                  e_cov, scaling_jac, Bmod, Acov, hcov, needs_scaling)
 !$omp do
-            do i_phi = 1, n_phi
+        do i_phi = 1, n_phi
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
 !$omp atomic
-                i_ctr = i_ctr + 1
-                call print_progress(i_ctr, n_phi)
+            i_ctr = i_ctr + 1
+            call print_progress(i_ctr, n_phi)
 #endif
-                do i_th = 1, n_th
-                    do i_r = 1, n_r
-                        x_scaled(1) = xmin(1) + h_r*dble(i_r - 1)
-                        x_scaled(2) = xmin(2) + h_th*dble(i_th - 1)
-                        x_scaled(3) = xmin(3) + h_phi*dble(i_phi - 1)
+            do i_th = 1, n_th
+                do i_r = 1, n_r
+                    x_scaled(1) = xmin(1) + h_r*dble(i_r - 1)
+                    x_scaled(2) = xmin(2) + h_th*dble(i_th - 1)
+                    x_scaled(3) = xmin(3) + h_phi*dble(i_phi - 1)
 
-                        scaling_jac = 1d0
-                        if (is_identity_scaling) then
-                            x_ref = x_scaled
-                        else if (is_sqrt_s_scaling) then
-                            x_ref(1) = x_scaled(1)**2
-                            x_ref(2) = x_scaled(2)
-                            x_ref(3) = x_scaled(3)
-                            scaling_jac(1) = 2d0 * x_scaled(1)
-                        end if
+                    scaling_jac = 1d0
+                    if (is_identity_scaling) then
+                        x_ref = x_scaled
+                    else if (is_sqrt_s_scaling) then
+                        x_ref(1) = x_scaled(1)**2
+                        x_ref(2) = x_scaled(2)
+                        x_ref(3) = x_scaled(3)
+                        scaling_jac(1) = 2d0*x_scaled(1)
+                    end if
 
-                        call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
-                                                    x_ref, x_cart, e_cov, Acov, &
-                                                    hcov, Bmod, needs_scaling)
-                        if (needs_scaling) then
-                            Acov(1) = Acov(1)*scaling_jac(1)
-                            hcov(1) = hcov(1)*scaling_jac(1)
-                        end if
+                    call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
+                                                x_ref, x_cart, e_cov, Acov, &
+                                                hcov, Bmod, needs_scaling)
+                    if (needs_scaling) then
+                        Acov(1) = Acov(1)*scaling_jac(1)
+                        hcov(1) = hcov(1)*scaling_jac(1)
+                    end if
 
-                        Ar(i_r, i_th, i_phi) = Acov(1)
-                        Ath(i_r, i_th, i_phi) = Acov(2)
-                        Aphi(i_r, i_th, i_phi) = Acov(3)
+                    Ar(i_r, i_th, i_phi) = Acov(1)
+                    Ath(i_r, i_th, i_phi) = Acov(2)
+                    Aphi(i_r, i_th, i_phi) = Acov(3)
 
-                        hr(i_r, i_th, i_phi) = hcov(1)
-                        hth(i_r, i_th, i_phi) = hcov(2)
-                        hphi(i_r, i_th, i_phi) = hcov(3)
+                    hr(i_r, i_th, i_phi) = hcov(1)
+                    hth(i_r, i_th, i_phi) = hcov(2)
+                    hphi(i_r, i_th, i_phi) = hcov(3)
 
-                        Bmod_arr(i_r, i_th, i_phi) = Bmod
-                    end do
+                    Bmod_arr(i_r, i_th, i_phi) = Bmod
                 end do
             end do
+        end do
 !$omp end do
 !$omp end parallel
 #endif
 
-            Ar = Ar - Ar(1, 1, 1)
-            Ath = Ath - Ath(1, 1, 1)
-            Aphi = Aphi - Aphi(1, 1, 1)
+        Ar = Ar - Ar(1, 1, 1)
+        Ath = Ath - Ath(1, 1, 1)
+        Aphi = Aphi - Aphi(1, 1, 1)
     end subroutine sample_spline_arrays
 
-        subroutine evaluate_at_ref_coords(source, ref_coords, x_scaled, x_ref, x_cart, &
-                                          e_cov, Acov, hcov, Bmod, needs_scaling)
+    subroutine evaluate_at_ref_coords(source, ref_coords, x_scaled, x_ref, x_cart, &
+                                      e_cov, Acov, hcov, Bmod, needs_scaling)
         !> Evaluate source field for spline sampling.
         !>
         !> Supported source modes:
@@ -408,49 +416,50 @@ contains
         real(dp) :: x_src(3)
 
         select type (source)
-            type is (vmec_field_t)
-                select type (ref_coords)
-                type is (vmec_coordinate_system_t)
-                    ! Same coordinate system: evaluate directly in VMEC coordinates.
-                    call source%evaluate(x_ref, Acov, hcov, Bmod)
-                    x_cart = 0d0
-                    e_cov = 0d0
-                    needs_scaling = .true.
-                    return
-                class default
-                    ! Different reference coordinates: evaluate VMEC field at the same
-                    ! physical point and transform covariant components into ref_coords.
-                    call ref_coords%evaluate_cart(x_ref, x_cart)
-                    call find_vmec_coords_for_cart_point(source%coords, ref_coords, &
-                                                         x_ref, x_cart, x_src)
+        type is (vmec_field_t)
+            select type (ref_coords)
+            type is (vmec_coordinate_system_t)
+                ! Same coordinate system: evaluate directly in VMEC coordinates.
+                call source%evaluate(x_ref, Acov, hcov, Bmod)
+                x_cart = 0d0
+                e_cov = 0d0
+                needs_scaling = .true.
+                return
+            class default
+                ! Different reference coordinates: evaluate VMEC field at the same
+                ! physical point and transform covariant components into ref_coords.
+                call ref_coords%evaluate_cart(x_ref, x_cart)
+                call find_vmec_coords_for_cart_point(source%coords, ref_coords, &
+                                                     x_ref, x_cart, x_src)
 
                 call source%evaluate(x_src, Acov, hcov, Bmod)
 
                 call source%coords%cov_to_cart(x_src, Acov, A_cart)
                 call source%coords%cov_to_cart(x_src, hcov, h_cart)
 
-                    call ref_coords%covariant_basis(x_ref, e_cov)
-                    Acov = matmul(A_cart, e_cov)
-                    hcov = matmul(h_cart, e_cov)
-                end select
-                needs_scaling = .true.
-                return
+                call ref_coords%covariant_basis(x_ref, e_cov)
+                Acov = matmul(A_cart, e_cov)
+                hcov = matmul(h_cart, e_cov)
+            end select
+            needs_scaling = .true.
+            return
         class default
             continue
         end select
 
-            select type (coords => source%coords)
-            type is (cartesian_coordinate_system_t)
-                call ref_coords%evaluate_cart(x_ref, x_cart)
-                call ref_coords%covariant_basis(x_ref, e_cov)
-                call source%evaluate(x_cart, A_cart, h_cart, Bmod)
-                Acov = matmul(A_cart, e_cov)
-                hcov = matmul(h_cart, e_cov)
-                needs_scaling = .true.
-            class default
-                error stop "evaluate_at_ref_coords: unsupported source coordinate system"
-            end select
-        end subroutine evaluate_at_ref_coords
+        select type (coords => source%coords)
+        type is (cartesian_coordinate_system_t)
+            call ref_coords%evaluate_cart(x_ref, x_cart)
+            call ref_coords%covariant_basis(x_ref, e_cov)
+            call source%evaluate(x_cart, A_cart, h_cart, Bmod)
+            Acov = matmul(A_cart, e_cov)
+            hcov = matmul(h_cart, e_cov)
+            needs_scaling = .true.
+        class default
+            error stop &
+                "evaluate_at_ref_coords: unsupported source coordinate system"
+        end select
+    end subroutine evaluate_at_ref_coords
 
     subroutine find_vmec_coords_for_cart_point(vmec_coords, ref_coords, u_ref, &
                                                x_target, u_vmec)
@@ -468,7 +477,7 @@ contains
         real(dp) :: xcyl(3)
         integer :: ierr
 
-        associate(dummy => ref_coords)
+        associate (dummy => ref_coords)
         end associate
 
         xcyl(1) = sqrt(x_target(1)**2 + x_target(2)**2)
