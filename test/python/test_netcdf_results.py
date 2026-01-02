@@ -130,8 +130,9 @@ class TestNetCDFResultsOutput:
                 zstart = ds.variables['zstart'][:]
                 zend = ds.variables['zend'][:]
 
-                # NetCDF stores (phase, particle) in Fortran order, which is
-                # (particle, phase) in Python. zstart[:, 0] is s coordinate.
+                # NetCDF stores (phase, particle) in Fortran order.
+                # Python reads this as (particle, phase) due to transpose.
+                # zstart[:, 0] is the s coordinate for all particles.
                 assert np.allclose(zstart[:, 0], 0.5, atol=0.1), \
                     f"Starting s not ~0.5: {zstart[:, 0]}"
 

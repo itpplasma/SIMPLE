@@ -23,6 +23,7 @@ module netcdf_results_output
 contains
 
     subroutine check_nc(status, location)
+        !> Check NetCDF status and stop on error.
         integer, intent(in) :: status
         character(len=*), intent(in) :: location
 
@@ -55,9 +56,14 @@ contains
         integer :: var_zstart, var_zend, var_xstart_cart, var_xend_cart
         integer :: var_iclass, var_class_lost
         integer :: i
-        real(dp) :: xstart_cart(3, ntestpart), xend_cart(3, ntestpart)
-        integer(int8) :: class_lost_i8(ntestpart)
+        real(dp), allocatable :: xstart_cart(:, :), xend_cart(:, :)
+        integer(int8), allocatable :: class_lost_i8(:)
         character(len=32) :: coord_type
+
+        ! Allocate working arrays
+        allocate (xstart_cart(3, ntestpart))
+        allocate (xend_cart(3, ntestpart))
+        allocate (class_lost_i8(ntestpart))
 
         ! Compute Cartesian positions
         call compute_cartesian_positions(xstart_cart, xend_cart)
@@ -135,20 +141,20 @@ contains
             'Initial phase space in reference coordinates')
         call check_nc(status, 'put_att zstart description')
         status = nf90_put_att(ncid, var_zstart, 'components', &
-            's (flux label), theta (rad), zeta (rad), p (v/v0), v_par/v')
+            's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
         call check_nc(status, 'put_att zstart components')
         status = nf90_put_att(ncid, var_zstart, 'coordinate_note', &
-            'See coordinate_type global attribute for VMEC vs chartmap')
+            'See coordinate_type attribute for VMEC vs chartmap')
         call check_nc(status, 'put_att zstart coordinate_note')
 
         status = nf90_def_var(ncid, 'zend', nf90_double, &
             [dim_phase, dim_particle], var_zend)
         call check_nc(status, 'def_var zend')
         status = nf90_put_att(ncid, var_zend, 'description', &
-            'Final phase space in reference coordinates (0 if not traced)')
+            'Final phase space in ref coords (0 if not traced)')
         call check_nc(status, 'put_att zend description')
         status = nf90_put_att(ncid, var_zend, 'components', &
-            's (flux label), theta (rad), zeta (rad), p (v/v0), v_par/v')
+            's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
         call check_nc(status, 'put_att zend components')
 
         status = nf90_def_var(ncid, 'xstart_cart', nf90_double, &
@@ -166,14 +172,14 @@ contains
         status = nf90_put_att(ncid, var_xend_cart, 'units', 'cm')
         call check_nc(status, 'put_att xend_cart units')
         status = nf90_put_att(ncid, var_xend_cart, 'description', &
-            'Final Cartesian position (equals xstart if not traced)')
+            'Final Cartesian position (= xstart if not traced)')
         call check_nc(status, 'put_att xend_cart description')
 
         status = nf90_def_var(ncid, 'iclass', nf90_int, &
             [dim_iclass, dim_particle], var_iclass)
         call check_nc(status, 'def_var iclass')
         status = nf90_put_att(ncid, var_iclass, 'description', &
-            'Classification: [J_par, topological, fractal] (0=unclassified)')
+            'Classification: [J_par, topology, fractal] (0=unclassified)')
         call check_nc(status, 'put_att iclass description')
 
         status = nf90_def_var(ncid, 'class_lost', nf90_byte, &
@@ -281,8 +287,8 @@ contains
         use params, only: ntestpart, zstart, zend
         use reference_coordinates, only: ref_coords
 
-        real(dp), intent(out) :: xstart_cart(3, ntestpart)
-        real(dp), intent(out) :: xend_cart(3, ntestpart)
+        real(dp), intent(out) :: xstart_cart(:, :)
+        real(dp), intent(out) :: xend_cart(:, :)
         integer :: i
         logical :: zend_is_zero
 

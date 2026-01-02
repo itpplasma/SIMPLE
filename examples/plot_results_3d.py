@@ -45,7 +45,6 @@ def plot_3d_positions(results: dict, lost_only: bool = False,
                       output_path: str | None = None) -> None:
     """Create side-by-side 3D scatter plots of start/end positions."""
     import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
     # NetCDF stores (xyz, particle) in Fortran order, which is
     # (particle, xyz) in Python (C order)
