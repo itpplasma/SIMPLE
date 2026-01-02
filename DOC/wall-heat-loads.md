@@ -83,17 +83,61 @@ $$P_\text{lost} = f_\text{energy} \cdot P_\alpha$$
 | W7-X (experiments) | 0.1-1 MW/m$^2$ | Lazerson et al. (2021) |
 | Material limits | 5-10 MW/m$^2$ | Engineering constraint |
 
+## Wall Area Calculation
+
+The heat flux requires accurate wall surface area. Two methods are available:
+
+### Simple Torus Approximation
+
+For quick estimates, the code defaults to a simple torus:
+
+$$A = 4\pi^2 R_0 a$$
+
+where $R_0$ is major radius and $a$ is minor radius. This underestimates stellarator wall area by 1.5-2x due to 3D shaping.
+
+### Actual Geometry from Chartmap
+
+For accurate results, provide a chartmap file with the actual wall geometry:
+
+$$A = n_{fp} \iint \left|\frac{\partial \mathbf{r}}{\partial \theta} \times \frac{\partial \mathbf{r}}{\partial \zeta}\right| d\theta\, d\zeta$$
+
+The chartmap contains Cartesian coordinates $(x, y, z)$ on a $(\rho, \theta, \zeta)$ grid. The wall surface is at $\rho = 1$.
+
+## Guiding Center Limitation
+
+**Important**: SIMPLE tracks guiding center orbits, not full particle orbits. The reported wall positions are guiding center positions, not actual wall impact points.
+
+For 3.5 MeV alpha particles in a ~5 T field:
+
+$$\rho_\alpha = \frac{m_\alpha v_\perp}{Z_\alpha e B} \approx 5-10\,\text{cm}$$
+
+This means:
+- Heat load patterns are smeared by ~10 cm
+- Fine-scale wall features are not resolved
+- Peak flux may be underestimated due to averaging
+
+For high-resolution wall load studies (e.g., limiter tile design), finite Larmor radius effects should be added by:
+1. Adding a gyroradius offset in the direction perpendicular to B
+2. Or using a full-orbit code instead of guiding center
+
 ## Code Implementation
 
 The `WallHeatMap` class in `pysimple.engineering` implements this calculation:
 
 ```python
-from pysimple.engineering import WallHeatMap
+from pysimple.engineering import WallHeatMap, compute_wall_area_from_chartmap
 
-# For a 3 GW fusion reactor (600 MW alpha power)
+# With actual wall geometry from chartmap (recommended)
 heat_map = WallHeatMap.from_netcdf(
     "results.nc",
-    total_alpha_power_MW=600.0,  # Required input
+    total_alpha_power_MW=600.0,  # 3 GW fusion -> 600 MW alpha
+    chartmap_file="wout.chartmap.nc",  # Actual 3D wall geometry
+)
+
+# Or with simple torus approximation (for quick estimates)
+heat_map_simple = WallHeatMap.from_netcdf(
+    "results.nc",
+    total_alpha_power_MW=600.0,
     major_radius=1000.0,  # cm
     minor_radius=100.0,   # cm
 )
@@ -102,6 +146,7 @@ print(f"Particle loss fraction: {heat_map.loss_fraction:.1%}")
 print(f"Energy loss fraction: {heat_map.energy_loss_fraction:.1%}")
 print(f"Lost power: {heat_map.lost_power:.1f} MW")
 print(f"Peak flux: {heat_map.peak_flux:.2f} MW/m^2")
+print(f"Wall area: {heat_map.wall_area:.1f} m^2")
 ```
 
 ## Data Format

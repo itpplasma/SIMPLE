@@ -29,6 +29,7 @@ from pysimple.engineering import (
     PortOptimizer,
     OptimizationResult,
     plot_heat_flux_2d,
+    compute_wall_area_from_chartmap,
 )
 
 
@@ -363,3 +364,204 @@ class TestIntegration:
 
         summary = heat_map.summary()
         assert "lost" in summary.lower()
+
+
+def create_mock_chartmap_nc(
+    path: Path,
+    R0: float = 10.0,
+    a: float = 1.0,
+    nfp: int = 5,
+    nrho: int = 17,
+    ntheta: int = 33,
+    nzeta: int = 16,
+):
+    """Create a mock chartmap.nc file for testing wall area calculation.
+
+    Creates a simple torus with major radius R0 and minor radius a.
+    The analytic surface area is A = 4 * pi^2 * R0 * a.
+
+    Args:
+        path: Output file path
+        R0: Major radius in meters
+        a: Minor radius in meters
+        nfp: Number of field periods
+        nrho: Number of radial grid points
+        ntheta: Number of poloidal grid points
+        nzeta: Number of toroidal grid points per field period
+    """
+    rho = np.linspace(0, 1, nrho)
+    theta = np.linspace(0, 2*np.pi, ntheta, endpoint=False)
+    zeta = np.linspace(0, 2*np.pi/nfp, nzeta, endpoint=False)
+
+    # Create coordinates: x, y, z on (rho, theta, zeta) grid
+    # File stores as (zeta, theta, rho) transposed
+    x = np.zeros((nrho, ntheta, nzeta))
+    y = np.zeros((nrho, ntheta, nzeta))
+    z = np.zeros((nrho, ntheta, nzeta))
+
+    for ir, r in enumerate(rho):
+        for it, th in enumerate(theta):
+            for iz, ze in enumerate(zeta):
+                R = R0 + r * a * np.cos(th)
+                x[ir, it, iz] = R * np.cos(ze) * 100  # cm
+                y[ir, it, iz] = R * np.sin(ze) * 100  # cm
+                z[ir, it, iz] = r * a * np.sin(th) * 100  # cm
+
+    with nc.Dataset(path, 'w', format='NETCDF4') as ds:
+        ds.createDimension('rho', nrho)
+        ds.createDimension('theta', ntheta)
+        ds.createDimension('zeta', nzeta)
+
+        v_rho = ds.createVariable('rho', 'f8', ('rho',))
+        v_theta = ds.createVariable('theta', 'f8', ('theta',))
+        v_zeta = ds.createVariable('zeta', 'f8', ('zeta',))
+        v_x = ds.createVariable('x', 'f8', ('zeta', 'theta', 'rho'))
+        v_y = ds.createVariable('y', 'f8', ('zeta', 'theta', 'rho'))
+        v_z = ds.createVariable('z', 'f8', ('zeta', 'theta', 'rho'))
+        v_nfp = ds.createVariable('num_field_periods', 'i4')
+
+        v_x.units = 'cm'
+        v_y.units = 'cm'
+        v_z.units = 'cm'
+
+        v_rho[:] = rho
+        v_theta[:] = theta
+        v_zeta[:] = zeta
+        v_x[:] = np.transpose(x, (2, 1, 0))
+        v_y[:] = np.transpose(y, (2, 1, 0))
+        v_z[:] = np.transpose(z, (2, 1, 0))
+        v_nfp.assignValue(nfp)
+
+
+@pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
+class TestWallAreaCalculation:
+    """Tests for wall area calculation from chartmap."""
+
+    def test_simple_torus_area(self, tmp_path: Path):
+        """Test wall area for simple torus matches analytic formula."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        create_mock_chartmap_nc(chartmap_path)
+
+        # Compute area from chartmap
+        area = compute_wall_area_from_chartmap(chartmap_path)
+
+        # Analytic torus area: A = 4 * pi^2 * R0 * a
+        R0, a = 10.0, 1.0  # meters (same as in mock)
+        expected_area = 4 * np.pi**2 * R0 * a
+
+        # Should match within ~5% (discretization error)
+        assert area == pytest.approx(expected_area, rel=0.05)
+
+    def test_area_positive(self, tmp_path: Path):
+        """Test that computed area is positive and reasonable."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        create_mock_chartmap_nc(chartmap_path)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+
+        assert area > 0
+        # For R0=10m, a=1m: A ~ 4*pi^2*10*1 ~ 395 m^2
+        assert 300 < area < 500
+
+    def test_heatmap_uses_chartmap_area(self, tmp_path: Path, mock_results_file: Path):
+        """Test that WallHeatMap uses chartmap area when provided."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        create_mock_chartmap_nc(chartmap_path)
+
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file,
+            total_alpha_power_MW=TEST_ALPHA_POWER_MW,
+            chartmap_file=chartmap_path,
+        )
+
+        # Should use chartmap area, not torus approximation
+        R0, a = 10.0, 1.0
+        expected_area = 4 * np.pi**2 * R0 * a
+        assert heat_map.wall_area == pytest.approx(expected_area, rel=0.05)
+
+    def test_single_field_period(self, tmp_path: Path):
+        """Test wall area with nfp=1 (full torus in one period)."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        R0, a = 5.0, 0.5
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=1, nzeta=32)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+        expected_area = 4 * np.pi**2 * R0 * a
+
+        assert area == pytest.approx(expected_area, rel=0.05)
+
+    def test_high_field_periods(self, tmp_path: Path):
+        """Test wall area with many field periods (typical stellarator)."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        R0, a = 8.0, 0.8
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=10, nzeta=16)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+        expected_area = 4 * np.pi**2 * R0 * a
+
+        # With more field periods, less zeta coverage, expect slightly larger error
+        assert area == pytest.approx(expected_area, rel=0.08)
+
+    def test_high_aspect_ratio(self, tmp_path: Path):
+        """Test wall area with high aspect ratio (R0 >> a)."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        R0, a = 100.0, 1.0  # Aspect ratio = 100
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=5)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+        expected_area = 4 * np.pi**2 * R0 * a  # ~3948 m^2
+
+        assert area == pytest.approx(expected_area, rel=0.05)
+
+    def test_low_aspect_ratio(self, tmp_path: Path):
+        """Test wall area with low aspect ratio (R0 ~ 3*a, typical tokamak)."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        R0, a = 3.0, 1.0  # Aspect ratio = 3
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=1, nzeta=64)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+        expected_area = 4 * np.pi**2 * R0 * a  # ~118 m^2
+
+        assert area == pytest.approx(expected_area, rel=0.05)
+
+    def test_fine_grid_convergence(self, tmp_path: Path):
+        """Test that finer grid gives more accurate area."""
+        R0, a = 10.0, 1.0
+        expected_area = 4 * np.pi**2 * R0 * a
+
+        # Coarse grid
+        coarse_path = tmp_path / "coarse.nc"
+        create_mock_chartmap_nc(coarse_path, R0=R0, a=a, nfp=5, ntheta=17, nzeta=8)
+        area_coarse = compute_wall_area_from_chartmap(coarse_path)
+
+        # Fine grid
+        fine_path = tmp_path / "fine.nc"
+        create_mock_chartmap_nc(fine_path, R0=R0, a=a, nfp=5, ntheta=65, nzeta=32)
+        area_fine = compute_wall_area_from_chartmap(fine_path)
+
+        # Fine grid should be closer to exact value
+        error_coarse = abs(area_coarse - expected_area) / expected_area
+        error_fine = abs(area_fine - expected_area) / expected_area
+        assert error_fine < error_coarse
+
+    def test_reactor_scale(self, tmp_path: Path):
+        """Test wall area at reactor scale (ITER-like dimensions)."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        R0, a = 6.2, 2.0  # ITER-like: R0=6.2m, a=2m
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=1, nzeta=64)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+        expected_area = 4 * np.pi**2 * R0 * a  # ~489 m^2
+
+        assert area == pytest.approx(expected_area, rel=0.05)
+
+    def test_small_device(self, tmp_path: Path):
+        """Test wall area for small device (W7-X scale)."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        R0, a = 5.5, 0.53  # W7-X: R0=5.5m, a=0.53m
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=5)
+
+        area = compute_wall_area_from_chartmap(chartmap_path)
+        expected_area = 4 * np.pi**2 * R0 * a  # ~115 m^2
+
+        assert area == pytest.approx(expected_area, rel=0.05)

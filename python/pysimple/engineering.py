@@ -84,6 +84,187 @@ except ImportError:
     HAS_NETCDF4 = False
 
 
+def compute_wall_area_from_chartmap(chartmap_file: str | Path) -> float:
+    """
+    Compute actual wall surface area from chartmap NetCDF file.
+
+    The chartmap contains Cartesian coordinates (x, y, z) on a grid of
+    (rho, theta, zeta). The wall surface is at rho=1 (last index).
+
+    Surface area is computed as:
+        A = n_fp * integral |dr/dtheta x dr/dzeta| dtheta dzeta
+
+    where the cross product magnitude gives the local surface element.
+
+    Args:
+        chartmap_file: Path to chartmap NetCDF file
+
+    Returns:
+        Total wall surface area in m^2
+
+    Note:
+        This gives the actual 3D shaped stellarator wall area, which can be
+        1.5-2x larger than the simple torus approximation 4*pi^2*R*a.
+    """
+    if not HAS_NETCDF4:
+        raise ImportError("netCDF4 required: pip install netCDF4")
+
+    with nc.Dataset(chartmap_file, 'r') as ds:
+        # Coordinates (theta and zeta are 1D, x/y/z are 3D)
+        theta = ds.variables['theta'][:]
+        zeta = ds.variables['zeta'][:]
+        nfp = int(ds.variables['num_field_periods'][...])
+
+        # Get boundary surface: x, y, z at rho=-1 (last index)
+        # File dims are (zeta, theta, rho), boundary is rho=-1
+        x_wall = ds.variables['x'][:, :, -1]  # shape (nzeta, ntheta)
+        y_wall = ds.variables['y'][:, :, -1]
+        z_wall = ds.variables['z'][:, :, -1]
+
+    # Convert from cm to m
+    x_wall = x_wall * 0.01
+    y_wall = y_wall * 0.01
+    z_wall = z_wall * 0.01
+
+    nzeta, ntheta = x_wall.shape
+    dtheta = theta[1] - theta[0] if len(theta) > 1 else 2 * np.pi
+    dzeta = zeta[1] - zeta[0] if len(zeta) > 1 else 2 * np.pi / nfp
+
+    # Compute surface element |dr/dtheta x dr/dzeta| at each grid point
+    # Use central differences for interior, one-sided at boundaries
+    # Note: theta is periodic (wraps), but zeta may not wrap if data is for
+    # one field period only (Cartesian x,y are not periodic in zeta within
+    # a single field period - they rotate by 2*pi/nfp between periods)
+    area = 0.0
+    for iz in range(nzeta):
+        for it in range(ntheta):
+            # Theta: periodic, always use central difference with wrapping
+            it_p = (it + 1) % ntheta
+            it_m = (it - 1) % ntheta
+            dr_dtheta = np.array([
+                (x_wall[iz, it_p] - x_wall[iz, it_m]) / (2 * dtheta),
+                (y_wall[iz, it_p] - y_wall[iz, it_m]) / (2 * dtheta),
+                (z_wall[iz, it_p] - z_wall[iz, it_m]) / (2 * dtheta),
+            ])
+
+            # Zeta: use one-sided differences at boundaries
+            # (Cartesian coords don't wrap within one field period)
+            if iz == 0:
+                # Forward difference at left boundary
+                dr_dzeta = np.array([
+                    (x_wall[1, it] - x_wall[0, it]) / dzeta,
+                    (y_wall[1, it] - y_wall[0, it]) / dzeta,
+                    (z_wall[1, it] - z_wall[0, it]) / dzeta,
+                ])
+            elif iz == nzeta - 1:
+                # Backward difference at right boundary
+                dr_dzeta = np.array([
+                    (x_wall[iz, it] - x_wall[iz - 1, it]) / dzeta,
+                    (y_wall[iz, it] - y_wall[iz - 1, it]) / dzeta,
+                    (z_wall[iz, it] - z_wall[iz - 1, it]) / dzeta,
+                ])
+            else:
+                # Central difference for interior
+                dr_dzeta = np.array([
+                    (x_wall[iz + 1, it] - x_wall[iz - 1, it]) / (2 * dzeta),
+                    (y_wall[iz + 1, it] - y_wall[iz - 1, it]) / (2 * dzeta),
+                    (z_wall[iz + 1, it] - z_wall[iz - 1, it]) / (2 * dzeta),
+                ])
+
+            # Cross product magnitude = surface element
+            cross = np.cross(dr_dtheta, dr_dzeta)
+            area += np.sqrt(np.sum(cross**2)) * dtheta * dzeta
+
+    # Multiply by number of field periods to get full torus
+    return float(area * nfp)
+
+
+def compute_bin_areas_from_chartmap(
+    chartmap_file: str | Path,
+    theta_edges: np.ndarray,
+    zeta_edges: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute actual area of each (theta, zeta) bin from chartmap geometry.
+
+    This properly accounts for the 3D stellarator shape rather than using
+    a uniform area approximation.
+
+    Args:
+        chartmap_file: Path to chartmap NetCDF file
+        theta_edges: Bin edges for poloidal angle (n_theta + 1)
+        zeta_edges: Bin edges for toroidal angle (n_zeta + 1)
+
+    Returns:
+        bin_areas: Array of shape (n_theta, n_zeta) with area in m^2 per bin
+    """
+    if not HAS_NETCDF4:
+        raise ImportError("netCDF4 required: pip install netCDF4")
+
+    with nc.Dataset(chartmap_file, 'r') as ds:
+        theta = ds.variables['theta'][:]
+        zeta = ds.variables['zeta'][:]
+        nfp = int(ds.variables['num_field_periods'][...])
+
+        x_wall = ds.variables['x'][:, :, -1] * 0.01  # cm -> m
+        y_wall = ds.variables['y'][:, :, -1] * 0.01
+        z_wall = ds.variables['z'][:, :, -1] * 0.01
+
+    nzeta_cm, ntheta_cm = x_wall.shape
+    dtheta_cm = theta[1] - theta[0] if len(theta) > 1 else 2 * np.pi
+    dzeta_cm = zeta[1] - zeta[0] if len(zeta) > 1 else 2 * np.pi / nfp
+
+    # Compute surface element at each chartmap grid point
+    surface_element = np.zeros((nzeta_cm, ntheta_cm))
+    for iz in range(nzeta_cm):
+        iz_p = (iz + 1) % nzeta_cm
+        iz_m = (iz - 1) % nzeta_cm
+        for it in range(ntheta_cm):
+            it_p = (it + 1) % ntheta_cm
+            it_m = (it - 1) % ntheta_cm
+
+            dr_dtheta = np.array([
+                (x_wall[iz, it_p] - x_wall[iz, it_m]) / (2 * dtheta_cm),
+                (y_wall[iz, it_p] - y_wall[iz, it_m]) / (2 * dtheta_cm),
+                (z_wall[iz, it_p] - z_wall[iz, it_m]) / (2 * dtheta_cm),
+            ])
+            dr_dzeta = np.array([
+                (x_wall[iz_p, it] - x_wall[iz_m, it]) / (2 * dzeta_cm),
+                (y_wall[iz_p, it] - y_wall[iz_m, it]) / (2 * dzeta_cm),
+                (z_wall[iz_p, it] - z_wall[iz_m, it]) / (2 * dzeta_cm),
+            ])
+            cross = np.cross(dr_dtheta, dr_dzeta)
+            surface_element[iz, it] = np.sqrt(np.sum(cross**2))
+
+    # Integrate surface element over each output bin
+    n_theta = len(theta_edges) - 1
+    n_zeta = len(zeta_edges) - 1
+    bin_areas = np.zeros((n_theta, n_zeta))
+
+    for i_theta in range(n_theta):
+        th_min, th_max = theta_edges[i_theta], theta_edges[i_theta + 1]
+        for i_zeta in range(n_zeta):
+            ze_min, ze_max = zeta_edges[i_zeta], zeta_edges[i_zeta + 1]
+
+            # Find chartmap grid points in this bin and sum their contributions
+            area_sum = 0.0
+            for iz in range(nzeta_cm):
+                zeta_val = zeta[iz]
+                # Handle periodicity: zeta in [0, 2pi/nfp)
+                if not (ze_min <= zeta_val < ze_max):
+                    continue
+                for it in range(ntheta_cm):
+                    theta_val = theta[it]
+                    # Handle periodicity: theta in [-pi, pi) or [0, 2pi)
+                    if not (th_min <= theta_val < th_max):
+                        continue
+                    area_sum += surface_element[iz, it] * dtheta_cm * dzeta_cm
+
+            bin_areas[i_theta, i_zeta] = area_sum * nfp
+
+    return bin_areas
+
+
 @dataclass
 class WallHeatMap:
     """
@@ -144,12 +325,13 @@ class WallHeatMap:
         n_zeta: int = 128,
         major_radius: float = 1000.0,
         minor_radius: float = 100.0,
+        chartmap_file: Optional[str | Path] = None,
     ) -> "WallHeatMap":
         """
         Load results from NetCDF and compute heat flux distribution.
 
         The heat flux is computed using the Monte Carlo approach:
-            q_bin = (n_bin / n_total) * P_alpha / A_bin
+            q_bin = sum(p_i^2 for i in bin) * (P_alpha / N_total) / A_bin
 
         This requires the user to specify total_alpha_power_MW based on the
         plasma scenario. For D-T fusion: P_alpha = P_fusion / 5.
@@ -160,18 +342,27 @@ class WallHeatMap:
                 For D-T: P_alpha = P_fusion / 5. E.g., 3 GW fusion -> 600 MW.
             n_theta: Number of poloidal bins
             n_zeta: Number of toroidal bins
-            major_radius: Major radius in cm (for wall area calculation)
-            minor_radius: Minor radius in cm (for wall area calculation)
+            major_radius: Major radius in cm (for torus wall area approximation)
+            minor_radius: Minor radius in cm (for torus wall area approximation)
+            chartmap_file: Optional path to chartmap NetCDF for actual wall geometry.
+                If provided, uses real 3D surface area from metric tensor instead
+                of simple torus approximation.
 
         Returns:
             WallHeatMap with physically-scaled heat flux in MW/m^2
 
         Example:
-            # 3 GW fusion reactor -> 600 MW alpha power
+            # With actual wall geometry from chartmap
             heat_map = WallHeatMap.from_netcdf(
                 "results.nc",
                 total_alpha_power_MW=600.0,
+                chartmap_file="wout.chartmap.nc",
             )
+
+        Note:
+            Guiding center limitation: The reported wall positions are guiding
+            center positions, not actual wall impact points. For 3.5 MeV alphas,
+            the gyroradius is ~5-10 cm, which smears the heat load pattern.
         """
         if not HAS_NETCDF4:
             raise ImportError("netCDF4 required: pip install netCDF4")
@@ -191,12 +382,15 @@ class WallHeatMap:
         lost_mask = class_lost
         n_lost = int(np.sum(lost_mask))
 
-        # Wall area: A = 4 * pi^2 * R0 * a (torus surface area)
-        # Convert cm to m: * 1e-4
-        wall_area_m2 = 4 * np.pi**2 * major_radius * minor_radius * 1e-4
-
         theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
         zeta_edges = np.linspace(0, 2 * np.pi, n_zeta + 1)
+
+        # Compute wall area: use chartmap if provided, else torus approximation
+        if chartmap_file is not None:
+            wall_area_m2 = compute_wall_area_from_chartmap(chartmap_file)
+        else:
+            # Simple torus: A = 4 * pi^2 * R0 * a, convert cm to m
+            wall_area_m2 = 4 * np.pi**2 * major_radius * minor_radius * 1e-4
 
         if n_lost == 0:
             return cls(
