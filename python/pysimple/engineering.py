@@ -1,0 +1,660 @@
+"""
+Engineering tools for wall heat load analysis and port optimization.
+
+This module provides:
+- WallHeatMap: Bin particle wall hits to heat flux (MW/m^2)
+- PortOptimizer: Optimize port placement to minimize heat exposure
+- Visualization: 3D heat flux plots via PyVista
+
+Example:
+    from pysimple.engineering import WallHeatMap, PortOptimizer
+
+    heat_map = WallHeatMap.from_netcdf("results.nc")
+    print(f"Peak flux: {heat_map.peak_flux:.2f} MW/m^2")
+
+    opt = PortOptimizer(heat_map)
+    opt.add_port("NBI", theta_width=0.3, zeta_width=0.2)
+    result = opt.solve()
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+
+try:
+    import netCDF4 as nc
+    HAS_NETCDF4 = True
+except ImportError:
+    HAS_NETCDF4 = False
+
+
+@dataclass
+class WallHeatMap:
+    """
+    Wall heat flux distribution from SIMPLE particle tracing results.
+
+    Bins lost particles by their wall hit location (theta, zeta) and computes
+    heat flux in MW/m^2 based on particle energy and wall area.
+
+    Attributes:
+        theta_edges: Bin edges for poloidal angle (rad)
+        zeta_edges: Bin edges for toroidal angle (rad)
+        flux_grid: Heat flux in MW/m^2, shape (n_theta, n_zeta)
+        hit_count: Number of particles per bin
+        total_power: Total deposited power in MW
+        particle_energy_eV: Energy per particle in eV
+        n_lost: Number of lost particles
+        n_total: Total number of particles traced
+        trace_time: Tracing time in seconds
+    """
+
+    theta_edges: np.ndarray
+    zeta_edges: np.ndarray
+    flux_grid: np.ndarray
+    hit_count: np.ndarray
+    total_power: float
+    particle_energy_eV: float
+    n_lost: int
+    n_total: int
+    trace_time: float
+    wall_area: float = 0.0
+    major_radius: float = 0.0
+    minor_radius: float = 0.0
+    _wall_positions: Optional[np.ndarray] = field(default=None, repr=False)
+    _loss_times: Optional[np.ndarray] = field(default=None, repr=False)
+
+    @classmethod
+    def from_netcdf(
+        cls,
+        results_file: str | Path,
+        n_theta: int = 64,
+        n_zeta: int = 128,
+        particle_energy_eV: float = 3.5e6,
+        major_radius: float = 1000.0,
+        minor_radius: float = 100.0,
+    ) -> "WallHeatMap":
+        """
+        Load results from NetCDF and compute heat flux distribution.
+
+        Args:
+            results_file: Path to results.nc from SIMPLE
+            n_theta: Number of poloidal bins
+            n_zeta: Number of toroidal bins
+            particle_energy_eV: Alpha particle energy (default 3.5 MeV)
+            major_radius: Major radius in cm (for area calculation)
+            minor_radius: Minor radius in cm (for area calculation)
+
+        Returns:
+            WallHeatMap with binned heat flux data
+        """
+        if not HAS_NETCDF4:
+            raise ImportError("netCDF4 required: pip install netCDF4")
+
+        results_file = Path(results_file)
+        if not results_file.exists():
+            raise FileNotFoundError(f"Results file not found: {results_file}")
+
+        with nc.Dataset(results_file, 'r') as ds:
+            zend = ds.variables['zend'][:]
+            xend_cart = ds.variables['xend_cart'][:]
+            class_lost = ds.variables['class_lost'][:].astype(bool)
+            times_lost = ds.variables['times_lost'][:]
+            trace_time = float(ds.trace_time)
+            n_total = int(ds.ntestpart)
+
+        lost_mask = class_lost
+        n_lost = int(np.sum(lost_mask))
+
+        if n_lost == 0:
+            theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
+            zeta_edges = np.linspace(0, 2 * np.pi, n_zeta + 1)
+            return cls(
+                theta_edges=theta_edges,
+                zeta_edges=zeta_edges,
+                flux_grid=np.zeros((n_theta, n_zeta)),
+                hit_count=np.zeros((n_theta, n_zeta), dtype=int),
+                total_power=0.0,
+                particle_energy_eV=particle_energy_eV,
+                n_lost=0,
+                n_total=n_total,
+                trace_time=trace_time,
+                major_radius=major_radius,
+                minor_radius=minor_radius,
+            )
+
+        theta_lost = zend[1, lost_mask]
+        zeta_lost = zend[2, lost_mask]
+        wall_positions = xend_cart[:, lost_mask]
+        loss_times = times_lost[lost_mask]
+
+        theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
+        zeta_edges = np.linspace(0, 2 * np.pi, n_zeta + 1)
+
+        hit_count, _, _ = np.histogram2d(
+            theta_lost, zeta_lost,
+            bins=[theta_edges, zeta_edges]
+        )
+        hit_count = hit_count.astype(int)
+
+        wall_area = 4 * np.pi**2 * major_radius * minor_radius * 1e-4
+        bin_area = wall_area / (n_theta * n_zeta)
+
+        eV_to_J = 1.602e-19
+        particle_energy_J = particle_energy_eV * eV_to_J
+        total_energy_J = n_lost * particle_energy_J
+        total_power_W = total_energy_J / trace_time
+        total_power_MW = total_power_W * 1e-6
+
+        power_per_particle_MW = total_power_MW / n_lost if n_lost > 0 else 0
+        flux_grid = hit_count * power_per_particle_MW / bin_area
+
+        return cls(
+            theta_edges=theta_edges,
+            zeta_edges=zeta_edges,
+            flux_grid=flux_grid,
+            hit_count=hit_count,
+            total_power=total_power_MW,
+            particle_energy_eV=particle_energy_eV,
+            n_lost=n_lost,
+            n_total=n_total,
+            trace_time=trace_time,
+            wall_area=wall_area,
+            major_radius=major_radius,
+            minor_radius=minor_radius,
+            _wall_positions=wall_positions,
+            _loss_times=loss_times,
+        )
+
+    @property
+    def theta_centers(self) -> np.ndarray:
+        """Bin centers for poloidal angle."""
+        return 0.5 * (self.theta_edges[:-1] + self.theta_edges[1:])
+
+    @property
+    def zeta_centers(self) -> np.ndarray:
+        """Bin centers for toroidal angle."""
+        return 0.5 * (self.zeta_edges[:-1] + self.zeta_edges[1:])
+
+    @property
+    def peak_flux(self) -> float:
+        """Maximum heat flux in MW/m^2."""
+        return float(np.max(self.flux_grid))
+
+    @property
+    def mean_flux(self) -> float:
+        """Mean heat flux over non-zero bins in MW/m^2."""
+        nonzero = self.flux_grid[self.flux_grid > 0]
+        return float(np.mean(nonzero)) if len(nonzero) > 0 else 0.0
+
+    @property
+    def loss_fraction(self) -> float:
+        """Fraction of particles lost to wall."""
+        return self.n_lost / self.n_total if self.n_total > 0 else 0.0
+
+    def flux_at(self, theta: float, zeta: float) -> float:
+        """Get heat flux at specific (theta, zeta) location."""
+        i_theta = np.searchsorted(self.theta_edges, theta) - 1
+        i_zeta = np.searchsorted(self.zeta_edges, zeta) - 1
+        i_theta = np.clip(i_theta, 0, len(self.theta_centers) - 1)
+        i_zeta = np.clip(i_zeta, 0, len(self.zeta_centers) - 1)
+        return float(self.flux_grid[i_theta, i_zeta])
+
+    def integrated_flux_in_region(
+        self,
+        theta_min: float,
+        theta_max: float,
+        zeta_min: float,
+        zeta_max: float,
+    ) -> float:
+        """Compute total power deposited in a region (MW)."""
+        theta_mask = (self.theta_centers >= theta_min) & \
+                     (self.theta_centers <= theta_max)
+        zeta_mask = (self.zeta_centers >= zeta_min) & \
+                    (self.zeta_centers <= zeta_max)
+        region_hits = self.hit_count[np.ix_(theta_mask, zeta_mask)]
+        fraction = np.sum(region_hits) / self.n_lost if self.n_lost > 0 else 0
+        return self.total_power * fraction
+
+    def summary(self) -> str:
+        """Return a summary string."""
+        return (
+            f"WallHeatMap: {self.n_lost}/{self.n_total} particles lost "
+            f"({100*self.loss_fraction:.1f}%)\n"
+            f"  Total power: {self.total_power:.3f} MW\n"
+            f"  Peak flux: {self.peak_flux:.3f} MW/m^2\n"
+            f"  Mean flux: {self.mean_flux:.3f} MW/m^2\n"
+            f"  Wall area: {self.wall_area:.1f} m^2"
+        )
+
+    def __repr__(self) -> str:
+        return self.summary()
+
+
+@dataclass
+class Port:
+    """A port or component on the wall surface."""
+
+    name: str
+    theta_center: float
+    zeta_center: float
+    theta_width: float
+    zeta_width: float
+
+    @property
+    def theta_min(self) -> float:
+        return self.theta_center - self.theta_width / 2
+
+    @property
+    def theta_max(self) -> float:
+        return self.theta_center + self.theta_width / 2
+
+    @property
+    def zeta_min(self) -> float:
+        return self.zeta_center - self.zeta_width / 2
+
+    @property
+    def zeta_max(self) -> float:
+        return self.zeta_center + self.zeta_width / 2
+
+
+@dataclass
+class OptimizationResult:
+    """Result of port placement optimization."""
+
+    ports: list[Port]
+    total_flux_on_ports: float
+    max_flux_on_ports: float
+    success: bool
+    message: str
+
+    def __repr__(self) -> str:
+        lines = [f"OptimizationResult(success={self.success})"]
+        lines.append(f"  Max flux on ports: {self.max_flux_on_ports:.3f} MW/m^2")
+        lines.append(f"  Total flux on ports: {self.total_flux_on_ports:.3f} MW")
+        for port in self.ports:
+            lines.append(
+                f"  {port.name}: theta={port.theta_center:.2f}, "
+                f"zeta={port.zeta_center:.2f}"
+            )
+        return "\n".join(lines)
+
+
+class PortOptimizer:
+    """
+    Optimize port placement to minimize heat flux exposure.
+
+    Example:
+        opt = PortOptimizer(heat_map)
+        opt.add_port("NBI_1", theta_width=0.3, zeta_width=0.2)
+        opt.set_max_flux_constraint(0.5)  # MW/m^2
+        result = opt.solve()
+    """
+
+    def __init__(self, heat_map: WallHeatMap):
+        self.heat_map = heat_map
+        self._ports: list[dict] = []
+        self._exclusion_zones: list[tuple[float, float, float, float]] = []
+        self._max_flux_constraint: Optional[float] = None
+
+    def add_port(
+        self,
+        name: str,
+        theta_width: float,
+        zeta_width: float,
+        theta_init: Optional[float] = None,
+        zeta_init: Optional[float] = None,
+    ) -> "PortOptimizer":
+        """
+        Add a port to optimize.
+
+        Args:
+            name: Port identifier
+            theta_width: Poloidal extent in radians
+            zeta_width: Toroidal extent in radians
+            theta_init: Initial theta position (optional)
+            zeta_init: Initial zeta position (optional)
+        """
+        self._ports.append({
+            "name": name,
+            "theta_width": theta_width,
+            "zeta_width": zeta_width,
+            "theta_init": theta_init,
+            "zeta_init": zeta_init,
+        })
+        return self
+
+    def add_exclusion_zone(
+        self,
+        theta_min: float,
+        theta_max: float,
+        zeta_min: float = 0.0,
+        zeta_max: float = 2 * np.pi,
+    ) -> "PortOptimizer":
+        """Add a region where ports cannot be placed."""
+        self._exclusion_zones.append((theta_min, theta_max, zeta_min, zeta_max))
+        return self
+
+    def set_max_flux_constraint(self, max_flux: float) -> "PortOptimizer":
+        """Set maximum allowed flux on any port (MW/m^2)."""
+        self._max_flux_constraint = max_flux
+        return self
+
+    def _objective(self, x: np.ndarray) -> float:
+        """Objective: minimize total flux on all ports."""
+        total = 0.0
+        for i, port_spec in enumerate(self._ports):
+            theta_c = x[2 * i]
+            zeta_c = x[2 * i + 1]
+            theta_w = port_spec["theta_width"]
+            zeta_w = port_spec["zeta_width"]
+            flux = self.heat_map.integrated_flux_in_region(
+                theta_c - theta_w / 2, theta_c + theta_w / 2,
+                zeta_c - zeta_w / 2, zeta_c + zeta_w / 2,
+            )
+            total += flux
+        return total
+
+    def _in_exclusion_zone(self, theta: float, zeta: float) -> bool:
+        """Check if point is in any exclusion zone."""
+        for t_min, t_max, z_min, z_max in self._exclusion_zones:
+            if t_min <= theta <= t_max and z_min <= zeta <= z_max:
+                return True
+        return False
+
+    def solve(self, method: str = "differential_evolution") -> OptimizationResult:
+        """
+        Solve the port placement optimization.
+
+        Args:
+            method: Optimization method (differential_evolution or minimize)
+
+        Returns:
+            OptimizationResult with optimized port positions
+        """
+        try:
+            from scipy.optimize import differential_evolution, minimize
+        except ImportError:
+            raise ImportError("scipy required for optimization: pip install scipy")
+
+        if not self._ports:
+            return OptimizationResult(
+                ports=[],
+                total_flux_on_ports=0.0,
+                max_flux_on_ports=0.0,
+                success=True,
+                message="No ports to optimize",
+            )
+
+        bounds, x0 = self._build_optimization_bounds()
+        x_opt, success, message = self._run_optimizer(method, bounds, x0)
+        return self._build_result(x_opt, success, message)
+
+    def _build_optimization_bounds(self) -> tuple[list, list]:
+        """Build bounds and initial guess for optimizer."""
+        bounds = []
+        x0 = []
+
+        for port_spec in self._ports:
+            theta_w = port_spec["theta_width"]
+            zeta_w = port_spec["zeta_width"]
+            theta_init = port_spec["theta_init"] or 0.0
+            zeta_init = port_spec["zeta_init"] or np.pi
+
+            bounds.append((-np.pi + theta_w / 2, np.pi - theta_w / 2))
+            bounds.append((zeta_w / 2, 2 * np.pi - zeta_w / 2))
+            x0.extend([theta_init, zeta_init])
+
+        return bounds, x0
+
+    def _run_optimizer(
+        self, method: str, bounds: list, x0: list
+    ) -> tuple[np.ndarray, bool, str]:
+        """Run the selected optimization method."""
+        from scipy.optimize import differential_evolution, minimize
+
+        if method == "differential_evolution":
+            result = differential_evolution(
+                self._objective,
+                bounds=bounds,
+                seed=42,
+                maxiter=100,
+                tol=1e-4,
+                polish=True,
+            )
+        else:
+            result = minimize(
+                self._objective,
+                x0=np.array(x0),
+                bounds=bounds,
+                method="L-BFGS-B",
+            )
+
+        return result.x, result.success, str(result.message)
+
+    def _build_result(
+        self, x_opt: np.ndarray, success: bool, message: str
+    ) -> OptimizationResult:
+        """Build OptimizationResult from optimizer output."""
+        ports = []
+        max_flux = 0.0
+        total_flux = 0.0
+
+        for i, port_spec in enumerate(self._ports):
+            port = Port(
+                name=port_spec["name"],
+                theta_center=x_opt[2 * i],
+                zeta_center=x_opt[2 * i + 1],
+                theta_width=port_spec["theta_width"],
+                zeta_width=port_spec["zeta_width"],
+            )
+            ports.append(port)
+
+            flux = self.heat_map.integrated_flux_in_region(
+                port.theta_min, port.theta_max,
+                port.zeta_min, port.zeta_max,
+            )
+            total_flux += flux
+
+            local_max = self._get_max_flux_in_region(
+                port.theta_min, port.theta_max,
+                port.zeta_min, port.zeta_max,
+            )
+            max_flux = max(max_flux, local_max)
+
+        return OptimizationResult(
+            ports=ports,
+            total_flux_on_ports=total_flux,
+            max_flux_on_ports=max_flux,
+            success=success,
+            message=message,
+        )
+
+    def _get_max_flux_in_region(
+        self,
+        theta_min: float,
+        theta_max: float,
+        zeta_min: float,
+        zeta_max: float,
+    ) -> float:
+        """Get maximum flux in a region."""
+        theta_mask = (self.heat_map.theta_centers >= theta_min) & \
+                     (self.heat_map.theta_centers <= theta_max)
+        zeta_mask = (self.heat_map.zeta_centers >= zeta_min) & \
+                    (self.heat_map.zeta_centers <= zeta_max)
+        region_flux = self.heat_map.flux_grid[np.ix_(theta_mask, zeta_mask)]
+        return float(np.max(region_flux)) if region_flux.size > 0 else 0.0
+
+
+def plot_heat_flux_2d(
+    heat_map: WallHeatMap,
+    ax=None,
+    cmap: str = "hot",
+    vmax: Optional[float] = None,
+    show_colorbar: bool = True,
+    ports: Optional[list[Port]] = None,
+):
+    """
+    Plot 2D heat flux distribution in (theta, zeta) coordinates.
+
+    Args:
+        heat_map: WallHeatMap to plot
+        ax: Matplotlib axes (created if None)
+        cmap: Colormap name
+        vmax: Maximum value for colorbar
+        show_colorbar: Whether to show colorbar
+        ports: Optional list of ports to overlay
+
+    Returns:
+        Matplotlib axes
+    """
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+    if vmax is None:
+        vmax = heat_map.peak_flux
+
+    im = ax.pcolormesh(
+        np.degrees(heat_map.zeta_edges),
+        np.degrees(heat_map.theta_edges),
+        heat_map.flux_grid,
+        cmap=cmap,
+        vmin=0,
+        vmax=vmax,
+        shading="flat",
+    )
+
+    if show_colorbar:
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label("Heat flux (MW/m$^2$)")
+
+    ax.set_xlabel("Toroidal angle (degrees)")
+    ax.set_ylabel("Poloidal angle (degrees)")
+    ax.set_title(
+        f"Wall Heat Flux: {heat_map.n_lost} lost, "
+        f"Peak = {heat_map.peak_flux:.2f} MW/m$^2$"
+    )
+
+    if ports:
+        for port in ports:
+            rect = plt.Rectangle(
+                (np.degrees(port.zeta_min), np.degrees(port.theta_min)),
+                np.degrees(port.zeta_width),
+                np.degrees(port.theta_width),
+                fill=False,
+                edgecolor="cyan",
+                linewidth=2,
+                linestyle="--",
+            )
+            ax.add_patch(rect)
+            ax.text(
+                np.degrees(port.zeta_center),
+                np.degrees(port.theta_max) + 5,
+                port.name,
+                ha="center",
+                va="bottom",
+                color="cyan",
+                fontsize=10,
+            )
+
+    return ax
+
+
+def plot_heat_flux_3d(
+    heat_map: WallHeatMap,
+    chartmap_file: Optional[str | Path] = None,
+    cmap: str = "hot",
+    clim: Optional[tuple[float, float]] = None,
+    show: bool = True,
+):
+    """
+    Plot 3D heat flux on wall surface using PyVista.
+
+    Args:
+        heat_map: WallHeatMap to plot
+        chartmap_file: Optional chartmap NetCDF for exact wall geometry
+        cmap: Colormap name
+        clim: Color limits (min, max)
+        show: Whether to display the plot
+
+    Returns:
+        PyVista plotter object
+    """
+    try:
+        import pyvista as pv
+    except ImportError:
+        raise ImportError("pyvista required for 3D plots: pip install pyvista")
+
+    R0 = heat_map.major_radius * 1e-2
+    a = heat_map.minor_radius * 1e-2
+
+    theta = heat_map.theta_centers
+    zeta = heat_map.zeta_centers
+    theta_grid, zeta_grid = np.meshgrid(theta, zeta, indexing='ij')
+
+    R = R0 + a * np.cos(theta_grid)
+    X = R * np.cos(zeta_grid)
+    Y = R * np.sin(zeta_grid)
+    Z = a * np.sin(theta_grid)
+
+    grid = pv.StructuredGrid(X, Y, Z)
+    grid["heat_flux"] = heat_map.flux_grid.flatten(order='F')
+
+    plotter = pv.Plotter()
+    plotter.add_mesh(
+        grid,
+        scalars="heat_flux",
+        cmap=cmap,
+        clim=clim,
+        show_scalar_bar=True,
+        scalar_bar_args={"title": "Heat Flux (MW/m^2)"},
+    )
+    plotter.add_axes()
+    plotter.set_background("white")
+
+    if show:
+        plotter.show()
+
+    return plotter
+
+
+def export_to_vtk(heat_map: WallHeatMap, output_file: str | Path) -> Path:
+    """
+    Export heat flux to VTK file for ParaView visualization.
+
+    Args:
+        heat_map: WallHeatMap to export
+        output_file: Output VTK file path
+
+    Returns:
+        Path to the created VTK file
+    """
+    try:
+        import pyvista as pv
+    except ImportError:
+        raise ImportError("pyvista required for VTK export: pip install pyvista")
+
+    R0 = heat_map.major_radius * 1e-2
+    a = heat_map.minor_radius * 1e-2
+
+    theta = heat_map.theta_centers
+    zeta = heat_map.zeta_centers
+    theta_grid, zeta_grid = np.meshgrid(theta, zeta, indexing='ij')
+
+    R = R0 + a * np.cos(theta_grid)
+    X = R * np.cos(zeta_grid)
+    Y = R * np.sin(zeta_grid)
+    Z = a * np.sin(theta_grid)
+
+    grid = pv.StructuredGrid(X, Y, Z)
+    grid["heat_flux"] = heat_map.flux_grid.flatten(order='F')
+    grid["hit_count"] = heat_map.hit_count.flatten(order='F')
+
+    output_path = Path(output_file)
+    grid.save(str(output_path))
+    return output_path
