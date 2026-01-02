@@ -449,8 +449,8 @@ class TestWallAreaCalculation:
         R0, a = 10.0, 1.0  # meters (same as in mock)
         expected_area = 4 * np.pi**2 * R0 * a
 
-        # Should match within ~5% (discretization error)
-        assert area == pytest.approx(expected_area, rel=0.05)
+        # Should match within 1.5% (numerical discretization error)
+        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_area_positive(self, tmp_path: Path):
         """Test that computed area is positive and reasonable."""
@@ -477,7 +477,7 @@ class TestWallAreaCalculation:
         # Should use chartmap area, not torus approximation
         R0, a = 10.0, 1.0
         expected_area = 4 * np.pi**2 * R0 * a
-        assert heat_map.wall_area == pytest.approx(expected_area, rel=0.05)
+        assert heat_map.wall_area == pytest.approx(expected_area, rel=0.015)
 
     def test_single_field_period(self, tmp_path: Path):
         """Test wall area with nfp=1 (full torus in one period)."""
@@ -488,7 +488,7 @@ class TestWallAreaCalculation:
         area = compute_wall_area_from_chartmap(chartmap_path)
         expected_area = 4 * np.pi**2 * R0 * a
 
-        assert area == pytest.approx(expected_area, rel=0.05)
+        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_high_field_periods(self, tmp_path: Path):
         """Test wall area with many field periods (typical stellarator)."""
@@ -499,8 +499,7 @@ class TestWallAreaCalculation:
         area = compute_wall_area_from_chartmap(chartmap_path)
         expected_area = 4 * np.pi**2 * R0 * a
 
-        # With more field periods, less zeta coverage, expect slightly larger error
-        assert area == pytest.approx(expected_area, rel=0.08)
+        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_high_aspect_ratio(self, tmp_path: Path):
         """Test wall area with high aspect ratio (R0 >> a)."""
@@ -511,7 +510,7 @@ class TestWallAreaCalculation:
         area = compute_wall_area_from_chartmap(chartmap_path)
         expected_area = 4 * np.pi**2 * R0 * a  # ~3948 m^2
 
-        assert area == pytest.approx(expected_area, rel=0.05)
+        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_low_aspect_ratio(self, tmp_path: Path):
         """Test wall area with low aspect ratio (R0 ~ 3*a, typical tokamak)."""
@@ -522,7 +521,7 @@ class TestWallAreaCalculation:
         area = compute_wall_area_from_chartmap(chartmap_path)
         expected_area = 4 * np.pi**2 * R0 * a  # ~118 m^2
 
-        assert area == pytest.approx(expected_area, rel=0.05)
+        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_fine_grid_convergence(self, tmp_path: Path):
         """Test that finer grid gives more accurate area."""
@@ -553,7 +552,7 @@ class TestWallAreaCalculation:
         area = compute_wall_area_from_chartmap(chartmap_path)
         expected_area = 4 * np.pi**2 * R0 * a  # ~489 m^2
 
-        assert area == pytest.approx(expected_area, rel=0.05)
+        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_small_device(self, tmp_path: Path):
         """Test wall area for small device (W7-X scale)."""
@@ -564,4 +563,4 @@ class TestWallAreaCalculation:
         area = compute_wall_area_from_chartmap(chartmap_path)
         expected_area = 4 * np.pi**2 * R0 * a  # ~115 m^2
 
-        assert area == pytest.approx(expected_area, rel=0.05)
+        assert area == pytest.approx(expected_area, rel=0.015)

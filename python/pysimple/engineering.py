@@ -84,6 +84,69 @@ except ImportError:
     HAS_NETCDF4 = False
 
 
+def _compute_surface_element_grid(
+    x_wall: np.ndarray,
+    y_wall: np.ndarray,
+    z_wall: np.ndarray,
+    dtheta: float,
+    dzeta: float,
+) -> np.ndarray:
+    """
+    Compute surface element |dr/dtheta x dr/dzeta| at each grid point.
+
+    Uses central differences for theta (periodic) and zeta interior points.
+    Uses one-sided differences at zeta boundaries because Cartesian
+    coordinates are not periodic within one field period (they rotate).
+
+    Args:
+        x_wall, y_wall, z_wall: Wall coordinates, shape (nzeta, ntheta), in meters
+        dtheta: Grid spacing in theta
+        dzeta: Grid spacing in zeta
+
+    Returns:
+        surface_element: Array of shape (nzeta, ntheta) with |dr/dtheta x dr/dzeta|
+    """
+    nzeta, ntheta = x_wall.shape
+    surface_element = np.zeros((nzeta, ntheta))
+
+    for iz in range(nzeta):
+        for it in range(ntheta):
+            # Theta: periodic, use central difference with wrapping
+            it_p = (it + 1) % ntheta
+            it_m = (it - 1) % ntheta
+            dr_dtheta = np.array([
+                (x_wall[iz, it_p] - x_wall[iz, it_m]) / (2 * dtheta),
+                (y_wall[iz, it_p] - y_wall[iz, it_m]) / (2 * dtheta),
+                (z_wall[iz, it_p] - z_wall[iz, it_m]) / (2 * dtheta),
+            ])
+
+            # Zeta: one-sided differences at boundaries
+            # (Cartesian coords rotate by 2*pi/nfp, not periodic in one period)
+            if iz == 0:
+                dr_dzeta = np.array([
+                    (x_wall[1, it] - x_wall[0, it]) / dzeta,
+                    (y_wall[1, it] - y_wall[0, it]) / dzeta,
+                    (z_wall[1, it] - z_wall[0, it]) / dzeta,
+                ])
+            elif iz == nzeta - 1:
+                dr_dzeta = np.array([
+                    (x_wall[iz, it] - x_wall[iz - 1, it]) / dzeta,
+                    (y_wall[iz, it] - y_wall[iz - 1, it]) / dzeta,
+                    (z_wall[iz, it] - z_wall[iz - 1, it]) / dzeta,
+                ])
+            else:
+                dr_dzeta = np.array([
+                    (x_wall[iz + 1, it] - x_wall[iz - 1, it]) / (2 * dzeta),
+                    (y_wall[iz + 1, it] - y_wall[iz - 1, it]) / (2 * dzeta),
+                    (z_wall[iz + 1, it] - z_wall[iz - 1, it]) / (2 * dzeta),
+                ])
+
+            cross = np.cross(dr_dtheta, dr_dzeta)
+            surface_element[iz, it] = np.sqrt(np.sum(cross**2))
+
+    return surface_element
+
+
 def compute_wall_area_from_chartmap(chartmap_file: str | Path) -> float:
     """
     Compute actual wall surface area from chartmap NetCDF file.
@@ -92,9 +155,8 @@ def compute_wall_area_from_chartmap(chartmap_file: str | Path) -> float:
     (rho, theta, zeta). The wall surface is at rho=1 (last index).
 
     Surface area is computed as:
-        A = n_fp * integral |dr/dtheta x dr/dzeta| dtheta dzeta
-
-    where the cross product magnitude gives the local surface element.
+        A_per_period = integral |dr/dtheta x dr/dzeta| dtheta dzeta
+        A_total = n_fp * A_per_period
 
     Args:
         chartmap_file: Path to chartmap NetCDF file
@@ -110,73 +172,23 @@ def compute_wall_area_from_chartmap(chartmap_file: str | Path) -> float:
         raise ImportError("netCDF4 required: pip install netCDF4")
 
     with nc.Dataset(chartmap_file, 'r') as ds:
-        # Coordinates (theta and zeta are 1D, x/y/z are 3D)
         theta = ds.variables['theta'][:]
         zeta = ds.variables['zeta'][:]
         nfp = int(ds.variables['num_field_periods'][...])
 
-        # Get boundary surface: x, y, z at rho=-1 (last index)
-        # File dims are (zeta, theta, rho), boundary is rho=-1
-        x_wall = ds.variables['x'][:, :, -1]  # shape (nzeta, ntheta)
-        y_wall = ds.variables['y'][:, :, -1]
-        z_wall = ds.variables['z'][:, :, -1]
-
-    # Convert from cm to m
-    x_wall = x_wall * 0.01
-    y_wall = y_wall * 0.01
-    z_wall = z_wall * 0.01
+        x_wall = ds.variables['x'][:, :, -1] * 0.01  # cm -> m
+        y_wall = ds.variables['y'][:, :, -1] * 0.01
+        z_wall = ds.variables['z'][:, :, -1] * 0.01
 
     nzeta, ntheta = x_wall.shape
     dtheta = theta[1] - theta[0] if len(theta) > 1 else 2 * np.pi
     dzeta = zeta[1] - zeta[0] if len(zeta) > 1 else 2 * np.pi / nfp
 
-    # Compute surface element |dr/dtheta x dr/dzeta| at each grid point
-    # Use central differences for interior, one-sided at boundaries
-    # Note: theta is periodic (wraps), but zeta may not wrap if data is for
-    # one field period only (Cartesian x,y are not periodic in zeta within
-    # a single field period - they rotate by 2*pi/nfp between periods)
-    area = 0.0
-    for iz in range(nzeta):
-        for it in range(ntheta):
-            # Theta: periodic, always use central difference with wrapping
-            it_p = (it + 1) % ntheta
-            it_m = (it - 1) % ntheta
-            dr_dtheta = np.array([
-                (x_wall[iz, it_p] - x_wall[iz, it_m]) / (2 * dtheta),
-                (y_wall[iz, it_p] - y_wall[iz, it_m]) / (2 * dtheta),
-                (z_wall[iz, it_p] - z_wall[iz, it_m]) / (2 * dtheta),
-            ])
+    surface_element = _compute_surface_element_grid(
+        x_wall, y_wall, z_wall, dtheta, dzeta
+    )
 
-            # Zeta: use one-sided differences at boundaries
-            # (Cartesian coords don't wrap within one field period)
-            if iz == 0:
-                # Forward difference at left boundary
-                dr_dzeta = np.array([
-                    (x_wall[1, it] - x_wall[0, it]) / dzeta,
-                    (y_wall[1, it] - y_wall[0, it]) / dzeta,
-                    (z_wall[1, it] - z_wall[0, it]) / dzeta,
-                ])
-            elif iz == nzeta - 1:
-                # Backward difference at right boundary
-                dr_dzeta = np.array([
-                    (x_wall[iz, it] - x_wall[iz - 1, it]) / dzeta,
-                    (y_wall[iz, it] - y_wall[iz - 1, it]) / dzeta,
-                    (z_wall[iz, it] - z_wall[iz - 1, it]) / dzeta,
-                ])
-            else:
-                # Central difference for interior
-                dr_dzeta = np.array([
-                    (x_wall[iz + 1, it] - x_wall[iz - 1, it]) / (2 * dzeta),
-                    (y_wall[iz + 1, it] - y_wall[iz - 1, it]) / (2 * dzeta),
-                    (z_wall[iz + 1, it] - z_wall[iz - 1, it]) / (2 * dzeta),
-                ])
-
-            # Cross product magnitude = surface element
-            cross = np.cross(dr_dtheta, dr_dzeta)
-            area += np.sqrt(np.sum(cross**2)) * dtheta * dzeta
-
-    # Multiply by number of field periods to get full torus
-    return float(area * nfp)
+    return float(np.sum(surface_element) * dtheta * dzeta * nfp)
 
 
 def compute_bin_areas_from_chartmap(
@@ -214,27 +226,10 @@ def compute_bin_areas_from_chartmap(
     dtheta_cm = theta[1] - theta[0] if len(theta) > 1 else 2 * np.pi
     dzeta_cm = zeta[1] - zeta[0] if len(zeta) > 1 else 2 * np.pi / nfp
 
-    # Compute surface element at each chartmap grid point
-    surface_element = np.zeros((nzeta_cm, ntheta_cm))
-    for iz in range(nzeta_cm):
-        iz_p = (iz + 1) % nzeta_cm
-        iz_m = (iz - 1) % nzeta_cm
-        for it in range(ntheta_cm):
-            it_p = (it + 1) % ntheta_cm
-            it_m = (it - 1) % ntheta_cm
-
-            dr_dtheta = np.array([
-                (x_wall[iz, it_p] - x_wall[iz, it_m]) / (2 * dtheta_cm),
-                (y_wall[iz, it_p] - y_wall[iz, it_m]) / (2 * dtheta_cm),
-                (z_wall[iz, it_p] - z_wall[iz, it_m]) / (2 * dtheta_cm),
-            ])
-            dr_dzeta = np.array([
-                (x_wall[iz_p, it] - x_wall[iz_m, it]) / (2 * dzeta_cm),
-                (y_wall[iz_p, it] - y_wall[iz_m, it]) / (2 * dzeta_cm),
-                (z_wall[iz_p, it] - z_wall[iz_m, it]) / (2 * dzeta_cm),
-            ])
-            cross = np.cross(dr_dtheta, dr_dzeta)
-            surface_element[iz, it] = np.sqrt(np.sum(cross**2))
+    # Compute surface element using shared helper (consistent boundary handling)
+    surface_element = _compute_surface_element_grid(
+        x_wall, y_wall, z_wall, dtheta_cm, dzeta_cm
+    )
 
     # Integrate surface element over each output bin
     n_theta = len(theta_edges) - 1
@@ -250,12 +245,10 @@ def compute_bin_areas_from_chartmap(
             area_sum = 0.0
             for iz in range(nzeta_cm):
                 zeta_val = zeta[iz]
-                # Handle periodicity: zeta in [0, 2pi/nfp)
                 if not (ze_min <= zeta_val < ze_max):
                     continue
                 for it in range(ntheta_cm):
                     theta_val = theta[it]
-                    # Handle periodicity: theta in [-pi, pi) or [0, 2pi)
                     if not (th_min <= theta_val < th_max):
                         continue
                     area_sum += surface_element[iz, it] * dtheta_cm * dzeta_cm
