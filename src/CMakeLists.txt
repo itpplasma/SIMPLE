@@ -1,4 +1,5 @@
 set(SOURCES
+    ${CMAKE_BINARY_DIR}/version.f90
     lapack_interfaces.f90
     sorting_mod.f90
     coordinates/coordinates.f90
@@ -40,6 +41,7 @@ set(SOURCES
     parse_ants.f90
     collis_alphas.f90
     netcdf_orbit_output.f90
+    netcdf_results_output.f90
     callback.f90
     params.f90
     params_wrapper.f90

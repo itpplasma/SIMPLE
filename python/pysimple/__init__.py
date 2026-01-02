@@ -826,6 +826,32 @@ def current_vmec() -> str | None:
     return _current_vmec
 
 
+def write_output() -> None:
+    """
+    Write output files for the current simulation.
+
+    Writes ASCII output files (times_lost.dat, etc.) and optionally
+    results.nc if output_results_netcdf=True was set in init().
+
+    The results.nc file contains:
+    - times_lost, trap_par, perp_inv: Per-particle loss data
+    - zstart, zend: Phase space positions (rho, theta, zeta, p, v_par/v)
+    - xstart_cart, xend_cart: Cartesian positions (x, y, z) in cm
+    - iclass, class_lost: Classification data
+    - Global attributes with simulation config
+
+    Example
+    -------
+    >>> pysimple.init('wout.nc', output_results_netcdf=True)
+    >>> particles = pysimple.sample_surface(100, s=0.5)
+    >>> pysimple.trace_parallel(particles)
+    >>> pysimple.write_output()  # Creates results.nc and ASCII files
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+    _simple_main.write_output()
+
+
 __all__ = [
     'init',
     'sample_surface',
@@ -837,6 +863,7 @@ __all__ = [
     'classify_fast',
     'classify_fractal',
     'current_vmec',
+    'write_output',
     'params',
     'RK45',
     'EXPL_IMPL_EULER',
