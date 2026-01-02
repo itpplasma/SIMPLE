@@ -642,8 +642,9 @@ class PortOptimizer:
         return self
 
     def _objective(self, x: np.ndarray) -> float:
-        """Objective: minimize total flux on all ports."""
+        """Objective: minimize total flux on all ports, penalize exclusion zones."""
         total = 0.0
+        penalty = 0.0
         for i, port_spec in enumerate(self._ports):
             theta_c = x[2 * i]
             zeta_c = x[2 * i + 1]
@@ -654,7 +655,10 @@ class PortOptimizer:
                 zeta_c - zeta_w / 2, zeta_c + zeta_w / 2,
             )
             total += flux
-        return total
+            # Add large penalty for ports in exclusion zones
+            if self._in_exclusion_zone(theta_c, zeta_c):
+                penalty += 1e6
+        return total + penalty
 
     def _in_exclusion_zone(self, theta: float, zeta: float) -> bool:
         """Check if point is in any exclusion zone."""

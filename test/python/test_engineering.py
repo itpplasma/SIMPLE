@@ -262,12 +262,10 @@ class TestPortOptimizer:
         assert result.success
         assert len(result.ports) == 0
 
-    @pytest.mark.skipif(
-        True,  # Skip by default - requires scipy
-        reason="Optimization test requires scipy"
-    )
     def test_solve_single_port(self, mock_results_file: Path):
-        """Test optimization with single port."""
+        """Test optimization with single port finds low-flux region."""
+        pytest.importorskip("scipy", reason="scipy required for optimization")
+
         heat_map = WallHeatMap.from_netcdf(
             mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
         )
@@ -281,6 +279,49 @@ class TestPortOptimizer:
         assert result.ports[0].name == "test_port"
         assert -np.pi <= result.ports[0].theta_center <= np.pi
         assert 0 <= result.ports[0].zeta_center <= 2 * np.pi
+        # Optimized position should have less flux than center of heat map
+        center_flux = heat_map.integrated_flux_in_region(-0.15, 0.15, np.pi - 0.15, np.pi + 0.15)
+        assert result.total_flux_on_ports <= center_flux or result.total_flux_on_ports < 0.1
+
+    def test_solve_multiple_ports(self, mock_results_file: Path):
+        """Test optimization with multiple ports."""
+        pytest.importorskip("scipy", reason="scipy required for optimization")
+
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+        opt = PortOptimizer(heat_map)
+        opt.add_port("NBI_1", theta_width=0.2, zeta_width=0.2)
+        opt.add_port("NBI_2", theta_width=0.2, zeta_width=0.2)
+
+        result = opt.solve()
+
+        assert result.success
+        assert len(result.ports) == 2
+        # Ports should be at different positions
+        p1, p2 = result.ports
+        dist = np.sqrt((p1.theta_center - p2.theta_center)**2 +
+                       (p1.zeta_center - p2.zeta_center)**2)
+        assert dist > 0.1  # Not at same location
+
+    def test_solve_with_exclusion_zone(self, mock_results_file: Path):
+        """Test that optimizer respects exclusion zones."""
+        pytest.importorskip("scipy", reason="scipy required for optimization")
+
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+        opt = PortOptimizer(heat_map)
+        opt.add_port("test_port", theta_width=0.2, zeta_width=0.2)
+        # Exclude the center region where particles hit
+        opt.add_exclusion_zone(-0.5, 0.5, 0, 2 * np.pi)
+
+        result = opt.solve()
+
+        assert result.success
+        # Port center should be outside exclusion zone
+        port = result.ports[0]
+        assert port.theta_center < -0.5 or port.theta_center > 0.5
 
     def test_exclusion_zone(self, mock_results_file: Path):
         """Test adding exclusion zones."""
