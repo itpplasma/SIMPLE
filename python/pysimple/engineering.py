@@ -6,10 +6,62 @@ This module provides:
 - PortOptimizer: Optimize port placement to minimize heat exposure
 - Visualization: 3D heat flux plots via PyVista
 
+Physics Background
+------------------
+For D-T fusion, each reaction produces 17.6 MeV total energy:
+- 14.1 MeV -> neutron (escapes)
+- 3.5 MeV -> alpha particle (heats plasma or hits wall)
+
+The total alpha power for a reactor is:
+    P_alpha = P_fusion / 5
+
+For example, a 3 GW fusion plant has ~600 MW of alpha power.
+
+Heat flux calculation with energy weighting
+-------------------------------------------
+The code accounts for collisional slowing down of alpha particles.
+Each particle's final energy is:
+
+    E_i = p_i^2 * E_birth
+
+where p_i = v/v0 is the normalized velocity at wall impact (zend[3]).
+
+Without collisions: p = 1, E_final = E_birth
+With collisions: p < 1, E_final < E_birth (particles slowed down)
+
+Heat flux per bin:
+
+    q_bin = sum(p_i^2 for i in bin) * (P_alpha / N_total) / A_bin
+
+Lost energy fraction:
+
+    f_energy = sum(p_i^2 for lost particles) / N_total
+
+This is more accurate than particle-based loss fraction because:
+- Prompt losses (early escape, p ~ 1) deposit more energy
+- Slow losses (after slowing down, p << 1) deposit less energy
+
+Typical values (from literature):
+- Infinity Two: ~2.5 MW/m^2 peak
+- ARIES-CS: 5-18 MW/m^2 peak
+- W7-X experiments: 0.1-1 MW/m^2 (fast ion loads)
+
+References:
+- Lazerson et al., Plasma Phys. Control. Fusion 63 (2021) 125033
+- Albert et al., J. Plasma Phys. (2024) - Infinity Two study
+- Ku & Boozer, Fusion Sci. Technol. 54 (2008) 673 - ARIES-CS
+
 Example:
     from pysimple.engineering import WallHeatMap, PortOptimizer
 
-    heat_map = WallHeatMap.from_netcdf("results.nc")
+    # For a 3 GW fusion reactor (600 MW alpha power)
+    heat_map = WallHeatMap.from_netcdf(
+        "results.nc",
+        total_alpha_power_MW=600.0,  # Required for physical MW/m^2
+        major_radius=1000.0,  # cm
+        minor_radius=100.0,   # cm
+    )
+    print(f"Loss fraction: {heat_map.loss_fraction:.1%}")
     print(f"Peak flux: {heat_map.peak_flux:.2f} MW/m^2")
 
     opt = PortOptimizer(heat_map)
@@ -38,26 +90,41 @@ class WallHeatMap:
     Wall heat flux distribution from SIMPLE particle tracing results.
 
     Bins lost particles by their wall hit location (theta, zeta) and computes
-    heat flux in MW/m^2 based on particle energy and wall area.
+    heat flux in MW/m^2. Accounts for collisional slowing down by using
+    energy-weighted binning based on final velocity p = v/v0.
+
+    The heat flux calculation is:
+        q_bin = sum(p_i^2 for i in bin) * (P_alpha / N_total) / A_bin
+
+    where:
+        - p_i = v/v0: normalized final velocity (from zend[3])
+        - P_alpha: total alpha power (MW), user-provided
+        - N_total: total particles traced
+        - A_bin: area of this bin (m^2)
 
     Attributes:
         theta_edges: Bin edges for poloidal angle (rad)
         zeta_edges: Bin edges for toroidal angle (rad)
         flux_grid: Heat flux in MW/m^2, shape (n_theta, n_zeta)
+        energy_grid: Energy weight sum per bin (sum of p^2)
         hit_count: Number of particles per bin
-        total_power: Total deposited power in MW
-        particle_energy_eV: Energy per particle in eV
+        lost_power: Power lost to wall (MW) = energy_loss_fraction * total_alpha_power
+        total_alpha_power: Total alpha power from fusion (MW), user input
         n_lost: Number of lost particles
         n_total: Total number of particles traced
         trace_time: Tracing time in seconds
+        wall_area: Total wall area in m^2
+        energy_loss_fraction: Fraction of energy lost = sum(p^2) / N_total
     """
 
     theta_edges: np.ndarray
     zeta_edges: np.ndarray
     flux_grid: np.ndarray
+    energy_grid: np.ndarray
     hit_count: np.ndarray
-    total_power: float
-    particle_energy_eV: float
+    lost_power: float
+    total_alpha_power: float
+    energy_loss_fraction: float
     n_lost: int
     n_total: int
     trace_time: float
@@ -66,30 +133,45 @@ class WallHeatMap:
     minor_radius: float = 0.0
     _wall_positions: Optional[np.ndarray] = field(default=None, repr=False)
     _loss_times: Optional[np.ndarray] = field(default=None, repr=False)
+    _final_p: Optional[np.ndarray] = field(default=None, repr=False)
 
     @classmethod
     def from_netcdf(
         cls,
         results_file: str | Path,
+        total_alpha_power_MW: float,
         n_theta: int = 64,
         n_zeta: int = 128,
-        particle_energy_eV: float = 3.5e6,
         major_radius: float = 1000.0,
         minor_radius: float = 100.0,
     ) -> "WallHeatMap":
         """
         Load results from NetCDF and compute heat flux distribution.
 
+        The heat flux is computed using the Monte Carlo approach:
+            q_bin = (n_bin / n_total) * P_alpha / A_bin
+
+        This requires the user to specify total_alpha_power_MW based on the
+        plasma scenario. For D-T fusion: P_alpha = P_fusion / 5.
+
         Args:
             results_file: Path to results.nc from SIMPLE
+            total_alpha_power_MW: Total alpha power from fusion reactions (MW).
+                For D-T: P_alpha = P_fusion / 5. E.g., 3 GW fusion -> 600 MW.
             n_theta: Number of poloidal bins
             n_zeta: Number of toroidal bins
-            particle_energy_eV: Alpha particle energy (default 3.5 MeV)
-            major_radius: Major radius in cm (for area calculation)
-            minor_radius: Minor radius in cm (for area calculation)
+            major_radius: Major radius in cm (for wall area calculation)
+            minor_radius: Minor radius in cm (for wall area calculation)
 
         Returns:
-            WallHeatMap with binned heat flux data
+            WallHeatMap with physically-scaled heat flux in MW/m^2
+
+        Example:
+            # 3 GW fusion reactor -> 600 MW alpha power
+            heat_map = WallHeatMap.from_netcdf(
+                "results.nc",
+                total_alpha_power_MW=600.0,
+            )
         """
         if not HAS_NETCDF4:
             raise ImportError("netCDF4 required: pip install netCDF4")
@@ -109,64 +191,86 @@ class WallHeatMap:
         lost_mask = class_lost
         n_lost = int(np.sum(lost_mask))
 
+        # Wall area: A = 4 * pi^2 * R0 * a (torus surface area)
+        # Convert cm to m: * 1e-4
+        wall_area_m2 = 4 * np.pi**2 * major_radius * minor_radius * 1e-4
+
+        theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
+        zeta_edges = np.linspace(0, 2 * np.pi, n_zeta + 1)
+
         if n_lost == 0:
-            theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
-            zeta_edges = np.linspace(0, 2 * np.pi, n_zeta + 1)
             return cls(
                 theta_edges=theta_edges,
                 zeta_edges=zeta_edges,
                 flux_grid=np.zeros((n_theta, n_zeta)),
+                energy_grid=np.zeros((n_theta, n_zeta)),
                 hit_count=np.zeros((n_theta, n_zeta), dtype=int),
-                total_power=0.0,
-                particle_energy_eV=particle_energy_eV,
+                lost_power=0.0,
+                total_alpha_power=total_alpha_power_MW,
+                energy_loss_fraction=0.0,
                 n_lost=0,
                 n_total=n_total,
                 trace_time=trace_time,
+                wall_area=wall_area_m2,
                 major_radius=major_radius,
                 minor_radius=minor_radius,
             )
 
         theta_lost = zend[1, lost_mask]
         zeta_lost = zend[2, lost_mask]
+        # zend[3] = p = v/v0 = normalized velocity at wall impact
+        final_p = zend[3, lost_mask]
         wall_positions = xend_cart[:, lost_mask]
         loss_times = times_lost[lost_mask]
 
-        theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
-        zeta_edges = np.linspace(0, 2 * np.pi, n_zeta + 1)
+        # Energy weight = p^2 (normalized to birth energy)
+        energy_weight = final_p**2
 
+        # Bin by particle count
         hit_count, _, _ = np.histogram2d(
             theta_lost, zeta_lost,
             bins=[theta_edges, zeta_edges]
         )
         hit_count = hit_count.astype(int)
 
-        wall_area = 4 * np.pi**2 * major_radius * minor_radius * 1e-4
-        bin_area = wall_area / (n_theta * n_zeta)
+        # Energy-weighted histogram: sum of p^2 per bin
+        energy_grid, _, _ = np.histogram2d(
+            theta_lost, zeta_lost,
+            bins=[theta_edges, zeta_edges],
+            weights=energy_weight
+        )
 
-        eV_to_J = 1.602e-19
-        particle_energy_J = particle_energy_eV * eV_to_J
-        total_energy_J = n_lost * particle_energy_J
-        total_power_W = total_energy_J / trace_time
-        total_power_MW = total_power_W * 1e-6
+        # Energy-weighted heat flux calculation:
+        # q_bin = sum(p_i^2 for i in bin) * (P_alpha / n_total) / A_bin
+        bin_area = wall_area_m2 / (n_theta * n_zeta)
+        power_density = total_alpha_power_MW / n_total  # MW per MC particle
+        flux_grid = energy_grid * power_density / bin_area  # MW/m^2
 
-        power_per_particle_MW = total_power_MW / n_lost if n_lost > 0 else 0
-        flux_grid = hit_count * power_per_particle_MW / bin_area
+        # Energy loss fraction = sum(p^2 for all lost) / n_total
+        total_energy_lost = np.sum(energy_weight)
+        energy_loss_fraction = total_energy_lost / n_total
+
+        # Lost power based on energy, not particle count
+        lost_power = energy_loss_fraction * total_alpha_power_MW
 
         return cls(
             theta_edges=theta_edges,
             zeta_edges=zeta_edges,
             flux_grid=flux_grid,
+            energy_grid=energy_grid,
             hit_count=hit_count,
-            total_power=total_power_MW,
-            particle_energy_eV=particle_energy_eV,
+            lost_power=lost_power,
+            total_alpha_power=total_alpha_power_MW,
+            energy_loss_fraction=energy_loss_fraction,
             n_lost=n_lost,
             n_total=n_total,
             trace_time=trace_time,
-            wall_area=wall_area,
+            wall_area=wall_area_m2,
             major_radius=major_radius,
             minor_radius=minor_radius,
             _wall_positions=wall_positions,
             _loss_times=loss_times,
+            _final_p=final_p,
         )
 
     @property
@@ -210,21 +314,28 @@ class WallHeatMap:
         zeta_min: float,
         zeta_max: float,
     ) -> float:
-        """Compute total power deposited in a region (MW)."""
+        """Compute total power deposited in a region (MW), energy-weighted."""
         theta_mask = (self.theta_centers >= theta_min) & \
                      (self.theta_centers <= theta_max)
         zeta_mask = (self.zeta_centers >= zeta_min) & \
                     (self.zeta_centers <= zeta_max)
-        region_hits = self.hit_count[np.ix_(theta_mask, zeta_mask)]
-        fraction = np.sum(region_hits) / self.n_lost if self.n_lost > 0 else 0
-        return self.total_power * fraction
+        # Use energy_grid (sum of p^2) for energy-weighted power
+        region_energy = self.energy_grid[np.ix_(theta_mask, zeta_mask)]
+        # Power = (sum(p^2) in region / n_total) * P_alpha
+        fraction = np.sum(region_energy) / self.n_total if self.n_total > 0 else 0
+        return self.total_alpha_power * fraction
 
     def summary(self) -> str:
         """Return a summary string."""
+        lost_pct = 100 * self.lost_power / self.total_alpha_power \
+            if self.total_alpha_power > 0 else 0
         return (
             f"WallHeatMap: {self.n_lost}/{self.n_total} particles lost "
             f"({100*self.loss_fraction:.1f}%)\n"
-            f"  Total power: {self.total_power:.3f} MW\n"
+            f"  Alpha power: {self.total_alpha_power:.1f} MW (input)\n"
+            f"  Particle loss fraction: {100*self.loss_fraction:.2f}%\n"
+            f"  Energy loss fraction: {100*self.energy_loss_fraction:.2f}%\n"
+            f"  Lost power: {self.lost_power:.3f} MW ({lost_pct:.1f}%)\n"
             f"  Peak flux: {self.peak_flux:.3f} MW/m^2\n"
             f"  Mean flux: {self.mean_flux:.3f} MW/m^2\n"
             f"  Wall area: {self.wall_area:.1f} m^2"
