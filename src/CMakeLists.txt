@@ -1,4 +1,5 @@
 set(SOURCES
+    ${CMAKE_BINARY_DIR}/version.f90
     lapack_interfaces.f90
     sorting_mod.f90
     coordinates/coordinates.f90

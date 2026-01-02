@@ -266,5 +266,13 @@ class TestNetCDFResultsOutput:
                 assert 'coordinate_type' in ds.ncattrs()
                 assert ds.coordinate_type in ['vmec', 'chartmap']
 
+                # Check version and timestamp attributes
+                assert 'simple_version' in ds.ncattrs()
+                assert len(ds.simple_version) > 0
+                assert 'created' in ds.ncattrs()
+                # Timestamp format: YYYY-MM-DDTHH:MM:SS
+                assert len(ds.created) == 19
+                assert 'T' in ds.created
+
         finally:
             os.chdir(original_dir)

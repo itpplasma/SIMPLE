@@ -47,6 +47,7 @@ contains
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input
         use reference_coordinates, only: ref_coords
+        use version, only: simple_version
 
         character(len=*), intent(in) :: filename
 
@@ -59,11 +60,20 @@ contains
         real(dp), allocatable :: xstart_cart(:, :), xend_cart(:, :)
         integer(int8), allocatable :: class_lost_i8(:)
         character(len=32) :: coord_type
+        character(len=8) :: date_str
+        character(len=10) :: time_str
+        character(len=64) :: timestamp
 
         ! Allocate working arrays
         allocate (xstart_cart(3, ntestpart))
         allocate (xend_cart(3, ntestpart))
         allocate (class_lost_i8(ntestpart))
+
+        ! Get current timestamp
+        call date_and_time(date=date_str, time=time_str)
+        write (timestamp, '(A4,"-",A2,"-",A2,"T",A2,":",A2,":",A2)') &
+            date_str(1:4), date_str(5:6), date_str(7:8), &
+            time_str(1:2), time_str(3:4), time_str(5:6)
 
         ! Compute Cartesian positions
         call compute_cartesian_positions(xstart_cart, xend_cart)
@@ -193,6 +203,11 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'title', &
             'SIMPLE particle tracing results')
         call check_nc(status, 'put_att title')
+        status = nf90_put_att(ncid, nf90_global, 'simple_version', &
+            trim(simple_version))
+        call check_nc(status, 'put_att simple_version')
+        status = nf90_put_att(ncid, nf90_global, 'created', trim(timestamp))
+        call check_nc(status, 'put_att created')
         status = nf90_put_att(ncid, nf90_global, 'ntestpart', ntestpart)
         call check_nc(status, 'put_att ntestpart')
         status = nf90_put_att(ncid, nf90_global, 'trace_time', trace_time)

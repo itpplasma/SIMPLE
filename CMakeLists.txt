@@ -9,6 +9,26 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
+# Get version from git describe (format: v1.5.2-42-g62fed6e[-dirty])
+execute_process(
+    COMMAND git describe --tags --dirty --always
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE SIMPLE_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT SIMPLE_VERSION)
+    set(SIMPLE_VERSION "unknown")
+endif()
+message(STATUS "SIMPLE version: ${SIMPLE_VERSION}")
+
+# Generate version.f90 from template
+configure_file(
+    ${CMAKE_SOURCE_DIR}/src/version.f90.in
+    ${CMAKE_BINARY_DIR}/version.f90
+    @ONLY
+)
+
 add_compile_options(-g)
 
 # Compiler-specific flags

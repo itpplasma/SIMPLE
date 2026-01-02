@@ -31,11 +31,15 @@ contains
       use timing, only: init_timer, print_phase_time
       use magfie_sub, only: TEST, VMEC, init_magfie
       use samplers, only: init_starting_surf
+      use version, only: simple_version
 
       implicit none
 
       character(256) :: config_file
       type(tracer_t) :: norb
+
+      ! Print version on startup
+      print '(A,A)', 'SIMPLE version ', simple_version
 
       ! Initialize timing
       call init_timer()
