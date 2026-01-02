@@ -644,6 +644,8 @@ contains
 
    subroutine write_output
       use field_can_base, only: n_field_evaluations
+      use params, only: output_results_netcdf
+      use netcdf_results_output, only: write_results_netcdf
 
       integer :: i, num_lost
       real(dp) :: inverse_times_lost_sum
@@ -690,6 +692,10 @@ contains
             write (1, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
          end do
          close (1)
+      end if
+
+      if (output_results_netcdf) then
+         call write_results_netcdf('results.nc')
       end if
 
    end subroutine write_output

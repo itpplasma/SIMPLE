@@ -74,8 +74,18 @@ set_tests_properties(test_batch_api_performance PROPERTIES
 add_test(NAME test_batch_api_scalability
     COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_batch_api.py::TestPerformanceFramework::test_column_major_access_speed -v
 )
-set_tests_properties(test_batch_api_scalability PROPERTIES 
+set_tests_properties(test_batch_api_scalability PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;batch_api;slow;scalability"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# NetCDF results output tests
+add_test(NAME test_netcdf_results
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_netcdf_results.py -v
+)
+set_tests_properties(test_netcdf_results PROPERTIES
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
+    LABELS "python;netcdf;slow"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
