@@ -402,6 +402,11 @@ class WallHeatMap:
         if not HAS_NETCDF4:
             raise ImportError("netCDF4 required: pip install netCDF4")
 
+        if total_alpha_power_MW <= 0:
+            raise ValueError(
+                f"total_alpha_power_MW must be positive, got {total_alpha_power_MW}"
+            )
+
         results_file = Path(results_file)
         if not results_file.exists():
             raise FileNotFoundError(f"Results file not found: {results_file}")
@@ -452,6 +457,12 @@ class WallHeatMap:
         wall_positions = xend_cart[:, lost_mask]
         loss_times = times_lost[lost_mask]
 
+        # Map angles to canonical ranges for histogram binning
+        # SIMPLE outputs theta in VMEC convention [0, 2pi], map to [-pi, pi]
+        # SIMPLE outputs zeta as cumulative angle (can be large), map to [0, 2pi]
+        theta_lost = ((theta_lost + np.pi) % (2 * np.pi)) - np.pi
+        zeta_lost = zeta_lost % (2 * np.pi)
+
         # Energy weight = p^2 (normalized to birth energy)
         energy_weight = final_p**2
 
@@ -474,6 +485,18 @@ class WallHeatMap:
             bin_areas = compute_bin_areas_from_chartmap(
                 chartmap_file, theta_edges, zeta_edges
             )
+            # Warn if bin resolution exceeds chartmap resolution
+            bin_area_sum = np.sum(bin_areas)
+            if bin_area_sum < 0.9 * wall_area_m2:
+                import warnings
+                warnings.warn(
+                    f"Bin areas sum ({bin_area_sum:.1f} m^2) is less than 90% of "
+                    f"wall area ({wall_area_m2:.1f} m^2). Heat map resolution may "
+                    f"exceed chartmap resolution, causing empty bins. Consider "
+                    f"reducing n_theta/n_zeta or using a finer chartmap.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         else:
             # Uniform bin area approximation (valid for simple torus)
             uniform_area = wall_area_m2 / (n_theta * n_zeta)
@@ -569,11 +592,28 @@ class WallHeatMap:
         zeta_min: float,
         zeta_max: float,
     ) -> float:
-        """Compute total power deposited in a region (MW), energy-weighted."""
+        """
+        Compute total power deposited in a region (MW), energy-weighted.
+
+        Handles zeta wrapping: if zeta_min < 0, splits into two regions
+        [2pi + zeta_min, 2pi] and [0, zeta_max].
+        """
         theta_mask = (self.theta_centers >= theta_min) & \
                      (self.theta_centers <= theta_max)
-        zeta_mask = (self.zeta_centers >= zeta_min) & \
-                    (self.zeta_centers <= zeta_max)
+
+        # Handle zeta wrapping for regions near zeta = 0
+        if zeta_min < 0:
+            # Split into two regions: [2pi + zeta_min, 2pi] and [0, zeta_max]
+            zeta_mask = (self.zeta_centers >= 2 * np.pi + zeta_min) | \
+                        (self.zeta_centers <= zeta_max)
+        elif zeta_max > 2 * np.pi:
+            # Split into two regions: [zeta_min, 2pi] and [0, zeta_max - 2pi]
+            zeta_mask = (self.zeta_centers >= zeta_min) | \
+                        (self.zeta_centers <= zeta_max - 2 * np.pi)
+        else:
+            zeta_mask = (self.zeta_centers >= zeta_min) & \
+                        (self.zeta_centers <= zeta_max)
+
         # Use energy_grid (sum of p^2) for energy-weighted power
         region_energy = self.energy_grid[np.ix_(theta_mask, zeta_mask)]
         # Power = (sum(p^2) in region / n_total) * P_alpha

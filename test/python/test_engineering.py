@@ -53,15 +53,24 @@ def create_mock_results_nc(path: Path, n_particles: int = 100, loss_fraction: fl
         np.random.seed(42)
         zend_data = np.zeros((5, n_particles))
         zend_data[0, :] = np.random.uniform(0.8, 1.0, n_particles)
-        zend_data[1, :] = np.random.uniform(-np.pi, np.pi, n_particles)
-        zend_data[2, :] = np.random.uniform(0, 2 * np.pi, n_particles)
+        # Use VMEC theta convention [0, 2pi] - code should map to [-pi, pi]
+        zend_data[1, :] = np.random.uniform(0, 2 * np.pi, n_particles)
+        # Use large zeta values (cumulative angle) - code should apply modulo
+        zend_data[2, :] = np.random.uniform(0, 20 * np.pi, n_particles)
         zend_data[3, :] = np.random.uniform(0.9, 1.0, n_particles)
         zend_data[4, :] = np.random.uniform(-1, 1, n_particles)
         zend[:] = zend_data
 
         R0, a = 1000.0, 100.0
-        theta = zend_data[1, :]
-        zeta = zend_data[2, :]
+        # Map theta to [-pi, pi] for Cartesian calculation (geometric consistency)
+        theta_geom = np.where(
+            zend_data[1, :] > np.pi,
+            zend_data[1, :] - 2 * np.pi,
+            zend_data[1, :]
+        )
+        zeta_geom = zend_data[2, :] % (2 * np.pi)
+        theta = theta_geom
+        zeta = zeta_geom
         R = R0 + a * np.cos(theta)
         x_cart = np.zeros((3, n_particles))
         x_cart[0, :] = R * np.cos(zeta)
@@ -425,6 +434,66 @@ class TestNewFeatures:
         # For simple torus they're uniform, but the mechanism is tested
         assert heat_map.bin_areas is not None
         assert np.sum(heat_map.bin_areas) == pytest.approx(heat_map.wall_area, rel=0.05)
+
+    def test_zeta_wrapping_in_region(self, mock_results_file: Path):
+        """Test that integrated_flux_in_region handles zeta wrapping correctly."""
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        # Test region that wraps around zeta = 0 (negative zeta_min)
+        # Port centered at zeta = 0.1 with width 0.4 has zeta_min = -0.1
+        power_wrapped = heat_map.integrated_flux_in_region(
+            theta_min=-0.5, theta_max=0.5,
+            zeta_min=-0.1, zeta_max=0.3
+        )
+
+        # Same region without wrapping: [0, 0.3] + [2*pi - 0.1, 2*pi]
+        power_part1 = heat_map.integrated_flux_in_region(
+            theta_min=-0.5, theta_max=0.5,
+            zeta_min=0, zeta_max=0.3
+        )
+        power_part2 = heat_map.integrated_flux_in_region(
+            theta_min=-0.5, theta_max=0.5,
+            zeta_min=2*np.pi - 0.1, zeta_max=2*np.pi
+        )
+
+        # Should be approximately equal (may differ slightly due to bin boundaries)
+        assert power_wrapped == pytest.approx(power_part1 + power_part2, rel=0.1)
+
+    def test_invalid_alpha_power(self, mock_results_file: Path):
+        """Test that invalid total_alpha_power_MW raises error."""
+        with pytest.raises(ValueError, match="must be positive"):
+            WallHeatMap.from_netcdf(
+                mock_results_file, total_alpha_power_MW=0.0
+            )
+
+        with pytest.raises(ValueError, match="must be positive"):
+            WallHeatMap.from_netcdf(
+                mock_results_file, total_alpha_power_MW=-10.0
+            )
+
+    def test_large_angles_handled(self, mock_results_file: Path):
+        """Test that mock data with large angles is handled correctly.
+
+        The mock data uses theta in [0, 2pi] and zeta in [0, 20*pi],
+        which should be mapped to [-pi, pi] and [0, 2pi] respectively.
+        """
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        # All binned data should be within the expected ranges
+        # Check that we have particles distributed across theta range
+        theta_has_hits = np.any(heat_map.hit_count > 0, axis=1)
+        assert np.sum(theta_has_hits) > 10  # Should have hits in many theta bins
+
+        # Check that we have particles distributed across zeta range
+        zeta_has_hits = np.any(heat_map.hit_count > 0, axis=0)
+        assert np.sum(zeta_has_hits) > 10  # Should have hits in many zeta bins
+
+        # Total hits should match n_lost
+        assert np.sum(heat_map.hit_count) == heat_map.n_lost
 
 
 @pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
