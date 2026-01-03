@@ -435,6 +435,30 @@ class TestNewFeatures:
         assert heat_map.bin_areas is not None
         assert np.sum(heat_map.bin_areas) == pytest.approx(heat_map.wall_area, rel=0.05)
 
+    def test_resolution_mismatch_warning(self, tmp_path: Path, mock_results_file: Path):
+        """Test that warning is issued when heatmap resolution exceeds chartmap."""
+        import warnings
+
+        # Create a very coarse chartmap (few grid points)
+        chartmap_path = tmp_path / "coarse_chartmap.nc"
+        create_mock_chartmap_nc(chartmap_path, ntheta=8, nzeta=4)
+
+        # Request fine heatmap resolution - many bins will be empty
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            heat_map = WallHeatMap.from_netcdf(
+                mock_results_file,
+                total_alpha_power_MW=TEST_ALPHA_POWER_MW,
+                chartmap_file=chartmap_path,
+                n_theta=64,
+                n_zeta=128,
+            )
+
+            # Should have issued a warning about bin area mismatch
+            assert len(w) == 1
+            assert "less than 90%" in str(w[0].message)
+            assert "resolution" in str(w[0].message)
+
     def test_zeta_wrapping_in_region(self, mock_results_file: Path):
         """Test that integrated_flux_in_region handles zeta wrapping correctly."""
         heat_map = WallHeatMap.from_netcdf(

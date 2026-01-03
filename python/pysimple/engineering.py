@@ -921,7 +921,7 @@ class PortOptimizer:
             )
             total_flux += flux
 
-            local_max = self._get_max_flux_in_region(
+            local_max = self._get_peak_flux_in_region(
                 port.theta_min, port.theta_max,
                 port.zeta_min, port.zeta_max,
             )
@@ -934,21 +934,6 @@ class PortOptimizer:
             success=success,
             message=message,
         )
-
-    def _get_max_flux_in_region(
-        self,
-        theta_min: float,
-        theta_max: float,
-        zeta_min: float,
-        zeta_max: float,
-    ) -> float:
-        """Get maximum flux in a region."""
-        theta_mask = (self.heat_map.theta_centers >= theta_min) & \
-                     (self.heat_map.theta_centers <= theta_max)
-        zeta_mask = (self.heat_map.zeta_centers >= zeta_min) & \
-                    (self.heat_map.zeta_centers <= zeta_max)
-        region_flux = self.heat_map.flux_grid[np.ix_(theta_mask, zeta_mask)]
-        return float(np.max(region_flux)) if region_flux.size > 0 else 0.0
 
 
 def plot_heat_flux_2d(

@@ -103,6 +103,20 @@ $$A = n_{fp} \iint \left|\frac{\partial \mathbf{r}}{\partial \theta} \times \fra
 
 The chartmap contains Cartesian coordinates $(x, y, z)$ on a $(\rho, \theta, \zeta)$ grid. The wall surface is at $\rho = 1$.
 
+### Resolution Matching
+
+When using a chartmap, the heat map bin resolution should not exceed the chartmap grid resolution. If the heat map has more bins than chartmap grid points, many bins will have zero computed area, leading to inaccurate flux calculations.
+
+The code issues a warning if the sum of bin areas is less than 90% of the total wall area:
+
+```
+UserWarning: Bin areas sum (X m^2) is less than 90% of wall area (Y m^2).
+Heat map resolution may exceed chartmap resolution, causing empty bins.
+Consider reducing n_theta/n_zeta or using a finer chartmap.
+```
+
+**Recommendation**: Use `n_theta` ≤ chartmap ntheta and `n_zeta` ≤ chartmap nzeta × nfp.
+
 ## Guiding Center Limitation
 
 **Important**: SIMPLE tracks guiding center orbits, not full particle orbits. The reported wall positions are guiding center positions, not actual wall impact points.
