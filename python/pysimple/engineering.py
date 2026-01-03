@@ -202,10 +202,15 @@ def compute_bin_areas_from_chartmap(
     This properly accounts for the 3D stellarator shape rather than using
     a uniform area approximation.
 
+    Coordinate handling:
+        - Chartmap theta: typically [0, 2π], mapped to heat map [-π, π]
+        - Chartmap zeta: one field period [0, 2π/nfp], extended by symmetry
+        - Heat map zeta: full torus [0, 2π], each bin maps to one period
+
     Args:
         chartmap_file: Path to chartmap NetCDF file
-        theta_edges: Bin edges for poloidal angle (n_theta + 1)
-        zeta_edges: Bin edges for toroidal angle (n_zeta + 1)
+        theta_edges: Bin edges for poloidal angle (n_theta + 1), typically [-π, π]
+        zeta_edges: Bin edges for toroidal angle (n_zeta + 1), typically [0, 2π]
 
     Returns:
         bin_areas: Array of shape (n_theta, n_zeta) with area in m^2 per bin
@@ -214,8 +219,8 @@ def compute_bin_areas_from_chartmap(
         raise ImportError("netCDF4 required: pip install netCDF4")
 
     with nc.Dataset(chartmap_file, 'r') as ds:
-        theta = ds.variables['theta'][:]
-        zeta = ds.variables['zeta'][:]
+        theta_cm = ds.variables['theta'][:]
+        zeta_cm = ds.variables['zeta'][:]
         nfp = int(ds.variables['num_field_periods'][...])
 
         x_wall = ds.variables['x'][:, :, -1] * 0.01  # cm -> m
@@ -223,13 +228,20 @@ def compute_bin_areas_from_chartmap(
         z_wall = ds.variables['z'][:, :, -1] * 0.01
 
     nzeta_cm, ntheta_cm = x_wall.shape
-    dtheta_cm = theta[1] - theta[0] if len(theta) > 1 else 2 * np.pi
-    dzeta_cm = zeta[1] - zeta[0] if len(zeta) > 1 else 2 * np.pi / nfp
+    dtheta_cm = theta_cm[1] - theta_cm[0] if len(theta_cm) > 1 else 2 * np.pi
+    dzeta_cm = zeta_cm[1] - zeta_cm[0] if len(zeta_cm) > 1 else 2 * np.pi / nfp
 
     # Compute surface element using shared helper (consistent boundary handling)
     surface_element = _compute_surface_element_grid(
         x_wall, y_wall, z_wall, dtheta_cm, dzeta_cm
     )
+
+    # Convert chartmap theta [0, 2π] to heat map convention [-π, π]
+    # theta in [0, π] stays same, theta in (π, 2π] -> (-π, 0]
+    theta_hm = np.where(theta_cm > np.pi, theta_cm - 2 * np.pi, theta_cm)
+
+    # Zeta period for the chartmap
+    zeta_period = 2 * np.pi / nfp
 
     # Integrate surface element over each output bin
     n_theta = len(theta_edges) - 1
@@ -241,19 +253,31 @@ def compute_bin_areas_from_chartmap(
         for i_zeta in range(n_zeta):
             ze_min, ze_max = zeta_edges[i_zeta], zeta_edges[i_zeta + 1]
 
+            # Map heat map zeta bin to chartmap period [0, zeta_period]
+            # Due to stellarator symmetry, all field periods have same geometry
+            ze_min_cm = ze_min % zeta_period
+            ze_max_cm = ze_max % zeta_period
+
             # Find chartmap grid points in this bin and sum their contributions
             area_sum = 0.0
             for iz in range(nzeta_cm):
-                zeta_val = zeta[iz]
-                if not (ze_min <= zeta_val < ze_max):
+                zeta_val = zeta_cm[iz]
+                # Handle wrapped bins (ze_min_cm > ze_max_cm after modulo)
+                if ze_min_cm <= ze_max_cm:
+                    in_zeta_bin = ze_min_cm <= zeta_val < ze_max_cm
+                else:
+                    # Bin wraps around: includes [ze_min_cm, period) and [0, ze_max_cm)
+                    in_zeta_bin = zeta_val >= ze_min_cm or zeta_val < ze_max_cm
+
+                if not in_zeta_bin:
                     continue
                 for it in range(ntheta_cm):
-                    theta_val = theta[it]
+                    theta_val = theta_hm[it]
                     if not (th_min <= theta_val < th_max):
                         continue
                     area_sum += surface_element[iz, it] * dtheta_cm * dzeta_cm
 
-            bin_areas[i_theta, i_zeta] = area_sum * nfp
+            bin_areas[i_theta, i_zeta] = area_sum
 
     return bin_areas
 
@@ -274,7 +298,21 @@ class WallHeatMap:
         - p_i = v/v0: normalized final velocity (from zend[3])
         - P_alpha: total alpha power (MW), user-provided
         - N_total: total particles traced
-        - A_bin: area of this bin (m^2)
+        - A_bin: area of this bin (m^2), from chartmap geometry or uniform approx
+
+    Coordinate Conventions (VMEC):
+        - theta: Poloidal angle in radians, range [-pi, pi]
+            * theta = 0: OUTBOARD midplane (maximum R, Z=0)
+            * theta = +/- pi: INBOARD midplane (minimum R, Z=0)
+            * theta > 0: Upper half (Z > 0)
+            * theta < 0: Lower half (Z < 0)
+        - zeta: Toroidal angle in radians, range [0, 2*pi]
+            * zeta increases in the direction of the toroidal current
+            * For nfp field periods, geometry repeats every 2*pi/nfp
+
+    For port placement:
+        - Outboard side: |theta| < pi/2 (e.g., NBI ports)
+        - Inboard side: |theta| > pi/2
 
     Attributes:
         theta_edges: Bin edges for poloidal angle (rad)
@@ -289,6 +327,8 @@ class WallHeatMap:
         trace_time: Tracing time in seconds
         wall_area: Total wall area in m^2
         energy_loss_fraction: Fraction of energy lost = sum(p^2) / N_total
+        bin_areas: Per-bin areas in m^2, shape (n_theta, n_zeta)
+        flux_error: Monte Carlo error estimate (MW/m^2), = flux / sqrt(N_bin)
     """
 
     theta_edges: np.ndarray
@@ -305,6 +345,8 @@ class WallHeatMap:
     wall_area: float = 0.0
     major_radius: float = 0.0
     minor_radius: float = 0.0
+    bin_areas: Optional[np.ndarray] = field(default=None, repr=False)
+    flux_error: Optional[np.ndarray] = field(default=None, repr=False)
     _wall_positions: Optional[np.ndarray] = field(default=None, repr=False)
     _loss_times: Optional[np.ndarray] = field(default=None, repr=False)
     _final_p: Optional[np.ndarray] = field(default=None, repr=False)
@@ -427,11 +469,35 @@ class WallHeatMap:
             weights=energy_weight
         )
 
+        # Compute bin areas: use 3D geometry if chartmap provided, else uniform
+        if chartmap_file is not None:
+            bin_areas = compute_bin_areas_from_chartmap(
+                chartmap_file, theta_edges, zeta_edges
+            )
+        else:
+            # Uniform bin area approximation (valid for simple torus)
+            uniform_area = wall_area_m2 / (n_theta * n_zeta)
+            bin_areas = np.full((n_theta, n_zeta), uniform_area)
+
         # Energy-weighted heat flux calculation:
         # q_bin = sum(p_i^2 for i in bin) * (P_alpha / n_total) / A_bin
-        bin_area = wall_area_m2 / (n_theta * n_zeta)
         power_density = total_alpha_power_MW / n_total  # MW per MC particle
-        flux_grid = energy_grid * power_density / bin_area  # MW/m^2
+        # Avoid division by zero for empty bins
+        with np.errstate(divide='ignore', invalid='ignore'):
+            flux_grid = np.where(
+                bin_areas > 0,
+                energy_grid * power_density / bin_areas,
+                0.0
+            )
+
+        # Monte Carlo error estimate: sigma_q = q / sqrt(N_bin)
+        # For bins with few particles, error is large
+        with np.errstate(divide='ignore', invalid='ignore'):
+            flux_error = np.where(
+                hit_count > 0,
+                flux_grid / np.sqrt(hit_count),
+                0.0
+            )
 
         # Energy loss fraction = sum(p^2 for all lost) / n_total
         total_energy_lost = np.sum(energy_weight)
@@ -455,6 +521,8 @@ class WallHeatMap:
             wall_area=wall_area_m2,
             major_radius=major_radius,
             minor_radius=minor_radius,
+            bin_areas=bin_areas,
+            flux_error=flux_error,
             _wall_positions=wall_positions,
             _loss_times=loss_times,
             _final_p=final_p,
@@ -642,23 +710,75 @@ class PortOptimizer:
         return self
 
     def _objective(self, x: np.ndarray) -> float:
-        """Objective: minimize total flux on all ports, penalize exclusion zones."""
+        """Objective: minimize total flux on all ports, penalize constraints."""
         total = 0.0
         penalty = 0.0
+        max_flux_density = 0.0
+
         for i, port_spec in enumerate(self._ports):
             theta_c = x[2 * i]
             zeta_c = x[2 * i + 1]
             theta_w = port_spec["theta_width"]
             zeta_w = port_spec["zeta_width"]
+
+            theta_min = theta_c - theta_w / 2
+            theta_max = theta_c + theta_w / 2
+            zeta_min = zeta_c - zeta_w / 2
+            zeta_max = zeta_c + zeta_w / 2
+
             flux = self.heat_map.integrated_flux_in_region(
-                theta_c - theta_w / 2, theta_c + theta_w / 2,
-                zeta_c - zeta_w / 2, zeta_c + zeta_w / 2,
+                theta_min, theta_max, zeta_min, zeta_max
             )
             total += flux
-            # Add large penalty for ports in exclusion zones
-            if self._in_exclusion_zone(theta_c, zeta_c):
+
+            # Check peak flux density on this port for constraint
+            if self._max_flux_constraint is not None:
+                port_flux_density = self._get_peak_flux_in_region(
+                    theta_min, theta_max, zeta_min, zeta_max
+                )
+                max_flux_density = max(max_flux_density, port_flux_density)
+
+            # Penalty for port overlapping exclusion zones (check all corners + center)
+            if self._port_overlaps_exclusion(theta_c, zeta_c, theta_w, zeta_w):
                 penalty += 1e6
+
+        # Penalty for exceeding max flux constraint
+        if self._max_flux_constraint is not None:
+            if max_flux_density > self._max_flux_constraint:
+                excess = max_flux_density - self._max_flux_constraint
+                penalty += 1e4 * excess  # Proportional penalty
+
         return total + penalty
+
+    def _get_peak_flux_in_region(
+        self, theta_min: float, theta_max: float, zeta_min: float, zeta_max: float
+    ) -> float:
+        """Get peak flux density (MW/m^2) in a region."""
+        theta_mask = (self.heat_map.theta_centers >= theta_min) & \
+                     (self.heat_map.theta_centers <= theta_max)
+        zeta_mask = (self.heat_map.zeta_centers >= zeta_min) & \
+                    (self.heat_map.zeta_centers <= zeta_max)
+        region_flux = self.heat_map.flux_grid[np.ix_(theta_mask, zeta_mask)]
+        return float(np.max(region_flux)) if region_flux.size > 0 else 0.0
+
+    def _port_overlaps_exclusion(
+        self, theta_c: float, zeta_c: float, theta_w: float, zeta_w: float
+    ) -> bool:
+        """Check if port rectangle overlaps any exclusion zone."""
+        # Check corners and center of the port
+        half_th = theta_w / 2
+        half_ze = zeta_w / 2
+        test_points = [
+            (theta_c, zeta_c),                      # center
+            (theta_c - half_th, zeta_c - half_ze),  # bottom-left
+            (theta_c - half_th, zeta_c + half_ze),  # bottom-right
+            (theta_c + half_th, zeta_c - half_ze),  # top-left
+            (theta_c + half_th, zeta_c + half_ze),  # top-right
+        ]
+        for theta, zeta in test_points:
+            if self._in_exclusion_zone(theta, zeta):
+                return True
+        return False
 
     def _in_exclusion_zone(self, theta: float, zeta: float) -> bool:
         """Check if point is in any exclusion zone."""

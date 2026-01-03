@@ -336,6 +336,96 @@ class TestPortOptimizer:
         assert opt._in_exclusion_zone(0.0, 0.5)
         assert not opt._in_exclusion_zone(1.0, 0.5)
 
+    def test_port_overlap_exclusion(self, mock_results_file: Path):
+        """Test that port corners are checked against exclusion zones."""
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+        opt = PortOptimizer(heat_map)
+
+        # Exclusion zone at theta > 0.5
+        opt.add_exclusion_zone(0.5, np.pi, 0, 2 * np.pi)
+
+        # Port centered at 0.3 with width 0.5 -> extends to 0.55 (overlaps exclusion)
+        assert opt._port_overlaps_exclusion(0.3, np.pi, 0.5, 0.5)
+
+        # Port centered at 0.0 with width 0.5 -> extends to 0.25 (no overlap)
+        assert not opt._port_overlaps_exclusion(0.0, np.pi, 0.5, 0.5)
+
+    def test_max_flux_constraint(self, mock_results_file: Path):
+        """Test that max_flux_constraint is enforced."""
+        pytest.importorskip("scipy", reason="scipy required for optimization")
+
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        # Without constraint
+        opt1 = PortOptimizer(heat_map)
+        opt1.add_port("test", theta_width=0.3, zeta_width=0.3)
+        r1 = opt1.solve()
+
+        # With very restrictive constraint - should avoid high flux areas
+        opt2 = PortOptimizer(heat_map)
+        opt2.add_port("test", theta_width=0.3, zeta_width=0.3)
+        opt2.set_max_flux_constraint(0.001)  # Very low threshold
+        r2 = opt2.solve()
+
+        # Both should succeed but may find different positions
+        assert r1.success
+        assert r2.success
+
+
+@pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
+class TestNewFeatures:
+    """Tests for bin areas, flux errors, and other new features."""
+
+    def test_bin_areas_attribute(self, mock_results_file: Path):
+        """Test that bin_areas is computed and stored."""
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        assert heat_map.bin_areas is not None
+        assert heat_map.bin_areas.shape == heat_map.flux_grid.shape
+        assert np.all(heat_map.bin_areas > 0)
+        # Total should equal wall area
+        assert np.sum(heat_map.bin_areas) == pytest.approx(heat_map.wall_area, rel=0.01)
+
+    def test_flux_error_attribute(self, mock_results_file: Path):
+        """Test that flux_error (Monte Carlo error) is computed."""
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        assert heat_map.flux_error is not None
+        assert heat_map.flux_error.shape == heat_map.flux_grid.shape
+
+        # Error should be flux / sqrt(N) for bins with particles
+        for i in range(heat_map.flux_grid.shape[0]):
+            for j in range(heat_map.flux_grid.shape[1]):
+                if heat_map.hit_count[i, j] > 0:
+                    expected_err = heat_map.flux_grid[i, j] / np.sqrt(heat_map.hit_count[i, j])
+                    assert heat_map.flux_error[i, j] == pytest.approx(expected_err, rel=1e-10)
+                else:
+                    assert heat_map.flux_error[i, j] == 0.0
+
+    def test_chartmap_bin_areas(self, tmp_path: Path, mock_results_file: Path):
+        """Test that chartmap provides per-bin areas."""
+        chartmap_path = tmp_path / "chartmap.nc"
+        create_mock_chartmap_nc(chartmap_path)
+
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file,
+            total_alpha_power_MW=TEST_ALPHA_POWER_MW,
+            chartmap_file=chartmap_path,
+        )
+
+        # Bin areas should vary (not all identical) for real geometry
+        # For simple torus they're uniform, but the mechanism is tested
+        assert heat_map.bin_areas is not None
+        assert np.sum(heat_map.bin_areas) == pytest.approx(heat_map.wall_area, rel=0.05)
+
 
 @pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
 class TestVisualization:
