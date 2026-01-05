@@ -19,6 +19,7 @@ program test_chartmap_wall_losses
     !> Outputs NetCDF file for visualization of loss positions and times.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use omp_lib, only: omp_get_max_threads
     use netcdf
     use simple, only: init_vmec
     use util, only: twopi
@@ -89,6 +90,7 @@ program test_chartmap_wall_losses
     print *, '========================================================'
     print *, 'Comparing loss fractions: VMEC vs Chartmap vs Meiss'
     print *, '========================================================'
+    print '(A,I0)', ' OpenMP max threads: ', omp_get_max_threads()
     print *
 
     chartmap_file = 'wout.chartmap.nc'
@@ -348,6 +350,7 @@ contains
         loss_pos = 0.0_dp
         lost_step = n_steps
 
+!$omp parallel do default(shared) private(i,j,ierr,z) schedule(static)
         do i = 1, n_particles
             z = z0(:, i)
             do j = 1, n_steps
@@ -360,6 +363,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_vmec
 
     subroutine trace_particles_chartmap(z0, loss_times, loss_pos, lost_step)
@@ -375,6 +379,7 @@ contains
         loss_pos = 0.0_dp
         lost_step = n_steps
 
+!$omp parallel do default(shared) private(i,j,ierr,z,z_chart) schedule(static)
         do i = 1, n_particles
             call vmec_to_chartmap(z0(:, i), z_chart)
             z = z_chart
@@ -388,6 +393,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_chartmap
 
     subroutine trace_particles_boozer(z0, loss_times, loss_pos, lost_step)
@@ -406,6 +412,7 @@ contains
         loss_pos = 0.0_dp
         lost_step = n_steps
 
+!$omp parallel do default(shared) private(i,j,ierr,z,theta_b,phi_b,theta_v,phi_v) schedule(static)
         do i = 1, n_particles
             z = z0(:, i)
             call vmec_to_boozer(z(1), z(2), z(3), theta_b, phi_b)
@@ -424,6 +431,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_boozer
 
     subroutine trace_particles_meiss(z0, loss_times, loss_pos, lost_step)
@@ -444,6 +452,7 @@ contains
         loss_pos = 0.0_dp
         lost_step = n_steps
 
+!$omp parallel do default(shared) private(i,j,ierr,z,z_chart,x_ref,x_integ) schedule(static)
         do i = 1, n_particles
             call vmec_to_chartmap(z0(:, i), z_chart)
             x_ref = z_chart(1:3)
@@ -463,6 +472,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_meiss
 
     subroutine trace_particles_meiss_vmec(z0, loss_times, loss_pos, lost_step)
@@ -482,6 +492,7 @@ contains
         loss_pos = 0.0_dp
         lost_step = n_steps
 
+!$omp parallel do default(shared) private(i,j,ierr,z,x_ref,x_integ) schedule(static)
         do i = 1, n_particles
             x_ref = z0(1:3, i)
             call ref_to_integ(x_ref, x_integ)
@@ -500,6 +511,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_meiss_vmec
 
     subroutine trace_particles_boozer_sympl(z0, loss_times, loss_pos, lost_step)
@@ -523,6 +535,7 @@ contains
 
         dtau_sympl = dtau/sqrt(2.0_dp)
 
+!$omp parallel do default(shared) private(i,j,ierr,f,integ,z,z5,theta_b,phi_b,theta_v,phi_v) schedule(static)
         do i = 1, n_particles
             z5 = z0(:, i)
             call vmec_to_boozer(z5(1), z5(2), z5(3), theta_b, phi_b)
@@ -552,6 +565,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_boozer_sympl
 
     subroutine trace_particles_meiss_vmec_sympl(z0, loss_times, loss_pos, lost_step)
@@ -581,6 +595,7 @@ contains
         ntau_substeps = max(1, ceiling(dtau/dtaumin))
         dtau_sympl = dtaumin/sqrt(2.0_dp)
 
+!$omp parallel do default(shared) private(i,j,ierr,f,integ,z,z5,x_ref,x_integ) schedule(static)
         do i = 1, n_particles
             x_ref = z0(1:3, i)
             call ref_to_integ(x_ref, x_integ)
@@ -608,6 +623,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_meiss_vmec_sympl
 
     subroutine trace_particles_meiss_chart_sympl(z0, loss_times, loss_pos, lost_step)
@@ -637,6 +653,7 @@ contains
         ntau_substeps = max(1, ceiling(dtau/dtaumin))
         dtau_sympl = dtaumin/sqrt(2.0_dp)
 
+!$omp parallel do default(shared) private(i,j,ierr,f,integ,z,z5,z_chart,x_ref,x_integ) schedule(static)
         do i = 1, n_particles
             call vmec_to_chartmap(z0(:, i), z_chart)
             x_ref = z_chart(1:3)
@@ -665,6 +682,7 @@ contains
                 end if
             end do
         end do
+!$omp end parallel do
     end subroutine trace_particles_meiss_chart_sympl
 
     subroutine vmec_to_chartmap(z_vmec, z_chart)
