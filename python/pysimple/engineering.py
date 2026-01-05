@@ -77,6 +77,13 @@ from typing import Optional
 
 import numpy as np
 
+from pysimple.coil_clearance import (
+    CoilClearanceConstraint,
+    CoilSegments,
+    WallSurface,
+    clearance_map_on_heatmap_grid,
+)
+
 try:
     import netCDF4 as nc
     HAS_NETCDF4 = True
@@ -705,6 +712,7 @@ class PortOptimizer:
         self._ports: list[dict] = []
         self._exclusion_zones: list[tuple[float, float, float, float]] = []
         self._max_flux_constraint: Optional[float] = None
+        self._coil_clearance: Optional[CoilClearanceConstraint] = None
 
     def add_port(
         self,
@@ -749,6 +757,37 @@ class PortOptimizer:
         self._max_flux_constraint = max_flux
         return self
 
+    def set_coil_clearance_constraint(
+        self,
+        coil_file: str | Path,
+        *,
+        chartmap_file: str | Path,
+        min_clearance_m: float,
+        use_zero_current_separators: bool = True,
+        jump_factor: float = 25.0,
+    ) -> "PortOptimizer":
+        """
+        Enforce a minimum distance from ports to coils (geometric feasibility).
+
+        This constraint requires a chartmap file to map (theta, zeta) port
+        locations to physical-space coordinates on the wall.
+        """
+        if min_clearance_m <= 0.0:
+            raise ValueError("min_clearance_m must be positive")
+
+        wall = WallSurface.from_chartmap(chartmap_file)
+        coils = CoilSegments.from_file(
+            coil_file,
+            use_zero_current_separators=use_zero_current_separators,
+            jump_factor=jump_factor,
+        )
+        self._coil_clearance = CoilClearanceConstraint(
+            wall=wall,
+            coils=coils,
+            min_clearance_m=float(min_clearance_m),
+        )
+        return self
+
     def _objective(self, x: np.ndarray) -> float:
         """Objective: minimize total flux on all ports, penalize constraints."""
         total = 0.0
@@ -781,6 +820,9 @@ class PortOptimizer:
             # Penalty for port overlapping exclusion zones (check all corners + center)
             if self._port_overlaps_exclusion(theta_c, zeta_c, theta_w, zeta_w):
                 penalty += 1e6
+            if self._coil_clearance is not None:
+                if self._coil_clearance.port_violates(theta_c, zeta_c, theta_w, zeta_w):
+                    penalty += 1e6
 
         # Penalty for exceeding max flux constraint
         if self._max_flux_constraint is not None:
@@ -1009,6 +1051,69 @@ def plot_heat_flux_2d(
                 fontsize=10,
             )
 
+    return ax
+
+
+def plot_heat_flux_with_coil_clearance(
+    heat_map: WallHeatMap,
+    *,
+    coil_file: str | Path,
+    chartmap_file: str | Path,
+    min_clearance_m: float,
+    ax=None,
+    cmap: str = "hot",
+    vmax: Optional[float] = None,
+    show_colorbar: bool = True,
+    ports: Optional[list[Port]] = None,
+    forbidden_alpha: float = 0.35,
+):
+    """
+    Plot heat flux with an overlaid forbidden region based on coil clearance.
+
+    The forbidden region is where the minimum distance from the wall to any
+    coil segment is less than min_clearance_m.
+    """
+    import matplotlib.pyplot as plt
+
+    if min_clearance_m <= 0.0:
+        raise ValueError("min_clearance_m must be positive")
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+    ax = plot_heat_flux_2d(
+        heat_map,
+        ax=ax,
+        cmap=cmap,
+        vmax=vmax,
+        show_colorbar=show_colorbar,
+        ports=ports,
+    )
+
+    wall = WallSurface.from_chartmap(chartmap_file)
+    coils = CoilSegments.from_file(coil_file)
+    clearance = clearance_map_on_heatmap_grid(
+        wall,
+        coils,
+        heat_map.theta_centers,
+        heat_map.zeta_centers,
+    )
+    forbidden = clearance < min_clearance_m
+
+    forbidden_grid = forbidden.astype(float)
+    ax.pcolormesh(
+        np.degrees(heat_map.zeta_edges),
+        np.degrees(heat_map.theta_edges),
+        forbidden_grid,
+        cmap="Greys",
+        vmin=0.0,
+        vmax=1.0,
+        shading="flat",
+        alpha=forbidden_alpha,
+    )
+    ax.set_title(
+        f"Wall Heat Flux + Coil Clearance (d > {min_clearance_m:.3f} m)"
+    )
     return ax
 
 

@@ -95,7 +95,7 @@ add_test(NAME test_engineering
     COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_engineering.py -v
 )
 set_tests_properties(test_engineering PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR}/python"
+    ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR}/python;SIMPLE_TEST_ARTIFACTS_DIR=${CMAKE_CURRENT_BINARY_DIR}/test_artifacts"
     LABELS "python;engineering"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
