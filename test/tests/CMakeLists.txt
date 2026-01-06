@@ -43,8 +43,6 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             set(LIBNEO_PYTHON_DIR "${libneo_SOURCE_DIR}/python")
         elseif(DEFINED LIBNEO_SOURCE_DIR AND EXISTS "${LIBNEO_SOURCE_DIR}/python/libneo/chartmap.py")
             set(LIBNEO_PYTHON_DIR "${LIBNEO_SOURCE_DIR}/python")
-        elseif(DEFINED ENV{CODE} AND EXISTS "$ENV{CODE}/libneo/python/libneo/chartmap.py")
-            set(LIBNEO_PYTHON_DIR "$ENV{CODE}/libneo/python")
         endif()
 
         if(NOT LIBNEO_PYTHON_DIR STREQUAL "")

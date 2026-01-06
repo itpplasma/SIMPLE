@@ -86,11 +86,7 @@ set(FILES_TO_WRAP
 )
 
 # Add libneo files to wrap
-if(DEFINED ENV{CODE})
-    set(LIBNEO_SOURCE_DIR $ENV{CODE}/libneo)
-else()
-    set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})
-endif()
+set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})
 
 list(APPEND FILES_TO_WRAP ${LIBNEO_SOURCE_DIR}/src/canonical_coordinates_mod.f90)
 
