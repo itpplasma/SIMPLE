@@ -1,10 +1,8 @@
 module samplers
+  use, intrinsic :: iso_fortran_env, only: dp => real64
   use util
 
   implicit none
-
-  ! Define real(dp) kind parameter
-  integer, parameter :: dp = kind(1.0d0)
 
   character(len=*), parameter :: START_FILE = 'start.dat'
   character(len=*), parameter :: START_FILE_ANTS = 'start_ants.dat'
@@ -158,7 +156,7 @@ module samplers
 
   subroutine sample_grid(zstart, grid_density)
     use params, only: ntestpart, zstart_dim1, zend, times_lost, &
-        trap_par, perp_inv, iclass, xstart, sbeg
+        trap_par, perp_inv, iclass, sbeg
     use util, only: pi
 
     real(dp), dimension(:,:), allocatable, intent(inout) :: zstart
