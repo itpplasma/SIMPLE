@@ -1,4 +1,5 @@
 module cut_detector
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     use util, only: twopi
     use simple, only: tstep
     use orbit_symplectic, only: symplectic_integrator_t
@@ -9,8 +10,6 @@ module cut_detector
 
     implicit none
 
-    ! Define real(dp) kind parameter
-    integer, parameter :: dp = kind(1.0d0)
     save
 
     integer, parameter :: n_tip_vars = 6
@@ -86,33 +85,29 @@ module cut_detector
       integer :: i
       real(dp) :: phiper = 0.0d0
 
-      do i=1, nstep_max
+      do i = 1, nplagr
         call tstep(si, f, z, ierr)
-        if(ierr.ne.0) exit
+        if (ierr.ne.0) exit
 
-        self%par_inv = self%par_inv+z(5)**2 ! parallel adiabatic invariant
+        self%par_inv = self%par_inv + z(5)**2 ! parallel adiabatic invariant
 
-        if(i.le.nplagr) then          !<=first nplagr points to initialize stencil
-          ! Note: i is guaranteed to be <= nplagr here, so array access is safe
-          self%orb_sten(1:5,i)=z
-          self%orb_sten(6,i)=self%par_inv
-        else                          !<=normal case, shift stencil
-          self%orb_sten(1:5,self%ipoi(1))=z
-          self%orb_sten(6,self%ipoi(1))=self%par_inv
-          self%ipoi=cshift(self%ipoi,1)
-        endif
+        self%orb_sten(1:5, i) = z
+        self%orb_sten(6, i) = self%par_inv
 
         !-------------------------------------------------------------------------
         ! Tip detection and interpolation
 
-        if(self%alam_prev.lt.0.d0.and.z(5).gt.0.d0) self%itip=0   !<=tip has been passed
+        if(self%alam_prev.lt.0.d0.and.z(5).gt.0.d0) then
+          self%itip=0   !<=tip has been passed
+        end if
         self%itip=self%itip+1
         self%alam_prev=z(5)
 
         !<=use only initialized stencil
         if(i.gt.nplagr .and. self%itip.eq.nplagr/2) then
           cut_type = 0
-          call plag_coeff(nplagr, nder, 0d0, self%orb_sten(5, self%ipoi), self%coef)
+          call plag_coeff(nplagr, nder, 0d0, self%orb_sten(5, self%ipoi), &
+            self%coef)
           var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
           var_cut(2) = modulo(var_cut(2), twopi)
           var_cut(3) = modulo(var_cut(3), twopi)
@@ -140,7 +135,70 @@ module cut_detector
         if(i.gt.nplagr .and. self%iper.eq.nplagr/2) then
           cut_type = 1
           !<=stencil around periodic boundary is complete, interpolate
-          call plag_coeff(nplagr, nder, 0d0, self%orb_sten(3, self%ipoi) - phiper, self%coef)
+          call plag_coeff(nplagr, nder, 0d0, self%orb_sten(3, self%ipoi) - &
+            phiper, self%coef)
+          var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
+          var_cut(2) = modulo(var_cut(2), twopi)
+          var_cut(3) = modulo(var_cut(3), twopi)
+          return
+        end if
+
+        ! End periodic boundary footprint detection and interpolation
+        !-------------------------------------------------------------------------
+
+      end do
+
+      do i = nplagr + 1, nstep_max
+        call tstep(si, f, z, ierr)
+        if (ierr.ne.0) exit
+
+        self%par_inv = self%par_inv + z(5)**2 ! parallel adiabatic invariant
+
+        self%orb_sten(1:5, self%ipoi(1)) = z
+        self%orb_sten(6, self%ipoi(1)) = self%par_inv
+        self%ipoi = cshift(self%ipoi, 1)
+
+        !-------------------------------------------------------------------------
+        ! Tip detection and interpolation
+
+        if(self%alam_prev.lt.0.d0.and.z(5).gt.0.d0) then
+          self%itip=0   !<=tip has been passed
+        end if
+        self%itip=self%itip+1
+        self%alam_prev=z(5)
+
+        if(self%itip.eq.nplagr/2) then
+          cut_type = 0
+          call plag_coeff(nplagr, nder, 0d0, self%orb_sten(5, self%ipoi), &
+            self%coef)
+          var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
+          var_cut(2) = modulo(var_cut(2), twopi)
+          var_cut(3) = modulo(var_cut(3), twopi)
+          self%par_inv = self%par_inv - var_cut(6)
+          return
+        end if
+
+        ! End tip detection and interpolation
+
+        !-------------------------------------------------------------------------
+        ! Periodic boundary footprint detection and interpolation
+
+        if(z(3).gt.dble(self%kper+1)*self%fper) then
+          self%iper=0   !<=periodic boundary has been passed
+          phiper=dble(self%kper+1)*self%fper
+          self%kper=self%kper+1
+        elseif(z(3).lt.dble(self%kper)*self%fper) then
+          self%iper=0   !<=periodic boundary has been passed
+          phiper=dble(self%kper)*self%fper
+          self%kper=self%kper-1
+        endif
+        self%iper=self%iper+1
+
+        if(self%iper.eq.nplagr/2) then
+          cut_type = 1
+          !<=stencil around periodic boundary is complete, interpolate
+          call plag_coeff(nplagr, nder, 0d0, self%orb_sten(3, self%ipoi) - &
+            phiper, self%coef)
           var_cut = matmul(self%orb_sten(:, self%ipoi), self%coef(0,:))
           var_cut(2) = modulo(var_cut(2), twopi)
           var_cut(3) = modulo(var_cut(3), twopi)
