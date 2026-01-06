@@ -1,5 +1,6 @@
 module orbit_symplectic
 
+use, intrinsic :: iso_fortran_env, only: dp => real64
 use util, only: pi, twopi
 use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
   eval_field => evaluate
@@ -17,9 +18,6 @@ use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
 
 implicit none
 
-! Define real(dp) kind parameter
-integer, parameter :: dp = kind(1.0d0)
-
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 
 contains
@@ -28,8 +26,6 @@ contains
   !
 recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   !
-  use plag_coeff_sub, only : plag_coeff
-
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: z(:)
@@ -37,8 +33,6 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   integer, intent(in) :: ntau
   real(dp), intent(in) :: rtol_init
   integer, intent(in) :: mode_init
-
-  integer :: k
 
   si%atol = 1d-15
   si%rtol = rtol_init
@@ -418,7 +412,6 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   real(dp), intent(out) :: xlast(n)
 
   real(dp) :: fvec(n), fjac(n,n), jinv(n,n)
-  integer :: pivot(n), info
 
   real(dp) :: xabs(n), tolref(n), fabs(n)
   real(dp) :: det
@@ -778,8 +771,13 @@ recursive subroutine jac_rk_lobatto(si, fs, s, jac)
 
   call coeff_rk_lobatto(s, a, ahat, b, c)
   jac = 0d0
+  dHprime = 0.0d0
 
-  Hprime = fs%dH(1)/fs%dpth(1)
+  Hprime = 0.0d0
+  Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
+  do k = 2, s
+    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+  end do
   dHprime(1) = (fs(1)%d2H(1)-Hprime(1)*fs(1)%d2pth(1))/fs(1)%dpth(1)  ! d/dr
   dHprime(2) = (fs(1)%d2H(7)-Hprime(1)*fs(1)%d2pth(7))/fs(1)%dpth(1)  ! d/dpph
   do k = 2, s
@@ -1209,7 +1207,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
@@ -1268,7 +1266,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast, dz
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
@@ -1330,7 +1328,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, parameter :: maxit = 8
 
   real(dp), dimension(n) :: x, xlast
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
