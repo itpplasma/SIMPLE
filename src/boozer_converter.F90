@@ -82,7 +82,7 @@ contains
         use vector_potentail_mod, only: ns, hs
         use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B, use_B_r
+                                          hs_B, h_theta_B, h_phi_B
 
         implicit none
 
@@ -784,7 +784,7 @@ contains
 
     !> Compute radial covariant magnetic field B_rho from symmetry flux coordinates
     subroutine compute_br_from_symflux(rho_tor, aiota_arr, Gfunc, Bcovar_symfl)
-        use boozer_coordinates_mod, only: ns_B, n_theta_B, n_phi_B
+        use boozer_coordinates_mod, only: ns_B, n_phi_B
         use plag_coeff_sub, only: plag_coeff
 
         real(dp), intent(in) :: rho_tor(:)
@@ -798,7 +798,7 @@ contains
         integer :: i_rho, i_phi, ibeg, iend, nshift
         real(dp) :: coef(0:NDER, NPOILAG)
 
-        nshift = NPOILAG/2
+        nshift = (NPOILAG - 1)/2
 
         do i_rho = 1, ns_B
             ibeg = i_rho - nshift
