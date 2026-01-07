@@ -503,6 +503,18 @@ set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
     TIMEOUT 60)
 
+# Chartmap R,Z consistency tests
+add_executable(test_chartmap_rz_consistency.x test_chartmap_rz_consistency.f90)
+target_link_libraries(test_chartmap_rz_consistency.x simple)
+add_dependencies(test_chartmap_rz_consistency.x ncsx_test_data)
+
+add_test(NAME test_chartmap_rz_consistency
+    COMMAND test_chartmap_rz_consistency.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_rz_consistency PROPERTIES
+    LABELS "unit"
+    TIMEOUT 120)
+
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)
 target_link_libraries(test_batch_splines.x simple testing_utils)
