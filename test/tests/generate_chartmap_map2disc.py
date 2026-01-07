@@ -29,6 +29,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=0.0,
         help="Outward offset of VMEC boundary in meters, applied before map2disc.",
     )
+    p.add_argument(
+        "--boundary-param",
+        type=str,
+        default="arc",
+        choices=("arc", "theta"),
+        help="Boundary parameterization for map2disc (arc or theta).",
+    )
     p.add_argument("--M", type=int, default=16)
     p.add_argument("--Nt", type=int, default=256)
     p.add_argument("--Ng", type=int, nargs=2, default=(256, 256))
@@ -63,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         nzeta=int(args.nzeta),
         s_boundary=float(args.s_boundary),
         boundary_offset=float(args.boundary_offset),
+        boundary_param=str(args.boundary_param),
         M=int(args.M),
         Nt=int(args.Nt),
         Ng=(int(args.Ng[0]), int(args.Ng[1])),
