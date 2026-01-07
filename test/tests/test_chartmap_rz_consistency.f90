@@ -33,6 +33,7 @@ program test_chartmap_rz_consistency
     call init_timer()
 
     call test_rz_chartmap_roundtrip(nerrors)
+    call test_rz_vmec_chartmap_roundtrip(nerrors)
     call test_vmec_chartmap_cyl_roundtrip(nerrors)
     call test_boundary_rz_match(nerrors)
     call test_interior_rz_consistency(nerrors)
@@ -116,6 +117,103 @@ contains
         print *, '  Max R,Z roundtrip error: ', err_max, ' m'
         if (nerrors == 0) print *, '  PASSED'
     end subroutine test_rz_chartmap_roundtrip
+
+    subroutine test_rz_vmec_chartmap_roundtrip(nerrors)
+        !> Test R,Z -> VMEC -> chartmap -> R,Z full roundtrip.
+        !> Generate points in VMEC coordinates first (guaranteeing they are
+        !> inside the plasma domain), then test R,Z inversion consistency.
+        integer, intent(inout) :: nerrors
+
+        class(coordinate_system_t), allocatable :: vmec_cs, chart_cs
+        real(dp) :: xcyl_orig(3), xcyl_vmec(3), xcyl_chart(3)
+        real(dp) :: u_vmec_orig(3), u_vmec_inv(3), u_chart(3)
+        real(dp) :: err_vmec, err_chart, err_max_vmec, err_max_chart
+        logical :: vmec_exists, chart_exists
+        integer :: ierr_vmec, ierr_chart, i, j, n_success, n_total
+        real(dp) :: s, theta, phi
+
+        print *, 'Test: R,Z -> VMEC -> chartmap -> R,Z full roundtrip'
+
+        inquire(file=VMEC_FILE, exist=vmec_exists)
+        inquire(file=CHARTMAP_FILE, exist=chart_exists)
+        if (.not. vmec_exists) then
+            print *, '  SKIP: ', VMEC_FILE, ' not found'
+            return
+        end if
+        if (.not. chart_exists) then
+            print *, '  SKIP: ', CHARTMAP_FILE, ' not found'
+            return
+        end if
+
+        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        call make_vmec_coordinate_system(vmec_cs)
+        call make_chartmap_coordinate_system(chart_cs, CHARTMAP_FILE)
+
+        err_max_vmec = 0.0_dp
+        err_max_chart = 0.0_dp
+        n_success = 0
+        n_total = 0
+        phi = 0.3_dp
+
+        do i = 1, 5
+            s = 0.2_dp + 0.15_dp * real(i - 1, dp)
+            do j = 1, 8
+                theta = twopi * real(j - 1, dp) / 8.0_dp
+                n_total = n_total + 1
+
+                u_vmec_orig = [s, theta, phi]
+                call vmec_cs%evaluate_cyl(u_vmec_orig, xcyl_orig)
+
+                call vmec_cs%from_cyl(xcyl_orig, u_vmec_inv, ierr_vmec)
+                if (ierr_vmec /= 0) then
+                    if (n_success == 0 .and. i == 1 .and. j == 1) then
+                        print *, '  DEBUG: VMEC inversion failed at s=', s, ' theta=', theta
+                        print *, '         R=', xcyl_orig(1), ' Z=', xcyl_orig(3)
+                        print *, '         ierr=', ierr_vmec
+                    end if
+                    cycle
+                end if
+
+                call vmec_cs%evaluate_cyl(u_vmec_inv, xcyl_vmec)
+                err_vmec = max(abs(xcyl_orig(1) - xcyl_vmec(1)), &
+                               abs(xcyl_orig(3) - xcyl_vmec(3)))
+                if (err_vmec > err_max_vmec) err_max_vmec = err_vmec
+
+                call chart_cs%from_cyl(xcyl_orig, u_chart, ierr_chart)
+                if (ierr_chart /= chartmap_from_cyl_ok) cycle
+
+                call chart_cs%evaluate_cyl(u_chart, xcyl_chart)
+                err_chart = max(abs(xcyl_orig(1) - xcyl_chart(1)), &
+                                abs(xcyl_orig(3) - xcyl_chart(3)))
+                if (err_chart > err_max_chart) err_max_chart = err_chart
+
+                n_success = n_success + 1
+
+                if (err_vmec > TOL_RZ) then
+                    print *, '  VMEC inversion error at s=', s, ' theta=', theta
+                    print *, '    err=', err_vmec
+                    nerrors = nerrors + 1
+                end if
+
+                if (err_chart > TOL_RZ) then
+                    print *, '  Chartmap inversion error at s=', s, ' theta=', theta
+                    print *, '    err=', err_chart
+                    nerrors = nerrors + 1
+                end if
+            end do
+        end do
+
+        print *, '  Successful inversions: ', n_success, ' /', n_total
+        print *, '  Max VMEC R,Z error:    ', err_max_vmec, ' m'
+        print *, '  Max chartmap R,Z error:', err_max_chart, ' m'
+
+        if (n_success < n_total / 2) then
+            print *, '  FAIL: Less than 50% inversions succeeded'
+            nerrors = nerrors + 1
+        else if (nerrors == 0) then
+            print *, '  PASSED'
+        end if
+    end subroutine test_rz_vmec_chartmap_roundtrip
 
     subroutine test_vmec_chartmap_cyl_roundtrip(nerrors)
         !> Test VMEC -> cyl -> chartmap -> cyl roundtrip preserves R,Z.
