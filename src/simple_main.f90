@@ -86,6 +86,9 @@ contains
          call sample_particles
          call print_phase_time('Particle sampling completed')
 
+         call verify_starting_positions_rz
+         call print_phase_time('R,Z sanity check completed')
+
          if (generate_start_only) stop 'stopping after generating start.dat'
 
          call init_magfie(isw_field_type)
@@ -703,5 +706,51 @@ contains
       end if
 
    end subroutine write_output
+
+   subroutine verify_starting_positions_rz
+      !> Verify and output starting position R,Z statistics.
+      !> This sanity check runs automatically at each simulation to help
+      !> verify coordinate consistency between different coordinate systems.
+      use reference_coordinates, only: ref_coords
+      use params, only: ntestpart, zstart
+
+      real(dp), parameter :: cm_to_m = 0.01d0
+      real(dp) :: x_cart(3), R, Z
+      real(dp) :: R_min, R_max, R_sum, Z_min, Z_max, Z_sum
+      integer :: ipart
+
+      if (.not. allocated(ref_coords)) then
+         print *, 'WARNING: verify_starting_positions_rz: ref_coords not allocated'
+         return
+      end if
+
+      R_min = huge(1.0d0)
+      R_max = -huge(1.0d0)
+      R_sum = 0.0d0
+      Z_min = huge(1.0d0)
+      Z_max = -huge(1.0d0)
+      Z_sum = 0.0d0
+
+      do ipart = 1, ntestpart
+         call ref_coords%evaluate_cart(zstart(1:3, ipart), x_cart)
+         R = sqrt(x_cart(1)**2 + x_cart(2)**2) * cm_to_m
+         Z = x_cart(3) * cm_to_m
+
+         R_min = min(R_min, R)
+         R_max = max(R_max, R)
+         R_sum = R_sum + R
+
+         Z_min = min(Z_min, Z)
+         Z_max = max(Z_max, Z)
+         Z_sum = Z_sum + Z
+      end do
+
+      print '(A)', '=== Starting Position R,Z Sanity Check ==='
+      print '(A,F10.4,A,F10.4,A,F10.4,A)', &
+         'R: min=', R_min, ' max=', R_max, ' mean=', R_sum/ntestpart, ' m'
+      print '(A,F10.4,A,F10.4,A,F10.4,A)', &
+         'Z: min=', Z_min, ' max=', Z_max, ' mean=', Z_sum/ntestpart, ' m'
+      print '(A)', '==========================================='
+   end subroutine verify_starting_positions_rz
 
 end module simple_main
