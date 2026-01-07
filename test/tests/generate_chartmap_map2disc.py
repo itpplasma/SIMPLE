@@ -41,6 +41,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=0.0,
         help="Outward offset of VMEC boundary in meters, applied before map2disc.",
     )
+    p.add_argument(
+        "--boundary-param",
+        type=str,
+        default="auto",
+        choices=("auto", "arc", "theta"),
+        help="Boundary parameterization for map2disc (auto, arc, or theta).",
+    )
     p.add_argument("--M", type=int, default=16)
     p.add_argument("--Nt", type=int, default=256)
     p.add_argument("--Ng", type=int, nargs=2, default=(256, 256))
@@ -81,7 +88,10 @@ def main(argv: list[str] | None = None) -> int:
 
     boundary_offset = float(args.boundary_offset)
     if "boundary_param" in sig_params:
-        kwargs["boundary_param"] = "theta" if boundary_offset == 0.0 else "arc"
+        boundary_param = str(args.boundary_param).strip().lower()
+        if boundary_param == "auto":
+            boundary_param = "theta" if boundary_offset == 0.0 else "arc"
+        kwargs["boundary_param"] = boundary_param
     if boundary_offset != 0.0:
         if "boundary_offset" not in sig_params:
             raise SystemExit(
