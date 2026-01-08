@@ -77,6 +77,8 @@ contains
       real(dp) a_phi,a_b,a_c,hstar
       real(dp) s_hc,hpstar,phidot,blodot,bra
       real(dp) pardeb
+      real(dp), parameter :: hpstar_min = 1.0d-12
+      real(dp), parameter :: p_min = 1.0d-14
   !
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
       dimension derphi(3)
@@ -107,6 +109,9 @@ contains
       call elefie_can(x,derphi)
   !
       p=z(4)
+      if (abs(p) < p_min) then
+        p = dsign(p_min, p + p_min)
+      endif
       alambd=z(5)
   !
       p2=p*p
@@ -138,6 +143,9 @@ contains
         hstar(i)=hctrvr(i)+ppar*a_c(i)
       enddo
       hpstar=1.d0+ppar*s_hc
+      if (abs(hpstar) < hpstar_min) then
+        hpstar = dsign(hpstar_min, hpstar + hpstar_min)
+      endif
   !
   ! velocities in the coordinate space
   !
@@ -165,7 +173,8 @@ contains
   !
       subroutine orbit_timestep_can(z,dtau,dtaumin,relerr,ierr)
 use diag_mod, only : dodiag
-use odeint_allroutines_sub, only : odeint_allroutines
+use odeint_allroutines_sub, only : odeint_allroutines, odeint_clear_status, &
+    odeint_has_failed
 use chamb_sub, only : chamb_can
   !
       implicit none
@@ -198,7 +207,12 @@ use chamb_sub, only : chamb_can
   !
       do while((dtau>0 .and. (tau2 .lt. dtau)) .or. (dtau<0 .and. (tau2 .gt. dtau)))
   !
+        call odeint_clear_status()
         call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+        if (odeint_has_failed()) then
+          ierr = 1
+          return
+        endif
   !
 if(dodiag) write (123,*) tau2,z
         y(1)=z(1)
@@ -214,7 +228,12 @@ if(dodiag) write (123,*) tau2,z
   !
       tau2=dtau
   !
+      call odeint_clear_status()
       call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+      if (odeint_has_failed()) then
+        ierr = 1
+        return
+      endif
   !
       y(1)=z(1)
       y(2)=z(2)
@@ -274,7 +293,8 @@ if(dodiag) write (123,*) tau2,z
       subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
                                xstart,bstart,volstart,bmod00,ierr)
   !
-      use odeint_allroutines_sub, only : odeint_allroutines
+      use odeint_allroutines_sub, only : odeint_allroutines, odeint_clear_status, &
+          odeint_has_failed
       use chamb_sub, only : chamb_can
       use magfie_sub, only : magfie
   !
@@ -376,8 +396,10 @@ if(dodiag) write (123,*) tau2,z
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
       subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
-      use odeint_allroutines_sub, only : odeint_allroutines
+      use odeint_allroutines_sub, only : odeint_allroutines, odeint_clear_status, &
+          odeint_has_failed
       use chamb_sub, only : chamb_can
+      use field_can_meiss, only : meiss_is_chartmap
   !
       implicit none
   !
@@ -395,6 +417,11 @@ if(dodiag) write (123,*) tau2,z
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
         print *,'orbit_timestep: number of steps exceeds nstepmax'
+        return
+      endif
+
+      if (meiss_is_chartmap) then
+        call orbit_timestep_can(z, dtau, dtaumin, relerr, ierr)
         return
       endif
   !
@@ -420,7 +447,12 @@ if(dodiag) write (123,*) tau2,z
             z(1)=z1
             z(2)=z2
   !
+            call odeint_clear_status()
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+            if (odeint_has_failed()) then
+              ierr = 1
+              return
+            endif
   !
             y(1)=z(1)
             y(2)=z(2)
@@ -431,7 +463,12 @@ if(dodiag) write (123,*) tau2,z
             if(ierr.eq.1) return
           else
   !
+            call odeint_clear_status()
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+            if (odeint_has_failed()) then
+              ierr = 1
+              return
+            endif
   !
           endif
         else
@@ -442,11 +479,21 @@ if(dodiag) write (123,*) tau2,z
             z(1)=z1
             z(2)=z2
   !
+            call odeint_clear_status()
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+            if (odeint_has_failed()) then
+              ierr = 1
+              return
+            endif
   !
           else
   !
+            call odeint_clear_status()
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+            if (odeint_has_failed()) then
+              ierr = 1
+              return
+            endif
   !
             y(1)=z(1)
             y(2)=z(2)
@@ -472,7 +519,12 @@ if(dodiag) write (123,*) tau2,z
           z(1)=z1
           z(2)=z2
   !
+          call odeint_clear_status()
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+          if (odeint_has_failed()) then
+            ierr = 1
+            return
+          endif
   !
           y(1)=z(1)
           y(2)=z(2)
@@ -483,7 +535,12 @@ if(dodiag) write (123,*) tau2,z
           if(ierr.eq.1) return
         else
   !
+          call odeint_clear_status()
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+          if (odeint_has_failed()) then
+            ierr = 1
+            return
+          endif
   !
         endif
       else
@@ -494,11 +551,21 @@ if(dodiag) write (123,*) tau2,z
           z(1)=z1
           z(2)=z2
   !
+          call odeint_clear_status()
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+          if (odeint_has_failed()) then
+            ierr = 1
+            return
+          endif
   !
         else
   !
+          call odeint_clear_status()
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+          if (odeint_has_failed()) then
+            ierr = 1
+            return
+          endif
   !
           y(1)=z(1)
           y(2)=z(2)

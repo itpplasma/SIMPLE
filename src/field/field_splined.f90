@@ -32,7 +32,7 @@ module field_splined
     use field_vmec, only: vmec_field_t
     use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
                                   chartmap_coordinate_system_t, RHO_TOR, RHO_POL, &
-                                  PSI_TOR_NORM, PSI_POL_NORM
+                                  PSI_TOR_NORM, PSI_POL_NORM, UNKNOWN
     use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, &
                                   identity_scaling_t
     use cartesian_coordinates, only: cartesian_coordinate_system_t
@@ -214,9 +214,15 @@ contains
 
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
-            if (.not. present(n_r_in)) n_r = cs%nrho
-            if (.not. present(n_th_in)) n_th = cs%ntheta
-            if (.not. present(n_phi_in)) n_phi = cs%nzeta
+            if (cs%rho_convention /= UNKNOWN) then
+                if (.not. present(n_r_in)) n_r = cs%nrho
+                if (.not. present(n_th_in)) n_th = cs%ntheta
+                if (.not. present(n_phi_in)) n_phi = cs%nzeta
+            else
+                if (.not. present(n_r_in)) n_r = max(n_r, 96)
+                if (.not. present(n_th_in)) n_th = max(n_th, 97)
+                if (.not. present(n_phi_in)) n_phi = max(n_phi, 96)
+            end if
         class default
             continue
         end select
@@ -228,12 +234,29 @@ contains
 
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
-            ! Use rho range [0.1, 0.99] to include most of the plasma volume
-            ! while avoiding the exact boundary where VMEC coordinate inversion fails.
-            ! The previous limit of 0.9 caused particles near the edge to use
-            ! extrapolated field values, leading to incorrect drift velocities.
-            if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0)
-            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0)
+            block
+                real(dp) :: rho_min, rho_max
+
+                if (cs%has_spl_rz) then
+                    rho_min = cs%spl_rz%x_min(1)
+                    rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
+                              real(cs%spl_rz%num_points(1) - 1, dp)
+                else
+                    rho_min = cs%spl_cart%x_min(1)
+                    rho_max = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
+                              real(cs%spl_cart%num_points(1) - 1, dp)
+                end if
+
+                if (cs%rho_convention == UNKNOWN) then
+                    if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0, rho_min)
+                    if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0, rho_max)
+                else
+                    ! Use rho range [0.1, 0.99] to include most of the plasma volume
+                    ! while avoiding the exact boundary where VMEC inversion fails.
+                    if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0, rho_min)
+                    if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0, rho_max)
+                end if
+            end block
         class default
             continue
         end select

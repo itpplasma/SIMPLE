@@ -689,49 +689,17 @@ contains
         real(dp), intent(in) :: z_vmec(5)
         real(dp), intent(out) :: z_chart(5)
 
-        real(dp) :: x_target(3), x_test(3), err_vec(3), err_norm
-        real(dp) :: J(3, 3), J_inv(3, 3), dx(3)
-        real(dp), parameter :: tol = 1.0e-8_dp
-        integer, parameter :: max_iter = 30
-        integer :: iter, info, ipiv(3)
-        real(dp) :: work(9)
+        real(dp) :: x_cyl(3)
+        integer :: ierr
 
-        call ref_coords%evaluate_cart(z_vmec(1:3), x_target)
-        z_chart(1:3) = z_vmec(1:3)
+        call ref_coords%evaluate_cyl(z_vmec(1:3), x_cyl)
+        call chartmap_coords%from_cyl(x_cyl, z_chart(1:3), ierr)
+        if (ierr /= 0) then
+            print *, 'vmec_to_chartmap: from_cyl failed ierr=', ierr
+            error stop 1
+        end if
         z_chart(4:5) = z_vmec(4:5)
-
-        do iter = 1, max_iter
-            call chartmap_coords%evaluate_cart(z_chart(1:3), x_test)
-            err_vec = x_test - x_target
-            err_norm = sqrt(sum(err_vec**2))
-            if (err_norm < tol) exit
-
-            call compute_jacobian(z_chart(1:3), J)
-            J_inv = J
-            call dgetrf(3, 3, J_inv, 3, ipiv, info)
-            call dgetri(3, J_inv, 3, ipiv, work, 9, info)
-            dx = -matmul(J_inv, err_vec)
-            z_chart(1:3) = z_chart(1:3) + dx
-        end do
     end subroutine vmec_to_chartmap
-
-    subroutine compute_jacobian(x, J)
-        real(dp), intent(in) :: x(3)
-        real(dp), intent(out) :: J(3, 3)
-        real(dp), parameter :: eps = 1.0e-6_dp
-        real(dp) :: x_p(3), x_m(3), c_p(3), c_m(3)
-        integer :: i
-
-        do i = 1, 3
-            x_p = x
-            x_m = x
-            x_p(i) = x(i) + eps
-            x_m(i) = x(i) - eps
-            call chartmap_coords%evaluate_cart(x_p, c_p)
-            call chartmap_coords%evaluate_cart(x_m, c_m)
-            J(:, i) = (c_p - c_m)/(2.0_dp*eps)
-        end do
-    end subroutine compute_jacobian
 
     function count_confined(loss_times) result(frac)
         real(dp), intent(in) :: loss_times(n_particles)

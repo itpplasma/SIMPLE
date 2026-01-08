@@ -72,6 +72,9 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 - Splined field construction or evaluation
 - Canonical coordinate transformations
 - libneo coordinate API usage
+  - Map2disc chartmaps (`rho_convention=unknown`) now use higher default spline
+    resolution (96×97×96) to stabilize long-time orbit tracing; see
+    `DOC/coordinates-and-fields.md` for details.
 
 **Integration System:**
 - `orbit_symplectic_base.f90`: Base integrator types and RK coefficients

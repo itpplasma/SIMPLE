@@ -153,6 +153,10 @@ Attributes: num_field_periods, zeta_convention, rho_convention
    - Suitable as a reference coordinate system for Meiss canonicalization;
      Meiss does not require flux coordinates, only a smooth reference mapping
      with non-vanishing toroidal field component in the domain.
+   - For orbit integration stability, default splined-field resolution is
+     increased for `rho_convention=unknown` chartmaps (currently
+     96×97×96 unless overridden), and the sampling range remains
+     `rho ∈ [0.1, 0.99]` to avoid VMEC inversion failures at the boundary.
 
 ### 2.4 Cartesian Coordinates
 
@@ -366,12 +370,12 @@ The REFCOORDS mode (`magfie_refcoords`) is the most flexible:
 
 ```fortran
 subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    ! 1. Evaluate splined field with derivatives
-    call refcoords_field%evaluate_with_der(x, Acov, hcovar, Bmod,
+    ! 1. Wrap chartmap angles to their periodic domains and evaluate splined field
+    call refcoords_field%evaluate_with_der(x_eval, Acov, hcovar, Bmod,
                                            dAcov, dhcov, dBmod)
 
     ! 2. Handle coordinate scaling (sqrt_s vs identity)
-    call scaled_to_ref_coords(refcoords_field%coords, x, u_ref, J)
+    call scaled_to_ref_coords(refcoords_field%coords, x_eval, u_ref, J)
 
     ! 3. Get metric from reference coordinates
     call refcoords_field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
@@ -379,6 +383,10 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 
     ! 4. Compute signed Jacobian
     sqrtg = signed_jacobian(e_cov) * J
+
+    ! 4b. Apply safety floors to avoid divide-by-zero in downstream steps
+    bmod = max(abs(bmod), 1.0d-30)
+    sqrtg = sign(max(abs(sqrtg), 1.0d-14), sqrtg)
 
     ! 5. Transform to contravariant components
     call inverse_metric_scaled(J, ginv_u, ginv_x)
@@ -388,6 +396,10 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     call compute_hcurl(sqrtg, dhcov, hcurl)
 end subroutine
 ```
+For chartmap reference coordinates, `magfie_refcoords` wraps `theta` to
+`[0, 2*pi)` and `zeta` to `[0, 2*pi/nfp)` before evaluating splines, clamps
+`rho` to the spline domain, and floors `bmod`/`sqrtg` to avoid divide-by-zero
+in `compute_hcurl`.
 
 ---
 
@@ -510,6 +522,8 @@ in the chosen reference system (often r = sqrt(s) for VMEC-based references).
 - The only structural requirement is a non-vanishing toroidal field component
   in the domain, so VMEC, chartmap, or cylindrical reference coordinates are
   all valid inputs.
+- The toroidal angle is treated with the field-period range
+  `phi in [0, 2*pi/nfp)` during spline construction and wrapping.
 
 **Construction** (two-phase):
 

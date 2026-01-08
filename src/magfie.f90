@@ -6,6 +6,7 @@ use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use field_splined, only: splined_field_t
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
                               RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
+use util, only: twopi
 
 implicit none
 
@@ -148,6 +149,10 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   real(dp) :: u_ref(3), J
   real(dp) :: e_cov(3, 3), jac_signed
   real(dp) :: sqrtg_abs
+  real(dp) :: x_eval(3), x_min(3), x_max(3), zeta_period
+  real(dp) :: bmod_safe, sqrtg_safe
+  real(dp), parameter :: bmod_min = 1.0d-30
+  real(dp), parameter :: sqrtg_min = 1.0d-14
 
   if (.not. allocated(refcoords_field)) then
     print *, 'magfie_refcoords: refcoords_field not set'
@@ -155,22 +160,39 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     error stop
   end if
 
-  call refcoords_field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, &
+  x_eval = x
+  x_min = refcoords_field%splines%x_min
+  x_max = refcoords_field%splines%x_min + refcoords_field%splines%h_step * &
+          real(refcoords_field%splines%num_points - 1, dp)
+  select type (coords => refcoords_field%coords)
+  type is (chartmap_coordinate_system_t)
+    x_eval(2) = modulo(x_eval(2) - x_min(2), twopi) + x_min(2)
+    zeta_period = twopi/real(coords%num_field_periods, dp)
+    x_eval(3) = modulo(x_eval(3) - x_min(3), zeta_period) + x_min(3)
+  class default
+  end select
+  x_eval(1) = max(x_min(1), min(x_eval(1), x_max(1)))
+
+  call refcoords_field%evaluate_with_der(x_eval, Acov, hcovar, Bmod_local, dAcov, &
                                          dhcov, dBmod)
   bmod = Bmod_local
-  bder = dBmod/max(bmod, 1.0d-30)
+  bmod_safe = sign(max(abs(bmod), bmod_min), bmod + bmod_min)
+  bmod = bmod_safe
+  bder = dBmod/bmod_safe
 
-  call scaled_to_ref_coords(refcoords_field%coords, x, u_ref, J)
+  call scaled_to_ref_coords(refcoords_field%coords, x_eval, u_ref, J)
   call refcoords_field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
   call refcoords_field%coords%covariant_basis(u_ref, e_cov)
 
   jac_signed = signed_jacobian(e_cov)
   sqrtg = jac_signed*J
+  sqrtg_safe = sign(max(abs(sqrtg), sqrtg_min), sqrtg + sqrtg_min)
+  sqrtg = sqrtg_safe
 
   call inverse_metric_scaled(J, ginv_u, ginv_x)
   hctrvr = matmul(ginv_x, hcovar)
 
-  call compute_hcurl(sqrtg, dhcov, hcurl)
+  call compute_hcurl(sqrtg_safe, dhcov, hcurl)
 end subroutine magfie_refcoords
 
 

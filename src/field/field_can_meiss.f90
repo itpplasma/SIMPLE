@@ -50,6 +50,7 @@ type :: grid_indices_t
 end type grid_indices_t
 
 class(magnetic_field_t), allocatable :: field_noncan
+logical, public :: meiss_is_chartmap = .false.
 integer :: n_r=62, n_th=63, n_phi=64
 real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
@@ -102,6 +103,14 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     class(coordinate_scaling_t), intent(in), optional :: scaling
 
         call field_clone(field_noncan_, field_noncan)
+        meiss_is_chartmap = .false.
+        select type (fld => field_noncan)
+        type is (splined_field_t)
+            select type (cs => fld%coords)
+            type is (chartmap_coordinate_system_t)
+                meiss_is_chartmap = .true.
+            end select
+        end select
 
     ! Initialize coordinate scaling based on field type
     if (allocated(coord_scaling)) deallocate(coord_scaling)
@@ -181,6 +190,7 @@ subroutine cleanup_meiss()
     if (allocated(lam_phi)) deallocate(lam_phi)
     if (allocated(chi_gauge)) deallocate(chi_gauge)
     if (allocated(field_noncan)) deallocate(field_noncan)
+    meiss_is_chartmap = .false.
     if (allocated(coord_scaling)) deallocate(coord_scaling)
 end subroutine cleanup_meiss
 
@@ -190,18 +200,21 @@ subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
     real(dp), intent(in) :: r, th_c, ph_c
     integer, intent(in) :: mode_secders
 
-    real(dp) :: x(3)
+    real(dp) :: x(3), x_eval(3)
 
     n_field_evaluations = n_field_evaluations + 1
 
     x = [r, th_c, ph_c]
+    x_eval(1) = max(xmin(1), min(x(1), xmax(1)))
+    x_eval(2) = modulo(x(2), twopi)
+    x_eval(3) = modulo(x(3), xmax(3))
 
     if (mode_secders > 0) then
-        call evaluate_meiss_batch_der2(f, x)
+        call evaluate_meiss_batch_der2(f, x_eval)
         return
     end if
 
-    call evaluate_meiss_batch_der(f, x)
+    call evaluate_meiss_batch_der(f, x_eval)
 end subroutine evaluate_meiss
 
 
@@ -213,7 +226,7 @@ subroutine integ_to_ref_meiss(xinteg, xref)
     call evaluate_batch_splines_3d(spl_transform_batch, xinteg, y_batch)
     call coord_scaling%inverse(xinteg, xref)  ! r -> s (integrator -> reference)
     xref(2) = modulo(xinteg(2), twopi)
-    xref(3) = modulo(xinteg(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
+    xref(3) = modulo(xinteg(3) + y_batch(1), xmax(3))  ! y_batch(1) is lam_phi
 end subroutine integ_to_ref_meiss
 
 
@@ -224,18 +237,23 @@ subroutine ref_to_integ_meiss(xref, xinteg)
     real(dp), parameter :: TOL = 1d-12
     integer, parameter :: MAX_ITER = 16
 
-    real(dp) :: y_batch(2), dy_batch(3, 2), phi_integ_prev
+    real(dp) :: y_batch(2), dy_batch(3, 2), phi_integ_prev, denom
     integer :: i
+    real(dp), parameter :: denom_min = 1.0d-10
 
     call coord_scaling%transform(xref, xinteg)  ! s -> r (reference -> integrator)
     xinteg(2) = modulo(xref(2), twopi)
-    xinteg(3) = modulo(xref(3), twopi)
+    xinteg(3) = modulo(xref(3), xmax(3))
 
     do i=1, MAX_ITER
         call evaluate_batch_splines_3d_der(spl_transform_batch, xinteg, y_batch, dy_batch)
         phi_integ_prev = xinteg(3)
         ! y_batch(1) is lam_phi, dy_batch(3,1) is d(lam_phi)/d(phi)
-        xinteg(3) = phi_integ_prev - (phi_integ_prev + y_batch(1) - xref(3))/(1d0 + dy_batch(3,1))
+        denom = 1.0d0 + dy_batch(3, 1)
+        if (abs(denom) < denom_min) then
+            denom = sign(denom_min, denom + denom_min)
+        end if
+        xinteg(3) = phi_integ_prev - (phi_integ_prev + y_batch(1) - xref(3))/denom
         if (abs(xinteg(3) - phi_integ_prev) < TOL) return
     enddo
     print *, 'WARNING: ref_to_integ_meiss did not converge after', MAX_ITER, 'iterations'
@@ -379,7 +397,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
     ! NVHPC/nvfortran: avoid ODE step-size underflow near singular points by
     ! relaxing tolerance when hp is very small at the start of the step.
     phi_c = xmin(3) + h_phi*(i_phi-1)
-    call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
+    call ah_cov_on_slice(r1, modulo(phi_c + y(1), xmax(3)), i_th, Ar_test, Ap_test, hr_test, hp_test)
     if (abs(hp_test) < hp_threshold) then
         relaxed_relerr = 1d-8
     end if
@@ -404,7 +422,7 @@ subroutine rh_can(r_c, z, dz, i_th, i_phi)
     real(dp) :: hp_safe
 
     phi_c = xmin(3) + h_phi*(i_phi-1)
-    call ah_cov_on_slice(r_c, modulo(phi_c + z(1), twopi), i_th, Ar, Ap, hr, hp)
+    call ah_cov_on_slice(r_c, modulo(phi_c + z(1), xmax(3)), i_th, Ar, Ap, hr, hp)
 
     hp_safe = hp
     if (abs(hp_safe) < hp_min) then
@@ -504,6 +522,8 @@ subroutine init_canonical_field_components
     real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
     real(dp), dimension(:,:,:,:), allocatable :: y_batch
     real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
+    real(dp) :: phi_jac
+    real(dp), parameter :: jac_min = 1.0d-10
     integer :: i_r, i_th, i_phi, dims(3)
 
     allocate(Ath(n_r,n_th,n_phi), Aphi(n_r,n_th,n_phi))
@@ -527,7 +547,7 @@ subroutine init_canonical_field_components
 
                 ! xcan is in integrator coords (r, th, phi)
                 ! xref here is the non-canonical angle coords (th, phi + lam)
-                xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, twopi)]
+                xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, xmax(3))]
 
                 select type (fld => field_noncan)
                 type is (vmec_field_t)
@@ -547,10 +567,15 @@ subroutine init_canonical_field_components
 
                 ! Note: We only use theta/phi components of Acov/hcov below
 
+                phi_jac = 1.0d0 + dlam(3)
+                if (abs(phi_jac) < jac_min) then
+                    phi_jac = sign(jac_min, phi_jac + jac_min)
+                end if
+
                 Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
-                Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
+                Aphi(i_r, i_th, i_phi) = Acov(3)*phi_jac - dchi(3)
                 hth(i_r, i_th, i_phi) = hcov(2) + hcov(3)*dlam(2)
-                hphi(i_r, i_th, i_phi) = hcov(3)*(1.0d0 + dlam(3))
+                hphi(i_r, i_th, i_phi) = hcov(3)*phi_jac
             end do
         end do
     end do
@@ -599,23 +624,29 @@ subroutine magfie_meiss(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
     real(dp), dimension(3), intent(out) :: bder, hcovar, hctrvr, hcurl
 
     type(field_can_t) :: f
-    real(dp) :: sqrtg_bmod
+    real(dp) :: sqrtg_bmod, sqrtg_bmod_safe, bmod_safe
+    real(dp), parameter :: bmod_min = 1.0d-30
+    real(dp), parameter :: sqrtg_min = 1.0d-14
 
     call evaluate_meiss(f, x(1), x(2), x(3), 0)
 
     bmod = f%Bmod
+    bmod_safe = sign(max(abs(bmod), bmod_min), bmod + bmod_min)
+    bmod = bmod_safe
 
     sqrtg_bmod = f%hph*f%dAth(1) - f%hth*f%dAph(1)
-    sqrtg = sqrtg_bmod/bmod
-    bder = f%dBmod/bmod
+    sqrtg_bmod_safe = sign(max(abs(sqrtg_bmod), sqrtg_min), &
+                           sqrtg_bmod + sqrtg_min)
+    sqrtg = sqrtg_bmod_safe/bmod_safe
+    bder = f%dBmod/bmod_safe
 
     hcovar(1) = 0d0
     hcovar(2) = f%hth
     hcovar(3) = f%hph
 
-    hctrvr(1) = (f%dAph(2) - f%dAth(3))/sqrtg_bmod
-    hctrvr(2) = -f%dAph(1)/sqrtg_bmod
-    hctrvr(3) = f%dAth(1)/sqrtg_bmod
+    hctrvr(1) = (f%dAph(2) - f%dAth(3))/sqrtg_bmod_safe
+    hctrvr(2) = -f%dAph(1)/sqrtg_bmod_safe
+    hctrvr(3) = f%dAth(1)/sqrtg_bmod_safe
 
     hcurl(1) = (f%dhph(2) - f%dhth(3))/sqrtg
     hcurl(2) = -f%dhph(1)/sqrtg
