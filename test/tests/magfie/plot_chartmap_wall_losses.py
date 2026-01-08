@@ -59,6 +59,7 @@ def compute_loss_curves(data):
     n_particles = len(data['vmec']['loss_time'])
     trace_time = data['trace_time']
     n_steps = data['n_steps']
+    tol = 1.0e-9 * trace_time
 
     time = np.linspace(0, trace_time, n_steps)
     curves = {}
@@ -67,7 +68,7 @@ def compute_loss_curves(data):
         loss_times = data[name]['loss_time']
         lost_fraction = np.zeros(n_steps)
         for i, t in enumerate(time):
-            lost_fraction[i] = np.sum(loss_times <= t) / n_particles
+            lost_fraction[i] = np.sum(loss_times < (t - tol)) / n_particles
         curves[name] = {
             'time': time,
             'lost': lost_fraction,
