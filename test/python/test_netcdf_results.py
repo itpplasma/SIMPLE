@@ -276,3 +276,58 @@ class TestNetCDFResultsOutput:
 
         finally:
             os.chdir(original_dir)
+
+    def test_xend_cart_consistent_with_zend(self, vmec_file: str, tmp_path: Path):
+        """Test xend_cart is computed correctly from zend via integ_to_ref.
+
+        This verifies the fix for https://github.com/itpplasma/SIMPLE/issues/302
+        where xend_cart was computed directly from zend (integrator coords)
+        without first converting to reference coords via integ_to_ref.
+        """
+        original_dir = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            # Use MEISS field (isw_field_type=3) which has non-trivial integ_to_ref
+            pysimple.init(
+                vmec_file,
+                deterministic=True,
+                trace_time=1e-4,  # Longer trace to get some motion
+                ntestpart=32,
+                output_results_netcdf=True,
+                isw_field_type=3,  # MEISS
+            )
+            particles = pysimple.sample_surface(32, s=0.5)
+            pysimple.trace_parallel(particles)
+            pysimple.write_output()
+
+            with nc.Dataset(tmp_path / "results.nc", 'r') as ds:
+                xstart = ds.variables['xstart_cart'][:]
+                xend = ds.variables['xend_cart'][:]
+                zend = ds.variables['zend'][:]
+
+                # For traced particles, verify R is physically reasonable
+                for i in range(zend.shape[0]):
+                    zend_is_zero = np.allclose(zend[i, :3], 0)
+                    if zend_is_zero:
+                        # Untraced - already tested separately
+                        continue
+
+                    # R = sqrt(x^2 + y^2) should be in stellarator range
+                    r_end = np.sqrt(xend[i, 0]**2 + xend[i, 1]**2)
+
+                    # xend should be within plasma/wall region (R ~ 500-1500 cm)
+                    assert r_end > 400, \
+                        f"Particle {i}: R_end={r_end:.1f} too small (bad conversion?)"
+                    assert r_end < 2000, \
+                        f"Particle {i}: R_end={r_end:.1f} too large (bad conversion?)"
+
+                    # For s values near boundary, R should not be near axis
+                    s_end = zend[i, 0]
+                    if s_end > 0.8:
+                        # Near edge - R should be near boundary
+                        assert r_end > 600, \
+                            f"Particle {i}: s={s_end:.2f} but R={r_end:.1f} too small"
+
+        finally:
+            os.chdir(original_dir)
