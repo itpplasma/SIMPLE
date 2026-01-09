@@ -228,12 +228,36 @@ contains
 
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
-            ! Use rho range [0.1, 0.99] to include most of the plasma volume
-            ! while avoiding the exact boundary where VMEC coordinate inversion fails.
-            ! The previous limit of 0.9 caused particles near the edge to use
-            ! extrapolated field values, leading to incorrect drift velocities.
-            if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0)
-            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0)
+            block
+                real(dp) :: rho_min, rho_max, rho_max_interior
+
+                if (cs%has_spl_rz) then
+                    rho_min = cs%spl_rz%x_min(1)
+                    rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
+                              real(cs%spl_rz%num_points(1) - 1, dp)
+                else
+                    rho_min = cs%spl_cart%x_min(1)
+                    rho_max = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
+                              real(cs%spl_cart%num_points(1) - 1, dp)
+                end if
+
+                ! Avoid sampling exactly at the outermost chartmap rho plane.
+                rho_max_interior = rho_max
+                if (cs%has_spl_rz) then
+                    if (cs%spl_rz%num_points(1) >= 2) then
+                        rho_max_interior = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
+                                           real(cs%spl_rz%num_points(1) - 2, dp)
+                    end if
+                else
+                    if (cs%spl_cart%num_points(1) >= 2) then
+                        rho_max_interior = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
+                                           real(cs%spl_cart%num_points(1) - 2, dp)
+                    end if
+                end if
+
+                if (.not. present(xmin_in)) xmin(1) = max(xmin(1), rho_min)
+                if (.not. present(xmax_in)) xmax(1) = min(xmax(1), rho_max_interior)
+            end block
         class default
             continue
         end select

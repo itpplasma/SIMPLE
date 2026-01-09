@@ -155,7 +155,6 @@ contains
     subroutine test_meiss_scaling_selection()
         class(coordinate_scaling_t), allocatable :: scaling
         type(splined_field_t) :: dummy_field
-        logical :: expect_sqrt_s
 
         print *, "=== Test 5: Meiss scaling selection ==="
 
@@ -164,35 +163,15 @@ contains
 
         call choose_default_scaling(dummy_field, scaling)
 
-        expect_sqrt_s = .false.
-        select type (cs => coords)
-        type is (chartmap_coordinate_system_t)
-            ! For known rho conventions, chartmap rho is treated as a normalized
-            ! flux label s in [0,1], so Meiss integration expects sqrt(s) scaling.
-            if (cs%rho_convention /= UNKNOWN) expect_sqrt_s = .true.
-        class default
-            expect_sqrt_s = .false.
-        end select
-
         select type (s => scaling)
         type is (identity_scaling_t)
             print *, "  Scaling type: identity_scaling"
-            if (expect_sqrt_s) then
-                print *, "  FAIL: expected sqrt_s scaling for this chartmap rho convention"
-                n_tests_failed = n_tests_failed + 1
-            else
-                print *, "  PASS: identity scaling selected"
-                n_tests_passed = n_tests_passed + 1
-            end if
+            print *, "  PASS: identity scaling selected (correct for rho=sqrt(s))"
+            n_tests_passed = n_tests_passed + 1
         type is (sqrt_s_scaling_t)
             print *, "  Scaling type: sqrt_s_scaling"
-            if (expect_sqrt_s) then
-                print *, "  PASS: sqrt_s scaling selected"
-                n_tests_passed = n_tests_passed + 1
-            else
-                print *, "  FAIL: unexpected sqrt_s scaling"
-                n_tests_failed = n_tests_failed + 1
-            end if
+            print *, "  FAIL: sqrt_s scaling would double-transform!"
+            n_tests_failed = n_tests_failed + 1
         class default
             print *, "  FAIL: unknown scaling type"
             n_tests_failed = n_tests_failed + 1

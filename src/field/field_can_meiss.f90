@@ -41,7 +41,7 @@ use field_can_base, only : field_can_t, n_field_evaluations
     use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
                                    identity_scaling_t, coordinate_scaling_clone
     use libneo_coordinates, only: chartmap_coordinate_system_t, UNKNOWN, &
-                                  PSI_TOR_NORM, PSI_POL_NORM
+                                  RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
 
 implicit none
 
@@ -134,8 +134,15 @@ end subroutine init_meiss
 
 subroutine choose_default_scaling(field, scaling)
     !> Choose appropriate coordinate scaling based on field type.
-    !> For geometric/UNKNOWN chartmaps, use identity scaling.
-    !> For flux-based coords (VMEC, RHO_TOR, PSI_TOR_NORM), use sqrt_s scaling.
+    !>
+    !> Scaling determines how the Meiss integrator coordinate r relates to flux:
+    !>   - sqrt_s_scaling: r = sqrt(s), use when field is in s-coordinates (VMEC)
+    !>   - identity_scaling: r = rho directly, use when field is already in rho coords
+    !>
+    !> For VMEC source field: uses sqrt_s_scaling (convert s -> r = sqrt(s))
+    !> For RHO_TOR/RHO_POL chartmap: uses identity (rho IS sqrt(s))
+    !> For PSI_TOR_NORM/PSI_POL_NORM: uses sqrt_s (convert s -> r = sqrt(s))
+    !> For UNKNOWN (geometric): uses identity (rho is geometric)
     class(magnetic_field_t), intent(in) :: field
     class(coordinate_scaling_t), allocatable, intent(out) :: scaling
 
@@ -145,11 +152,14 @@ subroutine choose_default_scaling(field, scaling)
 
     select type (fld => field)
     type is (splined_field_t)
-        ! Check if splined field uses geometric coordinates
         select type (cs => fld%coords)
         type is (chartmap_coordinate_system_t)
-            ! UNKNOWN means geometric radius (not flux-based)
-            if (cs%rho_convention == UNKNOWN) then
+            ! RHO_TOR/RHO_POL: rho = sqrt(s), already in Meiss integrator coords
+            ! UNKNOWN: geometric rho, no flux meaning, use directly
+            ! PSI_TOR_NORM/PSI_POL_NORM: rho = s, needs sqrt transform
+            if (cs%rho_convention == RHO_TOR .or. &
+                cs%rho_convention == RHO_POL .or. &
+                cs%rho_convention == UNKNOWN) then
                 use_identity = .true.
             end if
         end select
