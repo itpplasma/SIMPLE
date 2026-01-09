@@ -14,7 +14,7 @@ module simple_main
                      class_plot, ntcut, iclass, bmin, bmax, &
                      zstart, zend, trap_par, perp_inv, sbeg, &
                      ntimstep, should_skip, reset_seed_if_deterministic, &
-                     field_input, isw_field_type, reuse_batch
+                     field_input, isw_field_type, reuse_batch, meiss_integrator
 
    implicit none
 
@@ -201,7 +201,7 @@ contains
          call print_phase_time('Canonical field initialization completed')
       else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                isw_field_type == MEISS .or. isw_field_type == ALBERT) then
-         call init_field_can(isw_field_type, field_temp)
+         call init_field_can(isw_field_type, field_temp, meiss_integrator)
          call print_phase_time('Canonical field initialization completed')
       end if
    end subroutine init_field

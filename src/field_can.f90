@@ -9,7 +9,8 @@ use field_can_test, only : evaluate_test
 use field_can_flux, only : evaluate_flux, integ_to_ref_flux, ref_to_integ_flux
 use field_can_boozer, only : evaluate_boozer, integ_to_ref_boozer, ref_to_integ_boozer
 use field_can_meiss, only : init_meiss, evaluate_meiss, &
-  integ_to_ref_meiss, ref_to_integ_meiss
+  integ_to_ref_meiss, ref_to_integ_meiss, meiss_integrator_type
+use ode_integrator_factory, only: INTEGRATOR_LIBNEO, INTEGRATOR_VODE
 use field_can_albert, only : evaluate_albert, init_albert, integ_to_ref_albert, &
   ref_to_integ_albert
 
@@ -26,11 +27,12 @@ procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 
 contains
 
-subroutine field_can_from_name(field_name, field_noncan)
+subroutine field_can_from_name(field_name, field_noncan, integrator_type)
 
   character(*), intent(in) :: field_name
   !> For field_can_tMeiss
   class(magnetic_field_t), intent(in), optional :: field_noncan
+  integer, intent(in), optional :: integrator_type
 
   select case(trim(field_name))
     case("test")
@@ -45,14 +47,14 @@ subroutine field_can_from_name(field_name, field_noncan)
       ref_to_integ => ref_to_integ_boozer
     case("meiss")
       if (present(field_noncan)) then
-        call init_meiss(field_noncan)
+        call init_meiss(field_noncan, integrator_type=integrator_type)
       end if
       evaluate => evaluate_meiss
       integ_to_ref => integ_to_ref_meiss
       ref_to_integ => ref_to_integ_meiss
     case("albert")
       if (present(field_noncan)) then
-        call init_albert(field_noncan)
+        call init_albert(field_noncan, integrator_type=integrator_type)
       end if
       evaluate => evaluate_albert
       integ_to_ref => integ_to_ref_albert
@@ -64,13 +66,14 @@ subroutine field_can_from_name(field_name, field_noncan)
 end subroutine field_can_from_name
 
 
-subroutine field_can_from_id(field_id, field_noncan)
+subroutine field_can_from_id(field_id, field_noncan, integrator_type)
   integer, intent(in) :: field_id
   !> For field_can_tMeiss
   class(magnetic_field_t), intent(in), optional :: field_noncan
+  integer, intent(in), optional :: integrator_type
 
   if (present(field_noncan)) then
-    call field_can_from_name(name_from_id(field_id), field_noncan)
+    call field_can_from_name(name_from_id(field_id), field_noncan, integrator_type)
   else
     call field_can_from_name(name_from_id(field_id))
   end if
@@ -122,7 +125,7 @@ function id_from_name(field_name)
 end function id_from_name
 
 
-subroutine init_field_can(field_id, field_noncan)
+subroutine init_field_can(field_id, field_noncan, integrator_type)
   use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
   use boozer_sub, only : get_boozer_coordinates, get_boozer_coordinates_with_field
   use field_can_meiss, only : get_meiss_coordinates
@@ -130,10 +133,11 @@ subroutine init_field_can(field_id, field_noncan)
 
   integer, intent(in) :: field_id
   class(magnetic_field_t), intent(in), optional :: field_noncan
+  integer, intent(in), optional :: integrator_type
   type(vmec_field_t) :: vmec_field
 
   if (present(field_noncan)) then
-    call field_can_from_id(field_id, field_noncan)
+    call field_can_from_id(field_id, field_noncan, integrator_type)
     select case (field_id)
       case (TEST)
         continue
@@ -163,11 +167,11 @@ subroutine init_field_can(field_id, field_noncan)
       call get_boozer_coordinates
     case (MEISS)
       call create_vmec_field(vmec_field)
-      call field_can_from_id(field_id, vmec_field)
+      call field_can_from_id(field_id, vmec_field, integrator_type)
       call get_meiss_coordinates
     case (ALBERT)
       call create_vmec_field(vmec_field)
-      call field_can_from_id(field_id, vmec_field)
+      call field_can_from_id(field_id, vmec_field, integrator_type)
       call get_albert_coordinates
     case default
       print *, "init_field_can: Unknown field id ", field_id

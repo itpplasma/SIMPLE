@@ -61,6 +61,15 @@ list(APPEND SOURCES
     diag/diag_orbit.f90
 )
 
+# Add ODE integrator abstraction layer
+list(APPEND SOURCES
+    ode/ode_integrator_base.f90
+    ode/ode_integrator_libneo.f90
+    ode/ode_integrator_vode.f90
+    ode/ode_integrator_rk4.f90
+    ode/ode_integrator_factory.f90
+)
+
 # Add GVEC-specific sources if enabled
 if(ENABLE_GVEC)
     list(APPEND SOURCES
@@ -91,6 +100,11 @@ target_link_libraries(simple PUBLIC
 
 target_link_libraries(simple PUBLIC
     LIBNEO::neo
+)
+
+# Link VODE stiff ODE solver
+target_link_libraries(simple PUBLIC
+    vode
 )
 
 # For NVHPC: add built deps includes first to avoid gfortran-compiled modules in /usr/include

@@ -42,6 +42,8 @@ use field_can_base, only : field_can_t, n_field_evaluations
                                    identity_scaling_t, coordinate_scaling_clone
     use libneo_coordinates, only: chartmap_coordinate_system_t, UNKNOWN, &
                                   RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
+    use ode_integrator_base, only: ode_integrator_t
+    use ode_integrator_factory, only: create_integrator, INTEGRATOR_LIBNEO
 
 implicit none
 
@@ -74,6 +76,10 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 ! Coordinate scaling for s <-> r transform (default: r = sqrt(s))
 class(coordinate_scaling_t), allocatable :: coord_scaling
 
+! ODE integrator for canonical transformation (default: libneo RK45)
+class(ode_integrator_t), allocatable :: ode_integrator
+integer :: meiss_integrator_type = INTEGRATOR_LIBNEO
+
 contains
 
 subroutine rh_can_wrapper(r_c, z, dz, context)
@@ -94,13 +100,14 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
 end subroutine rh_can_wrapper
 
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax, &
-                      scaling)
+                      scaling, integrator_type)
     use new_vmec_stuff_mod, only : nper
 
     class(magnetic_field_t), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
     class(coordinate_scaling_t), intent(in), optional :: scaling
+    integer, intent(in), optional :: integrator_type
 
         call field_clone(field_noncan_, field_noncan)
         meiss_is_chartmap = .false.
@@ -138,6 +145,13 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
     h_r = (xmax(1)-xmin(1))/(n_r-1)
     h_th = (xmax(2)-xmin(2))/(n_th-1)
     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
+
+    ! Initialize ODE integrator (default: libneo RK45, option: VODE BDF stiff)
+    if (present(integrator_type)) then
+        meiss_integrator_type = integrator_type
+    end if
+    if (allocated(ode_integrator)) deallocate(ode_integrator)
+    ode_integrator = create_integrator(meiss_integrator_type)
 end subroutine init_meiss
 
 
@@ -202,6 +216,7 @@ subroutine cleanup_meiss()
     if (allocated(field_noncan)) deallocate(field_noncan)
     meiss_is_chartmap = .false.
     if (allocated(coord_scaling)) deallocate(coord_scaling)
+    if (allocated(ode_integrator)) deallocate(ode_integrator)
 end subroutine cleanup_meiss
 
 
@@ -383,8 +398,6 @@ subroutine print_progress(i_phi)
 end subroutine print_progress
 
 subroutine integrate(i_r, i_th, i_phi, y)
-    use odeint_allroutines_sub, only: odeint_allroutines
-
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
 
@@ -392,7 +405,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
     integer, parameter :: ndim = 2
     real(dp) :: r1, r2
     real(dp) :: relaxed_relerr
-    type(grid_indices_t) :: context
+    type(grid_indices_t), target :: context
 #ifdef SIMPLE_NVHPC
     real(dp), parameter :: hp_threshold = 1d-12
     real(dp) :: phi_c, Ar_test, Ap_test, hr_test, hp_test
@@ -414,7 +427,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
 #endif
 
     context = grid_indices_t(i_th, i_phi)
-    call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)
+    call ode_integrator%integrate(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)
 
     lam_phi(i_r, i_th, i_phi) = y(1)
     chi_gauge(i_r, i_th, i_phi) = y(2)

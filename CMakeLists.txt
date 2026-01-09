@@ -210,6 +210,16 @@ else()
     message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")
 endif()
 
+# Fetch VODE stiff ODE solver for MEISS integration
+include(FetchContent)
+FetchContent_Declare(
+    vode
+    GIT_REPOSITORY https://github.com/itpplasma/vode.git
+    GIT_TAG main
+)
+set(VODE_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(vode)
+
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
 endif()

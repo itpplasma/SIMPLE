@@ -93,6 +93,9 @@ module params
     character(1000) :: coord_input = ''
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
 
+    ! MEISS integrator selection: 1 = libneo (RK45), 2 = VODE (BDF stiff), 3 = RK4 (fixed-step)
+    integer :: meiss_integrator = 1
+
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
         facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
@@ -103,7 +106,7 @@ module params
         old_axis_healing_boundary, am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        integ_coords, output_results_netcdf, &
+        integ_coords, output_results_netcdf, meiss_integrator, &
         output_error, output_orbits_macrostep  ! callback
 
 contains
