@@ -291,21 +291,24 @@ contains
     end subroutine write_results_netcdf
 
     subroutine compute_cartesian_positions(xstart_cart, xend_cart)
-        !> Convert reference coordinates to Cartesian for all particles.
+        !> Convert coordinates to Cartesian for all particles.
+        !>
+        !> zstart is in reference coordinates (set by sampler before ref_to_integ).
+        !> zend is in integrator coordinates (set to z after tracing), so it must
+        !> be converted to reference coordinates via integ_to_ref before evaluate_cart.
         !>
         !> For particles that were not traced (zend = 0), xend_cart is set
         !> to xstart_cart since they effectively remained at the start.
-        !>
-        !> TODO: Investigate batch coordinate transformation for performance.
-        !> Current implementation uses O(n) individual calls.
 
         use params, only: ntestpart, zstart, zend
         use reference_coordinates, only: ref_coords
+        use field_can_mod, only: integ_to_ref
 
         real(dp), intent(out) :: xstart_cart(:, :)
         real(dp), intent(out) :: xend_cart(:, :)
         integer :: i
         logical :: zend_is_zero
+        real(dp) :: zend_ref(3)
 
         if (.not. allocated(ref_coords)) then
             print *, 'ERROR: ref_coords not allocated - cannot compute Cartesian'
@@ -314,6 +317,7 @@ contains
         end if
 
         do i = 1, ntestpart
+            ! zstart is already in reference coordinates
             call ref_coords%evaluate_cart(zstart(1:3, i), xstart_cart(:, i))
 
             ! Check if particle was traced: zend is set to exactly 0 for untraced
@@ -323,7 +327,9 @@ contains
                 ! Particle not traced - use start position
                 xend_cart(:, i) = xstart_cart(:, i)
             else
-                call ref_coords%evaluate_cart(zend(1:3, i), xend_cart(:, i))
+                ! zend is in integrator coordinates - convert to reference first
+                call integ_to_ref(zend(1:3, i), zend_ref)
+                call ref_coords%evaluate_cart(zend_ref, xend_cart(:, i))
             end if
         end do
 
