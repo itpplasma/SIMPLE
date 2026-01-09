@@ -633,3 +633,15 @@ set_tests_properties(golden_record_sanity PROPERTIES
     TIMEOUT 60  # 1 minute for sanity checks
     LABELS "golden_record;regression"
 )
+
+# Chartmap Meiss debug test (rho_convention, scaling)
+add_executable(test_chartmap_meiss_debug.x test_chartmap_meiss_debug.f90)
+target_link_libraries(test_chartmap_meiss_debug.x simple)
+
+add_test(NAME test_chartmap_meiss_debug
+    COMMAND test_chartmap_meiss_debug.x ${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.nc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_meiss_debug PROPERTIES
+    LABELS "unit;chartmap"
+    TIMEOUT 30
+    FIXTURES_REQUIRED vmec_test_data)

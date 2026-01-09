@@ -247,15 +247,11 @@ contains
                               real(cs%spl_cart%num_points(1) - 1, dp)
                 end if
 
-                if (cs%rho_convention == UNKNOWN) then
-                    if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0, rho_min)
-                    if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0, rho_max)
-                else
-                    ! Use rho range [0.1, 0.99] to include most of the plasma volume
-                    ! while avoiding the exact boundary where VMEC inversion fails.
-                    if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0, rho_min)
-                    if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0, rho_max)
-                end if
+                ! Use full chartmap range for all rho_conventions.
+                ! Chartmap stores pre-computed Cartesian coords and does not require
+                ! VMEC inversion. Use small lower bound to match Meiss integration.
+                if (.not. present(xmin_in)) xmin(1) = max(xmin(1), rho_min)
+                if (.not. present(xmax_in)) xmax(1) = min(xmax(1), rho_max)
             end block
         class default
             continue
