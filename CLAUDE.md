@@ -118,3 +118,19 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 
 - Some important routines on fields and splines and ode integrators are found in ../libneo which is built and linked as a dependency in our build process
 - a prototype of meiss and albert coordinate implementation for tokamak geometry with or without perturbations is found in ../letter-canonical
+
+## CRITICAL: Angle Conventions
+
+**ALL angles in SIMPLE are ALWAYS in RADIANS** - both theta (poloidal) and zeta (toroidal).
+
+Large angle values (e.g., 697 rad, 1310 rad) are normal and expected! They represent:
+- Multiple toroidal/poloidal turns from field line following
+- Angles are NOT wrapped to [0, 2π] during integration
+- 697 radians ≈ 111 toroidal turns
+
+**NEVER assume large angle values are in degrees!**
+
+This applies to:
+- start.dat files (input)
+- times_lost.dat files (output)
+- All internal coordinate representations
