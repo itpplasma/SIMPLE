@@ -65,9 +65,14 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             "Set -DLIBNEO_PYTHON_DIR=/path/to/libneo/python or disable via -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF.")
     endif()
 
+    # libneo's Python package imports optional compiled extensions (e.g. _efit_to_boozer).
+    # When building libneo as a subproject, those extensions live in the libneo
+    # binary dir, not in LIBNEO_PYTHON_DIR. Add them to PYTHONPATH for tests.
+    set(EFIT_TO_BOOZER_PYTHON_DIR "${CMAKE_BINARY_DIR}/libneo/src/efit_to_boozer")
+
     add_test(NAME generate_chartmap_map2disc
         COMMAND ${CMAKE_COMMAND} -E env
-            PYTHONPATH=${LIBNEO_PYTHON_DIR}
+            PYTHONPATH=${LIBNEO_PYTHON_DIR}:${EFIT_TO_BOOZER_PYTHON_DIR}
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/generate_chartmap_map2disc.py
             --libneo-python ${LIBNEO_PYTHON_DIR}
@@ -84,7 +89,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
 
     add_test(NAME generate_chartmap_ncsx_map2disc
         COMMAND ${CMAKE_COMMAND} -E env
-            PYTHONPATH=${LIBNEO_PYTHON_DIR}
+            PYTHONPATH=${LIBNEO_PYTHON_DIR}:${EFIT_TO_BOOZER_PYTHON_DIR}
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/generate_chartmap_map2disc.py
             --libneo-python ${LIBNEO_PYTHON_DIR}
@@ -101,7 +106,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
 
     add_test(NAME generate_chartmap_ncsx_map2disc_wall
         COMMAND ${CMAKE_COMMAND} -E env
-            PYTHONPATH=${LIBNEO_PYTHON_DIR}
+            PYTHONPATH=${LIBNEO_PYTHON_DIR}:${EFIT_TO_BOOZER_PYTHON_DIR}
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/generate_chartmap_map2disc.py
             --libneo-python ${LIBNEO_PYTHON_DIR}
@@ -118,7 +123,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
 
     add_test(NAME test_chartmap_ncsx_map2disc_wall_offset
         COMMAND ${CMAKE_COMMAND} -E env
-            PYTHONPATH=${LIBNEO_PYTHON_DIR}
+            PYTHONPATH=${LIBNEO_PYTHON_DIR}:${EFIT_TO_BOOZER_PYTHON_DIR}
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/plot_chartmap_wall_offset_check.py
             --wout ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
@@ -133,7 +138,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
 
     add_test(NAME plot_chartmap_vmec_vs_map2disc
         COMMAND ${CMAKE_COMMAND} -E env
-            PYTHONPATH=${LIBNEO_PYTHON_DIR}
+            PYTHONPATH=${LIBNEO_PYTHON_DIR}:${EFIT_TO_BOOZER_PYTHON_DIR}
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/plot_chartmap_compare_map2disc.py
             --vmec ${CHARTMAP_FILE}
@@ -621,3 +626,15 @@ set_tests_properties(golden_record_sanity PROPERTIES
     TIMEOUT 60  # 1 minute for sanity checks
     LABELS "golden_record;regression"
 )
+
+# Chartmap Meiss debug test (rho_convention, scaling)
+add_executable(test_chartmap_meiss_debug.x test_chartmap_meiss_debug.f90)
+target_link_libraries(test_chartmap_meiss_debug.x simple)
+
+add_test(NAME test_chartmap_meiss_debug
+    COMMAND test_chartmap_meiss_debug.x ${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.nc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_chartmap_meiss_debug PROPERTIES
+    LABELS "unit;chartmap"
+    TIMEOUT 30
+    FIXTURES_REQUIRED vmec_test_data)

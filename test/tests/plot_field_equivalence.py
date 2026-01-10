@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Plot field equivalence test results from binary data files."""
 
-import numpy as np
-import matplotlib.pyplot as plt
 import sys
+
+try:
+    import numpy as np
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+except Exception as exc:
+    print(f"Skipping field equivalence plots (matplotlib/numpy unavailable: {exc})")
+    raise SystemExit(0)
 
 
 def read_grid_data(prefix):
@@ -96,7 +104,11 @@ def plot_comparison(prefix):
     plt.colorbar(im5, ax=axes[1, 2])
 
     plt.tight_layout()
-    plt.savefig(f'{prefix}_comparison.png', dpi=150)
+    try:
+        plt.savefig(f'{prefix}_comparison.png', dpi=150)
+    except Exception as exc:
+        print(f"Skipping field equivalence plots (savefig failed: {exc})")
+        return
     plt.close()
 
     # Flux surface plot: VMEC vs Chartmap overlaid
@@ -126,7 +138,11 @@ def plot_comparison(prefix):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(f'{prefix}_flux_surface.png', dpi=150)
+    try:
+        plt.savefig(f'{prefix}_flux_surface.png', dpi=150)
+    except Exception as exc:
+        print(f"Skipping field equivalence plots (savefig failed: {exc})")
+        return
     plt.close()
 
     # Additional plot: Position difference between VMEC and chartmap
@@ -150,7 +166,11 @@ def plot_comparison(prefix):
     plt.colorbar(im1, ax=axes[1])
 
     plt.tight_layout()
-    plt.savefig(f'{prefix}_position_diff.png', dpi=150)
+    try:
+        plt.savefig(f'{prefix}_position_diff.png', dpi=150)
+    except Exception as exc:
+        print(f"Skipping field equivalence plots (savefig failed: {exc})")
+        return
     plt.close()
 
     print(

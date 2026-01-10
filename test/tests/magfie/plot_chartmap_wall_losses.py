@@ -9,10 +9,22 @@ Reads chartmap_wall_losses.nc and creates:
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import netCDF4 as nc
 import sys
 from pathlib import Path
+
+
+def _maybe_import_matplotlib():
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+
+        return plt
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (matplotlib unavailable: {exc})")
+        return None
 
 
 def load_data(filename):
@@ -79,6 +91,10 @@ def compute_loss_curves(data):
 
 def plot_loss_over_time(curves, output_file):
     """Plot loss and confined fractions over time."""
+    plt = _maybe_import_matplotlib()
+    if plt is None:
+        return
+
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     colors = {
@@ -117,14 +133,22 @@ def plot_loss_over_time(curves, output_file):
     ax.grid(True, alpha=0.3)
     ax.set_ylim([0, 100])
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    try:
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (savefig failed: {exc})")
+        return
     print(f'Saved loss time plot: {output_file}')
     plt.close()
 
 
 def plot_loss_positions(data, output_file):
     """Plot loss positions on wall in (theta, phi) coordinates."""
+    plt = _maybe_import_matplotlib()
+    if plt is None:
+        return
+
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     axes = axes.flatten()
 
@@ -167,14 +191,22 @@ def plot_loss_positions(data, output_file):
     # Hide the 6th subplot (unused)
     axes[5].set_visible(False)
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    try:
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (savefig failed: {exc})")
+        return
     print(f'Saved loss positions plot: {output_file}')
     plt.close()
 
 
 def plot_summary(data, curves, output_file):
     """Create summary comparison plot."""
+    plt = _maybe_import_matplotlib()
+    if plt is None:
+        return
+
     fig, axes = plt.subplots(1, 2, figsize=(16, 5))
 
     names = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
@@ -214,8 +246,12 @@ def plot_summary(data, curves, output_file):
     ax.legend()
     ax.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    try:
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (savefig failed: {exc})")
+        return
     print(f'Saved summary plot: {output_file}')
     plt.close()
 

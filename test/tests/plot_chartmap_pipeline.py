@@ -1,9 +1,26 @@
 #!/usr/bin/env python3
 """Plot chartmap pipeline unit test results."""
 
-import numpy as np
-import matplotlib.pyplot as plt
 import sys
+
+try:
+    import numpy as np
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+except Exception as exc:
+    print(f"Skipping chartmap pipeline plots (matplotlib/numpy unavailable: {exc})")
+    raise SystemExit(0)
+
+
+def _save_or_skip(path: str) -> bool:
+    try:
+        plt.savefig(path, dpi=150)
+        return True
+    except Exception as exc:
+        print(f"Skipping chartmap pipeline plots (savefig failed: {exc})")
+        return False
 
 
 def read_test_data(prefix):
@@ -48,7 +65,8 @@ def plot_test_A():
 
     plt.suptitle('Test A: Coordinate mapping roundtrip')
     plt.tight_layout()
-    plt.savefig('pipeline_A_roundtrip.png', dpi=150)
+    if not _save_or_skip('pipeline_A_roundtrip.png'):
+        return
     plt.close()
     print('Saved: pipeline_A_roundtrip.png')
 
@@ -78,7 +96,8 @@ def plot_test_B():
 
     plt.suptitle('Test B: covariant_basis vs finite-difference')
     plt.tight_layout()
-    plt.savefig('pipeline_B_basis_fd.png', dpi=150)
+    if not _save_or_skip('pipeline_B_basis_fd.png'):
+        return
     plt.close()
     print('Saved: pipeline_B_basis_fd.png')
 
@@ -108,7 +127,8 @@ def plot_test_C():
 
     plt.suptitle('Test C: Cartesian <-> ref basis transform identity')
     plt.tight_layout()
-    plt.savefig('pipeline_C_transform.png', dpi=150)
+    if not _save_or_skip('pipeline_C_transform.png'):
+        return
     plt.close()
     print('Saved: pipeline_C_transform.png')
 

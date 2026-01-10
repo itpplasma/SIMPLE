@@ -15,6 +15,9 @@ import sys
 
 try:
     import xarray as xr
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
     import numpy as np
 except ImportError as exc:
@@ -114,7 +117,12 @@ def main():
     plt.tight_layout()
 
     png_filename = "orbit_refcoords_comparison.png"
-    plt.savefig(png_filename, dpi=150, bbox_inches="tight")
+    try:
+        plt.savefig(png_filename, dpi=150, bbox_inches="tight")
+    except Exception as exc:
+        print(f"Skipping orbit comparison plot (savefig failed: {exc})")
+        ds.close()
+        sys.exit(0)
     print(f"Saved plot to {png_filename}")
 
     ds.close()

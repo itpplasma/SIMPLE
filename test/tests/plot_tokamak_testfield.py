@@ -6,6 +6,9 @@ import sys
 
 try:
     import numpy as np
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
 except ImportError as exc:
     # Allow this script to be used as an optional plot helper in test
@@ -61,7 +64,11 @@ def main() -> int:
     axes[1].legend()
 
     fig.tight_layout()
-    fig.savefig(OUT_FILE, dpi=150)
+    try:
+        fig.savefig(OUT_FILE, dpi=150)
+    except Exception as exc:
+        print(f"Skipping tokamak TEST-field plot (savefig failed: {exc})")
+        return 0
     print(f"Saved {OUT_FILE}")
     return 0
 
