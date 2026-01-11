@@ -44,11 +44,11 @@ test-nopy: build-deterministic
 
 # Run only fast tests (exclude slow and regression tests)
 test-fast: build-deterministic
-	$(CTEST_CMD) -LE "slow|regression"
+	$(CTEST_CMD) -LE "slow|regression|performance|scalability"
 
 # Run only slow tests
 test-slow: build-deterministic
-	$(CTEST_CMD) -L "slow" -LE "regression"
+	$(CTEST_CMD) -L "slow" -LE "regression|performance|scalability"
 
 # Run only regression tests (requires deterministic FP build without Python interface)
 test-regression: build-deterministic-nopy

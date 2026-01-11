@@ -21,6 +21,7 @@ add_test(NAME test_simple_api
 set_tests_properties(test_simple_api PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;simple_api;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -30,6 +31,7 @@ add_test(NAME test_batch_api
 set_tests_properties(test_batch_api PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;batch_api;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -39,6 +41,7 @@ add_test(NAME test_classification_api
 set_tests_properties(test_classification_api PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;classification;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -48,6 +51,7 @@ add_test(NAME test_orbit_macro
 set_tests_properties(test_orbit_macro PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;orbit;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -57,6 +61,7 @@ add_test(NAME test_examples
 set_tests_properties(test_examples PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;examples;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -66,7 +71,8 @@ add_test(NAME test_batch_api_performance
 )
 set_tests_properties(test_batch_api_performance PROPERTIES 
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;batch_api;slow;performance"
+    LABELS "python;batch_api;performance"
+    TIMEOUT 120
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -76,7 +82,8 @@ add_test(NAME test_batch_api_scalability
 )
 set_tests_properties(test_batch_api_scalability PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;batch_api;slow;scalability"
+    LABELS "python;batch_api;scalability"
+    TIMEOUT 120
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -87,6 +94,7 @@ add_test(NAME test_netcdf_results
 set_tests_properties(test_netcdf_results PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;netcdf;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -97,6 +105,7 @@ add_test(NAME test_chartmap_boundary_param
 set_tests_properties(test_chartmap_boundary_param PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
     LABELS "python;chartmap;slow"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -107,5 +116,6 @@ add_test(NAME test_engineering
 set_tests_properties(test_engineering PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR}/python"
     LABELS "python;engineering"
+    TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
