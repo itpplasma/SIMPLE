@@ -171,7 +171,7 @@ build() {
     fi
 
     # Check if CMakeLists.txt has fortplot dependency and adjust accordingly
-    local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF"
+    local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_TESTING=OFF"
 
     if grep -q "fortplot" CMakeLists.txt 2>/dev/null; then
         echo "Detected fortplot dependency in CMakeLists.txt"
