@@ -16,6 +16,7 @@ netCDF4==1.7.2
 # Optional dependencies for examples/plotting
 matplotlib==3.9.4
 scipy==1.15.2
+shapely==2.0.5
 
 # map2disc is required for map2disc-based chartmap generation via libneo
 # Pin to a specific commit for reproducibility.

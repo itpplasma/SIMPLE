@@ -171,7 +171,7 @@ build() {
     fi
 
     # Check if CMakeLists.txt has fortplot dependency and adjust accordingly
-    local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF"
+    local CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_TESTING=OFF"
 
     if grep -q "fortplot" CMakeLists.txt 2>/dev/null; then
         echo "Detected fortplot dependency in CMakeLists.txt"
@@ -185,6 +185,7 @@ build() {
     cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
         echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
+        tail -n 200 "$PROJECT_ROOT/configure.log" 2>/dev/null || true
         return 1
     fi
 
@@ -198,9 +199,11 @@ build() {
         fi
     fi
 
-    cmake --build build --config Release  > $PROJECT_ROOT/build.log 2>&1
+    local BUILD_PARALLEL="${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+    cmake --build build --config Release --parallel "$BUILD_PARALLEL" > $PROJECT_ROOT/build.log 2>&1
     if [ $? -ne 0 ]; then
         echo "Build failed. Check $PROJECT_ROOT/build.log"
+        tail -n 200 "$PROJECT_ROOT/build.log" 2>/dev/null || true
         return 1
     fi
 }

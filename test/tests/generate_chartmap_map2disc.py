@@ -5,6 +5,18 @@ import argparse
 from pathlib import Path
 
 
+def _force_rho_convention_rho_tor(nc_path: Path) -> None:
+    try:
+        from netCDF4 import Dataset
+    except Exception as exc:  # pragma: no cover
+        raise SystemExit(f"netCDF4 required to patch rho_convention: {exc}") from exc
+
+    with Dataset(nc_path, "a") as ds:
+        current = getattr(ds, "rho_convention", "")
+        if str(current).strip().lower() != "rho_tor":
+            ds.setncattr("rho_convention", "rho_tor")
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="generate_chartmap_map2disc")
     p.add_argument(
@@ -48,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"wout file not found: {wout}")
 
     # Import from the provided libneo source tree.
+    import inspect
     import sys
 
     sys.path.insert(0, str(libneo_python))
@@ -55,18 +68,30 @@ def main(argv: list[str] | None = None) -> int:
     from libneo.chartmap import write_chartmap_from_vmec_boundary
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_chartmap_from_vmec_boundary(
-        wout,
-        out,
-        nrho=int(args.nrho),
-        ntheta=int(args.ntheta),
-        nzeta=int(args.nzeta),
-        s_boundary=float(args.s_boundary),
-        boundary_offset=float(args.boundary_offset),
-        M=int(args.M),
-        Nt=int(args.Nt),
-        Ng=(int(args.Ng[0]), int(args.Ng[1])),
-    )
+    kwargs: dict[str, object] = {
+        "nrho": int(args.nrho),
+        "ntheta": int(args.ntheta),
+        "nzeta": int(args.nzeta),
+        "s_boundary": float(args.s_boundary),
+        "M": int(args.M),
+        "Nt": int(args.Nt),
+        "Ng": (int(args.Ng[0]), int(args.Ng[1])),
+    }
+    sig_params = inspect.signature(write_chartmap_from_vmec_boundary).parameters
+
+    boundary_offset = float(args.boundary_offset)
+    if "boundary_param" in sig_params:
+        kwargs["boundary_param"] = "theta" if boundary_offset == 0.0 else "arc"
+    if boundary_offset != 0.0:
+        if "boundary_offset" not in sig_params:
+            raise SystemExit(
+                "libneo.chartmap.write_chartmap_from_vmec_boundary does not support "
+                "boundary_offset; update libneo"
+            )
+        kwargs["boundary_offset"] = boundary_offset
+    write_chartmap_from_vmec_boundary(wout, out, **kwargs)
+
+    _force_rho_convention_rho_tor(out)
 
     if not out.exists() or out.stat().st_size == 0:
         raise SystemExit(f"failed to create: {out}")

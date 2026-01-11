@@ -228,12 +228,30 @@ contains
 
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
-            ! Use rho range [0.1, 0.99] to include most of the plasma volume
-            ! while avoiding the exact boundary where VMEC coordinate inversion fails.
-            ! The previous limit of 0.9 caused particles near the edge to use
-            ! extrapolated field values, leading to incorrect drift velocities.
-            if (.not. present(xmin_in)) xmin(1) = max(xmin(1), 0.1d0)
-            if (.not. present(xmax_in)) xmax(1) = min(xmax(1), 0.99d0)
+            block
+                real(dp) :: rho_min, rho_max, rho_max_safe, h_rho
+
+                if (cs%has_spl_rz) then
+                    rho_min = cs%spl_rz%x_min(1)
+                    rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
+                              real(cs%spl_rz%num_points(1) - 1, dp)
+                    h_rho = cs%spl_rz%h_step(1)
+                else
+                    rho_min = cs%spl_cart%x_min(1)
+                    rho_max = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
+                              real(cs%spl_cart%num_points(1) - 1, dp)
+                    h_rho = cs%spl_cart%h_step(1)
+                end if
+
+                ! Sampling the VMEC field requires inverting VMEC coordinates. This
+                ! inversion can fail exactly at the outermost rho plane, so sample
+                ! slightly inside while keeping essentially the full range.
+                rho_max_safe = rho_max
+                if (h_rho > 0d0) rho_max_safe = rho_max - 0.1d0*h_rho
+
+                if (.not. present(xmin_in)) xmin(1) = max(xmin(1), rho_min)
+                if (.not. present(xmax_in)) xmax(1) = min(xmax(1), rho_max_safe)
+            end block
         class default
             continue
         end select

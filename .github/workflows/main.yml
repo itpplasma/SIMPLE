@@ -20,7 +20,7 @@ env:
 jobs:
   test:
     name: Build and Test
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
@@ -30,9 +30,33 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
+
       - name: Install Python dependencies
         run: |
-          python3 -m pip install --user --break-system-packages -r requirements.txt
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Build SIMPLE (deterministic FP for reproducibility)
         run: |
@@ -43,7 +67,7 @@ jobs:
         run: make test-fast
 
       - name: Install Python package
-        run: python3 -m pip install -e . --no-build-isolation --break-system-packages
+        run: python -m pip install -e . --no-build-isolation
 
       - name: Run Slow Tests (Python)
         run: make test-slow
@@ -61,10 +85,20 @@ jobs:
 
   build-docs:
     name: Build Documentation
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            latexmk \
+            lyx \
+            texlive-latex-extra \
+            texlive-publishers \
+            texlive-science
 
       - name: Build LaTeX documents
         run: |

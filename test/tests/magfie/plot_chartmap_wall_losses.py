@@ -9,10 +9,22 @@ Reads chartmap_wall_losses.nc and creates:
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import netCDF4 as nc
 import sys
 from pathlib import Path
+
+
+def _maybe_import_matplotlib():
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+
+        return plt
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (matplotlib unavailable: {exc})")
+        return None
 
 
 def load_data(filename):
@@ -79,145 +91,167 @@ def compute_loss_curves(data):
 
 def plot_loss_over_time(curves, output_file):
     """Plot loss and confined fractions over time."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    plt = _maybe_import_matplotlib()
+    if plt is None:
+        return
 
-    colors = {
-        'vmec': 'black', 'chartmap': 'red', 'boozer': 'orange',
-        'meiss_vmec': 'blue', 'meiss_chart': 'green'
-    }
-    labels = {
-        'vmec': 'VMEC (RK45)',
-        'chartmap': 'Chartmap (RK45)',
-        'boozer': 'Boozer (RK45)',
-        'meiss_vmec': 'Meiss from VMEC',
-        'meiss_chart': 'Meiss from Chartmap'
-    }
+    try:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    ax = axes[0]
-    for name in ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']:
-        curve = curves[name]
-        ax.plot(curve['time'] * 1e6, curve['lost'] * 100,
-                color=colors[name], linewidth=2, label=labels[name])
-    ax.set_xlabel('Time [microseconds]')
-    ax.set_ylabel('Lost Fraction [%]')
-    ax.set_title('Particle Losses Over Time')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    ax.set_ylim([0, 100])
+        colors = {
+            'vmec': 'black', 'chartmap': 'red', 'boozer': 'orange',
+            'meiss_vmec': 'blue', 'meiss_chart': 'green'
+        }
+        labels = {
+            'vmec': 'VMEC (RK45)',
+            'chartmap': 'Chartmap (RK45)',
+            'boozer': 'Boozer (RK45)',
+            'meiss_vmec': 'Meiss from VMEC',
+            'meiss_chart': 'Meiss from Chartmap'
+        }
 
-    ax = axes[1]
-    for name in ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']:
-        curve = curves[name]
-        ax.plot(curve['time'] * 1e6, curve['confined'] * 100,
-                color=colors[name], linewidth=2, label=labels[name])
-    ax.set_xlabel('Time [microseconds]')
-    ax.set_ylabel('Confined Fraction [%]')
-    ax.set_title('Particle Confinement Over Time')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    ax.set_ylim([0, 100])
+        ax = axes[0]
+        for name in ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']:
+            curve = curves[name]
+            ax.plot(curve['time'] * 1e6, curve['lost'] * 100,
+                    color=colors[name], linewidth=2, label=labels[name])
+        ax.set_xlabel('Time [microseconds]')
+        ax.set_ylabel('Lost Fraction [%]')
+        ax.set_title('Particle Losses Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim([0, 100])
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    print(f'Saved loss time plot: {output_file}')
-    plt.close()
+        ax = axes[1]
+        for name in ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']:
+            curve = curves[name]
+            ax.plot(curve['time'] * 1e6, curve['confined'] * 100,
+                    color=colors[name], linewidth=2, label=labels[name])
+        ax.set_xlabel('Time [microseconds]')
+        ax.set_ylabel('Confined Fraction [%]')
+        ax.set_title('Particle Confinement Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim([0, 100])
+
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        print(f'Saved loss time plot: {output_file}')
+        plt.close()
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (matplotlib failed: {exc})")
+        return
 
 
 def plot_loss_positions(data, output_file):
     """Plot loss positions on wall in (theta, phi) coordinates."""
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    axes = axes.flatten()
+    plt = _maybe_import_matplotlib()
+    if plt is None:
+        return
 
-    titles = {
-        'vmec': 'VMEC (RK45)',
-        'chartmap': 'Chartmap (RK45)',
-        'boozer': 'Boozer (RK45)',
-        'meiss_vmec': 'Meiss from VMEC',
-        'meiss_chart': 'Meiss from Chartmap'
-    }
+    try:
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
 
-    trace_time = data['trace_time']
-    modes = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
+        titles = {
+            'vmec': 'VMEC (RK45)',
+            'chartmap': 'Chartmap (RK45)',
+            'boozer': 'Boozer (RK45)',
+            'meiss_vmec': 'Meiss from VMEC',
+            'meiss_chart': 'Meiss from Chartmap'
+        }
 
-    for i, name in enumerate(modes):
-        ax = axes[i]
-        loss_pos = data[name]['loss_pos']
-        loss_time = data[name]['loss_time']
+        trace_time = data['trace_time']
+        modes = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
 
-        lost_mask = loss_time < trace_time * 0.999
-        if np.any(lost_mask):
-            # NetCDF stores as (dim3, n_particles), Python reads as (n_particles, dim3)
-            s_lost = loss_pos[lost_mask, 0]
-            theta_lost = loss_pos[lost_mask, 1]
-            phi_lost = loss_pos[lost_mask, 2]
-            time_lost = loss_time[lost_mask]
+        for i, name in enumerate(modes):
+            ax = axes[i]
+            loss_pos = data[name]['loss_pos']
+            loss_time = data[name]['loss_time']
 
-            sc = ax.scatter(np.degrees(phi_lost), np.degrees(theta_lost),
-                            c=time_lost * 1e6, cmap='viridis', s=50, alpha=0.8)
-            plt.colorbar(sc, ax=ax, label='Loss time [us]')
-        else:
-            ax.text(0.5, 0.5, 'No losses', transform=ax.transAxes,
-                    ha='center', va='center', fontsize=14)
+            lost_mask = loss_time < trace_time * 0.999
+            if np.any(lost_mask):
+                # NetCDF stores as (dim3, n_particles), Python reads as (n_particles, dim3)
+                theta_lost = loss_pos[lost_mask, 1]
+                phi_lost = loss_pos[lost_mask, 2]
+                time_lost = loss_time[lost_mask]
 
-        ax.set_xlabel('Toroidal angle phi [degrees]')
-        ax.set_ylabel('Poloidal angle theta [degrees]')
-        ax.set_title(f'{titles[name]}\n(n_lost = {np.sum(lost_mask)})')
-        ax.grid(True, alpha=0.3)
+                sc = ax.scatter(np.degrees(phi_lost), np.degrees(theta_lost),
+                                c=time_lost * 1e6, cmap='viridis', s=50, alpha=0.8)
+                plt.colorbar(sc, ax=ax, label='Loss time [us]')
+            else:
+                ax.text(0.5, 0.5, 'No losses', transform=ax.transAxes,
+                        ha='center', va='center', fontsize=14)
 
-    # Hide the 6th subplot (unused)
-    axes[5].set_visible(False)
+            ax.set_xlabel('Toroidal angle phi [degrees]')
+            ax.set_ylabel('Poloidal angle theta [degrees]')
+            ax.set_title(f'{titles[name]}\n(n_lost = {np.sum(lost_mask)})')
+            ax.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    print(f'Saved loss positions plot: {output_file}')
-    plt.close()
+        # Hide the 6th subplot (unused)
+        axes[5].set_visible(False)
+
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        print(f'Saved loss positions plot: {output_file}')
+        plt.close()
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (matplotlib failed: {exc})")
+        return
 
 
 def plot_summary(data, curves, output_file):
     """Create summary comparison plot."""
-    fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+    plt = _maybe_import_matplotlib()
+    if plt is None:
+        return
 
-    names = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
-    labels = ['VMEC\n(RK45)', 'Chartmap\n(RK45)', 'Boozer\n(RK45)',
-              'Meiss\n(VMEC)', 'Meiss\n(Chart)']
-    colors = ['black', 'red', 'orange', 'blue', 'green']
+    try:
+        fig, axes = plt.subplots(1, 2, figsize=(16, 5))
 
-    confined_frac = [curves[n]['confined'][-1] * 100 for n in names]
+        names = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
+        labels = ['VMEC\n(RK45)', 'Chartmap\n(RK45)', 'Boozer\n(RK45)',
+                  'Meiss\n(VMEC)', 'Meiss\n(Chart)']
+        colors = ['black', 'red', 'orange', 'blue', 'green']
 
-    ax = axes[0]
-    bars = ax.bar(labels, confined_frac, color=colors, alpha=0.7)
-    ax.set_ylabel('Confined Fraction [%]')
-    ax.set_title('Final Confinement (t = {:.0f} us)'.format(
-        data['trace_time'] * 1e6))
-    ax.set_ylim([0, 100])
-    ax.grid(True, alpha=0.3, axis='y')
+        confined_frac = [curves[n]['confined'][-1] * 100 for n in names]
 
-    for bar, val in zip(bars, confined_frac):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
-                f'{val:.1f}%', ha='center', va='bottom', fontsize=10)
+        ax = axes[0]
+        bars = ax.bar(labels, confined_frac, color=colors, alpha=0.7)
+        ax.set_ylabel('Confined Fraction [%]')
+        ax.set_title('Final Confinement (t = {:.0f} us)'.format(
+            data['trace_time'] * 1e6))
+        ax.set_ylim([0, 100])
+        ax.grid(True, alpha=0.3, axis='y')
 
-    ax = axes[1]
-    n_particles = len(data['vmec']['loss_time'])
-    trace_time = data['trace_time']
+        for bar, val in zip(bars, confined_frac):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
+                    f'{val:.1f}%', ha='center', va='bottom', fontsize=10)
 
-    for i, name in enumerate(names):
-        loss_times = data[name]['loss_time']
-        lost_mask = loss_times < trace_time * 0.999
-        if np.any(lost_mask):
-            ax.hist(loss_times[lost_mask] * 1e6, bins=20, alpha=0.5,
-                    color=colors[i], label=f'{labels[i].replace(chr(10), " ")}',
-                    density=True)
+        ax = axes[1]
+        trace_time = data['trace_time']
 
-    ax.set_xlabel('Loss Time [microseconds]')
-    ax.set_ylabel('Density')
-    ax.set_title('Distribution of Loss Times')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+        for i, name in enumerate(names):
+            loss_times = data[name]['loss_time']
+            lost_mask = loss_times < trace_time * 0.999
+            if np.any(lost_mask):
+                ax.hist(loss_times[lost_mask] * 1e6, bins=20, alpha=0.5,
+                        color=colors[i], label=f'{labels[i].replace(chr(10), " ")}',
+                        density=True)
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    print(f'Saved summary plot: {output_file}')
-    plt.close()
+        ax.set_xlabel('Loss Time [microseconds]')
+        ax.set_ylabel('Density')
+        ax.set_title('Distribution of Loss Times')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        print(f'Saved summary plot: {output_file}')
+        plt.close()
+    except Exception as exc:
+        print(f"Skipping plot_chartmap_wall_losses (matplotlib failed: {exc})")
+        return
 
 
 def print_statistics(data, curves):
