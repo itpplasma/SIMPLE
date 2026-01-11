@@ -16,12 +16,14 @@ module simple_main
                       zstart, zend, trap_par, perp_inv, sbeg, &
                       ntimstep, should_skip, reset_seed_if_deterministic, &
                       field_input, isw_field_type, reuse_batch, coord_input, &
-                      wall_input, wall_units, wall_hit, wall_hit_cart
+                      wall_input, wall_units, wall_hit, wall_hit_cart, &
+                      wall_hit_normal_cart, wall_hit_cos_incidence, &
+                      wall_hit_angle_rad
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
     use reference_coordinates, only: ref_coords
     use stl_wall_intersection, only: stl_wall_t, stl_wall_init, &
                                      stl_wall_finalize, &
-                                     stl_wall_first_hit_segment
+                                     stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
 
     implicit none
@@ -539,6 +541,7 @@ contains
         real(dp) :: u_ref_prev(3), u_ref_cur(3), u_ref_hit(3)
         real(dp) :: x_prev(3), x_cur(3)
         real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
+        real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
         integer :: it, ierr_orbit, it_final
         integer(8) :: kt
         logical :: passing
@@ -595,12 +598,23 @@ contains
                 x_cur_m = x_cur*chartmap_cart_scale_to_m
 
                 if (u_ref_cur(1) > wall_rho_lcfs) then
-                    call stl_wall_first_hit_segment(wall, x_prev_m, x_cur_m, hit, &
-                                                    x_hit_m)
+                    call stl_wall_first_hit_segment_with_normal( &
+                        wall, x_prev_m, x_cur_m, hit, x_hit_m, normal_m)
                     if (hit) then
                         wall_hit(ipart) = 1_int8
                         x_hit = x_hit_m/chartmap_cart_scale_to_m
                         wall_hit_cart(:, ipart) = x_hit
+                        wall_hit_normal_cart(:, ipart) = normal_m
+
+                        vhat = x_cur_m - x_prev_m
+                        vnorm = sqrt(sum(vhat*vhat))
+                        if (vnorm > 0.0_dp) then
+                            vhat = vhat/vnorm
+                            cos_inc = abs(sum(vhat*normal_m))
+                            cos_inc = min(1.0_dp, max(0.0_dp, cos_inc))
+                            wall_hit_cos_incidence(ipart) = cos_inc
+                            wall_hit_angle_rad(ipart) = acos(cos_inc)
+                        end if
 
                         ierr_from_cart = 0
                         select type (ccs => ref_coords)

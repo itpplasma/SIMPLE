@@ -46,7 +46,11 @@ contains
                           ntimstep, startmode, num_surf, sbeg, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
-                          wall_input, wall_units, wall_hit, wall_hit_cart
+                          wall_input, wall_units, wall_hit, wall_hit_cart, &
+                          wall_hit_normal_cart, wall_hit_cos_incidence, &
+                          wall_hit_angle_rad
+        use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
+        use libneo_coordinates, only: chartmap_coordinate_system_t
         use reference_coordinates, only: ref_coords
         use version, only: simple_version
 
@@ -57,10 +61,14 @@ contains
         integer :: var_times_lost, var_trap_par, var_perp_inv
         integer :: var_zstart, var_zend, var_xstart_cart, var_xend_cart
         integer :: var_iclass, var_class_lost, var_wall_hit, var_wall_hit_cart
+        integer :: var_wall_hit_normal_cart, var_wall_hit_cos_incidence
+        integer :: var_wall_hit_angle_rad
         integer :: i
         real(dp), allocatable :: xstart_cart(:, :), xend_cart(:, :)
         integer(int8), allocatable :: class_lost_i8(:)
         character(len=32) :: coord_type
+        character(len=16) :: cart_units
+        type(chartmap_metadata_t) :: meta
         character(len=8) :: date_str
         character(len=10) :: time_str
         character(len=64) :: timestamp
@@ -88,17 +96,16 @@ contains
             end if
         end do
 
-        ! Determine coordinate type
-        if (len_trim(coord_input) > 0) then
-            if (index(coord_input, 'chartmap') > 0 .or. &
-                index(coord_input, '.nc') > 0) then
-                coord_type = 'chartmap'
-            else
-                coord_type = 'vmec'
-            end if
-        else
-            coord_type = 'vmec'
-        end if
+        coord_type = 'vmec'
+        cart_units = 'cm'
+        select type (ref_coords)
+        type is (chartmap_coordinate_system_t)
+            coord_type = 'chartmap'
+            call read_chartmap_metadata(coord_input, meta)
+            cart_units = meta%cart_units
+        class default
+            continue
+        end select
 
         ! Create file
         status = nf90_create(filename, nf90_netcdf4, ncid)
@@ -171,7 +178,7 @@ contains
         status = nf90_def_var(ncid, 'xstart_cart', nf90_double, &
                               [dim_xyz, dim_particle], var_xstart_cart)
         call check_nc(status, 'def_var xstart_cart')
-        status = nf90_put_att(ncid, var_xstart_cart, 'units', 'cm')
+        status = nf90_put_att(ncid, var_xstart_cart, 'units', trim(cart_units))
         call check_nc(status, 'put_att xstart_cart units')
         status = nf90_put_att(ncid, var_xstart_cart, 'description', &
                               'Initial Cartesian position (x, y, z)')
@@ -180,7 +187,7 @@ contains
         status = nf90_def_var(ncid, 'xend_cart', nf90_double, &
                               [dim_xyz, dim_particle], var_xend_cart)
         call check_nc(status, 'def_var xend_cart')
-        status = nf90_put_att(ncid, var_xend_cart, 'units', 'cm')
+        status = nf90_put_att(ncid, var_xend_cart, 'units', trim(cart_units))
         call check_nc(status, 'put_att xend_cart units')
         status = nf90_put_att(ncid, var_xend_cart, 'description', &
                               'Final Cartesian position (= xstart if not traced)')
@@ -211,11 +218,38 @@ contains
         status = nf90_def_var(ncid, 'wall_hit_cart', nf90_double, &
                               [dim_xyz, dim_particle], var_wall_hit_cart)
         call check_nc(status, 'def_var wall_hit_cart')
-        status = nf90_put_att(ncid, var_wall_hit_cart, 'units', 'cm')
+        status = nf90_put_att(ncid, var_wall_hit_cart, 'units', trim(cart_units))
         call check_nc(status, 'put_att wall_hit_cart units')
         status = nf90_put_att(ncid, var_wall_hit_cart, 'description', &
                               'First-hit Cartesian wall intersection point (x, y, z)')
         call check_nc(status, 'put_att wall_hit_cart description')
+
+        status = nf90_def_var(ncid, 'wall_hit_normal_cart', nf90_double, &
+                              [dim_xyz, dim_particle], var_wall_hit_normal_cart)
+        call check_nc(status, 'def_var wall_hit_normal_cart')
+        status = nf90_put_att(ncid, var_wall_hit_normal_cart, 'units', '1')
+        call check_nc(status, 'put_att wall_hit_normal_cart units')
+        status = nf90_put_att(ncid, var_wall_hit_normal_cart, 'description', &
+                              'Unit surface normal at wall hit (x, y, z)')
+        call check_nc(status, 'put_att wall_hit_normal_cart description')
+
+        status = nf90_def_var(ncid, 'wall_hit_cos_incidence', nf90_double, &
+                              [dim_particle], var_wall_hit_cos_incidence)
+        call check_nc(status, 'def_var wall_hit_cos_incidence')
+        status = nf90_put_att(ncid, var_wall_hit_cos_incidence, 'units', '1')
+        call check_nc(status, 'put_att wall_hit_cos_incidence units')
+        status = nf90_put_att(ncid, var_wall_hit_cos_incidence, 'description', &
+                              'Absolute cosine of incidence angle at wall hit')
+        call check_nc(status, 'put_att wall_hit_cos_incidence description')
+
+        status = nf90_def_var(ncid, 'wall_hit_angle_rad', nf90_double, &
+                              [dim_particle], var_wall_hit_angle_rad)
+        call check_nc(status, 'def_var wall_hit_angle_rad')
+        status = nf90_put_att(ncid, var_wall_hit_angle_rad, 'units', 'rad')
+        call check_nc(status, 'put_att wall_hit_angle_rad units')
+        status = nf90_put_att(ncid, var_wall_hit_angle_rad, 'description', &
+                              'Incidence angle at wall hit (0 = normal incidence)')
+        call check_nc(status, 'put_att wall_hit_angle_rad description')
 
         ! Global attributes - simulation config
         status = nf90_put_att(ncid, nf90_global, 'title', &
@@ -224,6 +258,8 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'simple_version', &
                               trim(simple_version))
         call check_nc(status, 'put_att simple_version')
+        status = nf90_put_att(ncid, nf90_global, 'cart_units', trim(cart_units))
+        call check_nc(status, 'put_att cart_units')
         status = nf90_put_att(ncid, nf90_global, 'created', trim(timestamp))
         call check_nc(status, 'put_att created')
         status = nf90_put_att(ncid, nf90_global, 'ntestpart', ntestpart)
@@ -309,6 +345,15 @@ contains
 
         status = nf90_put_var(ncid, var_wall_hit_cart, wall_hit_cart)
         call check_nc(status, 'put_var wall_hit_cart')
+
+        status = nf90_put_var(ncid, var_wall_hit_normal_cart, wall_hit_normal_cart)
+        call check_nc(status, 'put_var wall_hit_normal_cart')
+
+        status = nf90_put_var(ncid, var_wall_hit_cos_incidence, wall_hit_cos_incidence)
+        call check_nc(status, 'put_var wall_hit_cos_incidence')
+
+        status = nf90_put_var(ncid, var_wall_hit_angle_rad, wall_hit_angle_rad)
+        call check_nc(status, 'put_var wall_hit_angle_rad')
 
         ! Close file
         status = nf90_close(ncid)

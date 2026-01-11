@@ -111,6 +111,9 @@ module params
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
+    real(dp), allocatable :: wall_hit_normal_cart(:, :)
+    real(dp), allocatable :: wall_hit_cos_incidence(:)
+    real(dp), allocatable :: wall_hit_angle_rad(:)
 
 contains
 
@@ -277,6 +280,9 @@ contains
         if (allocated(confpart_pass)) deallocate (confpart_pass)
         if (allocated(wall_hit)) deallocate (wall_hit)
         if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
+        if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
+        if (allocated(wall_hit_cos_incidence)) deallocate (wall_hit_cos_incidence)
+        if (allocated(wall_hit_angle_rad)) deallocate (wall_hit_angle_rad)
 
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         allocate (times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -286,6 +292,9 @@ contains
         allocate (class_passing(ntestpart), class_lost(ntestpart))
         allocate (wall_hit(ntestpart))
         allocate (wall_hit_cart(3, ntestpart))
+        allocate (wall_hit_normal_cart(3, ntestpart))
+        allocate (wall_hit_cos_incidence(ntestpart))
+        allocate (wall_hit_angle_rad(ntestpart))
 
         times_lost = 0.0d0
         trap_par = 0.0d0
@@ -295,6 +304,9 @@ contains
         class_lost = .false.
         wall_hit = 0_int8
         wall_hit_cart = 0.0d0
+        wall_hit_normal_cart = 0.0d0
+        wall_hit_cos_incidence = 0.0d0
+        wall_hit_angle_rad = 0.0d0
     end subroutine reallocate_arrays
 
     subroutine sort_idx(idx_arr, N)

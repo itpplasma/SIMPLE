@@ -15,6 +15,7 @@
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/number_utils.h>
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
 #include <CGAL/squared_distance_3.h>
 #include <CGAL/Surface_mesh.h>
@@ -75,6 +76,41 @@ static Point first_point_along_segment(const Segment& seg, const Point& p0) {
     const double da = CGAL::squared_distance(p0, a);
     const double db = CGAL::squared_distance(p0, b);
     return (da <= db) ? a : b;
+}
+
+static bool face_normal_unit(const SurfaceMesh& mesh, SurfaceMesh::Face_index f,
+                             double normal_out[3]) {
+    if (normal_out == nullptr) {
+        return false;
+    }
+    if (f == SurfaceMesh::null_face()) {
+        return false;
+    }
+
+    const auto h0 = halfedge(f, mesh);
+    if (h0 == SurfaceMesh::null_halfedge()) {
+        return false;
+    }
+
+    const auto h1 = next(h0, mesh);
+    const auto h2 = next(h1, mesh);
+
+    const Point p0 = mesh.point(source(h0, mesh));
+    const Point p1 = mesh.point(target(h0, mesh));
+    const Point p2 = mesh.point(target(h1, mesh));
+
+    const auto u = p1 - p0;
+    const auto v = p2 - p0;
+    const auto n = CGAL::cross_product(u, v);
+    const double n2 = CGAL::to_double(n.squared_length());
+    if (!(n2 > 0.0)) {
+        return false;
+    }
+    const double inv = 1.0 / std::sqrt(n2);
+    normal_out[0] = CGAL::to_double(n.x()) * inv;
+    normal_out[1] = CGAL::to_double(n.y()) * inv;
+    normal_out[2] = CGAL::to_double(n.z()) * inv;
+    return true;
 }
 }  // namespace
 
@@ -161,5 +197,74 @@ extern "C" int stl_wall_first_hit_segment(void* h, const double p0_m[3],
     hit_m[0] = best_hit.x();
     hit_m[1] = best_hit.y();
     hit_m[2] = best_hit.z();
+    return 1;
+}
+
+extern "C" int stl_wall_first_hit_segment_with_normal(void* h, const double p0_m[3],
+                                                      const double p1_m[3],
+                                                      double hit_m[3],
+                                                      double normal[3]) {
+    if (h == nullptr || p0_m == nullptr || p1_m == nullptr || hit_m == nullptr ||
+        normal == nullptr) {
+        return 0;
+    }
+
+    const auto* wall = static_cast<const Wall*>(h);
+    const Point p0 = to_point(p0_m);
+    const Point p1 = to_point(p1_m);
+    const Segment seg(p0, p1);
+
+    using Intersection = Tree::Intersection_and_primitive_id<Segment>::Type;
+    std::vector<Intersection> intersections;
+    try {
+        wall->tree.all_intersections(seg, std::back_inserter(intersections));
+    } catch (...) {
+        return 0;
+    }
+
+    if (intersections.empty()) {
+        return 0;
+    }
+
+    double best_d2 = std::numeric_limits<double>::infinity();
+    Point best_hit(0.0, 0.0, 0.0);
+    SurfaceMesh::Face_index best_face = SurfaceMesh::null_face();
+
+    for (const auto& entry : intersections) {
+        const auto& variant_geom = entry.first;
+        const auto face = entry.second;
+        Point cand;
+        if (const Point* ipoint = variant_get_if<Point>(&variant_geom)) {
+            cand = *ipoint;
+        } else if (const Segment* iseg = variant_get_if<Segment>(&variant_geom)) {
+            cand = first_point_along_segment(*iseg, p0);
+        } else {
+            continue;
+        }
+
+        const double d2 = CGAL::squared_distance(p0, cand);
+        if (d2 < best_d2) {
+            best_d2 = d2;
+            best_hit = cand;
+            best_face = face;
+        }
+    }
+
+    if (!std::isfinite(best_d2)) {
+        return 0;
+    }
+
+    double n_unit[3] = {0.0, 0.0, 0.0};
+    if (!face_normal_unit(wall->mesh, best_face, n_unit)) {
+        return 0;
+    }
+
+    hit_m[0] = best_hit.x();
+    hit_m[1] = best_hit.y();
+    hit_m[2] = best_hit.z();
+
+    normal[0] = n_unit[0];
+    normal[1] = n_unit[1];
+    normal[2] = n_unit[2];
     return 1;
 }
