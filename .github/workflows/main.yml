@@ -42,10 +42,13 @@ jobs:
             gfortran \
             cmake \
             ninja-build \
+            pkg-config \
             libnetcdf-dev \
             libnetcdff-dev \
             libopenblas-dev \
-            liblapack-dev
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
 
       - name: Install Python dependencies
         run: |
@@ -91,6 +94,7 @@ jobs:
             latexmk \
             lyx \
             texlive-latex-extra \
+            texlive-publishers \
             texlive-science
 
       - name: Build LaTeX documents
