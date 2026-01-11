@@ -55,14 +55,13 @@
         simple_entry.f90
     )
 
-	if(SIMPLE_ENABLE_CGAL)
-	    add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
-	    if(TARGET CGAL::CGAL_Core)
-	        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL_Core)
-	    else()
-	        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
-	    endif()
-	endif()
+    if(SIMPLE_ENABLE_CGAL)
+        add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
+        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
+        if(TARGET CGAL::CGAL_Core)
+            target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL_Core)
+        endif()
+    endif()
 
 # Add diagnostic sources
 list(APPEND SOURCES

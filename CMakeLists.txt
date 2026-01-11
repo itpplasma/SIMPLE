@@ -201,7 +201,7 @@ find_or_fetch(libneo)
 
 # CGAL (optional, for STL wall intersections)
 if(SIMPLE_ENABLE_CGAL)
-    find_package(CGAL REQUIRED COMPONENTS Core)
+    find_package(CGAL REQUIRED)
     message(STATUS "CGAL enabled: ${CGAL_VERSION}")
     add_compile_definitions(SIMPLE_ENABLE_CGAL)
 else()
