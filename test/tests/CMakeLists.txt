@@ -68,7 +68,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     # libneo's Python package imports optional compiled extensions (e.g. _efit_to_boozer).
     # When building libneo as a subproject, those extensions live in the libneo
     # binary dir, not in LIBNEO_PYTHON_DIR. Add them to PYTHONPATH for tests.
-    if(DEFINED libneo_BINARY_DIR AND EXISTS "${libneo_BINARY_DIR}/src/efit_to_boozer")
+    if(DEFINED libneo_BINARY_DIR)
         set(EFIT_TO_BOOZER_PYTHON_DIR "${libneo_BINARY_DIR}/src/efit_to_boozer")
     else()
         set(EFIT_TO_BOOZER_PYTHON_DIR "${CMAKE_BINARY_DIR}/libneo/src/efit_to_boozer")
