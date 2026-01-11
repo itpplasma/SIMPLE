@@ -45,7 +45,8 @@ contains
                           facE_al, v0, integmode, relerr, npoiper, npoiper2, &
                           ntimstep, startmode, num_surf, sbeg, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
-                          netcdffile, field_input, coord_input
+                          netcdffile, field_input, coord_input, &
+                          wall_input, wall_units, wall_hit, wall_hit_cart
         use reference_coordinates, only: ref_coords
         use version, only: simple_version
 
@@ -55,7 +56,7 @@ contains
         integer :: dim_particle, dim_xyz, dim_phase, dim_iclass
         integer :: var_times_lost, var_trap_par, var_perp_inv
         integer :: var_zstart, var_zend, var_xstart_cart, var_xend_cart
-        integer :: var_iclass, var_class_lost
+        integer :: var_iclass, var_class_lost, var_wall_hit, var_wall_hit_cart
         integer :: i
         real(dp), allocatable :: xstart_cart(:, :), xend_cart(:, :)
         integer(int8), allocatable :: class_lost_i8(:)
@@ -118,93 +119,110 @@ contains
 
         ! Define variables with full attribute error checking
         status = nf90_def_var(ncid, 'times_lost', nf90_double, &
-            [dim_particle], var_times_lost)
+                              [dim_particle], var_times_lost)
         call check_nc(status, 'def_var times_lost')
         status = nf90_put_att(ncid, var_times_lost, 'units', 's')
         call check_nc(status, 'put_att times_lost units')
         status = nf90_put_att(ncid, var_times_lost, 'description', &
-            'Loss time (-1 if confined)')
+                              'Loss time (-1 if confined)')
         call check_nc(status, 'put_att times_lost description')
 
         status = nf90_def_var(ncid, 'trap_par', nf90_double, &
-            [dim_particle], var_trap_par)
+                              [dim_particle], var_trap_par)
         call check_nc(status, 'def_var trap_par')
         status = nf90_put_att(ncid, var_trap_par, 'units', 'dimensionless')
         call check_nc(status, 'put_att trap_par units')
         status = nf90_put_att(ncid, var_trap_par, 'description', &
-            'Trapping parameter eta = mu*B_max/E')
+                              'Trapping parameter eta = mu*B_max/E')
         call check_nc(status, 'put_att trap_par description')
 
         status = nf90_def_var(ncid, 'perp_inv', nf90_double, &
-            [dim_particle], var_perp_inv)
+                              [dim_particle], var_perp_inv)
         call check_nc(status, 'def_var perp_inv')
         status = nf90_put_att(ncid, var_perp_inv, 'units', 'cm^2*G')
         call check_nc(status, 'put_att perp_inv units')
         status = nf90_put_att(ncid, var_perp_inv, 'description', &
-            'Perpendicular adiabatic invariant J_perp = mu*B')
+                              'Perpendicular adiabatic invariant J_perp = mu*B')
         call check_nc(status, 'put_att perp_inv description')
 
         status = nf90_def_var(ncid, 'zstart', nf90_double, &
-            [dim_phase, dim_particle], var_zstart)
+                              [dim_phase, dim_particle], var_zstart)
         call check_nc(status, 'def_var zstart')
         status = nf90_put_att(ncid, var_zstart, 'description', &
-            'Initial phase space in reference coordinates')
+                              'Initial phase space in reference coordinates')
         call check_nc(status, 'put_att zstart description')
         status = nf90_put_att(ncid, var_zstart, 'components', &
-            's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
+                              's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
         call check_nc(status, 'put_att zstart components')
         status = nf90_put_att(ncid, var_zstart, 'coordinate_note', &
-            'See coordinate_type attribute for VMEC vs chartmap')
+                              'See coordinate_type attribute for VMEC vs chartmap')
         call check_nc(status, 'put_att zstart coordinate_note')
 
         status = nf90_def_var(ncid, 'zend', nf90_double, &
-            [dim_phase, dim_particle], var_zend)
+                              [dim_phase, dim_particle], var_zend)
         call check_nc(status, 'def_var zend')
         status = nf90_put_att(ncid, var_zend, 'description', &
-            'Final phase space in ref coords (0 if not traced)')
+                              'Final phase space in ref coords (0 if not traced)')
         call check_nc(status, 'put_att zend description')
         status = nf90_put_att(ncid, var_zend, 'components', &
-            's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
+                              's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
         call check_nc(status, 'put_att zend components')
 
         status = nf90_def_var(ncid, 'xstart_cart', nf90_double, &
-            [dim_xyz, dim_particle], var_xstart_cart)
+                              [dim_xyz, dim_particle], var_xstart_cart)
         call check_nc(status, 'def_var xstart_cart')
         status = nf90_put_att(ncid, var_xstart_cart, 'units', 'cm')
         call check_nc(status, 'put_att xstart_cart units')
         status = nf90_put_att(ncid, var_xstart_cart, 'description', &
-            'Initial Cartesian position (x, y, z)')
+                              'Initial Cartesian position (x, y, z)')
         call check_nc(status, 'put_att xstart_cart description')
 
         status = nf90_def_var(ncid, 'xend_cart', nf90_double, &
-            [dim_xyz, dim_particle], var_xend_cart)
+                              [dim_xyz, dim_particle], var_xend_cart)
         call check_nc(status, 'def_var xend_cart')
         status = nf90_put_att(ncid, var_xend_cart, 'units', 'cm')
         call check_nc(status, 'put_att xend_cart units')
         status = nf90_put_att(ncid, var_xend_cart, 'description', &
-            'Final Cartesian position (= xstart if not traced)')
+                              'Final Cartesian position (= xstart if not traced)')
         call check_nc(status, 'put_att xend_cart description')
 
         status = nf90_def_var(ncid, 'iclass', nf90_int, &
-            [dim_iclass, dim_particle], var_iclass)
+                              [dim_iclass, dim_particle], var_iclass)
         call check_nc(status, 'def_var iclass')
         status = nf90_put_att(ncid, var_iclass, 'description', &
-            'Classification: [J_par, topology, fractal] (0=unclassified)')
+                              'Classification: [J_par, topology, fractal] '// &
+                              '(0=unclassified)')
         call check_nc(status, 'put_att iclass description')
 
         status = nf90_def_var(ncid, 'class_lost', nf90_byte, &
-            [dim_particle], var_class_lost)
+                              [dim_particle], var_class_lost)
         call check_nc(status, 'def_var class_lost')
         status = nf90_put_att(ncid, var_class_lost, 'description', &
-            'Lost flag (1=lost, 0=confined)')
+                              'Lost flag (1=lost, 0=confined)')
         call check_nc(status, 'put_att class_lost description')
+
+        status = nf90_def_var(ncid, 'wall_hit', nf90_byte, &
+                              [dim_particle], var_wall_hit)
+        call check_nc(status, 'def_var wall_hit')
+        status = nf90_put_att(ncid, var_wall_hit, 'description', &
+                              'Wall hit flag (1=hit wall_input STL, 0=no hit)')
+        call check_nc(status, 'put_att wall_hit description')
+
+        status = nf90_def_var(ncid, 'wall_hit_cart', nf90_double, &
+                              [dim_xyz, dim_particle], var_wall_hit_cart)
+        call check_nc(status, 'def_var wall_hit_cart')
+        status = nf90_put_att(ncid, var_wall_hit_cart, 'units', 'cm')
+        call check_nc(status, 'put_att wall_hit_cart units')
+        status = nf90_put_att(ncid, var_wall_hit_cart, 'description', &
+                              'First-hit Cartesian wall intersection point (x, y, z)')
+        call check_nc(status, 'put_att wall_hit_cart description')
 
         ! Global attributes - simulation config
         status = nf90_put_att(ncid, nf90_global, 'title', &
-            'SIMPLE particle tracing results')
+                              'SIMPLE particle tracing results')
         call check_nc(status, 'put_att title')
         status = nf90_put_att(ncid, nf90_global, 'simple_version', &
-            trim(simple_version))
+                              trim(simple_version))
         call check_nc(status, 'put_att simple_version')
         status = nf90_put_att(ncid, nf90_global, 'created', trim(timestamp))
         call check_nc(status, 'put_att created')
@@ -237,7 +255,7 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'swcoll', merge(1, 0, swcoll))
         call check_nc(status, 'put_att swcoll')
         status = nf90_put_att(ncid, nf90_global, 'deterministic', &
-            merge(1, 0, deterministic))
+                              merge(1, 0, deterministic))
         call check_nc(status, 'put_att deterministic')
         status = nf90_put_att(ncid, nf90_global, 'ran_seed', ran_seed)
         call check_nc(status, 'put_att ran_seed')
@@ -247,6 +265,10 @@ contains
         call check_nc(status, 'put_att field_input')
         status = nf90_put_att(ncid, nf90_global, 'coord_input', trim(coord_input))
         call check_nc(status, 'put_att coord_input')
+        status = nf90_put_att(ncid, nf90_global, 'wall_input', trim(wall_input))
+        call check_nc(status, 'put_att wall_input')
+        status = nf90_put_att(ncid, nf90_global, 'wall_units', trim(wall_units))
+        call check_nc(status, 'put_att wall_units')
         status = nf90_put_att(ncid, nf90_global, 'coordinate_type', trim(coord_type))
         call check_nc(status, 'put_att coordinate_type')
 
@@ -281,6 +303,12 @@ contains
 
         status = nf90_put_var(ncid, var_class_lost, class_lost_i8)
         call check_nc(status, 'put_var class_lost')
+
+        status = nf90_put_var(ncid, var_wall_hit, wall_hit)
+        call check_nc(status, 'put_var wall_hit')
+
+        status = nf90_put_var(ncid, var_wall_hit_cart, wall_hit_cart)
+        call check_nc(status, 'put_var wall_hit_cart')
 
         ! Close file
         status = nf90_close(ncid)

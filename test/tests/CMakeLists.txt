@@ -382,14 +382,26 @@ add_executable(test_array_utils.x test_array_utils.f90)
 target_link_libraries(test_array_utils.x simple)
 add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
-# New comprehensive unit tests
-add_executable(test_util_simple.x test_util_simple.f90)
-target_link_libraries(test_util_simple.x simple)
-add_test(NAME test_util_simple COMMAND test_util_simple.x)
+    # New comprehensive unit tests
+    add_executable(test_util_simple.x test_util_simple.f90)
+    target_link_libraries(test_util_simple.x simple)
+    add_test(NAME test_util_simple COMMAND test_util_simple.x)
 
-add_executable(test_timing.x test_timing.f90)
-target_link_libraries(test_timing.x simple)
-add_test(NAME test_timing COMMAND test_timing.x)
+    add_executable(test_chartmap_metadata.x test_chartmap_metadata.f90)
+    target_link_libraries(test_chartmap_metadata.x simple)
+    add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
+    set_tests_properties(test_chartmap_metadata PROPERTIES LABELS "unit")
+
+    if(SIMPLE_ENABLE_CGAL)
+        add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
+        target_link_libraries(test_stl_wall_intersection.x simple)
+        add_test(NAME test_stl_wall_intersection COMMAND test_stl_wall_intersection.x)
+        set_tests_properties(test_stl_wall_intersection PROPERTIES LABELS "unit;wall")
+    endif()
+
+    add_executable(test_timing.x test_timing.f90)
+    target_link_libraries(test_timing.x simple)
+    add_test(NAME test_timing COMMAND test_timing.x)
 
 add_executable(test_sorting.x test_sorting.f90)
 target_link_libraries(test_sorting.x simple)

@@ -83,6 +83,41 @@ jobs:
           path: |
             build/Testing/
 
+  cgal-wall:
+    name: CGAL Wall Unit Tests
+    runs-on: ubuntu-24.04
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies (CGAL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libcgal-dev \
+            libgmp-dev \
+            libmpfr-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev
+
+      - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
+        run: |
+          make clean
+          make test-fast CONFIG=Fast \
+            FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
+            TEST='test_chartmap_metadata|test_stl_wall_intersection'
+
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-24.04
