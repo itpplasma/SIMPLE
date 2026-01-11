@@ -20,7 +20,7 @@ env:
 jobs:
   test:
     name: Build and Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
@@ -43,6 +43,8 @@ jobs:
             cmake \
             ninja-build \
             pkg-config \
+            libgsl-dev \
+            libhdf5-dev \
             libnetcdf-dev \
             libnetcdff-dev \
             libopenblas-dev \
@@ -82,7 +84,7 @@ jobs:
 
   build-docs:
     name: Build Documentation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
