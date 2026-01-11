@@ -9,6 +9,8 @@
 #include <variant>
 #include <vector>
 
+#include <boost/variant/get.hpp>
+
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
@@ -38,6 +40,21 @@ struct Wall {
 };
 
 static Point to_point(const double p[3]) { return Point(p[0], p[1], p[2]); }
+
+template <typename T, typename V>
+auto variant_get_if_impl(const V* v, int) -> decltype(std::get_if<T>(v)) {
+    return std::get_if<T>(v);
+}
+
+template <typename T, typename V>
+const T* variant_get_if_impl(const V* v, long) {
+    return boost::get<T>(v);
+}
+
+template <typename T, typename V>
+const T* variant_get_if(const V* v) {
+    return variant_get_if_impl<T>(v, 0);
+}
 
 static void scale_mesh(SurfaceMesh& mesh, double s) {
     if (!(s > 0.0)) {
@@ -122,9 +139,9 @@ extern "C" int stl_wall_first_hit_segment(void* h, const double p0_m[3],
     for (const auto& entry : intersections) {
         const auto& variant_geom = entry.first;
         Point cand;
-        if (const Point* ipoint = std::get_if<Point>(&variant_geom)) {
+        if (const Point* ipoint = variant_get_if<Point>(&variant_geom)) {
             cand = *ipoint;
-        } else if (const Segment* iseg = std::get_if<Segment>(&variant_geom)) {
+        } else if (const Segment* iseg = variant_get_if<Segment>(&variant_geom)) {
             cand = first_point_along_segment(*iseg, p0);
         } else {
             continue;
