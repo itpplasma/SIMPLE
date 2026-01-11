@@ -1,30 +1,38 @@
 program test_stl_wall_intersection
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use stl_wall_intersection, only: stl_wall_t, stl_wall_init, stl_wall_finalize, &
-                                     stl_wall_first_hit_segment
+                                     stl_wall_first_hit_segment_with_normal
     implicit none
 
     type(stl_wall_t) :: wall
     logical :: hit
     real(dp) :: p0(3), p1(3), hit_p(3)
+    real(dp) :: normal(3), dotx
 
     call write_tetra_stl_m("tetra_m.stl")
     call stl_wall_init(wall, "tetra_m.stl", 1.0_dp)
 
     p0 = [0.25_dp, 0.25_dp, 0.25_dp]
     p1 = [2.0_dp, 0.25_dp, 0.25_dp]
-    call stl_wall_first_hit_segment(wall, p0, p1, hit, hit_p)
+    call stl_wall_first_hit_segment_with_normal(wall, p0, p1, hit, hit_p, normal)
     call assert_true(hit, "expected intersection for meters STL")
     call assert_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
                           "meters STL hit point mismatch")
+    call assert_close_scalar(norm2(normal), 1.0_dp, 1.0e-12_dp, &
+                             "meters STL normal not unit length")
+    dotx = abs(normal(1))
+    call assert_close_scalar(dotx, 1.0_dp/sqrt(3.0_dp), 1.0e-12_dp, &
+                             "meters STL normal mismatch")
     call stl_wall_finalize(wall)
 
     call write_tetra_stl_mm("tetra_mm.stl")
     call stl_wall_init(wall, "tetra_mm.stl", 1.0e-3_dp)
-    call stl_wall_first_hit_segment(wall, p0, p1, hit, hit_p)
+    call stl_wall_first_hit_segment_with_normal(wall, p0, p1, hit, hit_p, normal)
     call assert_true(hit, "expected intersection for millimeters STL (scaled)")
     call assert_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
                           "mm STL scaled hit point mismatch")
+    call assert_close_scalar(norm2(normal), 1.0_dp, 1.0e-12_dp, &
+                             "mm STL normal not unit length")
     call stl_wall_finalize(wall)
 contains
 
@@ -101,5 +109,23 @@ contains
         end if
     end subroutine assert_close_vec
 
-end program test_stl_wall_intersection
+    function norm2(v) result(n)
+        real(dp), intent(in) :: v(3)
+        real(dp) :: n
+        n = sqrt(sum(v*v))
+    end function norm2
 
+    subroutine assert_close_scalar(a, b, tol, msg)
+        real(dp), intent(in) :: a, b
+        real(dp), intent(in) :: tol
+        character(len=*), intent(in) :: msg
+
+        if (abs(a - b) > tol) then
+            print *, "ASSERTION FAILED: ", trim(msg)
+            print *, "got:      ", a
+            print *, "expected: ", b
+            error stop 1
+        end if
+    end subroutine assert_close_scalar
+
+end program test_stl_wall_intersection
