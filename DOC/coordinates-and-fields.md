@@ -150,6 +150,9 @@ Attributes: num_field_periods, zeta_convention, rho_convention
    - Interior is geometric (not flux-based)
    - `rho_convention = unknown`
    - Same boundary as VMEC, different interior
+   - Suitable as a reference coordinate system for Meiss canonicalization;
+     Meiss does not require flux coordinates, only a smooth reference mapping
+     with non-vanishing toroidal field component in the domain.
 
 ### 2.4 Cartesian Coordinates
 
@@ -426,6 +429,10 @@ For each grid point (r, theta, phi) in scaled reference coordinates:
 5. ref_coords%covariant_basis -> e_cov (reference basis)
 6. A_ref = A_cart * e_cov (project to reference coords)
 ```
+When using a chartmap reference, differences between symplectic and RK45
+trajectories can already appear in chartmap $(\rho,\theta,\zeta)$ space, so a
+discrepancy seen in $R,Z$ is not automatically attributable to the chartmap
+inversion alone.
 
 **Case 3: Cartesian source (coils)**
 ```
@@ -494,7 +501,15 @@ call boozer_to_vmec(r, theta_B, phi_B, theta_v, phi_v)
 ### 6.3 Meiss Coordinates
 
 **File**: `src/field/field_can_meiss.f90`
-**Coordinates**: (r, theta_c, phi_c) where r = sqrt(s)
+**Coordinates**: (r, theta_c, phi_c) where r is a generic radial coordinate
+in the chosen reference system (often r = sqrt(s) for VMEC-based references).
+
+**Applicability**:
+- Meiss canonicalization is coordinate-agnostic: it does not require flux
+  coordinates or nested flux surfaces.
+- The only structural requirement is a non-vanishing toroidal field component
+  in the domain, so VMEC, chartmap, or cylindrical reference coordinates are
+  all valid inputs.
 
 **Construction** (two-phase):
 
