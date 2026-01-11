@@ -10,6 +10,7 @@ module stl_wall_intersection
     public :: stl_wall_init
     public :: stl_wall_finalize
     public :: stl_wall_first_hit_segment
+    public :: stl_wall_first_hit_segment_with_normal
 
     type :: stl_wall_t
         type(c_ptr) :: handle = c_null_ptr
@@ -39,6 +40,18 @@ module stl_wall_intersection
             real(c_double), intent(out) :: hit_m(3)
             integer(c_int) :: hit
         end function stl_wall_first_hit_segment_c
+
+        function stl_wall_first_hit_segment_with_normal_c( &
+            h, p0_m, p1_m, hit_m, normal) &
+            bind(C, name="stl_wall_first_hit_segment_with_normal") result(hit)
+            import :: c_ptr, c_double, c_int
+            type(c_ptr), value, intent(in) :: h
+            real(c_double), intent(in) :: p0_m(3)
+            real(c_double), intent(in) :: p1_m(3)
+            real(c_double), intent(out) :: hit_m(3)
+            real(c_double), intent(out) :: normal(3)
+            integer(c_int) :: hit
+        end function stl_wall_first_hit_segment_with_normal_c
     end interface
 #endif
 
@@ -113,5 +126,33 @@ contains
         error stop "stl_wall_first_hit_segment: CGAL disabled"
 #endif
     end subroutine stl_wall_first_hit_segment
+
+    subroutine stl_wall_first_hit_segment_with_normal(wall, p0_m, p1_m, hit, hit_m, &
+                                                      normal)
+        type(stl_wall_t), intent(in) :: wall
+        real(dp), intent(in) :: p0_m(3)
+        real(dp), intent(in) :: p1_m(3)
+        logical, intent(out) :: hit
+        real(dp), intent(out) :: hit_m(3)
+        real(dp), intent(out) :: normal(3)
+
+        integer(c_int) :: hit_i
+
+#ifdef SIMPLE_ENABLE_CGAL
+        if (.not. c_associated(wall%handle)) then
+            error stop "stl_wall_first_hit_segment_with_normal: wall not initialized"
+        end if
+        hit_i = stl_wall_first_hit_segment_with_normal_c(wall%handle, &
+                                                         real(p0_m, c_double), &
+                                                         real(p1_m, c_double), &
+                                                         hit_m, normal)
+        hit = (hit_i /= 0)
+#else
+        hit = .false.
+        hit_m = 0.0_dp
+        normal = 0.0_dp
+        error stop "stl_wall_first_hit_segment_with_normal: CGAL disabled"
+#endif
+    end subroutine stl_wall_first_hit_segment_with_normal
 
 end module stl_wall_intersection
