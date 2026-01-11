@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
-#include <CGAL/AABB_traits_3.h>
+#include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/IO/polygon_mesh_io.h>
@@ -23,7 +23,7 @@ using Point = Kernel::Point_3;
 using Segment = Kernel::Segment_3;
 using SurfaceMesh = CGAL::Surface_mesh<Point>;
 using Primitive = CGAL::AABB_face_graph_triangle_primitive<SurfaceMesh>;
-using Traits = CGAL::AABB_traits_3<Kernel, Primitive>;
+using Traits = CGAL::AABB_traits<Kernel, Primitive>;
 using Tree = CGAL::AABB_tree<Traits>;
 
 struct Wall {
