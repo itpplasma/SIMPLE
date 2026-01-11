@@ -83,6 +83,57 @@ jobs:
           path: |
             build/Testing/
 
+  cgal-wall:
+    name: CGAL Wall Unit Tests
+    runs-on: ubuntu-24.04
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies (CGAL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libcgal-dev \
+            libboost-dev \
+            libgmp-dev \
+            libmpfr-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            libopenmpi-dev \
+            openmpi-bin
+
+      - name: Install minimal Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+
+      - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
+        run: |
+          make clean
+          make test-fast CONFIG=Fast \
+            FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
+            TEST='test_chartmap_metadata|test_stl_wall_intersection'
+
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-24.04

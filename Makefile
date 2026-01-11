@@ -4,9 +4,9 @@ BUILD_DIR := build
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
 # Common ctest command with optional verbose and test name filtering
-CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
-CTEST_CMD_NOPY = cd $(BUILD_DIR) && SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
-NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R $(TEST))
+CTEST_CMD = cd $(BUILD_DIR) && ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R "$(TEST)")
+CTEST_CMD_NOPY = cd $(BUILD_DIR) && SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R "$(TEST)")
+NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R "$(TEST)")
 
 # NVIDIA HPC SDK paths for nvfortran builds
 NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11
@@ -35,19 +35,19 @@ build: configure
 # Example: make test-golden-main TEST=classifier VERBOSE=1
 
 # Run all tests except regression tests (default)
-test: build
+test: build-deterministic
 	$(CTEST_CMD) -LE "regression"
 
 # Run all non-Python tests (exclude python + regression)
-test-nopy: build
+test-nopy: build-deterministic
 	$(CTEST_CMD_NOPY) -LE "python|regression"
 
 # Run only fast tests (exclude slow and regression tests)
-test-fast: build
+test-fast: build-deterministic
 	$(CTEST_CMD) -LE "slow|regression"
 
 # Run only slow tests
-test-slow: build
+test-slow: build-deterministic
 	$(CTEST_CMD) -L "slow" -LE "regression"
 
 # Run only regression tests (requires deterministic FP build without Python interface)
@@ -92,11 +92,11 @@ test-all: build
 # Compares current branch against main to enforce strict numerical reproducibility
 # Any differences must be manually reviewed before merging
 test-golden: build-deterministic-nopy
-	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R $(TEST))
+	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
 
 # Golden record tests without deterministic FP (faster, for local iteration only)
 test-golden-fast: build
-	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R $(TEST))
+	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
 
 doc: configure
 	cmake --build --preset default --target doc

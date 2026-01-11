@@ -9,6 +9,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project (SIMPLE)
 enable_language(C Fortran)
 
+# Optional: enable CGAL-based STL wall intersection support.
+option(SIMPLE_ENABLE_CGAL "Enable CGAL STL wall intersection support" OFF)
+
 # Get version from git describe (format: v1.5.2-42-g62fed6e[-dirty])
 execute_process(
     COMMAND git describe --tags --dirty --always
@@ -195,6 +198,15 @@ else()
 endif()
 
 find_or_fetch(libneo)
+
+# CGAL (optional, for STL wall intersections)
+if(SIMPLE_ENABLE_CGAL)
+    find_package(CGAL REQUIRED)
+    message(STATUS "CGAL enabled: ${CGAL_VERSION}")
+    add_compile_definitions(SIMPLE_ENABLE_CGAL)
+else()
+    message(STATUS "CGAL disabled (SIMPLE_ENABLE_CGAL=OFF)")
+endif()
 
 # Fetch fortplot for diagnostic plotting (disabled for nvfortran due to compatibility issues)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")

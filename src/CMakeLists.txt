@@ -1,12 +1,14 @@
-set(SOURCES
-    ${CMAKE_BINARY_DIR}/version.f90
-    lapack_interfaces.f90
-    sorting_mod.f90
-    coordinates/coordinates.f90
-    coordinates/stencil_utils.f90
-    coordinates/array_utils.f90
-    coordinates/reference_coordinates.f90
-    coordinates/coordinate_scaling.f90
+    set(SOURCES
+        ${CMAKE_BINARY_DIR}/version.f90
+        lapack_interfaces.f90
+        sorting_mod.f90
+        wall/chartmap_metadata.f90
+        wall/stl_wall_intersection.F90
+        coordinates/coordinates.f90
+        coordinates/stencil_utils.f90
+        coordinates/array_utils.f90
+        coordinates/reference_coordinates.f90
+        coordinates/coordinate_scaling.f90
     coordinates/cartesian_coordinates.f90
     field/field_base.f90
     field/field_coils.f90
@@ -48,10 +50,18 @@ set(SOURCES
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90
-    timing.f90
-    simple_main.f90
-    simple_entry.f90
-)
+        timing.f90
+        simple_main.f90
+        simple_entry.f90
+    )
+
+    if(SIMPLE_ENABLE_CGAL)
+        add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
+        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
+        if(TARGET CGAL::CGAL_Core)
+            target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL_Core)
+        endif()
+    endif()
 
 # Add diagnostic sources
 list(APPEND SOURCES
@@ -69,7 +79,11 @@ if(ENABLE_GVEC)
     )
 endif()
 
-add_library (simple STATIC ${SOURCES})
+    add_library (simple STATIC ${SOURCES})
+
+    if(SIMPLE_ENABLE_CGAL)
+        target_link_libraries(simple PUBLIC stl_wall_cgal)
+    endif()
 
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
@@ -86,7 +100,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 
 target_link_libraries(simple PUBLIC
-	netcdf netcdff CONTRIB BLAS::BLAS LAPACK::LAPACK
+    netcdf netcdff CONTRIB BLAS::BLAS LAPACK::LAPACK
 )
 
 target_link_libraries(simple PUBLIC

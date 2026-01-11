@@ -1,4 +1,5 @@
 module params
+    use, intrinsic :: iso_fortran_env, only: int8
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
@@ -91,6 +92,8 @@ module params
 
     character(1000) :: field_input = ''
     character(1000) :: coord_input = ''
+    character(1000) :: wall_input = ''
+    character(16) :: wall_units = 'm'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
 
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
@@ -103,8 +106,11 @@ module params
         old_axis_healing_boundary, am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        integ_coords, output_results_netcdf, &
+        wall_input, wall_units, integ_coords, output_results_netcdf, &
         output_error, output_orbits_macrostep  ! callback
+
+    integer(int8), allocatable :: wall_hit(:)
+    real(dp), allocatable :: wall_hit_cart(:, :)
 
 contains
 
@@ -269,6 +275,8 @@ contains
         if (allocated(volstart)) deallocate (volstart)
         if (allocated(confpart_trap)) deallocate (confpart_trap)
         if (allocated(confpart_pass)) deallocate (confpart_pass)
+        if (allocated(wall_hit)) deallocate (wall_hit)
+        if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
 
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         allocate (times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -276,6 +284,8 @@ contains
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
         allocate (iclass(3, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
+        allocate (wall_hit(ntestpart))
+        allocate (wall_hit_cart(3, ntestpart))
 
         times_lost = 0.0d0
         trap_par = 0.0d0
@@ -283,6 +293,8 @@ contains
         iclass = 0
         class_passing = .false.
         class_lost = .false.
+        wall_hit = 0_int8
+        wall_hit_cart = 0.0d0
     end subroutine reallocate_arrays
 
     subroutine sort_idx(idx_arr, N)
