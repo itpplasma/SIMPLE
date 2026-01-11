@@ -45,6 +45,7 @@ jobs:
             pkg-config \
             libgsl-dev \
             libhdf5-dev \
+            libfftw3-dev \
             libnetcdf-dev \
             libnetcdff-dev \
             libopenblas-dev \
