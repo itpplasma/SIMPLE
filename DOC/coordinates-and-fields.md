@@ -643,6 +643,28 @@ end subroutine
 | `field_input` | string | Field data file (VMEC, coils, or GVEC) |
 | `coord_input` | string | Reference coordinate file (VMEC or chartmap) |
 
+### 8.2.1 STL Wall Intersection (`wall_input`, `wall_units`)
+
+SIMPLE can optionally detect wall losses by intersecting the orbit segment in
+Cartesian space with a triangulated STL surface (using CGAL).
+
+| Parameter | Type | Purpose |
+|-----------|------|---------|
+| `wall_input` | string | STL file path. If empty, wall intersections are disabled. |
+| `wall_units` | string | STL units: `m` or `mm` (STL has no unit metadata). |
+
+**Requirements**:
+- Must be built with `-DSIMPLE_ENABLE_CGAL=ON`.
+- Requires `coord_input` to be a chartmap reference coordinate file.
+
+**Performance gating**:
+- The expensive STL intersection is only evaluated for `rho > rho_lcfs`, where
+  `rho_lcfs` is read from the chartmap NetCDF metadata.
+
+**Outputs** (when `output_results_netcdf = .True.`):
+- `results.nc:wall_hit(particle)` (byte)
+- `results.nc:wall_hit_cart(xyz, particle)` (cm, consistent with `xstart_cart`)
+
 **Fallback Chain**:
 1. coord_input (if set)
 2. netcdffile (if coord_input empty)
