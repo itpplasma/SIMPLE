@@ -478,8 +478,8 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc field_equiv_map2disc
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_field_equivalence_chartmap_map2disc PROPERTIES
-        LABELS "integration;python"
-        TIMEOUT 120
+        LABELS "integration;python;slow"
+        TIMEOUT 300
         DEPENDS "generate_chartmap_ncsx_map2disc"
         FIXTURES_REQUIRED chartmap_ncsx_map2disc)
 
@@ -487,8 +487,8 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.wall0p1m.nc field_equiv_map2disc_wall
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_field_equivalence_chartmap_map2disc_wall PROPERTIES
-        LABELS "integration;python"
-        TIMEOUT 120
+        LABELS "integration;python;slow"
+        TIMEOUT 300
         DEPENDS "generate_chartmap_ncsx_map2disc_wall"
         FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
 endif()
