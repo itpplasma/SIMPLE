@@ -121,36 +121,38 @@ def _plot_overlay(
         print(f"Skipping wall-offset plot overlay (matplotlib unavailable: {exc})")
         return
 
-    n = len(slices)
-    fig, axes = plt.subplots(nrows=1, ncols=n, figsize=(6.2 * n, 5.5), constrained_layout=True)
-    if n == 1:
-        axes = [axes]
-
-    for ax, s in zip(axes, slices, strict=False):
-        r_vm = np.asarray(s["r_vmec"], dtype=float)
-        z_vm = np.asarray(s["z_vmec"], dtype=float)
-        r_buf = np.asarray(s["r_buf"], dtype=float)
-        z_buf = np.asarray(s["z_buf"], dtype=float)
-        r_wall = np.asarray(s["r_wall"], dtype=float)
-        z_wall = np.asarray(s["z_wall"], dtype=float)
-        phi = float(s["phi"])
-
-        ax.plot(r_vm, z_vm, "b-", lw=1.0, label="VMEC s=1")
-        ax.plot(r_buf, z_buf, "k--", lw=1.0, label=f"buffer +{offset_m:.3f} m")
-        ax.plot(r_wall, z_wall, "r.-", lw=1.0, ms=4, label="chartmap rho=1")
-        ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel("R [m]")
-        ax.set_ylabel("Z [m]")
-        ax.set_title(f"phi={phi:.6f} rad")
-        ax.legend(loc="best", fontsize=9)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     try:
+        n = len(slices)
+        fig, axes = plt.subplots(
+            nrows=1, ncols=n, figsize=(6.2 * n, 5.5), constrained_layout=True
+        )
+        if n == 1:
+            axes = [axes]
+
+        for ax, s in zip(axes, slices, strict=False):
+            r_vm = np.asarray(s["r_vmec"], dtype=float)
+            z_vm = np.asarray(s["z_vmec"], dtype=float)
+            r_buf = np.asarray(s["r_buf"], dtype=float)
+            z_buf = np.asarray(s["z_buf"], dtype=float)
+            r_wall = np.asarray(s["r_wall"], dtype=float)
+            z_wall = np.asarray(s["z_wall"], dtype=float)
+            phi = float(s["phi"])
+
+            ax.plot(r_vm, z_vm, "b-", lw=1.0, label="VMEC s=1")
+            ax.plot(r_buf, z_buf, "k--", lw=1.0, label=f"buffer +{offset_m:.3f} m")
+            ax.plot(r_wall, z_wall, "r.-", lw=1.0, ms=4, label="chartmap rho=1")
+            ax.set_aspect("equal", adjustable="box")
+            ax.set_xlabel("R [m]")
+            ax.set_ylabel("Z [m]")
+            ax.set_title(f"phi={phi:.6f} rad")
+            ax.legend(loc="best", fontsize=9)
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out_path, dpi=200)
+        plt.close(fig)
     except Exception as exc:
-        print(f"Skipping wall-offset plot overlay (savefig failed: {exc})")
+        print(f"Skipping wall-offset plot overlay (matplotlib failed: {exc})")
         return
-    plt.close(fig)
 
     if not out_path.exists() or out_path.stat().st_size == 0:
         raise SystemExit(f"failed to write plot: {out_path}")

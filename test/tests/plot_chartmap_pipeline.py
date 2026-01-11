@@ -43,94 +43,114 @@ def plot_test_A():
     """Plot Test A: roundtrip error."""
     r_grid, theta_grid, err_vmec, err_chart = read_test_data('pipeline_A')
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    try:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    vmin = min(err_vmec[err_vmec > -15].min() if np.any(err_vmec > -15) else -15,
-               err_chart[err_chart > -15].min() if np.any(err_chart > -15) else -15)
-    vmax = max(err_vmec.max(), err_chart.max())
+        vmin = min(
+            err_vmec[err_vmec > -15].min() if np.any(err_vmec > -15) else -15,
+            err_chart[err_chart > -15].min() if np.any(err_chart > -15) else -15,
+        )
+        vmax = max(err_vmec.max(), err_chart.max())
 
-    im0 = axes[0].pcolormesh(r_grid, theta_grid, err_vmec, cmap='hot',
-                              vmin=vmin, vmax=vmax)
-    axes[0].set_xlabel('r = sqrt(s)')
-    axes[0].set_ylabel('theta')
-    axes[0].set_title('VMEC->chart: log10(cyl roundtrip error)')
-    plt.colorbar(im0, ax=axes[0])
+        im0 = axes[0].pcolormesh(
+            r_grid, theta_grid, err_vmec, cmap='hot', vmin=vmin, vmax=vmax
+        )
+        axes[0].set_xlabel('r = sqrt(s)')
+        axes[0].set_ylabel('theta')
+        axes[0].set_title('VMEC->chart: log10(cyl roundtrip error)')
+        plt.colorbar(im0, ax=axes[0])
 
-    im1 = axes[1].pcolormesh(r_grid, theta_grid, err_chart, cmap='hot',
-                              vmin=vmin, vmax=vmax)
-    axes[1].set_xlabel('r = sqrt(s)')
-    axes[1].set_ylabel('theta')
-    axes[1].set_title('Chartmap: log10(u roundtrip error)')
-    plt.colorbar(im1, ax=axes[1])
+        im1 = axes[1].pcolormesh(
+            r_grid, theta_grid, err_chart, cmap='hot', vmin=vmin, vmax=vmax
+        )
+        axes[1].set_xlabel('r = sqrt(s)')
+        axes[1].set_ylabel('theta')
+        axes[1].set_title('Chartmap: log10(u roundtrip error)')
+        plt.colorbar(im1, ax=axes[1])
 
-    plt.suptitle('Test A: Coordinate mapping roundtrip')
-    plt.tight_layout()
-    if not _save_or_skip('pipeline_A_roundtrip.png'):
+        plt.suptitle('Test A: Coordinate mapping roundtrip')
+        plt.tight_layout()
+        if not _save_or_skip('pipeline_A_roundtrip.png'):
+            return
+        plt.close()
+        print('Saved: pipeline_A_roundtrip.png')
+    except Exception as exc:
+        print(f"Skipping chartmap pipeline plots (matplotlib failed: {exc})")
         return
-    plt.close()
-    print('Saved: pipeline_A_roundtrip.png')
 
 
 def plot_test_B():
     """Plot Test B: covariant basis FD error."""
     r_grid, theta_grid, err_vmec, err_chart = read_test_data('pipeline_B')
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    try:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    vmin = min(err_vmec.min(), err_chart.min())
-    vmax = max(err_vmec.max(), err_chart.max())
+        vmin = min(err_vmec.min(), err_chart.min())
+        vmax = max(err_vmec.max(), err_chart.max())
 
-    im0 = axes[0].pcolormesh(r_grid, theta_grid, err_vmec, cmap='hot',
-                              vmin=vmin, vmax=vmax)
-    axes[0].set_xlabel('r = sqrt(s)')
-    axes[0].set_ylabel('theta')
-    axes[0].set_title('VMEC: log10(basis FD error)')
-    plt.colorbar(im0, ax=axes[0])
+        im0 = axes[0].pcolormesh(
+            r_grid, theta_grid, err_vmec, cmap='hot', vmin=vmin, vmax=vmax
+        )
+        axes[0].set_xlabel('r = sqrt(s)')
+        axes[0].set_ylabel('theta')
+        axes[0].set_title('VMEC: log10(basis FD error)')
+        plt.colorbar(im0, ax=axes[0])
 
-    im1 = axes[1].pcolormesh(r_grid, theta_grid, err_chart, cmap='hot',
-                              vmin=vmin, vmax=vmax)
-    axes[1].set_xlabel('r = sqrt(s)')
-    axes[1].set_ylabel('theta')
-    axes[1].set_title('Chartmap: log10(basis FD error)')
-    plt.colorbar(im1, ax=axes[1])
+        im1 = axes[1].pcolormesh(
+            r_grid, theta_grid, err_chart, cmap='hot', vmin=vmin, vmax=vmax
+        )
+        axes[1].set_xlabel('r = sqrt(s)')
+        axes[1].set_ylabel('theta')
+        axes[1].set_title('Chartmap: log10(basis FD error)')
+        plt.colorbar(im1, ax=axes[1])
 
-    plt.suptitle('Test B: covariant_basis vs finite-difference')
-    plt.tight_layout()
-    if not _save_or_skip('pipeline_B_basis_fd.png'):
+        plt.suptitle('Test B: covariant_basis vs finite-difference')
+        plt.tight_layout()
+        if not _save_or_skip('pipeline_B_basis_fd.png'):
+            return
+        plt.close()
+        print('Saved: pipeline_B_basis_fd.png')
+    except Exception as exc:
+        print(f"Skipping chartmap pipeline plots (matplotlib failed: {exc})")
         return
-    plt.close()
-    print('Saved: pipeline_B_basis_fd.png')
 
 
 def plot_test_C():
     """Plot Test C: tensor transform identity error."""
     r_grid, theta_grid, err_vmec, err_chart = read_test_data('pipeline_C')
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    try:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    vmin = min(err_vmec.min(), err_chart.min())
-    vmax = max(err_vmec.max(), err_chart.max())
+        vmin = min(err_vmec.min(), err_chart.min())
+        vmax = max(err_vmec.max(), err_chart.max())
 
-    im0 = axes[0].pcolormesh(r_grid, theta_grid, err_vmec, cmap='hot',
-                              vmin=vmin, vmax=vmax)
-    axes[0].set_xlabel('r = sqrt(s)')
-    axes[0].set_ylabel('theta')
-    axes[0].set_title('VMEC: log10(transform identity error)')
-    plt.colorbar(im0, ax=axes[0])
+        im0 = axes[0].pcolormesh(
+            r_grid, theta_grid, err_vmec, cmap='hot', vmin=vmin, vmax=vmax
+        )
+        axes[0].set_xlabel('r = sqrt(s)')
+        axes[0].set_ylabel('theta')
+        axes[0].set_title('VMEC: log10(transform identity error)')
+        plt.colorbar(im0, ax=axes[0])
 
-    im1 = axes[1].pcolormesh(r_grid, theta_grid, err_chart, cmap='hot',
-                              vmin=vmin, vmax=vmax)
-    axes[1].set_xlabel('r = sqrt(s)')
-    axes[1].set_ylabel('theta')
-    axes[1].set_title('Chartmap: log10(transform identity error)')
-    plt.colorbar(im1, ax=axes[1])
+        im1 = axes[1].pcolormesh(
+            r_grid, theta_grid, err_chart, cmap='hot', vmin=vmin, vmax=vmax
+        )
+        axes[1].set_xlabel('r = sqrt(s)')
+        axes[1].set_ylabel('theta')
+        axes[1].set_title('Chartmap: log10(transform identity error)')
+        plt.colorbar(im1, ax=axes[1])
 
-    plt.suptitle('Test C: Cartesian <-> ref basis transform identity')
-    plt.tight_layout()
-    if not _save_or_skip('pipeline_C_transform.png'):
+        plt.suptitle('Test C: Cartesian <-> ref basis transform identity')
+        plt.tight_layout()
+        if not _save_or_skip('pipeline_C_transform.png'):
+            return
+        plt.close()
+        print('Saved: pipeline_C_transform.png')
+    except Exception as exc:
+        print(f"Skipping chartmap pipeline plots (matplotlib failed: {exc})")
         return
-    plt.close()
-    print('Saved: pipeline_C_transform.png')
 
 
 if __name__ == '__main__':

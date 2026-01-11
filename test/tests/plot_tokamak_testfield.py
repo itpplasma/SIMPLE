@@ -36,40 +36,40 @@ def main() -> int:
         print("No tokamak_testfield_*.dat files found; run test_sympl_tok.x first.")
         return 1
 
-    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
-    axes[0].set_xlabel("R/R0")
-    axes[0].set_ylabel("Z/R0")
-    axes[0].set_title("Tokamak TEST field orbits")
-
-    axes[1].set_xlabel("Step")
-    axes[1].set_ylabel("H/H0")
-    axes[1].set_title("Hamiltonian drift")
-
-    markers = ["o", "s", "^", "x", "d", "v"]
-
-    for idx, path in enumerate(files):
-        R, Z, h = load_orbit(path)
-        label = path.stem.replace("tokamak_testfield_", "")
-        marker = markers[idx % len(markers)]
-        axes[0].plot(R, Z, marker=marker, linestyle="none", markersize=2, label=label)
-        axes[1].plot(
-            h / h[0],
-            marker=marker,
-            linestyle="none",
-            markersize=2,
-            label=label,
-        )
-
-    axes[0].legend()
-    axes[1].legend()
-
-    fig.tight_layout()
     try:
+        fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+        axes[0].set_xlabel("R/R0")
+        axes[0].set_ylabel("Z/R0")
+        axes[0].set_title("Tokamak TEST field orbits")
+
+        axes[1].set_xlabel("Step")
+        axes[1].set_ylabel("H/H0")
+        axes[1].set_title("Hamiltonian drift")
+
+        markers = ["o", "s", "^", "x", "d", "v"]
+
+        for idx, path in enumerate(files):
+            R, Z, h = load_orbit(path)
+            label = path.stem.replace("tokamak_testfield_", "")
+            marker = markers[idx % len(markers)]
+            axes[0].plot(R, Z, marker=marker, linestyle="none", markersize=2, label=label)
+            axes[1].plot(
+                h / h[0],
+                marker=marker,
+                linestyle="none",
+                markersize=2,
+                label=label,
+            )
+
+        axes[0].legend()
+        axes[1].legend()
+
+        fig.tight_layout()
         fig.savefig(OUT_FILE, dpi=150)
+        print(f"Saved {OUT_FILE}")
     except Exception as exc:
-        print(f"Skipping tokamak TEST-field plot (savefig failed: {exc})")
+        print(f"Skipping tokamak TEST-field plot (matplotlib failed: {exc})")
         return 0
-    print(f"Saved {OUT_FILE}")
     return 0
 
 

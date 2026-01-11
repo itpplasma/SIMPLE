@@ -71,55 +71,55 @@ def main():
         sys.exit(1)
 
     # Create figure with 4 subplots
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle(f"Orbit for Particle {particle_id}", fontsize=14, fontweight="bold")
-
-    # Subplot 1: s vs theta (poloidal plane)
-    ax = axes[0, 0]
-    ax.plot(theta, s, "b,", markersize=2)
-    ax.scatter(theta[0], s[0], color="green", s=100, marker="o", label="Start", zorder=5)
-    ax.scatter(theta[-1], s[-1], color="red", s=100, marker="x", label="End", zorder=5)
-    ax.set_xlabel(r"$\theta$ (rad)")
-    ax.set_ylabel(r"$s$ (flux)")
-    ax.set_title("Poloidal Cross-Section (s-θ)")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-
-    # Subplot 2: s vs time
-    ax = axes[0, 1]
-    ax.plot(time, s, "r,", markersize=2)
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel(r"$s$ (flux)")
-    ax.set_title(r"Flux Surface Evolution")
-    ax.grid(True, alpha=0.3)
-
-    # Subplot 3: theta vs time
-    ax = axes[1, 0]
-    ax.plot(time, theta, "g,", markersize=2)
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel(r"$\theta$ (rad)")
-    ax.set_title("Poloidal Angle Evolution")
-    ax.grid(True, alpha=0.3)
-
-    # Subplot 4: phi vs time
-    ax = axes[1, 1]
-    ax.plot(time, phi, "m,", markersize=2)
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel(r"$\phi$ (rad)")
-    ax.set_title("Toroidal Angle Evolution")
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-
-    # Save as PNG
-    png_filename = f"orbit_{particle_id}.png"
     try:
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        fig.suptitle(f"Orbit for Particle {particle_id}", fontsize=14, fontweight="bold")
+
+        # Subplot 1: s vs theta (poloidal plane)
+        ax = axes[0, 0]
+        ax.plot(theta, s, "b,", markersize=2)
+        ax.scatter(theta[0], s[0], color="green", s=100, marker="o", label="Start", zorder=5)
+        ax.scatter(theta[-1], s[-1], color="red", s=100, marker="x", label="End", zorder=5)
+        ax.set_xlabel(r"$\theta$ (rad)")
+        ax.set_ylabel(r"$s$ (flux)")
+        ax.set_title("Poloidal Cross-Section (s-θ)")
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+        # Subplot 2: s vs time
+        ax = axes[0, 1]
+        ax.plot(time, s, "r,", markersize=2)
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel(r"$s$ (flux)")
+        ax.set_title(r"Flux Surface Evolution")
+        ax.grid(True, alpha=0.3)
+
+        # Subplot 3: theta vs time
+        ax = axes[1, 0]
+        ax.plot(time, theta, "g,", markersize=2)
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel(r"$\theta$ (rad)")
+        ax.set_title("Poloidal Angle Evolution")
+        ax.grid(True, alpha=0.3)
+
+        # Subplot 4: phi vs time
+        ax = axes[1, 1]
+        ax.plot(time, phi, "m,", markersize=2)
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel(r"$\phi$ (rad)")
+        ax.set_title("Toroidal Angle Evolution")
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        # Save as PNG
+        png_filename = f"orbit_{particle_id}.png"
         plt.savefig(png_filename, dpi=150, bbox_inches="tight")
+        print(f"Saved plot to {png_filename}")
     except Exception as exc:
-        print(f"Skipping orbit plot (savefig failed: {exc})")
+        print(f"Skipping orbit plot (matplotlib failed: {exc})")
         ds.close()
         sys.exit(0)
-    print(f"Saved plot to {png_filename}")
 
     ds.close()
 

@@ -129,74 +129,74 @@ def main(argv: list[str] | None = None) -> int:
         if ir_m not in ir_list_m:
             ir_list_m.append(ir_m)
 
-    nrows = len(iz_list)
-    fig, axes = plt.subplots(
-        nrows=nrows,
-        ncols=2,
-        figsize=(10.0, 2.4 * nrows),
-        constrained_layout=True,
-    )
-    if nrows == 1:
-        axes = np.array([axes])
-
-    for row, iz in enumerate(iz_list):
-        ax_rz = axes[row, 0]
-        ax_d = axes[row, 1]
-
-        zeta_target = float(zeta_v[iz])
-        iz_m = int(np.argmin(np.abs(zeta_m - zeta_target)))
-
-        for ir_v, ir_m in zip(ir_list_v, ir_list_m, strict=False):
-            rv = _closed(r_v[iz, :, ir_v])
-            zv = _closed(z_v[iz, :, ir_v])
-            rm = _closed(r_m[iz_m, :, ir_m])
-            zm = _closed(z_m[iz_m, :, ir_m])
-
-            lab_v = "VMEC->chartmap" if ir_v == ir_list_v[-1] else None
-            lab_m = "map2disc" if ir_m == ir_list_m[-1] else None
-
-            ax_rz.plot(rv, zv, "-", lw=1.0, alpha=0.85, label=lab_v)
-            ax_rz.plot(rm, zm, "--", lw=1.0, alpha=0.85, label=lab_m)
-        ax_rz.set_aspect("equal", adjustable="box")
-        ax_rz.set_xlabel("R [cm]")
-        ax_rz.set_ylabel("Z [cm]")
-        ax_rz.set_title(f"zeta={zeta_target:.6f} rad (multiple rho contours)")
-        if row == 0:
-            ax_rz.legend(loc="best", fontsize=9)
-
-        ir_v = ir_list_v[-1]
-        ir_m = ir_list_m[-1]
-        theta_target = theta_v
-
-        rv = r_v[iz, :, ir_v]
-        zv = z_v[iz, :, ir_v]
-        rm = _interp_periodic(theta_m, r_m[iz_m, :, ir_m], theta_target)
-        zm = _interp_periodic(theta_m, z_m[iz_m, :, ir_m], theta_target)
-
-        dr = rm - rv
-        dz = zm - zv
-        ax_d.plot(theta_v, dr, "-", lw=1.0, label="ΔR (map2disc - VMEC)")
-        ax_d.plot(theta_v, dz, "-", lw=1.0, label="ΔZ (map2disc - VMEC)")
-        ax_d.axhline(0.0, color="k", lw=0.6)
-        ax_d.set_xlabel("theta [rad]")
-        ax_d.set_ylabel("Δ [cm]")
-        ax_d.set_title(
-            "rho≈{:.3f}: max|ΔR|={:.3e} cm  max|ΔZ|={:.3e} cm".format(
-                float(rho_v[ir_v]),
-                float(np.max(np.abs(dr))),
-                float(np.max(np.abs(dz))),
-            )
-        )
-        if row == 0:
-            ax_d.legend(loc="best", fontsize=9)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     try:
+        nrows = len(iz_list)
+        fig, axes = plt.subplots(
+            nrows=nrows,
+            ncols=2,
+            figsize=(10.0, 2.4 * nrows),
+            constrained_layout=True,
+        )
+        if nrows == 1:
+            axes = np.array([axes])
+
+        for row, iz in enumerate(iz_list):
+            ax_rz = axes[row, 0]
+            ax_d = axes[row, 1]
+
+            zeta_target = float(zeta_v[iz])
+            iz_m = int(np.argmin(np.abs(zeta_m - zeta_target)))
+
+            for ir_v, ir_m in zip(ir_list_v, ir_list_m, strict=False):
+                rv = _closed(r_v[iz, :, ir_v])
+                zv = _closed(z_v[iz, :, ir_v])
+                rm = _closed(r_m[iz_m, :, ir_m])
+                zm = _closed(z_m[iz_m, :, ir_m])
+
+                lab_v = "VMEC->chartmap" if ir_v == ir_list_v[-1] else None
+                lab_m = "map2disc" if ir_m == ir_list_m[-1] else None
+
+                ax_rz.plot(rv, zv, "-", lw=1.0, alpha=0.85, label=lab_v)
+                ax_rz.plot(rm, zm, "--", lw=1.0, alpha=0.85, label=lab_m)
+            ax_rz.set_aspect("equal", adjustable="box")
+            ax_rz.set_xlabel("R [cm]")
+            ax_rz.set_ylabel("Z [cm]")
+            ax_rz.set_title(f"zeta={zeta_target:.6f} rad (multiple rho contours)")
+            if row == 0:
+                ax_rz.legend(loc="best", fontsize=9)
+
+            ir_v = ir_list_v[-1]
+            ir_m = ir_list_m[-1]
+            theta_target = theta_v
+
+            rv = r_v[iz, :, ir_v]
+            zv = z_v[iz, :, ir_v]
+            rm = _interp_periodic(theta_m, r_m[iz_m, :, ir_m], theta_target)
+            zm = _interp_periodic(theta_m, z_m[iz_m, :, ir_m], theta_target)
+
+            dr = rm - rv
+            dz = zm - zv
+            ax_d.plot(theta_v, dr, "-", lw=1.0, label="ΔR (map2disc - VMEC)")
+            ax_d.plot(theta_v, dz, "-", lw=1.0, label="ΔZ (map2disc - VMEC)")
+            ax_d.axhline(0.0, color="k", lw=0.6)
+            ax_d.set_xlabel("theta [rad]")
+            ax_d.set_ylabel("Δ [cm]")
+            ax_d.set_title(
+                "rho≈{:.3f}: max|ΔR|={:.3e} cm  max|ΔZ|={:.3e} cm".format(
+                    float(rho_v[ir_v]),
+                    float(np.max(np.abs(dr))),
+                    float(np.max(np.abs(dz))),
+                )
+            )
+            if row == 0:
+                ax_d.legend(loc="best", fontsize=9)
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out_path, dpi=150)
+        plt.close(fig)
     except Exception as exc:
-        print(f"Skipping plot_chartmap_compare_map2disc (savefig failed: {exc})")
+        print(f"Skipping plot_chartmap_compare_map2disc (matplotlib failed: {exc})")
         return 0
-    plt.close(fig)
 
     if not out_path.exists() or out_path.stat().st_size == 0:
         raise SystemExit(f"failed to write plot: {out_path}")
