@@ -110,7 +110,9 @@ jobs:
             libnetcdf-dev \
             libnetcdff-dev \
             libopenblas-dev \
-            liblapack-dev
+            liblapack-dev \
+            libopenmpi-dev \
+            openmpi-bin
 
       - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
         run: |
