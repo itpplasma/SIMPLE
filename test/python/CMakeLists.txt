@@ -90,6 +90,16 @@ set_tests_properties(test_netcdf_results PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+# Chartmap boundary parameterization tests
+add_test(NAME test_chartmap_boundary_param
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_boundary_param.py -v
+)
+set_tests_properties(test_chartmap_boundary_param PROPERTIES
+    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
+    LABELS "python;chartmap;slow"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
 # Wall heat load engineering tests (no Fortran backend needed)
 add_test(NAME test_engineering
     COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_engineering.py -v

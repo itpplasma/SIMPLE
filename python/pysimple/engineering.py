@@ -172,23 +172,54 @@ def compute_wall_area_from_chartmap(chartmap_file: str | Path) -> float:
         raise ImportError("netCDF4 required: pip install netCDF4")
 
     with nc.Dataset(chartmap_file, 'r') as ds:
-        theta = ds.variables['theta'][:]
-        zeta = ds.variables['zeta'][:]
         nfp = int(ds.variables['num_field_periods'][...])
-
         x_wall = ds.variables['x'][:, :, -1] * 0.01  # cm -> m
         y_wall = ds.variables['y'][:, :, -1] * 0.01
         z_wall = ds.variables['z'][:, :, -1] * 0.01
 
     nzeta, ntheta = x_wall.shape
-    dtheta = theta[1] - theta[0] if len(theta) > 1 else 2 * np.pi
-    dzeta = zeta[1] - zeta[0] if len(zeta) > 1 else 2 * np.pi / nfp
+    if nzeta < 2 or ntheta < 3:
+        raise ValueError("chartmap wall grid too small for area computation")
 
-    surface_element = _compute_surface_element_grid(
-        x_wall, y_wall, z_wall, dtheta, dzeta
-    )
+    period = 2.0 * np.pi / float(nfp)
+    c, s = np.cos(period), np.sin(period)
 
-    return float(np.sum(surface_element) * dtheta * dzeta * nfp)
+    # Close the toroidal direction over one field period by rotating zeta=0 slice.
+    x0 = x_wall[0]
+    y0 = y_wall[0]
+    x_next = c * x0 - s * y0
+    y_next = s * x0 + c * y0
+    z_next = z_wall[0]
+
+    def tri_area(p0: np.ndarray, p1: np.ndarray, p2: np.ndarray) -> float:
+        return 0.5 * float(np.linalg.norm(np.cross(p1 - p0, p2 - p0)))
+
+    area_period = 0.0
+    for iz in range(nzeta):
+        if iz == nzeta - 1:
+            x1 = x_next
+            y1 = y_next
+            z1 = z_next
+        else:
+            x1 = x_wall[iz + 1]
+            y1 = y_wall[iz + 1]
+            z1 = z_wall[iz + 1]
+
+        x0 = x_wall[iz]
+        y0 = y_wall[iz]
+        z0 = z_wall[iz]
+
+        for it in range(ntheta):
+            itp = (it + 1) % ntheta
+            p00 = np.array([x0[it], y0[it], z0[it]], dtype=float)
+            p01 = np.array([x0[itp], y0[itp], z0[itp]], dtype=float)
+            p10 = np.array([x1[it], y1[it], z1[it]], dtype=float)
+            p11 = np.array([x1[itp], y1[itp], z1[itp]], dtype=float)
+
+            area_period += tri_area(p00, p10, p01)
+            area_period += tri_area(p10, p11, p01)
+
+    return float(area_period * float(nfp))
 
 
 def compute_bin_areas_from_chartmap(
