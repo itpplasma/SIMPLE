@@ -613,7 +613,7 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
     set_tests_properties(golden_record_${CASE} PROPERTIES
-        TIMEOUT 300  # 5 minutes per case
+        TIMEOUT 1200  # Includes initial main clone/build on CI
         LABELS "golden_record;regression"
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
