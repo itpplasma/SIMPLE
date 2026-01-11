@@ -13,7 +13,7 @@
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/IO/polygon_mesh_io.h>
+#include <CGAL/boost/graph/IO/polygon_mesh_io.h>
 #include <CGAL/squared_distance_3.h>
 #include <CGAL/Surface_mesh.h>
 
