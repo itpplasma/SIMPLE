@@ -7,18 +7,18 @@ module simple_main
     use collis_alp, only: loacol_alpha, stost
     use samplers, only: sample
     use field_can_mod, only: integ_to_ref, ref_to_integ, init_field_can
-    use callback, only: output_orbits_macrostep
-    use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
-                      grid_density, dtau, dtaumin, ntau, v0, &
-                      kpart, confpart_pass, confpart_trap, times_lost, integmode, &
-                      relerr, trace_time, &
-                      class_plot, ntcut, iclass, bmin, bmax, &
-                      zstart, zend, trap_par, perp_inv, sbeg, &
-                      ntimstep, should_skip, reset_seed_if_deterministic, &
-                      field_input, isw_field_type, reuse_batch, coord_input, &
-                      wall_input, wall_units, wall_hit, wall_hit_cart, &
-                      wall_hit_normal_cart, wall_hit_cos_incidence, &
-                      wall_hit_angle_rad
+	    use callback, only: output_orbits_macrostep
+	    use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
+	                      grid_density, dtau, dtaumin, ntau, v0, &
+	                      kpart, confpart_pass, confpart_trap, times_lost, integmode, &
+	                      relerr, trace_time, &
+	                      class_plot, ntcut, iclass, bmin, bmax, &
+	                      zstart, zend, trap_par, perp_inv, sbeg, &
+	                      ntimstep, should_skip, reset_seed_if_deterministic, &
+	                      field_input, isw_field_type, reuse_batch, coord_input, &
+	                      wall_input, wall_units, wall_hit, wall_hit_cart, &
+	                      wall_hit_normal_cart, wall_hit_cos_incidence, &
+	                      wall_hit_angle_rad, ntau_macro, kt_macro
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
     use reference_coordinates, only: ref_coords
     use stl_wall_intersection, only: stl_wall_t, stl_wall_init, &
@@ -589,8 +589,8 @@ contains
 
         kt = 0
         it_final = 0
-        do it = 1, ntimstep
-            if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit)
+	        do it = 1, ntimstep
+	            if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it))
 
             if (wall_enabled .and. ierr_orbit == 0) then
                 call integ_to_ref(z(1:3), u_ref_cur)
@@ -665,22 +665,23 @@ contains
 !$omp end critical
     end subroutine trace_orbit
 
-    subroutine macrostep(anorb, z, kt, ierr_orbit)
-        use alpha_lifetime_sub, only: orbit_timestep_axis
-        use orbit_symplectic, only: orbit_timestep_sympl
+	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
+	        use alpha_lifetime_sub, only: orbit_timestep_axis
+	        use orbit_symplectic, only: orbit_timestep_sympl
 
-        type(tracer_t), intent(inout) :: anorb
-        real(dp), intent(inout) :: z(5)
-        integer(8), intent(inout) :: kt
-        integer, intent(out) :: ierr_orbit
+	        type(tracer_t), intent(inout) :: anorb
+	        real(dp), intent(inout) :: z(5)
+	        integer(8), intent(inout) :: kt
+	        integer, intent(out) :: ierr_orbit
+	        integer, intent(in) :: ntau_local
 
-        integer :: ktau
+	        integer :: ktau
 
-        do ktau = 1, ntau
-            if (integmode <= 0) then
-                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
-            else
-                if (swcoll) call update_momentum(anorb, z)
+	        do ktau = 1, ntau_local
+	            if (integmode <= 0) then
+	                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+	            else
+	                if (swcoll) call update_momentum(anorb, z)
                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
                 call to_standard_z_coordinates(anorb, z)
             end if
@@ -804,12 +805,12 @@ contains
             close (1)
         end if
 
-        open (1, file='confined_fraction.dat', recl=1024)
-        do i = 1, ntimstep
-            write (1, *) dble(i - 1)*dtau/v0, confpart_pass(i), &
-                confpart_trap(i), ntestpart
-        end do
-        close (1)
+	        open (1, file='confined_fraction.dat', recl=1024)
+	        do i = 1, ntimstep
+	            write (1, *) dble(kt_macro(i))*dtaumin/v0, confpart_pass(i), &
+	                confpart_trap(i), ntestpart
+	        end do
+	        close (1)
 
         if (ntcut > 0 .or. class_plot) then
             open (1, file='class_parts.dat', recl=1024)

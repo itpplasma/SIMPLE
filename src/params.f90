@@ -37,7 +37,12 @@ module params
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
-    integer :: ntau ! number of dtaumin in dtau
+	    integer :: ntau ! number of dtaumin in dtau
+	    integer(8) :: n_microsteps_total = 0_8
+	    character(16) :: macrostep_time_grid = 'linear'
+	    real(dp) :: macrostep_log_ratio = 1.0d3
+	    integer, allocatable :: ntau_macro(:)
+	    integer(8), allocatable :: kt_macro(:)
 
     integer :: integmode = EXPL_IMPL_EULER
 
@@ -96,18 +101,19 @@ module params
     character(16) :: wall_units = 'm'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
 
-    namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
-        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
-        isw_field_type, generate_start_only, startmode, grid_density, &
-        special_ants_file, integmode, relerr, tcut, nturns, debug, &
-        class_plot, cut_in_per, fast_class, vmec_B_scale, &
-        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-        old_axis_healing_boundary, am1, am2, Z1, Z2, &
-        densi1, densi2, tempi1, tempi2, tempe, &
-        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        wall_input, wall_units, integ_coords, output_results_netcdf, &
-        output_error, output_orbits_macrostep  ! callback
+	    namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
+	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
+	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
+	        isw_field_type, generate_start_only, startmode, grid_density, &
+	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
+	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
+	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
+	        old_axis_healing_boundary, am1, am2, Z1, Z2, &
+	        densi1, densi2, tempi1, tempi2, tempe, &
+	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
+	        wall_input, wall_units, integ_coords, output_results_netcdf, &
+	        output_error, output_orbits_macrostep, &  ! callback
+	        macrostep_time_grid, macrostep_log_ratio
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
@@ -137,11 +143,17 @@ contains
         end if
     end subroutine read_config
 
-    subroutine params_init
-        real(dp) :: E_alpha
-        integer :: L1i
+	    subroutine params_init
+	        real(dp) :: E_alpha
+	        integer :: L1i
+	        real(dp) :: weight_sum, w, log_ratio
+	        real(dp), allocatable :: frac(:)
+	        integer :: i, j, nintv
+	        integer(8) :: sum_steps
+	        integer, allocatable :: base_steps(:), order(:)
+	        character(16) :: grid_kind
 
-        if (isw_field_type == TEST) then
+	        if (isw_field_type == TEST) then
             ! TEST field uses normalized units: B0=1, R0=1, a=0.5
             ! Use normalized parameters for orbit integration
             v0 = 1.0d0          ! Normalized velocity
@@ -149,15 +161,15 @@ contains
             ro0 = 1.0d0         ! Normalized ro0 = mc/e * v0
             rmu = 1d8           ! Large inverse relativistic temperature
             tau = trace_time    ! Already in normalized units
-            dtau = tau/dble(ntimstep - 1)
+	            dtau = tau/dble(ntimstep - 1)
             L1i = 1             ! One field period (full torus)
             rbig = 1.0d0        ! Major radius R0=1
             dphi = 2.d0*pi/(L1i*npoiper)
-            dtaumin = 2.d0*pi*rbig/npoiper2
-            ntau = ceiling(dtau/dtaumin)
-            dtaumin = dtau/ntau
-            fper = 2d0*pi       ! Full torus
-        else
+	            dtaumin = 2.d0*pi*rbig/npoiper2
+	            ntau = ceiling(dtau/dtaumin)
+	            dtaumin = dtau/ntau
+	            fper = 2d0*pi       ! Full torus
+	        else
             E_alpha = 3.5d6/facE_al
             ! set alpha energy, velocity, and Larmor radius
             v0 = sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
@@ -167,23 +179,95 @@ contains
             rmu = 1d8
             ! normalized slowing down time:
             tau = trace_time*v0
-            ! normalized time step:
-            dtau = tau/dble(ntimstep - 1)
+	            ! normalized time step:
+	            dtau = tau/dble(ntimstep - 1)
             ! parameters for the vacuum chamber:
             call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
             rbig = rt0
             ! field line integration step step over phi (to check chamber wall crossing)
             dphi = 2.d0*pi/(L1i*npoiper)
-            ! orbit integration time step (to check chamber wall crossing)
-            dtaumin = 2.d0*pi*rbig/npoiper2
-            ntau = ceiling(dtau/dtaumin)
-            dtaumin = dtau/ntau
-            fper = 2d0*pi/dble(L1i)
-        end if
+	            ! orbit integration time step (to check chamber wall crossing)
+	            dtaumin = 2.d0*pi*rbig/npoiper2
+	            ntau = ceiling(dtau/dtaumin)
+	            dtaumin = dtau/ntau
+	            fper = 2d0*pi/dble(L1i)
+	        end if
 
-        ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
-        norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
-        nfp = L1i*norbper
+	        ! Macrostep schedule (number of microsteps per macrostep).
+	        ! - Default is linear: constant ntau per macrostep.
+	        ! - Log schedule: macrosteps are distributed logarithmically in time
+	        !   while keeping the microstep resolution dtaumin. The total number
+	        !   of microsteps is preserved as (ntimstep-1)*ntau.
+	        nintv = max(1, ntimstep - 1)
+	        n_microsteps_total = int(nintv, kind=8) * int(ntau, kind=8)
+	        if (allocated(ntau_macro)) deallocate(ntau_macro)
+	        if (allocated(kt_macro)) deallocate(kt_macro)
+	        allocate (ntau_macro(ntimstep))
+	        allocate (kt_macro(ntimstep))
+	        ntau_macro = 0
+	        kt_macro = 0_8
+
+	        grid_kind = to_lower(macrostep_time_grid)
+	        if (trim(grid_kind) == 'log') then
+	            log_ratio = max(1.0d0, macrostep_log_ratio)
+	            allocate (frac(nintv))
+	            allocate (base_steps(nintv))
+	            allocate (order(nintv))
+
+	            weight_sum = 0.0d0
+	            do i = 1, nintv
+	                w = log_ratio**(dble(i - 1)/dble(max(1, nintv - 1)))
+	                frac(i) = w
+	                weight_sum = weight_sum + w
+	            end do
+
+	            sum_steps = 0_int8
+	            do i = 1, nintv
+	                w = frac(i)/weight_sum * dble(n_microsteps_total)
+	                base_steps(i) = max(1, int(floor(w)))
+	                frac(i) = w - dble(base_steps(i))
+	                sum_steps = sum_steps + int(base_steps(i), kind=8)
+	                order(i) = i
+	            end do
+
+	            ! Distribute remainder to match n_microsteps_total exactly.
+	            if (sum_steps < n_microsteps_total) then
+	                call sort_desc_frac(frac, order)
+	                do i = 1, int(n_microsteps_total - sum_steps)
+	                    base_steps(order(i)) = base_steps(order(i)) + 1
+	                end do
+	            else if (sum_steps > n_microsteps_total) then
+	                call sort_asc_frac(frac, order)
+	                i = 1
+	                do while (sum_steps > n_microsteps_total)
+	                    j = order(1 + mod(i - 1, nintv))
+		                    if (base_steps(j) > 1) then
+		                        base_steps(j) = base_steps(j) - 1
+		                        sum_steps = sum_steps - 1_8
+		                    end if
+	                    i = i + 1
+	                    if (i > 1000000000) exit
+	                end do
+	            end if
+
+	            do i = 1, nintv
+	                ntau_macro(i + 1) = base_steps(i)
+	                kt_macro(i + 1) = kt_macro(i) + int(base_steps(i), kind=8)
+	            end do
+
+	            deallocate (frac)
+	            deallocate (base_steps)
+	            deallocate (order)
+	        else
+	            do i = 2, ntimstep
+	                ntau_macro(i) = ntau
+	                kt_macro(i) = kt_macro(i - 1) + int(ntau, kind=8)
+	            end do
+	        end if
+
+	        ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
+	        norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
+	        nfp = L1i*norbper
 
         zerolam = 0.d0
         nplagr = 4
@@ -192,7 +276,51 @@ contains
 
         call init_batch
         call reallocate_arrays
-    end subroutine params_init
+	    end subroutine params_init
+
+	    pure function to_lower(s) result(out)
+	        character(*), intent(in) :: s
+	        character(len(s)) :: out
+	        integer :: i, c
+	        out = s
+	        do i = 1, len(s)
+	            c = iachar(out(i:i))
+	            if (c >= iachar('A') .and. c <= iachar('Z')) then
+	                out(i:i) = achar(c + 32)
+	            end if
+	        end do
+	    end function to_lower
+
+	    subroutine sort_desc_frac(frac, order)
+	        real(dp), intent(inout) :: frac(:)
+	        integer, intent(inout) :: order(:)
+	        integer :: i, j, tmp
+	        real(dp) :: ftmp
+	        do i = 1, size(frac) - 1
+	            do j = i + 1, size(frac)
+	                if (frac(order(j)) > frac(order(i))) then
+	                    tmp = order(i)
+	                    order(i) = order(j)
+	                    order(j) = tmp
+	                end if
+	            end do
+	        end do
+	    end subroutine sort_desc_frac
+
+	    subroutine sort_asc_frac(frac, order)
+	        real(dp), intent(inout) :: frac(:)
+	        integer, intent(inout) :: order(:)
+	        integer :: i, j, tmp
+	        do i = 1, size(frac) - 1
+	            do j = i + 1, size(frac)
+	                if (frac(order(j)) < frac(order(i))) then
+	                    tmp = order(i)
+	                    order(i) = order(j)
+	                    order(j) = tmp
+	                end if
+	            end do
+	        end do
+	    end subroutine sort_asc_frac
 
     subroutine init_batch
         integer :: iostat, i, n
