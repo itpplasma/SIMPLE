@@ -229,34 +229,28 @@ contains
         select type (cs => ref_coords)
         type is (chartmap_coordinate_system_t)
             block
-                real(dp) :: rho_min, rho_max, rho_max_interior
+                real(dp) :: rho_min, rho_max, rho_max_safe, h_rho
 
                 if (cs%has_spl_rz) then
                     rho_min = cs%spl_rz%x_min(1)
                     rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
                               real(cs%spl_rz%num_points(1) - 1, dp)
+                    h_rho = cs%spl_rz%h_step(1)
                 else
                     rho_min = cs%spl_cart%x_min(1)
                     rho_max = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
                               real(cs%spl_cart%num_points(1) - 1, dp)
+                    h_rho = cs%spl_cart%h_step(1)
                 end if
 
-                ! Avoid sampling exactly at the outermost chartmap rho plane.
-                rho_max_interior = rho_max
-                if (cs%has_spl_rz) then
-                    if (cs%spl_rz%num_points(1) >= 2) then
-                        rho_max_interior = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
-                                           real(cs%spl_rz%num_points(1) - 2, dp)
-                    end if
-                else
-                    if (cs%spl_cart%num_points(1) >= 2) then
-                        rho_max_interior = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
-                                           real(cs%spl_cart%num_points(1) - 2, dp)
-                    end if
-                end if
+                ! Sampling the VMEC field requires inverting VMEC coordinates. This
+                ! inversion can fail exactly at the outermost rho plane, so sample
+                ! slightly inside while keeping essentially the full range.
+                rho_max_safe = rho_max
+                if (h_rho > 0d0) rho_max_safe = rho_max - 0.1d0*h_rho
 
                 if (.not. present(xmin_in)) xmin(1) = max(xmin(1), rho_min)
-                if (.not. present(xmax_in)) xmax(1) = min(xmax(1), rho_max_interior)
+                if (.not. present(xmax_in)) xmax(1) = min(xmax(1), rho_max_safe)
             end block
         class default
             continue

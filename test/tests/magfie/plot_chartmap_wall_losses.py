@@ -98,17 +98,17 @@ def plot_loss_over_time(curves, output_file):
     try:
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    colors = {
-        'vmec': 'black', 'chartmap': 'red', 'boozer': 'orange',
-        'meiss_vmec': 'blue', 'meiss_chart': 'green'
-    }
-    labels = {
-        'vmec': 'VMEC (RK45)',
-        'chartmap': 'Chartmap (RK45)',
-        'boozer': 'Boozer (RK45)',
-        'meiss_vmec': 'Meiss from VMEC',
-        'meiss_chart': 'Meiss from Chartmap'
-    }
+        colors = {
+            'vmec': 'black', 'chartmap': 'red', 'boozer': 'orange',
+            'meiss_vmec': 'blue', 'meiss_chart': 'green'
+        }
+        labels = {
+            'vmec': 'VMEC (RK45)',
+            'chartmap': 'Chartmap (RK45)',
+            'boozer': 'Boozer (RK45)',
+            'meiss_vmec': 'Meiss from VMEC',
+            'meiss_chart': 'Meiss from Chartmap'
+        }
 
         ax = axes[0]
         for name in ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']:
@@ -153,16 +153,16 @@ def plot_loss_positions(data, output_file):
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
         axes = axes.flatten()
 
-    titles = {
-        'vmec': 'VMEC (RK45)',
-        'chartmap': 'Chartmap (RK45)',
-        'boozer': 'Boozer (RK45)',
-        'meiss_vmec': 'Meiss from VMEC',
-        'meiss_chart': 'Meiss from Chartmap'
-    }
+        titles = {
+            'vmec': 'VMEC (RK45)',
+            'chartmap': 'Chartmap (RK45)',
+            'boozer': 'Boozer (RK45)',
+            'meiss_vmec': 'Meiss from VMEC',
+            'meiss_chart': 'Meiss from Chartmap'
+        }
 
-    trace_time = data['trace_time']
-    modes = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
+        trace_time = data['trace_time']
+        modes = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
 
         for i, name in enumerate(modes):
             ax = axes[i]
@@ -209,12 +209,12 @@ def plot_summary(data, curves, output_file):
     try:
         fig, axes = plt.subplots(1, 2, figsize=(16, 5))
 
-    names = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
-    labels = ['VMEC\n(RK45)', 'Chartmap\n(RK45)', 'Boozer\n(RK45)',
-              'Meiss\n(VMEC)', 'Meiss\n(Chart)']
-    colors = ['black', 'red', 'orange', 'blue', 'green']
+        names = ['vmec', 'chartmap', 'boozer', 'meiss_vmec', 'meiss_chart']
+        labels = ['VMEC\n(RK45)', 'Chartmap\n(RK45)', 'Boozer\n(RK45)',
+                  'Meiss\n(VMEC)', 'Meiss\n(Chart)']
+        colors = ['black', 'red', 'orange', 'blue', 'green']
 
-    confined_frac = [curves[n]['confined'][-1] * 100 for n in names]
+        confined_frac = [curves[n]['confined'][-1] * 100 for n in names]
 
         ax = axes[0]
         bars = ax.bar(labels, confined_frac, color=colors, alpha=0.7)
