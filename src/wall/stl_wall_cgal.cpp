@@ -14,14 +14,14 @@
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Simple_cartesian.h>
 #include <CGAL/number_utils.h>
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
 #include <CGAL/squared_distance_3.h>
 #include <CGAL/Surface_mesh.h>
 
 namespace {
-using Kernel = CGAL::Exact_predicates_inexact_constructions_kernel;
+using Kernel = CGAL::Simple_cartesian<double>;
 using Point = Kernel::Point_3;
 using Segment = Kernel::Segment_3;
 using SurfaceMesh = CGAL::Surface_mesh<Point>;
