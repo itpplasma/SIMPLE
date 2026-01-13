@@ -545,6 +545,15 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# Macrostep log grid tests (issue: performance regression with log grid)
+add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
+target_link_libraries(test_macrostep_log_grid.x simple)
+add_test(NAME test_macrostep_log_grid COMMAND test_macrostep_log_grid.x)
+set_tests_properties(test_macrostep_log_grid PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 60
+)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
