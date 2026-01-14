@@ -1,8 +1,10 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <exception>
+#include <fstream>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -16,7 +18,13 @@
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/number_utils.h>
+// Support both CGAL 5.x and 4.x APIs
+#if CGAL_VERSION_MAJOR >= 5
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
+#else
+#include <CGAL/IO/STL_reader.h>
+#include <CGAL/Polygon_mesh_processing/polygon_soup_to_polygon_mesh.h>
+#endif
 #include <CGAL/squared_distance_3.h>
 #include <CGAL/Surface_mesh.h>
 
@@ -121,9 +129,32 @@ extern "C" void* stl_wall_create(const char* filename, double scale_to_m) {
         }
 
         SurfaceMesh mesh;
+#if CGAL_VERSION_MAJOR >= 5
         if (!CGAL::IO::read_polygon_mesh(filename, mesh)) {
             return nullptr;
         }
+#else
+        // CGAL 4.x API for reading STL
+        std::vector<std::array<double, 3>> points;
+        std::vector<std::array<int, 3>> triangles;
+        std::ifstream input(filename, std::ios::binary);
+        if (!input || !CGAL::read_STL(input, points, triangles)) {
+            return nullptr;
+        }
+        std::vector<Point> pts;
+        pts.reserve(points.size());
+        for (const auto& p : points) {
+            pts.emplace_back(p[0], p[1], p[2]);
+        }
+        std::vector<std::vector<std::size_t>> faces;
+        faces.reserve(triangles.size());
+        for (const auto& t : triangles) {
+            faces.push_back({static_cast<std::size_t>(t[0]),
+                           static_cast<std::size_t>(t[1]),
+                           static_cast<std::size_t>(t[2])});
+        }
+        CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh(pts, faces, mesh);
+#endif
         if (num_faces(mesh) == 0 || num_vertices(mesh) == 0) {
             return nullptr;
         }
