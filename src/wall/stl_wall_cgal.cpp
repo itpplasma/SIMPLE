@@ -16,7 +16,7 @@
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
-#include <CGAL/Simple_cartesian.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/number_utils.h>
 // Support both CGAL 5.x and 4.x APIs
 #if CGAL_VERSION_MAJOR >= 5
@@ -29,7 +29,7 @@
 #include <CGAL/Surface_mesh.h>
 
 namespace {
-using Kernel = CGAL::Simple_cartesian<double>;
+using Kernel = CGAL::Exact_predicates_inexact_constructions_kernel;
 using Point = Kernel::Point_3;
 using Segment = Kernel::Segment_3;
 using SurfaceMesh = CGAL::Surface_mesh<Point>;

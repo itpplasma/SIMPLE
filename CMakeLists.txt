@@ -200,24 +200,9 @@ endif()
 find_or_fetch(libneo)
 
 # CGAL (optional, for STL wall intersections)
-# Uses Simple_cartesian<double> kernel - header-only, no GMP/MPFR needed
 if(SIMPLE_ENABLE_CGAL)
-    find_package(CGAL QUIET)
-    if(CGAL_FOUND)
-        message(STATUS "CGAL enabled (system): ${CGAL_VERSION}")
-        set(CGAL_INCLUDE_DIR "")  # Use CGAL::CGAL target
-    else()
-        message(STATUS "CGAL not found on system, fetching header-only version...")
-        include(FetchContent)
-        FetchContent_Declare(
-            cgal
-            URL https://github.com/CGAL/cgal/releases/download/v5.6.2/CGAL-5.6.2-library.tar.xz
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        )
-        FetchContent_Populate(cgal)
-        set(CGAL_INCLUDE_DIR "${cgal_SOURCE_DIR}/include")
-        message(STATUS "CGAL enabled (fetched): 5.6.2 at ${CGAL_INCLUDE_DIR}")
-    endif()
+    find_package(CGAL REQUIRED)
+    message(STATUS "CGAL enabled: ${CGAL_VERSION}")
     add_compile_definitions(SIMPLE_ENABLE_CGAL)
 else()
     message(STATUS "CGAL disabled (SIMPLE_ENABLE_CGAL=OFF)")

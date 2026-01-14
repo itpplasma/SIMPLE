@@ -57,12 +57,9 @@
 
     if(SIMPLE_ENABLE_CGAL)
         add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
-        # Header-only usage with Simple_cartesian kernel (no GMP/MPFR needed)
-        if(TARGET CGAL::CGAL)
-            target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
-        else()
-            # Fetched CGAL: just need include path (header-only)
-            target_include_directories(stl_wall_cgal PUBLIC ${CGAL_INCLUDE_DIR})
+        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
+        if(TARGET CGAL::CGAL_Core)
+            target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL_Core)
         endif()
     endif()
 
