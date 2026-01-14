@@ -59,7 +59,9 @@
         add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
         # CGAL 5.x is header-only, just need include paths for CGAL and Boost
         target_include_directories(stl_wall_cgal PUBLIC ${CGAL_INCLUDE_DIR})
-        target_link_libraries(stl_wall_cgal PUBLIC Boost::headers)
+        # CGAL requires GMP for exact arithmetic
+        find_library(GMP_LIBRARY gmp REQUIRED)
+        target_link_libraries(stl_wall_cgal PUBLIC Boost::headers ${GMP_LIBRARY})
     endif()
 
 # Add diagnostic sources
