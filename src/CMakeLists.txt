@@ -57,10 +57,9 @@
 
     if(SIMPLE_ENABLE_CGAL)
         add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
-        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
-        if(TARGET CGAL::CGAL_Core)
-            target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL_Core)
-        endif()
+        # CGAL 5.x is header-only, just need include paths for CGAL and Boost
+        target_include_directories(stl_wall_cgal PUBLIC ${CGAL_INCLUDE_DIR})
+        target_link_libraries(stl_wall_cgal PUBLIC Boost::headers)
     endif()
 
 # Add diagnostic sources

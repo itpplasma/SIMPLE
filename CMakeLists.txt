@@ -200,9 +200,26 @@ endif()
 find_or_fetch(libneo)
 
 # CGAL (optional, for STL wall intersections)
+# CGAL 5.x is header-only, fetch headers via FetchContent (don't run CGAL's CMake)
 if(SIMPLE_ENABLE_CGAL)
-    find_package(CGAL REQUIRED)
-    message(STATUS "CGAL enabled: ${CGAL_VERSION}")
+    # CGAL requires Boost headers
+    find_package(Boost REQUIRED)
+    message(STATUS "Boost found: ${Boost_VERSION}")
+
+    include(FetchContent)
+    FetchContent_Declare(
+        cgal
+        URL https://github.com/CGAL/cgal/releases/download/v5.6.1/CGAL-5.6.1.tar.xz
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_GetProperties(cgal)
+    if(NOT cgal_POPULATED)
+        FetchContent_Populate(cgal)
+    endif()
+    # CGAL 5.x is header-only, just add include path
+    set(CGAL_INCLUDE_DIR "${cgal_SOURCE_DIR}/include")
+    message(STATUS "CGAL enabled via FetchContent: 5.6.1 (header-only)")
+    message(STATUS "CGAL include dir: ${CGAL_INCLUDE_DIR}")
     add_compile_definitions(SIMPLE_ENABLE_CGAL)
 else()
     message(STATUS "CGAL disabled (SIMPLE_ENABLE_CGAL=OFF)")
