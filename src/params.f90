@@ -40,7 +40,6 @@ module params
 	    integer :: ntau ! number of dtaumin in dtau
 	    integer(8) :: n_microsteps_total = 0_8
 	    character(16) :: macrostep_time_grid = 'linear'
-	    real(dp) :: macrostep_log_ratio = 1.0d3
 	    integer, allocatable :: ntau_macro(:)
 	    integer(8), allocatable :: kt_macro(:)
 
@@ -113,7 +112,7 @@ module params
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, output_results_netcdf, &
 	        output_error, output_orbits_macrostep, &  ! callback
-	        macrostep_time_grid, macrostep_log_ratio
+	        macrostep_time_grid
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
@@ -146,11 +145,9 @@ contains
 	    subroutine params_init
 	        real(dp) :: E_alpha
 	        integer :: L1i
-	        real(dp) :: weight_sum, w, log_ratio
-	        real(dp), allocatable :: frac(:)
-	        integer :: i, j, nintv
-	        integer(8) :: sum_steps
-	        integer, allocatable :: base_steps(:), order(:)
+	        real(dp) :: weight_sum, cumul_weight, w
+	        integer :: i, nintv
+	        integer(8) :: kt_target, kt_prev
 	        character(16) :: grid_kind
 
 	        if (isw_field_type == TEST) then
@@ -209,55 +206,29 @@ contains
 
 	        grid_kind = to_lower(macrostep_time_grid)
 	        if (trim(grid_kind) == 'log') then
-	            log_ratio = max(1.0d0, macrostep_log_ratio)
-	            allocate (frac(nintv))
-	            allocate (base_steps(nintv))
-	            allocate (order(nintv))
+	            ! Logarithmic macrostep grid: timesteps appear equally spaced
+	            ! on a log10 plot of time. Weight for interval i is 10^((i-1)/(N-1)),
+	            ! giving a 10:1 ratio between last and first intervals.
+	            ! Uses cumulative rounding to guarantee exact total microsteps.
 
+	            ! First pass: compute total weight
 	            weight_sum = 0.0d0
 	            do i = 1, nintv
-	                w = log_ratio**(dble(i - 1)/dble(max(1, nintv - 1)))
-	                frac(i) = w
-	                weight_sum = weight_sum + w
+	                weight_sum = weight_sum + 10.0d0 ** (dble(i - 1) / dble(max(1, nintv - 1)))
 	            end do
 
-	            sum_steps = 0_int8
+	            ! Second pass: distribute microsteps via cumulative rounding
+	            ! Guarantee at least 1 microstep per interval to avoid empty loops
+	            cumul_weight = 0.0d0
+	            kt_prev = 0_8
 	            do i = 1, nintv
-	                w = frac(i)/weight_sum * dble(n_microsteps_total)
-	                base_steps(i) = max(1, int(floor(w)))
-	                frac(i) = w - dble(base_steps(i))
-	                sum_steps = sum_steps + int(base_steps(i), kind=8)
-	                order(i) = i
+	                w = 10.0d0 ** (dble(i - 1) / dble(max(1, nintv - 1)))
+	                cumul_weight = cumul_weight + w
+	                kt_target = nint(cumul_weight / weight_sum * dble(n_microsteps_total), kind=8)
+	                ntau_macro(i + 1) = max(1, int(kt_target - kt_prev))
+	                kt_macro(i + 1) = kt_prev + int(ntau_macro(i + 1), kind=8)
+	                kt_prev = kt_macro(i + 1)
 	            end do
-
-	            ! Distribute remainder to match n_microsteps_total exactly.
-	            if (sum_steps < n_microsteps_total) then
-	                call sort_desc_frac(frac, order)
-	                do i = 1, int(n_microsteps_total - sum_steps)
-	                    base_steps(order(i)) = base_steps(order(i)) + 1
-	                end do
-	            else if (sum_steps > n_microsteps_total) then
-	                call sort_asc_frac(frac, order)
-	                i = 1
-	                do while (sum_steps > n_microsteps_total)
-	                    j = order(1 + mod(i - 1, nintv))
-		                    if (base_steps(j) > 1) then
-		                        base_steps(j) = base_steps(j) - 1
-		                        sum_steps = sum_steps - 1_8
-		                    end if
-	                    i = i + 1
-	                    if (i > 1000000000) exit
-	                end do
-	            end if
-
-	            do i = 1, nintv
-	                ntau_macro(i + 1) = base_steps(i)
-	                kt_macro(i + 1) = kt_macro(i) + int(base_steps(i), kind=8)
-	            end do
-
-	            deallocate (frac)
-	            deallocate (base_steps)
-	            deallocate (order)
 	        else
 	            do i = 2, ntimstep
 	                ntau_macro(i) = ntau
@@ -290,37 +261,6 @@ contains
 	            end if
 	        end do
 	    end function to_lower
-
-	    subroutine sort_desc_frac(frac, order)
-	        real(dp), intent(inout) :: frac(:)
-	        integer, intent(inout) :: order(:)
-	        integer :: i, j, tmp
-	        real(dp) :: ftmp
-	        do i = 1, size(frac) - 1
-	            do j = i + 1, size(frac)
-	                if (frac(order(j)) > frac(order(i))) then
-	                    tmp = order(i)
-	                    order(i) = order(j)
-	                    order(j) = tmp
-	                end if
-	            end do
-	        end do
-	    end subroutine sort_desc_frac
-
-	    subroutine sort_asc_frac(frac, order)
-	        real(dp), intent(inout) :: frac(:)
-	        integer, intent(inout) :: order(:)
-	        integer :: i, j, tmp
-	        do i = 1, size(frac) - 1
-	            do j = i + 1, size(frac)
-	                if (frac(order(j)) < frac(order(i))) then
-	                    tmp = order(i)
-	                    order(i) = order(j)
-	                    order(j) = tmp
-	                end if
-	            end do
-	        end do
-	    end subroutine sort_asc_frac
 
     subroutine init_batch
         integer :: iostat, i, n

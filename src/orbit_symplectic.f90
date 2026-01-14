@@ -24,7 +24,7 @@ contains
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
+recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   !
   use plag_coeff_sub, only : plag_coeff
 
@@ -86,7 +86,7 @@ end subroutine orbit_sympl_init
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
@@ -94,7 +94,7 @@ subroutine orbit_timestep_sympl_gauss1(si, f, ierr)
   call orbit_timestep_sympl_rk_gauss(si, f, 1, ierr)
 end subroutine orbit_timestep_sympl_gauss1
 
-subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
@@ -102,7 +102,7 @@ subroutine orbit_timestep_sympl_gauss2(si, f, ierr)
   call orbit_timestep_sympl_rk_gauss(si, f, 2, ierr)
 end subroutine orbit_timestep_sympl_gauss2
 
-subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
@@ -110,7 +110,7 @@ subroutine orbit_timestep_sympl_gauss3(si, f, ierr)
   call orbit_timestep_sympl_rk_gauss(si, f, 3, ierr)
 end subroutine orbit_timestep_sympl_gauss3
 
-subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
@@ -118,7 +118,7 @@ subroutine orbit_timestep_sympl_gauss4(si, f, ierr)
   call orbit_timestep_sympl_rk_gauss(si, f, 4, ierr)
 end subroutine orbit_timestep_sympl_gauss4
 
-subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
@@ -126,27 +126,27 @@ subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
   call orbit_timestep_sympl_rk_lobatto(si, f, 3, ierr)
 end subroutine orbit_timestep_sympl_lobatto3
 
-subroutine orbit_timestep_quasi_gauss1(ierr)
+recursive subroutine orbit_timestep_quasi_gauss1(ierr)
   integer, intent(out) :: ierr
   call timestep_rk_gauss_quasi(1, ierr)
 end subroutine orbit_timestep_quasi_gauss1
 
-subroutine orbit_timestep_quasi_gauss2(ierr)
+recursive subroutine orbit_timestep_quasi_gauss2(ierr)
   integer, intent(out) :: ierr
   call timestep_rk_gauss_quasi(2, ierr)
 end subroutine orbit_timestep_quasi_gauss2
 
-subroutine orbit_timestep_quasi_gauss3(ierr)
+recursive subroutine orbit_timestep_quasi_gauss3(ierr)
   integer, intent(out) :: ierr
   call timestep_rk_gauss_quasi(3, ierr)
 end subroutine orbit_timestep_quasi_gauss3
 
-subroutine orbit_timestep_quasi_gauss4(ierr)
+recursive subroutine orbit_timestep_quasi_gauss4(ierr)
   integer, intent(out) :: ierr
   call timestep_rk_gauss_quasi(4, ierr)
 end subroutine orbit_timestep_quasi_gauss4
 
-subroutine orbit_timestep_quasi_lobatto3(ierr)
+recursive subroutine orbit_timestep_quasi_lobatto3(ierr)
   integer, intent(out) :: ierr
   call timestep_rk_lobatto_quasi(3, ierr)
 end subroutine orbit_timestep_quasi_lobatto3
@@ -154,7 +154,7 @@ end subroutine orbit_timestep_quasi_lobatto3
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
+recursive subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -174,7 +174,7 @@ end subroutine f_sympl_euler1
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine jac_sympl_euler1(si, f, x, jac)
+recursive subroutine jac_sympl_euler1(si, f, x, jac)
   !
   type(symplectic_integrator_t), intent(in) :: si
   type(field_can_t), intent(inout) :: f
@@ -195,7 +195,7 @@ end subroutine jac_sympl_euler1
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
+recursive subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -216,7 +216,7 @@ end subroutine f_sympl_euler2
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine jac_sympl_euler2(si, f, x, jac)
+recursive subroutine jac_sympl_euler2(si, f, x, jac)
   !
   type(symplectic_integrator_t), intent(in) :: si
   type(field_can_t), intent(inout) :: f
@@ -235,7 +235,7 @@ end subroutine jac_sympl_euler2
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine f_midpoint_part1(si, f, n, x, fvec)
+recursive subroutine f_midpoint_part1(si, f, n, x, fvec)
   !
     type(symplectic_integrator_t), intent(inout) :: si
     type(field_can_t), intent(inout) :: f
@@ -256,7 +256,7 @@ subroutine f_midpoint_part1(si, f, n, x, fvec)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine f_midpoint_part2(si, f, n, x, fvec)
+recursive subroutine f_midpoint_part2(si, f, n, x, fvec)
   !
     type(symplectic_integrator_t), intent(inout) :: si
     type(field_can_t), intent(inout) :: f
@@ -279,7 +279,7 @@ subroutine f_midpoint_part2(si, f, n, x, fvec)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine jac_midpoint_part1(si, f, x, jac)
+recursive subroutine jac_midpoint_part1(si, f, x, jac)
   !
     type(symplectic_integrator_t), intent(in) :: si
     type(field_can_t), intent(inout) :: f
@@ -336,7 +336,7 @@ end subroutine jac_midpoint_part1
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine jac_midpoint_part2(si, f, fmid, x, jac)
+recursive subroutine jac_midpoint_part2(si, f, fmid, x, jac)
   !
     type(symplectic_integrator_t), intent(in) :: si
     type(field_can_t), intent(inout) :: f
@@ -364,7 +364,7 @@ end subroutine jac_midpoint_part2
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine newton1(si, f, x, maxit, xlast)
+recursive subroutine newton1(si, f, x, maxit, xlast)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -416,7 +416,7 @@ subroutine newton1(si, f, x, maxit, xlast)
   write(6601,*) ''
 end subroutine
 
-subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
+recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
 
@@ -476,7 +476,7 @@ subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   write(6602,*) x(1), x(2), x(3), si%z(4), xabs
 end subroutine
 
-subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
+recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
 
@@ -529,7 +529,7 @@ end subroutine
   !
   ! Gauss-Legendre Runge-Kutta method with s internal stages (n=4*s variables)
   !
-subroutine f_rk_gauss(si, fs, s, x, fvec)
+recursive subroutine f_rk_gauss(si, fs, s, x, fvec)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   integer, intent(in) :: s
@@ -568,7 +568,7 @@ subroutine f_rk_gauss(si, fs, s, x, fvec)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine jac_rk_gauss(si, fs, s, jac)
+recursive subroutine jac_rk_gauss(si, fs, s, jac)
   !
   type(symplectic_integrator_t), intent(in) :: si
   integer, intent(in) :: s
@@ -645,7 +645,7 @@ subroutine jac_rk_gauss(si, fs, s, jac)
 
 end subroutine jac_rk_gauss
 
-subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
+recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
@@ -694,7 +694,7 @@ subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 end subroutine newton_rk_gauss
 
 
-subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
+recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   ! TODO: this doesn't work well yet
   type(symplectic_integrator_t), intent(inout) :: si
 
@@ -780,7 +780,7 @@ end subroutine fixpoint_rk_gauss
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine jac_rk_lobatto(si, fs, s, jac)
+recursive subroutine jac_rk_lobatto(si, fs, s, jac)
   !
   type(symplectic_integrator_t), intent(in) :: si
   integer, intent(in) :: s
@@ -918,7 +918,7 @@ subroutine jac_rk_lobatto(si, fs, s, jac)
 end subroutine jac_rk_lobatto
 
 
-subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
+recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
   type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
@@ -974,7 +974,7 @@ end subroutine newton_rk_lobatto
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_multi(mi, f, ierr)
+recursive subroutine orbit_timestep_sympl_multi(mi, f, ierr)
   !
   type(multistage_integrator_t), intent(inout) :: mi
   type(field_can_t), intent(inout) :: f
@@ -999,7 +999,7 @@ end subroutine orbit_timestep_sympl_multi
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
+recursive subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   !
   type(multistage_integrator_t), intent(inout) :: mi
   type(field_can_t), intent(inout) :: f
@@ -1026,7 +1026,7 @@ end subroutine orbit_sympl_init_multi
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
+recursive subroutine orbit_sympl_init_verlet(mi, f, z, dtau, ntau, rtol_init)
   !
   type(multistage_integrator_t), intent(inout) :: mi
 
@@ -1048,7 +1048,7 @@ end subroutine orbit_sympl_init_verlet
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
+recursive subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 4 with s=3
   !
@@ -1075,7 +1075,7 @@ subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
+recursive subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 4 with s=5 by McLachlan (1995)
   !
@@ -1108,7 +1108,7 @@ subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
+recursive subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 4 with s=6 by Blanes&Moan (2002)
   ! with coefficients in the form of Hairer (2002)
@@ -1144,7 +1144,7 @@ subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
+recursive subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
   !
   ! Composition method of order 6 with s=9 by Kahan&Li (1995)
   ! with coefficients in the form of Hairer (2002)
@@ -1176,7 +1176,7 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-  subroutine orbit_sympl_init_kahan8(mi, f, z, dtau, ntau, rtol_init)
+  recursive subroutine orbit_sympl_init_kahan8(mi, f, z, dtau, ntau, rtol_init)
     !
     ! Composition method of order 8 with s=17 by Kahan&Li (1995)
     ! with coefficients in the form of Hairer (2002)
@@ -1215,7 +1215,7 @@ subroutine orbit_sympl_init_kahan6(mi, f, z, dtau, ntau, rtol_init)
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1273,7 +1273,7 @@ end subroutine orbit_timestep_sympl_expl_impl_euler
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1335,7 +1335,7 @@ end subroutine orbit_timestep_sympl_impl_expl_euler
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
+recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1388,7 +1388,7 @@ end subroutine orbit_timestep_sympl_midpoint
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
+recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1518,7 +1518,7 @@ end subroutine orbit_timestep_sympl_rk_gauss
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
+recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -1579,7 +1579,7 @@ subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
 end subroutine orbit_timestep_sympl_rk_lobatto
 
 
-subroutine debug_root(si, f, x0)
+recursive subroutine debug_root(si, f, x0)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), pointer :: f
 

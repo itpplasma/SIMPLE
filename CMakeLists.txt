@@ -251,6 +251,7 @@ link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(SIMPLE_COMPILE_OPTIONS
         -Wall -Wextra -fPIC -g
+        $<$<COMPILE_LANGUAGE:Fortran>:-cpp>
         $<$<COMPILE_LANGUAGE:Fortran>:-Wimplicit-interface>
         $<$<COMPILE_LANGUAGE:Fortran>:-Wno-external-argument-mismatch>
         $<$<COMPILE_LANGUAGE:Fortran>:-fmax-errors=5>
