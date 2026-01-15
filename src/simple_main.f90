@@ -772,12 +772,15 @@ contains
         real(dp), intent(inout) :: x_prev_m(3)
 
         integer :: ktau, wall_check_interval
-        real(dp) :: u_ref_cur(3), x_cur(3), x_cur_m(3)
+        real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: x_hit_m(3), x_hit(3), normal_m(3)
         real(dp) :: vhat(3), vnorm, cos_inc
         real(dp) :: u_ref_hit(3)
+        real(dp) :: segment_length, hit_distance, t_frac
         logical :: hit
         integer :: ierr_from_cart
+
+        call integ_to_ref(z(1:3), u_ref_prev)
 
         ! Check wall every N microsteps to limit overhead
         ! For small macrosteps (ntau_local<=32), check at end only
@@ -849,6 +852,7 @@ contains
                 end if
 
                 x_prev_m = x_cur_m
+                u_ref_prev = u_ref_cur
             end if
         end do
     end subroutine macrostep_with_wall_check
