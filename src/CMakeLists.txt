@@ -57,9 +57,37 @@
 
     if(SIMPLE_ENABLE_CGAL)
         add_library(stl_wall_cgal STATIC wall/stl_wall_cgal.cpp)
-        target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL)
-        if(TARGET CGAL::CGAL_Core)
-            target_link_libraries(stl_wall_cgal PUBLIC CGAL::CGAL_Core)
+        # CGAL 5.x is header-only, just need include paths for CGAL and Boost
+        target_include_directories(stl_wall_cgal PUBLIC ${CGAL_INCLUDE_DIR})
+
+        # CGAL requires GMP for exact arithmetic - try system first, then build
+        find_library(GMP_LIBRARY gmp)
+        find_path(GMP_INCLUDE_DIR gmp.h)
+        if(GMP_LIBRARY AND GMP_INCLUDE_DIR)
+            message(STATUS "GMP found (system): ${GMP_LIBRARY}")
+            target_include_directories(stl_wall_cgal PUBLIC ${GMP_INCLUDE_DIR})
+            target_link_libraries(stl_wall_cgal PUBLIC Boost::headers ${GMP_LIBRARY})
+        else()
+            message(STATUS "GMP not found on system, building from source...")
+            include(ExternalProject)
+            set(GMP_VERSION "6.3.0")
+            set(GMP_INSTALL_DIR "${CMAKE_BINARY_DIR}/gmp-install")
+            ExternalProject_Add(gmp_external
+                URL https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VERSION}.tar.xz
+                URL_HASH SHA256=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
+                DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+                PREFIX ${CMAKE_BINARY_DIR}/gmp
+                CONFIGURE_COMMAND <SOURCE_DIR>/configure
+                    --prefix=${GMP_INSTALL_DIR}
+                    --enable-cxx
+                    --with-pic
+                BUILD_COMMAND make -j${CMAKE_BUILD_PARALLEL_LEVEL}
+                INSTALL_COMMAND make install
+                BUILD_BYPRODUCTS ${GMP_INSTALL_DIR}/lib/libgmp.a
+            )
+            add_dependencies(stl_wall_cgal gmp_external)
+            target_include_directories(stl_wall_cgal PUBLIC ${GMP_INSTALL_DIR}/include)
+            target_link_libraries(stl_wall_cgal PUBLIC Boost::headers ${GMP_INSTALL_DIR}/lib/libgmp.a)
         endif()
     endif()
 
