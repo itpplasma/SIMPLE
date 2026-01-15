@@ -209,16 +209,16 @@ if(SIMPLE_ENABLE_CGAL)
     include(FetchContent)
     FetchContent_Declare(
         cgal
-        URL https://github.com/CGAL/cgal/releases/download/v5.6.1/CGAL-5.6.1.tar.xz
+        URL https://github.com/CGAL/cgal/releases/download/v6.0.1/CGAL-6.0.1.tar.xz
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_GetProperties(cgal)
     if(NOT cgal_POPULATED)
         FetchContent_Populate(cgal)
     endif()
-    # CGAL 5.x is header-only, just add include path
+    # CGAL 6.x is header-only, just add include path
     set(CGAL_INCLUDE_DIR "${cgal_SOURCE_DIR}/include")
-    message(STATUS "CGAL enabled via FetchContent: 5.6.1 (header-only)")
+    message(STATUS "CGAL enabled via FetchContent: 6.0.1 (header-only)")
     message(STATUS "CGAL include dir: ${CGAL_INCLUDE_DIR}")
     add_compile_definitions(SIMPLE_ENABLE_CGAL)
 else()
