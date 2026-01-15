@@ -542,6 +542,7 @@ contains
         real(dp) :: x_prev(3), x_cur(3)
         real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
         real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
+        real(dp) :: segment_length, hit_distance, t_frac
         integer :: it, ierr_orbit, it_final
         integer(8) :: kt
         logical :: passing
@@ -626,6 +627,16 @@ contains
 
                         if (ierr_from_cart == 0) then
                             call ref_to_integ(u_ref_hit, z(1:3))
+                        else
+                            ! Fallback: linear interpolation of reference coordinates
+                            ! when from_cart fails (ill-conditioned regions of chartmap)
+                            segment_length = sqrt(sum((x_cur_m - x_prev_m)**2))
+                            if (segment_length > 0.0_dp) then
+                                hit_distance = sqrt(sum((x_hit_m - x_prev_m)**2))
+                                t_frac = hit_distance / segment_length
+                                u_ref_hit = u_ref_prev + t_frac * (u_ref_cur - u_ref_prev)
+                                call ref_to_integ(u_ref_hit, z(1:3))
+                            end if
                         end if
 
                         ierr_orbit = 77
