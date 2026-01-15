@@ -538,15 +538,11 @@ contains
         real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
 
         real(dp), dimension(5) :: z
-        real(dp) :: u_ref_prev(3), u_ref_cur(3), u_ref_hit(3)
-        real(dp) :: x_prev(3), x_cur(3)
-        real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
-        real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
+        real(dp) :: u_ref_prev(3)
+        real(dp) :: x_prev(3), x_prev_m(3)
         integer :: it, ierr_orbit, it_final
         integer(8) :: kt
         logical :: passing
-        logical :: hit
-        integer :: ierr_from_cart
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
@@ -589,10 +585,111 @@ contains
 
         kt = 0
         it_final = 0
-	        do it = 1, ntimstep
-	            if (it >= 2) call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it))
+        do it = 1, ntimstep
+            if (it >= 2) then
+                if (wall_enabled) then
+                    ! Use microstep-level wall checking for STL walls
+                    call macrostep_with_wall_check(anorb, z, kt, ierr_orbit, &
+                        ntau_macro(it), ipart, x_prev_m)
+                else
+                    call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it))
+                end if
+            end if
 
-            if (wall_enabled .and. ierr_orbit == 0) then
+            if (ierr_orbit .ne. 0) then
+                it_final = it
+                exit
+            end if
+
+            ! Store trajectory data (after macrostep so time is correct)
+            orbit_traj(:, it) = z
+            orbit_times(it) = kt*dtaumin/v0
+
+            call increase_confined_count(it, passing)
+            it_final = it
+        end do
+
+        ! Fill remaining timesteps with NaN if particle left domain early
+        if (it_final < ntimstep) then
+            do it = it_final + 1, ntimstep
+                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+            end do
+        end if
+
+!$omp critical
+        call integ_to_ref(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = kt*dtaumin/v0
+!$omp end critical
+    end subroutine trace_orbit
+
+	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
+        use alpha_lifetime_sub, only: orbit_timestep_axis
+        use orbit_symplectic, only: orbit_timestep_sympl
+
+        type(tracer_t), intent(inout) :: anorb
+        real(dp), intent(inout) :: z(5)
+        integer(8), intent(inout) :: kt
+        integer, intent(out) :: ierr_orbit
+        integer, intent(in) :: ntau_local
+
+        integer :: ktau
+
+        do ktau = 1, ntau_local
+            if (integmode <= 0) then
+                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+            else
+                if (swcoll) call update_momentum(anorb, z)
+                call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                call to_standard_z_coordinates(anorb, z)
+            end if
+            if (swcoll) call collide(z, dtaumin) ! Collisions
+            if (ierr_orbit .ne. 0) exit
+            kt = kt + 1
+        end do
+    end subroutine macrostep
+
+    subroutine macrostep_with_wall_check(anorb, z, kt, ierr_orbit, ntau_local, &
+            ipart, x_prev_m)
+        use alpha_lifetime_sub, only: orbit_timestep_axis
+        use orbit_symplectic, only: orbit_timestep_sympl
+
+        type(tracer_t), intent(inout) :: anorb
+        real(dp), intent(inout) :: z(5)
+        integer(8), intent(inout) :: kt
+        integer, intent(out) :: ierr_orbit
+        integer, intent(in) :: ntau_local
+        integer, intent(in) :: ipart
+        real(dp), intent(inout) :: x_prev_m(3)
+
+        integer :: ktau, wall_check_interval
+        real(dp) :: u_ref_cur(3), x_cur(3), x_cur_m(3)
+        real(dp) :: x_hit_m(3), x_hit(3), normal_m(3)
+        real(dp) :: vhat(3), vnorm, cos_inc
+        real(dp) :: u_ref_hit(3)
+        logical :: hit
+        integer :: ierr_from_cart
+
+        ! Check wall every N microsteps to limit overhead
+        ! For small macrosteps (ntau_local<=32), check at end only
+        ! For larger macrosteps, check every 32 microsteps
+        wall_check_interval = max(1, min(32, ntau_local))
+
+        do ktau = 1, ntau_local
+            if (integmode <= 0) then
+                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+            else
+                if (swcoll) call update_momentum(anorb, z)
+                call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                call to_standard_z_coordinates(anorb, z)
+            end if
+            if (swcoll) call collide(z, dtaumin) ! Collisions
+            if (ierr_orbit .ne. 0) exit
+            kt = kt + 1
+
+            ! Check wall intersection periodically or at end of macrostep
+            if (mod(ktau, wall_check_interval) == 0 .or. ktau == ntau_local) then
                 call integ_to_ref(z(1:3), u_ref_cur)
                 call ref_coords%evaluate_cart(u_ref_cur, x_cur)
                 x_cur_m = x_cur*chartmap_cart_scale_to_m
@@ -629,67 +726,14 @@ contains
                         end if
 
                         ierr_orbit = 77
+                        exit
                     end if
                 end if
 
-                u_ref_prev = u_ref_cur
-                x_prev = x_cur
                 x_prev_m = x_cur_m
             end if
-
-            if (ierr_orbit .ne. 0) then
-                it_final = it
-                exit
-            end if
-
-            ! Store trajectory data (after macrostep so time is correct)
-            orbit_traj(:, it) = z
-            orbit_times(it) = kt*dtaumin/v0
-
-            call increase_confined_count(it, passing)
-            it_final = it
         end do
-
-        ! Fill remaining timesteps with NaN if particle left domain early
-        if (it_final < ntimstep) then
-            do it = it_final + 1, ntimstep
-                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
-                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
-            end do
-        end if
-
-!$omp critical
-        call integ_to_ref(z(1:3), zend(1:3, ipart))
-        zend(4:5, ipart) = z(4:5)
-        times_lost(ipart) = kt*dtaumin/v0
-!$omp end critical
-    end subroutine trace_orbit
-
-	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
-	        use alpha_lifetime_sub, only: orbit_timestep_axis
-	        use orbit_symplectic, only: orbit_timestep_sympl
-
-	        type(tracer_t), intent(inout) :: anorb
-	        real(dp), intent(inout) :: z(5)
-	        integer(8), intent(inout) :: kt
-	        integer, intent(out) :: ierr_orbit
-	        integer, intent(in) :: ntau_local
-
-	        integer :: ktau
-
-	        do ktau = 1, ntau_local
-	            if (integmode <= 0) then
-	                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
-	            else
-	                if (swcoll) call update_momentum(anorb, z)
-                call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
-                call to_standard_z_coordinates(anorb, z)
-            end if
-            if (swcoll) call collide(z, dtaumin) ! Collisions
-            if (ierr_orbit .ne. 0) exit
-            kt = kt + 1
-        end do
-    end subroutine macrostep
+    end subroutine macrostep_with_wall_check
 
     subroutine to_standard_z_coordinates(anorb, z)
         type(tracer_t), intent(in) :: anorb
