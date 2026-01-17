@@ -25,6 +25,7 @@ module simple_main
                                      stl_wall_finalize, &
                                      stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
+    use orbit_symplectic_base, only: current_particle_index
 
     implicit none
 
@@ -545,6 +546,7 @@ contains
         logical :: passing
         type(classification_result_t) :: class_result
 
+        current_particle_index = ipart
         ierr_orbit = 0
 
         if (swcoll) call reset_seed_if_deterministic

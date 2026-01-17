@@ -9,6 +9,10 @@ integer, parameter :: dp = kind(1.0d0)
 
 logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
+! Current particle index for diagnostic output (set by simple_main before tracing)
+integer :: current_particle_index = 0
+!$omp threadprivate(current_particle_index)
+
   ! Integration methods
 integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
   MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15

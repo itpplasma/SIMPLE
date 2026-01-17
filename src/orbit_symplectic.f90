@@ -6,7 +6,7 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
   LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
-  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
+  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, current_particle_index
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -1243,7 +1243,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     end if
 
     if (x(1) < 0.0d0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      print *, 'r<0, ipart=', current_particle_index, ', z=', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01d0
     end if
 
@@ -1301,7 +1301,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      print *, 'r<0, ipart=', current_particle_index, ', z=', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -1364,7 +1364,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      print *, 'r<0, ipart=', current_particle_index, ', z=', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
@@ -1428,7 +1428,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      print *, 'r<0, ipart=', current_particle_index, ', z=', x(1), si%z(2), si%z(3), x(2)
       x(1) = 0.01
     end if
 
