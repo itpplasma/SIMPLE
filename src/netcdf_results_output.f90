@@ -391,7 +391,7 @@ contains
 
             ! Check if particle was traced: zend is set to exactly 0 for untraced
             ! particles (see simple_main.f90:493 and classification.f90:94)
-            zend_is_zero = all(zend(1:3, i) == 0.0_dp)
+            zend_is_zero = all(abs(zend(1:3, i)) <= 0.0_dp)
             if (zend_is_zero) then
                 ! Particle not traced - use start position
                 xend_cart(:, i) = xstart_cart(:, i)

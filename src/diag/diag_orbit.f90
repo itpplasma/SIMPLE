@@ -133,7 +133,7 @@ subroutine integrate_orbit_with_trajectory_debug(si, f, particle_number)
     real(dp), allocatable :: pphi_traj(:)
     integer, allocatable :: newton_iter_traj(:)
     real(dp), dimension(5) :: z, xlast
-    integer :: it, ktau, point_idx, newton_iters, ierr_orbit
+    integer :: it, ktau, point_idx, newton_iters
     integer, parameter :: maxit = 32
     real(dp) :: current_time
     integer :: total_points, field_eval_count
