@@ -607,6 +607,21 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
 endif()
 
 ##################################################
+# NCSX GC Cash–Karp COMPARISON TEST (VMEC vs MEISS)
+##################################################
+
+add_test(
+    NAME gc_ck_ncsx_vmec_vs_meiss
+    COMMAND ${CMAKE_COMMAND} -E env python3
+        ${CMAKE_SOURCE_DIR}/examples/compare_ncsx_meiss_vmec_ck.py
+        ${CMAKE_BINARY_DIR}/test/ncsx_meiss_vmec_ck
+)
+set_tests_properties(gc_ck_ncsx_vmec_vs_meiss PROPERTIES
+    TIMEOUT 600
+    LABELS "system;integration;plot;slow"
+)
+
+##################################################
 # GOLDEN RECORD TESTS
 ##################################################
 
