@@ -479,7 +479,9 @@ contains
         use samplers, only: sample, START_FILE
 
         if (1 == startmode) then
-            if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
+            if (0 == num_surf) then
+                call sample(zstart, 0.0d0, 1.0d0)
+            else if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
                 call sample(zstart, grid_density)
             else
                 call sample(zstart)
