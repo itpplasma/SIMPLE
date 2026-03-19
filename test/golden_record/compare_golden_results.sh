@@ -123,8 +123,8 @@ compare_cases() {
                 echo "  ✗ FAILED"
                 failed_cases=$((failed_cases + 1))
             fi
-        # Check if this is the classifier_fast case with multiple files
-        elif [ "$CASE" = "classifier_fast" ]; then
+        # Check if this is a classifier case with multiple files
+        elif [ "$CASE" = "classifier_fast" ] || [ "$CASE" = "classifier_combined" ]; then
             # List of files to compare for classifier_fast (excluding simple.in and wout.nc)
             # Note: fort.* files are excluded due to non-deterministic ordering in parallel execution
             CLASSIFIER_FILES="avg_inverse_t_lost.dat class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"
