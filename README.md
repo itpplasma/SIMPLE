@@ -19,12 +19,31 @@ The code is free to use and modify under the MIT License and links to Runge-Kutt
 Run `make` to produce a `build` directory including the main executable
 `simple.x`, main library `libsimple.so` and Python module `pysimple`.
 
-Required libraries:
-* NetCDF
-* LAPACK/BLAS
-
-Required compiler:
+Required build tools:
+* CMake (>= 3.22)
+* Ninja
 * GNU Fortran (gfortran)
+* git
+
+Required libraries:
+* NetCDF-Fortran (and NetCDF-C) — provides `nf-config` and `nc-config`
+* LAPACK/BLAS
+* OpenMP (enabled by default, usually included with gfortran)
+
+On Arch Linux:
+```bash
+sudo pacman -S gcc-fortran cmake ninja netcdf netcdf-fortran lapack blas
+```
+
+On Ubuntu/Debian:
+```bash
+sudo apt install gfortran cmake ninja-build libnetcdf-dev libnetcdff-dev liblapack-dev libblas-dev
+```
+
+On macOS (Homebrew):
+```bash
+brew install gcc cmake ninja netcdf netcdf-fortran lapack
+```
 
 For Python wrappers, do
 ```bash

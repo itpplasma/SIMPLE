@@ -36,9 +36,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Change config: `make CONFIG=Debug`
 
 ### Dependencies
-- Required: NetCDF, LAPACK/BLAS, libneo, GVEC (minimal)
+- Build tools: CMake (>= 3.22), Ninja, git
 - Compiler: GNU Fortran (gfortran)
-- Optional: OpenMP (enabled by default)
+- Required libraries: NetCDF-Fortran (and NetCDF-C), LAPACK/BLAS
+- Auto-fetched: libneo, fortplot (via FetchContent)
+- Optional: OpenMP (enabled by default), GVEC (experimental, off by default), CGAL (off by default)
 
 ### GVEC Integration
 - Minimal GVEC library automatically built from `thirdparty/gvec/`
