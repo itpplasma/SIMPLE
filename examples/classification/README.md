@@ -1,26 +1,53 @@
-class_parts.dat columns:
+# Classification Examples
 
-1: particle index
-2: starting radial coordinate s
-3: proportional to perpendicular adiabatic invariant (magnetic moment)
-4: result of j_parallel orbitclassifier
-5: result of topological (ideal) orbit classifier
-6: fractal dimension classification (regular=1, chaotic=2)
+Reproduces classification results in the style of the JPP 2020 paper:
+Albert, Kasilov, Kernbichler, "Accelerated methods for direct computation
+of fusion alpha particle losses within stellarator optimization",
+J. Plasma Phys. 86, 815860201 (2020).
 
-Prompt losses: 0
-Regular / ideal: 1
-Chaotic / non-ideal: 2
+Uses a QH (quasi-helical) equilibrium from Landreman & Paul 2021.
 
-according to classification.f90, check_orbit_type.f90 and simple_main.f90
+## Input files
 
-tcut is used only for fractal dimension classification. Earlier it was recommended to use at t=0.1s. The new classifiers (topological, and j_parallel) work at t=0.015s.
+- `simple_s03.in` — Single surface at s=0.3, 10000 particles, trace_time=1s
+- `simple_s06.in` — Single surface at s=0.6, 10000 particles, trace_time=1s
+- `simple_volume.in` — Volume sampling, 100000 particles, trace_time=0.015s
+- `simple.in` — Legacy volume config (5000 particles)
 
-Recipe: 
+## Running
 
-0) Minimize fraction of chaotic orbits. (10-100 times faster than usual run)
-1) Look at s=0.25 and s=0.5. See at which J_perp particles are chaotic on s=0.25 and optimize such that at these J_perp values at s=0.5 there are regular regions. (10-100 times faster than usual run)
-3) Optimize for loss fraction, tracing only chaotic orbits to the end. (only 1-10 times faster than usual run)
+    make run        # runs all three cases under /tmp/simple_classification
 
-TODO:
+Or manually:
 
-Enable mode 3) also for new classifiers.
+    bash run_all.sh
+
+## Plotting
+
+    make plot       # generates paper-style plots from results
+
+Scripts:
+- `plot_paper_results.py` — Paper-style plots (Fig 6, Fig 8, Table 1)
+- `plot_classification.py` — Legacy (s, J_perp) volume classification
+
+## Output files
+
+`class_parts.dat` columns:
+
+1. particle index
+2. starting radial coordinate s
+3. proportional to perpendicular adiabatic invariant (magnetic moment)
+4. result of j_parallel orbit classifier
+5. result of topological (ideal) orbit classifier
+6. fractal dimension classification (regular=1, chaotic=2)
+
+Classification codes: 0=prompt loss, 1=regular/ideal, 2=chaotic/non-ideal.
+
+`times_lost.dat` columns:
+
+1. particle index
+2. loss time (negative if confined, trace_time if regular)
+3. trapping parameter theta_trap (Eq. 3.1 in paper)
+4. starting s
+5. perpendicular invariant J_perp
+6-10. final state zend(1:5)
