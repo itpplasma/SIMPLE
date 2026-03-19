@@ -426,7 +426,9 @@ contains
         use samplers, only: sample, START_FILE
 
         if (1 == startmode) then
-            if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
+            if (0 == num_surf) then
+                call sample(zstart, 0.0d0, 1.0d0)
+            else if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
                 call sample(zstart, grid_density)
             else
                 call sample(zstart)
@@ -768,7 +770,7 @@ contains
 
 !$omp critical
         bmod = compute_bmod(z(1:3))
-        if (num_surf > 1) then
+        if (num_surf /= 1) then
             call get_bminmax(z(1), bmin, bmax)
         end if
         passing = z(5)**2 .gt. 1.d0 - bmod/bmax
@@ -862,6 +864,22 @@ contains
                 write (1, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
             end do
             close (1)
+
+            block
+                use bminmax_mod, only: nsbmnx, hsbmnx, bmin_arr, bmax_arr
+                use find_bminmax_sub, only: get_bminmax
+
+                real(dp) :: bmin_tmp, bmax_tmp
+
+                ! Ensure bminmax arrays are populated
+                call get_bminmax(0.5d0, bmin_tmp, bmax_tmp)
+
+                open (1, file='bminmax.dat', recl=1024)
+                do i = 0, nsbmnx
+                    write (1, *) hsbmnx*dble(i), bmin_arr(i), bmax_arr(i)
+                end do
+                close (1)
+            end block
         end if
 
         if (output_results_netcdf) then
