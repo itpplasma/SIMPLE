@@ -45,7 +45,7 @@ def doplot_inner(prompt, regular, stochastic, bminmax):
     jpmin = bmin_global / bmax_global
 
     plt.figure(figsize=(5, 4))
-    plt.imshow(cla.T, origin='lower', extent=[0, 1, 0, 1], aspect='auto',
+    plt.imshow(cla, origin='lower', extent=[0, 1, 0, 1], aspect='auto',
                vmin=-1.0, vmax=1.0, clim=(-1.0, 1.0))
     plt.plot(bminmax[:, 0], bmin_global / bminmax[:, 1], 'k')
     plt.plot(bminmax[:, 0], bmin_global / bminmax[:, 2], 'k--')
