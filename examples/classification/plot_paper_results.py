@@ -315,9 +315,10 @@ def plot_fig8(base_dir, output_path):
 def plot_volume_classification(data_dir, output_path, config_label=""):
     """Volume classification plot: (s, J_perp) colored by orbit type.
 
-    Continuous colormap: prompt loss (purple) → chaotic (teal) → regular
-    (yellow). The bmin/bmax curves show the deeply trapped and
-    trapped-passing boundaries.
+    Bins trapped particles only (iclass != 1 or trap_par >= 0) into a
+    (s, J_perp) grid. Passing particles are shown as white background.
+    The trapped-passing and deeply-trapped boundaries from bminmax.dat
+    are overlaid.
     """
     data_dir = Path(data_dir)
 
@@ -325,6 +326,9 @@ def plot_volume_classification(data_dir, output_path, config_label=""):
     s = class_data[:, 1]
     perp_inv = class_data[:, 2]
     icl_jpar = class_data[:, 3].astype(int)
+
+    tl_data = np.loadtxt(data_dir / "times_lost.dat")
+    trap_par = tl_data[:, 2]
 
     bminmax = np.loadtxt(data_dir / "bminmax.dat")
 
@@ -340,6 +344,9 @@ def plot_volume_classification(data_dir, output_path, config_label=""):
     for ipart in range(len(s)):
         i = min(ns, max(1, int(np.ceil(s[ipart] / hs)))) - 1
         k = min(nperp, max(1, int(np.ceil(perp_inv[ipart] / hp)))) - 1
+        is_trapped = trap_par[ipart] >= 0
+        if not is_trapped:
+            continue
         if icl_jpar[ipart] == 0:
             prompt[k, i] += 1.0
         elif icl_jpar[ipart] == 1:
