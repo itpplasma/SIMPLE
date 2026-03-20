@@ -1,0 +1,15 @@
+&config
+notrace_passing = 0
+ntestpart = 10000
+num_surf = 1
+sbeg = 0.6
+npoiper2 = 128
+netcdffile = 'wout_23_1900_fix_bdry.nc'
+isw_field_type = 2
+trace_time = 1.0d0
+tcut = 1d-1
+class_plot = .True.
+cut_in_per = 0.5d0
+fast_class = .True.
+deterministic = .True.
+/
