@@ -115,6 +115,9 @@ contains
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
 
+            call init_bminmax
+            call print_phase_time('Bmin/Bmax initialization completed')
+
             call sample_particles
             call print_phase_time('Particle sampling completed')
 
@@ -587,6 +590,7 @@ contains
             needs_bminmax_cache = num_surf /= 1
         end if
     end function needs_bminmax_cache
+
 
     subroutine init_counters
         icounter = 0 ! evaluation counter
