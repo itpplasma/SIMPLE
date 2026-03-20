@@ -325,7 +325,13 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
                     ! Store in classification result
                     class_result%jpar = ijpar
                     class_result%topology = ideal
-                    if(fast_class) ierr=ierr_cot
+                    ! fast_class without class_plot: stop tracing regular
+                    ! orbits early (they are confined). With class_plot,
+                    ! continue to ntcut so classification output is written.
+                    if(fast_class .and. .not. class_plot &
+                        .and. ierr_cot /= 0 .and. ijpar == 1) then
+                        regular = .True.
+                    endif
                     !
                     ! End classification by J_parallel and ideal orbit conditions
                 endif
