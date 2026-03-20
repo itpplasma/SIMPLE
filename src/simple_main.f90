@@ -98,6 +98,9 @@ contains
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
 
+            call init_bminmax
+            call print_phase_time('Bmin/Bmax initialization completed')
+
             call sample_particles
             call print_phase_time('Particle sampling completed')
 
@@ -516,6 +519,16 @@ contains
         end subroutine save_starting_points_test
     end subroutine sample_particles_test_field
 
+    subroutine init_bminmax
+        use find_bminmax_sub, only: init_bminmax_arrays
+
+        ! Populate bminmax arrays while magfie is still in VMEC mode.
+        ! find_bminmax scans (theta, phi) to find field extrema, so it
+        ! must run in the coordinate system where theta/phi are geometric
+        ! angles (VMEC), not canonical angles (Boozer/canflux).
+        call init_bminmax_arrays
+    end subroutine init_bminmax
+
     subroutine init_counters
         icounter = 0 ! evaluation counter
         kpart = 0
@@ -867,12 +880,6 @@ contains
 
             block
                 use bminmax_mod, only: nsbmnx, hsbmnx, bmin_arr, bmax_arr
-                use find_bminmax_sub, only: get_bminmax
-
-                real(dp) :: bmin_tmp, bmax_tmp
-
-                ! Ensure bminmax arrays are populated
-                call get_bminmax(0.5d0, bmin_tmp, bmax_tmp)
 
                 open (1, file='bminmax.dat', recl=1024)
                 do i = 0, nsbmnx
