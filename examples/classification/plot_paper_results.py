@@ -16,7 +16,7 @@ Generates:
   - Figure 7: QA loss plots at s=0.3 and s=0.6
   - Figure 8: Orbit classification in (theta, v_par/v) for all 3 configs
   - Table 1: Regular orbit fractions for trapped/passing regions
-  - Volume classification plot for QH
+  - Volume classification plots for QH, QI, QA
 
 Usage:
     python plot_paper_results.py [base_dir]
@@ -134,111 +134,162 @@ def plot_loss_figure(data_s03, data_s06, config_key, output_path):
     print(f"  Saved: {output_path}")
 
 
-def plot_fig8(base_dir, output_path):
-    """Generate Figure 8: orbit classification in (theta, v_par/v) space.
+def _read_namelist_param(simple_in, param_name, default):
+    """Read a single parameter value from a simple.in namelist file."""
+    if not simple_in.exists():
+        return default
+    for line in simple_in.read_text().splitlines():
+        if param_name in line and "=" in line:
+            if param_name == "tcut" and "ntcut" in line:
+                continue
+            val = line.split("=")[1].split("!")[0].strip().rstrip(",")
+            return float(val.replace("d", "e"))
+    return default
 
-    Three panels (a, b, c) for QI, QH, QA at s=0.6, phi = phi_n/2.
-    Colors match the paper: filled background = regular, circles = early loss,
-    crosses = chaotic/late loss, white line = trapped-passing boundary.
+
+def _classify_particles(fig8_dir):
+    """Load and classify particles from a Fig 8 run directory.
+
+    Returns (theta, pitch, category) where category is:
+      0 = regular (confined), 1 = early loss, 2 = chaotic/late loss
+    Returns None if data files are missing.
     """
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
-    panel_labels = ["(a) QI", "(b) QH", "(c) QA"]
+    for required in ("class_parts.dat", "times_lost.dat", "start.dat"):
+        if not (fig8_dir / required).exists():
+            return None
 
-    for ax, config_key, panel_label in zip(axes, ["QI", "QH", "QA"], panel_labels):
-        fig8_dir = base_dir / CONFIGS[config_key]["fig8"]
-        if not (fig8_dir / "class_parts.dat").exists():
-            ax.set_title(f"{panel_label} -- no data")
-            continue
+    class_data = np.loadtxt(fig8_dir / "class_parts.dat")
+    iclass_jpar = class_data[:, 3].astype(int)
 
-        class_data = np.loadtxt(fig8_dir / "class_parts.dat")
-        iclass_jpar = class_data[:, 3].astype(int)
+    tl_data = np.loadtxt(fig8_dir / "times_lost.dat")
+    loss_times = tl_data[:, 1]
 
-        tl_data = np.loadtxt(fig8_dir / "times_lost.dat")
-        loss_times = tl_data[:, 1]
+    start_data = np.loadtxt(fig8_dir / "start.dat")
+    theta = np.mod(start_data[:, 1], 2 * np.pi) / np.pi
+    pitch = start_data[:, 4]
 
-        start_file = fig8_dir / "start.dat"
-        if not start_file.exists():
-            ax.set_title(f"{panel_label} -- no start.dat")
-            continue
+    simple_in = fig8_dir / "simple.in"
+    trace_time = _read_namelist_param(simple_in, "trace_time", 1.0)
+    tcut = _read_namelist_param(simple_in, "tcut", 0.1)
 
-        start_data = np.loadtxt(start_file)
-        theta = np.mod(start_data[:, 1], 2 * np.pi) / np.pi
-        pitch = start_data[:, 4]
+    regular = iclass_jpar == 1
+    prompt_loss = iclass_jpar == 0
+    chaotic = iclass_jpar == 2
 
-        # Read trace_time and tcut from simple.in
-        trace_time = 1.0
-        tcut = 0.1
-        simple_in = fig8_dir / "simple.in"
-        if simple_in.exists():
-            for line in simple_in.read_text().splitlines():
-                if "trace_time" in line and "=" in line:
-                    val = line.split("=")[1].split("!")[0].strip().rstrip(",")
-                    trace_time = float(val.replace("d", "e"))
-                if "tcut" in line and "=" in line and "ntcut" not in line:
-                    val = line.split("=")[1].split("!")[0].strip().rstrip(",")
-                    tcut = float(val.replace("d", "e"))
+    lost_early = (loss_times > 0) & (loss_times < tcut)
+    lost_late = (loss_times > 0) & (loss_times >= tcut) & (loss_times < trace_time)
+    confined = (loss_times < 0) | (loss_times >= trace_time)
 
-        # Classification categories
-        regular = iclass_jpar == 1
-        prompt_loss = iclass_jpar == 0
-        chaotic = iclass_jpar == 2
+    # Category: 0=regular, 1=early loss, 2=chaotic
+    category = np.full(len(theta), -1, dtype=int)
+    category[regular] = 0
+    category[prompt_loss | (chaotic & lost_early)] = 1
+    category[chaotic & (lost_late | confined)] = 2
+    # Regular but lost -- still mark as regular for background
+    category[regular & ~confined] = 0
 
-        lost_early = (loss_times > 0) & (loss_times < tcut)
-        lost_late = (loss_times > 0) & (loss_times >= tcut) & (loss_times < trace_time)
-        confined = (loss_times < 0) | (loss_times >= trace_time)
+    return theta, pitch, category
 
-        # Background: regular confined (green filled squares)
-        ax.scatter(
-            theta[regular & confined], pitch[regular & confined],
-            c="tab:green", s=4, marker="s", alpha=0.6, edgecolors="none",
-            label="Regular",
-        )
 
-        # Regular but lost (rare false negatives)
-        regular_lost = regular & ~confined
-        if np.sum(regular_lost) > 0:
-            ax.scatter(
-                theta[regular_lost], pitch[regular_lost],
-                c="tab:green", s=4, marker="s", alpha=0.3, edgecolors="none",
+def _plot_fig8_panel(ax, fig8_dir, panel_label):
+    """Plot a single Fig 8 panel with dense imshow background and overlay markers.
+
+    The background grid is colored by dominant particle category in each cell:
+    green=regular, blue=early loss, yellow=chaotic, white=empty.
+    Individual early-loss and chaotic particles are overlaid as markers.
+    """
+    result = _classify_particles(fig8_dir)
+    if result is None:
+        ax.set_title(f"{panel_label} -- no data")
+        return
+
+    theta, pitch, category = result
+
+    n_grid = 100
+    theta_edges = np.linspace(0, 2, n_grid + 1)
+    pitch_edges = np.linspace(-1, 1, n_grid + 1)
+
+    # Count particles of each type in each grid cell
+    counts = np.zeros((3, n_grid, n_grid), dtype=int)
+    for cat_id in range(3):
+        mask = category == cat_id
+        if np.any(mask):
+            h, _, _ = np.histogram2d(
+                pitch[mask], theta[mask],
+                bins=[pitch_edges, theta_edges],
             )
+            counts[cat_id] = h.astype(int)
 
-        # Early losses (blue circles) -- prompt + chaotic early
-        early = prompt_loss | (chaotic & lost_early)
+    total = counts.sum(axis=0)
+
+    # Build RGBA image: green=regular, blue=early loss, yellow=chaotic
+    colors = {
+        0: np.array([0.2, 0.7, 0.2]),   # green (regular)
+        1: np.array([0.2, 0.4, 0.9]),   # blue (early loss)
+        2: np.array([0.9, 0.8, 0.1]),   # yellow (chaotic)
+    }
+    rgba = np.ones((n_grid, n_grid, 4))  # white background (alpha=1)
+    occupied = total > 0
+    dominant = np.argmax(counts, axis=0)
+    for cat_id in range(3):
+        mask = occupied & (dominant == cat_id)
+        rgba[mask, :3] = colors[cat_id]
+
+    ax.imshow(
+        rgba, origin="lower", extent=[0, 2, -1, 1], aspect="auto",
+        interpolation="nearest",
+    )
+
+    # Overlay markers for early losses (circles) and chaotic (crosses)
+    early = category == 1
+    if np.any(early):
         ax.scatter(
             theta[early], pitch[early],
             c="tab:blue", s=8, marker="o", alpha=0.7, edgecolors="none",
             label=r"Early loss ($t < t_\mathrm{cut}$)",
         )
 
-        # Chaotic late losses (red crosses)
-        late = chaotic & lost_late
+    chaotic_mask = category == 2
+    if np.any(chaotic_mask):
         ax.scatter(
-            theta[late], pitch[late],
+            theta[chaotic_mask], pitch[chaotic_mask],
             c="tab:red", s=12, marker="x", alpha=0.7, linewidths=0.8,
-            label="Chaotic (late loss)",
+            label="Chaotic",
         )
 
-        # Chaotic but confined (gold crosses -- false positives)
-        chaotic_conf = chaotic & confined
-        if np.sum(chaotic_conf) > 0:
-            ax.scatter(
-                theta[chaotic_conf], pitch[chaotic_conf],
-                c="gold", s=8, marker="x", alpha=0.5, linewidths=0.8,
-                label="Chaotic (confined)",
-            )
+    # Trapped-passing boundary
+    ax.axhline(y=0, color="white", linewidth=1.5, alpha=0.8)
 
-        # Trapped-passing boundary
-        ax.axhline(y=0, color="white", linewidth=1.5, alpha=0.8)
+    ax.set_xlabel(r"$\vartheta / \pi$")
+    ax.set_xlim([0, 2])
+    ax.set_ylim([-1, 1])
+    ax.set_title(panel_label)
 
-        ax.set_xlabel(r"$\vartheta / \pi$")
-        if ax is axes[0]:
-            ax.set_ylabel(r"$v_\parallel / v$")
-        ax.set_xlim([0, 2])
-        ax.set_ylim([-1, 1])
-        ax.set_title(panel_label)
 
-    # Shared legend from the first panel
-    handles, labels = axes[0].get_legend_handles_labels()
+def plot_fig8(base_dir, output_path):
+    """Generate Figure 8: orbit classification in (theta, v_par/v) space.
+
+    Three panels (a, b, c) for QI, QH, QA at s=0.6, phi = phi_n/2.
+    Uses a dense colored grid (imshow) for the background with overlay markers.
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+    panel_labels = ["(a) QI", "(b) QH", "(c) QA"]
+
+    for ax, config_key, panel_label in zip(axes, ["QI", "QH", "QA"], panel_labels):
+        fig8_dir = base_dir / CONFIGS[config_key]["fig8"]
+        _plot_fig8_panel(ax, fig8_dir, panel_label)
+
+    # Only the leftmost panel gets a y-label
+    axes[0].set_ylabel(r"$v_\parallel / v$")
+
+    # Shared legend from whichever panel has handles
+    handles, labels = [], []
+    for ax in axes:
+        h, l = ax.get_legend_handles_labels()
+        for hi, li in zip(h, l):
+            if li not in labels:
+                handles.append(hi)
+                labels.append(li)
     if handles:
         fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=8,
                    bbox_to_anchor=(0.5, -0.05))
@@ -250,7 +301,7 @@ def plot_fig8(base_dir, output_path):
     print(f"  Saved: {output_path}")
 
 
-def plot_volume_classification(data_dir, output_path):
+def plot_volume_classification(data_dir, output_path, config_label=""):
     """Volume classification plot: (s, J_perp) colored by orbit type."""
     data_dir = Path(data_dir)
 
@@ -300,7 +351,8 @@ def plot_volume_classification(data_dir, output_path):
     ax.set_ylim(jpmin, 1)
     ax.set_xlabel(r"Normalized toroidal flux $s$")
     ax.set_ylabel(r"Perpendicular invariant $J_\perp$")
-    ax.set_title(r"Volume classification ($J_\parallel$ classifier)")
+    title_suffix = f" -- {config_label}" if config_label else ""
+    ax.set_title(rf"Volume classification ($J_\parallel$ classifier){title_suffix}")
 
     cb = plt.colorbar(im, ax=ax)
     cb.set_ticks([-1, 0, 1])
@@ -406,11 +458,18 @@ def main():
         print("\nGenerating Figure 8 (orbit classification)...")
         plot_fig8(base_dir, output_dir / "fig8_classification.pdf")
 
-    # Volume classification
-    vol_dir = base_dir / "qh_volume"
-    if (vol_dir / "class_parts.dat").exists():
-        print("\nGenerating volume classification plot...")
-        plot_volume_classification(vol_dir, output_dir / "volume_classification.pdf")
+    # Volume classification for all 3 configs
+    volume_configs = [
+        ("QH", "qh_volume"),
+        ("QI", "qi_volume"),
+        ("QA", "qa_volume"),
+    ]
+    for vol_label, vol_name in volume_configs:
+        vol_dir = base_dir / vol_name
+        if (vol_dir / "class_parts.dat").exists():
+            out_name = f"volume_classification_{vol_label.lower()}.pdf"
+            print(f"\nGenerating volume classification plot ({vol_label})...")
+            plot_volume_classification(vol_dir, output_dir / out_name, vol_label)
 
     # Table 1
     print_table1(base_dir)
