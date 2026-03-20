@@ -146,7 +146,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
     !$omp critical
-    if(num_surf > 1) then
+    if(num_surf /= 1) then
         call get_bminmax(z(1),bmin,bmax)
     endif
     passing = z(5)**2.gt.1.d0-bmod/bmax
