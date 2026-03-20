@@ -4,6 +4,8 @@ fort.*
 *.log
 *.dat
 !python/pysimple/data/*.dat
+!examples/classification/data/*.nc
+!examples/classification/output/*.pdf
 *.out
 *~
 *.nc
