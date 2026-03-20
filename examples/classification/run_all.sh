@@ -11,15 +11,16 @@ if [ ! -x "$SIMPLE_X" ]; then
     exit 1
 fi
 
-# Equilibrium file sources
-QI_WOUT="/home/ert/data/ALPHAPART/VMEC/wout_23_1900_fix_bdry.nc"
-QH_WOUT="/home/ert/data/STELLOPT/BOOZER/Drevlak2018_QH/wout_qh_8_7.nc"
-QA_WOUT="/home/ert/data/STELLOPT/BOOZER/QuASDEX_Henneberg_2019/wout_henneberg_qa.nc"
+# Equilibrium files shipped in data/ directory
+DATA_DIR="$EXAMPLE_DIR/data"
+QI_WOUT="$DATA_DIR/wout_23_1900_fix_bdry.nc"
+QH_WOUT="$DATA_DIR/wout_qh_8_7.nc"
+QA_WOUT="$DATA_DIR/wout_henneberg_qa.nc"
 
-# Verify all equilibrium files exist
 for f in "$QI_WOUT" "$QH_WOUT" "$QA_WOUT"; do
     if [ ! -f "$f" ]; then
         echo "ERROR: Equilibrium file not found: $f"
+        echo "These should be in examples/classification/data/"
         exit 1
     fi
 done
