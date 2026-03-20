@@ -315,21 +315,16 @@ def plot_fig8(base_dir, output_path):
 def plot_volume_classification(data_dir, output_path, config_label=""):
     """Volume classification plot: (s, J_perp) colored by orbit type.
 
-    Uses 4 categories so the trapped-passing boundary is visible:
-    passing (white), regular trapped (green/yellow), chaotic (teal),
-    prompt loss (purple).
+    Continuous colormap: prompt loss (purple) → chaotic (teal) → regular
+    (yellow). The bmin/bmax curves show the deeply trapped and
+    trapped-passing boundaries.
     """
-    from matplotlib.colors import ListedColormap
-
     data_dir = Path(data_dir)
 
     class_data = np.loadtxt(data_dir / "class_parts.dat")
     s = class_data[:, 1]
     perp_inv = class_data[:, 2]
     icl_jpar = class_data[:, 3].astype(int)
-
-    tl_data = np.loadtxt(data_dir / "times_lost.dat")
-    trap_par = tl_data[:, 2]
 
     bminmax = np.loadtxt(data_dir / "bminmax.dat")
 
@@ -338,42 +333,35 @@ def plot_volume_classification(data_dir, output_path, config_label=""):
     pmax = np.max(perp_inv)
     hp = pmax / nperp
 
-    # 4 categories: 0=passing, 1=regular trapped, 2=chaotic, 3=prompt loss
-    counts = np.zeros((4, nperp, ns))
+    prompt = np.zeros((nperp, ns))
+    regular = np.zeros((nperp, ns))
+    stochastic = np.zeros((nperp, ns))
 
     for ipart in range(len(s)):
         i = min(ns, max(1, int(np.ceil(s[ipart] / hs)))) - 1
         k = min(nperp, max(1, int(np.ceil(perp_inv[ipart] / hp)))) - 1
-        is_passing = trap_par[ipart] < 0
-        if is_passing:
-            counts[0, k, i] += 1.0
-        elif icl_jpar[ipart] == 0:
-            counts[3, k, i] += 1.0
+        if icl_jpar[ipart] == 0:
+            prompt[k, i] += 1.0
         elif icl_jpar[ipart] == 1:
-            counts[1, k, i] += 1.0
+            regular[k, i] += 1.0
         elif icl_jpar[ipart] == 2:
-            counts[2, k, i] += 1.0
+            stochastic[k, i] += 1.0
 
-    tot = counts.sum(axis=0)
-    dominant = np.full((nperp, ns), np.nan)
-    filled = tot > 0
-    dominant[filled] = np.argmax(counts[:, filled], axis=0).astype(float)
-
-    # Colormap: passing=light gray, regular trapped=green,
-    #           chaotic=orange, prompt loss=dark blue
-    cmap = ListedColormap(["#e8e8e8", "#4daf4a", "#ff7f00", "#984ea3"])
+    tot = prompt + regular + stochastic
+    cla = regular - prompt
+    cla[tot == 0] = np.nan
+    tot[tot == 0] = np.nan
+    cla = cla / tot
 
     bmin_global = np.min(bminmax[:, 1])
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    ax.imshow(
-        dominant, origin="lower", extent=[0, 1, 0, 1], aspect="auto",
-        cmap=cmap, vmin=-0.5, vmax=3.5, interpolation="nearest",
+    im = ax.imshow(
+        cla, origin="lower", extent=[0, 1, 0, 1], aspect="auto",
+        vmin=-1.0, vmax=1.0,
     )
-    ax.plot(bminmax[:, 0], bmin_global / bminmax[:, 1], "k", lw=1.5,
-            label=r"$B_\mathrm{min}(s)$ (deeply trapped)")
-    ax.plot(bminmax[:, 0], bmin_global / bminmax[:, 2], "k--", lw=1.0,
-            label=r"$B_\mathrm{max}(s)$ (trapped-passing)")
+    ax.plot(bminmax[:, 0], bmin_global / bminmax[:, 1], "k", lw=1.5)
+    ax.plot(bminmax[:, 0], bmin_global / bminmax[:, 2], "k--", lw=1.0)
 
     jpmin = bmin_global / np.max(bminmax[:, 2])
     ax.set_ylim(jpmin, 1)
@@ -382,15 +370,9 @@ def plot_volume_classification(data_dir, output_path, config_label=""):
     title_suffix = f" -- {config_label}" if config_label else ""
     ax.set_title(f"Volume classification{title_suffix}")
 
-    # Legend patches
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor="#e8e8e8", edgecolor="k", label="Passing"),
-        Patch(facecolor="#4daf4a", edgecolor="k", label="Regular trapped"),
-        Patch(facecolor="#ff7f00", edgecolor="k", label="Chaotic"),
-        Patch(facecolor="#984ea3", edgecolor="k", label="Prompt loss"),
-    ]
-    ax.legend(handles=legend_elements, loc="lower left", fontsize=7)
+    cb = plt.colorbar(im, ax=ax)
+    cb.set_ticks([-1, 0, 1])
+    cb.set_ticklabels(["Prompt losses", "Chaotic", "Regular"])
 
     fig.tight_layout()
     fig.savefig(str(output_path), dpi=150, bbox_inches="tight")
