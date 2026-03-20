@@ -1,6 +1,6 @@
 [![DOI](https://zenodo.org/badge/146476544.svg)](https://zenodo.org/badge/latestdoi/146476544)
 
-# SIMPLE
+# SIMPLE 
 **S**ymplectic **I**ntegration **M**ethods for **P**article **L**oss **E**stimation
 
 SIMPLE computes statistical losses of guiding-center orbits for particles of given mass, charge and
