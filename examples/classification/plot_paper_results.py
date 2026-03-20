@@ -194,10 +194,13 @@ def _classify_particles(fig8_dir):
 def _plot_fig8_panel(ax, fig8_dir, panel_label):
     """Plot a single Fig 8 panel with dense imshow background and overlay markers.
 
-    The background grid is colored by dominant particle category in each cell:
-    green=regular, blue=early loss, yellow=chaotic, white=empty.
-    Individual early-loss and chaotic particles are overlaid as markers.
+    Uses a coarse grid with Gaussian smoothing so the background fills the
+    entire (theta/pi, v_par/v) plane -- the "brazilian flag" look from the
+    paper.  Colors: green=regular, blue=early loss, yellow=chaotic.
+    Overlay markers: circles for early losses, crosses for chaotic.
     """
+    from scipy.ndimage import gaussian_filter
+
     result = _classify_particles(fig8_dir)
     if result is None:
         ax.set_title(f"{panel_label} -- no data")
@@ -205,12 +208,12 @@ def _plot_fig8_panel(ax, fig8_dir, panel_label):
 
     theta, pitch, category = result
 
-    n_grid = 100
-    theta_edges = np.linspace(0, 2, n_grid + 1)
-    pitch_edges = np.linspace(-1, 1, n_grid + 1)
+    n_theta, n_pitch = 50, 50
+    theta_edges = np.linspace(0, 2, n_theta + 1)
+    pitch_edges = np.linspace(-1, 1, n_pitch + 1)
 
     # Count particles of each type in each grid cell
-    counts = np.zeros((3, n_grid, n_grid), dtype=int)
+    counts = np.zeros((3, n_pitch, n_theta))
     for cat_id in range(3):
         mask = category == cat_id
         if np.any(mask):
@@ -218,26 +221,34 @@ def _plot_fig8_panel(ax, fig8_dir, panel_label):
                 pitch[mask], theta[mask],
                 bins=[pitch_edges, theta_edges],
             )
-            counts[cat_id] = h.astype(int)
+            counts[cat_id] = h
 
-    total = counts.sum(axis=0)
+    # Smooth counts to fill gaps and produce continuous colored regions
+    sigma = 1.5
+    smoothed = np.array([gaussian_filter(counts[i], sigma) for i in range(3)])
+    total_smooth = smoothed.sum(axis=0)
 
-    # Build RGBA image: green=regular, blue=early loss, yellow=chaotic
-    colors = {
-        0: np.array([0.2, 0.7, 0.2]),   # green (regular)
-        1: np.array([0.2, 0.4, 0.9]),   # blue (early loss)
-        2: np.array([0.9, 0.8, 0.1]),   # yellow (chaotic)
-    }
-    rgba = np.ones((n_grid, n_grid, 4))  # white background (alpha=1)
-    occupied = total > 0
-    dominant = np.argmax(counts, axis=0)
+    # Build RGB image from smoothed fractional composition
+    color_map = np.array([
+        [0.2, 0.7, 0.2],   # green (regular)
+        [0.2, 0.4, 0.9],   # blue (early loss)
+        [0.9, 0.8, 0.1],   # yellow (chaotic)
+    ])
+    rgb = np.ones((n_pitch, n_theta, 3))
+    filled = total_smooth > 1e-10
     for cat_id in range(3):
-        mask = occupied & (dominant == cat_id)
-        rgba[mask, :3] = colors[cat_id]
+        frac = np.where(filled, smoothed[cat_id] / np.where(filled, total_smooth, 1.0), 0.0)
+        for ch in range(3):
+            rgb[:, :, ch] = np.where(
+                filled,
+                rgb[:, :, ch] - frac * (1.0 - color_map[cat_id, ch]),
+                rgb[:, :, ch],
+            )
+    rgb = np.clip(rgb, 0, 1)
 
     ax.imshow(
-        rgba, origin="lower", extent=[0, 2, -1, 1], aspect="auto",
-        interpolation="nearest",
+        rgb, origin="lower", extent=[0, 2, -1, 1], aspect="auto",
+        interpolation="bilinear",
     )
 
     # Overlay markers for early losses (circles) and chaotic (crosses)
@@ -245,7 +256,7 @@ def _plot_fig8_panel(ax, fig8_dir, panel_label):
     if np.any(early):
         ax.scatter(
             theta[early], pitch[early],
-            c="tab:blue", s=8, marker="o", alpha=0.7, edgecolors="none",
+            c="blue", s=2, marker="o", alpha=0.3, edgecolors="none",
             label=r"Early loss ($t < t_\mathrm{cut}$)",
         )
 
@@ -253,7 +264,7 @@ def _plot_fig8_panel(ax, fig8_dir, panel_label):
     if np.any(chaotic_mask):
         ax.scatter(
             theta[chaotic_mask], pitch[chaotic_mask],
-            c="tab:red", s=12, marker="x", alpha=0.7, linewidths=0.8,
+            c="red", s=4, marker="x", alpha=0.4, linewidths=0.5,
             label="Chaotic",
         )
 
