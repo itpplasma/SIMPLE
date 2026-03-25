@@ -21,7 +21,6 @@ module field_splined
     !>   - sqrt_s_scaling_t (default): grid in r = sqrt(s), better axis resolution
     !>
     !> Limitations:
-    !>   - Source field must evaluate in Cartesian coordinates
     !>   - sqgBctr output not supported (error stop if requested)
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
@@ -30,12 +29,14 @@ module field_splined
                            destroy_batch_splines_3d
     use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t
+    use field_gvec, only: gvec_field_t
     use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
                                   chartmap_coordinate_system_t, RHO_TOR, RHO_POL, &
                                   PSI_TOR_NORM, PSI_POL_NORM
     use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, &
                                   identity_scaling_t
     use cartesian_coordinates, only: cartesian_coordinate_system_t
+    use gvec_reference_coordinates, only: gvec_coordinate_system_t
 
     implicit none
 
@@ -447,8 +448,7 @@ contains
                 ! Different reference coordinates: evaluate VMEC field at the same
                 ! physical point and transform covariant components into ref_coords.
                 call ref_coords%evaluate_cart(x_ref, x_cart)
-                call find_vmec_coords_for_cart_point(source%coords, ref_coords, &
-                                                     x_ref, x_cart, x_src)
+                call find_source_coords_for_cart_point(source%coords, x_ref, x_cart, x_src)
 
                 call source%evaluate(x_src, Acov, hcov, Bmod)
 
@@ -461,6 +461,17 @@ contains
             end select
             needs_scaling = .true.
             return
+        type is (gvec_field_t)
+            select type (ref_coords)
+            type is (gvec_coordinate_system_t)
+                call source%evaluate(x_ref, Acov, hcov, Bmod)
+                x_cart = 0d0
+                e_cov = 0d0
+                needs_scaling = .true.
+                return
+            class default
+                continue
+            end select
         class default
             continue
         end select
@@ -474,49 +485,47 @@ contains
             hcov = matmul(h_cart, e_cov)
             needs_scaling = .true.
         class default
-            error stop &
-                "evaluate_at_ref_coords: unsupported source coordinate system"
+            call ref_coords%evaluate_cart(x_ref, x_cart)
+            call find_source_coords_for_cart_point(source%coords, x_ref, x_cart, x_src)
+
+            call source%evaluate(x_src, Acov, hcov, Bmod)
+
+            call source%coords%cov_to_cart(x_src, Acov, A_cart)
+            call source%coords%cov_to_cart(x_src, hcov, h_cart)
+
+            call ref_coords%covariant_basis(x_ref, e_cov)
+            Acov = matmul(A_cart, e_cov)
+            hcov = matmul(h_cart, e_cov)
+            needs_scaling = .true.
         end select
     end subroutine evaluate_at_ref_coords
 
-    subroutine find_vmec_coords_for_cart_point(vmec_coords, ref_coords, u_ref, &
-                                               x_target, u_vmec)
+    subroutine find_source_coords_for_cart_point(source_coords, u_ref, x_target, u_source)
         use util, only: twopi
-        !> Find VMEC coordinates u_vmec such that
-        !> vmec_coords%evaluate_cart(u_vmec) == x_target.
-        !> Prefer the native libneo inversion (from_cyl) to avoid fragile
-        !> finite-difference Newton iterations on periodic variables.
-        class(coordinate_system_t), intent(in) :: vmec_coords
-        class(coordinate_system_t), intent(in) :: ref_coords
+        !> Find source coordinates u_source such that
+        !> source_coords%evaluate_cart(u_source) == x_target.
         real(dp), intent(in) :: u_ref(3)
         real(dp), intent(in) :: x_target(3)
-        real(dp), intent(out) :: u_vmec(3)
+        class(coordinate_system_t), intent(in) :: source_coords
+        real(dp), intent(out) :: u_source(3)
 
         real(dp) :: xcyl(3)
         integer :: ierr
-
-        associate (dummy => ref_coords)
-        end associate
 
         xcyl(1) = sqrt(x_target(1)**2 + x_target(2)**2)
         xcyl(2) = modulo(atan2(x_target(2), x_target(1)), twopi)
         xcyl(3) = x_target(3)
 
-        select type (vcs => vmec_coords)
-        type is (vmec_coordinate_system_t)
-            call vcs%from_cyl(xcyl, u_vmec, ierr)
-            if (ierr /= 0) then
-                print *, "find_vmec_coords_for_cart_point: vmec from_cyl failed"
-                print *, "  ierr     = ", ierr
-                print *, "  u_ref    = ", u_ref
-                print *, "  xcyl     = ", xcyl
-                print *, "  x_target = ", x_target
-                error stop
-            end if
-        class default
-            error stop "find_vmec_coords_for_cart_point: expected VMEC coordinates"
-        end select
-    end subroutine find_vmec_coords_for_cart_point
+        call source_coords%from_cyl(xcyl, u_source, ierr)
+        if (ierr /= 0) then
+            print *, "find_source_coords_for_cart_point: from_cyl failed"
+            print *, "  ierr     = ", ierr
+            print *, "  u_ref    = ", u_ref
+            print *, "  xcyl     = ", xcyl
+            print *, "  x_target = ", x_target
+            error stop
+        end if
+    end subroutine find_source_coords_for_cart_point
 
     subroutine splined_field_cleanup(self)
         type(splined_field_t), intent(inout) :: self

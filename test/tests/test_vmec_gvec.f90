@@ -2,264 +2,110 @@ program test_vmec_gvec
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_vmec, only: vmec_field_t
     use field_gvec, only: gvec_field_t, create_gvec_field
+    use vmec_field_eval, only: vmec_field_evaluate_with_field
     use new_vmec_stuff_mod, only: netcdffile, multharm
     use spline_vmec_sub, only: spline_vmec_data
     use params, only: pi
-
 
     implicit none
 
     class(vmec_field_t), allocatable :: vmec_field
     class(gvec_field_t), allocatable :: gvec_field
+    real(dp) :: x(3)
+    real(dp) :: Acov_vmec(3), Acov_gvec(3)
+    real(dp) :: hcov_vmec(3), hcov_gvec(3)
+    real(dp) :: Bmod_vmec, Bmod_gvec
+    real(dp) :: max_rel_b
+    real(dp) :: max_rel_a
+    real(dp) :: max_rel_h
+    real(dp) :: rel_err
+    real(dp) :: worst_x_a(3)
+    real(dp) :: worst_x_h(3)
+    real(dp) :: worst_acov_vmec(3), worst_acov_gvec(3)
+    real(dp) :: worst_hcov_vmec(3), worst_hcov_gvec(3)
+    real(dp) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota
+    real(dp) :: sqg, alam, dl_ds, dl_dt, dl_dp
+    real(dp) :: Bctr_vartheta, Bctr_varphi
+    real(dp) :: Bcov_s, Bcov_vartheta, Bcov_varphi
+    ! The GVEC export is an interpolated interchange product, so this comparison
+    ! guards convention and regression errors rather than exact spline equality.
+    real(dp), parameter :: bmod_tol = 2.5e-2_dp
+    real(dp), parameter :: acov_tol = 6.0e-2_dp
+    real(dp), parameter :: hcov_tol = 3.0e-2_dp
+    integer :: worst_a_component
+    integer :: worst_h_component
+    real(dp), parameter :: s_values(4) = [0.05_dp, 0.2_dp, 0.45_dp, 0.75_dp]
+    real(dp), parameter :: phi_period = pi
+    integer :: i, j, k
 
-    interface
-        subroutine export_field_2d_data(vmec_field, gvec_field)
-            use field_vmec, only: vmec_field_t
-            use field_gvec, only: gvec_field_t
-            class(vmec_field_t), intent(in) :: vmec_field
-            class(gvec_field_t), intent(in) :: gvec_field
-        end subroutine export_field_2d_data
-
-        subroutine export_field_1d_data(vmec_field, gvec_field)
-            use field_vmec, only: vmec_field_t
-            use field_gvec, only: gvec_field_t
-            class(vmec_field_t), intent(in) :: vmec_field
-            class(gvec_field_t), intent(in) :: gvec_field
-        end subroutine export_field_1d_data
-    end interface
-    character(len=256) :: vmec_file, gvec_temp_file
-    logical :: file_exists
-
-    ! Variables for GVEC conversion
-    character(len=256) :: param_file
-    character(len=4096) :: param_strings(20)
-    integer :: exit_status
-    integer :: unit_param
-
-    ! Test parameters
-    real(dp) :: x_gvec(3), x_vmec(3)
-    real(dp) :: Acov_vmec(3), hcov_vmec(3), Bmod_vmec
-    real(dp) :: Acov_gvec(3), hcov_gvec(3), Bmod_gvec
-    real(dp) :: s_test, theta_test, phi_test
-    real(dp) :: rel_tol, abs_tol
-    integer :: ns, nt, np, i, j, k, icomp
-    real(dp) :: rel_error, abs_error, rel_err_B
-    real(dp) :: max_rel_error_Bmod, max_abs_error_Bmod
-    real(dp) :: max_rel_error_Acov(3), max_abs_error_Acov(3)
-    real(dp) :: max_rel_error_hcov(3), max_abs_error_hcov(3)
-    logical :: test_passed
-
-    ! VMEC wout file downloaded by CMake (in build/test/tests directory)
-    vmec_file = 'wout.nc'
-    gvec_temp_file = 'gvec_from_vmec_wout.dat'  ! GVEC state file created from VMEC
-
-    ! Initialize VMEC field using SIMPLE's method
-    netcdffile = vmec_file
+    netcdffile = 'wout.nc'
     multharm = 7
     call spline_vmec_data
-    allocate(vmec_field_t :: vmec_field)
+    allocate (vmec_field_t :: vmec_field)
+    call create_gvec_field('wout.gvec_export.nc', gvec_field)
 
-    ! Check if CMake successfully converted the file using Python GVEC API
-    inquire(file=gvec_temp_file, exist=file_exists)
-    if (.not. file_exists) then
+    max_rel_b = 0.0_dp
+    max_rel_a = 0.0_dp
+    max_rel_h = 0.0_dp
+    worst_a_component = 0
+    worst_h_component = 0
 
-        ! Create a minimal GVEC parameter file for VMEC reading
-        param_file = 'gvec_vmec_params.ini'
-        open(newunit=unit_param, file=param_file, status='replace')
-        write(unit_param, '(A)') '! Minimal GVEC parameter file for VMEC reading'
-        write(unit_param, '(A)') 'whichInitEquilibrium = 1  ! Read from VMEC'
-        write(unit_param, '(A)') 'VMECwoutfile = ' // trim(vmec_file)
-        write(unit_param, '(A)') 'VMECwoutfile_format = 0   ! NetCDF format'
-        write(unit_param, '(A)') ''
-        write(unit_param, '(A)') '! Grid settings optimized for axis treatment'
-        write(unit_param, '(A)') 'sgrid_nelems = 21'
-        write(unit_param, '(A)') 'sgrid_grid_type = 4'
-        write(unit_param, '(A)') 'sgrid_rmin = 1.0e-6'
-        write(unit_param, '(A)') 'sgrid_rmax = 0.99'
-        write(unit_param, '(A)') ''
-        write(unit_param, '(A)') '! Basis settings with higher accuracy'
-        write(unit_param, '(A)') 'X1X2_deg = 5'
-        write(unit_param, '(A)') 'LA_deg = 5'
-        write(unit_param, '(A)') ''
-        write(unit_param, '(A)') '! Output control'
-        write(unit_param, '(A)') 'ProjectName = test_vmec_gvec'
-        write(unit_param, '(A)') 'outputIter = 0  ! Output initial state only'
-        write(unit_param, '(A)') 'maxIter = 0     ! No iterations'
-        close(unit_param)
+    do i = 1, 4
+        x(1) = s_values(i)
+        do j = 1, 4
+            x(2) = 2.0_dp * pi * real(j - 1, dp) / 4.0_dp
+            do k = 1, 3
+                x(3) = phi_period * real(k - 1, dp) / 3.0_dp
 
-        call execute_command_line('../../_deps/gvec-build/bin/gvec ' // trim(param_file), &
-                                  exitstat=exit_status)
-        if (exit_status /= 0) then
-            print *, 'ERROR: GVEC command failed with exit status ', exit_status
-            error stop 1
-        end if
+                call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
+                call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
 
-        ! The output file will be named based on ProjectName
-        gvec_temp_file = 'test_vmec_gvec_State_0000_00000000.dat'
+                rel_err = abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
+                max_rel_b = max(max_rel_b, rel_err)
 
-        ! Check if the state file was created
-        inquire(file=gvec_temp_file, exist=file_exists)
-        if (.not. file_exists) then
-            print *, 'ERROR: GVEC state file not created'
-            error stop 1
-        end if
-    end if
-    call create_gvec_field(gvec_temp_file, gvec_field)
-
-    ! Compare field evaluations
-    ! Set tolerances based on actual field comparison results
-    ! The excellent agreement after theta* transformations allows tight tolerances
-    rel_tol = 2.5e-3_dp  ! 0.25% relative tolerance for |B| (actual max ~0.225%)
-    abs_tol = 1.5e2_dp   ! 150 Gauss absolute tolerance (actual max ~136 Gauss)
-
-    ! Grid for comparison including small s values to test axis regularization
-    ns = 5   ! Number of flux surfaces
-    nt = 4   ! Number of theta points
-    np = 2   ! Number of phi points
-
-    max_rel_error_Bmod = 0.0_dp
-    max_abs_error_Bmod = 0.0_dp
-    max_rel_error_Acov = 0.0_dp
-    max_abs_error_Acov = 0.0_dp
-    max_rel_error_hcov = 0.0_dp
-    max_abs_error_hcov = 0.0_dp
-    test_passed = .true.
-
-    do i = 1, ns
-        ! Test range including small s values: 0.01, 0.05, 0.1, 0.3, 0.6
-        if (i == 1) then
-            s_test = 0.01_dp  ! Very small s to test axis regularization
-        else if (i == 2) then
-            s_test = 0.05_dp  ! Regularization boundary
-        else
-            s_test = 0.1_dp + 0.25_dp * real(i-3, dp) / real(ns-3, dp)  ! s from 0.1 to 0.6
-        end if
-
-        do j = 1, nt
-            theta_test = 2.0_dp * pi * real(j-1, dp) / real(nt, dp)  ! theta from 0 to 2*pi
-
-            do k = 1, np
-                phi_test = pi * real(k-1, dp) / real(np, dp)  ! phi from 0 to pi
-
-                ! Set coordinates (r = sqrt(s), theta, phi)
-                x_vmec(1) = s_test
-                x_vmec(2) = theta_test
-                x_vmec(3) = phi_test
-
-                x_gvec(1) = sqrt(s_test)
-                x_gvec(2) = theta_test
-                x_gvec(3) = phi_test
-
-                ! Evaluate VMEC field
-                call vmec_field%evaluate(x_vmec, Acov_vmec, hcov_vmec, Bmod_vmec)
-
-                ! Evaluate GVEC field
-                call gvec_field%evaluate(x_gvec, Acov_gvec, hcov_gvec, Bmod_gvec)
-
-                ! Calculate errors for Bmod
-                abs_error = abs(Bmod_gvec - Bmod_vmec)
-                if (abs(Bmod_vmec) > abs_tol) then
-                    rel_error = abs_error / abs(Bmod_vmec)
-                else
-                    rel_error = 0.0_dp
+                rel_err = maxval(abs(Acov_gvec - Acov_vmec) / max(abs(Acov_vmec), 1.0_dp))
+                if (rel_err > max_rel_a) then
+                    max_rel_a = rel_err
+                    worst_x_a = x
+                    worst_acov_vmec = Acov_vmec
+                    worst_acov_gvec = Acov_gvec
+                    worst_a_component = maxloc(abs(Acov_gvec - Acov_vmec) / &
+                                               max(abs(Acov_vmec), 1.0_dp), 1)
                 end if
 
-                max_abs_error_Bmod = max(max_abs_error_Bmod, abs_error)
-                max_rel_error_Bmod = max(max_rel_error_Bmod, rel_error)
-
-                ! Calculate errors for Acov components
-                do icomp = 1, 3
-                    abs_error = abs(Acov_gvec(icomp) - Acov_vmec(icomp))
-                    if (abs(Acov_vmec(icomp)) > 1.0e-10_dp) then
-                        rel_error = abs_error / abs(Acov_vmec(icomp))
-                    else
-                        rel_error = 0.0_dp
-                    end if
-                    max_abs_error_Acov(icomp) = max(max_abs_error_Acov(icomp), abs_error)
-                    max_rel_error_Acov(icomp) = max(max_rel_error_Acov(icomp), rel_error)
-                end do
-
-                ! Calculate errors for hcov components
-                do icomp = 1, 3
-                    abs_error = abs(hcov_gvec(icomp) - hcov_vmec(icomp))
-                    if (abs(hcov_vmec(icomp)) > 1.0e-10_dp) then
-                        rel_error = abs_error / abs(hcov_vmec(icomp))
-                    else
-                        rel_error = 0.0_dp
-                    end if
-                    max_abs_error_hcov(icomp) = max(max_abs_error_hcov(icomp), abs_error)
-                    max_rel_error_hcov(icomp) = max(max_rel_error_hcov(icomp), rel_error)
-                end do
-
-
-                ! Calculate relative error for |B|
-                rel_err_B = abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
-
-                ! Check if errors exceed tolerance
-                if (max_rel_error_Bmod > rel_tol .and. max_abs_error_Bmod > abs_tol) then
-                    test_passed = .false.
+                rel_err = maxval(abs(hcov_gvec - hcov_vmec) / max(abs(hcov_vmec), 1.0_dp))
+                if (rel_err > max_rel_h) then
+                    max_rel_h = rel_err
+                    worst_x_h = x
+                    worst_hcov_vmec = hcov_vmec
+                    worst_hcov_gvec = hcov_gvec
+                    worst_h_component = maxloc(abs(hcov_gvec - hcov_vmec) / &
+                                               max(abs(hcov_vmec), 1.0_dp), 1)
                 end if
             end do
         end do
     end do
 
-    ! Evaluate fields at a representative point for typical values
-    x_vmec(1) = 0.5_dp   ! s = 0.5
-    x_vmec(2) = pi/4.0_dp
-    x_vmec(3) = 0.0_dp
+    print '(A,ES12.4)', 'max relative |B| error   = ', max_rel_b
+    print '(A,ES12.4)', 'max relative Acov error  = ', max_rel_a
+    print '(A,ES12.4)', 'max relative hcov error  = ', max_rel_h
+    print '(A,3ES12.4)', 'worst Acov x           = ', worst_x_a
+    print '(A,I0)', 'worst Acov component    = ', worst_a_component
+    print '(A,3ES12.4)', 'worst Acov vmec        = ', worst_acov_vmec
+    print '(A,3ES12.4)', 'worst Acov gvec        = ', worst_acov_gvec
+    print '(A,3ES12.4)', 'worst hcov x           = ', worst_x_h
+    print '(A,I0)', 'worst hcov component    = ', worst_h_component
+    print '(A,3ES12.4)', 'worst hcov vmec        = ', worst_hcov_vmec
+    print '(A,3ES12.4)', 'worst hcov gvec        = ', worst_hcov_gvec
+    call vmec_field_evaluate_with_field(gvec_field, worst_x_a(1), worst_x_a(2), worst_x_a(3), &
+                                        A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, sqg, &
+                                        alam, dl_ds, dl_dt, dl_dp, Bctr_vartheta, &
+                                        Bctr_varphi, Bcov_s, Bcov_vartheta, Bcov_varphi)
+    print '(A,ES12.4)', 'worst-point dl_ds      = ', dl_ds
+    print '(A,ES12.4)', 'worst-point A_theta    = ', A_theta
+    print '(A,ES12.4)', 'worst-point sqg        = ', sqg
 
-    x_gvec(1) = sqrt(0.5_dp)
-    x_gvec(2) = pi/4.0_dp
-    x_gvec(3) = 0.0_dp
-
-    call vmec_field%evaluate(x_vmec, Acov_vmec, hcov_vmec, Bmod_vmec)
-    call gvec_field%evaluate(x_gvec, Acov_gvec, hcov_gvec, Bmod_gvec)
-
-    ! Print comparison results
-    print *, ''
-    print *, 'Field comparison at (s,θ,φ) = (0.5, π/4, 0):'
-    print *, '================================================================'
-    print *, '              VMEC              GVEC              Rel. Error'
-    print *, '----------------------------------------------------------------'
-    print '(A,ES16.8,ES16.8,ES16.8)', '  |B|     ', Bmod_vmec, Bmod_gvec, &
-                                         abs(Bmod_gvec - Bmod_vmec) / abs(Bmod_vmec)
-    print *, ''
-    print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(1) ', Acov_vmec(1), Acov_gvec(1), &
-                                         merge(abs(Acov_gvec(1) - Acov_vmec(1)) / abs(Acov_vmec(1)), &
-                                               0.0_dp, abs(Acov_vmec(1)) > 1.0e-10_dp)
-    print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(2) ', Acov_vmec(2), Acov_gvec(2), &
-                                         merge(abs(Acov_gvec(2) - Acov_vmec(2)) / abs(Acov_vmec(2)), &
-                                               0.0_dp, abs(Acov_vmec(2)) > 1.0e-10_dp)
-    print '(A,ES16.8,ES16.8,ES16.8)', '  Acov(3) ', Acov_vmec(3), Acov_gvec(3), &
-                                         merge(abs(Acov_gvec(3) - Acov_vmec(3)) / abs(Acov_vmec(3)), &
-                                               0.0_dp, abs(Acov_vmec(3)) > 1.0e-10_dp)
-    print *, ''
-    print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(1) ', hcov_vmec(1), hcov_gvec(1), &
-                                         merge(abs(hcov_gvec(1) - hcov_vmec(1)) / abs(hcov_vmec(1)), &
-                                               0.0_dp, abs(hcov_vmec(1)) > 1.0e-10_dp)
-    print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(2) ', hcov_vmec(2), hcov_gvec(2), &
-                                         merge(abs(hcov_gvec(2) - hcov_vmec(2)) / abs(hcov_vmec(2)), &
-                                               0.0_dp, abs(hcov_vmec(2)) > 1.0e-10_dp)
-    print '(A,ES16.8,ES16.8,ES16.8)', '  hcov(3) ', hcov_vmec(3), hcov_gvec(3), &
-                                         merge(abs(hcov_gvec(3) - hcov_vmec(3)) / abs(hcov_vmec(3)), &
-                                               0.0_dp, abs(hcov_vmec(3)) > 1.0e-10_dp)
-    print *, '================================================================'
-    print *, ''
-    print *, 'Maximum errors over test grid:'
-    print *, '----------------------------------------------------------------'
-    print '(A,ES12.5,A,ES12.5,A)', '  |B|     max error: relative = ', max_rel_error_Bmod, &
-                                ', absolute = ', max_abs_error_Bmod, ' Gauss'
-    print *, ''
-
-    ! Final test result
-    print *, ''
-    if (test_passed) then
-        print *, 'TEST PASSED'
-    else
-        print *, 'TEST FAILED'
-        print '(A,ES12.5)', '  Tolerance (relative): ', rel_tol
-        print '(A,ES12.5,A)', '  Tolerance (absolute): ', abs_tol, ' Gauss'
-        error stop 'GVEC field comparison tolerances not met'
-    end if
-
+    if (max_rel_b > bmod_tol) error stop 'test_vmec_gvec: |B| mismatch'
+    if (max_rel_a > acov_tol) error stop 'test_vmec_gvec: Acov mismatch'
+    if (max_rel_h > hcov_tol) error stop 'test_vmec_gvec: hcov mismatch'
 end program test_vmec_gvec

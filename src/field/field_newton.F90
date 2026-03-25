@@ -67,36 +67,14 @@ contains
   !> Get stream function Lambda and its derivative for a given field
   !> This abstracts the field-specific stream function evaluation
   subroutine get_stream_function(mag_field, s, theta, varphi, alam, dl_dt)
-    use field, only: vmec_field_t
-#ifdef GVEC_AVAILABLE
-    use field, only: gvec_field_t
-    use vmec_field_adapter, only: vmec_lambda_interpolate_with_field
-#else
     use vmec_field_eval, only: vmec_lambda_interpolate_with_field
-#endif
     
     class(magnetic_field_t), intent(in) :: mag_field
     real(dp), intent(in) :: s, theta, varphi
     real(dp), intent(out) :: alam   ! Stream function Lambda
     real(dp), intent(out) :: dl_dt  ! dLambda/dtheta
     
-    ! Dispatch based on field type
-    select type (mag_field)
-    type is (vmec_field_t)
-      ! For VMEC, use the existing lambda interpolation
-      call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
-    
-#ifdef GVEC_AVAILABLE
-    type is (gvec_field_t)
-      ! For GVEC, Lambda is available as LA
-      call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
-#endif
-    
-    class default
-      ! For other fields, stream function may not be defined
-      alam = 0.0_dp
-      dl_dt = 0.0_dp
-    end select
+    call vmec_lambda_interpolate_with_field(mag_field, s, theta, varphi, alam, dl_dt)
     
   end subroutine get_stream_function
   

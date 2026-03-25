@@ -215,33 +215,6 @@ add_custom_target(ncsx_test_data DEPENDS ${CHARTMAP_NCSX_FILE} ${COILS_SIMPLE_FI
 # Symlinks for NCSX test data
 file(CREATE_LINK "${WOUT_NCSX_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc" SYMBOLIC)
 
-# Convert VMEC to GVEC format for testing field_vmec vs field_gvec
-# This requires GVEC Python API or command-line tools
-if(ENABLE_GVEC)
-    find_program(PYTHON_EXECUTABLE python3)
-    if(PYTHON_EXECUTABLE AND SIMPLE_ENABLE_PYTHON_TOOLS)
-        # Try to convert VMEC to GVEC using Python
-        execute_process(
-            COMMAND ${PYTHON_EXECUTABLE} -c "
-try:
-    import gvec
-    print('GVEC Python module found, converting VMEC to GVEC format...')
-    gvec.read_vmec('${CMAKE_CURRENT_BINARY_DIR}/wout.nc')
-    gvec.save('${CMAKE_CURRENT_BINARY_DIR}/wout_gvec.dat')
-    print('Successfully converted VMEC to GVEC format: wout_gvec.dat')
-except ImportError:
-    print('GVEC Python module not found, skipping VMEC to GVEC conversion')
-except Exception as e:
-    print(f'Failed to convert VMEC to GVEC: {e}')
-"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            RESULT_VARIABLE GVEC_CONVERT_RESULT
-        )
-    else()
-        message(STATUS "Python not found, skipping VMEC to GVEC conversion")
-    endif()
-endif()
-
 ##################################################
 # INTERNAL UNIT TEST STUFF
 ##################################################
@@ -326,14 +299,37 @@ add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
 # GVEC-related tests (only if GVEC support is enabled)
 if(ENABLE_GVEC)
-    file(CREATE_LINK "${TEST_DATA_DIR}/GVEC_elliptok_State_final.dat"
-        "${CMAKE_CURRENT_BINARY_DIR}/GVEC_elliptok_State_final.dat" SYMBOLIC)
+    set(SIMPLE_GVEC_EXPORT_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.gvec_export.nc")
+    set(SIMPLE_VENV_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+    if(EXISTS "${SIMPLE_VENV_PYTHON}")
+        set(SIMPLE_GVEC_PYTHON "${SIMPLE_VENV_PYTHON}")
+    else()
+        find_program(SIMPLE_GVEC_PYTHON python3 REQUIRED)
+    endif()
+
+    add_test(NAME generate_gvec_export
+        COMMAND ${SIMPLE_GVEC_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/generate_gvec_export.py
+            --gvec-bin $<TARGET_FILE:gvec>
+            --exporter ${CMAKE_SOURCE_DIR}/python/pysimple/gvec_export.py
+            --wout ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
+            --output ${SIMPLE_GVEC_EXPORT_FILE}
+            --ns 63
+            --ntheta 65
+            --nvarphi 65
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(generate_gvec_export PROPERTIES
+        FIXTURES_SETUP gvec_export
+        LABELS "integration;python"
+        TIMEOUT 600
+    )
 
     add_executable (test_gvec.x test_gvec.f90)
     target_link_libraries(test_gvec.x simple)
     add_test(NAME test_gvec COMMAND test_gvec.x)
     set_tests_properties(test_gvec PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_REQUIRED gvec_export
     )
 
     add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
@@ -342,11 +338,16 @@ if(ENABLE_GVEC)
     add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
     set_tests_properties(test_vmec_gvec PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_REQUIRED gvec_export
     )
 
     add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
     target_link_libraries(test_canonical_gvec.x simple)
     add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
+    set_tests_properties(test_canonical_gvec PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_REQUIRED gvec_export
+    )
 
     add_executable (test_simple_vmec_gvec.x test_simple_vmec_gvec.f90)
     target_link_libraries(test_simple_vmec_gvec.x simple)
@@ -354,7 +355,7 @@ if(ENABLE_GVEC)
     set_tests_properties(test_simple_vmec_gvec PROPERTIES
         LABELS "slow;integration"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        WILL_FAIL TRUE  # Expected to fail
+        FIXTURES_REQUIRED gvec_export
     )
 
     add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
@@ -362,6 +363,7 @@ if(ENABLE_GVEC)
     add_test(NAME test_adapter_consistency COMMAND test_adapter_consistency.x)
     set_tests_properties(test_adapter_consistency PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_REQUIRED gvec_export
     )
 
     add_executable (test_vmec_gvec_adapter.x test_vmec_gvec_adapter.f90)
@@ -370,6 +372,7 @@ if(ENABLE_GVEC)
     set_tests_properties(test_vmec_gvec_adapter PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "adapter"
+        FIXTURES_REQUIRED gvec_export
     )
 endif()
 

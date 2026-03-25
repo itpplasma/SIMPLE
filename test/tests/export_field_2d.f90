@@ -49,7 +49,7 @@ program export_field_2d
     ! File names
     vmec_file = 'wout.nc'
 #ifdef GVEC_AVAILABLE
-    gvec_file = 'test_vmec_gvec_State_0000_00000000.dat'
+    gvec_file = 'wout.gvec_export.nc'
 #endif
     
     print *, '================================================================'

@@ -10,6 +10,7 @@ module field
     use field_splined, only: splined_field_t, create_splined_field
 #ifdef GVEC_AVAILABLE
     use field_gvec, only: gvec_field_t, create_gvec_field
+    use gvec_export_data, only: gvec_export_is_file
 #endif
 
     implicit none
@@ -81,6 +82,13 @@ contains
         stripped_name = strip_directory(filename)
 
         if (endswith(filename, '.nc')) then
+#ifdef GVEC_AVAILABLE
+            if (gvec_export_is_file(filename)) then
+                call create_gvec_field(filename, gvec_temp)
+                call move_alloc(gvec_temp, field)
+                return
+            end if
+#endif
             call detect_refcoords_file_type(filename, file_type, ierr, message)
             if (ierr /= 0) then
                 print *, 'field_from_file: NetCDF file detection error for ', &
@@ -116,14 +124,6 @@ contains
             allocate (splined_coils)
             call create_splined_field(raw_coils, ref_coords, splined_coils)
             call move_alloc(splined_coils, field)
-        else if (endswith(filename, '.dat')) then
-#ifdef GVEC_AVAILABLE
-            call create_gvec_field(filename, gvec_temp)
-            call move_alloc(gvec_temp, field)
-#else
-            print *, 'ERROR: GVEC support not compiled. Rebuild with -DENABLE_GVEC=ON'
-            error stop
-#endif
         else
             print *, 'field_from_file: Unknown file name format ', filename
             error stop

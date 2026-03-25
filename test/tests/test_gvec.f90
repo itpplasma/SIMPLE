@@ -1,63 +1,26 @@
 program test_gvec
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use field_gvec, only: gvec_field_t, create_gvec_field
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_gvec, only: gvec_field_t, create_gvec_field
+    implicit none
 
-implicit none
+    class(gvec_field_t), allocatable :: field
+    real(dp) :: x(3)
+    real(dp) :: Acov(3)
+    real(dp) :: hcov(3)
+    real(dp) :: Bmod
+    real(dp) :: sqgBctr(3)
 
-class(gvec_field_t), allocatable :: gvec_field
-character(len=256) :: test_file
+    call create_gvec_field('wout.gvec_export.nc', field)
 
-test_file = 'GVEC_elliptok_State_final.dat'
+    x = [0.35_dp, 1.1_dp, 0.2_dp]
+    call field%evaluate(x, Acov, hcov, Bmod, sqgBctr)
 
-print *, 'Testing gvec_field_t creation...'
+    if (.not. all(abs(Acov) > 0.0_dp)) error stop 'test_gvec: Acov must be finite'
+    if (.not. all(abs(hcov) > 0.0_dp)) error stop 'test_gvec: hcov must be finite'
+    if (Bmod <= 0.0_dp) error stop 'test_gvec: Bmod must be positive'
+    if (abs(sqgBctr(2)) <= 0.0_dp) error stop 'test_gvec: sqgBctr(2) must be nonzero'
+    if (abs(sqgBctr(3)) <= 0.0_dp) error stop 'test_gvec: sqgBctr(3) must be nonzero'
 
-! Test: Create gvec_field_t using constructor
-print *, 'Creating gvec_field_t with create_gvec_field...'
-call create_gvec_field(test_file, gvec_field)
-
-if (allocated(gvec_field)) then
-    print *, 'SUCCESS: gvec_field_t created successfully'
-    print *, 'Filename stored: ', trim(gvec_field%filename)
-else
-    print *, 'FAILED: gvec_field_t creation failed'
-    error stop 1
-end if
-
-! Test the evaluate method
-print *, ''
-print *, 'Testing gvec_field_t evaluate method...'
-
-block
-    real(dp) :: x(3), Acov(3), hcov(3), Bmod
-    real(dp) :: s_test, theta_test, phi_test
-    
-    ! Test at a few different flux surfaces
-    s_test = 0.5_dp        ! Half-radius
-    theta_test = 0.0_dp    ! Poloidal angle
-    phi_test = 0.0_dp      ! Toroidal angle
-    
-    x(1) = sqrt(s_test)    ! r = sqrt(s)
-    x(2) = theta_test      ! theta
-    x(3) = phi_test        ! phi
-    
-    call gvec_field%evaluate(x, Acov, hcov, Bmod)
-    
-    print *, 'Field evaluation at s=0.5:'
-    print *, '  Acov = ', Acov
-    print *, '  hcov = ', hcov  
-    print *, '  Bmod = ', Bmod
-    
-    if (Bmod > 0.0_dp) then
-        print *, 'SUCCESS: evaluate() method working'
-    else
-        print *, 'ERROR: evaluate() returned invalid Bmod'
-        error stop 1
-    end if
-end block
-
-print *, ''
-print *, 'All tests passed!'
-print *, 'gvec_field_t constructor and evaluate() working correctly.'
-
+    print *, 'test_gvec passed'
 end program test_gvec

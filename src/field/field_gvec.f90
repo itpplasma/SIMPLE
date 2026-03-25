@@ -1,216 +1,106 @@
 module field_gvec
-    !> GVEC magnetic field evaluation from .dat files.
-
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_base, only: magnetic_field_t
-    use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system
-    use MODgvec_cubic_spline, only: t_cubspl
-    use MODgvec_rProfile_bspl, only: t_rProfile_bspl
-    use MODgvec_ReadState, only: ReadState, eval_phi_r, eval_phiPrime_r, &
-        eval_iota_r, eval_pres_r, Finalize_ReadState
-    use MODgvec_ReadState_Vars, only: profiles_1d, sbase_prof, X1_base_r, &
-        X2_base_r, LA_base_r, X1_r, X2_r, LA_r, hmap_r
+    use gvec_export_data, only: gvec_export_data_t, load_gvec_export_data, &
+                                gvec_profile_a_theta, gvec_profile_a_phi, &
+                                gvec_profile_da_theta_ds, gvec_profile_da_phi_ds, &
+                                gvec_geom_r, gvec_geom_dlambda_ds, &
+                                gvec_geom_dlambda_dt, gvec_geom_dlambda_dp, &
+                                gvec_geom_dr_ds, gvec_geom_dr_dt, gvec_geom_dr_dp, &
+                                gvec_geom_dz_ds, gvec_geom_dz_dt, gvec_geom_dz_dp
+    use gvec_reference_coordinates, only: gvec_coordinate_system_t
+    use spline_vmec_sub, only: compute_field_components
 
     implicit none
-
-    integer, parameter :: DERIV_R = 1
-    integer, parameter :: DERIV_THET = 2
-    integer, parameter :: DERIV_ZETA = 3
-
-    real(dp), parameter :: TESLA_IN_GAUSS = 10000.0_dp
-    real(dp), parameter :: METER_IN_CM = 100.0_dp
 
     private
     public :: gvec_field_t, create_gvec_field
 
     type, extends(magnetic_field_t) :: gvec_field_t
+        type(gvec_export_data_t) :: data
         character(len=256) :: filename = ''
-        integer :: nfp = 1
-        logical :: data_loaded = .false.
     contains
         procedure :: evaluate => gvec_evaluate
-        procedure :: load_dat_file
-        final :: gvec_field_cleanup
     end type gvec_field_t
 
 contains
 
-    subroutine create_gvec_field(gvec_file, gvec_field)
-        character(*), intent(in) :: gvec_file
-        class(gvec_field_t), allocatable, intent(out) :: gvec_field
+    subroutine create_gvec_field(filename, field)
+        character(*), intent(in) :: filename
+        class(gvec_field_t), allocatable, intent(out) :: field
 
-        allocate(gvec_field_t :: gvec_field)
-        gvec_field%filename = gvec_file
+        allocate (gvec_field_t :: field)
+        field%filename = filename
+        call load_gvec_export_data(filename, field%data)
 
-        call gvec_field%load_dat_file()
-
-        if (.not. gvec_field%data_loaded) then
-            print *, 'ERROR: Failed to load GVEC field from: ', gvec_file
-        end if
-
-        call make_vmec_coordinate_system(gvec_field%coords)
+        allocate (gvec_coordinate_system_t :: field%coords)
+        select type (coords => field%coords)
+        type is (gvec_coordinate_system_t)
+            coords%data = field%data
+        class default
+            error stop 'create_gvec_field: allocation failure'
+        end select
     end subroutine create_gvec_field
-
-
-    subroutine load_dat_file(self)
-        class(gvec_field_t), intent(inout) :: self
-        logical :: file_exists
-
-        inquire(file=trim(self%filename), exist=file_exists)
-        if (.not. file_exists) then
-            print *, 'Error: GVEC file does not exist: ', trim(self%filename)
-            return
-        end if
-
-        call ReadState(trim(self%filename))
-
-        if (allocated(profiles_1d) .and. allocated(sbase_prof)) then
-            if (allocated(hmap_r)) then
-                self%nfp = hmap_r%nfp
-            else
-                self%nfp = 1
-                print *, 'Warning: Could not read nfp from GVEC state, using default nfp=1'
-            end if
-            self%data_loaded = .true.
-        else
-            print *, 'Error: GVEC state initialization failed'
-            self%data_loaded = .false.
-        end if
-    end subroutine load_dat_file
-
 
     subroutine gvec_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
         class(gvec_field_t), intent(in) :: self
         real(dp), intent(in) :: x(3)
-        real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+        real(dp), intent(out) :: Acov(3)
+        real(dp), intent(out) :: hcov(3)
+        real(dp), intent(out) :: Bmod
         real(dp), intent(out), optional :: sqgBctr(3)
 
-        real(dp) :: r, theta, varphi, zeta
-        real(dp) :: gvec_coords(3), RZ_coords(3)
-        integer :: deriv_flags(2)
-        real(dp) :: X1_val, X2_val, R_pos, Z_pos
-        real(dp) :: dX1_ds, dX1_dthet, dX1_dzeta
-        real(dp) :: dX2_ds, dX2_dthet, dX2_dzeta
-        real(dp) :: dLA_ds, dLA_dthet, dLA_dzeta
-        real(dp) :: iota_val, phi_val, phiPrime_val, chi_val
-        real(dp) :: e_thet(3), e_zeta(3), e_s(3)
-        real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)
-        real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz
-        real(dp) :: Jac_h, Jac_l, Jac
-        real(dp) :: Bthctr, Bzetactr, Bthcov, Bzetacov, Bphcov, Bscov
-        real(dp) :: Bphctr
+        real(dp) :: profiles(5)
+        real(dp) :: geometry(18)
+        real(dp) :: a_theta
+        real(dp) :: a_phi
+        real(dp) :: da_theta_ds
+        real(dp) :: da_phi_ds
+        real(dp) :: r
+        real(dp) :: dl_ds
+        real(dp) :: dl_dt
+        real(dp) :: dl_dp
+        real(dp) :: sqg
+        real(dp) :: bctr_vartheta
+        real(dp) :: bctr_varphi
+        real(dp) :: bcov_s
+        real(dp) :: bcov_vartheta
+        real(dp) :: bcov_varphi
 
-        r = x(1)
-        theta = x(2)
-        varphi = x(3)
-        zeta = -varphi
+        call self%data%evaluate_profiles(x(1), profiles)
+        call self%data%evaluate_geometry(x, geometry)
 
-        if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
-            .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. &
-            .not. allocated(LA_r)) then
-            call ReadState(trim(self%filename))
-            if (.not. allocated(profiles_1d) .or. .not. allocated(sbase_prof) .or. &
-                .not. allocated(X1_r) .or. .not. allocated(X2_r) .or. &
-                .not. allocated(LA_r)) then
-                error stop 'Failed to initialize GVEC state for field evaluation'
-            end if
-        end if
+        a_theta = profiles(gvec_profile_a_theta)
+        a_phi = profiles(gvec_profile_a_phi)
+        da_theta_ds = profiles(gvec_profile_da_theta_ds)
+        da_phi_ds = profiles(gvec_profile_da_phi_ds)
+        r = geometry(gvec_geom_r)
+        dl_ds = geometry(gvec_geom_dlambda_ds)
+        dl_dt = geometry(gvec_geom_dlambda_dt)
+        dl_dp = geometry(gvec_geom_dlambda_dp)
+        call compute_field_components(r, geometry(gvec_geom_dr_ds), &
+                                      geometry(gvec_geom_dr_dt), &
+                                      geometry(gvec_geom_dr_dp), &
+                                      geometry(gvec_geom_dz_ds), &
+                                      geometry(gvec_geom_dz_dt), &
+                                      geometry(gvec_geom_dz_dp), da_theta_ds, &
+                                      da_phi_ds, dl_ds, dl_dt, dl_dp, sqg, &
+                                      bctr_vartheta, bctr_varphi, bcov_s, &
+                                      bcov_vartheta, bcov_varphi)
 
-        gvec_coords = [r, theta, zeta]
+        Acov(1) = a_theta * dl_ds
+        Acov(2) = a_theta * (1.0_dp + dl_dt)
+        Acov(3) = a_phi + a_theta * dl_dp
 
-        deriv_flags = [0, 0]
-        X1_val = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
+        Bmod = sqrt(bctr_vartheta * bcov_vartheta + bctr_varphi * bcov_varphi)
 
-        deriv_flags = [DERIV_R, 0]
-        dX1_ds = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
-
-        deriv_flags = [0, DERIV_THET]
-        dX1_dthet = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
-
-        deriv_flags = [0, DERIV_ZETA]
-        dX1_dzeta = X1_base_r%evalDOF_x(gvec_coords, deriv_flags, X1_r)
-
-        deriv_flags = [0, 0]
-        X2_val = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
-
-        deriv_flags = [DERIV_R, 0]
-        dX2_ds = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
-
-        deriv_flags = [0, DERIV_THET]
-        dX2_dthet = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
-
-        deriv_flags = [0, DERIV_ZETA]
-        dX2_dzeta = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
-
-        deriv_flags = [DERIV_R, 0]
-        dLA_ds = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
-
-        deriv_flags = [0, DERIV_THET]
-        dLA_dthet = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
-
-        deriv_flags = [0, DERIV_ZETA]
-        dLA_dzeta = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
-
-        iota_val = eval_iota_r(r)
-        phi_val = eval_phi_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2
-        phiPrime_val = eval_phiPrime_r(r) * TESLA_IN_GAUSS * METER_IN_CM**2
-        chi_val = sbase_prof%evalDOF_s(r, 0, profiles_1d(:, 2)) * &
-                  TESLA_IN_GAUSS * METER_IN_CM**2
-
-        R_pos = X1_val
-        Z_pos = X2_val
-        RZ_coords = [R_pos, Z_pos, zeta]
-        call hmap_r%get_dx_dqi(RZ_coords, dx_dq1, dx_dq2, dx_dq3)
-
-        e_s = dx_dq1 * dX1_ds + dx_dq2 * dX2_ds
-        e_thet = dx_dq1 * dX1_dthet + dx_dq2 * dX2_dthet
-        e_zeta = dx_dq1 * dX1_dzeta + dx_dq2 * dX2_dzeta + dx_dq3
-
-        g_ss = dot_product(e_s, e_s) * METER_IN_CM**2
-        g_tt = dot_product(e_thet, e_thet) * METER_IN_CM**2
-        g_zz = dot_product(e_zeta, e_zeta) * METER_IN_CM**2
-        g_st = dot_product(e_s, e_thet) * METER_IN_CM**2
-        g_sz = dot_product(e_s, e_zeta) * METER_IN_CM**2
-        g_tz = dot_product(e_thet, e_zeta) * METER_IN_CM**2
-
-        Jac_h = hmap_r%eval_Jh(RZ_coords)
-        Jac_l = dX1_ds * dX2_dthet - dX1_dthet * dX2_ds
-        Jac = Jac_h * Jac_l * METER_IN_CM**3
-
-        Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac
-        Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac
-        Bphctr = -Bzetactr
+        hcov(1) = (bcov_s + bcov_vartheta * dl_ds) / Bmod
+        hcov(2) = bcov_vartheta * (1.0_dp + dl_dt) / Bmod
+        hcov(3) = (bcov_varphi + bcov_vartheta * dl_dp) / Bmod
 
         if (present(sqgBctr)) then
-            sqgBctr(1) = 0.0_dp
-            sqgBctr(2) = Jac * Bthctr
-            sqgBctr(3) = Jac * Bzetactr
+            sqgBctr = [0.0_dp, sqg * bctr_vartheta, sqg * bctr_varphi]
         end if
-
-        Bthcov = g_tt * Bthctr + g_tz * Bzetactr
-        Bzetacov = g_tz * Bthctr + g_zz * Bzetactr
-        Bphcov = -Bzetacov
-        Bscov = g_st * Bthctr + g_sz * Bzetactr
-
-        Bmod = sqrt(Bthctr * Bthcov + Bphctr * Bphcov)
-
-        hcov(1) = (Bscov + Bthcov * dLA_ds) / Bmod * 2.0_dp * r
-        hcov(2) = Bthcov * (1.0_dp + dLA_dthet) / Bmod
-        hcov(3) = (Bphcov + Bthcov * dLA_dzeta) / Bmod
-
-        Acov(1) = phi_val * dLA_ds * 2.0_dp * r
-        Acov(2) = phi_val * (1.0_dp + dLA_dthet)
-        Acov(3) = -chi_val + phi_val * dLA_dzeta
     end subroutine gvec_evaluate
-
-
-    subroutine gvec_field_cleanup(self)
-        type(gvec_field_t), intent(inout) :: self
-
-        if (self%data_loaded) then
-            call Finalize_ReadState()
-            self%data_loaded = .false.
-        end if
-    end subroutine gvec_field_cleanup
 
 end module field_gvec

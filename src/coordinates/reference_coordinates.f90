@@ -4,6 +4,8 @@ module reference_coordinates
     use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
         make_chartmap_coordinate_system, detect_refcoords_file_type, &
         refcoords_file_chartmap, refcoords_file_vmec_wout, refcoords_file_unknown
+    use gvec_reference_coordinates, only: make_gvec_coordinate_system
+    use gvec_export_data, only: gvec_export_is_file
 
     implicit none
 
@@ -24,6 +26,11 @@ contains
         end if
 
         if (allocated(ref_coords)) deallocate(ref_coords)
+
+        if (gvec_export_is_file(coord_input)) then
+            call make_gvec_coordinate_system(ref_coords, coord_input)
+            return
+        end if
 
         call detect_refcoords_file_type(coord_input, file_type, ierr, message)
         if (ierr /= 0) then

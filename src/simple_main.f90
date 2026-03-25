@@ -25,6 +25,7 @@ module simple_main
                                      stl_wall_finalize, &
                                      stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
+    use gvec_reference_coordinates, only: gvec_coordinate_system_t
 
     implicit none
 
@@ -34,6 +35,7 @@ module simple_main
     logical, save :: wall_enabled = .false.
     real(dp), save :: wall_rho_lcfs = -1.0d0
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
+    integer, save :: sampling_magfie_id = 1
     type(stl_wall_t), save :: wall
 
 contains
@@ -92,8 +94,8 @@ contains
             call sample_particles_test_field
             call print_phase_time('TEST field particle sampling completed')
         else
-            call init_magfie(VMEC)
-            call print_phase_time('VMEC magnetic field initialization completed')
+            call init_magfie(sampling_magfie_id)
+            call print_phase_time('Sampling magnetic field initialization completed')
 
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
@@ -140,59 +142,57 @@ contains
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
+        logical :: vmec_required
 
         self%integmode = aintegmode
 
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
             self%fper = twopi  ! Full torus for analytic tokamak
+            sampling_magfie_id = TEST
             call print_phase_time('TEST field mode - no input files required')
         else
-            vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
-                                                                 field_input, &
-                                                                 coord_input)
-            call init_vmec(vmec_equilibrium_file, ans_s, ans_tp, amultharm, &
-                           self%fper)
-            call print_phase_time('VMEC initialization completed')
+            vmec_required = inputs_require_vmec(field_input, coord_input)
+
+            if (vmec_required) then
+                vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
+                                                                     field_input, &
+                                                                     coord_input)
+                call init_vmec(vmec_equilibrium_file, ans_s, ans_tp, amultharm, &
+                               self%fper)
+                call print_phase_time('VMEC initialization completed')
+                sampling_magfie_id = VMEC
+            end if
 
             call init_reference_coordinates(coord_input)
             call print_phase_time('Reference coordinate system '// &
                                   'initialization completed')
 
+            if (.not. vmec_required) then
+                self%fper = reference_coords_phi_period()
+            end if
+
             call init_stl_wall_if_enabled(coord_input)
             call print_phase_time('STL wall initialization completed')
 
             if (self%integmode >= 0) then
-            if (trim(field_input) == '') then
-                print *, 'simple_main.init_field: field_input must be set (see ', &
-                    'params.apply_config_aliases)'
-                error stop
-            end if
-
-            call field_from_file(field_input, field_temp)
-            call print_phase_time('Field from file loading completed')
-
-            if (isw_field_type == REFCOORDS) then
-                select type (field_temp)
-                type is (splined_field_t)
-                    call set_magfie_refcoords_field(field_temp)
-                type is (vmec_field_t)
-                    block
-                        type(splined_field_t) :: splined_vmec
-                        call create_splined_field(field_temp, ref_coords, &
-                                                  splined_vmec)
-                        call set_magfie_refcoords_field(splined_vmec)
-                    end block
-                class default
-                    print *, &
-                        'simple_main.init_field: REFCOORDS requires '// &
-                        'a splined field'
-                    print *, &
-                        'Supported inputs: coils (auto-splined) or VMEC wout', &
-                        ' (splined onto coord_input)'
+                if (trim(field_input) == '') then
+                    print *, 'simple_main.init_field: field_input must be set (see ', &
+                        'params.apply_config_aliases)'
                     error stop
-                end select
-            end if
+                end if
+
+                call field_from_file(field_input, field_temp)
+                call print_phase_time('Field from file loading completed')
+
+                if (.not. vmec_required) then
+                    call configure_refcoords_sampling_field(field_temp)
+                    sampling_magfie_id = REFCOORDS
+                end if
+
+                if (isw_field_type == REFCOORDS) then
+                    call configure_refcoords_sampling_field(field_temp)
+                end if
             end if
         end if
 
@@ -222,6 +222,24 @@ contains
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
+
+    subroutine configure_refcoords_sampling_field(field_temp)
+        use field_base, only: magnetic_field_t
+        use magfie_sub, only: set_magfie_refcoords_field
+        use field_splined, only: splined_field_t, create_splined_field
+        class(magnetic_field_t), intent(in) :: field_temp
+
+        select type (field_temp)
+        type is (splined_field_t)
+            call set_magfie_refcoords_field(field_temp)
+        class default
+            block
+                type(splined_field_t) :: splined_field
+                call create_splined_field(field_temp, ref_coords, splined_field)
+                call set_magfie_refcoords_field(splined_field)
+            end block
+        end select
+    end subroutine configure_refcoords_sampling_field
 
     subroutine init_stl_wall_if_enabled(coord_file)
         character(len=*), intent(in) :: coord_file
@@ -302,6 +320,57 @@ contains
             end if
         end if
     end function select_vmec_equilibrium_file
+
+    logical function inputs_require_vmec(field_file, coord_file)
+        use libneo_coordinates, only: detect_refcoords_file_type, &
+                                      refcoords_file_vmec_wout
+        use gvec_export_data, only: gvec_export_is_file
+
+        character(*), intent(in) :: field_file
+        character(*), intent(in) :: coord_file
+
+        integer :: file_type
+        integer :: ierr
+        character(len=2048) :: message
+        logical :: field_is_gvec
+        logical :: coord_is_gvec
+
+        inputs_require_vmec = .false.
+
+        field_is_gvec = gvec_export_is_file(field_file)
+        coord_is_gvec = gvec_export_is_file(coord_file)
+        if (field_is_gvec .or. coord_is_gvec) then
+            return
+        end if
+
+        if (len_trim(field_file) > 0 .and. ends_with_nc(field_file)) then
+            call detect_refcoords_file_type(trim(field_file), file_type, ierr, message)
+            if (ierr == 0 .and. file_type == refcoords_file_vmec_wout) then
+                inputs_require_vmec = .true.
+                return
+            end if
+        end if
+
+        if (len_trim(coord_file) > 0 .and. ends_with_nc(coord_file)) then
+            call detect_refcoords_file_type(trim(coord_file), file_type, ierr, message)
+            if (ierr == 0 .and. file_type == refcoords_file_vmec_wout) then
+                inputs_require_vmec = .true.
+            end if
+        end if
+    end function inputs_require_vmec
+
+    real(dp) function reference_coords_phi_period()
+        use util, only: twopi
+
+        select type (coords => ref_coords)
+        type is (chartmap_coordinate_system_t)
+            reference_coords_phi_period = twopi / real(coords%num_field_periods, dp)
+        type is (gvec_coordinate_system_t)
+            reference_coords_phi_period = coords%phi_period()
+        class default
+            error stop 'reference_coords_phi_period: unsupported reference coordinates'
+        end select
+    end function reference_coords_phi_period
 
     function ends_with_nc(filename) result(is_nc)
         character(*), intent(in) :: filename

@@ -9,6 +9,8 @@
         coordinates/array_utils.f90
         coordinates/reference_coordinates.f90
         coordinates/coordinate_scaling.f90
+        coordinates/gvec_reference_coordinates.f90
+        gvec/gvec_export_data.f90
     coordinates/cartesian_coordinates.f90
     field/field_base.f90
     field/field_coils.f90
@@ -103,7 +105,6 @@ list(APPEND SOURCES
 if(ENABLE_GVEC)
     list(APPEND SOURCES
         field/field_gvec.f90
-        field/vmec_field_adapter.f90
     )
 endif()
 
@@ -144,12 +145,6 @@ endif()
 
 # Conditionally link GVEC if enabled
 if(ENABLE_GVEC)
-    target_include_directories(simple PRIVATE
-        ${gvec_BINARY_DIR}/include
-    )
-    target_link_libraries(simple PUBLIC
-        gveclib
-    )
     target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
 endif()
 
