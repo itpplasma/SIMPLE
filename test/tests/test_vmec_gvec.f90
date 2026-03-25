@@ -33,11 +33,11 @@ program test_vmec_gvec
     ! Variables for GVEC conversion
     character(len=256) :: param_file
     character(len=4096) :: param_strings(20)
-    integer :: num_strings
+    integer :: exit_status
     integer :: unit_param
 
     ! Test parameters
-    real(dp) :: x(3)
+    real(dp) :: x_gvec(3), x_vmec(3)
     real(dp) :: Acov_vmec(3), hcov_vmec(3), Bmod_vmec
     real(dp) :: Acov_gvec(3), hcov_gvec(3), Bmod_gvec
     real(dp) :: s_test, theta_test, phi_test
@@ -55,7 +55,7 @@ program test_vmec_gvec
 
     ! Initialize VMEC field using SIMPLE's method
     netcdffile = vmec_file
-    multharm = 3  ! Use low order splines for faster testing
+    multharm = 7
     call spline_vmec_data
     allocate(vmec_field_t :: vmec_field)
 
@@ -87,9 +87,12 @@ program test_vmec_gvec
         write(unit_param, '(A)') 'maxIter = 0     ! No iterations'
         close(unit_param)
 
-        ! Use execute_command_line to run GVEC
-        call execute_command_line('../../_deps/gvec-build/bin/gvec ' // trim(param_file) // ' > /dev/null 2>&1', &
-                                  exitstat=num_strings)
+        call execute_command_line('../../_deps/gvec-build/bin/gvec ' // trim(param_file), &
+                                  exitstat=exit_status)
+        if (exit_status /= 0) then
+            print *, 'ERROR: GVEC command failed with exit status ', exit_status
+            error stop 1
+        end if
 
         ! The output file will be named based on ProjectName
         gvec_temp_file = 'test_vmec_gvec_State_0000_00000000.dat'
@@ -139,15 +142,19 @@ program test_vmec_gvec
                 phi_test = pi * real(k-1, dp) / real(np, dp)  ! phi from 0 to pi
 
                 ! Set coordinates (r = sqrt(s), theta, phi)
-                x(1) = sqrt(s_test)
-                x(2) = theta_test
-                x(3) = phi_test
+                x_vmec(1) = s_test
+                x_vmec(2) = theta_test
+                x_vmec(3) = phi_test
+
+                x_gvec(1) = sqrt(s_test)
+                x_gvec(2) = theta_test
+                x_gvec(3) = phi_test
 
                 ! Evaluate VMEC field
-                call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
+                call vmec_field%evaluate(x_vmec, Acov_vmec, hcov_vmec, Bmod_vmec)
 
                 ! Evaluate GVEC field
-                call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
+                call gvec_field%evaluate(x_gvec, Acov_gvec, hcov_gvec, Bmod_gvec)
 
                 ! Calculate errors for Bmod
                 abs_error = abs(Bmod_gvec - Bmod_vmec)
@@ -197,12 +204,16 @@ program test_vmec_gvec
     end do
 
     ! Evaluate fields at a representative point for typical values
-    x(1) = sqrt(0.5_dp)  ! r = sqrt(s) at s=0.5
-    x(2) = pi/4.0_dp     ! theta = pi/4
-    x(3) = 0.0_dp        ! phi = 0
+    x_vmec(1) = 0.5_dp   ! s = 0.5
+    x_vmec(2) = pi/4.0_dp
+    x_vmec(3) = 0.0_dp
 
-    call vmec_field%evaluate(x, Acov_vmec, hcov_vmec, Bmod_vmec)
-    call gvec_field%evaluate(x, Acov_gvec, hcov_gvec, Bmod_gvec)
+    x_gvec(1) = sqrt(0.5_dp)
+    x_gvec(2) = pi/4.0_dp
+    x_gvec(3) = 0.0_dp
+
+    call vmec_field%evaluate(x_vmec, Acov_vmec, hcov_vmec, Bmod_vmec)
+    call gvec_field%evaluate(x_gvec, Acov_gvec, hcov_gvec, Bmod_gvec)
 
     ! Print comparison results
     print *, ''

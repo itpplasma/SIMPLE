@@ -91,13 +91,14 @@ contains
         real(dp) :: X1_val, X2_val, R_pos, Z_pos
         real(dp) :: dX1_ds, dX1_dthet, dX1_dzeta
         real(dp) :: dX2_ds, dX2_dthet, dX2_dzeta
-        real(dp) :: dLA_dr, dLA_dthet, dLA_dzeta
+        real(dp) :: dLA_ds, dLA_dthet, dLA_dzeta
         real(dp) :: iota_val, phi_val, phiPrime_val, chi_val
         real(dp) :: e_thet(3), e_zeta(3), e_s(3)
         real(dp) :: dx_dq1(3), dx_dq2(3), dx_dq3(3)
         real(dp) :: g_tt, g_tz, g_zz, g_ss, g_st, g_sz
         real(dp) :: Jac_h, Jac_l, Jac
-        real(dp) :: Bthctr, Bzetactr, Bthcov, Bzetacov, Bscov
+        real(dp) :: Bthctr, Bzetactr, Bthcov, Bzetacov, Bphcov, Bscov
+        real(dp) :: Bphctr
 
         r = x(1)
         theta = x(2)
@@ -142,7 +143,7 @@ contains
         dX2_dzeta = X2_base_r%evalDOF_x(gvec_coords, deriv_flags, X2_r)
 
         deriv_flags = [DERIV_R, 0]
-        dLA_dr = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
+        dLA_ds = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
 
         deriv_flags = [0, DERIV_THET]
         dLA_dthet = LA_base_r%evalDOF_x(gvec_coords, deriv_flags, LA_r)
@@ -178,26 +179,28 @@ contains
 
         Bthctr = (iota_val - dLA_dzeta) * phiPrime_val / Jac
         Bzetactr = (1.0_dp + dLA_dthet) * phiPrime_val / Jac
+        Bphctr = -Bzetactr
 
         if (present(sqgBctr)) then
             sqgBctr(1) = 0.0_dp
-            sqgBctr(2) = (-Jac) * Bthctr
-            sqgBctr(3) = (-Jac) * (-Bzetactr)
+            sqgBctr(2) = Jac * Bthctr
+            sqgBctr(3) = Jac * Bzetactr
         end if
 
         Bthcov = g_tt * Bthctr + g_tz * Bzetactr
         Bzetacov = g_tz * Bthctr + g_zz * Bzetactr
+        Bphcov = -Bzetacov
         Bscov = g_st * Bthctr + g_sz * Bzetactr
 
-        Bmod = sqrt(Bthctr * Bthcov + Bzetactr * Bzetacov)
+        Bmod = sqrt(Bthctr * Bthcov + Bphctr * Bphcov)
 
-        hcov(1) = Bscov / Bmod
-        hcov(2) = Bthcov / Bmod
-        hcov(3) = -Bzetacov / Bmod
+        hcov(1) = (Bscov + Bthcov * dLA_ds) / Bmod * 2.0_dp * r
+        hcov(2) = Bthcov * (1.0_dp + dLA_dthet) / Bmod
+        hcov(3) = (Bphcov + Bthcov * dLA_dzeta) / Bmod
 
-        Acov(1) = phi_val * dLA_dr
+        Acov(1) = phi_val * dLA_ds * 2.0_dp * r
         Acov(2) = phi_val * (1.0_dp + dLA_dthet)
-        Acov(3) = -(-chi_val + phi_val * dLA_dzeta)
+        Acov(3) = -chi_val + phi_val * dLA_dzeta
     end subroutine gvec_evaluate
 
 

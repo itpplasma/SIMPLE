@@ -326,14 +326,23 @@ add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
 # GVEC-related tests (only if GVEC support is enabled)
 if(ENABLE_GVEC)
+    file(CREATE_LINK "${TEST_DATA_DIR}/GVEC_elliptok_State_final.dat"
+        "${CMAKE_CURRENT_BINARY_DIR}/GVEC_elliptok_State_final.dat" SYMBOLIC)
+
     add_executable (test_gvec.x test_gvec.f90)
     target_link_libraries(test_gvec.x simple)
-    # add_dependencies(test_gvec.x gvec_test_data)
     add_test(NAME test_gvec COMMAND test_gvec.x)
+    set_tests_properties(test_gvec PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
 
     add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
     target_link_libraries(test_vmec_gvec.x simple)
+    add_dependencies(test_vmec_gvec.x gvec)
     add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
+    set_tests_properties(test_vmec_gvec PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
 
     add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
     target_link_libraries(test_canonical_gvec.x simple)

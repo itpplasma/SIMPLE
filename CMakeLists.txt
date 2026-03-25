@@ -118,7 +118,7 @@ if(ENABLE_GVEC)
     include(FetchContent)
     FetchContent_Declare(
       gvec
-      GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/calbert/gvec.git
+      GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/gvec-group/gvec.git
       GIT_TAG        develop
     )
     set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
