@@ -136,11 +136,11 @@ program test_boozer_chartmap_roundtrip
     close(20)
 
     print *, '  max relative error Bmod:', max_err_bmod
-    if (max_err_bmod > 1.0e-3_dp) then
+    if (max_err_bmod > 1.0e-4_dp) then
         print *, 'FAIL: Bmod roundtrip error too large:', max_err_bmod
         nfail = nfail + 1
     else
-        print *, 'PASS: Bmod roundtrip error < 1e-3'
+        print *, 'PASS: Bmod roundtrip error < 1e-4'
     end if
 
     ! =========================================================
@@ -199,11 +199,11 @@ program test_boozer_chartmap_roundtrip
     end do
 
     print *, '  max |s_direct - s_chartmap|:', max_err_orbit
-    if (max_err_orbit > 1.0e-3_dp) then
+    if (max_err_orbit > 1.0e-6_dp) then
         print *, 'FAIL: orbit roundtrip error too large:', max_err_orbit
         nfail = nfail + 1
     else
-        print *, 'PASS: orbit roundtrip error < 1e-3'
+        print *, 'PASS: orbit roundtrip error < 1e-6'
     end if
 
     ! =========================================================
