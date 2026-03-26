@@ -351,6 +351,15 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
 
+    # Boozer chartmap roundtrip test: requires wout.nc
+    add_executable(test_boozer_chartmap_roundtrip.x test_boozer_chartmap_roundtrip.f90)
+    target_link_libraries(test_boozer_chartmap_roundtrip.x simple)
+    add_test(NAME test_boozer_chartmap_roundtrip
+        COMMAND test_boozer_chartmap_roundtrip.x)
+    set_tests_properties(test_boozer_chartmap_roundtrip PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow")
+
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
         target_link_libraries(test_stl_wall_intersection.x simple)
