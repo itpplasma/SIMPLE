@@ -12,6 +12,7 @@ use field_can_meiss, only : init_meiss, evaluate_meiss, &
   integ_to_ref_meiss, ref_to_integ_meiss
 use field_can_albert, only : evaluate_albert, init_albert, integ_to_ref_albert, &
   ref_to_integ_albert
+use field_boozer_chartmap, only : boozer_chartmap_field_t
 
 implicit none
 
@@ -124,7 +125,8 @@ end function id_from_name
 
 subroutine init_field_can(field_id, field_noncan)
   use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
-  use boozer_sub, only : get_boozer_coordinates, get_boozer_coordinates_with_field
+  use boozer_sub, only : get_boozer_coordinates, get_boozer_coordinates_with_field, &
+                         load_boozer_from_chartmap
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
 
@@ -140,7 +142,15 @@ subroutine init_field_can(field_id, field_noncan)
       case (CANFLUX)
         call get_canonical_coordinates_with_field(field_noncan)
       case (BOOZER)
-        call get_boozer_coordinates_with_field(field_noncan)
+        select type (f => field_noncan)
+        type is (boozer_chartmap_field_t)
+          call load_boozer_from_chartmap(f%filename)
+          ! Integrator coords = reference coords (both Boozer), no conversion
+          integ_to_ref => identity_transform
+          ref_to_integ => identity_transform
+        class default
+          call get_boozer_coordinates_with_field(field_noncan)
+        end select
       case (MEISS)
         call get_meiss_coordinates
       case (ALBERT)

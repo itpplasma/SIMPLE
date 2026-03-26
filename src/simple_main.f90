@@ -126,6 +126,7 @@ contains
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
         use field, only: field_from_file
+        use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
                               REFCOORDS, set_magfie_refcoords_field
@@ -140,13 +141,43 @@ contains
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
+        logical :: use_boozer_chartmap
 
         self%integmode = aintegmode
+
+        ! Check if field_input is a Boozer chartmap (no VMEC needed)
+        use_boozer_chartmap = .false.
+        if (len_trim(field_input) > 0) then
+            use_boozer_chartmap = is_boozer_chartmap(field_input)
+        end if
 
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
             self%fper = twopi  ! Full torus for analytic tokamak
             call print_phase_time('TEST field mode - no input files required')
+        else if (use_boozer_chartmap) then
+            ! Boozer chartmap: file-based, no VMEC initialization needed
+            call init_reference_coordinates(coord_input)
+            call print_phase_time('Reference coordinate system '// &
+                                  'initialization completed')
+
+            block
+                use libneo_coordinates, only: chartmap_coordinate_system_t
+                select type (cs => ref_coords)
+                type is (chartmap_coordinate_system_t)
+                    self%fper = twopi / real(cs%num_field_periods, dp)
+                class default
+                    self%fper = twopi
+                end select
+            end block
+
+            call init_stl_wall_if_enabled(coord_input)
+            call print_phase_time('STL wall initialization completed')
+
+            if (self%integmode >= 0) then
+                call field_from_file(field_input, field_temp)
+                call print_phase_time('Boozer chartmap field loading completed')
+            end if
         else
             vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
                                                                  field_input, &
