@@ -1054,6 +1054,7 @@ contains
         integer :: var_x, var_y, var_z
         integer :: var_aphi, var_btheta, var_bphi, var_bmod, var_nfp
         integer :: i_rho, i_theta, i_phi
+        integer :: n_theta_out, n_phi_out
         real(dp) :: rho_tor, s, theta_B, phi_B, theta_V, phi_V
         real(dp) :: R, Zval, alam
         real(dp) :: A_phi_dum, A_theta_dum, dA_phi_ds, dA_theta_ds, aiota
@@ -1063,21 +1064,28 @@ contains
         real(dp), allocatable :: rho_arr(:), theta_arr(:), zeta_arr(:)
         real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
         real(dp), allocatable :: x_arr(:, :, :), y_arr(:, :, :), z_arr(:, :, :)
+        real(dp), allocatable :: bmod_out(:, :, :)
 
-        allocate (rho_arr(ns_B), theta_arr(n_theta_B), zeta_arr(n_phi_B))
+        ! VMEC Boozer grid includes endpoints (periodic duplicate).
+        ! Chartmap format requires endpoint-excluded grids.
+        n_theta_out = n_theta_B - 1
+        n_phi_out = n_phi_B - 1
+
+        allocate (rho_arr(ns_B), theta_arr(n_theta_out), zeta_arr(n_phi_out))
         allocate (A_phi_arr(ns_B), B_theta_arr(ns_B), B_phi_arr(ns_B))
-        allocate (x_arr(ns_B, n_theta_B, n_phi_B))
-        allocate (y_arr(ns_B, n_theta_B, n_phi_B))
-        allocate (z_arr(ns_B, n_theta_B, n_phi_B))
+        allocate (x_arr(ns_B, n_theta_out, n_phi_out))
+        allocate (y_arr(ns_B, n_theta_out, n_phi_out))
+        allocate (z_arr(ns_B, n_theta_out, n_phi_out))
+        allocate (bmod_out(ns_B, n_theta_out, n_phi_out))
 
-        ! Build coordinate grids
+        ! Build coordinate grids (endpoint excluded)
         do i_rho = 1, ns_B
             rho_arr(i_rho) = max(real(i_rho - 1, dp) * hs_B, rho_min)
         end do
-        do i_theta = 1, n_theta_B
+        do i_theta = 1, n_theta_out
             theta_arr(i_theta) = real(i_theta - 1, dp) * h_theta_B
         end do
-        do i_phi = 1, n_phi_B
+        do i_phi = 1, n_phi_out
             zeta_arr(i_phi) = real(i_phi - 1, dp) * h_phi_B
         end do
 
@@ -1088,9 +1096,12 @@ contains
             B_phi_arr(i_rho) = s_Bcovar_tp_B(2, 1, i_rho)
         end do
 
+        ! Copy Bmod (exclude periodic endpoints)
+        bmod_out(:, :, :) = bmod_grid(:, 1:n_theta_out, 1:n_phi_out)
+
         ! Compute X, Y, Z geometry on the Boozer grid
-        do i_phi = 1, n_phi_B
-            do i_theta = 1, n_theta_B
+        do i_phi = 1, n_phi_out
+            do i_theta = 1, n_theta_out
                 do i_rho = 1, ns_B
                     rho_tor = rho_arr(i_rho)
                     s = rho_tor**2
@@ -1106,9 +1117,11 @@ contains
                         R, Zval, alam, dR_ds, dR_dt, dR_dp, &
                         dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
 
-                    ! Convert to Cartesian (phi_V is the cylindrical angle)
-                    x_arr(i_rho, i_theta, i_phi) = R * cos(phi_V)
-                    y_arr(i_rho, i_theta, i_phi) = R * sin(phi_V)
+                    ! Convert to Cartesian using phi_B as the azimuthal angle.
+                    ! This creates a pseudo-Cartesian representation consistent
+                    ! with the Boozer toroidal grid (atan2(y,x) = phi_B).
+                    x_arr(i_rho, i_theta, i_phi) = R * cos(phi_B)
+                    y_arr(i_rho, i_theta, i_phi) = R * sin(phi_B)
                     z_arr(i_rho, i_theta, i_phi) = Zval
                 end do
             end do
@@ -1120,9 +1133,10 @@ contains
 
         ! Dimensions
         call nc_assert(nf90_def_dim(ncid, "rho", ns_B, dim_rho), "def_dim rho")
-        call nc_assert(nf90_def_dim(ncid, "theta", n_theta_B, dim_theta), &
+        call nc_assert(nf90_def_dim(ncid, "theta", n_theta_out, dim_theta), &
                         "def_dim theta")
-        call nc_assert(nf90_def_dim(ncid, "zeta", n_phi_B, dim_zeta), "def_dim zeta")
+        call nc_assert(nf90_def_dim(ncid, "zeta", n_phi_out, dim_zeta), &
+                        "def_dim zeta")
 
         ! Coordinate variables
         call nc_assert(nf90_def_var(ncid, "rho", nf90_double, [dim_rho], var_rho), &
@@ -1179,14 +1193,14 @@ contains
         call nc_assert(nf90_put_var(ncid, var_aphi, A_phi_arr), "put A_phi")
         call nc_assert(nf90_put_var(ncid, var_btheta, B_theta_arr), "put B_theta")
         call nc_assert(nf90_put_var(ncid, var_bphi, B_phi_arr), "put B_phi")
-        call nc_assert(nf90_put_var(ncid, var_bmod, bmod_grid), "put Bmod")
+        call nc_assert(nf90_put_var(ncid, var_bmod, bmod_out), "put Bmod")
         call nc_assert(nf90_put_var(ncid, var_nfp, nper), "put nfp")
 
         call nc_assert(nf90_close(ncid), "close")
 
         print *, 'Exported Boozer chartmap to ', trim(filename)
-        print *, '  nfp=', nper, ' ns=', ns_B, ' ntheta=', n_theta_B, &
-                 ' nphi=', n_phi_B
+        print *, '  nfp=', nper, ' ns=', ns_B, ' ntheta=', n_theta_out, &
+                 ' nphi=', n_phi_out
         print *, '  torflux=', torflux
 
     contains

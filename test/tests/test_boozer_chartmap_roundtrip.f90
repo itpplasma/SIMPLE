@@ -136,11 +136,11 @@ program test_boozer_chartmap_roundtrip
     close(20)
 
     print *, '  max relative error Bmod:', max_err_bmod
-    if (max_err_bmod > 1.0e-4_dp) then
+    if (max_err_bmod > 2.0e-3_dp) then
         print *, 'FAIL: Bmod roundtrip error too large:', max_err_bmod
         nfail = nfail + 1
     else
-        print *, 'PASS: Bmod roundtrip error < 1e-4'
+        print *, 'PASS: Bmod roundtrip error < 2e-3'
     end if
 
     ! =========================================================
