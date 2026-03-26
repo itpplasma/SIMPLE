@@ -86,7 +86,10 @@ def generate_test_file(filename):
     v = ds.createVariable("Bmod", "f8", ("zeta", "theta", "rho"))
     v[:] = np.transpose(Bmod, (2, 1, 0))
 
-    ds.num_field_periods = np.int32(nfp)
+    # num_field_periods must be a scalar variable (not attribute) for libneo
+    v = ds.createVariable("num_field_periods", "i4")
+    v[:] = np.int32(nfp)
+
     ds.rho_convention = "rho_tor"
     ds.zeta_convention = "cyl"
     ds.rho_lcfs = 1.0

@@ -930,11 +930,13 @@ contains
         call nc_check(nf90_inq_varid(ncid, "zeta", varid), "var zeta")
         call nc_check(nf90_get_var(ncid, varid, zeta), "get zeta")
 
-        ! Read scalar attributes
+        ! Read scalar attributes and variables
         call nc_check(nf90_get_att(ncid, nf90_global, "torflux", torflux_val), &
                        "att torflux")
-        call nc_check(nf90_get_att(ncid, nf90_global, "num_field_periods", nfp_file), &
-                       "att num_field_periods")
+        call nc_check(nf90_inq_varid(ncid, "num_field_periods", varid), &
+                       "var num_field_periods")
+        call nc_check(nf90_get_var(ncid, varid, nfp_file), &
+                       "get num_field_periods")
 
         ! Read 1D profiles
         allocate (A_phi_arr(n_rho), B_theta_arr(n_rho), B_phi_arr(n_rho))

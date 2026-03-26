@@ -47,7 +47,8 @@ program test_boozer_chartmap
     end if
 
     ! Test field evaluation at mid-radius, theta=0, phi=0
-    x = [0.25_dp, 0.0_dp, 0.0_dp]  ! s=0.25, theta=0, phi=0
+    ! x(1) = rho = sqrt(s), so rho=0.5 means s=0.25
+    x = [0.5_dp, 0.0_dp, 0.0_dp]  ! rho=0.5, theta=0, phi=0
     call field%evaluate(x, Acov, hcov, Bmod)
 
     ! Bmod should be positive and reasonable (analytic tokamak ~ B0)
@@ -58,12 +59,12 @@ program test_boozer_chartmap
         print *, 'PASS: Bmod =', Bmod
     end if
 
-    ! A_theta = torflux * s = torflux * 0.25
+    ! A_theta = torflux * s = torflux * rho^2 = torflux * 0.25
     if (abs(Acov(2) - field%torflux * 0.25_dp) > 1.0e-8_dp * abs(Acov(2))) then
         print *, 'FAIL: Acov(2) =', Acov(2), ' expected', field%torflux * 0.25_dp
         nfail = nfail + 1
     else
-        print *, 'PASS: Acov(2) = torflux * s'
+        print *, 'PASS: Acov(2) = torflux * rho^2'
     end if
 
     ! hcov(1) should be 0 (no radial component in Boozer)
@@ -82,8 +83,8 @@ program test_boozer_chartmap
         print *, 'PASS: hcov(2) =', hcov(2), ' hcov(3) =', hcov(3)
     end if
 
-    ! Test at another point
-    x = [0.5_dp, 1.0_dp, 0.5_dp]  ! s=0.5, theta=1, phi=0.5
+    ! Test at another point: rho=0.7, theta=1, phi=0.5
+    x = [0.7_dp, 1.0_dp, 0.5_dp]
     call field%evaluate(x, Acov, hcov, Bmod)
 
     if (Bmod <= 0.0_dp) then

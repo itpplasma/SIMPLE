@@ -30,6 +30,7 @@ module field_splined
                            destroy_batch_splines_3d
     use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t
+    use field_boozer_chartmap, only: boozer_chartmap_field_t
     use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
                                   chartmap_coordinate_system_t, RHO_TOR, RHO_POL, &
                                   PSI_TOR_NORM, PSI_POL_NORM
@@ -459,6 +460,14 @@ contains
                 Acov = matmul(A_cart, e_cov)
                 hcov = matmul(h_cart, e_cov)
             end select
+            needs_scaling = .true.
+            return
+        type is (boozer_chartmap_field_t)
+            ! Boozer chartmap evaluates directly in (rho, theta_B, phi_B),
+            ! which matches the chartmap reference coordinate system.
+            call source%evaluate(x_ref, Acov, hcov, Bmod)
+            x_cart = 0d0
+            e_cov = 0d0
             needs_scaling = .true.
             return
         class default

@@ -110,11 +110,13 @@ contains
         call check_nc(nf90_inq_varid(ncid, "zeta", varid), "inq_var zeta")
         call check_nc(nf90_get_var(ncid, varid, zeta), "get_var zeta")
 
-        ! Read scalar attributes
+        ! Read scalar attributes and variables
         call check_nc(nf90_get_att(ncid, nf90_global, "torflux", torflux_val), &
                        "get_att torflux")
-        call check_nc(nf90_get_att(ncid, nf90_global, "num_field_periods", nfp_file), &
-                       "get_att num_field_periods")
+        call check_nc(nf90_inq_varid(ncid, "num_field_periods", varid), &
+                       "inq_var num_field_periods")
+        call check_nc(nf90_get_var(ncid, varid, nfp_file), &
+                       "get_var num_field_periods")
 
         ! Read 1D profiles
         allocate (A_phi_arr(n_rho), B_theta_arr(n_rho), B_phi_arr(n_rho))
@@ -196,26 +198,31 @@ contains
     end subroutine create_boozer_chartmap_field
 
     subroutine boozer_chartmap_evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-        !> Evaluate field at x = (s, theta_B, phi_B) in Boozer coordinates.
-        !> Returns covariant components for the non-canonical path.
+        !> Evaluate field at x = (rho, theta_B, phi_B) in chartmap coordinates.
+        !> Input x(1) = rho = sqrt(s), matching the chartmap coordinate system.
+        !> Returns covariant components in (rho, theta_B, phi_B) coordinates.
         class(boozer_chartmap_field_t), intent(in) :: self
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
         real(dp), intent(out), optional :: sqgBctr(3)
 
-        real(dp) :: s, rho_tor, theta_B, phi_B
+        real(dp) :: rho_tor, s, theta_B, phi_B
         real(dp) :: A_phi_val, A_theta_val
         real(dp) :: y1d_aphi(1), dy1d_aphi(1), d2y1d_aphi(1)
         real(dp) :: y1d_bc(2), dy1d_bc(2), d2y1d_bc(2)
         real(dp) :: x_3d(3), y_bmod(1)
         real(dp) :: B_theta_val, B_phi_val, Bmod_val
+        real(dp), parameter :: twopi = 8.0_dp * atan(1.0_dp)
 
-        s = x(1)
+        rho_tor = x(1)
         theta_B = x(2)
         phi_B = x(3)
-        rho_tor = sqrt(max(s, 0.0_dp))
+        s = rho_tor**2
 
         ! A_theta = torflux * s (linear, by definition)
+        ! In rho coordinates: A_theta(rho) = torflux * rho^2
+        ! Covariant component transforms: A_rho = A_s * ds/drho = A_s * 2*rho
+        ! But A_s = 0 (gauge), so A_rho = 0 regardless.
         A_theta_val = self%torflux * s
 
         ! A_phi from 1D spline at s
@@ -231,20 +238,24 @@ contains
 
         ! Bmod from 3D spline at (rho_tor, theta_B, phi_B)
         x_3d(1) = rho_tor
-        x_3d(2) = modulo(theta_B, 8.0_dp * atan(1.0_dp))
-        x_3d(3) = modulo(phi_B, 8.0_dp * atan(1.0_dp) / real(self%nfp, dp))
+        x_3d(2) = modulo(theta_B, twopi)
+        x_3d(3) = modulo(phi_B, twopi / real(self%nfp, dp))
 
         call evaluate_batch_splines_3d_no_der(self%bmod_spline, x_3d, y_bmod)
         Bmod_val = y_bmod(1)
 
         Bmod = Bmod_val
 
-        ! Covariant vector potential: A_s = 0 (gauge choice)
+        ! Covariant vector potential in (rho, theta, phi) coordinates.
+        ! A_theta and A_phi are the same in (s, theta, phi) and (rho, theta, phi)
+        ! since the angular coordinates are unchanged. A_rho = 0.
         Acov(1) = 0.0_dp
         Acov(2) = A_theta_val
         Acov(3) = A_phi_val
 
         ! Covariant unit field direction: h = B/|B|
+        ! B_theta and B_phi are covariant and independent of the radial
+        ! coordinate choice (they refer to the angular basis vectors).
         hcov(1) = 0.0_dp
         hcov(2) = B_theta_val / Bmod_val
         hcov(3) = B_phi_val / Bmod_val

@@ -299,8 +299,11 @@ def generate_boozer_chartmap(wout_file, output_file, n_rho=62, n_theta=63, n_phi
     v = ds.createVariable("Bmod", "f8", ("zeta", "theta", "rho"))
     v[:] = np.transpose(Bmod, (2, 1, 0))
 
+    # num_field_periods must be a scalar variable (not attribute) for libneo
+    v = ds.createVariable("num_field_periods", "i4")
+    v[:] = np.int32(nfp)
+
     # Global attributes
-    ds.num_field_periods = np.int32(nfp)
     ds.rho_convention = "rho_tor"
     ds.zeta_convention = "cyl"
     ds.rho_lcfs = rho_lcfs
