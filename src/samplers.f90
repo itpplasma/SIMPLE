@@ -25,6 +25,9 @@ module samplers
   ! Functions #################################
   subroutine init_starting_surf
     use alpha_lifetime_sub, only : integrate_mfl_can
+    use field_gvec, only: gvec_field_t
+    use gvec_export_data, only: gvec_family_logical, gvec_profile_iota
+    use magfie_sub, only: magfie, refcoords_field
     use params, only: dphi, nper, npoiper, phibeg, thetabeg, volstart, &
         xstart, sbeg, bmin, bmax, bmod00
 
@@ -36,9 +39,28 @@ module samplers
     bstart=0.d0
     volstart=0.d0
 
-    call integrate_mfl_can( &
-      npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
-      xstart,bstart,volstart,bmod00,ierr)
+    if (allocated(refcoords_field)) then
+      select type (field => refcoords_field)
+      type is (gvec_field_t)
+        if (field%data%family /= gvec_family_logical) then
+          call init_starting_surf_gvec_straight(field, npoiper*nper, dphi, sbeg(1), &
+                                                phibeg, thetabeg, xstart, bstart, &
+                                                volstart, bmod00, ierr)
+        else
+          call integrate_mfl_can( &
+            npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
+            xstart,bstart,volstart,bmod00,ierr)
+        end if
+      class default
+        call integrate_mfl_can( &
+          npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
+          xstart,bstart,volstart,bmod00,ierr)
+      end select
+    else
+      call integrate_mfl_can( &
+        npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
+        xstart,bstart,volstart,bmod00,ierr)
+    end if
 
     if(ierr.ne.0) then
       print *,'starting field line has points outside the chamber'
@@ -51,6 +73,89 @@ module samplers
 
     print *, 'bmod00 = ', bmod00, 'bmin = ', bmin, 'bmax = ', bmax
   end subroutine init_starting_surf
+
+  subroutine init_starting_surf_gvec_straight(field, npoi, dphi, rbeg, phibeg, thetabeg, &
+                                              xstart, bstart, volstart, bmod00, ierr)
+    use chamb_sub, only: chamb_can
+    use field_gvec, only: gvec_field_t
+    use gvec_export_data, only: gvec_profile_iota
+    use magfie_sub, only: magfie
+
+    class(gvec_field_t), intent(in) :: field
+    integer, intent(in) :: npoi
+    real(dp), intent(in) :: dphi, rbeg, phibeg, thetabeg
+    real(dp), intent(out) :: xstart(3, npoi), bstart(npoi), volstart(npoi), bmod00
+    integer, intent(out) :: ierr
+
+    real(dp) :: profiles(5)
+    real(dp) :: x(3), x_eval(3), phi_period, iota
+    real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+    real(dp) :: inv_bphi_prev, inv_bphi_curr
+    real(dp) :: b_over_bphi_prev, b_over_bphi_curr
+    real(dp) :: b2_over_bphi_prev, b2_over_bphi_curr
+    real(dp) :: int_b_over_bphi, int_b2_over_bphi
+    integer :: i
+
+    ierr = 0
+    phi_period = field%data%phi_period()
+    call field%data%evaluate_profiles(rbeg**2, profiles)
+    iota = profiles(gvec_profile_iota)
+
+    x = [rbeg, modulo(thetabeg, twopi), modulo(phibeg, phi_period)]
+    call chamb_can(x(1:2), x(3), ierr)
+    if (ierr /= 0) return
+
+    call magfie(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+    if (abs(hctrvr(3)) <= 1.0d-12) then
+      ierr = 1
+      return
+    end if
+
+    xstart(:, 1) = x
+    bstart(1) = bmod
+    volstart(1) = 0.0d0
+    inv_bphi_prev = 1.0d0/(bmod*hctrvr(3))
+    b_over_bphi_prev = bmod/hctrvr(3)
+    b2_over_bphi_prev = bmod**2/hctrvr(3)
+    int_b_over_bphi = 0.0d0
+    int_b2_over_bphi = 0.0d0
+
+    do i = 2, npoi
+      x(2) = modulo(thetabeg + real(i - 1, dp)*dphi*iota, twopi)
+      x(3) = modulo(phibeg + real(i - 1, dp)*dphi, phi_period)
+      call chamb_can(x(1:2), x(3), ierr)
+      if (ierr /= 0) return
+
+      x_eval = x
+      call magfie(x_eval, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+      if (abs(hctrvr(3)) <= 1.0d-12) then
+        ierr = 1
+        return
+      end if
+
+      inv_bphi_curr = 1.0d0/(bmod*hctrvr(3))
+      b_over_bphi_curr = bmod/hctrvr(3)
+      b2_over_bphi_curr = bmod**2/hctrvr(3)
+
+      volstart(i) = volstart(i - 1) + 0.5d0*dphi*(inv_bphi_prev + inv_bphi_curr)
+      int_b_over_bphi = int_b_over_bphi + 0.5d0*dphi*(b_over_bphi_prev + b_over_bphi_curr)
+      int_b2_over_bphi = int_b2_over_bphi + 0.5d0*dphi*(b2_over_bphi_prev + b2_over_bphi_curr)
+      xstart(:, i) = x
+      bstart(i) = bmod
+
+      inv_bphi_prev = inv_bphi_curr
+      b_over_bphi_prev = b_over_bphi_curr
+      b2_over_bphi_prev = b2_over_bphi_curr
+    end do
+
+    if (volstart(npoi) <= 0.0d0) then
+      ierr = 1
+      return
+    end if
+
+    volstart = volstart/volstart(npoi)
+    bmod00 = int_b2_over_bphi/max(int_b_over_bphi, 1.0d-30)
+  end subroutine init_starting_surf_gvec_straight
 
   subroutine load_starting_points(zstart, filename)
     real(dp), dimension(:,:), intent(inout) :: zstart

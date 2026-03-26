@@ -300,6 +300,8 @@ add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 # GVEC-related tests (only if GVEC support is enabled)
 if(ENABLE_GVEC)
     set(SIMPLE_GVEC_EXPORT_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.gvec_export.nc")
+    set(SIMPLE_GVEC_BOOZER_EXPORT_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.gvec_boozer_export.nc")
+    set(SIMPLE_GVEC_BOOZER_START_FILE "${CMAKE_CURRENT_BINARY_DIR}/start_boozer.dat")
     set(SIMPLE_VENV_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     if(EXISTS "${SIMPLE_VENV_PYTHON}")
         set(SIMPLE_GVEC_PYTHON "${SIMPLE_VENV_PYTHON}")
@@ -324,12 +326,62 @@ if(ENABLE_GVEC)
         TIMEOUT 600
     )
 
+    add_test(NAME generate_gvec_boozer_export
+        COMMAND ${SIMPLE_GVEC_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/generate_gvec_export.py
+            --gvec-bin $<TARGET_FILE:gvec>
+            --exporter ${CMAKE_SOURCE_DIR}/python/pysimple/gvec_export.py
+            --wout ${CMAKE_CURRENT_BINARY_DIR}/wout.nc
+            --output ${SIMPLE_GVEC_BOOZER_EXPORT_FILE}
+            --family boozer
+            --mnfactor 1
+            --ns 63
+            --ntheta 65
+            --nvarphi 65
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(generate_gvec_boozer_export PROPERTIES
+        FIXTURES_SETUP gvec_boozer_export
+        LABELS "integration;python"
+        TIMEOUT 600
+    )
+
+    add_test(NAME generate_gvec_boozer_start
+        COMMAND ${SIMPLE_GVEC_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/generate_gvec_boozer_start.py
+            --param-file ${CMAKE_CURRENT_BINARY_DIR}/simple_gvec_export.ini
+            --state-file ${CMAKE_CURRENT_BINARY_DIR}/simple_gvec_export_State_0000_00000000.dat
+            --output ${SIMPLE_GVEC_BOOZER_START_FILE}
+            --mnfactor 1
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(generate_gvec_boozer_start PROPERTIES
+        FIXTURES_REQUIRED gvec_export
+        FIXTURES_SETUP gvec_boozer_start
+        LABELS "integration;python"
+        TIMEOUT 600
+    )
+
     add_executable (test_gvec.x test_gvec.f90)
     target_link_libraries(test_gvec.x simple)
     add_test(NAME test_gvec COMMAND test_gvec.x)
     set_tests_properties(test_gvec PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         FIXTURES_REQUIRED gvec_export
+    )
+
+    add_executable (test_gvec_boozer.x test_gvec_boozer.f90)
+    target_link_libraries(test_gvec_boozer.x simple)
+    add_test(NAME test_gvec_boozer COMMAND test_gvec_boozer.x)
+    set_tests_properties(test_gvec_boozer PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_REQUIRED "gvec_boozer_export;gvec_boozer_start"
+    )
+
+    add_executable (test_gvec_boozer_refcoords_magfie.x test_gvec_boozer_refcoords_magfie.f90)
+    target_link_libraries(test_gvec_boozer_refcoords_magfie.x simple)
+    add_test(NAME test_gvec_boozer_refcoords_magfie COMMAND test_gvec_boozer_refcoords_magfie.x)
+    set_tests_properties(test_gvec_boozer_refcoords_magfie PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_REQUIRED gvec_boozer_export
     )
 
     add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
@@ -355,7 +407,7 @@ if(ENABLE_GVEC)
     set_tests_properties(test_simple_vmec_gvec PROPERTIES
         LABELS "slow;integration"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        FIXTURES_REQUIRED gvec_export
+        FIXTURES_REQUIRED "gvec_export;gvec_boozer_export;gvec_boozer_start"
     )
 
     add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
@@ -477,7 +529,8 @@ add_test(NAME test_refcoords_file_detection
     COMMAND test_refcoords_file_detection.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_refcoords_file_detection PROPERTIES
-    LABELS "unit")
+    LABELS "unit"
+    FIXTURES_REQUIRED "gvec_export;gvec_boozer_export")
 
 add_executable(test_field_equivalence_chartmap.x test_field_equivalence_chartmap.f90)
 target_link_libraries(test_field_equivalence_chartmap.x simple)

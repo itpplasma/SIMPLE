@@ -3,9 +3,15 @@ use spline_vmec_sub, only: vmec_field
 use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
+use field, only: field_clone
+use field_base, only: magnetic_field_t
+use field_gvec, only: gvec_field_t
 use field_splined, only: splined_field_t
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
                               RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
+use gvec_reference_coordinates, only: gvec_coordinate_system_t
+use util, only: twopi
+use new_vmec_stuff_mod, only: nper
 
 implicit none
 
@@ -37,15 +43,15 @@ procedure(magfie_base), pointer :: magfie => null()
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
                       REFCOORDS=5
 
-type(splined_field_t), allocatable :: refcoords_field
+class(magnetic_field_t), allocatable :: refcoords_field
 
 contains
 
 subroutine set_magfie_refcoords_field(field)
-  type(splined_field_t), intent(in) :: field
+  class(magnetic_field_t), intent(in) :: field
 
   if (allocated(refcoords_field)) deallocate (refcoords_field)
-  allocate (refcoords_field, source=field)
+  call field_clone(field, refcoords_field)
 end subroutine set_magfie_refcoords_field
 
 subroutine init_magfie(id)
@@ -148,6 +154,10 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   real(dp) :: u_ref(3), J
   real(dp) :: e_cov(3, 3), jac_signed
   real(dp) :: sqrtg_abs
+  real(dp) :: sqgBctr_ref(3)
+  real(dp) :: Acov_exact(3)
+  real(dp) :: hcov_exact(3)
+  real(dp) :: Bmod_exact
 
   if (.not. allocated(refcoords_field)) then
     print *, 'magfie_refcoords: refcoords_field not set'
@@ -155,8 +165,12 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     error stop
   end if
 
-  call refcoords_field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, &
-                                         dhcov, dBmod)
+  select type (field => refcoords_field)
+  type is (splined_field_t)
+    call field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, dhcov, dBmod)
+  class default
+    call evaluate_refcoords_fd(field, x, Acov, hcovar, Bmod_local, dAcov, dhcov, dBmod)
+  end select
   bmod = Bmod_local
   bder = dBmod/max(bmod, 1.0d-30)
 
@@ -168,10 +182,94 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   sqrtg = jac_signed*J
 
   call inverse_metric_scaled(J, ginv_u, ginv_x)
-  hctrvr = matmul(ginv_x, hcovar)
+  select type (field => refcoords_field)
+  type is (gvec_field_t)
+    call field%evaluate(u_ref, Acov_exact, hcov_exact, Bmod_exact, sqgBctr_ref)
+    hctrvr(1) = sqgBctr_ref(1)/(sqrtg*bmod)
+    hctrvr(2) = J*sqgBctr_ref(2)/(sqrtg*bmod)
+    hctrvr(3) = J*sqgBctr_ref(3)/(sqrtg*bmod)
+  class default
+    hctrvr = matmul(ginv_x, hcovar)
+  end select
 
   call compute_hcurl(sqrtg, dhcov, hcurl)
 end subroutine magfie_refcoords
+
+
+subroutine evaluate_refcoords_fd(field, x_scaled, Acov, hcov, Bmod, dAcov, dhcov, dBmod)
+  class(magnetic_field_t), intent(in) :: field
+  real(dp), intent(in) :: x_scaled(3)
+  real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+  real(dp), intent(out) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
+
+  real(dp), parameter :: h_rho = 1.0d-4
+  real(dp), parameter :: h_theta = 2.5d-4
+  real(dp), parameter :: h_phi = 2.5d-4
+
+  real(dp) :: x_plus(3)
+  real(dp) :: x_minus(3)
+  real(dp) :: A_plus(3)
+  real(dp) :: A_minus(3)
+  real(dp) :: h_plus(3)
+  real(dp) :: h_minus(3)
+  real(dp) :: B_plus
+  real(dp) :: B_minus
+  real(dp) :: delta
+  real(dp) :: phi_period
+  integer :: i
+
+  call evaluate_refcoords_field_scaled(field, x_scaled, Acov, hcov, Bmod)
+  phi_period = refcoords_field_phi_period(field%coords)
+
+  do i = 1, 3
+    x_plus = x_scaled
+    x_minus = x_scaled
+
+    select case (i)
+    case (1)
+      x_plus(1) = x_scaled(1) + h_rho
+      x_minus(1) = max(1.0d-6, x_scaled(1) - h_rho)
+      delta = x_plus(1) - x_minus(1)
+    case (2)
+      x_plus(2) = modulo(x_scaled(2) + h_theta, twopi)
+      x_minus(2) = modulo(x_scaled(2) - h_theta, twopi)
+      delta = 2.0d0*h_theta
+    case (3)
+      x_plus(3) = modulo(x_scaled(3) + h_phi, phi_period)
+      x_minus(3) = modulo(x_scaled(3) - h_phi, phi_period)
+      delta = 2.0d0*h_phi
+    case default
+      error stop 'evaluate_refcoords_fd: invalid coordinate index'
+    end select
+
+    call evaluate_refcoords_field_scaled(field, x_plus, A_plus, h_plus, B_plus)
+    call evaluate_refcoords_field_scaled(field, x_minus, A_minus, h_minus, B_minus)
+
+    dAcov(i, :) = (A_plus - A_minus)/delta
+    dhcov(i, :) = (h_plus - h_minus)/delta
+    dBmod(i) = (B_plus - B_minus)/delta
+  end do
+end subroutine evaluate_refcoords_fd
+
+
+subroutine evaluate_refcoords_field_scaled(field, x_scaled, Acov, hcov, Bmod)
+  class(magnetic_field_t), intent(in) :: field
+  real(dp), intent(in) :: x_scaled(3)
+  real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+
+  real(dp) :: u_ref(3)
+  real(dp) :: J
+  real(dp) :: Acov_ref(3)
+  real(dp) :: hcov_ref(3)
+
+  call scaled_to_ref_coords(field%coords, x_scaled, u_ref, J)
+  call field%evaluate(u_ref, Acov_ref, hcov_ref, Bmod)
+
+  Acov(1) = Acov_ref(1)*J
+  Acov(2:3) = Acov_ref(2:3)
+  hcov(1) = hcov_ref(1)*J
+  hcov(2:3) = hcov_ref(2:3)
+end subroutine evaluate_refcoords_field_scaled
 
 
 subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
@@ -192,6 +290,20 @@ subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
     J = 2.0d0*x_scaled(1)
   end select
 end subroutine scaled_to_ref_coords
+
+
+real(dp) function refcoords_field_phi_period(coords)
+  class(coordinate_system_t), intent(in) :: coords
+
+  select type (coords)
+  type is (chartmap_coordinate_system_t)
+    refcoords_field_phi_period = twopi/real(coords%num_field_periods, dp)
+  type is (gvec_coordinate_system_t)
+    refcoords_field_phi_period = coords%phi_period()
+  class default
+    refcoords_field_phi_period = twopi/real(nper, dp)
+  end select
+end function refcoords_field_phi_period
 
 
 subroutine inverse_metric_scaled(J, ginv_u, ginv_x)

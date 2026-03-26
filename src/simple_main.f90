@@ -225,6 +225,8 @@ contains
 
     subroutine configure_refcoords_sampling_field(field_temp)
         use field_base, only: magnetic_field_t
+        use field_gvec, only: gvec_field_t
+        use gvec_export_data, only: gvec_family_logical
         use magfie_sub, only: set_magfie_refcoords_field
         use field_splined, only: splined_field_t, create_splined_field
         class(magnetic_field_t), intent(in) :: field_temp
@@ -232,6 +234,16 @@ contains
         select type (field_temp)
         type is (splined_field_t)
             call set_magfie_refcoords_field(field_temp)
+        type is (gvec_field_t)
+            if (field_temp%data%family == gvec_family_logical) then
+                block
+                    type(splined_field_t) :: splined_field
+                    call create_splined_field(field_temp, ref_coords, splined_field)
+                    call set_magfie_refcoords_field(splined_field)
+                end block
+            else
+                call set_magfie_refcoords_field(field_temp)
+            end if
         class default
             block
                 type(splined_field_t) :: splined_field

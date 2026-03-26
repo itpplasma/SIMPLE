@@ -15,9 +15,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wout", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--project-name", default="simple_gvec_export")
+    parser.add_argument("--family", choices=["logical", "boozer"], default="logical")
     parser.add_argument("--ns", type=int, default=63)
     parser.add_argument("--ntheta", type=int, default=65)
     parser.add_argument("--nvarphi", type=int, default=65)
+    parser.add_argument("--mnfactor", type=int, default=1)
     return parser.parse_args()
 
 
@@ -65,12 +67,16 @@ def main() -> None:
             str(state_file),
             "--output",
             str(args.output),
+            "--family",
+            args.family,
             "--ns",
             str(args.ns),
             "--ntheta",
             str(args.ntheta),
             "--nvarphi",
             str(args.nvarphi),
+            "--mnfactor",
+            str(args.mnfactor),
         ],
         cwd=workdir,
         check=True,
