@@ -1,4 +1,6 @@
 add_subdirectory(tests)
-if(ENABLE_PYTHON_INTERFACE)
+if(ENABLE_PYTHON_INTERFACE AND SIMPLE_PYTHON_INTERFACE_BUILT)
     add_subdirectory(python)
+elseif(ENABLE_PYTHON_INTERFACE)
+    message(STATUS "Skipping Python tests because the SIMPLE Python backend was not built")
 endif()

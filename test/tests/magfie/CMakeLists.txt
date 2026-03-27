@@ -138,7 +138,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     )
 endif()
 
-if(SIMPLE_ENABLE_PYTHON_TOOLS)
+if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
     add_test(NAME test_orbit_chartmap_comparison_map2disc
         COMMAND $<TARGET_FILE:test_orbit_chartmap_comparison.x>
             wout.chartmap.map2disc.nc orbit_chartmap_comparison_map2disc.nc
