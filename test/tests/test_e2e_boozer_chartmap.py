@@ -27,12 +27,14 @@ EQUILIBRIA = [
     {
         "name": "QA",
         "wout": os.path.join(TEST_DATA, "wout.nc"),
+        "gvec_chartmap": os.path.join(TEST_DATA, "wout_qa.gvec.chartmap.nc"),
         "trace_time": "1d-2",
         "facE_al": "1.0d0",
     },
     {
         "name": "NCSX",
         "wout": os.path.join(TEST_DATA, "wout_ncsx.nc"),
+        "gvec_chartmap": None,
         "trace_time": "1d-2",
         "facE_al": "100.0d0",
     },
@@ -56,7 +58,7 @@ facE_al = {facE_al}
 """
 
 
-def simple_in_chartmap(trace_time, facE_al):
+def simple_in_chartmap(chartmap_name, trace_time, facE_al):
     return f"""\
 &config
 multharm = 3
@@ -64,8 +66,8 @@ contr_pp = -1e10
 trace_time = {trace_time}
 sbeg = 0.3d0
 ntestpart = 32
-field_input = 'boozer_chartmap.nc'
-coord_input = 'boozer_chartmap.nc'
+field_input = '{chartmap_name}'
+coord_input = '{chartmap_name}'
 isw_field_type = 2
 deterministic = .True.
 integmode = 1
@@ -89,6 +91,7 @@ def run_cmd(cmd, cwd, label, timeout=600):
 def run_single_equilibrium(eq, outdir):
     name = eq["name"]
     wout = eq["wout"]
+    gvec_chartmap = eq["gvec_chartmap"]
     trace_time = eq["trace_time"]
     facE_al = eq["facE_al"]
 
@@ -98,9 +101,12 @@ def run_single_equilibrium(eq, outdir):
 
     eq_dir = os.path.join(outdir, name)
     vmec_dir = os.path.join(eq_dir, "vmec_run")
-    chartmap_dir = os.path.join(eq_dir, "chartmap_run")
+    chartmap_dir = os.path.join(eq_dir, "vmec_chartmap_run")
+    gvec_dir = os.path.join(eq_dir, "gvec_chartmap_run")
     os.makedirs(vmec_dir)
     os.makedirs(chartmap_dir)
+    if gvec_chartmap and os.path.exists(gvec_chartmap):
+        os.makedirs(gvec_dir)
 
     wout_name = os.path.basename(wout)
 
@@ -129,61 +135,95 @@ def run_single_equilibrium(eq, outdir):
         return False
 
     # Step 3: Chartmap-only
-    print(f"  [{name}] Step 3: Chartmap-only path...")
+    print(f"  [{name}] Step 3: VMEC chartmap-only path...")
     with open(os.path.join(chartmap_dir, "simple.in"), "w") as f:
-        f.write(simple_in_chartmap(trace_time, facE_al))
+        f.write(simple_in_chartmap("boozer_chartmap.nc", trace_time, facE_al))
 
-    if not run_cmd([SIMPLE_X], cwd=chartmap_dir, label=f"{name} chartmap"):
+    if not run_cmd([SIMPLE_X], cwd=chartmap_dir, label=f"{name} VMEC chartmap"):
         return False
 
     cf_chartmap = os.path.join(chartmap_dir, "confined_fraction.dat")
     assert os.path.exists(cf_chartmap), f"{name}: confined_fraction.dat not produced"
 
-    # Step 4: Compare
-    data_vmec = np.loadtxt(cf_vmec)
-    data_chartmap = np.loadtxt(cf_chartmap)
+    series = {
+        "VMEC-Boozer": np.loadtxt(cf_vmec),
+        "VMEC chartmap": np.loadtxt(cf_chartmap),
+    }
 
-    n = min(len(data_vmec), len(data_chartmap))
-    data_vmec = data_vmec[:n]
-    data_chartmap = data_chartmap[:n]
+    if gvec_chartmap and os.path.exists(gvec_chartmap):
+        print(f"  [{name}] Step 4: GVEC chartmap-only path...")
+        shutil.copy(gvec_chartmap, os.path.join(gvec_dir, "boozer_chartmap.nc"))
+        shutil.copy(start_boozer, os.path.join(gvec_dir, "start.dat"))
+        with open(os.path.join(gvec_dir, "simple.in"), "w") as f:
+            f.write(simple_in_chartmap("boozer_chartmap.nc", trace_time, facE_al))
+        if not run_cmd([SIMPLE_X], cwd=gvec_dir, label=f"{name} GVEC chartmap"):
+            return False
+        cf_gvec = os.path.join(gvec_dir, "confined_fraction.dat")
+        assert os.path.exists(cf_gvec), f"{name}: GVEC confined_fraction.dat not produced"
+        series["GVEC chartmap"] = np.loadtxt(cf_gvec)
 
-    t = data_vmec[:, 0]
-    pass_v, trap_v = data_vmec[:, 1], data_vmec[:, 2]
-    pass_c, trap_c = data_chartmap[:, 1], data_chartmap[:, 2]
-    total_v = pass_v + trap_v
-    total_c = pass_c + trap_c
+    # Step 5: Compare
+    min_len = min(len(data) for data in series.values())
+    for key in list(series):
+        series[key] = series[key][:min_len]
 
-    max_diff_total = np.max(np.abs(total_v - total_c))
-    max_diff_pass = np.max(np.abs(pass_v - pass_c))
-    max_diff_trap = np.max(np.abs(trap_v - trap_c))
-
-    print(f"  [{name}] max |total diff| = {max_diff_total:.6e}")
-    print(f"  [{name}] max |pass diff|  = {max_diff_pass:.6e}")
-    print(f"  [{name}] max |trap diff|  = {max_diff_trap:.6e}")
-
-    # Plot
-    plot_comparison(eq_dir, name, t, total_v, total_c, pass_v, pass_c, trap_v, trap_c)
-
-    npart = data_vmec[0, 3]
+    ref = series["VMEC-Boozer"]
+    t = ref[:, 0]
+    npart = ref[0, 3]
     tol = 1.0 / npart
-    if max_diff_total > tol:
-        print(f"  [{name}] FAIL: total confined differs by {max_diff_total:.6e} > {tol:.6e}")
+
+    totals = {}
+    passings = {}
+    trappeds = {}
+    for key, data in series.items():
+        passings[key] = data[:, 1]
+        trappeds[key] = data[:, 2]
+        totals[key] = passings[key] + trappeds[key]
+
+    max_diff_total = 0.0
+    max_diff_pass = 0.0
+    max_diff_trap = 0.0
+    labels = list(series)
+    for i, left in enumerate(labels):
+        for right in labels[i + 1:]:
+            diff_total = np.max(np.abs(totals[left] - totals[right]))
+            diff_pass = np.max(np.abs(passings[left] - passings[right]))
+            diff_trap = np.max(np.abs(trappeds[left] - trappeds[right]))
+            print(f"  [{name}] max |total diff| {left} vs {right} = {diff_total:.6e}")
+            print(f"  [{name}] max |pass diff|  {left} vs {right} = {diff_pass:.6e}")
+            print(f"  [{name}] max |trap diff|  {left} vs {right} = {diff_trap:.6e}")
+            max_diff_total = max(max_diff_total, diff_total)
+            max_diff_pass = max(max_diff_pass, diff_pass)
+            max_diff_trap = max(max_diff_trap, diff_trap)
+
+    plot_comparison(eq_dir, name, t, totals, passings, trappeds)
+
+    if max_diff_total > tol or max_diff_pass > tol or max_diff_trap > tol:
+        print(
+            f"  [{name}] FAIL: pairwise confined-fraction disagreement exceeds {tol:.6e}"
+        )
         return False
 
     print(f"  [{name}] PASS")
     return True
 
 
-def plot_comparison(outdir, name, t, total_v, total_c, pass_v, pass_c, trap_v, trap_c):
+def plot_comparison(outdir, name, t, totals, passings, trappeds):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    styles = {
+        "VMEC-Boozer": ("k-", 1.8),
+        "VMEC chartmap": ("C0--", 1.4),
+        "GVEC chartmap": ("C3:", 2.0),
+    }
 
     ax = axes[0]
-    ax.plot(t * 1e3, total_v, "b-", lw=1.5, label="VMEC-Boozer")
-    ax.plot(t * 1e3, total_c, "r--", lw=1.5, label="Chartmap")
+    for key, values in totals.items():
+        style, width = styles.get(key, ("-", 1.5))
+        ax.plot(t * 1e3, values, style, lw=width, label=key)
     ax.set_xlabel("time [ms]")
     ax.set_ylabel("confined fraction")
     ax.set_title("Total confined")
@@ -191,10 +231,13 @@ def plot_comparison(outdir, name, t, total_v, total_c, pass_v, pass_c, trap_v, t
     ax.set_ylim(-0.05, 1.05)
 
     ax = axes[1]
-    ax.plot(t * 1e3, pass_v, "b-", lw=1.5, label="VMEC passing")
-    ax.plot(t * 1e3, pass_c, "r--", lw=1.5, label="Chartmap passing")
-    ax.plot(t * 1e3, trap_v, "b-", lw=1, alpha=0.5, label="VMEC trapped")
-    ax.plot(t * 1e3, trap_c, "r--", lw=1, alpha=0.5, label="Chartmap trapped")
+    for key, values in passings.items():
+        style, width = styles.get(key, ("-", 1.5))
+        ax.plot(t * 1e3, values, style, lw=width, label=f"{key} passing")
+    for key, values in trappeds.items():
+        style, width = styles.get(key, ("-", 1.2))
+        ax.plot(t * 1e3, values, style, lw=max(width - 0.4, 0.8), alpha=0.6,
+                label=f"{key} trapped")
     ax.set_xlabel("time [ms]")
     ax.set_ylabel("confined fraction")
     ax.set_title("Passing + Trapped")
@@ -202,12 +245,19 @@ def plot_comparison(outdir, name, t, total_v, total_c, pass_v, pass_c, trap_v, t
     ax.set_ylim(-0.05, 1.05)
 
     ax = axes[2]
-    ax.semilogy(t * 1e3, np.abs(total_v - total_c) + 1e-16, "k-", lw=1)
+    ref_key = "VMEC-Boozer"
+    for key, values in totals.items():
+        if key == ref_key:
+            continue
+        style, width = styles.get(key, ("-", 1.5))
+        ax.semilogy(t * 1e3, np.abs(totals[ref_key] - values) + 1e-16,
+                    style, lw=width, label=f"{key} - {ref_key}")
     ax.set_xlabel("time [ms]")
     ax.set_ylabel("|difference|")
     ax.set_title("Confined fraction difference")
+    ax.legend(fontsize=8)
 
-    fig.suptitle(f"E2E: VMEC-Boozer vs Chartmap ({name})", fontsize=14)
+    fig.suptitle(f"E2E confined fractions: {name}", fontsize=14)
     fig.tight_layout()
     outpath = os.path.join(outdir, f"e2e_{name}.png")
     fig.savefig(outpath, dpi=150)
