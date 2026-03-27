@@ -91,6 +91,21 @@ contains
             call print_phase_time('TEST field initialization completed')
             call sample_particles_test_field
             call print_phase_time('TEST field particle sampling completed')
+        else if (chartmap_mode) then
+            ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
+            if (startmode /= 2) then
+                error stop 'Boozer chartmap requires startmode=2 '// &
+                    '(load particles from start.dat)'
+            end if
+
+            call init_magfie(isw_field_type)
+            call print_phase_time('Boozer magfie initialization completed')
+
+            call init_starting_surf
+            call print_phase_time('Starting surface initialization completed')
+
+            call sample_particles
+            call print_phase_time('Particle sampling completed')
         else
             call init_magfie(VMEC)
             call print_phase_time('VMEC magnetic field initialization completed')
