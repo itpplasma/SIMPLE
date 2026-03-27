@@ -27,13 +27,13 @@ EQUILIBRIA = [
     {
         "name": "QA",
         "wout": os.path.join(TEST_DATA, "wout.nc"),
-        "trace_time": "1d-1",
+        "trace_time": "1d-2",
         "facE_al": "1.0d0",
     },
     {
         "name": "NCSX",
         "wout": os.path.join(TEST_DATA, "wout_ncsx.nc"),
-        "trace_time": "1d-1",
+        "trace_time": "1d-2",
         "facE_al": "100.0d0",
     },
 ]
