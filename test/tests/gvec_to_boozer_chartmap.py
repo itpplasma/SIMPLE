@@ -137,16 +137,18 @@ def main():
     v = ds.createVariable("theta", "f8", ("theta",)); v[:] = theta_geom
     v = ds.createVariable("zeta", "f8", ("zeta",)); v[:] = zeta_geom
 
+    # NetCDF dimensions are (zeta, theta, rho) so NF90 reads as (rho, theta, zeta)
     for name, arr in [("x", X), ("y", Y), ("z", Z_geom)]:
-        v = ds.createVariable(name, "f8", ("rho", "theta", "zeta"))
-        v[:] = arr
+        v = ds.createVariable(name, "f8", ("zeta", "theta", "rho"))
+        v[:] = np.transpose(arr, (2, 1, 0))
         v.units = "cm"
 
     v = ds.createVariable("A_phi", "f8", ("rho",)); v[:] = A_phi
     v = ds.createVariable("B_theta", "f8", ("rho",)); v[:] = B_theta
     v = ds.createVariable("B_phi", "f8", ("rho",)); v[:] = B_phi
-    v = ds.createVariable("Bmod", "f8", ("rho", "theta_field", "zeta_field"))
-    v[:] = Bmod_3d
+    # Bmod uses field dimensions (also reversed for NF90)
+    v = ds.createVariable("Bmod", "f8", ("zeta_field", "theta_field", "rho"))
+    v[:] = np.transpose(Bmod_3d, (2, 1, 0))
 
     v = ds.createVariable("num_field_periods", "i4"); v[:] = np.int32(nfp)
 
