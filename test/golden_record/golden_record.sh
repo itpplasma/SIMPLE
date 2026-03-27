@@ -175,8 +175,6 @@ build() {
 
     if grep -q "fortplot" CMakeLists.txt 2>/dev/null; then
         echo "Detected fortplot dependency in CMakeLists.txt"
-    else
-        CMAKE_OPTS="$CMAKE_OPTS -DENABLE_GVEC=OFF"
     fi
 
     # Enable deterministic floating-point for reproducible golden record tests

@@ -215,33 +215,6 @@ add_custom_target(ncsx_test_data DEPENDS ${CHARTMAP_NCSX_FILE} ${COILS_SIMPLE_FI
 # Symlinks for NCSX test data
 file(CREATE_LINK "${WOUT_NCSX_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc" SYMBOLIC)
 
-# Convert VMEC to GVEC format for testing field_vmec vs field_gvec
-# This requires GVEC Python API or command-line tools
-if(ENABLE_GVEC)
-    find_program(PYTHON_EXECUTABLE python3)
-    if(PYTHON_EXECUTABLE AND SIMPLE_ENABLE_PYTHON_TOOLS)
-        # Try to convert VMEC to GVEC using Python
-        execute_process(
-            COMMAND ${PYTHON_EXECUTABLE} -c "
-try:
-    import gvec
-    print('GVEC Python module found, converting VMEC to GVEC format...')
-    gvec.read_vmec('${CMAKE_CURRENT_BINARY_DIR}/wout.nc')
-    gvec.save('${CMAKE_CURRENT_BINARY_DIR}/wout_gvec.dat')
-    print('Successfully converted VMEC to GVEC format: wout_gvec.dat')
-except ImportError:
-    print('GVEC Python module not found, skipping VMEC to GVEC conversion')
-except Exception as e:
-    print(f'Failed to convert VMEC to GVEC: {e}')
-"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            RESULT_VARIABLE GVEC_CONVERT_RESULT
-        )
-    else()
-        message(STATUS "Python not found, skipping VMEC to GVEC conversion")
-    endif()
-endif()
-
 ##################################################
 # INTERNAL UNIT TEST STUFF
 ##################################################
@@ -323,53 +296,6 @@ target_link_libraries(test_samplers.x simple)
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
-
-# GVEC-related tests (only if GVEC support is enabled)
-if(ENABLE_GVEC)
-    add_executable (test_gvec.x test_gvec.f90)
-    target_link_libraries(test_gvec.x simple)
-    # add_dependencies(test_gvec.x gvec_test_data)
-    add_test(NAME test_gvec COMMAND test_gvec.x)
-
-    add_executable (test_vmec_gvec.x test_vmec_gvec.f90)
-    target_link_libraries(test_vmec_gvec.x simple)
-    add_test(NAME test_vmec_gvec COMMAND test_vmec_gvec.x)
-
-    add_executable (test_canonical_gvec.x test_canonical_gvec.f90)
-    target_link_libraries(test_canonical_gvec.x simple)
-    add_test(NAME test_canonical_gvec COMMAND test_canonical_gvec.x)
-
-    add_executable (test_simple_vmec_gvec.x test_simple_vmec_gvec.f90)
-    target_link_libraries(test_simple_vmec_gvec.x simple)
-    add_test(NAME test_simple_vmec_gvec COMMAND test_simple_vmec_gvec.x)
-    set_tests_properties(test_simple_vmec_gvec PROPERTIES
-        LABELS "slow;integration"
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        WILL_FAIL TRUE  # Expected to fail
-    )
-
-    add_executable (test_adapter_consistency.x test_adapter_consistency.f90)
-    target_link_libraries(test_adapter_consistency.x simple)
-    add_test(NAME test_adapter_consistency COMMAND test_adapter_consistency.x)
-    set_tests_properties(test_adapter_consistency PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-
-    add_executable (test_vmec_gvec_adapter.x test_vmec_gvec_adapter.f90)
-    target_link_libraries(test_vmec_gvec_adapter.x simple)
-    add_test(NAME test_vmec_gvec_adapter COMMAND test_vmec_gvec_adapter.x)
-    set_tests_properties(test_vmec_gvec_adapter PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "adapter"
-    )
-endif()
-
-
-# Add 2D field export utility (requires GVEC support)
-if(ENABLE_GVEC)
-    add_executable (export_field_2d.x export_field_2d.f90)
-    target_link_libraries(export_field_2d.x simple)
-endif()
 
 add_test(NAME test_magfie COMMAND test_magfie.x)
 

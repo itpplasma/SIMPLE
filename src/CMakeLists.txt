@@ -99,14 +99,6 @@ list(APPEND SOURCES
     diag/diag_orbit.f90
 )
 
-# Add GVEC-specific sources if enabled
-if(ENABLE_GVEC)
-    list(APPEND SOURCES
-        field/field_gvec.f90
-        field/vmec_field_adapter.f90
-    )
-endif()
-
     add_library (simple STATIC ${SOURCES})
 
     if(SIMPLE_ENABLE_CGAL)
@@ -140,17 +132,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     target_include_directories(simple BEFORE PUBLIC
         ${CMAKE_BINARY_DIR}/deps/include
     )
-endif()
-
-# Conditionally link GVEC if enabled
-if(ENABLE_GVEC)
-    target_include_directories(simple PRIVATE
-        ${gvec_BINARY_DIR}/include
-    )
-    target_link_libraries(simple PUBLIC
-        gveclib
-    )
-    target_compile_definitions(simple PUBLIC GVEC_AVAILABLE)
 endif()
 
 # Link fortplot (when available)

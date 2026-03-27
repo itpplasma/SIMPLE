@@ -1,6 +1,5 @@
 module vmec_field_eval
   !> Module providing VMEC field evaluation functions that work with magnetic_field_t classes
-  !> This module is always available regardless of GVEC support
 
   use, intrinsic :: iso_fortran_env, only : dp => real64
   use field_base, only : magnetic_field_t
