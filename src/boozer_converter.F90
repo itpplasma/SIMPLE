@@ -893,6 +893,7 @@ contains
 
         integer :: ncid, status, dimid, varid
         integer :: n_rho, n_theta, n_zeta, nfp_file
+        integer :: n_theta_field, n_zeta_field
         real(dp) :: torflux_val
         real(dp), allocatable :: rho(:), theta(:), zeta(:)
         real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
@@ -948,9 +949,22 @@ contains
         call nc_check(nf90_inq_varid(ncid, "B_phi", varid), "var B_phi")
         call nc_check(nf90_get_var(ncid, varid, B_phi_arr), "get B_phi")
 
-        ! Read 3D Bmod: NetCDF dims (zeta, theta, rho) map to Fortran
-        ! (rho, theta, zeta) via NF90 dimension reversal
-        allocate (Bmod_arr(n_rho, n_theta, n_zeta))
+        ! Read Bmod field dimensions (endpoint-included, may differ from geometry dims)
+        status = nf90_inq_dimid(ncid, "theta_field", dimid)
+        if (status == nf90_noerr) then
+            call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_theta_field), &
+                           "len theta_field")
+            call nc_check(nf90_inq_dimid(ncid, "zeta_field", dimid), "dim zeta_field")
+            call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_zeta_field), &
+                           "len zeta_field")
+        else
+            ! Fallback: field uses same dims as geometry (old format)
+            n_theta_field = n_theta
+            n_zeta_field = n_zeta
+        end if
+
+        ! Read 3D Bmod on field grid
+        allocate (Bmod_arr(n_rho, n_theta_field, n_zeta_field))
         call nc_check(nf90_inq_varid(ncid, "Bmod", varid), "var Bmod")
         call nc_check(nf90_get_var(ncid, varid, Bmod_arr), "get Bmod")
 
@@ -964,11 +978,12 @@ contains
         ns_s_B = 5
         ns_tp_B = 5
         ns_B = n_rho
-        n_theta_B = n_theta
-        n_phi_B = n_zeta
+        n_theta_B = n_theta_field
+        n_phi_B = n_zeta_field
         hs_B = rho(2) - rho(1)
-        h_theta_B = theta(2) - theta(1)
-        h_phi_B = zeta(2) - zeta(1)
+        ! Field grid step from endpoint-included dimensions
+        h_theta_B = TWOPI / real(n_theta_field - 1, dp)
+        h_phi_B = TWOPI / real(nfp_file, dp) / real(n_zeta_field - 1, dp)
         use_B_r = .false.
         use_del_tp_B = .false.
 
@@ -1001,12 +1016,14 @@ contains
         deallocate (y_bcovar)
 
         ! Build Bmod 3D batch spline over (rho_tor, theta_B, phi_B)
+        ! Uses endpoint-included field grid matching original VMEC Boozer splines
         order_3d = [ns_s_B, ns_tp_B, ns_tp_B]
         periodic_3d = [.false., .true., .true.]
-        x_min_3d = [rho(1), theta(1), zeta(1)]
-        x_max_3d = [rho(n_rho), theta(n_theta), zeta(n_zeta)]
+        x_min_3d = [rho(1), 0.0_dp, 0.0_dp]
+        x_max_3d = [rho(n_rho), h_theta_B * real(n_theta_field - 1, dp), &
+                     h_phi_B * real(n_zeta_field - 1, dp)]
 
-        allocate (y_bmod(n_rho, n_theta, n_zeta, 1))
+        allocate (y_bmod(n_rho, n_theta_field, n_zeta_field, 1))
         y_bmod(:, :, :, 1) = Bmod_arr
         call construct_batch_splines_3d(x_min_3d, x_max_3d, y_bmod, order_3d, &
                                         periodic_3d, bmod_br_batch_spline)
@@ -1015,8 +1032,8 @@ contains
         deallocate (y_bmod)
 
         print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
-        print *, '  nfp=', nfp_file, ' ns=', n_rho, ' ntheta=', n_theta, &
-                 ' nphi=', n_zeta
+        print *, '  nfp=', nfp_file, ' ns=', n_rho, ' ntheta_field=', &
+                 n_theta_field, ' nphi_field=', n_zeta_field
         print *, '  torflux=', torflux_val
 
     contains
@@ -1050,6 +1067,7 @@ contains
 
         integer :: ncid, status
         integer :: dim_rho, dim_theta, dim_zeta
+        integer :: dim_theta_field, dim_zeta_field
         integer :: var_rho, var_theta, var_zeta
         integer :: var_x, var_y, var_z
         integer :: var_aphi, var_btheta, var_bphi, var_bmod, var_nfp
@@ -1064,24 +1082,24 @@ contains
         real(dp), allocatable :: rho_arr(:), theta_arr(:), zeta_arr(:)
         real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
         real(dp), allocatable :: x_arr(:, :, :), y_arr(:, :, :), z_arr(:, :, :)
-        real(dp), allocatable :: bmod_out(:, :, :)
 
-        ! VMEC Boozer grid includes endpoints (periodic duplicate).
-        ! Chartmap format requires endpoint-excluded grids.
+        ! Chartmap geometry requires endpoint-excluded angular grids (libneo validator).
+        ! Boozer field data uses endpoint-included grids (matching original splines).
         n_theta_out = n_theta_B - 1
         n_phi_out = n_phi_B - 1
 
-        allocate (rho_arr(ns_B), theta_arr(n_theta_out), zeta_arr(n_phi_out))
+        allocate (rho_arr(ns_B))
+        allocate (theta_arr(n_theta_out), zeta_arr(n_phi_out))
         allocate (A_phi_arr(ns_B), B_theta_arr(ns_B), B_phi_arr(ns_B))
         allocate (x_arr(ns_B, n_theta_out, n_phi_out))
         allocate (y_arr(ns_B, n_theta_out, n_phi_out))
         allocate (z_arr(ns_B, n_theta_out, n_phi_out))
-        allocate (bmod_out(ns_B, n_theta_out, n_phi_out))
 
-        ! Build coordinate grids (endpoint excluded)
+        ! Radial grid
         do i_rho = 1, ns_B
             rho_arr(i_rho) = max(real(i_rho - 1, dp) * hs_B, rho_min)
         end do
+        ! Angular grids (endpoint excluded, for chartmap geometry)
         do i_theta = 1, n_theta_out
             theta_arr(i_theta) = real(i_theta - 1, dp) * h_theta_B
         end do
@@ -1096,10 +1114,7 @@ contains
             B_phi_arr(i_rho) = s_Bcovar_tp_B(2, 1, i_rho)
         end do
 
-        ! Copy Bmod (exclude periodic endpoints)
-        bmod_out(:, :, :) = bmod_grid(:, 1:n_theta_out, 1:n_phi_out)
-
-        ! Compute X, Y, Z geometry on the Boozer grid
+        ! Compute X, Y, Z geometry on the Boozer grid (endpoint-excluded)
         do i_phi = 1, n_phi_out
             do i_theta = 1, n_theta_out
                 do i_rho = 1, ns_B
@@ -1131,12 +1146,17 @@ contains
         status = nf90_create(trim(filename), nf90_clobber, ncid)
         call nc_assert(status, "create " // trim(filename))
 
-        ! Dimensions
+        ! Dimensions: geometry uses endpoint-excluded grids (chartmap validator),
+        ! field data uses endpoint-included grids (exact spline reproduction)
         call nc_assert(nf90_def_dim(ncid, "rho", ns_B, dim_rho), "def_dim rho")
         call nc_assert(nf90_def_dim(ncid, "theta", n_theta_out, dim_theta), &
                         "def_dim theta")
         call nc_assert(nf90_def_dim(ncid, "zeta", n_phi_out, dim_zeta), &
                         "def_dim zeta")
+        call nc_assert(nf90_def_dim(ncid, "theta_field", n_theta_B, dim_theta_field), &
+                        "def_dim theta_field")
+        call nc_assert(nf90_def_dim(ncid, "zeta_field", n_phi_B, dim_zeta_field), &
+                        "def_dim zeta_field")
 
         ! Coordinate variables
         call nc_assert(nf90_def_var(ncid, "rho", nf90_double, [dim_rho], var_rho), &
@@ -1165,7 +1185,8 @@ contains
         call nc_assert(nf90_def_var(ncid, "B_phi", nf90_double, [dim_rho], &
                         var_bphi), "def_var B_phi")
         call nc_assert(nf90_def_var(ncid, "Bmod", nf90_double, &
-                        [dim_rho, dim_theta, dim_zeta], var_bmod), "def_var Bmod")
+                        [dim_rho, dim_theta_field, dim_zeta_field], var_bmod), &
+                        "def_var Bmod")
         call nc_assert(nf90_def_var(ncid, "num_field_periods", nf90_int, var_nfp), &
                         "def_var nfp")
 
@@ -1193,7 +1214,7 @@ contains
         call nc_assert(nf90_put_var(ncid, var_aphi, A_phi_arr), "put A_phi")
         call nc_assert(nf90_put_var(ncid, var_btheta, B_theta_arr), "put B_theta")
         call nc_assert(nf90_put_var(ncid, var_bphi, B_phi_arr), "put B_phi")
-        call nc_assert(nf90_put_var(ncid, var_bmod, bmod_out), "put Bmod")
+        call nc_assert(nf90_put_var(ncid, var_bmod, bmod_grid), "put Bmod")
         call nc_assert(nf90_put_var(ncid, var_nfp, nper), "put nfp")
 
         call nc_assert(nf90_close(ncid), "close")
