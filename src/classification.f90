@@ -1,4 +1,5 @@
 module classification
+use, intrinsic :: iso_fortran_env, only: dp => real64
 use omp_lib
 use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
     ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
@@ -17,9 +18,6 @@ use magfie_sub, only : CANFLUX, BOOZER
 use check_orbit_type_sub, only : check_orbit_type
 
   implicit none
-
-  ! Define real(dp) kind parameter
-  integer, parameter :: dp = kind(1.0d0)
 
   ! Classification result type - separates data from I/O
   ! Note: 0=unclassified means the classification was not computed
@@ -65,7 +63,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     type(tracer_t), intent(inout) :: anorb
     integer, intent(in) :: ipart
     type(classification_result_t), intent(out) :: class_result
-    integer :: ierr, ierr_coll
+    integer :: ierr
     real(dp), dimension(5) :: z
     real(dp) :: bmod,sqrtg
     real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
