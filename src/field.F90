@@ -8,9 +8,6 @@ module field
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
-#ifdef GVEC_AVAILABLE
-    use field_gvec, only: gvec_field_t, create_gvec_field
-#endif
 
     implicit none
 
@@ -45,16 +42,6 @@ contains
             class default
                 error stop 'field_clone: Allocation failure (splined)'
             end select
-#ifdef GVEC_AVAILABLE
-        type is (gvec_field_t)
-            allocate (gvec_field_t :: dest)
-            select type (dest)
-            type is (gvec_field_t)
-                dest = source
-            class default
-                error stop 'field_clone: Allocation failure (gvec)'
-            end select
-#endif
         class default
             error stop 'field_clone: Unsupported field type'
         end select
@@ -74,9 +61,6 @@ contains
         type(vmec_field_t) :: vmec_field
         integer :: file_type, ierr
         character(len=2048) :: message
-#ifdef GVEC_AVAILABLE
-        class(gvec_field_t), allocatable :: gvec_temp
-#endif
 
         stripped_name = strip_directory(filename)
 
@@ -116,14 +100,6 @@ contains
             allocate (splined_coils)
             call create_splined_field(raw_coils, ref_coords, splined_coils)
             call move_alloc(splined_coils, field)
-        else if (endswith(filename, '.dat')) then
-#ifdef GVEC_AVAILABLE
-            call create_gvec_field(filename, gvec_temp)
-            call move_alloc(gvec_temp, field)
-#else
-            print *, 'ERROR: GVEC support not compiled. Rebuild with -DENABLE_GVEC=ON'
-            error stop
-#endif
         else
             print *, 'field_from_file: Unknown file name format ', filename
             error stop

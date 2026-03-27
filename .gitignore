@@ -55,7 +55,6 @@ threed1.*
 threed1.*
 timings.txt
 .aider*
-thirdparty/gvec
 thirdparty/pyplot_module.F90
 
 *.html

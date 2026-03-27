@@ -412,11 +412,7 @@ contains
                                            Bcovar_vartheta, Bcovar_varphi, &
                                            theta, onlytheta
       use spline_vmec_sub
-#ifdef GVEC_AVAILABLE
-      use vmec_field_adapter
-#else
       use vmec_field_eval
-#endif
 
       implicit none
 
@@ -844,11 +840,7 @@ contains
       use new_vmec_stuff_mod, only: nper
       use vector_potentail_mod, only: torflux
       use chamb_mod, only: rnegflag
-#ifdef GVEC_AVAILABLE
-      use vmec_field_adapter
-#else
       use vmec_field_eval
-#endif
 
       implicit none
 
@@ -920,11 +912,7 @@ contains
 
    subroutine vmec_to_cyl(s, theta, varphi, Rcyl, Zcyl)
       use spline_vmec_sub
-#ifdef GVEC_AVAILABLE
-      use vmec_field_adapter
-#else
       use vmec_field_eval
-#endif
 
       real(dp), intent(in) :: s, theta, varphi
       real(dp), intent(out) :: Rcyl, Zcyl

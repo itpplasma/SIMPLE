@@ -73,7 +73,6 @@ endif()
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
-option(ENABLE_GVEC "Enable GVEC field support (experimental)" OFF)
 option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
@@ -110,21 +109,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             -gpu=ccnative
         )
     endif()
-endif()
-
-# Conditionally fetch GVEC if enabled
-if(ENABLE_GVEC)
-    message(STATUS "GVEC support enabled - fetching GVEC library")
-    include(FetchContent)
-    FetchContent_Declare(
-      gvec
-      GIT_REPOSITORY https://gitlab.mpcdf.mpg.de/calbert/gvec.git
-      GIT_TAG        develop
-    )
-    set(GVEC_FOR_SIMPLE TRUE CACHE BOOL "Build minimal GVEC for SIMPLE")
-    FetchContent_MakeAvailable(gvec)
-else()
-    message(STATUS "GVEC support disabled")
 endif()
 
 set(CMAKE_MACOSX_RPATH 1)
@@ -248,7 +232,6 @@ message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
 include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
 link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
-# Set SIMPLE-specific compiler flags after GVEC to avoid affecting it
 # Compiler-specific flags (not applied to subprojects)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(SIMPLE_COMPILE_OPTIONS

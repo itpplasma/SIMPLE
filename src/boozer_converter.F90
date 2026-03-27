@@ -482,11 +482,7 @@ contains
         use binsrc_sub, only: binsrc
         use plag_coeff_sub, only: plag_coeff
         use spline_vmec_sub
-#ifdef GVEC_AVAILABLE
-        use vmec_field_adapter
-#else
         use vmec_field_eval
-#endif
 
         implicit none
 
