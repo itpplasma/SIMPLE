@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
+set(SIMPLE_PYTHON_INTERFACE_BUILT OFF PARENT_SCOPE)
+
 # Grab Python
 find_package(Python COMPONENTS Interpreter Development NumPy)
 
@@ -220,3 +222,5 @@ add_custom_target(
 
 install(TARGETS ${F2PY_MODULE_NAME} DESTINATION .)
 install(FILES ${CMAKE_BINARY_DIR}/simple_backend.py DESTINATION .)
+
+set(SIMPLE_PYTHON_INTERFACE_BUILT ON PARENT_SCOPE)

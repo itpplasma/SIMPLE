@@ -31,8 +31,21 @@ add_custom_command(
 add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
 
 # map2disc-based chartmap generation (via libneo Python API)
+set(SIMPLE_HAVE_MAP2DISC OFF)
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('map2disc') else 1)"
+        RESULT_VARIABLE MAP2DISC_IMPORT_RESULT
+    )
+    if(MAP2DISC_IMPORT_RESULT EQUAL 0)
+        set(SIMPLE_HAVE_MAP2DISC ON)
+    else()
+        message(STATUS "map2disc Python package not found; skipping map2disc-based chartmap tests")
+    endif()
+endif()
+
+if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
     set(CHARTMAP_MAP2DISC_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.map2disc.nc")
     set(CHARTMAP_NCSX_MAP2DISC_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.map2disc.nc")
     set(CHARTMAP_NCSX_MAP2DISC_WALL_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.map2disc.wall0p1m.nc")
@@ -411,7 +424,7 @@ set_tests_properties(test_field_equivalence_chartmap PROPERTIES
     LABELS "integration;slow"
     TIMEOUT 300)
 
-if(SIMPLE_ENABLE_PYTHON_TOOLS)
+if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
     add_test(NAME test_field_equivalence_chartmap_map2disc
         COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc field_equiv_map2disc
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
