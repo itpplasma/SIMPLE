@@ -17,7 +17,7 @@ module field_boozer_chartmap
     use interpolate, only: BatchSplineData1D, BatchSplineData3D, &
                            construct_batch_splines_1d, construct_batch_splines_3d, &
                            evaluate_batch_splines_1d_der2, &
-                           evaluate_batch_splines_3d_der, &
+                           evaluate_batch_splines_3d, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
     use netcdf
 
@@ -241,7 +241,7 @@ contains
         x_3d(2) = modulo(theta_B, twopi)
         x_3d(3) = modulo(phi_B, twopi / real(self%nfp, dp))
 
-        call evaluate_batch_splines_3d_no_der(self%bmod_spline, x_3d, y_bmod)
+        call evaluate_batch_splines_3d(self%bmod_spline, x_3d, y_bmod)
         Bmod_val = y_bmod(1)
 
         Bmod = Bmod_val
@@ -275,15 +275,6 @@ contains
             self%initialized = .false.
         end if
     end subroutine boozer_chartmap_cleanup
-
-    subroutine evaluate_batch_splines_3d_no_der(spl, x, y)
-        use interpolate, only: BatchSplineData3D, evaluate_batch_splines_3d
-        type(BatchSplineData3D), intent(in) :: spl
-        real(dp), intent(in) :: x(3)
-        real(dp), intent(out) :: y(:)
-
-        call evaluate_batch_splines_3d(spl, x, y)
-    end subroutine evaluate_batch_splines_3d_no_der
 
     subroutine read_3d_reordered(ncid, varid, n1, n2, n3, arr)
         !> Read a NetCDF variable with dims (zeta, theta, rho) into Fortran

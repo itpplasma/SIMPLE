@@ -94,6 +94,33 @@ program test_boozer_chartmap
         print *, 'PASS: Bmod at second point =', Bmod
     end if
 
+    ! Test integ_to_ref / ref_to_integ coordinate transforms
+    block
+        use field_can_boozer, only: integ_to_ref_boozer_chartmap, &
+                                    ref_to_integ_boozer_chartmap
+        real(dp) :: x_ref(3), x_integ(3), x_roundtrip(3), err
+
+        x_ref = [0.7_dp, 2.5_dp, 1.3_dp]  ! rho, theta, phi
+        call ref_to_integ_boozer_chartmap(x_ref, x_integ)
+
+        ! x_integ(1) should be rho^2 = 0.49
+        if (abs(x_integ(1) - 0.49_dp) > 1.0e-14_dp) then
+            print *, 'FAIL: ref_to_integ s =', x_integ(1), ' expected 0.49'
+            nfail = nfail + 1
+        else
+            print *, 'PASS: ref_to_integ rho->s correct'
+        end if
+
+        call integ_to_ref_boozer_chartmap(x_integ, x_roundtrip)
+        err = maxval(abs(x_roundtrip - x_ref))
+        if (err > 1.0e-14_dp) then
+            print *, 'FAIL: coord transform roundtrip error =', err
+            nfail = nfail + 1
+        else
+            print *, 'PASS: coord transform roundtrip < 1e-14'
+        end if
+    end block
+
     ! Summary
     print *, ''
     if (nfail == 0) then

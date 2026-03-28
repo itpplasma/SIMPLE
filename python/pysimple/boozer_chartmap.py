@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Generate extended Boozer chartmap NetCDF from VMEC wout.nc.
 
-Uses SIMPLE's existing Boozer converter to compute the transformation,
-then writes the result as an extended chartmap file that can be used
-as both coord_input and field_input without VMEC or GVEC libraries.
+WARNING: This script uses an APPROXIMATE Boozer transformation based on
+VMEC lambda. For production use, prefer the Fortran export_boozer_chartmap
+subroutine (in boozer_converter.F90) which uses the exact Boozer coordinate
+transformation computed by get_boozer_coordinates(). The Fortran exporter
+also produces endpoint-included field grids matching the internal spline
+representation exactly.
+
+This Python script is a prototype for offline file generation and testing.
+The geometry (X, Y, Z) and Bmod are evaluated at VMEC angles, not true
+Boozer angles, leading to small but nonzero errors.
 
 Usage:
     python -m pysimple.boozer_chartmap --wout wout.nc --out boozer_chartmap.nc \\
