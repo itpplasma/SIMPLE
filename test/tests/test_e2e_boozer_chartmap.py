@@ -79,7 +79,7 @@ EQUILIBRIA = [
 def simple_in_vmec(wout_name: str, trace_time: str, facE_al: str) -> str:
     return f"""\
 &config
-multharm = 3
+multharm = 5
 contr_pp = -1e10
 trace_time = {trace_time}
 macrostep_time_grid = 'log'
@@ -98,7 +98,7 @@ facE_al = {facE_al}
 def simple_in_chartmap(chartmap_name: str, trace_time: str, facE_al: str) -> str:
     return f"""\
 &config
-multharm = 3
+multharm = 5
 contr_pp = -1e10
 trace_time = {trace_time}
 macrostep_time_grid = 'log'
