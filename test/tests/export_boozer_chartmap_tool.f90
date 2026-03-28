@@ -37,7 +37,7 @@ program export_boozer_chartmap_tool
 
     ! Initialize VMEC
     netcdffile = wout_file
-    multharm = 3
+    multharm = 7
     ns_A = 5
     ns_s = 5
     ns_tp = 5

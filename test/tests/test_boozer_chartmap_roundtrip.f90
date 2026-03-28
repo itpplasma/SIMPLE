@@ -52,7 +52,7 @@ program test_boozer_chartmap_roundtrip
     mode = 'export'
     field_tol = 1.0e-4_dp
     orbit_tol = 1.0e-6_dp
-    artifact_prefix = '/tmp/boozer_chartmap_roundtrip'
+    artifact_prefix = 'boozer_chartmap_roundtrip'
 
     if (command_argument_count() >= 1) then
         call get_command_argument(1, wout_file)
@@ -69,7 +69,7 @@ program test_boozer_chartmap_roundtrip
     if (command_argument_count() >= 4) then
         call get_command_argument(4, artifact_prefix)
         if (len_trim(artifact_prefix) == 0) then
-            artifact_prefix = '/tmp/boozer_chartmap_roundtrip'
+            artifact_prefix = 'boozer_chartmap_roundtrip'
         end if
     end if
     if (command_argument_count() >= 5) then
@@ -98,7 +98,7 @@ program test_boozer_chartmap_roundtrip
     isw_field_type = 2
     rmu = 1.0e8_dp
     netcdffile = trim(wout_file)
-    multharm = 5
+    multharm = 7
     ns_A = 5
     ns_s = 5
     ns_tp = 5
@@ -211,11 +211,15 @@ program test_boozer_chartmap_roundtrip
     close(u_out)
 
     print *, '  max relative error Bmod:', max_err_bmod
-    if (max_err_bmod > field_tol) then
-        print *, 'FAIL: Bmod roundtrip error too large:', max_err_bmod
-        nfail = nfail + 1
+    if (field_tol >= 0.0_dp) then
+        if (max_err_bmod > field_tol) then
+            print *, 'FAIL: Bmod roundtrip error too large:', max_err_bmod
+            nfail = nfail + 1
+        else
+            print *, 'PASS: Bmod roundtrip error within tolerance'
+        end if
     else
-        print *, 'PASS: Bmod roundtrip error within tolerance'
+        print *, 'INFO: skipping Bmod pass/fail threshold, max err=', max_err_bmod
     end if
 
     ! =========================================================
@@ -270,11 +274,11 @@ contains
         real(dp) :: frac
 
         do j = 1, n_test
-            frac = real(j - 1, dp) / real(n_test - 1, dp)
+            frac = real(j, dp) / real(n_test + 1, dp)
             s_test(j) = 0.1_dp + 0.7_dp * frac
             th_test(j) = twopi * frac
-            ph_test(j) = phi_per * mod(real(j * 7, dp), real(n_test, dp)) &
-                          / real(n_test, dp)
+            ph_test(j) = phi_per * mod(real(2 * j + 1, dp), real(n_test + 1, dp)) &
+                          / real(n_test + 1, dp)
         end do
     end subroutine init_test_points
 

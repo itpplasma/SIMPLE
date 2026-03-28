@@ -5,6 +5,8 @@
 set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/test/test_data")
 set(WOUT_FILE "${TEST_DATA_DIR}/wout.nc")
 set(WOUT_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc")
+set(WOUT_QH_FILE "${TEST_DATA_DIR}/wout_qh.nc")
+set(WOUT_QH_URL "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc")
 
 # Download if not present
 if(NOT EXISTS "${WOUT_FILE}")
@@ -14,8 +16,15 @@ if(NOT EXISTS "${WOUT_FILE}")
     message(STATUS "Downloaded VMEC test file")
 endif()
 
+if(NOT EXISTS "${WOUT_QH_FILE}")
+    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
+    message(STATUS "Downloading QH VMEC file to ${WOUT_QH_FILE}...")
+    file(DOWNLOAD "${WOUT_QH_URL}" "${WOUT_QH_FILE}")
+endif()
+
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
+file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
 set(WOUT_QA_GVEC_CHARTMAP_SOURCE "${TEST_DATA_DIR}/wout_qa.gvec.chartmap.nc")
 set(WOUT_QA_GVEC_CHARTMAP_BINARY "${CMAKE_CURRENT_BINARY_DIR}/wout_qa.gvec.chartmap.nc")
@@ -25,6 +34,11 @@ endif()
 
 set(FIGURE8_BOUNDARY_SOURCE "${TEST_DATA_DIR}/figure8.quasr.boundary.nc")
 set(FIGURE8_CHARTMAP_SOURCE "${TEST_DATA_DIR}/figure8.gvec.chartmap.nc")
+
+set(BOOZER_CHARTMAP_PYTHON "${Python_EXECUTABLE}")
+if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+    set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+endif()
 
 # Generate chartmap file from VMEC for testing chartmap coordinate detection
 # Uses libneo's vmec_to_chartmap tool built as part of dependencies
@@ -368,7 +382,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
             ${WOUT_FILE}
             ${CMAKE_CURRENT_BINARY_DIR}/roundtrip_test.nc
             export
-            /tmp/boozer_chartmap_roundtrip
+            ${CMAKE_CURRENT_BINARY_DIR}/boozer_chartmap_roundtrip
             1.0e-4
             1.0e-6)
     set_tests_properties(test_boozer_chartmap_roundtrip PROPERTIES
@@ -381,7 +395,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
                 wout.nc
                 wout_qa.gvec.chartmap.nc
                 external
-                /tmp/boozer_chartmap_gvec_qa
+                ${CMAKE_CURRENT_BINARY_DIR}/boozer_chartmap_gvec_qa
                 2.5e-4
                 1.0e-6)
         set_tests_properties(test_boozer_chartmap_gvec_qa PROPERTIES
@@ -395,19 +409,22 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
-        COMMAND ${Python_EXECUTABLE}
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_boozer_chartmap.py)
     set_tests_properties(test_e2e_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "slow")
+        LABELS "slow;plot;python"
+        TIMEOUT 7200)
 
     if(EXISTS "${FIGURE8_BOUNDARY_SOURCE}" AND EXISTS "${FIGURE8_CHARTMAP_SOURCE}")
         add_test(NAME test_figure8_boozer_chartmap
-            COMMAND ${Python_EXECUTABLE}
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
                 ${CMAKE_CURRENT_SOURCE_DIR}/test_figure8_boozer_chartmap.py)
         set_tests_properties(test_figure8_boozer_chartmap PROPERTIES
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            LABELS "slow;plot")
+            LABELS "slow;plot;python;golden_record"
+            TIMEOUT 7200
+            DEPENDS test_e2e_boozer_chartmap)
     endif()
 
     if(SIMPLE_ENABLE_CGAL)

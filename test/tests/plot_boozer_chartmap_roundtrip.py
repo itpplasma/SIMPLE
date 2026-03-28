@@ -111,7 +111,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--prefix",
-        default="/tmp/boozer_chartmap_roundtrip",
+        default="boozer_chartmap_roundtrip",
         help="Artifact prefix used by the Fortran comparison test",
     )
     parser.add_argument("--direct-label", default="Direct (VMEC)")
