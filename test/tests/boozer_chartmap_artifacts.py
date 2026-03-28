@@ -99,6 +99,36 @@ def _set_equal_3d_limits(ax, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> Non
     ax.set_box_aspect((1.0, 1.0, 1.0))
 
 
+def _close_curve(curve: np.ndarray) -> np.ndarray:
+    curve = np.asarray(curve)
+    if curve.ndim != 1 or curve.size == 0:
+        return curve
+    return np.concatenate([curve, curve[:1]])
+
+
+def _close_surface_toroidally(
+    xsurf: np.ndarray, ysurf: np.ndarray, zsurf: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    xsurf = np.asarray(xsurf)
+    ysurf = np.asarray(ysurf)
+    zsurf = np.asarray(zsurf)
+    if xsurf.ndim != 2 or xsurf.shape[1] == 0:
+        return xsurf, ysurf, zsurf
+    return (
+        np.concatenate([xsurf, xsurf[:, :1]], axis=1),
+        np.concatenate([ysurf, ysurf[:, :1]], axis=1),
+        np.concatenate([zsurf, zsurf[:, :1]], axis=1),
+    )
+
+
+def _sample_indices(size: int, stride: int) -> list[int]:
+    indices = list(range(0, size, stride))
+    last = size - 1
+    if last not in indices:
+        indices.append(last)
+    return indices
+
+
 def _plot_surface_lines_3d(
     ax,
     xsurf: np.ndarray,
@@ -111,11 +141,15 @@ def _plot_surface_lines_3d(
     axis_z: np.ndarray,
     linestyle: str = "-",
 ) -> None:
+    xsurf, ysurf, zsurf = _close_surface_toroidally(xsurf, ysurf, zsurf)
+    axis_x = _close_curve(axis_x)
+    axis_y = _close_curve(axis_y)
+    axis_z = _close_curve(axis_z)
     n_phi = xsurf.shape[1]
     n_rho = xsurf.shape[0]
     phi_stride = max(1, n_phi // 12)
     rho_stride = max(1, n_rho // 12)
-    for idx in range(0, n_phi, phi_stride):
+    for idx in _sample_indices(n_phi, phi_stride):
         ax.plot(
             xsurf[:, idx],
             ysurf[:, idx],
@@ -125,7 +159,7 @@ def _plot_surface_lines_3d(
             alpha=0.45,
             ls=linestyle,
         )
-    for idx in range(0, n_rho, rho_stride):
+    for idx in _sample_indices(n_rho, rho_stride):
         ax.plot(
             xsurf[idx],
             ysurf[idx],
@@ -320,12 +354,20 @@ def plot_surface_comparison(
         ("x-y", left_x, left_y, right_x, right_y, left_ax_x, left_ax_y, right_ax_x, right_ax_y, "x [m]", "y [m]"),
     ]
     for ax, (title, xl, yl, xr, yr, xal, yal, xar, yar, xlabel, ylabel) in zip(axes[0], panels):
-        for idx in range(0, xl.shape[1], max(1, xl.shape[1] // 12)):
+        xl, yl, _ = _close_surface_toroidally(xl, yl, yl)
+        xr, yr, _ = _close_surface_toroidally(xr, yr, yr)
+        for idx in _sample_indices(xl.shape[1], max(1, xl.shape[1] // 12)):
             ax.plot(xl[:, idx], yl[:, idx], color="C0", lw=0.8, alpha=0.45)
-        for idx in range(0, xr.shape[1], max(1, xr.shape[1] // 12)):
+        for idx in _sample_indices(xr.shape[1], max(1, xr.shape[1] // 12)):
             ax.plot(xr[:, idx], yr[:, idx], color="C3", lw=0.8, alpha=0.45)
-        ax.plot(xal.mean(axis=0), yal.mean(axis=0), color="C0", lw=2.0, label=left_label)
-        ax.plot(xar.mean(axis=0), yar.mean(axis=0), color="C3", lw=1.6, ls="--", label=right_label)
+        for idx in _sample_indices(xl.shape[0], max(1, xl.shape[0] // 12)):
+            ax.plot(xl[idx], yl[idx], color="C0", lw=0.6, alpha=0.3)
+        for idx in _sample_indices(xr.shape[0], max(1, xr.shape[0] // 12)):
+            ax.plot(xr[idx], yr[idx], color="C3", lw=0.6, alpha=0.3)
+        ax.plot(_close_curve(xal.mean(axis=0)), _close_curve(yal.mean(axis=0)),
+                color="C0", lw=2.0, label=left_label)
+        ax.plot(_close_curve(xar.mean(axis=0)), _close_curve(yar.mean(axis=0)),
+                color="C3", lw=1.6, ls="--", label=right_label)
         ax.set_aspect("equal", adjustable="box")
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)

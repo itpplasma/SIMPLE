@@ -220,10 +220,37 @@ def plot_review(run_dir: Path, chartmap_path: Path) -> None:
     )
     axis_chart = np.stack([xa.mean(axis=0), ya.mean(axis=0), za.mean(axis=0)], axis=1)
 
+    def close_curve(curve: np.ndarray) -> np.ndarray:
+        curve = np.asarray(curve)
+        return np.concatenate([curve, curve[:1]])
+
+    def close_surface(xsurf: np.ndarray, ysurf: np.ndarray, zsurf: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return (
+            np.concatenate([xsurf, xsurf[:, :1]], axis=1),
+            np.concatenate([ysurf, ysurf[:, :1]], axis=1),
+            np.concatenate([zsurf, zsurf[:, :1]], axis=1),
+        )
+
+    def sample_indices(size: int, stride: int) -> list[int]:
+        indices = list(range(0, size, stride))
+        last = size - 1
+        if last not in indices:
+            indices.append(last)
+        return indices
+
+    xb_true_plot, yb_true_plot, zb_true_plot = close_surface(xb_true, yb_true, zb_true)
+    xb_plot, yb_plot, zb_plot = close_surface(xb, yb, zb)
+    axis_true_plot = np.column_stack(
+        [close_curve(axis_true[:, 0]), close_curve(axis_true[:, 1]), close_curve(axis_true[:, 2])]
+    )
+    axis_chart_plot = np.column_stack(
+        [close_curve(axis_chart[:, 0]), close_curve(axis_chart[:, 1]), close_curve(axis_chart[:, 2])]
+    )
+
     def draw_projection(ax, xsurf, ysurf, xlabel, ylabel, title, color):
-        for j in range(0, xsurf.shape[1], max(1, xsurf.shape[1] // 12)):
+        for j in sample_indices(xsurf.shape[1], max(1, xsurf.shape[1] // 12)):
             ax.plot(xsurf[:, j], ysurf[:, j], color=color, lw=0.8, alpha=0.55)
-        for i in range(0, xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
+        for i in sample_indices(xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
             ax.plot(xsurf[i], ysurf[i], color=color, lw=0.6, alpha=0.3)
         ax.set_aspect("equal", adjustable="box")
         ax.set_xlabel(xlabel)
@@ -231,9 +258,9 @@ def plot_review(run_dir: Path, chartmap_path: Path) -> None:
         ax.set_title(title)
 
     def draw_surface_3d(ax, xsurf, ysurf, zsurf, color, label, axis_xyz, linestyle="-"):
-        for j in range(0, xsurf.shape[1], max(1, xsurf.shape[1] // 12)):
+        for j in sample_indices(xsurf.shape[1], max(1, xsurf.shape[1] // 12)):
             ax.plot(xsurf[:, j], ysurf[:, j], zsurf[:, j], color=color, lw=0.7, alpha=0.45, ls=linestyle)
-        for i in range(0, xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
+        for i in sample_indices(xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
             ax.plot(xsurf[i], ysurf[i], zsurf[i], color=color, lw=0.5, alpha=0.22, ls=linestyle)
         ax.plot(axis_xyz[:, 0], axis_xyz[:, 1], axis_xyz[:, 2], color=color, lw=1.8, ls=linestyle, label=label)
 
@@ -258,24 +285,24 @@ def plot_review(run_dir: Path, chartmap_path: Path) -> None:
     for i in range(3):
         axes[2, i] = fig.add_subplot(3, 3, i + 7, projection="3d" if i < 2 else None)
 
-    draw_projection(axes[0, 0], xb_true, zb_true, "x [m]", "z [m]", "QUASR boundary x-z", "C0")
-    draw_projection(axes[0, 1], yb_true, zb_true, "y [m]", "z [m]", "QUASR boundary y-z", "C0")
-    draw_projection(axes[0, 2], xb_true, yb_true, "x [m]", "y [m]", "QUASR boundary x-y", "C0")
-    axes[0, 0].plot(axis_true[:, 0], axis_true[:, 2], color="black", lw=1.6, label="QUASR axis")
-    axes[0, 0].plot(axis_chart[:, 0], axis_chart[:, 2], color="goldenrod", lw=1.2, ls="--", label="chartmap axis")
+    draw_projection(axes[0, 0], xb_true_plot, zb_true_plot, "x [m]", "z [m]", "QUASR boundary x-z", "C0")
+    draw_projection(axes[0, 1], yb_true_plot, zb_true_plot, "y [m]", "z [m]", "QUASR boundary y-z", "C0")
+    draw_projection(axes[0, 2], xb_true_plot, yb_true_plot, "x [m]", "y [m]", "QUASR boundary x-y", "C0")
+    axes[0, 0].plot(axis_true_plot[:, 0], axis_true_plot[:, 2], color="black", lw=1.6, label="QUASR axis")
+    axes[0, 0].plot(axis_chart_plot[:, 0], axis_chart_plot[:, 2], color="goldenrod", lw=1.2, ls="--", label="chartmap axis")
     axes[0, 0].legend(fontsize=8)
-    axes[0, 1].plot(axis_true[:, 1], axis_true[:, 2], color="black", lw=1.6)
-    axes[0, 1].plot(axis_chart[:, 1], axis_chart[:, 2], color="goldenrod", lw=1.2, ls="--")
-    axes[0, 2].plot(axis_true[:, 0], axis_true[:, 1], color="black", lw=1.6)
-    axes[0, 2].plot(axis_chart[:, 0], axis_chart[:, 1], color="goldenrod", lw=1.2, ls="--")
+    axes[0, 1].plot(axis_true_plot[:, 1], axis_true_plot[:, 2], color="black", lw=1.6)
+    axes[0, 1].plot(axis_chart_plot[:, 1], axis_chart_plot[:, 2], color="goldenrod", lw=1.2, ls="--")
+    axes[0, 2].plot(axis_true_plot[:, 0], axis_true_plot[:, 1], color="black", lw=1.6)
+    axes[0, 2].plot(axis_chart_plot[:, 0], axis_chart_plot[:, 1], color="goldenrod", lw=1.2, ls="--")
 
-    xb_all = np.concatenate([xb_true.ravel(), xb.ravel()])
-    yb_all = np.concatenate([yb_true.ravel(), yb.ravel()])
-    zb_all = np.concatenate([zb_true.ravel(), zb.ravel()])
+    xb_all = np.concatenate([xb_true_plot.ravel(), xb_plot.ravel()])
+    yb_all = np.concatenate([yb_true_plot.ravel(), yb_plot.ravel()])
+    zb_all = np.concatenate([zb_true_plot.ravel(), zb_plot.ravel()])
     views = [(22.0, -62.0), (18.0, 24.0), (78.0, -90.0)]
     for ax, (elev, azim) in zip(axes[1], views):
-        draw_surface_3d(ax, xb_true, yb_true, zb_true, "C0", "QUASR boundary", axis_true)
-        draw_surface_3d(ax, xb, yb, zb, "C3", "chartmap surface", axis_chart, linestyle="--")
+        draw_surface_3d(ax, xb_true_plot, yb_true_plot, zb_true_plot, "C0", "QUASR boundary", axis_true_plot)
+        draw_surface_3d(ax, xb_plot, yb_plot, zb_plot, "C3", "chartmap surface", axis_chart_plot, linestyle="--")
         ax.view_init(elev=elev, azim=azim)
         set_equal_3d(ax, xb_all, yb_all, zb_all)
         ax.set_xlabel("x [m]")
@@ -284,17 +311,17 @@ def plot_review(run_dir: Path, chartmap_path: Path) -> None:
         ax.set_title(f"Overlay 3D elev={elev:.0f}, azim={azim:.0f}")
     axes[1, 0].legend(fontsize=8)
 
-    draw_surface_3d(axes[2, 0], xb_true, yb_true, zb_true, "C0", "QUASR boundary", axis_true)
+    draw_surface_3d(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot, "C0", "QUASR boundary", axis_true_plot)
     axes[2, 0].view_init(elev=28.0, azim=-45.0)
-    set_equal_3d(axes[2, 0], xb_true, yb_true, zb_true)
+    set_equal_3d(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot)
     axes[2, 0].set_title("QUASR boundary only")
     axes[2, 0].set_xlabel("x [m]")
     axes[2, 0].set_ylabel("y [m]")
     axes[2, 0].set_zlabel("z [m]")
 
-    draw_surface_3d(axes[2, 1], xb, yb, zb, "C3", "chartmap surface", axis_chart)
+    draw_surface_3d(axes[2, 1], xb_plot, yb_plot, zb_plot, "C3", "chartmap surface", axis_chart_plot)
     axes[2, 1].view_init(elev=28.0, azim=-45.0)
-    set_equal_3d(axes[2, 1], xb, yb, zb)
+    set_equal_3d(axes[2, 1], xb_plot, yb_plot, zb_plot)
     axes[2, 1].set_title("Chartmap surface only")
     axes[2, 1].set_xlabel("x [m]")
     axes[2, 1].set_ylabel("y [m]")
