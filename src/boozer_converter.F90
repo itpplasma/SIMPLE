@@ -1132,11 +1132,8 @@ contains
                         R, Zval, alam, dR_ds, dR_dt, dR_dp, &
                         dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
 
-                    ! Convert to Cartesian using phi_B as the azimuthal angle.
-                    ! This creates a pseudo-Cartesian representation consistent
-                    ! with the Boozer toroidal grid (atan2(y,x) = phi_B).
-                    x_arr(i_rho, i_theta, i_phi) = R * cos(phi_B)
-                    y_arr(i_rho, i_theta, i_phi) = R * sin(phi_B)
+                    x_arr(i_rho, i_theta, i_phi) = R * cos(phi_V)
+                    y_arr(i_rho, i_theta, i_phi) = R * sin(phi_V)
                     z_arr(i_rho, i_theta, i_phi) = Zval
                 end do
             end do
@@ -1193,7 +1190,7 @@ contains
         ! Global attributes
         call nc_assert(nf90_put_att(ncid, nf90_global, "rho_convention", "rho_tor"), &
                         "att rho_convention")
-        call nc_assert(nf90_put_att(ncid, nf90_global, "zeta_convention", "cyl"), &
+        call nc_assert(nf90_put_att(ncid, nf90_global, "zeta_convention", "boozer"), &
                         "att zeta_convention")
         call nc_assert(nf90_put_att(ncid, nf90_global, "rho_lcfs", rho_arr(ns_B)), &
                         "att rho_lcfs")

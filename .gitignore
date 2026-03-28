@@ -68,3 +68,5 @@ thirdparty/pyplot_module.F90
 .claude
 docs/_build/
 build*/
+artifacts/plots/
+artifacts/notebooks/

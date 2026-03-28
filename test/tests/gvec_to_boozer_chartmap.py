@@ -110,18 +110,9 @@ def main():
     pos = ev_geom['pos'].values  # (3, n_rho, n_theta_geom, n_phi_geom)
     # pos[0]=X, pos[1]=Y, pos[2]=Z in meters
 
-    # Use pseudo-Cartesian: R from true geometry, phi_B as azimuthal angle
-    X_true = pos[0] * 1e2  # m -> cm
-    Y_true = pos[1] * 1e2
+    X = pos[0] * 1e2  # m -> cm
+    Y = pos[1] * 1e2
     Z_geom = pos[2] * 1e2
-    R_geom = np.sqrt(X_true**2 + Y_true**2)
-
-    zeta_3d = np.broadcast_to(
-        zeta_geom[np.newaxis, np.newaxis, :],
-        (n_rho, n_theta_geom, n_phi_geom)
-    )
-    X = R_geom * np.cos(zeta_3d)
-    Y = R_geom * np.sin(zeta_3d)
 
     # Write NetCDF
     print(f"Writing {args.output}")
@@ -153,7 +144,7 @@ def main():
     v = ds.createVariable("num_field_periods", "i4"); v[:] = np.int32(nfp)
 
     ds.rho_convention = "rho_tor"
-    ds.zeta_convention = "cyl"
+    ds.zeta_convention = "boozer"
     ds.rho_lcfs = float(rho_grid[-1])
     ds.boozer_field = np.int32(1)
     ds.torflux = torflux
