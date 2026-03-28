@@ -26,15 +26,6 @@ endif()
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
-set(WOUT_QA_GVEC_CHARTMAP_SOURCE "${TEST_DATA_DIR}/wout_qa.gvec.chartmap.nc")
-set(WOUT_QA_GVEC_CHARTMAP_BINARY "${CMAKE_CURRENT_BINARY_DIR}/wout_qa.gvec.chartmap.nc")
-if(EXISTS "${WOUT_QA_GVEC_CHARTMAP_SOURCE}")
-    file(CREATE_LINK "${WOUT_QA_GVEC_CHARTMAP_SOURCE}" "${WOUT_QA_GVEC_CHARTMAP_BINARY}" SYMBOLIC)
-endif()
-
-set(FIGURE8_BOUNDARY_SOURCE "${TEST_DATA_DIR}/figure8.quasr.boundary.nc")
-set(FIGURE8_CHARTMAP_SOURCE "${TEST_DATA_DIR}/figure8.gvec.chartmap.nc")
-
 set(BOOZER_CHARTMAP_PYTHON "${Python_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -389,19 +380,13 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "slow")
 
-    if(EXISTS "${WOUT_QA_GVEC_CHARTMAP_SOURCE}")
-        add_test(NAME test_boozer_chartmap_gvec_qa
-            COMMAND test_boozer_chartmap_roundtrip.x
-                wout.nc
-                wout_qa.gvec.chartmap.nc
-                external
-                ${CMAKE_CURRENT_BINARY_DIR}/boozer_chartmap_gvec_qa
-                2.5e-4
-                1.0e-6)
-        set_tests_properties(test_boozer_chartmap_gvec_qa PROPERTIES
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            LABELS "slow")
-    endif()
+    add_test(NAME test_boozer_chartmap_gvec_qa
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/run_gvec_qa_roundtrip.py)
+    set_tests_properties(test_boozer_chartmap_gvec_qa PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow;python"
+        TIMEOUT 7200)
 
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
@@ -416,16 +401,14 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "slow;plot;python"
         TIMEOUT 7200)
 
-    if(EXISTS "${FIGURE8_BOUNDARY_SOURCE}" AND EXISTS "${FIGURE8_CHARTMAP_SOURCE}")
-        add_test(NAME test_figure8_boozer_chartmap
-            COMMAND ${BOOZER_CHARTMAP_PYTHON}
-                ${CMAKE_CURRENT_SOURCE_DIR}/test_figure8_boozer_chartmap.py)
-        set_tests_properties(test_figure8_boozer_chartmap PROPERTIES
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            LABELS "slow;plot;python;golden_record"
-            TIMEOUT 7200
-            DEPENDS test_e2e_boozer_chartmap)
-    endif()
+    add_test(NAME test_figure8_boozer_chartmap
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_figure8_boozer_chartmap.py)
+    set_tests_properties(test_figure8_boozer_chartmap PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow;plot;python;golden_record"
+        TIMEOUT 7200
+        DEPENDS test_e2e_boozer_chartmap)
 
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
