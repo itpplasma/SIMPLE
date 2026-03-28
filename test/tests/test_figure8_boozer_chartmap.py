@@ -14,6 +14,7 @@ import numpy as np
 
 from boozer_chartmap_artifacts import (
     confined_metrics,
+    download_if_missing,
     load_chartmap_fields,
     load_chartmap_surface,
     load_confined_fraction,
@@ -27,9 +28,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
 SIMPLE_X = BUILD_DIR / "simple.x"
 GVEC_TO_CHARTMAP = SCRIPT_DIR / "gvec_to_boozer_chartmap.py"
-TEST_DATA = SCRIPT_DIR.parent / "test_data"
-BOUNDARY = TEST_DATA / "figure8.quasr.boundary.nc"
-REFERENCE_CHARTMAP = TEST_DATA / "figure8.gvec.chartmap.nc"
+QUASR_TO_BOUNDARY = SCRIPT_DIR / "quasr_json_to_boundary.py"
+REFERENCE_SIGNATURE = SCRIPT_DIR / "figure8_signature_reference.txt"
+QUASR_JSON_URL = (
+    "https://raw.githubusercontent.com/gvec-group/gvec/main/"
+    "test-CI/data/quasr-0112714.json"
+)
 
 
 def write_inputs(run_dir: Path) -> None:
@@ -94,7 +98,7 @@ def pushd(path: Path):
     return _Pushd()
 
 
-def build_figure8_chartmap(run_dir: Path) -> Path:
+def build_figure8_chartmap(run_dir: Path) -> tuple[Path, Path]:
     import gvec
     from gvec.scripts.quasr import load_quasr
     from gvec.util import read_parameters
@@ -103,8 +107,24 @@ def build_figure8_chartmap(run_dir: Path) -> Path:
     solve_dir = run_dir / "solve"
     prepare_dir.mkdir(parents=True, exist_ok=True)
     solve_dir.mkdir(parents=True, exist_ok=True)
+    source_json = download_if_missing(run_dir / "quasr-0112714.json", QUASR_JSON_URL)
+    boundary = run_dir / "figure8.quasr.boundary.nc"
+    run_cmd(
+        [
+            sys.executable,
+            str(QUASR_TO_BOUNDARY),
+            str(source_json),
+            str(boundary),
+            "--ntheta",
+            "81",
+            "--nzeta",
+            "81",
+        ],
+        cwd=run_dir,
+        label="figure8 QUASR->boundary",
+    )
     with pushd(prepare_dir):
-        load_quasr(BOUNDARY, filetype="netcdf", quiet=True, name="figure8")
+        load_quasr(boundary, filetype="netcdf", quiet=True, name="figure8")
     params = read_parameters(prepare_dir / "figure8-parameters.toml")
     params["hmap_ncfile"] = str((prepare_dir / params["hmap_ncfile"]).resolve())
     params["minimize_tol"] = 1.0e-8
@@ -138,7 +158,7 @@ def build_figure8_chartmap(run_dir: Path) -> Path:
         label="figure8 GVEC->chartmap",
         timeout=3600,
     )
-    return output
+    return boundary, output
 
 
 def load_quasr_boundary(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -186,7 +206,7 @@ def figure8_signature(path: Path) -> np.ndarray:
 
 def assert_figure8_golden(chartmap_path: Path, out_dir: Path) -> None:
     generated = figure8_signature(chartmap_path)
-    reference = figure8_signature(REFERENCE_CHARTMAP)
+    reference = np.loadtxt(REFERENCE_SIGNATURE)
     np.savetxt(out_dir / "figure8_signature_generated.dat", generated)
     np.savetxt(out_dir / "figure8_signature_reference.dat", reference)
     if not np.allclose(generated, reference, rtol=1.0e-6, atol=1.0e-8):
@@ -199,13 +219,13 @@ def assert_figure8_golden(chartmap_path: Path, out_dir: Path) -> None:
         )
 
 
-def plot_review(run_dir: Path, chartmap_path: Path) -> None:
+def plot_review(run_dir: Path, boundary_path: Path, chartmap_path: Path) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    xb_true, yb_true, zb_true = load_quasr_boundary(BOUNDARY)
+    xb_true, yb_true, zb_true = load_quasr_boundary(boundary_path)
     surface = load_chartmap_surface(chartmap_path)
     fields = load_chartmap_fields(chartmap_path)
     xb, yb, zb = tile_field_periods(
@@ -367,8 +387,8 @@ def main() -> None:
     for path, label in [
         (SIMPLE_X, "simple.x"),
         (GVEC_TO_CHARTMAP, "GVEC conversion script"),
-        (BOUNDARY, "figure-8 boundary"),
-        (REFERENCE_CHARTMAP, "figure-8 golden chartmap"),
+        (QUASR_TO_BOUNDARY, "QUASR boundary conversion script"),
+        (REFERENCE_SIGNATURE, "figure-8 golden signature"),
     ]:
         if not path.exists():
             raise SystemExit(f"Missing {label}: {path}")
@@ -378,7 +398,7 @@ def main() -> None:
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
 
-    chartmap = build_figure8_chartmap(run_dir)
+    boundary, chartmap = build_figure8_chartmap(run_dir)
     write_inputs(run_dir)
     run_cmd([str(SIMPLE_X)], cwd=run_dir, label="figure8 SIMPLE")
 
@@ -391,7 +411,7 @@ def main() -> None:
 
     metrics = {"Figure-8 GVEC chartmap": confined_metrics(data)}
     plot_case_loss_comparison(run_dir / "figure8_losses.png", "Figure-8", metrics)
-    plot_review(run_dir, chartmap)
+    plot_review(run_dir, boundary, chartmap)
     assert_figure8_golden(chartmap, run_dir)
     maybe_plot_all_cases(run_dir, metrics)
     print("FIGURE-8 GVEC CHARTMAP PASS")
