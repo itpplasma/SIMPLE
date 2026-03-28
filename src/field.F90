@@ -8,6 +8,9 @@ module field
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
+    use field_boozer_chartmap, only: boozer_chartmap_field_t, &
+                                     create_boozer_chartmap_field, &
+                                     is_boozer_chartmap
 
     implicit none
 
@@ -42,6 +45,14 @@ contains
             class default
                 error stop 'field_clone: Allocation failure (splined)'
             end select
+        type is (boozer_chartmap_field_t)
+            allocate (boozer_chartmap_field_t :: dest)
+            select type (dest)
+            type is (boozer_chartmap_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (boozer_chartmap)'
+            end select
         class default
             error stop 'field_clone: Unsupported field type'
         end select
@@ -59,6 +70,7 @@ contains
         type(coils_field_t) :: raw_coils
         type(splined_field_t), allocatable :: splined_coils
         type(vmec_field_t) :: vmec_field
+        type(boozer_chartmap_field_t), allocatable :: bc_temp
         integer :: file_type, ierr
         character(len=2048) :: message
 
@@ -78,14 +90,19 @@ contains
                 call create_vmec_field(vmec_field)
                 call field_clone(vmec_field, field)
             case (refcoords_file_chartmap)
-                print *, &
-                    'field_from_file: chartmap NetCDF is a coordinate system file,', &
-                    ' not a field:'
-                print *, '  filename = ', trim(filename)
-                print *, &
-                    'Set coord_input to this chartmap file and set field_input to a', &
-                    ' VMEC wout.'
-                error stop
+                if (is_boozer_chartmap(filename)) then
+                    call create_boozer_chartmap_field(filename, bc_temp)
+                    call move_alloc(bc_temp, field)
+                else
+                    print *, &
+                        'field_from_file: chartmap NetCDF is a coordinate system ', &
+                        'file, not a field:'
+                    print *, '  filename = ', trim(filename)
+                    print *, &
+                        'Set coord_input to this chartmap file and set field_input', &
+                        ' to a VMEC wout.'
+                    error stop
+                end if
             case (refcoords_file_unknown)
                 print *, 'field_from_file: Unknown NetCDF file type: ', trim(filename)
                 error stop

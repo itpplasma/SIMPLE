@@ -41,17 +41,19 @@ contains
     subroutine main
         use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
                           integmode, params_init, swcoll, generate_start_only, &
-                          isw_field_type, &
+                          isw_field_type, field_input, startmode, &
                           ntestpart, ntimstep, coord_input
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, init_magfie
         use samplers, only: init_starting_surf
         use version, only: simple_version
+        use field_boozer_chartmap, only: is_boozer_chartmap
 
         implicit none
 
         character(256) :: config_file
         type(tracer_t) :: norb
+        logical :: chartmap_mode
 
         ! Print version on startup
         print '(A,A)', 'SIMPLE version ', simple_version
@@ -85,12 +87,32 @@ contains
             call print_phase_time('Collision initialization completed')
         end if
 
+        chartmap_mode = .false.
+        if (len_trim(field_input) > 0) then
+            chartmap_mode = is_boozer_chartmap(field_input)
+        end if
+
         if (isw_field_type == TEST) then
             ! TEST field uses analytic tokamak - no VMEC needed for sampling
             call init_magfie(TEST)
             call print_phase_time('TEST field initialization completed')
             call sample_particles_test_field
             call print_phase_time('TEST field particle sampling completed')
+        else if (chartmap_mode) then
+            ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
+            if (startmode /= 2) then
+                error stop 'Boozer chartmap requires startmode=2 '// &
+                    '(load particles from start.dat)'
+            end if
+
+            call init_magfie(isw_field_type)
+            call print_phase_time('Boozer magfie initialization completed')
+
+            call init_starting_surf
+            call print_phase_time('Starting surface initialization completed')
+
+            call sample_particles
+            call print_phase_time('Particle sampling completed')
         else
             call init_magfie(VMEC)
             call print_phase_time('VMEC magnetic field initialization completed')
@@ -126,6 +148,7 @@ contains
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
         use field, only: field_from_file
+        use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
                               REFCOORDS, set_magfie_refcoords_field
@@ -140,13 +163,43 @@ contains
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
+        logical :: use_boozer_chartmap
 
         self%integmode = aintegmode
+
+        ! Check if field_input is a Boozer chartmap (no VMEC needed)
+        use_boozer_chartmap = .false.
+        if (len_trim(field_input) > 0) then
+            use_boozer_chartmap = is_boozer_chartmap(field_input)
+        end if
 
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
             self%fper = twopi  ! Full torus for analytic tokamak
             call print_phase_time('TEST field mode - no input files required')
+        else if (use_boozer_chartmap) then
+            ! Boozer chartmap: file-based, no VMEC initialization needed
+            call init_reference_coordinates(coord_input)
+            call print_phase_time('Reference coordinate system '// &
+                                  'initialization completed')
+
+            block
+                use libneo_coordinates, only: chartmap_coordinate_system_t
+                select type (cs => ref_coords)
+                type is (chartmap_coordinate_system_t)
+                    self%fper = twopi / real(cs%num_field_periods, dp)
+                class default
+                    self%fper = twopi
+                end select
+            end block
+
+            call init_stl_wall_if_enabled(coord_input)
+            call print_phase_time('STL wall initialization completed')
+
+            if (self%integmode >= 0) then
+                call field_from_file(field_input, field_temp)
+                call print_phase_time('Boozer chartmap field loading completed')
+            end if
         else
             vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
                                                                  field_input, &

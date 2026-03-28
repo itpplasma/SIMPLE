@@ -4,7 +4,31 @@ module field_can_boozer
 
     implicit none
 
+    public :: integ_to_ref_boozer_chartmap, ref_to_integ_boozer_chartmap
+
 contains
+
+    subroutine integ_to_ref_boozer_chartmap(xinteg, xref)
+        !> Convert integrator coords (s, theta_B, phi_B) to
+        !> chartmap reference coords (rho, theta_B, phi_B).
+        real(dp), intent(in) :: xinteg(3)
+        real(dp), intent(out) :: xref(3)
+
+        xref(1) = sqrt(max(xinteg(1), 0.0_dp))
+        xref(2) = xinteg(2)
+        xref(3) = xinteg(3)
+    end subroutine integ_to_ref_boozer_chartmap
+
+    subroutine ref_to_integ_boozer_chartmap(xref, xinteg)
+        !> Convert chartmap reference coords (rho, theta_B, phi_B) to
+        !> integrator coords (s, theta_B, phi_B).
+        real(dp), intent(in) :: xref(3)
+        real(dp), intent(out) :: xinteg(3)
+
+        xinteg(1) = xref(1)**2
+        xinteg(2) = xref(2)
+        xinteg(3) = xref(3)
+    end subroutine ref_to_integ_boozer_chartmap
 
     subroutine evaluate_boozer(f, r, th_c, ph_c, mode_secders)
         type(field_can_t), intent(inout) :: f

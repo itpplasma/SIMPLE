@@ -19,6 +19,7 @@ module boozer_sub
     public :: vmec_to_boozer, boozer_to_vmec
     public :: delthe_delphi_BV
     public :: reset_boozer_batch_splines
+    public :: load_boozer_from_chartmap
 
     ! Constants
     real(dp), parameter :: TWOPI = 2.0_dp*3.14159265358979_dp
@@ -876,6 +877,160 @@ contains
         end if
         if (allocated(delt_delp_B_grid)) deallocate (delt_delp_B_grid)
     end subroutine reset_boozer_batch_splines
+
+    subroutine load_boozer_from_chartmap(filename)
+        !> Populate module-level Boozer batch splines from an extended chartmap
+        !> NetCDF file, bypassing the VMEC-based compute_boozer_data path.
+        use vector_potentail_mod, only: torflux, ns, hs
+        use new_vmec_stuff_mod, only: nper, ns_A, ns_s, ns_tp
+        use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, &
+                                          n_phi_B, hs_B, h_theta_B, h_phi_B, &
+                                          use_B_r, use_del_tp_B
+        use netcdf
+
+        character(len=*), intent(in) :: filename
+
+        integer :: ncid, status, dimid, varid
+        integer :: n_rho, n_theta, n_zeta, nfp_file
+        real(dp) :: torflux_val
+        real(dp), allocatable :: rho(:), theta(:), zeta(:)
+        real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
+        real(dp), allocatable :: Bmod_arr(:, :, :)
+        real(dp), allocatable :: y_aphi(:, :), y_bcovar(:, :), y_bmod(:, :, :, :)
+        real(dp) :: s_min, s_max, rho_min, rho_max
+        integer :: i
+        integer :: spline_order
+        integer :: order_3d(3)
+        logical :: periodic_3d(3)
+        real(dp) :: x_min_3d(3), x_max_3d(3)
+
+        call reset_boozer_batch_splines
+
+        ! Open file
+        status = nf90_open(trim(filename), nf90_nowrite, ncid)
+        if (status /= nf90_noerr) then
+            print *, "load_boozer_from_chartmap: cannot open ", trim(filename)
+            error stop
+        end if
+
+        ! Read dimensions
+        call nc_check(nf90_inq_dimid(ncid, "rho", dimid), "dim rho")
+        call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_rho), "len rho")
+        call nc_check(nf90_inq_dimid(ncid, "theta", dimid), "dim theta")
+        call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_theta), "len theta")
+        call nc_check(nf90_inq_dimid(ncid, "zeta", dimid), "dim zeta")
+        call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_zeta), "len zeta")
+
+        ! Read coordinate grids
+        allocate (rho(n_rho), theta(n_theta), zeta(n_zeta))
+        call nc_check(nf90_inq_varid(ncid, "rho", varid), "var rho")
+        call nc_check(nf90_get_var(ncid, varid, rho), "get rho")
+        call nc_check(nf90_inq_varid(ncid, "theta", varid), "var theta")
+        call nc_check(nf90_get_var(ncid, varid, theta), "get theta")
+        call nc_check(nf90_inq_varid(ncid, "zeta", varid), "var zeta")
+        call nc_check(nf90_get_var(ncid, varid, zeta), "get zeta")
+
+        ! Read scalar attributes and variables
+        call nc_check(nf90_get_att(ncid, nf90_global, "torflux", torflux_val), &
+                       "att torflux")
+        call nc_check(nf90_inq_varid(ncid, "num_field_periods", varid), &
+                       "var num_field_periods")
+        call nc_check(nf90_get_var(ncid, varid, nfp_file), &
+                       "get num_field_periods")
+
+        ! Read 1D profiles
+        allocate (A_phi_arr(n_rho), B_theta_arr(n_rho), B_phi_arr(n_rho))
+        call nc_check(nf90_inq_varid(ncid, "A_phi", varid), "var A_phi")
+        call nc_check(nf90_get_var(ncid, varid, A_phi_arr), "get A_phi")
+        call nc_check(nf90_inq_varid(ncid, "B_theta", varid), "var B_theta")
+        call nc_check(nf90_get_var(ncid, varid, B_theta_arr), "get B_theta")
+        call nc_check(nf90_inq_varid(ncid, "B_phi", varid), "var B_phi")
+        call nc_check(nf90_get_var(ncid, varid, B_phi_arr), "get B_phi")
+
+        ! Read 3D Bmod: NetCDF dims (zeta, theta, rho) map to Fortran
+        ! (rho, theta, zeta) via NF90 dimension reversal
+        allocate (Bmod_arr(n_rho, n_theta, n_zeta))
+        call nc_check(nf90_inq_varid(ncid, "Bmod", varid), "var Bmod")
+        call nc_check(nf90_get_var(ncid, varid, Bmod_arr), "get Bmod")
+
+        call nc_check(nf90_close(ncid), "close")
+
+        ! Set global parameters used by splint_boozer_coord
+        torflux = torflux_val
+        nper = nfp_file
+
+        ! Set boozer_coordinates_mod parameters
+        ns_s_B = 5
+        ns_tp_B = 5
+        ns_B = n_rho
+        n_theta_B = n_theta
+        n_phi_B = n_zeta
+        hs_B = rho(2) - rho(1)
+        h_theta_B = theta(2) - theta(1)
+        h_phi_B = zeta(2) - zeta(1)
+        use_B_r = .false.
+        use_del_tp_B = .false.
+
+        ! Set vector_potentail_mod parameters for A_phi spline
+        rho_min = rho(1)
+        rho_max = rho(n_rho)
+        s_min = rho_min**2
+        s_max = rho_max**2
+        ns = n_rho
+        hs = (s_max - s_min) / real(n_rho - 1, dp)
+        ns_A = 5
+
+        ! Build A_phi batch spline over s
+        spline_order = ns_A
+        allocate (y_aphi(n_rho, 1))
+        y_aphi(:, 1) = A_phi_arr
+        call construct_batch_splines_1d(s_min, s_max, y_aphi, spline_order, &
+                                        .false., aphi_batch_spline)
+        aphi_batch_spline_ready = .true.
+        deallocate (y_aphi)
+
+        ! Build B_theta, B_phi batch spline over rho_tor
+        spline_order = ns_s_B
+        allocate (y_bcovar(n_rho, 2))
+        y_bcovar(:, 1) = B_theta_arr
+        y_bcovar(:, 2) = B_phi_arr
+        call construct_batch_splines_1d(rho(1), rho(n_rho), y_bcovar, spline_order, &
+                                        .false., bcovar_tp_batch_spline)
+        bcovar_tp_batch_spline_ready = .true.
+        deallocate (y_bcovar)
+
+        ! Build Bmod 3D batch spline over (rho_tor, theta_B, phi_B)
+        order_3d = [ns_s_B, ns_tp_B, ns_tp_B]
+        periodic_3d = [.false., .true., .true.]
+        x_min_3d = [rho(1), theta(1), zeta(1)]
+        x_max_3d = [rho(n_rho), theta(n_theta), zeta(n_zeta)]
+
+        allocate (y_bmod(n_rho, n_theta, n_zeta, 1))
+        y_bmod(:, :, :, 1) = Bmod_arr
+        call construct_batch_splines_3d(x_min_3d, x_max_3d, y_bmod, order_3d, &
+                                        periodic_3d, bmod_br_batch_spline)
+        bmod_br_batch_spline_ready = .true.
+        bmod_br_num_quantities = 1
+        deallocate (y_bmod)
+
+        print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
+        print *, '  nfp=', nfp_file, ' ns=', n_rho, ' ntheta=', n_theta, &
+                 ' nphi=', n_zeta
+        print *, '  torflux=', torflux_val
+
+    contains
+
+        subroutine nc_check(stat, loc)
+            integer, intent(in) :: stat
+            character(len=*), intent(in) :: loc
+            if (stat /= nf90_noerr) then
+                print *, "load_boozer_from_chartmap: NetCDF error at ", trim(loc), &
+                         ": ", trim(nf90_strerror(stat))
+                error stop
+            end if
+        end subroutine nc_check
+
+    end subroutine load_boozer_from_chartmap
 
     subroutine build_boozer_aphi_batch_spline
         use vector_potentail_mod, only: ns, hs, sA_phi

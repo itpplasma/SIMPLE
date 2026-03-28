@@ -331,6 +331,26 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
     set_tests_properties(test_chartmap_metadata PROPERTIES LABELS "unit")
 
+    # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
+    add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
+    target_link_libraries(generate_test_boozer_chartmap.x netcdf m)
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc
+        COMMAND $<TARGET_FILE:generate_test_boozer_chartmap.x> ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS generate_test_boozer_chartmap.x
+        COMMENT "Generating test Boozer chartmap NetCDF"
+    )
+    add_custom_target(generate_test_boozer_chartmap
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    add_executable(test_boozer_chartmap.x test_boozer_chartmap.f90)
+    target_link_libraries(test_boozer_chartmap.x simple)
+    add_dependencies(test_boozer_chartmap.x generate_test_boozer_chartmap)
+    add_test(NAME test_boozer_chartmap COMMAND test_boozer_chartmap.x)
+    set_tests_properties(test_boozer_chartmap PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "unit")
+
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
         target_link_libraries(test_stl_wall_intersection.x simple)
