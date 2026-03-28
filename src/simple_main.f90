@@ -41,17 +41,19 @@ contains
     subroutine main
         use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
                           integmode, params_init, swcoll, generate_start_only, &
-                          isw_field_type, &
+                          isw_field_type, field_input, startmode, &
                           ntestpart, ntimstep, coord_input
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, init_magfie
         use samplers, only: init_starting_surf
         use version, only: simple_version
+        use field_boozer_chartmap, only: is_boozer_chartmap
 
         implicit none
 
         character(256) :: config_file
         type(tracer_t) :: norb
+        logical :: chartmap_mode
 
         ! Print version on startup
         print '(A,A)', 'SIMPLE version ', simple_version
@@ -83,6 +85,11 @@ contains
         if (swcoll) then
             call init_collisions
             call print_phase_time('Collision initialization completed')
+        end if
+
+        chartmap_mode = .false.
+        if (len_trim(field_input) > 0) then
+            chartmap_mode = is_boozer_chartmap(field_input)
         end if
 
         if (isw_field_type == TEST) then
