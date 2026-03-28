@@ -41,6 +41,8 @@ test/test_data/*
 !test/test_data/simple.single_fieldline.in
 !test/test_data/simple.volume.in
 !test/test_data/wout_qa.gvec.chartmap.nc
+!test/test_data/figure8.gvec.chartmap.nc
+!test/test_data/figure8.quasr.boundary.nc
 *.geany
 examples/test1/
 examples/test2/
@@ -66,3 +68,5 @@ thirdparty/pyplot_module.F90
 .claude
 docs/_build/
 build*/
+artifacts/plots/
+artifacts/notebooks/

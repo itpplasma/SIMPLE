@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+"""Figure-8 QUASR -> GVEC -> Boozer chartmap end-to-end benchmark."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+import netCDF4
+import numpy as np
+
+from boozer_chartmap_artifacts import (
+    confined_metrics,
+    load_chartmap_fields,
+    load_chartmap_surface,
+    load_confined_fraction,
+    plot_all_cases_total_losses,
+    plot_case_loss_comparison,
+    tile_field_periods,
+)
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
+SIMPLE_X = BUILD_DIR / "simple.x"
+GVEC_TO_CHARTMAP = SCRIPT_DIR / "gvec_to_boozer_chartmap.py"
+TEST_DATA = SCRIPT_DIR.parent / "test_data"
+BOUNDARY = TEST_DATA / "figure8.quasr.boundary.nc"
+REFERENCE_CHARTMAP = TEST_DATA / "figure8.gvec.chartmap.nc"
+
+
+def write_inputs(run_dir: Path) -> None:
+    starts = []
+    for rho in (0.35, 0.55, 0.78):
+        for theta in (0.0, 2.1, 4.2, 5.4):
+            starts.append((rho, theta, 0.0, 1.0, 0.35))
+            starts.append((rho, theta, 0.2, 1.0, -0.25))
+    with (run_dir / "start.dat").open("w", encoding="utf-8") as handle:
+        for row in starts:
+            handle.write(" ".join(f"{value:.12g}" for value in row) + "\n")
+
+    with (run_dir / "simple.in").open("w", encoding="utf-8") as handle:
+        handle.write(
+            """&config
+multharm = 5
+contr_pp = -1e10
+trace_time = 5d-4
+macrostep_time_grid = 'log'
+ntimstep = 61
+ntestpart = 24
+field_input = 'figure8.gvec.chartmap.nc'
+coord_input = 'figure8.gvec.chartmap.nc'
+isw_field_type = 2
+deterministic = .True.
+integmode = 1
+startmode = 2
+facE_al = 1.0d0
+/
+"""
+        )
+
+
+def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
+    print(f"[{label}] {' '.join(cmd)}")
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode == 0:
+        return
+    print(result.stdout[-4000:])
+    print(result.stderr[-4000:])
+    raise RuntimeError(f"{label} failed with exit code {result.returncode}")
+
+
+def pushd(path: Path):
+    class _Pushd:
+        def __enter__(self_inner):
+            self_inner.old = Path.cwd()
+            os.chdir(path)
+            return self_inner
+
+        def __exit__(self_inner, exc_type, exc, tb):
+            os.chdir(self_inner.old)
+            return False
+
+    return _Pushd()
+
+
+def build_figure8_chartmap(run_dir: Path) -> Path:
+    import gvec
+    from gvec.scripts.quasr import load_quasr
+    from gvec.util import read_parameters
+
+    prepare_dir = run_dir / "prepare"
+    solve_dir = run_dir / "solve"
+    prepare_dir.mkdir(parents=True, exist_ok=True)
+    solve_dir.mkdir(parents=True, exist_ok=True)
+    with pushd(prepare_dir):
+        load_quasr(BOUNDARY, filetype="netcdf", quiet=True, name="figure8")
+    params = read_parameters(prepare_dir / "figure8-parameters.toml")
+    params["hmap_ncfile"] = str((prepare_dir / params["hmap_ncfile"]).resolve())
+    params["minimize_tol"] = 1.0e-8
+    params["maxIter"] = 5
+    params["totalIter"] = 10
+    gvec.run(
+        params,
+        runpath=solve_dir,
+        redirect_gvec_stdout=True,
+        quiet=True,
+    )
+
+    param_final = sorted(solve_dir.glob("parameter*_final.ini"))[-1]
+    state_final = sorted(solve_dir.glob("*State_final.dat"))[-1]
+    output = run_dir / "figure8.gvec.chartmap.nc"
+    run_cmd(
+        [
+            sys.executable,
+            str(GVEC_TO_CHARTMAP),
+            str(param_final),
+            str(state_final),
+            str(output),
+            "--nrho",
+            "50",
+            "--ntheta",
+            "36",
+            "--nphi",
+            "81",
+        ],
+        cwd=run_dir,
+        label="figure8 GVEC->chartmap",
+        timeout=3600,
+    )
+    return output
+
+
+def load_quasr_boundary(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    with netCDF4.Dataset(path) as ds:
+        pos = np.asarray(ds["pos"][:], dtype=float)
+    return pos[:, :, 0], pos[:, :, 1], pos[:, :, 2]
+
+
+def figure8_signature(path: Path) -> np.ndarray:
+    surface = load_chartmap_surface(path)
+    fields = load_chartmap_fields(path)
+    bx, by, bz = tile_field_periods(
+        surface["boundary_x"], surface["boundary_y"], surface["boundary_z"], int(surface["nfp"])
+    )
+    ax, ay, az = tile_field_periods(
+        surface["axis_x"], surface["axis_y"], surface["axis_z"], int(surface["nfp"])
+    )
+    axis_x = ax.mean(axis=0)
+    axis_y = ay.mean(axis=0)
+    axis_z = az.mean(axis=0)
+    boundary_mid = bx[bx.shape[0] // 2]
+    boundary_top = bz[bz.shape[0] // 4]
+    idx_axis = np.linspace(0, axis_x.size - 1, 16, dtype=int)
+    idx_bound = np.linspace(0, boundary_mid.size - 1, 16, dtype=int)
+    rho_idx = np.linspace(0, len(fields["rho"]) - 1, 10, dtype=int)
+    bmod = np.asarray(fields["Bmod"], dtype=float)
+    ir = bmod.shape[0] // 2
+    it = np.linspace(0, bmod.shape[1] - 1, 6, dtype=int)
+    ip = np.linspace(0, bmod.shape[2] - 1, 6, dtype=int)
+    sample_bmod = np.array([bmod[ir, i, j] for i in it for j in ip], dtype=float)
+    return np.concatenate(
+        [
+            axis_x[idx_axis],
+            axis_y[idx_axis],
+            axis_z[idx_axis],
+            boundary_mid[idx_bound],
+            boundary_top[idx_bound],
+            np.asarray(fields["A_phi"])[rho_idx],
+            np.asarray(fields["B_theta"])[rho_idx],
+            np.asarray(fields["B_phi"])[rho_idx],
+            sample_bmod,
+        ]
+    )
+
+
+def assert_figure8_golden(chartmap_path: Path, out_dir: Path) -> None:
+    generated = figure8_signature(chartmap_path)
+    reference = figure8_signature(REFERENCE_CHARTMAP)
+    np.savetxt(out_dir / "figure8_signature_generated.dat", generated)
+    np.savetxt(out_dir / "figure8_signature_reference.dat", reference)
+    if not np.allclose(generated, reference, rtol=1.0e-6, atol=1.0e-8):
+        diff = np.abs(generated - reference)
+        idx = int(np.argmax(diff))
+        raise RuntimeError(
+            "Figure-8 golden record mismatch at index "
+            f"{idx}: generated={generated[idx]:.16e}, reference={reference[idx]:.16e}, "
+            f"abs_diff={diff[idx]:.3e}"
+        )
+
+
+def plot_review(run_dir: Path, chartmap_path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    xb_true, yb_true, zb_true = load_quasr_boundary(BOUNDARY)
+    surface = load_chartmap_surface(chartmap_path)
+    fields = load_chartmap_fields(chartmap_path)
+    xb, yb, zb = tile_field_periods(
+        surface["boundary_x"], surface["boundary_y"], surface["boundary_z"], int(surface["nfp"])
+    )
+    xa, ya, za = tile_field_periods(
+        surface["axis_x"], surface["axis_y"], surface["axis_z"], int(surface["nfp"])
+    )
+    axis_true = np.stack(
+        [xb_true.mean(axis=0), yb_true.mean(axis=0), zb_true.mean(axis=0)],
+        axis=1,
+    )
+    axis_chart = np.stack([xa.mean(axis=0), ya.mean(axis=0), za.mean(axis=0)], axis=1)
+
+    def close_curve(curve: np.ndarray) -> np.ndarray:
+        curve = np.asarray(curve)
+        return np.concatenate([curve, curve[:1]])
+
+    def close_surface(xsurf: np.ndarray, ysurf: np.ndarray, zsurf: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return (
+            np.concatenate([xsurf, xsurf[:, :1]], axis=1),
+            np.concatenate([ysurf, ysurf[:, :1]], axis=1),
+            np.concatenate([zsurf, zsurf[:, :1]], axis=1),
+        )
+
+    def sample_indices(size: int, stride: int) -> list[int]:
+        indices = list(range(0, size, stride))
+        last = size - 1
+        if last not in indices:
+            indices.append(last)
+        return indices
+
+    xb_true_plot, yb_true_plot, zb_true_plot = close_surface(xb_true, yb_true, zb_true)
+    xb_plot, yb_plot, zb_plot = close_surface(xb, yb, zb)
+    axis_true_plot = np.column_stack(
+        [close_curve(axis_true[:, 0]), close_curve(axis_true[:, 1]), close_curve(axis_true[:, 2])]
+    )
+    axis_chart_plot = np.column_stack(
+        [close_curve(axis_chart[:, 0]), close_curve(axis_chart[:, 1]), close_curve(axis_chart[:, 2])]
+    )
+
+    def draw_projection(ax, xsurf, ysurf, xlabel, ylabel, title, color):
+        for j in sample_indices(xsurf.shape[1], max(1, xsurf.shape[1] // 12)):
+            ax.plot(xsurf[:, j], ysurf[:, j], color=color, lw=0.8, alpha=0.55)
+        for i in sample_indices(xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
+            ax.plot(xsurf[i], ysurf[i], color=color, lw=0.6, alpha=0.3)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+
+    def draw_surface_3d(ax, xsurf, ysurf, zsurf, color, label, axis_xyz, linestyle="-"):
+        for j in sample_indices(xsurf.shape[1], max(1, xsurf.shape[1] // 12)):
+            ax.plot(xsurf[:, j], ysurf[:, j], zsurf[:, j], color=color, lw=0.7, alpha=0.45, ls=linestyle)
+        for i in sample_indices(xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
+            ax.plot(xsurf[i], ysurf[i], zsurf[i], color=color, lw=0.5, alpha=0.22, ls=linestyle)
+        ax.plot(axis_xyz[:, 0], axis_xyz[:, 1], axis_xyz[:, 2], color=color, lw=1.8, ls=linestyle, label=label)
+
+    def set_equal_3d(ax, x, y, z):
+        mins = np.array([np.min(x), np.min(y), np.min(z)], dtype=float)
+        maxs = np.array([np.max(x), np.max(y), np.max(z)], dtype=float)
+        center = 0.5 * (mins + maxs)
+        radius = 0.55 * np.max(maxs - mins)
+        if radius <= 0.0:
+            radius = 1.0
+        ax.set_xlim(center[0] - radius, center[0] + radius)
+        ax.set_ylim(center[1] - radius, center[1] + radius)
+        ax.set_zlim(center[2] - radius, center[2] + radius)
+        ax.set_box_aspect((1.0, 1.0, 1.0))
+
+    fig = plt.figure(figsize=(16, 12), constrained_layout=True)
+    axes = np.empty((3, 3), dtype=object)
+    for i in range(3):
+        axes[0, i] = fig.add_subplot(3, 3, i + 1)
+    for i in range(3):
+        axes[1, i] = fig.add_subplot(3, 3, i + 4, projection="3d")
+    for i in range(3):
+        axes[2, i] = fig.add_subplot(3, 3, i + 7, projection="3d" if i < 2 else None)
+
+    draw_projection(axes[0, 0], xb_true_plot, zb_true_plot, "x [m]", "z [m]", "QUASR boundary x-z", "C0")
+    draw_projection(axes[0, 1], yb_true_plot, zb_true_plot, "y [m]", "z [m]", "QUASR boundary y-z", "C0")
+    draw_projection(axes[0, 2], xb_true_plot, yb_true_plot, "x [m]", "y [m]", "QUASR boundary x-y", "C0")
+    axes[0, 0].plot(axis_true_plot[:, 0], axis_true_plot[:, 2], color="black", lw=1.6, label="QUASR axis")
+    axes[0, 0].plot(axis_chart_plot[:, 0], axis_chart_plot[:, 2], color="goldenrod", lw=1.2, ls="--", label="chartmap axis")
+    axes[0, 0].legend(fontsize=8)
+    axes[0, 1].plot(axis_true_plot[:, 1], axis_true_plot[:, 2], color="black", lw=1.6)
+    axes[0, 1].plot(axis_chart_plot[:, 1], axis_chart_plot[:, 2], color="goldenrod", lw=1.2, ls="--")
+    axes[0, 2].plot(axis_true_plot[:, 0], axis_true_plot[:, 1], color="black", lw=1.6)
+    axes[0, 2].plot(axis_chart_plot[:, 0], axis_chart_plot[:, 1], color="goldenrod", lw=1.2, ls="--")
+
+    xb_all = np.concatenate([xb_true_plot.ravel(), xb_plot.ravel()])
+    yb_all = np.concatenate([yb_true_plot.ravel(), yb_plot.ravel()])
+    zb_all = np.concatenate([zb_true_plot.ravel(), zb_plot.ravel()])
+    views = [(22.0, -62.0), (18.0, 24.0), (78.0, -90.0)]
+    for ax, (elev, azim) in zip(axes[1], views):
+        draw_surface_3d(ax, xb_true_plot, yb_true_plot, zb_true_plot, "C0", "QUASR boundary", axis_true_plot)
+        draw_surface_3d(ax, xb_plot, yb_plot, zb_plot, "C3", "chartmap surface", axis_chart_plot, linestyle="--")
+        ax.view_init(elev=elev, azim=azim)
+        set_equal_3d(ax, xb_all, yb_all, zb_all)
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("y [m]")
+        ax.set_zlabel("z [m]")
+        ax.set_title(f"Overlay 3D elev={elev:.0f}, azim={azim:.0f}")
+    axes[1, 0].legend(fontsize=8)
+
+    draw_surface_3d(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot, "C0", "QUASR boundary", axis_true_plot)
+    axes[2, 0].view_init(elev=28.0, azim=-45.0)
+    set_equal_3d(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot)
+    axes[2, 0].set_title("QUASR boundary only")
+    axes[2, 0].set_xlabel("x [m]")
+    axes[2, 0].set_ylabel("y [m]")
+    axes[2, 0].set_zlabel("z [m]")
+
+    draw_surface_3d(axes[2, 1], xb_plot, yb_plot, zb_plot, "C3", "chartmap surface", axis_chart_plot)
+    axes[2, 1].view_init(elev=28.0, azim=-45.0)
+    set_equal_3d(axes[2, 1], xb_plot, yb_plot, zb_plot)
+    axes[2, 1].set_title("Chartmap surface only")
+    axes[2, 1].set_xlabel("x [m]")
+    axes[2, 1].set_ylabel("y [m]")
+    axes[2, 1].set_zlabel("z [m]")
+
+    bmod = np.asarray(fields["Bmod"], dtype=float)
+    mid = bmod.shape[0] // 2
+    im = axes[2, 2].imshow(bmod[mid].T, origin="lower", aspect="auto", cmap="magma")
+    axes[2, 2].set_title("|B| at mid rho")
+    axes[2, 2].set_xlabel("zeta index")
+    axes[2, 2].set_ylabel("theta index")
+    fig.colorbar(im, ax=axes[2, 2], shrink=0.8)
+
+    outpath = run_dir / "figure8_review.png"
+    fig.savefig(outpath, dpi=180)
+    print(f"Saved {outpath}")
+
+
+def maybe_plot_all_cases(run_dir: Path, figure8_metrics: dict[str, dict[str, np.ndarray | float]]) -> None:
+    common_dir = Path.cwd() / "boozer_chartmap_e2e"
+    if not common_dir.exists():
+        return
+    cases = {}
+    for case_dir in sorted(common_dir.iterdir()):
+        if not case_dir.is_dir():
+            continue
+        series = {}
+        for label, subdir in [
+            ("VMEC-Boozer", "vmec_run"),
+            ("VMEC chartmap", "vmec_chartmap_run"),
+            ("GVEC chartmap", "gvec_chartmap_run"),
+        ]:
+            data_file = case_dir / subdir / "confined_fraction.dat"
+            if data_file.exists():
+                series[label] = confined_metrics(load_confined_fraction(data_file))
+        if series:
+            cases[case_dir.name] = series
+    cases["Figure-8"] = figure8_metrics
+    plot_all_cases_total_losses(run_dir / "all_cases_losses.png", cases)
+
+
+def main() -> None:
+    for path, label in [
+        (SIMPLE_X, "simple.x"),
+        (GVEC_TO_CHARTMAP, "GVEC conversion script"),
+        (BOUNDARY, "figure-8 boundary"),
+        (REFERENCE_CHARTMAP, "figure-8 golden chartmap"),
+    ]:
+        if not path.exists():
+            raise SystemExit(f"Missing {label}: {path}")
+
+    run_dir = Path.cwd() / "figure8_chartmap_smoke"
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+
+    chartmap = build_figure8_chartmap(run_dir)
+    write_inputs(run_dir)
+    run_cmd([str(SIMPLE_X)], cwd=run_dir, label="figure8 SIMPLE")
+
+    data = load_confined_fraction(run_dir / "confined_fraction.dat")
+    confined = np.asarray(data[:, 1:3], dtype=float)
+    if not np.all(np.isfinite(confined)):
+        raise RuntimeError("Non-finite confined fractions in figure-8 benchmark")
+    if np.any(confined < -1.0e-12) or np.any(confined > 1.0 + 1.0e-12):
+        raise RuntimeError("Confined fractions outside [0, 1] in figure-8 benchmark")
+
+    metrics = {"Figure-8 GVEC chartmap": confined_metrics(data)}
+    plot_case_loss_comparison(run_dir / "figure8_losses.png", "Figure-8", metrics)
+    plot_review(run_dir, chartmap)
+    assert_figure8_golden(chartmap, run_dir)
+    maybe_plot_all_cases(run_dir, metrics)
+    print("FIGURE-8 GVEC CHARTMAP PASS")
+
+
+if __name__ == "__main__":
+    main()

@@ -32,6 +32,9 @@ if(EXISTS "${WOUT_QA_GVEC_CHARTMAP_SOURCE}")
     file(CREATE_LINK "${WOUT_QA_GVEC_CHARTMAP_SOURCE}" "${WOUT_QA_GVEC_CHARTMAP_BINARY}" SYMBOLIC)
 endif()
 
+set(FIGURE8_BOUNDARY_SOURCE "${TEST_DATA_DIR}/figure8.quasr.boundary.nc")
+set(FIGURE8_CHARTMAP_SOURCE "${TEST_DATA_DIR}/figure8.gvec.chartmap.nc")
+
 set(BOOZER_CHARTMAP_PYTHON "${Python_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -412,6 +415,17 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "slow;plot;python"
         TIMEOUT 7200)
+
+    if(EXISTS "${FIGURE8_BOUNDARY_SOURCE}" AND EXISTS "${FIGURE8_CHARTMAP_SOURCE}")
+        add_test(NAME test_figure8_boozer_chartmap
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_figure8_boozer_chartmap.py)
+        set_tests_properties(test_figure8_boozer_chartmap PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "slow;plot;python;golden_record"
+            TIMEOUT 7200
+            DEPENDS test_e2e_boozer_chartmap)
+    endif()
 
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
