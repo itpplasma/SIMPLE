@@ -5,15 +5,16 @@
 numpy==2.2.6
 scikit-build-core==0.10.0
 
-# F90wrap - pinned to release version
-f90wrap==0.2.16
+# F90wrap - pinned to release version compatible with gvec
+f90wrap==0.3.0
 
 # Optional dependencies for testing
 pytest==7.4.3
 pytest-cov==6.2.1
 netCDF4==1.7.2
+gvec==1.4.0
 
 # Optional dependencies for examples/plotting
 matplotlib==3.9.4
 scipy==1.15.2
-shapely==2.0.5
+shapely==2.1.2
