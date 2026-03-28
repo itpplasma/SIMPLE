@@ -351,6 +351,27 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
 
+    # Boozer chartmap roundtrip test: requires wout.nc
+    add_executable(test_boozer_chartmap_roundtrip.x test_boozer_chartmap_roundtrip.f90)
+    target_link_libraries(test_boozer_chartmap_roundtrip.x simple)
+    add_test(NAME test_boozer_chartmap_roundtrip
+        COMMAND test_boozer_chartmap_roundtrip.x)
+    set_tests_properties(test_boozer_chartmap_roundtrip PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow")
+
+    # Export tool for e2e test
+    add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
+    target_link_libraries(export_boozer_chartmap_tool.x simple)
+
+    # E2E test: VMEC-Boozer vs chartmap confined fractions
+    add_test(NAME test_e2e_boozer_chartmap
+        COMMAND ${Python_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_boozer_chartmap.py)
+    set_tests_properties(test_e2e_boozer_chartmap PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow")
+
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
         target_link_libraries(test_stl_wall_intersection.x simple)
