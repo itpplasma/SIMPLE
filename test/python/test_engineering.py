@@ -29,6 +29,7 @@ from pysimple.engineering import (
     PortOptimizer,
     OptimizationResult,
     plot_heat_flux_2d,
+    plot_heat_flux_with_coil_clearance,
     compute_wall_area_from_chartmap,
 )
 
@@ -657,6 +658,31 @@ def create_mock_chartmap_nc(
         v_nfp.assignValue(nfp)
 
 
+def create_mock_coil_file(
+    path: Path,
+    *,
+    R0: float = 10.0,
+    a: float = 1.0,
+    clearance: float = 0.05,
+    n_points: int = 64,
+):
+    """
+    Create a simple coil polyline file near the outboard midplane.
+
+    The coil is a vertical line segment at zeta=0 (x axis), positioned just
+    outside the wall at theta=0, so it constrains ports near zeta=0.
+    """
+    x = np.full((n_points,), R0 + a + clearance, dtype=float)
+    y = np.zeros((n_points,), dtype=float)
+    z = np.linspace(-1.5 * a, 1.5 * a, n_points, dtype=float)
+    I = np.full((n_points,), 1.0, dtype=float)
+
+    data = np.column_stack([x, y, z, I])
+    with path.open("w", encoding="utf-8") as f:
+        f.write(f"{n_points}\n")
+        np.savetxt(f, data, fmt="%.10e")
+
+
 @pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
 class TestWallAreaCalculation:
     """Tests for wall area calculation from chartmap."""
@@ -675,6 +701,78 @@ class TestWallAreaCalculation:
 
         # Should match within 1.5% (numerical discretization error)
         assert area == pytest.approx(expected_area, rel=0.015)
+
+
+@pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
+class TestCoilClearance:
+    """Tests for coil clearance constraint and plotting."""
+
+    def test_coil_clearance_penalizes_forbidden_ports(
+        self, tmp_path: Path, mock_results_file: Path
+    ):
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        chartmap_path = tmp_path / "chartmap_nfp1.nc"
+        create_mock_chartmap_nc(chartmap_path, R0=10.0, a=1.0, nfp=1, nzeta=64)
+
+        coil_path = tmp_path / "coil.dat"
+        create_mock_coil_file(coil_path, R0=10.0, a=1.0, clearance=0.05)
+
+        opt = PortOptimizer(heat_map)
+        opt.add_port("P", theta_width=0.2, zeta_width=0.2)
+        opt.set_coil_clearance_constraint(
+            coil_path,
+            chartmap_file=chartmap_path,
+            min_clearance_m=0.1,
+        )
+
+        # zeta=0 should be too close to coil, zeta=pi should be far.
+        bad = opt._objective(np.array([0.0, 0.0]))
+        good = opt._objective(np.array([0.0, np.pi]))
+        assert bad > good + 1e5
+
+    def test_plot_heat_flux_with_coil_clearance_writes_artifact(
+        self, tmp_path: Path, mock_results_file: Path
+    ):
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        heat_map = WallHeatMap.from_netcdf(
+            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        chartmap_path = tmp_path / "chartmap_nfp1.nc"
+        create_mock_chartmap_nc(chartmap_path, R0=10.0, a=1.0, nfp=1, nzeta=64)
+
+        coil_path = tmp_path / "coil.dat"
+        create_mock_coil_file(coil_path, R0=10.0, a=1.0, clearance=0.05)
+
+        artifacts_root = Path(
+            os.environ.get("SIMPLE_TEST_ARTIFACTS_DIR", str(tmp_path))
+        )
+        out_dir = artifacts_root / "engineering"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_png = out_dir / "port_feasibility_coil_clearance.png"
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ports = [Port("P", 0.0, np.pi, 0.2, 0.2)]
+        plot_heat_flux_with_coil_clearance(
+            heat_map,
+            coil_file=coil_path,
+            chartmap_file=chartmap_path,
+            min_clearance_m=0.1,
+            ax=ax,
+            ports=ports,
+        )
+        fig.savefig(out_png, dpi=150)
+        plt.close(fig)
+
+        assert out_png.exists()
+        assert out_png.stat().st_size > 10_000
 
     def test_area_positive(self, tmp_path: Path):
         """Test that computed area is positive and reasonable."""
