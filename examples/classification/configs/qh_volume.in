@@ -1,6 +1,6 @@
 &config
 notrace_passing = 1
-ntestpart = 5000
+ntestpart = 100000
 num_surf = 0
 sbeg = 0.2
 npoiper2 = 128

@@ -1,15 +1,14 @@
 &config
 notrace_passing = 1
-ntestpart = 5000
-num_surf = 0
-sbeg = 0.2
+ntestpart = 100000
+num_surf = 1
+sbeg = 0.3
 npoiper2 = 128
 netcdffile = 'wout_qh_8_7.nc'
 isw_field_type = 2
-trace_time = 1.5d-2
-tcut = 1d-2
-class_plot = .True.
-cut_in_per = 0d0
+trace_time = 1.0d0
+tcut = 1d-1
+class_plot = .False.
 fast_class = .True.
 deterministic = .True.
 /
