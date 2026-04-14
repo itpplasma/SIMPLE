@@ -28,6 +28,7 @@ Fast
 _*.c
 *.pyc
 __pycache__/
+.venv/
 python/launch*
 .DS_Store
 RUN_*
