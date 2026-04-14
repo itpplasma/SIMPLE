@@ -34,7 +34,7 @@ def _cache_signature() -> str:
     digest = hashlib.sha256()
     digest.update(QA_WOUT_URL.encode("utf-8"))
     digest.update(Path(__file__).read_bytes())
-    digest.update((Path(__file__).resolve().parent / "gvec_to_boozer_chartmap.py").read_bytes())
+    digest.update((Path(__file__).resolve().parents[2] / "tools" / "gvec_to_boozer_chartmap.py").read_bytes())
     return digest.hexdigest()[:16]
 
 
