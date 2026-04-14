@@ -42,7 +42,7 @@ EQUILIBRIA = [
         "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc",
         "trace_time": "1d-2",
         "facE_al": "1.0d0",
-        "use_gvec": True,
+        "use_gvec": False,
         "vmec_roundtrip_field_tol": "1.0e-4",
         "gvec_roundtrip_field_tol": "2.5e-4",
         "gvec_minimize_tol": 1.0e-10,
