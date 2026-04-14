@@ -26,7 +26,8 @@ endif()
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
-set(BOOZER_CHARTMAP_PYTHON "${Python_EXECUTABLE}")
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
 endif()
@@ -47,7 +48,6 @@ add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
 # map2disc-based chartmap generation (via libneo Python API)
 set(SIMPLE_HAVE_MAP2DISC OFF)
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     execute_process(
         COMMAND ${Python3_EXECUTABLE} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('map2disc') else 1)"
         RESULT_VARIABLE MAP2DISC_IMPORT_RESULT
@@ -213,7 +213,6 @@ add_custom_command(
 
 # Convert STELLOPT coils format to SIMPLE format using Python
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_custom_command(
         OUTPUT ${COILS_SIMPLE_FILE}
         COMMAND ${Python3_EXECUTABLE}
