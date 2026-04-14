@@ -7,14 +7,12 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 
 import netCDF4
 import numpy as np
 
 from boozer_chartmap_artifacts import (
     confined_metrics,
-    download_if_missing,
     load_chartmap_fields,
     load_chartmap_surface,
     load_confined_fraction,
@@ -27,44 +25,17 @@ from boozer_chartmap_artifacts import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
 SIMPLE_X = BUILD_DIR / "simple.x"
-GVEC_TO_CHARTMAP = SCRIPT_DIR / "gvec_to_boozer_chartmap.py"
-QUASR_TO_BOUNDARY = SCRIPT_DIR / "quasr_json_to_boundary.py"
-REFERENCE_SIGNATURE = SCRIPT_DIR / "figure8_signature_reference.txt"
-QUASR_JSON_URL = (
-    "https://raw.githubusercontent.com/gvec-group/gvec/main/"
-    "test-CI/data/quasr-0112714.json"
-)
-
-
-def write_inputs(run_dir: Path) -> None:
-    starts = []
-    for rho in (0.35, 0.55, 0.78):
-        for theta in (0.0, 2.1, 4.2, 5.4):
-            starts.append((rho, theta, 0.0, 1.0, 0.35))
-            starts.append((rho, theta, 0.2, 1.0, -0.25))
-    with (run_dir / "start.dat").open("w", encoding="utf-8") as handle:
-        for row in starts:
-            handle.write(" ".join(f"{value:.12g}" for value in row) + "\n")
-
-    with (run_dir / "simple.in").open("w", encoding="utf-8") as handle:
-        handle.write(
-            """&config
-multharm = 5
-contr_pp = -1e10
-trace_time = 5d-4
-macrostep_time_grid = 'log'
-ntimstep = 61
-ntestpart = 24
-field_input = 'figure8.gvec.chartmap.nc'
-coord_input = 'figure8.gvec.chartmap.nc'
-isw_field_type = 2
-deterministic = .True.
-integmode = 1
-startmode = 2
-facE_al = 1.0d0
-/
-"""
-        )
+FIGURE8_DATA_ROOT = Path(
+    os.environ.get(
+        "SIMPLE_FIGURE8_DATA_ROOT",
+        str(Path.home() / "data" / "QUASR" / "SIMPLE" / "figure8"),
+    )
+).expanduser()
+REFERENCE_SIGNATURE = FIGURE8_DATA_ROOT / "figure8_signature_reference.txt"
+BOUNDARY_FILE = FIGURE8_DATA_ROOT / "figure8.quasr.boundary.nc"
+CHARTMAP_FILE = FIGURE8_DATA_ROOT / "figure8.gvec.chartmap.nc"
+SIMPLE_INPUT = FIGURE8_DATA_ROOT / "simple.in"
+START_INPUT = FIGURE8_DATA_ROOT / "start.dat"
 
 
 def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
@@ -84,81 +55,12 @@ def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
     raise RuntimeError(f"{label} failed with exit code {result.returncode}")
 
 
-def pushd(path: Path):
-    class _Pushd:
-        def __enter__(self_inner):
-            self_inner.old = Path.cwd()
-            os.chdir(path)
-            return self_inner
-
-        def __exit__(self_inner, exc_type, exc, tb):
-            os.chdir(self_inner.old)
-            return False
-
-    return _Pushd()
-
-
-def build_figure8_chartmap(run_dir: Path) -> tuple[Path, Path]:
-    import gvec
-    from gvec.scripts.quasr import load_quasr
-    from gvec.util import read_parameters
-
-    prepare_dir = run_dir / "prepare"
-    solve_dir = run_dir / "solve"
-    prepare_dir.mkdir(parents=True, exist_ok=True)
-    solve_dir.mkdir(parents=True, exist_ok=True)
-    source_json = download_if_missing(run_dir / "quasr-0112714.json", QUASR_JSON_URL)
-    boundary = run_dir / "figure8.quasr.boundary.nc"
-    run_cmd(
-        [
-            sys.executable,
-            str(QUASR_TO_BOUNDARY),
-            str(source_json),
-            str(boundary),
-            "--ntheta",
-            "81",
-            "--nzeta",
-            "81",
-        ],
-        cwd=run_dir,
-        label="figure8 QUASR->boundary",
-    )
-    with pushd(prepare_dir):
-        load_quasr(boundary, filetype="netcdf", quiet=True, name="figure8")
-    params = read_parameters(prepare_dir / "figure8-parameters.toml")
-    params["hmap_ncfile"] = str((prepare_dir / params["hmap_ncfile"]).resolve())
-    params["minimize_tol"] = 1.0e-8
-    params["maxIter"] = 5
-    params["totalIter"] = 10
-    gvec.run(
-        params,
-        runpath=solve_dir,
-        redirect_gvec_stdout=True,
-        quiet=True,
-    )
-
-    param_final = sorted(solve_dir.glob("parameter*_final.ini"))[-1]
-    state_final = sorted(solve_dir.glob("*State_final.dat"))[-1]
-    output = run_dir / "figure8.gvec.chartmap.nc"
-    run_cmd(
-        [
-            sys.executable,
-            str(GVEC_TO_CHARTMAP),
-            str(param_final),
-            str(state_final),
-            str(output),
-            "--nrho",
-            "50",
-            "--ntheta",
-            "36",
-            "--nphi",
-            "81",
-        ],
-        cwd=run_dir,
-        label="figure8 GVEC->chartmap",
-        timeout=3600,
-    )
-    return boundary, output
+def prepare_run_dir(run_dir: Path) -> tuple[Path, Path]:
+    chartmap_link = run_dir / "figure8.gvec.chartmap.nc"
+    chartmap_link.symlink_to(os.path.relpath(CHARTMAP_FILE, run_dir))
+    shutil.copy2(SIMPLE_INPUT, run_dir / "simple.in")
+    shutil.copy2(START_INPUT, run_dir / "start.dat")
+    return BOUNDARY_FILE, chartmap_link
 
 
 def load_quasr_boundary(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -386,8 +288,11 @@ def maybe_plot_all_cases(run_dir: Path, figure8_metrics: dict[str, dict[str, np.
 def main() -> None:
     for path, label in [
         (SIMPLE_X, "simple.x"),
-        (GVEC_TO_CHARTMAP, "GVEC conversion script"),
-        (QUASR_TO_BOUNDARY, "QUASR boundary conversion script"),
+        (FIGURE8_DATA_ROOT, "figure-8 data root"),
+        (BOUNDARY_FILE, "figure-8 boundary"),
+        (CHARTMAP_FILE, "figure-8 chartmap"),
+        (SIMPLE_INPUT, "figure-8 SIMPLE input"),
+        (START_INPUT, "figure-8 start file"),
         (REFERENCE_SIGNATURE, "figure-8 golden signature"),
     ]:
         if not path.exists():
@@ -398,8 +303,7 @@ def main() -> None:
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
 
-    boundary, chartmap = build_figure8_chartmap(run_dir)
-    write_inputs(run_dir)
+    boundary, chartmap = prepare_run_dir(run_dir)
     run_cmd([str(SIMPLE_X)], cwd=run_dir, label="figure8 SIMPLE")
 
     data = load_confined_fraction(run_dir / "confined_fraction.dat")
