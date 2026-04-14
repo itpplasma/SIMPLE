@@ -4,6 +4,7 @@ BUILD_DIR := build
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 PYTHON_FOR_TESTS := $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python)
 SIMPLE_GVEC_QA_CACHE_ROOT ?= $(HOME)/data/SIMPLE/gvec_qa_roundtrip
+SIMPLE_FIGURE8_DATA_ROOT ?= $(HOME)/data/QUASR/SIMPLE/figure8
 SIMPLE_DATA_REPO ?= $(HOME)/data
 SIMPLE_DATA_GVEC_QA_DIR ?= $(SIMPLE_DATA_REPO)/TESTS/SIMPLE/gvec_qa_roundtrip
 
@@ -21,6 +22,7 @@ NVHPC_ACC_BUILD_DIR := build_nvfortran_acc
 .PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
 .PHONY: nvfortran-acc nvfortran-acc-test nvfortran-acc-test-nopy nvfortran-acc-configure nvfortran-acc-clean
 .PHONY: gvec-qa-cache-fetch gvec-qa-cache-build gvec-qa-cache-sync-data gvec-qa-cache-refresh-data
+.PHONY: figure8-data-fetch
 all: build
 
 $(BUILD_NINJA):
@@ -107,6 +109,10 @@ gvec-qa-cache-fetch:
 	SIMPLE_GVEC_QA_CACHE_ROOT="$(SIMPLE_GVEC_QA_CACHE_ROOT)" \
 	GITLAB_DATA_SIMPLE_GVEC_SUBDIR="TESTS/SIMPLE/gvec_qa_roundtrip" \
 	bash tools/fetch_gvec_qa_cache.sh
+
+figure8-data-fetch:
+	SIMPLE_FIGURE8_DATA_ROOT="$(SIMPLE_FIGURE8_DATA_ROOT)" \
+	bash tools/fetch_figure8_data.sh
 
 gvec-qa-cache-build: build-deterministic
 	cd $(BUILD_DIR)/test/tests && \
