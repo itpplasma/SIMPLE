@@ -31,7 +31,7 @@ SIMPLE_X = BUILD_DIR / "simple.x"
 TOOL_X = BUILD_DIR / "test" / "tests" / "export_boozer_chartmap_tool.x"
 ROUNDTRIP_X = BUILD_DIR / "test" / "tests" / "test_boozer_chartmap_roundtrip.x"
 ROUNDTRIP_PLOT = SCRIPT_DIR / "plot_boozer_chartmap_roundtrip.py"
-GVEC_TO_CHARTMAP = SCRIPT_DIR / "gvec_to_boozer_chartmap.py"
+GVEC_TO_CHARTMAP = SCRIPT_DIR.parent.parent / "tools" / "gvec_to_boozer_chartmap.py"
 TEST_DATA = SCRIPT_DIR.parent / "test_data"
 
 

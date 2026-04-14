@@ -6,7 +6,7 @@ and writes the result in the extended chartmap format that SIMPLE
 can read without any GVEC or VMEC library at runtime.
 
 Usage:
-    .venv/bin/python gvec_to_boozer_chartmap.py <parameter.ini> <state.dat> <output.nc>
+    python tools/gvec_to_boozer_chartmap.py <parameter.ini> <state.dat> <output.nc>
 """
 
 import argparse
