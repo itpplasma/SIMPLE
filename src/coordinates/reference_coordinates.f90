@@ -4,6 +4,8 @@ module reference_coordinates
     use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
         make_chartmap_coordinate_system, detect_refcoords_file_type, &
         refcoords_file_chartmap, refcoords_file_vmec_wout, refcoords_file_unknown
+    use new_vmec_stuff_mod, only: vmec_RZ_scale
+    use scaled_chartmap_coordinates, only: wrap_scaled_chartmap_coordinate_system
 
     implicit none
 
@@ -36,6 +38,7 @@ contains
         select case (file_type)
         case (refcoords_file_chartmap)
             call make_chartmap_coordinate_system(ref_coords, coord_input)
+            call wrap_scaled_chartmap_coordinate_system(ref_coords, vmec_RZ_scale)
         case (refcoords_file_vmec_wout)
             call make_vmec_coordinate_system(ref_coords)
         case (refcoords_file_unknown)

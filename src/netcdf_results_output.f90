@@ -99,7 +99,7 @@ contains
         coord_type = 'vmec'
         cart_units = 'cm'
         select type (ref_coords)
-        type is (chartmap_coordinate_system_t)
+        class is (chartmap_coordinate_system_t)
             coord_type = 'chartmap'
             call read_chartmap_metadata(coord_input, meta)
             cart_units = meta%cart_units

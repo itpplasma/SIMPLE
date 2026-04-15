@@ -11,6 +11,7 @@
         coordinates/array_utils.f90
         coordinates/reference_coordinates.f90
         coordinates/coordinate_scaling.f90
+        coordinates/scaled_chartmap_coordinates.f90
     coordinates/cartesian_coordinates.f90
     field/field_base.f90
     field/field_coils.f90
