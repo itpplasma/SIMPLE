@@ -62,17 +62,19 @@ def main():
     # Evaluate field quantities in Boozer coordinates (endpoint-included grid)
     print(f"Evaluating field on {n_rho} x {n_theta_field} x {n_phi_field}...")
     ev = gvec.EvaluationsBoozer(
-        rho=rho_grid, theta_B=theta_field, zeta_B=zeta_field, state=state)
+        rho=rho_grid, theta_B=theta_field, zeta_B=zeta_field, state=state, MNfactor=3)
     gvec.compute(ev, 'mod_B', state=state)
     gvec.compute(ev, 'B_theta_B', state=state)
     gvec.compute(ev, 'B_zeta_B', state=state)
     gvec.compute(ev, 'iota', state=state)
 
+    ev = ev.transpose('rad', 'pol', 'tor', 'xyz')
+
     Bmod_3d = ev['mod_B'].values   # (n_rho, n_theta_field, n_phi_field)
     B_theta_3d = ev['B_theta_B'].values
     B_phi_3d = ev['B_zeta_B'].values
     iota_vals = ev['iota'].values
-    # Surface functions: take mean over angles (should be constant)
+    # Surface functions: (should be constant)
     if B_theta_3d.ndim == 3:
         B_theta = B_theta_3d[:, 0, 0]
         B_phi = B_phi_3d[:, 0, 0]
