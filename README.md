@@ -47,7 +47,7 @@ brew install gcc cmake ninja netcdf netcdf-fortran lapack
 
 For Python wrappers, do
 ```bash
-pip install f90wrap==0.2.16
+pip install f90wrap
 pip install -e . --no-build-isolation
 ```
 
@@ -160,10 +160,12 @@ fields residing in main memory. The main executable is `simple.x`.
 * `simple.in`
 * a VMEC NetCDF equlibrium (wout.nc) file with name specified in `simple.in`
 
-An example input file with explanation of each parameter can be found in `examples/simple.in`. An example `wout.nc` can be obtained by
+A minimal quickstart input is `examples/simple.in`. The full parameter reference with comments is `examples/simple_full.in`. An example `wout.nc` can be obtained by
 ```bash
 wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc
 ```
+
+For a self-contained demo that downloads test data, runs SIMPLE, and prints the confined fraction, use `examples/run_example.sh`.
 
 In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions.
 Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
@@ -187,10 +189,7 @@ The sum of 2. and 3. yields the overall confined fraction at each time.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.
 
 ### Comparing Commits ("Golden Record")
-To execute test_against_legacy_behaviour.py, execute `get_test_data.sh`, run SIMPLE and create the following symlinks in the `tests` directory after running SIMPLE in the `test_data` directory:
-* ../../../test_data/wout.nc --> wout.nc
-*  ../../../../examples/simple_full.in --> simple.in
-*  ../../../../build/start.dat start.dat
+To compare output between commits, use the golden record test suite in `test/golden_record/`. Run `test/golden_record/golden_record.sh [ref_version]` to build a reference version and compare its output against the current build.
 
 ## References
 When using this code for scientific publications, please cite the according references:
