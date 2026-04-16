@@ -343,6 +343,11 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     )
     add_custom_target(generate_test_boozer_chartmap
         DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    add_test(NAME generate_test_boozer_chartmap_data
+        COMMAND $<TARGET_FILE:generate_test_boozer_chartmap.x> ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    set_tests_properties(generate_test_boozer_chartmap_data PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "unit")
     add_executable(test_boozer_chartmap.x test_boozer_chartmap.f90)
     target_link_libraries(test_boozer_chartmap.x simple)
     add_dependencies(test_boozer_chartmap.x generate_test_boozer_chartmap)
@@ -350,6 +355,15 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     set_tests_properties(test_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
+    add_test(NAME test_chartmap_startmode1
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py
+            $<TARGET_FILE:simple.x>
+            ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    set_tests_properties(test_chartmap_startmode1 PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "integration;python"
+        DEPENDS "generate_test_boozer_chartmap_data")
 
     # Boozer chartmap roundtrip test: requires wout.nc
     add_executable(test_boozer_chartmap_roundtrip.x test_boozer_chartmap_roundtrip.f90)
