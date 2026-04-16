@@ -35,7 +35,7 @@ program test_bder_from_splines
     call init_reference_coordinates('wout_ncsx.nc')
 
     call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, splined)
+    call create_splined_field(raw_coils, ref_coords, splined, n_r=32, n_th=33, n_phi=32)
 
     phi_period = twopi/real(nper, dp)
 
