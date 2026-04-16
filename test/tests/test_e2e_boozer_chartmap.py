@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 
 import netCDF4
@@ -21,6 +20,7 @@ from boozer_chartmap_artifacts import (
     plot_case_loss_comparison,
     plot_field_component_comparison,
     plot_surface_comparison,
+    run_cmd,
     summarize_confined_fraction,
 )
 
@@ -114,23 +114,6 @@ startmode = 2
 facE_al = {facE_al}
 /
 """
-
-
-def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
-    print(f"[{label}] {' '.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-    if result.returncode == 0:
-        return
-    print(result.stdout[-4000:])
-    print(result.stderr[-4000:])
-    raise RuntimeError(f"{label} failed with exit code {result.returncode}")
 
 
 def build_gvec_chartmap(
@@ -242,6 +225,54 @@ def assert_boozer_chartmap_file(path: Path) -> None:
             raise RuntimeError(f"{path}: expected zeta_convention='boozer'")
         if str(getattr(ds, "rho_convention")) != "rho_tor":
             raise RuntimeError(f"{path}: expected rho_convention='rho_tor'")
+
+
+def _compare_and_summarize(
+    name: str,
+    series: dict[str, np.ndarray],
+    eq_dir: Path,
+    field_metrics: dict[str, float],
+) -> tuple[bool, dict[str, dict[str, float]]]:
+    min_len = min(len(values) for values in series.values())
+    metrics_by_label: dict[str, dict[str, np.ndarray | float]] = {}
+    max_diffs = {"total": 0.0, "pass": 0.0, "trap": 0.0}
+    ref_metrics = confined_metrics(series["VMEC-Boozer"][:min_len])
+    tol = 1.0 / float(ref_metrics["npart"])
+    for label, values in series.items():
+        metrics_by_label[label] = confined_metrics(values[:min_len])
+
+    labels = list(metrics_by_label)
+    for idx, left in enumerate(labels):
+        for right in labels[idx + 1:]:
+            left_m = metrics_by_label[left]
+            right_m = metrics_by_label[right]
+            for key, tag in [("total_conf", "total"), ("pass_conf", "pass"), ("trap_conf", "trap")]:
+                diff = float(np.max(np.abs(np.asarray(left_m[key]) - np.asarray(right_m[key]))))
+                print(f"[{name}] max |{tag} diff| {left} vs {right} = {diff:.6e}")
+                max_diffs[tag] = max(max_diffs[tag], diff)
+
+    plot_case_loss_comparison(eq_dir / f"e2e_{name}.png", name, metrics_by_label)
+
+    summary = {
+        label: summarize_confined_fraction(series[label][:min_len])
+        for label in series
+    }
+    summary["executed_modes"] = list(series)
+    summary["comparison"] = {
+        "tol": tol,
+        "max_total_diff": max_diffs["total"],
+        "max_pass_diff": max_diffs["pass"],
+        "max_trap_diff": max_diffs["trap"],
+    }
+    summary["field_metrics"] = field_metrics
+    write_json(eq_dir / "loss_summary.json", summary)
+
+    ok = all(value <= tol for value in max_diffs.values())
+    if not ok:
+        print(f"[{name}] FAIL: confined-fraction mismatch exceeds {tol:.6e}")
+    else:
+        print(f"[{name}] PASS")
+    return ok, summary
 
 
 def run_single_equilibrium(eq: dict[str, str | Path], outdir: Path) -> tuple[bool, dict[str, dict[str, float]]]:
@@ -370,57 +401,7 @@ def run_single_equilibrium(eq: dict[str, str | Path], outdir: Path) -> tuple[boo
     }
     if use_gvec and cf_gvec is not None:
         series["GVEC chartmap"] = cf_gvec
-    min_len = min(len(values) for values in series.values())
-    metrics_by_label: dict[str, dict[str, np.ndarray | float]] = {}
-    max_diffs = {"total": 0.0, "pass": 0.0, "trap": 0.0}
-    ref_metrics = confined_metrics(series["VMEC-Boozer"][:min_len])
-    tol = 1.0 / float(ref_metrics["npart"])
-    for label, values in series.items():
-        metrics_by_label[label] = confined_metrics(values[:min_len])
-
-    labels = list(metrics_by_label)
-    for idx, left in enumerate(labels):
-        for right in labels[idx + 1:]:
-            left_metrics = metrics_by_label[left]
-            right_metrics = metrics_by_label[right]
-            diff_total = float(
-                np.max(np.abs(np.asarray(left_metrics["total_conf"]) - np.asarray(right_metrics["total_conf"])))
-            )
-            diff_pass = float(
-                np.max(np.abs(np.asarray(left_metrics["pass_conf"]) - np.asarray(right_metrics["pass_conf"])))
-            )
-            diff_trap = float(
-                np.max(np.abs(np.asarray(left_metrics["trap_conf"]) - np.asarray(right_metrics["trap_conf"])))
-            )
-            print(f"[{name}] max |total diff| {left} vs {right} = {diff_total:.6e}")
-            print(f"[{name}] max |pass diff|  {left} vs {right} = {diff_pass:.6e}")
-            print(f"[{name}] max |trap diff|  {left} vs {right} = {diff_trap:.6e}")
-            max_diffs["total"] = max(max_diffs["total"], diff_total)
-            max_diffs["pass"] = max(max_diffs["pass"], diff_pass)
-            max_diffs["trap"] = max(max_diffs["trap"], diff_trap)
-
-    plot_case_loss_comparison(eq_dir / f"e2e_{name}.png", name, metrics_by_label)
-
-    summary = {
-        label: summarize_confined_fraction(series[label][:min_len])
-        for label in series
-    }
-    summary["executed_modes"] = list(series)
-    summary["comparison"] = {
-        "tol": tol,
-        "max_total_diff": max_diffs["total"],
-        "max_pass_diff": max_diffs["pass"],
-        "max_trap_diff": max_diffs["trap"],
-    }
-    summary["field_metrics"] = field_metrics
-    write_json(eq_dir / "loss_summary.json", summary)
-
-    ok = all(value <= tol for value in max_diffs.values())
-    if not ok:
-        print(f"[{name}] FAIL: confined-fraction mismatch exceeds {tol:.6e}")
-    else:
-        print(f"[{name}] PASS")
-    return ok, summary
+    return _compare_and_summarize(name, series, eq_dir, field_metrics)
 
 
 def main() -> None:

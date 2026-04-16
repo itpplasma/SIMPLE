@@ -6,18 +6,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shutil
-import subprocess
 
 import netCDF4
 import numpy as np
 
 from boozer_chartmap_artifacts import (
+    close_curve,
+    close_surface_toroidally,
     confined_metrics,
     load_chartmap_fields,
     load_chartmap_surface,
     load_confined_fraction,
     plot_all_cases_total_losses,
     plot_case_loss_comparison,
+    run_cmd,
+    sample_indices,
+    set_equal_3d_limits,
     tile_field_periods,
 )
 
@@ -36,23 +40,6 @@ BOUNDARY_FILE = FIGURE8_DATA_ROOT / "figure8.quasr.boundary.nc"
 CHARTMAP_FILE = FIGURE8_DATA_ROOT / "figure8.gvec.chartmap.nc"
 SIMPLE_INPUT = FIGURE8_DATA_ROOT / "simple.in"
 START_INPUT = FIGURE8_DATA_ROOT / "start.dat"
-
-
-def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
-    print(f"[{label}] {' '.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-    if result.returncode == 0:
-        return
-    print(result.stdout[-4000:])
-    print(result.stderr[-4000:])
-    raise RuntimeError(f"{label} failed with exit code {result.returncode}")
 
 
 def prepare_run_dir(run_dir: Path) -> tuple[Path, Path]:
@@ -142,26 +129,8 @@ def plot_review(run_dir: Path, boundary_path: Path, chartmap_path: Path) -> None
     )
     axis_chart = np.stack([xa.mean(axis=0), ya.mean(axis=0), za.mean(axis=0)], axis=1)
 
-    def close_curve(curve: np.ndarray) -> np.ndarray:
-        curve = np.asarray(curve)
-        return np.concatenate([curve, curve[:1]])
-
-    def close_surface(xsurf: np.ndarray, ysurf: np.ndarray, zsurf: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        return (
-            np.concatenate([xsurf, xsurf[:, :1]], axis=1),
-            np.concatenate([ysurf, ysurf[:, :1]], axis=1),
-            np.concatenate([zsurf, zsurf[:, :1]], axis=1),
-        )
-
-    def sample_indices(size: int, stride: int) -> list[int]:
-        indices = list(range(0, size, stride))
-        last = size - 1
-        if last not in indices:
-            indices.append(last)
-        return indices
-
-    xb_true_plot, yb_true_plot, zb_true_plot = close_surface(xb_true, yb_true, zb_true)
-    xb_plot, yb_plot, zb_plot = close_surface(xb, yb, zb)
+    xb_true_plot, yb_true_plot, zb_true_plot = close_surface_toroidally(xb_true, yb_true, zb_true)
+    xb_plot, yb_plot, zb_plot = close_surface_toroidally(xb, yb, zb)
     axis_true_plot = np.column_stack(
         [close_curve(axis_true[:, 0]), close_curve(axis_true[:, 1]), close_curve(axis_true[:, 2])]
     )
@@ -185,18 +154,6 @@ def plot_review(run_dir: Path, boundary_path: Path, chartmap_path: Path) -> None
         for i in sample_indices(xsurf.shape[0], max(1, xsurf.shape[0] // 12)):
             ax.plot(xsurf[i], ysurf[i], zsurf[i], color=color, lw=0.5, alpha=0.22, ls=linestyle)
         ax.plot(axis_xyz[:, 0], axis_xyz[:, 1], axis_xyz[:, 2], color=color, lw=1.8, ls=linestyle, label=label)
-
-    def set_equal_3d(ax, x, y, z):
-        mins = np.array([np.min(x), np.min(y), np.min(z)], dtype=float)
-        maxs = np.array([np.max(x), np.max(y), np.max(z)], dtype=float)
-        center = 0.5 * (mins + maxs)
-        radius = 0.55 * np.max(maxs - mins)
-        if radius <= 0.0:
-            radius = 1.0
-        ax.set_xlim(center[0] - radius, center[0] + radius)
-        ax.set_ylim(center[1] - radius, center[1] + radius)
-        ax.set_zlim(center[2] - radius, center[2] + radius)
-        ax.set_box_aspect((1.0, 1.0, 1.0))
 
     fig = plt.figure(figsize=(16, 12), constrained_layout=True)
     axes = np.empty((3, 3), dtype=object)
@@ -226,7 +183,7 @@ def plot_review(run_dir: Path, boundary_path: Path, chartmap_path: Path) -> None
         draw_surface_3d(ax, xb_true_plot, yb_true_plot, zb_true_plot, "C0", "QUASR boundary", axis_true_plot)
         draw_surface_3d(ax, xb_plot, yb_plot, zb_plot, "C3", "chartmap surface", axis_chart_plot, linestyle="--")
         ax.view_init(elev=elev, azim=azim)
-        set_equal_3d(ax, xb_all, yb_all, zb_all)
+        set_equal_3d_limits(ax, xb_all, yb_all, zb_all)
         ax.set_xlabel("x [m]")
         ax.set_ylabel("y [m]")
         ax.set_zlabel("z [m]")
@@ -235,7 +192,7 @@ def plot_review(run_dir: Path, boundary_path: Path, chartmap_path: Path) -> None
 
     draw_surface_3d(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot, "C0", "QUASR boundary", axis_true_plot)
     axes[2, 0].view_init(elev=28.0, azim=-45.0)
-    set_equal_3d(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot)
+    set_equal_3d_limits(axes[2, 0], xb_true_plot, yb_true_plot, zb_true_plot)
     axes[2, 0].set_title("QUASR boundary only")
     axes[2, 0].set_xlabel("x [m]")
     axes[2, 0].set_ylabel("y [m]")
@@ -243,7 +200,7 @@ def plot_review(run_dir: Path, boundary_path: Path, chartmap_path: Path) -> None
 
     draw_surface_3d(axes[2, 1], xb_plot, yb_plot, zb_plot, "C3", "chartmap surface", axis_chart_plot)
     axes[2, 1].view_init(elev=28.0, azim=-45.0)
-    set_equal_3d(axes[2, 1], xb_plot, yb_plot, zb_plot)
+    set_equal_3d_limits(axes[2, 1], xb_plot, yb_plot, zb_plot)
     axes[2, 1].set_title("Chartmap surface only")
     axes[2, 1].set_xlabel("x [m]")
     axes[2, 1].set_ylabel("y [m]")
