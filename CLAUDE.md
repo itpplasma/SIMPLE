@@ -34,6 +34,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Default: Release build (`-DCMAKE_BUILD_TYPE=Release`)
 - Available types: Release, Debug, Profile, Fast
 - Change config: `make CONFIG=Debug`
+- For long continuation or production physics runs, rebuild first with `make CONFIG=Fast`
+  so `./build/simple.x` uses the native-tuned fast profile instead of plain Release.
 
 ### Dependencies
 - Build tools: CMake (>= 3.22), Ninja, git
