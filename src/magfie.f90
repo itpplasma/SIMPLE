@@ -181,7 +181,7 @@ subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
   real(dp), intent(out) :: J
 
   select type (coords)
-  type is (chartmap_coordinate_system_t)
+  class is (chartmap_coordinate_system_t)
     ! Chartmap methods (metric_tensor, covariant_basis) expect native rho coords,
     ! not s = rho^2. The chartmap splines are stored on a rho grid.
     u_ref = x_scaled

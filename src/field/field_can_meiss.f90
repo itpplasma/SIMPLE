@@ -153,7 +153,7 @@ subroutine choose_default_scaling(field, scaling)
     select type (fld => field)
     type is (splined_field_t)
         select type (cs => fld%coords)
-        type is (chartmap_coordinate_system_t)
+        class is (chartmap_coordinate_system_t)
             ! RHO_TOR/RHO_POL: rho = sqrt(s), already in Meiss integrator coords
             ! UNKNOWN: geometric rho, no flux meaning, use directly
             ! PSI_TOR_NORM/PSI_POL_NORM: rho = s, needs sqrt transform

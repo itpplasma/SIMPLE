@@ -214,7 +214,7 @@ contains
         if (present(n_phi_in)) n_phi = n_phi_in
 
         select type (cs => ref_coords)
-        type is (chartmap_coordinate_system_t)
+        class is (chartmap_coordinate_system_t)
             if (.not. present(n_r_in)) n_r = cs%nrho
             if (.not. present(n_th_in)) n_th = cs%ntheta
             if (.not. present(n_phi_in)) n_phi = cs%nzeta
@@ -228,7 +228,7 @@ contains
         if (present(xmax_in)) xmax = xmax_in
 
         select type (cs => ref_coords)
-        type is (chartmap_coordinate_system_t)
+        class is (chartmap_coordinate_system_t)
             block
                 real(dp) :: rho_min, rho_max, rho_max_safe, h_rho
 
@@ -548,7 +548,7 @@ contains
         class(coordinate_scaling_t), pointer :: scaling_ptr
 
         select type (cs => ref_coords)
-        type is (chartmap_coordinate_system_t)
+        class is (chartmap_coordinate_system_t)
             if (cs%rho_convention == PSI_TOR_NORM .or. &
                 cs%rho_convention == PSI_POL_NORM) then
                 scaling_ptr => sqrt_s_scaling

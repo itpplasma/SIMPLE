@@ -181,7 +181,7 @@ contains
             block
                 use libneo_coordinates, only: chartmap_coordinate_system_t
                 select type (cs => ref_coords)
-                type is (chartmap_coordinate_system_t)
+                class is (chartmap_coordinate_system_t)
                     self%fper = twopi / real(cs%num_field_periods, dp)
                 class default
                     self%fper = twopi
@@ -290,7 +290,7 @@ contains
         end if
 
         select type (ref_coords)
-        type is (chartmap_coordinate_system_t)
+        class is (chartmap_coordinate_system_t)
             continue
         class default
             error stop "wall_input requires chartmap reference coordinates"
@@ -763,7 +763,7 @@ contains
 
                         ierr_from_cart = 0
                         select type (ccs => ref_coords)
-                        type is (chartmap_coordinate_system_t)
+                        class is (chartmap_coordinate_system_t)
                             call ccs%from_cart(x_hit, u_ref_hit, ierr_from_cart)
                         class default
                             ierr_from_cart = 1

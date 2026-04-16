@@ -19,7 +19,9 @@ module field_boozer_chartmap
                            evaluate_batch_splines_1d_der2, &
                            evaluate_batch_splines_3d, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
+    use new_vmec_stuff_mod, only: vmec_B_scale, vmec_RZ_scale
     use netcdf
+    use scaled_chartmap_coordinates, only: wrap_scaled_chartmap_coordinate_system
 
     implicit none
 
@@ -80,6 +82,7 @@ contains
         real(dp), allocatable :: y_aphi(:, :), y_bcovar(:, :), y_bmod(:, :, :, :)
         real(dp) :: s_min, s_max, rho_min, rho_max
         real(dp) :: h_s, h_theta_val, h_phi_val
+        real(dp) :: b_scale, rz_scale, covar_scale, flux_scale
         integer :: i
         integer, parameter :: spline_order_1d = 5
         integer, parameter :: spline_order_3d(3) = [5, 5, 5]
@@ -137,6 +140,17 @@ contains
 
         call check_nc(nf90_close(ncid), "close")
 
+        b_scale = vmec_B_scale
+        rz_scale = vmec_RZ_scale
+        covar_scale = b_scale*rz_scale
+        flux_scale = covar_scale*rz_scale
+
+        A_phi_arr = flux_scale*A_phi_arr
+        B_theta_arr = covar_scale*B_theta_arr
+        B_phi_arr = covar_scale*B_phi_arr
+        Bmod_arr = b_scale*Bmod_arr
+        torflux_val = flux_scale*torflux_val
+
         ! Grid parameters
         rho_min = rho(1)
         rho_max = rho(n_rho)
@@ -187,6 +201,7 @@ contains
 
         ! Set up coordinate system from the same chartmap file
         call make_chartmap_coordinate_system(cs, filename)
+        call wrap_scaled_chartmap_coordinate_system(cs, rz_scale)
         allocate (field%coords, source=cs)
 
         field%initialized = .true.
