@@ -47,7 +47,7 @@ brew install gcc cmake ninja netcdf netcdf-fortran lapack
 
 For Python wrappers, do
 ```bash
-pip install f90wrap==0.2.16
+pip install f90wrap
 pip install -e . --no-build-isolation
 ```
 
@@ -160,10 +160,12 @@ fields residing in main memory. The main executable is `simple.x`.
 * `simple.in`
 * a VMEC NetCDF equlibrium (wout.nc) file with name specified in `simple.in`
 
-An example input file with explanation of each parameter can be found in `examples/simple.in`. An example `wout.nc` can be obtained by
+A minimal quickstart input is `examples/simple.in`. The full parameter reference with comments is `examples/simple_full.in`. An example `wout.nc` can be obtained by
 ```bash
 wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc
 ```
+
+For a self-contained demo that downloads test data, runs SIMPLE, and prints the confined fraction, use `examples/run_example.sh`.
 
 In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions.
 Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
@@ -186,11 +188,33 @@ The sum of 2. and 3. yields the overall confined fraction at each time.
    and negative for passing. Eq. (3.1) in Accelerated Methods paper.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.
 
+### Boozer Chartmap Mode (GVEC and other sources)
+
+SIMPLE can run from pre-computed Boozer chartmap NetCDF files instead of a
+VMEC equilibrium. This enables use of GVEC equilibria and other field sources
+without requiring them at runtime.
+
+**Workflow:**
+
+1. Convert a GVEC solution to chartmap format:
+   ```bash
+   python tools/gvec_to_boozer_chartmap.py parameter_final.ini State_final.dat boozer_chartmap.nc
+   ```
+   Run `python tools/gvec_to_boozer_chartmap.py --help` for grid resolution options (`--nrho`, `--ntheta`, `--nphi`).
+
+2. Use `examples/simple_chartmap.in` as a starting point, pointing `field_input` and `coord_input` to your chartmap file.
+
+3. Run as usual: `./build/simple.x`
+
+Key differences from VMEC mode:
+- Both `field_input` and `coord_input` reference the same chartmap NetCDF file
+- `startmode = 2` means particle coordinates are in chartmap Boozer space
+- No VMEC file is needed at runtime
+
+See `DOC/coordinates-and-fields.md` section 8.2.1 for full details on coordinate conventions and the chartmap format.
+
 ### Comparing Commits ("Golden Record")
-To execute test_against_legacy_behaviour.py, execute `get_test_data.sh`, run SIMPLE and create the following symlinks in the `tests` directory after running SIMPLE in the `test_data` directory:
-* ../../../test_data/wout.nc --> wout.nc
-*  ../../../../examples/simple_full.in --> simple.in
-*  ../../../../build/start.dat start.dat
+To compare output between commits, use the golden record test suite in `test/golden_record/`. Run `test/golden_record/golden_record.sh [ref_version]` to build a reference version and compare its output against the current build.
 
 ## References
 When using this code for scientific publications, please cite the according references:

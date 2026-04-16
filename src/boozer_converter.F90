@@ -883,7 +883,7 @@ contains
         !> Populate module-level Boozer batch splines from an extended chartmap
         !> NetCDF file, bypassing the VMEC-based compute_boozer_data path.
         use vector_potentail_mod, only: torflux, ns, hs
-        use new_vmec_stuff_mod, only: nper, ns_A, ns_s, ns_tp
+        use new_vmec_stuff_mod, only: nper, ns_A, ns_s, ns_tp, vmec_B_scale, vmec_RZ_scale
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, &
                                           n_phi_B, hs_B, h_theta_B, h_phi_B, &
                                           use_B_r, use_del_tp_B
@@ -905,6 +905,7 @@ contains
         integer :: order_3d(3)
         logical :: periodic_3d(3)
         real(dp) :: x_min_3d(3), x_max_3d(3)
+        real(dp) :: b_scale, rz_scale, covar_scale, flux_scale
 
         call reset_boozer_batch_splines
 
@@ -969,6 +970,17 @@ contains
         call nc_check(nf90_get_var(ncid, varid, Bmod_arr), "get Bmod")
 
         call nc_check(nf90_close(ncid), "close")
+
+        b_scale = vmec_B_scale
+        rz_scale = vmec_RZ_scale
+        covar_scale = b_scale*rz_scale
+        flux_scale = covar_scale*rz_scale
+
+        A_phi_arr = flux_scale*A_phi_arr
+        B_theta_arr = covar_scale*B_theta_arr
+        B_phi_arr = covar_scale*B_phi_arr
+        Bmod_arr = b_scale*Bmod_arr
+        torflux_val = flux_scale*torflux_val
 
         ! Set global parameters used by splint_boozer_coord
         torflux = torflux_val
