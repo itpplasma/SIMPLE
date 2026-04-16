@@ -51,7 +51,7 @@ program test_magfie_refcoords_splines
     call init_reference_coordinates('wout_ncsx.nc')
 
     call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, f)
+    call create_splined_field(raw_coils, ref_coords, f, n_r=32, n_th=33, n_phi=32)
 
     call set_magfie_refcoords_field(f)
     call init_magfie(REFCOORDS)
