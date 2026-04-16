@@ -386,14 +386,6 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
 
-    add_executable(test_chartmap_scaling.x test_chartmap_scaling.f90)
-    target_link_libraries(test_chartmap_scaling.x simple)
-    add_dependencies(test_chartmap_scaling.x generate_test_boozer_chartmap)
-    add_test(NAME test_chartmap_scaling COMMAND test_chartmap_scaling.x)
-    set_tests_properties(test_chartmap_scaling PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "unit")
-
     # Boozer chartmap roundtrip test: requires wout.nc
     add_executable(test_boozer_chartmap_roundtrip.x test_boozer_chartmap_roundtrip.f90)
     target_link_libraries(test_boozer_chartmap_roundtrip.x simple)

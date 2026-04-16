@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import urllib.request
 
 import netCDF4
@@ -20,6 +21,23 @@ STYLES = {
 
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
+    print(f"[{label}] {' '.join(cmd)}")
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode == 0:
+        return
+    print(result.stdout[-4000:])
+    print(result.stderr[-4000:])
+    raise RuntimeError(f"{label} failed with exit code {result.returncode}")
 
 
 def download_if_missing(path: Path, url: str) -> Path:
@@ -83,7 +101,7 @@ def _style(label: str) -> tuple[str, str, float]:
     return STYLES.get(label, ("0.3", "-", 1.4))
 
 
-def _set_equal_3d_limits(ax, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> None:
+def set_equal_3d_limits(ax, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> None:
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     z = np.asarray(z, dtype=float)
@@ -99,14 +117,14 @@ def _set_equal_3d_limits(ax, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> Non
     ax.set_box_aspect((1.0, 1.0, 1.0))
 
 
-def _close_curve(curve: np.ndarray) -> np.ndarray:
+def close_curve(curve: np.ndarray) -> np.ndarray:
     curve = np.asarray(curve)
     if curve.ndim != 1 or curve.size == 0:
         return curve
     return np.concatenate([curve, curve[:1]])
 
 
-def _close_surface_toroidally(
+def close_surface_toroidally(
     xsurf: np.ndarray, ysurf: np.ndarray, zsurf: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     xsurf = np.asarray(xsurf)
@@ -121,7 +139,7 @@ def _close_surface_toroidally(
     )
 
 
-def _sample_indices(size: int, stride: int) -> list[int]:
+def sample_indices(size: int, stride: int) -> list[int]:
     indices = list(range(0, size, stride))
     last = size - 1
     if last not in indices:
@@ -129,7 +147,7 @@ def _sample_indices(size: int, stride: int) -> list[int]:
     return indices
 
 
-def _plot_surface_lines_3d(
+def plot_surface_lines_3d(
     ax,
     xsurf: np.ndarray,
     ysurf: np.ndarray,
@@ -141,15 +159,15 @@ def _plot_surface_lines_3d(
     axis_z: np.ndarray,
     linestyle: str = "-",
 ) -> None:
-    xsurf, ysurf, zsurf = _close_surface_toroidally(xsurf, ysurf, zsurf)
-    axis_x = _close_curve(axis_x)
-    axis_y = _close_curve(axis_y)
-    axis_z = _close_curve(axis_z)
+    xsurf, ysurf, zsurf = close_surface_toroidally(xsurf, ysurf, zsurf)
+    axis_x = close_curve(axis_x)
+    axis_y = close_curve(axis_y)
+    axis_z = close_curve(axis_z)
     n_phi = xsurf.shape[1]
     n_rho = xsurf.shape[0]
     phi_stride = max(1, n_phi // 12)
     rho_stride = max(1, n_rho // 12)
-    for idx in _sample_indices(n_phi, phi_stride):
+    for idx in sample_indices(n_phi, phi_stride):
         ax.plot(
             xsurf[:, idx],
             ysurf[:, idx],
@@ -159,7 +177,7 @@ def _plot_surface_lines_3d(
             alpha=0.45,
             ls=linestyle,
         )
-    for idx in _sample_indices(n_rho, rho_stride):
+    for idx in sample_indices(n_rho, rho_stride):
         ax.plot(
             xsurf[idx],
             ysurf[idx],
@@ -354,19 +372,19 @@ def plot_surface_comparison(
         ("x-y", left_x, left_y, right_x, right_y, left_ax_x, left_ax_y, right_ax_x, right_ax_y, "x [m]", "y [m]"),
     ]
     for ax, (title, xl, yl, xr, yr, xal, yal, xar, yar, xlabel, ylabel) in zip(axes[0], panels):
-        xl, yl, _ = _close_surface_toroidally(xl, yl, yl)
-        xr, yr, _ = _close_surface_toroidally(xr, yr, yr)
-        for idx in _sample_indices(xl.shape[1], max(1, xl.shape[1] // 12)):
+        xl, yl, _ = close_surface_toroidally(xl, yl, yl)
+        xr, yr, _ = close_surface_toroidally(xr, yr, yr)
+        for idx in sample_indices(xl.shape[1], max(1, xl.shape[1] // 12)):
             ax.plot(xl[:, idx], yl[:, idx], color="C0", lw=0.8, alpha=0.45)
-        for idx in _sample_indices(xr.shape[1], max(1, xr.shape[1] // 12)):
+        for idx in sample_indices(xr.shape[1], max(1, xr.shape[1] // 12)):
             ax.plot(xr[:, idx], yr[:, idx], color="C3", lw=0.8, alpha=0.45)
-        for idx in _sample_indices(xl.shape[0], max(1, xl.shape[0] // 12)):
+        for idx in sample_indices(xl.shape[0], max(1, xl.shape[0] // 12)):
             ax.plot(xl[idx], yl[idx], color="C0", lw=0.6, alpha=0.3)
-        for idx in _sample_indices(xr.shape[0], max(1, xr.shape[0] // 12)):
+        for idx in sample_indices(xr.shape[0], max(1, xr.shape[0] // 12)):
             ax.plot(xr[idx], yr[idx], color="C3", lw=0.6, alpha=0.3)
-        ax.plot(_close_curve(xal.mean(axis=0)), _close_curve(yal.mean(axis=0)),
+        ax.plot(close_curve(xal.mean(axis=0)), close_curve(yal.mean(axis=0)),
                 color="C0", lw=2.0, label=left_label)
-        ax.plot(_close_curve(xar.mean(axis=0)), _close_curve(yar.mean(axis=0)),
+        ax.plot(close_curve(xar.mean(axis=0)), close_curve(yar.mean(axis=0)),
                 color="C3", lw=1.6, ls="--", label=right_label)
         ax.set_aspect("equal", adjustable="box")
         ax.set_xlabel(xlabel)
@@ -379,7 +397,7 @@ def plot_surface_comparison(
     all_y = np.concatenate([left_y.ravel(), right_y.ravel(), left_ax_y.ravel(), right_ax_y.ravel()])
     all_z = np.concatenate([left_z.ravel(), right_z.ravel(), left_ax_z.ravel(), right_ax_z.ravel()])
     for ax, (elev, azim) in zip(axes[1], views):
-        _plot_surface_lines_3d(
+        plot_surface_lines_3d(
             ax,
             left_x,
             left_y,
@@ -390,7 +408,7 @@ def plot_surface_comparison(
             left_ax_y.mean(axis=0),
             left_ax_z.mean(axis=0),
         )
-        _plot_surface_lines_3d(
+        plot_surface_lines_3d(
             ax,
             right_x,
             right_y,
@@ -403,7 +421,7 @@ def plot_surface_comparison(
             linestyle="--",
         )
         ax.view_init(elev=elev, azim=azim)
-        _set_equal_3d_limits(ax, all_x, all_y, all_z)
+        set_equal_3d_limits(ax, all_x, all_y, all_z)
         ax.set_xlabel("x [m]")
         ax.set_ylabel("y [m]")
         ax.set_zlabel("z [m]")
