@@ -1,0 +1,12 @@
+&config
+trace_time = 1d-2        ! slowing down time, s
+sbeg = 0.3d0             ! starting s (normalized toroidal flux) for particles
+ntestpart = 128          ! number of test particles
+field_input = 'boozer_chartmap.nc'  ! Boozer chartmap NetCDF file for field data
+coord_input = 'boozer_chartmap.nc'  ! same file for reference coordinates
+isw_field_type = 2       ! Boozer field type
+startmode = 2            ! particle coordinates given in chartmap Boozer space
+deterministic = .True.   ! fixed random seed for reproducibility
+integmode = 1            ! Euler symplectic integrator
+multharm = 5             ! angular grid factor
+/
