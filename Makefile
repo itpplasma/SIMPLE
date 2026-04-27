@@ -14,7 +14,7 @@ NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
 NVHPC_BUILD_DIR := build_nvfortran
 NVHPC_ACC_BUILD_DIR := build_nvfortran_acc
 
-.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
+.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean venv nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
 .PHONY: nvfortran-acc nvfortran-acc-test nvfortran-acc-test-nopy nvfortran-acc-configure nvfortran-acc-clean
 all: build
 
@@ -97,6 +97,12 @@ test-golden: build-deterministic-nopy
 # Golden record tests without deterministic FP (faster, for local iteration only)
 test-golden-fast: build
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
+
+venv:
+	./setup-venv.sh
+
+venv-nopy:
+	./setup-venv.sh --no-pysimple
 
 doc: configure
 	cmake --build --preset default --target doc
