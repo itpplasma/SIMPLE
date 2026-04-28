@@ -78,7 +78,8 @@ module params
 
     ! Further configuration parameters
     integer          :: notrace_passing = 0
-    real(dp) :: facE_al = 1d0, trace_time = 1d-1
+    real(dp) :: facE_al = 1d0, alpha_energy_ev = -1d0, &
+                particle_energy_ev = 3.5d6, trace_time = 1d-1
     integer :: ntimstep = 10000, npoiper = 100, npoiper2 = 256, n_e = 2
     real(dp) :: n_d = 4
 
@@ -102,9 +103,9 @@ module params
 
 	    namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
 	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
-	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
-	        isw_field_type, generate_start_only, startmode, grid_density, &
-	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
+	        facE_al, alpha_energy_ev, npoiper2, n_e, n_d, netcdffile, ns_s, &
+	        ns_tp, multharm, isw_field_type, generate_start_only, startmode, &
+	        grid_density, special_ants_file, integmode, relerr, tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
 	        old_axis_healing_boundary, am1, am2, Z1, Z2, &
@@ -131,6 +132,8 @@ contains
 
         call apply_config_aliases
 
+        call validate_energy_config
+
         call reset_seed_if_deterministic
 
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
@@ -143,7 +146,6 @@ contains
     end subroutine read_config
 
 	    subroutine params_init
-	        real(dp) :: E_alpha
 	        integer :: L1i
 	        real(dp) :: weight_sum, cumul_weight, w
 	        integer :: i, nintv
@@ -167,9 +169,9 @@ contains
 	            dtaumin = dtau/ntau
 	            fper = 2d0*pi       ! Full torus
 	        else
-            E_alpha = 3.5d6/facE_al
+            particle_energy_ev = effective_alpha_energy_ev()
             ! set alpha energy, velocity, and Larmor radius
-            v0 = sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
+            v0 = sqrt(2.d0*particle_energy_ev*ev/(n_d*p_mass))
             rlarm = v0*n_d*p_mass*c/(n_e*e_charge)
             ro0 = rlarm
             ! Neglect relativistic effects by large inverse relativistic temperature
@@ -248,6 +250,26 @@ contains
         call init_batch
         call reallocate_arrays
 	    end subroutine params_init
+
+    function effective_alpha_energy_ev() result(energy_ev)
+        real(dp) :: energy_ev
+
+        if (alpha_energy_ev > 0d0) then
+            energy_ev = alpha_energy_ev
+        else
+            energy_ev = 3.5d6/facE_al
+        end if
+    end function effective_alpha_energy_ev
+
+    subroutine validate_energy_config
+        if (facE_al <= 0d0) then
+            error stop 'facE_al must be positive'
+        end if
+
+        if (abs(alpha_energy_ev) <= tiny(alpha_energy_ev)) then
+            error stop 'alpha_energy_ev must be positive when set'
+        end if
+    end subroutine validate_energy_config
 
 	    pure function to_lower(s) result(out)
 	        character(*), intent(in) :: s

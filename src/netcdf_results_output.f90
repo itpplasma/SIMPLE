@@ -42,7 +42,8 @@ contains
 
         use params, only: ntestpart, trace_time, zstart, zend, times_lost, &
                           trap_par, perp_inv, iclass, class_lost, &
-                          facE_al, v0, integmode, relerr, npoiper, npoiper2, &
+                          facE_al, alpha_energy_ev, particle_energy_ev, v0, &
+                          integmode, relerr, npoiper, npoiper2, &
                           ntimstep, startmode, num_surf, sbeg, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
@@ -268,6 +269,12 @@ contains
         call check_nc(status, 'put_att trace_time')
         status = nf90_put_att(ncid, nf90_global, 'facE_al', facE_al)
         call check_nc(status, 'put_att facE_al')
+        status = nf90_put_att(ncid, nf90_global, 'alpha_energy_ev', &
+                              alpha_energy_ev)
+        call check_nc(status, 'put_att alpha_energy_ev')
+        status = nf90_put_att(ncid, nf90_global, 'particle_energy_ev', &
+                              particle_energy_ev)
+        call check_nc(status, 'put_att particle_energy_ev')
         status = nf90_put_att(ncid, nf90_global, 'v0', v0)
         call check_nc(status, 'put_att v0')
         status = nf90_put_att(ncid, nf90_global, 'integmode', integmode)

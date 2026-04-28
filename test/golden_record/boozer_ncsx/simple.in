@@ -8,4 +8,5 @@ netcdffile = 'wout.nc'
 isw_field_type = 2       ! Boozer coordinates
 deterministic = .True.
 facE_al = 100.0d0        ! Energy scale factor (E_alpha / facE_al)
+alpha_energy_ev = -1.0d0 ! Explicit initial energy in eV; positive value overrides facE_al
 /
