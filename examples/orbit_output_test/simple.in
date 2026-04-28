@@ -11,6 +11,7 @@ phibeg = 0.d0
 thetabeg = 0.d0
 contr_pp = -1.0d0
 facE_al = 1.0
+alpha_energy_ev = -1.0d0
 npoiper2 = 128
 n_e = 2
 n_d = 4

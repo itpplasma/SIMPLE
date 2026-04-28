@@ -457,13 +457,14 @@ contains
 
     subroutine init_collisions
         use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
+                          dchichi, slowrate, dchichi_norm, slowrate_norm, &
+                          particle_energy_ev, v0
 
         real(dp) :: v0_coll
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          3.5d6/facE_al, v0_coll, dchichi, slowrate, dchichi_norm, &
-                          slowrate_norm)
+                          particle_energy_ev, v0_coll, dchichi, slowrate, &
+                          dchichi_norm, slowrate_norm)
 
         if (abs(v0_coll - v0) > 1d-6) then
             error stop 'simple_main.init_collisions: v0_coll != v0'

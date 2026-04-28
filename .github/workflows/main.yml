@@ -40,6 +40,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gfortran \
+            git-lfs \
             cmake \
             ninja-build \
             pkg-config \
@@ -58,6 +59,28 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Fetch Cached GVEC QA Data
+        env:
+          GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
+          SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
+        run: |
+          if [ -n "${GITLAB_ACCESS_TOKEN:-}" ]; then
+            make gvec-qa-cache-fetch
+          else
+            echo "GITLAB_ACCESS_TOKEN is not set; skipping GVEC QA cache fetch"
+          fi
+
+      - name: Fetch Figure-8 QUASR Data
+        env:
+          GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
+          SIMPLE_FIGURE8_DATA_ROOT: ${{ github.workspace }}/.ci-data/QUASR/SIMPLE/figure8
+        run: |
+          if [ -n "${GITLAB_ACCESS_TOKEN:-}" ]; then
+            make figure8-data-fetch
+          else
+            echo "GITLAB_ACCESS_TOKEN is not set; skipping figure-8 data fetch"
+          fi
+
       - name: Build SIMPLE (deterministic FP for reproducibility)
         run: |
           make clean
@@ -70,6 +93,9 @@ jobs:
         run: python -m pip install -e . --no-build-isolation
 
       - name: Run Slow Tests (Python)
+        env:
+          SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
+          SIMPLE_FIGURE8_DATA_ROOT: ${{ github.workspace }}/.ci-data/QUASR/SIMPLE/figure8
         run: make test-slow
 
       - name: Run Regression Tests (Golden Record)

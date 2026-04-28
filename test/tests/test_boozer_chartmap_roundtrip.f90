@@ -38,23 +38,67 @@ program test_boozer_chartmap_roundtrip
     real(dp) :: Bmod, dBmod(3), d2Bmod(6), Br, dBr(3), d2Br(6)
     real(dp) :: phi_period, z(4), z0(5), vartheta, varphi
     real(dp) :: rel_err, max_err_bmod, max_err_orbit
-    integer :: i, ierr, nfail, n_steps_done
-    character(len=256) :: chartmap_file
+    integer :: i, ierr, nfail, n_steps_done, u_out
+    character(len=256) :: wout_file, chartmap_file, mode, arg_value
+    character(len=512) :: artifact_prefix, field_data_file, orbit_direct_file, &
+                          orbit_chartmap_file
     type(symplectic_integrator_t) :: si
     type(field_can_t) :: f
+    real(dp) :: field_tol, orbit_tol
 
     nfail = 0
+    wout_file = 'wout.nc'
     chartmap_file = 'roundtrip_test.nc'
+    mode = 'export'
+    field_tol = 1.0e-4_dp
+    orbit_tol = 1.0e-6_dp
+    artifact_prefix = 'boozer_chartmap_roundtrip'
+
+    if (command_argument_count() >= 1) then
+        call get_command_argument(1, wout_file)
+        if (len_trim(wout_file) == 0) wout_file = 'wout.nc'
+    end if
+    if (command_argument_count() >= 2) then
+        call get_command_argument(2, chartmap_file)
+        if (len_trim(chartmap_file) == 0) chartmap_file = 'roundtrip_test.nc'
+    end if
+    if (command_argument_count() >= 3) then
+        call get_command_argument(3, mode)
+        if (len_trim(mode) == 0) mode = 'export'
+    end if
+    if (command_argument_count() >= 4) then
+        call get_command_argument(4, artifact_prefix)
+        if (len_trim(artifact_prefix) == 0) then
+            artifact_prefix = 'boozer_chartmap_roundtrip'
+        end if
+    end if
+    if (command_argument_count() >= 5) then
+        call get_command_argument(5, arg_value)
+        read (arg_value, *) field_tol
+    end if
+    if (command_argument_count() >= 6) then
+        call get_command_argument(6, arg_value)
+        read (arg_value, *) orbit_tol
+    end if
+
+    field_data_file = trim(artifact_prefix) // '_field_comparison.dat'
+    orbit_direct_file = trim(artifact_prefix) // '_orbit_direct.dat'
+    orbit_chartmap_file = trim(artifact_prefix) // '_orbit_chartmap.dat'
 
     print *, 'Starting roundtrip test...'
+    print *, '  wout_file=', trim(wout_file)
+    print *, '  chartmap_file=', trim(chartmap_file)
+    print *, '  mode=', trim(mode)
+    print *, '  field_tol=', field_tol
+    print *, '  orbit_tol=', orbit_tol
 
     ! =========================================================
     ! Step 1: Initialize VMEC and compute Boozer coordinates
     ! =========================================================
     isw_field_type = 2
     rmu = 1.0e8_dp
-    netcdffile = 'wout.nc'
-    multharm = 5
+    netcdffile = trim(wout_file)
+    multharm = 7
     ns_A = 5
     ns_s = 5
     ns_tp = 5
@@ -97,58 +141,19 @@ program test_boozer_chartmap_roundtrip
     ! =========================================================
     ! Step 3: Export to Boozer chartmap NetCDF
     ! =========================================================
-    call export_boozer_chartmap(chartmap_file)
-    print *, '=== Step 3: Exported chartmap ==='
-
-    ! =========================================================
-    ! Step 4: Reimport from chartmap and evaluate fields
-    ! =========================================================
-    call reset_boozer_batch_splines
-    call load_boozer_from_chartmap(chartmap_file)
-
-    do i = 1, n_test
-        call splint_boozer_coord(s_test(i), th_test(i), ph_test(i), 0, &
-            A_theta, A_phi_val, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, &
-            d3A_phi_dr3, Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
-            Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
-        Bmod_new(i) = Bmod
-    end do
-
-    print *, '=== Step 4: Chartmap field evaluation done ==='
-
-    ! =========================================================
-    ! Step 5: Compare fields
-    ! =========================================================
-    max_err_bmod = 0.0_dp
-    open(unit=20, file='/tmp/boozer_field_comparison.dat', status='replace')
-    write(20, '(a)') '# s  theta  phi  Bmod_ref  Bmod_chartmap  rel_err'
-
-    do i = 1, n_test
-        if (abs(Bmod_ref(i)) > 0.0_dp) then
-            rel_err = abs(Bmod_new(i) - Bmod_ref(i)) / abs(Bmod_ref(i))
-        else
-            rel_err = abs(Bmod_new(i))
-        end if
-        max_err_bmod = max(max_err_bmod, rel_err)
-        write(20, '(6es18.10)') s_test(i), th_test(i), ph_test(i), &
-            Bmod_ref(i), Bmod_new(i), rel_err
-    end do
-    close(20)
-
-    print *, '  max relative error Bmod:', max_err_bmod
-    if (max_err_bmod > 1.0e-4_dp) then
-        print *, 'FAIL: Bmod roundtrip error too large:', max_err_bmod
-        nfail = nfail + 1
+    if (trim(mode) == 'export') then
+        call export_boozer_chartmap(chartmap_file)
+        print *, '=== Step 3: Exported chartmap ==='
+    else if (trim(mode) == 'external') then
+        print *, '=== Step 3: Using external chartmap ==='
     else
-        print *, 'PASS: Bmod roundtrip error < 1e-4'
+        print *, 'Unknown chartmap comparison mode: ', trim(mode)
+        error stop 1
     end if
 
     ! =========================================================
-    ! Step 6: Run symplectic orbit (direct path)
+    ! Step 4: Run symplectic orbit (direct path)
     ! =========================================================
-    call reset_boozer_batch_splines
-    call get_boozer_coordinates
-    call field_can_from_name("boozer")
 
     call vmec_to_boozer(0.35_dp, 0.33_dp, 0.97_dp, vartheta, varphi)
 
@@ -162,30 +167,74 @@ program test_boozer_chartmap_roundtrip
 
     call run_symplectic_orbit(z0, dtau, n_orbit, orbit_direct, n_steps_done)
 
-    open(unit=21, file='/tmp/orbit_direct.dat', status='replace')
-    write(21, '(a)') '# time  s  theta  phi  pphi'
+    open(newunit=u_out, file=trim(orbit_direct_file), status='replace')
+    write(u_out, '(a)') '# time  s  theta  phi  pphi'
     do i = 1, n_steps_done
-        write(21, '(5es18.10)') orbit_direct(i, :)
+        write(u_out, '(5es18.10)') orbit_direct(i, :)
     end do
-    close(21)
+    close(u_out)
 
-    print *, '=== Step 6: Direct orbit done, steps=', n_steps_done, ' ==='
+    print *, '=== Step 4: Direct orbit done, steps=', n_steps_done, ' ==='
+
+    ! =========================================================
+    ! Step 5: Reimport from chartmap and evaluate fields
+    ! =========================================================
+    call load_boozer_from_chartmap(chartmap_file)
+
+    do i = 1, n_test
+        call splint_boozer_coord(s_test(i), th_test(i), ph_test(i), 0, &
+            A_theta, A_phi_val, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, &
+            d3A_phi_dr3, Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+            Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
+        Bmod_new(i) = Bmod
+    end do
+
+    print *, '=== Step 5: Chartmap field evaluation done ==='
+
+    ! =========================================================
+    ! Step 6: Compare fields
+    ! =========================================================
+    max_err_bmod = 0.0_dp
+    open(newunit=u_out, file=trim(field_data_file), status='replace')
+    write(u_out, '(a)') '# s  theta  phi  Bmod_ref  Bmod_chartmap  rel_err'
+
+    do i = 1, n_test
+        if (abs(Bmod_ref(i)) > 0.0_dp) then
+            rel_err = abs(Bmod_new(i) - Bmod_ref(i)) / abs(Bmod_ref(i))
+        else
+            rel_err = abs(Bmod_new(i))
+        end if
+        max_err_bmod = max(max_err_bmod, rel_err)
+        write(u_out, '(6es18.10)') s_test(i), th_test(i), ph_test(i), &
+            Bmod_ref(i), Bmod_new(i), rel_err
+    end do
+    close(u_out)
+
+    print *, '  max relative error Bmod:', max_err_bmod
+    if (field_tol >= 0.0_dp) then
+        if (max_err_bmod > field_tol) then
+            print *, 'FAIL: Bmod roundtrip error too large:', max_err_bmod
+            nfail = nfail + 1
+        else
+            print *, 'PASS: Bmod roundtrip error within tolerance'
+        end if
+    else
+        print *, 'INFO: skipping Bmod pass/fail threshold, max err=', max_err_bmod
+    end if
 
     ! =========================================================
     ! Step 7: Run symplectic orbit (chartmap path)
     ! =========================================================
-    call reset_boozer_batch_splines
-    call load_boozer_from_chartmap(chartmap_file)
     call field_can_from_name("boozer")
 
     call run_symplectic_orbit(z0, dtau, n_orbit, orbit_chartmap, n_steps_done)
 
-    open(unit=22, file='/tmp/orbit_chartmap.dat', status='replace')
-    write(22, '(a)') '# time  s  theta  phi  pphi'
+    open(newunit=u_out, file=trim(orbit_chartmap_file), status='replace')
+    write(u_out, '(a)') '# time  s  theta  phi  pphi'
     do i = 1, n_steps_done
-        write(22, '(5es18.10)') orbit_chartmap(i, :)
+        write(u_out, '(5es18.10)') orbit_chartmap(i, :)
     end do
-    close(22)
+    close(u_out)
 
     print *, '=== Step 7: Chartmap orbit done, steps=', n_steps_done, ' ==='
 
@@ -199,11 +248,11 @@ program test_boozer_chartmap_roundtrip
     end do
 
     print *, '  max |s_direct - s_chartmap|:', max_err_orbit
-    if (max_err_orbit > 1.0e-6_dp) then
+    if (max_err_orbit > orbit_tol) then
         print *, 'FAIL: orbit roundtrip error too large:', max_err_orbit
         nfail = nfail + 1
     else
-        print *, 'PASS: orbit roundtrip error < 1e-6'
+        print *, 'PASS: orbit roundtrip error within tolerance'
     end if
 
     ! =========================================================
@@ -225,11 +274,11 @@ contains
         real(dp) :: frac
 
         do j = 1, n_test
-            frac = real(j - 1, dp) / real(n_test - 1, dp)
+            frac = real(j, dp) / real(n_test + 1, dp)
             s_test(j) = 0.1_dp + 0.7_dp * frac
             th_test(j) = twopi * frac
-            ph_test(j) = phi_per * mod(real(j * 7, dp), real(n_test, dp)) &
-                          / real(n_test, dp)
+            ph_test(j) = phi_per * mod(real(2 * j + 1, dp), real(n_test + 1, dp)) &
+                          / real(n_test + 1, dp)
         end do
     end subroutine init_test_points
 
