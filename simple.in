@@ -15,6 +15,7 @@ phibeg = 0.d0            ! starting phi for field line
 thetabeg = 0.d0          ! starting theta for field line
 contr_pp = -1.0d0        ! control of passing particle fraction
 facE_al = 1.0            ! test particle energy reduction factor
+alpha_energy_ev = -1.0d0 ! explicit initial energy in eV; positive value overrides facE_al
 npoiper2 = 128	         ! points per period for integrator step
 n_e = 2                  ! test particle charge number (the same as Z)
 n_d = 4                  ! test particle mass number (the same as A)

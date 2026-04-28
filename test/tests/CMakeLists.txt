@@ -339,6 +339,11 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     target_link_libraries(test_util_simple.x simple)
     add_test(NAME test_util_simple COMMAND test_util_simple.x)
 
+    add_executable(test_params_energy_config.x test_params_energy_config.f90)
+    target_link_libraries(test_params_energy_config.x simple)
+    add_test(NAME test_params_energy_config COMMAND test_params_energy_config.x)
+    set_tests_properties(test_params_energy_config PROPERTIES LABELS "unit")
+
     add_executable(test_chartmap_metadata.x test_chartmap_metadata.f90)
     target_link_libraries(test_chartmap_metadata.x simple)
     add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
