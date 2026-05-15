@@ -155,33 +155,36 @@ contains
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-  subroutine get_bminmax(s,bmin,bmax)
-  !
-  use bminmax_mod, only : prop,nsbmnx,hsbmnx,bmin_arr,bmax_arr
-  !
-  implicit none
-  !
-  integer :: k
-  real(dp) :: s,bmin,bmax,ws,s0
-  !
-  if(prop) then
-    prop=.false.
-    hsbmnx=1.d0/dble(nsbmnx)
-    do k=0,nsbmnx
-      s0=max(1.d-8,hsbmnx*dble(k))
-  !
-      call find_bminmax(s0,bmin_arr(k),bmax_arr(k))
-  !
-    enddo
-  endif
-  !
-  ws=s/hsbmnx
-  k=min(nsbmnx-1,max(0,int(ws)))
-  ws=ws-dble(k)
-  !
-  bmin=bmin_arr(k)*(1.d0-ws)+bmin_arr(k+1)*ws
-  bmax=bmax_arr(k)*(1.d0-ws)+bmax_arr(k+1)*ws
-  !
+  subroutine init_bminmax_arrays
+    use bminmax_mod, only: prop, nsbmnx, hsbmnx, bmin_arr, bmax_arr
+
+    integer :: k
+    real(dp) :: s0
+
+    if (.not. prop) return
+    prop = .false.
+    hsbmnx = 1.d0/dble(nsbmnx)
+    do k = 0, nsbmnx
+        s0 = max(1.d-8, hsbmnx*dble(k))
+        call find_bminmax(s0, bmin_arr(k), bmax_arr(k))
+    end do
+  end subroutine init_bminmax_arrays
+
+  subroutine get_bminmax(s, bmin, bmax)
+    use bminmax_mod, only: prop, nsbmnx, hsbmnx, bmin_arr, bmax_arr
+
+    real(dp), intent(in) :: s
+    real(dp), intent(out) :: bmin, bmax
+    integer :: k
+    real(dp) :: ws
+
+    if (prop) call init_bminmax_arrays
+
+    ws = s/hsbmnx
+    k = min(nsbmnx - 1, max(0, int(ws)))
+    ws = ws - dble(k)
+    bmin = bmin_arr(k)*(1.d0 - ws) + bmin_arr(k + 1)*ws
+    bmax = bmax_arr(k)*(1.d0 - ws) + bmax_arr(k + 1)*ws
   end subroutine get_bminmax
 
 end module find_bminmax_sub
