@@ -94,7 +94,7 @@ else()
     set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})
 endif()
 
-list(APPEND FILES_TO_WRAP ${LIBNEO_SOURCE_DIR}/src/canonical_coordinates_mod.f90)
+list(APPEND FILES_TO_WRAP ${LIBNEO_SOURCE_DIR}/src/vmec_support/canonical_coordinates_mod.f90)
 
 set(EXCLUDE_BASENAMES
     # Empty
