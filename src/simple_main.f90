@@ -115,6 +115,11 @@ contains
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
 
+            if (num_surf /= 1) then
+                call init_bminmax
+                call print_phase_time('Bmin/Bmax initialization completed')
+            end if
+
             call sample_particles
             call print_phase_time('Particle sampling completed')
 
@@ -479,7 +484,9 @@ contains
         use samplers, only: sample, START_FILE
 
         if (1 == startmode) then
-            if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
+            if (0 == num_surf) then
+                call sample(zstart, 0.0d0, 1.0d0)
+            else if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
                 call sample(zstart, grid_density)
             else
                 call sample(zstart)
@@ -585,6 +592,7 @@ contains
             needs_bminmax_cache = num_surf /= 1
         end if
     end function needs_bminmax_cache
+
 
     subroutine init_counters
         icounter = 0 ! evaluation counter
