@@ -124,6 +124,11 @@ contains
             call print_phase_time('Field type initialization completed')
         end if
 
+        if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
+            call init_bminmax
+            call print_phase_time('Bmin/Bmax initialization completed')
+        end if
+
         call init_counters
         call print_phase_time('Counter initialization completed')
 
@@ -562,6 +567,25 @@ contains
         end subroutine save_starting_points_test
     end subroutine sample_particles_test_field
 
+    subroutine init_bminmax
+        use find_bminmax_sub, only: init_bminmax_arrays
+
+        ! Populate bminmax arrays with the active tracing magfie backend.
+        ! init_starting_surf supplies bmin/bmax for a single sampled surface;
+        ! this cache is only needed when particles span multiple surfaces.
+        call init_bminmax_arrays
+    end subroutine init_bminmax
+
+    logical function needs_bminmax_cache()
+        ! Match the current readers. Classifier semantics are kept unchanged
+        ! here; broad classifier changes belong in the classifier PR.
+        if ((ntcut > 0) .or. class_plot) then
+            needs_bminmax_cache = num_surf > 1
+        else
+            needs_bminmax_cache = num_surf /= 1
+        end if
+    end function needs_bminmax_cache
+
     subroutine init_counters
         icounter = 0 ! evaluation counter
         kpart = 0
@@ -816,7 +840,7 @@ contains
 
 !$omp critical
         bmod = compute_bmod(z(1:3))
-        if (num_surf > 1) then
+        if (num_surf /= 1) then
             call get_bminmax(z(1), bmin, bmax)
         end if
         passing = z(5)**2 .gt. 1.d0 - bmod/bmax
@@ -910,6 +934,18 @@ contains
                 write (1, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
             end do
             close (1)
+
+            if (needs_bminmax_cache()) then
+                block
+                    use bminmax_mod, only: nsbmnx, hsbmnx, bmin_arr, bmax_arr
+
+                    open (1, file='bminmax.dat', recl=1024)
+                    do i = 0, nsbmnx
+                        write (1, *) hsbmnx*dble(i), bmin_arr(i), bmax_arr(i)
+                    end do
+                    close (1)
+                end block
+            end if
         end if
 
         if (output_results_netcdf) then
