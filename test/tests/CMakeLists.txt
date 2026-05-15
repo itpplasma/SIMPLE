@@ -327,7 +327,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_util_simple COMMAND test_util_simple.x)
 
     add_executable(test_chartmap_metadata.x test_chartmap_metadata.f90)
-    target_link_libraries(test_chartmap_metadata.x simple)
+    target_link_libraries(test_chartmap_metadata.x simple testing_utils)
     add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
     set_tests_properties(test_chartmap_metadata PROPERTIES LABELS "unit")
 
@@ -396,7 +396,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
-        target_link_libraries(test_stl_wall_intersection.x simple)
+        target_link_libraries(test_stl_wall_intersection.x simple testing_utils)
         add_test(NAME test_stl_wall_intersection COMMAND test_stl_wall_intersection.x)
         set_tests_properties(test_stl_wall_intersection PROPERTIES LABELS "unit;wall")
     endif()
