@@ -19,6 +19,8 @@ from typing import Any
 
 import numpy as np
 
+from ._bminmax import needs_bminmax_cache as _needs_bminmax_cache
+
 try:
     import simple_backend as _backend
 except ImportError as exc:
@@ -377,12 +379,10 @@ def _init_before_trace():
     # init_magfie(isw_field_type) - set field evaluation to configured type
     _backend.magfie_wrapper.wrapper_init_magfie(_backend.velo_mod.isw_field_type)
 
-    classification_active = int(params.ntcut) > 0 or bool(params.class_plot)
-    if classification_active:
-        needs_bminmax = int(params.num_surf) > 1
-    else:
-        needs_bminmax = int(params.num_surf) != 1
-    if _backend.velo_mod.isw_field_type != _TEST_FIELD_ID and needs_bminmax:
+    if (
+        _backend.velo_mod.isw_field_type != _TEST_FIELD_ID
+        and _needs_bminmax_cache(params.num_surf, params.ntcut, params.class_plot)
+    ):
         _simple_main.init_bminmax()
 
     # init_counters - reset counters

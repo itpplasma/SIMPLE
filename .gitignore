@@ -55,6 +55,10 @@ threed1.*
 threed1.*
 timings.txt
 .aider*
+.codex
+.pid
+artifacts/
+perf.data*
 thirdparty/pyplot_module.F90
 
 *.html

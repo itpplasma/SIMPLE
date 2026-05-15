@@ -314,6 +314,14 @@ set_tests_properties(test_bminmax_lifecycle PROPERTIES
     TIMEOUT 15)
 
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
+    add_test(NAME test_bminmax_python
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_bminmax_python.py
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_bminmax_python PROPERTIES
+        LABELS "unit;python"
+        TIMEOUT 15)
+
     add_test(NAME test_bminmax_driver
         COMMAND ${CMAKE_COMMAND} -E env
             CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
