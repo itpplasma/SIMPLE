@@ -388,7 +388,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
-        COMMAND ${Python_EXECUTABLE}
+        COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_boozer_chartmap.py)
     set_tests_properties(test_e2e_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

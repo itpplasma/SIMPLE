@@ -23,7 +23,7 @@ program test_bder_from_splines
     real(dp), parameter :: tol_rel = 5.0e-8_dp
     real(dp), parameter :: tol_abs = 1.0e-10_dp
     real(dp), parameter :: h_rho = 1.0e-4_dp
-    real(dp), parameter :: h_ang = 1.0e-5_dp
+    real(dp), parameter :: h_ang = 3.0e-5_dp
 
     real(dp) :: max_rel(3)
     integer :: i
