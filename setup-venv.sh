@@ -10,7 +10,7 @@
 #   - python3 (>= 3.9) with venv module
 #   - gfortran, cmake, ninja-build
 #   - libnetcdff-dev (or netcdf-fortran-devel), liblapack-dev
-#   See docs/PREREQUISITES.md for distro-specific install commands.
+#   See README.md for distro-specific install commands.
 
 set -euo pipefail
 
