@@ -36,6 +36,9 @@ module samplers
     bstart=0.d0
     volstart=0.d0
 
+    ! For VMEC-backed runs the driver calls this while VMEC magfie is active,
+    ! so xstart can be copied directly to reference-coordinate zstart. The
+    ! volstart integral gives volume-weighted sampling on this one surface.
     call integrate_mfl_can( &
       npoiper*nper,dphi,sbeg(1),phibeg,thetabeg, &
       xstart,bstart,volstart,bmod00,ierr)

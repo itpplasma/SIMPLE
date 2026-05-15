@@ -115,11 +115,6 @@ contains
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
 
-            if (num_surf /= 1) then
-                call init_bminmax
-                call print_phase_time('Bmin/Bmax initialization completed')
-            end if
-
             call sample_particles
             call print_phase_time('Particle sampling completed')
 
@@ -127,6 +122,11 @@ contains
 
             call init_magfie(isw_field_type)
             call print_phase_time('Field type initialization completed')
+        end if
+
+        if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
+            call init_bminmax
+            call print_phase_time('Bmin/Bmax initialization completed')
         end if
 
         call init_counters
@@ -570,12 +570,21 @@ contains
     subroutine init_bminmax
         use find_bminmax_sub, only: init_bminmax_arrays
 
-        ! Populate bminmax arrays while magfie is still in VMEC mode.
-        ! find_bminmax scans (theta, phi) to find field extrema, so it
-        ! must run in the coordinate system where theta/phi are geometric
-        ! angles (VMEC), not canonical angles (Boozer/canflux).
+        ! Populate bminmax arrays with the active tracing magfie backend.
+        ! init_starting_surf supplies bmin/bmax for a single sampled surface;
+        ! this cache is only needed when particles span multiple surfaces.
         call init_bminmax_arrays
     end subroutine init_bminmax
+
+    logical function needs_bminmax_cache()
+        ! Match the current readers. Classifier semantics are kept unchanged
+        ! here; broad classifier changes belong in the classifier PR.
+        if ((ntcut > 0) .or. class_plot) then
+            needs_bminmax_cache = num_surf > 1
+        else
+            needs_bminmax_cache = num_surf /= 1
+        end if
+    end function needs_bminmax_cache
 
     subroutine init_counters
         icounter = 0 ! evaluation counter

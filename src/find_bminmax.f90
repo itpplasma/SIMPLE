@@ -164,6 +164,9 @@ contains
     if (.not. prop) return
     prop = .false.
     hsbmnx = 1.d0/dble(nsbmnx)
+    ! The cache is defined in the coordinate system of the active magfie
+    ! backend. The driver initializes it serially after selecting the tracing
+    ! backend, before parallel orbit tracing reads it.
     do k = 0, nsbmnx
         s0 = max(1.d-8, hsbmnx*dble(k))
         call find_bminmax(s0, bmin_arr(k), bmax_arr(k))

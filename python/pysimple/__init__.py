@@ -377,6 +377,14 @@ def _init_before_trace():
     # init_magfie(isw_field_type) - set field evaluation to configured type
     _backend.magfie_wrapper.wrapper_init_magfie(_backend.velo_mod.isw_field_type)
 
+    classification_active = int(params.ntcut) > 0 or bool(params.class_plot)
+    if classification_active:
+        needs_bminmax = int(params.num_surf) > 1
+    else:
+        needs_bminmax = int(params.num_surf) != 1
+    if _backend.velo_mod.isw_field_type != _TEST_FIELD_ID and needs_bminmax:
+        _simple_main.init_bminmax()
+
     # init_counters - reset counters
     _simple_main.init_counters()
 
