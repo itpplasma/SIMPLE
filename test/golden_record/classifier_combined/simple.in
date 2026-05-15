@@ -1,15 +1,15 @@
 &config
 notrace_passing = 1      ! skip tracing passing prts if notrace_passing=1
-ntestpart = 5000        ! number of test particles
+ntestpart = 32           ! number of test particles
 num_surf = 0             ! number of start surfaces, start points everywhere if 0
 sbeg = 0.2               ! starting surface for some initializations
 npoiper2 = 128           ! integration steps per field period
-netcdffile = 'wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc'   ! name of VMEC file in NETCDF format
+netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
 isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
 trace_time = 1.5d-2      ! tracing time
-tcut = 1d-2              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
+tcut = 1d-2              ! time when to do cut for classification (fractal dimension)
 class_plot = .True.      ! write starting points at phi=const cut for classification plot (.True./.False.)
 cut_in_per = 0d0         ! normalized phi-cut position within field period, [0:1], used if class_plot=.True.
-fast_class = .True.      ! if .True. quit immeadiately after fast classification and don't trace orbits to the end
+fast_class = .True.      ! if .True. quit immediately after fast classification
 deterministic = .True.
 /
