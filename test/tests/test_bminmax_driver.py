@@ -3,75 +3,51 @@
 
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
+from simple_driver import (
+    assert_file_absent,
+    assert_log_order,
+    assert_row_count,
+    log_text,
+    run_simple_case,
+)
 
-def run_case(simple_x: Path, wout: Path, name: str, config: str) -> Path:
-    work_root = Path(os.environ.get("CTEST_BINARY_DIRECTORY", Path.cwd()))
-    case_dir = Path(tempfile.mkdtemp(prefix=f"{name}_", dir=work_root))
-    (case_dir / "simple.in").write_text(config, encoding="utf-8")
-    try:
-        (case_dir / "wout.nc").symlink_to(wout)
-    except OSError:
-        shutil.copy2(wout, case_dir / "wout.nc")
+FIELD_INIT_MARKER = "Field type initialization completed"
+BMINMAX_INIT_MARKER = "Bmin/Bmax initialization completed"
 
-    result = subprocess.run(
-        [str(simple_x)],
-        cwd=case_dir,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=90,
-        check=False,
-    )
-    (case_dir / "simple.log").write_text(result.stdout, encoding="utf-8")
-    if result.returncode != 0:
-        raise AssertionError(
-            f"{name}: simple.x failed with {result.returncode}\n{result.stdout}"
-        )
-    return case_dir
+CLASSIFIER_CONFIG = """\
+class_plot = .True.
+fast_class = .True.
+notrace_passing = 1
+tcut = -1d0
+cut_in_per = 0d0
+"""
 
 
-def assert_log_order(case_dir: Path, before: str, after: str) -> None:
-    log = (case_dir / "simple.log").read_text(encoding="utf-8")
-    before_idx = log.find(before)
-    after_idx = log.find(after)
-    if before_idx < 0 or after_idx < 0:
-        raise AssertionError(f"{case_dir.name}: missing log markers\n{log}")
-    if before_idx > after_idx:
-        raise AssertionError(
-            f"{case_dir.name}: wrong log order for {before!r} and {after!r}"
-        )
-
-
-def assert_has_bminmax(case_dir: Path) -> None:
-    bminmax = case_dir / "bminmax.dat"
-    if not bminmax.exists():
-        raise AssertionError(f"{case_dir.name}: expected bminmax.dat")
-    rows = [
-        line
-        for line in bminmax.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    if len(rows) != 101:
-        raise AssertionError(
-            f"{case_dir.name}: expected 101 bminmax rows, got {len(rows)}"
-        )
-
-
-def assert_no_bminmax(case_dir: Path) -> None:
-    if (case_dir / "bminmax.dat").exists():
-        raise AssertionError(f"{case_dir.name}: bminmax.dat should not be written")
-    log = (case_dir / "simple.log").read_text(encoding="utf-8")
-    if "Bmin/Bmax initialization completed" in log:
+def assert_no_bminmax_cache(case_dir: Path) -> None:
+    assert_file_absent(case_dir, "bminmax.dat")
+    if BMINMAX_INIT_MARKER in log_text(case_dir):
         raise AssertionError(
             f"{case_dir.name}: bminmax cache was initialized unexpectedly"
         )
+
+
+def config_with(base: str, additions: str) -> str:
+    if not additions:
+        return base
+    return base.replace(
+        "deterministic = .True.",
+        f"deterministic = .True.\n{additions}",
+    )
+
+
+def assert_expected_cache(case_dir: Path, expect_cache: bool) -> None:
+    if expect_cache:
+        assert_log_order(case_dir, FIELD_INIT_MARKER, BMINMAX_INIT_MARKER)
+    else:
+        assert_no_bminmax_cache(case_dir)
 
 
 def main() -> int:
@@ -99,54 +75,33 @@ deterministic = .True.
 /
 """
 
-    single_surface = run_case(simple_x, wout, "bminmax_single_surface", common)
-    assert_no_bminmax(single_surface)
-
-    volume = run_case(
-        simple_x,
-        wout,
-        "bminmax_volume",
-        common.replace(
-            "deterministic = .True.",
-            "deterministic = .True.\nstartmode = 5\nnum_surf = 0",
+    cases = [
+        ("bminmax_single_surface", "", False, 0),
+        ("bminmax_volume", "startmode = 5\nnum_surf = 0", True, 0),
+        (
+            "bminmax_classifier_num_surf_zero",
+            f"num_surf = 0\n{CLASSIFIER_CONFIG}",
+            False,
+            0,
         ),
-    )
-    assert_log_order(
-        volume,
-        "Field type initialization completed",
-        "Bmin/Bmax initialization completed",
-    )
-
-    classifier_num_surf_zero = run_case(
-        simple_x,
-        wout,
-        "bminmax_classifier_num_surf_zero",
-        common.replace(
-            "deterministic = .True.",
-            "deterministic = .True.\nnum_surf = 0\nclass_plot = .True.\n"
-            "fast_class = .True.\n"
-            "notrace_passing = 1\ntcut = -1d0\ncut_in_per = 0d0",
+        (
+            "bminmax_classifier_multi_surface",
+            f"num_surf = 2\n{CLASSIFIER_CONFIG}",
+            True,
+            101,
         ),
-    )
-    assert_no_bminmax(classifier_num_surf_zero)
+    ]
 
-    classifier_multi_surface = run_case(
-        simple_x,
-        wout,
-        "bminmax_classifier_multi_surface",
-        common.replace(
-            "deterministic = .True.",
-            "deterministic = .True.\nnum_surf = 2\nclass_plot = .True.\n"
-            "fast_class = .True.\n"
-            "notrace_passing = 1\ntcut = -1d0\ncut_in_per = 0d0",
-        ),
-    )
-    assert_log_order(
-        classifier_multi_surface,
-        "Field type initialization completed",
-        "Bmin/Bmax initialization completed",
-    )
-    assert_has_bminmax(classifier_multi_surface)
+    for name, additions, expect_cache, expected_rows in cases:
+        case_dir = run_simple_case(
+            simple_x,
+            wout,
+            name,
+            config_with(common, additions),
+        )
+        assert_expected_cache(case_dir, expect_cache)
+        if expected_rows:
+            assert_row_count(case_dir, "bminmax.dat", expected_rows)
 
     return 0
 

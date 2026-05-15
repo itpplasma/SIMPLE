@@ -5,13 +5,14 @@ program test_bminmax_lifecycle
     use new_vmec_stuff_mod, only: nper
     use params, only: class_plot, ntcut, num_surf
     use simple_main, only: needs_bminmax_cache
+    use test_utils, only: check, check_close
 
     implicit none
 
     integer :: errors
 
     errors = 0
-    call test_cache_gate(errors)
+    call test_cache_gate_cases(errors)
     call test_active_backend_cache(errors)
 
     if (errors /= 0) then
@@ -23,44 +24,45 @@ program test_bminmax_lifecycle
 
 contains
 
-    subroutine test_cache_gate(errors)
+    subroutine test_cache_gate_cases(errors)
         integer, intent(inout) :: errors
+        character(len=256) :: cases_path
+        character(len=1) :: class_plot_token, expected_token
+        integer :: unit_id, ios, case_num
+        logical :: expected, actual
+
+        call get_command_argument(1, cases_path)
+        if (len_trim(cases_path) == 0) cases_path = "bminmax_cache_cases.tsv"
+
+        open(newunit=unit_id, file=trim(cases_path), status="old", action="read")
+        case_num = 0
+
+        do
+            read(unit_id, *, iostat=ios) num_surf, ntcut, class_plot_token, &
+                expected_token
+            if (ios < 0) exit
+            if (ios > 0) then
+                print *, "ERROR: failed to read bminmax cache case", case_num + 1
+                errors = errors + 1
+                exit
+            end if
+
+            case_num = case_num + 1
+            class_plot = class_plot_token == "T"
+            expected = expected_token == "T"
+            actual = needs_bminmax_cache()
+            call check(actual .eqv. expected, "bminmax cache predicate case failed", &
+                errors)
+        end do
+
+        close(unit_id)
+
+        call check(case_num > 0, "bminmax cache predicate cases were empty", errors)
 
         ntcut = 0
         class_plot = .false.
-
         num_surf = 1
-        call assert_false(needs_bminmax_cache(), &
-            "single-surface normal tracing must use init_starting_surf bmin/bmax", &
-            errors)
-
-        num_surf = 0
-        call assert_true(needs_bminmax_cache(), &
-            "normal volume tracing must initialize the bminmax cache", errors)
-
-        num_surf = 2
-        call assert_true(needs_bminmax_cache(), &
-            "normal multi-surface tracing must initialize the bminmax cache", errors)
-
-        class_plot = .true.
-        num_surf = 0
-        call assert_false(needs_bminmax_cache(), &
-            "classifier num_surf=0 semantics stay out of the bminmax PR", errors)
-
-        num_surf = 2
-        call assert_true(needs_bminmax_cache(), &
-            "classifier multi-surface tracing must initialize the bminmax cache", &
-            errors)
-
-        class_plot = .false.
-        ntcut = 1
-        num_surf = 0
-        call assert_false(needs_bminmax_cache(), &
-            "ntcut classifier num_surf=0 semantics stay out of the bminmax PR", errors)
-
-        ntcut = 0
-        num_surf = 1
-    end subroutine test_cache_gate
+    end subroutine test_cache_gate_cases
 
     subroutine test_active_backend_cache(errors)
         integer, intent(inout) :: errors
@@ -73,9 +75,9 @@ contains
         call init_bminmax_arrays
         call get_bminmax(0.4_dp, bmin, bmax)
 
-        call assert_close(bmin, 2.25_dp, 1.0e-7_dp, &
+        call check_close(real(bmin, kind(1.0d0)), 2.25d0, 1.0d-7, &
             "bminmax cache did not use the active test magfie backend for bmin", errors)
-        call assert_close(bmax, 2.55_dp, 1.0e-7_dp, &
+        call check_close(real(bmax, kind(1.0d0)), 2.55d0, 1.0d-7, &
             "bminmax cache did not use the active test magfie backend for bmax", errors)
 
         prop = .true.
@@ -105,36 +107,5 @@ contains
         hctrvr = [0.0_dp, 0.0_dp, 1.0_dp]
         hcurl = 0.0_dp
     end subroutine test_magfie_backend
-
-    subroutine assert_true(condition, message, errors)
-        logical, intent(in) :: condition
-        character(len=*), intent(in) :: message
-        integer, intent(inout) :: errors
-
-        if (.not. condition) then
-            print *, "ERROR:", trim(message)
-            errors = errors + 1
-        end if
-    end subroutine assert_true
-
-    subroutine assert_false(condition, message, errors)
-        logical, intent(in) :: condition
-        character(len=*), intent(in) :: message
-        integer, intent(inout) :: errors
-
-        call assert_true(.not. condition, message, errors)
-    end subroutine assert_false
-
-    subroutine assert_close(actual, expected, tolerance, message, errors)
-        real(dp), intent(in) :: actual, expected, tolerance
-        character(len=*), intent(in) :: message
-        integer, intent(inout) :: errors
-
-        if (abs(actual - expected) > tolerance) then
-            print *, "ERROR:", trim(message)
-            print *, "  actual=", actual, " expected=", expected
-            errors = errors + 1
-        end if
-    end subroutine assert_close
 
 end program test_bminmax_lifecycle

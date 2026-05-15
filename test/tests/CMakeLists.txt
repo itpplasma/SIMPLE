@@ -307,8 +307,10 @@ add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
 
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
-target_link_libraries(test_bminmax_lifecycle.x simple)
-add_test(NAME test_bminmax_lifecycle COMMAND test_bminmax_lifecycle.x)
+target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
+add_test(NAME test_bminmax_lifecycle
+    COMMAND test_bminmax_lifecycle.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/bminmax_cache_cases.tsv)
 set_tests_properties(test_bminmax_lifecycle PROPERTIES
     LABELS "unit"
     TIMEOUT 15)
@@ -317,6 +319,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     add_test(NAME test_bminmax_python
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_bminmax_python.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/bminmax_cache_cases.tsv
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_bminmax_python PROPERTIES
         LABELS "unit;python"

@@ -8,7 +8,7 @@ import importlib.util
 from pathlib import Path
 
 
-def main() -> int:
+def load_needs_bminmax_cache():
     helper = Path(__file__).resolve().parents[2] / "python" / "pysimple" / "_bminmax.py"
     spec = importlib.util.spec_from_file_location("pysimple_bminmax", helper)
     if spec is None or spec.loader is None:
@@ -17,20 +17,26 @@ def main() -> int:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    needs_bminmax_cache = module.needs_bminmax_cache
+    return module.needs_bminmax_cache
 
-    cases = [
-        ((1, 0, False), False),
-        ((0, 0, False), True),
-        ((2, 0, False), True),
-        ((0, 0, True), False),
-        ((2, 0, True), True),
-        ((0, 1, False), False),
-        ((2, 1, False), True),
-    ]
 
-    for args, expected in cases:
-        actual = needs_bminmax_cache(*args)
+def iter_cases(path: Path):
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        num_surf, ntcut, class_plot, expected = line.split()
+        yield (
+            (int(num_surf), int(ntcut), class_plot == "T"),
+            expected == "T",
+        )
+
+
+def main() -> int:
+    needs_bminmax_cache = load_needs_bminmax_cache()
+    cases_path = Path(sys.argv[1])
+
+    for args, expected in iter_cases(cases_path):
+        actual = bool(needs_bminmax_cache(*args))
         if actual is not expected:
             raise AssertionError(
                 f"needs_bminmax_cache{args} returned {actual}, expected {expected}"
