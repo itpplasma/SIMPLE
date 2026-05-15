@@ -2,15 +2,21 @@ program test_chartmap_metadata
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use netcdf
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
+    use test_utils, only: check_close, check_string
     implicit none
 
     type(chartmap_metadata_t) :: meta
+    integer :: errors
 
+    errors = 0
     call write_min_chartmap("mini.chartmap.nc", "cm", 0.8_dp)
     call read_chartmap_metadata("mini.chartmap.nc", meta)
-    call assert_close(meta%rho_lcfs, 0.8_dp, 1.0e-15_dp, "rho_lcfs mismatch")
-    call assert_close(meta%cart_scale_to_m, 0.01_dp, 1.0e-15_dp, "scale mismatch")
-    call assert_str(meta%cart_units, "cm", "units mismatch")
+    call check_close(meta%rho_lcfs, 0.8_dp, 1.0e-15_dp, "rho_lcfs mismatch", &
+        errors)
+    call check_close(meta%cart_scale_to_m, 0.01_dp, 1.0e-15_dp, &
+        "scale mismatch", errors)
+    call check_string(meta%cart_units, "cm", "units mismatch", errors)
+    if (errors /= 0) error stop 1
 contains
 
     subroutine check_nc(status, where)
@@ -82,27 +88,4 @@ contains
         call check_nc(status, "close")
     end subroutine write_min_chartmap
 
-    subroutine assert_close(a, b, tol, msg)
-        real(dp), intent(in) :: a, b, tol
-        character(len=*), intent(in) :: msg
-
-        if (abs(a - b) > tol) then
-            print *, "ASSERTION FAILED: ", trim(msg)
-            print *, "got=", a, " expected=", b
-            error stop 1
-        end if
-    end subroutine assert_close
-
-    subroutine assert_str(a, b, msg)
-        character(len=*), intent(in) :: a, b
-        character(len=*), intent(in) :: msg
-
-        if (trim(a) /= trim(b)) then
-            print *, "ASSERTION FAILED: ", trim(msg)
-            print *, "got=", trim(a), " expected=", trim(b)
-            error stop 1
-        end if
-    end subroutine assert_str
-
 end program test_chartmap_metadata
-
