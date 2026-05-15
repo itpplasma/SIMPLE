@@ -47,7 +47,7 @@ brew install gcc cmake ninja netcdf netcdf-fortran lapack
 
 For Python wrappers, do
 ```bash
-pip install f90wrap==0.2.16
+pip install f90wrap==0.3.0
 pip install -e . --no-build-isolation
 ```
 

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "numpy", "f90wrap==0.2.16"]
+requires = ["scikit-build-core", "numpy", "f90wrap==0.3.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -17,6 +17,3 @@ cmake.define.CMAKE_CACHE_DIR = "build"
 wheel.packages = ["python/pysimple"]
 wheel.install-dir = "pysimple"
 wheel.exclude = []
-
-[project.package-data]
-pysimple = ["data/*.dat"]
