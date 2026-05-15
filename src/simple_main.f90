@@ -935,7 +935,7 @@ contains
             end do
             close (1)
 
-            if (num_surf /= 1) then
+            if (needs_bminmax_cache()) then
                 block
                     use bminmax_mod, only: nsbmnx, hsbmnx, bmin_arr, bmax_arr
 
