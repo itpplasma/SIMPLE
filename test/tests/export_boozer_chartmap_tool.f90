@@ -15,10 +15,9 @@ program export_boozer_chartmap_tool
 
     implicit none
 
-    real(dp), parameter :: twopi = 2.0_dp * 3.14159265358979_dp
+    real(dp), parameter :: twopi = 8.0_dp * atan(1.0_dp)
     character(len=1024) :: wout_file, chartmap_file, start_vmec, start_boozer
-    character(len=1024) :: line
-    integer :: nargs, ipart, npart, ios
+    integer :: nargs, ipart, npart, ios, u_in, u_out
     real(dp) :: s, theta_v, phi_v, v, lam, theta_b, phi_b
     real(dp) :: RT0, R0i, cbfi, bz0i, bf0, fper, rho
     integer :: L1i
@@ -37,7 +36,7 @@ program export_boozer_chartmap_tool
 
     ! Initialize VMEC
     netcdffile = wout_file
-    multharm = 3
+    multharm = 7
     ns_A = 5
     ns_s = 5
     ns_tp = 5
@@ -57,26 +56,26 @@ program export_boozer_chartmap_tool
 
     ! Count particles in start_vmec
     npart = 0
-    open(unit=10, file=trim(start_vmec), status='old', iostat=ios)
+    open(newunit=u_in, file=trim(start_vmec), status='old', iostat=ios)
     if (ios /= 0) then
         print *, 'Cannot open ', trim(start_vmec)
         error stop
     end if
     do
-        read(10, *, iostat=ios)
+        read(u_in, *, iostat=ios)
         if (ios /= 0) exit
         npart = npart + 1
     end do
-    close(10)
+    close(u_in)
 
     print *, 'Converting', npart, ' particles from VMEC to Boozer coords'
 
     ! Convert start.dat coordinates
-    open(unit=10, file=trim(start_vmec), status='old')
-    open(unit=11, file=trim(start_boozer), status='replace', recl=1024)
+    open(newunit=u_in, file=trim(start_vmec), status='old')
+    open(newunit=u_out, file=trim(start_boozer), status='replace', recl=1024)
 
     do ipart = 1, npart
-        read(10, *) s, theta_v, phi_v, v, lam
+        read(u_in, *) s, theta_v, phi_v, v, lam
 
         ! Transform VMEC angles to Boozer angles
         call vmec_to_boozer(s, theta_v, phi_v, theta_b, phi_b)
@@ -84,11 +83,11 @@ program export_boozer_chartmap_tool
         ! In chartmap reference coords: x(1) = rho = sqrt(s)
         rho = sqrt(max(s, 0.0_dp))
 
-        write(11, *) rho, theta_b, phi_b, v, lam
+        write(u_out, *) rho, theta_b, phi_b, v, lam
     end do
 
-    close(10)
-    close(11)
+    close(u_in)
+    close(u_out)
 
     print *, 'Written ', trim(start_boozer)
 
