@@ -115,7 +115,7 @@ contains
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
 
-            if (num_surf /= 1 .or. ntcut > 0 .or. class_plot) then
+            if (num_surf /= 1) then
                 call init_bminmax
                 call print_phase_time('Bmin/Bmax initialization completed')
             end if
