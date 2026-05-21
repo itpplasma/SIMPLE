@@ -1,17 +1,15 @@
 # %%
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import root
-from scipy.interpolate import lagrange
-import common
-from common import (r0,th0,ph0,vpar0,timesteps,get_val,get_der,mu,qe,m,c,)
+from common import (dt_cpp_sym, r0, th0,ph0,vpar0,timesteps,autosave,folderforPlots,mu,qe,m,c,)
 from field_correct_test import field
-from plotale import plot_orbit, plot_mani, plot_cost_function
+
 
 f = field()
+nt = timesteps
 
-dt = 80
-nt = 1000
 
 metric = lambda z: {
     "_ii":  np.array([1, z[0]**2, (1 + z[0]*np.cos(z[1]))**2]),
@@ -27,7 +25,7 @@ def dLdx(v, dAth, dAph, dB, g):
     return ret
 
 
-def F(x, xold, pold):
+def F(x, xold, pold, dt):
     global p
     ret = np.zeros(3)
 
@@ -44,78 +42,137 @@ def F(x, xold, pold):
     return ret
 
 
-# Initial Conditions
-z = np.zeros([3, nt + 1])
-z[:, 0] = [r0, th0, ph0]
 
-f.evaluate(r0, th0, ph0)
-g = metric(z[:,0])
-v = np.zeros(3)
-p = np.zeros(3)
-vel = np.zeros([3, nt + 1])
-vel[:,0] = [vpar0*f.co_hr, vpar0*f.co_hth, vpar0*f.co_hph]
-
-p[0] = vel[0,0] 
-p[1] = vel[1,0] + qe/c*f.co_Ath
-p[2] = vel[2,0] + qe/c*f.co_Aph
-
-vper = np.zeros(nt)
-vpar = np.zeros(nt)
-v = np.zeros(nt)
-
+Z = []
+Vel = []
+Vparvec = []
+Vpervec = []
+Vpar = []
+Vper = []
+V = []
+P = []
+Energy = []
+Pphi = []
+Mu = []
 from time import time
-tic = time()
-for kt in range(nt):
-    pold = p
+for i in range(len(dt_cpp_sym)):
+    dt = dt_cpp_sym[i]
+    #nt = int(nt / dt)
 
-    sol = root(F, z[:,kt], method='hybr',tol=1e-12,args=(z[:,kt], pold))
-    z[:,kt+1] = sol.x
+    # Initial Conditions
+    z = np.zeros([3, nt + 1])
+    z[:, 0] = [r0, th0, ph0]
 
-    f.evaluate(z[0,kt+1], z[1,kt+1], z[2,kt+1])
-    g = metric(z[:,kt+1])
-    vel[:,kt+1] = 1/m * g['^ii']*(p - qe/c*np.array([0, f.co_Ath, f.co_Aph]))
+    f.evaluate(r0, th0, ph0)
+    g = metric(z[:,0])
+    p = np.zeros(3)
+    vel = np.zeros([3, nt + 1])
 
-
-    vper[kt] = np.sqrt(g['^ii'][0]*mu*2*f.B) 
-    vpar[kt] = np.sqrt(np.sum(vel[:,kt+1]**2)) - vper[kt]
-    v[kt] = np.sum(vel[:,kt+1])
-
-
+    A = np.array([0, f.co_Ath, f.co_Aph])
+    p = m*g['_ii']*vel[:,0] + qe/c*A
 
 
+    P_con = np.zeros([3, nt+1])
+    P_con[:,0] = p.copy()
+
+    v_per_vec = np.zeros([3, nt+1])
+    v_par_vec = np.zeros([3, nt+1])
+    v_par_vec[:,0] = vel[:,0]
+    vper = np.zeros(nt+1)
+    vpar = np.zeros(nt+1)
+    v = np.zeros(nt+1)
+
+    H = np.zeros(nt+1)
+    pphi = np.zeros(nt+1)
+    MU = np.zeros(nt+1)
+    H[0] = mu * f.B
+    pphi[0] = m*g['_ii'][2]*vel[2,0] + qe/c*f.co_Aph
+    MU[0] = mu
 
 
-'''
-t = np.linspace(0, nt, nt)
+    tic = time()
+    for kt in range(nt):
+        pold = p
 
-# k = nt
-k = 100
 
-plt.plot(t[:k], vpar[:k], linewidth=0.5, c='r', label='vpar')
+        sol = root(F, z[:,kt], method='hybr',tol=1e-12,args=(z[:,kt], pold, dt))
+        z[:,kt+1] = sol.x
 
-plt.plot(t[:k], vper[:k], linewidth=0.5, c='g', label='vper')
+        f.evaluate(z[0,kt+1], z[1,kt+1], z[2,kt+1])
+        g = metric(z[:,kt+1])
+        vel[:,kt+1] = 1/m * g['^ii']*(p - qe/c*np.array([0, f.co_Ath, f.co_Aph]))
 
-plt.plot(t[:k], v[:k], linewidth=0.5, c='b', label='v')
+        P_con[:,kt+1] = g['^ii']*p.copy()
+
+        v_par_vec[:,kt+1] = [0,
+                            g['^ii'][1]*f.co_hth*(vel[1,kt+1]*f.co_hth + vel[2,kt+1]*f.co_hph),
+                            g['^ii'][2]*f.co_hph*(vel[2,kt+1]*f.co_hph + vel[1,kt+1]*f.co_hth)]
+        v_per_vec[:,kt+1] = vel[:,kt+1] - v_par_vec[:,kt+1]
+
+        scalarvper =np.sqrt((v_per_vec[0,kt+1]**2 * g['_ii'][0] + v_per_vec[1,kt+1]**2 * g['_ii'][1] + v_per_vec[2,kt+1]**2 * g['_ii'][2]))
+        scalarvpar =np.sqrt((v_par_vec[0,kt+1]**2 * g['_ii'][0] + v_par_vec[1,kt+1]**2 * g['_ii'][1] + v_par_vec[2,kt+1]**2 * g['_ii'][2]))
+
+        vper[kt+1] = scalarvper #np.sqrt(g['^ii'][0]*mu*2*f.B)
+        vpar[kt+1] = scalarvpar #np.sqrt(g['_ii'][0]*vel[0,kt+1]**2 + g['_ii'][1]*vel[1,kt+1]**2 + g['_ii'][2]*vel[2,kt+1]**2) - vper[kt]
+        v[kt+1] = np.sqrt((vel[0,kt+1]**2 * g['_ii'][0] + vel[1,kt+1]**2 * g['_ii'][1] + vel[2,kt+1]**2 * g['_ii'][2]))
+
+
+        H[kt+1] = 1/(2*m)*(g['^ii'][0]*p[0]**2 + g['^ii'][1]*(p[1] - qe/c*f.co_Ath)**2 + g['^ii'][2]*(p[2] - qe/c*f.co_Aph)**2) + mu*f.B
+        pphi[kt+1] = m*g['_ii'][2]*vel[2,kt+1]+ qe/c*f.co_Aph
+        MU[kt+1] = m*vper[kt+1]**2/(2*f.B)
+
+
+    Z.append(z)
+    Vel.append(vel)
+    Vparvec.append(v_par_vec)
+    Vpervec.append(v_per_vec)
+    Vpar.append(vpar)
+    Vper.append(vper)
+    V.append(v)
+    P.append(P_con)
+    Energy.append(H)
+    Pphi.append(pphi)
+    Mu.append(MU)
+
+
+q_cpp_sym = Z
+v_cpp_sym = Vel
+p_cpp_sym = P
+Vtot_cpp_sym = V
+Vpar_cpp_sym = Vpar
+Vper_cpp_sym = Vper
+vpar_cpp_sym_vec = Vparvec
+vper_cpp_sym_vec = Vpervec
+En_cpp_sym = Energy
+Pphi_cpp_sym = Pphi
+Mu_cpp_sym = Mu
+
+
+k = nt#//100
+fig = plt.figure(figsize=(18,6))
+
+for j in range(len(dt_cpp_sym)):
+    t = np.linspace(0, nt*dt_cpp_sym[j], nt)
+    ax = fig.add_subplot(1, len(dt_cpp_sym), j+1)
+    ax.plot(t[:k], Vpar[j][:k], linewidth=0.5, c='r', label=r'$v_\parallel$')
+    ax.plot(t[:k], Vper[j][:k], linewidth=0.5, c='g', label=r'$v_\perp$')
+    ax.plot(t[:k], V[j][:k], linewidth=0.5, c='b', label=r'$v$')
+    ax.legend()
+    ax.set_title(r'$\Delta t_{\rm cpp\_sym} = ' + str(dt_cpp_sym[j]) + '$')
+
+if autosave == 1:
+    fig.savefig(os.path.join(folderforPlots, 'vel_cpp_sym.png'), dpi=300)
+else:
+    plt.show()
+
+
+fig = plt.figure(figsize=(18,6))
+
+for j in range(len(dt_cpp_sym)):
+    ax = fig.add_subplot(1, len(dt_cpp_sym), j+1)
+    ax.scatter(Z[j][0,:]*np.cos(Z[j][1,:]), Z[j][0,:]*np.sin(Z[j][1,:]), s=0.01, color='b')
+    ax.set_title(r'$\Delta t_{\rm cpp\_sym} = ' + str(dt_cpp_sym[j]) + '$')
+
+if autosave == 1:
+    fig.savefig(os.path.join(folderforPlots, 'banana_cpp_sym.png'), dpi=300)
 plt.show()
-
-
-plt.hist(v, bins=30, color='blue', edgecolor='black', alpha=0.7)
-plt.hist(vpar, bins=30, color='red', edgecolor='black', alpha=0.7)
-plt.hist(vper, bins=30, color='green', edgecolor='black', alpha=0.7)
-
-plt.xlabel("Value")
-plt.ylabel("Frequency")
-plt.title("Histogram of velocity")
-plt.grid(True, linestyle="--", alpha=0.5)
-plt.show()
-
-plt.plot
-plot_mani(z)
-#plt.plot(z[0,:]*np.cos(z[1,:]), z[0,:]*np.sin(z[1,:]), ".")
-plt.show()
-
-fig, ax = plt.subplots()
-plot_orbit(z, ax = ax)
-plt.plot(z[0,:5]*np.cos(z[1,:5]), z[0,:5]*np.sin(z[1,:5]), "o")
-plt.show()
-'''

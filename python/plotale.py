@@ -5,14 +5,16 @@ from matplotlib.pyplot import figure, plot, xlabel, ylabel, subplot, grid, legen
 
 
 
-def plot_orbit(z, ax):
+def plot_orbit(z, ax, leg=None, title=None):
 
     ax.plot(z[0, :] * cos(z[1, :]),
             z[0, :] * sin(z[1, :]),
-            'o', markersize=1)
+            'o', markersize=1, label=leg)
 
     ax.set_xlabel(r'$R-R_0$')
     ax.set_ylabel(r'$Z$')
+    ax.legend(loc='upper right')
+    ax.set_title(title)
     return ax
 
 
@@ -41,7 +43,7 @@ def plot_mani(z):
     z = z[0,:]*sin(z[1,:])
     ax.scatter(x,y,z)
     ax.set_zlim([-1,1])
-    
+
 
 
 
@@ -54,7 +56,7 @@ def plot_cost_function(F, zlast, zold, pthold):
     fres = empty_like(r)
     for kr in range(len(r)):
         fres[kr] = F([r[kr]], zold[1:], pthold)
-    
+
     figure()
     subplot(2,1,1)
     plot(r,fres)
@@ -66,7 +68,7 @@ def plot_cost_function(F, zlast, zold, pthold):
 
 def plot_cost_function_jac(F, zlast, zold, pthold):
     """Plot the cost function with Jacobian"""
-    
+
     r = linspace(-0.2,0.2,100)
     fres = empty_like(r)
     jac = empty_like(r)
@@ -74,11 +76,11 @@ def plot_cost_function_jac(F, zlast, zold, pthold):
         out = F([r[kr]], zold[1:], pthold)
         fres[kr] = out[0]
         jac[kr] = out[1][0]
-        
+
     jacnum = (roll(fres,-1)-roll(fres,1))/(2.*(r[1]-r[0]))
     jacnum[0] = jacnum[1]
     jacnum[-1] = jacnum[-2]
-    
+
     figure()
     subplot(2,1,1)
     plot(r,fres)
@@ -87,7 +89,7 @@ def plot_cost_function_jac(F, zlast, zold, pthold):
     xlabel('r')
     ylabel('F')
     grid()
-    
+
     subplot(2,1,2)
     plot(r,jac)
     plot(r,jacnum,'r--')
