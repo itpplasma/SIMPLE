@@ -671,7 +671,13 @@ endif()
 
 # Create golden record regression tests comparing against main branch
 # These tests enforce strict numerical reproducibility - any change in output
-# must be manually reviewed before merging to main
+# must be manually reviewed before merging to main.
+#
+# GOLDEN_RECORD_SKIP_CASES lists cases whose ref/cur divergence is the
+# intended outcome of a bug fix on this branch. classifier_fast is skipped
+# while the fix in src/classification.f90 (regular orbits no longer marked
+# lost under fast_class) is in flight; once merged to main and main is
+# rebuilt as reference, the entry can be removed.
 foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     add_test(
         NAME golden_record_${CASE}
@@ -682,7 +688,7 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     set_tests_properties(golden_record_${CASE} PROPERTIES
         TIMEOUT 1200  # Includes initial main clone/build on CI
         LABELS "golden_record;regression"
-        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
+        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7;GOLDEN_RECORD_SKIP_CASES=classifier_fast"
     )
 endforeach()
 
