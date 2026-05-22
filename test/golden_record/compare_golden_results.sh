@@ -149,9 +149,15 @@ compare_cases() {
             fi
         # Check if this is a classifier case with multiple files
         elif [ "$CASE" = "classifier_fast" ] || [ "$CASE" = "classifier_combined" ]; then
-            # List of files to compare for classifier_fast (excluding simple.in and wout.nc)
-            # Note: fort.* files are excluded due to non-deterministic ordering in parallel execution
-            CLASSIFIER_FILES="avg_inverse_t_lost.dat class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"
+            # List of files to compare for the classifier cases (excluding
+            # simple.in and wout.nc). fort.* are excluded because of
+            # non-deterministic ordering in parallel execution.
+            # avg_inverse_t_lost.dat is excluded because the file is only
+            # written when at least one particle is actually lost; with the
+            # fast_class regression fix the small classifier_fast test loses
+            # zero particles, so neither ref nor cur write the file and the
+            # comparator's "missing" check spuriously fails.
+            CLASSIFIER_FILES="class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"
             
             # Run multi-file comparison
             python "$SCRIPT_DIR/compare_files_multi.py" \
