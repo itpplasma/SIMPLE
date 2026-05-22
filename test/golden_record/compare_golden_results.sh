@@ -55,6 +55,22 @@ echo "Current directory: $CURRENT_DIR"
 echo "Test cases to compare: $(echo "$TEST_CASES" | wc -w)"
 echo ""
 
+# GOLDEN_RECORD_SKIP_CASES: space-separated list of case names whose ref/cur
+# divergence is expected and accepted (e.g. an intentional bug fix changes
+# the output). Each entry must be the exact case directory name. Set it in
+# CI workflow or the calling Makefile target rather than here, so the skip
+# stays explicit per branch.
+SKIP_CASES="${GOLDEN_RECORD_SKIP_CASES:-}"
+
+case_is_skipped() {
+    local case_name="$1"
+    [ -z "$SKIP_CASES" ] && return 1
+    for s in $SKIP_CASES; do
+        [ "$s" = "$case_name" ] && return 0
+    done
+    return 1
+}
+
 compare_cases() {
     local total_cases=0
     local passed_cases=0
@@ -65,6 +81,14 @@ compare_cases() {
 
     for CASE in $TEST_CASES; do
         total_cases=$((total_cases + 1))
+
+        if case_is_skipped "$CASE"; then
+            echo "Comparing $CASE case..."
+            echo "  ○ SKIPPED (in GOLDEN_RECORD_SKIP_CASES)"
+            skipped_cases=$((skipped_cases + 1))
+            echo ""
+            continue
+        fi
 
         echo "Comparing $CASE case..."
 
