@@ -12,6 +12,8 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
+use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
+  EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE
 
 implicit none
 
@@ -400,20 +402,7 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
     if (all(dabs(fvec) < si%atol)) return
     if (all(dabs(x-xlast) < si%rtol*tolref)) return
   enddo
-  print *, 'newton1: maximum iterations reached: ', maxit
-  write(6601,*) x(1), x(2)
-  write(6601,*) x-xlast
-  write(6601,*) fvec
-  write(6601,*) ''
-  write(6601,*) fjac(1,1), fjac(1,2)
-  write(6601,*) fjac(2,1), fjac(2,2)
-  write(6601,*) ''
-  write(6601,*) ijac(1,1), ijac(1,2)
-  write(6601,*) ijac(2,1), ijac(2,2)
-  write(6601,*) ''
-  write(6601,*) si%z(2), si%z(3)
-  write(6601,*) ''
-  write(6601,*) ''
+  call count_event(EVT_NEWTON1_MAXIT)
 end subroutine
 
 recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
@@ -472,8 +461,7 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  print *, 'newton2: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6602,*) x(1), x(2), x(3), si%z(4), xabs
+  call count_event(EVT_NEWTON2_MAXIT)
 end subroutine
 
 recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
@@ -689,8 +677,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  print *, 'newton_rk_gauss: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6603,*) x, xabs, fvec
+  call count_event(EVT_RK_GAUSS_MAXIT)
 end subroutine newton_rk_gauss
 
 
@@ -773,8 +760,7 @@ recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  print *, 'fixpoint_rk_gauss: maximum iterations reached: ', maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6603,*) x, xabs, fvec
+  call count_event(EVT_FIXPOINT_MAXIT)
 end subroutine fixpoint_rk_gauss
 
 
@@ -966,9 +952,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
     if (all(fabs < atol)) return
     if (all(xabs < rtol*tolref)) return
   enddo
-  print *, 'newton_rk_lobatto: maximum iterations reached: ', &
-           maxit, 'z = ', x(1), x(2), x(3), si%z(4)
-  write(6603,*) x, xabs, fvec
+  call count_event(EVT_RK_LOBATTO_MAXIT)
 end subroutine newton_rk_lobatto
 
 
@@ -1243,7 +1227,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     end if
 
     if (x(1) < 0.0d0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      call count_event(EVT_R_NEGATIVE)
       x(1) = 0.01d0
     end if
 

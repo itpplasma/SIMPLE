@@ -18,7 +18,10 @@ module simple_main
 	                      field_input, isw_field_type, reuse_batch, coord_input, &
 	                      wall_input, wall_units, wall_hit, wall_hit_cart, &
 	                      wall_hit_normal_cart, wall_hit_cos_incidence, &
-	                      wall_hit_angle_rad, ntau_macro, kt_macro
+	                      wall_hit_angle_rad, ntau_macro, kt_macro, &
+	                      checkpoint_interval
+    use diag_counters, only: diag_counters_init
+    use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
     use reference_coordinates, only: ref_coords
     use stl_wall_intersection, only: stl_wall_t, stl_wall_init, &
@@ -134,12 +137,11 @@ contains
         call init_counters
         call print_phase_time('Counter initialization completed')
 
+        call diag_counters_init
+        call progress_init(checkpoint_interval, ntestpart, write_results)
         call trace_parallel(norb)
+        call progress_finalize
         call print_phase_time('Parallel particle tracing completed')
-
-        confpart_pass = confpart_pass/ntestpart
-        confpart_trap = confpart_trap/ntestpart
-        call print_phase_time('Statistics normalization completed')
 
         call write_output
         call print_phase_time('Output writing completed')
@@ -409,6 +411,8 @@ contains
                 call write_orbit_to_netcdf(i, traj, times)
 !$omp end critical
             end if
+
+            call progress_tick
         end do
 !$omp end do
 !$omp end parallel
@@ -904,8 +908,6 @@ contains
         use params, only: output_results_netcdf
         use netcdf_results_output, only: write_results_netcdf
 
-        integer :: i, num_lost
-        real(dp) :: inverse_times_lost_sum
         integer(8) :: total_field_evaluations
 
         ! Sum field evaluations across all threads
@@ -916,57 +918,72 @@ contains
 
         print *, "Total field evaluations: ", total_field_evaluations
 
-        open (1, file='times_lost.dat', recl=1024)
+        call write_results
+
+        if (output_results_netcdf) then
+            call write_results_netcdf('results.nc')
+        end if
+    end subroutine write_output
+
+    subroutine write_results
+        !> Write the per-particle and confined-fraction result files from the
+        !> shared result arrays. progress_monitor calls this every
+        !> checkpoint_interval seconds, so a run killed mid-flight keeps its
+        !> last flushed output. Confined fractions are normalised by ntestpart,
+        !> as in the final write, so a partial file is a converging lower bound
+        !> and never exceeds one; particles not yet finished keep their sentinel
+        !> values (times_lost = -1).
+        integer :: i, num_lost, unit
+        real(dp) :: inverse_times_lost_sum, norm
+
+        norm = real(max(ntestpart, 1), dp)
+
+        open (newunit=unit, file='times_lost.dat', recl=1024)
         num_lost = 0
         inverse_times_lost_sum = 0.0d0
         do i = 1, ntestpart
-            write (1, *) i, times_lost(i), trap_par(i), zstart(1, i), &
+            write (unit, *) i, times_lost(i), trap_par(i), zstart(1, i), &
                 perp_inv(i), zend(:, i)
             if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
                 num_lost = num_lost + 1
                 inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
             end if
         end do
-        close (1)
+        close (unit)
 
         if (num_lost > 0) then
             ! Write average loss time.
-            open (1, file='avg_inverse_t_lost.dat', recl=1024)
-            write (1, *) inverse_times_lost_sum/num_lost
-            close (1)
+            open (newunit=unit, file='avg_inverse_t_lost.dat', recl=1024)
+            write (unit, *) inverse_times_lost_sum/num_lost
+            close (unit)
         end if
 
-	        open (1, file='confined_fraction.dat', recl=1024)
-	        do i = 1, ntimstep
-	            write (1, *) dble(kt_macro(i))*dtaumin/v0, confpart_pass(i), &
-	                confpart_trap(i), ntestpart
-	        end do
-	        close (1)
+        open (newunit=unit, file='confined_fraction.dat', recl=1024)
+        do i = 1, ntimstep
+            write (unit, *) dble(kt_macro(i))*dtaumin/v0, confpart_pass(i)/norm, &
+                confpart_trap(i)/norm, ntestpart
+        end do
+        close (unit)
 
         if (ntcut > 0 .or. class_plot) then
-            open (1, file='class_parts.dat', recl=1024)
+            open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
-                write (1, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
+                write (unit, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
             end do
-            close (1)
+            close (unit)
 
             if (needs_bminmax_cache()) then
                 block
                     use bminmax_mod, only: nsbmnx, hsbmnx, bmin_arr, bmax_arr
 
-                    open (1, file='bminmax.dat', recl=1024)
+                    open (newunit=unit, file='bminmax.dat', recl=1024)
                     do i = 0, nsbmnx
-                        write (1, *) hsbmnx*dble(i), bmin_arr(i), bmax_arr(i)
+                        write (unit, *) hsbmnx*dble(i), bmin_arr(i), bmax_arr(i)
                     end do
-                    close (1)
+                    close (unit)
                 end block
             end if
         end if
-
-        if (output_results_netcdf) then
-            call write_results_netcdf('results.nc')
-        end if
-
-    end subroutine write_output
+    end subroutine write_results
 
 end module simple_main
