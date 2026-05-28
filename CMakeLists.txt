@@ -157,6 +157,11 @@ else()
     find_package(LAPACK REQUIRED)
 endif()
 
+# Pin libneo to the 26.2 release line for validation. Switch to tag 26.2.0
+# before merging this bump branch.
+if(NOT DEFINED LIBNEO_BRANCH AND NOT DEFINED ENV{LIBNEO_BRANCH})
+    set(LIBNEO_BRANCH "release/26.2")
+endif()
 find_or_fetch(libneo)
 
 # Consume the NetCDF stack libneo resolved (see comment near the top). In the
