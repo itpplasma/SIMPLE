@@ -113,36 +113,12 @@ endif()
 
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(NC_CONFIG "nf-config")
-
-if (NC_CONFIG)
-execute_process(COMMAND nf-config --includedir
-                OUTPUT_VARIABLE NETCDFINCLUDE_DIR)
-execute_process(COMMAND nc-config --libdir
-				OUTPUT_VARIABLE NETCDFLIB_DIR)
-execute_process(COMMAND nf-config --flibs
-                OUTPUT_VARIABLE NETCDF_FLIBS)
-else()
-message(SEND_ERROR "nc-config not found. Please install libnetcdff-dev")
-endif()
-
-string(STRIP ${NETCDFINCLUDE_DIR} NETCDFINCLUDE_DIR)
-string(STRIP ${NETCDFLIB_DIR} NETCDFLIB_DIR)
-string(STRIP ${NETCDF_FLIBS} NETCDF_FLIBS)
-
-message(STATUS "NetCDF include path: " ${NETCDFINCLUDE_DIR})
-message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
-message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
-string(REPLACE " " ";" NETCDF_FLIBS "${NETCDF_FLIBS}")
-
-# For NVHPC compiler: avoid global include of /usr/include as it contains
-# gfortran-compiled HDF5 modules incompatible with nvfortran
-# NetCDF includes will be added target-specifically later
-if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    include_directories(${NETCDFINCLUDE_DIR})
-endif()
-link_directories(${NETCDFLIB_DIR})
-add_link_options(${NETCDF_FLIBS})
+# NetCDF and HDF5 are resolved by libneo, not here. libneo probes whether the
+# system libraries are ABI-compatible with the active Fortran compiler and, when
+# they are not (notably nvfortran, whose .mod format differs from gfortran's),
+# builds a matching HDF5 + NetCDF stack from source. It exports the result as
+# NETCDFINCLUDE_DIR and NETCDF_FLIBS_LIST. SIMPLE consumes those after
+# find_or_fetch(libneo) below, so one toolchain decision drives both projects.
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # Use NVHPC-provided BLAS/LAPACK to avoid pulling in libgomp via system OpenBLAS.
@@ -182,6 +158,24 @@ else()
 endif()
 
 find_or_fetch(libneo)
+
+# Consume the NetCDF stack libneo resolved (see comment near the top). In the
+# fetched case NETCDF_FLIBS_LIST is the netcdf::netcdff imported target, which
+# carries its include dir and the transitive HDF5 link; in the system case it is
+# the -lnetcdff/-lnetcdf flag list with NETCDFLIB_DIR set. Both forms work with
+# include_directories/link_libraries.
+if(NOT DEFINED NETCDFINCLUDE_DIR OR NETCDFINCLUDE_DIR STREQUAL "")
+    message(FATAL_ERROR
+        "libneo did not export NetCDF (NETCDFINCLUDE_DIR is unset). "
+        "Check libneo's dependency detection (cmake/DetectDependencies.cmake).")
+endif()
+message(STATUS "NetCDF (via libneo) include: ${NETCDFINCLUDE_DIR}")
+message(STATUS "NetCDF (via libneo) libs: ${NETCDF_FLIBS_LIST}")
+include_directories(${NETCDFINCLUDE_DIR})
+if(DEFINED NETCDFLIB_DIR AND NOT NETCDFLIB_DIR STREQUAL "")
+    link_directories(${NETCDFLIB_DIR})
+endif()
+link_libraries(${NETCDF_FLIBS_LIST})
 
 # CGAL (optional, for STL wall intersections)
 # CGAL 5.x is header-only, fetch headers via FetchContent (don't run CGAL's CMake)
@@ -228,9 +222,6 @@ if (SIMPLE_TESTING)
 endif()
 
 message(STATUS "CMake build type: " ${CMAKE_BUILD_TYPE})
-
-include_directories ($ENV{NETCDFF_INCLUDE} ${NFINC})
-link_directories ($ENV{NETCDF_LIB} $ENV{NETCDFF_LIB} ${NFLIBS})
 
 # Compiler-specific flags (not applied to subprojects)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
