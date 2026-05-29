@@ -533,8 +533,10 @@ contains
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
-        print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, '   confined frac = ', 1d0 - real(cpu_lost,dp)/real(ntestpart,dp)
-        print '(a,i0,a,i0,a,f7.4)', ' GPU lost = ', gpu_lost, ' / ', ntestpart, '   confined frac = ', 1d0 - real(gpu_lost,dp)/real(ntestpart,dp)
+        print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, &
+            '   confined frac = ', 1d0 - real(cpu_lost, dp)/real(ntestpart, dp)
+        print '(a,i0,a,i0,a,f7.4)', ' GPU lost = ', gpu_lost, ' / ', ntestpart, &
+            '   confined frac = ', 1d0 - real(gpu_lost, dp)/real(ntestpart, dp)
         print '(a,i0,a,i0)', ' lost<->confined flips = ', flip, ' / ', ntestpart
         print '(a,f10.4,a)', ' CPU time (OpenMP) = ', t_cpu, ' s'
         print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
