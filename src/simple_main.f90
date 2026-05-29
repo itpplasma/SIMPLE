@@ -466,6 +466,7 @@ contains
         real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
         real(dp) :: z(5)
         integer :: i, it, ktau, ierr, loss_mismatch
+        integer :: cpu_lost, gpu_lost, flip
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
 
         allocate (si_cpu(ntestpart), si_gpu(ntestpart))
@@ -517,15 +518,24 @@ contains
         ! Compare
         maxz = 0d0
         loss_mismatch = 0
+        cpu_lost = 0
+        gpu_lost = 0
+        flip = 0
         do i = 1, ntestpart
             maxz = max(maxz, maxval(dabs(cpu_zend(:, i) - gpu_zend(:, i))))
             if (cpu_loss(i) /= gpu_loss(i)) loss_mismatch = loss_mismatch + 1
+            if (cpu_loss(i) < ntimstep) cpu_lost = cpu_lost + 1
+            if (gpu_loss(i) < ntimstep) gpu_lost = gpu_lost + 1
+            if ((cpu_loss(i) < ntimstep) .neqv. (gpu_loss(i) < ntimstep)) flip = flip + 1
         end do
 
         print *, '==================== GPU vs CPU tracing ===================='
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
+        print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, '   confined frac = ', 1d0 - real(cpu_lost,dp)/real(ntestpart,dp)
+        print '(a,i0,a,i0,a,f7.4)', ' GPU lost = ', gpu_lost, ' / ', ntestpart, '   confined frac = ', 1d0 - real(gpu_lost,dp)/real(ntestpart,dp)
+        print '(a,i0,a,i0)', ' lost<->confined flips = ', flip, ' / ', ntestpart
         print '(a,f10.4,a)', ' CPU time (OpenMP) = ', t_cpu, ' s'
         print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
         if (t_gpu > 0d0) print '(a,f8.2,a)', ' speedup (CPU/GPU) = ', t_cpu/t_gpu, ' x'
