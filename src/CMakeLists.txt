@@ -55,6 +55,7 @@
     check_orbit_type.f90
     find_bminmax.f90
         timing.f90
+        simple_gpu.f90
         simple_main.f90
         simple_entry.f90
     )

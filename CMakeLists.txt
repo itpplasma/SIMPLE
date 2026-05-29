@@ -97,16 +97,23 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(SIMPLE_NVHPC)
 
     if(SIMPLE_ENABLE_OPENACC)
-        message(STATUS "OpenACC enabled for NVHPC compiler")
+        # Memory model for OpenACC. "managed" places allocatables in CUDA
+        # managed memory so derived-type allocatable components (e.g. batch
+        # spline %coeff) stay coherent host<->device without manual deep-copy
+        # update clauses, which nvfortran does not perform for such components.
+        # "unified" additionally covers module/static data (needs HMM driver).
+        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
+            "OpenACC memory model: managed|unified|separate")
+        message(STATUS "OpenACC enabled for NVHPC compiler (mem:${SIMPLE_OPENACC_MEM})")
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative>
+            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative>
+            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
         )
         add_link_options(
             -acc
-            -gpu=ccnative
+            -gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}
         )
     endif()
 endif()
@@ -135,12 +142,12 @@ message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
 message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
 string(REPLACE " " ";" NETCDF_FLIBS "${NETCDF_FLIBS}")
 
-# For NVHPC compiler: avoid global include of /usr/include as it contains
-# gfortran-compiled HDF5 modules incompatible with nvfortran
-# NetCDF includes will be added target-specifically later
-if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    include_directories(${NETCDFINCLUDE_DIR})
-endif()
+# Fortran .mod files are compiler-specific. nf-config (found above) is the
+# single source of truth for the NetCDF-Fortran include path: with NVHPC it
+# must point at an nvfortran-built netcdf-fortran, not the distro gfortran one
+# (a gfortran-built netcdf.mod under /usr/include aborts nvfortran with
+# "Corrupt or Old Module file"). See DOC/gpu-openacc.md for building it.
+include_directories(${NETCDFINCLUDE_DIR})
 link_directories(${NETCDFLIB_DIR})
 add_link_options(${NETCDF_FLIBS})
 

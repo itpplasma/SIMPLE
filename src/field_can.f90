@@ -221,6 +221,7 @@ subroutine get_val(f, pphi)
   !
   type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: pphi
+  !$acc routine seq
 
   f%vpar = (pphi - f%Aph/f%ro0)/f%hph
   f%H = f%vpar**2/2d0 + f%mu*f%Bmod
@@ -238,6 +239,7 @@ subroutine get_derivatives(f, pphi)
   !
   type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: pphi
+  !$acc routine seq
 
   call get_val(f, pphi)
 
@@ -264,6 +266,7 @@ subroutine get_derivatives2(f, pphi)
   !
   type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: pphi
+  !$acc routine seq
 
   call get_derivatives(f, pphi)
 
