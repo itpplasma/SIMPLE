@@ -16,13 +16,17 @@ module simple_gpu
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t
     use boozer_sub, only: torflux_gpu
+    use omp_lib, only: omp_get_thread_num
+#ifdef _OPENACC
+    use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
+#endif
 
     implicit none
     private
 
     integer, parameter :: maxit = 32
 
-    public :: trace_orbits_gpu
+    public :: trace_orbits_gpu, trace_orbits_gpu_range
 
 contains
 
@@ -146,14 +150,15 @@ contains
         end do
     end subroutine gpu_timestep_euler
 
-    subroutine trace_orbits_gpu(si, f, npart, ntimstep, ntau_macro, loss_step, zend)
-        ! Evolve npart pre-initialised particles on the GPU. Each particle runs
-        ! its full macrostep schedule; loss_step(i) = first timestep at which the
-        ! orbit left the plasma (r>1), or ntimstep if confined for the whole trace.
-        ! zend(:,i) holds the final integrator state z = (r, th, ph, pphi).
+    subroutine trace_orbits_gpu_range(si, f, npart, istart, iend, ntimstep, &
+                                      ntau_macro, loss_step, zend)
+        ! Evolve particles istart:iend on the currently selected OpenACC device.
+        ! loss_step(i) = first timestep at which the orbit left the plasma (r>1),
+        ! or ntimstep if confined for the whole trace. zend(:,i) is the final
+        ! integrator state z = (r, th, ph, pphi).
         type(symplectic_integrator_t), intent(inout) :: si(npart)
         type(field_can_t), intent(inout) :: f(npart)
-        integer, intent(in) :: npart, ntimstep
+        integer, intent(in) :: npart, istart, iend, ntimstep
         integer, intent(in) :: ntau_macro(ntimstep)
         integer, intent(out) :: loss_step(npart)
         real(dp), intent(out) :: zend(4, npart)
@@ -161,9 +166,10 @@ contains
         integer :: i, it, ktau, ierr, lstep
 
         !$acc parallel loop gang vector default(present) &
-        !$acc&   copy(si, f) copyin(ntau_macro) copyout(loss_step, zend) &
+        !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
+        !$acc&   copyout(loss_step(istart:iend), zend(:, istart:iend)) &
         !$acc&   private(it, ktau, ierr, lstep)
-        do i = 1, npart
+        do i = istart, iend
             ierr = 0
             lstep = ntimstep
             macro: do it = 2, ntimstep
@@ -182,6 +188,56 @@ contains
             zend(3, i) = si(i)%z(3)
             zend(4, i) = si(i)%z(4)
         end do
+    end subroutine trace_orbits_gpu_range
+
+    subroutine trace_orbits_gpu(si, f, npart, ntimstep, ntau_macro, loss_step, zend)
+        ! Evolve npart pre-initialised particles, splitting the work evenly
+        ! across all available NVIDIA GPUs (one host thread per device). Falls
+        ! back to a single device / the host when only one is present.
+        type(symplectic_integrator_t), intent(inout) :: si(npart)
+        type(field_can_t), intent(inout) :: f(npart)
+        integer, intent(in) :: npart, ntimstep
+        integer, intent(in) :: ntau_macro(ntimstep)
+        integer, intent(out) :: loss_step(npart)
+        real(dp), intent(out) :: zend(4, npart)
+
+        integer :: ngpu, navail, dev, i0, i1
+        character(16) :: env_val
+        integer :: env_len, env_stat, req
+
+        ! Number of devices to use. Default 1: with -gpu=mem:unified the spline
+        ! coefficient array is shared and migrates between devices on access, so
+        ! splitting across cards thrashes. Real multi-GPU needs a per-device
+        ! resident copy of the read-only splines. Opt in with SIMPLE_GPU_NUM_DEVICES.
+        req = 1
+        call get_environment_variable('SIMPLE_GPU_NUM_DEVICES', env_val, env_len, env_stat)
+        if (env_stat == 0 .and. env_len > 0) read (env_val, *, iostat=env_stat) req
+        if (env_stat /= 0 .or. req < 1) req = 1
+
+        ngpu = 1
+#ifdef _OPENACC
+        navail = acc_get_num_devices(acc_device_nvidia)
+        if (navail < 1) navail = 1
+        ngpu = min(req, navail)
+#endif
+        if (ngpu <= 1) then
+            call trace_orbits_gpu_range(si, f, npart, 1, npart, ntimstep, &
+                                        ntau_macro, loss_step, zend)
+            return
+        end if
+
+        !$omp parallel num_threads(ngpu) private(dev, i0, i1)
+        dev = omp_get_thread_num()
+#ifdef _OPENACC
+        call acc_set_device_num(dev, acc_device_nvidia)
+#endif
+        i0 = int(int(dev, 8)*npart/ngpu) + 1
+        i1 = int(int(dev + 1, 8)*npart/ngpu)
+        if (i1 >= i0) then
+            call trace_orbits_gpu_range(si, f, npart, i0, i1, ntimstep, &
+                                        ntau_macro, loss_step, zend)
+        end if
+        !$omp end parallel
     end subroutine trace_orbits_gpu
 
 end module simple_gpu
