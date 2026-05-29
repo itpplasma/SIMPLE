@@ -30,14 +30,14 @@ module boozer_sub
 !$omp threadprivate(current_field)
 
     ! Batch spline data for Bmod and B_r interpolation
-    type(BatchSplineData3D), save :: bmod_br_batch_spline
+    type(BatchSplineData3D), allocatable :: bmod_br_batch_spline
     logical, save :: bmod_br_batch_spline_ready = .false.
     integer, save :: bmod_br_num_quantities = 0
     real(dp), allocatable, save :: bmod_grid(:, :, :)
     real(dp), allocatable, save :: br_grid(:, :, :)
 
     ! Batch spline for A_phi (vector potential)
-    type(BatchSplineData1D), save :: aphi_batch_spline
+    type(BatchSplineData1D), allocatable :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
     ! Radial abscissa of aphi_batch_spline: .false. = uniform s (VMEC-derived
     ! Boozer), .true. = uniform rho grid (chartmap file). A chartmap tabulates
@@ -51,7 +51,7 @@ module boozer_sub
     real(dp), allocatable, save :: aphi_rho(:)
 
     ! Batch spline for B_theta, B_phi covariant components
-    type(BatchSplineData1D), save :: bcovar_tp_batch_spline
+    type(BatchSplineData1D), allocatable :: bcovar_tp_batch_spline
     logical, save :: bcovar_tp_batch_spline_ready = .false.
 
     ! Batch splines for coordinate transformations (VMEC <-> Boozer)
@@ -94,6 +94,7 @@ contains
         nper_gpu = nper
         use_B_r_gpu = use_B_r
         !$acc update device(torflux_gpu, nper_gpu, use_B_r_gpu, bmod_br_num_quantities, aphi_over_rho)
+        !$acc update device(bmod_br_batch_spline, aphi_batch_spline, bcovar_tp_batch_spline)
     end subroutine sync_boozer_gpu_params
 
     !> Initialize Boozer coordinates using given magnetic field
@@ -944,6 +945,14 @@ contains
             delt_delp_B_batch_spline_ready = .false.
         end if
         if (allocated(delt_delp_B_grid)) deallocate (delt_delp_B_grid)
+
+        ! Descriptors are allocatable so that, under -gpu=mem:managed/separate,
+        ! the module common is not emitted as a value-initialized device global
+        ! (which trips an nvfortran NVVM codegen bug). Keep them allocated for the
+        ! program lifetime; destroy_batch_splines_* above frees only %coeff.
+        if (.not. allocated(aphi_batch_spline)) allocate (aphi_batch_spline)
+        if (.not. allocated(bcovar_tp_batch_spline)) allocate (bcovar_tp_batch_spline)
+        if (.not. allocated(bmod_br_batch_spline)) allocate (bmod_br_batch_spline)
     end subroutine reset_boozer_batch_splines
 
     subroutine load_boozer_from_chartmap(filename)
