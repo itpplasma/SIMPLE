@@ -1047,6 +1047,12 @@ contains
                  n_theta_field, ' nphi_field=', n_zeta_field
         print *, '  torflux=', torflux_val
 
+        ! The chartmap loader builds the batch splines inline (not via
+        ! build_boozer_bmod_br_batch_spline), so refresh the device-accessible
+        ! field-parameter mirrors here too. splint_boozer_coord reads them on
+        ! both host and device.
+        call sync_boozer_gpu_params
+
     contains
 
         subroutine nc_check(stat, loc)
