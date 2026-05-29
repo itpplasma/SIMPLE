@@ -594,6 +594,18 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# GPU device-evaluation test: batch spline eval inside an OpenACC kernel must
+# match the host result. Only meaningful when OpenACC offload is enabled.
+if(SIMPLE_ENABLE_OPENACC)
+    add_executable(test_batch_splines_device.x test_batch_splines_device.f90)
+    target_link_libraries(test_batch_splines_device.x simple testing_utils)
+    add_test(NAME test_batch_splines_device COMMAND test_batch_splines_device.x)
+    set_tests_properties(test_batch_splines_device PROPERTIES
+        LABELS "unit;gpu"
+        TIMEOUT 120
+    )
+endif()
+
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
 target_link_libraries(test_macrostep_log_grid.x simple)

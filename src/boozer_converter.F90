@@ -63,7 +63,38 @@ module boozer_sub
     logical, save :: delt_delp_B_batch_spline_ready = .false.
     real(dp), allocatable, save :: delt_delp_B_grid(:, :, :, :)
 
+    ! Device-accessible copies of scalar field parameters that splint_boozer_coord
+    ! needs when running inside an OpenACC kernel. The libneo modules defining the
+    ! originals (vector_potentail_mod, new_vmec_stuff_mod, boozer_coordinates_mod)
+    ! are not OpenACC-compiled, so their globals have no device symbol. boozer_sub
+    ! is compiled with -acc -gpu=mem:unified, so these mirrors are coherent on the
+    ! device. Synced on the host by sync_boozer_gpu_params before GPU tracing.
+    real(dp), save :: torflux_gpu = 0.0_dp
+    integer, save :: nper_gpu = 1
+    logical, save :: use_B_r_gpu = .false.
+    public :: sync_boozer_gpu_params, torflux_gpu
+
+    ! Module statics referenced by splint_boozer_coord inside OpenACC device
+    ! kernels need device symbols. declare create + update device (in
+    ! sync_boozer_gpu_params / spline construction) keeps them coherent.
+    !$acc declare create(torflux_gpu, nper_gpu, use_B_r_gpu, bmod_br_num_quantities)
+    !$acc declare create(bmod_br_batch_spline, aphi_batch_spline, bcovar_tp_batch_spline)
+    !$acc declare create(aphi_over_rho)
+
 contains
+
+    !> Copy scalar Boozer field parameters from the libneo modules into
+    !> device-accessible boozer_sub mirrors. Host-only; call after field init
+    !> and before any OpenACC tracing kernel.
+    subroutine sync_boozer_gpu_params()
+        use vector_potentail_mod, only: torflux
+        use new_vmec_stuff_mod, only: nper
+        use boozer_coordinates_mod, only: use_B_r
+        torflux_gpu = torflux
+        nper_gpu = nper
+        use_B_r_gpu = use_B_r
+        !$acc update device(torflux_gpu, nper_gpu, use_B_r_gpu, aphi_over_rho)
+    end subroutine sync_boozer_gpu_params
 
     !> Initialize Boozer coordinates using given magnetic field
     subroutine get_boozer_coordinates_with_field(field)
@@ -125,13 +156,8 @@ contains
                                    Bmod_B, dBmod_B, d2Bmod_B, &
                                    B_r, dB_r, d2B_r)
 
-        use boozer_coordinates_mod, only: use_B_r
-        use vector_potentail_mod, only: torflux
-        use new_vmec_stuff_mod, only: nper
-        use chamb_mod, only: rnegflag
-        use diag_mod, only: dodiag, icounter
-
         implicit none
+        !$acc routine seq
 
         integer, intent(in) :: mode_secders
 
@@ -151,29 +177,25 @@ contains
         real(dp) :: x_eval(3), y_eval(2), dy_eval(3, 2), d2y_eval(6, 2)
         real(dp) :: theta_wrapped, phi_wrapped
         real(dp) :: y1d(2), dy1d(2), d2y1d(2)
+        real(dp) :: d3y1d(1)
 
-        if (dodiag) then
-!$omp atomic
-            icounter = icounter + 1
-        end if
-        r_eval = r
-        if (r_eval .le. 0.0_dp) then
-            rnegflag = .true.
-            r_eval = abs(r_eval)
-        end if
+        ! Negative r only occurs transiently inside the Newton solve; the
+        ! symplectic integrator clamps the radial coordinate itself, so the
+        ! abs() below is the only handling needed. The dodiag evaluation
+        ! counter and the chamb_mod rnegflag are host-only diagnostics that are
+        ! omitted here (threadprivate variables are not allowed in acc routines).
+        r_eval = abs(r)
 
-        A_theta = torflux*r_eval
-        dA_theta_dr = torflux
+        A_theta = torflux_gpu*r_eval
+        dA_theta_dr = torflux_gpu
 
         ! Interpolate A_phi. VMEC-derived Boozer data is tabulated on a uniform-s
         ! grid (evaluate at s directly). A chartmap tabulates A_phi on the file's
         ! uniform rho grid, so evaluate at rho and chain-rule to s, exactly like
         ! Bmod/B_theta/B_phi below. The chartmap branch uses local chain-rule
         ! coefficients so the VMEC-s branch keeps its original instruction order.
-        if (.not. aphi_batch_spline_ready) then
-            error stop "splint_boozer_coord: Aphi batch spline not initialized"
-        end if
-
+        ! Guards (error stop) are omitted so this routine is callable from OpenACC
+        ! device kernels (error stop is not supported there).
         if (aphi_over_rho) then
             ! A_phi(rho) -> s-derivatives by the chain rule for rho = sqrt(s):
             !   rho'   = 1/(2 rho)              [drds]
@@ -229,11 +251,7 @@ contains
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r_eval)
         theta_wrapped = modulo(vartheta_B, TWOPI)
-        phi_wrapped = modulo(varphi_B, TWOPI/real(nper, dp))
-
-        if (.not. bmod_br_batch_spline_ready) then
-            error stop "splint_boozer_coord: Bmod/Br batch spline not initialized"
-        end if
+        phi_wrapped = modulo(varphi_B, TWOPI/real(nper_gpu, dp))
 
         x_eval(1) = rho_tor
         x_eval(2) = theta_wrapped
@@ -282,7 +300,7 @@ contains
             d2Bmod_B(6) = d2qua_dp2
 
             ! Extract B_r (quantity 2, if present)
-            if (use_B_r) then
+            if (use_B_r_gpu) then
                 qua = y_eval(2)
                 dqua_dr = dy_eval(1, 2)
                 dqua_dt = dy_eval(2, 2)
@@ -340,7 +358,7 @@ contains
                 d2Bmod_B(1) = d2y_eval(1, 1)*drhods2 - dy_eval(1, 1)*d2rhods2m
             end if
 
-            if (use_B_r) then
+            if (use_B_r_gpu) then
                 qua = y_eval(2)
                 dqua_dr = dy_eval(1, 2)
                 dqua_dt = dy_eval(2, 2)
@@ -367,10 +385,6 @@ contains
         end if
 
         ! Interpolation of B_\vartheta and B_\varphi (flux functions)
-        if (.not. bcovar_tp_batch_spline_ready) then
-            error stop "splint_boozer_coord: Bcovar_tp batch spline not initialized"
-        end if
-
         call evaluate_batch_splines_1d_der2(bcovar_tp_batch_spline, rho_tor, y1d, &
                                             dy1d, d2y1d)
         B_vartheta_B = y1d(1)

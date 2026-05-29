@@ -144,6 +144,17 @@ contains
             call print_phase_time('Restart data loaded')
         end if
 
+        block
+            character(32) :: gpu_bench_env
+            integer :: gpu_bench_len, gpu_bench_stat
+            call get_environment_variable('SIMPLE_GPU_BENCH', gpu_bench_env, &
+                                          gpu_bench_len, gpu_bench_stat)
+            if (gpu_bench_stat == 0 .and. gpu_bench_len > 0) then
+                call trace_compare_gpu(norb)
+                return
+            end if
+        end block
+
         call diag_counters_init
         call progress_init(checkpoint_interval, ntestpart, write_results)
         call trace_parallel(norb)
@@ -435,6 +446,91 @@ contains
             call close_orbit_netcdf()
         end if
     end subroutine trace_parallel
+
+    subroutine trace_compare_gpu(norb)
+        ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
+        ! symplectic integrator on identical per-particle initial states for the
+        ! default Boozer + explicit-implicit Euler configuration. Triggered by
+        ! the SIMPLE_GPU_BENCH environment variable.
+        use orbit_symplectic, only: orbit_timestep_sympl
+        use orbit_symplectic_base, only: symplectic_integrator_t
+        use field_can_mod, only: field_can_t
+        use boozer_sub, only: sync_boozer_gpu_params
+        use simple_gpu, only: trace_orbits_gpu
+
+        type(tracer_t), intent(inout) :: norb
+
+        type(symplectic_integrator_t), allocatable :: si_cpu(:), si_gpu(:)
+        type(field_can_t), allocatable :: f_cpu(:), f_gpu(:)
+        integer, allocatable :: cpu_loss(:), gpu_loss(:)
+        real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
+        real(dp) :: z(5)
+        integer :: i, it, ktau, ierr, loss_mismatch
+        real(dp) :: t0, t1, t_cpu, t_gpu, maxz
+
+        allocate (si_cpu(ntestpart), si_gpu(ntestpart))
+        allocate (f_cpu(ntestpart), f_gpu(ntestpart))
+        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart))
+        allocate (cpu_zend(4, ntestpart), gpu_zend(4, ntestpart))
+
+        ! Identical per-particle initialisation (host). init_sympl sets the
+        ! orbit_timestep_sympl procedure pointer for the CPU reference.
+        do i = 1, ntestpart
+            call ref_to_integ(zstart(1:3, i), z(1:3))
+            z(4:5) = zstart(4:5, i)
+            call init_sympl(si_cpu(i), f_cpu(i), z, dtaumin, dtaumin, relerr, integmode)
+            si_gpu(i) = si_cpu(i)
+            f_gpu(i) = f_cpu(i)
+        end do
+
+        call sync_boozer_gpu_params
+
+        ! CPU reference (OpenMP over particles)
+        t0 = omp_get_wtime()
+        !$omp parallel do private(i, it, ktau, ierr) schedule(dynamic)
+        do i = 1, ntestpart
+            ierr = 0
+            cpu_loss(i) = ntimstep
+            do it = 2, ntimstep
+                do ktau = 1, ntau_macro(it)
+                    call orbit_timestep_sympl(si_cpu(i), f_cpu(i), ierr)
+                    if (ierr /= 0) exit
+                end do
+                if (ierr /= 0) then
+                    cpu_loss(i) = it
+                    exit
+                end if
+            end do
+            cpu_zend(:, i) = si_cpu(i)%z(1:4)
+        end do
+        !$omp end parallel do
+        t1 = omp_get_wtime()
+        t_cpu = t1 - t0
+
+        ! GPU kernel
+        t0 = omp_get_wtime()
+        call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
+                              gpu_loss, gpu_zend)
+        t1 = omp_get_wtime()
+        t_gpu = t1 - t0
+
+        ! Compare
+        maxz = 0d0
+        loss_mismatch = 0
+        do i = 1, ntestpart
+            maxz = max(maxz, maxval(dabs(cpu_zend(:, i) - gpu_zend(:, i))))
+            if (cpu_loss(i) /= gpu_loss(i)) loss_mismatch = loss_mismatch + 1
+        end do
+
+        print *, '==================== GPU vs CPU tracing ===================='
+        print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
+        print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
+        print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
+        print '(a,f10.4,a)', ' CPU time (OpenMP) = ', t_cpu, ' s'
+        print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
+        if (t_gpu > 0d0) print '(a,f8.2,a)', ' speedup (CPU/GPU) = ', t_cpu/t_gpu, ' x'
+        print *, '============================================================'
+    end subroutine trace_compare_gpu
 
     subroutine classify_parallel(norb)
         use classification, only: trace_orbit_with_classifiers, classification_result_t

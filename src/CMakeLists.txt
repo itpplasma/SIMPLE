@@ -59,6 +59,7 @@
         restart.f90
         progress_monitor.f90
         timing.f90
+        simple_gpu.f90
         simple_main.f90
         simple_entry.f90
     )
