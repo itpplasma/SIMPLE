@@ -93,7 +93,7 @@ contains
         torflux_gpu = torflux
         nper_gpu = nper
         use_B_r_gpu = use_B_r
-        !$acc update device(torflux_gpu, nper_gpu, use_B_r_gpu, aphi_over_rho)
+        !$acc update device(torflux_gpu, nper_gpu, use_B_r_gpu, bmod_br_num_quantities, aphi_over_rho)
     end subroutine sync_boozer_gpu_params
 
     !> Initialize Boozer coordinates using given magnetic field
@@ -1361,6 +1361,11 @@ contains
         bmod_br_batch_spline_ready = .true.
         bmod_br_num_quantities = nq
         deallocate (y_batch)
+
+        ! All scalar field parameters are final once the Bmod/B_r spline is
+        ! built; refresh the device-accessible mirrors used by splint_boozer_coord
+        ! (also keeps the host CPU path correct, since splint now reads them).
+        call sync_boozer_gpu_params
     end subroutine build_boozer_bmod_br_batch_spline
 
     subroutine build_boozer_delt_delp_batch_splines
