@@ -175,8 +175,15 @@ contains
         end if
 
         if (aphi_over_rho) then
+            ! A_phi(rho) -> s-derivatives by the chain rule for rho = sqrt(s):
+            !   rho'   = 1/(2 rho)              [drds]
+            !   rho''  = -1/(4 rho^3)           [-d2rds2m]
+            !   rho''' = 3/(8 rho^5)            [d3rds3]
+            ! f'  = g' rho'
+            ! f'' = g'' rho'^2 + g' rho''
+            ! f'''= g''' rho'^3 + 3 g'' rho' rho'' + g' rho'''
             block
-                real(dp) :: rho_a, drds, drds2, d2rds2m, d3y1d(1)
+                real(dp) :: rho_a, drds, drds2, d2rds2m, drds3, d3rds3, d3y1d(1)
                 rho_a = sqrt(r_eval)
                 drds = 0.5_dp/rho_a
                 drds2 = drds**2
@@ -185,14 +192,19 @@ contains
                     call evaluate_batch_splines_1d_der3(aphi_batch_spline, rho_a, &
                                                         y1d(1:1), dy1d(1:1), &
                                                         d2y1d(1:1), d3y1d)
+                    drds3 = drds*drds2  ! (drho/ds)^3 = 1/(8 rho^3)
+                    d3rds3 = 3.0_dp/(8.0_dp*rho_a**5)  ! d3rho/ds3
+                    d3A_phi_dr3 = d3y1d(1)*drds3 &
+                                  - 3.0_dp*d2y1d(1)*drds*d2rds2m &
+                                  + dy1d(1)*d3rds3
                 else
                     call evaluate_batch_splines_1d_der2(aphi_batch_spline, rho_a, &
                                                         y1d(1:1), dy1d(1:1), d2y1d(1:1))
+                    d3A_phi_dr3 = 0.0_dp
                 end if
                 A_phi = y1d(1)
                 dA_phi_dr = dy1d(1)*drds
                 d2A_phi_dr2 = d2y1d(1)*drds2 - dy1d(1)*d2rds2m
-                d3A_phi_dr3 = 0.0_dp  ! unused by the symplectic Boozer path
             end block
         else
             if (mode_secders > 0) then

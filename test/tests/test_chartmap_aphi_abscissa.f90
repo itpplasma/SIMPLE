@@ -30,8 +30,10 @@ program test_chartmap_aphi_abscissa
     real(dp) :: A_theta, A_phi, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3
     real(dp) :: B_vth, dB_vth, d2B_vth, B_vph, dB_vph, d2B_vph
     real(dp) :: Bmod, dBmod(3), d2Bmod(6), B_r, dB_r(3), d2B_r(6)
-    real(dp) :: aphi_ref, daphi_ds_ref, err_val, err_der
+    real(dp) :: aphi_ref, daphi_ds_ref, d2_ref, d3_ref, err_val, err_der
+    real(dp) :: err_d2, err_d3, gp, gpp, gppp, rr
     real(dp), parameter :: tol_val = 1.0e-4_dp, tol_der = 5.0e-3_dp
+    real(dp), parameter :: tol_d2 = 1.0e-2_dp, tol_d3 = 5.0e-2_dp
 
     rho_min = 0.05_dp
     do i = 1, n_rho
@@ -55,15 +57,26 @@ program test_chartmap_aphi_abscissa
                                  B_vph, dB_vph, d2B_vph, &
                                  Bmod, dBmod, d2Bmod, B_r, dB_r, d2B_r)
 
-        aphi_ref = aphi_profile(rho_eval)
-        ! dA_phi/ds = (dA_phi/drho)/(2 rho)
-        daphi_ds_ref = aphi_amp*aphi_freq*cos(aphi_freq*rho_eval)/(2.0_dp*rho_eval)
+        ! Analytic A_phi(rho) = amp sin(freq rho), with rho = sqrt(s).
+        ! g' , g'' , g''' are d/drho; the s-derivatives use the chain rule.
+        rr = rho_eval
+        gp = aphi_amp*aphi_freq*cos(aphi_freq*rr)
+        gpp = -aphi_amp*aphi_freq**2*sin(aphi_freq*rr)
+        gppp = -aphi_amp*aphi_freq**3*cos(aphi_freq*rr)
+        aphi_ref = aphi_profile(rr)
+        daphi_ds_ref = gp/(2.0_dp*rr)
+        d2_ref = gpp/(4.0_dp*rr**2) - gp/(4.0_dp*rr**3)
+        d3_ref = gppp/(8.0_dp*rr**3) - 3.0_dp*gpp/(8.0_dp*rr**4) &
+                 + 3.0_dp*gp/(8.0_dp*rr**5)
 
         err_val = abs(A_phi - aphi_ref)
         err_der = abs(dA_phi_dr - daphi_ds_ref)/max(abs(daphi_ds_ref), 1.0_dp)
+        err_d2 = abs(d2A_phi_dr2 - d2_ref)/max(abs(d2_ref), 1.0_dp)
+        err_d3 = abs(d3A_phi_dr3 - d3_ref)/max(abs(d3_ref), 1.0_dp)
 
-        write (*, '(a,f6.3,a,es12.4,a,es12.4)') &
-            'rho=', rho_eval, '  |dA_phi|err=', err_val, '  rel d/ds err=', err_der
+        write (*, '(a,f6.3,4(a,es11.3))') &
+            'rho=', rr, '  Aphi err=', err_val, '  d/ds=', err_der, &
+            '  d2/ds2=', err_d2, '  d3/ds3=', err_d3
         if (err_val > tol_val) then
             write (*, '(a,es12.4,a,es12.4)') '  FAIL A_phi value: got ', A_phi, &
                 ' expected ', aphi_ref
@@ -72,6 +85,16 @@ program test_chartmap_aphi_abscissa
         if (err_der > tol_der) then
             write (*, '(a,es12.4,a,es12.4)') '  FAIL dA_phi/ds: got ', dA_phi_dr, &
                 ' expected ', daphi_ds_ref
+            n_fail = n_fail + 1
+        end if
+        if (err_d2 > tol_d2) then
+            write (*, '(a,es12.4,a,es12.4)') '  FAIL d2A_phi/ds2: got ', d2A_phi_dr2, &
+                ' expected ', d2_ref
+            n_fail = n_fail + 1
+        end if
+        if (err_d3 > tol_d3) then
+            write (*, '(a,es12.4,a,es12.4)') '  FAIL d3A_phi/ds3: got ', d3A_phi_dr3, &
+                ' expected ', d3_ref
             n_fail = n_fail + 1
         end if
     end do
