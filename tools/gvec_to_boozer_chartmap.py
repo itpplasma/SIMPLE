@@ -36,6 +36,10 @@ def main():
     parser.add_argument("--nrho", type=int, default=50)
     parser.add_argument("--ntheta", type=int, default=36)
     parser.add_argument("--nphi", type=int, default=81)
+    parser.add_argument("--boozer-factor", type=int, default=2)
+    parser.add_argument("--Aphi-coord", choices=["rho", "rho2"], default="rho2", help="Coordinate for A_phi: rho or rho^2")
+    parser.add_argument("--Bcov", choices=["avg", "boozer-avg", "boozer-0"], default="avg", help="Method for computing B_theta and B_phi surface functions.")
+    parser.add_argument("--xyz-in-logical", action="store_true", help="Output XYZ in terms of the logical zeta, instead of the boozer-zeta.")
     args = parser.parse_args()
 
     print(f"Loading GVEC state: {args.paramfile} + {args.statefile}")
@@ -60,57 +64,60 @@ def main():
     zeta_field = np.linspace(0, phi_period, n_phi_field)
 
     # Evaluate field quantities in Boozer coordinates (endpoint-included grid)
-    print(f"Evaluating field on {n_rho} x {n_theta_field} x {n_phi_field}...")
-    ev = gvec.EvaluationsBoozer(
-        rho=rho_grid, theta_B=theta_field, zeta_B=zeta_field, state=state, MNfactor=3)
-    gvec.compute(ev, 'mod_B', state=state)
-    gvec.compute(ev, 'B_theta_B', state=state)
-    gvec.compute(ev, 'B_zeta_B', state=state)
-    gvec.compute(ev, 'iota', state=state)
-
-    ev = ev.transpose('rad', 'pol', 'tor', 'xyz')
+    print(f"Evaluating field & geometry on {n_rho} x {n_theta_field} x {n_phi_field}...")
+    ev = state.evaluate_sfl(
+        "mod_B", "B_theta_B", "B_zeta_B", "chi", "Phi_edge", "pos",
+        rho=rho_grid,
+        theta=theta_field,
+        zeta=zeta_field,
+        sfl="boozer",
+        MNfactor=args.boozer_factor,
+    )
+    ev = ev.transpose("xyz", 'rad', 'pol', 'tor')
+    ev_geom = ev.isel(pol=slice(0, -1), tor=slice(0, -1))  # Exclude endpoints
+    ev_s = state.evaluate("chi", rho=np.sqrt(rho_grid))
 
     Bmod_3d = ev['mod_B'].values   # (n_rho, n_theta_field, n_phi_field)
-    B_theta_3d = ev['B_theta_B'].values
-    B_phi_3d = ev['B_zeta_B'].values
-    iota_vals = ev['iota'].values
     # Surface functions: (should be constant)
-    if B_theta_3d.ndim == 3:
-        B_theta = B_theta_3d[:, 0, 0]
-        B_phi = B_phi_3d[:, 0, 0]
+    if args.Bcov == "avg":
+        ev_Bcov = state.evaluate("B_theta_avg", "B_zeta_avg", rho=rho_grid)
+        B_theta = ev_Bcov["B_theta_avg"].values
+        B_phi = ev_Bcov["B_zeta_avg"].values
+    elif args.Bcov == "boozer-avg":
+        B_theta = ev_geom['B_theta_B'].mean(["pol", "tor"]).values
+        B_phi = ev_geom['B_zeta_B'].mean(["pol", "tor"]).values
+    elif args.Bcov == "boozer-0":
+        B_theta = ev_geom['B_theta_B'].values[:, 0, 0]
+        B_phi = ev_geom['B_zeta_B'].values[:, 0, 0]
     else:
-        B_theta = B_theta_3d
-        B_phi = B_phi_3d
-    iota_prof = iota_vals.ravel()[:n_rho] if iota_vals.ndim > 1 else iota_vals
-    s_grid = rho_grid**2
+        raise ValueError(f"Invalid Bcov option: {args.Bcov}")
+
+    if args.Aphi_coord == "rho":
+        A_phi = -ev_s['chi'].values
+    elif args.Aphi_coord == "rho2":
+        A_phi = -ev["chi"].values
+    else:
+        raise ValueError(f"Invalid Aphi-coord option: {args.Aphi_coord}")
 
     # Toroidal flux: Phi_edge from evaluations
-    ev_edge = gvec.Evaluations(rho=np.array([1.0]),
-                                theta=np.array([0.0]),
-                                zeta=np.array([0.0]), state=state)
-    gvec.compute(ev_edge, 'Phi_edge', state=state)
     # GVEC Phi_edge is already Phi/(2*pi) in SI (Wb/(2*pi) = T*m^2/(2*pi))
-    torflux_SI = float(ev_edge['Phi_edge'].values.flat[0])
+    torflux_SI = float(ev['Phi_edge'].item())
 
     # CGS conversion (GVEC: SI, SIMPLE: CGS)
     Bmod_3d = Bmod_3d * 1e4         # T -> G
     B_theta = B_theta * 1e4 * 1e2   # T*m -> G*cm
     B_phi = B_phi * 1e4 * 1e2
     torflux = torflux_SI * 1e8       # T*m^2/(2pi) -> G*cm^2
+    A_phi = A_phi * 1e8              # T*m^2 -> G*cm^2
 
-    # A_phi: integrate -torflux * iota over s
-    A_phi = np.zeros(n_rho)
-    for i in range(1, n_rho):
-        ds = s_grid[i] - s_grid[i - 1]
-        A_phi[i] = A_phi[i - 1] - torflux * iota_prof[i] * ds
-
-    # Geometry on endpoint-excluded grid (Boozer angles)
-    print(f"Evaluating geometry on {n_rho} x {n_theta_geom} x {n_phi_geom}...")
-    ev_geom = gvec.EvaluationsBoozer(
-        rho=rho_grid, theta_B=theta_geom, zeta_B=zeta_geom, state=state)
-    gvec.compute(ev_geom, 'pos', state=state)
-    pos = ev_geom['pos'].values  # (3, n_rho, n_theta_geom, n_phi_geom)
-    # pos[0]=X, pos[1]=Y, pos[2]=Z in meters
+    if args.xyz_in_logical:
+        ev_logical = state.evaluate("pos", rho=rho_grid, theta=theta_geom, zeta=-zeta_geom)
+        ev_logical = ev_logical.transpose("xyz", 'rad', 'pol', 'tor')
+        pos = ev_logical['pos'].values  # (3, n_rho, n_theta_geom, n_phi_geom)
+    else:
+        # Geometry on endpoint-excluded grid (Boozer angles)
+        pos = ev_geom['pos'].values  # (3, n_rho, n_theta_geom, n_phi_geom)
+        # pos[0]=X, pos[1]=Y, pos[2]=Z in meters
 
     X = pos[0] * 1e2  # m -> cm
     Y = pos[1] * 1e2
@@ -146,7 +153,10 @@ def main():
     v = ds.createVariable("num_field_periods", "i4"); v[:] = np.int32(nfp)
 
     ds.rho_convention = "rho_tor"
-    ds.zeta_convention = "boozer"
+    if args.xyz_in_logical:
+        ds.zeta_convention = "cyl"
+    else:
+        ds.zeta_convention = "boozer"
     ds.rho_lcfs = float(rho_grid[-1])
     ds.boozer_field = np.int32(1)
     ds.torflux = torflux
