@@ -78,12 +78,10 @@ contains
         real(dp), allocatable :: rho(:), theta(:), zeta(:)
         real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
         real(dp), allocatable :: Bmod_arr(:, :, :)
-        real(dp), allocatable :: s_grid(:)
         real(dp), allocatable :: y_aphi(:, :), y_bcovar(:, :), y_bmod(:, :, :, :)
-        real(dp) :: s_min, s_max, rho_min, rho_max
+        real(dp) :: rho_min, rho_max
         real(dp) :: h_s, h_theta_val, h_phi_val
         real(dp) :: b_scale, rz_scale, covar_scale, flux_scale
-        integer :: i
         integer, parameter :: spline_order_1d = 5
         integer, parameter :: spline_order_3d(3) = [5, 5, 5]
         logical, parameter :: periodic_3d(3) = [.false., .true., .true.]
@@ -154,21 +152,15 @@ contains
         ! Grid parameters
         rho_min = rho(1)
         rho_max = rho(n_rho)
+        h_s = (rho_max - rho_min) / real(n_rho - 1, dp)  ! uniform rho step
         h_theta_val = theta(2) - theta(1)
         h_phi_val = zeta(2) - zeta(1)
 
-        ! Build A_phi spline over s = rho^2 (matching VMEC/boozer_converter convention)
-        allocate (s_grid(n_rho))
-        do i = 1, n_rho
-            s_grid(i) = rho(i)**2
-        end do
-        s_min = s_grid(1)
-        s_max = s_grid(n_rho)
-        h_s = (s_max - s_min) / real(n_rho - 1, dp)
-
+        ! Build A_phi spline over the file's uniform rho grid, like B_theta/B_phi
+        ! and Bmod. A_phi is a function of rho here; evaluate at rho (see below).
         allocate (y_aphi(n_rho, 1))
         y_aphi(:, 1) = A_phi_arr
-        call construct_batch_splines_1d(s_min, s_max, y_aphi, spline_order_1d, &
+        call construct_batch_splines_1d(rho_min, rho_max, y_aphi, spline_order_1d, &
                                         .false., field%aphi_spline)
 
         ! Build B_theta, B_phi spline over rho_tor
@@ -240,8 +232,8 @@ contains
         ! But A_s = 0 (gauge), so A_rho = 0 regardless.
         A_theta_val = self%torflux * s
 
-        ! A_phi from 1D spline at s
-        call evaluate_batch_splines_1d_der2(self%aphi_spline, s, y1d_aphi, &
+        ! A_phi from 1D spline at rho (tabulated on the file's rho grid)
+        call evaluate_batch_splines_1d_der2(self%aphi_spline, rho_tor, y1d_aphi, &
                                              dy1d_aphi, d2y1d_aphi)
         A_phi_val = y1d_aphi(1)
 

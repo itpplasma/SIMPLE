@@ -363,6 +363,14 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
     set_tests_properties(test_chartmap_metadata PROPERTIES LABELS "unit")
 
+    # Chartmap A_phi radial-abscissa contract (self-contained synthetic chartmap)
+    add_executable(test_chartmap_aphi_abscissa.x test_chartmap_aphi_abscissa.f90)
+    target_link_libraries(test_chartmap_aphi_abscissa.x simple)
+    add_test(NAME test_chartmap_aphi_abscissa COMMAND test_chartmap_aphi_abscissa.x)
+    set_tests_properties(test_chartmap_aphi_abscissa PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "unit")
+
     # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
     add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
     target_link_libraries(generate_test_boozer_chartmap.x netcdf m)

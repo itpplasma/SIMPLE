@@ -39,6 +39,16 @@ module boozer_sub
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
+    ! Radial abscissa of aphi_batch_spline: .false. = uniform s (VMEC-derived
+    ! Boozer), .true. = uniform rho grid (chartmap file). A chartmap tabulates
+    ! every 1D profile against its rho grid, so A_phi is evaluated at rho and
+    ! chain-ruled to s, matching B_theta/B_phi/Bmod.
+    logical, save :: aphi_over_rho = .false.
+    ! Canonical A_phi sampled natively on the Boozer rho grid in
+    ! compute_boozer_data (a flux function, like s_Bcovar_tp_B). export_boozer_chartmap
+    ! writes this directly so the chartmap A_phi shares the rho abscissa of
+    ! B_theta/B_phi -- no resampling of the s-grid A_phi spline.
+    real(dp), allocatable, save :: aphi_rho(:)
 
     ! Batch spline for B_theta, B_phi covariant components
     type(BatchSplineData1D), save :: bcovar_tp_batch_spline
@@ -155,28 +165,54 @@ contains
         A_theta = torflux*r_eval
         dA_theta_dr = torflux
 
-        ! Interpolate A_phi over s (batch spline 1D)
+        ! Interpolate A_phi. VMEC-derived Boozer data is tabulated on a uniform-s
+        ! grid (evaluate at s directly). A chartmap tabulates A_phi on the file's
+        ! uniform rho grid, so evaluate at rho and chain-rule to s, exactly like
+        ! Bmod/B_theta/B_phi below. The chartmap branch uses local chain-rule
+        ! coefficients so the VMEC-s branch keeps its original instruction order.
         if (.not. aphi_batch_spline_ready) then
             error stop "splint_boozer_coord: Aphi batch spline not initialized"
         end if
 
-        if (mode_secders > 0) then
-            ! Need third derivative - use der3 which computes all in one pass
+        if (aphi_over_rho) then
             block
-                real(dp) :: d3y1d(1)
-                call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
-                                                    y1d(1:1), dy1d(1:1), &
-                                                    d2y1d(1:1), d3y1d)
-                d3A_phi_dr3 = d3y1d(1)
+                real(dp) :: rho_a, drds, drds2, d2rds2m, d3y1d(1)
+                rho_a = sqrt(r_eval)
+                drds = 0.5_dp/rho_a
+                drds2 = drds**2
+                d2rds2m = drds2/rho_a  ! -d2rho/ds2
+                if (mode_secders > 0) then
+                    call evaluate_batch_splines_1d_der3(aphi_batch_spline, rho_a, &
+                                                        y1d(1:1), dy1d(1:1), &
+                                                        d2y1d(1:1), d3y1d)
+                else
+                    call evaluate_batch_splines_1d_der2(aphi_batch_spline, rho_a, &
+                                                        y1d(1:1), dy1d(1:1), d2y1d(1:1))
+                end if
+                A_phi = y1d(1)
+                dA_phi_dr = dy1d(1)*drds
+                d2A_phi_dr2 = d2y1d(1)*drds2 - dy1d(1)*d2rds2m
+                d3A_phi_dr3 = 0.0_dp  ! unused by the symplectic Boozer path
             end block
         else
-            call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, y1d(1:1), &
-                                                dy1d(1:1), d2y1d(1:1))
-            d3A_phi_dr3 = 0.0_dp
+            if (mode_secders > 0) then
+                ! Need third derivative - use der3 which computes all in one pass
+                block
+                    real(dp) :: d3y1d(1)
+                    call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
+                                                        y1d(1:1), dy1d(1:1), &
+                                                        d2y1d(1:1), d3y1d)
+                    d3A_phi_dr3 = d3y1d(1)
+                end block
+            else
+                call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, &
+                                                    y1d(1:1), dy1d(1:1), d2y1d(1:1))
+                d3A_phi_dr3 = 0.0_dp
+            end if
+            A_phi = y1d(1)
+            dA_phi_dr = dy1d(1)
+            d2A_phi_dr2 = d2y1d(1)
         end if
-        A_phi = y1d(1)
-        dA_phi_dr = dy1d(1)
-        d2A_phi_dr2 = d2y1d(1)
 
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r_eval)
@@ -529,6 +565,8 @@ contains
         G00 = 0.0_dp
 
         allocate (rho_tor(ns_B))
+        if (allocated(aphi_rho)) deallocate (aphi_rho)
+        allocate (aphi_rho(ns_B))
         allocate (aiota_arr(1))
         allocate (Gfunc(1, 1, 1))
         allocate (Bcovar_symfl(1, 1, 1, 1))
@@ -643,6 +681,9 @@ contains
             Bcovar_varphi_B = sum(Bcovar_varphi_V(2:n_theta_B, 2:n_phi_B))/gridcellnum
             s_Bcovar_tp_B(1, 1, i_rho) = Bcovar_vartheta_B
             s_Bcovar_tp_B(2, 1, i_rho) = Bcovar_varphi_B
+            ! A_phi is a flux function; store it natively on the rho grid for
+            ! export_boozer_chartmap (same abscissa as B_theta/B_phi above).
+            aphi_rho(i_rho) = A_phi
 
             denomjac = 1.0_dp/(aiota*Bcovar_vartheta_B + Bcovar_varphi_B)
             Gbeg = G00 + Bcovar_vartheta_B*denomjac*alam_2D(1, 1)
@@ -996,13 +1037,16 @@ contains
         hs = (s_max - s_min) / real(n_rho - 1, dp)
         ns_A = 5
 
-        ! Build A_phi batch spline over s
+        ! Build A_phi batch spline over the file's uniform rho grid. The chartmap
+        ! tabulates A_phi against rho (like B_theta/B_phi/Bmod), so splint_boozer_coord
+        ! evaluates it at rho and chain-rules to s.
         spline_order = ns_A
         allocate (y_aphi(n_rho, 1))
         y_aphi(:, 1) = A_phi_arr
-        call construct_batch_splines_1d(s_min, s_max, y_aphi, spline_order, &
+        call construct_batch_splines_1d(rho(1), rho(n_rho), y_aphi, spline_order, &
                                         .false., aphi_batch_spline)
         aphi_batch_spline_ready = .true.
+        aphi_over_rho = .true.
         deallocate (y_aphi)
 
         ! Build B_theta, B_phi batch spline over rho_tor
@@ -1055,7 +1099,7 @@ contains
         !> to an extended chartmap NetCDF file. Must be called after
         !> get_boozer_coordinates() and while VMEC splines are still active
         !> (needed for X, Y, Z geometry evaluation).
-        use vector_potentail_mod, only: ns, hs, sA_phi, torflux
+        use vector_potentail_mod, only: torflux
         use new_vmec_stuff_mod, only: nper
         use boozer_coordinates_mod, only: ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
@@ -1107,9 +1151,14 @@ contains
             zeta_arr(i_phi) = real(i_phi - 1, dp) * h_phi_B
         end do
 
-        ! Extract 1D profiles
+        ! Extract 1D profiles as genuine functions of the rho grid. A_phi, like
+        ! B_theta/B_phi, was sampled natively on the rho grid in compute_boozer_data,
+        ! so all three share the rho abscissa the loader reads them back on.
+        if (.not. allocated(aphi_rho)) then
+            error stop "export_boozer_chartmap: aphi_rho not populated"
+        end if
         do i_rho = 1, ns_B
-            A_phi_arr(i_rho) = sA_phi(1, i_rho)  ! zeroth spline coeff = value
+            A_phi_arr(i_rho) = aphi_rho(i_rho)
             B_theta_arr(i_rho) = s_Bcovar_tp_B(1, 1, i_rho)
             B_phi_arr(i_rho) = s_Bcovar_tp_B(2, 1, i_rho)
         end do
@@ -1262,6 +1311,7 @@ contains
         aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
 
         aphi_batch_spline_ready = .true.
+        aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
     end subroutine build_boozer_aphi_batch_spline
 
     subroutine build_boozer_bcovar_tp_batch_spline

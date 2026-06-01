@@ -154,6 +154,28 @@ Attributes: num_field_periods, zeta_convention, rho_convention
      Meiss does not require flux coordinates, only a smooth reference mapping
      with non-vanishing toroidal field component in the domain.
 
+#### Extended Boozer chartmap (field profiles)
+
+A chartmap with the global attribute `boozer_field = 1` also carries the
+Boozer field on the `rho` grid: the 1D surface functions `A_phi(rho)`,
+`B_theta(rho)`, `B_phi(rho)` and the 3D `Bmod(rho, theta, zeta)`, plus the
+scalar attribute `torflux`. `field_boozer_chartmap.f90` reads it as a
+`magnetic_field_t`; `load_boozer_from_chartmap` populates the symplectic
+Boozer splines.
+
+The contract: every 1D profile is a function of the file's `rho` grid. The
+reader splines `A_phi`, `B_theta`, `B_phi` over `rho` and converts radial
+derivatives to `s = rho^2` by the chain rule
+(`dF/ds = (dF/drho)/(2 rho)`), the same treatment `Bmod` already gets in
+`splint_boozer_coord`. `A_theta = torflux * s` stays linear in `s`. This
+holds for `rho_convention = rho_tor`, where `rho^2` is the normalized
+toroidal flux. `export_boozer_chartmap` writes `A_phi` sampled natively on
+the rho grid in `compute_boozer_data` (`aphi_rho`), so the exported profile
+shares the abscissa of `B_theta`/`B_phi`. GVEC's exporter
+(`tools/gvec_to_boozer_chartmap.py`) writes the same convention. The
+VMEC-derived direct Boozer path keeps `A_phi` on VMEC's native uniform-`s`
+grid; the `aphi_over_rho` flag selects the abscissa per source.
+
 ### 2.4 Cartesian Coordinates
 
 **Type**: `cartesian_coordinate_system_t`
