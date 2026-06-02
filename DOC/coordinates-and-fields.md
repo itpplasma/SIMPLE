@@ -159,9 +159,26 @@ Attributes: num_field_periods, zeta_convention, rho_convention
 A chartmap with the global attribute `boozer_field = 1` also carries the
 Boozer field on the `rho` grid: the 1D surface functions `A_phi(rho)`,
 `B_theta(rho)`, `B_phi(rho)` and the 3D `Bmod(rho, theta, zeta)`, plus the
-scalar attribute `torflux`. `field_boozer_chartmap.f90` reads it as a
-`magnetic_field_t`; `load_boozer_from_chartmap` populates the symplectic
-Boozer splines.
+scalar attributes `torflux` and `rmajor`. Two consumers read the file:
+`field_boozer_chartmap.f90` builds a `magnetic_field_t`, and
+`load_boozer_from_chartmap` populates the symplectic Boozer splines. Both go
+through one parser, `boozer_chartmap_io.read_boozer_chartmap`, so they cannot
+diverge on grid layout, periodicity, or metadata.
+
+`Bmod` lives on the endpoint-included field grid `theta_field`/`zeta_field`,
+distinct from the endpoint-excluded geometry grid `theta`/`zeta`. The reader
+takes its step sizes from the geometry grid and its node count from the field
+grid, so the periodic spline spans the full `2*pi` (poloidal) and `2*pi/nfp`
+(toroidal) period (`period = (n-1)*h_step`). Reading `Bmod` on the geometry
+grid instead would shorten the period by one cell and shift the interpolated
+`|B|`, including `bmin`/`bmax` and the trapped/passing boundary.
+
+`rmajor` restores `new_vmec_stuff_mod::rmajor` on load, which `stevvo` and
+`params_init` need for `dphi`, `dtaumin`, and `fper` in a VMEC-free chartmap
+run; without it the major radius defaults to 1 m and `dtaumin` comes out
+roughly ten times too small. The chartmap stores the field in base units;
+both readers apply `vmec_B_scale`/`vmec_RZ_scale` on load, matching the VMEC
+path (`vmecin` scales at read time) and `test_chartmap_scaling`.
 
 The contract: every 1D profile is a function of the file's `rho` grid. The
 reader splines `A_phi`, `B_theta`, `B_phi` over `rho` and converts radial

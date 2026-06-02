@@ -19,7 +19,8 @@ module field_boozer_chartmap
                            evaluate_batch_splines_1d_der2, &
                            evaluate_batch_splines_3d, &
                            destroy_batch_splines_1d, destroy_batch_splines_3d
-    use new_vmec_stuff_mod, only: vmec_B_scale, vmec_RZ_scale
+    use new_vmec_stuff_mod, only: vmec_B_scale, vmec_RZ_scale, nper, rmajor
+    use boozer_chartmap_io, only: boozer_chartmap_data_t, read_boozer_chartmap
     use netcdf
     use scaled_chartmap_coordinates, only: wrap_scaled_chartmap_coordinate_system
 
@@ -72,15 +73,9 @@ contains
         character(len=*), intent(in) :: filename
         type(boozer_chartmap_field_t), allocatable, intent(out) :: field
 
-        integer :: ncid, status, dimid, varid
-        integer :: n_rho, n_theta, n_zeta, nfp_file
-        real(dp) :: torflux_val
-        real(dp), allocatable :: rho(:), theta(:), zeta(:)
-        real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
-        real(dp), allocatable :: Bmod_arr(:, :, :)
+        type(boozer_chartmap_data_t) :: d
         real(dp), allocatable :: y_aphi(:, :), y_bcovar(:, :), y_bmod(:, :, :, :)
-        real(dp) :: rho_min, rho_max
-        real(dp) :: h_s, h_theta_val, h_phi_val
+        real(dp) :: torflux_val
         real(dp) :: b_scale, rz_scale, covar_scale, flux_scale
         integer, parameter :: spline_order_1d = 5
         integer, parameter :: spline_order_3d(3) = [5, 5, 5]
@@ -90,106 +85,62 @@ contains
 
         allocate (field)
 
-        ! Open file
-        status = nf90_open(trim(filename), nf90_nowrite, ncid)
-        call check_nc(status, "open " // trim(filename))
-
-        ! Read dimensions
-        call check_nc(nf90_inq_dimid(ncid, "rho", dimid), "inq_dim rho")
-        call check_nc(nf90_inquire_dimension(ncid, dimid, len=n_rho), "get_dim rho")
-        call check_nc(nf90_inq_dimid(ncid, "theta", dimid), "inq_dim theta")
-        call check_nc(nf90_inquire_dimension(ncid, dimid, len=n_theta), "get_dim theta")
-        call check_nc(nf90_inq_dimid(ncid, "zeta", dimid), "inq_dim zeta")
-        call check_nc(nf90_inquire_dimension(ncid, dimid, len=n_zeta), "get_dim zeta")
-
-        ! Read coordinate arrays
-        allocate (rho(n_rho), theta(n_theta), zeta(n_zeta))
-        call check_nc(nf90_inq_varid(ncid, "rho", varid), "inq_var rho")
-        call check_nc(nf90_get_var(ncid, varid, rho), "get_var rho")
-        call check_nc(nf90_inq_varid(ncid, "theta", varid), "inq_var theta")
-        call check_nc(nf90_get_var(ncid, varid, theta), "get_var theta")
-        call check_nc(nf90_inq_varid(ncid, "zeta", varid), "inq_var zeta")
-        call check_nc(nf90_get_var(ncid, varid, zeta), "get_var zeta")
-
-        ! Read scalar attributes and variables
-        call check_nc(nf90_get_att(ncid, nf90_global, "torflux", torflux_val), &
-                       "get_att torflux")
-        call check_nc(nf90_inq_varid(ncid, "num_field_periods", varid), &
-                       "inq_var num_field_periods")
-        call check_nc(nf90_get_var(ncid, varid, nfp_file), &
-                       "get_var num_field_periods")
-
-        ! Read 1D profiles
-        allocate (A_phi_arr(n_rho), B_theta_arr(n_rho), B_phi_arr(n_rho))
-
-        call check_nc(nf90_inq_varid(ncid, "A_phi", varid), "inq_var A_phi")
-        call check_nc(nf90_get_var(ncid, varid, A_phi_arr), "get_var A_phi")
-
-        call check_nc(nf90_inq_varid(ncid, "B_theta", varid), "inq_var B_theta")
-        call check_nc(nf90_get_var(ncid, varid, B_theta_arr), "get_var B_theta")
-
-        call check_nc(nf90_inq_varid(ncid, "B_phi", varid), "inq_var B_phi")
-        call check_nc(nf90_get_var(ncid, varid, B_phi_arr), "get_var B_phi")
-
-        ! Read 3D Bmod (stored as zeta, theta, rho in NetCDF → read into rho, theta, zeta)
-        allocate (Bmod_arr(n_rho, n_theta, n_zeta))
-        call check_nc(nf90_inq_varid(ncid, "Bmod", varid), "inq_var Bmod")
-        call read_3d_reordered(ncid, varid, n_rho, n_theta, n_zeta, Bmod_arr)
-
-        call check_nc(nf90_close(ncid), "close")
+        ! Single shared parse: base-unit arrays on the endpoint-included field grid.
+        call read_boozer_chartmap(filename, d)
 
         b_scale = vmec_B_scale
         rz_scale = vmec_RZ_scale
         covar_scale = b_scale*rz_scale
         flux_scale = covar_scale*rz_scale
 
-        A_phi_arr = flux_scale*A_phi_arr
-        B_theta_arr = covar_scale*B_theta_arr
-        B_phi_arr = covar_scale*B_phi_arr
-        Bmod_arr = b_scale*Bmod_arr
-        torflux_val = flux_scale*torflux_val
-
-        ! Grid parameters
-        rho_min = rho(1)
-        rho_max = rho(n_rho)
-        h_s = (rho_max - rho_min) / real(n_rho - 1, dp)  ! uniform rho step
-        h_theta_val = theta(2) - theta(1)
-        h_phi_val = zeta(2) - zeta(1)
+        d%A_phi = flux_scale*d%A_phi
+        d%B_theta = covar_scale*d%B_theta
+        d%B_phi = covar_scale*d%B_phi
+        d%Bmod = b_scale*d%Bmod
+        torflux_val = flux_scale*d%torflux
 
         ! Build A_phi spline over the file's uniform rho grid, like B_theta/B_phi
         ! and Bmod. A_phi is a function of rho here; evaluate at rho (see below).
-        allocate (y_aphi(n_rho, 1))
-        y_aphi(:, 1) = A_phi_arr
-        call construct_batch_splines_1d(rho_min, rho_max, y_aphi, spline_order_1d, &
+        allocate (y_aphi(d%n_rho, 1))
+        y_aphi(:, 1) = d%A_phi
+        call construct_batch_splines_1d(d%rho_min, d%rho_max, y_aphi, spline_order_1d, &
                                         .false., field%aphi_spline)
 
         ! Build B_theta, B_phi spline over rho_tor
-        allocate (y_bcovar(n_rho, 2))
-        y_bcovar(:, 1) = B_theta_arr
-        y_bcovar(:, 2) = B_phi_arr
-        call construct_batch_splines_1d(rho_min, rho_max, y_bcovar, spline_order_1d, &
+        allocate (y_bcovar(d%n_rho, 2))
+        y_bcovar(:, 1) = d%B_theta
+        y_bcovar(:, 2) = d%B_phi
+        call construct_batch_splines_1d(d%rho_min, d%rho_max, y_bcovar, spline_order_1d, &
                                         .false., field%bcovar_spline)
 
-        ! Build Bmod 3D spline over (rho_tor, theta_B, phi_B)
-        x_min_3d = [rho_min, theta(1), zeta(1)]
-        x_max_3d = [rho_max, theta(n_theta), zeta(n_zeta)]
+        ! Build Bmod 3D spline over (rho_tor, theta_B, phi_B). The field grid is
+        ! endpoint-included, so x_max spans the full 2*pi and 2*pi/nfp period
+        ! that the periodic spline expects (period = (n-1)*h_step).
+        x_min_3d = [d%rho_min, 0.0_dp, 0.0_dp]
+        x_max_3d = [d%rho_max, real(d%n_theta - 1, dp)*d%h_theta, &
+                    real(d%n_phi - 1, dp)*d%h_phi]
 
-        allocate (y_bmod(n_rho, n_theta, n_zeta, 1))
-        y_bmod(:, :, :, 1) = Bmod_arr
+        allocate (y_bmod(d%n_rho, d%n_theta, d%n_phi, 1))
+        y_bmod(:, :, :, 1) = d%Bmod
         call construct_batch_splines_3d(x_min_3d, x_max_3d, y_bmod, &
                                         spline_order_3d, periodic_3d, &
                                         field%bmod_spline)
 
         ! Store metadata
         field%torflux = torflux_val
-        field%nfp = nfp_file
-        field%ns = n_rho
-        field%ntheta = n_theta
-        field%nphi = n_zeta
-        field%hs = h_s
-        field%h_theta = h_theta_val
-        field%h_phi = h_phi_val
+        field%nfp = d%nfp
+        field%ns = d%n_rho
+        field%ntheta = d%n_theta
+        field%nphi = d%n_phi
+        field%hs = d%h_s
+        field%h_theta = d%h_theta
+        field%h_phi = d%h_phi
         field%filename = filename
+
+        ! Restore equilibrium periods/major radius so stevvo and params_init
+        ! produce the correct dphi/dtaumin/fper for a VMEC-free chartmap run.
+        nper = d%nfp
+        if (d%has_rmajor) rmajor = d%rmajor*rz_scale
 
         ! Set up coordinate system from the same chartmap file
         call make_chartmap_coordinate_system(cs, filename)
@@ -199,8 +150,8 @@ contains
         field%initialized = .true.
 
         print *, 'Loaded Boozer chartmap field from ', trim(filename)
-        print *, '  nfp=', nfp_file, ' ns=', n_rho, ' ntheta=', n_theta, &
-                 ' nphi=', n_zeta
+        print *, '  nfp=', d%nfp, ' ns=', d%n_rho, ' ntheta=', d%n_theta, &
+                 ' nphi=', d%n_phi
         print *, '  torflux=', torflux_val
     end subroutine create_boozer_chartmap_field
 
@@ -282,26 +233,5 @@ contains
             self%initialized = .false.
         end if
     end subroutine boozer_chartmap_cleanup
-
-    subroutine read_3d_reordered(ncid, varid, n1, n2, n3, arr)
-        !> Read a NetCDF variable with dims (zeta, theta, rho) into Fortran
-        !> array (n1=rho, n2=theta, n3=zeta). NF90 reverses dimension order
-        !> so the data lands directly in (rho, theta, zeta) layout.
-        integer, intent(in) :: ncid, varid, n1, n2, n3
-        real(dp), intent(out) :: arr(n1, n2, n3)
-
-        call check_nc(nf90_get_var(ncid, varid, arr), "get_var 3D")
-    end subroutine read_3d_reordered
-
-    subroutine check_nc(status, location)
-        integer, intent(in) :: status
-        character(len=*), intent(in) :: location
-
-        if (status /= nf90_noerr) then
-            print *, "NetCDF error at ", trim(location), ": ", &
-                trim(nf90_strerror(status))
-            error stop "NetCDF operation failed"
-        end if
-    end subroutine check_nc
 
 end module field_boozer_chartmap

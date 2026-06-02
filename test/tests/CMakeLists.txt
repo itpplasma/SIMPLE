@@ -367,6 +367,13 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_executable(test_chartmap_aphi_abscissa.x test_chartmap_aphi_abscissa.f90)
     target_link_libraries(test_chartmap_aphi_abscissa.x simple)
     add_test(NAME test_chartmap_aphi_abscissa COMMAND test_chartmap_aphi_abscissa.x)
+
+    # Shared chartmap reader: field-grid dims, periodic spans, rmajor (synthetic)
+    add_executable(test_boozer_chartmap_io.x test_boozer_chartmap_io.f90)
+    target_link_libraries(test_boozer_chartmap_io.x simple)
+    add_test(NAME test_boozer_chartmap_io COMMAND test_boozer_chartmap_io.x)
+    set_tests_properties(test_boozer_chartmap_io PROPERTIES LABELS "unit"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_chartmap_aphi_abscissa PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
@@ -425,6 +432,15 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
     target_link_libraries(export_boozer_chartmap_tool.x simple)
+
+    # Regression: physical |B| extrema must match between VMEC and Boozer
+    add_executable(test_boozer_vmec_bfield_match.x test_boozer_vmec_bfield_match.f90)
+    target_link_libraries(test_boozer_vmec_bfield_match.x simple)
+    add_test(NAME test_boozer_vmec_bfield_match
+        COMMAND test_boozer_vmec_bfield_match.x wout.nc)
+    set_tests_properties(test_boozer_vmec_bfield_match PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow")
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
