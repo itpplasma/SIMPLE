@@ -6,13 +6,18 @@ Reads orbit_chartmap_comparison.nc and creates 3D trajectory plots
 comparing all four integration paths in Cartesian coordinates.
 """
 
-import numpy as np
-import matplotlib
-matplotlib.use("Agg", force=True)
-import matplotlib.pyplot as plt
-import netCDF4 as nc
 import sys
 from pathlib import Path
+
+try:
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    import netCDF4 as nc
+except ImportError as e:
+    print(f"Skipping plot test: {e}")
+    sys.exit(0)
 
 
 def load_data(filename):

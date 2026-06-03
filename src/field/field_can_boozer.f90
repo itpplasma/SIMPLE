@@ -74,6 +74,12 @@ contains
         ! and stores results in variable f
         ! Works for A_th linear in r (toroidal flux as radial variable)
         !
+        ! Sign convention: A_theta = torflux*r is the toroidal flux psi_tor (on the
+        ! poloidal covariant component), with torflux = -phi_vmec/(2*pi) > 0 since
+        ! VMEC is left-handed (signgs = -1). A_phi = -chi is the toroidal covariant
+        ! component carrying the poloidal flux. See libneo spline_vmec_data /
+        ! vmecinm_m and gvec_simple/CONVENTIONS.md.
+        !
         ! mode_secders = 0: no second derivatives
         ! mode_secders = 1: second derivatives only in d/dr^2
         ! mode_secders = 2: all second derivatives, including mixed

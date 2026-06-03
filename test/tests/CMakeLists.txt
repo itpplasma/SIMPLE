@@ -708,7 +708,11 @@ endif()
 
 # Create golden record regression tests comparing against main branch
 # These tests enforce strict numerical reproducibility - any change in output
-# must be manually reviewed before merging to main
+# must be manually reviewed before merging to main.
+#
+# The GOLDEN_RECORD_SKIP_CASES env var is still honored by
+# compare_golden_results.sh for future intentional-divergence bug fixes;
+# pass it through ENVIRONMENT when needed.
 foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     add_test(
         NAME golden_record_${CASE}

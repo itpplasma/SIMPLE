@@ -1,24 +1,23 @@
-# Example for plotting classification over radius s and perpendicular invariant Jperp
+# Classification example reproducing JPP 2023 paper results
+# (Albert, Buchholz, Kasilov, Kernbichler, Rath, J. Plasma Phys. 89, 955890301)
+#
+# Configurations: QI (Drevlak 2014), QH (Drevlak 2018), QA (Henneberg 2019)
+#
+# Targets:
+#   make run    - run all 12 cases under /tmp/simple_classification
+#   make plot   - generate all paper-style plots from results
+#   make clean  - remove /tmp results
 
-FC = gfortran
-FFLAGS = -g -fbacktrace
+SIMPLE_X = ../../build/simple.x
+BASE_DIR = /tmp/simple_classification
 
 all: plot
 
-plot: prompt1.dat regular1.dat stochastic1.dat prompt2.dat regular2.dat stochastic2.dat plot_classification.py
-	python plot_classification.py
+run: $(SIMPLE_X)
+	bash run_all.sh
 
-prompt1.dat regular1.dat stochastic1.dat prompt2.dat regular2.dat stochastic2.dat: class_parts.dat postprocess_class.x
-	./postprocess_class.x
-
-class_parts.dat: simple.in wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc
-	../../build/simple.x
-
-wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc:
-	wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc
-
-postprocess_class.x: postprocess_class.f90
-	$(FC) $(FFLAGS) -o postprocess_class.x postprocess_class.f90
+plot:
+	source ../../.venv/bin/activate && python plot_paper_results.py $(BASE_DIR)
 
 clean:
-	rm -f *.x *.dat fort.* *.pdf
+	rm -rf $(BASE_DIR)
