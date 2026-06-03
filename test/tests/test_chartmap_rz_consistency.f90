@@ -24,7 +24,7 @@ program test_chartmap_rz_consistency
     integer :: nerrors
     real(dp) :: dummy
 
-    real(dp), parameter :: TOL_RZ = 1.0e-4_dp  ! 0.1 mm tolerance for R,Z matching
+    real(dp), parameter :: TOL_RZ = 1.0e-8_dp
 
     character(len=*), parameter :: VMEC_FILE = 'wout_ncsx.nc'
     character(len=*), parameter :: CHARTMAP_FILE = 'wout_ncsx.chartmap.nc'
@@ -352,8 +352,8 @@ contains
 
         print *, '  Max closest-point distance: ', max_min_dist, ' m'
 
-        if (max_min_dist > 0.02_dp) then
-            print *, '  FAIL: Boundary mismatch exceeds 2 cm tolerance'
+        if (max_min_dist > 0.015_dp) then
+            print *, '  FAIL: Boundary mismatch exceeds 1.5 cm tolerance'
             nerrors = nerrors + 1
         else
             print *, '  PASSED'

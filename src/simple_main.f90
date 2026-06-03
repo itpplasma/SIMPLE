@@ -106,7 +106,7 @@ contains
             call init_starting_surf
             call print_phase_time('Starting surface initialization completed')
 
-            call sample_particles
+            call sample_particles(.true.)
             call print_phase_time('Particle sampling completed')
         else
             call init_magfie(VMEC)
@@ -475,14 +475,27 @@ contains
         end if
     end subroutine init_collisions
 
-    subroutine sample_particles
-        use samplers, only: sample, START_FILE
+    subroutine sample_particles(xstart_is_integ_coords)
+        use samplers, only: sample, START_FILE, sample_grid, &
+                            sample_surface_fieldline, sample_surface_fieldline_from_integ
+
+        logical, intent(in), optional :: xstart_is_integ_coords
+        logical :: convert_surface_starts
+
+        convert_surface_starts = .false.
+        if (present(xstart_is_integ_coords)) then
+            convert_surface_starts = xstart_is_integ_coords
+        end if
 
         if (1 == startmode) then
             if ((0d0 < grid_density) .and. (1d0 > grid_density)) then
-                call sample(zstart, grid_density)
+                call sample_grid(zstart, grid_density, convert_surface_starts)
             else
-                call sample(zstart)
+                if (convert_surface_starts) then
+                    call sample_surface_fieldline_from_integ(zstart)
+                else
+                    call sample_surface_fieldline(zstart)
+                end if
             end if
 
         elseif (2 == startmode) then

@@ -1,8 +1,7 @@
 # Coordinate Systems and Magnetic Fields in SIMPLE
 
-This document provides comprehensive documentation of the coordinate systems,
-magnetic field representations, and their interactions in SIMPLE. It covers
-the complete architecture from abstract interfaces to concrete implementations.
+SIMPLE uses layered coordinate systems and magnetic field representations.
+This note describes their interfaces, file formats, and runtime paths.
 
 **IMPORTANT**: This document must be revised whenever coordinates or fields
 are changed or refactored. See CLAUDE.md for the maintenance requirement.
@@ -156,42 +155,14 @@ Attributes: num_field_periods, zeta_convention, rho_convention
 
 #### Extended Boozer chartmap (field profiles)
 
-A chartmap with the global attribute `boozer_field = 1` also carries the
-Boozer field on the `rho` grid: the 1D surface functions `A_phi(rho)`,
-`B_theta(rho)`, `B_phi(rho)` and the 3D `Bmod(rho, theta, zeta)`, plus the
-scalar attributes `torflux` and `rmajor`. Two consumers read the file:
-`field_boozer_chartmap.f90` builds a `magnetic_field_t`, and
-`load_boozer_from_chartmap` populates the symplectic Boozer splines. Both go
-through one parser, `boozer_chartmap_io.read_boozer_chartmap`, so they cannot
-diverge on grid layout, periodicity, or metadata.
-
-`Bmod` lives on the endpoint-included field grid `theta_field`/`zeta_field`,
-distinct from the endpoint-excluded geometry grid `theta`/`zeta`. The reader
-takes its step sizes from the geometry grid and its node count from the field
-grid, so the periodic spline spans the full `2*pi` (poloidal) and `2*pi/nfp`
-(toroidal) period (`period = (n-1)*h_step`). Reading `Bmod` on the geometry
-grid instead would shorten the period by one cell and shift the interpolated
-`|B|`, including `bmin`/`bmax` and the trapped/passing boundary.
-
-`rmajor` restores `new_vmec_stuff_mod::rmajor` on load, which `stevvo` and
-`params_init` need for `dphi`, `dtaumin`, and `fper` in a VMEC-free chartmap
-run; without it the major radius defaults to 1 m and `dtaumin` comes out
-roughly ten times too small. The chartmap stores the field in base units;
-both readers apply `vmec_B_scale`/`vmec_RZ_scale` on load, matching the VMEC
-path (`vmecin` scales at read time) and `test_chartmap_scaling`.
-
-The contract: every 1D profile is a function of the file's `rho` grid. The
-reader splines `A_phi`, `B_theta`, `B_phi` over `rho` and converts radial
-derivatives to `s = rho^2` by the chain rule
-(`dF/ds = (dF/drho)/(2 rho)`), the same treatment `Bmod` already gets in
-`splint_boozer_coord`. `A_theta = torflux * s` stays linear in `s`. This
-holds for `rho_convention = rho_tor`, where `rho^2` is the normalized
-toroidal flux. `export_boozer_chartmap` writes `A_phi` sampled natively on
-the rho grid in `compute_boozer_data` (`aphi_rho`), so the exported profile
-shares the abscissa of `B_theta`/`B_phi`. GVEC's exporter
-(`tools/gvec_to_boozer_chartmap.py`) writes the same convention. The
-VMEC-derived direct Boozer path keeps `A_phi` on VMEC's native uniform-`s`
-grid; the `aphi_over_rho` flag selects the abscissa per source.
+A chartmap with `boozer_field = 1` also stores `A_phi`, `B_theta`, `B_phi`,
+and `Bmod` on the file `rho` grid, plus `torflux` and `rmajor`. `rho_tor`
+means `s = rho^2`. The reader splines all 1D profiles on `rho` and converts
+radial derivatives to `s` by chain rule; `A_theta = torflux*s` stays linear
+in `s`. `Bmod` uses the endpoint-included `theta_field`/`zeta_field` grid,
+while `theta`/`zeta` provide the period steps. Both chartmap consumers use
+`boozer_chartmap_io.read_boozer_chartmap`, so metadata, scaling, and grid
+layout stay shared.
 
 ### 2.4 Cartesian Coordinates
 
@@ -798,8 +769,7 @@ Both chartmap types cover the same physical boundary but differ inside:
 | Axis position | Magnetic axis | Geometric center |
 | rho_convention | rho_tor | unknown |
 
-**Key Insight**: Despite different interior mappings, both give identical
-physics because:
+**Shared physics**: Both mappings give identical physics because:
 1. Particles start at same physical location (via Newton inversion)
 2. B field sampled from VMEC at physical locations
 3. Loss boundary (rho=1) is same physical surface

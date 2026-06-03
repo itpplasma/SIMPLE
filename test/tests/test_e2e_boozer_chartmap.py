@@ -196,6 +196,12 @@ def run_single_equilibrium(eq, outdir):
     if max_diff_total > tol:
         print(f"  [{name}] FAIL: total confined differs by {max_diff_total:.6e} > {tol:.6e}")
         return False
+    if max_diff_pass > tol:
+        print(f"  [{name}] FAIL: passing fraction differs by {max_diff_pass:.6e} > {tol:.6e}")
+        return False
+    if max_diff_trap > tol:
+        print(f"  [{name}] FAIL: trapped fraction differs by {max_diff_trap:.6e} > {tol:.6e}")
+        return False
 
     print(f"  [{name}] PASS")
     return True

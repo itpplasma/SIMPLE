@@ -27,9 +27,9 @@ program test_chartmap_pipeline
     integer, parameter :: N_TH_GRID = 16
     real(dp), parameter :: R_MIN = 0.2_dp
     real(dp), parameter :: R_RANGE = 0.5_dp
-    real(dp), parameter :: TOL_ROUNDTRIP = 1.0e-6_dp
-    real(dp), parameter :: TOL_BASIS_REL = 1.0e-3_dp
-    real(dp), parameter :: TOL_TRANSFORM = 1.0e-10_dp
+    real(dp), parameter :: TOL_ROUNDTRIP = 5.0e-9_dp
+    real(dp), parameter :: TOL_BASIS_REL = 5.0e-10_dp
+    real(dp), parameter :: TOL_TRANSFORM = 5.0e-14_dp
     real(dp), parameter :: FD_STEP = 1.0e-6_dp
 
     character(len=*), parameter :: VMEC_FILE = 'wout_ncsx.nc'

@@ -1,18 +1,7 @@
 program test_chartmap_aphi_abscissa
-    !> Unit test for the chartmap radial abscissa contract: every 1D profile in a
-    !> Boozer chartmap file (A_phi, B_theta, B_phi) is a function of the file's
-    !> uniform rho grid. A_phi must therefore be interpolated on rho and
-    !> chain-ruled to s, exactly like B_theta/B_phi/Bmod.
-    !>
-    !> Regression guard for the bug where A_phi was splined on a synthetic
-    !> uniform-s grid: that misplaces A_phi radially (rho is uniform, so s=rho^2
-    !> is not), which corrupts iota = -dA_phi_ds/dA_theta_ds and hence the
-    !> trapped/passing split. We write a synthetic chartmap with a known A_phi(rho)
-    !> that is non-polynomial in s, load it, and check A_phi(rho) and dA_phi/ds
-    !> against the analytic profile at interior points.
-
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use netcdf
+    use boozer_chartmap_io, only: boozer_chartmap_data_t, read_boozer_chartmap
     use boozer_sub, only: load_boozer_from_chartmap, splint_boozer_coord, &
         reset_boozer_batch_splines
     implicit none
@@ -20,8 +9,9 @@ program test_chartmap_aphi_abscissa
     real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
     real(dp), parameter :: aphi_amp = 0.3_dp, aphi_freq = 1.7_dp
     real(dp), parameter :: torflux_val = 1.0_dp
-    integer, parameter :: n_rho = 65, n_theta = 7, n_zeta = 7
-    integer, parameter :: n_theta_field = 9, n_zeta_field = 9
+    real(dp), parameter :: rmajor_val = 7.5_dp
+    integer, parameter :: n_rho = 65, n_theta = 8, n_zeta = 8
+    integer, parameter :: n_theta_field = 9, n_zeta_field = 9, nfp = 2
     character(len=*), parameter :: fname = 'test_aphi_abscissa.nc'
 
     real(dp) :: rho(n_rho)
@@ -32,8 +22,8 @@ program test_chartmap_aphi_abscissa
     real(dp) :: Bmod, dBmod(3), d2Bmod(6), B_r, dB_r(3), d2B_r(6)
     real(dp) :: aphi_ref, daphi_ds_ref, d2_ref, d3_ref, err_val, err_der
     real(dp) :: err_d2, err_d3, gp, gpp, gppp, rr
-    real(dp), parameter :: tol_val = 1.0e-4_dp, tol_der = 5.0e-3_dp
-    real(dp), parameter :: tol_d2 = 1.0e-2_dp, tol_d3 = 5.0e-2_dp
+    real(dp), parameter :: tol_val = 1.0e-13_dp, tol_der = 1.0e-13_dp
+    real(dp), parameter :: tol_d2 = 5.0e-10_dp, tol_d3 = 2.0e-9_dp
 
     rho_min = 0.05_dp
     do i = 1, n_rho
@@ -41,12 +31,11 @@ program test_chartmap_aphi_abscissa
     end do
 
     call write_synthetic_chartmap()
+    call check_reader_contract(n_fail)
 
     call reset_boozer_batch_splines
     call load_boozer_from_chartmap(fname)
 
-    ! Evaluate at interior rho points away from the grid boundary and axis.
-    n_fail = 0
     do i = 8, n_rho - 8, 6
         rho_eval = 0.5_dp*(rho(i) + rho(i + 1))   ! off-node
         s = rho_eval**2
@@ -57,8 +46,6 @@ program test_chartmap_aphi_abscissa
                                  B_vph, dB_vph, d2B_vph, &
                                  Bmod, dBmod, d2Bmod, B_r, dB_r, d2B_r)
 
-        ! Analytic A_phi(rho) = amp sin(freq rho), with rho = sqrt(s).
-        ! g' , g'' , g''' are d/drho; the s-derivatives use the chain rule.
         rr = rho_eval
         gp = aphi_amp*aphi_freq*cos(aphi_freq*rr)
         gpp = -aphi_amp*aphi_freq**2*sin(aphi_freq*rr)
@@ -115,6 +102,57 @@ contains
         a = aphi_amp*sin(aphi_freq*r)
     end function aphi_profile
 
+    pure function bmod_model(ir, it, iz) result(b)
+        integer, intent(in) :: ir, it, iz
+        real(dp) :: b
+        b = 1.0_dp + 0.1_dp*ir + 0.01_dp*it + 0.001_dp*iz
+    end function bmod_model
+
+    subroutine check_reader_contract(n_fail)
+        integer, intent(inout) :: n_fail
+        type(boozer_chartmap_data_t) :: d
+
+        n_fail = 0
+        call read_boozer_chartmap(fname, d)
+        call expect_int(d%n_rho, n_rho, 'n_rho', n_fail)
+        call expect_int(d%n_theta, n_theta_field, 'n_theta field grid', n_fail)
+        call expect_int(d%n_phi, n_zeta_field, 'n_phi field grid', n_fail)
+        call expect_int(d%nfp, nfp, 'nfp', n_fail)
+        call expect_real(d%torflux, torflux_val, 'torflux', n_fail)
+        if (.not. d%has_rmajor) then
+            print *, 'FAIL: missing rmajor attribute'
+            n_fail = n_fail + 1
+        end if
+        call expect_real(d%rmajor, rmajor_val, 'rmajor', n_fail)
+        call expect_real(real(d%n_theta - 1, dp)*d%h_theta, twopi, &
+                         'poloidal period', n_fail)
+        call expect_real(real(d%n_phi - 1, dp)*d%h_phi, twopi/real(nfp, dp), &
+                         'toroidal period', n_fail)
+        call expect_real(d%Bmod(2, 3, 4), bmod_model(2, 3, 4), 'Bmod(2,3,4)', n_fail)
+    end subroutine check_reader_contract
+
+    subroutine expect_int(got, want, label, n_fail)
+        integer, intent(in) :: got, want
+        character(len=*), intent(in) :: label
+        integer, intent(inout) :: n_fail
+
+        if (got /= want) then
+            print *, 'FAIL: ', label, ' got ', got, ' want ', want
+            n_fail = n_fail + 1
+        end if
+    end subroutine expect_int
+
+    subroutine expect_real(got, want, label, n_fail)
+        real(dp), intent(in) :: got, want
+        character(len=*), intent(in) :: label
+        integer, intent(inout) :: n_fail
+
+        if (abs(got - want) > 1.0e-12_dp*max(1.0_dp, abs(want))) then
+            print *, 'FAIL: ', label, ' got ', got, ' want ', want
+            n_fail = n_fail + 1
+        end if
+    end subroutine expect_real
+
     subroutine write_synthetic_chartmap()
         integer :: ncid, did_rho, did_th, did_ze, did_thf, did_zef
         integer :: vid_rho, vid_th, vid_ze, vid_aphi, vid_bth, vid_bph
@@ -122,20 +160,26 @@ contains
         real(dp) :: theta(n_theta), zeta(n_zeta)
         real(dp) :: a_phi_arr(n_rho), b_theta_arr(n_rho), b_phi_arr(n_rho)
         real(dp) :: bmod_arr(n_rho, n_theta_field, n_zeta_field)
-        integer :: j
+        integer :: ir, it, iz, j
 
         do j = 1, n_theta
-            theta(j) = real(j - 1, dp)*twopi/real(n_theta, dp)
+            theta(j) = real(j - 1, dp)*twopi/real(n_theta_field - 1, dp)
         end do
         do j = 1, n_zeta
-            zeta(j) = real(j - 1, dp)*twopi/real(n_zeta, dp)
+            zeta(j) = real(j - 1, dp)*twopi/real(nfp*(n_zeta_field - 1), dp)
         end do
         do j = 1, n_rho
             a_phi_arr(j) = aphi_profile(rho(j))
             b_theta_arr(j) = 0.5_dp*rho(j)
             b_phi_arr(j) = 2.0_dp
         end do
-        bmod_arr = 1.0_dp
+        do iz = 1, n_zeta_field
+            do it = 1, n_theta_field
+                do ir = 1, n_rho
+                    bmod_arr(ir, it, iz) = bmod_model(ir, it, iz)
+                end do
+            end do
+        end do
 
         call nc(nf90_create(fname, nf90_clobber, ncid), 'create')
         call nc(nf90_def_dim(ncid, 'rho', n_rho, did_rho), 'dim rho')
@@ -155,6 +199,7 @@ contains
         call nc(nf90_def_var(ncid, 'num_field_periods', nf90_int, vid_nfp), 'var nfp')
 
         call nc(nf90_put_att(ncid, nf90_global, 'torflux', torflux_val), 'att torflux')
+        call nc(nf90_put_att(ncid, nf90_global, 'rmajor', rmajor_val), 'att rmajor')
         call nc(nf90_put_att(ncid, nf90_global, 'boozer_field', 1), 'att boozer')
         call nc(nf90_enddef(ncid), 'enddef')
 
@@ -165,7 +210,7 @@ contains
         call nc(nf90_put_var(ncid, vid_bth, b_theta_arr), 'put bth')
         call nc(nf90_put_var(ncid, vid_bph, b_phi_arr), 'put bph')
         call nc(nf90_put_var(ncid, vid_bmod, bmod_arr), 'put bmod')
-        call nc(nf90_put_var(ncid, vid_nfp, 1), 'put nfp')
+        call nc(nf90_put_var(ncid, vid_nfp, nfp), 'put nfp')
         call nc(nf90_close(ncid), 'close')
     end subroutine write_synthetic_chartmap
 
