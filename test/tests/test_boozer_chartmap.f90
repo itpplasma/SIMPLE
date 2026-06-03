@@ -60,7 +60,7 @@ program test_boozer_chartmap
     end if
 
     ! A_theta = torflux * s = torflux * rho^2 = torflux * 0.25
-    if (abs(Acov(2) - field%torflux * 0.25_dp) > 1.0e-8_dp * abs(Acov(2))) then
+    if (abs(Acov(2) - field%torflux * 0.25_dp) > 1.0e-12_dp * abs(Acov(2))) then
         print *, 'FAIL: Acov(2) =', Acov(2), ' expected', field%torflux * 0.25_dp
         nfail = nfail + 1
     else

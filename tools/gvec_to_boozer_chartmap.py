@@ -122,6 +122,7 @@ def main():
     X = pos[0] * 1e2  # m -> cm
     Y = pos[1] * 1e2
     Z_geom = pos[2] * 1e2
+    rmajor = float(np.mean(np.sqrt(pos[0, 0] ** 2 + pos[1, 0] ** 2)))
 
     # Write NetCDF
     print(f"Writing {args.output}")
@@ -160,9 +161,10 @@ def main():
     ds.rho_lcfs = float(rho_grid[-1])
     ds.boozer_field = np.int32(1)
     ds.torflux = torflux
+    ds.rmajor = rmajor
 
     ds.close()
-    print(f"Done. nfp={nfp}, torflux={torflux:.6e}")
+    print(f"Done. nfp={nfp}, torflux={torflux:.6e}, rmajor={rmajor:.6e}")
 
 
 if __name__ == "__main__":

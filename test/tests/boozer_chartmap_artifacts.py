@@ -23,7 +23,7 @@ def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
+def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> str:
     print(f"[{label}] {' '.join(cmd)}")
     result = subprocess.run(
         cmd,
@@ -34,7 +34,7 @@ def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> None:
         check=False,
     )
     if result.returncode == 0:
-        return
+        return result.stdout
     print(result.stdout[-4000:])
     print(result.stderr[-4000:])
     raise RuntimeError(f"{label} failed with exit code {result.returncode}")

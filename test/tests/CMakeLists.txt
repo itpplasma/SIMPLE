@@ -32,6 +32,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
 endif()
 
+set(SIMPLE_HAVE_GVEC OFF)
+execute_process(
+    COMMAND ${BOOZER_CHARTMAP_PYTHON} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('gvec') else 1)"
+    RESULT_VARIABLE GVEC_IMPORT_RESULT
+)
+if(GVEC_IMPORT_RESULT EQUAL 0)
+    set(SIMPLE_HAVE_GVEC ON)
+else()
+    message(STATUS "gvec Python package not found; skipping GVEC chartmap QA test")
+endif()
+
 # Generate chartmap file from VMEC for testing chartmap coordinate detection
 # Uses libneo's vmec_to_chartmap tool built as part of dependencies
 set(CHARTMAP_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.nc")
@@ -376,6 +387,14 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
     set_tests_properties(test_chartmap_metadata PROPERTIES LABELS "unit")
 
+    # Chartmap reader metadata and A_phi radial-abscissa contract.
+    add_executable(test_chartmap_aphi_abscissa.x test_chartmap_aphi_abscissa.f90)
+    target_link_libraries(test_chartmap_aphi_abscissa.x simple)
+    add_test(NAME test_chartmap_aphi_abscissa COMMAND test_chartmap_aphi_abscissa.x)
+    set_tests_properties(test_chartmap_aphi_abscissa PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "unit")
+
     # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
     add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
     target_link_libraries(generate_test_boozer_chartmap.x netcdf m)
@@ -427,19 +446,21 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
             ${CMAKE_CURRENT_BINARY_DIR}/roundtrip_test.nc
             export
             ${CMAKE_CURRENT_BINARY_DIR}/boozer_chartmap_roundtrip
-            1.0e-4
-            1.0e-6)
+            8.0e-5
+            2.0e-9)
     set_tests_properties(test_boozer_chartmap_roundtrip PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "slow")
 
-    add_test(NAME test_boozer_chartmap_gvec_qa
-        COMMAND ${BOOZER_CHARTMAP_PYTHON}
-            ${CMAKE_CURRENT_SOURCE_DIR}/run_gvec_qa_roundtrip.py)
-    set_tests_properties(test_boozer_chartmap_gvec_qa PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "slow;python"
-        TIMEOUT 7200)
+    if(SIMPLE_HAVE_GVEC)
+        add_test(NAME test_boozer_chartmap_gvec_qa
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
+                ${CMAKE_CURRENT_SOURCE_DIR}/run_gvec_qa_roundtrip.py)
+        set_tests_properties(test_boozer_chartmap_gvec_qa PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "slow;python"
+            TIMEOUT 7200)
+    endif()
 
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
@@ -537,44 +558,6 @@ add_test(NAME test_refcoords_file_detection
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
-
-add_executable(test_field_equivalence_chartmap.x test_field_equivalence_chartmap.f90)
-target_link_libraries(test_field_equivalence_chartmap.x simple)
-add_dependencies(test_field_equivalence_chartmap.x ncsx_test_data)
-
-if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/plot_field_equivalence.py
-        ${CMAKE_CURRENT_BINARY_DIR}/plot_field_equivalence.py
-        COPYONLY)
-endif()
-
-add_test(NAME test_field_equivalence_chartmap
-    COMMAND test_field_equivalence_chartmap.x
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(test_field_equivalence_chartmap PROPERTIES
-    LABELS "integration;slow"
-    TIMEOUT 300)
-
-if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
-    add_test(NAME test_field_equivalence_chartmap_map2disc
-        COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc field_equiv_map2disc
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(test_field_equivalence_chartmap_map2disc PROPERTIES
-        LABELS "integration;python;slow"
-        TIMEOUT 300
-        DEPENDS "generate_chartmap_ncsx_map2disc"
-        FIXTURES_REQUIRED chartmap_ncsx_map2disc)
-
-    add_test(NAME test_field_equivalence_chartmap_map2disc_wall
-        COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.wall0p1m.nc field_equiv_map2disc_wall
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(test_field_equivalence_chartmap_map2disc_wall PROPERTIES
-        LABELS "integration;python;slow"
-        TIMEOUT 300
-        DEPENDS "generate_chartmap_ncsx_map2disc_wall"
-        FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
-endif()
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)

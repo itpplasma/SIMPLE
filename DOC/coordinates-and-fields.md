@@ -148,6 +148,17 @@ Attributes: num_field_periods, zeta_convention, rho_convention
    - interior is geometric, not flux-based
    - mainly useful as a smooth reference map for Meiss coordinates
 
+#### Extended Boozer chartmap (field profiles)
+
+A chartmap with `boozer_field = 1` also stores `A_phi`, `B_theta`, `B_phi`,
+and `Bmod` on the file `rho` grid, plus `torflux` and `rmajor`. `rho_tor`
+means `s = rho^2`. The reader splines all 1D profiles on `rho` and converts
+radial derivatives to `s` by chain rule; `A_theta = torflux*s` stays linear
+in `s`. `Bmod` uses the endpoint-included `theta_field`/`zeta_field` grid,
+while `theta`/`zeta` provide the period steps. Both chartmap consumers use
+`boozer_chartmap_io.read_boozer_chartmap`, so metadata, scaling, and grid
+layout stay shared.
+
 ### 2.4 Cartesian Coordinates
 
 **Type**: `cartesian_coordinate_system_t`

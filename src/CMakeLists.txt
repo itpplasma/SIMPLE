@@ -17,6 +17,7 @@
     field/field_coils.f90
     field/field_vmec.f90
     field/field_splined.f90
+    field/boozer_chartmap_io.f90
     field/field_boozer_chartmap.f90
     field/vmec_field_eval.f90
     field/field_newton.F90

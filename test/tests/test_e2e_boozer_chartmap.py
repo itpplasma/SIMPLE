@@ -43,7 +43,8 @@ EQUILIBRIA = [
         "trace_time": "1d-2",
         "facE_al": "1.0d0",
         "use_gvec": False,
-        "vmec_roundtrip_field_tol": "1.0e-4",
+        "vmec_roundtrip_field_tol": "8.0e-5",
+        "vmec_roundtrip_orbit_tol": "2.0e-9",
         "gvec_roundtrip_field_tol": "2.5e-4",
         "gvec_minimize_tol": 1.0e-10,
         "gvec_max_iter": 4,
@@ -56,7 +57,8 @@ EQUILIBRIA = [
         "trace_time": "1d-2",
         "facE_al": "1.0d0",
         "use_gvec": False,
-        "vmec_roundtrip_field_tol": "1.0e-4",
+        "vmec_roundtrip_field_tol": "9.6e-5",
+        "vmec_roundtrip_orbit_tol": "7.1e-9",
         "gvec_minimize_tol": 1.0e-10,
         "gvec_max_iter": 12,
         "gvec_total_iter": 24,
@@ -68,7 +70,8 @@ EQUILIBRIA = [
         "trace_time": "1d-2",
         "facE_al": "100.0d0",
         "use_gvec": False,
-        "vmec_roundtrip_field_tol": "1.0e-4",
+        "vmec_roundtrip_field_tol": "9.8e-5",
+        "vmec_roundtrip_orbit_tol": "3.8e-7",
         "gvec_minimize_tol": 1.0e-10,
         "gvec_max_iter": 8,
         "gvec_total_iter": 16,
@@ -213,6 +216,14 @@ def run_roundtrip(
     )
 
 
+def parse_tau_line(stdout: str) -> tuple[float | None, int | None]:
+    for line in stdout.splitlines():
+        if line.strip().startswith("tau:"):
+            parts = line.split()
+            return float(parts[2].replace("D", "E")), int(parts[4])
+    return None, None
+
+
 def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -225,6 +236,26 @@ def assert_boozer_chartmap_file(path: Path) -> None:
             raise RuntimeError(f"{path}: expected zeta_convention='boozer'")
         if str(getattr(ds, "rho_convention")) != "rho_tor":
             raise RuntimeError(f"{path}: expected rho_convention='rho_tor'")
+        rmajor = float(getattr(ds, "rmajor", 0.0))
+        if not np.isfinite(rmajor) or rmajor <= 0.0:
+            raise RuntimeError(f"{path}: rmajor attribute missing or invalid")
+
+
+def assert_matching_microstep(name: str, ref_stdout: str, chartmap_stdout: str) -> None:
+    ref_dtaumin, ref_ntau = parse_tau_line(ref_stdout)
+    chartmap_dtaumin, chartmap_ntau = parse_tau_line(chartmap_stdout)
+    if ref_dtaumin is None or ref_ntau is None:
+        raise RuntimeError(f"{name}: VMEC run did not print a tau line")
+    if chartmap_dtaumin is None or chartmap_ntau is None:
+        raise RuntimeError(f"{name}: chartmap run did not print a tau line")
+    if chartmap_ntau != ref_ntau:
+        raise RuntimeError(f"{name}: chartmap ntau={chartmap_ntau}, VMEC ntau={ref_ntau}")
+    rel = abs(chartmap_dtaumin - ref_dtaumin) / max(abs(ref_dtaumin), 1.0)
+    if rel > 1.0e-12:
+        raise RuntimeError(
+            f"{name}: chartmap dtaumin={chartmap_dtaumin:.17e}, "
+            f"VMEC dtaumin={ref_dtaumin:.17e}, rel={rel:.3e}"
+        )
 
 
 def _compare_and_summarize(
@@ -281,7 +312,8 @@ def run_single_equilibrium(eq: dict[str, str | Path], outdir: Path) -> tuple[boo
     trace_time = str(eq["trace_time"])
     facE_al = str(eq["facE_al"])
     use_gvec = bool(eq.get("use_gvec", False))
-    vmec_roundtrip_field_tol = str(eq.get("vmec_roundtrip_field_tol", "1.0e-4"))
+    vmec_roundtrip_field_tol = str(eq.get("vmec_roundtrip_field_tol", "8.0e-5"))
+    vmec_roundtrip_orbit_tol = str(eq.get("vmec_roundtrip_orbit_tol", "2.0e-9"))
     gvec_roundtrip_field_tol = str(eq.get("gvec_roundtrip_field_tol", "2.5e-4"))
     gvec_minimize_tol = float(eq.get("gvec_minimize_tol", 1.0e-10))
     gvec_max_iter = int(eq.get("gvec_max_iter", 4))
@@ -302,7 +334,7 @@ def run_single_equilibrium(eq: dict[str, str | Path], outdir: Path) -> tuple[boo
     (vmec_dir / "simple.in").write_text(simple_in_vmec(wout_name, trace_time, facE_al), encoding="utf-8")
 
     print(f"[{name}] Step 1: VMEC Boozer run")
-    run_cmd([str(SIMPLE_X)], cwd=vmec_dir, label=f"{name} VMEC")
+    vmec_stdout = run_cmd([str(SIMPLE_X)], cwd=vmec_dir, label=f"{name} VMEC")
     cf_vmec = load_confined_fraction(vmec_dir / "confined_fraction.dat")
     start_vmec = vmec_dir / "start.dat"
 
@@ -327,7 +359,8 @@ def run_single_equilibrium(eq: dict[str, str | Path], outdir: Path) -> tuple[boo
         simple_in_chartmap("boozer_chartmap.nc", trace_time, facE_al),
         encoding="utf-8",
     )
-    run_cmd([str(SIMPLE_X)], cwd=chartmap_dir, label=f"{name} VMEC chartmap")
+    chartmap_stdout = run_cmd([str(SIMPLE_X)], cwd=chartmap_dir, label=f"{name} VMEC chartmap")
+    assert_matching_microstep(name, vmec_stdout, chartmap_stdout)
     cf_chartmap = load_confined_fraction(chartmap_dir / "confined_fraction.dat")
 
     gvec_chartmap = None
@@ -363,7 +396,7 @@ def run_single_equilibrium(eq: dict[str, str | Path], outdir: Path) -> tuple[boo
         f"{name}: VMEC direct vs VMEC chartmap",
         "VMEC chartmap",
         vmec_roundtrip_field_tol,
-        "1.0e-6",
+        vmec_roundtrip_orbit_tol,
     )
     field_metrics: dict[str, float] = {}
     if use_gvec:

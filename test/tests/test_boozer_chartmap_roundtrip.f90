@@ -50,8 +50,8 @@ program test_boozer_chartmap_roundtrip
     wout_file = 'wout.nc'
     chartmap_file = 'roundtrip_test.nc'
     mode = 'export'
-    field_tol = 1.0e-4_dp
-    orbit_tol = 1.0e-6_dp
+    field_tol = 8.0e-5_dp
+    orbit_tol = 2.0e-9_dp
     artifact_prefix = 'boozer_chartmap_roundtrip'
 
     if (command_argument_count() >= 1) then

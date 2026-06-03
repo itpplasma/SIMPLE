@@ -131,12 +131,25 @@ module samplers
   end subroutine sample_volume_single
 
   subroutine sample_surface_fieldline(zstart)
-    use params, only: volstart, isw_field_type, ibins, xstart, npoiper, nper
-    use binsrc_sub, only: binsrc
-
     real(dp), dimension(:,:), intent(inout) :: zstart
 
-    real(dp) :: r,vartheta,varphi
+    call sample_surface_fieldline_impl(zstart, .false.)
+  end subroutine sample_surface_fieldline
+
+  subroutine sample_surface_fieldline_from_integ(zstart)
+    real(dp), dimension(:,:), intent(inout) :: zstart
+
+    call sample_surface_fieldline_impl(zstart, .true.)
+  end subroutine sample_surface_fieldline_from_integ
+
+  subroutine sample_surface_fieldline_impl(zstart, xstart_is_integ_coords)
+    use params, only: volstart, ibins, xstart, npoiper, nper
+    use binsrc_sub, only: binsrc
+    use field_can_mod, only: integ_to_ref
+
+    real(dp), dimension(:,:), intent(inout) :: zstart
+    logical, intent(in) :: xstart_is_integ_coords
+
     real(dp) :: xi
     integer :: ipart, i
 
@@ -144,12 +157,11 @@ module samplers
       call random_number(xi)
       call binsrc(volstart,1,npoiper*nper,xi,i)
       ibins=i
-      ! coordinates: z(1) = r, z(2) = vartheta, z(3) = varphi
-      r=xstart(1,i)
-      vartheta=xstart(2,i)
-      varphi=xstart(3,i)
-
-      zstart(1:3,ipart)=xstart(:,i)
+      if (xstart_is_integ_coords) then
+        call integ_to_ref(xstart(:,i), zstart(1:3,ipart))
+      else
+        zstart(1:3,ipart)=xstart(:,i)
+      end if
       zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
       call random_number(xi)
       zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
@@ -157,20 +169,28 @@ module samplers
 
     call save_starting_points(zstart)
 
-  end subroutine sample_surface_fieldline
+  end subroutine sample_surface_fieldline_impl
 
-  subroutine sample_grid(zstart, grid_density)
+  subroutine sample_grid(zstart, grid_density, xstart_is_integ_coords)
     use params, only: ntestpart, zstart_dim1, zend, times_lost, &
-        trap_par, perp_inv, iclass, xstart, sbeg
+        trap_par, perp_inv, iclass, sbeg
     use util, only: pi
+    use field_can_mod, only: integ_to_ref
 
     real(dp), dimension(:,:), allocatable, intent(inout) :: zstart
     real(dp), intent(in) :: grid_density
+    logical, intent(in), optional :: xstart_is_integ_coords
     real(dp) :: xi, xsize_real
-    integer :: xsize, ngrid, ipart, jpart, lidx
+    real(dp) :: xinteg(3)
+    integer :: ngrid, ipart, jpart, lidx
+    logical :: convert_surface_starts
+
+    convert_surface_starts = .false.
+    if (present(xstart_is_integ_coords)) then
+      convert_surface_starts = xstart_is_integ_coords
+    end if
 
     xsize_real = (2*pi) * grid_density !angle density
-    xsize = int(xsize_real)
     ngrid = int((1 / grid_density) - 1)
     ntestpart = ngrid ** 2 !number of total angle points
 
@@ -185,17 +205,14 @@ module samplers
     allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
 
     do ipart=1,ngrid
-      zstart(1,ipart) = sbeg(1)
-      zstart(2,ipart) = xsize_real * ipart
-      zstart(3,ipart) = xsize_real * ipart
-      zstart(4,ipart)=1.d0  ! normalized velocity module z(4) = v / v_0
-      call random_number(xi)
-      zstart(5,ipart)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v
       do jpart=1,ngrid
-        lidx = (jpart-1)*ntestpart+ipart
-        zstart(1,lidx) = sbeg(1)
-        zstart(2,lidx) = xsize_real * ipart
-        zstart(3,lidx) = xsize_real * jpart
+        lidx = (jpart-1)*ngrid+ipart
+        xinteg = [sbeg(1), xsize_real*ipart, xsize_real*jpart]
+        if (convert_surface_starts) then
+          call integ_to_ref(xinteg, zstart(1:3,lidx))
+        else
+          zstart(1:3,lidx) = xinteg
+        end if
         zstart(4,lidx) = 1.d0  ! normalized velocity module z(4) = v / v_0
         call random_number(xi)
         zstart(5,lidx)=2.d0*(xi-0.5d0)  ! starting pitch z(5)=v_\parallel / v

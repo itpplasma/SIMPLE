@@ -11,7 +11,7 @@ program test_chartmap_scaling
     type(boozer_chartmap_field_t), allocatable :: base_field, scaled_field
     real(dp), parameter :: rz_scale = 3.0_dp
     real(dp), parameter :: b_scale = 5.0_dp
-    real(dp), parameter :: tol = 1.0e-10_dp
+    real(dp), parameter :: tol = 1.0e-12_dp
     real(dp) :: u(3), x_cart_base(3), x_cart_scaled(3)
     real(dp) :: ref_cart_base(3), ref_cart_scaled(3)
     real(dp) :: Acov_base(3), hcov_base(3), Bmod_base
@@ -116,7 +116,7 @@ program test_chartmap_scaling
         if (ierr /= 0) then
             print *, 'FAIL: scaled chartmap from_cart ierr=', ierr
             nfail = nfail + 1
-        else if (maxval(abs(u_back - u)) > 1.0e-8_dp) then
+        else if (maxval(abs(u_back - u)) > 1.0e-10_dp) then
             print *, 'FAIL: scaled chartmap from_cart roundtrip mismatch'
             nfail = nfail + 1
         end if
