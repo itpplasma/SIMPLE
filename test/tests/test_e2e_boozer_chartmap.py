@@ -82,8 +82,18 @@ def run_cmd(cmd, cwd, label, timeout=600):
         print(f"  FAILED: {label}")
         print(result.stdout[-2000:] if result.stdout else "")
         print(result.stderr[-2000:] if result.stderr else "")
-        return False
-    return True
+        return False, ""
+    return True, result.stdout
+
+
+def parse_tau_line(stdout):
+    """Return (dtaumin, ntau) from SIMPLE's 'tau: dtau dtaumin resid ntau' line."""
+    for line in stdout.splitlines():
+        if line.strip().startswith("tau:"):
+            parts = line.split()
+            # parts: ['tau:', dtau, dtaumin, resid, ntau]
+            return float(parts[2].replace("D", "E")), int(parts[4])
+    return None, None
 
 
 def run_single_equilibrium(eq, outdir):
@@ -110,7 +120,8 @@ def run_single_equilibrium(eq, outdir):
     with open(os.path.join(vmec_dir, "simple.in"), "w") as f:
         f.write(simple_in_vmec(wout_name, trace_time, facE_al))
 
-    if not run_cmd([SIMPLE_X], cwd=vmec_dir, label=f"{name} VMEC"):
+    ok, vmec_stdout = run_cmd([SIMPLE_X], cwd=vmec_dir, label=f"{name} VMEC")
+    if not ok:
         return False
 
     cf_vmec = os.path.join(vmec_dir, "confined_fraction.dat")
@@ -123,9 +134,10 @@ def run_single_equilibrium(eq, outdir):
     chartmap_nc = os.path.join(chartmap_dir, "boozer_chartmap.nc")
     start_boozer = os.path.join(chartmap_dir, "start.dat")
 
-    if not run_cmd([TOOL_X, os.path.join(vmec_dir, wout_name), chartmap_nc,
-                    start_vmec, start_boozer],
-                   cwd=chartmap_dir, label=f"{name} export"):
+    ok, _ = run_cmd([TOOL_X, os.path.join(vmec_dir, wout_name), chartmap_nc,
+                     start_vmec, start_boozer],
+                    cwd=chartmap_dir, label=f"{name} export")
+    if not ok:
         return False
 
     # Step 3: Chartmap-only
@@ -133,11 +145,26 @@ def run_single_equilibrium(eq, outdir):
     with open(os.path.join(chartmap_dir, "simple.in"), "w") as f:
         f.write(simple_in_chartmap(trace_time, facE_al))
 
-    if not run_cmd([SIMPLE_X], cwd=chartmap_dir, label=f"{name} chartmap"):
+    ok, chartmap_stdout = run_cmd([SIMPLE_X], cwd=chartmap_dir, label=f"{name} chartmap")
+    if not ok:
         return False
 
     cf_chartmap = os.path.join(chartmap_dir, "confined_fraction.dat")
     assert os.path.exists(cf_chartmap), f"{name}: confined_fraction.dat not produced"
+
+    # The chartmap path must recover rmajor (hence dtaumin/ntau) from the file;
+    # a missing rmajor silently shrinks dtaumin ~10x (the reported bug).
+    dtaumin_v, ntau_v = parse_tau_line(vmec_stdout)
+    dtaumin_c, ntau_c = parse_tau_line(chartmap_stdout)
+    print(f"  [{name}] dtaumin VMEC={dtaumin_v} chartmap={dtaumin_c}; "
+          f"ntau VMEC={ntau_v} chartmap={ntau_c}")
+    if dtaumin_v is None or dtaumin_c is None:
+        print(f"  [{name}] FAIL: could not parse tau line")
+        return False
+    if ntau_v != ntau_c or abs(dtaumin_v - dtaumin_c) > 1e-9 * abs(dtaumin_v):
+        print(f"  [{name}] FAIL: dtaumin/ntau differ between VMEC and chartmap "
+              f"(rmajor not restored?)")
+        return False
 
     # Step 4: Compare
     data_vmec = np.loadtxt(cf_vmec)
@@ -168,6 +195,12 @@ def run_single_equilibrium(eq, outdir):
     tol = 1.0 / npart
     if max_diff_total > tol:
         print(f"  [{name}] FAIL: total confined differs by {max_diff_total:.6e} > {tol:.6e}")
+        return False
+    if max_diff_pass > tol:
+        print(f"  [{name}] FAIL: passing fraction differs by {max_diff_pass:.6e} > {tol:.6e}")
+        return False
+    if max_diff_trap > tol:
+        print(f"  [{name}] FAIL: trapped fraction differs by {max_diff_trap:.6e} > {tol:.6e}")
         return False
 
     print(f"  [{name}] PASS")

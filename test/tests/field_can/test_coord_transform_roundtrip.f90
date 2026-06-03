@@ -166,12 +166,12 @@ contains
         !>   ref_to_integ: s -> r -> Ath(r,th,ph) -> psi = Ath/Ath_norm
         !>   integ_to_ref: psi -> r(psi,th,ph) via spline -> s = r^2
         !> This introduces inherent numerical error from spline interpolation.
-        !> A tolerance of 1e-3 is appropriate for the 32^3 grid resolution.
+        !> The 32^3 spline grid gives a measured roundtrip floor near 2e-5.
         use field_can_meiss, only: init_meiss, cleanup_meiss
         use field_can_albert, only: get_albert_coordinates
 
         integer, intent(inout) :: n_failed
-        real(dp), parameter :: TOL = 1d-3  ! Relaxed for spline interpolation
+        real(dp), parameter :: TOL = 2d-5
         real(dp) :: test_points(3, 5)
         real(dp) :: x_ref(3), x_integ(3), x_ref_back(3)
         real(dp) :: err(3), max_err

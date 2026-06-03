@@ -1,8 +1,7 @@
 # Coordinate Systems and Magnetic Fields in SIMPLE
 
-This document provides comprehensive documentation of the coordinate systems,
-magnetic field representations, and their interactions in SIMPLE. It covers
-the complete architecture from abstract interfaces to concrete implementations.
+SIMPLE uses layered coordinate systems and magnetic field representations.
+This note describes their interfaces, file formats, and runtime paths.
 
 **IMPORTANT**: This document must be revised whenever coordinates or fields
 are changed or refactored. See CLAUDE.md for the maintenance requirement.
@@ -153,6 +152,17 @@ Attributes: num_field_periods, zeta_convention, rho_convention
    - Suitable as a reference coordinate system for Meiss canonicalization;
      Meiss does not require flux coordinates, only a smooth reference mapping
      with non-vanishing toroidal field component in the domain.
+
+#### Extended Boozer chartmap (field profiles)
+
+A chartmap with `boozer_field = 1` also stores `A_phi`, `B_theta`, `B_phi`,
+and `Bmod` on the file `rho` grid, plus `torflux` and `rmajor`. `rho_tor`
+means `s = rho^2`. The reader splines all 1D profiles on `rho` and converts
+radial derivatives to `s` by chain rule; `A_theta = torflux*s` stays linear
+in `s`. `Bmod` uses the endpoint-included `theta_field`/`zeta_field` grid,
+while `theta`/`zeta` provide the period steps. Both chartmap consumers use
+`boozer_chartmap_io.read_boozer_chartmap`, so metadata, scaling, and grid
+layout stay shared.
 
 ### 2.4 Cartesian Coordinates
 
@@ -759,8 +769,7 @@ Both chartmap types cover the same physical boundary but differ inside:
 | Axis position | Magnetic axis | Geometric center |
 | rho_convention | rho_tor | unknown |
 
-**Key Insight**: Despite different interior mappings, both give identical
-physics because:
+**Shared physics**: Both mappings give identical physics because:
 1. Particles start at same physical location (via Newton inversion)
 2. B field sampled from VMEC at physical locations
 3. Loss boundary (rho=1) is same physical surface

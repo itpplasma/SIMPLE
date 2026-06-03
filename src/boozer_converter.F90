@@ -39,6 +39,16 @@ module boozer_sub
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
+    ! Radial abscissa of aphi_batch_spline: .false. = uniform s (VMEC-derived
+    ! Boozer), .true. = uniform rho grid (chartmap file). A chartmap tabulates
+    ! every 1D profile against its rho grid, so A_phi is evaluated at rho and
+    ! chain-ruled to s, matching B_theta/B_phi/Bmod.
+    logical, save :: aphi_over_rho = .false.
+    ! Canonical A_phi sampled natively on the Boozer rho grid in
+    ! compute_boozer_data (a flux function, like s_Bcovar_tp_B). export_boozer_chartmap
+    ! writes this directly so the chartmap A_phi shares the rho abscissa of
+    ! B_theta/B_phi -- no resampling of the s-grid A_phi spline.
+    real(dp), allocatable, save :: aphi_rho(:)
 
     ! Batch spline for B_theta, B_phi covariant components
     type(BatchSplineData1D), save :: bcovar_tp_batch_spline
@@ -155,28 +165,66 @@ contains
         A_theta = torflux*r_eval
         dA_theta_dr = torflux
 
-        ! Interpolate A_phi over s (batch spline 1D)
+        ! Interpolate A_phi. VMEC-derived Boozer data is tabulated on a uniform-s
+        ! grid (evaluate at s directly). A chartmap tabulates A_phi on the file's
+        ! uniform rho grid, so evaluate at rho and chain-rule to s, exactly like
+        ! Bmod/B_theta/B_phi below. The chartmap branch uses local chain-rule
+        ! coefficients so the VMEC-s branch keeps its original instruction order.
         if (.not. aphi_batch_spline_ready) then
             error stop "splint_boozer_coord: Aphi batch spline not initialized"
         end if
 
-        if (mode_secders > 0) then
-            ! Need third derivative - use der3 which computes all in one pass
+        if (aphi_over_rho) then
+            ! A_phi(rho) -> s-derivatives by the chain rule for rho = sqrt(s):
+            !   rho'   = 1/(2 rho)              [drds]
+            !   rho''  = -1/(4 rho^3)           [-d2rds2m]
+            !   rho''' = 3/(8 rho^5)            [d3rds3]
+            ! f'  = g' rho'
+            ! f'' = g'' rho'^2 + g' rho''
+            ! f'''= g''' rho'^3 + 3 g'' rho' rho'' + g' rho'''
             block
-                real(dp) :: d3y1d(1)
-                call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
-                                                    y1d(1:1), dy1d(1:1), &
-                                                    d2y1d(1:1), d3y1d)
-                d3A_phi_dr3 = d3y1d(1)
+                real(dp) :: rho_a, drds, drds2, d2rds2m, drds3, d3rds3, d3y1d(1)
+                rho_a = sqrt(r_eval)
+                drds = 0.5_dp/rho_a
+                drds2 = drds**2
+                d2rds2m = drds2/rho_a  ! -d2rho/ds2
+                if (mode_secders > 0) then
+                    call evaluate_batch_splines_1d_der3(aphi_batch_spline, rho_a, &
+                                                        y1d(1:1), dy1d(1:1), &
+                                                        d2y1d(1:1), d3y1d)
+                    drds3 = drds*drds2  ! (drho/ds)^3 = 1/(8 rho^3)
+                    d3rds3 = 3.0_dp/(8.0_dp*rho_a**5)  ! d3rho/ds3
+                    d3A_phi_dr3 = d3y1d(1)*drds3 &
+                                  - 3.0_dp*d2y1d(1)*drds*d2rds2m &
+                                  + dy1d(1)*d3rds3
+                else
+                    call evaluate_batch_splines_1d_der2(aphi_batch_spline, rho_a, &
+                                                        y1d(1:1), dy1d(1:1), d2y1d(1:1))
+                    d3A_phi_dr3 = 0.0_dp
+                end if
+                A_phi = y1d(1)
+                dA_phi_dr = dy1d(1)*drds
+                d2A_phi_dr2 = d2y1d(1)*drds2 - dy1d(1)*d2rds2m
             end block
         else
-            call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, y1d(1:1), &
-                                                dy1d(1:1), d2y1d(1:1))
-            d3A_phi_dr3 = 0.0_dp
+            if (mode_secders > 0) then
+                ! Need third derivative - use der3 which computes all in one pass
+                block
+                    real(dp) :: d3y1d(1)
+                    call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
+                                                        y1d(1:1), dy1d(1:1), &
+                                                        d2y1d(1:1), d3y1d)
+                    d3A_phi_dr3 = d3y1d(1)
+                end block
+            else
+                call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, &
+                                                    y1d(1:1), dy1d(1:1), d2y1d(1:1))
+                d3A_phi_dr3 = 0.0_dp
+            end if
+            A_phi = y1d(1)
+            dA_phi_dr = dy1d(1)
+            d2A_phi_dr2 = d2y1d(1)
         end if
-        A_phi = y1d(1)
-        dA_phi_dr = dy1d(1)
-        d2A_phi_dr2 = d2y1d(1)
 
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r_eval)
@@ -529,6 +577,8 @@ contains
         G00 = 0.0_dp
 
         allocate (rho_tor(ns_B))
+        if (allocated(aphi_rho)) deallocate (aphi_rho)
+        allocate (aphi_rho(ns_B))
         allocate (aiota_arr(1))
         allocate (Gfunc(1, 1, 1))
         allocate (Bcovar_symfl(1, 1, 1, 1))
@@ -643,6 +693,9 @@ contains
             Bcovar_varphi_B = sum(Bcovar_varphi_V(2:n_theta_B, 2:n_phi_B))/gridcellnum
             s_Bcovar_tp_B(1, 1, i_rho) = Bcovar_vartheta_B
             s_Bcovar_tp_B(2, 1, i_rho) = Bcovar_varphi_B
+            ! A_phi is a flux function; store it natively on the rho grid for
+            ! export_boozer_chartmap (same abscissa as B_theta/B_phi above).
+            aphi_rho(i_rho) = A_phi
 
             denomjac = 1.0_dp/(aiota*Bcovar_vartheta_B + Bcovar_varphi_B)
             Gbeg = G00 + Bcovar_vartheta_B*denomjac*alam_2D(1, 1)
@@ -883,24 +936,19 @@ contains
         !> Populate module-level Boozer batch splines from an extended chartmap
         !> NetCDF file, bypassing the VMEC-based compute_boozer_data path.
         use vector_potentail_mod, only: torflux, ns, hs
-        use new_vmec_stuff_mod, only: nper, ns_A, ns_s, ns_tp
+        use new_vmec_stuff_mod, only: nper, rmajor, ns_A, ns_s, ns_tp, &
+                                      vmec_B_scale, vmec_RZ_scale
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, &
                                           n_phi_B, hs_B, h_theta_B, h_phi_B, &
                                           use_B_r, use_del_tp_B
-        use netcdf
+        use boozer_chartmap_io, only: boozer_chartmap_data_t, read_boozer_chartmap
 
         character(len=*), intent(in) :: filename
 
-        integer :: ncid, status, dimid, varid
-        integer :: n_rho, n_theta, n_zeta, nfp_file
-        integer :: n_theta_field, n_zeta_field
-        real(dp) :: torflux_val
-        real(dp), allocatable :: rho(:), theta(:), zeta(:)
-        real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
-        real(dp), allocatable :: Bmod_arr(:, :, :)
+        type(boozer_chartmap_data_t) :: d
         real(dp), allocatable :: y_aphi(:, :), y_bcovar(:, :), y_bmod(:, :, :, :)
-        real(dp) :: s_min, s_max, rho_min, rho_max
-        integer :: i
+        real(dp) :: s_min, s_max
+        real(dp) :: b_scale, rz_scale, covar_scale, flux_scale
         integer :: spline_order
         integer :: order_3d(3)
         logical :: periodic_3d(3)
@@ -908,109 +956,63 @@ contains
 
         call reset_boozer_batch_splines
 
-        ! Open file
-        status = nf90_open(trim(filename), nf90_nowrite, ncid)
-        if (status /= nf90_noerr) then
-            print *, "load_boozer_from_chartmap: cannot open ", trim(filename)
-            error stop
-        end if
+        ! Single shared parse: base-unit arrays on the endpoint-included field grid.
+        call read_boozer_chartmap(filename, d)
 
-        ! Read dimensions
-        call nc_check(nf90_inq_dimid(ncid, "rho", dimid), "dim rho")
-        call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_rho), "len rho")
-        call nc_check(nf90_inq_dimid(ncid, "theta", dimid), "dim theta")
-        call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_theta), "len theta")
-        call nc_check(nf90_inq_dimid(ncid, "zeta", dimid), "dim zeta")
-        call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_zeta), "len zeta")
-
-        ! Read coordinate grids
-        allocate (rho(n_rho), theta(n_theta), zeta(n_zeta))
-        call nc_check(nf90_inq_varid(ncid, "rho", varid), "var rho")
-        call nc_check(nf90_get_var(ncid, varid, rho), "get rho")
-        call nc_check(nf90_inq_varid(ncid, "theta", varid), "var theta")
-        call nc_check(nf90_get_var(ncid, varid, theta), "get theta")
-        call nc_check(nf90_inq_varid(ncid, "zeta", varid), "var zeta")
-        call nc_check(nf90_get_var(ncid, varid, zeta), "get zeta")
-
-        ! Read scalar attributes and variables
-        call nc_check(nf90_get_att(ncid, nf90_global, "torflux", torflux_val), &
-                       "att torflux")
-        call nc_check(nf90_inq_varid(ncid, "num_field_periods", varid), &
-                       "var num_field_periods")
-        call nc_check(nf90_get_var(ncid, varid, nfp_file), &
-                       "get num_field_periods")
-
-        ! Read 1D profiles
-        allocate (A_phi_arr(n_rho), B_theta_arr(n_rho), B_phi_arr(n_rho))
-        call nc_check(nf90_inq_varid(ncid, "A_phi", varid), "var A_phi")
-        call nc_check(nf90_get_var(ncid, varid, A_phi_arr), "get A_phi")
-        call nc_check(nf90_inq_varid(ncid, "B_theta", varid), "var B_theta")
-        call nc_check(nf90_get_var(ncid, varid, B_theta_arr), "get B_theta")
-        call nc_check(nf90_inq_varid(ncid, "B_phi", varid), "var B_phi")
-        call nc_check(nf90_get_var(ncid, varid, B_phi_arr), "get B_phi")
-
-        ! Read Bmod field dimensions (endpoint-included, may differ from geometry dims)
-        status = nf90_inq_dimid(ncid, "theta_field", dimid)
-        if (status == nf90_noerr) then
-            call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_theta_field), &
-                           "len theta_field")
-            call nc_check(nf90_inq_dimid(ncid, "zeta_field", dimid), "dim zeta_field")
-            call nc_check(nf90_inquire_dimension(ncid, dimid, len=n_zeta_field), &
-                           "len zeta_field")
-        else
-            ! Fallback: field uses same dims as geometry (old format)
-            n_theta_field = n_theta
-            n_zeta_field = n_zeta
-        end if
-
-        ! Read 3D Bmod on field grid
-        allocate (Bmod_arr(n_rho, n_theta_field, n_zeta_field))
-        call nc_check(nf90_inq_varid(ncid, "Bmod", varid), "var Bmod")
-        call nc_check(nf90_get_var(ncid, varid, Bmod_arr), "get Bmod")
-
-        call nc_check(nf90_close(ncid), "close")
+        ! Apply the VMEC scaling knobs so a chartmap behaves like a VMEC run
+        ! (matches boozer_chartmap_field_t and test_chartmap_scaling). Base files
+        ! are exported at scale 1, so this is a no-op by default.
+        b_scale = vmec_B_scale
+        rz_scale = vmec_RZ_scale
+        covar_scale = b_scale*rz_scale
+        flux_scale = covar_scale*rz_scale
+        d%A_phi = flux_scale*d%A_phi
+        d%B_theta = covar_scale*d%B_theta
+        d%B_phi = covar_scale*d%B_phi
+        d%Bmod = b_scale*d%Bmod
 
         ! Set global parameters used by splint_boozer_coord
-        torflux = torflux_val
-        nper = nfp_file
+        torflux = flux_scale*d%torflux
+        nper = d%nfp
+        if (d%has_rmajor) rmajor = d%rmajor*rz_scale
 
         ! Set boozer_coordinates_mod parameters
         ns_s_B = 5
         ns_tp_B = 5
-        ns_B = n_rho
-        n_theta_B = n_theta_field
-        n_phi_B = n_zeta_field
-        hs_B = rho(2) - rho(1)
-        ! Field grid step from endpoint-included dimensions
-        h_theta_B = TWOPI / real(n_theta_field - 1, dp)
-        h_phi_B = TWOPI / real(nfp_file, dp) / real(n_zeta_field - 1, dp)
+        ns_B = d%n_rho
+        n_theta_B = d%n_theta
+        n_phi_B = d%n_phi
+        hs_B = d%rho(2) - d%rho(1)
+        h_theta_B = d%h_theta
+        h_phi_B = d%h_phi
         use_B_r = .false.
         use_del_tp_B = .false.
 
         ! Set vector_potentail_mod parameters for A_phi spline
-        rho_min = rho(1)
-        rho_max = rho(n_rho)
-        s_min = rho_min**2
-        s_max = rho_max**2
-        ns = n_rho
-        hs = (s_max - s_min) / real(n_rho - 1, dp)
+        s_min = d%rho_min**2
+        s_max = d%rho_max**2
+        ns = d%n_rho
+        hs = (s_max - s_min) / real(d%n_rho - 1, dp)
         ns_A = 5
 
-        ! Build A_phi batch spline over s
+        ! Build A_phi batch spline over the file's uniform rho grid. The chartmap
+        ! tabulates A_phi against rho (like B_theta/B_phi/Bmod), so splint_boozer_coord
+        ! evaluates it at rho and chain-rules to s.
         spline_order = ns_A
-        allocate (y_aphi(n_rho, 1))
-        y_aphi(:, 1) = A_phi_arr
-        call construct_batch_splines_1d(s_min, s_max, y_aphi, spline_order, &
+        allocate (y_aphi(d%n_rho, 1))
+        y_aphi(:, 1) = d%A_phi
+        call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_aphi, spline_order, &
                                         .false., aphi_batch_spline)
         aphi_batch_spline_ready = .true.
+        aphi_over_rho = .true.
         deallocate (y_aphi)
 
         ! Build B_theta, B_phi batch spline over rho_tor
         spline_order = ns_s_B
-        allocate (y_bcovar(n_rho, 2))
-        y_bcovar(:, 1) = B_theta_arr
-        y_bcovar(:, 2) = B_phi_arr
-        call construct_batch_splines_1d(rho(1), rho(n_rho), y_bcovar, spline_order, &
+        allocate (y_bcovar(d%n_rho, 2))
+        y_bcovar(:, 1) = d%B_theta
+        y_bcovar(:, 2) = d%B_phi
+        call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_bcovar, spline_order, &
                                         .false., bcovar_tp_batch_spline)
         bcovar_tp_batch_spline_ready = .true.
         deallocate (y_bcovar)
@@ -1019,12 +1021,12 @@ contains
         ! Uses endpoint-included field grid matching original VMEC Boozer splines
         order_3d = [ns_s_B, ns_tp_B, ns_tp_B]
         periodic_3d = [.false., .true., .true.]
-        x_min_3d = [rho(1), 0.0_dp, 0.0_dp]
-        x_max_3d = [rho(n_rho), h_theta_B * real(n_theta_field - 1, dp), &
-                     h_phi_B * real(n_zeta_field - 1, dp)]
+        x_min_3d = [d%rho(1), 0.0_dp, 0.0_dp]
+        x_max_3d = [d%rho(d%n_rho), h_theta_B * real(d%n_theta - 1, dp), &
+                     h_phi_B * real(d%n_phi - 1, dp)]
 
-        allocate (y_bmod(n_rho, n_theta_field, n_zeta_field, 1))
-        y_bmod(:, :, :, 1) = Bmod_arr
+        allocate (y_bmod(d%n_rho, d%n_theta, d%n_phi, 1))
+        y_bmod(:, :, :, 1) = d%Bmod
         call construct_batch_splines_3d(x_min_3d, x_max_3d, y_bmod, order_3d, &
                                         periodic_3d, bmod_br_batch_spline)
         bmod_br_batch_spline_ready = .true.
@@ -1032,21 +1034,9 @@ contains
         deallocate (y_bmod)
 
         print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
-        print *, '  nfp=', nfp_file, ' ns=', n_rho, ' ntheta_field=', &
-                 n_theta_field, ' nphi_field=', n_zeta_field
-        print *, '  torflux=', torflux_val
-
-    contains
-
-        subroutine nc_check(stat, loc)
-            integer, intent(in) :: stat
-            character(len=*), intent(in) :: loc
-            if (stat /= nf90_noerr) then
-                print *, "load_boozer_from_chartmap: NetCDF error at ", trim(loc), &
-                         ": ", trim(nf90_strerror(stat))
-                error stop
-            end if
-        end subroutine nc_check
+        print *, '  nfp=', d%nfp, ' ns=', d%n_rho, ' ntheta_field=', &
+                 d%n_theta, ' nphi_field=', d%n_phi
+        print *, '  torflux=', torflux
 
     end subroutine load_boozer_from_chartmap
 
@@ -1055,8 +1045,8 @@ contains
         !> to an extended chartmap NetCDF file. Must be called after
         !> get_boozer_coordinates() and while VMEC splines are still active
         !> (needed for X, Y, Z geometry evaluation).
-        use vector_potentail_mod, only: ns, hs, sA_phi, torflux
-        use new_vmec_stuff_mod, only: nper
+        use vector_potentail_mod, only: torflux
+        use new_vmec_stuff_mod, only: nper, rmajor
         use boozer_coordinates_mod, only: ns_B, n_theta_B, n_phi_B, &
                                           hs_B, h_theta_B, h_phi_B, &
                                           s_Bcovar_tp_B
@@ -1107,9 +1097,14 @@ contains
             zeta_arr(i_phi) = real(i_phi - 1, dp) * h_phi_B
         end do
 
-        ! Extract 1D profiles
+        ! Extract 1D profiles as genuine functions of the rho grid. A_phi, like
+        ! B_theta/B_phi, was sampled natively on the rho grid in compute_boozer_data,
+        ! so all three share the rho abscissa the loader reads them back on.
+        if (.not. allocated(aphi_rho)) then
+            error stop "export_boozer_chartmap: aphi_rho not populated"
+        end if
         do i_rho = 1, ns_B
-            A_phi_arr(i_rho) = sA_phi(1, i_rho)  ! zeroth spline coeff = value
+            A_phi_arr(i_rho) = aphi_rho(i_rho)
             B_theta_arr(i_rho) = s_Bcovar_tp_B(1, 1, i_rho)
             B_phi_arr(i_rho) = s_Bcovar_tp_B(2, 1, i_rho)
         end do
@@ -1198,6 +1193,10 @@ contains
                         "att boozer_field")
         call nc_assert(nf90_put_att(ncid, nf90_global, "torflux", torflux), &
                         "att torflux")
+        ! Major radius (metres, base units) so the chartmap reader can restore
+        ! new_vmec_stuff_mod::rmajor; stevvo/params_init need it for dtaumin.
+        call nc_assert(nf90_put_att(ncid, nf90_global, "rmajor", rmajor), &
+                        "att rmajor")
 
         call nc_assert(nf90_enddef(ncid), "enddef")
 
@@ -1262,6 +1261,7 @@ contains
         aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
 
         aphi_batch_spline_ready = .true.
+        aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
     end subroutine build_boozer_aphi_batch_spline
 
     subroutine build_boozer_bcovar_tp_batch_spline

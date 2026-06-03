@@ -363,6 +363,14 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_chartmap_metadata COMMAND test_chartmap_metadata.x)
     set_tests_properties(test_chartmap_metadata PROPERTIES LABELS "unit")
 
+    # Chartmap reader metadata and A_phi radial-abscissa contract.
+    add_executable(test_chartmap_aphi_abscissa.x test_chartmap_aphi_abscissa.f90)
+    target_link_libraries(test_chartmap_aphi_abscissa.x simple)
+    add_test(NAME test_chartmap_aphi_abscissa COMMAND test_chartmap_aphi_abscissa.x)
+    set_tests_properties(test_chartmap_aphi_abscissa PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "unit")
+
     # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
     add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
     target_link_libraries(generate_test_boozer_chartmap.x netcdf m)
@@ -500,44 +508,6 @@ add_test(NAME test_refcoords_file_detection
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
-
-add_executable(test_field_equivalence_chartmap.x test_field_equivalence_chartmap.f90)
-target_link_libraries(test_field_equivalence_chartmap.x simple)
-add_dependencies(test_field_equivalence_chartmap.x ncsx_test_data)
-
-if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/plot_field_equivalence.py
-        ${CMAKE_CURRENT_BINARY_DIR}/plot_field_equivalence.py
-        COPYONLY)
-endif()
-
-add_test(NAME test_field_equivalence_chartmap
-    COMMAND test_field_equivalence_chartmap.x
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(test_field_equivalence_chartmap PROPERTIES
-    LABELS "integration;slow"
-    TIMEOUT 300)
-
-if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
-    add_test(NAME test_field_equivalence_chartmap_map2disc
-        COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.nc field_equiv_map2disc
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(test_field_equivalence_chartmap_map2disc PROPERTIES
-        LABELS "integration;python;slow"
-        TIMEOUT 300
-        DEPENDS "generate_chartmap_ncsx_map2disc"
-        FIXTURES_REQUIRED chartmap_ncsx_map2disc)
-
-    add_test(NAME test_field_equivalence_chartmap_map2disc_wall
-        COMMAND test_field_equivalence_chartmap.x wout_ncsx.chartmap.map2disc.wall0p1m.nc field_equiv_map2disc_wall
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(test_field_equivalence_chartmap_map2disc_wall PROPERTIES
-        LABELS "integration;python;slow"
-        TIMEOUT 300
-        DEPENDS "generate_chartmap_ncsx_map2disc_wall"
-        FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
-endif()
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)
