@@ -12,8 +12,16 @@ from pathlib import Path
 import numpy as np
 
 
-def write_config(path: Path, *, grid_density: float | None = None) -> None:
+def write_config(
+    path: Path,
+    *,
+    grid_density: float | None = None,
+    generate_start_only: bool = False,
+) -> None:
     grid_line = "" if grid_density is None else f"grid_density = {grid_density:.16e}\n"
+    start_only_line = (
+        "generate_start_only = .True.\n" if generate_start_only else ""
+    )
     path.write_text(
         f"""&config
 trace_time = 1d-6
@@ -27,13 +35,18 @@ startmode = 1
 integmode = 1
 relerr = 1d-10
 deterministic = .True.
-/
+{start_only_line}/
 """,
         encoding="ascii",
     )
 
 
-def run_once(workdir: Path, simple_x: Path) -> tuple[np.ndarray, np.ndarray]:
+def run_once(
+    workdir: Path,
+    simple_x: Path,
+    *,
+    expect_orbit_output: bool = True,
+) -> tuple[np.ndarray, np.ndarray | None]:
     for name in [
         "start.dat",
         "times_lost.dat",
@@ -62,9 +75,18 @@ def run_once(workdir: Path, simple_x: Path) -> tuple[np.ndarray, np.ndarray]:
         raise SystemExit(f"simple.x failed with exit code {result.returncode}")
 
     start = np.loadtxt(workdir / "start.dat")
-    confined = np.loadtxt(workdir / "confined_fraction.dat")
     if start.ndim == 1:
         start = start[np.newaxis, :]
+
+    confined_path = workdir / "confined_fraction.dat"
+    if not expect_orbit_output:
+        assert not confined_path.exists(), "generate_start_only traced chartmap orbits"
+        assert not (workdir / "times_lost.dat").exists(), (
+            "generate_start_only wrote chartmap orbit output"
+        )
+        return start, None
+
+    confined = np.loadtxt(confined_path)
     if confined.ndim == 1:
         confined = confined[np.newaxis, :]
     return start, confined
@@ -75,14 +97,24 @@ def run_case(
     simple_x: Path,
     *,
     grid_density: float | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    write_config(workdir / "simple.in", grid_density=grid_density)
+    generate_start_only: bool = False,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    write_config(
+        workdir / "simple.in",
+        grid_density=grid_density,
+        generate_start_only=generate_start_only,
+    )
     np.savetxt(
         workdir / "start.dat",
         np.full((8, 5), 9.0),
         fmt="%.16e",
     )
-    return run_once(workdir, simple_x)
+    start, confined = run_once(
+        workdir,
+        simple_x,
+        expect_orbit_output=not generate_start_only,
+    )
+    return start, confined
 
 
 def main() -> None:
@@ -101,6 +133,8 @@ def main() -> None:
     start1, confined1 = run_case(base, simple_x)
     start2, confined2 = run_case(base, simple_x)
 
+    assert confined1 is not None
+    assert confined2 is not None
     assert start1.shape == (8, 5), start1.shape
     assert not np.allclose(start1, 9.0), "chartmap startmode=1 reused an existing start.dat"
     np.testing.assert_allclose(start1[:, 0], np.sqrt(0.5), rtol=0.0, atol=1.0e-15)
@@ -124,6 +158,10 @@ def main() -> None:
     grid_start, _ = run_case(base, simple_x, grid_density=0.25)
     assert grid_start.shape == (9, 5), grid_start.shape
     np.testing.assert_allclose(grid_start[:, 0], np.sqrt(0.5), rtol=0.0, atol=1.0e-15)
+
+    start_only, confined = run_case(base, simple_x, generate_start_only=True)
+    assert confined is None
+    np.testing.assert_allclose(start_only[:, 0], np.sqrt(0.5), rtol=0.0, atol=1.0e-15)
 
 
 if __name__ == "__main__":

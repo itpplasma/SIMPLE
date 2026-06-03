@@ -108,6 +108,8 @@ contains
 
             call sample_particles(.true.)
             call print_phase_time('Particle sampling completed')
+
+            if (generate_start_only) stop 'stopping after generating start.dat'
         else
             call init_magfie(VMEC)
             call print_phase_time('VMEC magnetic field initialization completed')
