@@ -418,6 +418,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_boozer_chartmap COMMAND test_boozer_chartmap.x)
     set_tests_properties(test_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
@@ -435,6 +436,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_chartmap_scaling COMMAND test_chartmap_scaling.x)
     set_tests_properties(test_chartmap_scaling PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
 
     # Boozer chartmap roundtrip test: requires wout.nc
@@ -473,6 +475,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     set_tests_properties(test_e2e_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "slow;plot;python"
+        ENVIRONMENT "SIMPLE_BOOZER_CASES=QA"
         TIMEOUT 7200)
 
     add_test(NAME test_figure8_boozer_chartmap

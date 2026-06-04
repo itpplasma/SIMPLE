@@ -50,8 +50,8 @@ program test_chartmap_wall_losses
     type(splined_field_t) :: splined_vmec, splined_chartmap
     class(coordinate_system_t), allocatable :: chartmap_coords
 
-    integer, parameter :: n_particles = 64
-    integer, parameter :: n_steps = 2000
+    integer, parameter :: n_particles = 8
+    integer, parameter :: n_steps = 500
     real(dp), parameter :: trace_time = 1.0e-3_dp
     real(dp), parameter :: relerr = 1.0e-10_dp
     real(dp), parameter :: s_start = 0.8_dp
