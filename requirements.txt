@@ -12,7 +12,7 @@ f90wrap==0.3.0
 pytest==9.0.3
 pytest-cov==6.2.1
 netCDF4==1.7.2
-gvec==1.4.0
+gvec==1.4.1
 
 # Optional dependencies for examples/plotting
 matplotlib==3.9.4
