@@ -790,9 +790,10 @@ contains
             ! Fill trajectory arrays with NaN since we're not tracing this particle
             orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
             orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
-!$omp critical
-            confpart_pass = confpart_pass + 1.d0
-!$omp end critical
+            do it = 1, ntimstep
+!$omp atomic update
+                confpart_pass(it) = confpart_pass(it) + 1.d0
+            end do
             return
         end if
 
