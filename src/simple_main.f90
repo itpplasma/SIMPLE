@@ -22,6 +22,7 @@ module simple_main
 	                      checkpoint_interval
     use diag_counters, only: diag_counters_init
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
+    use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
     use reference_coordinates, only: ref_coords
     use stl_wall_intersection, only: stl_wall_t, stl_wall_init, &
@@ -45,7 +46,7 @@ contains
         use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
                           integmode, params_init, swcoll, generate_start_only, &
                           isw_field_type, field_input, startmode, &
-                          ntestpart, ntimstep, coord_input
+                          ntestpart, ntimstep, coord_input, restart
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, init_magfie
         use samplers, only: init_starting_surf
@@ -136,6 +137,12 @@ contains
 
         call init_counters
         call print_phase_time('Counter initialization completed')
+
+        if (restart) then
+            call read_restart_data()
+            call restore_confined_counts()
+            call print_phase_time('Restart data loaded')
+        end if
 
         call diag_counters_init
         call progress_init(checkpoint_interval, ntestpart, write_results)
@@ -394,6 +401,13 @@ contains
 
 !$omp do
         do i = 1, ntestpart
+            if (allocated(particle_done)) then
+                if (particle_done(i)) then
+                    call progress_tick
+                    cycle
+                end if
+            end if
+
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
             if (debug) then
 !$omp critical
