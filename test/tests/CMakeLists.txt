@@ -478,14 +478,15 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         ENVIRONMENT "SIMPLE_BOOZER_CASES=QA"
         TIMEOUT 7200)
 
-    add_test(NAME test_figure8_boozer_chartmap
-        COMMAND ${BOOZER_CHARTMAP_PYTHON}
-            ${CMAKE_CURRENT_SOURCE_DIR}/test_figure8_boozer_chartmap.py)
-    set_tests_properties(test_figure8_boozer_chartmap PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "slow;plot;python;golden_record"
-        TIMEOUT 7200
-        DEPENDS test_e2e_boozer_chartmap)
+    if(SIMPLE_HAVE_GVEC)
+        add_test(NAME test_figure8_boozer_chartmap
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_figure8_boozer_chartmap.py)
+        set_tests_properties(test_figure8_boozer_chartmap PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "slow;plot;python;golden_record"
+            TIMEOUT 7200)
+    endif()
 
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)

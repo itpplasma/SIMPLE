@@ -41,6 +41,8 @@ test/test_data/*
 !test/test_data/simple.multiple_fieldline.in
 !test/test_data/simple.single_fieldline.in
 !test/test_data/simple.volume.in
+!test/test_data/figure8/
+!test/test_data/figure8/*
 *.geany
 examples/test1/
 examples/test2/

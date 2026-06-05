@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 import shutil
+import sys
 
 import netCDF4
 import numpy as np
@@ -27,27 +29,139 @@ from boozer_chartmap_artifacts import (
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
+REPO_ROOT = SCRIPT_DIR.parent.parent
+BUILD_DIR = REPO_ROOT / "build"
 SIMPLE_X = BUILD_DIR / "simple.x"
-FIGURE8_DATA_ROOT = Path(
-    os.environ.get(
-        "SIMPLE_FIGURE8_DATA_ROOT",
-        str(Path.home() / "data" / "QUASR" / "SIMPLE" / "figure8"),
+GVEC_TO_CHARTMAP = REPO_ROOT / "tools" / "gvec_to_boozer_chartmap.py"
+QUASR_JSON_TO_BOUNDARY = REPO_ROOT / "tools" / "quasr_json_to_boundary.py"
+TEST_DATA = REPO_ROOT / "test" / "test_data" / "figure8"
+
+QUASR_ID = 112714
+QUASR_URL = (
+    f"https://quasr.flatironinstitute.org/simsopt_serials/"
+    f"{QUASR_ID // 10**3:04d}/serial{QUASR_ID:07d}.json"
+)
+
+REFERENCE_SIGNATURE = TEST_DATA / "figure8_signature_reference.txt"
+SIMPLE_INPUT = TEST_DATA / "simple.in"
+START_INPUT = TEST_DATA / "start.dat"
+
+
+def _cache_signature() -> str:
+    digest = hashlib.sha256()
+    digest.update(QUASR_URL.encode("utf-8"))
+    digest.update(Path(__file__).read_bytes())
+    digest.update(GVEC_TO_CHARTMAP.read_bytes())
+    digest.update(QUASR_JSON_TO_BOUNDARY.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def _default_cache_root() -> Path:
+    return Path.home() / "data" / "SIMPLE" / "figure8_chartmap"
+
+
+def _cache_dir() -> Path:
+    root = Path(
+        os.environ.get("SIMPLE_FIGURE8_CACHE_ROOT", str(_default_cache_root()))
+    ).expanduser()
+    return root / _cache_signature()
+
+
+def build_figure8_chartmap(workdir: Path) -> tuple[Path, Path]:
+    """Build the figure-8 chartmap from the QUASR public API via GVEC."""
+    import gvec
+    from gvec.scripts.quasr import load_quasr
+    from gvec.util import read_parameters
+
+    prepare_dir = workdir / "prepare"
+    solve_dir = workdir / "solve"
+    prepare_dir.mkdir(parents=True, exist_ok=True)
+    solve_dir.mkdir(parents=True, exist_ok=True)
+
+    quasr_json = workdir / f"quasr-{QUASR_ID:07d}.json"
+    if not quasr_json.exists():
+        from gvec.scripts.quasr import get_json_from_quasr
+        print(f"Downloading QUASR config {QUASR_ID} from {QUASR_URL}")
+        get_json_from_quasr(QUASR_ID, quasr_json)
+
+    boundary = workdir / "figure8.quasr.boundary.nc"
+    run_cmd(
+        [
+            sys.executable,
+            str(QUASR_JSON_TO_BOUNDARY),
+            str(quasr_json),
+            str(boundary),
+            "--ntheta", "81",
+            "--nzeta", "81",
+        ],
+        cwd=workdir,
+        label="QUASR->boundary",
     )
-).expanduser()
-REFERENCE_SIGNATURE = FIGURE8_DATA_ROOT / "figure8_signature_reference.txt"
-BOUNDARY_FILE = FIGURE8_DATA_ROOT / "figure8.quasr.boundary.nc"
-CHARTMAP_FILE = FIGURE8_DATA_ROOT / "figure8.gvec.chartmap.nc"
-SIMPLE_INPUT = FIGURE8_DATA_ROOT / "simple.in"
-START_INPUT = FIGURE8_DATA_ROOT / "start.dat"
+
+    with _pushd(prepare_dir):
+        load_quasr(boundary, filetype="netcdf", quiet=True, name="figure8")
+
+    params = read_parameters(prepare_dir / "figure8-parameters.toml")
+    params["hmap_ncfile"] = str((prepare_dir / params["hmap_ncfile"]).resolve())
+    params["minimize_tol"] = 1.0e-8
+    params["maxIter"] = 5
+    params["totalIter"] = 10
+    gvec.run(params, runpath=solve_dir, redirect_gvec_stdout=True, quiet=True)
+
+    param_final = sorted(solve_dir.glob("parameter*_final.ini"))[-1]
+    state_final = sorted(solve_dir.glob("*State_final.dat"))[-1]
+    chartmap = workdir / "figure8.gvec.chartmap.nc"
+    run_cmd(
+        [
+            sys.executable,
+            str(GVEC_TO_CHARTMAP),
+            str(param_final),
+            str(state_final),
+            str(chartmap),
+            "--nrho", "50",
+            "--ntheta", "36",
+            "--nphi", "81",
+        ],
+        cwd=workdir,
+        label="GVEC->chartmap",
+        timeout=3600,
+    )
+    return boundary, chartmap
 
 
-def prepare_run_dir(run_dir: Path) -> tuple[Path, Path]:
+def _pushd(path: Path):
+    class _Pushd:
+        def __enter__(self_inner):
+            self_inner.old = Path.cwd()
+            os.chdir(path)
+            return self_inner
+
+        def __exit__(self_inner, exc_type, exc, tb):
+            os.chdir(self_inner.old)
+            return False
+
+    return _Pushd()
+
+
+def get_figure8_data() -> tuple[Path, Path]:
+    """Return (boundary, chartmap) paths, building on the fly with caching."""
+    cache = _cache_dir()
+    chartmap = cache / "figure8.gvec.chartmap.nc"
+    boundary = cache / "figure8.quasr.boundary.nc"
+    if chartmap.exists() and boundary.exists():
+        print(f"Using cached figure-8 chartmap from {cache}")
+        return boundary, chartmap
+
+    print(f"Building figure-8 chartmap from QUASR #{QUASR_ID} in {cache}")
+    cache.mkdir(parents=True, exist_ok=True)
+    return build_figure8_chartmap(cache)
+
+
+def prepare_run_dir(run_dir: Path, chartmap_path: Path) -> None:
     chartmap_link = run_dir / "figure8.gvec.chartmap.nc"
-    chartmap_link.symlink_to(os.path.relpath(CHARTMAP_FILE, run_dir))
+    chartmap_link.symlink_to(os.path.relpath(chartmap_path, run_dir))
     shutil.copy2(SIMPLE_INPUT, run_dir / "simple.in")
     shutil.copy2(START_INPUT, run_dir / "start.dat")
-    return BOUNDARY_FILE, chartmap_link
 
 
 def load_quasr_boundary(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -245,22 +359,23 @@ def maybe_plot_all_cases(run_dir: Path, figure8_metrics: dict[str, dict[str, np.
 def main() -> None:
     for path, label in [
         (SIMPLE_X, "simple.x"),
-        (FIGURE8_DATA_ROOT, "figure-8 data root"),
-        (BOUNDARY_FILE, "figure-8 boundary"),
-        (CHARTMAP_FILE, "figure-8 chartmap"),
+        (REFERENCE_SIGNATURE, "figure-8 golden signature"),
         (SIMPLE_INPUT, "figure-8 SIMPLE input"),
         (START_INPUT, "figure-8 start file"),
-        (REFERENCE_SIGNATURE, "figure-8 golden signature"),
+        (GVEC_TO_CHARTMAP, "GVEC conversion script"),
+        (QUASR_JSON_TO_BOUNDARY, "QUASR conversion script"),
     ]:
         if not path.exists():
             raise SystemExit(f"Missing {label}: {path}")
+
+    boundary, chartmap = get_figure8_data()
 
     run_dir = Path.cwd() / "figure8_chartmap_smoke"
     if run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
 
-    boundary, chartmap = prepare_run_dir(run_dir)
+    prepare_run_dir(run_dir, chartmap)
     run_cmd([str(SIMPLE_X)], cwd=run_dir, label="figure8 SIMPLE")
 
     data = load_confined_fraction(run_dir / "confined_fraction.dat")
