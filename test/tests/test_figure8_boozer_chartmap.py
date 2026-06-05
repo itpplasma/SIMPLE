@@ -243,12 +243,9 @@ def maybe_plot_all_cases(run_dir: Path, figure8_metrics: dict[str, dict[str, np.
 
 
 def main() -> None:
-    if not FIGURE8_DATA_ROOT.exists():
-        print(f"Missing figure-8 data root: {FIGURE8_DATA_ROOT}")
-        raise SystemExit(77)
-
     for path, label in [
         (SIMPLE_X, "simple.x"),
+        (FIGURE8_DATA_ROOT, "figure-8 data root"),
         (BOUNDARY_FILE, "figure-8 boundary"),
         (CHARTMAP_FILE, "figure-8 chartmap"),
         (SIMPLE_INPUT, "figure-8 SIMPLE input"),

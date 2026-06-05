@@ -485,7 +485,6 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "slow;plot;python;golden_record"
         TIMEOUT 7200
-        SKIP_RETURN_CODE 77
         DEPENDS test_e2e_boozer_chartmap)
 
     if(SIMPLE_ENABLE_CGAL)
