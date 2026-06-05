@@ -5,6 +5,8 @@
 set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/test/test_data")
 set(WOUT_FILE "${TEST_DATA_DIR}/wout.nc")
 set(WOUT_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc")
+set(WOUT_QH_FILE "${TEST_DATA_DIR}/wout_qh.nc")
+set(WOUT_QH_URL "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc")
 
 # Download if not present
 if(NOT EXISTS "${WOUT_FILE}")
@@ -14,8 +16,32 @@ if(NOT EXISTS "${WOUT_FILE}")
     message(STATUS "Downloaded VMEC test file")
 endif()
 
+if(NOT EXISTS "${WOUT_QH_FILE}")
+    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
+    message(STATUS "Downloading QH VMEC file to ${WOUT_QH_FILE}...")
+    file(DOWNLOAD "${WOUT_QH_URL}" "${WOUT_QH_FILE}")
+endif()
+
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
+file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
+if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+    set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+endif()
+
+set(SIMPLE_HAVE_GVEC OFF)
+execute_process(
+    COMMAND ${BOOZER_CHARTMAP_PYTHON} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('gvec') else 1)"
+    RESULT_VARIABLE GVEC_IMPORT_RESULT
+)
+if(GVEC_IMPORT_RESULT EQUAL 0)
+    set(SIMPLE_HAVE_GVEC ON)
+else()
+    message(STATUS "gvec Python package not found; skipping GVEC chartmap QA test")
+endif()
 
 # Generate chartmap file from VMEC for testing chartmap coordinate detection
 # Uses libneo's vmec_to_chartmap tool built as part of dependencies
@@ -33,7 +59,6 @@ add_custom_target(chartmap_test_data DEPENDS ${CHARTMAP_FILE})
 # map2disc-based chartmap generation (via libneo Python API)
 set(SIMPLE_HAVE_MAP2DISC OFF)
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     execute_process(
         COMMAND ${Python3_EXECUTABLE} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('map2disc') else 1)"
         RESULT_VARIABLE MAP2DISC_IMPORT_RESULT
@@ -199,7 +224,6 @@ add_custom_command(
 
 # Convert STELLOPT coils format to SIMPLE format using Python
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_custom_command(
         OUTPUT ${COILS_SIMPLE_FILE}
         COMMAND ${Python3_EXECUTABLE}
@@ -394,6 +418,7 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_boozer_chartmap COMMAND test_boozer_chartmap.x)
     set_tests_properties(test_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
@@ -411,16 +436,33 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     add_test(NAME test_chartmap_scaling COMMAND test_chartmap_scaling.x)
     set_tests_properties(test_chartmap_scaling PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
 
     # Boozer chartmap roundtrip test: requires wout.nc
     add_executable(test_boozer_chartmap_roundtrip.x test_boozer_chartmap_roundtrip.f90)
     target_link_libraries(test_boozer_chartmap_roundtrip.x simple)
     add_test(NAME test_boozer_chartmap_roundtrip
-        COMMAND test_boozer_chartmap_roundtrip.x)
+        COMMAND test_boozer_chartmap_roundtrip.x
+            ${WOUT_FILE}
+            ${CMAKE_CURRENT_BINARY_DIR}/roundtrip_test.nc
+            export
+            ${CMAKE_CURRENT_BINARY_DIR}/boozer_chartmap_roundtrip
+            8.0e-5
+            2.0e-9)
     set_tests_properties(test_boozer_chartmap_roundtrip PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "slow")
+
+    if(SIMPLE_HAVE_GVEC)
+        add_test(NAME test_boozer_chartmap_gvec_qa
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
+                ${CMAKE_CURRENT_SOURCE_DIR}/run_gvec_qa_roundtrip.py)
+        set_tests_properties(test_boozer_chartmap_gvec_qa PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "slow;python"
+            TIMEOUT 7200)
+    endif()
 
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
@@ -428,11 +470,14 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
-        COMMAND ${Python3_EXECUTABLE}
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_boozer_chartmap.py)
     set_tests_properties(test_e2e_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "slow")
+        LABELS "slow;plot;python"
+        ENVIRONMENT "SIMPLE_BOOZER_CASES=QA"
+        TIMEOUT 7200)
+
 
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)

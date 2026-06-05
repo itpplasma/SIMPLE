@@ -1,5 +1,6 @@
 program test_chartmap_scaling
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use boozer_sub, only: load_boozer_from_chartmap, reset_boozer_batch_splines, splint_boozer_coord
     use field_boozer_chartmap, only: boozer_chartmap_field_t, create_boozer_chartmap_field
     use new_vmec_stuff_mod, only: vmec_B_scale, vmec_RZ_scale
     use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -15,6 +16,10 @@ program test_chartmap_scaling
     real(dp) :: ref_cart_base(3), ref_cart_scaled(3)
     real(dp) :: Acov_base(3), hcov_base(3), Bmod_base
     real(dp) :: Acov_scaled(3), hcov_scaled(3), Bmod_scaled
+    real(dp) :: A_theta_can, A_phi_can, dA_theta_can, dA_phi_can, d2A_phi_can, d3A_phi_can
+    real(dp) :: B_theta_can, dB_theta_can, d2B_theta_can
+    real(dp) :: B_phi_can, dB_phi_can, d2B_phi_can
+    real(dp) :: Bmod_can, B_r_can, dBmod_can(3), dB_r_can(3), d2Bmod_can(6), d2B_r_can(6)
     real(dp) :: u_back(3), x_scaled_input(3)
     real(dp) :: flux_scale
     character(len=*), parameter :: filename = 'test_boozer_chartmap.nc'
@@ -70,6 +75,40 @@ program test_chartmap_scaling
         nfail = nfail + 1
     end if
 
+    call load_boozer_from_chartmap(filename)
+    call splint_boozer_coord(u(1)**2, u(2), u(3), 0, &
+                             A_theta_can, A_phi_can, dA_theta_can, dA_phi_can, d2A_phi_can, d3A_phi_can, &
+                             B_theta_can, dB_theta_can, d2B_theta_can, &
+                             B_phi_can, dB_phi_can, d2B_phi_can, &
+                             Bmod_can, dBmod_can, d2Bmod_can, B_r_can, dB_r_can, d2B_r_can)
+
+    if (abs(A_theta_can - Acov_scaled(2)) > tol*max(1.0_dp, abs(A_theta_can))) then
+        print *, 'FAIL: canonical A_theta scaling mismatch'
+        nfail = nfail + 1
+    end if
+
+    if (abs(A_phi_can - Acov_scaled(3)) > tol*max(1.0_dp, abs(A_phi_can))) then
+        print *, 'FAIL: canonical A_phi scaling mismatch'
+        nfail = nfail + 1
+    end if
+
+    if (abs(B_theta_can - hcov_scaled(2)*Bmod_scaled) > tol*max(1.0_dp, abs(B_theta_can))) then
+        print *, 'FAIL: canonical B_theta scaling mismatch'
+        nfail = nfail + 1
+    end if
+
+    if (abs(B_phi_can - hcov_scaled(3)*Bmod_scaled) > tol*max(1.0_dp, abs(B_phi_can))) then
+        print *, 'FAIL: canonical B_phi scaling mismatch'
+        nfail = nfail + 1
+    end if
+
+    if (abs(Bmod_can - Bmod_scaled) > 5.0e-3_dp*max(1.0_dp, abs(Bmod_can))) then
+        print *, 'FAIL: canonical Bmod scaling mismatch'
+        print *, '  canonical Bmod =', Bmod_can
+        print *, '  direct Bmod    =', Bmod_scaled
+        nfail = nfail + 1
+    end if
+
     select type (cs => ref_coords)
     type is (scaled_chartmap_coordinate_system_t)
         x_scaled_input = ref_cart_scaled
@@ -88,6 +127,7 @@ program test_chartmap_scaling
 
     vmec_B_scale = 1.0_dp
     vmec_RZ_scale = 1.0_dp
+    call reset_boozer_batch_splines
 
     if (nfail /= 0) then
         print *, nfail, 'chartmap scaling tests failed'
