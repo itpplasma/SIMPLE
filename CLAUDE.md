@@ -27,6 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Python tests**: Located in `test/python/` directory
 - **Golden record testing**: Use `examples/golden_record.py` to compare against reference behavior
 - **Review evidence**: Nontrivial pull requests must fill `.github/pull_request_template.md`; see `docs/review-policy.md` for risk tiers, correctness contracts, and golden-record rules
+- **PR labels**: Every pull request needs exactly one `tier/T0` through `tier/T4` label and one size label. Size labels use changed lines: `size/XS` <= 10, `size/S` <= 100, `size/M` <= 300, `size/L` <= 1000, `size/XL` > 1000
 - **Verbose output**: Now default for all test targets. Use `VERBOSE=0` to disable
 - **Single test**: `make test TEST=test_name` - Run specific test by name
 - Note: Test system is currently under development
