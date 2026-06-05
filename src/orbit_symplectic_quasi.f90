@@ -4,6 +4,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
 use minpack_interfaces, only: hybrd1
+use diag_counters, only: count_event, EVT_R_NEGATIVE
 
 implicit none
 
@@ -216,7 +217,7 @@ subroutine timestep_midpoint_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      call count_event(EVT_R_NEGATIVE)
       x(1) = 0.01
     end if
 
@@ -256,7 +257,7 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      call count_event(EVT_R_NEGATIVE)
       x(1) = 0.01
     end if
 
@@ -310,7 +311,7 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      call count_event(EVT_R_NEGATIVE)
       x(1) = 0.01
     end if
 
@@ -367,7 +368,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
+      call count_event(EVT_R_NEGATIVE)
       x(1) = 0.01
     end if
 

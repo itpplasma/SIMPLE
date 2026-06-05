@@ -603,6 +603,26 @@ set_tests_properties(test_macrostep_log_grid PROPERTIES
     TIMEOUT 60
 )
 
+# Restart I/O unit test
+add_executable(test_restart_io.x test_restart_io.f90)
+target_link_libraries(test_restart_io.x simple)
+add_test(NAME test_restart_io
+    COMMAND test_restart_io.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_restart_io PROPERTIES
+    LABELS "unit"
+    TIMEOUT 15)
+
+# Restart integration test (TEST field, deterministic)
+add_test(NAME test_restart_integration
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_restart.py
+        $<TARGET_FILE:simple.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_restart_integration PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 60)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)

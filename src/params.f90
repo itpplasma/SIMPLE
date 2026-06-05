@@ -49,6 +49,10 @@ module params
 
     real(dp) :: relerr = 1d-13
 
+    ! Wall-clock seconds between partial-result checkpoints during tracing.
+    ! <= 0 disables periodic output (results then appear only at the end).
+    real(dp) :: checkpoint_interval = 10.0d0
+
     real(dp), allocatable :: trap_par(:), perp_inv(:)
     integer, allocatable :: iclass(:, :)
     logical, allocatable :: class_passing(:), class_lost(:)
@@ -86,6 +90,7 @@ module params
 
     logical :: debug = .False.
     logical :: output_results_netcdf = .False.
+    logical :: restart = .False.
     integer :: ierr
 
     integer :: batch_size = 2000000000  ! Initialize large so batch mode is not default
@@ -112,7 +117,7 @@ module params
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, output_results_netcdf, &
 	        output_error, output_orbits_macrostep, &  ! callback
-	        macrostep_time_grid
+	        macrostep_time_grid, checkpoint_interval, restart
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
