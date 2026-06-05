@@ -82,7 +82,7 @@ contains
         real(dp), intent(in) :: now
 
         real(dp) :: elapsed, frac, eta
-        integer :: unit, id
+        integer :: id
         integer(int64) :: total
         character(len=512) :: events
 
@@ -101,13 +101,6 @@ contains
                          trim(int_to_str(total))
             end if
         end do
-
-        open (newunit=unit, file='progress.dat', status='replace', action='write')
-        write (unit, '(A)') '# elapsed_s n_done n_total percent eta_s'
-        write (unit, '(F12.1, 1X, I0, 1X, I0, 1X, F6.2, 1X, F12.1)') &
-            elapsed, n_done, n_total, 100.0d0*frac, eta
-        if (len_trim(events) > 0) write (unit, '(A)') '# events:'//trim(events)
-        close (unit)
 
         write (output_unit, '(A, F6.2, A, I0, A, I0, A, F0.1, A, F0.1, A, A)') &
             ' [progress] ', 100.0d0*frac, '%  ', n_done, '/', n_total, &
