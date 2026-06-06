@@ -643,8 +643,11 @@ contains
         real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
 
         real(dp), dimension(5) :: z
-        real(dp) :: u_ref_prev(3)
-        real(dp) :: x_prev(3), x_prev_m(3)
+        real(dp) :: u_ref_prev(3), u_ref_cur(3), u_ref_hit(3)
+        real(dp) :: x_prev(3), x_cur(3)
+        real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
+        real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
+        real(dp) :: segment_length, hit_distance, t_frac
         integer :: it, ierr_orbit, it_final
         integer(8) :: kt
         logical :: passing
@@ -770,12 +773,15 @@ contains
         real(dp), intent(inout) :: x_prev_m(3)
 
         integer :: ktau, wall_check_interval
-        real(dp) :: u_ref_cur(3), x_cur(3), x_cur_m(3)
+        real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: x_hit_m(3), x_hit(3), normal_m(3)
         real(dp) :: vhat(3), vnorm, cos_inc
         real(dp) :: u_ref_hit(3)
+        real(dp) :: segment_length, hit_distance, t_frac
         logical :: hit
         integer :: ierr_from_cart
+
+        call integ_to_ref(z(1:3), u_ref_prev)
 
         ! Check wall every N microsteps to limit overhead
         ! For small macrosteps (ntau_local<=32), check at end only
@@ -829,6 +835,16 @@ contains
 
                         if (ierr_from_cart == 0) then
                             call ref_to_integ(u_ref_hit, z(1:3))
+                        else
+                            ! Fallback: linear interpolation of reference coordinates
+                            ! when from_cart fails (ill-conditioned regions of chartmap)
+                            segment_length = sqrt(sum((x_cur_m - x_prev_m)**2))
+                            if (segment_length > 0.0_dp) then
+                                hit_distance = sqrt(sum((x_hit_m - x_prev_m)**2))
+                                t_frac = hit_distance / segment_length
+                                u_ref_hit = u_ref_prev + t_frac * (u_ref_cur - u_ref_prev)
+                                call ref_to_integ(u_ref_hit, z(1:3))
+                            end if
                         end if
 
                         ierr_orbit = 77
@@ -837,6 +853,7 @@ contains
                 end if
 
                 x_prev_m = x_cur_m
+                u_ref_prev = u_ref_cur
             end if
         end do
     end subroutine macrostep_with_wall_check
