@@ -67,7 +67,7 @@ contains
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
     subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
-        use boozer_sub, only: splint_boozer_coord, torflux_gpu
+        use boozer_sub, only: splint_boozer_coord, boozer_state
         !
         ! Evaluates magnetic field in Boozer canonical coordinates (r, th_c, ph_c)
         ! and stores results in variable f
@@ -117,7 +117,7 @@ contains
                                  f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
 
         bmod2 = f%Bmod**2
-        sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*torflux_gpu
+        sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*boozer_state%torflux
         Bctr_vartheta = -f%dAph(1)/sqg
         Bctr_varphi = f%dAth(1)/sqg
 

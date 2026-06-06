@@ -3,19 +3,17 @@ module simple_gpu
     ! Boozer field (isw_field_type=2) + explicit-implicit symplectic Euler
     ! (integmode=EXPL_IMPL_EULER). One particle per GPU thread.
     !
-    ! The CPU integrator (orbit_symplectic) dispatches the field evaluation
-    ! through a procedure pointer, which cannot be called inside an OpenACC
-    ! compute region. This module provides device-resident (acc routine seq)
-    ! copies of the explicit-implicit Euler step and its 2x2 Newton solver that
-    ! call eval_field_booz directly. The arithmetic mirrors
-    ! orbit_timestep_sympl_expl_impl_euler / newton1 / f_sympl_euler1 /
-    ! jac_sympl_euler1 exactly (extrap_field = .true. branch); equivalence is
-    ! checked against the CPU path by test_gpu_orbit.
+    ! The CPU integrator dispatches the field evaluation through a procedure
+    ! pointer, which cannot be called inside an OpenACC compute region. This
+    ! module keeps the device-side field evaluation local and reuses the shared
+    ! symplectic-Euler algebra from orbit_symplectic_euler1. Equivalence is
+    ! checked against the CPU path by test_gpu_orbit_bench.
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
+    use field_can_mod, only: field_can_t, get_derivatives2
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t
-    use boozer_sub, only: torflux_gpu
+    use orbit_symplectic_euler1, only: sympl_euler1_newton_iter, sympl_euler1_extrapolate_step
+    use boozer_sub, only: boozer_state
     use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
@@ -30,43 +28,6 @@ module simple_gpu
 
 contains
 
-    subroutine gpu_f_sympl_euler1(si, f, x, fvec)
-        !$acc routine seq
-        type(symplectic_integrator_t), intent(inout) :: si
-        type(field_can_t), intent(inout) :: f
-        real(dp), intent(in) :: x(2)
-        real(dp), intent(out) :: fvec(2)
-
-        call eval_field_booz(f, x(1), si%z(2), si%z(3), 2)
-        call get_derivatives2(f, x(2))
-
-        fvec(1) = f%dpth(1)*(f%pth - si%pthold) &
-                  + si%dt*(f%dH(2)*f%dpth(1) - f%dH(1)*f%dpth(2))
-        fvec(2) = f%dpth(1)*(x(2) - si%z(4)) &
-                  + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-    end subroutine gpu_f_sympl_euler1
-
-    subroutine gpu_jac_sympl_euler1(si, f, x, jac)
-        !$acc routine seq
-        type(symplectic_integrator_t), intent(in) :: si
-        type(field_can_t), intent(in) :: f
-        real(dp), intent(in) :: x(2)
-        real(dp), intent(out) :: jac(2, 2)
-
-        jac(1, 1) = f%d2pth(1)*(f%pth - si%pthold) + f%dpth(1)**2 &
-            + si%dt*(f%d2H(2)*f%dpth(1) + f%dH(2)*f%d2pth(1) &
-                     - f%d2H(1)*f%dpth(2) - f%dH(1)*f%d2pth(2))
-        jac(1, 2) = f%d2pth(7)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(4) &
-            + si%dt*(f%d2H(8)*f%dpth(1) + f%dH(2)*f%d2pth(7) &
-                     - f%d2H(7)*f%dpth(2) - f%dH(1)*f%d2pth(8))
-        jac(2, 1) = f%d2pth(1)*(x(2) - si%z(4)) &
-            + si%dt*(f%d2H(3)*f%dpth(1) + f%dH(3)*f%d2pth(1) &
-                     - f%d2H(1)*f%dpth(3) - f%dH(1)*f%d2pth(3))
-        jac(2, 2) = f%d2pth(7)*(x(2) - si%z(4)) + f%dpth(1) &
-            + si%dt*(f%d2H(9)*f%dpth(1) + f%dH(3)*f%d2pth(7) &
-                     - f%d2H(7)*f%dpth(3) - f%dH(1)*f%d2pth(9))
-    end subroutine gpu_jac_sympl_euler1
-
     subroutine gpu_newton1(si, f, x, xlast)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
@@ -74,34 +35,22 @@ contains
         real(dp), intent(inout) :: x(2)
         real(dp), intent(out) :: xlast(2)
 
-        real(dp) :: fvec(2), fjac(2, 2), ijac(2, 2)
         real(dp) :: tolref(2)
         integer :: kit
+        logical :: converged
 
         tolref(1) = 1d0
-        tolref(2) = dabs(1d1*torflux_gpu/f%ro0)
+        tolref(2) = dabs(1d1*boozer_state%torflux/f%ro0)
 
         do kit = 1, maxit
             if (x(1) > 1d0) return
             if (x(1) < 0d0) x(1) = 0.01d0
 
-            call gpu_f_sympl_euler1(si, f, x, fvec)
-            call gpu_jac_sympl_euler1(si, f, x, fjac)
+            call eval_field_booz(f, x(1), si%z(2), si%z(3), 2)
+            call get_derivatives2(f, x(2))
+            call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
 
-            ijac(1, 1) = 1d0/(fjac(1, 1) - fjac(1, 2)*fjac(2, 1)/fjac(2, 2))
-            ijac(1, 2) = -1d0/(fjac(1, 1)*fjac(2, 2)/fjac(1, 2) - fjac(2, 1))
-            ijac(2, 1) = -1d0/(fjac(1, 1)*fjac(2, 2)/fjac(2, 1) - fjac(1, 2))
-            ijac(2, 2) = 1d0/(fjac(2, 2) - fjac(1, 2)*fjac(2, 1)/fjac(1, 1))
-
-            xlast = x
-            x(1) = x(1) - (ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2))
-            x(2) = x(2) - (ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2))
-
-            tolref(2) = max(dabs(x(2)), tolref(2))
-
-            if (dabs(fvec(1)) < si%atol .and. dabs(fvec(2)) < si%atol) return
-            if (dabs(x(1) - xlast(1)) < si%rtol*tolref(1) .and. &
-                dabs(x(2) - xlast(2)) < si%rtol*tolref(2)) return
+            if (converged) return
         end do
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
@@ -131,20 +80,7 @@ contains
             end if
             if (x(1) < 0.0d0) x(1) = 0.01d0
 
-            si%z(1) = x(1)
-            si%z(4) = x(2)
-
-            ! extrap_field = .true. branch (see orbit_symplectic_base)
-            f%pth = f%pth + f%dpth(1)*(x(1) - xlast(1)) + f%dpth(4)*(x(2) - xlast(2))
-            f%dH(1) = f%dH(1) + f%d2H(1)*(x(1) - xlast(1)) + f%d2H(7)*(x(2) - xlast(2))
-            f%dpth(1) = f%dpth(1) + f%d2pth(1)*(x(1) - xlast(1)) &
-                        + f%d2pth(7)*(x(2) - xlast(2))
-            f%vpar = f%vpar + f%dvpar(1)*(x(1) - xlast(1)) + f%dvpar(4)*(x(2) - xlast(2))
-            f%hth = f%hth + f%dhth(1)*(x(1) - xlast(1))
-            f%hph = f%hph + f%dhph(1)*(x(1) - xlast(1))
-
-            si%z(2) = si%z(2) + si%dt*f%dH(1)/f%dpth(1)
-            si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
+            call sympl_euler1_extrapolate_step(si, f, x, xlast)
 
             ktau = ktau + 1
         end do

@@ -12,8 +12,8 @@ module simple_main
 	                      grid_density, dtau, dtaumin, ntau, v0, &
 	                      kpart, confpart_pass, confpart_trap, times_lost, integmode, &
 	                      relerr, trace_time, &
-	                      class_plot, ntcut, iclass, bmin, bmax, &
-	                      zstart, zend, trap_par, perp_inv, sbeg, &
+	                      class_plot, fast_class, generate_start_only, ntcut, iclass, &
+	                      bmin, bmax, zstart, zend, trap_par, perp_inv, sbeg, &
 	                      ntimstep, should_skip, reset_seed_if_deterministic, &
 	                      field_input, isw_field_type, reuse_batch, coord_input, &
 	                      wall_input, wall_units, wall_hit, wall_hit_cart, &
@@ -449,13 +449,15 @@ contains
 
     subroutine trace_compare_gpu(norb)
         ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
-        ! symplectic integrator on identical per-particle initial states for the
-        ! default Boozer + explicit-implicit Euler configuration. Triggered by
-        ! the SIMPLE_GPU_BENCH environment variable.
+        ! symplectic integrator on identical per-particle initial states.
+        ! Triggered by the SIMPLE_GPU_BENCH environment variable and restricted
+        ! to the Boozer + EXPL_IMPL_EULER path without wall, collision, or
+        ! classifier options.
         use orbit_symplectic, only: orbit_timestep_sympl
-        use orbit_symplectic_base, only: symplectic_integrator_t
+        use orbit_symplectic_base, only: symplectic_integrator_t, EXPL_IMPL_EULER
         use field_can_mod, only: field_can_t
-        use boozer_sub, only: sync_boozer_gpu_params
+        use magfie_sub, only: BOOZER
+        use boozer_sub, only: sync_boozer_state
         use simple_gpu, only: trace_orbits_gpu
 
         type(tracer_t), intent(inout) :: norb
@@ -468,6 +470,14 @@ contains
         integer :: i, it, ktau, ierr, loss_mismatch
         integer :: cpu_lost, gpu_lost, flip
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
+
+        if (isw_field_type /= BOOZER .or. integmode /= EXPL_IMPL_EULER .or. swcoll .or. &
+            len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. generate_start_only) then
+            error stop "simple_main.trace_compare_gpu: SIMPLE_GPU_BENCH requires Boozer, " // &
+                       "EXPL_IMPL_EULER, and no wall/collision/classifier options"
+        end if
+
+        call sync_boozer_state
 
         allocate (si_cpu(ntestpart), si_gpu(ntestpart))
         allocate (f_cpu(ntestpart), f_gpu(ntestpart))
@@ -483,8 +493,6 @@ contains
             si_gpu(i) = si_cpu(i)
             f_gpu(i) = f_cpu(i)
         end do
-
-        call sync_boozer_gpu_params
 
         ! CPU reference (OpenMP over particles)
         t0 = omp_get_wtime()

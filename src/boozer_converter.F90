@@ -32,18 +32,12 @@ module boozer_sub
     ! Batch spline data for Bmod and B_r interpolation
     type(BatchSplineData3D), allocatable :: bmod_br_batch_spline
     logical, save :: bmod_br_batch_spline_ready = .false.
-    integer, save :: bmod_br_num_quantities = 0
     real(dp), allocatable, save :: bmod_grid(:, :, :)
     real(dp), allocatable, save :: br_grid(:, :, :)
 
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), allocatable :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
-    ! Radial abscissa of aphi_batch_spline: .false. = uniform s (VMEC-derived
-    ! Boozer), .true. = uniform rho grid (chartmap file). A chartmap tabulates
-    ! every 1D profile against its rho grid, so A_phi is evaluated at rho and
-    ! chain-ruled to s, matching B_theta/B_phi/Bmod.
-    logical, save :: aphi_over_rho = .false.
     ! Canonical A_phi sampled natively on the Boozer rho grid in
     ! compute_boozer_data (a flux function, like s_Bcovar_tp_B). export_boozer_chartmap
     ! writes this directly so the chartmap A_phi shares the rho abscissa of
@@ -63,39 +57,40 @@ module boozer_sub
     logical, save :: delt_delp_B_batch_spline_ready = .false.
     real(dp), allocatable, save :: delt_delp_B_grid(:, :, :, :)
 
-    ! Device-accessible copies of scalar field parameters that splint_boozer_coord
-    ! needs when running inside an OpenACC kernel. The libneo modules defining the
-    ! originals (vector_potentail_mod, new_vmec_stuff_mod, boozer_coordinates_mod)
-    ! are not OpenACC-compiled, so their globals have no device symbol. boozer_sub
-    ! is compiled with -acc -gpu=mem:unified, so these mirrors are coherent on the
-    ! device. Synced on the host by sync_boozer_gpu_params before GPU tracing.
-    real(dp), save :: torflux_gpu = 0.0_dp
-    integer, save :: nper_gpu = 1
-    logical, save :: use_B_r_gpu = .false.
-    public :: sync_boozer_gpu_params, torflux_gpu
+    type :: boozer_state_t
+        real(dp) :: torflux = 0.0_dp
+        integer :: nper = 1
+        logical :: use_B_r = .false.
+        integer :: bmod_br_num_quantities = 0
+        logical :: aphi_over_rho = .false.
+    end type boozer_state_t
+
+    ! Device-accessible Boozer runtime state shared by host and OpenACC code.
+    ! sync_boozer_state copies the libneo globals into this object before GPU use.
+    type(boozer_state_t), save :: boozer_state
+    public :: sync_boozer_state, boozer_state
 
     ! Module statics referenced by splint_boozer_coord inside OpenACC device
     ! kernels need device symbols. declare create + update device (in
-    ! sync_boozer_gpu_params / spline construction) keeps them coherent.
-    !$acc declare create(torflux_gpu, nper_gpu, use_B_r_gpu, bmod_br_num_quantities)
+    ! sync_boozer_state / spline construction) keeps them coherent.
+    !$acc declare create(boozer_state)
     !$acc declare create(bmod_br_batch_spline, aphi_batch_spline, bcovar_tp_batch_spline)
-    !$acc declare create(aphi_over_rho)
 
 contains
 
-    !> Copy scalar Boozer field parameters from the libneo modules into
-    !> device-accessible boozer_sub mirrors. Host-only; call after field init
-    !> and before any OpenACC tracing kernel.
-    subroutine sync_boozer_gpu_params()
+    !> Copy scalar Boozer field parameters from the libneo modules into the
+    !> shared runtime state. Host-only; call after field init and before any
+    !> OpenACC tracing kernel.
+    subroutine sync_boozer_state()
         use vector_potentail_mod, only: torflux
         use new_vmec_stuff_mod, only: nper
         use boozer_coordinates_mod, only: use_B_r
-        torflux_gpu = torflux
-        nper_gpu = nper
-        use_B_r_gpu = use_B_r
-        !$acc update device(torflux_gpu, nper_gpu, use_B_r_gpu, bmod_br_num_quantities, aphi_over_rho)
+        boozer_state%torflux = torflux
+        boozer_state%nper = nper
+        boozer_state%use_B_r = use_B_r
+        !$acc update device(boozer_state)
         !$acc update device(bmod_br_batch_spline, aphi_batch_spline, bcovar_tp_batch_spline)
-    end subroutine sync_boozer_gpu_params
+    end subroutine sync_boozer_state
 
     !> Initialize Boozer coordinates using given magnetic field
     subroutine get_boozer_coordinates_with_field(field)
@@ -187,8 +182,8 @@ contains
         ! omitted here (threadprivate variables are not allowed in acc routines).
         r_eval = abs(r)
 
-        A_theta = torflux_gpu*r_eval
-        dA_theta_dr = torflux_gpu
+        A_theta = boozer_state%torflux*r_eval
+        dA_theta_dr = boozer_state%torflux
 
         ! Interpolate A_phi. VMEC-derived Boozer data is tabulated on a uniform-s
         ! grid (evaluate at s directly). A chartmap tabulates A_phi on the file's
@@ -197,7 +192,7 @@ contains
         ! coefficients so the VMEC-s branch keeps its original instruction order.
         ! Guards (error stop) are omitted so this routine is callable from OpenACC
         ! device kernels (error stop is not supported there).
-        if (aphi_over_rho) then
+        if (boozer_state%aphi_over_rho) then
             ! A_phi(rho) -> s-derivatives by the chain rule for rho = sqrt(s):
             !   rho'   = 1/(2 rho)              [drds]
             !   rho''  = -1/(4 rho^3)           [-d2rds2m]
@@ -252,7 +247,7 @@ contains
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r_eval)
         theta_wrapped = modulo(vartheta_B, TWOPI)
-        phi_wrapped = modulo(varphi_B, TWOPI/real(nper_gpu, dp))
+        phi_wrapped = modulo(varphi_B, TWOPI/real(boozer_state%nper, dp))
 
         x_eval(1) = rho_tor
         x_eval(2) = theta_wrapped
@@ -265,9 +260,9 @@ contains
 
         if (mode_secders == 2) then
             call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                y_eval(1:bmod_br_num_quantities), &
-                                                dy_eval(:, 1:bmod_br_num_quantities), &
-                                                d2y_eval(:, 1:bmod_br_num_quantities))
+                                                y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                                dy_eval(:, 1:boozer_state%bmod_br_num_quantities), &
+                                                d2y_eval(:, 1:boozer_state%bmod_br_num_quantities))
 
             ! Extract Bmod (quantity 1)
             qua = y_eval(1)
@@ -301,7 +296,7 @@ contains
             d2Bmod_B(6) = d2qua_dp2
 
             ! Extract B_r (quantity 2, if present)
-            if (use_B_r_gpu) then
+            if (boozer_state%use_B_r) then
                 qua = y_eval(2)
                 dqua_dr = dy_eval(1, 2)
                 dqua_dt = dy_eval(2, 2)
@@ -339,8 +334,8 @@ contains
             end if
         else
             call evaluate_batch_splines_3d_der(bmod_br_batch_spline, x_eval, &
-                                               y_eval(1:bmod_br_num_quantities), &
-                                               dy_eval(:, 1:bmod_br_num_quantities))
+                                               y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                               dy_eval(:, 1:boozer_state%bmod_br_num_quantities))
 
             Bmod_B = y_eval(1)
             dBmod_B(1) = dy_eval(1, 1)*drhods
@@ -351,15 +346,15 @@ contains
 
             if (mode_secders == 1) then
                 call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                    y_eval(1:bmod_br_num_quantities), &
+                                                    y_eval(1:boozer_state%bmod_br_num_quantities), &
                                                     dy_eval(:, &
-                                                            1:bmod_br_num_quantities), &
+                                                            1:boozer_state%bmod_br_num_quantities), &
                                                     d2y_eval(:, &
-                                                             1:bmod_br_num_quantities))
+                                                             1:boozer_state%bmod_br_num_quantities))
                 d2Bmod_B(1) = d2y_eval(1, 1)*drhods2 - dy_eval(1, 1)*d2rhods2m
             end if
 
-            if (use_B_r_gpu) then
+            if (boozer_state%use_B_r) then
                 qua = y_eval(2)
                 dqua_dr = dy_eval(1, 2)
                 dqua_dt = dy_eval(2, 2)
@@ -920,6 +915,8 @@ contains
     end subroutine ensure_grid_4d
 
     subroutine reset_boozer_batch_splines
+        boozer_state = boozer_state_t()
+        !$acc update device(boozer_state)
         if (aphi_batch_spline_ready) then
             call destroy_batch_splines_1d(aphi_batch_spline)
             aphi_batch_spline_ready = .false.
@@ -931,7 +928,7 @@ contains
         if (bmod_br_batch_spline_ready) then
             call destroy_batch_splines_3d(bmod_br_batch_spline)
             bmod_br_batch_spline_ready = .false.
-            bmod_br_num_quantities = 0
+            boozer_state%bmod_br_num_quantities = 0
         end if
         if (allocated(bmod_grid)) deallocate (bmod_grid)
         if (allocated(br_grid)) deallocate (br_grid)
@@ -1027,7 +1024,7 @@ contains
         call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_aphi, spline_order, &
                                         .false., aphi_batch_spline)
         aphi_batch_spline_ready = .true.
-        aphi_over_rho = .true.
+        boozer_state%aphi_over_rho = .true.
         deallocate (y_aphi)
 
         ! Build B_theta, B_phi batch spline over rho_tor
@@ -1053,7 +1050,7 @@ contains
         call construct_batch_splines_3d(x_min_3d, x_max_3d, y_bmod, order_3d, &
                                         periodic_3d, bmod_br_batch_spline)
         bmod_br_batch_spline_ready = .true.
-        bmod_br_num_quantities = 1
+        boozer_state%bmod_br_num_quantities = 1
         deallocate (y_bmod)
 
         print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
@@ -1065,7 +1062,7 @@ contains
         ! build_boozer_bmod_br_batch_spline), so refresh the device-accessible
         ! field-parameter mirrors here too. splint_boozer_coord reads them on
         ! both host and device.
-        call sync_boozer_gpu_params
+        call sync_boozer_state
 
     end subroutine load_boozer_from_chartmap
 
@@ -1290,7 +1287,7 @@ contains
         aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
 
         aphi_batch_spline_ready = .true.
-        aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
+        boozer_state%aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
     end subroutine build_boozer_aphi_batch_spline
 
     subroutine build_boozer_bcovar_tp_batch_spline
@@ -1343,7 +1340,7 @@ contains
         if (bmod_br_batch_spline_ready) then
             call destroy_batch_splines_3d(bmod_br_batch_spline)
             bmod_br_batch_spline_ready = .false.
-            bmod_br_num_quantities = 0
+            boozer_state%bmod_br_num_quantities = 0
         end if
 
         order = [ns_s_B, ns_tp_B, ns_tp_B]
@@ -1374,13 +1371,13 @@ contains
         call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
                                         bmod_br_batch_spline)
         bmod_br_batch_spline_ready = .true.
-        bmod_br_num_quantities = nq
+        boozer_state%bmod_br_num_quantities = nq
         deallocate (y_batch)
 
         ! All scalar field parameters are final once the Bmod/B_r spline is
         ! built; refresh the device-accessible mirrors used by splint_boozer_coord
         ! (also keeps the host CPU path correct, since splint now reads them).
-        call sync_boozer_gpu_params
+        call sync_boozer_state
     end subroutine build_boozer_bmod_br_batch_spline
 
     subroutine build_boozer_delt_delp_batch_splines

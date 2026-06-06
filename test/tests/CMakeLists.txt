@@ -606,6 +606,22 @@ if(SIMPLE_ENABLE_OPENACC)
     )
 endif()
 
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.in
+    ${CMAKE_CURRENT_BINARY_DIR}/test_gpu_orbit_bench.in
+    COPYONLY)
+
+add_test(NAME test_gpu_orbit_bench
+    COMMAND ${CMAKE_COMMAND} -E env
+        SIMPLE_GPU_BENCH=1
+        $<TARGET_FILE:simple.x>
+        test_gpu_orbit_bench.in
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_gpu_orbit_bench PROPERTIES
+    LABELS "unit"
+    PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    TIMEOUT 120)
+
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
 target_link_libraries(test_macrostep_log_grid.x simple)
