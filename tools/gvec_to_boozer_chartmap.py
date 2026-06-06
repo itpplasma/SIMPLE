@@ -155,7 +155,7 @@ def main():
     v = ds.createVariable("num_field_periods", "i4"); v[:] = np.int32(nfp)
 
     ds.rho_convention = "rho_tor"
-    ds.zeta_convention = "cyl"
+    ds.zeta_convention = "boozer"
     ds.rho_lcfs = float(rho_grid[-1])
     ds.boozer_field = np.int32(1)
     ds.torflux = A_theta_edge

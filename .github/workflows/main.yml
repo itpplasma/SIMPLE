@@ -79,7 +79,7 @@ jobs:
         run: make test-fast
 
       - name: Install Python package
-        run: python -m pip install -e . --no-build-isolation
+        run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
       - name: Run Slow Tests (Python)
         env:

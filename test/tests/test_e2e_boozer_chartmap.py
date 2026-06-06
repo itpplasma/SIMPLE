@@ -232,8 +232,8 @@ def assert_boozer_chartmap_file(path: Path) -> None:
     with netCDF4.Dataset(path) as ds:
         if int(getattr(ds, "boozer_field")) != 1:
             raise RuntimeError(f"{path}: boozer_field attribute missing or invalid")
-        if str(getattr(ds, "zeta_convention")) != "cyl":
-            raise RuntimeError(f"{path}: expected zeta_convention='cyl'")
+        if str(getattr(ds, "zeta_convention")) != "boozer":
+            raise RuntimeError(f"{path}: expected zeta_convention='boozer'")
         if str(getattr(ds, "rho_convention")) != "rho_tor":
             raise RuntimeError(f"{path}: expected rho_convention='rho_tor'")
         rmajor = float(getattr(ds, "rmajor", 0.0))

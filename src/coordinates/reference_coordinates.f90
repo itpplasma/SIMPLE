@@ -1,6 +1,7 @@
 module reference_coordinates
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use field_boozer_chartmap, only: is_boozer_chartmap
     use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
         make_chartmap_coordinate_system, detect_refcoords_file_type, &
         refcoords_file_chartmap, refcoords_file_vmec_wout, refcoords_file_unknown
@@ -27,31 +28,36 @@ contains
 
         if (allocated(ref_coords)) deallocate(ref_coords)
 
-        call detect_refcoords_file_type(coord_input, file_type, ierr, message)
-        if (ierr /= 0) then
-            print *, 'reference_coordinates.init_reference_coordinates: ', &
-                'file detection error for ', trim(coord_input)
-            print *, trim(message)
-            error stop
-        end if
-
-        select case (file_type)
-        case (refcoords_file_chartmap)
+        if (is_boozer_chartmap(coord_input)) then
             call make_chartmap_coordinate_system(ref_coords, coord_input)
             call wrap_scaled_chartmap_coordinate_system(ref_coords, vmec_RZ_scale)
-        case (refcoords_file_vmec_wout)
-            call make_vmec_coordinate_system(ref_coords)
-        case (refcoords_file_unknown)
-            print *, 'reference_coordinates.init_reference_coordinates: ', &
-                'unknown file type for ', trim(coord_input)
-            print *, 'Expected VMEC wout (*.nc with rmnc) or chartmap (*.nc with ', &
-                'rho/theta/zeta dims and x/y/z vars)'
-            error stop
-        case default
-            print *, 'reference_coordinates.init_reference_coordinates: ', &
-                'unexpected file_type ', file_type
-            error stop
-        end select
+        else
+            call detect_refcoords_file_type(coord_input, file_type, ierr, message)
+            if (ierr /= 0) then
+                print *, 'reference_coordinates.init_reference_coordinates: ', &
+                    'file detection error for ', trim(coord_input)
+                print *, trim(message)
+                error stop
+            end if
+
+            select case (file_type)
+            case (refcoords_file_chartmap)
+                call make_chartmap_coordinate_system(ref_coords, coord_input)
+                call wrap_scaled_chartmap_coordinate_system(ref_coords, vmec_RZ_scale)
+            case (refcoords_file_vmec_wout)
+                call make_vmec_coordinate_system(ref_coords)
+            case (refcoords_file_unknown)
+                print *, 'reference_coordinates.init_reference_coordinates: ', &
+                    'unknown file type for ', trim(coord_input)
+                print *, 'Expected VMEC wout (*.nc with rmnc) or chartmap (*.nc with ', &
+                    'rho/theta/zeta dims and x/y/z vars)'
+                error stop
+            case default
+                print *, 'reference_coordinates.init_reference_coordinates: ', &
+                    'unexpected file_type ', file_type
+                error stop
+            end select
+        end if
     end subroutine init_reference_coordinates
 
 end module reference_coordinates

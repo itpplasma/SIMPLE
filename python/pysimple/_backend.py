@@ -32,6 +32,15 @@ def _load_backend() -> ModuleType:
         try:
             _BACKEND = import_module("simple_backend")
         except ImportError as exc:  # pragma: no cover - exercised in test skips
+            if getattr(exc, "name", None) == "f90wrap":
+                raise ImportError(
+                    "f90wrap is required to import SIMPLE Python bindings. Install f90wrap."
+                ) from exc
+            if getattr(exc, "name", None) == "_simple_backend":
+                raise ImportError(
+                    "Fortran extension _simple_backend failed to import. "
+                    "Rebuild SIMPLE with Python bindings enabled."
+                ) from exc
             raise ImportError(
                 "simple_backend module not found. Build SIMPLE with Python bindings enabled."
             ) from exc

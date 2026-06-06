@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     CHECK_NC(nc_put_att_text(ncid, var_z, "units", 2, "cm"), "put z units");
     CHECK_NC(nc_put_att_text(ncid, NC_GLOBAL, "rho_convention", 7, "rho_tor"),
              "put rho_convention");
-    CHECK_NC(nc_put_att_text(ncid, NC_GLOBAL, "zeta_convention", 3, "cyl"),
+    CHECK_NC(nc_put_att_text(ncid, NC_GLOBAL, "zeta_convention", 6, "boozer"),
              "put zeta_convention");
     CHECK_NC(nc_put_att_double(ncid, NC_GLOBAL, "rho_lcfs", NC_DOUBLE, 1,
                                (const double[]){1.0}),
