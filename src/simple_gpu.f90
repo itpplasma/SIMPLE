@@ -12,7 +12,8 @@ module simple_gpu
     use field_can_mod, only: field_can_t, get_derivatives2
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t
-    use orbit_symplectic_euler1, only: sympl_euler1_newton_iter, sympl_euler1_extrapolate_step
+    use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
+    use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use boozer_sub, only: boozer_state
     use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
@@ -80,7 +81,8 @@ contains
             end if
             if (x(1) < 0.0d0) x(1) = 0.01d0
 
-            call sympl_euler1_extrapolate_step(si, f, x, xlast)
+            call sympl_euler1_extrapolate_field(si, f, x, xlast)
+            call sympl_euler1_advance_angles(si, f)
 
             ktau = ktau + 1
         end do

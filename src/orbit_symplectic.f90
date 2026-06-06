@@ -11,7 +11,8 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
-  sympl_euler1_newton_iter, sympl_euler1_extrapolate_step
+  sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
+  sympl_euler1_advance_angles
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -369,31 +370,22 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(n)
 
-  real(dp) :: fvec(n), fjac(n,n), ijac(n,n)
   real(dp) :: tolref(n)
   integer :: kit
+  logical :: converged
 
   tolref(1) = 1d0
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
-    if(x(1) > 1d0) return
-    if(x(1) < 0d0) x(1) = 0.01d0
+    if (x(1) > 1d0) return
+    if (x(1) < 0d0) x(1) = 0.01d0
 
-    call f_sympl_euler1(si, f, n, x, fvec, 1)
-    call jac_sympl_euler1(si, f, x, fjac)
-    ijac(1,1) = 1d0/(fjac(1,1) - fjac(1,2)*fjac(2,1)/fjac(2,2))
-    ijac(1,2) = -1d0/(fjac(1,1)*fjac(2,2)/fjac(1,2) - fjac(2,1))
-    ijac(2,1) = -1d0/(fjac(1,1)*fjac(2,2)/fjac(2,1) - fjac(1,2))
-    ijac(2,2) = 1d0/(fjac(2,2) - fjac(1,2)*fjac(2,1)/fjac(1,1))
-    xlast = x
-    x = x - matmul(ijac, fvec)
+    call eval_field(f, x(1), si%z(2), si%z(3), 2)
+    call get_derivatives2(f, x(2))
+    call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
 
-    ! Don't take too small values in pphi as tolerance reference
-    tolref(2) = max(dabs(x(2)), tolref(2))
-
-    if (all(dabs(fvec) < si%atol)) return
-    if (all(dabs(x-xlast) < si%rtol*tolref)) return
+    if (converged) return
   enddo
   call count_event(EVT_NEWTON1_MAXIT)
 end subroutine
@@ -1228,19 +1220,13 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     si%z(4) = x(2)
 
     if (extrap_field) then
-      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1))  + f%dpth(4)*(x(2)-xlast(2))
-      f%dH(1) = f%dH(1) + f%d2H(1)*(x(1)-xlast(1)) + f%d2H(7)*(x(2)-xlast(2))
-      f%dpth(1)=f%dpth(1)+f%d2pth(1)*(x(1)-xlast(1))+f%d2pth(7)*(x(2)-xlast(2))
-      f%vpar = f%vpar + f%dvpar(1)*(x(1)-xlast(1)) + f%dvpar(4)*(x(2)-xlast(2))
-      f%hth = f%hth + f%dhth(1)*(x(1)-xlast(1))
-      f%hph = f%hph + f%dhph(1)*(x(1)-xlast(1))
+      call sympl_euler1_extrapolate_field(si, f, x, xlast)
     else
       call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
       call get_derivatives(f, si%z(4))
     endif
 
-    si%z(2) = si%z(2) + si%dt*f%dH(1)/f%dpth(1)
-    si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
+    call sympl_euler1_advance_angles(si, f)
 
     ktau = ktau+1
   enddo

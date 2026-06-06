@@ -8,7 +8,8 @@ implicit none
 private
 
 public :: sympl_euler1_residual, sympl_euler1_jacobian
-public :: sympl_euler1_newton_iter, sympl_euler1_extrapolate_step
+public :: sympl_euler1_newton_iter, sympl_euler1_extrapolate_field
+public :: sympl_euler1_advance_angles
 
 contains
 
@@ -66,10 +67,8 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
     ijac(2, 2) = 1d0/(fjac(2, 2) - fjac(1, 2)*fjac(2, 1)/fjac(1, 1))
 
     xlast = x
-    ! Keep the original 2x2 Newton update order; the tokamak benchmark is
-    ! sensitive enough that rewriting the multiply changes the Hamiltonian
-    ! spread.
-    x = x - matmul(ijac, fvec)
+    x(1) = x(1) - (ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2))
+    x(2) = x(2) - (ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2))
 
     tolref(2) = max(dabs(x(2)), tolref(2))
 
@@ -78,15 +77,12 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
                  dabs(x(2) - xlast(2)) < si%rtol*tolref(2))
 end subroutine sympl_euler1_newton_iter
 
-subroutine sympl_euler1_extrapolate_step(si, f, x, xlast)
+subroutine sympl_euler1_extrapolate_field(si, f, x, xlast)
     !$acc routine seq
-    type(symplectic_integrator_t), intent(inout) :: si
+    type(symplectic_integrator_t), intent(in) :: si
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(2)
     real(dp), intent(in) :: xlast(2)
-
-    si%z(1) = x(1)
-    si%z(4) = x(2)
 
     f%pth = f%pth + f%dpth(1)*(x(1) - xlast(1)) + f%dpth(4)*(x(2) - xlast(2))
     f%dH(1) = f%dH(1) + f%d2H(1)*(x(1) - xlast(1)) + f%d2H(7)*(x(2) - xlast(2))
@@ -95,9 +91,15 @@ subroutine sympl_euler1_extrapolate_step(si, f, x, xlast)
     f%vpar = f%vpar + f%dvpar(1)*(x(1) - xlast(1)) + f%dvpar(4)*(x(2) - xlast(2))
     f%hth = f%hth + f%dhth(1)*(x(1) - xlast(1))
     f%hph = f%hph + f%dhph(1)*(x(1) - xlast(1))
+end subroutine sympl_euler1_extrapolate_field
+
+subroutine sympl_euler1_advance_angles(si, f)
+    !$acc routine seq
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(in) :: f
 
     si%z(2) = si%z(2) + si%dt*f%dH(1)/f%dpth(1)
     si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
-end subroutine sympl_euler1_extrapolate_step
+end subroutine sympl_euler1_advance_angles
 
 end module orbit_symplectic_euler1
