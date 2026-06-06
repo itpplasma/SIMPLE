@@ -1185,7 +1185,7 @@ contains
         ! Global attributes
         call nc_assert(nf90_put_att(ncid, nf90_global, "rho_convention", "rho_tor"), &
                         "att rho_convention")
-        call nc_assert(nf90_put_att(ncid, nf90_global, "zeta_convention", "boozer"), &
+        call nc_assert(nf90_put_att(ncid, nf90_global, "zeta_convention", "cyl"), &
                         "att zeta_convention")
         call nc_assert(nf90_put_att(ncid, nf90_global, "rho_lcfs", rho_arr(ns_B)), &
                         "att rho_lcfs")
