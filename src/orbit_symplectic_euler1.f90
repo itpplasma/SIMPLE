@@ -66,8 +66,10 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
     ijac(2, 2) = 1d0/(fjac(2, 2) - fjac(1, 2)*fjac(2, 1)/fjac(1, 1))
 
     xlast = x
-    x(1) = x(1) - (ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2))
-    x(2) = x(2) - (ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2))
+    ! Keep the original 2x2 Newton update order; the tokamak benchmark is
+    ! sensitive enough that rewriting the multiply changes the Hamiltonian
+    ! spread.
+    x = x - matmul(ijac, fvec)
 
     tolref(2) = max(dabs(x(2)), tolref(2))
 
