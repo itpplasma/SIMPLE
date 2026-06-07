@@ -67,8 +67,7 @@ contains
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
     subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
-        use boozer_sub, only: splint_boozer_coord
-        use vector_potentail_mod, only: torflux
+        use boozer_sub, only: splint_boozer_coord, boozer_state
         !
         ! Evaluates magnetic field in Boozer canonical coordinates (r, th_c, ph_c)
         ! and stores results in variable f
@@ -90,6 +89,7 @@ contains
         type(field_can_t), intent(inout) :: f
         double precision, intent(in) :: r, th_c, ph_c
         integer, intent(in) :: mode_secders
+        !$acc routine seq
 
         double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, &
             d3Aphdr3, dummy, dummy3(3), dummy6(6), &
@@ -117,7 +117,7 @@ contains
                                  f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
 
         bmod2 = f%Bmod**2
-        sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*torflux
+        sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*boozer_state%torflux
         Bctr_vartheta = -f%dAph(1)/sqg
         Bctr_varphi = f%dAth(1)/sqg
 
