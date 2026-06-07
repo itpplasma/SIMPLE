@@ -205,9 +205,9 @@ class TestNetCDFResultsOutput:
         finally:
             os.chdir(original_dir)
 
-    def test_untraced_particles_have_xend_equals_xstart(
+    def test_untraced_particles_have_zero_xend(
             self, vmec_file: str, tmp_path: Path):
-        """Test that untraced particles (zend=0) have xend_cart = xstart_cart."""
+        """Test that untraced particles (zend=0) have zero xend_cart."""
         original_dir = os.getcwd()
         os.chdir(tmp_path)
 
@@ -225,15 +225,49 @@ class TestNetCDFResultsOutput:
             pysimple.write_output()
 
             with nc.Dataset(tmp_path / "results.nc", 'r') as ds:
-                xstart = ds.variables['xstart_cart'][:]
                 xend = ds.variables['xend_cart'][:]
                 zend = ds.variables['zend'][:]
 
                 for i in range(zend.shape[0]):
                     zend_is_zero = np.allclose(zend[i, :3], 0)
                     if zend_is_zero:
-                        assert np.allclose(xend[i], xstart[i]), \
-                            f"Particle {i}: untraced but xend != xstart"
+                        assert np.allclose(xend[i], 0), \
+                            f"Particle {i}: untraced but xend_cart is nonzero"
+
+        finally:
+            os.chdir(original_dir)
+
+    def test_wall_hits_use_authoritative_cartesian_hit(
+            self, vmec_file: str, tmp_path: Path):
+        """Test STL wall hits store xend_cart at wall_hit_cart."""
+        original_dir = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            pysimple.init(
+                vmec_file,
+                deterministic=True,
+                trace_time=1e-5,
+                ntestpart=16,
+                output_results_netcdf=True,
+                isw_field_type=3,
+            )
+            particles = pysimple.sample_surface(16, s=0.5)
+            pysimple.trace_parallel(particles)
+            pysimple.write_output()
+
+            with nc.Dataset(tmp_path / "results.nc", 'r') as ds:
+                if 'wall_hit' not in ds.variables:
+                    pytest.skip("wall-hit variables not available")
+
+                wall_hit = ds.variables['wall_hit'][:]
+                hit_indices = np.where(wall_hit == 1)[0]
+                if hit_indices.size == 0:
+                    pytest.skip("test run produced no STL wall hits")
+
+                xend = ds.variables['xend_cart'][:]
+                wall_hit_cart = ds.variables['wall_hit_cart'][:]
+                assert np.allclose(xend[hit_indices], wall_hit_cart[hit_indices])
 
         finally:
             os.chdir(original_dir)

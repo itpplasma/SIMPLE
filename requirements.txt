@@ -1,20 +1,21 @@
 # Python dependencies for SIMPLE
-# Pin exact versions for reproducibility in CI
+# Use minimum versions for compatibility across Python releases.
+# Exact pins break on newer Python versions that lack prebuilt wheels.
 
 # Core dependencies
-numpy==2.2.6
-scikit-build-core==0.10.0
+numpy>=2.2
+scikit-build-core>=0.10
 
-# F90wrap - pinned to release version compatible with gvec
+# F90wrap - pinned to release version (API-sensitive)
 f90wrap==0.3.0
 
-# Optional dependencies for testing
-pytest==9.0.3
-pytest-cov==6.2.1
-netCDF4==1.7.2
+# Testing
+pytest>=9.0
+pytest-cov>=6.2
+netCDF4>=1.7
 gvec==1.4.1
 
-# Optional dependencies for examples/plotting
-matplotlib==3.9.4
-scipy==1.15.2
-shapely==2.1.2
+# Plotting and examples
+matplotlib>=3.9
+scipy>=1.15
+shapely>=2.0

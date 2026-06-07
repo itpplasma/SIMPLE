@@ -39,6 +39,7 @@
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
+    orbit_symplectic_euler1.f90
     orbit_symplectic.f90
     util.F90
     samplers.f90
@@ -55,12 +56,13 @@
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90
-        diag_counters.f90
-        restart.f90
-        progress_monitor.f90
-        timing.f90
-        simple_main.f90
-        simple_entry.f90
+    diag_counters.f90
+    restart.f90
+    progress_monitor.f90
+    timing.f90
+    simple_gpu.f90
+    simple_main.f90
+    simple_entry.f90
     )
 
     if(SIMPLE_ENABLE_CGAL)

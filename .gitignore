@@ -74,3 +74,4 @@ docs/_build/
 build*/
 artifacts/plots/
 artifacts/notebooks/
+.venv/
