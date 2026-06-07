@@ -1,9 +1,8 @@
 module alpha_lifetime_sub
 
-implicit none
+use, intrinsic :: iso_fortran_env, only: dp => real64
 
-! Define real(dp) kind parameter
-integer, parameter :: dp = kind(1.0d0)
+implicit none
 
 contains
 
@@ -22,9 +21,8 @@ contains
   !   Output parameters:
   !             formal:    derphi  -   array of derivatives
   !
-      integer :: ierr
-      real(dp), dimension(3) :: x,derphi
-      real(dp) :: r,phi,z,psi,phi_el,phi_el_pr,phi_el_prpr
+      real(dp), intent(in) :: x(3)
+      real(dp), intent(out) :: derphi(3)
   !
       derphi=0.d0
   !
@@ -76,7 +74,6 @@ contains
       real(dp) rmumag,rovsqg,rosqgb,rovbm
       real(dp) a_phi,a_b,a_c,hstar
       real(dp) s_hc,hpstar,phidot,blodot,bra
-      real(dp) pardeb
   !
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
       dimension derphi(3)
@@ -172,7 +169,7 @@ use chamb_sub, only : chamb_can
   !
       integer, parameter          :: ndim=5, nstepmax=1000000
   !
-      integer :: ierr,j
+      integer :: ierr
       real(dp) :: dtau,dtaumin,phi,tau1,tau2
   !
       real(dp), dimension(2)    :: y
@@ -385,7 +382,7 @@ if(dodiag) write (123,*) tau2,z
       real(dp), parameter :: snear_axis=0.01d0
   !
       logical :: near_axis
-      integer :: ierr,j
+      integer :: ierr
       real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2
       real(dp) :: relerr
   !
