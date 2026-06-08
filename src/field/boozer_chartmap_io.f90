@@ -26,7 +26,6 @@ module boozer_chartmap_io
         integer :: nfp = 1
         real(dp) :: torflux = 0.0_dp
         real(dp) :: rmajor = 0.0_dp
-        logical :: has_rmajor = .false.
         real(dp) :: rho_min = 0.0_dp
         real(dp) :: rho_max = 0.0_dp
         real(dp) :: h_s = 0.0_dp     !< uniform rho step
@@ -82,9 +81,7 @@ contains
                     "inq_var num_field_periods")
         call check(nf90_get_var(ncid, varid, d%nfp), "get num_field_periods")
 
-        ! rmajor is optional (older files lack it).
-        status = nf90_get_att(ncid, nf90_global, "rmajor", d%rmajor)
-        d%has_rmajor = (status == nf90_noerr)
+        call check(nf90_get_att(ncid, nf90_global, "rmajor", d%rmajor), "att rmajor")
 
         ! 1D profiles on the rho grid.
         allocate (d%A_phi(n_rho), d%B_theta(n_rho), d%B_phi(n_rho))
@@ -95,19 +92,13 @@ contains
         call check(nf90_inq_varid(ncid, "B_phi", varid), "inq_var B_phi")
         call check(nf90_get_var(ncid, varid, d%B_phi), "get B_phi")
 
-        ! Bmod on the endpoint-included field grid; fall back to the geometry
-        ! grid for legacy files that share dimensions.
-        status = nf90_inq_dimid(ncid, "theta_field", dimid)
-        if (status == nf90_noerr) then
-            call check(nf90_inquire_dimension(ncid, dimid, len=d%n_theta), &
-                        "len theta_field")
-            call check(nf90_inq_dimid(ncid, "zeta_field", dimid), "inq_dim zeta_field")
-            call check(nf90_inquire_dimension(ncid, dimid, len=d%n_phi), &
-                        "len zeta_field")
-        else
-            d%n_theta = n_theta_geom
-            d%n_phi = n_phi_geom
-        end if
+        ! Bmod lives on the endpoint-included field grid.
+        call check(nf90_inq_dimid(ncid, "theta_field", dimid), "inq_dim theta_field")
+        call check(nf90_inquire_dimension(ncid, dimid, len=d%n_theta), &
+                    "len theta_field")
+        call check(nf90_inq_dimid(ncid, "zeta_field", dimid), "inq_dim zeta_field")
+        call check(nf90_inquire_dimension(ncid, dimid, len=d%n_phi), &
+                    "len zeta_field")
 
         allocate (d%Bmod(n_rho, d%n_theta, d%n_phi))
         call check(nf90_inq_varid(ncid, "Bmod", varid), "inq_var Bmod")

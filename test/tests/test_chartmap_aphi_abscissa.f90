@@ -119,10 +119,6 @@ contains
         call expect_int(d%n_phi, n_zeta_field, 'n_phi field grid', n_fail)
         call expect_int(d%nfp, nfp, 'nfp', n_fail)
         call expect_real(d%torflux, torflux_val, 'torflux', n_fail)
-        if (.not. d%has_rmajor) then
-            print *, 'FAIL: missing rmajor attribute'
-            n_fail = n_fail + 1
-        end if
         call expect_real(d%rmajor, rmajor_val, 'rmajor', n_fail)
         call expect_real(real(d%n_theta - 1, dp)*d%h_theta, twopi, &
                          'poloidal period', n_fail)
