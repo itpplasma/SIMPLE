@@ -1,126 +1,97 @@
 include(FetchContent)
 
-function(get_branch_or_main REPO_URL REMOTE_BRANCH)
-    execute_process(
-        COMMAND git rev-parse --abbrev-ref HEAD
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE BRANCH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
+# Resolve a first-party itpplasma dependency and add it to the build.
+#
+# Ref precedence (first match wins):
+#   1. <DEP>_REF      cache or env: a branch, tag or commit, validated against the
+#                     remote and ignored if absent. An upstream release sets this
+#                     to build this code against a candidate ref.
+#   2. <DEP>_GIT_TAG  cache: an explicit pinned tag (e.g. reference builds).
+#   3. <DEP>_RELEASE  cache: the release branch this code tracks by default.
+#   4. the current branch if it exists in the remote, otherwise main.
+#
+# The dependency is always fetched at the resolved ref; there is no local-path
+# shortcut.
+function(find_or_fetch DEPENDENCY)
+    set(REPO_URL https://github.com/itpplasma/${DEPENDENCY}.git)
+    string(TOUPPER ${DEPENDENCY} _DEP)
 
-    set(CANDIDATE_BRANCH "${BRANCH}")
-
-    if(CANDIDATE_BRANCH STREQUAL "HEAD" OR CANDIDATE_BRANCH STREQUAL "")
-        if(DEFINED ENV{GITHUB_HEAD_REF} AND NOT "$ENV{GITHUB_HEAD_REF}" STREQUAL "")
-            set(CANDIDATE_BRANCH "$ENV{GITHUB_HEAD_REF}")
-        elseif(DEFINED ENV{GITHUB_REF_NAME} AND NOT "$ENV{GITHUB_REF_NAME}" STREQUAL "")
-            set(CANDIDATE_BRANCH "$ENV{GITHUB_REF_NAME}")
+    set(_ref "")
+    set(_override "")
+    if(DEFINED ${_DEP}_REF AND NOT "${${_DEP}_REF}" STREQUAL "")
+        set(_override "${${_DEP}_REF}")
+    elseif(DEFINED ENV{${_DEP}_REF} AND NOT "$ENV{${_DEP}_REF}" STREQUAL "")
+        set(_override "$ENV{${_DEP}_REF}")
+    endif()
+    if(NOT "${_override}" STREQUAL "")
+        execute_process(
+            COMMAND git ls-remote ${REPO_URL} ${_override}
+            OUTPUT_VARIABLE _found
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(NOT "${_found}" STREQUAL "")
+            set(_ref "${_override}")
+        else()
+            message(WARNING "${_DEP}_REF='${_override}' not found in ${REPO_URL}; ignoring")
         endif()
     endif()
-
-    if(CANDIDATE_BRANCH STREQUAL "HEAD" OR CANDIDATE_BRANCH STREQUAL "")
-        set(CANDIDATE_BRANCH "main")
+    if("${_ref}" STREQUAL "" AND DEFINED ${_DEP}_GIT_TAG)
+        set(_ref "${${_DEP}_GIT_TAG}")
     endif()
+    if("${_ref}" STREQUAL "" AND DEFINED ${_DEP}_RELEASE AND NOT "${${_DEP}_RELEASE}" STREQUAL "")
+        set(_ref "${${_DEP}_RELEASE}")
+    endif()
+    if("${_ref}" STREQUAL "")
+        get_branch_or_main(${REPO_URL} _ref)
+    endif()
+    message(STATUS "Using ${DEPENDENCY} ref ${_ref} from ${REPO_URL}")
 
-    string(STRIP "${CANDIDATE_BRANCH}" CANDIDATE_BRANCH)
+    # Fetched first-party dependencies are linked as libraries, not test hosts.
+    set(LIBNEO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    set(LIBNEO_ENABLE_GOLDEN_TESTS OFF CACHE BOOL "" FORCE)
 
-    execute_process(
-        COMMAND git ls-remote --heads ${REPO_URL} ${CANDIDATE_BRANCH}
-        OUTPUT_VARIABLE BRANCH_EXISTS
-        ERROR_VARIABLE GIT_ERROR
-        RESULT_VARIABLE LS_REMOTE_RESULT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+    FetchContent_Declare(
+        ${DEPENDENCY}
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        GIT_REPOSITORY ${REPO_URL}
+        GIT_TAG ${_ref}
     )
-
-    if(LS_REMOTE_RESULT EQUAL 0 AND BRANCH_EXISTS)
-        set(${REMOTE_BRANCH} ${CANDIDATE_BRANCH} PARENT_SCOPE)
-    else()
-        if(NOT CANDIDATE_BRANCH STREQUAL "main")
-            message(WARNING "Requested branch ${CANDIDATE_BRANCH} not found in ${REPO_URL}; falling back to main")
-        endif()
-        set(${REMOTE_BRANCH} "main" PARENT_SCOPE)
+    FetchContent_GetProperties(${DEPENDENCY})
+    if(NOT ${DEPENDENCY}_POPULATED)
+        FetchContent_Populate(${DEPENDENCY})
+        add_subdirectory(${${DEPENDENCY}_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/${DEPENDENCY}
+            EXCLUDE_FROM_ALL
+        )
     endif()
 endfunction()
 
-function(find_or_fetch DEPENDENCY)
-    string(TOUPPER "${DEPENDENCY}" _dep_upper)
-    string(TOLOWER "${DEPENDENCY}" _dep_lower)
-
-    set(_source_dir "")
-    set(_use_local FALSE)
-
-    # Allow explicit override via <DEPENDENCY>_SOURCE_DIR cache variable
-    set(_override_var "${_dep_upper}_SOURCE_DIR")
-    if(DEFINED ${_override_var})
-        get_filename_component(_candidate "${${_override_var}}" ABSOLUTE "${CMAKE_SOURCE_DIR}")
-        if(IS_DIRECTORY "${_candidate}")
-            set(_source_dir "${_candidate}")
-            set(_use_local TRUE)
-        else()
-            message(FATAL_ERROR "${_override_var}='${_candidate}' is not a directory")
-        endif()
-    endif()
-
-    if(NOT _use_local AND DEFINED ENV{CODE})
-        get_filename_component(_candidate "$ENV{CODE}/${_dep_lower}" ABSOLUTE)
-        if(IS_DIRECTORY "${_candidate}")
-            set(_source_dir "${_candidate}")
-            set(_use_local TRUE)
-        endif()
-    endif()
-
-    if(_use_local)
-        if("${_dep_lower}" STREQUAL "libneo")
-            set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-        endif()
-        add_subdirectory("${_source_dir}" "${CMAKE_CURRENT_BINARY_DIR}/${_dep_lower}" EXCLUDE_FROM_ALL)
-        return()
-    endif()
-
-    if("${_dep_lower}" STREQUAL "libneo")
-        set(_repo_url "https://github.com/itpplasma/libneo.git")
-        set(_branch "")
-        set(_branch_source "")
-        if(DEFINED LIBNEO_BRANCH AND NOT "${LIBNEO_BRANCH}" STREQUAL "")
-            string(STRIP "${LIBNEO_BRANCH}" _branch)
-            set(_branch_source "cache")
-        elseif(DEFINED ENV{LIBNEO_BRANCH} AND NOT "$ENV{LIBNEO_BRANCH}" STREQUAL "")
-            string(STRIP "$ENV{LIBNEO_BRANCH}" _branch)
-            set(_branch_source "env")
-        endif()
-
-        if(NOT _branch STREQUAL "")
-            execute_process(
-                COMMAND git ls-remote --heads ${_repo_url} ${_branch}
-                OUTPUT_VARIABLE _branch_exists
-                RESULT_VARIABLE _branch_check_status
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-            set(_branch_valid FALSE)
-            if(_branch_check_status EQUAL 0 AND NOT _branch_exists STREQUAL "")
-                set(_branch_valid TRUE)
-            endif()
-            if(NOT _branch_valid)
-                message(WARNING "LIBNEO branch '${_branch}' (source: ${_branch_source}) not found; falling back to main")
-                set(_branch "")
-            endif()
-        endif()
-
-        if(_branch STREQUAL "")
-            get_branch_or_main(${_repo_url} _branch)
-        endif()
-
-        set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-
-        FetchContent_Declare(${_dep_lower}
-            GIT_REPOSITORY ${_repo_url}
-            GIT_TAG ${_branch}
-            GIT_PROGRESS TRUE
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+function(get_branch_or_main REPO_URL OUT)
+    if(DEFINED ENV{GITHUB_HEAD_REF} AND NOT "$ENV{GITHUB_HEAD_REF}" STREQUAL "")
+        set(_branch "$ENV{GITHUB_HEAD_REF}")
+    elseif(DEFINED ENV{GITHUB_REF_NAME} AND NOT "$ENV{GITHUB_REF_NAME}" STREQUAL "")
+        set(_branch "$ENV{GITHUB_REF_NAME}")
+    else()
+        execute_process(
+            COMMAND git rev-parse --abbrev-ref HEAD
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE _branch
+            OUTPUT_STRIP_TRAILING_WHITESPACE
         )
-        FetchContent_MakeAvailable(${_dep_lower})
+    endif()
+    if("${_branch}" STREQUAL "" OR "${_branch}" STREQUAL "HEAD")
+        set(${OUT} "main" PARENT_SCOPE)
         return()
     endif()
-
-    message(FATAL_ERROR "find_or_fetch does not know how to fetch dependency '${DEPENDENCY}'")
+    execute_process(
+        COMMAND git ls-remote --heads ${REPO_URL} ${_branch}
+        OUTPUT_VARIABLE _exists
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(NOT "${_exists}" STREQUAL "")
+        set(${OUT} "${_branch}" PARENT_SCOPE)
+    else()
+        set(${OUT} "main" PARENT_SCOPE)
+    endif()
 endfunction()
