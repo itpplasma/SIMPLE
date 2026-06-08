@@ -994,7 +994,7 @@ contains
         ! Set global parameters used by splint_boozer_coord
         torflux = flux_scale*d%torflux
         nper = d%nfp
-        if (d%has_rmajor) rmajor = d%rmajor*rz_scale
+        rmajor = d%rmajor*rz_scale
 
         ! Set boozer_coordinates_mod parameters
         ns_s_B = 5

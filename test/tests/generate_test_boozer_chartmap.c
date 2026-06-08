@@ -21,7 +21,9 @@ int main(int argc, char **argv)
         nfp = 2,
         n_rho = 17,
         n_theta = 33,
-        n_zeta = 33
+        n_zeta = 33,
+        n_theta_field = n_theta + 1,
+        n_zeta_field = n_zeta + 1
     };
 
     const double b0 = 2.0e4;
@@ -31,6 +33,7 @@ int main(int argc, char **argv)
     const double twopi = 2.0 * acos(-1.0);
     const double epsilon = a / r0;
     const double torflux = 0.5 * b0 * a * a;
+    const double rmajor = r0;
     const char *filename = argc > 1 ? argv[1] : "test_boozer_chartmap.nc";
 
     double rho[n_rho];
@@ -44,15 +47,16 @@ int main(int argc, char **argv)
     double *z = NULL;
     double *bmod = NULL;
     int ncid;
-    int dim_rho, dim_theta, dim_zeta;
+    int dim_rho, dim_theta, dim_zeta, dim_theta_field, dim_zeta_field;
     int dims_3d[3];
+    int dims_3d_field[3];
     int var_rho, var_theta, var_zeta, var_x, var_y, var_z, var_aphi, var_btheta;
     int var_bphi, var_bmod, var_nfp;
 
     x = malloc((size_t)n_rho * n_theta * n_zeta * sizeof(*x));
     y = malloc((size_t)n_rho * n_theta * n_zeta * sizeof(*y));
     z = malloc((size_t)n_rho * n_theta * n_zeta * sizeof(*z));
-    bmod = malloc((size_t)n_rho * n_theta * n_zeta * sizeof(*bmod));
+    bmod = malloc((size_t)n_rho * n_theta_field * n_zeta_field * sizeof(*bmod));
     if (x == NULL || y == NULL || z == NULL || bmod == NULL) {
         fprintf(stderr, "Allocation failure\n");
         free(x);
@@ -79,6 +83,7 @@ int main(int argc, char **argv)
         zeta[iz] = (twopi / (double)nfp) * (double)iz / (double)n_zeta;
     }
 
+    /* Geometry (x, y, z) on the endpoint-excluded geometry grid. */
     for (int iz = 0; iz < n_zeta; ++iz) {
         const double zeta_val = zeta[iz];
         for (int it = 0; it < n_theta; ++it) {
@@ -94,6 +99,20 @@ int main(int argc, char **argv)
                 x[idx] = radius * cos(zeta_val);
                 y[idx] = radius * sin(zeta_val);
                 z[idx] = r_minor * sin_theta;
+            }
+        }
+    }
+
+    /* Bmod on the endpoint-included field grid (theta_field/zeta_field), which
+       spans the full 2*pi (poloidal) and 2*pi/nfp (toroidal) period. */
+    for (int iz = 0; iz < n_zeta_field; ++iz) {
+        for (int it = 0; it < n_theta_field; ++it) {
+            const double cos_theta = cos(twopi * (double)it / (double)n_theta);
+            for (int ir = 0; ir < n_rho; ++ir) {
+                const double rho_val = rho[ir];
+                const size_t idx =
+                    ((size_t)iz * n_theta_field + (size_t)it) * n_rho +
+                    (size_t)ir;
                 bmod[idx] = b0 / (1.0 + rho_val * epsilon * cos_theta);
             }
         }
@@ -103,10 +122,18 @@ int main(int argc, char **argv)
     CHECK_NC(nc_def_dim(ncid, "rho", n_rho, &dim_rho), "def dim rho");
     CHECK_NC(nc_def_dim(ncid, "theta", n_theta, &dim_theta), "def dim theta");
     CHECK_NC(nc_def_dim(ncid, "zeta", n_zeta, &dim_zeta), "def dim zeta");
+    CHECK_NC(nc_def_dim(ncid, "theta_field", n_theta_field, &dim_theta_field),
+             "def dim theta_field");
+    CHECK_NC(nc_def_dim(ncid, "zeta_field", n_zeta_field, &dim_zeta_field),
+             "def dim zeta_field");
 
     dims_3d[0] = dim_zeta;
     dims_3d[1] = dim_theta;
     dims_3d[2] = dim_rho;
+
+    dims_3d_field[0] = dim_zeta_field;
+    dims_3d_field[1] = dim_theta_field;
+    dims_3d_field[2] = dim_rho;
 
     CHECK_NC(nc_def_var(ncid, "rho", NC_DOUBLE, 1, &dim_rho, &var_rho), "def rho");
     CHECK_NC(nc_def_var(ncid, "theta", NC_DOUBLE, 1, &dim_theta, &var_theta), "def theta");
@@ -117,7 +144,8 @@ int main(int argc, char **argv)
     CHECK_NC(nc_def_var(ncid, "A_phi", NC_DOUBLE, 1, &dim_rho, &var_aphi), "def A_phi");
     CHECK_NC(nc_def_var(ncid, "B_theta", NC_DOUBLE, 1, &dim_rho, &var_btheta), "def B_theta");
     CHECK_NC(nc_def_var(ncid, "B_phi", NC_DOUBLE, 1, &dim_rho, &var_bphi), "def B_phi");
-    CHECK_NC(nc_def_var(ncid, "Bmod", NC_DOUBLE, 3, dims_3d, &var_bmod), "def Bmod");
+    CHECK_NC(nc_def_var(ncid, "Bmod", NC_DOUBLE, 3, dims_3d_field, &var_bmod),
+             "def Bmod");
     CHECK_NC(nc_def_var(ncid, "num_field_periods", NC_INT, 0, NULL, &var_nfp),
              "def num_field_periods");
 
@@ -136,6 +164,8 @@ int main(int argc, char **argv)
              "put boozer_field");
     CHECK_NC(nc_put_att_double(ncid, NC_GLOBAL, "torflux", NC_DOUBLE, 1, &torflux),
              "put torflux");
+    CHECK_NC(nc_put_att_double(ncid, NC_GLOBAL, "rmajor", NC_DOUBLE, 1, &rmajor),
+             "put rmajor");
 
     CHECK_NC(nc_enddef(ncid), "enddef");
 

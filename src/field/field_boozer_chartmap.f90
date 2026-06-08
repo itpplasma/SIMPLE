@@ -140,7 +140,7 @@ contains
         ! Restore equilibrium periods/major radius so stevvo and params_init
         ! produce the correct dphi/dtaumin/fper for a VMEC-free chartmap run.
         nper = d%nfp
-        if (d%has_rmajor) rmajor = d%rmajor*rz_scale
+        rmajor = d%rmajor*rz_scale
 
         ! Set up coordinate system from the same chartmap file
         call make_chartmap_coordinate_system(cs, filename)

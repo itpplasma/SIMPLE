@@ -208,7 +208,6 @@ without requiring them at runtime.
 
 Key differences from VMEC mode:
 - Both `field_input` and `coord_input` reference the same chartmap NetCDF file
-- `startmode = 2` means particle coordinates are in chartmap Boozer space
 - No VMEC file is needed at runtime
 
 See `DOC/coordinates-and-fields.md` section 8.2.1 for full details on coordinate conventions and the chartmap format.
