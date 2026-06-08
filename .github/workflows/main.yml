@@ -11,6 +11,10 @@ on:
         description: libneo branch, tag or commit to build against
         required: false
         default: ''
+      full:
+        description: run the full suite (fast + slow + regression); nightly only
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -81,18 +85,28 @@ jobs:
           make clean
           make build-deterministic
 
+      # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
+      # push, PR and full=true run the complete suite below.
+      - name: Run Smoke Tests (libneo gate)
+        if: github.event_name == 'workflow_dispatch' && inputs.full != 'true'
+        run: make test-smoke
+
       - name: Run Fast Tests (Fortran only)
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         run: make test-fast
 
       - name: Install Python package
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
       - name: Run Slow Tests (Python)
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
         run: make test-slow
 
       - name: Run Regression Tests (Golden Record)
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         run: make test-regression
 
       - name: Upload test results

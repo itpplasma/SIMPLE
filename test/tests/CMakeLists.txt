@@ -504,6 +504,14 @@ add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
 
+# Sub-second base-interface tests for the libneo reverse-dependency gate
+# (ctest -L smoke).
+set_property(TEST
+    test_lapack_interfaces
+    test_orbit_symplectic_base
+    test_field_base
+    APPEND PROPERTY LABELS smoke)
+
 add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
 target_link_libraries(test_coordinates_simple.x simple)
 add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
