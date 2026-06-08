@@ -49,6 +49,14 @@ add_test(NAME test_hctr_from_metric_vmec
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 
+# Sub-second VMEC-coordinate tests that exercise libneo directly; the libneo
+# reverse-dependency gate runs this "smoke" set (ctest -L smoke).
+set_property(TEST
+    test_magfie_refcoords_vmec
+    test_jacobian_conventions_vmec
+    test_hctr_from_metric_vmec
+    APPEND PROPERTY LABELS smoke)
+
 add_test(NAME test_hcurl_from_dhcov_splines
     COMMAND $<TARGET_FILE:test_hcurl_from_dhcov_splines.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
