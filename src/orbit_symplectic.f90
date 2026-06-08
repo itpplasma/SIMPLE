@@ -1,5 +1,6 @@
 module orbit_symplectic
 
+use, intrinsic :: iso_fortran_env, only: dp => real64
 use util, only: pi, twopi
 use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
   eval_field => evaluate
@@ -10,15 +11,15 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
+use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
+  sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
+  sympl_euler1_advance_angles
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE
 
 implicit none
-
-! Define real(dp) kind parameter
-integer, parameter :: dp = kind(1.0d0)
 
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 
@@ -28,8 +29,6 @@ contains
   !
 recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   !
-  use plag_coeff_sub, only : plag_coeff
-
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   real(dp), intent(in) :: z(:)
@@ -37,8 +36,6 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   integer, intent(in) :: ntau
   real(dp), intent(in) :: rtol_init
   integer, intent(in) :: mode_init
-
-  integer :: k
 
   si%atol = 1d-15
   si%rtol = rtol_init
@@ -167,9 +164,7 @@ recursive subroutine f_sympl_euler1(si, f, n, x, fvec, iflag)
 
   call eval_field(f, x(1), si%z(2), si%z(3), 2)
   call get_derivatives2(f, x(2))
-
-  fvec(1) = f%dpth(1)*(f%pth - si%pthold) + si%dt*(f%dH(2)*f%dpth(1) - f%dH(1)*f%dpth(2))
-  fvec(2) = f%dpth(1)*(x(2) - si%z(4))  + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
+  call sympl_euler1_residual(si, f, x, fvec)
 
 end subroutine f_sympl_euler1
 
@@ -184,14 +179,7 @@ recursive subroutine jac_sympl_euler1(si, f, x, jac)
   real(dp), intent(in)  :: x(2)
   real(dp), intent(out) :: jac(2, 2)
 
-  jac(1,1) = f%d2pth(1)*(f%pth - si%pthold) + f%dpth(1)**2 &
-    + si%dt*(f%d2H(2)*f%dpth(1) + f%dH(2)*f%d2pth(1) - f%d2H(1)*f%dpth(2) - f%dH(1)*f%d2pth(2))
-  jac(1,2) = f%d2pth(7)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(4) &
-    + si%dt*(f%d2H(8)*f%dpth(1) + f%dH(2)*f%d2pth(7) - f%d2H(7)*f%dpth(2) - f%dH(1)*f%d2pth(8))
-  jac(2,1) = f%d2pth(1)*(x(2) - si%z(4)) &
-    + si%dt*(f%d2H(3)*f%dpth(1) + f%dH(3)*f%d2pth(1) - f%d2H(1)*f%dpth(3) - f%dH(1)*f%d2pth(3))
-  jac(2,2) = f%d2pth(7)*(x(2) - si%z(4)) + f%dpth(1) &
-    + si%dt*(f%d2H(9)*f%dpth(1) + f%dH(3)*f%d2pth(7) - f%d2H(7)*f%dpth(3) - f%dH(1)*f%d2pth(9))
+  call sympl_euler1_jacobian(si, f, x, jac)
 
 end subroutine jac_sympl_euler1
 
@@ -376,31 +364,22 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(n)
 
-  real(dp) :: fvec(n), fjac(n,n), ijac(n,n)
   real(dp) :: tolref(n)
   integer :: kit
+  logical :: converged
 
   tolref(1) = 1d0
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
-    if(x(1) > 1d0) return
-    if(x(1) < 0d0) x(1) = 0.01d0
+    if (x(1) > 1d0) return
+    if (x(1) < 0d0) x(1) = 0.01d0
 
-    call f_sympl_euler1(si, f, n, x, fvec, 1)
-    call jac_sympl_euler1(si, f, x, fjac)
-    ijac(1,1) = 1d0/(fjac(1,1) - fjac(1,2)*fjac(2,1)/fjac(2,2))
-    ijac(1,2) = -1d0/(fjac(1,1)*fjac(2,2)/fjac(1,2) - fjac(2,1))
-    ijac(2,1) = -1d0/(fjac(1,1)*fjac(2,2)/fjac(2,1) - fjac(1,2))
-    ijac(2,2) = 1d0/(fjac(2,2) - fjac(1,2)*fjac(2,1)/fjac(1,1))
-    xlast = x
-    x = x - matmul(ijac, fvec)
+    call eval_field(f, x(1), si%z(2), si%z(3), 2)
+    call get_derivatives2(f, x(2))
+    call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
 
-    ! Don't take too small values in pphi as tolerance reference
-    tolref(2) = max(dabs(x(2)), tolref(2))
-
-    if (all(dabs(fvec) < si%atol)) return
-    if (all(dabs(x-xlast) < si%rtol*tolref)) return
+    if (converged) return
   enddo
   call count_event(EVT_NEWTON1_MAXIT)
 end subroutine
@@ -418,7 +397,6 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   real(dp), intent(out) :: xlast(n)
 
   real(dp) :: fvec(n), fjac(n,n), jinv(n,n)
-  integer :: pivot(n), info
 
   real(dp) :: xabs(n), tolref(n), fabs(n)
   real(dp) :: det
@@ -778,8 +756,13 @@ recursive subroutine jac_rk_lobatto(si, fs, s, jac)
 
   call coeff_rk_lobatto(s, a, ahat, b, c)
   jac = 0d0
+  dHprime = 0.0d0
 
-  Hprime = fs%dH(1)/fs%dpth(1)
+  Hprime = 0.0d0
+  Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
+  do k = 2, s
+    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+  end do
   dHprime(1) = (fs(1)%d2H(1)-Hprime(1)*fs(1)%d2pth(1))/fs(1)%dpth(1)  ! d/dr
   dHprime(2) = (fs(1)%d2H(7)-Hprime(1)*fs(1)%d2pth(7))/fs(1)%dpth(1)  ! d/dpph
   do k = 2, s
@@ -1209,7 +1192,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
@@ -1235,19 +1218,13 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     si%z(4) = x(2)
 
     if (extrap_field) then
-      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1))  + f%dpth(4)*(x(2)-xlast(2))
-      f%dH(1) = f%dH(1) + f%d2H(1)*(x(1)-xlast(1)) + f%d2H(7)*(x(2)-xlast(2))
-      f%dpth(1)=f%dpth(1)+f%d2pth(1)*(x(1)-xlast(1))+f%d2pth(7)*(x(2)-xlast(2))
-      f%vpar = f%vpar + f%dvpar(1)*(x(1)-xlast(1)) + f%dvpar(4)*(x(2)-xlast(2))
-      f%hth = f%hth + f%dhth(1)*(x(1)-xlast(1))
-      f%hph = f%hph + f%dhph(1)*(x(1)-xlast(1))
+      call sympl_euler1_extrapolate_field(si, f, x, xlast)
     else
       call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
       call get_derivatives(f, si%z(4))
     endif
 
-    si%z(2) = si%z(2) + si%dt*f%dH(1)/f%dpth(1)
-    si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
+    call sympl_euler1_advance_angles(si, f)
 
     ktau = ktau+1
   enddo
@@ -1268,7 +1245,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast, dz
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0
@@ -1330,7 +1307,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, parameter :: maxit = 8
 
   real(dp), dimension(n) :: x, xlast
-  integer :: k, ktau
+  integer :: ktau
 
   ierr = 0
   ktau = 0

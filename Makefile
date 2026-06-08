@@ -19,7 +19,7 @@ NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
 NVHPC_BUILD_DIR := build_nvfortran
 NVHPC_ACC_BUILD_DIR := build_nvfortran_acc
 
-.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
+.PHONY: all configure reconfigure build build-deterministic build-deterministic-nopy test test-nopy test-fast test-slow test-regression test-all test-golden-main test-golden-tag test-golden install clean venv nvfortran nvfortran-test nvfortran-test-nopy nvfortran-configure nvfortran-clean
 .PHONY: nvfortran-acc nvfortran-acc-test nvfortran-acc-test-nopy nvfortran-acc-configure nvfortran-acc-clean
 .PHONY: gvec-qa-cache-fetch gvec-qa-cache-build gvec-qa-cache-sync-data gvec-qa-cache-refresh-data
 .PHONY: figure8-data-fetch
@@ -124,6 +124,12 @@ gvec-qa-cache-sync-data:
 	rsync -a --delete "$(SIMPLE_GVEC_QA_CACHE_ROOT)/" "$(SIMPLE_DATA_GVEC_QA_DIR)/"
 
 gvec-qa-cache-refresh-data: gvec-qa-cache-build gvec-qa-cache-sync-data
+
+venv:
+	./setup-venv.sh
+
+venv-nopy:
+	./setup-venv.sh --no-pysimple
 
 doc: configure
 	cmake --build --preset default --target doc

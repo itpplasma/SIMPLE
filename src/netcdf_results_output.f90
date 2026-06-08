@@ -366,13 +366,14 @@ contains
     subroutine compute_cartesian_positions(xstart_cart, xend_cart)
         !> Convert reference coordinates to Cartesian for all particles.
         !>
-        !> For particles that were not traced (zend = 0), xend_cart is set
-        !> to xstart_cart since they effectively remained at the start.
+        !> For particles that were not traced (zend = 0), xend_cart is set to zero.
         !>
-        !> TODO: Investigate batch coordinate transformation for performance.
-        !> Current implementation uses O(n) individual calls.
+        !> For STL wall hits (wall_hit == 1), xend_cart is set directly from
+        !> wall_hit_cart since that is the authoritative CGAL intersection point.
+        !> This avoids round-trip coordinate conversion errors when from_cart
+        !> fails in ill-conditioned chartmap regions.
 
-        use params, only: ntestpart, zstart, zend
+        use params, only: ntestpart, zstart, zend, wall_hit, wall_hit_cart
         use reference_coordinates, only: ref_coords
 
         real(dp), intent(out) :: xstart_cart(:, :)
@@ -389,14 +390,19 @@ contains
         do i = 1, ntestpart
             call ref_coords%evaluate_cart(zstart(1:3, i), xstart_cart(:, i))
 
-            ! Check if particle was traced: zend is set to exactly 0 for untraced
-            ! particles (see simple_main.f90:493 and classification.f90:94)
-            zend_is_zero = all(zend(1:3, i) == 0.0_dp)
-            if (zend_is_zero) then
-                ! Particle not traced - use start position
-                xend_cart(:, i) = xstart_cart(:, i)
+            ! For STL wall hits, use the authoritative CGAL intersection point
+            if (wall_hit(i) == 1) then
+                xend_cart(:, i) = wall_hit_cart(:, i)
             else
-                call ref_coords%evaluate_cart(zend(1:3, i), xend_cart(:, i))
+                ! Check if particle was traced: zend is set to exactly 0 for untraced
+                ! particles (see simple_main.f90:493 and classification.f90:94)
+                zend_is_zero = all(zend(1:3, i) == 0.0_dp)
+                if (zend_is_zero) then
+                    ! Particle not traced - keep xend_cart as zero
+                    xend_cart(:, i) = 0.0_dp
+                else
+                    call ref_coords%evaluate_cart(zend(1:3, i), xend_cart(:, i))
+                end if
             end if
         end do
 

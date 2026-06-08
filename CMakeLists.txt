@@ -97,16 +97,23 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(SIMPLE_NVHPC)
 
     if(SIMPLE_ENABLE_OPENACC)
-        message(STATUS "OpenACC enabled for NVHPC compiler")
+        # Memory model for OpenACC. "managed" places allocatables in CUDA
+        # managed memory so derived-type allocatable components (e.g. batch
+        # spline %coeff) stay coherent host<->device without manual deep-copy
+        # update clauses, which nvfortran does not perform for such components.
+        # "unified" additionally covers module/static data (needs HMM driver).
+        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
+            "OpenACC memory model: managed|unified|separate")
+        message(STATUS "OpenACC enabled for NVHPC compiler (mem:${SIMPLE_OPENACC_MEM})")
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative>
+            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative>
+            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
         )
         add_link_options(
             -acc
-            -gpu=ccnative
+            -gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}
         )
     endif()
 endif()

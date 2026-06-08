@@ -30,20 +30,14 @@ module boozer_sub
 !$omp threadprivate(current_field)
 
     ! Batch spline data for Bmod and B_r interpolation
-    type(BatchSplineData3D), save :: bmod_br_batch_spline
+    type(BatchSplineData3D), allocatable :: bmod_br_batch_spline
     logical, save :: bmod_br_batch_spline_ready = .false.
-    integer, save :: bmod_br_num_quantities = 0
     real(dp), allocatable, save :: bmod_grid(:, :, :)
     real(dp), allocatable, save :: br_grid(:, :, :)
 
     ! Batch spline for A_phi (vector potential)
-    type(BatchSplineData1D), save :: aphi_batch_spline
+    type(BatchSplineData1D), allocatable :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
-    ! Radial abscissa of aphi_batch_spline: .false. = uniform s (VMEC-derived
-    ! Boozer), .true. = uniform rho grid (chartmap file). A chartmap tabulates
-    ! every 1D profile against its rho grid, so A_phi is evaluated at rho and
-    ! chain-ruled to s, matching B_theta/B_phi/Bmod.
-    logical, save :: aphi_over_rho = .false.
     ! Canonical A_phi sampled natively on the Boozer rho grid in
     ! compute_boozer_data (a flux function, like s_Bcovar_tp_B). export_boozer_chartmap
     ! writes this directly so the chartmap A_phi shares the rho abscissa of
@@ -51,7 +45,7 @@ module boozer_sub
     real(dp), allocatable, save :: aphi_rho(:)
 
     ! Batch spline for B_theta, B_phi covariant components
-    type(BatchSplineData1D), save :: bcovar_tp_batch_spline
+    type(BatchSplineData1D), allocatable :: bcovar_tp_batch_spline
     logical, save :: bcovar_tp_batch_spline_ready = .false.
 
     ! Batch splines for coordinate transformations (VMEC <-> Boozer)
@@ -63,7 +57,40 @@ module boozer_sub
     logical, save :: delt_delp_B_batch_spline_ready = .false.
     real(dp), allocatable, save :: delt_delp_B_grid(:, :, :, :)
 
+    type :: boozer_state_t
+        real(dp) :: torflux = 0.0_dp
+        integer :: nper = 1
+        logical :: use_B_r = .false.
+        integer :: bmod_br_num_quantities = 0
+        logical :: aphi_over_rho = .false.
+    end type boozer_state_t
+
+    ! Device-accessible Boozer runtime state shared by host and OpenACC code.
+    ! sync_boozer_state copies the libneo globals into this object before GPU use.
+    type(boozer_state_t), save :: boozer_state
+    public :: sync_boozer_state, boozer_state
+
+    ! Module statics referenced by splint_boozer_coord inside OpenACC device
+    ! kernels need device symbols. declare create + update device (in
+    ! sync_boozer_state / spline construction) keeps them coherent.
+    !$acc declare create(boozer_state)
+    !$acc declare create(bmod_br_batch_spline, aphi_batch_spline, bcovar_tp_batch_spline)
+
 contains
+
+    !> Copy scalar Boozer field parameters from the libneo modules into the
+    !> shared runtime state. Host-only; call after field init and before any
+    !> OpenACC tracing kernel.
+    subroutine sync_boozer_state()
+        use vector_potentail_mod, only: torflux
+        use new_vmec_stuff_mod, only: nper
+        use boozer_coordinates_mod, only: use_B_r
+        boozer_state%torflux = torflux
+        boozer_state%nper = nper
+        boozer_state%use_B_r = use_B_r
+        !$acc update device(boozer_state)
+        !$acc update device(bmod_br_batch_spline, aphi_batch_spline, bcovar_tp_batch_spline)
+    end subroutine sync_boozer_state
 
     !> Initialize Boozer coordinates using given magnetic field
     subroutine get_boozer_coordinates_with_field(field)
@@ -94,7 +121,7 @@ contains
         use vector_potentail_mod, only: ns, hs
         use new_vmec_stuff_mod, only: n_theta, n_phi, h_theta, h_phi, ns_s, ns_tp
         use boozer_coordinates_mod, only: ns_s_B, ns_tp_B, ns_B, n_theta_B, n_phi_B, &
-                                          hs_B, h_theta_B, h_phi_B, use_B_r
+                                          hs_B, h_theta_B, h_phi_B
 
         implicit none
 
@@ -125,13 +152,8 @@ contains
                                    Bmod_B, dBmod_B, d2Bmod_B, &
                                    B_r, dB_r, d2B_r)
 
-        use boozer_coordinates_mod, only: use_B_r
-        use vector_potentail_mod, only: torflux
-        use new_vmec_stuff_mod, only: nper
-        use chamb_mod, only: rnegflag
-        use diag_mod, only: dodiag, icounter
-
         implicit none
+        !$acc routine seq
 
         integer, intent(in) :: mode_secders
 
@@ -151,30 +173,26 @@ contains
         real(dp) :: x_eval(3), y_eval(2), dy_eval(3, 2), d2y_eval(6, 2)
         real(dp) :: theta_wrapped, phi_wrapped
         real(dp) :: y1d(2), dy1d(2), d2y1d(2)
+        real(dp) :: d3y1d(1)
 
-        if (dodiag) then
-!$omp atomic
-            icounter = icounter + 1
-        end if
-        r_eval = r
-        if (r_eval .le. 0.0_dp) then
-            rnegflag = .true.
-            r_eval = abs(r_eval)
-        end if
+        ! Negative r only occurs transiently inside the Newton solve; the
+        ! symplectic integrator clamps the radial coordinate itself, so the
+        ! abs() below is the only handling needed. The dodiag evaluation
+        ! counter and the chamb_mod rnegflag are host-only diagnostics that are
+        ! omitted here (threadprivate variables are not allowed in acc routines).
+        r_eval = abs(r)
 
-        A_theta = torflux*r_eval
-        dA_theta_dr = torflux
+        A_theta = boozer_state%torflux*r_eval
+        dA_theta_dr = boozer_state%torflux
 
         ! Interpolate A_phi. VMEC-derived Boozer data is tabulated on a uniform-s
         ! grid (evaluate at s directly). A chartmap tabulates A_phi on the file's
         ! uniform rho grid, so evaluate at rho and chain-rule to s, exactly like
         ! Bmod/B_theta/B_phi below. The chartmap branch uses local chain-rule
         ! coefficients so the VMEC-s branch keeps its original instruction order.
-        if (.not. aphi_batch_spline_ready) then
-            error stop "splint_boozer_coord: Aphi batch spline not initialized"
-        end if
-
-        if (aphi_over_rho) then
+        ! Guards (error stop) are omitted so this routine is callable from OpenACC
+        ! device kernels (error stop is not supported there).
+        if (boozer_state%aphi_over_rho) then
             ! A_phi(rho) -> s-derivatives by the chain rule for rho = sqrt(s):
             !   rho'   = 1/(2 rho)              [drds]
             !   rho''  = -1/(4 rho^3)           [-d2rds2m]
@@ -229,11 +247,7 @@ contains
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r_eval)
         theta_wrapped = modulo(vartheta_B, TWOPI)
-        phi_wrapped = modulo(varphi_B, TWOPI/real(nper, dp))
-
-        if (.not. bmod_br_batch_spline_ready) then
-            error stop "splint_boozer_coord: Bmod/Br batch spline not initialized"
-        end if
+        phi_wrapped = modulo(varphi_B, TWOPI/real(boozer_state%nper, dp))
 
         x_eval(1) = rho_tor
         x_eval(2) = theta_wrapped
@@ -246,9 +260,9 @@ contains
 
         if (mode_secders == 2) then
             call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                y_eval(1:bmod_br_num_quantities), &
-                                                dy_eval(:, 1:bmod_br_num_quantities), &
-                                                d2y_eval(:, 1:bmod_br_num_quantities))
+                                                y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                                dy_eval(:, 1:boozer_state%bmod_br_num_quantities), &
+                                                d2y_eval(:, 1:boozer_state%bmod_br_num_quantities))
 
             ! Extract Bmod (quantity 1)
             qua = y_eval(1)
@@ -282,7 +296,7 @@ contains
             d2Bmod_B(6) = d2qua_dp2
 
             ! Extract B_r (quantity 2, if present)
-            if (use_B_r) then
+            if (boozer_state%use_B_r) then
                 qua = y_eval(2)
                 dqua_dr = dy_eval(1, 2)
                 dqua_dt = dy_eval(2, 2)
@@ -320,8 +334,8 @@ contains
             end if
         else
             call evaluate_batch_splines_3d_der(bmod_br_batch_spline, x_eval, &
-                                               y_eval(1:bmod_br_num_quantities), &
-                                               dy_eval(:, 1:bmod_br_num_quantities))
+                                               y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                               dy_eval(:, 1:boozer_state%bmod_br_num_quantities))
 
             Bmod_B = y_eval(1)
             dBmod_B(1) = dy_eval(1, 1)*drhods
@@ -332,15 +346,15 @@ contains
 
             if (mode_secders == 1) then
                 call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                                    y_eval(1:bmod_br_num_quantities), &
+                                                    y_eval(1:boozer_state%bmod_br_num_quantities), &
                                                     dy_eval(:, &
-                                                            1:bmod_br_num_quantities), &
+                                                            1:boozer_state%bmod_br_num_quantities), &
                                                     d2y_eval(:, &
-                                                             1:bmod_br_num_quantities))
+                                                             1:boozer_state%bmod_br_num_quantities))
                 d2Bmod_B(1) = d2y_eval(1, 1)*drhods2 - dy_eval(1, 1)*d2rhods2m
             end if
 
-            if (use_B_r) then
+            if (boozer_state%use_B_r) then
                 qua = y_eval(2)
                 dqua_dr = dy_eval(1, 2)
                 dqua_dt = dy_eval(2, 2)
@@ -367,10 +381,6 @@ contains
         end if
 
         ! Interpolation of B_\vartheta and B_\varphi (flux functions)
-        if (.not. bcovar_tp_batch_spline_ready) then
-            error stop "splint_boozer_coord: Bcovar_tp batch spline not initialized"
-        end if
-
         call evaluate_batch_splines_1d_der2(bcovar_tp_batch_spline, rho_tor, y1d, &
                                             dy1d, d2y1d)
         B_vartheta_B = y1d(1)
@@ -835,7 +845,7 @@ contains
 
     !> Compute radial covariant magnetic field B_rho from symmetry flux coordinates
     subroutine compute_br_from_symflux(rho_tor, aiota_arr, Gfunc, Bcovar_symfl)
-        use boozer_coordinates_mod, only: ns_B, n_theta_B, n_phi_B
+        use boozer_coordinates_mod, only: ns_B, n_phi_B
         use plag_coeff_sub, only: plag_coeff
 
         real(dp), intent(in) :: rho_tor(:)
@@ -849,7 +859,7 @@ contains
         integer :: i_rho, i_phi, ibeg, iend, nshift
         real(dp) :: coef(0:NDER, NPOILAG)
 
-        nshift = NPOILAG/2
+        nshift = (NPOILAG - 1)/2
 
         do i_rho = 1, ns_B
             ibeg = i_rho - nshift
@@ -905,6 +915,8 @@ contains
     end subroutine ensure_grid_4d
 
     subroutine reset_boozer_batch_splines
+        boozer_state = boozer_state_t()
+        !$acc update device(boozer_state)
         if (aphi_batch_spline_ready) then
             call destroy_batch_splines_1d(aphi_batch_spline)
             aphi_batch_spline_ready = .false.
@@ -916,7 +928,7 @@ contains
         if (bmod_br_batch_spline_ready) then
             call destroy_batch_splines_3d(bmod_br_batch_spline)
             bmod_br_batch_spline_ready = .false.
-            bmod_br_num_quantities = 0
+            boozer_state%bmod_br_num_quantities = 0
         end if
         if (allocated(bmod_grid)) deallocate (bmod_grid)
         if (allocated(br_grid)) deallocate (br_grid)
@@ -930,6 +942,14 @@ contains
             delt_delp_B_batch_spline_ready = .false.
         end if
         if (allocated(delt_delp_B_grid)) deallocate (delt_delp_B_grid)
+
+        ! Descriptors are allocatable so that, under -gpu=mem:managed/separate,
+        ! the module common is not emitted as a value-initialized device global
+        ! (which trips an nvfortran NVVM codegen bug). Keep them allocated for the
+        ! program lifetime; destroy_batch_splines_* above frees only %coeff.
+        if (.not. allocated(aphi_batch_spline)) allocate (aphi_batch_spline)
+        if (.not. allocated(bcovar_tp_batch_spline)) allocate (bcovar_tp_batch_spline)
+        if (.not. allocated(bmod_br_batch_spline)) allocate (bmod_br_batch_spline)
     end subroutine reset_boozer_batch_splines
 
     subroutine load_boozer_from_chartmap(filename)
@@ -1004,7 +1024,7 @@ contains
         call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_aphi, spline_order, &
                                         .false., aphi_batch_spline)
         aphi_batch_spline_ready = .true.
-        aphi_over_rho = .true.
+        boozer_state%aphi_over_rho = .true.
         deallocate (y_aphi)
 
         ! Build B_theta, B_phi batch spline over rho_tor
@@ -1030,13 +1050,19 @@ contains
         call construct_batch_splines_3d(x_min_3d, x_max_3d, y_bmod, order_3d, &
                                         periodic_3d, bmod_br_batch_spline)
         bmod_br_batch_spline_ready = .true.
-        bmod_br_num_quantities = 1
+        boozer_state%bmod_br_num_quantities = 1
         deallocate (y_bmod)
 
         print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
         print *, '  nfp=', d%nfp, ' ns=', d%n_rho, ' ntheta_field=', &
                  d%n_theta, ' nphi_field=', d%n_phi
         print *, '  torflux=', torflux
+
+        ! The chartmap loader builds the batch splines inline (not via
+        ! build_boozer_bmod_br_batch_spline), so refresh the device-accessible
+        ! field-parameter mirrors here too. splint_boozer_coord reads them on
+        ! both host and device.
+        call sync_boozer_state
 
     end subroutine load_boozer_from_chartmap
 
@@ -1261,7 +1287,7 @@ contains
         aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
 
         aphi_batch_spline_ready = .true.
-        aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
+        boozer_state%aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
     end subroutine build_boozer_aphi_batch_spline
 
     subroutine build_boozer_bcovar_tp_batch_spline
@@ -1314,7 +1340,7 @@ contains
         if (bmod_br_batch_spline_ready) then
             call destroy_batch_splines_3d(bmod_br_batch_spline)
             bmod_br_batch_spline_ready = .false.
-            bmod_br_num_quantities = 0
+            boozer_state%bmod_br_num_quantities = 0
         end if
 
         order = [ns_s_B, ns_tp_B, ns_tp_B]
@@ -1345,8 +1371,13 @@ contains
         call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
                                         bmod_br_batch_spline)
         bmod_br_batch_spline_ready = .true.
-        bmod_br_num_quantities = nq
+        boozer_state%bmod_br_num_quantities = nq
         deallocate (y_batch)
+
+        ! All scalar field parameters are final once the Bmod/B_r spline is
+        ! built; refresh the device-accessible mirrors used by splint_boozer_coord
+        ! (also keeps the host CPU path correct, since splint now reads them).
+        call sync_boozer_state
     end subroutine build_boozer_bmod_br_batch_spline
 
     subroutine build_boozer_delt_delp_batch_splines

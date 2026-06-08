@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "numpy", "f90wrap"]
+requires = ["scikit-build-core", "numpy", "f90wrap==0.3.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
