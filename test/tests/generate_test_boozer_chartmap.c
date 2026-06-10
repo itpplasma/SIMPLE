@@ -33,7 +33,6 @@ int main(int argc, char **argv)
     const double twopi = 2.0 * acos(-1.0);
     const double epsilon = a / r0;
     const double torflux = 0.5 * b0 * a * a;
-    const double rmajor = r0;
     const char *filename = argc > 1 ? argv[1] : "test_boozer_chartmap.nc";
 
     double rho[n_rho];
@@ -164,8 +163,6 @@ int main(int argc, char **argv)
              "put boozer_field");
     CHECK_NC(nc_put_att_double(ncid, NC_GLOBAL, "torflux", NC_DOUBLE, 1, &torflux),
              "put torflux");
-    CHECK_NC(nc_put_att_double(ncid, NC_GLOBAL, "rmajor", NC_DOUBLE, 1, &rmajor),
-             "put rmajor");
 
     CHECK_NC(nc_enddef(ncid), "enddef");
 

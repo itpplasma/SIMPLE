@@ -8,8 +8,8 @@ module boozer_chartmap_io
     !>
     !> Bmod is read on the endpoint-included field grid (theta_field/zeta_field),
     !> which spans the full 2*pi (poloidal) and 2*pi/nfp (toroidal) period. The
-    !> geometry grid (theta/zeta) is endpoint-excluded and is only used here to
-    !> recover the angular step sizes.
+    !> geometry grid (theta/zeta) is endpoint-excluded and is used here to
+    !> recover the angular step sizes and the major radius.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use netcdf
@@ -25,7 +25,7 @@ module boozer_chartmap_io
         integer :: n_phi = 0         !< field grid, endpoint-included (period span)
         integer :: nfp = 1
         real(dp) :: torflux = 0.0_dp
-        real(dp) :: rmajor = 0.0_dp
+        real(dp) :: rmajor = 0.0_dp  !< metres, derived from innermost-surface geometry
         real(dp) :: rho_min = 0.0_dp
         real(dp) :: rho_max = 0.0_dp
         real(dp) :: h_s = 0.0_dp     !< uniform rho step
@@ -81,7 +81,14 @@ contains
                     "inq_var num_field_periods")
         call check(nf90_get_var(ncid, varid, d%nfp), "get num_field_periods")
 
-        call check(nf90_get_att(ncid, nf90_global, "rmajor", d%rmajor), "att rmajor")
+        ! Major radius from geometry: (theta,zeta)-average of sqrt(x^2+y^2) on
+        ! the innermost rho surface (the chartmap analogue of libneo's
+        ! rmajor = rmnc(1,0) axis fallback in vmecinm_m.f90). x,y are stored in
+        ! cm at base scale; rmajor is kept in metres like the former global
+        ! attribute, so the vmec_RZ_scale applied downstream by the field
+        ! loaders stays correct. A leftover "rmajor" attribute in older files
+        ! is ignored.
+        call derive_rmajor(ncid, n_theta_geom, n_phi_geom, d%rmajor)
 
         ! 1D profiles on the rho grid.
         allocate (d%A_phi(n_rho), d%B_theta(n_rho), d%B_phi(n_rho))
@@ -106,6 +113,28 @@ contains
 
         call check(nf90_close(ncid), "close")
     end subroutine read_boozer_chartmap
+
+    subroutine derive_rmajor(ncid, n_theta_geom, n_phi_geom, rmajor)
+        integer, intent(in) :: ncid, n_theta_geom, n_phi_geom
+        real(dp), intent(out) :: rmajor
+
+        integer :: varid
+        real(dp), allocatable :: x_in(:, :, :), y_in(:, :, :)
+        real(dp), parameter :: cm_to_m = 1.0e-2_dp
+
+        allocate (x_in(1, n_theta_geom, n_phi_geom), &
+                  y_in(1, n_theta_geom, n_phi_geom))
+
+        call check(nf90_inq_varid(ncid, "x", varid), "inq_var x")
+        call check(nf90_get_var(ncid, varid, x_in, start=[1, 1, 1], &
+                                 count=[1, n_theta_geom, n_phi_geom]), "get x")
+        call check(nf90_inq_varid(ncid, "y", varid), "inq_var y")
+        call check(nf90_get_var(ncid, varid, y_in, start=[1, 1, 1], &
+                                 count=[1, n_theta_geom, n_phi_geom]), "get y")
+
+        rmajor = sum(sqrt(x_in**2 + y_in**2))*cm_to_m &
+                 /real(n_theta_geom*n_phi_geom, dp)
+    end subroutine derive_rmajor
 
     subroutine check(status, location)
         integer, intent(in) :: status
