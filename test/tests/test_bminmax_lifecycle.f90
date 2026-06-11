@@ -1,3 +1,40 @@
+! The analytic magfie backend lives in a module so it is an ordinary module
+! procedure. A pointer to a program-internal procedure forces gfortran to build
+! a trampoline on the stack, which faults on a non-executable stack.
+module test_bminmax_backend
+    use magfie_sub, only: dp
+    use new_vmec_stuff_mod, only: nper
+    implicit none
+
+contains
+
+    subroutine test_magfie_backend(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, sqrtg
+        real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        real(dp), parameter :: amp_theta = 0.1_dp
+        real(dp), parameter :: amp_phi = 0.05_dp
+        real(dp), parameter :: theta0 = 0.2_dp
+        real(dp), parameter :: phi0 = 0.4_dp
+        real(dp) :: phase_theta, phase_phi, kphi
+
+        kphi = real(max(1, nper), dp)
+        phase_theta = x(2) - theta0
+        phase_phi = kphi*x(3) - phi0
+
+        bmod = 2.0_dp + x(1) + amp_theta*cos(phase_theta) + amp_phi*cos(phase_phi)
+        sqrtg = 1.0_dp
+        bder(1) = 1.0_dp/bmod
+        bder(2) = -amp_theta*sin(phase_theta)/bmod
+        bder(3) = -amp_phi*kphi*sin(phase_phi)/bmod
+        hcovar = 0.0_dp
+        hctrvr = [0.0_dp, 0.0_dp, 1.0_dp]
+        hcurl = 0.0_dp
+    end subroutine test_magfie_backend
+
+end module test_bminmax_backend
+
 program test_bminmax_lifecycle
     use bminmax_mod, only: prop
     use find_bminmax_sub, only: get_bminmax, init_bminmax_arrays
@@ -5,6 +42,7 @@ program test_bminmax_lifecycle
     use new_vmec_stuff_mod, only: nper
     use params, only: class_plot, ntcut, num_surf
     use simple_main, only: needs_bminmax_cache
+    use test_bminmax_backend, only: test_magfie_backend
     use test_utils, only: check, check_close
 
     implicit none
@@ -82,30 +120,5 @@ contains
 
         prop = .true.
     end subroutine test_active_backend_cache
-
-    subroutine test_magfie_backend(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-        real(dp), intent(in) :: x(3)
-        real(dp), intent(out) :: bmod, sqrtg
-        real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
-
-        real(dp), parameter :: amp_theta = 0.1_dp
-        real(dp), parameter :: amp_phi = 0.05_dp
-        real(dp), parameter :: theta0 = 0.2_dp
-        real(dp), parameter :: phi0 = 0.4_dp
-        real(dp) :: phase_theta, phase_phi, kphi
-
-        kphi = real(max(1, nper), dp)
-        phase_theta = x(2) - theta0
-        phase_phi = kphi*x(3) - phi0
-
-        bmod = 2.0_dp + x(1) + amp_theta*cos(phase_theta) + amp_phi*cos(phase_phi)
-        sqrtg = 1.0_dp
-        bder(1) = 1.0_dp/bmod
-        bder(2) = -amp_theta*sin(phase_theta)/bmod
-        bder(3) = -amp_phi*kphi*sin(phase_phi)/bmod
-        hcovar = 0.0_dp
-        hctrvr = [0.0_dp, 0.0_dp, 1.0_dp]
-        hcurl = 0.0_dp
-    end subroutine test_magfie_backend
 
 end program test_bminmax_lifecycle

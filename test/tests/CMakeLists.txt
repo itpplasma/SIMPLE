@@ -1,3 +1,14 @@
+# Enforce no procedure-pointer trampolines in test executables. A pointer to an
+# internal procedure builds a stack trampoline that faults on a non-executable
+# stack; keep procedure-pointer targets (e.g. test magfie backends) as module
+# procedures. Inherited by the field_can/magfie/orbit subdirectories below.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+
 ##################################################
 # DOWNLOAD TEST DATA
 ##################################################
