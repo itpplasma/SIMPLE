@@ -17,6 +17,7 @@ program test_profiles
     call test_flat_intermediate_values(all_passed, n_failed)
     call test_slowing_down_distribution(all_passed, n_failed)
     call test_loss_fraction_flat_vs_scalar(all_passed, n_failed)
+    call test_maxwellian_fixed_point(all_passed, n_failed)
     call plot_collision_frequency_comparison()
 
     if (all_passed) then
@@ -515,6 +516,113 @@ contains
             passed = .false.; nfail = nfail + 1
         end if
     end subroutine test_loss_fraction_flat_vs_scalar
+
+    ! Acceptance test (issue #363): the background Maxwellian is the fixed point
+    ! of the collision operator. An ensemble sampled from the Maxwellian at the
+    ! background temperature, evolved under energy scattering and drag, keeps its
+    ! mean energy and its shape. enrat = E_alpha/T sets the equilibrium width:
+    ! f(p) ~ p^2 exp(-enrat p^2), <p^2> = 3/(2 enrat).
+    subroutine test_maxwellian_fixed_point(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+
+        integer, parameter :: npart = 8000, nstep = 4000, nbin = 12
+        real(dp) :: am1, am2, Z1, Z2, ealpha, v0
+        real(dp) :: densi1, densi2, tempi1, tempi2, tempe
+        real(dp) :: dchichi, slowrate, dchichi_norm, slowrate_norm
+        real(dp) :: enr, sig, dpp, dhh, fpeff, dtauc, twopi
+        real(dp) :: p0(npart), z(5)
+        real(dp) :: h_init(nbin), h_final(nbin), h_ana(nbin)
+        real(dp) :: plo, phi, db, pc, p2_init, p2_final, p2_eq
+        real(dp) :: u1, u2, u3, u4, vx, vy, vz, reldev_shape, reldev_ana, ratio
+        integer :: ip, it, ib, ierr
+        logical :: moment_ok, shape_ok
+
+        print *, 'Testing Maxwellian fixed point of the collision operator...'
+
+        am1 = 2.0d0; am2 = 3.0d0; Z1 = 1.0d0; Z2 = 1.0d0; ealpha = 3.5d6
+        tempe = 1.0d4; tempi1 = 1.0d4; tempi2 = 1.0d4
+        ni1_scale = 0.5d20; ni2_scale = 0.5d20
+        Te_scale = tempe; Ti1_scale = tempi1; Ti2_scale = tempi2
+        densi1 = ni1_scale*1.0d-6; densi2 = ni2_scale*1.0d-6
+
+        call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+        call set_flat_two_power()
+        call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
+
+        enr = enrat(1)
+        sig = 1.0d0/sqrt(2.0d0*enr)
+        p2_eq = 1.5d0/enr
+        twopi = 8.0d0*atan(1.0d0)
+        call coleff(1.0d0/sqrt(enr), dpp, dhh, fpeff)
+        dtauc = 0.01d0/enr/max(dpp, abs(fpeff))
+
+        plo = 0.0d0; phi = 4.0d0/sqrt(enr); db = (phi - plo)/dble(nbin)
+        h_init = 0.0d0; h_final = 0.0d0
+
+        call seed_rng()
+        ! sample Maxwellian momenta p = |v|, each Cartesian component ~ N(0, sig^2)
+        p2_init = 0.0d0
+        do ip = 1, npart
+            call random_number(u1); call random_number(u2)
+            call random_number(u3); call random_number(u4)
+            vx = sig*sqrt(-2.0d0*log(u1 + 1.0d-30))*cos(twopi*u2)
+            vy = sig*sqrt(-2.0d0*log(u1 + 1.0d-30))*sin(twopi*u2)
+            vz = sig*sqrt(-2.0d0*log(u3 + 1.0d-30))*cos(twopi*u4)
+            p0(ip) = sqrt(vx*vx + vy*vy + vz*vz)
+            p2_init = p2_init + p0(ip)**2
+            ib = int((p0(ip) - plo)/db) + 1
+            if (ib >= 1 .and. ib <= nbin) h_init(ib) = h_init(ib) + 1.0d0
+        end do
+
+        ! evolve with energy scattering + drag (iswmode = 2)
+        p2_final = 0.0d0
+        do ip = 1, npart
+            z = 0.0d0; z(1) = 0.5d0; z(4) = p0(ip); z(5) = 0.0d0
+            do it = 1, nstep
+                call stost(z, dtauc, 2, ierr)
+            end do
+            p2_final = p2_final + z(4)**2
+            ib = int((z(4) - plo)/db) + 1
+            if (ib >= 1 .and. ib <= nbin) h_final(ib) = h_final(ib) + 1.0d0
+        end do
+
+        do ib = 1, nbin
+            pc = plo + (dble(ib) - 0.5d0)*db
+            h_ana(ib) = pc*pc*exp(-enr*pc*pc)
+        end do
+        call normalize(h_init, nbin)
+        call normalize(h_final, nbin)
+        call normalize(h_ana, nbin)
+
+        ratio = (p2_final/dble(npart))/p2_eq
+        moment_ok = (ratio > 0.95d0 .and. ratio < 1.05d0)
+        if (moment_ok) then
+            print *, '  PASS: mean energy preserved, <p^2> final/eq =', ratio
+        else
+            print *, '  FAIL: mean energy drifted, <p^2> final/eq =', ratio
+            passed = .false.; nfail = nfail + 1
+        end if
+
+        reldev_shape = 0.0d0; reldev_ana = 0.0d0
+        do ib = 1, nbin
+            if (h_init(ib) > 0.05d0) then
+                reldev_shape = max(reldev_shape, &
+                                   abs(h_final(ib) - h_init(ib))/h_init(ib))
+                reldev_ana = max(reldev_ana, abs(h_final(ib) - h_ana(ib))/h_ana(ib))
+            end if
+        end do
+        shape_ok = (reldev_shape < 0.1d0 .and. reldev_ana < 0.1d0)
+        if (shape_ok) then
+            print *, '  PASS: distribution stays Maxwellian, max reldev', &
+                max(reldev_shape, reldev_ana)
+        else
+            print *, '  FAIL: distribution distorted, reldev init/ana', &
+                reldev_shape, reldev_ana
+            passed = .false.; nfail = nfail + 1
+        end if
+    end subroutine test_maxwellian_fixed_point
 
     subroutine set_flat_two_power()
         profile_type = "two_power"
