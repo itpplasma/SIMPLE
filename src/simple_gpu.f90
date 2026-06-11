@@ -9,7 +9,8 @@ module simple_gpu
     ! symplectic-Euler algebra from orbit_symplectic_euler1. Equivalence is
     ! checked against the CPU path by test_gpu_orbit_bench.
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_mod, only: field_can_t, get_derivatives2
+    use util, only: pi
+    use field_can_mod, only: field_can_t, get_derivatives, get_derivatives2
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t
     use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
@@ -45,6 +46,8 @@ contains
 
         do kit = 1, maxit
             if (x(1) > 1d0) return
+            ! Transient guard; converged-negative handled by the caller
+            ! (mirrors newton1 in orbit_symplectic, #370).
             if (x(1) < 0d0) x(1) = 0.01d0
 
             call eval_field_booz(f, x(1), si%z(2), si%z(3), 2)
@@ -64,6 +67,7 @@ contains
 
         real(dp) :: x(2), xlast(2)
         integer :: ktau
+        logical :: crossed
 
         ierr = 0
         ktau = 0
@@ -79,9 +83,30 @@ contains
                 ierr = 1
                 return
             end if
-            if (x(1) < 0.0d0) x(1) = 0.01d0
+            crossed = .false.
+            if (x(1) < 0.0d0) then
+                ! The converged radius lies beyond the axis: commit the
+                ! chart switch (r, theta) -> (|r|, theta + pi) (#370).
+                x(1) = -x(1)
+                si%z(2) = si%z(2) + pi
+                crossed = .true.
+                if (x(1) > 1.0d0) then
+                    ierr = 1
+                    return
+                end if
+            end if
 
-            call sympl_euler1_extrapolate_field(si, f, x, xlast)
+            si%z(1) = x(1)
+            si%z(4) = x(2)
+
+            if (crossed) then
+                ! xlast lives in the other chart; extrapolation across the
+                ! flip is invalid, evaluate the field fresh instead.
+                call eval_field_booz(f, si%z(1), si%z(2), si%z(3), 0)
+                call get_derivatives(f, si%z(4))
+            else
+                call sympl_euler1_extrapolate_field(si, f, x, xlast)
+            end if
             call sympl_euler1_advance_angles(si, f)
 
             ktau = ktau + 1

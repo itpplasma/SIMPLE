@@ -325,6 +325,17 @@ if (ENABLE_OPENMP)
     add_test(NAME test_sympl_testfield
         COMMAND test_sympl_testfield.x
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+    # Axis-crossing regression (issue #370): near-axis trapped orbits must
+    # never be lost at the axis and must conserve energy across crossings.
+    add_executable(test_axis_crossing.x test_axis_crossing.f90)
+    target_link_libraries(test_axis_crossing.x simple)
+    add_test(NAME test_axis_crossing
+        COMMAND test_axis_crossing.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_axis_crossing PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coord_trans.x test_coord_trans.f90)
@@ -492,6 +503,16 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
     target_link_libraries(export_boozer_chartmap_tool.x simple)
+
+    # Axis-loss regression (issue #370): zero symplectic-only losses on
+    # identical near-axis starts, symplectic Euler vs RK Boozer reference.
+    add_test(NAME test_axis_loss_consistency
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_axis_loss_consistency.py)
+    set_tests_properties(test_axis_loss_consistency PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 1800)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap

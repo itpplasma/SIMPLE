@@ -373,6 +373,11 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
 
   do kit = 1, maxit
     if (x(1) > 1d0) return
+    ! Transient guard: in s = rho^2 coordinates the Hamiltonian is not
+    ! smooth at the axis (sqrt(s) behavior), so there is no consistent
+    ! field extension to s < 0 for the solver itself. Intermediate
+    ! negative iterates are floored as before; a converged negative
+    ! solution is committed as an axis crossing by the caller (#370).
     if (x(1) < 0d0) x(1) = 0.01d0
 
     call eval_field(f, x(1), si%z(2), si%z(3), 2)
@@ -403,6 +408,8 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
 
   do kit = 1, maxit
     if(x(1) > 1.0) return
+    ! Transient guard for intermediate iterates; the converged-negative
+    ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
     call f_sympl_euler2(si, f, n, x, fvec, 1)
     fabs = dabs(fvec)
@@ -469,6 +476,8 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
 
   do kit = 1, maxit
     if(x(1) > 1.0) return
+    ! Transient guards for intermediate iterates; the converged-negative
+    ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
     if(x(5) < 0.0) x(5) = 0.01
     call f_midpoint_part1(si, f, n, x, fvec)
@@ -633,6 +642,8 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     ! Check if radius left the boundary
     do ks = 1, s
       if (x(4*ks-3) > 1d0) return
+      ! Transient guard for intermediate iterates; the converged-negative
+      ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
     end do
 
@@ -688,6 +699,8 @@ recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     ! Check if radius left the boundary
     do ks = 1, s
       if (x(4*ks-3) > 1d0) return
+      ! Transient guard for intermediate iterates; the converged-negative
+      ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
     end do
 
@@ -908,6 +921,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
 
     ! Check if radius left the boundary
     if (x(1) > 1d0) return
+    ! Transient guard for intermediate iterates (#370).
     if (x(1) < 0.0) x(1) = 0.01d0
     do ks = 2, s
       if (x(4*ks-2-3) > 1d0) return
@@ -1193,6 +1207,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
 
   real(dp), dimension(n) :: x, xlast
   integer :: ktau
+  logical :: crossed
 
   ierr = 0
   ktau = 0
@@ -1209,17 +1224,29 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
       return
     end if
 
+    crossed = .false.
     if (x(1) < 0.0d0) then
+      ! The converged radius lies beyond the axis: commit the chart switch
+      ! (r, theta) -> (|r|, theta + pi) and continue the orbit (#370).
+      x(1) = -x(1)
+      si%z(2) = si%z(2) + pi
+      crossed = .true.
       call count_event(EVT_R_NEGATIVE)
-      x(1) = 0.01d0
+      if (x(1) > 1.0d0) then
+        ! Pathological solve (|r| beyond the boundary on the far side).
+        ierr = 1
+        return
+      end if
     end if
 
     si%z(1) = x(1)
     si%z(4) = x(2)
 
-    if (extrap_field) then
+    if (extrap_field .and. .not. crossed) then
       call sympl_euler1_extrapolate_field(si, f, x, xlast)
     else
+      ! After a chart switch xlast lives in the other chart; extrapolation
+      ! across the flip is invalid, evaluate the field fresh instead.
       call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
       call get_derivatives(f, si%z(4))
     endif
@@ -1246,6 +1273,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
 
   real(dp), dimension(n) :: x, xlast, dz
   integer :: ktau
+  logical :: crossed
 
   ierr = 0
   ktau = 0
@@ -1261,14 +1289,23 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
       return
     end if
 
+    crossed = .false.
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
+      ! The converged radius lies beyond the axis: commit the chart switch
+      ! (r, theta) -> (|r|, theta + pi) and continue the orbit (#370).
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      crossed = .true.
+      call count_event(EVT_R_NEGATIVE)
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     si%z(1:3) = x
 
-    if (extrap_field) then
+    if (extrap_field .and. .not. crossed) then
       dz(1) = x(1)-xlast(1)
       dz(2) = x(2)-xlast(2)
       dz(3) = x(3)-xlast(3)
@@ -1325,8 +1362,15 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
+      ! Axis crossing on the final iterate: continue on the opposite ray
+      ! (see newton1); x(2) is the corresponding theta.
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      call count_event(EVT_R_NEGATIVE)
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     si%z = x(1:4)
@@ -1389,8 +1433,15 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     end if
 
     if (x(1) < 0.0) then
-      print *, 'r<0, z = ', x(1), si%z(2), si%z(3), x(2)
-      x(1) = 0.01
+      ! Axis crossing on the final iterate: continue on the opposite ray
+      ! (see newton1); x(2) is the corresponding theta.
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      call count_event(EVT_R_NEGATIVE)
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing

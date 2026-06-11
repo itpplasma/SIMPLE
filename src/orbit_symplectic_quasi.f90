@@ -1,5 +1,6 @@
 module orbit_symplectic_quasi
 
+use util, only: pi
 use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
@@ -217,8 +218,15 @@ subroutine timestep_midpoint_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
+      ! Axis crossing: continue on the opposite ray, (r, theta) ->
+      ! (|r|, theta + pi), instead of the former teleport to r = 0.01 (#370).
       call count_event(EVT_R_NEGATIVE)
-      x(1) = 0.01
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     si%z = x(1:4)
@@ -257,8 +265,15 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
+      ! Axis crossing: continue on the opposite ray, (r, theta) ->
+      ! (|r|, theta + pi), instead of the former teleport to r = 0.01 (#370).
       call count_event(EVT_R_NEGATIVE)
-      x(1) = 0.01
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     si%z(1) = x(1)
@@ -311,8 +326,15 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
     end if
 
     if (x(1) < 0.0) then
+      ! Axis crossing: continue on the opposite ray, (r, theta) ->
+      ! (|r|, theta + pi), instead of the former teleport to r = 0.01 (#370).
       call count_event(EVT_R_NEGATIVE)
-      x(1) = 0.01
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     si%z(1:3) = x
@@ -368,8 +390,15 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
     end if
 
     if (x(1) < 0.0) then
+      ! Axis crossing: continue on the opposite ray, (r, theta) ->
+      ! (|r|, theta + pi), instead of the former teleport to r = 0.01 (#370).
       call count_event(EVT_R_NEGATIVE)
-      x(1) = 0.01
+      x(1) = -x(1)
+      x(2) = x(2) + pi
+      if (x(1) > 1.0) then
+        ierr = 1
+        return
+      end if
     end if
 
     call coeff_rk_gauss(s, a, b, c)
