@@ -431,25 +431,6 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
 
-    add_executable(read_boozer_chartmap_file.x read_boozer_chartmap_file.f90)
-    target_link_libraries(read_boozer_chartmap_file.x simple)
-    add_executable(generate_legacy_boozer_chartmap.x generate_legacy_boozer_chartmap.c)
-    target_link_libraries(generate_legacy_boozer_chartmap.x netcdf)
-    add_test(NAME generate_legacy_boozer_chartmap_data
-        COMMAND $<TARGET_FILE:generate_legacy_boozer_chartmap.x>
-            ${CMAKE_CURRENT_BINARY_DIR}/legacy_boozer_chartmap.nc)
-    set_tests_properties(generate_legacy_boozer_chartmap_data PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "unit")
-    add_test(NAME test_boozer_chartmap_reject_legacy
-        COMMAND $<TARGET_FILE:read_boozer_chartmap_file.x>
-            ${CMAKE_CURRENT_BINARY_DIR}/legacy_boozer_chartmap.nc)
-    set_tests_properties(test_boozer_chartmap_reject_legacy PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS "generate_legacy_boozer_chartmap_data"
-        WILL_FAIL TRUE
-        LABELS "unit")
-
     # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
     add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
     target_link_libraries(generate_test_boozer_chartmap.x netcdf m)

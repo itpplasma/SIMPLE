@@ -76,9 +76,6 @@ contains
         call check(nf90_inq_varid(ncid, "zeta", varid), "inq_var zeta")
         call check(nf90_get_var(ncid, varid, zeta_geom), "get zeta")
 
-        call reject_dimension(ncid, "theta_field")
-        call reject_dimension(ncid, "zeta_field")
-
         call require_min_points("rho", d%rho)
         call require_min_points("theta", theta_geom)
         call require_min_points("zeta", zeta_geom)
@@ -218,23 +215,6 @@ contains
         call require_s_range(d)
         call check(nf90_get_var(ncid, varid, d%A_phi), "get A_phi")
     end subroutine read_aphi_profile
-
-    subroutine reject_dimension(ncid, name)
-        integer, intent(in) :: ncid
-        character(len=*), intent(in) :: name
-
-        integer :: dimid, status
-
-        status = nf90_inq_dimid(ncid, trim(name), dimid)
-        if (status == nf90_noerr) then
-            print *, "read_boozer_chartmap: obsolete dimension present: ", &
-                trim(name)
-            error stop "read_boozer_chartmap failed"
-        end if
-        if (status /= nf90_ebaddim) then
-            call check(status, "inq_dim "//trim(name))
-        end if
-    end subroutine reject_dimension
 
     subroutine require_scalar_variable(ncid, var_name)
         integer, intent(in) :: ncid
