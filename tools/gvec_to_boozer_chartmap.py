@@ -65,7 +65,7 @@ def main():
     # Evaluate field quantities in Boozer coordinates (endpoint-included grid)
     print(f"Evaluating field & geometry on {n_rho} x {n_theta_field} x {n_phi_field}...")
     ev = state.evaluate_sfl(
-        "mod_B", "B_theta_B", "B_zeta_B", "chi", "Phi_edge", "pos", "r_major",
+        "mod_B", "B_theta_B", "B_zeta_B", "chi", "Phi_edge", "pos",
         rho=rho_grid,
         theta=-theta_field if args.flip == "pol" else theta_field,  # Flip poloidal angle if requested
         zeta=-zeta_field if args.flip == "tor" else zeta_field,  # Flip toroidal angle if requested
@@ -101,9 +101,6 @@ def main():
     # Geometry on endpoint-excluded grid (Boozer angles)
     pos = ev_geom.pos.values  # (3, n_rho, n_theta_geom, n_phi_geom)
     X, Y, Z = pos[0], pos[1], pos[2]
-
-    rmajor = ev.r_major  # GVEC's definition of r_major differs from VMEC's!
-    # rmajor = np.mean(np.sqrt(X**2 + Y**2))
 
     # GVEC right-handed coordinates -> SIMPLE left-handed coordinates
     if args.flip == "tor":
@@ -159,13 +156,12 @@ def main():
     ds.rho_lcfs = float(rho_grid[-1])
     ds.boozer_field = np.int32(1)
     ds.torflux = A_theta_edge
-    ds.rmajor = rmajor
     ds.gvec2chartmap_boozer_factor = args.boozer_factor
     ds.gvec2chartmap_Bcov_method = args.Bcov
     ds.gvec2chartmap_flip = args.flip
 
     ds.close()
-    print(f"Done. nfp={nfp}, torflux={A_theta_edge:.6e}, rmajor={rmajor:.6e}")
+    print(f"Done. nfp={nfp}, torflux={A_theta_edge:.6e}")
 
 
 if __name__ == "__main__":

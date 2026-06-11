@@ -9,7 +9,12 @@ program test_chartmap_aphi_abscissa
     real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
     real(dp), parameter :: aphi_amp = 0.3_dp, aphi_freq = 1.7_dp
     real(dp), parameter :: torflux_val = 1.0_dp
+    ! The reader derives rmajor as the (theta,zeta)-average of sqrt(x^2+y^2)
+    ! on the innermost rho surface (cm -> m). For the circular-torus geometry
+    ! below that average is exactly r0_cm/1e2 on the uniform endpoint-excluded
+    ! theta grid.
     real(dp), parameter :: rmajor_val = 7.5_dp
+    real(dp), parameter :: r0_cm = rmajor_val*1.0e2_dp, a_cm = 1.0e2_dp
     integer, parameter :: n_rho = 65, n_theta = 8, n_zeta = 8
     integer, parameter :: n_theta_field = 9, n_zeta_field = 9, nfp = 2
     character(len=*), parameter :: fname = 'test_aphi_abscissa.nc'
@@ -119,7 +124,7 @@ contains
         call expect_int(d%n_phi, n_zeta_field, 'n_phi field grid', n_fail)
         call expect_int(d%nfp, nfp, 'nfp', n_fail)
         call expect_real(d%torflux, torflux_val, 'torflux', n_fail)
-        call expect_real(d%rmajor, rmajor_val, 'rmajor', n_fail)
+        call expect_real(d%rmajor, rmajor_val, 'rmajor (geometry-derived)', n_fail)
         call expect_real(real(d%n_theta - 1, dp)*d%h_theta, twopi, &
                          'poloidal period', n_fail)
         call expect_real(real(d%n_phi - 1, dp)*d%h_phi, twopi/real(nfp, dp), &
@@ -152,10 +157,12 @@ contains
     subroutine write_synthetic_chartmap()
         integer :: ncid, did_rho, did_th, did_ze, did_thf, did_zef
         integer :: vid_rho, vid_th, vid_ze, vid_aphi, vid_bth, vid_bph
-        integer :: vid_bmod, vid_nfp
+        integer :: vid_bmod, vid_nfp, vid_x, vid_y, vid_z
         real(dp) :: theta(n_theta), zeta(n_zeta)
         real(dp) :: a_phi_arr(n_rho), b_theta_arr(n_rho), b_phi_arr(n_rho)
         real(dp) :: bmod_arr(n_rho, n_theta_field, n_zeta_field)
+        real(dp) :: x_arr(n_rho, n_theta, n_zeta), y_arr(n_rho, n_theta, n_zeta)
+        real(dp) :: z_arr(n_rho, n_theta, n_zeta), radius
         integer :: ir, it, iz, j
 
         do j = 1, n_theta
@@ -176,6 +183,16 @@ contains
                 end do
             end do
         end do
+        do iz = 1, n_zeta
+            do it = 1, n_theta
+                do ir = 1, n_rho
+                    radius = r0_cm + a_cm*rho(ir)*cos(theta(it))
+                    x_arr(ir, it, iz) = radius*cos(zeta(iz))
+                    y_arr(ir, it, iz) = radius*sin(zeta(iz))
+                    z_arr(ir, it, iz) = a_cm*rho(ir)*sin(theta(it))
+                end do
+            end do
+        end do
 
         call nc(nf90_create(fname, nf90_clobber, ncid), 'create')
         call nc(nf90_def_dim(ncid, 'rho', n_rho, did_rho), 'dim rho')
@@ -190,18 +207,26 @@ contains
         call nc(nf90_def_var(ncid, 'A_phi', nf90_double, [did_rho], vid_aphi), 'var aphi')
         call nc(nf90_def_var(ncid, 'B_theta', nf90_double, [did_rho], vid_bth), 'var bth')
         call nc(nf90_def_var(ncid, 'B_phi', nf90_double, [did_rho], vid_bph), 'var bph')
+        call nc(nf90_def_var(ncid, 'x', nf90_double, &
+                             [did_rho, did_th, did_ze], vid_x), 'var x')
+        call nc(nf90_def_var(ncid, 'y', nf90_double, &
+                             [did_rho, did_th, did_ze], vid_y), 'var y')
+        call nc(nf90_def_var(ncid, 'z', nf90_double, &
+                             [did_rho, did_th, did_ze], vid_z), 'var z')
         call nc(nf90_def_var(ncid, 'Bmod', nf90_double, &
                              [did_rho, did_thf, did_zef], vid_bmod), 'var bmod')
         call nc(nf90_def_var(ncid, 'num_field_periods', nf90_int, vid_nfp), 'var nfp')
 
         call nc(nf90_put_att(ncid, nf90_global, 'torflux', torflux_val), 'att torflux')
-        call nc(nf90_put_att(ncid, nf90_global, 'rmajor', rmajor_val), 'att rmajor')
         call nc(nf90_put_att(ncid, nf90_global, 'boozer_field', 1), 'att boozer')
         call nc(nf90_enddef(ncid), 'enddef')
 
         call nc(nf90_put_var(ncid, vid_rho, rho), 'put rho')
         call nc(nf90_put_var(ncid, vid_th, theta), 'put th')
         call nc(nf90_put_var(ncid, vid_ze, zeta), 'put ze')
+        call nc(nf90_put_var(ncid, vid_x, x_arr), 'put x')
+        call nc(nf90_put_var(ncid, vid_y, y_arr), 'put y')
+        call nc(nf90_put_var(ncid, vid_z, z_arr), 'put z')
         call nc(nf90_put_var(ncid, vid_aphi, a_phi_arr), 'put aphi')
         call nc(nf90_put_var(ncid, vid_bth, b_theta_arr), 'put bth')
         call nc(nf90_put_var(ncid, vid_bph, b_phi_arr), 'put bph')
