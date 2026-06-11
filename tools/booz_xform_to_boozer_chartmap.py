@@ -220,18 +220,15 @@ def main():
     n_rho = args.nrho
     n_theta_geom = args.ntheta
     n_phi_geom = args.nzeta
-    n_theta_field = n_theta_geom + 1
-    n_phi_field = n_phi_geom + 1
 
     # Uniform from rho_min: the chartmap reader assumes a strictly uniform rho
-    # grid (h_s = rho(2)-rho(1)), so clipping the first point of a [0,1] grid
+    # grid, so clipping the first point of a [0,1] grid
     # to rho_min would misplace every interior sample by up to half a cell.
     rho_grid = np.linspace(1.0e-3, 1.0, n_rho)
     s_grid = rho_grid**2
+    s = np.linspace(rho_grid[0] ** 2, 1.0, n_rho)
     theta_geom = np.linspace(0.0, TWOPI, n_theta_geom, endpoint=False)
     zeta_geom = np.linspace(0.0, TWOPI / nfp, n_phi_geom, endpoint=False)
-    theta_field = np.linspace(0.0, TWOPI, n_theta_field)
-    zeta_field = np.linspace(0.0, TWOPI / nfp, n_phi_field)
 
     # Surface functions on uniform rho grid.
     # buco/bvco start at jlist[0]-1 = 1 (not 0); the axis value (index 0) is
@@ -242,16 +239,16 @@ def main():
     # A_phi(s) = -torflux * integral_0^s iota(s') ds'; sign follows SIMPLE's
     # chi = -A_phi convention (libneo spline_vmec_data, compute_boozer_data).
     iota_int = iota_spline.antiderivative()
-    A_phi = -torflux_si * (iota_int(s_grid) - iota_int(0.0))
+    A_phi = -torflux_si * (iota_int(s) - iota_int(0.0))
 
-    print(f"Evaluating Bmod on {n_rho} x {n_theta_field} x {n_phi_field}...")
+    print(f"Evaluating Bmod on {n_rho} x {n_theta_geom} x {n_phi_geom}...")
     bmnc_g = interp_coeffs(d["bmnc"], d["ixm"], rho_half, rho_grid)
-    Bmod = fourier_eval(bmnc_g, d["ixm"], d["ixn"], theta_field, zeta_field,
+    Bmod = fourier_eval(bmnc_g, d["ixm"], d["ixn"], theta_geom, zeta_geom,
                         "cos")
     if d["lasym"]:
         bmns_g = interp_coeffs(d["bmns"], d["ixm"], rho_half, rho_grid)
-        Bmod += fourier_eval(bmns_g, d["ixm"], d["ixn"], theta_field,
-                             zeta_field, "sin")
+        Bmod += fourier_eval(bmns_g, d["ixm"], d["ixn"], theta_geom,
+                             zeta_geom, "sin")
 
     print(f"Evaluating geometry on {n_rho} x {n_theta_geom} x {n_phi_geom}...")
     rmnc_g = interp_coeffs(d["rmnc"], d["ixm"], rho_half, rho_grid)
@@ -286,12 +283,12 @@ def main():
     print(f"Writing {args.output}")
     ds = netCDF4.Dataset(args.output, "w", format="NETCDF4")
     ds.createDimension("rho", n_rho)
+    ds.createDimension("s", n_rho)
     ds.createDimension("theta", n_theta_geom)
     ds.createDimension("zeta", n_phi_geom)
-    ds.createDimension("theta_field", n_theta_field)
-    ds.createDimension("zeta_field", n_phi_field)
 
     v = ds.createVariable("rho", "f8", ("rho",)); v[:] = rho_grid
+    v = ds.createVariable("s", "f8", ("s",)); v[:] = s
     v = ds.createVariable("theta", "f8", ("theta",)); v[:] = theta_geom
     v = ds.createVariable("zeta", "f8", ("zeta",)); v[:] = zeta_geom
 
@@ -301,10 +298,12 @@ def main():
         v[:] = np.transpose(arr, (2, 1, 0))
         v.units = "cm"
 
-    v = ds.createVariable("A_phi", "f8", ("rho",)); v[:] = A_phi
+    v = ds.createVariable("A_phi", "f8", ("s",))
+    v[:] = A_phi
+    v.radial_abscissa = "s"
     v = ds.createVariable("B_theta", "f8", ("rho",)); v[:] = B_theta
     v = ds.createVariable("B_phi", "f8", ("rho",)); v[:] = B_phi
-    v = ds.createVariable("Bmod", "f8", ("zeta_field", "theta_field", "rho"))
+    v = ds.createVariable("Bmod", "f8", ("zeta", "theta", "rho"))
     v[:] = np.transpose(Bmod, (2, 1, 0))
 
     v = ds.createVariable("num_field_periods", "i4"); v[:] = np.int32(nfp)

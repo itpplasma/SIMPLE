@@ -26,7 +26,7 @@ Required build tools:
 * git
 
 Required libraries:
-* NetCDF-Fortran (and NetCDF-C) — provides `nf-config` and `nc-config`
+* NetCDF-Fortran (and NetCDF-C), provides `nf-config` and `nc-config`
 * LAPACK/BLAS
 * OpenMP (enabled by default, usually included with gfortran)
 
@@ -214,8 +214,10 @@ without requiring them at runtime.
 Key differences from VMEC mode:
 - Both `field_input` and `coord_input` reference the same chartmap NetCDF file
 - No VMEC file is needed at runtime
+- Boozer chartmap files store `A_phi` on `s`; geometry, `Bmod`,
+  `B_theta`, and `B_phi` stay on `rho`
 
-See `DOC/coordinates-and-fields.md` section 8.2.1 for full details on coordinate conventions and the chartmap format.
+See `docs/boozer-chartmap-schema.rst` for the required NetCDF schema.
 
 ### Comparing Commits ("Golden Record")
 To compare output between commits, use the golden record test suite in `test/golden_record/`. Run `test/golden_record/golden_record.sh [ref_version]` to build a reference version and compare its output against the current build.

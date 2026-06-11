@@ -7,32 +7,35 @@ program test_chartmap_aphi_abscissa
     implicit none
 
     real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
-    real(dp), parameter :: aphi_amp = 0.3_dp, aphi_freq = 1.7_dp
+    real(dp), parameter :: aphi_c0 = 0.2_dp, aphi_c1 = 0.3_dp
+    real(dp), parameter :: aphi_c2 = -0.4_dp, aphi_c3 = 0.15_dp
     real(dp), parameter :: torflux_val = 1.0_dp
     ! The reader derives rmajor as the (theta,zeta)-average of sqrt(x^2+y^2)
     ! on the innermost rho surface (cm -> m). For the circular-torus geometry
-    ! below that average is exactly r0_cm/1e2 on the uniform endpoint-excluded
-    ! theta grid.
+    ! below that average is exactly r0_cm/1e2 on the uniform theta grid.
     real(dp), parameter :: rmajor_val = 7.5_dp
     real(dp), parameter :: r0_cm = rmajor_val*1.0e2_dp, a_cm = 1.0e2_dp
     integer, parameter :: n_rho = 65, n_theta = 8, n_zeta = 8
-    integer, parameter :: n_theta_field = 9, n_zeta_field = 9, nfp = 2
+    integer, parameter :: nfp = 2
     character(len=*), parameter :: fname = 'test_aphi_abscissa.nc'
 
     real(dp) :: rho(n_rho)
+    real(dp) :: s_grid(n_rho)
     integer :: i, n_fail
     real(dp) :: rho_min, s, rho_eval
     real(dp) :: A_theta, A_phi, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3
     real(dp) :: B_vth, dB_vth, d2B_vth, B_vph, dB_vph, d2B_vph
     real(dp) :: Bmod, dBmod(3), d2Bmod(6), B_r, dB_r(3), d2B_r(6)
     real(dp) :: aphi_ref, daphi_ds_ref, d2_ref, d3_ref, err_val, err_der
-    real(dp) :: err_d2, err_d3, gp, gpp, gppp, rr
+    real(dp) :: err_d2, err_d3, rr
     real(dp), parameter :: tol_val = 1.0e-13_dp, tol_der = 1.0e-13_dp
     real(dp), parameter :: tol_d2 = 5.0e-10_dp, tol_d3 = 2.0e-9_dp
 
     rho_min = 0.05_dp
     do i = 1, n_rho
         rho(i) = rho_min + real(i - 1, dp)*(1.0_dp - rho_min)/real(n_rho - 1, dp)
+        s_grid(i) = rho_min**2 + real(i - 1, dp)*(1.0_dp - rho_min**2) &
+                    /real(n_rho - 1, dp)
     end do
 
     call write_synthetic_chartmap()
@@ -52,14 +55,10 @@ program test_chartmap_aphi_abscissa
                                  Bmod, dBmod, d2Bmod, B_r, dB_r, d2B_r)
 
         rr = rho_eval
-        gp = aphi_amp*aphi_freq*cos(aphi_freq*rr)
-        gpp = -aphi_amp*aphi_freq**2*sin(aphi_freq*rr)
-        gppp = -aphi_amp*aphi_freq**3*cos(aphi_freq*rr)
-        aphi_ref = aphi_profile(rr)
-        daphi_ds_ref = gp/(2.0_dp*rr)
-        d2_ref = gpp/(4.0_dp*rr**2) - gp/(4.0_dp*rr**3)
-        d3_ref = gppp/(8.0_dp*rr**3) - 3.0_dp*gpp/(8.0_dp*rr**4) &
-                 + 3.0_dp*gp/(8.0_dp*rr**5)
+        aphi_ref = aphi_profile(s)
+        daphi_ds_ref = aphi_c1 + 2.0_dp*aphi_c2*s + 3.0_dp*aphi_c3*s**2
+        d2_ref = 2.0_dp*aphi_c2 + 6.0_dp*aphi_c3*s
+        d3_ref = 6.0_dp*aphi_c3
 
         err_val = abs(A_phi - aphi_ref)
         err_der = abs(dA_phi_dr - daphi_ds_ref)/max(abs(daphi_ds_ref), 1.0_dp)
@@ -101,10 +100,10 @@ program test_chartmap_aphi_abscissa
 
 contains
 
-    pure function aphi_profile(r) result(a)
-        real(dp), intent(in) :: r
+    pure function aphi_profile(s) result(a)
+        real(dp), intent(in) :: s
         real(dp) :: a
-        a = aphi_amp*sin(aphi_freq*r)
+        a = aphi_c0 + aphi_c1*s + aphi_c2*s**2 + aphi_c3*s**3
     end function aphi_profile
 
     pure function bmod_model(ir, it, iz) result(b)
@@ -120,16 +119,25 @@ contains
         n_fail = 0
         call read_boozer_chartmap(fname, d)
         call expect_int(d%n_rho, n_rho, 'n_rho', n_fail)
-        call expect_int(d%n_theta, n_theta_field, 'n_theta field grid', n_fail)
-        call expect_int(d%n_phi, n_zeta_field, 'n_phi field grid', n_fail)
+        call expect_int(d%n_theta, n_theta + 1, 'n_theta spline grid', n_fail)
+        call expect_int(d%n_phi, n_zeta + 1, 'n_phi spline grid', n_fail)
         call expect_int(d%nfp, nfp, 'nfp', n_fail)
         call expect_real(d%torflux, torflux_val, 'torflux', n_fail)
         call expect_real(d%rmajor, rmajor_val, 'rmajor (geometry-derived)', n_fail)
+        call expect_int(d%n_s, n_rho, 'n_s', n_fail)
+        call expect_real(d%s(1), rho_min**2, 's min', n_fail)
+        call expect_real(d%s(n_rho), 1.0_dp, 's max', n_fail)
         call expect_real(real(d%n_theta - 1, dp)*d%h_theta, twopi, &
                          'poloidal period', n_fail)
         call expect_real(real(d%n_phi - 1, dp)*d%h_phi, twopi/real(nfp, dp), &
                          'toroidal period', n_fail)
         call expect_real(d%Bmod(2, 3, 4), bmod_model(2, 3, 4), 'Bmod(2,3,4)', n_fail)
+        call expect_real(d%Bmod(2, n_theta + 1, 4), bmod_model(2, 1, 4), &
+                         'Bmod theta endpoint copy', n_fail)
+        call expect_real(d%Bmod(2, 3, n_zeta + 1), bmod_model(2, 3, 1), &
+                         'Bmod zeta endpoint copy', n_fail)
+        call expect_real(d%Bmod(2, n_theta + 1, n_zeta + 1), bmod_model(2, 1, 1), &
+                         'Bmod corner endpoint copy', n_fail)
     end subroutine check_reader_contract
 
     subroutine expect_int(got, want, label, n_fail)
@@ -155,29 +163,29 @@ contains
     end subroutine expect_real
 
     subroutine write_synthetic_chartmap()
-        integer :: ncid, did_rho, did_th, did_ze, did_thf, did_zef
-        integer :: vid_rho, vid_th, vid_ze, vid_aphi, vid_bth, vid_bph
+        integer :: ncid, did_rho, did_s, did_th, did_ze
+        integer :: vid_rho, vid_s, vid_th, vid_ze, vid_aphi, vid_bth, vid_bph
         integer :: vid_bmod, vid_nfp, vid_x, vid_y, vid_z
         real(dp) :: theta(n_theta), zeta(n_zeta)
         real(dp) :: a_phi_arr(n_rho), b_theta_arr(n_rho), b_phi_arr(n_rho)
-        real(dp) :: bmod_arr(n_rho, n_theta_field, n_zeta_field)
+        real(dp) :: bmod_arr(n_rho, n_theta, n_zeta)
         real(dp) :: x_arr(n_rho, n_theta, n_zeta), y_arr(n_rho, n_theta, n_zeta)
         real(dp) :: z_arr(n_rho, n_theta, n_zeta), radius
         integer :: ir, it, iz, j
 
         do j = 1, n_theta
-            theta(j) = real(j - 1, dp)*twopi/real(n_theta_field - 1, dp)
+            theta(j) = real(j - 1, dp)*twopi/real(n_theta, dp)
         end do
         do j = 1, n_zeta
-            zeta(j) = real(j - 1, dp)*twopi/real(nfp*(n_zeta_field - 1), dp)
+            zeta(j) = real(j - 1, dp)*twopi/real(nfp*n_zeta, dp)
         end do
         do j = 1, n_rho
-            a_phi_arr(j) = aphi_profile(rho(j))
+            a_phi_arr(j) = aphi_profile(s_grid(j))
             b_theta_arr(j) = 0.5_dp*rho(j)
             b_phi_arr(j) = 2.0_dp
         end do
-        do iz = 1, n_zeta_field
-            do it = 1, n_theta_field
+        do iz = 1, n_zeta
+            do it = 1, n_theta
                 do ir = 1, n_rho
                     bmod_arr(ir, it, iz) = bmod_model(ir, it, iz)
                 end do
@@ -196,15 +204,17 @@ contains
 
         call nc(nf90_create(fname, nf90_clobber, ncid), 'create')
         call nc(nf90_def_dim(ncid, 'rho', n_rho, did_rho), 'dim rho')
+        call nc(nf90_def_dim(ncid, 's', n_rho, did_s), 'dim s')
         call nc(nf90_def_dim(ncid, 'theta', n_theta, did_th), 'dim theta')
         call nc(nf90_def_dim(ncid, 'zeta', n_zeta, did_ze), 'dim zeta')
-        call nc(nf90_def_dim(ncid, 'theta_field', n_theta_field, did_thf), 'dim thf')
-        call nc(nf90_def_dim(ncid, 'zeta_field', n_zeta_field, did_zef), 'dim zef')
 
         call nc(nf90_def_var(ncid, 'rho', nf90_double, [did_rho], vid_rho), 'var rho')
+        call nc(nf90_def_var(ncid, 's', nf90_double, [did_s], vid_s), 'var s')
         call nc(nf90_def_var(ncid, 'theta', nf90_double, [did_th], vid_th), 'var th')
         call nc(nf90_def_var(ncid, 'zeta', nf90_double, [did_ze], vid_ze), 'var ze')
-        call nc(nf90_def_var(ncid, 'A_phi', nf90_double, [did_rho], vid_aphi), 'var aphi')
+        call nc(nf90_def_var(ncid, 'A_phi', nf90_double, [did_s], &
+                             vid_aphi), 'var aphi')
+        call nc(nf90_put_att(ncid, vid_aphi, 'radial_abscissa', 's'), 'att aphi')
         call nc(nf90_def_var(ncid, 'B_theta', nf90_double, [did_rho], vid_bth), 'var bth')
         call nc(nf90_def_var(ncid, 'B_phi', nf90_double, [did_rho], vid_bph), 'var bph')
         call nc(nf90_def_var(ncid, 'x', nf90_double, &
@@ -214,7 +224,7 @@ contains
         call nc(nf90_def_var(ncid, 'z', nf90_double, &
                              [did_rho, did_th, did_ze], vid_z), 'var z')
         call nc(nf90_def_var(ncid, 'Bmod', nf90_double, &
-                             [did_rho, did_thf, did_zef], vid_bmod), 'var bmod')
+                             [did_rho, did_th, did_ze], vid_bmod), 'var bmod')
         call nc(nf90_def_var(ncid, 'num_field_periods', nf90_int, vid_nfp), 'var nfp')
 
         call nc(nf90_put_att(ncid, nf90_global, 'torflux', torflux_val), 'att torflux')
@@ -222,6 +232,7 @@ contains
         call nc(nf90_enddef(ncid), 'enddef')
 
         call nc(nf90_put_var(ncid, vid_rho, rho), 'put rho')
+        call nc(nf90_put_var(ncid, vid_s, s_grid), 'put s')
         call nc(nf90_put_var(ncid, vid_th, theta), 'put th')
         call nc(nf90_put_var(ncid, vid_ze, zeta), 'put ze')
         call nc(nf90_put_var(ncid, vid_x, x_arr), 'put x')

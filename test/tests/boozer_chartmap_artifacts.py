@@ -307,6 +307,7 @@ def load_chartmap_surface(path: Path) -> dict[str, np.ndarray | int]:
 def load_chartmap_fields(path: Path) -> dict[str, np.ndarray]:
     with netCDF4.Dataset(path) as ds:
         rho = np.asarray(ds["rho"][:], dtype=float)
+        s = np.asarray(ds["s"][:], dtype=float)
         theta = np.asarray(ds["theta"][:], dtype=float)
         zeta = np.asarray(ds["zeta"][:], dtype=float)
         bmod = np.asarray(ds["Bmod"][:], dtype=float).transpose(2, 1, 0)
@@ -315,6 +316,7 @@ def load_chartmap_fields(path: Path) -> dict[str, np.ndarray]:
         b_phi = np.asarray(ds["B_phi"][:], dtype=float)
     return {
         "rho": rho,
+        "s": s,
         "theta": theta,
         "zeta": zeta,
         "Bmod": bmod,
@@ -449,9 +451,18 @@ def plot_field_component_comparison(
     left = load_chartmap_fields(left_path)
     right = load_chartmap_fields(right_path)
 
-    rho_common = np.linspace(0.0, 1.0, min(len(left["rho"]), len(right["rho"])))
-    left_a = np.interp(rho_common, left["rho"], left["A_phi"])
-    right_a = np.interp(rho_common, right["rho"], right["A_phi"])
+    s_common = np.linspace(
+        max(left["s"][0], right["s"][0]),
+        min(left["s"][-1], right["s"][-1]),
+        min(len(left["s"]), len(right["s"])),
+    )
+    rho_common = np.linspace(
+        max(left["rho"][0], right["rho"][0]),
+        min(left["rho"][-1], right["rho"][-1]),
+        min(len(left["rho"]), len(right["rho"])),
+    )
+    left_a = np.interp(s_common, left["s"], left["A_phi"])
+    right_a = np.interp(s_common, right["s"], right["A_phi"])
     left_bt = np.interp(rho_common, left["rho"], left["B_theta"])
     right_bt = np.interp(rho_common, right["rho"], right["B_theta"])
     left_bp = np.interp(rho_common, left["rho"], left["B_phi"])
@@ -483,7 +494,7 @@ def plot_field_component_comparison(
     for ax, (title, left_vals, right_vals, key) in zip(axes[0], profiles):
         ax.plot(rho_common, left_vals, color="C0", lw=1.8, label=left_label)
         ax.plot(rho_common, right_vals, color="C3", lw=1.4, ls="--", label=right_label)
-        ax.set_xlabel("rho")
+        ax.set_xlabel("s" if title == "A_phi" else "rho")
         ax.set_title(f"{title} (max rel {metrics[f'max_rel_{key}']:.2e})")
         ax.legend(fontsize=8)
 

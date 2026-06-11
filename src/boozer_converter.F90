@@ -38,12 +38,6 @@ module boozer_sub
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), allocatable :: aphi_batch_spline
     logical, save :: aphi_batch_spline_ready = .false.
-    ! Canonical A_phi sampled natively on the Boozer rho grid in
-    ! compute_boozer_data (a flux function, like s_Bcovar_tp_B). export_boozer_chartmap
-    ! writes this directly so the chartmap A_phi shares the rho abscissa of
-    ! B_theta/B_phi -- no resampling of the s-grid A_phi spline.
-    real(dp), allocatable, save :: aphi_rho(:)
-
     ! Batch spline for B_theta, B_phi covariant components
     type(BatchSplineData1D), allocatable :: bcovar_tp_batch_spline
     logical, save :: bcovar_tp_batch_spline_ready = .false.
@@ -62,7 +56,6 @@ module boozer_sub
         integer :: nper = 1
         logical :: use_B_r = .false.
         integer :: bmod_br_num_quantities = 0
-        logical :: aphi_over_rho = .false.
     end type boozer_state_t
 
     ! Device-accessible Boozer runtime state shared by host and OpenACC code.
@@ -185,64 +178,19 @@ contains
         A_theta = boozer_state%torflux*r_eval
         dA_theta_dr = boozer_state%torflux
 
-        ! Interpolate A_phi. VMEC-derived Boozer data is tabulated on a uniform-s
-        ! grid (evaluate at s directly). A chartmap tabulates A_phi on the file's
-        ! uniform rho grid, so evaluate at rho and chain-rule to s, exactly like
-        ! Bmod/B_theta/B_phi below. The chartmap branch uses local chain-rule
-        ! coefficients so the VMEC-s branch keeps its original instruction order.
-        ! Guards (error stop) are omitted so this routine is callable from OpenACC
-        ! device kernels (error stop is not supported there).
-        if (boozer_state%aphi_over_rho) then
-            ! A_phi(rho) -> s-derivatives by the chain rule for rho = sqrt(s):
-            !   rho'   = 1/(2 rho)              [drds]
-            !   rho''  = -1/(4 rho^3)           [-d2rds2m]
-            !   rho''' = 3/(8 rho^5)            [d3rds3]
-            ! f'  = g' rho'
-            ! f'' = g'' rho'^2 + g' rho''
-            ! f'''= g''' rho'^3 + 3 g'' rho' rho'' + g' rho'''
-            block
-                real(dp) :: rho_a, drds, drds2, d2rds2m, drds3, d3rds3, d3y1d(1)
-                rho_a = sqrt(r_eval)
-                drds = 0.5_dp/rho_a
-                drds2 = drds**2
-                d2rds2m = drds2/rho_a  ! -d2rho/ds2
-                if (mode_secders > 0) then
-                    call evaluate_batch_splines_1d_der3(aphi_batch_spline, rho_a, &
-                                                        y1d(1:1), dy1d(1:1), &
-                                                        d2y1d(1:1), d3y1d)
-                    drds3 = drds*drds2  ! (drho/ds)^3 = 1/(8 rho^3)
-                    d3rds3 = 3.0_dp/(8.0_dp*rho_a**5)  ! d3rho/ds3
-                    d3A_phi_dr3 = d3y1d(1)*drds3 &
-                                  - 3.0_dp*d2y1d(1)*drds*d2rds2m &
-                                  + dy1d(1)*d3rds3
-                else
-                    call evaluate_batch_splines_1d_der2(aphi_batch_spline, rho_a, &
-                                                        y1d(1:1), dy1d(1:1), d2y1d(1:1))
-                    d3A_phi_dr3 = 0.0_dp
-                end if
-                A_phi = y1d(1)
-                dA_phi_dr = dy1d(1)*drds
-                d2A_phi_dr2 = d2y1d(1)*drds2 - dy1d(1)*d2rds2m
-            end block
+        if (mode_secders > 0) then
+            call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
+                                                y1d(1:1), dy1d(1:1), &
+                                                d2y1d(1:1), d3y1d)
+            d3A_phi_dr3 = d3y1d(1)
         else
-            if (mode_secders > 0) then
-                ! Need third derivative - use der3 which computes all in one pass
-                block
-                    real(dp) :: d3y1d(1)
-                    call evaluate_batch_splines_1d_der3(aphi_batch_spline, r_eval, &
-                                                        y1d(1:1), dy1d(1:1), &
-                                                        d2y1d(1:1), d3y1d)
-                    d3A_phi_dr3 = d3y1d(1)
-                end block
-            else
-                call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, &
-                                                    y1d(1:1), dy1d(1:1), d2y1d(1:1))
-                d3A_phi_dr3 = 0.0_dp
-            end if
-            A_phi = y1d(1)
-            dA_phi_dr = dy1d(1)
-            d2A_phi_dr2 = d2y1d(1)
+            call evaluate_batch_splines_1d_der2(aphi_batch_spline, r_eval, &
+                                                y1d(1:1), dy1d(1:1), d2y1d(1:1))
+            d3A_phi_dr3 = 0.0_dp
         end if
+        A_phi = y1d(1)
+        dA_phi_dr = dy1d(1)
+        d2A_phi_dr2 = d2y1d(1)
 
         ! Interpolation of mod-B (and B_r if use_B_r)
         rho_tor = sqrt(r_eval)
@@ -587,8 +535,6 @@ contains
         G00 = 0.0_dp
 
         allocate (rho_tor(ns_B))
-        if (allocated(aphi_rho)) deallocate (aphi_rho)
-        allocate (aphi_rho(ns_B))
         allocate (aiota_arr(1))
         allocate (Gfunc(1, 1, 1))
         allocate (Bcovar_symfl(1, 1, 1, 1))
@@ -703,10 +649,6 @@ contains
             Bcovar_varphi_B = sum(Bcovar_varphi_V(2:n_theta_B, 2:n_phi_B))/gridcellnum
             s_Bcovar_tp_B(1, 1, i_rho) = Bcovar_vartheta_B
             s_Bcovar_tp_B(2, 1, i_rho) = Bcovar_varphi_B
-            ! A_phi is a flux function; store it natively on the rho grid for
-            ! export_boozer_chartmap (same abscissa as B_theta/B_phi above).
-            aphi_rho(i_rho) = A_phi
-
             denomjac = 1.0_dp/(aiota*Bcovar_vartheta_B + Bcovar_varphi_B)
             Gbeg = G00 + Bcovar_vartheta_B*denomjac*alam_2D(1, 1)
 
@@ -976,7 +918,7 @@ contains
 
         call reset_boozer_batch_splines
 
-        ! Single shared parse: base-unit arrays on the endpoint-included field grid.
+        ! Single shared parse: base-unit arrays plus internal periodic endpoints.
         call read_boozer_chartmap(filename, d)
 
         ! Apply the VMEC scaling knobs so a chartmap behaves like a VMEC run
@@ -1009,22 +951,18 @@ contains
         use_del_tp_B = .false.
 
         ! Set vector_potentail_mod parameters for A_phi spline
-        s_min = d%rho_min**2
-        s_max = d%rho_max**2
-        ns = d%n_rho
-        hs = (s_max - s_min) / real(d%n_rho - 1, dp)
+        ns = d%n_s
+        s_min = d%s(1)
+        s_max = d%s(d%n_s)
+        hs = (s_max - s_min) / real(ns - 1, dp)
         ns_A = 5
 
-        ! Build A_phi batch spline over the file's uniform rho grid. The chartmap
-        ! tabulates A_phi against rho (like B_theta/B_phi/Bmod), so splint_boozer_coord
-        ! evaluates it at rho and chain-rules to s.
         spline_order = ns_A
-        allocate (y_aphi(d%n_rho, 1))
+        allocate (y_aphi(ns, 1))
         y_aphi(:, 1) = d%A_phi
-        call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_aphi, spline_order, &
-                                        .false., aphi_batch_spline)
+        call construct_batch_splines_1d(s_min, s_max, y_aphi, spline_order, .false., &
+                                        aphi_batch_spline)
         aphi_batch_spline_ready = .true.
-        boozer_state%aphi_over_rho = .true.
         deallocate (y_aphi)
 
         ! Build B_theta, B_phi batch spline over rho_tor
@@ -1037,8 +975,8 @@ contains
         bcovar_tp_batch_spline_ready = .true.
         deallocate (y_bcovar)
 
-        ! Build Bmod 3D batch spline over (rho_tor, theta_B, phi_B)
-        ! Uses endpoint-included field grid matching original VMEC Boozer splines
+        ! Build Bmod 3D batch spline over (rho_tor, theta_B, phi_B). The
+        ! reader appended exact endpoint planes for the periodic spline.
         order_3d = [ns_s_B, ns_tp_B, ns_tp_B]
         periodic_3d = [.false., .true., .true.]
         x_min_3d = [d%rho(1), 0.0_dp, 0.0_dp]
@@ -1054,8 +992,8 @@ contains
         deallocate (y_bmod)
 
         print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
-        print *, '  nfp=', d%nfp, ' ns=', d%n_rho, ' ntheta_field=', &
-                 d%n_theta, ' nphi_field=', d%n_phi
+        print *, '  nfp=', d%nfp, ' ns=', d%n_rho, ' ntheta_spline=', &
+                 d%n_theta, ' nphi_spline=', d%n_phi
         print *, '  torflux=', torflux
 
         ! The chartmap loader builds the batch splines inline (not via
@@ -1082,9 +1020,8 @@ contains
         character(len=*), intent(in) :: filename
 
         integer :: ncid, status
-        integer :: dim_rho, dim_theta, dim_zeta
-        integer :: dim_theta_field, dim_zeta_field
-        integer :: var_rho, var_theta, var_zeta
+        integer :: dim_rho, dim_s, dim_theta, dim_zeta
+        integer :: var_rho, var_s, var_theta, var_zeta
         integer :: var_x, var_y, var_z
         integer :: var_aphi, var_btheta, var_bphi, var_bmod, var_nfp
         integer :: i_rho, i_theta, i_phi
@@ -1092,28 +1029,37 @@ contains
         real(dp) :: rho_tor, s, theta_B, phi_B, theta_V, phi_V
         real(dp) :: R, Zval, alam
         real(dp) :: A_phi_dum, A_theta_dum, dA_phi_ds, dA_theta_ds, aiota
+        real(dp) :: d2A_phi_ds2, d3A_phi_ds3, B_theta_val, B_phi_val
+        real(dp) :: dB_theta, d2B_theta, dB_phi, d2B_phi, Bmod_val, B_r_val
+        real(dp) :: dBmod(3), d2Bmod(6), dB_r(3), d2B_r(6)
         real(dp) :: dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
         real(dp) :: dl_ds, dl_dt, dl_dp
         real(dp), parameter :: rho_min = sqrt(1.0e-6_dp)
-        real(dp), allocatable :: rho_arr(:), theta_arr(:), zeta_arr(:)
+        real(dp), allocatable :: rho_arr(:), s_arr(:), theta_arr(:), zeta_arr(:)
         real(dp), allocatable :: A_phi_arr(:), B_theta_arr(:), B_phi_arr(:)
         real(dp), allocatable :: x_arr(:, :, :), y_arr(:, :, :), z_arr(:, :, :)
+        real(dp), allocatable :: bmod_arr(:, :, :)
 
-        ! Chartmap geometry requires endpoint-excluded angular grids (libneo validator).
-        ! Boozer field data uses endpoint-included grids (matching original splines).
+        ! Chartmap files store endpoint-excluded angular grids. The reader
+        ! reconstructs endpoint planes before building periodic splines.
         n_theta_out = n_theta_B - 1
         n_phi_out = n_phi_B - 1
 
         allocate (rho_arr(ns_B))
+        allocate (s_arr(ns_B))
         allocate (theta_arr(n_theta_out), zeta_arr(n_phi_out))
         allocate (A_phi_arr(ns_B), B_theta_arr(ns_B), B_phi_arr(ns_B))
         allocate (x_arr(ns_B, n_theta_out, n_phi_out))
         allocate (y_arr(ns_B, n_theta_out, n_phi_out))
         allocate (z_arr(ns_B, n_theta_out, n_phi_out))
+        allocate (bmod_arr(ns_B, n_theta_out, n_phi_out))
 
         ! Radial grid
         do i_rho = 1, ns_B
-            rho_arr(i_rho) = max(real(i_rho - 1, dp) * hs_B, rho_min)
+            rho_arr(i_rho) = rho_min + (1.0_dp - rho_min) &
+                             * real(i_rho - 1, dp)/real(ns_B - 1, dp)
+            s_arr(i_rho) = rho_min**2 + (1.0_dp - rho_min**2) &
+                           * real(i_rho - 1, dp)/real(ns_B - 1, dp)
         end do
         ! Angular grids (endpoint excluded, for chartmap geometry)
         do i_theta = 1, n_theta_out
@@ -1123,16 +1069,22 @@ contains
             zeta_arr(i_phi) = real(i_phi - 1, dp) * h_phi_B
         end do
 
-        ! Extract 1D profiles as genuine functions of the rho grid. A_phi, like
-        ! B_theta/B_phi, was sampled natively on the rho grid in compute_boozer_data,
-        ! so all three share the rho abscissa the loader reads them back on.
-        if (.not. allocated(aphi_rho)) then
-            error stop "export_boozer_chartmap: aphi_rho not populated"
-        end if
+        ! A_phi is a flux profile on s. B_theta/B_phi stay on rho for now.
         do i_rho = 1, ns_B
-            A_phi_arr(i_rho) = aphi_rho(i_rho)
-            B_theta_arr(i_rho) = s_Bcovar_tp_B(1, 1, i_rho)
-            B_phi_arr(i_rho) = s_Bcovar_tp_B(2, 1, i_rho)
+            call splint_boozer_coord(s_arr(i_rho), 0.0_dp, 0.0_dp, 0, &
+                                     A_theta_dum, A_phi_arr(i_rho), dA_theta_ds, &
+                                     dA_phi_ds, d2A_phi_ds2, d3A_phi_ds3, &
+                                     B_theta_val, dB_theta, d2B_theta, &
+                                     B_phi_val, dB_phi, d2B_phi, &
+                                     Bmod_val, dBmod, d2Bmod, B_r_val, dB_r, d2B_r)
+
+            s = rho_arr(i_rho)**2
+            call splint_boozer_coord(s, 0.0_dp, 0.0_dp, 0, &
+                                     A_theta_dum, A_phi_dum, dA_theta_ds, &
+                                     dA_phi_ds, d2A_phi_ds2, d3A_phi_ds3, &
+                                     B_theta_arr(i_rho), dB_theta, d2B_theta, &
+                                     B_phi_arr(i_rho), dB_phi, d2B_phi, &
+                                     Bmod_val, dBmod, d2Bmod, B_r_val, dB_r, d2B_r)
         end do
 
         ! Compute X, Y, Z geometry on the Boozer grid (endpoint-excluded)
@@ -1160,25 +1112,40 @@ contains
             end do
         end do
 
+        do i_phi = 1, n_phi_out
+            phi_B = real(i_phi - 1, dp) * h_phi_B
+            do i_theta = 1, n_theta_out
+                theta_B = real(i_theta - 1, dp) * h_theta_B
+                do i_rho = 1, ns_B
+                    s = rho_arr(i_rho)**2
+                    call splint_boozer_coord(s, theta_B, phi_B, 0, &
+                                             A_theta_dum, A_phi_dum, dA_theta_ds, &
+                                             dA_phi_ds, d2A_phi_ds2, d3A_phi_ds3, &
+                                             B_theta_val, dB_theta, d2B_theta, &
+                                             B_phi_val, dB_phi, d2B_phi, &
+                                             bmod_arr(i_rho, i_theta, i_phi), &
+                                             dBmod, d2Bmod, B_r_val, dB_r, d2B_r)
+                end do
+            end do
+        end do
+
         ! Write NetCDF file
         status = nf90_create(trim(filename), nf90_clobber, ncid)
         call nc_assert(status, "create " // trim(filename))
 
-        ! Dimensions: geometry uses endpoint-excluded grids (chartmap validator),
-        ! field data uses endpoint-included grids (exact spline reproduction)
+        ! Dimensions: one endpoint-excluded angular grid for geometry and fields.
         call nc_assert(nf90_def_dim(ncid, "rho", ns_B, dim_rho), "def_dim rho")
+        call nc_assert(nf90_def_dim(ncid, "s", ns_B, dim_s), "def_dim s")
         call nc_assert(nf90_def_dim(ncid, "theta", n_theta_out, dim_theta), &
                         "def_dim theta")
         call nc_assert(nf90_def_dim(ncid, "zeta", n_phi_out, dim_zeta), &
                         "def_dim zeta")
-        call nc_assert(nf90_def_dim(ncid, "theta_field", n_theta_B, dim_theta_field), &
-                        "def_dim theta_field")
-        call nc_assert(nf90_def_dim(ncid, "zeta_field", n_phi_B, dim_zeta_field), &
-                        "def_dim zeta_field")
 
         ! Coordinate variables
         call nc_assert(nf90_def_var(ncid, "rho", nf90_double, [dim_rho], var_rho), &
                         "def_var rho")
+        call nc_assert(nf90_def_var(ncid, "s", nf90_double, [dim_s], var_s), &
+                        "def_var s")
         call nc_assert(nf90_def_var(ncid, "theta", nf90_double, [dim_theta], &
                         var_theta), "def_var theta")
         call nc_assert(nf90_def_var(ncid, "zeta", nf90_double, [dim_zeta], &
@@ -1196,14 +1163,16 @@ contains
         call nc_assert(nf90_put_att(ncid, var_z, "units", "cm"), "att z units")
 
         ! Boozer field data
-        call nc_assert(nf90_def_var(ncid, "A_phi", nf90_double, [dim_rho], var_aphi), &
-                        "def_var A_phi")
+        call nc_assert(nf90_def_var(ncid, "A_phi", nf90_double, [dim_s], &
+                        var_aphi), "def_var A_phi")
+        call nc_assert(nf90_put_att(ncid, var_aphi, "radial_abscissa", "s"), &
+                        "att A_phi radial_abscissa")
         call nc_assert(nf90_def_var(ncid, "B_theta", nf90_double, [dim_rho], &
                         var_btheta), "def_var B_theta")
         call nc_assert(nf90_def_var(ncid, "B_phi", nf90_double, [dim_rho], &
                         var_bphi), "def_var B_phi")
         call nc_assert(nf90_def_var(ncid, "Bmod", nf90_double, &
-                        [dim_rho, dim_theta_field, dim_zeta_field], var_bmod), &
+                        [dim_rho, dim_theta, dim_zeta], var_bmod), &
                         "def_var Bmod")
         call nc_assert(nf90_def_var(ncid, "num_field_periods", nf90_int, var_nfp), &
                         "def_var nfp")
@@ -1226,6 +1195,7 @@ contains
 
         ! Write data
         call nc_assert(nf90_put_var(ncid, var_rho, rho_arr), "put rho")
+        call nc_assert(nf90_put_var(ncid, var_s, s_arr), "put s")
         call nc_assert(nf90_put_var(ncid, var_theta, theta_arr), "put theta")
         call nc_assert(nf90_put_var(ncid, var_zeta, zeta_arr), "put zeta")
         call nc_assert(nf90_put_var(ncid, var_x, x_arr), "put x")
@@ -1234,7 +1204,7 @@ contains
         call nc_assert(nf90_put_var(ncid, var_aphi, A_phi_arr), "put A_phi")
         call nc_assert(nf90_put_var(ncid, var_btheta, B_theta_arr), "put B_theta")
         call nc_assert(nf90_put_var(ncid, var_bphi, B_phi_arr), "put B_phi")
-        call nc_assert(nf90_put_var(ncid, var_bmod, bmod_grid), "put Bmod")
+        call nc_assert(nf90_put_var(ncid, var_bmod, bmod_arr), "put Bmod")
         call nc_assert(nf90_put_var(ncid, var_nfp, nper), "put nfp")
 
         call nc_assert(nf90_close(ncid), "close")
@@ -1285,7 +1255,6 @@ contains
         aphi_batch_spline%coeff(1, 0:order, :) = sA_phi(1:order + 1, :)
 
         aphi_batch_spline_ready = .true.
-        boozer_state%aphi_over_rho = .false.  ! VMEC A_phi lives on the uniform-s grid
     end subroutine build_boozer_aphi_batch_spline
 
     subroutine build_boozer_bcovar_tp_batch_spline
