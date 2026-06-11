@@ -98,6 +98,7 @@ def load_chartmap(path: Path) -> dict:
     with netCDF4.Dataset(path) as ds:
         out = {
             "rho": ds.variables["rho"][:].data,
+            "s": ds.variables["s"][:].data,
             "theta": ds.variables["theta"][:].data,
             "zeta": ds.variables["zeta"][:].data,
             "A_phi": ds.variables["A_phi"][:].data,
@@ -115,10 +116,16 @@ def load_chartmap(path: Path) -> dict:
 
 
 def bmod_interpolator(c: dict) -> RegularGridInterpolator:
-    n_th, n_ze = c["Bmod"].shape[1], c["Bmod"].shape[2]
-    theta_f = np.linspace(0.0, TWOPI, n_th)
-    zeta_f = np.linspace(0.0, TWOPI / c["nfp"], n_ze)
-    return RegularGridInterpolator((c["rho"], theta_f, zeta_f), c["Bmod"],
+    bmod = c["Bmod"]
+    nrho, n_th, n_ze = bmod.shape
+    bmod_periodic = np.empty((nrho, n_th + 1, n_ze + 1))
+    bmod_periodic[:, :n_th, :n_ze] = bmod
+    bmod_periodic[:, n_th, :n_ze] = bmod[:, 0, :]
+    bmod_periodic[:, :n_th, n_ze] = bmod[:, :, 0]
+    bmod_periodic[:, n_th, n_ze] = bmod[:, 0, 0]
+    theta_f = np.linspace(0.0, TWOPI, n_th + 1)
+    zeta_f = np.linspace(0.0, TWOPI / c["nfp"], n_ze + 1)
+    return RegularGridInterpolator((c["rho"], theta_f, zeta_f), bmod_periodic,
                                    method="cubic")
 
 
@@ -192,8 +199,12 @@ def check_golden_export(workdir: Path, chartmap: Path) -> Path:
           abs(new["torflux"] - ref["torflux"]) / abs(ref["torflux"]), 1.0e-6)
 
     b_scale = float(np.max(np.abs(ref["B_phi"])))
+    interp = CubicSpline(new["s"], new["A_phi"])(ref["s"])
+    check("A_phi max diff / scale",
+          float(np.max(np.abs(interp - ref["A_phi"]))
+                / float(np.max(np.abs(ref["A_phi"])))), 1.0e-5)
+
     for q, scale, tol in (
-        ("A_phi", float(np.max(np.abs(ref["A_phi"]))), 1.0e-5),
         ("B_theta", b_scale, 1.0e-4),
         ("B_phi", b_scale, 1.0e-4),
     ):

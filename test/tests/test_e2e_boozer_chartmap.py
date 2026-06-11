@@ -236,6 +236,29 @@ def assert_boozer_chartmap_file(path: Path) -> None:
             raise RuntimeError(f"{path}: expected zeta_convention='boozer'")
         if str(getattr(ds, "rho_convention")) != "rho_tor":
             raise RuntimeError(f"{path}: expected rho_convention='rho_tor'")
+        if "s" not in ds.dimensions or "s" not in ds.variables:
+            raise RuntimeError(f"{path}: expected s for A_phi")
+        if "theta_field" in ds.dimensions or "zeta_field" in ds.dimensions:
+            raise RuntimeError(f"{path}: redundant endpoint field dimensions present")
+        aphi = ds.variables["A_phi"]
+        if aphi.dimensions != ("s",):
+            raise RuntimeError(f"{path}: expected A_phi to use s dimension")
+        if getattr(aphi, "radial_abscissa", "") != "s":
+            raise RuntimeError(f"{path}: expected A_phi radial_abscissa='s'")
+        if ds.variables["B_theta"].dimensions != ("rho",):
+            raise RuntimeError(f"{path}: expected B_theta to use rho dimension")
+        if ds.variables["B_phi"].dimensions != ("rho",):
+            raise RuntimeError(f"{path}: expected B_phi to use rho dimension")
+        if ds.variables["Bmod"].dimensions != ("zeta", "theta", "rho"):
+            raise RuntimeError(f"{path}: expected Bmod to use zeta/theta/rho dimensions")
+        rho = np.asarray(ds.variables["rho"][:], dtype=float)
+        s = np.asarray(ds.variables["s"][:], dtype=float)
+        if not np.allclose(np.diff(rho), rho[1] - rho[0], rtol=0.0, atol=1e-14):
+            raise RuntimeError(f"{path}: rho grid is not uniform")
+        if not np.allclose(np.diff(s), s[1] - s[0], rtol=0.0, atol=1e-14):
+            raise RuntimeError(f"{path}: s grid is not uniform")
+        if not np.allclose([s[0], s[-1]], [rho[0] ** 2, rho[-1] ** 2]):
+            raise RuntimeError(f"{path}: s must span rho**2")
         if "rmajor" in ds.ncattrs():
             raise RuntimeError(
                 f"{path}: rmajor attribute is no longer part of the format; "

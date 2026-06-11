@@ -29,6 +29,16 @@ program test_profiles
 
 contains
 
+    ! Flat profiles reproduce the scalar collision operator up to floating-point
+    ! round-off, not bit-for-bit: the grid is built by an independent per-node
+    ! evaluation and read back through linear interpolation. Compare on a
+    ! relative scale tied to round-off.
+    pure logical function rel_close(a, b)
+        real(dp), intent(in) :: a, b
+        real(dp), parameter :: rtol = 1.0d-12
+        rel_close = abs(a - b) <= rtol*max(abs(a), abs(b), tiny(1.0_dp))
+    end function rel_close
+
     subroutine test_power_series_evaluation(passed, nfail)
         logical, intent(inout) :: passed
         integer, intent(inout) :: nfail
@@ -310,20 +320,22 @@ contains
         call set_flat_two_power()
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
 
-        ! Interpolated coefficients must equal the scalar values exactly, including
-        ! at s between grid nodes where the interpolation weight is nontrivial.
+        ! Interpolated coefficients must match the scalar values to round-off,
+        ! including at s between grid nodes where the interpolation weight is
+        ! nontrivial.
         coeff_ok = .true.
         do j = 0, 200
             s = (dble(j) + 0.37d0)/200.5d0
             if (s > 1.0d0) cycle
             call get_local_coeffs(s, efl, vrl, erl)
             do i = 1, nsorts
-                if (efl(i) /= efs(i) .or. vrl(i) /= vrs(i) .or. erl(i) /= ers(i)) &
-                    coeff_ok = .false.
+                if (.not. rel_close(efl(i), efs(i)) .or. &
+                    .not. rel_close(vrl(i), vrs(i)) .or. &
+                    .not. rel_close(erl(i), ers(i))) coeff_ok = .false.
             end do
         end do
         if (coeff_ok) then
-            print *, '  PASS: efcolf/velrat/enrat exact at all s'
+            print *, '  PASS: efcolf/velrat/enrat match scalar at all s'
         else
             print *, '  FAIL: interpolated coefficients differ from scalar'
             passed = .false.; nfail = nfail + 1
@@ -339,10 +351,12 @@ contains
             p = dble(k)/100.0d0
             call coleff(p, dpp_s, dhh_s, fp_s)
             call coleff_local(p, efl, vrl, erl, dpp_l, dhh_l, fp_l)
-            if (dpp_l /= dpp_s .or. dhh_l /= dhh_s .or. fp_l /= fp_s) oper_ok = .false.
+            if (.not. rel_close(dpp_l, dpp_s) .or. &
+                .not. rel_close(dhh_l, dhh_s) .or. &
+                .not. rel_close(fp_l, fp_s)) oper_ok = .false.
         end do
         if (oper_ok) then
-            print *, '  PASS: dpp/dhh/fpeff exact at all p'
+            print *, '  PASS: dpp/dhh/fpeff match at all p'
         else
             print *, '  FAIL: coleff_local differs from coleff'
             passed = .false.; nfail = nfail + 1
@@ -354,7 +368,7 @@ contains
     ! distribution n(p) for a constant source. The classical (Spitzer) result is
     ! n(p) ~ p^2/(p^3 + p_c^3) with p_c the critical velocity. This checks that
     ! shape and that the flat-profile and constant operators give the same
-    ! distribution bit-for-bit.
+    ! distribution to round-off.
     subroutine test_slowing_down_distribution(passed, nfail)
         logical, intent(inout) :: passed
         integer, intent(inout) :: nfail
@@ -403,13 +417,13 @@ contains
         call normalize(hist_scalar, nbin)
         call normalize(hist_flat, nbin)
 
-        ! Both variants must yield the same slowing-down distribution exactly.
+        ! Both variants must yield the same slowing-down distribution to round-off.
         same = .true.
         do ib = 1, nbin
-            if (hist_flat(ib) /= hist_scalar(ib)) same = .false.
+            if (.not. rel_close(hist_flat(ib), hist_scalar(ib))) same = .false.
         end do
         if (same) then
-            print *, '  PASS: flat-profile and constant distributions identical'
+            print *, '  PASS: flat-profile and constant distributions match'
         else
             print *, '  FAIL: slowing-down distribution differs between variants'
             passed = .false.; nfail = nfail + 1
@@ -463,8 +477,9 @@ contains
 
     ! End-to-end stochastic check: an ensemble of alphas under the full collision
     ! operator (pitch scattering, energy scattering, drag). With a fixed RNG seed
-    ! the flat-profile mode and the constant mode must give identical thermalized
-    ! fraction and identical final (momentum, pitch) coordinates.
+    ! the flat-profile mode and the constant mode see the same collision
+    ! coefficients up to round-off, so they must give the same thermalized
+    ! fraction and the same final (momentum, pitch) coordinates to round-off.
     subroutine test_loss_fraction_flat_vs_scalar(passed, nfail)
         logical, intent(inout) :: passed
         integer, intent(inout) :: nfail
@@ -502,13 +517,13 @@ contains
 
         coords_ok = .true.
         do ip = 1, npart
-            if (zend_f(1, ip) /= zend_s(1, ip) .or. zend_f(2, ip) /= zend_s(2, ip)) &
-                coords_ok = .false.
+            if (.not. rel_close(zend_f(1, ip), zend_s(1, ip)) .or. &
+                .not. rel_close(zend_f(2, ip), zend_s(2, ip))) coords_ok = .false.
         end do
 
         if (nlost_f == nlost_s .and. coords_ok) then
             print *, '  PASS: thermalized', nlost_s, 'of', npart, &
-                'and end coordinates identical'
+                'and end coordinates match'
         else
             if (nlost_f /= nlost_s) print *, '  FAIL: thermalized count differs', &
                 nlost_s, nlost_f

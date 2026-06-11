@@ -182,8 +182,8 @@ subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)
 
   select type (coords)
   class is (chartmap_coordinate_system_t)
-    ! Chartmap methods (metric_tensor, covariant_basis) expect native rho coords,
-    ! not s = rho^2. The chartmap splines are stored on a rho grid.
+    ! Chartmap methods (metric_tensor, covariant_basis) expect native rho coords.
+    ! The coordinate splines use rho, while A_phi is a separate s profile.
     u_ref = x_scaled
     J = 1.0d0
   class default
