@@ -223,8 +223,10 @@ def main():
     n_theta_field = n_theta_geom + 1
     n_phi_field = n_phi_geom + 1
 
-    rho_grid = np.linspace(0.0, 1.0, n_rho)
-    rho_grid[0] = 1.0e-3
+    # Uniform from rho_min: the chartmap reader assumes a strictly uniform rho
+    # grid (h_s = rho(2)-rho(1)), so clipping the first point of a [0,1] grid
+    # to rho_min would misplace every interior sample by up to half a cell.
+    rho_grid = np.linspace(1.0e-3, 1.0, n_rho)
     s_grid = rho_grid**2
     theta_geom = np.linspace(0.0, TWOPI, n_theta_geom, endpoint=False)
     zeta_geom = np.linspace(0.0, TWOPI / nfp, n_phi_geom, endpoint=False)
