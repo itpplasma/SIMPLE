@@ -186,9 +186,14 @@ contains
         idx_hi = idx_lo + 1
         weight = s_norm - dble(idx_lo - 1)
 
-        efcolf_loc = (1.0d0 - weight)*efcolf_grid(:, idx_lo) + weight*efcolf_grid(:, idx_hi)
-        velrat_loc = (1.0d0 - weight)*velrat_grid(:, idx_lo) + weight*velrat_grid(:, idx_hi)
-        enrat_loc = (1.0d0 - weight)*enrat_grid(:, idx_lo) + weight*enrat_grid(:, idx_hi)
+        ! Stable interpolation form: reproduces a node value exactly when both
+        ! bracketing nodes are equal (flat profile -> scalar coefficients bitwise).
+        efcolf_loc = efcolf_grid(:, idx_lo) &
+                     + weight*(efcolf_grid(:, idx_hi) - efcolf_grid(:, idx_lo))
+        velrat_loc = velrat_grid(:, idx_lo) &
+                     + weight*(velrat_grid(:, idx_hi) - velrat_grid(:, idx_lo))
+        enrat_loc = enrat_grid(:, idx_lo) &
+                    + weight*(enrat_grid(:, idx_hi) - enrat_grid(:, idx_lo))
     end subroutine get_local_coeffs
 
     subroutine stost(z, dtauc, iswmode, ierr)
