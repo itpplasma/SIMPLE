@@ -11,6 +11,7 @@ module boozer_chartmap_io
     !> this reader appends exact periodic endpoint planes for the spline backend.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use netcdf
 
     implicit none
@@ -50,9 +51,10 @@ contains
         integer :: n_rho, n_theta_geom, n_phi_geom
         real(dp), allocatable :: theta_geom(:), zeta_geom(:)
         real(dp), allocatable :: bmod_file(:, :, :)
+        real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
 
         status = nf90_open(trim(filename), nf90_nowrite, ncid)
-        call check(status, "open " // trim(filename))
+        call check(status, "open "//trim(filename))
 
         ! Geometry grid (endpoint-excluded): used only for step sizes.
         call check(nf90_inq_dimid(ncid, "rho", dimid), "inq_dim rho")
@@ -64,26 +66,42 @@ contains
 
         d%n_rho = n_rho
         allocate (d%rho(n_rho), theta_geom(n_theta_geom), zeta_geom(n_phi_geom))
+        call require_variable_dimensions(ncid, "rho", [character(len=3) :: "rho"])
         call check(nf90_inq_varid(ncid, "rho", varid), "inq_var rho")
         call check(nf90_get_var(ncid, varid, d%rho), "get rho")
+        call require_variable_dimensions(ncid, "theta", [character(len=5) :: "theta"])
         call check(nf90_inq_varid(ncid, "theta", varid), "inq_var theta")
         call check(nf90_get_var(ncid, varid, theta_geom), "get theta")
+        call require_variable_dimensions(ncid, "zeta", [character(len=4) :: "zeta"])
         call check(nf90_inq_varid(ncid, "zeta", varid), "inq_var zeta")
         call check(nf90_get_var(ncid, varid, zeta_geom), "get zeta")
 
+        call reject_dimension(ncid, "theta_field")
+        call reject_dimension(ncid, "zeta_field")
+
+        call require_min_points("rho", d%rho)
+        call require_min_points("theta", theta_geom)
+        call require_min_points("zeta", zeta_geom)
         d%rho_min = d%rho(1)
         d%rho_max = d%rho(n_rho)
-        d%h_rho = (d%rho_max - d%rho_min) / real(n_rho - 1, dp)
+        d%h_rho = (d%rho_max - d%rho_min)/real(n_rho - 1, dp)
         call require_uniform_grid("rho", d%rho, d%h_rho)
         d%h_theta = theta_geom(2) - theta_geom(1)
         d%h_phi = zeta_geom(2) - zeta_geom(1)
+        call require_uniform_grid("theta", theta_geom, d%h_theta)
+        call require_uniform_grid("zeta", zeta_geom, d%h_phi)
 
         ! Scalars.
         call check(nf90_get_att(ncid, nf90_global, "torflux", d%torflux), &
-                    "att torflux")
+                   "att torflux")
+        call require_scalar_variable(ncid, "num_field_periods")
         call check(nf90_inq_varid(ncid, "num_field_periods", varid), &
-                    "inq_var num_field_periods")
+                   "inq_var num_field_periods")
         call check(nf90_get_var(ncid, varid, d%nfp), "get num_field_periods")
+        call require_positive_nfp(d%nfp)
+        call require_endpoint_excluded_grid("theta", theta_geom, d%h_theta, twopi)
+        call require_endpoint_excluded_grid("zeta", zeta_geom, d%h_phi, &
+                                            twopi/real(d%nfp, dp))
 
         ! Major radius from geometry: (theta,zeta)-average of sqrt(x^2+y^2) on
         ! the innermost rho surface (the chartmap analogue of libneo's
@@ -97,8 +115,10 @@ contains
         ! 1D profiles. A_phi has its own abscissa; B_theta/B_phi remain on rho.
         call read_aphi_profile(ncid, d)
         allocate (d%B_theta(n_rho), d%B_phi(n_rho))
+        call require_variable_dimensions(ncid, "B_theta", [character(len=3) :: "rho"])
         call check(nf90_inq_varid(ncid, "B_theta", varid), "inq_var B_theta")
         call check(nf90_get_var(ncid, varid, d%B_theta), "get B_theta")
+        call require_variable_dimensions(ncid, "B_phi", [character(len=3) :: "rho"])
         call check(nf90_inq_varid(ncid, "B_phi", varid), "inq_var B_phi")
         call check(nf90_get_var(ncid, varid, d%B_phi), "get B_phi")
 
@@ -109,6 +129,8 @@ contains
         d%n_phi = n_phi_geom + 1
         allocate (bmod_file(n_rho, n_theta_geom, n_phi_geom))
         allocate (d%Bmod(n_rho, d%n_theta, d%n_phi))
+        call require_variable_dimensions(ncid, "Bmod", &
+                                         [character(len=5) :: "rho", "theta", "zeta"])
         call check(nf90_inq_varid(ncid, "Bmod", varid), "inq_var Bmod")
         call check(nf90_get_var(ncid, varid, bmod_file), "get Bmod")
         d%Bmod(:, 1:n_theta_geom, 1:n_phi_geom) = bmod_file
@@ -127,15 +149,22 @@ contains
         real(dp), allocatable :: x_in(:, :, :), y_in(:, :, :)
         real(dp), parameter :: cm_to_m = 1.0e-2_dp
 
+        call require_variable_dimensions(ncid, "x", &
+                                         [character(len=5) :: "rho", "theta", "zeta"])
+        call require_variable_dimensions(ncid, "y", &
+                                         [character(len=5) :: "rho", "theta", "zeta"])
+        call require_variable_dimensions(ncid, "z", &
+                                         [character(len=5) :: "rho", "theta", "zeta"])
+
         allocate (x_in(1, n_theta_geom, n_phi_geom), &
                   y_in(1, n_theta_geom, n_phi_geom))
 
         call check(nf90_inq_varid(ncid, "x", varid), "inq_var x")
         call check(nf90_get_var(ncid, varid, x_in, start=[1, 1, 1], &
-                                 count=[1, n_theta_geom, n_phi_geom]), "get x")
+                                count=[1, n_theta_geom, n_phi_geom]), "get x")
         call check(nf90_inq_varid(ncid, "y", varid), "inq_var y")
         call check(nf90_get_var(ncid, varid, y_in, start=[1, 1, 1], &
-                                 count=[1, n_theta_geom, n_phi_geom]), "get y")
+                                count=[1, n_theta_geom, n_phi_geom]), "get y")
 
         rmajor = sum(sqrt(x_in**2 + y_in**2))*cm_to_m &
                  /real(n_theta_geom*n_phi_geom, dp)
@@ -169,24 +198,103 @@ contains
 
         if (trim(abscissa) /= "s") then
             print *, "read_boozer_chartmap: unsupported A_phi radial_abscissa=", &
-                     trim(abscissa)
+                trim(abscissa)
             error stop "read_boozer_chartmap failed"
         end if
         if (trim(dim_name) /= "s") then
             print *, "read_boozer_chartmap: A_phi radial_abscissa='s' ", &
-                     "requires dimension s"
+                "requires dimension s"
             error stop "read_boozer_chartmap failed"
         end if
 
         d%n_s = n_aphi
         allocate (d%s(n_aphi), d%A_phi(n_aphi))
+        call require_variable_dimensions(ncid, "s", [character(len=1) :: "s"])
         call check(nf90_inq_varid(ncid, "s", var_s), "inq_var s")
         call check(nf90_get_var(ncid, var_s, d%s), "get s")
-        d%h_s = (d%s(n_aphi) - d%s(1)) / real(n_aphi - 1, dp)
+        call require_min_points("s", d%s)
+        d%h_s = (d%s(n_aphi) - d%s(1))/real(n_aphi - 1, dp)
         call require_uniform_grid("s", d%s, d%h_s)
         call require_s_range(d)
         call check(nf90_get_var(ncid, varid, d%A_phi), "get A_phi")
     end subroutine read_aphi_profile
+
+    subroutine reject_dimension(ncid, name)
+        integer, intent(in) :: ncid
+        character(len=*), intent(in) :: name
+
+        integer :: dimid, status
+
+        status = nf90_inq_dimid(ncid, trim(name), dimid)
+        if (status == nf90_noerr) then
+            print *, "read_boozer_chartmap: obsolete dimension present: ", &
+                trim(name)
+            error stop "read_boozer_chartmap failed"
+        end if
+        if (status /= nf90_ebaddim) then
+            call check(status, "inq_dim "//trim(name))
+        end if
+    end subroutine reject_dimension
+
+    subroutine require_scalar_variable(ncid, var_name)
+        integer, intent(in) :: ncid
+        character(len=*), intent(in) :: var_name
+
+        integer :: varid, ndims
+
+        call check(nf90_inq_varid(ncid, trim(var_name), varid), &
+                   "inq_var "//trim(var_name))
+        call check(nf90_inquire_variable(ncid, varid, ndims=ndims), &
+                   "inquire "//trim(var_name))
+        if (ndims /= 0) then
+            print *, "read_boozer_chartmap: ", trim(var_name), " must be scalar"
+            error stop "read_boozer_chartmap failed"
+        end if
+    end subroutine require_scalar_variable
+
+    subroutine require_variable_dimensions(ncid, var_name, expected)
+        integer, intent(in) :: ncid
+        character(len=*), intent(in) :: var_name
+        character(len=*), intent(in) :: expected(:)
+
+        integer :: varid, ndims, dimids(nf90_max_var_dims), i
+        character(len=nf90_max_name) :: dim_name
+
+        call check(nf90_inq_varid(ncid, trim(var_name), varid), &
+                   "inq_var "//trim(var_name))
+        call check(nf90_inquire_variable(ncid, varid, ndims=ndims, dimids=dimids), &
+                   "inquire "//trim(var_name))
+        if (ndims /= size(expected)) then
+            print *, "read_boozer_chartmap: ", trim(var_name), " must have ", &
+                size(expected), " dimensions"
+            error stop "read_boozer_chartmap failed"
+        end if
+        do i = 1, size(expected)
+            call check(nf90_inquire_dimension(ncid, dimids(i), name=dim_name), &
+                       "dimension for "//trim(var_name))
+            if (trim(dim_name) /= trim(expected(i))) then
+                print *, "read_boozer_chartmap: ", trim(var_name), &
+                    " dimension ", i, " is ", trim(dim_name), &
+                    " but expected ", trim(expected(i))
+                error stop "read_boozer_chartmap failed"
+            end if
+        end do
+    end subroutine require_variable_dimensions
+
+    subroutine require_min_points(name, grid)
+        character(len=*), intent(in) :: name
+        real(dp), intent(in) :: grid(:)
+
+        if (size(grid) < 2) then
+            print *, "read_boozer_chartmap: ", trim(name), " needs at least two points"
+            error stop "read_boozer_chartmap failed"
+        end if
+        if (any(.not. ieee_is_finite(grid))) then
+            print *, "read_boozer_chartmap: ", trim(name), &
+                " grid contains nonfinite values"
+            error stop "read_boozer_chartmap failed"
+        end if
+    end subroutine require_min_points
 
     subroutine require_uniform_grid(name, grid, h)
         character(len=*), intent(in) :: name
@@ -195,11 +303,7 @@ contains
         integer :: i
         real(dp) :: want, tol
 
-        if (size(grid) < 2) then
-            print *, "read_boozer_chartmap: ", trim(name), " needs at least two points"
-            error stop "read_boozer_chartmap failed"
-        end if
-        if (h <= 0.0_dp) then
+        if (.not. ieee_is_finite(h) .or. h <= 0.0_dp) then
             print *, "read_boozer_chartmap: ", trim(name), " must increase"
             error stop "read_boozer_chartmap failed"
         end if
@@ -209,11 +313,42 @@ contains
             want = grid(1) + real(i - 1, dp)*h
             if (abs(grid(i) - want) > tol) then
                 print *, "read_boozer_chartmap: nonuniform ", trim(name), &
-                         " grid at index ", i
+                    " grid at index ", i
                 error stop "read_boozer_chartmap failed"
             end if
         end do
     end subroutine require_uniform_grid
+
+    subroutine require_endpoint_excluded_grid(name, grid, h, period)
+        character(len=*), intent(in) :: name
+        real(dp), intent(in) :: grid(:), h, period
+
+        real(dp) :: tol
+
+        if (.not. ieee_is_finite(period) .or. period <= 0.0_dp) then
+            print *, "read_boozer_chartmap: ", trim(name), " period must be positive"
+            error stop "read_boozer_chartmap failed"
+        end if
+        tol = 128.0_dp*epsilon(1.0_dp)*max(1.0_dp, abs(period))
+        if (abs(grid(1)) > tol) then
+            print *, "read_boozer_chartmap: ", trim(name), " must start at zero"
+            error stop "read_boozer_chartmap failed"
+        end if
+        if (abs(real(size(grid), dp)*h - period) > tol) then
+            print *, "read_boozer_chartmap: ", trim(name), &
+                " must be endpoint-excluded over one period"
+            error stop "read_boozer_chartmap failed"
+        end if
+    end subroutine require_endpoint_excluded_grid
+
+    subroutine require_positive_nfp(nfp)
+        integer, intent(in) :: nfp
+
+        if (nfp <= 0) then
+            print *, "read_boozer_chartmap: num_field_periods must be positive"
+            error stop "read_boozer_chartmap failed"
+        end if
+    end subroutine require_positive_nfp
 
     subroutine require_s_range(d)
         type(boozer_chartmap_data_t), intent(in) :: d

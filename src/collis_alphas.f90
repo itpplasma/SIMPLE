@@ -146,13 +146,37 @@ contains
     end subroutine compute_rates
 
     subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
-        use simple_profiles, only: get_plasma_params
+        use simple_profiles, only: get_plasma_params, profiles_are_flat
 
         real(wp), intent(in) :: am1, am2, Z1, Z2, ealpha, v0
         real(wp) :: s, Te, Ti1, Ti2, ni1, ni2
         real(wp) :: densi1_loc, densi2_loc, tempi1_loc, tempi2_loc, tempe_loc
         real(wp) :: v0_loc
         integer :: i
+
+        if (profiles_are_flat()) then
+            call get_plasma_params(0.0_wp, Te, Ti1, Ti2, ni1, ni2)
+
+            tempe_loc = max(Te, 1.0d0)
+            tempi1_loc = max(Ti1, 1.0d0)
+            tempi2_loc = max(Ti2, 1.0d0)
+            densi1_loc = max(ni1*1.0d-6, 1.0d0)
+            densi2_loc = max(ni2*1.0d-6, 1.0d0)
+
+            call compute_collision_coeffs(am1, am2, Z1, Z2, &
+                                          densi1_loc, densi2_loc, &
+                                          tempi1_loc, tempi2_loc, tempe_loc, &
+                                          ealpha, v0_loc, &
+                                          efcolf_grid(:, 1), velrat_grid(:, 1), &
+                                          enrat_grid(:, 1))
+
+            do i = 2, N_S_GRID
+                efcolf_grid(:, i) = efcolf_grid(:, 1)
+                velrat_grid(:, i) = velrat_grid(:, 1)
+                enrat_grid(:, i) = enrat_grid(:, 1)
+            end do
+            return
+        end if
 
         do i = 1, N_S_GRID
             s = dble(i - 1)/dble(N_S_GRID - 1)

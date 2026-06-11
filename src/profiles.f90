@@ -131,4 +131,23 @@ contains
         ni2 = eval_two_power(s, ni2_scale, ni2_p1, ni2_p2)
     end subroutine get_two_power
 
+    pure function profiles_are_flat() result(is_flat)
+        logical :: is_flat
+
+        select case (active_profile)
+        case (TWO_POWER)
+            is_flat = Te_p2 == 0.0_dp .and. &
+                      Ti1_p2 == 0.0_dp .and. &
+                      Ti2_p2 == 0.0_dp .and. &
+                      ni1_p2 == 0.0_dp .and. &
+                      ni2_p2 == 0.0_dp
+        case default
+            is_flat = all(Te_coef(2:) == 0.0_dp) .and. &
+                      all(Ti1_coef(2:) == 0.0_dp) .and. &
+                      all(Ti2_coef(2:) == 0.0_dp) .and. &
+                      all(ni1_coef(2:) == 0.0_dp) .and. &
+                      all(ni2_coef(2:) == 0.0_dp)
+        end select
+    end function profiles_are_flat
+
 end module simple_profiles
