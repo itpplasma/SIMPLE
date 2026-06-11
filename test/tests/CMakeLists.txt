@@ -43,6 +43,17 @@ else()
     message(STATUS "gvec Python package not found; skipping GVEC chartmap QA test")
 endif()
 
+set(SIMPLE_HAVE_BOOZ_XFORM OFF)
+execute_process(
+    COMMAND ${BOOZER_CHARTMAP_PYTHON} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('booz_xform') else 1)"
+    RESULT_VARIABLE BOOZ_XFORM_IMPORT_RESULT
+)
+if(BOOZ_XFORM_IMPORT_RESULT EQUAL 0)
+    set(SIMPLE_HAVE_BOOZ_XFORM ON)
+else()
+    message(STATUS "booz_xform Python package not found; skipping booz_xform chartmap test")
+endif()
+
 # Generate chartmap file from VMEC for testing chartmap coordinate detection
 # Uses libneo's vmec_to_chartmap tool built as part of dependencies
 set(CHARTMAP_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.nc")
@@ -480,6 +491,18 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "slow;plot;python"
         ENVIRONMENT "SIMPLE_BOOZER_CASES=QA"
         TIMEOUT 7200)
+
+    # booz_xform -> Boozer chartmap converter: spectral reference, golden
+    # cross-check against export_boozer_chartmap, end-to-end orbit comparison.
+    if(SIMPLE_HAVE_BOOZ_XFORM)
+        add_test(NAME test_booz_xform_chartmap
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_booz_xform_chartmap.py)
+        set_tests_properties(test_booz_xform_chartmap PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "slow;python"
+            TIMEOUT 7200)
+    endif()
 
 
     if(SIMPLE_ENABLE_CGAL)

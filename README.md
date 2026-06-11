@@ -202,6 +202,11 @@ without requiring them at runtime.
    ```
    Run `python tools/gvec_to_boozer_chartmap.py --help` for grid resolution options (`--nrho`, `--ntheta`, `--nphi`).
 
+   booz_xform output (`boozmn*.nc`) converts the same way; the boozmn file alone is sufficient:
+   ```bash
+   python tools/booz_xform_to_boozer_chartmap.py boozmn_case.nc boozer_chartmap.nc
+   ```
+
 2. Use `examples/simple_chartmap.in` as a starting point, pointing `field_input` and `coord_input` to your chartmap file.
 
 3. Run as usual: `./build/simple.x`

@@ -151,13 +151,23 @@ Attributes: num_field_periods, zeta_convention, rho_convention
 #### Extended Boozer chartmap (field profiles)
 
 A chartmap with `boozer_field = 1` also stores `A_phi`, `B_theta`, `B_phi`,
-and `Bmod` on the file `rho` grid, plus `torflux` and `rmajor`. `rho_tor`
-means `s = rho^2`. The reader splines all 1D profiles on `rho` and converts
+and `Bmod` on the file `rho` grid, plus `torflux`. `rho_tor` means
+`s = rho^2`. The reader splines all 1D profiles on `rho` and converts
 radial derivatives to `s` by chain rule; `A_theta = torflux*s` stays linear
 in `s`. `Bmod` uses the endpoint-included `theta_field`/`zeta_field` grid,
-while `theta`/`zeta` provide the period steps. Both chartmap consumers use
+while `theta`/`zeta` provide the period steps. The major radius is not
+stored: the reader derives it as the `(theta, zeta)`-average of
+`sqrt(x^2 + y^2)` on the innermost `rho` surface (cm in the file, metres in
+`new_vmec_stuff_mod::rmajor`); a leftover `rmajor` attribute in older files
+is ignored. Both chartmap consumers use
 `boozer_chartmap_io.read_boozer_chartmap`, so metadata, scaling, and grid
 layout stay shared.
+
+Writers of the extended format: `export_boozer_chartmap`
+(`boozer_converter.F90`), `tools/gvec_to_boozer_chartmap.py`, and
+`tools/booz_xform_to_boozer_chartmap.py` (from booz_xform `boozmn*.nc`
+harmonics; recovers `torflux` from the surface geometry when `phi_b` is
+absent).
 
 ### 2.4 Cartesian Coordinates
 
