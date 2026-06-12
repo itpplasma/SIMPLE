@@ -288,7 +288,7 @@ contains
     end subroutine test_peaked_profile_collision_rates
 
     ! Flat radial profiles must reproduce the scalar (constant-coefficient)
-    ! collision operator bit-for-bit. This checks every intermediate value the
+    ! collision operator to round-off. This checks every intermediate value the
     ! stochastic step depends on: the interpolated coefficients at off-node s
     ! and the coleff outputs dpp/dhh/fpeff over the whole momentum range.
     subroutine test_flat_intermediate_values(passed, nfail)
