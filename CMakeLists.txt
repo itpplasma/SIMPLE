@@ -224,6 +224,18 @@ else()
     message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")
 endif()
 
+# fortnum provides the multidimensional root finder (multiroot_hybrids) that
+# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi.
+if(NOT TARGET fortnum)
+    include(FetchContent)
+    FetchContent_Declare(
+        fortnum
+        GIT_REPOSITORY git@github.com:lazy-fortran/fortnum.git
+        GIT_TAG a7faa3c
+    )
+    FetchContent_MakeAvailable(fortnum)
+endif()
+
 if (SIMPLE_TESTING)
     message(STATUS "Unit Tests enabled!")
 endif()
