@@ -23,9 +23,6 @@ permissions:
   checks: write
   actions: read
 
-env:
-  LIBNEO_BRANCH: ${{ inputs.libneo_ref || github.head_ref || github.ref_name }}
-
 jobs:
   test:
     name: Build and Test
@@ -83,7 +80,12 @@ jobs:
       - name: Build SIMPLE (deterministic FP for reproducibility)
         run: |
           make clean
-          make build-deterministic
+          REF="${{ inputs.libneo_ref }}"
+          if [ -n "$REF" ]; then
+            make build-deterministic LIBNEO_REF="$REF"
+          else
+            make build-deterministic
+          fi
 
       # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
       # push, PR and full=true run the complete suite below.
@@ -165,9 +167,13 @@ jobs:
       - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
         run: |
           make clean
+          REF="${{ inputs.libneo_ref }}"
+          LIBNEO_ARG=""
+          if [ -n "$REF" ]; then LIBNEO_ARG="LIBNEO_REF=$REF"; fi
           make test-fast CONFIG=Fast \
             FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
-            TEST='test_chartmap_metadata|test_stl_wall_intersection'
+            TEST='test_chartmap_metadata|test_stl_wall_intersection' \
+            $LIBNEO_ARG
 
   build-docs:
     name: Build Documentation

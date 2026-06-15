@@ -19,6 +19,21 @@ The code is free to use and modify under the MIT License and links to Runge-Kutt
 Run `make` to produce a `build` directory including the main executable
 `simple.x`, main library `libsimple.so` and Python module `pysimple`.
 
+To build against a specific libneo branch, tag, or commit SHA, pass it
+explicitly; the ambient shell environment is intentionally ignored:
+
+```bash
+make LIBNEO_REF=my-branch          # via make
+cmake -DLIBNEO_REF=my-branch ...   # via cmake directly
+```
+
+To use a local libneo checkout instead of fetching from GitHub:
+
+```bash
+make LIBNEO_PATH=/path/to/libneo
+cmake -DLIBNEO_SOURCE_DIR=/path/to/libneo ...
+```
+
 Required build tools:
 * CMake (>= 3.22)
 * Ninja
