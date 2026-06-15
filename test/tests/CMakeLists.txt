@@ -314,6 +314,16 @@ if (ENABLE_OPENMP)
 
     add_executable (test_sympl.x test_sympl_stell.f90)
     target_link_libraries(test_sympl.x simple)
+    # Stellarator symplectic + quasi-symplectic integrator driver. The quasi
+    # branch is the only code path that exercises the root solver behind the
+    # quasi steps (fortnum multiroot_hybrids on this branch, MINPACK hybrd1 on
+    # main); registering it gives that path real golden coverage.
+    add_test(NAME test_sympl_stell
+        COMMAND test_sympl.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_sympl_stell PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
