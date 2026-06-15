@@ -12,7 +12,7 @@ on:
         required: false
         default: ''
       full:
-        description: run the full suite (fast + slow + regression); nightly only
+        description: run the full suite (fast + slow + regression); set by the libneo full-ci gate
         required: false
         default: 'false'
 
