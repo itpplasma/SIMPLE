@@ -24,9 +24,10 @@ module orbit_symplectic_axis_pcart
 !> arXiv:1412.5464.
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
+use util, only: pi
 use field_can_mod, only: field_can_t, eval_field => evaluate, get_derivatives
 use orbit_symplectic_base, only: symplectic_integrator_t
-use flux_pseudocartesian, only: pseudocart_to_flux
+use orbit_symplectic_euler1, only: sympl_euler1_advance_angles
 
 implicit none
 private
@@ -46,70 +47,80 @@ subroutine set_axis_pcart(enabled, smax)
     if (present(smax)) axis_pcart_smax = smax
 end subroutine set_axis_pcart
 
-subroutine pcart_velocity(f, s, theta, phi, pphi, v)
-    !> Guiding-centre velocity (Xdot, Ydot, phidot, pphidot) at (s,theta,phi,pphi),
-    !> read off the canonical relations the flux-chart Euler1 uses. Finite at the
-    !> axis: the 1/sqrt(s) of sdot/2rho cancels (sdot ~ s).
+subroutine euler1_residual_q(si, f, q, pphi, theta0, r)
+    !> Normalized Euler1 residual at signed radius q (s=q^2). For q<0 the point is
+    !> on the far side of the axis, theta0+pi. The flux-chart residual divided by
+    !> dpth/ds is finite at the axis (the s^(-1/2) prefactor drops out), and only
+    !> first derivatives appear, so no divergent second derivative is needed.
+    type(symplectic_integrator_t), intent(in) :: si
     type(field_can_t), intent(inout) :: f
-    real(dp), intent(in) :: s, theta, phi, pphi
-    real(dp), intent(out) :: v(4)
-    real(dp) :: thdot, phidot, pphidot, pthdot, sdot, rho, cth, sth
+    real(dp), intent(in) :: q, pphi, theta0
+    real(dp), intent(out) :: r(2)
+    real(dp) :: s, theta, thdot
 
-    call eval_field(f, s, theta, phi, 0)
+    s = q*q
+    theta = theta0
+    if (q < 0.0_dp) theta = theta0 + pi
+    call eval_field(f, s, theta, si%z(3), 0)
     call get_derivatives(f, pphi)
-    thdot   = f%dH(1)/f%dpth(1)
-    phidot  = (f%vpar - thdot*f%hth)/f%hph
-    pphidot = -(f%dH(3) - thdot*f%dpth(3))
-    pthdot  = -(f%dH(2) - thdot*f%dpth(2))
-    sdot    = (pthdot - f%dpth(2)*thdot - f%dpth(3)*phidot - f%dpth(4)*pphidot) &
-              / f%dpth(1)
-    rho = sqrt(max(s, 0.0_dp)); cth = cos(theta); sth = sin(theta)
-    if (rho > 0.0_dp) then
-        v(1) = 0.5_dp*cth/rho*sdot - rho*sth*thdot
-        v(2) = 0.5_dp*sth/rho*sdot + rho*cth*thdot
-    else
-        v(1) = 0.0_dp; v(2) = 0.0_dp
-    end if
-    v(3) = phidot; v(4) = pphidot
-end subroutine pcart_velocity
-
-subroutine pcart_rhs(f, y, v)
-    type(field_can_t), intent(inout) :: f
-    real(dp), intent(in) :: y(4)
-    real(dp), intent(out) :: v(4)
-    real(dp) :: xref(3)
-    call pseudocart_to_flux([y(1), y(2), y(3)], xref)
-    call pcart_velocity(f, xref(1), xref(2), y(3), y(4), v)
-end subroutine pcart_rhs
+    thdot = f%dH(1)/f%dpth(1)
+    r(1) = (f%pth - si%pthold) + si%dt*(f%dH(2) - thdot*f%dpth(2))
+    r(2) = (pphi - si%z(4)) + si%dt*(f%dH(3) - thdot*f%dpth(3))
+end subroutine euler1_residual_q
 
 subroutine axis_pcart_step(si, f, ierr)
-    !> One substep of duration si%dt advanced in (X,Y,phi,pphi). The field and the
-    !> guiding-centre velocity are regular across the axis in (X,Y), so the step
-    !> needs no negative-s floor and no (s,theta)->(|s|,theta+pi) reflection.
+    !> One Euler1 substep solved in the regularized variable (q, pphi), s=q^2. Same
+    !> symplectic Euler1 map as the flux chart (same residual root), so there is no
+    !> chart seam; only the Newton conditioning changes near the axis. The Newton
+    !> uses a finite-difference Jacobian of the normalized residual, avoiding the
+    !> divergent second radial derivatives the analytic Jacobian needs. A converged
+    !> q<0 is the axis crossing (theta -> theta+pi); no floor, no reflection.
     type(symplectic_integrator_t), intent(inout) :: si
     type(field_can_t), intent(inout) :: f
     integer, intent(out) :: ierr
-    integer, parameter :: nsub = 8
-    real(dp) :: y(4), k1(4), k2(4), k3(4), k4(4), h
-    integer :: isub
+    integer, parameter :: maxit = 32
+    real(dp), parameter :: hq = 1.0e-8_dp, hp = 1.0e-8_dp
+    real(dp) :: q, pphi, theta0, r(2), rq(2), rp(2), jac(2, 2), det, dq, dp_
+    integer :: kit
+    logical :: converged
 
     ierr = 0
-    y(1) = sqrt(max(si%z(1), 0.0_dp))*cos(si%z(2))
-    y(2) = sqrt(max(si%z(1), 0.0_dp))*sin(si%z(2))
-    y(3) = si%z(3); y(4) = si%z(4)
-    h = si%dt/real(nsub, dp)
-    do isub = 1, nsub
-        call pcart_rhs(f, y, k1)
-        call pcart_rhs(f, y + 0.5_dp*h*k1, k2)
-        call pcart_rhs(f, y + 0.5_dp*h*k2, k3)
-        call pcart_rhs(f, y + h*k3, k4)
-        y = y + (h/6.0_dp)*(k1 + 2.0_dp*k2 + 2.0_dp*k3 + k4)
+    si%pthold = f%pth          ! pth at the step start (f holds the current point)
+    theta0 = si%z(2)
+    q = sqrt(max(si%z(1), 0.0_dp))
+    pphi = si%z(4)
+    converged = .false.
+    do kit = 1, maxit
+        call euler1_residual_q(si, f, q, pphi, theta0, r)
+        if (q*q > 1.0_dp) then
+            ierr = 1
+            return
+        end if
+        call euler1_residual_q(si, f, q + hq, pphi, theta0, rq)
+        call euler1_residual_q(si, f, q, pphi + hp, theta0, rp)
+        jac(:, 1) = (rq - r)/hq
+        jac(:, 2) = (rp - r)/hp
+        det = jac(1, 1)*jac(2, 2) - jac(1, 2)*jac(2, 1)
+        if (det == 0.0_dp) then
+            ierr = 1
+            return
+        end if
+        dq = (jac(2, 2)*r(1) - jac(1, 2)*r(2))/det
+        dp_ = (-jac(2, 1)*r(1) + jac(1, 1)*r(2))/det
+        q = q - dq
+        pphi = pphi - dp_
+        if (abs(r(1)) < si%atol .and. abs(r(2)) < si%atol) then
+            converged = .true.
+            exit
+        end if
     end do
-    si%z(1) = y(1)**2 + y(2)**2
-    si%z(2) = atan2(y(2), y(1))
-    si%z(3) = y(3); si%z(4) = y(4)
+
+    si%z(1) = q*q
+    si%z(4) = pphi
+    if (q < 0.0_dp) si%z(2) = theta0 + pi
     call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
     call get_derivatives(f, si%z(4))
+    call sympl_euler1_advance_angles(si, f)
 end subroutine axis_pcart_step
 
 end module orbit_symplectic_axis_pcart
