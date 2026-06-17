@@ -43,8 +43,7 @@ tempi1 = 1.0d4
 tempi2 = 1.0d4
 tempe = 1.0d4
 deterministic = .True.
-old_axis_healing = .True.
-old_axis_healing_boundary = .True.
+axis_healing = 'legacy'   ! 'legacy' | 'powerlaw' | 'polyfit' (recommended, future default); legacy boundary via axis_healing_boundary = 'fixed' | 'adaptive'
 batch_size = 1000
 ran_seed = 12345
 reuse_batch = .False.

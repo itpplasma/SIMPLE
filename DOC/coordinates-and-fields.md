@@ -777,6 +777,42 @@ field_input = 'coils.simple'
 netcdffile = 'wout.nc'  ! Reference VMEC
 ```
 
+### 8.3 Near-Axis Healing (`axis_healing`)
+
+VMEC Fourier harmonics are unreliable on the innermost flux surfaces, and the
+poloidal harmonics must scale as `rho^|m|` (`rho = sqrt(s)`) to be analytic at the
+magnetic axis. `axis_healing` selects how the harmonics are continued to the axis:
+
+| `axis_healing` | continuation |
+|---|---|
+| `'legacy'` | Discard the innermost surfaces and extrapolate the rescaled amplitude `c/rho^|m|`. Default. |
+| `'powerlaw'` | `rho^|m|` continuation below `rho_axis_heal`. Analytic, but splining `c/rho^|m|` amplifies near-axis noise (rough, ringing at the anchor). Superseded by `polyfit`. |
+| `'polyfit'` | `rho^|m|` times a least-squares polynomial in `s` (a Zernike radial polynomial) fitted to the reliable surfaces below `rho_axis_heal`. Same regularity, smooth, no anchor noise. Recommended. |
+
+Related parameters:
+
+- `axis_healing_boundary = 'fixed' | 'adaptive'` (legacy only): the reliability
+  boundary. `'fixed'` discards the innermost `min(|m|,4)` surfaces; `'adaptive'`
+  detects the noisy surface automatically.
+- `rho_axis_heal` (default 0.1): anchor radius below which `powerlaw`/`polyfit`
+  continue the harmonics.
+- `axis_healing_polyfit_degree` (default 3): polynomial degree for `polyfit`.
+
+```
+axis_healing = 'polyfit'   ! recommended near-axis field
+rho_axis_heal = 0.1
+```
+
+The polyfit field removes the near-axis non-convergence of the symplectic Euler1
+solver at its source: with it `newton1_maxit` drops to a machine-residual-floor
+level and energy is conserved across axis crossings.
+
+**Deprecated switches.** The booleans `old_axis_healing`,
+`old_axis_healing_boundary`, `axis_healing_power_law`, and `axis_healing_polyfit`
+still work but are mapped to `axis_healing` with a deprecation warning. A future
+release removes them and defaults `axis_healing` to `'polyfit'`; set it
+explicitly now to choose your field.
+
 ---
 
 ## 9. Coordinate Transformation Workflows
