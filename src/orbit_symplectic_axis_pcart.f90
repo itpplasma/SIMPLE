@@ -29,6 +29,7 @@ use field_can_mod, only: field_can_t, eval_field => evaluate, &
   get_derivatives, get_derivatives2
 use orbit_symplectic_base, only: symplectic_integrator_t
 use orbit_symplectic_euler1, only: sympl_euler1_advance_angles
+use diag_counters, only: count_event, EVT_NEWTON1_MAXIT
 
 implicit none
 private
@@ -98,12 +99,14 @@ subroutine axis_pcart_step(si, f, ierr)
     integer, parameter :: maxit = 32
     real(dp) :: q, pphi, theta0, r(2), jac(2, 2), det, dq, dp_
     integer :: kit
+    logical :: converged
 
     ierr = 0
     si%pthold = f%pth
     theta0 = si%z(2)
     q = sqrt(max(si%z(1), 0.0_dp))
     pphi = si%z(4)
+    converged = .false.
     do kit = 1, maxit
         call euler1_residual_jac_q(si, f, q, pphi, theta0, r, jac)
         if (q*q > 1.0_dp) then
@@ -119,8 +122,12 @@ subroutine axis_pcart_step(si, f, ierr)
         dp_ = (-jac(2, 1)*r(1) + jac(1, 1)*r(2))/det
         q = q - dq
         pphi = pphi - dp_
-        if (abs(r(1)) < si%atol .and. abs(r(2)) < si%atol) exit
+        if (abs(r(1)) < si%atol .and. abs(r(2)) < si%atol) then
+            converged = .true.
+            exit
+        end if
     end do
+    if (.not. converged) call count_event(EVT_NEWTON1_MAXIT)
 
     si%z(1) = q*q
     si%z(4) = pphi
