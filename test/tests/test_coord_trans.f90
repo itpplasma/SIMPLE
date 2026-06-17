@@ -31,7 +31,7 @@ program test_coord_trans
   integer          :: startmode
 
   integer :: ntau ! number of dtaumin in dtau
-  integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+  integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3
 
 
   double precision :: relerr
@@ -94,7 +94,7 @@ subroutine read_config
   read (1,*) ns_tp             !spline order for 3D quantities over theta and phi
   read (1,*) multharm          !angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index)
   read (1,*) startmode         !mode for initial conditions: 0=generate and store, 1=generate, store, and run, 2=read and run, 3=read ANTS and run
-  read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Verlet
+  read (1,*) integmode         !mode for integrator: -1 = RK VMEC, 0 = RK CAN, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3
   read (1,*) relerr            !relative error for RK integrator
   read (1,*) tcut              !time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
   read (1,*) debug             !produce debugging output (.True./.False.). Use only in non-parallel mode!
