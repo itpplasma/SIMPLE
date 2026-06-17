@@ -18,10 +18,14 @@ The coarse step is adequate when the bias and the distribution distance are belo
 the Monte-Carlo error of the confined fraction (~1/sqrt(N)). Evaluate this at the
 full trace time only: a coarse step can look converged early and diffuse later.
 
-times_lost.dat convention: column 2 is the loss time; a negative value (-1) marks
-a confined particle, a positive value is the loss time of a lost particle.
+times_lost.dat convention: column 2 is the loss time. A particle is confined if
+it is either never traced (sentinel < 0) or survives to the trace time
+(loss_time >= trace_time); it is lost only if 0 < loss_time < trace_time. The
+trace time is read from the simple.in next to each times_lost.dat.
 """
 import argparse
+import os
+import re
 import numpy as np
 
 
@@ -33,9 +37,19 @@ def read_times_lost(path):
     return data[:, 0].astype(int), data[:, 1]
 
 
-def confined_mask(loss_time):
-    """Confined particles carry the sentinel loss_time < 0."""
-    return loss_time < 0.0
+def read_trace_time(times_lost_path):
+    """trace_time from the simple.in sibling of a times_lost.dat path."""
+    cfg = os.path.join(os.path.dirname(os.path.abspath(times_lost_path)), "simple.in")
+    m = re.search(r"^\s*trace_time\s*=\s*([0-9.eEdD+-]+)", open(cfg).read(), re.M)
+    if not m:
+        raise SystemExit(f"trace_time not found in {cfg}")
+    return float(m.group(1).replace("d", "e").replace("D", "e"))
+
+
+def confined_mask(loss_time, trace_time):
+    """Confined = never traced (loss_time < 0) or survived to trace_time.
+    Lost = 0 < loss_time < trace_time."""
+    return (loss_time < 0.0) | (loss_time >= trace_time * (1.0 - 1e-9))
 
 
 def ks_statistic(a, b):
@@ -69,8 +83,8 @@ def compare(coarse_path, fine_path):
     tf = tf[np.searchsorted(iff, common)]
     n = len(common)
 
-    conf_c = confined_mask(tc)
-    conf_f = confined_mask(tf)
+    conf_c = confined_mask(tc, read_trace_time(coarse_path))
+    conf_f = confined_mask(tf, read_trace_time(fine_path))
     cf_c = conf_c.mean()
     cf_f = conf_f.mean()
 
