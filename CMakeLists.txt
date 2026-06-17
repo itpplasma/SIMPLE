@@ -439,6 +439,10 @@ add_executable(diag_traj.x
     app/simple_diag_traj.f90
 )
 
+add_executable(diag_field_deriv.x
+    app/simple_diag_field_deriv.f90
+)
+
 # Apply SIMPLE-specific compile options to executable
 target_compile_options(simple.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
@@ -459,6 +463,7 @@ target_compile_options(diag_meiss.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 target_compile_options(diag_albert.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 target_compile_options(diag_orbit.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 target_compile_options(diag_traj.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+target_compile_options(diag_field_deriv.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
 # Apply trampoline error flags only to SIMPLE executable (not subprojects like fortplot)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -482,6 +487,8 @@ target_link_libraries(diag_newton.x PRIVATE simple)
 target_link_libraries(diag_orbit.x PRIVATE simple)
 target_link_libraries(diag_traj.x PRIVATE simple)
 set_target_properties(diag_traj.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+target_link_libraries(diag_field_deriv.x PRIVATE simple)
+set_target_properties(diag_field_deriv.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
