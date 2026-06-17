@@ -14,6 +14,8 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
+use orbit_symplectic_axis_pcart, only: axis_pcart_step, axis_pcart_enabled, &
+  axis_pcart_smax
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -1212,6 +1214,20 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    ! Near the axis the flux-chart Euler1 Newton uses second radial derivatives
+    ! that diverge as s^(-3/2); advance the substep in pseudo-Cartesian (X,Y)
+    ! instead, where the field and velocity are regular across the axis (#398).
+    if (axis_pcart_enabled .and. si%z(1) < axis_pcart_smax) then
+      call axis_pcart_step(si, f, ierr)
+      if (ierr /= 0) return
+      if (si%z(1) > 1.0d0) then
+        ierr = 1
+        return
+      end if
+      ktau = ktau + 1
+      cycle
+    end if
+
     si%pthold = f%pth
 
     x(1)=si%z(1)
