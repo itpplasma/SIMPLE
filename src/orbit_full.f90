@@ -13,6 +13,7 @@ module orbit_full
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use orbit_full_provider, only: field_metric_provider_t, &
       FO_OK, FO_ERR_FIELD, FO_ERR_NO_CONVERGE, FO_ERR_OUT_OF_DOMAIN
+  use orbit_rk_core, only: rk_solve
   use util, only: c
   implicit none
   private
@@ -202,7 +203,7 @@ contains
       end do
 
       dz = fvec
-      call lu_solve6(fjac, dz, info)
+      call rk_solve(6, fjac, dz, info)
       if (info /= 0) then
         ierr = FO_ERR_NO_CONVERGE
         return
@@ -248,51 +249,6 @@ contains
     fvec(1:3) = z(1:3) - zold(1:3) - dt * vmid
     fvec(4:6) = z(4:6) - zold(4:6) - dt * acc
   end subroutine foimpl_residual
-
-  ! Dense 6x6 LU solve with partial pivoting, rhs overwritten with solution.
-  pure subroutine lu_solve6(A, rhs, info)
-    real(dp), intent(inout) :: A(6,6), rhs(6)
-    integer, intent(out) :: info
-    integer :: i, j, k, ipiv
-    real(dp) :: amax, factor, tmp
-
-    info = 0
-    do k = 1, 6
-      ipiv = k
-      amax = abs(A(k,k))
-      do i = k+1, 6
-        if (abs(A(i,k)) > amax) then
-          amax = abs(A(i,k))
-          ipiv = i
-        end if
-      end do
-      if (amax == 0.0_dp) then
-        info = k
-        return
-      end if
-      if (ipiv /= k) then
-        do j = 1, 6
-          tmp = A(k,j); A(k,j) = A(ipiv,j); A(ipiv,j) = tmp
-        end do
-        tmp = rhs(k); rhs(k) = rhs(ipiv); rhs(ipiv) = tmp
-      end if
-      do i = k+1, 6
-        factor = A(i,k)/A(k,k)
-        A(i,k) = factor
-        do j = k+1, 6
-          A(i,j) = A(i,j) - factor*A(k,j)
-        end do
-        rhs(i) = rhs(i) - factor*rhs(k)
-      end do
-    end do
-    do i = 6, 1, -1
-      tmp = rhs(i)
-      do j = i+1, 6
-        tmp = tmp - A(i,j)*rhs(j)
-      end do
-      rhs(i) = tmp/A(i,i)
-    end do
-  end subroutine lu_solve6
 
   ! Cartesian Boris, drift-kick-drift (leapfrog), CGS:
   !   m dv/dt = (q/c) v x B,  Omega = q B/(m c).
