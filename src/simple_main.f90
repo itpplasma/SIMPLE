@@ -875,6 +875,9 @@ contains
 	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
+        use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
+        use orbit_full, only: ORBIT_PAULI
+        use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
         real(dp), intent(inout) :: z(5)
@@ -889,7 +892,16 @@ contains
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
             else
                 if (swcoll) call update_momentum(anorb, z)
-                call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                ! Dispatch by integer orbit_model: GC (default) uses the
+                ! symplectic GC pusher; PAULI (CPP) integrates the same 4D
+                ! canonical state with mu held fixed on the slow manifold.
+                select case (orbit_model)
+                case (ORBIT_PAULI)
+                    call orbit_timestep_cpp(anorb%si, anorb%f, &
+                        cpp_stages_from_mode(integmode), ierr_orbit)
+                case default
+                    call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                end select
                 call to_standard_z_coordinates(anorb, z)
             end if
             if (swcoll) call collide(z, dtaumin) ! Collisions

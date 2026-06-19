@@ -39,6 +39,7 @@
     orbit_symplectic_quasi.f90
     orbit_symplectic_euler1.f90
     orbit_symplectic.f90
+    orbit_cpp.f90
     orbit_full_provider.f90
     orbit_full_mock_cart.f90
     orbit_full_mock_cyl.f90

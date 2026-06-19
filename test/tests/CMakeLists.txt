@@ -575,6 +575,29 @@ target_link_libraries(test_full_orbit.x simple)
 add_test(NAME test_full_orbit COMMAND test_full_orbit.x)
 set_tests_properties(test_full_orbit PROPERTIES LABELS "unit")
 
+# Implicit-midpoint full-orbit pusher on the analytic mocks (no field file).
+add_executable(test_fo_symplectic.x test_fo_symplectic.f90)
+target_link_libraries(test_fo_symplectic.x simple)
+add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x)
+set_tests_properties(test_fo_symplectic PROPERTIES LABELS "unit" TIMEOUT 120)
+
+# orbit_model config parsing + dispatch keys (Wave-1 followup #1).
+add_executable(test_orbit_model_dispatch.x test_orbit_model_dispatch.f90)
+target_link_libraries(test_orbit_model_dispatch.x simple)
+add_test(NAME test_orbit_model_dispatch COMMAND test_orbit_model_dispatch.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_orbit_model_dispatch PROPERTIES LABELS "unit")
+
+# CPP (flux-canonical) cross-checks against the BOOZER chart of the QA wout.
+# Run from the binary dir where the wout.nc symlink resolves.
+foreach(cpp_test test_cpp_equals_gc_largestep test_cpp_invariants)
+    add_executable(${cpp_test}.x ${cpp_test}.f90)
+    target_link_libraries(${cpp_test}.x simple)
+    add_test(NAME ${cpp_test} COMMAND ${cpp_test}.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(${cpp_test} PROPERTIES LABELS "integration" TIMEOUT 120)
+endforeach()
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)

@@ -5,22 +5,23 @@ module orbit_full
   !   m dv/dt = (q/c) v x B.
   !
   ! ORBIT_BORIS is the explicit gyro-resolved pusher (this module).
-  ! ORBIT_PAULI is the variational CPP scheme; the seam (state slots, provider
-  ! canonical-field method, non-fatal convergence error) is in place but the
-  ! step is not implemented here yet.
+  ! ORBIT_FOSYMPL is the implicit-midpoint curvilinear full orbit (foimpl_step):
+  ! structure-preserving large-step counterpart of Boris, sharing the provider
+  ! seam, FullOrbitState, and helpers.
+  ! ORBIT_PAULI (CPP, 4D flux-canonical) lives in orbit_cpp, not here; it reuses
+  ! field_can_t and the symplectic GC state, dispatched from simple_main.
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use orbit_full_provider, only: field_metric_provider_t, &
       FO_OK, FO_ERR_FIELD, FO_ERR_NO_CONVERGE, FO_ERR_OUT_OF_DOMAIN
-  use orbit_full_mock_cart, only: cartesian_provider_t
-  use neo_biotsavart, only: coils_t
-  use util, only: c, p_mass, e_charge, twopi
+  use util, only: c
   implicit none
   private
 
   ! orbit models (0 reserved for the existing symplectic guiding-center path)
-  integer, parameter, public :: ORBIT_GC    = 0
-  integer, parameter, public :: ORBIT_PAULI = 1   ! CPP variational, big dt, implicit
-  integer, parameter, public :: ORBIT_BORIS = 2   ! gyro-resolved Lorentz, explicit
+  integer, parameter, public :: ORBIT_GC      = 0
+  integer, parameter, public :: ORBIT_PAULI   = 1   ! CPP variational, big dt, implicit
+  integer, parameter, public :: ORBIT_BORIS   = 2   ! gyro-resolved Lorentz, explicit
+  integer, parameter, public :: ORBIT_FOSYMPL = 3   ! implicit-midpoint full orbit (B1)
 
   ! coordinate kinds (3..5 reserved for the libneo PR: VMEC, Boozer, chartmap)
   integer, parameter, public :: COORD_CART = 1
@@ -51,7 +52,6 @@ module orbit_full
 
   interface init_full_orbit_state
     module procedure init_full_orbit_state_prov
-    module procedure init_full_orbit_state_coils
   end interface init_full_orbit_state
 
 contains
@@ -75,43 +75,6 @@ contains
     state%z(4:6)      = v0
     call set_mu_from_state(state)
   end subroutine init_full_orbit_state_prov
-
-  ! Convenience init matching test_full_orbit.f90: flux-like IC (s,theta,phi)
-  ! plus a coil set. Builds a Cartesian Biot-Savart provider, places the
-  ! particle on a circle of radius proportional to s, and sets the velocity
-  ! from pitch lambda=vpar/v with speed v. mass/charge are atomic units here
-  ! (e.g. 4.0 amu, 2.0 e) and converted to CGS internally.
-  subroutine init_full_orbit_state_coils(state, s, theta, phi, lambda, v, &
-                                         orbit_model, mass_amu, charge_e, dt, coils)
-    type(FullOrbitState), intent(out) :: state
-    real(dp), intent(in) :: s, theta, phi, lambda, v
-    integer,  intent(in) :: orbit_model
-    real(dp), intent(in) :: mass_amu, charge_e, dt
-    type(coils_t), intent(in), target :: coils
-    type(cartesian_provider_t), allocatable, save :: cart_prov
-    real(dp) :: mass_cgs, charge_cgs, vpar, vperp, R, x0(3), v0(3)
-    real(dp), parameter :: R_AXIS = 1200.0_dp  ! cm, reactor-scale placeholder
-
-    if (allocated(cart_prov)) deallocate(cart_prov)
-    allocate(cart_prov)
-    cart_prov%field_kind = 3                     ! FIELD_COILS
-    cart_prov%coils => coils
-
-    mass_cgs   = mass_amu * p_mass
-    charge_cgs = charge_e * e_charge
-
-    R = R_AXIS * (1.0_dp + 0.1_dp * (s - 0.5_dp))
-    x0 = [R * cos(phi), R * sin(phi), 0.0_dp]
-    vpar  = lambda * v
-    vperp = sqrt(max(v*v - vpar*vpar, 0.0_dp))
-    ! Velocity: vpar along toroidal e_phi, vperp along e_R for a generic start.
-    v0 = [ vperp * cos(phi) - vpar * sin(phi) * sin(theta), &
-           vperp * sin(phi) + vpar * cos(phi) * sin(theta), &
-           vpar  * cos(theta) ]
-
-    call init_full_orbit_state_prov(state, x0, v0, orbit_model, COORD_CART, &
-                                    mass_cgs, charge_cgs, dt, cart_prov)
-  end subroutine init_full_orbit_state_coils
 
   subroutine set_mu_from_state(state)
     type(FullOrbitState), intent(inout) :: state
@@ -147,15 +110,189 @@ contains
       case default
         ierr = FO_ERR_OUT_OF_DOMAIN
       end select
+    case (ORBIT_FOSYMPL)
+      ! Implicit-midpoint curvilinear full orbit (VENUS-LEVIS geometry, B1):
+      ! m(dv^i/dt + Gamma^i_mn v^m v^n) = (q/c)(v x B)^i. The 6D residual is
+      ! fed to the shared Newton/LU core; structure-preserving large-step
+      ! counterpart of the explicit Boris pusher.
+      call foimpl_step(state, ierr)
     case (ORBIT_PAULI)
-      ! CPP variational step not implemented yet. The seam (canonical-field
-      ! provider method, vpar in z(4), mu, FO_ERR_NO_CONVERGE channel) is in
-      ! place; flag not-implemented without touching the Boris branch.
-      ierr = FO_ERR_NO_CONVERGE
+      ! CPP (4D flux-canonical) runs through the field_can / orbit_cpp path in
+      ! simple_main, not the 6D full-orbit state. Reaching it here means a
+      ! caller mis-routed a 4D model into the 6D pusher.
+      ierr = FO_ERR_OUT_OF_DOMAIN
     case default
       ierr = FO_ERR_OUT_OF_DOMAIN
     end select
   end subroutine timestep_full_orbit
+
+  ! Contravariant velocity RHS for the curvilinear full orbit:
+  !   acc^i = -Gamma^i_{mn} v^m v^n + (q/(m c)) (v x B)^i.
+  ! The Lorentz term is built in the local orthonormal frame (mirroring the
+  ! Boris cyl rotation) and converted back to contravariant components.
+  subroutine fo_accel(state, u, v, acc, ierr)
+    type(FullOrbitState), intent(in) :: state
+    real(dp), intent(in)  :: u(3), v(3)
+    real(dp), intent(out) :: acc(3)
+    integer,  intent(out) :: ierr
+    real(dp) :: Bvec(3), Bmod, hcov(3), Gamma(3,3,3)
+    real(dp) :: vorth(3), forth(3), fcon(3), geo(3), qmc, R
+    integer :: i, m, n
+
+    qmc = state%qm / c
+    call state%prov%eval_field(u, Bvec, Bmod, hcov, ierr)
+    if (ierr /= FO_OK) then
+      acc = 0.0_dp
+      return
+    end if
+
+    call state%prov%christoffel(u, Gamma)
+    geo = 0.0_dp
+    do i = 1, 3
+      do m = 1, 3
+        do n = 1, 3
+          geo(i) = geo(i) - Gamma(i,m,n) * v(m) * v(n)
+        end do
+      end do
+    end do
+
+    select case (state%ncoord)
+    case (COORD_CYL)
+      R = u(1)
+      vorth = contravar_to_orth(v, R)
+      forth = qmc * cross(vorth, Bvec)
+      fcon = orth_to_contravar(forth, R)
+    case default
+      ! flat metric: orthonormal == contravariant
+      fcon = qmc * cross(v, Bvec)
+    end select
+
+    acc = geo + fcon
+  end subroutine fo_accel
+
+  ! Implicit-midpoint step for the 6D curvilinear full orbit. Residual
+  !   F = znew - zold - dt * rhs((zold+znew)/2),
+  ! rhs = (v, acc(u,v)). Solved by Newton with a finite-difference Jacobian and
+  ! the dense LU core; symplectic for the canonical lift, energy-bounded.
+  subroutine foimpl_step(state, ierr)
+    type(FullOrbitState), intent(inout) :: state
+    integer, intent(out) :: ierr
+    integer, parameter :: maxit = 32
+    real(dp), parameter :: atol = 1.0e-13_dp, rtol = 1.0e-12_dp
+    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), zpert(6), fpert(6)
+    real(dp) :: dz(6), reltol(6), h
+    integer :: kit, i, j, info
+    logical :: conv
+
+    zold = state%z
+    z = zold   ! initial guess: explicit-Euler-free, start at old state
+
+    do kit = 1, maxit
+      call foimpl_residual(state, zold, z, fvec, ierr)
+      if (ierr /= FO_OK) return
+
+      do j = 1, 6
+        h = max(1.0e-8_dp, 1.0e-7_dp*abs(z(j)))
+        zpert = z; zpert(j) = z(j) + h
+        call foimpl_residual(state, zold, zpert, fpert, ierr)
+        if (ierr /= FO_OK) return
+        do i = 1, 6
+          fjac(i,j) = (fpert(i) - fvec(i)) / h
+        end do
+      end do
+
+      dz = fvec
+      call lu_solve6(fjac, dz, info)
+      if (info /= 0) then
+        ierr = FO_ERR_NO_CONVERGE
+        return
+      end if
+      z = z - dz
+
+      do i = 1, 3
+        reltol(i)   = max(abs(z(i)), 1.0_dp)
+        reltol(i+3) = max(abs(z(i+3)), 1.0_dp)
+      end do
+      conv = .true.
+      do i = 1, 6
+        if (abs(dz(i)) >= rtol*reltol(i) .and. abs(fvec(i)) >= atol) conv = .false.
+      end do
+      if (conv) exit
+    end do
+
+    if (state%ncoord == COORD_CYL .and. z(1) <= 0.0_dp) then
+      ierr = FO_ERR_OUT_OF_DOMAIN
+      return
+    end if
+
+    state%z = z
+    ierr = FO_OK
+  end subroutine foimpl_step
+
+  subroutine foimpl_residual(state, zold, z, fvec, ierr)
+    type(FullOrbitState), intent(in) :: state
+    real(dp), intent(in)  :: zold(6), z(6)
+    real(dp), intent(out) :: fvec(6)
+    integer,  intent(out) :: ierr
+    real(dp) :: zmid(6), umid(3), vmid(3), acc(3), dt
+
+    dt = state%dt
+    zmid = 0.5_dp * (zold + z)
+    umid = zmid(1:3)
+    vmid = zmid(4:6)
+    call fo_accel(state, umid, vmid, acc, ierr)
+    if (ierr /= FO_OK) then
+      fvec = 0.0_dp
+      return
+    end if
+    fvec(1:3) = z(1:3) - zold(1:3) - dt * vmid
+    fvec(4:6) = z(4:6) - zold(4:6) - dt * acc
+  end subroutine foimpl_residual
+
+  ! Dense 6x6 LU solve with partial pivoting, rhs overwritten with solution.
+  pure subroutine lu_solve6(A, rhs, info)
+    real(dp), intent(inout) :: A(6,6), rhs(6)
+    integer, intent(out) :: info
+    integer :: i, j, k, ipiv
+    real(dp) :: amax, factor, tmp
+
+    info = 0
+    do k = 1, 6
+      ipiv = k
+      amax = abs(A(k,k))
+      do i = k+1, 6
+        if (abs(A(i,k)) > amax) then
+          amax = abs(A(i,k))
+          ipiv = i
+        end if
+      end do
+      if (amax == 0.0_dp) then
+        info = k
+        return
+      end if
+      if (ipiv /= k) then
+        do j = 1, 6
+          tmp = A(k,j); A(k,j) = A(ipiv,j); A(ipiv,j) = tmp
+        end do
+        tmp = rhs(k); rhs(k) = rhs(ipiv); rhs(ipiv) = tmp
+      end if
+      do i = k+1, 6
+        factor = A(i,k)/A(k,k)
+        A(i,k) = factor
+        do j = k+1, 6
+          A(i,j) = A(i,j) - factor*A(k,j)
+        end do
+        rhs(i) = rhs(i) - factor*rhs(k)
+      end do
+    end do
+    do i = 6, 1, -1
+      tmp = rhs(i)
+      do j = i+1, 6
+        tmp = tmp - A(i,j)*rhs(j)
+      end do
+      rhs(i) = tmp/A(i,i)
+    end do
+  end subroutine lu_solve6
 
   ! Cartesian Boris, drift-kick-drift (leapfrog), CGS:
   !   m dv/dt = (q/c) v x B,  Omega = q B/(m c).
