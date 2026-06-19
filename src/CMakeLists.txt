@@ -42,6 +42,7 @@
     orbit_symplectic.f90
     orbit_cpp.f90
     field_pauli_cart.f90
+    pauli_gc_drift.f90
     orbit_cpp_pauli.f90
     orbit_cpp_vmec_metric.f90
     orbit_cpp_canonical.f90

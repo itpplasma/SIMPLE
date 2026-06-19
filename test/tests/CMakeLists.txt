@@ -633,6 +633,19 @@ add_test(NAME test_cpp_vmec COMMAND test_cpp_vmec.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_cpp_vmec PROPERTIES LABELS "unit" TIMEOUT 120)
 
+# Smoke-test the cross-validation figure data dump (diag_crossval_figures.x):
+# runs the three-system analytic + VMEC trajectory/invariant dump and asserts the
+# files exist and carry data. Guards the banana/conservation figure pipeline used
+# by examples/plot_crossval_figures.py. Runs from the binary dir where the wout.nc
+# symlink resolves so the VMEC panels are exercised too.
+add_test(NAME test_crossval_figure_dump
+    COMMAND ${CMAKE_COMMAND}
+        -DDIAG_EXE=$<TARGET_FILE:diag_crossval_figures.x>
+        -DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/crossval_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_crossval_figure_dump.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_crossval_figure_dump PROPERTIES LABELS "integration" TIMEOUT 120)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)

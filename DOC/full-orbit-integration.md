@@ -231,6 +231,35 @@ analytic tokamak). CPU-only: the curvilinear provider-based path in `orbit_full`
 (class dispatch, Christoffel symbols, FD Jacobian) and the mock providers used by
 `test_full_orbit` and `test_fo_symplectic`.
 
+## 6.7 Cross-validation figures
+
+`app/diag_crossval_figures.f90` (`diag_crossval_figures.x`) dumps the three-system
+trajectories and invariant time series; `examples/plot_crossval_figures.py` turns
+them into the banana and conservation panels. Both the analytic tokamak and the
+VMEC equilibrium are covered. Regenerate from the build directory (where the
+`wout.nc` symlink resolves for the VMEC panels):
+
+```
+./build/diag_crossval_figures.x crossval_data
+python examples/plot_crossval_figures.py crossval_data crossval_figs
+```
+
+Figures:
+- `banana_analytic.png`: left, the 6D Pauli full orbit (gyro-fattened) wrapping
+  the independent GC-drift banana on the shared analytic field; right, the
+  canonical-midpoint banana for CP (`dt=1`, gyro-resolved), CPP-sym (`dt=80`) and
+  CPP-var (`dt=800`), the large-step integrators tracing the same trapped section.
+- `conservation_analytic.png`: relative energy (bounded, no secular drift),
+  relative magnetic moment (CP, machine zero), toroidal canonical momentum
+  `p_phi` (axisymmetric field, machine zero), and the dt-independent CPP-sym
+  energy plateau (the symplectic signature).
+- `banana_vmec.png`, `conservation_vmec.png`: the same CP / CPP-sym split on VMEC
+  flux coordinates. `p_phi` is not asserted here (nfp=2, not axisymmetric); the
+  energy stays bounded (CP ~1e-7, CPP-sym ~1e-9).
+
+`test_crossval_figure_dump` smoke-tests the dump so the figure pipeline stays
+buildable and runnable.
+
 ## 7. References
 
 Numerical methods:
