@@ -208,9 +208,9 @@ contains
 
         if (mode_secders == 2) then
             call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                        y_eval(1:boozer_state%bmod_br_num_quantities), &
-                                    dy_eval(:, 1:boozer_state%bmod_br_num_quantities), &
-                                     d2y_eval(:, 1:boozer_state%bmod_br_num_quantities))
+                                                y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                                dy_eval(:, 1:boozer_state%bmod_br_num_quantities), &
+                                                d2y_eval(:, 1:boozer_state%bmod_br_num_quantities))
 
             ! Extract Bmod (quantity 1)
             qua = y_eval(1)
@@ -282,8 +282,8 @@ contains
             end if
         else
             call evaluate_batch_splines_3d_der(bmod_br_batch_spline, x_eval, &
-                                        y_eval(1:boozer_state%bmod_br_num_quantities), &
-                                      dy_eval(:, 1:boozer_state%bmod_br_num_quantities))
+                                               y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                               dy_eval(:, 1:boozer_state%bmod_br_num_quantities))
 
             Bmod_B = y_eval(1)
             dBmod_B(1) = dy_eval(1, 1)*drhods
@@ -294,11 +294,11 @@ contains
 
             if (mode_secders == 1) then
                 call evaluate_batch_splines_3d_der2(bmod_br_batch_spline, x_eval, &
-                                        y_eval(1:boozer_state%bmod_br_num_quantities), &
+                                                    y_eval(1:boozer_state%bmod_br_num_quantities), &
                                                     dy_eval(:, &
-                                               1:boozer_state%bmod_br_num_quantities), &
+                                                            1:boozer_state%bmod_br_num_quantities), &
                                                     d2y_eval(:, &
-                                                 1:boozer_state%bmod_br_num_quantities))
+                                                             1:boozer_state%bmod_br_num_quantities))
                 d2Bmod_B(1) = d2y_eval(1, 1)*drhods2 - dy_eval(1, 1)*d2rhods2m
             end if
 
@@ -954,7 +954,7 @@ contains
         ns = d%n_s
         s_min = d%s(1)
         s_max = d%s(d%n_s)
-        hs = (s_max - s_min)/real(ns - 1, dp)
+        hs = (s_max - s_min) / real(ns - 1, dp)
         ns_A = 5
 
         spline_order = ns_A
@@ -970,7 +970,7 @@ contains
         allocate (y_bcovar(d%n_rho, 2))
         y_bcovar(:, 1) = d%B_theta
         y_bcovar(:, 2) = d%B_phi
-     call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_bcovar, spline_order, &
+        call construct_batch_splines_1d(d%rho(1), d%rho(d%n_rho), y_bcovar, spline_order, &
                                         .false., bcovar_tp_batch_spline)
         bcovar_tp_batch_spline_ready = .true.
         deallocate (y_bcovar)
@@ -980,8 +980,8 @@ contains
         order_3d = [ns_s_B, ns_tp_B, ns_tp_B]
         periodic_3d = [.false., .true., .true.]
         x_min_3d = [d%rho(1), 0.0_dp, 0.0_dp]
-        x_max_3d = [d%rho(d%n_rho), h_theta_B*real(d%n_theta - 1, dp), &
-                    h_phi_B*real(d%n_phi - 1, dp)]
+        x_max_3d = [d%rho(d%n_rho), h_theta_B * real(d%n_theta - 1, dp), &
+                     h_phi_B * real(d%n_phi - 1, dp)]
 
         allocate (y_bmod(d%n_rho, d%n_theta, d%n_phi, 1))
         y_bmod(:, :, :, 1) = d%Bmod
@@ -993,7 +993,7 @@ contains
 
         print *, 'Loaded Boozer splines from chartmap: ', trim(filename)
         print *, '  nfp=', d%nfp, ' ns=', d%n_rho, ' ntheta_spline=', &
-            d%n_theta, ' nphi_spline=', d%n_phi
+                 d%n_theta, ' nphi_spline=', d%n_phi
         print *, '  torflux=', torflux
 
         ! The chartmap loader builds the batch splines inline (not via
@@ -1057,16 +1057,16 @@ contains
         ! Radial grid
         do i_rho = 1, ns_B
             rho_arr(i_rho) = rho_min + (1.0_dp - rho_min) &
-                             *real(i_rho - 1, dp)/real(ns_B - 1, dp)
+                             * real(i_rho - 1, dp)/real(ns_B - 1, dp)
             s_arr(i_rho) = rho_min**2 + (1.0_dp - rho_min**2) &
-                           *real(i_rho - 1, dp)/real(ns_B - 1, dp)
+                           * real(i_rho - 1, dp)/real(ns_B - 1, dp)
         end do
         ! Angular grids (endpoint excluded, for chartmap geometry)
         do i_theta = 1, n_theta_out
-            theta_arr(i_theta) = real(i_theta - 1, dp)*h_theta_B
+            theta_arr(i_theta) = real(i_theta - 1, dp) * h_theta_B
         end do
         do i_phi = 1, n_phi_out
-            zeta_arr(i_phi) = real(i_phi - 1, dp)*h_phi_B
+            zeta_arr(i_phi) = real(i_phi - 1, dp) * h_phi_B
         end do
 
         ! A_phi is a flux profile on s. B_theta/B_phi stay on rho for now.
@@ -1101,21 +1101,21 @@ contains
 
                     ! Evaluate VMEC geometry at (s, theta_V, phi_V)
                     call splint_vmec_data(s, theta_V, phi_V, &
-                                A_phi_dum, A_theta_dum, dA_phi_ds, dA_theta_ds, aiota, &
-                                          R, Zval, alam, dR_ds, dR_dt, dR_dp, &
-                                          dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
+                        A_phi_dum, A_theta_dum, dA_phi_ds, dA_theta_ds, aiota, &
+                        R, Zval, alam, dR_ds, dR_dt, dR_dp, &
+                        dZ_ds, dZ_dt, dZ_dp, dl_ds, dl_dt, dl_dp)
 
-                    x_arr(i_rho, i_theta, i_phi) = R*cos(phi_V)
-                    y_arr(i_rho, i_theta, i_phi) = R*sin(phi_V)
+                    x_arr(i_rho, i_theta, i_phi) = R * cos(phi_V)
+                    y_arr(i_rho, i_theta, i_phi) = R * sin(phi_V)
                     z_arr(i_rho, i_theta, i_phi) = Zval
                 end do
             end do
         end do
 
         do i_phi = 1, n_phi_out
-            phi_B = real(i_phi - 1, dp)*h_phi_B
+            phi_B = real(i_phi - 1, dp) * h_phi_B
             do i_theta = 1, n_theta_out
-                theta_B = real(i_theta - 1, dp)*h_theta_B
+                theta_B = real(i_theta - 1, dp) * h_theta_B
                 do i_rho = 1, ns_B
                     s = rho_arr(i_rho)**2
                     call splint_boozer_coord(s, theta_B, phi_B, 0, &
@@ -1131,63 +1131,63 @@ contains
 
         ! Write NetCDF file
         status = nf90_create(trim(filename), nf90_clobber, ncid)
-        call nc_assert(status, "create "//trim(filename))
+        call nc_assert(status, "create " // trim(filename))
 
         ! Dimensions: one endpoint-excluded angular grid for geometry and fields.
         call nc_assert(nf90_def_dim(ncid, "rho", ns_B, dim_rho), "def_dim rho")
         call nc_assert(nf90_def_dim(ncid, "s", ns_B, dim_s), "def_dim s")
         call nc_assert(nf90_def_dim(ncid, "theta", n_theta_out, dim_theta), &
-                       "def_dim theta")
+                        "def_dim theta")
         call nc_assert(nf90_def_dim(ncid, "zeta", n_phi_out, dim_zeta), &
-                       "def_dim zeta")
+                        "def_dim zeta")
 
         ! Coordinate variables
         call nc_assert(nf90_def_var(ncid, "rho", nf90_double, [dim_rho], var_rho), &
-                       "def_var rho")
+                        "def_var rho")
         call nc_assert(nf90_def_var(ncid, "s", nf90_double, [dim_s], var_s), &
-                       "def_var s")
+                        "def_var s")
         call nc_assert(nf90_def_var(ncid, "theta", nf90_double, [dim_theta], &
-                                    var_theta), "def_var theta")
+                        var_theta), "def_var theta")
         call nc_assert(nf90_def_var(ncid, "zeta", nf90_double, [dim_zeta], &
-                                    var_zeta), "def_var zeta")
+                        var_zeta), "def_var zeta")
 
         ! Geometry (NF90 reverses dims: Fortran (rho,theta,zeta) -> NetCDF (zeta,theta,rho))
         call nc_assert(nf90_def_var(ncid, "x", nf90_double, &
-                                    [dim_rho, dim_theta, dim_zeta], var_x), "def_var x")
+                        [dim_rho, dim_theta, dim_zeta], var_x), "def_var x")
         call nc_assert(nf90_put_att(ncid, var_x, "units", "cm"), "att x units")
         call nc_assert(nf90_def_var(ncid, "y", nf90_double, &
-                                    [dim_rho, dim_theta, dim_zeta], var_y), "def_var y")
+                        [dim_rho, dim_theta, dim_zeta], var_y), "def_var y")
         call nc_assert(nf90_put_att(ncid, var_y, "units", "cm"), "att y units")
         call nc_assert(nf90_def_var(ncid, "z", nf90_double, &
-                                    [dim_rho, dim_theta, dim_zeta], var_z), "def_var z")
+                        [dim_rho, dim_theta, dim_zeta], var_z), "def_var z")
         call nc_assert(nf90_put_att(ncid, var_z, "units", "cm"), "att z units")
 
         ! Boozer field data
         call nc_assert(nf90_def_var(ncid, "A_phi", nf90_double, [dim_s], &
-                                    var_aphi), "def_var A_phi")
+                        var_aphi), "def_var A_phi")
         call nc_assert(nf90_put_att(ncid, var_aphi, "radial_abscissa", "s"), &
-                       "att A_phi radial_abscissa")
+                        "att A_phi radial_abscissa")
         call nc_assert(nf90_def_var(ncid, "B_theta", nf90_double, [dim_rho], &
-                                    var_btheta), "def_var B_theta")
+                        var_btheta), "def_var B_theta")
         call nc_assert(nf90_def_var(ncid, "B_phi", nf90_double, [dim_rho], &
-                                    var_bphi), "def_var B_phi")
+                        var_bphi), "def_var B_phi")
         call nc_assert(nf90_def_var(ncid, "Bmod", nf90_double, &
-                                    [dim_rho, dim_theta, dim_zeta], var_bmod), &
-                       "def_var Bmod")
+                        [dim_rho, dim_theta, dim_zeta], var_bmod), &
+                        "def_var Bmod")
         call nc_assert(nf90_def_var(ncid, "num_field_periods", nf90_int, var_nfp), &
-                       "def_var nfp")
+                        "def_var nfp")
 
         ! Global attributes
         call nc_assert(nf90_put_att(ncid, nf90_global, "rho_convention", "rho_tor"), &
-                       "att rho_convention")
+                        "att rho_convention")
         call nc_assert(nf90_put_att(ncid, nf90_global, "zeta_convention", "boozer"), &
-                       "att zeta_convention")
+                        "att zeta_convention")
         call nc_assert(nf90_put_att(ncid, nf90_global, "rho_lcfs", rho_arr(ns_B)), &
-                       "att rho_lcfs")
+                        "att rho_lcfs")
         call nc_assert(nf90_put_att(ncid, nf90_global, "boozer_field", 1), &
-                       "att boozer_field")
+                        "att boozer_field")
         call nc_assert(nf90_put_att(ncid, nf90_global, "torflux", torflux), &
-                       "att torflux")
+                        "att torflux")
         ! No rmajor attribute: the chartmap reader derives the major radius
         ! from the innermost-surface geometry (see boozer_chartmap_io).
 
@@ -1211,7 +1211,7 @@ contains
 
         print *, 'Exported Boozer chartmap to ', trim(filename)
         print *, '  nfp=', nper, ' ns=', ns_B, ' ntheta=', n_theta_out, &
-            ' nphi=', n_phi_out
+                 ' nphi=', n_phi_out
         print *, '  torflux=', torflux
 
     contains
@@ -1221,7 +1221,7 @@ contains
             character(len=*), intent(in) :: loc
             if (stat /= nf90_noerr) then
                 print *, "export_boozer_chartmap: NetCDF error at ", trim(loc), &
-                    ": ", trim(nf90_strerror(stat))
+                         ": ", trim(nf90_strerror(stat))
                 error stop
             end if
         end subroutine nc_assert
