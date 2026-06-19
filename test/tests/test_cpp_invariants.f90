@@ -1,13 +1,21 @@
 program test_cpp_invariants
-  ! Invariant conservation for the CPP pusher on the BOOZER chart of the QA wout
-  ! (cheap real field). CPP is the GC degenerate-Lagrangian scheme with mu held
-  ! fixed, so its conserved-quantity behavior must match the validated GC
-  ! integrator. Asserts:
+  ! REFACTOR / CODE-MOTION ORACLE -- NOT a physics cross-validation.
+  !
+  ! Invariant conservation for the flux-canonical CPP pusher (orbit_cpp) on the
+  ! BOOZER chart of the QA wout. This CPP is the GC degenerate-Lagrangian scheme
+  ! with mu held fixed, so its residual is byte-identical to GC and its
+  ! conserved-quantity behavior matches the validated GC integrator by
+  ! construction. The "<= GC" asserts below are therefore IDENTITIES that guard
+  ! the device-portable Newton/LU realization, not evidence that two distinct
+  ! methods conserve equally well. The genuine 6D-Pauli invariant test (real
+  ! gyration, mu adiabatically conserved, energy bounded) is
+  ! test_cpp_pauli_gc_banana.
+  !
+  ! Asserts:
   !   - mu is a fixed parameter -> identically conserved (byte ==).
   !   - energy H = vpar^2/2 + mu*Bmod oscillation, energy secular drift, and the
-  !     canonical p_phi excursion each match GC to a tight relative margin (CPP
-  !     is no worse than GC at structure preservation), and are bounded with no
-  !     secular energy growth (modified-Hamiltonian property).
+  !     canonical p_phi excursion each match GC to a tight relative margin
+  !     (identity guard), and are bounded with no secular energy growth.
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: twopi
   use simple_main, only: init_field
@@ -41,9 +49,9 @@ program test_cpp_invariants
   call run_invariants(norb, nfail)
 
   if (nfail == 0) then
-    print *, 'ALL CPP INVARIANT TESTS PASSED'
+    print *, 'ALL CPP-FLUX CODE-MOTION INVARIANT ORACLE TESTS PASSED'
   else
-    print *, 'CPP INVARIANT TESTS FAILED: ', nfail
+    print *, 'CPP-FLUX CODE-MOTION INVARIANT ORACLE TESTS FAILED: ', nfail
     error stop 1
   end if
 

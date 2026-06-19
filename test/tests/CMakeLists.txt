@@ -581,6 +581,13 @@ target_link_libraries(test_fo_symplectic.x simple)
 add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x)
 set_tests_properties(test_fo_symplectic PROPERTIES LABELS "unit" TIMEOUT 120)
 
+# GPU-offload-ready full-orbit device path (B2): integer field-code dispatch,
+# fixed-size state, analytic Jacobian (no class() pointer, no FD Jacobian).
+add_executable(test_fo_device.x test_fo_device.f90)
+target_link_libraries(test_fo_device.x simple)
+add_test(NAME test_fo_device COMMAND test_fo_device.x)
+set_tests_properties(test_fo_device PROPERTIES LABELS "unit" TIMEOUT 120)
+
 # orbit_model config parsing + dispatch keys (Wave-1 followup #1).
 add_executable(test_orbit_model_dispatch.x test_orbit_model_dispatch.f90)
 target_link_libraries(test_orbit_model_dispatch.x simple)
@@ -588,8 +595,10 @@ add_test(NAME test_orbit_model_dispatch COMMAND test_orbit_model_dispatch.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_orbit_model_dispatch PROPERTIES LABELS "unit")
 
-# CPP (flux-canonical) cross-checks against the BOOZER chart of the QA wout.
-# Run from the binary dir where the wout.nc symlink resolves.
+# Flux-canonical CPP refactor/code-motion oracles: the CPP residual is the GC
+# degenerate-Lagrangian residual specialized to fixed mu, so CPP==GC is exact by
+# construction (a correctness check on the shared symplectic core, NOT a physics
+# cross-validation). Run from the binary dir where the wout.nc symlink resolves.
 foreach(cpp_test test_cpp_equals_gc_largestep test_cpp_invariants)
     add_executable(${cpp_test}.x ${cpp_test}.f90)
     target_link_libraries(${cpp_test}.x simple)
@@ -597,6 +606,13 @@ foreach(cpp_test test_cpp_equals_gc_largestep test_cpp_invariants)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(${cpp_test} PROPERTIES LABELS "integration" TIMEOUT 120)
 endforeach()
+
+# Genuine 6D Pauli CPP vs GC on the shared analytic tokamak: a real cross-method
+# validation (different methods, O(rho*) match), not a tautology. No field file.
+add_executable(test_cpp_pauli_gc_banana.x test_cpp_pauli_gc_banana.f90)
+target_link_libraries(test_cpp_pauli_gc_banana.x simple)
+add_test(NAME test_cpp_pauli_gc_banana COMMAND test_cpp_pauli_gc_banana.x)
+set_tests_properties(test_cpp_pauli_gc_banana PROPERTIES LABELS "unit" TIMEOUT 120)
 
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)

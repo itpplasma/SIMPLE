@@ -1,12 +1,20 @@
 program test_cpp_equals_gc_largestep
-  ! CPP (flux-canonical, mu fixed) must reproduce the GC symplectic trajectory
-  ! at GC-sized steps. The CPP Gauss residual is the GC degenerate-Lagrangian
-  ! Euler-Lagrange system specialized to fixed mu, so on the same canonical
-  ! chart, same stage, same dt the two integrators advance the 4D state
-  ! z=(r,theta,phi,pphi) identically up to the solver tolerance.
+  ! REFACTOR / CODE-MOTION ORACLE -- NOT a physics cross-validation.
   !
-  ! Cheap real field: BOOZER chart on the QA wout. Cross-check (strongest
-  ! available): max over the orbit of |z_CPP - z_GC| < 1e-10.
+  ! The flux-canonical CPP (orbit_cpp, mu fixed) Gauss residual is byte-identical
+  ! to the GC degenerate-Lagrangian residual: it IS the GC slow-manifold
+  ! projection in these coordinates. So "CPP == GC to Newton tol" is a TAUTOLOGY
+  ! by construction. This test exists to prove the device-portable Newton/LU
+  ! realization of that residual reproduces the validated GC integrator on the
+  ! same canonical chart, same stage, same dt -- a correctness check on the
+  ! shared symplectic core, not evidence that two different methods agree.
+  !
+  ! The genuine, non-tautological CPP cross-validation (a 6D Pauli particle that
+  ! carries real gyration, matching GC only to O(rho*)) is
+  ! test_cpp_pauli_gc_banana.
+  !
+  ! Cheap real field: BOOZER chart on the QA wout. Identity check: max over the
+  ! orbit of |z_CPP - z_GC| < 1e-10.
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: twopi
   use simple_main, only: init_field
@@ -41,9 +49,9 @@ program test_cpp_equals_gc_largestep
   call run_compare(norb, GAUSS2, 'GAUSS2', nfail)
 
   if (nfail == 0) then
-    print *, 'ALL CPP==GC LARGE-STEP TESTS PASSED'
+    print *, 'ALL CPP-FLUX CODE-MOTION ORACLE TESTS PASSED'
   else
-    print *, 'CPP==GC TESTS FAILED: ', nfail
+    print *, 'CPP-FLUX CODE-MOTION ORACLE TESTS FAILED: ', nfail
     error stop 1
   end if
 
@@ -92,7 +100,8 @@ contains
     end do
 
     print '(A,A,A,ES12.4)', '  ', tag, ': max |z_CPP - z_GC| = ', maxdiff
-    call check(tag//': CPP matches GC to Newton tol', maxdiff < 1.0e-10_dp, nfail)
+    call check(tag//': CPP residual reproduces GC (code-motion identity)', &
+        maxdiff < 1.0e-10_dp, nfail)
   end subroutine run_compare
 
   subroutine check(name, ok, nfail)

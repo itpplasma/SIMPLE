@@ -40,10 +40,13 @@
     orbit_symplectic_euler1.f90
     orbit_symplectic.f90
     orbit_cpp.f90
+    field_pauli_cart.f90
+    orbit_cpp_pauli.f90
     orbit_full_provider.f90
     orbit_full_mock_cart.f90
     orbit_full_mock_cyl.f90
     orbit_full.f90
+    orbit_full_device.f90
     util.F90
     samplers.f90
     cut_detector.f90

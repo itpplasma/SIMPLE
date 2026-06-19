@@ -876,7 +876,7 @@ contains
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
-        use orbit_full, only: ORBIT_PAULI
+        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D
         use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
@@ -899,6 +899,13 @@ contains
                 case (ORBIT_PAULI)
                     call orbit_timestep_cpp(anorb%si, anorb%f, &
                         cpp_stages_from_mode(integmode), ierr_orbit)
+                case (ORBIT_PAULI6D)
+                    ! The genuine 6D Pauli runs in Cartesian on the analytic
+                    ! tokamak, not the VMEC flux-canonical state advanced here.
+                    ! Routing it through the VMEC macrostep is unsupported; fail
+                    ! loud rather than silently tracing the GC instead.
+                    error stop 'orbit_model=ORBIT_PAULI6D is a Cartesian '// &
+                        'research model; not available in the VMEC macrostep'
                 case default
                     call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
                 end select

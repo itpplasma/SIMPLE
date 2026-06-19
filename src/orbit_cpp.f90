@@ -5,17 +5,25 @@ module orbit_cpp
   ! Gauss-collocation) integrator stays on it and reproduces GC at GC-sized
   ! (bounce-scale) steps.
   !
+  ! TAUTOLOGICAL BY DESIGN. This residual is the GC degenerate-Lagrangian
+  ! Euler-Lagrange system specialized to fixed mu. Because the GC canonical
+  ! equations ARE the slow-manifold equations of the Pauli particle in these
+  ! flux-canonical coordinates, this residual is byte-identical to the GC Gauss
+  ! residual. So "CPP == GC" here is an IDENTITY, not a physics cross-check: the
+  ! accompanying tests (test_cpp_equals_gc_largestep, test_cpp_invariants) are
+  ! refactor / code-motion correctness ORACLES on the shared symplectic core,
+  ! verifying that this device-portable Newton/LU realization reproduces the GC
+  ! trajectory it is built from. The genuine, non-tautological CPP -- a full 6D
+  ! particle that carries real gyration and is a DIFFERENT method from GC -- is
+  ! orbit_cpp_pauli; its banana matches GC only to O(rho*).
+  !
   ! State and field machinery are shared with the GC integrator verbatim:
   !   z(4) = (r, theta, phi, p_phi) in symplectic_integrator_t,
   !   field_can_t carries mu (fixed parameter), ro0, and the canonical field
   !   quantities Ath, Aph, hth, hph, Bmod with 1st and 2nd derivatives.
   !
   ! The discrete scheme is the degenerate-Lagrangian Euler-Lagrange system
-  ! (implicit Gauss collocation) on field_can_t with mu held fixed. Because the
-  ! GC canonical equations ARE the slow-manifold equations of the Pauli
-  ! particle, the CPP Gauss residual coincides with the GC Gauss residual at
-  ! fixed mu; test_cpp_equals_gc_largestep verifies the trajectories agree to
-  ! Newton tolerance.
+  ! (implicit Gauss collocation) on field_can_t with mu held fixed.
   !
   ! GPU portability: residual, Jacobian, the dense LU solve, and the Newton
   ! shell are pure, fixed-size, !$acc routine seq-able. No procedure pointers,

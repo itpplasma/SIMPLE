@@ -19,9 +19,15 @@ module orbit_full
 
   ! orbit models (0 reserved for the existing symplectic guiding-center path)
   integer, parameter, public :: ORBIT_GC      = 0
-  integer, parameter, public :: ORBIT_PAULI   = 1   ! CPP variational, big dt, implicit
+  integer, parameter, public :: ORBIT_PAULI   = 1   ! CPP flux-canonical (== GC, tautological)
   integer, parameter, public :: ORBIT_BORIS   = 2   ! gyro-resolved Lorentz, explicit
-  integer, parameter, public :: ORBIT_FOSYMPL = 3   ! implicit-midpoint full orbit (B1)
+  integer, parameter, public :: ORBIT_FOSYMPL = 3   ! implicit-midpoint full orbit
+  ! Genuine 6D classical Pauli particle (orbit_cpp_pauli), Cartesian analytic
+  ! field. A research / cross-validation model: distinct method from GC, matches
+  ! GC only to O(rho*). It runs in Cartesian on the analytic tokamak, not the
+  ! production VMEC flux-canonical state, so it is NOT routed through the VMEC
+  ! macrostep; it is exercised through its own harness (test_cpp_pauli_gc_banana).
+  integer, parameter, public :: ORBIT_PAULI6D = 4
 
   ! coordinate kinds (3..5 reserved for the libneo PR: VMEC, Boozer, chartmap)
   integer, parameter, public :: COORD_CART = 1

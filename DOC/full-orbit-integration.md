@@ -1,10 +1,9 @@
-# Full-orbit integration in SIMPLE: feasibility analysis
+# Full-orbit integration in SIMPLE
 
-Working notes on adding a Boris/VPA or symplectic full-orbit (Lorentz) pusher
-alongside the existing symplectic guiding-center tracer. Records what the switch
-costs, where it breaks across coordinate systems, and how ASCOT5 and VENUS-LEVIS
-handle the stellarator-boundary problem. Source references are to the local trees
-`/Users/ert/code/SIMPLE` and `/Users/ert/code/ascot5` and to the cited papers.
+Sections 1 to 5 are the feasibility analysis: what a Boris/VPA or symplectic
+full-orbit (Lorentz) pusher costs alongside the symplectic guiding-center tracer,
+where it breaks across coordinate systems, how ASCOT5 and VENUS-LEVIS handle the
+stellarator-boundary problem. Section 6 documents the pushers now implemented.
 
 ## 1. What SIMPLE integrates now
 
@@ -170,7 +169,69 @@ integrator family selected by a new mode, leaving the canonical guiding-center
 integrators untouched. Reserve the cylindrical-box plus wall-mesh route for when
 wall loads become the actual goal.
 
-## 6. References
+## 6. What is implemented
+
+Three pushers now sit alongside the symplectic guiding-center tracer, selected by
+the integer `orbit_model` (`src/orbit_full.f90`), plus a separate device path.
+
+### Flux-canonical CPP (`ORBIT_PAULI`, `src/orbit_cpp.f90`)
+
+The degenerate-Lagrangian Euler-Lagrange system on `field_can_t` with `mu` fixed.
+In these coordinates the discrete residual is byte-identical to the GC Gauss
+residual, so `CPP == GC` is an identity. Its tests
+(`test_cpp_equals_gc_largestep`, `test_cpp_invariants`) are code-motion oracles on
+the shared symplectic core, not a physics cross-check. The value is the
+device-portable Newton/LU realization: pure, fixed-size, `!$acc routine seq`.
+
+### Genuine 6D classical Pauli particle (`ORBIT_PAULI6D`, `src/orbit_cpp_pauli.f90`)
+
+A full 6D canonical `(x, p)` particle in Cartesian, `H = |p - (q/c)A|^2/(2m) +
+mu|B|`, `mu` a fixed parameter (Xiao & Qin 2021). It carries real gyration; the GC
+orbit is its slow manifold. Implicit midpoint on `(x, p)` with an analytic
+Jacobian from `grad A`, `Hess A`, `grad|B|`, `Hess|B|`. The field is
+`field_pauli_cart`: an exact divergence-free realization of the shared circular
+tokamak (`R0=1, a=0.5, B0=1, iota0=1`), `B = curl A`, so the Hamiltonian is well
+posed.
+
+This is a different method from GC, so its gyro-averaged banana matches GC only to
+O(rho*), not to zero. `test_cpp_pauli_gc_banana` checks it against an independent
+GC drift integrator on the same analytic field: turning points agree to O(rho*)
+with a nonzero gap, energy stays bounded, `mu` returns to start. Measured: the
+implicit midpoint filters gyration down to one step per gyroperiod, the banana
+width changing under 2 percent from 64 to 1 step per gyration.
+
+It runs in Cartesian on the analytic field, not the VMEC flux-canonical state, so
+it is a research and cross-validation model. The VMEC `macrostep` rejects it with
+an explicit error rather than silently tracing GC. The flux-canonical `ORBIT_PAULI`
+remains the production CPP entry on real equilibria.
+
+### Curvilinear symplectic full orbit (`ORBIT_FOSYMPL`, `src/orbit_full.f90`)
+
+Implicit-midpoint 6D Lorentz with the geodesic term `-Gamma^i_mn v^m v^n`
+(VENUS-LEVIS geometry, Route B). It uses the `field_metric_provider_t` seam and a
+finite-difference Jacobian, so it is the CPU path: good for mock-based unit tests,
+not device-offloadable.
+
+### GPU-offload-ready device path (`src/orbit_full_device.f90`)
+
+The full-orbit per-step kernel without the two device blockers: no `class()` vtable
+dispatch and no finite-difference Jacobian in the hot loop. Concrete field
+evaluation is selected by an integer `field_code` (`FOFIELD_UNIFORM`,
+`FOFIELD_LINGRAD`, `FOFIELD_TOKAMAK`) through `select case` to inlinable
+`!$acc routine seq` helpers. The state is fixed-size. The implicit-midpoint Lorentz
+Newton uses an analytic Jacobian: `d(v x B)/dx = v x (dB/dx)`, `d(v x B)/dv = e_k x
+B`, with `dB/dx` from the analytic field gradient.
+
+`test_fo_device` checks: device Boris reproduces the class-based Boris bit-for-bit;
+the analytic Jacobian matches a finite-difference Jacobian to 1e-9; uniform-B `|v|`
+and energy hold to round-off; the linear grad-B drift hits the analytic value.
+
+GPU-offload-ready: the three Cartesian flat-metric field codes (uniform, lingrad,
+analytic tokamak). CPU-only: the curvilinear provider-based path in `orbit_full`
+(class dispatch, Christoffel symbols, FD Jacobian) and the mock providers used by
+`test_full_orbit` and `test_fo_symplectic`.
+
+## 7. References
 
 Numerical methods:
 - H. Qin et al., "Why is Boris algorithm so good?", Phys. Plasmas 20, 084503
