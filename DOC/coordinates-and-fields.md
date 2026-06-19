@@ -786,21 +786,19 @@ magnetic axis. `axis_healing` selects how the harmonics are continued to the axi
 | `axis_healing` | continuation |
 |---|---|
 | `'legacy'` | Discard the innermost surfaces and extrapolate the rescaled amplitude `c/rho^|m|`. Default. |
-| `'powerlaw'` | `rho^|m|` continuation below `rho_axis_heal`. Analytic, but splining `c/rho^|m|` amplifies near-axis noise (rough, ringing at the anchor). Superseded by `polyfit`. |
-| `'polyfit'` | `rho^|m|` times a least-squares polynomial in `s` (a Zernike radial polynomial) fitted to the reliable surfaces below `rho_axis_heal`. Same regularity, smooth, no anchor noise. Recommended. |
+| `'legacy_adaptive'` | Legacy extrapolation with an automatically detected reliability boundary. Diagnostic mode. |
+| `'powerlaw'` | `rho^|m|` continuation below `s_axis_heal`. Analytic, but splining `c/rho^|m|` amplifies near-axis noise. Superseded by `polyfit`. |
+| `'polyfit'` | `rho^|m|` times a least-squares polynomial in `s` fitted to the reliable surfaces below `s_axis_heal`. Same regularity, smooth, no anchor noise. Recommended. |
 
 Related parameters:
 
-- `axis_healing_boundary = 'fixed' | 'adaptive'` (legacy only): the reliability
-  boundary. `'fixed'` discards the innermost `min(|m|,4)` surfaces; `'adaptive'`
-  detects the noisy surface automatically.
-- `rho_axis_heal` (default 0.1): anchor radius below which `powerlaw`/`polyfit`
-  continue the harmonics.
+- `s_axis_heal` (default `1.0d-2`): anchor flux below which
+  `powerlaw`/`polyfit` continue the harmonics.
 - `axis_healing_polyfit_degree` (default 3): polynomial degree for `polyfit`.
 
 ```
 axis_healing = 'polyfit'   ! recommended near-axis field
-rho_axis_heal = 0.1
+s_axis_heal = 1.0d-2
 ```
 
 The polyfit field removes the near-axis non-convergence of the symplectic Euler1
@@ -809,9 +807,11 @@ level and energy is conserved across axis crossings.
 
 **Deprecated switches.** The booleans `old_axis_healing`,
 `old_axis_healing_boundary`, `axis_healing_power_law`, and `axis_healing_polyfit`
-still work but are mapped to `axis_healing` with a deprecation warning. A future
-release removes them and defaults `axis_healing` to `'polyfit'`; set it
-explicitly now to choose your field.
+still work but are mapped to `axis_healing` with a deprecation warning.
+`rho_axis_heal` still works and is converted to `s_axis_heal = rho_axis_heal^2`.
+A future release removes these compatibility switches and defaults
+`axis_healing` to `'polyfit'`; set `axis_healing` and `s_axis_heal` explicitly
+now to choose your field.
 
 ---
 

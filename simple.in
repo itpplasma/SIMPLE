@@ -52,7 +52,8 @@ tempi1 = 1.0d4,          ! temperature of the first background species for colli
 tempi2 = 1.0d4,          ! temperature of the second background species for collisions (eV)
 tempe = 1.0d4            ! electron temperature for collisions (eV)
 deterministic = .True.  ! if .True. put seed for the same random walk
-axis_healing = 'legacy'   ! 'legacy' | 'powerlaw' | 'polyfit' (recommended, future default); legacy boundary via axis_healing_boundary = 'fixed' | 'adaptive'
+axis_healing = 'legacy'   ! 'legacy' | 'legacy_adaptive' | 'powerlaw' | 'polyfit' (recommended, future default)
+s_axis_heal = 1.0d-2      ! anchor flux for powerlaw/polyfit
 batch_size = 1000 ! Use only a portion of all particles. Ignored if larger than ntestpart.
 ran_seed = 12345   ! Random seed to get batch_size amounts of random indices from ntestpart.
 reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored in batch.dat, new batch generated if batch.dat not found.

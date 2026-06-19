@@ -1,6 +1,6 @@
 module stl_wall_intersection
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64, int8
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: iso_c_binding, only: c_ptr, c_null_ptr, c_associated, c_int
     use, intrinsic :: iso_c_binding, only: c_double, c_char, c_null_char
     implicit none
@@ -19,7 +19,7 @@ module stl_wall_intersection
 #ifdef SIMPLE_ENABLE_CGAL
     interface
         function stl_wall_create(filename_c, scale_to_m) &
-            bind(C, name="stl_wall_create") result(h)
+                bind(C, name="stl_wall_create") result(h)
             import :: c_ptr, c_char, c_double
             character(kind=c_char), intent(in) :: filename_c(*)
             real(c_double), value, intent(in) :: scale_to_m
@@ -32,7 +32,7 @@ module stl_wall_intersection
         end subroutine stl_wall_destroy
 
         function stl_wall_first_hit_segment_c(h, p0_m, p1_m, hit_m) &
-            bind(C, name="stl_wall_first_hit_segment") result(hit)
+                bind(C, name="stl_wall_first_hit_segment") result(hit)
             import :: c_ptr, c_double, c_int
             type(c_ptr), value, intent(in) :: h
             real(c_double), intent(in) :: p0_m(3)
@@ -42,8 +42,8 @@ module stl_wall_intersection
         end function stl_wall_first_hit_segment_c
 
         function stl_wall_first_hit_segment_with_normal_c( &
-            h, p0_m, p1_m, hit_m, normal) &
-            bind(C, name="stl_wall_first_hit_segment_with_normal") result(hit)
+                h, p0_m, p1_m, hit_m, normal) &
+                bind(C, name="stl_wall_first_hit_segment_with_normal") result(hit)
             import :: c_ptr, c_double, c_int
             type(c_ptr), value, intent(in) :: h
             real(c_double), intent(in) :: p0_m(3)
@@ -116,9 +116,9 @@ contains
             error stop "stl_wall_first_hit_segment: wall not initialized"
         end if
         hit_i = stl_wall_first_hit_segment_c(wall%handle, &
-                                             real(p0_m, c_double), &
-                                             real(p1_m, c_double), &
-                                             hit_m)
+            real(p0_m, c_double), &
+            real(p1_m, c_double), &
+            hit_m)
         hit = (hit_i /= 0)
 #else
         hit = .false.
@@ -128,7 +128,7 @@ contains
     end subroutine stl_wall_first_hit_segment
 
     subroutine stl_wall_first_hit_segment_with_normal(wall, p0_m, p1_m, hit, hit_m, &
-                                                      normal)
+            normal)
         type(stl_wall_t), intent(in) :: wall
         real(dp), intent(in) :: p0_m(3)
         real(dp), intent(in) :: p1_m(3)
@@ -143,9 +143,9 @@ contains
             error stop "stl_wall_first_hit_segment_with_normal: wall not initialized"
         end if
         hit_i = stl_wall_first_hit_segment_with_normal_c(wall%handle, &
-                                                         real(p0_m, c_double), &
-                                                         real(p1_m, c_double), &
-                                                         hit_m, normal)
+            real(p0_m, c_double), &
+            real(p1_m, c_double), &
+            hit_m, normal)
         hit = (hit_i /= 0)
 #else
         hit = .false.

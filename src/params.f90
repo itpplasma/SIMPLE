@@ -2,8 +2,8 @@ module params
     use, intrinsic :: iso_fortran_env, only: int8
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
-    use new_vmec_stuff_mod, only: axis_healing, axis_healing_boundary, &
-                                  rho_axis_heal, axis_healing_polyfit_degree, &
+    use new_vmec_stuff_mod, only: axis_healing, s_axis_heal, rho_axis_heal, &
+                                  axis_healing_polyfit_degree, &
                                   old_axis_healing, old_axis_healing_boundary, &
                                   axis_healing_power_law, axis_healing_polyfit, &
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
@@ -115,8 +115,8 @@ module params
 	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
-	        axis_healing_polyfit, axis_healing_polyfit_degree, axis_healing, axis_healing_boundary, &
+	        old_axis_healing_boundary, axis_healing_power_law, s_axis_heal, rho_axis_heal, &
+	        axis_healing_polyfit, axis_healing_polyfit_degree, axis_healing, &
 	        am1, am2, Z1, Z2, &
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &

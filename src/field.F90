@@ -1,16 +1,15 @@
 module field
     !> Field module aggregating all field types and factory functions.
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     use libneo_coordinates, only: detect_refcoords_file_type, refcoords_file_chartmap, &
-                                  refcoords_file_vmec_wout, refcoords_file_unknown
+        refcoords_file_vmec_wout, refcoords_file_unknown
     use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
     use field_boozer_chartmap, only: boozer_chartmap_field_t, &
-                                     create_boozer_chartmap_field, &
-                                     is_boozer_chartmap
+        create_boozer_chartmap_field, &
+        is_boozer_chartmap
 
     implicit none
 
@@ -21,34 +20,34 @@ contains
         class(magnetic_field_t), allocatable, intent(out) :: dest
 
         select type (source)
-        type is (vmec_field_t)
+            type is (vmec_field_t)
             allocate (vmec_field_t :: dest)
             select type (dest)
-            type is (vmec_field_t)
+                type is (vmec_field_t)
                 dest = source
             class default
                 error stop 'field_clone: Allocation failure (vmec)'
             end select
-        type is (coils_field_t)
+            type is (coils_field_t)
             allocate (coils_field_t :: dest)
             select type (dest)
-            type is (coils_field_t)
+                type is (coils_field_t)
                 dest = source
             class default
                 error stop 'field_clone: Allocation failure (coils)'
             end select
-        type is (splined_field_t)
+            type is (splined_field_t)
             allocate (splined_field_t :: dest)
             select type (dest)
-            type is (splined_field_t)
+                type is (splined_field_t)
                 dest = source
             class default
                 error stop 'field_clone: Allocation failure (splined)'
             end select
-        type is (boozer_chartmap_field_t)
+            type is (boozer_chartmap_field_t)
             allocate (boozer_chartmap_field_t :: dest)
             select type (dest)
-            type is (boozer_chartmap_field_t)
+                type is (boozer_chartmap_field_t)
                 dest = source
             class default
                 error stop 'field_clone: Allocation failure (boozer_chartmap)'
@@ -112,7 +111,7 @@ contains
                 end select
             end if
         else if (startswidth(stripped_name, 'coils') .or. &
-                 endswith(filename, '.coils')) then
+                endswith(filename, '.coils')) then
             call create_coils_field(filename, raw_coils)
             allocate (splined_coils)
             call create_splined_field(raw_coils, ref_coords, splined_coils)

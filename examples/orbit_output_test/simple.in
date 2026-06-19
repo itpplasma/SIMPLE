@@ -43,7 +43,8 @@ tempi1 = 1.0d4
 tempi2 = 1.0d4
 tempe = 1.0d4
 deterministic = .True.
-axis_healing = 'legacy'   ! 'legacy' | 'powerlaw' | 'polyfit' (recommended, future default); legacy boundary via axis_healing_boundary = 'fixed' | 'adaptive'
+axis_healing = 'legacy'   ! 'legacy' | 'legacy_adaptive' | 'powerlaw' | 'polyfit' (recommended, future default)
+s_axis_heal = 1.0d-2      ! anchor flux for powerlaw/polyfit
 batch_size = 1000
 ran_seed = 12345
 reuse_batch = .False.
