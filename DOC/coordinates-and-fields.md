@@ -586,6 +586,57 @@ f%dAth = [Ath_norm, 0, 0] ! Constant derivative
 - Uses libneo functions: `vmec_to_can`, `can_to_vmec`
 - Simpler than Meiss/Albert but less optimized
 
+### 6.6 Exact-Curl Analytic Field and the 6D Canonical Integrator
+
+**Files**: `src/field/field_can_test.f90` (`eval_field_correct_test`),
+`src/orbit_cpp_canonical.f90`
+
+The guiding-center integrators reduce the perpendicular motion to the magnetic
+moment. The 6D canonical integrator in `orbit_cpp_canonical` keeps the full
+phase space `(q, p)` in curvilinear coordinates `(r, theta, phi)` and resolves
+(or, for the Pauli models, represents) that motion directly. It is the SIMPLE
+port of the Egger-Feiel thesis discrete-variational integrators.
+
+The model field is the analytic tokamak. The covariant vector potential is
+`A_r = 0`, `A_theta = B0 (r^2/2 - r^3 cos(theta)/(3 R0))`,
+`A_phi = -B0 iota0 (r^2/2 - r^4/(4 a^2))`, with `B0 = iota0 = R0 = 1`, `a = 0.5`.
+The toroidal metric is diagonal: `g = diag(1, r^2, (R0 + r cos theta)^2)`,
+Jacobian `sqrt(g) = r (R0 + r cos theta)`. The guiding-center path reuses the
+linearized `eval_field_test` (`|B| = B0(1 - r/R0 cos theta)`). The 6D path needs
+the exact field from the curl of `A`: `B^k = eps^ijk A_{j,i} / sqrt(g)`,
+`|B| = sqrt(g_ij B^i B^j)`. With `A_r = 0` only `B^theta`, `B^phi` survive and
+`|B|^2 = A_{phi,r}^2 / (R0 + r cos theta)^2 + A_{theta,r}^2 / r^2`. `A`, `dA`,
+`d2A` are identical between the two evaluators; `B`, `dB`, `h` differ, and at the
+reference start `(r,theta) = (0.1, 1.5)` the exact `|B| = 0.99749` against the
+linearized `0.99293`. Using the linearized field for the 6D models would
+silently miss the python oracle.
+
+Three models share one integer-dispatched residual/Jacobian core: `MODEL_CP`
+(full charged particle, `dt = 1`), `MODEL_CPP_SYM` (Pauli symplectic midpoint,
+`H + mu|B|`, `dt = 80`), `MODEL_CPP_VAR` (Pauli variational midpoint,
+discrete Euler-Lagrange, `dt = 800`). The state is fixed-size 6,
+`z = (r, theta, phi, p_r, p_theta, p_phi)`; the position rows solve the
+canonical midpoint and the momentum rows carry `p`, so the Jacobian is square
+`6x6` and solved with the device LU `rk_solve` from `orbit_rk_core`. Newton uses
+the analytic Jacobian; the `O(mu)` `|B|` force takes its gradient from a
+central difference of the field's own `dBmod`, because the oracle-faithful
+`dBmod` is not a true gradient and a closed Hessian would be inconsistent. No
+`class()` or procedure pointer enters the hot path: the kernels are
+`!$acc routine seq`, ready for GPU offload. `COORD_VMEC` is reserved for the
+libneo `metric_tensor`/`christoffel` generalization; only `COORD_TOK` is wired.
+
+Two errata in the python reference are corrected in the Fortran. The metric
+theta-derivative `d g_33/d theta = -2 r (R0 + r cos theta) sin theta`; the
+python listing drops the factor `r`. That error breaks the symplectic energy
+bound: `CPP-sym` over 1000 steps drifts to `max|dE/E0| = 1.4e-1` with the python
+metric versus a bounded `1.0e-3` plateau, roughly `dt`-independent across
+`dt = 80, 40, 20, 10`, with the correct one. The field `d|B|/d theta` in
+`field_correct_test.py` also omits one chain-rule term; the residual keeps the
+python form so the trajectory reproduces the oracle to 15 digits, and the
+`mu`-force Jacobian differentiates that same `dBmod` by finite difference for
+consistency. The integrators are validated in `test/tests/test_cpp_canonical.f90`
+against the regenerated python oracle.
+
 ---
 
 ## 7. libneo Integration
@@ -885,6 +936,8 @@ trajectory.
 | `src/orbit_symplectic_base.f90` | Integrator types and RK coefficients |
 | `src/orbit_symplectic.f90` | Symplectic methods |
 | `src/orbit_symplectic_quasi.f90` | Quasi-symplectic and RK45 |
+| `src/orbit_rk_core.f90` | Shared device LU and Newton shell |
+| `src/orbit_cpp_canonical.f90` | 6D canonical-midpoint integrator (cp/cpp_sym/cpp_var) |
 | `src/alpha_lifetime_sub.f90` | orbit_timestep_axis |
 
 ---

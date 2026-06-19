@@ -614,6 +614,15 @@ target_link_libraries(test_cpp_pauli_gc_banana.x simple)
 add_test(NAME test_cpp_pauli_gc_banana COMMAND test_cpp_pauli_gc_banana.x)
 set_tests_properties(test_cpp_pauli_gc_banana PROPERTIES LABELS "unit" TIMEOUT 120)
 
+# Curvilinear canonical-midpoint 6D port (cp/cpp_sym/cpp_var) vs the python DVI
+# reference oracle on the analytic tokamak. Per-step trajectory reproduction to
+# ~1e-10 plus the symplectic energy bound (CPP-sym ~1e-3, dt-independent, no
+# secular drift), the strong acceptance gate. No field file.
+add_executable(test_cpp_canonical.x test_cpp_canonical.f90)
+target_link_libraries(test_cpp_canonical.x simple)
+add_test(NAME test_cpp_canonical COMMAND test_cpp_canonical.x)
+set_tests_properties(test_cpp_canonical PROPERTIES LABELS "unit" TIMEOUT 120)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
