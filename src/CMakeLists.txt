@@ -100,6 +100,10 @@ list(APPEND SOURCES
 
     add_library (simple STATIC ${SOURCES})
 
+    # Regenerate version.f90 from git describe before the library compiles it, so
+    # the baked-in version string tracks the current HEAD (see top CMakeLists.txt).
+    add_dependencies(simple simple_version_gen)
+
     if(SIMPLE_ENABLE_CGAL)
         target_link_libraries(simple PUBLIC stl_wall_cgal)
     endif()

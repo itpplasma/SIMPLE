@@ -186,6 +186,41 @@ contains
     end do
   end subroutine raise
 
+  ! Metric-unit perpendicular direction for the CP gyration seed: the radial
+  ! covariant direction e_r = (1,0,0) raised to e_r^i = g^i1, projected
+  ! perpendicular to the field (subtract its h-parallel part using |h|^2=1), then
+  ! normalized in the metric so g_ij eperp^i eperp^j = 1. On the diagonal tokamak
+  ! (h_1 = 0, g^11 = 1) this reduces to eperp = (1,0,0). A fixed gyrophase: the
+  ! O(rho*) FLR offset of the seeded gyro-center is the physics, not an error.
+  subroutine perp_unit_dir(blk, eperp)
+    type(block_t), intent(in) :: blk
+    real(dp), intent(out) :: eperp(3)
+    real(dp) :: er(3), hcon(3), hpar, nrm
+    integer :: i, j
+
+    er = [blk%ginv(1,1), blk%ginv(2,1), blk%ginv(3,1)]   ! e_r^i = g^i1
+    call raise(blk%ginv, blk%hcov, hcon)                 ! h^i
+
+    ! Parallel component along h: (h_i e_r^i) with |h|^2 = h_i h^i = 1.
+    hpar = blk%hcov(1)*er(1) + blk%hcov(2)*er(2) + blk%hcov(3)*er(3)
+    do i = 1, 3
+      eperp(i) = er(i) - hpar*hcon(i)
+    end do
+
+    ! Normalize in the metric: |eperp|_g^2 = g_ij eperp^i eperp^j.
+    nrm = 0.0_dp
+    do i = 1, 3
+      do j = 1, 3
+        nrm = nrm + blk%g(i,j)*eperp(i)*eperp(j)
+      end do
+    end do
+    if (nrm > 0.0_dp) then
+      eperp = eperp/sqrt(nrm)
+    else
+      eperp = [1.0_dp, 0.0_dp, 0.0_dp]
+    end if
+  end subroutine perp_unit_dir
+
   ! Lagrangian gradient dL/dq_k at (vmid, midpoint block), general full metric:
   !   dL/dq_k = (m/2) g_ij,k vmid^i vmid^j + qc A_i,k vmid^i [- mu |B|,k].
   ! mu_active gates the Pauli +mu|B| term so MODEL_CP folds it out.
@@ -475,9 +510,11 @@ contains
     end do
   end subroutine grad_jacobian_tok
 
-  ! Initialize the 6D state. CP: vel=(v^r=sqrt(2 mu B/ (m g_rr)),0,0) so the
-  ! radial gyration energy is mu B; p=g_ij v^j + qc A. CPP-sym: vel along h;
-  ! CPP-var: vel=0, p=qc A, dpdt0=-mu dB.
+  ! Initialize the 6D state. CP: FULL velocity v^i = vpar0 h^i + vperp e_perp^i,
+  ! vperp = sqrt(2 mu B/m), e_perp the metric-unit radial direction projected
+  ! perpendicular to h (a fixed gyrophase); p = m g_ij v^j + qc A places the
+  ! gyro-center within O(rho*) of the GC start. CPP-sym: vel along h; CPP-var:
+  ! vel=0, p=qc A, dpdt0=-mu dB.
   subroutine cpp_canon_init(st, model, coord, x0, vpar0, vperp0, mu_in, &
                             mass, charge, dt, ro0_in)
     type(cpp_canon_state_t), intent(out) :: st
@@ -485,7 +522,7 @@ contains
     real(dp), intent(in) :: x0(3), vpar0, vperp0, mu_in, mass, charge, dt
     real(dp), intent(in), optional :: ro0_in
     type(block_t) :: blk
-    real(dp) :: vcon(3), qc
+    real(dp) :: vcon(3), eperp(3), qc, vperp
     integer :: i, j
 
     vcon = 0.0_dp
@@ -502,8 +539,17 @@ contains
 
     select case (model)
     case (MODEL_CP)
+      ! Full classical particle: resolve the gyration, so seed the full velocity.
+      ! mu from vperp0 (vperp = sqrt(2 mu B/m)); on the diagonal tokamak with
+      ! h_1 = 0 the perpendicular direction reduces to the bare radial seed
+      ! [vperp,0,0], so the COORD_TOK oracle is reproduced bit-for-bit.
       st%mu = mass*vperp0*vperp0/(2.0_dp*blk%Bmod)
-      vcon = [sqrt(blk%ginv(1,1)*2.0_dp*st%mu*blk%Bmod), 0.0_dp, 0.0_dp]
+      vperp = sqrt(2.0_dp*st%mu*blk%Bmod/mass)
+      call perp_unit_dir(blk, eperp)
+      call raise(blk%ginv, vpar0*blk%hcov, vcon)   ! parallel piece v_par^i
+      do i = 1, 3
+        vcon(i) = vcon(i) + vperp*eperp(i)         ! + perpendicular gyration
+      end do
     case (MODEL_CPP_SYM)
       st%mu = mu_in
       ! Parallel start: v^i = vpar0 g^ij h_j (raise the covariant field direction).

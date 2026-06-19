@@ -479,6 +479,19 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "integration"
         TIMEOUT 120)
+
+    # Genuine 6D full charged particle (orbit_model=ORBIT_CP6D) wired into the
+    # production alpha-loss pipeline through COORD_VMEC, validated against the
+    # production GC. The gyration is RESOLVED: empirically determines npoiper2 by
+    # energy conservation (sweep table), then checks gyro-center tracking of the
+    # GC, mu adiabatic invariance, energy bound, and s>=1 loss propagation.
+    add_executable(test_cp6d_vs_gc.x test_cp6d_vs_gc.f90)
+    target_link_libraries(test_cp6d_vs_gc.x simple)
+    add_test(NAME test_cp6d_vs_gc COMMAND test_cp6d_vs_gc.x)
+    set_tests_properties(test_cp6d_vs_gc PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "integration"
+        TIMEOUT 300)
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py

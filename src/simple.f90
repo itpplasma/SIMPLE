@@ -11,7 +11,8 @@ module simple
   use field, only : vmec_field_t
   use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t
   use orbit_cpp_canonical, only : cpp_canon_state_t, cpp_canon_init, &
-    cpp_canon_step, cpp_canon_to_gc, MODEL_CPP_SYM, COORD_CHARTMAP, COORD_VMEC
+    cpp_canon_step, cpp_canon_to_gc, MODEL_CP, MODEL_CPP_SYM, &
+    COORD_CHARTMAP, COORD_VMEC
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -205,6 +206,52 @@ contains
       ro0_in=ro0_bar)
     cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
   end subroutine init_cpp
+
+  subroutine init_cp(cpp, f, z0, dtaumin)
+    ! Initialize the genuine 6D classical charged particle (orbit_model=ORBIT_CP6D)
+    ! from the SAME (s,theta,phi,v/v0,lambda) GC start as init_sympl/init_cpp.
+    !
+    ! Same coordinate route, normalization, and metric as init_cpp (COORD_VMEC,
+    ! SIMPLE GC sqrt(2) convention, mass=1, qc=1/ro0_bar, dt=dtaumin/sqrt(2)) --
+    ! see init_cpp for the full rationale. The ONE physics difference: CP resolves
+    ! the gyration (MODEL_CP, no mu|B| term), so it needs the FULL velocity, not
+    ! just the parallel piece. cpp_canon_init seeds
+    !   v^i = vpar_bar h^i + vperp e_perp^i,   vperp = sqrt(2 mu_bar |B|),
+    ! with e_perp a fixed-gyrophase metric-unit direction perpendicular to h, and
+    ! p_i = g_ij v^j + A_i/ro0_bar. This places the gyro-center within O(rho*) of
+    ! the GC start; that FLR offset is the physics. Because the gyration is
+    ! resolved, the caller must run a gyro-resolving step (large npoiper2): the
+    ! gyroperiod in normalized tau is ~2 pi ro0_bar, while the step is
+    ! dtaumin/sqrt(2), so steps/gyration = npoiper2 sqrt(2) ro0_bar/rbig.
+    use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready, &
+      vmec_eval_field
+    type(cpp_canon_state_t), intent(out) :: cpp
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(in) :: dtaumin
+
+    real(dp) :: ro0_bar, x0(3), Acov(3), Bmod, dBmod(3), hcov(3), mu, vpar_bar, vperp_bar
+
+    if (.not. vmec_metric_ready()) call vmec_metric_attach()
+
+    x0(1) = min(max(z0(1), 0d0), 1d0)
+    x0(2) = z0(2)
+    x0(3) = z0(3)
+
+    call vmec_eval_field(x0, Acov, Bmod, dBmod, hcov)
+
+    mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/Bmod*2d0      ! mu by factor 2 (GC convention)
+    ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)
+    vpar_bar = z0(4)*z0(5)*dsqrt(2d0)                 ! vpar_bar = vpar/sqrt(T/m)
+    vperp_bar = dsqrt(2d0*mu*Bmod)                    ! vperp from the GC mu (sqrt(2) conv)
+
+    ! mass=1, ro0=ro0_bar: identical normalization to init_cpp; MODEL_CP folds out
+    ! the mu|B| term and resolves the gyration through the full seed velocity.
+    call cpp_canon_init(cpp, MODEL_CP, COORD_VMEC, x0, vpar0=vpar_bar, &
+      vperp0=vperp_bar, mu_in=mu, mass=1d0, charge=1d0, dt=dtaumin/dsqrt(2d0), &
+      ro0_in=ro0_bar)
+    cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
+  end subroutine init_cp
 
   subroutine orbit_timestep_cpp_canonical(cpp, f, z, ierr)
     ! Advance the genuine 6D CPP one normalized step (dtaumin/sqrt(2)) and write

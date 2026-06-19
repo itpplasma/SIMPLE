@@ -12,7 +12,12 @@ enable_language(C Fortran)
 # Optional: enable CGAL-based STL wall intersection support.
 option(SIMPLE_ENABLE_CGAL "Enable CGAL STL wall intersection support" OFF)
 
-# Get version from git describe (format: v1.5.2-42-g62fed6e[-dirty])
+# Version from git describe (format: v1.5.2-42-g62fed6e[-dirty]). Generated at
+# configure time so the file exists for the first build, AND regenerated at BUILD
+# time by an always-run target (cmake/GenerateVersion.cmake) so the baked-in
+# string follows the current HEAD/dirty state instead of going stale after a
+# commit without a reconfigure. The script rewrites version.f90 only when the
+# describe output actually changes, so an unchanged HEAD triggers no recompile.
 execute_process(
     COMMAND git describe --tags --dirty --always
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -25,11 +30,21 @@ if(NOT SIMPLE_VERSION)
 endif()
 message(STATUS "SIMPLE version: ${SIMPLE_VERSION}")
 
-# Generate version.f90 from template
 configure_file(
     ${CMAKE_SOURCE_DIR}/src/version.f90.in
     ${CMAKE_BINARY_DIR}/version.f90
     @ONLY
+)
+
+add_custom_target(simple_version_gen ALL
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_SOURCE_DIR}/src/version.f90.in
+        -DDST=${CMAKE_BINARY_DIR}/version.f90
+        -DGIT_DIR=${CMAKE_SOURCE_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/GenerateVersion.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/version.f90
+    COMMENT "Refreshing SIMPLE version from git describe"
+    VERBATIM
 )
 
 add_compile_options(-g)

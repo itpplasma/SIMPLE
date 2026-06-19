@@ -48,7 +48,8 @@ module params
     ! Orbit model selector: 0 guiding-center (default, symplectic GC path),
     ! 1 Pauli/CPP 4D flux-canonical, 2 Boris full orbit, 3 implicit-midpoint full
     ! orbit, 4 Cartesian 6D Pauli (research), 5 genuine 6D canonical CPP on the
-    ! production Boozer/chartmap chart (ORBIT_CPP6D). See src/orbit_full.f90.
+    ! production COORD_VMEC chart (ORBIT_CPP6D), 6 genuine 6D full charged particle
+    ! on COORD_VMEC, gyro-resolved (ORBIT_CP6D). See src/orbit_full.f90.
     integer :: orbit_model = 0
 
     integer :: kpart = 0 ! progress counter for particles

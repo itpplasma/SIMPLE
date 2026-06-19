@@ -633,8 +633,13 @@ from metric compatibility, `g_{ij,k} = g_il Gamma^l_jk + g_jl Gamma^l_ik`. The
 covariant `A_i` and `|B|` come from SIMPLE's native VMEC field
 (`vmec_field_evaluate`), with `dA` and `d|B|` by central difference. The metric
 is consistent with the field: the covariant unit field obeys
-`h_i g^ij h_j = |h|^2 = 1` to central-difference accuracy (the libneo metric
-gives `g g^-1 = I` to `~1e-15`; the FD Christoffel sets the residual `~1e-2`).
+`h_i g^ij h_j = |h|^2 = 1` to about `1e-2` (e.g. `0.998`, `1.008`, `0.946` at
+`s = 0.3, 0.5, 0.7`). The libneo metric inverts exactly, `|g g^-1 - I| ~ 6e-16`,
+so the residual is not a metric defect. It comes from the source mismatch: `h_i`
+is built from SIMPLE's native VMEC field `B_i`, while `g^ij` is libneo's
+independent metric, and the two splined representations of the same equilibrium
+differ at the percent level. (On the broken chartmap the same invariant was
+`O(nfp^2)`, hundreds, not `1.009`.)
 This block is host-side: libneo's metric is `class()`-dispatched and reads 3D
 splines, so it cannot run under `!$acc routine seq`.
 
@@ -648,7 +653,8 @@ chartmap Cartesian `x/y/z` with a periodic fit over one field period, but for
 `nfp > 1` the Cartesian `x,y` are not field-period-periodic (they rotate by
 `2pi/nfp`), so the periodic spline destroys the secular toroidal rotation: the
 analytic spline `e_phi` loses its `~R` magnitude and the geometric metric gives
-`h_i g^ij h_j ~ nfp^2` instead of 1. The defect is upstream in libneo's
+`h_i g^ij h_j ~ 228..472` (`O(10^2)`) instead of 1. The defect is upstream in
+libneo's
 Cartesian-storage path and in the storage convention itself, so it cannot be
 repaired in the SIMPLE metric post-processor. A consistent chartmap route needs
 an R,Z (cylindrical) Boozer-chartmap representation in libneo: R and Z are
@@ -761,6 +767,42 @@ bounded, both orbits confined with overlapping radial (`s`) bands, and the
 on the same equilibrium gives a CPP6D confined fraction within `O(rho*)` of the
 GC one (`0.91` vs `0.97` at `trace_time = 1e-3 s`), the genuine-6D
 finite-Larmor difference over the GC.
+
+The full classical charged particle is wired the same way as
+`orbit_model = ORBIT_CP6D` (6), through `COORD_VMEC`. `init_cp` reuses the
+`init_cpp` sqrt(2) block and normalization (`mass = 1`, `qc = sqrt(2)/ro0`,
+`dt = dtaumin/sqrt(2)`) but seeds `MODEL_CP`, which resolves the gyration and
+drops the `mu|B|` term. So it needs the FULL velocity, not just the parallel
+piece: `v^i = vpar_bar h^i + vperp e_perp^i` with `vperp = sqrt(2 mu_bar |B|)`
+and `e_perp` a fixed-gyrophase metric-unit direction perpendicular to `h` (the
+raised radial direction with its `h`-parallel part removed). The seeded
+gyro-center sits an `O(rho*)` finite-Larmor offset off the GC start; that offset
+is the physics. `p_i = g_ij v^j + A_i/ro0_bar` as for `MODEL_CPP_SYM`. On the
+diagonal tokamak (`h_1 = 0`) the perpendicular direction reduces to the bare
+radial seed `[vperp, 0, 0]`, so the `COORD_TOK` oracle still reproduces bit for
+bit.
+
+Because the gyration is resolved, `ORBIT_CP6D` cannot run the bare GC macrostep;
+it must oversample the gyroperiod. The canonical cyclotron frequency is
+`Omega = qc |B| = |B|/ro0_bar`, so the gyroperiod in normalized tau is
+`2 pi ro0_bar/|B|`, while the step is `dtaumin/sqrt(2) = 2 pi rbig/(npoiper2
+sqrt(2))`. Steps per gyration is therefore `npoiper2 ro0/(rbig |B|)`, i.e. the
+resolution scales as `1/rho*`. On `test/test_data/wout.nc` (`ro0 = 2.70e5 cm`,
+`rbig = 1.02e3 cm`, `|B| = 5.60e4 G`, `rho* = ro0/(rbig |B|) = 4.7e-3`, gyroperiod
+`21.4 tau`) a sweep of `npoiper2` shows the energy error fall monotonically as
+the gyration is resolved: `max|dE/E0| = 0.31, 0.11, 0.033, 0.0087, 0.0022,
+0.00056` for `npoiper2 = 512, 1024, 2048, 4096, 8192, 16384` (2.4 to 77
+steps/gyration). It crosses below `1e-3` at `npoiper2 = 16384` (77
+steps/gyration), the required resolution there. A W7-X-class reactor case has a
+similar `rho* ~ 1/200`, so the same `npoiper2 ~ 1.6e4` order holds. At that
+resolution a single CP orbit conserves energy (`max|dE/E0| = 6e-4`), its
+gyro-center (running gyro-average of `s`) tracks the GC surface to `O(rho*)`, and
+the gyro-averaged magnetic moment shows no secular drift (the instantaneous
+`mu = vperp^2/(2|B|)` breathes at the gyrofrequency, `~8%`, which is not the
+invariant). `ORBIT_CP6D` shares `init_sympl` seeding,
+`orbit_timestep_cpp_canonical` (it dispatches on `cpp%model`), the loss
+write-back, and the `swcoll`/wall/classification guards with `ORBIT_CPP6D`;
+`test/tests/test_cp6d_vs_gc.f90` runs the sweep and the validation gates.
 
 ---
 

@@ -2,7 +2,7 @@ module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
     use omp_lib
     use util, only: sqrt2
-    use simple, only: init_vmec, init_sympl, init_cpp, tracer_t
+    use simple, only: init_vmec, init_sympl, init_cpp, init_cp, tracer_t
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
@@ -107,12 +107,13 @@ contains
         ! equilibrium splined, not a standalone Boozer-chartmap input. Checked
         ! once here (is_boozer_chartmap reads NetCDF and must not run per-thread).
         block
-            use orbit_full, only: ORBIT_CPP6D
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
             use params, only: orbit_model
-            if (orbit_model == ORBIT_CPP6D .and. chartmap_mode) error stop &
-                'orbit_model=ORBIT_CPP6D requires a VMEC-backed canonical field '// &
-                '(the Boozer-chartmap Cartesian metric is inconsistent; see '// &
-                'DOC/coordinates-and-fields.md)'
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+                .and. chartmap_mode) error stop &
+                'orbit_model=ORBIT_CPP6D/ORBIT_CP6D requires a VMEC-backed '// &
+                'canonical field (the Boozer-chartmap Cartesian metric is '// &
+                'inconsistent; see DOC/coordinates-and-fields.md)'
         end block
 
         if (isw_field_type == TEST) then
@@ -157,10 +158,11 @@ contains
         ! Build the COORD_VMEC metric once (allocates a module coordinate system),
         ! so per-thread init_cpp finds it ready and never races on the attach.
         block
-            use orbit_full, only: ORBIT_CPP6D
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
             use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready
             use params, only: orbit_model
-            if (orbit_model == ORBIT_CPP6D .and. .not. vmec_metric_ready()) then
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+                .and. .not. vmec_metric_ready()) then
                 call vmec_metric_attach
                 call print_phase_time('COORD_VMEC 6D metric attached')
             end if
@@ -844,20 +846,26 @@ contains
 
         if (integmode > 0) then
             block
-                use orbit_full, only: ORBIT_CPP6D
+                use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
                 use params, only: orbit_model
-                if (orbit_model == ORBIT_CPP6D) then
-                    if (wall_enabled) error stop 'orbit_model=ORBIT_CPP6D with '// &
-                        'wall_input is not supported (wall path is GC-only)'
-                    if (swcoll) error stop 'orbit_model=ORBIT_CPP6D with swcoll '// &
-                        'is not supported (fixed-mu 6D start; collisions perturb mu)'
+                if (orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) then
+                    if (wall_enabled) error stop 'orbit_model=ORBIT_CPP6D/CP6D '// &
+                        'with wall_input is not supported (wall path is GC-only)'
+                    if (swcoll) error stop 'orbit_model=ORBIT_CPP6D/CP6D with '// &
+                        'swcoll is not supported (fixed-mu 6D start; collisions '// &
+                        'perturb mu)'
                     ! The chartmap-vs-VMEC chart guard runs once in run(); the 6D
-                    ! CPP loss path is COORD_VMEC (see init_cpp). init_sympl still
-                    ! runs to seed anorb%f and compute the GC pitch-angle params
-                    ! below from the same start as the 6D wire.
+                    ! loss path is COORD_VMEC (see init_cpp/init_cp). init_sympl
+                    ! still runs to seed anorb%f and compute the GC pitch-angle
+                    ! params below from the same start as the 6D wire. CPP6D seeds
+                    ! the Pauli state (mu|B|); CP6D seeds the full charged particle.
                     call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
                         integmode)
-                    call init_cpp(anorb%cpp, anorb%f, z, dtaumin)
+                    if (orbit_model == ORBIT_CP6D) then
+                        call init_cp(anorb%cpp, anorb%f, z, dtaumin)
+                    else
+                        call init_cpp(anorb%cpp, anorb%f, z, dtaumin)
+                    end if
                 else
                     call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
                         integmode)
@@ -923,7 +931,7 @@ contains
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
-        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D
+        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D, ORBIT_CP6D
         use simple, only: orbit_timestep_cpp_canonical
         use params, only: orbit_model
 
@@ -957,10 +965,12 @@ contains
                     ! loud rather than silently tracing the GC instead.
                     error stop 'orbit_model=ORBIT_PAULI6D is a Cartesian '// &
                         'research model; not available in the VMEC macrostep'
-                case (ORBIT_CPP6D)
-                    ! Genuine 6D canonical CPP on the production chartmap chart.
-                    ! The wrapper advances one normalized step and writes z(1:5)
-                    ! directly (no to_standard_z_coordinates).
+                case (ORBIT_CPP6D, ORBIT_CP6D)
+                    ! Genuine 6D canonical pusher on the production COORD_VMEC
+                    ! chart: CPP6D the Pauli particle, CP6D the full charged
+                    ! particle. Both share the wrapper (it dispatches on
+                    ! anorb%cpp%model); it advances one normalized step and writes
+                    ! z(1:5) directly (no to_standard_z_coordinates).
                     call orbit_timestep_cpp_canonical(anorb%cpp, anorb%f, z, &
                         ierr_orbit)
                 case default

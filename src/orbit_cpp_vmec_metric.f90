@@ -21,6 +21,7 @@ module orbit_cpp_vmec_metric
   ! central-difference convention orbit_cpp_canonical uses for the tokamak block).
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use libneo_coordinates_base, only: coordinate_system_t
+  use field_can_base, only: n_field_evaluations
   implicit none
   private
 
@@ -96,6 +97,10 @@ contains
     real(dp) :: up(3), um(3), bp, bm
     integer :: k, i
 
+    ! Count one 6D field evaluation per primary call (mirrors field_can: one count
+    ! per evaluate). The FD-perturbation vmec_bmod calls below are not counted, the
+    ! same convention the field_can evaluators use for their derivative stencils.
+    n_field_evaluations = n_field_evaluations + 1
     call native_field(u, Acov, Bctr, Bcov, Bmod)
     call cs%metric_tensor(u, g, ginv, sqrtg)
     ! h_i = B_i/|B| (covariant unit field; B_i already covariant from VMEC).
