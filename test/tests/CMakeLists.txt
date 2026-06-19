@@ -468,17 +468,15 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "unit")
 
     # Genuine 6D canonical CPP (orbit_model=ORBIT_CPP6D) wired into the production
-    # Boozer/chartmap pipeline: drives init_field + init_cpp + the production
-    # wrapper in normalized time and checks the energy/mu-conservation gate, the
-    # s>=1 loss propagation, and the z(1:5) write-back. Uses the generated
-    # analytic-tokamak Boozer chartmap.
+    # alpha-loss pipeline through COORD_VMEC, validated against the production GC
+    # on the same real VMEC equilibrium (wout.nc). Asserts COORD_VMEC metric
+    # consistency (h_i g^ij h_j = 1, the check the chartmap failed), energy/mu
+    # conservation, GC/6D flux-band overlap, and s>=1 loss propagation.
     add_executable(test_cpp6d_vs_gc.x test_cpp6d_vs_gc.f90)
     target_link_libraries(test_cpp6d_vs_gc.x simple)
-    add_dependencies(test_cpp6d_vs_gc.x generate_test_boozer_chartmap)
     add_test(NAME test_cpp6d_vs_gc COMMAND test_cpp6d_vs_gc.x)
     set_tests_properties(test_cpp6d_vs_gc PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "integration"
         TIMEOUT 120)
     add_test(NAME test_chartmap_startmode1

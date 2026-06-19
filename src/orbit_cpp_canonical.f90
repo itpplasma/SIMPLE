@@ -330,16 +330,27 @@ contains
     end if
   end subroutine jacobian
 
-  ! Finite-difference Jacobian of the residual (host path).
+  ! Finite-difference Jacobian of the residual (host path). The COORD_VMEC
+  ! production wire runs in physical CGS, where the state is badly scaled: the
+  ! angles q (1:3) are O(1) while the covariant momenta p (4:6) are O(m v g) ~
+  ! 1e-8. A single absolute FD step would perturb p by many times its own
+  ! magnitude and wreck the p-columns, so the step is per-component RELATIVE to
+  ! the variable's own scale (col_scale), with an absolute floor only where the
+  ! variable itself is near zero.
   subroutine jacobian_fd(st, zold, z, jac)
     type(cpp_canon_state_t), intent(in) :: st
     real(dp), intent(in) :: zold(6), z(6)
     real(dp), intent(out) :: jac(6,6)
-    real(dp) :: zp(6), zm(6), rp(6), rm(6), h
+    real(dp) :: zp(6), zm(6), rp(6), rm(6), h, col_scale(6)
     integer :: j
 
+    ! Angles: O(1) scale. Momenta: their own magnitude (mean over the three p's
+    ! as a robust floor so a single small p does not collapse its column step).
+    col_scale(1:3) = 1.0_dp
+    col_scale(4:6) = max((abs(z(4)) + abs(z(5)) + abs(z(6)))/3.0_dp, 1.0e-30_dp)
+
     do j = 1, 6
-      h = 1.0e-7_dp*max(abs(z(j)), 1.0_dp)
+      h = 1.0e-7_dp*max(abs(z(j)), col_scale(j))
       zp = z; zm = z; zp(j) = zp(j) + h; zm(j) = zm(j) - h
       call residual(st, zold, zp, rp)
       call residual(st, zold, zm, rm)
@@ -520,15 +531,22 @@ contains
     integer, intent(out) :: ierr
     integer, parameter :: maxit = 50
     real(dp), parameter :: atol = 1.0e-13_dp, rtol = 1.0e-12_dp
-    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), reltol(6)
+    ! A central-difference Jacobian (the COORD_VMEC host path) is accurate to only
+    ! ~1e-7, so the Newton step cannot shrink below that relative floor and the
+    ! analytic-path rtol=1e-12 is unreachable. Use an FD-matched step tolerance
+    ! there; the analytic COORD_TOK/CHARTMAP path keeps the tight rtol unchanged.
+    real(dp), parameter :: rtol_fd = 1.0e-8_dp
+    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), reltol(6), steptol
     type(block_t) :: blk
     real(dp) :: vmid(3), qc
     integer :: kit, i, info, j
-    logical :: res_conv, step_conv
+    logical :: res_conv, step_conv, is_fd
 
     zold = st%z
     z = zold
     ierr = 0
+    is_fd = (st%coord == COORD_VMEC)
+    steptol = merge(rtol_fd, rtol, is_fd)
 
     do kit = 1, maxit
       if (z(1) <= 0.0_dp) z(1) = 1.0e-3_dp
@@ -552,9 +570,11 @@ contains
       res_conv = .true.; step_conv = .true.
       do i = 1, 6
         if (abs(fvec(i)) >= atol) res_conv = .false.
-        if (abs(dz(i)) >= rtol*reltol(i)) step_conv = .false.
+        if (abs(dz(i)) >= steptol*reltol(i)) step_conv = .false.
       end do
-      if (res_conv .or. step_conv) exit
+      ! The FD path converges on the step (its residual cannot reach atol with a
+      ! central-difference Jacobian); the analytic path may converge on either.
+      if (step_conv .or. (res_conv .and. .not. is_fd)) exit
     end do
 
     if (kit > maxit) ierr = 3

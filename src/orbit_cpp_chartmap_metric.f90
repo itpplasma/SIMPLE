@@ -75,10 +75,10 @@ contains
     real(dp), intent(in) :: u(3)
     real(dp), intent(out) :: Acov(3), dA(3,3), Bmod, dBmod(3), hcov(3)
     type(field_can_t) :: f
-    real(dp) :: rho, drho_ds
+    real(dp) :: rho, ds_drho
 
     rho = u(1)
-    drho_ds = 2.0_dp*rho   ! ds/drho = 2 rho (s = rho^2)
+    ds_drho = 2.0_dp*rho   ! ds/drho = 2 rho (s = rho^2); chain rule dF/drho = ds/drho dF/ds
 
     call eval_field(f, rho*rho, u(2), u(3), 0)
 
@@ -89,15 +89,15 @@ contains
     ! dA(i,k) = dA_i/du_k. A_s = 0 (row 1 all zero). Rows 2,3 (A_theta, A_phi):
     ! radial column k=1 scales by ds/drho; angular columns unchanged.
     dA = 0.0_dp
-    dA(2,1) = f%dAth(1)*drho_ds
+    dA(2,1) = f%dAth(1)*ds_drho
     dA(2,2) = f%dAth(2)
     dA(2,3) = f%dAth(3)
-    dA(3,1) = f%dAph(1)*drho_ds
+    dA(3,1) = f%dAph(1)*ds_drho
     dA(3,2) = f%dAph(2)
     dA(3,3) = f%dAph(3)
 
     ! d|B|/du_k: radial column scales, angular columns unchanged.
-    dBmod(1) = f%dBmod(1)*drho_ds
+    dBmod(1) = f%dBmod(1)*ds_drho
     dBmod(2) = f%dBmod(2)
     dBmod(3) = f%dBmod(3)
   end subroutine chartmap_eval_field

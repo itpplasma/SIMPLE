@@ -11,7 +11,7 @@ module simple
   use field, only : vmec_field_t
   use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t
   use orbit_cpp_canonical, only : cpp_canon_state_t, cpp_canon_init, &
-    cpp_canon_step, cpp_canon_to_gc, MODEL_CPP_SYM, COORD_CHARTMAP
+    cpp_canon_step, cpp_canon_to_gc, MODEL_CPP_SYM, COORD_CHARTMAP, COORD_VMEC
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -153,36 +153,55 @@ contains
 
   subroutine init_cpp(cpp, f, z0, dtaumin)
     ! Initialize the genuine 6D canonical CPP state (orbit_model=ORBIT_CPP6D) from
-    ! the SAME (s,theta,phi,vpar,mu) GC start as init_sympl, in NORMALIZED TIME.
-    ! Replicates the GC sqrt(2) convention verbatim (init_sympl lines above), then
-    ! maps onto the dimensionless 6D Hamiltonian on the production Boozer/chartmap
-    ! chart: the 6D state runs in u=(rho,theta_B,phi_B) with rho=sqrt(s) so the
-    ! libneo chartmap metric is native; field_can supplies A_i,|B|,h_i in s=rho^2.
-    ! The magnetic coupling qc=1/ro0_bar=sqrt(2)/ro0 is threaded via st%ro0=ro0_bar,
-    ! so the canonical momentum p_i=vpar*h_i+A_i/ro0_bar matches the GC pphi seed.
+    ! the SAME (s,theta,phi,v/v0,lambda) GC start as init_sympl.
+    !
+    ! Coordinate route: REAL VMEC flux coordinates (COORD_VMEC). The diagnosis on
+    ! the Cartesian-storage Boozer chartmap (DOC/coordinates-and-fields.md, "6D
+    ! canonical CPP") found its libneo periodic-Cartesian spline destroys the
+    ! secular toroidal rotation for nfp>1, so the spline metric is inconsistent
+    ! with the Boozer covariant field (h_i g^ij h_j ~ nfp^2, not 1). The VMEC
+    ! flux metric from libneo is consistent (test_cpp_vmec: |g g^-1 - I| < 1e-10,
+    ! h_i g^ij h_j ~ 1 to FD accuracy), so the production loss path runs there. The
+    ! 6D state runs natively in u=(s,vartheta,varphi); s is the chart-independent
+    ! flux label, so the s>=1 loss test and the s-binned confined fraction carry
+    ! over even though Boozer and VMEC angles differ.
+    !
+    ! Units: the SIMPLE GC normalization (same as init_sympl). With the CONSISTENT
+    ! VMEC metric the covariant unit field obeys h_i g^ij h_j = |h|^2 = 1, so the
+    ! 6D Hamiltonian H = (1/2m)(p-qcA)g^ij(p-qcA) + mu|B| reduces to the GC
+    ! H = vpar_bar^2/2 + mu_bar|B| with mass=1 and the seed p_i = vpar_bar h_i +
+    ! A_i/ro0_bar: along the field (p-qcA) = vpar_bar h, so the kinetic term is
+    ! (vpar_bar^2/2m)|h|^2 = vpar_bar^2/2. (This identity FAILED on the chartmap,
+    ! whose |h|^2 was ~nfp^2.) Keeping mass=1 also keeps the velocities O(vpar_bar)
+    ! ~ O(1), so the canonical-midpoint Newton stays well conditioned -- physical
+    ! CGS mass ~ 1e-24 would blow up v^i = g^ij(...)/m and wreck the solve.
+    ! qc = 1/ro0_bar = sqrt(2)/ro0, dt = dtaumin/sqrt(2): both identical to GC.
+    use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready, &
+      vmec_eval_field
     type(cpp_canon_state_t), intent(out) :: cpp
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
 
-    real(dp) :: ro0_bar, x0(3)
+    real(dp) :: ro0_bar, x0(3), Acov(3), Bmod, dBmod(3), hcov(3), mu, vpar_bar
 
-    call eval_field(f, z0(1), z0(2), z0(3), 0)
+    if (.not. vmec_metric_ready()) call vmec_metric_attach()
 
-    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 (GC convention)
-    ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)
-    f%vpar = z0(4)*z0(5)*dsqrt(2d0)                   ! vpar_bar = vpar/sqrt(T/m)
-
-    ! 6D state in the metric chart: u=(rho,theta_B,phi_B), rho=sqrt(s).
-    x0(1) = dsqrt(max(z0(1), 0d0))
+    ! 6D state in the VMEC flux chart: u=(s,vartheta,varphi), s direct (no rho).
+    x0(1) = min(max(z0(1), 0d0), 1d0)
     x0(2) = z0(2)
     x0(3) = z0(3)
 
-    ! mass=charge=1 (thesis e=m=1); dt=dtaumin/sqrt(2) (SAME as GC).
-    ! st%ro0=ro0_bar gives qc=1/ro0_bar so p_i seeds match the GC pphi convention;
-    ! p_s carries only the O(rho*) g_si v^i metric term (the genuine 6D start).
-    call cpp_canon_init(cpp, MODEL_CPP_SYM, COORD_CHARTMAP, x0, vpar0=f%vpar, &
-      vperp0=0d0, mu_in=f%mu, mass=1d0, charge=1d0, dt=dtaumin/dsqrt(2d0), &
+    call vmec_eval_field(x0, Acov, Bmod, dBmod, hcov)
+
+    mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/Bmod*2d0      ! mu by factor 2 (GC convention)
+    ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)
+    vpar_bar = z0(4)*z0(5)*dsqrt(2d0)                 ! vpar_bar = vpar/sqrt(T/m)
+
+    ! mass=1 (see header): the consistent |h|^2=1 metric makes the GC reduction
+    ! exact; st%ro0=ro0_bar gives qc=1/ro0_bar so p_i seeds match the GC pphi.
+    call cpp_canon_init(cpp, MODEL_CPP_SYM, COORD_VMEC, x0, vpar0=vpar_bar, &
+      vperp0=0d0, mu_in=mu, mass=1d0, charge=1d0, dt=dtaumin/dsqrt(2d0), &
       ro0_in=ro0_bar)
     cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
   end subroutine init_cpp
@@ -205,19 +224,24 @@ contains
     end if
 
     call cpp_canon_step(cpp, ierr)
-    ! cpp ierr: 2 = rho>=1 (s>=1 loss), 1 = LU fail, 3 = non-converge. All map to
+    ! cpp ierr: 2 = z(1)>=1 (s>=1 loss), 1 = LU fail, 3 = non-converge. All map to
     ! a nonzero orbit error consistent with the sympl loss/abort semantics.
     if (ierr /= 0) return
 
-    ! Write back z. State runs in rho; output uses s=rho^2 (loss test, classifier).
+    ! Write back z. COORD_VMEC runs in s directly; COORD_CHARTMAP in rho (s=rho^2).
+    ! z(4)=pabs is the conserved normalized speed; z(5)=lambda (vpar is the
+    ! normalized vpar_bar in both wires) so classification/output read z(4:5) the
+    ! same as to_standard_z_coordinates.
     call cpp_canon_to_gc(cpp, r, th, ph, vpar)
-    z(1) = cpp%z(1)**2   ! s = rho^2
+    z(4) = cpp%pabs
     z(2) = cpp%z(2)
     z(3) = cpp%z(3)
-    ! z(4)=pabs is the normalized speed (conserved); z(5)=vpar/(pabs*sqrt2) matches
-    ! to_standard_z_coordinates so classification/output read z(4:5) unchanged.
-    z(4) = cpp%pabs
     z(5) = vpar/(z(4)*dsqrt(2d0))
+    if (cpp%coord == COORD_CHARTMAP) then
+      z(1) = cpp%z(1)**2   ! s = rho^2 (chartmap chart)
+    else
+      z(1) = cpp%z(1)      ! s direct (VMEC flux chart)
+    end if
   end subroutine orbit_timestep_cpp_canonical
 
   subroutine timestep(self, s, th, ph, lam, ierr)

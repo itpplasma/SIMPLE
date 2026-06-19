@@ -99,6 +99,22 @@ contains
             chartmap_mode = is_boozer_chartmap(field_input)
         end if
 
+        ! The 6D CPP loss path runs in REAL VMEC flux coordinates (COORD_VMEC),
+        ! the only chart whose libneo metric is consistent with the covariant
+        ! field (h_i g^ij h_j = 1). The Cartesian-storage Boozer chartmap is not
+        ! (its periodic-Cartesian spline destroys the secular toroidal rotation
+        ! for nfp>1); see DOC/coordinates-and-fields.md. So CPP6D needs the VMEC
+        ! equilibrium splined, not a standalone Boozer-chartmap input. Checked
+        ! once here (is_boozer_chartmap reads NetCDF and must not run per-thread).
+        block
+            use orbit_full, only: ORBIT_CPP6D
+            use params, only: orbit_model
+            if (orbit_model == ORBIT_CPP6D .and. chartmap_mode) error stop &
+                'orbit_model=ORBIT_CPP6D requires a VMEC-backed canonical field '// &
+                '(the Boozer-chartmap Cartesian metric is inconsistent; see '// &
+                'DOC/coordinates-and-fields.md)'
+        end block
+
         if (isw_field_type == TEST) then
             ! TEST field uses analytic tokamak - no VMEC needed for sampling
             call init_magfie(TEST)
@@ -137,6 +153,18 @@ contains
             call init_bminmax
             call print_phase_time('Bmin/Bmax initialization completed')
         end if
+
+        ! Build the COORD_VMEC metric once (allocates a module coordinate system),
+        ! so per-thread init_cpp finds it ready and never races on the attach.
+        block
+            use orbit_full, only: ORBIT_CPP6D
+            use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready
+            use params, only: orbit_model
+            if (orbit_model == ORBIT_CPP6D .and. .not. vmec_metric_ready()) then
+                call vmec_metric_attach
+                call print_phase_time('COORD_VMEC 6D metric attached')
+            end if
+        end block
 
         call init_counters
         call print_phase_time('Counter initialization completed')
@@ -817,18 +845,16 @@ contains
         if (integmode > 0) then
             block
                 use orbit_full, only: ORBIT_CPP6D
-                use orbit_cpp_chartmap_metric, only: chartmap_metric_active
                 use params, only: orbit_model
                 if (orbit_model == ORBIT_CPP6D) then
                     if (wall_enabled) error stop 'orbit_model=ORBIT_CPP6D with '// &
                         'wall_input is not supported (wall path is GC-only)'
                     if (swcoll) error stop 'orbit_model=ORBIT_CPP6D with swcoll '// &
                         'is not supported (fixed-mu 6D start; collisions perturb mu)'
-                    if (.not. chartmap_metric_active()) error stop &
-                        'orbit_model=ORBIT_CPP6D requires the chartmap reference '// &
-                        'chart (no matching metric for generic BOOZER-on-VMEC)'
-                    ! init_sympl still runs to seed anorb%f and compute the GC
-                    ! pitch-angle params below from the same start as the 6D wire.
+                    ! The chartmap-vs-VMEC chart guard runs once in run(); the 6D
+                    ! CPP loss path is COORD_VMEC (see init_cpp). init_sympl still
+                    ! runs to seed anorb%f and compute the GC pitch-angle params
+                    ! below from the same start as the 6D wire.
                     call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
                         integmode)
                     call init_cpp(anorb%cpp, anorb%f, z, dtaumin)

@@ -24,7 +24,7 @@ module orbit_cpp_vmec_metric
   implicit none
   private
 
-  public :: vmec_metric_init, vmec_metric_ready
+  public :: vmec_metric_init, vmec_metric_attach, vmec_metric_ready
   public :: vmec_eval_metric, vmec_eval_field, vmec_bmod
 
   class(coordinate_system_t), allocatable :: cs
@@ -33,11 +33,11 @@ module orbit_cpp_vmec_metric
 contains
 
   ! Load VMEC splines from a wout file and build the libneo VMEC coordinate
-  ! system. Idempotent guard via vmec_metric_ready.
+  ! system. Idempotent guard via vmec_metric_ready. Stand-alone entry for tests
+  ! that have not already splined a VMEC equilibrium.
   subroutine vmec_metric_init(wout_file)
     use new_vmec_stuff_mod, only: netcdffile, multharm, ns_s, ns_tp
     use spline_vmec_sub, only: spline_vmec_data
-    use libneo_coordinates_vmec, only: make_vmec_coordinate_system
     character(*), intent(in) :: wout_file
 
     netcdffile = wout_file
@@ -45,10 +45,19 @@ contains
     ns_tp = 5
     multharm = 3
     call spline_vmec_data
+    call vmec_metric_attach
+  end subroutine vmec_metric_init
+
+  ! Build the libneo VMEC coordinate system from VMEC splines that the caller has
+  ! already loaded (production init_vmec/init_field). No re-splining, so the
+  ! production ns_s/ns_tp/multharm and the equilibrium scaling are preserved.
+  subroutine vmec_metric_attach
+    use libneo_coordinates_vmec, only: make_vmec_coordinate_system
+
     if (allocated(cs)) deallocate(cs)
     call make_vmec_coordinate_system(cs)
     ready = .true.
-  end subroutine vmec_metric_init
+  end subroutine vmec_metric_attach
 
   logical function vmec_metric_ready()
     vmec_metric_ready = ready
