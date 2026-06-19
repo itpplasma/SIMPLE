@@ -623,6 +623,16 @@ target_link_libraries(test_cpp_canonical.x simple)
 add_test(NAME test_cpp_canonical COMMAND test_cpp_canonical.x)
 set_tests_properties(test_cpp_canonical PROPERTIES LABELS "unit" TIMEOUT 120)
 
+# Same generalized full-metric 6D integrator on REAL VMEC flux coordinates
+# (test_data/wout.nc), with the libneo metric/Christoffel (#322) and SIMPLE's
+# native VMEC field. Asserts symplectic energy conservation (CP) and that the
+# big-step CPP stays on a bounded radial band (GC banana confinement signature).
+add_executable(test_cpp_vmec.x test_cpp_vmec.f90)
+target_link_libraries(test_cpp_vmec.x simple)
+add_test(NAME test_cpp_vmec COMMAND test_cpp_vmec.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_cpp_vmec PROPERTIES LABELS "unit" TIMEOUT 120)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)

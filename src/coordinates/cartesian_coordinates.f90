@@ -15,6 +15,7 @@ module cartesian_coordinates
         procedure :: evaluate_cyl => cartesian_evaluate_cyl
         procedure :: covariant_basis => cartesian_covariant_basis
         procedure :: metric_tensor => cartesian_metric_tensor
+        procedure :: christoffel => cartesian_christoffel
         procedure :: from_cyl => cartesian_from_cyl
     end type cartesian_coordinate_system_t
 
@@ -65,6 +66,15 @@ contains
         ginv = g
         sqrtg = 1.0_dp
     end subroutine cartesian_metric_tensor
+
+    subroutine cartesian_christoffel(self, u, Gamma)
+        !> Flat Cartesian: all Christoffel symbols vanish.
+        class(cartesian_coordinate_system_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: Gamma(3, 3, 3)
+
+        Gamma = 0.0_dp
+    end subroutine cartesian_christoffel
 
     subroutine cartesian_from_cyl(self, xcyl, u, ierr)
         !> Convert cylindrical to Cartesian.

@@ -164,6 +164,15 @@ else()
     find_package(LAPACK REQUIRED)
 endif()
 
+# The 6D full-orbit / CPP integrators need the metric tensor + Christoffel
+# symbols from libneo (issue #322). Until that merges to libneo main, pin the
+# fetched libneo to the feature branch by default. Override with -DLIBNEO_REF=...
+# (e.g. main once merged) or -DLIBNEO_SOURCE_DIR=... for a local checkout.
+if(NOT DEFINED LIBNEO_REF AND NOT DEFINED LIBNEO_SOURCE_DIR)
+    set(LIBNEO_REF "feature/metric-christoffel" CACHE STRING
+        "libneo git ref to fetch (branch, tag, or SHA)")
+endif()
+
 find_or_fetch(libneo)
 
 # Consume the NetCDF stack libneo resolved (see comment near the top). In the
