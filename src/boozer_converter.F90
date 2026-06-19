@@ -1311,7 +1311,7 @@ contains
         end if
 
         order = [ns_s_B, ns_tp_B, ns_tp_B]
-        if (any(order < 3) .or. any(order > 5)) then
+        if (minval(order) < 3 .or. maxval(order) > 5) then
             error stop "build_boozer_bmod_br_batch_spline: spline order must be 3..5"
         end if
 
@@ -1368,7 +1368,7 @@ contains
         end if
 
         order = [ns_s_B, ns_tp_B, ns_tp_B]
-        if (any(order < 3) .or. any(order > 5)) then
+        if (minval(order) < 3 .or. maxval(order) > 5) then
             error stop "build_boozer_delt_delp_batch_splines: order must be 3..5"
         end if
 

@@ -1,7 +1,6 @@
 module field
     !> Field module aggregating all field types and factory functions.
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     use libneo_coordinates, only: detect_refcoords_file_type, refcoords_file_chartmap, &
                                   refcoords_file_vmec_wout, refcoords_file_unknown
     use field_base, only: magnetic_field_t
