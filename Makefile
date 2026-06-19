@@ -5,7 +5,7 @@ BUILD_DIR := build
 # Prevent ambient shell env from silently changing which libneo is fetched.
 # Pass the ref explicitly via: make ... LIBNEO_REF=<branch|tag|sha>
 # $(origin) distinguishes a command-line assignment from an env import.
-unexport LIBNEO_REF LIBNEO_PATH LIBNEO_BRANCH
+unexport LIBNEO_REF LIBNEO_PATH
 ifeq ($(origin LIBNEO_REF),command line)
   FLAGS += -DLIBNEO_REF=$(LIBNEO_REF)
 endif
