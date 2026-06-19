@@ -56,6 +56,7 @@ end interface
 contains
 
 subroutine coeff_rk_gauss(n, a, b, c)
+  !$acc routine seq
   integer, intent(in) :: n
   real(dp), intent(inout) :: a(n,n), b(n), c(n)
 

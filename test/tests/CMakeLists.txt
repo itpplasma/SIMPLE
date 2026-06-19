@@ -743,6 +743,15 @@ if(SIMPLE_ENABLE_OPENACC)
         LABELS "unit;gpu"
         TIMEOUT 120
     )
+
+    # COORD_TOK 6D canonical step must run on the device and match the host.
+    add_executable(test_cpp_canonical_device.x test_cpp_canonical_device.f90)
+    target_link_libraries(test_cpp_canonical_device.x simple)
+    add_test(NAME test_cpp_canonical_device COMMAND test_cpp_canonical_device.x)
+    set_tests_properties(test_cpp_canonical_device PROPERTIES
+        LABELS "unit;gpu"
+        TIMEOUT 120
+    )
 endif()
 
 configure_file(

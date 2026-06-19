@@ -636,27 +636,47 @@ come from SIMPLE's native VMEC field (`vmec_field_evaluate`), with `dA` and
 
 Three models share one integer-dispatched residual: `MODEL_CP` (full charged
 particle), `MODEL_CPP_SYM` (Pauli symplectic midpoint, `H + mu|B|`),
-`MODEL_CPP_VAR` (Pauli variational midpoint, discrete Euler-Lagrange). The state
-is fixed-size 6, `z = (q1, q2, q3, p1, p2, p3)`; the position rows solve the
-canonical midpoint and the momentum rows carry `p`, so the Jacobian is square
-`6x6` and solved with the device LU `rk_solve` from `orbit_rk_core`. For
-`COORD_TOK` Newton uses the analytic Jacobian, with the `O(mu)` `|B|` force and
-the metric/field second derivatives taken from central differences of the
-block's own `dg`/`dA`/`dBmod` (the oracle-faithful `dBmod` is not a true
-gradient, so a closed Hessian would be inconsistent); the kernels are
-`!$acc routine seq`, GPU-offload ready. For `COORD_VMEC` the Jacobian is a
-central difference of the whole residual, consistent with the spline-based block.
+`MODEL_CPP_VAR` (Pauli variational midpoint, discrete Euler-Lagrange). `MODEL_CP`
+omits the `mu|B|` term: the full charged particle resolves the perpendicular
+gyromotion directly, so its kinetic energy already holds the perpendicular
+energy; the Pauli models drop the resolved gyromotion and reinstate it as the
+guiding-center `mu|B|`. The state is fixed-size 6,
+`z = (q1, q2, q3, p1, p2, p3)`; the position rows solve the canonical midpoint
+and the momentum rows carry `p`, so the Jacobian is square `6x6` and solved with
+the device LU `rk_solve` from `orbit_rk_core`. For `COORD_TOK` Newton uses the
+analytic Jacobian: `d2g` and `d2A` come from central differences of the block's
+own `dg`/`dA`, and the `O(mu)` `|B|` force gradient uses the block's analytic
+Hessian `d2Bmod`, the closed-form second derivative of the corrected `|B|`. The
+analytic-vs-finite-difference self-check passes for all three models. For
+`COORD_VMEC` the Jacobian is a central difference of the whole residual,
+consistent with the spline-based block.
 
-Two errata in the python reference are corrected in the Fortran `COORD_TOK`
-block. The metric theta-derivative is
-`d g_33/d theta = -2 r (R0 + r cos theta) sin theta`; the python listing drops
-the factor `r`. That error breaks the symplectic energy bound: `CPP-sym` over
-1000 steps drifts to `max|dE/E0| = 1.4e-1` with the python metric versus a
-bounded `1.0e-3` plateau, roughly `dt`-independent across `dt = 80, 40, 20, 10`,
-with the correct one. The field `d|B|/d theta` in `field_correct_test.py` also
-omits one chain-rule term; the residual keeps the python form so the trajectory
-reproduces the oracle to 15 digits, and the `mu`-force Jacobian differentiates
-that same `dBmod` by finite difference for consistency.
+The field `|B|` and its derivatives are the exact closed form of
+`|B| = sqrt(W)`, `W = A_phi,r^2/(R0 + r cos theta)^2 + A_theta,r^2/r^2`:
+`d_k|B| = dW_k/(2|B|)`, `d2_kl|B| = d2W_kl/(2|B|) - dW_k dW_l/(4|B|^3)`,
+finite-difference verified to `~1e-9` against `|B|`. An earlier port carried over
+two errata from the python listing. The metric theta-derivative now carries the
+factor `r`: `d g_33/d theta = -2 r (R0 + r cos theta) sin theta`. The field
+`d|B|/d theta` now keeps the `A_theta,rth` chain-rule term the listing dropped.
+With both corrected, the `CPP-sym` energy oscillation over a fixed time window
+converges as `dt^2`: `max|dE/E0| = 4.2e-5, 1.0e-5, 2.2e-6, 4.8e-7` for
+`dt = 80, 40, 20, 10`, each halving reducing the bound by about four. The buggy
+`d|B|` instead produced a flat `~1e-3` plateau that did not converge; the test
+asserts the `dt^2` behavior. The Fortran reproduces the regenerated python
+oracle for all three models to solver tolerance.
+
+`COORD_TOK` runs on the OpenACC device. `cpp_canon_step_tok` is the device entry:
+the whole chain (`residual_tok` -> `eval_block_tok` /
+`eval_field_correct_test` / `dLdq` / `raise` / `residual_blk`,
+`jacobian_analytic` -> `grad_jacobian_tok`, `rk_solve`) is `!$acc routine seq`
+with fixed-size state, integer model dispatch, the analytic Jacobian, and no
+`class()` or procedure pointer, so one particle runs per GPU thread. The host
+`cpp_canon_step` keeps the coordinate dispatcher; `COORD_VMEC` is host-only
+because libneo's metric is `class()`-dispatched and reads 3D splines, which
+cannot run under `!$acc routine seq`. `test/tests/test_cpp_canonical_device.f90`
+(built only with `SIMPLE_ENABLE_OPENACC=ON`) runs all three models for a batch of
+particles inside an `!$acc parallel loop` and checks the device result against
+the host step.
 
 `test/tests/test_cpp_canonical.f90` validates the analytic block against the
 regenerated python oracle. `test/tests/test_cpp_vmec.f90` runs the same

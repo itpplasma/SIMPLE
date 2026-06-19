@@ -25,8 +25,8 @@ CTEST_CMD_NOPY = cd $(BUILD_DIR) && SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-di
 NVHPC_CTEST_CMD = cd $(NVHPC_BUILD_DIR) && ACC_DEVICE_TYPE=HOST ACC_DEVICE_NUM=0 SIMPLE_ENABLE_PYTHON_TOOLS=0 ctest --test-dir test --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) $(if $(TEST),-R "$(TEST)")
 
 # NVIDIA HPC SDK paths for nvfortran builds
-NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/25.11
-NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.0/hpcx/hpcx-2.25.1/ompi
+NVHPC_ROOT := /opt/nvidia/hpc_sdk/Linux_x86_64/26.3
+NVHPC_HPCX := $(NVHPC_ROOT)/comm_libs/13.1/hpcx/hpcx-2.25.1/ompi
 NVHPC_BUILD_DIR := build_nvfortran
 NVHPC_ACC_BUILD_DIR := build_nvfortran_acc
 

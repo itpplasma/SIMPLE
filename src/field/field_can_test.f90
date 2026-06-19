@@ -101,8 +101,10 @@ end subroutine eval_field_test
 ! A, dA, d2A are byte-identical to eval_field_test; only B, dB, d2B, h differ:
 ! the GC-linearized B=B0(1-r/R0 cos th) is replaced by the exact |B| from B^k =
 ! eps^ijk A_j,i/sqrtg, |B|=sqrt(g_ij B^i B^j). With A_r=0 only B^th, B^ph survive
-! and |B|^2 = A_ph,r^2/(R0+r cos th)^2 + A_th,r^2/r^2 (W below). dBmod/d2Bmod come
-! from W via |B|=sqrt(W). The covariant h_i = g_ii B^i / |B| (h_r = 0). The 6D
+! and |B|^2 = A_ph,r^2/(R0+r cos th)^2 + A_th,r^2/r^2 (W below). dBmod and the
+! Hessian d2Bmod are the exact closed-form derivatives of |B|=sqrt(W):
+! d_k|B| = dW_k/(2|B|), d2_kl|B| = d2W_kl/(2|B|) - dW_k dW_l/(4|B|^3), FD-verified
+! to ~1e-9 against the field. The covariant h_i = g_ii B^i / |B| (h_r = 0). The 6D
 ! models need this exact field; the GC path keeps eval_field_test.
 subroutine evaluate_correct_test(f, r, th_c, ph_c, mode_secders)
     type(field_can_t), intent(inout) :: f
@@ -116,13 +118,15 @@ end subroutine evaluate_correct_test
 
 
 subroutine eval_field_correct_test(f, r, th, ph, mode_secders)
+    !$acc routine seq
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: r, th, ph
     integer, intent(in) :: mode_secders
 
     real(dp) :: B0, iota0, a, R0, cth, sth, J, Rr
-    real(dp) :: dAthr, dAphr, Bth, Bph, W
-    real(dp) :: Bmod, d2Athrr, d2Athrth, d2Aphrr
+    real(dp) :: dAthr, dAphr, Bth, Bph, W, Bmod
+    real(dp) :: d2Athrr, d2Athrth, d2Aphrr, d3Athrrr, d3Athrrth, d3Athrthth, d3Aphrrr
+    real(dp) :: dWdr, dWdth, d2Wrr, d2Wrth, d2Wthth
 
     B0 = 1.0d0; iota0 = 1.0d0; a = 0.5d0; R0 = 1.0d0
     cth = cos(th); sth = sin(th)
@@ -147,18 +151,19 @@ subroutine eval_field_correct_test(f, r, th, ph, mode_secders)
     f%hth = r**2*Bth/Bmod
     f%hph = Rr**2*Bph/Bmod
 
-    ! dBmod ported verbatim from field_correct_test.py (lines 34-36) so the 6D
-    ! port reproduces the python oracle bit-for-bit. dBmod(2) is the python
-    ! listing's value (it omits one chain-rule term in d|B|/dtheta); the oracle
-    ! trajectories were generated with it and the residual must match. The true
-    ! analytic d|B|/dtheta is recovered from W only in the Jacobian's d2 block,
-    ! where the O(mu)=1e-5 force makes the difference irrelevant to the fixed point.
-    d2Athrr = B0*(1d0 - 2d0*r/R0*cth)
-    d2Athrth = B0*r**2/R0*sth
-    d2Aphrr = -B0*iota0*(1d0 - 3d0*r**2/a**2)
-    f%dBmod(1) = (r*Bth**2 + r**2*Bth*(-1d0/J*d2Aphrr + 1d0/J**2*(R0 + 2d0*r*cth)*dAphr) &
-                  + Rr*cth*Bph**2 + Rr**2*Bph*(1d0/J*d2Athrr - 1d0/J**2*(R0 + 2d0*r*cth)*dAthr))/Bmod
-    f%dBmod(2) = (-Rr*r*sth*Bph**2 + Rr**2*Bph*(1d0/J*d2Athrth + 1d0/J**2*r**2*sth*dAthr))/Bmod
+    ! A_i derivatives entering W and its derivatives (A_r=0; A_th,A_ph are phi-free).
+    d2Athrr = B0*(R0 - 2d0*r*cth)/R0       ! A_th,rr
+    d2Athrth = B0*r**2*sth/R0              ! A_th,rth
+    d2Aphrr = -B0*iota0*(a**2 - 3d0*r**2)/a**2  ! A_ph,rr
+
+    ! Exact closed-form d|B| = dW/(2|B|). dW keeps both the Rr-dependence and
+    ! A_th,r's theta-dependence (A_th,rth) -- the latter is the chain-rule term the
+    ! python listing dropped in d|B|/dtheta. FD-verified to ~1e-9 against |B|.
+    dWdr = 2d0*dAphr*d2Aphrr/Rr**2 - 2d0*dAphr**2*cth/Rr**3 &
+           + 2d0*dAthr*d2Athrr/r**2 - 2d0*dAthr**2/r**3
+    dWdth = 2d0*r*sth*dAphr**2/Rr**3 + 2d0*dAthr*d2Athrth/r**2
+    f%dBmod(1) = dWdr/(2d0*Bmod)
+    f%dBmod(2) = dWdth/(2d0*Bmod)
     f%dBmod(3) = 0d0
 
     if (mode_secders <= 0) return
@@ -169,11 +174,22 @@ subroutine eval_field_correct_test(f, r, th, ph, mode_secders)
     f%d2Aph(1) = d2Aphrr
     f%d2Aph(2) = 0d0; f%d2Aph(3) = 0d0; f%d2Aph(4) = 0d0; f%d2Aph(5) = 0d0; f%d2Aph(6) = 0d0
 
-    ! d2Bmod is left unset: the python dBmod (above) is not a true gradient, so a
-    ! symmetric packed Hessian cannot represent its mixed derivative consistently.
-    ! The 6D Jacobian's mu|B| term takes d(dBmod)/dq by a central difference of
-    ! dBmod itself, which is exact for whichever dBmod the residual uses.
+    ! True analytic Hessian of the corrected |B|: d2|B|_kl = d2W_kl/(2|B|) -
+    ! dW_k dW_l/(4|B|^3). Third A_i derivatives entering d2W (only rr,rth,thth couple):
+    d3Athrrr = -2d0*B0*cth/R0; d3Athrrth = 2d0*B0*r*sth/R0; d3Athrthth = B0*r**2*cth/R0
+    d3Aphrrr = 6d0*B0*iota0*r/a**2
+    d2Wrr = 2d0*d2Aphrr**2/Rr**2 + 2d0*dAphr*d3Aphrrr/Rr**2 - 8d0*dAphr*d2Aphrr*cth/Rr**3 &
+            + 6d0*dAphr**2*cth**2/Rr**4 &
+            + 2d0*d2Athrr**2/r**2 + 2d0*dAthr*d3Athrrr/r**2 - 8d0*dAthr*d2Athrr/r**3 &
+            + 6d0*dAthr**2/r**4
+    d2Wrth = 4d0*dAphr*d2Aphrr*r*sth/Rr**3 - 2d0*dAphr**2*(-sth/Rr**3 + 3d0*r*sth*cth/Rr**4) &
+             + 2d0*(d2Athrth*d2Athrr + dAthr*d3Athrrth)/r**2 - 4d0*dAthr*d2Athrth/r**3
+    d2Wthth = 2d0*r*dAphr**2*(cth/Rr**3 + 3d0*r*sth**2/Rr**4) &
+              + 2d0*(d2Athrth**2 + dAthr*d3Athrthth)/r**2
     f%d2Bmod = 0d0
+    f%d2Bmod(1) = d2Wrr/(2d0*Bmod)   - dWdr*dWdr/(4d0*Bmod**3)     ! d2|B|/drr
+    f%d2Bmod(2) = d2Wrth/(2d0*Bmod)  - dWdr*dWdth/(4d0*Bmod**3)    ! d2|B|/drth
+    f%d2Bmod(4) = d2Wthth/(2d0*Bmod) - dWdth*dWdth/(4d0*Bmod**3)   ! d2|B|/dthth
 
 end subroutine eval_field_correct_test
 

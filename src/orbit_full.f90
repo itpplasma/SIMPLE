@@ -13,7 +13,7 @@ module orbit_full
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use orbit_full_provider, only: field_metric_provider_t, &
       FO_OK, FO_ERR_FIELD, FO_ERR_NO_CONVERGE, FO_ERR_OUT_OF_DOMAIN
-  use orbit_rk_core, only: rk_solve
+  use linalg_lu_device, only: rk_solve
   use util, only: c
   implicit none
   private
