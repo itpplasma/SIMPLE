@@ -570,6 +570,11 @@ add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
 target_link_libraries(test_orbit_symplectic_base.x simple)
 add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
 
+add_executable(test_full_orbit.x test_full_orbit.f90)
+target_link_libraries(test_full_orbit.x simple)
+add_test(NAME test_full_orbit COMMAND test_full_orbit.x)
+set_tests_properties(test_full_orbit PROPERTIES LABELS "unit")
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)

@@ -45,6 +45,10 @@ module params
 
     integer :: integmode = EXPL_IMPL_EULER
 
+    ! Orbit model selector: 0 guiding-center (default, symplectic GC path),
+    ! 1 Pauli/CPP full orbit, 2 Boris full orbit. See src/orbit_full.f90.
+    integer :: orbit_model = 0
+
     integer :: kpart = 0 ! progress counter for particles
 
     real(dp) :: relerr = 1d-13
@@ -109,7 +113,7 @@ module params
 	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
-	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
+	        special_ants_file, integmode, orbit_model, relerr, tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
 	        old_axis_healing_boundary, am1, am2, Z1, Z2, &
