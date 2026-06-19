@@ -139,6 +139,17 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     endif
     ! End moving starting points to the classification cut
 
+    block
+        use orbit_full, only: ORBIT_CPP6D
+        use params, only: orbit_model
+        ! Classifiers need the full per-microstep z update from the sympl state;
+        ! the genuine 6D CPP wire does not feed the classifier stencil yet.
+        ! Restrict classification to GC + ORBIT_PAULI for the first wiring.
+        if (integmode > 0 .and. orbit_model == ORBIT_CPP6D) error stop &
+            'orbit_model=ORBIT_CPP6D is not supported with classification '// &
+            '(ntcut>0 / class_plot); wire after the basic loss gate is validated'
+    end block
+
     if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
 
     call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)

@@ -8,7 +8,7 @@ program test_orbit_model_dispatch
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use params, only: orbit_model, integmode, read_config
   use orbit_full, only: ORBIT_GC, ORBIT_PAULI, ORBIT_BORIS, ORBIT_FOSYMPL, &
-      ORBIT_PAULI6D
+      ORBIT_PAULI6D, ORBIT_CPP6D
   use orbit_symplectic_base, only: GAUSS1, GAUSS2, GAUSS3, GAUSS4
   use orbit_cpp, only: cpp_stages_from_mode
 
@@ -35,7 +35,7 @@ program test_orbit_model_dispatch
   ! The dispatch keys are distinct integers (no overlap).
   call check('orbit model codes distinct', &
       ORBIT_GC == 0 .and. ORBIT_PAULI == 1 .and. ORBIT_BORIS == 2 .and. &
-      ORBIT_FOSYMPL == 3 .and. ORBIT_PAULI6D == 4, nfail)
+      ORBIT_FOSYMPL == 3 .and. ORBIT_PAULI6D == 4 .and. ORBIT_CPP6D == 5, nfail)
 
   ! Stage mapping that the CPP select-case dispatch uses.
   call check('GAUSS1 -> 1 stage', cpp_stages_from_mode(GAUSS1) == 1, nfail)

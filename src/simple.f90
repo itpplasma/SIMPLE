@@ -10,6 +10,8 @@ module simple
     orbit_sympl_init, orbit_timestep_sympl
   use field, only : vmec_field_t
   use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t
+  use orbit_cpp_canonical, only : cpp_canon_state_t, cpp_canon_init, &
+    cpp_canon_step, cpp_canon_to_gc, MODEL_CPP_SYM, COORD_CHARTMAP
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -32,6 +34,7 @@ public
     type(field_can_t) :: f
     type(symplectic_integrator_t) :: si
     type(multistage_integrator_t) :: mi
+    type(cpp_canon_state_t) :: cpp  ! genuine 6D CPP state (orbit_model=ORBIT_CPP6D)
   end type tracer_t
 
   interface tstep
@@ -147,6 +150,75 @@ contains
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
                           rtol_init, mode_init)
   end subroutine init_sympl
+
+  subroutine init_cpp(cpp, f, z0, dtaumin)
+    ! Initialize the genuine 6D canonical CPP state (orbit_model=ORBIT_CPP6D) from
+    ! the SAME (s,theta,phi,vpar,mu) GC start as init_sympl, in NORMALIZED TIME.
+    ! Replicates the GC sqrt(2) convention verbatim (init_sympl lines above), then
+    ! maps onto the dimensionless 6D Hamiltonian on the production Boozer/chartmap
+    ! chart: the 6D state runs in u=(rho,theta_B,phi_B) with rho=sqrt(s) so the
+    ! libneo chartmap metric is native; field_can supplies A_i,|B|,h_i in s=rho^2.
+    ! The magnetic coupling qc=1/ro0_bar=sqrt(2)/ro0 is threaded via st%ro0=ro0_bar,
+    ! so the canonical momentum p_i=vpar*h_i+A_i/ro0_bar matches the GC pphi seed.
+    type(cpp_canon_state_t), intent(out) :: cpp
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(in) :: dtaumin
+
+    real(dp) :: ro0_bar, x0(3)
+
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+
+    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 (GC convention)
+    ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)
+    f%vpar = z0(4)*z0(5)*dsqrt(2d0)                   ! vpar_bar = vpar/sqrt(T/m)
+
+    ! 6D state in the metric chart: u=(rho,theta_B,phi_B), rho=sqrt(s).
+    x0(1) = dsqrt(max(z0(1), 0d0))
+    x0(2) = z0(2)
+    x0(3) = z0(3)
+
+    ! mass=charge=1 (thesis e=m=1); dt=dtaumin/sqrt(2) (SAME as GC).
+    ! st%ro0=ro0_bar gives qc=1/ro0_bar so p_i seeds match the GC pphi convention;
+    ! p_s carries only the O(rho*) g_si v^i metric term (the genuine 6D start).
+    call cpp_canon_init(cpp, MODEL_CPP_SYM, COORD_CHARTMAP, x0, vpar0=f%vpar, &
+      vperp0=0d0, mu_in=f%mu, mass=1d0, charge=1d0, dt=dtaumin/dsqrt(2d0), &
+      ro0_in=ro0_bar)
+    cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
+  end subroutine init_cpp
+
+  subroutine orbit_timestep_cpp_canonical(cpp, f, z, ierr)
+    ! Advance the genuine 6D CPP one normalized step (dtaumin/sqrt(2)) and write
+    ! back the standard SIMPLE z(1:5) so times_lost/confined_fraction/output read
+    ! it identically to the GC path. The wrapper does NOT call
+    ! to_standard_z_coordinates (that reads the sympl path); it builds z itself.
+    type(cpp_canon_state_t), intent(inout) :: cpp
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+
+    real(dp) :: r, th, ph, vpar
+
+    if (z(1) < 0.0d0 .or. z(1) > 1.0d0) then
+      ierr = 1
+      return
+    end if
+
+    call cpp_canon_step(cpp, ierr)
+    ! cpp ierr: 2 = rho>=1 (s>=1 loss), 1 = LU fail, 3 = non-converge. All map to
+    ! a nonzero orbit error consistent with the sympl loss/abort semantics.
+    if (ierr /= 0) return
+
+    ! Write back z. State runs in rho; output uses s=rho^2 (loss test, classifier).
+    call cpp_canon_to_gc(cpp, r, th, ph, vpar)
+    z(1) = cpp%z(1)**2   ! s = rho^2
+    z(2) = cpp%z(2)
+    z(3) = cpp%z(3)
+    ! z(4)=pabs is the normalized speed (conserved); z(5)=vpar/(pabs*sqrt2) matches
+    ! to_standard_z_coordinates so classification/output read z(4:5) unchanged.
+    z(4) = cpp%pabs
+    z(5) = vpar/(z(4)*dsqrt(2d0))
+  end subroutine orbit_timestep_cpp_canonical
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self

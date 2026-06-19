@@ -589,7 +589,8 @@ f%dAth = [Ath_norm, 0, 0] ! Constant derivative
 ### 6.6 The Curvilinear 6D Canonical Integrator
 
 **Files**: `src/orbit_cpp_canonical.f90`, `src/orbit_cpp_vmec_metric.f90`,
-`src/field/field_can_test.f90` (`eval_field_correct_test`)
+`src/orbit_cpp_chartmap_metric.f90`, `src/field/field_can_test.f90`
+(`eval_field_correct_test`)
 
 The guiding-center integrators reduce the perpendicular motion to the magnetic
 moment. The 6D canonical integrator in `orbit_cpp_canonical` keeps the full
@@ -606,7 +607,7 @@ derivatives `g_{ij,k}`. The integrator reads them from a `block_t`: metric,
 metric derivatives, covariant `A_i` with gradient, `|B|` with gradient, and the
 covariant unit field `h_i`.
 
-Two coordinate blocks fill that structure.
+Three coordinate blocks fill that structure.
 
 `COORD_TOK` is the analytic tokamak, inline and GPU-portable. The metric is
 diagonal, `g = diag(1, r^2, (R0 + r cos theta)^2)`,
@@ -633,6 +634,25 @@ come from SIMPLE's native VMEC field (`vmec_field_evaluate`), with `dA` and
 `d|B|` by central difference. This block is host-side: libneo's metric is
 `class()`-dispatched and reads 3D splines, so it cannot run under
 `!$acc routine seq`.
+
+`COORD_CHARTMAP` is the production Boozer/chartmap chart, wired through
+`orbit_cpp_chartmap_metric`. It is the chart whose metric matches the production
+`field_can` chart (libneo #322): `field_can_boozer` integrates in
+`(s, theta_B, phi_B)` with the chartmap radius `rho = sqrt(s)` and the same
+angles, so the 6D state runs in `(rho, theta_B, phi_B)`, the chartmap metric is
+native, and the field is reparametrized from `s = rho^2` with the radial chain
+rule `dF/drho = 2 rho dF/ds`. The metric and Christoffel come from
+`reference_coordinates%ref_coords` (the scaled chartmap built by
+`init_reference_coordinates`); the covariant `A_i`, `h_i`, `|B|` come from the
+active `field_can_mod%evaluate` pointer. `chartmap_metric_active()` gates the
+path: the generic-BOOZER-on-VMEC chart has no matching metric and is rejected.
+
+The magnetic coupling carries a length normalization. The Hamiltonian uses
+`qc = charge/(c rho0)` with `rho0 = 1` by default, so `COORD_TOK`/`COORD_VMEC`
+keep the thesis `qc = charge/c` (`c = 1`). The production wire threads
+`rho0 = ro0_bar = ro0/sqrt(2)` so `qc = sqrt(2)/ro0`, which makes the canonical
+momentum `p_i = vpar h_i + A_i/ro0_bar` match the guiding-center `pphi` seed of
+`init_sympl`.
 
 Three models share one integer-dispatched residual: `MODEL_CP` (full charged
 particle), `MODEL_CPP_SYM` (Pauli symplectic midpoint, `H + mu|B|`),
@@ -688,6 +708,37 @@ The stellarator is not axisymmetric, so the toroidal canonical momentum is not
 conserved and is not asserted; near the axis `s -> 0` the flux metric is singular
 and the central-difference gradients lose accuracy, so the test starts at
 mid-radius.
+
+The genuine 6D canonical CPP is wired into the production alpha-loss pipeline as
+`orbit_model = ORBIT_CPP6D` (5). `init_cpp` in `simple.f90` replicates the
+`init_sympl` sqrt(2) block verbatim (`mu` by factor 2, `ro0_bar = ro0/sqrt(2)`,
+`vpar_bar = vpar sqrt(2)`), then seeds the `COORD_CHARTMAP` state at
+`(sqrt(s), theta, phi)` with `MODEL_CPP_SYM`, `mass = charge = 1`,
+`dt = dtaumin/sqrt(2)`, and `rho0 = ro0_bar`. The covariant momenta
+`p_theta = vpar h_theta + A_theta/ro0_bar`, `p_phi = vpar h_phi + A_phi/ro0_bar`
+match the GC seed; `p_s` carries only the `O(rho*)` metric term `g_si v^i`, the
+genuine 6D start. `orbit_timestep_cpp_canonical` advances one
+`dtaumin/sqrt(2)` step and writes `z(1:5)` itself (`z(1) = rho^2`, angles direct,
+`z(4) = pabs`, `z(5) = vpar/(pabs sqrt(2))` via `cpp_canon_to_gc`), so
+`times_lost`, `confined_fraction`, and the trajectory output read `z(1:5)`
+exactly as on the GC path. The macrostep in `simple_main` dispatches on
+`orbit_model`; the GC default and `ORBIT_PAULI` keep `to_standard_z_coordinates`,
+`ORBIT_CPP6D` routes around it. The first wiring restricts `ORBIT_CPP6D` to the
+chartmap chart with `swcoll = .false.` and no wall, and error-stops in
+classification (`ntcut > 0` / `class_plot`); collisions, the wall path, and the
+classifier stencil are the documented follow-ups.
+
+`test/tests/test_cpp6d_vs_gc.f90` drives the production `init_field` on the
+analytic Boozer chartmap, seeds the 6D state through `init_cpp`, and steps the
+production wrapper. It asserts the chart is a chartmap, the canonical-midpoint
+energy stays bounded with no drift, `mu` is held exactly fixed, the loss test
+(`s = rho^2 >= 1 -> ierr`) propagates, and `z(4:5)` map back consistently. The
+bundled chartmap stores Cartesian `x/y/z`, so its splined geometric metric is
+period-local and not fully consistent with the toroidal Boozer covariant field;
+the macrostep therefore needs the GC step resolved into microsteps to converge,
+and the absolute GC cross-validation (single-orbit to `O(rho*)`,
+`confined_fraction` match) waits on a self-consistent R/Z-storage Boozer chartmap
+from a real VMEC equilibrium.
 
 ---
 
@@ -991,6 +1042,7 @@ trajectory.
 | `src/orbit_rk_core.f90` | Shared device LU and Newton shell |
 | `src/orbit_cpp_canonical.f90` | Curvilinear 6D canonical-midpoint integrator (cp/cpp_sym/cpp_var) |
 | `src/orbit_cpp_vmec_metric.f90` | VMEC metric/Christoffel + native field provider for the 6D integrator |
+| `src/orbit_cpp_chartmap_metric.f90` | Production Boozer/chartmap metric + field_can provider for the 6D integrator (ORBIT_CPP6D) |
 | `src/alpha_lifetime_sub.f90` | orbit_timestep_axis |
 
 ---

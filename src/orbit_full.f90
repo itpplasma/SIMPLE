@@ -29,6 +29,14 @@ module orbit_full
   ! production VMEC flux-canonical state, so it is NOT routed through the VMEC
   ! macrostep; it is exercised through its own harness (test_cpp_pauli_gc_banana).
   integer, parameter, public :: ORBIT_PAULI6D = 4
+  ! Genuine 6D canonical-midpoint Pauli (orbit_cpp_canonical MODEL_CPP_SYM) wired
+  ! into the production alpha-loss pipeline. It runs in NORMALIZED TIME with the
+  ! GC sqrt(2) convention on the production Boozer/chartmap chart (the chartmap
+  ! libneo metric matches the field_can chart, libneo #322), feeding times_lost /
+  ! confined_fraction unchanged. Restricted to the chartmap chart; the generic
+  ! BOOZER-on-VMEC chart has no matching metric. Distinct method from GC, matches
+  ! GC to O(rho*); wired via init_cpp / orbit_timestep_cpp_canonical in simple.f90.
+  integer, parameter, public :: ORBIT_CPP6D = 5
 
   ! coordinate kinds (3..5 reserved for the libneo PR: VMEC, Boozer, chartmap)
   integer, parameter, public :: COORD_CART = 1

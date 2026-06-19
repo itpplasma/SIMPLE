@@ -45,6 +45,7 @@
     field_pauli_cart.f90
     orbit_cpp_pauli.f90
     orbit_cpp_vmec_metric.f90
+    orbit_cpp_chartmap_metric.f90
     orbit_cpp_canonical.f90
     orbit_full_provider.f90
     orbit_full_mock_cart.f90

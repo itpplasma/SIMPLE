@@ -2,7 +2,7 @@ module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
     use omp_lib
     use util, only: sqrt2
-    use simple, only: init_vmec, init_sympl, tracer_t
+    use simple, only: init_vmec, init_sympl, init_cpp, tracer_t
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
@@ -815,7 +815,28 @@ contains
         end if
 
         if (integmode > 0) then
-            call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
+            block
+                use orbit_full, only: ORBIT_CPP6D
+                use orbit_cpp_chartmap_metric, only: chartmap_metric_active
+                use params, only: orbit_model
+                if (orbit_model == ORBIT_CPP6D) then
+                    if (wall_enabled) error stop 'orbit_model=ORBIT_CPP6D with '// &
+                        'wall_input is not supported (wall path is GC-only)'
+                    if (swcoll) error stop 'orbit_model=ORBIT_CPP6D with swcoll '// &
+                        'is not supported (fixed-mu 6D start; collisions perturb mu)'
+                    if (.not. chartmap_metric_active()) error stop &
+                        'orbit_model=ORBIT_CPP6D requires the chartmap reference '// &
+                        'chart (no matching metric for generic BOOZER-on-VMEC)'
+                    ! init_sympl still runs to seed anorb%f and compute the GC
+                    ! pitch-angle params below from the same start as the 6D wire.
+                    call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
+                        integmode)
+                    call init_cpp(anorb%cpp, anorb%f, z, dtaumin)
+                else
+                    call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
+                        integmode)
+                end if
+            end block
         end if
 
         call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
@@ -876,7 +897,8 @@ contains
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
-        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D
+        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D
+        use simple, only: orbit_timestep_cpp_canonical
         use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
@@ -894,11 +916,14 @@ contains
                 if (swcoll) call update_momentum(anorb, z)
                 ! Dispatch by integer orbit_model: GC (default) uses the
                 ! symplectic GC pusher; PAULI (CPP) integrates the same 4D
-                ! canonical state with mu held fixed on the slow manifold.
+                ! canonical state with mu held fixed on the slow manifold;
+                ! CPP6D runs the genuine 6D canonical CPP in normalized time on
+                ! the production Boozer/chartmap chart, writing z(1:5) itself.
                 select case (orbit_model)
                 case (ORBIT_PAULI)
                     call orbit_timestep_cpp(anorb%si, anorb%f, &
                         cpp_stages_from_mode(integmode), ierr_orbit)
+                    call to_standard_z_coordinates(anorb, z)
                 case (ORBIT_PAULI6D)
                     ! The genuine 6D Pauli runs in Cartesian on the analytic
                     ! tokamak, not the VMEC flux-canonical state advanced here.
@@ -906,10 +931,16 @@ contains
                     ! loud rather than silently tracing the GC instead.
                     error stop 'orbit_model=ORBIT_PAULI6D is a Cartesian '// &
                         'research model; not available in the VMEC macrostep'
+                case (ORBIT_CPP6D)
+                    ! Genuine 6D canonical CPP on the production chartmap chart.
+                    ! The wrapper advances one normalized step and writes z(1:5)
+                    ! directly (no to_standard_z_coordinates).
+                    call orbit_timestep_cpp_canonical(anorb%cpp, anorb%f, z, &
+                        ierr_orbit)
                 case default
                     call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                    call to_standard_z_coordinates(anorb, z)
                 end select
-                call to_standard_z_coordinates(anorb, z)
             end if
             if (swcoll) call collide(z, dtaumin) ! Collisions
             if (ierr_orbit .ne. 0) exit

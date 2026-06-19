@@ -45,7 +45,7 @@ module orbit_cpp_canonical
   private
 
   integer, parameter, public :: MODEL_CP = 0, MODEL_CPP_SYM = 1, MODEL_CPP_VAR = 2
-  integer, parameter, public :: COORD_TOK = 0, COORD_VMEC = 1
+  integer, parameter, public :: COORD_TOK = 0, COORD_VMEC = 1, COORD_CHARTMAP = 2
 
   ! Thesis normalization: e = m = c = 1. qe/c uses this c, not the physical
   ! CGS speed of light in util (which would make the magnetic coupling vanish).
@@ -63,6 +63,12 @@ module orbit_cpp_canonical
     real(dp) :: dt        = 0.0_dp
     real(dp) :: mass      = 1.0_dp
     real(dp) :: charge    = 1.0_dp
+    ! Magnetic-coupling length normalization: the canonical momentum couples to A
+    ! through qc = charge/(c*ro0). ro0=1 (default) reproduces the thesis e=m=c=1
+    ! coupling qc=charge/c for COORD_TOK/COORD_VMEC. The SIMPLE-normalized GC wire
+    ! sets ro0 = ro0_bar = ro0/sqrt(2) so that p_i = vpar*h_i + A_i/ro0_bar.
+    real(dp) :: ro0       = 1.0_dp
+    real(dp) :: pabs      = 0.0_dp   ! normalized particle speed (GC z(4)), carried
     integer  :: model     = MODEL_CP
     integer  :: coord     = COORD_TOK
   end type cpp_canon_state_t
@@ -95,6 +101,8 @@ contains
     select case (coord)
     case (COORD_VMEC)
       call eval_block_vmec(q, blk)
+    case (COORD_CHARTMAP)
+      call eval_block_chartmap(q, blk)
     case default
       call eval_block_tok(q, blk)
     end select
@@ -152,6 +160,21 @@ contains
     end do
   end subroutine eval_block_vmec
 
+  ! Production Boozer/chartmap block (host-side). The 6D state runs in the chartmap
+  ! coordinates u=(rho,theta_B,phi_B): the libneo chartmap metric/Christoffel from
+  ! ref_coords is native there, and the production field_can (Boozer) field is
+  ! reparametrized from s=rho^2 with dF/drho=2 rho dF/ds. This is THE chart whose
+  ! metric matches the production field_can chart (libneo #322), so it backs the
+  ! production macrostep. NOT GPU-portable (class-dispatched metric + spline field).
+  subroutine eval_block_chartmap(q, blk)
+    use orbit_cpp_chartmap_metric, only: chartmap_eval_metric, chartmap_eval_field
+    real(dp), intent(in) :: q(3)
+    type(block_t), intent(out) :: blk
+
+    call chartmap_eval_metric(q, blk%g, blk%ginv, blk%dg)
+    call chartmap_eval_field(q, blk%Acov, blk%dA, blk%Bmod, blk%dBmod, blk%hcov)
+  end subroutine eval_block_chartmap
+
   ! Raise a covariant vector: v^i = g^ij v_j.
   pure subroutine raise(ginv, vcov, vcon)
     !$acc routine seq
@@ -166,16 +189,16 @@ contains
   ! Lagrangian gradient dL/dq_k at (vmid, midpoint block), general full metric:
   !   dL/dq_k = (m/2) g_ij,k vmid^i vmid^j + qc A_i,k vmid^i [- mu |B|,k].
   ! mu_active gates the Pauli +mu|B| term so MODEL_CP folds it out.
-  pure subroutine dLdq(mass, charge, mu, mu_active, vmid, blk, out)
+  pure subroutine dLdq(mass, charge, ro0, mu, mu_active, vmid, blk, out)
     !$acc routine seq
-    real(dp), intent(in) :: mass, charge, mu, vmid(3)
+    real(dp), intent(in) :: mass, charge, ro0, mu, vmid(3)
     logical, intent(in) :: mu_active
     type(block_t), intent(in) :: blk
     real(dp), intent(out) :: out(3)
     real(dp) :: qc, geo, em
     integer :: k, i, j
 
-    qc = charge/c
+    qc = charge/(c*ro0)
     do k = 1, 3
       geo = 0.0_dp
       do j = 1, 3
@@ -207,9 +230,9 @@ contains
     integer :: k
 
     vmid = (z(1:3) - zold(1:3))/st%dt
-    call dLdq(st%mass, st%charge, st%mu, mu_active, vmid, blk, grad)
+    call dLdq(st%mass, st%charge, st%ro0, st%mu, mu_active, vmid, blk, grad)
 
-    qc = st%charge/c
+    qc = st%charge/(c*st%ro0)
     pmid = st%pold + 0.5_dp*st%dt*grad
     do k = 1, 3
       vcov(k) = pmid(k) - qc*blk%Acov(k)
@@ -234,9 +257,9 @@ contains
     integer :: k, j
 
     vmid = (z(1:3) - zold(1:3))/st%dt
-    call dLdq(st%mass, st%charge, st%mu, .true., vmid, blk, dpdt)
+    call dLdq(st%mass, st%charge, st%ro0, st%mu, .true., vmid, blk, dpdt)
 
-    qc = st%charge/c
+    qc = st%charge/(c*st%ro0)
     do k = 1, 3
       pnew(k) = qc*blk%Acov(k)
       do j = 1, 3
@@ -349,7 +372,7 @@ contains
     qmid = 0.5_dp*(zold(1:3) + z(1:3))
     vmid = (z(1:3) - zold(1:3))/st%dt
     call eval_block_tok(qmid, blk)   ! analytic Jacobian path is COORD_TOK only
-    qc = st%charge/c
+    qc = st%charge/(c*st%ro0)
 
     ! Diagonal-metric derivative blocks: d(g_kk)/dx_j and d(g^kk)/dx_j.
     do k = 1, 3
@@ -360,7 +383,7 @@ contains
     end do
 
     call grad_jacobian_tok(qmid, st%mass, qc, mu_use, vmid, blk, st%dt, dgrad_dx)
-    call dLdq(st%mass, st%charge, mu_use, st%model /= MODEL_CP, vmid, blk, grad)
+    call dLdq(st%mass, st%charge, st%ro0, mu_use, st%model /= MODEL_CP, vmid, blk, grad)
 
     jac = 0.0_dp
     if (.not. is_var) then
@@ -445,10 +468,11 @@ contains
   ! radial gyration energy is mu B; p=g_ij v^j + qc A. CPP-sym: vel along h;
   ! CPP-var: vel=0, p=qc A, dpdt0=-mu dB.
   subroutine cpp_canon_init(st, model, coord, x0, vpar0, vperp0, mu_in, &
-                            mass, charge, dt)
+                            mass, charge, dt, ro0_in)
     type(cpp_canon_state_t), intent(out) :: st
     integer, intent(in) :: model, coord
     real(dp), intent(in) :: x0(3), vpar0, vperp0, mu_in, mass, charge, dt
+    real(dp), intent(in), optional :: ro0_in
     type(block_t) :: blk
     real(dp) :: vcon(3), qc
     integer :: i, j
@@ -460,7 +484,8 @@ contains
     st%charge = charge
     st%dt = dt
     st%z(1:3) = x0
-    qc = charge/c
+    if (present(ro0_in)) st%ro0 = ro0_in
+    qc = charge/(c*st%ro0)
 
     call eval_block(coord, x0, blk)
 
@@ -537,8 +562,8 @@ contains
     if (st%model == MODEL_CPP_VAR) then
       vmid = (z(1:3) - zold(1:3))/st%dt
       call eval_block(st%coord, 0.5_dp*(zold(1:3)+z(1:3)), blk)
-      qc = st%charge/c
-      call dLdq(st%mass, st%charge, st%mu, .true., vmid, blk, st%dpdtold)
+      qc = st%charge/(c*st%ro0)
+      call dLdq(st%mass, st%charge, st%ro0, st%mu, .true., vmid, blk, st%dpdtold)
       do i = 1, 3
         st%pold(i) = qc*blk%Acov(i)
         do j = 1, 3
@@ -604,8 +629,8 @@ contains
     if (st%model == MODEL_CPP_VAR) then
       vmid = (z(1:3) - zold(1:3))/st%dt
       call eval_block_tok(0.5_dp*(zold(1:3)+z(1:3)), blk)
-      qc = st%charge/c
-      call dLdq(st%mass, st%charge, st%mu, .true., vmid, blk, st%dpdtold)
+      qc = st%charge/(c*st%ro0)
+      call dLdq(st%mass, st%charge, st%ro0, st%mu, .true., vmid, blk, st%dpdtold)
       do i = 1, 3
         st%pold(i) = qc*blk%Acov(i)
         do j = 1, 3
@@ -633,7 +658,7 @@ contains
     integer :: k
 
     call eval_block(st%coord, st%z(1:3), blk)
-    qc = st%charge/c
+    qc = st%charge/(c*st%ro0)
     do k = 1, 3
       vcov(k) = st%z(3+k) - qc*blk%Acov(k)
     end do
@@ -655,7 +680,7 @@ contains
     integer :: k
 
     call eval_block(st%coord, st%z(1:3), blk)
-    qc = st%charge/c
+    qc = st%charge/(c*st%ro0)
     do k = 1, 3
       vcov(k) = (st%z(3+k) - qc*blk%Acov(k))/st%mass
     end do
