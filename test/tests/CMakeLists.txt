@@ -598,6 +598,16 @@ foreach(cpp_test test_cpp_equals_gc_largestep test_cpp_invariants)
     set_tests_properties(${cpp_test} PROPERTIES LABELS "integration" TIMEOUT 120)
 endforeach()
 
+# Three-system cross-validation (GC == CPP == gyro-averaged full orbit) on
+# analytic oracle fields only: no field file required.
+add_executable(test_cpp_gc_fullorbit_convergence.x
+    test_cpp_gc_fullorbit_convergence.f90)
+target_link_libraries(test_cpp_gc_fullorbit_convergence.x simple)
+add_test(NAME test_cpp_gc_fullorbit_convergence
+    COMMAND test_cpp_gc_fullorbit_convergence.x)
+set_tests_properties(test_cpp_gc_fullorbit_convergence
+    PROPERTIES LABELS "unit" TIMEOUT 120)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)

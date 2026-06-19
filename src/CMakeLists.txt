@@ -43,6 +43,7 @@
     orbit_full_provider.f90
     orbit_full_mock_cart.f90
     orbit_full_mock_cyl.f90
+    orbit_full_tokamak.f90
     orbit_full.f90
     util.F90
     samplers.f90

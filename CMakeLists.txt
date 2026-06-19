@@ -439,6 +439,10 @@ add_executable(diag_traj.x
     app/simple_diag_traj.f90
 )
 
+add_executable(diag_traj_models.x
+    app/diag_traj_models.f90
+)
+
 # Apply SIMPLE-specific compile options to executable
 target_compile_options(simple.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 
@@ -481,7 +485,10 @@ target_link_libraries(diag_albert.x PRIVATE simple)
 target_link_libraries(diag_newton.x PRIVATE simple)
 target_link_libraries(diag_orbit.x PRIVATE simple)
 target_link_libraries(diag_traj.x PRIVATE simple)
+target_link_libraries(diag_traj_models.x PRIVATE simple)
+target_compile_options(diag_traj_models.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
 set_target_properties(diag_traj.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set_target_properties(diag_traj_models.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
