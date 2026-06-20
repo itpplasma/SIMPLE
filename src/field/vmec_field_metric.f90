@@ -11,10 +11,16 @@ module vmec_field_metric
   ! two metrics differ. Here h_i = g_ij B^j / |B| with |B| = sqrt(g_ij B^i B^j)
   ! from the SAME g, so h_i g^ij h_j = 1 identically (to round-off).
   !
-  ! Field in native VMEC flux coordinates:
+  ! Field in native VMEC flux coordinates (s, theta, varphi):
   !   A_i      = (0, A_theta(s), A_phi(s))           (flux functions of s)
-  !   B^i      = (curl A)^i / sqrtg                  (sqrtg = native VMEC Jacobian)
-  !            = (0, -dA_phi_ds/sqrtg, dA_theta_ds/sqrtg)
+  !   B^i      = physical field in the VMEC poloidal angle theta, carrying the
+  !              lambda stream function (lmns) that converts the symmetry-flux
+  !              (straight-field-line) curl-of-flux-A field to the VMEC angle:
+  !                B^theta = (-dA_phi_ds - lam_p dA_theta_ds)/sqrtg
+  !                B^phi   = (1 + lam_t) dA_theta_ds/sqrtg     (B^s = 0)
+  !              Dropping lambda (the earlier curl-of-flux-A-only form) leaves
+  !              h_i g^ij h_j = 1 but the WRONG field direction, so the grad-B
+  !              and curvature drift are wrong and trapped orbits drift out.
   !   |B|      = sqrt(g_ij B^i B^j)
   ! Metric and metric derivatives:
   !   g_ij     = metric_tensor_vmec(R, dR, dZ)
@@ -51,9 +57,9 @@ contains
     real(dp) :: dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
     real(dp) :: dl_ds, dl_dt, dl_dp
     real(dp) :: d2R(6), d2Z(6), d2l(6)
-    real(dp) :: dR(3), dZ(3), hR(3,3), hZ(3,3)
+    real(dp) :: dR(3), dZ(3), hR(3,3), hZ(3,3), hl(3,3)
     real(dp) :: dsqrtg(3), d2A_phi_ds2, dBctr(3,3)
-    real(dp) :: det, B2, dB2(3), c2, dc2_ds
+    real(dp) :: det, B2, dB2(3), num2, num3, dnum2(3), dnum3(3)
     integer :: i, j, k, idx6(3,3)
 
     idx6 = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])
@@ -71,6 +77,7 @@ contains
       do k = 1, 3
         hR(i,k) = d2R(idx6(i,k))
         hZ(i,k) = d2Z(idx6(i,k))
+        hl(i,k) = d2l(idx6(i,k))
       end do
     end do
 
@@ -122,11 +129,20 @@ contains
     dA(2,1) = dA_theta_ds
     dA(3,1) = dA_phi_ds
 
-    ! Contravariant field B^i = (curl A)^i / sqrtg. With A_i = A_i(s):
-    !   B^1 = 0, B^2 = -dA_phi_ds/sqrtg, B^3 = dA_theta_ds/sqrtg.
+    ! Contravariant field in NATIVE VMEC angles. The physical field is the simple
+    ! curl-of-flux-A form only in the symmetry-flux (straight-field-line) angle
+    ! vartheta = theta + lambda(s,theta,phi); transformed to the VMEC poloidal angle
+    ! theta it carries the lambda stream function (lmns), without which the field
+    ! direction (and hence the grad-B/curvature drift) is wrong even though
+    ! |B| stays a unit-h field. With sqrtg the VMEC Jacobian (B^s = 0):
+    !   B^theta = (-dA_phi_ds - lam_p dA_theta_ds)/sqrtg
+    !   B^phi   = (1 + lam_t) dA_theta_ds/sqrtg
+    ! (lam_t = dl_dt, lam_p = dl_dp). dA_theta_ds = torflux is constant in s.
+    num2 = -dA_phi_ds - dl_dp*dA_theta_ds
+    num3 = (1.0_dp + dl_dt)*dA_theta_ds
     Bctr(1) = 0.0_dp
-    Bctr(2) = -dA_phi_ds/sqrtg
-    Bctr(3) = dA_theta_ds/sqrtg
+    Bctr(2) = num2/sqrtg
+    Bctr(3) = num3/sqrtg
 
     ! Covariant field B_i = g_ij B^j (same metric).
     do i = 1, 3
@@ -137,19 +153,21 @@ contains
     B2 = Bctr(2)*Bcov(2) + Bctr(3)*Bcov(3)
     Bmod = sqrt(B2)
 
-    ! Gradient of B^i. B^2 = c2(s)/sqrtg with c2 = -dA_phi_ds (radial only);
-    ! B^3 = dA_theta_ds/sqrtg with dA_theta_ds = torflux constant. Hence the
-    ! numerators depend on s alone, the denominator on all three coordinates.
+    ! Gradient of B^i = num/sqrtg. d(num)/du_k uses d2A_phi_ds2 (radial, via
+    ! splint_iota) and the lambda second derivatives hl(.,.) (dA_theta_ds is
+    ! constant so d(dA_theta_ds)=0).
     call splint_iota(s, aiota, daiota_ds)
     d2A_phi_ds2 = -daiota_ds*dA_theta_ds   ! aiota = -dA_phi_ds/torflux
-    c2 = -dA_phi_ds
-    dc2_ds = -d2A_phi_ds2
+    do k = 1, 3
+      dnum2(k) = -hl(3,k)*dA_theta_ds      ! d(-dA_phi_ds - lam_p dA_theta_ds)
+      dnum3(k) = hl(2,k)*dA_theta_ds       ! d((1+lam_t) dA_theta_ds)
+    end do
+    dnum2(1) = dnum2(1) - d2A_phi_ds2      ! radial part of -dA_phi_ds
     dBctr = 0.0_dp
     do k = 1, 3
-      dBctr(2,k) = -c2*dsqrtg(k)/sqrtg**2
-      dBctr(3,k) = -dA_theta_ds*dsqrtg(k)/sqrtg**2
+      dBctr(2,k) = dnum2(k)/sqrtg - num2*dsqrtg(k)/sqrtg**2
+      dBctr(3,k) = dnum3(k)/sqrtg - num3*dsqrtg(k)/sqrtg**2
     end do
-    dBctr(2,1) = dBctr(2,1) + dc2_ds/sqrtg
 
     ! d(|B|^2)/du_k = dg_ij,k B^i B^j + 2 g_ij B^i dB^j/du_k, then chain to |B|.
     do k = 1, 3
