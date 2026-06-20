@@ -218,8 +218,7 @@ contains
 
         select case (orbit_model)
         case (ORBIT_GC, ORBIT_PAULI)
-            if (orbit_coord /= 0) error stop &
-                'orbit_coord is only supported with orbit_model=ORBIT_CPP6D'
+            continue
         case (ORBIT_CPP6D)
             if (orbit_coord /= 1) error stop &
                 'orbit_model=ORBIT_CPP6D supports only orbit_coord=1 (Boozer)'

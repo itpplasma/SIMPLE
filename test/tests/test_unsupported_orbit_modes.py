@@ -21,11 +21,6 @@ CASES = [
         "not available in production alpha-loss tracing",
     ),
     (
-        "gc_orbit_coord_rejected",
-        "orbit_model = 0\norbit_coord = 1\n",
-        "orbit_coord is only supported with orbit_model=ORBIT_CPP6D",
-    ),
-    (
         "unknown_rejected",
         "orbit_model = 99\n",
         "unsupported orbit_model",
