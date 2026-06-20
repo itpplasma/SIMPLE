@@ -1,6 +1,6 @@
 module stl_wall_intersection
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64, int8
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: iso_c_binding, only: c_ptr, c_null_ptr, c_associated, c_int
     use, intrinsic :: iso_c_binding, only: c_double, c_char, c_null_char
     implicit none

@@ -13,7 +13,7 @@ program test_coord_transform_roundtrip
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     use magfie_sub, only: MEISS, ALBERT
-    use field_can_mod, only: init_field_can, integ_to_ref, ref_to_integ
+    use field_can_mod, only: integ_to_ref, ref_to_integ
     use field_can_meiss, only: integ_to_ref_meiss, ref_to_integ_meiss, twopi
     use field_can_albert, only: integ_to_ref_albert, ref_to_integ_albert
     use simple, only: init_vmec
@@ -115,7 +115,6 @@ contains
         call cleanup_meiss()
     end subroutine test_meiss_roundtrip
 
-
     subroutine test_meiss_s_r_conversion(n_failed)
         !> Verify the s <-> r = sqrt(s) scaling is applied correctly.
         integer, intent(inout) :: n_failed
@@ -159,7 +158,6 @@ contains
             print *, '    PASSED: s=0.81 -> r=0.9 conversion correct'
         end if
     end subroutine test_meiss_s_r_conversion
-
 
     subroutine test_albert_roundtrip(n_failed)
         !> Albert coordinates use spline interpolation for the psi <-> r mapping:

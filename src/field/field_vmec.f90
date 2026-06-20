@@ -4,7 +4,7 @@ module field_vmec
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_base, only: magnetic_field_t
-    use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system
+    use libneo_coordinates, only: make_vmec_coordinate_system
 
     implicit none
 
@@ -45,21 +45,20 @@ contains
                                       sqg, Bctr_vartheta, Bctr_varphi, Bcov_s, &
                                       Bcov_vartheta, Bcov_varphi)
 
-        Acov(1) = Acov_vartheta * dl_ds
-        Acov(2) = Acov_vartheta * (1d0 + dl_dt)
-        Acov(3) = Acov_varphi + Acov_vartheta * dl_dp
+        Acov(1) = Acov_vartheta*dl_ds
+        Acov(2) = Acov_vartheta*(1d0 + dl_dt)
+        Acov(3) = Acov_varphi + Acov_vartheta*dl_dp
 
-        Bmod = sqrt(Bctr_vartheta * Bcov_vartheta + Bctr_varphi * Bcov_varphi)
+        Bmod = sqrt(Bctr_vartheta*Bcov_vartheta + Bctr_varphi*Bcov_varphi)
 
-        hcov(1) = (Bcov_s + Bcov_vartheta * dl_ds) / Bmod
-        hcov(2) = Bcov_vartheta * (1d0 + dl_dt) / Bmod
-        hcov(3) = (Bcov_varphi + Bcov_vartheta * dl_dp) / Bmod
+        hcov(1) = (Bcov_s + Bcov_vartheta*dl_ds)/Bmod
+        hcov(2) = Bcov_vartheta*(1d0 + dl_dt)/Bmod
+        hcov(3) = (Bcov_varphi + Bcov_vartheta*dl_dp)/Bmod
 
         if (present(sqgBctr)) then
             error stop "sqgBctr not implemented in vmec_field_t"
         end if
     end subroutine vmec_evaluate
-
 
     subroutine create_vmec_field(field)
         !> Create VMEC field with VMEC coordinate system.

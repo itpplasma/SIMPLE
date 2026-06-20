@@ -16,11 +16,11 @@ program test_albert_transform_diagnostic
 
     use field, only: vmec_field_t, create_vmec_field
     use simple, only: init_vmec
-    use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss, &
-        spl_field_batch, xmin, xmax, n_r, n_th, n_phi, twopi
+    use field_can_meiss, only: init_meiss, cleanup_meiss, &
+                               spl_field_batch, xmin, xmax, n_r, n_th, n_phi, twopi
     use field_can_albert, only: get_albert_coordinates, psi_inner, psi_outer, &
-        psi_of_x, Ath_norm, r_of_xc, spl_r_batch, &
-        integ_to_ref_albert, ref_to_integ_albert
+                                psi_of_x, Ath_norm, r_of_xc, spl_r_batch, &
+                                integ_to_ref_albert, ref_to_integ_albert
     use interpolate, only: evaluate_batch_splines_3d
 
     implicit none
@@ -69,14 +69,13 @@ contains
 
         psi_range_full = psi_max_outer - psi_min_inner
         psi_range_safe = psi_outer - psi_inner
-        coverage = psi_range_safe / psi_range_full * 100d0
+        coverage = psi_range_safe/psi_range_full*100d0
 
         print *, '  Safe psi range: [', psi_inner, ',', psi_outer, ']'
         print *, '  Full psi range: [', psi_min_inner, ',', psi_max_outer, ']'
         print *, '  Coverage:', coverage, '%'
         print *, ''
     end subroutine diagnose_psi_range
-
 
     subroutine diagnose_transform_steps()
         !> Trace through transform steps to identify error accumulation.
@@ -94,7 +93,7 @@ contains
         x_ref = [0.5d0, 3.14159d0, 0.5d0]
 
         print *, '  Starting point (ref coords): s=', x_ref(1), &
-                 ' th=', x_ref(2), ' ph=', x_ref(3)
+            ' th=', x_ref(2), ' ph=', x_ref(3)
 
         ! Step 1: ref -> meiss (should be exact)
         call ref_to_integ_meiss(x_ref, x_meiss)
@@ -103,7 +102,7 @@ contains
 
         ! Step 2: Evaluate Ath spline at meiss coords
         call evaluate_batch_splines_3d(spl_field_batch, x_meiss, y_ath)
-        psi_forward = y_ath(1) / Ath_norm
+        psi_forward = y_ath(1)/Ath_norm
         print *, '  Step 2 - Ath spline evaluation:'
         print *, '    Ath =', y_ath(1), ' psi = Ath/Ath_norm =', psi_forward
 
@@ -134,7 +133,6 @@ contains
         print *, '    Total roundtrip error in s:', err_total
         print *, ''
     end subroutine diagnose_transform_steps
-
 
     subroutine diagnose_grid_resolution_effect()
         !> Test how grid resolution affects transform accuracy.

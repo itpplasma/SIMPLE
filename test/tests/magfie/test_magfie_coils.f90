@@ -6,13 +6,11 @@ program test_magfie_coils
     use simple, only: init_vmec
     use magfie_sub, only: VMEC
     use velo_mod, only: isw_field_type
-    use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use magfie_sub, only: magfie_vmec
-    use util, only: twopi
     use cylindrical_cartesian, only: cyl_to_cart
 
     implicit none
@@ -30,8 +28,8 @@ program test_magfie_coils
     n_failed = 0
     isw_field_type = VMEC
 
-    inquire(file='wout.nc', exist=wout_exists)
-    inquire(file='coils.simple', exist=coils_exists)
+    inquire (file='wout.nc', exist=wout_exists)
+    inquire (file='coils.simple', exist=coils_exists)
     if (.not. wout_exists) then
         print *, 'FAILED: Required VMEC file (wout.nc) not found'
         error stop 1
@@ -83,7 +81,7 @@ program test_magfie_coils
 
     ! Test 4: Splined and raw should agree within 1%
     print *, 'Test 4: Splined vs raw Biot-Savart agreement'
-    if (abs(Bmod_spl - Bmod_raw) / Bmod_raw > 0.01_dp) then
+    if (abs(Bmod_spl - Bmod_raw)/Bmod_raw > 0.01_dp) then
         print *, '  FAILED: Bmod_spl and Bmod_raw differ by more than 1%'
         print *, '    Bmod_spl = ', Bmod_spl, ' Bmod_raw = ', Bmod_raw
         n_failed = n_failed + 1
@@ -130,7 +128,6 @@ contains
         call cyl_to_cart(x_cyl, x_cart)
         call field%evaluate(x_cart, Acov, hcov, Bmod)
     end subroutine evaluate_raw_at_ref
-
 
     subroutine test_magfie(n_failed)
         integer, intent(inout) :: n_failed

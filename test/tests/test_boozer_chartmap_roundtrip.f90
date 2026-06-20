@@ -7,19 +7,19 @@ program test_boozer_chartmap_roundtrip
     use velo_mod, only: isw_field_type
     use boozer_coordinates_mod, only: use_B_r
     use boozer_sub, only: splint_boozer_coord, get_boozer_coordinates, &
-        vmec_to_boozer, export_boozer_chartmap, load_boozer_from_chartmap, &
-        reset_boozer_batch_splines
+                    vmec_to_boozer, export_boozer_chartmap, load_boozer_from_chartmap, &
+                          reset_boozer_batch_splines
     use spline_vmec_sub, only: spline_vmec_data
     use vmecin_sub, only: stevvo
-    use field_can_mod, only: field_can_from_name, field_can_init, &
-        eval_field => evaluate, field_can_t, get_val
+    use field_can_mod, only: field_can_from_name, &
+                             eval_field => evaluate, field_can_t, get_val
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, &
-        symplectic_integrator_t
+                                symplectic_integrator_t
 
     implicit none
 
     real(dp), parameter :: pi = 3.14159265358979_dp
-    real(dp), parameter :: twopi = 2.0_dp * pi
+    real(dp), parameter :: twopi = 2.0_dp*pi
 
     ! Field comparison
     integer, parameter :: n_test = 50
@@ -81,9 +81,9 @@ program test_boozer_chartmap_roundtrip
         read (arg_value, *) orbit_tol
     end if
 
-    field_data_file = trim(artifact_prefix) // '_field_comparison.dat'
-    orbit_direct_file = trim(artifact_prefix) // '_orbit_direct.dat'
-    orbit_chartmap_file = trim(artifact_prefix) // '_orbit_chartmap.dat'
+    field_data_file = trim(artifact_prefix)//'_field_comparison.dat'
+    orbit_direct_file = trim(artifact_prefix)//'_orbit_direct.dat'
+    orbit_chartmap_file = trim(artifact_prefix)//'_orbit_chartmap.dat'
 
     print *, 'Starting roundtrip test...'
     print *, '  wout_file=', trim(wout_file)
@@ -108,7 +108,7 @@ program test_boozer_chartmap_roundtrip
         integer :: L1i
         real(dp) :: R0i, cbfi, bz0i, bf0
         call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
-        fper = twopi / real(L1i, dp)
+        fper = twopi/real(L1i, dp)
     end block
     phi_period = fper
     RT0 = rmajor
@@ -118,7 +118,7 @@ program test_boozer_chartmap_roundtrip
     call field_can_from_name("boozer")
 
     ! ro0 for orbit integration: rlarm * bmod00
-    ro0 = 2.23e-2_dp * 2.81e5_dp
+    ro0 = 2.23e-2_dp*2.81e5_dp
 
     print *, '=== Step 1: VMEC + Boozer initialized ==='
     print *, '  nper=', nper, ' R0=', RT0, ' fper=', fper
@@ -130,9 +130,9 @@ program test_boozer_chartmap_roundtrip
 
     do i = 1, n_test
         call splint_boozer_coord(s_test(i), th_test(i), ph_test(i), 0, &
-            A_theta, A_phi_val, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, &
-            d3A_phi_dr3, Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
-            Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
+                              A_theta, A_phi_val, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, &
+                                 d3A_phi_dr3, Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                                 Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
         Bmod_ref(i) = Bmod
     end do
 
@@ -157,7 +157,7 @@ program test_boozer_chartmap_roundtrip
 
     call vmec_to_boozer(0.35_dp, 0.33_dp, 0.97_dp, vartheta, varphi)
 
-    dtau = fper * RT0 / 400.0_dp
+    dtau = fper*RT0/400.0_dp
 
     z0(1) = 0.35_dp
     z0(2) = vartheta
@@ -167,12 +167,12 @@ program test_boozer_chartmap_roundtrip
 
     call run_symplectic_orbit(z0, dtau, n_orbit, orbit_direct, n_steps_done)
 
-    open(newunit=u_out, file=trim(orbit_direct_file), status='replace')
-    write(u_out, '(a)') '# time  s  theta  phi  pphi'
+    open (newunit=u_out, file=trim(orbit_direct_file), status='replace')
+    write (u_out, '(a)') '# time  s  theta  phi  pphi'
     do i = 1, n_steps_done
-        write(u_out, '(5es18.10)') orbit_direct(i, :)
+        write (u_out, '(5es18.10)') orbit_direct(i, :)
     end do
-    close(u_out)
+    close (u_out)
 
     print *, '=== Step 4: Direct orbit done, steps=', n_steps_done, ' ==='
 
@@ -183,9 +183,9 @@ program test_boozer_chartmap_roundtrip
 
     do i = 1, n_test
         call splint_boozer_coord(s_test(i), th_test(i), ph_test(i), 0, &
-            A_theta, A_phi_val, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, &
-            d3A_phi_dr3, Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
-            Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
+                              A_theta, A_phi_val, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, &
+                                 d3A_phi_dr3, Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                                 Bmod, dBmod, d2Bmod, Br, dBr, d2Br)
         Bmod_new(i) = Bmod
     end do
 
@@ -195,20 +195,20 @@ program test_boozer_chartmap_roundtrip
     ! Step 6: Compare fields
     ! =========================================================
     max_err_bmod = 0.0_dp
-    open(newunit=u_out, file=trim(field_data_file), status='replace')
-    write(u_out, '(a)') '# s  theta  phi  Bmod_ref  Bmod_chartmap  rel_err'
+    open (newunit=u_out, file=trim(field_data_file), status='replace')
+    write (u_out, '(a)') '# s  theta  phi  Bmod_ref  Bmod_chartmap  rel_err'
 
     do i = 1, n_test
         if (abs(Bmod_ref(i)) > 0.0_dp) then
-            rel_err = abs(Bmod_new(i) - Bmod_ref(i)) / abs(Bmod_ref(i))
+            rel_err = abs(Bmod_new(i) - Bmod_ref(i))/abs(Bmod_ref(i))
         else
             rel_err = abs(Bmod_new(i))
         end if
         max_err_bmod = max(max_err_bmod, rel_err)
-        write(u_out, '(6es18.10)') s_test(i), th_test(i), ph_test(i), &
+        write (u_out, '(6es18.10)') s_test(i), th_test(i), ph_test(i), &
             Bmod_ref(i), Bmod_new(i), rel_err
     end do
-    close(u_out)
+    close (u_out)
 
     print *, '  max relative error Bmod:', max_err_bmod
     if (field_tol >= 0.0_dp) then
@@ -229,12 +229,12 @@ program test_boozer_chartmap_roundtrip
 
     call run_symplectic_orbit(z0, dtau, n_orbit, orbit_chartmap, n_steps_done)
 
-    open(newunit=u_out, file=trim(orbit_chartmap_file), status='replace')
-    write(u_out, '(a)') '# time  s  theta  phi  pphi'
+    open (newunit=u_out, file=trim(orbit_chartmap_file), status='replace')
+    write (u_out, '(a)') '# time  s  theta  phi  pphi'
     do i = 1, n_steps_done
-        write(u_out, '(5es18.10)') orbit_chartmap(i, :)
+        write (u_out, '(5es18.10)') orbit_chartmap(i, :)
     end do
-    close(u_out)
+    close (u_out)
 
     print *, '=== Step 7: Chartmap orbit done, steps=', n_steps_done, ' ==='
 
@@ -274,11 +274,11 @@ contains
         real(dp) :: frac
 
         do j = 1, n_test
-            frac = real(j, dp) / real(n_test + 1, dp)
-            s_test(j) = 0.1_dp + 0.7_dp * frac
-            th_test(j) = twopi * frac
-            ph_test(j) = phi_per * mod(real(2 * j + 1, dp), real(n_test + 1, dp)) &
-                          / real(n_test + 1, dp)
+            frac = real(j, dp)/real(n_test + 1, dp)
+            s_test(j) = 0.1_dp + 0.7_dp*frac
+            th_test(j) = twopi*frac
+            ph_test(j) = phi_per*mod(real(2*j + 1, dp), real(n_test + 1, dp)) &
+                         /real(n_test + 1, dp)
         end do
     end subroutine init_test_points
 
@@ -296,25 +296,25 @@ contains
         ! Initialize field_can_t
         call eval_field(f_loc, z0_in(1), z0_in(2), z0_in(3), 0)
 
-        f_loc%mu = 0.5_dp * z0_in(4)**2 * (1.0_dp - z0_in(5)**2) / &
-                   f_loc%Bmod * 2.0_dp
-        f_loc%ro0 = ro0 / sqrt(2.0_dp)
-        f_loc%vpar = z0_in(4) * z0_in(5) * sqrt(2.0_dp)
+        f_loc%mu = 0.5_dp*z0_in(4)**2*(1.0_dp - z0_in(5)**2)/ &
+                   f_loc%Bmod*2.0_dp
+        f_loc%ro0 = ro0/sqrt(2.0_dp)
+        f_loc%vpar = z0_in(4)*z0_in(5)*sqrt(2.0_dp)
 
         z_loc(1:3) = z0_in(1:3)
-        pphi = f_loc%vpar * f_loc%hph + f_loc%Aph / f_loc%ro0
+        pphi = f_loc%vpar*f_loc%hph + f_loc%Aph/f_loc%ro0
         z_loc(4) = pphi
 
         ! Midpoint integrator (mode=3), single step per call
         call orbit_sympl_init(si_loc, f_loc, z_loc, &
-                               dt / sqrt(2.0_dp), 1, 1.0e-10_dp, 3)
+                              dt/sqrt(2.0_dp), 1, 1.0e-10_dp, 3)
 
         steps_done = 0
         do j = 1, nsteps
             call orbit_timestep_sympl(si_loc, f_loc, ierr_loc)
             if (ierr_loc /= 0) exit
             steps_done = j
-            orbit_out(j, 1) = dt * real(j, dp)
+            orbit_out(j, 1) = dt*real(j, dp)
             orbit_out(j, 2) = si_loc%z(1)   ! s
             orbit_out(j, 3) = si_loc%z(2)   ! theta
             orbit_out(j, 4) = si_loc%z(3)   ! phi

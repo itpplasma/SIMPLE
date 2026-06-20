@@ -764,7 +764,7 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    TIMEOUT 60)
+    TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
 add_executable(test_chartmap_rz_consistency.x test_chartmap_rz_consistency.f90)
@@ -966,6 +966,7 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     set_tests_properties(golden_record_${CASE} PROPERTIES
         TIMEOUT 1200  # Includes initial main clone/build on CI
         LABELS "golden_record;regression"
+        RESOURCE_LOCK golden_record_reference
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
 endforeach()

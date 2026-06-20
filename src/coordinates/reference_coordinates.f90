@@ -1,10 +1,9 @@
 module reference_coordinates
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_boozer_chartmap, only: is_boozer_chartmap
     use libneo_coordinates, only: coordinate_system_t, make_vmec_coordinate_system, &
-        make_chartmap_coordinate_system, detect_refcoords_file_type, &
-        refcoords_file_chartmap, refcoords_file_vmec_wout, refcoords_file_unknown
+                          make_chartmap_coordinate_system, detect_refcoords_file_type, &
+               refcoords_file_chartmap, refcoords_file_vmec_wout, refcoords_file_unknown
     use new_vmec_stuff_mod, only: vmec_RZ_scale
     use scaled_chartmap_coordinates, only: wrap_scaled_chartmap_coordinate_system
 
@@ -26,7 +25,7 @@ contains
             error stop
         end if
 
-        if (allocated(ref_coords)) deallocate(ref_coords)
+        if (allocated(ref_coords)) deallocate (ref_coords)
 
         if (is_boozer_chartmap(coord_input)) then
             call make_chartmap_coordinate_system(ref_coords, coord_input)
@@ -49,7 +48,7 @@ contains
             case (refcoords_file_unknown)
                 print *, 'reference_coordinates.init_reference_coordinates: ', &
                     'unknown file type for ', trim(coord_input)
-                print *, 'Expected VMEC wout (*.nc with rmnc) or chartmap (*.nc with ', &
+               print *, 'Expected VMEC wout (*.nc with rmnc) or chartmap (*.nc with ', &
                     'rho/theta/zeta dims and x/y/z vars)'
                 error stop
             case default

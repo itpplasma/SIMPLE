@@ -8,8 +8,8 @@ program test_field_can_albert_diagnostic
     use magfie_sub, only: ALBERT
     use velo_mod, only: isw_field_type
     use field, only: vmec_field_t, create_vmec_field
-    use field_can_albert, only: init_albert, psi_inner, psi_outer, &
-        psi_of_x, Ath_norm, dpsi_dr_positive
+    use field_can_albert, only: psi_inner, psi_outer, &
+                                psi_of_x, Ath_norm, dpsi_dr_positive
     use field_can_meiss, only: spl_field_batch, xmin, xmax, n_r, n_th, n_phi
     use interpolate, only: evaluate_batch_splines_3d
     use params, only: coord_input
@@ -28,7 +28,7 @@ program test_field_can_albert_diagnostic
 
     print *, 'Test: Albert coordinate field initialization'
 
-    inquire(file='wout.nc', exist=file_exists)
+    inquire (file='wout.nc', exist=file_exists)
     if (.not. file_exists) then
         print *, 'FAILED: Required VMEC file (wout.nc) not found'
         error stop 1
@@ -65,12 +65,12 @@ program test_field_can_albert_diagnostic
     print *, 'Test 4: psi_of_x monotonicity'
     if (dpsi_dr_positive) then
         if (psi_of_x(n_r, n_th/2, n_phi/2) <= psi_of_x(1, n_th/2, n_phi/2)) then
-            print *, '  FAILED: psi_of_x should increase with r when dpsi_dr_positive=.true.'
+       print *, '  FAILED: psi_of_x should increase with r when dpsi_dr_positive=.true.'
             n_failed = n_failed + 1
         end if
     else
         if (psi_of_x(n_r, n_th/2, n_phi/2) >= psi_of_x(1, n_th/2, n_phi/2)) then
-            print *, '  FAILED: psi_of_x should decrease with r when dpsi_dr_positive=.false.'
+      print *, '  FAILED: psi_of_x should decrease with r when dpsi_dr_positive=.false.'
             n_failed = n_failed + 1
         end if
     end if
@@ -82,9 +82,9 @@ program test_field_can_albert_diagnostic
     do i_phi = 1, n_phi, max(1, n_phi/4)
         do i_th = 1, n_th, max(1, n_th/4)
             do i_r = 1, n_r, max(1, n_r/4)
-                x(1) = xmin(1) + (i_r-1)*(xmax(1)-xmin(1))/(n_r-1)
-                x(2) = xmin(2) + (i_th-1)*(xmax(2)-xmin(2))/(n_th-1)
-                x(3) = xmin(3) + (i_phi-1)*(xmax(3)-xmin(3))/(n_phi-1)
+                x(1) = xmin(1) + (i_r - 1)*(xmax(1) - xmin(1))/(n_r - 1)
+                x(2) = xmin(2) + (i_th - 1)*(xmax(2) - xmin(2))/(n_th - 1)
+                x(3) = xmin(3) + (i_phi - 1)*(xmax(3) - xmin(3))/(n_phi - 1)
                 call evaluate_batch_splines_3d(spl_field_batch, x, y_batch)
                 ! y_batch(5) is Bmod
                 Bmod_min = min(Bmod_min, y_batch(5))
