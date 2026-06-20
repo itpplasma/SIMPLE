@@ -873,6 +873,9 @@ contains
 
         if (swcoll) call reset_seed_if_deterministic
 
+        orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
+        orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
+
         if (ntcut > 0 .or. class_plot) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
             if (class_plot) then
@@ -947,7 +950,7 @@ contains
             end if
 
             if (ierr_orbit .ne. 0) then
-                it_final = it
+                it_final = it - 1
                 exit
             end if
 
@@ -958,14 +961,6 @@ contains
             call increase_confined_count(it, passing)
             it_final = it
         end do
-
-        ! Fill remaining timesteps with NaN if particle left domain early
-        if (it_final < ntimstep) then
-            do it = it_final + 1, ntimstep
-                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
-                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
-            end do
-        end if
 
 !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))

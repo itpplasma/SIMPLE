@@ -231,6 +231,10 @@ contains
     ! cpp ierr: 2 = z(1)>=1 (s>=1 loss), 1 = LU fail, 3 = non-converge. All map to
     ! a nonzero orbit error consistent with the sympl loss/abort semantics.
     if (ierr /= 0) return
+    if (cpp%z(1) < 0.0d0 .or. cpp%z(1) > 1.0d0) then
+      ierr = 2
+      return
+    end if
 
     ! Write back z. Boozer runs in s directly; COORD_CHARTMAP in rho (s=rho^2).
     ! z(4)=pabs is the conserved normalized speed; z(5)=lambda (vpar is the
