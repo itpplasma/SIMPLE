@@ -184,6 +184,9 @@ contains
     ! integrator/residual/Jacobian use, so the GC reduction (p-qcA = vpar_bar h,
     ! kinetic = vpar_bar^2/2) is exact at the start.
     use vmec_field_metric, only: vmec_field_metric_eval
+    use boozer_field_metric, only: boozer_field_metric_eval
+    use orbit_cpp_canonical, only: COORD_BOOZER
+    use params, only: orbit_coord
     type(cpp_canon_state_t), intent(out) :: cpp
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
@@ -192,14 +195,23 @@ contains
     real(dp) :: ro0_bar, x0(3), mu, vpar_bar
     real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
     real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
+    integer :: coord
 
-    ! 6D state in the VMEC flux chart: u=(s,vartheta,varphi), s direct (no rho).
+    ! 6D state in the flux chart u=(s,angle,angle), s direct (no rho). With
+    ! orbit_coord=1 the chart is Boozer (shares the GC angles/field); else VMEC.
     x0(1) = min(max(z0(1), 0d0), 1d0)
     x0(2) = z0(2)
     x0(3) = z0(3)
 
-    call vmec_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
-         Bctr, Bcov, Bmod, dBmod, hcov)
+    if (orbit_coord == 1) then
+      coord = COORD_BOOZER
+      call boozer_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
+           Bctr, Bcov, Bmod, dBmod, hcov)
+    else
+      coord = COORD_VMEC
+      call vmec_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
+           Bctr, Bcov, Bmod, dBmod, hcov)
+    end if
 
     mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/Bmod*2d0      ! mu by factor 2 (GC convention)
     ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)
@@ -207,7 +219,7 @@ contains
 
     ! mass=1 (see header): the consistent |h|^2=1 metric makes the GC reduction
     ! exact; st%ro0=ro0_bar gives qc=1/ro0_bar so p_i seeds match the GC pphi.
-    call cpp_canon_init(cpp, MODEL_CPP_SYM, COORD_VMEC, x0, vpar0=vpar_bar, &
+    call cpp_canon_init(cpp, MODEL_CPP_SYM, coord, x0, vpar0=vpar_bar, &
       vperp0=0d0, mu_in=mu, mass=1d0, charge=1d0, dt=dtaumin/dsqrt(2d0), &
       ro0_in=ro0_bar)
     cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved

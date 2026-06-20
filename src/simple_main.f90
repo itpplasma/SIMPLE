@@ -80,6 +80,15 @@ contains
         call read_profiles_config(config_file)
         call print_phase_time('Profiles configuration reading completed')
 
+        ! The 6D CPP/CP Boozer chart (orbit_coord=1) needs the Boozer angle-map
+        ! delta splines (boozer_field_metric -> delthe_delphi_BV_d2). Enable them
+        ! before init_field builds the Boozer coordinates.
+        block
+            use params, only: orbit_coord
+            use boozer_coordinates_mod, only: use_del_tp_B
+            if (orbit_coord == 1) use_del_tp_B = .true.
+        end block
+
         call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
         call print_phase_time('Field initialization completed')
 

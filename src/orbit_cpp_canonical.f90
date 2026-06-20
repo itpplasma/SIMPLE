@@ -51,6 +51,10 @@ module orbit_cpp_canonical
 
   integer, parameter, public :: MODEL_CP = 0, MODEL_CPP_SYM = 1, MODEL_CPP_VAR = 2
   integer, parameter, public :: COORD_TOK = 0, COORD_VMEC = 1, COORD_CHARTMAP = 2
+  ! COORD_BOOZER: single-source Boozer field+metric (boozer_field_metric), the
+  ! straight-field-line chart the production GC runs in, so the 6D state shares the
+  ! GC's Boozer angles and field. Same first-derivative analytic Jacobian as VMEC.
+  integer, parameter, public :: COORD_BOOZER = 3
 
   ! Thesis normalization: e = m = c = 1. qe/c uses this c, not the physical
   ! CGS speed of light in util (which would make the magnetic coupling vanish).
@@ -107,12 +111,30 @@ contains
     select case (coord)
     case (COORD_VMEC)
       call eval_block_vmec(q, blk)
+    case (COORD_BOOZER)
+      call eval_block_boozer(q, blk)
     case (COORD_CHARTMAP)
       call eval_block_chartmap(q, blk)
     case default
       call eval_block_tok(q, blk)
     end select
   end subroutine eval_block
+
+  ! Single-source Boozer block (host-side): full metric g_ij/g^ij and its analytic
+  ! derivative dg pulled back from the VMEC R,Z geometry through the Boozer angle
+  ! map, with the field (A_i, |B|, dBmod, h_i) taken directly from the production
+  ! Boozer splines so the 6D field equals the GC field. dg is the genuine
+  ! derivative of g (test_boozer_field_metric: dg vs FD ~1e-11), so the
+  ! first-derivative analytic Jacobian is self-consistent like the VMEC path.
+  subroutine eval_block_boozer(q, blk)
+    use boozer_field_metric, only: boozer_field_metric_eval
+    real(dp), intent(in) :: q(3)
+    type(block_t), intent(out) :: blk
+    real(dp) :: sqrtg, Bctr(3), Bcov(3)
+
+    call boozer_field_metric_eval(q, blk%g, blk%ginv, sqrtg, blk%dg, blk%Acov, &
+         blk%dA, Bctr, Bcov, blk%Bmod, blk%dBmod, blk%hcov)
+  end subroutine eval_block_boozer
 
   ! Analytic toroidal metric (R0=1) + exact-curl tokamak field. Diagonal metric;
   ! the only nonzero metric derivatives are dg22/dr, dg33/dr, dg33/dth (the latter
@@ -369,8 +391,8 @@ contains
     real(dp), intent(in) :: zold(6), z(6)
     real(dp), intent(out) :: jac(6,6)
 
-    if (st%coord == COORD_VMEC) then
-      call jacobian_vmec_analytic(st, zold, z, jac)
+    if (st%coord == COORD_VMEC .or. st%coord == COORD_BOOZER) then
+      call jacobian_vmec_analytic(st, zold, z, jac)   ! metric-based, dg-consistent
     else
       call jacobian_analytic(st, zold, z, jac)
     end if
@@ -413,7 +435,7 @@ contains
 
     qmid = 0.5_dp*(zold(1:3) + z(1:3))
     vmid = (z(1:3) - zold(1:3))/st%dt
-    call eval_block_vmec(qmid, blk)
+    call eval_block(st%coord, qmid, blk)   ! VMEC or BOOZER single-source block
     qc = st%charge/(c*st%ro0)
     mu_active = (st%model /= MODEL_CP)
     mu_use = merge(st%mu, 0.0_dp, mu_active)
