@@ -480,6 +480,18 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "integration"
         TIMEOUT 120)
 
+    # Multi-particle regression gate: guards the field-direction bug (trapped 6D
+    # orbits drifting monotonically outward and all being lost). Asserts trapped
+    # CPP orbits BOUNCE inward, conserve energy, and that a pitch spread keeps a
+    # majority confined with at least one trapped retained.
+    add_executable(test_cpp6d_loss_gate.x test_cpp6d_loss_gate.f90)
+    target_link_libraries(test_cpp6d_loss_gate.x simple)
+    add_test(NAME test_cpp6d_loss_gate COMMAND test_cpp6d_loss_gate.x)
+    set_tests_properties(test_cpp6d_loss_gate PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "integration"
+        TIMEOUT 120)
+
     # Genuine 6D full charged particle (orbit_model=ORBIT_CP6D) wired into the
     # production alpha-loss pipeline through COORD_VMEC, validated against the
     # production GC. The gyration is RESOLVED: empirically determines npoiper2 by
@@ -973,3 +985,6 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     LABELS "unit;chartmap"
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
+
+add_executable(diag_step_tmp.x diag_step_tmp.f90)
+target_link_libraries(diag_step_tmp.x simple)
