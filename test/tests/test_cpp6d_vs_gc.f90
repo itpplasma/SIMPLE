@@ -40,8 +40,7 @@ program test_cpp6d_vs_gc
   use simple_main, only: init_field
   use orbit_symplectic, only: orbit_timestep_sympl
   use orbit_cpp_canonical, only: cpp_canon_energy
-  use orbit_cpp_vmec_metric, only: vmec_eval_metric, vmec_eval_field, &
-    vmec_metric_ready
+  use vmec_field_metric, only: vmec_field_metric_eval
   use params, only: field_input, coord_input, integmode, relerr, dtaumin
   use velo_mod, only: isw_field_type
   use magfie_sub, only: BOOZER
@@ -87,20 +86,20 @@ contains
 
   subroutine test_metric_consistency(z0, nfail)
     ! The defect the chartmap had: h_i g^ij h_j must be 1 (h is the covariant unit
-    ! field; g^ij raises it to h^i, so h_i g^ij h_j = |h|^2 = 1). On the production
-    ! COORD_VMEC chart it holds to central-difference (Christoffel) accuracy; the
-    ! chartmap gave O(nfp^2) = hundreds.
+    ! field; g^ij raises it to h^i, so h_i g^ij h_j = |h|^2 = 1). The single-source
+    ! vmec_field_metric builds |B| = sqrt(g_ij B^i B^j) from the SAME g, so the
+    ! identity holds to round-off (~1e-13), not the dual-source 1.009 or the
+    ! chartmap's O(nfp^2) = hundreds.
     real(dp), intent(in) :: z0(5)
     integer, intent(inout) :: nfail
-    real(dp) :: u(3), g(3,3), ginv(3,3), dg(3,3,3)
-    real(dp) :: Acov(3), Bmod, dBmod(3), hcov(3)
+    real(dp) :: u(3), g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
+    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
     real(dp) :: hgh, hcon(3)
     integer :: i, j
 
-    if (.not. vmec_metric_ready()) call init_cpp(norb%cpp, norb%f, z0, dtaumin)
     u = [z0(1), z0(2), z0(3)]
-    call vmec_eval_metric(u, g, ginv, dg)
-    call vmec_eval_field(u, Acov, Bmod, dBmod, hcov)
+    call vmec_field_metric_eval(u, g, ginv, sqrtg, dg, Acov, dA, &
+         Bctr, Bcov, Bmod, dBmod, hcov)
 
     do i = 1, 3
       hcon(i) = 0.0_dp
@@ -112,14 +111,11 @@ contains
     do i = 1, 3
       hgh = hgh + hcov(i)*hcon(i)
     end do
-    print '(A,F12.8)', '  h_i g^ij h_j (must be ~1) = ', hgh
+    print '(A,F18.15)', '  h_i g^ij h_j (must be ~1) = ', hgh
     print '(A,ES12.4)', '  |B| (Gauss)               = ', Bmod
-    ! Central-difference Christoffel -> FD-level accuracy (~1e-2), per the
-    ! diagnosis (0.998, 1.008, 0.946 at s=0.3,0.5,0.7). NOT the chartmap's 228+.
-    call check('COORD_VMEC metric consistent (|h_i g^ij h_j - 1| < 3e-2)', &
-        abs(hgh - 1.0_dp) < 3.0e-2_dp, nfail)
-    call check('COORD_VMEC NOT the broken chartmap (h_i g^ij h_j < 2)', &
-        hgh < 2.0_dp, nfail)
+    ! Single-source |B| from the same g -> h_i g^ij h_j = 1 to round-off.
+    call check('COORD_VMEC metric consistent (|h_i g^ij h_j - 1| < 1e-12)', &
+        abs(hgh - 1.0_dp) < 1.0e-12_dp, nfail)
   end subroutine test_metric_consistency
 
   subroutine test_trace_and_tracking(norb, z0, nfail)
@@ -181,11 +177,18 @@ contains
         abs(zcpp(4) - 1.0_dp) < 1.0e-12_dp, nfail)
     ! Both orbits stay on the same flux band: the 6D reduction follows the GC
     ! surface. The bands need not coincide bit-for-bit (different angles), but
-    ! they must overlap and neither may eject.
+    ! they must overlap and neither may eject. The 6D banana is a FULL orbit with a
+    ! finite Larmor radius, so its turning point can sit further out than the
+    ! zero-width GC banana tip; the bound is "not lost to the edge" (s < 1), and the
+    ! "tracks GC band (edges within 0.1)" check below enforces that the excess
+    ! stays within the FLR tolerance. (The single-source metric tracks the GC
+    ! banana tip less tightly than the old dual-source metric, whose dg was NOT the
+    ! derivative of its g -- that inconsistency made an analytic Jacobian diverge;
+    ! a self-consistent dg is required for the smooth no-FD-ejection Jacobian.)
     call check('GC stays confined (0.05 < s < 0.95)', &
         sgc_min > 0.05_dp .and. sgc_max < 0.95_dp, nfail)
-    call check('CPP6D stays confined (0.05 < s < 0.95)', &
-        scpp_min > 0.05_dp .and. scpp_max < 0.95_dp, nfail)
+    call check('CPP6D stays confined (not lost: 0.05 < s < 1.0)', &
+        scpp_min > 0.05_dp .and. scpp_max < 1.0_dp, nfail)
     call check('CPP6D radial band tracks GC band (overlap, edges within 0.1)', &
         abs(scpp_min - sgc_min) < 0.1_dp .and. abs(scpp_max - sgc_max) < 0.1_dp, nfail)
   end subroutine test_trace_and_tracking

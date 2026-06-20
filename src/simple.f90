@@ -180,23 +180,26 @@ contains
     ! ~ O(1), so the canonical-midpoint Newton stays well conditioned -- physical
     ! CGS mass ~ 1e-24 would blow up v^i = g^ij(...)/m and wreck the solve.
     ! qc = 1/ro0_bar = sqrt(2)/ro0, dt = dtaumin/sqrt(2): both identical to GC.
-    use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready, &
-      vmec_eval_field
+    ! |B| for the mu seed comes from the SAME single-source vmec_field_metric the
+    ! integrator/residual/Jacobian use, so the GC reduction (p-qcA = vpar_bar h,
+    ! kinetic = vpar_bar^2/2) is exact at the start.
+    use vmec_field_metric, only: vmec_field_metric_eval
     type(cpp_canon_state_t), intent(out) :: cpp
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
 
-    real(dp) :: ro0_bar, x0(3), Acov(3), Bmod, dBmod(3), hcov(3), mu, vpar_bar
-
-    if (.not. vmec_metric_ready()) call vmec_metric_attach()
+    real(dp) :: ro0_bar, x0(3), mu, vpar_bar
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
+    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
 
     ! 6D state in the VMEC flux chart: u=(s,vartheta,varphi), s direct (no rho).
     x0(1) = min(max(z0(1), 0d0), 1d0)
     x0(2) = z0(2)
     x0(3) = z0(3)
 
-    call vmec_eval_field(x0, Acov, Bmod, dBmod, hcov)
+    call vmec_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
+         Bctr, Bcov, Bmod, dBmod, hcov)
 
     mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/Bmod*2d0      ! mu by factor 2 (GC convention)
     ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)

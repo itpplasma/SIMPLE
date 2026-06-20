@@ -16,10 +16,15 @@ module orbit_cpp_canonical
   ! Two coordinate blocks, integer-dispatched:
   !   COORD_TOK  analytic toroidal metric + exact-curl tokamak field, fully
   !              inline, !$acc routine seq, class-free, analytic Jacobian.
-  !   COORD_VMEC real VMEC flux coordinates: full metric g_ij/g^ij + Christoffel
-  !              from libneo (#322) via orbit_cpp_vmec_metric, covariant A_i and
-  !              |B| from SIMPLE's native VMEC field. Host-side (libneo class +
-  !              splines); Jacobian by finite difference of the same residual.
+  !   COORD_VMEC real VMEC flux coordinates: SINGLE-SOURCE full metric g_ij/g^ij,
+  !              analytic dg_ij,k, covariant A_i and dA, and |B|=sqrt(g_ij B^i B^j)
+  !              with analytic dBmod -- all from one vmec_field_metric_eval (libneo
+  !              splint_vmec_data_d2), so h_i g^ij h_j = 1 identically and dg is the
+  !              true derivative of g. Host-side (splines); Jacobian is a SIMPLIFIED
+  !              first-derivative analytic Jacobian of the same residual (g, ginv,
+  !              dg, dA, dBmod; d2 terms dropped) -- self-consistent (needs dg=d g),
+  !              smooth through v_par -> 0 where the old finite-difference Jacobian
+  !              went noisy and spuriously ejected trapped particles.
   ! The diagonal toroidal metric is the special case of the general full-metric
   ! arithmetic (off-diagonals zero), so COORD_TOK reproduces the validated python
   ! oracle bit-for-bit while the same residual runs on a stellarator metric.
@@ -90,9 +95,10 @@ module orbit_cpp_canonical
 
 contains
 
-  ! Evaluate the full metric + field block at q. mode_secders unused here (the
-  ! Jacobian uses analytic dg/dA for COORD_TOK and finite differences for the
-  ! mu|B| force and the whole COORD_VMEC path).
+  ! Evaluate the full metric + field block at q. COORD_TOK fills the analytic
+  ! diagonal block (its analytic Jacobian also uses d2g/d2A/d2Bmod); COORD_VMEC
+  ! fills the single-source block whose first derivatives (dg, dA, dBmod) drive
+  ! the simplified first-derivative analytic Jacobian.
   subroutine eval_block(coord, q, blk)
     integer, intent(in) :: coord
     real(dp), intent(in) :: q(3)
@@ -138,26 +144,26 @@ contains
     blk%hcov = [0.0_dp, fc%hth, fc%hph]
   end subroutine eval_block_tok
 
-  ! Real VMEC flux block (host-side). Full non-diagonal metric + Christoffel from
-  ! libneo; covariant A_i and |B| from the native VMEC field. dA is taken by a
-  ! central difference of A_i (the native evaluator returns analytic dA only in s).
+  ! Real VMEC flux block (host-side). SINGLE-SOURCE: the full non-diagonal metric
+  ! g_ij/g^ij, its analytic derivatives dg_ij,k, the covariant A_i and its gradient
+  ! dA, and |B| = sqrt(g_ij B^i B^j) with its analytic gradient dBmod ALL come from
+  ! one vmec_field_metric_eval call (libneo splint_vmec_data_d2). Two reasons this
+  ! must be single-source: (1) |B| from the SAME g gives h_i g^ij h_j = 1 to
+  ! round-off (the dual-source path gave 1.009); (2) the analytic Jacobian below
+  ! requires dg to be the genuine derivative of g -- with the dual-source split
+  ! (g from libneo metric_tensor, dg from a separate Christoffel call) dg is NOT
+  ! the derivative of g, so an analytic Jacobian is inconsistent and Newton fails.
+  ! Here dg is analytic from the same R,Z derivatives (test_vmec_field_metric: dg
+  ! vs FD ~1e-8), so the first-derivative analytic Jacobian is self-consistent and
+  ! Newton converges smoothly through v_par -> 0.
   subroutine eval_block_vmec(q, blk)
-    use orbit_cpp_vmec_metric, only: vmec_eval_metric, vmec_eval_field
+    use vmec_field_metric, only: vmec_field_metric_eval
     real(dp), intent(in) :: q(3)
     type(block_t), intent(out) :: blk
-    real(dp) :: Ap(3), Am(3), Bmp, dBmp(3), hp(3), qp(3), qm(3)
-    real(dp), parameter :: h = 1.0e-6_dp
-    integer :: k
+    real(dp) :: sqrtg, Bctr(3), Bcov(3)
 
-    call vmec_eval_metric(q, blk%g, blk%ginv, blk%dg)
-    call vmec_eval_field(q, blk%Acov, blk%Bmod, blk%dBmod, blk%hcov)
-    blk%dA = 0.0_dp
-    do k = 1, 3
-      qp = q; qm = q; qp(k) = qp(k) + h; qm(k) = qm(k) - h
-      call vmec_eval_field(qp, Ap, Bmp, dBmp, hp)
-      call vmec_eval_field(qm, Am, Bmp, dBmp, hp)
-      blk%dA(:,k) = (Ap - Am)/(2.0_dp*h)
-    end do
+    call vmec_field_metric_eval(q, blk%g, blk%ginv, sqrtg, blk%dg, blk%Acov, &
+         blk%dA, Bctr, Bcov, blk%Bmod, blk%dBmod, blk%hcov)
   end subroutine eval_block_vmec
 
   ! Production Boozer/chartmap block (host-side). The 6D state runs in the chartmap
@@ -349,49 +355,117 @@ contains
     call residual_blk(st, zold, z, blk, fvec)
   end subroutine residual_tok
 
-  ! Jacobian dF/dz. COORD_TOK uses the analytic full-metric Jacobian (validated by
-  ! the analytic-vs-FD self-check); COORD_VMEC uses a central-difference Jacobian
-  ! of the same residual (the host metric/field are spline+FD based, so a closed
-  ! Hessian would be inconsistent). Both feed the same portable Newton LU.
+  ! Jacobian dF/dz. COORD_TOK uses the analytic diagonal-metric Jacobian (with
+  ! d2g/d2A/d2Bmod, validated by the analytic-vs-FD self-check). COORD_VMEC uses a
+  ! simplified FIRST-derivative analytic Jacobian built from the same block (g,
+  ! ginv, dg, dA, dBmod) the residual uses, dropping the d2g/d2A/d2Bmod
+  ! force-gradient terms. The dropped terms make it an APPROXIMATE Jacobian, but it
+  ! is SMOOTH (the finite-difference Jacobian it replaces went noisy at banana
+  ! turning points v_par -> 0 and spuriously ejected all trapped particles); Newton
+  ! converges to the residual root with a smooth approximate Jacobian. Both feed
+  ! the same portable Newton LU.
   subroutine jacobian(st, zold, z, jac)
     type(cpp_canon_state_t), intent(in) :: st
     real(dp), intent(in) :: zold(6), z(6)
     real(dp), intent(out) :: jac(6,6)
 
     if (st%coord == COORD_VMEC) then
-      call jacobian_fd(st, zold, z, jac)
+      call jacobian_vmec_analytic(st, zold, z, jac)
     else
       call jacobian_analytic(st, zold, z, jac)
     end if
   end subroutine jacobian
 
-  ! Finite-difference Jacobian of the residual (host path). The COORD_VMEC
-  ! production wire runs in physical CGS, where the state is badly scaled: the
-  ! angles q (1:3) are O(1) while the covariant momenta p (4:6) are O(m v g) ~
-  ! 1e-8. A single absolute FD step would perturb p by many times its own
-  ! magnitude and wreck the p-columns, so the step is per-component RELATIVE to
-  ! the variable's own scale (col_scale), with an absolute floor only where the
-  ! variable itself is near zero.
-  subroutine jacobian_fd(st, zold, z, jac)
+  ! Simplified first-derivative analytic Jacobian for the full-metric sym residual
+  ! (COORD_VMEC, MODEL_CP / MODEL_CPP_SYM). It uses the SAME single-source block
+  ! (g, ginv, dg, dA, Acov, dBmod) at qmid = (zold+z)/2 that the residual
+  ! evaluates, where dg is the genuine derivative of g, so every term below uses
+  ! ONLY first derivatives -- the second derivatives of g, A and |B| (d2g, d2A,
+  ! d2Bmod) are dropped, the agreed simplification. The dropped terms make it an
+  ! APPROXIMATE Jacobian, but it is self-consistent and SMOOTH (the FD Jacobian it
+  ! replaces went noisy at v_par -> 0); Newton converges to the residual root.
+  !
+  ! sym residual:
+  !   grad_k  = (m/2) dg_ij,k v^i v^j + qc dA_i,k v^i [- mu dBmod_k],  v=(z-zold)/dt
+  !   pmid_l  = pold_l + (dt/2) grad_l
+  !   vcov_l  = pmid_l - qc Acov_l,   vcon_k = ginv_kl vcov_l
+  !   Fq_k    = z_k - zold_k - (dt/m) vcon_k
+  !   Fp_k    = z_(3+k) - (pold_k + dt grad_k)
+  ! With block first derivatives w.r.t. z_j = (1/2) d/dq_j (qmid carries the 1/2)
+  ! and the explicit v dependence dv^i/dz_j = delta_ij/dt:
+  !   dgrad_dz(k,j) = (m sum_l dg_jl,k v^l + qc dA_j,k)/dt          (d2 terms dropped)
+  !   dginv_dz(k,l,j) = -(1/2) ginv_ka dg_ab,j ginv_bl              (from dg only)
+  ! giving
+  !   dFq_k/dz_j   = delta_kj - (dt/m)[ dginv_dz(k,l,j) vcov_l
+  !                  + ginv_kl ( (dt/2) dgrad_dz(l,j) - (qc/2) dA_l,j ) ]
+  !   dFq_k/dp_m   = 0      (pmid uses pold, not z(4:6))
+  !   dFp_k/dz_j   = -dt dgrad_dz(k,j)
+  !   dFp_k/dp_m   = delta_km
+  subroutine jacobian_vmec_analytic(st, zold, z, jac)
     type(cpp_canon_state_t), intent(in) :: st
     real(dp), intent(in) :: zold(6), z(6)
     real(dp), intent(out) :: jac(6,6)
-    real(dp) :: zp(6), zm(6), rp(6), rm(6), h, col_scale(6)
-    integer :: j
+    type(block_t) :: blk
+    real(dp) :: qmid(3), vmid(3), grad(3), vcov(3), qc, mu_use
+    real(dp) :: dgrad_dz(3,3), dginv_dz(3,3,3)
+    integer :: k, j, l, a, b
+    logical :: mu_active
 
-    ! Angles: O(1) scale. Momenta: their own magnitude (mean over the three p's
-    ! as a robust floor so a single small p does not collapse its column step).
-    col_scale(1:3) = 1.0_dp
-    col_scale(4:6) = max((abs(z(4)) + abs(z(5)) + abs(z(6)))/3.0_dp, 1.0e-30_dp)
+    qmid = 0.5_dp*(zold(1:3) + z(1:3))
+    vmid = (z(1:3) - zold(1:3))/st%dt
+    call eval_block_vmec(qmid, blk)
+    qc = st%charge/(c*st%ro0)
+    mu_active = (st%model /= MODEL_CP)
+    mu_use = merge(st%mu, 0.0_dp, mu_active)
 
-    do j = 1, 6
-      h = 1.0e-7_dp*max(abs(z(j)), col_scale(j))
-      zp = z; zm = z; zp(j) = zp(j) + h; zm(j) = zm(j) - h
-      call residual(st, zold, zp, rp)
-      call residual(st, zold, zm, rm)
-      jac(:,j) = (rp - rm)/(2.0_dp*h)
+    ! dgrad_dz(k,j): explicit v dependence only (block d2 terms dropped). dLdq is
+    ! symmetric in dg's first two indices, so the v-derivative collapses to one sum.
+    do k = 1, 3
+      do j = 1, 3
+        dgrad_dz(k,j) = 0.0_dp
+        do l = 1, 3
+          dgrad_dz(k,j) = dgrad_dz(k,j) + blk%dg(j,l,k)*vmid(l)
+        end do
+        dgrad_dz(k,j) = (st%mass*dgrad_dz(k,j) + qc*blk%dA(j,k))/st%dt
+      end do
     end do
-  end subroutine jacobian_fd
+
+    ! dginv_dz(k,l,j) = d g^kl / d z_j = -(1/2) g^ka (dg_ab,j) g^bl.
+    do j = 1, 3
+      do l = 1, 3
+        do k = 1, 3
+          dginv_dz(k,l,j) = 0.0_dp
+          do a = 1, 3
+            do b = 1, 3
+              dginv_dz(k,l,j) = dginv_dz(k,l,j) &
+                  - 0.5_dp*blk%ginv(k,a)*blk%dg(a,b,j)*blk%ginv(b,l)
+            end do
+          end do
+        end do
+      end do
+    end do
+
+    ! grad and vcov at the current iterate (vcov = pmid - qc Acov).
+    call dLdq(st%mass, st%charge, st%ro0, mu_use, mu_active, vmid, blk, grad)
+    do l = 1, 3
+      vcov(l) = st%pold(l) + 0.5_dp*st%dt*grad(l) - qc*blk%Acov(l)
+    end do
+
+    jac = 0.0_dp
+    do k = 1, 3
+      do j = 1, 3
+        jac(k,j) = 0.0_dp
+        do l = 1, 3
+          jac(k,j) = jac(k,j) + dginv_dz(k,l,j)*vcov(l) &
+              + blk%ginv(k,l)*(0.5_dp*st%dt*dgrad_dz(l,j) - 0.5_dp*qc*blk%dA(l,j))
+        end do
+        jac(k,j) = -st%dt/st%mass*jac(k,j)
+        jac(3+k,j) = -st%dt*dgrad_dz(k,j)
+      end do
+      jac(k,k) = jac(k,k) + 1.0_dp
+      jac(3+k,3+k) = 1.0_dp
+    end do
+  end subroutine jacobian_vmec_analytic
 
   ! Analytic 6x6 Jacobian for the diagonal toroidal block (COORD_TOK). The
   ! position rows depend on z(1:3) only, so the p rows are linear: [Jqq 0; Jpq I].
@@ -577,22 +651,15 @@ contains
     integer, intent(out) :: ierr
     integer, parameter :: maxit = 50
     real(dp), parameter :: atol = 1.0e-13_dp, rtol = 1.0e-12_dp
-    ! A central-difference Jacobian (the COORD_VMEC host path) is accurate to only
-    ! ~1e-7, so the Newton step cannot shrink below that relative floor and the
-    ! analytic-path rtol=1e-12 is unreachable. Use an FD-matched step tolerance
-    ! there; the analytic COORD_TOK/CHARTMAP path keeps the tight rtol unchanged.
-    real(dp), parameter :: rtol_fd = 1.0e-8_dp
-    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), reltol(6), steptol
+    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), reltol(6)
     type(block_t) :: blk
     real(dp) :: vmid(3), qc
     integer :: kit, i, info, j
-    logical :: res_conv, step_conv, is_fd
+    logical :: res_conv, step_conv
 
     zold = st%z
     z = zold
     ierr = 0
-    is_fd = (st%coord == COORD_VMEC)
-    steptol = merge(rtol_fd, rtol, is_fd)
 
     do kit = 1, maxit
       if (z(1) <= 0.0_dp) z(1) = 1.0e-3_dp
@@ -616,11 +683,9 @@ contains
       res_conv = .true.; step_conv = .true.
       do i = 1, 6
         if (abs(fvec(i)) >= atol) res_conv = .false.
-        if (abs(dz(i)) >= steptol*reltol(i)) step_conv = .false.
+        if (abs(dz(i)) >= rtol*reltol(i)) step_conv = .false.
       end do
-      ! The FD path converges on the step (its residual cannot reach atol with a
-      ! central-difference Jacobian); the analytic path may converge on either.
-      if (step_conv .or. (res_conv .and. .not. is_fd)) exit
+      if (res_conv .or. step_conv) exit
     end do
 
     if (kit > maxit) ierr = 3
