@@ -679,6 +679,14 @@ add_test(NAME test_vmec_field_metric COMMAND test_vmec_field_metric.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_vmec_field_metric PROPERTIES LABELS "unit" TIMEOUT 120)
 
+# GATE for the single-source Boozer boozer_field_metric: h_i g^ij h_j = 1, splined
+# |B| match, analytic dg vs central FD, and g.ginv = I on test_data/wout.nc.
+add_executable(test_boozer_field_metric.x test_boozer_field_metric.f90)
+target_link_libraries(test_boozer_field_metric.x simple)
+add_test(NAME test_boozer_field_metric COMMAND test_boozer_field_metric.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_boozer_field_metric PROPERTIES LABELS "unit" TIMEOUT 120)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
@@ -985,6 +993,3 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     LABELS "unit;chartmap"
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
-
-add_executable(diag_step_tmp.x diag_step_tmp.f90)
-target_link_libraries(diag_step_tmp.x simple)
