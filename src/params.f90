@@ -7,9 +7,7 @@ module params
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
     use magfie_sub, only: TEST
-    use field_can_mod, only: eval_field => evaluate, field_can_t
-    use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-                                     EXPL_IMPL_EULER
+    use orbit_symplectic_base, only: EXPL_IMPL_EULER
     use vmecin_sub, only: stevvo
     use callback, only: output_error, output_orbits_macrostep
 
@@ -48,8 +46,8 @@ module params
     ! Orbit model selector: 0 guiding-center (default, symplectic GC path),
     ! 1 Pauli/CPP 4D flux-canonical, 2 Boris full orbit, 3 implicit-midpoint full
     ! orbit, 4 Cartesian 6D Pauli (research), 5 genuine 6D canonical CPP on the
-    ! production COORD_VMEC chart (ORBIT_CPP6D), 6 genuine 6D full charged particle
-    ! on COORD_VMEC, gyro-resolved (ORBIT_CP6D). See src/orbit_full.f90.
+    ! production Boozer chart (ORBIT_CPP6D), 6 genuine 6D full charged particle
+    ! on the same Boozer canonical machinery (ORBIT_CP6D). See src/orbit_full.f90.
     integer :: orbit_model = 0
 
     ! Chart for the 6D CP/CPP field+metric: 0 = VMEC flux (default), 1 = Boozer.

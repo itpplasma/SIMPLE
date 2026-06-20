@@ -1,16 +1,12 @@
 program test_cp6d_vs_gc
   ! Genuine 6D classical charged particle (orbit_model=ORBIT_CP6D) wired into the
-  ! production alpha-loss pipeline through REAL VMEC flux coordinates on the
-  ! single-source vmec_field_metric, on the reactor-scale test equilibrium
-  ! test_data/wout.nc (a QA stellarator, rho* ~ 1/200), validated against the
-  ! production guiding center.
+  ! production alpha-loss pipeline through the same Boozer canonical midpoint
+  ! machinery as CPP, on the reactor-scale test equilibrium test_data/wout.nc
+  ! (a QA stellarator, rho* ~ 1/200), validated against the production guiding
+  ! center.
   !
-  ! The CP loss path is EXPLICIT (orbit_cp_explicit, RK4): no Newton, no Jacobian,
-  ! so a banana turning point (v_par -> 0) is a smooth point of the RHS instead of
-  ! a Jacobian-noise ejection. CP differs from CPP6D in physics: the gyration is
-  ! RESOLVED. There is no mu|B| term; the full velocity v = vpar_bar h + vperp
-  ! e_perp is seeded, so the orbit gyrates at the Larmor scale and the gyro-center
-  ! sits an O(rho*) FLR offset off the GC start. CP MUST resolve the gyration, i.e.
+  ! CP differs from CPP6D in physics: MODEL_CP omits the Pauli mu|B| term and
+  ! seeds the resolved perpendicular velocity. CP must resolve the gyration, i.e.
   ! take many steps per gyroperiod (large npoiper2).
   !
   ! Acceptance gates (the task's validation list):
@@ -29,14 +25,17 @@ program test_cp6d_vs_gc
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
   use simple, only: init_sympl, init_cp, init_params, tracer_t, &
-    orbit_timestep_cp_explicit
+    orbit_timestep_cp_canonical
   use simple_main, only: init_field
   use orbit_symplectic, only: orbit_timestep_sympl
-  use orbit_cp_explicit, only: cp_explicit_energy, cp_explicit_to_gc
-  use orbit_cpp_vmec_metric, only: vmec_eval_field
-  use params, only: field_input, coord_input, integmode, relerr, dtaumin
+  use orbit_cpp_canonical, only: cpp_canon_energy, cpp_canon_to_gc, &
+    cpp_canon_state_t
+  use boozer_field_metric, only: boozer_field_metric_eval
+  use params, only: field_input, coord_input, integmode, relerr, dtaumin, orbit_coord
   use velo_mod, only: isw_field_type
   use magfie_sub, only: BOOZER
+  use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
+  use boozer_sub, only: get_boozer_coordinates
   use util, only: twopi
 
   implicit none
@@ -44,7 +43,6 @@ program test_cp6d_vs_gc
   integer, parameter :: ans_s = 5, ans_tp = 5, amultharm = 5
   type(tracer_t) :: norb
   real(dp) :: z0(5), rbig, ro0_bar, gyroperiod, Bmod
-  real(dp) :: Acov(3), dBmod(3), hcov(3)
   integer :: nfail, npoiper2
 
   nfail = 0
@@ -53,9 +51,13 @@ program test_cp6d_vs_gc
   isw_field_type = BOOZER
   field_input = 'wout.nc'
   coord_input = 'wout.nc'
+  orbit_coord = 1
   integmode = 1
   relerr = 1.0d-13
   call init_field(norb, 'wout.nc', ans_s, ans_tp, amultharm, integmode)
+  use_B_r = .true.
+  use_del_tp_B = .true.
+  call get_boozer_coordinates
   call init_params(norb, 2, 4, 3.5e6_dp, 256, 1, 1.0d-13)
   ! rbig (cm) back out of the npoiper2=256 step: dtaumin = 2 pi rbig / npoiper2.
   rbig = norb%dtaumin*256.0_dp/twopi
@@ -64,14 +66,14 @@ program test_cp6d_vs_gc
   ! Shared trapped-class IC in flux coords (s, theta, phi, v/v0, lambda).
   z0 = [0.3_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.3_dp]
 
-  ! Attach the COORD_VMEC metric (init_cp does it) and read |B| at the start so the
-  ! normalized gyroperiod can be computed. The canonical cyclotron frequency is
+  ! Read |B| at the start so the normalized gyroperiod can be computed.
+  ! The canonical cyclotron frequency is
   ! Omega = qc |B| = |B|/ro0_bar (charge=c=1, qc=1/ro0_bar), so the gyroperiod in
   ! normalized tau is 2 pi ro0_bar/|B|. With |B| ~ 5.9e4 G and ro0_bar ~ 1.9e5 cm
   ! this is O(20) tau -- much shorter than the GC step 2 pi rbig/npoiper2, so CP
   ! must oversample by ~ rbig|B|/ro0 = O(1/rho*) per gyration.
   call init_cp(norb%cp, norb%f, z0, norb%dtaumin)
-  call vmec_eval_field(norb%cp%x, Acov, Bmod, dBmod, hcov)
+  call read_boozer_field_mod(norb%cp%z(1:3), Bmod)
   gyroperiod = twopi*ro0_bar/Bmod
   print '(A,ES12.4)', '  ro0 (cm)            = ', ro0
   print '(A,ES12.4)', '  ro0_bar (cm)        = ', ro0_bar
@@ -129,14 +131,14 @@ contains
     zcp = z0
     call init_sympl(cp%si, cp%f, zcp, dtm, dtm, relerr, integmode)
     call init_cp(cp%cp, cp%f, zcp, dtm)
-    E0 = cp_explicit_energy(cp%cp); maxdE = 0.0_dp
+    E0 = cpp_canon_energy(cp%cp); maxdE = 0.0_dp
     do it = 1, nsteps
-      call orbit_timestep_cp_explicit(cp%cp, cp%f, zcp, ierr)
+      call orbit_timestep_cp_canonical(cp%cp, cp%f, zcp, ierr)
       if (ierr /= 0) then
         print '(A,I0,A,I0)', '  CP sweep step ', it, ' ierr=', ierr
         maxdE = huge(1.0_dp); return
       end if
-      E = cp_explicit_energy(cp%cp)
+      E = cpp_canon_energy(cp%cp)
       maxdE = max(maxdE, abs((E - E0)/E0))
     end do
   end subroutine cp_energy_sweep
@@ -211,14 +213,14 @@ contains
     zcp = z0
     call init_sympl(cp%si, cp%f, zcp, dtm, dtm, relerr, integmode)
     call init_cp(cp%cp, cp%f, zcp, dtm)
-    E0 = cp_explicit_energy(cp%cp); Emin = E0; Emax = E0
+    E0 = cpp_canon_energy(cp%cp); Emin = E0; Emax = E0
     mu0 = cp%cp%mu; mu_min = mu0; mu_max = mu0
     scp_hist(0) = zcp(1); cp_lost = .false.
     call emergent_mu(cp%cp, mu_hist(0))
     do it = 1, nstep
-      call orbit_timestep_cp_explicit(cp%cp, cp%f, zcp, ierr)
+      call orbit_timestep_cp_canonical(cp%cp, cp%f, zcp, ierr)
       if (ierr /= 0) then; cp_lost = .true.; exit; end if
-      E = cp_explicit_energy(cp%cp); Emin = min(Emin, E); Emax = max(Emax, E)
+      E = cpp_canon_energy(cp%cp); Emin = min(Emin, E); Emax = max(Emax, E)
       ! Emergent magnetic moment from the resolved velocity: mu = vperp^2/(2|B|).
       call emergent_mu(cp%cp, mu_emergent)
       mu_min = min(mu_min, mu_emergent); mu_max = max(mu_max, mu_emergent)
@@ -278,21 +280,28 @@ contains
     deallocate(scp_hist, sgc_hist, mu_hist)
   end subroutine test_gyrocenter_tracking
 
-  ! Emergent magnetic moment mu = vperp^2/(2|B|) from the resolved CP velocity:
-  ! vperp^2 = |v|^2 - vpar^2 with vpar = h_i v^i (cp_explicit_to_gc gives vpar) and
-  ! |v|^2 = (p-qcA) g^ij (p-qcA)/m^2 = 2 E_kin (the kinetic energy is |v|^2/2).
+  ! Emergent magnetic moment mu = vperp^2/(2|B|) from the resolved CP velocity.
   subroutine emergent_mu(st, mu_e)
-    use orbit_cp_explicit, only: cp_explicit_state_t
-    type(cp_explicit_state_t), intent(in) :: st
+    type(cpp_canon_state_t), intent(in) :: st
     real(dp), intent(out) :: mu_e
-    real(dp) :: r, th, ph, vpar, vsq, vperp2, Acov(3), Bmod, dBmod(3), hcov(3)
+    real(dp) :: r, th, ph, vpar, vsq, vperp2, Bmod
 
-    call cp_explicit_to_gc(st, r, th, ph, vpar)       ! vpar = h_i v^i
-    vsq = 2.0_dp*cp_explicit_energy(st)/st%mass        ! |v|^2 = 2 H (CP: no mu|B|)
+    call cpp_canon_to_gc(st, r, th, ph, vpar)         ! vpar = h_i v^i
+    vsq = 2.0_dp*cpp_canon_energy(st)/st%mass         ! |v|^2 = 2 H (CP: no mu|B|)
     vperp2 = max(vsq - vpar*vpar, 0.0_dp)
-    call vmec_eval_field(st%x, Acov, Bmod, dBmod, hcov)
+    call read_boozer_field_mod(st%z(1:3), Bmod)
     mu_e = st%mass*vperp2/(2.0_dp*Bmod)
   end subroutine emergent_mu
+
+  subroutine read_boozer_field_mod(u, Bmod)
+    real(dp), intent(in) :: u(3)
+    real(dp), intent(out) :: Bmod
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
+    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), dBmod(3), hcov(3)
+
+    call boozer_field_metric_eval(u, g, ginv, sqrtg, dg, Acov, dA, &
+      Bctr, Bcov, Bmod, dBmod, hcov)
+  end subroutine read_boozer_field_mod
 
   ! Centered boxcar of width w ending no later than index i (i-w+1 .. i).
   function boxcar(h, i, w) result(avg)
@@ -334,7 +343,7 @@ contains
     call init_sympl(edge%si, edge%f, zedge, dtm, dtm, relerr, integmode)
     call init_cp(edge%cp, edge%f, zedge, dtm)
     zedge(1) = 1.5_dp
-    call orbit_timestep_cp_explicit(edge%cp, edge%f, zedge, ierr)
+    call orbit_timestep_cp_canonical(edge%cp, edge%f, zedge, ierr)
     call check('CP6D wrapper flags z(1)>1 as loss (ierr/=0)', ierr /= 0, nfail)
   end subroutine test_loss_propagation
 

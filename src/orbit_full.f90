@@ -30,21 +30,13 @@ module orbit_full
   ! macrostep; it is exercised through its own harness (test_cpp_pauli_gc_banana).
   integer, parameter, public :: ORBIT_PAULI6D = 4
   ! Genuine 6D canonical-midpoint Pauli (orbit_cpp_canonical MODEL_CPP_SYM) wired
-  ! into the production alpha-loss pipeline. It runs in NORMALIZED TIME with the
-  ! GC sqrt(2) convention on the production Boozer/chartmap chart (the chartmap
-  ! libneo metric matches the field_can chart, libneo #322), feeding times_lost /
-  ! confined_fraction unchanged. Restricted to the chartmap chart; the generic
-  ! BOOZER-on-VMEC chart has no matching metric. Distinct method from GC, matches
-  ! GC to O(rho*); wired via init_cpp / orbit_timestep_cpp_canonical in simple.f90.
+  ! into the production alpha-loss pipeline. It runs in normalized time with the
+  ! GC sqrt(2) convention on the native Boozer chart, feeding times_lost /
+  ! confined_fraction unchanged.
   integer, parameter, public :: ORBIT_CPP6D = 5
-  ! Genuine 6D classical charged particle, EXPLICIT (orbit_cp_explicit, RK4 on the
-  ! single-source vmec_field_metric), SIMPLE GC sqrt(2) normalization (mass=1,
-  ! qc=sqrt(2)/ro0, dt=dtaumin/sqrt(2)). It differs from CPP6D in physics: the
-  ! gyration is RESOLVED (no mu|B| term, full velocity v = vpar h + vperp e_perp),
-  ! so it needs a gyro-resolving step (large npoiper2). It is EXPLICIT (no Newton
-  ! or Jacobian), so trapped particles survive v_par -> 0 turning points where the
-  ! implicit FD-Jacobian path ejected them. Wired via init_cp /
-  ! orbit_timestep_cp_explicit in simple.f90.
+  ! Genuine 6D classical charged particle in the same canonical midpoint machinery
+  ! as CPP (orbit_cpp_canonical MODEL_CP). CP omits the Pauli mu|B| term and seeds
+  ! the resolved perpendicular velocity.
   integer, parameter, public :: ORBIT_CP6D = 6
 
   ! coordinate kinds (3..5 reserved for the libneo PR: VMEC, Boozer, chartmap)

@@ -85,13 +85,32 @@ contains
         ! delta splines (boozer_field_metric -> delthe_delphi_BV_d2). Enable them
         ! before init_field builds the Boozer coordinates.
         block
-            use params, only: orbit_coord
-            use boozer_coordinates_mod, only: use_del_tp_B
-            if (orbit_coord == 1) use_del_tp_B = .true.
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+            use params, only: orbit_coord, orbit_model
+            use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+                .and. orbit_coord == 1) then
+                use_B_r = .true.
+                use_del_tp_B = .true.
+            end if
         end block
 
         call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
         call print_phase_time('Field initialization completed')
+
+        block
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+            use params, only: orbit_coord, orbit_model
+            use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
+            use boozer_sub, only: get_boozer_coordinates
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+                .and. orbit_coord == 1) then
+                use_B_r = .true.
+                use_del_tp_B = .true.
+                call get_boozer_coordinates
+                call print_phase_time('Boozer metric coordinate derivatives completed')
+            end if
+        end block
 
         call params_init
         call print_phase_time('Parameter initialization completed')
@@ -109,13 +128,8 @@ contains
             chartmap_mode = is_boozer_chartmap(field_input)
         end if
 
-        ! The 6D CPP loss path runs in REAL VMEC flux coordinates (COORD_VMEC),
-        ! the only chart whose libneo metric is consistent with the covariant
-        ! field (h_i g^ij h_j = 1). The Cartesian-storage Boozer chartmap is not
-        ! (its periodic-Cartesian spline destroys the secular toroidal rotation
-        ! for nfp>1); see DOC/coordinates-and-fields.md. So CPP6D needs the VMEC
-        ! equilibrium splined, not a standalone Boozer-chartmap input. Checked
-        ! once here (is_boozer_chartmap reads NetCDF and must not run per-thread).
+        ! The 6D CP/CPP path runs on the native Boozer chart built from a VMEC
+        ! equilibrium, not from a standalone Boozer-chartmap input.
         block
             use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
             use params, only: orbit_model
@@ -165,14 +179,14 @@ contains
             call print_phase_time('Bmin/Bmax initialization completed')
         end if
 
-        ! Build the COORD_VMEC metric once (allocates a module coordinate system),
-        ! so per-thread init_cpp finds it ready and never races on the attach.
+        ! Keep the VMEC metric attach for legacy non-Boozer experiments. Production
+        ! CP/CPP validation above currently restricts both models to Boozer.
         block
             use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
             use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready
-            use params, only: orbit_model
+            use params, only: orbit_model, orbit_coord
             if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
-                .and. .not. vmec_metric_ready()) then
+                .and. orbit_coord /= 1 .and. .not. vmec_metric_ready()) then
                 call vmec_metric_attach
                 call print_phase_time('COORD_VMEC 6D metric attached')
             end if
@@ -223,8 +237,8 @@ contains
             if (orbit_coord /= 1) error stop &
                 'orbit_model=ORBIT_CPP6D supports only orbit_coord=1 (Boozer)'
         case (ORBIT_CP6D)
-            error stop 'orbit_model=ORBIT_CP6D is not supported in production; '// &
-                'CP-in-Boozer is an open implementation issue'
+            if (orbit_coord /= 1) error stop &
+                'orbit_model=ORBIT_CP6D supports only orbit_coord=1 (Boozer)'
         case (ORBIT_BORIS, ORBIT_FOSYMPL, ORBIT_PAULI6D)
             error stop 'selected orbit_model is not available in production '// &
                 'alpha-loss tracing'
@@ -236,7 +250,7 @@ contains
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
         use field, only: field_from_file
-        use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
+        use field_boozer_chartmap, only: is_boozer_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
                               REFCOORDS, set_magfie_refcoords_field
@@ -888,7 +902,7 @@ contains
                         'swcoll is not supported (fixed-mu 6D start; collisions '// &
                         'perturb mu)'
                     ! The chartmap-vs-VMEC chart guard runs once in run(); the 6D
-                    ! loss path is COORD_VMEC (see init_cpp/init_cp). init_sympl
+                    ! loss path is native Boozer (see init_cpp/init_cp). init_sympl
                     ! still runs to seed anorb%f and compute the GC pitch-angle
                     ! params below from the same start as the 6D wire. CPP6D seeds
                     ! the Pauli state (mu|B|); CP6D seeds the full charged particle.
@@ -965,7 +979,7 @@ contains
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
         use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D, ORBIT_CP6D
-        use simple, only: orbit_timestep_cpp_canonical, orbit_timestep_cp_explicit
+        use simple, only: orbit_timestep_cpp_canonical, orbit_timestep_cp_canonical
         use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
@@ -1000,16 +1014,14 @@ contains
                         'research model; not available in the VMEC macrostep'
                 case (ORBIT_CPP6D)
                     ! Genuine 6D canonical Pauli pusher (implicit midpoint) on the
-                    ! production COORD_VMEC chart. Advances one normalized step and
+                    ! production Boozer chart. Advances one normalized step and
                     ! writes z(1:5) directly (no to_standard_z_coordinates).
                     call orbit_timestep_cpp_canonical(anorb%cpp, anorb%f, z, &
                         ierr_orbit)
                 case (ORBIT_CP6D)
-                    ! Genuine 6D full charged particle, symplectic implicit midpoint
-                    ! on the single-source VMEC flux metric, solved by Picard iteration.
-                    ! No Newton/Jacobian, so trapped particles survive v_par -> 0
-                    ! turning points. Writes z(1:5) directly.
-                    call orbit_timestep_cp_explicit(anorb%cp, anorb%f, z, &
+                    ! Genuine 6D full charged particle, sharing the canonical
+                    ! Boozer midpoint machinery with CPP and MODEL_CP dynamics.
+                    call orbit_timestep_cp_canonical(anorb%cp, anorb%f, z, &
                         ierr_orbit)
                 case default
                     call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)

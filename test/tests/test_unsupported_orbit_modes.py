@@ -11,9 +11,9 @@ CASES = [
         "orbit_model=ORBIT_CPP6D supports only orbit_coord=1",
     ),
     (
-        "cp6d_rejected",
-        "orbit_model = 6\norbit_coord = 1\n",
-        "orbit_model=ORBIT_CP6D is not supported in production",
+        "cp6d_vmec_rejected",
+        "orbit_model = 6\norbit_coord = 0\n",
+        "orbit_model=ORBIT_CP6D supports only orbit_coord=1",
     ),
     (
         "boris_rejected",

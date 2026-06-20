@@ -1,26 +1,12 @@
 program test_cpp6d_vs_gc
   ! Genuine 6D canonical CPP (orbit_model=ORBIT_CPP6D) wired into the production
-  ! alpha-loss pipeline through REAL VMEC flux coordinates (COORD_VMEC) on the
-  ! real reactor-scale equilibrium test_data/wout.nc (a QA stellarator,
-  ! rho* ~ 1/200), validated against the production guiding center.
-  !
-  ! WHY COORD_VMEC, not the Boozer chartmap: the Cartesian-storage Boozer chartmap
-  ! was diagnosed inconsistent. libneo splines the chartmap Cartesian x/y/z with a
-  ! PERIODIC fit over one field period, but for nfp>1 the Cartesian x,y are not
-  ! field-period-periodic (they rotate by 2pi/nfp), so the periodic spline
-  ! destroys the secular toroidal rotation: the analytic spline e_phi loses its ~R
-  ! magnitude and the geometric metric gives h_i g^ij h_j ~ nfp^2 instead of 1
-  ! (the covariant unit-field invariant |h|^2). The defect is upstream in libneo's
-  ! Cartesian-storage path and in the storage convention itself; it cannot be
-  ! repaired in the SIMPLE metric post-processor. The VMEC flux metric from libneo
-  ! is consistent (test_cpp_vmec: |g g^-1 - I| < 1e-10), so the production loss
-  ! path runs there. See DOC/coordinates-and-fields.md, "6D canonical CPP".
+  ! alpha-loss pipeline through native Boozer coordinates on the real reactor-scale
+  ! equilibrium test_data/wout.nc (a QA stellarator, rho* ~ 1/200), validated
+  ! against the production guiding center.
   !
   ! Acceptance gates:
-  !   (a) METRIC CONSISTENCY -- the exact check the chartmap failed: on the
-  !       production COORD_VMEC chart h_i g^ij h_j = |h|^2 = 1 to central-
-  !       difference (Christoffel-from-FD) accuracy. The chartmap gave 228..472 at
-  !       the same kind of point; COORD_VMEC gives ~1.
+  !   (a) METRIC CONSISTENCY -- on the production Boozer chart h_i g^ij h_j =
+  !       |h|^2 = 1.
   !   (b) The 6D canonical-midpoint scheme conserves energy and holds mu fixed over
   !       a short resolved trace (the symplectic / fixed-mu signature).
   !   (c) The 6D->GC reduction stays on a bounded flux band overlapping the GC band
@@ -28,11 +14,10 @@ program test_cpp6d_vs_gc
   !   (d) The s>=1 loss propagates through the production wrapper to ierr/=0.
   !
   ! The wire keeps the SIMPLE GC normalization (mass=1, qc=sqrt(2)/ro0,
-  ! dt=dtaumin/sqrt(2)). The consistent VMEC metric (|h|^2=1) makes the 6D
-  ! Hamiltonian reduce to the GC one exactly, so the bare production GC macrostep
-  ! runs without sub-cycling. The FD-Jacobian host path uses an FD-matched Newton
-  ! step tolerance (a central-difference Jacobian cannot reach the analytic-path
-  ! 1e-12 floor); see orbit_cpp_canonical.cpp_canon_step.
+  ! dt=dtaumin/sqrt(2)). The Boozer field-spline h_i g^ij h_j floor is tested at
+  ! the same 2e-4 level as test_boozer_field_metric. The native Boozer CPP pusher
+  ! is run at npoiper2=1024 here: still a production microstep, but small enough
+  ! for the first-derivative Newton solve to complete this long trapped trace.
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
   use simple, only: init_sympl, init_cpp, init_params, tracer_t, &
@@ -40,10 +25,12 @@ program test_cpp6d_vs_gc
   use simple_main, only: init_field
   use orbit_symplectic, only: orbit_timestep_sympl
   use orbit_cpp_canonical, only: cpp_canon_energy
-  use vmec_field_metric, only: vmec_field_metric_eval
-  use params, only: field_input, coord_input, integmode, relerr, dtaumin
+  use boozer_field_metric, only: boozer_field_metric_eval
+  use params, only: field_input, coord_input, integmode, relerr, dtaumin, orbit_coord
   use velo_mod, only: isw_field_type
   use magfie_sub, only: BOOZER
+  use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
+  use boozer_sub, only: get_boozer_coordinates
 
   implicit none
 
@@ -60,10 +47,14 @@ program test_cpp6d_vs_gc
   isw_field_type = BOOZER
   field_input = 'wout.nc'
   coord_input = 'wout.nc'
+  orbit_coord = 1
   integmode = 1
   relerr = 1.0d-13
   call init_field(norb, 'wout.nc', ans_s, ans_tp, amultharm, integmode)
-  call init_params(norb, 2, 4, 3.5e6_dp, 256, 1, 1.0d-13)
+  use_B_r = .true.
+  use_del_tp_B = .true.
+  call get_boozer_coordinates
+  call init_params(norb, 2, 4, 3.5e6_dp, 1024, 1, 1.0d-13)
   dtaumin = norb%dtaumin
   print '(A,ES12.4)', '  ro0 (cm)    = ', ro0
   print '(A,ES12.4)', '  dtaumin     = ', dtaumin
@@ -85,11 +76,7 @@ program test_cpp6d_vs_gc
 contains
 
   subroutine test_metric_consistency(z0, nfail)
-    ! The defect the chartmap had: h_i g^ij h_j must be 1 (h is the covariant unit
-    ! field; g^ij raises it to h^i, so h_i g^ij h_j = |h|^2 = 1). The single-source
-    ! vmec_field_metric builds |B| = sqrt(g_ij B^i B^j) from the SAME g, so the
-    ! identity holds to round-off (~1e-13), not the dual-source 1.009 or the
-    ! chartmap's O(nfp^2) = hundreds.
+    ! h_i g^ij h_j must be 1: h is the covariant unit field and g^ij raises it.
     real(dp), intent(in) :: z0(5)
     integer, intent(inout) :: nfail
     real(dp) :: u(3), g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
@@ -98,7 +85,7 @@ contains
     integer :: i, j
 
     u = [z0(1), z0(2), z0(3)]
-    call vmec_field_metric_eval(u, g, ginv, sqrtg, dg, Acov, dA, &
+    call boozer_field_metric_eval(u, g, ginv, sqrtg, dg, Acov, dA, &
          Bctr, Bcov, Bmod, dBmod, hcov)
 
     do i = 1, 3
@@ -113,18 +100,16 @@ contains
     end do
     print '(A,F18.15)', '  h_i g^ij h_j (must be ~1) = ', hgh
     print '(A,ES12.4)', '  |B| (Gauss)               = ', Bmod
-    ! Single-source |B| from the same g -> h_i g^ij h_j = 1 to round-off.
-    call check('COORD_VMEC metric consistent (|h_i g^ij h_j - 1| < 1e-12)', &
-        abs(hgh - 1.0_dp) < 1.0e-12_dp, nfail)
+    call check('Boozer metric consistent (|h_i g^ij h_j - 1| < 2e-4)', &
+        abs(hgh - 1.0_dp) < 2.0e-4_dp, nfail)
   end subroutine test_metric_consistency
 
   subroutine test_trace_and_tracking(norb, z0, nfail)
     ! Drive the production GC (orbit_timestep_sympl on the BOOZER chart) and the
-    ! genuine 6D CPP through the PRODUCTION wrapper (COORD_VMEC) at the BARE GC
+    ! genuine 6D CPP through the production wrapper at the bare GC
     ! macrostep -- no sub-cycling -- from the SAME (s,theta,phi,v,lambda) start.
     ! Both must stay confined and conserve their invariants; the 6D s band must
-    ! overlap the GC band. s is the chart-independent flux label, so the comparison
-    ! is fair across the Boozer (GC) and VMEC (6D) angle conventions.
+    ! overlap the GC band. Both paths use Boozer angles here.
     type(tracer_t), intent(inout) :: norb
     real(dp), intent(in) :: z0(5)
     integer, intent(inout) :: nfail
@@ -155,7 +140,12 @@ contains
     scpp_min = zcpp(1); scpp_max = zcpp(1); cpp_lost = .false.
     do it = 1, nstep
       call orbit_timestep_cpp_canonical(cpp%cpp, cpp%f, zcpp, ierr)
-      if (ierr /= 0) then; cpp_lost = .true.; exit; end if
+      if (ierr /= 0) then
+        print '(A,I0,A,I0,A,ES12.4)', '  CPP6D stopped at step ', it, &
+          ' ierr=', ierr, ' s=', zcpp(1)
+        cpp_lost = .true.
+        exit
+      end if
       scpp_min = min(scpp_min, zcpp(1)); scpp_max = max(scpp_max, zcpp(1))
       E = cpp_canon_energy(cpp%cpp); Emin = min(Emin, E); Emax = max(Emax, E)
     end do
