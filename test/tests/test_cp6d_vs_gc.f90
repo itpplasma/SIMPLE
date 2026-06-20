@@ -29,7 +29,7 @@ program test_cp6d_vs_gc
   use simple_main, only: init_field
   use orbit_symplectic, only: orbit_timestep_sympl
   use orbit_cpp_canonical, only: cpp_canon_energy, cpp_canon_to_gc, &
-    cpp_canon_state_t
+    cpp_canon_state_t, cpp_canon_boozer_guiding_center
   use boozer_field_metric, only: boozer_field_metric_eval
   use params, only: field_input, coord_input, integmode, relerr, dtaumin, orbit_coord
   use velo_mod, only: isw_field_type
@@ -65,6 +65,7 @@ program test_cp6d_vs_gc
 
   ! Shared trapped-class IC in flux coords (s, theta, phi, v/v0, lambda).
   z0 = [0.3_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.3_dp]
+  call test_cp_initial_guiding_center(z0, norb%dtaumin, nfail)
 
   ! Read |B| at the start so the normalized gyroperiod can be computed.
   ! The canonical cyclotron frequency is
@@ -119,6 +120,29 @@ contains
   end function steps_per_gyro
 
   ! Trace the CP orbit for nsteps and return max|dE/E0|.
+  subroutine test_cp_initial_guiding_center(z0, dtm, nfail)
+    real(dp), intent(in) :: z0(5), dtm
+    integer, intent(inout) :: nfail
+    type(tracer_t) :: cp
+    real(dp) :: zcp(5), xgc(3), dx(3), shift(3)
+
+    zcp = z0
+    call init_sympl(cp%si, cp%f, zcp, dtm, dtm, relerr, integmode)
+    call init_cp(cp%cp, cp%f, zcp, dtm)
+    call cpp_canon_boozer_guiding_center(cp%cp, xgc)
+    dx = xgc - z0(1:3)
+    shift = cp%cp%z(1:3) - z0(1:3)
+
+    print '(A,3ES12.4)', '  CP initial particle-GC shift = ', shift
+    print '(A,3ES12.4)', '  CP reconstructed GC error    = ', dx
+    call check('CP starts with finite FLR displacement', &
+      maxval(abs(shift)) > 1.0e-5_dp, nfail)
+    call check('CP initial particle remains inside 0 < s < 1', &
+      cp%cp%z(1) > 0.0_dp .and. cp%cp%z(1) < 1.0_dp, nfail)
+    call check('CP first-order guiding center matches start (max error < 5e-2)', &
+      maxval(abs(dx)) < 5.0e-2_dp, nfail)
+  end subroutine test_cp_initial_guiding_center
+
   subroutine cp_energy_sweep(z0, npoiper2, rbig, nsteps, maxdE)
     real(dp), intent(in) :: z0(5), rbig
     integer, intent(in) :: npoiper2, nsteps

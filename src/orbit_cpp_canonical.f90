@@ -61,7 +61,7 @@ module orbit_cpp_canonical
   real(dp), parameter :: c = 1.0_dp
 
   public :: cpp_canon_state_t, cpp_canon_init, cpp_canon_step, cpp_canon_step_tok, &
-            cpp_canon_energy, cpp_canon_to_gc
+            cpp_canon_energy, cpp_canon_to_gc, cpp_canon_boozer_guiding_center
   public :: residual, jacobian   ! exposed for the Jacobian FD self-check in tests
 
   type :: cpp_canon_state_t
@@ -248,6 +248,24 @@ contains
       eperp = [1.0_dp, 0.0_dp, 0.0_dp]
     end if
   end subroutine perp_unit_dir
+
+  subroutine boozer_larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, mass, qc, rho)
+    real(dp), intent(in) :: g(3,3), sqrtg, hcov(3), Bmod, vperp_con(3)
+    real(dp), intent(in) :: mass, qc
+    real(dp), intent(out) :: rho(3)
+    real(dp) :: vcov(3), factor
+    integer :: i
+
+    do i = 1, 3
+      vcov(i) = g(i,1)*vperp_con(1) + g(i,2)*vperp_con(2) &
+        + g(i,3)*vperp_con(3)
+    end do
+
+    factor = mass/(qc*Bmod*sqrtg)
+    rho(1) = factor*(hcov(2)*vcov(3) - hcov(3)*vcov(2))
+    rho(2) = factor*(hcov(3)*vcov(1) - hcov(1)*vcov(3))
+    rho(3) = factor*(hcov(1)*vcov(2) - hcov(2)*vcov(1))
+  end subroutine boozer_larmor_offset
 
   ! Lagrangian gradient dL/dq_k at (vmid, midpoint block), general full metric:
   !   dL/dq_k = (m/2) g_ij,k vmid^i vmid^j + qc A_i,k vmid^i [- mu |B|,k].
@@ -841,5 +859,34 @@ contains
     r = st%z(1); th = st%z(2); ph = st%z(3)
     vpar = blk%hcov(1)*vcon(1) + blk%hcov(2)*vcon(2) + blk%hcov(3)*vcon(3)
   end subroutine cpp_canon_to_gc
+
+  subroutine cpp_canon_boozer_guiding_center(st, xgc)
+    use boozer_field_metric, only: boozer_field_metric_eval
+    type(cpp_canon_state_t), intent(in) :: st
+    real(dp), intent(out) :: xgc(3)
+
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
+    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
+    real(dp) :: qc, vcov(3), vcon(3), hcon(3), vpar, vperp_con(3), rho(3)
+    integer :: i
+
+    if (st%coord /= COORD_BOOZER) error stop &
+      'CP guiding-center reconstruction requires COORD_BOOZER'
+
+    call boozer_field_metric_eval(st%z(1:3), g, ginv, sqrtg, dg, Acov, dA, &
+      Bctr, Bcov, Bmod, dBmod, hcov)
+
+    qc = st%charge/(c*st%ro0)
+    do i = 1, 3
+      vcov(i) = (st%z(3+i) - qc*Acov(i))/st%mass
+      vcon(i) = ginv(i,1)*vcov(1) + ginv(i,2)*vcov(2) + ginv(i,3)*vcov(3)
+      hcon(i) = ginv(i,1)*hcov(1) + ginv(i,2)*hcov(2) + ginv(i,3)*hcov(3)
+    end do
+
+    vpar = hcov(1)*vcon(1) + hcov(2)*vcon(2) + hcov(3)*vcon(3)
+    vperp_con = vcon - vpar*hcon
+    call boozer_larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, st%mass, qc, rho)
+    xgc = st%z(1:3) - rho
+  end subroutine cpp_canon_boozer_guiding_center
 
 end module orbit_cpp_canonical

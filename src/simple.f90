@@ -180,20 +180,25 @@ contains
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
 
-    real(dp) :: ro0_bar, x0(3), mu, vpar_bar, vperp0
+    real(dp) :: ro0_bar, x0(3), x_gc(3), mu, vpar_bar, vperp0
     real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
     real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
 
     if (orbit_coord /= 1) error stop &
       '6D CP/CPP production tracing supports only orbit_coord=1 (Boozer)'
 
-    ! 6D state in the flux chart u=(s,angle,angle), s direct (no rho). With
-    ! orbit_coord=1 the chart is Boozer, sharing the GC angles and field.
-    x0(1) = min(max(z0(1), 0d0), 1d0)
-    x0(2) = z0(2)
-    x0(3) = z0(3)
+    if (z0(1) <= 0d0 .or. z0(1) >= 1d0) error stop &
+      '6D CP/CPP initialization requires 0 < s < 1'
 
-    call boozer_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
+    ! The start record names the guiding-center point. CPP lives on that point;
+    ! CP is a resolved particle and must be placed one Larmor vector away so its
+    ! first-order guiding center is the requested start.
+    x_gc(1) = z0(1)
+    x_gc(2) = z0(2)
+    x_gc(3) = z0(3)
+    x0 = x_gc
+
+    call boozer_field_metric_eval(x_gc, g, ginv, sqrtg, dg, Acov, dA, &
          Bctr, Bcov, Bmod, dBmod, hcov)
 
     mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/Bmod*2d0      ! mu by factor 2 (GC convention)
@@ -201,6 +206,10 @@ contains
     vpar_bar = z0(4)*z0(5)*dsqrt(2d0)                 ! vpar_bar = vpar/sqrt(T/m)
     vperp0 = 0d0
     if (model == MODEL_CP) vperp0 = dsqrt(max(2d0*mu*Bmod, 0d0))
+    if (model == MODEL_CP) then
+      call cp_particle_position_from_gc(x_gc, g, ginv, sqrtg, hcov, Bmod, &
+        vperp0, 1d0, 1d0, ro0_bar, x0)
+    end if
 
     ! mass=1 and ro0=ro0_bar match the GC normalization. CP uses MODEL_CP and a
     ! perpendicular seed; CPP uses MODEL_CPP_SYM and carries mu|B|.
@@ -209,6 +218,81 @@ contains
       ro0_in=ro0_bar)
     st%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
   end subroutine init_canonical_6d
+
+  subroutine cp_particle_position_from_gc(x_gc, g, ginv, sqrtg, hcov, Bmod, &
+      vperp0, mass, charge, ro0_bar, x_particle)
+    real(dp), intent(in) :: x_gc(3), g(3,3), ginv(3,3), sqrtg
+    real(dp), intent(in) :: hcov(3), Bmod, vperp0, mass, charge, ro0_bar
+    real(dp), intent(out) :: x_particle(3)
+
+    real(dp) :: eperp(3), vperp_con(3), rho(3), qc
+
+    qc = charge/ro0_bar
+    if (abs(qc) <= tiny(1.0d0)) error stop &
+      'CP gyrocenter offset requires nonzero charge'
+
+    call metric_perp_unit_dir(g, ginv, hcov, eperp)
+    vperp_con = vperp0*eperp
+    call larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, mass, qc, rho)
+    x_particle = x_gc + rho
+
+    if (x_particle(1) <= 0d0 .or. x_particle(1) >= 1d0) error stop &
+      'CP gyrocenter offset leaves supported Boozer flux domain'
+  end subroutine cp_particle_position_from_gc
+
+  subroutine metric_perp_unit_dir(g, ginv, hcov, eperp)
+    real(dp), intent(in) :: g(3,3), ginv(3,3), hcov(3)
+    real(dp), intent(out) :: eperp(3)
+
+    real(dp) :: er(3), hcon(3), hpar, nrm
+    integer :: i, j
+
+    er = [ginv(1,1), ginv(2,1), ginv(3,1)]
+    call raise_metric(ginv, hcov, hcon)
+    hpar = hcov(1)*er(1) + hcov(2)*er(2) + hcov(3)*er(3)
+    eperp = er - hpar*hcon
+
+    nrm = 0d0
+    do i = 1, 3
+      do j = 1, 3
+        nrm = nrm + g(i,j)*eperp(i)*eperp(j)
+      end do
+    end do
+    if (nrm <= 0d0) error stop &
+      'CP gyrocenter offset could not build perpendicular direction'
+    eperp = eperp/dsqrt(nrm)
+  end subroutine metric_perp_unit_dir
+
+  subroutine larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, mass, qc, rho)
+    real(dp), intent(in) :: g(3,3), sqrtg, hcov(3), Bmod, vperp_con(3)
+    real(dp), intent(in) :: mass, qc
+    real(dp), intent(out) :: rho(3)
+
+    real(dp) :: vcov(3), factor
+    integer :: i
+
+    do i = 1, 3
+      vcov(i) = g(i,1)*vperp_con(1) + g(i,2)*vperp_con(2) &
+        + g(i,3)*vperp_con(3)
+    end do
+
+    factor = mass/(qc*Bmod*sqrtg)
+    rho(1) = factor*(hcov(2)*vcov(3) - hcov(3)*vcov(2))
+    rho(2) = factor*(hcov(3)*vcov(1) - hcov(1)*vcov(3))
+    rho(3) = factor*(hcov(1)*vcov(2) - hcov(2)*vcov(1))
+  end subroutine larmor_offset
+
+  subroutine raise_metric(ginv, vcov, vcon)
+    real(dp), intent(in) :: ginv(3,3), vcov(3)
+    real(dp), intent(out) :: vcon(3)
+
+    integer :: i
+
+    do i = 1, 3
+      vcon(i) = ginv(i,1)*vcov(1) + ginv(i,2)*vcov(2) &
+        + ginv(i,3)*vcov(3)
+    end do
+  end subroutine raise_metric
 
   subroutine orbit_timestep_cpp_canonical(cpp, f, z, ierr)
     ! Advance the genuine 6D CPP one normalized step (dtaumin/sqrt(2)) and write
@@ -219,8 +303,6 @@ contains
     type(field_can_t), intent(inout) :: f
     real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
-
-    real(dp) :: r, th, ph, vpar
 
     if (z(1) < 0.0d0 .or. z(1) > 1.0d0) then
       ierr = 1
@@ -236,21 +318,30 @@ contains
       return
     end if
 
+    call canonical_state_to_standard_z(cpp, z)
+  end subroutine orbit_timestep_cpp_canonical
+
+  subroutine canonical_state_to_standard_z(st, z)
     ! Write back z. Boozer runs in s directly; COORD_CHARTMAP in rho (s=rho^2).
     ! z(4)=pabs is the conserved normalized speed; z(5)=lambda (vpar is the
     ! normalized vpar_bar in both wires) so classification/output read z(4:5) the
     ! same as to_standard_z_coordinates.
-    call cpp_canon_to_gc(cpp, r, th, ph, vpar)
-    z(4) = cpp%pabs
-    z(2) = cpp%z(2)
-    z(3) = cpp%z(3)
+    type(cpp_canon_state_t), intent(in) :: st
+    real(dp), intent(inout) :: z(:)
+
+    real(dp) :: r, th, ph, vpar
+
+    call cpp_canon_to_gc(st, r, th, ph, vpar)
+    z(4) = st%pabs
+    z(2) = th
+    z(3) = ph
     z(5) = vpar/(z(4)*dsqrt(2d0))
-    if (cpp%coord == COORD_CHARTMAP) then
-      z(1) = cpp%z(1)**2   ! s = rho^2 (chartmap chart)
+    if (st%coord == COORD_CHARTMAP) then
+      z(1) = r**2
     else
-      z(1) = cpp%z(1)      ! s direct (VMEC flux chart)
+      z(1) = r
     end if
-  end subroutine orbit_timestep_cpp_canonical
+  end subroutine canonical_state_to_standard_z
 
   subroutine orbit_timestep_cp_canonical(cp, f, z, ierr)
     ! Advance the genuine 6D CP through the same canonical midpoint machinery as
