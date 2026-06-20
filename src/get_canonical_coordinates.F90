@@ -331,7 +331,7 @@ contains
       end if
 
       order = [ns_s_c, ns_tp_c, ns_tp_c]
-      if (any(order < 3) .or. any(order > 5)) then
+      if (minval(order) < 3 .or. maxval(order) > 5) then
          error stop "build_canflux_G_batch_spline: spline order must be 3..5"
       end if
 
@@ -376,7 +376,7 @@ contains
       end if
 
       order = [ns_s_c, ns_tp_c, ns_tp_c]
-      if (any(order < 3) .or. any(order > 5)) then
+      if (minval(order) < 3 .or. maxval(order) > 5) then
          error stop "build_canflux_sqg_Bt_Bp_batch_spline: spline order must be 3..5"
       end if
 

@@ -208,8 +208,8 @@ def main():
     buco_h = d["buco"][j]
     bvco_h = d["bvco"][j]
 
-    # SIMPLE works with torflux = -phi_vmec[-1]/(2*pi); phi_b stores the
-    # cumulative toroidal flux in Wb so phi_b[-1] > 0 and torflux is negative.
+    # Convert booz_xform's cumulative phi_b to the chartmap A_theta coefficient.
+    # The golden export test below fixes the sign against SIMPLE's VMEC path.
     if np.any(d["phi"] != 0.0):
         torflux_si = -float(d["phi"][-1]) / TWOPI
         print(f"Toroidal flux from phi_b: torflux = {torflux_si:.6e} T m^2")
