@@ -925,6 +925,22 @@ contains
 
         call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
+        ! CP6D integrates a resolved particle seeded one Larmor vector off the GC
+        ! start record. The classification above uses the GC start; the recorded
+        ! trajectory must begin at the actual integrated particle position so row 0
+        ! is continuous with the trace (issue #410), not the GC start it offsets
+        ! from. Overwrite z with the particle's standard-z after classification.
+        if (integmode > 0) then
+            block
+                use orbit_full, only: ORBIT_CP6D
+                use params, only: orbit_model
+                use simple, only: canonical_state_to_standard_z
+                if (orbit_model == ORBIT_CP6D) then
+                    call canonical_state_to_standard_z(anorb%cp, z)
+                end if
+            end block
+        end if
+
         if (passing .and. should_skip(ipart)) then
             ! Fill trajectory arrays with NaN since we're not tracing this particle
             orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)

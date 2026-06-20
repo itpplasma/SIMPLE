@@ -25,7 +25,7 @@ program test_cp6d_vs_gc
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
   use simple, only: init_sympl, init_cp, init_params, tracer_t, &
-    orbit_timestep_cp_canonical
+    orbit_timestep_cp_canonical, canonical_state_to_standard_z
   use simple_main, only: init_field
   use orbit_symplectic, only: orbit_timestep_sympl
   use orbit_cpp_canonical, only: cpp_canon_energy, cpp_canon_to_gc, &
@@ -66,6 +66,7 @@ program test_cp6d_vs_gc
   ! Shared trapped-class IC in flux coords (s, theta, phi, v/v0, lambda).
   z0 = [0.3_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.3_dp]
   call test_cp_initial_guiding_center(z0, norb%dtaumin, nfail)
+  call test_cp_orbit_start_record(z0, norb%dtaumin, nfail)
 
   ! Read |B| at the start so the normalized gyroperiod can be computed.
   ! The canonical cyclotron frequency is
@@ -142,6 +143,46 @@ contains
     call check('CP first-order guiding center matches start (max error < 5e-2)', &
       maxval(abs(dx)) < 5.0e-2_dp, nfail)
   end subroutine test_cp_initial_guiding_center
+
+  ! The production orbit output (simple_main trace_orbit) must record the CP
+  ! trajectory starting at the integrated PARTICLE position, not the GC start it
+  ! is seeded from (issue #410). canonical_state_to_standard_z is the exact value
+  ! row 0 records after the fix; it must reproduce the integrated particle state
+  ! cp%z(1:3) (the position the trace actually advances from), which sits one
+  ! Larmor vector off the GC start z0. Before the fix row 0 held z0 instead --
+  ! a spurious GC->particle jump between row 0 and row 1.
+  subroutine test_cp_orbit_start_record(z0, dtm, nfail)
+    real(dp), intent(in) :: z0(5), dtm
+    integer, intent(inout) :: nfail
+    type(tracer_t) :: cp
+    real(dp) :: zrec(5), rec_vs_particle, rec_vs_gc
+    integer :: ierr
+
+    zrec = z0
+    call init_sympl(cp%si, cp%f, zrec, dtm, dtm, relerr, integmode)
+    call init_cp(cp%cp, cp%f, zrec, dtm)
+
+    ! Recorded start: the particle's standard-z right after init (= row 0).
+    call canonical_state_to_standard_z(cp%cp, zrec)
+
+    rec_vs_particle = maxval(abs(zrec(1:3) - cp%cp%z(1:3)))
+    rec_vs_gc       = maxval(abs(zrec(1:3) - z0(1:3)))
+
+    print '(A,3ES12.4)', '  recorded start - GC start    = ', zrec(1:3) - z0(1:3)
+    print '(A,ES12.4)',  '  recorded - particle |max|    = ', rec_vs_particle
+    print '(A,ES12.4)',  '  recorded - GC start |max|    = ', rec_vs_gc
+
+    ! Row 0 is the integrated particle position the trace advances from ...
+    call check('CP recorded start equals integrated particle position', &
+      rec_vs_particle < 1.0e-12_dp, nfail)
+    ! ... which sits one Larmor vector off the GC start record, not on it.
+    call check('CP recorded start sits off the GC start (FLR offset)', &
+      rec_vs_gc > 1.0e-5_dp, nfail)
+    ! And the integrator advances from it without error.
+    zrec(4) = z0(4); zrec(5) = z0(5)
+    call orbit_timestep_cp_canonical(cp%cp, cp%f, zrec, ierr)
+    call check('CP step succeeds from recorded start', ierr == 0, nfail)
+  end subroutine test_cp_orbit_start_record
 
   subroutine cp_energy_sweep(z0, npoiper2, rbig, nsteps, maxdE)
     real(dp), intent(in) :: z0(5), rbig
