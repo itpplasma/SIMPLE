@@ -1,0 +1,175 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=25mm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\half}{\tfrac12}
+\title{Classical charged particle and classical Pauli particle\\
+in arbitrary curvilinear coordinates: derivation and SIMPLE normalization}
+\author{SIMPLE 6D full-orbit port}
+\date{}
+
+\begin{document}
+\maketitle
+
+\noindent
+Every equation here is verified symbolically, without gaps, by
+\texttt{cp\_cpp\_derivation.wl} (22 assertions, all pass). This text states the
+results and the one subtlety that the SIMPLE code depends on: the boundary
+between the two velocity normalizations.
+
+\section{Setup}
+Coordinates $q=(q^1,q^2,q^3)$ on a chart with symmetric metric $g_{ij}(q)$,
+inverse $g^{ij}$, Jacobian $\sqrt{g}=\sqrt{\det g}$. A particle of mass $m$,
+charge $e$, in a field with covariant vector potential $A_i(q)$ and scalar
+potential $\Phi(q)$; speed of light $c$. The contravariant velocity is
+$u^k=\dot q^k$. Nothing below assumes a particular chart: the same formulas hold
+in VMEC flux, Boozer, or any other curvilinear system.
+
+\section{Classical charged particle (CP)}
+Lagrangian
+\begin{equation}
+L=\half m\,g_{ij}u^iu^j+\frac{e}{c}A_iu^i-e\Phi .
+\end{equation}
+Canonical momentum and its inverse (define $\pi_i\equiv p_i-\tfrac{e}{c}A_i$):
+\begin{equation}
+p_k=\frac{\partial L}{\partial u^k}=m\,g_{ki}u^i+\frac{e}{c}A_k,
+\qquad
+u^k=\frac1m\,g^{kj}\pi_j .
+\end{equation}
+Hamiltonian by Legendre transform $H=p_ku^k-L$:
+\begin{equation}
+\boxed{\,H=\frac{1}{2m}\,\pi_i\,g^{ij}\,\pi_j+e\Phi\,.}
+\end{equation}
+Hamilton's equations give the curvilinear Lorentz equation in canonical form:
+\begin{equation}
+\dot q^k=\frac{\partial H}{\partial p_k}=\frac1m g^{kj}\pi_j,
+\qquad
+\dot p_k=-\frac{\partial H}{\partial q^k}
+=\frac{m}{2}\,g_{ij,k}\,u^iu^j+\frac{e}{c}A_{i,k}\,u^i-e\Phi_{,k}.
+\end{equation}
+The geodesic (Christoffel) part sits in $g_{ij,k}u^iu^j$; the magnetic part in
+$A_{i,k}u^i$. The conversion from $\partial g^{ij}/\partial q^k$ to
+$\partial g_{ij}/\partial q^k$ uses
+$g^{ij}_{\;,k}=-g^{ia}g^{jb}g_{ab,k}$, which is verified componentwise.
+
+\section{Classical Pauli particle (CPP)}
+The Pauli particle replaces the resolved gyration by the magnetic-moment energy
+$\mu|B|$, with $\mu$ a fixed parameter:
+\begin{equation}
+\boxed{\,H_{\mathrm{CPP}}=\frac{1}{2m}\,\pi_i\,g^{ij}\,\pi_j+\mu|B|+e\Phi\,.}
+\end{equation}
+The velocity equation is unchanged; the momentum equation gains the mirror force:
+\begin{equation}
+\dot q^k=\frac1m g^{kj}\pi_j,
+\qquad
+\dot p_k=\frac{m}{2}g_{ij,k}u^iu^j+\frac{e}{c}A_{i,k}u^i-\mu|B|_{,k}-e\Phi_{,k}.
+\end{equation}
+\paragraph{Slow manifold.}
+Seed with parallel-only kinetic momentum, $\pi_i=m\,v_\parallel h_i$, where $h_i$
+is the covariant unit field. With $h_ig^{ij}h_j=1$ the kinetic term collapses to
+$\half m v_\parallel^2$, so
+$H_{\mathrm{CPP}}=\half m v_\parallel^2+\mu|B|+e\Phi$, the guiding-center
+Hamiltonian. The CPP slow manifold is the guiding center (Burby 2020,
+Xiao--Qin 2021). The residual fast mode has amplitude $O(\rho_*)$ with
+$\rho_*=\rho_c/L$; it shrinks as $\rho_*\to0$ and does not vanish at finite
+$\rho_*$ in the plain symplectic scheme. At the reactor scale ($\rho_*\sim1/300$)
+CPP tracks the guiding center; on a small device ($\rho_*\sim1/30$) the two
+differ at the percent level for trapped orbits.
+
+\section{Field from the vector potential}
+The contravariant field, modulus, and covariant unit field are
+\begin{equation}
+B^i=\frac{1}{\sqrt g}\,\varepsilon^{ijk}\partial_jA_k,
+\qquad
+|B|=\sqrt{g_{ij}B^iB^j},
+\qquad
+h_i=\frac{g_{ij}B^j}{|B|}.
+\end{equation}
+With $|B|$ built from the same $g$, the unit-field invariant
+$h_ig^{ij}h_j=1$ holds identically.
+
+\paragraph{Field direction in raw VMEC angles.}
+In a straight-field-line chart (Boozer, or VMEC$+\lambda$) the components $A_i$
+are flux functions of $s$ alone, and $B^i=\mathrm{curl}\,A/\sqrt g$ reduces to
+$B^\vartheta=-A_{\varphi}'/\sqrt g$, $B^\varphi=A_{\vartheta}'/\sqrt g$. In the
+\emph{raw} VMEC poloidal angle $\theta$ the same physical field carries the VMEC
+stream function $\lambda$ (\texttt{lmns}); transformed to $\theta$,
+\begin{equation}
+B^\theta=\frac{-A_\varphi'-\lambda_{,\varphi}A_\vartheta'}{\sqrt g},
+\qquad
+B^\varphi=\frac{(1+\lambda_{,\theta})A_\vartheta'}{\sqrt g},
+\qquad B^s=0 .
+\end{equation}
+Dropping $\lambda$ leaves $|B|$ a unit-$h$ field, so $h_ig^{ij}h_j=1$ still holds,
+but the field \emph{direction} and $\nabla|B|$ are wrong, and trapped orbits drift
+out. Including $\lambda$ makes $|B|$ from the metric match the native VMEC
+$|B|$ to machine precision.
+
+\section{Normalization: two variants and the conversion boundary}
+SIMPLE carries two velocity normalizations. Let $T$ be the kinetic energy scale.
+\begin{itemize}
+\item \textbf{Local} (\texttt{neo-orb.tex}, \S\,Normalization):
+$v_0=\sqrt{T/m}$, $\bar t=v_0t$, $\bar v_\parallel=v_\parallel/v_0$,
+$\bar\mu=\bar v^2(1-\lambda^2)/(2B)$, $\rho_0=\tfrac{mc}{e}v_0$,
+$\bar p_k=\bar v_\parallel h_k+\rho_0^{-1}A_k$, with
+$\bar H=\bar v_\parallel^2/2+\bar\mu B$.
+\item \textbf{Global} (\S\,Global normalization): $v_{0s}=\sqrt{2T/m}=\sqrt2\,v_0$.
+Then $\bar t_s=\sqrt2\,\bar t$, $\bar v_{\parallel s}=\bar v_\parallel/\sqrt2$,
+$\bar p_s=\bar p/\sqrt2$, $\bar\mu_s=\bar\mu/2$, $\rho_{0s}=\sqrt2\,\rho_0$.
+\end{itemize}
+The code stores the \emph{global} scale: \texttt{params.f90} sets
+$v_0=\sqrt{2E/m}=v_{0s}$ and \texttt{ro0}$=\rho_{0s}$, and the step
+$\mathtt{dtaumin}=2\pi r_{\mathrm{big}}/\mathtt{npoiper2}$ is in global time.
+
+\paragraph{The boundary.}
+Everything \emph{outside} the symplectic guiding-center integrator uses the
+global scale: \texttt{params}, \texttt{simple\_main}, the start/output state
+$z=(s,\theta,\varphi,z_4,\lambda)$ with $z_4=v/v_{0s}$, \texttt{times\_lost}, and
+\texttt{confined\_fraction}. Everything \emph{inside} the integrator uses the
+local scale. The conversion happens at exactly two places, identical for the
+guiding center (\texttt{init\_sympl}) and for CP/CPP (\texttt{init\_cp},
+\texttt{init\_cpp}):
+\begin{align}
+\text{(seed)}\quad
+&\mu=\half z_4^2(1-\lambda^2)B^{-1}\!\cdot 2=\bar\mu_{\mathrm{local}},
+&&\rho_0^{\mathrm{int}}=\mathtt{ro0}/\sqrt2=\rho_0,\\
+&v_\parallel^{\mathrm{int}}=z_4\lambda\sqrt2=\bar v_{\parallel,\mathrm{local}},
+&&\dd t^{\mathrm{int}}=\mathtt{dtaumin}/\sqrt2 .
+\end{align}
+The factor $2$ on $\mu$ converts the global $\bar\mu_s$ to the local $\bar\mu$
+($\bar\mu_s=\bar\mu/2$); the $\sqrt2$ on $v_\parallel$ and $1/\sqrt2$ on $\rho_0$,
+$\dd t$ convert global to local. The energy then balances:
+$H=\half(\bar v_{\parallel,\mathrm{local}})^2+\mu B=\half(v/v_0)^2$ for all
+$\lambda$. The per-step write-back inverts the speed split,
+$z_5=v_\parallel^{\mathrm{int}}/(z_4\sqrt2)=\lambda$, so the output state returns
+to the global scale. CP and CPP use these identical factors, so the three
+integrators share one normalization contract.
+
+\section{Discretization}
+All three use the symplectic implicit midpoint
+$z=z_{\mathrm{old}}+\dd t\,f(z_{\mathrm{mid}})$,
+$z_{\mathrm{mid}}=\half(z+z_{\mathrm{old}})$, which is time-symmetric and
+preserves a modified energy. The full particle (CP6D) is gyro-resolved, so
+$\dd t\,\Omega<1$ and the map is a contraction: it is solved by fixed-point
+(Picard) iteration, no Jacobian, and $v_\parallel\to0$ is a smooth point. The Pauli
+particle (CPP6D) takes guiding-center-sized steps, where $\dd t\,\Omega\sim O(1)$
+and Picard diverges; it is solved by Newton with the analytic first-derivative
+Jacobian built from the single-source metric.
+
+\section{Analytic tokamak check}
+With $g=\mathrm{diag}(1,r^2,(R_0+r\cos\theta)^2)$,
+$A_\theta=B_0(r^2/2-r^3\cos\theta/(3R_0))$,
+$A_\varphi=-B_0\iota_0(r^2/2-r^4/(4r_0^2))$, the reference Python had two errata,
+both fixed here and confirmed symbolically:
+\begin{align}
+\text{(1)}\quad &\partial_\theta g_{33}=-2r(R_0+r\cos\theta)\sin\theta
+\quad(\text{factor }r\text{ restored}),\\
+\text{(2)}\quad &\partial_\theta|B|=\frac{1}{2|B|}\Big(
+\frac{2r\sin\theta\,A_{\varphi,r}^2}{(R_0+r\cos\theta)^3}
++\frac{2A_{\theta,r}A_{\theta,r\theta}}{r^2}\Big),
+\end{align}
+the second term ($A_{\theta,r}$ depending on $\theta$) being the chain-rule piece
+the buggy version dropped.
+
+\end{document}
