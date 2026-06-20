@@ -18,6 +18,7 @@ module boozer_sub
     public :: splint_boozer_coord
     public :: vmec_to_boozer, boozer_to_vmec
     public :: delthe_delphi_BV
+    public :: delthe_delphi_BV_d2
     public :: reset_boozer_batch_splines
     public :: load_boozer_from_chartmap
     public :: export_boozer_chartmap
@@ -406,6 +407,69 @@ contains
         ddelphi_BV(2) = dy_eval(3, 2)
 
     end subroutine delthe_delphi_BV
+
+!> Boozer-side angle map deltas with FULL first and second derivatives w.r.t.
+!> the Boozer coordinates (s, vartheta_B, varphi_B). Returns
+!>   deltheta_BV = vartheta_B - theta_V,  delphi_BV = varphi_B - varphi_V
+!> as functions of Boozer coordinates, together with
+!>   ddel(:,1) = d/ds,  ddel(:,2) = d/dvartheta_B,  ddel(:,3) = d/dvarphi_B
+!> and the packed second derivatives d2del(1:6) in the idx6 order
+!>   (ss, s t, s p, t t, t p, p p)  with t = vartheta_B, p = varphi_B.
+!> Uses the B-side batch spline (isw=1 path); requires use_del_tp_B. The spline
+!> abscissa is (rho, vartheta_B, varphi_B) with rho = sqrt(s); the radial chain
+!> rule d/ds = (drho/ds) d/drho, d2/ds2 = (drho/ds)^2 d2/drho2 + (d2rho/ds2) d/drho
+!> is applied here so the caller receives derivatives in s.
+    subroutine delthe_delphi_BV_d2(s, vartheta_B, varphi_B, deltheta_BV, delphi_BV, &
+                                   ddeltheta_BV, ddelphi_BV, &
+                                   d2deltheta_BV, d2delphi_BV)
+        use boozer_coordinates_mod, only: use_del_tp_B
+
+        real(dp), intent(in) :: s, vartheta_B, varphi_B
+        real(dp), intent(out) :: deltheta_BV, delphi_BV
+        real(dp), dimension(3), intent(out) :: ddeltheta_BV, ddelphi_BV
+        real(dp), dimension(6), intent(out) :: d2deltheta_BV, d2delphi_BV
+
+        real(dp) :: r_eval, rho_tor, drhods, d2rhods2
+        real(dp) :: x_eval(3), y_eval(2), dy_eval(3, 2), d2y_eval(6, 2)
+        integer :: q
+
+        if (.not. use_del_tp_B) then
+            error stop "delthe_delphi_BV_d2: requires use_del_tp_B = .true."
+        end if
+        if (.not. delt_delp_B_batch_spline_ready) then
+            error stop "delthe_delphi_BV_d2: B batch spline not initialized"
+        end if
+
+        r_eval = abs(s)
+        rho_tor = sqrt(r_eval)
+        x_eval(1) = rho_tor
+        x_eval(2) = vartheta_B
+        x_eval(3) = varphi_B
+
+        ! drho/ds = 0.5/rho,  d2rho/ds2 = -0.25/rho**3
+        drhods = 0.5_dp/rho_tor
+        d2rhods2 = -0.25_dp/rho_tor**3
+
+        call evaluate_batch_splines_3d_der2(delt_delp_B_batch_spline, x_eval, &
+                                            y_eval, dy_eval, d2y_eval)
+
+        ! Convert the radial slots (rho -> s) for each quantity. The packed index
+        ! convention from der2 is (rr, rt, rp, tt, tp, pp); slots 1,2,3 touch rho.
+        do q = 1, 2
+            ! Second derivatives first (they reference the rho first derivative).
+            d2y_eval(1, q) = d2y_eval(1, q)*drhods**2 + dy_eval(1, q)*d2rhods2
+            d2y_eval(2, q) = d2y_eval(2, q)*drhods
+            d2y_eval(3, q) = d2y_eval(3, q)*drhods
+            dy_eval(1, q) = dy_eval(1, q)*drhods
+        end do
+
+        deltheta_BV = y_eval(1)
+        delphi_BV = y_eval(2)
+        ddeltheta_BV = dy_eval(:, 1)
+        ddelphi_BV = dy_eval(:, 2)
+        d2deltheta_BV = d2y_eval(:, 1)
+        d2delphi_BV = d2y_eval(:, 2)
+    end subroutine delthe_delphi_BV_d2
 
 !> Convert VMEC coordinates (r, theta, varphi) to Boozer coordinates (vartheta_B,
 !> varphi_B)
