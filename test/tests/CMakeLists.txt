@@ -993,3 +993,12 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     LABELS "unit;chartmap"
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
+
+add_test(NAME test_unsupported_orbit_modes
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_unsupported_orbit_modes.py
+        $<TARGET_FILE:simple.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_unsupported_orbit_modes PROPERTIES
+    LABELS "integration;system"
+    TIMEOUT 30)

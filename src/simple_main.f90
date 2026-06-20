@@ -75,6 +75,7 @@ contains
 
         ! Must be called in this order. TODO: Fix
         call read_config(config_file)
+        call validate_orbit_model_config
         call print_phase_time('Configuration reading completed')
 
         call read_profiles_config(config_file)
@@ -208,6 +209,30 @@ contains
 
         call stl_wall_finalize(wall)
     end subroutine main
+
+    subroutine validate_orbit_model_config
+        use orbit_full, only: ORBIT_GC, ORBIT_PAULI, ORBIT_BORIS, &
+                              ORBIT_FOSYMPL, ORBIT_PAULI6D, ORBIT_CPP6D, &
+                              ORBIT_CP6D
+        use params, only: orbit_model, orbit_coord
+
+        select case (orbit_model)
+        case (ORBIT_GC, ORBIT_PAULI)
+            if (orbit_coord /= 0) error stop &
+                'orbit_coord is only supported with orbit_model=ORBIT_CPP6D'
+        case (ORBIT_CPP6D)
+            if (orbit_coord /= 1) error stop &
+                'orbit_model=ORBIT_CPP6D supports only orbit_coord=1 (Boozer)'
+        case (ORBIT_CP6D)
+            error stop 'orbit_model=ORBIT_CP6D is not supported in production; '// &
+                'CP-in-Boozer is an open implementation issue'
+        case (ORBIT_BORIS, ORBIT_FOSYMPL, ORBIT_PAULI6D)
+            error stop 'selected orbit_model is not available in production '// &
+                'alpha-loss tracing'
+        case default
+            error stop 'unsupported orbit_model'
+        end select
+    end subroutine validate_orbit_model_config
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
