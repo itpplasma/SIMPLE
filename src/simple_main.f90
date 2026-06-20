@@ -961,7 +961,7 @@ contains
                 ! symplectic GC pusher; PAULI (CPP) integrates the same 4D
                 ! canonical state with mu held fixed on the slow manifold;
                 ! CPP6D runs the genuine 6D canonical CPP in normalized time on
-                ! the production Boozer/chartmap chart, writing z(1:5) itself.
+                ! the selected 6D field+metric chart, writing z(1:5) itself.
                 select case (orbit_model)
                 case (ORBIT_PAULI)
                     call orbit_timestep_cpp(anorb%si, anorb%f, &
@@ -981,10 +981,10 @@ contains
                     call orbit_timestep_cpp_canonical(anorb%cpp, anorb%f, z, &
                         ierr_orbit)
                 case (ORBIT_CP6D)
-                    ! Genuine 6D full charged particle, EXPLICIT (RK4) on the
-                    ! single-source VMEC flux metric. No Newton/Jacobian, so trapped
-                    ! particles survive v_par -> 0 turning points. Writes z(1:5)
-                    ! directly.
+                    ! Genuine 6D full charged particle, symplectic implicit midpoint
+                    ! on the single-source VMEC flux metric, solved by Picard iteration.
+                    ! No Newton/Jacobian, so trapped particles survive v_par -> 0
+                    ! turning points. Writes z(1:5) directly.
                     call orbit_timestep_cp_explicit(anorb%cp, anorb%f, z, &
                         ierr_orbit)
                 case default

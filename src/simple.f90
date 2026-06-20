@@ -235,8 +235,9 @@ contains
     ! convention, mass=1, qc=1/ro0_bar, dt=dtaumin/sqrt(2)) -- see init_cpp for the
     ! full rationale. The CP loss path does NOT use the implicit canonical-midpoint
     ! Newton step (its FD Jacobian goes noisy at v_par -> 0 and ejects all trapped
-    ! particles); it integrates the curvilinear Lorentz ODE EXPLICITLY (RK4) in
-    ! orbit_cp_explicit, which has no Newton to fail.
+    ! particles); it integrates the curvilinear Lorentz ODE with symplectic implicit
+    ! midpoint solved by Picard iteration in orbit_cp_explicit, so there is no
+    ! Newton Jacobian to fail.
     !
     ! CP resolves the gyration, so it needs the FULL velocity, not just the
     ! parallel piece. cp_explicit_init seeds
