@@ -5,6 +5,7 @@ use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
 use simple
 use simple_main, only : init_field
+use params, only: coord_input, field_input
 use new_vmec_stuff_mod, only: rmajor
 use diag_mod, only : icounter
 use timing, only: get_wtime
@@ -27,6 +28,8 @@ real(8) :: rbig, dtau, dtaumax
 
 integer :: nt
 
+field_input = 'wout.nc'
+coord_input = 'wout.nc'
 call init_field(norb, 'wout.nc', 5, 5, 3, 2)
 
 npoiper2 = 64
@@ -83,8 +86,6 @@ call test_single(integ_lobatto4, 'lobatto4.out')
 call orbit_sympl_init(integ_gauss6, f, z0, dt, 1, 1d-12, 6)
 call test_single(integ_gauss6, 'gauss6.out')
 print *, ''
-
-stop
 
 call orbit_sympl_init_kahan6(kahan6, f, z0, dt, 1, 1d-12)
 call test_multi(kahan6, 'kahan6.out')

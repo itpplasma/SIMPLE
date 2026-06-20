@@ -19,6 +19,21 @@ The code is free to use and modify under the MIT License and links to Runge-Kutt
 Run `make` to produce a `build` directory including the main executable
 `simple.x`, main library `libsimple.so` and Python module `pysimple`.
 
+To build against a specific libneo branch, tag, or commit SHA, pass it
+explicitly; the ambient shell environment is intentionally ignored:
+
+```bash
+make LIBNEO_REF=my-branch          # via make
+cmake -DLIBNEO_REF=my-branch ...   # via cmake directly
+```
+
+To use a local libneo checkout instead of fetching from GitHub:
+
+```bash
+make LIBNEO_PATH=/path/to/libneo
+cmake -DLIBNEO_SOURCE_DIR=/path/to/libneo ...
+```
+
 Required build tools:
 * CMake (>= 3.22)
 * Ninja
@@ -214,10 +229,17 @@ without requiring them at runtime.
 Key differences from VMEC mode:
 - Both `field_input` and `coord_input` reference the same chartmap NetCDF file
 - No VMEC file is needed at runtime
+- `sbeg` remains normalized toroidal flux `s`; chartmap runs evaluate the
+  corresponding surface at `rho = sqrt(sbeg)`
 - Boozer chartmap files store `A_phi` on `s`; geometry, `Bmod`,
   `B_theta`, and `B_phi` stay on `rho`
+- GVEC chartmaps must be written in SIMPLE's left-handed Boozer convention;
+  the exporter default flips the toroidal angle and negates `A_phi`/`B_phi`
+- `vmec_B_scale` and `vmec_RZ_scale` also apply to chartmap fields and
+  coordinates at runtime
 
-See `docs/boozer-chartmap-schema.rst` for the required NetCDF schema.
+See `docs/boozer-chartmap-schema.rst` for the required NetCDF schema, sign
+map, and scaling rules.
 
 ### Comparing Commits ("Golden Record")
 To compare output between commits, use the golden record test suite in `test/golden_record/`. Run `test/golden_record/golden_record.sh [ref_version]` to build a reference version and compare its output against the current build.

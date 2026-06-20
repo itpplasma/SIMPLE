@@ -1,6 +1,17 @@
 CONFIG ?= Release
 FLAGS ?=
 BUILD_DIR := build
+
+# Prevent ambient shell env from silently changing which libneo is fetched.
+# Pass the ref explicitly via: make ... LIBNEO_REF=<branch|tag|sha>
+# $(origin) distinguishes a command-line assignment from an env import.
+unexport LIBNEO_REF LIBNEO_PATH
+ifeq ($(origin LIBNEO_REF),command line)
+  FLAGS += -DLIBNEO_REF=$(LIBNEO_REF)
+endif
+ifeq ($(origin LIBNEO_PATH),command line)
+  FLAGS += -DLIBNEO_SOURCE_DIR=$(LIBNEO_PATH)
+endif
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 PYTHON_FOR_TESTS := $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python)
 SIMPLE_GVEC_QA_CACHE_ROOT ?= $(HOME)/data/SIMPLE/gvec_qa_roundtrip
