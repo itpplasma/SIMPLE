@@ -13,6 +13,8 @@ module simple
   use orbit_cpp_canonical, only : cpp_canon_state_t, cpp_canon_init, &
     cpp_canon_step, cpp_canon_to_gc, MODEL_CP, MODEL_CPP_SYM, &
     COORD_CHARTMAP, COORD_VMEC
+  use orbit_cp_explicit, only : cp_explicit_state_t, cp_explicit_init, &
+    cp_explicit_step, cp_explicit_to_gc
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -36,6 +38,7 @@ public
     type(symplectic_integrator_t) :: si
     type(multistage_integrator_t) :: mi
     type(cpp_canon_state_t) :: cpp  ! genuine 6D CPP state (orbit_model=ORBIT_CPP6D)
+    type(cp_explicit_state_t) :: cp ! explicit 6D CP state (orbit_model=ORBIT_CP6D)
   end type tracer_t
 
   interface tstep
@@ -207,15 +210,21 @@ contains
     cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
   end subroutine init_cpp
 
-  subroutine init_cp(cpp, f, z0, dtaumin)
-    ! Initialize the genuine 6D classical charged particle (orbit_model=ORBIT_CP6D)
-    ! from the SAME (s,theta,phi,v/v0,lambda) GC start as init_sympl/init_cpp.
+  subroutine init_cp(cp, f, z0, dtaumin)
+    ! Initialize the EXPLICIT genuine 6D classical charged particle
+    ! (orbit_model=ORBIT_CP6D) from the SAME (s,theta,phi,v/v0,lambda) GC start as
+    ! init_sympl/init_cpp.
     !
-    ! Same coordinate route, normalization, and metric as init_cpp (COORD_VMEC,
-    ! SIMPLE GC sqrt(2) convention, mass=1, qc=1/ro0_bar, dt=dtaumin/sqrt(2)) --
-    ! see init_cpp for the full rationale. The ONE physics difference: CP resolves
-    ! the gyration (MODEL_CP, no mu|B| term), so it needs the FULL velocity, not
-    ! just the parallel piece. cpp_canon_init seeds
+    ! Same coordinate route, normalization, and metric as init_cpp (REAL VMEC flux
+    ! coordinates from the single-source vmec_field_metric, SIMPLE GC sqrt(2)
+    ! convention, mass=1, qc=1/ro0_bar, dt=dtaumin/sqrt(2)) -- see init_cpp for the
+    ! full rationale. The CP loss path does NOT use the implicit canonical-midpoint
+    ! Newton step (its FD Jacobian goes noisy at v_par -> 0 and ejects all trapped
+    ! particles); it integrates the curvilinear Lorentz ODE EXPLICITLY (RK4) in
+    ! orbit_cp_explicit, which has no Newton to fail.
+    !
+    ! CP resolves the gyration, so it needs the FULL velocity, not just the
+    ! parallel piece. cp_explicit_init seeds
     !   v^i = vpar_bar h^i + vperp e_perp^i,   vperp = sqrt(2 mu_bar |B|),
     ! with e_perp a fixed-gyrophase metric-unit direction perpendicular to h, and
     ! p_i = g_ij v^j + A_i/ro0_bar. This places the gyro-center within O(rho*) of
@@ -223,14 +232,16 @@ contains
     ! resolved, the caller must run a gyro-resolving step (large npoiper2): the
     ! gyroperiod in normalized tau is ~2 pi ro0_bar, while the step is
     ! dtaumin/sqrt(2), so steps/gyration = npoiper2 sqrt(2) ro0_bar/rbig.
-    use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready, &
-      vmec_eval_field
-    type(cpp_canon_state_t), intent(out) :: cpp
+    use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready
+    use vmec_field_metric, only: vmec_field_metric_eval
+    type(cp_explicit_state_t), intent(out) :: cp
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
 
-    real(dp) :: ro0_bar, x0(3), Acov(3), Bmod, dBmod(3), hcov(3), mu, vpar_bar, vperp_bar
+    real(dp) :: ro0_bar, x0(3), mu, vpar_bar
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
+    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
 
     if (.not. vmec_metric_ready()) call vmec_metric_attach()
 
@@ -238,19 +249,22 @@ contains
     x0(2) = z0(2)
     x0(3) = z0(3)
 
-    call vmec_eval_field(x0, Acov, Bmod, dBmod, hcov)
+    ! Read |B| from the SAME single-source metric the explicit pusher uses, so the
+    ! seeded vperp = sqrt(2 mu |B|) and the integrated energy are consistent. Using
+    ! the dual-source vmec_eval_field |B| here instead would mismatch by ~7% (the
+    ! two |B| differ), starving the perpendicular seed and biasing the orbit.
+    call vmec_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
+                                Bctr, Bcov, Bmod, dBmod, hcov)
 
     mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/Bmod*2d0      ! mu by factor 2 (GC convention)
     ro0_bar = ro0/dsqrt(2d0)                          ! ro0 smaller by sqrt(2)
     vpar_bar = z0(4)*z0(5)*dsqrt(2d0)                 ! vpar_bar = vpar/sqrt(T/m)
-    vperp_bar = dsqrt(2d0*mu*Bmod)                    ! vperp from the GC mu (sqrt(2) conv)
 
-    ! mass=1, ro0=ro0_bar: identical normalization to init_cpp; MODEL_CP folds out
-    ! the mu|B| term and resolves the gyration through the full seed velocity.
-    call cpp_canon_init(cpp, MODEL_CP, COORD_VMEC, x0, vpar0=vpar_bar, &
-      vperp0=vperp_bar, mu_in=mu, mass=1d0, charge=1d0, dt=dtaumin/dsqrt(2d0), &
-      ro0_in=ro0_bar)
-    cpp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
+    ! mass=1, ro0=ro0_bar: identical normalization to init_cpp; the explicit pusher
+    ! resolves the gyration through the full seed velocity (no mu|B| in the EOM).
+    call cp_explicit_init(cp, x0, vpar0=vpar_bar, mu_in=mu, mass=1d0, &
+      ro0_in=ro0_bar, dt=dtaumin/dsqrt(2d0))
+    cp%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
   end subroutine init_cp
 
   subroutine orbit_timestep_cpp_canonical(cpp, f, z, ierr)
@@ -290,6 +304,37 @@ contains
       z(1) = cpp%z(1)      ! s direct (VMEC flux chart)
     end if
   end subroutine orbit_timestep_cpp_canonical
+
+  subroutine orbit_timestep_cp_explicit(cp, f, z, ierr)
+    ! Advance the EXPLICIT genuine 6D CP one normalized step (dtaumin/sqrt(2)) and
+    ! write back the standard SIMPLE z(1:5), the same way as
+    ! orbit_timestep_cpp_canonical. The explicit RK4 step (orbit_cp_explicit) has
+    ! no Newton, so a banana turning point (v_par -> 0) is just a smooth point of
+    ! the RHS instead of a Jacobian-noise ejection. The 6D state runs natively in
+    ! the VMEC flux chart u=(s,vartheta,varphi), s direct (no rho).
+    type(cp_explicit_state_t), intent(inout) :: cp
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+
+    real(dp) :: s, th, ph, vpar
+
+    if (z(1) < 0.0d0 .or. z(1) > 1.0d0) then
+      ierr = 1
+      return
+    end if
+
+    call cp_explicit_step(cp, ierr)
+    ! ierr: 2 = s>=1 (loss). Maps to a nonzero orbit error like the sympl path.
+    if (ierr /= 0) return
+
+    call cp_explicit_to_gc(cp, s, th, ph, vpar)
+    z(4) = cp%pabs
+    z(2) = cp%x(2)
+    z(3) = cp%x(3)
+    z(5) = vpar/(z(4)*dsqrt(2d0))
+    z(1) = cp%x(1)      ! s direct (VMEC flux chart)
+  end subroutine orbit_timestep_cp_explicit
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self

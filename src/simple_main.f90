@@ -862,7 +862,7 @@ contains
                     call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
                         integmode)
                     if (orbit_model == ORBIT_CP6D) then
-                        call init_cp(anorb%cpp, anorb%f, z, dtaumin)
+                        call init_cp(anorb%cp, anorb%f, z, dtaumin)
                     else
                         call init_cpp(anorb%cpp, anorb%f, z, dtaumin)
                     end if
@@ -932,7 +932,7 @@ contains
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
         use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D, ORBIT_CP6D
-        use simple, only: orbit_timestep_cpp_canonical
+        use simple, only: orbit_timestep_cpp_canonical, orbit_timestep_cp_explicit
         use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
@@ -965,13 +965,18 @@ contains
                     ! loud rather than silently tracing the GC instead.
                     error stop 'orbit_model=ORBIT_PAULI6D is a Cartesian '// &
                         'research model; not available in the VMEC macrostep'
-                case (ORBIT_CPP6D, ORBIT_CP6D)
-                    ! Genuine 6D canonical pusher on the production COORD_VMEC
-                    ! chart: CPP6D the Pauli particle, CP6D the full charged
-                    ! particle. Both share the wrapper (it dispatches on
-                    ! anorb%cpp%model); it advances one normalized step and writes
-                    ! z(1:5) directly (no to_standard_z_coordinates).
+                case (ORBIT_CPP6D)
+                    ! Genuine 6D canonical Pauli pusher (implicit midpoint) on the
+                    ! production COORD_VMEC chart. Advances one normalized step and
+                    ! writes z(1:5) directly (no to_standard_z_coordinates).
                     call orbit_timestep_cpp_canonical(anorb%cpp, anorb%f, z, &
+                        ierr_orbit)
+                case (ORBIT_CP6D)
+                    ! Genuine 6D full charged particle, EXPLICIT (RK4) on the
+                    ! single-source VMEC flux metric. No Newton/Jacobian, so trapped
+                    ! particles survive v_par -> 0 turning points. Writes z(1:5)
+                    ! directly.
+                    call orbit_timestep_cp_explicit(anorb%cp, anorb%f, z, &
                         ierr_orbit)
                 case default
                     call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)

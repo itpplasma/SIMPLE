@@ -1,14 +1,17 @@
 program test_cp6d_vs_gc
   ! Genuine 6D classical charged particle (orbit_model=ORBIT_CP6D) wired into the
-  ! production alpha-loss pipeline through REAL VMEC flux coordinates (COORD_VMEC)
-  ! on the reactor-scale test equilibrium test_data/wout.nc (a QA stellarator,
-  ! rho* ~ 1/200), validated against the production guiding center.
+  ! production alpha-loss pipeline through REAL VMEC flux coordinates on the
+  ! single-source vmec_field_metric, on the reactor-scale test equilibrium
+  ! test_data/wout.nc (a QA stellarator, rho* ~ 1/200), validated against the
+  ! production guiding center.
   !
-  ! CP differs from CPP6D in physics: the gyration is RESOLVED. There is no mu|B|
-  ! term; the full velocity v = vpar_bar h + vperp e_perp is seeded, so the orbit
-  ! gyrates at the Larmor scale and the gyro-center sits an O(rho*) FLR offset off
-  ! the GC start. CPP6D runs the bare GC macrostep; CP MUST resolve the gyration,
-  ! i.e. take many steps per gyroperiod (large npoiper2).
+  ! The CP loss path is EXPLICIT (orbit_cp_explicit, RK4): no Newton, no Jacobian,
+  ! so a banana turning point (v_par -> 0) is a smooth point of the RHS instead of
+  ! a Jacobian-noise ejection. CP differs from CPP6D in physics: the gyration is
+  ! RESOLVED. There is no mu|B| term; the full velocity v = vpar_bar h + vperp
+  ! e_perp is seeded, so the orbit gyrates at the Larmor scale and the gyro-center
+  ! sits an O(rho*) FLR offset off the GC start. CP MUST resolve the gyration, i.e.
+  ! take many steps per gyroperiod (large npoiper2).
   !
   ! Acceptance gates (the task's validation list):
   !   (1) npoiper2 DETERMINED by energy conservation: sweep npoiper2 and report the
@@ -26,11 +29,11 @@ program test_cp6d_vs_gc
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
   use simple, only: init_sympl, init_cp, init_params, tracer_t, &
-    orbit_timestep_cpp_canonical
+    orbit_timestep_cp_explicit
   use simple_main, only: init_field
   use orbit_symplectic, only: orbit_timestep_sympl
-  use orbit_cpp_canonical, only: cpp_canon_energy, cpp_canon_to_gc
-  use orbit_cpp_vmec_metric, only: vmec_eval_field, vmec_metric_ready
+  use orbit_cp_explicit, only: cp_explicit_energy, cp_explicit_to_gc
+  use orbit_cpp_vmec_metric, only: vmec_eval_field
   use params, only: field_input, coord_input, integmode, relerr, dtaumin
   use velo_mod, only: isw_field_type
   use magfie_sub, only: BOOZER
@@ -67,8 +70,8 @@ program test_cp6d_vs_gc
   ! normalized tau is 2 pi ro0_bar/|B|. With |B| ~ 5.9e4 G and ro0_bar ~ 1.9e5 cm
   ! this is O(20) tau -- much shorter than the GC step 2 pi rbig/npoiper2, so CP
   ! must oversample by ~ rbig|B|/ro0 = O(1/rho*) per gyration.
-  call init_cp(norb%cpp, norb%f, z0, norb%dtaumin)
-  call vmec_eval_field(norb%cpp%z(1:3), Acov, Bmod, dBmod, hcov)
+  call init_cp(norb%cp, norb%f, z0, norb%dtaumin)
+  call vmec_eval_field(norb%cp%x, Acov, Bmod, dBmod, hcov)
   gyroperiod = twopi*ro0_bar/Bmod
   print '(A,ES12.4)', '  ro0 (cm)            = ', ro0
   print '(A,ES12.4)', '  ro0_bar (cm)        = ', ro0_bar
@@ -125,15 +128,15 @@ contains
     dtm = dtaumin_for(npoiper2, rbig)
     zcp = z0
     call init_sympl(cp%si, cp%f, zcp, dtm, dtm, relerr, integmode)
-    call init_cp(cp%cpp, cp%f, zcp, dtm)
-    E0 = cpp_canon_energy(cp%cpp); maxdE = 0.0_dp
+    call init_cp(cp%cp, cp%f, zcp, dtm)
+    E0 = cp_explicit_energy(cp%cp); maxdE = 0.0_dp
     do it = 1, nsteps
-      call orbit_timestep_cpp_canonical(cp%cpp, cp%f, zcp, ierr)
+      call orbit_timestep_cp_explicit(cp%cp, cp%f, zcp, ierr)
       if (ierr /= 0) then
         print '(A,I0,A,I0)', '  CP sweep step ', it, ' ierr=', ierr
         maxdE = huge(1.0_dp); return
       end if
-      E = cpp_canon_energy(cp%cpp)
+      E = cp_explicit_energy(cp%cp)
       maxdE = max(maxdE, abs((E - E0)/E0))
     end do
   end subroutine cp_energy_sweep
@@ -207,17 +210,17 @@ contains
     ! --- CP full orbit through the production wrapper, gyro-resolved.
     zcp = z0
     call init_sympl(cp%si, cp%f, zcp, dtm, dtm, relerr, integmode)
-    call init_cp(cp%cpp, cp%f, zcp, dtm)
-    E0 = cpp_canon_energy(cp%cpp); Emin = E0; Emax = E0
-    mu0 = cp%cpp%mu; mu_min = mu0; mu_max = mu0
+    call init_cp(cp%cp, cp%f, zcp, dtm)
+    E0 = cp_explicit_energy(cp%cp); Emin = E0; Emax = E0
+    mu0 = cp%cp%mu; mu_min = mu0; mu_max = mu0
     scp_hist(0) = zcp(1); cp_lost = .false.
-    call emergent_mu(cp%cpp, mu_hist(0))
+    call emergent_mu(cp%cp, mu_hist(0))
     do it = 1, nstep
-      call orbit_timestep_cpp_canonical(cp%cpp, cp%f, zcp, ierr)
+      call orbit_timestep_cp_explicit(cp%cp, cp%f, zcp, ierr)
       if (ierr /= 0) then; cp_lost = .true.; exit; end if
-      E = cpp_canon_energy(cp%cpp); Emin = min(Emin, E); Emax = max(Emax, E)
+      E = cp_explicit_energy(cp%cp); Emin = min(Emin, E); Emax = max(Emax, E)
       ! Emergent magnetic moment from the resolved velocity: mu = vperp^2/(2|B|).
-      call emergent_mu(cp%cpp, mu_emergent)
+      call emergent_mu(cp%cp, mu_emergent)
       mu_min = min(mu_min, mu_emergent); mu_max = max(mu_max, mu_emergent)
       mu_hist(it) = mu_emergent
       scp_hist(it) = zcp(1)
@@ -276,18 +279,18 @@ contains
   end subroutine test_gyrocenter_tracking
 
   ! Emergent magnetic moment mu = vperp^2/(2|B|) from the resolved CP velocity:
-  ! vperp^2 = |v|^2 - vpar^2 with vpar = h_i v^i (cpp_canon_to_gc gives vpar) and
+  ! vperp^2 = |v|^2 - vpar^2 with vpar = h_i v^i (cp_explicit_to_gc gives vpar) and
   ! |v|^2 = (p-qcA) g^ij (p-qcA)/m^2 = 2 E_kin (the kinetic energy is |v|^2/2).
   subroutine emergent_mu(st, mu_e)
-    use orbit_cpp_canonical, only: cpp_canon_state_t
-    type(cpp_canon_state_t), intent(in) :: st
+    use orbit_cp_explicit, only: cp_explicit_state_t
+    type(cp_explicit_state_t), intent(in) :: st
     real(dp), intent(out) :: mu_e
     real(dp) :: r, th, ph, vpar, vsq, vperp2, Acov(3), Bmod, dBmod(3), hcov(3)
 
-    call cpp_canon_to_gc(st, r, th, ph, vpar)         ! vpar = h_i v^i
-    vsq = 2.0_dp*cpp_canon_energy(st)/st%mass         ! |v|^2 = 2 H (CP: no mu|B|)
+    call cp_explicit_to_gc(st, r, th, ph, vpar)       ! vpar = h_i v^i
+    vsq = 2.0_dp*cp_explicit_energy(st)/st%mass        ! |v|^2 = 2 H (CP: no mu|B|)
     vperp2 = max(vsq - vpar*vpar, 0.0_dp)
-    call vmec_eval_field(st%z(1:3), Acov, Bmod, dBmod, hcov)
+    call vmec_eval_field(st%x, Acov, Bmod, dBmod, hcov)
     mu_e = st%mass*vperp2/(2.0_dp*Bmod)
   end subroutine emergent_mu
 
@@ -329,9 +332,9 @@ contains
     dtm = dtaumin_for(npoiper2, rbig)
     zedge = z0; zedge(1) = 0.5_dp
     call init_sympl(edge%si, edge%f, zedge, dtm, dtm, relerr, integmode)
-    call init_cp(edge%cpp, edge%f, zedge, dtm)
+    call init_cp(edge%cp, edge%f, zedge, dtm)
     zedge(1) = 1.5_dp
-    call orbit_timestep_cpp_canonical(edge%cpp, edge%f, zedge, ierr)
+    call orbit_timestep_cp_explicit(edge%cp, edge%f, zedge, ierr)
     call check('CP6D wrapper flags z(1)>1 as loss (ierr/=0)', ierr /= 0, nfail)
   end subroutine test_loss_propagation
 
