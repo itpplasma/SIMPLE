@@ -504,6 +504,13 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "integration"
         TIMEOUT 300)
+    add_executable(test_boozer_cartesian.x test_boozer_cartesian.f90)
+    target_link_libraries(test_boozer_cartesian.x simple)
+    add_test(NAME test_boozer_cartesian COMMAND test_boozer_cartesian.x)
+    set_tests_properties(test_boozer_cartesian PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "integration"
+        TIMEOUT 300)
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py

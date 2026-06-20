@@ -220,52 +220,16 @@ contains
   ! normalized in the metric so g_ij eperp^i eperp^j = 1. On the diagonal tokamak
   ! (h_1 = 0, g^11 = 1) this reduces to eperp = (1,0,0). A fixed gyrophase: the
   ! O(rho*) FLR offset of the seeded gyro-center is the physics, not an error.
+  ! Metric-unit perpendicular direction for the CP gyration seed. Thin wrapper
+  ! over the shared perp_unit_dir_flux so the velocity seed and the position
+  ! offset (boozer_cartesian) share one gyrophase reference.
   subroutine perp_unit_dir(blk, eperp)
+    use boozer_cartesian, only: perp_unit_dir_flux
     type(block_t), intent(in) :: blk
     real(dp), intent(out) :: eperp(3)
-    real(dp) :: er(3), hcon(3), hpar, nrm
-    integer :: i, j
 
-    er = [blk%ginv(1,1), blk%ginv(2,1), blk%ginv(3,1)]   ! e_r^i = g^i1
-    call raise(blk%ginv, blk%hcov, hcon)                 ! h^i
-
-    ! Parallel component along h: (h_i e_r^i) with |h|^2 = h_i h^i = 1.
-    hpar = blk%hcov(1)*er(1) + blk%hcov(2)*er(2) + blk%hcov(3)*er(3)
-    do i = 1, 3
-      eperp(i) = er(i) - hpar*hcon(i)
-    end do
-
-    ! Normalize in the metric: |eperp|_g^2 = g_ij eperp^i eperp^j.
-    nrm = 0.0_dp
-    do i = 1, 3
-      do j = 1, 3
-        nrm = nrm + blk%g(i,j)*eperp(i)*eperp(j)
-      end do
-    end do
-    if (nrm > 0.0_dp) then
-      eperp = eperp/sqrt(nrm)
-    else
-      eperp = [1.0_dp, 0.0_dp, 0.0_dp]
-    end if
+    call perp_unit_dir_flux(blk%g, blk%ginv, blk%hcov, eperp)
   end subroutine perp_unit_dir
-
-  subroutine boozer_larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, mass, qc, rho)
-    real(dp), intent(in) :: g(3,3), sqrtg, hcov(3), Bmod, vperp_con(3)
-    real(dp), intent(in) :: mass, qc
-    real(dp), intent(out) :: rho(3)
-    real(dp) :: vcov(3), factor
-    integer :: i
-
-    do i = 1, 3
-      vcov(i) = g(i,1)*vperp_con(1) + g(i,2)*vperp_con(2) &
-        + g(i,3)*vperp_con(3)
-    end do
-
-    factor = mass/(qc*Bmod*sqrtg)
-    rho(1) = factor*(hcov(2)*vcov(3) - hcov(3)*vcov(2))
-    rho(2) = factor*(hcov(3)*vcov(1) - hcov(1)*vcov(3))
-    rho(3) = factor*(hcov(1)*vcov(2) - hcov(2)*vcov(1))
-  end subroutine boozer_larmor_offset
 
   ! Lagrangian gradient dL/dq_k at (vmid, midpoint block), general full metric:
   !   dL/dq_k = (m/2) g_ij,k vmid^i vmid^j + qc A_i,k vmid^i [- mu |B|,k].
@@ -860,15 +824,20 @@ contains
     vpar = blk%hcov(1)*vcon(1) + blk%hcov(2)*vcon(2) + blk%hcov(3)*vcon(3)
   end subroutine cpp_canon_to_gc
 
+  ! Guiding center of the resolved CP particle: subtract the Larmor vector in
+  ! Cartesian (boozer_cartesian particle_to_gc), exact for any gyroradius and
+  ! regular at the axis. The perpendicular velocity is read from the canonical
+  ! momenta; the Cartesian round-trip is the inverse of the CP seed.
   subroutine cpp_canon_boozer_guiding_center(st, xgc)
     use boozer_field_metric, only: boozer_field_metric_eval
+    use boozer_cartesian, only: particle_to_gc
     type(cpp_canon_state_t), intent(in) :: st
     real(dp), intent(out) :: xgc(3)
 
     real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
     real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
-    real(dp) :: qc, vcov(3), vcon(3), hcon(3), vpar, vperp_con(3), rho(3)
-    integer :: i
+    real(dp) :: qc, vcov(3), vcon(3), hcon(3), vpar, vperp_con(3)
+    integer :: i, ierr
 
     if (st%coord /= COORD_BOOZER) error stop &
       'CP guiding-center reconstruction requires COORD_BOOZER'
@@ -877,16 +846,22 @@ contains
       Bctr, Bcov, Bmod, dBmod, hcov)
 
     qc = st%charge/(c*st%ro0)
+    ! Build the full covariant velocity before raising: raising mixes all three
+    ! components through ginv (the off-diagonal ginv(1,3) is sizeable here), so
+    ! vcov must be complete first.
     do i = 1, 3
       vcov(i) = (st%z(3+i) - qc*Acov(i))/st%mass
+    end do
+    do i = 1, 3
       vcon(i) = ginv(i,1)*vcov(1) + ginv(i,2)*vcov(2) + ginv(i,3)*vcov(3)
       hcon(i) = ginv(i,1)*hcov(1) + ginv(i,2)*hcov(2) + ginv(i,3)*hcov(3)
     end do
 
     vpar = hcov(1)*vcon(1) + hcov(2)*vcon(2) + hcov(3)*vcon(3)
     vperp_con = vcon - vpar*hcon
-    call boozer_larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, st%mass, qc, rho)
-    xgc = st%z(1:3) - rho
+    call particle_to_gc(st%z(1:3), vperp_con, st%mass, qc, xgc, ierr)
+    if (ierr /= 0) error stop &
+      'CP guiding-center reconstruction: Boozer<-Cartesian inversion failed'
   end subroutine cpp_canon_boozer_guiding_center
 
 end module orbit_cpp_canonical

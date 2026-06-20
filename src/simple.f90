@@ -207,8 +207,7 @@ contains
     vperp0 = 0d0
     if (model == MODEL_CP) vperp0 = dsqrt(max(2d0*mu*Bmod, 0d0))
     if (model == MODEL_CP) then
-      call cp_particle_position_from_gc(x_gc, g, ginv, sqrtg, hcov, Bmod, &
-        vperp0, 1d0, 1d0, ro0_bar, x0)
+      call cp_particle_position_from_gc(x_gc, vperp0, 1d0, ro0_bar, x0)
     end if
 
     ! mass=1 and ro0=ro0_bar match the GC normalization. CP uses MODEL_CP and a
@@ -219,80 +218,31 @@ contains
     st%pabs = z0(4)   ! normalized speed; z(4) on write-back, conserved
   end subroutine init_canonical_6d
 
-  subroutine cp_particle_position_from_gc(x_gc, g, ginv, sqrtg, hcov, Bmod, &
-      vperp0, mass, charge, ro0_bar, x_particle)
-    real(dp), intent(in) :: x_gc(3), g(3,3), ginv(3,3), sqrtg
-    real(dp), intent(in) :: hcov(3), Bmod, vperp0, mass, charge, ro0_bar
+  ! Place the resolved CP particle one Larmor vector off the guiding-center start.
+  ! The offset is built and applied in Cartesian (boozer_cartesian), exact for any
+  ! gyroradius and regular at the axis, then mapped back to Boozer. The
+  ! perpendicular gyrophase reference (perp_unit_dir_flux) is the SAME one
+  ! cpp_canon_init uses to seed the velocity, so position and velocity are the
+  ! consistent quarter-turn apart.
+  subroutine cp_particle_position_from_gc(x_gc, vperp0, charge, ro0_bar, &
+      x_particle)
+    use boozer_cartesian, only: gc_to_particle
+    real(dp), intent(in) :: x_gc(3), vperp0, charge, ro0_bar
     real(dp), intent(out) :: x_particle(3)
 
-    real(dp) :: eperp(3), vperp_con(3), rho(3), qc
+    real(dp) :: qc
+    integer :: ierr
 
     qc = charge/ro0_bar
     if (abs(qc) <= tiny(1.0d0)) error stop &
       'CP gyrocenter offset requires nonzero charge'
 
-    call metric_perp_unit_dir(g, ginv, hcov, eperp)
-    vperp_con = vperp0*eperp
-    call larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, mass, qc, rho)
-    x_particle = x_gc + rho
-
+    call gc_to_particle(x_gc, vperp0, 1d0, qc, x_particle, ierr)
+    if (ierr /= 0) error stop &
+      'CP gyrocenter offset: Boozer<-Cartesian inversion failed'
     if (x_particle(1) <= 0d0 .or. x_particle(1) >= 1d0) error stop &
       'CP gyrocenter offset leaves supported Boozer flux domain'
   end subroutine cp_particle_position_from_gc
-
-  subroutine metric_perp_unit_dir(g, ginv, hcov, eperp)
-    real(dp), intent(in) :: g(3,3), ginv(3,3), hcov(3)
-    real(dp), intent(out) :: eperp(3)
-
-    real(dp) :: er(3), hcon(3), hpar, nrm
-    integer :: i, j
-
-    er = [ginv(1,1), ginv(2,1), ginv(3,1)]
-    call raise_metric(ginv, hcov, hcon)
-    hpar = hcov(1)*er(1) + hcov(2)*er(2) + hcov(3)*er(3)
-    eperp = er - hpar*hcon
-
-    nrm = 0d0
-    do i = 1, 3
-      do j = 1, 3
-        nrm = nrm + g(i,j)*eperp(i)*eperp(j)
-      end do
-    end do
-    if (nrm <= 0d0) error stop &
-      'CP gyrocenter offset could not build perpendicular direction'
-    eperp = eperp/dsqrt(nrm)
-  end subroutine metric_perp_unit_dir
-
-  subroutine larmor_offset(g, sqrtg, hcov, Bmod, vperp_con, mass, qc, rho)
-    real(dp), intent(in) :: g(3,3), sqrtg, hcov(3), Bmod, vperp_con(3)
-    real(dp), intent(in) :: mass, qc
-    real(dp), intent(out) :: rho(3)
-
-    real(dp) :: vcov(3), factor
-    integer :: i
-
-    do i = 1, 3
-      vcov(i) = g(i,1)*vperp_con(1) + g(i,2)*vperp_con(2) &
-        + g(i,3)*vperp_con(3)
-    end do
-
-    factor = mass/(qc*Bmod*sqrtg)
-    rho(1) = factor*(hcov(2)*vcov(3) - hcov(3)*vcov(2))
-    rho(2) = factor*(hcov(3)*vcov(1) - hcov(1)*vcov(3))
-    rho(3) = factor*(hcov(1)*vcov(2) - hcov(2)*vcov(1))
-  end subroutine larmor_offset
-
-  subroutine raise_metric(ginv, vcov, vcon)
-    real(dp), intent(in) :: ginv(3,3), vcov(3)
-    real(dp), intent(out) :: vcon(3)
-
-    integer :: i
-
-    do i = 1, 3
-      vcon(i) = ginv(i,1)*vcov(1) + ginv(i,2)*vcov(2) &
-        + ginv(i,3)*vcov(3)
-    end do
-  end subroutine raise_metric
 
   subroutine orbit_timestep_cpp_canonical(cpp, f, z, ierr)
     ! Advance the genuine 6D CPP one normalized step (dtaumin/sqrt(2)) and write

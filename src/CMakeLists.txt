@@ -20,6 +20,7 @@
     field/vmec_field_eval.f90
     field/vmec_field_metric.f90
     field/boozer_field_metric.f90
+    field/boozer_cartesian.f90
     field/field_newton.F90
     field.F90
     field/field_can_base.f90
