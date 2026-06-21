@@ -480,6 +480,15 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "integration"
         TIMEOUT 120)
 
+    # Experimental Boris-Pauli (BAP2) large-step CPP pusher (orbit_cpp_boris):
+    # built for manual validation but NOT registered as a default test -- the
+    # explicit scheme conserves energy to ~1e-7 (no implicit-solve floor) but the
+    # trapped banana is not yet certified through the turning point (monotonic
+    # outward drift; sign/normalization of the curvilinear pusher under debug).
+    # Run by hand: build/test/tests/test_cpp_boris.x in a dir with wout.nc.
+    add_executable(test_cpp_boris.x test_cpp_boris.f90)
+    target_link_libraries(test_cpp_boris.x simple)
+
     # Multi-particle regression gate: guards the field-direction bug (trapped 6D
     # orbits drifting monotonically outward and all being lost). Asserts trapped
     # CPP orbits BOUNCE inward, conserve energy, and that a pitch spread keeps a
