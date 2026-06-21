@@ -527,6 +527,11 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "integration"
         TIMEOUT 300)
+    # Banana + invariant diagnostic (dumps data for plotting; not a ctest).
+    # Run by hand: build/test/tests/diag_banana.x in a dir with a wout, via the
+    # BANANA_* environment variables.
+    add_executable(diag_banana.x diag_banana.f90)
+    target_link_libraries(diag_banana.x simple)
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py
