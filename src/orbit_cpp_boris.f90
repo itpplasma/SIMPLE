@@ -18,7 +18,8 @@ module orbit_cpp_boris
   ! large-step filter on the rotation angle (keeps the modified mu bounded when
   ! dt*Omega_c >> 1).
   use, intrinsic :: iso_fortran_env, only: dp => real64
-  use boozer_cartesian, only: boozer_to_cart, cart_to_boozer
+  use boozer_cartesian, only: boozer_to_cart, cart_to_boozer, gc_to_particle, &
+       perp_unit_dir_flux
   use boozer_field_metric, only: boozer_field_metric_eval
   implicit none
   private
@@ -26,7 +27,7 @@ module orbit_cpp_boris
   real(dp), parameter :: c = 1.0_dp
 
   public :: cpp_boris_state_t, cpp_boris_init, cpp_boris_step, cpp_boris_energy, &
-            cpp_boris_to_gc
+            cpp_boris_mu, cpp_boris_to_gc
 
   type :: cpp_boris_state_t
     real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (cm)
@@ -117,29 +118,58 @@ contains
     ierr = 0
   end subroutine cpp_boris_step
 
-  ! Seed from a guiding-centre start record (s,th,ph,vpar) with v_perp = 0 (CPP
-  ! slow manifold) and the fixed mu. Cartesian position from boozer_to_cart; the
-  ! parallel velocity along the Cartesian field direction.
-  subroutine cpp_boris_init(st, pauli, x0_boozer, vpar0, mu_in, mass, charge, &
-                            dt, ro0_in, pabs, filtered)
+  ! Seed from a guiding-centre start record (s,th,ph) with parallel speed vpar0 and
+  ! perpendicular speed vperp0. pauli=.true. (CPP) keeps v_perp=0 on the Pauli slow
+  ! manifold and carries mu|B|. pauli=.false. (full-orbit CP) places the particle a
+  ! Larmor vector off the guiding centre (gc_to_particle, Cartesian, regular through
+  ! the axis) and seeds v = vpar0 b_hat + vperp0 e_perp, where e_perp is the SAME
+  ! gyrophase reference (perp_unit_dir_flux) the position offset uses, so position
+  ! and velocity are the consistent quarter-turn apart -- identical seed to the
+  ! implicit-midpoint CP (cp_particle_position_from_gc).
+  subroutine cpp_boris_init(st, pauli, x0_boozer, vpar0, vperp0, mu_in, mass, &
+                            charge, dt, ro0_in, pabs, filtered)
     type(cpp_boris_state_t), intent(out) :: st
     logical, intent(in) :: pauli
-    real(dp), intent(in) :: x0_boozer(3), vpar0, mu_in, mass, charge, dt, ro0_in, pabs
+    real(dp), intent(in) :: x0_boozer(3), vpar0, vperp0, mu_in, mass, charge, &
+                            dt, ro0_in, pabs
     logical, intent(in), optional :: filtered
-    real(dp) :: xyz(3), Jc(3,3), Bvec(3), Bmod, gradB(3), u(3)
-    integer :: ierr
+    real(dp) :: xyz(3), Jc(3,3), Bvec(3), Bmod, gradB(3), u(3), x0(3), bhat(3)
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3), Acov(3), dA(3,3)
+    real(dp) :: Bctr(3), Bcov(3), Bg, dBmod(3), hcov(3), eperp(3), eperp_cart(3), qc
+    integer :: ierr, a
 
     st%pauli = pauli
     st%mass = mass; st%charge = charge; st%dt = dt; st%ro0 = ro0_in
     st%mu = mu_in; st%pabs = pabs
     if (present(filtered)) st%filtered = filtered
-    st%u = x0_boozer
-    call boozer_to_cart(x0_boozer, xyz, Jc)
+
+    ! Full-orbit CP starts a Larmor vector off the GC; CPP starts on the GC.
+    x0 = x0_boozer
+    if (.not. pauli .and. vperp0 > 0.0_dp) then
+      qc = charge/ro0_in
+      call gc_to_particle(x0_boozer, vperp0, mass, qc, x0, ierr)
+      if (ierr /= 0) error stop 'cpp_boris_init: gc_to_particle inversion failed'
+    end if
+
+    st%u = x0
+    call boozer_to_cart(x0, xyz, Jc)
     st%x = xyz
-    call cart_field(xyz, x0_boozer, Bvec, Bmod, gradB, u, ierr)
+    call cart_field(xyz, x0, Bvec, Bmod, gradB, u, ierr)
     st%u = u
-    ! v = vpar0 * b_hat (parallel only; v_perp = 0 on the slow manifold).
-    st%v = vpar0*Bvec/max(Bmod_of(Bvec), 1.0e-30_dp)
+    bhat = Bvec/max(Bmod_of(Bvec), 1.0e-30_dp)
+    st%v = vpar0*bhat
+
+    if (.not. pauli .and. vperp0 > 0.0_dp) then
+      ! e_perp: contravariant flux perpendicular unit, pushed to Cartesian by Jc
+      ! (an isometry: |Jc e|^2 = e^T g e = 1), giving v_perp = vperp0 e_perp_cart.
+      call boozer_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
+           Bctr, Bcov, Bg, dBmod, hcov)
+      call perp_unit_dir_flux(g, ginv, hcov, eperp)
+      do a = 1, 3
+        eperp_cart(a) = Jc(a,1)*eperp(1) + Jc(a,2)*eperp(2) + Jc(a,3)*eperp(3)
+      end do
+      st%v = st%v + vperp0*eperp_cart
+    end if
   end subroutine cpp_boris_init
 
   function cpp_boris_energy(st) result(energy)
@@ -150,6 +180,21 @@ contains
     energy = 0.5_dp*st%mass*(st%v(1)**2 + st%v(2)**2 + st%v(3)**2)
     if (st%pauli) energy = energy + st%mu*Bmod
   end function cpp_boris_energy
+
+  ! Emergent magnetic moment mu = m v_perp^2/(2|B|) of the resolved orbit. Unlike
+  ! energy (machine-precision under the Boris rotation), mu is only an adiabatic
+  ! invariant: it oscillates at the gyrophase and drifts slowly; the gyro-averaged
+  ! value is the conserved quantity. Diagnostic, not used by the pusher.
+  function cpp_boris_mu(st) result(mu)
+    type(cpp_boris_state_t), intent(in) :: st
+    real(dp) :: mu, Bvec(3), Bmod, gradB(3), u(3), bhat(3), vpar, vperp2
+    integer :: ierr
+    call cart_field(st%x, st%u, Bvec, Bmod, gradB, u, ierr)
+    bhat = Bvec/max(Bmod_of(Bvec), 1.0e-30_dp)
+    vpar = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
+    vperp2 = max(st%v(1)**2 + st%v(2)**2 + st%v(3)**2 - vpar**2, 0.0_dp)
+    mu = 0.5_dp*st%mass*vperp2/max(Bmod, 1.0e-30_dp)
+  end function cpp_boris_mu
 
   ! Guiding-centre reduction for output: Boozer (s,th,ph) of the current point and
   ! the parallel speed lambda = vpar/|v|.

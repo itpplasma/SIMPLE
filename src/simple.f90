@@ -13,6 +13,8 @@ module simple
   use orbit_cpp_canonical, only : cpp_canon_state_t, cpp_canon_init, &
     cpp_canon_step, cpp_canon_to_gc, MODEL_CP, MODEL_CPP_SYM, &
     COORD_CHARTMAP, COORD_BOOZER
+  use orbit_cpp_boris, only : cpp_boris_state_t, cpp_boris_init, cpp_boris_step, &
+    cpp_boris_to_gc
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -37,6 +39,7 @@ public
     type(multistage_integrator_t) :: mi
     type(cpp_canon_state_t) :: cpp  ! genuine 6D CPP state (orbit_model=ORBIT_CPP6D)
     type(cpp_canon_state_t) :: cp   ! genuine 6D CP state (orbit_model=ORBIT_CP6D)
+    type(cpp_boris_state_t) :: cp_boris ! explicit Boris CP (orbit_model=ORBIT_CP6D_BORIS)
   end type tracer_t
 
   interface tstep
@@ -170,6 +173,57 @@ contains
 
     call init_canonical_6d(cp, MODEL_CP, f, z0, dtaumin)
   end subroutine init_cp
+
+  ! Seed the explicit Boris full-orbit CP from a GC start, same normalization and
+  ! gyrophase reference as init_canonical_6d(MODEL_CP) so the two integrators start
+  ! from the identical particle. The Boris init places the Larmor offset itself.
+  subroutine init_cp_boris(cpb, z0, dtaumin)
+    use boozer_field_metric, only: boozer_field_metric_eval
+    use params, only: orbit_coord
+    type(cpp_boris_state_t), intent(out) :: cpb
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(in) :: dtaumin
+    real(dp) :: ro0_bar, mu, vpar_bar, vperp0
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
+    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
+
+    if (orbit_coord /= 1) error stop &
+      '6D Boris CP tracing supports only orbit_coord=1 (Boozer)'
+    if (z0(1) <= 0d0 .or. z0(1) >= 1d0) error stop &
+      '6D Boris CP initialization requires 0 < s < 1'
+
+    call boozer_field_metric_eval(z0(1:3), g, ginv, sqrtg, dg, Acov, dA, &
+         Bctr, Bcov, Bmod, dBmod, hcov)
+    mu = .5d0*z0(4)**2*(1.d0 - z0(5)**2)/Bmod*2d0
+    ro0_bar = ro0/dsqrt(2d0)
+    vpar_bar = z0(4)*z0(5)*dsqrt(2d0)
+    vperp0 = dsqrt(max(2d0*mu*Bmod, 0d0))
+    call cpp_boris_init(cpb, .false., z0(1:3), vpar_bar, vperp0, mu, 1d0, 1d0, &
+      dtaumin/dsqrt(2d0), ro0_bar, z0(4))
+  end subroutine init_cp_boris
+
+  subroutine orbit_timestep_cp_boris(cpb, z, ierr)
+    ! Advance the explicit Boris CP one normalized step and write back the standard
+    ! SIMPLE z(1:5) like the canonical path: z(1)=particle s, z(2:3)=angles,
+    ! z(4)=pabs, z(5)=lambda. Cartesian step is regular through the axis; ierr/=0
+    ! marks a physical loss (s>=1) or field-inversion failure.
+    type(cpp_boris_state_t), intent(inout) :: cpb
+    real(dp), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+    real(dp) :: s, th, ph, vpar
+
+    call cpp_boris_step(cpb, ierr)
+    if (ierr /= 0) return
+    call cpp_boris_to_gc(cpb, s, th, ph, vpar, ierr)
+    if (ierr /= 0) return
+    if (s <= 0d0 .or. s >= 1d0) then
+      ierr = 2
+      return
+    end if
+    z(1) = s; z(2) = th; z(3) = ph
+    z(4) = cpb%pabs
+    z(5) = vpar/(z(4)*dsqrt(2d0))
+  end subroutine orbit_timestep_cp_boris
 
   subroutine init_canonical_6d(st, model, f, z0, dtaumin)
     use boozer_field_metric, only: boozer_field_metric_eval

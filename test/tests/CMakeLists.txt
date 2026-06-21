@@ -520,6 +520,13 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "integration"
         TIMEOUT 300)
+    add_executable(test_cp_boris.x test_cp_boris.f90)
+    target_link_libraries(test_cp_boris.x simple)
+    add_test(NAME test_cp_boris COMMAND test_cp_boris.x)
+    set_tests_properties(test_cp_boris PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "integration"
+        TIMEOUT 300)
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py

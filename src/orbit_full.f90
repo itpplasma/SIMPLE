@@ -38,6 +38,11 @@ module orbit_full
   ! as CPP (orbit_cpp_canonical MODEL_CP). CP omits the Pauli mu|B| term and seeds
   ! the resolved perpendicular velocity.
   integer, parameter, public :: ORBIT_CP6D = 6
+  ! Genuine 6D classical charged particle by an EXPLICIT Boris pusher in Cartesian
+  ! (orbit_cpp_boris). Same physics and seed as ORBIT_CP6D, but no nonlinear solve
+  ! (no convergence floor, no nonconv losses) and regular through the magnetic axis,
+  ! where the flux-canonical midpoint (ORBIT_CP6D) is singular.
+  integer, parameter, public :: ORBIT_CP6D_BORIS = 7
 
   ! coordinate kinds (3..5 reserved for the libneo PR: VMEC, Boozer, chartmap)
   integer, parameter, public :: COORD_CART = 1

@@ -67,7 +67,7 @@ contains
 
     tag = merge('BAP2-filtered', 'BAP2-plain   ', filt)
     nstep = 4000
-    call cpp_boris_init(st, .true., z0(1:3), vpar_bar, mu, 1.0_dp, 1.0_dp, &
+    call cpp_boris_init(st, .true., z0(1:3), vpar_bar, 0.0_dp, mu, 1.0_dp, 1.0_dp, &
                         dtaumin/sqrt(2.0_dp), ro0_bar, z0(4), filtered=filt)
     E0 = cpp_boris_energy(st); Emax = 0.0_dp
     smin = z0(1); smax = z0(1)

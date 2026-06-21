@@ -85,10 +85,11 @@ contains
         ! delta splines (boozer_field_metric -> delthe_delphi_BV_d2). Enable them
         ! before init_field builds the Boozer coordinates.
         block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
             use params, only: orbit_coord, orbit_model
             use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
-            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
+                 orbit_model == ORBIT_CP6D_BORIS) &
                 .and. orbit_coord == 1) then
                 use_B_r = .true.
                 use_del_tp_B = .true.
@@ -99,11 +100,12 @@ contains
         call print_phase_time('Field initialization completed')
 
         block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
             use params, only: orbit_coord, orbit_model
             use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
             use boozer_sub, only: get_boozer_coordinates
-            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
+                 orbit_model == ORBIT_CP6D_BORIS) &
                 .and. orbit_coord == 1) then
                 use_B_r = .true.
                 use_del_tp_B = .true.
@@ -131,9 +133,10 @@ contains
         ! The 6D CP/CPP path runs on the native Boozer chart built from a VMEC
         ! equilibrium, not from a standalone Boozer-chartmap input.
         block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
             use params, only: orbit_model
-            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
+                 orbit_model == ORBIT_CP6D_BORIS) &
                 .and. chartmap_mode) error stop &
                 'orbit_model=ORBIT_CPP6D/ORBIT_CP6D requires a VMEC-backed '// &
                 'canonical field (the Boozer-chartmap Cartesian metric is '// &
@@ -182,10 +185,11 @@ contains
         ! Keep the VMEC metric attach for legacy non-Boozer experiments. Production
         ! CP/CPP validation above currently restricts both models to Boozer.
         block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
             use orbit_cpp_vmec_metric, only: vmec_metric_attach, vmec_metric_ready
             use params, only: orbit_model, orbit_coord
-            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) &
+            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
+                 orbit_model == ORBIT_CP6D_BORIS) &
                 .and. orbit_coord /= 1 .and. .not. vmec_metric_ready()) then
                 call vmec_metric_attach
                 call print_phase_time('COORD_VMEC 6D metric attached')
@@ -227,7 +231,7 @@ contains
     subroutine validate_orbit_model_config
         use orbit_full, only: ORBIT_GC, ORBIT_PAULI, ORBIT_BORIS, &
                               ORBIT_FOSYMPL, ORBIT_PAULI6D, ORBIT_CPP6D, &
-                              ORBIT_CP6D
+                              ORBIT_CP6D, ORBIT_CP6D_BORIS
         use params, only: orbit_model, orbit_coord
 
         select case (orbit_model)
@@ -239,6 +243,9 @@ contains
         case (ORBIT_CP6D)
             if (orbit_coord /= 1) error stop &
                 'orbit_model=ORBIT_CP6D supports only orbit_coord=1 (Boozer)'
+        case (ORBIT_CP6D_BORIS)
+            if (orbit_coord /= 1) error stop &
+                'orbit_model=ORBIT_CP6D_BORIS supports only orbit_coord=1 (Boozer)'
         case (ORBIT_BORIS, ORBIT_FOSYMPL, ORBIT_PAULI6D)
             error stop 'selected orbit_model is not available in production '// &
                 'alpha-loss tracing'
@@ -896,9 +903,11 @@ contains
 
         if (integmode > 0) then
             block
-                use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D
+                use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
+                use simple, only: init_cp_boris
                 use params, only: orbit_model
-                if (orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D) then
+                if (orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D &
+                        .or. orbit_model == ORBIT_CP6D_BORIS) then
                     if (wall_enabled) error stop 'orbit_model=ORBIT_CPP6D/CP6D '// &
                         'with wall_input is not supported (wall path is GC-only)'
                     if (swcoll) error stop 'orbit_model=ORBIT_CPP6D/CP6D with '// &
@@ -908,11 +917,14 @@ contains
                     ! loss path is native Boozer (see init_cpp/init_cp). init_sympl
                     ! still runs to seed anorb%f and compute the GC pitch-angle
                     ! params below from the same start as the 6D wire. CPP6D seeds
-                    ! the Pauli state (mu|B|); CP6D seeds the full charged particle.
+                    ! the Pauli state (mu|B|); CP6D the full charged particle; the
+                    ! BORIS variant the explicit Cartesian full-orbit pusher.
                     call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, &
                         integmode)
                     if (orbit_model == ORBIT_CP6D) then
                         call init_cp(anorb%cp, anorb%f, z, dtaumin)
+                    else if (orbit_model == ORBIT_CP6D_BORIS) then
+                        call init_cp_boris(anorb%cp_boris, z, dtaumin)
                     else
                         call init_cpp(anorb%cpp, anorb%f, z, dtaumin)
                     end if
@@ -989,8 +1001,10 @@ contains
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
-        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D, ORBIT_CP6D
-        use simple, only: orbit_timestep_cpp_canonical, orbit_timestep_cp_canonical
+        use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D, ORBIT_CP6D, &
+            ORBIT_CP6D_BORIS
+        use simple, only: orbit_timestep_cpp_canonical, orbit_timestep_cp_canonical, &
+            orbit_timestep_cp_boris
         use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
@@ -1034,6 +1048,11 @@ contains
                     ! Boozer midpoint machinery with CPP and MODEL_CP dynamics.
                     call orbit_timestep_cp_canonical(anorb%cp, anorb%f, z, &
                         ierr_orbit)
+                case (ORBIT_CP6D_BORIS)
+                    ! Genuine 6D full charged particle by the explicit Cartesian
+                    ! Boris pusher: no nonlinear solve, machine-precision energy,
+                    ! regular through the magnetic axis.
+                    call orbit_timestep_cp_boris(anorb%cp_boris, z, ierr_orbit)
                 case default
                     call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
                     call to_standard_z_coordinates(anorb, z)
