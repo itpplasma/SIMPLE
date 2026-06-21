@@ -3,6 +3,7 @@ module params
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
+                                  axis_healing_power_law, rho_axis_heal, &
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
@@ -121,7 +122,8 @@ module params
 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-	        old_axis_healing_boundary, am1, am2, Z1, Z2, &
+	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
+	        am1, am2, Z1, Z2, &
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, output_results_netcdf, &

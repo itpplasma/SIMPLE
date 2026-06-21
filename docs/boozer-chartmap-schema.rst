@@ -20,6 +20,71 @@ The schema uses two radial coordinates:
 ``A_phi`` must be a one-dimensional variable over ``s`` and must carry
 ``radial_abscissa = "s"``. Files that store ``A_phi`` over ``rho`` are invalid.
 
+Runtime input keeps the usual SIMPLE meaning: ``sbeg`` is normalized toroidal
+flux ``s`` in both VMEC and chartmap runs. A chartmap run evaluates the start
+surface at ``rho = sqrt(sbeg)``.
+
+Angles and Signs
+----------------
+
+SIMPLE chartmaps use the same left-handed Boozer orientation as the VMEC path.
+The scalar global attribute ``torflux`` is the edge value of ``A_theta``, the
+poloidal covariant component of the vector potential:
+
+.. code-block:: text
+
+   A = A_theta grad(theta_B) + A_phi grad(zeta_B)
+   A_theta = torflux*s
+   A_phi   = -chi
+
+GVEC Boozer coordinates are right-handed for the W7-X/GVEC comparisons, with
+``zeta_GVEC = -phi_VMEC``. A GVEC chartmap therefore needs exactly one angle
+reversal before SIMPLE reads it:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Reversal
+     - Resampling
+     - Components that change sign
+     - Components that keep sign
+   * - ``zeta -> -zeta`` (default exporter path)
+     - geometry and ``Bmod`` at ``-zeta``
+     - ``A_phi``, ``B_phi``
+     - ``torflux``/``A_theta``, ``B_theta``
+   * - ``theta -> -theta``
+     - geometry and ``Bmod`` at ``-theta``
+     - ``torflux``/``A_theta``, ``B_theta``
+     - ``A_phi``, ``B_phi``
+
+Raw right-handed GVEC chartmaps and double-flipped chartmaps do not match the
+SIMPLE/VMEC convention.
+
+Runtime Scaling
+---------------
+
+Chartmap files store base-scale CGS quantities. SIMPLE applies the usual
+``vmec_B_scale`` and ``vmec_RZ_scale`` settings when it loads a chartmap, so a
+chartmap run scales like a VMEC run:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Quantity
+     - Runtime scale
+   * - ``Bmod``
+     - ``vmec_B_scale``
+   * - ``B_theta``, ``B_phi``
+     - ``vmec_B_scale * vmec_RZ_scale``
+   * - ``A_phi``, ``torflux``
+     - ``vmec_B_scale * vmec_RZ_scale**2``
+   * - ``x``, ``y``, ``z``, derived ``rmajor``
+     - ``vmec_RZ_scale``
+
+``test_chartmap_scaling`` checks the field object, canonical Boozer splines,
+reference-coordinate wrapper, vector potential, covariant field components,
+and ``Bmod``.
+
 Dimensions
 ----------
 

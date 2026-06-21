@@ -85,6 +85,8 @@ contains
             error stop "stl_wall_init: failed to create STL wall (CGAL)"
         end if
 #else
+        associate (dummy => wall)
+        end associate
         print *, "stl_wall_init: SIMPLE built without CGAL support."
         print *, "Rebuild with -DSIMPLE_ENABLE_CGAL=ON to use wall_input."
         error stop "stl_wall_init: CGAL disabled"
@@ -121,6 +123,8 @@ contains
                                              hit_m)
         hit = (hit_i /= 0)
 #else
+        associate (dummy_wall => wall, dummy_p0 => p0_m, dummy_p1 => p1_m)
+        end associate
         hit = .false.
         hit_m = 0.0_dp
         error stop "stl_wall_first_hit_segment: CGAL disabled"
@@ -148,6 +152,8 @@ contains
                                                          hit_m, normal)
         hit = (hit_i /= 0)
 #else
+        associate (dummy_wall => wall, dummy_p0 => p0_m, dummy_p1 => p1_m)
+        end associate
         hit = .false.
         hit_m = 0.0_dp
         normal = 0.0_dp

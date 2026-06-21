@@ -330,13 +330,10 @@ contains
             G_batch_spline_ready = .false.
         end if
 
-        order = [ns_s_c, ns_tp_c, ns_tp_c]
-        if (any(order < 3)) then
-            error stop "build_canflux_G_batch_spline: spline order must be 3..5"
-        end if
-        if (any(order > 5)) then
-            error stop "build_canflux_G_batch_spline: spline order must be 3..5"
-        end if
+      order = [ns_s_c, ns_tp_c, ns_tp_c]
+      if (minval(order) < 3 .or. maxval(order) > 5) then
+         error stop "build_canflux_G_batch_spline: spline order must be 3..5"
+      end if
 
         x_min = [0.0_dp, 0.0_dp, 0.0_dp]
         x_max(1) = hs_c*real(ns_c - 1, dp)
@@ -378,13 +375,10 @@ contains
             Bp_batch_spline_ready = .false.
         end if
 
-        order = [ns_s_c, ns_tp_c, ns_tp_c]
-        if (any(order < 3)) then
-            error stop "build_canflux_sqg_Bt_Bp_batch_spline: spline order must be 3..5"
-        end if
-        if (any(order > 5)) then
-            error stop "build_canflux_sqg_Bt_Bp_batch_spline: spline order must be 3..5"
-        end if
+      order = [ns_s_c, ns_tp_c, ns_tp_c]
+      if (minval(order) < 3 .or. maxval(order) > 5) then
+         error stop "build_canflux_sqg_Bt_Bp_batch_spline: spline order must be 3..5"
+      end if
 
         x_min = [0.0_dp, 0.0_dp, 0.0_dp]
         x_max(1) = hs_c*real(ns_c - 1, dp)

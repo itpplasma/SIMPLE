@@ -518,6 +518,20 @@ set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_orbit.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# Boozer chartmap export tool
+add_executable(export_boozer_chartmap.x
+    app/export_boozer_chartmap.f90
+)
+target_compile_options(export_boozer_chartmap.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(export_boozer_chartmap.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+target_link_libraries(export_boozer_chartmap.x PRIVATE simple)
+set_target_properties(export_boozer_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # Ensure fortplot is built before diagnostics (when available)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_dependencies(diag_meiss.x fortplot)
