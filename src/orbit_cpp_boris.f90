@@ -22,7 +22,8 @@ module orbit_cpp_boris
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use reference_coordinates, only: ref_coords
   use orbit_cpp_chartmap_metric, only: chartmap_eval_field
-  use libneo_coordinates, only: chartmap_coordinate_system_t
+  use libneo_coordinates, only: chartmap_coordinate_system_t, &
+       chartmap_from_cyl_ok, chartmap_from_cyl_err_out_of_bounds
   implicit none
   private
 
@@ -58,7 +59,32 @@ contains
   ! iterations -- far more robust and faster than the cold multi-seed from_cart, and
   ! thread-safe (read-only spline evaluation). status: CPB_OK interior, CPB_LOSS when
   ! the point maps to rho>=1 (out of the s<1 plasma), CPB_LOCATE_FAIL on no convergence.
+  ! Cartesian (wedge) -> logical. Warm damped Newton from the carried guess (fast,
+  ! 1-2 iters); if it cannot converge -- e.g. the guess went stale across a
+  ! field-period seam -- fall back to the chartmap's robust multi-seed from_cart,
+  ! which seeds zeta across [0, 2pi/nfp) and is immune to the stale guess.
   subroutine invert_cart_warm(x, u_guess, u, status)
+    real(dp), intent(in) :: x(3), u_guess(3)
+    real(dp), intent(out) :: u(3)
+    integer, intent(out) :: status
+    integer :: ierr
+
+    call invert_warm_newton(x, u_guess, u, status)
+    if (status /= CPB_LOCATE_FAIL) return
+    select type (cs => ref_coords)               ! robust multi-seed fallback
+    class is (chartmap_coordinate_system_t)
+      call cs%from_cart(x, u, ierr)
+    class default
+      return
+    end select
+    if (ierr == chartmap_from_cyl_ok) then
+      status = merge(CPB_LOSS, CPB_OK, u(1) >= 1.0_dp - 1.0e-3_dp)
+    else if (ierr == chartmap_from_cyl_err_out_of_bounds) then
+      status = CPB_LOSS
+    end if
+  end subroutine invert_cart_warm
+
+  subroutine invert_warm_newton(x, u_guess, u, status)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: u(3)
     integer, intent(out) :: status
@@ -110,7 +136,7 @@ contains
       rn = rnew
     end do
     status = accept_or_fail(u(1), rn, accept_tol, rho_edge)
-  end subroutine invert_cart_warm
+  end subroutine invert_warm_newton
 
   ! Classify a finished Newton. The inverse itself never declares a confinement
   ! loss: a converged locate (interior or just past the clamped edge) is CPB_OK and
