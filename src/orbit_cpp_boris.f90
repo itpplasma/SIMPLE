@@ -112,14 +112,17 @@ contains
     status = accept_or_fail(u(1), rn, accept_tol, rho_edge)
   end subroutine invert_cart_warm
 
-  ! Classify a finished Newton: a residual within accept_tol is a good locate
-  ! (loss if it sits at rho>=1), otherwise a numerical fault (counted confined).
+  ! Classify a finished Newton. The inverse itself never declares a confinement
+  ! loss: a converged locate (interior or just past the clamped edge) is CPB_OK and
+  ! reports the radius through u, so the caller decides loss on the guiding-centre
+  ! radius. A point that stalls at the edge is still OK (its rho>=1 is reported); an
+  ! interior point that cannot converge is a numerical fault (counted confined).
   pure integer function accept_or_fail(rho, rn, accept_tol, rho_edge) result(status)
     real(dp), intent(in) :: rho, rn, accept_tol, rho_edge
-    if (rn < accept_tol) then
-      status = merge(CPB_LOSS, CPB_OK, rho >= rho_edge)
+    if (rn < accept_tol .or. rho >= rho_edge - 1.0e-3_dp) then
+      status = CPB_OK
     else
-      status = merge(CPB_LOSS, CPB_LOCATE_FAIL, rho >= rho_edge - 1.0e-3_dp)
+      status = CPB_LOCATE_FAIL
     end if
   end function accept_or_fail
 
@@ -166,13 +169,17 @@ contains
     real(dp), intent(in) :: u(3)
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), Jc(3,3)
     integer, intent(out) :: status
-    real(dp) :: Acov(3), dA(3,3), dBmod(3), hcov(3)
+    real(dp) :: ue(3), Acov(3), dA(3,3), dBmod(3), hcov(3)
     real(dp) :: g(3,3), ginv(3,3), sqrtg, Bctr(3), Jinv(3,3)
     integer :: i
 
-    call chartmap_eval_field(u, Acov, dA, Bmod, dBmod, hcov)
-    call ref_coords%metric_tensor(u, g, ginv, sqrtg)
-    call ref_coords%covariant_basis(u, Jc)
+    ! A particle may gyro-excurse a Larmor radius past s=1; evaluate the field at
+    ! the clamped edge there (field_can is undefined past the last closed surface).
+    ue = u
+    ue(1) = min(ue(1), 1.0_dp - 1.0e-9_dp)
+    call chartmap_eval_field(ue, Acov, dA, Bmod, dBmod, hcov)
+    call ref_coords%metric_tensor(ue, g, ginv, sqrtg)
+    call ref_coords%covariant_basis(ue, Jc)
     if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart
       status = CPB_LOCATE_FAIL; return
     end if
@@ -432,6 +439,10 @@ contains
     th = u_gc(2); ph = u_gc(3)
     vpar = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
     if (present(Bmod_gc)) Bmod_gc = Bmod
+    ! Confinement loss is decided here, on the Larmor-corrected guiding centre
+    ! (#421): the particle may gyro-excurse past s=1 and return, as in ASCOT5; only
+    ! the guiding centre crossing the last closed surface is a loss.
+    if (u_gc(1) >= 1.0_dp) status = CPB_LOSS
   end subroutine cpp_boris_to_gc
 
   ! Unit perpendicular direction in contravariant flux components: raised radial
