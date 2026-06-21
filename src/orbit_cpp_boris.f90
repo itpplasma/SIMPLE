@@ -183,12 +183,19 @@ contains
     if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart
       status = CPB_LOCATE_FAIL; return
     end if
-    do i = 1, 3
-      Bctr(i) = Bmod*(ginv(i,1)*hcov(1) + ginv(i,2)*hcov(2) + ginv(i,3)*hcov(3))
-    end do
+    ! B = curl A with the Boozer flux-function potential A = (0, A_theta(s),
+    ! A_phi(s)). Then B^s = d_theta A_phi - d_phi A_theta = 0 EXACTLY (B tangent to
+    ! the flux surface), B^theta = -dA_phi/drho / sqrtg, B^phi = dA_theta/drho /
+    ! sqrtg, carrying the exact equilibrium pitch. This is divergence-free by
+    ! construction; raising the unit field h with the metric instead left a spurious
+    ! B^s (radial streaming) that drove the CP over-loss. Renormalize to |B|.
+    Bctr(1) = 0.0_dp
+    Bctr(2) = -dA(3,1)/sqrtg
+    Bctr(3) = dA(2,1)/sqrtg
     do i = 1, 3
       Bvec(i) = Jc(i,1)*Bctr(1) + Jc(i,2)*Bctr(2) + Jc(i,3)*Bctr(3)
     end do
+    Bvec = Bvec*(Bmod/max(sqrt(Bvec(1)**2 + Bvec(2)**2 + Bvec(3)**2), 1.0e-30_dp))
     call inv3(Jc, Jinv)
     do i = 1, 3
       gradB(i) = Jinv(1,i)*dBmod(1) + Jinv(2,i)*dBmod(2) + Jinv(3,i)*dBmod(3)
@@ -238,8 +245,9 @@ contains
     if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart
       status = CPB_LOCATE_FAIL; return
     end if
-    ! bhat (wedge Cartesian) = Jc (g^{ij} h_j), unit (|.| = 1 in metric g).
-    hctr = matmul(ginv, hcov)
+    ! bhat (wedge Cartesian) from B = curl A (B^s = 0 exactly, exact pitch); same
+    ! construction as field_at_logical so seed/readout match the push.
+    hctr = [0.0_dp, -dA(3,1)/sqrtg, dA(2,1)/sqrtg]
     do i = 1, 3
       bw(i) = Jc(i,1)*hctr(1) + Jc(i,2)*hctr(2) + Jc(i,3)*hctr(3)
     end do
