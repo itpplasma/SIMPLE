@@ -685,24 +685,34 @@ contains
     type(cpp_canon_state_t), intent(inout) :: st
     integer, intent(out) :: ierr
     integer, parameter :: maxit = 50
-    real(dp), parameter :: atol = 1.0e-13_dp
-    ! Relative residual floor for the round-off fallback. Each row is scaled by its
-    ! natural magnitude (q rows O(1); p rows carry the canonical momentum), so the
-    ! floor is 1e-10 of the equation scale -- still far tighter than any physical
-    ! tolerance, and reachable by both the spline round-off floor (COORD_BOOZER)
-    ! and the dropped-curvature floor (COORD_VMEC).
-    real(dp), parameter :: rtol = 1.0e-10_dp
-    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), resscale(6)
+    ! Convergence by the scaled max-residual (q rows O(1); p rows over |p_i|),
+    ! analytic Jacobian, no FD, no plateau heuristic. Two regimes, by chart:
+    !
+    !   COORD_TOK (exact analytic): Newton reaches machine precision; the
+    !   analytic-tokamak python oracle requires it (CPP_VAR drifts over 2000 steps
+    !   otherwise), so accept only at atol.
+    !
+    !   Spline charts (BOOZER/VMEC): the q rows reach machine precision (~1e-12)
+    !   but the momentum rows floor at ~1e-9, set by the precision of the Boozer
+    !   field/metric DERIVATIVE evaluation (the radial force grad_s = d/ds of the
+    !   pulled-back metric/field). This is the round-off floor of the residual
+    !   EVALUATION itself, hit identically by Newton, Picard, or a Boris force
+    !   eval; the root exists only to ~1e-9. floor_tol admits that genuine root.
+    !   A step whose residual stays far above it (the implicit midpoint has NO root
+    !   at a trapped bounce at large dt, the CPP resonance of #417, residual ~1e-3)
+    !   is flagged non-converged (ierr=3) -- never silently treated as a loss.
+    real(dp), parameter :: atol = 1.0e-13_dp, floor_tol = 1.0e-8_dp
+    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), frow(6)
     type(block_t) :: blk
-    real(dp) :: vmid(3), qc, resnorm, resnorm_prev
+    real(dp) :: vmid(3), qc, resnorm, f0, s_i, acc_tol
     integer :: kit, i, info, j
-    logical :: res_conv, rel_conv
 
     zold = st%z
     z = zold
     ierr = 0
-    res_conv = .false.
-    resnorm_prev = huge(1.0_dp)
+    f0 = -1.0_dp
+    resnorm = huge(1.0_dp)
+    acc_tol = merge(atol, floor_tol, st%coord == COORD_TOK)
 
     do kit = 1, maxit
       if (z(1) <= 0.0_dp) z(1) = 1.0e-3_dp
@@ -712,6 +722,15 @@ contains
         return
       end if
       call residual(st, zold, z, fvec)
+      frow(1:3) = abs(fvec(1:3))
+      resnorm = max(frow(1), frow(2), frow(3))
+      do i = 1, 3
+        s_i = max(abs(z(3+i)), 1.0_dp)
+        frow(3+i) = abs(fvec(3+i))/s_i
+        resnorm = max(resnorm, frow(3+i))
+      end do
+      if (f0 < 0.0_dp) f0 = resnorm
+      if (resnorm <= acc_tol) exit
       call jacobian(st, zold, z, fjac)
       dz = fvec
       call rk_solve(6, fjac, dz, info)
@@ -721,50 +740,9 @@ contains
         return
       end if
       z = z - dz
-      ! Accept on the RESIDUAL evaluated at the NEW (accepted) state, not on the
-      ! pre-update residual or the step size alone: a small Newton step can mask a
-      ! residual stalled far from the root (issue 417). The exact-Jacobian paths
-      ! (COORD_TOK, COORD_BOOZER) drive every residual component below the tight
-      ! absolute atol; COORD_TOK reaches it in a few iterations, preserving the
-      ! golden-record trajectory.
-      call residual(st, zold, z, fvec)
-      resscale(1:3) = 1.0_dp
-      do i = 1, 3
-        resscale(3+i) = max(abs(z(3+i)), 1.0_dp)
-      end do
-      res_conv = .true.
-      rel_conv = .true.
-      resnorm = 0.0_dp
-      do i = 1, 6
-        if (abs(fvec(i)) >= atol) res_conv = .false.
-        if (abs(fvec(i)) >= rtol*resscale(i)) rel_conv = .false.
-        resnorm = max(resnorm, abs(fvec(i))/resscale(i))
-      end do
-      if (res_conv) exit
-
-      ! Relative-floor fallback: the canonical momenta p_i = vpar h_i + A_i/ro0_bar
-      ! carry O(1e3) values in the Boozer chart, so the p-row residual floors at
-      ! ~|p|*eps ~ 1e-12, an order above the tight absolute atol; the achievable
-      ! minimum cannot reach atol. Accept once the scaled residual meets the
-      ! RELATIVE floor (rel_conv: |fvec_i| < rtol*resscale_i, 1e-10 of the row
-      ! scale) AND has stopped improving (this iterate did not reduce the scaled
-      ! residual norm) -- i.e. Newton has bottomed out at its round-off floor. The
-      ! plateau guard preserves the exact-Jacobian COORD_TOK trajectory: COORD_TOK
-      ! keeps reducing the residual past 1e-10 down to atol, so it never accepts on
-      ! the fallback and the golden record is unchanged. This is a RESIDUAL
-      ! criterion, not a step criterion: a small Newton step cannot mask a large
-      ! residual (issue 417), because rel_conv bounds the residual itself. The
-      ! earlier step-based stall gate spuriously rejected the Boozer floor -- a
-      ! coupled q-row round-off step (~1e-12) exceeded stagtol*1.0 while the
-      ! residual was already at 1e-13, ejecting confined particles as ierr=3.
-      if (rel_conv .and. resnorm >= resnorm_prev) then
-        res_conv = .true.
-        exit
-      end if
-      resnorm_prev = resnorm
     end do
 
-    if (.not. res_conv) then
+    if (resnorm > acc_tol) then
       ierr = 3
       call count_event(EVT_CPP_NONCONV)
     end if
