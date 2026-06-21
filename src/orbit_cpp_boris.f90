@@ -9,18 +9,19 @@ module orbit_cpp_boris
   ! H = |v|^2/2 + mu|B|, with frozen mu and an optional rotation-angle filter.
   !
   ! Field and geometry come from the chartmap (the Cartesian-side representation,
-  ! issue #420), through the active production field: at the Cartesian point we
-  ! invert to the logical chart u=(rho, theta_B, phi_B) with the chartmap forward
-  ! map (ref_coords%from_cart, rho=sqrt(s)), evaluate the field there (magfie:
-  ! |B|, the contravariant field direction hctrvr, d log|B|/du), and push the
-  ! physical vectors to Cartesian with the chartmap Jacobian Jc = d(x)/du
-  ! (covariant_basis):
-  !   B_cart      = Jc (|B| hctrvr),      grad|B|_cart = Jc^{-T} (|B| bder).
+  ! issue #420): at the Cartesian point we invert to the logical chart
+  ! u=(rho, theta_B, phi_B) with the chartmap forward map (ref_coords%from_cart,
+  ! rho=sqrt(s)), evaluate the production Boozer field there (chartmap_eval_field:
+  ! |B|, the covariant field direction h_i, d|B|/du_i), and push the physical
+  ! vectors to Cartesian with the chartmap Jacobian Jc = d(x)/du (covariant_basis)
+  ! and inverse metric g^{ij} (metric_tensor):
+  !   B_cart = Jc (|B| g^{ij} h_j),   grad|B|_cart = Jc^{-T} d|B|/du.
   ! The chartmap also owns the loss boundary: from_cart flags rho>=1 (out of the
   ! s<1 plasma) -- the ONLY confinement loss. A field-locate non-convergence is a
   ! numerical fault, retried/reported, never a loss (#419, #420).
   use, intrinsic :: iso_fortran_env, only: dp => real64
-  use magfie_sub, only: magfie, refcoords_field
+  use reference_coordinates, only: ref_coords
+  use orbit_cpp_chartmap_metric, only: chartmap_eval_field
   use libneo_coordinates, only: chartmap_coordinate_system_t, &
        chartmap_from_cyl_ok, chartmap_from_cyl_err_out_of_bounds
   implicit none
@@ -59,13 +60,38 @@ contains
     real(dp), intent(in) :: x(3)
     real(dp), intent(out) :: u(3)
     integer, intent(out) :: ierr
-    select type (cs => refcoords_field%coords)
+    select type (cs => ref_coords)
     class is (chartmap_coordinate_system_t)
       call cs%from_cart(x, u, ierr)
     class default
       error stop 'orbit_cpp_boris: reference coordinates are not a chartmap'
     end select
   end subroutine cart_to_logical
+
+  ! Cartesian B, |B|, grad|B| at logical u from the chartmap field (field_can) and
+  ! geometry (ref_coords): B^i = |B| g^{ij} h_j, B_cart = Jc B^i; grad|B| covariant
+  ! d|B|/du -> Cartesian by Jc^{-T}. Jc returned for downstream Larmor offsets.
+  subroutine field_at_logical(u, Bvec, Bmod, gradB, Jc)
+    real(dp), intent(in) :: u(3)
+    real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), Jc(3,3)
+    real(dp) :: Acov(3), dA(3,3), dBmod(3), hcov(3)
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, Bctr(3), Jinv(3,3)
+    integer :: i
+
+    call chartmap_eval_field(u, Acov, dA, Bmod, dBmod, hcov)
+    call ref_coords%metric_tensor(u, g, ginv, sqrtg)
+    call ref_coords%covariant_basis(u, Jc)
+    do i = 1, 3
+      Bctr(i) = Bmod*(ginv(i,1)*hcov(1) + ginv(i,2)*hcov(2) + ginv(i,3)*hcov(3))
+    end do
+    do i = 1, 3
+      Bvec(i) = Jc(i,1)*Bctr(1) + Jc(i,2)*Bctr(2) + Jc(i,3)*Bctr(3)
+    end do
+    call inv3(Jc, Jinv)
+    do i = 1, 3
+      gradB(i) = Jinv(1,i)*dBmod(1) + Jinv(2,i)*dBmod(2) + Jinv(3,i)*dBmod(3)
+    end do
+  end subroutine field_at_logical
 
   ! Cartesian B vector, |B|, and grad|B| at Cartesian x, from the chartmap field.
   ! status: CPB_OK (interior, u_out valid), CPB_LOSS (rho>=1 edge loss),
@@ -75,9 +101,8 @@ contains
     real(dp), intent(in) :: x(3)
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), u_out(3)
     integer, intent(out) :: status
-    real(dp) :: u(3), Jc(3,3), Jinv(3,3)
-    real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
-    integer :: i, ierr
+    real(dp) :: u(3), Jc(3,3)
+    integer :: ierr
 
     call cart_to_logical(x, u, ierr)
     if (ierr == chartmap_from_cyl_err_out_of_bounds) then
@@ -90,17 +115,7 @@ contains
     end if
     u_out = u
 
-    call magfie(u, Bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    call refcoords_field%coords%covariant_basis(u, Jc)
-    ! B_cart = Jc (|B| hctrvr) (contravariant field pushed to Cartesian).
-    do i = 1, 3
-      Bvec(i) = Bmod*(Jc(i,1)*hctrvr(1) + Jc(i,2)*hctrvr(2) + Jc(i,3)*hctrvr(3))
-    end do
-    ! grad|B|_cart = Jc^{-T} d|B|/du, d|B|/du_k = |B| bder_k (bder = d log|B|/du).
-    call inv3(Jc, Jinv)
-    do i = 1, 3
-      gradB(i) = Bmod*(Jinv(1,i)*bder(1) + Jinv(2,i)*bder(2) + Jinv(3,i)*bder(3))
-    end do
+    call field_at_logical(u, Bvec, Bmod, gradB, Jc)
     status = CPB_OK
   end subroutine cart_field
 
@@ -111,8 +126,8 @@ contains
     real(dp), intent(out) :: u_out(3), Jc(3,3), g(3,3), ginv(3,3), bhat(3), &
                              eperp(3), Bmod
     integer, intent(out) :: status
-    real(dp) :: u(3), sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
-    real(dp) :: eperp_u(3), nrm
+    real(dp) :: u(3), sqrtg, Acov(3), dA(3,3), dBmod(3), hcov(3)
+    real(dp) :: hctr(3), eperp_u(3), nrm
     integer :: i, ierr
 
     call cart_to_logical(x, u, ierr)
@@ -126,16 +141,17 @@ contains
     end if
     u_out = u
 
-    call magfie(u, Bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    call refcoords_field%coords%covariant_basis(u, Jc)
-    call refcoords_field%coords%metric_tensor(u, g, ginv, sqrtg)
-    ! bhat (Cartesian) = Jc hctrvr, a unit vector (|Jc hctrvr| = 1 in metric g).
+    call chartmap_eval_field(u, Acov, dA, Bmod, dBmod, hcov)
+    call ref_coords%covariant_basis(u, Jc)
+    call ref_coords%metric_tensor(u, g, ginv, sqrtg)
+    ! bhat (Cartesian) = Jc (g^{ij} h_j), a unit vector (|.| = 1 in metric g).
+    hctr = matmul(ginv, hcov)
     do i = 1, 3
-      bhat(i) = Jc(i,1)*hctrvr(1) + Jc(i,2)*hctrvr(2) + Jc(i,3)*hctrvr(3)
+      bhat(i) = Jc(i,1)*hctr(1) + Jc(i,2)*hctr(2) + Jc(i,3)*hctr(3)
     end do
     bhat = bhat/max(sqrt(bhat(1)**2 + bhat(2)**2 + bhat(3)**2), 1.0e-30_dp)
     ! perpendicular gyrophase reference: contravariant flux direction -> Cartesian.
-    call perp_unit_dir_flux(g, ginv, hcovar, eperp_u)
+    call perp_unit_dir_flux(g, ginv, hcov, eperp_u)
     do i = 1, 3
       eperp(i) = Jc(i,1)*eperp_u(1) + Jc(i,2)*eperp_u(2) + Jc(i,3)*eperp_u(3)
     end do
@@ -168,7 +184,7 @@ contains
 
     ! GC logical coords: chartmap radial label is rho = sqrt(s).
     u_gc = [sqrt(max(x0_boozer(1), 0.0_dp)), x0_boozer(2), x0_boozer(3)]
-    call refcoords_field%coords%evaluate_cart(u_gc, xyz_gc)
+    call ref_coords%evaluate_cart(u_gc, xyz_gc)
     qc = charge/ro0_in
 
     if (pauli .or. vperp0 <= 0.0_dp) then

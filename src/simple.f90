@@ -178,13 +178,13 @@ contains
   ! gyrophase reference as init_canonical_6d(MODEL_CP) so the two integrators start
   ! from the identical particle. The Boris init places the Larmor offset itself.
   subroutine init_cp_boris(cpb, z0, dtaumin)
-    use magfie_sub, only: magfie
+    use orbit_cpp_chartmap_metric, only: chartmap_eval_field
     use params, only: orbit_coord
     type(cpp_boris_state_t), intent(out) :: cpb
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
     real(dp) :: ro0_bar, mu, vpar_bar, vperp0
-    real(dp) :: u_gc(3), Bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+    real(dp) :: u_gc(3), Bmod, Acov(3), dA(3,3), dBmod(3), hcov(3)
 
     if (orbit_coord /= 1) error stop &
       '6D Boris CP tracing supports only orbit_coord=1 (Boozer)'
@@ -193,7 +193,7 @@ contains
 
     ! |B| at the guiding centre from the chartmap field (rho = sqrt(s)).
     u_gc = [dsqrt(z0(1)), z0(2), z0(3)]
-    call magfie(u_gc, Bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+    call chartmap_eval_field(u_gc, Acov, dA, Bmod, dBmod, hcov)
     mu = .5d0*z0(4)**2*(1.d0 - z0(5)**2)/Bmod*2d0
     ro0_bar = ro0/dsqrt(2d0)
     vpar_bar = z0(4)*z0(5)*dsqrt(2d0)

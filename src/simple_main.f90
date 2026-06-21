@@ -99,21 +99,6 @@ contains
         call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
         call print_phase_time('Field initialization completed')
 
-        block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
-            use params, only: orbit_coord, orbit_model
-            use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
-            use boozer_sub, only: get_boozer_coordinates
-            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
-                 orbit_model == ORBIT_CP6D_BORIS) &
-                .and. orbit_coord == 1) then
-                use_B_r = .true.
-                use_del_tp_B = .true.
-                call get_boozer_coordinates
-                call print_phase_time('Boozer metric coordinate derivatives completed')
-            end if
-        end block
-
         call params_init
         call print_phase_time('Parameter initialization completed')
 
@@ -129,19 +114,6 @@ contains
         if (len_trim(field_input) > 0) then
             chartmap_mode = is_boozer_chartmap(field_input)
         end if
-
-        ! The 6D CP/CPP path runs on the native Boozer chart built from a VMEC
-        ! equilibrium, not from a standalone Boozer-chartmap input.
-        block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
-            use params, only: orbit_model
-            if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
-                 orbit_model == ORBIT_CP6D_BORIS) &
-                .and. chartmap_mode) error stop &
-                'orbit_model=ORBIT_CPP6D/ORBIT_CP6D requires a VMEC-backed '// &
-                'canonical field (the Boozer-chartmap Cartesian metric is '// &
-                'inconsistent; see DOC/coordinates-and-fields.md)'
-        end block
 
         if (isw_field_type == TEST) then
             ! TEST field uses analytic tokamak - no VMEC needed for sampling
