@@ -170,7 +170,7 @@ contains
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), Jc(3,3)
     integer, intent(out) :: status
     real(dp) :: ue(3), Acov(3), dA(3,3), dBmod(3), hcov(3)
-    real(dp) :: g(3,3), ginv(3,3), sqrtg, Bctr(3), Jinv(3,3)
+    real(dp) :: g(3,3), ginv(3,3), sqrtg, Bctr(3), Jinv(3,3), Jdet
     integer :: i
 
     ! A particle may gyro-excurse a Larmor radius past s=1; evaluate the field at
@@ -184,14 +184,17 @@ contains
       status = CPB_LOCATE_FAIL; return
     end if
     ! B = curl A with the Boozer flux-function potential A = (0, A_theta(s),
-    ! A_phi(s)). Then B^s = d_theta A_phi - d_phi A_theta = 0 EXACTLY (B tangent to
-    ! the flux surface), B^theta = -dA_phi/drho / sqrtg, B^phi = dA_theta/drho /
-    ! sqrtg, carrying the exact equilibrium pitch. This is divergence-free by
-    ! construction; raising the unit field h with the metric instead left a spurious
-    ! B^s (radial streaming) that drove the CP over-loss. Renormalize to |B|.
+    ! A_phi(s)): B^s = d_theta A_phi - d_phi A_theta = 0 EXACTLY (B tangent to the
+    ! flux surface), B^i = (1/Jdet) eps^{ijk} d_j A_k. Jdet is the SIGNED Jacobian
+    ! det(Jc); using the unsigned sqrtg = sqrt(|det|) flips B in a left-handed chart
+    ! and reverses the gyration/grad-B drift, so trapped bananas go outward (loss)
+    ! instead of inward. Renormalize to |B|.
+    Jdet = Jc(1,1)*(Jc(2,2)*Jc(3,3) - Jc(2,3)*Jc(3,2)) &
+         - Jc(1,2)*(Jc(2,1)*Jc(3,3) - Jc(2,3)*Jc(3,1)) &
+         + Jc(1,3)*(Jc(2,1)*Jc(3,2) - Jc(2,2)*Jc(3,1))
     Bctr(1) = 0.0_dp
-    Bctr(2) = -dA(3,1)/sqrtg
-    Bctr(3) = dA(2,1)/sqrtg
+    Bctr(2) = -dA(3,1)/Jdet
+    Bctr(3) = dA(2,1)/Jdet
     do i = 1, 3
       Bvec(i) = Jc(i,1)*Bctr(1) + Jc(i,2)*Bctr(2) + Jc(i,3)*Bctr(3)
     end do
@@ -231,7 +234,7 @@ contains
     integer, intent(out) :: status
     real(dp) :: xw(3), ca, sa, u(3), Jc(3,3), g(3,3), ginv(3,3), sqrtg
     real(dp) :: Acov(3), dA(3,3), dBmod(3), hcov(3), hctr(3), eperp_u(3)
-    real(dp) :: bw(3), ew(3)
+    real(dp) :: bw(3), ew(3), Jdet
     integer :: i
 
     call to_wedge(x, xw, ca, sa)
@@ -245,9 +248,12 @@ contains
     if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart
       status = CPB_LOCATE_FAIL; return
     end if
-    ! bhat (wedge Cartesian) from B = curl A (B^s = 0 exactly, exact pitch); same
-    ! construction as field_at_logical so seed/readout match the push.
-    hctr = [0.0_dp, -dA(3,1)/sqrtg, dA(2,1)/sqrtg]
+    ! bhat (wedge Cartesian) from B = curl A with the SIGNED Jacobian (same as
+    ! field_at_logical so seed/readout match the push).
+    Jdet = Jc(1,1)*(Jc(2,2)*Jc(3,3) - Jc(2,3)*Jc(3,2)) &
+         - Jc(1,2)*(Jc(2,1)*Jc(3,3) - Jc(2,3)*Jc(3,1)) &
+         + Jc(1,3)*(Jc(2,1)*Jc(3,2) - Jc(2,2)*Jc(3,1))
+    hctr = [0.0_dp, -dA(3,1)/Jdet, dA(2,1)/Jdet]
     do i = 1, 3
       bw(i) = Jc(i,1)*hctr(1) + Jc(i,2)*hctr(2) + Jc(i,3)*hctr(3)
     end do
