@@ -92,9 +92,10 @@ contains
       do ls = 1, maxls
         ut = u + alpha*du
         if (ut(1) < 0.0_dp) ut(1) = -ut(1)        ! reflect through the axis
-        if (ut(1) >= rho_edge) then               ! trial left the plasma -> edge loss
-          status = CPB_LOSS; return
-        end if
+        ! A trial overshoot past rho=1 is NOT a loss: evaluate_cart clamps rho to
+        ! the grid edge so an interior target yields a large residual and the step
+        ! backtracks. Loss is decided only on the converged rho (accept_or_fail);
+        ! a genuinely-outside particle converges to rho~1 and is flagged there.
         call ref_coords%evaluate_cart(ut, xc)
         res = xc - x
         rnew = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
