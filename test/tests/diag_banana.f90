@@ -37,7 +37,8 @@ program diag_banana
   real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3), Acov(3), dA(3,3)
   real(dp) :: Bctr(3), Bcov(3), dBmod(3), hcov(3)
   character(len=256) :: woutfile, tag, sval
-  integer :: nstep_gc, nstep_cp
+  integer :: nstep_gc, nstep_cp, np2, ilam
+  real(dp) :: lam, sbeg
 
   woutfile = getenv_def('BANANA_WOUT', 'wout.nc')
   tag = getenv_def('BANANA_TAG', 'run')
@@ -47,6 +48,12 @@ program diag_banana
   if (len_trim(sval) > 0) then; read(sval,*) vmec_RZ_scale; else; vmec_RZ_scale = 1.0_dp; end if
   call get_environment_variable('BANANA_TRACE', sval)
   if (len_trim(sval) > 0) then; read(sval,*) trace_s; else; trace_s = 5.0e-5_dp; end if
+  call get_environment_variable('BANANA_NP', sval)
+  if (len_trim(sval) > 0) then; read(sval,*) np2; else; np2 = 16384; end if
+  call get_environment_variable('BANANA_LAMBDA', sval)
+  if (len_trim(sval) > 0) then; read(sval,*) lam; else; lam = 0.2_dp; end if
+  call get_environment_variable('BANANA_SBEG', sval)
+  if (len_trim(sval) > 0) then; read(sval,*) sbeg; else; sbeg = 0.5_dp; end if
 
   isw_field_type = BOOZER
   field_input = trim(woutfile); coord_input = trim(woutfile)
@@ -54,13 +61,13 @@ program diag_banana
   call init_field(norb, trim(woutfile), ans_s, ans_tp, amultharm, integmode)
   use_B_r = .true.; use_del_tp_B = .true.
   call get_boozer_coordinates
-  call init_params(norb, 2, 4, 3.5e6_dp, 16384, 1, 1.0d-10)
+  call init_params(norb, 2, 4, 3.5e6_dp, np2, 1, 1.0d-10)
   dtaumin = norb%dtaumin
   v0 = norb%v0
   ro0_bar = ro0/sqrt(2.0_dp)
 
-  ! one deeply-to-moderately trapped particle at mid radius
-  z0 = [0.5_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.2_dp]
+  ! one trapped particle at the requested surface and pitch
+  z0 = [sbeg, 0.0_dp, 0.0_dp, 1.0_dp, lam]
   call boozer_field_metric_eval(z0(1:3), g, ginv, sqrtg, dg, Acov, dA, &
        Bctr, Bcov, bmod, dBmod, hcov)
   mu0 = 0.5_dp*z0(4)**2*(1.0_dp - z0(5)**2)/bmod*2.0_dp
@@ -127,7 +134,8 @@ contains
     character(*), intent(in) :: tag
     type(cpp_boris_state_t) :: st
     real(dp) :: R, Zc, E, E0, Emax, mu_now, mumin, mumax, s, th, ph, vpar
-    integer :: it, ierr, u, sub
+    real(dp) :: gw, gsum, gn, mu_first, mu_last, mu_drift
+    integer :: it, ierr, u, sub, nwin
 
     call cpp_boris_init(st, .false., z0(1:3), vpar_bar, vperp0, mu0, 1.0_dp, &
                         1.0_dp, dtaumin/sqrt(2.0_dp), ro0_bar, z0(4))
@@ -136,12 +144,20 @@ contains
     E0 = cpp_boris_energy(st); Emax = 0.0_dp
     mu_now = cpp_boris_mu(st); mumin = mu_now; mumax = mu_now
     sub = max(1, nstep/4000)
+    ! gyro-averaged secular drift: average mu over a ~1-gyration window at the
+    ! start and at the end. The gyroperiod ~ 2 pi ro0_bar/|B| ~ a few dt; window
+    ! = max(50, nstep/200) steps spans several gyrations, averaging out the
+    ! gyro-phase oscillation to isolate the true (adiabatic) mu change.
+    nwin = max(50, nstep/200)
+    mu_first = 0.0_dp; mu_last = 0.0_dp; gn = 0.0_dp
     do it = 1, nstep
       call cpp_boris_step(st, ierr)
       if (ierr /= 0) exit
       E = cpp_boris_energy(st); mu_now = cpp_boris_mu(st)
       Emax = max(Emax, abs((E - E0)/E0))
       mumin = min(mumin, mu_now); mumax = max(mumax, mu_now)
+      if (it <= nwin) mu_first = mu_first + mu_now
+      if (it > nstep - nwin) then; mu_last = mu_last + mu_now; gn = gn + 1.0_dp; end if
       if (mod(it, sub) == 0) then
         call cpp_boris_to_gc(st, s, th, ph, vpar, ierr)
         R = sqrt(st%x(1)**2 + st%x(2)**2); Zc = st%x(3)
@@ -149,8 +165,11 @@ contains
       end if
     end do
     close(u)
-    print '(A,ES10.2,A,ES10.2,A,ES10.2)', '  CP  max|dE/E0| = ', Emax, &
-      '   mu band |dmu/mu0| = ', (mumax-mumin)/mu0, '  mu_mean~', 0.5_dp*(mumin+mumax)
+    mu_drift = -1.0_dp
+    if (gn > 0.0_dp) mu_drift = abs(mu_last/gn - mu_first/nwin)/(mu_first/nwin)
+    print '(A,ES10.2,A,F6.3,A,ES10.2)', '  CP  max|dE/E0| = ', Emax, &
+      '   mu gyro-osc band = ', (mumax-mumin)/mu0, &
+      '   gyro-avg secular drift = ', mu_drift
   end subroutine trace_cp
 
 end program diag_banana
