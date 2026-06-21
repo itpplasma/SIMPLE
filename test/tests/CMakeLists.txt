@@ -678,6 +678,15 @@ add_test(NAME test_cpp_vmec COMMAND test_cpp_vmec.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_cpp_vmec PROPERTIES LABELS "unit" TIMEOUT 120)
 
+# Finite-difference self-check of the full-metric CPP Newton Jacobian on the
+# COORD_BOOZER path: analytic jacobian() vs central FD of residual() must agree
+# to ~1e-5 relative, validating the analytic d2g/d2A/d2Bmod force-gradient terms.
+add_executable(test_cpp_jacobian_fd.x test_cpp_jacobian_fd.f90)
+target_link_libraries(test_cpp_jacobian_fd.x simple)
+add_test(NAME test_cpp_jacobian_fd COMMAND test_cpp_jacobian_fd.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_cpp_jacobian_fd PROPERTIES LABELS "unit" TIMEOUT 120)
+
 # GATE for the single-source plain vmec_field_metric: h_i g^ij h_j = 1 to ~1e-13
 # at interior points of test_data/wout.nc, and analytic dg vs central FD ~1e-8.
 add_executable(test_vmec_field_metric.x test_vmec_field_metric.f90)

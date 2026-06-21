@@ -89,8 +89,10 @@ module orbit_cpp_canonical
     real(dp) :: g(3,3)    = 0.0_dp   ! covariant metric g_ij
     real(dp) :: ginv(3,3) = 0.0_dp   ! contravariant metric g^ij
     real(dp) :: dg(3,3,3) = 0.0_dp   ! dg(i,j,k) = d g_ij / d q_k
+    real(dp) :: d2g(3,3,3,3) = 0.0_dp ! d2g(i,j,k,l) = d^2 g_ij / dq_k dq_l
     real(dp) :: Acov(3)   = 0.0_dp   ! covariant vector potential A_i (A_1 = 0)
     real(dp) :: dA(3,3)   = 0.0_dp   ! dA(i,k) = d A_i / d q_k
+    real(dp) :: d2A(3,3,3) = 0.0_dp  ! d2A(i,k,l) = d^2 A_i / dq_k dq_l
     real(dp) :: Bmod      = 0.0_dp   ! field modulus |B|
     real(dp) :: dBmod(3)  = 0.0_dp   ! d|B|/dq_k
     real(dp) :: d2Bmod(6) = 0.0_dp   ! packed Hessian of |B| (1=rr,2=rth,3=rph,4=thth,5=thph,6=phph)
@@ -133,7 +135,8 @@ contains
     real(dp) :: sqrtg, Bctr(3), Bcov(3)
 
     call boozer_field_metric_eval(q, blk%g, blk%ginv, sqrtg, blk%dg, blk%Acov, &
-         blk%dA, Bctr, Bcov, blk%Bmod, blk%dBmod, blk%hcov)
+         blk%dA, Bctr, Bcov, blk%Bmod, blk%dBmod, blk%hcov, &
+         d2g=blk%d2g, d2A=blk%d2A, d2Bmod=blk%d2Bmod)
   end subroutine eval_block_boozer
 
   ! Analytic toroidal metric (R0=1) + exact-curl tokamak field. Diagonal metric;
@@ -360,14 +363,14 @@ contains
   end subroutine residual_tok
 
   ! Jacobian dF/dz. COORD_TOK uses the analytic diagonal-metric Jacobian (with
-  ! d2g/d2A/d2Bmod, validated by the analytic-vs-FD self-check). COORD_VMEC uses a
-  ! simplified FIRST-derivative analytic Jacobian built from the same block (g,
-  ! ginv, dg, dA, dBmod) the residual uses, dropping the d2g/d2A/d2Bmod
-  ! force-gradient terms. The dropped terms make it an APPROXIMATE Jacobian, but it
-  ! is SMOOTH (the finite-difference Jacobian it replaces went noisy at banana
-  ! turning points v_par -> 0 and spuriously ejected all trapped particles); Newton
-  ! converges to the residual root with a smooth approximate Jacobian. Both feed
-  ! the same portable Newton LU.
+  ! d2g/d2A/d2Bmod, validated by the analytic-vs-FD self-check). COORD_BOOZER uses
+  ! the full-metric analytic Jacobian with the COMPLETE force-gradient second
+  ! derivatives (d2g, d2A, d2Bmod analytic from the Boozer-chart splines), so it is
+  ! the exact Jacobian of the residual (validated by test_cpp_jacobian_fd).
+  ! COORD_VMEC shares the same routine; its block fills d2g/d2A/d2Bmod as zero
+  ! (the FD self-check targets the Boozer path), so it remains the smooth
+  ! first-derivative approximation that converges through v_par -> 0. Both feed the
+  ! same portable Newton LU.
   subroutine jacobian(st, zold, z, jac)
     type(cpp_canon_state_t), intent(in) :: st
     real(dp), intent(in) :: zold(6), z(6)
@@ -380,14 +383,14 @@ contains
     end if
   end subroutine jacobian
 
-  ! Simplified first-derivative analytic Jacobian for the full-metric sym residual
-  ! (COORD_VMEC, MODEL_CP / MODEL_CPP_SYM). It uses the SAME single-source block
-  ! (g, ginv, dg, dA, Acov, dBmod) at qmid = (zold+z)/2 that the residual
-  ! evaluates, where dg is the genuine derivative of g, so every term below uses
-  ! ONLY first derivatives -- the second derivatives of g, A and |B| (d2g, d2A,
-  ! d2Bmod) are dropped, the agreed simplification. The dropped terms make it an
-  ! APPROXIMATE Jacobian, but it is self-consistent and SMOOTH (the FD Jacobian it
-  ! replaces went noisy at v_par -> 0); Newton converges to the residual root.
+  ! Full-metric analytic Jacobian for the sym residual (COORD_VMEC / COORD_BOOZER,
+  ! MODEL_CP / MODEL_CPP_SYM). It uses the SAME single-source block (g, ginv, dg,
+  ! d2g, dA, d2A, Acov, dBmod, d2Bmod) at qmid = (zold+z)/2 that the residual
+  ! evaluates, where dg is the genuine derivative of g. The COORD_BOOZER block
+  ! supplies analytic d2g/d2A/d2Bmod, so this is the EXACT Jacobian of the residual
+  ! (test_cpp_jacobian_fd). The COORD_VMEC block leaves those second derivatives
+  ! zero, reducing this to the smooth first-derivative approximation that converges
+  ! through v_par -> 0 where the old FD Jacobian went noisy.
   !
   ! sym residual:
   !   grad_k  = (m/2) dg_ij,k v^i v^j + qc dA_i,k v^i [- mu dBmod_k],  v=(z-zold)/dt
@@ -397,7 +400,9 @@ contains
   !   Fp_k    = z_(3+k) - (pold_k + dt grad_k)
   ! With block first derivatives w.r.t. z_j = (1/2) d/dq_j (qmid carries the 1/2)
   ! and the explicit v dependence dv^i/dz_j = delta_ij/dt:
-  !   dgrad_dz(k,j) = (m sum_l dg_jl,k v^l + qc dA_j,k)/dt          (d2 terms dropped)
+  !   dgrad_dz(k,j) = (m sum_l dg_jl,k v^l + qc dA_j,k)/dt           (explicit-v part)
+  !                 + 0.5*( 0.5 m sum_ab d2g_ab,kj v^a v^b
+  !                         + qc sum_a d2A_a,kj v^a - mu d2Bmod_kj ) (qmid-chain part)
   !   dginv_dz(k,l,j) = -(1/2) ginv_ka dg_ab,j ginv_bl              (from dg only)
   ! giving
   !   dFq_k/dz_j   = delta_kj - (dt/m)[ dginv_dz(k,l,j) vcov_l
@@ -411,8 +416,10 @@ contains
     real(dp), intent(out) :: jac(6,6)
     type(block_t) :: blk
     real(dp) :: qmid(3), vmid(3), grad(3), vcov(3), qc, mu_use
-    real(dp) :: dgrad_dz(3,3), dginv_dz(3,3,3)
+    real(dp) :: dgrad_dz(3,3), dginv_dz(3,3,3), d2Bmod_dense(3,3)
+    real(dp) :: chain_d2
     integer :: k, j, l, a, b
+    integer :: dpack(3,3)
     logical :: mu_active
 
     qmid = 0.5_dp*(zold(1:3) + z(1:3))
@@ -422,8 +429,18 @@ contains
     mu_active = (st%model /= MODEL_CP)
     mu_use = merge(st%mu, 0.0_dp, mu_active)
 
-    ! dgrad_dz(k,j): explicit v dependence only (block d2 terms dropped). dLdq is
-    ! symmetric in dg's first two indices, so the v-derivative collapses to one sum.
+    ! Expand the packed |B| Hessian (1=11,2=12,3=13,4=22,5=23,6=33) to dense.
+    dpack = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])
+    do k = 1, 3
+      do j = 1, 3
+        d2Bmod_dense(k,j) = blk%d2Bmod(dpack(k,j))
+      end do
+    end do
+
+    ! dgrad_dz(k,j): explicit-v part PLUS the qmid-chain part carrying the block
+    ! second derivatives. dLdq is symmetric in dg's first two indices, so the
+    ! v-derivative collapses to one sum. The chain part (factor 0.5 from qmid)
+    ! adds the d2g/d2A/d2Bmod force-gradient terms.
     do k = 1, 3
       do j = 1, 3
         dgrad_dz(k,j) = 0.0_dp
@@ -431,6 +448,18 @@ contains
           dgrad_dz(k,j) = dgrad_dz(k,j) + blk%dg(j,l,k)*vmid(l)
         end do
         dgrad_dz(k,j) = (st%mass*dgrad_dz(k,j) + qc*blk%dA(j,k))/st%dt
+
+        chain_d2 = 0.0_dp
+        do b = 1, 3
+          do a = 1, 3
+            chain_d2 = chain_d2 + 0.5_dp*st%mass*blk%d2g(a,b,k,j)*vmid(a)*vmid(b)
+          end do
+        end do
+        do a = 1, 3
+          chain_d2 = chain_d2 + qc*blk%d2A(a,k,j)*vmid(a)
+        end do
+        chain_d2 = chain_d2 - mu_use*d2Bmod_dense(k,j)
+        dgrad_dz(k,j) = dgrad_dz(k,j) + 0.5_dp*chain_d2
       end do
     end do
 
@@ -654,16 +683,23 @@ contains
     type(cpp_canon_state_t), intent(inout) :: st
     integer, intent(out) :: ierr
     integer, parameter :: maxit = 50
-    real(dp), parameter :: atol = 1.0e-13_dp, rtol = 1.0e-12_dp
-    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), reltol(6)
+    real(dp), parameter :: atol = 1.0e-13_dp
+    ! Relative residual floor for the stalled fallback. Each row is scaled by its
+    ! natural magnitude (q rows O(1); p rows carry the canonical momentum), so the
+    ! floor is 1e-10 of the equation scale -- still far tighter than any physical
+    ! tolerance, and reachable by both the spline round-off floor (COORD_BOOZER)
+    ! and the dropped-curvature floor (COORD_VMEC).
+    real(dp), parameter :: rtol = 1.0e-10_dp, stagtol = 1.0e-12_dp
+    real(dp) :: zold(6), z(6), fvec(6), fjac(6,6), dz(6), resscale(6), reltol(6)
     type(block_t) :: blk
     real(dp) :: vmid(3), qc
     integer :: kit, i, info, j
-    logical :: res_conv, step_conv
+    logical :: res_conv, rel_conv, stalled
 
     zold = st%z
     z = zold
     ierr = 0
+    res_conv = .false.
 
     do kit = 1, maxit
       if (z(1) <= 0.0_dp) z(1) = 1.0e-3_dp
@@ -680,19 +716,46 @@ contains
         return
       end if
       z = z - dz
+      ! Accept on the RESIDUAL evaluated at the NEW (accepted) state, not on the
+      ! pre-update residual or the step size alone: a small Newton step can mask a
+      ! residual stalled far from the root (issue 417). The exact-Jacobian paths
+      ! (COORD_TOK, COORD_BOOZER) drive every residual component below the tight
+      ! absolute atol; COORD_TOK reaches it in a few iterations, preserving the
+      ! golden-record trajectory.
+      call residual(st, zold, z, fvec)
+      resscale(1:3) = 1.0_dp
+      do i = 1, 3
+        resscale(3+i) = max(abs(z(3+i)), 1.0_dp)
+      end do
+      res_conv = .true.
+      rel_conv = .true.
+      do i = 1, 6
+        if (abs(fvec(i)) >= atol) res_conv = .false.
+        if (abs(fvec(i)) >= rtol*resscale(i)) rel_conv = .false.
+      end do
+      if (res_conv) exit
+
+      ! Stalled fallback: the spline round-off floor (COORD_BOOZER) and the
+      ! dropped-curvature floor of the approximate Jacobian (COORD_VMEC) both sit
+      ! above the tight atol, so Newton enters a round-off limit cycle. Accept once
+      ! the step has shrunk to round-off AND the residual meets the RELATIVE floor
+      ! (rel_conv) -- the residual is genuinely at its achievable minimum, not a
+      ! small step masking a large residual.
       reltol(1) = 1.0_dp; reltol(2) = twopi; reltol(3) = twopi
       do i = 1, 3
         reltol(3+i) = max(abs(z(3+i)), 1.0_dp)
       end do
-      res_conv = .true.; step_conv = .true.
+      stalled = .true.
       do i = 1, 6
-        if (abs(fvec(i)) >= atol) res_conv = .false.
-        if (abs(dz(i)) >= rtol*reltol(i)) step_conv = .false.
+        if (abs(dz(i)) >= stagtol*reltol(i)) stalled = .false.
       end do
-      if (res_conv .or. step_conv) exit
+      if (stalled .and. rel_conv) then
+        res_conv = .true.
+        exit
+      end if
     end do
 
-    if (kit > maxit) ierr = 3
+    if (.not. res_conv) ierr = 3
 
     if (st%model == MODEL_CPP_VAR) then
       vmid = (z(1:3) - zold(1:3))/st%dt

@@ -41,19 +41,26 @@ contains
 
   !$acc routine seq
   subroutine boozer_field_metric_eval(u, g, ginv, sqrtg, dg, Acov, dA, &
-                                      Bctr, Bcov, Bmod, dBmod, hcov)
-    use spline_vmec_sub, only: splint_vmec_data_d2
-    use boozer_sub, only: delthe_delphi_BV_d2, splint_boozer_coord
+                                      Bctr, Bcov, Bmod, dBmod, hcov, &
+                                      d2g, d2A, d2Bmod)
+    use spline_vmec_sub, only: splint_vmec_data_d2, splint_vmec_data_d3
+    use boozer_sub, only: delthe_delphi_BV_d2, delthe_delphi_BV_d3, splint_boozer_coord
     real(dp), intent(in) :: u(3)
     real(dp), intent(out) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
     real(dp), intent(out) :: Acov(3), dA(3,3)
     real(dp), intent(out) :: Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
+    ! Optional analytic second derivatives in the Boozer chart, for the 6D CP/CPP
+    ! Newton Jacobian d2 terms: d2g(a,b,k,l) = d^2 g_ab / du^k du^l,
+    ! d2A(a,k,l) = d^2 A_a / du^k du^l, d2Bmod packed (ss,st,sp,tt,tp,pp).
+    real(dp), intent(out), optional :: d2g(3,3,3,3), d2A(3,3,3), d2Bmod(6)
 
+    logical :: want_d2
     real(dp) :: s, vartheta_B, varphi_B, theta_V, varphi_V
-    integer :: idx6(3,3), i, j, k, l, m
+    integer :: idx6(3,3), idx10(3,3,3), i, j, k, l, m, c, d
 
     ! Angle map deltas, first and second derivatives w.r.t. (s, vartheta_B, varphi_B)
     real(dp) :: del_t, del_p, ddel_t(3), ddel_p(3), d2del_t(6), d2del_p(6)
+    real(dp) :: d3del_t(10), d3del_p(10)
 
     ! VMEC-chart geometry from splint_vmec_data_d2
     real(dp) :: A_phi, A_theta, dA_phi_ds, dA_theta_ds, aiota
@@ -61,14 +68,17 @@ contains
     real(dp) :: dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp
     real(dp) :: dl_ds, dl_dt, dl_dp
     real(dp) :: d2R(6), d2Z(6), d2l(6)
+    real(dp) :: d3R(10), d3Z(10), d3l(10)
     real(dp) :: dR(3), dZ(3), hR(3,3), hZ(3,3)
+    real(dp) :: tR(3,3,3), tZ(3,3,3)
 
     ! Metric and its gradient in the VMEC-angle chart
-    real(dp) :: gV(3,3), dgV(3,3,3)
+    real(dp) :: gV(3,3), dgV(3,3,3), d2gV(3,3,3,3)
 
     ! Angle Jacobian J = d(s,theta_V,varphi_V)/d(s,vartheta_B,varphi_B) and its
     ! gradient dJm(i,j,k) = d Jm(i,j) / d u_k (u the Boozer coordinate).
-    real(dp) :: Jm(3,3), dJm(3,3,3)
+    real(dp) :: Jm(3,3), dJm(3,3,3), d2Jm(3,3,3,3)
+    real(dp) :: d2gVtot(3,3,3,3)
 
     ! Boozer-chart field from production splines
     real(dp) :: A_theta_B, A_phi_B, dA_theta_dr, dA_phi_dr, d2A_phi_dr2, d3A_phi_dr3
@@ -79,7 +89,13 @@ contains
 
     real(dp) :: det, tmp, dgVtot(3,3,3)
 
+    want_d2 = present(d2g) .or. present(d2A) .or. present(d2Bmod)
+
     idx6 = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])
+    ! Symmetric 3-index packer over (s,t,p)=(1,2,3) -> 1..10, order
+    ! (sss,sst,ssp,stt,stp,spp,ttt,ttp,tpp,ppp), matching splint_vmec_data_d3
+    ! and delthe_delphi_BV_d3.
+    if (want_d2) call fill_idx10(idx10)
 
     s = u(1); vartheta_B = u(2); varphi_B = u(3)
 
@@ -87,8 +103,13 @@ contains
     ! all from the SAME B-side spline. theta_V, varphi_V are derived from these
     ! deltas (NOT from a separate boozer_to_vmec Newton on the V-side spline) so
     ! the geometry point and the Jacobian belong to one consistent angle map.
-    call delthe_delphi_BV_d2(s, vartheta_B, varphi_B, del_t, del_p, &
-                             ddel_t, ddel_p, d2del_t, d2del_p)
+    if (want_d2) then
+      call delthe_delphi_BV_d3(s, vartheta_B, varphi_B, del_t, del_p, &
+                               ddel_t, ddel_p, d2del_t, d2del_p, d3del_t, d3del_p)
+    else
+      call delthe_delphi_BV_d2(s, vartheta_B, varphi_B, del_t, del_p, &
+                               ddel_t, ddel_p, d2del_t, d2del_p)
+    end if
     theta_V = vartheta_B - del_t
     varphi_V = varphi_B - del_p
 
@@ -97,6 +118,7 @@ contains
          dA_phi_ds, dA_theta_ds, aiota, R, Zc, alam, &
          dR_ds, dR_dt, dR_dp, dZ_ds, dZ_dt, dZ_dp, &
          dl_ds, dl_dt, dl_dp, d2R, d2Z, d2l)
+    if (want_d2) call splint_vmec_data_d3(s, theta_V, varphi_V, d3R, d3Z, d3l)
 
     dR = [dR_ds, dR_dt, dR_dp]
     dZ = [dZ_ds, dZ_dt, dZ_dp]
@@ -106,6 +128,18 @@ contains
         hZ(i,k) = d2Z(idx6(i,k))
       end do
     end do
+
+    ! Dense symmetric 3rd-deriv tensors of the R,Z map in the VMEC chart.
+    if (want_d2) then
+      do i = 1, 3
+        do k = 1, 3
+          do l = 1, 3
+            tR(i,k,l) = d3R(idx10(i,k,l))
+            tZ(i,k,l) = d3Z(idx10(i,k,l))
+          end do
+        end do
+      end do
+    end if
 
     ! Metric in the VMEC-angle chart (R, phi, Z embedding), g_33 carries R^2.
     gV(1,1) = dR(1)**2 + dZ(1)**2
@@ -198,6 +232,86 @@ contains
       end do
     end do
 
+    ! Analytic second derivative of the pulled-back metric d2g_B, by one more
+    ! application of the product rule. Built only when requested (6D CP/CPP path).
+    if (present(d2g)) then
+      ! d2gV(a,b,k,l) = d^2 gV_ab / dx_V^k dx_V^l from gV_ab = dR_a dR_b
+      ! + dZ_a dZ_b + [a==b==3] R^2.
+      do i = 1, 3
+        do j = 1, 3
+          do k = 1, 3
+            do l = 1, 3
+              d2gV(i,j,k,l) = tR(i,k,l)*dR(j) + hR(i,k)*hR(j,l) &
+                            + hR(i,l)*hR(j,k) + dR(i)*tR(j,k,l) &
+                            + tZ(i,k,l)*dZ(j) + hZ(i,k)*hZ(j,l) &
+                            + hZ(i,l)*hZ(j,k) + dZ(i)*tZ(j,k,l)
+              if (i == 3 .and. j == 3) then
+                d2gV(i,j,k,l) = d2gV(i,j,k,l) &
+                              + 2.0_dp*dR(k)*dR(l) + 2.0_dp*R*hR(k,l)
+              end if
+            end do
+          end do
+        end do
+      end do
+
+      ! d2Jm(a,i,k,l) = d^2 Jm(a,i) / du^k du^l. Row 1 = 0; rows 2,3 = minus the
+      ! 3rd derivatives of the angle map.
+      d2Jm = 0.0_dp
+      do i = 1, 3
+        do k = 1, 3
+          do l = 1, 3
+            d2Jm(2,i,k,l) = -d3del_t(idx10(i,k,l))
+            d2Jm(3,i,k,l) = -d3del_p(idx10(i,k,l))
+          end do
+        end do
+      end do
+
+      ! d2gVtot(a,b,k,l) = d^2 gV_ab / du^k du^l (gV depends on u only through x_V):
+      !   = sum_c [ (sum_d d2gV(a,b,c,d) Jm(d,l)) Jm(c,k) + dgV(a,b,c) dJm(c,k,l) ].
+      do i = 1, 3
+        do j = 1, 3
+          do k = 1, 3
+            do l = 1, 3
+              tmp = 0.0_dp
+              do c = 1, 3
+                do d = 1, 3
+                  tmp = tmp + d2gV(i,j,c,d)*Jm(d,l)*Jm(c,k)
+                end do
+                tmp = tmp + dgV(i,j,c)*dJm(c,k,l)
+              end do
+              d2gVtot(i,j,k,l) = tmp
+            end do
+          end do
+        end do
+      end do
+
+      ! d2g_B(i,j,k,l): product rule on g_B(i,j) = sum_ab Jm(a,i) gV(a,b) Jm(b,j).
+      do i = 1, 3
+        do j = 1, 3
+          do k = 1, 3
+            do l = 1, 3
+              tmp = 0.0_dp
+              do c = 1, 3
+                do d = 1, 3
+                  tmp = tmp &
+                    + d2Jm(c,i,k,l)*gV(c,d)*Jm(d,j) &
+                    + dJm(c,i,k)*dgVtot(c,d,l)*Jm(d,j) &
+                    + dJm(c,i,k)*gV(c,d)*dJm(d,j,l) &
+                    + dJm(c,i,l)*dgVtot(c,d,k)*Jm(d,j) &
+                    + Jm(c,i)*d2gVtot(c,d,k,l)*Jm(d,j) &
+                    + Jm(c,i)*dgVtot(c,d,k)*dJm(d,j,l) &
+                    + dJm(c,i,l)*gV(c,d)*dJm(d,j,k) &
+                    + Jm(c,i)*dgVtot(c,d,l)*dJm(d,j,k) &
+                    + Jm(c,i)*gV(c,d)*d2Jm(d,j,k,l)
+                end do
+              end do
+              d2g(i,j,k,l) = tmp
+            end do
+          end do
+        end do
+      end do
+    end if
+
     ! Inverse Boozer metric by cofactors.
     det = g(1,1)*(g(2,2)*g(3,3) - g(2,3)*g(3,2)) &
         - g(1,2)*(g(2,1)*g(3,3) - g(2,3)*g(3,1)) &
@@ -215,9 +329,10 @@ contains
     ! Boozer Jacobian sqrt(g) = sqrt(det g_B).
     sqrtg = sqrt(det)
 
-    ! Field directly from the production Boozer splines (mode_secders=0 is enough;
-    ! all needed first derivatives are returned). Abscissa r = s.
-    call splint_boozer_coord(s, vartheta_B, varphi_B, 0, &
+    ! Field directly from the production Boozer splines. mode_secders=2 when the
+    ! caller wants d2A_phi/dr2 and d2Bmod (the 6D CP/CPP Jacobian d2 terms); the
+    ! cheaper mode=0 (first derivatives only) otherwise. Abscissa r = s.
+    call splint_boozer_coord(s, vartheta_B, varphi_B, merge(2, 0, want_d2), &
                              A_theta_B, A_phi_B, dA_theta_dr, dA_phi_dr, &
                              d2A_phi_dr2, d3A_phi_dr3, &
                              B_vartheta_B, dB_vartheta_B, d2B_vartheta_B, &
@@ -240,6 +355,14 @@ contains
     Bmod = Bmod_B
     dBmod = dBmod_B
 
+    ! Second derivatives of the field (Boozer chart): A_phi(s) and the splined |B|.
+    ! A_theta = torflux*s is linear, so its d2 is 0; only A_phi has d2A_phi/dr2.
+    if (present(d2A)) then
+      d2A = 0.0_dp
+      d2A(3,1,1) = d2A_phi_dr2
+    end if
+    if (present(d2Bmod)) d2Bmod = d2Bmod_B
+
     ! Contravariant field by raising with the Boozer metric.
     do i = 1, 3
       Bctr(i) = ginv(i,1)*Bcov(1) + ginv(i,2)*Bcov(2) + ginv(i,3)*Bcov(3)
@@ -250,5 +373,36 @@ contains
       hcov(i) = Bcov(i)/Bmod
     end do
   end subroutine boozer_field_metric_eval
+
+  ! Map a symmetric 3-index (i,j,k) over (s,t,p)=(1,2,3) to the packed slot 1..10
+  ! in order (sss,sst,ssp,stt,stp,spp,ttt,ttp,tpp,ppp), the convention used by
+  ! splint_vmec_data_d3 and delthe_delphi_BV_d3.
+  pure subroutine fill_idx10(idx10)
+    !$acc routine seq
+    integer, intent(out) :: idx10(3,3,3)
+    integer :: i, j, k, a, b, c, slot
+    integer :: order(10,3)
+
+    order = reshape([ &
+      1,1,1, 1,1,2, 1,1,3, 1,2,2, 1,2,3, 1,3,3, &
+      2,2,2, 2,2,3, 2,3,3, 3,3,3], [10, 3], order=[2,1])
+
+    do i = 1, 3
+      do j = 1, 3
+        do k = 1, 3
+          a = min(i, j, k)
+          c = max(i, j, k)
+          b = i + j + k - a - c
+          do slot = 1, 10
+            if (order(slot,1) == a .and. order(slot,2) == b &
+                .and. order(slot,3) == c) then
+              idx10(i,j,k) = slot
+              exit
+            end if
+          end do
+        end do
+      end do
+    end do
+  end subroutine fill_idx10
 
 end module boozer_field_metric
