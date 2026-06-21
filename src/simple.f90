@@ -207,17 +207,30 @@ contains
     ! SIMPLE z(1:5) like the canonical path: z(1)=particle s, z(2:3)=angles,
     ! z(4)=pabs, z(5)=lambda. Cartesian step is regular through the axis; ierr/=0
     ! marks a physical loss (s>=1) or field-inversion failure.
+    use diag_counters, only: count_event, EVT_CPP_SBOUND, EVT_CPP_LU_FAIL
     type(cpp_boris_state_t), intent(inout) :: cpb
     real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
     real(dp) :: s, th, ph, vpar
 
+    ! cart<-Boozer inversion returns ierr=2 when the gyro-position maps outside the
+    ! s<1 plasma -- a PHYSICAL edge loss for the full orbit (counted cpp_sbound) --
+    ! and ierr=1 only for a genuine interior non-convergence (numerical, cpp_lu_fail).
+    ! An explicit s>=1 crossing is likewise physical. So the loss statistics
+    ! separate true edge losses from numerical failures.
     call cpp_boris_step(cpb, ierr)
-    if (ierr /= 0) return
+    if (ierr /= 0) then
+      call count_event(merge(EVT_CPP_SBOUND, EVT_CPP_LU_FAIL, ierr == 2))
+      return
+    end if
     call cpp_boris_to_gc(cpb, s, th, ph, vpar, ierr)
-    if (ierr /= 0) return
+    if (ierr /= 0) then
+      call count_event(merge(EVT_CPP_SBOUND, EVT_CPP_LU_FAIL, ierr == 2))
+      return
+    end if
     if (s <= 0d0 .or. s >= 1d0) then
       ierr = 2
+      call count_event(EVT_CPP_SBOUND)
       return
     end if
     z(1) = s; z(2) = th; z(3) = ph

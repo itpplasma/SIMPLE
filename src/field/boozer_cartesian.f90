@@ -92,9 +92,16 @@ contains
     real(dp), parameter :: tol = 1.0e-7_dp, ok_tol = 1.0e-3_dp
     real(dp) :: xc(3), Jc(3,3), res(3), du(3), ut(3), rnew, rn, alpha
     integer :: it, ls
+    logical :: pinned_edge
 
+    ! ierr: 0 converged, 1 genuine (interior) non-convergence, 2 out of domain --
+    ! the target maps outside the s<1 plasma (the s clamp pins the iterate at the
+    ! boundary and the residual cannot close). ierr=2 is a PHYSICAL edge loss for
+    ! a full-orbit particle whose gyro-position left the plasma, not a numerical
+    ! failure; the caller counts it as such.
     ierr = 1
     u = u_guess
+    pinned_edge = .false.
     call boozer_to_cart(u, xc, Jc)
     res = xc - xyz
     rn = maxval(abs(res))
@@ -105,24 +112,36 @@ contains
       end if
       call solve3(Jc, -res, du)
       alpha = 1.0_dp
+      pinned_edge = .false.
       do ls = 1, maxls
         ut = u + alpha*du
         if (ut(1) <= 0.0_dp) ut(1) = 1.0e-8_dp
-        if (ut(1) >= 1.0_dp) ut(1) = 1.0_dp - 1.0e-8_dp
+        if (ut(1) >= 1.0_dp) then
+          ut(1) = 1.0_dp - 1.0e-8_dp
+          pinned_edge = .true.   ! Newton wants s>=1: target is outside the plasma
+        end if
         call boozer_to_cart(ut, xc, Jc)
         rnew = maxval(abs(xc - xyz))
         if (rnew < rn) exit
         alpha = 0.5_dp*alpha
       end do
       if (rnew >= rn) then         ! line search stalled at the residual floor
-        if (rn < ok_tol) ierr = 0
+        if (rn < ok_tol) then
+          ierr = 0
+        else if (pinned_edge .or. u(1) >= 1.0_dp - 1.0e-4_dp) then
+          ierr = 2                 ! stalled against the outer boundary -> out of domain
+        end if
         return
       end if
       u = ut
       res = xc - xyz
       rn = rnew
     end do
-    if (rn < ok_tol) ierr = 0
+    if (rn < ok_tol) then
+      ierr = 0
+    else if (pinned_edge .or. u(1) >= 1.0_dp - 1.0e-4_dp) then
+      ierr = 2
+    end if
   end subroutine cart_to_boozer
 
   ! Particle position from guiding center. The CP velocity is seeded at the
