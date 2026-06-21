@@ -871,12 +871,13 @@ contains
         real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
         real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
         real(dp) :: segment_length, hit_distance, t_frac
-        integer :: it, ierr_orbit, it_final
+        integer :: it, ierr_orbit, it_final, itr
         integer(8) :: kt
-        logical :: passing
+        logical :: passing, numerical_fault
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
+        numerical_fault = .false.
 
         if (swcoll) call reset_seed_if_deterministic
 
@@ -979,6 +980,16 @@ contains
 
             if (ierr_orbit .ne. 0) then
                 it_final = it - 1
+                ! ierr_orbit==3 is a chartmap field-locate fault (e.g. a near-axis
+                ! full orbit), a numerical event, NOT a confinement loss (#420):
+                ! count the particle confined for the remaining steps and flag it.
+                if (ierr_orbit == 3) then
+                    do itr = it, ntimstep
+                        call increase_confined_count(itr, passing)
+                    end do
+                    numerical_fault = .true.
+                    it_final = ntimstep
+                end if
                 exit
             end if
 
@@ -993,7 +1004,11 @@ contains
 !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
-        times_lost(ipart) = kt*dtaumin/v0
+        if (numerical_fault) then
+            times_lost(ipart) = -1.d0    ! confined: a numerical fault is not a loss
+        else
+            times_lost(ipart) = kt*dtaumin/v0
+        end if
 !$omp end critical
     end subroutine trace_orbit
 

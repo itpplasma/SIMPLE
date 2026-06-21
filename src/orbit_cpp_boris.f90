@@ -1,38 +1,44 @@
 module orbit_cpp_boris
-  ! Experimental large-step 6D classical Pauli particle by a Boris-type pusher
-  ! (Xiao-Qin BAP2), an EXPLICIT, structure-preserving alternative to the implicit
-  ! midpoint (orbit_cpp_canonical), which has no root at trapped bounces at large
-  ! dt (issue #417). Boris has no nonlinear solve, hence no convergence floor: the
-  ! step is exact rotation + force arithmetic. It is the same physics as CPP --
-  ! H = |p - qc A|^2/2m + mu|B|, seeded with v_perp = 0 on the slow manifold.
+  ! Cartesian explicit pusher for the classical particle (CP) and classical Pauli
+  ! particle (CPP), the production 6D full-orbit / large-step path (issue #420).
+  ! The particle advances in Cartesian (x, v): the magnetic rotation is exact for
+  ! constant B over a step, the kinetic metric is the identity, the geodesic terms
+  ! vanish, and the magnetic axis is an ordinary point. CP (pauli=.false.) is the
+  ! plain Boris drift-rotate-drift; CPP (pauli=.true.) adds the half mirror kicks
+  ! v -= 0.5*dt*(mu/m)*grad|B| around the rotation on the regular Pauli Lagrangian
+  ! H = |v|^2/2 + mu|B|, with frozen mu and an optional rotation-angle filter.
   !
-  ! The particle is advanced in Cartesian (x, v), where the magnetic rotation is
-  ! exact for constant B over a step. The field is the production Boozer field:
-  ! at the Cartesian point we invert to Boozer (cart_to_boozer), evaluate
-  ! boozer_field_metric (contravariant B^i, |B|, d|B|/du_i), and push the physical
-  ! vectors to Cartesian with the chart Jacobian Jc = d(xyz)/du:
-  !   B_cart = Jc B^ctr,   grad|B|_cart = Jc^{-T} d|B|/du.
-  ! The Pauli mirror force enters as the "electric" half-kick -mu grad|B|/m; the
-  ! full charged particle (MODEL_CP) drops it. Energy H and the parameter mu are
-  ! the validation invariants. set filtered=.true. for the Hairer-Lubich-Wang
-  ! large-step filter on the rotation angle (keeps the modified mu bounded when
-  ! dt*Omega_c >> 1).
+  ! Field and geometry come from the chartmap (the Cartesian-side representation,
+  ! issue #420), through the active production field: at the Cartesian point we
+  ! invert to the logical chart u=(rho, theta_B, phi_B) with the chartmap forward
+  ! map (ref_coords%from_cart, rho=sqrt(s)), evaluate the field there (magfie:
+  ! |B|, the contravariant field direction hctrvr, d log|B|/du), and push the
+  ! physical vectors to Cartesian with the chartmap Jacobian Jc = d(x)/du
+  ! (covariant_basis):
+  !   B_cart      = Jc (|B| hctrvr),      grad|B|_cart = Jc^{-T} (|B| bder).
+  ! The chartmap also owns the loss boundary: from_cart flags rho>=1 (out of the
+  ! s<1 plasma) -- the ONLY confinement loss. A field-locate non-convergence is a
+  ! numerical fault, retried/reported, never a loss (#419, #420).
   use, intrinsic :: iso_fortran_env, only: dp => real64
-  use boozer_cartesian, only: boozer_to_cart, cart_to_boozer, gc_to_particle, &
-       perp_unit_dir_flux
-  use boozer_field_metric, only: boozer_field_metric_eval
+  use magfie_sub, only: magfie, refcoords_field
+  use libneo_coordinates, only: chartmap_coordinate_system_t, &
+       chartmap_from_cyl_ok, chartmap_from_cyl_err_out_of_bounds
   implicit none
   private
 
   real(dp), parameter :: c = 1.0_dp
 
+  ! cart_field / locate status: regular interior point, physical edge loss, or a
+  ! numerical locate fault (NOT a loss).
+  integer, parameter, public :: CPB_OK = 0, CPB_LOSS = 1, CPB_LOCATE_FAIL = 2
+
   public :: cpp_boris_state_t, cpp_boris_init, cpp_boris_step, cpp_boris_energy, &
             cpp_boris_mu, cpp_boris_to_gc
 
   type :: cpp_boris_state_t
-    real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (cm)
+    real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (scaled cm)
     real(dp) :: v(3)   = 0.0_dp    ! Cartesian velocity (normalized)
-    real(dp) :: u(3)   = 0.0_dp    ! carried Boozer (s, vth, vph) = cart_to_boozer guess
+    real(dp) :: u(3)   = 0.0_dp    ! last logical (rho, theta_B, phi_B)
     real(dp) :: mu     = 0.0_dp    ! magnetic moment parameter
     real(dp) :: dt     = 0.0_dp
     real(dp) :: mass   = 1.0_dp
@@ -45,51 +51,187 @@ module orbit_cpp_boris
 
 contains
 
-  ! Cartesian B vector, |B|, and grad|B| at Cartesian x, from the Boozer field.
-  ! u_guess seeds the cart->Boozer inversion and is updated to the found u.
-  subroutine cart_field(x, u_guess, Bvec, Bmod, gradB, u_out, ierr)
-    real(dp), intent(in) :: x(3), u_guess(3)
-    real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), u_out(3)
+  ! Cartesian -> logical chart (rho, theta_B, phi_B) via the chartmap inverse map.
+  ! ierr is the chartmap status (out_of_bounds = past the s<1 plasma). from_cart is
+  ! defined on the chartmap extension, not the base coordinate_system_t, so dispatch
+  ! by type; the scaled override applies the cart scale.
+  subroutine cart_to_logical(x, u, ierr)
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: u(3)
     integer, intent(out) :: ierr
-    real(dp) :: u(3), xyz(3), Jc(3,3), Jinv(3,3)
-    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3), Acov(3), dA(3,3)
-    real(dp) :: Bctr(3), Bcov(3), dBmod(3), hcov(3)
-    integer :: i
+    select type (cs => refcoords_field%coords)
+    class is (chartmap_coordinate_system_t)
+      call cs%from_cart(x, u, ierr)
+    class default
+      error stop 'orbit_cpp_boris: reference coordinates are not a chartmap'
+    end select
+  end subroutine cart_to_logical
 
-    call cart_to_boozer(x, u_guess, u, ierr)
-    if (ierr /= 0) return
+  ! Cartesian B vector, |B|, and grad|B| at Cartesian x, from the chartmap field.
+  ! status: CPB_OK (interior, u_out valid), CPB_LOSS (rho>=1 edge loss),
+  ! CPB_LOCATE_FAIL (numerical inversion fault). On loss/fault Bvec etc. are
+  ! undefined and the caller must not push.
+  subroutine cart_field(x, Bvec, Bmod, gradB, u_out, status)
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), u_out(3)
+    integer, intent(out) :: status
+    real(dp) :: u(3), Jc(3,3), Jinv(3,3)
+    real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+    integer :: i, ierr
+
+    call cart_to_logical(x, u, ierr)
+    if (ierr == chartmap_from_cyl_err_out_of_bounds) then
+      status = CPB_LOSS; return
+    else if (ierr /= chartmap_from_cyl_ok) then
+      status = CPB_LOCATE_FAIL; return
+    end if
+    if (u(1) >= 1.0_dp) then       ! rho>=1: clamped to the boundary -> lost
+      u_out = u; status = CPB_LOSS; return
+    end if
     u_out = u
-    call boozer_field_metric_eval(u, g, ginv, sqrtg, dg, Acov, dA, &
-         Bctr, Bcov, Bmod, dBmod, hcov)
-    call boozer_to_cart(u, xyz, Jc)
-    ! B_cart = Jc B^ctr (contravariant field pushed to Cartesian).
+
+    call magfie(u, Bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+    call refcoords_field%coords%covariant_basis(u, Jc)
+    ! B_cart = Jc (|B| hctrvr) (contravariant field pushed to Cartesian).
     do i = 1, 3
-      Bvec(i) = Jc(i,1)*Bctr(1) + Jc(i,2)*Bctr(2) + Jc(i,3)*Bctr(3)
+      Bvec(i) = Bmod*(Jc(i,1)*hctrvr(1) + Jc(i,2)*hctrvr(2) + Jc(i,3)*hctrvr(3))
     end do
-    ! grad|B|_cart = Jc^{-T} d|B|/du.
+    ! grad|B|_cart = Jc^{-T} d|B|/du, d|B|/du_k = |B| bder_k (bder = d log|B|/du).
     call inv3(Jc, Jinv)
     do i = 1, 3
-      gradB(i) = Jinv(1,i)*dBmod(1) + Jinv(2,i)*dBmod(2) + Jinv(3,i)*dBmod(3)
+      gradB(i) = Bmod*(Jinv(1,i)*bder(1) + Jinv(2,i)*bder(2) + Jinv(3,i)*bder(3))
     end do
+    status = CPB_OK
   end subroutine cart_field
 
-  ! One Boris-Pauli macro-step in Cartesian: half drift, half mirror kick, exact
-  ! magnetic rotation, half mirror kick, half drift. ierr/=0 on field-inversion
-  ! failure (treated as a lost/aborted orbit by the caller).
-  subroutine cpp_boris_step(st, ierr)
+  ! Logical chart of a Cartesian point and the local covariant frame, for seeding
+  ! and Larmor offsets. status as in cart_field.
+  subroutine locate(x, u_out, Jc, g, ginv, bhat, eperp, Bmod, status)
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: u_out(3), Jc(3,3), g(3,3), ginv(3,3), bhat(3), &
+                             eperp(3), Bmod
+    integer, intent(out) :: status
+    real(dp) :: u(3), sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+    real(dp) :: eperp_u(3), nrm
+    integer :: i, ierr
+
+    call cart_to_logical(x, u, ierr)
+    if (ierr == chartmap_from_cyl_err_out_of_bounds) then
+      status = CPB_LOSS; return
+    else if (ierr /= chartmap_from_cyl_ok) then
+      status = CPB_LOCATE_FAIL; return
+    end if
+    if (u(1) >= 1.0_dp) then
+      u_out = u; status = CPB_LOSS; return
+    end if
+    u_out = u
+
+    call magfie(u, Bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+    call refcoords_field%coords%covariant_basis(u, Jc)
+    call refcoords_field%coords%metric_tensor(u, g, ginv, sqrtg)
+    ! bhat (Cartesian) = Jc hctrvr, a unit vector (|Jc hctrvr| = 1 in metric g).
+    do i = 1, 3
+      bhat(i) = Jc(i,1)*hctrvr(1) + Jc(i,2)*hctrvr(2) + Jc(i,3)*hctrvr(3)
+    end do
+    bhat = bhat/max(sqrt(bhat(1)**2 + bhat(2)**2 + bhat(3)**2), 1.0e-30_dp)
+    ! perpendicular gyrophase reference: contravariant flux direction -> Cartesian.
+    call perp_unit_dir_flux(g, ginv, hcovar, eperp_u)
+    do i = 1, 3
+      eperp(i) = Jc(i,1)*eperp_u(1) + Jc(i,2)*eperp_u(2) + Jc(i,3)*eperp_u(3)
+    end do
+    nrm = sqrt(eperp(1)**2 + eperp(2)**2 + eperp(3)**2)
+    eperp = eperp/max(nrm, 1.0e-30_dp)
+    status = CPB_OK
+  end subroutine locate
+
+  ! Seed from a guiding-centre start record u0=(s, theta_B, phi_B) with parallel
+  ! speed vpar0 and perpendicular speed vperp0. pauli=.true. (CPP) keeps v_perp=0
+  ! on the Pauli slow manifold and carries mu|B|. pauli=.false. (full-orbit CP)
+  ! places the particle a Larmor vector off the guiding centre in Cartesian (regular
+  ! through the axis) and seeds v = vpar0 bhat + vperp0 e_perp with e_perp the same
+  ! gyrophase reference the position offset uses.
+  subroutine cpp_boris_init(st, pauli, x0_boozer, vpar0, vperp0, mu_in, mass, &
+                            charge, dt, ro0_in, pabs, filtered)
+    type(cpp_boris_state_t), intent(out) :: st
+    logical, intent(in) :: pauli
+    real(dp), intent(in) :: x0_boozer(3), vpar0, vperp0, mu_in, mass, charge, &
+                            dt, ro0_in, pabs
+    logical, intent(in), optional :: filtered
+    real(dp) :: u_gc(3), xyz_gc(3), u_p(3), x_p(3), qc
+    real(dp) :: Jc(3,3), g(3,3), ginv(3,3), bhat(3), eperp(3), Bmod
+    integer :: status
+
+    st%pauli = pauli
+    st%mass = mass; st%charge = charge; st%dt = dt; st%ro0 = ro0_in
+    st%mu = mu_in; st%pabs = pabs
+    if (present(filtered)) st%filtered = filtered
+
+    ! GC logical coords: chartmap radial label is rho = sqrt(s).
+    u_gc = [sqrt(max(x0_boozer(1), 0.0_dp)), x0_boozer(2), x0_boozer(3)]
+    call refcoords_field%coords%evaluate_cart(u_gc, xyz_gc)
+    qc = charge/ro0_in
+
+    if (pauli .or. vperp0 <= 0.0_dp) then
+      x_p = xyz_gc
+      u_p = u_gc
+    else
+      call gc_to_particle(xyz_gc, u_gc, vperp0, mass, qc, x_p, u_p, status)
+      if (status /= CPB_OK) error stop 'cpp_boris_init: gc->particle inversion failed'
+    end if
+
+    st%x = x_p
+    st%u = u_p
+    call locate(x_p, u_p, Jc, g, ginv, bhat, eperp, Bmod, status)
+    if (status /= CPB_OK) error stop 'cpp_boris_init: particle seed outside chart'
+    st%u = u_p
+    st%v = vpar0*bhat
+    if (.not. pauli .and. vperp0 > 0.0_dp) st%v = st%v + vperp0*eperp
+  end subroutine cpp_boris_init
+
+  ! Cartesian guiding centre x_gc -> particle position a Larmor vector off it,
+  ! solved by the fixed point x_p with cart(x_p) - rho(x_p) = x_gc, rho the Larmor
+  ! vector built from the perpendicular speed at x_p (same gyrophase reference as
+  ! the velocity seed), so the seed offset and the GC reconstruction are inverses.
+  subroutine gc_to_particle(xyz_gc, u_gc, vperp0, mass, qc, x_p, u_p, status)
+    real(dp), intent(in) :: xyz_gc(3), u_gc(3), vperp0, mass, qc
+    real(dp), intent(out) :: x_p(3), u_p(3)
+    integer, intent(out) :: status
+    integer, parameter :: maxfp = 50
+    real(dp), parameter :: tol = 1.0e-10_dp
+    real(dp) :: Jc(3,3), g(3,3), ginv(3,3), bhat(3), eperp(3), Bmod
+    real(dp) :: rho_l(3), xnew(3)
+    integer :: it
+
+    x_p = xyz_gc
+    do it = 1, maxfp
+      call locate(x_p, u_p, Jc, g, ginv, bhat, eperp, Bmod, status)
+      if (status /= CPB_OK) return
+      ! rho = (m/(qc|B|)) bhat x v_perp, v_perp = vperp0 eperp (Cartesian).
+      rho_l = (mass/(qc*Bmod))*cross(bhat, vperp0*eperp)
+      xnew = xyz_gc + rho_l
+      if (maxval(abs(xnew - x_p)) < tol) then
+        x_p = xnew
+        call locate(x_p, u_p, Jc, g, ginv, bhat, eperp, Bmod, status)
+        return
+      end if
+      x_p = xnew
+    end do
+    status = CPB_OK
+  end subroutine gc_to_particle
+
+  subroutine cpp_boris_step(st, status)
     type(cpp_boris_state_t), intent(inout) :: st
-    integer, intent(out) :: ierr
+    integer, intent(out) :: status
     real(dp) :: x(3), v(3), Bvec(3), Bmod, gradB(3), u(3)
     real(dp) :: tvec(3), svec(3), vp(3), tmag2, qcm, fac
-    integer :: i
 
     x = st%x
     v = st%v
     qcm = st%charge/(c*st%ro0*st%mass)   ! rotation: dv/dt = qcm v x B
 
     x = x + 0.5_dp*st%dt*v
-    call cart_field(x, st%u, Bvec, Bmod, gradB, u, ierr)
-    if (ierr /= 0) return
+    call cart_field(x, Bvec, Bmod, gradB, u, status)
+    if (status /= CPB_OK) return
     st%u = u
 
     ! half mirror kick (Pauli only): m dv = -mu grad|B|.
@@ -115,102 +257,89 @@ contains
 
     st%x = x
     st%v = v
-    ierr = 0
+    status = CPB_OK
   end subroutine cpp_boris_step
-
-  ! Seed from a guiding-centre start record (s,th,ph) with parallel speed vpar0 and
-  ! perpendicular speed vperp0. pauli=.true. (CPP) keeps v_perp=0 on the Pauli slow
-  ! manifold and carries mu|B|. pauli=.false. (full-orbit CP) places the particle a
-  ! Larmor vector off the guiding centre (gc_to_particle, Cartesian, regular through
-  ! the axis) and seeds v = vpar0 b_hat + vperp0 e_perp, where e_perp is the SAME
-  ! gyrophase reference (perp_unit_dir_flux) the position offset uses, so position
-  ! and velocity are the consistent quarter-turn apart -- identical seed to the
-  ! implicit-midpoint CP (cp_particle_position_from_gc).
-  subroutine cpp_boris_init(st, pauli, x0_boozer, vpar0, vperp0, mu_in, mass, &
-                            charge, dt, ro0_in, pabs, filtered)
-    type(cpp_boris_state_t), intent(out) :: st
-    logical, intent(in) :: pauli
-    real(dp), intent(in) :: x0_boozer(3), vpar0, vperp0, mu_in, mass, charge, &
-                            dt, ro0_in, pabs
-    logical, intent(in), optional :: filtered
-    real(dp) :: xyz(3), Jc(3,3), Bvec(3), Bmod, gradB(3), u(3), x0(3), bhat(3)
-    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3), Acov(3), dA(3,3)
-    real(dp) :: Bctr(3), Bcov(3), Bg, dBmod(3), hcov(3), eperp(3), eperp_cart(3), qc
-    integer :: ierr, a
-
-    st%pauli = pauli
-    st%mass = mass; st%charge = charge; st%dt = dt; st%ro0 = ro0_in
-    st%mu = mu_in; st%pabs = pabs
-    if (present(filtered)) st%filtered = filtered
-
-    ! Full-orbit CP starts a Larmor vector off the GC; CPP starts on the GC.
-    x0 = x0_boozer
-    if (.not. pauli .and. vperp0 > 0.0_dp) then
-      qc = charge/ro0_in
-      call gc_to_particle(x0_boozer, vperp0, mass, qc, x0, ierr)
-      if (ierr /= 0) error stop 'cpp_boris_init: gc_to_particle inversion failed'
-    end if
-
-    st%u = x0
-    call boozer_to_cart(x0, xyz, Jc)
-    st%x = xyz
-    call cart_field(xyz, x0, Bvec, Bmod, gradB, u, ierr)
-    st%u = u
-    bhat = Bvec/max(Bmod_of(Bvec), 1.0e-30_dp)
-    st%v = vpar0*bhat
-
-    if (.not. pauli .and. vperp0 > 0.0_dp) then
-      ! e_perp: contravariant flux perpendicular unit, pushed to Cartesian by Jc
-      ! (an isometry: |Jc e|^2 = e^T g e = 1), giving v_perp = vperp0 e_perp_cart.
-      call boozer_field_metric_eval(x0, g, ginv, sqrtg, dg, Acov, dA, &
-           Bctr, Bcov, Bg, dBmod, hcov)
-      call perp_unit_dir_flux(g, ginv, hcov, eperp)
-      do a = 1, 3
-        eperp_cart(a) = Jc(a,1)*eperp(1) + Jc(a,2)*eperp(2) + Jc(a,3)*eperp(3)
-      end do
-      st%v = st%v + vperp0*eperp_cart
-    end if
-  end subroutine cpp_boris_init
 
   function cpp_boris_energy(st) result(energy)
     type(cpp_boris_state_t), intent(in) :: st
     real(dp) :: energy, Bvec(3), Bmod, gradB(3), u(3)
-    integer :: ierr
-    call cart_field(st%x, st%u, Bvec, Bmod, gradB, u, ierr)
+    integer :: status
+    call cart_field(st%x, Bvec, Bmod, gradB, u, status)
     energy = 0.5_dp*st%mass*(st%v(1)**2 + st%v(2)**2 + st%v(3)**2)
-    if (st%pauli) energy = energy + st%mu*Bmod
+    if (st%pauli .and. status == CPB_OK) energy = energy + st%mu*Bmod
   end function cpp_boris_energy
 
-  ! Emergent magnetic moment mu = m v_perp^2/(2|B|) of the resolved orbit. Unlike
-  ! energy (machine-precision under the Boris rotation), mu is only an adiabatic
-  ! invariant: it oscillates at the gyrophase and drifts slowly; the gyro-averaged
-  ! value is the conserved quantity. Diagnostic, not used by the pusher.
+  ! Guiding-centre magnetic moment mu = m v_perp^2/(2|B_gc|) (#421): evaluate at
+  ! the Larmor-corrected guiding centre, not the raw particle point, so the gyro
+  ! ripple O(rho/L) is removed and mu is conserved to O((rho/L)^2). Diagnostic only.
   function cpp_boris_mu(st) result(mu)
     type(cpp_boris_state_t), intent(in) :: st
-    real(dp) :: mu, Bvec(3), Bmod, gradB(3), u(3), bhat(3), vpar, vperp2
-    integer :: ierr
-    call cart_field(st%x, st%u, Bvec, Bmod, gradB, u, ierr)
-    bhat = Bvec/max(Bmod_of(Bvec), 1.0e-30_dp)
-    vpar = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
-    vperp2 = max(st%v(1)**2 + st%v(2)**2 + st%v(3)**2 - vpar**2, 0.0_dp)
-    mu = 0.5_dp*st%mass*vperp2/max(Bmod, 1.0e-30_dp)
+    real(dp) :: mu, s, th, ph, vpar, Bgc
+    integer :: status
+    call cpp_boris_to_gc(st, s, th, ph, vpar, status, Bmod_gc=Bgc)
+    if (status /= CPB_OK) then
+      mu = 0.0_dp; return
+    end if
+    mu = 0.5_dp*st%mass*max(st%v(1)**2 + st%v(2)**2 + st%v(3)**2 - vpar**2, &
+                            0.0_dp)/max(Bgc, 1.0e-30_dp)
   end function cpp_boris_mu
 
-  ! Guiding-centre reduction for output: Boozer (s,th,ph) of the current point and
-  ! the parallel speed lambda = vpar/|v|.
-  subroutine cpp_boris_to_gc(st, s, th, ph, vpar, ierr)
-    type(cpp_boris_state_t), intent(inout) :: st
+  ! Guiding-centre reduction for output (#421): remove the Larmor vector
+  ! (particle_to_gc, Cartesian) and report the centre in (s, theta_B, phi_B) with
+  ! the parallel speed at the centre. status: CPB_OK / CPB_LOSS / CPB_LOCATE_FAIL.
+  subroutine cpp_boris_to_gc(st, s, th, ph, vpar, status, Bmod_gc)
+    type(cpp_boris_state_t), intent(in) :: st
     real(dp), intent(out) :: s, th, ph, vpar
-    integer, intent(out) :: ierr
-    real(dp) :: u(3), Bvec(3), Bmod, gradB(3), uf(3), vmag
-    call cart_to_boozer(st%x, st%u, u, ierr)
-    if (ierr /= 0) return
-    st%u = u
-    s = u(1); th = u(2); ph = u(3)
-    call cart_field(st%x, u, Bvec, Bmod, gradB, uf, ierr)
-    vmag = max(Bmod_of(Bvec), 1.0e-30_dp)
-    vpar = (st%v(1)*Bvec(1) + st%v(2)*Bvec(2) + st%v(3)*Bvec(3))/vmag
+    integer, intent(out) :: status
+    real(dp), intent(out), optional :: Bmod_gc
+    real(dp) :: u_p(3), x_gc(3), u_gc(3), qc
+    real(dp) :: Jc(3,3), g(3,3), ginv(3,3), bhat(3), eperp(3), Bmod
+    real(dp) :: vpar_p, vperp_cart(3), rho_l(3)
+
+    s = 0.0_dp; th = 0.0_dp; ph = 0.0_dp; vpar = 0.0_dp
+    if (present(Bmod_gc)) Bmod_gc = 0.0_dp
+
+    call locate(st%x, u_p, Jc, g, ginv, bhat, eperp, Bmod, status)
+    if (status /= CPB_OK) return
+    qc = st%charge/st%ro0
+
+    ! Larmor vector from the particle's perpendicular velocity at x (Cartesian):
+    ! rho = (m/(qc|B|)) bhat x v_perp; x_gc = x - rho.
+    vpar_p = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
+    vperp_cart = st%v - vpar_p*bhat
+    rho_l = (st%mass/(qc*Bmod))*cross(bhat, vperp_cart)
+    x_gc = st%x - rho_l
+
+    call locate(x_gc, u_gc, Jc, g, ginv, bhat, eperp, Bmod, status)
+    if (status /= CPB_OK) return
+    s = u_gc(1)**2               ! chart rho -> s
+    th = u_gc(2); ph = u_gc(3)
+    vpar = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
+    if (present(Bmod_gc)) Bmod_gc = Bmod
   end subroutine cpp_boris_to_gc
+
+  ! Unit perpendicular direction in contravariant flux components: raised radial
+  ! covector projected off the field-parallel part, normalized in the metric.
+  subroutine perp_unit_dir_flux(g, ginv, hcov, eperp)
+    real(dp), intent(in) :: g(3,3), ginv(3,3), hcov(3)
+    real(dp), intent(out) :: eperp(3)
+    real(dp) :: er(3), hcon(3), hpar, nrm
+    integer :: i, j
+    er = [ginv(1,1), ginv(2,1), ginv(3,1)]
+    do i = 1, 3
+      hcon(i) = ginv(i,1)*hcov(1) + ginv(i,2)*hcov(2) + ginv(i,3)*hcov(3)
+    end do
+    hpar = hcov(1)*er(1) + hcov(2)*er(2) + hcov(3)*er(3)
+    eperp = er - hpar*hcon
+    nrm = 0.0_dp
+    do i = 1, 3
+      do j = 1, 3
+        nrm = nrm + g(i,j)*eperp(i)*eperp(j)
+      end do
+    end do
+    if (nrm <= 0.0_dp) error stop 'perp_unit_dir_flux: degenerate direction'
+    eperp = eperp/sqrt(nrm)
+  end subroutine perp_unit_dir_flux
 
   pure function cross(a, b) result(cr)
     real(dp), intent(in) :: a(3), b(3)
@@ -219,12 +348,6 @@ contains
     cr(2) = a(3)*b(1) - a(1)*b(3)
     cr(3) = a(1)*b(2) - a(2)*b(1)
   end function cross
-
-  pure function Bmod_of(B) result(m)
-    real(dp), intent(in) :: B(3)
-    real(dp) :: m
-    m = sqrt(B(1)**2 + B(2)**2 + B(3)**2)
-  end function Bmod_of
 
   pure subroutine inv3(A, Ainv)
     real(dp), intent(in) :: A(3,3)

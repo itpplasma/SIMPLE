@@ -178,22 +178,22 @@ contains
   ! gyrophase reference as init_canonical_6d(MODEL_CP) so the two integrators start
   ! from the identical particle. The Boris init places the Larmor offset itself.
   subroutine init_cp_boris(cpb, z0, dtaumin)
-    use boozer_field_metric, only: boozer_field_metric_eval
+    use magfie_sub, only: magfie
     use params, only: orbit_coord
     type(cpp_boris_state_t), intent(out) :: cpb
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
     real(dp) :: ro0_bar, mu, vpar_bar, vperp0
-    real(dp) :: g(3,3), ginv(3,3), sqrtg, dg(3,3,3)
-    real(dp) :: Acov(3), dA(3,3), Bctr(3), Bcov(3), Bmod, dBmod(3), hcov(3)
+    real(dp) :: u_gc(3), Bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
     if (orbit_coord /= 1) error stop &
       '6D Boris CP tracing supports only orbit_coord=1 (Boozer)'
     if (z0(1) <= 0d0 .or. z0(1) >= 1d0) error stop &
       '6D Boris CP initialization requires 0 < s < 1'
 
-    call boozer_field_metric_eval(z0(1:3), g, ginv, sqrtg, dg, Acov, dA, &
-         Bctr, Bcov, Bmod, dBmod, hcov)
+    ! |B| at the guiding centre from the chartmap field (rho = sqrt(s)).
+    u_gc = [dsqrt(z0(1)), z0(2), z0(3)]
+    call magfie(u_gc, Bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     mu = .5d0*z0(4)**2*(1.d0 - z0(5)**2)/Bmod*2d0
     ro0_bar = ro0/dsqrt(2d0)
     vpar_bar = z0(4)*z0(5)*dsqrt(2d0)
@@ -203,35 +203,31 @@ contains
   end subroutine init_cp_boris
 
   subroutine orbit_timestep_cp_boris(cpb, z, ierr)
-    ! Advance the explicit Boris CP one normalized step and write back the standard
-    ! SIMPLE z(1:5) like the canonical path: z(1)=particle s, z(2:3)=angles,
-    ! z(4)=pabs, z(5)=lambda. Cartesian step is regular through the axis; ierr/=0
-    ! marks a physical loss (s>=1) or field-inversion failure.
+    ! Advance the explicit Cartesian Boris CP one normalized step and write back the
+    ! standard SIMPLE z(1:5): z(1)=guiding-centre s, z(2:3)=angles, z(4)=pabs,
+    ! z(5)=lambda. The chartmap owns the boundary: the ONLY confinement loss is
+    ! s(x)>=1 (CPB_LOSS -> ierr=2, counted cpp_sbound). A field-locate
+    ! non-convergence (CPB_LOCATE_FAIL -> ierr=3, counted cpp_lu_fail) is a numerical
+    ! fault, reported but NEVER counted as a physical loss (#419, #420).
     use diag_counters, only: count_event, EVT_CPP_SBOUND, EVT_CPP_LU_FAIL
+    use orbit_cpp_boris, only: CPB_OK, CPB_LOSS
     type(cpp_boris_state_t), intent(inout) :: cpb
     real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
     real(dp) :: s, th, ph, vpar
+    integer :: status
 
-    ! cart<-Boozer inversion returns ierr=2 when the gyro-position maps outside the
-    ! s<1 plasma -- a PHYSICAL edge loss for the full orbit (counted cpp_sbound) --
-    ! and ierr=1 only for a genuine interior non-convergence (numerical, cpp_lu_fail).
-    ! An explicit s>=1 crossing is likewise physical. So the loss statistics
-    ! separate true edge losses from numerical failures.
-    call cpp_boris_step(cpb, ierr)
-    if (ierr /= 0) then
-      call count_event(merge(EVT_CPP_SBOUND, EVT_CPP_LU_FAIL, ierr == 2))
-      return
+    call cpp_boris_step(cpb, status)
+    if (status == CPB_LOSS) then
+      ierr = 2; call count_event(EVT_CPP_SBOUND); return
+    else if (status /= CPB_OK) then
+      ierr = 3; call count_event(EVT_CPP_LU_FAIL); return
     end if
-    call cpp_boris_to_gc(cpb, s, th, ph, vpar, ierr)
-    if (ierr /= 0) then
-      call count_event(merge(EVT_CPP_SBOUND, EVT_CPP_LU_FAIL, ierr == 2))
-      return
-    end if
-    if (s <= 0d0 .or. s >= 1d0) then
-      ierr = 2
-      call count_event(EVT_CPP_SBOUND)
-      return
+    call cpp_boris_to_gc(cpb, s, th, ph, vpar, status)
+    if (status == CPB_LOSS) then
+      ierr = 2; call count_event(EVT_CPP_SBOUND); return
+    else if (status /= CPB_OK) then
+      ierr = 3; call count_event(EVT_CPP_LU_FAIL); return
     end if
     z(1) = s; z(2) = th; z(3) = ph
     z(4) = cpb%pabs
