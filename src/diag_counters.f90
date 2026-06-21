@@ -14,7 +14,8 @@ module diag_counters
     private
 
     public :: EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, EVT_RK_GAUSS_MAXIT, &
-              EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, N_EVENT
+              EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
+              EVT_CPP_LU_FAIL, EVT_CPP_NONCONV, EVT_CPP_SBOUND, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
               diag_counters_reset, event_name
 
@@ -24,11 +25,18 @@ module diag_counters
     integer, parameter :: EVT_RK_LOBATTO_MAXIT = 4
     integer, parameter :: EVT_FIXPOINT_MAXIT = 5
     integer, parameter :: EVT_R_NEGATIVE = 6
-    integer, parameter :: N_EVENT = 6
+    ! 6D canonical CP/CPP midpoint Newton outcomes, kept separate from physical
+    ! edge loss so a numerical failure is never silently counted as a lost
+    ! particle. SBOUND = genuine s >= 1 crossing (physical loss); LU_FAIL =
+    ! singular Newton matrix; NONCONV = residual not converged in maxit.
+    integer, parameter :: EVT_CPP_LU_FAIL = 7
+    integer, parameter :: EVT_CPP_NONCONV = 8
+    integer, parameter :: EVT_CPP_SBOUND = 9
+    integer, parameter :: N_EVENT = 9
 
-    ! One cache line (64 B = 8 int64) per thread column, so neighbouring threads
-    ! never share a line. The event id indexes within a column; STRIDE >= N_EVENT.
-    integer, parameter :: STRIDE = 8
+    ! One cache line per thread column, so neighbouring threads never share a
+    ! line. The event id indexes within a column; STRIDE >= N_EVENT.
+    integer, parameter :: STRIDE = 16
     integer(int64), allocatable :: counts(:, :)  ! (STRIDE, 0:nthreads-1)
 
 contains
@@ -85,6 +93,12 @@ contains
             name = 'fixpoint_maxit'
         case (EVT_R_NEGATIVE)
             name = 'r_negative'
+        case (EVT_CPP_LU_FAIL)
+            name = 'cpp_lu_fail'
+        case (EVT_CPP_NONCONV)
+            name = 'cpp_nonconv'
+        case (EVT_CPP_SBOUND)
+            name = 'cpp_sbound'
         case default
             name = 'unknown'
         end select

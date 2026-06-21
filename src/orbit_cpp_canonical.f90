@@ -46,6 +46,8 @@ module orbit_cpp_canonical
   use field_can_base, only: field_can_t
   use field_can_test, only: eval_field_correct_test
   use linalg_lu_device, only: rk_solve
+  use diag_counters, only: count_event, EVT_CPP_LU_FAIL, EVT_CPP_NONCONV, &
+    EVT_CPP_SBOUND
   implicit none
   private
 
@@ -706,6 +708,7 @@ contains
       if (z(1) <= 0.0_dp) z(1) = 1.0e-3_dp
       if (z(1) >= 1.0_dp) then
         ierr = 2
+        call count_event(EVT_CPP_SBOUND)
         return
       end if
       call residual(st, zold, z, fvec)
@@ -714,6 +717,7 @@ contains
       call rk_solve(6, fjac, dz, info)
       if (info /= 0) then
         ierr = 1
+        call count_event(EVT_CPP_LU_FAIL)
         return
       end if
       z = z - dz
@@ -760,7 +764,10 @@ contains
       resnorm_prev = resnorm
     end do
 
-    if (.not. res_conv) ierr = 3
+    if (.not. res_conv) then
+      ierr = 3
+      call count_event(EVT_CPP_NONCONV)
+    end if
 
     if (st%model == MODEL_CPP_VAR) then
       vmid = (z(1:3) - zold(1:3))/st%dt
