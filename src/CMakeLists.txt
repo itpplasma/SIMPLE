@@ -52,6 +52,8 @@
     orbit_full_mock_cyl.f90
     orbit_full.f90
     orbit_full_device.f90
+    orbit_fo_field.f90
+    orbit_fo_boris.f90
     util.F90
     samplers.f90
     cut_detector.f90
