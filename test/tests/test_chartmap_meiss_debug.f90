@@ -1,12 +1,12 @@
 program test_chartmap_meiss_debug
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use libneo_coordinates, only: coordinate_system_t, make_chartmap_coordinate_system, &
+   use libneo_coordinates, only: coordinate_system_t, make_chartmap_coordinate_system, &
                                   chartmap_coordinate_system_t, RHO_TOR, RHO_POL, &
                                   PSI_TOR_NORM, PSI_POL_NORM, UNKNOWN
     use field_base, only: magnetic_field_t
     use field_splined, only: splined_field_t, create_splined_field
     use field_can_meiss, only: choose_default_scaling
-    use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, identity_scaling_t
+use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, identity_scaling_t
     implicit none
 
     character(len=512) :: chartmap_file, coils_file, vmec_file
@@ -21,7 +21,7 @@ program test_chartmap_meiss_debug
     call get_command_argument(3, vmec_file)
 
     if (len_trim(chartmap_file) == 0) then
-        print *, "Usage: test_chartmap_meiss_debug <chartmap.nc> [coils_file] [vmec_file]"
+      print *, "Usage: test_chartmap_meiss_debug <chartmap.nc> [coils_file] [vmec_file]"
         stop 1
     end if
 
@@ -128,11 +128,11 @@ contains
         type is (chartmap_coordinate_system_t)
             if (cs%has_spl_rz) then
                 rho_min = cs%spl_rz%x_min(1)
-                rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &
+                rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1)* &
                           real(cs%spl_rz%num_points(1) - 1, dp)
             else
                 rho_min = cs%spl_cart%x_min(1)
-                rho_max = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1) * &
+                rho_max = cs%spl_cart%x_min(1) + cs%spl_cart%h_step(1)* &
                           real(cs%spl_cart%num_points(1) - 1, dp)
             end if
 
@@ -159,7 +159,7 @@ contains
         print *, "=== Test 5: Meiss scaling selection ==="
 
         ! Create a minimal splined_field_t with our coords
-        allocate(dummy_field%coords, source=coords)
+        allocate (dummy_field%coords, source=coords)
 
         call choose_default_scaling(dummy_field, scaling)
 
