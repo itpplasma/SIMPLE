@@ -94,32 +94,41 @@ contains
     status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
   end subroutine invert_cart_warm
 
+  ! Cartesian (wedge) -> logical Newton. Seed rho and theta from the carried guess
+  ! (they do not jump between substeps) and the toroidal coordinate from the in-wedge
+  ! geometric angle atan2(y,x). The carried Boozer phi lives on the global
+  ! multi-period sheet and goes a full period 2*pi/nfp stale across a field-period
+  ! seam; the geometric angle is always in-wedge and differs from logical phi only by
+  ! the Boozer shift O(0.1 rad). One robust seed, no seam special case. (A warm phi
+  ! seed is faster away from seams but cannot be trusted at them: evaluate_cart wraps
+  ! phi mod 2*pi/nfp, so a stale guess can converge to a clamped-edge root and fake a
+  ! loss.) On stall the caller (invert_cart_warm) runs the multi-seed from_cart.
   subroutine invert_warm_newton(x, u_guess, u, status)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: u(3)
     integer, intent(out) :: status
+
+    call newton_from(x, [u_guess(1), u_guess(2), atan2(x(2), x(1))], u, status)
+  end subroutine invert_warm_newton
+
+  ! Damped Newton on the chartmap forward map x(u)=evaluate_cart(u) from an explicit
+  ! seed. Iterate in the pseudo-Cartesian chart w=(X,Y,phi)=(rho cos th, rho sin th,
+  ! phi): the polar (rho,theta) Newton is singular at the axis (dx/dtheta ~ rho,
+  ! det(Jc)->0), whereas the (X,Y) step stays regular and crosses the axis without
+  ! the reflect hack. w_to_u recovers rho>=0, theta=atan2 automatically.
+  subroutine newton_from(x, u_seed, u, status)
+    real(dp), intent(in) :: x(3), u_seed(3)
+    real(dp), intent(out) :: u(3)
+    integer, intent(out) :: status
     integer, parameter :: maxit = 30, maxls = 30
-    ! The forward map is a deterministic spline, so a damped Newton on the wedge
-    ! point converges to ~machine precision; tol targets that. accept_tol only
-    ! classifies a Newton that has stalled at the spline floor.
+    ! The forward map is a deterministic spline, so a damped Newton converges to
+    ! ~machine precision; tol targets that. accept_or_fail classifies a stall.
     real(dp), parameter :: tol = 1.0e-9_dp
     real(dp) :: xc(3), Jc(3,3), Jw(3,3), Jinv(3,3), res(3)
     real(dp) :: w(3), wt(3), ut(3), dw(3), cth, sth, rho, rn, rnew, alpha
     integer :: it, ls, i
 
-    ! Iterate in the pseudo-Cartesian chart w=(X,Y,phi)=(rho cos th, rho sin th,
-    ! phi): the polar (rho,theta) Newton is singular at the axis (dx/dtheta ~ rho,
-    ! det(Jc)->0), whereas the (X,Y) step stays regular and crosses the axis
-    ! without the reflect hack. w_to_u recovers rho>=0, theta=atan2 automatically.
-    ! Warm the radial/poloidal guess (rho, theta do not jump between substeps), but
-    ! seed the toroidal coordinate from the in-wedge geometric angle atan2(y,x). The
-    ! carried u_guess(3) is the Boozer phi on the global multi-period sheet; across a
-    ! field-period seam to_wedge rotates x into the next wedge while u_guess(3) still
-    ! sits a full period 2*pi/nfp away, stalling the Newton and tripping a spurious
-    ! loss. The wedge geometric angle differs from logical phi only by the Boozer
-    ! shift O(0.1 rad), so Newton converges in 1-2 iters at and away from the seam.
-    u = u_guess
-    u(3) = atan2(x(2), x(1))
+    u = u_seed
     w(1) = u(1)*cos(u(2)); w(2) = u(1)*sin(u(2)); w(3) = u(3)
     call ref_coords%evaluate_cart(u, xc)
     res = xc - x
@@ -161,7 +170,7 @@ contains
       rn = rnew
     end do
     status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
-  end subroutine invert_warm_newton
+  end subroutine newton_from
 
   ! Length of one unit-rho radial step |dx/drho| = |Jc(:,1)|, the chart scale used to
   ! judge a stalled Newton: a residual that is a small fraction of a radial cell means
