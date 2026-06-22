@@ -179,7 +179,7 @@ contains
   ! from the identical particle. The Boris init places the Larmor offset itself.
   subroutine init_cp_boris(cpb, z0, dtaumin)
     use orbit_cpp_chartmap_metric, only: chartmap_eval_field
-    use params, only: orbit_coord
+    use params, only: orbit_coord, relerr
     type(cpp_boris_state_t), intent(out) :: cpb
     real(dp), intent(in) :: z0(:)
     real(dp), intent(in) :: dtaumin
@@ -200,7 +200,36 @@ contains
     vperp0 = dsqrt(max(2d0*mu*Bmod, 0d0))
     call cpp_boris_init(cpb, .false., z0(1:3), vpar_bar, vperp0, mu, 1d0, 1d0, &
       dtaumin/dsqrt(2d0), ro0_bar, z0(4))
+    cpb%rtol = relerr   ! adaptive RK45 tolerance (ORBIT_CP6D_RK); unused by Boris
   end subroutine init_cp_boris
+
+  ! Advance the adaptive RK45 full-orbit CP one macrostep (ORBIT_CP6D_RK) and write
+  ! back z(1:5) exactly as orbit_timestep_cp_boris. Same Cartesian state, chartmap
+  ! field and guiding-centre loss test; only the time advance (error-controlled
+  ! Cash-Karp) differs from the fixed Boris step.
+  subroutine orbit_timestep_cp_rk(cpb, z, ierr)
+    use diag_counters, only: count_event, EVT_CPP_SBOUND, EVT_CPP_LU_FAIL
+    use orbit_cpp_boris, only: CPB_OK, CPB_LOSS, cpp_rk_step
+    type(cpp_boris_state_t), intent(inout) :: cpb
+    real(dp), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+    real(dp) :: s, th, ph, vpar
+    integer :: status
+
+    call cpp_rk_step(cpb, status)
+    if (status /= CPB_OK) then
+      ierr = 3; call count_event(EVT_CPP_LU_FAIL); return
+    end if
+    call cpp_boris_to_gc(cpb, s, th, ph, vpar, status)
+    if (status == CPB_LOSS) then
+      ierr = 2; call count_event(EVT_CPP_SBOUND); return
+    else if (status /= CPB_OK) then
+      ierr = 3; call count_event(EVT_CPP_LU_FAIL); return
+    end if
+    z(1) = s; z(2) = th; z(3) = ph
+    z(4) = cpb%pabs
+    z(5) = vpar/(z(4)*dsqrt(2d0))
+  end subroutine orbit_timestep_cp_rk
 
   subroutine orbit_timestep_cp_boris(cpb, z, ierr)
     ! Advance the explicit Cartesian Boris CP one normalized step and write back the

@@ -42,8 +42,17 @@ module orbit_cpp_boris
   ! numerical locate fault (NOT a loss).
   integer, parameter, public :: CPB_OK = 0, CPB_LOSS = 1, CPB_LOCATE_FAIL = 2
 
+  ! Per-particle state for the adaptive RK45 right-hand side cp_rk_rhs, which the
+  ! Cash-Karp stepper calls with the fixed (x, dydx) signature and so cannot take the
+  ! particle state as an argument. threadprivate so the OpenMP per-particle loop is
+  ! safe; set once per macrostep (the particle moves < a gyroradius within it, so the
+  ! start-of-step logical guess locates every sub-step point).
+  real(dp) :: rk_qcm = 0.0_dp, rk_uguess(3) = 0.0_dp
+  logical  :: rk_fault = .false.
+  !$omp threadprivate(rk_qcm, rk_uguess, rk_fault)
+
   public :: cpp_boris_state_t, cpp_boris_init, cpp_boris_step, cpp_boris_energy, &
-            cpp_boris_mu, cpp_boris_to_gc
+            cpp_boris_mu, cpp_boris_to_gc, cpp_rk_step
 
   type :: cpp_boris_state_t
     real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (scaled cm)
@@ -55,6 +64,7 @@ module orbit_cpp_boris
     real(dp) :: charge = 1.0_dp
     real(dp) :: ro0    = 1.0_dp
     real(dp) :: pabs   = 0.0_dp    ! normalized speed (carried for z(4) write-back)
+    real(dp) :: rtol   = 1.0e-8_dp ! adaptive RK relative tolerance (ORBIT_CP6D_RK)
     logical  :: pauli  = .true.    ! .true. CPP (+mu|B|); .false. CP (full orbit)
     logical  :: filtered = .false. ! HLW large-step rotation filter
   end type cpp_boris_state_t
@@ -461,6 +471,51 @@ contains
     st%v = v
     status = CPB_OK
   end subroutine cpp_boris_step
+
+  ! Adaptive Cash-Karp RK45 full-orbit CP step (ORBIT_CP6D_RK), the same error-
+  ! controlled integrator ASCOT5 uses for its gyro-orbit reference. Advance the
+  ! Cartesian (x, v) over one macrostep st%dt by the Lorentz ODE dx/dt = v,
+  ! dv/dt = qcm v x B(x), with B from the same chartmap cart_field as the Boris
+  ! pusher and the relative tolerance st%rtol; odeint_allroutines subdivides the
+  ! macrostep adaptively. status CPB_OK, or CPB_LOCATE_FAIL if a sub-step point could
+  ! not be located (numerical fault, never a loss). Loss is decided by the caller on
+  ! the guiding centre, exactly as for Boris. CP only (pauli is ignored: no mu kick).
+  subroutine cpp_rk_step(st, status)
+    use odeint_allroutines_sub, only: odeint_allroutines
+    type(cpp_boris_state_t), intent(inout) :: st
+    integer, intent(out) :: status
+    real(dp) :: y(6)
+
+    rk_qcm = st%charge/(c*st%ro0*st%mass)
+    rk_uguess = st%u
+    rk_fault = .false.
+    y(1:3) = st%x
+    y(4:6) = st%v
+    call odeint_allroutines(y, 6, 0.0_dp, st%dt, st%rtol, cp_rk_rhs)
+    st%x = y(1:3)
+    st%v = y(4:6)
+    st%u = rk_uguess
+    status = merge(CPB_LOCATE_FAIL, CPB_OK, rk_fault)
+  end subroutine cpp_rk_step
+
+  ! Cartesian Lorentz right-hand side for cpp_rk_step. y = (x, v); on a locate fault
+  ! freeze the derivative and flag rk_fault so the macrostep reports CPB_LOCATE_FAIL.
+  subroutine cp_rk_rhs(t, y, ydot)
+    real(dp), intent(in) :: t, y(:)
+    real(dp), intent(out) :: ydot(:)
+    real(dp) :: Bvec(3), Bmod, gradB(3), u(3)
+    integer :: status
+
+    call cart_field(y(1:3), rk_uguess, Bvec, Bmod, gradB, u, status)
+    if (status /= CPB_OK) then
+      rk_fault = .true.
+      ydot = 0.0_dp
+      return
+    end if
+    rk_uguess = u   ! warm the next sub-step: the adaptive RK can move many gyroradii
+    ydot(1:3) = y(4:6)
+    ydot(4:6) = rk_qcm*cross(y(4:6), Bvec)
+  end subroutine cp_rk_rhs
 
   function cpp_boris_energy(st) result(energy)
     type(cpp_boris_state_t), intent(in) :: st

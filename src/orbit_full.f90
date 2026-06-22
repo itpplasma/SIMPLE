@@ -44,6 +44,13 @@ module orbit_full
   ! where the flux-canonical midpoint (ORBIT_CP6D) is singular.
   integer, parameter, public :: ORBIT_CP6D_BORIS = 7
 
+  ! Genuine 6D classical charged particle by an adaptive Cash-Karp RK45 in Cartesian
+  ! (orbit_cpp_boris/cpp_rk_step). Same physics, seed and chartmap field as
+  ! ORBIT_CP6D_BORIS, but the error-controlled adaptive step ASCOT5 uses for its
+  ! gyro-orbit reference instead of the fixed Boris step: the external cross-check on
+  ! the Boris fixed-step phase error.
+  integer, parameter, public :: ORBIT_CP6D_RK = 8
+
   ! coordinate kinds (3..5 reserved for the libneo PR: VMEC, Boozer, chartmap)
   integer, parameter, public :: COORD_CART = 1
   integer, parameter, public :: COORD_CYL  = 2

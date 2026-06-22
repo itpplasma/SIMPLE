@@ -85,11 +85,12 @@ contains
         ! delta splines (boozer_field_metric -> delthe_delphi_BV_d2). Enable them
         ! before init_field builds the Boozer coordinates.
         block
-            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
+            use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS, &
+                                  ORBIT_CP6D_RK
             use params, only: orbit_coord, orbit_model
             use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
             if ((orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D .or. &
-                 orbit_model == ORBIT_CP6D_BORIS) &
+                 orbit_model == ORBIT_CP6D_BORIS .or. orbit_model == ORBIT_CP6D_RK) &
                 .and. orbit_coord == 1) then
                 use_B_r = .true.
                 use_del_tp_B = .true.
@@ -203,7 +204,7 @@ contains
     subroutine validate_orbit_model_config
         use orbit_full, only: ORBIT_GC, ORBIT_PAULI, ORBIT_BORIS, &
                               ORBIT_FOSYMPL, ORBIT_PAULI6D, ORBIT_CPP6D, &
-                              ORBIT_CP6D, ORBIT_CP6D_BORIS
+                              ORBIT_CP6D, ORBIT_CP6D_BORIS, ORBIT_CP6D_RK
         use params, only: orbit_model, orbit_coord
 
         select case (orbit_model)
@@ -218,6 +219,9 @@ contains
         case (ORBIT_CP6D_BORIS)
             if (orbit_coord /= 1) error stop &
                 'orbit_model=ORBIT_CP6D_BORIS supports only orbit_coord=1 (Boozer)'
+        case (ORBIT_CP6D_RK)
+            if (orbit_coord /= 1) error stop &
+                'orbit_model=ORBIT_CP6D_RK supports only orbit_coord=1 (Boozer)'
         case (ORBIT_BORIS, ORBIT_FOSYMPL, ORBIT_PAULI6D)
             error stop 'selected orbit_model is not available in production '// &
                 'alpha-loss tracing'
@@ -876,11 +880,13 @@ contains
 
         if (integmode > 0) then
             block
-                use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS
+                use orbit_full, only: ORBIT_CPP6D, ORBIT_CP6D, ORBIT_CP6D_BORIS, &
+                                      ORBIT_CP6D_RK
                 use simple, only: init_cp_boris
                 use params, only: orbit_model
                 if (orbit_model == ORBIT_CPP6D .or. orbit_model == ORBIT_CP6D &
-                        .or. orbit_model == ORBIT_CP6D_BORIS) then
+                        .or. orbit_model == ORBIT_CP6D_BORIS &
+                        .or. orbit_model == ORBIT_CP6D_RK) then
                     if (wall_enabled) error stop 'orbit_model=ORBIT_CPP6D/CP6D '// &
                         'with wall_input is not supported (wall path is GC-only)'
                     if (swcoll) error stop 'orbit_model=ORBIT_CPP6D/CP6D with '// &
@@ -896,7 +902,8 @@ contains
                         integmode)
                     if (orbit_model == ORBIT_CP6D) then
                         call init_cp(anorb%cp, anorb%f, z, dtaumin)
-                    else if (orbit_model == ORBIT_CP6D_BORIS) then
+                    else if (orbit_model == ORBIT_CP6D_BORIS .or. &
+                             orbit_model == ORBIT_CP6D_RK) then
                         call init_cp_boris(anorb%cp_boris, z, dtaumin)
                     else
                         call init_cpp(anorb%cpp, anorb%f, z, dtaumin)
@@ -989,9 +996,9 @@ contains
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_cpp, only: orbit_timestep_cpp, cpp_stages_from_mode
         use orbit_full, only: ORBIT_PAULI, ORBIT_PAULI6D, ORBIT_CPP6D, ORBIT_CP6D, &
-            ORBIT_CP6D_BORIS
+            ORBIT_CP6D_BORIS, ORBIT_CP6D_RK
         use simple, only: orbit_timestep_cpp_canonical, orbit_timestep_cp_canonical, &
-            orbit_timestep_cp_boris
+            orbit_timestep_cp_boris, orbit_timestep_cp_rk
         use params, only: orbit_model
 
         type(tracer_t), intent(inout) :: anorb
@@ -1040,6 +1047,11 @@ contains
                     ! Boris pusher: no nonlinear solve, machine-precision energy,
                     ! regular through the magnetic axis.
                     call orbit_timestep_cp_boris(anorb%cp_boris, z, ierr_orbit)
+                case (ORBIT_CP6D_RK)
+                    ! Same Cartesian full-orbit CP as BORIS but advanced by the
+                    ! adaptive Cash-Karp RK45 (ASCOT5-style error control), the
+                    ! cross-check on the Boris fixed-step phase error.
+                    call orbit_timestep_cp_rk(anorb%cp_boris, z, ierr_orbit)
                 case default
                     call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
                     call to_standard_z_coordinates(anorb, z)
