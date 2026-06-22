@@ -220,8 +220,13 @@ contains
             if (orbit_coord /= 1) error stop &
                 'orbit_model=ORBIT_CP6D_BORIS supports only orbit_coord=1 (Boozer)'
         case (ORBIT_CP6D_RK)
-            if (orbit_coord /= 1) error stop &
-                'orbit_model=ORBIT_CP6D_RK supports only orbit_coord=1 (Boozer)'
+            ! Adaptive RK45 full-orbit CP is unsupported for production loss
+            ! tracing: adaptive substeps overshoot the LCFS and the chartmap
+            ! field faults, scoring confined particles as lost. Use
+            ! ORBIT_CP6D_BORIS until the graceful past-edge field and odeint
+            ! loss-event handling land (issue #424).
+            error stop 'orbit_model=ORBIT_CP6D_RK is unsupported for '// &
+                'production loss tracing; use ORBIT_CP6D_BORIS'
         case (ORBIT_BORIS, ORBIT_FOSYMPL, ORBIT_PAULI6D)
             error stop 'selected orbit_model is not available in production '// &
                 'alpha-loss tracing'
