@@ -10,25 +10,33 @@ module orbit_cpp_boris
   !
   ! Field and geometry come from the chartmap (the Cartesian-side representation,
   ! issue #420): at the Cartesian point we invert to the logical chart
-  ! u=(rho, theta_B, phi_B) with the chartmap forward map (ref_coords%from_cart,
-  ! rho=sqrt(s)), evaluate the production Boozer field there (chartmap_eval_field:
-  ! |B|, the covariant field direction h_i, d|B|/du_i), and push the physical
-  ! vectors to Cartesian with the chartmap Jacobian Jc = d(x)/du (covariant_basis)
-  ! and inverse metric g^{ij} (metric_tensor):
-  !   B_cart = Jc (|B| g^{ij} h_j),   grad|B|_cart = Jc^{-T} d|B|/du.
-  ! The chartmap also owns the loss boundary: from_cart flags rho>=1 (out of the
-  ! s<1 plasma) -- the ONLY confinement loss. A field-locate non-convergence is a
-  ! numerical fault, retried/reported, never a loss (#419, #420).
+  ! u=(rho, theta_B, phi_B) with the chartmap forward map (rho=sqrt(s)), evaluate
+  ! the production Boozer flux potential there (chartmap_eval_field: A_theta(s),
+  ! A_phi(s), |B|, d|B|/du), and build the Cartesian field as B = curl A so B^s = 0
+  ! exactly (B tangent to the flux surface) with grad|B|_cart = Jc^{-T} d|B|/du.
+  ! The magnetic axis (rho->0) is healed by a pseudo-Cartesian chart
+  ! w=(X,Y,phi)=(rho cos th, rho sin th, phi): the polar basis dx/dtheta ~ rho
+  ! makes det(Jc)->0, but the (X,Y) chart Jacobian Jw is regular through rho=0, so
+  ! the inverse Newton and the field assembly both stay well-conditioned there.
+  ! The chartmap also owns the loss boundary: rho>=1 (out of the s<1 plasma) is
+  ! the ONLY confinement loss. A field-locate non-convergence is a numerical fault,
+  ! retried/reported, never a loss (#419, #420).
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use reference_coordinates, only: ref_coords
   use orbit_cpp_chartmap_metric, only: chartmap_eval_field
-  use libneo_coordinates, only: chartmap_coordinate_system_t, &
-       chartmap_from_cyl_ok, chartmap_from_cyl_err_out_of_bounds
+  use libneo_coordinates, only: chartmap_coordinate_system_t, chartmap_from_cyl_ok
   implicit none
   private
 
   real(dp), parameter :: c = 1.0_dp
   real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
+
+  ! Inverse-Newton classification: a converged locate has residual below
+  ! NEWTON_ACCEPT_TOL; a loosely converged point counts as the edge only when its
+  ! residual is below EDGE_FRAC of a radial cell (a genuine gyro-overshoot loss sits
+  ! within a Larmor radius of RHO_EDGE), otherwise it is a stalled interior fault.
+  real(dp), parameter :: NEWTON_ACCEPT_TOL = 1.0e-6_dp, RHO_EDGE = 1.0_dp, &
+                         EDGE_FRAC = 0.05_dp
 
   ! cart_field / locate status: regular interior point, physical edge loss, or a
   ! numerical locate fault (NOT a loss).
@@ -53,20 +61,18 @@ module orbit_cpp_boris
 
 contains
 
-  ! Cartesian -> logical chart (rho, theta_B, phi_B) by a warm-started Newton on the
-  ! chartmap forward map x(u) = evaluate_cart(u), Jc = covariant_basis(u). The carried
-  ! u_guess (previous substep) is a Larmor-step away, so Newton converges in 1-2 cheap
-  ! iterations -- far more robust and faster than the cold multi-seed from_cart, and
-  ! thread-safe (read-only spline evaluation). status: CPB_OK interior, CPB_LOSS when
-  ! the point maps to rho>=1 (out of the s<1 plasma), CPB_LOCATE_FAIL on no convergence.
-  ! Cartesian (wedge) -> logical. Warm damped Newton from the carried guess (fast,
-  ! 1-2 iters); if it cannot converge -- e.g. the guess went stale across a
-  ! field-period seam -- fall back to the chartmap's robust multi-seed from_cart,
-  ! which seeds zeta across [0, 2pi/nfp) and is immune to the stale guess.
+  ! Cartesian (wedge) -> logical chart (rho, theta_B, phi_B). Warm damped Newton on
+  ! the chartmap forward map x(u)=evaluate_cart(u) from the carried guess (a Larmor
+  ! step away, 1-2 iters, thread-safe read-only spline eval); on stall -- e.g. the
+  ! guess went stale across a field-period seam -- fall back to the chartmap's robust
+  ! multi-seed from_cart, which seeds zeta across [0, 2pi/nfp). status: CPB_OK (located,
+  ! rho reported through u for the caller's guiding-centre loss test) or CPB_LOCATE_FAIL
+  ! (no converged root -> numerical fault, never itself a loss).
   subroutine invert_cart_warm(x, u_guess, u, status)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: u(3)
     integer, intent(out) :: status
+    real(dp) :: xc(3), Jc(3,3), rn
     integer :: ierr
 
     call invert_warm_newton(x, u_guess, u, status)
@@ -77,11 +83,15 @@ contains
     class default
       return
     end select
-    if (ierr == chartmap_from_cyl_ok) then
-      status = merge(CPB_LOSS, CPB_OK, u(1) >= 1.0_dp - 1.0e-3_dp)
-    else if (ierr == chartmap_from_cyl_err_out_of_bounds) then
-      status = CPB_LOSS
-    end if
+    if (ierr /= chartmap_from_cyl_ok) return     ! genuine no-root: keep LOCATE_FAIL
+    ! Re-verify the fallback root with the same residual-vs-radial-cell criterion as
+    ! the warm path: from_cart clamps rho to [0,1], so a seam point it cannot solve
+    ! comes back pinned at rho=1 with a large residual. Accepting that as the edge
+    ! fakes a loss from mid-radius, so classify by the actual residual, not by rho.
+    call ref_coords%evaluate_cart(u, xc)
+    call ref_coords%covariant_basis(u, Jc)
+    rn = sqrt((xc(1) - x(1))**2 + (xc(2) - x(2))**2 + (xc(3) - x(3))**2)
+    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
   end subroutine invert_cart_warm
 
   subroutine invert_warm_newton(x, u_guess, u, status)
@@ -92,36 +102,50 @@ contains
     ! The forward map is a deterministic spline, so a damped Newton on the wedge
     ! point converges to ~machine precision; tol targets that. accept_tol only
     ! classifies a Newton that has stalled at the spline floor.
-    real(dp), parameter :: tol = 1.0e-9_dp, accept_tol = 1.0e-6_dp, rho_edge = 1.0_dp
-    real(dp) :: xc(3), Jc(3,3), Jinv(3,3), res(3), du(3), ut(3), rn, rnew, alpha
+    real(dp), parameter :: tol = 1.0e-9_dp
+    real(dp) :: xc(3), Jc(3,3), Jw(3,3), Jinv(3,3), res(3)
+    real(dp) :: w(3), wt(3), ut(3), dw(3), cth, sth, rho, rn, rnew, alpha
     integer :: it, ls, i
 
+    ! Iterate in the pseudo-Cartesian chart w=(X,Y,phi)=(rho cos th, rho sin th,
+    ! phi): the polar (rho,theta) Newton is singular at the axis (dx/dtheta ~ rho,
+    ! det(Jc)->0), whereas the (X,Y) step stays regular and crosses the axis
+    ! without the reflect hack. w_to_u recovers rho>=0, theta=atan2 automatically.
+    ! Warm the radial/poloidal guess (rho, theta do not jump between substeps), but
+    ! seed the toroidal coordinate from the in-wedge geometric angle atan2(y,x). The
+    ! carried u_guess(3) is the Boozer phi on the global multi-period sheet; across a
+    ! field-period seam to_wedge rotates x into the next wedge while u_guess(3) still
+    ! sits a full period 2*pi/nfp away, stalling the Newton and tripping a spurious
+    ! loss. The wedge geometric angle differs from logical phi only by the Boozer
+    ! shift O(0.1 rad), so Newton converges in 1-2 iters at and away from the seam.
     u = u_guess
+    u(3) = atan2(x(2), x(1))
+    w(1) = u(1)*cos(u(2)); w(2) = u(1)*sin(u(2)); w(3) = u(3)
     call ref_coords%evaluate_cart(u, xc)
     res = xc - x
     rn = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
     do it = 1, maxit
       if (rn < tol) then
-        status = accept_or_fail(u(1), rn, accept_tol, rho_edge)
+        status = accept_or_fail(u(1), rn, 0.0_dp, NEWTON_ACCEPT_TOL, RHO_EDGE)
         return
       end if
       call ref_coords%covariant_basis(u, Jc)
-      if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart: bail, not a loss
+      call pseudocart_basis(u, Jc, Jw, cth, sth, rho)
+      if (.not. jacobian_ok(Jw)) then   ! genuinely degenerate (off the chart)
         status = CPB_LOCATE_FAIL; return
       end if
-      call inv3(Jc, Jinv)
+      call inv3(Jw, Jinv)
       do i = 1, 3
-        du(i) = -(Jinv(i,1)*res(1) + Jinv(i,2)*res(2) + Jinv(i,3)*res(3))
+        dw(i) = -(Jinv(i,1)*res(1) + Jinv(i,2)*res(2) + Jinv(i,3)*res(3))
       end do
       ! backtracking line search: Newton is not monotonic for a finite offset.
+      ! A trial overshoot past rho=1 is NOT a loss: evaluate_cart clamps rho to the
+      ! grid edge so an interior target yields a large residual and the step
+      ! backtracks. Loss is decided only on the converged rho (accept_or_fail).
       alpha = 1.0_dp
       do ls = 1, maxls
-        ut = u + alpha*du
-        if (ut(1) < 0.0_dp) ut(1) = -ut(1)        ! reflect through the axis
-        ! A trial overshoot past rho=1 is NOT a loss: evaluate_cart clamps rho to
-        ! the grid edge so an interior target yields a large residual and the step
-        ! backtracks. Loss is decided only on the converged rho (accept_or_fail);
-        ! a genuinely-outside particle converges to rho~1 and is flagged there.
+        wt = w + alpha*dw
+        call w_to_u(wt, ut)
         call ref_coords%evaluate_cart(ut, xc)
         res = xc - x
         rnew = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
@@ -129,23 +153,37 @@ contains
         alpha = 0.5_dp*alpha
       end do
       if (rnew >= rn) then   ! line search could not improve -> stalled at the floor
-        status = accept_or_fail(u(1), rn, accept_tol, rho_edge)
+        status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
         return
       end if
+      w = wt
       u = ut
       rn = rnew
     end do
-    status = accept_or_fail(u(1), rn, accept_tol, rho_edge)
+    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
   end subroutine invert_warm_newton
 
-  ! Classify a finished Newton. The inverse itself never declares a confinement
-  ! loss: a converged locate (interior or just past the clamped edge) is CPB_OK and
+  ! Length of one unit-rho radial step |dx/drho| = |Jc(:,1)|, the chart scale used to
+  ! judge a stalled Newton: a residual that is a small fraction of a radial cell means
+  ! the target is essentially at the edge, a large fraction means an interior stall.
+  pure real(dp) function radial_scale(Jc) result(s)
+    real(dp), intent(in) :: Jc(3,3)
+    s = sqrt(Jc(1,1)**2 + Jc(2,1)**2 + Jc(3,1)**2)
+  end function radial_scale
+
+  ! Classify a finished Newton. A converged locate (rn below accept_tol) is CPB_OK and
   ! reports the radius through u, so the caller decides loss on the guiding-centre
-  ! radius. A point that stalls at the edge is still OK (its rho>=1 is reported); an
-  ! interior point that cannot converge is a numerical fault (counted confined).
-  pure integer function accept_or_fail(rho, rn, accept_tol, rho_edge) result(status)
-    real(dp), intent(in) :: rho, rn, accept_tol, rho_edge
-    if (rn < accept_tol .or. rho >= rho_edge - 1.0e-3_dp) then
+  ! radius. A loosely converged point AT the clamped edge is CPB_OK only when the
+  ! residual is a small fraction of a radial cell (a genuine gyro-overshoot loss sits
+  ! within a Larmor radius of rho=1). A Newton that stalls at the clamped edge while
+  ! its true radius is well inside the plasma has a residual of order a radial cell:
+  ! that is a numerical fault (counted confined), NOT a loss -- otherwise an inversion
+  ! that clamps to rho=1 at a field-period seam fakes an edge loss from mid-radius.
+  pure integer function accept_or_fail(rho, rn, scale, accept_tol, rho_edge) result(status)
+    real(dp), intent(in) :: rho, rn, scale, accept_tol, rho_edge
+    if (rn < accept_tol) then
+      status = CPB_OK
+    else if (rho >= rho_edge - 1.0e-3_dp .and. rn < EDGE_FRAC*scale) then
       status = CPB_OK
     else
       status = CPB_LOCATE_FAIL
@@ -196,7 +234,7 @@ contains
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), Jc(3,3)
     integer, intent(out) :: status
     real(dp) :: ue(3), Acov(3), dA(3,3), dBmod(3), hcov(3)
-    real(dp) :: g(3,3), ginv(3,3), sqrtg, Bctr(3), Jinv(3,3), Jdet
+    real(dp) :: Jw(3,3), Jwinv(3,3), cth, sth, rho, detJw, Bw(3), dBw(3), Bn
     integer :: i
 
     ! A particle may gyro-excurse a Larmor radius past s=1; evaluate the field at
@@ -204,38 +242,50 @@ contains
     ue = u
     ue(1) = min(ue(1), 1.0_dp - 1.0e-9_dp)
     call chartmap_eval_field(ue, Acov, dA, Bmod, dBmod, hcov)
-    call ref_coords%metric_tensor(ue, g, ginv, sqrtg)
     call ref_coords%covariant_basis(ue, Jc)
-    if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart
+    ! Heal the axis: work in the pseudo-Cartesian chart w=(X,Y,phi). The polar
+    ! basis column Jc(:,2)=dx/dtheta ~ rho makes det(Jc)->0 at the axis; the (X,Y)
+    ! chart Jacobian Jw is regular there (det(Jw)=det(Jc)/rho, same sign).
+    call pseudocart_basis(ue, Jc, Jw, cth, sth, rho)
+    if (.not. jacobian_ok(Jw)) then   ! genuinely degenerate (off the chart)
       status = CPB_LOCATE_FAIL; return
     end if
+    detJw = Jw(1,1)*(Jw(2,2)*Jw(3,3) - Jw(2,3)*Jw(3,2)) &
+          - Jw(1,2)*(Jw(2,1)*Jw(3,3) - Jw(2,3)*Jw(3,1)) &
+          + Jw(1,3)*(Jw(2,1)*Jw(3,2) - Jw(2,2)*Jw(3,1))
     ! B = curl A with the Boozer flux-function potential A = (0, A_theta(s),
     ! A_phi(s)): B^s = d_theta A_phi - d_phi A_theta = 0 EXACTLY (B tangent to the
-    ! flux surface), B^i = (1/Jdet) eps^{ijk} d_j A_k. Jdet is the SIGNED Jacobian
-    ! det(Jc); using the unsigned sqrtg = sqrt(|det|) flips B in a left-handed chart
-    ! and reverses the gyration/grad-B drift, so trapped bananas go outward (loss)
-    ! instead of inward. Renormalize to |B|.
-    Jdet = Jc(1,1)*(Jc(2,2)*Jc(3,3) - Jc(2,3)*Jc(3,2)) &
-         - Jc(1,2)*(Jc(2,1)*Jc(3,3) - Jc(2,3)*Jc(3,1)) &
-         + Jc(1,3)*(Jc(2,1)*Jc(3,2) - Jc(2,2)*Jc(3,1))
-    Bctr(1) = 0.0_dp
-    Bctr(2) = -dA(3,1)/Jdet
-    Bctr(3) = dA(2,1)/Jdet
+    ! flux surface). In the regular (X,Y,phi) chart the contravariant components
+    ! stay finite through the axis (det(Jw) is bounded, and dA_theta/drho ~ rho
+    ! cancels the surviving 1/rho). The signed det(Jw) keeps the left-handed chart
+    ! orientation: the unsigned sqrt(|det|) flips B and sends trapped bananas
+    ! outward. B^X = sin th dA_phi/drho /detJw, B^Y = -cos th dA_phi/drho /detJw,
+    ! B^phi = (dA_theta/drho)/rho /detJw. Renormalize to |B|.
+    Bw(1) =  sth*dA(3,1)/detJw
+    Bw(2) = -cth*dA(3,1)/detJw
+    Bw(3) = (dA(2,1)/rho)/detJw
     do i = 1, 3
-      Bvec(i) = Jc(i,1)*Bctr(1) + Jc(i,2)*Bctr(2) + Jc(i,3)*Bctr(3)
+      Bvec(i) = Jw(i,1)*Bw(1) + Jw(i,2)*Bw(2) + Jw(i,3)*Bw(3)
     end do
-    Bvec = Bvec*(Bmod/max(sqrt(Bvec(1)**2 + Bvec(2)**2 + Bvec(3)**2), 1.0e-30_dp))
-    call inv3(Jc, Jinv)
+    Bn = sqrt(Bvec(1)**2 + Bvec(2)**2 + Bvec(3)**2)
+    Bvec = Bvec*(Bmod/max(Bn, 1.0e-30_dp))
+    ! grad|B| in Cartesian: Jw^{-T} d|B|/dw, with d|B|/dw mapped from d|B|/du by the
+    ! pseudo-Cartesian chain rule (d|B|/dtheta ~ rho cancels the 1/rho).
+    dBw(1) = cth*dBmod(1) - (sth/rho)*dBmod(2)
+    dBw(2) = sth*dBmod(1) + (cth/rho)*dBmod(2)
+    dBw(3) = dBmod(3)
+    call inv3(Jw, Jwinv)
     do i = 1, 3
-      gradB(i) = Jinv(1,i)*dBmod(1) + Jinv(2,i)*dBmod(2) + Jinv(3,i)*dBmod(3)
+      gradB(i) = Jwinv(1,i)*dBw(1) + Jwinv(2,i)*dBw(2) + Jwinv(3,i)*dBw(3)
     end do
     status = CPB_OK
   end subroutine field_at_logical
 
   ! Cartesian B vector, |B|, and grad|B| at Cartesian x, from the chartmap field.
-  ! status: CPB_OK (interior, u_out valid), CPB_LOSS (rho>=1 edge loss),
-  ! CPB_LOCATE_FAIL (numerical inversion fault). On loss/fault Bvec etc. are
-  ! undefined and the caller must not push.
+  ! status: CPB_OK (located, u_out valid) or CPB_LOCATE_FAIL (numerical inversion
+  ! fault). On fault Bvec etc. are undefined and the caller must not push. Loss is
+  ! not decided here -- the field is defined through the clamped edge, and only the
+  ! guiding-centre crossing rho>=1 in cpp_boris_to_gc is a confinement loss.
   subroutine cart_field(x, u_guess, Bvec, Bmod, gradB, u_out, status)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), u_out(3)
@@ -258,39 +308,19 @@ contains
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: u_out(3), bhat(3), eperp(3), Bmod
     integer, intent(out) :: status
-    real(dp) :: xw(3), ca, sa, u(3), Jc(3,3), g(3,3), ginv(3,3), sqrtg
-    real(dp) :: Acov(3), dA(3,3), dBmod(3), hcov(3), hctr(3), eperp_u(3)
-    real(dp) :: bw(3), ew(3), Jdet
-    integer :: i
+    real(dp) :: xw(3), ca, sa, u(3), Jc(3,3), Bw(3), gw(3), bw_hat(3), ew(3)
 
     call to_wedge(x, xw, ca, sa)
     call invert_cart_warm(xw, u_guess, u, status)
     if (status /= CPB_OK) return
     u_out = u
-
-    call chartmap_eval_field(u, Acov, dA, Bmod, dBmod, hcov)
-    call ref_coords%covariant_basis(u, Jc)
-    call ref_coords%metric_tensor(u, g, ginv, sqrtg)
-    if (.not. jacobian_ok(Jc)) then   ! near-axis singular chart
-      status = CPB_LOCATE_FAIL; return
-    end if
-    ! bhat (wedge Cartesian) from B = curl A with the SIGNED Jacobian (same as
-    ! field_at_logical so seed/readout match the push).
-    Jdet = Jc(1,1)*(Jc(2,2)*Jc(3,3) - Jc(2,3)*Jc(3,2)) &
-         - Jc(1,2)*(Jc(2,1)*Jc(3,3) - Jc(2,3)*Jc(3,1)) &
-         + Jc(1,3)*(Jc(2,1)*Jc(3,2) - Jc(2,2)*Jc(3,1))
-    hctr = [0.0_dp, -dA(3,1)/Jdet, dA(2,1)/Jdet]
-    do i = 1, 3
-      bw(i) = Jc(i,1)*hctr(1) + Jc(i,2)*hctr(2) + Jc(i,3)*hctr(3)
-    end do
-    bw = bw/max(sqrt(bw(1)**2 + bw(2)**2 + bw(3)**2), 1.0e-30_dp)
-    ! perpendicular gyrophase reference: contravariant flux direction -> Cartesian.
-    call perp_unit_dir_flux(g, ginv, hcov, eperp_u)
-    do i = 1, 3
-      ew(i) = Jc(i,1)*eperp_u(1) + Jc(i,2)*eperp_u(2) + Jc(i,3)*eperp_u(3)
-    end do
-    ew = ew/max(sqrt(ew(1)**2 + ew(2)**2 + ew(3)**2), 1.0e-30_dp)
-    bhat = rotz(bw, ca, sa)       ! wedge -> global frame
+    ! Same axis-healed field assembly as the push (field_at_logical), so the seed
+    ! frame and the orbit-step field are identical.
+    call field_at_logical(u, Bw, Bmod, gw, Jc, status)
+    if (status /= CPB_OK) return
+    bw_hat = Bw/max(sqrt(Bw(1)**2 + Bw(2)**2 + Bw(3)**2), 1.0e-30_dp)
+    call perp_ref(bw_hat, ew)     ! arbitrary unit vector perpendicular to b
+    bhat = rotz(bw_hat, ca, sa)   ! wedge -> global frame
     eperp = rotz(ew, ca, sa)
     status = CPB_OK
   end subroutine locate
@@ -485,28 +515,54 @@ contains
     if (u_gc(1) >= 1.0_dp) status = CPB_LOSS
   end subroutine cpp_boris_to_gc
 
-  ! Unit perpendicular direction in contravariant flux components: raised radial
-  ! covector projected off the field-parallel part, normalized in the metric.
-  subroutine perp_unit_dir_flux(g, ginv, hcov, eperp)
-    real(dp), intent(in) :: g(3,3), ginv(3,3), hcov(3)
-    real(dp), intent(out) :: eperp(3)
-    real(dp) :: er(3), hcon(3), hpar, nrm
-    integer :: i, j
-    er = [ginv(1,1), ginv(2,1), ginv(3,1)]
-    do i = 1, 3
-      hcon(i) = ginv(i,1)*hcov(1) + ginv(i,2)*hcov(2) + ginv(i,3)*hcov(3)
+  ! Pseudo-Cartesian near-axis chart w=(X,Y,phi)=(rho cos th, rho sin th, phi).
+  ! The chartmap polar chart (rho,theta) is singular at the magnetic axis: the
+  ! covariant basis column Jc(:,2)=dx/dtheta ~ rho vanishes, so det(Jc)->0 and both
+  ! the inverse Newton (ill-conditioned in theta) and the field assembly degrade.
+  ! The (X,Y) basis stays regular through rho=0 (Pfefferle et al.,
+  ! arXiv:1412.5464; libneo flux_pseudocartesian). Returns the regular chart
+  ! Jacobian Jw(a,i)=dx_a/dw_i and the trig used to map field components.
+  subroutine pseudocart_basis(u, Jc, Jw, cth, sth, rho)
+    real(dp), intent(in) :: u(3), Jc(3,3)
+    real(dp), intent(out) :: Jw(3,3), cth, sth, rho
+    integer :: a
+    rho = max(u(1), 1.0e-30_dp)
+    cth = cos(u(2)); sth = sin(u(2))
+    do a = 1, 3
+      Jw(a,1) = Jc(a,1)*cth - Jc(a,2)*(sth/rho)   ! e_X = dx/dX
+      Jw(a,2) = Jc(a,1)*sth + Jc(a,2)*(cth/rho)   ! e_Y = dx/dY
+      Jw(a,3) = Jc(a,3)                           ! e_phi
     end do
-    hpar = hcov(1)*er(1) + hcov(2)*er(2) + hcov(3)*er(3)
-    eperp = er - hpar*hcon
-    nrm = 0.0_dp
-    do i = 1, 3
-      do j = 1, 3
-        nrm = nrm + g(i,j)*eperp(i)*eperp(j)
-      end do
-    end do
-    if (nrm <= 0.0_dp) error stop 'perp_unit_dir_flux: degenerate direction'
-    eperp = eperp/sqrt(nrm)
-  end subroutine perp_unit_dir_flux
+  end subroutine pseudocart_basis
+
+  ! Pseudo-Cartesian w=(X,Y,phi) -> logical u=(rho,theta,phi). rho>=0 and the
+  ! atan2 branch make the axis an ordinary point (no reflect hack on the inverse).
+  pure subroutine w_to_u(w, u)
+    real(dp), intent(in) :: w(3)
+    real(dp), intent(out) :: u(3)
+    u(1) = sqrt(w(1)**2 + w(2)**2)
+    u(2) = atan2(w(2), w(1))
+    u(3) = w(3)
+  end subroutine w_to_u
+
+  ! An arbitrary unit vector perpendicular to b, regular everywhere. The gyrophase
+  ! reference is gauge: only b and |v_perp| are physical, and the guiding-centre
+  ! reduction recovers v_perp from v directly, not from this choice. Gram-Schmidt
+  ! off the least-aligned axis so the subtraction never cancels.
+  pure subroutine perp_ref(b, e)
+    real(dp), intent(in) :: b(3)
+    real(dp), intent(out) :: e(3)
+    real(dp) :: a(3), d, n
+    if (abs(b(3)) < 0.9_dp) then
+      a = [0.0_dp, 0.0_dp, 1.0_dp]
+    else
+      a = [1.0_dp, 0.0_dp, 0.0_dp]
+    end if
+    d = a(1)*b(1) + a(2)*b(2) + a(3)*b(3)
+    e = a - d*b
+    n = sqrt(e(1)**2 + e(2)**2 + e(3)**2)
+    e = e/max(n, 1.0e-30_dp)
+  end subroutine perp_ref
 
   ! A chart Jacobian is usable when its determinant is well above the round-off
   ! floor relative to its size (the chartmap is singular at the magnetic axis,

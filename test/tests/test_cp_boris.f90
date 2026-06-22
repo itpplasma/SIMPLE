@@ -80,9 +80,13 @@ contains
     E0 = cpp_boris_energy(st); Emax = 0.0_dp
     mu0 = cpp_boris_mu(st); mumin = mu0; mumax = mu0
     smin = z0(1); smax = z0(1); lost = 0
-    ! secular drift: gyro-average mu over the first and last ~50-step windows
-    ! (each spans a few gyroperiods at np16384) and compare the averages.
-    nwin = 50; mu_first = 0.0_dp; mu_last = 0.0_dp; nfw = 0; nlw = 0
+    ! secular drift: gyro-average mu over the first and last tenth of the run and
+    ! compare the averages. The window must span many gyroperiods (the Boris
+    ! rotation is ~0.16 rad/step, so one gyroperiod is ~40 steps); nstep/10 = 2000
+    ! steps averages ~50 gyroperiods, removing the gyro-ripple so what survives is
+    ! the true secular drift. A short window leaves ripple phase aliased into the
+    ! difference and overstates the drift.
+    nwin = nstep/10; mu_first = 0.0_dp; mu_last = 0.0_dp; nfw = 0; nlw = 0
     do it = 1, nstep
       call cpp_boris_step(st, ierr)
       if (ierr /= 0) then; lost = 1; exit; end if

@@ -205,8 +205,9 @@ contains
   subroutine orbit_timestep_cp_boris(cpb, z, ierr)
     ! Advance the explicit Cartesian Boris CP one normalized step and write back the
     ! standard SIMPLE z(1:5): z(1)=guiding-centre s, z(2:3)=angles, z(4)=pabs,
-    ! z(5)=lambda. The chartmap owns the boundary: the ONLY confinement loss is
-    ! s(x)>=1 (CPB_LOSS -> ierr=2, counted cpp_sbound). A field-locate
+    ! z(5)=lambda. The step itself only locates the field (CPB_OK / CPB_LOCATE_FAIL);
+    ! the ONLY confinement loss is the guiding centre crossing s>=1, decided in
+    ! cpp_boris_to_gc (CPB_LOSS -> ierr=2, counted cpp_sbound). A field-locate
     ! non-convergence (CPB_LOCATE_FAIL -> ierr=3, counted cpp_lu_fail) is a numerical
     ! fault, reported but NEVER counted as a physical loss (#419, #420).
     use diag_counters, only: count_event, EVT_CPP_SBOUND, EVT_CPP_LU_FAIL
@@ -218,9 +219,7 @@ contains
     integer :: status
 
     call cpp_boris_step(cpb, status)
-    if (status == CPB_LOSS) then
-      ierr = 2; call count_event(EVT_CPP_SBOUND); return
-    else if (status /= CPB_OK) then
+    if (status /= CPB_OK) then
       ierr = 3; call count_event(EVT_CPP_LU_FAIL); return
     end if
     call cpp_boris_to_gc(cpb, s, th, ph, vpar, status)
