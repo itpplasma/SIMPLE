@@ -10,6 +10,7 @@ module simple
     orbit_sympl_init, orbit_timestep_sympl
   use field, only : vmec_field_t
   use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t
+  use orbit_fo_boris, only : fo_state_t, fo_init, fo_step, fo_to_gc
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -32,6 +33,7 @@ public
     type(field_can_t) :: f
     type(symplectic_integrator_t) :: si
     type(multistage_integrator_t) :: mi
+    type(fo_state_t) :: fo   ! full-orbit Boris state (orbit_model=ORBIT_FULL_ORBIT)
   end type tracer_t
 
   interface tstep
@@ -147,6 +149,65 @@ contains
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
                           rtol_init, mode_init)
   end subroutine init_sympl
+
+  ! Seed the full-orbit Boris pusher from a GC start record, same normalization and
+  ! gyrophase reference as the symplectic GC seed so the two integrators start from
+  ! the identical particle. fo_init places the Larmor offset itself.
+  subroutine init_fo(fo, z0, dtaumin)
+    use orbit_fo_field, only: fo_eval_field
+    use params, only: orbit_coord
+    type(fo_state_t), intent(out) :: fo
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(in) :: dtaumin
+    real(dp) :: ro0_bar, mu, vpar_bar, vperp0
+    real(dp) :: u_gc(3), Bmod, Acov(3), dA(3,3), dBmod(3), hcov(3)
+
+    if (orbit_coord /= 1) error stop &
+      'full-orbit tracing supports only orbit_coord=1 (Boozer)'
+    if (z0(1) <= 0d0 .or. z0(1) >= 1d0) error stop &
+      'full-orbit initialization requires 0 < s < 1'
+
+    ! |B| at the guiding centre from the chartmap field (rho = sqrt(s)).
+    u_gc = [dsqrt(z0(1)), z0(2), z0(3)]
+    call fo_eval_field(u_gc, Acov, dA, Bmod, dBmod, hcov)
+    mu = .5d0*z0(4)**2*(1.d0 - z0(5)**2)/Bmod*2d0
+    ro0_bar = ro0/dsqrt(2d0)
+    vpar_bar = z0(4)*z0(5)*dsqrt(2d0)
+    vperp0 = dsqrt(max(2d0*mu*Bmod, 0d0))
+    call fo_init(fo, z0(1:3), vpar_bar, vperp0, mu, 1d0, 1d0, &
+      dtaumin/dsqrt(2d0), ro0_bar, z0(4))
+  end subroutine init_fo
+
+  ! Advance the full-orbit Boris pusher one normalized step and write back the
+  ! standard SIMPLE z(1:5): z(1)=guiding-centre s, z(2:3)=angles, z(4)=pabs,
+  ! z(5)=lambda. The step itself only locates the field (FO_OK / FO_LOCATE_FAIL);
+  ! the ONLY confinement loss is the guiding centre crossing s>=1, decided in
+  ! fo_to_gc (FO_LOSS -> ierr=2, counted fo_loss). A field-locate non-convergence
+  ! (FO_LOCATE_FAIL -> ierr=3, counted fo_fault) is a numerical fault, reported
+  ! but NEVER counted as a physical loss.
+  subroutine orbit_timestep_fo(fo, z, ierr)
+    use diag_counters, only: count_event, EVT_FO_LOSS, EVT_FO_FAULT
+    use orbit_fo_boris, only: FO_OK, FO_LOSS
+    type(fo_state_t), intent(inout) :: fo
+    real(dp), intent(inout) :: z(:)
+    integer, intent(out) :: ierr
+    real(dp) :: s, th, ph, vpar
+    integer :: status
+
+    call fo_step(fo, status)
+    if (status /= FO_OK) then
+      ierr = 3; call count_event(EVT_FO_FAULT); return
+    end if
+    call fo_to_gc(fo, s, th, ph, vpar, status)
+    if (status == FO_LOSS) then
+      ierr = 2; call count_event(EVT_FO_LOSS); return
+    else if (status /= FO_OK) then
+      ierr = 3; call count_event(EVT_FO_FAULT); return
+    end if
+    z(1) = s; z(2) = th; z(3) = ph
+    z(4) = fo%pabs
+    z(5) = vpar/(z(4)*dsqrt(2d0))
+  end subroutine orbit_timestep_fo
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self

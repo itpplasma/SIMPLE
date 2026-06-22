@@ -14,7 +14,8 @@ module diag_counters
     private
 
     public :: EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, EVT_RK_GAUSS_MAXIT, &
-              EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, N_EVENT
+              EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
+              EVT_FO_LOSS, EVT_FO_FAULT, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
               diag_counters_reset, event_name
 
@@ -24,7 +25,12 @@ module diag_counters
     integer, parameter :: EVT_RK_LOBATTO_MAXIT = 4
     integer, parameter :: EVT_FIXPOINT_MAXIT = 5
     integer, parameter :: EVT_R_NEGATIVE = 6
-    integer, parameter :: N_EVENT = 6
+    ! Full-orbit (FO) outcomes, kept separate from physical edge loss so a numerical
+    ! locate fault is never silently counted as a lost particle. LOSS = guiding-centre
+    ! s >= 1 crossing (physical loss); FAULT = field-inversion non-convergence.
+    integer, parameter :: EVT_FO_LOSS = 7
+    integer, parameter :: EVT_FO_FAULT = 8
+    integer, parameter :: N_EVENT = 8
 
     ! One cache line (64 B = 8 int64) per thread column, so neighbouring threads
     ! never share a line. The event id indexes within a column; STRIDE >= N_EVENT.
@@ -85,6 +91,10 @@ contains
             name = 'fixpoint_maxit'
         case (EVT_R_NEGATIVE)
             name = 'r_negative'
+        case (EVT_FO_LOSS)
+            name = 'fo_loss'
+        case (EVT_FO_FAULT)
+            name = 'fo_fault'
         case default
             name = 'unknown'
         end select

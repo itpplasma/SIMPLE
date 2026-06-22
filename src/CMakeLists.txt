@@ -34,6 +34,8 @@
     orbit_symplectic_quasi.f90
     orbit_symplectic_euler1.f90
     orbit_symplectic.f90
+    orbit_fo_field.f90
+    orbit_fo_boris.f90
     util.F90
     samplers.f90
     cut_detector.f90
