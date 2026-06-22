@@ -17,6 +17,7 @@ program test_fo_boris
   use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, &
     fo_energy, fo_mu, fo_to_gc
   use orbit_fo_field, only: fo_eval_field
+  use reference_coordinates, only: ref_coords
   use params, only: field_input, coord_input, integmode, relerr, dtaumin, orbit_coord
   use velo_mod, only: isw_field_type
   use magfie_sub, only: BOOZER
@@ -39,6 +40,11 @@ program test_fo_boris
   call init_params(norb, 2, 4, 3.5e6_dp, 16384, 1, 1.0d-13)
   dtaumin = norb%dtaumin
   ro0_bar = ro0/sqrt(2.0_dp)
+
+  ! Precondition: the chartmap Jacobian must be in the documented convention. The
+  ! field assembly and the Cartesian inverse Newton both rely on it; a transposed
+  ! Jacobian flips the field while Boris still conserves energy, so check it here.
+  call check_covariant_basis_convention(nfail)
 
   ! passing (lambda=0.9), trapped (lambda=0.2), and an inner orbit driven toward
   ! the axis (small s, lambda=0.7) to exercise the near-axis crossing.
@@ -117,6 +123,33 @@ contains
       call check(tag//' mu adiabatic: secular drift < 1e-2', &
                  mu_drift >= 0.0_dp .and. mu_drift < 1.0e-2_dp, nfail)
   end subroutine run_fo
+
+  ! The FO field assembly builds B = curl A through ref_coords%covariant_basis,
+  ! which must return Jc(i,k) = d x_i / d u_k (Cartesian component i, logical
+  ! coord k). A transposed Jc (the libneo cart-spline chartmap bug) silently flips
+  ! the field: the Boris energy gates still pass, but the orbits are wrong. Catch
+  ! that directly by checking covariant_basis against a finite difference of
+  ! evaluate_cart at a generic off-axis, off-seam interior point.
+  subroutine check_covariant_basis_convention(nfail)
+    integer, intent(inout) :: nfail
+    real(dp) :: u(3), up(3), um(3), Jc(3,3), Jfd(3,3), xp(3), xm(3), du, rel
+    integer :: k
+
+    u = [0.6_dp, 0.7_dp, 0.3_dp]
+    du = 1.0e-6_dp
+    call ref_coords%covariant_basis(u, Jc)
+    do k = 1, 3
+      up = u; up(k) = u(k) + du
+      um = u; um(k) = u(k) - du
+      call ref_coords%evaluate_cart(up, xp)
+      call ref_coords%evaluate_cart(um, xm)
+      Jfd(:, k) = (xp - xm)/(2.0_dp*du)
+    end do
+    rel = maxval(abs(Jc - Jfd))/max(maxval(abs(Jfd)), 1.0e-30_dp)
+    print '(a,es10.2)', '  covariant_basis vs FD(evaluate_cart) rel err = ', rel
+    call check('chartmap Jacobian convention (not transposed)', rel < 1.0e-4_dp, &
+               nfail)
+  end subroutine check_covariant_basis_convention
 
   subroutine check(name, cond, nfail)
     character(*), intent(in) :: name
