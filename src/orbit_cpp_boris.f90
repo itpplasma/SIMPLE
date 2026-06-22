@@ -38,6 +38,13 @@ module orbit_cpp_boris
   real(dp), parameter :: NEWTON_ACCEPT_TOL = 1.0e-6_dp, RHO_EDGE = 1.0_dp, &
                          EDGE_FRAC = 0.05_dp
 
+  ! A guiding-centre loss (u_gc >= 1) is confirmed only when the robustly-located
+  ! particle radius u_p is within this gap of the edge: the GC and particle differ by
+  ! one Larmor radius (rho*/a ~ 0.005-0.01 here), so 0.05 is several Larmor radii of
+  ! margin and rejects field-period-seam reconstruction glitches that put a mid-radius
+  ! particle's reconstructed GC spuriously at rho >= 1.
+  real(dp), parameter :: GC_PARTICLE_GAP = 0.05_dp
+
   ! cart_field / locate status: regular interior point, physical edge loss, or a
   ! numerical locate fault (NOT a loss).
   integer, parameter, public :: CPB_OK = 0, CPB_LOSS = 1, CPB_LOCATE_FAIL = 2
@@ -573,10 +580,17 @@ contains
     th = u_gc(2); ph = u_gc(3)
     vpar = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
     if (present(Bmod_gc)) Bmod_gc = Bmod
-    ! Confinement loss is decided here, on the Larmor-corrected guiding centre
-    ! (#421): the particle may gyro-excurse past s=1 and return, as in ASCOT5; only
-    ! the guiding centre crossing the last closed surface is a loss.
-    if (u_gc(1) >= 1.0_dp) status = CPB_LOSS
+    ! Confinement loss: the Larmor-corrected guiding centre crosses the last closed
+    ! surface (u_gc >= 1). The GC must be locatable, so the loss keys on u_gc rather
+    ! than the particle (a particle gyro-excursed past s=1 is off-chart and cannot be
+    ! inverted). But u_gc is a second, cold-guess locate of x_gc and carries the
+    ! residual field-period-seam noise, which occasionally returns rho >= 1 for a
+    ! particle that is in fact at mid-radius. Reject that with the robust warm-started
+    ! particle locate u_p: a real loss has the particle within ~a Larmor radius of the
+    ! edge (|x_gc - x| = |rho_l| is a Larmor radius), so u_gc >= 1 while u_p is well
+    ! inside is a reconstruction glitch, not a loss. The field, integrator and energy
+    ! match ASCOT5 (run_simple/.../orbit_cmp), so the loss detector must be this clean.
+    if (u_gc(1) >= 1.0_dp .and. u_p(1) >= 1.0_dp - GC_PARTICLE_GAP) status = CPB_LOSS
   end subroutine cpp_boris_to_gc
 
   ! Pseudo-Cartesian near-axis chart w=(X,Y,phi)=(rho cos th, rho sin th, phi).
