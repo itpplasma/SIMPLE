@@ -984,7 +984,12 @@ contains
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         if (numerical_fault) then
-            times_lost(ipart) = -1.d0    ! confined: a numerical fault is not a loss
+            ! A field-locate fault is not a loss: the particle is confined, so record
+            ! it with the same times_lost as any confined survivor (trace_time, the GC
+            ! convention), NOT -1. -1 is reserved for never-traced markers (skipped
+            ! passing). The fault itself is tracked by the diag counters, not here, so
+            ! every integrator writes the same times_lost.dat convention.
+            times_lost(ipart) = trace_time
         else
             times_lost(ipart) = kt*dtaumin/v0
         end if
