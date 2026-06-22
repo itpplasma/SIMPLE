@@ -46,6 +46,18 @@ module params
 
     integer :: integmode = EXPL_IMPL_EULER
 
+    ! Orbit model selector. 0 = guiding-center (GC), the default symplectic
+    ! gyro-averaged path. 7 = full orbit (FO), the gyro-resolved Boris pusher in
+    ! Cartesian on the Boozer/chartmap chart, the ASCOT-style counterpart to GC.
+    ! Values 1-6 are reserved for other models.
+    integer, parameter :: ORBIT_GC = 0
+    integer, parameter :: ORBIT_FULL_ORBIT = 7
+    integer :: orbit_model = ORBIT_GC
+
+    ! Chart for the full-orbit field+geometry: full orbit currently supports only
+    ! orbit_coord = 1 (Boozer/chartmap), which shares the production GC field.
+    integer :: orbit_coord = 0
+
     integer :: kpart = 0 ! progress counter for particles
 
     real(dp) :: relerr = 1d-13
@@ -110,7 +122,8 @@ module params
 	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
-	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
+	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
 	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
