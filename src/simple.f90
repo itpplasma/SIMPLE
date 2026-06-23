@@ -224,6 +224,7 @@ contains
       'at some steps (near-axis below chartmap resolution, or a field-period seam). '// &
       'Those markers end at the last resolved position and are counted CONFINED '// &
       '(fo_fault), never lost. Refine the chartmap near the axis to remove them.'
+    flush (error_unit)
   end subroutine warn_fo_unresolved
 
   subroutine timestep(self, s, th, ph, lam, ierr)

@@ -149,14 +149,23 @@ contains
       do i = 1, 3
         dw(i) = -(Jinv(i,1)*res(1) + Jinv(i,2)*res(2) + Jinv(i,3)*res(3))
       end do
-      ! backtracking line search: Newton is not monotonic for a finite offset.
-      ! A trial overshoot past rho=1 is NOT a loss: evaluate_cart clamps rho to the
-      ! grid edge so an interior target yields a large residual and the step
-      ! backtracks. Loss is decided only on the converged rho (accept_or_fail).
+      ! Backtracking line search: Newton is not monotonic for a finite offset.
+      ! A trial that overshoots past rho=1 must be rejected, not evaluated: the
+      ! forward map clamps rho to the grid edge, so a past-edge trial returns a
+      ! point ON the edge whose residual can be smaller than the current interior
+      ! point -- the line search would accept it and the next step stalls on the
+      ! flat clamped region (the failure seen for mid-radius orbits crossing a
+      ! field-period seam, where the seam-corrupted step points outward). w_to_u
+      ! gives the trial rho before the clamp, so reject rho > 1 and keep backtracking
+      ! toward the true interior root. Loss is decided only on the guiding centre.
       alpha = 1.0_dp
       do ls = 1, maxls
         wt = w + alpha*dw
         call w_to_u(wt, ut)
+        if (ut(1) > 1.0_dp) then
+          alpha = 0.5_dp*alpha
+          cycle
+        end if
         call ref_coords%evaluate_cart(ut, xc)
         res = xc - x
         rnew = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
