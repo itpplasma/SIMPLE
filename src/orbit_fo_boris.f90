@@ -182,19 +182,21 @@ contains
     s = sqrt(Jc(1,1)**2 + Jc(2,1)**2 + Jc(3,1)**2)
   end function radial_scale
 
-  ! Classify a finished Newton. A converged locate (rn below accept_tol) is FO_OK and
-  ! reports the radius through u, so the caller decides loss on the guiding-centre
-  ! radius. A loosely converged point AT the clamped edge is FO_OK only when the
-  ! residual is a small fraction of a radial cell (a genuine gyro-overshoot loss sits
-  ! within a Larmor radius of rho=1). A Newton that stalls at the clamped edge while
-  ! its true radius is well inside the plasma has a residual of order a radial cell:
-  ! that is a numerical fault (counted confined), NOT a loss -- otherwise an inversion
-  ! that clamps to rho=1 at a field-period seam fakes an edge loss from mid-radius.
+  ! Classify a finished Newton by the Cartesian residual rn, judged against the local
+  ! radial cell |dx/drho| (scale), not an absolute length. A point is located when rn
+  ! is at machine tolerance OR a small fraction (EDGE_FRAC) of a radial cell. The
+  ! relative test is what makes this scale-correct: on a reactor-size chartmap
+  ! (positions ~1e3 cm) and near the magnetic axis, where the chart is barely resolved
+  ! (innermost rho grid point ~1e-3) and |dx/drho| is large, the residual floors well
+  ! above any fixed accept_tol while the point still sits a tiny fraction of a cell
+  ! from its target. Only a genuine stall -- a residual that is a sizable fraction of a
+  ! radial cell -- is a fault. The caller decides loss on the guiding-centre radius
+  ! (fo_to_gc), never here, so accepting a located edge or near-axis point just lets
+  ! the orbit continue; a seam glitch that clamps to rho=1 with a large residual still
+  ! fails the relative test and is rejected. rho_edge is kept for interface stability.
   pure integer function accept_or_fail(rho, rn, scale, accept_tol, rho_edge) result(status)
     real(dp), intent(in) :: rho, rn, scale, accept_tol, rho_edge
-    if (rn < accept_tol) then
-      status = FO_OK
-    else if (rho >= rho_edge - 1.0e-3_dp .and. rn < EDGE_FRAC*scale) then
+    if (rn < accept_tol .or. (scale > 0.0_dp .and. rn < EDGE_FRAC*scale)) then
       status = FO_OK
     else
       status = FO_LOCATE_FAIL
@@ -430,7 +432,7 @@ contains
 
     x = x + 0.5_dp*st%dt*v
     call cart_field(x, st%u, Bvec, Bmod, gradB, u, status)
-    if (status /= FO_OK) return
+    if (status /= FO_OK) return    ! unresolved: leave st at the last resolved state
     st%u = u
 
     ! exact magnetic rotation (constant B over the step).

@@ -874,10 +874,12 @@ contains
             if (ierr_orbit .ne. 0) then
                 it_final = it
                 if (orbit_model == ORBIT_FULL_ORBIT .and. ierr_orbit == 3) then
-                    ! Field-inversion non-convergence is a numerical fault, NOT a
-                    ! physical loss: the only full-orbit loss is the guiding-centre
-                    ! s>=1 crossing (ierr==2). Count the marker confined for the rest
-                    ! of the trace so a locate fault never inflates the loss fraction.
+                    ! Last-resort full-orbit fallback: the Cartesian inversion could
+                    ! not resolve the position (near-axis below chartmap resolution,
+                    ! or a field-period seam) and orbit_timestep_fo already warned.
+                    ! This is NOT a physical loss -- the state is at the last resolved
+                    ! position. Count the marker confined for the rest of the trace
+                    ! so an unresolved step never registers as a lost particle.
                     do it_f = it, ntimstep
                         call increase_confined_count(it_f, passing)
                     end do
@@ -906,7 +908,7 @@ contains
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = kt*dtaumin/v0
-        if (faulted) times_lost(ipart) = trace_time   ! fault: confined, not lost
+        if (faulted) times_lost(ipart) = trace_time   ! unresolved: confined, not lost
 !$omp end critical
     end subroutine trace_orbit
 

@@ -158,7 +158,7 @@ contains
             call fo_step(norb%fo, st)
             k = k + 1
             tt = k*dtaumin/v0
-            if (st /= FO_OK) then            ! particle-field inversion fault
+            if (st /= FO_OK) then            ! inversion fault
                 write (u, '(6ES16.8,I3)') tt, sgc, spart, the, phi, &
                     fo_energy(norb%fo)/E0, 2
                 exit
