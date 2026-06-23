@@ -15,7 +15,7 @@ program test_fo_boris
   use simple, only: init_params, tracer_t
   use simple_main, only: init_field
   use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, &
-    fo_energy, fo_mu, fo_to_gc
+    fo_energy, fo_mu, fo_to_gc, accept_or_fail, FO_OK, FO_LOCATE_FAIL
   use orbit_fo_field, only: fo_eval_field
   use reference_coordinates, only: ref_coords
   use params, only: field_input, coord_input, integmode, relerr, dtaumin, orbit_coord
@@ -52,6 +52,10 @@ program test_fo_boris
   call run_fo([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.2_dp], ro0_bar, 'trapped', nfail)
   call run_fo([0.04_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.7_dp], ro0_bar, 'near-axis', nfail)
 
+  ! A marker exiting the boundary must be located (so the guiding-centre loss test
+  ! runs), never turned into a confined fault.
+  call test_accept_classification(nfail)
+
   if (nfail == 0) then
     print *, 'ALL FO-BORIS TESTS PASSED'
   else
@@ -60,6 +64,36 @@ program test_fo_boris
   end if
 
 contains
+
+  ! accept_or_fail must LOCATE (FO_OK) a marker that clamped to the edge while its warm
+  ! guess was already near the edge -- a genuine LCFS exit, so fo_to_gc can flag the
+  ! guiding-centre loss -- while a mid-radius seam glitch and a near-axis stall stay
+  ! faults (FO_LOCATE_FAIL), never spurious losses. This pins the exiting-boundary fix.
+  subroutine test_accept_classification(nfail)
+    integer, intent(inout) :: nfail
+    real(dp), parameter :: tol = 1.0e-6_dp, edge = 1.0_dp, scale = 1.0_dp
+    real(dp), parameter :: big = 1.0_dp     ! residual well above EDGE_FRAC*scale
+    call expect_status(accept_or_fail(0.5_dp, 1.0e-9_dp, scale, tol, edge, 0.5_dp), &
+                       FO_OK, 'converged interior located', nfail)
+    call expect_status(accept_or_fail(0.01_dp, big, scale, tol, edge, 0.01_dp), &
+                       FO_LOCATE_FAIL, 'near-axis stall stays fault', nfail)
+    call expect_status(accept_or_fail(edge, big, scale, tol, edge, 0.5_dp), &
+                       FO_LOCATE_FAIL, 'mid-radius glitch stays fault', nfail)
+    call expect_status(accept_or_fail(edge, big, scale, tol, edge, 0.98_dp), &
+                       FO_OK, 'edge exit located for GC loss test', nfail)
+  end subroutine test_accept_classification
+
+  subroutine expect_status(got, want, tag, nfail)
+    integer, intent(in) :: got, want
+    character(*), intent(in) :: tag
+    integer, intent(inout) :: nfail
+    if (got /= want) then
+      print *, 'FAIL accept_or_fail: ', tag, ' got', got, ' want', want
+      nfail = nfail + 1
+    else
+      print *, 'ok: ', tag
+    end if
+  end subroutine expect_status
 
   subroutine run_fo(z0, ro0_bar, tag, nfail)
     real(dp), intent(in) :: z0(5), ro0_bar

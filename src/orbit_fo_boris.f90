@@ -47,7 +47,7 @@ module orbit_fo_boris
   ! numerical locate fault (NOT a loss).
   integer, parameter, public :: FO_OK = 0, FO_LOSS = 1, FO_LOCATE_FAIL = 2
 
-  public :: fo_state_t, fo_init, fo_step, fo_energy, fo_mu, fo_to_gc
+  public :: fo_state_t, fo_init, fo_step, fo_energy, fo_mu, fo_to_gc, accept_or_fail
 
   type :: fo_state_t
     real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (scaled cm)
@@ -93,7 +93,8 @@ contains
     call ref_coords%evaluate_cart(u, xc)
     call ref_coords%covariant_basis(u, Jc)
     rn = sqrt((xc(1) - x(1))**2 + (xc(2) - x(2))**2 + (xc(3) - x(3))**2)
-    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
+    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
+                            u_guess(1))
   end subroutine invert_cart_warm
 
   ! Cartesian (wedge) -> logical Newton. Seed rho and theta from the carried guess
@@ -137,7 +138,7 @@ contains
     rn = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
     do it = 1, maxit
       if (rn < tol) then
-        status = accept_or_fail(u(1), rn, 0.0_dp, NEWTON_ACCEPT_TOL, RHO_EDGE)
+        status = accept_or_fail(u(1), rn, 0.0_dp, NEWTON_ACCEPT_TOL, RHO_EDGE, u_seed(1))
         return
       end if
       call ref_coords%covariant_basis(u, Jc)
@@ -173,14 +174,16 @@ contains
         alpha = 0.5_dp*alpha
       end do
       if (rnew >= rn) then   ! line search could not improve -> stalled at the floor
-        status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
+        status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
+                                u_seed(1))
         return
       end if
       w = wt
       u = ut
       rn = rnew
     end do
-    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
+    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
+                            u_seed(1))
   end subroutine newton_from
 
   ! Length of one unit-rho radial step |dx/drho| = |Jc(:,1)|, the chart scale used to
@@ -198,14 +201,23 @@ contains
   ! (positions ~1e3 cm) and near the magnetic axis, where the chart is barely resolved
   ! (innermost rho grid point ~1e-3) and |dx/drho| is large, the residual floors well
   ! above any fixed accept_tol while the point still sits a tiny fraction of a cell
-  ! from its target. Only a genuine stall -- a residual that is a sizable fraction of a
-  ! radial cell -- is a fault. The caller decides loss on the guiding-centre radius
-  ! (fo_to_gc), never here, so accepting a located edge or near-axis point just lets
-  ! the orbit continue; a seam glitch that clamps to rho=1 with a large residual still
-  ! fails the relative test and is rejected. rho_edge is kept for interface stability.
-  pure integer function accept_or_fail(rho, rn, scale, accept_tol, rho_edge) result(status)
-    real(dp), intent(in) :: rho, rn, scale, accept_tol, rho_edge
+  ! from its target. A genuine stall -- a residual that is a sizable fraction of a
+  ! radial cell -- is a fault, EXCEPT when it clamps to the edge (rho ~ rho_edge) for a
+  ! marker whose warm guess rho_guess was already within GC_PARTICLE_GAP of the edge:
+  ! that is a marker leaving the plasma, whose true position is past rho=1 where the
+  ! forward map cannot represent it, so the inverse stalls on the clamped edge. Accept
+  ! it as located at the edge so the push continues on the clamped-edge field and
+  ! fo_to_gc decides the loss on the guiding centre -- never a blanket confined fault
+  ! that would silently keep an exiting marker. A mid-radius seam glitch that clamps to
+  ! rho=1 has rho_guess well inside, fails the guard, and stays a fault, so it is never
+  ! turned into a spurious loss.
+  pure integer function accept_or_fail(rho, rn, scale, accept_tol, rho_edge, rho_guess) &
+                                       result(status)
+    real(dp), intent(in) :: rho, rn, scale, accept_tol, rho_edge, rho_guess
     if (rn < accept_tol .or. (scale > 0.0_dp .and. rn < EDGE_FRAC*scale)) then
+      status = FO_OK
+    else if (rho >= rho_edge - GC_PARTICLE_GAP .and. &
+             rho_guess >= rho_edge - GC_PARTICLE_GAP) then
       status = FO_OK
     else
       status = FO_LOCATE_FAIL
