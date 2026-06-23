@@ -2,8 +2,8 @@ program test_chartmap_aphi_abscissa
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use netcdf
     use boozer_chartmap_io, only: boozer_chartmap_data_t, read_boozer_chartmap
-    use boozer_sub, only: load_boozer_from_chartmap, splint_boozer_coord, &
-        reset_boozer_batch_splines
+    use boozer_chartmap, only: load_boozer_from_chartmap
+    use boozer_sub, only: splint_boozer_coord, reset_boozer_batch_splines
     implicit none
 
     real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)

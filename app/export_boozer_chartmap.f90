@@ -14,7 +14,7 @@ use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
     integmode, params_init, isw_field_type
 use simple, only: tracer_t
 use simple_main, only: init_field
-use boozer_sub, only: export_boozer_chartmap
+use boozer_chartmap, only: export_boozer_chartmap
 use timing, only: init_timer, print_phase_time
 
 implicit none

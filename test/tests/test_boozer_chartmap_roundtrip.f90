@@ -7,8 +7,8 @@ program test_boozer_chartmap_roundtrip
     use velo_mod, only: isw_field_type
     use boozer_coordinates_mod, only: use_B_r
     use boozer_sub, only: splint_boozer_coord, get_boozer_coordinates, &
-                    vmec_to_boozer, export_boozer_chartmap, load_boozer_from_chartmap, &
-                          reset_boozer_batch_splines
+                    vmec_to_boozer, reset_boozer_batch_splines
+    use boozer_chartmap, only: export_boozer_chartmap, load_boozer_from_chartmap
     use spline_vmec_sub, only: spline_vmec_data
     use vmecin_sub, only: stevvo
     use field_can_mod, only: field_can_from_name, field_can_init, &

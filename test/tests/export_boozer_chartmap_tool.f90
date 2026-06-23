@@ -8,8 +8,8 @@ program export_boozer_chartmap_tool
     use parmot_mod, only: rmu
     use velo_mod, only: isw_field_type
     use boozer_coordinates_mod, only: use_B_r
-    use boozer_sub, only: get_boozer_coordinates, vmec_to_boozer, &
-                          export_boozer_chartmap
+    use boozer_sub, only: get_boozer_coordinates, vmec_to_boozer
+    use boozer_chartmap, only: export_boozer_chartmap
     use spline_vmec_sub, only: spline_vmec_data
     use vmecin_sub, only: stevvo
 
