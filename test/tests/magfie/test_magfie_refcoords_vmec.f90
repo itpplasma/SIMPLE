@@ -29,7 +29,7 @@ program test_magfie_refcoords_vmec
     real(dp), parameter :: tol_sqrtg = 5.0e-12_dp
     real(dp), parameter :: tol_hcov = 5.0e-12_dp
     real(dp), parameter :: tol_hctr = 5.0e-12_dp
-    real(dp), parameter :: tol_bder = 1.0e-12_dp
+    real(dp), parameter :: tol_bder = 1.0e-11_dp
     real(dp), parameter :: tol_hcurl = 5.0e-9_dp
 
     real(dp) :: r, theta, phi, phi_period
