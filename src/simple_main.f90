@@ -807,12 +807,13 @@ contains
         real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
         real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
         real(dp) :: segment_length, hit_distance, t_frac
-        integer :: it, ierr_orbit, it_final
+        integer :: it, ierr_orbit, it_final, it_f
         integer(8) :: kt
-        logical :: passing
+        logical :: passing, faulted
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
+        faulted = .false.
 
         if (swcoll) call reset_seed_if_deterministic
 
@@ -872,6 +873,18 @@ contains
 
             if (ierr_orbit .ne. 0) then
                 it_final = it
+                if (orbit_model == ORBIT_FULL_ORBIT .and. ierr_orbit == 3) then
+                    ! Last-resort full-orbit fallback: the Cartesian inversion could
+                    ! not resolve the position (near-axis below chartmap resolution,
+                    ! or a field-period seam) and orbit_timestep_fo already warned.
+                    ! This is NOT a physical loss -- the state is at the last resolved
+                    ! position. Count the marker confined for the rest of the trace
+                    ! so an unresolved step never registers as a lost particle.
+                    do it_f = it, ntimstep
+                        call increase_confined_count(it_f, passing)
+                    end do
+                    faulted = .true.
+                end if
                 exit
             end if
 
@@ -895,6 +908,7 @@ contains
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = kt*dtaumin/v0
+        if (faulted) times_lost(ipart) = trace_time   ! unresolved: confined, not lost
 !$omp end critical
     end subroutine trace_orbit
 

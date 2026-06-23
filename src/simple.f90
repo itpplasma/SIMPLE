@@ -196,18 +196,36 @@ contains
 
     call fo_step(fo, status)
     if (status /= FO_OK) then
-      ierr = 3; call count_event(EVT_FO_FAULT); return
+      ! Inversion unresolved (near-axis below chartmap resolution, or a field-period
+      ! seam). NOT a physical loss; fo_step left the state at the last resolved
+      ! position. Hand the caller ierr=3 to end the orbit gracefully as confined.
+      ierr = 3; call count_event(EVT_FO_FAULT); call warn_fo_unresolved; return
     end if
     call fo_to_gc(fo, s, th, ph, vpar, status)
     if (status == FO_LOSS) then
       ierr = 2; call count_event(EVT_FO_LOSS); return
     else if (status /= FO_OK) then
-      ierr = 3; call count_event(EVT_FO_FAULT); return
+      ierr = 3; call count_event(EVT_FO_FAULT); call warn_fo_unresolved; return
     end if
     z(1) = s; z(2) = th; z(3) = ph
     z(4) = fo%pabs
     z(5) = vpar/(z(4)*dsqrt(2d0))
   end subroutine orbit_timestep_fo
+
+  ! One-time stderr warning that some full-orbit steps could not invert the
+  ! Cartesian position and fell back to the last resolved field. The benign race on
+  ! `warned` across OpenMP threads at worst prints a few extra lines.
+  subroutine warn_fo_unresolved
+    use iso_fortran_env, only: error_unit
+    logical, save :: warned = .false.
+    if (warned) return
+    warned = .true.
+    write (error_unit, '(A)') ' WARNING: full-orbit Cartesian inversion unresolved '// &
+      'at some steps (near-axis below chartmap resolution, or a field-period seam). '// &
+      'Those markers end at the last resolved position and are counted CONFINED '// &
+      '(fo_fault), never lost. Refine the chartmap near the axis to remove them.'
+    flush (error_unit)
+  end subroutine warn_fo_unresolved
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self

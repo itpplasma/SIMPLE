@@ -47,7 +47,7 @@ module orbit_fo_boris
   ! numerical locate fault (NOT a loss).
   integer, parameter, public :: FO_OK = 0, FO_LOSS = 1, FO_LOCATE_FAIL = 2
 
-  public :: fo_state_t, fo_init, fo_step, fo_energy, fo_mu, fo_to_gc
+  public :: fo_state_t, fo_init, fo_step, fo_energy, fo_mu, fo_to_gc, accept_or_fail
 
   type :: fo_state_t
     real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (scaled cm)
@@ -93,7 +93,8 @@ contains
     call ref_coords%evaluate_cart(u, xc)
     call ref_coords%covariant_basis(u, Jc)
     rn = sqrt((xc(1) - x(1))**2 + (xc(2) - x(2))**2 + (xc(3) - x(3))**2)
-    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
+    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
+                            u_guess(1))
   end subroutine invert_cart_warm
 
   ! Cartesian (wedge) -> logical Newton. Seed rho and theta from the carried guess
@@ -137,7 +138,7 @@ contains
     rn = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
     do it = 1, maxit
       if (rn < tol) then
-        status = accept_or_fail(u(1), rn, 0.0_dp, NEWTON_ACCEPT_TOL, RHO_EDGE)
+        status = accept_or_fail(u(1), rn, 0.0_dp, NEWTON_ACCEPT_TOL, RHO_EDGE, u_seed(1))
         return
       end if
       call ref_coords%covariant_basis(u, Jc)
@@ -149,14 +150,23 @@ contains
       do i = 1, 3
         dw(i) = -(Jinv(i,1)*res(1) + Jinv(i,2)*res(2) + Jinv(i,3)*res(3))
       end do
-      ! backtracking line search: Newton is not monotonic for a finite offset.
-      ! A trial overshoot past rho=1 is NOT a loss: evaluate_cart clamps rho to the
-      ! grid edge so an interior target yields a large residual and the step
-      ! backtracks. Loss is decided only on the converged rho (accept_or_fail).
+      ! Backtracking line search: Newton is not monotonic for a finite offset.
+      ! A trial that overshoots past rho=1 must be rejected, not evaluated: the
+      ! forward map clamps rho to the grid edge, so a past-edge trial returns a
+      ! point ON the edge whose residual can be smaller than the current interior
+      ! point -- the line search would accept it and the next step stalls on the
+      ! flat clamped region (the failure seen for mid-radius orbits crossing a
+      ! field-period seam, where the seam-corrupted step points outward). w_to_u
+      ! gives the trial rho before the clamp, so reject rho > 1 and keep backtracking
+      ! toward the true interior root. Loss is decided only on the guiding centre.
       alpha = 1.0_dp
       do ls = 1, maxls
         wt = w + alpha*dw
         call w_to_u(wt, ut)
+        if (ut(1) > 1.0_dp) then
+          alpha = 0.5_dp*alpha
+          cycle
+        end if
         call ref_coords%evaluate_cart(ut, xc)
         res = xc - x
         rnew = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
@@ -164,14 +174,16 @@ contains
         alpha = 0.5_dp*alpha
       end do
       if (rnew >= rn) then   ! line search could not improve -> stalled at the floor
-        status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
+        status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
+                                u_seed(1))
         return
       end if
       w = wt
       u = ut
       rn = rnew
     end do
-    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE)
+    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
+                            u_seed(1))
   end subroutine newton_from
 
   ! Length of one unit-rho radial step |dx/drho| = |Jc(:,1)|, the chart scale used to
@@ -182,19 +194,30 @@ contains
     s = sqrt(Jc(1,1)**2 + Jc(2,1)**2 + Jc(3,1)**2)
   end function radial_scale
 
-  ! Classify a finished Newton. A converged locate (rn below accept_tol) is FO_OK and
-  ! reports the radius through u, so the caller decides loss on the guiding-centre
-  ! radius. A loosely converged point AT the clamped edge is FO_OK only when the
-  ! residual is a small fraction of a radial cell (a genuine gyro-overshoot loss sits
-  ! within a Larmor radius of rho=1). A Newton that stalls at the clamped edge while
-  ! its true radius is well inside the plasma has a residual of order a radial cell:
-  ! that is a numerical fault (counted confined), NOT a loss -- otherwise an inversion
-  ! that clamps to rho=1 at a field-period seam fakes an edge loss from mid-radius.
-  pure integer function accept_or_fail(rho, rn, scale, accept_tol, rho_edge) result(status)
-    real(dp), intent(in) :: rho, rn, scale, accept_tol, rho_edge
-    if (rn < accept_tol) then
+  ! Classify a finished Newton by the Cartesian residual rn, judged against the local
+  ! radial cell |dx/drho| (scale), not an absolute length. A point is located when rn
+  ! is at machine tolerance OR a small fraction (EDGE_FRAC) of a radial cell. The
+  ! relative test is what makes this scale-correct: on a reactor-size chartmap
+  ! (positions ~1e3 cm) and near the magnetic axis, where the chart is barely resolved
+  ! (innermost rho grid point ~1e-3) and |dx/drho| is large, the residual floors well
+  ! above any fixed accept_tol while the point still sits a tiny fraction of a cell
+  ! from its target. A genuine stall -- a residual that is a sizable fraction of a
+  ! radial cell -- is a fault, EXCEPT when it clamps to the edge (rho ~ rho_edge) for a
+  ! marker whose warm guess rho_guess was already within GC_PARTICLE_GAP of the edge:
+  ! that is a marker leaving the plasma, whose true position is past rho=1 where the
+  ! forward map cannot represent it, so the inverse stalls on the clamped edge. Accept
+  ! it as located at the edge so the push continues on the clamped-edge field and
+  ! fo_to_gc decides the loss on the guiding centre -- never a blanket confined fault
+  ! that would silently keep an exiting marker. A mid-radius seam glitch that clamps to
+  ! rho=1 has rho_guess well inside, fails the guard, and stays a fault, so it is never
+  ! turned into a spurious loss.
+  pure integer function accept_or_fail(rho, rn, scale, accept_tol, rho_edge, rho_guess) &
+                                       result(status)
+    real(dp), intent(in) :: rho, rn, scale, accept_tol, rho_edge, rho_guess
+    if (rn < accept_tol .or. (scale > 0.0_dp .and. rn < EDGE_FRAC*scale)) then
       status = FO_OK
-    else if (rho >= rho_edge - 1.0e-3_dp .and. rn < EDGE_FRAC*scale) then
+    else if (rho >= rho_edge - GC_PARTICLE_GAP .and. &
+             rho_guess >= rho_edge - GC_PARTICLE_GAP) then
       status = FO_OK
     else
       status = FO_LOCATE_FAIL
@@ -430,7 +453,7 @@ contains
 
     x = x + 0.5_dp*st%dt*v
     call cart_field(x, st%u, Bvec, Bmod, gradB, u, status)
-    if (status /= FO_OK) return
+    if (status /= FO_OK) return    ! unresolved: leave st at the last resolved state
     st%u = u
 
     ! exact magnetic rotation (constant B over the step).
