@@ -22,19 +22,19 @@ module orbit_fo_boris
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use reference_coordinates, only: ref_coords
   use orbit_fo_field, only: fo_eval_field
-  use libneo_coordinates, only: chartmap_coordinate_system_t, chartmap_from_cyl_ok
+  use libneo_coordinates, only: chartmap_coordinate_system_t, &
+    CHARTMAP_LOCATED, CHARTMAP_CLAMPED_EDGE, CHARTMAP_OUTSIDE, CHARTMAP_NO_ROOT
   implicit none
   private
 
   real(dp), parameter :: c = 1.0_dp
   real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
 
-  ! Inverse-Newton classification: a converged locate has residual below
-  ! NEWTON_ACCEPT_TOL; a loosely converged point counts as the edge only when its
+  ! Inverse classification (accept_or_fail): a converged locate has residual at
+  ! machine tolerance; a loosely converged point counts as the edge only when its
   ! residual is below EDGE_FRAC of a radial cell (a genuine gyro-overshoot loss sits
   ! within a Larmor radius of RHO_EDGE), otherwise it is a stalled interior fault.
-  real(dp), parameter :: NEWTON_ACCEPT_TOL = 1.0e-6_dp, RHO_EDGE = 1.0_dp, &
-                         EDGE_FRAC = 0.05_dp
+  real(dp), parameter :: RHO_EDGE = 1.0_dp, EDGE_FRAC = 0.05_dp
 
   ! A guiding-centre loss (u_gc >= 1) is confirmed only when the robustly-located
   ! particle radius u_p is within this gap of the edge: the GC and particle differ by
@@ -63,136 +63,59 @@ module orbit_fo_boris
 
 contains
 
-  ! Cartesian (wedge) -> logical chart (rho, theta_B, phi_B). Warm damped Newton on
-  ! the chartmap forward map x(u)=evaluate_cart(u) from the carried guess (a Larmor
-  ! step away, 1-2 iters, thread-safe read-only spline eval); on stall -- e.g. the
-  ! guess went stale across a field-period seam -- fall back to the chartmap's robust
-  ! multi-seed from_cart, which seeds zeta across [0, 2pi/nfp). status: FO_OK (located,
-  ! rho reported through u for the caller's guiding-centre loss test) or FO_LOCATE_FAIL
-  ! (no converged root -> numerical fault, never itself a loss).
+  ! Cartesian (wedge) -> logical chart (rho, theta_B, phi_B). Thin shell over the
+  ! libneo chartmap's warm Cartesian inverse cs%invert_cart (edge-1D + interior-3D +
+  ! cold multi-seed cascade in the regular pseudo-Cartesian chart, all fortnum
+  ! solvers): from the carried guess it locates the root, clamps rho to [0,1], wraps
+  ! the angles, and returns a GEOMETRIC status. geom_to_fo maps that geometry to the
+  ! pusher's two-state contract: FO_OK (located, rho reported through u for the
+  ! caller's guiding-centre loss test) or FO_LOCATE_FAIL (numerical fault, never
+  ! itself a loss). A clamped-edge root counts as located only when the warm guess was
+  ! already near the edge (a marker leaving the plasma), so a mid-radius seam glitch
+  ! pinned at rho=1 stays a fault and is never turned into a spurious loss.
   subroutine invert_cart_warm(x, u_guess, u, status)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: u(3)
     integer, intent(out) :: status
-    real(dp) :: xc(3), Jc(3,3), rn
-    integer :: ierr
+    integer :: geom_status
 
-    call invert_warm_newton(x, u_guess, u, status)
-    if (status /= FO_LOCATE_FAIL) return
-    select type (cs => ref_coords)               ! robust multi-seed fallback
+    select type (cs => ref_coords)
     class is (chartmap_coordinate_system_t)
-      call cs%from_cart(x, u, ierr)
+      call cs%invert_cart(x, u_guess, u, geom_status)
     class default
+      status = FO_LOCATE_FAIL
       return
     end select
-    if (ierr /= chartmap_from_cyl_ok) return     ! genuine no-root: keep LOCATE_FAIL
-    ! Re-verify the fallback root with the same residual-vs-radial-cell criterion as
-    ! the warm path: from_cart clamps rho to [0,1], so a seam point it cannot solve
-    ! comes back pinned at rho=1 with a large residual. Accepting that as the edge
-    ! fakes a loss from mid-radius, so classify by the actual residual, not by rho.
-    call ref_coords%evaluate_cart(u, xc)
-    call ref_coords%covariant_basis(u, Jc)
-    rn = sqrt((xc(1) - x(1))**2 + (xc(2) - x(2))**2 + (xc(3) - x(3))**2)
-    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
-                            u_guess(1))
+    status = geom_to_fo(geom_status, u_guess(1))
   end subroutine invert_cart_warm
 
-  ! Cartesian (wedge) -> logical Newton. Seed rho and theta from the carried guess
-  ! (they do not jump between substeps) and the toroidal coordinate from the in-wedge
-  ! geometric angle atan2(y,x). The carried Boozer phi lives on the global
-  ! multi-period sheet and goes a full period 2*pi/nfp stale across a field-period
-  ! seam; the geometric angle is always in-wedge and differs from logical phi only by
-  ! the Boozer shift O(0.1 rad). One robust seed, no seam special case. (A warm phi
-  ! seed is faster away from seams but cannot be trusted at them: evaluate_cart wraps
-  ! phi mod 2*pi/nfp, so a stale guess can converge to a clamped-edge root and fake a
-  ! loss.) On stall the caller (invert_cart_warm) runs the multi-seed from_cart.
-  subroutine invert_warm_newton(x, u_guess, u, status)
-    real(dp), intent(in) :: x(3), u_guess(3)
-    real(dp), intent(out) :: u(3)
-    integer, intent(out) :: status
-
-    call newton_from(x, [u_guess(1), u_guess(2), atan2(x(2), x(1))], u, status)
-  end subroutine invert_warm_newton
-
-  ! Damped Newton on the chartmap forward map x(u)=evaluate_cart(u) from an explicit
-  ! seed. Iterate in the pseudo-Cartesian chart w=(X,Y,phi)=(rho cos th, rho sin th,
-  ! phi): the polar (rho,theta) Newton is singular at the axis (dx/dtheta ~ rho,
-  ! det(Jc)->0), whereas the (X,Y) step stays regular and crosses the axis without
-  ! the reflect hack. w_to_u recovers rho>=0, theta=atan2 automatically.
-  subroutine newton_from(x, u_seed, u, status)
-    real(dp), intent(in) :: x(3), u_seed(3)
-    real(dp), intent(out) :: u(3)
-    integer, intent(out) :: status
-    integer, parameter :: maxit = 30, maxls = 30
-    ! The forward map is a deterministic spline, so a damped Newton converges to
-    ! ~machine precision; tol targets that. accept_or_fail classifies a stall.
-    real(dp), parameter :: tol = 1.0e-9_dp
-    real(dp) :: xc(3), Jc(3,3), Jw(3,3), Jinv(3,3), res(3)
-    real(dp) :: w(3), wt(3), ut(3), dw(3), cth, sth, rho, rn, rnew, alpha
-    integer :: it, ls, i
-
-    u = u_seed
-    w(1) = u(1)*cos(u(2)); w(2) = u(1)*sin(u(2)); w(3) = u(3)
-    call ref_coords%evaluate_cart(u, xc)
-    res = xc - x
-    rn = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
-    do it = 1, maxit
-      if (rn < tol) then
-        status = accept_or_fail(u(1), rn, 0.0_dp, NEWTON_ACCEPT_TOL, RHO_EDGE, u_seed(1))
-        return
+  ! Map the chartmap's geometric inverse status to the pusher's loss contract. The
+  ! enum is purely geometric (located / clamped-edge / outside / no-root); the loss
+  ! decision is the caller's, on the guiding centre. LOCATED and CLAMPED_EDGE are
+  ! both FO_OK: the push continues on the (clamped) field and fo_to_gc decides the
+  ! loss. OUTSIDE (best root pinned at rho=1 with a large residual) is the marker
+  ! whose true position is past the last surface where the forward map cannot
+  ! represent it; accept it as located ONLY when the warm guess rho was already within
+  ! GC_PARTICLE_GAP of the edge (a genuine LCFS exit), so the push continues and the
+  ! guiding-centre test runs. A mid-radius seam glitch (rho_guess well inside) clamps
+  ! to rho=1 too but fails the guard and stays a fault, never a spurious loss. NO_ROOT
+  ! is always a fault. This reproduces the accept_or_fail rho_guess gate exactly.
+  pure integer function geom_to_fo(geom_status, rho_guess) result(status)
+    integer, intent(in) :: geom_status
+    real(dp), intent(in) :: rho_guess
+    select case (geom_status)
+    case (CHARTMAP_LOCATED, CHARTMAP_CLAMPED_EDGE)
+      status = FO_OK
+    case (CHARTMAP_OUTSIDE)
+      if (rho_guess >= RHO_EDGE - GC_PARTICLE_GAP) then
+        status = FO_OK
+      else
+        status = FO_LOCATE_FAIL
       end if
-      call ref_coords%covariant_basis(u, Jc)
-      call pseudocart_basis(u, Jc, Jw, cth, sth, rho)
-      if (.not. jacobian_ok(Jw)) then   ! genuinely degenerate (off the chart)
-        status = FO_LOCATE_FAIL; return
-      end if
-      call inv3(Jw, Jinv)
-      do i = 1, 3
-        dw(i) = -(Jinv(i,1)*res(1) + Jinv(i,2)*res(2) + Jinv(i,3)*res(3))
-      end do
-      ! Backtracking line search: Newton is not monotonic for a finite offset.
-      ! A trial that overshoots past rho=1 must be rejected, not evaluated: the
-      ! forward map clamps rho to the grid edge, so a past-edge trial returns a
-      ! point ON the edge whose residual can be smaller than the current interior
-      ! point -- the line search would accept it and the next step stalls on the
-      ! flat clamped region (the failure seen for mid-radius orbits crossing a
-      ! field-period seam, where the seam-corrupted step points outward). w_to_u
-      ! gives the trial rho before the clamp, so reject rho > 1 and keep backtracking
-      ! toward the true interior root. Loss is decided only on the guiding centre.
-      alpha = 1.0_dp
-      do ls = 1, maxls
-        wt = w + alpha*dw
-        call w_to_u(wt, ut)
-        if (ut(1) > 1.0_dp) then
-          alpha = 0.5_dp*alpha
-          cycle
-        end if
-        call ref_coords%evaluate_cart(ut, xc)
-        res = xc - x
-        rnew = sqrt(res(1)**2 + res(2)**2 + res(3)**2)
-        if (rnew < rn) exit
-        alpha = 0.5_dp*alpha
-      end do
-      if (rnew >= rn) then   ! line search could not improve -> stalled at the floor
-        status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
-                                u_seed(1))
-        return
-      end if
-      w = wt
-      u = ut
-      rn = rnew
-    end do
-    status = accept_or_fail(u(1), rn, radial_scale(Jc), NEWTON_ACCEPT_TOL, RHO_EDGE, &
-                            u_seed(1))
-  end subroutine newton_from
-
-  ! Length of one unit-rho radial step |dx/drho| = |Jc(:,1)|, the chart scale used to
-  ! judge a stalled Newton: a residual that is a small fraction of a radial cell means
-  ! the target is essentially at the edge, a large fraction means an interior stall.
-  pure real(dp) function radial_scale(Jc) result(s)
-    real(dp), intent(in) :: Jc(3,3)
-    s = sqrt(Jc(1,1)**2 + Jc(2,1)**2 + Jc(3,1)**2)
-  end function radial_scale
+    case default                                 ! CHARTMAP_NO_ROOT and any other
+      status = FO_LOCATE_FAIL
+    end select
+  end function geom_to_fo
 
   ! Classify a finished Newton by the Cartesian residual rn, judged against the local
   ! radial cell |dx/drho| (scale), not an absolute length. A point is located when rn
@@ -555,16 +478,6 @@ contains
       Jw(a,3) = Jc(a,3)                           ! e_phi
     end do
   end subroutine pseudocart_basis
-
-  ! Pseudo-Cartesian w=(X,Y,phi) -> logical u=(rho,theta,phi). rho>=0 and the
-  ! atan2 branch make the axis an ordinary point (no reflect hack on the inverse).
-  pure subroutine w_to_u(w, u)
-    real(dp), intent(in) :: w(3)
-    real(dp), intent(out) :: u(3)
-    u(1) = sqrt(w(1)**2 + w(2)**2)
-    u(2) = atan2(w(2), w(1))
-    u(3) = w(3)
-  end subroutine w_to_u
 
   ! An arbitrary unit vector perpendicular to b, regular everywhere. The gyrophase
   ! reference is gauge: only b and |v_perp| are physical, and the guiding-centre
