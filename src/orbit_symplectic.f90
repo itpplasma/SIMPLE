@@ -14,6 +14,7 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
+use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, MODEL_GC
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -505,38 +506,15 @@ end subroutine
   ! Gauss-Legendre Runge-Kutta method with s internal stages (n=4*s variables)
   !
 recursive subroutine f_rk_gauss(si, fs, s, x, fvec)
-  !
+  ! GC Gauss residual: thin wrapper over the shared core (MODEL_GC). The
+  ! arithmetic lives in orbit_rk_core::gauss_canfield_residual.
   type(symplectic_integrator_t), intent(inout) :: si
   integer, intent(in) :: s
   type(field_can_t), intent(inout) :: fs(:)
   real(dp), intent(in) :: x(4*s)  ! = (rend, thend, phend, pphend)
   real(dp), intent(out) :: fvec(4*s)
 
-  real(dp) :: a(s,s), b(s), c(s), Hprime(s)
-  integer :: k,l  ! counters
-
-  call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
-
-  ! evaluate stages
-  do k = 1, s
-    call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 2)
-    call get_derivatives2(fs(k), x(4*k))
-    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
-  end do
-
-  do k = 1, s
-    fvec(4*k-3) = fs(k)%pth - si%pthold
-    fvec(4*k-2) = x(4*k-2)  - si%z(2)
-    fvec(4*k-1) = x(4*k-1)  - si%z(3)
-    fvec(4*k)   = x(4*k)    - si%z(4)
-    do l = 1, s
-      fvec(4*k-3) = fvec(4*k-3) + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                      ! thdot
-      fvec(4*k-1) = fvec(4*k-1) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-      fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-    end do
-  end do
-
+  call rk_gauss_residual(MODEL_GC, si, fs, s, x, fvec)
   end subroutine f_rk_gauss
 
 
@@ -544,79 +522,14 @@ recursive subroutine f_rk_gauss(si, fs, s, x, fvec)
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 recursive subroutine jac_rk_gauss(si, fs, s, jac)
-  !
+  ! GC Gauss Jacobian: thin wrapper over the shared core (MODEL_GC). The
+  ! arithmetic lives in orbit_rk_core::gauss_canfield_jacobian.
   type(symplectic_integrator_t), intent(in) :: si
   integer, intent(in) :: s
   type(field_can_t), intent(in) :: fs(:)
   real(dp), intent(out) :: jac(4*s, 4*s)
 
-  real(dp) :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
-  integer :: k,l,m  ! counters
-
-  call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
-
-  ! evaluate stages
-  do k = 1, s
-    m=4*k
-    Hprime(k)      = fs(k)%dH(1)/fs(k)%dpth(1)
-    dHprime(m-3) = (fs(k)%d2H(1) - Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
-    dHprime(m-2) = (fs(k)%d2H(2) - Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
-    dHprime(m-1) = (fs(k)%d2H(3) - Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
-    dHprime(m)   = (fs(k)%d2H(7) - Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph
-  end do
-
-  jac = 0d0
-
-  do k = 1, s
-    m=4*k
-    jac(m-3, m-3) = fs(k)%dpth(1)
-    jac(m-3, m-2) = fs(k)%dpth(2)
-    jac(m-3, m-1) = fs(k)%dpth(3)
-    jac(m-3, m)   = fs(k)%dpth(4)
-    jac(m-2, m-2) = 1d0
-    jac(m-1, m-1) = 1d0
-    jac(m, m) = 1d0
-  end do
-
-  do l = 1, s
-    do k = 1, s
-        m=4*k
-        jac(m-3, 4*l-3) = jac(m-3, 4*l-3) & ! d/dr
-          + si%dt*a(k,l)*(fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-3))
-        jac(m-3, 4*l-2) = jac(m-3, 4*l-2) & ! d/dth
-          + si%dt*a(k,l)*(fs(l)%d2H(4) - fs(l)%d2pth(4)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-2))
-        jac(m-3, 4*l-1) = jac(m-3, 4*l-1) & ! d/dph
-          + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-1))
-        jac(m-3, 4*l) = jac(m-3, 4*l) & ! d/dpph
-          + si%dt*a(k,l)*(fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l))
-
-      jac(m-2, 4*l-3)   = jac(m-2, 4*l-3)   - si%dt*a(k,l)*dHprime(4*l-3)   ! d/dr
-      jac(m-2, 4*l-2) = jac(m-2, 4*l-2) - si%dt*a(k,l)*dHprime(4*l-2) ! d/dth
-      jac(m-2, 4*l-1) = jac(m-2, 4*l-1) - si%dt*a(k,l)*dHprime(4*l-1) ! d/dph
-      jac(m-2, 4*l) = jac(m-2, 4*l) - si%dt*a(k,l)*dHprime(4*l) ! d/dpph
-
-      jac(m-1, 4*l-3) = jac(m-1, 4*l-3) & ! d/dr
-        - si%dt*a(k,l)*(-fs(l)%dhph(1)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-          + (fs(l)%dvpar(1) - dHprime(4*l-3)*fs(l)%hth - Hprime(l)*fs(l)%dhth(1))/fs(l)%hph)
-      jac(m-1, 4*l-2) = jac(m-1, 4*l-2) & ! d/dth
-        - si%dt*a(k,l)*(-fs(l)%dhph(2)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-          + (fs(l)%dvpar(2) - dHprime(4*l-2)*fs(l)%hth - Hprime(l)*fs(l)%dhth(2))/fs(l)%hph)
-      jac(m-1, 4*l-1) = jac(m-1, 4*l-1) & ! d/dph
-        - si%dt*a(k,l)*(-fs(l)%dhph(3)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-          + (fs(l)%dvpar(3) - dHprime(4*l-1)*fs(l)%hth - Hprime(l)*fs(l)%dhth(3))/fs(l)%hph)
-      jac(m-1, 4*l) = jac(m-1, 4*l) & ! d/dpph
-        - si%dt*a(k,l)*((fs(l)%dvpar(4) - dHprime(4*l)*fs(l)%hth)/fs(l)%hph)
-
-      jac(m, 4*l-3) = jac(m, 4*l-3) & ! d/dr
-        + si%dt*a(k,l)*(fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-3))
-      jac(m, 4*l-2) = jac(m, 4*l-2) & ! d/dth
-        + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-2))
-      jac(m, 4*l-1) = jac(m, 4*l-1) & ! d/dph
-        + si%dt*a(k,l)*(fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-1))
-      jac(m, 4*l) = jac(m, 4*l) & ! d/dpph
-        + si%dt*a(k,l)*(fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l))
-    end do
-  end do
+  call rk_gauss_jacobian(MODEL_GC, si, fs, s, jac)
 
 end subroutine jac_rk_gauss
 
