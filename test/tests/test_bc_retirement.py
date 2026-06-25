@@ -20,10 +20,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import netCDF4
 import numpy as np
 import pytest
-from scipy.interpolate import CubicSpline, RegularGridInterpolator
+
+netCDF4 = pytest.importorskip("netCDF4")
+_scipy_interp = pytest.importorskip("scipy.interpolate")
+CubicSpline = _scipy_interp.CubicSpline
+RegularGridInterpolator = _scipy_interp.RegularGridInterpolator
 
 # ---------------------------------------------------------------------------
 # Fixture paths: committed into the repo, no external dependencies.
@@ -95,8 +98,6 @@ def test_chartmap_bmod_matches_bc_fourier():
     Tolerance: 5e-3 relative.
     """
     pytest.importorskip("libneo")
-    pytest.importorskip("netCDF4")
-    pytest.importorskip("scipy")
     assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
     assert CHARTMAP_NC.exists(), f"committed fixture missing: {CHARTMAP_NC}"
 
@@ -146,8 +147,6 @@ def test_chartmap_bmod_matches_bc_fourier():
 def test_bmod_axis_scale():
     """On-axis Bmod (m=0 harmonic) from chartmap matches .bc m=0 mode to 1%."""
     pytest.importorskip("libneo")
-    pytest.importorskip("netCDF4")
-    pytest.importorskip("scipy")
     assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
     assert CHARTMAP_NC.exists(), f"committed fixture missing: {CHARTMAP_NC}"
 
