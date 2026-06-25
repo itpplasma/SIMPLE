@@ -557,6 +557,17 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
             TIMEOUT 7200)
     endif()
 
+    # .bc retirement scaffold (SIMPLE#430): VMEC-chartmap vs VMEC-Boozer proxy
+    # (Phase A, always runs) plus EQDSK/.bc cross-path when libneo#343-345 land
+    # (Phase B, skips gracefully when converters or test data are absent).
+    add_test(NAME test_bc_retirement
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_bc_retirement.py)
+    set_tests_properties(test_bc_retirement PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "slow;python"
+        TIMEOUT 7200)
+
 
     if(SIMPLE_ENABLE_CGAL)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)

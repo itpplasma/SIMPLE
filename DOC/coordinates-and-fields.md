@@ -932,6 +932,27 @@ plasma.
 New name `integ_coords` is more descriptive but less documented.
 **Recommendation**: Use `integ_coords` in new code.
 
+### A.7 Strumberger Boozer ASCII (`.bc`) Input — Deprecated
+
+**Status**: Deprecated as of SIMPLE#430.  Do not use `.bc` files for new work.
+
+The Strumberger Boozer ASCII format (`.bc`) was the historic way to supply a
+tokamak Boozer-coordinate equilibrium.  The replacement workflow is:
+
+1. Convert the EQDSK g-file to a Boozer chartmap NetCDF using
+   `libneo/python/libneo/eqdsk_to_boozer_chartmap.py` (libneo#343).
+2. Pass the chartmap as both `field_input` and `coord_input`; set
+   `isw_field_type = 2` and `startmode = 2`.
+
+**Retirement gate**: `test/tests/test_bc_retirement.py` (SIMPLE#430) verifies
+that the chartmap and `booz_xform`-derived paths match the `.bc` result.
+Phase A (VMEC-chartmap proxy) already runs.  Phase B (EQDSK/.bc cross-path FP
+equality) is blocked on itpplasma/libneo#343, #344, #345; it skips gracefully
+until those converters land.
+
+**Non-goal**: `.bc` reading is not removed until the full floating-point gate
+(Phase B) is green.
+
 ---
 
 *Document last updated: 2025-12-29*
