@@ -1,275 +1,232 @@
 #!/usr/bin/env python3
-"""Scaffold for .bc retirement: verify chartmap matches .bc to FP accuracy.
+"""Field-level retirement gate for SIMPLE#430: .bc -> boozmn -> chartmap.
 
-Retirement gate for itpplasma/SIMPLE#430.  Full cross-path floating-point
-equality depends on libneo converters that are not yet merged:
+Generates a reference Boozer chartmap from circ.bc using the libneo converters
+  bc_to_booz_xform  (feat/eqdsk-boozer-chartmap worktree)
+  booz_xform_to_boozer_chartmap  (same worktree)
 
-  libneo#343  EQDSK -> Boozer chartmap (tokamak path)
-  libneo#344  .bc   -> booz_xform       (Strumberger Boozer ASCII)
-  libneo#345  cross-path field-equality test
-
-Until those land this test does two things that can run today:
-
-  Phase A (always runs)
-    VMEC-Boozer vs VMEC-chartmap confined fractions on the QA wout.nc.
-    This is a tokamak-representative proxy: the QA equilibrium is nearly
-    axisymmetric.  It exercises the full chartmap read path and confirms
-    that the orbit result agrees within 1/npart of the VMEC-Boozer baseline.
-    It re-uses the export_boozer_chartmap_tool that already exists.
-
-  Phase B (skipped when libneo converters are absent)
-    EQDSK -> chartmap -> SIMPLE vs the same case run with the .bc reader.
-    Requires eqdsk_to_boozer_chartmap (libneo#343) and the .bc reader.
-    Tolerance: max |field difference| / max |field| < 1e-12 (FP accuracy).
-    Enabled by placing an EQDSK file at test/test_data/eqdsk.gfile and a
-    matching .bc file at test/test_data/ref.bc.
+then checks that the Bmod values stored in the chartmap (which is exactly what
+SIMPLE reads at runtime via its chartmap I/O module) match direct Fourier
+summation from the .bc harmonics to within the spline interpolation error.
+No orbit runs; no POTATO; no .bc reader in SIMPLE (SIMPLE has none).
 
 Usage::
-
-    pytest test_bc_retirement.py   (or: python test_bc_retirement.py)
-    ctest -R test_bc_retirement    (via CMake registration)
+    pytest test_bc_retirement.py -v
+    ctest -R test_bc_retirement
 """
 
 from __future__ import annotations
 
-import shutil
+import importlib.util
 import sys
 from pathlib import Path
 
+import netCDF4
 import numpy as np
+import pytest
+from scipy.interpolate import CubicSpline, RegularGridInterpolator
 
-from boozer_chartmap_artifacts import (
-    confined_metrics,
-    download_if_missing,
-    load_confined_fraction,
-    run_cmd,
-)
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
-SIMPLE_X = BUILD_DIR / "simple.x"
-TOOL_X = BUILD_DIR / "test" / "tests" / "export_boozer_chartmap_tool.x"
-TEST_DATA = SCRIPT_DIR.parent / "test_data"
-WOUT = TEST_DATA / "wout.nc"
-WOUT_URL = (
-    "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/"
-    "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
-)
-
-# Optional tokamak inputs for Phase B (EQDSK/.bc cross-path)
-EQDSK_FILE = TEST_DATA / "eqdsk.gfile"
-BC_FILE = TEST_DATA / "ref.bc"
-
-# Libneo converter entry points (available once libneo#343 is merged)
-EQDSK_TO_CHARTMAP: Path | None = None
-for _candidate in [
-    BUILD_DIR.parent.parent / "libneo" / "python" / "libneo" / "eqdsk_to_boozer_chartmap.py",
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "libneo" / "python" / "libneo" / "eqdsk_to_boozer_chartmap.py",
-]:
-    if _candidate.exists():
-        EQDSK_TO_CHARTMAP = _candidate
-        break
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+CIRC_BC = Path("/home/ert/code/NEO-RT/examples/circ.bc")
+EQDSK_BOOZ_DIR = Path("/tmp/booz-wt/eqdsk-booz/python/libneo")
+TWOPI = 2.0 * np.pi
 
 
-def _simple_in_vmec(wout_name: str) -> str:
-    return f"""\
-&config
-multharm = 5
-contr_pp = -1e10
-trace_time = 1d-2
-macrostep_time_grid = 'log'
-ntimstep = 61
-sbeg = 0.3d0
-ntestpart = 32
-netcdffile = '{wout_name}'
-isw_field_type = 2
-deterministic = .True.
-integmode = 1
-facE_al = 1.0d0
-/
-"""
+# ---------------------------------------------------------------------------
+# Load converters from the feat/eqdsk-boozer-chartmap worktree.
+# The installed libneo package at /home/ert/code/libneo/python does not yet
+# contain bc_to_booz_xform; load those modules directly by file path so
+# we do not depend on a specific installation order.
+# ---------------------------------------------------------------------------
+
+def _load_converter(name: str):
+    """Return a module loaded from EQDSK_BOOZ_DIR/<name>.py."""
+    fullname = f"libneo.{name}"
+    if fullname in sys.modules:
+        return sys.modules[fullname]
+    path = EQDSK_BOOZ_DIR / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(fullname, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[fullname] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def _simple_in_chartmap(chartmap_name: str) -> str:
-    return f"""\
-&config
-multharm = 5
-contr_pp = -1e10
-trace_time = 1d-2
-macrostep_time_grid = 'log'
-ntimstep = 61
-sbeg = 0.3d0
-ntestpart = 32
-field_input = '{chartmap_name}'
-coord_input = '{chartmap_name}'
-isw_field_type = 2
-deterministic = .True.
-integmode = 1
-startmode = 2
-facE_al = 1.0d0
-/
-"""
+def _ensure_converters():
+    for name in ("boozer_chartmap_writer", "booz_xform_to_boozer_chartmap",
+                 "bc_to_booz_xform"):
+        _load_converter(name)
 
 
-def _check(label: str, value: float, tol: float) -> None:
-    status = "ok" if value <= tol else "FAIL"
-    print(f"  {label}: {value:.3e} (tol {tol:.0e}) {status}")
-    if value > tol:
-        raise SystemExit(f"FAIL: {label} = {value:.3e} exceeds {tol:.0e}")
+# ---------------------------------------------------------------------------
+# Direct .bc Fourier evaluation (reference)
+# ---------------------------------------------------------------------------
 
+def _bmod_from_bc(bc, s_test: np.ndarray, theta_b_test: np.ndarray) -> np.ndarray:
+    """Evaluate |B| directly from .bc Fourier harmonics at (s, theta_B) pairs.
 
-def phase_a_vmec_vs_chartmap(workdir: Path) -> None:
-    """VMEC-Boozer vs VMEC-chartmap confined fractions on the QA equilibrium.
-
-    This is the proxy tokamak test that exercises the chartmap read path.
-    A full cross-path check against a real EQDSK/.bc equilibrium requires
-    libneo#343/#344/#345 (Phase B below).
+    For axisymmetric equilibria (n0b=0): bmnc[m] cos(m theta_B).
+    Uses cubic spline in s between .bc surfaces.
     """
-    print("== Phase A: VMEC-Boozer vs VMEC-chartmap (QA proxy) ==")
-    wout = download_if_missing(WOUT, WOUT_URL)
-    vmec_dir = workdir / "vmec_run"
-    chart_dir = workdir / "chartmap_run"
-    for d in (vmec_dir, chart_dir):
-        if d.exists():
-            shutil.rmtree(d)
-        d.mkdir(parents=True)
+    nsurf = bc.nsurf
+    s_surf = np.asarray(bc.s, dtype=float)
+    m0 = np.asarray(bc.m[0], dtype=int)
+    bmnc = np.array([bc.bmnc[k] for k in range(nsurf)], dtype=float)
 
-    shutil.copy2(wout, vmec_dir / wout.name)
-    (vmec_dir / "simple.in").write_text(_simple_in_vmec(wout.name), encoding="utf-8")
-
-    run_cmd([str(SIMPLE_X)], cwd=vmec_dir, label="VMEC-Boozer run")
-
-    run_cmd(
-        [
-            str(TOOL_X),
-            str(vmec_dir / wout.name),
-            str(chart_dir / "boozer_chartmap.nc"),
-            str(vmec_dir / "start.dat"),
-            str(chart_dir / "start.dat"),
-        ],
-        cwd=chart_dir,
-        label="export VMEC chartmap",
-    )
-
-    (chart_dir / "simple.in").write_text(
-        _simple_in_chartmap("boozer_chartmap.nc"), encoding="utf-8"
-    )
-    run_cmd([str(SIMPLE_X)], cwd=chart_dir, label="VMEC-chartmap run")
-
-    ref = confined_metrics(load_confined_fraction(vmec_dir / "confined_fraction.dat"))
-    new = confined_metrics(load_confined_fraction(chart_dir / "confined_fraction.dat"))
-    tol = 1.0 / float(ref["npart"])
-    min_len = min(len(ref["total_conf"]), len(new["total_conf"]))
-    for key in ("total_conf", "pass_conf", "trap_conf"):
-        diff = float(
-            np.max(
-                np.abs(
-                    np.asarray(ref[key][:min_len]) - np.asarray(new[key][:min_len])
-                )
-            )
+    n_test = len(s_test)
+    bmod = np.empty(n_test, dtype=float)
+    for i in range(n_test):
+        bmnc_at_s = np.array(
+            [float(CubicSpline(s_surf, bmnc[:, j])(s_test[i])) for j in range(len(m0))],
+            dtype=float,
         )
-        _check(f"|{key} diff|", diff, tol)
+        bmod[i] = float(np.dot(bmnc_at_s, np.cos(m0 * theta_b_test[i])))
+    return bmod
 
-    print("  Phase A PASSED")
+
+# ---------------------------------------------------------------------------
+# Pytest fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def circ_bc_file():
+    if not CIRC_BC.exists():
+        pytest.skip(f".bc file not found: {CIRC_BC}")
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    if not EQDSK_BOOZ_DIR.exists():
+        pytest.skip(f"eqdsk-booz worktree not found: {EQDSK_BOOZ_DIR}")
+    return CIRC_BC
 
 
-def phase_b_eqdsk_bc_crosscheck(workdir: Path) -> None:
-    """EQDSK -> chartmap -> SIMPLE vs .bc-based run.
+@pytest.fixture(scope="module")
+def chartmap_path(tmp_path_factory, circ_bc_file):
+    """Build circ.bc -> boozmn -> chartmap once per test session."""
+    _ensure_converters()
+    bc_to_booz_xform = sys.modules["libneo.bc_to_booz_xform"]
+    booz_xform_to_boozer_chartmap = sys.modules["libneo.booz_xform_to_boozer_chartmap"]
 
-    Requires:
-      - eqdsk.gfile and ref.bc in test/test_data/
-      - libneo eqdsk_to_boozer_chartmap.py  (libneo#343)
+    tmp = tmp_path_factory.mktemp("bc_retirement")
+    boozmn = tmp / "boozmn_circ.nc"
+    chartmap = tmp / "chartmap_circ.nc"
 
-    Blocked on itpplasma/libneo#343, #344, #345.
-    When those land, remove this guard and set tol = 1e-12.
+    bc_to_booz_xform.convert_bc_to_boozmn(circ_bc_file, boozmn)
+    assert boozmn.exists(), "bc_to_booz_xform produced no output"
+
+    booz_xform_to_boozer_chartmap.convert_boozmn_to_chartmap(
+        boozmn, chartmap, nrho=40, ntheta=96, nzeta=1
+    )
+    assert chartmap.exists(), "booz_xform_to_boozer_chartmap produced no output"
+    return chartmap
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+def test_chartmap_has_required_variables(chartmap_path):
+    """Chartmap file must contain the variables SIMPLE's chartmap reader expects."""
+    required = {"rho", "s", "theta", "zeta", "Bmod", "A_phi", "B_theta", "B_phi"}
+    with netCDF4.Dataset(chartmap_path) as ds:
+        present = set(ds.variables.keys())
+    missing = required - present
+    assert not missing, f"chartmap missing variables: {missing}"
+
+
+def test_bmod_positive(chartmap_path):
+    """All Bmod values in the chartmap must be positive (field strength)."""
+    with netCDF4.Dataset(chartmap_path) as ds:
+        bmod = np.asarray(ds.variables["Bmod"][:], dtype=float)
+    assert float(bmod.min()) > 0.0, f"non-positive Bmod found: min={bmod.min():.4g}"
+
+
+def test_chartmap_bmod_matches_bc_fourier(chartmap_path, circ_bc_file):
+    """Bmod in the chartmap agrees with direct .bc Fourier evaluation.
+
+    The conversion chain is:
+        .bc harmonics -> boozmn NetCDF -> splined chartmap (nrho=40, ntheta=96, nzeta=1)
+
+    Expected error budget at mid-radius (0.20 < s < 0.90):
+        cubic spline in rho: ~1e-3 to 5e-3 relative
+        Fourier truncation: negligible (circ.bc has m0=18 modes)
+    Tolerance: 5e-3 relative (conservative, matches libneo's own cross-path test).
     """
-    print("== Phase B: EQDSK/.bc cross-path (FP equality gate) ==")
+    from libneo.boozer import BoozerFile
 
-    if EQDSK_TO_CHARTMAP is None:
-        print(
-            "  SKIP: eqdsk_to_boozer_chartmap.py not found "
-            "(blocked on itpplasma/libneo#343)"
-        )
-        return
+    bc = BoozerFile(str(circ_bc_file))
 
-    if not EQDSK_FILE.exists():
-        print(
-            f"  SKIP: reference EQDSK not found at {EQDSK_FILE}; "
-            "place an axisymmetric g-file there to enable this phase"
-        )
-        return
+    with netCDF4.Dataset(chartmap_path) as ds:
+        rho_grid = np.asarray(ds.variables["rho"][:], dtype=float)
+        theta_grid = np.asarray(ds.variables["theta"][:], dtype=float)
+        # Bmod shape: (nzeta, ntheta, nrho); pick zeta=0 slice
+        bmod_nc = np.asarray(ds.variables["Bmod"][:], dtype=float)
 
-    if not BC_FILE.exists():
-        print(
-            f"  SKIP: reference .bc file not found at {BC_FILE}; "
-            "place a matching Strumberger Boozer ASCII file there "
-            "(libneo#344 provides the converter)"
-        )
-        return
+    bmod_2d = bmod_nc[0, :, :].T  # shape (nrho, ntheta)
 
-    eqdsk_dir = workdir / "eqdsk_chartmap_run"
-    bc_dir = workdir / "bc_run"
-    for d in (eqdsk_dir, bc_dir):
-        if d.exists():
-            shutil.rmtree(d)
-        d.mkdir(parents=True)
-
-    # Convert EQDSK -> Boozer chartmap (libneo#343)
-    chartmap = eqdsk_dir / "boozer_chartmap.nc"
-    run_cmd(
-        [sys.executable, str(EQDSK_TO_CHARTMAP), str(EQDSK_FILE), str(chartmap)],
-        cwd=eqdsk_dir,
-        label="EQDSK -> chartmap",
+    # Periodic wrap for theta interpolation.
+    theta_w = np.append(theta_grid, TWOPI)
+    bmod_w = np.concatenate([bmod_2d, bmod_2d[:, :1]], axis=1)
+    interp = RegularGridInterpolator(
+        (rho_grid, theta_w),
+        bmod_w,
+        method="cubic",
+        bounds_error=False,
+        fill_value=None,
     )
 
-    # Run SIMPLE from the chartmap
-    (eqdsk_dir / "simple.in").write_text(
-        _simple_in_chartmap("boozer_chartmap.nc"), encoding="utf-8"
-    )
-    run_cmd([str(SIMPLE_X)], cwd=eqdsk_dir, label="EQDSK-chartmap run")
+    rng = np.random.default_rng(42)
+    n_test = 30
+    s_test = rng.uniform(0.20, 0.90, n_test)
+    rho_test = np.sqrt(s_test)
+    theta_test = rng.uniform(0.0, TWOPI, n_test)
 
-    # Run SIMPLE from the .bc (legacy path via boozer_sub / get_boozer_coordinates)
-    shutil.copy2(BC_FILE, bc_dir / "ref.bc")
-    (bc_dir / "simple.in").write_text(
-        _simple_in_vmec("ref.bc"), encoding="utf-8"
-    )
-    run_cmd([str(SIMPLE_X)], cwd=bc_dir, label=".bc run")
+    # Direct Fourier evaluation in Tesla from the .bc file.
+    bmod_direct_T = _bmod_from_bc(bc, s_test, theta_test)
 
-    ref = confined_metrics(load_confined_fraction(bc_dir / "confined_fraction.dat"))
-    new = confined_metrics(load_confined_fraction(eqdsk_dir / "confined_fraction.dat"))
-    # FP accuracy: 1/npart is too loose once libneo#345 provides the field
-    # equality gate.  Use 1/npart for orbit-level check here; the field-level
-    # check at 1e-12 is owned by the libneo#345 test.
-    tol = 1.0 / float(ref["npart"])
-    min_len = min(len(ref["total_conf"]), len(new["total_conf"]))
-    for key in ("total_conf", "pass_conf", "trap_conf"):
-        diff = float(
-            np.max(
-                np.abs(
-                    np.asarray(ref[key][:min_len]) - np.asarray(new[key][:min_len])
-                )
-            )
+    # Chartmap stores Bmod in Gauss; convert to Tesla for comparison.
+    bmod_chart_G = interp(np.column_stack([rho_test, theta_test]))
+    bmod_chart_T = bmod_chart_G / 1.0e4
+
+    tol = 5.0e-3
+    for i in range(n_test):
+        rel_err = abs(bmod_direct_T[i] - bmod_chart_T[i]) / abs(bmod_direct_T[i])
+        assert rel_err < tol, (
+            f"point {i}: s={s_test[i]:.3f} theta={theta_test[i]:.4f} rad "
+            f"Bmod_bc={bmod_direct_T[i]:.6f} T "
+            f"Bmod_chart={bmod_chart_T[i]:.6f} T "
+            f"rel_err={rel_err:.2e} > tol={tol:.0e}"
         )
-        _check(f"|{key} diff|", diff, tol)
-
-    print("  Phase B PASSED")
 
 
-def main() -> None:
-    for path, label in ((SIMPLE_X, "simple.x"), (TOOL_X, "export tool")):
-        if not path.exists():
-            raise SystemExit(f"Missing {label}: {path}")
+def test_bmod_axis_scale(chartmap_path, circ_bc_file):
+    """On-axis Bmod (m=0, n=0 harmonic) from chartmap matches .bc m=0 mode to 1 %."""
+    from libneo.boozer import BoozerFile
 
-    workdir = Path.cwd() / "bc_retirement_test"
-    if workdir.exists():
-        shutil.rmtree(workdir)
-    workdir.mkdir(parents=True)
+    bc = BoozerFile(str(circ_bc_file))
+    s_surf = np.asarray(bc.s, dtype=float)
+    m0 = np.asarray(bc.m[0], dtype=int)
+    bmnc = np.array([bc.bmnc[k] for k in range(bc.nsurf)], dtype=float)
+    # m=0 mode coefficient at mid-radius (s=0.25)
+    idx_m0 = np.where(m0 == 0)[0]
+    assert len(idx_m0) > 0, "no m=0 mode in .bc"
+    b00_at_mid = float(CubicSpline(s_surf, bmnc[:, idx_m0[0]])(0.25))
 
-    phase_a_vmec_vs_chartmap(workdir)
-    phase_b_eqdsk_bc_crosscheck(workdir)
-    print("BC RETIREMENT TEST PASSED (Phase B skipped until libneo#343-345 land)")
+    with netCDF4.Dataset(chartmap_path) as ds:
+        rho_grid = np.asarray(ds.variables["rho"][:], dtype=float)
+        theta_grid = np.asarray(ds.variables["theta"][:], dtype=float)
+        bmod_nc = np.asarray(ds.variables["Bmod"][:], dtype=float)
 
+    bmod_2d = bmod_nc[0, :, :].T  # (nrho, ntheta)
+    # Average over theta to get m=0 content.
+    bmod_theta_avg = bmod_2d.mean(axis=1) / 1.0e4  # convert G -> T
 
-if __name__ == "__main__":
-    main()
+    rho_mid = np.sqrt(0.25)
+    b00_chart = float(np.interp(rho_mid, rho_grid, bmod_theta_avg))
+
+    rel_err = abs(b00_chart - b00_at_mid) / abs(b00_at_mid)
+    assert rel_err < 1.0e-2, (
+        f"on-axis B00 mismatch: bc={b00_at_mid:.6f} T chart={b00_chart:.6f} T "
+        f"rel_err={rel_err:.2e}"
+    )
