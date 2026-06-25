@@ -93,9 +93,10 @@ def test_chartmap_bmod_matches_bc_fourier():
         .bc harmonics -> boozmn NetCDF -> splined chartmap (nrho=40, ntheta=96, nzeta=1)
 
     Expected error budget at mid-radius (0.20 < s < 0.90):
-        cubic spline in rho: ~1e-3 to 5e-3 relative
-        Fourier truncation: negligible (circ.bc has m0=18 modes)
-    Tolerance: 5e-3 relative.
+        cubic spline in rho + Fourier truncation: < 1e-4 relative
+        (fixture regenerated with the radial-grid-aligned bc_to_booz_xform,
+        libneo PR #347; bc.s lands exactly on the booz_xform half-grid)
+    Tolerance: 1e-4 relative.
     """
     pytest.importorskip("libneo")
     assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
@@ -133,7 +134,7 @@ def test_chartmap_bmod_matches_bc_fourier():
     bmod_chart_G = interp(np.column_stack([rho_test, theta_test]))
     bmod_chart_T = bmod_chart_G / 1.0e4
 
-    tol = 5.0e-3
+    tol = 1.0e-4
     for i in range(n_test):
         rel_err = abs(bmod_direct_T[i] - bmod_chart_T[i]) / abs(bmod_direct_T[i])
         assert rel_err < tol, (
