@@ -94,6 +94,7 @@ def test_chartmap_bmod_matches_bc_fourier():
         Fourier truncation: negligible (circ.bc has m0=18 modes)
     Tolerance: 5e-3 relative.
     """
+    pytest.importorskip("libneo")
     pytest.importorskip("netCDF4")
     pytest.importorskip("scipy")
     assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
@@ -144,6 +145,7 @@ def test_chartmap_bmod_matches_bc_fourier():
 
 def test_bmod_axis_scale():
     """On-axis Bmod (m=0 harmonic) from chartmap matches .bc m=0 mode to 1%."""
+    pytest.importorskip("libneo")
     pytest.importorskip("netCDF4")
     pytest.importorskip("scipy")
     assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
