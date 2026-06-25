@@ -157,7 +157,10 @@ compare_cases() {
             # fast_class regression fix the small classifier_fast test loses
             # zero particles, so neither ref nor cur write the file and the
             # comparator's "missing" check spuriously fails.
-            CLASSIFIER_FILES="class_parts.dat confined_fraction.dat healaxis.dat start.dat times_lost.dat"
+            # healaxis.dat is excluded because the axis-healing diagnostic is no
+            # longer written (dropped in the near-axis healing work / #331), so it
+            # is always missing and the comparator spuriously fails.
+            CLASSIFIER_FILES="class_parts.dat confined_fraction.dat start.dat times_lost.dat"
             
             # Run multi-file comparison
             python "$SCRIPT_DIR/compare_files_multi.py" \

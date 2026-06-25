@@ -115,7 +115,6 @@ contains
         call cleanup_meiss()
     end subroutine test_meiss_roundtrip
 
-
     subroutine test_meiss_s_r_conversion(n_failed)
         !> Verify the s <-> r = sqrt(s) scaling is applied correctly.
         integer, intent(inout) :: n_failed
@@ -159,7 +158,6 @@ contains
             print *, '    PASSED: s=0.81 -> r=0.9 conversion correct'
         end if
     end subroutine test_meiss_s_r_conversion
-
 
     subroutine test_albert_roundtrip(n_failed)
         !> Albert coordinates use spline interpolation for the psi <-> r mapping:

@@ -1,0 +1,287 @@
+module orbit_rk_core
+  ! Device-callable shared core for the implicit Gauss-collocation step used by
+  ! the guiding-center (GC) integrator. No procedure pointers and no class()
+  ! polymorphism in the hot path: the residual/Jacobian/Newton kernels are
+  ! inlinable !$acc routine seq routines, the way orbit_symplectic_euler1
+  ! already shares the symplectic-Euler residual/Jacobian/Newton between the
+  ! CPU integrator and the OpenACC GPU kernel.
+  !
+  ! The arithmetic is lifted byte-identically from the former f_rk_gauss /
+  ! jac_rk_gauss bodies in orbit_symplectic. coeff_rk_gauss stays in
+  ! orbit_symplectic_base (plain data) and is called inside the kernels. The
+  ! Newton shell here uses the device LU solve rk_solve; the GC CPU path keeps
+  ! dgesv in orbit_symplectic for byte-identical results.
+  use, intrinsic :: iso_fortran_env, only: dp => real64
+  use util, only: twopi
+  use field_can_mod, only: field_can_t, get_derivatives2, eval_field => evaluate
+  use orbit_symplectic_base, only: symplectic_integrator_t, coeff_rk_gauss
+
+  implicit none
+  private
+
+  ! Model code kept as a named constant for the residual/Jacobian/Newton
+  ! signatures so the GC caller in orbit_symplectic reads explicitly. Only the
+  ! GC kernel exists here; the CPP and symplectic full-orbit models were shelved.
+  integer, parameter, public :: MODEL_GC = 0
+
+  public :: rk_gauss_residual, rk_gauss_jacobian, rk_gauss_newton, rk_solve
+
+contains
+
+  ! GC Gauss residual: the field-canonical degenerate-Lagrangian residual.
+  subroutine rk_gauss_residual(model, si, fs, s, x, fvec)
+    !$acc routine seq
+    integer, intent(in) :: model
+    type(symplectic_integrator_t), intent(inout) :: si
+    integer, intent(in) :: s
+    type(field_can_t), intent(inout) :: fs(:)
+    real(dp), intent(in) :: x(4*s)
+    real(dp), intent(out) :: fvec(4*s)
+
+    call gauss_canfield_residual(si, fs, s, x, fvec)
+  end subroutine rk_gauss_residual
+
+  ! GC Gauss Jacobian, analytic from the 2nd derivatives of field_can_t.
+  subroutine rk_gauss_jacobian(model, si, fs, s, jac)
+    !$acc routine seq
+    integer, intent(in) :: model
+    type(symplectic_integrator_t), intent(in) :: si
+    integer, intent(in) :: s
+    type(field_can_t), intent(in) :: fs(:)
+    real(dp), intent(out) :: jac(4*s, 4*s)
+
+    call gauss_canfield_jacobian(si, fs, s, jac)
+  end subroutine rk_gauss_jacobian
+
+  ! Concrete residual kernel: layout x(4*k-3:4*k) = (r,theta,phi,pphi) per stage.
+  ! Body lifted verbatim from f_rk_gauss.
+  subroutine gauss_canfield_residual(si, fs, s, x, fvec)
+    !$acc routine seq
+    type(symplectic_integrator_t), intent(inout) :: si
+    integer, intent(in) :: s
+    type(field_can_t), intent(inout) :: fs(:)
+    real(dp), intent(in) :: x(4*s)
+    real(dp), intent(out) :: fvec(4*s)
+
+    real(dp) :: a(s,s), b(s), c(s), Hprime(s)
+    integer :: k, l
+
+    call coeff_rk_gauss(s, a, b, c)
+
+    do k = 1, s
+      call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 2)
+      call get_derivatives2(fs(k), x(4*k))
+      Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
+    end do
+
+    do k = 1, s
+      fvec(4*k-3) = fs(k)%pth - si%pthold
+      fvec(4*k-2) = x(4*k-2)  - si%z(2)
+      fvec(4*k-1) = x(4*k-1)  - si%z(3)
+      fvec(4*k)   = x(4*k)    - si%z(4)
+      do l = 1, s
+        fvec(4*k-3) = fvec(4*k-3) + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
+        fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                      ! thdot
+        fvec(4*k-1) = fvec(4*k-1) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
+        fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
+      end do
+    end do
+  end subroutine gauss_canfield_residual
+
+  ! Concrete Jacobian kernel. Body lifted verbatim from jac_rk_gauss.
+  subroutine gauss_canfield_jacobian(si, fs, s, jac)
+    !$acc routine seq
+    type(symplectic_integrator_t), intent(in) :: si
+    integer, intent(in) :: s
+    type(field_can_t), intent(in) :: fs(:)
+    real(dp), intent(out) :: jac(4*s, 4*s)
+
+    real(dp) :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
+    integer :: k, l, m
+
+    call coeff_rk_gauss(s, a, b, c)
+
+    do k = 1, s
+      m = 4*k
+      Hprime(k)    = fs(k)%dH(1)/fs(k)%dpth(1)
+      dHprime(m-3) = (fs(k)%d2H(1) - Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
+      dHprime(m-2) = (fs(k)%d2H(2) - Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
+      dHprime(m-1) = (fs(k)%d2H(3) - Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
+      dHprime(m)   = (fs(k)%d2H(7) - Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph
+    end do
+
+    jac = 0d0
+
+    do k = 1, s
+      m = 4*k
+      jac(m-3, m-3) = fs(k)%dpth(1)
+      jac(m-3, m-2) = fs(k)%dpth(2)
+      jac(m-3, m-1) = fs(k)%dpth(3)
+      jac(m-3, m)   = fs(k)%dpth(4)
+      jac(m-2, m-2) = 1d0
+      jac(m-1, m-1) = 1d0
+      jac(m, m) = 1d0
+    end do
+
+    do l = 1, s
+      do k = 1, s
+          m = 4*k
+          jac(m-3, 4*l-3) = jac(m-3, 4*l-3) & ! d/dr
+            + si%dt*a(k,l)*(fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-3))
+          jac(m-3, 4*l-2) = jac(m-3, 4*l-2) & ! d/dth
+            + si%dt*a(k,l)*(fs(l)%d2H(4) - fs(l)%d2pth(4)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-2))
+          jac(m-3, 4*l-1) = jac(m-3, 4*l-1) & ! d/dph
+            + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-1))
+          jac(m-3, 4*l) = jac(m-3, 4*l) & ! d/dpph
+            + si%dt*a(k,l)*(fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l))
+
+        jac(m-2, 4*l-3)   = jac(m-2, 4*l-3)   - si%dt*a(k,l)*dHprime(4*l-3)   ! d/dr
+        jac(m-2, 4*l-2) = jac(m-2, 4*l-2) - si%dt*a(k,l)*dHprime(4*l-2) ! d/dth
+        jac(m-2, 4*l-1) = jac(m-2, 4*l-1) - si%dt*a(k,l)*dHprime(4*l-1) ! d/dph
+        jac(m-2, 4*l) = jac(m-2, 4*l) - si%dt*a(k,l)*dHprime(4*l) ! d/dpph
+
+        jac(m-1, 4*l-3) = jac(m-1, 4*l-3) & ! d/dr
+          - si%dt*a(k,l)*(-fs(l)%dhph(1)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
+            + (fs(l)%dvpar(1) - dHprime(4*l-3)*fs(l)%hth - Hprime(l)*fs(l)%dhth(1))/fs(l)%hph)
+        jac(m-1, 4*l-2) = jac(m-1, 4*l-2) & ! d/dth
+          - si%dt*a(k,l)*(-fs(l)%dhph(2)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
+            + (fs(l)%dvpar(2) - dHprime(4*l-2)*fs(l)%hth - Hprime(l)*fs(l)%dhth(2))/fs(l)%hph)
+        jac(m-1, 4*l-1) = jac(m-1, 4*l-1) & ! d/dph
+          - si%dt*a(k,l)*(-fs(l)%dhph(3)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
+            + (fs(l)%dvpar(3) - dHprime(4*l-1)*fs(l)%hth - Hprime(l)*fs(l)%dhth(3))/fs(l)%hph)
+        jac(m-1, 4*l) = jac(m-1, 4*l) & ! d/dpph
+          - si%dt*a(k,l)*((fs(l)%dvpar(4) - dHprime(4*l)*fs(l)%hth)/fs(l)%hph)
+
+        jac(m, 4*l-3) = jac(m, 4*l-3) & ! d/dr
+          + si%dt*a(k,l)*(fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-3))
+        jac(m, 4*l-2) = jac(m, 4*l-2) & ! d/dth
+          + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-2))
+        jac(m, 4*l-1) = jac(m, 4*l-1) & ! d/dph
+          + si%dt*a(k,l)*(fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-1))
+        jac(m, 4*l) = jac(m, 4*l) & ! d/dpph
+          + si%dt*a(k,l)*(fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l))
+      end do
+    end do
+  end subroutine gauss_canfield_jacobian
+
+  ! Device-portable dense LU solve A x = rhs with partial pivoting, in place on
+  ! rhs. n <= 4*S_MAX (n <= 16 for s <= 4). info = 0 on success, else the failing
+  ! pivot column. Replaces dgesv on the device; the GC CPU path keeps dgesv.
+  pure subroutine rk_solve(n, A, rhs, info)
+    !$acc routine seq
+    integer, intent(in) :: n
+    real(dp), intent(inout) :: A(n,n), rhs(n)
+    integer, intent(out) :: info
+    integer :: i, j, k, ipiv
+    real(dp) :: piv, amax, factor, tmp
+
+    info = 0
+    do k = 1, n
+      ipiv = k
+      amax = abs(A(k,k))
+      do i = k+1, n
+        if (abs(A(i,k)) > amax) then
+          amax = abs(A(i,k))
+          ipiv = i
+        end if
+      end do
+      ! Singular column: amax = max|A(i,k)| >= 0, so .not.(amax > 0) means the
+      ! whole pivot column is zero. Phrased this way to avoid a real-equality
+      ! comparison (-Wcompare-reals).
+      if (.not. (amax > 0d0)) then
+        info = k
+        return
+      end if
+      if (ipiv /= k) then
+        do j = 1, n
+          tmp = A(k,j); A(k,j) = A(ipiv,j); A(ipiv,j) = tmp
+        end do
+        tmp = rhs(k); rhs(k) = rhs(ipiv); rhs(ipiv) = tmp
+      end if
+      piv = A(k,k)
+      do i = k+1, n
+        factor = A(i,k)/piv
+        A(i,k) = factor
+        do j = k+1, n
+          A(i,j) = A(i,j) - factor*A(k,j)
+        end do
+        rhs(i) = rhs(i) - factor*rhs(k)
+      end do
+    end do
+
+    do i = n, 1, -1
+      tmp = rhs(i)
+      do j = i+1, n
+        tmp = tmp - A(i,j)*rhs(j)
+      end do
+      rhs(i) = tmp/A(i,i)
+    end do
+  end subroutine rk_solve
+
+  ! Device-callable Newton iteration for the Gauss step. Mirrors the
+  ! newton_rk_gauss control flow (atol/rtol/tolref, boundary guards, maxit) with
+  ! the device LU solver rk_solve in place of dgesv. No event counters here:
+  ! hit_maxit is returned so the CPU caller can record EVT_RK_GAUSS_MAXIT,
+  ! exactly as the GPU newton1 path omits fort.6601. Retained for the deferred
+  ! fortnum multiroot wiring; not yet called by the CPU GC Newton step.
+  subroutine rk_gauss_newton(model, si, fs, s, x, atol, rtol, maxit, xlast, &
+                             hit_maxit)
+    !$acc routine seq
+    integer, intent(in) :: model
+    type(symplectic_integrator_t), intent(inout) :: si
+    integer, intent(in) :: s
+    type(field_can_t), intent(inout) :: fs(:)
+    real(dp), intent(inout) :: x(4*s)
+    real(dp), intent(in) :: atol, rtol
+    integer, intent(in) :: maxit
+    real(dp), intent(out) :: xlast(4*s)
+    logical, intent(out) :: hit_maxit
+
+    real(dp) :: fvec(4*s), fjac(4*s, 4*s)
+    real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s)
+    integer :: kit, ks, info
+    logical :: conv
+
+    hit_maxit = .false.
+    do kit = 1, maxit
+
+      ! Check if radius left the boundary
+      do ks = 1, s
+        if (x(4*ks-3) > 1d0) return
+        ! Transient guard for intermediate iterates; the converged-negative
+        ! case is handled by the caller via a chart switch (#370).
+        if (x(4*ks-3) < 0.0d0) x(4*ks-3) = 0.01d0
+      end do
+
+      call rk_gauss_residual(model, si, fs, s, x, fvec)
+      call rk_gauss_jacobian(model, si, fs, s, fjac)
+      fabs = abs(fvec)
+      xlast = x
+      call rk_solve(4*s, fjac, fvec, info)
+      if (info /= 0) return
+      ! after solution: fvec = (xold-xnew)_Newton
+      x = x - fvec
+      xabs = abs(x - xlast)
+
+      do ks = 1, s
+        tolref(4*ks-3) = 1d0
+        tolref(4*ks-2) = twopi
+        tolref(4*ks-1) = twopi
+        tolref(4*ks)   = abs(xlast(4*ks))
+      end do
+
+      conv = .true.
+      do ks = 1, 4*s
+        if (fabs(ks) >= atol) conv = .false.
+      end do
+      if (conv) return
+      conv = .true.
+      do ks = 1, 4*s
+        if (xabs(ks) >= rtol*tolref(ks)) conv = .false.
+      end do
+      if (conv) return
+    end do
+    hit_maxit = .true.
+  end subroutine rk_gauss_newton
+
+end module orbit_rk_core

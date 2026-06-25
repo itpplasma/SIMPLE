@@ -2,7 +2,7 @@ module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
     use omp_lib
     use util, only: sqrt2
-    use simple, only: init_vmec, init_sympl, tracer_t
+    use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, tracer_t
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
@@ -19,7 +19,8 @@ module simple_main
 	                      wall_input, wall_units, wall_hit, wall_hit_cart, &
 	                      wall_hit_normal_cart, wall_hit_cos_incidence, &
 	                      wall_hit_angle_rad, ntau_macro, kt_macro, &
-	                      checkpoint_interval
+	                      checkpoint_interval, orbit_model, orbit_coord, &
+	                      ORBIT_GC, ORBIT_FULL_ORBIT
     use diag_counters, only: diag_counters_init
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
@@ -75,6 +76,7 @@ contains
 
         ! Must be called in this order. TODO: Fix
         call read_config(config_file)
+        call validate_orbit_model_config
         call print_phase_time('Configuration reading completed')
 
         call read_profiles_config(config_file)
@@ -169,6 +171,24 @@ contains
 
         call stl_wall_finalize(wall)
     end subroutine main
+
+    ! Reject orbit_model values this build does not implement, with a clear message,
+    ! before any tracing starts. Only guiding-center (the default symplectic path)
+    ! and full orbit (the gyro-resolved Boris pusher) are available here.
+    subroutine validate_orbit_model_config
+        select case (orbit_model)
+        case (ORBIT_GC)
+            continue
+        case (ORBIT_FULL_ORBIT)
+            if (orbit_coord /= 1) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT supports only orbit_coord=1 (Boozer)'
+            if (class_plot .or. fast_class) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT does not support orbit classification'
+        case default
+            error stop 'unsupported orbit_model (use 0 = guiding-center or '// &
+                '7 = full orbit)'
+        end select
+    end subroutine validate_orbit_model_config
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
@@ -790,12 +810,13 @@ contains
         real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
         real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
         real(dp) :: segment_length, hit_distance, t_frac
-        integer :: it, ierr_orbit, it_final
+        integer :: it, ierr_orbit, it_final, it_f
         integer(8) :: kt
-        logical :: passing
+        logical :: passing, faulted
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
+        faulted = .false.
 
         if (swcoll) call reset_seed_if_deterministic
 
@@ -817,7 +838,13 @@ contains
             x_prev_m = x_prev*chartmap_cart_scale_to_m
         end if
 
-        if (integmode > 0) then
+        if (orbit_model == ORBIT_FULL_ORBIT) then
+            if (wall_enabled) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT does not support wall loss yet'
+            if (swcoll) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT does not support collisions yet'
+            call init_fo(anorb%fo, z, dtaumin)
+        else if (integmode > 0) then
             call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
         end if
 
@@ -849,6 +876,18 @@ contains
 
             if (ierr_orbit .ne. 0) then
                 it_final = it
+                if (orbit_model == ORBIT_FULL_ORBIT .and. ierr_orbit == 3) then
+                    ! Last-resort full-orbit fallback: the Cartesian inversion could
+                    ! not resolve the position (near-axis below chartmap resolution,
+                    ! or a field-period seam) and orbit_timestep_fo already warned.
+                    ! This is NOT a physical loss -- the state is at the last resolved
+                    ! position. Count the marker confined for the rest of the trace
+                    ! so an unresolved step never registers as a lost particle.
+                    do it_f = it, ntimstep
+                        call increase_confined_count(it_f, passing)
+                    end do
+                    faulted = .true.
+                end if
                 exit
             end if
 
@@ -872,6 +911,7 @@ contains
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = kt*dtaumin/v0
+        if (faulted) times_lost(ipart) = trace_time   ! unresolved: confined, not lost
 !$omp end critical
     end subroutine trace_orbit
 
@@ -888,6 +928,12 @@ contains
         integer :: ktau
 
         do ktau = 1, ntau_local
+            if (orbit_model == ORBIT_FULL_ORBIT) then
+                call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
+                if (ierr_orbit .ne. 0) exit
+                kt = kt + 1
+                cycle
+            end if
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
             else

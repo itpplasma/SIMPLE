@@ -3,6 +3,9 @@ module params
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
+                                  axis_healing_power_law, rho_axis_heal, &
+                                  axis_healing, s_axis_heal, &
+                                  axis_healing_polyfit_degree, &
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
@@ -49,6 +52,18 @@ module params
     ! Opt-in; default off keeps the flux-chart floor+reflection behaviour.
     logical :: axis_pcart = .False.
     real(dp) :: axis_pcart_smax = 0.01d0
+
+    ! Orbit model selector. 0 = guiding-center (GC), the default symplectic
+    ! gyro-averaged path. 7 = full orbit (FO), the gyro-resolved Boris pusher in
+    ! Cartesian on the Boozer/chartmap chart, the ASCOT-style counterpart to GC.
+    ! Values 1-6 are reserved for other models.
+    integer, parameter :: ORBIT_GC = 0
+    integer, parameter :: ORBIT_FULL_ORBIT = 7
+    integer :: orbit_model = ORBIT_GC
+
+    ! Chart for the full-orbit field+geometry: full orbit currently supports only
+    ! orbit_coord = 1 (Boozer/chartmap), which shares the production GC field.
+    integer :: orbit_coord = 0
 
     integer :: kpart = 0 ! progress counter for particles
 
@@ -114,10 +129,13 @@ module params
 	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
-	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
+	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-	        old_axis_healing_boundary, am1, am2, Z1, Z2, &
+	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
+	        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
+	        am1, am2, Z1, Z2, &
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, output_results_netcdf, &
