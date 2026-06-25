@@ -43,7 +43,7 @@ def main():
     parser.add_argument("--ntheta", type=int, default=36)
     parser.add_argument("--nphi", type=int, default=81)
     parser.add_argument("--boozer-factor", type=int, default=1)
-    parser.add_argument("--Bcov", choices=["avg", "boozer-avg", "boozer-0"], default="avg", help="Method for computing B_theta and B_phi surface functions.")
+    parser.add_argument("--Bcov", choices=["avg", "boozer-avg", "boozer-0"], default="boozer-avg", help="Method for computing B_theta and B_phi surface functions.")
     parser.add_argument(
         "--flip",
         choices=["pol", "tor"],
