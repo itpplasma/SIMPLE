@@ -43,6 +43,9 @@ test/test_data/*
 !test/test_data/simple.volume.in
 !test/test_data/figure8/
 !test/test_data/figure8/*
+!test/test_data/circ.bc
+!test/test_data/boozmn_circ.nc
+!test/test_data/chartmap_circ.nc
 *.geany
 examples/test1/
 examples/test2/

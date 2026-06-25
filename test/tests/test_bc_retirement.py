@@ -1,24 +1,23 @@
-#!/usr/bin/env python3
 """Field-level retirement gate for SIMPLE#430: .bc -> boozmn -> chartmap.
 
-Generates a reference Boozer chartmap from circ.bc using the libneo converters
-  bc_to_booz_xform  (feat/eqdsk-boozer-chartmap worktree)
-  booz_xform_to_boozer_chartmap  (same worktree)
+Validates that the pre-generated Boozer chartmap (committed as a test fixture)
+contains the variables SIMPLE's chartmap reader expects and that Bmod values
+agree with direct Fourier summation from the .bc harmonics.
 
-then checks that the Bmod values stored in the chartmap (which is exactly what
-SIMPLE reads at runtime via its chartmap I/O module) match direct Fourier
-summation from the .bc harmonics to within the spline interpolation error.
-No orbit runs; no POTATO; no .bc reader in SIMPLE (SIMPLE has none).
+Fixture files committed at test/test_data/:
+  circ.bc            -- Strumberger Boozer .bc file (axisymmetric tokamak)
+  boozmn_circ.nc     -- booz_xform-format NetCDF generated from circ.bc via
+                        libneo bc_to_booz_xform (feat/eqdsk-boozer-chartmap,
+                        merged into libneo main as PR #343-345)
+  chartmap_circ.nc   -- Boozer chartmap for SIMPLE generated from boozmn_circ.nc
+                        via libneo booz_xform_to_boozer_chartmap (nrho=40,
+                        ntheta=96, nzeta=1)
 
-Usage::
-    pytest test_bc_retirement.py -v
-    ctest -R test_bc_retirement
+No orbit runs; no POTATO; no libneo converters required at test time.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import netCDF4
@@ -27,37 +26,14 @@ import pytest
 from scipy.interpolate import CubicSpline, RegularGridInterpolator
 
 # ---------------------------------------------------------------------------
-# Paths
+# Fixture paths: committed into the repo, no external dependencies.
 # ---------------------------------------------------------------------------
-CIRC_BC = Path("/home/ert/code/NEO-RT/examples/circ.bc")
-EQDSK_BOOZ_DIR = Path("/tmp/booz-wt/eqdsk-booz/python/libneo")
+_TEST_DATA = Path(__file__).resolve().parents[1] / "test_data"
+CIRC_BC = _TEST_DATA / "circ.bc"
+BOOZMN_NC = _TEST_DATA / "boozmn_circ.nc"
+CHARTMAP_NC = _TEST_DATA / "chartmap_circ.nc"
+
 TWOPI = 2.0 * np.pi
-
-
-# ---------------------------------------------------------------------------
-# Load converters from the feat/eqdsk-boozer-chartmap worktree.
-# The installed libneo package at /home/ert/code/libneo/python does not yet
-# contain bc_to_booz_xform; load those modules directly by file path so
-# we do not depend on a specific installation order.
-# ---------------------------------------------------------------------------
-
-def _load_converter(name: str):
-    """Return a module loaded from EQDSK_BOOZ_DIR/<name>.py."""
-    fullname = f"libneo.{name}"
-    if fullname in sys.modules:
-        return sys.modules[fullname]
-    path = EQDSK_BOOZ_DIR / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(fullname, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[fullname] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _ensure_converters():
-    for name in ("boozer_chartmap_writer", "booz_xform_to_boozer_chartmap",
-                 "bc_to_booz_xform"):
-        _load_converter(name)
 
 
 # ---------------------------------------------------------------------------
@@ -65,10 +41,9 @@ def _ensure_converters():
 # ---------------------------------------------------------------------------
 
 def _bmod_from_bc(bc, s_test: np.ndarray, theta_b_test: np.ndarray) -> np.ndarray:
-    """Evaluate |B| directly from .bc Fourier harmonics at (s, theta_B) pairs.
+    """Evaluate |B| from .bc Fourier harmonics at (s, theta_B) pairs.
 
-    For axisymmetric equilibria (n0b=0): bmnc[m] cos(m theta_B).
-    Uses cubic spline in s between .bc surfaces.
+    Axisymmetric: bmnc[m] * cos(m * theta_B).  Spline in s between surfaces.
     """
     nsurf = bc.nsurf
     s_surf = np.asarray(bc.s, dtype=float)
@@ -87,85 +62,53 @@ def _bmod_from_bc(bc, s_test: np.ndarray, theta_b_test: np.ndarray) -> np.ndarra
 
 
 # ---------------------------------------------------------------------------
-# Pytest fixtures
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def circ_bc_file():
-    if not CIRC_BC.exists():
-        pytest.skip(f".bc file not found: {CIRC_BC}")
-    pytest.importorskip("netCDF4")
-    pytest.importorskip("scipy")
-    if not EQDSK_BOOZ_DIR.exists():
-        pytest.skip(f"eqdsk-booz worktree not found: {EQDSK_BOOZ_DIR}")
-    return CIRC_BC
-
-
-@pytest.fixture(scope="module")
-def chartmap_path(tmp_path_factory, circ_bc_file):
-    """Build circ.bc -> boozmn -> chartmap once per test session."""
-    _ensure_converters()
-    bc_to_booz_xform = sys.modules["libneo.bc_to_booz_xform"]
-    booz_xform_to_boozer_chartmap = sys.modules["libneo.booz_xform_to_boozer_chartmap"]
-
-    tmp = tmp_path_factory.mktemp("bc_retirement")
-    boozmn = tmp / "boozmn_circ.nc"
-    chartmap = tmp / "chartmap_circ.nc"
-
-    bc_to_booz_xform.convert_bc_to_boozmn(circ_bc_file, boozmn)
-    assert boozmn.exists(), "bc_to_booz_xform produced no output"
-
-    booz_xform_to_boozer_chartmap.convert_boozmn_to_chartmap(
-        boozmn, chartmap, nrho=40, ntheta=96, nzeta=1
-    )
-    assert chartmap.exists(), "booz_xform_to_boozer_chartmap produced no output"
-    return chartmap
-
-
-# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_chartmap_has_required_variables(chartmap_path):
+def test_chartmap_has_required_variables():
     """Chartmap file must contain the variables SIMPLE's chartmap reader expects."""
+    assert CHARTMAP_NC.exists(), f"committed fixture missing: {CHARTMAP_NC}"
     required = {"rho", "s", "theta", "zeta", "Bmod", "A_phi", "B_theta", "B_phi"}
-    with netCDF4.Dataset(chartmap_path) as ds:
+    with netCDF4.Dataset(CHARTMAP_NC) as ds:
         present = set(ds.variables.keys())
     missing = required - present
     assert not missing, f"chartmap missing variables: {missing}"
 
 
-def test_bmod_positive(chartmap_path):
+def test_bmod_positive():
     """All Bmod values in the chartmap must be positive (field strength)."""
-    with netCDF4.Dataset(chartmap_path) as ds:
+    assert CHARTMAP_NC.exists(), f"committed fixture missing: {CHARTMAP_NC}"
+    with netCDF4.Dataset(CHARTMAP_NC) as ds:
         bmod = np.asarray(ds.variables["Bmod"][:], dtype=float)
     assert float(bmod.min()) > 0.0, f"non-positive Bmod found: min={bmod.min():.4g}"
 
 
-def test_chartmap_bmod_matches_bc_fourier(chartmap_path, circ_bc_file):
+def test_chartmap_bmod_matches_bc_fourier():
     """Bmod in the chartmap agrees with direct .bc Fourier evaluation.
 
-    The conversion chain is:
+    Conversion chain verified once at fixture-generation time:
         .bc harmonics -> boozmn NetCDF -> splined chartmap (nrho=40, ntheta=96, nzeta=1)
 
     Expected error budget at mid-radius (0.20 < s < 0.90):
         cubic spline in rho: ~1e-3 to 5e-3 relative
         Fourier truncation: negligible (circ.bc has m0=18 modes)
-    Tolerance: 5e-3 relative (conservative, matches libneo's own cross-path test).
+    Tolerance: 5e-3 relative.
     """
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
+    assert CHARTMAP_NC.exists(), f"committed fixture missing: {CHARTMAP_NC}"
+
     from libneo.boozer import BoozerFile
+    bc = BoozerFile(str(CIRC_BC))
 
-    bc = BoozerFile(str(circ_bc_file))
-
-    with netCDF4.Dataset(chartmap_path) as ds:
+    with netCDF4.Dataset(CHARTMAP_NC) as ds:
         rho_grid = np.asarray(ds.variables["rho"][:], dtype=float)
         theta_grid = np.asarray(ds.variables["theta"][:], dtype=float)
-        # Bmod shape: (nzeta, ntheta, nrho); pick zeta=0 slice
         bmod_nc = np.asarray(ds.variables["Bmod"][:], dtype=float)
 
-    bmod_2d = bmod_nc[0, :, :].T  # shape (nrho, ntheta)
+    bmod_2d = bmod_nc[0, :, :].T  # (nrho, ntheta)
 
-    # Periodic wrap for theta interpolation.
     theta_w = np.append(theta_grid, TWOPI)
     bmod_w = np.concatenate([bmod_2d, bmod_2d[:, :1]], axis=1)
     interp = RegularGridInterpolator(
@@ -182,10 +125,9 @@ def test_chartmap_bmod_matches_bc_fourier(chartmap_path, circ_bc_file):
     rho_test = np.sqrt(s_test)
     theta_test = rng.uniform(0.0, TWOPI, n_test)
 
-    # Direct Fourier evaluation in Tesla from the .bc file.
     bmod_direct_T = _bmod_from_bc(bc, s_test, theta_test)
 
-    # Chartmap stores Bmod in Gauss; convert to Tesla for comparison.
+    # chartmap stores Bmod in Gauss; convert to Tesla for comparison
     bmod_chart_G = interp(np.column_stack([rho_test, theta_test]))
     bmod_chart_T = bmod_chart_G / 1.0e4
 
@@ -200,27 +142,30 @@ def test_chartmap_bmod_matches_bc_fourier(chartmap_path, circ_bc_file):
         )
 
 
-def test_bmod_axis_scale(chartmap_path, circ_bc_file):
-    """On-axis Bmod (m=0, n=0 harmonic) from chartmap matches .bc m=0 mode to 1 %."""
-    from libneo.boozer import BoozerFile
+def test_bmod_axis_scale():
+    """On-axis Bmod (m=0 harmonic) from chartmap matches .bc m=0 mode to 1%."""
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    assert CIRC_BC.exists(), f"committed fixture missing: {CIRC_BC}"
+    assert CHARTMAP_NC.exists(), f"committed fixture missing: {CHARTMAP_NC}"
 
-    bc = BoozerFile(str(circ_bc_file))
+    from libneo.boozer import BoozerFile
+    bc = BoozerFile(str(CIRC_BC))
+
     s_surf = np.asarray(bc.s, dtype=float)
     m0 = np.asarray(bc.m[0], dtype=int)
     bmnc = np.array([bc.bmnc[k] for k in range(bc.nsurf)], dtype=float)
-    # m=0 mode coefficient at mid-radius (s=0.25)
+
     idx_m0 = np.where(m0 == 0)[0]
     assert len(idx_m0) > 0, "no m=0 mode in .bc"
     b00_at_mid = float(CubicSpline(s_surf, bmnc[:, idx_m0[0]])(0.25))
 
-    with netCDF4.Dataset(chartmap_path) as ds:
+    with netCDF4.Dataset(CHARTMAP_NC) as ds:
         rho_grid = np.asarray(ds.variables["rho"][:], dtype=float)
-        theta_grid = np.asarray(ds.variables["theta"][:], dtype=float)
         bmod_nc = np.asarray(ds.variables["Bmod"][:], dtype=float)
 
     bmod_2d = bmod_nc[0, :, :].T  # (nrho, ntheta)
-    # Average over theta to get m=0 content.
-    bmod_theta_avg = bmod_2d.mean(axis=1) / 1.0e4  # convert G -> T
+    bmod_theta_avg = bmod_2d.mean(axis=1) / 1.0e4  # G -> T
 
     rho_mid = np.sqrt(0.25)
     b00_chart = float(np.interp(rho_mid, rho_grid, bmod_theta_avg))
