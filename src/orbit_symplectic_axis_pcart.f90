@@ -18,6 +18,10 @@ module orbit_symplectic_axis_pcart
 !> This is the near-axis register of Pfefferle, Cooper, Graves, Misev,
 !> Comput. Phys. Commun. 207, 144 (2016), arXiv:1412.5464, and matches SIMPLE's
 !> RK path, which keeps these orbits confined.
+!>
+!> Wired only into the expl_impl_euler (integmode = 1) timestep, the default
+!> and benchmark guiding-centre path; the other symplectic modes still use the
+!> flux chart throughout.
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
 use field_can_mod, only: field_can_t, eval_field => evaluate, get_derivatives

@@ -1133,10 +1133,6 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     if (axis_pcart_enabled .and. si%z(1) < axis_pcart_smax) then
       call axis_pcart_step(si, f, ierr)
       if (ierr /= 0) return
-      if (si%z(1) > 1.0d0) then
-        ierr = 1
-        return
-      end if
       ktau = ktau + 1
       cycle
     end if
