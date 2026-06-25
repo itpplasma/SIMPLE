@@ -126,8 +126,8 @@ end function id_from_name
 
 subroutine init_field_can(field_id, field_noncan)
   use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
-  use boozer_sub, only : get_boozer_coordinates, get_boozer_coordinates_with_field, &
-                         load_boozer_from_chartmap
+  use boozer_sub, only : get_boozer_coordinates
+  use boozer_chartmap, only : load_boozer_from_chartmap
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
 
@@ -150,7 +150,7 @@ subroutine init_field_can(field_id, field_noncan)
           integ_to_ref => integ_to_ref_boozer_chartmap
           ref_to_integ => ref_to_integ_boozer_chartmap
         class default
-          call get_boozer_coordinates_with_field(field_noncan)
+          call get_boozer_coordinates()
         end select
       case (MEISS)
         call get_meiss_coordinates

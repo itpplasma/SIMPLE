@@ -5,6 +5,12 @@ Uses GVEC Python library to evaluate fields in Boozer coordinates
 and writes the result in the extended chartmap format that SIMPLE
 can read without any GVEC or VMEC library at runtime.
 
+The output uses SIMPLE's VMEC/Boozer chartmap convention. GVEC coordinates are
+right-handed, while SIMPLE chartmaps are left-handed. The default --flip tor
+therefore samples the toroidal angle at -zeta and negates only the covariant
+zeta components, A_phi and B_phi. The alternative --flip pol samples -theta and
+negates only the covariant theta components, torflux/A_theta and B_theta.
+
 Usage:
     python tools/gvec_to_boozer_chartmap.py <parameter.ini> <state.dat> <output.nc>
 """
@@ -38,7 +44,16 @@ def main():
     parser.add_argument("--nphi", type=int, default=81)
     parser.add_argument("--boozer-factor", type=int, default=1)
     parser.add_argument("--Bcov", choices=["avg", "boozer-avg", "boozer-0"], default="boozer-avg", help="Method for computing B_theta and B_phi surface functions.")
-    parser.add_argument("--flip", choices=["pol", "tor"], default="tor", help="Flip the sign of the poloidal or toroidal angle (to obtain left-handed coordinates).")
+    parser.add_argument(
+        "--flip",
+        choices=["pol", "tor"],
+        default="tor",
+        help=(
+            "Single angle reversal used to obtain SIMPLE's left-handed "
+            "chartmap convention. 'tor' flips A_phi/B_phi; 'pol' flips "
+            "torflux/B_theta."
+        ),
+    )
     args = parser.parse_args()
 
     print(f"Loading GVEC state: {args.paramfile} + {args.statefile}")
@@ -93,10 +108,8 @@ def main():
     )
     A_phi = -np.asarray(ev_aphi.chi.values).reshape(n_rho, -1)[:, 0]
 
-    # A_theta (on edge) = toroidal flux
-    # GVEC Phi_edge is already Phi/(2*pi) in SI (Wb/(2*pi) = T*m^2/(2*pi))
-    # the 2*pi factor is used to convert between vector potential components and integral fluxes
-    # GVEC's profiles correspond to the vector potential components
+    # Phi_edge is the toroidal-flux coefficient A_theta at the edge.
+    # It flips only when the poloidal coordinate is reversed.
     A_theta_edge = ev.Phi_edge.item()
 
     pos = ev.pos.values  # (3, n_rho, n_theta_geom, n_phi_geom)

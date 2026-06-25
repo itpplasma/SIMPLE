@@ -1,7 +1,6 @@
 module field
     !> Field module aggregating all field types and factory functions.
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     use libneo_coordinates, only: detect_refcoords_file_type, refcoords_file_chartmap, &
                                   refcoords_file_vmec_wout, refcoords_file_unknown
     use field_base, only: magnetic_field_t
@@ -103,10 +102,10 @@ contains
                         ' to a VMEC wout.'
                     error stop
                 case (refcoords_file_unknown)
-                    print *, 'field_from_file: Unknown NetCDF file type: ', trim(filename)
+                  print *, 'field_from_file: Unknown NetCDF file type: ', trim(filename)
                     error stop
                 case default
-                    print *, 'field_from_file: Unexpected file_type ', file_type, ' for ', &
+                print *, 'field_from_file: Unexpected file_type ', file_type, ' for ', &
                         trim(filename)
                     error stop
                 end select

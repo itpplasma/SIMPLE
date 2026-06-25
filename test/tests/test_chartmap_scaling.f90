@@ -1,6 +1,7 @@
 program test_chartmap_scaling
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use boozer_sub, only: load_boozer_from_chartmap, reset_boozer_batch_splines, splint_boozer_coord
+    use boozer_chartmap, only: load_boozer_from_chartmap
+    use boozer_sub, only: reset_boozer_batch_splines, splint_boozer_coord
     use field_boozer_chartmap, only: boozer_chartmap_field_t, create_boozer_chartmap_field
     use new_vmec_stuff_mod, only: vmec_B_scale, vmec_RZ_scale
     use reference_coordinates, only: init_reference_coordinates, ref_coords

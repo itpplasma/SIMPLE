@@ -4,7 +4,8 @@ use util, only: pi
 use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
-use minpack_interfaces, only: hybrd1
+use fortnum_multiroot, only: multiroot_hybrids
+use fortnum_status, only: fortnum_status_t
 use diag_counters, only: count_event, EVT_R_NEGATIVE
 
 implicit none
@@ -29,11 +30,10 @@ contains
   ! Wrapper routines for ODEPACK
   !
 
-subroutine f_exact_quasi(n, x, fvec, iflag)
-  integer, intent(in) :: n
-  real(dp), intent(in) :: x(n)
-  real(dp), intent(out) :: fvec(n)
-  integer, intent(in) :: iflag
+subroutine f_exact_quasi(x, fvec, ctx)
+  real(dp), intent(in) :: x(:)
+  real(dp), intent(out) :: fvec(:)
+  class(*), intent(in), optional :: ctx
 
   type(field_can_t) :: f2
 
@@ -49,11 +49,10 @@ subroutine f_exact_quasi(n, x, fvec, iflag)
 end subroutine f_exact_quasi
 
 
-subroutine f_euler1_quasi(n, x, fvec, iflag)
-  integer, intent(in) :: n
-  real(dp), intent(in) :: x(n)
-  real(dp), intent(out) :: fvec(n)
-  integer, intent(in) :: iflag
+subroutine f_euler1_quasi(x, fvec, ctx)
+  real(dp), intent(in) :: x(:)
+  real(dp), intent(out) :: fvec(:)
+  class(*), intent(in), optional :: ctx
 
   call eval_field(f, x(1), si%z(2), si%z(3), 0)
   call get_derivatives(f, x(2))
@@ -66,11 +65,10 @@ subroutine f_euler1_quasi(n, x, fvec, iflag)
 end subroutine f_euler1_quasi
 
 
-subroutine f_euler2_quasi(n, x, fvec, iflag)
-  integer, intent(in) :: n
-  real(dp), intent(in) :: x(n)
-  real(dp), intent(out) :: fvec(n)
-  integer, intent(in) :: iflag
+subroutine f_euler2_quasi(x, fvec, ctx)
+  real(dp), intent(in) :: x(:)
+  real(dp), intent(out) :: fvec(:)
+  class(*), intent(in), optional :: ctx
 
   call eval_field(f, x(1), x(2), x(3), 0)
   call get_derivatives(f, si%z(4))
@@ -83,11 +81,10 @@ subroutine f_euler2_quasi(n, x, fvec, iflag)
 end subroutine f_euler2_quasi
 
 
-subroutine f_midpoint_quasi(n, x, fvec, iflag)
-    integer, intent(in) :: n
-    real(dp), intent(in) :: x(n)
-    real(dp), intent(out) :: fvec(n)
-    integer, intent(in) :: iflag
+subroutine f_midpoint_quasi(x, fvec, ctx)
+    real(dp), intent(in) :: x(:)
+    real(dp), intent(out) :: fvec(:)
+    class(*), intent(in), optional :: ctx
 
     real(dp) :: dpthmid, pthdotbar
 
@@ -114,16 +111,17 @@ subroutine f_midpoint_quasi(n, x, fvec, iflag)
 end subroutine f_midpoint_quasi
 
 
-subroutine f_rk_gauss_quasi(n, x, fvec, iflag)
+subroutine f_rk_gauss_quasi(x, fvec, ctx)
 
-  integer, intent(in) :: n
-  real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-  real(dp), intent(out) :: fvec(n)
-  integer, intent(in) :: iflag
+  real(dp), intent(in) :: x(:)  ! = (rend, thend, phend, pphend, rmid)
+  real(dp), intent(out) :: fvec(:)
+  class(*), intent(in), optional :: ctx
 
-  real(dp) :: a(n/4,n/4), b(n/4), c(n/4), Hprime(n/4)
+  integer :: n
+  real(dp) :: a(size(x)/4,size(x)/4), b(size(x)/4), c(size(x)/4), Hprime(size(x)/4)
   integer :: k,l  ! counters
 
+  n = size(x)
   call coeff_rk_gauss(n/4, a, b, c)  ! TODO: move this to preprocessing
 
   ! evaluate stages
@@ -155,13 +153,13 @@ end subroutine f_rk_gauss_quasi
   !
   ! Lobatto (IIIA)-(IIIB) Runge-Kutta method, s stages (n=4*s-2 variables)
   !
-subroutine f_rk_lobatto_quasi(n, x, fvec)
+subroutine f_rk_lobatto_quasi(x, fvec, ctx)
   !
-  integer, intent(in) :: n
-  real(dp), intent(in) :: x(n)
-  real(dp), intent(out) :: fvec(n)
+  real(dp), intent(in) :: x(:)
+  real(dp), intent(out) :: fvec(:)
+  class(*), intent(in), optional :: ctx
 
-  call f_rk_lobatto(si, fs, (n+2)/4, x, fvec, 0)
+  call f_rk_lobatto(si, fs, (size(x)+2)/4, x, fvec, 0)
 
   end subroutine f_rk_lobatto_quasi
 
@@ -198,19 +196,20 @@ subroutine timestep_midpoint_quasi(ierr)
 
   integer, parameter :: n = 5
 
-  real(dp), dimension(n) :: x
-  real(dp) :: fvec(n)
-  integer :: ktau, info
+  real(dp), dimension(n) :: x, x0
+  type(fortnum_status_t) :: status
+  integer :: ktau
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    x(1:4) = si%z
-    x(5) = si%z(1)
+    x0(1:4) = si%z
+    x0(5) = si%z(1)
 
-    call hybrd1(f_midpoint_quasi, n, x, fvec, si%rtol, info)
+    call multiroot_hybrids(f_midpoint_quasi, n, x0, x, status, &
+      xtol=si%rtol, ftol=si%rtol)
 
     if (x(1) > 1.0) then
       ierr = 1
@@ -245,19 +244,21 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
 
   integer, parameter :: n = 2
 
-  real(dp), dimension(n) :: x
-  real(dp) :: fvec(n)
-  integer :: ktau, info
+  real(dp), dimension(n) :: x, x0
+  real(dp), dimension(1) :: xe0, xe
+  type(fortnum_status_t) :: status
+  integer :: ktau
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    x(1)=si%z(1)
-    x(2)=si%z(4)
+    x0(1)=si%z(1)
+    x0(2)=si%z(4)
 
-    call hybrd1(f_euler1_quasi, n, x, fvec, si%rtol, info)
+    call multiroot_hybrids(f_euler1_quasi, n, x0, x, status, &
+      xtol=si%rtol, ftol=si%rtol)
 
     if (x(1) > 1.0) then
       ierr = 1
@@ -286,8 +287,10 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
     si%z(3) = si%z(3) + si%dt*(f%vpar - f%dH(1)/f%dpth(1)*f%hth)/f%hph
 
     if (exact_steps) then
-      call hybrd1(f_exact_quasi, 1, x, fvec, si%rtol, info)
-      si%z(1) = x(1)
+      xe0(1) = si%z(1)
+      call multiroot_hybrids(f_exact_quasi, 1, xe0, xe, status, &
+        xtol=si%rtol, ftol=si%rtol)
+      si%z(1) = xe(1)
       call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
       call get_derivatives(f, si%z(4))
     end if
@@ -307,18 +310,20 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
 
   integer, parameter :: n = 3
 
-  real(dp), dimension(n) :: x
-  real(dp) :: fvec(n)
-  integer :: ktau, info
+  real(dp), dimension(n) :: x, x0
+  real(dp), dimension(1) :: xe0, xe
+  type(fortnum_status_t) :: status
+  integer :: ktau
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    x = si%z(1:3)
+    x0 = si%z(1:3)
 
-    call hybrd1(f_euler2_quasi, n, x, fvec, si%rtol, info)
+    call multiroot_hybrids(f_euler2_quasi, n, x0, x, status, &
+      xtol=si%rtol, ftol=si%rtol)
 
     if (x(1) > 1.0) then
       ierr = 1
@@ -346,8 +351,10 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
     si%z(4) = si%z(4) - si%dt*(f%dH(3) - f%dH(1)*f%dpth(3)/f%dpth(1))
 
     if (exact_steps) then
-      call hybrd1(f_exact_quasi, 1, x, fvec, si%rtol, info)
-      si%z(1) = x(1)
+      xe0(1) = si%z(1)
+      call multiroot_hybrids(f_exact_quasi, 1, xe0, xe, status, &
+        xtol=si%rtol, ftol=si%rtol)
+      si%z(1) = xe(1)
       call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
       call get_derivatives(f, si%z(4))
     end if
@@ -363,9 +370,9 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
 
 
   integer, intent(in) :: s
-  real(dp), dimension(4*s) :: x
-  real(dp) :: fvec(4*s)
-  integer :: ktau, info, k, l
+  real(dp), dimension(4*s) :: x, x0
+  type(fortnum_status_t) :: status
+  integer :: ktau, k, l
 
   real(dp) :: a(s,s), b(s), c(s), Hprime(s)
 
@@ -379,10 +386,11 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
     si%pthold = f%pth
 
     do k = 1,s
-      x((4*k-3):(4*k)) = si%z
+      x0((4*k-3):(4*k)) = si%z
     end do
 
-    call hybrd1(f_rk_gauss_quasi, 4*s, x, fvec, si%rtol, info)
+    call multiroot_hybrids(f_rk_gauss_quasi, 4*s, x0, x, status, &
+      xtol=si%rtol, ftol=si%rtol)
 
     if (x(1) > 1.0) then
       ierr = 1
@@ -427,9 +435,9 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
 
 
   integer, intent(in) :: s
-  real(dp), dimension(4*s-2) :: x
-  real(dp) :: fvec(4*s-2)
-  integer :: ktau, info, k, l
+  real(dp), dimension(4*s-2) :: x, x0
+  type(fortnum_status_t) :: status
+  integer :: ktau, k, l
 
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
 
@@ -442,10 +450,10 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
   do while(ktau .lt. si%ntau)
     si%pthold = f%pth
 
-    x(1) = si%z(1)
-    x(2) = si%z(4)
+    x0(1) = si%z(1)
+    x0(2) = si%z(4)
     do k = 2,s
-      x((4*k-3-2):(4*k-2)) = si%z
+      x0((4*k-3-2):(4*k-2)) = si%z
     end do
 
     !
@@ -472,7 +480,8 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
     ! x x x 0 0
     ! x x x 0 0
 
-    call hybrd1(f_rk_lobatto_quasi, 4*s-2, x, fvec, si%rtol, info)
+    call multiroot_hybrids(f_rk_lobatto_quasi, 4*s-2, x0, x, status, &
+      xtol=si%rtol, ftol=si%rtol)
 
     call coeff_rk_lobatto(s, a, ahat, b, c)
 
