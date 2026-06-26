@@ -183,8 +183,6 @@ contains
             rbig = 1.0d0        ! Major radius R0=1
             dphi = 2.d0*pi/(L1i*npoiper)
 	            dtaumin = 2.d0*pi*rbig/npoiper2
-	            ntau = ceiling(dtau/dtaumin)
-	            dtaumin = dtau/ntau
 	            fper = 2d0*pi       ! Full torus
 	        else
             E_alpha = 3.5d6/facE_al
@@ -205,18 +203,17 @@ contains
             dphi = 2.d0*pi/(L1i*npoiper)
 	            ! orbit integration time step (to check chamber wall crossing)
 	            dtaumin = 2.d0*pi*rbig/npoiper2
-	            ntau = ceiling(dtau/dtaumin)
-	            dtaumin = dtau/ntau
 	            fper = 2d0*pi/dble(L1i)
 	        end if
 
-	        ! Macrostep schedule (number of microsteps per macrostep).
-	        ! - Default is linear: constant ntau per macrostep.
-	        ! - Log schedule: macrosteps are distributed logarithmically in time
-	        !   while keeping the microstep resolution dtaumin. The total number
-	        !   of microsteps is preserved as (ntimstep-1)*ntau.
+	        ! Macrostep schedule. dtaumin (microstep) is fixed by npoiper2 alone, so
+	        ! resolution is independent of trace_time; the schedule distributes
+	        ! n_microsteps_total microsteps over the ntimstep output points.
+	        ! - linear: equal microsteps per macrostep (cumulative rounding).
+	        ! - log: macrosteps spaced logarithmically in time, 10:1 last:first.
 	        nintv = max(1, ntimstep - 1)
-	        n_microsteps_total = int(nintv, kind=8) * int(ntau, kind=8)
+	        n_microsteps_total = max(int(nintv, kind=8), nint(tau/dtaumin, kind=8))
+	        ntau = max(1, int(n_microsteps_total / int(nintv, kind=8)))
 	        if (allocated(ntau_macro)) deallocate(ntau_macro)
 	        if (allocated(kt_macro)) deallocate(kt_macro)
 	        allocate (ntau_macro(ntimstep))
@@ -250,9 +247,12 @@ contains
 	                kt_prev = kt_macro(i + 1)
 	            end do
 	        else
-	            do i = 2, ntimstep
-	                ntau_macro(i) = ntau
-	                kt_macro(i) = kt_macro(i - 1) + int(ntau, kind=8)
+	            kt_prev = 0_8
+	            do i = 1, nintv
+	                kt_target = nint(dble(i) / dble(nintv) * dble(n_microsteps_total), kind=8)
+	                ntau_macro(i + 1) = max(1, int(kt_target - kt_prev))
+	                kt_macro(i + 1) = kt_prev + int(ntau_macro(i + 1), kind=8)
+	                kt_prev = kt_macro(i + 1)
 	            end do
 	        end if
 
