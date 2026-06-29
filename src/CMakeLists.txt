@@ -114,7 +114,10 @@ target_link_libraries(simple PUBLIC
 )
 
 target_link_libraries(simple PUBLIC
-    LIBNEO::neo
+    LIBNEO::coordinates
+    LIBNEO::field
+    LIBNEO::odeint
+    LIBNEO::util
 )
 
 # For NVHPC: add built deps includes first to avoid gfortran-compiled modules in /usr/include
