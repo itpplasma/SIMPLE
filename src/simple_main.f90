@@ -201,7 +201,9 @@ contains
         use field_vmec, only: vmec_field_t
         use util, only: twopi
         use reference_coordinates, only: init_reference_coordinates, ref_coords
-        use params, only: coord_input, field_input, wall_input, wall_units
+        use params, only: coord_input, field_input, wall_input, wall_units, &
+                          axis_pcart, axis_pcart_smax
+        use orbit_symplectic_axis_pcart, only: set_axis_pcart
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
@@ -211,6 +213,7 @@ contains
         logical :: use_boozer_chartmap
 
         self%integmode = aintegmode
+        call set_axis_pcart(axis_pcart, axis_pcart_smax)
 
         ! Check if field_input is a Boozer chartmap (no VMEC needed)
         use_boozer_chartmap = .false.

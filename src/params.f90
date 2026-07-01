@@ -48,6 +48,11 @@ module params
 
     integer :: integmode = EXPL_IMPL_EULER
 
+    ! Cross the magnetic axis in pseudo-Cartesian (X,Y) coordinates (#398).
+    ! Opt-in; default off keeps the flux-chart floor+reflection behaviour.
+    logical :: axis_pcart = .False.
+    real(dp) :: axis_pcart_smax = 0.01d0
+
     ! Orbit model selector. 0 = guiding-center (GC), the default symplectic
     ! gyro-averaged path. 7 = full orbit (FO), the gyro-resolved Boris pusher in
     ! Cartesian on the Boozer/chartmap chart, the ASCOT-style counterpart to GC.
@@ -135,7 +140,7 @@ module params
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, output_results_netcdf, &
 	        output_error, output_orbits_macrostep, &  ! callback
-	        macrostep_time_grid, checkpoint_interval, restart
+	        macrostep_time_grid, checkpoint_interval, restart, axis_pcart, axis_pcart_smax
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)

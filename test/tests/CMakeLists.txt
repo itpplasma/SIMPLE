@@ -542,6 +542,17 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "system;python"
         TIMEOUT 1800)
 
+    # Near-axis pseudo-Cartesian step (#401): axis_pcart drives the near-axis
+    # negative-s and Newton-maxit faults of the flux-chart Euler1 integrator to
+    # zero without losing particles the default flux chart kept.
+    add_test(NAME test_axis_pcart
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_axis_pcart.py)
+    set_tests_properties(test_axis_pcart PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 600)
+
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
         COMMAND ${BOOZER_CHARTMAP_PYTHON}
