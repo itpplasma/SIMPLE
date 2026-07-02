@@ -6,6 +6,15 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      libneo_ref:
+        description: libneo branch, tag or commit to build against
+        required: false
+        default: ''
+      full:
+        description: run the full suite (fast + slow + regression); set by the libneo full-ci gate
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -14,15 +23,13 @@ permissions:
   checks: write
   actions: read
 
-env:
-  LIBNEO_BRANCH: ${{ github.head_ref || github.ref_name }}
-
 jobs:
   test:
     name: Build and Test
     runs-on: ubuntu-24.04
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
 
     steps:
@@ -73,20 +80,35 @@ jobs:
       - name: Build SIMPLE (deterministic FP for reproducibility)
         run: |
           make clean
-          make build-deterministic
+          REF="${{ inputs.libneo_ref }}"
+          if [ -n "$REF" ]; then
+            make build-deterministic LIBNEO_REF="$REF"
+          else
+            make build-deterministic
+          fi
+
+      # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
+      # push, PR and full=true run the complete suite below.
+      - name: Run Smoke Tests (libneo gate)
+        if: github.event_name == 'workflow_dispatch' && inputs.full != 'true'
+        run: make test-smoke
 
       - name: Run Fast Tests (Fortran only)
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         run: make test-fast
 
       - name: Install Python package
-        run: python -m pip install -e . --no-build-isolation
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
+        run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
       - name: Run Slow Tests (Python)
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
         run: make test-slow
 
       - name: Run Regression Tests (Golden Record)
+        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
         run: make test-regression
 
       - name: Upload test results
@@ -102,6 +124,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
 
     steps:
@@ -144,9 +167,13 @@ jobs:
       - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
         run: |
           make clean
+          REF="${{ inputs.libneo_ref }}"
+          LIBNEO_ARG=""
+          if [ -n "$REF" ]; then LIBNEO_ARG="LIBNEO_REF=$REF"; fi
           make test-fast CONFIG=Fast \
             FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
-            TEST='test_chartmap_metadata|test_stl_wall_intersection'
+            TEST='test_chartmap_metadata|test_stl_wall_intersection' \
+            $LIBNEO_ARG
 
   build-docs:
     name: Build Documentation

@@ -14,6 +14,7 @@ with the codebase.
    overview
    api/index
    examples
+   boozer-chartmap-schema
 
 Indices and tables
 ------------------

@@ -8,14 +8,14 @@ program export_boozer_chartmap_tool
     use parmot_mod, only: rmu
     use velo_mod, only: isw_field_type
     use boozer_coordinates_mod, only: use_B_r
-    use boozer_sub, only: get_boozer_coordinates, vmec_to_boozer, &
-        export_boozer_chartmap
+    use boozer_sub, only: get_boozer_coordinates, vmec_to_boozer
+    use boozer_chartmap, only: export_boozer_chartmap
     use spline_vmec_sub, only: spline_vmec_data
     use vmecin_sub, only: stevvo
 
     implicit none
 
-    real(dp), parameter :: twopi = 8.0_dp * atan(1.0_dp)
+    real(dp), parameter :: twopi = 8.0_dp*atan(1.0_dp)
     character(len=1024) :: wout_file, chartmap_file, start_vmec, start_boozer
     integer :: nargs, ipart, npart, ios, u_in, u_out
     real(dp) :: s, theta_v, phi_v, v, lam, theta_b, phi_b
@@ -25,7 +25,7 @@ program export_boozer_chartmap_tool
     nargs = command_argument_count()
     if (nargs /= 4) then
         print *, 'Usage: export_boozer_chartmap_tool.x <wout.nc> <chartmap.nc>', &
-                 ' <start_vmec.dat> <start_boozer.dat>'
+            ' <start_vmec.dat> <start_boozer.dat>'
         error stop
     end if
 
@@ -45,7 +45,7 @@ program export_boozer_chartmap_tool
 
     call spline_vmec_data
     call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
-    fper = twopi / real(L1i, dp)
+    fper = twopi/real(L1i, dp)
 
     ! Compute Boozer coordinates
     use_B_r = .false.
@@ -56,26 +56,26 @@ program export_boozer_chartmap_tool
 
     ! Count particles in start_vmec
     npart = 0
-    open(newunit=u_in, file=trim(start_vmec), status='old', iostat=ios)
+    open (newunit=u_in, file=trim(start_vmec), status='old', iostat=ios)
     if (ios /= 0) then
         print *, 'Cannot open ', trim(start_vmec)
         error stop
     end if
     do
-        read(u_in, *, iostat=ios)
+        read (u_in, *, iostat=ios)
         if (ios /= 0) exit
         npart = npart + 1
     end do
-    close(u_in)
+    close (u_in)
 
     print *, 'Converting', npart, ' particles from VMEC to Boozer coords'
 
     ! Convert start.dat coordinates
-    open(newunit=u_in, file=trim(start_vmec), status='old')
-    open(newunit=u_out, file=trim(start_boozer), status='replace', recl=1024)
+    open (newunit=u_in, file=trim(start_vmec), status='old')
+    open (newunit=u_out, file=trim(start_boozer), status='replace', recl=1024)
 
     do ipart = 1, npart
-        read(u_in, *) s, theta_v, phi_v, v, lam
+        read (u_in, *) s, theta_v, phi_v, v, lam
 
         ! Transform VMEC angles to Boozer angles
         call vmec_to_boozer(s, theta_v, phi_v, theta_b, phi_b)
@@ -83,11 +83,11 @@ program export_boozer_chartmap_tool
         ! In chartmap reference coords: x(1) = rho = sqrt(s)
         rho = sqrt(max(s, 0.0_dp))
 
-        write(u_out, *) rho, theta_b, phi_b, v, lam
+        write (u_out, *) rho, theta_b, phi_b, v, lam
     end do
 
-    close(u_in)
-    close(u_out)
+    close (u_in)
+    close (u_out)
 
     print *, 'Written ', trim(start_boozer)
 

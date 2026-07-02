@@ -5,6 +5,12 @@ Uses GVEC Python library to evaluate fields in Boozer coordinates
 and writes the result in the extended chartmap format that SIMPLE
 can read without any GVEC or VMEC library at runtime.
 
+The output uses SIMPLE's VMEC/Boozer chartmap convention. GVEC coordinates are
+right-handed, while SIMPLE chartmaps are left-handed. The default --flip tor
+therefore samples the toroidal angle at -zeta and negates only the covariant
+zeta components, A_phi and B_phi. The alternative --flip pol samples -theta and
+negates only the covariant theta components, torflux/A_theta and B_theta.
+
 Usage:
     python tools/gvec_to_boozer_chartmap.py <parameter.ini> <state.dat> <output.nc>
 """
@@ -37,8 +43,17 @@ def main():
     parser.add_argument("--ntheta", type=int, default=36)
     parser.add_argument("--nphi", type=int, default=81)
     parser.add_argument("--boozer-factor", type=int, default=1)
-    parser.add_argument("--Bcov", choices=["avg", "boozer-avg", "boozer-0"], default="avg", help="Method for computing B_theta and B_phi surface functions.")
-    parser.add_argument("--flip", choices=["pol", "tor"], default="tor", help="Flip the sign of the poloidal or toroidal angle (to obtain left-handed coordinates).")
+    parser.add_argument("--Bcov", choices=["avg", "boozer-avg", "boozer-0"], default="boozer-avg", help="Method for computing B_theta and B_phi surface functions.")
+    parser.add_argument(
+        "--flip",
+        choices=["pol", "tor"],
+        default="tor",
+        help=(
+            "Single angle reversal used to obtain SIMPLE's left-handed "
+            "chartmap convention. 'tor' flips A_phi/B_phi; 'pol' flips "
+            "torflux/B_theta."
+        ),
+    )
     args = parser.parse_args()
 
     print(f"Loading GVEC state: {args.paramfile} + {args.statefile}")
@@ -48,34 +63,27 @@ def main():
     phi_period = twopi / nfp
 
     n_rho = args.nrho
-    # Geometry: endpoint-excluded (chartmap validator)
     n_theta_geom = args.ntheta
     n_phi_geom = args.nphi
-    # Field: endpoint-included (exact spline reproduction)
-    n_theta_field = n_theta_geom + 1
-    n_phi_field = n_phi_geom + 1
 
-    rho_grid = np.linspace(0, 1, n_rho)
-    rho_grid[0] = 1e-3
+    rho_grid = np.linspace(1e-3, 1, n_rho)
+    s = np.linspace(rho_grid[0] ** 2, 1.0, n_rho)
+    rho_profile = np.sqrt(s)
     theta_geom = np.linspace(0, twopi, n_theta_geom, endpoint=False)
     zeta_geom = np.linspace(0, phi_period, n_phi_geom, endpoint=False)
-    theta_field = np.linspace(0, twopi, n_theta_field)
-    zeta_field = np.linspace(0, phi_period, n_phi_field)
 
-    # Evaluate field quantities in Boozer coordinates (endpoint-included grid)
-    print(f"Evaluating field & geometry on {n_rho} x {n_theta_field} x {n_phi_field}...")
+    print(f"Evaluating field & geometry on {n_rho} x {n_theta_geom} x {n_phi_geom}...")
     ev = state.evaluate_sfl(
-        "mod_B", "B_theta_B", "B_zeta_B", "chi", "Phi_edge", "pos", "r_major",
+        "mod_B", "B_theta_B", "B_zeta_B", "Phi_edge", "pos",
         rho=rho_grid,
-        theta=-theta_field if args.flip == "pol" else theta_field,  # Flip poloidal angle if requested
-        zeta=-zeta_field if args.flip == "tor" else zeta_field,  # Flip toroidal angle if requested
+        theta=-theta_geom if args.flip == "pol" else theta_geom,
+        zeta=-zeta_geom if args.flip == "tor" else zeta_geom,
         sfl="boozer",
         MNfactor=args.boozer_factor,
     )
     ev = ev.transpose("xyz", 'rad', 'pol', 'tor')
-    ev_geom = ev.isel(pol=slice(0, -1), tor=slice(0, -1))  # Exclude endpoints
 
-    Bmod_3d = ev.mod_B.values   # (n_rho, n_theta_field, n_phi_field)
+    Bmod_3d = ev.mod_B.values   # (n_rho, n_theta_geom, n_phi_geom)
 
     # Surface functions: (should be constant)
     if args.Bcov == "avg":
@@ -83,27 +91,29 @@ def main():
         B_theta = ev_Bcov.B_theta_avg.values
         B_phi = ev_Bcov.B_zeta_avg.values
     elif args.Bcov == "boozer-avg":
-        B_theta = ev_geom.B_theta_B.mean(["pol", "tor"]).values
-        B_phi = ev_geom.B_zeta_B.mean(["pol", "tor"]).values
+        B_theta = ev.B_theta_B.mean(["pol", "tor"]).values
+        B_phi = ev.B_zeta_B.mean(["pol", "tor"]).values
     elif args.Bcov == "boozer-0":
-        B_theta = ev_geom.B_theta_B.values[:, 0, 0]
-        B_phi = ev_geom.B_zeta_B.values[:, 0, 0]
+        B_theta = ev.B_theta_B.values[:, 0, 0]
+        B_phi = ev.B_zeta_B.values[:, 0, 0]
     else:
         raise ValueError(f"Invalid Bcov option: {args.Bcov}")
-    A_phi = -ev.chi.values
+    ev_aphi = state.evaluate_sfl(
+        "chi",
+        rho=rho_profile,
+        theta=np.array([0.0]),
+        zeta=np.array([0.0]),
+        sfl="boozer",
+        MNfactor=args.boozer_factor,
+    )
+    A_phi = -np.asarray(ev_aphi.chi.values).reshape(n_rho, -1)[:, 0]
 
-    # A_theta (on edge) = toroidal flux
-    # GVEC Phi_edge is already Phi/(2*pi) in SI (Wb/(2*pi) = T*m^2/(2*pi))
-    # the 2*pi factor is used to convert between vector potential components and integral fluxes
-    # GVEC's profiles correspond to the vector potential components
+    # Phi_edge is the toroidal-flux coefficient A_theta at the edge.
+    # It flips only when the poloidal coordinate is reversed.
     A_theta_edge = ev.Phi_edge.item()
 
-    # Geometry on endpoint-excluded grid (Boozer angles)
-    pos = ev_geom.pos.values  # (3, n_rho, n_theta_geom, n_phi_geom)
+    pos = ev.pos.values  # (3, n_rho, n_theta_geom, n_phi_geom)
     X, Y, Z = pos[0], pos[1], pos[2]
-
-    rmajor = ev.r_major  # GVEC's definition of r_major differs from VMEC's!
-    # rmajor = np.mean(np.sqrt(X**2 + Y**2))
 
     # GVEC right-handed coordinates -> SIMPLE left-handed coordinates
     if args.flip == "tor":
@@ -130,12 +140,12 @@ def main():
     ds = netCDF4.Dataset(args.output, "w", format="NETCDF4")
 
     ds.createDimension("rho", n_rho)
+    ds.createDimension("s", n_rho)
     ds.createDimension("theta", n_theta_geom)
     ds.createDimension("zeta", n_phi_geom)
-    ds.createDimension("theta_field", n_theta_field)
-    ds.createDimension("zeta_field", n_phi_field)
 
     v = ds.createVariable("rho", "f8", ("rho",)); v[:] = rho_grid
+    v = ds.createVariable("s", "f8", ("s",)); v[:] = s
     v = ds.createVariable("theta", "f8", ("theta",)); v[:] = theta_geom
     v = ds.createVariable("zeta", "f8", ("zeta",)); v[:] = zeta_geom
 
@@ -145,11 +155,12 @@ def main():
         v[:] = np.transpose(arr, (2, 1, 0))
         v.units = "cm"
 
-    v = ds.createVariable("A_phi", "f8", ("rho",)); v[:] = A_phi
+    v = ds.createVariable("A_phi", "f8", ("s",))
+    v[:] = A_phi
+    v.radial_abscissa = "s"
     v = ds.createVariable("B_theta", "f8", ("rho",)); v[:] = B_theta
     v = ds.createVariable("B_phi", "f8", ("rho",)); v[:] = B_phi
-    # Bmod uses field dimensions (also reversed for NF90)
-    v = ds.createVariable("Bmod", "f8", ("zeta_field", "theta_field", "rho"))
+    v = ds.createVariable("Bmod", "f8", ("zeta", "theta", "rho"))
     v[:] = np.transpose(Bmod_3d, (2, 1, 0))
 
     v = ds.createVariable("num_field_periods", "i4"); v[:] = np.int32(nfp)
@@ -159,13 +170,12 @@ def main():
     ds.rho_lcfs = float(rho_grid[-1])
     ds.boozer_field = np.int32(1)
     ds.torflux = A_theta_edge
-    ds.rmajor = rmajor
     ds.gvec2chartmap_boozer_factor = args.boozer_factor
     ds.gvec2chartmap_Bcov_method = args.Bcov
     ds.gvec2chartmap_flip = args.flip
 
     ds.close()
-    print(f"Done. nfp={nfp}, torflux={A_theta_edge:.6e}, rmajor={rmajor:.6e}")
+    print(f"Done. nfp={nfp}, torflux={A_theta_edge:.6e}")
 
 
 if __name__ == "__main__":

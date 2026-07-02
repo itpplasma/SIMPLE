@@ -2,9 +2,9 @@ module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
     use omp_lib
     use util, only: sqrt2
-    use simple, only: init_vmec, init_sympl, tracer_t
+    use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, tracer_t
     use diag_mod, only: icounter
-    use collis_alp, only: loacol_alpha, stost
+    use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
     use field_can_mod, only: integ_to_ref, ref_to_integ, init_field_can
 	    use callback, only: output_orbits_macrostep
@@ -12,14 +12,15 @@ module simple_main
 	                      grid_density, dtau, dtaumin, ntau, v0, &
 	                      kpart, confpart_pass, confpart_trap, times_lost, integmode, &
 	                      relerr, trace_time, &
-	                      class_plot, ntcut, iclass, bmin, bmax, &
-	                      zstart, zend, trap_par, perp_inv, sbeg, &
+	                      class_plot, fast_class, generate_start_only, ntcut, iclass, &
+	                      bmin, bmax, zstart, zend, trap_par, perp_inv, sbeg, &
 	                      ntimstep, should_skip, reset_seed_if_deterministic, &
 	                      field_input, isw_field_type, reuse_batch, coord_input, &
 	                      wall_input, wall_units, wall_hit, wall_hit_cart, &
 	                      wall_hit_normal_cart, wall_hit_cos_incidence, &
 	                      wall_hit_angle_rad, ntau_macro, kt_macro, &
-	                      checkpoint_interval
+	                      checkpoint_interval, orbit_model, orbit_coord, &
+	                      ORBIT_GC, ORBIT_FULL_ORBIT
     use diag_counters, only: diag_counters_init
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
@@ -75,7 +76,11 @@ contains
 
         ! Must be called in this order. TODO: Fix
         call read_config(config_file)
+        call validate_orbit_model_config
         call print_phase_time('Configuration reading completed')
+
+        call read_profiles_config(config_file)
+        call print_phase_time('Profiles configuration reading completed')
 
         call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
         call print_phase_time('Field initialization completed')
@@ -144,6 +149,17 @@ contains
             call print_phase_time('Restart data loaded')
         end if
 
+        block
+            character(32) :: gpu_bench_env
+            integer :: gpu_bench_len, gpu_bench_stat
+            call get_environment_variable('SIMPLE_GPU_BENCH', gpu_bench_env, &
+                                          gpu_bench_len, gpu_bench_stat)
+            if (gpu_bench_stat == 0 .and. gpu_bench_len > 0) then
+                call trace_compare_gpu(norb)
+                return
+            end if
+        end block
+
         call diag_counters_init
         call progress_init(checkpoint_interval, ntestpart, write_results)
         call trace_parallel(norb)
@@ -155,6 +171,24 @@ contains
 
         call stl_wall_finalize(wall)
     end subroutine main
+
+    ! Reject orbit_model values this build does not implement, with a clear message,
+    ! before any tracing starts. Only guiding-center (the default symplectic path)
+    ! and full orbit (the gyro-resolved Boris pusher) are available here.
+    subroutine validate_orbit_model_config
+        select case (orbit_model)
+        case (ORBIT_GC)
+            continue
+        case (ORBIT_FULL_ORBIT)
+            if (orbit_coord /= 1) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT supports only orbit_coord=1 (Boozer)'
+            if (class_plot .or. fast_class) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT does not support orbit classification'
+        case default
+            error stop 'unsupported orbit_model (use 0 = guiding-center or '// &
+                '7 = full orbit)'
+        end select
+    end subroutine validate_orbit_model_config
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
@@ -436,6 +470,111 @@ contains
         end if
     end subroutine trace_parallel
 
+    subroutine trace_compare_gpu(norb)
+        ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
+        ! symplectic integrator on identical per-particle initial states.
+        ! Triggered by the SIMPLE_GPU_BENCH environment variable and restricted
+        ! to the Boozer + EXPL_IMPL_EULER path without wall, collision, or
+        ! classifier options.
+        use orbit_symplectic, only: orbit_timestep_sympl
+        use orbit_symplectic_base, only: symplectic_integrator_t, EXPL_IMPL_EULER
+        use field_can_mod, only: field_can_t
+        use magfie_sub, only: BOOZER
+        use boozer_sub, only: sync_boozer_state
+        use simple_gpu, only: trace_orbits_gpu
+
+        type(tracer_t), intent(inout) :: norb
+
+        type(symplectic_integrator_t), allocatable :: si_cpu(:), si_gpu(:)
+        type(field_can_t), allocatable :: f_cpu(:), f_gpu(:)
+        integer, allocatable :: cpu_loss(:), gpu_loss(:)
+        real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
+        real(dp) :: z(5)
+        integer :: i, it, ktau, ierr, loss_mismatch
+        integer :: cpu_lost, gpu_lost, flip
+        real(dp) :: t0, t1, t_cpu, t_gpu, maxz
+
+        if (isw_field_type /= BOOZER .or. integmode /= EXPL_IMPL_EULER .or. swcoll .or. &
+            len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. generate_start_only) then
+            error stop "simple_main.trace_compare_gpu: SIMPLE_GPU_BENCH requires Boozer, " // &
+                       "EXPL_IMPL_EULER, and no wall/collision/classifier options"
+        end if
+
+        call sync_boozer_state
+
+        allocate (si_cpu(ntestpart), si_gpu(ntestpart))
+        allocate (f_cpu(ntestpart), f_gpu(ntestpart))
+        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart))
+        allocate (cpu_zend(4, ntestpart), gpu_zend(4, ntestpart))
+
+        ! Identical per-particle initialisation (host). init_sympl sets the
+        ! orbit_timestep_sympl procedure pointer for the CPU reference.
+        do i = 1, ntestpart
+            call ref_to_integ(zstart(1:3, i), z(1:3))
+            z(4:5) = zstart(4:5, i)
+            call init_sympl(si_cpu(i), f_cpu(i), z, dtaumin, dtaumin, relerr, integmode)
+            si_gpu(i) = si_cpu(i)
+            f_gpu(i) = f_cpu(i)
+        end do
+
+        ! CPU reference (OpenMP over particles)
+        t0 = omp_get_wtime()
+        !$omp parallel do private(i, it, ktau, ierr) schedule(dynamic)
+        do i = 1, ntestpart
+            ierr = 0
+            cpu_loss(i) = ntimstep
+            do it = 2, ntimstep
+                do ktau = 1, ntau_macro(it)
+                    call orbit_timestep_sympl(si_cpu(i), f_cpu(i), ierr)
+                    if (ierr /= 0) exit
+                end do
+                if (ierr /= 0) then
+                    cpu_loss(i) = it
+                    exit
+                end if
+            end do
+            cpu_zend(:, i) = si_cpu(i)%z(1:4)
+        end do
+        !$omp end parallel do
+        t1 = omp_get_wtime()
+        t_cpu = t1 - t0
+
+        ! GPU kernel
+        t0 = omp_get_wtime()
+        call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
+                              gpu_loss, gpu_zend)
+        t1 = omp_get_wtime()
+        t_gpu = t1 - t0
+
+        ! Compare
+        maxz = 0d0
+        loss_mismatch = 0
+        cpu_lost = 0
+        gpu_lost = 0
+        flip = 0
+        do i = 1, ntestpart
+            maxz = max(maxz, maxval(dabs(cpu_zend(:, i) - gpu_zend(:, i))))
+            if (cpu_loss(i) /= gpu_loss(i)) loss_mismatch = loss_mismatch + 1
+            if (cpu_loss(i) < ntimstep) cpu_lost = cpu_lost + 1
+            if (gpu_loss(i) < ntimstep) gpu_lost = gpu_lost + 1
+            if ((cpu_loss(i) < ntimstep) .neqv. (gpu_loss(i) < ntimstep)) flip = flip + 1
+        end do
+
+        print *, '==================== GPU vs CPU tracing ===================='
+        print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
+        print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
+        print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
+        print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, &
+            '   confined frac = ', 1d0 - real(cpu_lost, dp)/real(ntestpart, dp)
+        print '(a,i0,a,i0,a,f7.4)', ' GPU lost = ', gpu_lost, ' / ', ntestpart, &
+            '   confined frac = ', 1d0 - real(gpu_lost, dp)/real(ntestpart, dp)
+        print '(a,i0,a,i0)', ' lost<->confined flips = ', flip, ' / ', ntestpart
+        print '(a,f10.4,a)', ' CPU time (OpenMP) = ', t_cpu, ' s'
+        print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
+        if (t_gpu > 0d0) print '(a,f8.2,a)', ' speedup (CPU/GPU) = ', t_cpu/t_gpu, ' x'
+        print *, '============================================================'
+    end subroutine trace_compare_gpu
+
     subroutine classify_parallel(norb)
         use classification, only: trace_orbit_with_classifiers, classification_result_t
         use params, only: class_passing, class_lost
@@ -480,19 +619,39 @@ contains
         print *, 'v0 = ', v0
     end subroutine print_parameters
 
-    subroutine init_collisions
-        use params, only: am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          facE_al, dchichi, slowrate, dchichi_norm, slowrate_norm, v0
+    subroutine read_profiles_config(config_file)
+        use simple_profiles, only: read_profiles
 
-        real(dp) :: v0_coll
+        character(256), intent(in) :: config_file
+
+        call read_profiles(config_file)
+    end subroutine read_profiles_config
+
+    subroutine init_collisions
+        use params, only: am1, am2, Z1, Z2, facE_al, dchichi, slowrate, &
+                          dchichi_norm, slowrate_norm, v0
+        use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
+                                   ni1_scale, ni2_scale
+
+        real(dp) :: v0_coll, ealpha
+        real(dp) :: densi1, densi2, tempi1, tempi2, tempe
+
+        ealpha = 3.5d6/facE_al
+        densi1 = ni1_scale*1.0d-6
+        densi2 = ni2_scale*1.0d-6
+        tempi1 = Ti1_scale
+        tempi2 = Ti2_scale
+        tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          3.5d6/facE_al, v0_coll, dchichi, slowrate, dchichi_norm, &
+                          ealpha, v0_coll, dchichi, slowrate, dchichi_norm, &
                           slowrate_norm)
 
         if (abs(v0_coll - v0) > 1d-6) then
             error stop 'simple_main.init_collisions: v0_coll != v0'
         end if
+
+        call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
     end subroutine init_collisions
 
     subroutine sample_particles(xstart_is_integ_coords)
@@ -643,14 +802,18 @@ contains
         real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
 
         real(dp), dimension(5) :: z
-        real(dp) :: u_ref_prev(3)
-        real(dp) :: x_prev(3), x_prev_m(3)
-        integer :: it, ierr_orbit, it_final
+        real(dp) :: u_ref_prev(3), u_ref_cur(3), u_ref_hit(3)
+        real(dp) :: x_prev(3), x_cur(3)
+        real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
+        real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
+        real(dp) :: segment_length, hit_distance, t_frac
+        integer :: it, ierr_orbit, it_final, it_f
         integer(8) :: kt
-        logical :: passing
+        logical :: passing, faulted
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
+        faulted = .false.
 
         if (swcoll) call reset_seed_if_deterministic
 
@@ -672,7 +835,13 @@ contains
             x_prev_m = x_prev*chartmap_cart_scale_to_m
         end if
 
-        if (integmode > 0) then
+        if (orbit_model == ORBIT_FULL_ORBIT) then
+            if (wall_enabled) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT does not support wall loss yet'
+            if (swcoll) error stop &
+                'orbit_model=ORBIT_FULL_ORBIT does not support collisions yet'
+            call init_fo(anorb%fo, z, dtaumin)
+        else if (integmode > 0) then
             call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
         end if
 
@@ -682,9 +851,10 @@ contains
             ! Fill trajectory arrays with NaN since we're not tracing this particle
             orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
             orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
-!$omp critical
-            confpart_pass = confpart_pass + 1.d0
-!$omp end critical
+            do it = 1, ntimstep
+!$omp atomic update
+                confpart_pass(it) = confpart_pass(it) + 1.d0
+            end do
             return
         end if
 
@@ -703,6 +873,18 @@ contains
 
             if (ierr_orbit .ne. 0) then
                 it_final = it
+                if (orbit_model == ORBIT_FULL_ORBIT .and. ierr_orbit == 3) then
+                    ! Last-resort full-orbit fallback: the Cartesian inversion could
+                    ! not resolve the position (near-axis below chartmap resolution,
+                    ! or a field-period seam) and orbit_timestep_fo already warned.
+                    ! This is NOT a physical loss -- the state is at the last resolved
+                    ! position. Count the marker confined for the rest of the trace
+                    ! so an unresolved step never registers as a lost particle.
+                    do it_f = it, ntimstep
+                        call increase_confined_count(it_f, passing)
+                    end do
+                    faulted = .true.
+                end if
                 exit
             end if
 
@@ -726,6 +908,7 @@ contains
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = kt*dtaumin/v0
+        if (faulted) times_lost(ipart) = trace_time   ! unresolved: confined, not lost
 !$omp end critical
     end subroutine trace_orbit
 
@@ -742,6 +925,12 @@ contains
         integer :: ktau
 
         do ktau = 1, ntau_local
+            if (orbit_model == ORBIT_FULL_ORBIT) then
+                call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
+                if (ierr_orbit .ne. 0) exit
+                kt = kt + 1
+                cycle
+            end if
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
             else
@@ -769,12 +958,15 @@ contains
         real(dp), intent(inout) :: x_prev_m(3)
 
         integer :: ktau, wall_check_interval
-        real(dp) :: u_ref_cur(3), x_cur(3), x_cur_m(3)
+        real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: x_hit_m(3), x_hit(3), normal_m(3)
         real(dp) :: vhat(3), vnorm, cos_inc
         real(dp) :: u_ref_hit(3)
+        real(dp) :: segment_length, hit_distance, t_frac
         logical :: hit
         integer :: ierr_from_cart
+
+        call integ_to_ref(z(1:3), u_ref_prev)
 
         ! Check wall every N microsteps to limit overhead
         ! For small macrosteps (ntau_local<=32), check at end only
@@ -828,6 +1020,16 @@ contains
 
                         if (ierr_from_cart == 0) then
                             call ref_to_integ(u_ref_hit, z(1:3))
+                        else
+                            ! Fallback: linear interpolation of reference coordinates
+                            ! when from_cart fails (ill-conditioned regions of chartmap)
+                            segment_length = sqrt(sum((x_cur_m - x_prev_m)**2))
+                            if (segment_length > 0.0_dp) then
+                                hit_distance = sqrt(sum((x_hit_m - x_prev_m)**2))
+                                t_frac = hit_distance / segment_length
+                                u_ref_hit = u_ref_prev + t_frac * (u_ref_cur - u_ref_prev)
+                                call ref_to_integ(u_ref_hit, z(1:3))
+                            end if
                         end if
 
                         ierr_orbit = 77
@@ -836,6 +1038,7 @@ contains
                 end if
 
                 x_prev_m = x_cur_m
+                u_ref_prev = u_ref_cur
             end if
         end do
     end subroutine macrostep_with_wall_check
@@ -908,7 +1111,8 @@ contains
     end subroutine update_momentum
 
     subroutine collide(z, dt)
-        real(dp), intent(in) :: z(5), dt
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: dt
         integer :: ierr_coll
 
         call stost(z, dt, 1, ierr_coll)

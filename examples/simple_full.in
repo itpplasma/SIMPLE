@@ -32,7 +32,7 @@ startmode = 1            !  mode for initial conditions:
 !                         5=distribute in volume ("global")
 grid_density = 0d0       ! for startmode 1 only, between 0.0 to 0.99, when 0.0 then no grid is made.
 special_ants_file = .False. ! if .True., a different start file is read (defined in samplers.f90), .False. uses standard filename (defined in samplers.f90)
-integmode = 1            ! mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Verlet
+integmode = 1            ! mode for integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3
 relerr = 1d-13           ! tolerance for integrator. Set to 1d-13 for symplectic.
 tcut = -1d0              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
 debug = .False.          ! produce debugging output (.True./.False.). Use only in non-parallel mode!
@@ -59,4 +59,29 @@ ran_seed = 12345   ! Random seed to get batch_size amounts of random indices fro
 reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored in batch.dat, new batch generated if batch.dat not found.
 output_orbits_macrostep = .False. ! Output orbit positions to fort.9XXXX
 output_error = .False. ! Output additional error diagnostics
+/
+
+&profiles
+! Radial plasma profiles for collision calculations.
+! profile_type can be "power_series" or "two_power".
+! Default values give uniform profiles matching the old scalar parameters above.
+profile_type = "two_power"
+
+! Scale factors (on-axis values)
+Te_scale = 1.0d4      ! electron temperature in eV
+Ti1_scale = 1.0d4     ! ion species 1 temperature in eV
+Ti2_scale = 1.0d4     ! ion species 2 temperature in eV
+ni1_scale = 0.5d20    ! ion species 1 density in m^-3
+ni2_scale = 0.5d20    ! ion species 2 density in m^-3
+
+! Two-power profile: f(s) = scale * (1 - s^p1)^p2
+! p2 = 0 gives flat profile, p2 > 0 gives peaked profile
+Te_p1 = 1.0d0,  Te_p2 = 0.0d0   ! flat electron temperature
+Ti1_p1 = 1.0d0, Ti1_p2 = 0.0d0  ! flat ion 1 temperature
+Ti2_p1 = 1.0d0, Ti2_p2 = 0.0d0  ! flat ion 2 temperature
+ni1_p1 = 1.0d0, ni1_p2 = 0.0d0  ! flat ion 1 density
+ni2_p1 = 1.0d0, ni2_p2 = 0.0d0  ! flat ion 2 density
+
+! Power series profile: f(s) = scale * sum(coef(n) * s^(n-1))
+! Te_coef = 1.0d0, 0.0d0, ...  ! coefficient array (up to 10 terms)
 /

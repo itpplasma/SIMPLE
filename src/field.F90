@@ -1,7 +1,6 @@
 module field
     !> Field module aggregating all field types and factory functions.
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     use libneo_coordinates, only: detect_refcoords_file_type, refcoords_file_chartmap, &
                                   refcoords_file_vmec_wout, refcoords_file_unknown
     use field_base, only: magnetic_field_t
@@ -77,23 +76,23 @@ contains
         stripped_name = strip_directory(filename)
 
         if (endswith(filename, '.nc')) then
-            call detect_refcoords_file_type(filename, file_type, ierr, message)
-            if (ierr /= 0) then
-                print *, 'field_from_file: NetCDF file detection error for ', &
-                    trim(filename)
-                print *, trim(message)
-                error stop
-            end if
+            if (is_boozer_chartmap(filename)) then
+                call create_boozer_chartmap_field(filename, bc_temp)
+                call move_alloc(bc_temp, field)
+            else
+                call detect_refcoords_file_type(filename, file_type, ierr, message)
+                if (ierr /= 0) then
+                    print *, 'field_from_file: NetCDF file detection error for ', &
+                        trim(filename)
+                    print *, trim(message)
+                    error stop
+                end if
 
-            select case (file_type)
-            case (refcoords_file_vmec_wout)
-                call create_vmec_field(vmec_field)
-                call field_clone(vmec_field, field)
-            case (refcoords_file_chartmap)
-                if (is_boozer_chartmap(filename)) then
-                    call create_boozer_chartmap_field(filename, bc_temp)
-                    call move_alloc(bc_temp, field)
-                else
+                select case (file_type)
+                case (refcoords_file_vmec_wout)
+                    call create_vmec_field(vmec_field)
+                    call field_clone(vmec_field, field)
+                case (refcoords_file_chartmap)
                     print *, &
                         'field_from_file: chartmap NetCDF is a coordinate system ', &
                         'file, not a field:'
@@ -102,15 +101,15 @@ contains
                         'Set coord_input to this chartmap file and set field_input', &
                         ' to a VMEC wout.'
                     error stop
-                end if
-            case (refcoords_file_unknown)
-                print *, 'field_from_file: Unknown NetCDF file type: ', trim(filename)
-                error stop
-            case default
+                case (refcoords_file_unknown)
+                  print *, 'field_from_file: Unknown NetCDF file type: ', trim(filename)
+                    error stop
+                case default
                 print *, 'field_from_file: Unexpected file_type ', file_type, ' for ', &
-                    trim(filename)
-                error stop
-            end select
+                        trim(filename)
+                    error stop
+                end select
+            end if
         else if (startswidth(stripped_name, 'coils') .or. &
                  endswith(filename, '.coils')) then
             call create_coils_field(filename, raw_coils)

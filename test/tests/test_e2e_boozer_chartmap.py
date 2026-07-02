@@ -236,26 +236,64 @@ def assert_boozer_chartmap_file(path: Path) -> None:
             raise RuntimeError(f"{path}: expected zeta_convention='boozer'")
         if str(getattr(ds, "rho_convention")) != "rho_tor":
             raise RuntimeError(f"{path}: expected rho_convention='rho_tor'")
-        rmajor = float(getattr(ds, "rmajor", 0.0))
-        if not np.isfinite(rmajor) or rmajor <= 0.0:
-            raise RuntimeError(f"{path}: rmajor attribute missing or invalid")
+        if "s" not in ds.dimensions or "s" not in ds.variables:
+            raise RuntimeError(f"{path}: expected s for A_phi")
+        if "theta_field" in ds.dimensions or "zeta_field" in ds.dimensions:
+            raise RuntimeError(f"{path}: redundant endpoint field dimensions present")
+        aphi = ds.variables["A_phi"]
+        if aphi.dimensions != ("s",):
+            raise RuntimeError(f"{path}: expected A_phi to use s dimension")
+        if getattr(aphi, "radial_abscissa", "") != "s":
+            raise RuntimeError(f"{path}: expected A_phi radial_abscissa='s'")
+        if ds.variables["B_theta"].dimensions != ("rho",):
+            raise RuntimeError(f"{path}: expected B_theta to use rho dimension")
+        if ds.variables["B_phi"].dimensions != ("rho",):
+            raise RuntimeError(f"{path}: expected B_phi to use rho dimension")
+        if ds.variables["Bmod"].dimensions != ("zeta", "theta", "rho"):
+            raise RuntimeError(f"{path}: expected Bmod to use zeta/theta/rho dimensions")
+        rho = np.asarray(ds.variables["rho"][:], dtype=float)
+        s = np.asarray(ds.variables["s"][:], dtype=float)
+        if not np.allclose(np.diff(rho), rho[1] - rho[0], rtol=0.0, atol=1e-14):
+            raise RuntimeError(f"{path}: rho grid is not uniform")
+        if not np.allclose(np.diff(s), s[1] - s[0], rtol=0.0, atol=1e-14):
+            raise RuntimeError(f"{path}: s grid is not uniform")
+        if not np.allclose([s[0], s[-1]], [rho[0] ** 2, rho[-1] ** 2]):
+            raise RuntimeError(f"{path}: s must span rho**2")
+        if "rmajor" in ds.ncattrs():
+            raise RuntimeError(
+                f"{path}: rmajor attribute is no longer part of the format; "
+                "the reader derives it from geometry"
+            )
 
 
 def assert_matching_microstep(name: str, ref_stdout: str, chartmap_stdout: str) -> None:
+    # The chartmap run derives rmajor from the innermost-surface geometry
+    # (axis-average R) while the VMEC run uses the volume-based Rmajor_p from
+    # the wout. For the QA test case they differ by 1.2 percent, which feeds
+    # linearly into dtaumin = 2*pi*rmajor*1e2/npoiper2 and ntau. 5 percent
+    # bounds that geometric difference with margin while still catching the
+    # order-of-magnitude rmajor bugs this check was introduced for (350b0f2).
+    tol = 5.0e-2
     ref_dtaumin, ref_ntau = parse_tau_line(ref_stdout)
     chartmap_dtaumin, chartmap_ntau = parse_tau_line(chartmap_stdout)
     if ref_dtaumin is None or ref_ntau is None:
         raise RuntimeError(f"{name}: VMEC run did not print a tau line")
     if chartmap_dtaumin is None or chartmap_ntau is None:
         raise RuntimeError(f"{name}: chartmap run did not print a tau line")
-    if chartmap_ntau != ref_ntau:
-        raise RuntimeError(f"{name}: chartmap ntau={chartmap_ntau}, VMEC ntau={ref_ntau}")
+    rel_ntau = abs(chartmap_ntau - ref_ntau) / max(ref_ntau, 1)
+    if rel_ntau > tol:
+        raise RuntimeError(
+            f"{name}: chartmap ntau={chartmap_ntau}, VMEC ntau={ref_ntau}, "
+            f"rel={rel_ntau:.3e} > {tol:.0e}"
+        )
     rel = abs(chartmap_dtaumin - ref_dtaumin) / max(abs(ref_dtaumin), 1.0)
-    if rel > 1.0e-12:
+    if rel > tol:
         raise RuntimeError(
             f"{name}: chartmap dtaumin={chartmap_dtaumin:.17e}, "
-            f"VMEC dtaumin={ref_dtaumin:.17e}, rel={rel:.3e}"
+            f"VMEC dtaumin={ref_dtaumin:.17e}, rel={rel:.3e} > {tol:.0e}"
         )
+    print(f"[{name}] microstep: dtaumin rel diff {rel:.3e}, "
+          f"ntau {ref_ntau} -> {chartmap_ntau} (rel {rel_ntau:.3e})")
 
 
 def _compare_and_summarize(

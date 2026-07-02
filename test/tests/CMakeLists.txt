@@ -1,3 +1,14 @@
+# Enforce no procedure-pointer trampolines in test executables. A pointer to an
+# internal procedure builds a stack trampoline that faults on a non-executable
+# stack; keep procedure-pointer targets (e.g. test magfie backends) as module
+# procedures. Inherited by the field_can/magfie/orbit subdirectories below.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+
 ##################################################
 # DOWNLOAD TEST DATA
 ##################################################
@@ -43,6 +54,17 @@ else()
     message(STATUS "gvec Python package not found; skipping GVEC chartmap QA test")
 endif()
 
+set(SIMPLE_HAVE_BOOZ_XFORM OFF)
+execute_process(
+    COMMAND ${BOOZER_CHARTMAP_PYTHON} -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('booz_xform') else 1)"
+    RESULT_VARIABLE BOOZ_XFORM_IMPORT_RESULT
+)
+if(BOOZ_XFORM_IMPORT_RESULT EQUAL 0)
+    set(SIMPLE_HAVE_BOOZ_XFORM ON)
+else()
+    message(STATUS "booz_xform Python package not found; skipping booz_xform chartmap test")
+endif()
+
 # Generate chartmap file from VMEC for testing chartmap coordinate detection
 # Uses libneo's vmec_to_chartmap tool built as part of dependencies
 set(CHARTMAP_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout.chartmap.nc")
@@ -81,8 +103,6 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
             set(LIBNEO_PYTHON_DIR "${libneo_SOURCE_DIR}/python")
         elseif(DEFINED LIBNEO_SOURCE_DIR AND EXISTS "${LIBNEO_SOURCE_DIR}/python/libneo/chartmap.py")
             set(LIBNEO_PYTHON_DIR "${LIBNEO_SOURCE_DIR}/python")
-        elseif(DEFINED ENV{CODE} AND EXISTS "$ENV{CODE}/libneo/python/libneo/chartmap.py")
-            set(LIBNEO_PYTHON_DIR "$ENV{CODE}/libneo/python")
         endif()
 
         if(NOT LIBNEO_PYTHON_DIR STREQUAL "")
@@ -294,6 +314,16 @@ if (ENABLE_OPENMP)
 
     add_executable (test_sympl.x test_sympl_stell.f90)
     target_link_libraries(test_sympl.x simple)
+    # Stellarator symplectic + quasi-symplectic integrator driver. The quasi
+    # branch is the only code path that exercises the root solver behind the
+    # quasi steps (fortnum multiroot_hybrids on this branch, MINPACK hybrd1 on
+    # main); registering it gives that path real golden coverage.
+    add_test(NAME test_sympl_stell
+        COMMAND test_sympl.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_sympl_stell PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
@@ -305,6 +335,28 @@ if (ENABLE_OPENMP)
     add_test(NAME test_sympl_testfield
         COMMAND test_sympl_testfield.x
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+    # Axis-crossing regression (issue #370): near-axis trapped orbits must
+    # never be lost at the axis and must conserve energy across crossings.
+    add_executable(test_axis_crossing.x test_axis_crossing.f90)
+    target_link_libraries(test_axis_crossing.x simple)
+    add_test(NAME test_axis_crossing
+        COMMAND test_axis_crossing.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_axis_crossing PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
+
+    # Full-orbit (FO) Boris pusher: energy bound, near-axis crossing, no spurious
+    # loss, on the reactor-scale Boozer field (wout.nc symlinked above).
+    add_executable(test_fo_boris.x test_fo_boris.f90)
+    target_link_libraries(test_fo_boris.x simple)
+    add_test(NAME test_fo_boris
+        COMMAND test_fo_boris.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_fo_boris PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coord_trans.x test_coord_trans.f90)
@@ -326,6 +378,11 @@ add_executable (test_orbits.x test_orbits_vmec.f90)
 target_link_libraries(test_orbits.x simple)
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
+
+add_executable (test_profiles.x test_profiles.f90)
+target_link_libraries(test_profiles.x simple)
+add_test(NAME test_profiles COMMAND test_profiles.x)
+set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
@@ -464,9 +521,26 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
             TIMEOUT 7200)
     endif()
 
+    add_test(NAME test_gvec_chartmap_converter_static
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_gvec_chartmap_converter_static.py)
+    set_tests_properties(test_gvec_chartmap_converter_static PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "unit;python")
+
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
     target_link_libraries(export_boozer_chartmap_tool.x simple)
+
+    # Axis-loss regression (issue #370): zero symplectic-only losses on
+    # identical near-axis starts, symplectic Euler vs RK Boozer reference.
+    add_test(NAME test_axis_loss_consistency
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_axis_loss_consistency.py)
+    set_tests_properties(test_axis_loss_consistency PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 1800)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
@@ -477,6 +551,18 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "slow;plot;python"
         ENVIRONMENT "SIMPLE_BOOZER_CASES=QA"
         TIMEOUT 7200)
+
+    # booz_xform -> Boozer chartmap converter: spectral reference, golden
+    # cross-check against export_boozer_chartmap, end-to-end orbit comparison.
+    if(SIMPLE_HAVE_BOOZ_XFORM)
+        add_test(NAME test_booz_xform_chartmap
+            COMMAND ${BOOZER_CHARTMAP_PYTHON}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_booz_xform_chartmap.py)
+        set_tests_properties(test_booz_xform_chartmap PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "slow;python"
+            TIMEOUT 7200)
+    endif()
 
 
     if(SIMPLE_ENABLE_CGAL)
@@ -505,6 +591,19 @@ add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
+
+add_executable(test_ntcut_overflow.x test_ntcut_overflow.f90)
+target_link_libraries(test_ntcut_overflow.x simple)
+add_test(NAME test_ntcut_overflow COMMAND test_ntcut_overflow.x)
+
+# Sub-second base-interface tests for the libneo reverse-dependency gate
+# (ctest -L smoke).
+set_property(TEST
+    test_lapack_interfaces
+    test_orbit_symplectic_base
+    test_field_base
+    test_ntcut_overflow
+    APPEND PROPERTY LABELS smoke)
 
 add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
 target_link_libraries(test_coordinates_simple.x simple)
@@ -594,6 +693,34 @@ set_tests_properties(test_batch_splines PROPERTIES
     TIMEOUT 60
 )
 
+# GPU device-evaluation test: batch spline eval inside an OpenACC kernel must
+# match the host result. Only meaningful when OpenACC offload is enabled.
+if(SIMPLE_ENABLE_OPENACC)
+    add_executable(test_batch_splines_device.x test_batch_splines_device.f90)
+    target_link_libraries(test_batch_splines_device.x simple testing_utils)
+    add_test(NAME test_batch_splines_device COMMAND test_batch_splines_device.x)
+    set_tests_properties(test_batch_splines_device PROPERTIES
+        LABELS "unit;gpu"
+        TIMEOUT 120
+    )
+endif()
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.in
+    ${CMAKE_CURRENT_BINARY_DIR}/test_gpu_orbit_bench.in
+    COPYONLY)
+
+add_test(NAME test_gpu_orbit_bench
+    COMMAND ${CMAKE_COMMAND} -E env
+        SIMPLE_GPU_BENCH=1
+        $<TARGET_FILE:simple.x>
+        test_gpu_orbit_bench.in
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_gpu_orbit_bench PROPERTIES
+    LABELS "unit"
+    PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    TIMEOUT 120)
+
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
 target_link_libraries(test_macrostep_log_grid.x simple)
@@ -676,7 +803,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
 endif()
 
 ##################################################
-# NCSX GC Cash–Karp COMPARISON TEST (VMEC vs MEISS)
+# NCSX GC Cash-Karp COMPARISON TEST (VMEC vs MEISS)
 ##################################################
 
 add_test(

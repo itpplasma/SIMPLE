@@ -73,6 +73,10 @@ contains
     end subroutine progress_tick
 
     subroutine progress_finalize()
+        !> Emit one final summary so the event totals (e.g. fo_loss / fo_fault)
+        !> are always reported, including for runs too short to cross a periodic
+        !> interval. A silent fo_fault count would hide inversion faults.
+        if (n_total > 0) call emit(int(n_done_shared), wall_time())
         active = .false.
         dump_results => null()
     end subroutine progress_finalize

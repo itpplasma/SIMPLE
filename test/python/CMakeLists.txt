@@ -119,3 +119,13 @@ set_tests_properties(test_engineering PROPERTIES
     TIMEOUT 300
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+add_test(NAME test_coil_clearance
+    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_coil_clearance.py -v
+)
+set_tests_properties(test_coil_clearance PROPERTIES
+    ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR}/python"
+    LABELS "python;engineering"
+    TIMEOUT 120
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)

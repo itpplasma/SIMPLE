@@ -1,9 +1,8 @@
 module alpha_lifetime_sub
 
-implicit none
+use, intrinsic :: iso_fortran_env, only: dp => real64
 
-! Define real(dp) kind parameter
-integer, parameter :: dp = kind(1.0d0)
+implicit none
 
 contains
 
@@ -22,9 +21,8 @@ contains
   !   Output parameters:
   !             formal:    derphi  -   array of derivatives
   !
-      integer :: ierr
-      real(dp), dimension(3) :: x,derphi
-      real(dp) :: r,phi,z,psi,phi_el,phi_el_pr,phi_el_prpr
+      real(dp), intent(in) :: x(3)
+      real(dp), intent(out) :: derphi(3)
   !
       derphi=0.d0
   !
@@ -76,7 +74,6 @@ contains
       real(dp) rmumag,rovsqg,rosqgb,rovbm
       real(dp) a_phi,a_b,a_c,hstar
       real(dp) s_hc,hpstar,phidot,blodot,bra
-      real(dp) pardeb
   !
       dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
       dimension derphi(3)
@@ -172,7 +169,7 @@ use chamb_sub, only : chamb_can
   !
       integer, parameter          :: ndim=5, nstepmax=1000000
   !
-      integer :: ierr,j
+      integer :: ierr
       real(dp) :: dtau,dtaumin,phi,tau1,tau2
   !
       real(dp), dimension(2)    :: y
@@ -354,21 +351,35 @@ if(dodiag) write (123,*) tau2,z
   real(dp), intent(in) :: tau
   real(dp), intent(in) :: z_axis(:)
   real(dp), intent(out) :: vz_axis(:)
+  real(dp), parameter :: s_floor=1.d-8
   real(dp) :: derlogsqs
+  real(dp) :: r2,scale,x_eval,y_eval
   real(dp), dimension(5) :: z,vz
   !
-  !  z(1)=z_axis(1)**2+z_axis(2)**2
-  z(1)=sqrt(z_axis(1)**2+z_axis(2)**2)
-  z(1)=max(z(1),1.d-8)
-  z(2)=atan2(z_axis(2),z_axis(1))
+  r2=z_axis(1)**2+z_axis(2)**2
+  if(r2.lt.s_floor) then
+    if(r2.gt.0.d0) then
+      scale=sqrt(s_floor/r2)
+      x_eval=scale*z_axis(1)
+      y_eval=scale*z_axis(2)
+    else
+      x_eval=sqrt(s_floor)
+      y_eval=0.d0
+    endif
+    z(1)=s_floor
+  else
+    x_eval=z_axis(1)
+    y_eval=z_axis(2)
+    z(1)=r2
+  endif
+  z(2)=atan2(y_eval,x_eval)
   z(3:5)=z_axis(3:5)
   !
   call velo_can(tau,z,vz)
   !
-  !  derlogsqs=0.5d0*vz(1)/sqrt(z(1))
-  derlogsqs=vz(1)/z(1)
-  vz_axis(1)=derlogsqs*z_axis(1)-vz(2)*z_axis(2)
-  vz_axis(2)=derlogsqs*z_axis(2)+vz(2)*z_axis(1)
+  derlogsqs=0.5d0*vz(1)/z(1)
+  vz_axis(1)=derlogsqs*x_eval-vz(2)*y_eval
+  vz_axis(2)=derlogsqs*y_eval+vz(2)*x_eval
   vz_axis(3:5)=vz(3:5)
   !
   end subroutine velo_axis
@@ -385,7 +396,7 @@ if(dodiag) write (123,*) tau2,z
       real(dp), parameter :: snear_axis=0.01d0
   !
       logical :: near_axis
-      integer :: ierr,j
+      integer :: ierr
       real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2
       real(dp) :: relerr
   !
@@ -413,9 +424,9 @@ if(dodiag) write (123,*) tau2,z
   !
       do while((dtau>0 .and. (tau2 .lt. dtau)) .or. (dtau<0 .and. (tau2 .gt. dtau)))
         if(near_axis) then
-          if(z(1)**2+z(2)**2.gt.snear_axis**2) then
+          if(z(1)**2+z(2)**2.gt.snear_axis) then
             near_axis=.false.
-            z1=sqrt(z(1)**2+z(2)**2)
+            z1=z(1)**2+z(2)**2
             z2=atan2(z(2),z(1))
             z(1)=z1
             z(2)=z2
@@ -437,8 +448,8 @@ if(dodiag) write (123,*) tau2,z
         else
           if(z(1).lt.snear_axis) then
             near_axis=.true.
-            z1=z(1)*cos(z(2))
-            z2=z(1)*sin(z(2))
+            z1=sqrt(max(z(1),0.d0))*cos(z(2))
+            z2=sqrt(max(z(1),0.d0))*sin(z(2))
             z(1)=z1
             z(2)=z2
   !
@@ -465,9 +476,9 @@ if(dodiag) write (123,*) tau2,z
       tau2=dtau
   !
       if(near_axis) then
-        if(z(1)**2+z(2)**2.gt.snear_axis**2) then
+        if(z(1)**2+z(2)**2.gt.snear_axis) then
           near_axis=.false.
-          z1=sqrt(z(1)**2+z(2)**2)
+          z1=z(1)**2+z(2)**2
           z2=atan2(z(2),z(1))
           z(1)=z1
           z(2)=z2
@@ -489,8 +500,8 @@ if(dodiag) write (123,*) tau2,z
       else
         if(z(1).lt.snear_axis) then
           near_axis=.true.
-          z1=z(1)*cos(z(2))
-          z2=z(1)*sin(z(2))
+          z1=sqrt(max(z(1),0.d0))*cos(z(2))
+          z2=sqrt(max(z(1),0.d0))*sin(z(2))
           z(1)=z1
           z(2)=z2
   !
@@ -512,7 +523,7 @@ if(dodiag) write (123,*) tau2,z
       endif
   !
       if(near_axis) then
-        z1=sqrt(z(1)**2+z(2)**2)
+        z1=z(1)**2+z(2)**2
         z2=atan2(z(2),z(1))
         z(1)=z1
         z(2)=z2

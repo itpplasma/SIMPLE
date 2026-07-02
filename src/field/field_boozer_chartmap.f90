@@ -3,7 +3,7 @@ module field_boozer_chartmap
     !>
     !> Reads an extended chartmap file containing Boozer coordinate geometry
     !> (X, Y, Z on a Boozer angle grid) plus magnetic field data:
-    !>   - A_phi(rho)        : toroidal vector potential (1D)
+    !>   - A_phi(s)          : toroidal vector potential (1D flux profile)
     !>   - B_theta(rho)      : covariant poloidal B component (1D, surface function)
     !>   - B_phi(rho)        : covariant toroidal B component (1D, surface function)
     !>   - Bmod(rho,theta,zeta) : field magnitude (3D)
@@ -85,7 +85,7 @@ contains
 
         allocate (field)
 
-        ! Single shared parse: base-unit arrays on the endpoint-included field grid.
+        ! Single shared parse: base-unit arrays plus internal periodic endpoints.
         call read_boozer_chartmap(filename, d)
 
         b_scale = vmec_B_scale
@@ -99,12 +99,10 @@ contains
         d%Bmod = b_scale*d%Bmod
         torflux_val = flux_scale*d%torflux
 
-        ! Build A_phi spline over the file's uniform rho grid, like B_theta/B_phi
-        ! and Bmod. A_phi is a function of rho here; evaluate at rho (see below).
-        allocate (y_aphi(d%n_rho, 1))
+        allocate (y_aphi(d%n_s, 1))
         y_aphi(:, 1) = d%A_phi
-        call construct_batch_splines_1d(d%rho_min, d%rho_max, y_aphi, spline_order_1d, &
-                                        .false., field%aphi_spline)
+        call construct_batch_splines_1d(d%s(1), d%s(d%n_s), y_aphi, &
+                                        spline_order_1d, .false., field%aphi_spline)
 
         ! Build B_theta, B_phi spline over rho_tor
         allocate (y_bcovar(d%n_rho, 2))
@@ -113,9 +111,8 @@ contains
         call construct_batch_splines_1d(d%rho_min, d%rho_max, y_bcovar, spline_order_1d, &
                                         .false., field%bcovar_spline)
 
-        ! Build Bmod 3D spline over (rho_tor, theta_B, phi_B). The field grid is
-        ! endpoint-included, so x_max spans the full 2*pi and 2*pi/nfp period
-        ! that the periodic spline expects (period = (n-1)*h_step).
+        ! Build Bmod 3D spline over (rho_tor, theta_B, phi_B). The reader
+        ! appended exact endpoint planes, so x_max spans the full periods.
         x_min_3d = [d%rho_min, 0.0_dp, 0.0_dp]
         x_max_3d = [d%rho_max, real(d%n_theta - 1, dp)*d%h_theta, &
                     real(d%n_phi - 1, dp)*d%h_phi]
@@ -132,7 +129,7 @@ contains
         field%ns = d%n_rho
         field%ntheta = d%n_theta
         field%nphi = d%n_phi
-        field%hs = d%h_s
+        field%hs = d%h_rho
         field%h_theta = d%h_theta
         field%h_phi = d%h_phi
         field%filename = filename
@@ -140,7 +137,7 @@ contains
         ! Restore equilibrium periods/major radius so stevvo and params_init
         ! produce the correct dphi/dtaumin/fper for a VMEC-free chartmap run.
         nper = d%nfp
-        if (d%has_rmajor) rmajor = d%rmajor*rz_scale
+        rmajor = d%rmajor*rz_scale
 
         ! Set up coordinate system from the same chartmap file
         call make_chartmap_coordinate_system(cs, filename)
@@ -183,9 +180,8 @@ contains
         ! But A_s = 0 (gauge), so A_rho = 0 regardless.
         A_theta_val = self%torflux * s
 
-        ! A_phi from 1D spline at rho (tabulated on the file's rho grid)
-        call evaluate_batch_splines_1d_der2(self%aphi_spline, rho_tor, y1d_aphi, &
-                                             dy1d_aphi, d2y1d_aphi)
+        call evaluate_batch_splines_1d_der2(self%aphi_spline, s, &
+                                            y1d_aphi, dy1d_aphi, d2y1d_aphi)
         A_phi_val = y1d_aphi(1)
 
         ! B_theta, B_phi from 1D spline at rho_tor

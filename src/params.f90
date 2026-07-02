@@ -3,6 +3,9 @@ module params
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
+                                  axis_healing_power_law, rho_axis_heal, &
+                                  axis_healing, s_axis_heal, &
+                                  axis_healing_polyfit_degree, &
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
@@ -45,6 +48,18 @@ module params
 
     integer :: integmode = EXPL_IMPL_EULER
 
+    ! Orbit model selector. 0 = guiding-center (GC), the default symplectic
+    ! gyro-averaged path. 7 = full orbit (FO), the gyro-resolved Boris pusher in
+    ! Cartesian on the Boozer/chartmap chart, the ASCOT-style counterpart to GC.
+    ! Values 1-6 are reserved for other models.
+    integer, parameter :: ORBIT_GC = 0
+    integer, parameter :: ORBIT_FULL_ORBIT = 7
+    integer :: orbit_model = ORBIT_GC
+
+    ! Chart for the full-orbit field+geometry: full orbit currently supports only
+    ! orbit_coord = 1 (Boozer/chartmap), which shares the production GC field.
+    integer :: orbit_coord = 0
+
     integer :: kpart = 0 ! progress counter for particles
 
     real(dp) :: relerr = 1d-13
@@ -64,7 +79,7 @@ module params
     real(dp) :: fper, zerolam = 0d0
 
     real(dp) :: tcut = -1d0
-    integer :: ntcut
+    integer(8) :: ntcut
     integer :: nturns = 8
     logical          :: class_plot = .False.    !<=AAA
     real(dp) :: cut_in_per = 0d0        !<=AAA
@@ -109,10 +124,13 @@ module params
 	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
-	        special_ants_file, integmode, relerr, tcut, nturns, debug, &
+	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-	        old_axis_healing_boundary, am1, am2, Z1, Z2, &
+	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
+	        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
+	        am1, am2, Z1, Z2, &
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, output_results_netcdf, &
@@ -238,7 +256,7 @@ contains
 	            end do
 	        end if
 
-	        ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
+	        ntcut = microstep_cut_index(ntimstep, ntau, tcut, trace_time)
 	        norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
 	        nfp = L1i*norbper
 
@@ -250,6 +268,25 @@ contains
         call init_batch
         call reallocate_arrays
 	    end subroutine params_init
+
+    pure function microstep_cut_index(ntimstep_in, ntau_in, tcut_in, &
+            trace_time_in) result(ntcut_out)
+        ! Microstep index of the classification cut time tcut; <=0 disables it.
+        ! ntimstep*ntau reaches ~1e10 for second-scale traces and overflows a
+        ! 32-bit product, flipping the sign and spuriously enabling classification,
+        ! so evaluate in real(dp) and return int64.
+        integer, intent(in) :: ntimstep_in, ntau_in
+        real(dp), intent(in) :: tcut_in, trace_time_in
+        integer(8) :: ntcut_out
+
+        if (tcut_in > 0d0 .and. trace_time_in > 0d0) then
+            ntcut_out = ceiling( &
+                real(ntimstep_in, dp)*real(ntau_in, dp)*tcut_in/trace_time_in, &
+                kind=8)
+        else
+            ntcut_out = -1_8
+        end if
+    end function microstep_cut_index
 
 	    pure function to_lower(s) result(out)
 	        character(*), intent(in) :: s
