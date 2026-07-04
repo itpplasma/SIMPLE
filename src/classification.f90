@@ -160,6 +160,8 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     if(passing .and. should_skip(ipart)) then
         !$omp critical
         confpart_pass=confpart_pass+1.d0
+        zend(:, ipart) = zstart(:, ipart)
+        times_lost(ipart) = -1.d0
         !$omp end critical
         if(class_plot) then
             !$omp critical

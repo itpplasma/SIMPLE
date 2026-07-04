@@ -56,7 +56,12 @@ Legacy script note
 
 ``examples/orbits_and_cuts.py`` uses ``pysimple.trace_orbit()`` and computes a
 simple toroidal-plane cut in Python. Prefer ``examples/simple_api.py`` when you
-just want the shortest supported entry point.
+just want the shortest supported entry point. The single-particle state is
+``[s, theta, phi, v/v0, lambda]`` with ``lambda = v_parallel / v``; the example
+includes both a confined trapped seed and a confined passing seed because the
+sign of ``lambda`` alone does not determine the orbit topology. The script also
+sets ``contr_pp=-1e10`` so deep-passing seeds are traced instead of being
+skipped by the default ``contr_pp=-1`` policy.
 
 Testing
 -------

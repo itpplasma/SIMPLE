@@ -15,7 +15,16 @@ from simple_backend import get_can_sub
 VMEC_FILE = Path(__file__).resolve().parents[1] / "test" / "test_data" / "wout.nc"
 TRACE_TIME = 1.0e-2
 INTEGRATOR = "midpoint"
-INITIAL_POSITION = np.array([0.6, 0.0, 0.25 * np.pi, 1.0, -0.4], dtype=float)
+CONTR_PP = -1.0e10
+# Single-particle state layout:
+# [s, theta, phi, v/v0, lambda] with lambda = v_parallel / v.
+# The sign of lambda selects co-/counter-passing direction, but whether an
+# orbit is trapped or passing also depends on the launch point.
+# Disable the default deep-passing skip so large positive lambda values are
+# actually traced when experimenting with orbit topology in this script.
+TRAPPED_POSITION = np.array([0.6, 0.0, 0.25 * np.pi, 1.0, 0.0], dtype=float)
+PASSING_POSITION = np.array([0.3, 0.0, 0.25 * np.pi, 1.0, 0.8], dtype=float)
+INITIAL_POSITION = TRAPPED_POSITION.copy()
 TOROIDAL_CUT = 0.0
 TOROIDAL_PERIOD = 2.0 * np.pi
 
@@ -98,6 +107,7 @@ def main() -> None:
         deterministic=True,
         trace_time=TRACE_TIME,
         ntestpart=1,
+        contr_pp=CONTR_PP,
     )
 
     result = pysimple.trace_orbit(

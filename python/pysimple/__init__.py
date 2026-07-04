@@ -371,15 +371,9 @@ def load_particles(particle_file: str | Path) -> np.ndarray:
 
 _trace_initialized = False
 
-def _init_before_trace():
-    """Initialize components needed before tracing (call once before first trace).
 
-    This mimics lines 78-81 from simple_main::main():
-    - init_magfie(isw_field_type) - sets magfie pointer to correct field type
-    - init_counters - resets counters
-
-    Note: init_starting_surf is called during init(), not here!
-    """
+def _ensure_trace_initialized():
+    """Initialize components that only need to be configured once after init()."""
     global _trace_initialized
 
     if _trace_initialized:
@@ -394,10 +388,19 @@ def _init_before_trace():
     ):
         _simple_main.init_bminmax()
 
-    # init_counters - reset counters
+    _trace_initialized = True
+
+
+def _reset_trace_counters() -> None:
+    """Reset per-run result arrays after any particle-array reallocation."""
     _simple_main.init_counters()
 
-    _trace_initialized = True
+
+def _load_loss_times(n_particles: int) -> np.ndarray:
+    """Read the current backend loss-time array."""
+    loss_times = np.zeros(n_particles, dtype=np.float64)
+    _backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
+    return np.ascontiguousarray(loss_times, dtype=np.float64)
 
 
 def trace_orbit(
@@ -411,7 +414,11 @@ def trace_orbit(
     Parameters
     ----------
     position : np.ndarray
-        Array of shape (5,) containing initial position
+        Array of shape (5,) containing the initial particle state
+        ``[s, theta, phi, v/v0, lambda]`` with ``lambda = v_parallel / v``.
+        The sign of ``lambda`` sets the parallel-direction branch, but
+        trapped/passing topology depends on both ``lambda`` and the launch
+        position.
     integrator : str | int
         Integration method (default: MIDPOINT)
     return_trajectory : bool
@@ -430,6 +437,9 @@ def trace_orbit(
     ----
     The trace time is determined by the `trace_time` parameter passed to `init()`.
     To change trace time, call `init()` again with a different `trace_time` value.
+    Deep-passing seeds may be intentionally skipped by the backend when
+    ``contr_pp`` is left at its default value of ``-1``; set a more negative
+    ``contr_pp`` in ``init()`` (for example ``-1e10``) to force tracing.
 
     Example
     -------
@@ -439,9 +449,6 @@ def trace_orbit(
     """
     if not _initialized:
         raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    # Initialize components needed before first trace
-    _init_before_trace()
 
     # Resolve integrator
     if isinstance(integrator, str):
@@ -460,6 +467,8 @@ def trace_orbit(
     params.ntestpart = 1
     params.reallocate_arrays()
     params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _reset_trace_counters()
 
     # Use wrapper to avoid f90wrap zstart binding mismatch
     zstart = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order='F')
@@ -489,9 +498,7 @@ def trace_orbit(
             zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
             _backend.params_wrapper.get_zend_bulk(1, zend)
             final_pos = zend[:, 0]
-
-            finite_mask = np.isfinite(times)
-            loss_time = float(times[finite_mask][-1]) if finite_mask.any() else float("nan")
+            loss_time = float(_load_loss_times(1)[0])
 
             return {
                 "final_position": np.ascontiguousarray(final_pos),
@@ -509,9 +516,7 @@ def trace_orbit(
         zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
         _backend.params_wrapper.get_zend_bulk(1, zend)
         final_pos = zend[:, 0]
-
-        finite_mask = np.isfinite(times)
-        loss_time = float(times[finite_mask][-1]) if finite_mask.any() else float("nan")
+        loss_time = float(_load_loss_times(1)[0])
 
         return {
             "final_position": np.ascontiguousarray(final_pos),
@@ -564,9 +569,6 @@ def trace_parallel(
     if not _initialized:
         raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
 
-    # Initialize components needed before first trace
-    _init_before_trace()
-
     # Resolve integrator
     if isinstance(integrator, str):
         key = integrator.lower()
@@ -587,6 +589,8 @@ def trace_parallel(
     params.ntestpart = n_particles
     params.reallocate_arrays()
     params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _reset_trace_counters()
     zstart = np.asfortranarray(positions, dtype=np.float64)
     _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
@@ -597,8 +601,7 @@ def trace_parallel(
     _backend.params_wrapper.get_zend_bulk(n_particles, zend)
     final_positions = np.ascontiguousarray(zend, dtype=np.float64)
 
-    loss_times = np.zeros(n_particles, dtype=np.float64)
-    _backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
+    loss_times = _load_loss_times(n_particles)
 
     results: dict[str, np.ndarray] = {
         "final_positions": final_positions,
@@ -672,9 +675,6 @@ def classify_parallel(
     if not _initialized:
         raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
 
-    # Initialize components needed before first trace
-    _init_before_trace()
-
     # Resolve integrator
     if isinstance(integrator, str):
         key = integrator.lower()
@@ -695,6 +695,8 @@ def classify_parallel(
     params.ntestpart = n_particles
     params.reallocate_arrays()
     params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _reset_trace_counters()
     zstart = np.asfortranarray(positions, dtype=np.float64)
     _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
@@ -704,8 +706,7 @@ def classify_parallel(
     zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
     _backend.params_wrapper.get_zend_bulk(n_particles, zend)
 
-    loss_times = np.zeros(n_particles, dtype=np.float64)
-    _backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
+    loss_times = _load_loss_times(n_particles)
 
     trap_parameter = np.zeros(n_particles, dtype=np.float64)
     _backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
