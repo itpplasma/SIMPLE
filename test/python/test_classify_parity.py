@@ -132,10 +132,10 @@ def test_classification_parity(tmp_path: Path, vmec_file: str) -> None:
     )
 
     # Verify classification arrays are populated (values depend on ntcut/class_plot settings)
-    assert "minkowski" in python_results
+    assert "fractal" in python_results
     assert "jpar" in python_results
     assert "topology" in python_results
-    assert python_results["minkowski"].shape == (n_particles,)
+    assert python_results["fractal"].shape == (n_particles,)
     assert python_results["jpar"].shape == (n_particles,)
     assert python_results["topology"].shape == (n_particles,)
 

@@ -45,8 +45,9 @@ First verify the bindings import cleanly:
     particles = pysimple.sample_surface(32, s=0.3)
     results = pysimple.trace_parallel(particles, integrator="midpoint")
 
-    n_lost = (results["loss_times"] < 5e-5).sum()
-    print(f"Lost particles: {n_lost}")
+    n_lost = ((results["loss_times"] > 0.0) & (results["loss_times"] < 5e-5)).sum()
+    n_skipped = (results["loss_times"] < 0.0).sum()
+    print(f"Lost particles: {n_lost} (skipped deep-passing: {n_skipped})")
 
 Complete examples are in ``examples/simple_api.py``, ``examples/classify_fast.py``,
 and ``examples/classify_fractal.py``.

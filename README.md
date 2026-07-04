@@ -126,7 +126,9 @@ particles = pysimple.sample_surface(100, s=0.5)
 
 # Trace orbits in parallel
 results = pysimple.trace_parallel(particles)
-print(f"Lost: {(results['loss_times'] < 1e-3).sum()} particles")
+lost = ((results['loss_times'] > 0.0) & (results['loss_times'] < 1e-3)).sum()
+skipped = (results['loss_times'] < 0.0).sum()
+print(f"Lost: {lost} particles (skipped deep-passing: {skipped})")
 ```
 
 #### Initialization
@@ -142,7 +144,7 @@ Parameters:
 - `ntestpart=100`: Number of test particles
 - `npoiper2=64`: Integration steps per poloidal transit
 - `integmode`: Integration method (default: MIDPOINT)
-- `isw_field_type`: Field type (0=TEST, 2=VMEC, 3=BOOZER, etc.)
+- `isw_field_type`: Field type (`-1=TEST`, `0=CANFLUX`, `1=VMEC`, `2=BOOZER`, `3=MEISS`, `4=ALBERT`, `5=REFCOORDS`)
 - Any other Fortran parameter from params.f90
 
 #### Particle Sampling
@@ -151,7 +153,8 @@ Parameters:
 
 Sample particles uniformly on a flux surface.
 
-Returns: `(5, n_particles)` array with columns `[s, theta, phi, p_abs, v_par]`
+Returns: `(5, n_particles)` array with columns `[s, theta, phi, v/v0, lambda]`,
+where `lambda = v_parallel / v`
 
 **`pysimple.sample_volume(n_particles, s_inner, s_outer)`**
 
@@ -194,7 +197,7 @@ Returns dictionary including all trace_parallel outputs plus:
 - `'lost'`: `(n_particles,)` boolean
 - `'jpar'`: `(n_particles,)` J-parallel conservation (0-2)
 - `'topology'`: `(n_particles,)` topological classification (0-2)
-- `'minkowski'`: `(n_particles,)` Minkowski dimension (0-3)
+- `'fractal'`: `(n_particles,)` fractal classification (`1=regular`, `2=chaotic`)
 
 #### Integrator Constants
 

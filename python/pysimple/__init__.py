@@ -22,7 +22,7 @@ import numpy as np
 from ._bminmax import needs_bminmax_cache as _needs_bminmax_cache
 
 try:
-    import simple_backend as _backend
+    import simple_backend as _fortran_backend
 except ImportError as exc:
     if getattr(exc, "name", None) == "f90wrap":
         raise ImportError(
@@ -73,19 +73,19 @@ _TEST_FIELD_ID = -1
 _VMEC_FIELD_ID = 1
 
 # Direct access to Fortran params module
-params = _backend.params
+params = _fortran_backend.params
 
 # Module-level simple_main instance (Fortran module exposed as class by f90wrap)
-_simple_main = _backend.Simple_Main()
+_simple_main = _fortran_backend.Simple_Main()
 
 # Module state
 _initialized = False
 _current_vmec: str | None = None
-_tracer: "_backend.simple.tracer_t | None" = None
+_tracer: "_fortran_backend.simple.tracer_t | None" = None
 
 
 def _is_test_field() -> bool:
-    return int(_backend.velo_mod.isw_field_type) == _TEST_FIELD_ID
+    return int(_fortran_backend.velo_mod.isw_field_type) == _TEST_FIELD_ID
 
 
 def _sampling_rng() -> np.random.Generator:
@@ -179,7 +179,7 @@ def init(
     for key, value in param_overrides.items():
         if key in {"isw_field_type", "integ_coords"}:
             value_int = int(value)
-            _backend.velo_mod.isw_field_type = value_int
+            _fortran_backend.velo_mod.isw_field_type = value_int
             if hasattr(params, "integ_coords"):
                 params.integ_coords = value_int
         elif not hasattr(params, key):
@@ -191,7 +191,7 @@ def init(
         params.apply_config_aliases()
 
     # Step 2: init_field (same as Fortran main())
-    _tracer = _backend.simple.tracer_t()
+    _tracer = _fortran_backend.simple.tracer_t()
     _simple_main.init_field(
         _tracer,
         vmec_path,
@@ -209,18 +209,18 @@ def init(
 
     # Step 4: init_magfie - set function pointer for magnetic field evaluation
     # Use isw_field_type from velo_mod (set via param_overrides above)
-    field_type = int(_backend.velo_mod.isw_field_type)
+    field_type = int(_fortran_backend.velo_mod.isw_field_type)
 
     # Step 5: init_starting_surf (required for non-TEST fields)
     # Match Fortran driver ordering: initialize VMEC magfie for surface setup,
     # then restore requested field type for tracing.
     if field_type != _TEST_FIELD_ID:
-        _backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
-        samplers = _backend.Samplers()
+        _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
+        samplers = _fortran_backend.Samplers()
         samplers.init_starting_surf()
-        _backend.magfie_wrapper.wrapper_init_magfie(field_type)
+        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
     else:
-        _backend.magfie_wrapper.wrapper_init_magfie(field_type)
+        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
 
     _initialized = True
     _current_vmec = vmec_path
@@ -254,7 +254,7 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
     params.startmode = 2
 
     # Use wrapper to avoid f90wrap array bug
-    _backend.params_wrapper.set_sbeg(1, float(s))
+    _fortran_backend.params_wrapper.set_sbeg(1, float(s))
 
     if _is_test_field():
         rng = _sampling_rng()
@@ -267,11 +267,11 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
         zstart[3, :] = 1.0
         zstart[4, :] = rng.uniform(-1.0, 1.0, n_particles)
     else:
-        samplers = _backend.Samplers()
+        samplers = _fortran_backend.Samplers()
         zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
         samplers.sample(zstart)
 
-    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
+    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     return np.ascontiguousarray(zstart, dtype=np.float64)
 
@@ -318,10 +318,10 @@ def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarra
         zstart[4, :] = rng.uniform(-1.0, 1.0, n_particles)
     else:
         zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-        samplers = _backend.Samplers()
+        samplers = _fortran_backend.Samplers()
         samplers.sample(zstart, float(s_inner), float(s_outer))
 
-    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
+    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     return np.ascontiguousarray(zstart, dtype=np.float64)
 
@@ -380,10 +380,12 @@ def _ensure_trace_initialized():
         return
 
     # init_magfie(isw_field_type) - set field evaluation to configured type
-    _backend.magfie_wrapper.wrapper_init_magfie(_backend.velo_mod.isw_field_type)
+    _fortran_backend.magfie_wrapper.wrapper_init_magfie(
+        _fortran_backend.velo_mod.isw_field_type
+    )
 
     if (
-        _backend.velo_mod.isw_field_type != _TEST_FIELD_ID
+        _fortran_backend.velo_mod.isw_field_type != _TEST_FIELD_ID
         and _needs_bminmax_cache(params.num_surf, params.ntcut, params.class_plot)
     ):
         _simple_main.init_bminmax()
@@ -399,7 +401,7 @@ def _reset_trace_counters() -> None:
 def _load_loss_times(n_particles: int) -> np.ndarray:
     """Read the current backend loss-time array."""
     loss_times = np.zeros(n_particles, dtype=np.float64)
-    _backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
+    _fortran_backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
     return np.ascontiguousarray(loss_times, dtype=np.float64)
 
 
@@ -473,7 +475,7 @@ def trace_orbit(
     # Use wrapper to avoid f90wrap zstart binding mismatch
     zstart = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order='F')
     zstart[:, 0] = position
-    _backend.params_wrapper.set_zstart_bulk(1, zstart)
+    _fortran_backend.params_wrapper.set_zstart_bulk(1, zstart)
 
     test_bounds = _capture_test_field_bounds() if _is_test_field() else None
 
@@ -491,12 +493,12 @@ def trace_orbit(
 
             # Convert integrator trajectory to reference coordinates in bulk.
             traj_ref = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
-            _backend.params_wrapper.integ_traj_to_ref(traj_can, traj_ref)
+            _fortran_backend.params_wrapper.integ_traj_to_ref(traj_can, traj_ref)
             traj_ref_out = np.ascontiguousarray(traj_ref)
 
             # Extract final position via wrapper to avoid f90wrap zend binding mismatch
             zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
-            _backend.params_wrapper.get_zend_bulk(1, zend)
+            _fortran_backend.params_wrapper.get_zend_bulk(1, zend)
             final_pos = zend[:, 0]
             loss_time = float(_load_loss_times(1)[0])
 
@@ -514,7 +516,7 @@ def trace_orbit(
 
         # Extract final position via wrapper to avoid f90wrap zend binding mismatch
         zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
-        _backend.params_wrapper.get_zend_bulk(1, zend)
+        _fortran_backend.params_wrapper.get_zend_bulk(1, zend)
         final_pos = zend[:, 0]
         loss_time = float(_load_loss_times(1)[0])
 
@@ -559,7 +561,9 @@ def trace_parallel(
     -------
     >>> pysimple.init('wout.nc', trace_time=1e-3)
     >>> results = pysimple.trace_parallel(particles)
-    >>> lost_mask = results['loss_times'] < pysimple.params.trace_time
+    >>> lost_mask = (results['loss_times'] > 0.0) & (
+    ...     results['loss_times'] < pysimple.params.trace_time
+    ... )
 
     Notes
     -----
@@ -592,13 +596,13 @@ def trace_parallel(
     _ensure_trace_initialized()
     _reset_trace_counters()
     zstart = np.asfortranarray(positions, dtype=np.float64)
-    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
+    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     # Run parallel simulation (calls trace_parallel in Fortran).
     _simple_main.trace_parallel(_tracer)
 
     zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-    _backend.params_wrapper.get_zend_bulk(n_particles, zend)
+    _fortran_backend.params_wrapper.get_zend_bulk(n_particles, zend)
     final_positions = np.ascontiguousarray(zend, dtype=np.float64)
 
     loss_times = _load_loss_times(n_particles)
@@ -610,14 +614,14 @@ def trace_parallel(
 
     if hasattr(params, "trap_par"):
         trap_parameter = np.zeros(n_particles, dtype=np.float64)
-        _backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
+        _fortran_backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
         results["trap_parameter"] = np.ascontiguousarray(
             trap_parameter, dtype=np.float64
         )
 
     if hasattr(params, "perp_inv"):
         perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
-        _backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
+        _fortran_backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
         results["perpendicular_invariant"] = np.ascontiguousarray(
             perpendicular_invariant, dtype=np.float64
         )
@@ -698,32 +702,32 @@ def classify_parallel(
     _ensure_trace_initialized()
     _reset_trace_counters()
     zstart = np.asfortranarray(positions, dtype=np.float64)
-    _backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
+    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
 
     # Run parallel classification (calls classify_parallel in Fortran).
     _simple_main.classify_parallel(_tracer)
 
     zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-    _backend.params_wrapper.get_zend_bulk(n_particles, zend)
+    _fortran_backend.params_wrapper.get_zend_bulk(n_particles, zend)
 
     loss_times = _load_loss_times(n_particles)
 
     trap_parameter = np.zeros(n_particles, dtype=np.float64)
-    _backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
+    _fortran_backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
 
     perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
-    _backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
+    _fortran_backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
 
     passing_i = np.zeros(n_particles, dtype=np.int32)
-    _backend.params_wrapper.get_class_passing_bulk(n_particles, passing_i)
+    _fortran_backend.params_wrapper.get_class_passing_bulk(n_particles, passing_i)
     passing = passing_i.astype(bool)
 
     lost_i = np.zeros(n_particles, dtype=np.int32)
-    _backend.params_wrapper.get_class_lost_bulk(n_particles, lost_i)
+    _fortran_backend.params_wrapper.get_class_lost_bulk(n_particles, lost_i)
     lost = lost_i.astype(bool)
 
     iclass = np.zeros((3, n_particles), dtype=np.int32, order="F")
-    _backend.params_wrapper.get_iclass_bulk(n_particles, iclass)
+    _fortran_backend.params_wrapper.get_iclass_bulk(n_particles, iclass)
 
     return {
         "final_positions": np.ascontiguousarray(zend, dtype=np.float64),
