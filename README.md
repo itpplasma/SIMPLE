@@ -208,9 +208,9 @@ Available integrators (from `orbit_symplectic_base.f90`):
 #### Complete Examples
 
 Start with `examples/simple_api.py`, `examples/classify_fast.py`, or
-`examples/classify_fractal.py`. The older `examples/orbits_and_cuts.py` script
-is a low-level backend demo and is no longer the recommended entry point for new
-users.
+`examples/classify_fractal.py`. `examples/orbits_and_cuts.py` now derives a
+simple toroidal-plane cut from `pysimple.trace_orbit()`, but `simple_api.py`
+remains the shortest entry point for new users.
 
 ## Usage
 

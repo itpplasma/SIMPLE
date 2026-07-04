@@ -57,13 +57,12 @@ echo "Installing Python dependencies from requirements.txt ..."
 python -m pip install --prefer-binary -r "${SCRIPT_DIR}/requirements.txt"
 
 if [ "$BUILD_PYSIMPLE" -eq 1 ]; then
+    export CMAKE_ARGS="${CMAKE_ARGS:+${CMAKE_ARGS} }-DBLA_VENDOR=OpenBLAS"
     echo "Building pysimple (Fortran-Python bindings) ..."
-    # Build SIMPLE first if not already built
-    if [ ! -f "${SCRIPT_DIR}/build/build.ninja" ]; then
-        echo "  Configuring CMake ..."
-        cmake -S "$SCRIPT_DIR" -B"${SCRIPT_DIR}/build" -GNinja \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_COLOR_DIAGNOSTICS=ON
-    fi
+    echo "  Configuring CMake ..."
+    cmake -S "$SCRIPT_DIR" -B"${SCRIPT_DIR}/build" -GNinja \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_COLOR_DIAGNOSTICS=ON \
+        -DBLA_VENDOR=OpenBLAS
     echo "  Building Fortran library ..."
     cmake --build "${SCRIPT_DIR}/build" --config Release
 

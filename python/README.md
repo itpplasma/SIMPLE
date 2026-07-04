@@ -54,9 +54,9 @@ and ``examples/classify_fractal.py``.
 Legacy script note
 ------------------
 
-``examples/orbits_and_cuts.py`` talks directly to the low-level backend and is
-kept for reference only. Prefer ``pysimple`` for new scripts and user-facing
-examples.
+``examples/orbits_and_cuts.py`` uses ``pysimple.trace_orbit()`` and computes a
+simple toroidal-plane cut in Python. Prefer ``examples/simple_api.py`` when you
+just want the shortest supported entry point.
 
 Testing
 -------
