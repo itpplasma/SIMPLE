@@ -42,14 +42,15 @@ def _read_fortran_classification(path: Path, n_particles: int) -> dict[str, np.n
     data = np.loadtxt(path / "times_lost.dat")
 
     # times_lost.dat format:
-    # ipart, passing(0/1), loss_time, trap_par, perp_inv
-    # Classification is in iclass array but not written to file!
-    # We'll rely on passing/trapped and loss times for basic parity
+    # ipart, loss_time, trap_par, s_start, perp_inv, zend(1:5)
+    # Passing/trapped is reconstructed from trap_par, matching the Fortran code
+    # path where trap_par < 0 indicates passing.
+    trap_parameter = data[:, 2]
 
     return {
-        "passing": data[:, 1].astype(bool),
-        "loss_times": data[:, 2],
-        "trap_parameter": data[:, 3],
+        "passing": trap_parameter < 0.0,
+        "loss_times": data[:, 1],
+        "trap_parameter": trap_parameter,
         "perpendicular_invariant": data[:, 4],
     }
 
@@ -82,6 +83,7 @@ def test_classification_parity(tmp_path: Path, vmec_file: str) -> None:
     pysimple.init(
         vmec_path,
         deterministic=True,
+        isw_field_type=0,
         notrace_passing=0,
         npoiper2=64,
         num_surf=1,

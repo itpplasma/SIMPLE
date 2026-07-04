@@ -255,6 +255,7 @@ def sample_surface(n_particles: int, s: float) -> np.ndarray:
 
     # Use wrapper to avoid f90wrap array bug
     _fortran_backend.params_wrapper.set_sbeg(1, float(s))
+    _sync_single_surface_state(float(s))
 
     if _is_test_field():
         rng = _sampling_rng()
@@ -405,6 +406,35 @@ def _load_loss_times(n_particles: int) -> np.ndarray:
     return np.ascontiguousarray(loss_times, dtype=np.float64)
 
 
+def _sync_single_surface_state(surface_s: float) -> None:
+    """Refresh single-surface sampling and bmin/bmax state for a loaded surface."""
+    if _is_test_field() or int(getattr(params, "num_surf", 0)) != 1:
+        return
+
+    _fortran_backend.params_wrapper.set_sbeg(1, float(surface_s))
+    field_type = int(_fortran_backend.velo_mod.isw_field_type)
+    _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
+    _fortran_backend.Samplers().init_starting_surf()
+    _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
+
+
+def _maybe_sync_single_surface_state(positions: np.ndarray) -> None:
+    """Align sbeg/bmin/bmax with the provided surface when all particles share it."""
+    if positions.size == 0:
+        return
+
+    if positions.ndim == 1:
+        _sync_single_surface_state(float(positions[0]))
+        return
+
+    if positions.ndim != 2:
+        return
+
+    surface_s = float(positions[0, 0])
+    if np.allclose(positions[0, :], surface_s, rtol=0.0, atol=1.0e-12):
+        _sync_single_surface_state(surface_s)
+
+
 def trace_orbit(
     position: np.ndarray,
     integrator: str | int = MIDPOINT,
@@ -470,6 +500,7 @@ def trace_orbit(
     params.reallocate_arrays()
     params.integmode = integrator_code
     _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(position)
     _reset_trace_counters()
 
     # Use wrapper to avoid f90wrap zstart binding mismatch
@@ -594,6 +625,7 @@ def trace_parallel(
     params.reallocate_arrays()
     params.integmode = integrator_code
     _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(positions)
     _reset_trace_counters()
     zstart = np.asfortranarray(positions, dtype=np.float64)
     _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
@@ -700,6 +732,7 @@ def classify_parallel(
     params.reallocate_arrays()
     params.integmode = integrator_code
     _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(positions)
     _reset_trace_counters()
     zstart = np.asfortranarray(positions, dtype=np.float64)
     _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
