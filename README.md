@@ -60,11 +60,54 @@ On macOS (Homebrew):
 brew install gcc cmake ninja netcdf netcdf-fortran lapack
 ```
 
-For Python wrappers, do
+### Python virtual environment (recommended)
+
+On machines where the system Python is externally managed (PEP 668), create a
+repository-local virtual environment before installing `f90wrap` or the Python
+bindings:
+
 ```bash
-pip install f90wrap==0.3.0
-pip install -e . --no-build-isolation
+./setup-venv.sh
 ```
+
+The script creates `.venv/`, installs the Python dependencies, and installs
+`pysimple` in editable mode so `python -c "import pysimple"` works from the
+repository root.
+
+If you are using SIMPLE together with the sibling benchmark checkout
+`../benchmark-simple-potato`, prefer the shared environment in that benchmark
+repository so all three checkouts (`../benchmark-simple-potato`, `../SIMPLE`,
+`../NEO-RT`) use the same Python installation:
+
+```bash
+source ../benchmark-simple-potato/.venv/bin/activate
+python -m pip install --no-build-isolation -e .
+```
+
+Later, reactivate the same environment with:
+
+```bash
+source .venv/bin/activate
+```
+
+If you need to refresh packages after pulling new changes, rerun
+`./setup-venv.sh`. Pass `--recreate` to discard the existing `.venv` and start
+from scratch.
+
+If you prefer the manual steps, the equivalent workflow is:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e . --no-build-isolation
+```
+
+Important: if CMake previously reported `Python f90wrap not found, skipping
+interface build.`, activate the virtual environment first and then rebuild or
+reinstall `pysimple` so the bindings are generated with `f90wrap` available on
+`PATH`.
 
 ### Python API
 
@@ -164,7 +207,10 @@ Available integrators (from `orbit_symplectic_base.f90`):
 
 #### Complete Examples
 
-See `examples/simple_api.py` for complete working examples.
+Start with `examples/simple_api.py`, `examples/classify_fast.py`, or
+`examples/classify_fractal.py`. The older `examples/orbits_and_cuts.py` script
+is a low-level backend demo and is no longer the recommended entry point for new
+users.
 
 ## Usage
 
