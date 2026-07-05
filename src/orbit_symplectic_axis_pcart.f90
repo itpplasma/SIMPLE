@@ -34,7 +34,6 @@ public :: axis_pcart_enabled, axis_pcart_smax, set_axis_pcart, axis_pcart_step
 
 logical, save :: axis_pcart_enabled = .false.
 real(dp), save :: axis_pcart_smax = 0.01_dp
-!$acc declare copyin(axis_pcart_enabled, axis_pcart_smax)
 
 contains
 
@@ -46,7 +45,6 @@ subroutine set_axis_pcart(enabled, smax)
 end subroutine set_axis_pcart
 
 subroutine pcart_velocity(f, y, fxy)
-    !$acc routine seq
     !> Guiding-centre velocity in (X,Y,phi,pphi). y = (X,Y,phi,pphi). The flux
     !> velocity (sdot, thetadot, phidot, pphidot) is mapped to (Xdot, Ydot) by
     !> the transform Jacobian d(X,Y)/d(s,theta), regular for rho > 0.
@@ -68,6 +66,9 @@ subroutine pcart_velocity(f, y, fxy)
     thd = f%dH(1)/a
     phid = (f%vpar - thd*f%hth)/f%hph
     ppd = -(f%dH(3) - thd*f%dpth(3))
+    ! Non-canonical structure: pthd is dpth/dtau = -dH/dtheta + thetadot*dpth/dtheta.
+    ! sdot follows from pthd = sum_j dpth/dz_j * zdot_j solved for the s component,
+    ! not from dropping the dpth(2)*thetadot term.
     pthd = -(f%dH(2) - thd*f%dpth(2))
     sdot = (pthd - f%dpth(2)*thd - f%dpth(3)*phid - f%dpth(4)*ppd)/a
 
@@ -78,7 +79,6 @@ subroutine pcart_velocity(f, y, fxy)
 end subroutine pcart_velocity
 
 subroutine axis_pcart_step(si, f, ierr)
-    !$acc routine seq
     !> One explicit RK4 substep in pseudo-Cartesian (X,Y,phi,pphi).
     type(symplectic_integrator_t), intent(inout) :: si
     type(field_can_t), intent(inout) :: f
