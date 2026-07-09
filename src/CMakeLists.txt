@@ -108,7 +108,13 @@ target_link_libraries(simple PUBLIC
 )
 
 target_link_libraries(simple PUBLIC
-    LIBNEO::neo
+    LIBNEO::boozer
+    LIBNEO::coordinates
+    LIBNEO::field
+    LIBNEO::magnetic_field_base
+    LIBNEO::odeint
+    LIBNEO::util
+    LIBNEO::vmec_field
 )
 
 target_link_libraries(simple PUBLIC
