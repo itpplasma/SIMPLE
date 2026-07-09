@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "pysimple"
 version = "1.2.0"
-dependencies = ["numpy", "f90wrap"]
+dependencies = ["numpy", "f90wrap==0.3.0"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
 ]

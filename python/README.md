@@ -1,67 +1,72 @@
 Clean SIMPLE Python API
 =======================
 
-The ``simple`` package provides a modern, batch-oriented interface to the
-high-performance SIMPLE Fortran backend.  It mirrors the structure-of-arrays
-memory layout used in Fortran, enabling zero-copy interaction while keeping the
-public API concise.
+The supported Python package is ``pysimple``. It wraps the Fortran backend built
+by CMake/f90wrap and provides a module-level API for initialization, sampling,
+tracing, and classification.
 
-Legacy proof-of-concept notebooks and scripts that originally lived here are
-now preserved under ``concept/`` so the Python directory focuses purely on the
-supported interface.
+Environment setup
+-----------------
 
-Key modules
------------
+For a fresh checkout, create the recommended local virtual environment:
 
-``simple.__init__``
-    Public entry point exporting :class:`ParticleBatch`, :class:`BatchResults`,
-    :class:`SurfaceSampler`, :class:`VolumeSampler`, and the :func:`trace_orbits`
-    convenience function.
+.. code-block:: bash
 
-``simple.particles``
-    Structure-of-arrays container that wraps particle phase-space coordinates.
-    Provides helpers for sampling and for constructing batches from raw numpy
-    arrays returned by the Fortran samplers.
+    ./setup-venv.sh
 
-``simple.results``
-    Immutable view over the Fortran output arrays with convenience methods for
-    confinement analysis.
+Later, reactivate it with:
 
-``simple.samplers``
-    Lightweight wrappers over the Fortran ``samplers`` module, exposing a
-    Pythonic interface for surface/volume sampling as well as file-based
-    particle loading.
+.. code-block:: bash
+
+    source .venv/bin/activate
+
+The editable install performed by ``setup-venv.sh`` exposes ``import pysimple``
+directly from the repository checkout.
+
+If you are working from the sibling benchmark checkout layout
+(``../benchmark-simple-potato``, ``../SIMPLE``, ``../NEO-RT``), use the shared
+environment in ``../benchmark-simple-potato/.venv`` instead of maintaining a
+second venv here.
 
 Quick start
 -----------
 
-When working directly from the repository, expose the package via
-``PYTHONPATH`` (or install it in editable mode) so that ``import simple``
-resolves correctly:
+First verify the bindings import cleanly:
 
 .. code-block:: bash
 
-    export PYTHONPATH=$PWD/python:$PYTHONPATH
-
-If you prefer an installed package, use ``python -m pip install .`` which will
-build the bindings and expose the same ``simple`` module.
-
-The high-level :class:`simple.SimpleSession` takes care of VMEC loading and
-keeps the Fortran globals in sync:
+    python -c "import pysimple; print('pysimple ok')"
 
 .. code-block:: python
 
-    import simple
+    import pysimple
 
-    session = simple.SimpleSession(simple.ensure_example_vmec())
-    batch = session.sample_surface(1024, surface=0.4)
-    results = session.trace(batch, tmax=0.2, integrator="symplectic_midpoint")
+    pysimple.init("wout.nc", deterministic=True, trace_time=5e-5, ntestpart=32)
+    particles = pysimple.sample_surface(32, s=0.3)
+    results = pysimple.trace_parallel(particles, integrator="midpoint")
 
-    confined_fraction = results.confined_mask().mean()
-    print(f"Confined fraction: {confined_fraction:.2%}")
+    n_lost = ((results["loss_times"] > 0.0) & (results["loss_times"] < 5e-5)).sum()
+    n_skipped = (results["loss_times"] < 0.0).sum()
+    print(f"Lost particles: {n_lost} (skipped deep-passing: {n_skipped})")
+
+Complete examples are in ``examples/simple_api.py``, ``examples/classify_fast.py``,
+and ``examples/classify_fractal.py``.
+
+Legacy script note
+------------------
+
+``examples/orbits_and_cuts.py`` uses ``pysimple.trace_orbit()`` and computes a
+simple toroidal-plane cut in Python. Prefer ``examples/simple_api.py`` when you
+just want the shortest supported entry point. The single-particle state is
+``[s, theta, phi, v/v0, lambda]`` with ``lambda = v_parallel / v``; the example
+includes both a confined trapped seed and a confined passing seed because the
+sign of ``lambda`` alone does not determine the orbit topology. The script also
+sets ``contr_pp=-1e10`` so deep-passing seeds are traced instead of being
+skipped by the default ``contr_pp=-1`` policy.
 
 Testing
 -------
 
-See ``test/python`` for pytest-based validation of the API.  All tests load the
-same VMEC equilibrium through the shared fixture in ``test/conftest.py``.
+See ``test/python`` for pytest-based validation of the API. Activate ``.venv``
+first so the tests use the same interpreter that has ``pysimple`` and its
+dependencies installed.

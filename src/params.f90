@@ -84,7 +84,7 @@ module params
     real(dp) :: fper, zerolam = 0d0
 
     real(dp) :: tcut = -1d0
-    integer :: ntcut
+    integer(8) :: ntcut
     integer :: nturns = 8
     logical          :: class_plot = .False.    !<=AAA
     real(dp) :: cut_in_per = 0d0        !<=AAA
@@ -261,7 +261,7 @@ contains
 	            end do
 	        end if
 
-	        ntcut = ceiling(ntimstep*ntau*tcut/trace_time)
+	        ntcut = microstep_cut_index(ntimstep, ntau, tcut, trace_time)
 	        norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
 	        nfp = L1i*norbper
 
@@ -273,6 +273,25 @@ contains
         call init_batch
         call reallocate_arrays
 	    end subroutine params_init
+
+    pure function microstep_cut_index(ntimstep_in, ntau_in, tcut_in, &
+            trace_time_in) result(ntcut_out)
+        ! Microstep index of the classification cut time tcut; <=0 disables it.
+        ! ntimstep*ntau reaches ~1e10 for second-scale traces and overflows a
+        ! 32-bit product, flipping the sign and spuriously enabling classification,
+        ! so evaluate in real(dp) and return int64.
+        integer, intent(in) :: ntimstep_in, ntau_in
+        real(dp), intent(in) :: tcut_in, trace_time_in
+        integer(8) :: ntcut_out
+
+        if (tcut_in > 0d0 .and. trace_time_in > 0d0) then
+            ntcut_out = ceiling( &
+                real(ntimstep_in, dp)*real(ntau_in, dp)*tcut_in/trace_time_in, &
+                kind=8)
+        else
+            ntcut_out = -1_8
+        end if
+    end function microstep_cut_index
 
 	    pure function to_lower(s) result(out)
 	        character(*), intent(in) :: s

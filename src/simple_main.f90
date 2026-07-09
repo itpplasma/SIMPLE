@@ -817,6 +817,8 @@ contains
 
         ierr_orbit = 0
         faulted = .false.
+        orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
+        orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
 
         if (swcoll) call reset_seed_if_deterministic
 
@@ -851,9 +853,8 @@ contains
         call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
         if (passing .and. should_skip(ipart)) then
-            ! Fill trajectory arrays with NaN since we're not tracing this particle
-            orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
-            orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
+            zend(:, ipart) = zstart(:, ipart)
+            times_lost(ipart) = -1.d0
             do it = 1, ntimstep
 !$omp atomic update
                 confpart_pass(it) = confpart_pass(it) + 1.d0

@@ -11,6 +11,7 @@ particles = pysimple.sample_surface(32, s=0.3)
 
 results = pysimple.trace_parallel(particles, integrator='midpoint')
 
-n_lost = (results['loss_times'] < 5e-5).sum()
+n_lost = ((results['loss_times'] > 0.0) & (results['loss_times'] < 5e-5)).sum()
 n_confined = (results['loss_times'] >= 5e-5).sum()
-print(f"Traced 32 particles: {n_confined} confined, {n_lost} lost")
+n_skipped = (results['loss_times'] < 0.0).sum()
+print(f"Traced 32 particles: {n_confined} confined, {n_lost} lost, {n_skipped} skipped")

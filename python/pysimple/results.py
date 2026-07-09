@@ -62,8 +62,12 @@ class BatchResults:
         threshold = self._tmax if t_threshold is None else float(t_threshold)
         return self._loss_times >= threshold
 
+    def skipped_mask(self) -> np.ndarray:
+        return self._loss_times < 0
+
     def lost_mask(self, t_threshold: Optional[float] = None) -> np.ndarray:
-        return ~self.confined_mask(t_threshold)
+        threshold = self._tmax if t_threshold is None else float(t_threshold)
+        return (self._loss_times > 0) & (self._loss_times < threshold)
 
     def confined(self, t_threshold: Optional[float] = None) -> np.ndarray:
         mask = self.confined_mask(t_threshold)
@@ -92,11 +96,11 @@ class BatchResults:
     def summary(self) -> str:  # pragma: no cover - simple diagnostic formatting
         confined = self.confined_mask().sum()
         lost = self.lost_mask().sum()
+        skipped = self.skipped_mask().sum()
         return (
             f"BatchResults(n_particles={self.n_particles}, "
-            f"confined={confined}, lost={lost}, tmax={self._tmax})"
+            f"confined={confined}, lost={lost}, skipped={skipped}, tmax={self._tmax})"
         )
 
     def __repr__(self) -> str:  # pragma: no cover - simple diagnostic formatting
         return self.summary()
-

@@ -219,3 +219,40 @@ class TestTraceOrbits:
         assert 'times' in result
         assert result['trajectory'].shape[0] == 5
         assert result['times'].shape[0] == result['trajectory'].shape[1]
+
+    def test_trace_parallel_preserves_skipped_passing_sentinel(self, vmec_file: str):
+        """Deep-passing particles skipped by contr_pp must keep loss_time = -1."""
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=1)
+        particle = np.array([[0.6], [0.0], [0.25 * np.pi], [1.0], [0.8]])
+
+        trace_results = pysimple.trace_parallel(particle, integrator="midpoint")
+        classify_results = pysimple.classify_parallel(particle, integrator="midpoint")
+
+        assert trace_results["loss_times"][0] == pytest.approx(-1.0)
+        assert classify_results["loss_times"][0] == pytest.approx(-1.0)
+        np.testing.assert_allclose(trace_results["final_positions"][:, 0], particle[:, 0])
+        np.testing.assert_allclose(classify_results["final_positions"][:, 0], particle[:, 0])
+
+    def test_trace_orbit_uses_backend_loss_time_for_early_loss(self, vmec_file: str):
+        """Single-particle tracing should report the backend loss time, not a padded zero."""
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-2, ntestpart=1)
+        particle = np.array([0.6, 0.0, 0.25 * np.pi, 1.0, 0.2])
+
+        single = pysimple.trace_orbit(
+            particle,
+            integrator="midpoint",
+            return_trajectory=True,
+        )
+
+        pysimple.init(vmec_file, deterministic=True, trace_time=1e-2, ntestpart=1)
+        batch = pysimple.trace_parallel(particle.reshape(5, 1), integrator="midpoint")
+
+        assert single["loss_time"] == pytest.approx(batch["loss_times"][0])
+        assert 0.0 < single["loss_time"] < pysimple.params.trace_time
+
+        positive_times = np.flatnonzero(single["times"] > 0.0)
+        assert positive_times.size > 0
+        np.testing.assert_array_equal(
+            np.isnan(single["times"][positive_times[-1] + 1 :]),
+            np.ones(single["times"].shape[0] - positive_times[-1] - 1, dtype=bool),
+        )

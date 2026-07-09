@@ -18,6 +18,8 @@ import sys
 sys.path.insert(0, str(python_dir))
 
 import pysimple  # noqa: E402  pylint: disable=wrong-import-position
+from pysimple._backend import SimulationArrays  # noqa: E402  pylint: disable=wrong-import-position
+from pysimple.results import BatchResults  # noqa: E402  pylint: disable=wrong-import-position
 
 
 class TestSoALayout:
@@ -74,6 +76,21 @@ class TestBatchResults:
         }
         assert results["final_positions"].shape == (5, 3)
 
+    def test_skipped_particles_are_not_counted_as_lost(self):
+        arrays = SimulationArrays(
+            final_positions=np.zeros((5, 3), dtype=np.float64),
+            loss_times=np.array([-1.0, 2.0e-5, 1.0e-4], dtype=np.float64),
+            trap_parameter=None,
+            perpendicular_invariant=None,
+            tmax=1.0e-4,
+        )
+        results = BatchResults.from_backend(arrays)
+
+        np.testing.assert_array_equal(results.skipped_mask(), [True, False, False])
+        np.testing.assert_array_equal(results.lost_mask(), [False, True, False])
+        np.testing.assert_array_equal(results.confined_mask(), [False, False, True])
+        assert "skipped=1" in results.summary()
+
 
 class TestPerformanceFramework:
     def test_column_major_access_speed(self):
@@ -87,4 +104,3 @@ class TestPerformanceFramework:
 
         assert column_access.shape == (5,)
         assert row_access.shape == (n_particles,)
-

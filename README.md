@@ -60,11 +60,54 @@ On macOS (Homebrew):
 brew install gcc cmake ninja netcdf netcdf-fortran lapack
 ```
 
-For Python wrappers, do
+### Python virtual environment (recommended)
+
+On machines where the system Python is externally managed (PEP 668), create a
+repository-local virtual environment before installing `f90wrap` or the Python
+bindings:
+
 ```bash
-pip install f90wrap==0.3.0
-pip install -e . --no-build-isolation
+./setup-venv.sh
 ```
+
+The script creates `.venv/`, installs the Python dependencies, and installs
+`pysimple` in editable mode so `python -c "import pysimple"` works from the
+repository root.
+
+If you are using SIMPLE together with the sibling benchmark checkout
+`../benchmark-simple-potato`, prefer the shared environment in that benchmark
+repository so all three checkouts (`../benchmark-simple-potato`, `../SIMPLE`,
+`../NEO-RT`) use the same Python installation:
+
+```bash
+source ../benchmark-simple-potato/.venv/bin/activate
+python -m pip install --no-build-isolation -e .
+```
+
+Later, reactivate the same environment with:
+
+```bash
+source .venv/bin/activate
+```
+
+If you need to refresh packages after pulling new changes, rerun
+`./setup-venv.sh`. Pass `--recreate` to discard the existing `.venv` and start
+from scratch.
+
+If you prefer the manual steps, the equivalent workflow is:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e . --no-build-isolation
+```
+
+Important: if CMake previously reported `Python f90wrap not found, skipping
+interface build.`, activate the virtual environment first and then rebuild or
+reinstall `pysimple` so the bindings are generated with `f90wrap` available on
+`PATH`.
 
 ### Python API
 
@@ -83,7 +126,9 @@ particles = pysimple.sample_surface(100, s=0.5)
 
 # Trace orbits in parallel
 results = pysimple.trace_parallel(particles)
-print(f"Lost: {(results['loss_times'] < 1e-3).sum()} particles")
+lost = ((results['loss_times'] > 0.0) & (results['loss_times'] < 1e-3)).sum()
+skipped = (results['loss_times'] < 0.0).sum()
+print(f"Lost: {lost} particles (skipped deep-passing: {skipped})")
 ```
 
 #### Initialization
@@ -99,7 +144,7 @@ Parameters:
 - `ntestpart=100`: Number of test particles
 - `npoiper2=64`: Integration steps per poloidal transit
 - `integmode`: Integration method (default: MIDPOINT)
-- `isw_field_type`: Field type (0=TEST, 2=VMEC, 3=BOOZER, etc.)
+- `isw_field_type`: Field type (`-1=TEST`, `0=CANFLUX`, `1=VMEC`, `2=BOOZER`, `3=MEISS`, `4=ALBERT`, `5=REFCOORDS`)
 - Any other Fortran parameter from params.f90
 
 #### Particle Sampling
@@ -108,7 +153,8 @@ Parameters:
 
 Sample particles uniformly on a flux surface.
 
-Returns: `(5, n_particles)` array with columns `[s, theta, phi, p_abs, v_par]`
+Returns: `(5, n_particles)` array with columns `[s, theta, phi, v/v0, lambda]`,
+where `lambda = v_parallel / v`
 
 **`pysimple.sample_volume(n_particles, s_inner, s_outer)`**
 
@@ -151,7 +197,7 @@ Returns dictionary including all trace_parallel outputs plus:
 - `'lost'`: `(n_particles,)` boolean
 - `'jpar'`: `(n_particles,)` J-parallel conservation (0-2)
 - `'topology'`: `(n_particles,)` topological classification (0-2)
-- `'minkowski'`: `(n_particles,)` Minkowski dimension (0-3)
+- `'fractal'`: `(n_particles,)` fractal classification (`1=regular`, `2=chaotic`)
 
 #### Integrator Constants
 
@@ -164,7 +210,10 @@ Available integrators (from `orbit_symplectic_base.f90`):
 
 #### Complete Examples
 
-See `examples/simple_api.py` for complete working examples.
+Start with `examples/simple_api.py`, `examples/classify_fast.py`, or
+`examples/classify_fractal.py`. `examples/orbits_and_cuts.py` now derives a
+simple toroidal-plane cut from `pysimple.trace_orbit()`, but `simple_api.py`
+remains the shortest entry point for new users.
 
 ## Usage
 
