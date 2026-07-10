@@ -1,6 +1,6 @@
 module netcdf_orbit_output
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_value
     use netcdf
     implicit none
 
@@ -16,7 +16,9 @@ module netcdf_orbit_output
     integer :: ncid
     integer :: dimid_particle, dimid_timestep
     integer :: varid_time, varid_s, varid_theta, varid_phi, varid_p_abs, varid_v_par
+    integer :: varid_r, varid_z
     logical :: netcdf_initialized = .false.
+    logical :: cylindrical_output = .false.
     real(dp) :: fill_value
 
 contains
@@ -31,16 +33,77 @@ contains
         end if
     end subroutine check_nc
 
+    subroutine configure_cylindrical_output(cart_units, coordinate_type, &
+                                            radial_coordinate)
+        use chartmap_metadata, only: read_chartmap_cart_units
+        use libneo_coordinates, only: chartmap_coordinate_system_t
+        use params, only: coord_input
+        use reference_coordinates, only: ref_coords
+
+        character(len=*), intent(out) :: cart_units, coordinate_type
+        character(len=*), intent(out) :: radial_coordinate
+
+        cart_units = 'cm'
+        coordinate_type = 'unavailable'
+        radial_coordinate = 's'
+        cylindrical_output = allocated(ref_coords)
+        if (.not. cylindrical_output) return
+
+        coordinate_type = 'vmec'
+        select type (ref_coords)
+        class is (chartmap_coordinate_system_t)
+            coordinate_type = 'chartmap'
+            radial_coordinate = 'rho'
+            call read_chartmap_cart_units(coord_input, cart_units)
+        class default
+            continue
+        end select
+    end subroutine configure_cylindrical_output
+
+    subroutine define_cylindrical_variable(name, description, cart_units, varid)
+        character(len=*), intent(in) :: name, description, cart_units
+        integer, intent(out) :: varid
+
+        integer :: status
+
+        status = nf90_def_var(ncid, trim(name), nf90_double, &
+            [dimid_particle, dimid_timestep], varid)
+        call check_nc(status, 'nf90_def_var '//trim(name))
+        if (netcdf_compression_level > 0) then
+            status = nf90_def_var_deflate(ncid, varid, 1, 1, &
+                netcdf_compression_level)
+            call check_nc(status, 'nf90_def_var_deflate '//trim(name))
+        end if
+        status = nf90_put_att(ncid, varid, '_FillValue', fill_value)
+        call check_nc(status, 'nf90_put_att '//trim(name)//' _FillValue')
+        status = nf90_put_att(ncid, varid, 'units', trim(cart_units))
+        call check_nc(status, 'nf90_put_att '//trim(name)//' units')
+        status = nf90_put_att(ncid, varid, 'description', trim(description))
+        call check_nc(status, 'nf90_put_att '//trim(name)//' description')
+    end subroutine define_cylindrical_variable
+
+    subroutine define_cylindrical_variables(cart_units)
+        character(len=*), intent(in) :: cart_units
+
+        call define_cylindrical_variable('R', 'Cylindrical major radius', &
+                                         cart_units, varid_r)
+        call define_cylindrical_variable('Z', &
+            'Cylindrical vertical coordinate', cart_units, varid_z)
+    end subroutine define_cylindrical_variables
+
 
     subroutine init_orbit_netcdf(n_particles, n_timesteps)
         integer, intent(in) :: n_particles, n_timesteps
         integer :: status, coord_varid_particle, coord_varid_timestep
+        character(len=16) :: cart_units, coordinate_type, radial_coordinate
 
         if (netcdf_initialized) then
             error stop 'init_orbit_netcdf: already initialized'
         end if
 
         fill_value = ieee_value(0.0d0, ieee_quiet_nan)
+        call configure_cylindrical_output(cart_units, coordinate_type, &
+                                          radial_coordinate)
 
         ! Create NetCDF file
         status = nf90_create('orbits.nc', nf90_netcdf4, ncid)
@@ -80,6 +143,9 @@ contains
         end if
         status = nf90_put_att(ncid, varid_s, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att s _FillValue')
+        status = nf90_put_att(ncid, varid_s, 'description', &
+            'First reference coordinate; see radial_coordinate global attribute')
+        call check_nc(status, 'nf90_put_att s description')
 
         status = nf90_def_var(ncid, 'theta', nf90_double, &
             [dimid_particle, dimid_timestep], varid_theta)
@@ -121,6 +187,8 @@ contains
         status = nf90_put_att(ncid, varid_v_par, '_FillValue', fill_value)
         call check_nc(status, 'nf90_put_att v_par _FillValue')
 
+        if (cylindrical_output) call define_cylindrical_variables(cart_units)
+
         ! Add global attributes
         status = nf90_put_att(ncid, nf90_global, 'description', &
             'SIMPLE orbit tracer output (macrostep mode)')
@@ -135,6 +203,14 @@ contains
 
         status = nf90_put_att(ncid, nf90_global, 'n_timesteps', n_timesteps)
         call check_nc(status, 'nf90_put_att n_timesteps')
+
+        status = nf90_put_att(ncid, nf90_global, 'coordinate_type', &
+            trim(coordinate_type))
+        call check_nc(status, 'nf90_put_att coordinate_type')
+
+        status = nf90_put_att(ncid, nf90_global, 'radial_coordinate', &
+            trim(radial_coordinate))
+        call check_nc(status, 'nf90_put_att radial_coordinate')
 
         ! End define mode
         status = nf90_enddef(ncid)
@@ -182,13 +258,16 @@ contains
 
     subroutine write_orbit_to_netcdf(ipart, orbit_traj, orbit_times)
         use field_can_mod, only : integ_to_ref
+        use reference_coordinates, only: ref_coords
+
         integer, intent(in) :: ipart
         real(kind(1.0d0)), intent(in) :: orbit_traj(:,:)  ! (5, ntimstep)
         real(kind(1.0d0)), intent(in) :: orbit_times(:)   ! (ntimstep)
 
         integer :: it, status, n_times
-        real(kind(1.0d0)) :: xref(3)
-        real(kind(1.0d0)), allocatable :: s_array(:), theta_array(:), phi_array(:)
+        real(dp) :: xcyl(3), xref(3)
+        real(dp), allocatable :: r_array(:), s_array(:), theta_array(:), phi_array(:)
+        real(dp), allocatable :: z_array(:)
 
         if (.not. netcdf_initialized) then
             error stop 'write_orbit_to_netcdf: NetCDF not initialized'
@@ -196,6 +275,11 @@ contains
 
         n_times = size(orbit_times)
         allocate(s_array(n_times), theta_array(n_times), phi_array(n_times))
+        if (cylindrical_output) then
+            allocate (r_array(n_times), z_array(n_times))
+            r_array = fill_value
+            z_array = fill_value
+        end if
 
         ! Convert integrator to reference coordinates
         do it = 1, n_times
@@ -203,6 +287,13 @@ contains
             s_array(it) = xref(1)
             theta_array(it) = xref(2)
             phi_array(it) = xref(3)
+            if (cylindrical_output) then
+                if (all(ieee_is_finite(xref))) then
+                    call ref_coords%evaluate_cyl(xref, xcyl)
+                    r_array(it) = xcyl(1)
+                    z_array(it) = xcyl(3)
+                end if
+            end if
         enddo
 
         ! Write entire orbit to NetCDF in one shot
@@ -223,6 +314,15 @@ contains
 
         status = nf90_put_var(ncid, varid_v_par, orbit_traj(5, :), start=[ipart, 1], count=[1, n_times])
         call check_nc(status, 'nf90_put_var v_par')
+
+        if (cylindrical_output) then
+            status = nf90_put_var(ncid, varid_r, r_array, start=[ipart, 1], &
+                count=[1, n_times])
+            call check_nc(status, 'nf90_put_var R')
+            status = nf90_put_var(ncid, varid_z, z_array, start=[ipart, 1], &
+                count=[1, n_times])
+            call check_nc(status, 'nf90_put_var Z')
+        end if
     end subroutine write_orbit_to_netcdf
 
 

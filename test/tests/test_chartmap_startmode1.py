@@ -9,6 +9,7 @@ import sys
 import os
 from pathlib import Path
 
+import netCDF4 as nc
 import numpy as np
 
 
@@ -35,6 +36,7 @@ startmode = 1
 integmode = 1
 relerr = 1d-10
 deterministic = .True.
+output_orbits_macrostep = .True.
 {start_only_line}/
 """,
         encoding="ascii",
@@ -54,6 +56,7 @@ def run_once(
         "avg_inverse_t_lost.dat",
         "results.nc",
         "fort.6601",
+        "orbits.nc",
     ]:
         target = workdir / name
         if target.exists() or target.is_symlink():
@@ -153,6 +156,34 @@ def main() -> None:
     )
     assert np.count_nonzero(np.abs(start1[:, 4] - start1[0, 4]) > 1.0e-12) > 0, (
         "expected varied sampled pitches"
+    )
+
+    with nc.Dataset(base / "orbits.nc") as dataset:
+        assert dataset.coordinate_type == "chartmap"
+        assert dataset.radial_coordinate == "rho"
+        assert dataset.variables["R"].units == "cm"
+        assert dataset.variables["Z"].units == "cm"
+        rho = np.asarray(dataset.variables["s"][:])
+        theta = np.asarray(dataset.variables["theta"][:])
+        zeta = np.asarray(dataset.variables["phi"][:])
+        radius = np.asarray(dataset.variables["R"][:])
+        height = np.asarray(dataset.variables["Z"][:])
+
+    finite_reference = np.isfinite(rho) & np.isfinite(theta) & np.isfinite(zeta)
+    assert np.any(finite_reference)
+    assert np.array_equal(np.isfinite(radius), finite_reference)
+    assert np.array_equal(np.isfinite(height), finite_reference)
+    np.testing.assert_allclose(
+        radius[finite_reference],
+        150.0 + 50.0 * rho[finite_reference] * np.cos(theta[finite_reference]),
+        rtol=0.0,
+        atol=2.0e-4,
+    )
+    np.testing.assert_allclose(
+        height[finite_reference],
+        50.0 * rho[finite_reference] * np.sin(theta[finite_reference]),
+        rtol=0.0,
+        atol=2.0e-4,
     )
 
     grid_start, _ = run_case(base, simple_x, grid_density=0.25)

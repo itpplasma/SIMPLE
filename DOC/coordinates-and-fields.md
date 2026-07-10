@@ -835,6 +835,21 @@ At rho=0.5, theta=0, zeta=0:
 This changes coordinate-specific quantities, but not the intended physical
 trajectory.
 
+### 9.4 Orbit Trajectory Output
+
+With `output_orbits_macrostep = .true.`, `orbits.nc` stores the trajectory in
+reference coordinates as `s`, `theta`, and `phi`. The global
+`radial_coordinate` attribute gives the meaning of the first variable: `s` for
+VMEC and `rho` for chartmaps. The variable name `s` remains for file-format
+compatibility.
+
+When a reference coordinate system is available, the file also contains `R`
+and `Z`. SIMPLE computes them through the active reference geometry, so VMEC
+and chartmap runs use the same runtime map as the orbit calculation. Each
+variable carries its native length unit (`cm` or `m`). Points without a finite
+reference position remain NaN. Analytic test fields do not write `R` and `Z`
+because they have no reference-coordinate geometry.
+
 ---
 
 ## 10. Key Files Reference

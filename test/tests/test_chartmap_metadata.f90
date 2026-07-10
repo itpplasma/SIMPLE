@@ -1,12 +1,14 @@
 program test_chartmap_metadata
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use netcdf
-    use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
+    use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_cart_units, &
+                                 read_chartmap_metadata
     use test_utils, only: check_close, check_string
     implicit none
 
     type(chartmap_metadata_t) :: meta
     integer :: errors
+    character(len=16) :: cart_units
 
     errors = 0
     call write_min_chartmap("mini.chartmap.nc", "cm", 0.8_dp)
@@ -16,6 +18,10 @@ program test_chartmap_metadata
     call check_close(meta%cart_scale_to_m, 0.01_dp, 1.0e-15_dp, &
         "scale mismatch", errors)
     call check_string(meta%cart_units, "cm", "units mismatch", errors)
+
+    call write_min_chartmap("units-only.chartmap.nc", "m")
+    call read_chartmap_cart_units("units-only.chartmap.nc", cart_units)
+    call check_string(cart_units, "m", "units-only read mismatch", errors)
     if (errors /= 0) error stop 1
 contains
 
@@ -32,7 +38,7 @@ contains
     subroutine write_min_chartmap(path, x_units, rho_lcfs)
         character(len=*), intent(in) :: path
         character(len=*), intent(in) :: x_units
-        real(dp), intent(in) :: rho_lcfs
+        real(dp), intent(in), optional :: rho_lcfs
 
         integer :: ncid, status
         integer :: dim_rho, dim_theta, dim_zeta
@@ -69,8 +75,10 @@ contains
         status = nf90_put_att(ncid, var_x, "units", trim(x_units))
         call check_nc(status, "put_att x.units")
 
-        status = nf90_put_att(ncid, nf90_global, "rho_lcfs", rho_lcfs)
-        call check_nc(status, "put_att rho_lcfs")
+        if (present(rho_lcfs)) then
+            status = nf90_put_att(ncid, nf90_global, "rho_lcfs", rho_lcfs)
+            call check_nc(status, "put_att rho_lcfs")
+        end if
 
         status = nf90_enddef(ncid)
         call check_nc(status, "enddef")
