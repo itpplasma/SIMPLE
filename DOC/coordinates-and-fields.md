@@ -237,7 +237,7 @@ end subroutine
 ### 3.2 VMEC Field
 
 **Type**: `vmec_field_t`
-**File**: `src/field/field_vmec.f90`
+**File**: `libneo/src/field/field_vmec.f90`
 
 - Native coordinates: VMEC (s, theta, varphi)
 - Evaluation: Calls `splint_vmec_data()` from libneo
@@ -263,18 +263,18 @@ call create_vmec_field(field)
 call create_coils_field('coils.simple', field)
 ```
 
-### 3.4 GVEC Field
+### 3.4 Boozer Chartmap Field
 
-**Type**: `gvec_field_t`
-**File**: `src/field/field_gvec.f90`
+**Type**: `boozer_chartmap_field_t`
+**File**: `src/field/field_boozer_chartmap.f90`
 
-- Reads `.dat` files with B-spline magnetic field data
-- Requires `GVEC_AVAILABLE` compile flag
-- This is a separate runtime path from the chartmap-based Boozer path
+- Reads an extended Boozer chartmap NetCDF (`boozer_field = 1`, see section 2)
+- Native coordinates: chartmap (rho = sqrt(s), theta_B, phi_B)
+- No VMEC initialization; runtime path selected by `is_boozer_chartmap()`
 
-For the workflow added in this PR, SIMPLE does **not** read raw GVEC state
-files directly. Instead, GVEC output is converted to an extended Boozer
-chartmap NetCDF and SIMPLE runs from that chartmap file.
+GVEC equilibria enter through this path. SIMPLE reads no raw GVEC state files
+and links no GVEC library; convert with `tools/gvec_to_boozer_chartmap.py`
+(section 8.2.1).
 
 ### 3.5 Splined Field (Decorator)
 
@@ -659,14 +659,14 @@ end subroutine
 | 2 | BOOZER | (s, theta_B, phi_B) | Symplectic |
 | 3 | MEISS | (r, theta_c, phi_c) | Symplectic |
 | 4 | ALBERT | (psi, theta_c, phi_c) | Symplectic |
-| 5 | REFCOORDS | (varies) | Both |
+| 5 | REFCOORDS | (varies) | RK45 only |
 
 ### 8.2 Input File Parameters
 
 | Parameter | Type | Purpose |
 |-----------|------|---------|
 | `netcdffile` | string | VMEC wout.nc file path |
-| `field_input` | string | Field data file (VMEC, coils, or GVEC) |
+| `field_input` | string | Field data file (VMEC wout, coils file, or Boozer chartmap NetCDF) |
 | `coord_input` | string | Reference coordinate file (VMEC or chartmap) |
 
 ### 8.2.1 GVEC -> Boozer chartmap -> SIMPLE
@@ -745,7 +745,7 @@ Cartesian space with a triangulated STL surface (using CGAL).
 
 **Constraints**:
 - integmode >= 1: Requires canonical field type (TEST, CANFLUX, BOOZER, MEISS, ALBERT)
-- integmode = 0 (RK45): Requires VMEC field type
+- integmode = 0 (RK45): works with any initialized field type (VMEC, REFCOORDS, or canonical modes); `simple_main.f90` guards only integmode >= 1
 
 ### 8.4 Spline Parameters
 
@@ -868,10 +868,10 @@ because they have no reference-coordinate geometry.
 
 | File | Purpose |
 |------|---------|
-| `src/field/field_base.f90` | Abstract magnetic_field_t (28 lines) |
-| `src/field/field_vmec.f90` | VMEC field (72 lines) |
+| `libneo/src/field/magnetic_field_base.f90` | Abstract magnetic_field_t |
+| `libneo/src/field/field_vmec.f90` | VMEC field |
 | `src/field/field_coils.f90` | Coils Biot-Savart (62 lines) |
-| `src/field/field_gvec.f90` | GVEC B-spline (214 lines) |
+| `src/field/field_boozer_chartmap.f90` | Extended Boozer chartmap field |
 | `src/field/field_splined.f90` | Splined decorator (537 lines) |
 | `src/field.F90` | Field factory (182 lines) |
 
