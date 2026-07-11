@@ -1019,6 +1019,7 @@ contains
                                  SPECTRE_OK, SPECTRE_BOUNDARY
         use magfie_sub, only: spectre_field
         use interface_crossing, only: crossing_log_record
+        use params, only: crossing_level
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         integer, intent(in) :: ipart
@@ -1042,7 +1043,7 @@ contains
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
                     call orbit_timestep_spectre(state, z, dtaumin, relerr, &
-                                                ierr_orbit, event)
+                                                crossing_level, ierr_orbit, event)
                     if (event%occurred) then
                         call crossing_log_record(ipart, &
                             (real(kt, dp) + event%t_frac)*dtaumin/v0, event%info)

@@ -46,6 +46,7 @@ def write_input(path, h5, trace_time, npart, sbeg):
         f"  field_input = '{h5}'",
         "  integ_coords = 6",
         "  integmode = 0",
+        "  crossing_level = 0",
         "  deterministic = .True.",
         "  ran_seed = 12345",
         "/",

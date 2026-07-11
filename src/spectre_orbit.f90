@@ -14,7 +14,7 @@ module spectre_orbit
     use odeint_allroutines_sub, only: odeint_allroutines
     use alpha_lifetime_sub, only: velo_can
     use interface_crossing, only: apply_crossing, crossing_info_t, axis_offset, &
-                                  CROSSING_LEVEL0, CROSS_LOSS
+                                  CROSS_LOSS
 
     implicit none
     private
@@ -77,17 +77,18 @@ contains
         state%mvol = mvol
     end subroutine spectre_state_reset
 
-    subroutine orbit_timestep_spectre(state, z, dtaumin, relerr, ierr, event)
+    subroutine orbit_timestep_spectre(state, z, dtaumin, relerr, level, ierr, event)
         !> Advance z = (rho_g, theta, zeta, p, lambda) by one microstep dtaumin.
         !> Once the home volume is fixed the substep runs on the field-clamped RHS
         !> (continuous across the interface); if the trajectory leaves the home
         !> volume the crossing time is bisected to the interface and apply_crossing
-        !> switches volume or reflects, with z resumed just inside the resolved
-        !> volume. A crossing outward through the outermost interface is a loss and
-        !> reports SPECTRE_BOUNDARY.
+        !> switches volume or reflects with the Level-`level` map, resuming z just
+        !> inside the resolved volume. A crossing outward through the outermost
+        !> interface is a loss and reports SPECTRE_BOUNDARY.
         type(spectre_orbit_state_t), intent(inout) :: state
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dtaumin, relerr
+        integer, intent(in) :: level
         integer, intent(out) :: ierr
         type(spectre_event_t), intent(out) :: event
 
@@ -127,7 +128,7 @@ contains
 
         call locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, event%t_frac)
         iface = nint(boundary)
-        call apply_crossing(z_hit, iface, direction, state%mvol, CROSSING_LEVEL0, &
+        call apply_crossing(z_hit, iface, direction, state%mvol, level, &
                             z, event%info)
         event%occurred = .true.
 
