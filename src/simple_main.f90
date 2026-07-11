@@ -1153,6 +1153,15 @@ contains
             it_final = it
         end do
 
+        ! A mirror-confined (skimming) marker is confined for the rest of the
+        ! trace, so it must count as confined at every remaining step for the
+        ! confined_fraction series to stay consistent with times_lost.
+        if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
+            do it = it_final, ntimstep
+                call increase_confined_count(it, passing)
+            end do
+        end if
+
         if (it_final < ntimstep) then
             do it = it_final + 1, ntimstep
                 orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
