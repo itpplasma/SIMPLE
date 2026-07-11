@@ -646,14 +646,17 @@ chartmap path does, so `stevvo` and `params_init` produce a consistent
 of the outermost interface (SI meters; `stevvo` scales it to cm). `fper` is
 `2*pi/Nfp`. `integmode > 0` builds the per-volume canonical coordinates below.
 
-**`magfie_spectre`** evaluates on the chart `x = (rho_g, theta, zeta)`. The
-field supplies `|B|`, covariant `h = B/|B|`, and the exact `sqrt(g) B^i` (the
-metric-free 2-form, no finite differences); the coordinate system supplies the
-analytic metric. `grad log|B|` (`bder`) and `curl(h)` (`hcurl`), the small drift
-corrections, come from central differences of `|B|` and `h`. `|B|` jumps across
-SPEC interfaces (the pressure jump), so the radial stencil is kept inside the
-current volume `[floor(rho_g), floor(rho_g)+1]`; straddling an integer would
-inject the discontinuity into the drift and stall the ODE solver.
+**`magfie_spectre`** evaluates on the chart `x = (rho_g, theta, zeta)`. libneo
+`spectre_evaluate_der` returns `|B|`, covariant `h = B/|B|`, the exact
+`sqrt(g) B^i` (the metric-free 2-form) and the analytic derivatives `d|B|/dx`
+and `d h_i/dx` in a single field evaluation; the coordinate system supplies the
+analytic metric and its derivative `d g_ij/dx`. `grad log|B|` (`bder`) and
+`curl(h)` (`hcurl`), the small drift corrections, follow analytically from the
+vector-potential Hessian and `d g_ij/dx`, so the field is evaluated once per
+call instead of the seven central-difference evaluations it replaced. `|B|`
+jumps across SPEC interfaces (the pressure jump), but the analytic derivative is
+the in-volume derivative in the volume `lvol = min(int(rho_g)+1, Mvol)` owning
+the point, so the discontinuity never enters the drift.
 
 **Units**. The SPECTRE field returns SI (Tesla, meter); SIMPLE integrates in
 Gaussian-CGS. The conversion lives in one block in `magfie_spectre`:

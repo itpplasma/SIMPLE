@@ -193,22 +193,19 @@ end subroutine magfie_refcoords
 subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   !> magfie in the SPECTRE stacked-rho chart x = (rho_g, theta, zeta).
   !>
-  !> The field returns |B|, covariant h = B/|B| and the exact sqrt(g) B^i (the
-  !> metric-free 2-form, no finite differences) in SI units; the coordinate
-  !> system provides the analytic metric. grad log|B| and curl(h), the small
-  !> drift corrections, come from central differences of |B| and h.
+  !> The field returns |B|, covariant h = B/|B|, the exact sqrt(g) B^i (the
+  !> metric-free 2-form) and the analytic x-derivatives of |B| and h in SI units;
+  !> the coordinate system provides the analytic metric and its derivative. grad
+  !> log|B| (bder) and curl(h) (hcurl), the small drift corrections, follow
+  !> analytically with no finite differences.
   implicit none
 
   real(dp), intent(in) :: x(3)
   real(dp), intent(out) :: bmod, sqrtg
   real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
-  real(dp) :: Acov(3), hcov(3), Bmod_si, sqgBctr(3)
-  real(dp) :: g(3, 3), ginv(3, 3), sqrtg_si
-  real(dp) :: dhcov(3, 3)
-  real(dp) :: xp(3), xm(3), Bmod_p, Bmod_m, hcov_p(3), hcov_m(3)
-  real(dp) :: Acov_dum(3), sqg_dum(3), denom, lo, hi
-  real(dp), parameter :: h_fd = 1.0d-4
+  real(dp) :: hcov(3), Bmod_si, sqgBctr(3), sqrtg_si
+  real(dp) :: dhcov_si(3, 3), dBmod_si(3), dhcov(3, 3)
   integer :: j
 
   if (.not. allocated(spectre_field)) then
@@ -217,8 +214,8 @@ subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     error stop
   end if
 
-  call spectre_field%evaluate(x, Acov, hcov, Bmod_si, sqgBctr)
-  call spectre_field%coords%metric_tensor(x, g, ginv, sqrtg_si)
+  call spectre_field%evaluate_der(x, hcov, Bmod_si, sqgBctr, sqrtg_si, &
+                                  dhcov_si, dBmod_si)
 
   ! Gaussian-CGS boundary conversion (single place). The SPECTRE field is SI
   ! (Tesla, meter); SIMPLE integrates in Gaussian-CGS. |B|: Tesla -> Gauss.
@@ -229,37 +226,14 @@ subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   sqrtg = sqrtg_si*M3_TO_CM3
   hcovar = hcov*M_TO_CM
   hctrvr = sqgBctr/(sqrtg_si*Bmod_si)/M_TO_CM
+  bder = dBmod_si/Bmod_si
 
+  ! hcurl^i = eps^ijk d_j h_k / sqrt(g). The covariant derivative d h_i/dx carries
+  ! the same M_TO_CM length factor as hcovar; compute_hcurl divides by the cm
+  ! sqrt(g), so hcurl comes out contravariant in Gaussian-CGS like hctrvr.
   do j = 1, 3
-    xp = x
-    xm = x
-    denom = 2.0d0*h_fd
-    if (j == 1) then
-      ! |B| jumps across SPEC interfaces, so the radial stencil must stay inside
-      ! the current volume [floor(rho_g), floor(rho_g)+1]; straddling an integer
-      ! injects the pressure-jump discontinuity into the drift and stalls odeint.
-      lo = real(floor(x(1)), dp)
-      hi = lo + 1.0d0
-      if (x(1) - h_fd < lo) then
-        xm(1) = x(1)
-        xp(1) = x(1) + denom
-      else if (x(1) + h_fd > hi) then
-        xm(1) = x(1) - denom
-        xp(1) = x(1)
-      else
-        xm(1) = x(1) - h_fd
-        xp(1) = x(1) + h_fd
-      end if
-    else
-      xm(j) = x(j) - h_fd
-      xp(j) = x(j) + h_fd
-    end if
-    call spectre_field%evaluate(xp, Acov_dum, hcov_p, Bmod_p, sqg_dum)
-    call spectre_field%evaluate(xm, Acov_dum, hcov_m, Bmod_m, sqg_dum)
-    bder(j) = (log(Bmod_p) - log(Bmod_m))/denom
-    dhcov(:, j) = (hcov_p - hcov_m)*M_TO_CM/denom
+    dhcov(:, j) = dhcov_si(:, j)*M_TO_CM
   end do
-
   call compute_hcurl(sqrtg, dhcov, hcurl)
 end subroutine magfie_spectre
 

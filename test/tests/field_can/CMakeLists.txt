@@ -89,3 +89,25 @@ add_test(NAME test_spectre_sympl_crossing_invariants
 set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
+
+# Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
+# difference algorithm they replaced to the FD truncation floor, at interior
+# points of every volume of the committed tokamak and stellarator fixtures.
+add_executable(test_magfie_spectre_analytic.x test_magfie_spectre_analytic.f90)
+target_link_libraries(test_magfie_spectre_analytic.x simple)
+
+add_test(NAME test_magfie_spectre_analytic_tok
+    COMMAND $<TARGET_FILE:test_magfie_spectre_analytic.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_magfie_spectre_analytic_tok PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120)
+
+add_test(NAME test_magfie_spectre_analytic_stell
+    COMMAND $<TARGET_FILE:test_magfie_spectre_analytic.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_magfie_spectre_analytic_stell PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120)
