@@ -133,6 +133,23 @@ tangential refraction applied where it is small. On the two-volume tok2vol
 fixture the poloidal variation is weak, so most crossings take the Level-0
 rescale and a minority refract with kicks up to `~0.2` rad.
 
+## Impulse-map validity domain (finding F5)
+
+The single-impulse form is the thin-layer limit only while the energy
+balance closes within a small tangential displacement:
+`mu [[B]] < v_par * (tangential B variation over the kick scale)`.
+Outside that domain the ideal sheet supplies no parallel mirror channel
+(`B . n = 0` holds inside a tangential-discontinuity layer, so
+`h . grad B` has no normal contribution), and the true limit is a long
+tangential slide along the sheet toward an equal-|B| point, which leaves
+the impulse map's ordering. Implementation: crossings whose refraction
+root exceeds a 0.3 rad tangential kick fall back to the energy-exact
+Level-0 rescale (the adiabatic-mirror convention); on the tok2vol
+fixture this affects most crossings because its poloidal |B| variation
+is weak. Mirror-vs-slide in this regime is an open modeling question to
+be adjudicated by the full-orbit comparison (SIMPLE#442); both
+conventions conserve H and mu exactly.
+
 ## Mixed-sheet ambiguity (finding F4) and the adopted convention
 
 For pure `[[B]]` or pure `[[h]]` sheets the thin-layer limit is unique
