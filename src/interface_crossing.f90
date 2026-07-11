@@ -1,15 +1,22 @@
 module interface_crossing
-    !> Level-0 guiding-center interface crossing for SPECTRE stacked-rho charts
-    !> (#443). apply_crossing is the single entry point; the Level-1 refraction
-    !> map (#440) later replaces the map behind it without touching callers, so
-    !> the level argument selects the map (only level 0 is implemented here).
+    !> Guiding-center interface crossing for SPECTRE stacked-rho charts. The
+    !> single entry point apply_crossing selects the map through its level
+    !> argument, so callers stay untouched between levels.
     !>
-    !> Level 0 holds (theta, zeta, mu), keeps the sign of v_par, switches volume,
-    !> and rescales v_par from exact energy conservation across the pressure jump
-    !> [[B]]. It is energy-exact in both branches (crossing and reflection).
+    !> Level 0 (#443) holds (theta, zeta, mu), keeps the sign of v_par, switches
+    !> volume, and rescales v_par from exact energy conservation across the
+    !> pressure jump [[B]].
+    !>
+    !> Level 1 (#440) is the thin-current-sheet limit of the guiding-center
+    !> dynamics: an impulse Delta z = lambda_k * X along the Hamiltonian vector
+    !> field X = {z, rho_g} of the interface function, with the single scalar
+    !> lambda_k fixed by exact energy conservation H = v_par^2/2 + mu*B. It adds
+    !> the tangential sheet-drift kick and the drift-order v_par term that Level 0
+    !> omits. Both levels are energy-exact in the crossing and reflection branch.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use magfie_sub, only: magfie
+    use parmot_mod, only: ro0
 
     implicit none
     private
@@ -17,10 +24,11 @@ module interface_crossing
     public :: apply_crossing, crossing_info_t, axis_offset
     public :: crossing_log_reset, crossing_log_record, crossing_log_write, &
               crossing_log_count
-    public :: CROSSING_LEVEL0, CROSS_CROSSING, CROSS_REFLECTION, CROSS_LOSS, &
-              CROSS_STOP
+    public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSS_CROSSING, CROSS_REFLECTION, &
+              CROSS_LOSS, CROSS_STOP
 
     integer, parameter :: CROSSING_LEVEL0 = 0
+    integer, parameter :: CROSSING_LEVEL1 = 1
     integer, parameter :: CROSS_CROSSING = 1
     integer, parameter :: CROSS_REFLECTION = 2
     integer, parameter :: CROSS_LOSS = 3
@@ -43,6 +51,20 @@ module interface_crossing
     !> substep triggers a zero-length event at its start point.
     real(dp), parameter :: reflect_nudge = 1.0d-6
 
+    !> Level-1 refraction solve: a damped (backtracking) Newton on the scalar
+    !> lambda_k drives the energy residual |dH|/H below newton_rtol. Backtracking
+    !> keeps the step from diverging where the residual is non-monotonic in the
+    !> tangential kick (the target |B| varies poloidally). The generator is
+    !> refreshed at the midpoint state by sym_iters symmetrization sweeps per
+    !> residual, so the discrete map is symplectic. If no refraction root is found
+    !> within max_kick radians the map falls back to the energy-exact Level-0
+    !> rescale, so every energetically allowed marker still crosses.
+    integer, parameter :: max_newton = 40
+    integer, parameter :: max_backtrack = 20
+    integer, parameter :: sym_iters = 2
+    real(dp), parameter :: newton_rtol = 1.0d-14
+    real(dp), parameter :: max_kick = 0.3d0
+
     type :: crossing_info_t
         integer :: event_type = 0
         integer :: iface = 0
@@ -55,6 +77,14 @@ module interface_crossing
         real(dp) :: mu = 0.0_dp
         real(dp) :: bmod_home = 0.0_dp
         real(dp) :: bmod_target = 0.0_dp
+        !> Level-1 generator X = {z, rho_g}, scalar lambda_k, and the applied
+        !> tangential kicks (theta, zeta receive lambda_k*X); zero at Level 0.
+        real(dp) :: xtheta = 0.0_dp
+        real(dp) :: xzeta = 0.0_dp
+        real(dp) :: xvpar = 0.0_dp
+        real(dp) :: lambda = 0.0_dp
+        real(dp) :: dtheta = 0.0_dp
+        real(dp) :: dzeta = 0.0_dp
     end type crossing_info_t
 
     type :: crossing_record_t
@@ -80,8 +110,8 @@ contains
         real(dp) :: rho_face, rho_home, rho_target
         real(dp) :: bmod_home, bmod_target, perp_inv, mu, vpar, radicand
 
-        if (level /= CROSSING_LEVEL0) then
-            error stop 'apply_crossing: Level-1 crossing not yet implemented'
+        if (level /= CROSSING_LEVEL0 .and. level /= CROSSING_LEVEL1) then
+            error stop 'apply_crossing: unknown crossing_level'
         end if
 
         rho_face = real(iface, dp)
@@ -132,6 +162,12 @@ contains
             return
         end if
 
+        if (level == CROSSING_LEVEL1) then
+            call level1_map(rho_face, rho_home, rho_target, direction, &
+                            bmod_home, mu, vpar, y_iface, y_out, info)
+            return
+        end if
+
         bmod_target = bmod_at([rho_target, y_iface(2), y_iface(3)])
         info%bmod_target = bmod_target
 
@@ -162,6 +198,189 @@ contains
 
         call magfie(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     end function bmod_at
+
+    subroutine level1_map(rho_face, rho_home, rho_target, direction, &
+                          bmod_home, mu, vpar, y_iface, y_out, info)
+        !> Level-1 refraction map: the impulse Delta z = lambda_k * X along the
+        !> interface Hamiltonian vector field. The Level-0 energy criterion at the
+        !> landing point (radicand0 = v_par^2 - 2 mu [[B]]) decides crossing vs
+        !> mirror, so the event split matches Level 0; Level 1 refines the crossing
+        !> with the tangential sheet-drift kick and the drift-order v_par term. The
+        !> forbidden crossing reflects as the Level-0 mirror (same-side energy root,
+        !> no kick), which keeps the trapped sheet-skimming class identical to
+        !> Level 0.
+        real(dp), intent(in) :: rho_face, rho_home, rho_target
+        integer, intent(in) :: direction
+        real(dp), intent(in) :: bmod_home, mu, vpar, y_iface(5)
+        real(dp), intent(inout) :: y_out(5)
+        type(crossing_info_t), intent(inout) :: info
+
+        real(dp) :: theta0, zeta0, p, hh, radicand0
+        real(dp) :: xt, xz, xv, lam, dtheta, dzeta, vpar_new
+
+        theta0 = y_iface(2)
+        zeta0 = y_iface(3)
+        p = y_iface(4)
+        hh = 0.5_dp*vpar**2 + mu*bmod_home
+        radicand0 = 2.0_dp*(hh - mu*bmod_at([rho_target, theta0, zeta0]))
+
+        xt = 0.0_dp
+        xz = 0.0_dp
+        xv = 0.0_dp
+        lam = 0.0_dp
+        dtheta = 0.0_dp
+        dzeta = 0.0_dp
+
+        if (radicand0 >= 0.0_dp) then
+            call solve_crossing(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, &
+                                radicand0, xt, xz, xv, lam, dtheta, dzeta, vpar_new)
+            info%event_type = CROSS_CROSSING
+            info%bmod_target = bmod_at([rho_target, theta0 + dtheta, zeta0 + dzeta])
+            y_out(1) = rho_face + real(direction, dp)*reflect_nudge
+        else
+            vpar_new = -vpar
+            info%event_type = CROSS_REFLECTION
+            info%vol_to = info%vol_from
+            info%bmod_target = bmod_home
+            y_out(1) = rho_face - real(direction, dp)*reflect_nudge
+        end if
+
+        info%xtheta = xt
+        info%xzeta = xz
+        info%xvpar = xv
+        info%lambda = lam
+        info%dtheta = dtheta
+        info%dzeta = dzeta
+        info%vpar_after = vpar_new
+        y_out(2) = theta0 + dtheta
+        y_out(3) = zeta0 + dzeta
+        y_out(5) = vpar_new/p
+    end subroutine level1_map
+
+    subroutine solve_crossing(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, &
+                              radicand0, xt, xz, xv, lam, dtheta, dzeta, vpar_new)
+        !> Damped Newton for the refraction root of
+        !> F(lam) = 0.5*(v_par + lam*X_vpar)^2 + mu*B_target(kick) - H_home. The
+        !> residual (via residual_at) refreshes the generator by symmetrization
+        !> sweeps at the midpoint state z + 0.5*lam*X. Backtracking halves the step
+        !> whenever it fails to reduce |F|, so the walk to the equal-|B| point does
+        !> not diverge where F is non-monotonic in the poloidal angle. If |F| is not
+        !> driven below tolerance within max_kick the map falls back to the
+        !> energy-exact Level-0 rescale (no kick), so every energetically allowed
+        !> marker crosses.
+        real(dp), intent(in) :: rho_home, rho_target, theta0, zeta0, vpar, mu, hh
+        real(dp), intent(in) :: radicand0
+        real(dp), intent(out) :: xt, xz, xv, lam, dtheta, dzeta, vpar_new
+
+        integer :: iter, bt
+        real(dp) :: fres, dfres, step, lam_try, fres_try, dfres_try
+        real(dp) :: xt_try, xz_try, xv_try
+        logical :: converged
+
+        lam = 0.0_dp
+        call residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, lam, &
+                         fres, dfres, xt, xz, xv)
+        converged = abs(fres) <= newton_rtol*abs(hh)
+
+        do iter = 1, max_newton
+            if (converged) exit
+            if (abs(dfres) <= tiny(1.0_dp)) exit
+            step = fres/dfres
+            do bt = 0, max_backtrack
+                lam_try = lam - step
+                call residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, &
+                                 hh, lam_try, fres_try, dfres_try, &
+                                 xt_try, xz_try, xv_try)
+                if (abs(fres_try) < abs(fres)) exit
+                step = 0.5_dp*step
+            end do
+            if (abs(fres_try) >= abs(fres)) exit
+            lam = lam_try
+            fres = fres_try
+            dfres = dfres_try
+            xt = xt_try
+            xz = xz_try
+            xv = xv_try
+            converged = abs(fres) <= newton_rtol*abs(hh)
+            if (abs(lam*xt) > max_kick .or. abs(lam*xz) > max_kick) exit
+        end do
+
+        if (converged .and. abs(lam*xt) <= max_kick &
+            .and. abs(lam*xz) <= max_kick) then
+            dtheta = lam*xt
+            dzeta = lam*xz
+            vpar_new = vpar + lam*xv
+        else
+            xt = 0.0_dp
+            xz = 0.0_dp
+            xv = 0.0_dp
+            lam = 0.0_dp
+            dtheta = 0.0_dp
+            dzeta = 0.0_dp
+            vpar_new = sign(sqrt(radicand0), vpar)
+        end if
+    end subroutine solve_crossing
+
+    subroutine residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, lam, &
+                           fres, dfres, xt, xz, xv)
+        !> Energy residual F(lam) and its lambda-derivative for the refraction
+        !> solve, with the generator X evaluated self-consistently at the midpoint
+        !> state z + 0.5*lam*X by sym_iters fixed-point sweeps. dfres freezes X, the
+        !> dominant term being the poloidal |B| gradient along the tangential kick.
+        real(dp), intent(in) :: rho_home, rho_target, theta0, zeta0, vpar, mu, hh
+        real(dp), intent(in) :: lam
+        real(dp), intent(out) :: fres, dfres, xt, xz, xv
+
+        integer :: k
+        real(dp) :: th_mid, ze_mid, vp_mid, th_k, ze_k, vp_k
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        xt = 0.0_dp
+        xz = 0.0_dp
+        xv = 0.0_dp
+        do k = 1, sym_iters
+            th_mid = theta0 + 0.5_dp*lam*xt
+            ze_mid = zeta0 + 0.5_dp*lam*xz
+            vp_mid = vpar + 0.5_dp*lam*xv
+            call generator_sym(rho_home, rho_target, th_mid, ze_mid, vp_mid, &
+                               xt, xz, xv)
+        end do
+        th_k = theta0 + lam*xt
+        ze_k = zeta0 + lam*xz
+        vp_k = vpar + lam*xv
+        call magfie([rho_target, th_k, ze_k], bmod, sqrtg, bder, hcovar, hctrvr, &
+                    hcurl)
+        fres = 0.5_dp*vp_k**2 + mu*bmod - hh
+        dfres = vp_k*xv + mu*bmod*(bder(2)*xt + bder(3)*xz)
+    end subroutine residual_at
+
+    subroutine generator_sym(rho_home, rho_target, theta, zeta, vpar_mid, &
+                             xt, xz, xv)
+        !> Interface Hamiltonian vector field X = {z, rho_g} in SIMPLE Gaussian
+        !> units, from the guiding-center bracket. hcovar/sqrtg/hcurl are the
+        !> midpoint average of the two volumes, and the drift constant ro0 and
+        !> Bstar_par = bmod + ro0*v_par*(h.curl h) are the same ones velo_can uses
+        !> for the per-volume drift (parmot_mod ro0; hpstar = Bstar_par/bmod).
+        real(dp), intent(in) :: rho_home, rho_target, theta, zeta, vpar_mid
+        real(dp), intent(out) :: xt, xz, xv
+
+        real(dp) :: b_h, sg_h, bder_h(3), hcov_h(3), hctr_h(3), hcurl_h(3)
+        real(dp) :: b_t, sg_t, bder_t(3), hcov_t(3), hctr_t(3), hcurl_t(3)
+        real(dp) :: sqrtg, hcov(3), hcurl(3), bmod, bstar_par
+
+        call magfie([rho_home, theta, zeta], b_h, sg_h, bder_h, hcov_h, hctr_h, &
+                    hcurl_h)
+        call magfie([rho_target, theta, zeta], b_t, sg_t, bder_t, hcov_t, hctr_t, &
+                    hcurl_t)
+        bmod = 0.5_dp*(b_h + b_t)
+        sqrtg = 0.5_dp*(sg_h + sg_t)
+        hcov = 0.5_dp*(hcov_h + hcov_t)
+        hcurl = 0.5_dp*(hcurl_h + hcurl_t)
+        bstar_par = bmod + ro0*vpar_mid*dot_product(hcov, hcurl)
+        xt = -ro0*hcov(3)/(sqrtg*bstar_par)
+        xz = ro0*hcov(2)/(sqrtg*bstar_par)
+        xv = ro0*vpar_mid*hcurl(1)/bstar_par
+    end subroutine generator_sym
 
     subroutine crossing_log_reset(capacity)
         integer, intent(in) :: capacity
@@ -210,13 +429,16 @@ contains
         call sorted_by_particle(order)
         open (newunit=unit, file=filename, recl=1024)
         write (unit, '(A)') '# particle  time  iface  type  vol_from  vol_to  '// &
-            'theta  zeta  vpar_before  vpar_after  mu  bmod_home  bmod_target'
+            'theta  zeta  vpar_before  vpar_after  mu  bmod_home  bmod_target  '// &
+            'xtheta  xzeta  xvpar  lambda  dtheta  dzeta'
         do i = 1, crossing_count
             associate (r => crossing_log(order(i)))
                 write (unit, *) r%ipart, r%time, r%info%iface, r%info%event_type, &
                     r%info%vol_from, r%info%vol_to, r%info%theta, r%info%zeta, &
                     r%info%vpar_before, r%info%vpar_after, r%info%mu, &
-                    r%info%bmod_home, r%info%bmod_target
+                    r%info%bmod_home, r%info%bmod_target, &
+                    r%info%xtheta, r%info%xzeta, r%info%xvpar, r%info%lambda, &
+                    r%info%dtheta, r%info%dzeta
             end associate
         end do
         close (unit)

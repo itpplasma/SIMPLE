@@ -119,6 +119,9 @@ module params
     character(1000) :: wall_input = ''
     character(16) :: wall_units = 'm'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
+    !> SPECTRE RK45 interface-crossing map: 1 = Level-1 refraction (default),
+    !> 0 = Level-0 energy rescale (regression comparison).
+    integer :: crossing_level = 1
 
 	    namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
 	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
@@ -133,7 +136,8 @@ module params
 	        am1, am2, Z1, Z2, &
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-	        wall_input, wall_units, integ_coords, output_results_netcdf, &
+	        wall_input, wall_units, integ_coords, crossing_level, &
+        output_results_netcdf, &
 	        output_error, output_orbits_macrostep, &  ! callback
 	        macrostep_time_grid, checkpoint_interval, restart
 

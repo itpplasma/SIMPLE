@@ -631,9 +631,10 @@ from the guiding-center stack below.
 `trace_orbit_spectre`), `src/samplers.f90` (`sample_spectre_surface`).
 
 `simple.x` traces guiding centers in a SPECTRE equilibrium on the non-canonical
-RK45 path, one volume at a time. On reaching an interface the Level-0 crossing
-map switches volume, reflects, or loses the marker (see interface crossing
-below); the outermost interface is the loss surface.
+RK45 path, one volume at a time. On reaching an interface the crossing map
+(`crossing_level`, Level 1 by default) switches volume, reflects, or loses the
+marker (see interface crossing below); the outermost interface is the loss
+surface.
 
 **Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
 extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
@@ -683,9 +684,9 @@ the first step as the pair of integer interfaces bracketing `rho_g`. When a
 microstep leaves the home volume, `orbit_timestep_spectre` locates the interface
 `rho_g = k` (Illinois false position on the substep to `< 1e-10`) and hands the
 landing state to `apply_crossing(y_iface, iface, direction, mvol, level, y_out,
-info)` in `interface_crossing.f90`. Only `level = 0` is implemented; a higher
-level errors out ("Level-1 crossing not yet implemented"), the seam the symplectic
-refraction map (#440) later fills without touching callers.
+info)` in `interface_crossing.f90`. The `crossing_level` namelist knob selects
+the map: `1` (default) is the Level-1 refraction map (#440), `0` is the Level-0
+energy rescale (#443) kept for regression comparison.
 
 The Level-0 map holds `(theta, zeta)` and the perpendicular invariant, evaluates
 `|B|` from *both* volumes at the same interface point (`rho_g = k -+ 1e-12`, the
@@ -711,6 +712,33 @@ stored invariant `perp_inv = z(4)^2 (1 - z(5)^2)/|B| = 2 mu` (`v_perp^2/|B|`), s
 
 After a crossing `rho_g` is nudged `1e-6` into the resolved volume so the next
 substep does not re-trigger the event within the odeint tolerance.
+
+**Interface crossing (Level 1, #440)**. `crossing_level = 1` (default) replaces
+the rescale with the thin-current-sheet limit of the drift: an impulse `Delta z =
+lambda_k X` along the interface Hamiltonian vector field `X = {z, rho_g}`, with
+the single scalar `lambda_k` fixed by exact energy conservation. The generator
+uses the same `parmot_mod` constant `ro0` and the same
+`Bstar_par = |B| + ro0 v_par (h.curl h)` as `velo_can`:
+
+    X_theta = - ro0 hcovar_zeta  / (sqrtg Bstar_par)
+    X_zeta  = + ro0 hcovar_theta / (sqrtg Bstar_par)
+    X_vpar  = + ro0 v_par (curl h)^rho / Bstar_par.
+
+The energy criterion at the landing point (`radicand0 = v_par^2 - 2 mu [[B]]`, the
+Level-0 condition) decides crossing vs mirror, so the event split matches Level 0.
+A forbidden crossing reflects as the Level-0 mirror (`v_par -> -v_par`, no kick).
+For a crossing the angles `(theta, zeta)` and `v_par` receive `lambda_k X`;
+`rho_g` stays on the interface and then switches volume with the Level-0 nudge.
+`lambda_k` solves `H_target(z + lambda_k X) = H_home(z)` by a damped (backtracking)
+Newton, with the generator refreshed each residual at the midpoint state
+`z + (lambda_k/2) X` from both-side quantities averaged, so the discrete map is
+symplectic and keeps `mu` and `p` fixed. The crossing lands the angles on an
+equal-`|B|` target point instead of rescaling `v_par`. That point sits a
+tangential distance `~ mu [[B]] / v_drift_normal` away; where the poloidal `|B|`
+gradient along the sheet drift is weak this exceeds the `0.3` rad thin-layer
+bound and the map falls back to the energy-exact Level-0 rescale (no kick), so
+every energetically allowed marker still crosses. The full derivation is in
+`DOC/spectre-interface-crossing.md`.
 
 **Drift regularization**. The guiding-center drift diverges where
 `Bstar_par = 1 + p_par (c/e) h.curl h -> 0`, a pitch-dependent phase-space
