@@ -3,7 +3,7 @@ module orbit_symplectic_quasi
 use util, only: pi
 use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-  orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
+  orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax
 use fortnum_multiroot, only: multiroot_hybrids
 use fortnum_status, only: fortnum_status_t
 use diag_counters, only: count_event, EVT_R_NEGATIVE
@@ -211,7 +211,7 @@ subroutine timestep_midpoint_quasi(ierr)
     call multiroot_hybrids(f_midpoint_quasi, n, x0, x, status, &
       xtol=si%rtol, ftol=si%rtol)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -222,7 +222,7 @@ subroutine timestep_midpoint_quasi(ierr)
       call count_event(EVT_R_NEGATIVE)
       x(1) = -x(1)
       x(2) = x(2) + pi
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -260,7 +260,7 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
     call multiroot_hybrids(f_euler1_quasi, n, x0, x, status, &
       xtol=si%rtol, ftol=si%rtol)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -271,7 +271,7 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
       call count_event(EVT_R_NEGATIVE)
       x(1) = -x(1)
       x(2) = x(2) + pi
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -325,7 +325,7 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
     call multiroot_hybrids(f_euler2_quasi, n, x0, x, status, &
       xtol=si%rtol, ftol=si%rtol)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -336,7 +336,7 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
       call count_event(EVT_R_NEGATIVE)
       x(1) = -x(1)
       x(2) = x(2) + pi
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -392,7 +392,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
     call multiroot_hybrids(f_rk_gauss_quasi, 4*s, x0, x, status, &
       xtol=si%rtol, ftol=si%rtol)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -403,7 +403,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
       call count_event(EVT_R_NEGATIVE)
       x(1) = -x(1)
       x(2) = x(2) + pi
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if

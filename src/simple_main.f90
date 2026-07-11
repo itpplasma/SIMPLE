@@ -318,8 +318,8 @@ contains
                 error stop &
                     'Symplectic guiding-center integrators require '// &
                     'canonical field representation (set isw_field_type to TEST, '// &
-                    'CANFLUX, BOOZER, MEISS, or ALBERT)'
-            case (TEST, CANFLUX, BOOZER, MEISS, ALBERT)
+                    'CANFLUX, BOOZER, MEISS, ALBERT, or SPECTRE)'
+            case (TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE)
                 continue
             case default
                 error stop &
@@ -344,26 +344,21 @@ contains
         !> init_vmec; the equilibrium globals nper and rmajor are taken from the
         !> SPECTRE file so stevvo and params_init produce a consistent
         !> dphi/dtaumin/fper. rmajor is the m=0,n=0 R harmonic of the outermost
-        !> interface (SI meters); stevvo scales it to cm. Symplectic integration
-        !> for SPECTRE is deferred to spectre-07.
+        !> interface (SI meters); stevvo scales it to cm. For integmode > 0 the
+        !> per-volume Meiss canonical coordinates are built here (#439).
         use field_spectre, only: spectre_field_t, create_spectre_field
-        use magfie_sub, only: set_magfie_spectre_field
+        use magfie_sub, only: set_magfie_spectre_field, SPECTRE
         use new_vmec_stuff_mod, only: nper, rmajor
         use util, only: twopi
         use params, only: field_input
+        use timing, only: print_phase_time
+        use orbit_symplectic_base, only: sympl_rmax
 
         type(tracer_t), intent(inout) :: self
 
         type(spectre_field_t) :: sf
         integer :: ierr, ii
         real(dp) :: r00
-
-        if (self%integmode > 0) then
-            print *, 'init_spectre_field: SPECTRE supports only integmode = 0 '// &
-                '(non-canonical RK45).'
-            print *, 'Symplectic SPECTRE integration is deferred to spectre-07.'
-            error stop
-        end if
 
         call create_spectre_field(sf, field_input, ierr)
         if (ierr /= 0) then
@@ -390,6 +385,16 @@ contains
 
         print *, 'SPECTRE field: Nfp = ', sf%data%Nfp, ' Mvol = ', sf%data%Mvol, &
             ' rmajor = ', rmajor, ' m'
+
+        if (self%integmode > 0) then
+            ! The symplectic Newton/loss guards treat r > sympl_rmax as "left the
+            ! domain". SPECTRE integrates in rho_g in [0, Mvol], so an iterate inside
+            ! an outer volume must not be misread as a loss; per-volume boundary
+            ! stops are handled by trace_orbit_spectre_sympl.
+            sympl_rmax = real(sf%data%Mvol, dp)
+            call init_field_can(SPECTRE, sf)
+            call print_phase_time('SPECTRE per-volume canonical construction completed')
+        end if
     end subroutine init_spectre_field
 
     subroutine init_stl_wall_if_enabled(coord_file)
@@ -925,7 +930,12 @@ contains
         ! (a well-confined-tokamak assumption) would wrongly mark interface-bound
         ! markers as confined, so it is bypassed here.
         if (isw_field_type == SPECTRE) then
-            call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
+            if (integmode > 0) then
+                call trace_orbit_spectre_sympl(anorb, ipart, z, passing, &
+                                               orbit_traj, orbit_times)
+            else
+                call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
+            end if
             return
         end if
 
@@ -1071,6 +1081,102 @@ contains
         times_lost(ipart) = t_stop
 !$omp end critical
     end subroutine trace_orbit_spectre
+
+    subroutine trace_orbit_spectre_sympl(anorb, ipart, z, passing, orbit_traj, &
+                                         orbit_times)
+        !> Per-volume symplectic guiding-center trace for SPECTRE (integmode > 0).
+        !> The canonical integrator steps the marker inside its home volume
+        !> [home_lo, home_hi]; the first accepted step landing outside the volume is
+        !> a boundary-stop. Exact interface landing (bisection of the crossing step)
+        !> is a later unit, so the terminal state is that first outside step.
+        use orbit_symplectic, only: orbit_timestep_sympl
+        use field_can_spectre, only: spectre_mvol
+        use params, only: spectre_hit, spectre_event
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+
+        type(tracer_t), intent(inout) :: anorb
+        integer, intent(in) :: ipart
+        real(dp), intent(inout) :: z(5)
+        logical, intent(in) :: passing
+        real(dp), intent(out) :: orbit_traj(:, :)
+        real(dp), intent(out) :: orbit_times(:)
+
+        real(dp) :: home_lo, home_hi
+        integer :: it, ktau, ierr_orbit, it_final, iface, direction
+        integer(8) :: kt
+        real(dp) :: bmod, vpar, mu, t_stop
+        logical :: boundary
+
+        home_lo = real(floor(z(1)), dp)
+        home_lo = max(0.0d0, min(home_lo, real(spectre_mvol - 1, dp)))
+        home_hi = home_lo + 1.0d0
+
+        kt = 0
+        it_final = 0
+        ierr_orbit = 0
+        boundary = .false.
+        iface = 0
+        direction = 0
+
+        do it = 1, ntimstep
+            if (it >= 2) then
+                do ktau = 1, ntau_macro(it)
+                    call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                    if (ierr_orbit /= 0) exit
+                    call to_standard_z_coordinates(anorb, z)
+                    kt = kt + 1
+                    if (z(1) >= home_hi) then
+                        boundary = .true.
+                        iface = nint(home_hi)
+                        direction = 1
+                        exit
+                    else if (z(1) <= home_lo) then
+                        boundary = .true.
+                        iface = nint(home_lo)
+                        direction = -1
+                        exit
+                    end if
+                end do
+            end if
+
+            if (ierr_orbit /= 0 .or. boundary) then
+                it_final = it
+                exit
+            end if
+
+            orbit_traj(:, it) = z
+            orbit_times(it) = kt*dtaumin/v0
+            call increase_confined_count(it, passing)
+            it_final = it
+        end do
+
+        if (it_final < ntimstep) then
+            do it = it_final + 1, ntimstep
+                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+            end do
+        end if
+
+        t_stop = real(kt, dp)*dtaumin/v0
+        if (boundary) then
+            bmod = compute_bmod(z(1:3))
+            vpar = z(4)*z(5)
+            mu = 0.5d0*z(4)**2*(1.0d0 - z(5)**2)/bmod
+            spectre_hit(ipart) = 1_int8
+            spectre_event(1, ipart) = real(iface, dp)
+            spectre_event(2, ipart) = z(2)
+            spectre_event(3, ipart) = z(3)
+            spectre_event(4, ipart) = vpar
+            spectre_event(5, ipart) = mu
+            spectre_event(6, ipart) = real(direction, dp)
+        end if
+
+!$omp critical
+        call integ_to_ref(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = t_stop
+!$omp end critical
+    end subroutine trace_orbit_spectre_sympl
 
 	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
         use alpha_lifetime_sub, only: orbit_timestep_axis
