@@ -30,6 +30,7 @@
     magfie_can_boozer.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
+    spectre_orbit.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
@@ -114,6 +115,7 @@ target_link_libraries(simple PUBLIC
     LIBNEO::field
     LIBNEO::odeint
     LIBNEO::spectre
+    LIBNEO::spectre_field
     LIBNEO::util
     LIBNEO::vmec_field
 )
