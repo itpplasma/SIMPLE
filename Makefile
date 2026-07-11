@@ -78,32 +78,15 @@ test-regression: build-deterministic-nopy
 
 # Build with deterministic floating-point for regression tests
 # Keeps CODE intact so local dependency paths are respected
-# Patches libneo to also use deterministic FP (no -ffast-math)
 build-deterministic:
 	@echo "Building with deterministic FP..."
 	cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
-	@LIBNEO_CMAKE="$(BUILD_DIR)/_deps/libneo-src/CMakeLists.txt"; \
-	if [ -f "$$LIBNEO_CMAKE" ] && grep -q "\-ffast-math" "$$LIBNEO_CMAKE" 2>/dev/null; then \
-		echo "Patching libneo for deterministic FP..."; \
-		sed 's/-ffast-math[[:space:]]*-ffp-contract=fast/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
-		sed 's/-ffast-math/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
-		echo "Reconfiguring after libneo patch..."; \
-		cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS); \
-	fi
 	cmake --build $(BUILD_DIR) --config $(CONFIG)
 
 # Deterministic build matching golden record reference configuration (Python OFF)
 build-deterministic-nopy:
 	@echo "Building with deterministic FP and Python interface OFF (golden record reference)..."
 	cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DENABLE_PYTHON_INTERFACE=OFF -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS)
-	@LIBNEO_CMAKE="$(BUILD_DIR)/_deps/libneo-src/CMakeLists.txt"; \
-	if [ -f "$$LIBNEO_CMAKE" ] && grep -q "\-ffast-math" "$$LIBNEO_CMAKE" 2>/dev/null; then \
-		echo "Patching libneo for deterministic FP..."; \
-		sed 's/-ffast-math[[:space:]]*-ffp-contract=fast/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
-		sed 's/-ffast-math/-ffp-contract=off/g' "$$LIBNEO_CMAKE" > "$$LIBNEO_CMAKE.tmp" && mv "$$LIBNEO_CMAKE.tmp" "$$LIBNEO_CMAKE"; \
-		echo "Reconfiguring after libneo patch..."; \
-		cmake -S . -B$(BUILD_DIR) -GNinja -DCMAKE_BUILD_TYPE=$(CONFIG) -DSIMPLE_DETERMINISTIC_FP=ON -DENABLE_PYTHON_INTERFACE=OFF -DCMAKE_COLOR_DIAGNOSTICS=ON $(FLAGS); \
-	fi
 	cmake --build $(BUILD_DIR) --config $(CONFIG)
 
 # Run all tests including regression tests
