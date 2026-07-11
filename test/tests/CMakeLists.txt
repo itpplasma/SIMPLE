@@ -589,6 +589,10 @@ add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
 target_link_libraries(test_orbit_symplectic_base.x simple)
 add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
 
+add_executable(test_newton_solver_status.x test_newton_solver_status.f90)
+target_link_libraries(test_newton_solver_status.x simple)
+add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
