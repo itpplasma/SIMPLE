@@ -51,3 +51,27 @@ add_test(NAME test_boozer_spline_derivatives
 set_tests_properties(test_boozer_spline_derivatives PROPERTIES
     LABELS "unit"
     TIMEOUT 180)
+
+# Per-volume Meiss canonical coordinates for SPECTRE (#439): construction identity
+# on the committed libneo stellarator fixture, p_phi conservation on the committed
+# axisymmetric two-volume tokamak fixture.
+add_executable(test_spectre_sympl_volume.x test_spectre_sympl_volume.f90)
+target_link_libraries(test_spectre_sympl_volume.x simple)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_construction)
+add_test(NAME test_spectre_sympl_volume_construction
+    COMMAND $<TARGET_FILE:test_spectre_sympl_volume.x> construction
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_construction)
+set_tests_properties(test_spectre_sympl_volume_construction PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_pphi)
+add_test(NAME test_spectre_sympl_volume_pphi
+    COMMAND $<TARGET_FILE:test_spectre_sympl_volume.x> pphi
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_pphi)
+set_tests_properties(test_spectre_sympl_volume_pphi PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)

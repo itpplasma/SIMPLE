@@ -14,7 +14,7 @@ module orbit_rk_core
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: twopi
   use field_can_mod, only: field_can_t, get_derivatives2, eval_field => evaluate
-  use orbit_symplectic_base, only: symplectic_integrator_t, coeff_rk_gauss
+  use orbit_symplectic_base, only: symplectic_integrator_t, coeff_rk_gauss, sympl_rmax
 
   implicit none
   private
@@ -247,7 +247,7 @@ contains
 
       ! Check if radius left the boundary
       do ks = 1, s
-        if (x(4*ks-3) > 1d0) return
+        if (x(4*ks-3) > sympl_rmax) return
         ! Transient guard for intermediate iterates; the converged-negative
         ! case is handled by the caller via a chart switch (#370).
         if (x(4*ks-3) < 0.0d0) x(4*ks-3) = 0.01d0

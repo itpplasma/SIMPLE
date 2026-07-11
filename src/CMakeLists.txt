@@ -23,6 +23,7 @@
     field/field_can_meiss.f90
     field/psi_transform.f90
     field/field_can_albert.f90
+    field/field_can_spectre.f90
     field_line_spectre.f90
     field_can.f90
     magfie.f90

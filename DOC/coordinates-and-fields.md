@@ -642,7 +642,7 @@ libneo `create_spectre_field` (which builds the stacked-rho
 chartmap path does, so `stevvo` and `params_init` produce a consistent
 `dphi`/`dtaumin`/`fper`: `nper = Nfp`, and `rmajor` is the `m=0, n=0` R harmonic
 of the outermost interface (SI meters; `stevvo` scales it to cm). `fper` is
-`2*pi/Nfp`. `integmode > 0` is rejected with a message pointing to spectre-07.
+`2*pi/Nfp`. `integmode > 0` builds the per-volume canonical coordinates below.
 
 **`magfie_spectre`** evaluates on the chart `x = (rho_g, theta, zeta)`. The
 field supplies `|B|`, covariant `h = B/|B|`, and the exact `sqrt(g) B^i` (the
@@ -687,6 +687,59 @@ interface, theta, zeta, v_par, mu, direction); the marker's loss time and final
 state also appear in `times_lost.dat`, so `confined_fraction.dat` accounts for
 every marker as confined or boundary-stopped. The outermost interface is the
 default loss surface.
+
+#### Guiding-center symplectic per volume (`integmode > 0`)
+
+**Files**: `src/field/field_can_spectre.f90`, `src/field/field_can_meiss.f90`
+(`spectre_field_t` arms in `ah_cov_on_slice` / `init_canonical_field_components`,
+the `meiss_volume_t` slot, and the `harvest_meiss_volume` mover),
+`src/field_can.f90` (id `SPECTRE` dispatch), `src/simple_main.f90`
+(`init_spectre_field`, `trace_orbit_spectre_sympl`).
+
+**Corrected premise** (computer-algebra verified in spectre-orbits
+`ca/05_gc_canonical.wl`): the SPECTRE `A_s = 0` gauge supplies only half of the
+canonical requirement. The covariant `h_s` does not vanish in SPECTRE
+coordinates (metric off-diagonals), so the guiding-center phase-space 1-form
+keeps a `rho_par B_s ds` term. The Meiss angle transform `zeta_c` with
+`d_s lambda = -B_s/B_zeta` plus gauge `chi` with `d_s chi = (d_s lambda) A_zeta`
+restores both `A'_s = 0` and `B'_s = 0`, so the guiding-center flow is canonical
+in `(rho_g, theta_c, zeta_c)`.
+
+**Per-volume construction**. The construction ODE would integrate through the
+interface current sheets in a global chart, so it is run once per volume on the
+smooth slab `r in [lvol-1, lvol]` (`lvol = 1..Mvol`) using the existing Meiss
+machinery (`init_meiss` + `get_meiss_coordinates`). The axis volume starts at
+`r = 1e-3` so the construction never touches the `r = 0` coordinate singularity.
+The SPECTRE chart is its own radial coordinate, so the identity radial scaling is
+used (no `r = sqrt(s)`). Each volume is built on a `48 x 48 x 32`
+`(r, theta, zeta)` grid; after `get_meiss_coordinates`, `harvest_meiss_volume`
+moves the field and transform batch splines (coefficient arrays via `move_alloc`,
+not copied) into a per-volume `meiss_volume_t` slot in `field_can_spectre`.
+
+**Units**. The construction stays in the field's SI covariant units (numerically
+balanced, `O(1)`). The Gaussian-CGS conversion is applied only at
+`evaluate_spectre_can`, uniformly to values and derivatives because
+`(rho_g, theta, zeta)` are all dimensionless: `Bmod` `1e4` (Tesla -> Gauss),
+covariant `h_theta`/`h_phi` `1e2` (`L`), covariant `A_theta`/`A_phi`
+`1e8 = 1e4 * (1e2)^2` (flux-like `[B] L^2`, Tesla*m^2 -> Gauss*cm^2). The last
+factor makes `sqrt(g) = (h_phi A_theta' - h_theta A_phi')/Bmod` come out in
+`cm^3`, matching `magfie_spectre`.
+
+**Evaluation**. `evaluate_spectre_can` picks `lvol = min(int(r)+1, Mvol)` and
+evaluates that volume's splines; `integ_to_ref` / `ref_to_integ` apply the active
+volume's `lambda_phi` transform (radial map is the identity). Newton iterates
+inside a symplectic step may probe just past the volume edge. The batch splines
+carry no valid polynomial extension there (unlike the direct analytic basis of
+the field-line path), so those evaluations are clamped to the construction-domain
+edge; a final accepted state leaving `[home_lo, home_hi]` still triggers a
+boundary-stop. `trace_orbit_spectre_sympl` steps the canonical integrator inside
+the home volume and stops on the first accepted step outside it; exact interface
+landing (bisection of the crossing step) is a later unit.
+
+**Optional follow-up** (documented, not implemented): a `no_K`-style variant that
+drops `rho_par h_s` in SPECTRE coordinates directly -- the same
+`O(Larmor-radius)` approximation as SIMPLE's Boozer `use_B_r = .false.`. The
+exact per-volume Meiss construction here is the reference path.
 
 ---
 
@@ -762,7 +815,7 @@ end subroutine
 | 3 | MEISS | (r, theta_c, phi_c) | Symplectic |
 | 4 | ALBERT | (psi, theta_c, phi_c) | Symplectic |
 | 5 | REFCOORDS | (varies) | RK45 only |
-| 6 | SPECTRE | (rho_g, theta, zeta) | RK45 only (integmode = 0) |
+| 6 | SPECTRE | (rho_g, theta, zeta) | RK45 (integmode = 0) or per-volume symplectic (integmode > 0) |
 
 `integ_coords` is the integer mode id above; `6` selects SPECTRE. A string
 alias `'spectre'` is not read from the namelist (the slot is integer).

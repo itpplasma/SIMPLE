@@ -6,7 +6,7 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
-  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
+  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
   coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
@@ -373,7 +373,7 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
-    if (x(1) > 1d0) return
+    if (x(1) > sympl_rmax) return
     ! Transient guard: in s = rho^2 coordinates the Hamiltonian is not
     ! smooth at the axis (sqrt(s) behavior), so there is no consistent
     ! field extension to s < 0 for the solver itself. Intermediate
@@ -408,7 +408,7 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   real(dp) :: det
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
+    if(x(1) > sympl_rmax) return
     ! Transient guard for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
@@ -476,7 +476,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   tolref(5) = 1d0
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
+    if(x(1) > sympl_rmax) return
     ! Transient guards for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
@@ -554,7 +554,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) return
+      if (x(4*ks-3) > sympl_rmax) return
       ! Transient guard for intermediate iterates; the converged-negative
       ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
@@ -611,7 +611,7 @@ recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) return
+      if (x(4*ks-3) > sympl_rmax) return
       ! Transient guard for intermediate iterates; the converged-negative
       ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
@@ -833,11 +833,11 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
   do kit = 1, maxit
 
     ! Check if radius left the boundary
-    if (x(1) > 1d0) return
+    if (x(1) > sympl_rmax) return
     ! Transient guard for intermediate iterates (#370).
     if (x(1) < 0.0) x(1) = 0.01d0
     do ks = 2, s
-      if (x(4*ks-2-3) > 1d0) return
+      if (x(4*ks-2-3) > sympl_rmax) return
       if (x(4*ks-2-3) < 0.0) x(4*ks-3) = 0.01d0
     end do
 
@@ -1132,7 +1132,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
 
     call newton1(si, f, x, maxit, xlast)
 
-    if (x(1) > 1.0d0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1145,7 +1145,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
       si%z(2) = si%z(2) + pi
       crossed = .true.
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0d0) then
+      if (x(1) > sympl_rmax) then
         ! Pathological solve (|r| beyond the boundary on the far side).
         ierr = 1
         return
@@ -1197,7 +1197,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
 
     call newton2(si, f, x, si%atol, si%rtol, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1210,7 +1210,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
       x(2) = x(2) + pi
       crossed = .true.
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -1269,7 +1269,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 
     call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1280,7 +1280,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       x(1) = -x(1)
       x(2) = x(2) + pi
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -1340,7 +1340,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     !optionally try fixed point iterations, doesn't work yet
     !call fixpoint_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1351,7 +1351,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       x(1) = -x(1)
       x(2) = x(2) + pi
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if

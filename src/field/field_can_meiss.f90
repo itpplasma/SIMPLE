@@ -38,6 +38,7 @@ use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
     use field, only : magnetic_field_t, vmec_field_t, field_clone
     use field_splined, only: splined_field_t
+    use field_spectre, only: spectre_field_t
     use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
                                    identity_scaling_t, coordinate_scaling_clone
     use libneo_coordinates, only: chartmap_coordinate_system_t, UNKNOWN, &
@@ -73,7 +74,50 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 ! Coordinate scaling for s <-> r transform (default: r = sqrt(s))
 class(coordinate_scaling_t), allocatable :: coord_scaling
 
+! Caller-owned harvest of one Meiss construction. field_can_spectre keeps one per
+! SPECTRE volume; harvest_meiss_volume moves the module-level splines into a slot.
+type :: meiss_volume_t
+    type(BatchSplineData3D) :: spl_field
+    type(BatchSplineData3D) :: spl_transform
+    class(coordinate_scaling_t), allocatable :: scaling
+    real(dp) :: rmin
+    real(dp) :: rmax
+end type meiss_volume_t
+
 contains
+
+subroutine harvest_meiss_volume(vol)
+    !> Move the current module-level construction (field and transform batch
+    !> splines, radial domain, scaling) into a caller-owned slot. The batch spline
+    !> coefficient arrays are moved, not copied; the module init flags are cleared
+    !> so a following cleanup_meiss or construction re-uses the freed slots.
+    type(meiss_volume_t), intent(out) :: vol
+
+    call move_batch_spline_3d(spl_field_batch, vol%spl_field)
+    call move_batch_spline_3d(spl_transform_batch, vol%spl_transform)
+    batch_splines_initialized = .false.
+    transform_splines_initialized = .false.
+
+    call coordinate_scaling_clone(coord_scaling, vol%scaling)
+    vol%rmin = xmin(1)
+    vol%rmax = xmax(1)
+end subroutine harvest_meiss_volume
+
+
+subroutine move_batch_spline_3d(src, dst)
+    type(BatchSplineData3D), intent(inout) :: src
+    type(BatchSplineData3D), intent(out) :: dst
+
+    dst%order = src%order
+    dst%num_points = src%num_points
+    dst%periodic = src%periodic
+    dst%h_step = src%h_step
+    dst%x_min = src%x_min
+    dst%inv_h_step = src%inv_h_step
+    dst%period = src%period
+    dst%num_quantities = src%num_quantities
+    call move_alloc(src%coeff, dst%coeff)
+end subroutine move_batch_spline_3d
 
 subroutine rh_can_wrapper(r_c, z, dz, context)
     real(dp), intent(in) :: r_c
@@ -472,6 +516,16 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
         Ap = Acov(3)
         hr = hcov(1)
         hp = hcov(3)
+    type is (spectre_field_t)
+        ! SPECTRE chart (rho_g, theta, zeta) with identity scaling; covariant
+        ! components are used raw in SI, the Gaussian-CGS conversion is applied at
+        ! canonical evaluation. Here h_s = hcov(1) is nonzero (the reason the Meiss
+        ! angle transform is required), while A_s = Acov(1) = 0 in the SPECTRE gauge.
+        call fld%evaluate(x_integ, Acov, hcov, Bmod)
+        Ar = Acov(1)
+        Ap = Acov(3)
+        hr = hcov(1)
+        hp = hcov(3)
     class default
         error stop "ah_cov_on_slice: unsupported field type"
     end select
@@ -550,6 +604,9 @@ subroutine init_canonical_field_components
                     end block
                 type is (splined_field_t)
                     ! Splined field already in scaled coordinates
+                    call fld%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                type is (spectre_field_t)
+                    ! SPECTRE chart is its own radial coordinate (identity scaling)
                     call fld%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
                 class default
                     error stop "init_canonical_field_components: unsupported field type"
