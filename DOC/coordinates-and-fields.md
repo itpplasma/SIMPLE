@@ -621,8 +621,72 @@ interpolation is needed. R, Z come from the SPEC interface Fourier blend
 (`spectre_rz`, mirroring libneo `libneo_coordinates_spectre` for output only:
 linear-in-s between interfaces for interior volumes, the `sbar**m` power law for
 the axis volume). Field lines never cross interfaces (`B.n = 0` on both sides),
-so no crossing logic is involved. This is a standalone diagnostic and is not yet
-wired into the `magfie` / `field_can` guiding-center stack.
+so no crossing logic is involved. This app is a standalone diagnostic separate
+from the guiding-center stack below.
+
+#### Guiding-center RK45 per volume (`integ_coords = 6`)
+
+**Files**: `src/magfie.f90` (`magfie_spectre`), `src/spectre_orbit.f90`,
+`src/simple_main.f90` (`init_spectre_field`, `trace_orbit_spectre`),
+`src/samplers.f90` (`sample_spectre_surface`).
+
+`simple.x` traces guiding centers in a SPECTRE equilibrium on the non-canonical
+RK45 path, one volume at a time. Interface crossing physics is deferred, so an
+orbit stops when it reaches a volume boundary (see boundary-stop below).
+
+**Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
+extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
+libneo `create_spectre_field` (which builds the stacked-rho
+`spectre_coordinate_system_t`). The run is VMEC-free: no `init_vmec`, no `wout`.
+`init_spectre_field` sets the equilibrium globals the same way the Boozer
+chartmap path does, so `stevvo` and `params_init` produce a consistent
+`dphi`/`dtaumin`/`fper`: `nper = Nfp`, and `rmajor` is the `m=0, n=0` R harmonic
+of the outermost interface (SI meters; `stevvo` scales it to cm). `fper` is
+`2*pi/Nfp`. `integmode > 0` is rejected with a message pointing to spectre-07.
+
+**`magfie_spectre`** evaluates on the chart `x = (rho_g, theta, zeta)`. The
+field supplies `|B|`, covariant `h = B/|B|`, and the exact `sqrt(g) B^i` (the
+metric-free 2-form, no finite differences); the coordinate system supplies the
+analytic metric. `grad log|B|` (`bder`) and `curl(h)` (`hcurl`), the small drift
+corrections, come from central differences of `|B|` and `h`. `|B|` jumps across
+SPEC interfaces (the pressure jump), so the radial stencil is kept inside the
+current volume `[floor(rho_g), floor(rho_g)+1]`; straddling an integer would
+inject the discontinuity into the drift and stall the ODE solver.
+
+**Units**. The SPECTRE field returns SI (Tesla, meter); SIMPLE integrates in
+Gaussian-CGS. The conversion lives in one block in `magfie_spectre`:
+
+| quantity | factor | reason |
+|----------|--------|--------|
+| `bmod` = `\|B\|` | `1e4` | Tesla -> Gauss |
+| `sqrtg` (Jacobian) | `1e6` | `L^3`, meter -> cm |
+| `hcovar` (covariant `h_i`) | `1e2` | `L` |
+| `hctrvr` (contravariant `h^i`) | `1e-2` | `1/L` |
+| `bder` = `d log\|B\|/dx` | `1` | dimensionless (the chart is dimensionless) |
+
+The covariant vector potential (`T*m -> G*cm`, factor `1e6`) does not enter the
+non-canonical RK45 path, which uses only `bmod`/`sqrtg`/`bder`/`hcovar`/
+`hctrvr`/`hcurl`. The alpha normalization then follows the standard SIMPLE chain
+unchanged: `v0`, `ro0 = v0 m c / e` (cm*Gauss), and `dtaumin = 2*pi*rmajor/
+npoiper2` (cm).
+
+**Sampler**. `startmode = 1` samples the control surface `rho_g = sbeg(1)`:
+`(theta, zeta)` grid nodes drawn with probability proportional to the surface
+Jacobian `|e_theta x e_zeta|`, uniform velocity magnitude, random pitch. The
+chart is the integration coordinate, so `start.dat` holds `(rho_g, theta, zeta)`
+directly and every marker sits on the requested interface to round-off. The
+sampler also sets `bmin`/`bmax`/`bmod00` from a scan of the surface.
+
+**Boundary-stop**. A marker is confined to its home volume, fixed after the
+first step as the pair of integer interfaces bracketing `rho_g`. When a
+microstep crosses a home boundary, `orbit_timestep_spectre` bisects the dense
+RK45 trajectory to `|rho_g - integer| < 1e-10`, records the crossing state, and
+ends the orbit with a distinct boundary-stop status (not a wall loss). Each stop
+writes one line to `spectre_boundary_events.dat` (particle, loss time,
+interface, theta, zeta, v_par, mu, direction); the marker's loss time and final
+state also appear in `times_lost.dat`, so `confined_fraction.dat` accounts for
+every marker as confined or boundary-stopped. The outermost interface is the
+default loss surface.
 
 ---
 
@@ -698,6 +762,10 @@ end subroutine
 | 3 | MEISS | (r, theta_c, phi_c) | Symplectic |
 | 4 | ALBERT | (psi, theta_c, phi_c) | Symplectic |
 | 5 | REFCOORDS | (varies) | RK45 only |
+| 6 | SPECTRE | (rho_g, theta, zeta) | RK45 only (integmode = 0) |
+
+`integ_coords` is the integer mode id above; `6` selects SPECTRE. A string
+alias `'spectre'` is not read from the namelist (the slot is integer).
 
 ### 8.2 Input File Parameters
 

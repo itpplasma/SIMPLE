@@ -4,6 +4,7 @@ use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use field_splined, only: splined_field_t
+use field_spectre, only: spectre_field_t
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
                               RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
 
@@ -11,6 +12,11 @@ implicit none
 
 ! Define real(dp) kind parameter
 integer, parameter :: dp = kind(1.0d0)
+
+! SIMPLE runs in Gaussian-CGS; the SPECTRE field returns SI (Tesla, meter).
+real(dp), parameter :: TESLA_TO_GAUSS = 1.0d4
+real(dp), parameter :: M_TO_CM = 1.0d2
+real(dp), parameter :: M3_TO_CM3 = 1.0d6
 
 abstract interface
   subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -35,9 +41,10 @@ end interface
 procedure(magfie_base), pointer :: magfie => null()
 
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
-                      REFCOORDS=5
+                      REFCOORDS=5, SPECTRE=6
 
 type(splined_field_t), allocatable :: refcoords_field
+type(spectre_field_t), allocatable :: spectre_field
 
 contains
 
@@ -47,6 +54,13 @@ subroutine set_magfie_refcoords_field(field)
   if (allocated(refcoords_field)) deallocate (refcoords_field)
   allocate (refcoords_field, source=field)
 end subroutine set_magfie_refcoords_field
+
+subroutine set_magfie_spectre_field(field)
+  type(spectre_field_t), intent(in) :: field
+
+  if (allocated(spectre_field)) deallocate (spectre_field)
+  allocate (spectre_field, source=field)
+end subroutine set_magfie_spectre_field
 
 subroutine init_magfie(id)
   integer, intent(in) :: id
@@ -66,6 +80,8 @@ subroutine init_magfie(id)
     magfie => magfie_albert
   case(REFCOORDS)
     magfie => magfie_refcoords
+  case(SPECTRE)
+    magfie => magfie_spectre
   case default
     print *,'init_magfie: unknown id ', id
     error stop
@@ -172,6 +188,80 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 
   call compute_hcurl(sqrtg, dhcov, hcurl)
 end subroutine magfie_refcoords
+
+
+subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+  !> magfie in the SPECTRE stacked-rho chart x = (rho_g, theta, zeta).
+  !>
+  !> The field returns |B|, covariant h = B/|B| and the exact sqrt(g) B^i (the
+  !> metric-free 2-form, no finite differences) in SI units; the coordinate
+  !> system provides the analytic metric. grad log|B| and curl(h), the small
+  !> drift corrections, come from central differences of |B| and h.
+  implicit none
+
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod, sqrtg
+  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+  real(dp) :: Acov(3), hcov(3), Bmod_si, sqgBctr(3)
+  real(dp) :: g(3, 3), ginv(3, 3), sqrtg_si
+  real(dp) :: dhcov(3, 3)
+  real(dp) :: xp(3), xm(3), Bmod_p, Bmod_m, hcov_p(3), hcov_m(3)
+  real(dp) :: Acov_dum(3), sqg_dum(3), denom, lo, hi
+  real(dp), parameter :: h_fd = 1.0d-4
+  integer :: j
+
+  if (.not. allocated(spectre_field)) then
+    print *, 'magfie_spectre: spectre_field not set'
+    print *, 'Call set_magfie_spectre_field before init_magfie(SPECTRE)'
+    error stop
+  end if
+
+  call spectre_field%evaluate(x, Acov, hcov, Bmod_si, sqgBctr)
+  call spectre_field%coords%metric_tensor(x, g, ginv, sqrtg_si)
+
+  ! Gaussian-CGS boundary conversion (single place). The SPECTRE field is SI
+  ! (Tesla, meter); SIMPLE integrates in Gaussian-CGS. |B|: Tesla -> Gauss.
+  ! Lengths meter -> cm: the Jacobian sqrt(g) carries L**3, covariant h_i carry
+  ! L, contravariant h^i = B^i/|B| carries 1/L. bder = d log|B|/dx is scale-free
+  ! because x = (rho_g, theta, zeta) is dimensionless, so it needs no factor.
+  bmod = Bmod_si*TESLA_TO_GAUSS
+  sqrtg = sqrtg_si*M3_TO_CM3
+  hcovar = hcov*M_TO_CM
+  hctrvr = sqgBctr/(sqrtg_si*Bmod_si)/M_TO_CM
+
+  do j = 1, 3
+    xp = x
+    xm = x
+    denom = 2.0d0*h_fd
+    if (j == 1) then
+      ! |B| jumps across SPEC interfaces, so the radial stencil must stay inside
+      ! the current volume [floor(rho_g), floor(rho_g)+1]; straddling an integer
+      ! injects the pressure-jump discontinuity into the drift and stalls odeint.
+      lo = real(floor(x(1)), dp)
+      hi = lo + 1.0d0
+      if (x(1) - h_fd < lo) then
+        xm(1) = x(1)
+        xp(1) = x(1) + denom
+      else if (x(1) + h_fd > hi) then
+        xm(1) = x(1) - denom
+        xp(1) = x(1)
+      else
+        xm(1) = x(1) - h_fd
+        xp(1) = x(1) + h_fd
+      end if
+    else
+      xm(j) = x(j) - h_fd
+      xp(j) = x(j) + h_fd
+    end if
+    call spectre_field%evaluate(xp, Acov_dum, hcov_p, Bmod_p, sqg_dum)
+    call spectre_field%evaluate(xm, Acov_dum, hcov_m, Bmod_m, sqg_dum)
+    bder(j) = (log(Bmod_p) - log(Bmod_m))/denom
+    dhcov(:, j) = (hcov_p - hcov_m)*M_TO_CM/denom
+  end do
+
+  call compute_hcurl(sqrtg, dhcov, hcurl)
+end subroutine magfie_spectre
 
 
 subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)

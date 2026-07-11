@@ -764,6 +764,18 @@ set_tests_properties(test_spectre_poincare PROPERTIES
     LABELS "integration;python"
     TIMEOUT 120)
 
+# SPECTRE guiding-center RK45 tracing per volume with boundary-stop (#438).
+# Uses simple.x with the committed libneo SPECTRE HDF5 fixture; VMEC-free.
+add_test(NAME test_spectre_gc_rk45
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_gc_rk45.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_gc_rk45 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
