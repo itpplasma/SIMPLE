@@ -38,6 +38,19 @@ file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    add_test(
+        NAME test_deterministic_dependency_flags
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_deterministic_dependency_flags.py
+            ${CMAKE_BINARY_DIR}/compile_commands.json
+            ${libneo_SOURCE_DIR}
+    )
+    set_tests_properties(test_deterministic_dependency_flags PROPERTIES
+        LABELS "unit;regression")
+endif()
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")

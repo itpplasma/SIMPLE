@@ -186,23 +186,13 @@ build() {
     fi
 
     # Enable deterministic floating-point for reproducible golden record tests
-    CMAKE_OPTS="$CMAKE_OPTS -DSIMPLE_DETERMINISTIC_FP=ON"
+    CMAKE_OPTS="$CMAKE_OPTS -DSIMPLE_DETERMINISTIC_FP=ON -DLIBNEO_DETERMINISTIC_FP=ON"
 
     cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
         echo "CMake configuration failed. Check $PROJECT_ROOT/configure.log"
         tail -n 200 "$PROJECT_ROOT/configure.log" 2>/dev/null || true
         return 1
-    fi
-
-    # Patch libneo CMakeLists.txt after cmake fetches it, then reconfigure
-    # (libneo doesn't have SIMPLE_DETERMINISTIC_FP, so we patch -ffast-math directly)
-    local LIBNEO_CMAKE="$PROJECT_ROOT/build/_deps/libneo-src/CMakeLists.txt"
-    if [ -f "$LIBNEO_CMAKE" ]; then
-        if patch_libneo_for_deterministic_fp "$LIBNEO_CMAKE"; then
-            echo "Reconfiguring after libneo patch..."
-            cmake -S . -Bbuild -GNinja $CMAKE_OPTS >> $PROJECT_ROOT/configure.log 2>&1
-        fi
     fi
 
     local BUILD_PARALLEL="${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
@@ -212,31 +202,6 @@ build() {
         tail -n 200 "$PROJECT_ROOT/build.log" 2>/dev/null || true
         return 1
     fi
-}
-
-
-# Patch libneo CMakeLists.txt for deterministic floating-point
-# Returns 0 (success) if patching was done, 1 if no patching needed
-patch_libneo_for_deterministic_fp() {
-    local CMAKE_FILE="$1"
-
-    if [ ! -f "$CMAKE_FILE" ]; then
-        return 1
-    fi
-
-    # Check if -ffast-math is present (needs patching)
-    if ! grep -q "\-ffast-math" "$CMAKE_FILE" 2>/dev/null; then
-        return 1
-    fi
-
-    echo "Patching libneo for deterministic floating-point..."
-
-    # Replace -ffast-math -ffp-contract=fast with -ffp-contract=off
-    sed -i.bak 's/-ffast-math[[:space:]]*-ffp-contract=fast/-ffp-contract=off/g' "$CMAKE_FILE"
-    # Replace remaining standalone -ffast-math
-    sed -i.bak 's/-ffast-math/-ffp-contract=off/g' "$CMAKE_FILE"
-    echo "Patched: Replaced -ffast-math with -ffp-contract=off in libneo"
-    return 0
 }
 
 
