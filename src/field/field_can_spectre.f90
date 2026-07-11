@@ -32,9 +32,24 @@ module field_can_spectre
 
     public :: construct_spectre_coordinates, evaluate_spectre_can, &
               integ_to_ref_spectre, ref_to_integ_spectre, cleanup_spectre, &
-              spectre_volumes, spectre_mvol, set_spectre_volume_lock
+              spectre_volumes, spectre_mvol, set_spectre_volume_lock, &
+              set_spectre_construction_grid
 
-    integer, parameter :: N_R_VOL = 48, N_TH_VOL = 48, N_PHI_VOL = 32
+    !> Per-volume Meiss construction grid. r, th default to the historical hardcoded
+    !> 48; phi = -1 selects the automatic policy below. set_spectre_construction_grid
+    !> threads the namelist knob (params: spectre_ncon_r/th/phi) in before the build,
+    !> kept as a setter because field_can_* cannot use params (dependency cycle).
+    integer :: ncon_r = 48, ncon_th = 48, ncon_phi = -1
+
+    !> Automatic phi resolution. NPHI_FULL is the historical hardcoded value, used
+    !> for fields carrying toroidal harmonics (bit-identical). Axisymmetric SPECTRE
+    !> fields (all n = 0) are phi-invariant, so the construction only needs a minimal
+    !> periodic-quintic phi grid; AXISYM_NPHI is the dominant memory saver for tokamak
+    !> cases (arrays and splines scale linearly in n_phi). It stays above the quintic
+    !> order+1 = 6 so spl_five_per is well conditioned, and preserves the symplectic
+    !> energy invariants; a positive spectre_ncon_phi overrides it (raise to NPHI_FULL
+    !> for high-order convergence, lower for RK45-only or memory-bound runs).
+    integer, parameter :: AXISYM_NPHI = 8, NPHI_FULL = 32
     real(dp), parameter :: AXIS_OFFSET = 1.0e-3_dp
     !> Sheet-adjacent regularization band, the canonical analogue of the RK45
     !> path's drift_band (spectre_orbit): the guiding-center 1-form degenerates
@@ -88,23 +103,48 @@ contains
         end if
     end function active_volume
 
+    subroutine set_spectre_construction_grid(n_r, n_th, n_phi)
+        !> Set the per-volume Meiss construction grid before the build (n_phi <= 0
+        !> selects the automatic phi policy). Called from init_spectre_field.
+        integer, intent(in) :: n_r, n_th, n_phi
+
+        ncon_r = n_r
+        ncon_th = n_th
+        ncon_phi = n_phi
+    end subroutine set_spectre_construction_grid
+
     subroutine construct_spectre_coordinates(field_noncan)
         !> Build one Meiss chart per SPECTRE volume on r in [lvol-1, lvol]. The axis
         !> volume starts at AXIS_OFFSET so the construction never touches the r = 0
         !> coordinate singularity.
         class(magnetic_field_t), intent(in) :: field_noncan
 
-        integer :: lvol
+        integer :: lvol, nphi_eff
         real(dp) :: rmin, rmax
+        logical :: axisym
 
         call cleanup_spectre
 
         select type (fld => field_noncan)
         type is (spectre_field_t)
             spectre_mvol = fld%data%Mvol
+            axisym = all(fld%data%in == 0)
         class default
             error stop 'construct_spectre_coordinates: field is not spectre_field_t'
         end select
+
+        if (ncon_phi > 0) then
+            nphi_eff = ncon_phi
+        else if (axisym) then
+            nphi_eff = AXISYM_NPHI
+        else
+            nphi_eff = NPHI_FULL
+        end if
+
+        print '(A,I0,A,I0,A,L1,A,I0,A,L1)', &
+            ' spectre_construction_grid: n_r=', ncon_r, ' n_th=', ncon_th, &
+            ' axisym=', axisym, ' n_phi=', nphi_eff, &
+            ' phi_auto=', ncon_phi <= 0
 
         allocate (spectre_volumes(spectre_mvol))
 
@@ -113,7 +153,7 @@ contains
             if (lvol == 1) rmin = rmin + AXIS_OFFSET
             rmax = real(lvol, dp)
 
-            call init_meiss(field_noncan, N_R_VOL, N_TH_VOL, N_PHI_VOL, rmin, rmax, &
+            call init_meiss(field_noncan, ncon_r, ncon_th, nphi_eff, rmin, rmax, &
                             0.0_dp, twopi, identity_scaling_t())
             call get_meiss_coordinates
             call harvest_meiss_volume(spectre_volumes(lvol))

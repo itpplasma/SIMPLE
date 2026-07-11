@@ -782,10 +782,28 @@ smooth slab `r in [lvol-1, lvol]` (`lvol = 1..Mvol`) using the existing Meiss
 machinery (`init_meiss` + `get_meiss_coordinates`). The axis volume starts at
 `r = 1e-3` so the construction never touches the `r = 0` coordinate singularity.
 The SPECTRE chart is its own radial coordinate, so the identity radial scaling is
-used (no `r = sqrt(s)`). Each volume is built on a `48 x 48 x 32`
-`(r, theta, zeta)` grid; after `get_meiss_coordinates`, `harvest_meiss_volume`
-moves the field and transform batch splines (coefficient arrays via `move_alloc`,
-not copied) into a per-volume `meiss_volume_t` slot in `field_can_spectre`.
+used (no `r = sqrt(s)`). Each volume is built on the `(r, theta, zeta)` grid set
+by the `spectre_ncon_r/th/phi` namelist knob (default `48 x 48 x 32`); after
+`get_meiss_coordinates`, `harvest_meiss_volume` moves the field and transform
+batch splines (coefficient arrays via `move_alloc`, not copied) into a per-volume
+`meiss_volume_t` slot in `field_can_spectre`.
+
+**Construction-grid knob and memory** (#442). The quintic batch splines dominate
+peak memory: the coefficient array is `n_quantities * 6^3 * n_r * n_th * n_phi`
+per volume, ~1.8 GB at the `48 x 48 x 32` default on the two-volume tok2vol
+fixture. `spectre_ncon_r/th/phi` (threaded in by
+`set_spectre_construction_grid` before the build, kept as a setter because
+`field_can_*` cannot `use params` without a dependency cycle) let a caller trade
+resolution for memory. `spectre_ncon_phi = -1` (the default) is automatic: fields
+carrying toroidal harmonics keep the historical `n_phi = 32` (bit-identical),
+while an **axisymmetric** field (all `in == 0`, e.g. any tokamak) is phi-invariant
+and auto-clamps to `AXISYM_NPHI = 8` -- the dominant memory saver, ~3.8x on
+tok2vol (1.77 GB -> 0.46 GB), and bit-identical to `n_phi = 32` for well-confined
+orbit energy conservation (verified to `2.9e-12`). A positive `spectre_ncon_phi`
+overrides the clamp verbatim: raise it to 32 when high-order symplectic
+convergence needs the full phi grid, or lower it for RK45-only runs (the RK45
+path, `integmode = 0`, builds no construction at all). `AXISYM_NPHI` stays above
+the quintic `order + 1 = 6` so the periodic spline is well conditioned.
 
 **Units**. The construction stays in the field's SI covariant units (numerically
 balanced, `O(1)`). The Gaussian-CGS conversion is applied only at
@@ -979,6 +997,36 @@ Cartesian space with a triangulated STL surface (using CGAL).
 1. coord_input (if set)
 2. netcdffile (if coord_input empty)
 3. field_input (if both empty)
+
+### 8.2.3 SPECTRE Equilibria (`integ_coords = 6`)
+
+VMEC-free multi-volume guiding-center tracing on a SPECTRE/SPEC MRxMHD
+equilibrium (HDF5, `.h5`), detected automatically from `field_input`. The
+end-to-end pipeline (issues #437-#442): symplectic field-line Poincare app
+(#437), per-volume RK45 guiding centers (#438), per-volume Meiss canonical
+coordinates (#439), Level-1 refraction (#440) and Level-0 rescale (#443)
+interface crossing maps, symplectic multi-volume crossing (#441), and the
+validation suite (#442). Example input: `examples/simple_spectre.in`.
+
+| Parameter | Type | Default | Purpose |
+|-----------|------|---------|---------|
+| `field_input` | string | `''` | SPECTRE HDF5 equilibrium (`.h5`); VMEC-free |
+| `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
+| `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
+| `crossing_level` | int | 1 | interface crossing map: `1` = Level-1 refraction, `0` = Level-0 energy rescale |
+| `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
+| `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
+| `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |
+
+The radial start `sbeg` is the SPECTRE label `rho_g in [0, Mvol]`; markers are
+lost only at the outermost interface `rho_g = Mvol`. `crossing_level` and the
+construction grid apply to `integmode > 0`; the RK45 path shares
+`crossing_level` but builds no construction. On the axisymmetric two-volume
+tok2vol fixture Level 0 and Level 1 give equal loss fractions (finding F5); the
+committed reference behavior (loss accounting, L0-vs-L1, trapped/passing mirror
+split, fixed-seed determinism) is locked by
+`test/tests/test_spectre_validation.py`, and the construction-grid knob and
+axisymmetric clamp by `test/tests/test_spectre_construction_grid.py`.
 
 ### 8.3 Integration Mode (`integmode`)
 

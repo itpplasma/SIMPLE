@@ -828,6 +828,32 @@ set_tests_properties(test_spectre_sympl_crossing PROPERTIES
     LABELS "integration;python"
     TIMEOUT 300)
 
+# SPECTRE construction-grid memory knob and axisymmetric phi auto-clamp (#442):
+# the clamp triggers on axisymmetric tok2vol, peak RSS falls below the unclamped
+# phi=32 build, and a coarse grid still reproduces the per-volume canonical chart.
+add_test(NAME test_spectre_construction_grid
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_construction_grid.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_construction_grid PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE end-to-end validation (#442): losses and accounting, Level-0 vs
+# Level-1 loss fractions, trapped/passing mirror-criterion split, guiding-center
+# crossing mu conservation, and fixed-seed determinism on the committed tok2vol.
+add_test(NAME test_spectre_validation
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_validation.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_validation PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
