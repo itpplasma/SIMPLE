@@ -19,7 +19,8 @@ module spectre_sympl_orbit
     use orbit_symplectic_base, only: symplectic_integrator_t
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use interface_crossing, only: apply_crossing, crossing_info_t, &
-                                  crossing_log_record, CROSS_LOSS, CROSS_STOP
+                                  crossing_log_record, CROSS_LOSS, CROSS_STOP, &
+                                  CROSS_REFLECTION
 
     implicit none
     private
@@ -27,11 +28,22 @@ module spectre_sympl_orbit
     public :: sympl_spectre_state_t, sympl_spectre_reset, recanon_pphi, &
               orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
               sympl_landing_stats
-    public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP
+    public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP, &
+              SYMPL_SPECTRE_SKIM
 
     integer, parameter :: SYMPL_SPECTRE_OK = 0
     integer, parameter :: SYMPL_SPECTRE_LOSS = 88
     integer, parameter :: SYMPL_SPECTRE_STOP = 89
+    !> A trapped marker whose magnetic-mirror turning point sits on an interface
+    !> reflects, is nudged back, and is returned by its drift within one
+    !> microstep -- with v_par ~ 0 the reflection cannot move it away. Left alone
+    !> it reflects every microstep forever with no progress in (theta, zeta),
+    !> hijacking the run. Such a marker is mirror-confined (it cannot cross the
+    !> interface outward), so after SKIM_MAX consecutive same-interface
+    !> reflections with no angular progress it is terminated as confined-skimming.
+    integer, parameter :: SYMPL_SPECTRE_SKIM = 90
+    integer, parameter :: SKIM_MAX = 256
+    real(dp), parameter :: SKIM_PROGRESS = 1.0d-4
 
     !> Landing target and acceptance for |rho_g - k| at the interface. The
     !> h*-solve aims at landing_tol; the per-volume splines are clamped at the
@@ -75,6 +87,12 @@ module spectre_sympl_orbit
         integer :: mode = 0
         integer :: level = 1
         real(dp) :: dt_std = 0.0_dp
+        !> Consecutive same-interface reflections with no angular progress, and
+        !> the interface and (theta, zeta) at the start of the current run.
+        integer :: skim_count = 0
+        integer :: skim_iface = -1
+        real(dp) :: skim_theta = 0.0_dp
+        real(dp) :: skim_zeta = 0.0_dp
     end type sympl_spectre_state_t
 
     integer :: n_landings = 0
@@ -233,6 +251,12 @@ contains
                 exit
             end if
 
+            if (skimming(state, info)) then
+                ierr = SYMPL_SPECTRE_SKIM
+                t_frac = used/state%dt_std
+                exit
+            end if
+
             ! Select the target volume (and its field lock) from the nudged
             ! rho_g before re-canonicalizing in that volume's gauge.
             call set_home(state, y_out(1))
@@ -246,6 +270,41 @@ contains
 
         si%dt = state%dt_std
     end subroutine orbit_microstep_sympl_spectre
+
+    logical function skimming(state, info)
+        !> True once a marker has reflected SKIM_MAX times in a row off the same
+        !> interface without moving in (theta, zeta): a mirror turning point
+        !> pinned on the interface by its drift. Any non-reflection event, a
+        !> different interface, or angular progress resets the run counter, so a
+        !> physically precessing trapped particle (which advances in theta/zeta
+        !> between bounces) is never flagged.
+        type(sympl_spectre_state_t), intent(inout) :: state
+        type(crossing_info_t), intent(in) :: info
+
+        real(dp) :: dth, dze
+
+        skimming = .false.
+
+        if (info%event_type /= CROSS_REFLECTION) then
+            state%skim_count = 0
+            state%skim_iface = -1
+            return
+        end if
+
+        dth = abs(info%theta - state%skim_theta)
+        dze = abs(info%zeta - state%skim_zeta)
+        if (info%iface == state%skim_iface .and. dth < SKIM_PROGRESS &
+            .and. dze < SKIM_PROGRESS) then
+            state%skim_count = state%skim_count + 1
+        else
+            state%skim_count = 1
+            state%skim_iface = info%iface
+            state%skim_theta = info%theta
+            state%skim_zeta = info%zeta
+        end if
+
+        skimming = state%skim_count >= SKIM_MAX
+    end function skimming
 
     subroutine classify_step(state, si, ierr_step, boundary, iface, direction)
         type(sympl_spectre_state_t), intent(in) :: state

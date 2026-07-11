@@ -1103,7 +1103,7 @@ contains
         !> pathological non-convergence fallback inside the microstepper.
         use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
                                        orbit_microstep_sympl_spectre, &
-                                       SYMPL_SPECTRE_OK
+                                       SYMPL_SPECTRE_OK, SYMPL_SPECTRE_SKIM
         use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
         use params, only: crossing_level
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
@@ -1162,6 +1162,10 @@ contains
 
         if (ierr_orbit == SYMPL_SPECTRE_OK) then
             t_stop = real(kt, dp)*dtaumin/v0
+        else if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
+            ! Mirror-confined at an interior interface: cannot be lost, so record
+            ! it as confined (times_lost = trace_time) rather than at its stop.
+            t_stop = trace_time
         else
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
