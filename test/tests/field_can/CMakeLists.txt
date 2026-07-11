@@ -75,3 +75,17 @@ add_test(NAME test_spectre_sympl_volume_pphi
 set_tests_properties(test_spectre_sympl_volume_pphi PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
+
+# Symplectic multi-volume crossing (#441): long-run H and p_phi invariants of
+# the composed flow-jump-flow map on the committed tok2vol fixture.
+add_executable(test_spectre_sympl_crossing.x test_spectre_sympl_crossing.f90)
+target_link_libraries(test_spectre_sympl_crossing.x simple)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_sympl_crossing)
+add_test(NAME test_spectre_sympl_crossing_invariants
+    COMMAND $<TARGET_FILE:test_spectre_sympl_crossing.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_sympl_crossing)
+set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)

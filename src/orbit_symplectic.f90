@@ -1254,7 +1254,10 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
-  integer, parameter :: maxit = 8
+  ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
+  ! and the exact-landing substep solve (#441) needs fully converged trial
+  ! steps, which 8 iterations do not guarantee near interfaces.
+  integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
   integer :: ktau

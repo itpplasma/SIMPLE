@@ -814,6 +814,20 @@ set_tests_properties(test_spectre_crossing_l1 PROPERTIES
     LABELS "integration;python"
     TIMEOUT 300)
 
+# Symplectic multi-volume interface crossing (#441): exact-landing accuracy,
+# reflections, RK45 cross-path loss consistency, and step-halving order on the
+# committed tok2vol fixture. The long-run invariant witness runs separately as
+# test_spectre_sympl_crossing_invariants (field_can/).
+add_test(NAME test_spectre_sympl_crossing
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_sympl_crossing.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_sympl_crossing PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
