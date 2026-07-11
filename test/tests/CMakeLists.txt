@@ -751,6 +751,19 @@ set_tests_properties(test_restart_integration PROPERTIES
     LABELS "integration;python"
     TIMEOUT 60)
 
+# SPECTRE symplectic field-line Poincare app vs SPECTRE reference sections (#437).
+# The fixture is the committed libneo G3V3L3Fi HDF5; do not copy it into SIMPLE.
+add_test(NAME test_spectre_poincare
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_poincare.py
+        $<TARGET_FILE:spectre_poincare.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/poincare.npz
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_poincare PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)
