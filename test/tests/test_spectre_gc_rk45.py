@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Behavioural test for SPECTRE guiding-center RK45 tracing per volume (#438).
+"""Behavioural test for SPECTRE guiding-center RK45 tracing per volume (#438, #443).
 
 Runs simple.x on the committed libneo SPECTRE fixture with integ_coords='spectre'
 (mode id 6) and integmode=0, markers started on control surface rho_g = 2, and
 checks the acceptance scenarios:
 
-  1. Every marker either completes the trace inside its volume or boundary-stops
-     on an interface to |rho_g - integer| < 1e-10; times_lost.dat and
-     confined_fraction.dat account for every marker.
-  2. Relative total energy (p^2, conserved by the guiding-center flow) drifts by
-     less than the RK45-tolerance bound over the trace.
+  1. With the Level-0 crossing map wired in (#443), markers traverse volumes and
+     either stay confined for the whole trace or are lost at the outermost
+     interface; times_lost.dat and confined_fraction.dat account for every
+     marker, and no boundary-stop artefact file is left behind.
+  2. Relative total energy (p^2, conserved by the guiding-center flow and by the
+     crossing map) drifts by less than the RK45-tolerance bound over the trace.
   3. The surface sampler places markers on the requested interface to < 1e-12 and
      reproduces bit-for-bit with a fixed seed.
   4. The run is VMEC-free: no wout file is configured or opened.
@@ -27,7 +28,6 @@ import numpy as np
 NTESTPART = 32
 TRACE_TIME = 1.0e-4
 SBEG = 2.0
-RHO_TOL = 1.0e-10          # boundary-stop location tolerance
 ENERGY_TOL = 1.0e-8        # relative energy drift bound
 SAMPLE_TOL = 1.0e-12       # sampler forward-map residual on the interface
 PERP_INV_MAX = 1.0e-2      # normalization witness: perp invariant ~ 1/B (Gauss)
@@ -72,14 +72,10 @@ def load_times_lost(workdir):
     }
 
 
-def count_boundary_events(workdir):
-    path = os.path.join(workdir, "spectre_boundary_events.dat")
-    n = 0
-    with open(path) as f:
-        for line in f:
-            if line.strip() and not line.startswith("#"):
-                n += 1
-    return n
+def load_crossing_events(workdir):
+    path = os.path.join(workdir, "spectre_crossing_events.dat")
+    a = np.loadtxt(path)
+    return a.reshape(1, -1) if a.ndim == 1 else a
 
 
 def main():
@@ -89,35 +85,34 @@ def main():
     with tempfile.TemporaryDirectory() as work:
         stdout = run_simple(binary, work, h5)
         res = load_times_lost(work)
-        n_events = count_boundary_events(work)
+        ev = load_crossing_events(work)
 
-        boundary = res["t_lost"] < TRACE_TIME * (1.0 - 1e-9)
-        confined = ~boundary
-        n_boundary = int(boundary.sum())
+        lost = res["t_lost"] < TRACE_TIME * (1.0 - 1e-9)
+        confined = ~lost
+        n_lost = int(lost.sum())
         n_confined = int(confined.sum())
 
-        # BDD 1: accounting -- every marker confined or boundary-stopped.
-        if n_confined + n_boundary != NTESTPART:
+        # BDD 1: accounting -- every marker confined or lost at the outermost
+        # interface, and the boundary-stop artefact of #438 is gone.
+        if n_confined + n_lost != NTESTPART:
             failures.append(
-                f"BDD1: {n_confined}+{n_boundary} != {NTESTPART} markers")
-        if n_boundary != n_events:
+                f"BDD1: {n_confined}+{n_lost} != {NTESTPART} markers")
+        if os.path.exists(os.path.join(work, "spectre_boundary_events.dat")):
+            failures.append("BDD1: stale spectre_boundary_events.dat present")
+        loss = ev[ev[:, 3] == 3]           # type 3 = loss at the outermost face
+        if len(loss) != n_lost:
             failures.append(
-                f"BDD1: {n_boundary} boundary times but {n_events} logged events")
-        if n_boundary:
-            worst = np.max(np.abs(res["zend_rho"][boundary]
-                                  - np.round(res["zend_rho"][boundary])))
-            if not worst < RHO_TOL:
-                failures.append(
-                    f"BDD1: boundary-stop |rho_g-int| = {worst:.3e} >= {RHO_TOL:.0e}")
-        else:
-            worst = 0.0
+                f"BDD1: {n_lost} lost markers but {len(loss)} loss events")
+        if len(loss):
+            mvol = int(loss[:, 2].max())
+            if not np.all(loss[:, 2] == mvol):
+                failures.append("BDD1: a loss occurred off the outermost interface")
         if n_confined:
             tmin = res["t_lost"][confined].min()
             if not tmin >= TRACE_TIME * (1.0 - 1e-6):
                 failures.append(
                     f"BDD1: confined marker loss time {tmin:.3e} < trace_time")
-        print(f"BDD1: confined={n_confined} boundary={n_boundary} "
-              f"max|rho_g-int|={worst:.3e}")
+        print(f"BDD1: confined={n_confined} lost={n_lost} loss_events={len(loss)}")
 
         # confined_fraction.dat closes the account at the final time.
         cf = np.loadtxt(os.path.join(work, "confined_fraction.dat"))
