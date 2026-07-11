@@ -627,12 +627,13 @@ from the guiding-center stack below.
 #### Guiding-center RK45 per volume (`integ_coords = 6`)
 
 **Files**: `src/magfie.f90` (`magfie_spectre`), `src/spectre_orbit.f90`,
-`src/simple_main.f90` (`init_spectre_field`, `trace_orbit_spectre`),
-`src/samplers.f90` (`sample_spectre_surface`).
+`src/interface_crossing.f90`, `src/simple_main.f90` (`init_spectre_field`,
+`trace_orbit_spectre`), `src/samplers.f90` (`sample_spectre_surface`).
 
 `simple.x` traces guiding centers in a SPECTRE equilibrium on the non-canonical
-RK45 path, one volume at a time. Interface crossing physics is deferred, so an
-orbit stops when it reaches a volume boundary (see boundary-stop below).
+RK45 path, one volume at a time. On reaching an interface the Level-0 crossing
+map switches volume, reflects, or loses the marker (see interface crossing
+below); the outermost interface is the loss surface.
 
 **Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
 extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
@@ -677,16 +678,57 @@ chart is the integration coordinate, so `start.dat` holds `(rho_g, theta, zeta)`
 directly and every marker sits on the requested interface to round-off. The
 sampler also sets `bmin`/`bmax`/`bmod00` from a scan of the surface.
 
-**Boundary-stop**. A marker is confined to its home volume, fixed after the
-first step as the pair of integer interfaces bracketing `rho_g`. When a
-microstep crosses a home boundary, `orbit_timestep_spectre` bisects the dense
-RK45 trajectory to `|rho_g - integer| < 1e-10`, records the crossing state, and
-ends the orbit with a distinct boundary-stop status (not a wall loss). Each stop
-writes one line to `spectre_boundary_events.dat` (particle, loss time,
-interface, theta, zeta, v_par, mu, direction); the marker's loss time and final
-state also appear in `times_lost.dat`, so `confined_fraction.dat` accounts for
-every marker as confined or boundary-stopped. The outermost interface is the
-default loss surface.
+**Interface crossing (Level 0, #443)**. A marker owns a home volume, fixed after
+the first step as the pair of integer interfaces bracketing `rho_g`. When a
+microstep leaves the home volume, `orbit_timestep_spectre` locates the interface
+`rho_g = k` (Illinois false position on the substep to `< 1e-10`) and hands the
+landing state to `apply_crossing(y_iface, iface, direction, mvol, level, y_out,
+info)` in `interface_crossing.f90`. Only `level = 0` is implemented; a higher
+level errors out ("Level-1 crossing not yet implemented"), the seam the symplectic
+refraction map (#440) later fills without touching callers.
+
+The Level-0 map holds `(theta, zeta)` and the perpendicular invariant, evaluates
+`|B|` from *both* volumes at the same interface point (`rho_g = k -+ 1e-12`, the
+per-volume polynomial basis), and rescales the parallel velocity. Writing the
+stored invariant `perp_inv = z(4)^2 (1 - z(5)^2)/|B| = 2 mu` (`v_perp^2/|B|`), so
+`mu = perp_inv/2` is the magnetic moment:
+
+    v_par'^2 = v_par^2 - 2 mu (B_target - B_home),   v_par = z(4) z(5).
+
+- **Crossing** (`v_par'^2 >= 0`): keep the sign of `v_par`, switch to the
+  neighbour volume. `H = v_par^2/2 + mu |B|` (each side in its own volume) is
+  conserved to round-off, and `z(4)` (hence energy) is unchanged.
+- **Reflection** (`v_par'^2 < 0`): the forbidden crossing into higher `|B|` is a
+  magnetic mirror. The marker stays home with `v_par -> -v_par` (the same-side
+  energy root), so `|v_par|`, `mu`, and `|B|` are unchanged and `H` is exact. A
+  deeply trapped marker whose banana tip sits on the sheet stays pinned there,
+  the crude Level-0 behaviour absent a tangential sheet-drift kick.
+- **Loss**: crossing outward through the outermost interface (`direction = +1`,
+  `iface = Mvol`) removes the marker; its loss time is recorded in
+  `times_lost.dat` and `confined_fraction.dat`.
+- **Axis**: reaching `rho_g = 0` (the coordinate axis, `sqrt(g) = 0`) reflects
+  trivially before the singularity.
+
+After a crossing `rho_g` is nudged `1e-6` into the resolved volume so the next
+substep does not re-trigger the event within the odeint tolerance.
+
+**Drift regularization**. The guiding-center drift diverges where
+`Bstar_par = 1 + p_par (c/e) h.curl h -> 0`, a pitch-dependent phase-space
+surface that the interface sheet current pushes into a thin layer beside each
+interface. `velo_can_clamped` in `spectre_orbit.f90` freezes the field at the
+volume edge minus a `2e-2` band and caps the RHS magnitude so the RK45 substep
+integrates a finite, physical drift instead of collapsing to zero step. This
+regularizes only the integrated orbit near the layer; the crossing map itself
+uses the true both-side `|B|` at the exact interface, so energy conservation is
+untouched.
+
+**Crossing log**. Every crossing and reflection appends one line to
+`spectre_crossing_events.dat`, grouped by particle in time order (a stable
+counting sort, so the file is reproducible under OpenMP): particle, time,
+interface, type (1 crossing / 2 reflection / 3 loss), exit volume, entry volume,
+theta, zeta, `v_par` before, `v_par` after, mu, `|B|` home, `|B|` target. The
+symplectic path is not yet wired, so a boundary-stop status now appears only
+there.
 
 #### Guiding-center symplectic per volume (`integmode > 0`)
 

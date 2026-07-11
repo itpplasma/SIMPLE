@@ -799,6 +799,19 @@ set_tests_properties(test_spectre_sympl_volume PROPERTIES
     LABELS "integration;python"
     TIMEOUT 300)
 
+# SPECTRE Level-0 interface crossing map with event location (#443). tok2vol is
+# committed alongside the test; G3V3L3Fi is the committed libneo fixture.
+add_test(NAME test_spectre_crossing_l0
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_crossing_l0.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_crossing_l0 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
 add_subdirectory(field_can)
 add_subdirectory(magfie)
 add_subdirectory(orbit)

@@ -31,6 +31,7 @@
     magfie_can_boozer.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
+    interface_crossing.f90
     spectre_orbit.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90

@@ -9,7 +9,7 @@ module params
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
-    use magfie_sub, only: TEST, SPECTRE
+    use magfie_sub, only: TEST
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
                                      EXPL_IMPL_EULER
@@ -142,11 +142,6 @@ module params
     real(dp), allocatable :: wall_hit_normal_cart(:, :)
     real(dp), allocatable :: wall_hit_cos_incidence(:)
     real(dp), allocatable :: wall_hit_angle_rad(:)
-
-    ! SPECTRE volume-boundary events (#438): flag plus one record per particle
-    ! holding (interface index, theta, zeta, v_par, mu, direction).
-    integer(int8), allocatable :: spectre_hit(:)
-    real(dp), allocatable :: spectre_event(:, :)
 
 contains
 
@@ -395,8 +390,6 @@ contains
         if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
         if (allocated(wall_hit_cos_incidence)) deallocate (wall_hit_cos_incidence)
         if (allocated(wall_hit_angle_rad)) deallocate (wall_hit_angle_rad)
-        if (allocated(spectre_hit)) deallocate (spectre_hit)
-        if (allocated(spectre_event)) deallocate (spectre_event)
 
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         allocate (times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -421,12 +414,6 @@ contains
         wall_hit_normal_cart = 0.0d0
         wall_hit_cos_incidence = 0.0d0
         wall_hit_angle_rad = 0.0d0
-
-        if (isw_field_type == SPECTRE) then
-            allocate (spectre_hit(ntestpart), spectre_event(6, ntestpart))
-            spectre_hit = 0_int8
-            spectre_event = 0.0d0
-        end if
     end subroutine reallocate_arrays
 
     subroutine sort_idx(idx_arr, N)

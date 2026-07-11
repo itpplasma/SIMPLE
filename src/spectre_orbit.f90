@@ -1,16 +1,20 @@
 module spectre_orbit
     !> Non-canonical RK45 guiding-center stepping in the SPECTRE stacked-rho
-    !> chart with per-volume boundary termination (#438).
+    !> chart with Level-0 interface crossing (#438, #443).
     !>
-    !> A marker is traced inside one volume at a time: rho_g moves freely until it
-    !> reaches an interface (an integer rho_g). Interface crossing physics is
-    !> deferred to spectre-08, so the orbit stops there ("boundary-stop"), the
-    !> crossing time is located by bisection of the dense RK45 trajectory to
-    !> |rho_g - integer| < 1e-10, and the terminal state is reported to the caller.
+    !> A marker is traced inside one volume at a time on a field-clamped RHS whose
+    !> |B| is frozen at the home-volume edge, so the RK45 substep never marches
+    !> across the interface |B| jump. When the substep leaves [home_lo, home_hi]
+    !> the interface time is found by Illinois false position and apply_crossing
+    !> switches volume (or reflects) before stepping resumes. The outermost
+    !> interface is the loss surface: a crossing outward from volume Mvol reports
+    !> SPECTRE_BOUNDARY and terminates the trace.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use odeint_allroutines_sub, only: odeint_allroutines
     use alpha_lifetime_sub, only: velo_can
+    use interface_crossing, only: apply_crossing, crossing_info_t, axis_offset, &
+                                  CROSSING_LEVEL0, CROSS_LOSS
 
     implicit none
     private
@@ -25,6 +29,26 @@ module spectre_orbit
     real(dp), parameter :: rho_tol = 1.0d-10
     integer, parameter :: max_bisect = 80
 
+    !> Home-volume boundaries handed to the field-clamped RHS. Each traced marker
+    !> owns one thread, so these must be thread-private.
+    real(dp) :: ev_lo = 0.0_dp, ev_hi = 0.0_dp
+    !$omp threadprivate(ev_lo, ev_hi)
+
+    !> Keep the marker state strictly inside its home volume when re-seeding the
+    !> next microstep.
+    real(dp), parameter :: clamp_margin = 1.0d-9
+    !> The guiding-center drift diverges (Bstar_par -> 0 from the interface sheet
+    !> current) in a thin unphysical layer next to each interface. The RHS field
+    !> is frozen at the volume edge minus this band so the substep integrates a
+    !> finite, physical drift; the exact interface jump is applied separately by
+    !> apply_crossing at rho_g = iface.
+    real(dp), parameter :: drift_band = 2.0d-2
+    !> Backstop for the same Bstar_par -> 0 breakdown when it falls inside the
+    !> band (it is a pitch-dependent phase-space surface, not a fixed radius):
+    !> cap the RHS magnitude so odeint keeps a finite step through the unphysical
+    !> layer instead of collapsing to zero step and exhausting its step budget.
+    real(dp), parameter :: drift_cap = 1.0d0
+
     type :: spectre_orbit_state_t
         !> Home volume [home_lo, home_hi] is the pair of consecutive integer
         !> interfaces bracketing the marker; it is fixed after the first step so a
@@ -37,9 +61,8 @@ module spectre_orbit
 
     type :: spectre_event_t
         logical :: occurred = .false.
-        integer :: iface = 0
-        integer :: direction = 0
         real(dp) :: t_frac = 0.0_dp
+        type(crossing_info_t) :: info
     end type spectre_event_t
 
 contains
@@ -55,49 +78,65 @@ contains
     end subroutine spectre_state_reset
 
     subroutine orbit_timestep_spectre(state, z, dtaumin, relerr, ierr, event)
-        !> Advance z = (rho_g, theta, zeta, p, lambda) by one microstep dtaumin,
-        !> then test the home-volume boundaries. On a crossing z is refined to the
-        !> interface and the step reports SPECTRE_BOUNDARY.
+        !> Advance z = (rho_g, theta, zeta, p, lambda) by one microstep dtaumin.
+        !> Once the home volume is fixed the substep runs on the field-clamped RHS
+        !> (continuous across the interface); if the trajectory leaves the home
+        !> volume the crossing time is bisected to the interface and apply_crossing
+        !> switches volume or reflects, with z resumed just inside the resolved
+        !> volume. A crossing outward through the outermost interface is a loss and
+        !> reports SPECTRE_BOUNDARY.
         type(spectre_orbit_state_t), intent(inout) :: state
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dtaumin, relerr
         integer, intent(out) :: ierr
         type(spectre_event_t), intent(out) :: event
 
-        real(dp) :: z_start(5), z_end(5)
-        real(dp) :: rho_start, rho_end, boundary
+        real(dp) :: z_start(5), z_end(5), z_hit(5), boundary
+        integer :: direction, iface
 
         event%occurred = .false.
         ierr = SPECTRE_OK
-        rho_start = z(1)
-
         z_start = z
-        call integrate_step(z_start, dtaumin, relerr, z_end, ierr)
-        if (ierr /= SPECTRE_OK) return
-        rho_end = z_end(1)
 
         if (.not. state%home_set) then
-            call set_home_volume(state, rho_end)
+            ev_lo = axis_offset
+            ev_hi = real(state%mvol, dp)
+            call integrate_clamped(z_start, dtaumin, relerr, z_end, ierr)
+            if (ierr /= SPECTRE_OK) return
+            call set_home_volume(state, z_end(1))
             z = z_end
+            z(1) = max(state%home_lo, min(z(1), state%home_hi - clamp_margin))
             return
         end if
 
-        if (rho_end >= state%home_hi) then
+        ev_lo = state%home_lo
+        ev_hi = state%home_hi
+        call integrate_clamped(z_start, dtaumin, relerr, z_end, ierr)
+        if (ierr /= SPECTRE_OK) return
+
+        if (z_end(1) >= state%home_hi) then
             boundary = state%home_hi
-            event%direction = 1
-        else if (rho_end <= state%home_lo) then
+            direction = 1
+        else if (z_end(1) <= state%home_lo) then
             boundary = state%home_lo
-            event%direction = -1
+            direction = -1
         else
             z = z_end
             return
         end if
 
-        call locate_crossing(z_start, dtaumin, relerr, rho_start, boundary, z, &
-                             event%t_frac)
-        event%iface = nint(boundary)
+        call locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, event%t_frac)
+        iface = nint(boundary)
+        call apply_crossing(z_hit, iface, direction, state%mvol, CROSSING_LEVEL0, &
+                            z, event%info)
         event%occurred = .true.
-        ierr = SPECTRE_BOUNDARY
+
+        if (event%info%event_type == CROSS_LOSS) then
+            ierr = SPECTRE_BOUNDARY
+        else
+            call set_home_volume(state, z(1))
+            ierr = SPECTRE_OK
+        end if
     end subroutine orbit_timestep_spectre
 
     subroutine set_home_volume(state, rho)
@@ -113,41 +152,72 @@ contains
         state%home_set = .true.
     end subroutine set_home_volume
 
-    subroutine locate_crossing(z_start, dtaumin, relerr, rho_start, boundary, &
-                               z_hit, t_frac)
-        !> Bisect the microstep time so the dense RK45 trajectory reaches rho_g =
-        !> boundary to |rho_g - boundary| < 1e-10. rho_start is strictly inside.
-        real(dp), intent(in) :: z_start(5), dtaumin, relerr, rho_start, boundary
+    subroutine locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, t_frac)
+        !> Find the microstep time where the clamped-RHS trajectory reaches rho_g =
+        !> boundary to |rho_g - boundary| < rho_tol, by the Illinois variant of
+        !> false position. z_start is strictly inside the home volume and the full
+        !> step already overshot the boundary, so [0, dtaumin] brackets the root.
+        real(dp), intent(in) :: z_start(5), dtaumin, relerr, boundary
         real(dp), intent(out) :: z_hit(5)
         real(dp), intent(out) :: t_frac
 
-        real(dp) :: t_lo, t_hi, t_mid, side_start, rho_mid, z_mid(5)
-        integer :: it, ierr
+        real(dp) :: t_lo, t_hi, f_lo, f_hi, t_mid, f_mid, z_mid(5)
+        integer :: it, ierr, last_side
 
-        side_start = sign(1.0_dp, rho_start - boundary)
         t_lo = 0.0_dp
+        f_lo = z_start(1) - boundary
         t_hi = dtaumin
-        z_hit = z_start
-        t_mid = dtaumin
+        call integrate_clamped(z_start, t_hi, relerr, z_mid, ierr)
+        f_hi = z_mid(1) - boundary
+        z_hit = z_mid
+        t_mid = t_hi
+        last_side = 0
 
         do it = 1, max_bisect
-            t_mid = 0.5_dp*(t_lo + t_hi)
-            call integrate_step(z_start, t_mid, relerr, z_mid, ierr)
+            if (abs(f_hi - f_lo) <= tiny(1.0_dp)) exit
+            t_mid = t_hi - f_hi*(t_hi - t_lo)/(f_hi - f_lo)
+            call integrate_clamped(z_start, t_mid, relerr, z_mid, ierr)
             if (ierr /= SPECTRE_OK) exit
-            rho_mid = z_mid(1)
+            f_mid = z_mid(1) - boundary
             z_hit = z_mid
-            if (abs(rho_mid - boundary) < rho_tol) exit
-            if (sign(1.0_dp, rho_mid - boundary) == side_start) then
+            if (abs(f_mid) < rho_tol) exit
+            if (f_mid*f_lo > 0.0_dp) then
                 t_lo = t_mid
+                f_lo = f_mid
+                if (last_side == 1) f_hi = 0.5_dp*f_hi
+                last_side = 1
             else
                 t_hi = t_mid
+                f_hi = f_mid
+                if (last_side == -1) f_lo = 0.5_dp*f_lo
+                last_side = -1
             end if
         end do
 
         t_frac = t_mid/dtaumin
     end subroutine locate_crossing
 
-    subroutine integrate_step(z_in, tau, relerr, z_out, ierr)
+    subroutine velo_can_clamped(tau, z, vz)
+        !> velo_can with rho_g clamped to the home volume [ev_lo, ev_hi). Inside
+        !> the volume the drift is exact; past an interface the field is held at
+        !> its boundary value so the RHS stays continuous and the RK45 step never
+        !> straddles the |B| jump. z_end itself still moves past the interface, so
+        !> the caller detects the crossing and bisects to the exact interface.
+        real(dp), intent(in) :: tau
+        real(dp), intent(in) :: z(:)
+        real(dp), intent(out) :: vz(:)
+
+        real(dp) :: zc(size(z)), vmag
+
+        zc = z
+        zc(1) = max(max(ev_lo + drift_band, axis_offset), &
+                    min(z(1), ev_hi - drift_band))
+        call velo_can(tau, zc, vz)
+        vmag = sqrt(sum(vz**2))
+        if (vmag > drift_cap) vz = vz*(drift_cap/vmag)
+    end subroutine velo_can_clamped
+
+    subroutine integrate_clamped(z_in, tau, relerr, z_out, ierr)
         real(dp), intent(in) :: z_in(5), tau, relerr
         real(dp), intent(out) :: z_out(5)
         integer, intent(out) :: ierr
@@ -157,7 +227,7 @@ contains
         ierr = SPECTRE_OK
         z_out = z_in
         if (tau <= 0.0_dp) return
-        call odeint_allroutines(z_out, ndim, 0.0_dp, tau, relerr, velo_can)
-    end subroutine integrate_step
+        call odeint_allroutines(z_out, ndim, 0.0_dp, tau, relerr, velo_can_clamped)
+    end subroutine integrate_clamped
 
 end module spectre_orbit

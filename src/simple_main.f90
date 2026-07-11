@@ -174,6 +174,12 @@ contains
         end block
 
         call diag_counters_init
+        if (isw_field_type == SPECTRE) then
+            block
+                use interface_crossing, only: crossing_log_reset
+                call crossing_log_reset(256)
+            end block
+        end if
         call progress_init(checkpoint_interval, ntestpart, write_results)
         call trace_parallel(norb)
         call progress_finalize
@@ -1005,13 +1011,14 @@ contains
 
     subroutine trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
         !> Per-volume RK45 guiding-center trace for SPECTRE (integmode=0). The
-        !> marker stays confined for the full trace or boundary-stops at the first
-        !> interface it reaches; the refined crossing state and event are recorded.
+        !> marker traverses volumes through the Level-0 crossing map and stays
+        !> confined for the full trace, reflects at forbidden interfaces, or is
+        !> lost at the outermost interface. Every crossing/reflection is logged.
         use spectre_orbit, only: spectre_orbit_state_t, spectre_event_t, &
                                  spectre_state_reset, orbit_timestep_spectre, &
                                  SPECTRE_OK, SPECTRE_BOUNDARY
         use magfie_sub, only: spectre_field
-        use params, only: spectre_hit, spectre_event
+        use interface_crossing, only: crossing_log_record
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         integer, intent(in) :: ipart
@@ -1024,7 +1031,7 @@ contains
         type(spectre_event_t) :: event
         integer :: it, ktau, ierr_orbit, it_final
         integer(8) :: kt
-        real(dp) :: bmod, vpar, mu, t_stop
+        real(dp) :: t_stop
 
         call spectre_state_reset(state, spectre_field%data%Mvol)
 
@@ -1036,6 +1043,10 @@ contains
                 do ktau = 1, ntau_macro(it)
                     call orbit_timestep_spectre(state, z, dtaumin, relerr, &
                                                 ierr_orbit, event)
+                    if (event%occurred) then
+                        call crossing_log_record(ipart, &
+                            (real(kt, dp) + event%t_frac)*dtaumin/v0, event%info)
+                    end if
                     if (ierr_orbit /= SPECTRE_OK) exit
                     kt = kt + 1
                 end do
@@ -1060,17 +1071,7 @@ contains
         end if
 
         if (ierr_orbit == SPECTRE_BOUNDARY) then
-            bmod = compute_bmod(z(1:3))
-            vpar = z(4)*z(5)
-            mu = 0.5d0*z(4)**2*(1.0d0 - z(5)**2)/bmod
             t_stop = (real(kt, dp) + event%t_frac)*dtaumin/v0
-            spectre_hit(ipart) = 1_int8
-            spectre_event(1, ipart) = real(event%iface, dp)
-            spectre_event(2, ipart) = z(2)
-            spectre_event(3, ipart) = z(3)
-            spectre_event(4, ipart) = vpar
-            spectre_event(5, ipart) = mu
-            spectre_event(6, ipart) = real(event%direction, dp)
         else
             t_stop = real(kt, dp)*dtaumin/v0
         end if
@@ -1091,7 +1092,8 @@ contains
         !> is a later unit, so the terminal state is that first outside step.
         use orbit_symplectic, only: orbit_timestep_sympl
         use field_can_spectre, only: spectre_mvol
-        use params, only: spectre_hit, spectre_event
+        use interface_crossing, only: crossing_info_t, crossing_log_record, &
+                                      CROSS_STOP
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         type(tracer_t), intent(inout) :: anorb
@@ -1159,16 +1161,24 @@ contains
 
         t_stop = real(kt, dp)*dtaumin/v0
         if (boundary) then
-            bmod = compute_bmod(z(1:3))
-            vpar = z(4)*z(5)
-            mu = 0.5d0*z(4)**2*(1.0d0 - z(5)**2)/bmod
-            spectre_hit(ipart) = 1_int8
-            spectre_event(1, ipart) = real(iface, dp)
-            spectre_event(2, ipart) = z(2)
-            spectre_event(3, ipart) = z(3)
-            spectre_event(4, ipart) = vpar
-            spectre_event(5, ipart) = mu
-            spectre_event(6, ipart) = real(direction, dp)
+            block
+                type(crossing_info_t) :: info
+                bmod = compute_bmod(z(1:3))
+                vpar = z(4)*z(5)
+                mu = 0.5d0*z(4)**2*(1.0d0 - z(5)**2)/bmod
+                info%event_type = CROSS_STOP
+                info%iface = iface
+                info%vol_from = merge(iface, iface + 1, direction == 1)
+                info%vol_to = info%vol_from
+                info%theta = z(2)
+                info%zeta = z(3)
+                info%vpar_before = vpar
+                info%vpar_after = vpar
+                info%mu = mu
+                info%bmod_home = bmod
+                info%bmod_target = bmod
+                call crossing_log_record(ipart, t_stop, info)
+            end block
         end if
 
 !$omp critical
@@ -1451,7 +1461,7 @@ contains
         end do
         close (unit)
 
-        call write_spectre_boundary_events
+        call write_spectre_crossing_events
 
         if (ntcut > 0 .or. class_plot) then
             open (newunit=unit, file='class_parts.dat', recl=1024)
@@ -1474,26 +1484,15 @@ contains
         end if
     end subroutine write_results
 
-    subroutine write_spectre_boundary_events
-        !> One line per SPECTRE boundary-stop marker:
-        !> particle, loss_time[s], interface, theta, zeta, v_par, mu, direction.
-        use params, only: spectre_hit, spectre_event
+    subroutine write_spectre_crossing_events
+        !> Level-0 interface crossing log (#443), one line per crossing/reflection
+        !> event across all SPECTRE markers, grouped by particle in time order.
+        use interface_crossing, only: crossing_log_write
+        use magfie_sub, only: SPECTRE
 
-        integer :: i, unit
+        if (isw_field_type /= SPECTRE) return
 
-        if (.not. allocated(spectre_hit)) return
-
-        open (newunit=unit, file='spectre_boundary_events.dat', recl=1024)
-        write (unit, '(A)') '# particle  loss_time  interface  theta  zeta  '// &
-            'v_par  mu  direction'
-        do i = 1, ntestpart
-            if (spectre_hit(i) == 1_int8) then
-                write (unit, *) i, times_lost(i), nint(spectre_event(1, i)), &
-                    spectre_event(2, i), spectre_event(3, i), spectre_event(4, i), &
-                    spectre_event(5, i), nint(spectre_event(6, i))
-            end if
-        end do
-        close (unit)
-    end subroutine write_spectre_boundary_events
+        call crossing_log_write('spectre_crossing_events.dat')
+    end subroutine write_spectre_crossing_events
 
 end module simple_main
