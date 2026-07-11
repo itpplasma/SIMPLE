@@ -586,6 +586,44 @@ f%dAth = [Ath_norm, 0, 0] ! Constant derivative
 - Uses libneo functions: `vmec_to_can`, `can_to_vmec`
 - Simpler than Meiss/Albert but less optimized
 
+### 6.6 SPECTRE Field-Line Coordinates
+
+**Files**: `src/field_line_spectre.f90`, `app/spectre_poincare.f90`
+**Input**: SPECTRE/SPEC MRxMHD equilibrium (HDF5), read through libneo
+`spectre_reader` (`spectre_data_t`, `load_spectre`); per-volume covariant
+vector potential `(A_theta, A_zeta)` and its s/theta/zeta derivatives from
+libneo `spectre_basis` (`eval_spectre_vector_potential`). Derivatives are with
+respect to the local volume coordinate `s in [-1, 1]`; the polynomial basis is
+valid past `|s| = 1`.
+
+**Canonical structure**: inside a single volume the magnetic field line is the
+flow of a one-degree-of-freedom canonical system with the toroidal angle `zeta`
+as time, the poloidal angle `theta` as coordinate, and `psi = A_theta` as the
+conjugate momentum. The radial coordinate `s` is recovered implicitly from `psi`
+at fixed `(theta, zeta)`. The derived flow is
+
+```
+dtheta/dzeta = -dA_zeta/ds / dA_theta/ds
+dpsi/dzeta   =  dA_zeta/dtheta - dA_theta/dtheta * dA_zeta/ds / dA_theta/ds
+```
+
+with the explicit `d/dzeta` terms cancelling. `field_line_spectre.f90` advances
+`(theta, psi)` with a semi-implicit symplectic Euler map: a Newton solve on `s`
+for the implicit momentum update (analytic Jacobian from the `ss` and `st`
+second derivatives, `|F|` tolerance `1e-13`), then explicit `theta` and `zeta`
+updates. Both update signs set the field-line orientation (the sign of iota).
+
+**App `spectre_poincare.x`**: traces field lines per volume from a namelist
+(`spectre_poincare.in`) and writes `poincare_vol<N>.dat` (seed, section, s,
+theta, R, Z) and `iota_vol<N>.dat` (least-squares rotational transform). Field
+periodicity places every section exactly on `zeta0 + k*2*pi/Nfp`, so no
+interpolation is needed. R, Z come from the SPEC interface Fourier blend
+(`spectre_rz`, mirroring libneo `libneo_coordinates_spectre` for output only:
+linear-in-s between interfaces for interior volumes, the `sbar**m` power law for
+the axis volume). Field lines never cross interfaces (`B.n = 0` on both sides),
+so no crossing logic is involved. This is a standalone diagnostic and is not yet
+wired into the `magfie` / `field_can` guiding-center stack.
+
 ---
 
 ## 7. libneo Integration
