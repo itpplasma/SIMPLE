@@ -355,10 +355,12 @@ contains
         !> interface (SI meters); stevvo scales it to cm. For integmode > 0 the
         !> per-volume Meiss canonical coordinates are built here (#439).
         use field_spectre, only: spectre_field_t, create_spectre_field
+        use field_can_spectre, only: set_spectre_construction_grid
         use magfie_sub, only: set_magfie_spectre_field, SPECTRE
         use new_vmec_stuff_mod, only: nper, rmajor
         use util, only: twopi
-        use params, only: field_input
+        use params, only: field_input, spectre_ncon_r, spectre_ncon_th, &
+                          spectre_ncon_phi
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
 
@@ -403,6 +405,8 @@ contains
             ! interface (#441). Beyond the edge the locked per-volume field is
             ! extended linearly, so iterates out there stay finite.
             sympl_rmax = real(sf%data%Mvol + 1, dp)
+            call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
+                                               spectre_ncon_phi)
             call init_field_can(SPECTRE, sf)
             call print_phase_time('SPECTRE per-volume canonical construction completed')
         end if

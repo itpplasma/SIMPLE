@@ -41,7 +41,7 @@ HALVING_RATIO_LO, HALVING_RATIO_HI = 3.0, 6.0
 
 
 def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
-                relerr, face_al=1.0, ntimstep=100):
+                relerr, face_al=1.0, ntimstep=100, ncon_phi=None):
     lines = [
         "&config",
         f"  trace_time = {trace_time}",
@@ -57,8 +57,13 @@ def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
         "  output_orbits_macrostep = .True.",
         "  deterministic = .True.",
         "  ran_seed = 12345",
-        "/",
     ]
+    # tok2vol is axisymmetric, so the construction phi grid auto-clamps
+    # (spectre_ncon_phi = -1). The high-order convergence probe pins the full
+    # phi resolution; the other scenarios exercise the clamped default.
+    if ncon_phi is not None:
+        lines.append(f"  spectre_ncon_phi = {ncon_phi}")
+    lines.append("/")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -198,7 +203,8 @@ def check_step_halving(binary, h5, failures):
         with tempfile.TemporaryDirectory() as work:
             out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
                              trace_time=trace_time, sbeg=0.97,
-                             npoiper2=npoiper2, relerr="1d-12", face_al=50.0)
+                             npoiper2=npoiper2, relerr="1d-12", face_al=50.0,
+                             ncon_phi=32)
             ev = load_events(work)
             _, _, stops = parse_landing_stats(out)
             check_stops(ev, stops, f"halving np={npoiper2}", failures)
