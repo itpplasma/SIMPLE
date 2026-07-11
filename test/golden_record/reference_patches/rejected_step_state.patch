@@ -1,0 +1,28 @@
+diff --git a/src/simple_main.f90 b/src/simple_main.f90
+index 647cdfe..f3887bf 100644
+--- a/src/simple_main.f90
++++ b/src/simple_main.f90
+@@ -937,10 +937,11 @@ contains
+             else
+                 if (swcoll) call update_momentum(anorb, z)
+                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
++                if (ierr_orbit .ne. 0) exit
+                 call to_standard_z_coordinates(anorb, z)
+             end if
+-            if (swcoll) call collide(z, dtaumin) ! Collisions
+             if (ierr_orbit .ne. 0) exit
++            if (swcoll) call collide(z, dtaumin) ! Collisions
+             kt = kt + 1
+         end do
+     end subroutine macrostep
+@@ -980,8 +981,9 @@ contains
+             else
+                 if (swcoll) call update_momentum(anorb, z)
+                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
++                if (ierr_orbit .ne. 0) exit
+                 call to_standard_z_coordinates(anorb, z)
+             end if
+-            if (swcoll) call collide(z, dtaumin) ! Collisions
+             if (ierr_orbit .ne. 0) exit
++            if (swcoll) call collide(z, dtaumin) ! Collisions
+             kt = kt + 1
