@@ -177,7 +177,9 @@ contains
         if (isw_field_type == SPECTRE) then
             block
                 use interface_crossing, only: crossing_log_reset
+                use spectre_sympl_orbit, only: sympl_landing_stats_reset
                 call crossing_log_reset(256)
+                call sympl_landing_stats_reset
             end block
         end if
         call progress_init(checkpoint_interval, ntestpart, write_results)
@@ -394,10 +396,13 @@ contains
 
         if (self%integmode > 0) then
             ! The symplectic Newton/loss guards treat r > sympl_rmax as "left the
-            ! domain". SPECTRE integrates in rho_g in [0, Mvol], so an iterate inside
-            ! an outer volume must not be misread as a loss; per-volume boundary
-            ! stops are handled by trace_orbit_spectre_sympl.
-            sympl_rmax = real(sf%data%Mvol, dp)
+            ! domain". SPECTRE integrates in rho_g in [0, Mvol] and loses markers
+            ! through the crossing pipeline at rho_g = Mvol, so the guard sits one
+            ! volume width beyond: at exactly Mvol it would abort Newton iterates
+            ! mid-solve during the exact-landing substep onto the outermost
+            ! interface (#441). Beyond the edge the locked per-volume field is
+            ! extended linearly, so iterates out there stay finite.
+            sympl_rmax = real(sf%data%Mvol + 1, dp)
             call init_field_can(SPECTRE, sf)
             call print_phase_time('SPECTRE per-volume canonical construction completed')
         end if
@@ -1087,14 +1092,16 @@ contains
     subroutine trace_orbit_spectre_sympl(anorb, ipart, z, passing, orbit_traj, &
                                          orbit_times)
         !> Per-volume symplectic guiding-center trace for SPECTRE (integmode > 0).
-        !> The canonical integrator steps the marker inside its home volume
-        !> [home_lo, home_hi]; the first accepted step landing outside the volume is
-        !> a boundary-stop. Exact interface landing (bisection of the crossing step)
-        !> is a later unit, so the terminal state is that first outside step.
-        use orbit_symplectic, only: orbit_timestep_sympl
-        use field_can_spectre, only: spectre_mvol
-        use interface_crossing, only: crossing_info_t, crossing_log_record, &
-                                      CROSS_STOP
+        !> Each microstep resolves interface events by an exact-landing substep of
+        !> the same implicit scheme, applies the crossing map, and re-canonicalizes
+        !> in the resolved volume (#441). Markers are lost only at the outermost
+        !> interface, matching the RK45 path; CROSS_STOP remains only as the
+        !> pathological non-convergence fallback inside the microstepper.
+        use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
+                                       orbit_microstep_sympl_spectre, &
+                                       SYMPL_SPECTRE_OK
+        use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
+        use params, only: crossing_level
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         type(tracer_t), intent(inout) :: anorb
@@ -1104,49 +1111,38 @@ contains
         real(dp), intent(out) :: orbit_traj(:, :)
         real(dp), intent(out) :: orbit_times(:)
 
-        real(dp) :: home_lo, home_hi
-        integer :: it, ktau, ierr_orbit, it_final, iface, direction
+        type(sympl_spectre_state_t) :: state
+        integer :: it, ktau, ierr_orbit, it_final
         integer(8) :: kt
-        real(dp) :: bmod, vpar, mu, t_stop
-        logical :: boundary
+        real(dp) :: t_stop, t_frac
 
-        home_lo = real(floor(z(1)), dp)
-        home_lo = max(0.0d0, min(home_lo, real(spectre_mvol - 1, dp)))
-        home_hi = home_lo + 1.0d0
+        call sympl_spectre_reset(state, anorb%si, spectre_mvol, integmode, &
+                                 crossing_level)
 
         kt = 0
         it_final = 0
-        ierr_orbit = 0
-        boundary = .false.
-        iface = 0
-        direction = 0
+        ierr_orbit = SYMPL_SPECTRE_OK
+        t_frac = 1.0d0
 
         do it = 1, ntimstep
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
-                    call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
-                    if (ierr_orbit /= 0) exit
-                    call to_standard_z_coordinates(anorb, z)
+                    call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
+                                                       ipart, &
+                                                       real(kt, dp)*dtaumin/v0, &
+                                                       dtaumin/v0, ierr_orbit, &
+                                                       t_frac)
+                    if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
                     kt = kt + 1
-                    if (z(1) >= home_hi) then
-                        boundary = .true.
-                        iface = nint(home_hi)
-                        direction = 1
-                        exit
-                    else if (z(1) <= home_lo) then
-                        boundary = .true.
-                        iface = nint(home_lo)
-                        direction = -1
-                        exit
-                    end if
                 end do
             end if
 
-            if (ierr_orbit /= 0 .or. boundary) then
+            if (ierr_orbit /= SYMPL_SPECTRE_OK) then
                 it_final = it
                 exit
             end if
 
+            call to_standard_z_coordinates(anorb, z)
             orbit_traj(:, it) = z
             orbit_times(it) = kt*dtaumin/v0
             call increase_confined_count(it, passing)
@@ -1160,27 +1156,15 @@ contains
             end do
         end if
 
-        t_stop = real(kt, dp)*dtaumin/v0
-        if (boundary) then
-            block
-                type(crossing_info_t) :: info
-                bmod = compute_bmod(z(1:3))
-                vpar = z(4)*z(5)
-                mu = 0.5d0*z(4)**2*(1.0d0 - z(5)**2)/bmod
-                info%event_type = CROSS_STOP
-                info%iface = iface
-                info%vol_from = merge(iface, iface + 1, direction == 1)
-                info%vol_to = info%vol_from
-                info%theta = z(2)
-                info%zeta = z(3)
-                info%vpar_before = vpar
-                info%vpar_after = vpar
-                info%mu = mu
-                info%bmod_home = bmod
-                info%bmod_target = bmod
-                call crossing_log_record(ipart, t_stop, info)
-            end block
+        if (ierr_orbit == SYMPL_SPECTRE_OK) then
+            t_stop = real(kt, dp)*dtaumin/v0
+        else
+            t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
+
+        call to_standard_z_coordinates(anorb, z)
+        ! The next marker on this thread starts with an unlocked field dispatch.
+        call set_spectre_volume_lock(0)
 
 !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
@@ -1486,14 +1470,26 @@ contains
     end subroutine write_results
 
     subroutine write_spectre_crossing_events
-        !> Level-0 interface crossing log (#443), one line per crossing/reflection
+        !> Interface crossing log (#443/#440), one line per crossing/reflection
         !> event across all SPECTRE markers, grouped by particle in time order.
+        !> For symplectic runs the exact-landing statistics (#441) are printed so
+        !> tests can assert the interface landing accuracy from stdout.
         use interface_crossing, only: crossing_log_write
+        use spectre_sympl_orbit, only: sympl_landing_stats
         use magfie_sub, only: SPECTRE
+
+        integer :: landings, stops
+        real(dp) :: max_resid
 
         if (isw_field_type /= SPECTRE) return
 
         call crossing_log_write('spectre_crossing_events.dat')
+
+        if (integmode > 0) then
+            call sympl_landing_stats(landings, max_resid, stops)
+            print '(A,I0,A,ES12.4,A,I0)', 'sympl_landing_stats: count= ', &
+                landings, ' max_resid= ', max_resid, ' cross_stop= ', stops
+        end if
     end subroutine write_spectre_crossing_events
 
 end module simple_main

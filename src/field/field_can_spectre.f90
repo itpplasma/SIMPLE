@@ -32,10 +32,26 @@ module field_can_spectre
 
     public :: construct_spectre_coordinates, evaluate_spectre_can, &
               integ_to_ref_spectre, ref_to_integ_spectre, cleanup_spectre, &
-              spectre_volumes, spectre_mvol
+              spectre_volumes, spectre_mvol, set_spectre_volume_lock
 
     integer, parameter :: N_R_VOL = 48, N_TH_VOL = 48, N_PHI_VOL = 32
     real(dp), parameter :: AXIS_OFFSET = 1.0e-3_dp
+    !> Sheet-adjacent regularization band, the canonical analogue of the RK45
+    !> path's drift_band (spectre_orbit): the guiding-center 1-form degenerates
+    !> (dpth/dr = 0, i.e. Bstar_par -> 0) in a thin unphysical layer next to
+    !> each interface, where every state on the degeneracy manifold is a
+    !> spurious root of the implicit steppers as h -> 0. Inside the band A and
+    !> Bmod are extended linearly in r from the band edge while the radial slope
+    !> of h_theta, h_phi is blended quadratically to zero over one band width
+    !> (C1 everywhere, so the implicit-step residuals stay smooth); at and
+    !> beyond the interface dpth/dr = sqrtg*Bmod/(ro0*h_phi) > 0 independent of
+    !> pitch, so the canonical structure is non-degenerate by construction and
+    !> all conservation properties survive. The interface jump itself still
+    !> uses the true both-side |B| via magfie. The width is chosen so the
+    !> band-edge h gradients are subcritical (ro0*vpar*curl h < B) for 3.5 MeV
+    !> alphas on the test equilibria: a monotone blend of a subcritical slope
+    !> stays subcritical, so no degeneracy re-enters the blend zone.
+    real(dp), parameter :: EDGE_BAND = 5.0e-2_dp
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), parameter :: H_SCALE = M_TO_CM
     real(dp), parameter :: B_SCALE = TESLA_TO_GAUSS
@@ -43,7 +59,34 @@ module field_can_spectre
     type(meiss_volume_t), allocatable :: spectre_volumes(:)
     integer :: spectre_mvol = 0
 
+    !> Home-volume lock for multi-volume symplectic stepping (#441). Newton
+    !> iterates of an implicit step may probe past an interior interface, where
+    !> the int(r) dispatch would evaluate the neighbour volume's discontinuous
+    !> field; with the lock set, evaluation stays on the home volume's splines,
+    !> clamped at its edge (the canonical analogue of velo_can_clamped on the
+    !> RK45 path). Each traced marker owns one thread.
+    integer :: lock_lvol = 0
+    !$omp threadprivate(lock_lvol)
+
 contains
+
+    subroutine set_spectre_volume_lock(lvol)
+        !> lvol > 0 pins field evaluation to that volume; 0 restores dispatch on
+        !> int(r).
+        integer, intent(in) :: lvol
+
+        lock_lvol = lvol
+    end subroutine set_spectre_volume_lock
+
+    integer function active_volume(r) result(lvol)
+        real(dp), intent(in) :: r
+
+        if (lock_lvol > 0) then
+            lvol = min(lock_lvol, spectre_mvol)
+        else
+            lvol = volume_index(r)
+        end if
+    end function active_volume
 
     subroutine construct_spectre_coordinates(field_noncan)
         !> Build one Meiss chart per SPECTRE volume on r in [lvol-1, lvol]. The axis
@@ -93,13 +136,75 @@ contains
         type(meiss_volume_t), intent(in) :: vol
         real(dp) :: rc
 
-        ! Newton iterates inside a symplectic step may probe just past the volume
-        ! edge. The splines carry no valid polynomial extension there, so clamp the
-        ! evaluation to the construction domain edge. This is NOT the direct-basis
-        ! path where clamping was rejected: the accepted state leaving the volume
-        ! still triggers a boundary-stop in the caller.
+        ! Angle-transform evaluation: the batch splines carry no valid
+        ! polynomial extension past the construction domain, so pin the radius
+        ! to the edge. Field evaluation instead goes through band_clamp and
+        ! extend_band (see EDGE_BAND).
         rc = max(vol%rmin, min(vol%rmax, r))
     end function clamp_to_volume
+
+
+    pure function band_clamp(r, vol) result(rc)
+        !> Evaluation radius for the canonical field: pinned EDGE_BAND inside the
+        !> volume; evaluate_spectre_can extends the values over the remaining
+        !> distance (see EDGE_BAND and extend_band).
+        real(dp), intent(in) :: r
+        type(meiss_volume_t), intent(in) :: vol
+        real(dp) :: rc
+
+        rc = max(vol%rmin + EDGE_BAND, min(vol%rmax - EDGE_BAND, r))
+    end function band_clamp
+
+
+    pure subroutine extend_band(y, dy, d2y, dr_out, secders)
+        !> Radial extension of the harvested field over the signed distance
+        !> dr_out from the band edge (see EDGE_BAND). Per quantity the value
+        !> follows y + y_r*G(dr_out): G = dr_out (linear, C-infinity) for Ath,
+        !> Aph, Bmod; for hth, hph the slope G' blends quadratically from 1 to 0
+        !> over one band width and stays 0 beyond, so the h-components go over
+        !> smoothly (C1) into radially frozen values at the interface. All first
+        !> derivatives are updated consistently with the extended values; only
+        !> curvatures unavailable without third derivatives stay frozen, which
+        !> degrades the Newton Jacobian alone.
+        real(dp), intent(inout) :: y(5), dy(3, 5), d2y(6, 5)
+        real(dp), intent(in) :: dr_out
+        logical, intent(in) :: secders
+
+        integer :: k
+        real(dp) :: a, s, gval, gp, gpp, y1
+
+        a = abs(dr_out)
+        s = sign(1.0_dp, dr_out)
+
+        do k = 1, 5
+            if (k == 3 .or. k == 4) then
+                if (a < EDGE_BAND) then
+                    gval = dr_out - s*0.5_dp*a*a/EDGE_BAND
+                    gp = 1.0_dp - a/EDGE_BAND
+                    gpp = -s/EDGE_BAND
+                else
+                    gval = s*0.5_dp*EDGE_BAND
+                    gp = 0.0_dp
+                    gpp = 0.0_dp
+                end if
+            else
+                gval = dr_out
+                gp = 1.0_dp
+                gpp = 0.0_dp
+            end if
+
+            y1 = dy(1, k)
+            y(k) = y(k) + y1*gval
+            if (secders) then
+                dy(2, k) = dy(2, k) + d2y(2, k)*gval
+                dy(3, k) = dy(3, k) + d2y(3, k)*gval
+                d2y(1, k) = y1*gpp
+                d2y(2, k) = d2y(2, k)*gp
+                d2y(3, k) = d2y(3, k)*gp
+            end if
+            dy(1, k) = y1*gp
+        end do
+    end subroutine extend_band
 
 
     subroutine evaluate_spectre_can(f, r, th_c, ph_c, mode_secders)
@@ -107,18 +212,22 @@ contains
         real(dp), intent(in) :: r, th_c, ph_c
         integer, intent(in) :: mode_secders
 
-        integer :: lvol
-        real(dp) :: x(3)
+        integer :: lvol, k
+        real(dp) :: x(3), dr_out
         real(dp) :: y(5), dy(3, 5), d2y(6, 5)
 
         n_field_evaluations = n_field_evaluations + 1
 
-        lvol = volume_index(r)
-        x = [clamp_to_volume(r, spectre_volumes(lvol)), th_c, ph_c]
+        lvol = active_volume(r)
+        x = [band_clamp(r, spectre_volumes(lvol)), th_c, ph_c]
+        dr_out = r - x(1)
 
         if (mode_secders > 0) then
             call evaluate_batch_splines_3d_der2(spectre_volumes(lvol)%spl_field, &
                                                 x, y, dy, d2y)
+            if (dr_out /= 0.0_dp) then
+                call extend_band(y, dy, d2y, dr_out, .true.)
+            end if
             f%d2Ath = d2y(:, 1)*A_SCALE
             f%d2Aph = d2y(:, 2)*A_SCALE
             f%d2hth = d2y(:, 3)*H_SCALE
@@ -127,6 +236,9 @@ contains
         else
             call evaluate_batch_splines_3d_der(spectre_volumes(lvol)%spl_field, &
                                                x, y, dy)
+            if (dr_out /= 0.0_dp) then
+                call extend_band(y, dy, d2y, dr_out, .false.)
+            end if
         end if
 
         f%Ath = y(1)*A_SCALE

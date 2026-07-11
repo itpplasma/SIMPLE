@@ -23,7 +23,7 @@ module interface_crossing
 
     public :: apply_crossing, crossing_info_t, axis_offset
     public :: crossing_log_reset, crossing_log_record, crossing_log_write, &
-              crossing_log_count
+              crossing_log_count, crossing_log_count_type
     public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSS_CROSSING, CROSS_REFLECTION, &
               CROSS_LOSS, CROSS_STOP
 
@@ -32,8 +32,9 @@ module interface_crossing
     integer, parameter :: CROSS_CROSSING = 1
     integer, parameter :: CROSS_REFLECTION = 2
     integer, parameter :: CROSS_LOSS = 3
-    !> Symplectic orbits terminate at volume boundaries until the exact-landing
-    !> crossing is wired (SIMPLE#441); their stop events share this log.
+    !> Pathological fallback of the symplectic exact-landing pipeline (SIMPLE#441):
+    !> a stop event terminates the orbit when the substep solve or the implicit
+    !> step itself fails to converge; regular boundaries cross via apply_crossing.
     integer, parameter :: CROSS_STOP = 4
 
     !> Inner cutoff for the innermost volume: rho_g = 0 is the coordinate axis
@@ -414,6 +415,21 @@ contains
     integer function crossing_log_count()
         crossing_log_count = crossing_count
     end function crossing_log_count
+
+    integer function crossing_log_count_type(event_type)
+        integer, intent(in) :: event_type
+
+        integer :: i
+
+        crossing_log_count_type = 0
+        !$omp critical (spectre_crossing_log)
+        do i = 1, crossing_count
+            if (crossing_log(i)%info%event_type == event_type) then
+                crossing_log_count_type = crossing_log_count_type + 1
+            end if
+        end do
+        !$omp end critical (spectre_crossing_log)
+    end function crossing_log_count_type
 
     subroutine crossing_log_write(filename)
         character(*), intent(in) :: filename

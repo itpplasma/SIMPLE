@@ -194,6 +194,32 @@ missing force" witness).
 Crossings are drift-rare (once per radial volume transit), so per-crossing
 cost is negligible.
 
+### Symplectic path specifics (SIMPLE#441, `spectre_sympl_orbit.f90`)
+
+The accepted step that leaves the home volume is never committed: the
+substep length `h*` with `|rho_g(h*) - k| < 1e-10` is solved by Illinois
+false position, each evaluation one full implicit step of the same scheme
+from the same pre-step state, so the landed state lies on the exact
+discrete orbit of a symplectic map. Per-volume splines are evaluated with
+a home-volume lock and a C1 radial extension from an `EDGE_BAND` inside
+the volume edge (`field_can_spectre`): `A` and `Bmod` continue linearly,
+the radial slope of `h_theta`, `h_phi` blends to zero, which keeps
+`dpth/dr = sqrtg*Bmod/(ro0*h_phi) > 0` in the whole sheet-adjacent zone
+where the raw guiding-center 1-form degenerates (`Bstar_par -> 0`, the
+canonical analogue of the RK45 drift band). Where the landing root falls
+in a step-length regime with a multi-branched implicit solve (grazing
+events) the substep is halved and re-solved; committed substeps that jump
+more than half a volume width in `rho_g`, more than O(1) in energy, or
+flip theta by pi away from the axis are unconverged-Newton artifacts and
+are likewise halved. After `apply_crossing` the integrator is
+re-initialized from the mapped physical state in the target volume's own
+gauge (the orbit-start code path, so no gauge matching), and the remaining
+microstep budget is completed there, preserving the scheme's order under
+step halving. Only one-step schemes are admitted (`ntau = 1` asserted); a
+persistent non-convergence terminates the orbit through the `CROSS_STOP`
+fallback, which on the tok2vol tests occurs only where the full-energy
+interior degeneracy invalidates the guiding-center premise itself.
+
 ## Physical caveat
 
 `mu` conservation through a zero-width sheet is a modeling convention: the

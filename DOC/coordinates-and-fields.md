@@ -753,18 +753,19 @@ untouched.
 **Crossing log**. Every crossing and reflection appends one line to
 `spectre_crossing_events.dat`, grouped by particle in time order (a stable
 counting sort, so the file is reproducible under OpenMP): particle, time,
-interface, type (1 crossing / 2 reflection / 3 loss), exit volume, entry volume,
-theta, zeta, `v_par` before, `v_par` after, mu, `|B|` home, `|B|` target. The
-symplectic path is not yet wired, so a boundary-stop status now appears only
-there.
+interface, type (1 crossing / 2 reflection / 3 loss / 4 stop), exit volume,
+entry volume, theta, zeta, `v_par` before, `v_par` after, mu, `|B|` home,
+`|B|` target. Both the RK45 and the symplectic path feed this log; type 4 is
+the symplectic path's pathological non-convergence fallback (#441).
 
 #### Guiding-center symplectic per volume (`integmode > 0`)
 
 **Files**: `src/field/field_can_spectre.f90`, `src/field/field_can_meiss.f90`
 (`spectre_field_t` arms in `ah_cov_on_slice` / `init_canonical_field_components`,
 the `meiss_volume_t` slot, and the `harvest_meiss_volume` mover),
-`src/field_can.f90` (id `SPECTRE` dispatch), `src/simple_main.f90`
-(`init_spectre_field`, `trace_orbit_spectre_sympl`).
+`src/field_can.f90` (id `SPECTRE` dispatch), `src/spectre_sympl_orbit.f90`
+(multi-volume microstepping with exact interface landing, #441),
+`src/simple_main.f90` (`init_spectre_field`, `trace_orbit_spectre_sympl`).
 
 **Corrected premise** (computer-algebra verified in spectre-orbits
 `ca/05_gc_canonical.wl`): the SPECTRE `A_s = 0` gauge supplies only half of the
@@ -795,16 +796,37 @@ covariant `h_theta`/`h_phi` `1e2` (`L`), covariant `A_theta`/`A_phi`
 factor makes `sqrt(g) = (h_phi A_theta' - h_theta A_phi')/Bmod` come out in
 `cm^3`, matching `magfie_spectre`.
 
-**Evaluation**. `evaluate_spectre_can` picks `lvol = min(int(r)+1, Mvol)` and
-evaluates that volume's splines; `integ_to_ref` / `ref_to_integ` apply the active
-volume's `lambda_phi` transform (radial map is the identity). Newton iterates
-inside a symplectic step may probe just past the volume edge. The batch splines
-carry no valid polynomial extension there (unlike the direct analytic basis of
-the field-line path), so those evaluations are clamped to the construction-domain
-edge; a final accepted state leaving `[home_lo, home_hi]` still triggers a
-boundary-stop. `trace_orbit_spectre_sympl` steps the canonical integrator inside
-the home volume and stops on the first accepted step outside it; exact interface
-landing (bisection of the crossing step) is a later unit.
+**Evaluation**. `evaluate_spectre_can` picks `lvol = min(int(r)+1, Mvol)` --
+or the volume pinned by `set_spectre_volume_lock` during multi-volume
+stepping, so Newton iterates probing past an interior interface never read
+the neighbour volume's discontinuous field -- and evaluates that volume's
+splines; `integ_to_ref` / `ref_to_integ` apply the active volume's
+`lambda_phi` transform (radial map is the identity). Within `EDGE_BAND` of a
+volume edge and beyond it the field is the C1 radial extension from the band
+edge (`extend_band`): `A` and `Bmod` linear, the radial slope of `h_theta`,
+`h_phi` blended to zero, which removes the sheet-adjacent `Bstar_par -> 0`
+degeneracy of the guiding-center 1-form from the zone (the canonical analogue
+of the RK45 path's `drift_band`).
+
+**Multi-volume orbits (#441)**. `trace_orbit_spectre_sympl` drives
+`spectre_sympl_orbit`: an accepted step leaving `[home_lo, home_hi]` is
+rewound and re-solved for the substep length landing on the interface to
+`|rho_g - k| < 1e-10` (Illinois false position; every trial is one full
+implicit step of the same scheme, so the landed state is on the discrete
+orbit of a symplectic map). The landed state is converted to physical
+variables, `apply_crossing` maps it across (or reflects), and the integrator
+is re-initialized from the mapped state in the target volume's gauge exactly
+like an orbit start; the remaining microstep budget is completed there.
+Markers are lost only at the outermost interface, matching the RK45 path;
+`sympl_rmax` sits at `Mvol + 1` so the internal Newton guards never fire on
+iterates inside the domain or on the landing solve at `rho_g = Mvol`.
+Grazing events whose landing solve stalls, and committed steps that jump in
+`rho_g`, energy, or theta beyond physical bounds (silently unconverged
+Newton), are retried with a halved substep; persistent non-convergence
+terminates the orbit through the logged `CROSS_STOP` fallback. On tok2vol
+this occurs only at full 3.5 MeV alpha energy, where the interior
+`Bstar_par = 0` surface invalidates the guiding-center premise for a subset
+of pitches.
 
 **Optional follow-up** (documented, not implemented): a `no_K`-style variant that
 drops `rho_par h_s` in SPECTRE coordinates directly -- the same
@@ -973,8 +995,12 @@ Cartesian space with a triangulated STL surface (using CGAL).
 | 15 | LOBATTO3 | 6 | Slow |
 
 **Constraints**:
-- integmode >= 1: Requires canonical field type (TEST, CANFLUX, BOOZER, MEISS, ALBERT)
+- integmode >= 1: Requires canonical field type (TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE)
 - integmode = 0 (RK45): works with any initialized field type (VMEC, REFCOORDS, or canonical modes); `simple_main.f90` guards only integmode >= 1
+- SPECTRE multi-volume crossing (#441) admits one-step schemes only (all of
+  the above, driven with `ntau = 1`, asserted in `spectre_sympl_orbit`):
+  re-canonicalization after each interface crossing restarts the scheme from
+  a single point, so no multistep history may carry over
 
 ### 8.4 Spline Parameters
 
