@@ -16,7 +16,7 @@ program test_albert_transform_diagnostic
 
     use field, only: vmec_field_t, create_vmec_field
     use simple, only: init_vmec
-    use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss, &
+    use field_can_meiss, only: init_meiss, cleanup_meiss, &
                                spl_field_batch, xmin, xmax, n_r, n_th, n_phi, twopi
     use field_can_albert, only: get_albert_coordinates, psi_inner, psi_outer, &
                                 psi_of_x, Ath_norm, r_of_xc, spl_r_batch, &

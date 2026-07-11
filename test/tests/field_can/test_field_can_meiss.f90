@@ -1,17 +1,15 @@
 program test_field_can_meiss
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use params, only: read_config
     use simple, only: tracer_t
     use simple_main, only: init_field
     use velo_mod, only: isw_field_type
     use field, only: vmec_field_t, create_vmec_field
-    use field_can_mod, only: eval_field => evaluate, field_can_t, field_can_init
+    use field_can_mod, only: eval_field => evaluate, field_can_t
     use magfie_sub, only: MEISS
-    use field_can_meiss, only: init_meiss, init_transformation, &
+    use field_can_meiss, only: init_meiss, &
                                spline_transformation, init_canonical_field_components, &
            xmin, h_r, h_phi, h_th, ah_cov_on_slice, n_r, n_phi, n_th, lam_phi, chi_gauge
-    use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary
     implicit none
 
     real(dp), parameter :: twopi = atan(1.d0)*8.d0

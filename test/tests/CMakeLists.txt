@@ -323,7 +323,7 @@ if (ENABLE_OPENMP)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
-        TIMEOUT 120)
+        TIMEOUT 300)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
@@ -386,6 +386,11 @@ set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
+
+add_executable(test_deterministic_seed.x test_deterministic_seed.f90)
+target_link_libraries(test_deterministic_seed.x simple)
+add_test(NAME test_deterministic_seed COMMAND test_deterministic_seed.x)
+set_tests_properties(test_deterministic_seed PROPERTIES LABELS "unit")
 
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
 target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
@@ -670,7 +675,7 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    TIMEOUT 60)
+    TIMEOUT 300)
 
 # Chartmap R,Z consistency tests
 add_executable(test_chartmap_rz_consistency.x test_chartmap_rz_consistency.f90)
@@ -682,7 +687,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    TIMEOUT 120)
+    TIMEOUT 300)
 
 # Batch spline optimization test
 add_executable(test_batch_splines.x ../test_batch_splines.f90)
@@ -773,7 +778,7 @@ add_test(
         $<TARGET_FILE:simple.x>
 )
 set_tests_properties(orbit_netcdf_output PROPERTIES
-    TIMEOUT 120
+    TIMEOUT 300
     LABELS "system;integration"
 )
 

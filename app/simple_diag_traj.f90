@@ -18,7 +18,7 @@ program diag_traj_main
     use simple_main, only: init_field
     use magfie_sub, only: init_magfie, VMEC
     use samplers, only: init_starting_surf, sample, START_FILE
-    use field_can_mod, only: field_can_t, get_val, eval_field => evaluate, ref_to_integ
+    use field_can_mod, only: field_can_t, get_val, ref_to_integ
     use orbit_symplectic, only: orbit_timestep_sympl
     use orbit_symplectic_base, only: symplectic_integrator_t
     use alpha_lifetime_sub, only: orbit_timestep_axis

@@ -4,7 +4,7 @@ module diag_meiss
 !> Provides visualization and analysis tools for canonical coordinate transformations
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_meiss, only: rh_can, grid_indices_t, n_r, xmin, xmax, h_r
+    use field_can_meiss, only: rh_can, n_r, xmin, xmax
     use fortplot, only: figure, plot, savefig, xlabel, ylabel, title
 
     implicit none

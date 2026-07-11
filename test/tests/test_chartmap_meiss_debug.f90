@@ -3,8 +3,7 @@ program test_chartmap_meiss_debug
    use libneo_coordinates, only: coordinate_system_t, make_chartmap_coordinate_system, &
                                   chartmap_coordinate_system_t, RHO_TOR, RHO_POL, &
                                   PSI_TOR_NORM, PSI_POL_NORM, UNKNOWN
-    use field_base, only: magnetic_field_t
-    use field_splined, only: splined_field_t, create_splined_field
+    use field_splined, only: splined_field_t
     use field_can_meiss, only: choose_default_scaling
 use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, identity_scaling_t
     implicit none

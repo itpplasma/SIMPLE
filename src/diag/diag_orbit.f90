@@ -4,12 +4,11 @@ module diag_orbit
 !> full SIMPLE initialization and real orbit integration
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-use params, only: dtau, dtaumin, ntestpart, ntimstep, ntau, zstart, startmode, grid_density, &
+use params, only: dtaumin, ntestpart, ntimstep, ntau, zstart, &
     special_ants_file, reuse_batch, num_surf, sbeg, integmode, relerr, reset_seed_if_deterministic
-    use samplers, only: sample, START_FILE
     use field_can_mod, only: field_can_t, get_val, eval_field => evaluate, ref_to_integ
     use orbit_symplectic_base, only: symplectic_integrator_t, extrap_field
- use orbit_symplectic, only: orbit_timestep_sympl, f_midpoint_part1, f_midpoint_part2, &
+ use orbit_symplectic, only: f_midpoint_part1, f_midpoint_part2, &
                                 jac_midpoint_part1, jac_midpoint_part2
     use simple, only: init_sympl
     use vector_potentail_mod, only: torflux

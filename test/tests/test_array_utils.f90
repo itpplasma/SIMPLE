@@ -1,5 +1,4 @@
 program test_array_utils
-    use, intrinsic :: iso_fortran_env, only: dp => real64
     use array_utils, only: init_derivative_factors
     implicit none
 
