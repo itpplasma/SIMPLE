@@ -109,7 +109,7 @@ module params
     integer :: ierr
 
     integer :: batch_size = 2000000000  ! Initialize large so batch mode is not default
-    integer :: ran_seed = 12345
+    integer :: ran_seed = 42
     integer :: num_surf = 1
     logical :: reuse_batch = .False.
     integer, dimension(:), allocatable :: idx
