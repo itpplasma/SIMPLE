@@ -130,7 +130,7 @@ module params
     integer :: ierr
 
     integer :: batch_size = 2000000000  ! Initialize large so batch mode is not default
-    integer :: ran_seed = 12345
+    integer :: ran_seed = 42
     integer :: num_surf = 1
     logical :: reuse_batch = .False.
     integer, dimension(:), allocatable :: idx
@@ -595,7 +595,7 @@ contains
         if (deterministic) then
             call random_seed(size=seedsize)
             if (.not. allocated(seed)) allocate (seed(seedsize))
-            seed = 42
+            seed = ran_seed
             call random_seed(put=seed)
         end if
     end subroutine reset_seed_if_deterministic
