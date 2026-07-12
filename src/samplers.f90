@@ -168,7 +168,8 @@ contains
 
     subroutine sample_grid(zstart, grid_density, xstart_is_integ_coords)
         use params, only: ntestpart, zstart_dim1, zend, times_lost, &
-                          trap_par, perp_inv, iclass, sbeg
+                          orbit_exit_code, boundary_event_radial_residual, &
+                          boundary_event_time_width, trap_par, perp_inv, iclass, sbeg
         use util, only: pi
         use field_can_mod, only: integ_to_ref
 
@@ -194,10 +195,20 @@ contains
         if (allocated(zend)) deallocate (zend)
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         if (allocated(times_lost)) deallocate (times_lost)
+        if (allocated(orbit_exit_code)) deallocate (orbit_exit_code)
+        if (allocated(boundary_event_radial_residual)) &
+            deallocate (boundary_event_radial_residual)
+        if (allocated(boundary_event_time_width)) deallocate (boundary_event_time_width)
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
-    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+        allocate(times_lost(ntestpart), orbit_exit_code(ntestpart), &
+                 boundary_event_radial_residual(ntestpart), &
+                 boundary_event_time_width(ntestpart), &
+                 trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+        orbit_exit_code = 0
+        boundary_event_radial_residual = -1d0
+        boundary_event_time_width = -1d0
 
         do ipart = 1, ngrid
             do jpart = 1, ngrid

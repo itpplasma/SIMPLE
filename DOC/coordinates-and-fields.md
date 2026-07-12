@@ -716,9 +716,10 @@ Cartesian space with a triangulated STL surface (using CGAL).
 - Must be built with `-DSIMPLE_ENABLE_CGAL=ON`.
 - Requires `coord_input` to be a chartmap reference coordinate file.
 
-**Performance gating**:
-- The expensive STL intersection is only evaluated for `rho > rho_lcfs`, where
-  `rho_lcfs` is read from the chartmap NetCDF metadata.
+**Intersection ordering**:
+- SIMPLE tests every accepted microstep segment against the STL surface.
+- If a microstep also reaches the chartmap boundary, SIMPLE tests the partial
+  segment up to that boundary and records the earlier wall intersection.
 
 **Outputs** (when `output_results_netcdf = .True.`):
 - `results.nc:wall_hit(particle)` (byte)

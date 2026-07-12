@@ -22,6 +22,9 @@ program test_chartmap_metadata
     call write_min_chartmap("units-only.chartmap.nc", "m")
     call read_chartmap_cart_units("units-only.chartmap.nc", cart_units)
     call check_string(cart_units, "m", "units-only read mismatch", errors)
+    call read_chartmap_metadata("units-only.chartmap.nc", meta)
+    call check_close(meta%rho_lcfs, -1.0_dp, 0.0_dp, &
+        "missing rho_lcfs sentinel mismatch", errors)
     if (errors /= 0) error stop 1
 contains
 
