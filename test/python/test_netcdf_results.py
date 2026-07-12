@@ -82,6 +82,13 @@ class TestNetCDFResultsOutput:
                 assert 'ntestpart' in ds.ncattrs()
                 assert 'trace_time' in ds.ncattrs()
                 assert ds.ntestpart == 8
+                assert ds.boundary_event_fraction_tolerance == -1.0
+                assert ds.boundary_event_radial_tolerance == -1.0
+                assert ds.canonical_grid_nr == 62
+                assert ds.canonical_grid_ntheta == 63
+                assert ds.canonical_grid_nphi == 64
+                assert ds.canonical_ode_relerr == 1e-11
+                assert ds.multharm == 5
 
         finally:
             os.chdir(original_dir)

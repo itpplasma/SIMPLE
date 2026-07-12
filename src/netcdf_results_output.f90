@@ -45,12 +45,17 @@ contains
                           boundary_event_time_width, trap_par, perp_inv, iclass, &
                           class_lost, &
                           facE_al, v0, integmode, relerr, npoiper, npoiper2, &
+                          boundary_event_fraction_tolerance, &
+                          boundary_event_radial_tolerance, &
+                          canonical_grid_nr, canonical_grid_ntheta, &
+                          canonical_grid_nphi, canonical_ode_relerr, &
                           ntimstep, startmode, num_surf, sbeg, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
                           wall_input, wall_units, wall_hit, wall_hit_cart, &
                           wall_hit_normal_cart, wall_hit_cos_incidence, &
                           wall_hit_angle_rad
+        use new_vmec_stuff_mod, only: multharm
         use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
         use libneo_coordinates, only: chartmap_coordinate_system_t
         use reference_coordinates, only: ref_coords
@@ -297,6 +302,28 @@ contains
         call check_nc(status, 'put_att integmode')
         status = nf90_put_att(ncid, nf90_global, 'relerr', relerr)
         call check_nc(status, 'put_att relerr')
+        status = nf90_put_att(ncid, nf90_global, &
+                              'boundary_event_fraction_tolerance', &
+                              boundary_event_fraction_tolerance)
+        call check_nc(status, 'put_att boundary_event_fraction_tolerance')
+        status = nf90_put_att(ncid, nf90_global, &
+                              'boundary_event_radial_tolerance', &
+                              boundary_event_radial_tolerance)
+        call check_nc(status, 'put_att boundary_event_radial_tolerance')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nr', &
+                              canonical_grid_nr)
+        call check_nc(status, 'put_att canonical_grid_nr')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_ntheta', &
+                              canonical_grid_ntheta)
+        call check_nc(status, 'put_att canonical_grid_ntheta')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nphi', &
+                              canonical_grid_nphi)
+        call check_nc(status, 'put_att canonical_grid_nphi')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_ode_relerr', &
+                              canonical_ode_relerr)
+        call check_nc(status, 'put_att canonical_ode_relerr')
+        status = nf90_put_att(ncid, nf90_global, 'multharm', multharm)
+        call check_nc(status, 'put_att multharm')
         status = nf90_put_att(ncid, nf90_global, 'npoiper', npoiper)
         call check_nc(status, 'put_att npoiper')
         status = nf90_put_att(ncid, nf90_global, 'npoiper2', npoiper2)
