@@ -11,7 +11,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
-  SYMPLECTIC_STEP_BOUNDARY_LIMITED
+  SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
+  boundary_event_radial_tolerance
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -1547,6 +1548,20 @@ subroutine attempt_midpoint_step(si, f, status)
   end if
 end subroutine attempt_midpoint_step
 
+subroutine get_boundary_event_tolerances(rtol, fraction_tolerance, radial_tolerance)
+  real(dp), intent(in) :: rtol
+  real(dp), intent(out) :: fraction_tolerance, radial_tolerance
+
+  fraction_tolerance = max(1d-12, 10d0*rtol)
+  radial_tolerance = max(1d-10, 10d0*rtol)
+  if (boundary_event_fraction_tolerance > 0d0) then
+    fraction_tolerance = boundary_event_fraction_tolerance
+  end if
+  if (boundary_event_radial_tolerance > 0d0) then
+    radial_tolerance = boundary_event_radial_tolerance
+  end if
+end subroutine get_boundary_event_tolerances
+
 subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
     raw_step, si, f, status, event_fraction, radial_residual, fraction_width)
   type(symplectic_integrator_t), intent(in) :: accepted_integrator
@@ -1573,8 +1588,8 @@ subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
   root_estimate_available = .false.
   best_integrator = accepted_integrator
   best_field = accepted_field
-  fraction_tolerance = max(1d-12, 10d0*accepted_integrator%rtol)
-  radial_tolerance = max(1d-10, 10d0*accepted_integrator%rtol)
+  call get_boundary_event_tolerances(accepted_integrator%rtol, &
+    fraction_tolerance, radial_tolerance)
 
   do iteration = 1, max_event_iterations
     trial_integrator = accepted_integrator
