@@ -598,6 +598,28 @@ add_executable(test_newton_solver_status.x test_newton_solver_status.f90)
 target_link_libraries(test_newton_solver_status.x simple)
 add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
 
+add_executable(test_boundary_event_config.x test_boundary_event_config.f90)
+target_link_libraries(test_boundary_event_config.x simple)
+add_test(NAME test_boundary_event_config_valid
+    COMMAND test_boundary_event_config.x valid)
+add_test(NAME test_boundary_event_config_fraction_nan
+    COMMAND test_boundary_event_config.x fraction_nan)
+add_test(NAME test_boundary_event_config_fraction_inf
+    COMMAND test_boundary_event_config.x fraction_inf)
+add_test(NAME test_boundary_event_config_radial_nan
+    COMMAND test_boundary_event_config.x radial_nan)
+set_tests_properties(
+    test_boundary_event_config_valid
+    test_boundary_event_config_fraction_nan
+    test_boundary_event_config_fraction_inf
+    test_boundary_event_config_radial_nan
+    PROPERTIES LABELS "unit")
+set_tests_properties(
+    test_boundary_event_config_fraction_nan
+    test_boundary_event_config_fraction_inf
+    test_boundary_event_config_radial_nan
+    PROPERTIES WILL_FAIL TRUE)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
