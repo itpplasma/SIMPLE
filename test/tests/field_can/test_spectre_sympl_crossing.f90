@@ -202,6 +202,7 @@ contains
         write (unit, '(A)') "  field_input = '"//h5//"'"
         write (unit, '(A)') '  integ_coords = 6'
         write (unit, '(A)') '  integmode = 3'
+        write (unit, '(A)') '  spectre_ncon_phi = 32'
         write (unit, '(A)') '  ntestpart = 8'
         write (unit, '(A)') '  ntimstep = 100'
         write (unit, '(A)') '  npoiper2 = 4096'

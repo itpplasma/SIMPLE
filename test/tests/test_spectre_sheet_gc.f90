@@ -71,6 +71,25 @@ program test_spectre_sheet_gc
     if (ierr /= SHEET_GC_OK) error stop 'inward sheet initialization failed'
     if (state%owner /= 2) error stop 'inward sheet entry owner'
 
+    call evaluate_sheet_profile(1, -4.0_dp, 0.7_dp, 0.3_dp, sample, ierr)
+    state = sheet_gc_state_t(active=.true., iface=1, owner=1, eta=-4.0_dp, &
+        theta=0.7_dp, zeta=0.3_dp, vpar=sign(5.0_dp, sample%hctr(1)), &
+        mu=2.0e-5_dp)
+    state%energy = 0.5_dp*state%vpar**2 + state%mu*sample%bmod
+    state%p = sqrt(2.0_dp*state%energy)
+    call sheet_gc_advance(state, 1.0e-7_dp, 0.0_dp, exited, dt_used, ierr)
+    if (ierr /= SHEET_GC_OK .or. .not. exited) &
+        error stop 'pure-magnitude branch did not exit'
+    if (dt_used /= 0.0_dp) error stop 'pure-magnitude branch consumed regular time'
+    if (state%owner /= 2 .or. state%active) &
+        error stop 'pure-magnitude branch owner'
+    call evaluate_sheet_profile(1, state%eta, state%theta, state%zeta, sample, &
+        ierr)
+    energy_after = 0.5_dp*state%vpar**2 + state%mu*sample%bmod
+    if (abs(energy_after - state%energy) > &
+        5.0e-13_dp*max(1.0_dp, state%energy)) &
+        error stop 'pure-magnitude branch energy'
+
     max_residual = 0.0_dp
     do i = 1, NSAMPLE
         call sheet_gc_rhs(1, ETAS(i), 0.7_dp, 0.3_dp, 0.5_dp, 0.02_dp, &
