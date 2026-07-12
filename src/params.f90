@@ -1,5 +1,5 @@
 module params
-    use, intrinsic :: iso_fortran_env, only: int8
+    use, intrinsic :: iso_fortran_env, only: int8, int64
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
@@ -19,6 +19,8 @@ module params
     use callback, only: output_error, output_orbits_macrostep
 
     implicit none
+
+    private :: config_value_is_finite
 
     ! Define real(dp) kind parameter
     integer, parameter :: dp = kind(1.0d0)
@@ -172,20 +174,36 @@ contains
 
         call reset_seed_if_deterministic
 
-        if (boundary_event_fraction_tolerance /= -1d0 .and. &
-            boundary_event_fraction_tolerance <= 0d0) then
-            error stop 'boundary_event_fraction_tolerance must be positive or -1'
-        end if
-        if (boundary_event_radial_tolerance /= -1d0 .and. &
-            boundary_event_radial_tolerance <= 0d0) then
-            error stop 'boundary_event_radial_tolerance must be positive or -1'
-        end if
+        call validate_boundary_event_tolerances
 
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
         end if
 
     end subroutine read_config
+
+    subroutine validate_boundary_event_tolerances
+        if (.not. config_value_is_finite(boundary_event_fraction_tolerance) .or. &
+            (boundary_event_fraction_tolerance /= -1d0 .and. &
+             boundary_event_fraction_tolerance <= 0d0)) then
+            error stop 'boundary_event_fraction_tolerance must be finite and positive or -1'
+        end if
+        if (.not. config_value_is_finite(boundary_event_radial_tolerance) .or. &
+            (boundary_event_radial_tolerance /= -1d0 .and. &
+             boundary_event_radial_tolerance <= 0d0)) then
+            error stop 'boundary_event_radial_tolerance must be finite and positive or -1'
+        end if
+    end subroutine validate_boundary_event_tolerances
+
+    pure logical function config_value_is_finite(value)
+        real(dp), intent(in) :: value
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7ff0000000000000', int64)
+        integer(int64) :: bits
+
+        bits = transfer(value, bits)
+        config_value_is_finite = iand(bits, exponent_mask) /= exponent_mask
+    end function config_value_is_finite
 
 	    subroutine params_init
 	        real(dp) :: E_alpha

@@ -46,13 +46,28 @@ contains
       step_status = SYMPLECTIC_STEP_OK
     end if
   end subroutine basin_limited_step
+
+  subroutine nonlinear_boundary_step(si, f, step_status)
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
+    integer, intent(out) :: step_status
+    real(dp) :: radius
+
+    if (si%dt > 0.4_dp) then
+      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      radius = 1.0_dp - 1.0e-7_dp - (0.4_dp - si%dt)**2
+      si%z(1) = radius
+      step_status = SYMPLECTIC_STEP_OK
+    end if
+  end subroutine nonlinear_boundary_step
 end module linear_radial_field_backend
 
 program test_newton_solver_status
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
-    evaluate_linear_radial
+    evaluate_linear_radial, nonlinear_boundary_step
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
     advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
@@ -202,21 +217,6 @@ contains
       error stop 'unresolved configured event changed the accepted state'
     end if
   end subroutine test_configured_event_tolerances
-
-  subroutine nonlinear_boundary_step(si, f, step_status)
-    type(symplectic_integrator_t), intent(inout) :: si
-    type(field_can_t), intent(inout) :: f
-    integer, intent(out) :: step_status
-    real(dp) :: radius
-
-    if (si%dt > 0.4_dp) then
-      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else
-      radius = 1.0_dp - 1.0e-7_dp - (0.4_dp - si%dt)**2
-      si%z(1) = radius
-      step_status = SYMPLECTIC_STEP_OK
-    end if
-  end subroutine nonlinear_boundary_step
 
   subroutine test_solver_basin_is_not_boundary
     type(symplectic_integrator_t) :: basin_integrator
