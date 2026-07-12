@@ -1,8 +1,31 @@
+module failed_symplectic_step_backend
+  use field_can_base, only: field_can_t
+  use orbit_symplectic_base, only: symplectic_integrator_t
+
+  implicit none
+
+contains
+
+  subroutine fail_symplectic_step(si, f, ierr)
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
+    integer, intent(out) :: ierr
+
+    f%Bmod = 8.0d0
+    f%vpar = 3.0d0
+    f%mu = 1.0d0
+    ierr = 1
+  end subroutine fail_symplectic_step
+
+end module failed_symplectic_step_backend
+
 program test_sympl_testfield
-  use, intrinsic :: iso_fortran_env, only : dp => real64
-  use simple_main, only : init_field
+  use, intrinsic :: iso_fortran_env, only : dp => real64, int64
+  use failed_symplectic_step_backend, only: fail_symplectic_step
+  use simple_main, only : init_field, macrostep, macrostep_with_wall_check
   use simple, only : tracer_t, init_sympl
-  use params, only : isw_field_type, field_input, coord_input, integmode
+  use params, only : isw_field_type, field_input, coord_input, integmode, &
+    swcoll, orbit_model, ORBIT_GC
   use magfie_sub, only : TEST
   use field_can_mod, only : evaluate
   use orbit_symplectic, only : orbit_timestep_sympl
@@ -42,5 +65,43 @@ program test_sympl_testfield
     stop 1
   end if
 
+  call test_failed_step_preserves_state
+
   print *, 'TEST field symplectic step succeeded'
+
+contains
+
+  subroutine test_failed_step_preserves_state
+    real(dp), parameter :: initial_state(5) = [0.2_dp, 1.0_dp, 2.0_dp, &
+      1.0_dp, 0.25_dp]
+    real(dp) :: z(5)
+    real(dp) :: x_previous(3)
+    integer(int64) :: kt
+    integer :: step_error
+
+    swcoll = .false.
+    orbit_model = ORBIT_GC
+    orbit_timestep_sympl => fail_symplectic_step
+    z = initial_state
+    kt = 0_int64
+
+    call macrostep(norb, z, kt, step_error, 1)
+
+    if (step_error /= 1) error stop 'failed step status was not preserved'
+    if (kt /= 0_int64) error stop 'failed step advanced the time index'
+    if (any(z /= initial_state)) then
+      error stop 'failed symplectic step changed the accepted state'
+    end if
+
+    z = initial_state
+    x_previous = 0.0_dp
+    kt = 0_int64
+    call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous)
+    if (step_error /= 1) error stop 'wall path lost failed step status'
+    if (kt /= 0_int64) error stop 'failed wall path advanced the time index'
+    if (any(z /= initial_state)) then
+      error stop 'failed wall path changed the accepted state'
+    end if
+  end subroutine test_failed_step_preserves_state
+
 end program test_sympl_testfield
