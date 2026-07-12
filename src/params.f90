@@ -122,6 +122,7 @@ module params
     !> SPECTRE RK45 interface-crossing map: 1 = Level-1 refraction (default),
     !> 0 = Level-0 energy rescale (regression comparison).
     integer :: crossing_level = 1
+    logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
     !> allocates rank-3 arrays plus quintic batch splines of this size, so the
@@ -150,7 +151,8 @@ module params
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
 	        wall_input, wall_units, integ_coords, crossing_level, &
-		        spectre_ncon_r, spectre_ncon_th, spectre_ncon_phi, &
+	        spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
+	        spectre_ncon_phi, &
         output_results_netcdf, &
 	        output_error, output_orbits_macrostep, &  ! callback
 	        macrostep_time_grid, checkpoint_interval, restart

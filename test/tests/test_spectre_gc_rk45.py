@@ -33,11 +33,11 @@ SAMPLE_TOL = 1.0e-12       # sampler forward-map residual on the interface
 PERP_INV_MAX = 1.0e-2      # normalization witness: perp invariant ~ 1/B (Gauss)
 
 
-def write_input(path, h5):
+def write_input(path, h5, sbeg=SBEG, flux_label=False, generate_only=False):
     lines = [
         "&config",
         f"  trace_time = {TRACE_TIME}",
-        f"  sbeg = {SBEG}",
+        f"  sbeg = {sbeg}",
         f"  ntestpart = {NTESTPART}",
         "  ntimstep = 100",
         "  npoiper2 = 256",
@@ -49,12 +49,16 @@ def write_input(path, h5):
         "  ran_seed = 12345",
         "/",
     ]
+    if flux_label:
+        lines.insert(-1, "  spectre_sbeg_is_toroidal_flux = .True.")
+    if generate_only:
+        lines.insert(-1, "  generate_start_only = .True.")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
 
-def run_simple(binary, workdir, h5):
-    write_input(os.path.join(workdir, "simple.in"), h5)
+def run_simple(binary, workdir, h5, **kwargs):
+    write_input(os.path.join(workdir, "simple.in"), h5, **kwargs)
     proc = subprocess.run([binary, "simple.in"], cwd=workdir,
                           capture_output=True, text=True, timeout=300)
     if proc.returncode != 0:
@@ -165,6 +169,19 @@ def main():
         if "SPECTRE field loading completed" not in stdout:
             failures.append("BDD4: SPECTRE field loading phase missing from log")
         print("BDD4: VMEC-free initialization confirmed")
+
+    with tempfile.TemporaryDirectory() as work:
+        run_simple(binary, work, h5, sbeg=0.05, flux_label=True,
+                   generate_only=True)
+        start = np.loadtxt(os.path.join(work, "start.dat"))
+        expected_rho = 0.67072394072143493
+        residual = np.max(np.abs(start[:, 0] - expected_rho))
+        if not residual < SAMPLE_TOL:
+            failures.append(
+                f"BDD5: exact flux inverse residual {residual:.3e} >= "
+                f"{SAMPLE_TOL:.0e}")
+        print(f"BDD5: s=0.05 maps to rho_g={expected_rho:.15f}, "
+              f"residual={residual:.3e}")
 
     if failures:
         print("\nFAILURES:")

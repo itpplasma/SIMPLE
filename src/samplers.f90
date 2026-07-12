@@ -131,14 +131,15 @@ contains
         !> with probability proportional to the surface Jacobian |e_theta x e_zeta|.
         !> The chart is the integration coordinate, so zstart is (rho_g, theta,
         !> zeta) directly. Also sets bmin/bmax/bmod00 for pitch classification.
-        use params, only: sbeg, bmin, bmax, bmod00
+        use params, only: sbeg, bmin, bmax, bmod00, &
+                          spectre_sbeg_is_toroidal_flux
         use magfie_sub, only: magfie, spectre_field
         use binsrc_sub, only: binsrc
 
         real(dp), dimension(:, :), intent(inout) :: zstart
 
         integer, parameter :: ntheta = 64, nzeta = 64
-        integer :: ngrid, it, iz, k, ipart
+        integer :: ngrid, it, iz, k, ipart, ierr
         real(dp) :: rho_g, th, ze, area, wsum, bsum, bmod, xi
         real(dp) :: u(3), e_cov(3, 3), cross(3)
         real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
@@ -148,7 +149,13 @@ contains
             error stop 'sample_spectre_surface: spectre_field not set'
 
         ngrid = ntheta*nzeta
-        rho_g = sbeg(1)
+        if (spectre_sbeg_is_toroidal_flux) then
+            call spectre_field%axis_rho_from_toroidal_flux(sbeg(1), rho_g, ierr)
+            if (ierr /= 0) &
+                error stop 'sample_spectre_surface: target flux outside axis volume'
+        else
+            rho_g = sbeg(1)
+        end if
         allocate (theta_g(ngrid), zeta_g(ngrid), wcum(ngrid))
 
         wsum = 0.0d0
@@ -191,7 +198,8 @@ contains
             zstart(5, ipart) = 2.0d0*(xi - 0.5d0)
         end do
 
-        print *, 'sample_spectre_surface: rho_g = ', rho_g, ' bmod00 = ', bmod00, &
+        print *, 'sample_spectre_surface: rho_g = ', rho_g, ' target = ', sbeg(1), &
+            ' flux_label = ', spectre_sbeg_is_toroidal_flux, ' bmod00 = ', bmod00, &
             ' bmin = ', bmin, ' bmax = ', bmax
         call save_starting_points(zstart)
     end subroutine sample_spectre_surface
