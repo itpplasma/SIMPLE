@@ -23,7 +23,7 @@ program test_orbit_chartmap_comparison
     use parmot_mod, only: ro0, rmu
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
-    use field_can_mod, only: init_field_can, integ_to_ref
+    use field_can_mod, only: integ_to_ref
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
@@ -268,7 +268,6 @@ contains
 
     subroutine set_physics_parameters(v0_out)
         use util, only: ev, p_mass, c_light => c, e_charge
-        use vector_potentail_mod, only: torflux
 
         real(dp), intent(out) :: v0_out
         real(dp) :: E_alpha, rlarm

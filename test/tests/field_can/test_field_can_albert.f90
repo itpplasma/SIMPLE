@@ -7,7 +7,6 @@ program test_field_can_albert
     use magfie_sub, only: ALBERT
     use velo_mod, only: isw_field_type
     use field, only: vmec_field_t, create_vmec_field
-    use field_can_albert, only: init_albert
 
     implicit none
 
