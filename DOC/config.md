@@ -10,3 +10,14 @@
   its dimensionless radial residual tolerance in the integrator coordinate.
   Both default to `-1`, which derives the tolerance from `relerr`. Set positive
   values to refine event location independently of the nonlinear solve.
+
+* `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
+  control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
+  and 64. Each dimension must be between 6 and 512, and their product must not
+  exceed 2,097,152 grid points. This limit guards allocation arithmetic; the
+  requested host and accelerator memory must still fit the selected grid and
+  spline backend. `canonical_ode_relerr` controls the radial transformation
+  solve and defaults to `1d-11`. NVHPC
+  builds use at least `1d-8` only on slices where the covariant toroidal field
+  component is near zero, preventing step-size underflow at that coordinate
+  singularity. Change one setting at a time in resolution studies.

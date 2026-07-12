@@ -24,6 +24,8 @@ module simple_main
         ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_DOMAIN, &
         ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
         ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+    use params, only: canonical_grid_nr, canonical_grid_ntheta, &
+        canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
@@ -319,11 +321,15 @@ contains
 
         if (isw_field_type == TEST) then
             ! TEST field is fully analytic - no field file needed
-            call init_field_can(isw_field_type)
+            call init_field_can(isw_field_type, n_r=canonical_grid_nr, &
+                n_th=canonical_grid_ntheta, n_phi=canonical_grid_nphi, &
+                transformation_relerr=canonical_ode_relerr)
             call print_phase_time('Canonical field initialization completed')
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                  isw_field_type == MEISS .or. isw_field_type == ALBERT) then
-            call init_field_can(isw_field_type, field_temp)
+            call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
+                canonical_grid_ntheta, canonical_grid_nphi, &
+                canonical_ode_relerr)
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field

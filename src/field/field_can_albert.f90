@@ -106,6 +106,7 @@ contains
     end subroutine ref_to_integ_albert
 
     subroutine get_albert_coordinates
+        call cleanup_albert
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
         print *, 'field_can_meiss.init_transformation'
 #endif
@@ -126,6 +127,20 @@ contains
 #endif
         call init_splines_with_psi
     end subroutine get_albert_coordinates
+
+    subroutine cleanup_albert
+        use interpolate, only: destroy_batch_splines_3d
+
+        call destroy_batch_splines_3d(spl_r_batch)
+        call destroy_batch_splines_3d(spl_albert_batch)
+        if (allocated(psi_of_x)) deallocate(psi_of_x)
+        if (allocated(psi_grid)) deallocate(psi_grid)
+        if (allocated(r_of_xc)) deallocate(r_of_xc)
+        if (allocated(Aph_of_xc)) deallocate(Aph_of_xc)
+        if (allocated(hth_of_xc)) deallocate(hth_of_xc)
+        if (allocated(hph_of_xc)) deallocate(hph_of_xc)
+        if (allocated(Bmod_of_xc)) deallocate(Bmod_of_xc)
+    end subroutine cleanup_albert
 
     subroutine init_splines_with_psi
         use psi_transform, only: grid_r_to_psi

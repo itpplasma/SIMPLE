@@ -84,6 +84,10 @@ module params
     ! Wall-clock seconds between partial-result checkpoints during tracing.
     ! <= 0 disables periodic output (results then appear only at the end).
     real(dp) :: checkpoint_interval = 10.0d0
+    integer :: canonical_grid_nr = 62
+    integer :: canonical_grid_ntheta = 63
+    integer :: canonical_grid_nphi = 64
+    real(dp) :: canonical_ode_relerr = 1d-11
 
     real(dp), allocatable :: trap_par(:), perp_inv(:)
     integer, allocatable :: iclass(:, :)
@@ -143,6 +147,8 @@ module params
 	        isw_field_type, generate_start_only, startmode, grid_density, &
 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
 	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
+	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
+	        canonical_ode_relerr, &
 	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
@@ -175,6 +181,22 @@ contains
         call reset_seed_if_deterministic
 
         call validate_boundary_event_tolerances
+        if (min(canonical_grid_nr, canonical_grid_ntheta, &
+            canonical_grid_nphi) < 6) then
+            error stop 'canonical map grid dimensions must be at least 6'
+        end if
+        if (max(canonical_grid_nr, canonical_grid_ntheta, &
+            canonical_grid_nphi) > 512) then
+            error stop 'canonical map grid dimensions must not exceed 512'
+        end if
+        if (int(canonical_grid_nr, int64)*int(canonical_grid_ntheta, int64)* &
+            int(canonical_grid_nphi, int64) > 2097152_int64) then
+            error stop 'canonical map grid exceeds the 2097152-point limit'
+        end if
+        if (.not. config_value_is_finite(canonical_ode_relerr) .or. &
+            canonical_ode_relerr <= 0d0) then
+            error stop 'canonical_ode_relerr must be finite and positive'
+        end if
 
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
