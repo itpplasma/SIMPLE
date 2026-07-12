@@ -27,6 +27,7 @@ fi
 RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_$REF_VER"
 RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
+GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-88fbadf7aac699bf8816749b55a5ff9be627c346}
 
 # Find test cases - they should be copied by CMake to the golden_record directory
 if [ -n "$SINGLE_CASE" ]; then
@@ -113,6 +114,12 @@ main() {
     mkdir -p "$GOLDEN_RECORD_BASE_DIR"
     mkdir -p "$TEST_DATA_DIR"
 
+    local REF_CONTRACT_STAMP="$PROJECT_ROOT_REF/build/.golden-libneo-ref"
+    if [ -f "$PROJECT_ROOT_REF/build/simple.x" ] && \
+       [ "$(cat "$REF_CONTRACT_STAMP" 2>/dev/null)" != "$GOLDEN_LIBNEO_REF" ]; then
+        rm -rf "$PROJECT_ROOT_REF/build"
+    fi
+
     # Check if we need to build reference version
     if [ ! -f "$PROJECT_ROOT_REF/build/simple.x" ]; then
         echo "Reference build not found, cloning and building..."
@@ -187,6 +194,7 @@ build() {
 
     # Enable deterministic floating-point for reproducible golden record tests
     CMAKE_OPTS="$CMAKE_OPTS -DSIMPLE_DETERMINISTIC_FP=ON -DLIBNEO_DETERMINISTIC_FP=ON"
+    CMAKE_OPTS="$CMAKE_OPTS -DLIBNEO_REF=$GOLDEN_LIBNEO_REF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
 
     cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
@@ -202,6 +210,11 @@ build() {
         tail -n 200 "$PROJECT_ROOT/build.log" 2>/dev/null || true
         return 1
     fi
+
+    python3 "$SCRIPT_DIR/../python/test_deterministic_dependency_flags.py" \
+        "$PROJECT_ROOT/build/compile_commands.json" \
+        "$PROJECT_ROOT/build/_deps/libneo-src"
+    printf '%s\n' "$GOLDEN_LIBNEO_REF" > "$PROJECT_ROOT/build/.golden-libneo-ref"
 }
 
 
