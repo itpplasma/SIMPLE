@@ -1,6 +1,9 @@
 module linear_radial_field_backend
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_base, only: field_can_t
+  use orbit_symplectic_base, only: symplectic_integrator_t, &
+    SYMPLECTIC_STEP_BOUNDARY_LIMITED, SYMPLECTIC_STEP_OK, &
+    SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 
   implicit none
 
@@ -27,12 +30,29 @@ contains
     f%d2hph = 0.0_dp
     f%d2Bmod = 0.0_dp
   end subroutine evaluate_linear_radial
+
+  subroutine basin_limited_step(si, f, step_status)
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
+    integer, intent(out) :: step_status
+
+    if (si%dt >= 0.1_dp) then
+      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else if (si%dt >= 0.0625_dp) then
+      step_status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    else
+      si%z(1) = 0.5_dp + (0.5_dp - 1.0e-12_dp)* &
+        (1.0_dp - ((0.0625_dp - si%dt)/0.0625_dp)**2)
+      step_status = SYMPLECTIC_STEP_OK
+    end if
+  end subroutine basin_limited_step
 end module linear_radial_field_backend
 
 program test_newton_solver_status
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_mod, only: field_can_t, eval_field => evaluate
-  use linear_radial_field_backend, only: evaluate_linear_radial
+  use linear_radial_field_backend, only: basin_limited_step, &
+    evaluate_linear_radial
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
     advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system
@@ -154,22 +174,6 @@ contains
       error stop 'solver-basin failure changed the accepted state'
     end if
   end subroutine test_solver_basin_is_not_boundary
-
-  subroutine basin_limited_step(si, f, step_status)
-    type(symplectic_integrator_t), intent(inout) :: si
-    type(field_can_t), intent(inout) :: f
-    integer, intent(out) :: step_status
-
-    if (si%dt >= 0.1_dp) then
-      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else if (si%dt >= 0.0625_dp) then
-      step_status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-    else
-      si%z(1) = 0.5_dp + (0.5_dp - 1.0e-12_dp)* &
-        (1.0_dp - ((0.0625_dp - si%dt)/0.0625_dp)**2)
-      step_status = SYMPLECTIC_STEP_OK
-    end if
-  end subroutine basin_limited_step
 
   subroutine test_lcfs_location
     real(dp), parameter :: timesteps(3) = [0.02_dp, 0.01_dp, 0.005_dp]
