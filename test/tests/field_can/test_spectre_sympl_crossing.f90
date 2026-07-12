@@ -43,8 +43,8 @@ program test_spectre_sympl_crossing
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
                                    orbit_microstep_sympl_spectre, recanon_pphi, &
                                    sympl_landing_stats_reset, &
-                                   sympl_landing_stats, sympl_fo_stats, &
-                                   SYMPL_SPECTRE_OK
+                                   sympl_landing_stats, sympl_landing_eval_stats, &
+                                   sympl_fo_stats, SYMPL_SPECTRE_OK
     use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, SPECTRE_FO_OK
     use parmot_mod, only: ro0
     use interface_crossing, only: crossing_log_reset, crossing_log_count_type, &
@@ -76,6 +76,7 @@ program test_spectre_sympl_crossing
     real(dp) :: shell_defect, seg_drift, pphi_walk, max_resid
     integer :: transition_series(NREC), mode_series(NREC)
     integer :: im, nrec_got, n_cross, n_stop, landings, stops, n_crossers
+    integer :: landing_evals
     integer :: n_sheet, n_transitions, n_fo_entries, n_fo_exits, n_fo_losses
     integer :: n_fo_failures, n_fo_status(5)
     logical :: failed, crosser
@@ -166,6 +167,7 @@ program test_spectre_sympl_crossing
     n_sheet = crossing_log_count_type(CROSS_SHEET)
     n_stop = crossing_log_count_type(CROSS_STOP)
     call sympl_landing_stats(landings, max_resid, stops)
+    call sympl_landing_eval_stats(landing_evals)
     call sympl_fo_stats(n_fo_entries, n_fo_exits, n_fo_losses, n_fo_failures, &
         n_fo_status)
     n_transitions = n_cross + n_sheet + n_fo_entries
@@ -173,7 +175,8 @@ program test_spectre_sympl_crossing
     print '(A,I0,A,I0,A,I0,A,I0,A,I0)', 'events: crossings=', n_cross, &
         ' sheet=', n_sheet, ' fo_entries=', n_fo_entries, ' landings=', landings, &
         ' cross_stop=', n_stop
-    print '(A,ES12.4)', 'landing: max |rho_g - k| = ', max_resid
+    print '(A,ES12.4,A,I0)', 'landing: max |rho_g - k| = ', max_resid, &
+        '  evaluations = ', landing_evals
 
     if (n_crossers < 2) then
         print '(A,I0)', 'FAIL: fewer than 2 crossing markers: ', n_crossers
