@@ -323,6 +323,7 @@ if (ENABLE_OPENMP)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
+        RUN_SERIAL TRUE
         TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
@@ -688,6 +689,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
+    RUN_SERIAL TRUE
     TIMEOUT 120)
 
 # Batch spline optimization test
