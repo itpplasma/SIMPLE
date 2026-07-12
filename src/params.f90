@@ -32,7 +32,20 @@ module params
     real(dp), dimension(:, :), allocatable :: xstart
     real(dp), dimension(:, :), allocatable :: zstart, zend
     real(dp), dimension(:), allocatable :: confpart_trap, confpart_pass
+    integer, dimension(:), allocatable :: unresolved_orbits
     real(dp), dimension(:), allocatable :: times_lost
+    real(dp), dimension(:), allocatable :: boundary_event_radial_residual
+    real(dp), dimension(:), allocatable :: boundary_event_time_width
+    integer, dimension(:), allocatable :: orbit_exit_code
+    integer, parameter :: ORBIT_EXIT_COMPLETED = 0
+    integer, parameter :: ORBIT_EXIT_LCFS = 1
+    integer, parameter :: ORBIT_EXIT_WALL = 2
+    integer, parameter :: ORBIT_EXIT_SKIPPED = 3
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_DOMAIN = 101
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_MAXITER = 102
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_EVENT = 104
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_FULL_ORBIT = 105
     real(dp) :: contr_pp = -1d0
     integer          :: ibins
     logical          :: generate_start_only = .False.
@@ -395,6 +408,10 @@ contains
         if (allocated(zstart)) deallocate (zstart)
         if (allocated(zend)) deallocate (zend)
         if (allocated(times_lost)) deallocate (times_lost)
+        if (allocated(boundary_event_radial_residual)) &
+            deallocate (boundary_event_radial_residual)
+        if (allocated(boundary_event_time_width)) deallocate (boundary_event_time_width)
+        if (allocated(orbit_exit_code)) deallocate (orbit_exit_code)
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
@@ -405,6 +422,7 @@ contains
         if (allocated(volstart)) deallocate (volstart)
         if (allocated(confpart_trap)) deallocate (confpart_trap)
         if (allocated(confpart_pass)) deallocate (confpart_pass)
+        if (allocated(unresolved_orbits)) deallocate (unresolved_orbits)
         if (allocated(wall_hit)) deallocate (wall_hit)
         if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
         if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
@@ -413,8 +431,12 @@ contains
 
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         allocate (times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
+        allocate (boundary_event_radial_residual(ntestpart), &
+                  boundary_event_time_width(ntestpart))
+        allocate (orbit_exit_code(ntestpart))
         allocate (xstart(3, npoi), bstart(npoi), volstart(npoi))
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
+        allocate (unresolved_orbits(ntimstep))
         allocate (iclass(3, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
         allocate (wall_hit(ntestpart))
@@ -424,6 +446,9 @@ contains
         allocate (wall_hit_angle_rad(ntestpart))
 
         times_lost = 0.0d0
+        boundary_event_radial_residual = -1d0
+        boundary_event_time_width = -1d0
+        orbit_exit_code = 0
         trap_par = 0.0d0
         perp_inv = 0.0d0
         iclass = 0
