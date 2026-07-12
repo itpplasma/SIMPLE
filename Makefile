@@ -1,6 +1,7 @@
 CONFIG ?= Release
 FLAGS ?=
 BUILD_DIR := build
+GOLDEN_LIBNEO_REF := cbb57e125390cd21ea906cc0ec9bff5b28c6fc26
 
 # Prevent ambient shell env from silently changing which libneo is fetched.
 # Pass the ref explicitly via: make ... LIBNEO_REF=<branch|tag|sha>
@@ -73,8 +74,9 @@ test-slow: build-deterministic
 	$(CTEST_CMD) -L "slow" -LE "regression|performance|scalability"
 
 # Run only regression tests (requires deterministic FP build without Python interface)
+test-regression: FLAGS += -DLIBNEO_REF=$(GOLDEN_LIBNEO_REF)
 test-regression: build-deterministic-nopy
-	$(CTEST_CMD) -L "regression"
+	export GOLDEN_LIBNEO_REF=$(GOLDEN_LIBNEO_REF); $(CTEST_CMD) -L "regression"
 
 # Build with deterministic floating-point for regression tests
 # Keeps CODE intact so local dependency paths are respected
