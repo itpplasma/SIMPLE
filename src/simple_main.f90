@@ -937,10 +937,11 @@ contains
             else
                 if (swcoll) call update_momentum(anorb, z)
                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                if (ierr_orbit .ne. 0) exit
                 call to_standard_z_coordinates(anorb, z)
             end if
-            if (swcoll) call collide(z, dtaumin) ! Collisions
             if (ierr_orbit .ne. 0) exit
+            if (swcoll) call collide(z, dtaumin) ! Collisions
             kt = kt + 1
         end do
     end subroutine macrostep
@@ -980,10 +981,11 @@ contains
             else
                 if (swcoll) call update_momentum(anorb, z)
                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                if (ierr_orbit .ne. 0) exit
                 call to_standard_z_coordinates(anorb, z)
             end if
-            if (swcoll) call collide(z, dtaumin) ! Collisions
             if (ierr_orbit .ne. 0) exit
+            if (swcoll) call collide(z, dtaumin) ! Collisions
             kt = kt + 1
 
             ! Check wall intersection periodically or at end of macrostep
