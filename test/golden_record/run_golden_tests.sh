@@ -5,6 +5,9 @@
 
 set -e
 
+export OMP_NUM_THREADS=2
+export OMP_DYNAMIC=FALSE
+
 PROJECT_ROOT="$1"
 RUN_DIR="$2"
 TEST_DATA_DIR="$3"

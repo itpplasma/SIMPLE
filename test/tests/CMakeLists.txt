@@ -323,6 +323,7 @@ if (ENABLE_OPENMP)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
+        RUN_SERIAL TRUE
         TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
@@ -593,6 +594,10 @@ add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
 target_link_libraries(test_orbit_symplectic_base.x simple)
 add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
 
+add_executable(test_newton_solver_status.x test_newton_solver_status.f90)
+target_link_libraries(test_newton_solver_status.x simple)
+add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
@@ -688,6 +693,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
+    RUN_SERIAL TRUE
     TIMEOUT 120)
 
 # Batch spline optimization test

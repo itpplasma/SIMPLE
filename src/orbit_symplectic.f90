@@ -7,7 +7,9 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
   LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
-  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
+  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
+  SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+  SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -450,7 +452,22 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   call count_event(EVT_NEWTON2_MAXIT)
 end subroutine
 
-recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
+subroutine solve_newton_system(matrix, residual, status)
+  real(dp), intent(inout) :: matrix(:, :), residual(:)
+  integer, intent(out) :: status
+
+  integer :: info, n, pivot(size(residual))
+
+  n = size(residual)
+  call dgesv(n, 1, matrix, n, pivot, residual, n, info)
+  if (info == 0) then
+    status = SYMPLECTIC_STEP_OK
+  else
+    status = SYMPLECTIC_STEP_LINEAR_SOLVE
+  end if
+end subroutine solve_newton_system
+
+recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
 
@@ -463,11 +480,14 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(n)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(n), fjac(n,n)
-  integer :: pivot(n), info
 
   real(dp) :: xabs(n), tolref(n), fabs(n)
+
+  xlast = x
+  status = SYMPLECTIC_STEP_MAXITER
 
   tolref(1) = 1d0
   tolref(2) = twopi
@@ -476,7 +496,10 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   tolref(5) = 1d0
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
+    if(x(1) > 1.0 .or. x(5) > 1.0) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     ! Transient guards for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
@@ -488,16 +511,28 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     call jac_midpoint_part2(si, f, fmid, x, fjac)
     fabs = dabs(fvec)
     xlast = x
-    call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
+    call solve_newton_system(fjac, fvec, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
+    if (x(1) > 1d0 .or. x(5) > 1d0) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     ! Don't take too small values in pphi as tolerance reference
     tolref(4) = max(dabs(x(4)), tolref(4))
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
 end subroutine
 
@@ -533,7 +568,7 @@ recursive subroutine jac_rk_gauss(si, fs, s, jac)
 
 end subroutine jac_rk_gauss
 
-recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
+recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
@@ -544,17 +579,23 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(4*s)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(4*s), fjac(4*s, 4*s)
-  integer :: pivot(4*s), info
 
   real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s)
+
+  xlast = x
+  status = SYMPLECTIC_STEP_MAXITER
 
   do kit = 1, maxit
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) return
+      if (x(4*ks-3) > 1d0) then
+        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
       ! Transient guard for intermediate iterates; the converged-negative
       ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
@@ -564,9 +605,17 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     call jac_rk_gauss(si, fs, s, fjac)
     fabs = dabs(fvec)
     xlast = x
-    call dgesv(4*s, 1, fjac, 4*s, pivot, fvec, 4*s, info)
+    call solve_newton_system(fjac, fvec, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
+    do ks = 1, s
+      if (x(4*ks-3) > 1d0) then
+        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
+    end do
     xabs = dabs(x - xlast)
 
     do ks = 1, s
@@ -576,8 +625,14 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
       tolref(4*ks) = dabs(xlast(4*ks))
     end do
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
   call count_event(EVT_RK_GAUSS_MAXIT)
 end subroutine newton_rk_gauss
@@ -812,8 +867,32 @@ recursive subroutine jac_rk_lobatto(si, fs, s, jac)
   end do
 end subroutine jac_rk_lobatto
 
+subroutine guard_lobatto_stage_radii(x, s, status)
+  integer, intent(in) :: s
+  real(dp), intent(inout) :: x(4*s-2)
+  integer, intent(out) :: status
 
-recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
+  integer :: ks, radius_index
+
+  status = SYMPLECTIC_STEP_OK
+  if (x(1) > 1d0) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  if (x(1) < 0d0) x(1) = 0.01d0
+
+  do ks = 2, s
+    radius_index = 4*ks - 5
+    if (x(radius_index) > 1d0) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+    if (x(radius_index) < 0d0) x(radius_index) = 0.01d0
+  end do
+end subroutine guard_lobatto_stage_radii
+
+
+recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
@@ -824,30 +903,40 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(4*s-2)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
-  integer :: pivot(4*s-2), info
 
   real(dp) :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2)
 
+  xlast = x
+  status = SYMPLECTIC_STEP_MAXITER
+
   do kit = 1, maxit
 
-    ! Check if radius left the boundary
-    if (x(1) > 1d0) return
-    ! Transient guard for intermediate iterates (#370).
-    if (x(1) < 0.0) x(1) = 0.01d0
-    do ks = 2, s
-      if (x(4*ks-2-3) > 1d0) return
-      if (x(4*ks-2-3) < 0.0) x(4*ks-3) = 0.01d0
-    end do
+    call guard_lobatto_stage_radii(x, s, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
 
     call f_rk_lobatto(si, fs, s, x, fvec, 2)
     call jac_rk_lobatto(si, fs, s, fjac)
     fabs = dabs(fvec)
     xlast = x
-    call dgesv(4*s-2, 1, fjac, 4*s-2, pivot, fvec, 4*s-2, info)
+    call solve_newton_system(fjac, fvec, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
+    if (x(1) > 1d0) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+    do ks = 2, s
+      if (x(4*ks-5) > 1d0) then
+        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
+    end do
     xabs = dabs(x - xlast)
 
     tolref(1) = 1d0
@@ -859,8 +948,14 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
       tolref(4*ks-2) = dabs(xlast(4*ks-2))
     end do
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
   call count_event(EVT_RK_LOBATTO_MAXIT)
 end subroutine newton_rk_lobatto
@@ -1257,17 +1352,28 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, parameter :: maxit = 8
 
   real(dp), dimension(n) :: x, xlast
-  integer :: ktau
+  integer :: ktau, newton_status
+  type(symplectic_integrator_t) :: accepted_integrator
+  type(field_can_t) :: accepted_field
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     x(1:4) = si%z
     x(5) = si%z(1)
 
-    call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast)
+    call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
+      newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
+      return
+    end if
 
     if (x(1) > 1.0) then
       ierr = 1
@@ -1317,9 +1423,11 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
   integer, intent(in) :: s
   real(dp), dimension(4*s) :: x, xlast
-  integer :: k, l, ktau
+  integer :: k, l, ktau, newton_status
 
   type(field_can_t) :: fs(s)
+  type(field_can_t) :: accepted_field
+  type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
 
   do k = 1,s
@@ -1330,13 +1438,22 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     do k = 1,s
       x((4*k-3):(4*k)) = si%z
     end do
 
-    call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
+    call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast, &
+      newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
+      return
+    end if
     !optionally try fixed point iterations, doesn't work yet
     !call fixpoint_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
 
@@ -1453,9 +1570,11 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
 
   integer, intent(in) :: s
   real(dp), dimension(4*s-2) :: x, xlast
-  integer :: ktau, k, l
+  integer :: ktau, k, l, newton_status
 
   type(field_can_t) :: fs(s)
+  type(field_can_t) :: accepted_field
+  type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
@@ -1465,6 +1584,8 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     x(1) = si%z(1)
@@ -1473,7 +1594,14 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       x((4*k-3-2):(4*k-2)) = si%z
     end do
 
-    call newton_rk_lobatto(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
+    call newton_rk_lobatto(si, fs, s, x, si%atol, si%rtol, maxit, xlast, &
+      newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
+      return
+    end if
 
     call coeff_rk_lobatto(s, a, ahat, b, c)
 
