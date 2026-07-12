@@ -6,10 +6,10 @@ program test_spectre_sympl_crossing
     !> under the implicit midpoint scheme with exact-landing substeps, the
     !> crossing map, and per-volume re-canonicalization. Witnesses:
     !>
-    !>   * Interface-crossing markers: the linear-fit slope of H(t) through
-    !>     thousands of flow-jump-flow compositions is consistent with zero
-    !>     (|slope|*T/H0 below SLOPE_TOL) -- the symplecticity witness. Their
-    !>     peak |dH/H| stays below the in-volume scheme floor with margin.
+    !>   * Interface-crossing markers: the fixed pabs^2 shell agrees with the
+    !>     actual GC-sheet and full-orbit energies through hundreds of mode
+    !>     compositions. The focused crossing test separately verifies temporal
+    !>     convergence of the local bulk landing error.
     !>   * Control markers that never cross: canonical p_phi = si%z(4) is
     !>     conserved to round-off (exact axisymmetric momentum map), bounding
     !>     the in-volume floor that H comparisons are measured against.
@@ -33,10 +33,13 @@ program test_spectre_sympl_crossing
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
                                    orbit_microstep_sympl_spectre, recanon_pphi, &
                                    sympl_landing_stats_reset, &
-                                   sympl_landing_stats, SYMPL_SPECTRE_OK
+                                   sympl_landing_stats, sympl_fo_stats, &
+                                   SYMPL_SPECTRE_OK
+    use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, SPECTRE_FO_OK
     use parmot_mod, only: ro0
     use interface_crossing, only: crossing_log_reset, crossing_log_count_type, &
-                                  CROSS_CROSSING, CROSS_STOP
+                                  CROSS_CROSSING, CROSS_REFLECTION, CROSS_STOP, &
+                                  CROSS_SHEET
     use util, only: twopi, sqrt2
 
     implicit none
@@ -48,19 +51,24 @@ program test_spectre_sympl_crossing
     !> markers; measured values sit at 1e-8..1e-7 while the in-volume floor
     !> (control markers, no crossings) drifts at ~1e-5.
     real(dp), parameter :: SLOPE_TOL = 1.0d-6
+    real(dp), parameter :: ACTUAL_SLOPE_TOL = 1.0d-5
     real(dp), parameter :: H_DRIFT_TOL = 5.0d-5
+    real(dp), parameter :: TRANSIENT_H_TOL = 5.0d-4
     real(dp), parameter :: PPHI_CONTROL_TOL = 1.0d-12
     real(dp), parameter :: PPHI_SEGMENT_TOL = 1.0d-6
-    real(dp), parameter :: PPHI_JUMP_EPS = 1.0d-9
     real(dp), parameter :: LANDING_TOL = 1.0d-8
-    integer, parameter :: MIN_CROSSINGS = 2000
+    integer, parameter :: MIN_TRANSITIONS = 400
 
     character(len=1024) :: h5file
     character(len=256) :: config_file
     type(tracer_t) :: norb
-    real(dp) :: h_series(NREC), p_series(NREC), t_series(NREC)
-    real(dp) :: slope, serr, drift, seg_drift, pphi_walk, max_resid
+    real(dp) :: h_series(NREC), h_actual(NREC), p_series(NREC), t_series(NREC)
+    real(dp) :: slope, serr, drift, actual_slope, actual_serr, actual_drift
+    real(dp) :: shell_defect, seg_drift, pphi_walk, max_resid
+    integer :: transition_series(NREC), mode_series(NREC)
     integer :: im, nrec_got, n_cross, n_stop, landings, stops, n_crossers
+    integer :: n_sheet, n_transitions, n_fo_entries, n_fo_exits, n_fo_losses
+    integer :: n_fo_failures, n_fo_status(5)
     logical :: failed, crosser
 
     if (command_argument_count() < 1) then
@@ -84,7 +92,8 @@ program test_spectre_sympl_crossing
     call check_recanon_energy(failed)
 
     do im = 1, NMARKER
-        call trace_marker(im, nrec_got, h_series, p_series, t_series)
+        call trace_marker(im, nrec_got, h_series, h_actual, p_series, t_series, &
+            transition_series, mode_series)
         if (nrec_got < MIN_REC) then
             print '(A,I0,A,I0,A)', 'FAIL: marker ', im, ' ended after ', &
                 nrec_got, ' records'
@@ -92,8 +101,14 @@ program test_spectre_sympl_crossing
             cycle
         end if
 
-        call segment_stats(p_series(1:nrec_got), crosser, seg_drift, pphi_walk)
+        call segment_stats(p_series(1:nrec_got), transition_series(1:nrec_got), &
+            mode_series(1:nrec_got), crosser, seg_drift, pphi_walk)
+        if (.not. crosser) h_series(1:nrec_got) = h_actual(1:nrec_got)
         call fit_series(t_series(1:nrec_got), h_series(1:nrec_got), slope, serr, drift)
+        call fit_series(t_series(1:nrec_got), h_actual(1:nrec_got), actual_slope, &
+            actual_serr, actual_drift)
+        shell_defect = maxval(abs(h_actual(1:nrec_got) - h_series(1:nrec_got))/ &
+            abs(h_series(1:nrec_got)))
 
         if (crosser) then
             n_crossers = n_crossers + 1
@@ -102,6 +117,9 @@ program test_spectre_sympl_crossing
                 3.0_dp*serr, '  max|dH/H| = ', drift
             print '(A,ES11.3,A,ES11.3)', '    pphi: in-segment drift = ', &
                 seg_drift, '  total walk (map kicks) = ', pphi_walk
+            print '(A,ES11.3,A,ES11.3,A,ES11.3)', &
+                '    actual H slope*T/H0 = ', actual_slope, '  max drift = ', &
+                actual_drift, '  max shell defect = ', shell_defect
             if (abs(slope) > max(3.0_dp*serr, SLOPE_TOL)) then
                 print '(A,I0)', 'FAIL: secular H drift for crossing marker ', im
                 failed = .true.
@@ -113,6 +131,15 @@ program test_spectre_sympl_crossing
             if (seg_drift >= PPHI_SEGMENT_TOL) then
                 print '(A,I0)', 'FAIL: p_phi drifts between crossings, marker ', &
                     im
+                failed = .true.
+            end if
+            if (abs(actual_slope) > max(3.0_dp*actual_serr, ACTUAL_SLOPE_TOL)) then
+                print '(A,I0)', 'FAIL: secular actual H drift, marker ', im
+                failed = .true.
+            end if
+            if (actual_drift >= TRANSIENT_H_TOL .or. &
+                shell_defect >= TRANSIENT_H_TOL) then
+                print '(A,I0)', 'FAIL: local bulk H defect above guard, marker ', im
                 failed = .true.
             end if
         else
@@ -131,20 +158,25 @@ program test_spectre_sympl_crossing
     end do
 
     n_cross = crossing_log_count_type(CROSS_CROSSING)
+    n_sheet = crossing_log_count_type(CROSS_SHEET)
     n_stop = crossing_log_count_type(CROSS_STOP)
     call sympl_landing_stats(landings, max_resid, stops)
+    call sympl_fo_stats(n_fo_entries, n_fo_exits, n_fo_losses, n_fo_failures, &
+        n_fo_status)
+    n_transitions = n_cross + n_sheet + n_fo_entries
 
-    print '(A,I0,A,I0,A,I0,A,I0)', 'events: crossings=', n_cross, &
-        ' landings=', landings, ' cross_stop=', n_stop, &
-        ' crossing_markers=', n_crossers
+    print '(A,I0,A,I0,A,I0,A,I0,A,I0)', 'events: crossings=', n_cross, &
+        ' sheet=', n_sheet, ' fo_entries=', n_fo_entries, ' landings=', landings, &
+        ' cross_stop=', n_stop
     print '(A,ES12.4)', 'landing: max |rho_g - k| = ', max_resid
 
     if (n_crossers < 2) then
         print '(A,I0)', 'FAIL: fewer than 2 crossing markers: ', n_crossers
         failed = .true.
     end if
-    if (n_cross < MIN_CROSSINGS) then
-        print '(A,I0,A,I0)', 'FAIL: crossings ', n_cross, ' < ', MIN_CROSSINGS
+    if (n_transitions < MIN_TRANSITIONS) then
+        print '(A,I0,A,I0)', 'FAIL: hybrid transitions ', n_transitions, &
+            ' < ', MIN_TRANSITIONS
         failed = .true.
     end if
     if (n_stop /= 0 .or. stops /= 0) then
@@ -221,16 +253,20 @@ contains
         call set_spectre_volume_lock(0)
     end subroutine check_recanon_energy
 
-    subroutine trace_marker(im, nrec_got, h_series, p_series, t_series)
+    subroutine trace_marker(im, nrec_got, h_series, h_actual, p_series, t_series, &
+            transition_series, mode_series)
         integer, intent(in) :: im
         integer, intent(out) :: nrec_got
-        real(dp), intent(out) :: h_series(NREC), p_series(NREC), t_series(NREC)
+        real(dp), intent(out) :: h_series(NREC), h_actual(NREC)
+        real(dp), intent(out) :: p_series(NREC), t_series(NREC)
+        integer, intent(out) :: transition_series(NREC), mode_series(NREC)
 
         type(symplectic_integrator_t) :: si
         type(field_can_t) :: f, ftmp
         type(sympl_spectre_state_t) :: state
         real(dp) :: zphys(5), z(5), lam, th0, t_frac
-        integer :: k, ierr
+        integer :: k, ierr, fo_status
+        real(dp) :: fo_pphi
 
         lam = LAM0
         if (mod(im, 2) == 0) lam = -LAM0
@@ -250,37 +286,59 @@ contains
                                                dtaumin/v0, ierr, t_frac)
             if (ierr /= SYMPL_SPECTRE_OK) exit
             if (mod(k, NSAMPLE) == 0) then
-                ftmp = f
-                call eval_field(ftmp, si%z(1), si%z(2), si%z(3), 0)
-                call get_val(ftmp, si%z(4))
                 nrec_got = nrec_got + 1
-                h_series(nrec_got) = ftmp%H
-                p_series(nrec_got) = si%z(4)
+                if (state%fo%active) then
+                    mode_series(nrec_got) = 3
+                    h_series(nrec_got) = 0.5_dp*dot_product(state%fo%v, state%fo%v)
+                    h_actual(nrec_got) = h_series(nrec_got)
+                    call spectre_fo_canonical_pzeta(state%fo, ro0/sqrt2, &
+                        fo_pphi, fo_status)
+                    if (fo_status /= SPECTRE_FO_OK) then
+                        nrec_got = nrec_got - 1
+                        cycle
+                    end if
+                    p_series(nrec_got) = fo_pphi
+                else if (state%sheet%active) then
+                    mode_series(nrec_got) = 2
+                    h_series(nrec_got) = state%sheet%p**2
+                    h_actual(nrec_got) = h_series(nrec_got)
+                    p_series(nrec_got) = si%z(4)
+                else
+                    mode_series(nrec_got) = 1
+                    ftmp = f
+                    call eval_field(ftmp, si%z(1), si%z(2), si%z(3), 0)
+                    call get_val(ftmp, si%z(4))
+                    h_series(nrec_got) = si%pabs**2
+                    h_actual(nrec_got) = ftmp%H
+                    p_series(nrec_got) = si%z(4)
+                end if
+                transition_series(nrec_got) = &
+                    crossing_log_count_type(CROSS_CROSSING) + &
+                    crossing_log_count_type(CROSS_REFLECTION) + &
+                    crossing_log_count_type(CROSS_SHEET)
                 t_series(nrec_got) = real(k, dp)*dtaumin/v0
             end if
         end do
         call set_spectre_volume_lock(0)
     end subroutine trace_marker
 
-    subroutine segment_stats(p, crosser, seg_drift, walk)
-        !> Split the p_phi series into constant segments at every relative jump
-        !> above PPHI_JUMP_EPS (crossing kicks and chatter pairs; in-volume
-        !> conservation is exact to round-off by axisymmetry). seg_drift is the
-        !> peak relative deviation within any segment, walk the peak relative
-        !> excursion of the whole series.
+    subroutine segment_stats(p, transition, mode, crosser, seg_drift, walk)
+        !> Split p_phi only at logged events or sampled mode changes. Momentum
+        !> changes cannot create their own one-point segments and hide drift.
         real(dp), intent(in) :: p(:)
+        integer, intent(in) :: transition(:), mode(:)
         logical, intent(out) :: crosser
         real(dp), intent(out) :: seg_drift, walk
 
         real(dp) :: p0, seg_ref
         integer :: k
 
-        p0 = abs(p(1))
+        p0 = max(abs(p(1)), tiny(1.0_dp))
         seg_ref = p(1)
         seg_drift = 0.0_dp
         crosser = .false.
         do k = 2, size(p)
-            if (abs(p(k) - p(k - 1)) > PPHI_JUMP_EPS*p0) then
+            if (transition(k) /= transition(k - 1) .or. mode(k) /= mode(k - 1)) then
                 crosser = .true.
                 seg_ref = p(k)
             else

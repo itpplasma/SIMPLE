@@ -14,13 +14,13 @@ module spectre_orbit
     use odeint_allroutines_sub, only: odeint_allroutines
     use alpha_lifetime_sub, only: velo_can
     use interface_crossing, only: apply_crossing, crossing_info_t, axis_offset, &
-                                  CROSS_LOSS
+        CROSS_LOSS
 
     implicit none
     private
 
     public :: spectre_orbit_state_t, spectre_event_t, spectre_state_reset, &
-              orbit_timestep_spectre, SPECTRE_OK, SPECTRE_BOUNDARY, SPECTRE_FAULT
+        orbit_timestep_spectre, SPECTRE_OK, SPECTRE_BOUNDARY, SPECTRE_FAULT
 
     integer, parameter :: SPECTRE_OK = 0
     integer, parameter :: SPECTRE_BOUNDARY = 88
@@ -34,8 +34,7 @@ module spectre_orbit
     real(dp) :: ev_lo = 0.0_dp, ev_hi = 0.0_dp
     !$omp threadprivate(ev_lo, ev_hi)
 
-    !> Keep the marker state strictly inside its home volume when re-seeding the
-    !> next microstep.
+    !> Keep an initially sampled marker strictly inside its inferred home volume.
     real(dp), parameter :: clamp_margin = 1.0d-9
     !> The guiding-center drift diverges (Bstar_par -> 0 from the interface sheet
     !> current) in a thin unphysical layer next to each interface. The RHS field
@@ -82,9 +81,9 @@ contains
         !> Once the home volume is fixed the substep runs on the field-clamped RHS
         !> (continuous across the interface); if the trajectory leaves the home
         !> volume the crossing time is bisected to the interface and apply_crossing
-        !> switches volume or reflects with the Level-`level` map, resuming z just
-        !> inside the resolved volume. A crossing outward through the outermost
-        !> interface is a loss and reports SPECTRE_BOUNDARY.
+        !> switches volume or reflects with the Level-`level` map, retaining exact
+        !> interface coordinates with explicit side ownership. A crossing outward
+        !> through the outermost interface is a loss and reports SPECTRE_BOUNDARY.
         type(spectre_orbit_state_t), intent(inout) :: state
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dtaumin, relerr
@@ -115,10 +114,12 @@ contains
         call integrate_clamped(z_start, dtaumin, relerr, z_end, ierr)
         if (ierr /= SPECTRE_OK) return
 
-        if (z_end(1) >= state%home_hi) then
+        if (z_end(1) > state%home_hi .or. &
+            (z_end(1) == state%home_hi .and. z_start(1) < state%home_hi)) then
             boundary = state%home_hi
             direction = 1
-        else if (z_end(1) <= state%home_lo) then
+        else if (z_end(1) < state%home_lo .or. &
+                (z_end(1) == state%home_lo .and. z_start(1) > state%home_lo)) then
             boundary = state%home_lo
             direction = -1
         else
@@ -129,13 +130,13 @@ contains
         call locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, event%t_frac)
         iface = nint(boundary)
         call apply_crossing(z_hit, iface, direction, state%mvol, level, &
-                            z, event%info)
+            z, event%info)
         event%occurred = .true.
 
         if (event%info%event_type == CROSS_LOSS) then
             ierr = SPECTRE_BOUNDARY
         else
-            call set_home_volume(state, z(1))
+            call set_home_volume_index(state, event%info%vol_to)
             ierr = SPECTRE_OK
         end if
     end subroutine orbit_timestep_spectre
@@ -152,6 +153,15 @@ contains
         state%home_hi = lo + 1.0_dp
         state%home_set = .true.
     end subroutine set_home_volume
+
+    subroutine set_home_volume_index(state, lvol)
+        type(spectre_orbit_state_t), intent(inout) :: state
+        integer, intent(in) :: lvol
+
+        state%home_lo = real(lvol - 1, dp)
+        state%home_hi = real(lvol, dp)
+        state%home_set = .true.
+    end subroutine set_home_volume_index
 
     subroutine locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, t_frac)
         !> Find the microstep time where the clamped-RHS trajectory reaches rho_g =
@@ -212,7 +222,7 @@ contains
 
         zc = z
         zc(1) = max(max(ev_lo + drift_band, axis_offset), &
-                    min(z(1), ev_hi - drift_band))
+            min(z(1), ev_hi - drift_band))
         call velo_can(tau, zc, vz)
         vmag = sqrt(sum(vz**2))
         if (vmag > drift_cap) vz = vz*(drift_cap/vmag)

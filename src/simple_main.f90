@@ -921,6 +921,8 @@ contains
 
         call ref_to_integ(zstart(1:3, ipart), z(1:3))
         z(4:5) = zstart(4:5, ipart)
+        orbit_traj(:, 1) = zstart(:, ipart)
+        orbit_times(1) = 0.0_dp
         zend(:, ipart) = 0d0
 
         if (wall_enabled) then
@@ -1146,7 +1148,11 @@ contains
                 exit
             end if
 
-            call to_standard_z_coordinates(anorb, z)
+            if (state%fo%active .and. state%fo%has_y) then
+                z = state%fo%last_y
+            else
+                call to_standard_z_coordinates(anorb, z)
+            end if
             orbit_traj(:, it) = z
             orbit_times(it) = kt*dtaumin/v0
             call increase_confined_count(it, passing)
@@ -1179,7 +1185,11 @@ contains
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
 
-        call to_standard_z_coordinates(anorb, z)
+        if (state%fo%active .and. state%fo%has_y) then
+            z = state%fo%last_y
+        else
+            call to_standard_z_coordinates(anorb, z)
+        end if
         ! The next marker on this thread starts with an unlocked field dispatch.
         call set_spectre_volume_lock(0)
 
@@ -1492,10 +1502,16 @@ contains
         !> For symplectic runs the exact-landing statistics (#441) are printed so
         !> tests can assert the interface landing accuracy from stdout.
         use interface_crossing, only: crossing_log_write
-        use spectre_sympl_orbit, only: sympl_landing_stats
+        use spectre_sympl_orbit, only: sympl_landing_stats, sympl_sheet_stats, &
+            sympl_fo_stats
         use magfie_sub, only: SPECTRE
 
-        integer :: landings, stops
+        integer :: landings, stops, sheet_entries, sheet_exits
+        integer :: sheet_init_failures, sheet_advance_failures
+        integer :: sheet_failure_status(5)
+        integer :: sheet_stop_reason(5)
+        integer :: fo_entries, fo_exits, fo_losses, fo_failures
+        integer :: fo_failure_status(5)
         real(dp) :: max_resid
 
         if (isw_field_type /= SPECTRE) return
@@ -1506,6 +1522,21 @@ contains
             call sympl_landing_stats(landings, max_resid, stops)
             print '(A,I0,A,ES12.4,A,I0)', 'sympl_landing_stats: count= ', &
                 landings, ' max_resid= ', max_resid, ' cross_stop= ', stops
+            call sympl_sheet_stats(sheet_entries, sheet_exits, &
+                sheet_init_failures, sheet_advance_failures, sheet_failure_status, &
+                sheet_stop_reason)
+            print '(A,I0,A,I0,A,I0,A,I0,A,5(I0,1X),A,5(I0,1X))', &
+                'sympl_sheet_stats: entries= ', &
+                sheet_entries, ' exits= ', sheet_exits, ' init_fail= ', &
+                sheet_init_failures, ' advance_fail= ', sheet_advance_failures, &
+                ' status= ', sheet_failure_status, ' stop_reason= ', &
+                sheet_stop_reason
+            call sympl_fo_stats(fo_entries, fo_exits, fo_losses, fo_failures, &
+                fo_failure_status)
+            print '(A,I0,A,I0,A,I0,A,I0,A,5(I0,1X))', &
+                'sympl_fo_stats: entries= ', fo_entries, ' exits= ', fo_exits, &
+                ' losses= ', fo_losses, ' failures= ', fo_failures, ' status= ', &
+                fo_failure_status
         end if
     end subroutine write_spectre_crossing_events
 

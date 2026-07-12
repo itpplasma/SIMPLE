@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import numpy as np
 
@@ -225,11 +226,11 @@ def gc_mu_conservation(binary, h5, failures):
 def determinism(binary, h5, failures):
     with tempfile.TemporaryDirectory() as w1:
         run(binary, w1, h5, crossing_level=1, trace_time=2.0e-5)
-        tl1 = np.loadtxt(os.path.join(w1, "times_lost.dat"))
+        tl1 = (Path(w1) / "times_lost.dat").read_bytes()
     with tempfile.TemporaryDirectory() as w2:
         run(binary, w2, h5, crossing_level=1, trace_time=2.0e-5)
-        tl2 = np.loadtxt(os.path.join(w2, "times_lost.dat"))
-    identical = np.array_equal(tl1, tl2)
+        tl2 = (Path(w2) / "times_lost.dat").read_bytes()
+    identical = tl1 == tl2
     if not identical:
         failures.append("determinism: times_lost.dat not reproducible with a "
                         "fixed seed")

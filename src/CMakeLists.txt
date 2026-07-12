@@ -31,6 +31,8 @@
     magfie_can_boozer.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
+    spectre_sheet_gc.f90
+    spectre_fo_hybrid.f90
     interface_crossing.f90
     spectre_orbit.f90
     spectre_sympl_orbit.f90

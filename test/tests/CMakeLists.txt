@@ -393,6 +393,25 @@ target_link_libraries(test_deterministic_seed.x simple)
 add_test(NAME test_deterministic_seed COMMAND test_deterministic_seed.x)
 set_tests_properties(test_deterministic_seed PROPERTIES LABELS "unit")
 
+add_executable(test_interface_crossing_ownership.x test_interface_crossing_ownership.f90)
+target_link_libraries(test_interface_crossing_ownership.x simple)
+add_test(NAME test_interface_crossing_ownership COMMAND test_interface_crossing_ownership.x)
+set_tests_properties(test_interface_crossing_ownership PROPERTIES LABELS "unit")
+
+add_executable(test_spectre_sheet_gc.x test_spectre_sheet_gc.f90)
+target_link_libraries(test_spectre_sheet_gc.x simple)
+add_test(NAME test_spectre_sheet_gc
+    COMMAND test_spectre_sheet_gc.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+set_tests_properties(test_spectre_sheet_gc PROPERTIES LABELS "integration")
+
+add_executable(test_spectre_fo_hybrid.x test_spectre_fo_hybrid.f90)
+target_link_libraries(test_spectre_fo_hybrid.x simple)
+add_test(NAME test_spectre_fo_hybrid
+    COMMAND test_spectre_fo_hybrid.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+set_tests_properties(test_spectre_fo_hybrid PROPERTIES LABELS "integration")
+
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
 target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
 add_test(NAME test_bminmax_lifecycle

@@ -14,36 +14,46 @@ module spectre_sympl_orbit
     use util, only: twopi, sqrt2
     use parmot_mod, only: ro0
     use field_can_mod, only: field_can_t, eval_field => evaluate, integ_to_ref, &
-                             ref_to_integ
+        ref_to_integ
     use field_can_spectre, only: set_spectre_volume_lock
     use orbit_symplectic_base, only: symplectic_integrator_t
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use interface_crossing, only: apply_crossing, crossing_info_t, &
-                                  crossing_log_record, CROSS_LOSS, CROSS_STOP, &
-                                  CROSS_REFLECTION
+        crossing_log_record, CROSS_LOSS, CROSS_STOP, &
+        CROSS_REFLECTION, CROSS_SHEET
+    use spectre_sheet_gc, only: sheet_gc_state_t, sheet_gc_initialize, &
+        sheet_gc_advance, sheet_gc_to_y, SHEET_GC_OK
+    use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_enter, &
+        spectre_fo_advance_until_exit, SPECTRE_FO_OK, SPECTRE_FO_LOSS
 
     implicit none
     private
 
     public :: sympl_spectre_state_t, sympl_spectre_reset, recanon_pphi, &
-              orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
-              sympl_landing_stats
+        orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
+        sympl_landing_stats, sympl_sheet_stats
+    public :: sympl_fo_stats
     public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP, &
-              SYMPL_SPECTRE_SKIM
+        SYMPL_SPECTRE_SKIM
 
     integer, parameter :: SYMPL_SPECTRE_OK = 0
     integer, parameter :: SYMPL_SPECTRE_LOSS = 88
     integer, parameter :: SYMPL_SPECTRE_STOP = 89
     !> A trapped marker whose magnetic-mirror turning point sits on an interface
-    !> reflects, is nudged back, and is returned by its drift within one
+    !> reflects, remains owned by its home volume, and is returned by its drift within one
     !> microstep -- with v_par ~ 0 the reflection cannot move it away. Left alone
     !> it reflects every microstep forever with no progress in (theta, zeta),
     !> hijacking the run. Such a marker is mirror-confined (it cannot cross the
     !> interface outward), so after SKIM_MAX consecutive same-interface
     !> reflections with no angular progress it is terminated as confined-skimming.
     integer, parameter :: SYMPL_SPECTRE_SKIM = 90
+    integer, parameter :: SHEET_STAT_ENTRY = 1, SHEET_STAT_EXIT = 2
+    integer, parameter :: SHEET_STAT_INIT_FAIL = 3, SHEET_STAT_ADVANCE_FAIL = 4
+    integer, parameter :: STOP_SHEET = 1, STOP_TELEPORT = 2, STOP_STEP = 3
+    integer, parameter :: STOP_LANDING = 4, STOP_EVENT_CAP = 5
     integer, parameter :: SKIM_MAX = 256
     real(dp), parameter :: SKIM_PROGRESS = 1.0d-4
+    real(dp), parameter :: SKIM_PITCH_MAX = 2.0d-2
 
     !> Landing target and acceptance for |rho_g - k| at the interface. The
     !> h*-solve aims at landing_tol; the per-volume splines are clamped at the
@@ -53,18 +63,16 @@ module spectre_sympl_orbit
     real(dp), parameter :: landing_accept = 1.0d-8
     integer, parameter :: max_locate = 64
 
-    !> Events resolved within one microstep budget. A sheet-skimming class can
-    !> chatter at an interface (the drift normal reverses across the sheet); past
-    !> the cap the rest of the microstep is dropped (the RK45 path drops it after
-    !> the first event), never a stop.
-    integer, parameter :: max_events = 16
+    !> Events resolved within one microstep budget. Reaching the cap is a reported
+    !> stop: silently dropping the remaining time changes the fixed-step map.
+    integer, parameter :: max_events = 64
     !> Near-tangent crossings can put the landing root where the implicit solve
     !> of a long substep is multi-branched (Newton basin boundaries), making
     !> g(h) discontinuous. The substep is then halved and re-attempted: committed
     !> half-steps are fixed-length symplectic maps, and the landing solve re-runs
     !> in a smaller-h regime where the step map is single-valued.
     integer, parameter :: max_iters = 200
-    real(dp), parameter :: h_min_frac = 1.0d-6
+    real(dp), parameter :: h_min_frac = 1.0d-8
     real(dp), parameter :: budget_eps = 1.0d-12
     !> A committed substep moving rho_g by more than max_step_dr, or changing
     !> the energy 0.5*vpar^2 + mu*B by more than max_step_dh relative, is an
@@ -73,7 +81,7 @@ module spectre_sympl_orbit
     !> only O(1) garbage states trip; legitimate scheme error stays orders of
     !> magnitude below them at any usable step size.
     real(dp), parameter :: max_step_dr = 0.5d0
-    real(dp), parameter :: max_step_dh = 0.1d0
+    real(dp), parameter :: max_step_dh = 5.0d-5
 
     !> Home-side offset for the per-volume angle-transform evaluation at a landed
     !> point: the volume dispatch keys on int(rho_g), so exactly at rho_g = k it
@@ -93,10 +101,23 @@ module spectre_sympl_orbit
         integer :: skim_iface = -1
         real(dp) :: skim_theta = 0.0_dp
         real(dp) :: skim_zeta = 0.0_dp
+        type(sheet_gc_state_t) :: sheet
+        type(spectre_fo_state_t) :: fo
     end type sympl_spectre_state_t
 
     integer :: n_landings = 0
     integer :: n_stops = 0
+    integer :: n_sheet_entries = 0
+    integer :: n_sheet_exits = 0
+    integer :: n_sheet_init_failures = 0
+    integer :: n_sheet_advance_failures = 0
+    integer :: n_sheet_failure_status(5) = 0
+    integer :: n_stop_reason(5) = 0
+    integer :: n_fo_entries = 0
+    integer :: n_fo_exits = 0
+    integer :: n_fo_losses = 0
+    integer :: n_fo_failures = 0
+    integer :: n_fo_failure_status(5) = 0
     real(dp) :: max_landing_resid = 0.0_dp
 
 contains
@@ -141,8 +162,17 @@ contains
         call set_spectre_volume_lock(nint(state%home_hi))
     end subroutine set_home
 
+    subroutine set_home_volume(state, lvol)
+        type(sympl_spectre_state_t), intent(inout) :: state
+        integer, intent(in) :: lvol
+
+        state%home_lo = real(lvol - 1, dp)
+        state%home_hi = real(lvol, dp)
+        call set_spectre_volume_lock(lvol)
+    end subroutine set_home_volume
+
     subroutine orbit_microstep_sympl_spectre(state, si, f, ipart, t_base_sec, &
-                                             dt_sec, ierr, t_frac)
+            dt_sec, ierr, t_frac)
         !> Advance one microstep of length state%dt_std, resolving interface
         !> events by exact-landing substeps. On SYMPL_SPECTRE_LOSS or
         !> SYMPL_SPECTRE_STOP the orbit terminates at fraction t_frac of the
@@ -159,8 +189,11 @@ contains
         type(field_can_t) :: f0
         type(crossing_info_t) :: info
         real(dp) :: budget, used, h_try, h_land, resid, y_iface(5), y_out(5)
-        integer :: iters, nev, iface, direction, ierr_step
-        logical :: boundary, solved
+        real(dp) :: sheet_dt_used
+        integer :: iters, nev, iface, direction, ierr_step, ierr_sheet, ierr_fo
+        integer :: fo_owner
+        integer :: prev_iface
+        logical :: boundary, solved, sheet_exited, fo_exited
 
         ierr = SYMPL_SPECTRE_OK
         t_frac = 1.0_dp
@@ -168,8 +201,85 @@ contains
         used = 0.0_dp
         h_try = budget
         nev = 0
+        prev_iface = -1
 
-        do iters = 1, max_iters
+        if (state%fo%active) then
+            call continue_fo(state, si, f, budget, used, y_out, fo_owner, &
+                fo_exited, ierr_fo)
+            if (ierr_fo /= SPECTRE_FO_OK) then
+                call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
+                    dt_sec*used/state%dt_std, state%fo%iface, 1, STOP_SHEET, &
+                    used, state%dt_std, ierr, t_frac)
+                si%dt = state%dt_std
+                return
+            end if
+            if (.not. fo_exited .or. budget <= budget_eps*state%dt_std) then
+                si%dt = state%dt_std
+                return
+            end if
+            h_try = budget
+        end if
+
+        if (state%sheet%active) then
+            call sheet_gc_advance(state%sheet, sqrt2*budget, ro0, sheet_exited, &
+                sheet_dt_used, ierr_sheet)
+            if (sheet_exited) call count_sheet_stat(SHEET_STAT_EXIT)
+            if (ierr_sheet /= SHEET_GC_OK) &
+                call count_sheet_stat(SHEET_STAT_ADVANCE_FAIL, ierr_sheet)
+            used = sheet_dt_used/sqrt2
+            budget = state%dt_std - used
+            call sheet_gc_to_y(state%sheet, y_out)
+            call set_home_volume(state, state%sheet%owner)
+            call recanonicalize(state, si, f, y_out)
+            if (ierr_sheet /= SHEET_GC_OK) then
+                y_iface = y_out
+                call start_fo(state, si, f, y_iface, state%sheet%owner, &
+                    state%sheet%iface, budget, used, y_out, fo_owner, fo_exited, &
+                    ierr_fo)
+                if (ierr_fo /= SPECTRE_FO_OK) then
+                    direction = merge(1, -1, &
+                        state%sheet%owner == state%sheet%iface)
+                    call finish_fo_error(ierr_fo, si, f, ipart, &
+                        t_base_sec + dt_sec*used/state%dt_std, &
+                        state%sheet%iface, direction, STOP_SHEET, used, &
+                        state%dt_std, ierr, t_frac)
+                    si%dt = state%dt_std
+                    return
+                end if
+                if (.not. fo_exited .or. &
+                    budget <= budget_eps*state%dt_std) then
+                    si%dt = state%dt_std
+                    return
+                end if
+                sheet_exited = .true.
+            end if
+            if (.not. sheet_exited .or. budget <= budget_eps*state%dt_std) then
+                si%dt = state%dt_std
+                return
+            end if
+            h_try = budget
+        end if
+
+        iters = 0
+        do
+            iters = iters + 1
+            if (iters > max_iters) then
+                call integrator_state(si, f, y_iface)
+                iface = max(1, min(state%mvol - 1, nint(si%z(1))))
+                call start_fo(state, si, f, y_iface, nint(state%home_hi), &
+                    iface, budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                if (ierr_fo /= SPECTRE_FO_OK) then
+                    call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
+                        dt_sec*used/state%dt_std, iface, 1, STOP_STEP, used, &
+                        state%dt_std, ierr, t_frac)
+                    exit
+                end if
+                if (.not. fo_exited .or. &
+                    budget <= budget_eps*state%dt_std) exit
+                iters = 0
+                h_try = budget
+                cycle
+            end if
             si0 = si
             f0 = f
             si%dt = h_try
@@ -181,16 +291,25 @@ contains
                     f = f0
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
-                    call record_stop(si, f, ipart, &
-                                     t_base_sec + dt_sec*used/state%dt_std, &
-                                     nint(state%home_hi), 1)
-                    ierr = SYMPL_SPECTRE_STOP
-                    t_frac = used/state%dt_std
-                    exit
+                    call integrator_state(si, f, y_iface)
+                    iface = max(1, min(state%mvol - 1, nint(si%z(1))))
+                    call start_fo(state, si, f, y_iface, nint(state%home_hi), &
+                        iface, budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                    if (ierr_fo /= SPECTRE_FO_OK) then
+                        call finish_fo_error(ierr_fo, si, f, ipart, &
+                            t_base_sec + dt_sec*used/state%dt_std, iface, 1, &
+                            STOP_TELEPORT, used, state%dt_std, ierr, t_frac)
+                        exit
+                    end if
+                    if (.not. fo_exited .or. &
+                        budget <= budget_eps*state%dt_std) exit
+                    h_try = budget
+                    cycle
                 end if
             end if
 
-            call classify_step(state, si, ierr_step, boundary, iface, direction)
+            call classify_step(state, si0%z(1), si, ierr_step, boundary, iface, &
+                direction)
 
             if (.not. boundary) then
                 if (ierr_step /= 0) then
@@ -201,12 +320,20 @@ contains
                     f = f0
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
-                    call record_stop(si, f, ipart, &
-                                     t_base_sec + dt_sec*used/state%dt_std, &
-                                     nint(state%home_hi), 1)
-                    ierr = SYMPL_SPECTRE_STOP
-                    t_frac = used/state%dt_std
-                    exit
+                    call integrator_state(si, f, y_iface)
+                    iface = max(1, min(state%mvol - 1, nint(si%z(1))))
+                    call start_fo(state, si, f, y_iface, nint(state%home_hi), &
+                        iface, budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                    if (ierr_fo /= SPECTRE_FO_OK) then
+                        call finish_fo_error(ierr_fo, si, f, ipart, &
+                            t_base_sec + dt_sec*used/state%dt_std, iface, 1, &
+                            STOP_STEP, used, state%dt_std, ierr, t_frac)
+                        exit
+                    end if
+                    if (.not. fo_exited .or. &
+                        budget <= budget_eps*state%dt_std) exit
+                    h_try = budget
+                    cycle
                 end if
                 used = used + h_try
                 budget = state%dt_std - used
@@ -219,7 +346,7 @@ contains
             end if
 
             call locate_landing(si, f, si0, f0, h_try, real(iface, dp), &
-                                direction, ierr_step == 0, h_land, resid, solved)
+                direction, ierr_step == 0, h_land, resid, solved)
             if (.not. solved) then
                 ! The landing root sits where the implicit solve of this substep
                 ! length is multi-branched: halve and re-attempt from the same
@@ -228,12 +355,19 @@ contains
                 f = f0
                 h_try = 0.5_dp*h_try
                 if (h_try >= h_min_frac*state%dt_std) cycle
-                call record_stop(si, f, ipart, &
-                                 t_base_sec + dt_sec*used/state%dt_std, &
-                                 iface, direction)
-                ierr = SYMPL_SPECTRE_STOP
-                t_frac = used/state%dt_std
-                exit
+                call integrator_state(si, f, y_iface)
+                call start_fo(state, si, f, y_iface, nint(state%home_hi), &
+                    iface, budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                if (ierr_fo /= SPECTRE_FO_OK) then
+                    call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
+                        dt_sec*used/state%dt_std, iface, direction, STOP_LANDING, &
+                        used, state%dt_std, ierr, t_frac)
+                    exit
+                end if
+                if (.not. fo_exited .or. &
+                    budget <= budget_eps*state%dt_std) exit
+                h_try = budget
+                cycle
             end if
             used = used + h_land
             budget = state%dt_std - used
@@ -241,15 +375,73 @@ contains
 
             call landed_state(si, f, real(iface, dp), direction, y_iface)
             call apply_crossing(y_iface, iface, direction, state%mvol, &
-                                state%level, y_out, info)
-            call crossing_log_record(ipart, t_base_sec + dt_sec*used/state%dt_std, &
-                                     info)
-
+                state%level, y_out, info)
             if (info%event_type == CROSS_LOSS) then
+                call crossing_log_record(ipart, &
+                    t_base_sec + dt_sec*used/state%dt_std, info)
                 ierr = SYMPL_SPECTRE_LOSS
                 t_frac = used/state%dt_std
                 exit
             end if
+
+            if (iface == prev_iface) then
+                call sheet_gc_initialize(iface, direction, y_iface, info%mu, &
+                    info%bmod_home, ro0, state%sheet, ierr_sheet)
+                if (ierr_sheet == SHEET_GC_OK) then
+                    call count_sheet_stat(SHEET_STAT_ENTRY)
+                    info%event_type = CROSS_SHEET
+                    info%vol_to = info%vol_from
+                    call crossing_log_record(ipart, &
+                        t_base_sec + dt_sec*used/state%dt_std, info)
+                    call sheet_gc_advance(state%sheet, sqrt2*budget, ro0, &
+                        sheet_exited, sheet_dt_used, ierr_sheet)
+                    if (sheet_exited) call count_sheet_stat(SHEET_STAT_EXIT)
+                    if (ierr_sheet /= SHEET_GC_OK) &
+                        call count_sheet_stat(SHEET_STAT_ADVANCE_FAIL, ierr_sheet)
+                    used = used + sheet_dt_used/sqrt2
+                    budget = state%dt_std - used
+                    call sheet_gc_to_y(state%sheet, y_out)
+                    call set_home_volume(state, state%sheet%owner)
+                    call recanonicalize(state, si, f, y_out)
+                    if (ierr_sheet /= SHEET_GC_OK) then
+                        y_iface = y_out
+                        call start_fo(state, si, f, y_iface, state%sheet%owner, &
+                            iface, budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                        if (ierr_fo /= SPECTRE_FO_OK) then
+                            call finish_fo_error(ierr_fo, si, f, ipart, &
+                                t_base_sec + dt_sec*used/state%dt_std, iface, &
+                                direction, STOP_SHEET, used, state%dt_std, ierr, &
+                                t_frac)
+                            exit
+                        end if
+                        if (.not. fo_exited .or. &
+                            budget <= budget_eps*state%dt_std) exit
+                        sheet_exited = .true.
+                    end if
+                    if (.not. sheet_exited .or. &
+                        budget <= budget_eps*state%dt_std) exit
+                    h_try = budget
+                    prev_iface = -1
+                    cycle
+                end if
+                call count_sheet_stat(SHEET_STAT_INIT_FAIL, ierr_sheet)
+                call start_fo(state, si, f, y_iface, info%vol_from, iface, &
+                    budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                if (ierr_fo /= SPECTRE_FO_OK) then
+                    call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
+                        dt_sec*used/state%dt_std, iface, direction, STOP_SHEET, &
+                        used, state%dt_std, ierr, t_frac)
+                    exit
+                end if
+                if (.not. fo_exited .or. &
+                    budget <= budget_eps*state%dt_std) exit
+                h_try = budget
+                prev_iface = -1
+                cycle
+            end if
+
+            call crossing_log_record(ipart, t_base_sec + dt_sec*used/state%dt_std, &
+                info)
 
             if (skimming(state, info)) then
                 ierr = SYMPL_SPECTRE_SKIM
@@ -257,13 +449,28 @@ contains
                 exit
             end if
 
-            ! Select the target volume (and its field lock) from the nudged
-            ! rho_g before re-canonicalizing in that volume's gauge.
-            call set_home(state, y_out(1))
+            call set_home_volume(state, info%vol_to)
             call recanonicalize(state, si, f, y_out)
 
+            prev_iface = iface
             nev = nev + 1
-            if (nev >= max_events) exit
+            if (nev >= max_events) then
+                y_iface = y_out
+                call start_fo(state, si, f, y_iface, info%vol_to, iface, &
+                    budget, used, y_out, fo_owner, fo_exited, ierr_fo)
+                if (ierr_fo /= SPECTRE_FO_OK) then
+                    call finish_fo_error(ierr_fo, si, f, ipart, &
+                        t_base_sec + dt_sec*used/state%dt_std, iface, direction, &
+                        STOP_EVENT_CAP, used, state%dt_std, ierr, t_frac)
+                    exit
+                end if
+                if (.not. fo_exited .or. &
+                    budget <= budget_eps*state%dt_std) exit
+                nev = 0
+                prev_iface = -1
+                h_try = budget
+                cycle
+            end if
             if (budget <= budget_eps*state%dt_std) exit
             h_try = min(2.0_dp*h_try, budget)
         end do
@@ -281,11 +488,17 @@ contains
         type(sympl_spectre_state_t), intent(inout) :: state
         type(crossing_info_t), intent(in) :: info
 
-        real(dp) :: dth, dze
+        real(dp) :: dth, dze, speed
 
         skimming = .false.
 
         if (info%event_type /= CROSS_REFLECTION) then
+            state%skim_count = 0
+            state%skim_iface = -1
+            return
+        end if
+        speed = sqrt(info%vpar_before**2 + 2.0_dp*info%mu*info%bmod_home)
+        if (abs(info%vpar_before) > SKIM_PITCH_MAX*speed) then
             state%skim_count = 0
             state%skim_iface = -1
             return
@@ -306,8 +519,10 @@ contains
         skimming = state%skim_count >= SKIM_MAX
     end function skimming
 
-    subroutine classify_step(state, si, ierr_step, boundary, iface, direction)
+    subroutine classify_step(state, rho_start, si, ierr_step, boundary, iface, &
+            direction)
         type(sympl_spectre_state_t), intent(in) :: state
+        real(dp), intent(in) :: rho_start
         type(symplectic_integrator_t), intent(in) :: si
         integer, intent(in) :: ierr_step
         logical, intent(out) :: boundary
@@ -329,11 +544,13 @@ contains
             return
         end if
 
-        if (si%z(1) >= state%home_hi) then
+        if (si%z(1) > state%home_hi .or. &
+            (si%z(1) == state%home_hi .and. rho_start < state%home_hi)) then
             boundary = .true.
             iface = nint(state%home_hi)
             direction = 1
-        else if (si%z(1) <= state%home_lo) then
+        else if (si%z(1) < state%home_lo .or. &
+                (si%z(1) == state%home_lo .and. rho_start > state%home_lo)) then
             ! home_lo = 0 is the coordinate axis, not an interface: the chart
             ! flip (r, theta) -> (-r, theta + pi) inside the steppers handles
             ! axis flybys (#370), so only real interfaces raise events here.
@@ -346,7 +563,7 @@ contains
     end subroutine classify_step
 
     subroutine locate_landing(si, f, si0, f0, h_full, rho_k, direction, &
-                              full_committed, h_land, resid, solved)
+            full_committed, h_land, resid, solved)
         !> Solve g(h) = dir*(z1(1; h) - rho_k) = 0 for the substep length by
         !> Illinois false position; every evaluation is one full implicit step of
         !> length h from the same pre-step state (si0, f0). Spline evaluations
@@ -464,14 +681,94 @@ contains
         y(1) = si%z(1)
         y(2) = si%z(2)
         y(3) = unwrap_near(xref(3), si%z(3))
-        p = sqrt(f%mu*f%Bmod + 0.5_dp*f%vpar**2)
+        p = si%pabs
         y(4) = p
-        y(5) = f%vpar/(p*sqrt2)
+        y(5) = shell_pitch(f, p)
     end subroutine landed_state
 
+    subroutine integrator_state(si, f, y)
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(in) :: f
+        real(dp), intent(out) :: y(5)
+
+        real(dp) :: xref(3), p
+
+        call integ_to_ref(si%z(1:3), xref)
+        y(1) = si%z(1)
+        y(2) = si%z(2)
+        y(3) = unwrap_near(xref(3), si%z(3))
+        p = si%pabs
+        y(4) = p
+        y(5) = shell_pitch(f, p)
+    end subroutine integrator_state
+
+    pure function shell_pitch(f, p) result(lambda)
+        type(field_can_t), intent(in) :: f
+        real(dp), intent(in) :: p
+        real(dp) :: lambda, lambda2
+
+        lambda2 = max(1.0_dp - f%mu*f%Bmod/p**2, 0.0_dp)
+        lambda = sign(sqrt(lambda2), f%vpar)
+    end function shell_pitch
+
+    subroutine start_fo(state, si, f, y, owner, iface, budget, used, y_out, &
+            owner_out, exited, ierr)
+        type(sympl_spectre_state_t), intent(inout) :: state
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: y(5)
+        integer, intent(in) :: owner, iface
+        real(dp), intent(inout) :: budget, used
+        real(dp), intent(out) :: y_out(5)
+        integer, intent(out) :: owner_out, ierr
+        logical, intent(out) :: exited
+
+        state%sheet%active = .false.
+        call spectre_fo_enter(state%fo, y, owner, iface, ro0/sqrt2, ierr)
+        if (ierr /= SPECTRE_FO_OK) then
+            call count_fo_failure(ierr)
+            return
+        end if
+        call count_fo_entry
+        call continue_fo(state, si, f, budget, used, y_out, owner_out, &
+            exited, ierr)
+    end subroutine start_fo
+
+    subroutine continue_fo(state, si, f, budget, used, y_out, owner_out, &
+            exited, ierr)
+        type(sympl_spectre_state_t), intent(inout) :: state
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(inout) :: budget, used
+        real(dp), intent(out) :: y_out(5)
+        integer, intent(out) :: owner_out, ierr
+        logical, intent(out) :: exited
+
+        real(dp) :: dt_used
+
+        call spectre_fo_advance_until_exit(state%fo, budget, ro0/sqrt2, &
+            dt_used, y_out, owner_out, exited, ierr)
+        used = used + dt_used
+        budget = state%dt_std - used
+        if (ierr /= SPECTRE_FO_OK) then
+            if (ierr == SPECTRE_FO_LOSS) then
+                !$omp critical (spectre_sympl_landing)
+                n_fo_losses = n_fo_losses + 1
+                !$omp end critical (spectre_sympl_landing)
+            else
+                call count_fo_failure(ierr)
+            end if
+            return
+        end if
+        if (.not. exited) return
+        call count_fo_exit
+        call set_home_volume(state, owner_out)
+        call recanonicalize(state, si, f, y_out)
+    end subroutine continue_fo
+
     subroutine recanonicalize(state, si, f, y)
-        !> Re-initialize the integrator from the physical state y in the volume
-        !> selected by its (nudged) rho_g, exactly like a fresh orbit start
+        !> Re-initialize the integrator from the physical state y in the explicitly
+        !> owned volume, exactly like a fresh orbit start
         !> (init_sympl): per-volume gauges differ, so canonical momenta are
         !> rebuilt from the target volume's own Ath, Aph, hth, hph.
         type(sympl_spectre_state_t), intent(in) :: state
@@ -538,12 +835,12 @@ contains
         b = a + twopi*nint((near - a)/twopi)
     end function unwrap_near
 
-    subroutine record_stop(si, f, ipart, t_sec, iface, direction)
+    subroutine record_stop(si, f, ipart, t_sec, iface, direction, reason)
         type(symplectic_integrator_t), intent(in) :: si
         type(field_can_t), intent(in) :: f
         integer, intent(in) :: ipart
         real(dp), intent(in) :: t_sec
-        integer, intent(in) :: iface, direction
+        integer, intent(in) :: iface, direction, reason
 
         type(crossing_info_t) :: info
         real(dp) :: vpar
@@ -564,8 +861,28 @@ contains
 
         !$omp critical (spectre_sympl_landing)
         n_stops = n_stops + 1
+        if (reason >= 1 .and. reason <= size(n_stop_reason)) &
+            n_stop_reason(reason) = n_stop_reason(reason) + 1
         !$omp end critical (spectre_sympl_landing)
     end subroutine record_stop
+
+    subroutine finish_fo_error(fo_status, si, f, ipart, t_sec, iface, &
+            direction, reason, used, dt, ierr, t_frac)
+        integer, intent(in) :: fo_status, ipart, iface, direction, reason
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(in) :: f
+        real(dp), intent(in) :: t_sec, used, dt
+        integer, intent(out) :: ierr
+        real(dp), intent(out) :: t_frac
+
+        if (fo_status == SPECTRE_FO_LOSS) then
+            ierr = SYMPL_SPECTRE_LOSS
+        else
+            call record_stop(si, f, ipart, t_sec, iface, direction, reason)
+            ierr = SYMPL_SPECTRE_STOP
+        end if
+        t_frac = used/dt
+    end subroutine finish_fo_error
 
     subroutine update_landing_stats(resid)
         real(dp), intent(in) :: resid
@@ -580,6 +897,17 @@ contains
         !$omp critical (spectre_sympl_landing)
         n_landings = 0
         n_stops = 0
+        n_sheet_entries = 0
+        n_sheet_exits = 0
+        n_sheet_init_failures = 0
+        n_sheet_advance_failures = 0
+        n_sheet_failure_status = 0
+        n_stop_reason = 0
+        n_fo_entries = 0
+        n_fo_exits = 0
+        n_fo_losses = 0
+        n_fo_failures = 0
+        n_fo_failure_status = 0
         max_landing_resid = 0.0_dp
         !$omp end critical (spectre_sympl_landing)
     end subroutine sympl_landing_stats_reset
@@ -594,5 +922,78 @@ contains
         stops = n_stops
         !$omp end critical (spectre_sympl_landing)
     end subroutine sympl_landing_stats
+
+    subroutine count_sheet_stat(kind, status)
+        integer, intent(in) :: kind
+        integer, intent(in), optional :: status
+
+        !$omp critical (spectre_sympl_landing)
+        select case (kind)
+        case (SHEET_STAT_ENTRY)
+            n_sheet_entries = n_sheet_entries + 1
+        case (SHEET_STAT_EXIT)
+            n_sheet_exits = n_sheet_exits + 1
+        case (SHEET_STAT_INIT_FAIL)
+            n_sheet_init_failures = n_sheet_init_failures + 1
+        case (SHEET_STAT_ADVANCE_FAIL)
+            n_sheet_advance_failures = n_sheet_advance_failures + 1
+        end select
+        if (present(status)) then
+            if (status >= 1 .and. status <= size(n_sheet_failure_status)) &
+                n_sheet_failure_status(status) = n_sheet_failure_status(status) + 1
+        end if
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine count_sheet_stat
+
+    subroutine sympl_sheet_stats(entries, exits, init_failures, advance_failures, &
+            failure_status, stop_reason)
+        integer, intent(out) :: entries, exits, init_failures, advance_failures
+        integer, intent(out) :: failure_status(5)
+        integer, intent(out) :: stop_reason(5)
+
+        !$omp critical (spectre_sympl_landing)
+        entries = n_sheet_entries
+        exits = n_sheet_exits
+        init_failures = n_sheet_init_failures
+        advance_failures = n_sheet_advance_failures
+        failure_status = n_sheet_failure_status
+        stop_reason = n_stop_reason
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine sympl_sheet_stats
+
+    subroutine count_fo_entry
+        !$omp critical (spectre_sympl_landing)
+        n_fo_entries = n_fo_entries + 1
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine count_fo_entry
+
+    subroutine count_fo_exit
+        !$omp critical (spectre_sympl_landing)
+        n_fo_exits = n_fo_exits + 1
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine count_fo_exit
+
+    subroutine count_fo_failure(status)
+        integer, intent(in) :: status
+
+        !$omp critical (spectre_sympl_landing)
+        n_fo_failures = n_fo_failures + 1
+        if (status >= 1 .and. status <= size(n_fo_failure_status)) &
+            n_fo_failure_status(status) = n_fo_failure_status(status) + 1
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine count_fo_failure
+
+    subroutine sympl_fo_stats(entries, exits, losses, failures, failure_status)
+        integer, intent(out) :: entries, exits, losses, failures
+        integer, intent(out) :: failure_status(5)
+
+        !$omp critical (spectre_sympl_landing)
+        entries = n_fo_entries
+        exits = n_fo_exits
+        losses = n_fo_losses
+        failures = n_fo_failures
+        failure_status = n_fo_failure_status
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine sympl_fo_stats
 
 end module spectre_sympl_orbit

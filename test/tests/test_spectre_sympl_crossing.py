@@ -32,7 +32,7 @@ from netCDF4 import Dataset
 C_PART, C_TIME, C_IFACE, C_TYPE, C_VFROM, C_VTO = 0, 1, 2, 3, 4, 5
 C_THETA, C_ZETA, C_VPB, C_VPA, C_MU, C_BH, C_BT = 6, 7, 8, 9, 10, 11, 12
 
-TYPE_CROSSING, TYPE_REFLECTION, TYPE_LOSS, TYPE_STOP = 1, 2, 3, 4
+TYPE_CROSSING, TYPE_REFLECTION, TYPE_LOSS, TYPE_STOP, TYPE_SHEET = 1, 2, 3, 4, 5
 
 LANDING_TOL = 1.0e-8
 H_REFL_TOL = 1.0e-12
@@ -94,24 +94,46 @@ def parse_landing_stats(stdout):
                   r"([0-9.E+-]+)\s+cross_stop=\s*(\d+)", stdout)
     if not m:
         raise RuntimeError("sympl_landing_stats line missing from stdout")
+    sheet = re.search(r"sympl_sheet_stats: entries=\s*(\d+)\s+exits=\s*(\d+)\s+"
+                      r"init_fail=\s*(\d+)\s+advance_fail=\s*(\d+)\s+"
+                      r"status=\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+"
+                      r"stop_reason=\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)",
+                      stdout)
+    if not sheet:
+        raise RuntimeError("sympl_sheet_stats line missing from stdout")
+    fo = re.search(r"sympl_fo_stats: entries=\s*(\d+)\s+exits=\s*(\d+)\s+"
+                   r"losses=\s*(\d+)\s+failures=\s*(\d+)\s+status=\s*(\d+)\s+"
+                   r"(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", stdout)
+    if not fo:
+        raise RuntimeError("sympl_fo_stats line missing from stdout")
+    if int(fo.group(4)) != 0:
+        raise RuntimeError(f"full-orbit fallback failures: {fo.groups()}\n"
+                           f"{stdout[-4000:]}")
+    print("sheet stats: entries={} exits={} init_fail={} advance_fail={} "
+          "status={},{},{},{},{}"
+          " stop_reason={},{},{},{},{}"
+          .format(*sheet.groups()))
+    print("full-orbit stats: entries={} exits={} losses={} failures={} "
+          "status={},{},{},{},{}".format(*fo.groups()))
     return int(m.group(1)), float(m.group(2)), int(m.group(3))
 
 
 def check_stops(ev, stops, tag, failures):
     n_stop_log = int((ev[:, C_TYPE] == TYPE_STOP).sum()) if len(ev) else 0
+    n_sheet = int((ev[:, C_TYPE] == TYPE_SHEET).sum()) if len(ev) else 0
+    print(f"{tag}: sheet entries={n_sheet}")
     if stops != 0 or n_stop_log != 0:
         failures.append(f"{tag}: CROSS_STOP events ({stops}, log {n_stop_log})")
 
 
 def check_landing_and_reflection(binary, h5, failures):
-    # 875 keV alphas: guiding-center-valid on tok2vol. At the full 3.5 MeV the
-    # interior GC degeneracy (Bstar_par = 0 mid-volume) breaks the canonical
-    # model for a subset of pitches and those orbits stop, correctly.
+    # 437.5 keV keeps Bstar_parallel nonzero for the fixed-seed reflection
+    # ensemble while retaining both transmissions and magnetic mirrors.
     trace_time, npart = 2.0e-5, 16
     with tempfile.TemporaryDirectory() as work:
         out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
                          trace_time=trace_time, sbeg=0.5, npoiper2=256,
-                         relerr="1d-12", face_al=4.0)
+                         relerr="1d-12", face_al=8.0)
         ev = load_events(work)
         tl = load_times_lost(work)
     landings, max_resid, stops = parse_landing_stats(out)
@@ -139,15 +161,17 @@ def check_landing_and_reflection(binary, h5, failures):
     # The orbit continues after reflecting: some reflecting marker survives
     # beyond its last reflection (confined for the full trace or lost later).
     continues = False
+    continuation_times = []
     for p in np.unique(refl[:, C_PART]).astype(int):
         t_last = refl[refl[:, C_PART] == p][:, C_TIME].max()
         t_end = float(tl[tl[:, 0] == p][0, 1])
-        if t_end >= trace_time*(1.0 - 1e-9) or t_end > 2.0*t_last:
+        continuation_times.append(t_end - t_last)
+        if t_end - t_last > 1.0e-12*trace_time:
             continues = True
     if not continues:
         failures.append("reflection: no reflecting marker continued its orbit")
     print(f"reflection: events={len(refl)} max|dH|/H={rel:.3e} "
-          f"continues={continues}")
+          f"continues={continues} dt_after={continuation_times}")
 
 
 def loss_fraction(workdir, trace_time):
@@ -157,15 +181,13 @@ def loss_fraction(workdir, trace_time):
 
 
 def check_cross_path(binary, h5, failures):
-    # 875 keV: the most guiding-center-defensible energy on tok2vol at which
-    # the RK45 reference path still integrates (its odeint aborts at lower
-    # energies); at full 3.5 MeV the two GC formulations differ at O(rho*) ~ 1
-    # and their loss statistics are not comparable.
+    # 250 keV keeps Bstar_parallel nonzero for every fixed-seed marker in both
+    # GC formulations and still produces interface crossings and losses.
     trace_time, npart = 2.0e-5, 32
     with tempfile.TemporaryDirectory() as work:
         out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
                          trace_time=trace_time, sbeg=0.5, npoiper2=256,
-                         relerr="1d-12", face_al=4.0)
+                         relerr="1d-12", face_al=14.0)
         ev3 = load_events(work)
         _, _, stops = parse_landing_stats(out)
         check_stops(ev3, stops, "cross-path sympl", failures)
@@ -173,7 +195,7 @@ def check_cross_path(binary, h5, failures):
     with tempfile.TemporaryDirectory() as work:
         run_simple(binary, work, h5=h5, integmode=0, npart=npart,
                    trace_time=trace_time, sbeg=0.5, npoiper2=256,
-                   relerr="1d-8", face_al=4.0)
+                   relerr="1d-8", face_al=14.0)
         p0, _ = loss_fraction(work, trace_time)
 
     p_mean = 0.5*(p3 + p0)

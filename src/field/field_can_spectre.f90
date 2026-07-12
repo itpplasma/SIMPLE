@@ -302,7 +302,7 @@ contains
         integer :: lvol
         real(dp) :: x(3), y(2)
 
-        lvol = volume_index(xinteg(1))
+        lvol = active_volume(xinteg(1))
         x = [clamp_to_volume(xinteg(1), spectre_volumes(lvol)), xinteg(2), xinteg(3)]
         call evaluate_batch_splines_3d(spectre_volumes(lvol)%spl_transform, x, y)
 
@@ -322,7 +322,7 @@ contains
         integer :: lvol, i
         real(dp) :: x(3), y(2), dy(3, 2), phi_prev
 
-        lvol = volume_index(xref(1))
+        lvol = active_volume(xref(1))
         xinteg(1) = xref(1)
         xinteg(2) = modulo(xref(2), twopi)
         xinteg(3) = modulo(xref(3), twopi)

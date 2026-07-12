@@ -23,9 +23,9 @@ module interface_crossing
 
     public :: apply_crossing, crossing_info_t, axis_offset
     public :: crossing_log_reset, crossing_log_record, crossing_log_write, &
-              crossing_log_count, crossing_log_count_type
+        crossing_log_count, crossing_log_count_type
     public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSS_CROSSING, CROSS_REFLECTION, &
-              CROSS_LOSS, CROSS_STOP
+        CROSS_LOSS, CROSS_STOP, CROSS_SHEET
 
     integer, parameter :: CROSSING_LEVEL0 = 0
     integer, parameter :: CROSSING_LEVEL1 = 1
@@ -36,6 +36,7 @@ module interface_crossing
     !> a stop event terminates the orbit when the substep solve or the implicit
     !> step itself fails to converge; regular boundaries cross via apply_crossing.
     integer, parameter :: CROSS_STOP = 4
+    integer, parameter :: CROSS_SHEET = 5
 
     !> Inner cutoff for the innermost volume: rho_g = 0 is the coordinate axis
     !> where sqrt(g) = 0, so the marker reflects trivially before reaching it
@@ -46,12 +47,6 @@ module interface_crossing
     !> the neighbouring volume k-1 resp. k, and the libneo polynomial basis of
     !> each volume is well-defined at that offset from the shared interface point.
     real(dp), parameter :: iface_eps = 1.0d-12
-    !> After the map rho_g is nudged reflect_nudge off the interface so the
-    !> restarted RK45 step does not immediately re-detect the same event. It must
-    !> clear the odeint event tolerance (~sqrt(epsilon) ~ 1.5e-8) or the next
-    !> substep triggers a zero-length event at its start point.
-    real(dp), parameter :: reflect_nudge = 1.0d-6
-
     !> Level-1 refraction solve: a damped (backtracking) Newton on the scalar
     !> lambda_k drives the energy residual |dH|/H below newton_rtol. Backtracking
     !> keeps the step from diverging where the residual is non-monotonic in the
@@ -159,13 +154,13 @@ contains
             info%vol_to = info%vol_from
             info%vpar_after = -vpar
             y_out(5) = -y_iface(5)
-            y_out(1) = axis_offset + reflect_nudge
+            y_out(1) = axis_offset
             return
         end if
 
         if (level == CROSSING_LEVEL1) then
             call level1_map(rho_face, rho_home, rho_target, direction, &
-                            bmod_home, mu, vpar, y_iface, y_out, info)
+                bmod_home, mu, vpar, y_iface, y_out, info)
             return
         end if
 
@@ -177,7 +172,7 @@ contains
             info%event_type = CROSS_CROSSING
             info%vpar_after = sign(sqrt(radicand), vpar)
             y_out(5) = info%vpar_after/y_iface(4)
-            y_out(1) = rho_face + real(direction, dp)*reflect_nudge
+            y_out(1) = rho_face
         else
             ! Forbidden crossing into the higher-field volume is a magnetic
             ! mirror: the marker stays home with v_par reversed (the same-side
@@ -187,7 +182,7 @@ contains
             info%vol_to = info%vol_from
             info%vpar_after = -vpar
             y_out(5) = -y_iface(5)
-            y_out(1) = rho_face - real(direction, dp)*reflect_nudge
+            y_out(1) = rho_face
         end if
     end subroutine apply_crossing
 
@@ -201,7 +196,7 @@ contains
     end function bmod_at
 
     subroutine level1_map(rho_face, rho_home, rho_target, direction, &
-                          bmod_home, mu, vpar, y_iface, y_out, info)
+            bmod_home, mu, vpar, y_iface, y_out, info)
         !> Level-1 refraction map: the impulse Delta z = lambda_k * X along the
         !> interface Hamiltonian vector field. The Level-0 energy criterion at the
         !> landing point (radicand0 = v_par^2 - 2 mu [[B]]) decides crossing vs
@@ -234,16 +229,16 @@ contains
 
         if (radicand0 >= 0.0_dp) then
             call solve_crossing(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, &
-                                radicand0, xt, xz, xv, lam, dtheta, dzeta, vpar_new)
+                radicand0, xt, xz, xv, lam, dtheta, dzeta, vpar_new)
             info%event_type = CROSS_CROSSING
             info%bmod_target = bmod_at([rho_target, theta0 + dtheta, zeta0 + dzeta])
-            y_out(1) = rho_face + real(direction, dp)*reflect_nudge
+            y_out(1) = rho_face
         else
             vpar_new = -vpar
             info%event_type = CROSS_REFLECTION
             info%vol_to = info%vol_from
             info%bmod_target = bmod_home
-            y_out(1) = rho_face - real(direction, dp)*reflect_nudge
+            y_out(1) = rho_face
         end if
 
         info%xtheta = xt
@@ -259,7 +254,7 @@ contains
     end subroutine level1_map
 
     subroutine solve_crossing(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, &
-                              radicand0, xt, xz, xv, lam, dtheta, dzeta, vpar_new)
+            radicand0, xt, xz, xv, lam, dtheta, dzeta, vpar_new)
         !> Damped Newton for the refraction root of
         !> F(lam) = 0.5*(v_par + lam*X_vpar)^2 + mu*B_target(kick) - H_home. The
         !> residual (via residual_at) refreshes the generator by symmetrization
@@ -280,7 +275,7 @@ contains
 
         lam = 0.0_dp
         call residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, lam, &
-                         fres, dfres, xt, xz, xv)
+            fres, dfres, xt, xz, xv)
         converged = abs(fres) <= newton_rtol*abs(hh)
 
         do iter = 1, max_newton
@@ -290,8 +285,8 @@ contains
             do bt = 0, max_backtrack
                 lam_try = lam - step
                 call residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, &
-                                 hh, lam_try, fres_try, dfres_try, &
-                                 xt_try, xz_try, xv_try)
+                    hh, lam_try, fres_try, dfres_try, &
+                    xt_try, xz_try, xv_try)
                 if (abs(fres_try) < abs(fres)) exit
                 step = 0.5_dp*step
             end do
@@ -323,7 +318,7 @@ contains
     end subroutine solve_crossing
 
     subroutine residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, lam, &
-                           fres, dfres, xt, xz, xv)
+            fres, dfres, xt, xz, xv)
         !> Energy residual F(lam) and its lambda-derivative for the refraction
         !> solve, with the generator X evaluated self-consistently at the midpoint
         !> state z + 0.5*lam*X by sym_iters fixed-point sweeps. dfres freezes X, the
@@ -344,19 +339,19 @@ contains
             ze_mid = zeta0 + 0.5_dp*lam*xz
             vp_mid = vpar + 0.5_dp*lam*xv
             call generator_sym(rho_home, rho_target, th_mid, ze_mid, vp_mid, &
-                               xt, xz, xv)
+                xt, xz, xv)
         end do
         th_k = theta0 + lam*xt
         ze_k = zeta0 + lam*xz
         vp_k = vpar + lam*xv
         call magfie([rho_target, th_k, ze_k], bmod, sqrtg, bder, hcovar, hctrvr, &
-                    hcurl)
+            hcurl)
         fres = 0.5_dp*vp_k**2 + mu*bmod - hh
         dfres = vp_k*xv + mu*bmod*(bder(2)*xt + bder(3)*xz)
     end subroutine residual_at
 
     subroutine generator_sym(rho_home, rho_target, theta, zeta, vpar_mid, &
-                             xt, xz, xv)
+            xt, xz, xv)
         !> Interface Hamiltonian vector field X = {z, rho_g} in SIMPLE Gaussian
         !> units, from the guiding-center bracket. hcovar/sqrtg/hcurl are the
         !> midpoint average of the two volumes, and the drift constant ro0 and
@@ -370,9 +365,9 @@ contains
         real(dp) :: sqrtg, hcov(3), hcurl(3), bmod, bstar_par
 
         call magfie([rho_home, theta, zeta], b_h, sg_h, bder_h, hcov_h, hctr_h, &
-                    hcurl_h)
+            hcurl_h)
         call magfie([rho_target, theta, zeta], b_t, sg_t, bder_t, hcov_t, hctr_t, &
-                    hcurl_t)
+            hcurl_t)
         bmod = 0.5_dp*(b_h + b_t)
         sqrtg = 0.5_dp*(sg_h + sg_t)
         hcov = 0.5_dp*(hcov_h + hcov_t)
