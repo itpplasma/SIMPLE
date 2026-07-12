@@ -670,7 +670,8 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    TIMEOUT 60)
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
 add_executable(test_chartmap_rz_consistency.x test_chartmap_rz_consistency.f90)

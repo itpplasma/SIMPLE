@@ -87,7 +87,7 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
         isw_field_type=0,
     )
     # Use wrapper to set sbeg (f90wrap array access workaround)
-    pysimple._backend.params_wrapper.set_sbeg(1, surface)
+    pysimple._fortran_backend.params_wrapper.set_sbeg(1, surface)
 
     particles = pysimple.load_particles(start_path)
 
