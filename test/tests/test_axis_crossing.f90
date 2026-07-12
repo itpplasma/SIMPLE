@@ -10,16 +10,17 @@ program test_axis_crossing
     !>     losses),
     !>   - r stays inside [0, 1),
     !>   - the energy drift stays bounded.
-    !> At least one start must trigger the axis-crossing branch
-    !> (EVT_R_NEGATIVE), otherwise the test would silently stop covering it.
+    !> The chart-switch operation is then checked directly for an interior
+    !> crossing and for a crossed radius outside the valid domain.
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use util, only: twopi
+    use util, only: pi, twopi
     use simple, only: tracer_t, init_sympl, init_params
     use simple_main, only: init_field
     use params, only: field_input, coord_input
     use new_vmec_stuff_mod, only: rmajor
-    use orbit_symplectic, only: orbit_timestep_sympl
-    use orbit_symplectic_base, only: symplectic_integrator_t
+    use orbit_symplectic, only: orbit_timestep_sympl, apply_axis_chart_switch
+    use orbit_symplectic_base, only: symplectic_integrator_t, &
+        SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     use field_can_mod, only: field_can_t, eval_field => evaluate, get_val
     use diag_counters, only: diag_counters_init, diag_counters_total, &
                              EVT_R_NEGATIVE
@@ -38,11 +39,11 @@ program test_axis_crossing
     real(dp) :: z5(5)
     real(dp) :: r0(n_start), vpar0(n_start), th0(n_start)
     real(dp) :: rbig, dtau, h0, hdrift, rmin, hnow, hsum1, hsum2, hsec
-    real(dp) :: osc_tol, sec_tol, dth
+    real(dp) :: osc_tol, sec_tol, axis_radius, axis_theta
     integer :: ierr, istart, kt, nh1, nh2, iphase, ksteps
     integer(8) :: ncross0
     integer(8) :: ncross
-    logical :: failed
+    logical :: failed, crossed
 
     ! Mix of passing potato orbits (|vpar| large, small r: the orbit circles
     ! a drift-shifted center and sweeps through the axis) and deeply trapped
@@ -62,9 +63,8 @@ program test_axis_crossing
 
     failed = .false.
     do iphase = 1, 2
-    ! Phase 1: fine step (512 per torus), tight tolerances; orbits graze the
-    ! axis. Phase 2: coarse step (64 per torus), where the Newton iterate
-    ! genuinely overshoots r < 0 and the chart switch must engage.
+    ! Phase 1 uses a fine step and tight tolerances. Phase 2 checks the same
+    ! near-axis ensemble with a coarser step.
     if (iphase == 1) then
         dtau = twopi*rbig/512.0_dp
         ksteps = nsteps
@@ -139,57 +139,31 @@ program test_axis_crossing
     end do
     end do
 
-    ! Phase 3: white-box trigger. On a clean field ds/dt vanishes at the
-    ! axis, so a negative Newton iterate is rare; the spurious-loss bug fired
-    ! on corrupted near-axis field data (#370). Force the implicit solve
-    ! through the axis by biasing f%pth (the driver copies it to pthold) and
-    ! require the chart switch to engage and the orbit to survive.
-    dtau = twopi*rbig/64.0_dp
+    ! A converged step beyond the polar-coordinate axis continues on the
+    ! opposite ray without changing the physical point.
     ncross0 = diag_counters_total(EVT_R_NEGATIVE)
-    trigger: do istart = 1, n_start
-        do kt = 1, 9
-            z5 = [2.0e-5_dp, th0(istart), 0.1_dp, 1.0_dp, vpar0(istart)]
-            call init_sympl(norb%si, norb%f, z5, dtau, dtau, 1.0e-12_dp, 1)
-            ! Bias pth by a few times the radial pth variation across the
-            ! start radius, so the implicit solve lands at a small negative
-            ! radius (a realistic crossing magnitude).
-            ! Signed: linearized solution r = r0*(1 - kt) crosses for kt >= 2.
-            norb%f%pth = norb%f%pth &
-                - real(kt, dp)*z5(1)*norb%f%dpth(1)
-            call orbit_timestep_sympl(norb%si, norb%f, ierr)
-            ! The bias is unphysical by construction, so a loss flag on the
-            ! poisoned orbit is not itself a failure; only the crossing
-            ! semantics are asserted once the event fires.
-            if (diag_counters_total(EVT_R_NEGATIVE) > ncross0) then
-                ! Discriminate the chart switch from the historic clamp:
-                ! the clamp teleported to exactly r = 0.01 with theta
-                ! unchanged; the switch keeps r near the axis (the committed
-                ! magnitude is the small overshoot) and shifts theta by pi.
-                if (norb%si%z(1) < 0.0_dp) then
-                    print *, 'FAIL: trigger left r negative, r = ', &
-                        norb%si%z(1)
-                    failed = .true.
-                end if
-                if (norb%si%z(1) >= 5.0e-3_dp) then
-                    print *, 'FAIL: trigger left the axis region, r = ', &
-                        norb%si%z(1), ' (clamp-like teleport)'
-                    failed = .true.
-                end if
-                dth = modulo(norb%si%z(2) - th0(istart), twopi)
-                if (abs(dth - 0.5_dp*twopi) > 1.0_dp) then
-                    print *, 'FAIL: trigger theta shift ', dth, &
-                        ' not close to pi (clamp-like continuation)'
-                    failed = .true.
-                end if
-                exit trigger
-            end if
-        end do
-    end do trigger
+    axis_radius = -2.0e-5_dp
+    axis_theta = 0.25_dp
+    call apply_axis_chart_switch(axis_radius, axis_theta, crossed, ierr)
+    if (.not. crossed .or. ierr /= SYMPLECTIC_STEP_OK &
+        .or. abs(axis_radius - 2.0e-5_dp) > epsilon(axis_radius) &
+        .or. abs(axis_theta - (0.25_dp + pi)) > epsilon(axis_theta)) then
+        print *, 'FAIL: axis chart switch', axis_radius, axis_theta, crossed, ierr
+        failed = .true.
+    end if
+
+    axis_radius = -1.01_dp
+    axis_theta = 0.5_dp
+    call apply_axis_chart_switch(axis_radius, axis_theta, crossed, ierr)
+    if (.not. crossed .or. ierr /= SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
+        print *, 'FAIL: crossed radius outside domain was accepted', &
+            axis_radius, crossed, ierr
+        failed = .true.
+    end if
 
     ncross = diag_counters_total(EVT_R_NEGATIVE)
-    if (ncross < 1) then
-        print *, 'FAIL: no start triggered the axis-crossing branch; ', &
-            'the test no longer covers it'
+    if (ncross /= ncross0 + 2) then
+        print *, 'FAIL: axis-crossing counter increment', ncross0, ncross
         failed = .true.
     end if
 

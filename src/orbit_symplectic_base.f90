@@ -23,6 +23,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
     integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
     integer, parameter :: SYMPLECTIC_STEP_LINEAR_SOLVE = 3
+    integer, parameter :: SYMPLECTIC_STEP_BOUNDARY = 4
+    integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
+    integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
 
     type :: symplectic_integrator_t
         real(dp) :: atol
@@ -36,6 +39,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
         integer :: ntau
         real(dp) :: dt
         real(dp) :: pabs
+        real(dp) :: last_step_fraction = 1d0
+        real(dp) :: last_event_radial_residual = 0d0
+        real(dp) :: last_event_fraction_width = 0d0
     end type symplectic_integrator_t
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
