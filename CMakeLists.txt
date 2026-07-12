@@ -79,6 +79,10 @@ option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 
+if(SIMPLE_DETERMINISTIC_FP)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
+
 if(SIMPLE_ENABLE_DEBUG_OUTPUT)
     add_compile_definitions(SIMPLE_ENABLE_DEBUG_OUTPUT)
 endif()
@@ -174,6 +178,10 @@ else()
     find_package(LAPACK REQUIRED)
 endif()
 
+if(SIMPLE_DETERMINISTIC_FP)
+    set(LIBNEO_DETERMINISTIC_FP ON CACHE BOOL
+        "Use deterministic floating-point options in libneo" FORCE)
+endif()
 find_or_fetch(libneo)
 
 # Consume the NetCDF stack libneo resolved (see comment near the top). In the
