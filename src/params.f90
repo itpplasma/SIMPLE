@@ -12,7 +12,9 @@ module params
     use magfie_sub, only: TEST
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-                                     EXPL_IMPL_EULER
+                                     EXPL_IMPL_EULER, &
+                                     boundary_event_fraction_tolerance, &
+                                     boundary_event_radial_tolerance
     use vmecin_sub, only: stevvo
     use callback, only: output_error, output_orbits_macrostep
 
@@ -155,6 +157,7 @@ module params
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
 	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
@@ -188,6 +191,15 @@ contains
         call apply_config_aliases
 
         call reset_seed_if_deterministic
+
+        if (boundary_event_fraction_tolerance /= -1d0 .and. &
+            boundary_event_fraction_tolerance <= 0d0) then
+            error stop 'boundary_event_fraction_tolerance must be positive or -1'
+        end if
+        if (boundary_event_radial_tolerance /= -1d0 .and. &
+            boundary_event_radial_tolerance <= 0d0) then
+            error stop 'boundary_event_radial_tolerance must be positive or -1'
+        end if
 
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'

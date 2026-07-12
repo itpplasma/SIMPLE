@@ -4,3 +4,9 @@
   them off via `notrace_passing=.True.`, one may resort to 128, or even 64
   in extreme cases with short tracing time. However, also for these cases,
   `npoiper2=256` appears to be a safer choice.
+
+* `boundary_event_fraction_tolerance` sets the dimensionless fractional-step
+  bracket tolerance for an `s=1` event. `boundary_event_radial_tolerance` sets
+  its dimensionless radial residual tolerance in the integrator coordinate.
+  Both default to `-1`, which derives the tolerance from `relerr`. Set positive
+  values to refine event location independently of the nonlinear solve.
