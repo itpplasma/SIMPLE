@@ -12,6 +12,10 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     ! Integration methods
     integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
              MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
+    integer, parameter :: SYMPLECTIC_STEP_OK = 0
+    integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
+    integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
+    integer, parameter :: SYMPLECTIC_STEP_LINEAR_SOLVE = 3
 
     type :: symplectic_integrator_t
         real(dp) :: atol
