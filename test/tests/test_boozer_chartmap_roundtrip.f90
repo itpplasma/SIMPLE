@@ -11,7 +11,7 @@ program test_boozer_chartmap_roundtrip
     use boozer_chartmap, only: export_boozer_chartmap, load_boozer_from_chartmap
     use spline_vmec_sub, only: spline_vmec_data
     use vmecin_sub, only: stevvo
-    use field_can_mod, only: field_can_from_name, field_can_init, &
+    use field_can_mod, only: field_can_from_name, &
                              eval_field => evaluate, field_can_t, get_val
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, &
                                 symplectic_integrator_t

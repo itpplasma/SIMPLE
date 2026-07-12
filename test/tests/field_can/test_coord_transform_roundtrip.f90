@@ -13,7 +13,7 @@ program test_coord_transform_roundtrip
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     use magfie_sub, only: MEISS, ALBERT
-    use field_can_mod, only: init_field_can, integ_to_ref, ref_to_integ
+    use field_can_mod, only: integ_to_ref, ref_to_integ
     use field_can_meiss, only: integ_to_ref_meiss, ref_to_integ_meiss, twopi
     use field_can_albert, only: integ_to_ref_albert, ref_to_integ_albert
     use simple, only: init_vmec

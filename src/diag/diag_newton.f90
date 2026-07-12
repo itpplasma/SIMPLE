@@ -4,7 +4,7 @@ module diag_newton
 !> during orbit integration using midpoint rule
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use util, only: pi, twopi
+    use util, only: twopi
     use field_can_mod, only: field_can_t, get_val, eval_field => evaluate
     use orbit_symplectic_base, only: symplectic_integrator_t
     use vector_potentail_mod, only: torflux

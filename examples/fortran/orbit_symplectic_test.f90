@@ -3,7 +3,7 @@ program orbit_symplectic_test
     use field_can_mod, only: eval_field
     use diag_mod, only: icounter
 
-    use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, &
+    use orbit_symplectic, only: orbit_timestep_sympl, &
                                 mu, ro0, f, df, d2f, z, pth, ntau
 
     implicit none
