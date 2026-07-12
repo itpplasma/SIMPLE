@@ -333,10 +333,16 @@ end subroutine init_transformation_arrays
 subroutine compute_transformation()
 !> Compute transformation data via integration (expensive operation)
     integer :: i_ctr
+    logical :: parallel_slices
 
     i_ctr = 0
+    parallel_slices = .true.
+    select type (field_noncan)
+    type is (spectre_field_t)
+        parallel_slices = .false.
+    end select
 
-    !$omp parallel private(i_ctr)
+    !$omp parallel private(i_ctr) if(parallel_slices)
     !$omp do
     do i_ctr = 1, n_phi
         call compute_phi_slice(i_ctr)
