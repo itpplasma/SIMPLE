@@ -387,6 +387,11 @@ set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
 
+add_executable(test_deterministic_seed.x test_deterministic_seed.f90)
+target_link_libraries(test_deterministic_seed.x simple)
+add_test(NAME test_deterministic_seed COMMAND test_deterministic_seed.x)
+set_tests_properties(test_deterministic_seed PROPERTIES LABELS "unit")
+
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
 target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
 add_test(NAME test_bminmax_lifecycle
