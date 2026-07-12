@@ -32,6 +32,7 @@ contains
         type(chartmap_metadata_t), intent(out) :: meta
 
         integer :: ncid, status
+        real(dp) :: rho_lcfs
 
         meta%rho_lcfs = -1.0_dp
         meta%cart_scale_to_m = -1.0_dp
@@ -40,12 +41,11 @@ contains
         status = nf90_open(trim(filename), nf90_nowrite, ncid)
         call check_nc(status, "nf90_open(chartmap)")
 
-        status = nf90_get_att(ncid, nf90_global, "rho_lcfs", meta%rho_lcfs)
-        if (status /= nf90_noerr) then
-            status = nf90_close(ncid)
-            call check_nc(status, "nf90_close(chartmap)")
-            error stop "chartmap missing global attribute rho_lcfs"
-        end if
+        rho_lcfs = -1.0_dp
+        status = nf90_get_att(ncid, nf90_global, "rho_lcfs", rho_lcfs)
+        if (status /= nf90_noerr .and. status /= nf90_enotatt) &
+            call check_nc(status, "get_att rho_lcfs")
+        if (status == nf90_noerr) meta%rho_lcfs = rho_lcfs
 
         call read_cart_units(ncid, meta%cart_units, meta%cart_scale_to_m)
 

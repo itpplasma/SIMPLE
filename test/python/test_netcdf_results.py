@@ -60,6 +60,9 @@ class TestNetCDFResultsOutput:
                 assert ds.dimensions['phase'].size == 5
 
                 assert 'times_lost' in ds.variables
+                assert 'orbit_exit_code' in ds.variables
+                assert 'boundary_event_radial_residual' in ds.variables
+                assert 'boundary_event_time_width' in ds.variables
                 assert 'zstart' in ds.variables
                 assert 'zend' in ds.variables
                 assert 'xstart_cart' in ds.variables
@@ -68,6 +71,13 @@ class TestNetCDFResultsOutput:
                 assert 'perp_inv' in ds.variables
                 assert 'iclass' in ds.variables
                 assert 'class_lost' in ds.variables
+                assert np.all(np.isin(ds.variables['orbit_exit_code'][:], [0, 1, 2, 3]))
+                exit_codes = ds.variables['orbit_exit_code'][:]
+                event_residual = ds.variables['boundary_event_radial_residual'][:]
+                event_width = ds.variables['boundary_event_time_width'][:]
+                lcfs = exit_codes == 1
+                assert np.all(event_residual[lcfs] >= 0.0)
+                assert np.all(event_width[lcfs] >= 0.0)
 
                 assert 'ntestpart' in ds.ncattrs()
                 assert 'trace_time' in ds.ncattrs()
