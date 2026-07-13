@@ -425,6 +425,15 @@ add_test(NAME test_spectre_fo_hybrid
         ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
 set_tests_properties(test_spectre_fo_hybrid PROPERTIES LABELS "integration")
 
+add_executable(test_spectre_freeboundary.x test_spectre_freeboundary.f90)
+target_link_libraries(test_spectre_freeboundary.x simple)
+add_test(NAME test_spectre_freeboundary
+    COMMAND test_spectre_freeboundary.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5)
+set_tests_properties(test_spectre_freeboundary PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120)
+
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
 target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
 add_test(NAME test_bminmax_lifecycle
