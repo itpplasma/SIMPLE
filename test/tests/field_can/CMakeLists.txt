@@ -1,8 +1,22 @@
 add_executable (test_field_can_meiss.x test_field_can_meiss.f90)
 target_link_libraries(test_field_can_meiss.x simple)
+add_test(NAME test_field_can_meiss_config
+    COMMAND $<TARGET_FILE:test_field_can_meiss.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_field_can_meiss_config PROPERTIES
+    LABELS "integration"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 add_executable (test_field_can_albert.x test_field_can_albert.f90)
 target_link_libraries(test_field_can_albert.x simple)
+add_test(NAME test_field_can_albert_config
+    COMMAND $<TARGET_FILE:test_field_can_albert.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_field_can_albert_config PROPERTIES
+    LABELS "integration"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 add_executable (test_field_can_transforms.x test_field_can_transforms.f90)
 target_link_libraries(test_field_can_transforms.x simple)

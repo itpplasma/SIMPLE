@@ -51,8 +51,12 @@ type :: grid_indices_t
 end type grid_indices_t
 
 class(magnetic_field_t), allocatable :: field_noncan
-integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]
+integer, parameter :: default_n_r = 62, default_n_th = 63, default_n_phi = 64
+real(dp), parameter :: default_transformation_relerr = 1d-11
+real(dp), parameter :: default_xmin(3) = [1d-6, 0d0, 0d0]
+integer :: n_r=default_n_r, n_th=default_n_th, n_phi=default_n_phi
+real(dp) :: transformation_relerr = default_transformation_relerr
+real(dp) :: xmin(3) = default_xmin
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
@@ -137,15 +141,19 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
 end subroutine rh_can_wrapper
 
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax, &
-                      scaling)
+                      scaling, transformation_relerr_)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: iso_fortran_env, only: int64
     use new_vmec_stuff_mod, only : nper
 
     class(magnetic_field_t), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
     class(coordinate_scaling_t), intent(in), optional :: scaling
+    real(dp), intent(in), optional :: transformation_relerr_
 
-        call field_clone(field_noncan_, field_noncan)
+    call cleanup_meiss
+    call field_clone(field_noncan_, field_noncan)
 
     ! Initialize coordinate scaling based on field type
     if (allocated(coord_scaling)) deallocate(coord_scaling)
@@ -160,16 +168,36 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
         call choose_default_scaling(field_noncan_, coord_scaling)
     end if
 
+    n_r = default_n_r
+    n_th = default_n_th
+    n_phi = default_n_phi
+    transformation_relerr = default_transformation_relerr
+    xmin = default_xmin
+    xmax = [1d0, twopi, twopi/nper]
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
     if (present(n_phi_)) n_phi = n_phi_
+    if (any([n_r, n_th, n_phi] < order + 1)) then
+        error stop 'canonical map grid dimensions must exceed the spline order'
+    end if
+    if (max(n_r, n_th, n_phi) > 512) then
+        error stop 'canonical map grid dimensions must not exceed 512'
+    end if
+    if (int(n_r, int64)*int(n_th, int64)*int(n_phi, int64) > 2097152_int64) then
+        error stop 'canonical map grid exceeds the 2097152-point limit'
+    end if
+    if (present(transformation_relerr_)) then
+        if (.not. ieee_is_finite(transformation_relerr_) .or. &
+            transformation_relerr_ <= 0d0) then
+            error stop 'canonical map ODE tolerance must be finite and positive'
+        end if
+        transformation_relerr = transformation_relerr_
+    end if
 
     if (present(rmin)) xmin(1) = rmin
     if (present(rmax)) xmax(1) = rmax
     if (present(thmin)) xmin(2) = thmin
     if (present(thmax)) xmax(2) = thmax
-    xmax(3) = twopi/nper
-
     h_r = (xmax(1)-xmin(1))/(n_r-1)
     h_th = (xmax(2)-xmin(2))/(n_th-1)
     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
@@ -420,7 +448,6 @@ subroutine integrate(i_r, i_th, i_phi, y)
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
 
-    real(dp), parameter :: relerr_default = 1d-11
     integer, parameter :: ndim = 2
     real(dp) :: r1, r2
     real(dp) :: relaxed_relerr
@@ -433,7 +460,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
 
-    relaxed_relerr = relerr_default
+    relaxed_relerr = transformation_relerr
 
 #ifdef SIMPLE_NVHPC
     ! NVHPC/nvfortran: avoid ODE step-size underflow near singular points by
@@ -441,7 +468,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
     phi_c = xmin(3) + h_phi*(i_phi-1)
     call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
     if (abs(hp_test) < hp_threshold) then
-        relaxed_relerr = 1d-8
+        relaxed_relerr = max(transformation_relerr, 1d-8)
     end if
 #endif
 

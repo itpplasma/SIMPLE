@@ -167,7 +167,8 @@ build() {
     local REFERENCE_PATCH
     for REFERENCE_PATCH in \
         "$SCRIPT_DIR/reference_patches/rejected_step_state.patch" \
-        "$SCRIPT_DIR/reference_patches/physical_exit_reporting.patch"; do
+        "$SCRIPT_DIR/reference_patches/physical_exit_reporting.patch" \
+        "$SCRIPT_DIR/reference_patches/canonical_map_resolution.patch"; do
         if git apply --check "$REFERENCE_PATCH"; then
             git apply "$REFERENCE_PATCH"
         elif ! git apply --reverse --check "$REFERENCE_PATCH"; then

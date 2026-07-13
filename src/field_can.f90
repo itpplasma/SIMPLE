@@ -10,9 +10,9 @@ use field_can_flux, only : evaluate_flux, integ_to_ref_flux, ref_to_integ_flux
 use field_can_boozer, only : evaluate_boozer, integ_to_ref_boozer, ref_to_integ_boozer, &
   integ_to_ref_boozer_chartmap, ref_to_integ_boozer_chartmap
 use field_can_meiss, only : init_meiss, evaluate_meiss, &
-  integ_to_ref_meiss, ref_to_integ_meiss
+  integ_to_ref_meiss, ref_to_integ_meiss, cleanup_meiss
 use field_can_albert, only : evaluate_albert, init_albert, integ_to_ref_albert, &
-  ref_to_integ_albert
+  ref_to_integ_albert, cleanup_albert
 use field_can_spectre, only : construct_spectre_coordinates, evaluate_spectre_can, &
   integ_to_ref_spectre, ref_to_integ_spectre
 use field_boozer_chartmap, only : boozer_chartmap_field_t
@@ -30,33 +30,45 @@ procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 
 contains
 
-subroutine field_can_from_name(field_name, field_noncan)
+subroutine field_can_from_name(field_name, field_noncan, n_r, n_th, n_phi, &
+    transformation_relerr)
 
   character(*), intent(in) :: field_name
   !> For field_can_tMeiss
   class(magnetic_field_t), intent(in), optional :: field_noncan
+  integer, intent(in), optional :: n_r, n_th, n_phi
+  real(dp), intent(in), optional :: transformation_relerr
 
   select case(trim(field_name))
     case("test")
+      call cleanup_albert
+      call cleanup_meiss
       evaluate => evaluate_test
     case("flux")
+      call cleanup_albert
+      call cleanup_meiss
       evaluate => evaluate_flux
       integ_to_ref => integ_to_ref_flux
       ref_to_integ => ref_to_integ_flux
     case("boozer")
+      call cleanup_albert
+      call cleanup_meiss
       evaluate => evaluate_boozer
       integ_to_ref => integ_to_ref_boozer
       ref_to_integ => ref_to_integ_boozer
     case("meiss")
+      call cleanup_albert
       if (present(field_noncan)) then
-        call init_meiss(field_noncan)
+        call init_meiss(field_noncan, n_r, n_th, n_phi, &
+          transformation_relerr_=transformation_relerr)
       end if
       evaluate => evaluate_meiss
       integ_to_ref => integ_to_ref_meiss
       ref_to_integ => ref_to_integ_meiss
     case("albert")
       if (present(field_noncan)) then
-        call init_albert(field_noncan)
+        call init_albert(field_noncan, n_r, n_th, n_phi, &
+          transformation_relerr_=transformation_relerr)
       end if
       evaluate => evaluate_albert
       integ_to_ref => integ_to_ref_albert
@@ -72,13 +84,17 @@ subroutine field_can_from_name(field_name, field_noncan)
 end subroutine field_can_from_name
 
 
-subroutine field_can_from_id(field_id, field_noncan)
+subroutine field_can_from_id(field_id, field_noncan, n_r, n_th, n_phi, &
+    transformation_relerr)
   integer, intent(in) :: field_id
   !> For field_can_tMeiss
   class(magnetic_field_t), intent(in), optional :: field_noncan
+  integer, intent(in), optional :: n_r, n_th, n_phi
+  real(dp), intent(in), optional :: transformation_relerr
 
   if (present(field_noncan)) then
-    call field_can_from_name(name_from_id(field_id), field_noncan)
+    call field_can_from_name(name_from_id(field_id), field_noncan, n_r, n_th, &
+      n_phi, transformation_relerr)
   else
     call field_can_from_name(name_from_id(field_id))
   end if
@@ -134,7 +150,8 @@ function id_from_name(field_name)
 end function id_from_name
 
 
-subroutine init_field_can(field_id, field_noncan)
+subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
+    transformation_relerr)
   use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
   use boozer_sub, only : get_boozer_coordinates
   use boozer_chartmap, only : load_boozer_from_chartmap
@@ -143,10 +160,13 @@ subroutine init_field_can(field_id, field_noncan)
 
   integer, intent(in) :: field_id
   class(magnetic_field_t), intent(in), optional :: field_noncan
+  integer, intent(in), optional :: n_r, n_th, n_phi
+  real(dp), intent(in), optional :: transformation_relerr
   type(vmec_field_t) :: vmec_field
 
   if (present(field_noncan)) then
-    call field_can_from_id(field_id, field_noncan)
+    call field_can_from_id(field_id, field_noncan, n_r, n_th, n_phi, &
+      transformation_relerr)
     select case (field_id)
       case (TEST)
         continue
@@ -186,11 +206,13 @@ subroutine init_field_can(field_id, field_noncan)
       call get_boozer_coordinates
     case (MEISS)
       call create_vmec_field(vmec_field)
-      call field_can_from_id(field_id, vmec_field)
+      call field_can_from_id(field_id, vmec_field, n_r, n_th, n_phi, &
+        transformation_relerr)
       call get_meiss_coordinates
     case (ALBERT)
       call create_vmec_field(vmec_field)
-      call field_can_from_id(field_id, vmec_field)
+      call field_can_from_id(field_id, vmec_field, n_r, n_th, n_phi, &
+        transformation_relerr)
       call get_albert_coordinates
     case default
       print *, "init_field_can: Unknown field id ", field_id
