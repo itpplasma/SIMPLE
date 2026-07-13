@@ -4,6 +4,7 @@ use field_can_meiss, only: magfie_meiss
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use field_splined, only: splined_field_t
+use field_spectre, only: spectre_field_t
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
                               RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
 
@@ -11,6 +12,11 @@ implicit none
 
 ! Define real(dp) kind parameter
 integer, parameter :: dp = kind(1.0d0)
+
+! SIMPLE runs in Gaussian-CGS; the SPECTRE field returns SI (Tesla, meter).
+real(dp), parameter :: TESLA_TO_GAUSS = 1.0d4
+real(dp), parameter :: M_TO_CM = 1.0d2
+real(dp), parameter :: M3_TO_CM3 = 1.0d6
 
 abstract interface
   subroutine magfie_base(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
@@ -35,9 +41,10 @@ end interface
 procedure(magfie_base), pointer :: magfie => null()
 
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
-                      REFCOORDS=5
+                      REFCOORDS=5, SPECTRE=6
 
 type(splined_field_t), allocatable :: refcoords_field
+type(spectre_field_t), allocatable :: spectre_field
 
 contains
 
@@ -47,6 +54,13 @@ subroutine set_magfie_refcoords_field(field)
   if (allocated(refcoords_field)) deallocate (refcoords_field)
   allocate (refcoords_field, source=field)
 end subroutine set_magfie_refcoords_field
+
+subroutine set_magfie_spectre_field(field)
+  type(spectre_field_t), intent(in) :: field
+
+  if (allocated(spectre_field)) deallocate (spectre_field)
+  allocate (spectre_field, source=field)
+end subroutine set_magfie_spectre_field
 
 subroutine init_magfie(id)
   integer, intent(in) :: id
@@ -66,6 +80,8 @@ subroutine init_magfie(id)
     magfie => magfie_albert
   case(REFCOORDS)
     magfie => magfie_refcoords
+  case(SPECTRE)
+    magfie => magfie_spectre
   case default
     print *,'init_magfie: unknown id ', id
     error stop
@@ -172,6 +188,54 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 
   call compute_hcurl(sqrtg, dhcov, hcurl)
 end subroutine magfie_refcoords
+
+
+subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+  !> magfie in the SPECTRE stacked-rho chart x = (rho_g, theta, zeta).
+  !>
+  !> The field returns |B|, covariant h = B/|B|, the exact sqrt(g) B^i (the
+  !> metric-free 2-form) and the analytic x-derivatives of |B| and h in SI units;
+  !> the coordinate system provides the analytic metric and its derivative. grad
+  !> log|B| (bder) and curl(h) (hcurl), the small drift corrections, follow
+  !> analytically with no finite differences.
+  implicit none
+
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod, sqrtg
+  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+  real(dp) :: hcov(3), Bmod_si, sqgBctr(3), sqrtg_si
+  real(dp) :: dhcov_si(3, 3), dBmod_si(3), dhcov(3, 3)
+  integer :: j
+
+  if (.not. allocated(spectre_field)) then
+    print *, 'magfie_spectre: spectre_field not set'
+    print *, 'Call set_magfie_spectre_field before init_magfie(SPECTRE)'
+    error stop
+  end if
+
+  call spectre_field%evaluate_der(x, hcov, Bmod_si, sqgBctr, sqrtg_si, &
+                                  dhcov_si, dBmod_si)
+
+  ! Gaussian-CGS boundary conversion (single place). The SPECTRE field is SI
+  ! (Tesla, meter); SIMPLE integrates in Gaussian-CGS. |B|: Tesla -> Gauss.
+  ! Lengths meter -> cm: the Jacobian sqrt(g) carries L**3, covariant h_i carry
+  ! L, contravariant h^i = B^i/|B| carries 1/L. bder = d log|B|/dx is scale-free
+  ! because x = (rho_g, theta, zeta) is dimensionless, so it needs no factor.
+  bmod = Bmod_si*TESLA_TO_GAUSS
+  sqrtg = sqrtg_si*M3_TO_CM3
+  hcovar = hcov*M_TO_CM
+  hctrvr = sqgBctr/(sqrtg_si*Bmod_si)/M_TO_CM
+  bder = dBmod_si/Bmod_si
+
+  ! hcurl^i = eps^ijk d_j h_k / sqrt(g). The covariant derivative d h_i/dx carries
+  ! the same M_TO_CM length factor as hcovar; compute_hcurl divides by the cm
+  ! sqrt(g), so hcurl comes out contravariant in Gaussian-CGS like hctrvr.
+  do j = 1, 3
+    dhcov(:, j) = dhcov_si(:, j)*M_TO_CM
+  end do
+  call compute_hcurl(sqrtg, dhcov, hcurl)
+end subroutine magfie_spectre
 
 
 subroutine scaled_to_ref_coords(coords, x_scaled, u_ref, J)

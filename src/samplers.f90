@@ -125,6 +125,85 @@ contains
 
     end subroutine sample_volume_single
 
+    subroutine sample_spectre_surface(zstart)
+        !> Place markers on the SPECTRE control surface rho_g = sbeg(1), drawn
+        !> uniformly over the real surface: (theta, zeta) grid nodes are picked
+        !> with probability proportional to the surface Jacobian |e_theta x e_zeta|.
+        !> The chart is the integration coordinate, so zstart is (rho_g, theta,
+        !> zeta) directly. Also sets bmin/bmax/bmod00 for pitch classification.
+        use params, only: sbeg, bmin, bmax, bmod00, &
+                          spectre_sbeg_is_toroidal_flux
+        use magfie_sub, only: magfie, spectre_field
+        use binsrc_sub, only: binsrc
+
+        real(dp), dimension(:, :), intent(inout) :: zstart
+
+        integer, parameter :: ntheta = 64, nzeta = 64
+        integer :: ngrid, it, iz, k, ipart, ierr
+        real(dp) :: rho_g, th, ze, area, wsum, bsum, bmod, xi
+        real(dp) :: u(3), e_cov(3, 3), cross(3)
+        real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp), allocatable :: theta_g(:), zeta_g(:), wcum(:)
+
+        if (.not. allocated(spectre_field)) &
+            error stop 'sample_spectre_surface: spectre_field not set'
+
+        ngrid = ntheta*nzeta
+        if (spectre_sbeg_is_toroidal_flux) then
+            call spectre_field%axis_rho_from_toroidal_flux(sbeg(1), rho_g, ierr)
+            if (ierr /= 0) &
+                error stop 'sample_spectre_surface: target flux outside axis volume'
+        else
+            rho_g = sbeg(1)
+        end if
+        allocate (theta_g(ngrid), zeta_g(ngrid), wcum(ngrid))
+
+        wsum = 0.0d0
+        bsum = 0.0d0
+        bmin = huge(1.0d0)
+        bmax = -huge(1.0d0)
+        k = 0
+        do it = 1, ntheta
+            do iz = 1, nzeta
+                k = k + 1
+                th = twopi*(real(it, dp) - 0.5d0)/real(ntheta, dp)
+                ze = twopi*(real(iz, dp) - 0.5d0)/real(nzeta, dp)
+                u = [rho_g, th, ze]
+                call spectre_field%coords%covariant_basis(u, e_cov)
+                cross(1) = e_cov(2, 2)*e_cov(3, 3) - e_cov(3, 2)*e_cov(2, 3)
+                cross(2) = e_cov(3, 2)*e_cov(1, 3) - e_cov(1, 2)*e_cov(3, 3)
+                cross(3) = e_cov(1, 2)*e_cov(2, 3) - e_cov(2, 2)*e_cov(1, 3)
+                area = sqrt(sum(cross**2))
+                call magfie(u, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+                bmin = min(bmin, bmod)
+                bmax = max(bmax, bmod)
+                bsum = bsum + bmod
+                wsum = wsum + area
+                theta_g(k) = th
+                zeta_g(k) = ze
+                wcum(k) = wsum
+            end do
+        end do
+        wcum = wcum/wsum
+        bmod00 = bsum/real(ngrid, dp)
+
+        do ipart = 1, size(zstart, 2)
+            call random_number(xi)
+            call binsrc(wcum, 1, ngrid, xi, k)
+            zstart(1, ipart) = rho_g
+            zstart(2, ipart) = theta_g(k)
+            zstart(3, ipart) = zeta_g(k)
+            zstart(4, ipart) = 1.0d0
+            call random_number(xi)
+            zstart(5, ipart) = 2.0d0*(xi - 0.5d0)
+        end do
+
+        print *, 'sample_spectre_surface: rho_g = ', rho_g, ' target = ', sbeg(1), &
+            ' flux_label = ', spectre_sbeg_is_toroidal_flux, ' bmod00 = ', bmod00, &
+            ' bmin = ', bmin, ' bmax = ', bmax
+        call save_starting_points(zstart)
+    end subroutine sample_spectre_surface
+
     subroutine sample_surface_fieldline(zstart)
         real(dp), dimension(:, :), intent(inout) :: zstart
 

@@ -6,7 +6,7 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
-  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
+  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
   coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
   SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE
@@ -375,7 +375,7 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
-    if (x(1) > 1d0) return
+    if (x(1) > sympl_rmax) return
     ! Transient guard: in s = rho^2 coordinates the Hamiltonian is not
     ! smooth at the axis (sqrt(s) behavior), so there is no consistent
     ! field extension to s < 0 for the solver itself. Intermediate
@@ -410,7 +410,7 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
   real(dp) :: det
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
+    if(x(1) > sympl_rmax) return
     ! Transient guard for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
@@ -496,7 +496,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
   tolref(5) = 1d0
 
   do kit = 1, maxit
-    if(x(1) > 1.0 .or. x(5) > 1.0) then
+    if(x(1) > sympl_rmax .or. x(5) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
@@ -516,7 +516,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
-    if (x(1) > 1d0 .or. x(5) > 1d0) then
+    if (x(1) > sympl_rmax .or. x(5) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
@@ -592,7 +592,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) then
+      if (x(4*ks-3) > sympl_rmax) then
         status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
         return
       end if
@@ -611,7 +611,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) then
+      if (x(4*ks-3) > sympl_rmax) then
         status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
         return
       end if
@@ -666,7 +666,7 @@ recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) return
+      if (x(4*ks-3) > sympl_rmax) return
       ! Transient guard for intermediate iterates; the converged-negative
       ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
@@ -875,7 +875,7 @@ subroutine guard_lobatto_stage_radii(x, s, status)
   integer :: ks, radius_index
 
   status = SYMPLECTIC_STEP_OK
-  if (x(1) > 1d0) then
+  if (x(1) > sympl_rmax) then
     status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     return
   end if
@@ -883,7 +883,7 @@ subroutine guard_lobatto_stage_radii(x, s, status)
 
   do ks = 2, s
     radius_index = 4*ks - 5
-    if (x(radius_index) > 1d0) then
+    if (x(radius_index) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
@@ -927,12 +927,12 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
     x = x - fvec
-    if (x(1) > 1d0) then
+    if (x(1) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
     do ks = 2, s
-      if (x(4*ks-5) > 1d0) then
+      if (x(4*ks-5) > sympl_rmax) then
         status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
         return
       end if
@@ -1227,7 +1227,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
 
     call newton1(si, f, x, maxit, xlast)
 
-    if (x(1) > 1.0d0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1240,7 +1240,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
       si%z(2) = si%z(2) + pi
       crossed = .true.
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0d0) then
+      if (x(1) > sympl_rmax) then
         ! Pathological solve (|r| beyond the boundary on the far side).
         ierr = 1
         return
@@ -1292,7 +1292,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
 
     call newton2(si, f, x, si%atol, si%rtol, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1305,7 +1305,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
       x(2) = x(2) + pi
       crossed = .true.
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -1349,7 +1349,10 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5
-  integer, parameter :: maxit = 8
+  ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
+  ! and the exact-landing substep solve (#441) needs fully converged trial
+  ! steps, which 8 iterations do not guarantee near interfaces.
+  integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
   integer :: ktau, newton_status
@@ -1375,7 +1378,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       return
     end if
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1386,7 +1389,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       x(1) = -x(1)
       x(2) = x(2) + pi
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if
@@ -1457,7 +1460,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     !optionally try fixed point iterations, doesn't work yet
     !call fixpoint_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
 
-    if (x(1) > 1.0) then
+    if (x(1) > sympl_rmax) then
       ierr = 1
       return
     end if
@@ -1468,7 +1471,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       x(1) = -x(1)
       x(2) = x(2) + pi
       call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
+      if (x(1) > sympl_rmax) then
         ierr = 1
         return
       end if

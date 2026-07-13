@@ -49,16 +49,17 @@ contains
                           isw_field_type, field_input, startmode, &
                           ntestpart, ntimstep, coord_input, restart
         use timing, only: init_timer, print_phase_time
-        use magfie_sub, only: TEST, VMEC, init_magfie
-        use samplers, only: init_starting_surf
+        use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
+        use samplers, only: init_starting_surf, sample_spectre_surface
         use version, only: simple_version
         use field_boozer_chartmap, only: is_boozer_chartmap
+        use field, only: is_spectre_file
 
         implicit none
 
         character(256) :: config_file
         type(tracer_t) :: norb
-        logical :: chartmap_mode
+        logical :: chartmap_mode, spectre_mode
 
         ! Print version on startup
         print '(A,A)', 'SIMPLE version ', simple_version
@@ -97,8 +98,10 @@ contains
         end if
 
         chartmap_mode = .false.
+        spectre_mode = .false.
         if (len_trim(field_input) > 0) then
-            chartmap_mode = is_boozer_chartmap(field_input)
+            spectre_mode = is_spectre_file(field_input)
+            if (.not. spectre_mode) chartmap_mode = is_boozer_chartmap(field_input)
         end if
 
         if (isw_field_type == TEST) then
@@ -107,6 +110,16 @@ contains
             call print_phase_time('TEST field initialization completed')
             call sample_particles_test_field
             call print_phase_time('TEST field particle sampling completed')
+        else if (spectre_mode) then
+            ! SPECTRE: VMEC-free, per-volume RK45 guiding centers. Sampling and
+            ! tracing use magfie_spectre directly on the stacked-rho chart.
+            call init_magfie(SPECTRE)
+            call print_phase_time('SPECTRE magfie initialization completed')
+
+            call sample_spectre_surface(zstart)
+            call print_phase_time('SPECTRE particle sampling completed')
+
+            if (generate_start_only) stop 'stopping after generating start.dat'
         else if (chartmap_mode) then
             ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
             call init_magfie(isw_field_type)
@@ -161,6 +174,14 @@ contains
         end block
 
         call diag_counters_init
+        if (isw_field_type == SPECTRE) then
+            block
+                use interface_crossing, only: crossing_log_reset
+                use spectre_sympl_orbit, only: sympl_landing_stats_reset
+                call crossing_log_reset(256)
+                call sympl_landing_stats_reset
+            end block
+        end if
         call progress_init(checkpoint_interval, ntestpart, write_results)
         call trace_parallel(norb)
         call progress_finalize
@@ -192,11 +213,11 @@ contains
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use field_base, only: magnetic_field_t
-        use field, only: field_from_file
+        use field, only: field_from_file, is_spectre_file
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
-                              REFCOORDS, set_magfie_refcoords_field
+                              REFCOORDS, SPECTRE, set_magfie_refcoords_field
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
         use util, only: twopi
@@ -208,20 +229,25 @@ contains
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
-        logical :: use_boozer_chartmap
+        logical :: use_boozer_chartmap, use_spectre
 
         self%integmode = aintegmode
 
-        ! Check if field_input is a Boozer chartmap (no VMEC needed)
+        ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
+        use_spectre = .false.
         if (len_trim(field_input) > 0) then
-            use_boozer_chartmap = is_boozer_chartmap(field_input)
+            use_spectre = is_spectre_file(field_input)
+            if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
         end if
 
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
             self%fper = twopi  ! Full torus for analytic tokamak
             call print_phase_time('TEST field mode - no input files required')
+        else if (use_spectre) then
+            call init_spectre_field(self)
+            call print_phase_time('SPECTRE field loading completed')
         else if (use_boozer_chartmap) then
             ! Boozer chartmap: file-based, no VMEC initialization needed
             call init_reference_coordinates(coord_input)
@@ -300,8 +326,8 @@ contains
                 error stop &
                     'Symplectic guiding-center integrators require '// &
                     'canonical field representation (set isw_field_type to TEST, '// &
-                    'CANFLUX, BOOZER, MEISS, or ALBERT)'
-            case (TEST, CANFLUX, BOOZER, MEISS, ALBERT)
+                    'CANFLUX, BOOZER, MEISS, ALBERT, or SPECTRE)'
+            case (TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE)
                 continue
             case default
                 error stop &
@@ -320,6 +346,71 @@ contains
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
+
+    subroutine init_spectre_field(self)
+        !> VMEC-free SPECTRE setup. Mirrors the Boozer-chartmap precedent: no
+        !> init_vmec; the equilibrium globals nper and rmajor are taken from the
+        !> SPECTRE file so stevvo and params_init produce a consistent
+        !> dphi/dtaumin/fper. rmajor is the m=0,n=0 R harmonic of the outermost
+        !> interface (SI meters); stevvo scales it to cm. For integmode > 0 the
+        !> per-volume Meiss canonical coordinates are built here (#439).
+        use field_spectre, only: spectre_field_t, create_spectre_field
+        use field_can_spectre, only: set_spectre_construction_grid
+        use magfie_sub, only: set_magfie_spectre_field, SPECTRE
+        use new_vmec_stuff_mod, only: nper, rmajor
+        use util, only: twopi
+        use params, only: field_input, spectre_ncon_r, spectre_ncon_th, &
+                          spectre_ncon_phi
+        use timing, only: print_phase_time
+        use orbit_symplectic_base, only: sympl_rmax
+
+        type(tracer_t), intent(inout) :: self
+
+        type(spectre_field_t) :: sf
+        integer :: ierr, ii
+        real(dp) :: r00
+
+        call create_spectre_field(sf, field_input, ierr)
+        if (ierr /= 0) then
+            print *, 'init_spectre_field: create_spectre_field failed for ', &
+                trim(field_input), ' (ierr = ', ierr, ')'
+            error stop
+        end if
+        call set_magfie_spectre_field(sf)
+
+        r00 = 0.0d0
+        do ii = 1, sf%data%mn
+            if (sf%data%im(ii) == 0) then
+                if (sf%data%in(ii) == 0) then
+                    r00 = sf%data%Rbc(ii, sf%data%Mvol)
+                end if
+            end if
+        end do
+        if (r00 <= 0.0d0) error stop &
+            'init_spectre_field: no positive m=0,n=0 R harmonic on outer interface'
+
+        nper = sf%data%Nfp
+        rmajor = r00
+        self%fper = twopi/real(sf%data%Nfp, dp)
+
+        print *, 'SPECTRE field: Nfp = ', sf%data%Nfp, ' Mvol = ', sf%data%Mvol, &
+            ' rmajor = ', rmajor, ' m'
+
+        if (self%integmode > 0) then
+            ! The symplectic Newton/loss guards treat r > sympl_rmax as "left the
+            ! domain". SPECTRE integrates in rho_g in [0, Mvol] and loses markers
+            ! through the crossing pipeline at rho_g = Mvol, so the guard sits one
+            ! volume width beyond: at exactly Mvol it would abort Newton iterates
+            ! mid-solve during the exact-landing substep onto the outermost
+            ! interface (#441). Beyond the edge the locked per-volume field is
+            ! extended linearly, so iterates out there stay finite.
+            sympl_rmax = real(sf%data%Mvol + 1, dp)
+            call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
+                                               spectre_ncon_phi)
+            call init_field_can(SPECTRE, sf)
+            call print_phase_time('SPECTRE per-volume canonical construction completed')
+        end if
+    end subroutine init_spectre_field
 
     subroutine init_stl_wall_if_enabled(coord_file)
         character(len=*), intent(in) :: coord_file
@@ -794,6 +885,7 @@ contains
         use classification, only: trace_orbit_with_classifiers, &
                                   classification_result_t, &
                                   write_classification_results
+        use magfie_sub, only: SPECTRE
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         type(tracer_t), intent(inout) :: anorb
@@ -829,6 +921,8 @@ contains
 
         call ref_to_integ(zstart(1:3, ipart), z(1:3))
         z(4:5) = zstart(4:5, ipart)
+        orbit_traj(:, 1) = zstart(:, ipart)
+        orbit_times(1) = 0.0_dp
         zend(:, ipart) = 0d0
 
         if (wall_enabled) then
@@ -848,6 +942,19 @@ contains
         end if
 
         call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
+
+        ! SPECTRE traces every marker per volume: the passing-skip optimisation
+        ! (a well-confined-tokamak assumption) would wrongly mark interface-bound
+        ! markers as confined, so it is bypassed here.
+        if (isw_field_type == SPECTRE) then
+            if (integmode > 0) then
+                call trace_orbit_spectre_sympl(anorb, ipart, z, passing, &
+                                               orbit_traj, orbit_times)
+            else
+                call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
+            end if
+            return
+        end if
 
         if (passing .and. should_skip(ipart)) then
             zend(:, ipart) = zstart(:, ipart)
@@ -912,6 +1019,186 @@ contains
         if (faulted) times_lost(ipart) = trace_time   ! unresolved: confined, not lost
 !$omp end critical
     end subroutine trace_orbit
+
+    subroutine trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
+        !> Per-volume RK45 guiding-center trace for SPECTRE (integmode=0). The
+        !> marker traverses volumes through the Level-0 crossing map and stays
+        !> confined for the full trace, reflects at forbidden interfaces, or is
+        !> lost at the outermost interface. Every crossing/reflection is logged.
+        use spectre_orbit, only: spectre_orbit_state_t, spectre_event_t, &
+                                 spectre_state_reset, orbit_timestep_spectre, &
+                                 SPECTRE_OK, SPECTRE_BOUNDARY
+        use magfie_sub, only: spectre_field
+        use interface_crossing, only: crossing_log_record
+        use params, only: crossing_level
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+
+        integer, intent(in) :: ipart
+        real(dp), intent(inout) :: z(5)
+        logical, intent(in) :: passing
+        real(dp), intent(out) :: orbit_traj(:, :)
+        real(dp), intent(out) :: orbit_times(:)
+
+        type(spectre_orbit_state_t) :: state
+        type(spectre_event_t) :: event
+        integer :: it, ktau, ierr_orbit, it_final
+        integer(8) :: kt
+        real(dp) :: t_stop
+
+        call spectre_state_reset(state, spectre_field%data%Mvol)
+
+        kt = 0
+        it_final = 0
+        ierr_orbit = SPECTRE_OK
+        do it = 1, ntimstep
+            if (it >= 2) then
+                do ktau = 1, ntau_macro(it)
+                    call orbit_timestep_spectre(state, z, dtaumin, relerr, &
+                                                crossing_level, ierr_orbit, event)
+                    if (event%occurred) then
+                        call crossing_log_record(ipart, &
+                            (real(kt, dp) + event%t_frac)*dtaumin/v0, event%info)
+                    end if
+                    if (ierr_orbit /= SPECTRE_OK) exit
+                    kt = kt + 1
+                end do
+            end if
+
+            if (ierr_orbit /= SPECTRE_OK) then
+                it_final = it
+                exit
+            end if
+
+            orbit_traj(:, it) = z
+            orbit_times(it) = kt*dtaumin/v0
+            call increase_confined_count(it, passing)
+            it_final = it
+        end do
+
+        if (it_final < ntimstep) then
+            do it = it_final + 1, ntimstep
+                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+            end do
+        end if
+
+        if (ierr_orbit == SPECTRE_BOUNDARY) then
+            t_stop = (real(kt, dp) + event%t_frac)*dtaumin/v0
+        else
+            t_stop = real(kt, dp)*dtaumin/v0
+        end if
+
+!$omp critical
+        call integ_to_ref(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = t_stop
+!$omp end critical
+    end subroutine trace_orbit_spectre
+
+    subroutine trace_orbit_spectre_sympl(anorb, ipart, z, passing, orbit_traj, &
+                                         orbit_times)
+        !> Per-volume symplectic guiding-center trace for SPECTRE (integmode > 0).
+        !> Each microstep resolves interface events by an exact-landing substep of
+        !> the same implicit scheme, applies the crossing map, and re-canonicalizes
+        !> in the resolved volume (#441). Markers are lost only at the outermost
+        !> interface, matching the RK45 path; CROSS_STOP remains only as the
+        !> pathological non-convergence fallback inside the microstepper.
+        use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
+                                       orbit_microstep_sympl_spectre, &
+                                       SYMPL_SPECTRE_OK, SYMPL_SPECTRE_SKIM
+        use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
+        use params, only: crossing_level
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+
+        type(tracer_t), intent(inout) :: anorb
+        integer, intent(in) :: ipart
+        real(dp), intent(inout) :: z(5)
+        logical, intent(in) :: passing
+        real(dp), intent(out) :: orbit_traj(:, :)
+        real(dp), intent(out) :: orbit_times(:)
+
+        type(sympl_spectre_state_t) :: state
+        integer :: it, ktau, ierr_orbit, it_final
+        integer(8) :: kt
+        real(dp) :: t_stop, t_frac
+
+        call sympl_spectre_reset(state, anorb%si, spectre_mvol, integmode, &
+                                 crossing_level)
+
+        kt = 0
+        it_final = 0
+        ierr_orbit = SYMPL_SPECTRE_OK
+        t_frac = 1.0d0
+
+        do it = 1, ntimstep
+            if (it >= 2) then
+                do ktau = 1, ntau_macro(it)
+                    call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
+                                                       ipart, &
+                                                       real(kt, dp)*dtaumin/v0, &
+                                                       dtaumin/v0, ierr_orbit, &
+                                                       t_frac)
+                    if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
+                    kt = kt + 1
+                end do
+            end if
+
+            if (ierr_orbit /= SYMPL_SPECTRE_OK) then
+                it_final = it
+                exit
+            end if
+
+            if (state%fo%active .and. state%fo%has_y) then
+                z = state%fo%last_y
+            else
+                call to_standard_z_coordinates(anorb, z)
+            end if
+            orbit_traj(:, it) = z
+            orbit_times(it) = kt*dtaumin/v0
+            call increase_confined_count(it, passing)
+            it_final = it
+        end do
+
+        ! A mirror-confined (skimming) marker is confined for the rest of the
+        ! trace, so it must count as confined at every remaining step for the
+        ! confined_fraction series to stay consistent with times_lost.
+        if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
+            do it = it_final, ntimstep
+                call increase_confined_count(it, passing)
+            end do
+        end if
+
+        if (it_final < ntimstep) then
+            do it = it_final + 1, ntimstep
+                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+            end do
+        end if
+
+        if (ierr_orbit == SYMPL_SPECTRE_OK) then
+            t_stop = real(kt, dp)*dtaumin/v0
+        else if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
+            ! Mirror-confined at an interior interface: cannot be lost, so record
+            ! it as confined (times_lost = trace_time) rather than at its stop.
+            t_stop = trace_time
+        else
+            t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
+        end if
+
+        if (state%fo%active .and. state%fo%has_y) then
+            z = state%fo%last_y
+        else
+            call to_standard_z_coordinates(anorb, z)
+        end if
+        ! The next marker on this thread starts with an unlocked field dispatch.
+        call set_spectre_volume_lock(0)
+
+!$omp critical
+        call integ_to_ref(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = t_stop
+!$omp end critical
+    end subroutine trace_orbit_spectre_sympl
 
 	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
         use alpha_lifetime_sub, only: orbit_timestep_axis
@@ -1186,6 +1473,8 @@ contains
         end do
         close (unit)
 
+        call write_spectre_crossing_events
+
         if (ntcut > 0 .or. class_plot) then
             open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
@@ -1206,5 +1495,49 @@ contains
             end if
         end if
     end subroutine write_results
+
+    subroutine write_spectre_crossing_events
+        !> Interface crossing log (#443/#440), one line per crossing/reflection
+        !> event across all SPECTRE markers, grouped by particle in time order.
+        !> For symplectic runs the exact-landing statistics (#441) are printed so
+        !> tests can assert the interface landing accuracy from stdout.
+        use interface_crossing, only: crossing_log_write
+        use spectre_sympl_orbit, only: sympl_landing_stats, sympl_sheet_stats, &
+            sympl_fo_stats
+        use magfie_sub, only: SPECTRE
+
+        integer :: landings, stops, sheet_entries, sheet_exits
+        integer :: sheet_init_failures, sheet_advance_failures
+        integer :: sheet_failure_status(5)
+        integer :: sheet_stop_reason(5)
+        integer :: fo_entries, fo_exits, fo_losses, fo_failures
+        integer :: fo_failure_status(5)
+        real(dp) :: max_resid
+
+        if (isw_field_type /= SPECTRE) return
+
+        call crossing_log_write('spectre_crossing_events.dat')
+
+        if (integmode > 0) then
+            call sympl_landing_stats(landings, max_resid, stops)
+            print '(A,I0,A,ES12.4,A,I0)', 'sympl_landing_stats: count= ', &
+                landings, ' max_resid= ', max_resid, ' cross_stop= ', stops
+            call sympl_sheet_stats(sheet_entries, sheet_exits, &
+                sheet_init_failures, sheet_advance_failures, sheet_failure_status, &
+                sheet_stop_reason)
+            print '(A,I0,A,I0,A,I0,A,I0,A,5(I0,1X),A,5(I0,1X))', &
+                'sympl_sheet_stats: entries= ', &
+                sheet_entries, ' exits= ', sheet_exits, ' init_fail= ', &
+                sheet_init_failures, ' advance_fail= ', sheet_advance_failures, &
+                ' status= ', sheet_failure_status, ' stop_reason= ', &
+                sheet_stop_reason
+            call sympl_fo_stats(fo_entries, fo_exits, fo_losses, fo_failures, &
+                fo_failure_status)
+            print '(A,I0,A,I0,A,I0,A,I0,A,5(I0,1X))', &
+                'sympl_fo_stats: entries= ', fo_entries, ' exits= ', fo_exits, &
+                ' losses= ', fo_losses, ' failures= ', fo_failures, ' status= ', &
+                fo_failure_status
+        end if
+    end subroutine write_spectre_crossing_events
 
 end module simple_main

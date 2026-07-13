@@ -10,6 +10,7 @@ module field
     use field_boozer_chartmap, only: boozer_chartmap_field_t, &
                                      create_boozer_chartmap_field, &
                                      is_boozer_chartmap
+    use field_spectre, only: spectre_field_t, create_spectre_field
 
     implicit none
 
@@ -52,6 +53,14 @@ contains
             class default
                 error stop 'field_clone: Allocation failure (boozer_chartmap)'
             end select
+        type is (spectre_field_t)
+            allocate (spectre_field_t :: dest)
+            select type (dest)
+            type is (spectre_field_t)
+                dest = source
+            class default
+                error stop 'field_clone: Allocation failure (spectre)'
+            end select
         class default
             error stop 'field_clone: Unsupported field type'
         end select
@@ -70,12 +79,22 @@ contains
         type(splined_field_t), allocatable :: splined_coils
         type(vmec_field_t) :: vmec_field
         type(boozer_chartmap_field_t), allocatable :: bc_temp
+        type(spectre_field_t), allocatable :: spectre_temp
         integer :: file_type, ierr
         character(len=2048) :: message
 
         stripped_name = strip_directory(filename)
 
-        if (endswith(filename, '.nc')) then
+        if (is_spectre_file(filename)) then
+            allocate (spectre_temp)
+            call create_spectre_field(spectre_temp, filename, ierr)
+            if (ierr /= 0) then
+                print *, 'field_from_file: create_spectre_field failed for ', &
+                    trim(filename), ' (ierr = ', ierr, ')'
+                error stop
+            end if
+            call move_alloc(spectre_temp, field)
+        else if (endswith(filename, '.nc')) then
             if (is_boozer_chartmap(filename)) then
                 call create_boozer_chartmap_field(filename, bc_temp)
                 call move_alloc(bc_temp, field)
@@ -121,6 +140,39 @@ contains
             error stop
         end if
     end subroutine field_from_file
+
+    function is_spectre_file(filename) result(is_spectre)
+        !> SPECTRE equilibria are HDF5. Accept a .h5 name or any non-.nc file whose
+        !> first bytes carry the HDF5 signature, so a mislabelled extension still
+        !> routes. NetCDF-4 is itself HDF5, so .nc is excluded from the magic sniff
+        !> to keep VMEC and chartmap files on the NetCDF path.
+        character(*), intent(in) :: filename
+        logical :: is_spectre
+
+        character(len=1) :: magic(8)
+        integer :: unit, ios, i
+        integer, parameter :: hdf5_magic(8) = [137, 72, 68, 70, 13, 10, 26, 10]
+
+        is_spectre = endswith(filename, '.h5')
+        if (is_spectre) return
+        if (endswith(filename, '.nc')) return
+
+        open (newunit=unit, file=filename, access='stream', form='unformatted', &
+              status='old', action='read', iostat=ios)
+        if (ios /= 0) return
+
+        read (unit, iostat=ios) magic
+        close (unit)
+        if (ios /= 0) return
+
+        is_spectre = .true.
+        do i = 1, 8
+            if (iachar(magic(i)) /= hdf5_magic(i)) then
+                is_spectre = .false.
+                return
+            end if
+        end do
+    end function is_spectre_file
 
     function startswidth(text, start)
         logical :: startswidth

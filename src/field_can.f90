@@ -1,7 +1,7 @@
 module field_can_mod
 use diag_mod, only : icounter
 use boozer_sub, only : splint_boozer_coord
-use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT
+use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE
 use field, only : magnetic_field_t, vmec_field_t, create_vmec_field
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, field_can_t
@@ -13,6 +13,8 @@ use field_can_meiss, only : init_meiss, evaluate_meiss, &
   integ_to_ref_meiss, ref_to_integ_meiss
 use field_can_albert, only : evaluate_albert, init_albert, integ_to_ref_albert, &
   ref_to_integ_albert
+use field_can_spectre, only : construct_spectre_coordinates, evaluate_spectre_can, &
+  integ_to_ref_spectre, ref_to_integ_spectre
 use field_boozer_chartmap, only : boozer_chartmap_field_t
 
 implicit none
@@ -59,6 +61,10 @@ subroutine field_can_from_name(field_name, field_noncan)
       evaluate => evaluate_albert
       integ_to_ref => integ_to_ref_albert
       ref_to_integ => ref_to_integ_albert
+    case("spectre")
+      evaluate => evaluate_spectre_can
+      integ_to_ref => integ_to_ref_spectre
+      ref_to_integ => ref_to_integ_spectre
     case default
       print *, "field_can_from_name: Unknown field type ", field_name
       error stop
@@ -95,6 +101,8 @@ function name_from_id(field_id)
       name_from_id = "meiss"
     case(ALBERT)
       name_from_id = "albert"
+    case(SPECTRE)
+      name_from_id = "spectre"
     case default
       print *, "name_from_id: Unknown field id ", field_id
       error stop
@@ -117,6 +125,8 @@ function id_from_name(field_name)
       id_from_name = MEISS
     case("albert")
       id_from_name = ALBERT
+    case("spectre")
+      id_from_name = SPECTRE
     case default
       print *, "id_from_name: Unknown field type ", field_name
       error stop
@@ -156,6 +166,8 @@ subroutine init_field_can(field_id, field_noncan)
         call get_meiss_coordinates
       case (ALBERT)
         call get_albert_coordinates
+      case (SPECTRE)
+        call construct_spectre_coordinates(field_noncan)
       case default
         print *, "init_field_can: Unknown field id ", field_id
         error stop

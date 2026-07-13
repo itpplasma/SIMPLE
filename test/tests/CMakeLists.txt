@@ -393,6 +393,25 @@ target_link_libraries(test_deterministic_seed.x simple)
 add_test(NAME test_deterministic_seed COMMAND test_deterministic_seed.x)
 set_tests_properties(test_deterministic_seed PROPERTIES LABELS "unit")
 
+add_executable(test_interface_crossing_ownership.x test_interface_crossing_ownership.f90)
+target_link_libraries(test_interface_crossing_ownership.x simple)
+add_test(NAME test_interface_crossing_ownership COMMAND test_interface_crossing_ownership.x)
+set_tests_properties(test_interface_crossing_ownership PROPERTIES LABELS "unit")
+
+add_executable(test_spectre_sheet_gc.x test_spectre_sheet_gc.f90)
+target_link_libraries(test_spectre_sheet_gc.x simple)
+add_test(NAME test_spectre_sheet_gc
+    COMMAND test_spectre_sheet_gc.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+set_tests_properties(test_spectre_sheet_gc PROPERTIES LABELS "integration")
+
+add_executable(test_spectre_fo_hybrid.x test_spectre_fo_hybrid.f90)
+target_link_libraries(test_spectre_fo_hybrid.x simple)
+add_test(NAME test_spectre_fo_hybrid
+    COMMAND test_spectre_fo_hybrid.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+set_tests_properties(test_spectre_fo_hybrid PROPERTIES LABELS "integration")
+
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
 target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
 add_test(NAME test_bminmax_lifecycle
@@ -761,6 +780,109 @@ add_test(NAME test_restart_integration
 set_tests_properties(test_restart_integration PROPERTIES
     LABELS "integration;python"
     TIMEOUT 60)
+
+# SPECTRE symplectic field-line Poincare app vs SPECTRE reference sections (#437).
+# The fixture is the committed libneo G3V3L3Fi HDF5; do not copy it into SIMPLE.
+add_test(NAME test_spectre_poincare
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_poincare.py
+        $<TARGET_FILE:spectre_poincare.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/poincare.npz
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_poincare PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE guiding-center RK45 tracing per volume with boundary-stop (#438).
+# Uses simple.x with the committed libneo SPECTRE HDF5 fixture; VMEC-free.
+add_test(NAME test_spectre_gc_rk45
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_gc_rk45.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_gc_rk45 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE per-volume symplectic guiding-center tracing (#439): bounded non-secular
+# energy, cross-scheme consistency, and RK45 cross-check on the committed fixture.
+add_test(NAME test_spectre_sympl_volume
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_sympl_volume.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_sympl_volume PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
+
+# SPECTRE Level-0 interface crossing map with event location (#443). tok2vol is
+# committed alongside the test; G3V3L3Fi is the committed libneo fixture.
+add_test(NAME test_spectre_crossing_l0
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_crossing_l0.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_crossing_l0 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE Level-1 interface crossing refraction map (#440). Runs tok2vol under
+# both crossing_level = 1 (default) and 0 and checks the map from the crossing
+# log (generator components and lambda_k).
+add_test(NAME test_spectre_crossing_l1
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_crossing_l1.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_crossing_l1 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
+
+# Symplectic multi-volume interface crossing (#441): exact-landing accuracy,
+# reflections, RK45 cross-path loss consistency, and step-halving order on the
+# committed tok2vol fixture. The long-run invariant witness runs separately as
+# test_spectre_sympl_crossing_invariants (field_can/).
+add_test(NAME test_spectre_sympl_crossing
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_sympl_crossing.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_sympl_crossing PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
+
+# SPECTRE construction-grid memory knob and axisymmetric phi auto-clamp (#442):
+# the clamp triggers on axisymmetric tok2vol, peak RSS falls below the unclamped
+# phi=32 build, and a coarse grid still reproduces the per-volume canonical chart.
+add_test(NAME test_spectre_construction_grid
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_construction_grid.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_construction_grid PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE end-to-end validation (#442): losses and accounting, Level-0 vs
+# Level-1 loss fractions, trapped/passing mirror-criterion split, guiding-center
+# crossing mu conservation, and fixed-seed determinism on the committed tok2vol.
+add_test(NAME test_spectre_validation
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_validation.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_validation PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
 
 add_subdirectory(field_can)
 add_subdirectory(magfie)

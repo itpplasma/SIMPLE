@@ -511,6 +511,20 @@ endif()
 target_link_libraries(export_boozer_chartmap.x PRIVATE simple)
 set_target_properties(export_boozer_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# SPECTRE symplectic field-line Poincare app
+add_executable(spectre_poincare.x
+    app/spectre_poincare.f90
+)
+target_compile_options(spectre_poincare.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(spectre_poincare.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+target_link_libraries(spectre_poincare.x PRIVATE simple)
+set_target_properties(spectre_poincare.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # Ensure fortplot is built before diagnostics (when available)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_dependencies(diag_meiss.x fortplot)
