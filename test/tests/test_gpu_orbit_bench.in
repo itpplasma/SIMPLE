@@ -3,7 +3,8 @@ trace_time = 1d-4
 ntimstep = 51
 ntestpart = 8
 sbeg = 0.3d0
-netcdffile = 'wout.nc'
+startmode = 2
+netcdffile = '../wout.nc'
 isw_field_type = 2
 integmode = 1
 /
