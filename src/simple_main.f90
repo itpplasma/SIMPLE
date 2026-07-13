@@ -768,10 +768,12 @@ contains
         call init_bminmax_arrays
     end subroutine init_bminmax
 
+    logical function classification_enabled()
+        classification_enabled = (ntcut > 0) .or. class_plot .or. fast_class
+    end function classification_enabled
+
     logical function needs_bminmax_cache()
-        ! Match the current readers. Classifier semantics are kept unchanged
-        ! here; broad classifier changes belong in the classifier PR.
-        if ((ntcut > 0) .or. class_plot) then
+        if (classification_enabled()) then
             needs_bminmax_cache = num_surf > 1
         else
             needs_bminmax_cache = num_surf /= 1
@@ -819,7 +821,7 @@ contains
 
         if (swcoll) call reset_seed_if_deterministic
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
             if (class_plot) then
                 call write_classification_results(ipart, class_result)
@@ -1184,7 +1186,7 @@ contains
         end do
         close (unit)
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
                 write (unit, *) i, zstart(1, i), perp_inv(i), iclass(:, i)

@@ -601,6 +601,10 @@ add_executable(test_ntcut_overflow.x test_ntcut_overflow.f90)
 target_link_libraries(test_ntcut_overflow.x simple)
 add_test(NAME test_ntcut_overflow COMMAND test_ntcut_overflow.x)
 
+add_executable(test_cli_fast_class.x test_cli_fast_class.f90)
+target_link_libraries(test_cli_fast_class.x simple)
+add_test(NAME test_cli_fast_class COMMAND test_cli_fast_class.x)
+
 # Sub-second base-interface tests for the libneo reverse-dependency gate
 # (ctest -L smoke).
 set_property(TEST
@@ -608,6 +612,7 @@ set_property(TEST
     test_orbit_symplectic_base
     test_field_base
     test_ntcut_overflow
+    test_cli_fast_class
     APPEND PROPERTY LABELS smoke)
 
 add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
