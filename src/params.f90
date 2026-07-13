@@ -14,7 +14,8 @@ module params
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
                                      EXPL_IMPL_EULER, &
                                      boundary_event_fraction_tolerance, &
-                                     boundary_event_radial_tolerance
+                                     boundary_event_radial_tolerance, &
+                                     symplectic_euler_warning_mode
     use vmecin_sub, only: stevvo
     use callback, only: output_error, output_orbits_macrostep
 
@@ -164,6 +165,7 @@ module params
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        symplectic_euler_warning_mode, &
 	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
 	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
 	        canonical_ode_relerr, &
@@ -201,6 +203,11 @@ contains
         call apply_config_aliases
 
         call reset_seed_if_deterministic
+
+        if (symplectic_euler_warning_mode) then
+            print *, 'WARNING: symplectic Euler accepts finite Newton iterates ', &
+                'after the iteration limit; see newton1_maxit diagnostics'
+        end if
 
         call validate_boundary_event_tolerances
         if (min(canonical_grid_nr, canonical_grid_ntheta, &

@@ -26,6 +26,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY = 4
     integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
+    logical :: symplectic_euler_warning_mode = .true.
     real(dp) :: boundary_event_fraction_tolerance = -1d0
     real(dp) :: boundary_event_radial_tolerance = -1d0
 
