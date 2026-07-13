@@ -847,6 +847,16 @@ set_tests_properties(test_spectre_gc_rk45 PROPERTIES
     LABELS "integration;python"
     TIMEOUT 120)
 
+add_test(NAME test_spectre_startmode2
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_startmode2.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_startmode2 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
 # SPECTRE per-volume symplectic guiding-center tracing (#439): bounded non-secular
 # energy, cross-scheme consistency, and RK45 cross-check on the committed fixture.
 add_test(NAME test_spectre_sympl_volume

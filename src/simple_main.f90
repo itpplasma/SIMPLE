@@ -125,7 +125,11 @@ contains
             call init_magfie(SPECTRE)
             call print_phase_time('SPECTRE magfie initialization completed')
 
-            call sample_spectre_surface(zstart)
+            if (startmode == 1) then
+                call sample_spectre_surface(zstart)
+            else
+                call sample_particles(.true.)
+            end if
             call print_phase_time('SPECTRE particle sampling completed')
 
             if (generate_start_only) stop 'stopping after generating start.dat'
