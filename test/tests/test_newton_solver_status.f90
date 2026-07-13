@@ -69,7 +69,7 @@ program test_newton_solver_status
   use linear_radial_field_backend, only: basin_limited_step, &
     evaluate_linear_radial, nonlinear_boundary_step
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
-    advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
+    advance_symplectic_with_boundary, newton1, newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
     get_boundary_event_tolerances
   use orbit_symplectic_base, only: symplectic_integrator_t, &
@@ -78,13 +78,15 @@ program test_newton_solver_status
     SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
     SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
     SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED, &
-    boundary_event_fraction_tolerance, boundary_event_radial_tolerance
+    boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
+    symplectic_euler_warning_mode
 
   implicit none
 
   type(symplectic_integrator_t) :: integrator
   type(field_can_t) :: field
   real(dp) :: x(5), xlast(5), matrix(2, 2), residual(2), matrix3(3, 3)
+  real(dp) :: euler_x(2), euler_xlast(2)
   real(dp) :: lobatto_state(10), expected_lobatto_state(10)
   integer :: i, status
 
@@ -97,6 +99,19 @@ program test_newton_solver_status
     error stop 'zero-iteration midpoint solve did not report max iterations'
   end if
   if (any(xlast /= x)) error stop 'zero-iteration solve changed the iterate'
+
+  euler_x = [0.5_dp, 0.3_dp]
+  field%ro0 = 1.0_dp
+  symplectic_euler_warning_mode = .false.
+  call newton1(integrator, field, euler_x, 0, euler_xlast, status)
+  if (status /= SYMPLECTIC_STEP_MAXITER) then
+    error stop 'strict Euler mode did not report max iterations'
+  end if
+  symplectic_euler_warning_mode = .true.
+  call newton1(integrator, field, euler_x, 0, euler_xlast, status)
+  if (status /= SYMPLECTIC_STEP_OK) then
+    error stop 'Euler warning mode did not accept the finite iterate'
+  end if
 
   x(1) = 1.1_dp
   call newton_midpoint(integrator, field, x, 1.0e-15_dp, 1.0e-12_dp, &

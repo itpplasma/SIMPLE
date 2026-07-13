@@ -12,7 +12,7 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
-  boundary_event_radial_tolerance
+  boundary_event_radial_tolerance, symplectic_euler_warning_mode
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -24,6 +24,7 @@ use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 
 implicit none
 
@@ -446,6 +447,9 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON1_MAXIT)
+    if (symplectic_euler_warning_mode .and. all(ieee_is_finite(x))) then
+      status = SYMPLECTIC_STEP_OK
+    end if
   end if
 end subroutine
 
