@@ -1,5 +1,5 @@
 module params
-    use, intrinsic :: iso_fortran_env, only: int8
+    use, intrinsic :: iso_fortran_env, only: int8, int64
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
@@ -12,11 +12,15 @@ module params
     use magfie_sub, only: TEST
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-                                     EXPL_IMPL_EULER
+                                     EXPL_IMPL_EULER, &
+                                     boundary_event_fraction_tolerance, &
+                                     boundary_event_radial_tolerance
     use vmecin_sub, only: stevvo
     use callback, only: output_error, output_orbits_macrostep
 
     implicit none
+
+    private :: config_value_is_finite
 
     ! Define real(dp) kind parameter
     integer, parameter :: dp = kind(1.0d0)
@@ -155,6 +159,7 @@ module params
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
 	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
@@ -189,11 +194,36 @@ contains
 
         call reset_seed_if_deterministic
 
+        call validate_boundary_event_tolerances
+
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
         end if
 
     end subroutine read_config
+
+    subroutine validate_boundary_event_tolerances
+        if (.not. config_value_is_finite(boundary_event_fraction_tolerance) .or. &
+            (boundary_event_fraction_tolerance /= -1d0 .and. &
+             boundary_event_fraction_tolerance <= 0d0)) then
+            error stop 'boundary_event_fraction_tolerance must be finite and positive or -1'
+        end if
+        if (.not. config_value_is_finite(boundary_event_radial_tolerance) .or. &
+            (boundary_event_radial_tolerance /= -1d0 .and. &
+             boundary_event_radial_tolerance <= 0d0)) then
+            error stop 'boundary_event_radial_tolerance must be finite and positive or -1'
+        end if
+    end subroutine validate_boundary_event_tolerances
+
+    pure logical function config_value_is_finite(value)
+        real(dp), intent(in) :: value
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7ff0000000000000', int64)
+        integer(int64) :: bits
+
+        bits = transfer(value, bits)
+        config_value_is_finite = iand(bits, exponent_mask) /= exponent_mask
+    end function config_value_is_finite
 
 	    subroutine params_init
 	        real(dp) :: E_alpha

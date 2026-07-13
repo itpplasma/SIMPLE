@@ -46,22 +46,39 @@ contains
       step_status = SYMPLECTIC_STEP_OK
     end if
   end subroutine basin_limited_step
+
+  subroutine nonlinear_boundary_step(si, f, step_status)
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
+    integer, intent(out) :: step_status
+    real(dp) :: radius
+
+    if (si%dt > 0.4_dp) then
+      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      radius = 1.0_dp - 1.0e-7_dp - (0.4_dp - si%dt)**2
+      si%z(1) = radius
+      step_status = SYMPLECTIC_STEP_OK
+    end if
+  end subroutine nonlinear_boundary_step
 end module linear_radial_field_backend
 
 program test_newton_solver_status
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
-    evaluate_linear_radial
+    evaluate_linear_radial, nonlinear_boundary_step
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
     advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
-    orbit_timestep_sympl, matrix3_near_singular, solve_newton_system
+    orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
+    get_boundary_event_tolerances
   use orbit_symplectic_base, only: symplectic_integrator_t, &
     EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, LOBATTO3, &
     SYMPLECTIC_STEP_BOUNDARY, &
     SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
     SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
-    SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED, &
+    boundary_event_fraction_tolerance, boundary_event_radial_tolerance
 
   implicit none
 
@@ -150,9 +167,56 @@ program test_newton_solver_status
   end if
 
   call test_lcfs_location
+  call test_configured_event_tolerances
   call test_solver_basin_is_not_boundary
 
 contains
+
+  subroutine test_configured_event_tolerances
+    type(symplectic_integrator_t) :: loose_integrator, tight_integrator
+    type(field_can_t) :: event_field
+    real(dp) :: configured_fraction_tolerance, configured_radial_tolerance
+    integer :: event_status
+
+    eval_field => evaluate_linear_radial
+    event_field%ro0 = 1.0_dp
+    event_field%mu = 1.0_dp
+
+    loose_integrator%z = [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+    loose_integrator%dt = 1.0_dp
+    loose_integrator%ntau = 1
+    loose_integrator%rtol = 1.0e-12_dp
+    boundary_event_fraction_tolerance = 1.0e-4_dp
+    boundary_event_radial_tolerance = 1.0e-4_dp
+    call get_boundary_event_tolerances(1.0e-12_dp, &
+      configured_fraction_tolerance, configured_radial_tolerance)
+    if (configured_fraction_tolerance /= 1.0e-4_dp .or. &
+        configured_radial_tolerance /= 1.0e-4_dp) then
+      error stop 'configured event tolerances were not selected'
+    end if
+    call advance_symplectic_with_boundary(loose_integrator, event_field, &
+      nonlinear_boundary_step, event_status)
+    if (event_status /= SYMPLECTIC_STEP_BOUNDARY) then
+      error stop 'loose configured event tolerances rejected the crossing'
+    end if
+
+    tight_integrator%z = [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+    tight_integrator%dt = 1.0_dp
+    tight_integrator%ntau = 1
+    tight_integrator%rtol = 1.0e-12_dp
+    boundary_event_fraction_tolerance = 1.0e-8_dp
+    boundary_event_radial_tolerance = 1.0e-8_dp
+    call advance_symplectic_with_boundary(tight_integrator, event_field, &
+      nonlinear_boundary_step, event_status)
+    boundary_event_fraction_tolerance = -1.0_dp
+    boundary_event_radial_tolerance = -1.0_dp
+    if (event_status /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) then
+      error stop 'tight radial tolerance accepted an unresolved crossing'
+    end if
+    if (any(tight_integrator%z /= [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp])) then
+      error stop 'unresolved configured event changed the accepted state'
+    end if
+  end subroutine test_configured_event_tolerances
 
   subroutine test_solver_basin_is_not_boundary
     type(symplectic_integrator_t) :: basin_integrator
