@@ -29,12 +29,15 @@ ENV_OVERSHOOT = 0.02
 ENV_REACH = 0.05
 
 
-def write_namelist(path, h5, nturns, nsteps, nseeds, volumes=None):
+def write_namelist(path, h5, nturns, nsteps, nseeds, volumes=None,
+                   seed_file=None):
     lines = ["&poincare", f"  spectre_file = '{h5}'", "  zeta0 = 0.0",
              f"  nturns = {nturns}", f"  nsteps_per_period = {nsteps}",
              f"  nseeds_per_volume = {nseeds}"]
     if volumes is not None:
         lines.append("  volumes = " + ", ".join(str(v) for v in volumes))
+    if seed_file is not None:
+        lines.append(f"  seed_file = '{seed_file}'")
     lines.append("/")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -156,11 +159,8 @@ def main():
             print(f"BDD3 vol{lvol}: iota [{iota.min():.5f},{iota.max():.5f}] "
                   f"ref [{ref_iota.min():.5f},{ref_iota.max():.5f}]")
 
-        # BDD 4: step-halving convergence. Symplectic Euler is first order, so
-        # the final section point shift is O(h): it stays small and halves on
-        # each doubling (the literal 1e-6 target needs ~1e6 steps/period). A
-        # loose Newton tolerance would floor the shift and break the halving;
-        # Newton runs at 1e-13, so the shift keeps shrinking.
+        # BDD 4: implicit midpoint is second order, so the final-section shift
+        # falls by about four when the step is halved.
         pts = {}
         for nsteps in (256, 512, 1024):
             run_app(binary, work, h5, nturns=3, nsteps=nsteps, nseeds=4,
@@ -175,9 +175,20 @@ def main():
         d1, d2 = shift(256, 512), shift(512, 1024)
         if not d1 < 1.0e-3:
             failures.append(f"BDD4: coarse shift {d1:.3e} not small")
-        if not d2 < 0.75 * d1:
+        if not d2 < 0.40 * d1:
             failures.append(f"BDD4: shift not converging {d2:.3e} vs {d1:.3e}")
         print(f"BDD4: shift 256->512 = {d1:.3e}, 512->1024 = {d2:.3e}")
+
+        seed_path = os.path.join(work, "seeds.dat")
+        explicit = np.array([[1, -0.4, 0.1], [1, 0.2, 0.7]])
+        np.savetxt(seed_path, explicit, fmt=["%d", "%.17g", "%.17g"])
+        run_app(binary, work, h5, nturns=1, nsteps=64, nseeds=1,
+                volumes=[2], seed_file=seed_path)
+        initial = load_volume(work, 2)
+        initial = initial[initial[:, 1] == 0][:, [2, 3]]
+        if not np.allclose(initial, explicit[:, 1:], rtol=0.0, atol=1.0e-14):
+            failures.append("BDD5: explicit field-line seeds were replaced")
+        print("BDD5: explicit field-line seeds preserved")
 
     if failures:
         print("\nFAILURES:")
