@@ -11,8 +11,11 @@ map is checked directly from spectre_crossing_events.dat:
   * Implementation identity: on tok2vol every crossing applies exactly
     lambda_k * X to (theta, zeta, v_par) and conserves H = v_par^2/2 + mu*|B| to
     1e-13, with |B| taken at the KICKED landing point in each volume.
-  * Physics magnitude: the tangential kicks are nonzero, finite, and small
-    compared to 2*pi; the same run under crossing_level = 0 applies no kick.
+  * Physics magnitude: refraction impulse kicks are nonzero, finite, and obey
+    the thin-layer bound; equal-B relocations (forbidden-crossing reflections
+    and far-side relocated transmissions, lambda_k = 0) may move O(1) along
+    the interface and are held to exact energy instead. The same run under
+    crossing_level = 0 applies no kick.
   * Level-0 vs Level-1: the same ensemble under both maps keeps the event count
     within 20% and conserves energy in both.
 
@@ -121,22 +124,30 @@ def check_identity(ev1, failures):
 
 
 def check_physics(ev1, ev0, failures):
+    # Two kick classes at Level 1: the refraction impulse (lambda_k != 0)
+    # obeys the thin-layer bound; equal-B relocations (lambda_k = 0 with a
+    # nonzero displacement, transmission or reflection) may move O(1) along
+    # the interface and are held to energy exactness by check_energy.
     cross1 = ev1[ev1[:, C_TYPE] == TYPE_CROSSING]
     kick = np.hypot(cross1[:, C_DTH], cross1[:, C_DZE])
-    refr = kick[kick > 0.0]
+    impulse = kick[cross1[:, C_LAM] != 0.0]
     if not np.all(np.isfinite(kick)):
         failures.append("physics: non-finite tangential kick")
-    if not np.all(kick < KICK_MAX):
-        failures.append(f"physics: kick {kick.max():.3e} >= {KICK_MAX} rad")
-    if not KICK_MIN < kick.max():
-        failures.append(f"physics: no nonzero refraction kick (max {kick.max():.3e})")
+    if not np.all(impulse < KICK_MAX):
+        failures.append(f"physics: impulse kick {impulse.max():.3e} >= {KICK_MAX} rad")
+    if not KICK_MIN < impulse.max():
+        failures.append(f"physics: no nonzero refraction kick (max {impulse.max():.3e})")
+
+    refl1 = ev1[ev1[:, C_TYPE] == TYPE_REFLECTION]
+    reloc = np.hypot(refl1[:, C_DTH], refl1[:, C_DZE])
+    n_reloc = int((reloc > 0.0).sum() + (kick[cross1[:, C_LAM] == 0.0] > 0.0).sum())
 
     cross0 = ev0[ev0[:, C_TYPE] == TYPE_CROSSING]
     zero0 = np.max(np.abs(cross0[:, [C_XT, C_XZ, C_XV, C_LAM, C_DTH, C_DZE]]))
     if not zero0 <= 0.0:
         failures.append(f"physics: Level-0 kick nonzero ({zero0:.3e})")
-    print(f"physics: refracted={len(refr)}/{len(cross1)} "
-          f"kick_max={kick.max():.3e} rad, Level-0 max component {zero0:.3e}")
+    print(f"physics: refracted={len(impulse)}/{len(cross1)} relocated={n_reloc} "
+          f"impulse_max={impulse.max():.3e} rad, Level-0 max component {zero0:.3e}")
 
 
 def check_energy(ev, tag, failures):

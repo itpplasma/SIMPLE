@@ -60,6 +60,18 @@ module interface_crossing
     integer, parameter :: sym_iters = 2
     real(dp), parameter :: newton_rtol = 1.0d-14
     real(dp), parameter :: max_kick = 0.3d0
+    !> Kicked Level-1 reflection (CA15): a forbidden crossing of a
+    !> pure-magnitude sheet is an equal-B relocation along the interface at
+    !> frozen (v_par, mu, H): the state follows the drift direction
+    !> sign(ro0)*(h_zeta, -h_theta) until the home field returns to the entry
+    !> value B* (same-side conjugate exit) or the target field drops to B*
+    !> (relocated transmission). reloc_max_dirjump bounds the direction jump
+    !> |h_home - h_target| inside which the pure-magnitude limit applies (the
+    !> hybrid switch criterion scale); outside it, and on any trace failure,
+    !> the Level-0 mirror is kept.
+    real(dp), parameter :: reloc_step = 6.283185307179586d-3
+    integer, parameter :: reloc_max_steps = 20000
+    real(dp), parameter :: reloc_max_dirjump = 0.05d0
 
     type :: crossing_info_t
         integer :: event_type = 0
@@ -195,6 +207,144 @@ contains
         call magfie(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
     end function bmod_at
 
+    subroutine field_at(x, bmod, hcov, hctr)
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, hcov(3), hctr(3)
+
+        real(dp) :: sqrtg, bder(3), hcurl(3)
+
+        call magfie(x, bmod, sqrtg, bder, hcov, hctr, hcurl)
+    end subroutine field_at
+
+    subroutine relocate_forbidden(rho_home, rho_target, theta0, zeta0, vpar, &
+            mu, bmod_home, dtheta, dzeta, vpar_new, info)
+        !> Equal-B relocation of a forbidden Level-1 crossing (CA15), with the
+        !> Level-0 mirror as fallback. The map conserves H exactly because the
+        !> exit field equals the frozen entry value B*; v_par, p, lambda, and
+        !> mu are untouched, ownership is assigned explicitly per exit side,
+        !> and no physical time is consumed.
+        real(dp), intent(in) :: rho_home, rho_target, theta0, zeta0, vpar, mu
+        real(dp), intent(in) :: bmod_home
+        real(dp), intent(out) :: dtheta, dzeta, vpar_new
+        type(crossing_info_t), intent(inout) :: info
+
+        real(dp) :: bstar, sgn, hnorm, cosjump
+        real(dp) :: bm, bp, gm, gp, gm_prev, gp_prev
+        real(dp) :: th, ze, th_prev, ze_prev, th_hit, ze_hit
+        real(dp) :: bm0, bp0, hcov(3), hctr(3), hcov_t(3), hctr_t(3)
+        integer :: k
+        logical :: reflect_hit, transmit_hit
+
+        ! Level-0 mirror defaults; every early return keeps them.
+        dtheta = 0.0_dp
+        dzeta = 0.0_dp
+        vpar_new = -vpar
+        info%event_type = CROSS_REFLECTION
+        info%vol_to = info%vol_from
+        info%bmod_target = bmod_home
+
+        call field_at([rho_home, theta0, zeta0], bm0, hcov, hctr)
+        call field_at([rho_target, theta0, zeta0], bp0, hcov_t, hctr_t)
+        ! h^i_home h_{target,i} is the invariant dot product of the two unit
+        ! fields; 1 - cos bounds |[[h]]|^2/2.
+        cosjump = dot_product(hctr, hcov_t)
+        if (1.0_dp - cosjump > 0.5_dp*reloc_max_dirjump**2) return
+
+        bstar = bm0
+        sgn = sign(1.0_dp, ro0*mu)
+        th = theta0
+        ze = zeta0
+        bm = bm0
+        bp = bp0
+        gm = 0.0_dp
+        gp = bp0 - bstar
+        reflect_hit = .false.
+        transmit_hit = .false.
+
+        do k = 1, reloc_max_steps
+            th_prev = th
+            ze_prev = ze
+            gm_prev = gm
+            gp_prev = gp
+            hnorm = sqrt(hcov(2)**2 + hcov(3)**2)
+            if (hnorm <= sqrt(tiny(1.0_dp))) return
+            th = th_prev + sgn*reloc_step*hcov(3)/hnorm
+            ze = ze_prev - sgn*reloc_step*hcov(2)/hnorm
+            call field_at([rho_home, th, ze], bm, hcov, hctr)
+            bp = bmod_at([rho_target, th, ze])
+            gm = bm - bstar
+            gp = bp - bstar
+            if (k == 1) then
+                ! The drift must carry the state into the sheet; a level line
+                ! that exits immediately is the degenerate case the mirror owns.
+                if (gm >= 0.0_dp) return
+            end if
+            if (gm >= 0.0_dp) then
+                reflect_hit = .true.
+                exit
+            end if
+            if (gp <= 0.0_dp) then
+                transmit_hit = .true.
+                exit
+            end if
+        end do
+
+        if (reflect_hit) then
+            call refine_root(rho_home, bstar, th_prev, ze_prev, th, ze, &
+                th_hit, ze_hit)
+            dtheta = th_hit - theta0
+            dzeta = ze_hit - zeta0
+            vpar_new = vpar
+            info%event_type = CROSS_REFLECTION
+            info%vol_to = info%vol_from
+            info%bmod_target = bmod_at([rho_target, th_hit, ze_hit])
+        else if (transmit_hit) then
+            call refine_root(rho_target, bstar, th_prev, ze_prev, th, ze, &
+                th_hit, ze_hit)
+            dtheta = th_hit - theta0
+            dzeta = ze_hit - zeta0
+            vpar_new = vpar
+            info%event_type = CROSS_CROSSING
+            info%bmod_target = bmod_at([rho_target, th_hit, ze_hit])
+        end if
+    end subroutine relocate_forbidden
+
+    subroutine refine_root(rho_side, bstar, th_a, ze_a, th_b, ze_b, th_hit, ze_hit)
+        !> Bisection for B(rho_side, th, ze) = bstar on the segment between the
+        !> last two trace points; the sign change is bracketed by construction.
+        !> The full 60 halvings put the exit on the level set to round-off, so
+        !> the relocation's H error stays at the energy-exactness floor of the
+        !> other crossing branches instead of a solver tolerance.
+        real(dp), intent(in) :: rho_side, bstar, th_a, ze_a, th_b, ze_b
+        real(dp), intent(out) :: th_hit, ze_hit
+
+        real(dp) :: sa, sb, sm, ga, gm_loc
+        integer :: k
+
+        sa = 0.0_dp
+        sb = 1.0_dp
+        ga = bmod_at([rho_side, th_a, ze_a]) - bstar
+        do k = 1, 60
+            sm = 0.5_dp*(sa + sb)
+            gm_loc = bmod_at([rho_side, th_a + sm*(th_b - th_a), &
+                              ze_a + sm*(ze_b - ze_a)]) - bstar
+            if (gm_loc == 0.0_dp) then
+                sa = sm
+                sb = sm
+                exit
+            end if
+            if (gm_loc*ga > 0.0_dp) then
+                sa = sm
+                ga = gm_loc
+            else
+                sb = sm
+            end if
+        end do
+        sm = 0.5_dp*(sa + sb)
+        th_hit = th_a + sm*(th_b - th_a)
+        ze_hit = ze_a + sm*(ze_b - ze_a)
+    end subroutine refine_root
+
     subroutine level1_map(rho_face, rho_home, rho_target, direction, &
             bmod_home, mu, vpar, y_iface, y_out, info)
         !> Level-1 refraction map: the impulse Delta z = lambda_k * X along the
@@ -234,10 +384,8 @@ contains
             info%bmod_target = bmod_at([rho_target, theta0 + dtheta, zeta0 + dzeta])
             y_out(1) = rho_face
         else
-            vpar_new = -vpar
-            info%event_type = CROSS_REFLECTION
-            info%vol_to = info%vol_from
-            info%bmod_target = bmod_home
+            call relocate_forbidden(rho_home, rho_target, theta0, zeta0, vpar, &
+                mu, bmod_home, dtheta, dzeta, vpar_new, info)
             y_out(1) = rho_face
         end if
 
