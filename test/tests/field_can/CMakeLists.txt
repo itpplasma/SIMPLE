@@ -118,6 +118,20 @@ set_tests_properties(test_spectre_kicked_reflection PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
 
+# Physical mu-scatter reference (ROADMAP section 4): full-orbit interface
+# traversals against the conserved-mu GC sheet convention, two gyrostep scales.
+add_executable(test_spectre_fo_mu_scatter.x test_spectre_fo_mu_scatter.f90)
+target_link_libraries(test_spectre_fo_mu_scatter.x simple)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
+add_test(NAME test_spectre_fo_mu_scatter
+    COMMAND $<TARGET_FILE:test_spectre_fo_mu_scatter.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
+set_tests_properties(test_spectre_fo_mu_scatter PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)
+
 # Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
 # difference algorithm they replaced to the FD truncation floor, at interior
 # points of every volume of the committed tokamak and stellarator fixtures.

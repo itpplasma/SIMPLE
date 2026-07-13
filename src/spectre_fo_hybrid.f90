@@ -67,13 +67,17 @@ contains
         state%active = .true.
     end subroutine spectre_fo_enter
     subroutine spectre_fo_advance_until_exit(state, dt, ro0_bar, dt_used, y, &
-            owner, exited, status)
+            owner, exited, status, h_scale)
         type(spectre_fo_state_t), intent(inout) :: state
         real(dp), intent(in) :: dt, ro0_bar
         real(dp), intent(out) :: dt_used, y(5)
         integer, intent(out) :: owner, status
         logical, intent(out) :: exited
-        real(dp) :: remaining, h, bmod, b(3), acov(3), e_zeta(3)
+        !> Gyrostep reduction factor in (0, 1] for convergence studies of the
+        !> recorded canonical-momentum defect and the measured return mu; the
+        !> production path omits it.
+        real(dp), intent(in), optional :: h_scale
+        real(dp) :: remaining, h, bmod, b(3), acov(3), e_zeta(3), hfac
         integer :: nstep, map_status
         dt_used = 0.0_dp
         y = 0.0_dp
@@ -82,6 +86,14 @@ contains
         if (.not. state%active .or. dt < 0.0_dp .or. ro0_bar <= 0.0_dp) then
             status = SPECTRE_FO_INVALID_STATE
             return
+        end if
+        hfac = 1.0_dp
+        if (present(h_scale)) then
+            if (h_scale <= 0.0_dp .or. h_scale > 1.0_dp) then
+                status = SPECTRE_FO_INVALID_STATE
+                return
+            end if
+            hfac = h_scale
         end if
         remaining = dt
         do nstep = 1, MAX_SUBSTEPS
@@ -93,7 +105,7 @@ contains
             call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
                 e_zeta, status)
             if (status /= SPECTRE_FO_OK) return
-            h = min(remaining, 2.0_dp*MAX_ROTATION_PARAMETER*ro0_bar/bmod)
+            h = min(remaining, hfac*2.0_dp*MAX_ROTATION_PARAMETER*ro0_bar/bmod)
             call boris_substep(state, h, ro0_bar, status)
             if (status /= SPECTRE_FO_OK) return
             dt_used = dt_used + h
