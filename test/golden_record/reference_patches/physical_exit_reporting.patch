@@ -1,3 +1,21 @@
+diff --git a/DOC/coordinates-and-fields.md b/DOC/coordinates-and-fields.md
+index e326bbf..06f58d1 100644
+--- a/DOC/coordinates-and-fields.md
++++ b/DOC/coordinates-and-fields.md
+@@ -988,9 +988,10 @@ Cartesian space with a triangulated STL surface (using CGAL).
+ - Must be built with `-DSIMPLE_ENABLE_CGAL=ON`.
+ - Requires `coord_input` to be a chartmap reference coordinate file.
+ 
+-**Performance gating**:
+-- The expensive STL intersection is only evaluated for `rho > rho_lcfs`, where
+-  `rho_lcfs` is read from the chartmap NetCDF metadata.
++**Intersection ordering**:
++- SIMPLE tests every accepted microstep segment against the STL surface.
++- If a microstep also reaches the chartmap boundary, SIMPLE tests the partial
++  segment up to that boundary and records the earlier wall intersection.
+ 
+ **Outputs** (when `output_results_netcdf = .True.`):
+ - `results.nc:wall_hit(particle)` (byte)
 diff --git a/src/netcdf_results_output.f90 b/src/netcdf_results_output.f90
 index 0d02b38..923cc99 100644
 --- a/src/netcdf_results_output.f90
@@ -73,11 +91,11 @@ index 0d02b38..923cc99 100644
          call check_nc(status, 'put_var trap_par')
  
 diff --git a/src/orbit_symplectic.f90 b/src/orbit_symplectic.f90
-index a9423d6..c42503a 100644
+index ea12e2b..697c450 100644
 --- a/src/orbit_symplectic.f90
 +++ b/src/orbit_symplectic.f90
 @@ -9,7 +9,9 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
-   LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
+   LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
    coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
    SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
 -  SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE
@@ -107,7 +125,7 @@ index a9423d6..c42503a 100644
 +  radius = -radius
 +  theta = theta + pi
 +  call count_event(EVT_R_NEGATIVE)
-+  if (radius > 1d0) status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
++  if (radius > sympl_rmax) status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 +end subroutine apply_axis_chart_switch
 +
    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -123,7 +141,7 @@ index a9423d6..c42503a 100644
  
    si%z = z
  
-@@ -54,35 +75,40 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
+@@ -54,35 +75,42 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
  
    select case (mode_init)
      case (RK45)
@@ -166,13 +184,15 @@ index a9423d6..c42503a 100644
        print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
        error stop
    end select
-+  if (mode_init /= RK45) then
++  if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
 +    orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
++  else if (mode_init /= RK45) then
++    orbit_timestep_sympl => raw_timestep_sympl
 +  end if
  end subroutine orbit_sympl_init
  
  
-@@ -357,25 +383,33 @@ end subroutine jac_midpoint_part2
+@@ -357,25 +385,33 @@ end subroutine jac_midpoint_part2
  
    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    !
@@ -201,15 +221,15 @@ index a9423d6..c42503a 100644
    tolref(2) = dabs(1d1*torflux/f%ro0)
  
    do kit = 1, maxit
--    if (x(1) > 1d0) return
-+    if (x(1) > 1d0) then
+-    if (x(1) > sympl_rmax) return
++    if (x(1) > sympl_rmax) then
 +      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 +      return
 +    end if
      ! Transient guard: in s = rho^2 coordinates the Hamiltonian is not
      ! smooth at the axis (sqrt(s) behavior), so there is no consistent
      ! field extension to s < 0 for the solver itself. Intermediate
-@@ -385,32 +419,63 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
+@@ -385,32 +421,63 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
  
      call eval_field(f, x(1), si%z(2), si%z(3), 2)
      call get_derivatives2(f, x(2))
@@ -223,7 +243,7 @@ index a9423d6..c42503a 100644
 +      status = SYMPLECTIC_STEP_LINEAR_SOLVE
 +      return
 +    end if
-+    if (x(1) > 1d0) then
++    if (x(1) > sympl_rmax) then
 +      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 +      return
 +    end if
@@ -272,15 +292,15 @@ index a9423d6..c42503a 100644
 +  boundary_limited = .false.
  
    do kit = 1, maxit
--    if(x(1) > 1.0) return
-+    if(x(1) > 1.0) then
+-    if(x(1) > sympl_rmax) return
++    if(x(1) > sympl_rmax) then
 +      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 +      return
 +    end if
      ! Transient guard for intermediate iterates; the converged-negative
      ! case is handled by the caller via a chart switch (#370).
      if(x(1) < 0.0) x(1) = 0.01
-@@ -422,6 +487,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
+@@ -422,6 +489,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
      det = fjac(1,1)*fjac(2,2)*fjac(3,3) + fjac(1,2)*fjac(2,3)*fjac(3,1) + fjac(1,3)*fjac(2,1)*fjac(3,2) &
          - fjac(1,3)*fjac(2,2)*fjac(3,1) - fjac(1,1)*fjac(2,3)*fjac(3,2) - fjac(1,2)*fjac(2,1)*fjac(3,3)
  
@@ -292,7 +312,7 @@ index a9423d6..c42503a 100644
      jinv(1,1) = fjac(2,2)*fjac(3,3) - fjac(2,3)*fjac(3,2)
      jinv(1,2) = fjac(1,3)*fjac(3,2) - fjac(1,2)*fjac(3,3)
      jinv(1,3) = fjac(1,2)*fjac(2,3) - fjac(1,3)*fjac(2,2)
-@@ -434,7 +504,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
+@@ -434,7 +506,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
      jinv(3,2) = fjac(1,2)*fjac(3,1) - fjac(3,2)*fjac(1,1)
      jinv(3,3) = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
  
@@ -305,7 +325,7 @@ index a9423d6..c42503a 100644
  
      !call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
      ! after solution: fvec = (xold-xnew)_Newton
-@@ -446,12 +520,36 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
+@@ -446,12 +522,36 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
      tolref(2) = twopi
      tolref(3) = twopi
  
@@ -345,7 +365,7 @@ index a9423d6..c42503a 100644
  subroutine solve_newton_system(matrix, residual, status)
    real(dp), intent(inout) :: matrix(:, :), residual(:)
    integer, intent(out) :: status
-@@ -467,6 +565,45 @@ subroutine solve_newton_system(matrix, residual, status)
+@@ -467,6 +567,49 @@ subroutine solve_newton_system(matrix, residual, status)
    end if
  end subroutine solve_newton_system
  
@@ -369,12 +389,16 @@ index a9423d6..c42503a 100644
 +  integer :: k, radius_index
 +
 +  step_scale = 1d0
++  if (sympl_rmax > 1d0) then
++    limited = .false.
++    return
++  end if
 +  do k = 1, size(radial_indices)
 +    radius_index = radial_indices(k)
 +    outward_step = -correction(radius_index)
 +    if (outward_step > 0d0) then
 +      step_scale = min(step_scale, &
-+        0.8d0*max(0d0, 1d0 - x(radius_index))/outward_step)
++        0.8d0*max(0d0, sympl_rmax - x(radius_index))/outward_step)
 +    end if
 +  end do
 +  limited = step_scale < 1d0
@@ -384,14 +408,14 @@ index a9423d6..c42503a 100644
 +  real(dp), intent(in) :: x(:), rtol
 +  integer, intent(in) :: radial_indices(:)
 +
-+  radial_boundary_reached = any(abs(1d0 - x(radial_indices)) <= &
++  radial_boundary_reached = any(abs(sympl_rmax - x(radial_indices)) <= &
 +    max(1d-10, 10d0*rtol))
 +end function radial_boundary_reached
 +
  recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
    type(symplectic_integrator_t), intent(inout) :: si
    type(field_can_t), intent(inout) :: f
-@@ -475,6 +612,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
+@@ -475,6 +618,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
  
    integer, parameter :: n = 5
    integer :: kit
@@ -399,7 +423,7 @@ index a9423d6..c42503a 100644
  
    real(dp), intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
    real(dp), intent(in) :: atol, rtol
-@@ -484,10 +622,12 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
+@@ -484,10 +628,12 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
  
    real(dp) :: fvec(n), fjac(n,n)
  
@@ -413,22 +437,27 @@ index a9423d6..c42503a 100644
  
    tolref(1) = 1d0
    tolref(2) = twopi
-@@ -514,26 +654,32 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
+@@ -514,9 +660,16 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
      call solve_newton_system(fjac, fvec, status)
      if (status /= SYMPLECTIC_STEP_OK) return
      status = SYMPLECTIC_STEP_MAXITER
 -    ! after solution: fvec = (xold-xnew)_Newton
 -    x = x - fvec
--    if (x(1) > 1d0 .or. x(5) > 1d0) then
--      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
--      return
--    end if
-+    call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
-+      step_limited)
-+    boundary_limited = boundary_limited .or. step_limited
-+    x = x - step_scale*fvec
-     xabs = dabs(x - xlast)
- 
+-    if (x(1) > sympl_rmax .or. x(5) > sympl_rmax) then
++    if (sympl_rmax > 1d0) then
++      step_limited = .false.
++      x = x - fvec
++    else
++      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
++        step_limited)
++      boundary_limited = boundary_limited .or. step_limited
++      x = x - step_scale*fvec
++    end if
++    if (any(x(radial_indices) > sympl_rmax)) then
+       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+       return
+     end if
+@@ -525,15 +678,23 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
      ! Don't take too small values in pphi as tolerance reference
      tolref(4) = max(dabs(x(4)), tolref(4))
  
@@ -454,7 +483,7 @@ index a9423d6..c42503a 100644
  end subroutine
  
    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-@@ -573,7 +719,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
+@@ -573,7 +734,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
  
    integer, intent(in) :: s
    type(field_can_t), intent(inout) :: fs(:)
@@ -463,7 +492,7 @@ index a9423d6..c42503a 100644
  
    real(dp), intent(inout) :: x(4*s)
    real(dp), intent(in) :: atol, rtol
-@@ -583,10 +729,15 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
+@@ -583,10 +744,15 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
  
    real(dp) :: fvec(4*s), fjac(4*s, 4*s)
  
@@ -480,25 +509,34 @@ index a9423d6..c42503a 100644
  
    do kit = 1, maxit
  
-@@ -609,13 +760,10 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
+@@ -609,13 +775,19 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
      if (status /= SYMPLECTIC_STEP_OK) return
      status = SYMPLECTIC_STEP_MAXITER
      ! after solution: fvec = (xold-xnew)_Newton
 -    x = x - fvec
 -    do ks = 1, s
--      if (x(4*ks-3) > 1d0) then
+-      if (x(4*ks-3) > sympl_rmax) then
 -        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 -        return
 -      end if
 -    end do
-+    call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
-+      step_limited)
-+    boundary_limited = boundary_limited .or. step_limited
-+    x = x - step_scale*fvec
++    if (sympl_rmax > 1d0) then
++      step_limited = .false.
++      x = x - fvec
++    else
++      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
++        step_limited)
++      boundary_limited = boundary_limited .or. step_limited
++      x = x - step_scale*fvec
++    end if
++    if (any(x(radial_indices) > sympl_rmax)) then
++      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
++      return
++    end if
      xabs = dabs(x - xlast)
  
      do ks = 1, s
-@@ -625,16 +773,27 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
+@@ -625,16 +797,27 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
        tolref(4*ks) = dabs(xlast(4*ks))
      end do
  
@@ -529,7 +567,7 @@ index a9423d6..c42503a 100644
  end subroutine newton_rk_gauss
  
  
-@@ -897,7 +1056,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
+@@ -897,7 +1080,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
  
    integer, intent(in) :: s
    type(field_can_t), intent(inout) :: fs(:)
@@ -538,7 +576,7 @@ index a9423d6..c42503a 100644
  
    real(dp), intent(inout) :: x(4*s-2)
    real(dp), intent(in) :: atol, rtol
-@@ -907,10 +1066,16 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
+@@ -907,10 +1090,16 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
  
    real(dp) :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
  
@@ -556,29 +594,35 @@ index a9423d6..c42503a 100644
  
    do kit = 1, maxit
  
-@@ -926,17 +1091,10 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
+@@ -926,17 +1115,19 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
      if (status /= SYMPLECTIC_STEP_OK) return
      status = SYMPLECTIC_STEP_MAXITER
      ! after solution: fvec = (xold-xnew)_Newton
 -    x = x - fvec
--    if (x(1) > 1d0) then
--      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
--      return
--    end if
+-    if (x(1) > sympl_rmax) then
++    if (sympl_rmax > 1d0) then
++      step_limited = .false.
++      x = x - fvec
++    else
++      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
++        step_limited)
++      boundary_limited = boundary_limited .or. step_limited
++      x = x - step_scale*fvec
++    end if
++    if (any(x(radial_indices) > sympl_rmax)) then
+       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+       return
+     end if
 -    do ks = 2, s
--      if (x(4*ks-5) > 1d0) then
+-      if (x(4*ks-5) > sympl_rmax) then
 -        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
 -        return
 -      end if
 -    end do
-+    call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
-+      step_limited)
-+    boundary_limited = boundary_limited .or. step_limited
-+    x = x - step_scale*fvec
      xabs = dabs(x - xlast)
  
      tolref(1) = 1d0
-@@ -948,16 +1106,25 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
+@@ -948,16 +1139,25 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
        tolref(4*ks-2) = dabs(xlast(4*ks-2))
      end do
  
@@ -607,7 +651,7 @@ index a9423d6..c42503a 100644
  end subroutine newton_rk_lobatto
  
  
-@@ -1214,37 +1381,41 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
+@@ -1214,37 +1414,41 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
    integer, parameter :: maxit = 32
  
    real(dp), dimension(n) :: x, xlast
@@ -636,7 +680,7 @@ index a9423d6..c42503a 100644
 +      return
 +    end if
  
-     if (x(1) > 1.0d0) then
+     if (x(1) > sympl_rmax) then
 -      ierr = 1
 +      si = accepted_integrator
 +      f = accepted_field
@@ -652,7 +696,7 @@ index a9423d6..c42503a 100644
 -      si%z(2) = si%z(2) + pi
 -      crossed = .true.
 -      call count_event(EVT_R_NEGATIVE)
--      if (x(1) > 1.0d0) then
+-      if (x(1) > sympl_rmax) then
 -        ! Pathological solve (|r| beyond the boundary on the far side).
 -        ierr = 1
 -        return
@@ -665,7 +709,7 @@ index a9423d6..c42503a 100644
      end if
  
      si%z(1) = x(1)
-@@ -1280,35 +1451,40 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
+@@ -1280,35 +1484,40 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
    integer, parameter :: maxit = 32
  
    real(dp), dimension(n) :: x, xlast, dz
@@ -693,7 +737,7 @@ index a9423d6..c42503a 100644
 +      return
 +    end if
  
-     if (x(1) > 1.0) then
+     if (x(1) > sympl_rmax) then
 -      ierr = 1
 +      si = accepted_integrator
 +      f = accepted_field
@@ -709,7 +753,7 @@ index a9423d6..c42503a 100644
 -      x(2) = x(2) + pi
 -      crossed = .true.
 -      call count_event(EVT_R_NEGATIVE)
--      if (x(1) > 1.0) then
+-      if (x(1) > sympl_rmax) then
 -        ierr = 1
 -        return
 -      end if
@@ -721,7 +765,7 @@ index a9423d6..c42503a 100644
      end if
  
      si%z(1:3) = x
-@@ -1341,73 +1517,240 @@ end subroutine orbit_timestep_sympl_impl_expl_euler
+@@ -1341,76 +1550,310 @@ end subroutine orbit_timestep_sympl_impl_expl_euler
  
    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    !
@@ -738,7 +782,10 @@ index a9423d6..c42503a 100644
 +  logical :: crossed
  
 -  integer, parameter :: n = 5
--  integer, parameter :: maxit = 8
+   ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
+   ! and the exact-landing substep solve (#441) needs fully converged trial
+   ! steps, which 8 iterations do not guarantee near interfaces.
+-  integer, parameter :: maxit = 32
 +  si%pthold = f%pth
 +  x(1:4) = si%z
 +  x(5) = si%z(1)
@@ -762,7 +809,7 @@ index a9423d6..c42503a 100644
 -    x(1:4) = si%z
 -    x(5) = si%z(1)
 +  si%z = x(1:4)
-+  if (extrap_field .and. .not. crossed) then
++  if (extrap_field) then
 +    f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
 +      + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
 +      + f%dpth(4)*(x(4)-xlast(4))
@@ -815,7 +862,7 @@ index a9423d6..c42503a 100644
 +      fraction_low = trial_fraction
 +      best_integrator = trial_integrator
 +      best_field = trial_field
-+      radial_residual = abs(1d0 - best_integrator%z(1))
++      radial_residual = abs(sympl_rmax - best_integrator%z(1))
 +
 +      if (radial_residual == 0d0) then
 +        fraction_ceiling = fraction_low
@@ -840,7 +887,7 @@ index a9423d6..c42503a 100644
 +        f = best_field
 +        si%dt = accepted_integrator%dt
 +        si%ntau = accepted_integrator%ntau
-+        si%z(1) = 1d0
++        si%z(1) = sympl_rmax
 +        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
 +        call get_val(f, si%z(4))
 +        event_fraction = fraction_low
@@ -866,19 +913,19 @@ index a9423d6..c42503a 100644
 -      ierr = newton_status
 +      status = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
 +      event_fraction = 0d0
-+      radial_residual = abs(1d0 - best_integrator%z(1))
++      radial_residual = abs(sympl_rmax - best_integrator%z(1))
 +      fraction_width = fraction_ceiling - fraction_low
        return
 -    end if
 -
--    if (x(1) > 1.0) then
+-    if (x(1) > sympl_rmax) then
 -      ierr = 1
 +    case default
 +      si = accepted_integrator
 +      f = accepted_field
 +      status = trial_status
 +      event_fraction = 0d0
-+      radial_residual = abs(1d0 - best_integrator%z(1))
++      radial_residual = abs(sympl_rmax - best_integrator%z(1))
 +      fraction_width = fraction_ceiling - fraction_low
        return
 +    end select
@@ -893,14 +940,9 @@ index a9423d6..c42503a 100644
 +  f = accepted_field
 +  status = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
 +  event_fraction = 0d0
-+  radial_residual = abs(1d0 - best_integrator%z(1))
++  radial_residual = abs(sympl_rmax - best_integrator%z(1))
 +  fraction_width = fraction_ceiling - fraction_low
 +end subroutine locate_symplectic_boundary
-+
-+recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
-+  type(symplectic_integrator_t), intent(inout) :: si
-+  type(field_can_t), intent(inout) :: f
-+  integer, intent(out) :: ierr
  
 -    if (x(1) < 0.0) then
 -      ! Axis crossing on the final iterate: continue on the opposite ray
@@ -908,24 +950,90 @@ index a9423d6..c42503a 100644
 -      x(1) = -x(1)
 -      x(2) = x(2) + pi
 -      call count_event(EVT_R_NEGATIVE)
--      if (x(1) > 1.0) then
--        ierr = 1
-+  if (si%ntau /= 1) error stop &
-+    'orbit_timestep_sympl_midpoint raw step requires ntau=1'
-+  call attempt_midpoint_step(si, f, ierr)
-+end subroutine orbit_timestep_sympl_midpoint
-+
-+recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
++recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
 +  type(symplectic_integrator_t), intent(inout) :: si
 +  type(field_can_t), intent(inout) :: f
 +  integer, intent(out) :: ierr
 +
++  integer, parameter :: n = 5, maxit = 32
++  real(dp) :: x(n), xlast(n)
++  integer :: ktau, step_status
++  type(symplectic_integrator_t) :: accepted_integrator
++  type(field_can_t) :: accepted_field
++
++  if (sympl_rmax > 1d0) then
++    ierr = SYMPLECTIC_STEP_OK
++    do ktau = 1, si%ntau
++      accepted_integrator = si
++      accepted_field = f
++      si%pthold = f%pth
++      x(1:4) = si%z
++      x(5) = si%z(1)
++      call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
++        step_status)
++      if (step_status /= SYMPLECTIC_STEP_OK) then
++        si = accepted_integrator
++        f = accepted_field
++        ierr = step_status
++        return
++      end if
+       if (x(1) > sympl_rmax) then
+-        ierr = 1
++        ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+         return
+       end if
+-    end if
++      if (x(1) < 0d0) then
++        x(1) = -x(1)
++        x(2) = x(2) + pi
++        call count_event(EVT_R_NEGATIVE)
++        if (x(1) > sympl_rmax) then
++          ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
++          return
++        end if
++      end if
++      si%z = x(1:4)
++      if (extrap_field) then
++        f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
++          + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
++          + f%dpth(4)*(x(4)-xlast(4))
++      else
++        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
++        call get_val(f, si%z(4))
++      end if
++    end do
++    return
++  end if
+ 
+-    si%z = x(1:4)
++  if (si%ntau /= 1) error stop &
++    'orbit_timestep_sympl_midpoint raw step requires ntau=1'
++  call attempt_midpoint_step(si, f, ierr)
++end subroutine orbit_timestep_sympl_midpoint
+ 
+-    if (extrap_field) then
+-      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
+-                    + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
+-                    + f%dpth(3)*(x(3)-xlast(3)) &  ! d/dph
+-                    + f%dpth(4)*(x(4)-xlast(4))    ! d/dpph
+-    else
+-      call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+-      call get_val(f, si%z(4))
+-    endif
++recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
++  type(symplectic_integrator_t), intent(inout) :: si
++  type(field_can_t), intent(inout) :: f
++  integer, intent(out) :: ierr
+ 
+-    ktau = ktau+1
+-  enddo
 +  if (.not. associated(raw_timestep_sympl)) then
 +    error stop 'symplectic timestep implementation is not initialized'
 +  end if
 +  call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
 +end subroutine orbit_timestep_sympl_with_boundary
-+
+ 
+-end subroutine orbit_timestep_sympl_midpoint
 +subroutine advance_symplectic_with_boundary(si, f, raw_step, ierr)
 +  type(symplectic_integrator_t), intent(inout) :: si
 +  type(field_can_t), intent(inout) :: f
@@ -947,6 +1055,25 @@ index a9423d6..c42503a 100644
 +  fraction_width = 0d0
 +  ierr = SYMPLECTIC_STEP_OK
 +
++  if (sympl_rmax > 1d0) then
++    do ktau = 1, original_ntau
++      accepted_integrator = si
++      accepted_field = f
++      si%ntau = 1
++      call raw_step(si, f, step_status)
++      si%ntau = original_ntau
++      if (step_status /= SYMPLECTIC_STEP_OK) then
++        si = accepted_integrator
++        f = accepted_field
++        si%last_step_fraction = real(ktau - 1, dp)/real(original_ntau, dp)
++        ierr = step_status
++        return
++      end if
++    end do
++    si%last_step_fraction = 1d0
++    return
++  end if
++
 +  do ktau = 1, original_ntau
 +    accepted_integrator = si
 +    accepted_field = f
@@ -954,27 +1081,16 @@ index a9423d6..c42503a 100644
 +    call raw_step(si, f, step_status)
 +    si%ntau = original_ntau
 +    if (step_status == SYMPLECTIC_STEP_OK) then
-+      if (si%z(1) == 1d0) then
++      if (si%z(1) == sympl_rmax) then
 +        si%last_step_fraction = real(ktau, dp)/real(original_ntau, dp)
 +        si%last_event_radial_residual = 0d0
 +        si%last_event_fraction_width = 0d0
 +        ierr = SYMPLECTIC_STEP_BOUNDARY
-         return
-       end if
++        return
++      end if
 +      cycle
-     end if
- 
--    si%z = x(1:4)
--
--    if (extrap_field) then
--      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
--                    + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
--                    + f%dpth(3)*(x(3)-xlast(3)) &  ! d/dph
--                    + f%dpth(4)*(x(4)-xlast(4))    ! d/dpph
--    else
--      call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
--      call get_val(f, si%z(4))
--    endif
++    end if
++
 +    if (step_status == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
 +      accepted_integrator%ntau = original_ntau
 +      call locate_symplectic_boundary(accepted_integrator, accepted_field, &
@@ -990,9 +1106,7 @@ index a9423d6..c42503a 100644
 +        return
 +      end if
 +    end if
- 
--    ktau = ktau+1
--  enddo
++
 +    si = entry_integrator
 +    f = entry_field
 +    si%last_step_fraction = 0d0
@@ -1001,21 +1115,20 @@ index a9423d6..c42503a 100644
 +    ierr = step_status
 +    return
 +  end do
- 
--end subroutine orbit_timestep_sympl_midpoint
++
 +  si%last_step_fraction = 1d0
 +  si%ntau = original_ntau
 +end subroutine advance_symplectic_with_boundary
  
  
    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-@@ -1457,23 +1800,13 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
+@@ -1460,23 +1903,13 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
      !optionally try fixed point iterations, doesn't work yet
      !call fixpoint_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
  
--    if (x(1) > 1.0) then
+-    if (x(1) > sympl_rmax) then
 -      ierr = 1
-+    if (any(x(1:4*s:4) > 1.0d0)) then
++    if (any(x(1:4*s:4) > sympl_rmax)) then
 +      si = accepted_integrator
 +      f = accepted_field
 +      ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
@@ -1028,7 +1141,7 @@ index a9423d6..c42503a 100644
 -      x(1) = -x(1)
 -      x(2) = x(2) + pi
 -      call count_event(EVT_R_NEGATIVE)
--      if (x(1) > 1.0) then
+-      if (x(1) > sympl_rmax) then
 -        ierr = 1
 -        return
 -      end if
@@ -1038,10 +1151,10 @@ index a9423d6..c42503a 100644
  
      if (extrap_field) then
 diff --git a/src/orbit_symplectic_base.f90 b/src/orbit_symplectic_base.f90
-index ab39279..7c0ffc6 100644
+index a626534..fed80de 100644
 --- a/src/orbit_symplectic_base.f90
 +++ b/src/orbit_symplectic_base.f90
-@@ -16,6 +16,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
+@@ -23,6 +23,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
      integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
      integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
      integer, parameter :: SYMPLECTIC_STEP_LINEAR_SOLVE = 3
@@ -1051,7 +1164,7 @@ index ab39279..7c0ffc6 100644
  
      type :: symplectic_integrator_t
          real(dp) :: atol
-@@ -29,6 +32,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
+@@ -36,6 +39,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
          integer :: ntau
          real(dp) :: dt
          real(dp) :: pabs
@@ -1062,9 +1175,17 @@ index ab39279..7c0ffc6 100644
  
      !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 diff --git a/src/orbit_symplectic_euler1.f90 b/src/orbit_symplectic_euler1.f90
-index 7e7ef1d..8589dc2 100644
+index 7e7ef1d..4925d52 100644
 --- a/src/orbit_symplectic_euler1.f90
 +++ b/src/orbit_symplectic_euler1.f90
+@@ -1,6 +1,6 @@
+ module orbit_symplectic_euler1
+ use field_can_mod, only: field_can_t
+-use orbit_symplectic_base, only: symplectic_integrator_t
++use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax
+ use, intrinsic :: iso_fortran_env, only: dp => real64
+ 
+ implicit none
 @@ -47,7 +47,8 @@ subroutine sympl_euler1_jacobian(si, f, x, jac)
                   - f%d2H(7)*f%dpth(3) - f%dH(1)*f%d2pth(9))
  end subroutine sympl_euler1_jacobian
@@ -1123,9 +1244,9 @@ index 7e7ef1d..8589dc2 100644
 +    correction(1) = ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2)
 +    correction(2) = ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2)
 +    step_scale = 1d0
-+    if (correction(1) < 0d0) then
++    if (sympl_rmax <= 1d0 .and. correction(1) < 0d0) then
 +        step_scale = min(1d0, &
-+            0.8d0*max(0d0, 1d0 - x(1))/(-correction(1)))
++            0.8d0*max(0d0, sympl_rmax - x(1))/(-correction(1)))
 +    end if
 +    boundary_limited = step_scale < 1d0
 +    x = x - step_scale*correction
@@ -1144,7 +1265,7 @@ index 7e7ef1d..8589dc2 100644
  
  subroutine sympl_euler1_extrapolate_field(si, f, x, xlast)
 diff --git a/src/params.f90 b/src/params.f90
-index f9cd569..f227a28 100644
+index 1879617..48ca328 100644
 --- a/src/params.f90
 +++ b/src/params.f90
 @@ -32,7 +32,20 @@ module params
@@ -1168,7 +1289,7 @@ index f9cd569..f227a28 100644
      real(dp) :: contr_pp = -1d0
      integer          :: ibins
      logical          :: generate_start_only = .False.
-@@ -375,6 +388,10 @@ contains
+@@ -395,6 +408,10 @@ contains
          if (allocated(zstart)) deallocate (zstart)
          if (allocated(zend)) deallocate (zend)
          if (allocated(times_lost)) deallocate (times_lost)
@@ -1179,7 +1300,7 @@ index f9cd569..f227a28 100644
          if (allocated(trap_par)) deallocate (trap_par)
          if (allocated(perp_inv)) deallocate (perp_inv)
          if (allocated(iclass)) deallocate (iclass)
-@@ -385,6 +402,7 @@ contains
+@@ -405,6 +422,7 @@ contains
          if (allocated(volstart)) deallocate (volstart)
          if (allocated(confpart_trap)) deallocate (confpart_trap)
          if (allocated(confpart_pass)) deallocate (confpart_pass)
@@ -1187,7 +1308,7 @@ index f9cd569..f227a28 100644
          if (allocated(wall_hit)) deallocate (wall_hit)
          if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
          if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
-@@ -393,8 +411,12 @@ contains
+@@ -413,8 +431,12 @@ contains
  
          allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
          allocate (times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
@@ -1200,7 +1321,7 @@ index f9cd569..f227a28 100644
          allocate (iclass(3, ntestpart))
          allocate (class_passing(ntestpart), class_lost(ntestpart))
          allocate (wall_hit(ntestpart))
-@@ -404,6 +426,9 @@ contains
+@@ -424,6 +446,9 @@ contains
          allocate (wall_hit_angle_rad(ntestpart))
  
          times_lost = 0.0d0
@@ -1305,10 +1426,10 @@ index 71f6ae2..1f45320 100644
                      confpart_pass(it) = confpart_pass(it) + 1.0d0
                  else
 diff --git a/src/samplers.f90 b/src/samplers.f90
-index 20b9c0e..4b536c8 100644
+index 72fe57f..d66b69b 100644
 --- a/src/samplers.f90
 +++ b/src/samplers.f90
-@@ -168,7 +168,8 @@ contains
+@@ -247,7 +247,8 @@ contains
  
      subroutine sample_grid(zstart, grid_density, xstart_is_integ_coords)
          use params, only: ntestpart, zstart_dim1, zend, times_lost, &
@@ -1318,7 +1439,7 @@ index 20b9c0e..4b536c8 100644
          use util, only: pi
          use field_can_mod, only: integ_to_ref
  
-@@ -194,10 +195,20 @@ contains
+@@ -273,10 +274,20 @@ contains
          if (allocated(zend)) deallocate (zend)
          allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
          if (allocated(times_lost)) deallocate (times_lost)
@@ -1516,7 +1637,7 @@ index 3bd3c2a..26fbcd7 100644
                  end if
              end if
 diff --git a/src/simple_main.f90 b/src/simple_main.f90
-index f3887bf..73328e6 100644
+index 033c720..a0d0ad4 100644
 --- a/src/simple_main.f90
 +++ b/src/simple_main.f90
 @@ -1,26 +1,29 @@
@@ -1585,23 +1706,23 @@ index f3887bf..73328e6 100644
      real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
      type(stl_wall_t), save :: wall
  
-@@ -199,7 +206,6 @@ contains
-                               REFCOORDS, set_magfie_refcoords_field
+@@ -220,7 +227,6 @@ contains
+                               REFCOORDS, SPECTRE, set_magfie_refcoords_field
          use field_splined, only: splined_field_t, create_splined_field
          use field_vmec, only: vmec_field_t
 -        use util, only: twopi
          use reference_coordinates, only: init_reference_coordinates, ref_coords
          use params, only: coord_input, field_input, wall_input, wall_units
  
-@@ -211,6 +217,7 @@ contains
-         logical :: use_boozer_chartmap
+@@ -232,6 +238,7 @@ contains
+         logical :: use_boozer_chartmap, use_spectre
  
          self%integmode = aintegmode
 +        map_boundary_is_lcfs = .true.
  
-         ! Check if field_input is a Boozer chartmap (no VMEC needed)
+         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
          use_boozer_chartmap = .false.
-@@ -328,27 +335,25 @@ contains
+@@ -419,27 +426,25 @@ contains
          character(len=16) :: units
  
          wall_enabled = .false.
@@ -1636,7 +1757,7 @@ index f3887bf..73328e6 100644
  
          units = adjustl(wall_units)
          select case (trim(units))
-@@ -539,6 +544,10 @@ contains
+@@ -630,6 +635,10 @@ contains
          t1 = omp_get_wtime()
          t_cpu = t1 - t0
  
@@ -1647,7 +1768,7 @@ index f3887bf..73328e6 100644
          ! GPU kernel
          t0 = omp_get_wtime()
          call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
-@@ -708,7 +717,6 @@ contains
+@@ -799,7 +808,6 @@ contains
          !> Sample particles for the analytic circular tokamak TEST field.
          !> TEST field uses (r, theta, phi) coordinates with B0=1, R0=1, a=0.5, iota=1.
          !> bmod = B0 * (1 - r/R0 * cos(theta))
@@ -1655,7 +1776,7 @@ index f3887bf..73328e6 100644
          use params, only: ntestpart, sbeg, bmod00, bmin, bmax, zstart, &
                            reset_seed_if_deterministic
  
-@@ -785,11 +793,64 @@ contains
+@@ -876,11 +884,64 @@ contains
          ! initialize array of confined particle percentage
          confpart_trap = 0.d0
          confpart_pass = 0.d0
@@ -1720,7 +1841,7 @@ index f3887bf..73328e6 100644
      subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
          use classification, only: trace_orbit_with_classifiers, &
                                    classification_result_t, &
-@@ -802,18 +863,16 @@ contains
+@@ -894,18 +955,16 @@ contains
          real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
  
          real(dp), dimension(5) :: z
@@ -1743,7 +1864,7 @@ index f3887bf..73328e6 100644
          orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
          orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
  
-@@ -852,6 +911,7 @@ contains
+@@ -959,6 +1018,7 @@ contains
          if (passing .and. should_skip(ipart)) then
              zend(:, ipart) = zstart(:, ipart)
              times_lost(ipart) = -1.d0
@@ -1751,7 +1872,7 @@ index f3887bf..73328e6 100644
              do it = 1, ntimstep
  !$omp atomic update
                  confpart_pass(it) = confpart_pass(it) + 1.d0
-@@ -866,23 +926,34 @@ contains
+@@ -973,23 +1033,34 @@ contains
                  if (wall_enabled) then
                      ! Use microstep-level wall checking for STL walls
                      call macrostep_with_wall_check(anorb, z, kt, ierr_orbit, &
@@ -1796,7 +1917,7 @@ index f3887bf..73328e6 100644
                      end do
                      faulted = .true.
                  end if
-@@ -908,12 +979,39 @@ contains
+@@ -1015,8 +1086,13 @@ contains
  !$omp critical
          call integ_to_ref(z(1:3), zend(1:3, ipart))
          zend(4:5, ipart) = z(4:5)
@@ -1811,6 +1932,10 @@ index f3887bf..73328e6 100644
 +        end if
  !$omp end critical
      end subroutine trace_orbit
+ 
+@@ -1200,7 +1276,29 @@ contains
+ !$omp end critical
+     end subroutine trace_orbit_spectre_sympl
  
 -	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
 +    pure subroutine locate_linear_lcfs(z_start, z_end, field_period, z_event, &
@@ -1839,7 +1964,7 @@ index f3887bf..73328e6 100644
          use alpha_lifetime_sub, only: orbit_timestep_axis
          use orbit_symplectic, only: orbit_timestep_sympl
  
-@@ -922,21 +1020,51 @@ contains
+@@ -1209,21 +1307,51 @@ contains
          integer(8), intent(inout) :: kt
          integer, intent(out) :: ierr_orbit
          integer, intent(in) :: ntau_local
@@ -1892,7 +2017,7 @@ index f3887bf..73328e6 100644
                  if (ierr_orbit .ne. 0) exit
                  call to_standard_z_coordinates(anorb, z)
              end if
-@@ -946,8 +1074,70 @@ contains
+@@ -1233,8 +1361,70 @@ contains
          end do
      end subroutine macrostep
  
@@ -1964,7 +2089,7 @@ index f3887bf..73328e6 100644
          use alpha_lifetime_sub, only: orbit_timestep_axis
          use orbit_symplectic, only: orbit_timestep_sympl
  
-@@ -958,91 +1148,86 @@ contains
+@@ -1245,91 +1435,86 @@ contains
          integer, intent(in) :: ntau_local
          integer, intent(in) :: ipart
          real(dp), intent(inout) :: x_prev_m(3)
@@ -2120,7 +2245,7 @@ index f3887bf..73328e6 100644
          end do
      end subroutine macrostep_with_wall_check
  
-@@ -1159,25 +1344,45 @@ contains
+@@ -1446,25 +1631,45 @@ contains
  
          norm = real(max(ntestpart, 1), dp)
  
@@ -2173,7 +2298,7 @@ index f3887bf..73328e6 100644
  
          open (newunit=unit, file='confined_fraction.dat', recl=1024)
          do i = 1, ntimstep
-@@ -1186,6 +1391,13 @@ contains
+@@ -1473,6 +1678,13 @@ contains
          end do
          close (unit)
  
@@ -2184,9 +2309,9 @@ index f3887bf..73328e6 100644
 +        end do
 +        close (unit)
 +
+         call write_spectre_crossing_events
+ 
          if (ntcut > 0 .or. class_plot) then
-             open (newunit=unit, file='class_parts.dat', recl=1024)
-             do i = 1, ntestpart
 diff --git a/src/wall/chartmap_metadata.f90 b/src/wall/chartmap_metadata.f90
 index 8629a14..833e1aa 100644
 --- a/src/wall/chartmap_metadata.f90
@@ -2217,4 +2342,856 @@ index 8629a14..833e1aa 100644
  
          call read_cart_units(ncid, meta%cart_units, meta%cart_scale_to_m)
  
-
+diff --git a/test/python/test_netcdf_results.py b/test/python/test_netcdf_results.py
+index d6a6aab..63b3173 100644
+--- a/test/python/test_netcdf_results.py
++++ b/test/python/test_netcdf_results.py
+@@ -60,6 +60,9 @@ class TestNetCDFResultsOutput:
+                 assert ds.dimensions['phase'].size == 5
+ 
+                 assert 'times_lost' in ds.variables
++                assert 'orbit_exit_code' in ds.variables
++                assert 'boundary_event_radial_residual' in ds.variables
++                assert 'boundary_event_time_width' in ds.variables
+                 assert 'zstart' in ds.variables
+                 assert 'zend' in ds.variables
+                 assert 'xstart_cart' in ds.variables
+@@ -68,6 +71,13 @@ class TestNetCDFResultsOutput:
+                 assert 'perp_inv' in ds.variables
+                 assert 'iclass' in ds.variables
+                 assert 'class_lost' in ds.variables
++                assert np.all(np.isin(ds.variables['orbit_exit_code'][:], [0, 1, 2, 3]))
++                exit_codes = ds.variables['orbit_exit_code'][:]
++                event_residual = ds.variables['boundary_event_radial_residual'][:]
++                event_width = ds.variables['boundary_event_time_width'][:]
++                lcfs = exit_codes == 1
++                assert np.all(event_residual[lcfs] >= 0.0)
++                assert np.all(event_width[lcfs] >= 0.0)
+ 
+                 assert 'ntestpart' in ds.ncattrs()
+                 assert 'trace_time' in ds.ncattrs()
+diff --git a/test/tests/test_axis_crossing.f90 b/test/tests/test_axis_crossing.f90
+index 47887fd..6137dfd 100644
+--- a/test/tests/test_axis_crossing.f90
++++ b/test/tests/test_axis_crossing.f90
+@@ -10,16 +10,17 @@ program test_axis_crossing
+     !>     losses),
+     !>   - r stays inside [0, 1),
+     !>   - the energy drift stays bounded.
+-    !> At least one start must trigger the axis-crossing branch
+-    !> (EVT_R_NEGATIVE), otherwise the test would silently stop covering it.
++    !> The chart-switch operation is then checked directly for an interior
++    !> crossing and for a crossed radius outside the valid domain.
+     use, intrinsic :: iso_fortran_env, only: dp => real64
+-    use util, only: twopi
++    use util, only: pi, twopi
+     use simple, only: tracer_t, init_sympl, init_params
+     use simple_main, only: init_field
+     use params, only: field_input, coord_input
+     use new_vmec_stuff_mod, only: rmajor
+-    use orbit_symplectic, only: orbit_timestep_sympl
+-    use orbit_symplectic_base, only: symplectic_integrator_t
++    use orbit_symplectic, only: orbit_timestep_sympl, apply_axis_chart_switch
++    use orbit_symplectic_base, only: symplectic_integrator_t, &
++        SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+     use field_can_mod, only: field_can_t, eval_field => evaluate, get_val
+     use diag_counters, only: diag_counters_init, diag_counters_total, &
+                              EVT_R_NEGATIVE
+@@ -38,11 +39,11 @@ program test_axis_crossing
+     real(dp) :: z5(5)
+     real(dp) :: r0(n_start), vpar0(n_start), th0(n_start)
+     real(dp) :: rbig, dtau, h0, hdrift, rmin, hnow, hsum1, hsum2, hsec
+-    real(dp) :: osc_tol, sec_tol, dth
++    real(dp) :: osc_tol, sec_tol, axis_radius, axis_theta
+     integer :: ierr, istart, kt, nh1, nh2, iphase, ksteps
+     integer(8) :: ncross0
+     integer(8) :: ncross
+-    logical :: failed
++    logical :: failed, crossed
+ 
+     ! Mix of passing potato orbits (|vpar| large, small r: the orbit circles
+     ! a drift-shifted center and sweeps through the axis) and deeply trapped
+@@ -62,9 +63,8 @@ program test_axis_crossing
+ 
+     failed = .false.
+     do iphase = 1, 2
+-    ! Phase 1: fine step (512 per torus), tight tolerances; orbits graze the
+-    ! axis. Phase 2: coarse step (64 per torus), where the Newton iterate
+-    ! genuinely overshoots r < 0 and the chart switch must engage.
++    ! Phase 1 uses a fine step and tight tolerances. Phase 2 checks the same
++    ! near-axis ensemble with a coarser step.
+     if (iphase == 1) then
+         dtau = twopi*rbig/512.0_dp
+         ksteps = nsteps
+@@ -139,57 +139,31 @@ program test_axis_crossing
+     end do
+     end do
+ 
+-    ! Phase 3: white-box trigger. On a clean field ds/dt vanishes at the
+-    ! axis, so a negative Newton iterate is rare; the spurious-loss bug fired
+-    ! on corrupted near-axis field data (#370). Force the implicit solve
+-    ! through the axis by biasing f%pth (the driver copies it to pthold) and
+-    ! require the chart switch to engage and the orbit to survive.
+-    dtau = twopi*rbig/64.0_dp
++    ! A converged step beyond the polar-coordinate axis continues on the
++    ! opposite ray without changing the physical point.
+     ncross0 = diag_counters_total(EVT_R_NEGATIVE)
+-    trigger: do istart = 1, n_start
+-        do kt = 1, 9
+-            z5 = [2.0e-5_dp, th0(istart), 0.1_dp, 1.0_dp, vpar0(istart)]
+-            call init_sympl(norb%si, norb%f, z5, dtau, dtau, 1.0e-12_dp, 1)
+-            ! Bias pth by a few times the radial pth variation across the
+-            ! start radius, so the implicit solve lands at a small negative
+-            ! radius (a realistic crossing magnitude).
+-            ! Signed: linearized solution r = r0*(1 - kt) crosses for kt >= 2.
+-            norb%f%pth = norb%f%pth &
+-                - real(kt, dp)*z5(1)*norb%f%dpth(1)
+-            call orbit_timestep_sympl(norb%si, norb%f, ierr)
+-            ! The bias is unphysical by construction, so a loss flag on the
+-            ! poisoned orbit is not itself a failure; only the crossing
+-            ! semantics are asserted once the event fires.
+-            if (diag_counters_total(EVT_R_NEGATIVE) > ncross0) then
+-                ! Discriminate the chart switch from the historic clamp:
+-                ! the clamp teleported to exactly r = 0.01 with theta
+-                ! unchanged; the switch keeps r near the axis (the committed
+-                ! magnitude is the small overshoot) and shifts theta by pi.
+-                if (norb%si%z(1) < 0.0_dp) then
+-                    print *, 'FAIL: trigger left r negative, r = ', &
+-                        norb%si%z(1)
+-                    failed = .true.
+-                end if
+-                if (norb%si%z(1) >= 5.0e-3_dp) then
+-                    print *, 'FAIL: trigger left the axis region, r = ', &
+-                        norb%si%z(1), ' (clamp-like teleport)'
+-                    failed = .true.
+-                end if
+-                dth = modulo(norb%si%z(2) - th0(istart), twopi)
+-                if (abs(dth - 0.5_dp*twopi) > 1.0_dp) then
+-                    print *, 'FAIL: trigger theta shift ', dth, &
+-                        ' not close to pi (clamp-like continuation)'
+-                    failed = .true.
+-                end if
+-                exit trigger
+-            end if
+-        end do
+-    end do trigger
++    axis_radius = -2.0e-5_dp
++    axis_theta = 0.25_dp
++    call apply_axis_chart_switch(axis_radius, axis_theta, crossed, ierr)
++    if (.not. crossed .or. ierr /= SYMPLECTIC_STEP_OK &
++        .or. abs(axis_radius - 2.0e-5_dp) > epsilon(axis_radius) &
++        .or. abs(axis_theta - (0.25_dp + pi)) > epsilon(axis_theta)) then
++        print *, 'FAIL: axis chart switch', axis_radius, axis_theta, crossed, ierr
++        failed = .true.
++    end if
++
++    axis_radius = -1.01_dp
++    axis_theta = 0.5_dp
++    call apply_axis_chart_switch(axis_radius, axis_theta, crossed, ierr)
++    if (.not. crossed .or. ierr /= SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
++        print *, 'FAIL: crossed radius outside domain was accepted', &
++            axis_radius, crossed, ierr
++        failed = .true.
++    end if
+ 
+     ncross = diag_counters_total(EVT_R_NEGATIVE)
+-    if (ncross < 1) then
+-        print *, 'FAIL: no start triggered the axis-crossing branch; ', &
+-            'the test no longer covers it'
++    if (ncross /= ncross0 + 2) then
++        print *, 'FAIL: axis-crossing counter increment', ncross0, ncross
+         failed = .true.
+     end if
+ 
+diff --git a/test/tests/test_chartmap_metadata.f90 b/test/tests/test_chartmap_metadata.f90
+index bf272c4..6be2b15 100644
+--- a/test/tests/test_chartmap_metadata.f90
++++ b/test/tests/test_chartmap_metadata.f90
+@@ -22,6 +22,9 @@ program test_chartmap_metadata
+     call write_min_chartmap("units-only.chartmap.nc", "m")
+     call read_chartmap_cart_units("units-only.chartmap.nc", cart_units)
+     call check_string(cart_units, "m", "units-only read mismatch", errors)
++    call read_chartmap_metadata("units-only.chartmap.nc", meta)
++    call check_close(meta%rho_lcfs, -1.0_dp, 0.0_dp, &
++        "missing rho_lcfs sentinel mismatch", errors)
+     if (errors /= 0) error stop 1
+ contains
+ 
+diff --git a/test/tests/test_newton_solver_status.f90 b/test/tests/test_newton_solver_status.f90
+index 173f8ae..edc232f 100644
+--- a/test/tests/test_newton_solver_status.f90
++++ b/test/tests/test_newton_solver_status.f90
+@@ -1,17 +1,73 @@
++module linear_radial_field_backend
++  use, intrinsic :: iso_fortran_env, only: dp => real64
++  use field_can_base, only: field_can_t
++  use orbit_symplectic_base, only: symplectic_integrator_t, &
++    SYMPLECTIC_STEP_BOUNDARY_LIMITED, SYMPLECTIC_STEP_OK, &
++    SYMPLECTIC_STEP_OUTSIDE_DOMAIN
++
++  implicit none
++
++contains
++
++  subroutine evaluate_linear_radial(f, r, theta, phi, mode)
++    type(field_can_t), intent(inout) :: f
++    real(dp), intent(in) :: r, theta, phi
++    integer, intent(in) :: mode
++
++    f%Ath = r
++    f%Aph = 0.0_dp
++    f%hth = 0.0_dp
++    f%hph = 1.0_dp
++    f%Bmod = 2.0_dp - theta
++    f%dAth = [1.0_dp, 0.0_dp, 0.0_dp]
++    f%dAph = 0.0_dp
++    f%dhth = 0.0_dp
++    f%dhph = 0.0_dp
++    f%dBmod = [0.0_dp, -1.0_dp, 0.0_dp]
++    f%d2Ath = 0.0_dp
++    f%d2Aph = 0.0_dp
++    f%d2hth = 0.0_dp
++    f%d2hph = 0.0_dp
++    f%d2Bmod = 0.0_dp
++  end subroutine evaluate_linear_radial
++
++  subroutine basin_limited_step(si, f, step_status)
++    type(symplectic_integrator_t), intent(inout) :: si
++    type(field_can_t), intent(inout) :: f
++    integer, intent(out) :: step_status
++
++    if (si%dt >= 0.1_dp) then
++      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
++    else if (si%dt >= 0.0625_dp) then
++      step_status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
++    else
++      si%z(1) = 0.5_dp + (0.5_dp - 1.0e-12_dp)* &
++        (1.0_dp - ((0.0625_dp - si%dt)/0.0625_dp)**2)
++      step_status = SYMPLECTIC_STEP_OK
++    end if
++  end subroutine basin_limited_step
++end module linear_radial_field_backend
++
+ program test_newton_solver_status
+   use, intrinsic :: iso_fortran_env, only: dp => real64
+-  use field_can_mod, only: field_can_t
+-  use orbit_symplectic, only: guard_lobatto_stage_radii, newton_midpoint, &
+-    solve_newton_system
++  use field_can_mod, only: field_can_t, eval_field => evaluate
++  use linear_radial_field_backend, only: basin_limited_step, &
++    evaluate_linear_radial
++  use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
++    advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
++    orbit_timestep_sympl, matrix3_near_singular, solve_newton_system
+   use orbit_symplectic_base, only: symplectic_integrator_t, &
++    EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, LOBATTO3, &
++    SYMPLECTIC_STEP_BOUNDARY, &
+     SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+-    SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE
++    SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
++    SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED
+ 
+   implicit none
+ 
+   type(symplectic_integrator_t) :: integrator
+   type(field_can_t) :: field
+-  real(dp) :: x(5), xlast(5), matrix(2, 2), residual(2)
++  real(dp) :: x(5), xlast(5), matrix(2, 2), residual(2), matrix3(3, 3)
+   real(dp) :: lobatto_state(10), expected_lobatto_state(10)
+   integer :: i, status
+ 
+@@ -51,6 +107,14 @@ program test_newton_solver_status
+     error stop 'Newton system returned the wrong correction'
+   end if
+ 
++  matrix3 = 0.0_dp
++  matrix3(1, 1) = 1.0e-8_dp
++  matrix3(2, 2) = 1.0e-8_dp
++  matrix3(3, 3) = 1.0e-8_dp
++  if (matrix3_near_singular(matrix3, 1.0e-24_dp)) then
++    error stop 'scaled well-conditioned Euler system was classified singular'
++  end if
++
+   lobatto_state = [(-0.1_dp*real(i, dp), i = 1, 10)]
+   lobatto_state(1) = -0.2_dp
+   lobatto_state(3) = -0.4_dp
+@@ -71,4 +135,113 @@ program test_newton_solver_status
+   if (status /= SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
+     error stop 'exterior Lobatto stage did not report its domain failure'
+   end if
++
++  if (.not. boundary_event_converged(1.0e-11_dp, 2.0e-9_dp, &
++      1.0e-10_dp, 1.0e-8_dp)) then
++    error stop 'converged boundary bracket was rejected'
++  end if
++  if (boundary_event_converged(1.0e-11_dp, 2.0e-5_dp, &
++      1.0e-10_dp, 1.0e-8_dp)) then
++    error stop 'large boundary radial residual was accepted'
++  end if
++  if (boundary_event_converged(1.0e-4_dp, 2.0e-9_dp, &
++      1.0e-10_dp, 1.0e-8_dp)) then
++    error stop 'wide boundary time bracket was accepted'
++  end if
++
++  call test_lcfs_location
++  call test_solver_basin_is_not_boundary
++
++contains
++
++  subroutine test_solver_basin_is_not_boundary
++    type(symplectic_integrator_t) :: basin_integrator
++    type(field_can_t) :: basin_field
++    real(dp) :: initial_state(4)
++    integer :: basin_status
++
++    initial_state = [0.5_dp, 0.1_dp, 0.2_dp, 0.3_dp]
++    basin_integrator%z = initial_state
++    basin_integrator%dt = 0.1_dp
++    basin_integrator%ntau = 1
++    basin_integrator%rtol = 1.0e-12_dp
++    call advance_symplectic_with_boundary(basin_integrator, basin_field, &
++      basin_limited_step, basin_status)
++    if (basin_status /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) then
++      error stop 'solver-basin limit was promoted to a physical boundary event'
++    end if
++    if (any(basin_integrator%z /= initial_state)) then
++      error stop 'solver-basin failure changed the accepted state'
++    end if
++  end subroutine test_solver_basin_is_not_boundary
++
++  subroutine test_lcfs_location
++    real(dp), parameter :: timesteps(3) = [0.02_dp, 0.01_dp, 0.005_dp]
++    integer, parameter :: modes(4) = [EXPL_IMPL_EULER, IMPL_EXPL_EULER, &
++      MIDPOINT, LOBATTO3]
++    real(dp), parameter :: exact_event_time = 0.1_dp
++    real(dp) :: event_time, current_error, previous_error
++    integer :: i, j
++
++    do j = 1, size(modes)
++      previous_error = huge(1.0_dp)
++      do i = 1, size(timesteps)
++        call locate_linear_boundary(modes(j), timesteps(i), event_time)
++        current_error = abs(event_time - exact_event_time)
++        if (current_error > 2.0_dp*timesteps(i)) then
++          print *, 'mode, timestep, event time:', modes(j), timesteps(i), &
++            event_time
++          error stop 'boundary time disagrees with analytic crossing'
++        end if
++        if (current_error > previous_error + 256.0_dp*epsilon(1.0_dp)) then
++          print *, 'mode, timestep, errors:', modes(j), timesteps(i), &
++            previous_error, current_error
++          error stop 'boundary time failed to converge under timestep refinement'
++        end if
++        previous_error = current_error
++      end do
++    end do
++  end subroutine test_lcfs_location
++
++  subroutine locate_linear_boundary(mode, timestep, event_time)
++    integer, intent(in) :: mode
++    real(dp), intent(in) :: timestep
++    real(dp), intent(out) :: event_time
++    type(symplectic_integrator_t) :: event_integrator
++    type(field_can_t) :: event_field
++    real(dp) :: z0(4)
++    integer :: event_status, step
++
++    eval_field => evaluate_linear_radial
++    event_field%ro0 = 1.0_dp
++    event_field%mu = 1.0_dp
++    z0 = [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp]
++    call orbit_sympl_init(event_integrator, event_field, z0, &
++      timestep, 1, 1.0e-12_dp, mode)
++
++    do step = 1, 1000
++      call orbit_timestep_sympl(event_integrator, event_field, event_status)
++      if (event_status == SYMPLECTIC_STEP_BOUNDARY) exit
++      if (event_status /= SYMPLECTIC_STEP_OK) then
++        print *, 'mode, timestep, status, residual, width:', mode, timestep, &
++          event_status, event_integrator%last_event_radial_residual, &
++          event_integrator%last_event_fraction_width
++        error stop 'analytic boundary trace ended with a numerical failure'
++      end if
++    end do
++    if (event_status /= SYMPLECTIC_STEP_BOUNDARY) then
++      error stop 'analytic boundary trace did not reach the boundary'
++    end if
++    if (event_integrator%z(1) /= 1.0_dp) then
++      error stop 'boundary event endpoint is not on the boundary'
++    end if
++    if (.not. boundary_event_converged( &
++        event_integrator%last_event_fraction_width, &
++        event_integrator%last_event_radial_residual, 1.0e-11_dp, &
++        1.0e-10_dp)) then
++      error stop 'reported boundary event does not meet its tolerances'
++    end if
++    event_time = (real(step - 1, dp) + &
++      event_integrator%last_step_fraction)*timestep
++  end subroutine locate_linear_boundary
+ end program test_newton_solver_status
+diff --git a/test/tests/test_restart_io.f90 b/test/tests/test_restart_io.f90
+index 1d4423e..44229b3 100644
+--- a/test/tests/test_restart_io.f90
++++ b/test/tests/test_restart_io.f90
+@@ -1,8 +1,11 @@
+ program test_restart_io
+     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
+     use params, only: ntestpart, times_lost, trap_par, perp_inv, zend, zstart, &
++                      orbit_exit_code, boundary_event_radial_residual, &
++                      boundary_event_time_width, ORBIT_EXIT_COMPLETED, &
++                      ORBIT_EXIT_LCFS, &
+                       confpart_pass, confpart_trap, ntimstep, kt_macro, &
+-                      v0, dtaumin
++                      v0, dtaumin, trace_time
+     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
+     implicit none
+ 
+@@ -11,6 +14,7 @@ program test_restart_io
+ 
+     nerr = 0
+     call test_read_restart()
++    call test_legacy_restart_retraces_early_exit()
+     call test_restore_counts()
+ 
+     if (nerr > 0) then
+@@ -29,9 +33,15 @@ contains
+         print *, '=== Test: read_restart_data ==='
+ 
+         ntestpart = np
++        trace_time = 1.0d0
+         allocate (times_lost(np), trap_par(np), perp_inv(np))
++        allocate (orbit_exit_code(np), boundary_event_radial_residual(np), &
++                  boundary_event_time_width(np))
+         allocate (zend(5, np), zstart(5, np))
+         times_lost = -1.0d0
++        orbit_exit_code = 0
++        boundary_event_radial_residual = -1.0d0
++        boundary_event_time_width = -1.0d0
+         trap_par = 0.0d0
+         perp_inv = 0.0d0
+         zend = 0.0d0
+@@ -61,6 +71,15 @@ contains
+         end do
+         close (unit)
+ 
++        open (newunit=unit, file='orbit_exit_code.dat', recl=1024)
++        do i = 1, np
++            write (unit, *) i, merge(ORBIT_EXIT_LCFS, 0, expected_tl(i) > 0d0), &
++                expected_tl(i), &
++                merge(1.0d-11, -1.0d0, expected_tl(i) > 0d0), &
++                merge(1.0d-12, -1.0d0, expected_tl(i) > 0d0)
++        end do
++        close (unit)
++
+         call read_restart_data()
+ 
+         do i = 1, np
+@@ -74,12 +93,50 @@ contains
+                 call assert_eq(perp_inv(i), expected_pi(i), 'perp_inv', i)
+                 call assert_eq(zend(1, i), expected_ze(1, i), 'zend(1)', i)
+                 call assert_eq(zend(5, i), expected_ze(5, i), 'zend(5)', i)
++                call assert(orbit_exit_code(i) == ORBIT_EXIT_LCFS, &
++                    'physical exit code restored', i)
++                call assert_eq(boundary_event_radial_residual(i), 1.0d-11, &
++                    'event residual', i)
+             end if
+         end do
+ 
+-        deallocate (times_lost, trap_par, perp_inv, zend, zstart, particle_done)
++        deallocate (times_lost, orbit_exit_code, boundary_event_radial_residual, &
++                    boundary_event_time_width, trap_par, perp_inv, zend, zstart, &
++                    particle_done)
+     end subroutine test_read_restart
+ 
++    subroutine test_legacy_restart_retraces_early_exit()
++        integer :: unit
++
++        ntestpart = 2
++        trace_time = 1d0
++        allocate (times_lost(2), trap_par(2), perp_inv(2), orbit_exit_code(2))
++        allocate (boundary_event_radial_residual(2), boundary_event_time_width(2))
++        allocate (zend(5, 2), zstart(5, 2))
++        times_lost = -1d0
++        orbit_exit_code = ORBIT_EXIT_COMPLETED
++        trap_par = 0d0
++        perp_inv = 0d0
++        zend = 0d0
++        zstart = 0d0
++
++        open (newunit=unit, file='times_lost.dat', recl=1024)
++        write (unit, *) 1, 0.5d0, 0d0, 0d0, 0d0, zend(:, 1)
++        write (unit, *) 2, 1.0d0, 0d0, 0d0, 0d0, zend(:, 2)
++        close (unit)
++        open (newunit=unit, file='orbit_exit_code.dat', status='old')
++        close (unit, status='delete')
++
++        call read_restart_data()
++        call assert(.not. particle_done(1), &
++            'ambiguous legacy early exit must be retraced', 1)
++        call assert(particle_done(2), 'legacy completed trace is reusable', 2)
++
++        deallocate (times_lost, orbit_exit_code, boundary_event_radial_residual, &
++                    boundary_event_time_width, trap_par, perp_inv, zend, zstart, &
++                    particle_done)
++    end subroutine test_legacy_restart_retraces_early_exit
++
+     subroutine test_restore_counts()
+         integer :: it
+ 
+@@ -90,7 +147,7 @@ contains
+         v0 = 1.0d0
+         dtaumin = 1.0d-3
+ 
+-        allocate (times_lost(4), trap_par(4), perp_inv(4))
++        allocate (times_lost(4), trap_par(4), perp_inv(4), orbit_exit_code(4))
+         allocate (zend(5, 4), zstart(5, 4))
+         allocate (confpart_pass(nt), confpart_trap(nt))
+         allocate (kt_macro(nt))
+@@ -100,6 +157,7 @@ contains
+         confpart_pass = 0.0d0
+         confpart_trap = 0.0d0
+         times_lost = -1.0d0
++        orbit_exit_code = ORBIT_EXIT_LCFS
+         trap_par = 0.0d0
+         perp_inv = 0.0d0
+         zend = 0.0d0
+@@ -108,22 +166,23 @@ contains
+         if (allocated(particle_done)) deallocate(particle_done)
+         allocate (particle_done(4))
+ 
+-        ! Particle 1: passing, survived 250 microsteps (0.25s) → counted at it=1,2,3
++        ! Particle 1: passing, exits exactly at step 200.
+         particle_done(1) = .true.
+-        times_lost(1) = 250.0d0*dtaumin/v0
++        times_lost(1) = 200.0d0*dtaumin/v0
+         trap_par(1) = -0.5d0
+ 
+         ! Particle 2: trapped, survived all 400+ microsteps → counted at all it
+         particle_done(2) = .true.
+         times_lost(2) = 500.0d0*dtaumin/v0
+         trap_par(2) = 0.3d0
++        orbit_exit_code(2) = ORBIT_EXIT_COMPLETED
+ 
+         ! Particle 3: not done
+         particle_done(3) = .false.
+ 
+-        ! Particle 4: passing, survived 0 microsteps → counted at it=1 only
++        ! Particle 4: passing, exits just after step 200.
+         particle_done(4) = .true.
+-        times_lost(4) = 0.0d0
++        times_lost(4) = 200.25d0*dtaumin/v0
+         trap_par(4) = -0.2d0
+ 
+         call restore_confined_counts()
+@@ -132,11 +191,11 @@ contains
+         call assert_eq(confpart_pass(1), 2.0d0, 'pass(1)', 0)
+         call assert_eq(confpart_trap(1), 1.0d0, 'trap(1)', 0)
+ 
+-        ! it=2: kt_macro=100 → p1(250>=100,pass)+p2(500>=100,trap) → pass=1, trap=1
+-        call assert_eq(confpart_pass(2), 1.0d0, 'pass(2)', 0)
++        ! At step 100, both passing particles remain confined.
++        call assert_eq(confpart_pass(2), 2.0d0, 'pass(2)', 0)
+         call assert_eq(confpart_trap(2), 1.0d0, 'trap(2)', 0)
+ 
+-        ! it=3: kt_macro=200 → p1(250>=200,pass)+p2(500>=200,trap) → pass=1, trap=1
++        ! At step 200, p1 is already lost; p4 exits just afterward.
+         call assert_eq(confpart_pass(3), 1.0d0, 'pass(3)', 0)
+         call assert_eq(confpart_trap(3), 1.0d0, 'trap(3)', 0)
+ 
+@@ -148,7 +207,7 @@ contains
+         call assert_eq(confpart_pass(5), 0.0d0, 'pass(5)', 0)
+         call assert_eq(confpart_trap(5), 1.0d0, 'trap(5)', 0)
+ 
+-        deallocate (times_lost, trap_par, perp_inv, zend, zstart)
++        deallocate (times_lost, orbit_exit_code, trap_par, perp_inv, zend, zstart)
+         deallocate (confpart_pass, confpart_trap, kt_macro, particle_done)
+     end subroutine test_restore_counts
+ 
+diff --git a/test/tests/test_stl_wall_intersection.f90 b/test/tests/test_stl_wall_intersection.f90
+index 4f9dc11..c6abd66 100644
+--- a/test/tests/test_stl_wall_intersection.f90
++++ b/test/tests/test_stl_wall_intersection.f90
+@@ -1,23 +1,31 @@
+ program test_stl_wall_intersection
+-    use, intrinsic :: iso_fortran_env, only: dp => real64
+-    use stl_wall_intersection, only: stl_wall_t, stl_wall_init, stl_wall_finalize, &
++    use, intrinsic :: iso_fortran_env, only: dp => real64, int8
++    use stl_wall_intersection, only: stl_wall_init, stl_wall_finalize, &
+                                      stl_wall_first_hit_segment_with_normal
+     use test_utils, only: check, check_close, check_close_vec
++    use simple_main, only: main_wall => wall, chartmap_cart_scale_to_m, &
++                           locate_wall_segment
++    use params, only: wall_hit, wall_hit_cart, wall_hit_normal_cart, &
++                      wall_hit_cos_incidence, wall_hit_angle_rad
++    use reference_coordinates, only: ref_coords
++    use cartesian_coordinates, only: cartesian_coordinate_system_t
+     implicit none
+ 
+-    type(stl_wall_t) :: wall
+     integer :: errors
+     logical :: hit
+     real(dp) :: p0(3), p1(3), hit_p(3)
+     real(dp) :: normal(3), dotx
++    real(dp) :: z(5), z_start(5), z_end(5), hit_step
++    real(dp) :: u_start(3), u_end(3)
+ 
+     errors = 0
+     call write_tetra_stl_m("tetra_m.stl")
+-    call stl_wall_init(wall, "tetra_m.stl", 1.0_dp)
++    call stl_wall_init(main_wall, "tetra_m.stl", 1.0_dp)
+ 
+     p0 = [0.25_dp, 0.25_dp, 0.25_dp]
+     p1 = [2.0_dp, 0.25_dp, 0.25_dp]
+-    call stl_wall_first_hit_segment_with_normal(wall, p0, p1, hit, hit_p, normal)
++    call stl_wall_first_hit_segment_with_normal( &
++        main_wall, p0, p1, hit, hit_p, normal)
+     call check(hit, "expected intersection for meters STL", errors)
+     call check_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
+         "meters STL hit point mismatch", errors)
+@@ -26,17 +34,60 @@ program test_stl_wall_intersection
+     dotx = abs(normal(1))
+     call check_close(dotx, 1.0_dp/sqrt(3.0_dp), 1.0e-12_dp, &
+         "meters STL normal mismatch", errors)
+-    call stl_wall_finalize(wall)
++
++    allocate (cartesian_coordinate_system_t :: ref_coords)
++    allocate (wall_hit(1), wall_hit_cart(3, 1), wall_hit_normal_cart(3, 1), &
++              wall_hit_cos_incidence(1), wall_hit_angle_rad(1))
++    wall_hit = 0_int8
++    wall_hit_cart = 0.0_dp
++    wall_hit_normal_cart = 0.0_dp
++    wall_hit_cos_incidence = 0.0_dp
++    wall_hit_angle_rad = 0.0_dp
++    chartmap_cart_scale_to_m = 1.0_dp
++    z_start = [p0, 4.0_dp, 5.0_dp]
++    z_end = [p1, 11.0_dp, 19.0_dp]
++    z = z_end
++    call locate_wall_segment(z, z_start, z_end, 1, p0, p0, p1, p1, 6.0_dp, &
++        8.0_dp, 7.0_dp, hit, hit_step)
++    call check(hit, "wall event locator missed crossing", errors)
++    call check_close_vec(z(1:3), hit_p, 1.0e-12_dp, &
++        "wall event position mismatch", errors)
++    call check_close_vec(z(4:5), [5.0_dp, 7.0_dp], 1.0e-12_dp, &
++        "wall event phase-space interpolation mismatch", errors)
++    call check_close(hit_step, 9.0_dp, 1.0e-12_dp, &
++        "wall event time mismatch", errors)
++    call check(wall_hit(1) == 1_int8, "wall hit flag missing", errors)
++    call check_close_vec(wall_hit_cart(:, 1), hit_p, 1.0e-12_dp, &
++        "stored wall hit position mismatch", errors)
++    call check_close_vec(wall_hit_normal_cart(:, 1), normal, 1.0e-12_dp, &
++        "stored wall normal mismatch", errors)
++    call check_close(wall_hit_cos_incidence(1), 1.0_dp/sqrt(3.0_dp), &
++        1.0e-12_dp, "wall incidence cosine mismatch", errors)
++    call check_close(wall_hit_angle_rad(1), acos(1.0_dp/sqrt(3.0_dp)), &
++        1.0e-12_dp, "wall incidence angle mismatch", errors)
++
++    u_start = [0.25_dp, 6.2_dp, 3.0_dp]
++    u_end = [2.0_dp, 0.1_dp, -3.0_dp]
++    z = z_end
++    call locate_wall_segment(z, z_start, z_end, 1, p0, u_start, p1, u_end, &
++        6.0_dp, 8.0_dp, 7.0_dp, hit, hit_step)
++    call check_close(z(2), 6.2_dp + (0.1_dp - 6.2_dp + &
++        2.0_dp*acos(-1.0_dp))/7.0_dp, 1.0e-12_dp, &
++        "wall event poloidal seam mismatch", errors)
++    call check_close(z(3), 3.0_dp, 1.0e-12_dp, &
++        "wall event field-period seam mismatch", errors)
++    call stl_wall_finalize(main_wall)
+ 
+     call write_tetra_stl_mm("tetra_mm.stl")
+-    call stl_wall_init(wall, "tetra_mm.stl", 1.0e-3_dp)
+-    call stl_wall_first_hit_segment_with_normal(wall, p0, p1, hit, hit_p, normal)
++    call stl_wall_init(main_wall, "tetra_mm.stl", 1.0e-3_dp)
++    call stl_wall_first_hit_segment_with_normal( &
++        main_wall, p0, p1, hit, hit_p, normal)
+     call check(hit, "expected intersection for millimeters STL (scaled)", errors)
+     call check_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
+         "mm STL scaled hit point mismatch", errors)
+     call check_close(norm2(normal), 1.0_dp, 1.0e-12_dp, &
+         "mm STL normal not unit length", errors)
+-    call stl_wall_finalize(wall)
++    call stl_wall_finalize(main_wall)
+     if (errors /= 0) error stop 1
+ contains
+ 
+diff --git a/test/tests/test_sympl_testfield.f90 b/test/tests/test_sympl_testfield.f90
+index 4b6b5c8..1b6366c 100644
+--- a/test/tests/test_sympl_testfield.f90
++++ b/test/tests/test_sympl_testfield.f90
+@@ -1,6 +1,6 @@
+ module failed_symplectic_step_backend
+   use field_can_base, only: field_can_t
+-  use orbit_symplectic_base, only: symplectic_integrator_t
++  use orbit_symplectic_base, only: symplectic_integrator_t, SYMPLECTIC_STEP_BOUNDARY
+ 
+   implicit none
+ 
+@@ -17,18 +17,38 @@ contains
+     ierr = 1
+   end subroutine fail_symplectic_step
+ 
++  subroutine locate_lcfs_step(si, f, ierr)
++    type(symplectic_integrator_t), intent(inout) :: si
++    type(field_can_t), intent(inout) :: f
++    integer, intent(out) :: ierr
++
++    si%z = [1.0d0, 0.2d0, 0.3d0, 0.4d0]
++    si%last_step_fraction = 0.25d0
++    si%last_event_radial_residual = 1.0d-11
++    si%last_event_fraction_width = 1.0d-12
++    f%Bmod = 1.0d0
++    f%mu = 1.0d0
++    f%vpar = 0.0d0
++    ierr = SYMPLECTIC_STEP_BOUNDARY
++  end subroutine locate_lcfs_step
++
+ end module failed_symplectic_step_backend
+ 
+ program test_sympl_testfield
+   use, intrinsic :: iso_fortran_env, only : dp => real64, int64
+-  use failed_symplectic_step_backend, only: fail_symplectic_step
+-  use simple_main, only : init_field, macrostep, macrostep_with_wall_check
+-  use simple, only : tracer_t, init_sympl
++  use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
++  use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
++    macrostep, macrostep_with_wall_check
++  use simple, only : tracer_t, init_sympl, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
+   use params, only : isw_field_type, field_input, coord_input, integmode, &
+-    swcoll, orbit_model, ORBIT_GC
++    swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
++    ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_DOMAIN, &
++    ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+   use magfie_sub, only : TEST
+   use field_can_mod, only : evaluate
+   use orbit_symplectic, only : orbit_timestep_sympl
++  use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
++    SYMPLECTIC_STEP_OK
+ 
+   implicit none
+ 
+@@ -36,6 +56,7 @@ program test_sympl_testfield
+   character(*), parameter :: vmec_file = WOUT_FILE
+   integer, parameter :: ans_s = 5, ans_tp = 5, amultharm = 5
+   integer :: ierr
++  real(dp) :: initial_si_z(4)
+ 
+   ! Configure symplectic GC with TEST field to ensure initialization succeeds
+   isw_field_type = TEST
+@@ -59,18 +80,44 @@ program test_sympl_testfield
+                   norb%dtau, norb%dtaumin, norb%relerr, 1)
+ 
+   ierr = 0
++  initial_si_z = norb%si%z
+   call orbit_timestep_sympl(norb%si, norb%f, ierr)
+-  if (ierr /= 0) then
+-    print *, 'orbit_timestep_sympl failed with ierr=', ierr
+-    stop 1
++  if (ierr == SYMPLECTIC_STEP_OK) then
++    error stop 'unconverged Euler test-field step lost its failure status'
++  end if
++  if (any(norb%si%z /= initial_si_z)) then
++    error stop 'unconverged Euler test-field step changed accepted position'
+   end if
+ 
++  call test_macrostep_lcfs_event
+   call test_failed_step_preserves_state
++  call test_exit_classification
++  call test_fo_lcfs_location
+ 
+   print *, 'TEST field symplectic step succeeded'
+ 
+ contains
+ 
++  subroutine test_macrostep_lcfs_event
++    real(dp) :: z(5), exit_step
++    integer(int64) :: kt
++    integer :: step_error
++
++    swcoll = .false.
++    orbit_model = ORBIT_GC
++    orbit_timestep_sympl => locate_lcfs_step
++    z = [0.9_dp, 0.1_dp, 0.2_dp, 1.0_dp, 0.0_dp]
++    kt = 0_int64
++    call macrostep(norb, z, kt, step_error, 1, exit_step)
++
++    if (step_error /= SYMPLECTIC_STEP_BOUNDARY) then
++      error stop 'located LCFS event lost its physical status'
++    end if
++    if (kt /= 0_int64) error stop 'fractional LCFS event advanced a full step'
++    if (exit_step /= 0.25_dp) error stop 'LCFS event time lost its step fraction'
++    if (z(1) /= 1.0_dp) error stop 'LCFS event endpoint was not committed'
++  end subroutine test_macrostep_lcfs_event
++
+   subroutine test_failed_step_preserves_state
+     real(dp), parameter :: initial_state(5) = [0.2_dp, 1.0_dp, 2.0_dp, &
+       1.0_dp, 0.25_dp]
+@@ -104,4 +151,70 @@ contains
+     end if
+   end subroutine test_failed_step_preserves_state
+ 
++  subroutine test_exit_classification
++    if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, .true.) /= &
++        ORBIT_EXIT_LCFS) then
++      error stop 'converged LCFS event was not classified as physical'
++    end if
++    if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, .false.) /= &
++        ORBIT_EXIT_NUMERICAL_DOMAIN) then
++      error stop 'extended map boundary was classified as physical LCFS'
++    end if
++    if (classify_orbit_exit(77, ORBIT_GC, 3, .true.) /= ORBIT_EXIT_WALL) then
++      error stop 'wall event was not classified as physical'
++    end if
++    if (classify_orbit_exit(77, ORBIT_GC, 0, .true.) /= ORBIT_EXIT_WALL) then
++      error stop 'axis wall event was not classified as physical'
++    end if
++    if (classify_orbit_exit(1, ORBIT_GC, 3, .true.) /= &
++        ORBIT_EXIT_NUMERICAL_DOMAIN) then
++      error stop 'exterior Newton iterate was classified as physical'
++    end if
++    if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, .true.) /= &
++        ORBIT_EXIT_LCFS) then
++      error stop 'full-orbit LCFS exit was not classified as physical'
++    end if
++    if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, .false.) /= &
++        ORBIT_EXIT_NUMERICAL_DOMAIN) then
++      error stop 'extended full-orbit map boundary was classified as physical'
++    end if
++    if (classify_orbit_exit(ORBIT_FO_NUMERICAL, ORBIT_FULL_ORBIT, 3, .true.) /= &
++        ORBIT_EXIT_NUMERICAL_FULL_ORBIT) then
++      error stop 'full-orbit locate failure was classified as physical'
++    end if
++    if (classify_orbit_exit(1, ORBIT_GC, 0, .true.) /= ORBIT_EXIT_LCFS) then
++      error stop 'RK LCFS exit was classified as numerical'
++    end if
++    if (classify_orbit_exit(1, ORBIT_GC, 0, .false.) /= &
++        ORBIT_EXIT_NUMERICAL_DOMAIN) then
++      error stop 'RK extended-map boundary was classified as physical'
++    end if
++  end subroutine test_exit_classification
++
++  subroutine test_fo_lcfs_location
++    real(dp), parameter :: z_before(5) = [0.9_dp, 6.2_dp, 3.0_dp, 1.0_dp, &
++      -0.5_dp]
++    real(dp), parameter :: z_after(5) = [1.1_dp, 0.1_dp, -3.0_dp, 2.0_dp, &
++      0.5_dp]
++    real(dp), parameter :: tolerance = 32.0_dp*epsilon(1.0_dp)
++    real(dp) :: z_event(5), event_fraction
++
++    call locate_linear_lcfs(z_before, z_after, 6.0_dp, z_event, event_fraction)
++    if (abs(event_fraction - 0.5_dp) > tolerance) then
++      error stop 'full-orbit LCFS fraction is incorrect'
++    end if
++    if (z_event(1) /= 1.0_dp) error stop 'full-orbit event is not on the LCFS'
++    if (abs(z_event(4) - 1.5_dp) > tolerance .or. &
++        abs(z_event(5)) > tolerance) then
++      error stop 'full-orbit phase-space state is inconsistent with event time'
++    end if
++    if (abs(z_event(2) - (6.2_dp + 0.5_dp*(0.1_dp - 6.2_dp + &
++        2.0_dp*acos(-1.0_dp)))) > tolerance) then
++      error stop 'full-orbit poloidal seam was not interpolated periodically'
++    end if
++    if (abs(z_event(3) - 3.0_dp) > tolerance) then
++      error stop 'full-orbit field-period seam was not interpolated periodically'
++    end if
++  end subroutine test_fo_lcfs_location
++
+ end program test_sympl_testfield
