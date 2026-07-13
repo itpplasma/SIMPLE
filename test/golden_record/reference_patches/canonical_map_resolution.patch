@@ -1,0 +1,1000 @@
+diff --git a/DOC/config.md b/DOC/config.md
+index d856a9f..5a7b3c0 100644
+--- a/DOC/config.md
++++ b/DOC/config.md
+@@ -4,3 +4,20 @@
+   them off via `notrace_passing=.True.`, one may resort to 128, or even 64
+   in extreme cases with short tracing time. However, also for these cases,
+   `npoiper2=256` appears to be a safer choice.
++
++* `boundary_event_fraction_tolerance` sets the dimensionless fractional-step
++  bracket tolerance for an `s=1` event. `boundary_event_radial_tolerance` sets
++  its dimensionless radial residual tolerance in the integrator coordinate.
++  Both default to `-1`, which derives the tolerance from `relerr`. Set positive
++  values to refine event location independently of the nonlinear solve.
++
++* `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
++  control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
++  and 64. Each dimension must be between 6 and 512, and their product must not
++  exceed 2,097,152 grid points. This limit guards allocation arithmetic; the
++  requested host and accelerator memory must still fit the selected grid and
++  spline backend. `canonical_ode_relerr` controls the radial transformation
++  solve and defaults to `1d-11`. NVHPC
++  builds use at least `1d-8` only on slices where the covariant toroidal field
++  component is near zero, preventing step-size underflow at that coordinate
++  singularity. Change one setting at a time in resolution studies.
+diff --git a/src/field/field_can_albert.f90 b/src/field/field_can_albert.f90
+index 5cc7cfd..98adce1 100644
+--- a/src/field/field_can_albert.f90
++++ b/src/field/field_can_albert.f90
+@@ -106,6 +106,7 @@ contains
+     end subroutine ref_to_integ_albert
+ 
+     subroutine get_albert_coordinates
++        call cleanup_albert
+ #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+         print *, 'field_can_meiss.init_transformation'
+ #endif
+@@ -127,6 +128,20 @@ contains
+         call init_splines_with_psi
+     end subroutine get_albert_coordinates
+ 
++    subroutine cleanup_albert
++        use interpolate, only: destroy_batch_splines_3d
++
++        call destroy_batch_splines_3d(spl_r_batch)
++        call destroy_batch_splines_3d(spl_albert_batch)
++        if (allocated(psi_of_x)) deallocate(psi_of_x)
++        if (allocated(psi_grid)) deallocate(psi_grid)
++        if (allocated(r_of_xc)) deallocate(r_of_xc)
++        if (allocated(Aph_of_xc)) deallocate(Aph_of_xc)
++        if (allocated(hth_of_xc)) deallocate(hth_of_xc)
++        if (allocated(hph_of_xc)) deallocate(hph_of_xc)
++        if (allocated(Bmod_of_xc)) deallocate(Bmod_of_xc)
++    end subroutine cleanup_albert
++
+     subroutine init_splines_with_psi
+         use psi_transform, only: grid_r_to_psi
+         use field_can_meiss, only: spl_field_batch
+diff --git a/src/field/field_can_meiss.f90 b/src/field/field_can_meiss.f90
+index 7302b97..7a46493 100644
+--- a/src/field/field_can_meiss.f90
++++ b/src/field/field_can_meiss.f90
+@@ -51,8 +51,12 @@ type :: grid_indices_t
+ end type grid_indices_t
+ 
+ class(magnetic_field_t), allocatable :: field_noncan
+-integer :: n_r=62, n_th=63, n_phi=64
+-real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]
++integer, parameter :: default_n_r = 62, default_n_th = 63, default_n_phi = 64
++real(dp), parameter :: default_transformation_relerr = 1d-11
++real(dp), parameter :: default_xmin(3) = [1d-6, 0d0, 0d0]
++integer :: n_r=default_n_r, n_th=default_n_th, n_phi=default_n_phi
++real(dp) :: transformation_relerr = default_transformation_relerr
++real(dp) :: xmin(3) = default_xmin
+ real(dp) :: xmax(3) = [1d0, twopi, twopi]
+ 
+ real(dp) :: h_r, h_th, h_phi
+@@ -137,15 +141,19 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
+ end subroutine rh_can_wrapper
+ 
+ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax, &
+-                      scaling)
++                      scaling, transformation_relerr_)
++    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
++    use, intrinsic :: iso_fortran_env, only: int64
+     use new_vmec_stuff_mod, only : nper
+ 
+     class(magnetic_field_t), intent(in) :: field_noncan_
+     integer, intent(in), optional :: n_r_, n_th_, n_phi_
+     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
+     class(coordinate_scaling_t), intent(in), optional :: scaling
++    real(dp), intent(in), optional :: transformation_relerr_
+ 
+-        call field_clone(field_noncan_, field_noncan)
++    call cleanup_meiss
++    call field_clone(field_noncan_, field_noncan)
+ 
+     ! Initialize coordinate scaling based on field type
+     if (allocated(coord_scaling)) deallocate(coord_scaling)
+@@ -160,16 +168,36 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
+         call choose_default_scaling(field_noncan_, coord_scaling)
+     end if
+ 
++    n_r = default_n_r
++    n_th = default_n_th
++    n_phi = default_n_phi
++    transformation_relerr = default_transformation_relerr
++    xmin = default_xmin
++    xmax = [1d0, twopi, twopi/nper]
+     if (present(n_r_)) n_r = n_r_
+     if (present(n_th_)) n_th = n_th_
+     if (present(n_phi_)) n_phi = n_phi_
++    if (any([n_r, n_th, n_phi] < order + 1)) then
++        error stop 'canonical map grid dimensions must exceed the spline order'
++    end if
++    if (max(n_r, n_th, n_phi) > 512) then
++        error stop 'canonical map grid dimensions must not exceed 512'
++    end if
++    if (int(n_r, int64)*int(n_th, int64)*int(n_phi, int64) > 2097152_int64) then
++        error stop 'canonical map grid exceeds the 2097152-point limit'
++    end if
++    if (present(transformation_relerr_)) then
++        if (.not. ieee_is_finite(transformation_relerr_) .or. &
++            transformation_relerr_ <= 0d0) then
++            error stop 'canonical map ODE tolerance must be finite and positive'
++        end if
++        transformation_relerr = transformation_relerr_
++    end if
+ 
+     if (present(rmin)) xmin(1) = rmin
+     if (present(rmax)) xmax(1) = rmax
+     if (present(thmin)) xmin(2) = thmin
+     if (present(thmax)) xmax(2) = thmax
+-    xmax(3) = twopi/nper
+-
+     h_r = (xmax(1)-xmin(1))/(n_r-1)
+     h_th = (xmax(2)-xmin(2))/(n_th-1)
+     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
+@@ -420,7 +448,6 @@ subroutine integrate(i_r, i_th, i_phi, y)
+     integer, intent(in) :: i_r, i_th, i_phi
+     real(dp), dimension(2), intent(inout) :: y
+ 
+-    real(dp), parameter :: relerr_default = 1d-11
+     integer, parameter :: ndim = 2
+     real(dp) :: r1, r2
+     real(dp) :: relaxed_relerr
+@@ -433,7 +460,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
+     r1 = xmin(1) + h_r*(i_r-2)
+     r2 = xmin(1) + h_r*(i_r-1)
+ 
+-    relaxed_relerr = relerr_default
++    relaxed_relerr = transformation_relerr
+ 
+ #ifdef SIMPLE_NVHPC
+     ! NVHPC/nvfortran: avoid ODE step-size underflow near singular points by
+@@ -441,7 +468,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
+     phi_c = xmin(3) + h_phi*(i_phi-1)
+     call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
+     if (abs(hp_test) < hp_threshold) then
+-        relaxed_relerr = 1d-8
++        relaxed_relerr = max(transformation_relerr, 1d-8)
+     end if
+ #endif
+ 
+diff --git a/src/field_can.f90 b/src/field_can.f90
+index c916b0b..4937d5f 100644
+--- a/src/field_can.f90
++++ b/src/field_can.f90
+@@ -10,9 +10,9 @@ use field_can_flux, only : evaluate_flux, integ_to_ref_flux, ref_to_integ_flux
+ use field_can_boozer, only : evaluate_boozer, integ_to_ref_boozer, ref_to_integ_boozer, &
+   integ_to_ref_boozer_chartmap, ref_to_integ_boozer_chartmap
+ use field_can_meiss, only : init_meiss, evaluate_meiss, &
+-  integ_to_ref_meiss, ref_to_integ_meiss
++  integ_to_ref_meiss, ref_to_integ_meiss, cleanup_meiss
+ use field_can_albert, only : evaluate_albert, init_albert, integ_to_ref_albert, &
+-  ref_to_integ_albert
++  ref_to_integ_albert, cleanup_albert
+ use field_can_spectre, only : construct_spectre_coordinates, evaluate_spectre_can, &
+   integ_to_ref_spectre, ref_to_integ_spectre
+ use field_boozer_chartmap, only : boozer_chartmap_field_t
+@@ -30,33 +30,45 @@ procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
+ 
+ contains
+ 
+-subroutine field_can_from_name(field_name, field_noncan)
++subroutine field_can_from_name(field_name, field_noncan, n_r, n_th, n_phi, &
++    transformation_relerr)
+ 
+   character(*), intent(in) :: field_name
+   !> For field_can_tMeiss
+   class(magnetic_field_t), intent(in), optional :: field_noncan
++  integer, intent(in), optional :: n_r, n_th, n_phi
++  real(dp), intent(in), optional :: transformation_relerr
+ 
+   select case(trim(field_name))
+     case("test")
++      call cleanup_albert
++      call cleanup_meiss
+       evaluate => evaluate_test
+     case("flux")
++      call cleanup_albert
++      call cleanup_meiss
+       evaluate => evaluate_flux
+       integ_to_ref => integ_to_ref_flux
+       ref_to_integ => ref_to_integ_flux
+     case("boozer")
++      call cleanup_albert
++      call cleanup_meiss
+       evaluate => evaluate_boozer
+       integ_to_ref => integ_to_ref_boozer
+       ref_to_integ => ref_to_integ_boozer
+     case("meiss")
++      call cleanup_albert
+       if (present(field_noncan)) then
+-        call init_meiss(field_noncan)
++        call init_meiss(field_noncan, n_r, n_th, n_phi, &
++          transformation_relerr_=transformation_relerr)
+       end if
+       evaluate => evaluate_meiss
+       integ_to_ref => integ_to_ref_meiss
+       ref_to_integ => ref_to_integ_meiss
+     case("albert")
+       if (present(field_noncan)) then
+-        call init_albert(field_noncan)
++        call init_albert(field_noncan, n_r, n_th, n_phi, &
++          transformation_relerr_=transformation_relerr)
+       end if
+       evaluate => evaluate_albert
+       integ_to_ref => integ_to_ref_albert
+@@ -72,13 +84,17 @@ subroutine field_can_from_name(field_name, field_noncan)
+ end subroutine field_can_from_name
+ 
+ 
+-subroutine field_can_from_id(field_id, field_noncan)
++subroutine field_can_from_id(field_id, field_noncan, n_r, n_th, n_phi, &
++    transformation_relerr)
+   integer, intent(in) :: field_id
+   !> For field_can_tMeiss
+   class(magnetic_field_t), intent(in), optional :: field_noncan
++  integer, intent(in), optional :: n_r, n_th, n_phi
++  real(dp), intent(in), optional :: transformation_relerr
+ 
+   if (present(field_noncan)) then
+-    call field_can_from_name(name_from_id(field_id), field_noncan)
++    call field_can_from_name(name_from_id(field_id), field_noncan, n_r, n_th, &
++      n_phi, transformation_relerr)
+   else
+     call field_can_from_name(name_from_id(field_id))
+   end if
+@@ -134,7 +150,8 @@ function id_from_name(field_name)
+ end function id_from_name
+ 
+ 
+-subroutine init_field_can(field_id, field_noncan)
++subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
++    transformation_relerr)
+   use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
+   use boozer_sub, only : get_boozer_coordinates
+   use boozer_chartmap, only : load_boozer_from_chartmap
+@@ -143,10 +160,13 @@ subroutine init_field_can(field_id, field_noncan)
+ 
+   integer, intent(in) :: field_id
+   class(magnetic_field_t), intent(in), optional :: field_noncan
++  integer, intent(in), optional :: n_r, n_th, n_phi
++  real(dp), intent(in), optional :: transformation_relerr
+   type(vmec_field_t) :: vmec_field
+ 
+   if (present(field_noncan)) then
+-    call field_can_from_id(field_id, field_noncan)
++    call field_can_from_id(field_id, field_noncan, n_r, n_th, n_phi, &
++      transformation_relerr)
+     select case (field_id)
+       case (TEST)
+         continue
+@@ -186,11 +206,13 @@ subroutine init_field_can(field_id, field_noncan)
+       call get_boozer_coordinates
+     case (MEISS)
+       call create_vmec_field(vmec_field)
+-      call field_can_from_id(field_id, vmec_field)
++      call field_can_from_id(field_id, vmec_field, n_r, n_th, n_phi, &
++        transformation_relerr)
+       call get_meiss_coordinates
+     case (ALBERT)
+       call create_vmec_field(vmec_field)
+-      call field_can_from_id(field_id, vmec_field)
++      call field_can_from_id(field_id, vmec_field, n_r, n_th, n_phi, &
++        transformation_relerr)
+       call get_albert_coordinates
+     case default
+       print *, "init_field_can: Unknown field id ", field_id
+diff --git a/src/netcdf_results_output.f90 b/src/netcdf_results_output.f90
+index 923cc99..85a4055 100644
+--- a/src/netcdf_results_output.f90
++++ b/src/netcdf_results_output.f90
+@@ -45,12 +45,17 @@ contains
+                           boundary_event_time_width, trap_par, perp_inv, iclass, &
+                           class_lost, &
+                           facE_al, v0, integmode, relerr, npoiper, npoiper2, &
++                          boundary_event_fraction_tolerance, &
++                          boundary_event_radial_tolerance, &
++                          canonical_grid_nr, canonical_grid_ntheta, &
++                          canonical_grid_nphi, canonical_ode_relerr, &
+                           ntimstep, startmode, num_surf, sbeg, &
+                           isw_field_type, swcoll, deterministic, ran_seed, &
+                           netcdffile, field_input, coord_input, &
+                           wall_input, wall_units, wall_hit, wall_hit_cart, &
+                           wall_hit_normal_cart, wall_hit_cos_incidence, &
+                           wall_hit_angle_rad
++        use new_vmec_stuff_mod, only: multharm
+         use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
+         use libneo_coordinates, only: chartmap_coordinate_system_t
+         use reference_coordinates, only: ref_coords
+@@ -297,6 +302,28 @@ contains
+         call check_nc(status, 'put_att integmode')
+         status = nf90_put_att(ncid, nf90_global, 'relerr', relerr)
+         call check_nc(status, 'put_att relerr')
++        status = nf90_put_att(ncid, nf90_global, &
++                              'boundary_event_fraction_tolerance', &
++                              boundary_event_fraction_tolerance)
++        call check_nc(status, 'put_att boundary_event_fraction_tolerance')
++        status = nf90_put_att(ncid, nf90_global, &
++                              'boundary_event_radial_tolerance', &
++                              boundary_event_radial_tolerance)
++        call check_nc(status, 'put_att boundary_event_radial_tolerance')
++        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nr', &
++                              canonical_grid_nr)
++        call check_nc(status, 'put_att canonical_grid_nr')
++        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_ntheta', &
++                              canonical_grid_ntheta)
++        call check_nc(status, 'put_att canonical_grid_ntheta')
++        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nphi', &
++                              canonical_grid_nphi)
++        call check_nc(status, 'put_att canonical_grid_nphi')
++        status = nf90_put_att(ncid, nf90_global, 'canonical_ode_relerr', &
++                              canonical_ode_relerr)
++        call check_nc(status, 'put_att canonical_ode_relerr')
++        status = nf90_put_att(ncid, nf90_global, 'multharm', multharm)
++        call check_nc(status, 'put_att multharm')
+         status = nf90_put_att(ncid, nf90_global, 'npoiper', npoiper)
+         call check_nc(status, 'put_att npoiper')
+         status = nf90_put_att(ncid, nf90_global, 'npoiper2', npoiper2)
+diff --git a/src/orbit_symplectic.f90 b/src/orbit_symplectic.f90
+index 697c450..5fa5eb8 100644
+--- a/src/orbit_symplectic.f90
++++ b/src/orbit_symplectic.f90
+@@ -11,7 +11,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
+   SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
+   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
+-  SYMPLECTIC_STEP_BOUNDARY_LIMITED
++  SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
++  boundary_event_radial_tolerance
+ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
+   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
+   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
+@@ -1583,6 +1584,20 @@ subroutine attempt_midpoint_step(si, f, status)
+   end if
+ end subroutine attempt_midpoint_step
+ 
++subroutine get_boundary_event_tolerances(rtol, fraction_tolerance, radial_tolerance)
++  real(dp), intent(in) :: rtol
++  real(dp), intent(out) :: fraction_tolerance, radial_tolerance
++
++  fraction_tolerance = max(1d-12, 10d0*rtol)
++  radial_tolerance = max(1d-10, 10d0*rtol)
++  if (boundary_event_fraction_tolerance > 0d0) then
++    fraction_tolerance = boundary_event_fraction_tolerance
++  end if
++  if (boundary_event_radial_tolerance > 0d0) then
++    radial_tolerance = boundary_event_radial_tolerance
++  end if
++end subroutine get_boundary_event_tolerances
++
+ subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
+     raw_step, si, f, status, event_fraction, radial_residual, fraction_width)
+   type(symplectic_integrator_t), intent(in) :: accepted_integrator
+@@ -1609,8 +1624,8 @@ subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
+   root_estimate_available = .false.
+   best_integrator = accepted_integrator
+   best_field = accepted_field
+-  fraction_tolerance = max(1d-12, 10d0*accepted_integrator%rtol)
+-  radial_tolerance = max(1d-10, 10d0*accepted_integrator%rtol)
++  call get_boundary_event_tolerances(accepted_integrator%rtol, &
++    fraction_tolerance, radial_tolerance)
+ 
+   do iteration = 1, max_event_iterations
+     trial_integrator = accepted_integrator
+diff --git a/src/orbit_symplectic_base.f90 b/src/orbit_symplectic_base.f90
+index fed80de..ada49e3 100644
+--- a/src/orbit_symplectic_base.f90
++++ b/src/orbit_symplectic_base.f90
+@@ -26,6 +26,8 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
+     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY = 4
+     integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
+     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
++    real(dp) :: boundary_event_fraction_tolerance = -1d0
++    real(dp) :: boundary_event_radial_tolerance = -1d0
+ 
+     type :: symplectic_integrator_t
+         real(dp) :: atol
+diff --git a/src/params.f90 b/src/params.f90
+index 48ca328..1ca156b 100644
+--- a/src/params.f90
++++ b/src/params.f90
+@@ -1,5 +1,5 @@
+ module params
+-    use, intrinsic :: iso_fortran_env, only: int8
++    use, intrinsic :: iso_fortran_env, only: int8, int64
+     use util, only: pi, c, e_charge, p_mass, ev
+     use parmot_mod, only: ro0, rmu
+     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
+@@ -12,12 +12,16 @@ module params
+     use magfie_sub, only: TEST
+     use field_can_mod, only: eval_field => evaluate, field_can_t
+     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
+-                                     EXPL_IMPL_EULER
++                                     EXPL_IMPL_EULER, &
++                                     boundary_event_fraction_tolerance, &
++                                     boundary_event_radial_tolerance
+     use vmecin_sub, only: stevvo
+     use callback, only: output_error, output_orbits_macrostep
+ 
+     implicit none
+ 
++    private :: config_value_is_finite
++
+     ! Define real(dp) kind parameter
+     integer, parameter :: dp = kind(1.0d0)
+     integer          :: nper = 1000, ntestpart = 1024
+@@ -80,6 +84,10 @@ module params
+     ! Wall-clock seconds between partial-result checkpoints during tracing.
+     ! <= 0 disables periodic output (results then appear only at the end).
+     real(dp) :: checkpoint_interval = 10.0d0
++    integer :: canonical_grid_nr = 62
++    integer :: canonical_grid_ntheta = 63
++    integer :: canonical_grid_nphi = 64
++    real(dp) :: canonical_ode_relerr = 1d-11
+ 
+     real(dp), allocatable :: trap_par(:), perp_inv(:)
+     integer, allocatable :: iclass(:, :)
+@@ -155,6 +163,9 @@ module params
+ 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
+ 	        isw_field_type, generate_start_only, startmode, grid_density, &
+ 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
++	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
++	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
++	        canonical_ode_relerr, &
+ 	        tcut, nturns, debug, &
+ 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
+ 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
+@@ -189,12 +200,53 @@ contains
+ 
+         call reset_seed_if_deterministic
+ 
++        call validate_boundary_event_tolerances
++        if (min(canonical_grid_nr, canonical_grid_ntheta, &
++            canonical_grid_nphi) < 6) then
++            error stop 'canonical map grid dimensions must be at least 6'
++        end if
++        if (max(canonical_grid_nr, canonical_grid_ntheta, &
++            canonical_grid_nphi) > 512) then
++            error stop 'canonical map grid dimensions must not exceed 512'
++        end if
++        if (int(canonical_grid_nr, int64)*int(canonical_grid_ntheta, int64)* &
++            int(canonical_grid_nphi, int64) > 2097152_int64) then
++            error stop 'canonical map grid exceeds the 2097152-point limit'
++        end if
++        if (.not. config_value_is_finite(canonical_ode_relerr) .or. &
++            canonical_ode_relerr <= 0d0) then
++            error stop 'canonical_ode_relerr must be finite and positive'
++        end if
++
+         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
+             error stop 'Collisions are incompatible with classification'
+         end if
+ 
+     end subroutine read_config
+ 
++    subroutine validate_boundary_event_tolerances
++        if (.not. config_value_is_finite(boundary_event_fraction_tolerance) .or. &
++            (boundary_event_fraction_tolerance /= -1d0 .and. &
++             boundary_event_fraction_tolerance <= 0d0)) then
++            error stop 'boundary_event_fraction_tolerance must be finite and positive or -1'
++        end if
++        if (.not. config_value_is_finite(boundary_event_radial_tolerance) .or. &
++            (boundary_event_radial_tolerance /= -1d0 .and. &
++             boundary_event_radial_tolerance <= 0d0)) then
++            error stop 'boundary_event_radial_tolerance must be finite and positive or -1'
++        end if
++    end subroutine validate_boundary_event_tolerances
++
++    pure logical function config_value_is_finite(value)
++        real(dp), intent(in) :: value
++        integer(int64), parameter :: exponent_mask = &
++            int(z'7ff0000000000000', int64)
++        integer(int64) :: bits
++
++        bits = transfer(value, bits)
++        config_value_is_finite = iand(bits, exponent_mask) /= exponent_mask
++    end function config_value_is_finite
++
+ 	    subroutine params_init
+ 	        real(dp) :: E_alpha
+ 	        integer :: L1i
+diff --git a/src/simple_main.f90 b/src/simple_main.f90
+index a0d0ad4..fafe33b 100644
+--- a/src/simple_main.f90
++++ b/src/simple_main.f90
+@@ -24,6 +24,8 @@ module simple_main
+         ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_DOMAIN, &
+         ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
+         ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
++    use params, only: canonical_grid_nr, canonical_grid_ntheta, &
++        canonical_grid_nphi, canonical_ode_relerr
+     use diag_counters, only: diag_counters_init
+     use progress_monitor, only: progress_init, progress_tick, progress_finalize
+     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
+@@ -345,11 +347,15 @@ contains
+ 
+         if (isw_field_type == TEST) then
+             ! TEST field is fully analytic - no field file needed
+-            call init_field_can(isw_field_type)
++            call init_field_can(isw_field_type, n_r=canonical_grid_nr, &
++                n_th=canonical_grid_ntheta, n_phi=canonical_grid_nphi, &
++                transformation_relerr=canonical_ode_relerr)
+             call print_phase_time('Canonical field initialization completed')
+         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
+                  isw_field_type == MEISS .or. isw_field_type == ALBERT) then
+-            call init_field_can(isw_field_type, field_temp)
++            call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
++                canonical_grid_ntheta, canonical_grid_nphi, &
++                canonical_ode_relerr)
+             call print_phase_time('Canonical field initialization completed')
+         end if
+     end subroutine init_field
+diff --git a/test/python/test_netcdf_results.py b/test/python/test_netcdf_results.py
+index 63b3173..6013bc9 100644
+--- a/test/python/test_netcdf_results.py
++++ b/test/python/test_netcdf_results.py
+@@ -82,6 +82,13 @@ class TestNetCDFResultsOutput:
+                 assert 'ntestpart' in ds.ncattrs()
+                 assert 'trace_time' in ds.ncattrs()
+                 assert ds.ntestpart == 8
++                assert ds.boundary_event_fraction_tolerance == -1.0
++                assert ds.boundary_event_radial_tolerance == -1.0
++                assert ds.canonical_grid_nr == 62
++                assert ds.canonical_grid_ntheta == 63
++                assert ds.canonical_grid_nphi == 64
++                assert ds.canonical_ode_relerr == 1e-11
++                assert ds.multharm == 5
+ 
+         finally:
+             os.chdir(original_dir)
+diff --git a/test/tests/CMakeLists.txt b/test/tests/CMakeLists.txt
+index c69b3a1..d8642c5 100644
+--- a/test/tests/CMakeLists.txt
++++ b/test/tests/CMakeLists.txt
+@@ -617,6 +617,28 @@ add_executable(test_newton_solver_status.x test_newton_solver_status.f90)
+ target_link_libraries(test_newton_solver_status.x simple)
+ add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
+ 
++add_executable(test_boundary_event_config.x test_boundary_event_config.f90)
++target_link_libraries(test_boundary_event_config.x simple)
++add_test(NAME test_boundary_event_config_valid
++    COMMAND test_boundary_event_config.x valid)
++add_test(NAME test_boundary_event_config_fraction_nan
++    COMMAND test_boundary_event_config.x fraction_nan)
++add_test(NAME test_boundary_event_config_fraction_inf
++    COMMAND test_boundary_event_config.x fraction_inf)
++add_test(NAME test_boundary_event_config_radial_nan
++    COMMAND test_boundary_event_config.x radial_nan)
++set_tests_properties(
++    test_boundary_event_config_valid
++    test_boundary_event_config_fraction_nan
++    test_boundary_event_config_fraction_inf
++    test_boundary_event_config_radial_nan
++    PROPERTIES LABELS "unit")
++set_tests_properties(
++    test_boundary_event_config_fraction_nan
++    test_boundary_event_config_fraction_inf
++    test_boundary_event_config_radial_nan
++    PROPERTIES WILL_FAIL TRUE)
++
+ add_executable(test_field_base.x test_field_base.f90)
+ target_link_libraries(test_field_base.x simple)
+ add_test(NAME test_field_base COMMAND test_field_base.x)
+diff --git a/test/tests/field_can/CMakeLists.txt b/test/tests/field_can/CMakeLists.txt
+index 1183d55..520f47a 100644
+--- a/test/tests/field_can/CMakeLists.txt
++++ b/test/tests/field_can/CMakeLists.txt
+@@ -1,8 +1,22 @@
+ add_executable (test_field_can_meiss.x test_field_can_meiss.f90)
+ target_link_libraries(test_field_can_meiss.x simple)
++add_test(NAME test_field_can_meiss_config
++    COMMAND $<TARGET_FILE:test_field_can_meiss.x>
++    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
++set_tests_properties(test_field_can_meiss_config PROPERTIES
++    LABELS "integration"
++    RUN_SERIAL TRUE
++    TIMEOUT 120)
+ 
+ add_executable (test_field_can_albert.x test_field_can_albert.f90)
+ target_link_libraries(test_field_can_albert.x simple)
++add_test(NAME test_field_can_albert_config
++    COMMAND $<TARGET_FILE:test_field_can_albert.x>
++    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
++set_tests_properties(test_field_can_albert_config PROPERTIES
++    LABELS "integration"
++    RUN_SERIAL TRUE
++    TIMEOUT 120)
+ 
+ add_executable (test_field_can_transforms.x test_field_can_transforms.f90)
+ target_link_libraries(test_field_can_transforms.x simple)
+diff --git a/test/tests/field_can/test_field_can_albert.f90 b/test/tests/field_can/test_field_can_albert.f90
+index 97ae60d..411476c 100644
+--- a/test/tests/field_can/test_field_can_albert.f90
++++ b/test/tests/field_can/test_field_can_albert.f90
+@@ -1,24 +1,107 @@
+ program test_field_can_albert
+ 
+     use, intrinsic :: iso_fortran_env, only: dp => real64
++    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
++    use util, only: twopi
+ 
+     use simple, only: tracer_t
+     use simple_main, only: init_field
+     use magfie_sub, only: ALBERT
+     use velo_mod, only: isw_field_type
+     use field, only: vmec_field_t, create_vmec_field
++    use field_can_meiss, only: n_r, n_th, n_phi, transformation_relerr, xmax, &
++        get_meiss_coordinates, ref_to_integ_meiss
++    use field_can_mod, only: eval_field => evaluate, field_can_t, field_can_from_name
++    use field_can_albert, only: ref_to_integ_albert, integ_to_ref_albert, &
++        r_of_xc, psi_of_x
++    use params, only: canonical_grid_nr, canonical_grid_ntheta, &
++        canonical_grid_nphi, canonical_ode_relerr, field_input, coord_input
+ 
+     implicit none
+ 
+-    real(dp), parameter :: twopi = atan(1.d0)*8.d0
+-
+     type(tracer_t) :: norb
+     type(vmec_field_t) :: magfie
+ 
+     isw_field_type = ALBERT
+     call create_vmec_field(magfie)
++    field_input = 'wout.nc'
++    coord_input = 'wout.nc'
++    canonical_grid_nr = 8
++    canonical_grid_ntheta = 9
++    canonical_grid_nphi = 10
++    canonical_ode_relerr = 1.0e-8_dp
+ 
+     print *, 'init_field'
+     call init_field(norb, 'wout.nc', 5, 5, 3, 0)
++    if (any([n_r, n_th, n_phi] /= [8, 9, 10]) .or. &
++        transformation_relerr /= 1.0e-8_dp) then
++        error stop 'configured Albert map controls were not applied'
++    end if
++    call assert_albert_map
++
++    call assert_albert_to_meiss_switch
++
++    canonical_grid_nr = 7
++    canonical_grid_ntheta = 8
++    canonical_grid_nphi = 9
++    canonical_ode_relerr = 5.0e-9_dp
++    call init_field(norb, 'wout.nc', 5, 5, 3, 0)
++    if (any([n_r, n_th, n_phi] /= [7, 8, 9]) .or. &
++        transformation_relerr /= 5.0e-9_dp) then
++        error stop 'reinitialized Albert map controls were not applied'
++    end if
++    call assert_albert_map
++
++contains
++
++    subroutine assert_albert_map
++        real(dp), parameter :: tolerance = 5.0e-2_dp
++        real(dp) :: xref(3), xref_back(3), xinteg(3), xinteg_outer(3)
++        real(dp) :: error(3)
++        type(field_can_t) :: field_value, periodic_value
++
++        xref = [0.25_dp, 1.1_dp, 0.3_dp]
++        call ref_to_integ_albert(xref, xinteg)
++        call integ_to_ref_albert(xinteg, xref_back)
++        error(1) = abs(xref_back(1) - xref(1))
++        error(2) = abs(modulo(xref_back(2) - xref(2) + 0.5_dp*twopi, twopi) - &
++            0.5_dp*twopi)
++        error(3) = abs(modulo(xref_back(3) - xref(3) + 0.5_dp*twopi, twopi) - &
++            0.5_dp*twopi)
++        if (maxval(error) > tolerance) error stop 'Albert coordinate roundtrip failed'
++
++        call ref_to_integ_albert([0.36_dp, xref(2), xref(3)], xinteg_outer)
++        if (xinteg_outer(1) <= xinteg(1)) error stop 'Albert radial orientation failed'
++
++        call eval_field(field_value, xinteg(1), xinteg(2), xinteg(3), 1)
++        call eval_field(periodic_value, xinteg(1), xinteg(2), &
++            xinteg(3) + xmax(3), 1)
++        if (.not. ieee_is_finite(field_value%Bmod) .or. field_value%Bmod <= 0.0_dp .or. &
++            .not. all(ieee_is_finite(field_value%dAth)) .or. &
++            .not. all(ieee_is_finite(field_value%dAph)) .or. &
++            .not. ieee_is_finite(field_value%hth) .or. &
++            .not. ieee_is_finite(field_value%hph)) then
++            error stop 'Albert field evaluation is not finite'
++        end if
++        if (abs(periodic_value%Bmod - field_value%Bmod) > tolerance) then
++            error stop 'Albert field-period seam failed'
++        end if
++    end subroutine assert_albert_map
++
++    subroutine assert_albert_to_meiss_switch
++        real(dp) :: xinteg(3)
++        type(field_can_t) :: field_value
++
++        call field_can_from_name('meiss', magfie, 7, 8, 9, 5.0e-9_dp)
++        if (allocated(r_of_xc) .or. allocated(psi_of_x)) then
++            error stop 'Albert resources survived a Meiss mode switch'
++        end if
++        call get_meiss_coordinates
++        call ref_to_integ_meiss([0.25_dp, 1.1_dp, 0.3_dp], xinteg)
++        call eval_field(field_value, xinteg(1), xinteg(2), xinteg(3), 1)
++        if (.not. ieee_is_finite(field_value%Bmod) .or. field_value%Bmod <= 0.0_dp) then
++            error stop 'Meiss evaluation failed after Albert mode switch'
++        end if
++    end subroutine assert_albert_to_meiss_switch
+ 
+ end program test_field_can_albert
+diff --git a/test/tests/field_can/test_field_can_meiss.f90 b/test/tests/field_can/test_field_can_meiss.f90
+index ac0d99d..a7f113c 100644
+--- a/test/tests/field_can/test_field_can_meiss.f90
++++ b/test/tests/field_can/test_field_can_meiss.f90
+@@ -1,29 +1,54 @@
+ program test_field_can_meiss
+ 
+     use, intrinsic :: iso_fortran_env, only: dp => real64
++    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
++    use util, only: twopi
+     use simple, only: tracer_t
+     use simple_main, only: init_field
+     use velo_mod, only: isw_field_type
+     use field, only: vmec_field_t, create_vmec_field
+     use field_can_mod, only: eval_field => evaluate, field_can_t
+     use magfie_sub, only: MEISS
+-    use field_can_meiss, only: init_meiss, &
++    use field_can_meiss, only: init_meiss, get_meiss_coordinates, &
+                                spline_transformation, init_canonical_field_components, &
+-           xmin, h_r, h_phi, h_th, ah_cov_on_slice, n_r, n_phi, n_th, lam_phi, chi_gauge
++           xmin, xmax, h_r, h_phi, h_th, ah_cov_on_slice, n_r, n_phi, n_th, &
++           lam_phi, chi_gauge, transformation_relerr, ref_to_integ_meiss, &
++           integ_to_ref_meiss
++    use params, only: canonical_grid_nr, canonical_grid_ntheta, &
++        canonical_grid_nphi, canonical_ode_relerr, field_input, coord_input, &
++        read_config
+     implicit none
+ 
+-    real(dp), parameter :: twopi = atan(1.d0)*8.d0
+-
+     type(tracer_t) :: norb
+     type(vmec_field_t) :: magfie
++    integer :: config_unit
+ 
+     isw_field_type = MEISS
+     call create_vmec_field(magfie)
+ 
++    open(newunit=config_unit, file='canonical-map-config.nml', status='replace')
++    write(config_unit, '(a)') '&config'
++    write(config_unit, '(a)') 'canonical_grid_nr=8'
++    write(config_unit, '(a)') 'canonical_grid_ntheta=9'
++    write(config_unit, '(a)') 'canonical_grid_nphi=10'
++    write(config_unit, '(a)') 'canonical_ode_relerr=1.0e-8'
++    write(config_unit, '(a)') '/'
++    close(config_unit)
++    call read_config('canonical-map-config.nml')
++    open(newunit=config_unit, file='canonical-map-config.nml', status='old')
++    close(config_unit, status='delete')
++    field_input = 'wout.nc'
++    coord_input = 'wout.nc'
++
+     print *, 'init_field'
+     call init_field(norb, 'wout.nc', 5, 5, 3, 0)
+-    call init_meiss(magfie, 128, 4, 4, 0.01d0, 1.0d0, 0.0d0, twopi)
+-
++    if (n_r /= 8 .or. n_th /= 9 .or. n_phi /= 10) then
++        error stop 'configured canonical map grid was not applied'
++    end if
++    if (transformation_relerr /= 1.0e-8_dp) then
++        error stop 'configured canonical ODE tolerance was not applied'
++    end if
++    call assert_meiss_map
+     print *, 'test_covar_components'
+     call test_covar_components
+ 
+@@ -36,8 +61,69 @@ program test_field_can_meiss
+     print *, 'test_evaluate_meiss'
+     call test_evaluate_meiss
+ 
++    call test_repeated_initialization
++
+ contains
+ 
++    subroutine test_repeated_initialization
++        call init_meiss(magfie, 12, 13, 14, 0.01_dp, 0.9_dp, 0.2_dp, 6.0_dp, &
++            transformation_relerr_=1.0e-8_dp)
++        if (any([n_r, n_th, n_phi] /= [12, 13, 14])) then
++            error stop 'custom canonical map grid was not applied'
++        end if
++        if (transformation_relerr /= 1.0e-8_dp) then
++            error stop 'custom canonical ODE tolerance was not applied'
++        end if
++        call get_meiss_coordinates
++        call assert_meiss_map
++
++        call init_meiss(magfie)
++        if (any([n_r, n_th, n_phi] /= [62, 63, 64])) then
++            error stop 'canonical map grid defaults were not restored'
++        end if
++        if (transformation_relerr /= 1.0e-11_dp) then
++            error stop 'canonical ODE tolerance default was not restored'
++        end if
++        if (any(xmin /= [1.0e-6_dp, 0.0_dp, 0.0_dp]) .or. &
++            xmax(1) /= 1.0_dp .or. xmax(2) /= twopi) then
++            error stop 'canonical map bounds defaults were not restored'
++        end if
++    end subroutine test_repeated_initialization
++
++    subroutine assert_meiss_map
++        real(dp), parameter :: tolerance = 1.0e-7_dp
++        real(dp) :: xref(3), xref_back(3), xinteg(3), xinteg_outer(3)
++        real(dp) :: error(3)
++        type(field_can_t) :: field_value, periodic_value
++
++        xref = [0.25_dp, 1.1_dp, 0.3_dp]
++        call ref_to_integ_meiss(xref, xinteg)
++        call integ_to_ref_meiss(xinteg, xref_back)
++        error(1) = abs(xref_back(1) - xref(1))
++        error(2) = abs(modulo(xref_back(2) - xref(2) + 0.5_dp*twopi, twopi) - &
++            0.5_dp*twopi)
++        error(3) = abs(modulo(xref_back(3) - xref(3) + 0.5_dp*twopi, twopi) - &
++            0.5_dp*twopi)
++        if (maxval(error) > tolerance) error stop 'Meiss coordinate roundtrip failed'
++
++        call ref_to_integ_meiss([0.36_dp, xref(2), xref(3)], xinteg_outer)
++        if (xinteg_outer(1) <= xinteg(1)) error stop 'Meiss radial orientation failed'
++
++        call eval_field(field_value, xinteg(1), xinteg(2), xinteg(3), 1)
++        call eval_field(periodic_value, xinteg(1), xinteg(2), &
++            xinteg(3) + xmax(3), 1)
++        if (.not. ieee_is_finite(field_value%Bmod) .or. field_value%Bmod <= 0.0_dp .or. &
++            .not. all(ieee_is_finite(field_value%dAth)) .or. &
++            .not. all(ieee_is_finite(field_value%dAph)) .or. &
++            .not. ieee_is_finite(field_value%hth) .or. &
++            .not. ieee_is_finite(field_value%hph)) then
++            error stop 'Meiss field evaluation is not finite'
++        end if
++        if (abs(periodic_value%Bmod - field_value%Bmod) > tolerance) then
++            error stop 'Meiss field-period seam failed'
++        end if
++    end subroutine assert_meiss_map
++
+     subroutine test_covar_components
+         real(dp) :: r, phi, th
+         real(dp) :: Ar, Ap, hr, hp
+diff --git a/test/tests/test_boundary_event_config.f90 b/test/tests/test_boundary_event_config.f90
+new file mode 100644
+index 0000000..03d07f9
+--- /dev/null
++++ b/test/tests/test_boundary_event_config.f90
+@@ -0,0 +1,27 @@
++program test_boundary_event_config
++    use, intrinsic :: ieee_arithmetic, only: ieee_positive_inf, ieee_quiet_nan, &
++        ieee_value
++    use params, only: boundary_event_fraction_tolerance, &
++        boundary_event_radial_tolerance, validate_boundary_event_tolerances
++
++    implicit none
++
++    character(16) :: mode
++
++    call get_command_argument(1, mode)
++    boundary_event_fraction_tolerance = 1.0d-8
++    boundary_event_radial_tolerance = 1.0d-9
++    select case (trim(mode))
++    case ('valid')
++        continue
++    case ('fraction_nan')
++        boundary_event_fraction_tolerance = ieee_value(0.0d0, ieee_quiet_nan)
++    case ('fraction_inf')
++        boundary_event_fraction_tolerance = ieee_value(0.0d0, ieee_positive_inf)
++    case ('radial_nan')
++        boundary_event_radial_tolerance = ieee_value(0.0d0, ieee_quiet_nan)
++    case default
++        error stop 'unknown boundary event configuration test mode'
++    end select
++    call validate_boundary_event_tolerances
++end program test_boundary_event_config
+diff --git a/test/tests/test_newton_solver_status.f90 b/test/tests/test_newton_solver_status.f90
+index edc232f..98f4299 100644
+--- a/test/tests/test_newton_solver_status.f90
++++ b/test/tests/test_newton_solver_status.f90
+@@ -46,22 +46,39 @@ contains
+       step_status = SYMPLECTIC_STEP_OK
+     end if
+   end subroutine basin_limited_step
++
++  subroutine nonlinear_boundary_step(si, f, step_status)
++    type(symplectic_integrator_t), intent(inout) :: si
++    type(field_can_t), intent(inout) :: f
++    integer, intent(out) :: step_status
++    real(dp) :: radius
++
++    if (si%dt > 0.4_dp) then
++      step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
++    else
++      radius = 1.0_dp - 1.0e-7_dp - (0.4_dp - si%dt)**2
++      si%z(1) = radius
++      step_status = SYMPLECTIC_STEP_OK
++    end if
++  end subroutine nonlinear_boundary_step
+ end module linear_radial_field_backend
+ 
+ program test_newton_solver_status
+   use, intrinsic :: iso_fortran_env, only: dp => real64
+   use field_can_mod, only: field_can_t, eval_field => evaluate
+   use linear_radial_field_backend, only: basin_limited_step, &
+-    evaluate_linear_radial
++    evaluate_linear_radial, nonlinear_boundary_step
+   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
+     advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
+-    orbit_timestep_sympl, matrix3_near_singular, solve_newton_system
++    orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
++    get_boundary_event_tolerances
+   use orbit_symplectic_base, only: symplectic_integrator_t, &
+     EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, LOBATTO3, &
+     SYMPLECTIC_STEP_BOUNDARY, &
+     SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+     SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
+-    SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED
++    SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED, &
++    boundary_event_fraction_tolerance, boundary_event_radial_tolerance
+ 
+   implicit none
+ 
+@@ -150,10 +167,57 @@ program test_newton_solver_status
+   end if
+ 
+   call test_lcfs_location
++  call test_configured_event_tolerances
+   call test_solver_basin_is_not_boundary
+ 
+ contains
+ 
++  subroutine test_configured_event_tolerances
++    type(symplectic_integrator_t) :: loose_integrator, tight_integrator
++    type(field_can_t) :: event_field
++    real(dp) :: configured_fraction_tolerance, configured_radial_tolerance
++    integer :: event_status
++
++    eval_field => evaluate_linear_radial
++    event_field%ro0 = 1.0_dp
++    event_field%mu = 1.0_dp
++
++    loose_integrator%z = [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp]
++    loose_integrator%dt = 1.0_dp
++    loose_integrator%ntau = 1
++    loose_integrator%rtol = 1.0e-12_dp
++    boundary_event_fraction_tolerance = 1.0e-4_dp
++    boundary_event_radial_tolerance = 1.0e-4_dp
++    call get_boundary_event_tolerances(1.0e-12_dp, &
++      configured_fraction_tolerance, configured_radial_tolerance)
++    if (configured_fraction_tolerance /= 1.0e-4_dp .or. &
++        configured_radial_tolerance /= 1.0e-4_dp) then
++      error stop 'configured event tolerances were not selected'
++    end if
++    call advance_symplectic_with_boundary(loose_integrator, event_field, &
++      nonlinear_boundary_step, event_status)
++    if (event_status /= SYMPLECTIC_STEP_BOUNDARY) then
++      error stop 'loose configured event tolerances rejected the crossing'
++    end if
++
++    tight_integrator%z = [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp]
++    tight_integrator%dt = 1.0_dp
++    tight_integrator%ntau = 1
++    tight_integrator%rtol = 1.0e-12_dp
++    boundary_event_fraction_tolerance = 1.0e-8_dp
++    boundary_event_radial_tolerance = 1.0e-8_dp
++    call advance_symplectic_with_boundary(tight_integrator, event_field, &
++      nonlinear_boundary_step, event_status)
++    boundary_event_fraction_tolerance = -1.0_dp
++    boundary_event_radial_tolerance = -1.0_dp
++    if (event_status /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) then
++      error stop 'tight radial tolerance accepted an unresolved crossing'
++    end if
++    if (any(tight_integrator%z /= [0.9_dp, 0.0_dp, 0.0_dp, 0.0_dp])) then
++      error stop 'unresolved configured event changed the accepted state'
++    end if
++  end subroutine test_configured_event_tolerances
++
+   subroutine test_solver_basin_is_not_boundary
+     type(symplectic_integrator_t) :: basin_integrator
+     type(field_can_t) :: basin_field
