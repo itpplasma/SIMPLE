@@ -70,7 +70,7 @@ def main() -> int:
     diff = np.abs(ref_data - cur_data)
     denom = np.maximum(np.abs(ref_data), 1.0e-300)
     rel = diff / denom
-    ok = np.isclose(ref_data, cur_data, rtol=rtol, atol=atol)
+    ok = np.isclose(ref_data, cur_data, rtol=rtol, atol=atol, equal_nan=True)
 
     if bool(np.all(ok)):
         print(

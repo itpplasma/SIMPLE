@@ -164,13 +164,18 @@ build() {
     echo "Building SIMPLE in $PROJECT_ROOT"
     cd $PROJECT_ROOT
 
-    local REFERENCE_PATCH="$SCRIPT_DIR/reference_patches/rejected_step_state.patch"
-    if git apply --check "$REFERENCE_PATCH"; then
-        git apply "$REFERENCE_PATCH"
-    elif ! git apply --reverse --check "$REFERENCE_PATCH"; then
-        echo "Reference patch does not apply cleanly: $REFERENCE_PATCH"
-        return 1
-    fi
+    local REFERENCE_PATCH
+    for REFERENCE_PATCH in \
+        "$SCRIPT_DIR/reference_patches/rejected_step_state.patch" \
+        "$SCRIPT_DIR/reference_patches/physical_exit_reporting.patch" \
+        "$SCRIPT_DIR/reference_patches/canonical_map_resolution.patch"; do
+        if git apply --check "$REFERENCE_PATCH"; then
+            git apply "$REFERENCE_PATCH"
+        elif ! git apply --reverse --check "$REFERENCE_PATCH"; then
+            echo "Reference patch does not apply cleanly: $REFERENCE_PATCH"
+            return 1
+        fi
+    done
 
     # For older versions, check if libneo is needed as a sibling directory
     if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then

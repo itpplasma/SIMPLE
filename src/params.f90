@@ -1,5 +1,5 @@
 module params
-    use, intrinsic :: iso_fortran_env, only: int8
+    use, intrinsic :: iso_fortran_env, only: int8, int64
     use util, only: pi, c, e_charge, p_mass, ev
     use parmot_mod, only: ro0, rmu
     use new_vmec_stuff_mod, only: old_axis_healing, old_axis_healing_boundary, &
@@ -12,11 +12,15 @@ module params
     use magfie_sub, only: TEST
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-                                     EXPL_IMPL_EULER
+                                     EXPL_IMPL_EULER, &
+                                     boundary_event_fraction_tolerance, &
+                                     boundary_event_radial_tolerance
     use vmecin_sub, only: stevvo
     use callback, only: output_error, output_orbits_macrostep
 
     implicit none
+
+    private :: config_value_is_finite
 
     ! Define real(dp) kind parameter
     integer, parameter :: dp = kind(1.0d0)
@@ -32,7 +36,20 @@ module params
     real(dp), dimension(:, :), allocatable :: xstart
     real(dp), dimension(:, :), allocatable :: zstart, zend
     real(dp), dimension(:), allocatable :: confpart_trap, confpart_pass
+    integer, dimension(:), allocatable :: unresolved_orbits
     real(dp), dimension(:), allocatable :: times_lost
+    real(dp), dimension(:), allocatable :: boundary_event_radial_residual
+    real(dp), dimension(:), allocatable :: boundary_event_time_width
+    integer, dimension(:), allocatable :: orbit_exit_code
+    integer, parameter :: ORBIT_EXIT_COMPLETED = 0
+    integer, parameter :: ORBIT_EXIT_LCFS = 1
+    integer, parameter :: ORBIT_EXIT_WALL = 2
+    integer, parameter :: ORBIT_EXIT_SKIPPED = 3
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_DOMAIN = 101
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_MAXITER = 102
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_EVENT = 104
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_FULL_ORBIT = 105
     real(dp) :: contr_pp = -1d0
     integer          :: ibins
     logical          :: generate_start_only = .False.
@@ -67,6 +84,10 @@ module params
     ! Wall-clock seconds between partial-result checkpoints during tracing.
     ! <= 0 disables periodic output (results then appear only at the end).
     real(dp) :: checkpoint_interval = 10.0d0
+    integer :: canonical_grid_nr = 62
+    integer :: canonical_grid_ntheta = 63
+    integer :: canonical_grid_nphi = 64
+    real(dp) :: canonical_ode_relerr = 1d-11
 
     real(dp), allocatable :: trap_par(:), perp_inv(:)
     integer, allocatable :: iclass(:, :)
@@ -142,6 +163,9 @@ module params
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
 	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
+	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
+	        canonical_ode_relerr, &
 	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
@@ -176,11 +200,52 @@ contains
 
         call reset_seed_if_deterministic
 
+        call validate_boundary_event_tolerances
+        if (min(canonical_grid_nr, canonical_grid_ntheta, &
+            canonical_grid_nphi) < 6) then
+            error stop 'canonical map grid dimensions must be at least 6'
+        end if
+        if (max(canonical_grid_nr, canonical_grid_ntheta, &
+            canonical_grid_nphi) > 512) then
+            error stop 'canonical map grid dimensions must not exceed 512'
+        end if
+        if (int(canonical_grid_nr, int64)*int(canonical_grid_ntheta, int64)* &
+            int(canonical_grid_nphi, int64) > 2097152_int64) then
+            error stop 'canonical map grid exceeds the 2097152-point limit'
+        end if
+        if (.not. config_value_is_finite(canonical_ode_relerr) .or. &
+            canonical_ode_relerr <= 0d0) then
+            error stop 'canonical_ode_relerr must be finite and positive'
+        end if
+
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
         end if
 
     end subroutine read_config
+
+    subroutine validate_boundary_event_tolerances
+        if (.not. config_value_is_finite(boundary_event_fraction_tolerance) .or. &
+            (boundary_event_fraction_tolerance /= -1d0 .and. &
+             boundary_event_fraction_tolerance <= 0d0)) then
+            error stop 'boundary_event_fraction_tolerance must be finite and positive or -1'
+        end if
+        if (.not. config_value_is_finite(boundary_event_radial_tolerance) .or. &
+            (boundary_event_radial_tolerance /= -1d0 .and. &
+             boundary_event_radial_tolerance <= 0d0)) then
+            error stop 'boundary_event_radial_tolerance must be finite and positive or -1'
+        end if
+    end subroutine validate_boundary_event_tolerances
+
+    pure logical function config_value_is_finite(value)
+        real(dp), intent(in) :: value
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7ff0000000000000', int64)
+        integer(int64) :: bits
+
+        bits = transfer(value, bits)
+        config_value_is_finite = iand(bits, exponent_mask) /= exponent_mask
+    end function config_value_is_finite
 
 	    subroutine params_init
 	        real(dp) :: E_alpha
@@ -395,6 +460,10 @@ contains
         if (allocated(zstart)) deallocate (zstart)
         if (allocated(zend)) deallocate (zend)
         if (allocated(times_lost)) deallocate (times_lost)
+        if (allocated(boundary_event_radial_residual)) &
+            deallocate (boundary_event_radial_residual)
+        if (allocated(boundary_event_time_width)) deallocate (boundary_event_time_width)
+        if (allocated(orbit_exit_code)) deallocate (orbit_exit_code)
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
@@ -405,6 +474,7 @@ contains
         if (allocated(volstart)) deallocate (volstart)
         if (allocated(confpart_trap)) deallocate (confpart_trap)
         if (allocated(confpart_pass)) deallocate (confpart_pass)
+        if (allocated(unresolved_orbits)) deallocate (unresolved_orbits)
         if (allocated(wall_hit)) deallocate (wall_hit)
         if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
         if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
@@ -413,8 +483,12 @@ contains
 
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         allocate (times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart))
+        allocate (boundary_event_radial_residual(ntestpart), &
+                  boundary_event_time_width(ntestpart))
+        allocate (orbit_exit_code(ntestpart))
         allocate (xstart(3, npoi), bstart(npoi), volstart(npoi))
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
+        allocate (unresolved_orbits(ntimstep))
         allocate (iclass(3, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
         allocate (wall_hit(ntestpart))
@@ -424,6 +498,9 @@ contains
         allocate (wall_hit_angle_rad(ntestpart))
 
         times_lost = 0.0d0
+        boundary_event_radial_residual = -1d0
+        boundary_event_time_width = -1d0
+        orbit_exit_code = 0
         trap_par = 0.0d0
         perp_inv = 0.0d0
         iclass = 0

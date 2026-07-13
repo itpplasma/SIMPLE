@@ -1,26 +1,31 @@
 module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
     use omp_lib
-    use util, only: sqrt2
-    use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, tracer_t
+    use util, only: sqrt2, twopi
+    use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, tracer_t, &
+        ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
     use field_can_mod, only: integ_to_ref, ref_to_integ, init_field_can
-	    use callback, only: output_orbits_macrostep
-	    use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
-	                      grid_density, dtau, dtaumin, ntau, v0, &
-	                      kpart, confpart_pass, confpart_trap, times_lost, integmode, &
-	                      relerr, trace_time, &
-	                      class_plot, fast_class, generate_start_only, ntcut, iclass, &
-	                      bmin, bmax, zstart, zend, trap_par, perp_inv, sbeg, &
-	                      ntimstep, should_skip, reset_seed_if_deterministic, &
-	                      field_input, isw_field_type, reuse_batch, coord_input, &
-	                      wall_input, wall_units, wall_hit, wall_hit_cart, &
-	                      wall_hit_normal_cart, wall_hit_cos_incidence, &
-	                      wall_hit_angle_rad, ntau_macro, kt_macro, &
-	                      checkpoint_interval, orbit_model, orbit_coord, &
-	                      ORBIT_GC, ORBIT_FULL_ORBIT
+    use callback, only: output_orbits_macrostep
+    use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
+        grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
+        confpart_trap, unresolved_orbits, times_lost, orbit_exit_code, &
+        boundary_event_radial_residual, &
+        boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
+        fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
+        zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
+        reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
+        coord_input, wall_input, wall_units, wall_hit, wall_hit_cart, &
+        wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
+        ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
+        ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
+        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_DOMAIN, &
+        ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
+        ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+    use params, only: canonical_grid_nr, canonical_grid_ntheta, &
+        canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
@@ -30,6 +35,10 @@ module simple_main
                                      stl_wall_finalize, &
                                      stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
+    use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
+        SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
+        SYMPLECTIC_STEP_LINEAR_SOLVE, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
+        SYMPLECTIC_STEP_BOUNDARY_LIMITED
 
     implicit none
 
@@ -37,7 +46,7 @@ module simple_main
     integer, parameter :: dp = kind(1.0d0)
 
     logical, save :: wall_enabled = .false.
-    real(dp), save :: wall_rho_lcfs = -1.0d0
+    logical, save :: map_boundary_is_lcfs = .true.
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     type(stl_wall_t), save :: wall
 
@@ -220,7 +229,6 @@ contains
                               REFCOORDS, SPECTRE, set_magfie_refcoords_field
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
-        use util, only: twopi
         use reference_coordinates, only: init_reference_coordinates, ref_coords
         use params, only: coord_input, field_input, wall_input, wall_units
 
@@ -232,6 +240,7 @@ contains
         logical :: use_boozer_chartmap, use_spectre
 
         self%integmode = aintegmode
+        map_boundary_is_lcfs = .true.
 
         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
@@ -338,11 +347,15 @@ contains
 
         if (isw_field_type == TEST) then
             ! TEST field is fully analytic - no field file needed
-            call init_field_can(isw_field_type)
+            call init_field_can(isw_field_type, n_r=canonical_grid_nr, &
+                n_th=canonical_grid_ntheta, n_phi=canonical_grid_nphi, &
+                transformation_relerr=canonical_ode_relerr)
             call print_phase_time('Canonical field initialization completed')
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                  isw_field_type == MEISS .or. isw_field_type == ALBERT) then
-            call init_field_can(isw_field_type, field_temp)
+            call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
+                canonical_grid_ntheta, canonical_grid_nphi, &
+                canonical_ode_relerr)
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
@@ -419,27 +432,25 @@ contains
         character(len=16) :: units
 
         wall_enabled = .false.
-        wall_rho_lcfs = -1.0d0
+        map_boundary_is_lcfs = .true.
         chartmap_cart_scale_to_m = -1.0d0
 
-        if (len_trim(wall_input) == 0) then
-            return
-        end if
-
         if (.not. allocated(ref_coords)) then
+            if (len_trim(wall_input) == 0) return
             error stop "wall_input set but reference coordinates not initialized"
         end if
 
         select type (ref_coords)
         class is (chartmap_coordinate_system_t)
-            continue
+            call read_chartmap_metadata(coord_file, meta)
+            chartmap_cart_scale_to_m = meta%cart_scale_to_m
+            map_boundary_is_lcfs = abs(meta%rho_lcfs - 1d0) <= 1d-12
         class default
+            if (len_trim(wall_input) == 0) return
             error stop "wall_input requires chartmap reference coordinates"
         end select
 
-        call read_chartmap_metadata(coord_file, meta)
-        wall_rho_lcfs = meta%rho_lcfs
-        chartmap_cart_scale_to_m = meta%cart_scale_to_m
+        if (len_trim(wall_input) == 0) return
 
         units = adjustl(wall_units)
         select case (trim(units))
@@ -630,6 +641,10 @@ contains
         t1 = omp_get_wtime()
         t_cpu = t1 - t0
 
+        if (any(cpu_loss < ntimstep)) then
+            error stop 'SIMPLE_GPU_BENCH does not support boundary-reaching traces'
+        end if
+
         ! GPU kernel
         t0 = omp_get_wtime()
         call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
@@ -799,7 +814,6 @@ contains
         !> Sample particles for the analytic circular tokamak TEST field.
         !> TEST field uses (r, theta, phi) coordinates with B0=1, R0=1, a=0.5, iota=1.
         !> bmod = B0 * (1 - r/R0 * cos(theta))
-        use util, only: twopi
         use params, only: ntestpart, sbeg, bmod00, bmin, bmax, zstart, &
                           reset_seed_if_deterministic
 
@@ -876,10 +890,63 @@ contains
         ! initialize array of confined particle percentage
         confpart_trap = 0.d0
         confpart_pass = 0.d0
+        unresolved_orbits = 0
 
         ! initialize lost times when particles get lost
         times_lost = -1.d0
+        orbit_exit_code = 0
+        boundary_event_radial_residual = -1d0
+        boundary_event_time_width = -1d0
     end subroutine init_counters
+
+    pure integer function classify_orbit_exit(ierr_orbit, model, mode, &
+            boundary_is_lcfs)
+        integer, intent(in) :: ierr_orbit, model, mode
+        logical, intent(in) :: boundary_is_lcfs
+
+        if (ierr_orbit == 0) then
+            classify_orbit_exit = ORBIT_EXIT_COMPLETED
+        else if (ierr_orbit == 77) then
+            classify_orbit_exit = ORBIT_EXIT_WALL
+        else if (model == ORBIT_FULL_ORBIT) then
+            if (ierr_orbit == ORBIT_FO_LOSS) then
+                if (boundary_is_lcfs) then
+                    classify_orbit_exit = ORBIT_EXIT_LCFS
+                else
+                    classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+                end if
+            else
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+            end if
+        else if (mode <= 0) then
+            if (ierr_orbit == 1 .and. boundary_is_lcfs) then
+                classify_orbit_exit = ORBIT_EXIT_LCFS
+            else
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+            end if
+        else
+            select case (ierr_orbit)
+            case (SYMPLECTIC_STEP_BOUNDARY)
+                if (boundary_is_lcfs) then
+                    classify_orbit_exit = ORBIT_EXIT_LCFS
+                else
+                    classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+                end if
+            case (SYMPLECTIC_STEP_OUTSIDE_DOMAIN)
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+            case (SYMPLECTIC_STEP_MAXITER)
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_MAXITER
+            case (SYMPLECTIC_STEP_LINEAR_SOLVE)
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_LINEAR
+            case (SYMPLECTIC_STEP_EVENT_NOT_CONVERGED)
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_EVENT
+            case (SYMPLECTIC_STEP_BOUNDARY_LIMITED)
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_EVENT
+            case default
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_EVENT
+            end select
+        end if
+    end function classify_orbit_exit
 
     subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
         use classification, only: trace_orbit_with_classifiers, &
@@ -894,18 +961,16 @@ contains
         real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
 
         real(dp), dimension(5) :: z
-        real(dp) :: u_ref_prev(3), u_ref_cur(3), u_ref_hit(3)
-        real(dp) :: x_prev(3), x_cur(3)
-        real(dp) :: x_prev_m(3), x_cur_m(3), x_hit_m(3), x_hit(3)
-        real(dp) :: normal_m(3), vhat(3), vnorm, cos_inc
-        real(dp) :: segment_length, hit_distance, t_frac
+        real(dp) :: u_ref_prev(3), x_prev(3), x_prev_m(3), exit_step
         integer :: it, ierr_orbit, it_final, it_f
         integer(8) :: kt
-        logical :: passing, faulted
+        logical :: passing, faulted, physical_exit
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
         faulted = .false.
+        physical_exit = .false.
+        exit_step = -1d0
         orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
         orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
 
@@ -959,6 +1024,7 @@ contains
         if (passing .and. should_skip(ipart)) then
             zend(:, ipart) = zstart(:, ipart)
             times_lost(ipart) = -1.d0
+            orbit_exit_code(ipart) = ORBIT_EXIT_SKIPPED
             do it = 1, ntimstep
 !$omp atomic update
                 confpart_pass(it) = confpart_pass(it) + 1.d0
@@ -973,23 +1039,34 @@ contains
                 if (wall_enabled) then
                     ! Use microstep-level wall checking for STL walls
                     call macrostep_with_wall_check(anorb, z, kt, ierr_orbit, &
-                        ntau_macro(it), ipart, x_prev_m)
+                        ntau_macro(it), ipart, x_prev_m, exit_step)
                 else
-                    call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it))
+                    call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it), &
+                        exit_step)
                 end if
             end if
 
             if (ierr_orbit .ne. 0) then
+                orbit_exit_code(ipart) = classify_orbit_exit( &
+                    ierr_orbit, orbit_model, integmode, map_boundary_is_lcfs)
                 it_final = it
-                if (orbit_model == ORBIT_FULL_ORBIT .and. ierr_orbit == 3) then
-                    ! Last-resort full-orbit fallback: the Cartesian inversion could
-                    ! not resolve the position (near-axis below chartmap resolution,
-                    ! or a field-period seam) and orbit_timestep_fo already warned.
-                    ! This is NOT a physical loss -- the state is at the last resolved
-                    ! position. Count the marker confined for the rest of the trace
-                    ! so an unresolved step never registers as a lost particle.
+                physical_exit = orbit_exit_code(ipart) == ORBIT_EXIT_LCFS .or. &
+                    orbit_exit_code(ipart) == ORBIT_EXIT_WALL
+                if (physical_exit) then
+                    orbit_traj(:, it) = z
+                    orbit_times(it) = exit_step*dtaumin/v0
+                    if (orbit_exit_code(ipart) == ORBIT_EXIT_LCFS .and. &
+                        orbit_model == ORBIT_GC .and. integmode > 0 .and. &
+                        ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
+                        boundary_event_radial_residual(ipart) = &
+                            anorb%si%last_event_radial_residual
+                        boundary_event_time_width(ipart) = &
+                            anorb%si%last_event_fraction_width*dtaumin/v0
+                    end if
+                else
                     do it_f = it, ntimstep
-                        call increase_confined_count(it_f, passing)
+!$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
                     end do
                     faulted = .true.
                 end if
@@ -1015,8 +1092,13 @@ contains
 !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
-        times_lost(ipart) = kt*dtaumin/v0
-        if (faulted) times_lost(ipart) = trace_time   ! unresolved: confined, not lost
+        if (physical_exit) then
+            times_lost(ipart) = exit_step*dtaumin/v0
+        else if (faulted) then
+            times_lost(ipart) = ieee_value(0.0d0, ieee_quiet_nan)
+        else
+            times_lost(ipart) = kt*dtaumin/v0
+        end if
 !$omp end critical
     end subroutine trace_orbit
 
@@ -1200,7 +1282,29 @@ contains
 !$omp end critical
     end subroutine trace_orbit_spectre_sympl
 
-	    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local)
+    pure subroutine locate_linear_lcfs(z_start, z_end, field_period, z_event, &
+            event_fraction)
+        real(dp), intent(in) :: z_start(5), z_end(5), field_period
+        real(dp), intent(out) :: z_event(5), event_fraction
+        real(dp) :: theta_delta, phi_delta
+
+        event_fraction = 1d0
+        if (z_end(1) > z_start(1)) then
+            event_fraction = min(1d0, max(0d0, &
+                (1d0 - z_start(1))/(z_end(1) - z_start(1))))
+        end if
+        theta_delta = modulo(z_end(2) - z_start(2) + 0.5d0*twopi, twopi) - &
+            0.5d0*twopi
+        phi_delta = modulo(z_end(3) - z_start(3) + 0.5d0*field_period, &
+            field_period) - 0.5d0*field_period
+        z_event(1) = 1d0
+        z_event(2) = z_start(2) + event_fraction*theta_delta
+        z_event(3) = z_start(3) + event_fraction*phi_delta
+        z_event(4:5) = z_start(4:5) + &
+            event_fraction*(z_end(4:5) - z_start(4:5))
+    end subroutine locate_linear_lcfs
+
+    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
 
@@ -1209,21 +1313,51 @@ contains
         integer(8), intent(inout) :: kt
         integer, intent(out) :: ierr_orbit
         integer, intent(in) :: ntau_local
+        real(dp), intent(out), optional :: exit_step
 
         integer :: ktau
+        real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
+
+        if (present(exit_step)) exit_step = real(kt, dp)
 
         do ktau = 1, ntau_local
+            z_step_start = z
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
-                if (ierr_orbit .ne. 0) exit
+                if (ierr_orbit .ne. 0) then
+                    if (ierr_orbit == ORBIT_FO_LOSS) then
+                        z_step_end = z
+                        call locate_linear_lcfs(z_step_start, z_step_end, &
+                            anorb%fper, &
+                            z, loss_fraction)
+                        if (present(exit_step)) then
+                            exit_step = real(kt, dp) + loss_fraction
+                        end if
+                    end if
+                    exit
+                end if
                 kt = kt + 1
                 cycle
             end if
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+                if (ierr_orbit == 1) then
+                    z_step_end = z
+                    call locate_linear_lcfs(z_step_start, z_step_end, &
+                        anorb%fper, z, loss_fraction)
+                    if (present(exit_step)) then
+                        exit_step = real(kt, dp) + loss_fraction
+                    end if
+                end if
             else
                 if (swcoll) call update_momentum(anorb, z)
                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
+                    call to_standard_z_coordinates(anorb, z)
+                    if (present(exit_step)) exit_step = real(kt, dp) + &
+                        anorb%si%last_step_fraction
+                    exit
+                end if
                 if (ierr_orbit .ne. 0) exit
                 call to_standard_z_coordinates(anorb, z)
             end if
@@ -1233,8 +1367,70 @@ contains
         end do
     end subroutine macrostep
 
+    subroutine locate_wall_segment(z, z_start, z_end, ipart, x_start_m, &
+            u_start, x_end_m, u_end, field_period, start_step, segment_steps, &
+            hit, hit_step)
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: z_start(5), z_end(5)
+        integer, intent(in) :: ipart
+        real(dp), intent(in) :: x_start_m(3), u_start(3), x_end_m(3), u_end(3)
+        real(dp), intent(in) :: field_period
+        real(dp), intent(in) :: start_step, segment_steps
+        logical, intent(out) :: hit
+        real(dp), intent(out) :: hit_step
+
+        real(dp) :: x_hit_m(3), x_hit(3), normal_m(3), vhat(3)
+        real(dp) :: segment_length, hit_distance, hit_fraction, cos_inc
+        real(dp) :: u_hit(3), theta_delta, phi_delta
+        integer :: ierr_from_cart
+
+        hit = .false.
+        hit_step = start_step + segment_steps
+        call stl_wall_first_hit_segment_with_normal( &
+            wall, x_start_m, x_end_m, hit, x_hit_m, normal_m)
+        if (.not. hit) return
+
+        x_hit = x_hit_m/chartmap_cart_scale_to_m
+        wall_hit(ipart) = 1_int8
+        wall_hit_cart(:, ipart) = x_hit
+        wall_hit_normal_cart(:, ipart) = normal_m
+
+        vhat = x_end_m - x_start_m
+        segment_length = sqrt(sum(vhat*vhat))
+        hit_fraction = 1d0
+        if (segment_length > 0d0) then
+            hit_distance = sqrt(sum((x_hit_m - x_start_m)**2))
+            hit_fraction = min(1d0, max(0d0, hit_distance/segment_length))
+            vhat = vhat/segment_length
+            cos_inc = min(1d0, max(0d0, abs(sum(vhat*normal_m))))
+            wall_hit_cos_incidence(ipart) = cos_inc
+            wall_hit_angle_rad(ipart) = acos(cos_inc)
+        end if
+
+        ierr_from_cart = 0
+        select type (ccs => ref_coords)
+        class is (chartmap_coordinate_system_t)
+            call ccs%from_cart(x_hit, u_hit, ierr_from_cart)
+        class default
+            ierr_from_cart = 1
+        end select
+
+        if (ierr_from_cart /= 0) then
+            theta_delta = modulo(u_end(2) - u_start(2) + 0.5d0*twopi, &
+                twopi) - 0.5d0*twopi
+            phi_delta = modulo(u_end(3) - u_start(3) + 0.5d0*field_period, &
+                field_period) - 0.5d0*field_period
+            u_hit(1) = u_start(1) + hit_fraction*(u_end(1) - u_start(1))
+            u_hit(2) = u_start(2) + hit_fraction*theta_delta
+            u_hit(3) = u_start(3) + hit_fraction*phi_delta
+        end if
+        call ref_to_integ(u_hit, z(1:3))
+        z(4:5) = z_start(4:5) + hit_fraction*(z_end(4:5) - z_start(4:5))
+        hit_step = start_step + hit_fraction*segment_steps
+    end subroutine locate_wall_segment
+
     subroutine macrostep_with_wall_check(anorb, z, kt, ierr_orbit, ntau_local, &
-            ipart, x_prev_m)
+            ipart, x_prev_m, exit_step)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: orbit_timestep_sympl
 
@@ -1245,91 +1441,86 @@ contains
         integer, intent(in) :: ntau_local
         integer, intent(in) :: ipart
         real(dp), intent(inout) :: x_prev_m(3)
+        real(dp), intent(out), optional :: exit_step
 
-        integer :: ktau, wall_check_interval
+        integer :: ktau
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
-        real(dp) :: x_hit_m(3), x_hit(3), normal_m(3)
-        real(dp) :: vhat(3), vnorm, cos_inc
-        real(dp) :: u_ref_hit(3)
-        real(dp) :: segment_length, hit_distance, t_frac
+        real(dp) :: z_step_start(5), z_step_end(5), segment_duration
+        real(dp) :: boundary_fraction
+        real(dp) :: wall_exit_step
         logical :: hit
-        integer :: ierr_from_cart
 
         call integ_to_ref(z(1:3), u_ref_prev)
-
-        ! Check wall every N microsteps to limit overhead
-        ! For small macrosteps (ntau_local<=32), check at end only
-        ! For larger macrosteps, check every 32 microsteps
-        wall_check_interval = max(1, min(32, ntau_local))
-
+        if (present(exit_step)) exit_step = real(kt, dp)
         do ktau = 1, ntau_local
+            z_step_start = z
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+                if (ierr_orbit == 1) then
+                    z_step_end = z
+                    call locate_linear_lcfs(z_step_start, z_step_end, &
+                        anorb%fper, z, boundary_fraction)
+                    z_step_end = z
+                    call integ_to_ref(z(1:3), u_ref_cur)
+                    call ref_coords%evaluate_cart(u_ref_cur, x_cur)
+                    x_cur_m = x_cur*chartmap_cart_scale_to_m
+                    call locate_wall_segment(z, z_step_start, z_step_end, ipart, &
+                        x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
+                        real(kt, dp), boundary_fraction, hit, wall_exit_step)
+                    if (hit) ierr_orbit = 77
+                    if (present(exit_step)) then
+                        if (hit) then
+                            exit_step = wall_exit_step
+                        else
+                            exit_step = real(kt, dp) + boundary_fraction
+                        end if
+                    end if
+                    exit
+                end if
             else
                 if (swcoll) call update_momentum(anorb, z)
                 call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
+                    call to_standard_z_coordinates(anorb, z)
+                    call integ_to_ref(z(1:3), u_ref_cur)
+                    call ref_coords%evaluate_cart(u_ref_cur, x_cur)
+                    x_cur_m = x_cur*chartmap_cart_scale_to_m
+                    z_step_end = z
+                    segment_duration = anorb%si%last_step_fraction
+                    call locate_wall_segment(z, z_step_start, z_step_end, ipart, &
+                        x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
+                        real(kt, dp), segment_duration, hit, wall_exit_step)
+                    if (hit) ierr_orbit = 77
+                    if (present(exit_step)) then
+                        if (hit) then
+                            exit_step = wall_exit_step
+                        else
+                            exit_step = real(kt, dp) + segment_duration
+                        end if
+                    end if
+                    exit
+                end if
                 if (ierr_orbit .ne. 0) exit
                 call to_standard_z_coordinates(anorb, z)
             end if
             if (ierr_orbit .ne. 0) exit
-            if (swcoll) call collide(z, dtaumin) ! Collisions
-            kt = kt + 1
-
-            ! Check wall intersection periodically or at end of macrostep
-            if (mod(ktau, wall_check_interval) == 0 .or. ktau == ntau_local) then
-                call integ_to_ref(z(1:3), u_ref_cur)
-                call ref_coords%evaluate_cart(u_ref_cur, x_cur)
-                x_cur_m = x_cur*chartmap_cart_scale_to_m
-
-                if (u_ref_cur(1) > wall_rho_lcfs) then
-                    call stl_wall_first_hit_segment_with_normal( &
-                        wall, x_prev_m, x_cur_m, hit, x_hit_m, normal_m)
-                    if (hit) then
-                        wall_hit(ipart) = 1_int8
-                        x_hit = x_hit_m/chartmap_cart_scale_to_m
-                        wall_hit_cart(:, ipart) = x_hit
-                        wall_hit_normal_cart(:, ipart) = normal_m
-
-                        vhat = x_cur_m - x_prev_m
-                        vnorm = sqrt(sum(vhat*vhat))
-                        if (vnorm > 0.0_dp) then
-                            vhat = vhat/vnorm
-                            cos_inc = abs(sum(vhat*normal_m))
-                            cos_inc = min(1.0_dp, max(0.0_dp, cos_inc))
-                            wall_hit_cos_incidence(ipart) = cos_inc
-                            wall_hit_angle_rad(ipart) = acos(cos_inc)
-                        end if
-
-                        ierr_from_cart = 0
-                        select type (ccs => ref_coords)
-                        class is (chartmap_coordinate_system_t)
-                            call ccs%from_cart(x_hit, u_ref_hit, ierr_from_cart)
-                        class default
-                            ierr_from_cart = 1
-                        end select
-
-                        if (ierr_from_cart == 0) then
-                            call ref_to_integ(u_ref_hit, z(1:3))
-                        else
-                            ! Fallback: linear interpolation of reference coordinates
-                            ! when from_cart fails (ill-conditioned regions of chartmap)
-                            segment_length = sqrt(sum((x_cur_m - x_prev_m)**2))
-                            if (segment_length > 0.0_dp) then
-                                hit_distance = sqrt(sum((x_hit_m - x_prev_m)**2))
-                                t_frac = hit_distance / segment_length
-                                u_ref_hit = u_ref_prev + t_frac * (u_ref_cur - u_ref_prev)
-                                call ref_to_integ(u_ref_hit, z(1:3))
-                            end if
-                        end if
-
-                        ierr_orbit = 77
-                        exit
-                    end if
-                end if
-
-                x_prev_m = x_cur_m
-                u_ref_prev = u_ref_cur
+            z_step_end = z
+            call integ_to_ref(z(1:3), u_ref_cur)
+            call ref_coords%evaluate_cart(u_ref_cur, x_cur)
+            x_cur_m = x_cur*chartmap_cart_scale_to_m
+            call locate_wall_segment(z, z_step_start, z_step_end, ipart, &
+                x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
+                real(kt, dp), 1d0, hit, wall_exit_step)
+            if (hit) then
+                ierr_orbit = 77
+                if (present(exit_step)) exit_step = wall_exit_step
+                exit
             end if
+
+            if (swcoll) call collide(z, dtaumin)
+            kt = kt + 1
+            x_prev_m = x_cur_m
+            u_ref_prev = u_ref_cur
         end do
     end subroutine macrostep_with_wall_check
 
@@ -1446,30 +1637,57 @@ contains
 
         norm = real(max(ntestpart, 1), dp)
 
-        open (newunit=unit, file='times_lost.dat', recl=1024)
+        open (newunit=unit, file='orbit_exit_code.dat', status='replace', &
+            action='write')
+        close (unit)
+
+        open (newunit=unit, file='times_lost.dat', status='replace', &
+            action='write', recl=1024)
         num_lost = 0
         inverse_times_lost_sum = 0.0d0
         do i = 1, ntestpart
             write (unit, *) i, times_lost(i), trap_par(i), zstart(1, i), &
                 perp_inv(i), zend(:, i)
-            if (times_lost(i) > 0.0d0 .and. times_lost(i) < trace_time) then
-                num_lost = num_lost + 1
-                inverse_times_lost_sum = inverse_times_lost_sum + 1.0/times_lost(i)
+            if (orbit_exit_code(i) == ORBIT_EXIT_LCFS .or. &
+                orbit_exit_code(i) == ORBIT_EXIT_WALL) then
+                if (times_lost(i) > 0d0) then
+                    num_lost = num_lost + 1
+                    inverse_times_lost_sum = inverse_times_lost_sum + &
+                        1.0/times_lost(i)
+                end if
             end if
         end do
         close (unit)
 
+        open (newunit=unit, file='orbit_exit_code.dat', status='replace', &
+            action='write', recl=1024)
+        do i = 1, ntestpart
+            write (unit, *) i, orbit_exit_code(i), &
+                times_lost(i), boundary_event_radial_residual(i), &
+                boundary_event_time_width(i)
+        end do
+        close (unit)
+
+        open (newunit=unit, file='avg_inverse_t_lost.dat', status='replace', &
+            action='write', recl=1024)
         if (num_lost > 0) then
-            ! Write average loss time.
-            open (newunit=unit, file='avg_inverse_t_lost.dat', recl=1024)
             write (unit, *) inverse_times_lost_sum/num_lost
-            close (unit)
+        else
+            write (unit, *) 0d0
         end if
+        close (unit)
 
         open (newunit=unit, file='confined_fraction.dat', recl=1024)
         do i = 1, ntimstep
             write (unit, *) dble(kt_macro(i))*dtaumin/v0, confpart_pass(i)/norm, &
                 confpart_trap(i)/norm, ntestpart
+        end do
+        close (unit)
+
+        open (newunit=unit, file='unresolved_fraction.dat', recl=1024)
+        do i = 1, ntimstep
+            write (unit, *) dble(kt_macro(i))*dtaumin/v0, &
+                real(unresolved_orbits(i), dp)/norm, ntestpart
         end do
         close (unit)
 
