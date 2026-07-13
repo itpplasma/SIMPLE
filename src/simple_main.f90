@@ -377,7 +377,9 @@ contains
         use new_vmec_stuff_mod, only: nper, rmajor
         use util, only: twopi
         use params, only: field_input, spectre_ncon_r, spectre_ncon_th, &
-                          spectre_ncon_phi
+                          spectre_ncon_phi, spectre_ncon_order, &
+                          spectre_ncon_ode_max_steps
+        use params, only: spectre_ncon_ode_relerr
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
 
@@ -423,7 +425,9 @@ contains
             ! extended linearly, so iterates out there stay finite.
             sympl_rmax = real(sf%data%Mvol + 1, dp)
             call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
-                                               spectre_ncon_phi)
+                                               spectre_ncon_phi, spectre_ncon_order, &
+                                               spectre_ncon_ode_max_steps, &
+                                               spectre_ncon_ode_relerr)
             call init_field_can(SPECTRE, sf)
             call print_phase_time('SPECTRE per-volume canonical construction completed')
         end if

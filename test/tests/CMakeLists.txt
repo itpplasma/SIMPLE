@@ -886,6 +886,7 @@ add_test(NAME test_spectre_sympl_volume
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_sympl_volume PROPERTIES
     LABELS "integration;python"
+    RUN_SERIAL TRUE
     TIMEOUT 300)
 
 # SPECTRE Level-0 interface crossing map with event location (#443). tok2vol is
@@ -926,6 +927,7 @@ add_test(NAME test_spectre_sympl_crossing
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_sympl_crossing PROPERTIES
     LABELS "integration;python"
+    RUN_SERIAL TRUE
     TIMEOUT 300)
 
 # SPECTRE construction-grid memory knob and axisymmetric phi auto-clamp (#442):
@@ -952,6 +954,7 @@ add_test(NAME test_spectre_validation
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_validation PROPERTIES
     LABELS "integration;python"
+    RUN_SERIAL TRUE
     TIMEOUT 300)
 
 add_subdirectory(field_can)

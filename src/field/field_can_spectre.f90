@@ -35,14 +35,15 @@ module field_can_spectre
               spectre_volumes, spectre_mvol, set_spectre_volume_lock, &
               set_spectre_construction_grid
 
-    !> Per-volume Meiss construction grid. r, th default to the historical hardcoded
-    !> 48; phi = -1 selects the automatic policy below. set_spectre_construction_grid
+    !> Per-volume Meiss construction grid. phi = -1 selects the automatic policy
+    !> below. set_spectre_construction_grid
     !> threads the namelist knob (params: spectre_ncon_r/th/phi) in before the build,
     !> kept as a setter because field_can_* cannot use params (dependency cycle).
-    integer :: ncon_r = 48, ncon_th = 48, ncon_phi = -1
+    integer :: ncon_r = 48, ncon_th = 48, ncon_phi = -1, ncon_order = 5
+    integer :: ncon_ode_step_limit = 1000000
+    real(dp) :: ncon_ode_relerr = 1.0e-2_dp
 
-    !> Automatic phi resolution. NPHI_FULL is the historical hardcoded value, used
-    !> for fields carrying toroidal harmonics (bit-identical). Axisymmetric SPECTRE
+    !> Automatic phi resolution. Axisymmetric SPECTRE
     !> fields (all n = 0) are phi-invariant, so the construction only needs a minimal
     !> periodic-quintic phi grid; AXISYM_NPHI is the dominant memory saver for tokamak
     !> cases (arrays and splines scale linearly in n_phi). It stays above the quintic
@@ -103,23 +104,34 @@ contains
         end if
     end function active_volume
 
-    subroutine set_spectre_construction_grid(n_r, n_th, n_phi)
+    subroutine set_spectre_construction_grid(n_r, n_th, n_phi, spline_order, &
+                                             ode_step_limit, ode_relerr)
         !> Set the per-volume Meiss construction grid before the build (n_phi <= 0
         !> selects the automatic phi policy). Called from init_spectre_field.
         integer, intent(in) :: n_r, n_th, n_phi
+        integer, intent(in), optional :: spline_order
+        integer, intent(in), optional :: ode_step_limit
+        real(dp), intent(in), optional :: ode_relerr
 
         ncon_r = n_r
         ncon_th = n_th
         ncon_phi = n_phi
+        ncon_order = 5
+        if (present(spline_order)) ncon_order = spline_order
+        ncon_ode_step_limit = 1000000
+        if (present(ode_step_limit)) ncon_ode_step_limit = ode_step_limit
+        ncon_ode_relerr = 1.0e-2_dp
+        if (present(ode_relerr)) ncon_ode_relerr = ode_relerr
     end subroutine set_spectre_construction_grid
 
-    subroutine construct_spectre_coordinates(field_noncan)
+    subroutine construct_spectre_coordinates(field_noncan, ierr)
         !> Build one Meiss chart per SPECTRE volume on r in [lvol-1, lvol]. The axis
         !> volume starts at AXIS_OFFSET so the construction never touches the r = 0
         !> coordinate singularity.
         class(magnetic_field_t), intent(in) :: field_noncan
+        integer, intent(out), optional :: ierr
 
-        integer :: lvol, nphi_eff
+        integer :: lvol, nphi_eff, meiss_ierr
         real(dp) :: rmin, rmax
         logical :: axisym
 
@@ -141,10 +153,11 @@ contains
             nphi_eff = NPHI_FULL
         end if
 
-        print '(A,I0,A,I0,A,L1,A,I0,A,L1)', &
+        print '(A,I0,A,I0,A,L1,A,I0,A,L1,A,I0,A,I0,A,ES9.2)', &
             ' spectre_construction_grid: n_r=', ncon_r, ' n_th=', ncon_th, &
             ' axisym=', axisym, ' n_phi=', nphi_eff, &
-            ' phi_auto=', ncon_phi <= 0
+            ' phi_auto=', ncon_phi <= 0, ' order=', ncon_order, &
+            ' ode_steps=', ncon_ode_step_limit, ' ode_relerr=', ncon_ode_relerr
 
         allocate (spectre_volumes(spectre_mvol))
 
@@ -154,12 +167,24 @@ contains
             rmax = real(lvol, dp)
 
             call init_meiss(field_noncan, ncon_r, ncon_th, nphi_eff, rmin, rmax, &
-                            0.0_dp, twopi, identity_scaling_t())
-            call get_meiss_coordinates
+                            0.0_dp, twopi, identity_scaling_t(), &
+                            transformation_relerr_=ncon_ode_relerr, &
+                            spline_order_=ncon_order, &
+                            ode_step_limit_=ncon_ode_step_limit)
+            call get_meiss_coordinates(meiss_ierr)
+            if (meiss_ierr /= 0) then
+                call cleanup_spectre
+                if (present(ierr)) then
+                    ierr = lvol
+                    return
+                end if
+                error stop 'SPECTRE canonical construction ODE failed'
+            end if
             call harvest_meiss_volume(spectre_volumes(lvol))
         end do
 
         call cleanup_meiss
+        if (present(ierr)) ierr = 0
     end subroutine construct_spectre_coordinates
 
 
