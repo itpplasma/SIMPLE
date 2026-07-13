@@ -31,7 +31,7 @@ module spectre_sympl_orbit
 
     public :: sympl_spectre_state_t, sympl_spectre_reset, recanon_pphi, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
-        sympl_landing_stats, sympl_sheet_stats
+        sympl_landing_stats, sympl_landing_eval_stats, sympl_sheet_stats
     public :: sympl_fo_stats
     public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP, &
         SYMPL_SPECTRE_SKIM
@@ -106,6 +106,7 @@ module spectre_sympl_orbit
     end type sympl_spectre_state_t
 
     integer :: n_landings = 0
+    integer :: n_landing_evals = 0
     integer :: n_stops = 0
     integer :: n_sheet_entries = 0
     integer :: n_sheet_exits = 0
@@ -585,7 +586,7 @@ contains
         type(symplectic_integrator_t) :: si_best
         type(field_can_t) :: f_best
         real(dp) :: dir, t_lo, t_hi, f_lo, f_hi, t_mid, g, best
-        integer :: it, ierr_step, last_side
+        integer :: it, ierr_step, last_side, evals
         logical :: hi_valid
 
         dir = real(direction, dp)
@@ -595,6 +596,7 @@ contains
         f_hi = 0.0_dp
         hi_valid = .false.
         last_side = 0
+        evals = 0
 
         best = huge(1.0_dp)
         h_land = h_full
@@ -622,6 +624,7 @@ contains
             f = f0
             si%dt = t_mid
             call orbit_timestep_sympl(si, f, ierr_step)
+            evals = evals + 1
             g = dir*(si%z(1) - rho_k)
             if (ierr_step /= 0 .or. g /= g .or. &
                 step_teleported(si0, f0, si, f)) then
@@ -659,6 +662,9 @@ contains
             si = si_best
             f = f_best
         end if
+        !$omp critical (spectre_sympl_landing)
+        n_landing_evals = n_landing_evals + evals
+        !$omp end critical (spectre_sympl_landing)
     end subroutine locate_landing
 
     subroutine landed_state(si, f, rho_k, direction, y)
@@ -896,6 +902,7 @@ contains
     subroutine sympl_landing_stats_reset
         !$omp critical (spectre_sympl_landing)
         n_landings = 0
+        n_landing_evals = 0
         n_stops = 0
         n_sheet_entries = 0
         n_sheet_exits = 0
@@ -922,6 +929,17 @@ contains
         stops = n_stops
         !$omp end critical (spectre_sympl_landing)
     end subroutine sympl_landing_stats
+
+    subroutine sympl_landing_eval_stats(evals)
+        !> Total implicit-step evaluations spent inside locate_landing since
+        !> the last reset; evaluations/landing is the root-iteration cost the
+        !> seeded bracket shrink is measured by.
+        integer, intent(out) :: evals
+
+        !$omp critical (spectre_sympl_landing)
+        evals = n_landing_evals
+        !$omp end critical (spectre_sympl_landing)
+    end subroutine sympl_landing_eval_stats
 
     subroutine count_sheet_stat(kind, status)
         integer, intent(in) :: kind
