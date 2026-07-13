@@ -59,7 +59,9 @@ def compare_numerical_files(old_file, new_file, rtol=0.0, atol=0.0):
             if len(old_row) != len(new_row):
                 return False, f"Column count mismatch at row {row_idx}: {len(old_row)} vs {len(new_row)}"
             for old_val, new_val in zip(old_row, new_row):
-                if not np.isclose(old_val, new_val, rtol=rtol, atol=atol):
+                if not np.isclose(
+                    old_val, new_val, rtol=rtol, atol=atol, equal_nan=True
+                ):
                     non_match_count += 1
 
         if non_match_count > 0:

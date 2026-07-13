@@ -7,6 +7,7 @@ GOLDEN_RECORD_DIR=$(cd "$SCRIPT_DIR/.." && pwd)/golden_record
 echo "Golden Record Sanity Tests"
 echo "=========================="
 echo ""
+status=0
 
 # Test 1: Single file comparison - matching
 echo -n "Test 1: Single file comparison (matching)... "
@@ -17,6 +18,7 @@ if [ $? -eq 0 ]; then
     echo "PASSED"
 else
     echo "FAILED"
+    status=1
 fi
 
 # Test 2: Single file comparison - non-matching
@@ -28,6 +30,7 @@ if [ $? -ne 0 ]; then
     echo "PASSED (correctly detected difference)"
 else
     echo "FAILED (should have detected difference)"
+    status=1
 fi
 
 # Test 3: Multi-file comparison - matching
@@ -40,6 +43,7 @@ if [ $? -eq 0 ]; then
     echo "PASSED"
 else
     echo "FAILED"
+    status=1
 fi
 
 # Test 4: Multi-file comparison - non-matching
@@ -52,6 +56,7 @@ if [ $? -ne 0 ]; then
     echo "PASSED (correctly detected differences)"
 else
     echo "FAILED (should have detected differences)"
+    status=1
 fi
 
 # Test 5: Full comparison script - simple_test matching
@@ -64,6 +69,7 @@ if [ $? -eq 0 ]; then
     echo "PASSED"
 else
     echo "FAILED"
+    status=1
 fi
 
 # Test 6: Full comparison script - classifier_fast non-matching
@@ -76,7 +82,55 @@ if [ $? -ne 0 ]; then
     echo "PASSED (correctly detected differences)"
 else
     echo "FAILED (should have detected differences)"
+    status=1
+fi
+
+echo -n "Test 7: Paired NaNs compare equal... "
+python "$GOLDEN_RECORD_DIR/compare_files.py" \
+    "$SCRIPT_DIR/reference/nan_test/times_lost.dat" \
+    "$SCRIPT_DIR/matching/nan_test/times_lost.dat" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "PASSED"
+else
+    echo "FAILED"
+    status=1
+fi
+
+echo -n "Test 8: One-sided NaN compares unequal... "
+python "$GOLDEN_RECORD_DIR/compare_files.py" \
+    "$SCRIPT_DIR/reference/nan_test/times_lost.dat" \
+    "$SCRIPT_DIR/non_matching/nan_test/times_lost.dat" >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "PASSED (correctly detected difference)"
+else
+    echo "FAILED (should have detected difference)"
+    status=1
+fi
+
+echo -n "Test 9: Multi-file paired NaNs compare equal... "
+python "$GOLDEN_RECORD_DIR/compare_files_multi.py" \
+    "$SCRIPT_DIR/reference/nan_test" \
+    "$SCRIPT_DIR/matching/nan_test" \
+    --files times_lost.dat >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "PASSED"
+else
+    echo "FAILED"
+    status=1
+fi
+
+echo -n "Test 10: Multi-file one-sided NaN compares unequal... "
+python "$GOLDEN_RECORD_DIR/compare_files_multi.py" \
+    "$SCRIPT_DIR/reference/nan_test" \
+    "$SCRIPT_DIR/non_matching/nan_test" \
+    --files times_lost.dat >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "PASSED (correctly detected difference)"
+else
+    echo "FAILED (should have detected difference)"
+    status=1
 fi
 
 echo ""
 echo "All tests completed!"
+exit "$status"
