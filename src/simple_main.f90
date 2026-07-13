@@ -59,7 +59,8 @@ contains
                           ntestpart, ntimstep, coord_input, restart
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
-        use samplers, only: init_starting_surf, sample_spectre_surface
+        use samplers, only: init_starting_surf, sample_spectre_surface, &
+                            init_spectre_start_bounds
         use version, only: simple_version
         use field_boozer_chartmap, only: is_boozer_chartmap
         use field, only: is_spectre_file
@@ -129,6 +130,7 @@ contains
                 call sample_spectre_surface(zstart)
             else
                 call sample_particles(.true.)
+                if (startmode == 2) call init_spectre_start_bounds(zstart)
             end if
             call print_phase_time('SPECTRE particle sampling completed')
 

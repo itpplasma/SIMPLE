@@ -16,14 +16,18 @@ STARTS = np.array([
 ])
 
 
-def config(field):
+def config(field, generate_start_only):
     return f"""&config
 field_input = '{field}'
 integ_coords = 6
 integmode = 0
 ntestpart = {len(STARTS)}
 startmode = 2
-generate_start_only = .True.
+generate_start_only = {'.True.' if generate_start_only else '.False.'}
+trace_time = 1d-7
+ntimstep = 5
+npoiper2 = 64
+relerr = 1d-8
 spectre_ncon_r = 8
 spectre_ncon_th = 8
 spectre_ncon_phi = 8
@@ -31,12 +35,12 @@ spectre_ncon_phi = 8
 """
 
 
-def main():
-    binary, field = map(Path, sys.argv[1:])
+def run(binary, field, generate_start_only):
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         np.savetxt(work / "start.dat", STARTS, fmt="%.17g")
-        (work / "simple.in").write_text(config(field.resolve()))
+        (work / "simple.in").write_text(
+            config(field.resolve(), generate_start_only))
         proc = subprocess.run([binary.resolve(), "simple.in"], cwd=work,
                               capture_output=True, text=True, timeout=120)
         if proc.returncode != 0:
@@ -44,7 +48,18 @@ def main():
         actual = np.loadtxt(work / "start.dat")
         if not np.array_equal(actual, STARTS):
             raise AssertionError(f"explicit starts were replaced:\n{actual}")
-    print("SPECTRE startmode=2 explicit starts PASS")
+        if not generate_start_only:
+            times_lost = np.atleast_2d(np.loadtxt(work / "times_lost.dat"))
+            if not np.all(np.isfinite(times_lost[:, 2])):
+                raise AssertionError(
+                    f"non-finite trapped-passing diagnostics:\n{times_lost}")
+
+
+def main():
+    binary, field = map(Path, sys.argv[1:])
+    run(binary, field, True)
+    run(binary, field, False)
+    print("SPECTRE startmode=2 explicit starts and diagnostics PASS")
 
 
 if __name__ == "__main__":
