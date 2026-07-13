@@ -844,6 +844,16 @@ set_tests_properties(test_spectre_poincare PROPERTIES
     LABELS "integration;python"
     TIMEOUT 120)
 
+add_executable(test_field_line_midpoint.x test_field_line_midpoint.f90)
+target_link_libraries(test_field_line_midpoint.x simple)
+add_test(NAME test_field_line_midpoint
+    COMMAND test_field_line_midpoint.x
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_field_line_midpoint PROPERTIES
+    LABELS "unit;spectre"
+    TIMEOUT 15)
+
 # SPECTRE guiding-center RK45 tracing per volume with boundary-stop (#438).
 # Uses simple.x with the committed libneo SPECTRE HDF5 fixture; VMEC-free.
 add_test(NAME test_spectre_gc_rk45

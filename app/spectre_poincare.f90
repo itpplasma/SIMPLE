@@ -4,15 +4,16 @@ program spectre_poincare
     !>
     !> Reads a namelist (default spectre_poincare.in), loads the SPECTRE HDF5
     !> equilibrium, seeds field lines per volume at theta = 0.2 with s spread
-    !> across the volume, and integrates each line with the semi-implicit
-    !> symplectic Euler map in field_line_spectre. Field periodicity puts every
+    !> across the volume, and integrates each line with the implicit midpoint
+    !> map in field_line_spectre. Field periodicity puts every
     !> section exactly on zeta0 + k*2*pi/Nfp, so no interpolation is needed.
     !>
     !> Output per volume: poincare_vol<N>.dat (seed, section, s, theta, R, Z)
     !> and iota_vol<N>.dat (seed, fitted rotational transform).
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use spectre_reader, only: spectre_data_t, load_spectre, free_spectre
-    use field_line_spectre, only: field_line_psi, field_line_step, spectre_rz
+    use field_line_spectre, only: field_line_psi, field_line_step, spectre_rz, &
+                                  prepare_field_line_spline, cleanup_field_line_spline
 
     implicit none
 
@@ -23,12 +24,14 @@ program spectre_poincare
     real(dp), parameter :: s_terminate = 1.0_dp - 1.0e-10_dp
     integer, parameter :: max_volumes = 128
 
-    character(len=1024) :: spectre_file
+    character(len=1024) :: spectre_file, seed_file
     real(dp) :: zeta0
     integer :: nturns, nsteps_per_period, nseeds_per_volume
+    integer :: spline_n_s, spline_n_theta, spline_n_zeta, spline_order
     integer :: volumes(max_volumes)
     namelist /poincare/ spectre_file, zeta0, nturns, &
-        nsteps_per_period, nseeds_per_volume, volumes
+        nsteps_per_period, nseeds_per_volume, volumes, seed_file, spline_n_s, &
+        spline_n_theta, spline_n_zeta, spline_order
 
     type(spectre_data_t) :: data
     character(len=1024) :: config_file
@@ -37,10 +40,15 @@ program spectre_poincare
     real(dp) :: h
 
     spectre_file = 'spectre.h5'
+    seed_file = ''
     zeta0 = 0.0_dp
     nturns = 200
     nsteps_per_period = 256
     nseeds_per_volume = 4
+    spline_n_s = 32
+    spline_n_theta = 32
+    spline_n_zeta = 32
+    spline_order = 3
     volumes = -1
 
     config_file = 'spectre_poincare.in'
@@ -140,11 +148,14 @@ contains
 
         integer :: nsec, iseed, ksec, istep, uposec, uiota
         real(dp) :: s, theta, zeta, psi, R, Z, iota
-        real(dp), allocatable :: zeta_sec(:), theta_sec(:)
+        real(dp), allocatable :: zeta_sec(:), theta_sec(:), seeds(:, :)
         character(len=64) :: poi_name, iota_name
         logical :: terminated
 
         nsec = nturns*data%Nfp
+        call volume_seeds(lvol, seeds)
+        call prepare_field_line_spline(data, lvol, spline_n_s, spline_n_theta, &
+                                       spline_n_zeta, spline_order)
         allocate (zeta_sec(0:nsec), theta_sec(0:nsec))
 
         write (poi_name, '(A,I0,A)') 'poincare_vol', lvol, '.dat'
@@ -154,9 +165,9 @@ contains
         write (uposec, '(A)') '# seed  section  s  theta  R  Z'
         write (uiota, '(A)') '# seed  iota'
 
-        do iseed = 1, nseeds_per_volume
-            s = seed_s(iseed, nseeds_per_volume)
-            theta = seed_theta
+        do iseed = 1, size(seeds, 1)
+            s = seeds(iseed, 1)
+            theta = seeds(iseed, 2)
             zeta = zeta0
             psi = field_line_psi(data, lvol, s, theta, zeta)
             terminated = .false.
@@ -193,7 +204,44 @@ contains
         close (uposec)
         close (uiota)
         deallocate (zeta_sec, theta_sec)
+        call cleanup_field_line_spline
     end subroutine trace_volume
+
+    subroutine volume_seeds(lvol, seeds)
+        integer, intent(in) :: lvol
+        real(dp), allocatable, intent(out) :: seeds(:, :)
+
+        integer :: unit, ios, ivol, count, i
+        real(dp) :: sval, theta
+
+        if (len_trim(seed_file) == 0) then
+            allocate (seeds(nseeds_per_volume, 2))
+            do i = 1, nseeds_per_volume
+                seeds(i, :) = [seed_s(i, nseeds_per_volume), seed_theta]
+            end do
+            return
+        end if
+
+        open (newunit=unit, file=trim(seed_file), status='old', action='read')
+        count = 0
+        do
+            read (unit, *, iostat=ios) ivol, sval, theta
+            if (ios /= 0) exit
+            if (ivol == lvol - 1) count = count + 1
+        end do
+        rewind (unit)
+        allocate (seeds(count, 2))
+        i = 0
+        do
+            read (unit, *, iostat=ios) ivol, sval, theta
+            if (ios /= 0) exit
+            if (ivol == lvol - 1) then
+                i = i + 1
+                seeds(i, :) = [sval, theta]
+            end if
+        end do
+        close (unit)
+    end subroutine volume_seeds
 
     subroutine write_section(unit, iseed, ksec, s, theta, R, Z)
         integer, intent(in) :: unit, iseed, ksec
