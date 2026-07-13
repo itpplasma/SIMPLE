@@ -554,6 +554,7 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
         ! components are used raw in SI, the Gaussian-CGS conversion is applied at
         ! canonical evaluation. Here h_s = hcov(1) is nonzero (the reason the Meiss
         ! angle transform is required), while A_s = Acov(1) = 0 in the SPECTRE gauge.
+        call bias_spectre_upper_endpoint(fld, x_integ)
         call fld%evaluate(x_integ, Acov, hcov, Bmod)
         Ar = Acov(1)
         Ap = Acov(3)
@@ -640,6 +641,7 @@ subroutine init_canonical_field_components
                     call fld%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
                 type is (spectre_field_t)
                     ! SPECTRE chart is its own radial coordinate (identity scaling)
+                    call bias_spectre_upper_endpoint(fld, xref)
                     call fld%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
                 class default
                     error stop "init_canonical_field_components: unsupported field type"
@@ -668,6 +670,18 @@ subroutine init_canonical_field_components
     call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_field_batch)
     batch_splines_initialized = .true.
 end subroutine init_canonical_field_components
+
+
+subroutine bias_spectre_upper_endpoint(field, x)
+    type(spectre_field_t), intent(in) :: field
+    real(dp), intent(inout) :: x(3)
+
+    ! Exact stacked interfaces belong to the outer volume. A lower-volume
+    ! construction must sample its upper endpoint as the one-sided inner limit.
+    if (x(1) >= xmax(1) .and. xmax(1) < real(field%data%Mvol, dp)) then
+        x(1) = nearest(xmax(1), -1.0_dp)
+    end if
+end subroutine bias_spectre_upper_endpoint
 
 
 pure function get_grid_point(i_r, i_th, i_phi)

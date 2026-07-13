@@ -94,7 +94,10 @@ contains
         real(dp) :: x(3), y(2), dy(3, 2), lam, dlam(3), dchi(3)
         real(dp) :: xref(3), Acov(3), hcov(3), Bmod
         real(dp) :: Ar_res, Br_res, Ath, Aph, Bth, Bph
-        real(dp) :: maxA, maxB, ratioA, ratioB
+        real(dp) :: maxA, maxB, max_endpoint_B, max_endpoint_h, ratioA, ratioB
+        real(dp) :: hscale
+        real(dp) :: field_values(5)
+        real(dp) :: field_derivatives(3, 5)
 
         call create_spectre_field(src, h5, ierr)
         if (ierr /= 0) error stop 'check_construction: create_spectre_field failed'
@@ -102,6 +105,8 @@ contains
         period = twopi/real(nper, dp)
         maxA = 0.0_dp
         maxB = 0.0_dp
+        max_endpoint_B = 0.0_dp
+        max_endpoint_h = 0.0_dp
 
         ! The transformed radial 1-form components A'_r and B'_r vanish at the
         ! construction nodes; on the interior verification grid the residual is the
@@ -116,6 +121,7 @@ contains
             rmax = spectre_volumes(lvol)%rmax
             do ir = 1, NR
                 frac = R_LO + (R_HI - R_LO)*(real(ir, dp) - 0.5_dp)/real(NR, dp)
+                if (ir == NR) frac = 0.95_dp
                 r = rmin + (rmax - rmin)*frac
                 do ith = 1, NTH
                     th = twopi*(real(ith, dp) - 0.5_dp)/real(NTH, dp)
@@ -148,10 +154,38 @@ contains
             end do
         end do
 
+        do lvol = 1, spectre_mvol - 1
+            r = spectre_volumes(lvol)%rmax
+            do ith = 1, NTH
+                th = twopi*(real(ith, dp) - 0.5_dp)/real(NTH, dp)
+                ph = 0.0_dp
+                x = [r, th, ph]
+                call evaluate_batch_splines_3d_der( &
+                    spectre_volumes(lvol)%spl_transform, x, y, dy)
+                xref = [nearest(r, -1.0_dp), th, ph + y(1)]
+                call src%evaluate(xref, Acov, hcov, Bmod)
+                call evaluate_batch_splines_3d_der( &
+                    spectre_volumes(lvol)%spl_field, x, field_values, &
+                    field_derivatives)
+                max_endpoint_B = max(max_endpoint_B, &
+                    abs(field_values(5) - Bmod)/Bmod)
+                Bth = hcov(2) + hcov(3)*dy(2, 1)
+                Bph = hcov(3)*(1.0_dp + dy(3, 1))
+                hscale = hypot(Bth, Bph)
+                max_endpoint_h = max(max_endpoint_h, &
+                    hypot(field_values(3) - Bth, field_values(4) - Bph)/hscale)
+            end do
+        end do
+
         print '(A,I0,A)', 'construction: ', spectre_mvol, ' volumes checked'
         print '(A,ES12.4)', 'construction: max |A''_r|/|A_ang| = ', maxA
         print '(A,ES12.4)', 'construction: max |B''_r|/|B_ang| = ', maxB
-        if (maxA >= TOL .or. maxB >= TOL) then
+        print '(A,ES12.4)', 'construction: max lower endpoint |dB|/B = ', &
+            max_endpoint_B
+        print '(A,ES12.4)', 'construction: max lower endpoint |dh|/|h| = ', &
+            max_endpoint_h
+        if (maxA >= TOL .or. maxB >= TOL .or. max_endpoint_h >= TOL .or. &
+            max_endpoint_B >= TOL) then
             print '(A,ES10.2)', 'FAIL: construction identity above tolerance ', TOL
             error stop 1
         end if
