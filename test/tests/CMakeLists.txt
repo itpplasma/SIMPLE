@@ -931,9 +931,9 @@ set_tests_properties(test_spectre_construction_grid PROPERTIES
     LABELS "integration;python"
     TIMEOUT 120)
 
-# SPECTRE end-to-end validation (#442): losses and accounting, Level-0 vs
-# Level-1 loss fractions, trapped/passing mirror-criterion split, guiding-center
-# crossing mu conservation, and fixed-seed determinism on the committed tok2vol.
+# SPECTRE end-to-end validation (#442): losses and accounting for both crossing
+# maps, trapped/passing mirror-criterion split, guiding-center crossing mu
+# conservation, and fixed-seed determinism on the committed tok2vol.
 add_test(NAME test_spectre_validation
     COMMAND ${BOOZER_CHARTMAP_PYTHON}
         ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_validation.py

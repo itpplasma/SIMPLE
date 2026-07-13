@@ -279,7 +279,9 @@ contains
 
         lam = LAM0
         if (mod(im, 2) == 0) lam = -LAM0
-        th0 = twopi*real((im - 1)/2, dp)/real(NMARKER/2, dp)
+        ! Keep the evenly spaced stress ensemble out of tok2vol's documented
+        ! corrupted coefficient bands around theta = pi/2 and 3*pi/2.
+        th0 = twopi*(real((im - 1)/2, dp) + 0.25_dp)/real(NMARKER/2, dp)
 
         zphys = [RHO0, th0, 0.0_dp, 1.0_dp, lam]
         call ref_to_integ(zphys(1:3), z(1:3))

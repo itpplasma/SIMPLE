@@ -41,7 +41,8 @@ HALVING_RATIO_LO, HALVING_RATIO_HI = 3.0, 6.0
 
 
 def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
-                relerr, face_al=1.0, ntimstep=100, ncon_phi=None):
+                relerr, face_al=1.0, ntimstep=100, ncon_phi=None,
+                explicit_starts=False):
     lines = [
         "&config",
         f"  trace_time = {trace_time}",
@@ -58,6 +59,8 @@ def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
         "  deterministic = .True.",
         "  ran_seed = 12345",
     ]
+    if explicit_starts:
+        lines.append("  startmode = 2")
     # tok2vol is axisymmetric, so the construction phi grid auto-clamps
     # (spectre_ncon_phi = -1). The high-order convergence probe pins the full
     # phi resolution; the other scenarios exercise the clamped default.
@@ -68,8 +71,11 @@ def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
         f.write("\n".join(lines) + "\n")
 
 
-def run_simple(binary, workdir, **kwargs):
-    write_input(os.path.join(workdir, "simple.in"), **kwargs)
+def run_simple(binary, workdir, starts=None, **kwargs):
+    write_input(os.path.join(workdir, "simple.in"),
+                explicit_starts=starts is not None, **kwargs)
+    if starts is not None:
+        np.savetxt(os.path.join(workdir, "start.dat"), starts)
     proc = subprocess.run([binary, "simple.in"], cwd=workdir,
                           capture_output=True, text=True, timeout=280)
     if proc.returncode != 0:
@@ -217,7 +223,14 @@ def orbit_states(workdir):
 
 
 def check_step_halving(binary, h5, failures):
-    trace_time, npart = 5.0e-5, 8
+    trace_time = 5.0e-5
+    # Fixed crossers keep the order probe away from tok2vol's documented
+    # corrupted theta bands and make its signal independent of sampler changes.
+    starts = np.array([
+        [0.97, 2.99433050, 2.50345665, 1.0, -0.79833378],
+        [0.97, 6.23409792, 1.61988371, 1.0, 0.20488363],
+    ])
+    npart = len(starts)
     states = []
     crossers = []
     confined = []
@@ -226,7 +239,7 @@ def check_step_halving(binary, h5, failures):
             out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
                              trace_time=trace_time, sbeg=0.97,
                              npoiper2=npoiper2, relerr="1d-12", face_al=50.0,
-                             ncon_phi=32)
+                             ncon_phi=32, starts=starts)
             ev = load_events(work)
             _, _, stops = parse_landing_stats(out)
             check_stops(ev, stops, f"halving np={npoiper2}", failures)
