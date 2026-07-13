@@ -12,8 +12,9 @@ program test_field_can_meiss
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, &
                                spline_transformation, init_canonical_field_components, &
            xmin, xmax, h_r, h_phi, h_th, ah_cov_on_slice, n_r, n_phi, n_th, &
-           lam_phi, chi_gauge, transformation_relerr, ref_to_integ_meiss, &
+           spl_transform_batch, transformation_relerr, ref_to_integ_meiss, &
            integ_to_ref_meiss
+    use interpolate, only: evaluate_batch_splines_3d
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr, field_input, coord_input, &
         read_config
@@ -153,6 +154,7 @@ contains
         integer :: funit
         integer :: i_r, i_th, i_phi
         real(dp) :: r, th, phi
+        real(dp) :: transformation(2)
 
         open (newunit=funit, file=filename, status='unknown')
         write (funit, *) '#', ' r', ' phi', ' th', ' lam_phi', ' chi_gauge'
@@ -163,8 +165,9 @@ contains
                 phi = xmin(3) + h_phi*(i_phi - 1)
                 do i_r = 1, n_r
                     r = xmin(1) + h_r*(i_r - 1)
-                    write (funit, *) r, phi, th, lam_phi(i_r, i_th, i_phi), &
-                        chi_gauge(i_r, i_th, i_phi)
+                    call evaluate_batch_splines_3d(spl_transform_batch, &
+                                                   [r, th, phi], transformation)
+                    write (funit, *) r, phi, th, transformation
                 end do
             end do
         end do

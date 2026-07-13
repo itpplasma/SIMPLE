@@ -204,6 +204,48 @@ contains
         call save_starting_points(zstart)
     end subroutine sample_spectre_surface
 
+    subroutine init_spectre_start_bounds(zstart)
+        use params, only: bmin, bmax, bmod00
+        use magfie_sub, only: magfie
+
+        real(dp), dimension(:, :), intent(in) :: zstart
+
+        integer, parameter :: nrho = 8, ntheta = 64, nzeta = 64
+        integer :: ir, it, iz, nr
+        real(dp) :: rho_lo, rho_hi, rho, theta, zeta, bmod, bsum
+        real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        rho_lo = minval(zstart(1, :))
+        rho_hi = maxval(zstart(1, :))
+        nr = merge(1, nrho, abs(rho_hi - rho_lo) <= &
+                   epsilon(1.0d0)*max(1.0d0, abs(rho_lo), abs(rho_hi)))
+        bmin = huge(1.0d0)
+        bmax = -huge(1.0d0)
+        bsum = 0.0d0
+        do ir = 1, nr
+            if (nr == 1) then
+                rho = rho_lo
+            else
+                rho = rho_lo + (rho_hi - rho_lo)*real(ir - 1, dp)/real(nr - 1, dp)
+            end if
+            do it = 1, ntheta
+                theta = twopi*(real(it, dp) - 0.5d0)/real(ntheta, dp)
+                do iz = 1, nzeta
+                    zeta = twopi*(real(iz, dp) - 0.5d0)/real(nzeta, dp)
+                    call magfie([rho, theta, zeta], bmod, sqrtg, bder, hcovar, &
+                                hctrvr, hcurl)
+                    bmin = min(bmin, bmod)
+                    bmax = max(bmax, bmod)
+                    bsum = bsum + bmod
+                end do
+            end do
+        end do
+        bmod00 = bsum/real(nr*ntheta*nzeta, dp)
+
+        print *, 'init_spectre_start_bounds: rho = ', rho_lo, rho_hi, &
+            ' bmod00 = ', bmod00, ' bmin = ', bmin, ' bmax = ', bmax
+    end subroutine init_spectre_start_bounds
+
     subroutine sample_surface_fieldline(zstart)
         real(dp), dimension(:, :), intent(inout) :: zstart
 

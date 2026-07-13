@@ -59,7 +59,8 @@ contains
                           ntestpart, ntimstep, coord_input, restart
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
-        use samplers, only: init_starting_surf, sample_spectre_surface
+        use samplers, only: init_starting_surf, sample_spectre_surface, &
+                            init_spectre_start_bounds
         use version, only: simple_version
         use field_boozer_chartmap, only: is_boozer_chartmap
         use field, only: is_spectre_file
@@ -129,6 +130,7 @@ contains
                 call sample_spectre_surface(zstart)
             else
                 call sample_particles(.true.)
+                if (startmode == 2) call init_spectre_start_bounds(zstart)
             end if
             call print_phase_time('SPECTRE particle sampling completed')
 
@@ -377,7 +379,9 @@ contains
         use new_vmec_stuff_mod, only: nper, rmajor
         use util, only: twopi
         use params, only: field_input, spectre_ncon_r, spectre_ncon_th, &
-                          spectre_ncon_phi
+                          spectre_ncon_phi, spectre_ncon_order, &
+                          spectre_ncon_ode_max_steps
+        use params, only: spectre_ncon_ode_relerr
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
 
@@ -423,7 +427,9 @@ contains
             ! extended linearly, so iterates out there stay finite.
             sympl_rmax = real(sf%data%Mvol + 1, dp)
             call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
-                                               spectre_ncon_phi)
+                                               spectre_ncon_phi, spectre_ncon_order, &
+                                               spectre_ncon_ode_max_steps, &
+                                               spectre_ncon_ode_relerr)
             call init_field_can(SPECTRE, sf)
             call print_phase_time('SPECTRE per-volume canonical construction completed')
         end if

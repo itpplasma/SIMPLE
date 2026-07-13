@@ -30,6 +30,7 @@ import numpy as np
 # Construction identity: confined-marker p^2 drift. The coarse-grid Meiss chart
 # stays at ~2.5e-10 (measured); a broken construction drifts to O(0.1).
 IDENTITY_TOL = 1.0e-6
+ORDER3_IDENTITY_TOL = 1.0e-4
 # Clamp must cut phi well below the historical 32 to save the phi memory factor.
 CLAMP_PHI_MAX = 16
 # The clamp must cut peak RSS to a clear fraction of the unclamped phi=32 build.
@@ -98,12 +99,14 @@ def run_config(binary, h5, integmode=3, ntestpart=2, trace_time=1.0e-6,
 
 def parse_grid(out):
     m = re.search(r"spectre_construction_grid: n_r=(\d+) n_th=(\d+) "
-                  r"axisym=([TF]) n_phi=(\d+) phi_auto=([TF])", out)
+                  r"axisym=([TF]) n_phi=(\d+) phi_auto=([TF]) order=(\d+) "
+                  r"ode_steps=(\d+) ode_relerr=\s*([0-9.E+-]+)", out)
     if not m:
         raise RuntimeError("spectre_construction_grid line missing from stdout")
     return dict(n_r=int(m.group(1)), n_th=int(m.group(2)),
                 axisym=m.group(3) == "T", n_phi=int(m.group(4)),
-                phi_auto=m.group(5) == "T")
+                phi_auto=m.group(5) == "T", order=int(m.group(6)),
+                ode_steps=int(m.group(7)), ode_relerr=float(m.group(8)))
 
 
 def main():
@@ -113,6 +116,10 @@ def main():
     # Default: axisymmetric tok2vol auto-clamps the phi grid.
     rss_clamped, out_default, _ = run_config(binary, tok2vol)
     grid = parse_grid(out_default)
+    if (grid["n_r"], grid["n_th"], grid["order"]) != (48, 48, 5):
+        failures.append(f"defaults: unexpected construction settings {grid}")
+    if not np.isclose(grid["ode_relerr"], 1.0e-2):
+        failures.append(f"defaults: ODE tolerance {grid['ode_relerr']:.3e}")
     if not grid["axisym"]:
         failures.append("clamp: tok2vol not detected as axisymmetric")
     if not grid["phi_auto"]:
@@ -126,7 +133,8 @@ def main():
     # Red proof: forcing spectre_ncon_phi = 32 bypasses the clamp and restores
     # the historical full-resolution build; peak RSS jumps by ~the phi ratio.
     rss_full, out_full, _ = run_config(binary, tok2vol,
-                                       extra=("spectre_ncon_phi = 32",))
+                                       extra=("spectre_ncon_phi = 32",
+                                              "spectre_ncon_order = 5"))
     grid_full = parse_grid(out_full)
     if grid_full["phi_auto"] or grid_full["n_phi"] != 32:
         failures.append(f"red proof: explicit phi=32 not honored "
@@ -148,6 +156,17 @@ def main():
     print(f"memory: coarse(16x16, phi={parse_grid(out_coarse)['n_phi']})="
           f"{rss_coarse:.0f} MB (default {rss_clamped:.0f} MB)")
 
+    rss_cubic, out_cubic, _ = run_config(
+        binary, tok2vol,
+        extra=("spectre_ncon_phi = 32", "spectre_ncon_order = 3"))
+    if parse_grid(out_cubic)["order"] != 3:
+        failures.append("order: cubic construction setting not honored")
+    if not rss_cubic < rss_full:
+        failures.append(f"order: cubic RSS {rss_cubic:.0f} MB not below "
+                        f"quintic {rss_full:.0f} MB")
+    print(f"memory: cubic({grid['n_r']}x{grid['n_th']}, phi=32)="
+          f"{rss_cubic:.0f} MB (quintic {rss_full:.0f} MB)")
+
     # Construction identity: a coarse-grid chart still conserves the
     # guiding-center energy p^2 for confined low-energy markers.
     _, out_id, data = run_config(
@@ -164,6 +183,23 @@ def main():
                             f">= {IDENTITY_TOL:.0e}")
         print(f"identity: coarse-grid confined={int(confined.sum())} "
               f"max|p^2-1|={drift:.3e}")
+
+    _, _, data_cubic = run_config(
+        binary, tok2vol, ntestpart=16, trace_time=1.0e-5, ntimstep=50,
+        npoiper2=1024, relerr="1d-12", face_al=50.0,
+        extra=("spectre_ncon_r = 16", "spectre_ncon_th = 16",
+               "spectre_ncon_order = 3"))
+    confined_cubic = data_cubic[:, 1] >= 1.0e-5 * (1.0 - 1e-9)
+    if confined_cubic.sum() < 8:
+        failures.append(f"order identity: only {int(confined_cubic.sum())} "
+                        "confined markers")
+    else:
+        drift_cubic = float(np.max(np.abs(data_cubic[confined_cubic, 8] ** 2 - 1.0)))
+        if not drift_cubic < ORDER3_IDENTITY_TOL:
+            failures.append(f"order identity: cubic p^2 drift {drift_cubic:.3e} "
+                            f">= {ORDER3_IDENTITY_TOL:.0e}")
+        print(f"identity: cubic confined={int(confined_cubic.sum())} "
+              f"max|p^2-1|={drift_cubic:.3e}")
 
     if failures:
         print("\nFAILURES:")
