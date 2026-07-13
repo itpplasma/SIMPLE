@@ -1,6 +1,6 @@
 module orbit_symplectic_euler1
 use field_can_mod, only: field_can_t
-use orbit_symplectic_base, only: symplectic_integrator_t
+use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax
 use, intrinsic :: iso_fortran_env, only: dp => real64
 
 implicit none
@@ -94,9 +94,9 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
     correction(1) = ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2)
     correction(2) = ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2)
     step_scale = 1d0
-    if (correction(1) < 0d0) then
+    if (sympl_rmax <= 1d0 .and. correction(1) < 0d0) then
         step_scale = min(1d0, &
-            0.8d0*max(0d0, 1d0 - x(1))/(-correction(1)))
+            0.8d0*max(0d0, sympl_rmax - x(1))/(-correction(1)))
     end if
     boundary_limited = step_scale < 1d0
     x = x - step_scale*correction

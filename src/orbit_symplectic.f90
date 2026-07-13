@@ -106,8 +106,10 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
-  if (mode_init /= RK45) then
+  if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
     orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
+  else if (mode_init /= RK45) then
+    orbit_timestep_sympl => raw_timestep_sympl
   end if
 end subroutine orbit_sympl_init
 
@@ -585,6 +587,10 @@ pure subroutine limit_radial_newton_step(x, correction, radial_indices, &
   integer :: k, radius_index
 
   step_scale = 1d0
+  if (sympl_rmax > 1d0) then
+    limited = .false.
+    return
+  end if
   do k = 1, size(radial_indices)
     radius_index = radial_indices(k)
     outward_step = -correction(radius_index)
@@ -654,10 +660,19 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     call solve_newton_system(fjac, fvec, status)
     if (status /= SYMPLECTIC_STEP_OK) return
     status = SYMPLECTIC_STEP_MAXITER
-    call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
-      step_limited)
-    boundary_limited = boundary_limited .or. step_limited
-    x = x - step_scale*fvec
+    if (sympl_rmax > 1d0) then
+      step_limited = .false.
+      x = x - fvec
+    else
+      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*fvec
+    end if
+    if (any(x(radial_indices) > sympl_rmax)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     ! Don't take too small values in pphi as tolerance reference
@@ -760,10 +775,19 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     if (status /= SYMPLECTIC_STEP_OK) return
     status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
-    call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
-      step_limited)
-    boundary_limited = boundary_limited .or. step_limited
-    x = x - step_scale*fvec
+    if (sympl_rmax > 1d0) then
+      step_limited = .false.
+      x = x - fvec
+    else
+      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*fvec
+    end if
+    if (any(x(radial_indices) > sympl_rmax)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     do ks = 1, s
@@ -1091,10 +1115,19 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     if (status /= SYMPLECTIC_STEP_OK) return
     status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
-    call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
-      step_limited)
-    boundary_limited = boundary_limited .or. step_limited
-    x = x - step_scale*fvec
+    if (sympl_rmax > 1d0) then
+      step_limited = .false.
+      x = x - fvec
+    else
+      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*fvec
+    end if
+    if (any(x(radial_indices) > sympl_rmax)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     tolref(1) = 1d0
@@ -1540,7 +1573,7 @@ subroutine attempt_midpoint_step(si, f, status)
   if (status /= SYMPLECTIC_STEP_OK) return
 
   si%z = x(1:4)
-  if (extrap_field .and. .not. crossed) then
+  if (extrap_field) then
     f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
       + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
       + f%dpth(4)*(x(4)-xlast(4))
@@ -1672,6 +1705,54 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
+  integer, parameter :: n = 5, maxit = 32
+  real(dp) :: x(n), xlast(n)
+  integer :: ktau, step_status
+  type(symplectic_integrator_t) :: accepted_integrator
+  type(field_can_t) :: accepted_field
+
+  if (sympl_rmax > 1d0) then
+    ierr = SYMPLECTIC_STEP_OK
+    do ktau = 1, si%ntau
+      accepted_integrator = si
+      accepted_field = f
+      si%pthold = f%pth
+      x(1:4) = si%z
+      x(5) = si%z(1)
+      call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
+        step_status)
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        si = accepted_integrator
+        f = accepted_field
+        ierr = step_status
+        return
+      end if
+      if (x(1) > sympl_rmax) then
+        ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
+      if (x(1) < 0d0) then
+        x(1) = -x(1)
+        x(2) = x(2) + pi
+        call count_event(EVT_R_NEGATIVE)
+        if (x(1) > sympl_rmax) then
+          ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+          return
+        end if
+      end if
+      si%z = x(1:4)
+      if (extrap_field) then
+        f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
+          + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
+          + f%dpth(4)*(x(4)-xlast(4))
+      else
+        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+        call get_val(f, si%z(4))
+      end if
+    end do
+    return
+  end if
+
   if (si%ntau /= 1) error stop &
     'orbit_timestep_sympl_midpoint raw step requires ntau=1'
   call attempt_midpoint_step(si, f, ierr)
@@ -1708,6 +1789,25 @@ subroutine advance_symplectic_with_boundary(si, f, raw_step, ierr)
   radial_residual = 0d0
   fraction_width = 0d0
   ierr = SYMPLECTIC_STEP_OK
+
+  if (sympl_rmax > 1d0) then
+    do ktau = 1, original_ntau
+      accepted_integrator = si
+      accepted_field = f
+      si%ntau = 1
+      call raw_step(si, f, step_status)
+      si%ntau = original_ntau
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        si = accepted_integrator
+        f = accepted_field
+        si%last_step_fraction = real(ktau - 1, dp)/real(original_ntau, dp)
+        ierr = step_status
+        return
+      end if
+    end do
+    si%last_step_fraction = 1d0
+    return
+  end if
 
   do ktau = 1, original_ntau
     accepted_integrator = si
