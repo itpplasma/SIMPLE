@@ -43,6 +43,8 @@ class TestNetCDFResultsOutput:
                 ntestpart=8,
                 output_results_netcdf=True,
                 isw_field_type=3,
+                contr_pp=-1e10,
+                notrace_passing=0,
             )
             particles = pysimple.sample_surface(8, s=0.5)
             pysimple.trace_parallel(particles)
@@ -89,6 +91,8 @@ class TestNetCDFResultsOutput:
                 assert ds.canonical_grid_nphi == 64
                 assert ds.canonical_ode_relerr == 1e-11
                 assert ds.multharm == 5
+                assert ds.contr_pp == -1e10
+                assert ds.notrace_passing == 0
 
         finally:
             os.chdir(original_dir)

@@ -50,6 +50,7 @@ contains
                           canonical_grid_nr, canonical_grid_ntheta, &
                           canonical_grid_nphi, canonical_ode_relerr, &
                           ntimstep, startmode, num_surf, sbeg, &
+                          contr_pp, notrace_passing, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
                           wall_input, wall_units, wall_hit, wall_hit_cart, &
@@ -336,6 +337,11 @@ contains
         call check_nc(status, 'put_att num_surf')
         status = nf90_put_att(ncid, nf90_global, 'sbeg', sbeg)
         call check_nc(status, 'put_att sbeg')
+        status = nf90_put_att(ncid, nf90_global, 'contr_pp', contr_pp)
+        call check_nc(status, 'put_att contr_pp')
+        status = nf90_put_att(ncid, nf90_global, 'notrace_passing', &
+                              notrace_passing)
+        call check_nc(status, 'put_att notrace_passing')
         status = nf90_put_att(ncid, nf90_global, 'isw_field_type', isw_field_type)
         call check_nc(status, 'put_att isw_field_type')
         status = nf90_put_att(ncid, nf90_global, 'swcoll', merge(1, 0, swcoll))
