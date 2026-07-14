@@ -64,12 +64,13 @@ contains
 end module linear_radial_field_backend
 
 program test_newton_solver_status
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
     evaluate_linear_radial, nonlinear_boundary_step
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
-    advance_symplectic_with_boundary, newton1, newton_midpoint, orbit_sympl_init, &
+    advance_symplectic_with_boundary, newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
     get_boundary_event_tolerances
   use orbit_symplectic_base, only: symplectic_integrator_t, &
@@ -86,7 +87,6 @@ program test_newton_solver_status
   type(symplectic_integrator_t) :: integrator
   type(field_can_t) :: field
   real(dp) :: x(5), xlast(5), matrix(2, 2), residual(2), matrix3(3, 3)
-  real(dp) :: euler_x(2), euler_xlast(2)
   real(dp) :: lobatto_state(10), expected_lobatto_state(10)
   integer :: i, status
 
@@ -99,19 +99,6 @@ program test_newton_solver_status
     error stop 'zero-iteration midpoint solve did not report max iterations'
   end if
   if (any(xlast /= x)) error stop 'zero-iteration solve changed the iterate'
-
-  euler_x = [0.5_dp, 0.3_dp]
-  field%ro0 = 1.0_dp
-  symplectic_euler_warning_mode = .false.
-  call newton1(integrator, field, euler_x, 0, euler_xlast, status)
-  if (status /= SYMPLECTIC_STEP_MAXITER) then
-    error stop 'strict Euler mode did not report max iterations'
-  end if
-  symplectic_euler_warning_mode = .true.
-  call newton1(integrator, field, euler_x, 0, euler_xlast, status)
-  if (status /= SYMPLECTIC_STEP_OK) then
-    error stop 'Euler warning mode did not accept the finite iterate'
-  end if
 
   x(1) = 1.1_dp
   call newton_midpoint(integrator, field, x, 1.0e-15_dp, 1.0e-12_dp, &
@@ -184,8 +171,49 @@ program test_newton_solver_status
   call test_lcfs_location
   call test_configured_event_tolerances
   call test_solver_basin_is_not_boundary
+  call test_euler_warning_mode
 
 contains
+
+  subroutine test_euler_warning_mode
+    type(symplectic_integrator_t) :: strict_integrator, warning_integrator
+    type(field_can_t) :: strict_field, warning_field
+    real(dp) :: initial_state(4)
+    integer :: euler_status
+
+    eval_field => evaluate_linear_radial
+    strict_field%ro0 = 1.0_dp
+    strict_field%mu = 1.0_dp
+    initial_state = [0.5_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+    call orbit_sympl_init(strict_integrator, strict_field, initial_state, &
+      0.01_dp, 1, 0.0_dp, EXPL_IMPL_EULER)
+    strict_integrator%atol = 0.0_dp
+    symplectic_euler_warning_mode = .false.
+    call orbit_timestep_sympl(strict_integrator, strict_field, euler_status)
+    if (euler_status /= SYMPLECTIC_STEP_MAXITER) then
+      error stop 'strict Euler timestep did not report max iterations'
+    end if
+    if (any(strict_integrator%z /= initial_state)) then
+      error stop 'strict Euler max-iteration failure changed the accepted state'
+    end if
+
+    warning_field%ro0 = 1.0_dp
+    warning_field%mu = 1.0_dp
+    call orbit_sympl_init(warning_integrator, warning_field, initial_state, &
+      0.01_dp, 1, 0.0_dp, EXPL_IMPL_EULER)
+    warning_integrator%atol = 0.0_dp
+    symplectic_euler_warning_mode = .true.
+    call orbit_timestep_sympl(warning_integrator, warning_field, euler_status)
+    if (euler_status /= SYMPLECTIC_STEP_OK) then
+      error stop 'Euler warning mode did not continue the timestep'
+    end if
+    if (.not. all(ieee_is_finite(warning_integrator%z))) then
+      error stop 'Euler warning mode accepted a non-finite state'
+    end if
+    if (all(warning_integrator%z == initial_state)) then
+      error stop 'Euler warning mode did not commit the timestep'
+    end if
+  end subroutine test_euler_warning_mode
 
   subroutine test_configured_event_tolerances
     type(symplectic_integrator_t) :: loose_integrator, tight_integrator

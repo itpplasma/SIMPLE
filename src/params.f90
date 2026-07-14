@@ -204,9 +204,10 @@ contains
 
         call reset_seed_if_deterministic
 
-        if (symplectic_euler_warning_mode) then
-            print *, 'WARNING: symplectic Euler accepts finite Newton iterates ', &
-                'after the iteration limit; see newton1_maxit diagnostics'
+        if (integmode == EXPL_IMPL_EULER .and. symplectic_euler_warning_mode) then
+            print *, 'WARNING: explicit-implicit symplectic Euler accepts ', &
+                'finite Newton iterates after the iteration limit; ', &
+                'see newton1_maxit diagnostics'
         end if
 
         call validate_boundary_event_tolerances
