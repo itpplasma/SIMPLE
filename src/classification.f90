@@ -1,14 +1,21 @@
 module classification
 use, intrinsic :: iso_fortran_env, only: dp => real64
+use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 use omp_lib
 use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
     ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
     class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &
     nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
-    integmode, relerr, ntau, should_skip
+    integmode, relerr, ntau, should_skip, orbit_exit_code, unresolved_orbits, &
+    ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, ORBIT_EXIT_SKIPPED, &
+    ORBIT_EXIT_NUMERICAL_DOMAIN, ORBIT_EXIT_NUMERICAL_MAXITER, &
+    ORBIT_EXIT_NUMERICAL_LINEAR, ORBIT_EXIT_NUMERICAL_EVENT
 use util, only: twopi, sqrt2
 use velo_mod,   only : isw_field_type
 use orbit_symplectic, only : orbit_timestep_sympl, get_val
+use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
+    SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
+    SYMPLECTIC_STEP_LINEAR_SOLVE
 use simple, only : init_sympl, tracer_t
 use cut_detector, only : fract_dimension
 use diag_mod, only : icounter
@@ -28,6 +35,7 @@ use check_orbit_type_sub, only : check_orbit_type
     integer :: fractal           ! Fractal: 0=unclassified, 1=regular, 2=chaotic
     integer :: jpar              ! J_parallel: 0=unclassified, 1=regular, 2=stochastic
     integer :: topology          ! Topology: 0=unclassified, 1=ideal, 2=non-ideal
+    integer :: exit_code         ! Physical or numerical orbit termination
   end type classification_result_t
 
   ! output files:
@@ -67,7 +75,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     real(dp), dimension(5) :: z
     real(dp) :: bmod,sqrtg
     real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
-    integer :: it, ktau
+    integer :: it, ktau, it_f
     integer(8) :: kt
     logical :: passing
 
@@ -101,6 +109,7 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     class_result%fractal = 0
     class_result%jpar = 0
     class_result%topology = 0
+    class_result%exit_code = ORBIT_EXIT_COMPLETED
 
     !  open(unit=10000+ipart, iostat=stat, status='old')
     !  if (stat == 0) close(10000+ipart, status='delete')
@@ -172,6 +181,8 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
         ! Mark as regular passing (fractal=1) and not lost
         class_result%fractal = 1
         class_result%lost = .false.
+        class_result%exit_code = ORBIT_EXIT_SKIPPED
+        orbit_exit_code(ipart) = ORBIT_EXIT_SKIPPED
         return
     endif
     ! End forced classification of passing as regular
@@ -254,16 +265,14 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
                 z(5) = anorb%f%vpar/(z(4)*sqrt2)
             endif
 
-            ! Write starting data for orbits which were lost in case of classification plot
-            ! Mark orbit as lost if integration failed
             if(ierr.ne.0) then
-                class_result%lost = .true.
-                if(class_plot) then
+                call classify_classifier_exit(ierr, integmode, &
+                    class_result%lost, class_result%exit_code)
+                if(class_plot .and. class_result%lost) then
                     call output_lost_orbit_starting_data(ipart, passing)
                 endif
                 exit
             endif
-            ! End handling of lost orbits
             kt = kt+1
 
             par_inv = par_inv+z(5)**2*dtaumin ! parallel adiabatic invariant
@@ -451,12 +460,47 @@ subroutine trace_orbit_with_classifiers(anorb, ipart, class_result)
     elseif(isw_field_type .eq. BOOZER) then
         call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
     endif
-    times_lost(ipart) = kt*dtaumin/v0
+    orbit_exit_code(ipart) = class_result%exit_code
+    if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
+        times_lost(ipart) = ieee_value(0.0_dp, ieee_quiet_nan)
+    else
+        times_lost(ipart) = kt*dtaumin/v0
+    end if
     deallocate(zpoipl_tip, zpoipl_per)
     !$omp end critical
+    if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
+        do it_f = it, ntimstep
+!$omp atomic update
+            unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+        end do
+    end if
     !  close(unit=10000+ipart)
     !  close(unit=10000+ipart)
 end subroutine trace_orbit_with_classifiers
+
+pure subroutine classify_classifier_exit(ierr, mode, lost, exit_code)
+    integer, intent(in) :: ierr, mode
+    logical, intent(out) :: lost
+    integer, intent(out) :: exit_code
+
+    lost = .false.
+    if (mode <= 0 .or. ierr == SYMPLECTIC_STEP_BOUNDARY) then
+        lost = .true.
+        exit_code = ORBIT_EXIT_LCFS
+        return
+    end if
+
+    select case (ierr)
+    case (SYMPLECTIC_STEP_OUTSIDE_DOMAIN)
+        exit_code = ORBIT_EXIT_NUMERICAL_DOMAIN
+    case (SYMPLECTIC_STEP_MAXITER)
+        exit_code = ORBIT_EXIT_NUMERICAL_MAXITER
+    case (SYMPLECTIC_STEP_LINEAR_SOLVE)
+        exit_code = ORBIT_EXIT_NUMERICAL_LINEAR
+    case default
+        exit_code = ORBIT_EXIT_NUMERICAL_EVENT
+    end select
+end subroutine classify_classifier_exit
 
 
 subroutine output_lost_orbit_starting_data(ipart, passing)
@@ -535,6 +579,8 @@ subroutine write_classification_results(ipart, class_result)
     integer, intent(in) :: ipart
     type(classification_result_t), intent(in) :: class_result
     logical :: regular
+
+    if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) return
 
     ! Write lost orbits
     if(class_result%lost) then

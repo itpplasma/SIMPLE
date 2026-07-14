@@ -12,7 +12,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
-  boundary_event_radial_tolerance, symplectic_newton_warning_mode
+  boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
+  symplectic_newton_warning_factor
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -49,12 +50,18 @@ pure logical function finite_newton_iterate(x)
   finite_newton_iterate = .true.
 end function finite_newton_iterate
 
-logical function accept_finite_maxiter(x)
-  real(dp), intent(in) :: x(:)
+logical function accept_bounded_maxiter(x, xlast, tolref, rtol)
+  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol
 
-  accept_finite_maxiter = symplectic_newton_warning_mode .and. &
-    finite_newton_iterate(x)
-end function accept_finite_maxiter
+  accept_bounded_maxiter = .false.
+  if (.not. symplectic_newton_warning_mode) return
+  if (rtol <= 0.0_dp) return
+  if (.not. finite_newton_iterate(x)) return
+  if (.not. finite_newton_iterate(xlast)) return
+  if (.not. finite_newton_iterate(tolref)) return
+  accept_bounded_maxiter = all(abs(x - xlast) <= &
+    symplectic_newton_warning_factor*rtol*abs(tolref))
+end function accept_bounded_maxiter
 
 subroutine apply_axis_chart_switch(radius, theta, crossed, status)
   real(dp), intent(inout) :: radius, theta
@@ -472,7 +479,8 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON1_MAXIT)
-    if (accept_finite_maxiter(x)) status = SYMPLECTIC_STEP_OK
+    if (accept_bounded_maxiter(x, xlast, tolref, si%rtol)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
 
@@ -566,7 +574,8 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON2_MAXIT)
-    if (accept_finite_maxiter(x)) status = SYMPLECTIC_STEP_OK
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
 
@@ -723,7 +732,8 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_finite_maxiter(x)) status = SYMPLECTIC_STEP_OK
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
 
@@ -847,7 +857,8 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     end if
   else
     call count_event(EVT_RK_GAUSS_MAXIT)
-    if (accept_finite_maxiter(x)) status = SYMPLECTIC_STEP_OK
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_gauss
 
@@ -1188,7 +1199,8 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     end if
   else
     call count_event(EVT_RK_LOBATTO_MAXIT)
-    if (accept_finite_maxiter(x)) status = SYMPLECTIC_STEP_OK
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_lobatto
 
