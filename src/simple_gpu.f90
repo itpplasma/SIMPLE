@@ -8,14 +8,14 @@ module simple_gpu
     ! module keeps the device-side field evaluation local and reuses the shared
     ! symplectic-Euler algebra from orbit_symplectic_euler1. Equivalence is
     ! checked against the CPU path by test_gpu_orbit_bench.
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use util, only: pi
     use field_can_mod, only: field_can_t, get_derivatives, get_derivatives2
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t, &
         SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
         SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
-        SYMPLECTIC_STEP_BOUNDARY_LIMITED
+        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode
     use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
     use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use boozer_sub, only: boozer_state
@@ -33,12 +33,30 @@ module simple_gpu
 
 contains
 
-    subroutine gpu_newton1(si, f, x, xlast, status)
+    logical function gpu_finite_iterate(x)
+        !$acc routine seq
+        real(dp), intent(in) :: x(:)
+
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7FF0000000000000', int64)
+        integer(int64) :: bits
+        integer :: i
+
+        gpu_finite_iterate = .false.
+        do i = 1, size(x)
+            bits = transfer(x(i), bits)
+            if (iand(bits, exponent_mask) == exponent_mask) return
+        end do
+        gpu_finite_iterate = .true.
+    end function gpu_finite_iterate
+
+    subroutine gpu_newton1(si, f, x, xlast, warning_mode, status)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         real(dp), intent(inout) :: x(2)
         real(dp), intent(out) :: xlast(2)
+        logical, intent(in) :: warning_mode
         integer, intent(out) :: status
 
         real(dp) :: tolref(2)
@@ -87,14 +105,17 @@ contains
             else
                 status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
             end if
+        else if (warning_mode .and. gpu_finite_iterate(x)) then
+            status = SYMPLECTIC_STEP_OK
         end if
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, ierr)
+    subroutine gpu_timestep_euler(si, f, warning_mode, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
+        logical, intent(in) :: warning_mode
         integer, intent(out) :: ierr
 
         real(dp) :: x(2), xlast(2)
@@ -113,7 +134,7 @@ contains
             x(1) = si%z(1)
             x(2) = si%z(4)
 
-            call gpu_newton1(si, f, x, xlast, newton_status)
+            call gpu_newton1(si, f, x, xlast, warning_mode, newton_status)
             if (newton_status /= SYMPLECTIC_STEP_OK) then
                 si = accepted_integrator
                 f = accepted_field
@@ -173,17 +194,20 @@ contains
         real(dp), intent(out) :: zend(4, npart)
 
         integer :: i, it, ktau, ierr, lstep
+        logical :: warning_mode
+
+        warning_mode = symplectic_newton_warning_mode
 
         !$acc parallel loop gang vector default(present) &
         !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), zend(:, istart:iend)) &
-        !$acc&   private(it, ktau, ierr, lstep)
+        !$acc&   private(it, ktau, ierr, lstep) firstprivate(warning_mode)
         do i = istart, iend
             ierr = 0
             lstep = ntimstep
             macro: do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call gpu_timestep_euler(si(i), f(i), ierr)
+                    call gpu_timestep_euler(si(i), f(i), warning_mode, ierr)
                     if (ierr /= 0) exit
                 end do
                 if (ierr /= 0) then

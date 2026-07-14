@@ -11,6 +11,14 @@
   Both default to `-1`, which derives the tolerance from `relerr`. Set positive
   values to refine event location independently of the nonlinear solve.
 
+* `symplectic_newton_warning_mode` defaults to `.true.` and preserves the
+  historical behavior of continuing from the final finite Newton iterate when
+  an implicit solve reaches its iteration limit. Each occurrence is reported
+  by the corresponding `*_maxit` diagnostic. Set it to `.false.` to stop the
+  affected orbit at its last accepted position. Exterior-domain, singular
+  linear-system, non-finite, and unresolved boundary-event states always stop
+  the orbit.
+
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
   and 64. Each dimension must be between 6 and 512, and their product must not
