@@ -63,6 +63,74 @@ logical function accept_bounded_maxiter(x, xlast, tolref, rtol)
     symplectic_newton_warning_factor*rtol*abs(tolref))
 end function accept_bounded_maxiter
 
+subroutine advance_symplectic_with_retry(si, f, stepper, status)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  procedure(orbit_timestep_sympl_i) :: stepper
+  integer, intent(out) :: status
+
+  call advance_retry_interval(si, f, stepper, si%dt, 0, status)
+end subroutine advance_symplectic_with_retry
+
+recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
+    status)
+  integer, parameter :: max_retry_depth = 8
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  procedure(orbit_timestep_sympl_i) :: stepper
+  real(dp), intent(in) :: interval
+  integer, intent(in) :: depth
+  integer, intent(out) :: status
+  type(symplectic_integrator_t) :: initial_integrator
+  type(field_can_t) :: initial_field
+  logical :: recoverable
+
+  initial_integrator = si
+  initial_field = f
+  si%dt = interval
+  call stepper(si, f, status)
+  if (status == SYMPLECTIC_STEP_OK .or. &
+      status == SYMPLECTIC_STEP_BOUNDARY) then
+    si%dt = interval
+    return
+  end if
+
+  si = initial_integrator
+  f = initial_field
+  si%dt = interval
+  recoverable = status == SYMPLECTIC_STEP_MAXITER .or. &
+    status == SYMPLECTIC_STEP_LINEAR_SOLVE
+  if (.not. symplectic_newton_warning_mode .or. .not. recoverable .or. &
+      depth >= max_retry_depth) return
+
+  ! For a fixed subdivision, the two accepted maps remain symplectic and cover
+  ! the original interval exactly. State-dependent subdivision is a warning-mode
+  ! recovery path, not a globally fixed symplectic map.
+  call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
+    status)
+  if (status == SYMPLECTIC_STEP_BOUNDARY) then
+    si%last_step_fraction = 0.5_dp*si%last_step_fraction
+    si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+    si%dt = interval
+    return
+  end if
+  if (status == SYMPLECTIC_STEP_OK) then
+    call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
+      status)
+    if (status == SYMPLECTIC_STEP_BOUNDARY) then
+      si%last_step_fraction = 0.5_dp + 0.5_dp*si%last_step_fraction
+      si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+      si%dt = interval
+      return
+    end if
+  end if
+  if (status /= SYMPLECTIC_STEP_OK) then
+    si = initial_integrator
+    f = initial_field
+  end if
+  si%dt = interval
+end subroutine advance_retry_interval
+
 subroutine apply_axis_chart_switch(radius, theta, crossed, status)
   real(dp), intent(inout) :: radius, theta
   logical, intent(out) :: crossed

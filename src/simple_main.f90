@@ -1316,7 +1316,8 @@ contains
 
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step)
         use alpha_lifetime_sub, only: orbit_timestep_axis
-        use orbit_symplectic, only: orbit_timestep_sympl
+        use orbit_symplectic, only: advance_symplectic_with_retry, &
+            orbit_timestep_sympl
 
         type(tracer_t), intent(inout) :: anorb
         real(dp), intent(inout) :: z(5)
@@ -1361,7 +1362,8 @@ contains
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
-                call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                call advance_symplectic_with_retry(anorb%si, anorb%f, &
+                    orbit_timestep_sympl, ierr_orbit)
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     call to_standard_z_coordinates(anorb, z)
                     if (present(exit_step)) exit_step = real(kt, dp) + &
@@ -1442,7 +1444,8 @@ contains
     subroutine macrostep_with_wall_check(anorb, z, kt, ierr_orbit, ntau_local, &
             ipart, x_prev_m, exit_step)
         use alpha_lifetime_sub, only: orbit_timestep_axis
-        use orbit_symplectic, only: orbit_timestep_sympl
+        use orbit_symplectic, only: advance_symplectic_with_retry, &
+            orbit_timestep_sympl
 
         type(tracer_t), intent(inout) :: anorb
         real(dp), intent(inout) :: z(5)
@@ -1489,7 +1492,8 @@ contains
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
-                call orbit_timestep_sympl(anorb%si, anorb%f, ierr_orbit)
+                call advance_symplectic_with_retry(anorb%si, anorb%f, &
+                    orbit_timestep_sympl, ierr_orbit)
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     call to_standard_z_coordinates(anorb, z)
                     call integ_to_ref(z(1:3), u_ref_cur)
