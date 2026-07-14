@@ -63,6 +63,19 @@ _INTEGRATOR_ALIASES: dict[str, int] = {
     "lobatto3": LOBATTO3,
 }
 
+ORBIT_CLASS_UNKNOWN = 0
+ORBIT_CLASS_TRAPPED = 1
+ORBIT_CLASS_PASSING = 2
+
+FREQ_SUCCESS = 0
+FREQ_INVALID_INPUT = 1
+FREQ_ORBIT_LOST = 2
+FREQ_INTEGRATOR_ERROR = 3
+FREQ_MAX_STEPS = 4
+
+CUT_TIP = 0
+CUT_TOROIDAL = 1
+
 # Default spline orders used by Fortran
 DEFAULT_NS_S = 5
 DEFAULT_NS_TP = 5
@@ -558,6 +571,143 @@ def trace_orbit(
     finally:
         if test_bounds is not None:
             _restore_test_field_bounds(test_bounds)
+
+
+def compute_canonical_frequencies(
+    position: np.ndarray,
+    *,
+    integrator: str | int = MIDPOINT,
+    n_periods: int = 1,
+    max_steps: int = 10_000_000,
+) -> dict[str, float | int | str]:
+    """Compute bounce/transit and mean toroidal frequencies for one orbit.
+
+    ``position`` is ``[s, theta, phi, v/v0, lambda]`` in the public
+    reference coordinates. Set ``n_periods=1`` for a symmetric configuration
+    or use more periods to quantify cycle variation in an asymmetric field.
+    Periods are seconds, angles radians, and frequencies rad/s.
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
+
+    position = np.ascontiguousarray(position, dtype=np.float64)
+    if position.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {position.shape}")
+    if n_periods < 1:
+        raise ValueError("n_periods must be at least one")
+    if max_steps < 1:
+        raise ValueError("max_steps must be at least one")
+
+    params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(position)
+
+    values = np.zeros(6, dtype=np.float64)
+    metadata = np.zeros(5, dtype=np.int32)
+    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
+
+    try:
+        if test_bounds is not None:
+            _apply_test_field_bounds(float(position[0]))
+        _simple_main.compute_canonical_frequencies_flat(
+            _tracer,
+            position,
+            int(n_periods),
+            int(max_steps),
+            values,
+            metadata,
+        )
+    finally:
+        if test_bounds is not None:
+            _restore_test_field_bounds(test_bounds)
+
+    orbit_names = {
+        ORBIT_CLASS_UNKNOWN: "unknown",
+        ORBIT_CLASS_TRAPPED: "trapped",
+        ORBIT_CLASS_PASSING: "passing",
+    }
+    orbit_class = int(metadata[1])
+    return {
+        "period": float(values[0]),
+        "period_std": float(values[1]),
+        "delta_phi": float(values[2]),
+        "delta_phi_std": float(values[3]),
+        "omega_b": float(values[4]),
+        "omega_phi": float(values[5]),
+        "status": int(metadata[0]),
+        "orbit_class": orbit_names.get(orbit_class, "unknown"),
+        "orbit_class_code": orbit_class,
+        "parallel_direction": int(metadata[2]),
+        "n_periods": int(metadata[3]),
+        "n_steps": int(metadata[4]),
+    }
+
+
+def trace_to_cut(
+    position: np.ndarray,
+    *,
+    cut: str | int = "tip",
+    integrator: str | int = MIDPOINT,
+    max_events: int = 100,
+) -> dict[str, np.ndarray | float | int | str]:
+    """Trace one orbit to an interpolated tip or toroidal-period cut."""
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    cut_aliases = {"any": -1, "tip": CUT_TIP, "toroidal": CUT_TOROIDAL}
+    if isinstance(cut, str):
+        key = cut.lower()
+        if key not in cut_aliases:
+            raise ValueError(f"Unknown cut: {cut}")
+        cut_code = cut_aliases[key]
+    else:
+        cut_code = int(cut)
+        if cut_code not in {-1, CUT_TIP, CUT_TOROIDAL}:
+            raise ValueError(f"Unknown cut: {cut}")
+
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
+    if integrator_code <= RK45:
+        raise ValueError("trace_to_cut requires a symplectic integrator")
+    if max_events < 1:
+        raise ValueError("max_events must be at least one")
+
+    position = np.ascontiguousarray(position, dtype=np.float64)
+    if position.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {position.shape}")
+
+    params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(position)
+    cut_state = np.zeros(6, dtype=np.float64)
+    cut_type, status = _simple_main.trace_to_cut_flat(
+        _tracer,
+        position,
+        cut_code,
+        int(max_events),
+        cut_state,
+    )
+    cut_names = {CUT_TIP: "tip", CUT_TOROIDAL: "toroidal"}
+    return {
+        "state": np.ascontiguousarray(cut_state[:5]),
+        "parallel_invariant": float(cut_state[5]),
+        "cut_type": cut_names.get(int(cut_type), "unknown"),
+        "cut_type_code": int(cut_type),
+        "status": int(status),
+    }
 
 
 def trace_parallel(

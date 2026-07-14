@@ -42,6 +42,7 @@
     cut_detector.f90
     classification.f90
     simple.f90
+    orbit_frequencies.f90
     parse_ants.f90
     profiles.f90
     collis_alphas.f90
@@ -84,6 +85,10 @@ list(APPEND SOURCES
 )
 
     add_library (simple STATIC ${SOURCES})
+
+    target_include_directories(simple PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>
+    )
 
     if(SIMPLE_ENABLE_CGAL)
         target_link_libraries(simple PUBLIC stl_wall_cgal)
