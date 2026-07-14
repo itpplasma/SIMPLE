@@ -206,7 +206,8 @@ contains
 
         if (integmode > 0 .and. symplectic_newton_warning_mode) then
             print *, 'WARNING: symplectic integrators accept bounded Newton ', &
-                'corrections after the iteration limit; see maxit diagnostics'
+                'corrections and retry failed smooth-field steps by halving; ', &
+                'see maxit diagnostics'
         end if
 
         call validate_boundary_event_tolerances
