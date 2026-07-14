@@ -43,6 +43,8 @@ class TestNetCDFResultsOutput:
                 ntestpart=8,
                 output_results_netcdf=True,
                 isw_field_type=3,
+                contr_pp=-1e10,
+                notrace_passing=0,
             )
             particles = pysimple.sample_surface(8, s=0.5)
             pysimple.trace_parallel(particles)
@@ -60,6 +62,9 @@ class TestNetCDFResultsOutput:
                 assert ds.dimensions['phase'].size == 5
 
                 assert 'times_lost' in ds.variables
+                assert 'orbit_exit_code' in ds.variables
+                assert 'boundary_event_radial_residual' in ds.variables
+                assert 'boundary_event_time_width' in ds.variables
                 assert 'zstart' in ds.variables
                 assert 'zend' in ds.variables
                 assert 'xstart_cart' in ds.variables
@@ -68,10 +73,26 @@ class TestNetCDFResultsOutput:
                 assert 'perp_inv' in ds.variables
                 assert 'iclass' in ds.variables
                 assert 'class_lost' in ds.variables
+                assert np.all(np.isin(ds.variables['orbit_exit_code'][:], [0, 1, 2, 3]))
+                exit_codes = ds.variables['orbit_exit_code'][:]
+                event_residual = ds.variables['boundary_event_radial_residual'][:]
+                event_width = ds.variables['boundary_event_time_width'][:]
+                lcfs = exit_codes == 1
+                assert np.all(event_residual[lcfs] >= 0.0)
+                assert np.all(event_width[lcfs] >= 0.0)
 
                 assert 'ntestpart' in ds.ncattrs()
                 assert 'trace_time' in ds.ncattrs()
                 assert ds.ntestpart == 8
+                assert ds.boundary_event_fraction_tolerance == -1.0
+                assert ds.boundary_event_radial_tolerance == -1.0
+                assert ds.canonical_grid_nr == 62
+                assert ds.canonical_grid_ntheta == 63
+                assert ds.canonical_grid_nphi == 64
+                assert ds.canonical_ode_relerr == 1e-11
+                assert ds.multharm == 5
+                assert ds.contr_pp == -1e10
+                assert ds.notrace_passing == 0
 
         finally:
             os.chdir(original_dir)

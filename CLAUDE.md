@@ -44,14 +44,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Compiler: GNU Fortran (gfortran)
 - Required libraries: NetCDF-Fortran (and NetCDF-C), LAPACK/BLAS
 - Auto-fetched: libneo, fortplot (via FetchContent)
-- Optional: OpenMP (enabled by default), GVEC (experimental, off by default), CGAL (off by default)
-
-### GVEC Integration
-- Minimal GVEC library automatically built from `thirdparty/gvec/`
-- Provides B-spline and cubic spline functionality for magnetic field interpolation
-- Used by `field_gvec.f90` for reading `.dat` magnetic field files
-- Library: `libgvec.a` with modules in `gvec_modules/`
+- Optional: OpenMP (enabled by default), CGAL (off by default)
 - Python interface: numpy, f90wrap (for building pysimple)
+
+### GVEC Input
+- SIMPLE links no GVEC library at runtime
+- Convert GVEC output with `tools/gvec_to_boozer_chartmap.py` to an extended Boozer chartmap NetCDF (schema: `docs/boozer-chartmap-schema.rst`), then set it as `field_input`/`coord_input`
 
 ## Architecture Overview
 

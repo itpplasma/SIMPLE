@@ -7,7 +7,6 @@ program test_coordinate_refactoring
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: init_vmec
-    use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field

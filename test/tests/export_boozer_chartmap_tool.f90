@@ -4,7 +4,7 @@ program export_boozer_chartmap_tool
     !>
     !> Usage: export_boozer_chartmap_tool.x <wout.nc> <chartmap.nc> <start_vmec.dat> <start_boozer.dat>
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use new_vmec_stuff_mod, only: netcdffile, multharm, ns_A, ns_s, ns_tp, nper
+    use new_vmec_stuff_mod, only: netcdffile, multharm, ns_A, ns_s, ns_tp
     use parmot_mod, only: rmu
     use velo_mod, only: isw_field_type
     use boozer_coordinates_mod, only: use_B_r

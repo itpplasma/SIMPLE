@@ -9,9 +9,27 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
 
     logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
+    ! Upper radial bound the Newton/loss guards treat as "left the domain". Default
+    ! 1.0 is the normalized-flux edge s = 1 for VMEC/Meiss/Boozer/flux charts. SPECTRE
+    ! integrates in the stacked chart rho_g in [0, Mvol] and raises this to Mvol so an
+    ! iterate inside an outer volume is not misread as a loss; per-volume boundary
+    ! stops are handled by the caller (#439).
+    real(dp) :: sympl_rmax = 1.0d0
+
     ! Integration methods
     integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
              MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
+    integer, parameter :: SYMPLECTIC_STEP_OK = 0
+    integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
+    integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
+    integer, parameter :: SYMPLECTIC_STEP_LINEAR_SOLVE = 3
+    integer, parameter :: SYMPLECTIC_STEP_BOUNDARY = 4
+    integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
+    integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
+    logical :: symplectic_newton_warning_mode = .true.
+    real(dp), parameter :: symplectic_newton_warning_factor = 10.0_dp
+    real(dp) :: boundary_event_fraction_tolerance = -1d0
+    real(dp) :: boundary_event_radial_tolerance = -1d0
 
     type :: symplectic_integrator_t
         real(dp) :: atol
@@ -25,6 +43,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
         integer :: ntau
         real(dp) :: dt
         real(dp) :: pabs
+        real(dp) :: last_step_fraction = 1d0
+        real(dp) :: last_event_radial_residual = 0d0
+        real(dp) :: last_event_fraction_width = 0d0
     end type symplectic_integrator_t
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

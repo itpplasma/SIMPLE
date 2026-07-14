@@ -1,23 +1,31 @@
 program test_stl_wall_intersection
-    use, intrinsic :: iso_fortran_env, only: dp => real64
-    use stl_wall_intersection, only: stl_wall_t, stl_wall_init, stl_wall_finalize, &
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int8
+    use stl_wall_intersection, only: stl_wall_init, stl_wall_finalize, &
                                      stl_wall_first_hit_segment_with_normal
     use test_utils, only: check, check_close, check_close_vec
+    use simple_main, only: main_wall => wall, chartmap_cart_scale_to_m, &
+                           locate_wall_segment
+    use params, only: wall_hit, wall_hit_cart, wall_hit_normal_cart, &
+                      wall_hit_cos_incidence, wall_hit_angle_rad
+    use reference_coordinates, only: ref_coords
+    use cartesian_coordinates, only: cartesian_coordinate_system_t
     implicit none
 
-    type(stl_wall_t) :: wall
     integer :: errors
     logical :: hit
     real(dp) :: p0(3), p1(3), hit_p(3)
     real(dp) :: normal(3), dotx
+    real(dp) :: z(5), z_start(5), z_end(5), hit_step
+    real(dp) :: u_start(3), u_end(3)
 
     errors = 0
     call write_tetra_stl_m("tetra_m.stl")
-    call stl_wall_init(wall, "tetra_m.stl", 1.0_dp)
+    call stl_wall_init(main_wall, "tetra_m.stl", 1.0_dp)
 
     p0 = [0.25_dp, 0.25_dp, 0.25_dp]
     p1 = [2.0_dp, 0.25_dp, 0.25_dp]
-    call stl_wall_first_hit_segment_with_normal(wall, p0, p1, hit, hit_p, normal)
+    call stl_wall_first_hit_segment_with_normal( &
+        main_wall, p0, p1, hit, hit_p, normal)
     call check(hit, "expected intersection for meters STL", errors)
     call check_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
         "meters STL hit point mismatch", errors)
@@ -26,17 +34,60 @@ program test_stl_wall_intersection
     dotx = abs(normal(1))
     call check_close(dotx, 1.0_dp/sqrt(3.0_dp), 1.0e-12_dp, &
         "meters STL normal mismatch", errors)
-    call stl_wall_finalize(wall)
+
+    allocate (cartesian_coordinate_system_t :: ref_coords)
+    allocate (wall_hit(1), wall_hit_cart(3, 1), wall_hit_normal_cart(3, 1), &
+              wall_hit_cos_incidence(1), wall_hit_angle_rad(1))
+    wall_hit = 0_int8
+    wall_hit_cart = 0.0_dp
+    wall_hit_normal_cart = 0.0_dp
+    wall_hit_cos_incidence = 0.0_dp
+    wall_hit_angle_rad = 0.0_dp
+    chartmap_cart_scale_to_m = 1.0_dp
+    z_start = [p0, 4.0_dp, 5.0_dp]
+    z_end = [p1, 11.0_dp, 19.0_dp]
+    z = z_end
+    call locate_wall_segment(z, z_start, z_end, 1, p0, p0, p1, p1, 6.0_dp, &
+        8.0_dp, 7.0_dp, hit, hit_step)
+    call check(hit, "wall event locator missed crossing", errors)
+    call check_close_vec(z(1:3), hit_p, 1.0e-12_dp, &
+        "wall event position mismatch", errors)
+    call check_close_vec(z(4:5), [5.0_dp, 7.0_dp], 1.0e-12_dp, &
+        "wall event phase-space interpolation mismatch", errors)
+    call check_close(hit_step, 9.0_dp, 1.0e-12_dp, &
+        "wall event time mismatch", errors)
+    call check(wall_hit(1) == 1_int8, "wall hit flag missing", errors)
+    call check_close_vec(wall_hit_cart(:, 1), hit_p, 1.0e-12_dp, &
+        "stored wall hit position mismatch", errors)
+    call check_close_vec(wall_hit_normal_cart(:, 1), normal, 1.0e-12_dp, &
+        "stored wall normal mismatch", errors)
+    call check_close(wall_hit_cos_incidence(1), 1.0_dp/sqrt(3.0_dp), &
+        1.0e-12_dp, "wall incidence cosine mismatch", errors)
+    call check_close(wall_hit_angle_rad(1), acos(1.0_dp/sqrt(3.0_dp)), &
+        1.0e-12_dp, "wall incidence angle mismatch", errors)
+
+    u_start = [0.25_dp, 6.2_dp, 3.0_dp]
+    u_end = [2.0_dp, 0.1_dp, -3.0_dp]
+    z = z_end
+    call locate_wall_segment(z, z_start, z_end, 1, p0, u_start, p1, u_end, &
+        6.0_dp, 8.0_dp, 7.0_dp, hit, hit_step)
+    call check_close(z(2), 6.2_dp + (0.1_dp - 6.2_dp + &
+        2.0_dp*acos(-1.0_dp))/7.0_dp, 1.0e-12_dp, &
+        "wall event poloidal seam mismatch", errors)
+    call check_close(z(3), 3.0_dp, 1.0e-12_dp, &
+        "wall event field-period seam mismatch", errors)
+    call stl_wall_finalize(main_wall)
 
     call write_tetra_stl_mm("tetra_mm.stl")
-    call stl_wall_init(wall, "tetra_mm.stl", 1.0e-3_dp)
-    call stl_wall_first_hit_segment_with_normal(wall, p0, p1, hit, hit_p, normal)
+    call stl_wall_init(main_wall, "tetra_mm.stl", 1.0e-3_dp)
+    call stl_wall_first_hit_segment_with_normal( &
+        main_wall, p0, p1, hit, hit_p, normal)
     call check(hit, "expected intersection for millimeters STL (scaled)", errors)
     call check_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
         "mm STL scaled hit point mismatch", errors)
     call check_close(norm2(normal), 1.0_dp, 1.0e-12_dp, &
         "mm STL normal not unit length", errors)
-    call stl_wall_finalize(wall)
+    call stl_wall_finalize(main_wall)
     if (errors /= 0) error stop 1
 contains
 

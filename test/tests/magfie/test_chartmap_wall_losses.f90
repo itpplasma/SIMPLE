@@ -24,7 +24,7 @@ program test_chartmap_wall_losses
     use simple, only: init_vmec
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
-    use magfie_sub, only: init_magfie, magfie, VMEC, BOOZER, MEISS, REFCOORDS, &
+    use magfie_sub, only: init_magfie, VMEC, BOOZER, MEISS, REFCOORDS, &
                           set_magfie_refcoords_field
     use alpha_lifetime_sub, only: orbit_timestep_axis
     use parmot_mod, only: ro0, rmu
@@ -33,12 +33,12 @@ program test_chartmap_wall_losses
     use field_can_mod, only: field_can_t, eval_field => evaluate
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
-    use field_can_mod, only: init_field_can, integ_to_ref, ref_to_integ, &
+    use field_can_mod, only: integ_to_ref, ref_to_integ, &
                              field_can_from_id
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, cleanup_meiss
     use boozer_sub, only: vmec_to_boozer, boozer_to_vmec, get_boozer_coordinates
     use reference_coordinates, only: init_reference_coordinates, ref_coords
-    use libneo_coordinates, only: coordinate_system_t, vmec_coordinate_system_t, &
+    use libneo_coordinates, only: coordinate_system_t, &
                                   make_chartmap_coordinate_system
 
     implicit none
@@ -516,7 +516,7 @@ contains
 
     subroutine trace_particles_boozer_sympl(z0, loss_times, loss_pos, lost_step)
         !> Trace particles using Boozer canonical coordinates with midpoint symplectic.
-        use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+        use field_can_mod, only: field_can_t, eval_field => evaluate
 
         real(dp), intent(in) :: z0(5, n_particles)
         real(dp), intent(out) :: loss_times(n_particles)
@@ -571,7 +571,7 @@ contains
     subroutine trace_particles_meiss_vmec_sympl(z0, loss_times, loss_pos, lost_step)
         !> Trace particles using Meiss coords from VMEC with midpoint symplectic.
         !> Uses npoiper2=256 for proper timestep based on major radius.
-        use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+        use field_can_mod, only: field_can_t, eval_field => evaluate
         use new_vmec_stuff_mod, only: rmajor
 
         real(dp), intent(in) :: z0(5, n_particles)
@@ -629,7 +629,7 @@ contains
     subroutine trace_particles_meiss_chart_sympl(z0, loss_times, loss_pos, lost_step)
         !> Trace particles using Meiss coords from chartmap with midpoint symplectic.
         !> Uses npoiper2=256 for proper timestep based on major radius.
-        use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
+        use field_can_mod, only: field_can_t, eval_field => evaluate
         use new_vmec_stuff_mod, only: rmajor
 
         real(dp), intent(in) :: z0(5, n_particles)

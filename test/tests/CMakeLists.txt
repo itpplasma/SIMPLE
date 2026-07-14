@@ -38,6 +38,19 @@ file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    add_test(
+        NAME test_deterministic_dependency_flags
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_deterministic_dependency_flags.py
+            ${CMAKE_BINARY_DIR}/compile_commands.json
+            ${libneo_SOURCE_DIR}
+    )
+    set_tests_properties(test_deterministic_dependency_flags PROPERTIES
+        LABELS "unit;regression")
+endif()
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -323,6 +336,7 @@ if (ENABLE_OPENMP)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
+        RUN_SERIAL TRUE
         TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
@@ -393,6 +407,39 @@ set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
+
+add_executable(test_deterministic_seed.x test_deterministic_seed.f90)
+target_link_libraries(test_deterministic_seed.x simple)
+add_test(NAME test_deterministic_seed COMMAND test_deterministic_seed.x)
+set_tests_properties(test_deterministic_seed PROPERTIES LABELS "unit")
+
+add_executable(test_interface_crossing_ownership.x test_interface_crossing_ownership.f90)
+target_link_libraries(test_interface_crossing_ownership.x simple)
+add_test(NAME test_interface_crossing_ownership COMMAND test_interface_crossing_ownership.x)
+set_tests_properties(test_interface_crossing_ownership PROPERTIES LABELS "unit")
+
+add_executable(test_spectre_sheet_gc.x test_spectre_sheet_gc.f90)
+target_link_libraries(test_spectre_sheet_gc.x simple)
+add_test(NAME test_spectre_sheet_gc
+    COMMAND test_spectre_sheet_gc.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+set_tests_properties(test_spectre_sheet_gc PROPERTIES LABELS "integration")
+
+add_executable(test_spectre_fo_hybrid.x test_spectre_fo_hybrid.f90)
+target_link_libraries(test_spectre_fo_hybrid.x simple)
+add_test(NAME test_spectre_fo_hybrid
+    COMMAND test_spectre_fo_hybrid.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+set_tests_properties(test_spectre_fo_hybrid PROPERTIES LABELS "integration")
+
+add_executable(test_spectre_freeboundary.x test_spectre_freeboundary.f90)
+target_link_libraries(test_spectre_freeboundary.x simple)
+add_test(NAME test_spectre_freeboundary
+    COMMAND test_spectre_freeboundary.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5)
+set_tests_properties(test_spectre_freeboundary PROPERTIES
+    LABELS "integration"
+    TIMEOUT 120)
 
 add_executable(test_bminmax_lifecycle.x test_bminmax_lifecycle.f90)
 target_link_libraries(test_bminmax_lifecycle.x simple testing_utils)
@@ -595,6 +642,32 @@ add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
 target_link_libraries(test_orbit_symplectic_base.x simple)
 add_test(NAME test_orbit_symplectic_base COMMAND test_orbit_symplectic_base.x)
 
+add_executable(test_newton_solver_status.x test_newton_solver_status.f90)
+target_link_libraries(test_newton_solver_status.x simple)
+add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
+
+add_executable(test_boundary_event_config.x test_boundary_event_config.f90)
+target_link_libraries(test_boundary_event_config.x simple)
+add_test(NAME test_boundary_event_config_valid
+    COMMAND test_boundary_event_config.x valid)
+add_test(NAME test_boundary_event_config_fraction_nan
+    COMMAND test_boundary_event_config.x fraction_nan)
+add_test(NAME test_boundary_event_config_fraction_inf
+    COMMAND test_boundary_event_config.x fraction_inf)
+add_test(NAME test_boundary_event_config_radial_nan
+    COMMAND test_boundary_event_config.x radial_nan)
+set_tests_properties(
+    test_boundary_event_config_valid
+    test_boundary_event_config_fraction_nan
+    test_boundary_event_config_fraction_inf
+    test_boundary_event_config_radial_nan
+    PROPERTIES LABELS "unit")
+set_tests_properties(
+    test_boundary_event_config_fraction_nan
+    test_boundary_event_config_fraction_inf
+    test_boundary_event_config_radial_nan
+    PROPERTIES WILL_FAIL TRUE)
+
 add_executable(test_field_base.x test_field_base.f90)
 target_link_libraries(test_field_base.x simple)
 add_test(NAME test_field_base COMMAND test_field_base.x)
@@ -677,7 +750,8 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    TIMEOUT 60)
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
 add_executable(test_chartmap_rz_consistency.x test_chartmap_rz_consistency.f90)
@@ -689,6 +763,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
+    RUN_SERIAL TRUE
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -712,9 +787,14 @@ if(SIMPLE_ENABLE_OPENACC)
     )
 endif()
 
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.in
-    ${CMAKE_CURRENT_BINARY_DIR}/test_gpu_orbit_bench.in
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench/test_gpu_orbit_bench.in
+    COPYONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench/start.dat
     COPYONLY)
 
 add_test(NAME test_gpu_orbit_bench
@@ -726,6 +806,7 @@ add_test(NAME test_gpu_orbit_bench
 set_tests_properties(test_gpu_orbit_bench PROPERTIES
     LABELS "unit"
     PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench
     TIMEOUT 120)
 
 # Macrostep log grid tests (issue: performance regression with log grid)
@@ -756,6 +837,132 @@ add_test(NAME test_restart_integration
 set_tests_properties(test_restart_integration PROPERTIES
     LABELS "integration;python"
     TIMEOUT 60)
+
+# SPECTRE symplectic field-line Poincare app vs SPECTRE reference sections (#437).
+# The fixture is the committed libneo G3V3L3Fi HDF5; do not copy it into SIMPLE.
+add_test(NAME test_spectre_poincare
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_poincare.py
+        $<TARGET_FILE:spectre_poincare.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/poincare.npz
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_poincare PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+add_executable(test_field_line_midpoint.x test_field_line_midpoint.f90)
+target_link_libraries(test_field_line_midpoint.x simple)
+add_test(NAME test_field_line_midpoint
+    COMMAND test_field_line_midpoint.x
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_field_line_midpoint PROPERTIES
+    LABELS "unit;spectre"
+    TIMEOUT 15)
+
+# SPECTRE guiding-center RK45 tracing per volume with boundary-stop (#438).
+# Uses simple.x with the committed libneo SPECTRE HDF5 fixture; VMEC-free.
+add_test(NAME test_spectre_gc_rk45
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_gc_rk45.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_gc_rk45 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+add_test(NAME test_spectre_startmode2
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_startmode2.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_startmode2 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE per-volume symplectic guiding-center tracing (#439): bounded non-secular
+# energy, cross-scheme consistency, and RK45 cross-check on the committed fixture.
+add_test(NAME test_spectre_sympl_volume
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_sympl_volume.py
+        $<TARGET_FILE:simple.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_sympl_volume PROPERTIES
+    LABELS "integration;python"
+    RUN_SERIAL TRUE
+    TIMEOUT 300)
+
+# SPECTRE Level-0 interface crossing map with event location (#443). tok2vol is
+# committed alongside the test; G3V3L3Fi is the committed libneo fixture.
+add_test(NAME test_spectre_crossing_l0
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_crossing_l0.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_crossing_l0 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE Level-1 interface crossing refraction map (#440). Runs tok2vol under
+# both crossing_level = 1 (default) and 0 and checks the map from the crossing
+# log (generator components and lambda_k).
+add_test(NAME test_spectre_crossing_l1
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_crossing_l1.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_crossing_l1 PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 300)
+
+# Symplectic multi-volume interface crossing (#441): exact-landing accuracy,
+# reflections, RK45 cross-path loss consistency, and step-halving order on the
+# committed tok2vol fixture. The long-run invariant witness runs separately as
+# test_spectre_sympl_crossing_invariants (field_can/).
+add_test(NAME test_spectre_sympl_crossing
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_sympl_crossing.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_sympl_crossing PROPERTIES
+    LABELS "integration;python"
+    RUN_SERIAL TRUE
+    TIMEOUT 300)
+
+# SPECTRE construction-grid memory knob and axisymmetric phi auto-clamp (#442):
+# the clamp triggers on axisymmetric tok2vol, peak RSS falls below the unclamped
+# phi=32 build, and a coarse grid still reproduces the per-volume canonical chart.
+add_test(NAME test_spectre_construction_grid
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_construction_grid.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_construction_grid PROPERTIES
+    LABELS "integration;python"
+    TIMEOUT 120)
+
+# SPECTRE end-to-end validation (#442): losses and accounting for both crossing
+# maps, trapped/passing mirror-criterion split, guiding-center crossing mu
+# conservation, and fixed-seed determinism on the committed tok2vol.
+add_test(NAME test_spectre_validation
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_validation.py
+        $<TARGET_FILE:simple.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_validation PROPERTIES
+    LABELS "integration;python"
+    RUN_SERIAL TRUE
+    TIMEOUT 300)
 
 add_subdirectory(field_can)
 add_subdirectory(magfie)

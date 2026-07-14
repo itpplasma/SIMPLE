@@ -1,10 +1,10 @@
 !
   use new_vmec_stuff_mod, only: netcdffile, multharm, ns_A, ns_s, ns_tp
 !  use chamb_mod,  only : rbig,rcham2
-  use parmot_mod, only: rmu, ro0, eeff
+  use parmot_mod, only: rmu, ro0
   use velo_mod, only: isw_field_type
   use diag_mod, only: icounter
-use field_can_mod, only: eval_field => evaluate, field_can_from_name, field_can_t, field_can_init
+use field_can_mod, only: field_can_from_name, field_can_t
   use orbit_symplectic, only: symplectic_integrator_t, orbit_timestep_sympl
   use simple, only: init_sympl
   use plag_coeff_sub, only: plag_coeff

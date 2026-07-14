@@ -41,14 +41,22 @@ contains
         !> complete results including config attributes.
 
         use params, only: ntestpart, trace_time, zstart, zend, times_lost, &
-                          trap_par, perp_inv, iclass, class_lost, &
+                          orbit_exit_code, boundary_event_radial_residual, &
+                          boundary_event_time_width, trap_par, perp_inv, iclass, &
+                          class_lost, &
                           facE_al, v0, integmode, relerr, npoiper, npoiper2, &
+                          boundary_event_fraction_tolerance, &
+                          boundary_event_radial_tolerance, &
+                          canonical_grid_nr, canonical_grid_ntheta, &
+                          canonical_grid_nphi, canonical_ode_relerr, &
                           ntimstep, startmode, num_surf, sbeg, &
+                          contr_pp, notrace_passing, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
                           wall_input, wall_units, wall_hit, wall_hit_cart, &
                           wall_hit_normal_cart, wall_hit_cos_incidence, &
                           wall_hit_angle_rad
+        use new_vmec_stuff_mod, only: multharm
         use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
         use libneo_coordinates, only: chartmap_coordinate_system_t
         use reference_coordinates, only: ref_coords
@@ -58,7 +66,8 @@ contains
 
         integer :: ncid, status
         integer :: dim_particle, dim_xyz, dim_phase, dim_iclass
-        integer :: var_times_lost, var_trap_par, var_perp_inv
+        integer :: var_times_lost, var_orbit_exit_code, var_trap_par, var_perp_inv
+        integer :: var_boundary_event_radial_residual, var_boundary_event_time_width
         integer :: var_zstart, var_zend, var_xstart_cart, var_xend_cart
         integer :: var_iclass, var_class_lost, var_wall_hit, var_wall_hit_cart
         integer :: var_wall_hit_normal_cart, var_wall_hit_cos_incidence
@@ -131,8 +140,28 @@ contains
         status = nf90_put_att(ncid, var_times_lost, 'units', 's')
         call check_nc(status, 'put_att times_lost units')
         status = nf90_put_att(ncid, var_times_lost, 'description', &
-                              'Loss time (-1 if confined)')
+            'Physical loss time (-1 if skipped; NaN after numerical failure)')
         call check_nc(status, 'put_att times_lost description')
+
+        status = nf90_def_var(ncid, 'orbit_exit_code', nf90_int, &
+            [dim_particle], var_orbit_exit_code)
+        call check_nc(status, 'def_var orbit_exit_code')
+        status = nf90_put_att(ncid, var_orbit_exit_code, 'description', &
+            '0=completed, 1=LCFS, 2=wall, 3=skipped, 101-105=numerical failure')
+        call check_nc(status, 'put_att orbit_exit_code description')
+
+        status = nf90_def_var(ncid, 'boundary_event_radial_residual', nf90_double, &
+            [dim_particle], var_boundary_event_radial_residual)
+        call check_nc(status, 'def_var boundary_event_radial_residual')
+        status = nf90_put_att(ncid, var_boundary_event_radial_residual, 'units', &
+            'normalized radial coordinate')
+        call check_nc(status, 'put_att boundary_event_radial_residual units')
+
+        status = nf90_def_var(ncid, 'boundary_event_time_width', nf90_double, &
+            [dim_particle], var_boundary_event_time_width)
+        call check_nc(status, 'def_var boundary_event_time_width')
+        status = nf90_put_att(ncid, var_boundary_event_time_width, 'units', 's')
+        call check_nc(status, 'put_att boundary_event_time_width units')
 
         status = nf90_def_var(ncid, 'trap_par', nf90_double, &
                               [dim_particle], var_trap_par)
@@ -274,6 +303,28 @@ contains
         call check_nc(status, 'put_att integmode')
         status = nf90_put_att(ncid, nf90_global, 'relerr', relerr)
         call check_nc(status, 'put_att relerr')
+        status = nf90_put_att(ncid, nf90_global, &
+                              'boundary_event_fraction_tolerance', &
+                              boundary_event_fraction_tolerance)
+        call check_nc(status, 'put_att boundary_event_fraction_tolerance')
+        status = nf90_put_att(ncid, nf90_global, &
+                              'boundary_event_radial_tolerance', &
+                              boundary_event_radial_tolerance)
+        call check_nc(status, 'put_att boundary_event_radial_tolerance')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nr', &
+                              canonical_grid_nr)
+        call check_nc(status, 'put_att canonical_grid_nr')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_ntheta', &
+                              canonical_grid_ntheta)
+        call check_nc(status, 'put_att canonical_grid_ntheta')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nphi', &
+                              canonical_grid_nphi)
+        call check_nc(status, 'put_att canonical_grid_nphi')
+        status = nf90_put_att(ncid, nf90_global, 'canonical_ode_relerr', &
+                              canonical_ode_relerr)
+        call check_nc(status, 'put_att canonical_ode_relerr')
+        status = nf90_put_att(ncid, nf90_global, 'multharm', multharm)
+        call check_nc(status, 'put_att multharm')
         status = nf90_put_att(ncid, nf90_global, 'npoiper', npoiper)
         call check_nc(status, 'put_att npoiper')
         status = nf90_put_att(ncid, nf90_global, 'npoiper2', npoiper2)
@@ -286,6 +337,11 @@ contains
         call check_nc(status, 'put_att num_surf')
         status = nf90_put_att(ncid, nf90_global, 'sbeg', sbeg)
         call check_nc(status, 'put_att sbeg')
+        status = nf90_put_att(ncid, nf90_global, 'contr_pp', contr_pp)
+        call check_nc(status, 'put_att contr_pp')
+        status = nf90_put_att(ncid, nf90_global, 'notrace_passing', &
+                              notrace_passing)
+        call check_nc(status, 'put_att notrace_passing')
         status = nf90_put_att(ncid, nf90_global, 'isw_field_type', isw_field_type)
         call check_nc(status, 'put_att isw_field_type')
         status = nf90_put_att(ncid, nf90_global, 'swcoll', merge(1, 0, swcoll))
@@ -315,6 +371,17 @@ contains
         ! Write data
         status = nf90_put_var(ncid, var_times_lost, times_lost)
         call check_nc(status, 'put_var times_lost')
+
+        status = nf90_put_var(ncid, var_orbit_exit_code, orbit_exit_code)
+        call check_nc(status, 'put_var orbit_exit_code')
+
+        status = nf90_put_var(ncid, var_boundary_event_radial_residual, &
+            boundary_event_radial_residual)
+        call check_nc(status, 'put_var boundary_event_radial_residual')
+
+        status = nf90_put_var(ncid, var_boundary_event_time_width, &
+            boundary_event_time_width)
+        call check_nc(status, 'put_var boundary_event_time_width')
 
         status = nf90_put_var(ncid, var_trap_par, trap_par)
         call check_nc(status, 'put_var trap_par')

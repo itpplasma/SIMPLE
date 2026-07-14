@@ -125,6 +125,127 @@ contains
 
     end subroutine sample_volume_single
 
+    subroutine sample_spectre_surface(zstart)
+        !> Place markers on the SPECTRE control surface rho_g = sbeg(1), drawn
+        !> uniformly over the real surface: (theta, zeta) grid nodes are picked
+        !> with probability proportional to the surface Jacobian |e_theta x e_zeta|.
+        !> The chart is the integration coordinate, so zstart is (rho_g, theta,
+        !> zeta) directly. Also sets bmin/bmax/bmod00 for pitch classification.
+        use params, only: sbeg, bmin, bmax, bmod00, &
+                          spectre_sbeg_is_toroidal_flux
+        use magfie_sub, only: magfie, spectre_field
+        use binsrc_sub, only: binsrc
+
+        real(dp), dimension(:, :), intent(inout) :: zstart
+
+        integer, parameter :: ntheta = 64, nzeta = 64
+        integer :: ngrid, it, iz, k, ipart, ierr
+        real(dp) :: rho_g, th, ze, area, wsum, bsum, bmod, xi
+        real(dp) :: u(3), e_cov(3, 3), cross(3)
+        real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp), allocatable :: theta_g(:), zeta_g(:), wcum(:)
+
+        if (.not. allocated(spectre_field)) &
+            error stop 'sample_spectre_surface: spectre_field not set'
+
+        ngrid = ntheta*nzeta
+        if (spectre_sbeg_is_toroidal_flux) then
+            call spectre_field%axis_rho_from_toroidal_flux(sbeg(1), rho_g, ierr)
+            if (ierr /= 0) &
+                error stop 'sample_spectre_surface: target flux outside axis volume'
+        else
+            rho_g = sbeg(1)
+        end if
+        allocate (theta_g(ngrid), zeta_g(ngrid), wcum(ngrid))
+
+        wsum = 0.0d0
+        bsum = 0.0d0
+        bmin = huge(1.0d0)
+        bmax = -huge(1.0d0)
+        k = 0
+        do it = 1, ntheta
+            do iz = 1, nzeta
+                k = k + 1
+                th = twopi*(real(it, dp) - 0.5d0)/real(ntheta, dp)
+                ze = twopi*(real(iz, dp) - 0.5d0)/real(nzeta, dp)
+                u = [rho_g, th, ze]
+                call spectre_field%coords%covariant_basis(u, e_cov)
+                cross(1) = e_cov(2, 2)*e_cov(3, 3) - e_cov(3, 2)*e_cov(2, 3)
+                cross(2) = e_cov(3, 2)*e_cov(1, 3) - e_cov(1, 2)*e_cov(3, 3)
+                cross(3) = e_cov(1, 2)*e_cov(2, 3) - e_cov(2, 2)*e_cov(1, 3)
+                area = sqrt(sum(cross**2))
+                call magfie(u, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+                bmin = min(bmin, bmod)
+                bmax = max(bmax, bmod)
+                bsum = bsum + bmod
+                wsum = wsum + area
+                theta_g(k) = th
+                zeta_g(k) = ze
+                wcum(k) = wsum
+            end do
+        end do
+        wcum = wcum/wsum
+        bmod00 = bsum/real(ngrid, dp)
+
+        do ipart = 1, size(zstart, 2)
+            call random_number(xi)
+            call binsrc(wcum, 1, ngrid, xi, k)
+            zstart(1, ipart) = rho_g
+            zstart(2, ipart) = theta_g(k)
+            zstart(3, ipart) = zeta_g(k)
+            zstart(4, ipart) = 1.0d0
+            call random_number(xi)
+            zstart(5, ipart) = 2.0d0*(xi - 0.5d0)
+        end do
+
+        print *, 'sample_spectre_surface: rho_g = ', rho_g, ' target = ', sbeg(1), &
+            ' flux_label = ', spectre_sbeg_is_toroidal_flux, ' bmod00 = ', bmod00, &
+            ' bmin = ', bmin, ' bmax = ', bmax
+        call save_starting_points(zstart)
+    end subroutine sample_spectre_surface
+
+    subroutine init_spectre_start_bounds(zstart)
+        use params, only: bmin, bmax, bmod00
+        use magfie_sub, only: magfie
+
+        real(dp), dimension(:, :), intent(in) :: zstart
+
+        integer, parameter :: nrho = 8, ntheta = 64, nzeta = 64
+        integer :: ir, it, iz, nr
+        real(dp) :: rho_lo, rho_hi, rho, theta, zeta, bmod, bsum
+        real(dp) :: sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        rho_lo = minval(zstart(1, :))
+        rho_hi = maxval(zstart(1, :))
+        nr = merge(1, nrho, abs(rho_hi - rho_lo) <= &
+                   epsilon(1.0d0)*max(1.0d0, abs(rho_lo), abs(rho_hi)))
+        bmin = huge(1.0d0)
+        bmax = -huge(1.0d0)
+        bsum = 0.0d0
+        do ir = 1, nr
+            if (nr == 1) then
+                rho = rho_lo
+            else
+                rho = rho_lo + (rho_hi - rho_lo)*real(ir - 1, dp)/real(nr - 1, dp)
+            end if
+            do it = 1, ntheta
+                theta = twopi*(real(it, dp) - 0.5d0)/real(ntheta, dp)
+                do iz = 1, nzeta
+                    zeta = twopi*(real(iz, dp) - 0.5d0)/real(nzeta, dp)
+                    call magfie([rho, theta, zeta], bmod, sqrtg, bder, hcovar, &
+                                hctrvr, hcurl)
+                    bmin = min(bmin, bmod)
+                    bmax = max(bmax, bmod)
+                    bsum = bsum + bmod
+                end do
+            end do
+        end do
+        bmod00 = bsum/real(nr*ntheta*nzeta, dp)
+
+        print *, 'init_spectre_start_bounds: rho = ', rho_lo, rho_hi, &
+            ' bmod00 = ', bmod00, ' bmin = ', bmin, ' bmax = ', bmax
+    end subroutine init_spectre_start_bounds
+
     subroutine sample_surface_fieldline(zstart)
         real(dp), dimension(:, :), intent(inout) :: zstart
 
@@ -168,7 +289,8 @@ contains
 
     subroutine sample_grid(zstart, grid_density, xstart_is_integ_coords)
         use params, only: ntestpart, zstart_dim1, zend, times_lost, &
-                          trap_par, perp_inv, iclass, sbeg
+                          orbit_exit_code, boundary_event_radial_residual, &
+                          boundary_event_time_width, trap_par, perp_inv, iclass, sbeg
         use util, only: pi
         use field_can_mod, only: integ_to_ref
 
@@ -194,10 +316,20 @@ contains
         if (allocated(zend)) deallocate (zend)
         allocate (zstart(zstart_dim1, ntestpart), zend(zstart_dim1, ntestpart))
         if (allocated(times_lost)) deallocate (times_lost)
+        if (allocated(orbit_exit_code)) deallocate (orbit_exit_code)
+        if (allocated(boundary_event_radial_residual)) &
+            deallocate (boundary_event_radial_residual)
+        if (allocated(boundary_event_time_width)) deallocate (boundary_event_time_width)
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
-    allocate(times_lost(ntestpart), trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+        allocate(times_lost(ntestpart), orbit_exit_code(ntestpart), &
+                 boundary_event_radial_residual(ntestpart), &
+                 boundary_event_time_width(ntestpart), &
+                 trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+        orbit_exit_code = 0
+        boundary_event_radial_residual = -1d0
+        boundary_event_time_width = -1d0
 
         do ipart = 1, ngrid
             do jpart = 1, ngrid

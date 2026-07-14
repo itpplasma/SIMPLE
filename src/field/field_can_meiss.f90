@@ -38,6 +38,7 @@ use util, only : twopi
 use field_can_base, only : field_can_t, n_field_evaluations
     use field, only : magnetic_field_t, vmec_field_t, field_clone
     use field_splined, only: splined_field_t
+    use field_spectre, only: spectre_field_t
     use coordinate_scaling, only : coordinate_scaling_t, sqrt_s_scaling_t, &
                                    identity_scaling_t, coordinate_scaling_clone
     use libneo_coordinates, only: chartmap_coordinate_system_t, UNKNOWN, &
@@ -50,8 +51,12 @@ type :: grid_indices_t
 end type grid_indices_t
 
 class(magnetic_field_t), allocatable :: field_noncan
-integer :: n_r=62, n_th=63, n_phi=64
-real(dp) :: xmin(3) = [1d-6, 0d0, 0d0]
+integer, parameter :: default_n_r = 62, default_n_th = 63, default_n_phi = 64
+real(dp), parameter :: default_transformation_relerr = 1d-11
+real(dp), parameter :: default_xmin(3) = [1d-6, 0d0, 0d0]
+integer :: n_r=default_n_r, n_th=default_n_th, n_phi=default_n_phi
+real(dp) :: transformation_relerr = default_transformation_relerr
+real(dp) :: xmin(3) = default_xmin
 real(dp) :: xmax(3) = [1d0, twopi, twopi]
 
 real(dp) :: h_r, h_th, h_phi
@@ -67,13 +72,60 @@ real(dp), dimension(:,:,:), allocatable :: lam_phi, chi_gauge
 type(BatchSplineData3D) :: spl_transform_batch
 logical :: transform_splines_initialized = .false.
 
-integer, parameter :: order(3) = [5, 5, 5]  ! Restored to original 5th order for accuracy
+integer, parameter :: default_spline_order = 5
+integer, parameter :: default_ode_step_limit = 1000000
+integer :: order(3) = [default_spline_order, default_spline_order, &
+                       default_spline_order]
+integer :: ode_step_limit = default_ode_step_limit
 logical, parameter :: periodic(3) = [.False., .True., .True.]
 
 ! Coordinate scaling for s <-> r transform (default: r = sqrt(s))
 class(coordinate_scaling_t), allocatable :: coord_scaling
 
+! Caller-owned harvest of one Meiss construction. field_can_spectre keeps one per
+! SPECTRE volume; harvest_meiss_volume moves the module-level splines into a slot.
+type :: meiss_volume_t
+    type(BatchSplineData3D) :: spl_field
+    type(BatchSplineData3D) :: spl_transform
+    class(coordinate_scaling_t), allocatable :: scaling
+    real(dp) :: rmin
+    real(dp) :: rmax
+end type meiss_volume_t
+
 contains
+
+subroutine harvest_meiss_volume(vol)
+    !> Move the current module-level construction (field and transform batch
+    !> splines, radial domain, scaling) into a caller-owned slot. The batch spline
+    !> coefficient arrays are moved, not copied; the module init flags are cleared
+    !> so a following cleanup_meiss or construction re-uses the freed slots.
+    type(meiss_volume_t), intent(out) :: vol
+
+    call move_batch_spline_3d(spl_field_batch, vol%spl_field)
+    call move_batch_spline_3d(spl_transform_batch, vol%spl_transform)
+    batch_splines_initialized = .false.
+    transform_splines_initialized = .false.
+
+    call coordinate_scaling_clone(coord_scaling, vol%scaling)
+    vol%rmin = xmin(1)
+    vol%rmax = xmax(1)
+end subroutine harvest_meiss_volume
+
+
+subroutine move_batch_spline_3d(src, dst)
+    type(BatchSplineData3D), intent(inout) :: src
+    type(BatchSplineData3D), intent(out) :: dst
+
+    dst%order = src%order
+    dst%num_points = src%num_points
+    dst%periodic = src%periodic
+    dst%h_step = src%h_step
+    dst%x_min = src%x_min
+    dst%inv_h_step = src%inv_h_step
+    dst%period = src%period
+    dst%num_quantities = src%num_quantities
+    call move_alloc(src%coeff, dst%coeff)
+end subroutine move_batch_spline_3d
 
 subroutine rh_can_wrapper(r_c, z, dz, context)
     real(dp), intent(in) :: r_c
@@ -93,15 +145,21 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
 end subroutine rh_can_wrapper
 
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax, &
-                      scaling)
+                      scaling, transformation_relerr_, spline_order_, ode_step_limit_)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use, intrinsic :: iso_fortran_env, only: int64
     use new_vmec_stuff_mod, only : nper
 
     class(magnetic_field_t), intent(in) :: field_noncan_
     integer, intent(in), optional :: n_r_, n_th_, n_phi_
     real(dp), intent(in), optional :: rmin, rmax, thmin, thmax
     class(coordinate_scaling_t), intent(in), optional :: scaling
+    real(dp), intent(in), optional :: transformation_relerr_
+    integer, intent(in), optional :: spline_order_
+    integer, intent(in), optional :: ode_step_limit_
 
-        call field_clone(field_noncan_, field_noncan)
+    call cleanup_meiss
+    call field_clone(field_noncan_, field_noncan)
 
     ! Initialize coordinate scaling based on field type
     if (allocated(coord_scaling)) deallocate(coord_scaling)
@@ -116,16 +174,44 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
         call choose_default_scaling(field_noncan_, coord_scaling)
     end if
 
+    n_r = default_n_r
+    n_th = default_n_th
+    n_phi = default_n_phi
+    transformation_relerr = default_transformation_relerr
+    order = default_spline_order
+    ode_step_limit = default_ode_step_limit
+    xmin = default_xmin
+    xmax = [1d0, twopi, twopi/nper]
     if (present(n_r_)) n_r = n_r_
     if (present(n_th_)) n_th = n_th_
     if (present(n_phi_)) n_phi = n_phi_
+    if (present(spline_order_)) order = spline_order_
+    if (present(ode_step_limit_)) ode_step_limit = ode_step_limit_
+    if (any(order < 3) .or. any(order > 5)) then
+        error stop 'canonical map spline order must be between 3 and 5'
+    end if
+    if (ode_step_limit < 1) error stop 'canonical map ODE step limit must be positive'
+    if (any([n_r, n_th, n_phi] < order + 1)) then
+        error stop 'canonical map grid dimensions must exceed the spline order'
+    end if
+    if (max(n_r, n_th, n_phi) > 512) then
+        error stop 'canonical map grid dimensions must not exceed 512'
+    end if
+    if (int(n_r, int64)*int(n_th, int64)*int(n_phi, int64) > 2097152_int64) then
+        error stop 'canonical map grid exceeds the 2097152-point limit'
+    end if
+    if (present(transformation_relerr_)) then
+        if (.not. ieee_is_finite(transformation_relerr_) .or. &
+            transformation_relerr_ <= 0d0) then
+            error stop 'canonical map ODE tolerance must be finite and positive'
+        end if
+        transformation_relerr = transformation_relerr_
+    end if
 
     if (present(rmin)) xmin(1) = rmin
     if (present(rmax)) xmax(1) = rmax
     if (present(thmin)) xmin(2) = thmin
     if (present(thmax)) xmax(2) = thmax
-    xmax(3) = twopi/nper
-
     h_r = (xmax(1)-xmin(1))/(n_r-1)
     h_th = (xmax(2)-xmin(2))/(n_th-1)
     h_phi = (xmax(3)-xmin(3))/(n_phi-1)
@@ -252,11 +338,22 @@ subroutine ref_to_integ_meiss(xref, xinteg)
 end subroutine ref_to_integ_meiss
 
 
-subroutine get_meiss_coordinates
+subroutine get_meiss_coordinates(ierr)
+    integer, intent(out), optional :: ierr
+    integer :: status
+
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.init_transformation'
 #endif
-    call init_transformation
+    call init_transformation(status)
+    if (status /= 0) then
+        call cleanup_meiss
+        if (present(ierr)) then
+            ierr = status
+            return
+        end if
+        error stop 'Meiss transformation ODE failed'
+    end if
 
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     print *, 'field_can_meiss.spline_transformation'
@@ -267,12 +364,21 @@ subroutine get_meiss_coordinates
     print *, 'field_can_meiss.init_canonical_field_components'
 #endif
     call init_canonical_field_components
+    if (present(ierr)) ierr = 0
 end subroutine get_meiss_coordinates
 
 
-subroutine init_transformation
+subroutine init_transformation(ierr)
+    integer, intent(out), optional :: ierr
+    integer :: status
+
     call init_transformation_arrays()
-    call compute_transformation()
+    call compute_transformation(status)
+    if (present(ierr)) then
+        ierr = status
+    else if (status /= 0) then
+        error stop 'Meiss transformation ODE failed'
+    end if
 end subroutine init_transformation
 
 subroutine init_transformation_arrays()
@@ -286,24 +392,39 @@ subroutine init_transformation_arrays()
     chi_gauge = 0.0_dp
 end subroutine init_transformation_arrays
 
-subroutine compute_transformation()
+subroutine compute_transformation(ierr)
 !> Compute transformation data via integration (expensive operation)
+    integer, intent(out) :: ierr
     integer :: i_ctr
+    integer, allocatable :: slice_status(:)
+    logical :: parallel_slices
 
     i_ctr = 0
+    allocate(slice_status(n_phi), source=0)
+    parallel_slices = .true.
+    select type (field_noncan)
+    type is (spectre_field_t)
+        parallel_slices = .false.
+    end select
 
-    !$omp parallel private(i_ctr)
-    !$omp do
-    do i_ctr = 1, n_phi
-        call compute_phi_slice(i_ctr)
-    enddo
-    !$omp end do
-    !$omp end parallel
+    if (parallel_slices) then
+        !$omp parallel do private(i_ctr)
+        do i_ctr = 1, n_phi
+            call compute_phi_slice(i_ctr, slice_status(i_ctr))
+        end do
+        !$omp end parallel do
+    else
+        do i_ctr = 1, n_phi
+            call compute_phi_slice(i_ctr, slice_status(i_ctr))
+        end do
+    end if
+    ierr = maxval(slice_status)
 end subroutine compute_transformation
 
-subroutine compute_phi_slice(i_phi)
+subroutine compute_phi_slice(i_phi, ierr)
 !> Compute transformation for single phi slice
     integer, intent(in) :: i_phi
+    integer, intent(out) :: ierr
     real(dp) :: y(2)
     integer :: i_th
 
@@ -311,6 +432,7 @@ subroutine compute_phi_slice(i_phi)
     call print_progress(i_phi)
 #endif
     
+    ierr = 0
     do i_th = 1, n_th
         lam_phi(1, i_th, i_phi) = 0d0
         chi_gauge(1, i_th, i_phi) = 0d0
@@ -319,7 +441,8 @@ subroutine compute_phi_slice(i_phi)
         if (is_hr_zero_on_slice(i_th, i_phi)) then
             call set_identity_slice(i_th, i_phi)
         else
-            call integrate_radial_slice(i_th, i_phi, y)
+            call integrate_radial_slice(i_th, i_phi, y, ierr)
+            if (ierr /= 0) return
         endif
     enddo
 end subroutine compute_phi_slice
@@ -335,14 +458,21 @@ subroutine set_identity_slice(i_th, i_phi)
     enddo
 end subroutine set_identity_slice
 
-subroutine integrate_radial_slice(i_th, i_phi, y)
+subroutine integrate_radial_slice(i_th, i_phi, y, ierr)
 !> Integrate along radial direction for given (i_th, i_phi)
     integer, intent(in) :: i_th, i_phi
     real(dp), intent(inout) :: y(2)
+    integer, intent(out) :: ierr
     integer :: i_r
-    
+
+    ierr = 0
     do i_r = 2, n_r
-        call integrate(i_r, i_th, i_phi, y)
+        call integrate(i_r, i_th, i_phi, y, ierr)
+        if (ierr /= 0) then
+            write (*, '(A,I0,A,I0,A,I0)') 'Meiss ODE failed at r index ', i_r, &
+                ', theta index ', i_th, ', phi index ', i_phi
+            return
+        end if
     enddo
 end subroutine integrate_radial_slice
 
@@ -364,13 +494,13 @@ subroutine print_progress(i_phi)
     !$omp end critical
 end subroutine print_progress
 
-subroutine integrate(i_r, i_th, i_phi, y)
+subroutine integrate(i_r, i_th, i_phi, y, ierr)
     use odeint_allroutines_sub, only: odeint_allroutines
 
     integer, intent(in) :: i_r, i_th, i_phi
     real(dp), dimension(2), intent(inout) :: y
+    integer, intent(out) :: ierr
 
-    real(dp), parameter :: relerr_default = 1d-11
     integer, parameter :: ndim = 2
     real(dp) :: r1, r2
     real(dp) :: relaxed_relerr
@@ -383,7 +513,7 @@ subroutine integrate(i_r, i_th, i_phi, y)
     r1 = xmin(1) + h_r*(i_r-2)
     r2 = xmin(1) + h_r*(i_r-1)
 
-    relaxed_relerr = relerr_default
+    relaxed_relerr = transformation_relerr
 
 #ifdef SIMPLE_NVHPC
     ! NVHPC/nvfortran: avoid ODE step-size underflow near singular points by
@@ -391,12 +521,14 @@ subroutine integrate(i_r, i_th, i_phi, y)
     phi_c = xmin(3) + h_phi*(i_phi-1)
     call ah_cov_on_slice(r1, modulo(phi_c + y(1), twopi), i_th, Ar_test, Ap_test, hr_test, hp_test)
     if (abs(hp_test) < hp_threshold) then
-        relaxed_relerr = 1d-8
+        relaxed_relerr = max(transformation_relerr, 1d-8)
     end if
 #endif
 
     context = grid_indices_t(i_th, i_phi)
-    call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, rh_can_wrapper)
+    call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, &
+                            rh_can_wrapper, step_limit=ode_step_limit, ierr=ierr)
+    if (ierr /= 0) return
 
     lam_phi(i_r, i_th, i_phi) = y(1)
     chi_gauge(i_r, i_th, i_phi) = y(2)
@@ -472,6 +604,17 @@ subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
         Ap = Acov(3)
         hr = hcov(1)
         hp = hcov(3)
+    type is (spectre_field_t)
+        ! SPECTRE chart (rho_g, theta, zeta) with identity scaling; covariant
+        ! components are used raw in SI, the Gaussian-CGS conversion is applied at
+        ! canonical evaluation. Here h_s = hcov(1) is nonzero (the reason the Meiss
+        ! angle transform is required), while A_s = Acov(1) = 0 in the SPECTRE gauge.
+        call bias_spectre_upper_endpoint(fld, x_integ)
+        call fld%evaluate(x_integ, Acov, hcov, Bmod)
+        Ar = Acov(1)
+        Ap = Acov(3)
+        hr = hcov(1)
+        hp = hcov(3)
     class default
         error stop "ah_cov_on_slice: unsupported field type"
     end select
@@ -511,14 +654,13 @@ end function is_hr_zero_on_slice
 
 subroutine init_canonical_field_components
     real(dp) :: xcan(3)
-    real(dp), dimension(:,:,:), allocatable :: Ath, Aphi, hth, hphi, Bmod
     real(dp), dimension(:,:,:,:), allocatable :: y_batch
-    real(dp) :: xref(3), Acov(3), hcov(3), lam, dlam(3), chi, dchi(3)
-    integer :: i_r, i_th, i_phi, dims(3)
+    real(dp) :: xref(3), Acov(3), hcov(3), Bmod, lam, dlam(3), chi, dchi(3)
+    integer :: i_r, i_th, i_phi
 
-    allocate(Ath(n_r,n_th,n_phi), Aphi(n_r,n_th,n_phi))
-    allocate(hth(n_r,n_th,n_phi), hphi(n_r,n_th,n_phi))
-    allocate(Bmod(n_r,n_th,n_phi))
+    if (allocated(lam_phi)) deallocate(lam_phi)
+    if (allocated(chi_gauge)) deallocate(chi_gauge)
+    allocate(y_batch(n_r, n_th, n_phi, 5))
 
     do i_phi=1,n_phi
         do i_th=1,n_th
@@ -546,38 +688,47 @@ subroutine init_canonical_field_components
                         real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
                         x_integ_local = xref
                         call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
-                        call fld%evaluate(x_ref_local, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                        call fld%evaluate(x_ref_local, Acov, hcov, Bmod)
                     end block
                 type is (splined_field_t)
                     ! Splined field already in scaled coordinates
-                    call fld%evaluate(xref, Acov, hcov, Bmod(i_r, i_th, i_phi))
+                    call fld%evaluate(xref, Acov, hcov, Bmod)
+                type is (spectre_field_t)
+                    ! SPECTRE chart is its own radial coordinate (identity scaling)
+                    call bias_spectre_upper_endpoint(fld, xref)
+                    call fld%evaluate(xref, Acov, hcov, Bmod)
                 class default
                     error stop "init_canonical_field_components: unsupported field type"
                 end select
 
                 ! Note: We only use theta/phi components of Acov/hcov below
 
-                Ath(i_r, i_th, i_phi) = Acov(2) + Acov(3)*dlam(2) - dchi(2)
-                Aphi(i_r, i_th, i_phi) = Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
-                hth(i_r, i_th, i_phi) = hcov(2) + hcov(3)*dlam(2)
-                hphi(i_r, i_th, i_phi) = hcov(3)*(1.0d0 + dlam(3))
+                y_batch(i_r, i_th, i_phi, 1) = &
+                    Acov(2) + Acov(3)*dlam(2) - dchi(2)
+                y_batch(i_r, i_th, i_phi, 2) = &
+                    Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
+                y_batch(i_r, i_th, i_phi, 3) = hcov(2) + hcov(3)*dlam(2)
+                y_batch(i_r, i_th, i_phi, 4) = hcov(3)*(1.0d0 + dlam(3))
+                y_batch(i_r, i_th, i_phi, 5) = Bmod
             end do
         end do
     end do
 
-    ! Construct batch spline for all 5 field components: [Ath, Aph, hth, hph, Bmod]
-    dims = shape(Ath)
-    allocate(y_batch(dims(1), dims(2), dims(3), 5))
-    
-    y_batch(:,:,:,1) = Ath
-    y_batch(:,:,:,2) = Aphi
-    y_batch(:,:,:,3) = hth
-    y_batch(:,:,:,4) = hphi
-    y_batch(:,:,:,5) = Bmod
-    
     call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_field_batch)
     batch_splines_initialized = .true.
 end subroutine init_canonical_field_components
+
+
+subroutine bias_spectre_upper_endpoint(field, x)
+    type(spectre_field_t), intent(in) :: field
+    real(dp), intent(inout) :: x(3)
+
+    ! Exact stacked interfaces belong to the outer volume. A lower-volume
+    ! construction must sample its upper endpoint as the one-sided inner limit.
+    if (x(1) >= xmax(1) .and. xmax(1) < real(field%data%Mvol, dp)) then
+        x(1) = nearest(xmax(1), -1.0_dp)
+    end if
+end subroutine bias_spectre_upper_endpoint
 
 
 pure function get_grid_point(i_r, i_th, i_phi)

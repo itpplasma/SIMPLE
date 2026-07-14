@@ -21,7 +21,6 @@ program test_orbit_refcoords_rk45
     use netcdf
     use simple, only: init_vmec
     use util, only: twopi
-    use new_vmec_stuff_mod, only: nper
     use magfie_sub, only: init_magfie, magfie, VMEC, REFCOORDS, &
                           set_magfie_refcoords_field
     use alpha_lifetime_sub, only: orbit_timestep_axis
@@ -190,7 +189,6 @@ program test_orbit_refcoords_rk45
 contains
 
     subroutine set_physics_parameters
-        use vector_potentail_mod, only: torflux
 
         ro0 = 1.0d-5
         rmu = 1.0d8

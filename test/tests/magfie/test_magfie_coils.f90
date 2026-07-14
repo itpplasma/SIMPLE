@@ -6,13 +6,11 @@ program test_magfie_coils
     use simple, only: init_vmec
     use magfie_sub, only: VMEC
     use velo_mod, only: isw_field_type
-    use field_base, only: magnetic_field_t
     use field_vmec, only: vmec_field_t
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use magfie_sub, only: magfie_vmec
-    use util, only: twopi
     use cylindrical_cartesian, only: cyl_to_cart
 
     implicit none

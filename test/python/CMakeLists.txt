@@ -14,16 +14,47 @@ file(DOWNLOAD
 #     LABELS "slow"
 # )
 
-# Clean Python API tests
-add_test(NAME test_simple_api
-    COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_api.py -v
-)
-set_tests_properties(test_simple_api PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
-    LABELS "python;simple_api;slow"
-    TIMEOUT 300
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
+function(add_simple_api_test test_name test_node)
+    add_test(NAME test_simple_api_${test_name}
+        COMMAND ${Python_EXECUTABLE} -m pytest
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_api.py::${test_node} -v
+    )
+    set_tests_properties(test_simple_api_${test_name} PROPERTIES
+        ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python"
+        LABELS "python;simple_api;slow"
+        TIMEOUT 120
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+endfunction()
+
+add_simple_api_test(integration_constants TestConstants::test_integration_constants)
+add_simple_api_test(default_values TestConstants::test_default_values)
+add_simple_api_test(init_basic TestInitialization::test_init_basic)
+add_simple_api_test(init_parameters TestInitialization::test_init_with_parameters)
+add_simple_api_test(init_repeated TestInitialization::test_multiple_reinitializations)
+add_simple_api_test(integrator_alias TestIntegratorSelection::test_alias_resolution)
+add_simple_api_test(sampler_shape TestSampling::test_surface_sampler_shape)
+add_simple_api_test(sampler_sizes TestSampling::test_sample_different_sizes)
+add_simple_api_test(sampler_volume TestSampling::test_sample_volume)
+add_simple_api_test(sample_surface TestSampleSurface::test_sample_surface)
+add_simple_api_test(sample_copy TestSampleSurface::test_particles_can_be_copied)
+add_simple_api_test(trace_results TestTraceOrbits::test_trace_returns_dict_results)
+add_simple_api_test(trace_vmec TestTraceOrbits::test_trace_with_vmec_field)
+add_simple_api_test(trace_boozer TestTraceOrbits::test_trace_with_boozer_field)
+add_simple_api_test(trace_filters TestTraceOrbits::test_confined_and_lost_filters)
+add_simple_api_test(trace_integrators TestTraceOrbits::test_different_integrators)
+add_simple_api_test(trace_single TestTraceOrbits::test_trace_single_orbit)
+add_simple_api_test(trace_trajectory TestTraceOrbits::test_trace_with_trajectory)
+add_simple_api_test(canonical_frequencies
+    TestTraceOrbits::test_canonical_frequencies)
+add_simple_api_test(canonical_frequency_validation
+    TestTraceOrbits::test_canonical_frequency_validation)
+add_simple_api_test(trace_to_tip
+    TestTraceOrbits::test_trace_to_tip)
+add_simple_api_test(trace_to_cut_validation
+    TestTraceOrbits::test_trace_to_cut_validation)
+add_simple_api_test(trace_skipped TestTraceOrbits::test_trace_parallel_preserves_skipped_passing_sentinel)
+add_simple_api_test(trace_early_loss TestTraceOrbits::test_trace_orbit_uses_backend_loss_time_for_early_loss)
 
 add_test(NAME test_batch_api
     COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/test_batch_api.py -v

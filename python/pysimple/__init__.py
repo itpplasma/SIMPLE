@@ -95,6 +95,7 @@ _simple_main = _fortran_backend.Simple_Main()
 _initialized = False
 _current_vmec: str | None = None
 _tracer: "_fortran_backend.simple.tracer_t | None" = None
+_field_key: "tuple | None" = None
 
 
 def _is_test_field() -> bool:
@@ -169,7 +170,7 @@ def init(
     >>> import pysimple
     >>> pysimple.init('wout.nc', deterministic=True, ntestpart=1000, trace_time=1e-3)
     """
-    global _initialized, _current_vmec, _tracer, _trace_initialized
+    global _initialized, _current_vmec, _tracer, _trace_initialized, _field_key
 
     # Reset trace initialization flag to ensure field pointers are updated
     _trace_initialized = False
@@ -203,16 +204,26 @@ def init(
     if hasattr(params, "apply_config_aliases"):
         params.apply_config_aliases()
 
-    # Step 2: init_field (same as Fortran main())
-    _tracer = _fortran_backend.simple.tracer_t()
-    _simple_main.init_field(
-        _tracer,
-        vmec_path,
-        params.ns_s,
-        params.ns_tp,
-        params.multharm,
-        params.integmode,
-    )
+    # Step 2: init_field (same as Fortran main()). The field construction is a
+    # pure function of (file, spline orders, multharm, integmode, field type)
+    # -- init_field builds the canonical data of the requested field type --
+    # so repeated re-initialization with an identical key keeps the built
+    # field and tracer; params_init and the magfie pointer setup below still
+    # run every call.
+    field_key = (vmec_path, params.ns_s, params.ns_tp, params.multharm,
+                 params.integmode,
+                 int(_fortran_backend.velo_mod.isw_field_type))
+    if not (_initialized and _tracer is not None and field_key == _field_key):
+        _tracer = _fortran_backend.simple.tracer_t()
+        _simple_main.init_field(
+            _tracer,
+            vmec_path,
+            params.ns_s,
+            params.ns_tp,
+            params.multharm,
+            params.integmode,
+        )
+        _field_key = field_key
 
     # Step 3: params_init (same as Fortran main())
     # This calls reset_seed_if_deterministic() internally!

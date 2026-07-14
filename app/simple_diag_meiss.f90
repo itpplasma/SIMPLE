@@ -9,7 +9,7 @@ use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, integmode, par
     use timing, only: init_timer, print_phase_time
     use diag_meiss, only: plot_rh_can_vs_rc
     use field_can_mod, only: field_can_from_id
-    use field, only: field_from_file, vmec_field_t, create_vmec_field
+    use field, only: vmec_field_t, create_vmec_field
     use field_can_meiss, only: init_transformation_arrays
 
     implicit none

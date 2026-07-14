@@ -79,6 +79,10 @@ option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 
+if(SIMPLE_DETERMINISTIC_FP)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
+
 if(SIMPLE_ENABLE_DEBUG_OUTPUT)
     add_compile_definitions(SIMPLE_ENABLE_DEBUG_OUTPUT)
 endif()
@@ -174,6 +178,10 @@ else()
     find_package(LAPACK REQUIRED)
 endif()
 
+if(SIMPLE_DETERMINISTIC_FP)
+    set(LIBNEO_DETERMINISTIC_FP ON CACHE BOOL
+        "Use deterministic floating-point options in libneo" FORCE)
+endif()
 find_or_fetch(libneo)
 
 # Consume the NetCDF stack libneo resolved (see comment near the top). In the
@@ -510,6 +518,20 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 target_link_libraries(export_boozer_chartmap.x PRIVATE simple)
 set_target_properties(export_boozer_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# SPECTRE symplectic field-line Poincare app
+add_executable(spectre_poincare.x
+    app/spectre_poincare.f90
+)
+target_compile_options(spectre_poincare.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(spectre_poincare.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+target_link_libraries(spectre_poincare.x PRIVATE simple)
+set_target_properties(spectre_poincare.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Ensure fortplot is built before diagnostics (when available)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")

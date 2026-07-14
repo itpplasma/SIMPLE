@@ -23,12 +23,19 @@
     field/field_can_meiss.f90
     field/psi_transform.f90
     field/field_can_albert.f90
+    field/field_can_spectre.f90
+    field_line_spectre.f90
     field_can.f90
     magfie.f90
     magfie_wrapper.f90
     magfie_can_boozer.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
+    spectre_sheet_gc.f90
+    spectre_fo_hybrid.f90
+    interface_crossing.f90
+    spectre_orbit.f90
+    spectre_sympl_orbit.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
@@ -116,11 +123,19 @@ target_link_libraries(simple PUBLIC
     LIBNEO::boozer
     LIBNEO::coordinates
     LIBNEO::field
-    LIBNEO::magnetic_field_base
     LIBNEO::odeint
+    LIBNEO::spectre
+    LIBNEO::spectre_field
     LIBNEO::util
     LIBNEO::vmec_field
 )
+
+# The abstract field_base module lives in its own decompose-neo-core target in
+# recent libneo, but is bundled into vmec_field on the SPECTRE feature branch.
+# Link the granular target only when the paired libneo exports it.
+if(TARGET LIBNEO::magnetic_field_base)
+    target_link_libraries(simple PUBLIC LIBNEO::magnetic_field_base)
+endif()
 
 target_link_libraries(simple PUBLIC
     fortnum

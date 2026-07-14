@@ -22,6 +22,9 @@ save
 
 public
 
+  integer, parameter :: ORBIT_FO_LOSS = 2
+  integer, parameter :: ORBIT_FO_NUMERICAL = 3
+
   type :: tracer_t
     real(dp) :: fper
     real(dp) :: dtau, dtaumin, v0
@@ -199,13 +202,26 @@ contains
       ! Inversion unresolved (near-axis below chartmap resolution, or a field-period
       ! seam). NOT a physical loss; fo_step left the state at the last resolved
       ! position. Hand the caller ierr=3 to end the orbit gracefully as confined.
-      ierr = 3; call count_event(EVT_FO_FAULT); call warn_fo_unresolved; return
+      ierr = ORBIT_FO_NUMERICAL
+      call count_event(EVT_FO_FAULT)
+      call warn_fo_unresolved
+      return
     end if
     call fo_to_gc(fo, s, th, ph, vpar, status)
     if (status == FO_LOSS) then
-      ierr = 2; call count_event(EVT_FO_LOSS); return
+      z(1) = s
+      z(2) = th
+      z(3) = ph
+      z(4) = fo%pabs
+      z(5) = vpar/(z(4)*dsqrt(2d0))
+      ierr = ORBIT_FO_LOSS
+      call count_event(EVT_FO_LOSS)
+      return
     else if (status /= FO_OK) then
-      ierr = 3; call count_event(EVT_FO_FAULT); call warn_fo_unresolved; return
+      ierr = ORBIT_FO_NUMERICAL
+      call count_event(EVT_FO_FAULT)
+      call warn_fo_unresolved
+      return
     end if
     z(1) = s; z(2) = th; z(3) = ph
     z(4) = fo%pabs

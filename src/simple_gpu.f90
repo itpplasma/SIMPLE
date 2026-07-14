@@ -8,11 +8,15 @@ module simple_gpu
     ! module keeps the device-side field evaluation local and reuses the shared
     ! symplectic-Euler algebra from orbit_symplectic_euler1. Equivalence is
     ! checked against the CPU path by test_gpu_orbit_bench.
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use util, only: pi
     use field_can_mod, only: field_can_t, get_derivatives, get_derivatives2
     use field_can_boozer, only: eval_field_booz
-    use orbit_symplectic_base, only: symplectic_integrator_t
+    use orbit_symplectic_base, only: symplectic_integrator_t, &
+        SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+        SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
+        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode, &
+        symplectic_newton_warning_factor
     use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
     use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use boozer_sub, only: boozer_state
@@ -30,57 +34,122 @@ module simple_gpu
 
 contains
 
-    subroutine gpu_newton1(si, f, x, xlast)
+    logical function gpu_finite_iterate(x)
+        !$acc routine seq
+        real(dp), intent(in) :: x(:)
+
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7FF0000000000000', int64)
+        integer(int64) :: bits
+        integer :: i
+
+        gpu_finite_iterate = .false.
+        do i = 1, size(x)
+            bits = transfer(x(i), bits)
+            if (iand(bits, exponent_mask) == exponent_mask) return
+        end do
+        gpu_finite_iterate = .true.
+    end function gpu_finite_iterate
+
+    subroutine gpu_newton1(si, f, x, xlast, warning_mode, status)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         real(dp), intent(inout) :: x(2)
         real(dp), intent(out) :: xlast(2)
+        logical, intent(in) :: warning_mode
+        integer, intent(out) :: status
 
         real(dp) :: tolref(2)
         integer :: kit
-        logical :: converged
+        logical :: converged, linear_failed, boundary_limited
+        logical :: step_boundary_limited
+
+        status = SYMPLECTIC_STEP_MAXITER
+        boundary_limited = .false.
 
         tolref(1) = 1d0
         tolref(2) = dabs(1d1*boozer_state%torflux/f%ro0)
 
         do kit = 1, maxit
-            if (x(1) > 1d0) return
+            if (x(1) > 1d0) then
+                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                return
+            end if
             ! Transient guard; converged-negative handled by the caller
             ! (mirrors newton1 in orbit_symplectic, #370).
             if (x(1) < 0d0) x(1) = 0.01d0
 
             call eval_field_booz(f, x(1), si%z(2), si%z(3), 2)
             call get_derivatives2(f, x(2))
-            call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
+            call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
+                linear_failed, step_boundary_limited)
+            boundary_limited = boundary_limited .or. step_boundary_limited
 
-            if (converged) return
+            if (linear_failed) then
+                status = SYMPLECTIC_STEP_LINEAR_SOLVE
+                return
+            end if
+            if (x(1) > 1d0) then
+                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                return
+            end if
+            if (converged) then
+                status = SYMPLECTIC_STEP_OK
+                return
+            end if
         end do
+        if (boundary_limited) then
+            if (step_boundary_limited .and. &
+                abs(1d0 - x(1)) <= max(1d-10, 10d0*si%rtol)) then
+                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+            else
+                status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+            end if
+        else if (warning_mode .and. gpu_finite_iterate(x) .and. &
+                 gpu_finite_iterate(xlast) .and. gpu_finite_iterate(tolref) .and. &
+                 all(abs(x - xlast) <= &
+                     symplectic_newton_warning_factor*si%rtol*abs(tolref))) then
+            status = SYMPLECTIC_STEP_OK
+        end if
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, ierr)
+    subroutine gpu_timestep_euler(si, f, warning_mode, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
+        logical, intent(in) :: warning_mode
         integer, intent(out) :: ierr
 
         real(dp) :: x(2), xlast(2)
-        integer :: ktau
+        integer :: ktau, newton_status
         logical :: crossed
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
 
         ierr = 0
         ktau = 0
         do while (ktau < si%ntau)
+            accepted_integrator = si
+            accepted_field = f
             si%pthold = f%pth
 
             x(1) = si%z(1)
             x(2) = si%z(4)
 
-            call gpu_newton1(si, f, x, xlast)
+            call gpu_newton1(si, f, x, xlast, warning_mode, newton_status)
+            if (newton_status /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                ierr = newton_status
+                return
+            end if
 
             if (x(1) > 1.0d0) then
-                ierr = 1
+                si = accepted_integrator
+                f = accepted_field
+                ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
             crossed = .false.
@@ -91,7 +160,9 @@ contains
                 si%z(2) = si%z(2) + pi
                 crossed = .true.
                 if (x(1) > 1.0d0) then
-                    ierr = 1
+                    si = accepted_integrator
+                    f = accepted_field
+                    ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                     return
                 end if
             end if
@@ -127,17 +198,20 @@ contains
         real(dp), intent(out) :: zend(4, npart)
 
         integer :: i, it, ktau, ierr, lstep
+        logical :: warning_mode
+
+        warning_mode = symplectic_newton_warning_mode
 
         !$acc parallel loop gang vector default(present) &
         !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), zend(:, istart:iend)) &
-        !$acc&   private(it, ktau, ierr, lstep)
+        !$acc&   private(it, ktau, ierr, lstep) firstprivate(warning_mode)
         do i = istart, iend
             ierr = 0
             lstep = ntimstep
             macro: do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call gpu_timestep_euler(si(i), f(i), ierr)
+                    call gpu_timestep_euler(si(i), f(i), warning_mode, ierr)
                     if (ierr /= 0) exit
                 end do
                 if (ierr /= 0) then

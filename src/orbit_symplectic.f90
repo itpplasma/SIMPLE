@@ -1,13 +1,19 @@
 module orbit_symplectic
 
-use, intrinsic :: iso_fortran_env, only: dp => real64
+use, intrinsic :: iso_fortran_env, only: dp => real64, int64
 use util, only: pi, twopi
 use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
-  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, &
-  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto
+  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
+  coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
+  SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+  SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
+  SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
+  SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
+  boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
+  symplectic_newton_warning_factor
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -18,13 +24,59 @@ use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, MODEL_GC
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
-  EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE
+  EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
+  EVT_MIDPOINT_MAXIT
 
 implicit none
 
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
+procedure(orbit_timestep_sympl_i), pointer, private :: raw_timestep_sympl => null()
 
 contains
+
+pure logical function finite_newton_iterate(x)
+  real(dp), intent(in) :: x(:)
+
+  integer(int64), parameter :: exponent_mask = &
+    int(z'7FF0000000000000', int64)
+  integer(int64) :: bits
+  integer :: i
+
+  finite_newton_iterate = .false.
+  do i = 1, size(x)
+    bits = transfer(x(i), bits)
+    if (iand(bits, exponent_mask) == exponent_mask) return
+  end do
+  finite_newton_iterate = .true.
+end function finite_newton_iterate
+
+logical function accept_bounded_maxiter(x, xlast, tolref, rtol)
+  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol
+
+  accept_bounded_maxiter = .false.
+  if (.not. symplectic_newton_warning_mode) return
+  if (rtol <= 0.0_dp) return
+  if (.not. finite_newton_iterate(x)) return
+  if (.not. finite_newton_iterate(xlast)) return
+  if (.not. finite_newton_iterate(tolref)) return
+  accept_bounded_maxiter = all(abs(x - xlast) <= &
+    symplectic_newton_warning_factor*rtol*abs(tolref))
+end function accept_bounded_maxiter
+
+subroutine apply_axis_chart_switch(radius, theta, crossed, status)
+  real(dp), intent(inout) :: radius, theta
+  logical, intent(out) :: crossed
+  integer, intent(out) :: status
+
+  crossed = radius < 0d0
+  status = SYMPLECTIC_STEP_OK
+  if (.not. crossed) return
+
+  radius = -radius
+  theta = theta + pi
+  call count_event(EVT_R_NEGATIVE)
+  if (radius > sympl_rmax) status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+end subroutine apply_axis_chart_switch
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -43,6 +95,9 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   si%ntau = ntau
   si%dt = dt
+  si%last_step_fraction = 1d0
+  si%last_event_radial_residual = 0d0
+  si%last_event_fraction_width = 0d0
 
   si%z = z
 
@@ -52,35 +107,42 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   select case (mode_init)
     case (RK45)
+      nullify(raw_timestep_sympl)
+      nullify(orbit_timestep_sympl)
       orbit_timestep_quasi => orbit_timestep_rk45
     case (EXPL_IMPL_EULER)
-      orbit_timestep_sympl => orbit_timestep_sympl_expl_impl_euler
+      raw_timestep_sympl => orbit_timestep_sympl_expl_impl_euler
       orbit_timestep_quasi => timestep_expl_impl_euler_quasi
     case (IMPL_EXPL_EULER)
-      orbit_timestep_sympl => orbit_timestep_sympl_impl_expl_euler
+      raw_timestep_sympl => orbit_timestep_sympl_impl_expl_euler
       orbit_timestep_quasi => timestep_impl_expl_euler_quasi
     case (MIDPOINT)
-      orbit_timestep_sympl => orbit_timestep_sympl_midpoint
+      raw_timestep_sympl => orbit_timestep_sympl_midpoint
       orbit_timestep_quasi => timestep_midpoint_quasi
     case (GAUSS1)
-      orbit_timestep_sympl => orbit_timestep_sympl_gauss1
+      raw_timestep_sympl => orbit_timestep_sympl_gauss1
       orbit_timestep_quasi => orbit_timestep_quasi_gauss1
     case (GAUSS2)
-      orbit_timestep_sympl => orbit_timestep_sympl_gauss2
+      raw_timestep_sympl => orbit_timestep_sympl_gauss2
       orbit_timestep_quasi => orbit_timestep_quasi_gauss2
     case (GAUSS3)
-      orbit_timestep_sympl => orbit_timestep_sympl_gauss3
+      raw_timestep_sympl => orbit_timestep_sympl_gauss3
       orbit_timestep_quasi => orbit_timestep_quasi_gauss3
     case (GAUSS4)
-      orbit_timestep_sympl => orbit_timestep_sympl_gauss4
+      raw_timestep_sympl => orbit_timestep_sympl_gauss4
       orbit_timestep_quasi => orbit_timestep_quasi_gauss4
     case (LOBATTO3)
-      orbit_timestep_sympl => orbit_timestep_sympl_lobatto3
+      raw_timestep_sympl => orbit_timestep_sympl_lobatto3
       orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
     case default
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
+  if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
+    orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
+  else if (mode_init /= RK45) then
+    orbit_timestep_sympl => raw_timestep_sympl
+  end if
 end subroutine orbit_sympl_init
 
 
@@ -355,25 +417,33 @@ end subroutine jac_midpoint_part2
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-recursive subroutine newton1(si, f, x, maxit, xlast)
+recursive subroutine newton1(si, f, x, maxit, xlast, status)
   !
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   integer, parameter :: n = 2
+  integer, parameter :: radial_indices(1) = [1]
 
   real(dp), intent(inout) :: x(n)
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(n)
+  integer, intent(out) :: status
 
   real(dp) :: tolref(n)
   integer :: kit
-  logical :: converged
+  logical :: converged, linear_failed, boundary_limited, step_boundary_limited
+
+  status = SYMPLECTIC_STEP_MAXITER
+  boundary_limited = .false.
 
   tolref(1) = 1d0
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
-    if (x(1) > 1d0) return
+    if (x(1) > sympl_rmax) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     ! Transient guard: in s = rho^2 coordinates the Hamiltonian is not
     ! smooth at the axis (sqrt(s) behavior), so there is no consistent
     ! field extension to s < 0 for the solver itself. Intermediate
@@ -383,32 +453,65 @@ recursive subroutine newton1(si, f, x, maxit, xlast)
 
     call eval_field(f, x(1), si%z(2), si%z(3), 2)
     call get_derivatives2(f, x(2))
-    call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged)
+    call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
+      linear_failed, step_boundary_limited)
+    boundary_limited = boundary_limited .or. step_boundary_limited
 
-    if (converged) return
+    if (linear_failed) then
+      status = SYMPLECTIC_STEP_LINEAR_SOLVE
+      return
+    end if
+    if (x(1) > sympl_rmax) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+    if (converged) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
-  call count_event(EVT_NEWTON1_MAXIT)
+  if (boundary_limited) then
+    if (step_boundary_limited .and. &
+        radial_boundary_reached(x, radial_indices, si%rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_NEWTON1_MAXIT)
+    if (accept_bounded_maxiter(x, xlast, tolref, si%rtol)) &
+      status = SYMPLECTIC_STEP_OK
+  end if
 end subroutine
 
-recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
+recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
 
   integer, parameter :: n = 3
+  integer, parameter :: radial_indices(1) = [1]
   integer :: kit
 
   real(dp), intent(inout) :: x(n)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(n)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(n), fjac(n,n), jinv(n,n)
 
-  real(dp) :: xabs(n), tolref(n), fabs(n)
-  real(dp) :: det
+  real(dp) :: xabs(n), tolref(n), fabs(n), correction(n)
+  real(dp) :: det, step_scale
+  logical :: boundary_limited, step_limited
+
+  status = SYMPLECTIC_STEP_MAXITER
+  boundary_limited = .false.
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
+    if(x(1) > sympl_rmax) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     ! Transient guard for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
@@ -419,6 +522,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
 
     det = fjac(1,1)*fjac(2,2)*fjac(3,3) + fjac(1,2)*fjac(2,3)*fjac(3,1) + fjac(1,3)*fjac(2,1)*fjac(3,2) &
         - fjac(1,3)*fjac(2,2)*fjac(3,1) - fjac(1,1)*fjac(2,3)*fjac(3,2) - fjac(1,2)*fjac(2,1)*fjac(3,3)
+
+    if (matrix3_near_singular(fjac, det)) then
+      status = SYMPLECTIC_STEP_LINEAR_SOLVE
+      return
+    end if
 
     jinv(1,1) = fjac(2,2)*fjac(3,3) - fjac(2,3)*fjac(3,2)
     jinv(1,2) = fjac(1,3)*fjac(3,2) - fjac(1,2)*fjac(3,3)
@@ -432,7 +540,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     jinv(3,2) = fjac(1,2)*fjac(3,1) - fjac(3,2)*fjac(1,1)
     jinv(3,3) = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
 
-    x = x - matmul(jinv, fvec)/det
+    correction = matmul(jinv, fvec)/det
+    call limit_radial_newton_step(x, correction, radial_indices, step_scale, &
+      step_limited)
+    boundary_limited = boundary_limited .or. step_limited
+    x = x - step_scale*correction
 
     !call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
     ! after solution: fvec = (xold-xnew)_Newton
@@ -444,13 +556,97 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast)
     tolref(2) = twopi
     tolref(3) = twopi
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (.not. step_limited .and. all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (.not. step_limited .and. all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
-  call count_event(EVT_NEWTON2_MAXIT)
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_NEWTON2_MAXIT)
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
+  end if
 end subroutine
 
-recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
+pure logical function matrix3_near_singular(matrix, determinant)
+  real(dp), intent(in) :: matrix(3, 3), determinant
+  real(dp) :: matrix_scale
+
+  matrix_scale = maxval(abs(matrix))
+  matrix3_near_singular = matrix_scale == 0d0 .or. &
+    abs(determinant) <= epsilon(1d0)*matrix_scale**3
+end function matrix3_near_singular
+
+subroutine solve_newton_system(matrix, residual, status)
+  real(dp), intent(inout) :: matrix(:, :), residual(:)
+  integer, intent(out) :: status
+
+  integer :: info, n, pivot(size(residual))
+
+  n = size(residual)
+  call dgesv(n, 1, matrix, n, pivot, residual, n, info)
+  if (info == 0) then
+    status = SYMPLECTIC_STEP_OK
+  else
+    status = SYMPLECTIC_STEP_LINEAR_SOLVE
+  end if
+end subroutine solve_newton_system
+
+pure logical function boundary_event_converged(fraction_width, radial_residual, &
+    fraction_tolerance, radial_tolerance)
+  real(dp), intent(in) :: fraction_width, radial_residual
+  real(dp), intent(in) :: fraction_tolerance, radial_tolerance
+
+  boundary_event_converged = fraction_width <= fraction_tolerance .and. &
+    radial_residual <= radial_tolerance
+end function boundary_event_converged
+
+pure subroutine limit_radial_newton_step(x, correction, radial_indices, &
+    step_scale, limited)
+  real(dp), intent(in) :: x(:), correction(:)
+  integer, intent(in) :: radial_indices(:)
+  real(dp), intent(out) :: step_scale
+  logical, intent(out) :: limited
+
+  real(dp) :: outward_step
+  integer :: k, radius_index
+
+  step_scale = 1d0
+  if (sympl_rmax > 1d0) then
+    limited = .false.
+    return
+  end if
+  do k = 1, size(radial_indices)
+    radius_index = radial_indices(k)
+    outward_step = -correction(radius_index)
+    if (outward_step > 0d0) then
+      step_scale = min(step_scale, &
+        0.8d0*max(0d0, sympl_rmax - x(radius_index))/outward_step)
+    end if
+  end do
+  limited = step_scale < 1d0
+end subroutine limit_radial_newton_step
+
+pure logical function radial_boundary_reached(x, radial_indices, rtol)
+  real(dp), intent(in) :: x(:), rtol
+  integer, intent(in) :: radial_indices(:)
+
+  radial_boundary_reached = any(abs(sympl_rmax - x(radial_indices)) <= &
+    max(1d-10, 10d0*rtol))
+end function radial_boundary_reached
+
+recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
 
@@ -458,16 +654,22 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
 
   integer, parameter :: n = 5
   integer :: kit
+  integer, parameter :: radial_indices(2) = [1, 5]
 
   real(dp), intent(inout) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(n)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(n), fjac(n,n)
-  integer :: pivot(n), info
 
-  real(dp) :: xabs(n), tolref(n), fabs(n)
+  real(dp) :: xabs(n), tolref(n), fabs(n), step_scale
+  logical :: boundary_limited, step_limited
+
+  xlast = x
+  status = SYMPLECTIC_STEP_MAXITER
+  boundary_limited = .false.
 
   tolref(1) = 1d0
   tolref(2) = twopi
@@ -476,7 +678,10 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
   tolref(5) = 1d0
 
   do kit = 1, maxit
-    if(x(1) > 1.0) return
+    if(x(1) > sympl_rmax .or. x(5) > sympl_rmax) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     ! Transient guards for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
     if(x(1) < 0.0) x(1) = 0.01
@@ -488,17 +693,48 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast)
     call jac_midpoint_part2(si, f, fmid, x, fjac)
     fabs = dabs(fvec)
     xlast = x
-    call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
-    ! after solution: fvec = (xold-xnew)_Newton
-    x = x - fvec
+    call solve_newton_system(fjac, fvec, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
+    if (sympl_rmax > 1d0) then
+      step_limited = .false.
+      x = x - fvec
+    else
+      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*fvec
+    end if
+    if (any(x(radial_indices) > sympl_rmax)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     ! Don't take too small values in pphi as tolerance reference
     tolref(4) = max(dabs(x(4)), tolref(4))
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (.not. step_limited .and. all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (.not. step_limited .and. all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_MIDPOINT_MAXIT)
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
+  end if
 end subroutine
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -533,28 +769,39 @@ recursive subroutine jac_rk_gauss(si, fs, s, jac)
 
 end subroutine jac_rk_gauss
 
-recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
+recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
   type(field_can_t), intent(inout) :: fs(:)
-  integer :: kit, ks
+  integer :: kit, ks, radial_indices(s)
 
   real(dp), intent(inout) :: x(4*s)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(4*s)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(4*s), fjac(4*s, 4*s)
-  integer :: pivot(4*s), info
 
-  real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s)
+  real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s), step_scale
+  logical :: boundary_limited, step_limited
+
+  xlast = x
+  status = SYMPLECTIC_STEP_MAXITER
+  boundary_limited = .false.
+  do ks = 1, s
+    radial_indices(ks) = 4*ks - 3
+  end do
 
   do kit = 1, maxit
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) return
+      if (x(4*ks-3) > sympl_rmax) then
+        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
       ! Transient guard for intermediate iterates; the converged-negative
       ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
@@ -564,9 +811,23 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
     call jac_rk_gauss(si, fs, s, fjac)
     fabs = dabs(fvec)
     xlast = x
-    call dgesv(4*s, 1, fjac, 4*s, pivot, fvec, 4*s, info)
+    call solve_newton_system(fjac, fvec, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
-    x = x - fvec
+    if (sympl_rmax > 1d0) then
+      step_limited = .false.
+      x = x - fvec
+    else
+      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*fvec
+    end if
+    if (any(x(radial_indices) > sympl_rmax)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     do ks = 1, s
@@ -576,10 +837,29 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
       tolref(4*ks) = dabs(xlast(4*ks))
     end do
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (.not. step_limited .and. all(x(radial_indices) >= 0d0) .and. &
+        all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (.not. step_limited .and. all(x(radial_indices) >= 0d0) .and. &
+        all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
-  call count_event(EVT_RK_GAUSS_MAXIT)
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_RK_GAUSS_MAXIT)
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
+  end if
 end subroutine newton_rk_gauss
 
 
@@ -611,7 +891,7 @@ recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > 1d0) return
+      if (x(4*ks-3) > sympl_rmax) return
       ! Transient guard for intermediate iterates; the converged-negative
       ! case is handled by the caller via a chart switch (#370).
       if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
@@ -812,42 +1092,84 @@ recursive subroutine jac_rk_lobatto(si, fs, s, jac)
   end do
 end subroutine jac_rk_lobatto
 
+subroutine guard_lobatto_stage_radii(x, s, status)
+  integer, intent(in) :: s
+  real(dp), intent(inout) :: x(4*s-2)
+  integer, intent(out) :: status
 
-recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
+  integer :: ks, radius_index
+
+  status = SYMPLECTIC_STEP_OK
+  if (x(1) > sympl_rmax) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  if (x(1) < 0d0) x(1) = 0.01d0
+
+  do ks = 2, s
+    radius_index = 4*ks - 5
+    if (x(radius_index) > sympl_rmax) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+    if (x(radius_index) < 0d0) x(radius_index) = 0.01d0
+  end do
+end subroutine guard_lobatto_stage_radii
+
+
+recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, status)
   type(symplectic_integrator_t), intent(inout) :: si
 
   integer, intent(in) :: s
   type(field_can_t), intent(inout) :: fs(:)
-  integer :: kit, ks
+  integer :: kit, ks, radial_indices(s)
 
   real(dp), intent(inout) :: x(4*s-2)
   real(dp), intent(in) :: atol, rtol
   integer, intent(in) :: maxit
   real(dp), intent(out) :: xlast(4*s-2)
+  integer, intent(out) :: status
 
   real(dp) :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
-  integer :: pivot(4*s-2), info
 
-  real(dp) :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2)
+  real(dp) :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2), step_scale
+  logical :: boundary_limited, step_limited
+
+  xlast = x
+  status = SYMPLECTIC_STEP_MAXITER
+  boundary_limited = .false.
+  radial_indices(1) = 1
+  do ks = 2, s
+    radial_indices(ks) = 4*ks - 5
+  end do
 
   do kit = 1, maxit
 
-    ! Check if radius left the boundary
-    if (x(1) > 1d0) return
-    ! Transient guard for intermediate iterates (#370).
-    if (x(1) < 0.0) x(1) = 0.01d0
-    do ks = 2, s
-      if (x(4*ks-2-3) > 1d0) return
-      if (x(4*ks-2-3) < 0.0) x(4*ks-3) = 0.01d0
-    end do
+    call guard_lobatto_stage_radii(x, s, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
 
     call f_rk_lobatto(si, fs, s, x, fvec, 2)
     call jac_rk_lobatto(si, fs, s, fjac)
     fabs = dabs(fvec)
     xlast = x
-    call dgesv(4*s-2, 1, fjac, 4*s-2, pivot, fvec, 4*s-2, info)
+    call solve_newton_system(fjac, fvec, status)
+    if (status /= SYMPLECTIC_STEP_OK) return
+    status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
-    x = x - fvec
+    if (sympl_rmax > 1d0) then
+      step_limited = .false.
+      x = x - fvec
+    else
+      call limit_radial_newton_step(x, fvec, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*fvec
+    end if
+    if (any(x(radial_indices) > sympl_rmax)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
     xabs = dabs(x - xlast)
 
     tolref(1) = 1d0
@@ -859,10 +1181,27 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast)
       tolref(4*ks-2) = dabs(xlast(4*ks-2))
     end do
 
-    if (all(fabs < atol)) return
-    if (all(xabs < rtol*tolref)) return
+    if (.not. step_limited .and. all(fabs < atol)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    if (.not. step_limited .and. all(xabs < rtol*tolref)) then
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
   enddo
-  call count_event(EVT_RK_LOBATTO_MAXIT)
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_RK_LOBATTO_MAXIT)
+    if (accept_bounded_maxiter(x, xlast, tolref, rtol)) &
+      status = SYMPLECTIC_STEP_OK
+  end if
 end subroutine newton_rk_lobatto
 
 
@@ -1119,37 +1458,41 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
-  integer :: ktau
+  integer :: ktau, newton_status
   logical :: crossed
+  type(symplectic_integrator_t) :: accepted_integrator
+  type(field_can_t) :: accepted_field
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     x(1)=si%z(1)
     x(2)=si%z(4)
 
-    call newton1(si, f, x, maxit, xlast)
-
-    if (x(1) > 1.0d0) then
-      ierr = 1
+    call newton1(si, f, x, maxit, xlast, newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
       return
     end if
 
-    crossed = .false.
-    if (x(1) < 0.0d0) then
-      ! The converged radius lies beyond the axis: commit the chart switch
-      ! (r, theta) -> (|r|, theta + pi) and continue the orbit (#370).
-      x(1) = -x(1)
-      si%z(2) = si%z(2) + pi
-      crossed = .true.
-      call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0d0) then
-        ! Pathological solve (|r| beyond the boundary on the far side).
-        ierr = 1
-        return
-      end if
+    if (x(1) > sympl_rmax) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+
+    call apply_axis_chart_switch(x(1), si%z(2), crossed, ierr)
+    if (ierr /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      return
     end if
 
     si%z(1) = x(1)
@@ -1185,35 +1528,40 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast, dz
-  integer :: ktau
+  integer :: ktau, newton_status
   logical :: crossed
+  type(symplectic_integrator_t) :: accepted_integrator
+  type(field_can_t) :: accepted_field
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     x = si%z(1:3)
 
-    call newton2(si, f, x, si%atol, si%rtol, maxit, xlast)
-
-    if (x(1) > 1.0) then
-      ierr = 1
+    call newton2(si, f, x, si%atol, si%rtol, maxit, xlast, newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
       return
     end if
 
-    crossed = .false.
-    if (x(1) < 0.0) then
-      ! The converged radius lies beyond the axis: commit the chart switch
-      ! (r, theta) -> (|r|, theta + pi) and continue the orbit (#370).
-      x(1) = -x(1)
-      x(2) = x(2) + pi
-      crossed = .true.
-      call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
-        ierr = 1
-        return
-      end if
+    if (x(1) > sympl_rmax) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+
+    call apply_axis_chart_switch(x(1), x(2), crossed, ierr)
+    if (ierr /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      return
     end if
 
     si%z(1:3) = x
@@ -1246,62 +1594,324 @@ end subroutine orbit_timestep_sympl_impl_expl_euler
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
-  !
+subroutine attempt_midpoint_step(si, f, status)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: status
 
+  integer, parameter :: n = 5, maxit = 32
+  real(dp) :: x(n), xlast(n)
+  logical :: crossed
+
+  ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
+  ! and the exact-landing substep solve (#441) needs fully converged trial
+  ! steps, which 8 iterations do not guarantee near interfaces.
+  si%pthold = f%pth
+  x(1:4) = si%z
+  x(5) = si%z(1)
+
+  call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, status)
+  if (status /= SYMPLECTIC_STEP_OK) return
+
+  call apply_axis_chart_switch(x(1), x(2), crossed, status)
+  if (status /= SYMPLECTIC_STEP_OK) return
+
+  si%z = x(1:4)
+  if (extrap_field) then
+    f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
+      + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
+      + f%dpth(4)*(x(4)-xlast(4))
+  else
+    call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+    call get_val(f, si%z(4))
+  end if
+end subroutine attempt_midpoint_step
+
+subroutine get_boundary_event_tolerances(rtol, fraction_tolerance, radial_tolerance)
+  real(dp), intent(in) :: rtol
+  real(dp), intent(out) :: fraction_tolerance, radial_tolerance
+
+  fraction_tolerance = max(1d-12, 10d0*rtol)
+  radial_tolerance = max(1d-10, 10d0*rtol)
+  if (boundary_event_fraction_tolerance > 0d0) then
+    fraction_tolerance = boundary_event_fraction_tolerance
+  end if
+  if (boundary_event_radial_tolerance > 0d0) then
+    radial_tolerance = boundary_event_radial_tolerance
+  end if
+end subroutine get_boundary_event_tolerances
+
+subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
+    raw_step, si, f, status, event_fraction, radial_residual, fraction_width)
+  type(symplectic_integrator_t), intent(in) :: accepted_integrator
+  type(field_can_t), intent(in) :: accepted_field
+  procedure(orbit_timestep_sympl_i) :: raw_step
+  type(symplectic_integrator_t), intent(out) :: si
+  type(field_can_t), intent(out) :: f
+  integer, intent(out) :: status
+  real(dp), intent(out) :: event_fraction, radial_residual, fraction_width
+
+  integer, parameter :: max_event_iterations = 64
+  type(symplectic_integrator_t) :: trial_integrator, best_integrator
+  type(field_can_t) :: trial_field, best_field
+  real(dp) :: fraction_low, fraction_ceiling, trial_fraction
+  real(dp) :: previous_fraction, previous_radius
+  real(dp) :: root_estimate
+  real(dp) :: fraction_tolerance, radial_tolerance
+  integer :: iteration, trial_status
+  logical :: root_estimate_available
+
+  fraction_low = 0d0
+  fraction_ceiling = 1d0
+  trial_fraction = 0.5d0
+  root_estimate_available = .false.
+  best_integrator = accepted_integrator
+  best_field = accepted_field
+  call get_boundary_event_tolerances(accepted_integrator%rtol, &
+    fraction_tolerance, radial_tolerance)
+
+  do iteration = 1, max_event_iterations
+    trial_integrator = accepted_integrator
+    trial_field = accepted_field
+    trial_integrator%dt = accepted_integrator%dt*trial_fraction
+    trial_integrator%ntau = 1
+    call raw_step(trial_integrator, trial_field, trial_status)
+
+    select case (trial_status)
+    case (SYMPLECTIC_STEP_OK)
+      previous_fraction = fraction_low
+      previous_radius = best_integrator%z(1)
+      fraction_low = trial_fraction
+      best_integrator = trial_integrator
+      best_field = trial_field
+      radial_residual = abs(sympl_rmax - best_integrator%z(1))
+
+      if (radial_residual == 0d0) then
+        fraction_ceiling = fraction_low
+        root_estimate = fraction_low
+        root_estimate_available = .true.
+      else if (best_integrator%z(1) > previous_radius .and. &
+          fraction_low > previous_fraction) then
+        root_estimate = fraction_low + radial_residual* &
+          (fraction_low - previous_fraction)/ &
+          (best_integrator%z(1) - previous_radius)
+        root_estimate = min(fraction_ceiling, max(fraction_low, root_estimate))
+        root_estimate_available = .true.
+      else
+        root_estimate_available = .false.
+      end if
+      fraction_width = fraction_ceiling - fraction_low
+
+      if (root_estimate_available .and. &
+          boundary_event_converged(fraction_width, radial_residual, &
+          fraction_tolerance, radial_tolerance)) then
+        si = best_integrator
+        f = best_field
+        si%dt = accepted_integrator%dt
+        si%ntau = accepted_integrator%ntau
+        si%z(1) = sympl_rmax
+        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+        call get_val(f, si%z(4))
+        event_fraction = fraction_low
+        status = SYMPLECTIC_STEP_BOUNDARY
+        return
+      end if
+
+      if (root_estimate_available .and. root_estimate > fraction_low) then
+        trial_fraction = fraction_low + 0.8d0* &
+          (root_estimate - fraction_low)
+      else
+        trial_fraction = 0.5d0*(fraction_low + fraction_ceiling)
+      end if
+    case (SYMPLECTIC_STEP_OUTSIDE_DOMAIN)
+      fraction_ceiling = trial_fraction
+      trial_fraction = 0.5d0*(fraction_low + fraction_ceiling)
+    case (SYMPLECTIC_STEP_BOUNDARY_LIMITED)
+      si = accepted_integrator
+      f = accepted_field
+      status = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+      event_fraction = 0d0
+      radial_residual = abs(sympl_rmax - best_integrator%z(1))
+      fraction_width = fraction_ceiling - fraction_low
+      return
+    case default
+      si = accepted_integrator
+      f = accepted_field
+      status = trial_status
+      event_fraction = 0d0
+      radial_residual = abs(sympl_rmax - best_integrator%z(1))
+      fraction_width = fraction_ceiling - fraction_low
+      return
+    end select
+
+    if (trial_fraction <= fraction_low .or. &
+        trial_fraction >= fraction_ceiling) then
+      exit
+    end if
+  end do
+
+  si = accepted_integrator
+  f = accepted_field
+  status = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+  event_fraction = 0d0
+  radial_residual = abs(sympl_rmax - best_integrator%z(1))
+  fraction_width = fraction_ceiling - fraction_low
+end subroutine locate_symplectic_boundary
+
+recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
   integer, intent(out) :: ierr
 
-  integer, parameter :: n = 5
-  integer, parameter :: maxit = 8
+  integer, parameter :: n = 5, maxit = 32
+  real(dp) :: x(n), xlast(n)
+  integer :: ktau, step_status
+  type(symplectic_integrator_t) :: accepted_integrator
+  type(field_can_t) :: accepted_field
 
-  real(dp), dimension(n) :: x, xlast
-  integer :: ktau
+  if (sympl_rmax > 1d0) then
+    ierr = SYMPLECTIC_STEP_OK
+    do ktau = 1, si%ntau
+      accepted_integrator = si
+      accepted_field = f
+      si%pthold = f%pth
+      x(1:4) = si%z
+      x(5) = si%z(1)
+      call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
+        step_status)
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        si = accepted_integrator
+        f = accepted_field
+        ierr = step_status
+        return
+      end if
+      if (x(1) > sympl_rmax) then
+        ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
+      if (x(1) < 0d0) then
+        x(1) = -x(1)
+        x(2) = x(2) + pi
+        call count_event(EVT_R_NEGATIVE)
+        if (x(1) > sympl_rmax) then
+          ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+          return
+        end if
+      end if
+      si%z = x(1:4)
+      if (extrap_field) then
+        f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
+          + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
+          + f%dpth(4)*(x(4)-xlast(4))
+      else
+        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+        call get_val(f, si%z(4))
+      end if
+    end do
+    return
+  end if
 
-  ierr = 0
-  ktau = 0
-  do while(ktau .lt. si%ntau)
-    si%pthold = f%pth
+  if (si%ntau /= 1) error stop &
+    'orbit_timestep_sympl_midpoint raw step requires ntau=1'
+  call attempt_midpoint_step(si, f, ierr)
+end subroutine orbit_timestep_sympl_midpoint
 
-    x(1:4) = si%z
-    x(5) = si%z(1)
+recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
 
-    call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast)
+  if (.not. associated(raw_timestep_sympl)) then
+    error stop 'symplectic timestep implementation is not initialized'
+  end if
+  call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
+end subroutine orbit_timestep_sympl_with_boundary
 
-    if (x(1) > 1.0) then
-      ierr = 1
-      return
+subroutine advance_symplectic_with_boundary(si, f, raw_step, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  procedure(orbit_timestep_sympl_i) :: raw_step
+  integer, intent(out) :: ierr
+
+  type(symplectic_integrator_t) :: entry_integrator, accepted_integrator
+  type(field_can_t) :: entry_field, accepted_field
+  real(dp) :: event_fraction, radial_residual, fraction_width
+  integer :: ktau, step_status, original_ntau
+
+  entry_integrator = si
+  entry_field = f
+  original_ntau = si%ntau
+  si%last_step_fraction = 0d0
+  si%last_event_radial_residual = 0d0
+  si%last_event_fraction_width = 0d0
+  radial_residual = 0d0
+  fraction_width = 0d0
+  ierr = SYMPLECTIC_STEP_OK
+
+  if (sympl_rmax > 1d0) then
+    do ktau = 1, original_ntau
+      accepted_integrator = si
+      accepted_field = f
+      si%ntau = 1
+      call raw_step(si, f, step_status)
+      si%ntau = original_ntau
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        si = accepted_integrator
+        f = accepted_field
+        si%last_step_fraction = real(ktau - 1, dp)/real(original_ntau, dp)
+        ierr = step_status
+        return
+      end if
+    end do
+    si%last_step_fraction = 1d0
+    return
+  end if
+
+  do ktau = 1, original_ntau
+    accepted_integrator = si
+    accepted_field = f
+    si%ntau = 1
+    call raw_step(si, f, step_status)
+    si%ntau = original_ntau
+    if (step_status == SYMPLECTIC_STEP_OK) then
+      if (si%z(1) == sympl_rmax) then
+        si%last_step_fraction = real(ktau, dp)/real(original_ntau, dp)
+        si%last_event_radial_residual = 0d0
+        si%last_event_fraction_width = 0d0
+        ierr = SYMPLECTIC_STEP_BOUNDARY
+        return
+      end if
+      cycle
     end if
 
-    if (x(1) < 0.0) then
-      ! Axis crossing on the final iterate: continue on the opposite ray
-      ! (see newton1); x(2) is the corresponding theta.
-      x(1) = -x(1)
-      x(2) = x(2) + pi
-      call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
-        ierr = 1
+    if (step_status == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
+      accepted_integrator%ntau = original_ntau
+      call locate_symplectic_boundary(accepted_integrator, accepted_field, &
+        raw_step, si, f, step_status, event_fraction, radial_residual, &
+        fraction_width)
+      if (step_status == SYMPLECTIC_STEP_BOUNDARY) then
+        si%last_step_fraction = &
+          (real(ktau - 1, dp) + event_fraction)/real(original_ntau, dp)
+        si%last_event_radial_residual = radial_residual
+        si%last_event_fraction_width = &
+          fraction_width/real(original_ntau, dp)
+        ierr = step_status
         return
       end if
     end if
 
-    si%z = x(1:4)
+    si = entry_integrator
+    f = entry_field
+    si%last_step_fraction = 0d0
+    si%last_event_radial_residual = radial_residual
+    si%last_event_fraction_width = fraction_width
+    ierr = step_status
+    return
+  end do
 
-    if (extrap_field) then
-      f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5) - xlast(5)) &  ! d/dr
-                    + f%dpth(2)*(x(2)-xlast(2)) &  ! d/dth
-                    + f%dpth(3)*(x(3)-xlast(3)) &  ! d/dph
-                    + f%dpth(4)*(x(4)-xlast(4))    ! d/dpph
-    else
-      call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
-      call get_val(f, si%z(4))
-    endif
-
-    ktau = ktau+1
-  enddo
-
-end subroutine orbit_timestep_sympl_midpoint
+  si%last_step_fraction = 1d0
+  si%ntau = original_ntau
+end subroutine advance_symplectic_with_boundary
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1317,9 +1927,11 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
   integer, intent(in) :: s
   real(dp), dimension(4*s) :: x, xlast
-  integer :: k, l, ktau
+  integer :: k, l, ktau, newton_status
 
   type(field_can_t) :: fs(s)
+  type(field_can_t) :: accepted_field
+  type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
 
   do k = 1,s
@@ -1330,31 +1942,30 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     do k = 1,s
       x((4*k-3):(4*k)) = si%z
     end do
 
-    call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
+    call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast, &
+      newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
+      return
+    end if
     !optionally try fixed point iterations, doesn't work yet
     !call fixpoint_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
 
-    if (x(1) > 1.0) then
-      ierr = 1
+    if (any(x(1:4*s:4) > sympl_rmax)) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
-    end if
-
-    if (x(1) < 0.0) then
-      ! Axis crossing on the final iterate: continue on the opposite ray
-      ! (see newton1); x(2) is the corresponding theta.
-      x(1) = -x(1)
-      x(2) = x(2) + pi
-      call count_event(EVT_R_NEGATIVE)
-      if (x(1) > 1.0) then
-        ierr = 1
-        return
-      end if
     end if
 
     call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
@@ -1453,9 +2064,11 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
 
   integer, intent(in) :: s
   real(dp), dimension(4*s-2) :: x, xlast
-  integer :: ktau, k, l
+  integer :: ktau, k, l, newton_status
 
   type(field_can_t) :: fs(s)
+  type(field_can_t) :: accepted_field
+  type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
 
   do k = 1,s
@@ -1465,6 +2078,8 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    accepted_integrator = si
+    accepted_field = f
     si%pthold = f%pth
 
     x(1) = si%z(1)
@@ -1473,7 +2088,14 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       x((4*k-3-2):(4*k-2)) = si%z
     end do
 
-    call newton_rk_lobatto(si, fs, s, x, si%atol, si%rtol, maxit, xlast)
+    call newton_rk_lobatto(si, fs, s, x, si%atol, si%rtol, maxit, xlast, &
+      newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
+      return
+    end if
 
     call coeff_rk_lobatto(s, a, ahat, b, c)
 
