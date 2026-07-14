@@ -89,7 +89,8 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   initial_field = f
   si%dt = interval
   call stepper(si, f, status)
-  if (status == SYMPLECTIC_STEP_OK) then
+  if (status == SYMPLECTIC_STEP_OK .or. &
+      status == SYMPLECTIC_STEP_BOUNDARY) then
     si%dt = interval
     return
   end if
@@ -107,9 +108,22 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   ! recovery path, not a globally fixed symplectic map.
   call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
     status)
-  if (status == SYMPLECTIC_STEP_OK) &
+  if (status == SYMPLECTIC_STEP_BOUNDARY) then
+    si%last_step_fraction = 0.5_dp*si%last_step_fraction
+    si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+    si%dt = interval
+    return
+  end if
+  if (status == SYMPLECTIC_STEP_OK) then
     call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
       status)
+    if (status == SYMPLECTIC_STEP_BOUNDARY) then
+      si%last_step_fraction = 0.5_dp + 0.5_dp*si%last_step_fraction
+      si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+      si%dt = interval
+      return
+    end if
+  end if
   if (status /= SYMPLECTIC_STEP_OK) then
     si = initial_integrator
     f = initial_field

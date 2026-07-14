@@ -3,7 +3,8 @@ module linear_radial_field_backend
   use field_can_base, only: field_can_t
   use orbit_symplectic_base, only: symplectic_integrator_t, &
     SYMPLECTIC_STEP_BOUNDARY_LIMITED, SYMPLECTIC_STEP_OK, &
-    SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER
+    SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
+    SYMPLECTIC_STEP_BOUNDARY
 
   implicit none
 
@@ -91,6 +92,29 @@ contains
     f%H = 99.0_dp
     step_status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
   end subroutine failed_boundary_step
+
+  subroutine retryable_boundary_step(si, f, step_status)
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
+    integer, intent(out) :: step_status
+
+    retry_calls = retry_calls + 1
+    if (si%dt > 0.5_dp) then
+      step_status = SYMPLECTIC_STEP_MAXITER
+      return
+    end if
+    if (retry_calls == 2) then
+      si%z(1) = si%z(1) + si%dt
+      f%H = f%H + si%dt
+      step_status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    si%z(1) = si%z(1) + 0.25_dp*si%dt
+    f%H = f%H + 0.25_dp*si%dt
+    si%last_step_fraction = 0.25_dp
+    si%last_event_fraction_width = 0.02_dp
+    step_status = SYMPLECTIC_STEP_BOUNDARY
+  end subroutine retryable_boundary_step
 end module linear_radial_field_backend
 
 program test_newton_solver_status
@@ -99,7 +123,7 @@ program test_newton_solver_status
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
     evaluate_linear_radial, failed_boundary_step, nonlinear_boundary_step, &
-    retryable_step, retry_calls
+    retryable_boundary_step, retryable_step, retry_calls
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
     advance_symplectic_with_boundary, advance_symplectic_with_retry, &
     newton_midpoint, orbit_sympl_init, &
@@ -321,6 +345,22 @@ contains
     end if
     if (any(retry_integrator%z /= initial_state) .or. retry_field%H /= 0.0_dp) then
       error stop 'failed boundary step changed the accepted state'
+    end if
+
+    retry_calls = 0
+    call advance_symplectic_with_retry(retry_integrator, retry_field, &
+      retryable_boundary_step, step_status)
+    if (step_status /= SYMPLECTIC_STEP_BOUNDARY .or. retry_calls /= 3) then
+      error stop 'retry path lost a converged boundary event'
+    end if
+    if (abs(retry_integrator%z(1) - 1.125_dp) > 1.0e-14_dp .or. &
+        abs(retry_field%H - 0.625_dp) > 1.0e-14_dp) then
+      error stop 'retry path lost the boundary event state'
+    end if
+    if (abs(retry_integrator%last_step_fraction - 0.625_dp) > 1.0e-14_dp .or. &
+        abs(retry_integrator%last_event_fraction_width - 0.01_dp) > &
+        1.0e-14_dp) then
+      error stop 'retry path reported the wrong boundary event time'
     end if
   end subroutine test_step_retry
 
