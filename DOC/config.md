@@ -11,6 +11,16 @@
   Both default to `-1`, which derives the tolerance from `relerr`. Set positive
   values to refine event location independently of the nonlinear solve.
 
+* `symplectic_newton_warning_mode` defaults to `.true.`. When an implicit solve
+  reaches its iteration limit, SIMPLE continues only if the final Newton
+  correction is finite and no more than ten times the requested relative
+  tolerance. Each occurrence is reported by the corresponding `*_maxit`
+  diagnostic. Set it to `.false.` to stop the affected orbit at its last
+  accepted position. Larger corrections, exterior-domain states, singular
+  linear systems, non-finite values, and unresolved boundary events always
+  stop the orbit. Numerical stops are recorded in `orbit_exit_code` and as
+  `NaN` in `times_lost`; they are unresolved markers, not physical losses.
+
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
   and 64. Each dimension must be between 6 and 512, and their product must not

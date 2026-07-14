@@ -37,18 +37,19 @@ end module failed_symplectic_step_backend
 program test_sympl_testfield
   use, intrinsic :: iso_fortran_env, only : dp => real64, int64
   use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
+  use classification, only: classify_classifier_exit
   use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
     macrostep, macrostep_with_wall_check
   use simple, only : tracer_t, init_sympl, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
   use params, only : isw_field_type, field_input, coord_input, integmode, &
     swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
     ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_DOMAIN, &
-    ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+    ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
   use magfie_sub, only : TEST
   use field_can_mod, only : evaluate
   use orbit_symplectic, only : orbit_timestep_sympl
   use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
-    SYMPLECTIC_STEP_OK
+    SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_MAXITER
 
   implicit none
 
@@ -152,6 +153,9 @@ contains
   end subroutine test_failed_step_preserves_state
 
   subroutine test_exit_classification
+    logical :: classifier_lost
+    integer :: classifier_exit
+
     if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, .true.) /= &
         ORBIT_EXIT_LCFS) then
       error stop 'converged LCFS event was not classified as physical'
@@ -188,6 +192,17 @@ contains
     if (classify_orbit_exit(1, ORBIT_GC, 0, .false.) /= &
         ORBIT_EXIT_NUMERICAL_DOMAIN) then
       error stop 'RK extended-map boundary was classified as physical'
+    end if
+
+    call classify_classifier_exit(SYMPLECTIC_STEP_MAXITER, 3, &
+      classifier_lost, classifier_exit)
+    if (classifier_lost .or. classifier_exit /= ORBIT_EXIT_NUMERICAL_MAXITER) then
+      error stop 'classifier mode promoted Newton maxiter to a physical loss'
+    end if
+    call classify_classifier_exit(SYMPLECTIC_STEP_BOUNDARY, 3, &
+      classifier_lost, classifier_exit)
+    if (.not. classifier_lost .or. classifier_exit /= ORBIT_EXIT_LCFS) then
+      error stop 'classifier mode lost its physical boundary classification'
     end if
   end subroutine test_exit_classification
 
