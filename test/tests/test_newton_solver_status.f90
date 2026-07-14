@@ -64,7 +64,8 @@ contains
 end module linear_radial_field_backend
 
 program test_newton_solver_status
-  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, &
+    ieee_value
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
@@ -74,13 +75,14 @@ program test_newton_solver_status
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
     get_boundary_event_tolerances
   use orbit_symplectic_base, only: symplectic_integrator_t, &
-    EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, LOBATTO3, &
+    EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, &
+    GAUSS4, LOBATTO3, &
     SYMPLECTIC_STEP_BOUNDARY, &
     SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
     SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
     SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, SYMPLECTIC_STEP_BOUNDARY_LIMITED, &
     boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
-    symplectic_euler_warning_mode
+    symplectic_newton_warning_mode
 
   implicit none
 
@@ -93,12 +95,22 @@ program test_newton_solver_status
   field%Aph = 0.0_dp
   field%ro0 = 1.0_dp
   x = [0.5_dp, 0.1_dp, 0.2_dp, 0.3_dp, 0.5_dp]
+  symplectic_newton_warning_mode = .false.
   call newton_midpoint(integrator, field, x, 1.0e-15_dp, 1.0e-12_dp, &
     0, xlast, status)
   if (status /= SYMPLECTIC_STEP_MAXITER) then
     error stop 'zero-iteration midpoint solve did not report max iterations'
   end if
   if (any(xlast /= x)) error stop 'zero-iteration solve changed the iterate'
+
+  x(1) = ieee_value(0.0_dp, ieee_quiet_nan)
+  symplectic_newton_warning_mode = .true.
+  call newton_midpoint(integrator, field, x, 1.0e-15_dp, 1.0e-12_dp, &
+    0, xlast, status)
+  if (status /= SYMPLECTIC_STEP_MAXITER) then
+    error stop 'warning mode accepted a non-finite Newton iterate'
+  end if
+  symplectic_newton_warning_mode = .false.
 
   x(1) = 1.1_dp
   call newton_midpoint(integrator, field, x, 1.0e-15_dp, 1.0e-12_dp, &
@@ -171,49 +183,56 @@ program test_newton_solver_status
   call test_lcfs_location
   call test_configured_event_tolerances
   call test_solver_basin_is_not_boundary
-  call test_euler_warning_mode
+  call test_newton_warning_mode
 
 contains
 
-  subroutine test_euler_warning_mode
+  subroutine test_newton_warning_mode
+    integer, parameter :: modes(8) = [EXPL_IMPL_EULER, IMPL_EXPL_EULER, &
+      MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3]
     type(symplectic_integrator_t) :: strict_integrator, warning_integrator
     type(field_can_t) :: strict_field, warning_field
     real(dp) :: initial_state(4)
-    integer :: euler_status
+    integer :: mode_index, step_status
 
     eval_field => evaluate_linear_radial
-    strict_field%ro0 = 1.0_dp
-    strict_field%mu = 1.0_dp
     initial_state = [0.5_dp, 0.0_dp, 0.0_dp, 0.0_dp]
-    call orbit_sympl_init(strict_integrator, strict_field, initial_state, &
-      0.01_dp, 1, 0.0_dp, EXPL_IMPL_EULER)
-    strict_integrator%atol = 0.0_dp
-    symplectic_euler_warning_mode = .false.
-    call orbit_timestep_sympl(strict_integrator, strict_field, euler_status)
-    if (euler_status /= SYMPLECTIC_STEP_MAXITER) then
-      error stop 'strict Euler timestep did not report max iterations'
-    end if
-    if (any(strict_integrator%z /= initial_state)) then
-      error stop 'strict Euler max-iteration failure changed the accepted state'
-    end if
+    do mode_index = 1, size(modes)
+      strict_field%ro0 = 1.0_dp
+      strict_field%mu = 1.0_dp
+      call orbit_sympl_init(strict_integrator, strict_field, initial_state, &
+        0.01_dp, 1, 0.0_dp, modes(mode_index))
+      strict_integrator%atol = 0.0_dp
+      symplectic_newton_warning_mode = .false.
+      call orbit_timestep_sympl(strict_integrator, strict_field, step_status)
+      if (step_status /= SYMPLECTIC_STEP_MAXITER) then
+        print *, 'strict mode, status:', modes(mode_index), step_status
+        error stop 'strict timestep did not report max iterations'
+      end if
+      if (any(strict_integrator%z /= initial_state)) then
+        error stop 'strict max-iteration failure changed the accepted state'
+      end if
 
-    warning_field%ro0 = 1.0_dp
-    warning_field%mu = 1.0_dp
-    call orbit_sympl_init(warning_integrator, warning_field, initial_state, &
-      0.01_dp, 1, 0.0_dp, EXPL_IMPL_EULER)
-    warning_integrator%atol = 0.0_dp
-    symplectic_euler_warning_mode = .true.
-    call orbit_timestep_sympl(warning_integrator, warning_field, euler_status)
-    if (euler_status /= SYMPLECTIC_STEP_OK) then
-      error stop 'Euler warning mode did not continue the timestep'
-    end if
-    if (.not. all(ieee_is_finite(warning_integrator%z))) then
-      error stop 'Euler warning mode accepted a non-finite state'
-    end if
-    if (all(warning_integrator%z == initial_state)) then
-      error stop 'Euler warning mode did not commit the timestep'
-    end if
-  end subroutine test_euler_warning_mode
+      warning_field%ro0 = 1.0_dp
+      warning_field%mu = 1.0_dp
+      call orbit_sympl_init(warning_integrator, warning_field, initial_state, &
+        0.01_dp, 1, 0.0_dp, modes(mode_index))
+      warning_integrator%atol = 0.0_dp
+      symplectic_newton_warning_mode = .true.
+      call orbit_timestep_sympl(warning_integrator, warning_field, step_status)
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        print *, 'warning mode, status:', modes(mode_index), step_status
+        error stop 'warning mode did not continue the timestep'
+      end if
+      if (.not. all(ieee_is_finite(warning_integrator%z))) then
+        error stop 'warning mode accepted a non-finite state'
+      end if
+      if (modes(mode_index) == EXPL_IMPL_EULER .and. &
+          all(warning_integrator%z == initial_state)) then
+        error stop 'warning mode did not commit the timestep'
+      end if
+    end do
+  end subroutine test_newton_warning_mode
 
   subroutine test_configured_event_tolerances
     type(symplectic_integrator_t) :: loose_integrator, tight_integrator

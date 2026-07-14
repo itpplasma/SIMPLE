@@ -15,7 +15,7 @@ module diag_counters
 
     public :: EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, EVT_RK_GAUSS_MAXIT, &
               EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
-              EVT_FO_LOSS, EVT_FO_FAULT, N_EVENT
+              EVT_FO_LOSS, EVT_FO_FAULT, EVT_MIDPOINT_MAXIT, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
               diag_counters_reset, event_name
 
@@ -30,11 +30,12 @@ module diag_counters
     ! s >= 1 crossing (physical loss); FAULT = field-inversion non-convergence.
     integer, parameter :: EVT_FO_LOSS = 7
     integer, parameter :: EVT_FO_FAULT = 8
-    integer, parameter :: N_EVENT = 8
+    integer, parameter :: EVT_MIDPOINT_MAXIT = 9
+    integer, parameter :: N_EVENT = 9
 
-    ! One cache line (64 B = 8 int64) per thread column, so neighbouring threads
-    ! never share a line. The event id indexes within a column; STRIDE >= N_EVENT.
-    integer, parameter :: STRIDE = 8
+    ! Whole cache lines per thread column keep neighbouring threads from sharing
+    ! a line. The event id indexes within a column; STRIDE >= N_EVENT.
+    integer, parameter :: STRIDE = 16
     integer(int64), allocatable :: counts(:, :)  ! (STRIDE, 0:nthreads-1)
 
 contains
@@ -95,6 +96,8 @@ contains
             name = 'fo_loss'
         case (EVT_FO_FAULT)
             name = 'fo_fault'
+        case (EVT_MIDPOINT_MAXIT)
+            name = 'midpoint_maxit'
         case default
             name = 'unknown'
         end select
