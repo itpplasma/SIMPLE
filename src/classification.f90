@@ -77,9 +77,9 @@ contains
         real(dp), dimension(5) :: z
         real(dp) :: bmod,sqrtg
         real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
-        integer :: it, ktau, it_f
+        integer :: first_unresolved_it, hold_streak, it, ktau, it_f
         integer(8) :: kt
-        logical :: passing
+        logical :: had_numerical_hold, passing
 
         integer                                       :: ifp_tip,ifp_per
         integer,          dimension(:),   allocatable :: ipoi
@@ -215,6 +215,9 @@ contains
 
 
         kt = 0
+        first_unresolved_it = 0
+        hold_streak = 0
+        had_numerical_hold = .false.
         if (passing) then
             !$omp atomic
             confpart_pass(1)=confpart_pass(1)+1.d0
@@ -258,16 +261,36 @@ contains
                 cycle
             endif
             do ktau=1,ntau
+                if (hold_streak /= 0) then
+                    ierr = hold_streak
+                    exit
+                end if
                 if (integmode <= 0) then
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
+                    if (ierr /= 0 .and. ierr /= 1 .and. &
+                        symplectic_newton_warning_mode) then
+                        if (hold_streak == 0) then
+                            call count_event(EVT_WARNING_STEP_SKIP)
+                            hold_streak = ierr
+                            had_numerical_hold = .true.
+                            if (first_unresolved_it == 0) first_unresolved_it = it
+                            ierr = 0
+                        end if
+                    end if
                 else
                     call advance_symplectic_with_retry(anorb%si, anorb%f, &
                         orbit_timestep_sympl, ierr)
                     if (ierr /= 0 .and. ierr /= SYMPLECTIC_STEP_BOUNDARY .and. &
                         symplectic_newton_warning_mode) then
+                        if (hold_streak == 0) then
                         call count_event(EVT_WARNING_STEP_SKIP)
+                            hold_streak = ierr
+                            had_numerical_hold = .true.
+                            if (first_unresolved_it == 0) first_unresolved_it = it
                         ierr = 0
+                        end if
                     else if (ierr == 0) then
+                        hold_streak = 0
                         z(1:3) = anorb%si%z(1:3)
                         z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod + &
                             0.5d0*anorb%f%vpar**2)
@@ -454,6 +477,7 @@ contains
                 !    write(999, *) kt*dtaumin/v0, z
             enddo
             if(ierr.ne.0) exit
+            if (.not. had_numerical_hold) then
             if(passing) then
                 !$omp atomic
                 confpart_pass(it)=confpart_pass(it)+1.d0
@@ -461,7 +485,14 @@ contains
                 !$omp atomic
                 confpart_trap(it)=confpart_trap(it)+1.d0
             endif
+            end if
         enddo
+
+        if (had_numerical_hold) then
+            class_result%lost = .false.
+            if (class_result%exit_code < ORBIT_EXIT_NUMERICAL_DOMAIN) &
+                class_result%exit_code = ORBIT_EXIT_NUMERICAL_EVENT
+        end if
 
         !$omp critical
         zend(:,ipart) = z
@@ -479,7 +510,8 @@ contains
         deallocate(zpoipl_tip, zpoipl_per)
         !$omp end critical
         if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
-            do it_f = it, ntimstep
+            if (first_unresolved_it == 0) first_unresolved_it = min(it, ntimstep)
+            do it_f = first_unresolved_it, ntimstep
                 !$omp atomic update
                 unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
             end do
@@ -494,9 +526,14 @@ contains
         integer, intent(out) :: exit_code
 
         lost = .false.
-        if (mode <= 0 .or. ierr == SYMPLECTIC_STEP_BOUNDARY) then
+        if ((mode <= 0 .and. ierr == 1) .or. &
+            ierr == SYMPLECTIC_STEP_BOUNDARY) then
             lost = .true.
             exit_code = ORBIT_EXIT_LCFS
+            return
+        end if
+        if (mode <= 0) then
+            exit_code = ORBIT_EXIT_NUMERICAL_EVENT
             return
         end if
 

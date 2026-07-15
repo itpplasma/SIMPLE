@@ -49,7 +49,7 @@ program test_spectre_sympl_crossing
     use parmot_mod, only: ro0
     use interface_crossing, only: crossing_log_reset, crossing_log_count_type, &
                                   CROSS_CROSSING, CROSS_REFLECTION, CROSS_STOP, &
-                                  CROSS_SHEET
+        CROSS_SHEET, CROSS_RECOVERY
     use util, only: twopi, sqrt2
 
     implicit none
@@ -326,7 +326,8 @@ contains
                 transition_series(nrec_got) = &
                     crossing_log_count_type(CROSS_CROSSING) + &
                     crossing_log_count_type(CROSS_REFLECTION) + &
-                    crossing_log_count_type(CROSS_SHEET)
+                    crossing_log_count_type(CROSS_SHEET) + &
+                    crossing_log_count_type(CROSS_RECOVERY)
                 t_series(nrec_got) = real(k, dp)*dtaumin/v0
             end if
         end do
