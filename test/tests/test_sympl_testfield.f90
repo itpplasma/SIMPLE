@@ -44,7 +44,8 @@ program test_sympl_testfield
     use params, only : isw_field_type, field_input, coord_input, integmode, &
         swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
         ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_DOMAIN, &
-        ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+        ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_EVENT, &
+        ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use magfie_sub, only : TEST
     use field_can_mod, only : evaluate
     use orbit_symplectic, only : orbit_timestep_sympl
@@ -126,7 +127,8 @@ contains
         real(dp) :: z(5)
         real(dp) :: x_previous(3)
         integer(int64) :: kt
-        integer :: step_error
+        integer :: hold_streak, step_error
+        logical :: numerical_hold
 
         swcoll = .false.
         orbit_model = ORBIT_GC
@@ -155,24 +157,44 @@ contains
 
         z = initial_state
         kt = 0_int64
+        hold_streak = 0
         symplectic_newton_warning_mode = .true.
-        call macrostep(norb, z, kt, step_error, 1)
+        call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
+            numerical_hold_any=numerical_hold)
         if (step_error /= 0) error stop 'warning mode stopped a failed step'
         if (kt /= 1_int64) error stop 'warning mode did not consume the failed step'
+        if (.not. numerical_hold .or. hold_streak == 0) &
+            error stop 'warning mode did not latch the unresolved state'
         if (any(z /= initial_state)) then
             error stop 'warning-mode skip changed the last accepted state'
         end if
+        call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
+            numerical_hold_any=numerical_hold)
+        if (step_error == 0) &
+            error stop 'repeated unchanged warning failure was not bounded'
+        if (kt /= 1_int64) &
+            error stop 'repeated warning failure advanced the time index'
 
         z = initial_state
         x_previous = 0.0_dp
         kt = 0_int64
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous)
+        hold_streak = 0
+        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
+            hold_streak=hold_streak, numerical_hold_any=numerical_hold)
         if (step_error /= 0) error stop 'warning-mode wall path stopped a failed step'
         if (kt /= 1_int64) &
             error stop 'warning-mode wall path did not consume the failed step'
+        if (.not. numerical_hold .or. hold_streak == 0) &
+            error stop 'warning-mode wall path did not latch the failure'
         if (any(z /= initial_state)) then
             error stop 'warning-mode wall skip changed the last accepted state'
         end if
+        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
+            hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+        if (step_error == 0) &
+            error stop 'wall path repeated an unchanged warning failure'
+        if (kt /= 1_int64) &
+            error stop 'repeated wall warning failure advanced the time index'
     end subroutine test_failed_step_preserves_state
 
     subroutine test_exit_classification
@@ -216,6 +238,10 @@ contains
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'RK extended-map boundary was classified as physical'
         end if
+        if (classify_orbit_exit(2, ORBIT_GC, 0, .true.) /= &
+            ORBIT_EXIT_NUMERICAL_EVENT) then
+            error stop 'RK integration fault was classified as physical'
+        end if
 
         call classify_classifier_exit(SYMPLECTIC_STEP_MAXITER, 3, &
             classifier_lost, classifier_exit)
@@ -226,6 +252,10 @@ contains
             classifier_lost, classifier_exit)
         if (.not. classifier_lost .or. classifier_exit /= ORBIT_EXIT_LCFS) then
             error stop 'classifier mode lost its physical boundary classification'
+        end if
+        call classify_classifier_exit(2, 0, classifier_lost, classifier_exit)
+        if (classifier_lost .or. classifier_exit /= ORBIT_EXIT_NUMERICAL_EVENT) then
+            error stop 'classifier mode promoted an RK fault to a physical loss'
         end if
     end subroutine test_exit_classification
 

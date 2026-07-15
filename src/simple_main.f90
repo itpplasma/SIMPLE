@@ -546,7 +546,10 @@ contains
         !$omp parallel firstprivate(norb) private(traj, times, i)
         allocate (traj(5, ntimstep), times(ntimstep))
 
-        !$omp do
+        ! Independent markers have highly nonuniform trace costs. One-marker
+        ! dynamic chunks keep unfinished work available to every thread instead
+        ! of queueing it behind a pathological marker in a static block.
+        !$omp do schedule(dynamic, 1)
         do i = 1, ntestpart
             if (allocated(particle_done)) then
                 if (particle_done(i)) then
@@ -932,8 +935,10 @@ contains
         else if (mode <= 0) then
             if (ierr_orbit == 1 .and. boundary_is_lcfs) then
                 classify_orbit_exit = ORBIT_EXIT_LCFS
-            else
+            else if (ierr_orbit == 1) then
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+            else
+                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_EVENT
             end if
         else
             select case (ierr_orbit)
@@ -974,13 +979,16 @@ contains
         real(dp), dimension(5) :: z
         real(dp) :: u_ref_prev(3), x_prev(3), x_prev_m(3), exit_step
         integer :: it, ierr_orbit, it_final, it_f
+        integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
-        logical :: passing, faulted, physical_exit
+        logical :: passing, faulted, numerical_hold, physical_exit
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
         faulted = .false.
         physical_exit = .false.
+        first_unresolved_it = 0
+        hold_streak = 0
         exit_step = -1d0
         orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
         orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
@@ -1050,11 +1058,16 @@ contains
                 if (wall_enabled) then
                     ! Use microstep-level wall checking for STL walls
                     call macrostep_with_wall_check(anorb, z, kt, ierr_orbit, &
-                        ntau_macro(it), ipart, x_prev_m, exit_step)
+                        ntau_macro(it), ipart, x_prev_m, exit_step, &
+                        hold_streak=hold_streak, &
+                        numerical_hold_any=numerical_hold)
                 else
                     call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it), &
-                        exit_step)
+                        exit_step, hold_streak=hold_streak, &
+                        numerical_hold_any=numerical_hold)
                 end if
+                if (numerical_hold .and. first_unresolved_it == 0) &
+                    first_unresolved_it = it
             end if
 
             if (ierr_orbit .ne. 0) then
@@ -1075,10 +1088,7 @@ contains
                             anorb%si%last_event_fraction_width*dtaumin/v0
                     end if
                 else
-                    do it_f = it, ntimstep
-                        !$omp atomic update
-                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
-                    end do
+                    if (first_unresolved_it == 0) first_unresolved_it = it
                     faulted = .true.
                 end if
                 exit
@@ -1088,9 +1098,20 @@ contains
             orbit_traj(:, it) = z
             orbit_times(it) = kt*dtaumin/v0
 
-            call increase_confined_count(it, passing)
+            if (first_unresolved_it == 0) call increase_confined_count(it, passing)
             it_final = it
         end do
+
+        if (first_unresolved_it > 0) then
+            do it_f = first_unresolved_it, ntimstep
+                !$omp atomic update
+                unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+            end do
+            physical_exit = .false.
+            faulted = .true.
+            if (orbit_exit_code(ipart) < ORBIT_EXIT_NUMERICAL_DOMAIN) &
+                orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+        end if
 
         ! Fill remaining timesteps with NaN if particle left domain early
         if (it_final < ntimstep) then
@@ -1225,6 +1246,7 @@ contains
 
         type(sympl_spectre_state_t) :: state
         integer :: it, it_f, ktau, ierr_orbit, it_final
+        integer :: first_unresolved_it, holds_before
         integer(8) :: kt
         real(dp) :: t_stop, t_frac
 
@@ -1235,15 +1257,19 @@ contains
         it_final = 0
         ierr_orbit = SYMPL_SPECTRE_OK
         t_frac = 1.0d0
+        first_unresolved_it = 0
 
         do it = 1, ntimstep
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
+                    holds_before = state%warning_hold_count
                     call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
                         ipart, &
                         real(kt, dp)*dtaumin/v0, &
                         dtaumin/v0, ierr_orbit, &
                         t_frac)
+                    if (state%warning_hold_count > holds_before .and. &
+                        first_unresolved_it == 0) first_unresolved_it = it
                     if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
                     kt = kt + 1
                 end do
@@ -1256,19 +1282,14 @@ contains
                     orbit_exit_code(ipart) = ORBIT_EXIT_LCFS
                 case (SYMPL_SPECTRE_STOP)
                     orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
-                    do it_f = it, ntimstep
-                        !$omp atomic update
-                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
-                    end do
                 case (SYMPL_SPECTRE_SKIM)
                     orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
                 case default
                     orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
-                    do it_f = it, ntimstep
-                        !$omp atomic update
-                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
-                    end do
                 end select
+                if (ierr_orbit /= SYMPL_SPECTRE_LOSS .and. &
+                    ierr_orbit /= SYMPL_SPECTRE_SKIM .and. &
+                    first_unresolved_it == 0) first_unresolved_it = it
                 exit
             end if
 
@@ -1279,9 +1300,16 @@ contains
             end if
             orbit_traj(:, it) = z
             orbit_times(it) = kt*dtaumin/v0
-            call increase_confined_count(it, passing)
+            if (first_unresolved_it == 0) call increase_confined_count(it, passing)
             it_final = it
         end do
+
+        if (first_unresolved_it > 0) then
+            do it_f = first_unresolved_it, ntimstep
+                !$omp atomic update
+                unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+            end do
+        end if
 
         ! A mirror-confined (skimming) marker is confined for the rest of the
         ! trace, so it must count as confined at every remaining step for the
@@ -1299,7 +1327,10 @@ contains
             end do
         end if
 
-        if (ierr_orbit == SYMPL_SPECTRE_OK) then
+        if (state%warning_hold_count > 0) then
+            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
+            orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+        else if (ierr_orbit == SYMPL_SPECTRE_OK) then
             t_stop = real(kt, dp)*dtaumin/v0
             orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         else if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
@@ -1349,7 +1380,8 @@ contains
             event_fraction*(z_end(4:5) - z_start(4:5))
     end subroutine locate_linear_lcfs
 
-    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step)
+    subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
+            hold_streak, numerical_hold_any)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
@@ -1360,14 +1392,25 @@ contains
         integer, intent(out) :: ierr_orbit
         integer, intent(in) :: ntau_local
         real(dp), intent(out), optional :: exit_step
+        integer, intent(inout), optional :: hold_streak
+        logical, intent(out), optional :: numerical_hold_any
 
-        integer :: ktau
+        integer :: hold_streak_local, ktau
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
+        logical :: numerical_hold, numerical_hold_any_local
 
         if (present(exit_step)) exit_step = real(kt, dp)
+        hold_streak_local = 0
+        if (present(hold_streak)) hold_streak_local = hold_streak
+        numerical_hold_any_local = .false.
 
         do ktau = 1, ntau_local
+            numerical_hold = .false.
             z_step_start = z
+            if (hold_streak_local /= 0) then
+                ierr_orbit = hold_streak_local
+                exit
+            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -1384,12 +1427,22 @@ contains
                         ! Default production mode advances the clock past this
                         ! one unresolved microstep and retries the next step;
                         ! numerical inversion faults are never physical losses.
-                        call count_event(EVT_WARNING_STEP_SKIP)
                         z = z_step_start
+                        if (hold_streak_local == 0) then
+                            call count_event(EVT_WARNING_STEP_SKIP)
+                            hold_streak_local = ierr_orbit
+                            numerical_hold = .true.
+                            numerical_hold_any_local = .true.
                         ierr_orbit = 0
+                    end if
                     end if
                     if (ierr_orbit .ne. 0) exit
                 end if
+                if (numerical_hold) then
+                    kt = kt + 1
+                    cycle
+                end if
+                hold_streak_local = 0
                 kt = kt + 1
                 cycle
             end if
@@ -1401,6 +1454,18 @@ contains
                         anorb%fper, z, loss_fraction)
                     if (present(exit_step)) then
                         exit_step = real(kt, dp) + loss_fraction
+                    end if
+                else if (ierr_orbit /= 0 .and. &
+                        symplectic_newton_warning_mode) then
+                    ! The RK driver rolls back failed integration to the last
+                    ! accepted state. Apply the same bounded warning convention
+                    ! as the symplectic and full-orbit paths.
+                    if (hold_streak_local == 0) then
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak_local = ierr_orbit
+                        numerical_hold = .true.
+                        numerical_hold_any_local = .true.
+                        ierr_orbit = 0
                     end if
                 end if
             else
@@ -1418,17 +1483,31 @@ contains
                     ! advance_symplectic_with_retry restored the last accepted
                     ! state. Skip only the unresolved microstep and continue;
                     ! strict mode still reports the numerical exit.
+                    if (hold_streak_local == 0) then
                     call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak_local = ierr_orbit
+                        numerical_hold = .true.
+                        numerical_hold_any_local = .true.
                     ierr_orbit = 0
+                    end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
+                    hold_streak_local = 0
                 end if
                 if (ierr_orbit .ne. 0) exit
             end if
             if (ierr_orbit .ne. 0) exit
+            if (numerical_hold) then
+                kt = kt + 1
+                cycle
+            end if
+            if (integmode <= 0) hold_streak_local = 0
             if (swcoll) call collide(z, dtaumin) ! Collisions
             kt = kt + 1
         end do
+        if (present(hold_streak)) hold_streak = hold_streak_local
+        if (present(numerical_hold_any)) &
+            numerical_hold_any = numerical_hold_any_local
     end subroutine macrostep
 
     subroutine locate_wall_segment(z, z_start, z_end, ipart, x_start_m, &
@@ -1494,7 +1573,7 @@ contains
     end subroutine locate_wall_segment
 
     subroutine macrostep_with_wall_check(anorb, z, kt, ierr_orbit, ntau_local, &
-            ipart, x_prev_m, exit_step)
+            ipart, x_prev_m, exit_step, hold_streak, numerical_hold_any)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
@@ -1507,19 +1586,28 @@ contains
         integer, intent(in) :: ipart
         real(dp), intent(inout) :: x_prev_m(3)
         real(dp), intent(out), optional :: exit_step
+        integer, intent(inout), optional :: hold_streak
+        logical, intent(out), optional :: numerical_hold_any
 
-        integer :: ktau
+        integer :: hold_streak_local, ktau
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
-        logical :: hit, numerical_hold
+        logical :: hit, numerical_hold, numerical_hold_any_local
 
         call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
+        hold_streak_local = 0
+        if (present(hold_streak)) hold_streak_local = hold_streak
+        numerical_hold_any_local = .false.
         do ktau = 1, ntau_local
             numerical_hold = .false.
             z_step_start = z
+            if (hold_streak_local /= 0) then
+                ierr_orbit = hold_streak_local
+                exit
+            end if
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
                 if (ierr_orbit == 1) then
@@ -1542,6 +1630,15 @@ contains
                         end if
                     end if
                     exit
+                else if (ierr_orbit /= 0 .and. &
+                        symplectic_newton_warning_mode) then
+                    if (hold_streak_local == 0) then
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak_local = ierr_orbit
+                        numerical_hold = .true.
+                        numerical_hold_any_local = .true.
+                        ierr_orbit = 0
+                    end if
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -1569,17 +1666,21 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
+                    if (hold_streak_local == 0) then
                     call count_event(EVT_WARNING_STEP_SKIP)
-                    ierr_orbit = 0
+                        hold_streak_local = ierr_orbit
                     numerical_hold = .true.
+                        numerical_hold_any_local = .true.
+                        ierr_orbit = 0
+                    end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
+                    hold_streak_local = 0
                 end if
                 if (ierr_orbit .ne. 0) exit
             end if
             if (ierr_orbit .ne. 0) exit
             if (numerical_hold) then
-                if (swcoll) call collide(z, dtaumin)
                 kt = kt + 1
                 cycle
             end if
@@ -1598,9 +1699,13 @@ contains
 
             if (swcoll) call collide(z, dtaumin)
             kt = kt + 1
+            if (integmode <= 0) hold_streak_local = 0
             x_prev_m = x_cur_m
             u_ref_prev = u_ref_cur
         end do
+        if (present(hold_streak)) hold_streak = hold_streak_local
+        if (present(numerical_hold_any)) &
+            numerical_hold_any = numerical_hold_any_local
     end subroutine macrostep_with_wall_check
 
     subroutine to_standard_z_coordinates(anorb, z)
@@ -1761,7 +1866,8 @@ contains
         end if
         close (unit)
 
-        open (newunit=unit, file='confined_fraction.dat', recl=1024)
+        open (newunit=unit, file='confined_fraction.dat', status='replace', &
+            action='write', recl=1024)
         do i = 1, ntimstep
             resolved_count = ntestpart - unresolved_orbits(i)
             if (resolved_count > 0) then
@@ -1776,7 +1882,8 @@ contains
         end do
         close (unit)
 
-        open (newunit=unit, file='unresolved_fraction.dat', recl=1024)
+        open (newunit=unit, file='unresolved_fraction.dat', status='replace', &
+            action='write', recl=1024)
         do i = 1, ntimstep
             write (unit, *) dble(kt_macro(i))*dtaumin/v0, &
                 real(unresolved_orbits(i), dp)/norm, ntestpart

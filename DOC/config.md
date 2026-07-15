@@ -15,13 +15,16 @@
   reaches its iteration limit, SIMPLE continues only if the final Newton
   correction is finite and no more than ten times the requested relative
   tolerance. Each occurrence is reported by the corresponding `*_maxit`
-  diagnostic. If bounded retries still cannot resolve a numerical microstep,
-  SIMPLE retains the last accepted state for that interval, records
-  `warning_step_skip`, and resumes the same marker at the next microstep.
-  Numerical failures therefore never become physical losses or terminate a
-  marker in the default mode. Set the option to `.false.` for strict diagnostic
-  runs that roll back and stop the affected marker; those stops use a 101--105
-  `orbit_exit_code` and `NaN` in `times_lost` and remain distinct from losses.
+  diagnostic. The production RK, symplectic, and full-orbit paths then use the
+  same terminal convention: if bounded recovery cannot resolve a numerical
+  microstep, SIMPLE retains the last accepted state for that interval, records
+  `warning_step_skip`, and marks the interval unresolved. Because an unchanged
+  state would reproduce the same deterministic failure, the next microstep uses
+  a circuit breaker instead of repeating the complete retry cascade. It ends
+  only that marker with a 101--105 `orbit_exit_code` and `NaN` in `times_lost`;
+  the ensemble continues, and the marker is neither confined nor physically
+  lost. Set the option to `.false.` for strict diagnostic runs that expose the
+  first exhausted recovery without the one-interval warning hold.
 
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
