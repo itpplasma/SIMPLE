@@ -1118,8 +1118,8 @@ contains
         !> confined for the full trace, reflects at forbidden interfaces, or is
         !> lost at the outermost interface. Every crossing/reflection is logged.
         use spectre_orbit, only: spectre_orbit_state_t, spectre_event_t, &
-                                 spectre_state_reset, orbit_timestep_spectre, &
-                                 SPECTRE_OK, SPECTRE_BOUNDARY
+            spectre_state_reset, orbit_timestep_spectre, &
+            SPECTRE_OK, SPECTRE_BOUNDARY
         use magfie_sub, only: spectre_field
         use interface_crossing, only: crossing_log_record
         use params, only: crossing_level
@@ -1133,7 +1133,7 @@ contains
 
         type(spectre_orbit_state_t) :: state
         type(spectre_event_t) :: event
-        integer :: it, ktau, ierr_orbit, it_final
+        integer :: it, ktau, ierr_orbit, it_final, it_f
         integer(8) :: kt
         real(dp) :: t_stop
 
@@ -1158,6 +1158,15 @@ contains
 
             if (ierr_orbit /= SPECTRE_OK) then
                 it_final = it
+                if (ierr_orbit == SPECTRE_BOUNDARY) then
+                    orbit_exit_code(ipart) = ORBIT_EXIT_LCFS
+                else
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                    do it_f = it, ntimstep
+                    !$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+                    end do
+                end if
                 exit
             end if
 
@@ -1176,8 +1185,11 @@ contains
 
         if (ierr_orbit == SPECTRE_BOUNDARY) then
             t_stop = (real(kt, dp) + event%t_frac)*dtaumin/v0
+        else if (ierr_orbit /= SPECTRE_OK) then
+            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
         else
             t_stop = real(kt, dp)*dtaumin/v0
+            orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         end if
 
 !$omp critical
@@ -1196,8 +1208,9 @@ contains
         !> interface, matching the RK45 path; CROSS_STOP remains only as the
         !> pathological non-convergence fallback inside the microstepper.
         use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
-                                       orbit_microstep_sympl_spectre, &
-                                       SYMPL_SPECTRE_OK, SYMPL_SPECTRE_SKIM
+            orbit_microstep_sympl_spectre, &
+            SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, &
+            SYMPL_SPECTRE_STOP, SYMPL_SPECTRE_SKIM
         use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
         use params, only: crossing_level
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
@@ -1210,7 +1223,7 @@ contains
         real(dp), intent(out) :: orbit_times(:)
 
         type(sympl_spectre_state_t) :: state
-        integer :: it, ktau, ierr_orbit, it_final
+        integer :: it, ktau, ierr_orbit, it_final, it_f
         integer(8) :: kt
         real(dp) :: t_stop, t_frac
 
@@ -1237,6 +1250,24 @@ contains
 
             if (ierr_orbit /= SYMPL_SPECTRE_OK) then
                 it_final = it
+                select case (ierr_orbit)
+                case (SYMPL_SPECTRE_LOSS)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_LCFS
+                case (SYMPL_SPECTRE_STOP)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+                    do it_f = it, ntimstep
+                        !$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+                    end do
+                case (SYMPL_SPECTRE_SKIM)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
+                case default
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                    do it_f = it, ntimstep
+                        !$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+                    end do
+                end select
                 exit
             end if
 
@@ -1269,10 +1300,13 @@ contains
 
         if (ierr_orbit == SYMPL_SPECTRE_OK) then
             t_stop = real(kt, dp)*dtaumin/v0
+            orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         else if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
             ! Mirror-confined at an interior interface: cannot be lost, so record
             ! it as confined (times_lost = trace_time) rather than at its stop.
             t_stop = trace_time
+        else if (ierr_orbit /= SYMPL_SPECTRE_LOSS) then
+            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
         else
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
@@ -1642,12 +1676,14 @@ contains
         !> Write the per-particle and confined-fraction result files from the
         !> shared result arrays. progress_monitor calls this every
         !> checkpoint_interval seconds, so a run killed mid-flight keeps its
-        !> last flushed output. Confined fractions are normalised by ntestpart,
-        !> as in the final write, so a partial file is a converging lower bound
-        !> and never exceeds one; particles not yet finished keep their sentinel
-        !> values (times_lost = -1).
-        integer :: i, num_lost, unit
-        real(dp) :: inverse_times_lost_sum, norm
+        !> last flushed output. Confined fractions are conditional on the
+        !> numerically resolved population at each time. A partial file remains
+        !> a lower bound because unfinished particles have not contributed to
+        !> the numerator. Particles not yet finished keep times_lost = -1.
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+
+        integer :: i, num_lost, resolved_count, unit
+        real(dp) :: inverse_times_lost_sum, norm, pass_fraction, trap_fraction
 
         norm = real(max(ntestpart, 1), dp)
 
@@ -1660,6 +1696,9 @@ contains
         num_lost = 0
         inverse_times_lost_sum = 0.0d0
         do i = 1, ntestpart
+            if (orbit_exit_code(i) >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
+                times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
+            end if
             write (unit, *) i, times_lost(i), trap_par(i), zstart(1, i), &
                 perp_inv(i), zend(:, i)
             if (orbit_exit_code(i) == ORBIT_EXIT_LCFS .or. &
@@ -1693,8 +1732,16 @@ contains
 
         open (newunit=unit, file='confined_fraction.dat', recl=1024)
         do i = 1, ntimstep
-            write (unit, *) dble(kt_macro(i))*dtaumin/v0, confpart_pass(i)/norm, &
-                confpart_trap(i)/norm, ntestpart
+            resolved_count = ntestpart - unresolved_orbits(i)
+            if (resolved_count > 0) then
+                pass_fraction = confpart_pass(i)/real(resolved_count, dp)
+                trap_fraction = confpart_trap(i)/real(resolved_count, dp)
+            else
+                pass_fraction = ieee_value(0.0_dp, ieee_quiet_nan)
+                trap_fraction = ieee_value(0.0_dp, ieee_quiet_nan)
+            end if
+            write (unit, *) dble(kt_macro(i))*dtaumin/v0, pass_fraction, &
+                trap_fraction, resolved_count
         end do
         close (unit)
 

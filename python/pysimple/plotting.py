@@ -44,7 +44,7 @@ The plotting functions read standard SIMPLE output files:
     Column 1: Time [s]
     Column 2: confpart_pass (confined passing fraction)
     Column 3: confpart_trap (confined trapped fraction)
-    Column 4: Total number of particles
+    Column 4: Numerically resolved particles used as the denominator
     Note: Total confined fraction = Column 2 + Column 3
 
 Example
@@ -210,7 +210,7 @@ def load_loss_data(directory: str | Path) -> LossData:
         start_pitch = np.zeros(n_particles)
 
     # Load confined_fraction.dat
-    # Columns: time, confpart_pass, confpart_trap, ntestpart
+    # Columns: time, confpart_pass, confpart_trap, resolved particle count
     conf_file = directory / "confined_fraction.dat"
     if conf_file.exists():
         conf_data = np.loadtxt(conf_file)
