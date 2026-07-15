@@ -5,6 +5,7 @@ Tests for the cleaned SIMPLE Python API.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -67,6 +68,29 @@ class TestInitialization:
         pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
         pysimple.init(vmec_file, deterministic=True, trace_time=1e-3)
         pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
+
+    def test_chartmap_init_selects_boozer_field(self):
+        """Chart-map initialization must not attempt to load a VMEC wout."""
+        chartmap_file = os.environ["SIMPLE_TEST_CHARTMAP"]
+        pysimple.init(
+            chartmap_file,
+            deterministic=True,
+            ntestpart=1,
+            npoiper2=64,
+            trace_time=1e-4,
+        )
+        assert int(pysimple._fortran_backend.velo_mod.isw_field_type) == 2
+        result = pysimple.compute_canonical_frequencies(
+            np.array([0.4, 0.7, 0.1, 1.0, 0.1]),
+            n_periods=1,
+            max_steps=10,
+        )
+        assert result["status"] in {
+            pysimple.FREQ_SUCCESS,
+            pysimple.FREQ_ORBIT_LOST,
+            pysimple.FREQ_INTEGRATOR_ERROR,
+            pysimple.FREQ_MAX_STEPS,
+        }
 
 
 class TestIntegratorSelection:

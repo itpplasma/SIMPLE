@@ -84,6 +84,7 @@ DEFAULT_MULTHARM = 5
 # Field type constants (mirroring magfie_sub.f90)
 _TEST_FIELD_ID = -1
 _VMEC_FIELD_ID = 1
+_BOOZER_FIELD_ID = 2
 
 # Direct access to Fortran params module
 params = _fortran_backend.params
@@ -94,12 +95,29 @@ _simple_main = _fortran_backend.Simple_Main()
 # Module state
 _initialized = False
 _current_vmec: str | None = None
+_current_chartmap = False
 _tracer: "_fortran_backend.simple.tracer_t | None" = None
 _field_key: "tuple | None" = None
 
 
 def _is_test_field() -> bool:
     return int(_fortran_backend.velo_mod.isw_field_type) == _TEST_FIELD_ID
+
+
+def _is_boozer_chartmap(path: str) -> bool:
+    """Return whether *path* declares the Boozer chart-map file contract."""
+    try:
+        import netCDF4
+    except ImportError as exc:
+        raise ImportError(
+            "netCDF4 is required to initialize SIMPLE from a NetCDF equilibrium"
+        ) from exc
+
+    try:
+        with netCDF4.Dataset(path, "r") as dataset:
+            return int(dataset.getncattr("boozer_field")) == 1
+    except (AttributeError, OSError, TypeError, ValueError):
+        return False
 
 
 def _sampling_rng() -> np.random.Generator:
@@ -170,12 +188,23 @@ def init(
     >>> import pysimple
     >>> pysimple.init('wout.nc', deterministic=True, ntestpart=1000, trace_time=1e-3)
     """
-    global _initialized, _current_vmec, _tracer, _trace_initialized, _field_key
+    global _initialized, _current_vmec, _current_chartmap, _tracer
+    global _trace_initialized, _field_key
 
     # Reset trace initialization flag to ensure field pointers are updated
     _trace_initialized = False
 
     vmec_path = str(Path(vmec_file).expanduser().resolve())
+    chartmap_mode = _is_boozer_chartmap(vmec_path)
+
+    # A Boozer chart map is already expressed in the canonical coordinates
+    # required by the symplectic integrators.  Select that representation when
+    # the caller has not explicitly requested a field type.
+    explicit_field_type = {"isw_field_type", "integ_coords"} & param_overrides.keys()
+    if chartmap_mode and not explicit_field_type:
+        _fortran_backend.velo_mod.isw_field_type = _BOOZER_FIELD_ID
+        if hasattr(params, "integ_coords"):
+            params.integ_coords = _BOOZER_FIELD_ID
 
     # Step 1: Set parameters (replaces read_config without file I/O)
     params.netcdffile = vmec_path
@@ -225,6 +254,18 @@ def init(
         )
         _field_key = field_key
 
+    field_type = int(_fortran_backend.velo_mod.isw_field_type)
+
+    # Chart-map inputs do not carry a VMEC wout.  Point magfie at the Boozer
+    # chart-map field before params_init(), whose stevvo setup evaluates B.
+    if chartmap_mode:
+        if field_type != _BOOZER_FIELD_ID:
+            raise ValueError(
+                "Boozer chart-map input requires isw_field_type=2 "
+                "(or omit isw_field_type to select it automatically)"
+            )
+        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
+
     # Step 3: params_init (same as Fortran main())
     # This calls reset_seed_if_deterministic() internally!
     # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
@@ -233,12 +274,13 @@ def init(
 
     # Step 4: init_magfie - set function pointer for magnetic field evaluation
     # Use isw_field_type from velo_mod (set via param_overrides above)
-    field_type = int(_fortran_backend.velo_mod.isw_field_type)
-
     # Step 5: init_starting_surf (required for non-TEST fields)
     # Match Fortran driver ordering: initialize VMEC magfie for surface setup,
     # then restore requested field type for tracing.
-    if field_type != _TEST_FIELD_ID:
+    if chartmap_mode:
+        samplers = _fortran_backend.Samplers()
+        samplers.init_starting_surf()
+    elif field_type != _TEST_FIELD_ID:
         _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
         samplers = _fortran_backend.Samplers()
         samplers.init_starting_surf()
@@ -248,6 +290,7 @@ def init(
 
     _initialized = True
     _current_vmec = vmec_path
+    _current_chartmap = chartmap_mode
 
 
 def sample_surface(n_particles: int, s: float) -> np.ndarray:
@@ -437,7 +480,8 @@ def _sync_single_surface_state(surface_s: float) -> None:
 
     _fortran_backend.params_wrapper.set_sbeg(1, float(surface_s))
     field_type = int(_fortran_backend.velo_mod.isw_field_type)
-    _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
+    setup_field_type = field_type if _current_chartmap else _VMEC_FIELD_ID
+    _fortran_backend.magfie_wrapper.wrapper_init_magfie(setup_field_type)
     _fortran_backend.Samplers().init_starting_surf()
     _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
 

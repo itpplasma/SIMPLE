@@ -27,11 +27,26 @@ function(add_simple_api_test test_name test_node)
     )
 endfunction()
 
+function(add_chartmap_api_test test_name test_node)
+    add_test(NAME test_simple_api_${test_name}
+        COMMAND ${Python_EXECUTABLE} -m pytest
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_api.py::${test_node} -v
+    )
+    set_tests_properties(test_simple_api_${test_name} PROPERTIES
+        ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python:${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/python;SIMPLE_TEST_CHARTMAP=${CMAKE_BINARY_DIR}/test/tests/test_boozer_chartmap.nc"
+        LABELS "python;simple_api;chartmap;slow"
+        TIMEOUT 120
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS "generate_test_boozer_chartmap_data"
+    )
+endfunction()
+
 add_simple_api_test(integration_constants TestConstants::test_integration_constants)
 add_simple_api_test(default_values TestConstants::test_default_values)
 add_simple_api_test(init_basic TestInitialization::test_init_basic)
 add_simple_api_test(init_parameters TestInitialization::test_init_with_parameters)
 add_simple_api_test(init_repeated TestInitialization::test_multiple_reinitializations)
+add_chartmap_api_test(init_chartmap TestInitialization::test_chartmap_init_selects_boozer_field)
 add_simple_api_test(integrator_alias TestIntegratorSelection::test_alias_resolution)
 add_simple_api_test(sampler_shape TestSampling::test_surface_sampler_shape)
 add_simple_api_test(sampler_sizes TestSampling::test_sample_different_sizes)
