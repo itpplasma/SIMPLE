@@ -15,11 +15,13 @@
   reaches its iteration limit, SIMPLE continues only if the final Newton
   correction is finite and no more than ten times the requested relative
   tolerance. Each occurrence is reported by the corresponding `*_maxit`
-  diagnostic. Set it to `.false.` to stop the affected orbit at its last
-  accepted position. Larger corrections, exterior-domain states, singular
-  linear systems, non-finite values, and unresolved boundary events always
-  stop the orbit. Numerical stops are recorded in `orbit_exit_code` and as
-  `NaN` in `times_lost`; they are unresolved markers, not physical losses.
+  diagnostic. If bounded retries still cannot resolve a numerical microstep,
+  SIMPLE retains the last accepted state for that interval, records
+  `warning_step_skip`, and resumes the same marker at the next microstep.
+  Numerical failures therefore never become physical losses or terminate a
+  marker in the default mode. Set the option to `.false.` for strict diagnostic
+  runs that roll back and stop the affected marker; those stops use a 101--105
+  `orbit_exit_code` and `NaN` in `times_lost` and remain distinct from losses.
 
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
