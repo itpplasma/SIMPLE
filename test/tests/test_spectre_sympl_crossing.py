@@ -205,13 +205,15 @@ def check_cross_path(binary, h5, failures):
         p0, _ = loss_fraction(work, trace_time)
 
     p_mean = 0.5*(p3 + p0)
-    sigma = np.sqrt(max(p_mean*(1.0 - p_mean), 1.0/n)/n)
-    if not abs(p3 - p0) < 3.0*sigma:
+    # The statistic is the difference of two independent N-marker binomial
+    # proportions. Its null variance has a contribution from each sample.
+    sigma_delta = np.sqrt(2.0*max(p_mean*(1.0 - p_mean), 1.0/n)/n)
+    if not abs(p3 - p0) < 3.0*sigma_delta:
         failures.append(f"cross-path: loss fractions differ beyond MC error: "
                         f"sympl {p3:.3f} vs RK45 {p0:.3f} (3 sigma = "
-                        f"{3.0*sigma:.3f})")
+                        f"{3.0*sigma_delta:.3f})")
     print(f"cross-path: loss fraction sympl={p3:.3f} RK45={p0:.3f} "
-          f"3sigma={3.0*sigma:.3f} (N={n})")
+          f"3sigma={3.0*sigma_delta:.3f} (N={n})")
 
 
 def orbit_states(workdir):

@@ -104,14 +104,15 @@ module spectre_sympl_orbit
         real(dp) :: skim_theta = 0.0_dp
         real(dp) :: skim_zeta = 0.0_dp
         !> An exhausted warning-mode recovery holds one unresolved interval.
-        !> The unchanged state would reproduce the same deterministic failure,
-        !> so the following microstep reports a marker-local numerical stop
-        !> instead of repeating the full retry/FO cascade indefinitely.
+        !> The next microstep retries guiding-centre advancement from the last
+        !> valid state. Only a later recovery with the same reason at the same
+        !> state is a repeated deterministic failure and becomes marker-local.
         logical :: warning_hold_latched = .false.
         integer :: warning_hold_count = 0
         integer :: warning_hold_reason = STOP_STEP
         integer :: warning_hold_iface = 0
         integer :: warning_hold_direction = 0
+        real(dp) :: warning_hold_z(4) = 0.0_dp
         type(sheet_gc_state_t) :: sheet
         type(spectre_fo_state_t) :: fo
     end type sympl_spectre_state_t
@@ -214,15 +215,6 @@ contains
         h_try = budget
         nev = 0
         prev_iface = -1
-
-        if (state%warning_hold_latched) then
-            call record_stop(si, f, ipart, t_base_sec, state%warning_hold_iface, &
-                state%warning_hold_direction, state%warning_hold_reason)
-            ierr = SYMPL_SPECTRE_STOP
-            t_frac = 0.0_dp
-            si%dt = state%dt_std
-            return
-        end if
 
         if (state%fo%active) then
             call continue_fo(state, si, f, budget, used, y_out, fo_owner, &
@@ -904,7 +896,7 @@ contains
             call recanonicalize(state, si, f, state%fo%last_y)
         end if
 
-        if (recover_warning_skip(state, budget, used, ierr, t_frac, reason, &
+        if (recover_warning_skip(state, si, budget, used, ierr, t_frac, reason, &
             0, 0)) return
 
         call record_stop(si, f, ipart, t_sec, 0, 0, reason)
@@ -963,17 +955,18 @@ contains
             call set_home_volume(state, owner)
             call recanonicalize(state, si, f, state%fo%last_y)
         end if
-        recover_fo_failure = recover_warning_skip(state, budget, used, ierr, &
-            t_frac, STOP_SHEET, state%fo%iface, &
+        recover_fo_failure = recover_warning_skip(state, si, budget, used, &
+            ierr, t_frac, STOP_SHEET, state%fo%iface, &
             merge(1, -1, owner == state%fo%iface))
     end function recover_fo_failure
 
-    logical function recover_warning_skip(state, budget, used, ierr, t_frac, &
-            reason, iface, direction)
+    logical function recover_warning_skip(state, si, budget, used, ierr, &
+            t_frac, reason, iface, direction)
         !> Last-resort default: after all active recovery has failed, retain the
         !> last valid state for this unresolved interval and resume the marker on
         !> the next microstep. Strict mode returns .false. to expose the stop.
         type(sympl_spectre_state_t), intent(inout) :: state
+        type(symplectic_integrator_t), intent(in) :: si
         real(dp), intent(inout) :: budget, used
         integer, intent(inout) :: ierr
         real(dp), intent(inout) :: t_frac
@@ -981,6 +974,17 @@ contains
 
         recover_warning_skip = symplectic_newton_warning_mode
         if (.not. recover_warning_skip) return
+
+        if (state%warning_hold_latched .and. &
+            reason == state%warning_hold_reason .and. &
+            iface == state%warning_hold_iface .and. &
+            direction == state%warning_hold_direction .and. &
+            maxval(abs(si%z - state%warning_hold_z)) <= &
+            100.0_dp*epsilon(1.0_dp)*max(1.0_dp, &
+                maxval(abs(state%warning_hold_z)))) then
+            recover_warning_skip = .false.
+            return
+        end if
 
         used = used + budget
         budget = 0.0_dp
@@ -993,6 +997,7 @@ contains
         state%warning_hold_reason = reason
         state%warning_hold_iface = iface
         state%warning_hold_direction = direction
+        state%warning_hold_z = si%z
 
         state%fo%active = .false.
         state%sheet%active = .false.
