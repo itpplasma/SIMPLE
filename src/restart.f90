@@ -2,11 +2,11 @@ module restart_mod
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use params, only: ntestpart, times_lost, orbit_exit_code, &
-                      boundary_event_radial_residual, boundary_event_time_width, &
-                      trap_par, perp_inv, zend, &
-                      confpart_pass, confpart_trap, ntimstep, kt_macro, &
-                      v0, dtaumin, trace_time, ORBIT_EXIT_COMPLETED, &
-                      ORBIT_EXIT_LCFS
+        boundary_event_radial_residual, boundary_event_time_width, &
+        trap_par, perp_inv, zend, &
+        confpart_pass, confpart_trap, ntimstep, kt_macro, &
+        v0, dtaumin, trace_time, ORBIT_EXIT_COMPLETED, &
+        ORBIT_EXIT_LCFS, ORBIT_EXIT_WALL
     implicit none
     private
 
@@ -64,7 +64,8 @@ contains
                 boundary_event_radial_residual(idx) = radial_residual
                 boundary_event_time_width(idx) = time_width
                 particle_done(idx) = exit_code == ORBIT_EXIT_COMPLETED .or. &
-                    exit_code == ORBIT_EXIT_LCFS
+                    exit_code == ORBIT_EXIT_LCFS .or. &
+                    exit_code == ORBIT_EXIT_WALL
             end do
             close (unit)
         end if

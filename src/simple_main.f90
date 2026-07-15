@@ -1262,6 +1262,12 @@ contains
                     end do
                 case (SYMPL_SPECTRE_SKIM)
                     orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
+                case default
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                    do it_f = it, ntimstep
+                        !$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+                    end do
                 end select
                 exit
             end if
@@ -1300,7 +1306,7 @@ contains
             ! Mirror-confined at an interior interface: cannot be lost, so record
             ! it as confined (times_lost = trace_time) rather than at its stop.
             t_stop = trace_time
-        else if (ierr_orbit == SYMPL_SPECTRE_STOP) then
+        else if (ierr_orbit /= SYMPL_SPECTRE_LOSS) then
             t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
         else
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
@@ -1701,12 +1707,14 @@ contains
         !> Write the per-particle and confined-fraction result files from the
         !> shared result arrays. progress_monitor calls this every
         !> checkpoint_interval seconds, so a run killed mid-flight keeps its
-        !> last flushed output. Confined fractions are normalised by ntestpart,
-        !> as in the final write, so a partial file is a converging lower bound
-        !> and never exceeds one; particles not yet finished keep their sentinel
-        !> values (times_lost = -1).
-        integer :: i, num_lost, unit
-        real(dp) :: inverse_times_lost_sum, norm
+        !> last flushed output. Confined fractions are conditional on the
+        !> numerically resolved population at each time. A partial file remains
+        !> a lower bound because unfinished particles have not contributed to
+        !> the numerator. Particles not yet finished keep times_lost = -1.
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+
+        integer :: i, num_lost, resolved_count, unit
+        real(dp) :: inverse_times_lost_sum, norm, pass_fraction, trap_fraction
 
         norm = real(max(ntestpart, 1), dp)
 
@@ -1719,6 +1727,9 @@ contains
         num_lost = 0
         inverse_times_lost_sum = 0.0d0
         do i = 1, ntestpart
+            if (orbit_exit_code(i) >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
+                times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
+            end if
             write (unit, *) i, times_lost(i), trap_par(i), zstart(1, i), &
                 perp_inv(i), zend(:, i)
             if (orbit_exit_code(i) == ORBIT_EXIT_LCFS .or. &
@@ -1752,8 +1763,16 @@ contains
 
         open (newunit=unit, file='confined_fraction.dat', recl=1024)
         do i = 1, ntimstep
-            write (unit, *) dble(kt_macro(i))*dtaumin/v0, confpart_pass(i)/norm, &
-                confpart_trap(i)/norm, ntestpart
+            resolved_count = ntestpart - unresolved_orbits(i)
+            if (resolved_count > 0) then
+                pass_fraction = confpart_pass(i)/real(resolved_count, dp)
+                trap_fraction = confpart_trap(i)/real(resolved_count, dp)
+            else
+                pass_fraction = ieee_value(0.0_dp, ieee_quiet_nan)
+                trap_fraction = ieee_value(0.0_dp, ieee_quiet_nan)
+            end if
+            write (unit, *) dble(kt_macro(i))*dtaumin/v0, pass_fraction, &
+                trap_fraction, resolved_count
         end do
         close (unit)
 
