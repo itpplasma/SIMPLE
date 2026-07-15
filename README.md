@@ -239,15 +239,23 @@ Diagnostics for slow convergence of Newton iterations are written in `fort.6601`
 1. Physical time
 2. Confined fraction of passing particles
 3. Confined fraction of trapped particles
-4. Total number of particles
+4. Number of numerically resolved particles used as the denominator
 
-The sum of 2. and 3. yields the overall confined fraction at each time.
+The sum of 2. and 3. yields the overall confined fraction among resolved
+particles at each time. Numerically fatal orbits are excluded from both the
+numerator and denominator. If no orbit is resolved, both fractions are `NaN`.
+`unresolved_fraction.dat` reports the excluded numerical-failure fraction
+against the total initial population; its third column remains the total
+number of particles.
 
 `times_lost.dat` contains the loss time of each particle. Columns are:
 1. Particle index. Corresponds to line number in start.dat .
-2. Time t_loss [s] when the particle is lost. Possible values are: -1, `trace_time`, or any other value between 0 and trace_time.
+2. Time t_loss [s] when the particle is lost. Possible values are: -1, `NaN`,
+   `trace_time`, or any other value between 0 and trace_time.
   * If never lost or classified as regular, maximum tracing time `trace_time` is written.
   * If ignored due to contr_pp, which defines deep passing region as confined (we don consider them anymore), -1 is written.
+  * If tracing ends in a numerical fatal condition, `NaN` is written. Such an
+    orbit is unresolved, not physically lost or confined.
 3. Trapping parameter trap_par that is 1 for deeply trapped, 0 for tp boundary
    and negative for passing. Eq. (3.1) in Accelerated Methods paper.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.
