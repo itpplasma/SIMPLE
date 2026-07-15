@@ -26,19 +26,20 @@ module simple_main
         ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
-    use diag_counters, only: diag_counters_init
+    use diag_counters, only: diag_counters_init, count_event, &
+        EVT_WARNING_STEP_SKIP
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
     use reference_coordinates, only: ref_coords
     use stl_wall_intersection, only: stl_wall_t, stl_wall_init, &
-                                     stl_wall_finalize, &
-                                     stl_wall_first_hit_segment_with_normal
+        stl_wall_finalize, &
+        stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
     use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
         SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
         SYMPLECTIC_STEP_LINEAR_SOLVE, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
-        SYMPLECTIC_STEP_BOUNDARY_LIMITED
+        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode
 
     implicit none
 
@@ -54,13 +55,13 @@ contains
 
     subroutine main
         use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
-                          integmode, params_init, swcoll, generate_start_only, &
-                          isw_field_type, field_input, startmode, &
-                          ntestpart, ntimstep, coord_input, restart
+            integmode, params_init, swcoll, generate_start_only, &
+            isw_field_type, field_input, startmode, &
+            ntestpart, ntimstep, coord_input, restart
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
         use samplers, only: init_starting_surf, sample_spectre_surface, &
-                            init_spectre_start_bounds
+            init_spectre_start_bounds
         use version, only: simple_version
         use field_boozer_chartmap, only: is_boozer_chartmap
         use field, only: is_spectre_file
@@ -181,7 +182,7 @@ contains
             character(32) :: gpu_bench_env
             integer :: gpu_bench_len, gpu_bench_stat
             call get_environment_variable('SIMPLE_GPU_BENCH', gpu_bench_env, &
-                                          gpu_bench_len, gpu_bench_stat)
+                gpu_bench_len, gpu_bench_stat)
             if (gpu_bench_stat == 0 .and. gpu_bench_len > 0) then
                 call trace_compare_gpu(norb)
                 return
@@ -232,7 +233,7 @@ contains
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
-                              REFCOORDS, SPECTRE, set_magfie_refcoords_field
+            REFCOORDS, SPECTRE, set_magfie_refcoords_field
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -258,7 +259,7 @@ contains
 
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
-            self%fper = twopi  ! Full torus for analytic tokamak
+            self%fper = twopi ! Full torus for analytic tokamak
             call print_phase_time('TEST field mode - no input files required')
         else if (use_spectre) then
             call init_spectre_field(self)
@@ -267,7 +268,7 @@ contains
             ! Boozer chartmap: file-based, no VMEC initialization needed
             call init_reference_coordinates(coord_input)
             call print_phase_time('Reference coordinate system '// &
-                                  'initialization completed')
+                'initialization completed')
 
             block
                 use libneo_coordinates, only: chartmap_coordinate_system_t
@@ -288,50 +289,50 @@ contains
             end if
         else
             vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
-                                                                 field_input, &
-                                                                 coord_input)
+                field_input, &
+                coord_input)
             call init_vmec(vmec_equilibrium_file, ans_s, ans_tp, amultharm, &
-                           self%fper)
+                self%fper)
             call print_phase_time('VMEC initialization completed')
 
             call init_reference_coordinates(coord_input)
             call print_phase_time('Reference coordinate system '// &
-                                  'initialization completed')
+                'initialization completed')
 
             call init_stl_wall_if_enabled(coord_input)
             call print_phase_time('STL wall initialization completed')
 
             if (self%integmode >= 0) then
-            if (trim(field_input) == '') then
-                print *, 'simple_main.init_field: field_input must be set (see ', &
-                    'params.apply_config_aliases)'
-                error stop
-            end if
-
-            call field_from_file(field_input, field_temp)
-            call print_phase_time('Field from file loading completed')
-
-            if (isw_field_type == REFCOORDS) then
-                select type (field_temp)
-                type is (splined_field_t)
-                    call set_magfie_refcoords_field(field_temp)
-                type is (vmec_field_t)
-                    block
-                        type(splined_field_t) :: splined_vmec
-                        call create_splined_field(field_temp, ref_coords, &
-                                                  splined_vmec)
-                        call set_magfie_refcoords_field(splined_vmec)
-                    end block
-                class default
-                    print *, &
-                        'simple_main.init_field: REFCOORDS requires '// &
-                        'a splined field'
-                    print *, &
-                        'Supported inputs: coils (auto-splined) or VMEC wout', &
-                        ' (splined onto coord_input)'
+                if (trim(field_input) == '') then
+                    print *, 'simple_main.init_field: field_input must be set (see ', &
+                        'params.apply_config_aliases)'
                     error stop
-                end select
-            end if
+                end if
+
+                call field_from_file(field_input, field_temp)
+                call print_phase_time('Field from file loading completed')
+
+                if (isw_field_type == REFCOORDS) then
+                    select type (field_temp)
+                        type is (splined_field_t)
+                        call set_magfie_refcoords_field(field_temp)
+                        type is (vmec_field_t)
+                        block
+                            type(splined_field_t) :: splined_vmec
+                            call create_splined_field(field_temp, ref_coords, &
+                                splined_vmec)
+                            call set_magfie_refcoords_field(splined_vmec)
+                        end block
+                    class default
+                        print *, &
+                            'simple_main.init_field: REFCOORDS requires '// &
+                            'a splined field'
+                        print *, &
+                            'Supported inputs: coils (auto-splined) or VMEC wout', &
+                            ' (splined onto coord_input)'
+                        error stop
+                    end select
+                end if
             end if
         end if
 
@@ -358,7 +359,7 @@ contains
                 transformation_relerr=canonical_ode_relerr)
             call print_phase_time('Canonical field initialization completed')
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
-                 isw_field_type == MEISS .or. isw_field_type == ALBERT) then
+                isw_field_type == MEISS .or. isw_field_type == ALBERT) then
             call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
                 canonical_grid_ntheta, canonical_grid_nphi, &
                 canonical_ode_relerr)
@@ -379,8 +380,8 @@ contains
         use new_vmec_stuff_mod, only: nper, rmajor
         use util, only: twopi
         use params, only: field_input, spectre_ncon_r, spectre_ncon_th, &
-                          spectre_ncon_phi, spectre_ncon_order, &
-                          spectre_ncon_ode_max_steps
+            spectre_ncon_phi, spectre_ncon_order, &
+            spectre_ncon_ode_max_steps
         use params, only: spectre_ncon_ode_relerr
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
@@ -427,9 +428,9 @@ contains
             ! extended linearly, so iterates out there stay finite.
             sympl_rmax = real(sf%data%Mvol + 1, dp)
             call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
-                                               spectre_ncon_phi, spectre_ncon_order, &
-                                               spectre_ncon_ode_max_steps, &
-                                               spectre_ncon_ode_relerr)
+                spectre_ncon_phi, spectre_ncon_order, &
+                spectre_ncon_ode_max_steps, &
+                spectre_ncon_ode_relerr)
             call init_field_can(SPECTRE, sf)
             call print_phase_time('SPECTRE per-volume canonical construction completed')
         end if
@@ -477,9 +478,9 @@ contains
     end subroutine init_stl_wall_if_enabled
 
     function select_vmec_equilibrium_file(vmec_file_default, field_file, coord_file) &
-        result(vmec_file)
+            result(vmec_file)
         use libneo_coordinates, only: detect_refcoords_file_type, &
-                                      refcoords_file_vmec_wout
+            refcoords_file_vmec_wout
         character(*), intent(in) :: vmec_file_default
         character(*), intent(in) :: field_file
         character(*), intent(in) :: coord_file
@@ -493,7 +494,7 @@ contains
         if (len_trim(field_file) > 0) then
             if (ends_with_nc(field_file)) then
                 call detect_refcoords_file_type(trim(field_file), file_type, &
-                                                ierr, message)
+                    ierr, message)
                 if (ierr == 0 .and. file_type == refcoords_file_vmec_wout) then
                     vmec_file = trim(field_file)
                     return
@@ -504,7 +505,7 @@ contains
         if (len_trim(coord_file) > 0) then
             if (ends_with_nc(coord_file)) then
                 call detect_refcoords_file_type(trim(coord_file), file_type, &
-                                                ierr, message)
+                    ierr, message)
                 if (ierr == 0 .and. file_type == refcoords_file_vmec_wout) then
                     vmec_file = trim(coord_file)
                     return
@@ -529,7 +530,7 @@ contains
 
     subroutine trace_parallel(norb)
         use netcdf_orbit_output, only: init_orbit_netcdf, close_orbit_netcdf, &
-                                       write_orbit_to_netcdf
+            write_orbit_to_netcdf
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
         use params, only: debug
 #endif
@@ -542,10 +543,10 @@ contains
             call init_orbit_netcdf(ntestpart, ntimstep)
         end if
 
-!$omp parallel firstprivate(norb) private(traj, times, i)
+        !$omp parallel firstprivate(norb) private(traj, times, i)
         allocate (traj(5, ntimstep), times(ntimstep))
 
-!$omp do
+        !$omp do
         do i = 1, ntestpart
             if (allocated(particle_done)) then
                 if (particle_done(i)) then
@@ -556,26 +557,26 @@ contains
 
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
             if (debug) then
-!$omp critical
+                !$omp critical
                 kpart = kpart + 1
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                     omp_get_thread_num()
-!$omp end critical
+                !$omp end critical
             end if
 #endif
 
             call trace_orbit(norb, i, traj, times)
 
             if (output_orbits_macrostep) then
-!$omp critical
+                !$omp critical
                 call write_orbit_to_netcdf(i, traj, times)
-!$omp end critical
+                !$omp end critical
             end if
 
             call progress_tick
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
 
         if (output_orbits_macrostep) then
             call close_orbit_netcdf()
@@ -609,7 +610,7 @@ contains
         if (isw_field_type /= BOOZER .or. integmode /= EXPL_IMPL_EULER .or. swcoll .or. &
             len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. generate_start_only) then
             error stop "simple_main.trace_compare_gpu: SIMPLE_GPU_BENCH requires Boozer, " // &
-                       "EXPL_IMPL_EULER, and no wall/collision/classifier options"
+                "EXPL_IMPL_EULER, and no wall/collision/classifier options"
         end if
 
         call sync_boozer_state
@@ -658,7 +659,7 @@ contains
         ! GPU kernel
         t0 = omp_get_wtime()
         call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
-                              gpu_loss, gpu_zend)
+            gpu_loss, gpu_zend)
         t1 = omp_get_wtime()
         t_gpu = t1 - t0
 
@@ -702,16 +703,16 @@ contains
         integer :: i
         type(classification_result_t) :: class_result
 
-!$omp parallel firstprivate(norb) private(class_result, i)
-!$omp do
+        !$omp parallel firstprivate(norb) private(class_result, i)
+        !$omp do
         do i = 1, ntestpart
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
             if (debug) then
-!$omp critical
+                !$omp critical
                 kpart = kpart + 1
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                     omp_get_thread_num()
-!$omp end critical
+                !$omp end critical
             end if
 #endif
 
@@ -724,14 +725,14 @@ contains
             ! iclass already populated by trace_orbit_with_classifiers
             ! Other results (zend, times_lost, trap_par, perp_inv) also already stored
         end do
-!$omp end do
-!$omp end parallel
+        !$omp end do
+        !$omp end parallel
     end subroutine classify_parallel
 
     subroutine print_parameters
         print *, 'tau: ', dtau, dtaumin, min(dabs(mod(dtau, dtaumin)), &
-                                             dabs(mod(dtau, dtaumin) - &
-                                                  dtaumin))/dtaumin, ntau
+            dabs(mod(dtau, dtaumin) - &
+            dtaumin))/dtaumin, ntau
         print *, 'v0 = ', v0
     end subroutine print_parameters
 
@@ -745,9 +746,9 @@ contains
 
     subroutine init_collisions
         use params, only: am1, am2, Z1, Z2, facE_al, dchichi, slowrate, &
-                          dchichi_norm, slowrate_norm, v0
+            dchichi_norm, slowrate_norm, v0
         use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
-                                   ni1_scale, ni2_scale
+            ni1_scale, ni2_scale
 
         real(dp) :: v0_coll, ealpha
         real(dp) :: densi1, densi2, tempi1, tempi2, tempe
@@ -760,8 +761,8 @@ contains
         tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0_coll, dchichi, slowrate, dchichi_norm, &
-                          slowrate_norm)
+            ealpha, v0_coll, dchichi, slowrate, dchichi_norm, &
+            slowrate_norm)
 
         if (abs(v0_coll - v0) > 1d-6) then
             error stop 'simple_main.init_collisions: v0_coll != v0'
@@ -772,7 +773,7 @@ contains
 
     subroutine sample_particles(xstart_is_integ_coords)
         use samplers, only: sample, START_FILE, sample_grid, &
-                            sample_surface_fieldline, sample_surface_fieldline_from_integ
+            sample_surface_fieldline, sample_surface_fieldline_from_integ
 
         logical, intent(in), optional :: xstart_is_integ_coords
         logical :: convert_surface_starts
@@ -825,7 +826,7 @@ contains
         !> TEST field uses (r, theta, phi) coordinates with B0=1, R0=1, a=0.5, iota=1.
         !> bmod = B0 * (1 - r/R0 * cos(theta))
         use params, only: ntestpart, sbeg, bmod00, bmin, bmax, zstart, &
-                          reset_seed_if_deterministic
+            reset_seed_if_deterministic
 
         real(dp), parameter :: B0 = 1.0d0, R0 = 1.0d0, a = 0.5d0
         real(dp) :: r_start, tmp_rand
@@ -960,15 +961,15 @@ contains
 
     subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
         use classification, only: trace_orbit_with_classifiers, &
-                                  classification_result_t, &
-                                  write_classification_results
+            classification_result_t, &
+            write_classification_results
         use magfie_sub, only: SPECTRE
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         type(tracer_t), intent(inout) :: anorb
         integer, intent(in) :: ipart
-        real(dp), intent(out) :: orbit_traj(:, :)  ! (5, ntimstep)
-        real(dp), intent(out) :: orbit_times(:)   ! (ntimstep)
+        real(dp), intent(out) :: orbit_traj(:, :) ! (5, ntimstep)
+        real(dp), intent(out) :: orbit_times(:) ! (ntimstep)
 
         real(dp), dimension(5) :: z
         real(dp) :: u_ref_prev(3), x_prev(3), x_prev_m(3), exit_step
@@ -1024,7 +1025,7 @@ contains
         if (isw_field_type == SPECTRE) then
             if (integmode > 0) then
                 call trace_orbit_spectre_sympl(anorb, ipart, z, passing, &
-                                               orbit_traj, orbit_times)
+                    orbit_traj, orbit_times)
             else
                 call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
             end if
@@ -1036,7 +1037,7 @@ contains
             times_lost(ipart) = -1.d0
             orbit_exit_code(ipart) = ORBIT_EXIT_SKIPPED
             do it = 1, ntimstep
-!$omp atomic update
+                !$omp atomic update
                 confpart_pass(it) = confpart_pass(it) + 1.d0
             end do
             return
@@ -1075,7 +1076,7 @@ contains
                     end if
                 else
                     do it_f = it, ntimstep
-!$omp atomic update
+                        !$omp atomic update
                         unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
                     end do
                     faulted = .true.
@@ -1099,7 +1100,7 @@ contains
             end do
         end if
 
-!$omp critical
+        !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         if (physical_exit) then
@@ -1109,7 +1110,7 @@ contains
         else
             times_lost(ipart) = kt*dtaumin/v0
         end if
-!$omp end critical
+        !$omp end critical
     end subroutine trace_orbit
 
     subroutine trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
@@ -1118,8 +1119,8 @@ contains
         !> confined for the full trace, reflects at forbidden interfaces, or is
         !> lost at the outermost interface. Every crossing/reflection is logged.
         use spectre_orbit, only: spectre_orbit_state_t, spectre_event_t, &
-                                 spectre_state_reset, orbit_timestep_spectre, &
-                                 SPECTRE_OK, SPECTRE_BOUNDARY
+            spectre_state_reset, orbit_timestep_spectre, &
+            SPECTRE_OK, SPECTRE_BOUNDARY
         use magfie_sub, only: spectre_field
         use interface_crossing, only: crossing_log_record
         use params, only: crossing_level
@@ -1133,7 +1134,7 @@ contains
 
         type(spectre_orbit_state_t) :: state
         type(spectre_event_t) :: event
-        integer :: it, ktau, ierr_orbit, it_final
+        integer :: it, it_f, ktau, ierr_orbit, it_final
         integer(8) :: kt
         real(dp) :: t_stop
 
@@ -1146,7 +1147,7 @@ contains
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
                     call orbit_timestep_spectre(state, z, dtaumin, relerr, &
-                                                crossing_level, ierr_orbit, event)
+                        crossing_level, ierr_orbit, event)
                     if (event%occurred) then
                         call crossing_log_record(ipart, &
                             (real(kt, dp) + event%t_frac)*dtaumin/v0, event%info)
@@ -1158,6 +1159,15 @@ contains
 
             if (ierr_orbit /= SPECTRE_OK) then
                 it_final = it
+                if (ierr_orbit == SPECTRE_BOUNDARY) then
+                    orbit_exit_code(ipart) = ORBIT_EXIT_LCFS
+                else
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                    do it_f = it, ntimstep
+                        !$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+                    end do
+                end if
                 exit
             end if
 
@@ -1176,19 +1186,22 @@ contains
 
         if (ierr_orbit == SPECTRE_BOUNDARY) then
             t_stop = (real(kt, dp) + event%t_frac)*dtaumin/v0
+        else if (ierr_orbit /= SPECTRE_OK) then
+            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
         else
             t_stop = real(kt, dp)*dtaumin/v0
+            orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         end if
 
-!$omp critical
+        !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = t_stop
-!$omp end critical
+        !$omp end critical
     end subroutine trace_orbit_spectre
 
     subroutine trace_orbit_spectre_sympl(anorb, ipart, z, passing, orbit_traj, &
-                                         orbit_times)
+            orbit_times)
         !> Per-volume symplectic guiding-center trace for SPECTRE (integmode > 0).
         !> Each microstep resolves interface events by an exact-landing substep of
         !> the same implicit scheme, applies the crossing map, and re-canonicalizes
@@ -1196,8 +1209,9 @@ contains
         !> interface, matching the RK45 path; CROSS_STOP remains only as the
         !> pathological non-convergence fallback inside the microstepper.
         use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
-                                       orbit_microstep_sympl_spectre, &
-                                       SYMPL_SPECTRE_OK, SYMPL_SPECTRE_SKIM
+            orbit_microstep_sympl_spectre, &
+            SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, &
+            SYMPL_SPECTRE_STOP, SYMPL_SPECTRE_SKIM
         use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
         use params, only: crossing_level
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
@@ -1210,12 +1224,12 @@ contains
         real(dp), intent(out) :: orbit_times(:)
 
         type(sympl_spectre_state_t) :: state
-        integer :: it, ktau, ierr_orbit, it_final
+        integer :: it, it_f, ktau, ierr_orbit, it_final
         integer(8) :: kt
         real(dp) :: t_stop, t_frac
 
         call sympl_spectre_reset(state, anorb%si, spectre_mvol, integmode, &
-                                 crossing_level)
+            crossing_level)
 
         kt = 0
         it_final = 0
@@ -1226,10 +1240,10 @@ contains
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
                     call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
-                                                       ipart, &
-                                                       real(kt, dp)*dtaumin/v0, &
-                                                       dtaumin/v0, ierr_orbit, &
-                                                       t_frac)
+                        ipart, &
+                        real(kt, dp)*dtaumin/v0, &
+                        dtaumin/v0, ierr_orbit, &
+                        t_frac)
                     if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
                     kt = kt + 1
                 end do
@@ -1237,6 +1251,18 @@ contains
 
             if (ierr_orbit /= SYMPL_SPECTRE_OK) then
                 it_final = it
+                select case (ierr_orbit)
+                case (SYMPL_SPECTRE_LOSS)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_LCFS
+                case (SYMPL_SPECTRE_STOP)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+                    do it_f = it, ntimstep
+                        !$omp atomic update
+                        unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+                    end do
+                case (SYMPL_SPECTRE_SKIM)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
+                end select
                 exit
             end if
 
@@ -1269,10 +1295,13 @@ contains
 
         if (ierr_orbit == SYMPL_SPECTRE_OK) then
             t_stop = real(kt, dp)*dtaumin/v0
+            orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         else if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
             ! Mirror-confined at an interior interface: cannot be lost, so record
             ! it as confined (times_lost = trace_time) rather than at its stop.
             t_stop = trace_time
+        else if (ierr_orbit == SYMPL_SPECTRE_STOP) then
+            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
         else
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
@@ -1285,11 +1314,11 @@ contains
         ! The next marker on this thread starts with an unlocked field dispatch.
         call set_spectre_volume_lock(0)
 
-!$omp critical
+        !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = t_stop
-!$omp end critical
+        !$omp end critical
     end subroutine trace_orbit_spectre_sympl
 
     pure subroutine locate_linear_lcfs(z_start, z_end, field_period, z_event, &
@@ -1344,8 +1373,16 @@ contains
                         if (present(exit_step)) then
                             exit_step = real(kt, dp) + loss_fraction
                         end if
+                    else if (symplectic_newton_warning_mode) then
+                        ! The full-orbit pusher retains its last resolved state.
+                        ! Default production mode advances the clock past this
+                        ! one unresolved microstep and retries the next step;
+                        ! numerical inversion faults are never physical losses.
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        z = z_step_start
+                        ierr_orbit = 0
                     end if
-                    exit
+                    if (ierr_orbit .ne. 0) exit
                 end if
                 kt = kt + 1
                 cycle
@@ -1370,8 +1407,17 @@ contains
                         anorb%si%last_step_fraction
                     exit
                 end if
+                if (ierr_orbit .ne. 0 .and. &
+                    symplectic_newton_warning_mode) then
+                    ! advance_symplectic_with_retry restored the last accepted
+                    ! state. Skip only the unresolved microstep and continue;
+                    ! strict mode still reports the numerical exit.
+                    call count_event(EVT_WARNING_STEP_SKIP)
+                    ierr_orbit = 0
+                else if (ierr_orbit == 0) then
+                    call to_standard_z_coordinates(anorb, z)
+                end if
                 if (ierr_orbit .ne. 0) exit
-                call to_standard_z_coordinates(anorb, z)
             end if
             if (ierr_orbit .ne. 0) exit
             if (swcoll) call collide(z, dtaumin) ! Collisions
@@ -1461,11 +1507,12 @@ contains
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
-        logical :: hit
+        logical :: hit, numerical_hold
 
         call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
         do ktau = 1, ntau_local
+            numerical_hold = .false.
             z_step_start = z
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
@@ -1514,10 +1561,22 @@ contains
                     end if
                     exit
                 end if
+                if (ierr_orbit .ne. 0 .and. &
+                    symplectic_newton_warning_mode) then
+                    call count_event(EVT_WARNING_STEP_SKIP)
+                    ierr_orbit = 0
+                    numerical_hold = .true.
+                else if (ierr_orbit == 0) then
+                    call to_standard_z_coordinates(anorb, z)
+                end if
                 if (ierr_orbit .ne. 0) exit
-                call to_standard_z_coordinates(anorb, z)
             end if
             if (ierr_orbit .ne. 0) exit
+            if (numerical_hold) then
+                if (swcoll) call collide(z, dtaumin)
+                kt = kt + 1
+                cycle
+            end if
             z_step_end = z
             call integ_to_ref(z(1:3), u_ref_cur)
             call ref_coords%evaluate_cart(u_ref_cur, x_cur)
@@ -1552,10 +1611,10 @@ contains
         logical, intent(in) :: passing
 
         if (passing) then
-!$omp atomic update
+            !$omp atomic update
             confpart_pass(it) = confpart_pass(it) + 1.d0
         else
-!$omp atomic update
+            !$omp atomic update
             confpart_trap(it) = confpart_trap(it) + 1.d0
         end if
     end subroutine increase_confined_count
@@ -1569,7 +1628,7 @@ contains
 
         real(dp) :: bmod
 
-!$omp critical
+        !$omp critical
         bmod = compute_bmod(z(1:3))
         if (num_surf /= 1) then
             call get_bminmax(z(1), bmin, bmax)
@@ -1577,7 +1636,7 @@ contains
         passing = z(5)**2 .gt. 1.d0 - bmod/bmax
         trap_par_ = ((1.d0 - z(5)**2)*bmax/bmod - 1.d0)*bmin/(bmax - bmin)
         perp_inv_ = z(4)**2*(1.d0 - z(5)**2)/bmod
-!$omp end critical
+        !$omp end critical
     end subroutine compute_pitch_angle_params
 
     function compute_bmod(z) result(bmod)
@@ -1625,9 +1684,9 @@ contains
 
         ! Sum field evaluations across all threads
         total_field_evaluations = 0
-!$omp parallel reduction(+:total_field_evaluations)
+        !$omp parallel reduction(+:total_field_evaluations)
         total_field_evaluations = total_field_evaluations + n_field_evaluations
-!$omp end parallel
+        !$omp end parallel
 
         print *, "Total field evaluations: ", total_field_evaluations
 

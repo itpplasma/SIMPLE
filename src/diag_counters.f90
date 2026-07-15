@@ -9,15 +9,16 @@ module diag_counters
     !> critical. Totals are a plain reduction over the thread columns, taken
     !> outside the hot path.
     use, intrinsic :: iso_fortran_env, only: int64
-!$  use omp_lib, only: omp_get_max_threads, omp_get_thread_num
+    !$  use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     implicit none
     private
 
     public :: EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, EVT_RK_GAUSS_MAXIT, &
-              EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
-              EVT_FO_LOSS, EVT_FO_FAULT, EVT_MIDPOINT_MAXIT, N_EVENT
+        EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
+        EVT_FO_LOSS, EVT_FO_FAULT, EVT_MIDPOINT_MAXIT, &
+        EVT_WARNING_STEP_SKIP, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
-              diag_counters_reset, event_name
+        diag_counters_reset, event_name
 
     integer, parameter :: EVT_NEWTON1_MAXIT = 1
     integer, parameter :: EVT_NEWTON2_MAXIT = 2
@@ -31,12 +32,13 @@ module diag_counters
     integer, parameter :: EVT_FO_LOSS = 7
     integer, parameter :: EVT_FO_FAULT = 8
     integer, parameter :: EVT_MIDPOINT_MAXIT = 9
-    integer, parameter :: N_EVENT = 9
+    integer, parameter :: EVT_WARNING_STEP_SKIP = 10
+    integer, parameter :: N_EVENT = 10
 
     ! Whole cache lines per thread column keep neighbouring threads from sharing
     ! a line. The event id indexes within a column; STRIDE >= N_EVENT.
     integer, parameter :: STRIDE = 16
-    integer(int64), allocatable :: counts(:, :)  ! (STRIDE, 0:nthreads-1)
+    integer(int64), allocatable :: counts(:, :) ! (STRIDE, 0:nthreads-1)
 
 contains
 
@@ -44,7 +46,7 @@ contains
         integer :: nthreads
 
         nthreads = 1
-!$      nthreads = omp_get_max_threads()
+        !$      nthreads = omp_get_max_threads()
         if (allocated(counts)) deallocate (counts)
         allocate (counts(STRIDE, 0:nthreads - 1))
         counts = 0_int64
@@ -58,7 +60,7 @@ contains
 
         if (.not. allocated(counts)) return
         tid = 0
-!$      tid = omp_get_thread_num()
+        !$      tid = omp_get_thread_num()
         counts(id, tid) = counts(id, tid) + 1_int64
     end subroutine count_event
 
@@ -98,6 +100,8 @@ contains
             name = 'fo_fault'
         case (EVT_MIDPOINT_MAXIT)
             name = 'midpoint_maxit'
+        case (EVT_WARNING_STEP_SKIP)
+            name = 'warning_step_skip'
         case default
             name = 'unknown'
         end select
