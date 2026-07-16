@@ -184,6 +184,7 @@ contains
 
         real(dp) :: t_lo, t_hi, f_lo, f_hi, t_mid, f_mid, z_mid(5)
         integer :: it, last_side
+        logical :: converged
 
         t_lo = 0.0_dp
         ierr = SPECTRE_OK
@@ -195,15 +196,20 @@ contains
         z_hit = z_mid
         t_mid = t_hi
         last_side = 0
+        converged = abs(f_hi) < rho_tol
 
         do it = 1, max_bisect
+            if (converged) exit
             if (abs(f_hi - f_lo) <= tiny(1.0_dp)) exit
             t_mid = t_hi - f_hi*(t_hi - t_lo)/(f_hi - f_lo)
             call integrate_clamped(z_start, t_mid, relerr, z_mid, ierr)
             if (ierr /= SPECTRE_OK) return
             f_mid = z_mid(1) - boundary
             z_hit = z_mid
-            if (abs(f_mid) < rho_tol) exit
+            if (abs(f_mid) < rho_tol) then
+                converged = .true.
+                exit
+            end if
             if (f_mid*f_lo > 0.0_dp) then
                 t_lo = t_mid
                 f_lo = f_mid
@@ -217,6 +223,12 @@ contains
             end if
         end do
 
+        if (.not. converged) then
+            z_hit = z_start
+            t_frac = 0.0_dp
+            ierr = SPECTRE_FAULT
+            return
+        end if
         t_frac = t_mid/dtaumin
     end subroutine locate_crossing
 

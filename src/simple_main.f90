@@ -1066,8 +1066,6 @@ contains
                         exit_step, hold_streak=hold_streak, &
                         numerical_hold_any=numerical_hold)
                 end if
-                if (numerical_hold .and. first_unresolved_it == 0) &
-                    first_unresolved_it = it
             end if
 
             if (ierr_orbit .ne. 0) then
@@ -1141,7 +1139,7 @@ contains
         !> lost at the outermost interface. Every crossing/reflection is logged.
         use spectre_orbit, only: spectre_orbit_state_t, spectre_event_t, &
             spectre_state_reset, orbit_timestep_spectre, &
-            SPECTRE_OK, SPECTRE_BOUNDARY
+            SPECTRE_OK, SPECTRE_BOUNDARY, SPECTRE_FAULT
         use magfie_sub, only: spectre_field
         use interface_crossing, only: crossing_log_record
         use params, only: crossing_level
@@ -1172,6 +1170,17 @@ contains
                     if (event%occurred) then
                         call crossing_log_record(ipart, &
                             (real(kt, dp) + event%t_frac)*dtaumin/v0, event%info)
+                    end if
+                    if (ierr_orbit == SPECTRE_FAULT .and. &
+                        symplectic_newton_warning_mode) then
+                        ! orbit_timestep_spectre rolls back to the last accepted
+                        ! position. Consume this held interval and retry the same
+                        ! marker on the next microstep; warning mode never turns an
+                        ! isolated RK failure into a terminal marker.
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        ierr_orbit = SPECTRE_OK
+                        kt = kt + 1
+                        cycle
                     end if
                     if (ierr_orbit /= SPECTRE_OK) exit
                     kt = kt + 1
@@ -1246,7 +1255,7 @@ contains
 
         type(sympl_spectre_state_t) :: state
         integer :: it, it_f, ktau, ierr_orbit, it_final
-        integer :: first_unresolved_it, holds_before
+        integer :: first_unresolved_it
         integer(8) :: kt
         real(dp) :: t_stop, t_frac
 
@@ -1262,14 +1271,11 @@ contains
         do it = 1, ntimstep
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
-                    holds_before = state%warning_hold_count
                     call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
                         ipart, &
                         real(kt, dp)*dtaumin/v0, &
                         dtaumin/v0, ierr_orbit, &
                         t_frac)
-                    if (state%warning_hold_count > holds_before .and. &
-                        first_unresolved_it == 0) first_unresolved_it = it
                     if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
                     kt = kt + 1
                 end do
@@ -1327,10 +1333,7 @@ contains
             end do
         end if
 
-        if (state%warning_hold_count > 0) then
-            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
-            orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
-        else if (ierr_orbit == SYMPL_SPECTRE_OK) then
+        if (ierr_orbit == SYMPL_SPECTRE_OK) then
             t_stop = real(kt, dp)*dtaumin/v0
             orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         else if (ierr_orbit == SYMPL_SPECTRE_SKIM) then
@@ -1593,6 +1596,7 @@ contains
         numerical_hold_any_local = .false.
         do ktau = 1, ntau_local
             numerical_hold = .false.
+            segment_duration = 1.0_dp
             z_step_start = z
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
@@ -1627,7 +1631,7 @@ contains
             else
                 if (swcoll) call update_momentum(anorb, z)
                 call advance_symplectic_with_retry(anorb%si, anorb%f, &
-                    orbit_timestep_sympl, ierr_orbit)
+                    orbit_timestep_sympl, ierr_orbit, segment_duration)
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     call to_standard_z_coordinates(anorb, z)
                     call integ_to_ref(z(1:3), u_ref_cur)
@@ -1672,7 +1676,7 @@ contains
             x_cur_m = x_cur*chartmap_cart_scale_to_m
             call locate_wall_segment(z, z_step_start, z_step_end, ipart, &
                 x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
-                real(kt, dp), 1d0, hit, wall_exit_step)
+                real(kt, dp), segment_duration, hit, wall_exit_step)
             if (hit) then
                 ierr_orbit = 77
                 if (present(exit_step)) exit_step = wall_exit_step
@@ -1792,12 +1796,10 @@ contains
 
     subroutine write_results
         !> Write the per-particle and confined-fraction result files from the
-        !> shared result arrays. progress_monitor calls this every
-        !> checkpoint_interval seconds, so a run killed mid-flight keeps its
-        !> last flushed output. Confined fractions are conditional on the
-        !> numerically resolved population at each time. A partial file remains
-        !> a lower bound because unfinished particles have not contributed to
-        !> the numerator. Particles not yet finished keep times_lost = -1.
+        !> shared result arrays after particle tracing has reached a team-safe
+        !> point. Confined fractions are conditional on the numerically resolved
+        !> population at each time. Particles not yet finished (for example in an
+        !> explicitly requested partial write) keep times_lost = -1.
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         integer :: i, num_lost, resolved_count, unit

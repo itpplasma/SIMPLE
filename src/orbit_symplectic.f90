@@ -12,7 +12,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
-  boundary_event_radial_tolerance, symplectic_newton_warning_mode
+  boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
+  symplectic_newton_warning_factor
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -24,7 +25,7 @@ use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
-  EVT_MIDPOINT_MAXIT
+  EVT_MIDPOINT_MAXIT, EVT_WARNING_STEP_SKIP
 
 implicit none
 
@@ -49,28 +50,38 @@ pure logical function finite_newton_iterate(x)
   finite_newton_iterate = .true.
 end function finite_newton_iterate
 
-logical function accept_warning_maxiter(x)
-  ! Warning mode preserves SIMPLE's historical production convention: a
-  ! finite last Newton iterate is usable. The CPU tracing driver still rejects
-  ! non-finite, radially discontinuous, or off-speed-shell states and routes
-  ! those through bounded retry/recovery. Strict mode reports maxiter.
-  real(dp), intent(in) :: x(:)
+logical function accept_warning_maxiter(x, xlast, tolref, rtol)
+  ! Continue directly only when the last Newton correction is finite and close
+  ! to the requested tolerance. Larger finite iterates are not trustworthy
+  ! states: the warning-mode driver retries them at smaller substeps and, if
+  ! every recovery is exhausted, advances the clock from the last valid state.
+  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol
 
-  accept_warning_maxiter = symplectic_newton_warning_mode .and. &
-    finite_newton_iterate(x)
+  accept_warning_maxiter = .false.
+  if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
+  if (.not. finite_newton_iterate(x)) return
+  if (.not. finite_newton_iterate(xlast)) return
+  if (.not. finite_newton_iterate(tolref)) return
+  accept_warning_maxiter = all(abs(x - xlast) <= &
+    symplectic_newton_warning_factor*rtol*abs(tolref))
 end function accept_warning_maxiter
 
-subroutine advance_symplectic_with_retry(si, f, stepper, status)
+subroutine advance_symplectic_with_retry(si, f, stepper, status, &
+    accepted_fraction)
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
   procedure(orbit_timestep_sympl_i) :: stepper
   integer, intent(out) :: status
+  real(dp), intent(out), optional :: accepted_fraction
+  real(dp) :: accepted_fraction_local
 
-  call advance_retry_interval(si, f, stepper, si%dt, 0, status)
+  call advance_retry_interval(si, f, stepper, si%dt, 0, status, &
+    accepted_fraction_local)
+  if (present(accepted_fraction)) accepted_fraction = accepted_fraction_local
 end subroutine advance_symplectic_with_retry
 
 recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
-    status)
+    status, accepted_fraction)
   integer, parameter :: max_retry_depth = 8
   type(symplectic_integrator_t), intent(inout) :: si
   type(field_can_t), intent(inout) :: f
@@ -78,16 +89,26 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   real(dp), intent(in) :: interval
   integer, intent(in) :: depth
   integer, intent(out) :: status
+  real(dp), intent(out) :: accepted_fraction
   type(symplectic_integrator_t) :: initial_integrator
+  type(symplectic_integrator_t) :: half_integrator
   type(field_can_t) :: initial_field
+  type(field_can_t) :: half_field
+  real(dp) :: child_fraction
   logical :: recoverable
 
+  accepted_fraction = 0.0_dp
   initial_integrator = si
   initial_field = f
   si%dt = interval
   call stepper(si, f, status)
   if (status == SYMPLECTIC_STEP_OK .or. &
       status == SYMPLECTIC_STEP_BOUNDARY) then
+    if (status == SYMPLECTIC_STEP_OK) then
+      accepted_fraction = 1.0_dp
+    else
+      accepted_fraction = si%last_step_fraction
+    end if
     si%dt = interval
     return
   end if
@@ -104,20 +125,51 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   ! the original interval exactly. State-dependent subdivision is a warning-mode
   ! recovery path, not a globally fixed symplectic map.
   call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
-    status)
+    status, child_fraction)
   if (status == SYMPLECTIC_STEP_BOUNDARY) then
     si%last_step_fraction = 0.5_dp*si%last_step_fraction
     si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+    accepted_fraction = 0.5_dp*child_fraction
     si%dt = interval
     return
   end if
   if (status == SYMPLECTIC_STEP_OK) then
+    if (child_fraction < 1.0_dp) then
+      ! A nested recovery already consumed the unresolved suffix of this first
+      ! half. Preserve that contiguous accepted prefix and do not leap over the
+      ! held interval to attempt the nominal second half.
+      accepted_fraction = 0.5_dp*child_fraction
+      si%dt = interval
+      return
+    end if
+    half_integrator = si
+    half_field = f
     call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
-      status)
+      status, child_fraction)
     if (status == SYMPLECTIC_STEP_BOUNDARY) then
       si%last_step_fraction = 0.5_dp + 0.5_dp*si%last_step_fraction
       si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+      accepted_fraction = 0.5_dp + 0.5_dp*child_fraction
       si%dt = interval
+      return
+    end if
+    if (status == SYMPLECTIC_STEP_OK) then
+      accepted_fraction = 0.5_dp + 0.5_dp*child_fraction
+      si%dt = interval
+      return
+    end if
+    recoverable = status == SYMPLECTIC_STEP_MAXITER .or. &
+      status == SYMPLECTIC_STEP_LINEAR_SOLVE
+    if (recoverable) then
+      ! Keep the first accepted half rather than discarding meaningful orbit
+      ! progress because the second half exhausted every retry. Warning mode
+      ! consumes only that unresolved remainder and resumes from this state.
+      si = half_integrator
+      f = half_field
+      si%dt = interval
+      status = SYMPLECTIC_STEP_OK
+      accepted_fraction = 0.5_dp
+      call count_event(EVT_WARNING_STEP_SKIP)
       return
     end if
   end if
@@ -544,7 +596,7 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON1_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, si%rtol)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -639,7 +691,7 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON2_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -797,7 +849,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -922,7 +974,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     end if
   else
     call count_event(EVT_RK_GAUSS_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_gauss
@@ -1264,7 +1316,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     end if
   else
     call count_event(EVT_RK_LOBATTO_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_lobatto
