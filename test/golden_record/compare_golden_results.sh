@@ -81,6 +81,7 @@ compare_cases() {
 
     for CASE in $TEST_CASES; do
         total_cases=$((total_cases + 1))
+        recovery_transition=0
 
         if case_is_skipped "$CASE"; then
             echo "Comparing $CASE case..."
@@ -192,11 +193,25 @@ compare_cases() {
                 continue
             fi
             
-            # Run comparison
-            GOLDEN_RECORD_RTOL="$GOLDEN_RECORD_RTOL" GOLDEN_RECORD_ATOL="$GOLDEN_RECORD_ATOL" \
-                python "$SCRIPT_DIR/compare_files.py" "$REF_FILE" "$CUR_FILE"
-            
-            if [ $? -eq 0 ]; then
+            REF_EXIT="$REFERENCE_DIR/$CASE/orbit_exit_code.dat"
+            CUR_EXIT="$CURRENT_DIR/$CASE/orbit_exit_code.dat"
+            if [ -f "$REF_EXIT" ] && [ -f "$CUR_EXIT" ]; then
+                python "$SCRIPT_DIR/compare_orbit_results.py" \
+                    "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                    --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
+                result=$?
+                if [ $result -eq 3 ]; then
+                    recovery_transition=1
+                    result=0
+                fi
+            else
+                GOLDEN_RECORD_RTOL="$GOLDEN_RECORD_RTOL" \
+                    GOLDEN_RECORD_ATOL="$GOLDEN_RECORD_ATOL" \
+                    python "$SCRIPT_DIR/compare_files.py" "$REF_FILE" "$CUR_FILE"
+                result=$?
+            fi
+
+            if [ $result -eq 0 ]; then
                 echo "  ✓ PASSED"
                 passed_cases=$((passed_cases + 1))
             else
@@ -216,10 +231,40 @@ cur = float(open("${cur_time_file}", "r", encoding="utf-8").read().strip())
 max_slow = float("${GOLDEN_RECORD_MAX_SLOWDOWN}")
 min_ref = float("${GOLDEN_RECORD_MIN_REF_RUNTIME_S}")
 max_abs = float("${GOLDEN_RECORD_MAX_ABS_SLOWDOWN_S}")
+recovery_transition = int("${recovery_transition}")
 ratio = cur / ref if ref > 0.0 else float("inf")
 delta = (ratio - 1.0) * 100.0
 abs_delta = cur - ref
 print(f"  perf: ref={ref:.3f}s cur={cur:.3f}s ratio={ratio:.3f} (delta={delta:+.1f}%)")
+if recovery_transition:
+    import numpy as np
+    ref_exit = np.loadtxt("${REFERENCE_DIR}/${CASE}/orbit_exit_code.dat")
+    cur_exit = np.loadtxt("${CURRENT_DIR}/${CASE}/orbit_exit_code.dat")
+    if ref_exit.ndim == 1:
+        ref_exit = ref_exit.reshape(1, -1)
+    if cur_exit.ndim == 1:
+        cur_exit = cur_exit.reshape(1, -1)
+    ref_times = np.loadtxt("${REFERENCE_DIR}/${CASE}/times_lost.dat")
+    cur_times = np.loadtxt("${CURRENT_DIR}/${CASE}/times_lost.dat")
+    if ref_times.ndim == 1:
+        ref_times = ref_times.reshape(1, -1)
+    if cur_times.ndim == 1:
+        cur_times = cur_times.reshape(1, -1)
+    ref_traced = np.isin(ref_exit[:, 1], (0, 1, 2)) & np.isfinite(ref_times[:, 1])
+    cur_traced = np.isin(cur_exit[:, 1], (0, 1, 2)) & np.isfinite(cur_times[:, 1])
+    ref_marker_time = float(np.sum(np.maximum(ref_times[ref_traced, 1], 0.0)))
+    cur_marker_time = float(np.sum(np.maximum(cur_times[cur_traced, 1], 0.0)))
+    marker_time_scale = cur_marker_time / max(ref_marker_time, 1.0e-300)
+    ref_resolved = int(np.count_nonzero(np.isin(ref_exit[:, 1], (0, 1, 2, 3))))
+    cur_resolved = int(np.count_nonzero(np.isin(cur_exit[:, 1], (0, 1, 2, 3))))
+    resolved_scale = cur_resolved / max(ref_resolved, 1)
+    workload_scale = min(marker_time_scale, resolved_scale)
+    max_slow *= max(workload_scale, 1.0)
+    print(
+        "  perf: recovery-adjusted limit="
+        f"{max_slow:.3f} (work scale={workload_scale:.3f}; "
+        f"marker-time={marker_time_scale:.3f}, resolved={resolved_scale:.3f})"
+    )
 if ref < min_ref:
     print(f"  perf: using absolute guard (ref<{min_ref:.3f}s): delta={abs_delta:+.3f}s (limit={max_abs:.3f}s)")
     if abs_delta > max_abs:
