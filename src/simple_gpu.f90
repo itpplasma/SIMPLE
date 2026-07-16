@@ -82,7 +82,7 @@ contains
             call eval_field_booz(f, x(1), si%z(2), si%z(3), 2)
             call get_derivatives2(f, x(2))
             call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
-                linear_failed, step_boundary_limited)
+                linear_failed, step_boundary_limited, .not. warning_mode)
             boundary_limited = boundary_limited .or. step_boundary_limited
 
             if (linear_failed) then
