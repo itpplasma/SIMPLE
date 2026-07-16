@@ -2,8 +2,8 @@ module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
     use omp_lib
     use util, only: sqrt2, twopi
-    use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, tracer_t, &
-        ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
+    use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
+        reseed_sympl, tracer_t, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
@@ -27,7 +27,7 @@ module simple_main
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
-        EVT_WARNING_STEP_SKIP
+        EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
@@ -1571,14 +1571,37 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
-                    ! advance_symplectic_with_retry restored the last accepted
-                    ! state. Skip only the unresolved microstep and continue;
-                    ! strict mode still reports the numerical exit.
-                    call count_event(EVT_WARNING_STEP_SKIP)
-                    hold_streak_local = ierr_orbit
-                    numerical_hold = .true.
-                    numerical_hold_any_local = .true.
-                    ierr_orbit = 0
+                    ! A failed symplectic map has restored its last accepted
+                    ! state. Advance that same interval with the established
+                    ! adaptive RK/axis path, then thread-locally reseed the
+                    ! symplectic state. This prevents a boundary-near marker
+                    ! from consuming the rest of the trace at one held point.
+                    z = z_step_start
+                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
+                        ierr_orbit)
+                    if (ierr_orbit == 0) then
+                        call reseed_sympl(anorb%si, anorb%f, z)
+                        call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
+                        hold_streak_local = 0
+                    else if (ierr_orbit == 1) then
+                        z_step_end = z
+                        call locate_linear_lcfs(z_step_start, z_step_end, &
+                            anorb%fper, z, loss_fraction)
+                        anorb%si%last_step_fraction = loss_fraction
+                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        anorb%si%last_event_fraction_width = 1.d0
+                        if (present(exit_step)) exit_step = real(kt, dp) + &
+                            loss_fraction
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                        exit
+                    else
+                        z = z_step_start
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak_local = ierr_orbit
+                        numerical_hold = .true.
+                        numerical_hold_any_local = .true.
+                        ierr_orbit = 0
+                    end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
@@ -1750,11 +1773,49 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
-                    call count_event(EVT_WARNING_STEP_SKIP)
-                    hold_streak_local = ierr_orbit
-                    numerical_hold = .true.
-                    numerical_hold_any_local = .true.
-                    ierr_orbit = 0
+                    z = z_step_start
+                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
+                        ierr_orbit)
+                    if (ierr_orbit == 0) then
+                        call reseed_sympl(anorb%si, anorb%f, z)
+                        call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
+                        hold_streak_local = 0
+                    else if (ierr_orbit == 1) then
+                        z_step_end = z
+                        call locate_linear_lcfs(z_step_start, z_step_end, &
+                            anorb%fper, z, boundary_fraction)
+                        call integ_to_ref(z(1:3), u_ref_cur)
+                        call ref_coords%evaluate_cart(u_ref_cur, x_cur)
+                        x_cur_m = x_cur*chartmap_cart_scale_to_m
+                        z_step_end = z
+                        call locate_wall_segment(z, z_step_start, z_step_end, &
+                            ipart, &
+                            x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
+                            real(kt, dp), boundary_fraction, hit, wall_exit_step)
+                        if (hit) then
+                            ierr_orbit = 77
+                        else
+                            ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                            anorb%si%last_step_fraction = boundary_fraction
+                            anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                            anorb%si%last_event_fraction_width = 1.d0
+                        end if
+                        if (present(exit_step)) then
+                            if (hit) then
+                                exit_step = wall_exit_step
+                            else
+                                exit_step = real(kt, dp) + boundary_fraction
+                            end if
+                        end if
+                        exit
+                    else
+                        z = z_step_start
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak_local = ierr_orbit
+                        numerical_hold = .true.
+                        numerical_hold_any_local = .true.
+                        ierr_orbit = 0
+                    end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
