@@ -12,20 +12,20 @@
   values to refine event location independently of the nonlinear solve.
 
 * `symplectic_newton_warning_mode` defaults to `.true.`. When an implicit solve
-  reaches its iteration limit, SIMPLE continues only if the final Newton
-  correction is finite and no more than ten times the requested relative
-  tolerance. Each occurrence is reported by the corresponding `*_maxit`
-  diagnostic. The production RK, symplectic, and full-orbit paths then use the
-  same terminal convention: if bounded recovery cannot resolve a numerical
-  microstep, SIMPLE retains any contiguous accepted prefix and holds only the
-  unresolved remainder, records `warning_step_skip`, advances the clock for
-  the complete interval, and retries from that valid state on the next
-  microstep. A warning hold does not terminate or
-  numerically disqualify the marker: a marker that reaches the requested end
-  time remains a resolved survivor, while a later physical boundary event is
-  still a loss. Set the option to `.false.` for strict diagnostic runs that end
-  only the affected marker at the first exhausted recovery and report a
-  101--105 `orbit_exit_code` with `NaN` in `times_lost`.
+  reaches its iteration limit, SIMPLE commits any finite final Newton iterate
+  and continues the orbit. Each occurrence is reported by the corresponding
+  `*_maxit` diagnostic. Recursive recovery is reserved for an unusable step,
+  such as a failed linear solve or non-finite iterate. The production RK,
+  symplectic, and full-orbit paths use the same terminal convention: if that
+  recovery cannot resolve a numerical microstep, SIMPLE retains any contiguous
+  accepted prefix and holds only the unresolved remainder, records
+  `warning_step_skip`, advances the clock for the complete interval, and
+  retries from that valid state on the next microstep. A warning hold does not
+  terminate or numerically disqualify the marker: a marker that reaches the
+  requested end time remains a resolved survivor, while a later physical
+  boundary event is still a loss. Set the option to `.false.` for strict
+  diagnostic runs that end only the affected marker at the first exhausted
+  recovery and report a 101--105 `orbit_exit_code` with `NaN` in `times_lost`.
 
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,

@@ -15,8 +15,7 @@ module simple_gpu
     use orbit_symplectic_base, only: symplectic_integrator_t, &
         SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
         SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
-        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode, &
-        symplectic_newton_warning_factor
+        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode
     use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
     use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use boozer_sub, only: boozer_state
@@ -106,10 +105,7 @@ contains
             else
                 status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
             end if
-        else if (warning_mode .and. gpu_finite_iterate(x) .and. &
-                 gpu_finite_iterate(xlast) .and. gpu_finite_iterate(tolref) .and. &
-                 all(abs(x - xlast) <= &
-                     symplectic_newton_warning_factor*si%rtol*abs(tolref))) then
+        else if (warning_mode .and. gpu_finite_iterate(x)) then
             status = SYMPLECTIC_STEP_OK
         end if
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
