@@ -17,7 +17,8 @@ module diag_counters
         EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
         EVT_FO_LOSS, EVT_FO_FAULT, EVT_MIDPOINT_MAXIT, &
         EVT_WARNING_STEP_SKIP, EVT_SPECTRE_REF_INVERSE_MAXIT, &
-        EVT_SPECTRE_INVALID_STATE, EVT_SYMPLECTIC_RK_RECOVERY, N_EVENT
+        EVT_SPECTRE_INVALID_STATE, EVT_SYMPLECTIC_RK_RECOVERY, &
+        EVT_SYMPLECTIC_RESUME, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
         diag_counters_reset, event_name
 
@@ -37,7 +38,8 @@ module diag_counters
     integer, parameter :: EVT_SPECTRE_REF_INVERSE_MAXIT = 11
     integer, parameter :: EVT_SPECTRE_INVALID_STATE = 12
     integer, parameter :: EVT_SYMPLECTIC_RK_RECOVERY = 13
-    integer, parameter :: N_EVENT = 13
+    integer, parameter :: EVT_SYMPLECTIC_RESUME = 14
+    integer, parameter :: N_EVENT = 14
 
     ! Whole cache lines per thread column keep neighbouring threads from sharing
     ! a line. The event id indexes within a column; STRIDE >= N_EVENT.
@@ -112,6 +114,8 @@ contains
             name = 'spectre_invalid_state'
         case (EVT_SYMPLECTIC_RK_RECOVERY)
             name = 'symplectic_rk_recovery'
+        case (EVT_SYMPLECTIC_RESUME)
+            name = 'symplectic_resume'
         case default
             name = 'unknown'
         end select

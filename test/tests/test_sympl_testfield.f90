@@ -39,7 +39,8 @@ program test_sympl_testfield
     use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
-        macrostep, macrostep_with_wall_check
+        macrostep, macrostep_with_wall_check, rk_recovery_state_t, &
+        activate_rk_recovery, should_resume_symplectic
     use simple, only : tracer_t, init_sympl, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
     use params, only : isw_field_type, field_input, coord_input, integmode, &
         swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
@@ -94,6 +95,7 @@ program test_sympl_testfield
 
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
+    call test_rk_recovery_regions
     call test_exit_classification
     call test_fo_lcfs_location
 
@@ -204,6 +206,48 @@ contains
         if (any(z /= initial_state)) &
             error stop 'repeated wall warning changed the accepted state'
     end subroutine test_failed_step_preserves_state
+
+    subroutine test_rk_recovery_regions
+        type(rk_recovery_state_t) :: recovery
+
+        call activate_rk_recovery(recovery, 0.005_dp)
+        if (.not. recovery%active) error stop 'near-axis RK recovery did not start'
+        if (should_resume_symplectic(recovery, 0.015_dp)) then
+            error stop 'near-axis recovery resumed inside its hysteresis band'
+        end if
+        if (.not. should_resume_symplectic(recovery, 0.02_dp)) then
+            error stop 'near-axis recovery did not resume outside the axis band'
+        end if
+
+        recovery = rk_recovery_state_t()
+        call activate_rk_recovery(recovery, 0.5_dp)
+        recovery%steps = 255
+        if (should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'generic recovery ignored its first cooldown'
+        end if
+        recovery%steps = 256
+        if (.not. should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'generic recovery did not probe after its cooldown'
+        end if
+        call activate_rk_recovery(recovery, 0.5_dp)
+        recovery%steps = 511
+        if (should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'repeated generic recovery did not back off'
+        end if
+        recovery%steps = 512
+        if (.not. should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'backed-off generic recovery never resumed probing'
+        end if
+
+        recovery = rk_recovery_state_t()
+        call activate_rk_recovery(recovery, 0.995_dp)
+        if (should_resume_symplectic(recovery, 0.99_dp)) then
+            error stop 'edge recovery resumed before moving safely inward'
+        end if
+        if (.not. should_resume_symplectic(recovery, 0.98_dp)) then
+            error stop 'edge recovery did not resume after moving inward'
+        end if
+    end subroutine test_rk_recovery_regions
 
     subroutine test_exit_classification
         logical :: classifier_lost

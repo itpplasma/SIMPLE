@@ -27,7 +27,8 @@ module simple_main
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
-        EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY
+        EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY, &
+        EVT_SYMPLECTIC_RESUME
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
@@ -51,7 +52,53 @@ module simple_main
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     type(stl_wall_t), save :: wall
 
+    integer, parameter :: RK_RECOVERY_GENERIC = 1
+    integer, parameter :: RK_RECOVERY_AXIS = 2
+    integer, parameter :: RK_RECOVERY_EDGE = 3
+    real(dp), parameter :: RK_AXIS_ENTER = 0.01_dp
+    real(dp), parameter :: RK_AXIS_EXIT = 0.02_dp
+    real(dp), parameter :: RK_EDGE_ENTER = 0.98_dp
+
+    type :: rk_recovery_state_t
+        logical :: active = .false.
+        integer :: reason = RK_RECOVERY_GENERIC
+        integer :: steps = 0
+        integer :: failures = 0
+    end type rk_recovery_state_t
+
 contains
+
+    pure subroutine activate_rk_recovery(state, radius)
+        type(rk_recovery_state_t), intent(inout) :: state
+        real(dp), intent(in) :: radius
+
+        state%active = .true.
+        state%steps = 0
+        state%failures = min(state%failures + 1, 9)
+        if (radius < RK_AXIS_ENTER) then
+            state%reason = RK_RECOVERY_AXIS
+        else if (radius > RK_EDGE_ENTER) then
+            state%reason = RK_RECOVERY_EDGE
+        else
+            state%reason = RK_RECOVERY_GENERIC
+        end if
+    end subroutine activate_rk_recovery
+
+    pure logical function should_resume_symplectic(state, radius)
+        type(rk_recovery_state_t), intent(in) :: state
+        real(dp), intent(in) :: radius
+        integer :: cooldown
+
+        select case (state%reason)
+        case (RK_RECOVERY_AXIS)
+            should_resume_symplectic = radius >= RK_AXIS_EXIT
+        case (RK_RECOVERY_EDGE)
+            should_resume_symplectic = radius <= RK_EDGE_ENTER
+        case default
+            cooldown = 2**(7 + state%failures)
+            should_resume_symplectic = state%steps >= cooldown
+        end select
+    end function should_resume_symplectic
 
     subroutine main
         use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
@@ -1078,6 +1125,7 @@ contains
         integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
         logical :: passing, faulted, numerical_hold, physical_exit
+        type(rk_recovery_state_t) :: rk_recovery
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
@@ -1085,6 +1133,7 @@ contains
         physical_exit = .false.
         first_unresolved_it = 0
         hold_streak = 0
+        rk_recovery = rk_recovery_state_t()
         exit_step = -1d0
         orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
         orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
@@ -1156,11 +1205,13 @@ contains
                     call macrostep_with_wall_check(anorb, z, kt, ierr_orbit, &
                         ntau_macro(it), ipart, x_prev_m, exit_step, &
                         hold_streak=hold_streak, &
-                        numerical_hold_any=numerical_hold)
+                        numerical_hold_any=numerical_hold, &
+                        rk_recovery=rk_recovery)
                 else
                     call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it), &
                         exit_step, hold_streak=hold_streak, &
-                        numerical_hold_any=numerical_hold)
+                        numerical_hold_any=numerical_hold, &
+                        rk_recovery=rk_recovery)
                 end if
             end if
 
@@ -1480,7 +1531,7 @@ contains
     end subroutine locate_linear_lcfs
 
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
-            hold_streak, numerical_hold_any)
+            hold_streak, numerical_hold_any, rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
@@ -1493,15 +1544,19 @@ contains
         real(dp), intent(out), optional :: exit_step
         integer, intent(inout), optional :: hold_streak
         logical, intent(out), optional :: numerical_hold_any
+        type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
         integer :: hold_streak_local, ktau
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
         logical :: numerical_hold, numerical_hold_any_local
+        type(rk_recovery_state_t) :: rk_recovery_local
 
         if (present(exit_step)) exit_step = real(kt, dp)
         hold_streak_local = 0
         if (present(hold_streak)) hold_streak_local = hold_streak
         numerical_hold_any_local = .false.
+        rk_recovery_local = rk_recovery_state_t()
+        if (present(rk_recovery)) rk_recovery_local = rk_recovery
 
         do ktau = 1, ntau_local
             numerical_hold = .false.
@@ -1539,7 +1594,7 @@ contains
                 kt = kt + 1
                 cycle
             end if
-            if (integmode <= 0) then
+            if (integmode <= 0 .or. rk_recovery_local%active) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
                 if (ierr_orbit == 1) then
                     z_step_end = z
@@ -1547,6 +1602,12 @@ contains
                         anorb%fper, z, loss_fraction)
                     if (present(exit_step)) then
                         exit_step = real(kt, dp) + loss_fraction
+                    end if
+                    if (rk_recovery_local%active) then
+                        anorb%si%last_step_fraction = loss_fraction
+                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        anorb%si%last_event_fraction_width = 1.d0
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 else if (ierr_orbit /= 0 .and. &
                         symplectic_newton_warning_mode) then
@@ -1574,14 +1635,17 @@ contains
                     ! A failed symplectic map has restored its last accepted
                     ! state. Advance that same interval with the established
                     ! adaptive RK/axis path, then thread-locally reseed the
-                    ! symplectic state. This prevents a boundary-near marker
-                    ! from consuming the rest of the trace at one held point.
+                    ! symplectic state. Keep this marker on RK while it remains
+                    ! in the failing axis/edge region; generic failures use an
+                    ! exponentially backed-off probe interval.
                     z = z_step_start
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                     if (ierr_orbit == 0) then
                         call reseed_sympl(anorb%si, anorb%f, z)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
+                        call activate_rk_recovery(rk_recovery_local, &
+                            z_step_start(1))
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         z_step_end = z
@@ -1605,6 +1669,7 @@ contains
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
+                    rk_recovery_local = rk_recovery_state_t()
                 end if
                 if (ierr_orbit .ne. 0) exit
             end if
@@ -1613,13 +1678,24 @@ contains
                 kt = kt + 1
                 cycle
             end if
-            if (integmode <= 0) hold_streak_local = 0
+            if (rk_recovery_local%active .and. .not. numerical_hold) then
+                hold_streak_local = 0
+                rk_recovery_local%steps = rk_recovery_local%steps + 1
+                if (should_resume_symplectic(rk_recovery_local, z(1))) then
+                    call reseed_sympl(anorb%si, anorb%f, z)
+                    rk_recovery_local%active = .false.
+                    call count_event(EVT_SYMPLECTIC_RESUME)
+                end if
+            end if
+            if (integmode <= 0 .or. rk_recovery_local%active) &
+                hold_streak_local = 0
             if (swcoll) call collide(z, dtaumin) ! Collisions
             kt = kt + 1
         end do
         if (present(hold_streak)) hold_streak = hold_streak_local
         if (present(numerical_hold_any)) &
             numerical_hold_any = numerical_hold_any_local
+        if (present(rk_recovery)) rk_recovery = rk_recovery_local
     end subroutine macrostep
 
     subroutine locate_wall_segment(z, z_start, z_end, ipart, x_start_m, &
@@ -1685,7 +1761,8 @@ contains
     end subroutine locate_wall_segment
 
     subroutine macrostep_with_wall_check(anorb, z, kt, ierr_orbit, ntau_local, &
-            ipart, x_prev_m, exit_step, hold_streak, numerical_hold_any)
+            ipart, x_prev_m, exit_step, hold_streak, numerical_hold_any, &
+            rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
@@ -1700,6 +1777,7 @@ contains
         real(dp), intent(out), optional :: exit_step
         integer, intent(inout), optional :: hold_streak
         logical, intent(out), optional :: numerical_hold_any
+        type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
         integer :: hold_streak_local, ktau
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
@@ -1707,17 +1785,20 @@ contains
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
+        type(rk_recovery_state_t) :: rk_recovery_local
 
         call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
         hold_streak_local = 0
         if (present(hold_streak)) hold_streak_local = hold_streak
         numerical_hold_any_local = .false.
+        rk_recovery_local = rk_recovery_state_t()
+        if (present(rk_recovery)) rk_recovery_local = rk_recovery
         do ktau = 1, ntau_local
             numerical_hold = .false.
             segment_duration = 1.0_dp
             z_step_start = z
-            if (integmode <= 0) then
+            if (integmode <= 0 .or. rk_recovery_local%active) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
                 if (ierr_orbit == 1) then
                     z_step_end = z
@@ -1731,6 +1812,12 @@ contains
                         x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
                         real(kt, dp), boundary_fraction, hit, wall_exit_step)
                     if (hit) ierr_orbit = 77
+                    if (.not. hit .and. rk_recovery_local%active) then
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                        anorb%si%last_step_fraction = boundary_fraction
+                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        anorb%si%last_event_fraction_width = 1.d0
+                    end if
                     if (present(exit_step)) then
                         if (hit) then
                             exit_step = wall_exit_step
@@ -1779,6 +1866,8 @@ contains
                     if (ierr_orbit == 0) then
                         call reseed_sympl(anorb%si, anorb%f, z)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
+                        call activate_rk_recovery(rk_recovery_local, &
+                            z_step_start(1))
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         z_step_end = z
@@ -1819,6 +1908,7 @@ contains
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
+                    rk_recovery_local = rk_recovery_state_t()
                 end if
                 if (ierr_orbit .ne. 0) exit
             end if
@@ -1842,13 +1932,24 @@ contains
 
             if (swcoll) call collide(z, dtaumin)
             kt = kt + 1
-            if (integmode <= 0) hold_streak_local = 0
+            if (rk_recovery_local%active) then
+                hold_streak_local = 0
+                rk_recovery_local%steps = rk_recovery_local%steps + 1
+                if (should_resume_symplectic(rk_recovery_local, z(1))) then
+                    call reseed_sympl(anorb%si, anorb%f, z)
+                    rk_recovery_local%active = .false.
+                    call count_event(EVT_SYMPLECTIC_RESUME)
+                end if
+            end if
+            if (integmode <= 0 .or. rk_recovery_local%active) &
+                hold_streak_local = 0
             x_prev_m = x_cur_m
             u_ref_prev = u_ref_cur
         end do
         if (present(hold_streak)) hold_streak = hold_streak_local
         if (present(numerical_hold_any)) &
             numerical_hold_any = numerical_hold_any_local
+        if (present(rk_recovery)) rk_recovery = rk_recovery_local
     end subroutine macrostep_with_wall_check
 
     subroutine to_standard_z_coordinates(anorb, z)
