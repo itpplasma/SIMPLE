@@ -119,6 +119,9 @@ def losses_and_accounting(binary, h5, failures):
         failures.append(f"accounting: {n_conf} confined + {n_term} terminated + "
                         f"{n_unres} unresolved "
                         f"!= {NPART} markers")
+    if n_unres != 0:
+        failures.append(f"accounting: default warning run has {n_unres} "
+                        "terminal numerical markers (expected zero)")
     if not np.all(exit_codes[unresolved, 1] >= 101):
         failures.append("accounting: unresolved marker lacks numerical exit code")
     if np.any(exit_codes[confined | terminated, 1] >= 101):
@@ -155,6 +158,9 @@ def crossing_map_accounting(binary, h5, p1, failures):
     if n_conf0 + n_term0 + n_unres0 != NPART:
         failures.append(f"crossing maps: Level-0 account is {n_conf0} confined + "
                         f"{n_term0} terminated + {n_unres0} unresolved")
+    if n_unres0 != 0:
+        failures.append(f"crossing maps: default warning Level-0 run has "
+                        f"{n_unres0} terminal numerical markers")
 
     with tempfile.TemporaryDirectory() as work:
         run(binary, work, h5, crossing_level=0)

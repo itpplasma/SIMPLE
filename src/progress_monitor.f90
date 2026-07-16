@@ -1,13 +1,14 @@
 module progress_monitor
-    !> Periodic progress reporting and partial-result checkpointing for the
+    !> Periodic progress reporting and team-safe final result output for the
     !> particle tracing loop.
     !>
     !> Once per finished particle a thread calls progress_tick. The hot path is
     !> a single atomic increment of the completed counter and a wall-clock read,
     !> with no critical and no file access. When `interval` seconds have passed
-    !> one thread enters a rarely taken critical, writes a status line and the
-    !> partial results to disk, and advances the deadline. A run killed mid-flight
-    !> therefore leaves its most recent output on disk instead of nothing.
+    !> one thread enters a rarely taken critical, writes a status line, and
+    !> advances the deadline. Result files are written only after the parallel
+    !> region: a live snapshot would race with trajectory and counter updates and
+    !> could mix different marker states in one checkpoint.
     !>
     !> The monitor never touches physics arrays itself. The owner registers a
     !> dump callback at init, so this module depends on no tracing code and the
@@ -26,7 +27,7 @@ module progress_monitor
     end interface
 
     procedure(dump_proc_i), pointer :: dump_results => null()
-    real(dp) :: interval = 0.0d0   ! <= 0 disables periodic checkpointing
+    real(dp) :: interval = 0.0d0   ! <= 0 disables periodic progress reports
     real(dp) :: t_start = 0.0d0
     real(dp) :: t_next = 0.0d0
     integer :: n_total = 0
@@ -61,13 +62,11 @@ contains
         done = n_done_shared
 !$omp end atomic
 
-        now = wall_time()
-        if (now < t_next) return
-
 !$omp critical (progress_flush)
-        if (now >= t_next) then   ! double-checked: only one thread per interval
+        now = wall_time()
+        if (now >= t_next) then
             t_next = now + interval
-            call emit(int(done), now)
+            call emit(int(done), now, .false.)
         end if
 !$omp end critical (progress_flush)
     end subroutine progress_tick
@@ -76,21 +75,22 @@ contains
         !> Emit one final summary so the event totals (e.g. fo_loss / fo_fault)
         !> are always reported, including for runs too short to cross a periodic
         !> interval. A silent fo_fault count would hide inversion faults.
-        if (n_total > 0) call emit(int(n_done_shared), wall_time())
+        if (n_total > 0) call emit(int(n_done_shared), wall_time(), .true.)
         active = .false.
         dump_results => null()
     end subroutine progress_finalize
 
-    subroutine emit(n_done, now)
+    subroutine emit(n_done, now, final)
         integer, intent(in) :: n_done
         real(dp), intent(in) :: now
+        logical, intent(in) :: final
 
         real(dp) :: elapsed, frac, eta
         integer :: id
         integer(int64) :: total
         character(len=512) :: events
 
-        if (associated(dump_results)) call dump_results()
+        if (final .and. associated(dump_results)) call dump_results()
 
         elapsed = now - t_start
         frac = real(n_done, dp)/real(max(n_total, 1), dp)
@@ -98,13 +98,15 @@ contains
         if (frac > 0.0d0) eta = elapsed*(1.0d0 - frac)/frac
 
         events = ''
-        do id = 1, N_EVENT
-            total = diag_counters_total(id)
-            if (total > 0_int64) then
-                events = trim(events)//' '//event_name(id)//'='// &
-                         trim(int_to_str(total))
-            end if
-        end do
+        if (final) then
+            do id = 1, N_EVENT
+                total = diag_counters_total(id)
+                if (total > 0_int64) then
+                    events = trim(events)//' '//event_name(id)//'='// &
+                             trim(int_to_str(total))
+                end if
+            end do
+        end if
 
         write (output_unit, '(A, F6.2, A, I0, A, I0, A, F0.1, A, F0.1, A, A)') &
             ' [progress] ', 100.0d0*frac, '%  ', n_done, '/', n_total, &

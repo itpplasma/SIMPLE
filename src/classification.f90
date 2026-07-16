@@ -79,7 +79,7 @@ contains
         real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
         integer :: first_unresolved_it, hold_streak, it, ktau, it_f
         integer(8) :: kt
-        logical :: had_numerical_hold, passing
+        logical :: passing
 
         integer                                       :: ifp_tip,ifp_per
         integer,          dimension(:),   allocatable :: ipoi
@@ -217,7 +217,6 @@ contains
         kt = 0
         first_unresolved_it = 0
         hold_streak = 0
-        had_numerical_hold = .false.
         if (passing) then
             !$omp atomic
             confpart_pass(1)=confpart_pass(1)+1.d0
@@ -267,8 +266,6 @@ contains
                         symplectic_newton_warning_mode) then
                         call count_event(EVT_WARNING_STEP_SKIP)
                         hold_streak = ierr
-                        had_numerical_hold = .true.
-                        if (first_unresolved_it == 0) first_unresolved_it = it
                         ierr = 0
                     end if
                 else
@@ -278,8 +275,6 @@ contains
                         symplectic_newton_warning_mode) then
                         call count_event(EVT_WARNING_STEP_SKIP)
                         hold_streak = ierr
-                        had_numerical_hold = .true.
-                        if (first_unresolved_it == 0) first_unresolved_it = it
                         ierr = 0
                     else if (ierr == 0) then
                         hold_streak = 0
@@ -469,22 +464,14 @@ contains
                 !    write(999, *) kt*dtaumin/v0, z
             enddo
             if(ierr.ne.0) exit
-            if (.not. had_numerical_hold) then
-                if(passing) then
-                    !$omp atomic
-                    confpart_pass(it)=confpart_pass(it)+1.d0
-                else
-                    !$omp atomic
-                    confpart_trap(it)=confpart_trap(it)+1.d0
-                endif
-            end if
+            if(passing) then
+                !$omp atomic
+                confpart_pass(it)=confpart_pass(it)+1.d0
+            else
+                !$omp atomic
+                confpart_trap(it)=confpart_trap(it)+1.d0
+            endif
         enddo
-
-        if (had_numerical_hold) then
-            class_result%lost = .false.
-            if (class_result%exit_code < ORBIT_EXIT_NUMERICAL_DOMAIN) &
-                class_result%exit_code = ORBIT_EXIT_NUMERICAL_EVENT
-        end if
 
         !$omp critical
         zend(:,ipart) = z

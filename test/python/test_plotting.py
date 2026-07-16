@@ -88,6 +88,14 @@ class TestLossData:
 
         np.savetxt(tmp_path / "times_lost.dat", times_lost)
 
+        exit_codes = np.zeros((n_particles, 2))
+        exit_codes[:, 0] = np.arange(1, n_particles + 1)
+        exit_codes[:, 1] = np.where(
+            (times_lost[:, 1] > 0.0) & (times_lost[:, 1] < 1.0), 1, 0
+        )
+        exit_codes[times_lost[:, 1] < 0.0, 1] = 3
+        np.savetxt(tmp_path / "orbit_exit_code.dat", exit_codes)
+
         # confined_fraction.dat: time, confpart_pass, confpart_trap, ntestpart
         n_times = 50
         conf_frac = np.zeros((n_times, 4))
@@ -132,6 +140,32 @@ class TestLossData:
 
         # Masks should be mutually exclusive (mostly)
         # Note: particles with t_loss < 0 are skipped, t_loss >= trace_time are confined
+
+    def test_numerical_nan_is_excluded_from_resolved_statistics(self, tmp_path):
+        """Numerical exits are neither confined nor lost and do not poison time."""
+        times_lost = np.zeros((4, 10))
+        times_lost[:, 0] = np.arange(1, 5)
+        times_lost[:, 1] = [1.0, 0.25, -1.0, np.nan]
+        times_lost[:, 8] = 1.0
+        np.savetxt(tmp_path / "times_lost.dat", times_lost)
+        np.savetxt(
+            tmp_path / "orbit_exit_code.dat",
+            np.array([[1, 0], [2, 1], [3, 3], [4, 102]], dtype=float),
+        )
+        np.savetxt(
+            tmp_path / "confined_fraction.dat",
+            np.array([[0.0, 0.5, 0.5, 2], [1.0, 0.5, 0.0, 2]]),
+        )
+
+        data = load_loss_data(tmp_path)
+
+        assert data.trace_time == 1.0
+        assert data.lost_mask.tolist() == [False, True, False, False]
+        assert data.confined_mask.tolist() == [True, False, True, False]
+        assert data.resolved_mask.tolist() == [True, True, True, False]
+        assert data.unresolved_mask.tolist() == [False, False, False, True]
+        _, energy = compute_energy_confined_fraction(data, np.array([0.5]))
+        assert energy[0] == pytest.approx(2.0 / 3.0)
 
 
 class TestEnergyCalculations:
@@ -249,6 +283,26 @@ class TestPlotting:
         )
 
         assert output_path.exists()
+
+    def test_nocoll_curve_uses_its_own_resolved_denominator(
+        self, mock_loss_data_pair
+    ):
+        """Paired curves remain conditional on each run's survivor population."""
+        pytest.importorskip("matplotlib")
+        data_coll, data_nocoll = mock_loss_data_pair
+        data_coll.orbit_exit_codes = np.concatenate(
+            [np.full(30, 3), np.full(50, 1), np.zeros(20)]
+        )
+        data_nocoll.orbit_exit_codes = np.concatenate(
+            [np.full(50, 102), np.full(30, 1), np.zeros(20)]
+        )
+
+        fig = plot_energy_loss_vs_jperp(
+            data_coll, data_nocoll, show=False, nperp=1
+        )
+
+        nocoll_curve = fig.axes[0].lines[1].get_xdata()
+        assert nocoll_curve[0] == pytest.approx(30.0 / 50.0)
         assert fig is not None
 
     def test_plot_confined_fraction(self, mock_loss_data_pair, tmp_path):

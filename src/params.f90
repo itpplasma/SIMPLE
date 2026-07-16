@@ -82,8 +82,8 @@ module params
 
     real(dp) :: relerr = 1d-13
 
-    ! Wall-clock seconds between partial-result checkpoints during tracing.
-    ! <= 0 disables periodic output (results then appear only at the end).
+    ! Wall-clock seconds between progress reports during tracing. Result arrays
+    ! are written only at a team-safe point after tracing; <= 0 disables reports.
     real(dp) :: checkpoint_interval = 10.0d0
     integer :: canonical_grid_nr = 62
     integer :: canonical_grid_ntheta = 63
@@ -205,9 +205,9 @@ contains
         call reset_seed_if_deterministic
 
         if (integmode > 0 .and. symplectic_newton_warning_mode) then
-            print *, 'WARNING: symplectic integrators accept finite Newton ', &
-                'iterates after maxit; post-step sanity checks and bounded ', &
-                'retry remain active; see maxit diagnostics'
+            print *, 'WARNING: symplectic integrators accept bounded Newton ', &
+                'corrections after maxit; failed steps retry from the last ', &
+                'valid state; see maxit/step-skip diagnostics'
         end if
 
         call validate_boundary_event_tolerances

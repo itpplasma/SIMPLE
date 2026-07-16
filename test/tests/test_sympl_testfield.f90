@@ -164,7 +164,7 @@ contains
         if (step_error /= 0) error stop 'warning mode stopped a failed step'
         if (kt /= 1_int64) error stop 'warning mode did not consume the failed step'
         if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'warning mode did not latch the unresolved state'
+            error stop 'warning mode did not report the held interval'
         if (any(z /= initial_state)) then
             error stop 'warning-mode skip changed the last accepted state'
         end if
@@ -175,7 +175,7 @@ contains
         if (kt /= 2_int64) &
             error stop 'repeated warning failure did not consume one interval'
         if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'repeated warning failure lost its unresolved marker'
+            error stop 'repeated warning failure lost its diagnostic status'
         if (any(z /= initial_state)) &
             error stop 'repeated warning hold changed the accepted state'
 
@@ -200,7 +200,7 @@ contains
         if (kt /= 2_int64) &
             error stop 'repeated wall warning did not consume one interval'
         if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'repeated wall warning lost its unresolved marker'
+            error stop 'repeated wall warning lost its diagnostic status'
         if (any(z /= initial_state)) &
             error stop 'repeated wall warning changed the accepted state'
     end subroutine test_failed_step_preserves_state
