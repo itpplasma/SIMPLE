@@ -1,7 +1,8 @@
 module spectre_sheet_gc
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use libneo_coordinates, only: spectre_coordinate_system_t
     use magfie_sub, only: spectre_field, TESLA_TO_GAUSS, M_TO_CM, M3_TO_CM3
+    use diag_counters, only: count_event, EVT_SPECTRE_INVALID_STATE
     implicit none
     private
     public :: sheet_gc_sample_t, sheet_gc_state_t, evaluate_sheet_profile
@@ -45,6 +46,17 @@ module spectre_sheet_gc
         real(dp) :: energy = 0.0_dp
     end type sheet_gc_state_t
 contains
+    elemental logical function ieee_is_finite(value)
+        real(dp), intent(in) :: value
+
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7FF0000000000000', int64)
+        integer(int64) :: bits
+
+        bits = transfer(value, bits)
+        ieee_is_finite = iand(bits, exponent_mask) /= exponent_mask
+    end function ieee_is_finite
+
     subroutine evaluate_sheet_profile(iface, eta, theta, zeta, sample, ierr)
         integer, intent(in) :: iface
         real(dp), intent(in) :: eta, theta, zeta
@@ -54,6 +66,11 @@ contains
         real(dp) :: dbm(3), dbp(3), ginv(3, 3), dginv(3, 3, 3), sqrtg
         real(dp) :: blend, blend_eta
         sample = sheet_gc_sample_t()
+        if (.not. all(ieee_is_finite([eta, theta, zeta]))) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         if (.not. allocated(spectre_field)) then
             ierr = SHEET_GC_UNINITIALIZED
             return
@@ -61,6 +78,20 @@ contains
         call one_sided_fields(iface, theta, zeta, hm, hp, bm, bp, dhm, dhp, &
             dbm, dbp)
         call interface_metric(iface, theta, zeta, ginv, dginv, sqrtg)
+        if (.not. all(ieee_is_finite(hm)) .or. &
+            .not. all(ieee_is_finite(hp)) .or. &
+            .not. ieee_is_finite(bm) .or. .not. ieee_is_finite(bp) .or. &
+            .not. all(ieee_is_finite(dhm)) .or. &
+            .not. all(ieee_is_finite(dhp)) .or. &
+            .not. all(ieee_is_finite(dbm)) .or. &
+            .not. all(ieee_is_finite(dbp)) .or. &
+            .not. all(ieee_is_finite(ginv)) .or. &
+            .not. all(ieee_is_finite(dginv)) .or. &
+            .not. ieee_is_finite(sqrtg) .or. abs(sqrtg) <= tiny(1.0_dp)) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         blend = 0.5_dp*(1.0_dp + tanh(eta))
         blend_eta = 2.0_dp*blend*(1.0_dp - blend)
         call normalized_profile(blend, blend_eta, hm, hp, dhm, dhp, ginv, &
@@ -79,6 +110,21 @@ contains
         sample%hcurl(3) = (sample%hder(2, 1) - sample%hder(1, 2))/sample%sqrtg
         sample%rotation = sample%hcov(3)*sample%h_eta(2) - &
             sample%hcov(2)*sample%h_eta(3)
+        if (.not. ieee_is_finite(sample%bmod) .or. sample%bmod <= 0.0_dp .or. &
+            .not. ieee_is_finite(sample%sqrtg) .or. &
+            abs(sample%sqrtg) <= tiny(1.0_dp) .or. &
+            .not. all(ieee_is_finite(sample%hcov)) .or. &
+            .not. all(ieee_is_finite(sample%h_eta)) .or. &
+            .not. all(ieee_is_finite(sample%db)) .or. &
+            .not. all(ieee_is_finite(sample%hder)) .or. &
+            .not. all(ieee_is_finite(sample%hctr)) .or. &
+            .not. all(ieee_is_finite(sample%hcurl)) .or. &
+            .not. ieee_is_finite(sample%rotation)) then
+            sample = sheet_gc_sample_t()
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         ierr = SHEET_GC_OK
     end subroutine evaluate_sheet_profile
 
@@ -92,6 +138,11 @@ contains
         real(dp) :: scale, bstar_s, normal_n
         rhs = 0.0_dp
         energy_rate = 0.0_dp
+        if (.not. all(ieee_is_finite([eta, theta, zeta, vpar, mu, rho0]))) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         call evaluate_sheet_profile(iface, eta, theta, zeta, s, ierr)
         if (ierr /= SHEET_GC_OK) return
         scale = abs(s%hcov(3)*s%h_eta(2)) + abs(s%hcov(2)*s%h_eta(3))
@@ -117,6 +168,14 @@ contains
             (-s%h_eta(3)*s%db(2) + s%h_eta(2)*s%db(3))/s%rotation)
         energy_rate = vpar*rhs(4) + mu* &
             (s%db(1)*rhs(1) + s%db(2)*rhs(2) + s%db(3)*rhs(3))
+        if (.not. all(ieee_is_finite(rhs)) .or. &
+            .not. ieee_is_finite(energy_rate)) then
+            rhs = 0.0_dp
+            energy_rate = 0.0_dp
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         ierr = SHEET_GC_OK
     end subroutine sheet_gc_rhs
 
@@ -131,6 +190,13 @@ contains
         real(dp) :: radicand, incoming, rhs(4), energy_rate
 
         state = sheet_gc_state_t()
+        if (.not. all(ieee_is_finite(y)) .or. .not. ieee_is_finite(mu) .or. &
+            .not. ieee_is_finite(b_home) .or. .not. ieee_is_finite(rho0) .or. &
+            y(4) <= 0.0_dp .or. mu < 0.0_dp .or. b_home <= 0.0_dp) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         state%iface = iface
         state%owner = merge(iface, iface + 1, direction > 0)
         state%eta = merge(-PROFILE_EDGE, PROFILE_EDGE, direction > 0)
@@ -144,7 +210,7 @@ contains
             sample, ierr)
         if (ierr /= SHEET_GC_OK) return
         radicand = 2.0_dp*(state%energy - mu*sample%bmod)
-        if (radicand <= 0.0_dp) then
+        if (.not. ieee_is_finite(radicand) .or. radicand <= 0.0_dp) then
             ierr = SHEET_GC_ENERGY_BARRIER
             return
         end if
@@ -177,24 +243,38 @@ contains
         integer, intent(out) :: ierr
 
         real(dp) :: remaining, h, h_exit, rhs(4), energy_rate
-        type(sheet_gc_state_t) :: state0
+        type(sheet_gc_state_t) :: state0, valid_state
         integer :: nstep
 
         exited = .false.
         dt_used = 0.0_dp
         ierr = SHEET_GC_OK
+        if (.not. sheet_state_finite(state) .or. .not. ieee_is_finite(dt) .or. &
+            .not. ieee_is_finite(rho0)) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         if (dt <= 0.0_dp) return
         remaining = dt
+        valid_state = state
         do nstep = 1, MAX_SUBSTEPS
             call sheet_gc_rhs(state%iface, state%eta, state%theta, state%zeta, &
                 state%vpar, state%mu, rho0, rhs, energy_rate, ierr)
             if (ierr == SHEET_GC_DEGENERATE) then
+                state = valid_state
                 call pure_magnitude_exit(state, rho0, ierr)
                 if (ierr == SHEET_GC_OK) exited = .true.
                 return
             end if
             if (ierr /= SHEET_GC_OK) return
             h = min(remaining, MAX_ETA_STEP/max(abs(rhs(1)), tiny(1.0_dp)))
+            if (.not. ieee_is_finite(h) .or. h <= 0.0_dp) then
+                state = valid_state
+                ierr = SHEET_GC_DEGENERATE
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             state0 = state
             call rk4_sheet_step(state, h, rho0, ierr)
             if (ierr == SHEET_GC_DEGENERATE) then
@@ -204,6 +284,13 @@ contains
                 return
             end if
             if (ierr /= SHEET_GC_OK) return
+            if (.not. sheet_state_finite(state)) then
+                state = state0
+                ierr = SHEET_GC_DEGENERATE
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
+            valid_state = state
             remaining = remaining - h
             if (abs(state%eta) >= PROFILE_EDGE) then
                 call locate_sheet_exit(state0, h, rho0, &
@@ -236,6 +323,15 @@ contains
             state%vpar/state%p]
     end subroutine sheet_gc_to_y
 
+    pure logical function sheet_state_finite(state)
+        type(sheet_gc_state_t), intent(in) :: state
+
+        sheet_state_finite = all(ieee_is_finite([state%eta, state%theta, &
+            state%zeta, state%vpar, state%p, state%mu, state%energy])) .and. &
+            state%p > 0.0_dp .and. state%mu >= 0.0_dp .and. &
+            state%energy > 0.0_dp
+    end function sheet_state_finite
+
     subroutine rk4_sheet_step(state, h, rho0, ierr)
         type(sheet_gc_state_t), intent(inout) :: state
         real(dp), intent(in) :: h, rho0
@@ -259,6 +355,11 @@ contains
             z(3) + h*k3(3), z(4) + h*k3(4), state%mu, rho0, k4, rate, ierr)
         if (ierr /= SHEET_GC_OK) return
         z = z + h*(k1 + 2.0_dp*k2 + 2.0_dp*k3 + k4)/6.0_dp
+        if (.not. all(ieee_is_finite(z))) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         call project_sheet_energy(state, z, ierr)
         if (ierr /= SHEET_GC_OK) return
         state%eta = z(1)
@@ -277,8 +378,13 @@ contains
 
         call evaluate_sheet_profile(state%iface, z(1), z(2), z(3), sample, ierr)
         if (ierr /= SHEET_GC_OK) return
+        if (.not. all(ieee_is_finite(z)) .or. .not. sheet_state_finite(state)) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         radicand = 2.0_dp*(state%energy - state%mu*sample%bmod)
-        if (radicand <= 0.0_dp) then
+        if (.not. ieee_is_finite(radicand) .or. radicand <= 0.0_dp) then
             ierr = SHEET_GC_ENERGY_BARRIER
             return
         end if
@@ -330,6 +436,11 @@ contains
         type(sheet_gc_state_t) :: state0
         real(dp) :: rhs(4), rate, step, edge
         integer :: nstep
+        if (.not. sheet_state_finite(state) .or. .not. ieee_is_finite(rho0)) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         do nstep = 1, MAX_SUBSTEPS
             call pure_magnitude_rhs(state%iface, state%eta, state%theta, &
                 state%zeta, state%vpar, state%mu, rho0, rhs, ierr)
@@ -337,9 +448,23 @@ contains
             rate = max(maxval(abs(rhs(1:3))), &
                 abs(rhs(4))/max(abs(state%vpar), 1.0e-3_dp))
             step = PURE_ETA_STEP/max(rate, tiny(1.0_dp))
+            if (.not. ieee_is_finite(step) .or. step <= 0.0_dp) then
+                ierr = SHEET_GC_DEGENERATE
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             state0 = state
             call rk4_pure_magnitude_step(state, step, rho0, ierr)
-            if (ierr /= SHEET_GC_OK) return
+            if (ierr /= SHEET_GC_OK) then
+                state = state0
+                return
+            end if
+            if (.not. sheet_state_finite(state)) then
+                state = state0
+                ierr = SHEET_GC_DEGENERATE
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             if (abs(state%eta) >= PROFILE_EDGE) then
                 edge = sign(PROFILE_EDGE, state%eta)
                 call locate_pure_magnitude_exit(state0, step, rho0, edge, state, &
@@ -362,6 +487,11 @@ contains
         type(sheet_gc_sample_t) :: s
         real(dp) :: bstar_s, bstar_parallel, normal_n
         rhs = 0.0_dp
+        if (.not. all(ieee_is_finite([eta, theta, zeta, vpar, mu, rho0]))) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         call evaluate_sheet_profile(iface, eta, theta, zeta, s, ierr)
         if (ierr /= SHEET_GC_OK) return
         bstar_s = s%bmod*s%hctr(1)
@@ -376,6 +506,12 @@ contains
         rhs(2) = rho0*mu*s%hcov(3)*s%db(1)/(s%sqrtg*bstar_parallel)
         rhs(3) = -rho0*mu*s%hcov(2)*s%db(1)/(s%sqrtg*bstar_parallel)
         rhs(4) = -mu*bstar_s*s%db(1)/bstar_parallel
+        if (.not. all(ieee_is_finite(rhs))) then
+            rhs = 0.0_dp
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         ierr = SHEET_GC_OK
     end subroutine pure_magnitude_rhs
 
@@ -400,6 +536,11 @@ contains
             z(3) + h*k3(3), z(4) + h*k3(4), state%mu, rho0, k4, ierr)
         if (ierr /= SHEET_GC_OK) return
         z = z + h*(k1 + 2.0_dp*k2 + 2.0_dp*k3 + k4)/6.0_dp
+        if (.not. all(ieee_is_finite(z))) then
+            ierr = SHEET_GC_DEGENERATE
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         call project_sheet_energy(state, z, ierr)
         if (ierr /= SHEET_GC_OK) return
         state%eta = z(1)

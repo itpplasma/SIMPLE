@@ -82,8 +82,9 @@ module params
 
     real(dp) :: relerr = 1d-13
 
-    ! Wall-clock seconds between progress reports during tracing. Result arrays
-    ! are written only at a team-safe point after tracing; <= 0 disables reports.
+    ! Legacy progress/checkpoint interval, retained for input compatibility.
+    ! Tracing performs no timed I/O; results and event totals are emitted after
+    ! the OpenMP team joins.
     real(dp) :: checkpoint_interval = 10.0d0
     integer :: canonical_grid_nr = 62
     integer :: canonical_grid_ntheta = 63

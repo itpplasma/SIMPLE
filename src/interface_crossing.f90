@@ -15,6 +15,7 @@ module interface_crossing
     !> omits. Both levels are energy-exact in the crossing and reflection branch.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
+    !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     use magfie_sub, only: magfie
     use parmot_mod, only: ro0
 
@@ -108,6 +109,12 @@ module interface_crossing
         type(crossing_info_t) :: info
     end type crossing_record_t
 
+    type :: thread_crossing_log_t
+        type(crossing_record_t), allocatable :: record(:)
+        integer :: count = 0
+    end type thread_crossing_log_t
+
+    type(thread_crossing_log_t), allocatable :: thread_log(:)
     type(crossing_record_t), allocatable :: crossing_log(:)
     integer :: crossing_count = 0
 
@@ -583,9 +590,17 @@ contains
 
     subroutine crossing_log_reset(capacity)
         integer, intent(in) :: capacity
+        integer :: nthreads, tid
 
+        nthreads = 1
+        !$ nthreads = omp_get_max_threads()
+        if (allocated(thread_log)) deallocate (thread_log)
         if (allocated(crossing_log)) deallocate (crossing_log)
-        allocate (crossing_log(max(capacity, 1)))
+        allocate (thread_log(0:nthreads - 1))
+        do tid = 0, nthreads - 1
+            allocate (thread_log(tid)%record(max(capacity, 1)))
+            thread_log(tid)%count = 0
+        end do
         crossing_count = 0
     end subroutine crossing_log_reset
 
@@ -595,38 +610,47 @@ contains
         type(crossing_info_t), intent(in) :: info
 
         type(crossing_record_t), allocatable :: tmp(:)
+        integer :: tid, n
 
-        !$omp critical (spectre_crossing_log)
-        if (.not. allocated(crossing_log)) allocate (crossing_log(64))
-        if (crossing_count >= size(crossing_log)) then
-            allocate (tmp(2*size(crossing_log)))
-            tmp(1:crossing_count) = crossing_log(1:crossing_count)
-            call move_alloc(tmp, crossing_log)
+        if (.not. allocated(thread_log)) return
+        tid = 0
+        !$ tid = omp_get_thread_num()
+        n = thread_log(tid)%count
+        if (n >= size(thread_log(tid)%record)) then
+            allocate (tmp(2*size(thread_log(tid)%record)))
+            tmp(1:n) = thread_log(tid)%record(1:n)
+            call move_alloc(tmp, thread_log(tid)%record)
         end if
-        crossing_count = crossing_count + 1
-        crossing_log(crossing_count)%ipart = ipart
-        crossing_log(crossing_count)%time = time
-        crossing_log(crossing_count)%info = info
-        !$omp end critical (spectre_crossing_log)
+        n = n + 1
+        thread_log(tid)%count = n
+        thread_log(tid)%record(n)%ipart = ipart
+        thread_log(tid)%record(n)%time = time
+        thread_log(tid)%record(n)%info = info
     end subroutine crossing_log_record
 
     integer function crossing_log_count()
-        crossing_log_count = crossing_count
+        integer :: tid
+
+        crossing_log_count = 0
+        if (.not. allocated(thread_log)) return
+        do tid = lbound(thread_log, 1), ubound(thread_log, 1)
+            crossing_log_count = crossing_log_count + thread_log(tid)%count
+        end do
     end function crossing_log_count
 
     integer function crossing_log_count_type(event_type)
         integer, intent(in) :: event_type
 
-        integer :: i
+        integer :: i, tid
 
         crossing_log_count_type = 0
-        !$omp critical (spectre_crossing_log)
-        do i = 1, crossing_count
-            if (crossing_log(i)%info%event_type == event_type) then
-                crossing_log_count_type = crossing_log_count_type + 1
-            end if
+        if (.not. allocated(thread_log)) return
+        do tid = lbound(thread_log, 1), ubound(thread_log, 1)
+            do i = 1, thread_log(tid)%count
+                if (thread_log(tid)%record(i)%info%event_type == event_type) &
+                    crossing_log_count_type = crossing_log_count_type + 1
+            end do
         end do
-        !$omp end critical (spectre_crossing_log)
     end function crossing_log_count_type
 
     subroutine crossing_log_write(filename)
@@ -635,11 +659,8 @@ contains
         integer :: unit, i
         integer, allocatable :: order(:)
 
-        if (.not. allocated(crossing_log)) return
-
-        ! Checkpoint dumps call this from a worker thread while others append, so
-        ! serialize against crossing_log_record to keep the growable array live.
-        !$omp critical (spectre_crossing_log)
+        if (.not. allocated(thread_log)) return
+        call gather_crossing_log
         call sorted_by_particle(order)
         open (newunit=unit, file=filename, recl=1024)
         write (unit, '(A)') '# particle  time  iface  type  vol_from  vol_to  '// &
@@ -656,8 +677,22 @@ contains
             end associate
         end do
         close (unit)
-        !$omp end critical (spectre_crossing_log)
     end subroutine crossing_log_write
+
+    subroutine gather_crossing_log
+        integer :: first, last, tid
+
+        crossing_count = crossing_log_count()
+        if (allocated(crossing_log)) deallocate (crossing_log)
+        allocate (crossing_log(max(crossing_count, 1)))
+        first = 1
+        do tid = lbound(thread_log, 1), ubound(thread_log, 1)
+            last = first + thread_log(tid)%count - 1
+            if (last >= first) crossing_log(first:last) = &
+                thread_log(tid)%record(1:thread_log(tid)%count)
+            first = last + 1
+        end do
+    end subroutine gather_crossing_log
 
     subroutine sorted_by_particle(order)
         !> Stable counting sort of the log by particle index. Each particle is

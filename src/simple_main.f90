@@ -198,7 +198,7 @@ contains
                 call sympl_landing_stats_reset
             end block
         end if
-        call progress_init(checkpoint_interval, ntestpart, write_results)
+        call progress_init(checkpoint_interval, ntestpart)
         call trace_parallel(norb)
         call progress_finalize
         call print_phase_time('Parallel particle tracing completed')

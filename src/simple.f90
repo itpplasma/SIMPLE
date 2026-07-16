@@ -210,7 +210,6 @@ contains
       z = z_start
       ierr = ORBIT_FO_NUMERICAL
       call count_event(EVT_FO_FAULT)
-      call warn_fo_unresolved
       return
     end if
     call fo_to_gc(fo, s, th, ph, vpar, status)
@@ -228,30 +227,12 @@ contains
       z = z_start
       ierr = ORBIT_FO_NUMERICAL
       call count_event(EVT_FO_FAULT)
-      call warn_fo_unresolved
       return
     end if
     z(1) = s; z(2) = th; z(3) = ph
     z(4) = fo%pabs
     z(5) = vpar/(z(4)*dsqrt(2d0))
   end subroutine orbit_timestep_fo
-
-  ! One-time stderr warning that some full-orbit steps could not invert the
-  ! Cartesian position and were rolled back to the last resolved state.
-  subroutine warn_fo_unresolved
-    use iso_fortran_env, only: error_unit
-    logical, save :: warned = .false.
-    !$omp critical (fo_unresolved_warning)
-    if (.not. warned) then
-      warned = .true.
-      write (error_unit, '(A)') ' WARNING: full-orbit Cartesian inversion unresolved '// &
-        'at some steps (near-axis below chartmap resolution, or a field-period seam). '// &
-        'Warning mode holds that interval at the last resolved state and continues '// &
-        '(fo_fault); it is never counted as a physical loss.'
-      flush (error_unit)
-    end if
-    !$omp end critical (fo_unresolved_warning)
-  end subroutine warn_fo_unresolved
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self
