@@ -581,17 +581,16 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
       return
     end if
   enddo
-  if (boundary_limited) then
-    if (step_boundary_limited .and. &
-        radial_boundary_reached(x, radial_indices, si%rtol)) then
-      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else
-      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-    end if
-  else
-    call count_event(EVT_NEWTON1_MAXIT)
-    if (accept_warning_maxiter(x)) &
-      status = SYMPLECTIC_STEP_OK
+  if (boundary_limited .and. step_boundary_limited .and. &
+      radial_boundary_reached(x, radial_indices, si%rtol)) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  call count_event(EVT_NEWTON1_MAXIT)
+  if (accept_warning_maxiter(x)) then
+    status = SYMPLECTIC_STEP_OK
+  else if (boundary_limited) then
+    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
   end if
 end subroutine
 
@@ -676,17 +675,16 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
       return
     end if
   enddo
-  if (boundary_limited) then
-    if (step_limited .and. &
-        radial_boundary_reached(x, radial_indices, rtol)) then
-      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else
-      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-    end if
-  else
-    call count_event(EVT_NEWTON2_MAXIT)
-    if (accept_warning_maxiter(x)) &
-      status = SYMPLECTIC_STEP_OK
+  if (boundary_limited .and. step_limited .and. &
+      radial_boundary_reached(x, radial_indices, rtol)) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  call count_event(EVT_NEWTON2_MAXIT)
+  if (accept_warning_maxiter(x)) then
+    status = SYMPLECTIC_STEP_OK
+  else if (boundary_limited) then
+    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
   end if
 end subroutine
 
@@ -834,17 +832,16 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
       return
     end if
   enddo
-  if (boundary_limited) then
-    if (step_limited .and. &
-        radial_boundary_reached(x, radial_indices, rtol)) then
-      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else
-      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-    end if
-  else
-    call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_warning_maxiter(x)) &
-      status = SYMPLECTIC_STEP_OK
+  if (boundary_limited .and. step_limited .and. &
+      radial_boundary_reached(x, radial_indices, rtol)) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  call count_event(EVT_MIDPOINT_MAXIT)
+  if (accept_warning_maxiter(x)) then
+    status = SYMPLECTIC_STEP_OK
+  else if (boundary_limited) then
+    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
   end if
 end subroutine
 
@@ -959,17 +956,16 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
       return
     end if
   enddo
-  if (boundary_limited) then
-    if (step_limited .and. &
-        radial_boundary_reached(x, radial_indices, rtol)) then
-      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else
-      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-    end if
-  else
-    call count_event(EVT_RK_GAUSS_MAXIT)
-    if (accept_warning_maxiter(x)) &
-      status = SYMPLECTIC_STEP_OK
+  if (boundary_limited .and. step_limited .and. &
+      radial_boundary_reached(x, radial_indices, rtol)) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  call count_event(EVT_RK_GAUSS_MAXIT)
+  if (accept_warning_maxiter(x)) then
+    status = SYMPLECTIC_STEP_OK
+  else if (boundary_limited) then
+    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
   end if
 end subroutine newton_rk_gauss
 
@@ -1301,17 +1297,16 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
       return
     end if
   enddo
-  if (boundary_limited) then
-    if (step_limited .and. &
-        radial_boundary_reached(x, radial_indices, rtol)) then
-      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    else
-      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-    end if
-  else
-    call count_event(EVT_RK_LOBATTO_MAXIT)
-    if (accept_warning_maxiter(x)) &
-      status = SYMPLECTIC_STEP_OK
+  if (boundary_limited .and. step_limited .and. &
+      radial_boundary_reached(x, radial_indices, rtol)) then
+    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    return
+  end if
+  call count_event(EVT_RK_LOBATTO_MAXIT)
+  if (accept_warning_maxiter(x)) then
+    status = SYMPLECTIC_STEP_OK
+  else if (boundary_limited) then
+    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
   end if
 end subroutine newton_rk_lobatto
 
