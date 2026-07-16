@@ -826,6 +826,7 @@ add_test(NAME test_restart_io
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_restart_io PROPERTIES
     LABELS "unit"
+    RESOURCE_LOCK simple_result_files
     TIMEOUT 15)
 
 add_executable(test_result_accounting.x test_result_accounting.f90)
@@ -835,6 +836,7 @@ add_test(NAME test_result_accounting
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_result_accounting PROPERTIES
     LABELS "unit"
+    RESOURCE_LOCK simple_result_files
     TIMEOUT 15)
 
 # Restart integration test (TEST field, deterministic)
