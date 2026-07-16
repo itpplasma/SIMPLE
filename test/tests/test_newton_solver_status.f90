@@ -133,7 +133,8 @@ contains
 end module linear_radial_field_backend
 
 program test_newton_solver_status
-  use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, &
+    ieee_value
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
@@ -261,8 +262,8 @@ contains
   subroutine test_newton_warning_mode
     integer, parameter :: modes(8) = [EXPL_IMPL_EULER, IMPL_EXPL_EULER, &
       MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3]
-    type(symplectic_integrator_t) :: strict_integrator
-    type(field_can_t) :: strict_field
+    type(symplectic_integrator_t) :: strict_integrator, warning_integrator
+    type(field_can_t) :: strict_field, warning_field
     real(dp) :: initial_state(4), accepted(2), previous(2)
     integer :: mode_index, step_status
 
@@ -282,6 +283,25 @@ contains
       end if
       if (any(strict_integrator%z /= initial_state)) then
         error stop 'strict max-iteration failure changed the accepted state'
+      end if
+
+      warning_field%ro0 = 1.0_dp
+      warning_field%mu = 1.0_dp
+      call orbit_sympl_init(warning_integrator, warning_field, initial_state, &
+        0.01_dp, 1, 0.0_dp, modes(mode_index))
+      warning_integrator%atol = 0.0_dp
+      symplectic_newton_warning_mode = .true.
+      call orbit_timestep_sympl(warning_integrator, warning_field, step_status)
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        print *, 'warning mode, status:', modes(mode_index), step_status
+        error stop 'warning mode did not continue the timestep'
+      end if
+      if (.not. all(ieee_is_finite(warning_integrator%z))) then
+        error stop 'warning mode accepted a non-finite state'
+      end if
+      if (modes(mode_index) == EXPL_IMPL_EULER .and. &
+          all(warning_integrator%z == initial_state)) then
+        error stop 'warning mode did not commit the timestep'
       end if
 
     end do
