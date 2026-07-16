@@ -289,6 +289,9 @@ contains
         call init_sympl(si, f, z, dtaumin, dtaumin, relerr, integmode)
         call sympl_spectre_reset(state, si, spectre_mvol, integmode, &
                                  crossing_level)
+        if (si%accept_unbounded_newton_warning) then
+            error stop 'SPECTRE did not enable bounded Newton warnings'
+        end if
 
         nrec_got = 0
         do k = 1, NSTEP

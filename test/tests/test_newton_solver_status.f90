@@ -309,21 +309,34 @@ contains
     previous = [1.0_dp, 2.0_dp]
     accepted = previous + [5.0e-12_dp, 1.0e-11_dp]
     symplectic_newton_warning_mode = .true.
-    if (.not. accept_warning_maxiter(accepted)) then
+    if (.not. accept_warning_maxiter(accepted, previous, previous, &
+        1.0e-12_dp, .true.)) then
       error stop 'warning mode rejected a finite Newton iterate'
     end if
     accepted(1) = huge(1.0_dp)
-    if (.not. accept_warning_maxiter(accepted)) then
+    if (.not. accept_warning_maxiter(accepted, previous, previous, &
+        1.0e-12_dp, .true.)) then
       error stop 'warning mode rejected a large finite Newton iterate'
+    end if
+    if (accept_warning_maxiter(accepted, previous, previous, &
+        1.0e-12_dp, .false.)) then
+      error stop 'bounded warning policy accepted a gross Newton correction'
+    end if
+    accepted = previous + [5.0e-12_dp, 1.0e-11_dp]
+    if (.not. accept_warning_maxiter(accepted, previous, previous, &
+        1.0e-12_dp, .false.)) then
+      error stop 'bounded warning policy rejected a near-converged iterate'
     end if
     accepted = previous
     accepted(1) = ieee_value(0.0_dp, ieee_quiet_nan)
-    if (accept_warning_maxiter(accepted)) then
+    if (accept_warning_maxiter(accepted, previous, previous, &
+        1.0e-12_dp, .true.)) then
       error stop 'warning mode accepted a non-finite Newton correction'
     end if
     accepted = previous
     symplectic_newton_warning_mode = .false.
-    if (accept_warning_maxiter(accepted)) then
+    if (accept_warning_maxiter(accepted, previous, previous, &
+        1.0e-12_dp, .true.)) then
       error stop 'strict mode accepted a Newton max-iteration state'
     end if
   end subroutine test_newton_warning_mode

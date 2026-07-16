@@ -27,6 +27,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
     logical :: symplectic_newton_warning_mode = .true.
+    real(dp), parameter :: symplectic_newton_warning_factor = 10.0_dp
     real(dp) :: boundary_event_fraction_tolerance = -1d0
     real(dp) :: boundary_event_radial_tolerance = -1d0
 
@@ -45,6 +46,10 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
         real(dp) :: last_step_fraction = 1d0
         real(dp) :: last_event_radial_residual = 0d0
         real(dp) :: last_event_fraction_width = 0d0
+        ! Generic SIMPLE tracing historically commits every finite Newton
+        ! iteration-limit state in warning mode. Specialized callers may
+        ! disable that liberal policy and accept only a near-converged state.
+        logical :: accept_unbounded_newton_warning = .true.
     end type symplectic_integrator_t
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

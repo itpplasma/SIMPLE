@@ -138,7 +138,7 @@ contains
 
     subroutine sympl_spectre_reset(state, si, mvol, mode, level)
         type(sympl_spectre_state_t), intent(out) :: state
-        type(symplectic_integrator_t), intent(in) :: si
+        type(symplectic_integrator_t), intent(inout) :: si
         integer, intent(in) :: mvol, mode, level
 
         if (mode <= 0) then
@@ -156,6 +156,9 @@ contains
         state%mode = mode
         state%level = level
         state%dt_std = si%dt
+        ! SPECTRE discontinuities require a valid interface state. Preserve
+        ! near-converged warning-mode iterates, but recover gross corrections.
+        si%accept_unbounded_newton_warning = .false.
         call set_home(state, si%z(1))
     end subroutine sympl_spectre_reset
 

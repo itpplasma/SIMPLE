@@ -12,7 +12,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
-  boundary_event_radial_tolerance, symplectic_newton_warning_mode
+  boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
+  symplectic_newton_warning_factor
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -49,15 +50,27 @@ pure logical function finite_newton_iterate(x)
   finite_newton_iterate = .true.
 end function finite_newton_iterate
 
-logical function accept_warning_maxiter(x)
+logical function accept_warning_maxiter(x, xlast, tolref, rtol, &
+    accept_unbounded)
   ! Warning mode preserves the historical SIMPLE continuation contract: a
   ! Newton iteration-limit event is diagnostic, not a rejected step. Commit
   ! every finite final iterate and leave recursive recovery for genuinely
   ! unusable states such as failed linear solves or non-finite iterates.
-  real(dp), intent(in) :: x(:)
+  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol
+  logical, intent(in) :: accept_unbounded
 
-  accept_warning_maxiter = symplectic_newton_warning_mode .and. &
-    finite_newton_iterate(x)
+  accept_warning_maxiter = .false.
+  if (.not. symplectic_newton_warning_mode) return
+  if (.not. finite_newton_iterate(x)) return
+  if (accept_unbounded) then
+    accept_warning_maxiter = .true.
+    return
+  end if
+  if (rtol <= 0.0_dp) return
+  if (.not. finite_newton_iterate(xlast)) return
+  if (.not. finite_newton_iterate(tolref)) return
+  accept_warning_maxiter = all(abs(x - xlast) <= &
+    symplectic_newton_warning_factor*rtol*abs(tolref))
 end function accept_warning_maxiter
 
 subroutine advance_symplectic_with_retry(si, f, stepper, status, &
@@ -566,7 +579,8 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     call get_derivatives2(f, x(2))
     call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
       linear_failed, step_boundary_limited, &
-      .not. symplectic_newton_warning_mode)
+      .not. symplectic_newton_warning_mode .or. &
+      .not. si%accept_unbounded_newton_warning)
     boundary_limited = boundary_limited .or. step_boundary_limited
 
     if (linear_failed) then
@@ -591,7 +605,8 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON1_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, si%rtol, &
+        si%accept_unbounded_newton_warning)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -653,7 +668,8 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     jinv(3,3) = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
 
     correction = matmul(jinv, fvec)/det
-    if (symplectic_newton_warning_mode) then
+    if (symplectic_newton_warning_mode .and. &
+        si%accept_unbounded_newton_warning) then
       step_limited = .false.
       x = x - correction
     else
@@ -691,7 +707,8 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON2_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%accept_unbounded_newton_warning)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -849,7 +866,8 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%accept_unbounded_newton_warning)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -974,7 +992,8 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     end if
   else
     call count_event(EVT_RK_GAUSS_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%accept_unbounded_newton_warning)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_gauss
@@ -1316,7 +1335,8 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     end if
   else
     call count_event(EVT_RK_LOBATTO_MAXIT)
-    if (accept_warning_maxiter(x)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%accept_unbounded_newton_warning)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_lobatto
