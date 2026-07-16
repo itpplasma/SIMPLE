@@ -205,9 +205,9 @@ contains
         call reset_seed_if_deterministic
 
         if (integmode > 0 .and. symplectic_newton_warning_mode) then
-            print *, 'WARNING: symplectic integrators accept bounded Newton ', &
-                'corrections and retry failed smooth-field steps by halving; ', &
-                'see maxit diagnostics'
+            print *, 'WARNING: symplectic integrators accept finite Newton ', &
+                'iterates after maxit; post-step sanity checks and bounded ', &
+                'retry remain active; see maxit diagnostics'
         end if
 
         call validate_boundary_event_tolerances

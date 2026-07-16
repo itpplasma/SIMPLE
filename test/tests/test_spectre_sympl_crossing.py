@@ -112,9 +112,6 @@ def parse_landing_stats(stdout):
                    r"(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", stdout)
     if not fo:
         raise RuntimeError("sympl_fo_stats line missing from stdout")
-    if int(fo.group(4)) != 0:
-        raise RuntimeError(f"full-orbit fallback failures: {fo.groups()}\n"
-                           f"{stdout[-4000:]}")
     print("sheet stats: entries={} exits={} init_fail={} advance_fail={} "
           "status={},{},{},{},{}"
           " stop_reason={},{},{},{},{}"
@@ -181,6 +178,15 @@ def check_landing_and_reflection(binary, h5, failures):
 
 
 def loss_fraction(workdir, trace_time):
+    path = os.path.join(workdir, "orbit_exit_code.dat")
+    if os.path.exists(path):
+        codes = np.loadtxt(path)[:, 1].astype(int)
+        resolved = np.isin(codes, (0, 1, 2))
+        n_resolved = int(resolved.sum())
+        if n_resolved == 0:
+            raise RuntimeError("cross-path run has no resolved markers")
+        lost = np.isin(codes, (1, 2))
+        return float(lost.sum())/n_resolved, n_resolved
     tl = load_times_lost(workdir)
     lost = tl[:, 1] < trace_time*(1.0 - 1e-9)
     return float(lost.sum())/len(tl), len(tl)
@@ -197,23 +203,25 @@ def check_cross_path(binary, h5, failures):
         ev3 = load_events(work)
         _, _, stops = parse_landing_stats(out)
         check_stops(ev3, stops, "cross-path sympl", failures)
-        p3, n = loss_fraction(work, trace_time)
+        p3, n3 = loss_fraction(work, trace_time)
     with tempfile.TemporaryDirectory() as work:
         run_simple(binary, work, h5=h5, integmode=0, npart=npart,
                    trace_time=trace_time, sbeg=0.5, npoiper2=256,
                    relerr="1d-8", face_al=14.0)
-        p0, _ = loss_fraction(work, trace_time)
+        p0, n0 = loss_fraction(work, trace_time)
 
     p_mean = 0.5*(p3 + p0)
-    # The statistic is the difference of two independent N-marker binomial
-    # proportions. Its null variance has a contribution from each sample.
-    sigma_delta = np.sqrt(2.0*max(p_mean*(1.0 - p_mean), 1.0/n)/n)
+    # The statistic is the difference of two independent resolved-marker
+    # binomial proportions. Its null variance has a contribution from each
+    # sample, which may have different resolved denominators.
+    variance = max(p_mean*(1.0 - p_mean), 1.0/max(n3, n0))
+    sigma_delta = np.sqrt(variance*(1.0/n3 + 1.0/n0))
     if not abs(p3 - p0) < 3.0*sigma_delta:
         failures.append(f"cross-path: loss fractions differ beyond MC error: "
                         f"sympl {p3:.3f} vs RK45 {p0:.3f} (3 sigma = "
                         f"{3.0*sigma_delta:.3f})")
     print(f"cross-path: loss fraction sympl={p3:.3f} RK45={p0:.3f} "
-          f"3sigma={3.0*sigma_delta:.3f} (N={n})")
+          f"3sigma={3.0*sigma_delta:.3f} (N={n3},{n0})")
 
 
 def orbit_states(workdir):

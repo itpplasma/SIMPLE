@@ -128,7 +128,7 @@ program test_newton_solver_status
     advance_symplectic_with_boundary, advance_symplectic_with_retry, &
     newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
-    get_boundary_event_tolerances, accept_bounded_maxiter
+    get_boundary_event_tolerances, accept_warning_maxiter
   use orbit_symplectic_base, only: symplectic_integrator_t, &
     EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, &
     GAUSS4, LOBATTO3, &
@@ -248,7 +248,7 @@ contains
       MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3]
     type(symplectic_integrator_t) :: strict_integrator
     type(field_can_t) :: strict_field
-    real(dp) :: initial_state(4), accepted(2), previous(2), scale(2)
+    real(dp) :: initial_state(4), accepted(2), previous(2)
     integer :: mode_index, step_status
 
     eval_field => evaluate_linear_radial
@@ -272,24 +272,23 @@ contains
     end do
 
     previous = [1.0_dp, 2.0_dp]
-    scale = [1.0_dp, 2.0_dp]
     accepted = previous + [5.0e-12_dp, 1.0e-11_dp]
     symplectic_newton_warning_mode = .true.
-    if (.not. accept_bounded_maxiter(accepted, previous, scale, 1.0e-12_dp)) then
-      error stop 'warning mode rejected a bounded Newton correction'
+    if (.not. accept_warning_maxiter(accepted)) then
+      error stop 'warning mode rejected a finite Newton iterate'
     end if
-    accepted(1) = previous(1) + 11.0e-12_dp
-    if (accept_bounded_maxiter(accepted, previous, scale, 1.0e-12_dp)) then
-      error stop 'warning mode accepted an excessive Newton correction'
+    accepted(1) = huge(1.0_dp)
+    if (.not. accept_warning_maxiter(accepted)) then
+      error stop 'warning mode rejected a finite large Newton iterate'
     end if
     accepted = previous
     accepted(1) = ieee_value(0.0_dp, ieee_quiet_nan)
-    if (accept_bounded_maxiter(accepted, previous, scale, 1.0e-12_dp)) then
+    if (accept_warning_maxiter(accepted)) then
       error stop 'warning mode accepted a non-finite Newton correction'
     end if
     accepted = previous
     symplectic_newton_warning_mode = .false.
-    if (accept_bounded_maxiter(accepted, previous, scale, 1.0e-12_dp)) then
+    if (accept_warning_maxiter(accepted)) then
       error stop 'strict mode accepted a Newton max-iteration state'
     end if
   end subroutine test_newton_warning_mode

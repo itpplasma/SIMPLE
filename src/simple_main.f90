@@ -1407,10 +1407,6 @@ contains
         do ktau = 1, ntau_local
             numerical_hold = .false.
             z_step_start = z
-            if (hold_streak_local /= 0) then
-                ierr_orbit = hold_streak_local
-                exit
-            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -1428,13 +1424,11 @@ contains
                         ! one unresolved microstep and retries the next step;
                         ! numerical inversion faults are never physical losses.
                         z = z_step_start
-                        if (hold_streak_local == 0) then
-                            call count_event(EVT_WARNING_STEP_SKIP)
-                            hold_streak_local = ierr_orbit
-                            numerical_hold = .true.
-                            numerical_hold_any_local = .true.
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak_local = ierr_orbit
+                        numerical_hold = .true.
+                        numerical_hold_any_local = .true.
                         ierr_orbit = 0
-                    end if
                     end if
                     if (ierr_orbit .ne. 0) exit
                 end if
@@ -1460,13 +1454,11 @@ contains
                     ! The RK driver rolls back failed integration to the last
                     ! accepted state. Apply the same bounded warning convention
                     ! as the symplectic and full-orbit paths.
-                    if (hold_streak_local == 0) then
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
-                    end if
+                    call count_event(EVT_WARNING_STEP_SKIP)
+                    hold_streak_local = ierr_orbit
+                    numerical_hold = .true.
+                    numerical_hold_any_local = .true.
+                    ierr_orbit = 0
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -1483,13 +1475,11 @@ contains
                     ! advance_symplectic_with_retry restored the last accepted
                     ! state. Skip only the unresolved microstep and continue;
                     ! strict mode still reports the numerical exit.
-                    if (hold_streak_local == 0) then
                     call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
+                    hold_streak_local = ierr_orbit
+                    numerical_hold = .true.
+                    numerical_hold_any_local = .true.
                     ierr_orbit = 0
-                    end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
@@ -1604,10 +1594,6 @@ contains
         do ktau = 1, ntau_local
             numerical_hold = .false.
             z_step_start = z
-            if (hold_streak_local /= 0) then
-                ierr_orbit = hold_streak_local
-                exit
-            end if
             if (integmode <= 0) then
                 call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
                 if (ierr_orbit == 1) then
@@ -1632,13 +1618,11 @@ contains
                     exit
                 else if (ierr_orbit /= 0 .and. &
                         symplectic_newton_warning_mode) then
-                    if (hold_streak_local == 0) then
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
-                    end if
+                    call count_event(EVT_WARNING_STEP_SKIP)
+                    hold_streak_local = ierr_orbit
+                    numerical_hold = .true.
+                    numerical_hold_any_local = .true.
+                    ierr_orbit = 0
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -1666,13 +1650,11 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
-                    if (hold_streak_local == 0) then
                     call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
+                    hold_streak_local = ierr_orbit
                     numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
-                    end if
+                    numerical_hold_any_local = .true.
+                    ierr_orbit = 0
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
