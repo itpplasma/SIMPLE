@@ -63,6 +63,19 @@ class TestInitialization:
             npoiper2=64
         )
 
+    def test_init_accepts_namelist_case(self, vmec_file: str):
+        """init() should accept namelist-cased names such as facE_al."""
+        pysimple.init(
+            vmec_file,
+            deterministic=True,
+            trace_time=1e-4,
+            ntestpart=1,
+            facE_al=700.0,
+            n_d=2,
+            n_e=1,
+        )
+        assert float(pysimple.params.face_al) == 700.0
+
     def test_multiple_reinitializations(self, vmec_file: str):
         """Multiple init() calls should work without crash"""
         pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
@@ -85,10 +98,11 @@ class TestInitialization:
             n_periods=1,
             max_steps=10,
         )
+        # A boundary stop is a physical loss (FREQ_ORBIT_LOST), never an
+        # unexplained FREQ_INTEGRATOR_ERROR.
         assert result["status"] in {
             pysimple.FREQ_SUCCESS,
             pysimple.FREQ_ORBIT_LOST,
-            pysimple.FREQ_INTEGRATOR_ERROR,
             pysimple.FREQ_MAX_STEPS,
         }
 

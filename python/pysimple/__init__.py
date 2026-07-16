@@ -225,10 +225,14 @@ def init(
             _fortran_backend.velo_mod.isw_field_type = value_int
             if hasattr(params, "integ_coords"):
                 params.integ_coords = value_int
-        elif not hasattr(params, key):
+            continue
+        # Fortran namelist names are case-insensitive (e.g. facE_al in
+        # simple.in), while f90wrap exposes them lowercased.
+        if not hasattr(params, key):
+            key = key.lower()
+        if not hasattr(params, key):
             raise ValueError(f"Unknown SIMPLE parameter: {key}")
-        else:
-            setattr(params, key, value)
+        setattr(params, key, value)
 
     if hasattr(params, "apply_config_aliases"):
         params.apply_config_aliases()

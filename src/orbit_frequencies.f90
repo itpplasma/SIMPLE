@@ -1,6 +1,9 @@
 module orbit_frequencies
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: tracer_t, init_sympl, tstep
+    use orbit_symplectic_base, only: SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+                                     SYMPLECTIC_STEP_MAXITER, &
+                                     SYMPLECTIC_STEP_BOUNDARY
     use util, only: twopi
 
     implicit none
@@ -86,7 +89,12 @@ contains
             result%n_steps = step
 
             if (ierr /= 0) then
-                if (ierr == 1 .or. ierr == 2) then
+                ! A step that stops on the outer radial boundary is a physical
+                ! loss through the plasma edge, exactly like leaving the domain;
+                ! only genuinely numerical failures report an integrator error.
+                if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN &
+                    .or. ierr == SYMPLECTIC_STEP_MAXITER &
+                    .or. ierr == SYMPLECTIC_STEP_BOUNDARY) then
                     result%status = FREQ_ORBIT_LOST
                 else
                     result%status = FREQ_INTEGRATOR_ERROR
