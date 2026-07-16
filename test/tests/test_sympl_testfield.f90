@@ -170,10 +170,14 @@ contains
         end if
         call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
             numerical_hold_any=numerical_hold)
-        if (step_error == 0) &
-            error stop 'repeated unchanged warning failure was not bounded'
-        if (kt /= 1_int64) &
-            error stop 'repeated warning failure advanced the time index'
+        if (step_error /= 0) &
+            error stop 'repeated warning failure stopped the orbit'
+        if (kt /= 2_int64) &
+            error stop 'repeated warning failure did not consume one interval'
+        if (.not. numerical_hold .or. hold_streak == 0) &
+            error stop 'repeated warning failure lost its unresolved marker'
+        if (any(z /= initial_state)) &
+            error stop 'repeated warning hold changed the accepted state'
 
         z = initial_state
         x_previous = 0.0_dp
@@ -191,10 +195,14 @@ contains
         end if
         call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
             hold_streak=hold_streak, numerical_hold_any=numerical_hold)
-        if (step_error == 0) &
-            error stop 'wall path repeated an unchanged warning failure'
-        if (kt /= 1_int64) &
-            error stop 'repeated wall warning failure advanced the time index'
+        if (step_error /= 0) &
+            error stop 'repeated wall warning failure stopped the orbit'
+        if (kt /= 2_int64) &
+            error stop 'repeated wall warning did not consume one interval'
+        if (.not. numerical_hold .or. hold_streak == 0) &
+            error stop 'repeated wall warning lost its unresolved marker'
+        if (any(z /= initial_state)) &
+            error stop 'repeated wall warning changed the accepted state'
     end subroutine test_failed_step_preserves_state
 
     subroutine test_exit_classification

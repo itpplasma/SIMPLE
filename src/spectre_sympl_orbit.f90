@@ -105,8 +105,9 @@ module spectre_sympl_orbit
         real(dp) :: skim_zeta = 0.0_dp
         !> An exhausted warning-mode recovery holds one unresolved interval.
         !> The next microstep retries guiding-centre advancement from the last
-        !> valid state. Only a later recovery with the same reason at the same
-        !> state is a repeated deterministic failure and becomes marker-local.
+        !> valid state. A later identical failure consumes one unresolved
+        !> interval directly instead of repeating the full recovery cascade;
+        !> default warning mode never turns that retry into a marker stop.
         logical :: warning_hold_latched = .false.
         integer :: warning_hold_count = 0
         integer :: warning_hold_reason = STOP_STEP
@@ -291,10 +292,10 @@ contains
                     dt_sec*used/state%dt_std, STOP_STEP, budget, used, ierr, &
                     t_frac, resume_gc)
                 if (resume_gc) then
-                iters = 0
-                h_try = budget
-                cycle
-            end if
+                    iters = 0
+                    h_try = budget
+                    cycle
+                end if
                 exit
             end if
             si0 = si
@@ -306,17 +307,22 @@ contains
                 if (step_teleported(si0, si, f)) then
                     si = si0
                     f = f0
+                    if (same_warning_hold(state, si, STOP_TELEPORT, 0, 0)) then
+                        if (recover_warning_skip(state, si, budget, used, ierr, &
+                            t_frac, STOP_TELEPORT, 0, 0)) exit
+                    end if
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
                     call recover_local_error(state, si, f, ipart, t_base_sec + &
                         dt_sec*used/state%dt_std, STOP_TELEPORT, budget, used, &
                         ierr, t_frac, resume_gc)
                     if (resume_gc) then
-                    h_try = budget
-                    cycle
-                end if
+                        h_try = budget
+                        cycle
+                    end if
                     exit
                 end if
+                state%warning_hold_latched = .false.
             end if
 
             call classify_step(state, si0%z(1), si, ierr_step, boundary, iface, &
@@ -329,15 +335,19 @@ contains
                     ! branches.
                     si = si0
                     f = f0
+                    if (same_warning_hold(state, si, STOP_STEP, 0, 0)) then
+                        if (recover_warning_skip(state, si, budget, used, ierr, &
+                            t_frac, STOP_STEP, 0, 0)) exit
+                    end if
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
                     call recover_local_error(state, si, f, ipart, t_base_sec + &
                         dt_sec*used/state%dt_std, STOP_STEP, budget, used, ierr, &
                         t_frac, resume_gc)
                     if (resume_gc) then
-                    h_try = budget
-                    cycle
-                end if
+                        h_try = budget
+                        cycle
+                    end if
                     exit
                 end if
                 used = used + h_try
@@ -975,17 +985,6 @@ contains
         recover_warning_skip = symplectic_newton_warning_mode
         if (.not. recover_warning_skip) return
 
-        if (state%warning_hold_latched .and. &
-            reason == state%warning_hold_reason .and. &
-            iface == state%warning_hold_iface .and. &
-            direction == state%warning_hold_direction .and. &
-            maxval(abs(si%z - state%warning_hold_z)) <= &
-            100.0_dp*epsilon(1.0_dp)*max(1.0_dp, &
-                maxval(abs(state%warning_hold_z)))) then
-            recover_warning_skip = .false.
-            return
-        end if
-
         used = used + budget
         budget = 0.0_dp
         ierr = SYMPL_SPECTRE_OK
@@ -1003,6 +1002,20 @@ contains
         state%sheet%active = .false.
     end function recover_warning_skip
 
+    pure logical function same_warning_hold(state, si, reason, iface, direction)
+        type(sympl_spectre_state_t), intent(in) :: state
+        type(symplectic_integrator_t), intent(in) :: si
+        integer, intent(in) :: reason, iface, direction
+
+        same_warning_hold = state%warning_hold_latched .and. &
+            reason == state%warning_hold_reason .and. &
+            iface == state%warning_hold_iface .and. &
+            direction == state%warning_hold_direction .and. &
+            maxval(abs(si%z - state%warning_hold_z)) <= &
+            100.0_dp*epsilon(1.0_dp)*max(1.0_dp, &
+            maxval(abs(state%warning_hold_z)))
+    end function same_warning_hold
+
     subroutine record_stop(si, f, ipart, t_sec, iface, direction, reason)
         type(symplectic_integrator_t), intent(in) :: si
         type(field_can_t), intent(in) :: f
@@ -1019,7 +1032,7 @@ contains
         if (iface == 0) then
             info%vol_from = 0
         else
-        info%vol_from = merge(iface, iface + 1, direction == 1)
+            info%vol_from = merge(iface, iface + 1, direction == 1)
         end if
         info%vol_to = info%vol_from
         info%theta = si%z(2)

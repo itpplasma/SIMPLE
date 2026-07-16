@@ -261,34 +261,26 @@ contains
                 cycle
             endif
             do ktau=1,ntau
-                if (hold_streak /= 0) then
-                    ierr = hold_streak
-                    exit
-                end if
                 if (integmode <= 0) then
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
                     if (ierr /= 0 .and. ierr /= 1 .and. &
                         symplectic_newton_warning_mode) then
-                        if (hold_streak == 0) then
-                            call count_event(EVT_WARNING_STEP_SKIP)
-                            hold_streak = ierr
-                            had_numerical_hold = .true.
-                            if (first_unresolved_it == 0) first_unresolved_it = it
-                            ierr = 0
-                        end if
+                        call count_event(EVT_WARNING_STEP_SKIP)
+                        hold_streak = ierr
+                        had_numerical_hold = .true.
+                        if (first_unresolved_it == 0) first_unresolved_it = it
+                        ierr = 0
                     end if
                 else
                     call advance_symplectic_with_retry(anorb%si, anorb%f, &
                         orbit_timestep_sympl, ierr)
                     if (ierr /= 0 .and. ierr /= SYMPLECTIC_STEP_BOUNDARY .and. &
                         symplectic_newton_warning_mode) then
-                        if (hold_streak == 0) then
                         call count_event(EVT_WARNING_STEP_SKIP)
-                            hold_streak = ierr
-                            had_numerical_hold = .true.
-                            if (first_unresolved_it == 0) first_unresolved_it = it
+                        hold_streak = ierr
+                        had_numerical_hold = .true.
+                        if (first_unresolved_it == 0) first_unresolved_it = it
                         ierr = 0
-                        end if
                     else if (ierr == 0) then
                         hold_streak = 0
                         z(1:3) = anorb%si%z(1:3)
@@ -478,13 +470,13 @@ contains
             enddo
             if(ierr.ne.0) exit
             if (.not. had_numerical_hold) then
-            if(passing) then
-                !$omp atomic
-                confpart_pass(it)=confpart_pass(it)+1.d0
-            else
-                !$omp atomic
-                confpart_trap(it)=confpart_trap(it)+1.d0
-            endif
+                if(passing) then
+                    !$omp atomic
+                    confpart_pass(it)=confpart_pass(it)+1.d0
+                else
+                    !$omp atomic
+                    confpart_trap(it)=confpart_trap(it)+1.d0
+                endif
             end if
         enddo
 
