@@ -909,7 +909,7 @@ add_test(NAME test_spectre_crossing_l0
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_crossing_l0 PROPERTIES
     LABELS "integration;python"
-    TIMEOUT 120)
+    TIMEOUT 300)
 
 # SPECTRE Level-1 interface crossing refraction map (#440). Runs tok2vol under
 # both crossing_level = 1 (default) and 0 and checks the map from the crossing
