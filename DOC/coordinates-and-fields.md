@@ -1200,7 +1200,29 @@ because they have no reference-coordinate geometry.
 | `src/magfie.f90` | Unified field evaluation interface |
 | `src/magfie_can_boozer.f90` | Boozer/Canflux implementations |
 
-### 10.5 Integration
+### 10.5 Canonical Frequency API
+
+`src/orbit_frequencies.f90` provides the source-level Fortran interface
+`compute_canonical_frequencies(tracer, initial_state, options, result)`.
+`initial_state` uses SIMPLE integration coordinates in the standard ordering
+`[s, theta, phi, v/v0, lambda]`; all angles are radians and remain unwrapped.
+The caller must initialize `tracer_t` and set `dtaumin`, `v0`, `relerr`, and
+`integmode`. The routine copies the tracer before integration and therefore
+does not advance caller-owned orbit state.
+
+The result contains the positive bounce/transit frequency
+`omega_b = 2*pi/period` and the signed mean toroidal frequency
+`omega_phi = delta_phi/period`. Periods are seconds, frequencies are rad/s,
+and toroidal displacement is radians. Named status and orbit-class constants
+are exported by the module. A downstream Fortran target can link the CMake
+target `simple` and `use orbit_frequencies`; the target publishes SIMPLE's
+build-tree module directory.
+
+The flat wrapper in `simple_main` accepts the public reference-coordinate
+state, performs `ref_to_integ`, and is the boundary used by f90wrap and
+`pysimple.compute_canonical_frequencies`.
+
+### 10.6 Integration
 
 | File | Purpose |
 |------|---------|
