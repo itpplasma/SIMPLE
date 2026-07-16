@@ -565,7 +565,8 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     call eval_field(f, x(1), si%z(2), si%z(3), 2)
     call get_derivatives2(f, x(2))
     call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
-      linear_failed, step_boundary_limited)
+      linear_failed, step_boundary_limited, &
+      .not. symplectic_newton_warning_mode)
     boundary_limited = boundary_limited .or. step_boundary_limited
 
     if (linear_failed) then
@@ -581,16 +582,17 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
       return
     end if
   enddo
-  if (boundary_limited .and. step_boundary_limited .and. &
-      radial_boundary_reached(x, radial_indices, si%rtol)) then
-    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    return
-  end if
-  call count_event(EVT_NEWTON1_MAXIT)
-  if (accept_warning_maxiter(x)) then
-    status = SYMPLECTIC_STEP_OK
-  else if (boundary_limited) then
-    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+  if (boundary_limited) then
+    if (step_boundary_limited .and. &
+        radial_boundary_reached(x, radial_indices, si%rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_NEWTON1_MAXIT)
+    if (accept_warning_maxiter(x)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
 
@@ -651,10 +653,15 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     jinv(3,3) = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
 
     correction = matmul(jinv, fvec)/det
-    call limit_radial_newton_step(x, correction, radial_indices, step_scale, &
-      step_limited)
-    boundary_limited = boundary_limited .or. step_limited
-    x = x - step_scale*correction
+    if (symplectic_newton_warning_mode) then
+      step_limited = .false.
+      x = x - correction
+    else
+      call limit_radial_newton_step(x, correction, radial_indices, step_scale, &
+        step_limited)
+      boundary_limited = boundary_limited .or. step_limited
+      x = x - step_scale*correction
+    end if
 
     !call dgesv(n, 1, fjac, n, pivot, fvec, n, info)
     ! after solution: fvec = (xold-xnew)_Newton
@@ -675,16 +682,17 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
       return
     end if
   enddo
-  if (boundary_limited .and. step_limited .and. &
-      radial_boundary_reached(x, radial_indices, rtol)) then
-    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    return
-  end if
-  call count_event(EVT_NEWTON2_MAXIT)
-  if (accept_warning_maxiter(x)) then
-    status = SYMPLECTIC_STEP_OK
-  else if (boundary_limited) then
-    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_NEWTON2_MAXIT)
+    if (accept_warning_maxiter(x)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
 
@@ -805,7 +813,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     call solve_newton_system(fjac, fvec, status)
     if (status /= SYMPLECTIC_STEP_OK) return
     status = SYMPLECTIC_STEP_MAXITER
-    if (sympl_rmax > 1d0) then
+    if (sympl_rmax > 1d0 .or. symplectic_newton_warning_mode) then
       step_limited = .false.
       x = x - fvec
     else
@@ -832,16 +840,17 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
       return
     end if
   enddo
-  if (boundary_limited .and. step_limited .and. &
-      radial_boundary_reached(x, radial_indices, rtol)) then
-    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    return
-  end if
-  call count_event(EVT_MIDPOINT_MAXIT)
-  if (accept_warning_maxiter(x)) then
-    status = SYMPLECTIC_STEP_OK
-  else if (boundary_limited) then
-    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_MIDPOINT_MAXIT)
+    if (accept_warning_maxiter(x)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
 
@@ -923,7 +932,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     if (status /= SYMPLECTIC_STEP_OK) return
     status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
-    if (sympl_rmax > 1d0) then
+    if (sympl_rmax > 1d0 .or. symplectic_newton_warning_mode) then
       step_limited = .false.
       x = x - fvec
     else
@@ -956,16 +965,17 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
       return
     end if
   enddo
-  if (boundary_limited .and. step_limited .and. &
-      radial_boundary_reached(x, radial_indices, rtol)) then
-    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    return
-  end if
-  call count_event(EVT_RK_GAUSS_MAXIT)
-  if (accept_warning_maxiter(x)) then
-    status = SYMPLECTIC_STEP_OK
-  else if (boundary_limited) then
-    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_RK_GAUSS_MAXIT)
+    if (accept_warning_maxiter(x)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_gauss
 
@@ -1264,7 +1274,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     if (status /= SYMPLECTIC_STEP_OK) return
     status = SYMPLECTIC_STEP_MAXITER
     ! after solution: fvec = (xold-xnew)_Newton
-    if (sympl_rmax > 1d0) then
+    if (sympl_rmax > 1d0 .or. symplectic_newton_warning_mode) then
       step_limited = .false.
       x = x - fvec
     else
@@ -1297,16 +1307,17 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
       return
     end if
   enddo
-  if (boundary_limited .and. step_limited .and. &
-      radial_boundary_reached(x, radial_indices, rtol)) then
-    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-    return
-  end if
-  call count_event(EVT_RK_LOBATTO_MAXIT)
-  if (accept_warning_maxiter(x)) then
-    status = SYMPLECTIC_STEP_OK
-  else if (boundary_limited) then
-    status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+  if (boundary_limited) then
+    if (step_limited .and. &
+        radial_boundary_reached(x, radial_indices, rtol)) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+    else
+      status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
+    end if
+  else
+    call count_event(EVT_RK_LOBATTO_MAXIT)
+    if (accept_warning_maxiter(x)) &
+      status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_lobatto
 

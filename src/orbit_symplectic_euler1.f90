@@ -48,7 +48,7 @@ subroutine sympl_euler1_jacobian(si, f, x, jac)
 end subroutine sympl_euler1_jacobian
 
 subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
-        linear_failed, boundary_limited)
+        linear_failed, boundary_limited, limit_radial_step)
     !$acc routine seq
     type(symplectic_integrator_t), intent(in) :: si
     type(field_can_t), intent(in) :: f
@@ -58,6 +58,7 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
     logical, intent(out) :: converged
     logical, intent(out) :: linear_failed
     logical, intent(out) :: boundary_limited
+    logical, intent(in) :: limit_radial_step
 
     real(dp) :: fvec(2), fjac(2, 2), ijac(2, 2)
     real(dp) :: correction(2), determinant, matrix_scale, step_scale
@@ -94,7 +95,8 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
     correction(1) = ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2)
     correction(2) = ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2)
     step_scale = 1d0
-    if (sympl_rmax <= 1d0 .and. correction(1) < 0d0) then
+    if (limit_radial_step .and. sympl_rmax <= 1d0 .and. &
+            correction(1) < 0d0) then
         step_scale = min(1d0, &
             0.8d0*max(0d0, sympl_rmax - x(1))/(-correction(1)))
     end if

@@ -13,12 +13,14 @@
 
 * `symplectic_newton_warning_mode` defaults to `.true.`. When an implicit solve
   reaches its iteration limit, SIMPLE commits any finite final Newton iterate
-  and continues the orbit. Each occurrence is reported by the corresponding
-  `*_maxit` diagnostic. Recursive recovery is reserved for an unusable step,
-  such as a failed linear solve or non-finite iterate. The production RK,
-  symplectic, and full-orbit paths use the same terminal convention: if that
-  recovery cannot resolve a numerical microstep, SIMPLE retains any contiguous
-  accepted prefix and holds only the unresolved remainder, records
+  and continues the orbit. This default path uses the historical undamped
+  Newton correction; the radial solver-basin limiter remains active in strict
+  mode. Each occurrence is reported by the corresponding `*_maxit` diagnostic.
+  Recursive recovery is reserved for an unusable step, such as a failed linear
+  solve or non-finite iterate. The production RK, symplectic, and full-orbit
+  paths use the same terminal convention: if that recovery cannot resolve a
+  numerical microstep, SIMPLE retains any contiguous accepted prefix and holds
+  only the unresolved remainder, records
   `warning_step_skip`, advances the clock for the complete interval, and
   retries from that valid state on the next microstep. A warning hold does not
   terminate or numerically disqualify the marker: a marker that reaches the
