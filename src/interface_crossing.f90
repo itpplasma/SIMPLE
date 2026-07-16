@@ -18,6 +18,7 @@ module interface_crossing
     !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     use magfie_sub, only: magfie
     use parmot_mod, only: ro0
+    use diag_counters, only: count_event, EVT_SPECTRE_INVALID_STATE
 
     implicit none
     private
@@ -291,11 +292,11 @@ contains
         type(crossing_info_t), intent(inout) :: info
 
         real(dp) :: bstar, sgn, hnorm, cosjump
-        real(dp) :: bm, bp, gm, gp, gm_prev, gp_prev
+        real(dp) :: bm, bp, gm, gp, gm_prev, gp_prev, bmod_hit
         real(dp) :: th, ze, th_prev, ze_prev, th_hit, ze_hit
         real(dp) :: bm0, bp0, hcov(3), hctr(3), hcov_t(3), hctr_t(3)
         integer :: k
-        logical :: reflect_hit, transmit_hit
+        logical :: reflect_hit, transmit_hit, valid
 
         ! Level-0 mirror defaults; every early return keeps them.
         dtheta = 0.0_dp
@@ -307,9 +308,21 @@ contains
 
         call field_at([rho_home, theta0, zeta0], bm0, hcov, hctr)
         call field_at([rho_target, theta0, zeta0], bp0, hcov_t, hctr_t)
+        valid = finite_value(bm0) .and. finite_value(bp0) .and. &
+            all_finite(hcov) .and. all_finite(hctr) .and. &
+            all_finite(hcov_t) .and. all_finite(hctr_t) .and. &
+            bm0 > 0.0_dp .and. bp0 > 0.0_dp
+        if (.not. valid) then
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         ! h^i_home h_{target,i} is the invariant dot product of the two unit
         ! fields; 1 - cos bounds |[[h]]|^2/2.
         cosjump = dot_product(hctr, hcov_t)
+        if (.not. finite_value(cosjump)) then
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         if (1.0_dp - cosjump > 0.5_dp*reloc_max_dirjump**2) return
 
         bstar = bm0
@@ -329,11 +342,23 @@ contains
             gm_prev = gm
             gp_prev = gp
             hnorm = sqrt(hcov(2)**2 + hcov(3)**2)
+            if (.not. finite_value(hnorm)) then
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             if (hnorm <= sqrt(tiny(1.0_dp))) return
             th = th_prev + sgn*reloc_step*hcov(3)/hnorm
             ze = ze_prev - sgn*reloc_step*hcov(2)/hnorm
             call field_at([rho_home, th, ze], bm, hcov, hctr)
             bp = bmod_at([rho_target, th, ze])
+            valid = finite_value(th) .and. finite_value(ze) .and. &
+                finite_value(bm) .and. finite_value(bp) .and. &
+                all_finite(hcov) .and. all_finite(hctr) .and. &
+                bm > 0.0_dp .and. bp > 0.0_dp
+            if (.not. valid) then
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             gm = bm - bstar
             gp = bp - bstar
             if (k == 1) then
@@ -353,16 +378,23 @@ contains
 
         if (reflect_hit) then
             call refine_root(rho_home, bstar, th_prev, ze_prev, th, ze, &
-                th_hit, ze_hit)
+                th_hit, ze_hit, valid)
+            if (.not. valid) return
+            bmod_hit = bmod_at([rho_target, th_hit, ze_hit])
+            if (.not. finite_value(bmod_hit) .or. bmod_hit <= 0.0_dp) then
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             dtheta = th_hit - theta0
             dzeta = ze_hit - zeta0
             vpar_new = vpar
             info%event_type = CROSS_REFLECTION
             info%vol_to = info%vol_from
-            info%bmod_target = bmod_at([rho_target, th_hit, ze_hit])
+            info%bmod_target = bmod_hit
         else if (transmit_hit) then
             call refine_root(rho_target, bstar, th_prev, ze_prev, th, ze, &
-                th_hit, ze_hit)
+                th_hit, ze_hit, valid)
+            if (.not. valid) return
             dtheta = th_hit - theta0
             dzeta = ze_hit - zeta0
             vpar_new = vpar
@@ -371,7 +403,8 @@ contains
         end if
     end subroutine relocate_forbidden
 
-    subroutine refine_root(rho_side, bstar, th_a, ze_a, th_b, ze_b, th_hit, ze_hit)
+    subroutine refine_root(rho_side, bstar, th_a, ze_a, th_b, ze_b, th_hit, &
+            ze_hit, valid)
         !> Bisection for B(rho_side, th, ze) = bstar on the segment between the
         !> last two trace points; the sign change is bracketed by construction.
         !> The full 60 halvings put the exit on the level set to round-off, so
@@ -379,6 +412,7 @@ contains
         !> other crossing branches instead of a solver tolerance.
         real(dp), intent(in) :: rho_side, bstar, th_a, ze_a, th_b, ze_b
         real(dp), intent(out) :: th_hit, ze_hit
+        logical, intent(out) :: valid
 
         real(dp) :: sa, sb, sm, ga, gm_loc
         integer :: k
@@ -386,10 +420,20 @@ contains
         sa = 0.0_dp
         sb = 1.0_dp
         ga = bmod_at([rho_side, th_a, ze_a]) - bstar
+        valid = finite_value(ga)
+        if (.not. valid) then
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
         do k = 1, 60
             sm = 0.5_dp*(sa + sb)
             gm_loc = bmod_at([rho_side, th_a + sm*(th_b - th_a), &
                               ze_a + sm*(ze_b - ze_a)]) - bstar
+            if (.not. finite_value(gm_loc)) then
+                valid = .false.
+                call count_event(EVT_SPECTRE_INVALID_STATE)
+                return
+            end if
             if (gm_loc == 0.0_dp) then
                 sa = sm
                 sb = sm
@@ -481,25 +525,30 @@ contains
         integer :: iter, bt
         real(dp) :: fres, dfres, step, lam_try, fres_try, dfres_try
         real(dp) :: xt_try, xz_try, xv_try
-        logical :: converged
+        logical :: converged, valid, invalid_seen
 
         lam = 0.0_dp
+        invalid_seen = .false.
         call residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, lam, &
-            fres, dfres, xt, xz, xv)
-        converged = abs(fres) <= newton_rtol*abs(hh)
+            fres, dfres, xt, xz, xv, valid)
+        invalid_seen = .not. valid
+        converged = valid .and. abs(fres) <= newton_rtol*abs(hh)
 
         do iter = 1, max_newton
             if (converged) exit
+            if (.not. valid) exit
             if (abs(dfres) <= tiny(1.0_dp)) exit
             step = fres/dfres
             do bt = 0, max_backtrack
                 lam_try = lam - step
                 call residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, &
                     hh, lam_try, fres_try, dfres_try, &
-                    xt_try, xz_try, xv_try)
-                if (abs(fres_try) < abs(fres)) exit
+                    xt_try, xz_try, xv_try, valid)
+                if (valid .and. abs(fres_try) < abs(fres)) exit
+                invalid_seen = invalid_seen .or. .not. valid
                 step = 0.5_dp*step
             end do
+            if (.not. valid) exit
             if (abs(fres_try) >= abs(fres)) exit
             lam = lam_try
             fres = fres_try
@@ -510,6 +559,8 @@ contains
             converged = abs(fres) <= newton_rtol*abs(hh)
             if (abs(lam*xt) > max_kick .or. abs(lam*xz) > max_kick) exit
         end do
+
+        if (invalid_seen) call count_event(EVT_SPECTRE_INVALID_STATE)
 
         if (converged .and. abs(lam*xt) <= max_kick &
             .and. abs(lam*xz) <= max_kick) then
@@ -528,7 +579,7 @@ contains
     end subroutine solve_crossing
 
     subroutine residual_at(rho_home, rho_target, theta0, zeta0, vpar, mu, hh, lam, &
-            fres, dfres, xt, xz, xv)
+            fres, dfres, xt, xz, xv, valid)
         !> Energy residual F(lam) and its lambda-derivative for the refraction
         !> solve, with the generator X evaluated self-consistently at the midpoint
         !> state z + 0.5*lam*X by sym_iters fixed-point sweeps. dfres freezes X, the
@@ -536,6 +587,7 @@ contains
         real(dp), intent(in) :: rho_home, rho_target, theta0, zeta0, vpar, mu, hh
         real(dp), intent(in) :: lam
         real(dp), intent(out) :: fres, dfres, xt, xz, xv
+        logical, intent(out) :: valid
 
         integer :: k
         real(dp) :: th_mid, ze_mid, vp_mid, th_k, ze_k, vp_k
@@ -544,24 +596,38 @@ contains
         xt = 0.0_dp
         xz = 0.0_dp
         xv = 0.0_dp
+        fres = 0.0_dp
+        dfres = 0.0_dp
+        valid = finite_value(rho_home) .and. finite_value(rho_target) .and. &
+            finite_value(theta0) .and. finite_value(zeta0) .and. &
+            finite_value(vpar) .and. finite_value(mu) .and. &
+            finite_value(hh) .and. finite_value(lam)
+        if (.not. valid) return
         do k = 1, sym_iters
             th_mid = theta0 + 0.5_dp*lam*xt
             ze_mid = zeta0 + 0.5_dp*lam*xz
             vp_mid = vpar + 0.5_dp*lam*xv
             call generator_sym(rho_home, rho_target, th_mid, ze_mid, vp_mid, &
-                xt, xz, xv)
+                xt, xz, xv, valid)
+            if (.not. valid) return
         end do
         th_k = theta0 + lam*xt
         ze_k = zeta0 + lam*xz
         vp_k = vpar + lam*xv
         call magfie([rho_target, th_k, ze_k], bmod, sqrtg, bder, hcovar, hctrvr, &
             hcurl)
+        valid = finite_value(bmod) .and. finite_value(sqrtg) .and. &
+            all_finite(bder) .and. all_finite(hcovar) .and. &
+            all_finite(hctrvr) .and. all_finite(hcurl) .and. &
+            bmod > 0.0_dp .and. abs(sqrtg) > tiny(1.0_dp)
+        if (.not. valid) return
         fres = 0.5_dp*vp_k**2 + mu*bmod - hh
         dfres = vp_k*xv + mu*bmod*(bder(2)*xt + bder(3)*xz)
+        valid = finite_value(fres) .and. finite_value(dfres)
     end subroutine residual_at
 
     subroutine generator_sym(rho_home, rho_target, theta, zeta, vpar_mid, &
-            xt, xz, xv)
+            xt, xz, xv, valid)
         !> Interface Hamiltonian vector field X = {z, rho_g} in SIMPLE Gaussian
         !> units, from the guiding-center bracket. hcovar/sqrtg/hcurl are the
         !> midpoint average of the two volumes, and the drift constant ro0 and
@@ -569,6 +635,7 @@ contains
         !> for the per-volume drift (parmot_mod ro0; hpstar = Bstar_par/bmod).
         real(dp), intent(in) :: rho_home, rho_target, theta, zeta, vpar_mid
         real(dp), intent(out) :: xt, xz, xv
+        logical, intent(out) :: valid
 
         real(dp) :: b_h, sg_h, bder_h(3), hcov_h(3), hctr_h(3), hcurl_h(3)
         real(dp) :: b_t, sg_t, bder_t(3), hcov_t(3), hctr_t(3), hcurl_t(3)
@@ -578,14 +645,38 @@ contains
             hcurl_h)
         call magfie([rho_target, theta, zeta], b_t, sg_t, bder_t, hcov_t, hctr_t, &
             hcurl_t)
+        valid = finite_value(b_h) .and. finite_value(sg_h) .and. &
+            all_finite(bder_h) .and. all_finite(hcov_h) .and. &
+            all_finite(hctr_h) .and. all_finite(hcurl_h) .and. &
+            finite_value(b_t) .and. finite_value(sg_t) .and. &
+            all_finite(bder_t) .and. all_finite(hcov_t) .and. &
+            all_finite(hctr_t) .and. all_finite(hcurl_t) .and. &
+            b_h > 0.0_dp .and. b_t > 0.0_dp
+        if (.not. valid) then
+            xt = 0.0_dp
+            xz = 0.0_dp
+            xv = 0.0_dp
+            return
+        end if
         bmod = 0.5_dp*(b_h + b_t)
         sqrtg = 0.5_dp*(sg_h + sg_t)
         hcov = 0.5_dp*(hcov_h + hcov_t)
         hcurl = 0.5_dp*(hcurl_h + hcurl_t)
         bstar_par = bmod + ro0*vpar_mid*dot_product(hcov, hcurl)
+        valid = finite_value(bmod) .and. finite_value(sqrtg) .and. &
+            all_finite(hcov) .and. all_finite(hcurl) .and. &
+            finite_value(bstar_par) .and. abs(sqrtg) > tiny(1.0_dp) .and. &
+            abs(bstar_par) > tiny(1.0_dp)
+        if (.not. valid) then
+            xt = 0.0_dp
+            xz = 0.0_dp
+            xv = 0.0_dp
+            return
+        end if
         xt = -ro0*hcov(3)/(sqrtg*bstar_par)
         xz = ro0*hcov(2)/(sqrtg*bstar_par)
         xv = ro0*vpar_mid*hcurl(1)/bstar_par
+        valid = finite_value(xt) .and. finite_value(xz) .and. finite_value(xv)
     end subroutine generator_sym
 
     subroutine crossing_log_reset(capacity)
