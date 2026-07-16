@@ -18,10 +18,10 @@ module spectre_sympl_orbit
         ref_to_integ
     use field_can_spectre, only: set_spectre_volume_lock
     use orbit_symplectic_base, only: symplectic_integrator_t, &
-        symplectic_newton_warning_mode
+        symplectic_newton_warning_mode, SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use interface_crossing, only: apply_crossing, crossing_info_t, &
-        crossing_log_record, CROSS_LOSS, CROSS_STOP, CROSS_RECOVERY, &
+        crossing_log_record, CROSS_LOSS, CROSS_STOP, CROSS_RECOVERY, CROSS_INVALID, &
         CROSS_REFLECTION, CROSS_SHEET
     use spectre_sheet_gc, only: sheet_gc_state_t, sheet_gc_initialize, &
         sheet_gc_advance, sheet_gc_to_y, SHEET_GC_OK
@@ -386,13 +386,26 @@ contains
                 h_try = budget
                 cycle
             end if
-            used = used + h_land
-            budget = state%dt_std - used
-            call update_landing_stats(resid)
-
             call landed_state(si, f, real(iface, dp), direction, y_iface)
             call apply_crossing(y_iface, iface, direction, state%mvol, &
                 state%level, y_out, info)
+            if (info%event_type == CROSS_INVALID) then
+                si = si0
+                f = f0
+                h_try = 0.5_dp*h_try
+                if (h_try >= h_min_frac*state%dt_std) cycle
+                call recover_local_error(state, si, f, ipart, t_base_sec + &
+                    dt_sec*used/state%dt_std, STOP_LANDING, budget, used, ierr, &
+                    t_frac, resume_gc)
+                if (resume_gc) then
+                    h_try = budget
+                    cycle
+                end if
+                exit
+            end if
+            used = used + h_land
+            budget = state%dt_std - used
+            call update_landing_stats(resid)
             if (info%event_type == CROSS_LOSS) then
                 call crossing_log_record(ipart, &
                     t_base_sec + dt_sec*used/state%dt_std, info)
@@ -559,7 +572,8 @@ contains
             ! The stepper refuses to commit r > sympl_rmax (= Mvol). From the
             ! outermost volume that is the outward-crossing signal, with si%z
             ! still holding the pre-step state.
-            if (nint(state%home_hi) == state%mvol) then
+            if (ierr_step == SYMPLECTIC_STEP_OUTSIDE_DOMAIN .and. &
+                    nint(state%home_hi) == state%mvol) then
                 boundary = .true.
                 iface = state%mvol
                 direction = 1

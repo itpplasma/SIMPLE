@@ -18,9 +18,10 @@ end module interface_crossing_ownership_fixture
 
 program test_interface_crossing_ownership
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
     use magfie_sub, only: magfie
     use interface_crossing, only: apply_crossing, crossing_info_t, &
-        CROSSING_LEVEL0, CROSS_CROSSING, CROSS_REFLECTION
+        CROSSING_LEVEL0, CROSS_CROSSING, CROSS_REFLECTION, CROSS_INVALID
     use interface_crossing_ownership_fixture, only: stepped_field
 
     implicit none
@@ -45,4 +46,14 @@ program test_interface_crossing_ownership
     if (info%event_type /= CROSS_REFLECTION) error stop 'reflection type'
     if (info%vol_to /= 1) error stop 'reflection ownership'
     if (y_out(1) /= 1.0_dp) error stop 'reflection moved off interface'
+
+    y_in = [1.0_dp, 0.2_dp, 0.3_dp, 1.0_dp, 0.5_dp]
+    y_in(5) = ieee_value(0.0_dp, ieee_quiet_nan)
+    call apply_crossing(y_in, 1, 1, 3, CROSSING_LEVEL0, y_out, info)
+    if (info%event_type /= CROSS_INVALID) &
+        error stop 'non-finite pitch became a physical event'
+    y_in = [3.0_dp, 0.2_dp, 0.3_dp, -1.0_dp, 0.5_dp]
+    call apply_crossing(y_in, 3, 1, 3, CROSSING_LEVEL0, y_out, info)
+    if (info%event_type /= CROSS_INVALID) &
+        error stop 'invalid momentum became an outer loss'
 end program test_interface_crossing_ownership
