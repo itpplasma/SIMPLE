@@ -1,5 +1,6 @@
 program test_spectre_sheet_gc
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
     use field_spectre, only: spectre_field_t, create_spectre_field
     use magfie_sub, only: set_magfie_spectre_field
     use spectre_sheet_gc, only: sheet_gc_sample_t, sheet_gc_state_t, &
@@ -17,7 +18,7 @@ program test_spectre_sheet_gc
     type(spectre_field_t) :: field
     type(sheet_gc_sample_t) :: sample
     type(sheet_gc_state_t) :: state
-    real(dp) :: rhs(4), y(5), energy_rate, scale, max_residual, t0, t1
+    real(dp) :: rhs(4), y(5), energy_rate, scale, max_residual, t0, t1, nan_value
     real(dp) :: energy_after, dt_used, p_initial, lambda_initial
     integer :: ierr, i
     logical :: exited
@@ -30,6 +31,13 @@ program test_spectre_sheet_gc
     call create_spectre_field(field, trim(filename), ierr)
     if (ierr /= 0) error stop 'failed to load SPECTRE fixture'
     call set_magfie_spectre_field(field)
+
+    nan_value = ieee_value(0.0_dp, ieee_quiet_nan)
+    call sheet_gc_rhs(1, 0.0_dp, nan_value, 0.3_dp, 0.5_dp, 0.02_dp, &
+        0.01_dp, rhs, energy_rate, ierr)
+    if (ierr /= SHEET_GC_DEGENERATE) error stop 'non-finite sheet state status'
+    if (any(rhs /= 0.0_dp) .or. energy_rate /= 0.0_dp) &
+        error stop 'non-finite sheet state returned a nonzero RHS'
 
     call sheet_gc_rhs(1, 0.0_dp, 0.7_dp, 0.3_dp, 0.0_dp, 0.02_dp, &
         0.01_dp, rhs, energy_rate, ierr)

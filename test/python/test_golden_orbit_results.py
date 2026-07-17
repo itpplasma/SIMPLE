@@ -91,6 +91,24 @@ def test_ordinary_physics_drift_still_fails(tmp_path: Path) -> None:
     assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 1
 
 
+def test_valid_survivor_endpoint_may_decorrelate(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    cur_times, cur_exits = _base_tables()
+    cur_times[0, 5:10] = [0.8, 0.2, 0.4, 0.9, -0.1]
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 0
+
+
+def test_invalid_survivor_endpoint_fails(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    cur_times, cur_exits = _base_tables()
+    cur_times[0, 5] = np.nan
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 1
+
+
 def test_unrelated_columns_on_recovered_marker_still_fail(tmp_path: Path) -> None:
     ref_times, ref_exits = _base_tables()
     ref_times[0, 1] = np.nan
@@ -119,6 +137,53 @@ def test_non_numerical_reference_transition_fails(tmp_path: Path) -> None:
     ref_times[0, 1] = 6.0e-5
     ref_exits[0, 1:3] = [2.0, 6.0e-5]
     cur_times, cur_exits = _base_tables()
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 1
+
+
+def test_invalid_physical_endpoint_may_be_corrected(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    ref_times[1, 5] = 5.0e5
+    cur_times, cur_exits = _base_tables()
+    cur_times[1, 1] = 1.0e-4
+    cur_times[1, 5:10] = [0.8, 0.2, 0.4, 0.9, -0.1]
+    cur_exits[1, 1:3] = [0.0, 1.0e-4]
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 3
+
+
+def test_invalid_physical_endpoint_requires_valid_correction(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    ref_times[1, 5] = 5.0e5
+    cur_times, cur_exits = _base_tables()
+    cur_times[1, 1] = 1.0e-4
+    cur_times[1, 5] = np.nan
+    cur_exits[1, 1:3] = [0.0, 1.0e-4]
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 1
+
+
+def test_near_lcfs_survivor_may_become_lost(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    ref_times[0, 5] = 0.9999
+    cur_times, cur_exits = _base_tables()
+    cur_times[0, 1] = 2.0e-5
+    cur_times[0, 5] = 1.0
+    cur_exits[0, 1:3] = [1.0, 2.0e-5]
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 3
+
+
+def test_interior_survivor_may_not_become_lost(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    cur_times, cur_exits = _base_tables()
+    cur_times[0, 1] = 2.0e-5
+    cur_times[0, 5] = 1.0
+    cur_exits[0, 1:3] = [1.0, 2.0e-5]
     _write_case(tmp_path / "ref", ref_times, ref_exits)
     _write_case(tmp_path / "cur", cur_times, cur_exits)
     assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 1

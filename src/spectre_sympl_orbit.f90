@@ -12,6 +12,7 @@ module spectre_sympl_orbit
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     use util, only: twopi, sqrt2
     use parmot_mod, only: ro0
     use field_can_mod, only: field_can_t, eval_field => evaluate, integ_to_ref, &
@@ -118,21 +119,15 @@ module spectre_sympl_orbit
         type(spectre_fo_state_t) :: fo
     end type sympl_spectre_state_t
 
-    integer :: n_landings = 0
-    integer :: n_landing_evals = 0
-    integer :: n_stops = 0
-    integer :: n_sheet_entries = 0
-    integer :: n_sheet_exits = 0
-    integer :: n_sheet_init_failures = 0
-    integer :: n_sheet_advance_failures = 0
-    integer :: n_sheet_failure_status(5) = 0
-    integer :: n_stop_reason(5) = 0
-    integer :: n_fo_entries = 0
-    integer :: n_fo_exits = 0
-    integer :: n_fo_losses = 0
-    integer :: n_fo_failures = 0
-    integer :: n_fo_failure_status(5) = 0
-    real(dp) :: max_landing_resid = 0.0_dp
+    !> Hot-path statistics are per-thread. Each OpenMP worker writes only its
+    !> own slot; totals are reduced after the parallel trace has joined.
+    integer, allocatable :: n_landings(:), n_landing_evals(:), n_stops(:)
+    integer, allocatable :: n_sheet_entries(:), n_sheet_exits(:)
+    integer, allocatable :: n_sheet_init_failures(:), n_sheet_advance_failures(:)
+    integer, allocatable :: n_sheet_failure_status(:, :), n_stop_reason(:, :)
+    integer, allocatable :: n_fo_entries(:), n_fo_exits(:), n_fo_losses(:)
+    integer, allocatable :: n_fo_failures(:), n_fo_failure_status(:, :)
+    real(dp), allocatable :: max_landing_resid(:)
 
 contains
 
@@ -698,9 +693,10 @@ contains
             si = si_best
             f = f_best
         end if
-        !$omp critical (spectre_sympl_landing)
-        n_landing_evals = n_landing_evals + evals
-        !$omp end critical (spectre_sympl_landing)
+        if (allocated(n_landing_evals)) then
+            n_landing_evals(stats_thread()) = &
+                n_landing_evals(stats_thread()) + evals
+        end if
     end subroutine locate_landing
 
     subroutine landed_state(si, f, rho_k, direction, y)
@@ -797,9 +793,8 @@ contains
         budget = state%dt_std - used
         if (ierr /= SPECTRE_FO_OK) then
             if (ierr == SPECTRE_FO_LOSS) then
-                !$omp critical (spectre_sympl_landing)
-                n_fo_losses = n_fo_losses + 1
-                !$omp end critical (spectre_sympl_landing)
+                if (allocated(n_fo_losses)) n_fo_losses(stats_thread()) = &
+                    n_fo_losses(stats_thread()) + 1
             else
                 call count_fo_failure(ierr)
             end if
@@ -1058,11 +1053,12 @@ contains
         info%bmod_target = f%Bmod
         call crossing_log_record(ipart, t_sec, info)
 
-        !$omp critical (spectre_sympl_landing)
-        n_stops = n_stops + 1
-        if (reason >= 1 .and. reason <= size(n_stop_reason)) &
-            n_stop_reason(reason) = n_stop_reason(reason) + 1
-        !$omp end critical (spectre_sympl_landing)
+        if (allocated(n_stops)) then
+            n_stops(stats_thread()) = n_stops(stats_thread()) + 1
+            if (reason >= 1 .and. reason <= size(n_stop_reason, 1)) &
+                n_stop_reason(reason, stats_thread()) = &
+                    n_stop_reason(reason, stats_thread()) + 1
+        end if
     end subroutine record_stop
 
     subroutine finish_fo_error(fo_status, si, f, ipart, t_sec, iface, &
@@ -1086,14 +1082,36 @@ contains
     subroutine update_landing_stats(resid)
         real(dp), intent(in) :: resid
 
-        !$omp critical (spectre_sympl_landing)
-        n_landings = n_landings + 1
-        max_landing_resid = max(max_landing_resid, resid)
-        !$omp end critical (spectre_sympl_landing)
+        if (allocated(n_landings)) then
+            n_landings(stats_thread()) = n_landings(stats_thread()) + 1
+            max_landing_resid(stats_thread()) = &
+                max(max_landing_resid(stats_thread()), resid)
+        end if
     end subroutine update_landing_stats
 
     subroutine sympl_landing_stats_reset
-        !$omp critical (spectre_sympl_landing)
+        integer :: nthreads
+
+        nthreads = 1
+        !$ nthreads = omp_get_max_threads()
+        if (allocated(n_landings)) then
+            deallocate(n_landings, n_landing_evals, n_stops, n_sheet_entries, &
+                n_sheet_exits, n_sheet_init_failures, n_sheet_advance_failures, &
+                n_sheet_failure_status, n_stop_reason, n_fo_entries, n_fo_exits, &
+                n_fo_losses, n_fo_failures, n_fo_failure_status, &
+                max_landing_resid)
+        end if
+        allocate(n_landings(0:nthreads - 1), n_landing_evals(0:nthreads - 1), &
+            n_stops(0:nthreads - 1), n_sheet_entries(0:nthreads - 1), &
+            n_sheet_exits(0:nthreads - 1), &
+            n_sheet_init_failures(0:nthreads - 1), &
+            n_sheet_advance_failures(0:nthreads - 1), &
+            n_sheet_failure_status(5, 0:nthreads - 1), &
+            n_stop_reason(5, 0:nthreads - 1), n_fo_entries(0:nthreads - 1), &
+            n_fo_exits(0:nthreads - 1), n_fo_losses(0:nthreads - 1), &
+            n_fo_failures(0:nthreads - 1), &
+            n_fo_failure_status(5, 0:nthreads - 1), &
+            max_landing_resid(0:nthreads - 1))
         n_landings = 0
         n_landing_evals = 0
         n_stops = 0
@@ -1109,18 +1127,20 @@ contains
         n_fo_failures = 0
         n_fo_failure_status = 0
         max_landing_resid = 0.0_dp
-        !$omp end critical (spectre_sympl_landing)
     end subroutine sympl_landing_stats_reset
 
     subroutine sympl_landing_stats(landings, max_resid, stops)
         integer, intent(out) :: landings, stops
         real(dp), intent(out) :: max_resid
 
-        !$omp critical (spectre_sympl_landing)
-        landings = n_landings
-        max_resid = max_landing_resid
-        stops = n_stops
-        !$omp end critical (spectre_sympl_landing)
+        landings = 0
+        max_resid = 0.0_dp
+        stops = 0
+        if (allocated(n_landings)) then
+            landings = sum(n_landings)
+            max_resid = maxval(max_landing_resid)
+            stops = sum(n_stops)
+        end if
     end subroutine sympl_landing_stats
 
     subroutine sympl_landing_eval_stats(evals)
@@ -1129,31 +1149,33 @@ contains
         !> seeded bracket shrink is measured by.
         integer, intent(out) :: evals
 
-        !$omp critical (spectre_sympl_landing)
-        evals = n_landing_evals
-        !$omp end critical (spectre_sympl_landing)
+        evals = 0
+        if (allocated(n_landing_evals)) evals = sum(n_landing_evals)
     end subroutine sympl_landing_eval_stats
 
     subroutine count_sheet_stat(kind, status)
         integer, intent(in) :: kind
         integer, intent(in), optional :: status
 
-        !$omp critical (spectre_sympl_landing)
+        integer :: tid
+
+        if (.not. allocated(n_sheet_entries)) return
+        tid = stats_thread()
         select case (kind)
         case (SHEET_STAT_ENTRY)
-            n_sheet_entries = n_sheet_entries + 1
+            n_sheet_entries(tid) = n_sheet_entries(tid) + 1
         case (SHEET_STAT_EXIT)
-            n_sheet_exits = n_sheet_exits + 1
+            n_sheet_exits(tid) = n_sheet_exits(tid) + 1
         case (SHEET_STAT_INIT_FAIL)
-            n_sheet_init_failures = n_sheet_init_failures + 1
+            n_sheet_init_failures(tid) = n_sheet_init_failures(tid) + 1
         case (SHEET_STAT_ADVANCE_FAIL)
-            n_sheet_advance_failures = n_sheet_advance_failures + 1
+            n_sheet_advance_failures(tid) = n_sheet_advance_failures(tid) + 1
         end select
         if (present(status)) then
-            if (status >= 1 .and. status <= size(n_sheet_failure_status)) &
-                n_sheet_failure_status(status) = n_sheet_failure_status(status) + 1
+            if (status >= 1 .and. status <= size(n_sheet_failure_status, 1)) &
+                n_sheet_failure_status(status, tid) = &
+                    n_sheet_failure_status(status, tid) + 1
         end if
-        !$omp end critical (spectre_sympl_landing)
     end subroutine count_sheet_stat
 
     subroutine sympl_sheet_stats(entries, exits, init_failures, advance_failures, &
@@ -1162,49 +1184,65 @@ contains
         integer, intent(out) :: failure_status(5)
         integer, intent(out) :: stop_reason(5)
 
-        !$omp critical (spectre_sympl_landing)
-        entries = n_sheet_entries
-        exits = n_sheet_exits
-        init_failures = n_sheet_init_failures
-        advance_failures = n_sheet_advance_failures
-        failure_status = n_sheet_failure_status
-        stop_reason = n_stop_reason
-        !$omp end critical (spectre_sympl_landing)
+        entries = 0
+        exits = 0
+        init_failures = 0
+        advance_failures = 0
+        failure_status = 0
+        stop_reason = 0
+        if (allocated(n_sheet_entries)) then
+            entries = sum(n_sheet_entries)
+            exits = sum(n_sheet_exits)
+            init_failures = sum(n_sheet_init_failures)
+            advance_failures = sum(n_sheet_advance_failures)
+            failure_status = sum(n_sheet_failure_status, dim=2)
+            stop_reason = sum(n_stop_reason, dim=2)
+        end if
     end subroutine sympl_sheet_stats
 
     subroutine count_fo_entry
-        !$omp critical (spectre_sympl_landing)
-        n_fo_entries = n_fo_entries + 1
-        !$omp end critical (spectre_sympl_landing)
+        if (allocated(n_fo_entries)) n_fo_entries(stats_thread()) = &
+            n_fo_entries(stats_thread()) + 1
     end subroutine count_fo_entry
 
     subroutine count_fo_exit
-        !$omp critical (spectre_sympl_landing)
-        n_fo_exits = n_fo_exits + 1
-        !$omp end critical (spectre_sympl_landing)
+        if (allocated(n_fo_exits)) n_fo_exits(stats_thread()) = &
+            n_fo_exits(stats_thread()) + 1
     end subroutine count_fo_exit
 
     subroutine count_fo_failure(status)
         integer, intent(in) :: status
+        integer :: tid
 
-        !$omp critical (spectre_sympl_landing)
-        n_fo_failures = n_fo_failures + 1
-        if (status >= 1 .and. status <= size(n_fo_failure_status)) &
-            n_fo_failure_status(status) = n_fo_failure_status(status) + 1
-        !$omp end critical (spectre_sympl_landing)
+        if (.not. allocated(n_fo_failures)) return
+        tid = stats_thread()
+        n_fo_failures(tid) = n_fo_failures(tid) + 1
+        if (status >= 1 .and. status <= size(n_fo_failure_status, 1)) &
+            n_fo_failure_status(status, tid) = &
+                n_fo_failure_status(status, tid) + 1
     end subroutine count_fo_failure
 
     subroutine sympl_fo_stats(entries, exits, losses, failures, failure_status)
         integer, intent(out) :: entries, exits, losses, failures
         integer, intent(out) :: failure_status(5)
 
-        !$omp critical (spectre_sympl_landing)
-        entries = n_fo_entries
-        exits = n_fo_exits
-        losses = n_fo_losses
-        failures = n_fo_failures
-        failure_status = n_fo_failure_status
-        !$omp end critical (spectre_sympl_landing)
+        entries = 0
+        exits = 0
+        losses = 0
+        failures = 0
+        failure_status = 0
+        if (allocated(n_fo_entries)) then
+            entries = sum(n_fo_entries)
+            exits = sum(n_fo_exits)
+            losses = sum(n_fo_losses)
+            failures = sum(n_fo_failures)
+            failure_status = sum(n_fo_failure_status, dim=2)
+        end if
     end subroutine sympl_fo_stats
+
+    integer function stats_thread()
+        stats_thread = 0
+        !$ stats_thread = omp_get_thread_num()
+    end function stats_thread
 
 end module spectre_sympl_orbit

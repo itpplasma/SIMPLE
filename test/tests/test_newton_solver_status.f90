@@ -143,8 +143,9 @@ program test_newton_solver_status
     advance_symplectic_with_boundary, advance_symplectic_with_retry, &
     newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
-    get_boundary_event_tolerances, accept_warning_maxiter
-  use orbit_symplectic_base, only: symplectic_integrator_t, &
+    get_boundary_event_tolerances, accept_warning_maxiter, &
+    limit_radial_newton_step
+  use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax, &
     EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, &
     GAUSS4, LOBATTO3, &
     SYMPLECTIC_STEP_BOUNDARY, &
@@ -254,9 +255,27 @@ program test_newton_solver_status
   call test_configured_event_tolerances
   call test_solver_basin_is_not_boundary
   call test_newton_warning_mode
+  call test_warning_radial_limiter
   call test_step_retry
 
 contains
+
+  subroutine test_warning_radial_limiter
+    real(dp) :: iterate(2), correction(2), step_scale
+    logical :: limited
+
+    iterate = [0.172_dp, 0.0_dp]
+    correction = [-1.078_dp, 0.0_dp]
+    sympl_rmax = 1.0_dp
+    symplectic_newton_warning_mode = .true.
+    call limit_radial_newton_step(iterate, correction, [1], step_scale, limited)
+    if (.not. limited .or. step_scale >= 1.0_dp) then
+      error stop 'warning mode disabled bounded radial Newton damping'
+    end if
+    if (iterate(1) - step_scale*correction(1) >= sympl_rmax) then
+      error stop 'bounded radial Newton damping left the field domain'
+    end if
+  end subroutine test_warning_radial_limiter
 
   subroutine test_newton_warning_mode
     integer, parameter :: modes(8) = [EXPL_IMPL_EULER, IMPL_EXPL_EULER, &

@@ -9,7 +9,7 @@ module simple
   use orbit_symplectic, only : symplectic_integrator_t, multistage_integrator_t, &
     orbit_sympl_init, orbit_timestep_sympl
   use field, only : vmec_field_t
-  use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t
+  use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t, get_val
   use orbit_fo_boris, only : fo_state_t, fo_init, fo_step, fo_to_gc
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
@@ -153,6 +153,31 @@ contains
                           rtol_init, mode_init)
   end subroutine init_sympl
 
+  subroutine reseed_sympl(si, f, z0)
+    !> Re-seed one particle's symplectic state from standard GC coordinates.
+    !>
+    !> Unlike init_sympl/orbit_sympl_init this routine does not select the
+    !> module-global integration procedure. It is therefore safe to call from
+    !> an OpenMP worker after a local RK recovery step: every write is confined
+    !> to the caller's per-particle integrator and field objects.
+    type(symplectic_integrator_t), intent(inout) :: si
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(in) :: z0(:)
+
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+    si%pabs = z0(4)
+    f%mu = z0(4)**2*(1.d0 - z0(5)**2)/f%Bmod
+    f%ro0 = ro0/dsqrt(2.d0)
+    f%vpar = z0(4)*z0(5)*dsqrt(2.d0)
+    si%z(1:3) = z0(1:3)
+    si%z(4) = f%vpar*f%hph + f%Aph/f%ro0
+    call get_val(f, si%z(4))
+    si%pthold = f%pth
+    si%last_step_fraction = 1.d0
+    si%last_event_radial_residual = 0.d0
+    si%last_event_fraction_width = 0.d0
+  end subroutine reseed_sympl
+
   ! Seed the full-orbit Boris pusher from a GC start record, same normalization and
   ! gyrophase reference as the symplectic GC seed so the two integrators start from
   ! the identical particle. fo_init places the Larmor offset itself.
@@ -210,7 +235,6 @@ contains
       z = z_start
       ierr = ORBIT_FO_NUMERICAL
       call count_event(EVT_FO_FAULT)
-      call warn_fo_unresolved
       return
     end if
     call fo_to_gc(fo, s, th, ph, vpar, status)
@@ -228,30 +252,12 @@ contains
       z = z_start
       ierr = ORBIT_FO_NUMERICAL
       call count_event(EVT_FO_FAULT)
-      call warn_fo_unresolved
       return
     end if
     z(1) = s; z(2) = th; z(3) = ph
     z(4) = fo%pabs
     z(5) = vpar/(z(4)*dsqrt(2d0))
   end subroutine orbit_timestep_fo
-
-  ! One-time stderr warning that some full-orbit steps could not invert the
-  ! Cartesian position and were rolled back to the last resolved state.
-  subroutine warn_fo_unresolved
-    use iso_fortran_env, only: error_unit
-    logical, save :: warned = .false.
-    !$omp critical (fo_unresolved_warning)
-    if (.not. warned) then
-      warned = .true.
-      write (error_unit, '(A)') ' WARNING: full-orbit Cartesian inversion unresolved '// &
-        'at some steps (near-axis below chartmap resolution, or a field-period seam). '// &
-        'Warning mode holds that interval at the last resolved state and continues '// &
-        '(fo_fault); it is never counted as a physical loss.'
-      flush (error_unit)
-    end if
-    !$omp end critical (fo_unresolved_warning)
-  end subroutine warn_fo_unresolved
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self

@@ -15,7 +15,7 @@ module field_can_spectre
     !> Bmod Tesla->Gauss, covariant h meter->cm, covariant A (flux-like, [B]*L^2)
     !> Tesla*m^2 -> Gauss*cm^2.
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use field_base, only: magnetic_field_t
     use field_spectre, only: spectre_field_t
     use field_can_base, only: field_can_t, n_field_evaluations, twopi
@@ -26,6 +26,8 @@ module field_can_spectre
                            evaluate_batch_splines_3d_der, &
                            evaluate_batch_splines_3d_der2
     use magfie_sub, only: TESLA_TO_GAUSS, M_TO_CM
+    use diag_counters, only: count_event, EVT_SPECTRE_REF_INVERSE_MAXIT, &
+        EVT_SPECTRE_INVALID_STATE
 
     implicit none
     private
@@ -85,6 +87,17 @@ module field_can_spectre
     !$omp threadprivate(lock_lvol)
 
 contains
+
+    elemental logical function ieee_is_finite(value)
+        real(dp), intent(in) :: value
+
+        integer(int64), parameter :: exponent_mask = &
+            int(z'7FF0000000000000', int64)
+        integer(int64) :: bits
+
+        bits = transfer(value, bits)
+        ieee_is_finite = iand(bits, exponent_mask) /= exponent_mask
+    end function ieee_is_finite
 
     subroutine set_spectre_volume_lock(lvol)
         !> lvol > 0 pins field evaluation to that volume; 0 restores dispatch on
@@ -345,24 +358,49 @@ contains
         integer, parameter :: MAX_ITER = 16
 
         integer :: lvol, i
-        real(dp) :: x(3), y(2), dy(3, 2), phi_prev
+        real(dp) :: x(3), y(2), dy(3, 2), phi, phi_next, target
+        real(dp) :: residual, correction, best_phi, best_residual, denom
+
+        if (.not. all(ieee_is_finite(xref))) then
+            xinteg = xref
+            call count_event(EVT_SPECTRE_INVALID_STATE)
+            return
+        end if
 
         lvol = active_volume(xref(1))
         xinteg(1) = xref(1)
         xinteg(2) = modulo(xref(2), twopi)
-        xinteg(3) = modulo(xref(3), twopi)
+        target = modulo(xref(3), twopi)
+        phi = target
+        best_phi = phi
+        best_residual = huge(1.0_dp)
 
         do i = 1, MAX_ITER
             x = [clamp_to_volume(xinteg(1), spectre_volumes(lvol)), xinteg(2), &
-                 xinteg(3)]
+                 modulo(phi, twopi)]
             call evaluate_batch_splines_3d_der(spectre_volumes(lvol)%spl_transform, &
                                                x, y, dy)
-            phi_prev = xinteg(3)
-            xinteg(3) = phi_prev - (phi_prev + y(1) - xref(3))/(1d0 + dy(3, 1))
-            if (abs(xinteg(3) - phi_prev) < TOL) return
+            if (.not. ieee_is_finite(y(1)) .or. &
+                .not. ieee_is_finite(dy(3, 1))) exit
+            residual = modulo(phi + y(1) - target + 0.5_dp*twopi, twopi) - &
+                0.5_dp*twopi
+            if (abs(residual) < best_residual) then
+                best_residual = abs(residual)
+                best_phi = phi
+            end if
+            denom = 1.0_dp + dy(3, 1)
+            if (abs(denom) <= 100.0_dp*epsilon(1.0_dp)) exit
+            correction = max(-0.5_dp*twopi, min(0.5_dp*twopi, residual/denom))
+            phi_next = phi - correction
+            if (.not. ieee_is_finite(phi_next)) exit
+            phi = phi_next
+            if (abs(correction) < TOL) then
+                xinteg(3) = phi + twopi*anint((xref(3) - phi)/twopi)
+                return
+            end if
         end do
-        print *, 'WARNING: ref_to_integ_spectre did not converge after', &
-            MAX_ITER, 'iterations'
+        xinteg(3) = best_phi + twopi*anint((xref(3) - best_phi)/twopi)
+        call count_event(EVT_SPECTRE_REF_INVERSE_MAXIT)
     end subroutine ref_to_integ_spectre
 
 

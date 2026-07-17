@@ -39,7 +39,9 @@ program test_sympl_testfield
     use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
-        macrostep, macrostep_with_wall_check
+        locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
+        rk_recovery_state_t, validate_rk_state, &
+        activate_rk_recovery, should_resume_symplectic
     use simple, only : tracer_t, init_sympl, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
     use params, only : isw_field_type, field_input, coord_input, integmode, &
         swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
@@ -94,8 +96,12 @@ program test_sympl_testfield
 
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
+    call test_rk_recovery_regions
+    call test_both_methods_failed_hold
     call test_exit_classification
     call test_fo_lcfs_location
+    call test_validated_rk_lcfs_location
+    call test_rk_state_validation
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -205,6 +211,88 @@ contains
             error stop 'repeated wall warning changed the accepted state'
     end subroutine test_failed_step_preserves_state
 
+    subroutine test_rk_recovery_regions
+        type(rk_recovery_state_t) :: recovery
+
+        call activate_rk_recovery(recovery, 0.005_dp)
+        if (.not. recovery%active) error stop 'near-axis RK recovery did not start'
+        if (should_resume_symplectic(recovery, 0.015_dp)) then
+            error stop 'near-axis recovery resumed inside its hysteresis band'
+        end if
+        if (.not. should_resume_symplectic(recovery, 0.02_dp)) then
+            error stop 'near-axis recovery did not resume outside the axis band'
+        end if
+
+        recovery = rk_recovery_state_t()
+        call activate_rk_recovery(recovery, 0.5_dp)
+        recovery%steps = 255
+        if (should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'generic recovery ignored its first cooldown'
+        end if
+        recovery%steps = 256
+        if (.not. should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'generic recovery did not probe after its cooldown'
+        end if
+        call activate_rk_recovery(recovery, 0.5_dp)
+        recovery%steps = 511
+        if (should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'repeated generic recovery did not back off'
+        end if
+        recovery%steps = 512
+        if (.not. should_resume_symplectic(recovery, 0.5_dp)) then
+            error stop 'backed-off generic recovery never resumed probing'
+        end if
+
+        recovery = rk_recovery_state_t()
+        call activate_rk_recovery(recovery, 0.995_dp)
+        if (should_resume_symplectic(recovery, 0.99_dp)) then
+            error stop 'edge recovery resumed before moving safely inward'
+        end if
+        if (.not. should_resume_symplectic(recovery, 0.98_dp)) then
+            error stop 'edge recovery did not resume after moving inward'
+        end if
+    end subroutine test_rk_recovery_regions
+
+    subroutine test_both_methods_failed_hold
+        real(dp), parameter :: initial_state(5) = [0.2_dp, 1.0_dp, 2.0_dp, &
+            1.0_dp, 0.25_dp]
+        type(rk_recovery_state_t) :: recovery
+        real(dp) :: z(5), x_previous(3)
+        integer(int64) :: kt
+        integer :: step_error
+        logical :: numerical_hold
+
+        recovery%active = .true.
+        recovery%both_methods_failed = .true.
+        z = initial_state
+        kt = 0_int64
+        call macrostep(norb, z, kt, step_error, 2, &
+            numerical_hold_any=numerical_hold, rk_recovery=recovery)
+        if (step_error /= 0) error stop 'latched recovery hold stopped the orbit'
+        if (kt /= 2_int64) error stop 'latched recovery did not consume intervals'
+        if (.not. numerical_hold) error stop 'latched recovery lost held status'
+        if (any(z /= initial_state)) &
+            error stop 'latched recovery changed the accepted state'
+        if (.not. recovery%both_methods_failed) &
+            error stop 'latched recovery state was cleared'
+
+        recovery%active = .true.
+        recovery%both_methods_failed = .true.
+        z = initial_state
+        x_previous = 0.0_dp
+        kt = 0_int64
+        call macrostep_with_wall_check(norb, z, kt, step_error, 2, 1, &
+            x_previous, numerical_hold_any=numerical_hold, &
+            rk_recovery=recovery)
+        if (step_error /= 0) error stop 'latched wall hold stopped the orbit'
+        if (kt /= 2_int64) error stop 'latched wall hold did not consume intervals'
+        if (.not. numerical_hold) error stop 'latched wall hold lost held status'
+        if (any(z /= initial_state)) &
+            error stop 'latched wall hold changed the accepted state'
+        if (.not. recovery%both_methods_failed) &
+            error stop 'latched wall recovery state was cleared'
+    end subroutine test_both_methods_failed_hold
+
     subroutine test_exit_classification
         logical :: classifier_lost
         integer :: classifier_exit
@@ -292,5 +380,52 @@ contains
             error stop 'full-orbit field-period seam was not interpolated periodically'
         end if
     end subroutine test_fo_lcfs_location
+
+    subroutine test_validated_rk_lcfs_location
+        real(dp), parameter :: z_before(5) = [0.9_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+            -0.5_dp]
+        real(dp), parameter :: z_after(5) = [1.1_dp, 0.4_dp, 0.5_dp, 2.0_dp, &
+            0.5_dp]
+        real(dp), parameter :: z_gross_jump(5) = [100.0_dp, 0.4_dp, 0.5_dp, &
+            2.0_dp, 0.5_dp]
+        real(dp), parameter :: tolerance = 32.0_dp*epsilon(1.0_dp)
+        real(dp) :: z_event(5), event_fraction
+        integer :: step_error
+
+        step_error = 1
+        call locate_validated_lcfs(z_before, z_after, 6.0_dp, z_event, &
+            event_fraction, step_error)
+        if (step_error /= 1 .or. abs(event_fraction - 0.5_dp) > tolerance .or. &
+            abs(z_event(1) - 1.0_dp) > tolerance) then
+            error stop 'valid adaptive-RK LCFS crossing was rejected'
+        end if
+
+        step_error = 1
+        call locate_validated_lcfs(z_before, z_gross_jump, 6.0_dp, z_event, &
+            event_fraction, step_error)
+        if (step_error /= 2 .or. event_fraction /= 0.0_dp .or. &
+            any(z_event /= z_before)) then
+            error stop 'gross adaptive-RK jump was classified as a physical loss'
+        end if
+    end subroutine test_validated_rk_lcfs_location
+
+    subroutine test_rk_state_validation
+        real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+            -0.5_dp]
+        real(dp) :: z_after(5)
+        integer :: step_error
+
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 0.5_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error)
+        if (step_error /= 0) error stop 'valid adaptive-RK state was rejected'
+
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 2.0_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error)
+        if (step_error /= 2 .or. any(z_after /= z_before)) then
+            error stop 'invalid adaptive-RK state was committed'
+        end if
+    end subroutine test_rk_state_validation
 
 end program test_sympl_testfield

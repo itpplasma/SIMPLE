@@ -31,13 +31,14 @@ program test_spectre_sympl_crossing
     !>   * Every landing satisfies |rho_g - k| < 1e-8 and no CROSS_STOP occurs.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple, only: tracer_t, init_sympl
     use simple_main, only: init_field
     use params, only: read_config, params_init, netcdffile, ns_s, ns_tp, &
                       multharm, dtaumin, relerr, v0, crossing_level, integmode
     use magfie_sub, only: init_magfie, SPECTRE
     use field_can_mod, only: field_can_t, eval_field => evaluate, get_val, &
-                             ref_to_integ
+                             integ_to_ref, ref_to_integ
     use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
     use orbit_symplectic_base, only: symplectic_integrator_t
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
@@ -100,6 +101,7 @@ program test_spectre_sympl_crossing
     n_crossers = 0
 
     call check_recanon_energy(failed)
+    call check_large_winding_roundtrip(failed)
 
     do im = 1, NMARKER
         call trace_marker(im, nrec_got, h_series, h_actual, p_series, t_series, &
@@ -261,6 +263,26 @@ contains
         end do
         call set_spectre_volume_lock(0)
     end subroutine check_recanon_energy
+
+    subroutine check_large_winding_roundtrip(failed)
+        logical, intent(inout) :: failed
+
+        real(dp), parameter :: TOL = 2.0d-9
+        real(dp) :: xref(3), xinteg(3), xroundtrip(3), periodic_error
+
+        xref = [0.5_dp, 1.2_dp, 100000.0_dp*twopi + 0.37_dp]
+        call ref_to_integ(xref, xinteg)
+        call integ_to_ref(xinteg, xroundtrip)
+        periodic_error = abs(modulo(xroundtrip(3) - xref(3) + 0.5_dp*twopi, &
+                                    twopi) - 0.5_dp*twopi)
+        if (.not. all(ieee_is_finite(xinteg)) .or. &
+            abs(xinteg(3) - xref(3)) > 0.5_dp*twopi .or. &
+            periodic_error > TOL) then
+            print '(A,3ES12.4)', 'FAIL: large-winding inverse: ', &
+                xinteg(3) - xref(3), periodic_error, xinteg(3)
+            failed = .true.
+        end if
+    end subroutine check_large_winding_roundtrip
 
     subroutine trace_marker(im, nrec_got, h_series, h_actual, p_series, t_series, &
             transition_series, mode_series)

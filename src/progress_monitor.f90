@@ -2,73 +2,42 @@ module progress_monitor
     !> Periodic progress reporting and team-safe final result output for the
     !> particle tracing loop.
     !>
-    !> Once per finished particle a thread calls progress_tick. The hot path is
-    !> a single atomic increment of the completed counter and a wall-clock read,
-    !> with no critical and no file access. When `interval` seconds have passed
-    !> one thread enters a rarely taken critical, writes a status line, and
-    !> advances the deadline. Result files are written only after the parallel
-    !> region: a live snapshot would race with trajectory and counter updates and
-    !> could mix different marker states in one checkpoint.
-    !>
-    !> The monitor never touches physics arrays itself. The owner registers a
-    !> dump callback at init, so this module depends on no tracing code and the
-    !> dependency runs one way.
+    !> Once per finished particle a thread calls progress_tick. The OpenMP path
+    !> is only one atomic increment: no lock, formatted I/O, file access, clock
+    !> query, or callback runs while particles are being traced. The joined
+    !> caller emits one final event summary; the owner then writes result files
+    !> serially. The legacy interval argument is retained for input/API
+    !> compatibility but no longer triggers mid-trace output.
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64, output_unit
     use diag_counters, only: N_EVENT, diag_counters_total, event_name
     implicit none
     private
 
-    public :: progress_init, progress_tick, progress_finalize, dump_proc_i
-
-    abstract interface
-        subroutine dump_proc_i()
-            !> Write current results to disk from the shared result arrays.
-        end subroutine dump_proc_i
-    end interface
-
-    procedure(dump_proc_i), pointer :: dump_results => null()
-    real(dp) :: interval = 0.0d0   ! <= 0 disables periodic progress reports
+    public :: progress_init, progress_tick, progress_finalize
     real(dp) :: t_start = 0.0d0
-    real(dp) :: t_next = 0.0d0
     integer :: n_total = 0
     integer(int64) :: n_done_shared = 0_int64
     logical :: active = .false.
 
 contains
 
-    subroutine progress_init(interval_seconds, n_particles, dump)
+    subroutine progress_init(interval_seconds, n_particles)
         real(dp), intent(in) :: interval_seconds
         integer, intent(in) :: n_particles
-        procedure(dump_proc_i) :: dump
 
-        interval = interval_seconds
         n_total = n_particles
         n_done_shared = 0_int64
-        dump_results => dump
-        active = interval > 0.0d0 .and. n_particles > 0
+        active = n_particles > 0
         t_start = wall_time()
-        t_next = t_start + interval
     end subroutine progress_init
 
     subroutine progress_tick()
         !> Call once per finished particle from inside the parallel region.
-        real(dp) :: now
-        integer(int64) :: done
-
         if (.not. active) return
 
-!$omp atomic capture
+!$omp atomic update
         n_done_shared = n_done_shared + 1_int64
-        done = n_done_shared
 !$omp end atomic
-
-!$omp critical (progress_flush)
-        now = wall_time()
-        if (now >= t_next) then
-            t_next = now + interval
-            call emit(int(done), now, .false.)
-        end if
-!$omp end critical (progress_flush)
     end subroutine progress_tick
 
     subroutine progress_finalize()
@@ -77,7 +46,6 @@ contains
         !> interval. A silent fo_fault count would hide inversion faults.
         if (n_total > 0) call emit(int(n_done_shared), wall_time(), .true.)
         active = .false.
-        dump_results => null()
     end subroutine progress_finalize
 
     subroutine emit(n_done, now, final)
@@ -89,8 +57,6 @@ contains
         integer :: id
         integer(int64) :: total
         character(len=512) :: events
-
-        if (final .and. associated(dump_results)) call dump_results()
 
         elapsed = now - t_start
         frac = real(n_done, dp)/real(max(n_total, 1), dp)
