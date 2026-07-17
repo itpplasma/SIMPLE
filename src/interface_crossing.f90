@@ -14,7 +14,7 @@ module interface_crossing
     !> the tangential sheet-drift kick and the drift-order v_par term that Level 0
     !> omits. Both levels are energy-exact in the crossing and reflection branch.
 
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use magfie_sub, only: magfie
     use parmot_mod, only: ro0
 
@@ -25,7 +25,7 @@ module interface_crossing
     public :: crossing_log_reset, crossing_log_record, crossing_log_write, &
         crossing_log_count, crossing_log_count_type
     public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSS_CROSSING, CROSS_REFLECTION, &
-        CROSS_LOSS, CROSS_STOP, CROSS_SHEET, CROSS_RECOVERY
+        CROSS_LOSS, CROSS_STOP, CROSS_SHEET, CROSS_RECOVERY, CROSS_INVALID
 
     integer, parameter :: CROSSING_LEVEL0 = 0
     integer, parameter :: CROSSING_LEVEL1 = 1
@@ -41,6 +41,9 @@ module interface_crossing
     !> iface and both volume fields are zero so post-processing cannot confuse
     !> the recovery map with a discontinuity crossing.
     integer, parameter :: CROSS_RECOVERY = 6
+    !> A candidate event whose physical state or field values are unusable.
+    !> Callers must recover from the pre-step state; this is never a loss.
+    integer, parameter :: CROSS_INVALID = 7
 
     !> Inner cutoff for the innermost volume: rho_g = 0 is the coordinate axis
     !> where sqrt(g) = 0, so the marker reflects trivially before reaching it
@@ -120,15 +123,22 @@ contains
         type(crossing_info_t), intent(out) :: info
 
         real(dp) :: rho_face, rho_home, rho_target
-        real(dp) :: bmod_home, bmod_target, perp_inv, mu, vpar, radicand
+        real(dp) :: bmod_home, bmod_target, perp_inv, mu, vpar, radicand, pitch
+
+        info%event_type = CROSS_INVALID
+        y_out = y_iface
 
         if (level /= CROSSING_LEVEL0 .and. level /= CROSSING_LEVEL1) then
             error stop 'apply_crossing: unknown crossing_level'
         end if
+        if ((direction /= -1 .and. direction /= 1) .or. iface < 0 .or. &
+                iface > mvol .or. .not. all_finite(y_iface) .or. &
+                y_iface(4) <= 0.0_dp .or. abs(y_iface(5)) > 1.0_dp) return
 
         rho_face = real(iface, dp)
-        y_out = y_iface
-        vpar = y_iface(4)*y_iface(5)
+        pitch = max(-1.0_dp, min(1.0_dp, y_iface(5)))
+        y_out(5) = pitch
+        vpar = y_iface(4)*pitch
 
         info%iface = iface
         info%theta = y_iface(2)
@@ -149,14 +159,16 @@ contains
         end if
 
         bmod_home = bmod_at([rho_home, y_iface(2), y_iface(3)])
+        if (.not. finite_value(bmod_home) .or. bmod_home <= 0.0_dp) return
         info%bmod_home = bmod_home
         info%bmod_target = bmod_home
 
         ! perp_inv = v_perp^2/|B| = z(4)^2 (1 - z(5)^2)/|B| is the perpendicular
         ! invariant the RK45 path stores; mu = perp_inv/2 is the magnetic moment
         ! held fixed across the interface, so the whole map runs on this invariant.
-        perp_inv = y_iface(4)**2*(1.0_dp - y_iface(5)**2)/bmod_home
+        perp_inv = y_iface(4)**2*max(1.0_dp - pitch**2, 0.0_dp)/bmod_home
         mu = 0.5_dp*perp_inv
+        if (.not. finite_value(mu) .or. mu < 0.0_dp) return
         info%mu = mu
 
         if (direction == 1 .and. iface == mvol) then
@@ -177,13 +189,19 @@ contains
         if (level == CROSSING_LEVEL1) then
             call level1_map(rho_face, rho_home, rho_target, direction, &
                 bmod_home, mu, vpar, y_iface, y_out, info)
+            if (.not. valid_mapped_crossing(y_out, info)) then
+                info%event_type = CROSS_INVALID
+                y_out = y_iface
+            end if
             return
         end if
 
         bmod_target = bmod_at([rho_target, y_iface(2), y_iface(3)])
+        if (.not. finite_value(bmod_target) .or. bmod_target <= 0.0_dp) return
         info%bmod_target = bmod_target
 
         radicand = vpar**2 - 2.0_dp*mu*(bmod_target - bmod_home)
+        if (.not. finite_value(radicand)) return
         if (radicand >= 0.0_dp) then
             info%event_type = CROSS_CROSSING
             info%vpar_after = sign(sqrt(radicand), vpar)
@@ -201,6 +219,39 @@ contains
             y_out(1) = rho_face
         end if
     end subroutine apply_crossing
+
+    pure logical function valid_mapped_crossing(y, info)
+        real(dp), intent(in) :: y(5)
+        type(crossing_info_t), intent(in) :: info
+
+        valid_mapped_crossing = all_finite(y) .and. y(4) > 0.0_dp .and. &
+            abs(y(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
+            finite_value(info%mu) .and. info%mu >= 0.0_dp .and. &
+            finite_value(info%bmod_home) .and. info%bmod_home > 0.0_dp .and. &
+            finite_value(info%bmod_target) .and. info%bmod_target > 0.0_dp .and. &
+            (info%event_type == CROSS_CROSSING .or. &
+             info%event_type == CROSS_REFLECTION)
+    end function valid_mapped_crossing
+
+    pure logical function finite_value(x)
+        real(dp), intent(in) :: x
+        integer(int64), parameter :: exponent_mask = int(z'7FF0000000000000', int64)
+        integer(int64) :: bits
+
+        bits = transfer(x, bits)
+        finite_value = iand(bits, exponent_mask) /= exponent_mask
+    end function finite_value
+
+    pure logical function all_finite(x)
+        real(dp), intent(in) :: x(:)
+        integer :: i
+
+        all_finite = .false.
+        do i = 1, size(x)
+            if (.not. finite_value(x(i))) return
+        end do
+        all_finite = .true.
+    end function all_finite
 
     function bmod_at(x) result(bmod)
         real(dp), intent(in) :: x(3)

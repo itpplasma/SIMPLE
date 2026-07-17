@@ -15,7 +15,7 @@ module spectre_orbit
     use odeint_allroutines_sub, only: odeint_allroutines, odeint_has_failed
     use alpha_lifetime_sub, only: velo_can
     use interface_crossing, only: apply_crossing, crossing_info_t, axis_offset, &
-        CROSS_LOSS
+        CROSS_LOSS, CROSS_INVALID
 
     implicit none
     private
@@ -139,6 +139,12 @@ contains
         iface = nint(boundary)
         call apply_crossing(z_hit, iface, direction, state%mvol, level, &
             z, event%info)
+        if (event%info%event_type == CROSS_INVALID) then
+            z = z_start
+            event%occurred = .false.
+            ierr = SPECTRE_FAULT
+            return
+        end if
         event%occurred = .true.
 
         if (event%info%event_type == CROSS_LOSS) then
