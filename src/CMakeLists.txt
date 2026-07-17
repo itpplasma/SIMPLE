@@ -121,7 +121,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 
 target_link_libraries(simple PUBLIC
-    netcdf netcdff BLAS::BLAS LAPACK::LAPACK
+    BLAS::BLAS LAPACK::LAPACK
 )
 
 target_link_libraries(simple PUBLIC
