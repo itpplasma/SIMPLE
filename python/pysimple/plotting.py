@@ -44,7 +44,7 @@ The plotting functions read standard SIMPLE output files:
     Column 1: Time [s]
     Column 2: confpart_pass (confined passing fraction)
     Column 3: confpart_trap (confined trapped fraction)
-    Column 4: Total number of particles
+    Column 4: Numerically resolved particles used as the denominator
     Note: Total confined fraction = Column 2 + Column 3
 
 Example
@@ -112,6 +112,9 @@ class LossData:
         Confined trapped fraction at each time.
     trace_time : float
         Maximum tracing time [s].
+    orbit_exit_codes : np.ndarray, optional
+        Per-marker exit codes. Codes 0, 1, and 2 are resolved completion,
+        LCFS loss, and wall loss; codes 101--105 are numerical terminations.
     """
 
     n_particles: int
@@ -127,6 +130,7 @@ class LossData:
     confined_pass: np.ndarray
     confined_trap: np.ndarray
     trace_time: float
+    orbit_exit_codes: Optional[np.ndarray] = None
 
     @property
     def confined_fraction(self) -> np.ndarray:
@@ -135,18 +139,41 @@ class LossData:
 
     @property
     def lost_mask(self) -> np.ndarray:
-        """Boolean mask for particles that were lost (not confined)."""
+        """Boolean mask for resolved physical LCFS or wall losses."""
+        if self.orbit_exit_codes is not None:
+            return np.isin(self.orbit_exit_codes, (1, 2))
         return (self.loss_times > 0) & (self.loss_times < self.trace_time)
 
     @property
     def confined_mask(self) -> np.ndarray:
         """Boolean mask for particles that remained confined."""
+        if self.orbit_exit_codes is not None:
+            # Code 3 is SIMPLE's deliberate deep-passing shortcut. Fortran
+            # counts those analytically confined markers in the same resolved
+            # denominator, while skipped_mask keeps the shortcut observable.
+            return np.isin(self.orbit_exit_codes, (0, 3))
         return self.loss_times >= self.trace_time
 
     @property
     def skipped_mask(self) -> np.ndarray:
         """Boolean mask for particles skipped (deep passing, contr_pp)."""
+        if self.orbit_exit_codes is not None:
+            return self.orbit_exit_codes == 3
         return self.loss_times < 0
+
+    @property
+    def resolved_mask(self) -> np.ndarray:
+        """Markers eligible for confinement and loss statistics."""
+        if self.orbit_exit_codes is not None:
+            return np.isin(self.orbit_exit_codes, (0, 1, 2, 3))
+        return self.lost_mask | self.confined_mask
+
+    @property
+    def unresolved_mask(self) -> np.ndarray:
+        """Markers terminated for numerical reasons."""
+        if self.orbit_exit_codes is not None:
+            return (self.orbit_exit_codes >= 101) & (self.orbit_exit_codes <= 105)
+        return ~np.isfinite(self.loss_times)
 
 
 def load_loss_data(directory: str | Path) -> LossData:
@@ -209,8 +236,9 @@ def load_loss_data(directory: str | Path) -> LossData:
         start_phi = np.zeros(n_particles)
         start_pitch = np.zeros(n_particles)
 
-    # Load confined_fraction.dat
-    # Columns: time, confpart_pass, confpart_trap, ntestpart
+    # Load confined_fraction.dat. Its final time is authoritative: numerical
+    # NaNs in times_lost.dat must not poison or extend the requested trace time.
+    # Columns: time, confpart_pass, confpart_trap, resolved particle count
     conf_file = directory / "confined_fraction.dat"
     if conf_file.exists():
         conf_data = np.loadtxt(conf_file)
@@ -218,19 +246,42 @@ def load_loss_data(directory: str | Path) -> LossData:
         time_grid = np.abs(conf_data[1:, 0])
         confined_pass = conf_data[1:, 1]
         confined_trap = conf_data[1:, 2]
+        trace_time = float(time_grid[-1]) if len(time_grid) > 0 else 1.0
     else:
-        # Generate from loss times if file not available
-        time_grid = np.logspace(-5, 0, 100)
+        finite_times = np.abs(loss_times[np.isfinite(loss_times)])
+        trace_time = float(np.max(finite_times)) if finite_times.size else 1.0
+        time_grid = np.logspace(-5, np.log10(max(trace_time, 1.0e-5)), 100)
+
+    exit_file = directory / "orbit_exit_code.dat"
+    if exit_file.exists():
+        exit_data = np.loadtxt(exit_file)
+        exit_data = np.atleast_2d(exit_data)
+        if exit_data.shape[0] != n_particles:
+            raise ValueError("orbit_exit_code.dat particle count does not match times_lost.dat")
+        orbit_exit_codes = exit_data[:, 1].astype(int)
+    else:
+        # Backward compatibility for output predating explicit exit codes.
+        orbit_exit_codes = np.full(n_particles, 101, dtype=int)
+        orbit_exit_codes[loss_times < 0.0] = 3
+        orbit_exit_codes[np.isfinite(loss_times) & (loss_times >= trace_time)] = 0
+        orbit_exit_codes[(loss_times > 0.0) & (loss_times < trace_time)] = 1
+
+    if not conf_file.exists():
         confined_pass = np.zeros_like(time_grid)
         confined_trap = np.zeros_like(time_grid)
+        resolved = np.isin(orbit_exit_codes, (0, 1, 2, 3))
+        passing = trap_parameter < 0
+        denominator = int(np.sum(resolved))
         for i, t in enumerate(time_grid):
-            confined = np.abs(loss_times) >= t
-            passing = trap_parameter < 0
-            confined_pass[i] = np.sum(confined & passing) / n_particles
-            confined_trap[i] = np.sum(confined & ~passing) / n_particles
-
-    # Determine trace_time from maximum loss time or last time in grid
-    trace_time = max(np.max(np.abs(loss_times)), time_grid[-1] if len(time_grid) > 0 else 1.0)
+            confined = resolved & (
+                np.isin(orbit_exit_codes, (0, 3)) | (loss_times >= t)
+            )
+            if denominator > 0:
+                confined_pass[i] = np.sum(confined & passing) / denominator
+                confined_trap[i] = np.sum(confined & ~passing) / denominator
+            else:
+                confined_pass[i] = np.nan
+                confined_trap[i] = np.nan
 
     return LossData(
         n_particles=n_particles,
@@ -246,6 +297,7 @@ def load_loss_data(directory: str | Path) -> LossData:
         confined_pass=confined_pass,
         confined_trap=confined_trap,
         trace_time=trace_time,
+        orbit_exit_codes=orbit_exit_codes,
     )
 
 
@@ -281,7 +333,9 @@ def compute_energy_confined_fraction(
     if time_grid is None:
         time_grid = data.time_grid
 
-    e_total = float(data.n_particles)
+    e_total = float(np.sum(data.resolved_mask))
+    if e_total == 0.0:
+        return time_grid, np.full_like(time_grid, np.nan, dtype=float)
 
     if slowing_down_curve is not None:
         times_sd, energy_sd = slowing_down_curve
@@ -295,7 +349,7 @@ def compute_energy_confined_fraction(
 
     energy_fraction = np.zeros_like(time_grid)
     for i, t in enumerate(time_grid):
-        lost_before_t = (data.loss_times > 0) & (data.loss_times < t)
+        lost_before_t = data.lost_mask & (data.loss_times < t)
         e_lost = np.sum(energy_at_loss[lost_before_t])
         energy_fraction[i] = (e_total - e_lost) / e_total
 
@@ -412,7 +466,7 @@ def _plot_kde_density_panel(ax, data: LossData) -> None:
 def _plot_energy_loss_panel(ax, data: LossData) -> None:
     """Plot energy loss distribution vs J_perp panel."""
     jperp_bins, particle_count, energy_lost = compute_energy_loss_distribution(data)
-    total = data.n_particles if data.n_particles > 0 else 1
+    total = max(int(np.sum(data.resolved_mask)), 1)
     energy_frac = energy_lost / total
     particle_frac = particle_count / total
 
@@ -426,7 +480,10 @@ def _plot_energy_loss_panel(ax, data: LossData) -> None:
 
 def _plot_starting_positions_panel(ax, data: LossData) -> None:
     """Plot starting positions colored by loss time panel."""
-    tlost_all = np.maximum(np.abs(data.loss_times), 1e-10)
+    tlost_all = np.where(
+        np.isfinite(data.loss_times), np.abs(data.loss_times), data.trace_time
+    )
+    tlost_all = np.maximum(tlost_all, 1e-10)
     scatter = ax.scatter(data.start_theta, data.start_pitch, c=np.log10(tlost_all), s=1, cmap="viridis", vmin=-5, vmax=0)
     cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label(r"$\log_{10}(t_{\mathrm{loss}})$")
@@ -650,7 +707,8 @@ def _bin_energy_actual(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Bin particles and energy by J_perp using actual final_p^2 (vectorized)."""
     k = _compute_bin_indices(data.perp_invariant, hp, nperp)
-    part_distr = np.bincount(k, minlength=nperp).astype(float)
+    part_distr = np.bincount(k, weights=data.resolved_mask.astype(float),
+                            minlength=nperp)
     energy_weights = np.where(data.lost_mask, data.final_p**2, 0.0)
     energ_distr = np.bincount(k, weights=energy_weights, minlength=nperp)
     return part_distr, energ_distr
@@ -665,7 +723,8 @@ def _bin_energy_theoretical(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Bin particles and energy by J_perp using theoretical slowing-down (vectorized)."""
     k = _compute_bin_indices(data.perp_invariant, hp, nperp)
-    part_distr = np.bincount(k, minlength=nperp).astype(float)
+    part_distr = np.bincount(k, weights=data.resolved_mask.astype(float),
+                            minlength=nperp)
 
     energy_adj = energy_sd - THERMAL_ENERGY_FRACTION
     energy_at_loss = np.interp(data.loss_times, times_sd, energy_adj, left=energy_adj[0], right=energy_adj[-1])
@@ -743,13 +802,14 @@ def plot_energy_loss_vs_jperp(
             _, energ_n_theo = _bin_energy_theoretical(data_nocoll, hp, nperp, times_sd, energy_sd)
 
     part_c_safe = np.where(part_c > 0, part_c, 1)
+    part_n_safe = np.where(part_n > 0, part_n, 1) if part_n is not None else None
     jperp = np.arange(1, nperp + 1) / nperp
 
     curves = [
         (energ_c / part_c_safe, "r-", 2, "COLL (actual)"),
-        (energ_n / part_c_safe if energ_n is not None else None, "b-", 2, "NOCOLL (actual)"),
+        (energ_n / part_n_safe if energ_n is not None else None, "b-", 2, "NOCOLL (actual)"),
         (energ_c_theo / part_c_safe if energ_c_theo is not None else None, "r--", 1.5, "COLL (theoretical)"),
-        (energ_n_theo / part_c_safe if energ_n_theo is not None else None, "b--", 1.5, "NOCOLL (theoretical)"),
+        (energ_n_theo / part_n_safe if energ_n_theo is not None else None, "b--", 1.5, "NOCOLL (theoretical)"),
     ]
 
     max_f = 0.0

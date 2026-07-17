@@ -11,7 +11,8 @@ module spectre_orbit
     !> SPECTRE_BOUNDARY and terminates the trace.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use odeint_allroutines_sub, only: odeint_allroutines
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use odeint_allroutines_sub, only: odeint_allroutines, odeint_has_failed
     use alpha_lifetime_sub, only: velo_can
     use interface_crossing, only: apply_crossing, crossing_info_t, axis_offset, &
         CROSS_LOSS
@@ -28,6 +29,7 @@ module spectre_orbit
 
     real(dp), parameter :: rho_tol = 1.0d-10
     integer, parameter :: max_bisect = 80
+    integer, parameter :: max_retry_depth = 8
 
     !> Home-volume boundaries handed to the field-clamped RHS. Each traced marker
     !> owns one thread, so these must be thread-private.
@@ -127,7 +129,13 @@ contains
             return
         end if
 
-        call locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, event%t_frac)
+        call locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, &
+            event%t_frac, ierr)
+        if (ierr /= SPECTRE_OK) then
+            z = z_start
+            event%occurred = .false.
+            return
+        end if
         iface = nint(boundary)
         call apply_crossing(z_hit, iface, direction, state%mvol, level, &
             z, event%info)
@@ -163,7 +171,8 @@ contains
         state%home_set = .true.
     end subroutine set_home_volume_index
 
-    subroutine locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, t_frac)
+    subroutine locate_crossing(z_start, dtaumin, relerr, boundary, z_hit, t_frac, &
+            ierr)
         !> Find the microstep time where the clamped-RHS trajectory reaches rho_g =
         !> boundary to |rho_g - boundary| < rho_tol, by the Illinois variant of
         !> false position. z_start is strictly inside the home volume and the full
@@ -171,27 +180,36 @@ contains
         real(dp), intent(in) :: z_start(5), dtaumin, relerr, boundary
         real(dp), intent(out) :: z_hit(5)
         real(dp), intent(out) :: t_frac
+        integer, intent(out) :: ierr
 
         real(dp) :: t_lo, t_hi, f_lo, f_hi, t_mid, f_mid, z_mid(5)
-        integer :: it, ierr, last_side
+        integer :: it, last_side
+        logical :: converged
 
         t_lo = 0.0_dp
+        ierr = SPECTRE_OK
         f_lo = z_start(1) - boundary
         t_hi = dtaumin
         call integrate_clamped(z_start, t_hi, relerr, z_mid, ierr)
+        if (ierr /= SPECTRE_OK) return
         f_hi = z_mid(1) - boundary
         z_hit = z_mid
         t_mid = t_hi
         last_side = 0
+        converged = abs(f_hi) < rho_tol
 
         do it = 1, max_bisect
+            if (converged) exit
             if (abs(f_hi - f_lo) <= tiny(1.0_dp)) exit
             t_mid = t_hi - f_hi*(t_hi - t_lo)/(f_hi - f_lo)
             call integrate_clamped(z_start, t_mid, relerr, z_mid, ierr)
-            if (ierr /= SPECTRE_OK) exit
+            if (ierr /= SPECTRE_OK) return
             f_mid = z_mid(1) - boundary
             z_hit = z_mid
-            if (abs(f_mid) < rho_tol) exit
+            if (abs(f_mid) < rho_tol) then
+                converged = .true.
+                exit
+            end if
             if (f_mid*f_lo > 0.0_dp) then
                 t_lo = t_mid
                 f_lo = f_mid
@@ -205,6 +223,12 @@ contains
             end if
         end do
 
+        if (.not. converged) then
+            z_hit = z_start
+            t_frac = 0.0_dp
+            ierr = SPECTRE_FAULT
+            return
+        end if
         t_frac = t_mid/dtaumin
     end subroutine locate_crossing
 
@@ -233,12 +257,34 @@ contains
         real(dp), intent(out) :: z_out(5)
         integer, intent(out) :: ierr
 
+        call integrate_clamped_retry(z_in, tau, relerr, 0, z_out, ierr)
+    end subroutine integrate_clamped
+
+    recursive subroutine integrate_clamped_retry(z_in, tau, relerr, depth, &
+            z_out, ierr)
+        real(dp), intent(in) :: z_in(5), tau, relerr
+        integer, intent(in) :: depth
+        real(dp), intent(out) :: z_out(5)
+        integer, intent(out) :: ierr
+
+        real(dp) :: z_half(5)
         integer, parameter :: ndim = 5
 
         ierr = SPECTRE_OK
         z_out = z_in
         if (tau <= 0.0_dp) return
         call odeint_allroutines(z_out, ndim, 0.0_dp, tau, relerr, velo_can_clamped)
-    end subroutine integrate_clamped
+        if (.not. odeint_has_failed() .and. all(ieee_is_finite(z_out))) return
+
+        z_out = z_in
+        ierr = SPECTRE_FAULT
+        if (depth >= max_retry_depth) return
+        call integrate_clamped_retry(z_in, 0.5_dp*tau, relerr, depth + 1, &
+            z_half, ierr)
+        if (ierr /= SPECTRE_OK) return
+        call integrate_clamped_retry(z_half, 0.5_dp*tau, relerr, depth + 1, &
+            z_out, ierr)
+        if (ierr /= SPECTRE_OK) z_out = z_in
+    end subroutine integrate_clamped_retry
 
 end module spectre_orbit

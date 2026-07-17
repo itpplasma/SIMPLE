@@ -25,7 +25,7 @@ module interface_crossing
     public :: crossing_log_reset, crossing_log_record, crossing_log_write, &
         crossing_log_count, crossing_log_count_type
     public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSS_CROSSING, CROSS_REFLECTION, &
-        CROSS_LOSS, CROSS_STOP, CROSS_SHEET
+        CROSS_LOSS, CROSS_STOP, CROSS_SHEET, CROSS_RECOVERY
 
     integer, parameter :: CROSSING_LEVEL0 = 0
     integer, parameter :: CROSSING_LEVEL1 = 1
@@ -37,6 +37,10 @@ module interface_crossing
     !> step itself fails to converge; regular boundaries cross via apply_crossing.
     integer, parameter :: CROSS_STOP = 4
     integer, parameter :: CROSS_SHEET = 5
+    !> Marker-local GC -> full-orbit fallback away from any physical interface.
+    !> iface and both volume fields are zero so post-processing cannot confuse
+    !> the recovery map with a discontinuity crossing.
+    integer, parameter :: CROSS_RECOVERY = 6
 
     !> Inner cutoff for the innermost volume: rho_g = 0 is the coordinate axis
     !> where sqrt(g) = 0, so the marker reflects trivially before reaching it

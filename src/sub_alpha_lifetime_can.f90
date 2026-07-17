@@ -387,7 +387,8 @@ if(dodiag) write (123,*) tau2,z
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
       subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr)
-      use odeint_allroutines_sub, only : odeint_allroutines
+            use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+            use odeint_allroutines_sub, only : odeint_allroutines, odeint_has_failed
       use chamb_sub, only : chamb_can
   !
       implicit none
@@ -401,7 +402,7 @@ if(dodiag) write (123,*) tau2,z
       real(dp) :: relerr
   !
       real(dp), dimension(2)    :: y
-      real(dp), dimension(ndim) :: z
+            real(dp), dimension(ndim) :: z, z_initial
   !
       if(abs(dtaumin*nstepmax).le.abs(dtau)) then
         ierr=2
@@ -410,6 +411,7 @@ if(dodiag) write (123,*) tau2,z
       endif
   !
       ierr=0
+            z_initial=z
       y(1)=z(1)
       y(2)=z(2)
       phi=z(3)
@@ -432,6 +434,11 @@ if(dodiag) write (123,*) tau2,z
             z(2)=z2
   !
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                            z=z_initial
+                            ierr=2
+                            return
+                        endif
   !
             y(1)=z(1)
             y(2)=z(2)
@@ -443,6 +450,11 @@ if(dodiag) write (123,*) tau2,z
           else
   !
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                            z=z_initial
+                            ierr=2
+                            return
+                        endif
   !
           endif
         else
@@ -454,10 +466,20 @@ if(dodiag) write (123,*) tau2,z
             z(2)=z2
   !
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                            z=z_initial
+                            ierr=2
+                            return
+                        endif
   !
           else
   !
             call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                            z=z_initial
+                            ierr=2
+                            return
+                        endif
   !
             y(1)=z(1)
             y(2)=z(2)
@@ -484,6 +506,11 @@ if(dodiag) write (123,*) tau2,z
           z(2)=z2
   !
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        z=z_initial
+                        ierr=2
+                        return
+                    endif
   !
           y(1)=z(1)
           y(2)=z(2)
@@ -495,6 +522,11 @@ if(dodiag) write (123,*) tau2,z
         else
   !
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        z=z_initial
+                        ierr=2
+                        return
+                    endif
   !
         endif
       else
@@ -506,10 +538,20 @@ if(dodiag) write (123,*) tau2,z
           z(2)=z2
   !
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_axis)
+                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        z=z_initial
+                        ierr=2
+                        return
+                    endif
   !
         else
   !
           call odeint_allroutines(z,ndim,tau1,tau2,relerr,velo_can)
+                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        z=z_initial
+                        ierr=2
+                        return
+                    endif
   !
           y(1)=z(1)
           y(2)=z(2)

@@ -21,6 +21,8 @@ module spectre_fo_hybrid
         real(dp) :: v(3) = 0.0_dp
         real(dp) :: u(3) = 0.0_dp
         real(dp) :: last_y(5) = 0.0_dp
+        real(dp) :: entry_rho = 0.0_dp
+        real(dp) :: entry_pzeta = 0.0_dp
         integer :: owner = 0
         integer :: iface = 0
         logical :: has_y = .false.
@@ -44,6 +46,7 @@ contains
         end if
         state%u = y(1:3)
         state%last_y = y
+        state%entry_rho = y(1)
         state%has_y = .true.
         state%owner = owner
         state%iface = iface
@@ -53,6 +56,7 @@ contains
         vperp = sqrt(max(2.0_dp*y(4)**2 - vpar**2, 0.0_dp))
         call perpendicular_frame(b, e1, e2)
         target = vpar*dot_product(b, e_zeta) + acov(3)/ro0_bar
+        state%entry_pzeta = target
         alpha = 0.0_dp
         if (axisymmetric()) then
             call solve_gyrophase(x_gc, state%u, owner, b, e1, e2, vpar, &
@@ -149,6 +153,13 @@ contains
         if (status /= SPECTRE_FO_OK) return
         vpar = dot_product(state%v, b)
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
+        ! Standard Boris conserves speed exactly but not the canonical momentum
+        ! associated with an ignorable toroidal angle. In an axisymmetric field
+        ! that momentum is an exact physical invariant, including across a
+        ! discontinuous radial sheet. Use the entry value when mapping back to
+        ! GC variables so a short recovery excursion cannot create a hidden
+        ! p_zeta kick.
+        if (axisymmetric()) pzeta = state%entry_pzeta
         vperp = state%v - vpar*b
         rho_l = (ro0_bar/bmod)*cross(b, vperp)
         x_gc = state%x - rho_l
@@ -202,7 +213,12 @@ contains
             e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
         radial_larmor = max(abs(state%u(1) - y_gc(1)), 1.0e-8_dp)
-        exited = abs(y_gc(1) - real(state%iface, dp)) > 4.0_dp*radial_larmor
+        if (state%iface == 0) then
+            exited = abs(y_gc(1) - state%entry_rho) > 4.0_dp*radial_larmor
+        else
+            exited = abs(y_gc(1) - real(state%iface, dp)) > &
+                4.0_dp*radial_larmor
+        end if
         exited = exited .and. abs(bmod_p - bmod_gc)/bmod_gc <= 0.05_dp
         exited = exited .and. norm2(bp - bgc) <= 0.05_dp
     end subroutine check_exit

@@ -194,14 +194,20 @@ contains
     type(fo_state_t), intent(inout) :: fo
     real(dp), intent(inout) :: z(:)
     integer, intent(out) :: ierr
-    real(dp) :: s, th, ph, vpar
+    type(fo_state_t) :: fo_start
+    real(dp) :: s, th, ph, vpar, z_start(size(z))
     integer :: status
 
+    fo_start = fo
+    z_start = z
     call fo_step(fo, status)
     if (status /= FO_OK) then
       ! Inversion unresolved (near-axis below chartmap resolution, or a field-period
       ! seam). NOT a physical loss; fo_step left the state at the last resolved
-      ! position. Hand the caller ierr=3 to end the orbit gracefully as confined.
+      ! position. Roll back both public and hidden pusher state so warning mode
+      ! can consume a true held interval and retry from a meaningful position.
+      fo = fo_start
+      z = z_start
       ierr = ORBIT_FO_NUMERICAL
       call count_event(EVT_FO_FAULT)
       call warn_fo_unresolved
@@ -218,6 +224,8 @@ contains
       call count_event(EVT_FO_LOSS)
       return
     else if (status /= FO_OK) then
+      fo = fo_start
+      z = z_start
       ierr = ORBIT_FO_NUMERICAL
       call count_event(EVT_FO_FAULT)
       call warn_fo_unresolved
@@ -229,18 +237,20 @@ contains
   end subroutine orbit_timestep_fo
 
   ! One-time stderr warning that some full-orbit steps could not invert the
-  ! Cartesian position and fell back to the last resolved field. The benign race on
-  ! `warned` across OpenMP threads at worst prints a few extra lines.
+  ! Cartesian position and were rolled back to the last resolved state.
   subroutine warn_fo_unresolved
     use iso_fortran_env, only: error_unit
     logical, save :: warned = .false.
-    if (warned) return
-    warned = .true.
-    write (error_unit, '(A)') ' WARNING: full-orbit Cartesian inversion unresolved '// &
-      'at some steps (near-axis below chartmap resolution, or a field-period seam). '// &
-      'Those markers end at the last resolved position and are counted CONFINED '// &
-      '(fo_fault), never lost. Refine the chartmap near the axis to remove them.'
-    flush (error_unit)
+    !$omp critical (fo_unresolved_warning)
+    if (.not. warned) then
+      warned = .true.
+      write (error_unit, '(A)') ' WARNING: full-orbit Cartesian inversion unresolved '// &
+        'at some steps (near-axis below chartmap resolution, or a field-period seam). '// &
+        'Warning mode holds that interval at the last resolved state and continues '// &
+        '(fo_fault); it is never counted as a physical loss.'
+      flush (error_unit)
+    end if
+    !$omp end critical (fo_unresolved_warning)
   end subroutine warn_fo_unresolved
 
   subroutine timestep(self, s, th, ph, lam, ierr)

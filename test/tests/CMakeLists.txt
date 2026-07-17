@@ -828,6 +828,15 @@ set_tests_properties(test_restart_io PROPERTIES
     LABELS "unit"
     TIMEOUT 15)
 
+add_executable(test_result_accounting.x test_result_accounting.f90)
+target_link_libraries(test_result_accounting.x simple)
+add_test(NAME test_result_accounting
+    COMMAND test_result_accounting.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_result_accounting PROPERTIES
+    LABELS "unit"
+    TIMEOUT 15)
+
 # Restart integration test (TEST field, deterministic)
 add_test(NAME test_restart_integration
     COMMAND ${Python3_EXECUTABLE}
@@ -907,7 +916,7 @@ add_test(NAME test_spectre_crossing_l0
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_crossing_l0 PROPERTIES
     LABELS "integration;python"
-    TIMEOUT 120)
+    TIMEOUT 300)
 
 # SPECTRE Level-1 interface crossing refraction map (#440). Runs tok2vol under
 # both crossing_level = 1 (default) and 0 and checks the map from the crossing

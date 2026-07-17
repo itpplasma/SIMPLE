@@ -91,9 +91,11 @@ def run(binary, workdir, h5, **kwargs):
 
 
 def split_confined(times_lost, trace_time):
-    confined = times_lost >= trace_time * (1.0 - 1e-9)
-    terminated = (times_lost > 0.0) & (times_lost < trace_time * (1.0 - 1e-9))
-    unresolved = times_lost <= 0.0
+    finite = np.isfinite(times_lost)
+    confined = finite & (times_lost >= trace_time * (1.0 - 1e-9))
+    terminated = (finite & (times_lost > 0.0)
+                  & (times_lost < trace_time * (1.0 - 1e-9)))
+    unresolved = ~finite
     return confined, terminated, unresolved
 
 
@@ -104,40 +106,45 @@ def losses_and_accounting(binary, h5, failures):
         run(binary, work, h5, crossing_level=1)
         tl = np.loadtxt(os.path.join(work, "times_lost.dat"))
         cf = np.loadtxt(os.path.join(work, "confined_fraction.dat"))
+        exit_codes = np.loadtxt(os.path.join(work, "orbit_exit_code.dat"))
         ev_path = os.path.join(work, "spectre_crossing_events.dat")
         crossings_written = os.path.exists(ev_path) and os.path.getsize(ev_path) > 0
 
     if len(tl) != NPART:
         failures.append(f"accounting: times_lost.dat has {len(tl)} rows != {NPART}")
-    if not np.all(np.isfinite(tl[:, 1])):
-        failures.append("accounting: non-finite loss time (unresolved marker)")
-
     confined, terminated, unresolved = split_confined(tl[:, 1], TRACE_TIME)
     n_conf, n_term, n_unres = (int(confined.sum()), int(terminated.sum()),
                                int(unresolved.sum()))
-    if n_unres != 0:
-        failures.append(f"accounting: {n_unres} markers left unresolved "
-                        f"(times_lost <= 0)")
-    if n_conf + n_term != NPART:
-        failures.append(f"accounting: {n_conf} confined + {n_term} terminated "
+    if n_conf + n_term + n_unres != NPART:
+        failures.append(f"accounting: {n_conf} confined + {n_term} terminated + "
+                        f"{n_unres} unresolved "
                         f"!= {NPART} markers")
+    if n_unres != 0:
+        failures.append(f"accounting: default warning run has {n_unres} "
+                        "terminal numerical markers (expected zero)")
+    if not np.all(exit_codes[unresolved, 1] >= 101):
+        failures.append("accounting: unresolved marker lacks numerical exit code")
+    if np.any(exit_codes[confined | terminated, 1] >= 101):
+        failures.append("accounting: resolved marker has numerical exit code")
 
     # confined_fraction.dat is filled by an independent per-timestep confined
     # counter; its final value must equal the times_lost confined count. Breaking
     # the loss tally (counting a lost marker as confined) makes these disagree.
+    n_resolved = n_conf + n_term
     frac_final = cf[-1, 1] + cf[-1, 2]
-    if abs(frac_final - n_conf / NPART) > 0.5 / NPART + 1e-9:
+    if abs(frac_final - n_conf / n_resolved) > 0.5 / n_resolved + 1e-9:
         failures.append(f"accounting: confined_fraction {frac_final:.4f} != "
-                        f"times_lost confined {n_conf / NPART:.4f}")
-    if int(cf[-1, 3]) != NPART:
+                        f"resolved times_lost confined "
+                        f"{n_conf / n_resolved:.4f}")
+    if int(cf[-1, 3]) != n_resolved:
         failures.append(f"accounting: confined_fraction N = {int(cf[-1, 3])}")
     if not crossings_written:
         failures.append("accounting: no spectre_crossing_events.dat produced")
 
     print(f"accounting: confined={n_conf} terminated={n_term} unresolved="
-          f"{n_unres} (sum={n_conf + n_term}={NPART}) "
-          f"cf_final={frac_final:.3f}=({n_conf}/{NPART})")
-    return n_term / NPART
+          f"{n_unres} (sum={n_conf + n_term + n_unres}={NPART}) "
+          f"cf_final={frac_final:.3f}=({n_conf}/{n_resolved})")
+    return n_term / n_resolved
 
 
 def crossing_map_accounting(binary, h5, p1, failures):
@@ -148,9 +155,12 @@ def crossing_map_accounting(binary, h5, p1, failures):
     confined0, terminated0, unresolved0 = split_confined(tl0[:, 1], TRACE_TIME)
     n_conf0, n_term0, n_unres0 = (int(confined0.sum()), int(terminated0.sum()),
                                   int(unresolved0.sum()))
-    if n_conf0 + n_term0 != NPART or n_unres0 != 0:
+    if n_conf0 + n_term0 + n_unres0 != NPART:
         failures.append(f"crossing maps: Level-0 account is {n_conf0} confined + "
                         f"{n_term0} terminated + {n_unres0} unresolved")
+    if n_unres0 != 0:
+        failures.append(f"crossing maps: default warning Level-0 run has "
+                        f"{n_unres0} terminal numerical markers")
 
     with tempfile.TemporaryDirectory() as work:
         run(binary, work, h5, crossing_level=0)
@@ -159,7 +169,7 @@ def crossing_map_accounting(binary, h5, p1, failures):
         failures.append("crossing maps: Level-0 times_lost.dat is not "
                         "bit-identical under a fixed seed")
 
-    p0 = n_term0 / NPART
+    p0 = n_term0 / (n_conf0 + n_term0)
     print(f"crossing maps: loss_fraction L1={p1:.3f} L0={p0:.3f} "
           f"Level-0_account={n_conf0}+{n_term0}+{n_unres0}={NPART} "
           f"Level-0_repeat={'bit-identical' if raw0 == raw0_repeat else 'DIFFERS'}")
