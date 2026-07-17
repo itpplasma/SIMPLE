@@ -96,6 +96,7 @@ program test_sympl_testfield
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
     call test_rk_recovery_regions
+    call test_both_methods_failed_hold
     call test_exit_classification
     call test_fo_lcfs_location
 
@@ -248,6 +249,46 @@ contains
             error stop 'edge recovery did not resume after moving inward'
         end if
     end subroutine test_rk_recovery_regions
+
+    subroutine test_both_methods_failed_hold
+        real(dp), parameter :: initial_state(5) = [0.2_dp, 1.0_dp, 2.0_dp, &
+            1.0_dp, 0.25_dp]
+        type(rk_recovery_state_t) :: recovery
+        real(dp) :: z(5), x_previous(3)
+        integer(int64) :: kt
+        integer :: step_error
+        logical :: numerical_hold
+
+        recovery%active = .true.
+        recovery%both_methods_failed = .true.
+        z = initial_state
+        kt = 0_int64
+        call macrostep(norb, z, kt, step_error, 2, &
+            numerical_hold_any=numerical_hold, rk_recovery=recovery)
+        if (step_error /= 0) error stop 'latched recovery hold stopped the orbit'
+        if (kt /= 2_int64) error stop 'latched recovery did not consume intervals'
+        if (.not. numerical_hold) error stop 'latched recovery lost held status'
+        if (any(z /= initial_state)) &
+            error stop 'latched recovery changed the accepted state'
+        if (.not. recovery%both_methods_failed) &
+            error stop 'latched recovery state was cleared'
+
+        recovery%active = .true.
+        recovery%both_methods_failed = .true.
+        z = initial_state
+        x_previous = 0.0_dp
+        kt = 0_int64
+        call macrostep_with_wall_check(norb, z, kt, step_error, 2, 1, &
+            x_previous, numerical_hold_any=numerical_hold, &
+            rk_recovery=recovery)
+        if (step_error /= 0) error stop 'latched wall hold stopped the orbit'
+        if (kt /= 2_int64) error stop 'latched wall hold did not consume intervals'
+        if (.not. numerical_hold) error stop 'latched wall hold lost held status'
+        if (any(z /= initial_state)) &
+            error stop 'latched wall hold changed the accepted state'
+        if (.not. recovery%both_methods_failed) &
+            error stop 'latched wall recovery state was cleared'
+    end subroutine test_both_methods_failed_hold
 
     subroutine test_exit_classification
         logical :: classifier_lost

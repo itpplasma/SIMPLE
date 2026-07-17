@@ -26,6 +26,10 @@
   still a loss. Set the option to `.false.` for strict diagnostic runs that end
   only the affected marker at the first exhausted recovery and report a
   101--105 `orbit_exit_code` with `NaN` in `times_lost`.
+  A symplectic failure may use the established adaptive-RK pusher from the last
+  accepted state. That fallback is capped at 10,000 internal steps. If both
+  pushers fail from the same state, warning mode records held intervals for the
+  rest of the trace instead of repeating an identical stalled RK solve.
 
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,

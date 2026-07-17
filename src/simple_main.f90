@@ -58,12 +58,14 @@ module simple_main
     real(dp), parameter :: RK_AXIS_ENTER = 0.01_dp
     real(dp), parameter :: RK_AXIS_EXIT = 0.02_dp
     real(dp), parameter :: RK_EDGE_ENTER = 0.98_dp
+    integer, parameter :: RK_RECOVERY_STEP_LIMIT = 10000
 
     type :: rk_recovery_state_t
         logical :: active = .false.
         integer :: reason = RK_RECOVERY_GENERIC
         integer :: steps = 0
         integer :: failures = 0
+        logical :: both_methods_failed = .false.
     end type rk_recovery_state_t
 
 contains
@@ -74,6 +76,7 @@ contains
 
         state%active = .true.
         state%steps = 0
+        state%both_methods_failed = .false.
         state%failures = min(state%failures + 1, 9)
         if (radius < RK_AXIS_ENTER) then
             state%reason = RK_RECOVERY_AXIS
@@ -961,10 +964,10 @@ contains
     end subroutine init_counters
 
     subroutine compute_canonical_frequencies_flat(anorb, initial_state, &
-                                                  n_periods, max_steps, &
-                                                  values, metadata)
+            n_periods, max_steps, &
+            values, metadata)
         use orbit_frequencies, only: frequency_options_t, frequency_result_t, &
-                                     compute_canonical_frequencies
+            compute_canonical_frequencies
 
         type(tracer_t), intent(inout) :: anorb
         real(dp), intent(in) :: initial_state(5)
@@ -1003,9 +1006,9 @@ contains
     end subroutine compute_canonical_frequencies_flat
 
     subroutine trace_to_cut_flat(anorb, initial_state, requested_cut_type, &
-                                 max_events, cut_state, cut_type, status)
+            max_events, cut_state, cut_type, status)
         use cut_detector, only: cut_detector_t, init_cut_detector => init, &
-                                trace_to_cut
+            trace_to_cut
 
         type(tracer_t), intent(inout) :: anorb
         real(dp), intent(in) :: initial_state(5)
@@ -1036,7 +1039,7 @@ contains
 
         do event_index = 1, max_events
             call trace_to_cut(detector, anorb%si, anorb%f, z, cut_state, &
-                              cut_type, ierr)
+                cut_type, ierr)
             if (ierr /= 0) then
                 status = ierr
                 return
@@ -1561,6 +1564,19 @@ contains
         do ktau = 1, ntau_local
             numerical_hold = .false.
             z_step_start = z
+            if (rk_recovery_local%both_methods_failed) then
+                ! This autonomous step has already failed from the same accepted
+                ! state with both pushers. Repeating the identical adaptive-RK
+                ! solve can consume millions of rejected substeps without new
+                ! information, so retain the intervention for the remaining
+                ! intervals and keep its held-time accounting explicit.
+                call count_event(EVT_WARNING_STEP_SKIP)
+                numerical_hold = .true.
+                numerical_hold_any_local = .true.
+                ierr_orbit = 0
+                kt = kt + 1
+                cycle
+            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -1595,7 +1611,13 @@ contains
                 cycle
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
-                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+                if (rk_recovery_local%active) then
+                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
+                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                else
+                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
+                        ierr_orbit)
+                end if
                 if (ierr_orbit == 1) then
                     z_step_end = z
                     call locate_linear_lcfs(z_step_start, z_step_end, &
@@ -1614,6 +1636,8 @@ contains
                     ! The RK driver rolls back failed integration to the last
                     ! accepted state. Apply the same bounded warning convention
                     ! as the symplectic and full-orbit paths.
+                    if (rk_recovery_local%active) &
+                        rk_recovery_local%both_methods_failed = .true.
                     call count_event(EVT_WARNING_STEP_SKIP)
                     hold_streak_local = ierr_orbit
                     numerical_hold = .true.
@@ -1640,7 +1664,7 @@ contains
                     ! exponentially backed-off probe interval.
                     z = z_step_start
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit)
+                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
                     if (ierr_orbit == 0) then
                         call reseed_sympl(anorb%si, anorb%f, z)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
@@ -1660,6 +1684,7 @@ contains
                         exit
                     else
                         z = z_step_start
+                        rk_recovery_local%both_methods_failed = .true.
                         call count_event(EVT_WARNING_STEP_SKIP)
                         hold_streak_local = ierr_orbit
                         numerical_hold = .true.
@@ -1798,8 +1823,22 @@ contains
             numerical_hold = .false.
             segment_duration = 1.0_dp
             z_step_start = z
+            if (rk_recovery_local%both_methods_failed) then
+                call count_event(EVT_WARNING_STEP_SKIP)
+                numerical_hold = .true.
+                numerical_hold_any_local = .true.
+                ierr_orbit = 0
+                kt = kt + 1
+                cycle
+            end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
-                call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr_orbit)
+                if (rk_recovery_local%active) then
+                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
+                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                else
+                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
+                        ierr_orbit)
+                end if
                 if (ierr_orbit == 1) then
                     z_step_end = z
                     call locate_linear_lcfs(z_step_start, z_step_end, &
@@ -1828,6 +1867,8 @@ contains
                     exit
                 else if (ierr_orbit /= 0 .and. &
                         symplectic_newton_warning_mode) then
+                    if (rk_recovery_local%active) &
+                        rk_recovery_local%both_methods_failed = .true.
                     call count_event(EVT_WARNING_STEP_SKIP)
                     hold_streak_local = ierr_orbit
                     numerical_hold = .true.
@@ -1862,7 +1903,7 @@ contains
                     symplectic_newton_warning_mode) then
                     z = z_step_start
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit)
+                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
                     if (ierr_orbit == 0) then
                         call reseed_sympl(anorb%si, anorb%f, z)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
@@ -1899,6 +1940,7 @@ contains
                         exit
                     else
                         z = z_step_start
+                        rk_recovery_local%both_methods_failed = .true.
                         call count_event(EVT_WARNING_STEP_SKIP)
                         hold_streak_local = ierr_orbit
                         numerical_hold = .true.
