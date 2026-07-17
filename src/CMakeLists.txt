@@ -103,6 +103,11 @@ list(APPEND SOURCES
 
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
+# `diag_albert.f90` consumes pyplot_module.mod while `pyplot` is a separate
+# target. A link edge alone does not order compilation of the dependent target
+# under Ninja, so a clean parallel build can compile diag_albert before the
+# module file exists.
+add_dependencies(simple pyplot)
 
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
