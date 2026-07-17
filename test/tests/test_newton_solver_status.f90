@@ -277,9 +277,13 @@ contains
       strict_integrator%atol = 0.0_dp
       symplectic_newton_warning_mode = .false.
       call orbit_timestep_sympl(strict_integrator, strict_field, step_status)
-      if (step_status /= SYMPLECTIC_STEP_MAXITER) then
+      ! The Lobatto path can detect a candidate boundary while exhausting the
+      ! forced-zero tolerance solve. Both statuses are strict numerical
+      ! failures, and both must roll back the accepted state.
+      if (step_status /= SYMPLECTIC_STEP_MAXITER .and. &
+          step_status /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) then
         print *, 'strict mode, status:', modes(mode_index), step_status
-        error stop 'strict timestep did not report max iterations'
+        error stop 'strict timestep did not report a numerical failure'
       end if
       if (any(strict_integrator%z /= initial_state)) then
         error stop 'strict max-iteration failure changed the accepted state'
