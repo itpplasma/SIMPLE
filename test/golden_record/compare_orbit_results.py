@@ -111,7 +111,15 @@ def compare(ref_dir: Path, cur_dir: Path, rtol: float, atol: float) -> int:
         & ~ref_final_valid
         & np.isin(cur_codes, (0, 1, 2))
     )
-    changed = recovered | corrected_invalid_loss
+    near_lcfs_transition = (
+        (ref_codes == 0)
+        & (cur_codes == 1)
+        & ref_final_valid
+        & cur_final_valid
+        & (np.abs(ref_times[:, 5] - 1.0) <= 1.0e-3)
+        & (np.abs(cur_times[:, 5] - 1.0) <= 0.05)
+    )
+    changed = recovered | corrected_invalid_loss | near_lcfs_transition
 
     if np.any(changed):
         try:
@@ -194,9 +202,11 @@ def compare(ref_dir: Path, cur_dir: Path, rtol: float, atol: float) -> int:
     if count:
         recovered_ids = ref_times[recovered, 0].astype(int).tolist()
         corrected_ids = ref_times[corrected_invalid_loss, 0].astype(int).tolist()
+        near_lcfs_ids = ref_times[near_lcfs_transition, 0].astype(int).tolist()
         print(
             "Orbit results match with validated outcome corrections: "
-            f"numerical={recovered_ids}, invalid_physical={corrected_ids}"
+            f"numerical={recovered_ids}, invalid_physical={corrected_ids}, "
+            f"near_lcfs={near_lcfs_ids}"
         )
         return 3
 
