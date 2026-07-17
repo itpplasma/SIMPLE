@@ -52,6 +52,51 @@ First verify the bindings import cleanly:
 Complete examples are in ``examples/simple_api.py``, ``examples/classify_fast.py``,
 and ``examples/classify_fractal.py``.
 
+Canonical orbit frequencies
+---------------------------
+
+``compute_canonical_frequencies`` traces one particle until it completes the
+requested number of poloidal cycles:
+
+.. code-block:: python
+
+    position = [0.6, 0.0, 0.25 * np.pi, 1.0, 0.3]
+    frequency = pysimple.compute_canonical_frequencies(
+        position, integrator="midpoint", n_periods=4
+    )
+    print(frequency["omega_b"], frequency["omega_phi"])
+
+For trapped particles, a cycle is measured between same-direction
+``v_parallel = 0`` crossings. For passing particles, it is measured between
+successive signed ``2*pi`` advances of the unwrapped poloidal angle. The
+toroidal displacement is also unwrapped. Periods are seconds, displacements
+are radians, and both frequencies are angular frequencies in rad/s.
+
+Use ``n_periods=1`` for the inexpensive single-cycle value in an axisymmetric
+field. Larger values return the mean and sample spread over several cycles,
+which is useful in asymmetric fields. Always inspect ``status`` before using a
+result; losses, integrator errors, and the maximum-step limit remain visible
+instead of being silently discarded. An orbit that leaves the plasma through
+the outer radial boundary reports ``FREQ_ORBIT_LOST``.
+
+The particle species and energy follow the same defaults as ``simple.in``
+(3.5 MeV alphas). A frequency computed for a different particle needs the
+matching overrides in ``init``, for example a 5 keV deuteron:
+
+.. code-block:: python
+
+    pysimple.init("field.nc", deterministic=True, n_e=1, n_d=2, facE_al=700.0)
+
+A fast particle in a small equilibrium can be genuinely unconfined; a
+``FREQ_ORBIT_LOST`` result for a seed that should be confined usually means
+the species/energy overrides are missing.
+
+The same event machinery is available as ``pysimple.trace_to_cut``. Select
+``cut="tip"`` for a same-direction ``v_parallel=0`` section or
+``cut="toroidal"`` for a field-period section. The returned state is converted
+back to public reference coordinates. This driver currently requires one of
+SIMPLE's symplectic integrators.
+
 Legacy script note
 ------------------
 

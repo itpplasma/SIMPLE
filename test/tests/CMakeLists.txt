@@ -350,6 +350,13 @@ if (ENABLE_OPENMP)
         COMMAND test_sympl_testfield.x
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+    add_executable(test_orbit_frequencies.x test_orbit_frequencies.f90)
+    target_link_libraries(test_orbit_frequencies.x simple)
+    add_test(NAME test_orbit_frequencies
+        COMMAND test_orbit_frequencies.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_orbit_frequencies PROPERTIES TIMEOUT 120 LABELS "physics")
+
     # Axis-crossing regression (issue #370): near-axis trapped orbits must
     # never be lost at the axis and must conserve energy across crossings.
     add_executable(test_axis_crossing.x test_axis_crossing.f90)

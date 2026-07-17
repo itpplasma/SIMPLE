@@ -913,6 +913,102 @@ contains
         boundary_event_time_width = -1d0
     end subroutine init_counters
 
+    subroutine compute_canonical_frequencies_flat(anorb, initial_state, &
+                                                  n_periods, max_steps, &
+                                                  values, metadata)
+        use orbit_frequencies, only: frequency_options_t, frequency_result_t, &
+                                     compute_canonical_frequencies
+
+        type(tracer_t), intent(inout) :: anorb
+        real(dp), intent(in) :: initial_state(5)
+        integer, intent(in) :: n_periods, max_steps
+        real(dp), intent(out) :: values(6)
+        integer, intent(out) :: metadata(5)
+
+        type(frequency_options_t) :: options
+        type(frequency_result_t) :: result
+        real(dp) :: z(5)
+
+        call ref_to_integ(initial_state(1:3), z(1:3))
+        z(4:5) = initial_state(4:5)
+
+        anorb%dtaumin = dtaumin
+        anorb%dtau = dtaumin
+        anorb%v0 = v0
+        anorb%relerr = relerr
+        anorb%integmode = integmode
+        options%n_periods = n_periods
+        options%max_steps = max_steps
+
+        call compute_canonical_frequencies(anorb, z, options, result)
+
+        values(1) = result%period
+        values(2) = result%period_std
+        values(3) = result%delta_phi
+        values(4) = result%delta_phi_std
+        values(5) = result%omega_b
+        values(6) = result%omega_phi
+        metadata(1) = result%status
+        metadata(2) = result%orbit_class
+        metadata(3) = result%parallel_direction
+        metadata(4) = result%n_periods
+        metadata(5) = result%n_steps
+    end subroutine compute_canonical_frequencies_flat
+
+    subroutine trace_to_cut_flat(anorb, initial_state, requested_cut_type, &
+                                 max_events, cut_state, cut_type, status)
+        use cut_detector, only: cut_detector_t, init_cut_detector => init, &
+                                trace_to_cut
+
+        type(tracer_t), intent(inout) :: anorb
+        real(dp), intent(in) :: initial_state(5)
+        integer, intent(in) :: requested_cut_type, max_events
+        real(dp), intent(out) :: cut_state(6)
+        integer, intent(out) :: cut_type, status
+
+        type(cut_detector_t) :: detector
+        real(dp) :: z(5), reference_position(3)
+        integer :: event_index, ierr
+
+        cut_state = 0.0_dp
+        cut_type = -1
+        status = 1
+        if (requested_cut_type < -1 .or. requested_cut_type > 1) return
+        if (max_events < 1 .or. integmode <= 0) return
+
+        call ref_to_integ(initial_state(1:3), z(1:3))
+        z(4:5) = initial_state(4:5)
+        anorb%dtaumin = dtaumin
+        anorb%dtau = dtaumin
+        anorb%v0 = v0
+        anorb%relerr = relerr
+        anorb%integmode = integmode
+
+        call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
+        call init_cut_detector(detector, anorb%fper, z)
+
+        do event_index = 1, max_events
+            call trace_to_cut(detector, anorb%si, anorb%f, z, cut_state, &
+                              cut_type, ierr)
+            if (ierr /= 0) then
+                status = ierr
+                return
+            end if
+            if (requested_cut_type == -1) exit
+            if (cut_type == requested_cut_type) exit
+        end do
+
+        if (requested_cut_type /= -1) then
+            if (cut_type /= requested_cut_type) then
+                status = 4
+                return
+            end if
+        end if
+
+        call integ_to_ref(cut_state(1:3), reference_position)
+        cut_state(1:3) = reference_position
+        status = 0
+    end subroutine trace_to_cut_flat
     pure integer function classify_orbit_exit(ierr_orbit, model, mode, &
             boundary_is_lcfs)
         integer, intent(in) :: ierr_orbit, model, mode

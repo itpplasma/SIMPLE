@@ -63,6 +63,19 @@ _INTEGRATOR_ALIASES: dict[str, int] = {
     "lobatto3": LOBATTO3,
 }
 
+ORBIT_CLASS_UNKNOWN = 0
+ORBIT_CLASS_TRAPPED = 1
+ORBIT_CLASS_PASSING = 2
+
+FREQ_SUCCESS = 0
+FREQ_INVALID_INPUT = 1
+FREQ_ORBIT_LOST = 2
+FREQ_INTEGRATOR_ERROR = 3
+FREQ_MAX_STEPS = 4
+
+CUT_TIP = 0
+CUT_TOROIDAL = 1
+
 # Default spline orders used by Fortran
 DEFAULT_NS_S = 5
 DEFAULT_NS_TP = 5
@@ -71,6 +84,7 @@ DEFAULT_MULTHARM = 5
 # Field type constants (mirroring magfie_sub.f90)
 _TEST_FIELD_ID = -1
 _VMEC_FIELD_ID = 1
+_BOOZER_FIELD_ID = 2
 
 # Direct access to Fortran params module
 params = _fortran_backend.params
@@ -81,12 +95,29 @@ _simple_main = _fortran_backend.Simple_Main()
 # Module state
 _initialized = False
 _current_vmec: str | None = None
+_current_chartmap = False
 _tracer: "_fortran_backend.simple.tracer_t | None" = None
 _field_key: "tuple | None" = None
 
 
 def _is_test_field() -> bool:
     return int(_fortran_backend.velo_mod.isw_field_type) == _TEST_FIELD_ID
+
+
+def _is_boozer_chartmap(path: str) -> bool:
+    """Return whether *path* declares the Boozer chart-map file contract."""
+    try:
+        import netCDF4
+    except ImportError as exc:
+        raise ImportError(
+            "netCDF4 is required to initialize SIMPLE from a NetCDF equilibrium"
+        ) from exc
+
+    try:
+        with netCDF4.Dataset(path, "r") as dataset:
+            return int(dataset.getncattr("boozer_field")) == 1
+    except (AttributeError, OSError, TypeError, ValueError):
+        return False
 
 
 def _sampling_rng() -> np.random.Generator:
@@ -157,12 +188,23 @@ def init(
     >>> import pysimple
     >>> pysimple.init('wout.nc', deterministic=True, ntestpart=1000, trace_time=1e-3)
     """
-    global _initialized, _current_vmec, _tracer, _trace_initialized, _field_key
+    global _initialized, _current_vmec, _current_chartmap, _tracer
+    global _trace_initialized, _field_key
 
     # Reset trace initialization flag to ensure field pointers are updated
     _trace_initialized = False
 
     vmec_path = str(Path(vmec_file).expanduser().resolve())
+    chartmap_mode = _is_boozer_chartmap(vmec_path)
+
+    # A Boozer chart map is already expressed in the canonical coordinates
+    # required by the symplectic integrators.  Select that representation when
+    # the caller has not explicitly requested a field type.
+    explicit_field_type = {"isw_field_type", "integ_coords"} & param_overrides.keys()
+    if chartmap_mode and not explicit_field_type:
+        _fortran_backend.velo_mod.isw_field_type = _BOOZER_FIELD_ID
+        if hasattr(params, "integ_coords"):
+            params.integ_coords = _BOOZER_FIELD_ID
 
     # Step 1: Set parameters (replaces read_config without file I/O)
     params.netcdffile = vmec_path
@@ -183,10 +225,14 @@ def init(
             _fortran_backend.velo_mod.isw_field_type = value_int
             if hasattr(params, "integ_coords"):
                 params.integ_coords = value_int
-        elif not hasattr(params, key):
+            continue
+        # Fortran namelist names are case-insensitive (e.g. facE_al in
+        # simple.in), while f90wrap exposes them lowercased.
+        if not hasattr(params, key):
+            key = key.lower()
+        if not hasattr(params, key):
             raise ValueError(f"Unknown SIMPLE parameter: {key}")
-        else:
-            setattr(params, key, value)
+        setattr(params, key, value)
 
     if hasattr(params, "apply_config_aliases"):
         params.apply_config_aliases()
@@ -212,6 +258,18 @@ def init(
         )
         _field_key = field_key
 
+    field_type = int(_fortran_backend.velo_mod.isw_field_type)
+
+    # Chart-map inputs do not carry a VMEC wout.  Point magfie at the Boozer
+    # chart-map field before params_init(), whose stevvo setup evaluates B.
+    if chartmap_mode:
+        if field_type != _BOOZER_FIELD_ID:
+            raise ValueError(
+                "Boozer chart-map input requires isw_field_type=2 "
+                "(or omit isw_field_type to select it automatically)"
+            )
+        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
+
     # Step 3: params_init (same as Fortran main())
     # This calls reset_seed_if_deterministic() internally!
     # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
@@ -220,12 +278,13 @@ def init(
 
     # Step 4: init_magfie - set function pointer for magnetic field evaluation
     # Use isw_field_type from velo_mod (set via param_overrides above)
-    field_type = int(_fortran_backend.velo_mod.isw_field_type)
-
     # Step 5: init_starting_surf (required for non-TEST fields)
     # Match Fortran driver ordering: initialize VMEC magfie for surface setup,
     # then restore requested field type for tracing.
-    if field_type != _TEST_FIELD_ID:
+    if chartmap_mode:
+        samplers = _fortran_backend.Samplers()
+        samplers.init_starting_surf()
+    elif field_type != _TEST_FIELD_ID:
         _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
         samplers = _fortran_backend.Samplers()
         samplers.init_starting_surf()
@@ -235,6 +294,7 @@ def init(
 
     _initialized = True
     _current_vmec = vmec_path
+    _current_chartmap = chartmap_mode
 
 
 def sample_surface(n_particles: int, s: float) -> np.ndarray:
@@ -424,7 +484,8 @@ def _sync_single_surface_state(surface_s: float) -> None:
 
     _fortran_backend.params_wrapper.set_sbeg(1, float(surface_s))
     field_type = int(_fortran_backend.velo_mod.isw_field_type)
-    _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
+    setup_field_type = field_type if _current_chartmap else _VMEC_FIELD_ID
+    _fortran_backend.magfie_wrapper.wrapper_init_magfie(setup_field_type)
     _fortran_backend.Samplers().init_starting_surf()
     _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
 
@@ -569,6 +630,143 @@ def trace_orbit(
     finally:
         if test_bounds is not None:
             _restore_test_field_bounds(test_bounds)
+
+
+def compute_canonical_frequencies(
+    position: np.ndarray,
+    *,
+    integrator: str | int = MIDPOINT,
+    n_periods: int = 1,
+    max_steps: int = 10_000_000,
+) -> dict[str, float | int | str]:
+    """Compute bounce/transit and mean toroidal frequencies for one orbit.
+
+    ``position`` is ``[s, theta, phi, v/v0, lambda]`` in the public
+    reference coordinates. Set ``n_periods=1`` for a symmetric configuration
+    or use more periods to quantify cycle variation in an asymmetric field.
+    Periods are seconds, angles radians, and frequencies rad/s.
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
+
+    position = np.ascontiguousarray(position, dtype=np.float64)
+    if position.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {position.shape}")
+    if n_periods < 1:
+        raise ValueError("n_periods must be at least one")
+    if max_steps < 1:
+        raise ValueError("max_steps must be at least one")
+
+    params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(position)
+
+    values = np.zeros(6, dtype=np.float64)
+    metadata = np.zeros(5, dtype=np.int32)
+    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
+
+    try:
+        if test_bounds is not None:
+            _apply_test_field_bounds(float(position[0]))
+        _simple_main.compute_canonical_frequencies_flat(
+            _tracer,
+            position,
+            int(n_periods),
+            int(max_steps),
+            values,
+            metadata,
+        )
+    finally:
+        if test_bounds is not None:
+            _restore_test_field_bounds(test_bounds)
+
+    orbit_names = {
+        ORBIT_CLASS_UNKNOWN: "unknown",
+        ORBIT_CLASS_TRAPPED: "trapped",
+        ORBIT_CLASS_PASSING: "passing",
+    }
+    orbit_class = int(metadata[1])
+    return {
+        "period": float(values[0]),
+        "period_std": float(values[1]),
+        "delta_phi": float(values[2]),
+        "delta_phi_std": float(values[3]),
+        "omega_b": float(values[4]),
+        "omega_phi": float(values[5]),
+        "status": int(metadata[0]),
+        "orbit_class": orbit_names.get(orbit_class, "unknown"),
+        "orbit_class_code": orbit_class,
+        "parallel_direction": int(metadata[2]),
+        "n_periods": int(metadata[3]),
+        "n_steps": int(metadata[4]),
+    }
+
+
+def trace_to_cut(
+    position: np.ndarray,
+    *,
+    cut: str | int = "tip",
+    integrator: str | int = MIDPOINT,
+    max_events: int = 100,
+) -> dict[str, np.ndarray | float | int | str]:
+    """Trace one orbit to an interpolated tip or toroidal-period cut."""
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    cut_aliases = {"any": -1, "tip": CUT_TIP, "toroidal": CUT_TOROIDAL}
+    if isinstance(cut, str):
+        key = cut.lower()
+        if key not in cut_aliases:
+            raise ValueError(f"Unknown cut: {cut}")
+        cut_code = cut_aliases[key]
+    else:
+        cut_code = int(cut)
+        if cut_code not in {-1, CUT_TIP, CUT_TOROIDAL}:
+            raise ValueError(f"Unknown cut: {cut}")
+
+    if isinstance(integrator, str):
+        key = integrator.lower()
+        if key not in _INTEGRATOR_ALIASES:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        integrator_code = _INTEGRATOR_ALIASES[key]
+    else:
+        integrator_code = int(integrator)
+    if integrator_code <= RK45:
+        raise ValueError("trace_to_cut requires a symplectic integrator")
+    if max_events < 1:
+        raise ValueError("max_events must be at least one")
+
+    position = np.ascontiguousarray(position, dtype=np.float64)
+    if position.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {position.shape}")
+
+    params.integmode = integrator_code
+    _ensure_trace_initialized()
+    _maybe_sync_single_surface_state(position)
+    cut_state = np.zeros(6, dtype=np.float64)
+    cut_type, status = _simple_main.trace_to_cut_flat(
+        _tracer,
+        position,
+        cut_code,
+        int(max_events),
+        cut_state,
+    )
+    cut_names = {CUT_TIP: "tip", CUT_TOROIDAL: "toroidal"}
+    return {
+        "state": np.ascontiguousarray(cut_state[:5]),
+        "parallel_invariant": float(cut_state[5]),
+        "cut_type": cut_names.get(int(cut_type), "unknown"),
+        "cut_type_code": int(cut_type),
+        "status": int(status),
+    }
 
 
 def trace_parallel(
