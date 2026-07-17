@@ -27,8 +27,8 @@ def _write_case(path: Path, times: np.ndarray, exits: np.ndarray) -> None:
 def _base_tables() -> tuple[np.ndarray, np.ndarray]:
     times = np.array(
         [
-            [1.0, 1.0e-4, 1.0, 0.3],
-            [2.0, 4.0e-5, -1.0, 0.3],
+            [1.0, 1.0e-4, 1.0, 0.3, 0.2, 0.4, 0.1, 0.2, 1.0, 0.0],
+            [2.0, 4.0e-5, -1.0, 0.3, 0.2, 1.0, 0.2, 0.3, 1.0, 0.0],
         ]
     )
     exits = np.array(
@@ -100,6 +100,18 @@ def test_unrelated_columns_on_recovered_marker_still_fail(tmp_path: Path) -> Non
     _write_case(tmp_path / "ref", ref_times, ref_exits)
     _write_case(tmp_path / "cur", cur_times, cur_exits)
     assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 1
+
+
+def test_recovered_marker_may_have_a_new_final_state(tmp_path: Path) -> None:
+    ref_times, ref_exits = _base_tables()
+    ref_times[0, 1] = np.nan
+    ref_times[0, 5:10] = np.nan
+    ref_exits[0, 1:3] = [105.0, np.nan]
+    cur_times, cur_exits = _base_tables()
+    cur_times[0, 5:10] = [0.8, 0.2, 0.4, 0.9, -0.1]
+    _write_case(tmp_path / "ref", ref_times, ref_exits)
+    _write_case(tmp_path / "cur", cur_times, cur_exits)
+    assert MODULE.compare(tmp_path / "ref", tmp_path / "cur", 1.0e-7, 1.0e-12) == 3
 
 
 def test_non_numerical_reference_transition_fails(tmp_path: Path) -> None:

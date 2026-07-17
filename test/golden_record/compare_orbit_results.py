@@ -4,8 +4,8 @@
 The reference build can terminate a marker numerically where the current build
 recovers it.  That one transition is intentional: reference exit code 101--105
 and a NaN loss time may become current code 0, 1, or 2 with a physically valid
-time.  Every unaffected row and every other output column remain subject to the
-ordinary golden tolerances.
+time and final state. Every unaffected row, plus the recovered marker's id and
+initial invariants, remain subject to the ordinary golden tolerances.
 """
 
 from __future__ import annotations
@@ -112,10 +112,14 @@ def compare(ref_dir: Path, cur_dir: Path, rtol: float, atol: float) -> int:
             print(f"invalid numerical-recovery outcome for particles {bad_ids}")
             return 1
 
-    # Compare all ordinary results.  For a proven recovered row only the loss
-    # time and exit-status record cease to have a like-for-like reference.
+    # Compare all ordinary results. For a proven recovered row, the loss time,
+    # exit status, and final phase-space state cease to have a like-for-like
+    # reference: the reference marker stopped before producing that endpoint.
+    # Particle id and initial marker invariants remain protected below.
     ref_times_cmp = ref_times.copy()
     ref_times_cmp[recovered, 1] = cur_times[recovered, 1]
+    if ref_times.shape[1] >= 10:
+        ref_times_cmp[recovered, 5:10] = cur_times[recovered, 5:10]
     times_ok = np.isclose(
         ref_times_cmp, cur_times, rtol=rtol, atol=atol, equal_nan=True
     )
