@@ -5,6 +5,7 @@ Tests for the cleaned SIMPLE Python API.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -62,11 +63,48 @@ class TestInitialization:
             npoiper2=64
         )
 
+    def test_init_accepts_namelist_case(self, vmec_file: str):
+        """init() should accept namelist-cased names such as facE_al."""
+        pysimple.init(
+            vmec_file,
+            deterministic=True,
+            trace_time=1e-4,
+            ntestpart=1,
+            facE_al=700.0,
+            n_d=2,
+            n_e=1,
+        )
+        assert float(pysimple.params.face_al) == 700.0
+
     def test_multiple_reinitializations(self, vmec_file: str):
         """Multiple init() calls should work without crash"""
         pysimple.init(vmec_file, deterministic=True, trace_time=1e-4)
         pysimple.init(vmec_file, deterministic=True, trace_time=1e-3)
         pysimple.init(vmec_file, deterministic=True, trace_time=5e-5)
+
+    def test_chartmap_init_selects_boozer_field(self):
+        """Chart-map initialization must not attempt to load a VMEC wout."""
+        chartmap_file = os.environ["SIMPLE_TEST_CHARTMAP"]
+        pysimple.init(
+            chartmap_file,
+            deterministic=True,
+            ntestpart=1,
+            npoiper2=64,
+            trace_time=1e-4,
+        )
+        assert int(pysimple._fortran_backend.velo_mod.isw_field_type) == 2
+        result = pysimple.compute_canonical_frequencies(
+            np.array([0.4, 0.7, 0.1, 1.0, 0.1]),
+            n_periods=1,
+            max_steps=10,
+        )
+        # A boundary stop is a physical loss (FREQ_ORBIT_LOST), never an
+        # unexplained FREQ_INTEGRATOR_ERROR.
+        assert result["status"] in {
+            pysimple.FREQ_SUCCESS,
+            pysimple.FREQ_ORBIT_LOST,
+            pysimple.FREQ_MAX_STEPS,
+        }
 
 
 class TestIntegratorSelection:
@@ -219,6 +257,57 @@ class TestTraceOrbits:
         assert 'times' in result
         assert result['trajectory'].shape[0] == 5
         assert result['times'].shape[0] == result['trajectory'].shape[1]
+
+    def test_canonical_frequencies(self, vmec_file: str):
+        pysimple.init(
+            vmec_file,
+            deterministic=True,
+            ntestpart=1,
+            npoiper2=1024,
+            trace_time=1e-3,
+        )
+        trapped = np.array([0.4, 0.7, 0.1, 1.0, 0.1])
+        result = pysimple.compute_canonical_frequencies(
+            trapped,
+            integrator="midpoint",
+            n_periods=2,
+        )
+
+        assert result["status"] == pysimple.FREQ_SUCCESS
+        assert result["orbit_class"] == "trapped"
+        assert result["n_periods"] == 2
+        assert result["period"] > 0.0
+        assert result["omega_b"] > 0.0
+        assert result["omega_b"] == pytest.approx(2.0 * np.pi / result["period"])
+
+    def test_canonical_frequency_validation(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True, ntestpart=1)
+        particle = np.array([0.4, 0.7, 0.1, 1.0, 0.9])
+
+        with pytest.raises(ValueError, match="n_periods"):
+            pysimple.compute_canonical_frequencies(particle, n_periods=0)
+        with pytest.raises(ValueError, match="max_steps"):
+            pysimple.compute_canonical_frequencies(particle, max_steps=0)
+        with pytest.raises(ValueError, match="shape"):
+            pysimple.compute_canonical_frequencies(particle[:4])
+
+    def test_trace_to_tip(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True, ntestpart=1, npoiper2=1024)
+        particle = np.array([0.4, 0.7, 0.1, 1.0, 0.1])
+        result = pysimple.trace_to_cut(particle, cut="tip", max_events=10)
+
+        assert result["status"] == 0
+        assert result["cut_type"] == "tip"
+        assert result["state"].shape == (5,)
+        assert abs(result["state"][4]) < 1e-6
+
+    def test_trace_to_cut_validation(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True, ntestpart=1)
+        particle = np.array([0.4, 0.7, 0.1, 1.0, 0.9])
+        with pytest.raises(ValueError, match="Unknown cut"):
+            pysimple.trace_to_cut(particle, cut="poloidal")
+        with pytest.raises(ValueError, match="symplectic"):
+            pysimple.trace_to_cut(particle, integrator="rk45")
 
     def test_trace_parallel_preserves_skipped_passing_sentinel(self, vmec_file: str):
         """Deep-passing particles skipped by contr_pp must keep loss_time = -1."""

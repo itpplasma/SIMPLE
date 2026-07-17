@@ -49,6 +49,7 @@
     cut_detector.f90
     classification.f90
     simple.f90
+    orbit_frequencies.f90
     parse_ants.f90
     profiles.f90
     collis_alphas.f90
@@ -92,12 +93,21 @@ list(APPEND SOURCES
 
     add_library (simple STATIC ${SOURCES})
 
+    target_include_directories(simple PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>
+    )
+
     if(SIMPLE_ENABLE_CGAL)
         target_link_libraries(simple PUBLIC stl_wall_cgal)
     endif()
 
 # Link pyplot library to SIMPLE
 target_link_libraries(simple PUBLIC pyplot)
+# `diag_albert.f90` consumes pyplot_module.mod while `pyplot` is a separate
+# target. A link edge alone does not order compilation of the dependent target
+# under Ninja, so a clean parallel build can compile diag_albert before the
+# module file exists.
+add_dependencies(simple pyplot)
 
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})
