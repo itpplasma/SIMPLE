@@ -39,7 +39,8 @@ program test_sympl_testfield
     use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
-        macrostep, macrostep_with_wall_check, rk_recovery_state_t, &
+        locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
+        rk_recovery_state_t, validate_rk_state, &
         activate_rk_recovery, should_resume_symplectic
     use simple, only : tracer_t, init_sympl, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
     use params, only : isw_field_type, field_input, coord_input, integmode, &
@@ -99,6 +100,8 @@ program test_sympl_testfield
     call test_both_methods_failed_hold
     call test_exit_classification
     call test_fo_lcfs_location
+    call test_validated_rk_lcfs_location
+    call test_rk_state_validation
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -377,5 +380,52 @@ contains
             error stop 'full-orbit field-period seam was not interpolated periodically'
         end if
     end subroutine test_fo_lcfs_location
+
+    subroutine test_validated_rk_lcfs_location
+        real(dp), parameter :: z_before(5) = [0.9_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+            -0.5_dp]
+        real(dp), parameter :: z_after(5) = [1.1_dp, 0.4_dp, 0.5_dp, 2.0_dp, &
+            0.5_dp]
+        real(dp), parameter :: z_gross_jump(5) = [100.0_dp, 0.4_dp, 0.5_dp, &
+            2.0_dp, 0.5_dp]
+        real(dp), parameter :: tolerance = 32.0_dp*epsilon(1.0_dp)
+        real(dp) :: z_event(5), event_fraction
+        integer :: step_error
+
+        step_error = 1
+        call locate_validated_lcfs(z_before, z_after, 6.0_dp, z_event, &
+            event_fraction, step_error)
+        if (step_error /= 1 .or. abs(event_fraction - 0.5_dp) > tolerance .or. &
+            abs(z_event(1) - 1.0_dp) > tolerance) then
+            error stop 'valid adaptive-RK LCFS crossing was rejected'
+        end if
+
+        step_error = 1
+        call locate_validated_lcfs(z_before, z_gross_jump, 6.0_dp, z_event, &
+            event_fraction, step_error)
+        if (step_error /= 2 .or. event_fraction /= 0.0_dp .or. &
+            any(z_event /= z_before)) then
+            error stop 'gross adaptive-RK jump was classified as a physical loss'
+        end if
+    end subroutine test_validated_rk_lcfs_location
+
+    subroutine test_rk_state_validation
+        real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+            -0.5_dp]
+        real(dp) :: z_after(5)
+        integer :: step_error
+
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 0.5_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error)
+        if (step_error /= 0) error stop 'valid adaptive-RK state was rejected'
+
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 2.0_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error)
+        if (step_error /= 2 .or. any(z_after /= z_before)) then
+            error stop 'invalid adaptive-RK state was committed'
+        end if
+    end subroutine test_rk_state_validation
 
 end program test_sympl_testfield

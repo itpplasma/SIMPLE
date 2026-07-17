@@ -7,7 +7,8 @@ module simple_main
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use samplers, only: sample
-    use field_can_mod, only: integ_to_ref, ref_to_integ, init_field_can
+    use field_can_mod, only: field_can_t, integ_to_ref, ref_to_integ, &
+        init_field_can
     use callback, only: output_orbits_macrostep
     use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
         grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
@@ -37,7 +38,8 @@ module simple_main
         stl_wall_finalize, &
         stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
-    use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
+    use orbit_symplectic_base, only: symplectic_integrator_t, &
+        SYMPLECTIC_STEP_BOUNDARY, &
         SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
         SYMPLECTIC_STEP_LINEAR_SOLVE, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
         SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode
@@ -1533,6 +1535,66 @@ contains
             event_fraction*(z_end(4:5) - z_start(4:5))
     end subroutine locate_linear_lcfs
 
+    subroutine locate_validated_lcfs(z_start, z_end, field_period, z_event, &
+            event_fraction, ierr)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z_start(5), z_end(5), field_period
+        real(dp), intent(out) :: z_event(5), event_fraction
+        integer, intent(inout) :: ierr
+        real(dp), parameter :: radial_sanity_band = 0.05_dp
+        real(dp), parameter :: max_local_radial_step = 0.5_dp
+        real(dp) :: u_event(3)
+
+        if (.not. all(ieee_is_finite(z_start)) .or. &
+            .not. all(ieee_is_finite(z_end)) .or. &
+            abs(z_end(1) - z_start(1)) > max_local_radial_step) then
+            z_event = z_start
+            event_fraction = 0.0_dp
+            ierr = 2
+            return
+        end if
+
+        call locate_linear_lcfs(z_start, z_end, field_period, z_event, &
+            event_fraction)
+        call integ_to_ref(z_event(1:3), u_event)
+        if (all(ieee_is_finite(z_event)) .and. &
+            all(ieee_is_finite(u_event)) .and. &
+            abs(u_event(1) - 1.0_dp) <= radial_sanity_band) return
+
+        ! The legacy RK chamber flag is based on its first integration
+        ! coordinate. In a canonical map, a gross numerical jump can therefore
+        ! resemble an LCFS crossing. Do not turn that failure into a physical
+        ! loss unless the candidate is local and maps back to a finite LCFS point.
+        z_event = z_start
+        event_fraction = 0.0_dp
+        ierr = 2
+    end subroutine locate_validated_lcfs
+
+    subroutine validate_rk_state(z_start, z_end, ierr)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z_start(5)
+        real(dp), intent(inout) :: z_end(5)
+        integer, intent(inout) :: ierr
+        real(dp), parameter :: radial_sanity_band = 0.05_dp
+        real(dp), parameter :: max_local_radial_step = 0.5_dp
+        real(dp) :: u_end(3)
+
+        if (ierr /= 0) return
+        if (all(ieee_is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
+            abs(z_end(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
+            abs(z_end(1) - z_start(1)) <= max_local_radial_step) then
+            call integ_to_ref(z_end(1:3), u_end)
+            if (all(ieee_is_finite(u_end)) .and. &
+                u_end(1) >= -radial_sanity_band .and. &
+                u_end(1) <= 1.0_dp + radial_sanity_band) return
+        end if
+
+        z_end = z_start
+        ierr = 2
+    end subroutine validate_rk_state
+
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
             hold_streak, numerical_hold_any, rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
@@ -1553,6 +1615,8 @@ contains
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
         logical :: numerical_hold, numerical_hold_any_local
         type(rk_recovery_state_t) :: rk_recovery_local
+        type(symplectic_integrator_t) :: si_step_start
+        type(field_can_t) :: f_step_start
 
         if (present(exit_step)) exit_step = real(kt, dp)
         hold_streak_local = 0
@@ -1618,10 +1682,13 @@ contains
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
+                call validate_rk_state(z_step_start, z, ierr_orbit)
                 if (ierr_orbit == 1) then
                     z_step_end = z
-                    call locate_linear_lcfs(z_step_start, z_step_end, &
-                        anorb%fper, z, loss_fraction)
+                    call locate_validated_lcfs(z_step_start, z_step_end, &
+                        anorb%fper, z, loss_fraction, ierr_orbit)
+                end if
+                if (ierr_orbit == 1) then
                     if (present(exit_step)) then
                         exit_step = real(kt, dp) + loss_fraction
                     end if
@@ -1646,8 +1713,18 @@ contains
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
+                si_step_start = anorb%si
+                f_step_start = anorb%f
                 call advance_symplectic_with_retry(anorb%si, anorb%f, &
                     orbit_timestep_sympl, ierr_orbit)
+                if (ierr_orbit == 0) then
+                    call to_standard_z_coordinates(anorb, z)
+                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    if (ierr_orbit /= 0) then
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
+                    end if
+                end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     call to_standard_z_coordinates(anorb, z)
                     if (present(exit_step)) exit_step = real(kt, dp) + &
@@ -1665,6 +1742,12 @@ contains
                     z = z_step_start
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    if (ierr_orbit == 1) then
+                        z_step_end = z
+                        call locate_validated_lcfs(z_step_start, z_step_end, &
+                            anorb%fper, z, loss_fraction, ierr_orbit)
+                    end if
                     if (ierr_orbit == 0) then
                         call reseed_sympl(anorb%si, anorb%f, z)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
@@ -1672,9 +1755,6 @@ contains
                             z_step_start(1))
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
-                        z_step_end = z
-                        call locate_linear_lcfs(z_step_start, z_step_end, &
-                            anorb%fper, z, loss_fraction)
                         anorb%si%last_step_fraction = loss_fraction
                         anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
                         anorb%si%last_event_fraction_width = 1.d0
@@ -1811,6 +1891,8 @@ contains
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
         type(rk_recovery_state_t) :: rk_recovery_local
+        type(symplectic_integrator_t) :: si_step_start
+        type(field_can_t) :: f_step_start
 
         call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
@@ -1839,10 +1921,13 @@ contains
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
+                call validate_rk_state(z_step_start, z, ierr_orbit)
                 if (ierr_orbit == 1) then
                     z_step_end = z
-                    call locate_linear_lcfs(z_step_start, z_step_end, &
-                        anorb%fper, z, boundary_fraction)
+                    call locate_validated_lcfs(z_step_start, z_step_end, &
+                        anorb%fper, z, boundary_fraction, ierr_orbit)
+                end if
+                if (ierr_orbit == 1) then
                     z_step_end = z
                     call integ_to_ref(z(1:3), u_ref_cur)
                     call ref_coords%evaluate_cart(u_ref_cur, x_cur)
@@ -1877,8 +1962,18 @@ contains
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
+                si_step_start = anorb%si
+                f_step_start = anorb%f
                 call advance_symplectic_with_retry(anorb%si, anorb%f, &
                     orbit_timestep_sympl, ierr_orbit, segment_duration)
+                if (ierr_orbit == 0) then
+                    call to_standard_z_coordinates(anorb, z)
+                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    if (ierr_orbit /= 0) then
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
+                    end if
+                end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     call to_standard_z_coordinates(anorb, z)
                     call integ_to_ref(z(1:3), u_ref_cur)
@@ -1904,6 +1999,12 @@ contains
                     z = z_step_start
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    if (ierr_orbit == 1) then
+                        z_step_end = z
+                        call locate_validated_lcfs(z_step_start, z_step_end, &
+                            anorb%fper, z, boundary_fraction, ierr_orbit)
+                    end if
                     if (ierr_orbit == 0) then
                         call reseed_sympl(anorb%si, anorb%f, z)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
@@ -1911,9 +2012,6 @@ contains
                             z_step_start(1))
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
-                        z_step_end = z
-                        call locate_linear_lcfs(z_step_start, z_step_end, &
-                            anorb%fper, z, boundary_fraction)
                         call integ_to_ref(z(1:3), u_ref_cur)
                         call ref_coords%evaluate_cart(u_ref_cur, x_cur)
                         x_cur_m = x_cur*chartmap_cart_scale_to_m
