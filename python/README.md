@@ -97,6 +97,55 @@ The same event machinery is available as ``pysimple.trace_to_cut``. Select
 back to public reference coordinates. This driver currently requires one of
 SIMPLE's symplectic integrators.
 
+Invariant initial conditions
+----------------------------
+
+``invariants_from_state`` converts the existing public state to the magnetic
+invariant set used by NEO-RT/POTATO:
+
+.. code-block:: python
+
+    invariant = pysimple.invariants_from_state(
+        np.array([0.4, 0.7, 0.0, 1.0, 0.3])
+    )
+    starts = pysimple.states_from_invariants(
+        invariant["h0"], invariant["j_perp"], invariant["p_phi"]
+    )
+
+``H0 = (v/v0)^2`` and
+``J_perp = H0 * (1 - lambda**2) / B``. ``p_phi`` is
+``psi_star = (c/q) P_phi`` in magnetic-flux units. The public convention is
+axis-zero and outward-positive for the magnetic-flux contribution; the total
+also contains parallel momentum. It is not the VMEC radial label ``s`` and it
+is not SIMPLE's private symplectic fourth coordinate.
+
+The inverse is defined for axisymmetric fields. It uses the section
+``grad(psi) x grad(B) = 0`` and returns all regular roots on both
+``sign(v_parallel)`` branches. The rows in ``starts["states"]`` are standard
+SIMPLE states. They are ordered by cylindrical major radius from HFS to LFS,
+the direction used for POTATO's ``R_c``. Multiple rows can represent the same
+physical orbit. The routine does not choose an outer or inner topological
+class.
+
+Raw POTATO ``psi_star`` retains the equilibrium flux gauge. Supply the axis
+and edge flux to convert it:
+
+.. code-block:: python
+
+    starts = pysimple.states_from_potato_invariants(
+        h0,
+        j_perp,
+        psi_star,
+        psi_axis=psi_axis,
+        psi_edge=psi_edge,
+        v0_ratio=v0_potato / v0_simple,
+    )
+
+``v0_ratio`` defaults to one. That default requires the same reference energy,
+particle mass, and charge state in both codes. SIMPLE's public time remains
+``tau = v0 * t``; the symplectic integrator's internal ``sqrt(2)`` rescaling
+does not change this interface.
+
 Legacy script note
 ------------------
 

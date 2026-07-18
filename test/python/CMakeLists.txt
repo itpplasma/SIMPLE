@@ -69,6 +69,12 @@ add_simple_api_test(trace_to_tip
     TestTraceOrbits::test_trace_to_tip)
 add_simple_api_test(trace_to_cut_validation
     TestTraceOrbits::test_trace_to_cut_validation)
+add_simple_api_test(invariant_initial_conditions
+    TestTraceOrbits::test_invariant_initial_conditions)
+add_simple_api_test(potato_invariant_normalization
+    TestTraceOrbits::test_potato_invariant_normalization)
+add_simple_api_test(invariant_validation
+    TestTraceOrbits::test_invariant_validation)
 add_simple_api_test(trace_skipped TestTraceOrbits::test_trace_parallel_preserves_skipped_passing_sentinel)
 add_simple_api_test(trace_early_loss TestTraceOrbits::test_trace_orbit_uses_backend_loss_time_for_early_loss)
 

@@ -73,6 +73,17 @@ FREQ_ORBIT_LOST = 2
 FREQ_INTEGRATOR_ERROR = 3
 FREQ_MAX_STEPS = 4
 
+INVARIANT_SUCCESS = 0
+INVARIANT_INVALID_INPUT = 1
+INVARIANT_NOT_AXISYMMETRIC = 2
+INVARIANT_NO_INTERSECTION = 3
+INVARIANT_ROOT_FAILURE = 4
+INVARIANT_CAPACITY = 5
+
+SECTION_EXTREMUM_UNKNOWN = 0
+SECTION_B_MINIMUM = 1
+SECTION_B_MAXIMUM = 2
+
 CUT_TIP = 0
 CUT_TOROIDAL = 1
 
@@ -708,6 +719,140 @@ def compute_canonical_frequencies(
         "n_periods": int(metadata[3]),
         "n_steps": int(metadata[4]),
     }
+
+
+def invariants_from_state(position: np.ndarray) -> dict[str, float | int | str]:
+    """Convert one public GC state to ``(H0, J_perp, p_phi)``.
+
+    ``H0=(v/v0)^2`` and ``J_perp=H0*(1-lambda**2)/B`` use the same
+    normalization as POTATO when both codes use the same reference velocity.
+    ``p_phi`` is the flux-normalized canonical toroidal momentum
+    ``psi*=(c/q)P_phi``. It is axis-zero and positive in the outward flux
+    direction. The magnetic-flux term is zero on axis, while the total also
+    contains the parallel-momentum term. It is not a dimensionless flux label.
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+
+    position = np.ascontiguousarray(position, dtype=np.float64)
+    if position.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {position.shape}")
+
+    _ensure_trace_initialized()
+    values = np.zeros(5, dtype=np.float64)
+    status = _simple_main.invariants_from_state_flat(_tracer, position, values)
+    return {
+        "h0": float(values[0]),
+        "j_perp": float(values[1]),
+        "p_phi": float(values[2]),
+        "psi_star": float(values[2]),
+        "axis_flux_native": float(values[3]),
+        "outward_sign": float(values[4]),
+        "status": int(status),
+        "p_phi_convention": "axis-zero, outward-positive flux gauge for (c/q)P_phi",
+        "time_convention": "tau=v0*t",
+    }
+
+
+def states_from_invariants(
+    h0: float,
+    j_perp: float,
+    p_phi: float,
+    *,
+    max_solutions: int = 64,
+) -> dict[str, np.ndarray | int | str]:
+    """Return all regular cut states matching ``(H0, J_perp, p_phi)``.
+
+    The axisymmetric cut is ``grad(psi) x grad(B) = 0``. Results are ordered
+    by cylindrical major radius, matching POTATO's HFS-to-LFS ``R_c``
+    convention. Multiple entries may represent the same physical orbit;
+    no outer/inner topological class is selected implicitly.
+    """
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+    if not np.isfinite([h0, j_perp, p_phi]).all():
+        raise ValueError("invariants must be finite")
+    if h0 <= 0.0:
+        raise ValueError("h0 must be positive")
+    if j_perp < 0.0:
+        raise ValueError("j_perp must be non-negative")
+    if max_solutions < 1:
+        raise ValueError("max_solutions must be at least one")
+
+    _ensure_trace_initialized()
+    values = np.ascontiguousarray([h0, j_perp, p_phi], dtype=np.float64)
+    states = np.zeros((5, max_solutions), dtype=np.float64, order="F")
+    metadata = np.zeros((3, max_solutions), dtype=np.int32, order="F")
+    residuals = np.zeros(max_solutions, dtype=np.float64)
+    cylindrical = np.zeros((3, max_solutions), dtype=np.float64, order="F")
+    n_solutions, status = _simple_main.states_from_invariants_flat(
+        _tracer,
+        values,
+        int(max_solutions),
+        states,
+        metadata,
+        residuals,
+        cylindrical,
+    )
+    count = int(n_solutions)
+    kind_names = {
+        SECTION_EXTREMUM_UNKNOWN: "unknown",
+        SECTION_B_MINIMUM: "B_min",
+        SECTION_B_MAXIMUM: "B_max",
+    }
+    kinds = metadata[2, :count].copy()
+    return {
+        "states": np.ascontiguousarray(states[:, :count].T),
+        "cylindrical": np.ascontiguousarray(cylindrical[:, :count].T),
+        "sigma": np.ascontiguousarray(metadata[0, :count]),
+        "section_branch": np.ascontiguousarray(metadata[1, :count]),
+        "section_kind_code": np.ascontiguousarray(kinds),
+        "section_kind": np.asarray(
+            [kind_names.get(int(kind), "unknown") for kind in kinds]
+        ),
+        "residual": np.ascontiguousarray(residuals[:count]),
+        "n_solutions": count,
+        "status": int(status),
+        "ordering": "POTATO R_c (HFS to LFS)",
+    }
+
+
+def states_from_potato_invariants(
+    h0: float,
+    j_perp: float,
+    psi_star: float,
+    *,
+    psi_axis: float,
+    psi_edge: float,
+    v0_ratio: float = 1.0,
+    max_solutions: int = 64,
+) -> dict[str, np.ndarray | int | str]:
+    """Convert raw POTATO invariants and return matching SIMPLE starts.
+
+    ``v0_ratio`` is ``v0_POTATO/v0_SIMPLE``. The default is correct only when
+    both runs use the same reference energy, species mass, and charge state.
+    ``psi_axis`` and ``psi_edge`` are in the same flux units and gauge as the
+    raw POTATO ``psi_star``.
+    """
+    if v0_ratio <= 0.0 or not np.isfinite(v0_ratio):
+        raise ValueError("v0_ratio must be finite and positive")
+    if not np.isfinite([psi_axis, psi_edge]).all():
+        raise ValueError("psi_axis and psi_edge must be finite")
+    if psi_edge == psi_axis:
+        raise ValueError("psi_edge must differ from psi_axis")
+    raw = np.ascontiguousarray([h0, j_perp, psi_star], dtype=np.float64)
+    converted = np.zeros(3, dtype=np.float64)
+    _simple_main.potato_invariants_to_simple_flat(
+        raw, float(psi_axis), float(psi_edge), float(v0_ratio), converted
+    )
+    result = states_from_invariants(
+        float(converted[0]),
+        float(converted[1]),
+        float(converted[2]),
+        max_solutions=max_solutions,
+    )
+    result["simple_invariants"] = converted
+    return result
 
 
 def trace_to_cut(

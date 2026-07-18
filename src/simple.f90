@@ -45,7 +45,35 @@ public
       module procedure timestep_sympl_z
    end interface tstep
 
+  public :: encode_symplectic_state
+
 contains
+
+  subroutine encode_symplectic_state(f, z0, zsympl, h0, jperp, psi_star)
+    !> Convert the public GC state to the normalization used by the symplectic
+    !> Hamiltonian. This is the single source of truth used by initialization,
+    !> reseeding, and the invariant API.
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(in) :: z0(:)
+    real(dp), intent(out) :: zsympl(4)
+    real(dp), intent(out), optional :: h0, jperp, psi_star
+
+    real(dp) :: jperp_local, psi_star_local
+
+    call eval_field(f, z0(1), z0(2), z0(3), 0)
+    jperp_local = z0(4)**2*(1.0_dp - z0(5)**2)/f%Bmod
+    psi_star_local = f%Aph + ro0*z0(4)*z0(5)*f%hph
+
+    f%mu = jperp_local
+    f%ro0 = ro0/sqrt(2.0_dp)
+    f%vpar = z0(4)*z0(5)*sqrt(2.0_dp)
+    zsympl(1:3) = z0(1:3)
+    zsympl(4) = f%vpar*f%hph + f%Aph/f%ro0
+
+    if (present(h0)) h0 = z0(4)**2
+    if (present(jperp)) jperp = jperp_local
+    if (present(psi_star)) psi_star = psi_star_local
+  end subroutine encode_symplectic_state
 
 
   subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)
@@ -137,16 +165,8 @@ contains
     endif
 
     ! Initialize symplectic integrator
-    call eval_field(f, z0(1), z0(2), z0(3), 0)
-
     si%pabs = z0(4)
-
-    f%mu = .5d0*z0(4)**2*(1.d0-z0(5)**2)/f%Bmod*2d0 ! mu by factor 2 from other modules
-    f%ro0 = ro0/dsqrt(2d0) ! ro0 = mc/e*v0, different by sqrt(2) from other modules
-    f%vpar = z0(4)*z0(5)*dsqrt(2d0) ! vpar_bar = vpar/sqrt(T/m), different by sqrt(2) from other modules
-
-    z(1:3) = z0(1:3)  ! s, th, ph
-    z(4) = f%vpar*f%hph + f%Aph/f%ro0 ! pphi
+    call encode_symplectic_state(f, z0, z)
 
     ! factor 1/sqrt(2) due to velocity normalisation different from other modules
     call orbit_sympl_init(si, f, z, dtaumin/dsqrt(2d0), nint(dtau/dtaumin), &
@@ -164,13 +184,8 @@ contains
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
 
-    call eval_field(f, z0(1), z0(2), z0(3), 0)
     si%pabs = z0(4)
-    f%mu = z0(4)**2*(1.d0 - z0(5)**2)/f%Bmod
-    f%ro0 = ro0/dsqrt(2.d0)
-    f%vpar = z0(4)*z0(5)*dsqrt(2.d0)
-    si%z(1:3) = z0(1:3)
-    si%z(4) = f%vpar*f%hph + f%Aph/f%ro0
+    call encode_symplectic_state(f, z0, si%z)
     call get_val(f, si%z(4))
     si%pthold = f%pth
     si%last_step_fraction = 1.d0

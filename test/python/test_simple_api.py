@@ -309,6 +309,78 @@ class TestTraceOrbits:
         with pytest.raises(ValueError, match="symplectic"):
             pysimple.trace_to_cut(particle, integrator="rk45")
 
+    def test_invariant_initial_conditions(self, vmec_file: str):
+        pysimple.init(
+            vmec_file,
+            deterministic=True,
+            ntestpart=1,
+            isw_field_type=-1,
+        )
+        particle = np.array([0.2, 0.7, 0.2, 0.8, 0.6])
+        invariant = pysimple.invariants_from_state(particle)
+
+        assert invariant["status"] == pysimple.INVARIANT_SUCCESS
+        assert invariant["h0"] == pytest.approx(particle[3] ** 2)
+        assert invariant["psi_star"] == invariant["p_phi"]
+        assert invariant["time_convention"] == "tau=v0*t"
+
+        starts = pysimple.states_from_invariants(
+            invariant["h0"], invariant["j_perp"], invariant["p_phi"]
+        )
+        assert starts["status"] == pysimple.INVARIANT_SUCCESS
+        assert starts["n_solutions"] >= 1
+        assert starts["states"].shape == (starts["n_solutions"], 5)
+        assert set(starts["sigma"]).issubset({-1, 1})
+
+        for state in starts["states"]:
+            reconstructed = pysimple.invariants_from_state(state)
+            assert reconstructed["h0"] == pytest.approx(invariant["h0"])
+            assert reconstructed["j_perp"] == pytest.approx(
+                invariant["j_perp"], rel=1e-10
+            )
+            assert reconstructed["p_phi"] == pytest.approx(
+                invariant["p_phi"], rel=1e-9, abs=1e-9
+            )
+
+    def test_potato_invariant_normalization(self, vmec_file: str):
+        pysimple.init(
+            vmec_file,
+            deterministic=True,
+            ntestpart=1,
+            isw_field_type=-1,
+        )
+        result = pysimple.states_from_potato_invariants(
+            1.0,
+            2.0,
+            12.0,
+            psi_axis=10.0,
+            psi_edge=20.0,
+            v0_ratio=0.5,
+        )
+        np.testing.assert_allclose(result["simple_invariants"], [0.25, 0.5, 2.0])
+
+        reversed_flux = pysimple.states_from_potato_invariants(
+            1.0,
+            2.0,
+            8.0,
+            psi_axis=10.0,
+            psi_edge=0.0,
+        )
+        np.testing.assert_allclose(
+            reversed_flux["simple_invariants"], [1.0, 2.0, 2.0]
+        )
+
+    def test_invariant_validation(self, vmec_file: str):
+        pysimple.init(vmec_file, deterministic=True, ntestpart=1)
+        with pytest.raises(ValueError, match="shape"):
+            pysimple.invariants_from_state(np.zeros(4))
+        with pytest.raises(ValueError, match="h0"):
+            pysimple.states_from_invariants(0.0, 0.0, 0.0)
+        with pytest.raises(ValueError, match="v0_ratio"):
+            pysimple.states_from_potato_invariants(
+                1.0, 1.0, 1.0, psi_axis=0.0, psi_edge=1.0, v0_ratio=0.0
+            )
+
     def test_trace_parallel_preserves_skipped_passing_sentinel(self, vmec_file: str):
         """Deep-passing particles skipped by contr_pp must keep loss_time = -1."""
         pysimple.init(vmec_file, deterministic=True, trace_time=1e-4, ntestpart=1)
