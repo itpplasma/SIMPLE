@@ -1222,7 +1222,95 @@ The flat wrapper in `simple_main` accepts the public reference-coordinate
 state, performs `ref_to_integ`, and is the boundary used by f90wrap and
 `pysimple.compute_canonical_frequencies`.
 
-### 10.6 Integration
+### 10.6 Guiding-center invariant initial conditions
+
+`src/orbit_invariants.f90` provides an axisymmetric preprocessing path from the
+three guiding-center invariants `(H0, J_perp, p_phi)` to SIMPLE's standard
+initial state `[s, theta, phi, p, lambda]`. The existing state remains the
+integrator input, so this API adds no branch or unit checks to the orbit hot
+loop.
+
+SIMPLE uses
+
+```
+p       = |momentum|/(m v0)
+lambda  = v_parallel/v
+H0      = p^2
+J_perp  = p^2 (1 - lambda^2)/B
+```
+
+for the current magnetic Hamiltonian. Electrostatic potential energy is not
+included. With `rho0 = m c v0/q`, the native flux-normalized canonical
+toroidal momentum is
+
+```
+psi_star_native = A_phi + rho0 p lambda h_phi = (c/q) P_phi.
+```
+
+It has magnetic-flux units; it is not the dimensionless VMEC label `s`.
+`A_phi` is the toroidal covariant vector-potential component, hence the
+poloidal flux contribution. For a VMEC field, `A_theta` is toroidal flux and
+`A_phi` is minus poloidal flux.
+
+The public `p_phi` value uses a portable POTATO-facing gauge:
+
+```
+p_phi = epsilon_psi (psi_star_native - A_phi_axis),
+epsilon_psi = sign(A_phi_edge - A_phi_axis).
+```
+
+The magnetic-flux contribution is therefore zero on axis and positive in the
+equilibrium's outward flux direction. The total `p_phi` also contains the
+parallel-momentum term and need not vanish on axis. Raw POTATO `psi_star`
+values retain the g-eqdsk gauge. Convert them with
+
+```
+p_phi = sign(psi_edge - psi_axis) (psi_star_POTATO - psi_axis).
+```
+
+If POTATO and SIMPLE use different reference velocities, set
+`a = v0_POTATO/v0_SIMPLE` and convert `H0_SIMPLE = a^2 H0_POTATO` and
+`J_perp_SIMPLE = a^2 J_perp_POTATO`. The default `a = 1` requires the same
+reference energy, mass, and charge state. The physical flux-normalized
+`p_phi` needs no velocity rescaling when both codes describe the same physical
+species and toroidal orientation.
+
+The symplectic integrator uses a private normalization. `init_sympl`,
+`reseed_sympl`, and the invariant API share `encode_symplectic_state`, which
+sets
+
+```
+mu_bar    = J_perp
+rho0_bar  = rho0/sqrt(2)
+vpar_bar  = sqrt(2) p lambda
+z(4)      = sqrt(2) psi_star_native/rho0
+dt_bar    = dtau/sqrt(2).
+```
+
+The paired `sqrt(2)` factors do not change the public time convention:
+`tau = v0 t`. They stay inside the symplectic implementation.
+
+The inverse routine constructs the coordinate-independent Poincare cut
+`grad(psi) x grad(B) = 0`. In axisymmetry this is the set of `B` extrema on
+each flux surface. It scans both `sigma = sign(v_parallel)` branches and
+returns every regular root. Results from the flat/Python API are ordered by
+cylindrical major radius from HFS to LFS, matching POTATO's `R_c` direction.
+The metadata identifies the velocity sign, section branch, and whether the
+point is a `B` minimum or maximum.
+
+No root is selected as the representative orbit. Several cut points can map
+to one physical orbit, and a non-monotone `psi_star(R_c)` can repeat an orbit
+within one branch. Likewise, “outer” and “inner” describe whether an orbit
+encircles the central forbidden region; they are topological classes, not HFS
+and LFS labels. This multiplicity follows the POTATO construction described by
+[Buchholz et al. (2022)](https://doi.org/10.1088/1742-6596/2397/1/012012).
+
+The source-level entry points are `invariants_from_state`,
+`states_from_invariants`, and `potato_to_simple_invariants`. The flat wrappers
+in `simple_main` convert between reference and integration coordinates and
+provide cylindrical `R_c` metadata for Python.
+
+### 10.7 Integration
 
 | File | Purpose |
 |------|---------|
@@ -1278,5 +1366,5 @@ New name `integ_coords` is more descriptive but less documented.
 
 ---
 
-*Document last updated: 2025-12-29*
+*Document last updated: 2026-07-18*
 *Corresponding code version: Post v1.5.1*

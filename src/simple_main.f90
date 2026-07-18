@@ -1007,6 +1007,121 @@ contains
         metadata(5) = result%n_steps
     end subroutine compute_canonical_frequencies_flat
 
+    subroutine invariants_from_state_flat(anorb, initial_state, values, status)
+        use orbit_invariants, only: guiding_center_invariants_t, &
+            invariants_from_state, invariant_flux_convention
+
+        type(tracer_t), intent(in) :: anorb
+        real(dp), intent(in) :: initial_state(5)
+        real(dp), intent(out) :: values(5)
+        integer, intent(out) :: status
+
+        type(guiding_center_invariants_t) :: invariants
+        real(dp) :: state(5)
+
+        call ref_to_integ(initial_state(1:3), state(1:3))
+        state(4:5) = initial_state(4:5)
+        call invariants_from_state(anorb, state, invariants, status)
+        values(1:3) = [invariants%h0, invariants%j_perp, invariants%p_phi]
+        call invariant_flux_convention(anorb, values(4), values(5))
+    end subroutine invariants_from_state_flat
+
+    subroutine potato_invariants_to_simple_flat(potato_values, psi_axis, &
+            psi_edge, v0_ratio, simple_values)
+        use orbit_invariants, only: guiding_center_invariants_t, &
+            potato_to_simple_invariants
+
+        real(dp), intent(in) :: potato_values(3)
+        real(dp), intent(in) :: psi_axis, psi_edge, v0_ratio
+        real(dp), intent(out) :: simple_values(3)
+
+        type(guiding_center_invariants_t) :: potato, converted
+
+        potato%h0 = potato_values(1)
+        potato%j_perp = potato_values(2)
+        potato%p_phi = potato_values(3)
+        call potato_to_simple_invariants(potato, psi_axis, psi_edge, v0_ratio, &
+                                         converted)
+        simple_values = [converted%h0, converted%j_perp, converted%p_phi]
+    end subroutine potato_invariants_to_simple_flat
+
+    subroutine states_from_invariants_flat(anorb, values, max_solutions, &
+            states, metadata, residuals, cylindrical, n_solutions, status)
+        use orbit_invariants, only: guiding_center_invariants_t, &
+            invariant_start_result_t, states_from_invariants, &
+            INVARIANT_CAPACITY
+
+        type(tracer_t), intent(in) :: anorb
+        real(dp), intent(in) :: values(3)
+        integer, intent(in) :: max_solutions
+        real(dp), intent(out) :: states(5, max_solutions)
+        integer, intent(out) :: metadata(3, max_solutions)
+        real(dp), intent(out) :: residuals(max_solutions)
+        real(dp), intent(out) :: cylindrical(3, max_solutions)
+        integer, intent(out) :: n_solutions, status
+
+        type(guiding_center_invariants_t) :: invariants
+        type(invariant_start_result_t) :: result
+        integer :: i
+
+        states = 0.0_dp
+        metadata = 0
+        residuals = 0.0_dp
+        cylindrical = 0.0_dp
+        n_solutions = 0
+        invariants%h0 = values(1)
+        invariants%j_perp = values(2)
+        invariants%p_phi = values(3)
+        call states_from_invariants(anorb, invariants, result)
+        status = result%status
+        n_solutions = min(size(result%starts), max_solutions)
+        do i = 1, n_solutions
+            states(:, i) = result%starts(i)%state
+            metadata(:, i) = [result%starts(i)%sigma, &
+                result%starts(i)%section_branch, result%starts(i)%section_kind]
+            residuals(i) = result%starts(i)%residual
+            if (allocated(ref_coords)) then
+                call ref_coords%evaluate_cyl(states(1:3, i), cylindrical(:, i))
+            end if
+        end do
+        call sort_invariant_starts(states, metadata, residuals, cylindrical, &
+                                   n_solutions)
+        if (size(result%starts) > max_solutions) status = INVARIANT_CAPACITY
+    end subroutine states_from_invariants_flat
+
+    subroutine sort_invariant_starts(states, metadata, residuals, cylindrical, &
+                                     count)
+        real(dp), intent(inout) :: states(:, :), residuals(:), cylindrical(:, :)
+        integer, intent(inout) :: metadata(:, :)
+        integer, intent(in) :: count
+
+        real(dp) :: state_tmp(size(states, 1)), residual_tmp
+        real(dp) :: cylindrical_tmp(size(cylindrical, 1))
+        integer :: metadata_tmp(size(metadata, 1))
+        integer :: i, j
+
+        if (.not. allocated(ref_coords)) return
+        do i = 2, count
+            state_tmp = states(:, i)
+            metadata_tmp = metadata(:, i)
+            residual_tmp = residuals(i)
+            cylindrical_tmp = cylindrical(:, i)
+            j = i - 1
+            do while (j >= 1)
+                if (cylindrical(1, j) <= cylindrical_tmp(1)) exit
+                states(:, j + 1) = states(:, j)
+                metadata(:, j + 1) = metadata(:, j)
+                residuals(j + 1) = residuals(j)
+                cylindrical(:, j + 1) = cylindrical(:, j)
+                j = j - 1
+            end do
+            states(:, j + 1) = state_tmp
+            metadata(:, j + 1) = metadata_tmp
+            residuals(j + 1) = residual_tmp
+            cylindrical(:, j + 1) = cylindrical_tmp
+        end do
+    end subroutine sort_invariant_starts
+
     subroutine trace_to_cut_flat(anorb, initial_state, requested_cut_type, &
             max_events, cut_state, cut_type, status)
         use cut_detector, only: cut_detector_t, init_cut_detector => init, &

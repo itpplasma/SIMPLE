@@ -450,6 +450,11 @@ set_tests_properties(test_bminmax_lifecycle PROPERTIES
     LABELS "unit"
     TIMEOUT 15)
 
+add_executable(test_orbit_invariants.x test_orbit_invariants.f90)
+target_link_libraries(test_orbit_invariants.x simple)
+add_test(NAME test_orbit_invariants COMMAND test_orbit_invariants.x)
+set_tests_properties(test_orbit_invariants PROPERTIES LABELS "unit")
+
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
     add_test(NAME test_bminmax_python
         COMMAND ${Python3_EXECUTABLE}
