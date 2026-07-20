@@ -238,6 +238,12 @@ surface represents. Its values are `auto` (the default), `lcfs`, `wall`, and
 as an LCFS and treats other outer chart surfaces as numerical-domain limits.
 Set `wall` explicitly when the outer chart surface is the physical coordinate
 wall. The requested and effective values are stored in `results.nc`.
+For an external `wall_input` STL, SIMPLE tests every accepted microstep chord
+whose endpoint has passed the chart's recorded LCFS. Chords ending inside the
+LCFS are not queried: in a non-convex toroidal geometry their straight
+Cartesian interpolation can intersect the external wall even though the
+physical orbit has not left the plasma. The effective radial query threshold
+is stored as `wall_query_rho_lcfs` in `results.nc` (`-1` when inactive).
 
 Default warning mode accepts finite generic Newton corrections through 100
 tolerance units after the iteration limit. This covers the observed roundoff

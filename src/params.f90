@@ -141,6 +141,9 @@ module params
     character(1000) :: coord_input = ''
     character(1000) :: wall_input = ''
     character(16) :: wall_units = 'm'
+    !> Radial threshold for querying an external STL wall. A negative value
+    !> means that no external-wall query gate is active for this run.
+    real(dp) :: wall_query_rho_lcfs = -1.0_dp
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it

@@ -54,6 +54,7 @@ contains
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
             wall_input, wall_units, wall_hit, wall_hit_cart, &
+            wall_query_rho_lcfs, &
             chart_boundary_kind, chart_boundary_kind_effective, &
                           wall_hit_normal_cart, wall_hit_cos_incidence, &
                           wall_hit_angle_rad
@@ -374,6 +375,9 @@ contains
         call check_nc(status, 'put_att wall_input')
         status = nf90_put_att(ncid, nf90_global, 'wall_units', trim(wall_units))
         call check_nc(status, 'put_att wall_units')
+        status = nf90_put_att(ncid, nf90_global, 'wall_query_rho_lcfs', &
+            wall_query_rho_lcfs)
+        call check_nc(status, 'put_att wall_query_rho_lcfs')
         status = nf90_put_att(ncid, nf90_global, 'chart_boundary_kind', &
             trim(chart_boundary_kind))
         call check_nc(status, 'put_att chart_boundary_kind')

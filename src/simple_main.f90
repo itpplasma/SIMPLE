@@ -19,6 +19,7 @@ module simple_main
         zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
         reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
         coord_input, wall_input, wall_units, wall_hit, wall_hit_cart, &
+        wall_query_rho_lcfs, &
         chart_boundary_kind, chart_boundary_kind_effective, &
         wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
         ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
@@ -498,6 +499,7 @@ contains
         map_boundary_exit_code = ORBIT_EXIT_LCFS
         chart_boundary_kind_effective = 'lcfs'
         chartmap_cart_scale_to_m = -1.0d0
+        wall_query_rho_lcfs = -1.0d0
 
         if (.not. allocated(ref_coords)) then
             if (len_trim(wall_input) == 0) return
@@ -533,6 +535,13 @@ contains
         end select
 
         if (len_trim(wall_input) == 0) return
+
+        ! The STL is an external physical wall enclosing the LCFS. Querying a
+        ! straight Cartesian chord while the accepted endpoint is still inside
+        ! the LCFS can create a false intersection in a non-convex toroidal
+        ! geometry. Preserve the historical SIMPLE rule: activate wall queries
+        ! only once an accepted microstep endpoint has passed the recorded LCFS.
+        wall_query_rho_lcfs = meta%rho_lcfs
 
         units = adjustl(wall_units)
         select case (trim(units))
@@ -1919,6 +1928,8 @@ contains
 
         hit = .false.
         hit_step = start_step + segment_steps
+        if (wall_query_rho_lcfs >= 0.0_dp .and. &
+                u_end(1) <= wall_query_rho_lcfs) return
         call stl_wall_first_hit_segment_with_normal( &
             wall, x_start_m, x_end_m, hit, x_hit_m, normal_m)
         if (.not. hit) return

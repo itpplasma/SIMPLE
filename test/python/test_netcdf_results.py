@@ -94,6 +94,7 @@ class TestNetCDFResultsOutput:
                 assert ds.symplectic_spectre_newton_warning_factor == 10.0
                 assert ds.chart_boundary_kind == 'auto'
                 assert ds.chart_boundary_kind_effective == 'lcfs'
+                assert ds.wall_query_rho_lcfs == -1.0
                 assert ds.diagnostic_midpoint_maxit >= 0
                 assert ds.diagnostic_warning_maxit_accept >= 0
                 assert ds.diagnostic_retry_exhausted >= 0
