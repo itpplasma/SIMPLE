@@ -309,21 +309,34 @@ contains
     tolref = [1.0_dp, 2.0_dp]
     accepted = previous + [5.0e-12_dp, 1.0e-11_dp]
     symplectic_newton_warning_mode = .true.
-    if (.not. accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp)) then
-      error stop 'warning mode rejected a bounded Newton correction'
-    end if
-    accepted(1) = huge(1.0_dp)
-    if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp)) then
-      error stop 'warning mode accepted an unbounded Newton correction'
-    end if
+        if (.not. accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
+            10.0_dp)) then
+            error stop 'warning mode rejected a bounded Newton correction'
+        end if
+        accepted = previous + [50.0e-12_dp, 100.0e-12_dp]
+        if (.not. accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
+            100.0_dp)) then
+            error stop 'generic warning mode rejected a roundoff plateau correction'
+        end if
+        if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
+            10.0_dp)) then
+            error stop 'SPECTRE warning bound accepted a generic-only correction'
+        end if
+        accepted(1) = huge(1.0_dp)
+        if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
+            100.0_dp)) then
+            error stop 'warning mode accepted an unbounded Newton correction'
+        end if
     accepted = previous
     accepted(1) = ieee_value(0.0_dp, ieee_quiet_nan)
-    if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp)) then
+        if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
+            100.0_dp)) then
       error stop 'warning mode accepted a non-finite Newton correction'
     end if
     accepted = previous
     symplectic_newton_warning_mode = .false.
-    if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp)) then
+        if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
+            100.0_dp)) then
       error stop 'strict mode accepted a Newton max-iteration state'
     end if
   end subroutine test_newton_warning_mode
@@ -362,18 +375,18 @@ contains
     retry_calls = 0
     call advance_symplectic_with_retry(retry_integrator, retry_field, &
       second_half_fails_step, step_status, accepted_fraction)
-    if (step_status /= SYMPLECTIC_STEP_OK) then
-      error stop 'warning mode discarded a recoverable first half'
-    end if
-    if (abs(retry_integrator%z(1) - 1.0_dp) > 1.0e-14_dp .or. &
-        abs(retry_field%H - 0.5_dp) > 1.0e-14_dp) then
-      error stop 'failed second half rolled back accepted progress'
+        if (step_status /= SYMPLECTIC_STEP_MAXITER) then
+            error stop 'warning mode hid a failed second half'
+        end if
+        if (any(retry_integrator%z /= initial_state) .or. &
+            retry_field%H /= 0.0_dp) then
+            error stop 'failed second half did not roll back the full interval'
     end if
     if (retry_integrator%dt /= 1.0_dp) then
       error stop 'partial retry did not restore the configured timestep'
     end if
-    if (abs(accepted_fraction - 0.5_dp) > 1.0e-14_dp) then
-      error stop 'partial retry reported the wrong accepted duration'
+        if (accepted_fraction /= 0.0_dp) then
+            error stop 'failed retry reported an accepted duration'
     end if
 
     retry_integrator%z = initial_state

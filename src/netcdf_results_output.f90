@@ -53,7 +53,8 @@ contains
                           contr_pp, notrace_passing, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           netcdffile, field_input, coord_input, &
-                          wall_input, wall_units, wall_hit, wall_hit_cart, &
+            wall_input, wall_units, wall_hit, wall_hit_cart, &
+            chart_boundary_kind, chart_boundary_kind_effective, &
                           wall_hit_normal_cart, wall_hit_cos_incidence, &
                           wall_hit_angle_rad
         use new_vmec_stuff_mod, only: multharm
@@ -61,10 +62,14 @@ contains
         use libneo_coordinates, only: chartmap_coordinate_system_t
         use reference_coordinates, only: ref_coords
         use version, only: simple_version
+        use diag_counters, only: N_EVENT, diag_counters_total, event_name
+        use orbit_symplectic_base, only: symplectic_newton_warning_factor, &
+            symplectic_spectre_newton_warning_factor
 
         character(len=*), intent(in) :: filename
 
-        integer :: ncid, status
+        integer :: event_id, ncid, status
+        character(:), allocatable :: diagnostic_name
         integer :: dim_particle, dim_xyz, dim_phase, dim_iclass
         integer :: var_times_lost, var_orbit_exit_code, var_trap_par, var_perp_inv
         integer :: var_boundary_event_radial_residual, var_boundary_event_time_width
@@ -304,6 +309,14 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'relerr', relerr)
         call check_nc(status, 'put_att relerr')
         status = nf90_put_att(ncid, nf90_global, &
+            'symplectic_newton_warning_factor', &
+            symplectic_newton_warning_factor)
+        call check_nc(status, 'put_att symplectic_newton_warning_factor')
+        status = nf90_put_att(ncid, nf90_global, &
+            'symplectic_spectre_newton_warning_factor', &
+            symplectic_spectre_newton_warning_factor)
+        call check_nc(status, 'put_att symplectic_spectre_newton_warning_factor')
+        status = nf90_put_att(ncid, nf90_global, &
                               'boundary_event_fraction_tolerance', &
                               boundary_event_fraction_tolerance)
         call check_nc(status, 'put_att boundary_event_fraction_tolerance')
@@ -361,8 +374,21 @@ contains
         call check_nc(status, 'put_att wall_input')
         status = nf90_put_att(ncid, nf90_global, 'wall_units', trim(wall_units))
         call check_nc(status, 'put_att wall_units')
+        status = nf90_put_att(ncid, nf90_global, 'chart_boundary_kind', &
+            trim(chart_boundary_kind))
+        call check_nc(status, 'put_att chart_boundary_kind')
+        status = nf90_put_att(ncid, nf90_global, &
+            'chart_boundary_kind_effective', &
+            trim(chart_boundary_kind_effective))
+        call check_nc(status, 'put_att chart_boundary_kind_effective')
         status = nf90_put_att(ncid, nf90_global, 'coordinate_type', trim(coord_type))
         call check_nc(status, 'put_att coordinate_type')
+        do event_id = 1, N_EVENT
+            diagnostic_name = 'diagnostic_'//event_name(event_id)
+            status = nf90_put_att(ncid, nf90_global, diagnostic_name, &
+                diag_counters_total(event_id))
+            call check_nc(status, 'put_att '//diagnostic_name)
+        end do
 
         ! End define mode
         status = nf90_enddef(ncid)

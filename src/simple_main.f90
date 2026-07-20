@@ -19,6 +19,7 @@ module simple_main
         zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
         reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
         coord_input, wall_input, wall_units, wall_hit, wall_hit_cart, &
+        chart_boundary_kind, chart_boundary_kind_effective, &
         wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
         ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
         ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
@@ -50,7 +51,7 @@ module simple_main
     integer, parameter :: dp = kind(1.0d0)
 
     logical, save :: wall_enabled = .false.
-    logical, save :: map_boundary_is_lcfs = .true.
+    integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     type(stl_wall_t), save :: wall
 
@@ -67,7 +68,6 @@ module simple_main
         integer :: reason = RK_RECOVERY_GENERIC
         integer :: steps = 0
         integer :: failures = 0
-        logical :: both_methods_failed = .false.
     end type rk_recovery_state_t
 
 contains
@@ -78,7 +78,6 @@ contains
 
         state%active = .true.
         state%steps = 0
-        state%both_methods_failed = .false.
         state%failures = min(state%failures + 1, 9)
         if (radius < RK_AXIS_ENTER) then
             state%reason = RK_RECOVERY_AXIS
@@ -299,7 +298,8 @@ contains
         logical :: use_boozer_chartmap, use_spectre
 
         self%integmode = aintegmode
-        map_boundary_is_lcfs = .true.
+        map_boundary_exit_code = ORBIT_EXIT_LCFS
+        chart_boundary_kind_effective = 'lcfs'
 
         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
@@ -495,7 +495,8 @@ contains
         character(len=16) :: units
 
         wall_enabled = .false.
-        map_boundary_is_lcfs = .true.
+        map_boundary_exit_code = ORBIT_EXIT_LCFS
+        chart_boundary_kind_effective = 'lcfs'
         chartmap_cart_scale_to_m = -1.0d0
 
         if (.not. allocated(ref_coords)) then
@@ -507,7 +508,25 @@ contains
         class is (chartmap_coordinate_system_t)
             call read_chartmap_metadata(coord_file, meta)
             chartmap_cart_scale_to_m = meta%cart_scale_to_m
-            map_boundary_is_lcfs = abs(meta%rho_lcfs - 1d0) <= 1d-12
+            select case (trim(chart_boundary_kind))
+            case ('auto')
+                if (abs(meta%rho_lcfs - 1d0) <= 1d-12) then
+                    map_boundary_exit_code = ORBIT_EXIT_LCFS
+                    chart_boundary_kind_effective = 'lcfs'
+                else
+                    map_boundary_exit_code = ORBIT_EXIT_NUMERICAL_DOMAIN
+                    chart_boundary_kind_effective = 'domain'
+                end if
+            case ('lcfs')
+                map_boundary_exit_code = ORBIT_EXIT_LCFS
+                chart_boundary_kind_effective = 'lcfs'
+            case ('wall')
+                map_boundary_exit_code = ORBIT_EXIT_WALL
+                chart_boundary_kind_effective = 'wall'
+            case ('domain')
+                map_boundary_exit_code = ORBIT_EXIT_NUMERICAL_DOMAIN
+                chart_boundary_kind_effective = 'domain'
+            end select
         class default
             if (len_trim(wall_input) == 0) return
             error stop "wall_input requires chartmap reference coordinates"
@@ -1177,9 +1196,9 @@ contains
         status = 0
     end subroutine trace_to_cut_flat
     pure integer function classify_orbit_exit(ierr_orbit, model, mode, &
-            boundary_is_lcfs)
+            boundary_exit_code)
         integer, intent(in) :: ierr_orbit, model, mode
-        logical, intent(in) :: boundary_is_lcfs
+        integer, intent(in) :: boundary_exit_code
 
         if (ierr_orbit == 0) then
             classify_orbit_exit = ORBIT_EXIT_COMPLETED
@@ -1187,30 +1206,20 @@ contains
             classify_orbit_exit = ORBIT_EXIT_WALL
         else if (model == ORBIT_FULL_ORBIT) then
             if (ierr_orbit == ORBIT_FO_LOSS) then
-                if (boundary_is_lcfs) then
-                    classify_orbit_exit = ORBIT_EXIT_LCFS
-                else
-                    classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
-                end if
+                classify_orbit_exit = boundary_exit_code
             else
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
             end if
         else if (mode <= 0) then
-            if (ierr_orbit == 1 .and. boundary_is_lcfs) then
-                classify_orbit_exit = ORBIT_EXIT_LCFS
-            else if (ierr_orbit == 1) then
-                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+            if (ierr_orbit == 1) then
+                classify_orbit_exit = boundary_exit_code
             else
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_EVENT
             end if
         else
             select case (ierr_orbit)
             case (SYMPLECTIC_STEP_BOUNDARY)
-                if (boundary_is_lcfs) then
-                    classify_orbit_exit = ORBIT_EXIT_LCFS
-                else
-                    classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
-                end if
+                classify_orbit_exit = boundary_exit_code
             case (SYMPLECTIC_STEP_OUTSIDE_DOMAIN)
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
             case (SYMPLECTIC_STEP_MAXITER)
@@ -1337,7 +1346,7 @@ contains
 
             if (ierr_orbit .ne. 0) then
                 orbit_exit_code(ipart) = classify_orbit_exit( &
-                    ierr_orbit, orbit_model, integmode, map_boundary_is_lcfs)
+                    ierr_orbit, orbit_model, integmode, map_boundary_exit_code)
                 it_final = it
                 physical_exit = orbit_exit_code(ipart) == ORBIT_EXIT_LCFS .or. &
                     orbit_exit_code(ipart) == ORBIT_EXIT_WALL
@@ -1743,19 +1752,6 @@ contains
         do ktau = 1, ntau_local
             numerical_hold = .false.
             z_step_start = z
-            if (rk_recovery_local%both_methods_failed) then
-                ! This autonomous step has already failed from the same accepted
-                ! state with both pushers. Repeating the identical adaptive-RK
-                ! solve can consume millions of rejected substeps without new
-                ! information, so retain the intervention for the remaining
-                ! intervals and keep its held-time accounting explicit.
-                call count_event(EVT_WARNING_STEP_SKIP)
-                numerical_hold = .true.
-                numerical_hold_any_local = .true.
-                ierr_orbit = 0
-                kt = kt + 1
-                cycle
-            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -1768,10 +1764,8 @@ contains
                             exit_step = real(kt, dp) + loss_fraction
                         end if
                     else if (symplectic_newton_warning_mode) then
-                        ! The full-orbit pusher retains its last resolved state.
-                        ! Default production mode advances the clock past this
-                        ! one unresolved microstep and retries the next step;
-                        ! numerical inversion faults are never physical losses.
+                        ! Preserve the historical warning-mode single-step hold
+                        ! for full-orbit numerical inversion faults.
                         z = z_step_start
                         call count_event(EVT_WARNING_STEP_SKIP)
                         hold_streak_local = ierr_orbit
@@ -1813,18 +1807,9 @@ contains
                         anorb%si%last_event_fraction_width = 1.d0
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
-                else if (ierr_orbit /= 0 .and. &
-                        symplectic_newton_warning_mode) then
-                    ! The RK driver rolls back failed integration to the last
-                    ! accepted state. Apply the same bounded warning convention
-                    ! as the symplectic and full-orbit paths.
-                    if (rk_recovery_local%active) &
-                        rk_recovery_local%both_methods_failed = .true.
-                    call count_event(EVT_WARNING_STEP_SKIP)
+                else if (ierr_orbit /= 0) then
+                    z = z_step_start
                     hold_streak_local = ierr_orbit
-                    numerical_hold = .true.
-                    numerical_hold_any_local = .true.
-                    ierr_orbit = 0
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -1879,12 +1864,9 @@ contains
                         exit
                     else
                         z = z_step_start
-                        rk_recovery_local%both_methods_failed = .true.
-                        call count_event(EVT_WARNING_STEP_SKIP)
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
                         hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
                     end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
@@ -2020,14 +2002,6 @@ contains
             numerical_hold = .false.
             segment_duration = 1.0_dp
             z_step_start = z
-            if (rk_recovery_local%both_methods_failed) then
-                call count_event(EVT_WARNING_STEP_SKIP)
-                numerical_hold = .true.
-                numerical_hold_any_local = .true.
-                ierr_orbit = 0
-                kt = kt + 1
-                cycle
-            end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
@@ -2065,15 +2039,9 @@ contains
                         end if
                     end if
                     exit
-                else if (ierr_orbit /= 0 .and. &
-                        symplectic_newton_warning_mode) then
-                    if (rk_recovery_local%active) &
-                        rk_recovery_local%both_methods_failed = .true.
-                    call count_event(EVT_WARNING_STEP_SKIP)
+                else if (ierr_orbit /= 0) then
+                    z = z_step_start
                     hold_streak_local = ierr_orbit
-                    numerical_hold = .true.
-                    numerical_hold_any_local = .true.
-                    ierr_orbit = 0
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -2153,12 +2121,9 @@ contains
                         exit
                     else
                         z = z_step_start
-                        rk_recovery_local%both_methods_failed = .true.
-                        call count_event(EVT_WARNING_STEP_SKIP)
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
                         hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
                     end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)

@@ -661,16 +661,23 @@ add_test(NAME test_boundary_event_config_fraction_inf
     COMMAND test_boundary_event_config.x fraction_inf)
 add_test(NAME test_boundary_event_config_radial_nan
     COMMAND test_boundary_event_config.x radial_nan)
+add_test(NAME test_chart_boundary_config_valid
+    COMMAND test_boundary_event_config.x chart_valid)
+add_test(NAME test_chart_boundary_config_invalid
+    COMMAND test_boundary_event_config.x chart_invalid)
 set_tests_properties(
     test_boundary_event_config_valid
     test_boundary_event_config_fraction_nan
     test_boundary_event_config_fraction_inf
     test_boundary_event_config_radial_nan
+    test_chart_boundary_config_valid
+    test_chart_boundary_config_invalid
     PROPERTIES LABELS "unit")
 set_tests_properties(
     test_boundary_event_config_fraction_nan
     test_boundary_event_config_fraction_inf
     test_boundary_event_config_radial_nan
+    test_chart_boundary_config_invalid
     PROPERTIES WILL_FAIL TRUE)
 
 add_executable(test_field_base.x test_field_base.f90)

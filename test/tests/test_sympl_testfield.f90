@@ -97,7 +97,6 @@ program test_sympl_testfield
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
     call test_rk_recovery_regions
-    call test_both_methods_failed_hold
     call test_exit_classification
     call test_fo_lcfs_location
     call test_validated_rk_lcfs_location
@@ -167,23 +166,13 @@ contains
         symplectic_newton_warning_mode = .true.
         call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
             numerical_hold_any=numerical_hold)
-        if (step_error /= 0) error stop 'warning mode stopped a failed step'
-        if (kt /= 1_int64) error stop 'warning mode did not consume the failed step'
-        if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'warning mode did not report the held interval'
+        if (step_error == 0) error stop 'warning mode hid exhausted recovery'
+        if (kt /= 0_int64) error stop 'warning mode consumed a failed step'
+        if (numerical_hold .or. hold_streak == 0) &
+            error stop 'warning mode misreported exhausted recovery'
         if (any(z /= initial_state)) then
-            error stop 'warning-mode skip changed the last accepted state'
+            error stop 'warning-mode failure changed the last accepted state'
         end if
-        call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
-            numerical_hold_any=numerical_hold)
-        if (step_error /= 0) &
-            error stop 'repeated warning failure stopped the orbit'
-        if (kt /= 2_int64) &
-            error stop 'repeated warning failure did not consume one interval'
-        if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'repeated warning failure lost its diagnostic status'
-        if (any(z /= initial_state)) &
-            error stop 'repeated warning hold changed the accepted state'
 
         z = initial_state
         x_previous = 0.0_dp
@@ -191,24 +180,13 @@ contains
         hold_streak = 0
         call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
             hold_streak=hold_streak, numerical_hold_any=numerical_hold)
-        if (step_error /= 0) error stop 'warning-mode wall path stopped a failed step'
-        if (kt /= 1_int64) &
-            error stop 'warning-mode wall path did not consume the failed step'
-        if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'warning-mode wall path did not latch the failure'
+        if (step_error == 0) error stop 'warning wall path hid exhausted recovery'
+        if (kt /= 0_int64) error stop 'warning wall path consumed a failed step'
+        if (numerical_hold .or. hold_streak == 0) &
+            error stop 'warning wall path misreported exhausted recovery'
         if (any(z /= initial_state)) then
-            error stop 'warning-mode wall skip changed the last accepted state'
+            error stop 'warning wall failure changed the last accepted state'
         end if
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-            hold_streak=hold_streak, numerical_hold_any=numerical_hold)
-        if (step_error /= 0) &
-            error stop 'repeated wall warning failure stopped the orbit'
-        if (kt /= 2_int64) &
-            error stop 'repeated wall warning did not consume one interval'
-        if (.not. numerical_hold .or. hold_streak == 0) &
-            error stop 'repeated wall warning lost its diagnostic status'
-        if (any(z /= initial_state)) &
-            error stop 'repeated wall warning changed the accepted state'
     end subroutine test_failed_step_preserves_state
 
     subroutine test_rk_recovery_regions
@@ -253,88 +231,61 @@ contains
         end if
     end subroutine test_rk_recovery_regions
 
-    subroutine test_both_methods_failed_hold
-        real(dp), parameter :: initial_state(5) = [0.2_dp, 1.0_dp, 2.0_dp, &
-            1.0_dp, 0.25_dp]
-        type(rk_recovery_state_t) :: recovery
-        real(dp) :: z(5), x_previous(3)
-        integer(int64) :: kt
-        integer :: step_error
-        logical :: numerical_hold
-
-        recovery%active = .true.
-        recovery%both_methods_failed = .true.
-        z = initial_state
-        kt = 0_int64
-        call macrostep(norb, z, kt, step_error, 2, &
-            numerical_hold_any=numerical_hold, rk_recovery=recovery)
-        if (step_error /= 0) error stop 'latched recovery hold stopped the orbit'
-        if (kt /= 2_int64) error stop 'latched recovery did not consume intervals'
-        if (.not. numerical_hold) error stop 'latched recovery lost held status'
-        if (any(z /= initial_state)) &
-            error stop 'latched recovery changed the accepted state'
-        if (.not. recovery%both_methods_failed) &
-            error stop 'latched recovery state was cleared'
-
-        recovery%active = .true.
-        recovery%both_methods_failed = .true.
-        z = initial_state
-        x_previous = 0.0_dp
-        kt = 0_int64
-        call macrostep_with_wall_check(norb, z, kt, step_error, 2, 1, &
-            x_previous, numerical_hold_any=numerical_hold, &
-            rk_recovery=recovery)
-        if (step_error /= 0) error stop 'latched wall hold stopped the orbit'
-        if (kt /= 2_int64) error stop 'latched wall hold did not consume intervals'
-        if (.not. numerical_hold) error stop 'latched wall hold lost held status'
-        if (any(z /= initial_state)) &
-            error stop 'latched wall hold changed the accepted state'
-        if (.not. recovery%both_methods_failed) &
-            error stop 'latched wall recovery state was cleared'
-    end subroutine test_both_methods_failed_hold
-
     subroutine test_exit_classification
         logical :: classifier_lost
         integer :: classifier_exit
 
-        if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, .true.) /= &
+        if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, &
+            ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_LCFS) then
             error stop 'converged LCFS event was not classified as physical'
         end if
-        if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, .false.) /= &
+        if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, &
+            ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'extended map boundary was classified as physical LCFS'
         end if
-        if (classify_orbit_exit(77, ORBIT_GC, 3, .true.) /= ORBIT_EXIT_WALL) then
+        if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, &
+            ORBIT_EXIT_WALL) /= ORBIT_EXIT_WALL) then
+            error stop 'coordinate wall was not classified as physical'
+        end if
+        if (classify_orbit_exit(77, ORBIT_GC, 3, ORBIT_EXIT_LCFS) /= &
+            ORBIT_EXIT_WALL) then
             error stop 'wall event was not classified as physical'
         end if
-        if (classify_orbit_exit(77, ORBIT_GC, 0, .true.) /= ORBIT_EXIT_WALL) then
+        if (classify_orbit_exit(77, ORBIT_GC, 0, ORBIT_EXIT_LCFS) /= &
+            ORBIT_EXIT_WALL) then
             error stop 'axis wall event was not classified as physical'
         end if
-        if (classify_orbit_exit(1, ORBIT_GC, 3, .true.) /= &
+        if (classify_orbit_exit(1, ORBIT_GC, 3, ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'exterior Newton iterate was classified as physical'
         end if
-        if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, .true.) /= &
+        if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, &
+            ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_LCFS) then
             error stop 'full-orbit LCFS exit was not classified as physical'
         end if
-        if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, .false.) /= &
+        if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, &
+            ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'extended full-orbit map boundary was classified as physical'
         end if
-        if (classify_orbit_exit(ORBIT_FO_NUMERICAL, ORBIT_FULL_ORBIT, 3, .true.) /= &
+        if (classify_orbit_exit(ORBIT_FO_NUMERICAL, ORBIT_FULL_ORBIT, 3, &
+            ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_NUMERICAL_FULL_ORBIT) then
             error stop 'full-orbit locate failure was classified as physical'
         end if
-        if (classify_orbit_exit(1, ORBIT_GC, 0, .true.) /= ORBIT_EXIT_LCFS) then
+        if (classify_orbit_exit(1, ORBIT_GC, 0, ORBIT_EXIT_LCFS) /= &
+            ORBIT_EXIT_LCFS) then
             error stop 'RK LCFS exit was classified as numerical'
         end if
-        if (classify_orbit_exit(1, ORBIT_GC, 0, .false.) /= &
+        if (classify_orbit_exit(1, ORBIT_GC, 0, &
+            ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'RK extended-map boundary was classified as physical'
         end if
-        if (classify_orbit_exit(2, ORBIT_GC, 0, .true.) /= &
+        if (classify_orbit_exit(2, ORBIT_GC, 0, ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_NUMERICAL_EVENT) then
             error stop 'RK integration fault was classified as physical'
         end if

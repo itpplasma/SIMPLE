@@ -141,6 +141,8 @@ module params
     character(1000) :: coord_input = ''
     character(1000) :: wall_input = ''
     character(16) :: wall_units = 'm'
+    character(16) :: chart_boundary_kind = 'auto'
+    character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
     !> SPECTRE RK45 interface-crossing map: 1 = Level-1 refraction (default),
     !> 0 = Level-0 energy rescale (regression comparison).
@@ -178,7 +180,7 @@ module params
 	        am1, am2, Z1, Z2, &
 	        densi1, densi2, tempi1, tempi2, tempe, &
 	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-	        wall_input, wall_units, integ_coords, crossing_level, &
+	        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
 	        spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
 	        spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
 	        spectre_ncon_ode_relerr, &
@@ -212,6 +214,7 @@ contains
         end if
 
         call validate_boundary_event_tolerances
+        call validate_chart_boundary_kind
         if (min(canonical_grid_nr, canonical_grid_ntheta, &
             canonical_grid_nphi) < 6) then
             error stop 'canonical map grid dimensions must be at least 6'
@@ -234,6 +237,14 @@ contains
         end if
 
     end subroutine read_config
+
+    subroutine validate_chart_boundary_kind
+        select case (trim(chart_boundary_kind))
+        case ('auto', 'lcfs', 'wall', 'domain')
+        case default
+            error stop "chart_boundary_kind must be auto, lcfs, wall, or domain"
+        end select
+    end subroutine validate_chart_boundary_kind
 
     subroutine validate_boundary_event_tolerances
         if (.not. config_value_is_finite(boundary_event_fraction_tolerance) .or. &

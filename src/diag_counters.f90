@@ -18,7 +18,10 @@ module diag_counters
         EVT_FO_LOSS, EVT_FO_FAULT, EVT_MIDPOINT_MAXIT, &
         EVT_WARNING_STEP_SKIP, EVT_SPECTRE_REF_INVERSE_MAXIT, &
         EVT_SPECTRE_INVALID_STATE, EVT_SYMPLECTIC_RK_RECOVERY, &
-        EVT_SYMPLECTIC_RESUME, N_EVENT
+        EVT_SYMPLECTIC_RESUME, EVT_WARNING_MAXIT_ACCEPT, &
+        EVT_WARNING_MAXIT_REJECT_100, EVT_WARNING_MAXIT_REJECT_1E4, &
+        EVT_WARNING_MAXIT_REJECT_LARGE, EVT_WARNING_MAXIT_NONFINITE, &
+        EVT_RETRY_EXHAUSTED, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
         diag_counters_reset, event_name
 
@@ -39,11 +42,17 @@ module diag_counters
     integer, parameter :: EVT_SPECTRE_INVALID_STATE = 12
     integer, parameter :: EVT_SYMPLECTIC_RK_RECOVERY = 13
     integer, parameter :: EVT_SYMPLECTIC_RESUME = 14
-    integer, parameter :: N_EVENT = 14
+    integer, parameter :: EVT_WARNING_MAXIT_ACCEPT = 15
+    integer, parameter :: EVT_WARNING_MAXIT_REJECT_100 = 16
+    integer, parameter :: EVT_WARNING_MAXIT_REJECT_1E4 = 17
+    integer, parameter :: EVT_WARNING_MAXIT_REJECT_LARGE = 18
+    integer, parameter :: EVT_WARNING_MAXIT_NONFINITE = 19
+    integer, parameter :: EVT_RETRY_EXHAUSTED = 20
+    integer, parameter :: N_EVENT = 20
 
     ! Whole cache lines per thread column keep neighbouring threads from sharing
     ! a line. The event id indexes within a column; STRIDE >= N_EVENT.
-    integer, parameter :: STRIDE = 16
+    integer, parameter :: STRIDE = 32
     integer(int64), allocatable :: counts(:, :) ! (STRIDE, 0:nthreads-1)
 
 contains
@@ -116,6 +125,18 @@ contains
             name = 'symplectic_rk_recovery'
         case (EVT_SYMPLECTIC_RESUME)
             name = 'symplectic_resume'
+        case (EVT_WARNING_MAXIT_ACCEPT)
+            name = 'warning_maxit_accept'
+        case (EVT_WARNING_MAXIT_REJECT_100)
+            name = 'warning_maxit_reject_100'
+        case (EVT_WARNING_MAXIT_REJECT_1E4)
+            name = 'warning_maxit_reject_1e4'
+        case (EVT_WARNING_MAXIT_REJECT_LARGE)
+            name = 'warning_maxit_reject_large'
+        case (EVT_WARNING_MAXIT_NONFINITE)
+            name = 'warning_maxit_nonfinite'
+        case (EVT_RETRY_EXHAUSTED)
+            name = 'retry_exhausted'
         case default
             name = 'unknown'
         end select

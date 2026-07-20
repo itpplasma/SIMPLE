@@ -232,7 +232,19 @@ wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wou
 For a self-contained demo that downloads test data, runs SIMPLE, and prints the confined fraction, use `examples/run_example.sh`.
 
 In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions.
-Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
+For chartmap coordinates, `chart_boundary_kind` declares what the outer chart
+surface represents. Its values are `auto` (the default), `lcfs`, `wall`, and
+`domain`. `auto` treats a chart whose recorded LCFS is at normalized radius one
+as an LCFS and treats other outer chart surfaces as numerical-domain limits.
+Set `wall` explicitly when the outer chart surface is the physical coordinate
+wall. The requested and effective values are stored in `results.nc`.
+
+Default warning mode accepts finite generic Newton corrections through 100
+tolerance units after the iteration limit. This covers the observed roundoff
+plateau at `relerr=1e-13` while still rejecting large and non-finite iterates.
+SPECTRE interface states retain the stricter 10-unit bound. Aggregate Newton,
+retry, recovery, and rejection counters are stored as `diagnostic_*` global
+attributes in `results.nc`.
 
 ### Output
 `confined_fraction.dat` is the main output, containing four columns:

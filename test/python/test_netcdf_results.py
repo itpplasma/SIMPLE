@@ -90,6 +90,13 @@ class TestNetCDFResultsOutput:
                 assert ds.canonical_grid_ntheta == 63
                 assert ds.canonical_grid_nphi == 64
                 assert ds.canonical_ode_relerr == 1e-11
+                assert ds.symplectic_newton_warning_factor == 100.0
+                assert ds.symplectic_spectre_newton_warning_factor == 10.0
+                assert ds.chart_boundary_kind == 'auto'
+                assert ds.chart_boundary_kind_effective == 'lcfs'
+                assert ds.diagnostic_midpoint_maxit >= 0
+                assert ds.diagnostic_warning_maxit_accept >= 0
+                assert ds.diagnostic_retry_exhausted >= 0
                 assert ds.multharm == 5
                 assert ds.contr_pp == -1e10
                 assert ds.notrace_passing == 0
