@@ -135,6 +135,7 @@ end module linear_radial_field_backend
 program test_newton_solver_status
   use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
   use, intrinsic :: iso_fortran_env, only: dp => real64
+  use util, only: twopi
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
     evaluate_linear_radial, failed_boundary_step, nonlinear_boundary_step, &
@@ -144,6 +145,7 @@ program test_newton_solver_status
     newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
     get_boundary_event_tolerances, accept_warning_maxiter, &
+    accept_warning_axis_crossing, &
     limit_radial_newton_step
   use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax, &
     EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, &
@@ -283,6 +285,7 @@ contains
     type(symplectic_integrator_t) :: strict_integrator
     type(field_can_t) :: strict_field
     real(dp) :: initial_state(4), accepted(2), previous(2), tolref(2)
+    real(dp) :: axis_iterate(5), axis_previous(5), axis_tolref(5)
     integer :: mode_index, step_status
 
     eval_field => evaluate_linear_radial
@@ -338,6 +341,39 @@ contains
         if (accept_warning_maxiter(accepted, previous, tolref, 1.0e-12_dp, &
             100.0_dp)) then
       error stop 'strict mode accepted a Newton max-iteration state'
+    end if
+
+    strict_integrator%z = [5.0e-7_dp, 1.0_dp, 2.0_dp, 3.0_dp]
+    axis_iterate = [-4.0e-7_dp, 1.0_dp, 2.0_dp, 3.0_dp, -2.0e-7_dp]
+    axis_previous = [0.01_dp, 1.0_dp, 2.0_dp, 3.0_dp, 0.01_dp]
+    axis_tolref = [1.0_dp, twopi, twopi, 10.0_dp, 1.0_dp]
+    symplectic_newton_warning_mode = .true.
+    if (.not. accept_warning_axis_crossing(strict_integrator, axis_iterate, &
+        axis_previous, axis_tolref, 1.0e-12_dp)) then
+      error stop 'warning mode rejected a local converged axis crossing'
+    end if
+    axis_iterate(1) = abs(axis_iterate(1))
+    if (accept_warning_axis_crossing(strict_integrator, axis_iterate, &
+        axis_previous, axis_tolref, 1.0e-12_dp)) then
+      error stop 'axis recovery accepted a non-crossing max-iteration state'
+    end if
+    axis_iterate(1) = -4.0e-7_dp
+    axis_iterate(2) = axis_iterate(2) + 1.0e-6_dp
+    if (accept_warning_axis_crossing(strict_integrator, axis_iterate, &
+        axis_previous, axis_tolref, 1.0e-12_dp)) then
+      error stop 'axis recovery accepted an unconverged angular correction'
+    end if
+    axis_iterate(2) = axis_previous(2)
+    strict_integrator%z(1) = 0.1_dp
+    if (accept_warning_axis_crossing(strict_integrator, axis_iterate, &
+        axis_previous, axis_tolref, 1.0e-12_dp)) then
+      error stop 'axis recovery accepted a crossing from outside the axis chart'
+    end if
+    strict_integrator%z(1) = 5.0e-7_dp
+    symplectic_newton_warning_mode = .false.
+    if (accept_warning_axis_crossing(strict_integrator, axis_iterate, &
+        axis_previous, axis_tolref, 1.0e-12_dp)) then
+      error stop 'strict mode accepted an axis max-iteration state'
     end if
   end subroutine test_newton_warning_mode
 

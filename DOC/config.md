@@ -12,24 +12,24 @@
   values to refine event location independently of the nonlinear solve.
 
 * `symplectic_newton_warning_mode` defaults to `.true.`. When an implicit solve
-  reaches its iteration limit, SIMPLE continues only if the final Newton
-  correction is finite and no more than ten times the requested relative
-  tolerance. Each occurrence is reported by the corresponding `*_maxit`
-  diagnostic. The production RK, symplectic, and full-orbit paths then use the
-  same terminal convention: if bounded recovery cannot resolve a numerical
-  microstep, SIMPLE retains any contiguous accepted prefix and holds only the
-  unresolved remainder, records `warning_step_skip`, advances the clock for
-  the complete interval, and retries from that valid state on the next
-  microstep. A warning hold does not terminate or
-  numerically disqualify the marker: a marker that reaches the requested end
-  time remains a resolved survivor, while a later physical boundary event is
-  still a loss. Set the option to `.false.` for strict diagnostic runs that end
-  only the affected marker at the first exhausted recovery and report a
-  101--105 `orbit_exit_code` with `NaN` in `times_lost`.
-  A symplectic failure may use the established adaptive-RK pusher from the last
-  accepted state. That fallback is capped at 10,000 internal steps. If both
-  pushers fail from the same state, warning mode records held intervals for the
-  rest of the trace instead of repeating an identical stalled RK solve.
+  reaches its iteration limit, the generic integrators accept a finite final
+  correction through 100 requested-tolerance units; SPECTRE keeps a 10-unit
+  bound. Midpoint steps that cross the polar-coordinate axis have one additional
+  local rule. If both radial Newton variables remain within `1d-6`, the endpoint
+  radius is negative, and every angular and momentum correction satisfies the
+  usual warning bound, SIMPLE accepts the step and applies the equivalent
+  positive-radius chart switch. This avoids rejecting a physically regular axis
+  passage because its signed radial coordinate is singular. The
+  `warning_axis_crossing_accept` diagnostic counts these steps.
+
+  Other rejected steps use bounded dyadic symplectic retries and then the
+  established adaptive-RK pusher from the last accepted state. The RK fallback
+  is capped at 10,000 internal steps. If both methods fail, warning mode rolls
+  back and consumes one isolated microstep, records `warning_step_skip`, and
+  retries. A successful step resets the allowance; a second consecutive failure
+  is a numerical exit. Set the option to `.false.` for strict diagnostic runs
+  that end the affected marker at the first exhausted recovery. Numerical exits
+  use codes 101--105 and `NaN` in `times_lost`.
 
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,

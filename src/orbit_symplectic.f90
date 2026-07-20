@@ -27,7 +27,7 @@ use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_MIDPOINT_MAXIT, EVT_WARNING_MAXIT_ACCEPT, &
   EVT_WARNING_MAXIT_REJECT_100, EVT_WARNING_MAXIT_REJECT_1E4, &
   EVT_WARNING_MAXIT_REJECT_LARGE, EVT_WARNING_MAXIT_NONFINITE, &
-  EVT_RETRY_EXHAUSTED
+  EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT
 
 implicit none
 
@@ -85,6 +85,29 @@ logical function accept_warning_maxiter(x, xlast, tolref, rtol, warning_factor)
     call count_event(EVT_WARNING_MAXIT_REJECT_LARGE)
   end if
 end function accept_warning_maxiter
+
+logical function accept_warning_axis_crossing(si, x, xlast, tolref, rtol)
+  ! Near the polar-coordinate axis, the endpoint and midpoint radii can change
+  ! sign while the physical step and its angular/momentum components have
+  ! converged. Accept only that local chart crossing; the caller immediately
+  ! maps the negative endpoint to the equivalent positive-radius chart.
+  type(symplectic_integrator_t), intent(in) :: si
+  real(dp), intent(in) :: x(5), xlast(5), tolref(5), rtol
+  real(dp), parameter :: axis_radius = 1.0e-6_dp
+
+  accept_warning_axis_crossing = .false.
+  if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
+  if (si%z(1) < 0.0_dp .or. si%z(1) > axis_radius) return
+  if (.not. finite_newton_iterate(x)) return
+  if (.not. finite_newton_iterate(xlast)) return
+  if (.not. finite_newton_iterate(tolref)) return
+  if (x(1) >= 0.0_dp) return
+  if (max(abs(x(1)), abs(x(5))) > axis_radius) return
+  accept_warning_axis_crossing = all(abs(x(2:4) - xlast(2:4)) <= &
+    si%warning_factor*rtol*abs(tolref(2:4)))
+  if (accept_warning_axis_crossing) &
+    call count_event(EVT_WARNING_AXIS_CROSSING_ACCEPT)
+end function accept_warning_axis_crossing
 
 subroutine advance_symplectic_with_retry(si, f, stepper, status, &
     accepted_fraction)
@@ -849,8 +872,12 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, rtol, si%warning_factor)) &
+    if (accept_warning_axis_crossing(si, x, xlast, tolref, rtol)) then
       status = SYMPLECTIC_STEP_OK
+    else if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%warning_factor)) then
+      status = SYMPLECTIC_STEP_OK
+    end if
   end if
 end subroutine
 

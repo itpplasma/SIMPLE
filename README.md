@@ -248,6 +248,12 @@ is stored as `wall_query_rho_lcfs` in `results.nc` (`-1` when inactive).
 Default warning mode accepts finite generic Newton corrections through 100
 tolerance units after the iteration limit. This covers the observed roundoff
 plateau at `relerr=1e-13` while still rejecting large and non-finite iterates.
+At a midpoint crossing of the polar-coordinate axis, the signed endpoint and
+midpoint radii may remain unconverged even though the physical nonradial state
+has converged. SIMPLE accepts that chart change only when both radial values are
+within `1d-6`, the endpoint radius is negative, and the angular and momentum
+corrections satisfy the normal warning bound. It then applies the equivalent
+positive-radius chart switch and records `warning_axis_crossing_accept`.
 If symplectic retries and the adaptive-RK fallback both fail, one isolated
 microstep is rolled back and consumed as a warning hold; the next microstep
 retries normally. A successful step resets the allowance, while a second

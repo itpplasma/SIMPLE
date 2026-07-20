@@ -98,6 +98,7 @@ class TestNetCDFResultsOutput:
                 assert ds.max_consecutive_warning_holds == 1
                 assert ds.diagnostic_midpoint_maxit >= 0
                 assert ds.diagnostic_warning_maxit_accept >= 0
+                assert ds.diagnostic_warning_axis_crossing_accept >= 0
                 assert ds.diagnostic_retry_exhausted >= 0
                 assert ds.multharm == 5
                 assert ds.contr_pp == -1e10
