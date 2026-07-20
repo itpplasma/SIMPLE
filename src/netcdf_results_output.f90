@@ -52,6 +52,7 @@ contains
                           ntimstep, startmode, num_surf, sbeg, &
                           contr_pp, notrace_passing, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
+                          max_consecutive_warning_holds, &
                           netcdffile, field_input, coord_input, &
             wall_input, wall_units, wall_hit, wall_hit_cart, &
             wall_query_rho_lcfs, &
@@ -365,6 +366,9 @@ contains
         call check_nc(status, 'put_att deterministic')
         status = nf90_put_att(ncid, nf90_global, 'ran_seed', ran_seed)
         call check_nc(status, 'put_att ran_seed')
+        status = nf90_put_att(ncid, nf90_global, &
+            'max_consecutive_warning_holds', max_consecutive_warning_holds)
+        call check_nc(status, 'put_att max_consecutive_warning_holds')
         status = nf90_put_att(ncid, nf90_global, 'netcdffile', trim(netcdffile))
         call check_nc(status, 'put_att netcdffile')
         status = nf90_put_att(ncid, nf90_global, 'field_input', trim(field_input))

@@ -18,6 +18,7 @@ module simple_main
         fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
         zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
         reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
+        max_consecutive_warning_holds, &
         coord_input, wall_input, wall_units, wall_hit, wall_hit_cart, &
         wall_query_rho_lcfs, &
         chart_boundary_kind, chart_boundary_kind_effective, &
@@ -1773,14 +1774,9 @@ contains
                             exit_step = real(kt, dp) + loss_fraction
                         end if
                     else if (symplectic_newton_warning_mode) then
-                        ! Preserve the historical warning-mode single-step hold
-                        ! for full-orbit numerical inversion faults.
-                        z = z_step_start
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
+                        call hold_isolated_warning_failure(z, z_step_start, &
+                            ierr_orbit, hold_streak_local, numerical_hold, &
+                            numerical_hold_any_local)
                     end if
                     if (ierr_orbit .ne. 0) exit
                 end if
@@ -1817,8 +1813,9 @@ contains
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 else if (ierr_orbit /= 0) then
-                    z = z_step_start
-                    hold_streak_local = ierr_orbit
+                    call hold_isolated_warning_failure(z, z_step_start, &
+                        ierr_orbit, hold_streak_local, numerical_hold, &
+                        numerical_hold_any_local)
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -1875,7 +1872,9 @@ contains
                         z = z_step_start
                         anorb%si = si_step_start
                         anorb%f = f_step_start
-                        hold_streak_local = ierr_orbit
+                        call hold_isolated_warning_failure(z, z_step_start, &
+                            ierr_orbit, hold_streak_local, numerical_hold, &
+                            numerical_hold_any_local)
                     end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
@@ -1908,6 +1907,27 @@ contains
             numerical_hold_any = numerical_hold_any_local
         if (present(rk_recovery)) rk_recovery = rk_recovery_local
     end subroutine macrostep
+
+    subroutine hold_isolated_warning_failure(z, z_step_start, ierr_orbit, &
+            hold_streak, numerical_hold, numerical_hold_any)
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: z_step_start(5)
+        integer, intent(inout) :: ierr_orbit, hold_streak
+        logical, intent(inout) :: numerical_hold, numerical_hold_any
+
+        z = z_step_start
+        if (.not. symplectic_newton_warning_mode) return
+        if (hold_streak >= max_consecutive_warning_holds) return
+
+        ! Preserve the historical warning-level behavior for one isolated
+        ! unresolved microstep. Unlike the former permanent latch, the next
+        ! microstep retries both pushers; a successful step resets the streak.
+        call count_event(EVT_WARNING_STEP_SKIP)
+        hold_streak = hold_streak + 1
+        numerical_hold = .true.
+        numerical_hold_any = .true.
+        ierr_orbit = 0
+    end subroutine hold_isolated_warning_failure
 
     subroutine locate_wall_segment(z, z_start, z_end, ipart, x_start_m, &
             u_start, x_end_m, u_end, field_period, start_step, segment_steps, &
@@ -2051,8 +2071,9 @@ contains
                     end if
                     exit
                 else if (ierr_orbit /= 0) then
-                    z = z_step_start
-                    hold_streak_local = ierr_orbit
+                    call hold_isolated_warning_failure(z, z_step_start, &
+                        ierr_orbit, hold_streak_local, numerical_hold, &
+                        numerical_hold_any_local)
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -2134,7 +2155,9 @@ contains
                         z = z_step_start
                         anorb%si = si_step_start
                         anorb%f = f_step_start
-                        hold_streak_local = ierr_orbit
+                        call hold_isolated_warning_failure(z, z_step_start, &
+                            ierr_orbit, hold_streak_local, numerical_hold, &
+                            numerical_hold_any_local)
                     end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)

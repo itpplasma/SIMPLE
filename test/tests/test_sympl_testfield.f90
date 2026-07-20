@@ -166,12 +166,22 @@ contains
         symplectic_newton_warning_mode = .true.
         call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
             numerical_hold_any=numerical_hold)
-        if (step_error == 0) error stop 'warning mode hid exhausted recovery'
-        if (kt /= 0_int64) error stop 'warning mode consumed a failed step'
-        if (numerical_hold .or. hold_streak == 0) &
-            error stop 'warning mode misreported exhausted recovery'
+        if (step_error /= 0) error stop 'isolated warning failure stopped orbit'
+        if (kt /= 1_int64) error stop 'isolated warning hold lost its interval'
+        if (.not. numerical_hold .or. hold_streak /= 1) &
+            error stop 'isolated warning hold was not reported'
         if (any(z /= initial_state)) then
-            error stop 'warning-mode failure changed the last accepted state'
+            error stop 'isolated warning hold changed the last accepted state'
+        end if
+
+        call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
+            numerical_hold_any=numerical_hold)
+        if (step_error == 0) error stop 'repeated warning failure was hidden'
+        if (kt /= 1_int64) error stop 'repeated failure consumed another interval'
+        if (numerical_hold .or. hold_streak /= 1) &
+            error stop 'repeated warning failure was misreported'
+        if (any(z /= initial_state)) then
+            error stop 'repeated warning failure changed the last accepted state'
         end if
 
         z = initial_state
@@ -180,12 +190,22 @@ contains
         hold_streak = 0
         call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
             hold_streak=hold_streak, numerical_hold_any=numerical_hold)
-        if (step_error == 0) error stop 'warning wall path hid exhausted recovery'
-        if (kt /= 0_int64) error stop 'warning wall path consumed a failed step'
-        if (numerical_hold .or. hold_streak == 0) &
-            error stop 'warning wall path misreported exhausted recovery'
+        if (step_error /= 0) error stop 'isolated wall warning stopped orbit'
+        if (kt /= 1_int64) error stop 'isolated wall hold lost its interval'
+        if (.not. numerical_hold .or. hold_streak /= 1) &
+            error stop 'isolated wall hold was not reported'
         if (any(z /= initial_state)) then
-            error stop 'warning wall failure changed the last accepted state'
+            error stop 'isolated wall hold changed the last accepted state'
+        end if
+
+        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
+            hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+        if (step_error == 0) error stop 'repeated wall failure was hidden'
+        if (kt /= 1_int64) error stop 'repeated wall failure consumed another interval'
+        if (numerical_hold .or. hold_streak /= 1) &
+            error stop 'repeated wall failure was misreported'
+        if (any(z /= initial_state)) then
+            error stop 'repeated wall failure changed the last accepted state'
         end if
     end subroutine test_failed_step_preserves_state
 

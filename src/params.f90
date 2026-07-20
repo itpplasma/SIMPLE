@@ -137,6 +137,11 @@ module params
     logical :: reuse_batch = .False.
     integer, dimension(:), allocatable :: idx
 
+    !> Warning mode may consume one isolated, fully exhausted numerical
+    !> microstep. A second consecutive failure is terminal rather than freezing
+    !> the remainder of the orbit at one phase-space point.
+    integer, parameter :: max_consecutive_warning_holds = 1
+
     character(1000) :: field_input = ''
     character(1000) :: coord_input = ''
     character(1000) :: wall_input = ''

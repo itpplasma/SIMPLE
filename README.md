@@ -248,9 +248,13 @@ is stored as `wall_query_rho_lcfs` in `results.nc` (`-1` when inactive).
 Default warning mode accepts finite generic Newton corrections through 100
 tolerance units after the iteration limit. This covers the observed roundoff
 plateau at `relerr=1e-13` while still rejecting large and non-finite iterates.
-SPECTRE interface states retain the stricter 10-unit bound. Aggregate Newton,
-retry, recovery, and rejection counters are stored as `diagnostic_*` global
-attributes in `results.nc`.
+If symplectic retries and the adaptive-RK fallback both fail, one isolated
+microstep is rolled back and consumed as a warning hold; the next microstep
+retries normally. A successful step resets the allowance, while a second
+consecutive full failure is a numerical exit instead of a permanent frozen
+orbit. SPECTRE interface states retain the stricter 10-unit bound and their
+established recovery behavior. The hold limit and aggregate Newton, retry,
+recovery, and rejection counters are stored in `results.nc`.
 
 ### Output
 `confined_fraction.dat` is the main output, containing four columns:
