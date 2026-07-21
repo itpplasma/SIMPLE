@@ -67,7 +67,7 @@ module simple_main
     real(dp), parameter :: RK_RECOVERY_AXIS_ENTER = 0.1_dp
     ! Retry only a failed legacy axis solve with a smoother, still axis-local
     ! Cartesian regularization. Successful release-era RK paths stay unchanged.
-    real(dp), parameter :: RK_RECOVERY_AXIS_FLOOR = 1.0e-6_dp
+    real(dp), parameter :: RK_RECOVERY_AXIS_FLOOR = 1.0e-3_dp
 
     type :: rk_recovery_state_t
         logical :: active = .false.

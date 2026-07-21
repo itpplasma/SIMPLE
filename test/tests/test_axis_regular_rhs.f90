@@ -14,7 +14,7 @@ program test_axis_regular_rhs
     implicit none
 
     integer, parameter :: nray = 8
-    real(dp), parameter :: sample_s = 1.0e-6_dp
+    real(dp), parameter :: sample_s = 1.0e-3_dp
     real(dp), parameter :: probe_rho = 1.0e-12_dp
     real(dp), parameter :: axis_limit_tol = 1.0e-8_dp
     type(tracer_t) :: norb
@@ -47,7 +47,7 @@ program test_axis_regular_rhs
         failed = .true.
     end if
 
-    rho = 2.0e-2_dp
+    rho = 5.0e-2_dp
     theta = 0.7_dp
     s = rho*rho
     zaxis = [rho*cos(theta), rho*sin(theta), 0.1_dp, 1.0_dp, -0.3_dp]
