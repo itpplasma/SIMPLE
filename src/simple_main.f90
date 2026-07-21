@@ -64,6 +64,7 @@ module simple_main
     real(dp), parameter :: RK_AXIS_EXIT = 0.02_dp
     real(dp), parameter :: RK_EDGE_ENTER = 0.98_dp
     integer, parameter :: RK_RECOVERY_STEP_LIMIT = 10000
+    real(dp), parameter :: RK_RECOVERY_AXIS_ENTER = 0.1_dp
     ! Retry only a failed legacy axis solve with a smoother, still axis-local
     ! Cartesian regularization. Successful release-era RK paths stay unchanged.
     real(dp), parameter :: RK_RECOVERY_AXIS_FLOOR = 1.0e-6_dp
@@ -88,11 +89,12 @@ contains
         z_start = z
         call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
             RK_RECOVERY_STEP_LIMIT)
-        if (ierr /= 2 .or. z_start(1) >= RK_AXIS_ENTER) return
+        if (ierr /= 2 .or. z_start(1) >= RK_RECOVERY_AXIS_ENTER) return
 
         z = z_start
         call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
-            RK_RECOVERY_STEP_LIMIT, RK_RECOVERY_AXIS_FLOOR)
+            RK_RECOVERY_STEP_LIMIT, RK_RECOVERY_AXIS_FLOOR, &
+            RK_RECOVERY_AXIS_ENTER)
     end subroutine orbit_timestep_recovery
 
     pure subroutine activate_rk_recovery(state, radius)
@@ -1091,7 +1093,7 @@ contains
         potato%j_perp = potato_values(2)
         potato%p_phi = potato_values(3)
         call potato_to_simple_invariants(potato, psi_axis, psi_edge, v0_ratio, &
-                                         converted)
+            converted)
         simple_values = [converted%h0, converted%j_perp, converted%p_phi]
     end subroutine potato_invariants_to_simple_flat
 
@@ -1135,12 +1137,12 @@ contains
             end if
         end do
         call sort_invariant_starts(states, metadata, residuals, cylindrical, &
-                                   n_solutions)
+            n_solutions)
         if (size(result%starts) > max_solutions) status = INVARIANT_CAPACITY
     end subroutine states_from_invariants_flat
 
     subroutine sort_invariant_starts(states, metadata, residuals, cylindrical, &
-                                     count)
+            count)
         real(dp), intent(inout) :: states(:, :), residuals(:), cylindrical(:, :)
         integer, intent(inout) :: metadata(:, :)
         integer, intent(in) :: count
@@ -1986,7 +1988,7 @@ contains
         hit = .false.
         hit_step = start_step + segment_steps
         if (wall_query_rho_lcfs >= 0.0_dp .and. &
-                u_end(1) <= wall_query_rho_lcfs) return
+            u_end(1) <= wall_query_rho_lcfs) return
         call stl_wall_first_hit_segment_with_normal( &
             wall, x_start_m, x_end_m, hit, x_hit_m, normal_m)
         if (.not. hit) return

@@ -56,7 +56,7 @@ program test_axis_regular_rhs
     call polar_rhs_to_axis(zaxis, s, vpolar, vexpected)
     call velo_axis_regularized(0.0_dp, zaxis, vprobe, sample_s)
     if (maxval(abs(vprobe - vexpected)) > 1.0e-12_dp) then
-        print *, 'FAIL: tensor pullback changed the outer RHS, error = ', &
+        print *, 'FAIL: regular chart changed the outer RHS, error = ', &
             maxval(abs(vprobe - vexpected))
         failed = .true.
     end if
