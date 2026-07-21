@@ -368,6 +368,15 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         TIMEOUT 120)
 
+    add_executable(test_axis_regular_rhs.x test_axis_regular_rhs.f90)
+    target_link_libraries(test_axis_regular_rhs.x simple)
+    add_test(NAME test_axis_regular_rhs
+        COMMAND test_axis_regular_rhs.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_axis_regular_rhs PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
+
     # Full-orbit (FO) Boris pusher: energy bound, near-axis crossing, no spurious
     # loss, on the reactor-scale Boozer field (wout.nc symlinked above).
     add_executable(test_fo_boris.x test_fo_boris.f90)

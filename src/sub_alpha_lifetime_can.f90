@@ -4,6 +4,13 @@ module alpha_lifetime_sub
 
     implicit none
 
+    integer, parameter :: axis_tensor_count = 14
+
+    type :: magfie_data_t
+        real(dp) :: bmod, sqrtg
+        real(dp) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+    end type magfie_data_t
+
 contains
 
     !ToDo make module from all global things like this one
@@ -361,37 +368,229 @@ contains
             real(dp), intent(in) :: z_axis(:)
             real(dp), intent(out) :: vz_axis(:)
             real(dp), intent(in) :: s_floor
-            real(dp) :: derlogsqs
-            real(dp) :: r2,scale,x_eval,y_eval
-            real(dp), dimension(5) :: z,vz
-            !
-            r2=z_axis(1)**2+z_axis(2)**2
-            if(r2.lt.s_floor) then
-                if(r2.gt.0.d0) then
-                    scale=sqrt(s_floor/r2)
-                    x_eval=scale*z_axis(1)
-                    y_eval=scale*z_axis(2)
-                else
-                    x_eval=sqrt(s_floor)
-                    y_eval=0.d0
-                endif
-                z(1)=s_floor
-            else
-                x_eval=z_axis(1)
-                y_eval=z_axis(2)
-                z(1)=r2
-            endif
-            z(2)=atan2(y_eval,x_eval)
-            z(3:5)=z_axis(3:5)
-            !
-            call velo_can(tau,z,vz)
-            !
-            derlogsqs=0.5d0*vz(1)/z(1)
-            vz_axis(1)=derlogsqs*x_eval-vz(2)*y_eval
-            vz_axis(2)=derlogsqs*y_eval+vz(2)*x_eval
-            vz_axis(3:5)=vz(3:5)
-            !
+            real(dp) :: derphi(3)
+            type(magfie_data_t) :: field
+
+            ! Pull back the complete magfie tensor set before evaluating the
+            ! coordinate-covariant guiding-centre equation. Transforming only
+            ! the final polar velocity makes a radius floor select an arbitrary
+            ! approach ray at the axis.
+            call evaluate_axis_field(z_axis(1), z_axis(2), z_axis(3), &
+                s_floor, field)
+            derphi=0.d0
+            call guiding_center_velocity(z_axis, field, derphi, vz_axis)
         end subroutine velo_axis_regularized
+
+        subroutine guiding_center_velocity(z, field, derphi, vz)
+            use parmot_mod, only : rmu,ro0
+            real(dp), intent(in) :: z(:), derphi(3)
+            type(magfie_data_t), intent(in) :: field
+            real(dp), intent(out) :: vz(:)
+            integer :: i
+            real(dp) :: p,alambd,p2,ovmu,gamma2,gamma,ppar,vpa,coala
+            real(dp) :: rmumag,rovsqg,rosqgb,rovbm
+            real(dp) :: a_phi(3),a_b(3),a_c(3),hstar(3)
+            real(dp) :: s_hc,hpstar,phidot,blodot,bra
+
+            p=z(4)
+            alambd=z(5)
+            p2=p*p
+            ovmu=2.d0/rmu
+            gamma2=p2*ovmu+1.d0
+            gamma=dsqrt(gamma2)
+            ppar=p*alambd
+            vpa=ppar/gamma
+            coala=(1.d0-alambd**2)
+            rmumag=.5d0*p2*coala/field%bmod
+
+            rovsqg=ro0/field%sqrtg
+            rosqgb=.5d0*rovsqg/field%bmod
+            rovbm=ro0/field%bmod
+
+            a_phi(1)=(field%hcovar(2)*derphi(3) &
+                -field%hcovar(3)*derphi(2))*rosqgb
+            a_b(1)=(field%hcovar(2)*field%bder(3) &
+                -field%hcovar(3)*field%bder(2))*rovsqg
+            a_phi(2)=(field%hcovar(3)*derphi(1) &
+                -field%hcovar(1)*derphi(3))*rosqgb
+            a_b(2)=(field%hcovar(3)*field%bder(1) &
+                -field%hcovar(1)*field%bder(3))*rovsqg
+            a_phi(3)=(field%hcovar(1)*derphi(2) &
+                -field%hcovar(2)*derphi(1))*rosqgb
+            a_b(3)=(field%hcovar(1)*field%bder(2) &
+                -field%hcovar(2)*field%bder(1))*rovsqg
+
+            s_hc=0.d0
+            do i=1,3
+                a_c(i)=field%hcurl(i)*rovbm
+                s_hc=s_hc+a_c(i)*field%hcovar(i)
+                hstar(i)=field%hctrvr(i)+ppar*a_c(i)
+            enddo
+            hpstar=1.d0+ppar*s_hc
+
+            phidot=0.d0
+            blodot=0.d0
+            do i=1,3
+                bra=vpa*hstar(i)+a_phi(i)+a_b(i)*rmumag/gamma
+                vz(i)=bra/hpstar
+                phidot=phidot+vz(i)*derphi(i)
+                blodot=blodot+vz(i)*field%bder(i)
+            enddo
+
+            vz(4)=-0.5d0*gamma*phidot/p
+            vz(5)=-(0.5d0*coala/hpstar)*(sum(hstar*derphi)/p &
+                +p*sum(hstar*field%bder)/gamma &
+                +alambd*sum(a_phi*field%bder))
+        end subroutine guiding_center_velocity
+
+        subroutine evaluate_axis_field(x, y, phi, sample_s, field)
+            real(dp), intent(in) :: x, y, phi, sample_s
+            type(magfie_data_t), intent(out) :: field
+            integer, parameter :: nang = 8
+            real(dp) :: values(axis_tensor_count, nang, 2)
+            real(dp) :: mean(axis_tensor_count, 2)
+            real(dp) :: m1c(axis_tensor_count, 2), m1s(axis_tensor_count, 2)
+            real(dp) :: m2c(axis_tensor_count, 2), m2s(axis_tensor_count, 2)
+            real(dp) :: coeff(axis_tensor_count), packed(axis_tensor_count)
+            real(dp) :: raw_packed(axis_tensor_count)
+            real(dp) :: angle, radius, radius0, r2, blend, blend_arg
+            integer :: iangle, iring
+            type(magfie_data_t) :: sample
+
+            r2=x*x+y*y
+            if(r2.ge.sample_s) then
+                call evaluate_axis_field_raw(x, y, phi, field)
+                return
+            endif
+
+            ! Resolve the regular Cartesian modes through quadratic order on
+            ! two circles. The second radius removes the leading radial
+            ! contamination from the axis value and linear harmonics.
+            radius0=sqrt(sample_s)
+            do iring=1,2
+                radius=real(iring,dp)*radius0
+                do iangle=1,nang
+                    angle=2.d0*acos(-1.d0)*real(iangle-1,dp)/real(nang,dp)
+                    call evaluate_axis_field_raw(radius*cos(angle), &
+                        radius*sin(angle), phi, sample)
+                    call pack_axis_field(sample, values(:,iangle,iring))
+                enddo
+            enddo
+
+            mean=0.d0
+            m1c=0.d0
+            m1s=0.d0
+            m2c=0.d0
+            m2s=0.d0
+            do iring=1,2
+                do iangle=1,nang
+                    angle=2.d0*acos(-1.d0)*real(iangle-1,dp)/real(nang,dp)
+                    mean(:,iring)=mean(:,iring)+values(:,iangle,iring)
+                    m1c(:,iring)=m1c(:,iring)+values(:,iangle,iring)*cos(angle)
+                    m1s(:,iring)=m1s(:,iring)+values(:,iangle,iring)*sin(angle)
+                    m2c(:,iring)=m2c(:,iring)+values(:,iangle,iring)*cos(2.d0*angle)
+                    m2s(:,iring)=m2s(:,iring)+values(:,iangle,iring)*sin(2.d0*angle)
+                enddo
+            enddo
+            mean=mean/real(nang,dp)
+            m1c=2.d0*m1c/real(nang,dp)
+            m1s=2.d0*m1s/real(nang,dp)
+            m2c=2.d0*m2c/real(nang,dp)
+            m2s=2.d0*m2s/real(nang,dp)
+
+            packed=(4.d0*mean(:,1)-mean(:,2))/3.d0
+            coeff=(4.d0*m1c(:,1)/radius0 &
+                -m1c(:,2)/(2.d0*radius0))/3.d0
+            packed=packed+coeff*x
+            coeff=(4.d0*m1s(:,1)/radius0 &
+                -m1s(:,2)/(2.d0*radius0))/3.d0
+            packed=packed+coeff*y
+            coeff=(mean(:,2)-mean(:,1))/(3.d0*sample_s)
+            packed=packed+coeff*r2
+            coeff=(4.d0*m2c(:,1)/sample_s &
+                -m2c(:,2)/(4.d0*sample_s))/3.d0
+            packed=packed+coeff*(x*x-y*y)
+            coeff=(4.d0*m2s(:,1)/sample_s &
+                -m2s(:,2)/(4.d0*sample_s))/3.d0
+            packed=packed+coeff*(2.d0*x*y)
+
+            ! Join the reconstruction to the exact pullback with a C1
+            ! smoothstep in the outer half of the disk.
+            if(r2.gt.0.25d0*sample_s) then
+                call evaluate_axis_field_raw(x, y, phi, sample)
+                call pack_axis_field(sample, raw_packed)
+                blend_arg=2.d0*sqrt(r2/sample_s)-1.d0
+                blend=blend_arg*blend_arg*(3.d0-2.d0*blend_arg)
+                packed=(1.d0-blend)*packed+blend*raw_packed
+            endif
+            call unpack_axis_field(packed, field)
+        end subroutine evaluate_axis_field
+
+        subroutine evaluate_axis_field_raw(x, y, phi, field)
+            use magfie_sub, only : magfie
+            real(dp), intent(in) :: x, y, phi
+            type(magfie_data_t), intent(out) :: field
+            real(dp) :: s, theta, xpolar(3)
+            real(dp) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+            s=x*x+y*y
+            if(.not.(s.gt.0.d0)) error stop &
+                'raw axis-field evaluation requires nonzero radius'
+            theta=atan2(y,x)
+            xpolar=[s,theta,phi]
+            call magfie(xpolar, field%bmod, field%sqrtg, bder, hcovar, &
+                hctrvr, hcurl)
+
+            ! ds = 2X dX + 2Y dY and
+            ! dtheta = (-Y dX + X dY)/s; det(dx/dq) = 2 > 0.
+            field%sqrtg=2.d0*field%sqrtg
+            call polar_covector_to_axis(x, y, s, bder, field%bder)
+            call polar_covector_to_axis(x, y, s, hcovar, field%hcovar)
+            call polar_vector_to_axis(x, y, s, hctrvr, field%hctrvr)
+            call polar_vector_to_axis(x, y, s, hcurl, field%hcurl)
+        end subroutine evaluate_axis_field_raw
+
+        pure subroutine polar_covector_to_axis(x, y, s, polar, axis)
+            real(dp), intent(in) :: x, y, s, polar(3)
+            real(dp), intent(out) :: axis(3)
+
+            axis(1)=2.d0*x*polar(1)-y*polar(2)/s
+            axis(2)=2.d0*y*polar(1)+x*polar(2)/s
+            axis(3)=polar(3)
+        end subroutine polar_covector_to_axis
+
+        pure subroutine polar_vector_to_axis(x, y, s, polar, axis)
+            real(dp), intent(in) :: x, y, s, polar(3)
+            real(dp), intent(out) :: axis(3)
+
+            axis(1)=x*polar(1)/(2.d0*s)-y*polar(2)
+            axis(2)=y*polar(1)/(2.d0*s)+x*polar(2)
+            axis(3)=polar(3)
+        end subroutine polar_vector_to_axis
+
+        pure subroutine pack_axis_field(field, packed)
+            type(magfie_data_t), intent(in) :: field
+            real(dp), intent(out) :: packed(axis_tensor_count)
+
+            packed(1)=field%bmod
+            packed(2)=field%sqrtg
+            packed(3:5)=field%bder
+            packed(6:8)=field%hcovar
+            packed(9:11)=field%hctrvr
+            packed(12:14)=field%hcurl
+        end subroutine pack_axis_field
+
+        pure subroutine unpack_axis_field(packed, field)
+            real(dp), intent(in) :: packed(axis_tensor_count)
+            type(magfie_data_t), intent(out) :: field
+
+            field%bmod=packed(1)
+            field%sqrtg=packed(2)
+            field%bder=packed(3:5)
+            field%hcovar=packed(6:8)
+            field%hctrvr=packed(9:11)
+            field%hcurl=packed(12:14)
+        end subroutine unpack_axis_field
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
