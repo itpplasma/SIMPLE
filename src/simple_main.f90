@@ -64,6 +64,9 @@ module simple_main
     real(dp), parameter :: RK_AXIS_EXIT = 0.02_dp
     real(dp), parameter :: RK_EDGE_ENTER = 0.98_dp
     integer, parameter :: RK_RECOVERY_STEP_LIMIT = 10000
+    ! Retry only a failed legacy axis solve with a smoother, still axis-local
+    ! Cartesian regularization. Successful release-era RK paths stay unchanged.
+    real(dp), parameter :: RK_RECOVERY_AXIS_FLOOR = 1.0e-6_dp
 
     type :: rk_recovery_state_t
         logical :: active = .false.
@@ -73,6 +76,24 @@ module simple_main
     end type rk_recovery_state_t
 
 contains
+
+    subroutine orbit_timestep_recovery(z, interval, tolerance, ierr)
+        use alpha_lifetime_sub, only: orbit_timestep_axis
+
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: interval, tolerance
+        integer, intent(out) :: ierr
+        real(dp) :: z_start(5)
+
+        z_start = z
+        call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
+            RK_RECOVERY_STEP_LIMIT)
+        if (ierr /= 2 .or. z_start(1) >= RK_AXIS_ENTER) return
+
+        z = z_start
+        call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
+            RK_RECOVERY_STEP_LIMIT, RK_RECOVERY_AXIS_FLOOR)
+    end subroutine orbit_timestep_recovery
 
     pure subroutine activate_rk_recovery(state, radius)
         type(rk_recovery_state_t), intent(inout) :: state
@@ -1705,19 +1726,32 @@ contains
         ierr = 2
     end subroutine locate_validated_lcfs
 
-    subroutine validate_rk_state(z_start, z_end, ierr)
+    subroutine validate_rk_state(z_start, z_end, ierr, expected_momentum)
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 
         real(dp), intent(in) :: z_start(5)
         real(dp), intent(inout) :: z_end(5)
         integer, intent(inout) :: ierr
+        real(dp), intent(in), optional :: expected_momentum
         real(dp), parameter :: radial_sanity_band = 0.05_dp
         real(dp), parameter :: max_local_radial_step = 0.5_dp
+        real(dp), parameter :: momentum_sanity_fraction = 0.05_dp
+        real(dp) :: momentum_reference
         real(dp) :: u_end(3)
+        logical :: momentum_valid
 
         if (ierr /= 0) return
+        momentum_reference = z_start(4)
+        momentum_valid = .true.
+        if (present(expected_momentum)) then
+            momentum_reference = expected_momentum
+            momentum_valid = abs(z_end(4) - momentum_reference) <= &
+                momentum_sanity_fraction* &
+                max(abs(momentum_reference), tiny(1.0_dp))
+        end if
         if (all(ieee_is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
             abs(z_end(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
+            momentum_valid .and. &
             abs(z_end(1) - z_start(1)) <= max_local_radial_step) then
             call integ_to_ref(z_end(1:3), u_end)
             if (all(ieee_is_finite(u_end)) .and. &
@@ -1790,13 +1824,14 @@ contains
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                    call orbit_timestep_recovery(z, dtaumin, relerr, &
+                        ierr_orbit)
                 else
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
-                call validate_rk_state(z_step_start, z, ierr_orbit)
+                call validate_rk_state(z_step_start, z, ierr_orbit, &
+                    z_step_start(4))
                 if (ierr_orbit == 1) then
                     z_step_end = z
                     call locate_validated_lcfs(z_step_start, z_step_end, &
@@ -1825,7 +1860,8 @@ contains
                     orbit_timestep_sympl, ierr_orbit)
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    call validate_rk_state(z_step_start, z, ierr_orbit, &
+                        si_step_start%pabs)
                     if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
@@ -1846,9 +1882,10 @@ contains
                     ! in the failing axis/edge region; generic failures use an
                     ! exponentially backed-off probe interval.
                     z = z_step_start
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    call orbit_timestep_recovery(z, dtaumin, relerr, &
+                        ierr_orbit)
+                    call validate_rk_state(z_step_start, z, ierr_orbit, &
+                        si_step_start%pabs)
                     if (ierr_orbit == 1) then
                         z_step_end = z
                         call locate_validated_lcfs(z_step_start, z_step_end, &
@@ -2035,13 +2072,14 @@ contains
             z_step_start = z
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                    call orbit_timestep_recovery(z, dtaumin, relerr, &
+                        ierr_orbit)
                 else
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
-                call validate_rk_state(z_step_start, z, ierr_orbit)
+                call validate_rk_state(z_step_start, z, ierr_orbit, &
+                    z_step_start(4))
                 if (ierr_orbit == 1) then
                     z_step_end = z
                     call locate_validated_lcfs(z_step_start, z_step_end, &
@@ -2083,7 +2121,8 @@ contains
                     orbit_timestep_sympl, ierr_orbit, segment_duration)
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    call validate_rk_state(z_step_start, z, ierr_orbit, &
+                        si_step_start%pabs)
                     if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
@@ -2112,9 +2151,10 @@ contains
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
                     z = z_step_start
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
+                    call orbit_timestep_recovery(z, dtaumin, relerr, &
+                        ierr_orbit)
+                    call validate_rk_state(z_step_start, z, ierr_orbit, &
+                        si_step_start%pabs)
                     if (ierr_orbit == 1) then
                         z_step_end = z
                         call locate_validated_lcfs(z_step_start, z_step_end, &

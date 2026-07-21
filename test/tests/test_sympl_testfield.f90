@@ -391,6 +391,18 @@ contains
         call validate_rk_state(z_before, z_after, step_error)
         if (step_error /= 0) error stop 'valid adaptive-RK state was rejected'
 
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 0.5_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
+        if (step_error /= 2 .or. any(z_after /= z_before)) then
+            error stop 'wrong-energy adaptive-RK branch was committed'
+        endif
+
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.01_dp, 0.5_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
+        if (step_error /= 0) error stop 'bounded adaptive-RK momentum drift was rejected'
+
         z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 2.0_dp]
         step_error = 0
         call validate_rk_state(z_before, z_after, step_error)

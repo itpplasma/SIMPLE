@@ -342,6 +342,15 @@ contains
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
         subroutine velo_axis(tau,z_axis,vz_axis)
+            real(dp), intent(in) :: tau
+            real(dp), intent(in) :: z_axis(:)
+            real(dp), intent(out) :: vz_axis(:)
+            real(dp), parameter :: legacy_s_floor = 1.d-8
+
+            call velo_axis_regularized(tau, z_axis, vz_axis, legacy_s_floor)
+        end subroutine velo_axis
+
+        subroutine velo_axis_regularized(tau,z_axis,vz_axis,s_floor)
             !
             ! Here variables z(1)=s and z(2)=theta are replaced with
             ! x_axis(1)=x=sqrt(s)*cos(theta) and x_axis(2)=y=sqrt(s)*sin(theta)
@@ -351,7 +360,7 @@ contains
             real(dp), intent(in) :: tau
             real(dp), intent(in) :: z_axis(:)
             real(dp), intent(out) :: vz_axis(:)
-            real(dp), parameter :: s_floor=1.d-8
+            real(dp), intent(in) :: s_floor
             real(dp) :: derlogsqs
             real(dp) :: r2,scale,x_eval,y_eval
             real(dp), dimension(5) :: z,vz
@@ -382,21 +391,22 @@ contains
             vz_axis(2)=derlogsqs*y_eval+vz(2)*x_eval
             vz_axis(3:5)=vz(3:5)
             !
-        end subroutine velo_axis
+        end subroutine velo_axis_regularized
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
-        subroutine integrate_axis_segment(z,tau1,tau2,relerr,near_axis,step_limit)
+        subroutine integrate_axis_segment(z,tau1,tau2,relerr,near_axis, &
+                axis_floor,step_limit)
             use odeint_allroutines_sub, only : odeint_allroutines
             implicit none
             logical, intent(in) :: near_axis
             integer, intent(in), optional :: step_limit
-            real(dp), intent(in) :: tau1,tau2,relerr
+            real(dp), intent(in) :: tau1,tau2,relerr,axis_floor
             real(dp), intent(inout) :: z(5)
-            integer :: context
+            real(dp) :: context
 
+            context=axis_floor
             if(present(step_limit)) then
-                context=0
                 if(near_axis) then
                     call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
                         velo_axis_context,step_limit=step_limit)
@@ -405,7 +415,8 @@ contains
                         velo_can_context,step_limit=step_limit)
                 endif
             else if(near_axis) then
-                call odeint_allroutines(z,5,tau1,tau2,relerr,velo_axis)
+                call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
+                    velo_axis_context)
             else
                 call odeint_allroutines(z,5,tau1,tau2,relerr,velo_can)
             endif
@@ -430,12 +441,15 @@ contains
             real(dp), intent(out) :: vz(:)
 
             select type(context)
-                type is(integer)
+                type is(real(dp))
+                call velo_axis_regularized(tau,z,vz,context)
+            class default
+                error stop 'invalid axis ODE context'
             end select
-            call velo_axis(tau,z,vz)
         end subroutine velo_axis_context
 
-        subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr,step_limit)
+        subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr,step_limit, &
+                axis_floor)
             use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
             use odeint_allroutines_sub, only : odeint_has_failed
             use chamb_sub, only : chamb_can
@@ -448,7 +462,8 @@ contains
             logical :: near_axis
             integer :: ierr
             integer, intent(in), optional :: step_limit
-            real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2
+            real(dp), intent(in), optional :: axis_floor
+            real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2,axis_floor_local
             real(dp) :: relerr
             !
             real(dp), dimension(2)    :: y
@@ -461,6 +476,13 @@ contains
             endif
             !
             ierr=0
+            axis_floor_local=1.d-8
+            if(present(axis_floor)) axis_floor_local=axis_floor
+            if(.not.ieee_is_finite(axis_floor_local) .or. &
+                axis_floor_local.le.0.d0) then
+                ierr=2
+                return
+            endif
             z_initial=z
             y(1)=z(1)
             y(2)=z(2)
@@ -483,7 +505,8 @@ contains
                         z(1)=z1
                         z(2)=z2
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -499,7 +522,8 @@ contains
                         if(ierr.eq.1) return
                     else
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -515,7 +539,8 @@ contains
                         z(1)=z1
                         z(2)=z2
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -524,7 +549,8 @@ contains
                         !
                     else
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -555,7 +581,8 @@ contains
                     z(1)=z1
                     z(2)=z2
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
@@ -571,7 +598,8 @@ contains
                     if(ierr.eq.1) return
                 else
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
@@ -587,7 +615,8 @@ contains
                     z(1)=z1
                     z(2)=z2
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
@@ -596,7 +625,8 @@ contains
                     !
                 else
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
