@@ -6,7 +6,296 @@ module alpha_lifetime_sub
 
     integer, parameter :: axis_rhs_count = 5
 
+    type :: toroidal_regularization_context_t
+        real(dp) :: mu = 0.0_dp
+        real(dp) :: major_radius_cm = 1.0_dp
+    end type toroidal_regularization_context_t
+
+    ! The Burby--Ellison position map is retained only through first order in
+    ! gyroradius. Near a mirror point, its neglected second-order terms can put
+    ! the mapped state just below the original constant-momentum energy shell.
+    ! Clamp only that small mismatch; a larger negative radicand is a failed
+    ! regularized step and must fall through to the next recovery method.
+    real(dp), parameter :: toroidal_energy_shell_tolerance = 1.0e-5_dp
+
 contains
+
+    subroutine bstar_parallel_factor(z, factor)
+        use parmot_mod, only: ro0
+        use magfie_sub, only: magfie
+        real(dp), intent(in) :: z(5)
+        real(dp), intent(out) :: factor
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        call magfie(z(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        factor = 1.0_dp + z(4)*z(5)*(ro0/bmod)*dot_product(hcurl, hcovar)
+    end subroutine bstar_parallel_factor
+
+    subroutine toroidal_regularized_position_map(x, ppar, direction, x_mapped, &
+            ierr)
+        !> Leading near-identity map from Burby and Ellison, Phys. Plasmas 24,
+        !> 110703 (2017), Eq. (13). direction=1 maps the conventional guiding
+        !> centre to the toroidally regularized coordinate; direction=-1
+        !> numerically inverts that first-order map. The toroidal component is
+        !> unchanged, which preserves field-period closure without an angular
+        !> seam.
+        real(dp), intent(in) :: x(3), ppar
+        integer, intent(in) :: direction
+        real(dp), intent(out) :: x_mapped(3)
+        integer, intent(out) :: ierr
+        real(dp), parameter :: derivative_step = 1.0e-6_dp
+        real(dp) :: shift(3), shift_plus(3), shift_minus(3)
+        real(dp) :: residual(2), residual_trial(2), jacobian(2, 2), delta(2)
+        real(dp) :: x_plus(3), x_minus(3), x_trial(3), determinant, damping
+        real(dp) :: residual_norm, trial_norm
+        integer :: iteration, line_search, shift_error
+
+        ierr = 2
+        x_mapped = x
+        if (abs(direction) /= 1) return
+        if (direction == 1) then
+            call toroidal_position_shift(x, ppar, shift, shift_error)
+            if (shift_error /= 0) return
+            x_mapped = x + shift
+            ierr = 0
+            return
+        end if
+
+        ! Invert x_regular=x_standard+shift(x_standard) with a damped two-
+        ! dimensional Newton solve. Fixed-point inversion is not contractive
+        ! near the conventional B_parallel_star singularity.
+        do iteration = 1, 20
+            call toroidal_position_shift(x_mapped, ppar, shift, shift_error)
+            if (shift_error /= 0) then
+                x_mapped = x
+                return
+            end if
+            residual = x_mapped(1:2) + shift(1:2) - x(1:2)
+            residual_norm = maxval(abs(residual))
+            if (residual_norm <= &
+                    1.0e-12_dp*max(1.0_dp, maxval(abs(x)))) then
+                ierr = 0
+                return
+            end if
+            do line_search = 1, 2
+                x_plus = x_mapped
+                x_minus = x_mapped
+                x_plus(line_search) = x_plus(line_search) + derivative_step
+                x_minus(line_search) = x_minus(line_search) - derivative_step
+                call toroidal_position_shift(x_plus, ppar, shift_plus, &
+                    shift_error)
+                if (shift_error /= 0) then
+                    x_mapped = x
+                    return
+                end if
+                call toroidal_position_shift(x_minus, ppar, shift_minus, &
+                    shift_error)
+                if (shift_error /= 0) then
+                    x_mapped = x
+                    return
+                end if
+                jacobian(:, line_search) = &
+                    (shift_plus(1:2) - shift_minus(1:2))/ &
+                    (2.0_dp*derivative_step)
+                jacobian(line_search, line_search) = &
+                    jacobian(line_search, line_search) + 1.0_dp
+            end do
+            determinant = jacobian(1, 1)*jacobian(2, 2) - &
+                jacobian(1, 2)*jacobian(2, 1)
+            if (abs(determinant) <= 100.0_dp*tiny(1.0_dp)) then
+                x_mapped = x
+                return
+            end if
+            delta(1) = (-jacobian(2, 2)*residual(1) + &
+                jacobian(1, 2)*residual(2))/determinant
+            delta(2) = (jacobian(2, 1)*residual(1) - &
+                jacobian(1, 1)*residual(2))/determinant
+
+            damping = 1.0_dp
+            do line_search = 1, 12
+                x_trial = x_mapped
+                x_trial(1:2) = x_trial(1:2) + damping*delta
+                if (x_trial(1) < 0.0_dp) then
+                    damping = 0.5_dp*damping
+                    cycle
+                end if
+                call toroidal_position_shift(x_trial, ppar, shift_plus, &
+                    shift_error)
+                if (shift_error /= 0) then
+                    damping = 0.5_dp*damping
+                    cycle
+                end if
+                residual_trial = x_trial(1:2) + shift_plus(1:2) - x(1:2)
+                trial_norm = maxval(abs(residual_trial))
+                if (trial_norm < residual_norm) then
+                    x_mapped = x_trial
+                    exit
+                end if
+                damping = 0.5_dp*damping
+            end do
+            if (line_search > 12) then
+                x_mapped = x
+                return
+            end if
+        end do
+        x_mapped = x
+    end subroutine toroidal_regularized_position_map
+
+    subroutine toroidal_position_shift(x, ppar, shift, ierr)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use parmot_mod, only: ro0
+        use magfie_sub, only: magfie_refcoords
+        real(dp), intent(in) :: x(3), ppar
+        real(dp), intent(out) :: shift(3)
+        integer, intent(out) :: ierr
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: bphi
+
+        ierr = 2
+        shift = 0.0_dp
+        call magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        bphi = bmod*hctrvr(3)
+        if (abs(sqrtg*bphi) <= 100.0_dp*tiny(1.0_dp)) return
+        shift(1) = ro0*ppar*hcovar(2)/(sqrtg*bphi)
+        shift(2) = -ro0*ppar*hcovar(1)/(sqrtg*bphi)
+        if (.not. all(ieee_is_finite(shift))) then
+            shift = 0.0_dp
+            return
+        end if
+        ierr = 0
+    end subroutine toroidal_position_shift
+
+    subroutine toroidal_regularized_rhs(tau, y, dy, context)
+        use parmot_mod, only: rmu, ro0
+        use magfie_sub, only: magfie_refcoords
+        real(dp), intent(in) :: tau, y(:)
+        real(dp), intent(out) :: dy(:)
+        class(*), intent(in) :: context
+        real(dp), parameter :: derivative_step = 1.0e-5_dp
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: bp, gp, bdp(3), hcp(3), htp(3), hxp(3)
+        real(dp) :: bm, gm, bdm(3), hcm(3), htm(3), hxm(3)
+        real(dp) :: xwork(3), dq(3), dkinetic(3), q, u, ppar, vpa
+        real(dp) :: drift_scale, gamma
+        real(dp) :: h
+        integer :: i
+
+        select type (ctx => context)
+        type is (toroidal_regularization_context_t)
+            call magfie_refcoords(y(1:3), bmod, sqrtg, bder, hcovar, &
+                hctrvr, hcurl)
+            q = ctx%major_radius_cm*hctrvr(3)
+            if (abs(q) <= 100.0_dp*tiny(1.0_dp)) then
+                dy = huge(1.0_dp)
+                return
+            end if
+
+            do i = 1, 3
+                h = derivative_step
+                xwork = y(1:3)
+                xwork(i) = xwork(i) + h
+                call magfie_refcoords(xwork, bp, gp, bdp, hcp, htp, hxp)
+                xwork(i) = y(i) - h
+                call magfie_refcoords(xwork, bm, gm, bdm, hcm, htm, hxm)
+                dq(i) = ctx%major_radius_cm*(htp(3) - htm(3))/(2.0_dp*h)
+            end do
+
+            u = y(4)
+            ppar = q*u
+            gamma = sqrt(1.0_dp + &
+                2.0_dp*(ppar**2 + 2.0_dp*ctx%mu*bmod)/rmu)
+            vpa = ppar/gamma
+            dkinetic = (u*u*q*dq + ctx%mu*bmod*bder)/gamma
+            drift_scale = ro0/(sqrtg*bmod*hctrvr(3))
+            dy(1) = vpa*hctrvr(1) - drift_scale*dkinetic(2)
+            dy(2) = vpa*hctrvr(2) + drift_scale*dkinetic(1)
+            dy(3) = vpa*hctrvr(3)
+            dy(4) = -dot_product(hctrvr, dkinetic)/q
+        class default
+            dy = huge(1.0_dp)
+        end select
+    end subroutine toroidal_regularized_rhs
+
+    subroutine orbit_timestep_toroidal_regularized(z, dtau, relerr, ierr, &
+            step_limit)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use odeint_allroutines_sub, only: odeint_allroutines, &
+            odeint_has_failed
+        use chamb_sub, only: chamb_can
+        use magfie_sub, only: magfie_refcoords, has_magfie_refcoords_field
+        use field_can_mod, only: integ_to_ref, ref_to_integ
+        use new_vmec_stuff_mod, only: rmajor
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: dtau, relerr
+        integer, intent(out) :: ierr
+        integer, intent(in) :: step_limit
+        type(toroidal_regularization_context_t) :: context
+        real(dp) :: z_initial(5), y(4), chamber_y(2)
+        real(dp) :: x_standard(3), x_regular(3)
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: q, ppar, ppar_raw, ppar_squared
+        integer :: map_error
+
+        z_initial = z
+        if (.not. has_magfie_refcoords_field()) then
+            ierr = 2
+            return
+        end if
+        call integ_to_ref(z(1:3), x_standard)
+        call magfie_refcoords(x_standard, bmod, sqrtg, bder, hcovar, hctrvr, &
+            hcurl)
+        context%major_radius_cm = 100.0_dp*rmajor
+        context%mu = 0.5_dp*z(4)**2*(1.0_dp - z(5)**2)/bmod
+        ppar = z(4)*z(5)
+        call toroidal_regularized_position_map(x_standard, ppar, 1, x_regular, &
+            map_error)
+        if (map_error /= 0) then
+            ierr = 2
+            return
+        end if
+        y(1:3) = x_regular
+        call magfie_refcoords(y(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        q = context%major_radius_cm*hctrvr(3)
+        if (abs(q) <= 100.0_dp*tiny(1.0_dp)) then
+            ierr = 2
+            return
+        end if
+        y(4) = ppar/q
+
+        call odeint_allroutines(y, 4, context, 0.0_dp, dtau, relerr, &
+            toroidal_regularized_rhs, step_limit=step_limit)
+        if (odeint_has_failed() .or. .not. all(ieee_is_finite(y))) then
+            z = z_initial
+            ierr = 2
+            return
+        end if
+
+        call magfie_refcoords(y(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        q = context%major_radius_cm*hctrvr(3)
+        ppar_raw = q*y(4)
+        call toroidal_regularized_position_map(y(1:3), ppar_raw, -1, &
+            x_standard, map_error)
+        if (map_error /= 0) then
+            z = z_initial
+            ierr = 2
+            return
+        end if
+        call magfie_refcoords(x_standard, bmod, sqrtg, bder, hcovar, hctrvr, &
+            hcurl)
+        ppar_squared = z_initial(4)**2 - 2.0_dp*context%mu*bmod
+        if (ppar_squared < &
+                -toroidal_energy_shell_tolerance*z_initial(4)**2) then
+            z = z_initial
+            ierr = 2
+            return
+        end if
+        ppar = sign(sqrt(max(ppar_squared, 0.0_dp)), ppar_raw)
+        call ref_to_integ(x_standard, z(1:3))
+        z(4) = z_initial(4)
+        z(5) = ppar/z(4)
+        chamber_y = z(1:2)
+        call chamb_can(chamber_y, z(3), ierr)
+    end subroutine orbit_timestep_toroidal_regularized
 
     !ToDo make module from all global things like this one
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

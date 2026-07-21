@@ -21,7 +21,8 @@ module diag_counters
         EVT_SYMPLECTIC_RESUME, EVT_WARNING_MAXIT_ACCEPT, &
         EVT_WARNING_MAXIT_REJECT_100, EVT_WARNING_MAXIT_REJECT_1E4, &
         EVT_WARNING_MAXIT_REJECT_LARGE, EVT_WARNING_MAXIT_NONFINITE, &
-        EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT, N_EVENT
+        EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT, &
+        EVT_TOROIDAL_REGULARIZATION, EVT_AXIS_FO_BRIDGE, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
         diag_counters_reset, event_name
 
@@ -49,7 +50,9 @@ module diag_counters
     integer, parameter :: EVT_WARNING_MAXIT_NONFINITE = 19
     integer, parameter :: EVT_RETRY_EXHAUSTED = 20
     integer, parameter :: EVT_WARNING_AXIS_CROSSING_ACCEPT = 21
-    integer, parameter :: N_EVENT = 21
+    integer, parameter :: EVT_TOROIDAL_REGULARIZATION = 22
+    integer, parameter :: EVT_AXIS_FO_BRIDGE = 23
+    integer, parameter :: N_EVENT = 23
 
     ! Whole cache lines per thread column keep neighbouring threads from sharing
     ! a line. The event id indexes within a column; STRIDE >= N_EVENT.
@@ -140,6 +143,10 @@ contains
             name = 'retry_exhausted'
         case (EVT_WARNING_AXIS_CROSSING_ACCEPT)
             name = 'warning_axis_crossing_accept'
+        case (EVT_TOROIDAL_REGULARIZATION)
+            name = 'toroidal_regularization'
+        case (EVT_AXIS_FO_BRIDGE)
+            name = 'axis_fo_bridge'
         case default
             name = 'unknown'
         end select

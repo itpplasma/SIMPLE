@@ -254,12 +254,37 @@ has converged. SIMPLE accepts that chart change only when both radial values are
 within `1d-6`, the endpoint radius is negative, and the angular and momentum
 corrections satisfy the normal warning bound. It then applies the equivalent
 positive-radius chart switch and records `warning_axis_crossing_accept`.
-If symplectic retries and the adaptive-RK fallback both fail, one isolated
-microstep is rolled back and consumed as a warning hold; the next microstep
-retries normally. A successful step resets the allowance, while a second
-consecutive full failure is a numerical exit instead of a permanent frozen
-orbit. SPECTRE interface states retain the stricter 10-unit bound and their
-established recovery behavior. The hold limit and aggregate Newton, retry,
+After symplectic retries fail, SIMPLE advances the same interval with the
+established adaptive-RK guiding-centre pusher. The conventional equations are
+always tried first. If they encounter the
+`B_parallel_star = B + rho_0 v_parallel b dot curl(b)` singularity, SIMPLE uses
+the leading toroidally regularized equations of
+[Burby and Ellison](https://doi.org/10.1063/1.5004429). The required condition
+is a nonzero contravariant toroidal field component. The near-identity spatial
+map is applied on entry and inverted on exit. If the reference polar chart
+itself becomes unresolved at the magnetic axis, one interval is bridged with
+the Cartesian Boris full-orbit pusher. Its field assembly uses the regular
+co-rotating `(X,Y,phi)` frame; the field-period wedge rotation restores the lab
+frame without an angular seam. These paths use the existing physical field in
+its native reference coordinates; they do not replace the field or reprocess
+the whole device.
+
+For a collisionless marker, every recovery handoff retains the momentum shell
+from the last accepted symplectic state. A collision updates that reference in
+the usual way. Recovery returns to the requested symplectic method after 256
+consecutive conventional-RK intervals with
+`abs(B_parallel_star/B) >= 0.3` and, for an axis or edge recovery, after the
+corresponding chart hysteresis has also been cleared. This prevents repeated
+reseed cycles from promoting a bounded energy oscillation into a new reference
+energy. The measured Hamiltonian remains an output diagnostic; symplectic
+integration is not described as exact energy conservation.
+
+If every recovery path fails, one isolated microstep is rolled back and
+consumed as a warning hold; the next microstep retries normally. A successful
+step resets the allowance, while a second consecutive full failure is a
+numerical exit instead of a permanent frozen orbit. SPECTRE interface states
+retain the stricter 10-unit bound and their established recovery behavior. The
+hold limit and aggregate Newton, retry, toroidal-regularization, axis-full-orbit,
 recovery, and rejection counters are stored in `results.nc`.
 
 ### Output

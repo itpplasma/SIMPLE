@@ -173,7 +173,7 @@ contains
                           rtol_init, mode_init)
   end subroutine init_sympl
 
-  subroutine reseed_sympl(si, f, z0)
+  subroutine reseed_sympl(si, f, z0, momentum_reference)
     !> Re-seed one particle's symplectic state from standard GC coordinates.
     !>
     !> Unlike init_sympl/orbit_sympl_init this routine does not select the
@@ -183,9 +183,13 @@ contains
     type(symplectic_integrator_t), intent(inout) :: si
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: z0(:)
+    real(dp), intent(in), optional :: momentum_reference
+    real(dp) :: z_seed(size(z0))
 
-    si%pabs = z0(4)
-    call encode_symplectic_state(f, z0, si%z)
+    z_seed = z0
+    if (present(momentum_reference)) z_seed(4) = momentum_reference
+    si%pabs = z_seed(4)
+    call encode_symplectic_state(f, z_seed, si%z)
     call get_val(f, si%z(4))
     si%pthold = f%pth
     si%last_step_fraction = 1.d0
@@ -273,6 +277,88 @@ contains
     z(4) = fo%pabs
     z(5) = vpar/(z(4)*dsqrt(2d0))
   end subroutine orbit_timestep_fo
+
+  subroutine orbit_timestep_fo_bridge(fo, z, interval, ierr, continue_state)
+    !> Advance one failed guiding-centre interval with the physical Cartesian
+    !> Lorentz pusher. This is a narrow warning-mode bridge for reference fields
+    !> that are already splined on the chartmap; normal GC trajectories never
+    !> enter it. The Boris substeps resolve at most 0.1 rad of gyro-rotation.
+    use orbit_fo_boris, only: fo_init_reference, fo_step, &
+      fo_to_reference_gc, FO_OK, FO_LOSS
+    use orbit_fo_field, only: fo_eval_reference_field, &
+      fo_reference_field_available
+    use field_can_mod, only: integ_to_ref, ref_to_integ
+    type(fo_state_t), intent(inout) :: fo
+    real(dp), intent(inout) :: z(5)
+    real(dp), intent(in) :: interval
+    integer, intent(out) :: ierr
+    logical, intent(in), optional :: continue_state
+    real(dp), parameter :: max_rotation_parameter = 0.05_dp
+    integer, parameter :: max_substeps = 100000
+    real(dp) :: z_start(5), u_gc(3), hcov(3), Bmod, mu
+    real(dp) :: ro0_bar, vpar_bar, vperp, remaining, h, vpar_out
+    integer :: status, nstep
+    logical :: continuing
+
+    z_start = z
+    ierr = 2
+    continuing = .false.
+    if (present(continue_state)) continuing = continue_state
+    if (.not. fo_reference_field_available()) return
+    if (z(4) <= 0.0_dp .or. abs(z(5)) > 1.0_dp) return
+
+    ro0_bar = ro0/sqrt(2.0_dp)
+    if (.not. continuing) then
+      call integ_to_ref(z(1:3), u_gc)
+      if (u_gc(1) <= 0.0_dp .or. u_gc(1) >= 1.0_dp) return
+      call fo_eval_reference_field(u_gc, hcov, Bmod, status)
+      if (status /= 0 .or. Bmod <= 0.0_dp) return
+
+      mu = z(4)**2*(1.0_dp - z(5)**2)/Bmod
+      vpar_bar = sqrt(2.0_dp)*z(4)*z(5)
+      vperp = sqrt(max(2.0_dp*mu*Bmod, 0.0_dp))
+      call fo_init_reference(fo, u_gc, vpar_bar, vperp, mu, 1.0_dp, &
+        1.0_dp, 0.0_dp, ro0_bar, z(4))
+    else if (.not. fo%reference_field) then
+      return
+    end if
+
+    remaining = abs(interval)/sqrt(2.0_dp)
+    do nstep = 1, max_substeps
+      if (remaining <= epsilon(1.0_dp)*max(abs(interval), 1.0_dp)) exit
+      call fo_eval_reference_field(fo%u, hcov, Bmod, status)
+      if (status /= 0 .or. Bmod <= 0.0_dp) then
+        z = z_start
+        return
+      end if
+      h = min(remaining, 2.0_dp*max_rotation_parameter*ro0_bar/Bmod)
+      fo%dt = sign(h, interval)
+      call fo_step(fo, status)
+      if (status /= FO_OK) then
+        z = z_start
+        return
+      end if
+      remaining = remaining - h
+    end do
+    if (remaining > epsilon(1.0_dp)*max(abs(interval), 1.0_dp)) then
+      z = z_start
+      return
+    end if
+
+    call fo_to_reference_gc(fo, u_gc, vpar_out, status)
+    if (status /= FO_OK .and. status /= FO_LOSS) then
+      z = z_start
+      return
+    end if
+    call ref_to_integ(u_gc, z(1:3))
+    z(4) = fo%pabs
+    z(5) = vpar_out/(sqrt(2.0_dp)*z(4))
+    if (status == FO_LOSS) then
+      ierr = 1
+    else
+      ierr = 0
+    end if
+  end subroutine orbit_timestep_fo_bridge
 
   subroutine timestep(self, s, th, ph, lam, ierr)
     type(tracer_t), intent(inout) :: self

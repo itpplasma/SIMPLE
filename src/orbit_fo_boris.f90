@@ -21,7 +21,7 @@ module orbit_fo_boris
   ! never a loss.
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use reference_coordinates, only: ref_coords
-  use orbit_fo_field, only: fo_eval_field
+  use orbit_fo_field, only: fo_eval_field, fo_eval_reference_field
   use libneo_coordinates, only: chartmap_coordinate_system_t, chartmap_from_cyl_ok
   implicit none
   private
@@ -47,7 +47,8 @@ module orbit_fo_boris
   ! numerical locate fault (NOT a loss).
   integer, parameter, public :: FO_OK = 0, FO_LOSS = 1, FO_LOCATE_FAIL = 2
 
-  public :: fo_state_t, fo_init, fo_step, fo_energy, fo_mu, fo_to_gc, accept_or_fail
+  public :: fo_state_t, fo_init, fo_init_reference, fo_step, fo_energy, &
+    fo_mu, fo_to_gc, fo_to_reference_gc, accept_or_fail
 
   type :: fo_state_t
     real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (scaled cm)
@@ -59,6 +60,7 @@ module orbit_fo_boris
     real(dp) :: charge = 1.0_dp
     real(dp) :: ro0    = 1.0_dp
     real(dp) :: pabs   = 0.0_dp    ! normalized speed (carried for z(4) write-back)
+    logical :: reference_field = .false.
   end type fo_state_t
 
 contains
@@ -263,18 +265,52 @@ contains
   ! Cartesian B, |B|, grad|B| at logical u from the chartmap field (field_can) and
   ! geometry (ref_coords): B^i = |B| g^{ij} h_j, B_cart = Jc B^i; grad|B| covariant
   ! d|B|/du -> Cartesian by Jc^{-T}. Jc returned for downstream Larmor offsets.
-  subroutine field_at_logical(u, Bvec, Bmod, gradB, Jc, status)
+  subroutine field_at_logical(u, Bvec, Bmod, gradB, Jc, status, reference_field)
     real(dp), intent(in) :: u(3)
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), Jc(3,3)
     integer, intent(out) :: status
+    logical, intent(in) :: reference_field
     real(dp) :: ue(3), Acov(3), dA(3,3), dBmod(3), hcov(3)
     real(dp) :: Jw(3,3), Jwinv(3,3), cth, sth, rho, detJw, Bw(3), dBw(3), Bn
+    real(dp) :: hw(3)
     integer :: i
 
     ! A particle may gyro-excurse a Larmor radius past s=1; evaluate the field at
     ! the clamped edge there (field_can is undefined past the last closed surface).
     ue = u
     ue(1) = min(ue(1), 1.0_dp - 1.0e-9_dp)
+    if (reference_field) then
+      call fo_eval_reference_field(ue, hcov, Bmod, status)
+      if (status /= 0) then
+        status = FO_LOCATE_FAIL
+        return
+      end if
+      call ref_coords%covariant_basis(ue, Jc)
+      ! Assemble the covector in the regular rotating (X,Y,phi) frame.  Directly
+      ! inverting the polar Jc becomes ill-conditioned as rho->0 even though the
+      ! Cartesian field is smooth.  The same frame is used by the chart inverse;
+      ! to_wedge supplies the exact field-period rotation on return to global
+      ! Cartesian coordinates.
+      call pseudocart_basis(ue, Jc, Jw, cth, sth, rho)
+      if (.not. jacobian_ok(Jw)) then
+        status = FO_LOCATE_FAIL
+        return
+      end if
+      hw(1) = cth*hcov(1) - (sth/rho)*hcov(2)
+      hw(2) = sth*hcov(1) + (cth/rho)*hcov(2)
+      hw(3) = hcov(3)
+      call inv3(Jw, Jwinv)
+      Bvec = matmul(transpose(Jwinv), hw)
+      Bn = norm2(Bvec)
+      if (Bn <= 0.0_dp) then
+        status = FO_LOCATE_FAIL
+        return
+      end if
+      Bvec = Bvec*(Bmod/Bn)
+      gradB = 0.0_dp
+      status = FO_OK
+      return
+    end if
     call fo_eval_field(ue, Acov, dA, Bmod, dBmod, hcov)
     call ref_coords%covariant_basis(ue, Jc)
     ! Heal the axis: work in the pseudo-Cartesian chart w=(X,Y,phi). The polar
@@ -320,17 +356,19 @@ contains
   ! fault). On fault Bvec etc. are undefined and the caller must not push. Loss is
   ! not decided here -- the field is defined through the clamped edge, and only the
   ! guiding-centre crossing rho>=1 in fo_to_gc is a confinement loss.
-  subroutine cart_field(x, u_guess, Bvec, Bmod, gradB, u_out, status)
+  subroutine cart_field(x, u_guess, Bvec, Bmod, gradB, u_out, status, &
+      reference_field)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: Bvec(3), Bmod, gradB(3), u_out(3)
     integer, intent(out) :: status
+    logical, intent(in) :: reference_field
     real(dp) :: xw(3), ca, sa, u(3), Jc(3,3), Bw(3), gw(3)
 
     call to_wedge(x, xw, ca, sa)
     call invert_cart_warm(xw, u_guess, u, status)
     if (status /= FO_OK) return
     u_out = u
-    call field_at_logical(u, Bw, Bmod, gw, Jc, status)
+    call field_at_logical(u, Bw, Bmod, gw, Jc, status, reference_field)
     if (status /= FO_OK) return
     Bvec = rotz(Bw, ca, sa)       ! wedge field vector -> global frame
     gradB = rotz(gw, ca, sa)
@@ -338,10 +376,11 @@ contains
 
   ! Logical chart of a Cartesian point and the local covariant frame, for seeding
   ! and Larmor offsets. status as in cart_field. u_guess warm-starts the inversion.
-  subroutine locate(x, u_guess, u_out, bhat, eperp, Bmod, status)
+  subroutine locate(x, u_guess, u_out, bhat, eperp, Bmod, status, reference_field)
     real(dp), intent(in) :: x(3), u_guess(3)
     real(dp), intent(out) :: u_out(3), bhat(3), eperp(3), Bmod
     integer, intent(out) :: status
+    logical, intent(in) :: reference_field
     real(dp) :: xw(3), ca, sa, u(3), Jc(3,3), Bw(3), gw(3), bw_hat(3), ew(3)
 
     call to_wedge(x, xw, ca, sa)
@@ -350,7 +389,7 @@ contains
     u_out = u
     ! Same axis-healed field assembly as the push (field_at_logical), so the seed
     ! frame and the orbit-step field are identical.
-    call field_at_logical(u, Bw, Bmod, gw, Jc, status)
+    call field_at_logical(u, Bw, Bmod, gw, Jc, status, reference_field)
     if (status /= FO_OK) return
     bw_hat = Bw/max(sqrt(Bw(1)**2 + Bw(2)**2 + Bw(3)**2), 1.0e-30_dp)
     call perp_ref(bw_hat, ew)     ! arbitrary unit vector perpendicular to b
@@ -369,15 +408,37 @@ contains
     type(fo_state_t), intent(out) :: st
     real(dp), intent(in) :: x0_boozer(3), vpar0, vperp0, mu_in, mass, charge, &
                             dt, ro0_in, pabs
-    real(dp) :: u_gc(3), xyz_gc(3), u_p(3), x_p(3), qc
+    real(dp) :: u_gc(3)
+
+    u_gc = [sqrt(max(x0_boozer(1), 0.0_dp)), x0_boozer(2), x0_boozer(3)]
+    call fo_init_logical(st, u_gc, vpar0, vperp0, mu_in, mass, charge, dt, &
+      ro0_in, pabs, .false.)
+  end subroutine fo_init
+
+  subroutine fo_init_reference(st, u_gc, vpar0, vperp0, mu_in, mass, &
+      charge, dt, ro0_in, pabs)
+    type(fo_state_t), intent(out) :: st
+    real(dp), intent(in) :: u_gc(3), vpar0, vperp0, mu_in, mass, charge, dt, &
+      ro0_in, pabs
+
+    call fo_init_logical(st, u_gc, vpar0, vperp0, mu_in, mass, charge, dt, &
+      ro0_in, pabs, .true.)
+  end subroutine fo_init_reference
+
+  subroutine fo_init_logical(st, u_gc, vpar0, vperp0, mu_in, mass, charge, &
+      dt, ro0_in, pabs, reference_field)
+    type(fo_state_t), intent(out) :: st
+    real(dp), intent(in) :: u_gc(3), vpar0, vperp0, mu_in, mass, charge, dt, &
+      ro0_in, pabs
+    logical, intent(in) :: reference_field
+    real(dp) :: xyz_gc(3), u_p(3), x_p(3), qc
     real(dp) :: bhat(3), eperp(3), Bmod
     integer :: status
 
     st%mass = mass; st%charge = charge; st%dt = dt; st%ro0 = ro0_in
     st%mu = mu_in; st%pabs = pabs
+    st%reference_field = reference_field
 
-    ! GC logical coords: chartmap radial label is rho = sqrt(s).
-    u_gc = [sqrt(max(x0_boozer(1), 0.0_dp)), x0_boozer(2), x0_boozer(3)]
     call ref_coords%evaluate_cart(u_gc, xyz_gc)
     qc = charge/ro0_in
 
@@ -389,7 +450,8 @@ contains
       ! locate, fall back to seeding at the guiding centre: the offset is O(rho_L),
       ! and a genuine edge orbit is then lost during integration, not at init. Never
       ! abort -- this runs per particle inside the OpenMP loop.
-      call gc_to_particle(xyz_gc, u_gc, vperp0, mass, qc, x_p, u_p, status)
+      call gc_to_particle(xyz_gc, u_gc, vperp0, mass, qc, x_p, u_p, status, &
+        reference_field)
       if (status /= FO_OK) then
         x_p = xyz_gc
         u_p = u_gc
@@ -398,7 +460,7 @@ contains
 
     st%x = x_p
     st%u = u_p
-    call locate(x_p, u_p, u_p, bhat, eperp, Bmod, status)
+    call locate(x_p, u_p, u_p, bhat, eperp, Bmod, status, reference_field)
     if (status /= FO_OK) then
       ! Cannot even seed the frame at the guiding centre: leave v=0 so the first
       ! orbit step reports a locate fault (counted confined), never a crash.
@@ -408,16 +470,18 @@ contains
     st%u = u_p
     st%v = vpar0*bhat
     if (vperp0 > 0.0_dp) st%v = st%v + vperp0*eperp
-  end subroutine fo_init
+  end subroutine fo_init_logical
 
   ! Cartesian guiding centre x_gc -> particle position a Larmor vector off it,
   ! solved by the fixed point x_p with cart(x_p) - rho(x_p) = x_gc, rho the Larmor
   ! vector built from the perpendicular speed at x_p (same gyrophase reference as
   ! the velocity seed), so the seed offset and the GC reconstruction are inverses.
-  subroutine gc_to_particle(xyz_gc, u_gc, vperp0, mass, qc, x_p, u_p, status)
+  subroutine gc_to_particle(xyz_gc, u_gc, vperp0, mass, qc, x_p, u_p, status, &
+      reference_field)
     real(dp), intent(in) :: xyz_gc(3), u_gc(3), vperp0, mass, qc
     real(dp), intent(out) :: x_p(3), u_p(3)
     integer, intent(out) :: status
+    logical, intent(in) :: reference_field
     integer, parameter :: maxfp = 50
     real(dp), parameter :: tol = 1.0e-10_dp
     real(dp) :: bhat(3), eperp(3), Bmod
@@ -426,14 +490,14 @@ contains
 
     x_p = xyz_gc
     do it = 1, maxfp
-      call locate(x_p, u_gc, u_p, bhat, eperp, Bmod, status)
+      call locate(x_p, u_gc, u_p, bhat, eperp, Bmod, status, reference_field)
       if (status /= FO_OK) return
       ! rho = (m/(qc|B|)) bhat x v_perp, v_perp = vperp0 eperp (Cartesian).
       rho_l = (mass/(qc*Bmod))*cross(bhat, vperp0*eperp)
       xnew = xyz_gc + rho_l
       if (maxval(abs(xnew - x_p)) < tol) then
         x_p = xnew
-        call locate(x_p, u_gc, u_p, bhat, eperp, Bmod, status)
+        call locate(x_p, u_gc, u_p, bhat, eperp, Bmod, status, reference_field)
         return
       end if
       x_p = xnew
@@ -452,7 +516,8 @@ contains
     qcm = st%charge/(c*st%ro0*st%mass)   ! rotation: dv/dt = qcm v x B
 
     x = x + 0.5_dp*st%dt*v
-    call cart_field(x, st%u, Bvec, Bmod, gradB, u, status)
+    call cart_field(x, st%u, Bvec, Bmod, gradB, u, status, &
+      st%reference_field)
     if (status /= FO_OK) return    ! unresolved: leave st at the last resolved state
     st%u = u
 
@@ -499,14 +564,37 @@ contains
     real(dp), intent(out) :: s, th, ph, vpar
     integer, intent(out) :: status
     real(dp), intent(out), optional :: Bmod_gc
-    real(dp) :: u_p(3), x_gc(3), u_gc(3), qc
+    real(dp) :: u_gc(3), Bmod_local
+
+    call fo_to_reference_gc(st, u_gc, vpar, status, Bmod_local)
+    if (status /= FO_OK .and. status /= FO_LOSS) then
+      s = 0.0_dp
+      th = 0.0_dp
+      ph = 0.0_dp
+      if (present(Bmod_gc)) Bmod_gc = 0.0_dp
+      return
+    end if
+    s = u_gc(1)**2
+    th = u_gc(2)
+    ph = u_gc(3)
+    if (present(Bmod_gc)) Bmod_gc = Bmod_local
+  end subroutine fo_to_gc
+
+  subroutine fo_to_reference_gc(st, u_gc, vpar, status, Bmod_gc)
+    type(fo_state_t), intent(in) :: st
+    real(dp), intent(out) :: u_gc(3), vpar
+    integer, intent(out) :: status
+    real(dp), intent(out), optional :: Bmod_gc
+    real(dp) :: u_p(3), x_gc(3), qc
     real(dp) :: bhat(3), eperp(3), Bmod
     real(dp) :: vpar_p, vperp_cart(3), rho_l(3)
 
-    s = 0.0_dp; th = 0.0_dp; ph = 0.0_dp; vpar = 0.0_dp
+    u_gc = 0.0_dp
+    vpar = 0.0_dp
     if (present(Bmod_gc)) Bmod_gc = 0.0_dp
 
-    call locate(st%x, st%u, u_p, bhat, eperp, Bmod, status)
+    call locate(st%x, st%u, u_p, bhat, eperp, Bmod, status, &
+      st%reference_field)
     if (status /= FO_OK) return
     qc = st%charge/st%ro0
 
@@ -517,10 +605,9 @@ contains
     rho_l = (st%mass/(qc*Bmod))*cross(bhat, vperp_cart)
     x_gc = st%x - rho_l
 
-    call locate(x_gc, u_p, u_gc, bhat, eperp, Bmod, status)
+    call locate(x_gc, u_p, u_gc, bhat, eperp, Bmod, status, &
+      st%reference_field)
     if (status /= FO_OK) return
-    s = u_gc(1)**2               ! chart rho -> s
-    th = u_gc(2); ph = u_gc(3)
     vpar = st%v(1)*bhat(1) + st%v(2)*bhat(2) + st%v(3)*bhat(3)
     if (present(Bmod_gc)) Bmod_gc = Bmod
     ! Confinement loss: the Larmor-corrected guiding centre crosses the last closed
@@ -534,7 +621,7 @@ contains
     ! inside is a reconstruction glitch, not a loss. The field, integrator and energy
     ! match the ASCOT full-orbit reference, so the loss detector must be this clean.
     if (u_gc(1) >= 1.0_dp .and. u_p(1) >= 1.0_dp - GC_PARTICLE_GAP) status = FO_LOSS
-  end subroutine fo_to_gc
+  end subroutine fo_to_reference_gc
 
   ! Pseudo-Cartesian near-axis chart w=(X,Y,phi)=(rho cos th, rho sin th, phi).
   ! The chartmap polar chart (rho,theta) is singular at the magnetic axis: the

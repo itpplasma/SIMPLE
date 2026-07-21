@@ -42,13 +42,14 @@ program test_sympl_testfield
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
         rk_recovery_state_t, validate_rk_state, &
         activate_rk_recovery, should_resume_symplectic
-    use simple, only : tracer_t, init_sympl, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
+    use simple, only : tracer_t, init_sympl, reseed_sympl, ORBIT_FO_LOSS, &
+        ORBIT_FO_NUMERICAL
     use params, only : isw_field_type, field_input, coord_input, integmode, &
         swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
         ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_DOMAIN, &
         ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_EVENT, &
         ORBIT_EXIT_NUMERICAL_FULL_ORBIT
-    use magfie_sub, only : TEST
+    use magfie_sub, only : TEST, init_magfie
     use field_can_mod, only : evaluate
     use orbit_symplectic, only : orbit_timestep_sympl
     use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
@@ -70,6 +71,7 @@ program test_sympl_testfield
     integmode = 1
 
     call init_field(norb, vmec_file, ans_s, ans_tp, amultharm, integmode)
+    call init_magfie(TEST)
 
     if (.not. associated(evaluate)) then
         print *, 'evaluate pointer not associated for TEST field'
@@ -101,6 +103,7 @@ program test_sympl_testfield
     call test_fo_lcfs_location
     call test_validated_rk_lcfs_location
     call test_rk_state_validation
+    call test_reseed_momentum_reference
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -211,45 +214,78 @@ contains
 
     subroutine test_rk_recovery_regions
         type(rk_recovery_state_t) :: recovery
+        real(dp) :: z(5)
 
-        call activate_rk_recovery(recovery, 0.005_dp)
+        z = [0.005_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp]
+        call activate_rk_recovery(recovery, z, 1.0_dp)
         if (.not. recovery%active) error stop 'near-axis RK recovery did not start'
-        if (should_resume_symplectic(recovery, 0.015_dp)) then
+        if (.not. recovery%has_momentum_reference) then
+            error stop 'RK recovery did not retain its momentum reference'
+        end if
+        if (recovery%momentum_reference /= 1.0_dp) then
+            error stop 'RK recovery changed its momentum reference'
+        end if
+        recovery%safe_steps = 255
+        z(1) = 0.12_dp
+        if (should_resume_symplectic(recovery, z)) then
             error stop 'near-axis recovery resumed inside its hysteresis band'
         end if
-        if (.not. should_resume_symplectic(recovery, 0.02_dp)) then
-            error stop 'near-axis recovery did not resume outside the axis band'
+        recovery%safe_steps = 256
+        if (.not. should_resume_symplectic(recovery, z)) then
+            error stop 'near-axis recovery did not resume after a safe streak'
         end if
 
         recovery = rk_recovery_state_t()
-        call activate_rk_recovery(recovery, 0.5_dp)
-        recovery%steps = 255
-        if (should_resume_symplectic(recovery, 0.5_dp)) then
+        z(1) = 0.5_dp
+        call activate_rk_recovery(recovery, z, 1.0_dp)
+        recovery%safe_steps = 255
+        if (should_resume_symplectic(recovery, z)) then
             error stop 'generic recovery ignored its first cooldown'
         end if
-        recovery%steps = 256
-        if (.not. should_resume_symplectic(recovery, 0.5_dp)) then
+        recovery%safe_steps = 256
+        if (.not. should_resume_symplectic(recovery, z)) then
             error stop 'generic recovery did not probe after its cooldown'
         end if
-        call activate_rk_recovery(recovery, 0.5_dp)
-        recovery%steps = 511
-        if (should_resume_symplectic(recovery, 0.5_dp)) then
+        call activate_rk_recovery(recovery, z, 1.0_dp)
+        recovery%safe_steps = 511
+        if (should_resume_symplectic(recovery, z)) then
             error stop 'repeated generic recovery did not back off'
         end if
-        recovery%steps = 512
-        if (.not. should_resume_symplectic(recovery, 0.5_dp)) then
+        recovery%safe_steps = 512
+        if (.not. should_resume_symplectic(recovery, z)) then
             error stop 'backed-off generic recovery never resumed probing'
         end if
 
         recovery = rk_recovery_state_t()
-        call activate_rk_recovery(recovery, 0.995_dp)
-        if (should_resume_symplectic(recovery, 0.99_dp)) then
+        z(1) = 0.995_dp
+        call activate_rk_recovery(recovery, z, 1.0_dp)
+        recovery%safe_steps = 256
+        z(1) = 0.99_dp
+        if (should_resume_symplectic(recovery, z)) then
             error stop 'edge recovery resumed before moving safely inward'
         end if
-        if (.not. should_resume_symplectic(recovery, 0.98_dp)) then
+        z(1) = 0.98_dp
+        if (.not. should_resume_symplectic(recovery, z)) then
             error stop 'edge recovery did not resume after moving inward'
         end if
     end subroutine test_rk_recovery_regions
+
+    subroutine test_reseed_momentum_reference
+        real(dp) :: z(5)
+
+        z = [0.2_dp, 1.0_dp, 0.0_dp, 1.02_dp, 0.25_dp]
+        call reseed_sympl(norb%si, norb%f, z, 1.0_dp)
+        if (norb%si%pabs /= 1.0_dp) then
+            error stop 'reseed ratcheted the symplectic momentum reference'
+        end if
+        if (abs(norb%f%H - 1.0_dp) > 100.0_dp*epsilon(1.0_dp)) then
+            error stop 'reseed did not project onto the reference energy shell'
+        end if
+        if (abs(norb%f%vpar/sqrt(2.0_dp) - 0.25_dp) > &
+                100.0_dp*epsilon(1.0_dp)) then
+            error stop 'momentum-shell projection changed the pitch coordinate'
+        end if
+    end subroutine test_reseed_momentum_reference
 
     subroutine test_exit_classification
         logical :: classifier_lost
@@ -398,10 +434,17 @@ contains
             error stop 'wrong-energy adaptive-RK branch was committed'
         endif
 
-        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.01_dp, 0.5_dp]
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.004_dp, 0.5_dp]
         step_error = 0
         call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
         if (step_error /= 0) error stop 'bounded adaptive-RK momentum drift was rejected'
+
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.006_dp, 0.5_dp]
+        step_error = 0
+        call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
+        if (step_error /= 2 .or. any(z_after /= z_before)) then
+            error stop 'excessive adaptive-RK momentum drift was committed'
+        end if
 
         z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 2.0_dp]
         step_error = 0
