@@ -519,6 +519,20 @@ endif()
 target_link_libraries(export_boozer_chartmap.x PRIVATE simple)
 set_target_properties(export_boozer_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# Native signed-field/geometry probe used by cross-code coordinate gates.
+add_executable(probe_boozer_chartmap.x
+    app/probe_boozer_chartmap.f90
+)
+target_compile_options(probe_boozer_chartmap.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(probe_boozer_chartmap.x PRIVATE
+        $<$<COMPILE_LANGUAGE:Fortran>:-Wtrampolines>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Werror=trampolines>
+    )
+endif()
+target_link_libraries(probe_boozer_chartmap.x PRIVATE simple)
+set_target_properties(probe_boozer_chartmap.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # SPECTRE symplectic field-line Poincare app
 add_executable(spectre_poincare.x
     app/spectre_poincare.f90

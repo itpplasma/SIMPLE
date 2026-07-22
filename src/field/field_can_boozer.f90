@@ -73,11 +73,12 @@ contains
         ! and stores results in variable f
         ! Works for A_th linear in r (toroidal flux as radial variable)
         !
-        ! Sign convention: A_theta = torflux*r is the toroidal flux psi_tor (on the
-        ! poloidal covariant component), with torflux = -phi_vmec/(2*pi) > 0 since
-        ! VMEC is left-handed (signgs = -1). A_phi = -chi is the toroidal covariant
-        ! component carrying the poloidal flux. See libneo spline_vmec_data /
-        ! vmecinm_m and gvec_simple/CONVENTIONS.md.
+        ! Sign convention: A_theta = torflux*r is the poloidal covariant component,
+        ! with torflux=-phi_vmec/(2*pi). VMEC zeta is the physical geometric
+        ! cylindrical azimuth; the minus sign instead follows from the usual VMEC
+        ! (s,theta,zeta) chart being left-handed (signgs=-1): for oriented J<0,
+        ! B^zeta=(dA_theta/ds)/J. A_phi=-chi is the toroidal covariant component
+        ! carrying poloidal flux. See libneo spline_vmec_data/vmecinm_m.
         !
         ! mode_secders = 0: no second derivatives
         ! mode_secders = 1: second derivatives only in d/dr^2
