@@ -141,6 +141,35 @@ compare_cases() {
                 result=$?
             fi
 
+            # Diagnostics used to overwrite these files, so this case only
+            # compared field diagnostics and silently ignored orbit changes.
+            # They now run in an isolated directory; enforce the orbit result
+            # in addition to the diagnostic contract.
+            REF_EXIT="$REFERENCE_DIR/$CASE/orbit_exit_code.dat"
+            CUR_EXIT="$CURRENT_DIR/$CASE/orbit_exit_code.dat"
+            echo "  (also comparing orbit results)"
+            if [ -f "$REF_EXIT" ] && [ -f "$CUR_EXIT" ]; then
+                python "$SCRIPT_DIR/compare_orbit_results.py" \
+                    "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                    --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
+                orbit_result=$?
+                if [ $orbit_result -eq 3 ]; then
+                    recovery_transition=1
+                    orbit_result=0
+                fi
+            else
+                GOLDEN_RECORD_RTOL="$GOLDEN_RECORD_RTOL" \
+                    GOLDEN_RECORD_ATOL="$GOLDEN_RECORD_ATOL" \
+                    python "$SCRIPT_DIR/compare_files.py" \
+                    "$REFERENCE_DIR/$CASE/times_lost.dat" \
+                    "$CURRENT_DIR/$CASE/times_lost.dat"
+                orbit_result=$?
+            fi
+            if [ $orbit_result -ne 0 ]; then
+                echo "  FAILED: Orbit results differ"
+                result=$orbit_result
+            fi
+
             if [ $result -eq 0 ]; then
                 echo "  ✓ PASSED"
                 passed_cases=$((passed_cases + 1))

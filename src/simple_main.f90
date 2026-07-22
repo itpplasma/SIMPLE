@@ -3,9 +3,11 @@ module simple_main
     use omp_lib
     use util, only: sqrt2, twopi
     use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
-        reseed_sympl, tracer_t, ORBIT_FO_LOSS, ORBIT_FO_NUMERICAL
+        orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
+        ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
+    use magfie_sub, only: ALBERT
     use samplers, only: sample
     use field_can_mod, only: field_can_t, integ_to_ref, ref_to_integ, &
         init_field_can
@@ -18,18 +20,23 @@ module simple_main
         fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
         zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
         reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
+        max_consecutive_warning_holds, &
         coord_input, wall_input, wall_units, wall_hit, wall_hit_cart, &
+        wall_query_rho_lcfs, &
+        chart_boundary_kind, chart_boundary_kind_effective, &
         wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
         ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
         ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_DOMAIN, &
+        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
+        ORBIT_EXIT_NUMERICAL_DOMAIN, &
         ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
         ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
         EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY, &
-        EVT_SYMPLECTIC_RESUME
+        EVT_SYMPLECTIC_RESUME, EVT_TOROIDAL_REGULARIZATION, &
+        EVT_AXIS_FO_BRIDGE
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
@@ -50,60 +57,199 @@ module simple_main
     integer, parameter :: dp = kind(1.0d0)
 
     logical, save :: wall_enabled = .false.
-    logical, save :: map_boundary_is_lcfs = .true.
+    integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     type(stl_wall_t), save :: wall
 
     integer, parameter :: RK_RECOVERY_GENERIC = 1
     integer, parameter :: RK_RECOVERY_AXIS = 2
     integer, parameter :: RK_RECOVERY_EDGE = 3
-    real(dp), parameter :: RK_AXIS_ENTER = 0.01_dp
-    real(dp), parameter :: RK_AXIS_EXIT = 0.02_dp
+    real(dp), parameter :: RK_AXIS_ENTER = 0.1_dp
+    real(dp), parameter :: RK_AXIS_EXIT = 0.12_dp
+    real(dp), parameter :: FO_AXIS_ENTER = 0.02_dp
     real(dp), parameter :: RK_EDGE_ENTER = 0.98_dp
     integer, parameter :: RK_RECOVERY_STEP_LIMIT = 10000
+    integer, parameter :: TOROIDAL_RECOVERY_STEP_LIMIT = 100000
+    integer, parameter :: RK_SAFE_STREAK_TO_RESUME = 256
+    real(dp), parameter :: RK_RECOVERY_AXIS_ENTER = 0.1_dp
+    real(dp), parameter :: NUMERICAL_CONFINED_S_MAX = 0.01_dp
+    ! Retry only a failed legacy axis solve with a smoother, still axis-local
+    ! Cartesian regularization. Successful release-era RK paths stay unchanged.
+    real(dp), parameter :: RK_RECOVERY_AXIS_FLOOR = 1.0e-3_dp
+    real(dp), parameter :: FO_BRIDGE_BSTAR_ENTER = 0.2_dp
+    real(dp), parameter :: RK_RECOVERY_BSTAR_EXIT = 0.3_dp
+    integer, parameter :: RECOVERY_STEP_STANDARD = 0
+    integer, parameter :: RECOVERY_STEP_AXIS = 1
+    integer, parameter :: RECOVERY_STEP_TOROIDAL = 2
+    integer, parameter :: RECOVERY_STEP_FULL_ORBIT = 3
+    real(dp), parameter :: MOMENTUM_SANITY_FRACTION = 0.005_dp
 
     type :: rk_recovery_state_t
         logical :: active = .false.
+        logical :: has_momentum_reference = .false.
         integer :: reason = RK_RECOVERY_GENERIC
         integer :: steps = 0
+        integer :: safe_steps = 0
         integer :: failures = 0
-        logical :: both_methods_failed = .false.
+        real(dp) :: momentum_reference = 0.0_dp
     end type rk_recovery_state_t
 
 contains
 
-    pure subroutine activate_rk_recovery(state, radius)
-        type(rk_recovery_state_t), intent(inout) :: state
-        real(dp), intent(in) :: radius
+    logical function recovery_state_has_valid_phase_space(z)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 
+        real(dp), intent(in) :: z(5)
+
+        recovery_state_has_valid_phase_space = all(ieee_is_finite(z)) .and. &
+            z(4) > 0.0_dp .and. &
+            abs(z(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp)
+    end function recovery_state_has_valid_phase_space
+
+    logical function recovery_state_is_physical(z, expected_momentum)
+        real(dp), intent(in) :: z(5), expected_momentum
+
+        recovery_state_is_physical = recovery_state_has_valid_phase_space(z) .and. &
+            abs(z(4) - expected_momentum) <= &
+            MOMENTUM_SANITY_FRACTION*max(abs(expected_momentum), tiny(1.0_dp))
+    end function recovery_state_is_physical
+
+    subroutine orbit_timestep_recovery(fo, z, interval, tolerance, &
+            expected_momentum, ierr, method)
+        use alpha_lifetime_sub, only: orbit_timestep_axis, &
+            bstar_parallel_factor, orbit_timestep_toroidal_regularized
+        use orbit_fo_boris, only: fo_state_t
+
+        type(fo_state_t), intent(inout) :: fo
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: interval, tolerance, expected_momentum
+        integer, intent(out) :: ierr
+        integer, intent(out) :: method
+        real(dp) :: z_start(5)
+        real(dp) :: bstar_factor
+        real(dp) :: x_reference(3)
+
+        method = RECOVERY_STEP_STANDARD
+        z_start = z
+        call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
+            RK_RECOVERY_STEP_LIMIT)
+        if (ierr == 0) then
+            if (.not. recovery_state_is_physical(z, expected_momentum)) ierr = 2
+        else if (ierr == 1) then
+            if (.not. recovery_state_has_valid_phase_space(z)) ierr = 2
+        end if
+        if (ierr /= 2) return
+
+        call bstar_parallel_factor(z_start, bstar_factor)
+        call integ_to_ref(z_start(1:3), x_reference)
+        if (x_reference(1) < RK_RECOVERY_AXIS_ENTER .and. &
+            abs(bstar_factor) >= FO_BRIDGE_BSTAR_ENTER) then
+            z = z_start
+            call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
+                RK_RECOVERY_STEP_LIMIT, RK_RECOVERY_AXIS_FLOOR, &
+                RK_RECOVERY_AXIS_ENTER)
+            if (ierr == 0) then
+                if (.not. recovery_state_is_physical(z, expected_momentum)) &
+                    ierr = 2
+            else if (ierr == 1) then
+                if (.not. recovery_state_has_valid_phase_space(z)) ierr = 2
+            end if
+            if (ierr /= 2) then
+                method = RECOVERY_STEP_AXIS
+                return
+            end if
+        end if
+
+        z = z_start
+        call orbit_timestep_toroidal_regularized(z, interval, &
+            max(tolerance, 1.0e-10_dp), ierr, &
+            TOROIDAL_RECOVERY_STEP_LIMIT)
+        if (ierr == 0) then
+            if (recovery_state_is_physical(z, expected_momentum)) then
+                method = RECOVERY_STEP_TOROIDAL
+                call count_event(EVT_TOROIDAL_REGULARIZATION)
+                return
+            end if
+            ierr = 2
+        end if
+        if (ierr == 1) then
+            if (.not. recovery_state_has_valid_phase_space(z)) ierr = 2
+        end if
+        if (ierr /= 2 .or. x_reference(1) >= FO_AXIS_ENTER) return
+
+        z = z_start
+        call orbit_timestep_fo_bridge(fo, z, interval, ierr)
+        if (ierr == 0) then
+            if (recovery_state_is_physical(z, expected_momentum)) then
+                method = RECOVERY_STEP_FULL_ORBIT
+                call count_event(EVT_AXIS_FO_BRIDGE)
+            else
+                ierr = 2
+            end if
+        end if
+    end subroutine orbit_timestep_recovery
+
+    subroutine activate_rk_recovery(state, z, momentum_reference)
+        type(rk_recovery_state_t), intent(inout) :: state
+        real(dp), intent(in) :: z(5), momentum_reference
+        real(dp) :: x_reference(3)
+
+        call integ_to_ref(z(1:3), x_reference)
         state%active = .true.
+        state%has_momentum_reference = .true.
         state%steps = 0
-        state%both_methods_failed = .false.
+        state%safe_steps = 0
+        state%momentum_reference = momentum_reference
         state%failures = min(state%failures + 1, 9)
-        if (radius < RK_AXIS_ENTER) then
+        if (x_reference(1) < RK_AXIS_ENTER) then
             state%reason = RK_RECOVERY_AXIS
-        else if (radius > RK_EDGE_ENTER) then
+        else if (x_reference(1) > RK_EDGE_ENTER) then
             state%reason = RK_RECOVERY_EDGE
         else
             state%reason = RK_RECOVERY_GENERIC
         end if
     end subroutine activate_rk_recovery
 
-    pure logical function should_resume_symplectic(state, radius)
+    logical function should_resume_symplectic(state, z)
         type(rk_recovery_state_t), intent(in) :: state
-        real(dp), intent(in) :: radius
+        real(dp), intent(in) :: z(5)
         integer :: cooldown
+        real(dp) :: x_reference(3)
 
+        call integ_to_ref(z(1:3), x_reference)
         select case (state%reason)
         case (RK_RECOVERY_AXIS)
-            should_resume_symplectic = radius >= RK_AXIS_EXIT
+            should_resume_symplectic = x_reference(1) >= RK_AXIS_EXIT .and. &
+                state%safe_steps >= RK_SAFE_STREAK_TO_RESUME
         case (RK_RECOVERY_EDGE)
-            should_resume_symplectic = radius <= RK_EDGE_ENTER
+            should_resume_symplectic = x_reference(1) <= RK_EDGE_ENTER .and. &
+                state%safe_steps >= RK_SAFE_STREAK_TO_RESUME
         case default
             cooldown = 2**(7 + state%failures)
-            should_resume_symplectic = state%steps >= cooldown
+            should_resume_symplectic = state%safe_steps >= cooldown
         end select
     end function should_resume_symplectic
+
+    subroutine update_recovery_streak(state, z, method)
+        use alpha_lifetime_sub, only: bstar_parallel_factor
+
+        type(rk_recovery_state_t), intent(inout) :: state
+        real(dp), intent(in) :: z(5)
+        integer, intent(in) :: method
+        real(dp) :: bstar_factor
+
+        state%steps = state%steps + 1
+        if (method /= RECOVERY_STEP_STANDARD) then
+            state%safe_steps = 0
+            return
+        end if
+        call bstar_parallel_factor(z, bstar_factor)
+        if (abs(bstar_factor) < RK_RECOVERY_BSTAR_EXIT) then
+            state%safe_steps = 0
+            return
+        end if
+        state%safe_steps = state%safe_steps + 1
+    end subroutine update_recovery_streak
 
     subroutine main
         use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
@@ -299,7 +445,8 @@ contains
         logical :: use_boozer_chartmap, use_spectre
 
         self%integmode = aintegmode
-        map_boundary_is_lcfs = .true.
+        map_boundary_exit_code = ORBIT_EXIT_LCFS
+        chart_boundary_kind_effective = 'lcfs'
 
         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
@@ -415,6 +562,10 @@ contains
             call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
                 canonical_grid_ntheta, canonical_grid_nphi, &
                 canonical_ode_relerr)
+            if (isw_field_type == BOOZER .or. &
+                isw_field_type == CANFLUX) then
+                call set_magfie_refcoords_field(field_temp)
+            end if
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
@@ -495,8 +646,10 @@ contains
         character(len=16) :: units
 
         wall_enabled = .false.
-        map_boundary_is_lcfs = .true.
+        map_boundary_exit_code = ORBIT_EXIT_LCFS
+        chart_boundary_kind_effective = 'lcfs'
         chartmap_cart_scale_to_m = -1.0d0
+        wall_query_rho_lcfs = -1.0d0
 
         if (.not. allocated(ref_coords)) then
             if (len_trim(wall_input) == 0) return
@@ -507,13 +660,38 @@ contains
         class is (chartmap_coordinate_system_t)
             call read_chartmap_metadata(coord_file, meta)
             chartmap_cart_scale_to_m = meta%cart_scale_to_m
-            map_boundary_is_lcfs = abs(meta%rho_lcfs - 1d0) <= 1d-12
+            select case (trim(chart_boundary_kind))
+            case ('auto')
+                if (abs(meta%rho_lcfs - 1d0) <= 1d-12) then
+                    map_boundary_exit_code = ORBIT_EXIT_LCFS
+                    chart_boundary_kind_effective = 'lcfs'
+                else
+                    map_boundary_exit_code = ORBIT_EXIT_NUMERICAL_DOMAIN
+                    chart_boundary_kind_effective = 'domain'
+                end if
+            case ('lcfs')
+                map_boundary_exit_code = ORBIT_EXIT_LCFS
+                chart_boundary_kind_effective = 'lcfs'
+            case ('wall')
+                map_boundary_exit_code = ORBIT_EXIT_WALL
+                chart_boundary_kind_effective = 'wall'
+            case ('domain')
+                map_boundary_exit_code = ORBIT_EXIT_NUMERICAL_DOMAIN
+                chart_boundary_kind_effective = 'domain'
+            end select
         class default
             if (len_trim(wall_input) == 0) return
             error stop "wall_input requires chartmap reference coordinates"
         end select
 
         if (len_trim(wall_input) == 0) return
+
+        ! The STL is an external physical wall enclosing the LCFS. Querying a
+        ! straight Cartesian chord while the accepted endpoint is still inside
+        ! the LCFS can create a false intersection in a non-convex toroidal
+        ! geometry. Preserve the historical SIMPLE rule: activate wall queries
+        ! only once an accepted microstep endpoint has passed the recorded LCFS.
+        wall_query_rho_lcfs = meta%rho_lcfs
 
         units = adjustl(wall_units)
         select case (trim(units))
@@ -1041,7 +1219,7 @@ contains
         potato%j_perp = potato_values(2)
         potato%p_phi = potato_values(3)
         call potato_to_simple_invariants(potato, psi_axis, psi_edge, v0_ratio, &
-                                         converted)
+            converted)
         simple_values = [converted%h0, converted%j_perp, converted%p_phi]
     end subroutine potato_invariants_to_simple_flat
 
@@ -1085,12 +1263,12 @@ contains
             end if
         end do
         call sort_invariant_starts(states, metadata, residuals, cylindrical, &
-                                   n_solutions)
+            n_solutions)
         if (size(result%starts) > max_solutions) status = INVARIANT_CAPACITY
     end subroutine states_from_invariants_flat
 
     subroutine sort_invariant_starts(states, metadata, residuals, cylindrical, &
-                                     count)
+            count)
         real(dp), intent(inout) :: states(:, :), residuals(:), cylindrical(:, :)
         integer, intent(inout) :: metadata(:, :)
         integer, intent(in) :: count
@@ -1177,9 +1355,9 @@ contains
         status = 0
     end subroutine trace_to_cut_flat
     pure integer function classify_orbit_exit(ierr_orbit, model, mode, &
-            boundary_is_lcfs)
+            boundary_exit_code)
         integer, intent(in) :: ierr_orbit, model, mode
-        logical, intent(in) :: boundary_is_lcfs
+        integer, intent(in) :: boundary_exit_code
 
         if (ierr_orbit == 0) then
             classify_orbit_exit = ORBIT_EXIT_COMPLETED
@@ -1187,30 +1365,20 @@ contains
             classify_orbit_exit = ORBIT_EXIT_WALL
         else if (model == ORBIT_FULL_ORBIT) then
             if (ierr_orbit == ORBIT_FO_LOSS) then
-                if (boundary_is_lcfs) then
-                    classify_orbit_exit = ORBIT_EXIT_LCFS
-                else
-                    classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
-                end if
+                classify_orbit_exit = boundary_exit_code
             else
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
             end if
         else if (mode <= 0) then
-            if (ierr_orbit == 1 .and. boundary_is_lcfs) then
-                classify_orbit_exit = ORBIT_EXIT_LCFS
-            else if (ierr_orbit == 1) then
-                classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
+            if (ierr_orbit == 1) then
+                classify_orbit_exit = boundary_exit_code
             else
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_EVENT
             end if
         else
             select case (ierr_orbit)
             case (SYMPLECTIC_STEP_BOUNDARY)
-                if (boundary_is_lcfs) then
-                    classify_orbit_exit = ORBIT_EXIT_LCFS
-                else
-                    classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
-                end if
+                classify_orbit_exit = boundary_exit_code
             case (SYMPLECTIC_STEP_OUTSIDE_DOMAIN)
                 classify_orbit_exit = ORBIT_EXIT_NUMERICAL_DOMAIN
             case (SYMPLECTIC_STEP_MAXITER)
@@ -1226,6 +1394,51 @@ contains
             end select
         end if
     end function classify_orbit_exit
+
+    pure real(dp) function normalized_flux_from_reference_radial( &
+            reference_radial, radial_is_rho)
+        real(dp), intent(in) :: reference_radial
+        logical, intent(in) :: radial_is_rho
+
+        normalized_flux_from_reference_radial = reference_radial
+        if (radial_is_rho .and. reference_radial >= 0.0_dp) &
+            normalized_flux_from_reference_radial = reference_radial**2
+    end function normalized_flux_from_reference_radial
+
+    real(dp) function reference_normalized_flux_s(reference_radial)
+        real(dp), intent(in) :: reference_radial
+        logical :: radial_is_rho
+
+        radial_is_rho = .false.
+        if (allocated(ref_coords)) then
+            select type (ref_coords)
+            class is (chartmap_coordinate_system_t)
+                radial_is_rho = .true.
+            class default
+                continue
+            end select
+        end if
+        reference_normalized_flux_s = normalized_flux_from_reference_radial( &
+            reference_radial, radial_is_rho)
+    end function reference_normalized_flux_s
+
+    pure logical function should_classify_numerically_confined(exit_code, &
+            model, mode, warning_mode, collisions_enabled, recovery_active, &
+            normalized_flux_s)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        integer, intent(in) :: exit_code, model, mode
+        logical, intent(in) :: warning_mode, collisions_enabled, recovery_active
+        real(dp), intent(in) :: normalized_flux_s
+
+        should_classify_numerically_confined = &
+            exit_code == ORBIT_EXIT_NUMERICAL_MAXITER .and. &
+            warning_mode .and. .not. collisions_enabled .and. &
+            model == ORBIT_GC .and. mode > 0 .and. recovery_active .and. &
+            ieee_is_finite(normalized_flux_s) .and. &
+            normalized_flux_s >= 0.0_dp .and. &
+            normalized_flux_s < NUMERICAL_CONFINED_S_MAX
+    end function should_classify_numerically_confined
 
     subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
         use classification, only: trace_orbit_with_classifiers, &
@@ -1245,12 +1458,14 @@ contains
         integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
         logical :: passing, faulted, numerical_hold, physical_exit
+        logical :: numerically_confined
         type(rk_recovery_state_t) :: rk_recovery
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
         faulted = .false.
         physical_exit = .false.
+        numerically_confined = .false.
         first_unresolved_it = 0
         hold_streak = 0
         rk_recovery = rk_recovery_state_t()
@@ -1337,8 +1552,25 @@ contains
 
             if (ierr_orbit .ne. 0) then
                 orbit_exit_code(ipart) = classify_orbit_exit( &
-                    ierr_orbit, orbit_model, integmode, map_boundary_is_lcfs)
+                    ierr_orbit, orbit_model, integmode, map_boundary_exit_code)
                 it_final = it
+                call integ_to_ref(z(1:3), u_ref_prev)
+                numerically_confined = should_classify_numerically_confined( &
+                    orbit_exit_code(ipart), orbit_model, integmode, &
+                    symplectic_newton_warning_mode, swcoll, rk_recovery%active, &
+                    reference_normalized_flux_s(u_ref_prev(1)))
+                if (numerically_confined) then
+                    ! All pushers failed from the same validated state in the
+                    ! axis-local core (VMEC s<0.01, or chartmap rho<0.1).
+                    ! This is neither a wall nor an LCFS event. Preserve it as
+                    ! an explicit audited outcome and apply the established
+                    ! numerical-fault-as-
+                    ! confined convention instead of fabricating a loss.
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_CONFINED
+                    do it_f = it, ntimstep
+                        call increase_confined_count(it_f, passing)
+                    end do
+                end if
                 physical_exit = orbit_exit_code(ipart) == ORBIT_EXIT_LCFS .or. &
                     orbit_exit_code(ipart) == ORBIT_EXIT_WALL
                 if (physical_exit) then
@@ -1352,7 +1584,7 @@ contains
                         boundary_event_time_width(ipart) = &
                             anorb%si%last_event_fraction_width*dtaumin/v0
                     end if
-                else
+                else if (.not. numerically_confined) then
                     if (first_unresolved_it == 0) first_unresolved_it = it
                     faulted = .true.
                 end if
@@ -1391,6 +1623,8 @@ contains
         zend(4:5, ipart) = z(4:5)
         if (physical_exit) then
             times_lost(ipart) = exit_step*dtaumin/v0
+        else if (numerically_confined) then
+            times_lost(ipart) = trace_time
         else if (faulted) then
             times_lost(ipart) = ieee_value(0.0d0, ieee_quiet_nan)
         else
@@ -1657,13 +1891,9 @@ contains
         real(dp), intent(in) :: z_start(5), z_end(5), field_period
         real(dp), intent(out) :: z_event(5), event_fraction
         integer, intent(inout) :: ierr
-        real(dp), parameter :: radial_sanity_band = 0.05_dp
-        real(dp), parameter :: max_local_radial_step = 0.5_dp
-        real(dp) :: u_event(3)
 
         if (.not. all(ieee_is_finite(z_start)) .or. &
-            .not. all(ieee_is_finite(z_end)) .or. &
-            abs(z_end(1) - z_start(1)) > max_local_radial_step) then
+            .not. all(ieee_is_finite(z_end))) then
             z_event = z_start
             event_fraction = 0.0_dp
             ierr = 2
@@ -1672,43 +1902,152 @@ contains
 
         call locate_linear_lcfs(z_start, z_end, field_period, z_event, &
             event_fraction)
-        call integ_to_ref(z_event(1:3), u_event)
         if (all(ieee_is_finite(z_event)) .and. &
-            all(ieee_is_finite(u_event)) .and. &
-            abs(u_event(1) - 1.0_dp) <= radial_sanity_band) return
+            event_fraction >= 0.0_dp .and. event_fraction <= 1.0_dp .and. &
+            recovery_state_is_physical(z_event, z_start(4))) return
 
-        ! The legacy RK chamber flag is based on its first integration
-        ! coordinate. In a canonical map, a gross numerical jump can therefore
-        ! resemble an LCFS crossing. Do not turn that failure into a physical
-        ! loss unless the candidate is local and maps back to a finite LCFS point.
+        ! The legacy chamber is the native integration-coordinate surface
+        ! z(1)=1, which need not coincide with reference rho=1 for a perturbed
+        ! canonical map. Accept only a physical event inside the attempted
+        ! microstep; never extrapolate a chamber flag into a loss.
         z_event = z_start
         event_fraction = 0.0_dp
         ierr = 2
     end subroutine locate_validated_lcfs
 
-    subroutine validate_rk_state(z_start, z_end, ierr)
+    logical function crosses_reference_boundary(z_start, z_end)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z_start(5), z_end(5)
+        real(dp) :: u_start(3), u_end(3)
+
+        crosses_reference_boundary = .false.
+        if (.not. all(ieee_is_finite(z_start)) .or. &
+            .not. all(ieee_is_finite(z_end))) return
+        call integ_to_ref(z_start(1:3), u_start)
+        call integ_to_ref(z_end(1:3), u_end)
+        if (.not. all(ieee_is_finite(u_start)) .or. &
+            .not. all(ieee_is_finite(u_end))) return
+        crosses_reference_boundary = u_start(1) < 1.0_dp .and. &
+            u_end(1) >= 1.0_dp
+    end function crosses_reference_boundary
+
+    subroutine locate_reference_crossing(z_start, z_end, field_period, &
+            z_event, event_fraction, found)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z_start(5), z_end(5), field_period
+        real(dp), intent(out) :: z_event(5), event_fraction
+        logical, intent(out) :: found
+        real(dp) :: delta(5), z_trial(5), u_start(3), u_end(3), u_trial(3)
+        real(dp) :: fraction_low, fraction_high, fraction_mid
+        integer :: iteration
+
+        found = .false.
+        z_event = z_start
+        event_fraction = 0.0_dp
+        if (.not. all(ieee_is_finite(z_start)) .or. &
+            .not. all(ieee_is_finite(z_end))) return
+        call integ_to_ref(z_start(1:3), u_start)
+        call integ_to_ref(z_end(1:3), u_end)
+        if (.not. all(ieee_is_finite(u_start)) .or. &
+            .not. all(ieee_is_finite(u_end))) return
+        if (u_start(1) >= 1.0_dp .or. u_end(1) < 1.0_dp) return
+
+        delta = z_end - z_start
+        delta(2) = modulo(delta(2) + 0.5_dp*twopi, twopi) - 0.5_dp*twopi
+        delta(3) = modulo(delta(3) + 0.5_dp*field_period, field_period) - &
+            0.5_dp*field_period
+        fraction_low = 0.0_dp
+        fraction_high = 1.0_dp
+        do iteration = 1, 64
+            fraction_mid = 0.5_dp*(fraction_low + fraction_high)
+            z_trial = z_start + fraction_mid*delta
+            call integ_to_ref(z_trial(1:3), u_trial)
+            if (.not. all(ieee_is_finite(u_trial))) return
+            if (u_trial(1) >= 1.0_dp) then
+                fraction_high = fraction_mid
+            else
+                fraction_low = fraction_mid
+            end if
+        end do
+        event_fraction = fraction_high
+        z_event = z_start + event_fraction*delta
+        call integ_to_ref(z_event(1:3), u_trial)
+        if (.not. all(ieee_is_finite(u_trial))) return
+        if (abs(u_trial(1) - 1.0_dp) > 0.05_dp) return
+        found = .true.
+    end subroutine locate_reference_crossing
+
+    subroutine validate_rk_state(z_start, z_end, ierr, expected_momentum)
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 
         real(dp), intent(in) :: z_start(5)
         real(dp), intent(inout) :: z_end(5)
         integer, intent(inout) :: ierr
-        real(dp), parameter :: radial_sanity_band = 0.05_dp
-        real(dp), parameter :: max_local_radial_step = 0.5_dp
-        real(dp) :: u_end(3)
+        real(dp), intent(in), optional :: expected_momentum
+        real(dp) :: momentum_reference
+        logical :: momentum_valid
 
         if (ierr /= 0) return
+        momentum_reference = z_start(4)
+        momentum_valid = .true.
+        if (present(expected_momentum)) then
+            momentum_reference = expected_momentum
+            momentum_valid = abs(z_end(4) - momentum_reference) <= &
+                MOMENTUM_SANITY_FRACTION* &
+                max(abs(momentum_reference), tiny(1.0_dp))
+        end if
         if (all(ieee_is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
             abs(z_end(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
-            abs(z_end(1) - z_start(1)) <= max_local_radial_step) then
-            call integ_to_ref(z_end(1:3), u_end)
-            if (all(ieee_is_finite(u_end)) .and. &
-                u_end(1) >= -radial_sanity_band .and. &
-                u_end(1) <= 1.0_dp + radial_sanity_band) return
-        end if
+            momentum_valid) return
 
         z_end = z_start
         ierr = 2
     end subroutine validate_rk_state
+
+    subroutine validate_rk_step_or_reference_boundary(z_start, z_candidate, &
+            field_period, expected_momentum, z, event_fraction, ierr, &
+            reference_boundary)
+        real(dp), intent(in) :: z_start(5), z_candidate(5), field_period
+        real(dp), intent(in) :: expected_momentum
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(out) :: event_fraction
+        integer, intent(inout) :: ierr
+        logical, intent(out) :: reference_boundary
+        integer :: step_ierr
+
+        reference_boundary = .false.
+        event_fraction = 0.0_dp
+        step_ierr = ierr
+        if (step_ierr /= 0 .and. step_ierr /= 1) return
+
+        if (isw_field_type == ALBERT) then
+            if (crosses_reference_boundary(z_start, z_candidate)) then
+                call locate_reference_crossing(z_start, z_candidate, &
+                    field_period, z, event_fraction, reference_boundary)
+                if (reference_boundary) then
+                    ierr = 0
+                    call validate_rk_state(z_start, z, ierr, expected_momentum)
+                    if (ierr == 0) then
+                        ierr = 1
+                        return
+                    end if
+                    reference_boundary = .false.
+                end if
+            end if
+        end if
+
+        if (step_ierr == 1) then
+            z = z_candidate
+            ierr = step_ierr
+            return
+        end if
+
+        z = z_candidate
+        ierr = 0
+        call validate_rk_state(z_start, z, ierr, expected_momentum)
+    end subroutine validate_rk_step_or_reference_boundary
 
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
             hold_streak, numerical_hold_any, rk_recovery)
@@ -1726,9 +2065,11 @@ contains
         logical, intent(out), optional :: numerical_hold_any
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
-        integer :: hold_streak_local, ktau
+        integer :: hold_streak_local, ktau, recovery_method
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
+        real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
+        logical :: reference_boundary
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -1742,20 +2083,8 @@ contains
 
         do ktau = 1, ntau_local
             numerical_hold = .false.
+            reference_boundary = .false.
             z_step_start = z
-            if (rk_recovery_local%both_methods_failed) then
-                ! This autonomous step has already failed from the same accepted
-                ! state with both pushers. Repeating the identical adaptive-RK
-                ! solve can consume millions of rejected substeps without new
-                ! information, so retain the intervention for the remaining
-                ! intervals and keep its held-time accounting explicit.
-                call count_event(EVT_WARNING_STEP_SKIP)
-                numerical_hold = .true.
-                numerical_hold_any_local = .true.
-                ierr_orbit = 0
-                kt = kt + 1
-                cycle
-            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -1768,16 +2097,9 @@ contains
                             exit_step = real(kt, dp) + loss_fraction
                         end if
                     else if (symplectic_newton_warning_mode) then
-                        ! The full-orbit pusher retains its last resolved state.
-                        ! Default production mode advances the clock past this
-                        ! one unresolved microstep and retries the next step;
-                        ! numerical inversion faults are never physical losses.
-                        z = z_step_start
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
+                        call hold_isolated_warning_failure(z, z_step_start, &
+                            ierr_orbit, hold_streak_local, numerical_hold, &
+                            numerical_hold_any_local)
                     end if
                     if (ierr_orbit .ne. 0) exit
                 end if
@@ -1791,14 +2113,27 @@ contains
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                    call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
+                        merge(rk_recovery_local%momentum_reference, &
+                        z_step_start(4), &
+                        rk_recovery_local%has_momentum_reference), ierr_orbit, &
+                        recovery_method)
                 else
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
-                call validate_rk_state(z_step_start, z, ierr_orbit)
-                if (ierr_orbit == 1) then
+                z_step_end = z
+                if (rk_recovery_local%has_momentum_reference) then
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, &
+                        rk_recovery_local%momentum_reference, z, loss_fraction, &
+                        ierr_orbit, reference_boundary)
+                else
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, z_step_start(4), z, &
+                        loss_fraction, ierr_orbit, reference_boundary)
+                end if
+                if (ierr_orbit == 1 .and. .not. reference_boundary) then
                     z_step_end = z
                     call locate_validated_lcfs(z_step_start, z_step_end, &
                         anorb%fper, z, loss_fraction, ierr_orbit)
@@ -1809,22 +2144,21 @@ contains
                     end if
                     if (rk_recovery_local%active) then
                         anorb%si%last_step_fraction = loss_fraction
-                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        if (reference_boundary) then
+                            call integ_to_ref(z(1:3), u_event)
+                            anorb%si%last_event_radial_residual = &
+                                abs(u_event(1) - 1.d0)
+                        else
+                            anorb%si%last_event_radial_residual = &
+                                abs(z(1) - 1.d0)
+                        end if
                         anorb%si%last_event_fraction_width = 1.d0
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
-                else if (ierr_orbit /= 0 .and. &
-                        symplectic_newton_warning_mode) then
-                    ! The RK driver rolls back failed integration to the last
-                    ! accepted state. Apply the same bounded warning convention
-                    ! as the symplectic and full-orbit paths.
-                    if (rk_recovery_local%active) &
-                        rk_recovery_local%both_methods_failed = .true.
-                    call count_event(EVT_WARNING_STEP_SKIP)
-                    hold_streak_local = ierr_orbit
-                    numerical_hold = .true.
-                    numerical_hold_any_local = .true.
-                    ierr_orbit = 0
+                else if (ierr_orbit /= 0) then
+                    call hold_isolated_warning_failure(z, z_step_start, &
+                        ierr_orbit, hold_streak_local, numerical_hold, &
+                        numerical_hold_any_local)
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -1834,14 +2168,25 @@ contains
                     orbit_timestep_sympl, ierr_orbit)
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
-                    if (ierr_orbit /= 0) then
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        loss_fraction, ierr_orbit, reference_boundary)
+                    if (reference_boundary .and. ierr_orbit == 1) then
+                        call integ_to_ref(z(1:3), u_event)
+                        anorb%si%last_step_fraction = loss_fraction
+                        anorb%si%last_event_radial_residual = &
+                            abs(u_event(1) - 1.d0)
+                        anorb%si%last_event_fraction_width = 1.d0
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                    else if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     end if
                 end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
-                    call to_standard_z_coordinates(anorb, z)
+                    if (.not. reference_boundary) &
+                        call to_standard_z_coordinates(anorb, z)
                     if (present(exit_step)) exit_step = real(kt, dp) + &
                         anorb%si%last_step_fraction
                     exit
@@ -1855,23 +2200,35 @@ contains
                     ! in the failing axis/edge region; generic failures use an
                     ! exponentially backed-off probe interval.
                     z = z_step_start
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
-                    if (ierr_orbit == 1) then
+                    z(4) = si_step_start%pabs
+                    call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
+                        si_step_start%pabs, ierr_orbit, recovery_method)
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        loss_fraction, ierr_orbit, reference_boundary)
+                    if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
                         call locate_validated_lcfs(z_step_start, z_step_end, &
                             anorb%fper, z, loss_fraction, ierr_orbit)
                     end if
                     if (ierr_orbit == 0) then
-                        call reseed_sympl(anorb%si, anorb%f, z)
+                        call reseed_sympl(anorb%si, anorb%f, z, &
+                            si_step_start%pabs)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
                         call activate_rk_recovery(rk_recovery_local, &
-                            z_step_start(1))
+                            z_step_start, si_step_start%pabs)
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         anorb%si%last_step_fraction = loss_fraction
-                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        if (reference_boundary) then
+                            call integ_to_ref(z(1:3), u_event)
+                            anorb%si%last_event_radial_residual = &
+                                abs(u_event(1) - 1.d0)
+                        else
+                            anorb%si%last_event_radial_residual = &
+                                abs(z(1) - 1.d0)
+                        end if
                         anorb%si%last_event_fraction_width = 1.d0
                         if (present(exit_step)) exit_step = real(kt, dp) + &
                             loss_fraction
@@ -1879,12 +2236,11 @@ contains
                         exit
                     else
                         z = z_step_start
-                        rk_recovery_local%both_methods_failed = .true.
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
+                        call hold_isolated_warning_failure(z, z_step_start, &
+                            ierr_orbit, hold_streak_local, numerical_hold, &
+                            numerical_hold_any_local)
                     end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
@@ -1900,16 +2256,27 @@ contains
             end if
             if (rk_recovery_local%active .and. .not. numerical_hold) then
                 hold_streak_local = 0
-                rk_recovery_local%steps = rk_recovery_local%steps + 1
-                if (should_resume_symplectic(rk_recovery_local, z(1))) then
-                    call reseed_sympl(anorb%si, anorb%f, z)
+                call update_recovery_streak(rk_recovery_local, z, &
+                    recovery_method)
+                if (should_resume_symplectic(rk_recovery_local, z)) then
+                    if (rk_recovery_local%has_momentum_reference) then
+                        call reseed_sympl(anorb%si, anorb%f, z, &
+                            rk_recovery_local%momentum_reference)
+                    else
+                        call reseed_sympl(anorb%si, anorb%f, z)
+                    end if
                     rk_recovery_local%active = .false.
                     call count_event(EVT_SYMPLECTIC_RESUME)
                 end if
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) &
                 hold_streak_local = 0
-            if (swcoll) call collide(z, dtaumin) ! Collisions
+            if (swcoll) then
+                call collide(z, dtaumin) ! Collisions
+                if (rk_recovery_local%active) then
+                    rk_recovery_local%momentum_reference = z(4)
+                end if
+            end if
             kt = kt + 1
         end do
         if (present(hold_streak)) hold_streak = hold_streak_local
@@ -1917,6 +2284,27 @@ contains
             numerical_hold_any = numerical_hold_any_local
         if (present(rk_recovery)) rk_recovery = rk_recovery_local
     end subroutine macrostep
+
+    subroutine hold_isolated_warning_failure(z, z_step_start, ierr_orbit, &
+            hold_streak, numerical_hold, numerical_hold_any)
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: z_step_start(5)
+        integer, intent(inout) :: ierr_orbit, hold_streak
+        logical, intent(inout) :: numerical_hold, numerical_hold_any
+
+        z = z_step_start
+        if (.not. symplectic_newton_warning_mode) return
+        if (hold_streak >= max_consecutive_warning_holds) return
+
+        ! Preserve the historical warning-level behavior for one isolated
+        ! unresolved microstep. Unlike the former permanent latch, the next
+        ! microstep retries both pushers; a successful step resets the streak.
+        call count_event(EVT_WARNING_STEP_SKIP)
+        hold_streak = hold_streak + 1
+        numerical_hold = .true.
+        numerical_hold_any = .true.
+        ierr_orbit = 0
+    end subroutine hold_isolated_warning_failure
 
     subroutine locate_wall_segment(z, z_start, z_end, ipart, x_start_m, &
             u_start, x_end_m, u_end, field_period, start_step, segment_steps, &
@@ -1937,6 +2325,8 @@ contains
 
         hit = .false.
         hit_step = start_step + segment_steps
+        if (wall_query_rho_lcfs >= 0.0_dp .and. &
+            u_end(1) <= wall_query_rho_lcfs) return
         call stl_wall_first_hit_segment_with_normal( &
             wall, x_start_m, x_end_m, hit, x_hit_m, normal_m)
         if (.not. hit) return
@@ -1999,12 +2389,13 @@ contains
         logical, intent(out), optional :: numerical_hold_any
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
-        integer :: hold_streak_local, ktau
+        integer :: hold_streak_local, ktau, recovery_method
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
+        logical :: reference_boundary
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -2018,26 +2409,32 @@ contains
         if (present(rk_recovery)) rk_recovery_local = rk_recovery
         do ktau = 1, ntau_local
             numerical_hold = .false.
+            reference_boundary = .false.
             segment_duration = 1.0_dp
             z_step_start = z
-            if (rk_recovery_local%both_methods_failed) then
-                call count_event(EVT_WARNING_STEP_SKIP)
-                numerical_hold = .true.
-                numerical_hold_any_local = .true.
-                ierr_orbit = 0
-                kt = kt + 1
-                cycle
-            end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
+                    call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
+                        merge(rk_recovery_local%momentum_reference, &
+                        z_step_start(4), &
+                        rk_recovery_local%has_momentum_reference), ierr_orbit, &
+                        recovery_method)
                 else
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
-                call validate_rk_state(z_step_start, z, ierr_orbit)
-                if (ierr_orbit == 1) then
+                z_step_end = z
+                if (rk_recovery_local%has_momentum_reference) then
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, &
+                        rk_recovery_local%momentum_reference, z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
+                else
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, z_step_start(4), z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
+                end if
+                if (ierr_orbit == 1 .and. .not. reference_boundary) then
                     z_step_end = z
                     call locate_validated_lcfs(z_step_start, z_step_end, &
                         anorb%fper, z, boundary_fraction, ierr_orbit)
@@ -2065,15 +2462,10 @@ contains
                         end if
                     end if
                     exit
-                else if (ierr_orbit /= 0 .and. &
-                        symplectic_newton_warning_mode) then
-                    if (rk_recovery_local%active) &
-                        rk_recovery_local%both_methods_failed = .true.
-                    call count_event(EVT_WARNING_STEP_SKIP)
-                    hold_streak_local = ierr_orbit
-                    numerical_hold = .true.
-                    numerical_hold_any_local = .true.
-                    ierr_orbit = 0
+                else if (ierr_orbit /= 0) then
+                    call hold_isolated_warning_failure(z, z_step_start, &
+                        ierr_orbit, hold_streak_local, numerical_hold, &
+                        numerical_hold_any_local)
                 end if
             else
                 if (swcoll) call update_momentum(anorb, z)
@@ -2083,15 +2475,27 @@ contains
                     orbit_timestep_sympl, ierr_orbit, segment_duration)
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
-                    if (ierr_orbit /= 0) then
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
+                    if (reference_boundary .and. ierr_orbit == 1) then
+                        anorb%si%last_step_fraction = boundary_fraction
+                        anorb%si%last_event_fraction_width = 1.d0
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                    else if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     end if
                 end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
-                    call to_standard_z_coordinates(anorb, z)
+                    if (.not. reference_boundary) &
+                        call to_standard_z_coordinates(anorb, z)
                     call integ_to_ref(z(1:3), u_ref_cur)
+                    if (reference_boundary) then
+                        anorb%si%last_event_radial_residual = &
+                            abs(u_ref_cur(1) - 1.d0)
+                    end if
                     call ref_coords%evaluate_cart(u_ref_cur, x_cur)
                     x_cur_m = x_cur*chartmap_cart_scale_to_m
                     z_step_end = z
@@ -2112,19 +2516,24 @@ contains
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
                     z = z_step_start
-                    call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
-                        ierr_orbit, RK_RECOVERY_STEP_LIMIT)
-                    call validate_rk_state(z_step_start, z, ierr_orbit)
-                    if (ierr_orbit == 1) then
+                    z(4) = si_step_start%pabs
+                    call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
+                        si_step_start%pabs, ierr_orbit, recovery_method)
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
+                    if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
                         call locate_validated_lcfs(z_step_start, z_step_end, &
                             anorb%fper, z, boundary_fraction, ierr_orbit)
                     end if
                     if (ierr_orbit == 0) then
-                        call reseed_sympl(anorb%si, anorb%f, z)
+                        call reseed_sympl(anorb%si, anorb%f, z, &
+                            si_step_start%pabs)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
                         call activate_rk_recovery(rk_recovery_local, &
-                            z_step_start(1))
+                            z_step_start, si_step_start%pabs)
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_ref_cur)
@@ -2153,12 +2562,11 @@ contains
                         exit
                     else
                         z = z_step_start
-                        rk_recovery_local%both_methods_failed = .true.
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak_local = ierr_orbit
-                        numerical_hold = .true.
-                        numerical_hold_any_local = .true.
-                        ierr_orbit = 0
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
+                        call hold_isolated_warning_failure(z, z_step_start, &
+                            ierr_orbit, hold_streak_local, numerical_hold, &
+                            numerical_hold_any_local)
                     end if
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
@@ -2185,13 +2593,24 @@ contains
                 exit
             end if
 
-            if (swcoll) call collide(z, dtaumin)
+            if (swcoll) then
+                call collide(z, dtaumin)
+                if (rk_recovery_local%active) then
+                    rk_recovery_local%momentum_reference = z(4)
+                end if
+            end if
             kt = kt + 1
             if (rk_recovery_local%active) then
                 hold_streak_local = 0
-                rk_recovery_local%steps = rk_recovery_local%steps + 1
-                if (should_resume_symplectic(rk_recovery_local, z(1))) then
-                    call reseed_sympl(anorb%si, anorb%f, z)
+                call update_recovery_streak(rk_recovery_local, z, &
+                    recovery_method)
+                if (should_resume_symplectic(rk_recovery_local, z)) then
+                    if (rk_recovery_local%has_momentum_reference) then
+                        call reseed_sympl(anorb%si, anorb%f, z, &
+                            rk_recovery_local%momentum_reference)
+                    else
+                        call reseed_sympl(anorb%si, anorb%f, z)
+                    end if
                     rk_recovery_local%active = .false.
                     call count_event(EVT_SYMPLECTIC_RESUME)
                 end if

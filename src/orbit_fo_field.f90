@@ -10,9 +10,26 @@ module orbit_fo_field
   implicit none
   private
 
-  public :: fo_eval_field
+  public :: fo_eval_field, fo_eval_reference_field, &
+    fo_reference_field_available
 
 contains
+
+  logical function fo_reference_field_available()
+    use magfie_sub, only: has_magfie_refcoords_field
+
+    fo_reference_field_available = has_magfie_refcoords_field()
+  end function fo_reference_field_available
+
+  subroutine fo_eval_reference_field(u, hcov, Bmod, status)
+    use magfie_sub, only: evaluate_magfie_refcoords_field
+    real(dp), intent(in) :: u(3)
+    real(dp), intent(out) :: hcov(3), Bmod
+    integer, intent(out) :: status
+    real(dp) :: Acov(3)
+
+    call evaluate_magfie_refcoords_field(u, Acov, hcov, Bmod, status)
+  end subroutine fo_eval_reference_field
 
   ! Production Boozer field at u=(rho,theta_B,phi_B), reparametrized from
   ! field_can(s=rho^2). field_can returns covariant A_theta,A_phi (A_s=0),

@@ -3,7 +3,7 @@ program test_restart_io
     use params, only: ntestpart, times_lost, trap_par, perp_inv, zend, zstart, &
                       orbit_exit_code, boundary_event_radial_residual, &
                       boundary_event_time_width, ORBIT_EXIT_COMPLETED, &
-                      ORBIT_EXIT_LCFS, &
+                      ORBIT_EXIT_LCFS, ORBIT_EXIT_NUMERICAL_CONFINED, &
                       confpart_pass, confpart_trap, ntimstep, kt_macro, &
                       v0, dtaumin, trace_time
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
@@ -15,6 +15,7 @@ program test_restart_io
     nerr = 0
     call test_read_restart()
     call test_legacy_restart_retraces_early_exit()
+    call test_numerically_confined_restart()
     call test_restore_counts()
 
     if (nerr > 0) then
@@ -136,6 +137,42 @@ contains
                     boundary_event_time_width, trap_par, perp_inv, zend, zstart, &
                     particle_done)
     end subroutine test_legacy_restart_retraces_early_exit
+
+    subroutine test_numerically_confined_restart()
+        integer :: unit
+
+        ntestpart = 1
+        trace_time = 1.0d0
+        allocate (times_lost(1), trap_par(1), perp_inv(1), orbit_exit_code(1))
+        allocate (boundary_event_radial_residual(1), boundary_event_time_width(1))
+        allocate (zend(5, 1), zstart(5, 1))
+        times_lost = -1.0d0
+        orbit_exit_code = ORBIT_EXIT_COMPLETED
+        trap_par = 0.0d0
+        perp_inv = 0.0d0
+        zend = 0.0d0
+        zstart = 0.0d0
+
+        open (newunit=unit, file='times_lost.dat', recl=1024)
+        write (unit, *) 1, trace_time, 0.0d0, 0.0d0, 0.0d0, zend(:, 1)
+        close (unit)
+        open (newunit=unit, file='orbit_exit_code.dat', recl=1024)
+        write (unit, *) 1, ORBIT_EXIT_NUMERICAL_CONFINED, trace_time, &
+            -1.0d0, -1.0d0
+        close (unit)
+
+        call read_restart_data()
+        call assert(particle_done(1), &
+            'numerically confined marker is reusable', 1)
+        call assert(orbit_exit_code(1) == ORBIT_EXIT_NUMERICAL_CONFINED, &
+            'numerically confined exit code restored', 1)
+        call assert_eq(times_lost(1), trace_time, &
+            'numerically confined trace time restored', 1)
+
+        deallocate (times_lost, orbit_exit_code, boundary_event_radial_residual, &
+                    boundary_event_time_width, trap_par, perp_inv, zend, zstart, &
+                    particle_done)
+    end subroutine test_numerically_confined_restart
 
     subroutine test_restore_counts()
         integer :: it

@@ -19,7 +19,8 @@ module spectre_sympl_orbit
         ref_to_integ
     use field_can_spectre, only: set_spectre_volume_lock
     use orbit_symplectic_base, only: symplectic_integrator_t, &
-        symplectic_newton_warning_mode, SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        symplectic_newton_warning_mode, symplectic_spectre_newton_warning_factor, &
+        SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use interface_crossing, only: apply_crossing, crossing_info_t, &
         crossing_log_record, CROSS_LOSS, CROSS_STOP, CROSS_RECOVERY, CROSS_INVALID, &
@@ -206,6 +207,7 @@ contains
 
         ierr = SYMPL_SPECTRE_OK
         t_frac = 1.0_dp
+        si%warning_factor = symplectic_spectre_newton_warning_factor
         budget = state%dt_std
         used = 0.0_dp
         h_try = budget
@@ -831,6 +833,7 @@ contains
         z(1:3) = xinteg
         z(4) = recanon_pphi(f, y(4), y(5))
         call orbit_sympl_init(si, f, z, state%dt_std, 1, si%rtol, state%mode)
+        si%warning_factor = symplectic_spectre_newton_warning_factor
     end subroutine recanonicalize
 
     pure function recanon_pphi(f, p, lambda) result(pphi)

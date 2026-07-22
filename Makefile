@@ -1,7 +1,7 @@
 CONFIG ?= Release
 FLAGS ?=
 BUILD_DIR := build
-GOLDEN_LIBNEO_REF := e451e0a42f5228d85b0479de40aa35db8b48239d
+GOLDEN_LIBNEO_REF := e2b281b1bc9f9f48f9526622445e0b2c0f8a4984
 
 # Prevent ambient shell env from silently changing which libneo is fetched.
 # Pass the ref explicitly via: make ... LIBNEO_REF=<branch|tag|sha>
@@ -98,10 +98,12 @@ test-all: build
 # Golden record test target
 # Compares current branch against main to enforce strict numerical reproducibility
 # Any differences must be manually reviewed before merging
+test-golden: FLAGS += -DLIBNEO_REF=$(GOLDEN_LIBNEO_REF)
 test-golden: build-deterministic-nopy
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
 
 # Golden record tests without deterministic FP (faster, for local iteration only)
+test-golden-fast: FLAGS += -DLIBNEO_REF=$(GOLDEN_LIBNEO_REF)
 test-golden-fast: build
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
 

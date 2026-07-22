@@ -4,7 +4,298 @@ module alpha_lifetime_sub
 
     implicit none
 
+    integer, parameter :: axis_rhs_count = 5
+
+    type :: toroidal_regularization_context_t
+        real(dp) :: mu = 0.0_dp
+        real(dp) :: major_radius_cm = 1.0_dp
+    end type toroidal_regularization_context_t
+
+    ! The Burby--Ellison position map is retained only through first order in
+    ! gyroradius. Near a mirror point, its neglected second-order terms can put
+    ! the mapped state just below the original constant-momentum energy shell.
+    ! Clamp only that small mismatch; a larger negative radicand is a failed
+    ! regularized step and must fall through to the next recovery method.
+    real(dp), parameter :: toroidal_energy_shell_tolerance = 1.0e-5_dp
+
 contains
+
+    subroutine bstar_parallel_factor(z, factor)
+        use parmot_mod, only: ro0
+        use magfie_sub, only: magfie
+        real(dp), intent(in) :: z(5)
+        real(dp), intent(out) :: factor
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+
+        call magfie(z(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        factor = 1.0_dp + z(4)*z(5)*(ro0/bmod)*dot_product(hcurl, hcovar)
+    end subroutine bstar_parallel_factor
+
+    subroutine toroidal_regularized_position_map(x, ppar, direction, x_mapped, &
+            ierr)
+        !> Leading near-identity map from Burby and Ellison, Phys. Plasmas 24,
+        !> 110703 (2017), Eq. (13). direction=1 maps the conventional guiding
+        !> centre to the toroidally regularized coordinate; direction=-1
+        !> numerically inverts that first-order map. The toroidal component is
+        !> unchanged, which preserves field-period closure without an angular
+        !> seam.
+        real(dp), intent(in) :: x(3), ppar
+        integer, intent(in) :: direction
+        real(dp), intent(out) :: x_mapped(3)
+        integer, intent(out) :: ierr
+        real(dp), parameter :: derivative_step = 1.0e-6_dp
+        real(dp) :: shift(3), shift_plus(3), shift_minus(3)
+        real(dp) :: residual(2), residual_trial(2), jacobian(2, 2), delta(2)
+        real(dp) :: x_plus(3), x_minus(3), x_trial(3), determinant, damping
+        real(dp) :: residual_norm, trial_norm
+        integer :: iteration, line_search, shift_error
+
+        ierr = 2
+        x_mapped = x
+        if (abs(direction) /= 1) return
+        if (direction == 1) then
+            call toroidal_position_shift(x, ppar, shift, shift_error)
+            if (shift_error /= 0) return
+            x_mapped = x + shift
+            ierr = 0
+            return
+        end if
+
+        ! Invert x_regular=x_standard+shift(x_standard) with a damped two-
+        ! dimensional Newton solve. Fixed-point inversion is not contractive
+        ! near the conventional B_parallel_star singularity.
+        do iteration = 1, 20
+            call toroidal_position_shift(x_mapped, ppar, shift, shift_error)
+            if (shift_error /= 0) then
+                x_mapped = x
+                return
+            end if
+            residual = x_mapped(1:2) + shift(1:2) - x(1:2)
+            residual_norm = maxval(abs(residual))
+            if (residual_norm <= &
+                    1.0e-12_dp*max(1.0_dp, maxval(abs(x)))) then
+                ierr = 0
+                return
+            end if
+            do line_search = 1, 2
+                x_plus = x_mapped
+                x_minus = x_mapped
+                x_plus(line_search) = x_plus(line_search) + derivative_step
+                x_minus(line_search) = x_minus(line_search) - derivative_step
+                call toroidal_position_shift(x_plus, ppar, shift_plus, &
+                    shift_error)
+                if (shift_error /= 0) then
+                    x_mapped = x
+                    return
+                end if
+                call toroidal_position_shift(x_minus, ppar, shift_minus, &
+                    shift_error)
+                if (shift_error /= 0) then
+                    x_mapped = x
+                    return
+                end if
+                jacobian(:, line_search) = &
+                    (shift_plus(1:2) - shift_minus(1:2))/ &
+                    (2.0_dp*derivative_step)
+                jacobian(line_search, line_search) = &
+                    jacobian(line_search, line_search) + 1.0_dp
+            end do
+            determinant = jacobian(1, 1)*jacobian(2, 2) - &
+                jacobian(1, 2)*jacobian(2, 1)
+            if (abs(determinant) <= 100.0_dp*tiny(1.0_dp)) then
+                x_mapped = x
+                return
+            end if
+            delta(1) = (-jacobian(2, 2)*residual(1) + &
+                jacobian(1, 2)*residual(2))/determinant
+            delta(2) = (jacobian(2, 1)*residual(1) - &
+                jacobian(1, 1)*residual(2))/determinant
+
+            damping = 1.0_dp
+            do line_search = 1, 12
+                x_trial = x_mapped
+                x_trial(1:2) = x_trial(1:2) + damping*delta
+                if (x_trial(1) < 0.0_dp) then
+                    damping = 0.5_dp*damping
+                    cycle
+                end if
+                call toroidal_position_shift(x_trial, ppar, shift_plus, &
+                    shift_error)
+                if (shift_error /= 0) then
+                    damping = 0.5_dp*damping
+                    cycle
+                end if
+                residual_trial = x_trial(1:2) + shift_plus(1:2) - x(1:2)
+                trial_norm = maxval(abs(residual_trial))
+                if (trial_norm < residual_norm) then
+                    x_mapped = x_trial
+                    exit
+                end if
+                damping = 0.5_dp*damping
+            end do
+            if (line_search > 12) then
+                x_mapped = x
+                return
+            end if
+        end do
+        x_mapped = x
+    end subroutine toroidal_regularized_position_map
+
+    subroutine toroidal_position_shift(x, ppar, shift, ierr)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use parmot_mod, only: ro0
+        use magfie_sub, only: magfie_refcoords
+        real(dp), intent(in) :: x(3), ppar
+        real(dp), intent(out) :: shift(3)
+        integer, intent(out) :: ierr
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: bphi
+
+        ierr = 2
+        shift = 0.0_dp
+        call magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        bphi = bmod*hctrvr(3)
+        if (abs(sqrtg*bphi) <= 100.0_dp*tiny(1.0_dp)) return
+        shift(1) = ro0*ppar*hcovar(2)/(sqrtg*bphi)
+        shift(2) = -ro0*ppar*hcovar(1)/(sqrtg*bphi)
+        if (.not. all(ieee_is_finite(shift))) then
+            shift = 0.0_dp
+            return
+        end if
+        ierr = 0
+    end subroutine toroidal_position_shift
+
+    subroutine toroidal_regularized_rhs(tau, y, dy, context)
+        use parmot_mod, only: rmu, ro0
+        use magfie_sub, only: magfie_refcoords
+        real(dp), intent(in) :: tau, y(:)
+        real(dp), intent(out) :: dy(:)
+        class(*), intent(in) :: context
+        real(dp), parameter :: derivative_step = 1.0e-5_dp
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: bp, gp, bdp(3), hcp(3), htp(3), hxp(3)
+        real(dp) :: bm, gm, bdm(3), hcm(3), htm(3), hxm(3)
+        real(dp) :: xwork(3), dq(3), dkinetic(3), q, u, ppar, vpa
+        real(dp) :: drift_scale, gamma
+        real(dp) :: h
+        integer :: i
+
+        select type (ctx => context)
+        type is (toroidal_regularization_context_t)
+            call magfie_refcoords(y(1:3), bmod, sqrtg, bder, hcovar, &
+                hctrvr, hcurl)
+            q = ctx%major_radius_cm*hctrvr(3)
+            if (abs(q) <= 100.0_dp*tiny(1.0_dp)) then
+                dy = huge(1.0_dp)
+                return
+            end if
+
+            do i = 1, 3
+                h = derivative_step
+                xwork = y(1:3)
+                xwork(i) = xwork(i) + h
+                call magfie_refcoords(xwork, bp, gp, bdp, hcp, htp, hxp)
+                xwork(i) = y(i) - h
+                call magfie_refcoords(xwork, bm, gm, bdm, hcm, htm, hxm)
+                dq(i) = ctx%major_radius_cm*(htp(3) - htm(3))/(2.0_dp*h)
+            end do
+
+            u = y(4)
+            ppar = q*u
+            gamma = sqrt(1.0_dp + &
+                2.0_dp*(ppar**2 + 2.0_dp*ctx%mu*bmod)/rmu)
+            vpa = ppar/gamma
+            dkinetic = (u*u*q*dq + ctx%mu*bmod*bder)/gamma
+            drift_scale = ro0/(sqrtg*bmod*hctrvr(3))
+            dy(1) = vpa*hctrvr(1) - drift_scale*dkinetic(2)
+            dy(2) = vpa*hctrvr(2) + drift_scale*dkinetic(1)
+            dy(3) = vpa*hctrvr(3)
+            dy(4) = -dot_product(hctrvr, dkinetic)/q
+        class default
+            dy = huge(1.0_dp)
+        end select
+    end subroutine toroidal_regularized_rhs
+
+    subroutine orbit_timestep_toroidal_regularized(z, dtau, relerr, ierr, &
+            step_limit)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use odeint_allroutines_sub, only: odeint_allroutines, &
+            odeint_has_failed
+        use chamb_sub, only: chamb_can
+        use magfie_sub, only: magfie_refcoords, has_magfie_refcoords_field
+        use field_can_mod, only: integ_to_ref, ref_to_integ
+        use new_vmec_stuff_mod, only: rmajor
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: dtau, relerr
+        integer, intent(out) :: ierr
+        integer, intent(in) :: step_limit
+        type(toroidal_regularization_context_t) :: context
+        real(dp) :: z_initial(5), y(4), chamber_y(2)
+        real(dp) :: x_standard(3), x_regular(3)
+        real(dp) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: q, ppar, ppar_raw, ppar_squared
+        integer :: map_error
+
+        z_initial = z
+        if (.not. has_magfie_refcoords_field()) then
+            ierr = 2
+            return
+        end if
+        call integ_to_ref(z(1:3), x_standard)
+        call magfie_refcoords(x_standard, bmod, sqrtg, bder, hcovar, hctrvr, &
+            hcurl)
+        context%major_radius_cm = 100.0_dp*rmajor
+        context%mu = 0.5_dp*z(4)**2*(1.0_dp - z(5)**2)/bmod
+        ppar = z(4)*z(5)
+        call toroidal_regularized_position_map(x_standard, ppar, 1, x_regular, &
+            map_error)
+        if (map_error /= 0) then
+            ierr = 2
+            return
+        end if
+        y(1:3) = x_regular
+        call magfie_refcoords(y(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        q = context%major_radius_cm*hctrvr(3)
+        if (abs(q) <= 100.0_dp*tiny(1.0_dp)) then
+            ierr = 2
+            return
+        end if
+        y(4) = ppar/q
+
+        call odeint_allroutines(y, 4, context, 0.0_dp, dtau, relerr, &
+            toroidal_regularized_rhs, step_limit=step_limit)
+        if (odeint_has_failed() .or. .not. all(ieee_is_finite(y))) then
+            z = z_initial
+            ierr = 2
+            return
+        end if
+
+        call magfie_refcoords(y(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        q = context%major_radius_cm*hctrvr(3)
+        ppar_raw = q*y(4)
+        call toroidal_regularized_position_map(y(1:3), ppar_raw, -1, &
+            x_standard, map_error)
+        if (map_error /= 0) then
+            z = z_initial
+            ierr = 2
+            return
+        end if
+        call magfie_refcoords(x_standard, bmod, sqrtg, bder, hcovar, hctrvr, &
+            hcurl)
+        ppar_squared = z_initial(4)**2 - 2.0_dp*context%mu*bmod
+        if (ppar_squared < &
+                -toroidal_energy_shell_tolerance*z_initial(4)**2) then
+            z = z_initial
+            ierr = 2
+            return
+        end if
+        ppar = sign(sqrt(max(ppar_squared, 0.0_dp)), ppar_raw)
+        call ref_to_integ(x_standard, z(1:3))
+        z(4) = z_initial(4)
+        z(5) = ppar/z(4)
+        chamber_y = z(1:2)
+        call chamb_can(chamber_y, z(3), ierr)
+    end subroutine orbit_timestep_toroidal_regularized
 
     !ToDo make module from all global things like this one
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -342,6 +633,15 @@ contains
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
         subroutine velo_axis(tau,z_axis,vz_axis)
+            real(dp), intent(in) :: tau
+            real(dp), intent(in) :: z_axis(:)
+            real(dp), intent(out) :: vz_axis(:)
+            real(dp), parameter :: legacy_s_floor = 1.d-8
+
+            call velo_axis_regularized(tau, z_axis, vz_axis, legacy_s_floor)
+        end subroutine velo_axis
+
+        subroutine velo_axis_regularized(tau,z_axis,vz_axis,s_floor)
             !
             ! Here variables z(1)=s and z(2)=theta are replaced with
             ! x_axis(1)=x=sqrt(s)*cos(theta) and x_axis(2)=y=sqrt(s)*sin(theta)
@@ -351,52 +651,126 @@ contains
             real(dp), intent(in) :: tau
             real(dp), intent(in) :: z_axis(:)
             real(dp), intent(out) :: vz_axis(:)
-            real(dp), parameter :: s_floor=1.d-8
-            real(dp) :: derlogsqs
-            real(dp) :: r2,scale,x_eval,y_eval
-            real(dp), dimension(5) :: z,vz
-            !
-            r2=z_axis(1)**2+z_axis(2)**2
-            if(r2.lt.s_floor) then
-                if(r2.gt.0.d0) then
-                    scale=sqrt(s_floor/r2)
-                    x_eval=scale*z_axis(1)
-                    y_eval=scale*z_axis(2)
-                else
-                    x_eval=sqrt(s_floor)
-                    y_eval=0.d0
-                endif
-                z(1)=s_floor
-            else
-                x_eval=z_axis(1)
-                y_eval=z_axis(2)
-                z(1)=r2
+            real(dp), intent(in) :: s_floor
+            call evaluate_axis_rhs(tau, z_axis, s_floor, vz_axis)
+        end subroutine velo_axis_regularized
+
+        subroutine evaluate_axis_rhs(tau, z_axis, sample_s, vz_axis)
+            real(dp), intent(in) :: tau, z_axis(:), sample_s
+            real(dp), intent(out) :: vz_axis(:)
+            integer, parameter :: nang = 8
+            real(dp) :: values(axis_rhs_count, nang, 2)
+            real(dp) :: mean(axis_rhs_count, 2)
+            real(dp) :: m1c(axis_rhs_count, 2), m1s(axis_rhs_count, 2)
+            real(dp) :: m2c(axis_rhs_count, 2), m2s(axis_rhs_count, 2)
+            real(dp) :: coeff(axis_rhs_count), reconstructed(axis_rhs_count)
+            real(dp) :: raw(axis_rhs_count), zsample(axis_rhs_count)
+            real(dp) :: angle, radius, radius0, r2, blend, blend_arg
+            integer :: iangle, iring
+
+            r2=z_axis(1)*z_axis(1)+z_axis(2)*z_axis(2)
+            if(r2.ge.sample_s) then
+                call evaluate_axis_rhs_raw(tau, z_axis, vz_axis)
+                return
             endif
-            z(2)=atan2(y_eval,x_eval)
-            z(3:5)=z_axis(3:5)
-            !
-            call velo_can(tau,z,vz)
-            !
-            derlogsqs=0.5d0*vz(1)/z(1)
-            vz_axis(1)=derlogsqs*x_eval-vz(2)*y_eval
-            vz_axis(2)=derlogsqs*y_eval+vz(2)*x_eval
-            vz_axis(3:5)=vz(3:5)
-            !
-        end subroutine velo_axis
+
+            ! Reconstruct the physical guiding-centre vector field itself in
+            ! regular Cartesian modes. Unlike independent tensor fits, this
+            ! retains all algebraic identities among the magfie quantities.
+            radius0=sqrt(sample_s)
+            zsample(3:5)=z_axis(3:5)
+            do iring=1,2
+                radius=real(iring,dp)*radius0
+                do iangle=1,nang
+                    angle=2.d0*acos(-1.d0)*real(iangle-1,dp)/real(nang,dp)
+                    zsample(1)=radius*cos(angle)
+                    zsample(2)=radius*sin(angle)
+                    call evaluate_axis_rhs_raw(tau, zsample, &
+                        values(:,iangle,iring))
+                enddo
+            enddo
+
+            mean=0.d0
+            m1c=0.d0
+            m1s=0.d0
+            m2c=0.d0
+            m2s=0.d0
+            do iring=1,2
+                do iangle=1,nang
+                    angle=2.d0*acos(-1.d0)*real(iangle-1,dp)/real(nang,dp)
+                    mean(:,iring)=mean(:,iring)+values(:,iangle,iring)
+                    m1c(:,iring)=m1c(:,iring)+values(:,iangle,iring)*cos(angle)
+                    m1s(:,iring)=m1s(:,iring)+values(:,iangle,iring)*sin(angle)
+                    m2c(:,iring)=m2c(:,iring)+values(:,iangle,iring)*cos(2.d0*angle)
+                    m2s(:,iring)=m2s(:,iring)+values(:,iangle,iring)*sin(2.d0*angle)
+                enddo
+            enddo
+            mean=mean/real(nang,dp)
+            m1c=2.d0*m1c/real(nang,dp)
+            m1s=2.d0*m1s/real(nang,dp)
+            m2c=2.d0*m2c/real(nang,dp)
+            m2s=2.d0*m2s/real(nang,dp)
+
+            reconstructed=(4.d0*mean(:,1)-mean(:,2))/3.d0
+            coeff=(4.d0*m1c(:,1)/radius0 &
+                -m1c(:,2)/(2.d0*radius0))/3.d0
+            reconstructed=reconstructed+coeff*z_axis(1)
+            coeff=(4.d0*m1s(:,1)/radius0 &
+                -m1s(:,2)/(2.d0*radius0))/3.d0
+            reconstructed=reconstructed+coeff*z_axis(2)
+            coeff=(mean(:,2)-mean(:,1))/(3.d0*sample_s)
+            reconstructed=reconstructed+coeff*r2
+            coeff=(4.d0*m2c(:,1)/sample_s &
+                -m2c(:,2)/(4.d0*sample_s))/3.d0
+            reconstructed=reconstructed+coeff* &
+                (z_axis(1)*z_axis(1)-z_axis(2)*z_axis(2))
+            coeff=(4.d0*m2s(:,1)/sample_s &
+                -m2s(:,2)/(4.d0*sample_s))/3.d0
+            reconstructed=reconstructed+coeff* &
+                (2.d0*z_axis(1)*z_axis(2))
+
+            ! Join the reconstruction to the exact pullback with a C1
+            ! smoothstep in the outer half of the disk.
+            if(r2.gt.0.25d0*sample_s) then
+                call evaluate_axis_rhs_raw(tau, z_axis, raw)
+                blend_arg=2.d0*sqrt(r2/sample_s)-1.d0
+                blend=blend_arg*blend_arg*(3.d0-2.d0*blend_arg)
+                reconstructed=(1.d0-blend)*reconstructed+blend*raw
+            endif
+            vz_axis=reconstructed
+        end subroutine evaluate_axis_rhs
+
+        subroutine evaluate_axis_rhs_raw(tau, z_axis, vz_axis)
+            real(dp), intent(in) :: tau, z_axis(:)
+            real(dp), intent(out) :: vz_axis(:)
+            real(dp) :: s, zpolar(5), vpolar(5)
+
+            s=z_axis(1)*z_axis(1)+z_axis(2)*z_axis(2)
+            if(.not.(s.gt.0.d0)) error stop &
+                'raw axis-RHS evaluation requires nonzero radius'
+            zpolar=[s,atan2(z_axis(2),z_axis(1)),z_axis(3:5)]
+            call velo_can(tau,zpolar,vpolar)
+            vz_axis(1)=0.5d0*vpolar(1)*z_axis(1)/s &
+                -vpolar(2)*z_axis(2)
+            vz_axis(2)=0.5d0*vpolar(1)*z_axis(2)/s &
+                +vpolar(2)*z_axis(1)
+            vz_axis(3:5)=vpolar(3:5)
+        end subroutine evaluate_axis_rhs_raw
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
-        subroutine integrate_axis_segment(z,tau1,tau2,relerr,near_axis,step_limit)
+        subroutine integrate_axis_segment(z,tau1,tau2,relerr,near_axis, &
+                axis_floor,step_limit)
             use odeint_allroutines_sub, only : odeint_allroutines
             implicit none
             logical, intent(in) :: near_axis
             integer, intent(in), optional :: step_limit
-            real(dp), intent(in) :: tau1,tau2,relerr
+            real(dp), intent(in) :: tau1,tau2,relerr,axis_floor
             real(dp), intent(inout) :: z(5)
-            integer :: context
+            real(dp) :: context
 
+            context=axis_floor
             if(present(step_limit)) then
-                context=0
                 if(near_axis) then
                     call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
                         velo_axis_context,step_limit=step_limit)
@@ -405,7 +779,8 @@ contains
                         velo_can_context,step_limit=step_limit)
                 endif
             else if(near_axis) then
-                call odeint_allroutines(z,5,tau1,tau2,relerr,velo_axis)
+                call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
+                    velo_axis_context)
             else
                 call odeint_allroutines(z,5,tau1,tau2,relerr,velo_can)
             endif
@@ -430,12 +805,15 @@ contains
             real(dp), intent(out) :: vz(:)
 
             select type(context)
-                type is(integer)
+                type is(real(dp))
+                call velo_axis_regularized(tau,z,vz,context)
+            class default
+                error stop 'invalid axis ODE context'
             end select
-            call velo_axis(tau,z,vz)
         end subroutine velo_axis_context
 
-        subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr,step_limit)
+        subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr,step_limit, &
+                axis_floor,near_axis_limit)
             use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
             use odeint_allroutines_sub, only : odeint_has_failed
             use chamb_sub, only : chamb_can
@@ -443,13 +821,12 @@ contains
             implicit none
             !
             integer, parameter          :: ndim=5, nstepmax=1000000
-            real(dp), parameter :: snear_axis=0.01d0
-            !
             logical :: near_axis
             integer :: ierr
             integer, intent(in), optional :: step_limit
-            real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2
-            real(dp) :: relerr
+            real(dp), intent(in), optional :: axis_floor,near_axis_limit
+            real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2,axis_floor_local
+            real(dp) :: relerr,snear_axis
             !
             real(dp), dimension(2)    :: y
             real(dp), dimension(ndim) :: z, z_initial
@@ -461,6 +838,17 @@ contains
             endif
             !
             ierr=0
+            axis_floor_local=1.d-8
+            snear_axis=0.01d0
+            if(present(axis_floor)) axis_floor_local=axis_floor
+            if(present(near_axis_limit)) snear_axis=near_axis_limit
+            if(.not.ieee_is_finite(axis_floor_local) .or. &
+                axis_floor_local.le.0.d0 .or. &
+                .not.ieee_is_finite(snear_axis) .or. &
+                snear_axis.le.axis_floor_local .or. snear_axis.gt.1.d0) then
+                ierr=2
+                return
+            endif
             z_initial=z
             y(1)=z(1)
             y(2)=z(2)
@@ -483,7 +871,8 @@ contains
                         z(1)=z1
                         z(2)=z2
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -499,7 +888,8 @@ contains
                         if(ierr.eq.1) return
                     else
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -515,7 +905,8 @@ contains
                         z(1)=z1
                         z(2)=z2
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -524,7 +915,8 @@ contains
                         !
                     else
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                        call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                            axis_floor_local,step_limit)
                         if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                             z=z_initial
                             ierr=2
@@ -555,7 +947,8 @@ contains
                     z(1)=z1
                     z(2)=z2
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
@@ -571,7 +964,8 @@ contains
                     if(ierr.eq.1) return
                 else
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
@@ -587,7 +981,8 @@ contains
                     z(1)=z1
                     z(2)=z2
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.true.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2
@@ -596,7 +991,8 @@ contains
                     !
                 else
                     !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.false.,step_limit)
+                    call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
+                        axis_floor_local,step_limit)
                     if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
                         z=z_initial
                         ierr=2

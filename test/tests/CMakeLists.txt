@@ -368,6 +368,15 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         TIMEOUT 120)
 
+    add_executable(test_axis_regular_rhs.x test_axis_regular_rhs.f90)
+    target_link_libraries(test_axis_regular_rhs.x simple)
+    add_test(NAME test_axis_regular_rhs
+        COMMAND test_axis_regular_rhs.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_axis_regular_rhs PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
+
     # Full-orbit (FO) Boris pusher: energy bound, near-axis crossing, no spurious
     # loss, on the reactor-scale Boozer field (wout.nc symlinked above).
     add_executable(test_fo_boris.x test_fo_boris.f90)
@@ -661,16 +670,23 @@ add_test(NAME test_boundary_event_config_fraction_inf
     COMMAND test_boundary_event_config.x fraction_inf)
 add_test(NAME test_boundary_event_config_radial_nan
     COMMAND test_boundary_event_config.x radial_nan)
+add_test(NAME test_chart_boundary_config_valid
+    COMMAND test_boundary_event_config.x chart_valid)
+add_test(NAME test_chart_boundary_config_invalid
+    COMMAND test_boundary_event_config.x chart_invalid)
 set_tests_properties(
     test_boundary_event_config_valid
     test_boundary_event_config_fraction_nan
     test_boundary_event_config_fraction_inf
     test_boundary_event_config_radial_nan
+    test_chart_boundary_config_valid
+    test_chart_boundary_config_invalid
     PROPERTIES LABELS "unit")
 set_tests_properties(
     test_boundary_event_config_fraction_nan
     test_boundary_event_config_fraction_inf
     test_boundary_event_config_radial_nan
+    test_chart_boundary_config_invalid
     PROPERTIES WILL_FAIL TRUE)
 
 add_executable(test_field_base.x test_field_base.f90)

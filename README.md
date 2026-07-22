@@ -232,7 +232,69 @@ wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wou
 For a self-contained demo that downloads test data, runs SIMPLE, and prints the confined fraction, use `examples/run_example.sh`.
 
 In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions.
-Diagnostics for slow convergence of Newton iterations are written in `fort.6601`.
+For chartmap coordinates, `chart_boundary_kind` declares what the outer chart
+surface represents. Its values are `auto` (the default), `lcfs`, `wall`, and
+`domain`. `auto` treats a chart whose recorded LCFS is at normalized radius one
+as an LCFS and treats other outer chart surfaces as numerical-domain limits.
+Set `wall` explicitly when the outer chart surface is the physical coordinate
+wall. The requested and effective values are stored in `results.nc`.
+For an external `wall_input` STL, SIMPLE tests every accepted microstep chord
+whose endpoint has passed the chart's recorded LCFS. Chords ending inside the
+LCFS are not queried: in a non-convex toroidal geometry their straight
+Cartesian interpolation can intersect the external wall even though the
+physical orbit has not left the plasma. The effective radial query threshold
+is stored as `wall_query_rho_lcfs` in `results.nc` (`-1` when inactive).
+
+Default warning mode accepts finite generic Newton corrections through 100
+tolerance units after the iteration limit. This covers the observed roundoff
+plateau at `relerr=1e-13` while still rejecting large and non-finite iterates.
+At a midpoint crossing of the polar-coordinate axis, the signed endpoint and
+midpoint radii may remain unconverged even though the physical nonradial state
+has converged. SIMPLE accepts that chart change only when both radial values are
+within `1d-6`, the endpoint radius is negative, and the angular and momentum
+corrections satisfy the normal warning bound. It then applies the equivalent
+positive-radius chart switch and records `warning_axis_crossing_accept`.
+After symplectic retries fail, SIMPLE advances the same interval with the
+established adaptive-RK guiding-centre pusher. The conventional equations are
+always tried first. If they encounter the
+`B_parallel_star = B + rho_0 v_parallel b dot curl(b)` singularity, SIMPLE uses
+the leading toroidally regularized equations of
+[Burby and Ellison](https://doi.org/10.1063/1.5004429). The required condition
+is a nonzero contravariant toroidal field component. The near-identity spatial
+map is applied on entry and inverted on exit. If the reference polar chart
+itself becomes unresolved at the magnetic axis, one interval is bridged with
+the Cartesian Boris full-orbit pusher. Its field assembly uses the regular
+co-rotating `(X,Y,phi)` frame; the field-period wedge rotation restores the lab
+frame without an angular seam. These paths use the existing physical field in
+its native reference coordinates; they do not replace the field or reprocess
+the whole device.
+
+For a collisionless marker, every recovery handoff retains the momentum shell
+from the last accepted symplectic state. A collision updates that reference in
+the usual way. Recovery returns to the requested symplectic method after 256
+consecutive conventional-RK intervals with
+`abs(B_parallel_star/B) >= 0.3` and, for an axis or edge recovery, after the
+corresponding chart hysteresis has also been cleared. This prevents repeated
+reseed cycles from promoting a bounded energy oscillation into a new reference
+energy. The measured Hamiltonian remains an output diagnostic; symplectic
+integration is not described as exact energy conservation.
+
+If every recovery path fails, one isolated microstep is rolled back and
+consumed as a warning hold; the next microstep retries normally. A successful
+step resets the allowance, while a second consecutive full failure is a
+numerical exit instead of a permanent frozen orbit. SPECTRE interface states
+retain the stricter 10-unit bound and their established recovery behavior. The
+hold limit and aggregate Newton, retry, toroidal-regularization, axis-full-orbit,
+recovery, and rejection counters are stored in `results.nc`.
+
+One narrower collisionless guiding-centre outcome is recorded separately. If
+all recovery methods have been attempted, the final error is Newton
+nonconvergence, and the last validated state remains in the axis-local core
+(normalized toroidal flux `s<0.01`, equivalent to chartmap `rho<0.1`), SIMPLE
+records exit code 4 and counts the marker confined through `trace_time`. This
+is neither a wall/LCFS loss nor an unlabelled successful completion.
+Collisional, full-orbit, strict-mode, SPECTRE, and non-core failures retain
+their numerical exit codes.
 
 ### Output
 `confined_fraction.dat` is the main output, containing four columns:
@@ -256,6 +318,9 @@ number of particles.
   * If ignored due to contr_pp, which defines deep passing region as confined (we don consider them anymore), -1 is written.
   * If tracing ends in a numerical fatal condition, `NaN` is written. Such an
     orbit is unresolved, not physically lost or confined.
+  * If a collisionless guiding-centre marker exhausts all recovery methods in
+    the axis-local core, `trace_time` is written with audited exit code 4 and
+    the marker is counted confined.
 3. Trapping parameter trap_par that is 1 for deeply trapped, 0 for tp boundary
    and negative for passing. Eq. (3.1) in Accelerated Methods paper.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.
