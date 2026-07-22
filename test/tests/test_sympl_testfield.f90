@@ -40,6 +40,7 @@ program test_sympl_testfield
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
+        recovery_state_has_valid_phase_space, recovery_state_is_physical, &
         rk_recovery_state_t, validate_rk_state, &
         activate_rk_recovery, should_resume_symplectic
     use simple, only : tracer_t, init_sympl, reseed_sympl, ORBIT_FO_LOSS, &
@@ -103,6 +104,7 @@ program test_sympl_testfield
     call test_fo_lcfs_location
     call test_validated_rk_lcfs_location
     call test_rk_state_validation
+    call test_recovery_state_validation
     call test_reseed_momentum_reference
 
     print *, 'TEST field symplectic step succeeded'
@@ -391,10 +393,12 @@ contains
     subroutine test_validated_rk_lcfs_location
         real(dp), parameter :: z_before(5) = [0.9_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
             -0.5_dp]
-        real(dp), parameter :: z_after(5) = [1.1_dp, 0.4_dp, 0.5_dp, 2.0_dp, &
+        real(dp), parameter :: z_after(5) = [1.1_dp, 0.4_dp, 0.5_dp, 1.004_dp, &
             0.5_dp]
-        real(dp), parameter :: z_gross_jump(5) = [100.0_dp, 0.4_dp, 0.5_dp, &
+        real(dp), parameter :: z_no_crossing(5) = [0.8_dp, 0.4_dp, 0.5_dp, &
             2.0_dp, 0.5_dp]
+        real(dp), parameter :: z_invalid_event(5) = [1.1_dp, 0.4_dp, 0.5_dp, &
+            1.0_dp, 4.0_dp]
         real(dp), parameter :: tolerance = 32.0_dp*epsilon(1.0_dp)
         real(dp) :: z_event(5), event_fraction
         integer :: step_error
@@ -408,11 +412,19 @@ contains
         end if
 
         step_error = 1
-        call locate_validated_lcfs(z_before, z_gross_jump, 6.0_dp, z_event, &
+        call locate_validated_lcfs(z_before, z_no_crossing, 6.0_dp, z_event, &
             event_fraction, step_error)
         if (step_error /= 2 .or. event_fraction /= 0.0_dp .or. &
             any(z_event /= z_before)) then
-            error stop 'gross adaptive-RK jump was classified as a physical loss'
+            error stop 'adaptive-RK chamber flag without a crossing became a loss'
+        end if
+
+        step_error = 1
+        call locate_validated_lcfs(z_before, z_invalid_event, 6.0_dp, z_event, &
+            event_fraction, step_error)
+        if (step_error /= 2 .or. event_fraction /= 0.0_dp .or. &
+            any(z_event /= z_before)) then
+            error stop 'unphysical adaptive-RK chamber event became a loss'
         end if
     end subroutine test_validated_rk_lcfs_location
 
@@ -453,5 +465,31 @@ contains
             error stop 'invalid adaptive-RK state was committed'
         end if
     end subroutine test_rk_state_validation
+
+    subroutine test_recovery_state_validation
+        real(dp) :: z(5)
+
+        z = [0.2_dp, 0.3_dp, 0.4_dp, 1.0_dp, 0.5_dp]
+        if (.not. recovery_state_has_valid_phase_space(z)) then
+            error stop 'physical recovery state was rejected'
+        end if
+        if (.not. recovery_state_is_physical(z, 1.0_dp)) then
+            error stop 'recovery state on the momentum shell was rejected'
+        end if
+
+        z(5) = 2.0_dp
+        if (recovery_state_has_valid_phase_space(z)) then
+            error stop 'recovery state with impossible pitch was accepted'
+        end if
+
+        z = [0.2_dp, 0.3_dp, 0.4_dp, 1.004_dp, 0.5_dp]
+        if (.not. recovery_state_is_physical(z, 1.0_dp)) then
+            error stop 'bounded recovery momentum drift was rejected'
+        end if
+        z(4) = 1.006_dp
+        if (recovery_state_is_physical(z, 1.0_dp)) then
+            error stop 'excessive recovery momentum drift was accepted'
+        end if
+    end subroutine test_recovery_state_validation
 
 end program test_sympl_testfield

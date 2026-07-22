@@ -7,6 +7,7 @@ module simple_main
         ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
+    use magfie_sub, only: ALBERT
     use samplers, only: sample
     use field_can_mod, only: field_can_t, integ_to_ref, ref_to_integ, &
         init_field_can
@@ -79,6 +80,7 @@ module simple_main
     integer, parameter :: RECOVERY_STEP_AXIS = 1
     integer, parameter :: RECOVERY_STEP_TOROIDAL = 2
     integer, parameter :: RECOVERY_STEP_FULL_ORBIT = 3
+    real(dp), parameter :: MOMENTUM_SANITY_FRACTION = 0.005_dp
 
     type :: rk_recovery_state_t
         logical :: active = .false.
@@ -92,14 +94,33 @@ module simple_main
 
 contains
 
-    subroutine orbit_timestep_recovery(fo, z, interval, tolerance, ierr, method)
+    logical function recovery_state_has_valid_phase_space(z)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z(5)
+
+        recovery_state_has_valid_phase_space = all(ieee_is_finite(z)) .and. &
+            z(4) > 0.0_dp .and. &
+            abs(z(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp)
+    end function recovery_state_has_valid_phase_space
+
+    logical function recovery_state_is_physical(z, expected_momentum)
+        real(dp), intent(in) :: z(5), expected_momentum
+
+        recovery_state_is_physical = recovery_state_has_valid_phase_space(z) .and. &
+            abs(z(4) - expected_momentum) <= &
+            MOMENTUM_SANITY_FRACTION*max(abs(expected_momentum), tiny(1.0_dp))
+    end function recovery_state_is_physical
+
+    subroutine orbit_timestep_recovery(fo, z, interval, tolerance, &
+            expected_momentum, ierr, method)
         use alpha_lifetime_sub, only: orbit_timestep_axis, &
             bstar_parallel_factor, orbit_timestep_toroidal_regularized
         use orbit_fo_boris, only: fo_state_t
 
         type(fo_state_t), intent(inout) :: fo
         real(dp), intent(inout) :: z(5)
-        real(dp), intent(in) :: interval, tolerance
+        real(dp), intent(in) :: interval, tolerance, expected_momentum
         integer, intent(out) :: ierr
         integer, intent(out) :: method
         real(dp) :: z_start(5)
@@ -110,16 +131,27 @@ contains
         z_start = z
         call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
             RK_RECOVERY_STEP_LIMIT)
+        if (ierr == 0) then
+            if (.not. recovery_state_is_physical(z, expected_momentum)) ierr = 2
+        else if (ierr == 1) then
+            if (.not. recovery_state_has_valid_phase_space(z)) ierr = 2
+        end if
         if (ierr /= 2) return
 
         call bstar_parallel_factor(z_start, bstar_factor)
         call integ_to_ref(z_start(1:3), x_reference)
         if (x_reference(1) < RK_RECOVERY_AXIS_ENTER .and. &
-                abs(bstar_factor) >= FO_BRIDGE_BSTAR_ENTER) then
+            abs(bstar_factor) >= FO_BRIDGE_BSTAR_ENTER) then
             z = z_start
             call orbit_timestep_axis(z, interval, interval, tolerance, ierr, &
                 RK_RECOVERY_STEP_LIMIT, RK_RECOVERY_AXIS_FLOOR, &
                 RK_RECOVERY_AXIS_ENTER)
+            if (ierr == 0) then
+                if (.not. recovery_state_is_physical(z, expected_momentum)) &
+                    ierr = 2
+            else if (ierr == 1) then
+                if (.not. recovery_state_has_valid_phase_space(z)) ierr = 2
+            end if
             if (ierr /= 2) then
                 method = RECOVERY_STEP_AXIS
                 return
@@ -131,17 +163,27 @@ contains
             max(tolerance, 1.0e-10_dp), ierr, &
             TOROIDAL_RECOVERY_STEP_LIMIT)
         if (ierr == 0) then
-            method = RECOVERY_STEP_TOROIDAL
-            call count_event(EVT_TOROIDAL_REGULARIZATION)
-            return
+            if (recovery_state_is_physical(z, expected_momentum)) then
+                method = RECOVERY_STEP_TOROIDAL
+                call count_event(EVT_TOROIDAL_REGULARIZATION)
+                return
+            end if
+            ierr = 2
+        end if
+        if (ierr == 1) then
+            if (.not. recovery_state_has_valid_phase_space(z)) ierr = 2
         end if
         if (ierr /= 2 .or. x_reference(1) >= FO_AXIS_ENTER) return
 
         z = z_start
         call orbit_timestep_fo_bridge(fo, z, interval, ierr)
         if (ierr == 0) then
-            method = RECOVERY_STEP_FULL_ORBIT
-            call count_event(EVT_AXIS_FO_BRIDGE)
+            if (recovery_state_is_physical(z, expected_momentum)) then
+                method = RECOVERY_STEP_FULL_ORBIT
+                call count_event(EVT_AXIS_FO_BRIDGE)
+            else
+                ierr = 2
+            end if
         end if
     end subroutine orbit_timestep_recovery
 
@@ -519,7 +561,7 @@ contains
                 canonical_grid_ntheta, canonical_grid_nphi, &
                 canonical_ode_relerr)
             if (isw_field_type == BOOZER .or. &
-                    isw_field_type == CANFLUX) then
+                isw_field_type == CANFLUX) then
                 call set_magfie_refcoords_field(field_temp)
             end if
             call print_phase_time('Canonical field initialization completed')
@@ -1781,13 +1823,9 @@ contains
         real(dp), intent(in) :: z_start(5), z_end(5), field_period
         real(dp), intent(out) :: z_event(5), event_fraction
         integer, intent(inout) :: ierr
-        real(dp), parameter :: radial_sanity_band = 0.05_dp
-        real(dp), parameter :: max_local_radial_step = 0.5_dp
-        real(dp) :: u_event(3)
 
         if (.not. all(ieee_is_finite(z_start)) .or. &
-            .not. all(ieee_is_finite(z_end)) .or. &
-            abs(z_end(1) - z_start(1)) > max_local_radial_step) then
+            .not. all(ieee_is_finite(z_end))) then
             z_event = z_start
             event_fraction = 0.0_dp
             ierr = 2
@@ -1796,19 +1834,82 @@ contains
 
         call locate_linear_lcfs(z_start, z_end, field_period, z_event, &
             event_fraction)
-        call integ_to_ref(z_event(1:3), u_event)
         if (all(ieee_is_finite(z_event)) .and. &
-            all(ieee_is_finite(u_event)) .and. &
-            abs(u_event(1) - 1.0_dp) <= radial_sanity_band) return
+            event_fraction >= 0.0_dp .and. event_fraction <= 1.0_dp .and. &
+            recovery_state_is_physical(z_event, z_start(4))) return
 
-        ! The legacy RK chamber flag is based on its first integration
-        ! coordinate. In a canonical map, a gross numerical jump can therefore
-        ! resemble an LCFS crossing. Do not turn that failure into a physical
-        ! loss unless the candidate is local and maps back to a finite LCFS point.
+        ! The legacy chamber is the native integration-coordinate surface
+        ! z(1)=1, which need not coincide with reference rho=1 for a perturbed
+        ! canonical map. Accept only a physical event inside the attempted
+        ! microstep; never extrapolate a chamber flag into a loss.
         z_event = z_start
         event_fraction = 0.0_dp
         ierr = 2
     end subroutine locate_validated_lcfs
+
+    logical function crosses_reference_boundary(z_start, z_end)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z_start(5), z_end(5)
+        real(dp) :: u_start(3), u_end(3)
+
+        crosses_reference_boundary = .false.
+        if (.not. all(ieee_is_finite(z_start)) .or. &
+            .not. all(ieee_is_finite(z_end))) return
+        call integ_to_ref(z_start(1:3), u_start)
+        call integ_to_ref(z_end(1:3), u_end)
+        if (.not. all(ieee_is_finite(u_start)) .or. &
+            .not. all(ieee_is_finite(u_end))) return
+        crosses_reference_boundary = u_start(1) < 1.0_dp .and. &
+            u_end(1) >= 1.0_dp
+    end function crosses_reference_boundary
+
+    subroutine locate_reference_crossing(z_start, z_end, field_period, &
+            z_event, event_fraction, found)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        real(dp), intent(in) :: z_start(5), z_end(5), field_period
+        real(dp), intent(out) :: z_event(5), event_fraction
+        logical, intent(out) :: found
+        real(dp) :: delta(5), z_trial(5), u_start(3), u_end(3), u_trial(3)
+        real(dp) :: fraction_low, fraction_high, fraction_mid
+        integer :: iteration
+
+        found = .false.
+        z_event = z_start
+        event_fraction = 0.0_dp
+        if (.not. all(ieee_is_finite(z_start)) .or. &
+            .not. all(ieee_is_finite(z_end))) return
+        call integ_to_ref(z_start(1:3), u_start)
+        call integ_to_ref(z_end(1:3), u_end)
+        if (.not. all(ieee_is_finite(u_start)) .or. &
+            .not. all(ieee_is_finite(u_end))) return
+        if (u_start(1) >= 1.0_dp .or. u_end(1) < 1.0_dp) return
+
+        delta = z_end - z_start
+        delta(2) = modulo(delta(2) + 0.5_dp*twopi, twopi) - 0.5_dp*twopi
+        delta(3) = modulo(delta(3) + 0.5_dp*field_period, field_period) - &
+            0.5_dp*field_period
+        fraction_low = 0.0_dp
+        fraction_high = 1.0_dp
+        do iteration = 1, 64
+            fraction_mid = 0.5_dp*(fraction_low + fraction_high)
+            z_trial = z_start + fraction_mid*delta
+            call integ_to_ref(z_trial(1:3), u_trial)
+            if (.not. all(ieee_is_finite(u_trial))) return
+            if (u_trial(1) >= 1.0_dp) then
+                fraction_high = fraction_mid
+            else
+                fraction_low = fraction_mid
+            end if
+        end do
+        event_fraction = fraction_high
+        z_event = z_start + event_fraction*delta
+        call integ_to_ref(z_event(1:3), u_trial)
+        if (.not. all(ieee_is_finite(u_trial))) return
+        if (abs(u_trial(1) - 1.0_dp) > 0.05_dp) return
+        found = .true.
+    end subroutine locate_reference_crossing
 
     subroutine validate_rk_state(z_start, z_end, ierr, expected_momentum)
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -1817,11 +1918,7 @@ contains
         real(dp), intent(inout) :: z_end(5)
         integer, intent(inout) :: ierr
         real(dp), intent(in), optional :: expected_momentum
-        real(dp), parameter :: radial_sanity_band = 0.05_dp
-        real(dp), parameter :: max_local_radial_step = 0.5_dp
-        real(dp), parameter :: momentum_sanity_fraction = 0.005_dp
         real(dp) :: momentum_reference
-        real(dp) :: u_end(3)
         logical :: momentum_valid
 
         if (ierr /= 0) return
@@ -1830,22 +1927,59 @@ contains
         if (present(expected_momentum)) then
             momentum_reference = expected_momentum
             momentum_valid = abs(z_end(4) - momentum_reference) <= &
-                momentum_sanity_fraction* &
+                MOMENTUM_SANITY_FRACTION* &
                 max(abs(momentum_reference), tiny(1.0_dp))
         end if
         if (all(ieee_is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
             abs(z_end(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
-            momentum_valid .and. &
-            abs(z_end(1) - z_start(1)) <= max_local_radial_step) then
-            call integ_to_ref(z_end(1:3), u_end)
-            if (all(ieee_is_finite(u_end)) .and. &
-                u_end(1) >= -radial_sanity_band .and. &
-                u_end(1) <= 1.0_dp + radial_sanity_band) return
-        end if
+            momentum_valid) return
 
         z_end = z_start
         ierr = 2
     end subroutine validate_rk_state
+
+    subroutine validate_rk_step_or_reference_boundary(z_start, z_candidate, &
+            field_period, expected_momentum, z, event_fraction, ierr, &
+            reference_boundary)
+        real(dp), intent(in) :: z_start(5), z_candidate(5), field_period
+        real(dp), intent(in) :: expected_momentum
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(out) :: event_fraction
+        integer, intent(inout) :: ierr
+        logical, intent(out) :: reference_boundary
+        integer :: step_ierr
+
+        reference_boundary = .false.
+        event_fraction = 0.0_dp
+        step_ierr = ierr
+        if (step_ierr /= 0 .and. step_ierr /= 1) return
+
+        if (isw_field_type == ALBERT) then
+            if (crosses_reference_boundary(z_start, z_candidate)) then
+                call locate_reference_crossing(z_start, z_candidate, &
+                    field_period, z, event_fraction, reference_boundary)
+                if (reference_boundary) then
+                    ierr = 0
+                    call validate_rk_state(z_start, z, ierr, expected_momentum)
+                    if (ierr == 0) then
+                        ierr = 1
+                        return
+                    end if
+                    reference_boundary = .false.
+                end if
+            end if
+        end if
+
+        if (step_ierr == 1) then
+            z = z_candidate
+            ierr = step_ierr
+            return
+        end if
+
+        z = z_candidate
+        ierr = 0
+        call validate_rk_state(z_start, z, ierr, expected_momentum)
+    end subroutine validate_rk_step_or_reference_boundary
 
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
             hold_streak, numerical_hold_any, rk_recovery)
@@ -1865,7 +1999,9 @@ contains
 
         integer :: hold_streak_local, ktau, recovery_method
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
+        real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
+        logical :: reference_boundary
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -1879,6 +2015,7 @@ contains
 
         do ktau = 1, ntau_local
             numerical_hold = .false.
+            reference_boundary = .false.
             z_step_start = z
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
@@ -1909,19 +2046,26 @@ contains
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
-                        ierr_orbit, recovery_method)
+                        merge(rk_recovery_local%momentum_reference, &
+                        z_step_start(4), &
+                        rk_recovery_local%has_momentum_reference), ierr_orbit, &
+                        recovery_method)
                 else
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
+                z_step_end = z
                 if (rk_recovery_local%has_momentum_reference) then
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        rk_recovery_local%momentum_reference)
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, &
+                        rk_recovery_local%momentum_reference, z, loss_fraction, &
+                        ierr_orbit, reference_boundary)
                 else
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        z_step_start(4))
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, z_step_start(4), z, &
+                        loss_fraction, ierr_orbit, reference_boundary)
                 end if
-                if (ierr_orbit == 1) then
+                if (ierr_orbit == 1 .and. .not. reference_boundary) then
                     z_step_end = z
                     call locate_validated_lcfs(z_step_start, z_step_end, &
                         anorb%fper, z, loss_fraction, ierr_orbit)
@@ -1932,7 +2076,14 @@ contains
                     end if
                     if (rk_recovery_local%active) then
                         anorb%si%last_step_fraction = loss_fraction
-                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        if (reference_boundary) then
+                            call integ_to_ref(z(1:3), u_event)
+                            anorb%si%last_event_radial_residual = &
+                                abs(u_event(1) - 1.d0)
+                        else
+                            anorb%si%last_event_radial_residual = &
+                                abs(z(1) - 1.d0)
+                        end if
                         anorb%si%last_event_fraction_width = 1.d0
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
@@ -1949,15 +2100,25 @@ contains
                     orbit_timestep_sympl, ierr_orbit)
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        si_step_start%pabs)
-                    if (ierr_orbit /= 0) then
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        loss_fraction, ierr_orbit, reference_boundary)
+                    if (reference_boundary .and. ierr_orbit == 1) then
+                        call integ_to_ref(z(1:3), u_event)
+                        anorb%si%last_step_fraction = loss_fraction
+                        anorb%si%last_event_radial_residual = &
+                            abs(u_event(1) - 1.d0)
+                        anorb%si%last_event_fraction_width = 1.d0
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                    else if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     end if
                 end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
-                    call to_standard_z_coordinates(anorb, z)
+                    if (.not. reference_boundary) &
+                        call to_standard_z_coordinates(anorb, z)
                     if (present(exit_step)) exit_step = real(kt, dp) + &
                         anorb%si%last_step_fraction
                     exit
@@ -1973,10 +2134,12 @@ contains
                     z = z_step_start
                     z(4) = si_step_start%pabs
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
-                        ierr_orbit, recovery_method)
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        si_step_start%pabs)
-                    if (ierr_orbit == 1) then
+                        si_step_start%pabs, ierr_orbit, recovery_method)
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        loss_fraction, ierr_orbit, reference_boundary)
+                    if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
                         call locate_validated_lcfs(z_step_start, z_step_end, &
                             anorb%fper, z, loss_fraction, ierr_orbit)
@@ -1990,7 +2153,14 @@ contains
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         anorb%si%last_step_fraction = loss_fraction
-                        anorb%si%last_event_radial_residual = abs(z(1) - 1.d0)
+                        if (reference_boundary) then
+                            call integ_to_ref(z(1:3), u_event)
+                            anorb%si%last_event_radial_residual = &
+                                abs(u_event(1) - 1.d0)
+                        else
+                            anorb%si%last_event_radial_residual = &
+                                abs(z(1) - 1.d0)
+                        end if
                         anorb%si%last_event_fraction_width = 1.d0
                         if (present(exit_step)) exit_step = real(kt, dp) + &
                             loss_fraction
@@ -2157,6 +2327,7 @@ contains
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
+        logical :: reference_boundary
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -2170,24 +2341,32 @@ contains
         if (present(rk_recovery)) rk_recovery_local = rk_recovery
         do ktau = 1, ntau_local
             numerical_hold = .false.
+            reference_boundary = .false.
             segment_duration = 1.0_dp
             z_step_start = z
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
-                        ierr_orbit, recovery_method)
+                        merge(rk_recovery_local%momentum_reference, &
+                        z_step_start(4), &
+                        rk_recovery_local%has_momentum_reference), ierr_orbit, &
+                        recovery_method)
                 else
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, &
                         ierr_orbit)
                 end if
+                z_step_end = z
                 if (rk_recovery_local%has_momentum_reference) then
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        rk_recovery_local%momentum_reference)
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, &
+                        rk_recovery_local%momentum_reference, z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
                 else
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        z_step_start(4))
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, z_step_start(4), z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
                 end if
-                if (ierr_orbit == 1) then
+                if (ierr_orbit == 1 .and. .not. reference_boundary) then
                     z_step_end = z
                     call locate_validated_lcfs(z_step_start, z_step_end, &
                         anorb%fper, z, boundary_fraction, ierr_orbit)
@@ -2228,16 +2407,27 @@ contains
                     orbit_timestep_sympl, ierr_orbit, segment_duration)
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        si_step_start%pabs)
-                    if (ierr_orbit /= 0) then
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
+                    if (reference_boundary .and. ierr_orbit == 1) then
+                        anorb%si%last_step_fraction = boundary_fraction
+                        anorb%si%last_event_fraction_width = 1.d0
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
+                    else if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     end if
                 end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
-                    call to_standard_z_coordinates(anorb, z)
+                    if (.not. reference_boundary) &
+                        call to_standard_z_coordinates(anorb, z)
                     call integ_to_ref(z(1:3), u_ref_cur)
+                    if (reference_boundary) then
+                        anorb%si%last_event_radial_residual = &
+                            abs(u_ref_cur(1) - 1.d0)
+                    end if
                     call ref_coords%evaluate_cart(u_ref_cur, x_cur)
                     x_cur_m = x_cur*chartmap_cart_scale_to_m
                     z_step_end = z
@@ -2260,10 +2450,12 @@ contains
                     z = z_step_start
                     z(4) = si_step_start%pabs
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
-                        ierr_orbit, recovery_method)
-                    call validate_rk_state(z_step_start, z, ierr_orbit, &
-                        si_step_start%pabs)
-                    if (ierr_orbit == 1) then
+                        si_step_start%pabs, ierr_orbit, recovery_method)
+                    z_step_end = z
+                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                        z_step_end, anorb%fper, si_step_start%pabs, z, &
+                        boundary_fraction, ierr_orbit, reference_boundary)
+                    if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
                         call locate_validated_lcfs(z_step_start, z_step_end, &
                             anorb%fper, z, boundary_fraction, ierr_orbit)
