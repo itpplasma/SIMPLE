@@ -42,7 +42,9 @@ program test_sympl_testfield
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
         recovery_state_has_valid_phase_space, recovery_state_is_physical, &
         rk_recovery_state_t, validate_rk_state, &
-        activate_rk_recovery, should_resume_symplectic
+        activate_rk_recovery, should_resume_symplectic, &
+        normalized_flux_from_reference_radial, &
+        should_classify_numerically_confined
     use simple, only : tracer_t, init_sympl, reseed_sympl, ORBIT_FO_LOSS, &
         ORBIT_FO_NUMERICAL
     use params, only : isw_field_type, field_input, coord_input, integmode, &
@@ -101,6 +103,7 @@ program test_sympl_testfield
     call test_failed_step_preserves_state
     call test_rk_recovery_regions
     call test_exit_classification
+    call test_numerically_confined_classification
     call test_fo_lcfs_location
     call test_validated_rk_lcfs_location
     call test_rk_state_validation
@@ -363,6 +366,49 @@ contains
             error stop 'classifier mode promoted an RK fault to a physical loss'
         end if
     end subroutine test_exit_classification
+
+    subroutine test_numerically_confined_classification
+        if (abs(normalized_flux_from_reference_radial(0.1_dp, .true.) - &
+                0.01_dp) > epsilon(1.0_dp)) then
+            error stop 'chartmap rho was not converted to normalized flux s'
+        end if
+        if (normalized_flux_from_reference_radial(0.1_dp, .false.) /= 0.1_dp) then
+            error stop 'VMEC normalized flux s was incorrectly rescaled'
+        end if
+        if (.not. should_classify_numerically_confined( &
+                ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_GC, 1, .true., .false., &
+                .true., 0.0099_dp)) then
+            error stop 'eligible core recovery failure was not classified confined'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
+                ORBIT_GC, 1, .true., .false., .true., 0.01_dp)) then
+            error stop 'axis fallback included its outer radial boundary'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
+                ORBIT_GC, 1, .true., .true., .true., 0.01_dp)) then
+            error stop 'collisional marker was classified numerically confined'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
+                ORBIT_GC, 1, .false., .false., .true., 0.01_dp)) then
+            error stop 'strict-mode marker was classified numerically confined'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
+                ORBIT_GC, 1, .true., .false., .false., 0.01_dp)) then
+            error stop 'failure without exhausted recovery was classified confined'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
+                ORBIT_FULL_ORBIT, 1, .true., .false., .true., 0.01_dp)) then
+            error stop 'full-orbit marker was classified numerically confined'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
+                ORBIT_GC, 0, .true., .false., .true., 0.01_dp)) then
+            error stop 'non-symplectic marker was classified numerically confined'
+        end if
+        if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_DOMAIN, &
+                ORBIT_GC, 1, .true., .false., .true., 0.01_dp)) then
+            error stop 'domain failure was classified numerically confined'
+        end if
+    end subroutine test_numerically_confined_classification
 
     subroutine test_fo_lcfs_location
         real(dp), parameter :: z_before(5) = [0.9_dp, 6.2_dp, 3.0_dp, 1.0_dp, &

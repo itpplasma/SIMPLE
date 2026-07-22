@@ -27,7 +27,8 @@ module simple_main
         wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
         ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
         ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_DOMAIN, &
+        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
+        ORBIT_EXIT_NUMERICAL_DOMAIN, &
         ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
         ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
@@ -71,6 +72,7 @@ module simple_main
     integer, parameter :: TOROIDAL_RECOVERY_STEP_LIMIT = 100000
     integer, parameter :: RK_SAFE_STREAK_TO_RESUME = 256
     real(dp), parameter :: RK_RECOVERY_AXIS_ENTER = 0.1_dp
+    real(dp), parameter :: NUMERICAL_CONFINED_S_MAX = 0.01_dp
     ! Retry only a failed legacy axis solve with a smoother, still axis-local
     ! Cartesian regularization. Successful release-era RK paths stay unchanged.
     real(dp), parameter :: RK_RECOVERY_AXIS_FLOOR = 1.0e-3_dp
@@ -1393,6 +1395,51 @@ contains
         end if
     end function classify_orbit_exit
 
+    pure real(dp) function normalized_flux_from_reference_radial( &
+            reference_radial, radial_is_rho)
+        real(dp), intent(in) :: reference_radial
+        logical, intent(in) :: radial_is_rho
+
+        normalized_flux_from_reference_radial = reference_radial
+        if (radial_is_rho .and. reference_radial >= 0.0_dp) &
+            normalized_flux_from_reference_radial = reference_radial**2
+    end function normalized_flux_from_reference_radial
+
+    real(dp) function reference_normalized_flux_s(reference_radial)
+        real(dp), intent(in) :: reference_radial
+        logical :: radial_is_rho
+
+        radial_is_rho = .false.
+        if (allocated(ref_coords)) then
+            select type (ref_coords)
+            class is (chartmap_coordinate_system_t)
+                radial_is_rho = .true.
+            class default
+                continue
+            end select
+        end if
+        reference_normalized_flux_s = normalized_flux_from_reference_radial( &
+            reference_radial, radial_is_rho)
+    end function reference_normalized_flux_s
+
+    pure logical function should_classify_numerically_confined(exit_code, &
+            model, mode, warning_mode, collisions_enabled, recovery_active, &
+            normalized_flux_s)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+
+        integer, intent(in) :: exit_code, model, mode
+        logical, intent(in) :: warning_mode, collisions_enabled, recovery_active
+        real(dp), intent(in) :: normalized_flux_s
+
+        should_classify_numerically_confined = &
+            exit_code == ORBIT_EXIT_NUMERICAL_MAXITER .and. &
+            warning_mode .and. .not. collisions_enabled .and. &
+            model == ORBIT_GC .and. mode > 0 .and. recovery_active .and. &
+            ieee_is_finite(normalized_flux_s) .and. &
+            normalized_flux_s >= 0.0_dp .and. &
+            normalized_flux_s < NUMERICAL_CONFINED_S_MAX
+    end function should_classify_numerically_confined
+
     subroutine trace_orbit(anorb, ipart, orbit_traj, orbit_times)
         use classification, only: trace_orbit_with_classifiers, &
             classification_result_t, &
@@ -1411,12 +1458,14 @@ contains
         integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
         logical :: passing, faulted, numerical_hold, physical_exit
+        logical :: numerically_confined
         type(rk_recovery_state_t) :: rk_recovery
         type(classification_result_t) :: class_result
 
         ierr_orbit = 0
         faulted = .false.
         physical_exit = .false.
+        numerically_confined = .false.
         first_unresolved_it = 0
         hold_streak = 0
         rk_recovery = rk_recovery_state_t()
@@ -1505,6 +1554,23 @@ contains
                 orbit_exit_code(ipart) = classify_orbit_exit( &
                     ierr_orbit, orbit_model, integmode, map_boundary_exit_code)
                 it_final = it
+                call integ_to_ref(z(1:3), u_ref_prev)
+                numerically_confined = should_classify_numerically_confined( &
+                    orbit_exit_code(ipart), orbit_model, integmode, &
+                    symplectic_newton_warning_mode, swcoll, rk_recovery%active, &
+                    reference_normalized_flux_s(u_ref_prev(1)))
+                if (numerically_confined) then
+                    ! All pushers failed from the same validated state in the
+                    ! axis-local core (VMEC s<0.01, or chartmap rho<0.1).
+                    ! This is neither a wall nor an LCFS event. Preserve it as
+                    ! an explicit audited outcome and apply the established
+                    ! numerical-fault-as-
+                    ! confined convention instead of fabricating a loss.
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_CONFINED
+                    do it_f = it, ntimstep
+                        call increase_confined_count(it_f, passing)
+                    end do
+                end if
                 physical_exit = orbit_exit_code(ipart) == ORBIT_EXIT_LCFS .or. &
                     orbit_exit_code(ipart) == ORBIT_EXIT_WALL
                 if (physical_exit) then
@@ -1518,7 +1584,7 @@ contains
                         boundary_event_time_width(ipart) = &
                             anorb%si%last_event_fraction_width*dtaumin/v0
                     end if
-                else
+                else if (.not. numerically_confined) then
                     if (first_unresolved_it == 0) first_unresolved_it = it
                     faulted = .true.
                 end if
@@ -1557,6 +1623,8 @@ contains
         zend(4:5, ipart) = z(4:5)
         if (physical_exit) then
             times_lost(ipart) = exit_step*dtaumin/v0
+        else if (numerically_confined) then
+            times_lost(ipart) = trace_time
         else if (faulted) then
             times_lost(ipart) = ieee_value(0.0d0, ieee_quiet_nan)
         else

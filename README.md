@@ -287,6 +287,15 @@ retain the stricter 10-unit bound and their established recovery behavior. The
 hold limit and aggregate Newton, retry, toroidal-regularization, axis-full-orbit,
 recovery, and rejection counters are stored in `results.nc`.
 
+One narrower collisionless guiding-centre outcome is recorded separately. If
+all recovery methods have been attempted, the final error is Newton
+nonconvergence, and the last validated state remains in the axis-local core
+(normalized toroidal flux `s<0.01`, equivalent to chartmap `rho<0.1`), SIMPLE
+records exit code 4 and counts the marker confined through `trace_time`. This
+is neither a wall/LCFS loss nor an unlabelled successful completion.
+Collisional, full-orbit, strict-mode, SPECTRE, and non-core failures retain
+their numerical exit codes.
+
 ### Output
 `confined_fraction.dat` is the main output, containing four columns:
 1. Physical time
@@ -309,6 +318,9 @@ number of particles.
   * If ignored due to contr_pp, which defines deep passing region as confined (we don consider them anymore), -1 is written.
   * If tracing ends in a numerical fatal condition, `NaN` is written. Such an
     orbit is unresolved, not physically lost or confined.
+  * If a collisionless guiding-centre marker exhausts all recovery methods in
+    the axis-local core, `trace_time` is written with audited exit code 4 and
+    the marker is counted confined.
 3. Trapping parameter trap_par that is 1 for deeply trapped, 0 for tp boundary
    and negative for passing. Eq. (3.1) in Accelerated Methods paper.
    Whenever trap_par < contr_pp, particle is not traced and counted as confined.

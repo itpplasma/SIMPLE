@@ -31,6 +31,14 @@
   that end the affected marker at the first exhausted recovery. Numerical exits
   use codes 101--105 and `NaN` in `times_lost`.
 
+  A collisionless guiding-centre marker that exhausts every recovery method
+  after the warning hold while its last validated normalized toroidal flux is
+  below `s=0.01` is classified as numerically confined. For chartmap inputs,
+  SIMPLE converts the stored `rho` to `s=rho^2` before applying the gate. It
+  uses exit code 4 and `trace_time` in `times_lost`. This core-only fallback is
+  disabled for collisions, strict mode, full-orbit tracing, SPECTRE, and
+  failures outside the axis-local region.
+
 * `canonical_grid_nr`, `canonical_grid_ntheta`, and `canonical_grid_nphi`
   control the Meiss or Albert canonical-map grid. Their defaults are 62, 63,
   and 64. Each dimension must be between 6 and 512, and their product must not

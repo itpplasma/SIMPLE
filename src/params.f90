@@ -46,6 +46,11 @@ module params
     integer, parameter :: ORBIT_EXIT_LCFS = 1
     integer, parameter :: ORBIT_EXIT_WALL = 2
     integer, parameter :: ORBIT_EXIT_SKIPPED = 3
+    ! A collisionless warning-mode marker whose validated last state is in the
+    ! axis-local core after all recovery methods are exhausted. It is not a
+    ! physical loss and is conservatively counted confined, with the distinct
+    ! code retained for auditability.
+    integer, parameter :: ORBIT_EXIT_NUMERICAL_CONFINED = 4
     integer, parameter :: ORBIT_EXIT_NUMERICAL_DOMAIN = 101
     integer, parameter :: ORBIT_EXIT_NUMERICAL_MAXITER = 102
     integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103

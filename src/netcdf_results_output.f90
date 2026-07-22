@@ -147,14 +147,16 @@ contains
         status = nf90_put_att(ncid, var_times_lost, 'units', 's')
         call check_nc(status, 'put_att times_lost units')
         status = nf90_put_att(ncid, var_times_lost, 'description', &
-            'Physical loss time (-1 if skipped; NaN after numerical failure)')
+            'Physical loss time (-1 if skipped; trace_time if confined; ' // &
+            'NaN after fatal numerical failure)')
         call check_nc(status, 'put_att times_lost description')
 
         status = nf90_def_var(ncid, 'orbit_exit_code', nf90_int, &
             [dim_particle], var_orbit_exit_code)
         call check_nc(status, 'def_var orbit_exit_code')
         status = nf90_put_att(ncid, var_orbit_exit_code, 'description', &
-            '0=completed, 1=LCFS, 2=wall, 3=skipped, 101-105=numerical failure')
+            '0=completed, 1=LCFS, 2=wall, 3=skipped, ' // &
+            '4=numerically confined in core, 101-105=numerical failure')
         call check_nc(status, 'put_att orbit_exit_code description')
 
         status = nf90_def_var(ncid, 'boundary_event_radial_residual', nf90_double, &
