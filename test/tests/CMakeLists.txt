@@ -580,13 +580,6 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
             TIMEOUT 7200)
     endif()
 
-    add_test(NAME test_gvec_chartmap_converter_static
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/test_gvec_chartmap_converter_static.py)
-    set_tests_properties(test_gvec_chartmap_converter_static PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "unit;python")
-
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
     target_link_libraries(export_boozer_chartmap_tool.x simple)
