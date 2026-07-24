@@ -125,6 +125,9 @@ for test_case in $TEST_CASES; do
 
     # Copy input file from project being tested
     cp "$PROJECT_TEST_DIR/$test_case/simple.in" "$test_dir/"
+    if [ -f "$PROJECT_TEST_DIR/$test_case/start.dat" ]; then
+        cp "$PROJECT_TEST_DIR/$test_case/start.dat" "$test_dir/"
+    fi
 
     # Determine which wout and coils files to use based on test case
     if [[ "$test_case" == *"_coils"* ]]; then
@@ -169,11 +172,25 @@ for test_case in $TEST_CASES; do
 
     # Run albert diagnostic for albert_coils test cases
     if [[ "$test_case" == "albert_coils" ]]; then
+        # The diagnostic programs initialize SIMPLE and write the normal orbit
+        # output files as a side effect.  Keep those files away from the orbit
+        # run above so the golden comparison sees the actual 32-particle result.
+        diag_dir="$test_dir/diagnostics"
+        mkdir -p "$diag_dir"
+        rm -f "$diag_dir/albert_coils_diagnostic.dat" \
+            "$diag_dir/albert_intermediate.dat" \
+            "$test_dir/albert_coils_diagnostic.dat" \
+            "$test_dir/albert_intermediate.dat"
+        ln -sfn ../simple.in "$diag_dir/simple.in"
+        ln -sfn ../wout.nc "$diag_dir/wout.nc"
+        ln -sfn ../coils.simple "$diag_dir/coils.simple"
+
         ALBERT_DIAG_BIN="$PROJECT_ROOT/build/test/tests/field_can/test_field_can_albert_coils_diagnostic.x"
         if [ -x "$ALBERT_DIAG_BIN" ]; then
             echo "Running Albert coordinate diagnostic..."
-            "$ALBERT_DIAG_BIN" >> simple.log 2>&1
-            if [ $? -ne 0 ]; then
+            if (cd "$diag_dir" && "$ALBERT_DIAG_BIN") >> simple.log 2>&1; then
+                cp "$diag_dir/albert_coils_diagnostic.dat" "$test_dir/"
+            else
                 echo "Warning: Albert diagnostic failed (non-fatal)"
             fi
         fi
@@ -181,8 +198,9 @@ for test_case in $TEST_CASES; do
         ALBERT_INTER_BIN="$PROJECT_ROOT/build/test/tests/field_can/test_albert_intermediate.x"
         if [ -x "$ALBERT_INTER_BIN" ]; then
             echo "Running Albert intermediate values diagnostic..."
-            "$ALBERT_INTER_BIN" >> simple.log 2>&1
-            if [ $? -ne 0 ]; then
+            if (cd "$diag_dir" && "$ALBERT_INTER_BIN") >> simple.log 2>&1; then
+                cp "$diag_dir/albert_intermediate.dat" "$test_dir/"
+            else
                 echo "Warning: Albert intermediate diagnostic failed (non-fatal)"
             fi
         fi

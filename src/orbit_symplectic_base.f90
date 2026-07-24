@@ -27,13 +27,15 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
     logical :: symplectic_newton_warning_mode = .true.
-    real(dp), parameter :: symplectic_newton_warning_factor = 10.0_dp
+    real(dp), parameter :: symplectic_newton_warning_factor = 100.0_dp
+    real(dp), parameter :: symplectic_spectre_newton_warning_factor = 10.0_dp
     real(dp) :: boundary_event_fraction_tolerance = -1d0
     real(dp) :: boundary_event_radial_tolerance = -1d0
 
     type :: symplectic_integrator_t
         real(dp) :: atol
         real(dp) :: rtol
+        real(dp) :: warning_factor = symplectic_newton_warning_factor
 
         ! Current phase-space coordinates z and old pth
         real(dp), dimension(4) :: z  ! z = (r, th, ph, pphi)

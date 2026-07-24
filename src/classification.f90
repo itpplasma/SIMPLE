@@ -7,6 +7,7 @@ module classification
         class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &
         nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
         integmode, relerr, ntau, should_skip, orbit_exit_code, unresolved_orbits, &
+        max_consecutive_warning_holds, &
         ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, ORBIT_EXIT_SKIPPED, &
         ORBIT_EXIT_NUMERICAL_DOMAIN, ORBIT_EXIT_NUMERICAL_MAXITER, &
         ORBIT_EXIT_NUMERICAL_LINEAR, ORBIT_EXIT_NUMERICAL_EVENT
@@ -74,7 +75,7 @@ contains
         integer, intent(in) :: ipart
         type(classification_result_t), intent(out) :: class_result
         integer :: ierr
-        real(dp), dimension(5) :: z
+        real(dp), dimension(5) :: z, z_step_start
         real(dp) :: bmod,sqrtg
         real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
         integer :: first_unresolved_it, hold_streak, it, ktau, it_f
@@ -260,22 +261,31 @@ contains
                 cycle
             endif
             do ktau=1,ntau
+                z_step_start = z
                 if (integmode <= 0) then
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
                     if (ierr /= 0 .and. ierr /= 1 .and. &
                         symplectic_newton_warning_mode) then
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak = ierr
-                        ierr = 0
+                        z = z_step_start
+                        if (hold_streak < max_consecutive_warning_holds) then
+                            call count_event(EVT_WARNING_STEP_SKIP)
+                            hold_streak = hold_streak + 1
+                            ierr = 0
+                        end if
+                    else if (ierr == 0) then
+                        hold_streak = 0
                     end if
                 else
                     call advance_symplectic_with_retry(anorb%si, anorb%f, &
                         orbit_timestep_sympl, ierr)
                     if (ierr /= 0 .and. ierr /= SYMPLECTIC_STEP_BOUNDARY .and. &
                         symplectic_newton_warning_mode) then
-                        call count_event(EVT_WARNING_STEP_SKIP)
-                        hold_streak = ierr
-                        ierr = 0
+                        z = z_step_start
+                        if (hold_streak < max_consecutive_warning_holds) then
+                            call count_event(EVT_WARNING_STEP_SKIP)
+                            hold_streak = hold_streak + 1
+                            ierr = 0
+                        end if
                     else if (ierr == 0) then
                         hold_streak = 0
                         z(1:3) = anorb%si%z(1:3)

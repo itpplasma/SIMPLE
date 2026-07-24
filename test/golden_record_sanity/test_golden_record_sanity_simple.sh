@@ -131,6 +131,48 @@ else
     status=1
 fi
 
+SANITY_TMP=$(mktemp -d)
+trap 'rm -rf "$SANITY_TMP"' EXIT
+for variant in reference matching non_matching; do
+    mkdir -p "$SANITY_TMP/$variant/albert_coils"
+    printf '1.0 2.0\n' > \
+        "$SANITY_TMP/$variant/albert_coils/albert_coils_diagnostic.dat"
+    printf '3.0 4.0\n' > \
+        "$SANITY_TMP/$variant/albert_coils/albert_intermediate.dat"
+    printf '1 0 1.0e-4 0 0\n' > \
+        "$SANITY_TMP/$variant/albert_coils/orbit_exit_code.dat"
+    printf '&config\ntrace_time = 1.0e-4\n/\n' > \
+        "$SANITY_TMP/$variant/albert_coils/simple.in"
+    printf '1.0\n' > \
+        "$SANITY_TMP/$variant/albert_coils/runtime_seconds.txt"
+done
+printf '1 1.0e-4 0.5 0.3 0.1 0.3 0 0 1 0\n' > \
+    "$SANITY_TMP/reference/albert_coils/times_lost.dat"
+cp "$SANITY_TMP/reference/albert_coils/times_lost.dat" \
+    "$SANITY_TMP/matching/albert_coils/times_lost.dat"
+printf '1 1.0e-4 0.6 0.3 0.1 0.3 0 0 1 0\n' > \
+    "$SANITY_TMP/non_matching/albert_coils/times_lost.dat"
+
+echo -n "Test 11: Albert diagnostics and orbit results matching... "
+if "$GOLDEN_RECORD_DIR/compare_golden_results.sh" \
+        "$SANITY_TMP/reference" "$SANITY_TMP/matching" \
+        "albert_coils"; then
+    echo "PASSED"
+else
+    echo "FAILED"
+    status=1
+fi
+
+echo -n "Test 12: Albert orbit difference is detected... "
+if "$GOLDEN_RECORD_DIR/compare_golden_results.sh" \
+        "$SANITY_TMP/reference" "$SANITY_TMP/non_matching" \
+        "albert_coils"; then
+    echo "FAILED (diagnostics hid an orbit difference)"
+    status=1
+else
+    echo "PASSED (correctly detected orbit difference)"
+fi
+
 echo ""
 echo "All tests completed!"
 exit "$status"

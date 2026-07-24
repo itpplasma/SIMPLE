@@ -10,9 +10,10 @@ program test_fo_boris
   !   (2) NEAR-AXIS: a particle whose orbit reaches small s crosses the axis region
   !       with energy still bounded and no integrator failure,
   !   (3) a confined particle stays 0 < s < 1 over the run (no spurious loss).
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
-  use simple, only: init_params, tracer_t
+  use simple, only: init_params, orbit_timestep_fo_bridge, tracer_t
   use simple_main, only: init_field
   use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, &
     fo_energy, fo_mu, fo_to_gc, accept_or_fail, FO_OK, FO_LOCATE_FAIL
@@ -20,7 +21,9 @@ program test_fo_boris
   use reference_coordinates, only: ref_coords
   use params, only: field_input, coord_input, integmode, relerr, dtaumin, orbit_coord
   use velo_mod, only: isw_field_type
-  use magfie_sub, only: BOOZER
+  use magfie_sub, only: BOOZER, magfie_refcoords, magfie_vmec
+  use alpha_lifetime_sub, only: toroidal_regularized_position_map
+  use field_can_mod, only: integ_to_ref, ref_to_integ
   use boozer_coordinates_mod, only: use_B_r, use_del_tp_B
   use boozer_sub, only: get_boozer_coordinates
   implicit none
@@ -45,6 +48,9 @@ program test_fo_boris
   ! field assembly and the Cartesian inverse Newton both rely on it; a transposed
   ! Jacobian flips the field while Boris still conserves energy, so check it here.
   call check_covariant_basis_convention(nfail)
+  call check_reference_fallback_field(nfail)
+  call check_reference_axis_bridge(nfail)
+  call check_toroidal_position_map(nfail)
 
   ! passing (lambda=0.9), trapped (lambda=0.2), and an inner orbit driven toward
   ! the axis (small s, lambda=0.7) to exercise the near-axis crossing.
@@ -64,6 +70,70 @@ program test_fo_boris
   end if
 
 contains
+
+  subroutine check_reference_axis_bridge(nfail)
+    integer, intent(inout) :: nfail
+    real(dp) :: z(5), x_reference(3)
+    integer :: ierr
+
+    x_reference = [0.01_dp, 0.7_dp, 0.2_dp]
+    call ref_to_integ(x_reference, z(1:3))
+    z(4:5) = [1.0_dp, 0.2_dp]
+    call orbit_timestep_fo_bridge(norb%fo, z, dtaumin, ierr)
+    call check('native-reference axis bridge succeeds', ierr == 0, nfail)
+    if (ierr /= 0) return
+    call integ_to_ref(z(1:3), x_reference)
+    call check('native-reference axis bridge stays finite', &
+      all(ieee_is_finite(x_reference)) .and. all(ieee_is_finite(z(4:5))), &
+      nfail)
+    call check('native-reference axis bridge preserves momentum shell', &
+      z(4) == 1.0_dp, nfail)
+  end subroutine check_reference_axis_bridge
+
+  subroutine check_reference_fallback_field(nfail)
+    integer, intent(inout) :: nfail
+    real(dp), parameter :: x(3) = [0.36_dp, 0.7_dp, 0.2_dp]
+    real(dp) :: bmod, sqrtg, bder(3), hcov(3), hctr(3), hcurl(3)
+    real(dp) :: bmod_ref, sqrtg_ref, bder_ref(3), hcov_ref(3)
+    real(dp) :: hctr_ref(3), hcurl_ref(3), relative_derivative_error
+
+    call magfie_refcoords(x, bmod, sqrtg, bder, hcov, hctr, hcurl)
+    call magfie_vmec(x, bmod_ref, sqrtg_ref, bder_ref, hcov_ref, hctr_ref, &
+      hcurl_ref)
+    call check('generic fallback field is finite', &
+      ieee_is_finite(bmod) .and. ieee_is_finite(sqrtg) .and. &
+      all(ieee_is_finite(bder)) .and. all(ieee_is_finite(hcov)) .and. &
+      all(ieee_is_finite(hctr)) .and. all(ieee_is_finite(hcurl)), nfail)
+    call check('generic fallback field preserves B', &
+      abs(bmod - bmod_ref) <= 1.0e-12_dp*abs(bmod_ref), nfail)
+    relative_derivative_error = maxval(abs(bder - bder_ref))/ &
+      max(maxval(abs(bder_ref)), 1.0e-12_dp)
+    call check('generic fallback field derivatives match VMEC', &
+      relative_derivative_error < 1.0e-4_dp, nfail)
+  end subroutine check_reference_fallback_field
+
+  subroutine check_toroidal_position_map(nfail)
+    integer, intent(inout) :: nfail
+    real(dp), parameter :: x(3) = [0.36_dp, 0.7_dp, 0.2_dp]
+    real(dp) :: x_regular(3), x_roundtrip(3), displacement, closure
+    integer :: ierr
+
+    call toroidal_regularized_position_map(x, 0.5_dp, 1, x_regular, ierr)
+    call check('toroidal position map succeeds', ierr == 0, nfail)
+    if (ierr /= 0) return
+    call toroidal_regularized_position_map(x_regular, 0.5_dp, -1, &
+      x_roundtrip, ierr)
+    call check('inverse toroidal position map succeeds', ierr == 0, nfail)
+    if (ierr /= 0) return
+    displacement = maxval(abs(x_regular - x))
+    closure = maxval(abs(x_roundtrip - x))
+    print '(a,es10.2,a,es10.2)', '  toroidal map displacement=', displacement, &
+      ' first-order closure=', closure
+    call check('toroidal position map leaves phi unchanged', &
+      x_regular(3) == x(3) .and. x_roundtrip(3) == x(3), nfail)
+    call check('toroidal position map closes to first order', &
+      closure < max(0.01_dp*displacement, 1.0e-10_dp), nfail)
+  end subroutine check_toroidal_position_map
 
   ! accept_or_fail must LOCATE (FO_OK) a marker that clamped to the edge while its warm
   ! guess was already near the edge -- a genuine LCFS exit, so fo_to_gc can flag the

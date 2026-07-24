@@ -12,8 +12,7 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
-  boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
-  symplectic_newton_warning_factor
+  boundary_event_radial_tolerance, symplectic_newton_warning_mode
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
@@ -25,7 +24,10 @@ use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
-  EVT_MIDPOINT_MAXIT, EVT_WARNING_STEP_SKIP
+  EVT_MIDPOINT_MAXIT, EVT_WARNING_MAXIT_ACCEPT, &
+  EVT_WARNING_MAXIT_REJECT_100, EVT_WARNING_MAXIT_REJECT_1E4, &
+  EVT_WARNING_MAXIT_REJECT_LARGE, EVT_WARNING_MAXIT_NONFINITE, &
+  EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT
 
 implicit none
 
@@ -50,21 +52,62 @@ pure logical function finite_newton_iterate(x)
   finite_newton_iterate = .true.
 end function finite_newton_iterate
 
-logical function accept_warning_maxiter(x, xlast, tolref, rtol)
-  ! Continue directly only when the last Newton correction is finite and close
-  ! to the requested tolerance. Larger finite iterates are not trustworthy
-  ! states: the warning-mode driver retries them at smaller substeps and, if
-  ! every recovery is exhausted, advances the clock from the last valid state.
-  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol
+logical function accept_warning_maxiter(x, xlast, tolref, rtol, warning_factor)
+  ! Continue only when the final Newton correction is finite and inside this
+  ! integrator's tolerance-scaled guard. Other iterates enter retry recovery.
+  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol, warning_factor
+  real(dp) :: correction_ratio
 
   accept_warning_maxiter = .false.
   if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
+  if (.not. finite_newton_iterate(x)) then
+    call count_event(EVT_WARNING_MAXIT_NONFINITE)
+    return
+  end if
+  if (.not. finite_newton_iterate(xlast)) then
+    call count_event(EVT_WARNING_MAXIT_NONFINITE)
+    return
+  end if
+  if (.not. finite_newton_iterate(tolref)) then
+    call count_event(EVT_WARNING_MAXIT_NONFINITE)
+    return
+  end if
+  correction_ratio = maxval(abs(x - xlast)/ &
+    max(rtol*abs(tolref), tiny(1.0_dp)))
+  accept_warning_maxiter = correction_ratio <= warning_factor
+  if (accept_warning_maxiter) then
+    call count_event(EVT_WARNING_MAXIT_ACCEPT)
+  else if (correction_ratio <= 100.0_dp) then
+    call count_event(EVT_WARNING_MAXIT_REJECT_100)
+  else if (correction_ratio <= 1.0e4_dp) then
+    call count_event(EVT_WARNING_MAXIT_REJECT_1E4)
+  else
+    call count_event(EVT_WARNING_MAXIT_REJECT_LARGE)
+  end if
+end function accept_warning_maxiter
+
+logical function accept_warning_axis_crossing(si, x, xlast, tolref, rtol)
+  ! Near the polar-coordinate axis, the endpoint and midpoint radii can change
+  ! sign while the physical step and its angular/momentum components have
+  ! converged. Accept only that local chart crossing; the caller immediately
+  ! maps the negative endpoint to the equivalent positive-radius chart.
+  type(symplectic_integrator_t), intent(in) :: si
+  real(dp), intent(in) :: x(5), xlast(5), tolref(5), rtol
+  real(dp), parameter :: axis_radius = 1.0e-6_dp
+
+  accept_warning_axis_crossing = .false.
+  if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
+  if (si%z(1) < 0.0_dp .or. si%z(1) > axis_radius) return
   if (.not. finite_newton_iterate(x)) return
   if (.not. finite_newton_iterate(xlast)) return
   if (.not. finite_newton_iterate(tolref)) return
-  accept_warning_maxiter = all(abs(x - xlast) <= &
-    symplectic_newton_warning_factor*rtol*abs(tolref))
-end function accept_warning_maxiter
+  if (x(1) >= 0.0_dp) return
+  if (max(abs(x(1)), abs(x(5))) > axis_radius) return
+  accept_warning_axis_crossing = all(abs(x(2:4) - xlast(2:4)) <= &
+    si%warning_factor*rtol*abs(tolref(2:4)))
+  if (accept_warning_axis_crossing) &
+    call count_event(EVT_WARNING_AXIS_CROSSING_ACCEPT)
+end function accept_warning_axis_crossing
 
 subroutine advance_symplectic_with_retry(si, f, stepper, status, &
     accepted_fraction)
@@ -91,9 +134,7 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   integer, intent(out) :: status
   real(dp), intent(out) :: accepted_fraction
   type(symplectic_integrator_t) :: initial_integrator
-  type(symplectic_integrator_t) :: half_integrator
   type(field_can_t) :: initial_field
-  type(field_can_t) :: half_field
   real(dp) :: child_fraction
   logical :: recoverable
 
@@ -119,7 +160,11 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   recoverable = status == SYMPLECTIC_STEP_MAXITER .or. &
     status == SYMPLECTIC_STEP_LINEAR_SOLVE
   if (.not. symplectic_newton_warning_mode .or. .not. recoverable .or. &
-      depth >= max_retry_depth) return
+      depth >= max_retry_depth) then
+    if (recoverable .and. depth >= max_retry_depth) &
+      call count_event(EVT_RETRY_EXHAUSTED)
+    return
+  end if
 
   ! For a fixed subdivision, the two accepted maps remain symplectic and cover
   ! the original interval exactly. State-dependent subdivision is a warning-mode
@@ -134,16 +179,6 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
     return
   end if
   if (status == SYMPLECTIC_STEP_OK) then
-    if (child_fraction < 1.0_dp) then
-      ! A nested recovery already consumed the unresolved suffix of this first
-      ! half. Preserve that contiguous accepted prefix and do not leap over the
-      ! held interval to attempt the nominal second half.
-      accepted_fraction = 0.5_dp*child_fraction
-      si%dt = interval
-      return
-    end if
-    half_integrator = si
-    half_field = f
     call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
       status, child_fraction)
     if (status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -158,24 +193,11 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
       si%dt = interval
       return
     end if
-    recoverable = status == SYMPLECTIC_STEP_MAXITER .or. &
-      status == SYMPLECTIC_STEP_LINEAR_SOLVE
-    if (recoverable) then
-      ! Keep the first accepted half rather than discarding meaningful orbit
-      ! progress because the second half exhausted every retry. Warning mode
-      ! consumes only that unresolved remainder and resumes from this state.
-      si = half_integrator
-      f = half_field
-      si%dt = interval
-      status = SYMPLECTIC_STEP_OK
-      accepted_fraction = 0.5_dp
-      call count_event(EVT_WARNING_STEP_SKIP)
-      return
-    end if
   end if
   if (status /= SYMPLECTIC_STEP_OK) then
     si = initial_integrator
     f = initial_field
+    accepted_fraction = 0.0_dp
   end if
   si%dt = interval
 end subroutine advance_retry_interval
@@ -596,7 +618,8 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON1_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, si%rtol)) &
+    if (accept_warning_maxiter(x, xlast, tolref, si%rtol, &
+        si%warning_factor)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -691,7 +714,7 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON2_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, si%warning_factor)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine
@@ -849,8 +872,12 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
+    if (accept_warning_axis_crossing(si, x, xlast, tolref, rtol)) then
       status = SYMPLECTIC_STEP_OK
+    else if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%warning_factor)) then
+      status = SYMPLECTIC_STEP_OK
+    end if
   end if
 end subroutine
 
@@ -974,7 +1001,7 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
     end if
   else
     call count_event(EVT_RK_GAUSS_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, si%warning_factor)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_gauss
@@ -1316,7 +1343,7 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
     end if
   else
     call count_event(EVT_RK_LOBATTO_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, rtol)) &
+    if (accept_warning_maxiter(x, xlast, tolref, rtol, si%warning_factor)) &
       status = SYMPLECTIC_STEP_OK
   end if
 end subroutine newton_rk_lobatto

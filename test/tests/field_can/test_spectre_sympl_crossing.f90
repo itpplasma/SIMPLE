@@ -40,7 +40,8 @@ program test_spectre_sympl_crossing
     use field_can_mod, only: field_can_t, eval_field => evaluate, get_val, &
                              integ_to_ref, ref_to_integ
     use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
-    use orbit_symplectic_base, only: symplectic_integrator_t
+    use orbit_symplectic_base, only: symplectic_integrator_t, &
+        symplectic_spectre_newton_warning_factor
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
                                    orbit_microstep_sympl_spectre, recanon_pphi, &
                                    sympl_landing_stats_reset, &
@@ -315,8 +316,12 @@ contains
         nrec_got = 0
         do k = 1, NSTEP
             call orbit_microstep_sympl_spectre(state, si, f, im, &
-                                               real(k - 1, dp)*dtaumin/v0, &
-                                               dtaumin/v0, ierr, t_frac)
+                real(k - 1, dp)*dtaumin/v0, &
+                dtaumin/v0, ierr, t_frac)
+            if (si%warning_factor /= &
+                symplectic_spectre_newton_warning_factor) then
+                error stop 'SPECTRE lost its strict Newton warning bound'
+            end if
             if (ierr /= SYMPL_SPECTRE_OK) exit
             if (mod(k, NSAMPLE) == 0) then
                 nrec_got = nrec_got + 1

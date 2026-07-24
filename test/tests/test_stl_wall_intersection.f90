@@ -6,7 +6,8 @@ program test_stl_wall_intersection
     use simple_main, only: main_wall => wall, chartmap_cart_scale_to_m, &
                            locate_wall_segment
     use params, only: wall_hit, wall_hit_cart, wall_hit_normal_cart, &
-                      wall_hit_cos_incidence, wall_hit_angle_rad
+                      wall_hit_cos_incidence, wall_hit_angle_rad, &
+                      wall_query_rho_lcfs
     use reference_coordinates, only: ref_coords
     use cartesian_coordinates, only: cartesian_coordinate_system_t
     implicit none
@@ -46,8 +47,27 @@ program test_stl_wall_intersection
     chartmap_cart_scale_to_m = 1.0_dp
     z_start = [p0, 4.0_dp, 5.0_dp]
     z_end = [p1, 11.0_dp, 19.0_dp]
+
+    ! A Cartesian chord can intersect a non-convex external wall even though
+    ! its accepted endpoint remains inside the LCFS. Such a chord is not a
+    ! physical wall loss and must not be queried.
+    wall_query_rho_lcfs = 1.0_dp
+    u_start = [0.25_dp, 0.25_dp, 0.25_dp]
+    u_end = [0.50_dp, 0.25_dp, 0.25_dp]
     z = z_end
-    call locate_wall_segment(z, z_start, z_end, 1, p0, p0, p1, p1, 6.0_dp, &
+    call locate_wall_segment(z, z_start, z_end, 1, p0, u_start, p1, u_end, &
+        6.0_dp, 8.0_dp, 7.0_dp, hit, hit_step)
+    call check(.not. hit, "interior-LCFS chord was queried against wall", errors)
+    call check(wall_hit(1) == 0_int8, "interior chord set wall hit flag", errors)
+    call check_close_vec(z, z_end, 1.0e-12_dp, &
+        "interior chord changed orbit state", errors)
+    call check_close(hit_step, 15.0_dp, 1.0e-12_dp, &
+        "interior chord changed event time", errors)
+
+    u_start = p0
+    u_end = p1
+    z = z_end
+    call locate_wall_segment(z, z_start, z_end, 1, p0, u_start, p1, u_end, 6.0_dp, &
         8.0_dp, 7.0_dp, hit, hit_step)
     call check(hit, "wall event locator missed crossing", errors)
     call check_close_vec(z(1:3), hit_p, 1.0e-12_dp, &
@@ -77,6 +97,7 @@ program test_stl_wall_intersection
     call check_close(z(3), 3.0_dp, 1.0e-12_dp, &
         "wall event field-period seam mismatch", errors)
     call stl_wall_finalize(main_wall)
+    wall_query_rho_lcfs = -1.0_dp
 
     call write_tetra_stl_mm("tetra_mm.stl")
     call stl_wall_init(main_wall, "tetra_mm.stl", 1.0e-3_dp)

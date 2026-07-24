@@ -1,8 +1,9 @@
 module magfie_sub
 use spline_vmec_sub, only: vmec_field
-use field_can_meiss, only: magfie_meiss
+use field_can_meiss, only: magfie_meiss, field_noncan
 use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
+use field_base, only: magnetic_field_t
 use field_splined, only: splined_field_t
 use field_spectre, only: spectre_field_t
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
@@ -43,13 +44,19 @@ procedure(magfie_base), pointer :: magfie => null()
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
                       REFCOORDS=5, SPECTRE=6
 
-type(splined_field_t), allocatable :: refcoords_field
+class(magnetic_field_t), allocatable :: refcoords_field
 type(spectre_field_t), allocatable :: spectre_field
 
 contains
 
+logical function has_magfie_refcoords_field()
+  has_magfie_refcoords_field = allocated(refcoords_field)
+  if (has_magfie_refcoords_field) return
+  has_magfie_refcoords_field = allocated(field_noncan)
+end function has_magfie_refcoords_field
+
 subroutine set_magfie_refcoords_field(field)
-  type(splined_field_t), intent(in) :: field
+  class(magnetic_field_t), intent(in) :: field
 
   if (allocated(refcoords_field)) deallocate (refcoords_field)
   allocate (refcoords_field, source=field)
@@ -158,6 +165,40 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   real(dp), intent(out) :: bmod, sqrtg
   real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
+  if (allocated(refcoords_field)) then
+    select type (refcoords_field)
+    type is (splined_field_t)
+      call magfie_splined_refcoords(refcoords_field, x, bmod, sqrtg, bder, &
+        hcovar, hctrvr, hcurl)
+      return
+    class default
+      call magfie_generic_refcoords(refcoords_field, x, bmod, sqrtg, bder, &
+        hcovar, hctrvr, hcurl)
+      return
+    end select
+  end if
+  if (allocated(field_noncan)) then
+    select type (field_noncan)
+    type is (splined_field_t)
+      call magfie_splined_refcoords(field_noncan, x, bmod, sqrtg, bder, &
+        hcovar, hctrvr, hcurl)
+      return
+    class default
+      call magfie_generic_refcoords(field_noncan, x, bmod, sqrtg, bder, &
+        hcovar, hctrvr, hcurl)
+      return
+    end select
+  end if
+  print *, 'magfie_refcoords: no splined reference field available'
+  error stop
+end subroutine magfie_refcoords
+
+subroutine magfie_splined_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
+    hctrvr, hcurl)
+  type(splined_field_t), intent(in) :: field
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod, sqrtg
+  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
   real(dp) :: Acov(3), Bmod_local
   real(dp) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
   real(dp) :: g(3, 3), ginv_u(3, 3), ginv_x(3, 3)
@@ -165,20 +206,14 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   real(dp) :: e_cov(3, 3), jac_signed
   real(dp) :: sqrtg_abs
 
-  if (.not. allocated(refcoords_field)) then
-    print *, 'magfie_refcoords: refcoords_field not set'
-    print *, 'Call set_magfie_refcoords_field before init_magfie(REFCOORDS)'
-    error stop
-  end if
-
-  call refcoords_field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, &
-                                         dhcov, dBmod)
+  call field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, dhcov, &
+    dBmod)
   bmod = Bmod_local
   bder = dBmod/max(bmod, 1.0d-30)
 
-  call scaled_to_ref_coords(refcoords_field%coords, x, u_ref, J)
-  call refcoords_field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
-  call refcoords_field%coords%covariant_basis(u_ref, e_cov)
+  call scaled_to_ref_coords(field%coords, x, u_ref, J)
+  call field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
+  call field%coords%covariant_basis(u_ref, e_cov)
 
   jac_signed = signed_jacobian(e_cov)
   sqrtg = jac_signed*J
@@ -187,7 +222,62 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   hctrvr = matmul(ginv_x, hcovar)
 
   call compute_hcurl(sqrtg, dhcov, hcurl)
-end subroutine magfie_refcoords
+end subroutine magfie_splined_refcoords
+
+subroutine magfie_generic_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
+    hctrvr, hcurl)
+  class(magnetic_field_t), intent(in) :: field
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: bmod, sqrtg
+  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+  real(dp), parameter :: derivative_step = 1.0e-5_dp
+  real(dp) :: Acov(3), dBmod(3), dhcov(3, 3)
+  real(dp) :: ap(3), hp(3), bp, am(3), hm(3), bm
+  real(dp) :: xp(3), xm(3), denominator
+  real(dp) :: g(3, 3), ginv(3, 3), e_cov(3, 3)
+  real(dp) :: sqrtg_abs
+  integer :: i
+
+  call field%evaluate(x, Acov, hcovar, bmod)
+  do i = 1, 3
+    xp = x
+    xm = x
+    xp(i) = x(i) + derivative_step
+    xm(i) = x(i) - derivative_step
+    if (i == 1 .and. xm(i) < 0.0_dp) xm(i) = x(i)
+    call field%evaluate(xp, ap, hp, bp)
+    call field%evaluate(xm, am, hm, bm)
+    denominator = xp(i) - xm(i)
+    dBmod(i) = (bp - bm)/denominator
+    dhcov(:, i) = (hp - hm)/denominator
+  end do
+  bder = dBmod/max(bmod, 1.0d-30)
+  call field%coords%metric_tensor(x, g, ginv, sqrtg_abs)
+  call field%coords%covariant_basis(x, e_cov)
+  sqrtg = sign(sqrtg_abs, signed_jacobian(e_cov))
+  hctrvr = matmul(ginv, hcovar)
+  call compute_hcurl(sqrtg, dhcov, hcurl)
+end subroutine magfie_generic_refcoords
+
+subroutine evaluate_magfie_refcoords_field(x, Acov, hcov, Bmod, status)
+  real(dp), intent(in) :: x(3)
+  real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+  integer, intent(out) :: status
+
+  status = 0
+  if (allocated(refcoords_field)) then
+    call refcoords_field%evaluate(x, Acov, hcov, Bmod)
+    return
+  end if
+  if (allocated(field_noncan)) then
+    call field_noncan%evaluate(x, Acov, hcov, Bmod)
+    return
+  end if
+  Acov = 0.0_dp
+  hcov = 0.0_dp
+  Bmod = 0.0_dp
+  status = 1
+end subroutine evaluate_magfie_refcoords_field
 
 
 subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)

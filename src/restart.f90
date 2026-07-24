@@ -6,7 +6,7 @@ module restart_mod
         trap_par, perp_inv, zend, &
         confpart_pass, confpart_trap, ntimstep, kt_macro, &
         v0, dtaumin, trace_time, ORBIT_EXIT_COMPLETED, &
-        ORBIT_EXIT_LCFS, ORBIT_EXIT_WALL
+        ORBIT_EXIT_LCFS, ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_CONFINED
     implicit none
     private
 
@@ -65,7 +65,8 @@ contains
                 boundary_event_time_width(idx) = time_width
                 particle_done(idx) = exit_code == ORBIT_EXIT_COMPLETED .or. &
                     exit_code == ORBIT_EXIT_LCFS .or. &
-                    exit_code == ORBIT_EXIT_WALL
+                    exit_code == ORBIT_EXIT_WALL .or. &
+                    exit_code == ORBIT_EXIT_NUMERICAL_CONFINED
             end do
             close (unit)
         end if

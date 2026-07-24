@@ -8,7 +8,7 @@ program test_result_accounting
         zstart, zend, boundary_event_radial_residual, &
         boundary_event_time_width, isw_field_type, class_plot, &
         ntcut, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_NUMERICAL_MAXITER
+        ORBIT_EXIT_NUMERICAL_CONFINED, ORBIT_EXIT_NUMERICAL_MAXITER
     use simple_main, only: write_results
     implicit none
 
@@ -17,6 +17,7 @@ program test_result_accounting
     nerr = 0
     call setup_results()
     call test_resolved_denominator()
+    call test_numerically_confined_denominator()
     call test_zero_resolved()
     call teardown_results()
 
@@ -86,6 +87,35 @@ contains
             'unresolved fraction keeps total denominator')
         call assert_true(total_count == 3, 'unresolved denominator is total')
     end subroutine test_resolved_denominator
+
+    subroutine test_numerically_confined_denominator()
+        integer :: unit, resolved_count, total_count
+        real(dp) :: time, pass_fraction, trap_fraction, unresolved_fraction
+
+        confpart_pass = 2.0_dp
+        confpart_trap = 0.0_dp
+        unresolved_orbits = 0
+        times_lost = [10.0_dp, 5.0_dp, 10.0_dp]
+        orbit_exit_code = [ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
+            ORBIT_EXIT_NUMERICAL_CONFINED]
+
+        call write_results()
+
+        open (newunit=unit, file='confined_fraction.dat', status='old')
+        read (unit, *) time, pass_fraction, trap_fraction, resolved_count
+        close (unit)
+        call assert_close(pass_fraction, 2.0_dp/3.0_dp, &
+            'numerically confined marker remains resolved')
+        call assert_true(resolved_count == 3, &
+            'numerically confined marker stays in denominator')
+
+        open (newunit=unit, file='unresolved_fraction.dat', status='old')
+        read (unit, *) time, unresolved_fraction, total_count
+        close (unit)
+        call assert_close(unresolved_fraction, 0.0_dp, &
+            'numerically confined marker is not unresolved')
+        call assert_true(total_count == 3, 'total population remains three')
+    end subroutine test_numerically_confined_denominator
 
     subroutine test_zero_resolved()
         integer :: unit, resolved_count

@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | PR #503 2026-07-22 | In warning mode, recover a failed conventional guiding-centre interval with toroidal regularization and, only at an unresolved polar axis, a Cartesian full-orbit bridge. Preserve the last accepted momentum shell, return to the requested symplectic method after a safe streak, and retain the bounded isolated-warning hold instead of freezing a marker indefinitely. Successful legacy steps are unchanged. |
 | N | v1.5.1 (release/1.5) 2025-12-23 | Use atomic updates when incrementing the confined pass/trap counters so each branch stays thread-safe without enclosing the entire branch in an OpenMP critical region. |
 | N | v1.4.2 (release/1.4) 2025-12-23 | Backport the atomic-update behavior for confined counters so release/1.4 matches v1.5.1’s threading sync. |
 | Y | 6ae316f 2025-12-22 | Deterministic mode: change RNG seed from 0 to 42 |

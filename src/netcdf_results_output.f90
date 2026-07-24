@@ -52,8 +52,11 @@ contains
                           ntimstep, startmode, num_surf, sbeg, &
                           contr_pp, notrace_passing, &
                           isw_field_type, swcoll, deterministic, ran_seed, &
+                          max_consecutive_warning_holds, &
                           netcdffile, field_input, coord_input, &
-                          wall_input, wall_units, wall_hit, wall_hit_cart, &
+            wall_input, wall_units, wall_hit, wall_hit_cart, &
+            wall_query_rho_lcfs, &
+            chart_boundary_kind, chart_boundary_kind_effective, &
                           wall_hit_normal_cart, wall_hit_cos_incidence, &
                           wall_hit_angle_rad
         use new_vmec_stuff_mod, only: multharm
@@ -61,10 +64,14 @@ contains
         use libneo_coordinates, only: chartmap_coordinate_system_t
         use reference_coordinates, only: ref_coords
         use version, only: simple_version
+        use diag_counters, only: N_EVENT, diag_counters_total, event_name
+        use orbit_symplectic_base, only: symplectic_newton_warning_factor, &
+            symplectic_spectre_newton_warning_factor
 
         character(len=*), intent(in) :: filename
 
-        integer :: ncid, status
+        integer :: event_id, ncid, status
+        character(:), allocatable :: diagnostic_name
         integer :: dim_particle, dim_xyz, dim_phase, dim_iclass
         integer :: var_times_lost, var_orbit_exit_code, var_trap_par, var_perp_inv
         integer :: var_boundary_event_radial_residual, var_boundary_event_time_width
@@ -140,14 +147,16 @@ contains
         status = nf90_put_att(ncid, var_times_lost, 'units', 's')
         call check_nc(status, 'put_att times_lost units')
         status = nf90_put_att(ncid, var_times_lost, 'description', &
-            'Physical loss time (-1 if skipped; NaN after numerical failure)')
+            'Physical loss time (-1 if skipped; trace_time if confined; ' // &
+            'NaN after fatal numerical failure)')
         call check_nc(status, 'put_att times_lost description')
 
         status = nf90_def_var(ncid, 'orbit_exit_code', nf90_int, &
             [dim_particle], var_orbit_exit_code)
         call check_nc(status, 'def_var orbit_exit_code')
         status = nf90_put_att(ncid, var_orbit_exit_code, 'description', &
-            '0=completed, 1=LCFS, 2=wall, 3=skipped, 101-105=numerical failure')
+            '0=completed, 1=LCFS, 2=wall, 3=skipped, ' // &
+            '4=numerically confined in core, 101-105=numerical failure')
         call check_nc(status, 'put_att orbit_exit_code description')
 
         status = nf90_def_var(ncid, 'boundary_event_radial_residual', nf90_double, &
@@ -304,6 +313,14 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'relerr', relerr)
         call check_nc(status, 'put_att relerr')
         status = nf90_put_att(ncid, nf90_global, &
+            'symplectic_newton_warning_factor', &
+            symplectic_newton_warning_factor)
+        call check_nc(status, 'put_att symplectic_newton_warning_factor')
+        status = nf90_put_att(ncid, nf90_global, &
+            'symplectic_spectre_newton_warning_factor', &
+            symplectic_spectre_newton_warning_factor)
+        call check_nc(status, 'put_att symplectic_spectre_newton_warning_factor')
+        status = nf90_put_att(ncid, nf90_global, &
                               'boundary_event_fraction_tolerance', &
                               boundary_event_fraction_tolerance)
         call check_nc(status, 'put_att boundary_event_fraction_tolerance')
@@ -351,6 +368,9 @@ contains
         call check_nc(status, 'put_att deterministic')
         status = nf90_put_att(ncid, nf90_global, 'ran_seed', ran_seed)
         call check_nc(status, 'put_att ran_seed')
+        status = nf90_put_att(ncid, nf90_global, &
+            'max_consecutive_warning_holds', max_consecutive_warning_holds)
+        call check_nc(status, 'put_att max_consecutive_warning_holds')
         status = nf90_put_att(ncid, nf90_global, 'netcdffile', trim(netcdffile))
         call check_nc(status, 'put_att netcdffile')
         status = nf90_put_att(ncid, nf90_global, 'field_input', trim(field_input))
@@ -361,8 +381,24 @@ contains
         call check_nc(status, 'put_att wall_input')
         status = nf90_put_att(ncid, nf90_global, 'wall_units', trim(wall_units))
         call check_nc(status, 'put_att wall_units')
+        status = nf90_put_att(ncid, nf90_global, 'wall_query_rho_lcfs', &
+            wall_query_rho_lcfs)
+        call check_nc(status, 'put_att wall_query_rho_lcfs')
+        status = nf90_put_att(ncid, nf90_global, 'chart_boundary_kind', &
+            trim(chart_boundary_kind))
+        call check_nc(status, 'put_att chart_boundary_kind')
+        status = nf90_put_att(ncid, nf90_global, &
+            'chart_boundary_kind_effective', &
+            trim(chart_boundary_kind_effective))
+        call check_nc(status, 'put_att chart_boundary_kind_effective')
         status = nf90_put_att(ncid, nf90_global, 'coordinate_type', trim(coord_type))
         call check_nc(status, 'put_att coordinate_type')
+        do event_id = 1, N_EVENT
+            diagnostic_name = 'diagnostic_'//event_name(event_id)
+            status = nf90_put_att(ncid, nf90_global, diagnostic_name, &
+                diag_counters_total(event_id))
+            call check_nc(status, 'put_att '//diagnostic_name)
+        end do
 
         ! End define mode
         status = nf90_enddef(ncid)
