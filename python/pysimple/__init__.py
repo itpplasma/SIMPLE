@@ -739,7 +739,7 @@ def invariants_from_state(position: np.ndarray) -> dict[str, float | int | str]:
         raise ValueError(f"position must have shape (5,), got {position.shape}")
 
     _ensure_trace_initialized()
-    values = np.zeros(5, dtype=np.float64)
+    values = np.zeros(6, dtype=np.float64)
     status = _simple_main.invariants_from_state_flat(_tracer, position, values)
     return {
         "h0": float(values[0]),
@@ -748,6 +748,7 @@ def invariants_from_state(position: np.ndarray) -> dict[str, float | int | str]:
         "psi_star": float(values[2]),
         "axis_flux_native": float(values[3]),
         "outward_sign": float(values[4]),
+        "edge_flux_native": float(values[5]),
         "status": int(status),
         "p_phi_convention": "axis-zero, outward-positive flux gauge for (c/q)P_phi",
         "time_convention": "tau=v0*t",

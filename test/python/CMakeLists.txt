@@ -48,6 +48,10 @@ add_simple_api_test(init_parameters TestInitialization::test_init_with_parameter
 add_simple_api_test(init_namelist_case TestInitialization::test_init_accepts_namelist_case)
 add_simple_api_test(init_repeated TestInitialization::test_multiple_reinitializations)
 add_chartmap_api_test(init_chartmap TestInitialization::test_chartmap_init_selects_boozer_field)
+add_chartmap_api_test(invariant_chartmap_flux
+    TestInitialization::test_chartmap_invariants_report_lcfs_flux)
+set_tests_properties(test_simple_api_invariant_chartmap_flux PROPERTIES
+    LABELS "python;simple_api;chartmap")
 add_simple_api_test(integrator_alias TestIntegratorSelection::test_alias_resolution)
 add_simple_api_test(sampler_shape TestSampling::test_surface_sampler_shape)
 add_simple_api_test(sampler_sizes TestSampling::test_sample_different_sizes)

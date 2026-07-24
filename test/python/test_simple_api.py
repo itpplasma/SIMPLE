@@ -6,8 +6,10 @@ Tests for the cleaned SIMPLE Python API.
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
+import netCDF4 as nc
 import numpy as np
 import pytest
 
@@ -105,6 +107,35 @@ class TestInitialization:
             pysimple.FREQ_ORBIT_LOST,
             pysimple.FREQ_MAX_STEPS,
         }
+
+    def test_chartmap_invariants_report_lcfs_flux(self, tmp_path: Path):
+        """Invariant metadata must use the LCFS, not an extended map boundary."""
+        source = Path(os.environ["SIMPLE_TEST_CHARTMAP"])
+        chartmap = tmp_path / "extended_chartmap.nc"
+        shutil.copy2(source, chartmap)
+        rho_lcfs = 0.8
+        with nc.Dataset(chartmap, "r+") as dataset:
+            dataset.setncattr("rho_lcfs", rho_lcfs)
+            s = np.asarray(dataset["s"][:])
+            a_phi = np.asarray(dataset["A_phi"][:])
+
+        a_phi_slope = (a_phi[-1] - a_phi[0]) / (s[-1] - s[0])
+        expected_edge_flux = a_phi_slope * rho_lcfs**2
+
+        pysimple.init(
+            str(chartmap),
+            deterministic=True,
+            ntestpart=1,
+            npoiper2=64,
+            trace_time=1e-4,
+        )
+        invariant = pysimple.invariants_from_state(
+            np.array([0.4, 0.7, 0.1, 1.0, 0.1])
+        )
+
+        assert invariant["edge_flux_native"] == pytest.approx(
+            expected_edge_flux, rel=1e-10
+        )
 
 
 class TestIntegratorSelection:

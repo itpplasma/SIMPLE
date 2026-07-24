@@ -119,6 +119,12 @@ axis-zero and outward-positive for the magnetic-flux contribution; the total
 also contains parallel momentum. It is not the VMEC radial label ``s`` and it
 is not SIMPLE's private symplectic fourth coordinate.
 
+``invariants_from_state`` also returns ``axis_flux_native`` and
+``edge_flux_native``, the native ``A_phi`` values at the magnetic axis and
+equilibrium edge (LCFS). Their absolute difference is the poloidal-flux span.
+For an extended chartmap, the edge value is evaluated at ``rho_lcfs``, not at
+the outer computational boundary.
+
 The inverse is defined for axisymmetric fields. It uses the section
 ``grad(psi) x grad(B) = 0`` and returns all regular roots on both
 ``sign(v_parallel)`` branches. The rows in ``starts["states"]`` are standard
