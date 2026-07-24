@@ -1259,6 +1259,11 @@ p_phi = epsilon_psi (psi_star_native - A_phi_axis),
 epsilon_psi = sign(A_phi_edge - A_phi_axis).
 ```
 
+The Python `invariants_from_state` result exposes these native equilibrium
+values as `axis_flux_native` and `edge_flux_native`. The latter is evaluated
+at the LCFS; for an extended chartmap this is its `rho_lcfs`, not the outer
+computational boundary.
+
 The magnetic-flux contribution is therefore zero on axis and positive in the
 equilibrium's outward flux direction. The total `p_phi` also contains the
 parallel-momentum term and need not vanish on axis. Raw POTATO `psi_star`

@@ -9,8 +9,8 @@ module simple_main
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
     use magfie_sub, only: ALBERT
     use samplers, only: sample
-    use field_can_mod, only: field_can_t, integ_to_ref, ref_to_integ, &
-        init_field_can
+    use field_can_mod, only: field_can_t, evaluate_field => evaluate, &
+        integ_to_ref, ref_to_integ, init_field_can
     use callback, only: output_orbits_macrostep
     use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
         grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
@@ -59,6 +59,7 @@ module simple_main
     logical, save :: wall_enabled = .false.
     integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
+    real(dp), save :: invariant_edge_radius = 1.0_dp
     type(stl_wall_t), save :: wall
 
     integer, parameter :: RK_RECOVERY_GENERIC = 1
@@ -447,6 +448,7 @@ contains
         self%integmode = aintegmode
         map_boundary_exit_code = ORBIT_EXIT_LCFS
         chart_boundary_kind_effective = 'lcfs'
+        invariant_edge_radius = 1.0_dp
 
         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
@@ -458,6 +460,7 @@ contains
 
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
+            invariant_edge_radius = 0.5_dp
             self%fper = twopi ! Full torus for analytic tokamak
             call print_phase_time('TEST field mode - no input files required')
         else if (use_spectre) then
@@ -679,6 +682,9 @@ contains
                 map_boundary_exit_code = ORBIT_EXIT_NUMERICAL_DOMAIN
                 chart_boundary_kind_effective = 'domain'
             end select
+            if (meta%rho_lcfs > 0.0_dp .and. meta%rho_lcfs <= 1.0_dp) then
+                invariant_edge_radius = meta%rho_lcfs**2
+            end if
         class default
             if (len_trim(wall_input) == 0) return
             error stop "wall_input requires chartmap reference coordinates"
@@ -1191,10 +1197,11 @@ contains
 
         type(tracer_t), intent(in) :: anorb
         real(dp), intent(in) :: initial_state(5)
-        real(dp), intent(out) :: values(5)
+        real(dp), intent(out) :: values(6)
         integer, intent(out) :: status
 
         type(guiding_center_invariants_t) :: invariants
+        type(tracer_t) :: edge_field
         real(dp) :: state(5)
 
         call ref_to_integ(initial_state(1:3), state(1:3))
@@ -1202,6 +1209,10 @@ contains
         call invariants_from_state(anorb, state, invariants, status)
         values(1:3) = [invariants%h0, invariants%j_perp, invariants%p_phi]
         call invariant_flux_convention(anorb, values(4), values(5))
+        edge_field = anorb
+        call evaluate_field(edge_field%f, invariant_edge_radius, 0.0_dp, &
+            0.0_dp, 0)
+        values(6) = edge_field%f%Aph
     end subroutine invariants_from_state_flat
 
     subroutine potato_invariants_to_simple_flat(potato_values, psi_axis, &
