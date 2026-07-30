@@ -53,6 +53,8 @@ jobs:
             pkg-config \
             libgsl-dev \
             libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
             libopenblas-dev \
             liblapack-dev \
             openmpi-bin \
@@ -163,6 +165,8 @@ jobs:
             libboost-dev \
             libgmp-dev \
             libmpfr-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
             libopenblas-dev \
             liblapack-dev \
             libopenmpi-dev \
