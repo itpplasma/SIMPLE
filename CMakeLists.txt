@@ -124,13 +124,6 @@ endif()
 
 set(CMAKE_MACOSX_RPATH 1)
 
-# NetCDF and HDF5 are resolved by libneo, not here. libneo probes whether the
-# system libraries are ABI-compatible with the active Fortran compiler and, when
-# they are not (notably nvfortran, whose .mod format differs from gfortran's),
-# builds a matching HDF5 + NetCDF stack from source. It exports the result as
-# NETCDFINCLUDE_DIR and NETCDF_FLIBS_LIST. SIMPLE consumes those after
-# find_or_fetch(libneo) below, so one toolchain decision drives both projects.
-
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # Use NVHPC-provided BLAS/LAPACK to avoid pulling in libgomp via system OpenBLAS.
     get_filename_component(_nvhpc_bin_dir "${CMAKE_Fortran_COMPILER}" DIRECTORY)
@@ -184,20 +177,10 @@ if(SIMPLE_DETERMINISTIC_FP)
 endif()
 find_or_fetch(libneo)
 
-# Consume the scientific-I/O target selected by libneo. The variable fallback
-# keeps released libneo revisions usable while the Fortio migration lands.
-if(TARGET fortio::fortio)
-    link_libraries(fortio::fortio)
-else()
-    if(NOT DEFINED NETCDFINCLUDE_DIR OR NETCDFINCLUDE_DIR STREQUAL "")
-        message(FATAL_ERROR "libneo exported neither Fortio nor NetCDF")
-    endif()
-    include_directories(${NETCDFINCLUDE_DIR})
-    if(DEFINED NETCDFLIB_DIR AND NOT NETCDFLIB_DIR STREQUAL "")
-        link_directories(${NETCDFLIB_DIR})
-    endif()
-    link_libraries(${NETCDF_FLIBS_LIST})
+if(NOT TARGET fortio::fortio)
+    message(FATAL_ERROR "libneo did not provide its required Fortio target")
 endif()
+link_libraries(fortio::fortio)
 
 # CGAL (optional, for STL wall intersections)
 # CGAL 5.x is header-only, fetch headers via FetchContent (don't run CGAL's CMake)

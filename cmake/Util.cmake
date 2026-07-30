@@ -63,7 +63,7 @@ function(find_or_fetch DEPENDENCY)
 
     if(_use_local)
         if("${_dep_lower}" STREQUAL "libneo")
-            set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+            set(LIBNEO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
         endif()
         add_subdirectory("${_source_dir}" "${CMAKE_CURRENT_BINARY_DIR}/${_dep_lower}" EXCLUDE_FROM_ALL)
         return()
@@ -95,10 +95,10 @@ function(find_or_fetch DEPENDENCY)
         endif()
 
         if(_branch STREQUAL "")
-            get_branch_or_main(${_repo_url} _branch)
+            set(_branch "afa0e4243e5e3f3e41110960f19cd0f340834988")
         endif()
 
-        set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+        set(LIBNEO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 
         FetchContent_Declare(${_dep_lower}
             GIT_REPOSITORY ${_repo_url}
