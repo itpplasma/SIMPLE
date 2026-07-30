@@ -99,7 +99,16 @@ jobs:
 
       - name: Install Python package
         if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
-        run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
+        run: |
+          REF="${{ inputs.libneo_ref }}"
+          if [ -n "$REF" ]; then
+            python -m pip install -e . --no-build-isolation \
+              -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON \
+              -Ccmake.define.LIBNEO_REF="$REF"
+          else
+            python -m pip install -e . --no-build-isolation \
+              -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
+          fi
 
       - name: Run Slow Tests (Python)
         if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
@@ -109,7 +118,13 @@ jobs:
 
       - name: Run Regression Tests (Golden Record)
         if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
-        run: make test-regression
+        run: |
+          REF="${{ inputs.libneo_ref }}"
+          if [ -n "$REF" ]; then
+            make test-regression LIBNEO_REF="$REF"
+          else
+            make test-regression
+          fi
 
       - name: Upload test results
         if: always()
