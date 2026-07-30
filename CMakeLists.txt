@@ -184,23 +184,20 @@ if(SIMPLE_DETERMINISTIC_FP)
 endif()
 find_or_fetch(libneo)
 
-# Consume the NetCDF stack libneo resolved (see comment near the top). In the
-# fetched case NETCDF_FLIBS_LIST is the netcdf::netcdff imported target, which
-# carries its include dir and the transitive HDF5 link; in the system case it is
-# the -lnetcdff/-lnetcdf flag list with NETCDFLIB_DIR set. Both forms work with
-# include_directories/link_libraries.
-if(NOT DEFINED NETCDFINCLUDE_DIR OR NETCDFINCLUDE_DIR STREQUAL "")
-    message(FATAL_ERROR
-        "libneo did not export NetCDF (NETCDFINCLUDE_DIR is unset). "
-        "Check libneo's dependency detection (cmake/DetectDependencies.cmake).")
+# Consume the scientific-I/O target selected by libneo. The variable fallback
+# keeps released libneo revisions usable while the Fortio migration lands.
+if(TARGET fortio::fortio)
+    link_libraries(fortio::fortio)
+else()
+    if(NOT DEFINED NETCDFINCLUDE_DIR OR NETCDFINCLUDE_DIR STREQUAL "")
+        message(FATAL_ERROR "libneo exported neither Fortio nor NetCDF")
+    endif()
+    include_directories(${NETCDFINCLUDE_DIR})
+    if(DEFINED NETCDFLIB_DIR AND NOT NETCDFLIB_DIR STREQUAL "")
+        link_directories(${NETCDFLIB_DIR})
+    endif()
+    link_libraries(${NETCDF_FLIBS_LIST})
 endif()
-message(STATUS "NetCDF (via libneo) include: ${NETCDFINCLUDE_DIR}")
-message(STATUS "NetCDF (via libneo) libs: ${NETCDF_FLIBS_LIST}")
-include_directories(${NETCDFINCLUDE_DIR})
-if(DEFINED NETCDFLIB_DIR AND NOT NETCDFLIB_DIR STREQUAL "")
-    link_directories(${NETCDFLIB_DIR})
-endif()
-link_libraries(${NETCDF_FLIBS_LIST})
 
 # CGAL (optional, for STL wall intersections)
 # CGAL 5.x is header-only, fetch headers via FetchContent (don't run CGAL's CMake)
