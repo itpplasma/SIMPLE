@@ -52,10 +52,7 @@ jobs:
             ninja-build \
             pkg-config \
             libgsl-dev \
-            libhdf5-dev \
             libfftw3-dev \
-            libnetcdf-dev \
-            libnetcdff-dev \
             libopenblas-dev \
             liblapack-dev \
             openmpi-bin \
@@ -161,14 +158,11 @@ jobs:
             ninja-build \
             pkg-config \
             libgsl-dev \
-            libhdf5-dev \
             libfftw3-dev \
             libcgal-dev \
             libboost-dev \
             libgmp-dev \
             libmpfr-dev \
-            libnetcdf-dev \
-            libnetcdff-dev \
             libopenblas-dev \
             liblapack-dev \
             libopenmpi-dev \

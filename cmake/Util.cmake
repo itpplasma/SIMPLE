@@ -95,7 +95,7 @@ function(find_or_fetch DEPENDENCY)
         endif()
 
         if(_branch STREQUAL "")
-            get_branch_or_main(${_repo_url} _branch)
+            set(_branch "afa0e4243e5e3f3e41110960f19cd0f340834988")
         endif()
 
         set(LIBNEO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
