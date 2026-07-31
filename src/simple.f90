@@ -30,7 +30,7 @@ public
     real(dp) :: dtau, dtaumin, v0
     integer          :: n_e, n_d
 
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3
+    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3, 20 = Gauss-Radau, 21 = Bulirsch-Stoer
     real(dp) :: relerr
 
     type(field_can_t) :: f

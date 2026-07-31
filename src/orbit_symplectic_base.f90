@@ -19,6 +19,19 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     ! Integration methods
     integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
              MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
+
+    ! High-order explicit methods on the 4D canonical chart, for benchmarking
+    ! against the symplectic schemes above. They integrate the same canonical
+    ! Hamiltonian through the same f_ode right-hand side, so a comparison per
+    ! field evaluation is like for like -- unlike integmode = 0, which runs the
+    ! 5D drift-kinetic form with a different right-hand side and coordinates.
+    !
+    ! RADAU15 is the first-order-system formulation of IAS15 (Rein & Spiegel
+    ! 2015), the strongest published claim that a non-symplectic method beats
+    ! symplectic ones on long integrations. GBS16 is Gragg-Bulirsch-Stoer
+    ! extrapolation, the classical high-accuracy explicit method of celestial
+    ! mechanics.
+    integer, parameter :: RADAU15 = 20, GBS16 = 21
     integer, parameter :: SYMPLECTIC_STEP_OK = 0
     integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
     integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2

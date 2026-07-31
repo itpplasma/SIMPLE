@@ -24,6 +24,14 @@ type(symplectic_integrator_t) :: si
 
 procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
 
+! Step size carried across macro-steps by the adaptive explicit integrators.
+! Without this each macro-step restarts the step-size search from a default
+! guess and spends most of its evaluations re-discovering a step it already
+! knew, which inflates the evaluation count by more than an order of magnitude
+! and would make any cost comparison meaningless.
+real(dp) :: explicit_h_carry = 0d0
+  !$omp threadprivate(explicit_h_carry)
+
 contains
 
   !
@@ -549,5 +557,93 @@ subroutine orbit_timestep_rk45(ierr)
     ktau = ktau+1
   end do
 end subroutine orbit_timestep_rk45
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Adapter from f_ode to fortnum's ode_rhs_t, which carries an optional context
+! argument that this right-hand side does not need.
+subroutine f_ode_fortnum(t, y, dydt, ctx)
+  real(dp), intent(in)  :: t
+  real(dp), intent(in)  :: y(:)
+  real(dp), intent(out) :: dydt(:)
+  class(*), intent(in), optional :: ctx
+
+  call f_ode(t, y, dydt)
+end subroutine f_ode_fortnum
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Gauss-Radau (IAS15-style, 15th order) on the same canonical Hamiltonian the
+! symplectic schemes use.
+subroutine orbit_timestep_radau15(ierr)
+  !
+  use fortnum_ode_gauss_radau, only : ode_integrate_radau
+  use fortnum_ode, only : ode_problem_t, ode_solution_t
+  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
+  integer, intent(out) :: ierr
+  integer :: ktau, nlast
+  type(ode_problem_t) :: problem
+  type(ode_solution_t) :: solution
+  type(fortnum_status_t) :: status
+
+  ierr = 0
+  ktau = 0
+  problem%rhs => f_ode_fortnum
+  problem%rtol = si%rtol
+  problem%atol = si%atol
+  allocate(problem%y0(4))
+  do while(ktau .lt. si%ntau)
+    problem%t0 = ktau*si%dt
+    problem%t1 = (ktau+1)*si%dt
+    problem%y0 = si%z(1:4)
+    problem%h0 = explicit_h_carry
+    call ode_integrate_radau(problem, solution, status)
+    if (status%code /= FORTNUM_OK) then
+      ierr = 1
+      return
+    end if
+    nlast = size(solution%t)
+    si%z(1:4) = solution%y(:, nlast)
+    if (nlast > 1) explicit_h_carry = solution%h(nlast)
+    ktau = ktau+1
+  end do
+end subroutine orbit_timestep_radau15
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Gragg-Bulirsch-Stoer extrapolation on the same canonical Hamiltonian.
+subroutine orbit_timestep_gbs16(ierr)
+  !
+  use fortnum_ode_extrapolation, only : ode_integrate_gbs
+  use fortnum_ode, only : ode_problem_t, ode_solution_t
+  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
+  integer, intent(out) :: ierr
+  integer :: ktau, nlast
+  type(ode_problem_t) :: problem
+  type(ode_solution_t) :: solution
+  type(fortnum_status_t) :: status
+
+  ierr = 0
+  ktau = 0
+  problem%rhs => f_ode_fortnum
+  problem%rtol = si%rtol
+  problem%atol = si%atol
+  allocate(problem%y0(4))
+  do while(ktau .lt. si%ntau)
+    problem%t0 = ktau*si%dt
+    problem%t1 = (ktau+1)*si%dt
+    problem%y0 = si%z(1:4)
+    problem%h0 = explicit_h_carry
+    call ode_integrate_gbs(problem, solution, status)
+    if (status%code /= FORTNUM_OK) then
+      ierr = 1
+      return
+    end if
+    nlast = size(solution%t)
+    si%z(1:4) = solution%y(:, nlast)
+    if (nlast > 1) explicit_h_carry = solution%h(nlast)
+    ktau = ktau+1
+  end do
+end subroutine orbit_timestep_gbs16
 
 end module orbit_symplectic_quasi
