@@ -76,3 +76,4 @@ _skbuild/
 artifacts/plots/
 artifacts/notebooks/
 .venv/
+.sloptools/artifacts/

@@ -15,7 +15,8 @@ program test_fo_boris
   use parmot_mod, only: ro0
   use simple, only: init_params, orbit_timestep_fo_bridge, tracer_t
   use simple_main, only: init_field
-  use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, &
+  use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, fo_step_rkng, &
+    fo_step_rkng_adaptive, &
     fo_energy, fo_mu, fo_to_gc, accept_or_fail, FO_OK, FO_LOCATE_FAIL
   use orbit_fo_field, only: fo_eval_field
   use reference_coordinates, only: ref_coords
@@ -57,6 +58,16 @@ program test_fo_boris
   call run_fo([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.9_dp], ro0_bar, 'passing', nfail)
   call run_fo([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.2_dp], ro0_bar, 'trapped', nfail)
   call run_fo([0.04_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.7_dp], ro0_bar, 'near-axis', nfail)
+
+  ! Runge-Kutta-Nystrom on the same orbits. Full orbit is genuinely
+  ! y'' = f(t,y,y'), so RKNG applies directly with no reformulation -- the one
+  ! place a Nystrom-family method fits SIMPLE without a transplant.
+  call run_fo_rkng([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.9_dp], ro0_bar, 'passing', nfail)
+  call run_fo_rkng([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.2_dp], ro0_bar, 'trapped', nfail)
+  call run_fo_rkng_adaptive([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.9_dp], ro0_bar, &
+                            'passing', nfail)
+  call run_fo_rkng_adaptive([0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.2_dp], ro0_bar, &
+                            'trapped', nfail)
 
   ! A marker exiting the boundary must be located (so the guiding-centre loss test
   ! runs), never turned into a confined fault.
@@ -164,6 +175,146 @@ contains
       print *, 'ok: ', tag
     end if
   end subroutine expect_status
+
+  ! RKNG on the same orbits, gated on ORDER rather than on an energy bound.
+  !
+  ! Comparing RKNG's energy drift against Boris's would be a category error.
+  ! Boris conserves energy structurally -- its magnetic rotation is exact for
+  ! constant B, so the drift is round-off at any step size and says nothing about
+  ! accuracy. For a non-structure-preserving method the energy error IS the
+  ! truncation error, so the meaningful check is that it falls at the design rate
+  ! when the step is refined. In a static magnetic field the exact flow conserves
+  ! energy identically, which makes this an independent oracle: no reference
+  ! trajectory and no recorded output are involved.
+  !
+  ! The tableau is order 3, so halving the step should cut the energy error by
+  ! about 8. The gate is a rate above 2.5 across the refinement, loose enough for
+  ! the pre-asymptotic wobble and tight enough to fail an order defect.
+  subroutine run_fo_rkng(z0, ro0_bar, tag, nfail)
+    real(dp), intent(in) :: z0(5), ro0_bar
+    character(*), intent(in) :: tag
+    integer, intent(inout) :: nfail
+    real(dp) :: err(3), rate
+    integer :: k, nsub(3)
+
+    nsub = [1, 2, 4]
+    do k = 1, 3
+      call rkng_energy_error(z0, ro0_bar, nsub(k), err(k), nfail, tag)
+    end do
+
+    rate = -1.0_dp
+    if (err(3) > 0.0_dp .and. err(1) > 0.0_dp) &
+      rate = log(err(1)/err(3))/log(4.0_dp)
+
+    print '(a,a,a,es10.2,a,es10.2,a,es10.2,a,f6.2)', '  rkng ', tag, &
+      ' |dE/E0| at h, h/2, h/4 = ', err(1), ', ', err(2), ', ', err(3), &
+      '   observed order = ', rate
+    call check('rkng '//tag//' energy error converges at order >= 2.5', &
+               rate > 2.5_dp, nfail)
+  end subroutine run_fo_rkng
+
+  subroutine rkng_energy_error(z0, ro0_bar, nsub, emax, nfail, tag)
+    real(dp), intent(in) :: z0(5), ro0_bar
+    integer, intent(in) :: nsub
+    real(dp), intent(out) :: emax
+    integer, intent(inout) :: nfail
+    character(*), intent(in) :: tag
+    type(fo_state_t) :: st
+    real(dp) :: bmod, mu, vpar_bar, vperp0, E0, E
+    real(dp) :: s, th, ph, vpar
+    real(dp) :: Acov(3), dA(3,3), dBmod(3), hcov(3)
+    integer :: it, ierr, nstep, lost
+
+    call fo_eval_field([sqrt(z0(1)), z0(2), z0(3)], Acov, dA, bmod, dBmod, hcov)
+    mu = 0.5_dp*z0(4)**2*(1.0_dp - z0(5)**2)/bmod*2.0_dp
+    vpar_bar = z0(4)*z0(5)*sqrt(2.0_dp)
+    vperp0 = sqrt(max(2.0_dp*mu*bmod, 0.0_dp))
+
+    nstep = 2000
+    call fo_init(st, z0(1:3), vpar_bar, vperp0, mu, 1.0_dp, &
+                 1.0_dp, dtaumin/sqrt(2.0_dp), ro0_bar, z0(4))
+    E0 = fo_energy(st); emax = 0.0_dp; lost = 0
+    do it = 1, nstep
+      call fo_step_rkng(st, ierr, nsub)
+      if (ierr /= 0) then; lost = 1; exit; end if
+      call fo_to_gc(st, s, th, ph, vpar, ierr)
+      if (ierr /= 0) then; lost = 1; exit; end if
+      if (s <= 0.0_dp .or. s >= 1.0_dp) exit
+      E = fo_energy(st)
+      emax = max(emax, abs((E - E0)/E0))
+    end do
+    call check('rkng '//tag//' step never failed', lost == 0, nfail)
+  end subroutine rkng_energy_error
+
+  ! Error control has to make the achieved error track the REQUESTED tolerance,
+  ! which a fixed step cannot do and a broken embedded estimate would not do
+  ! either -- it would still give small errors at small rtol. So the gate is the
+  ! log-log slope of energy drift against rtol, which must be near 1, plus the
+  ! requirement that a tighter tolerance actually costs more force evaluations.
+  !
+  ! The oracle is exact: a static magnetic force does no work, so every part of
+  ! the energy drift is truncation error.
+  subroutine run_fo_rkng_adaptive(z0, ro0_bar, tag, nfail)
+    real(dp), intent(in) :: z0(5), ro0_bar
+    character(*), intent(in) :: tag
+    integer, intent(inout) :: nfail
+    real(dp) :: tols(3), err(3), slope
+    integer :: k, nfev(3)
+
+    tols = [1.0e-5_dp, 1.0e-7_dp, 1.0e-9_dp]
+    do k = 1, 3
+      call rkng_adaptive_energy_error(z0, ro0_bar, tols(k), err(k), nfev(k), &
+                                      nfail, tag)
+    end do
+
+    slope = -1.0_dp
+    if (err(3) > 0.0_dp .and. err(1) > 0.0_dp) &
+      slope = log10(err(1)/err(3))/log10(tols(1)/tols(3))
+
+    print '(a,a,a,es10.2,a,es10.2,a,es10.2,a,f6.2,a,i0)', '  rkng-adaptive ', &
+      tag, ' |dE/E0| at rtol 1e-5, 1e-7, 1e-9 = ', err(1), ', ', err(2), ', ', &
+      err(3), '   err/tol slope = ', slope, '   nfev = ', nfev(3)
+    call check('rkng-adaptive '//tag//' error tracks the requested tolerance', &
+               slope > 0.6_dp .and. slope < 1.4_dp, nfail)
+    call check('rkng-adaptive '//tag//' tighter tolerance costs more work', &
+               nfev(3) > nfev(1), nfail)
+  end subroutine run_fo_rkng_adaptive
+
+  subroutine rkng_adaptive_energy_error(z0, ro0_bar, rtol, emax, nfev_total, &
+                                        nfail, tag)
+    real(dp), intent(in) :: z0(5), ro0_bar, rtol
+    real(dp), intent(out) :: emax
+    integer, intent(out) :: nfev_total
+    integer, intent(inout) :: nfail
+    character(*), intent(in) :: tag
+    type(fo_state_t) :: st
+    real(dp) :: bmod, mu, vpar_bar, vperp0, E0, E, h_carry
+    real(dp) :: s, th, ph, vpar
+    real(dp) :: Acov(3), dA(3,3), dBmod(3), hcov(3)
+    integer :: it, ierr, nstep, lost, nfev
+
+    call fo_eval_field([sqrt(z0(1)), z0(2), z0(3)], Acov, dA, bmod, dBmod, hcov)
+    mu = 0.5_dp*z0(4)**2*(1.0_dp - z0(5)**2)/bmod*2.0_dp
+    vpar_bar = z0(4)*z0(5)*sqrt(2.0_dp)
+    vperp0 = sqrt(max(2.0_dp*mu*bmod, 0.0_dp))
+
+    nstep = 2000
+    call fo_init(st, z0(1:3), vpar_bar, vperp0, mu, 1.0_dp, &
+                 1.0_dp, dtaumin/sqrt(2.0_dp), ro0_bar, z0(4))
+    E0 = fo_energy(st); emax = 0.0_dp; lost = 0
+    h_carry = 0.0_dp; nfev_total = 0
+    do it = 1, nstep
+      call fo_step_rkng_adaptive(st, rtol, rtol*1.0e-3_dp, h_carry, ierr, nfev)
+      nfev_total = nfev_total + nfev
+      if (ierr /= 0) then; lost = 1; exit; end if
+      call fo_to_gc(st, s, th, ph, vpar, ierr)
+      if (ierr /= 0) then; lost = 1; exit; end if
+      if (s <= 0.0_dp .or. s >= 1.0_dp) exit
+      E = fo_energy(st)
+      emax = max(emax, abs((E - E0)/E0))
+    end do
+    call check('rkng-adaptive '//tag//' step never failed', lost == 0, nfail)
+  end subroutine rkng_adaptive_energy_error
 
   subroutine run_fo(z0, ro0_bar, tag, nfail)
     real(dp), intent(in) :: z0(5), ro0_bar

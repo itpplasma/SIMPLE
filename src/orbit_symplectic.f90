@@ -6,7 +6,7 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
-  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
+  LOBATTO3, RADAU15, GBS16, CASHKARP45, TDRK24, TDRK24A, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
   coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
   SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
@@ -15,6 +15,10 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   boundary_event_radial_tolerance, symplectic_newton_warning_mode
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
+  orbit_timestep_radau15, orbit_timestep_gbs16, orbit_timestep_tdrk24, &
+  orbit_timestep_tdrk24a, orbit_timestep_cashkarp45, &
+  reset_explicit_step_carry, &
+  si_quasi => si, f_quasi => f, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
@@ -231,6 +235,7 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   si%atol = 1d-15
   si%rtol = rtol_init
+  call reset_explicit_step_carry
 
   si%ntau = ntau
   si%dt = dt
@@ -273,6 +278,21 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
     case (LOBATTO3)
       raw_timestep_sympl => orbit_timestep_sympl_lobatto3
       orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
+    case (RADAU15)
+      raw_timestep_sympl => orbit_timestep_sympl_radau15
+      orbit_timestep_quasi => orbit_timestep_radau15
+    case (GBS16)
+      raw_timestep_sympl => orbit_timestep_sympl_gbs16
+      orbit_timestep_quasi => orbit_timestep_gbs16
+    case (TDRK24)
+      raw_timestep_sympl => orbit_timestep_sympl_tdrk24
+      orbit_timestep_quasi => orbit_timestep_tdrk24
+    case (TDRK24A)
+      raw_timestep_sympl => orbit_timestep_sympl_tdrk24a
+      orbit_timestep_quasi => orbit_timestep_tdrk24a
+    case (CASHKARP45)
+      raw_timestep_sympl => orbit_timestep_sympl_cashkarp45
+      orbit_timestep_quasi => orbit_timestep_cashkarp45
     case default
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
@@ -283,6 +303,75 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
     orbit_timestep_sympl => raw_timestep_sympl
   end if
 end subroutine orbit_sympl_init
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Bridges the explicit high-order steppers, which live on the quasi path and
+! read the module-level state there, into the symplectic stepper signature the
+! driver calls. The quasi state is threadprivate, so this is thread safe.
+!
+! The copies are the price of reusing f_ode unchanged, which is what keeps the
+! comparison honest: these methods integrate exactly the same right-hand side
+! as the symplectic schemes, through the same field evaluations.
+recursive subroutine orbit_timestep_sympl_radau15(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  si_quasi = si
+  f_quasi = f
+  call orbit_timestep_radau15(ierr)
+  si = si_quasi
+  f = f_quasi
+end subroutine orbit_timestep_sympl_radau15
+
+recursive subroutine orbit_timestep_sympl_gbs16(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  si_quasi = si
+  f_quasi = f
+  call orbit_timestep_gbs16(ierr)
+  si = si_quasi
+  f = f_quasi
+end subroutine orbit_timestep_sympl_gbs16
+
+recursive subroutine orbit_timestep_sympl_tdrk24(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  si_quasi = si
+  f_quasi = f
+  call orbit_timestep_tdrk24(ierr)
+  si = si_quasi
+  f = f_quasi
+end subroutine orbit_timestep_sympl_tdrk24
+
+recursive subroutine orbit_timestep_sympl_tdrk24a(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  si_quasi = si
+  f_quasi = f
+  call orbit_timestep_tdrk24a(ierr)
+  si = si_quasi
+  f = f_quasi
+end subroutine orbit_timestep_sympl_tdrk24a
+
+recursive subroutine orbit_timestep_sympl_cashkarp45(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
+
+  si_quasi = si
+  f_quasi = f
+  call orbit_timestep_cashkarp45(ierr)
+  si = si_quasi
+  f = f_quasi
+end subroutine orbit_timestep_sympl_cashkarp45
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
