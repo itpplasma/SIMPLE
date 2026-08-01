@@ -182,6 +182,32 @@ if(SIMPLE_DETERMINISTIC_FP)
     set(LIBNEO_DETERMINISTIC_FP ON CACHE BOOL
         "Use deterministic floating-point options in libneo" FORCE)
 endif()
+
+# fortnum provides the multidimensional root finder (multiroot_hybrids) that
+# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi, and the ODE
+# integrators behind the explicit integmodes.
+#
+# This must be declared BEFORE libneo. libneo declares fortnum too, and
+# FetchContent honours the first declaration it sees and silently discards
+# later ones -- so with libneo first, the pin here has no effect and the build
+# gets whatever revision libneo happens to track. The failure is invisible in a
+# working-tree build, where find_or_fetch(libneo) resolves to a local checkout
+# that is usually already up to date, and appears only in a clean clone, as a
+# missing .mod file for whichever module SIMPLE needs and libneo's fortnum
+# lacks.
+#
+# The guard stays for the case where an enclosing project already provides
+# fortnum: there, that one wins deliberately.
+if(NOT TARGET fortnum)
+    include(FetchContent)
+    FetchContent_Declare(
+        fortnum
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+        GIT_TAG a14192874195b8d22a90f0c034ec4c56772be7aa
+    )
+    FetchContent_MakeAvailable(fortnum)
+endif()
+
 find_or_fetch(libneo)
 
 # Consume the scientific-I/O target selected by libneo. The variable fallback
@@ -237,18 +263,6 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(USE_FORTPLOT)
 else()
     message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")
-endif()
-
-# fortnum provides the multidimensional root finder (multiroot_hybrids) that
-# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi.
-if(NOT TARGET fortnum)
-    include(FetchContent)
-    FetchContent_Declare(
-        fortnum
-        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        GIT_TAG a14192874195b8d22a90f0c034ec4c56772be7aa
-    )
-    FetchContent_MakeAvailable(fortnum)
 endif()
 
 if (SIMPLE_TESTING)

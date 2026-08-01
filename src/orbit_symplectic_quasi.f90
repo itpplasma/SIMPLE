@@ -607,7 +607,27 @@ subroutine orbit_timestep_radau15(ierr)
     if (nlast > 1) explicit_h_carry = solution%h(nlast)
     ktau = ktau+1
   end do
+  call sync_field_to_state
 end subroutine orbit_timestep_radau15
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Re-evaluate the field at the converged end-of-step state.
+!
+! Only z(1:4) are integrated; the caller reconstructs the parallel velocity as
+! z(5) = f%vpar/(pabs*sqrt(2)), reading f%vpar off the module-global field_can_t
+! that f_ode fills as a side effect. After a multi-stage step that side effect
+! belongs to the last interior stage node, not to the end of the step, so z(5)
+! carries an error the tolerance cannot remove: measured on the sweep,
+! components 1-4 of the final state converged to 5e-9 while z(5) stalled at
+! 3.3e-4 and got no better from rtol 1e-8 to 1e-10.
+!
+! One evaluation per macro-step, against the hundreds a step already costs.
+subroutine sync_field_to_state
+  real(dp) :: zdot_discard(4)
+
+  call f_ode(0d0, si%z(1:4), zdot_discard)
+end subroutine sync_field_to_state
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -644,6 +664,7 @@ subroutine orbit_timestep_gbs16(ierr)
     if (nlast > 1) explicit_h_carry = solution%h(nlast)
     ktau = ktau+1
   end do
+  call sync_field_to_state
 end subroutine orbit_timestep_gbs16
 
 end module orbit_symplectic_quasi
