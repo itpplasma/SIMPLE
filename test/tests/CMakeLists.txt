@@ -426,6 +426,16 @@ target_link_libraries(test_orbits.x simple)
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
 
+# Explicit high-order integmodes on the 4D canonical chart: energy drift must
+# respond to the tolerance, and the four adaptive methods must agree. Uses the
+# analytic test field, so it needs no VMEC file.
+add_executable(test_explicit_integmodes.x test_explicit_integmodes.f90)
+target_link_libraries(test_explicit_integmodes.x simple)
+add_test(NAME test_explicit_integmodes COMMAND test_explicit_integmodes.x)
+set_tests_properties(test_explicit_integmodes PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
+
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)

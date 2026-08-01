@@ -30,10 +30,20 @@ procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
 ! guess and spends most of its evaluations re-discovering a step it already
 ! knew, which inflates the evaluation count by more than an order of magnitude
 ! and would make any cost comparison meaningless.
+!
+! The carry belongs to one orbit, not to the thread: leaving it set when the
+! next orbit starts makes that orbit's first macro-step depend on which orbit
+! the thread happened to run before it, so the same particle gives different
+! evaluation counts (and, through the controller's history, slightly different
+! trajectories) depending on scheduling. orbit_sympl_init resets it.
 real(dp) :: explicit_h_carry = 0d0
   !$omp threadprivate(explicit_h_carry)
 
 contains
+
+subroutine reset_explicit_step_carry
+  explicit_h_carry = 0d0
+end subroutine reset_explicit_step_carry
 
   !
   ! Wrapper routines for ODEPACK
@@ -825,5 +835,92 @@ subroutine orbit_timestep_tdrk24(ierr)
   end do
   call sync_field_to_state
 end subroutine orbit_timestep_tdrk24
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Two-derivative Runge-Kutta with error control: the same method as
+! orbit_timestep_tdrk24, driven by a tolerance instead of a step count.
+!
+! The embedded estimate needs the three-stage order-4 tableau. The two-stage
+! one, which orbit_timestep_tdrk24 uses, cannot carry one: with c = (0, 1/2)
+! the order-3 conditions already force the order-4 weights, so the two
+! solutions coincide and their difference is identically zero. One extra G
+! evaluation per step buys the estimate.
+!
+! Both modes are kept. Fixed step is what makes TDRK comparable to the
+! symplectic schemes at matched resolution; tolerance control is what makes it
+! comparable to Gauss-Radau, Bulirsch-Stoer and Cash-Karp at matched accuracy.
+subroutine orbit_timestep_tdrk24a(ierr)
+  !
+  use fortnum_ode_tdrk, only : tdrk_integrate_adaptive
+  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
+  integer, intent(out) :: ierr
+  integer :: ktau, nfev_f, nfev_g, naccept, nreject
+  real(dp) :: yend(4), hlast
+  type(fortnum_status_t) :: status
+
+  ierr = 0
+  ktau = 0
+  do while(ktau .lt. si%ntau)
+    call tdrk_integrate_adaptive(f_ode_fortnum, g_ode_fortnum, &
+      ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), si%rtol, si%atol, &
+      explicit_h_carry, yend, hlast, nfev_f, nfev_g, naccept, nreject, status)
+    if (status%code /= FORTNUM_OK) then
+      ierr = 1
+      return
+    end if
+    si%z(1:4) = yend
+    explicit_h_carry = hlast
+    ktau = ktau+1
+  end do
+  call sync_field_to_state
+end subroutine orbit_timestep_tdrk24a
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Cash-Karp RK5(4) on the 4D canonical chart.
+!
+! integmode = 0 already runs a Cash-Karp, but on the 5D drift-kinetic form with
+! a different right-hand side and different coordinates, so its error and its
+! field-evaluation count are not commensurable with the methods above. This
+! mode puts the classical adaptive workhorse on exactly the same f_ode as the
+! symplectic schemes, Gauss-Radau, Bulirsch-Stoer and TDRK, which is what makes
+! the work-precision comparison a comparison of methods rather than of
+! formulations.
+subroutine orbit_timestep_cashkarp45(ierr)
+  !
+  use fortnum_ode, only : ode_integrate, ode_problem_t, ode_workspace_t, &
+    ode_solution_t
+  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
+  integer, intent(out) :: ierr
+  integer :: ktau, nlast
+  type(ode_problem_t) :: problem
+  type(ode_workspace_t) :: workspace
+  type(ode_solution_t) :: solution
+  type(fortnum_status_t) :: status
+
+  ierr = 0
+  ktau = 0
+  problem%rhs => f_ode_fortnum
+  problem%rtol = si%rtol
+  problem%atol = si%atol
+  allocate(problem%y0(4))
+  do while(ktau .lt. si%ntau)
+    problem%t0 = ktau*si%dt
+    problem%t1 = (ktau+1)*si%dt
+    problem%y0 = si%z(1:4)
+    problem%h0 = explicit_h_carry
+    call ode_integrate(problem, workspace, solution, status)
+    if (status%code /= FORTNUM_OK) then
+      ierr = 1
+      return
+    end if
+    nlast = solution%nsteps + 1
+    si%z(1:4) = solution%y(:, nlast)
+    if (nlast > 1) explicit_h_carry = solution%h(nlast)
+    ktau = ktau+1
+  end do
+  call sync_field_to_state
+end subroutine orbit_timestep_cashkarp45
 
 end module orbit_symplectic_quasi

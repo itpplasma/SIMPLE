@@ -48,7 +48,8 @@ module orbit_fo_boris
   integer, parameter, public :: FO_OK = 0, FO_LOSS = 1, FO_LOCATE_FAIL = 2
 
   public :: fo_state_t, fo_init, fo_init_reference, fo_step, fo_energy, &
-    fo_mu, fo_to_gc, fo_to_reference_gc, accept_or_fail, fo_step_rkng
+    fo_mu, fo_to_gc, fo_to_reference_gc, accept_or_fail, fo_step_rkng, &
+    fo_step_rkng_adaptive
 
 
   type :: fo_state_t
@@ -443,6 +444,50 @@ contains
     st%u = rkng_st%u
     status = FO_OK
   end subroutine fo_step_rkng
+
+  ! The same RKNG method under tolerance control rather than a fixed substep
+  ! count. rtol/atol replace nsub as the accuracy knob, which is what lets the
+  ! full-orbit arena be swept the same way the guiding-centre one is.
+  !
+  ! h_carry passes the accepted step size from one macro-step to the next: a
+  ! gyro-orbit's timescale barely changes between steps, so restarting the
+  ! controller from scratch every dt would waste the rejections it already paid
+  ! for. Pass 0 on the first call and feed the returned value back afterwards.
+  subroutine fo_step_rkng_adaptive(st, rtol, atol, h_carry, status, nfev)
+    use fortnum_ode_tdrk, only: rkng_integrate_adaptive
+    use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+    type(fo_state_t), intent(inout) :: st
+    real(dp), intent(in) :: rtol, atol
+    real(dp), intent(inout) :: h_carry
+    integer, intent(out) :: status
+    integer, intent(out), optional :: nfev
+    real(dp) :: yend(3), ypend(3), hlast
+    integer :: nf, naccept, nreject
+    type(fortnum_status_t) :: fstat
+
+    rkng_st = st
+    rkng_status = FO_OK
+
+    call rkng_integrate_adaptive(fo_rkng_force, 0.0_dp, st%dt, st%x, st%v, &
+      rtol, atol, h_carry, yend, ypend, hlast, nf, naccept, nreject, fstat)
+
+    if (present(nfev)) nfev = nf
+
+    if (rkng_status /= FO_OK) then
+      status = rkng_status        ! leave st at the last resolved state
+      return
+    end if
+    if (fstat%code /= FORTNUM_OK) then
+      status = FO_LOCATE_FAIL
+      return
+    end if
+
+    st%x = yend
+    st%v = ypend
+    st%u = rkng_st%u
+    h_carry = hlast
+    status = FO_OK
+  end subroutine fo_step_rkng_adaptive
 
   subroutine cart_field(x, u_guess, Bvec, Bmod, gradB, u_out, status, &
       reference_field)
