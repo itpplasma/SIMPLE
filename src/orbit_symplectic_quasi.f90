@@ -80,6 +80,19 @@ subroutine explicit_step_finish(h_entry, ierr)
   real(dp), intent(in) :: h_entry
   integer, intent(out) :: ierr
 
+  ! A non-finite state has to be caught before the comparisons below, because
+  ! every comparison against NaN is false: NaN > sympl_rmax does not fire, so a
+  ! NaN orbit would be waved through as a good step and reported as confined.
+  ! The adaptive drivers usually fail first -- a NaN error norm never satisfies
+  ! err <= 1, so the step is rejected until the size underflows -- but the
+  ! fixed-step TDRK has no error estimate to fail, and nothing else on this path
+  ! inspects the state.
+  if (any(si%z(1:4) /= si%z(1:4))) then
+    ierr = SYMPLECTIC_STEP_MAXITER
+    explicit_h_carry = h_entry
+    return
+  end if
+
   if (si%z(1) < 0d0) then
     call count_event(EVT_R_NEGATIVE)
     si%z(1) = -si%z(1)
