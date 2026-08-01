@@ -4,7 +4,8 @@ use util, only: pi
 use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives, &
   get_derivatives2
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-  orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax
+  orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax, &
+  SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER
 use fortnum_multiroot, only: multiroot_hybrids
 use fortnum_status, only: fortnum_status_t
 use diag_counters, only: count_event, EVT_R_NEGATIVE
@@ -44,6 +45,27 @@ contains
 subroutine reset_explicit_step_carry
   explicit_h_carry = 0d0
 end subroutine reset_explicit_step_carry
+
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  !
+! Report whether the state now sits outside the plasma, in the status code the
+! caller's boundary bisection expects.
+!
+! The symplectic schemes reach this through their Newton solve, which tests the
+! radius of every iterate. The explicit drivers hand a whole substep to an
+! adaptive integrator in one call, so nothing between the endpoints is ever
+! looked at, and a particle that crosses the last closed flux surface is simply
+! integrated onwards through extrapolated splines and reported as still
+! confined. At a 1 s trace that put 44 of 1000 markers at s > 1 -- one as far
+! out as s = 2.8 -- all counted as confined, which is why the explicit modes
+! reported 76 losses where the symplectic schemes and RK4/5 both reported ~207.
+!
+! Returning OUTSIDE_DOMAIN hands the step to locate_symplectic_boundary, which
+! bisects on si%dt exactly as it does for the symplectic schemes.
+integer function explicit_step_status() result(status)
+  status = SYMPLECTIC_STEP_OK
+  if (si%z(1) > sympl_rmax) status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+end function explicit_step_status
 
   !
   ! Wrapper routines for ODEPACK
@@ -723,12 +745,14 @@ subroutine orbit_timestep_radau15(ierr)
     problem%h0 = explicit_h_carry
     call ode_integrate_radau(problem, solution, status)
     if (status%code /= FORTNUM_OK) then
-      ierr = 1
+      ierr = SYMPLECTIC_STEP_MAXITER
       return
     end if
     nlast = size(solution%t)
     si%z(1:4) = solution%y(:, nlast)
     if (nlast > 1) explicit_h_carry = solution%h(nlast)
+    ierr = explicit_step_status()
+    if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
   call sync_field_to_state
@@ -780,12 +804,14 @@ subroutine orbit_timestep_gbs16(ierr)
     problem%h0 = explicit_h_carry
     call ode_integrate_gbs(problem, solution, status)
     if (status%code /= FORTNUM_OK) then
-      ierr = 1
+      ierr = SYMPLECTIC_STEP_MAXITER
       return
     end if
     nlast = size(solution%t)
     si%z(1:4) = solution%y(:, nlast)
     if (nlast > 1) explicit_h_carry = solution%h(nlast)
+    ierr = explicit_step_status()
+    if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
   call sync_field_to_state
@@ -827,10 +853,12 @@ subroutine orbit_timestep_tdrk24(ierr)
       ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), 1, 4, .false., yend, &
       nfev_f, nfev_g, status)
     if (status%code /= FORTNUM_OK) then
-      ierr = 1
+      ierr = SYMPLECTIC_STEP_MAXITER
       return
     end if
     si%z(1:4) = yend
+    ierr = explicit_step_status()
+    if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
   call sync_field_to_state
@@ -866,11 +894,13 @@ subroutine orbit_timestep_tdrk24a(ierr)
       ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), si%rtol, si%atol, &
       explicit_h_carry, yend, hlast, nfev_f, nfev_g, naccept, nreject, status)
     if (status%code /= FORTNUM_OK) then
-      ierr = 1
+      ierr = SYMPLECTIC_STEP_MAXITER
       return
     end if
     si%z(1:4) = yend
     explicit_h_carry = hlast
+    ierr = explicit_step_status()
+    if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
   call sync_field_to_state
@@ -912,7 +942,7 @@ subroutine orbit_timestep_cashkarp45(ierr)
     problem%h0 = explicit_h_carry
     call ode_integrate(problem, workspace, solution, status)
     if (status%code /= FORTNUM_OK) then
-      ierr = 1
+      ierr = SYMPLECTIC_STEP_MAXITER
       return
     end if
     nlast = solution%nsteps + 1
@@ -924,6 +954,8 @@ subroutine orbit_timestep_cashkarp45(ierr)
     ! in bounds there; here nlast would read one past the end and carry
     ! whatever that memory held into the next macro-step's initial step size.
     if (solution%nsteps > 0) explicit_h_carry = solution%h(solution%nsteps)
+    ierr = explicit_step_status()
+    if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
   call sync_field_to_state

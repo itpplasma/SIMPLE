@@ -637,6 +637,18 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         LABELS "system;python"
         TIMEOUT 1800)
 
+    # The explicit integmodes must notice a marker leaving the plasma. They
+    # hand a whole substep to an adaptive integrator and see nothing between
+    # its endpoints, so without an explicit radius check a marker that crossed
+    # s = 1 was integrated onwards and reported as confined.
+    add_test(NAME test_explicit_loss_detection
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py)
+    set_tests_properties(test_explicit_loss_detection PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 3600)
+
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
         COMMAND ${BOOZER_CHARTMAP_PYTHON}
