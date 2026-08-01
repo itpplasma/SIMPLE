@@ -31,7 +31,11 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     ! symplectic ones on long integrations. GBS16 is Gragg-Bulirsch-Stoer
     ! extrapolation, the classical high-accuracy explicit method of celestial
     ! mechanics.
-    integer, parameter :: RADAU15 = 20, GBS16 = 21
+    ! TDRK24 is the Runge-Kutta-Nystrom transplant: an RKN tableau applied to
+    ! the first-order guiding-centre system through zdd = F'(z)F(z), which is a
+    ! special two-derivative Runge-Kutta method (Chan & Tsai 2010). Fixed step,
+    ! so npoiper2 sets its resolution as it does for the symplectic schemes.
+    integer, parameter :: RADAU15 = 20, GBS16 = 21, TDRK24 = 24
     integer, parameter :: SYMPLECTIC_STEP_OK = 0
     integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
     integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
