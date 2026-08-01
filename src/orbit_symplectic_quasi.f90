@@ -917,7 +917,13 @@ subroutine orbit_timestep_cashkarp45(ierr)
     end if
     nlast = solution%nsteps + 1
     si%z(1:4) = solution%y(:, nlast)
-    if (nlast > 1) explicit_h_carry = solution%h(nlast)
+    ! solution%h is trimmed to nsteps entries, one FEWER than solution%t and
+    ! solution%y, because a step size belongs to the interval between two
+    ! recorded points rather than to a point. ode_integrate_radau and
+    ! ode_integrate_gbs allocate nsteps+1 for both, so the same expression is
+    ! in bounds there; here nlast would read one past the end and carry
+    ! whatever that memory held into the next macro-step's initial step size.
+    if (solution%nsteps > 0) explicit_h_carry = solution%h(solution%nsteps)
     ktau = ktau+1
   end do
   call sync_field_to_state
