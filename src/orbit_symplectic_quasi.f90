@@ -48,24 +48,48 @@ end subroutine reset_explicit_step_carry
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-! Report whether the state now sits outside the plasma, in the status code the
-! caller's boundary bisection expects.
+! Restore the chart invariants the rest of SIMPLE maintains inside a step, and
+! report the status the caller's boundary bisection expects.
 !
-! The symplectic schemes reach this through their Newton solve, which tests the
-! radius of every iterate. The explicit drivers hand a whole substep to an
-! adaptive integrator in one call, so nothing between the endpoints is ever
-! looked at, and a particle that crosses the last closed flux surface is simply
-! integrated onwards through extrapolated splines and reported as still
-! confined. At a 1 s trace that put 44 of 1000 markers at s > 1 -- one as far
-! out as s = 2.8 -- all counted as confined, which is why the explicit modes
-! reported 76 losses where the symplectic schemes and RK4/5 both reported ~207.
+! The symplectic schemes reach both of these through their Newton solve, which
+! inspects every iterate. The explicit drivers hand a whole substep to an
+! adaptive integrator in one call and see nothing between its endpoints, so
+! both have to be re-imposed here, at the same dtaumin granularity the
+! symplectic schemes work at.
 !
-! Returning OUTSIDE_DOMAIN hands the step to locate_symplectic_boundary, which
-! bisects on si%dt exactly as it does for the symplectic schemes.
-integer function explicit_step_status() result(status)
-  status = SYMPLECTIC_STEP_OK
-  if (si%z(1) > sympl_rmax) status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-end function explicit_step_status
+! Leaving the plasma. A marker that crossed the last closed flux surface used
+! to be integrated onwards through extrapolated splines and reported as still
+! confined: at a 1 s trace that put 44 of 1000 markers at s > 1, one as far out
+! as s = 2.8, which is why the explicit modes found 76 losses where the
+! symplectic schemes and RK4/5 both independently found about 207. Returning
+! OUTSIDE_DOMAIN hands the step to locate_symplectic_boundary, which bisects on
+! si%dt exactly as it does for the symplectic schemes.
+!
+! Crossing the axis. r is a radius, so r < 0 is not a position but a chart
+! artefact of passing through the magnetic axis; every other integrator in
+! SIMPLE continues on the opposite ray, (r, theta) -> (|r|, theta + pi), rather
+! than the pre-#370 teleport to r = 0.01. Without it the next substep evaluates
+! the field at a negative radius, outside the spline domain entirely.
+!
+! h_entry is the step-size carry as it stood before the substep. A step that
+! does not complete must not leave its trial step size behind: the boundary
+! bisection re-runs the step up to 64 times on ever smaller fractions of dt,
+! and without this the carry would come back at bisection scale and throttle
+! every later step of the orbit.
+subroutine explicit_step_finish(h_entry, ierr)
+  real(dp), intent(in) :: h_entry
+  integer, intent(out) :: ierr
+
+  if (si%z(1) < 0d0) then
+    call count_event(EVT_R_NEGATIVE)
+    si%z(1) = -si%z(1)
+    si%z(2) = si%z(2) + pi
+  end if
+
+  ierr = SYMPLECTIC_STEP_OK
+  if (si%z(1) > sympl_rmax) ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+  if (ierr /= SYMPLECTIC_STEP_OK) explicit_h_carry = h_entry
+end subroutine explicit_step_finish
 
   !
   ! Wrapper routines for ODEPACK
@@ -731,6 +755,7 @@ subroutine orbit_timestep_radau15(ierr)
   type(ode_problem_t) :: problem
   type(ode_solution_t) :: solution
   type(fortnum_status_t) :: status
+  real(dp) :: h_entry
 
   ierr = 0
   ktau = 0
@@ -739,6 +764,7 @@ subroutine orbit_timestep_radau15(ierr)
   problem%atol = si%atol
   allocate(problem%y0(4))
   do while(ktau .lt. si%ntau)
+    h_entry = explicit_h_carry
     problem%t0 = ktau*si%dt
     problem%t1 = (ktau+1)*si%dt
     problem%y0 = si%z(1:4)
@@ -746,12 +772,13 @@ subroutine orbit_timestep_radau15(ierr)
     call ode_integrate_radau(problem, solution, status)
     if (status%code /= FORTNUM_OK) then
       ierr = SYMPLECTIC_STEP_MAXITER
+      explicit_h_carry = h_entry
       return
     end if
     nlast = size(solution%t)
     si%z(1:4) = solution%y(:, nlast)
     if (nlast > 1) explicit_h_carry = solution%h(nlast)
-    ierr = explicit_step_status()
+    call explicit_step_finish(h_entry, ierr)
     if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
@@ -790,6 +817,7 @@ subroutine orbit_timestep_gbs16(ierr)
   type(ode_problem_t) :: problem
   type(ode_solution_t) :: solution
   type(fortnum_status_t) :: status
+  real(dp) :: h_entry
 
   ierr = 0
   ktau = 0
@@ -798,6 +826,7 @@ subroutine orbit_timestep_gbs16(ierr)
   problem%atol = si%atol
   allocate(problem%y0(4))
   do while(ktau .lt. si%ntau)
+    h_entry = explicit_h_carry
     problem%t0 = ktau*si%dt
     problem%t1 = (ktau+1)*si%dt
     problem%y0 = si%z(1:4)
@@ -805,12 +834,13 @@ subroutine orbit_timestep_gbs16(ierr)
     call ode_integrate_gbs(problem, solution, status)
     if (status%code /= FORTNUM_OK) then
       ierr = SYMPLECTIC_STEP_MAXITER
+      explicit_h_carry = h_entry
       return
     end if
     nlast = size(solution%t)
     si%z(1:4) = solution%y(:, nlast)
     if (nlast > 1) explicit_h_carry = solution%h(nlast)
-    ierr = explicit_step_status()
+    call explicit_step_finish(h_entry, ierr)
     if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
@@ -845,19 +875,22 @@ subroutine orbit_timestep_tdrk24(ierr)
   integer :: ktau, nfev_f, nfev_g
   real(dp) :: yend(4)
   type(fortnum_status_t) :: status
+  real(dp) :: h_entry
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    h_entry = explicit_h_carry
     call tdrk_integrate_fixed(f_ode_fortnum, g_ode_fortnum, &
       ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), 1, 4, .false., yend, &
       nfev_f, nfev_g, status)
     if (status%code /= FORTNUM_OK) then
       ierr = SYMPLECTIC_STEP_MAXITER
+      explicit_h_carry = h_entry
       return
     end if
     si%z(1:4) = yend
-    ierr = explicit_step_status()
+    call explicit_step_finish(h_entry, ierr)
     if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
@@ -886,20 +919,23 @@ subroutine orbit_timestep_tdrk24a(ierr)
   integer :: ktau, nfev_f, nfev_g, naccept, nreject
   real(dp) :: yend(4), hlast
   type(fortnum_status_t) :: status
+  real(dp) :: h_entry
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+    h_entry = explicit_h_carry
     call tdrk_integrate_adaptive(f_ode_fortnum, g_ode_fortnum, &
       ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), si%rtol, si%atol, &
       explicit_h_carry, yend, hlast, nfev_f, nfev_g, naccept, nreject, status)
     if (status%code /= FORTNUM_OK) then
       ierr = SYMPLECTIC_STEP_MAXITER
+      explicit_h_carry = h_entry
       return
     end if
     si%z(1:4) = yend
     explicit_h_carry = hlast
-    ierr = explicit_step_status()
+    call explicit_step_finish(h_entry, ierr)
     if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
@@ -928,6 +964,7 @@ subroutine orbit_timestep_cashkarp45(ierr)
   type(ode_workspace_t) :: workspace
   type(ode_solution_t) :: solution
   type(fortnum_status_t) :: status
+  real(dp) :: h_entry
 
   ierr = 0
   ktau = 0
@@ -936,6 +973,7 @@ subroutine orbit_timestep_cashkarp45(ierr)
   problem%atol = si%atol
   allocate(problem%y0(4))
   do while(ktau .lt. si%ntau)
+    h_entry = explicit_h_carry
     problem%t0 = ktau*si%dt
     problem%t1 = (ktau+1)*si%dt
     problem%y0 = si%z(1:4)
@@ -943,6 +981,7 @@ subroutine orbit_timestep_cashkarp45(ierr)
     call ode_integrate(problem, workspace, solution, status)
     if (status%code /= FORTNUM_OK) then
       ierr = SYMPLECTIC_STEP_MAXITER
+      explicit_h_carry = h_entry
       return
     end if
     nlast = solution%nsteps + 1
@@ -954,7 +993,7 @@ subroutine orbit_timestep_cashkarp45(ierr)
     ! in bounds there; here nlast would read one past the end and carry
     ! whatever that memory held into the next macro-step's initial step size.
     if (solution%nsteps > 0) explicit_h_carry = solution%h(solution%nsteps)
-    ierr = explicit_step_status()
+    call explicit_step_finish(h_entry, ierr)
     if (ierr /= SYMPLECTIC_STEP_OK) return
     ktau = ktau+1
   end do
