@@ -48,7 +48,8 @@ module orbit_fo_boris
   integer, parameter, public :: FO_OK = 0, FO_LOSS = 1, FO_LOCATE_FAIL = 2
 
   public :: fo_state_t, fo_init, fo_init_reference, fo_step, fo_energy, &
-    fo_mu, fo_to_gc, fo_to_reference_gc, accept_or_fail
+    fo_mu, fo_to_gc, fo_to_reference_gc, accept_or_fail, fo_step_rkng
+
 
   type :: fo_state_t
     real(dp) :: x(3)   = 0.0_dp    ! Cartesian position (scaled cm)
@@ -62,6 +63,16 @@ module orbit_fo_boris
     real(dp) :: pabs   = 0.0_dp    ! normalized speed (carried for z(4) write-back)
     logical :: reference_field = .false.
   end type fo_state_t
+
+  ! State for the RKNG right-hand side. fortnum's rkng interface passes only
+  ! (t, y, yp, ypp) plus an unlimited-polymorphic ctx, while the force needs the
+  ! warm-start logical coordinate and the reference-field flag, and it updates
+  ! that warm start as it goes. Carrying them here mirrors how the guiding-centre
+  ! quasi module holds si and f, and keeps the interface fortnum expects.
+  type(fo_state_t) :: rkng_st
+  integer :: rkng_status = FO_OK
+  !$omp threadprivate(rkng_st, rkng_status)
+
 
 contains
 
@@ -356,6 +367,83 @@ contains
   ! fault). On fault Bvec etc. are undefined and the caller must not push. Loss is
   ! not decided here -- the field is defined through the clamped edge, and only the
   ! guiding-centre crossing rho>=1 in fo_to_gc is a confinement loss.
+  ! Lorentz acceleration in general Runge-Kutta-Nystrom form.
+  !
+  ! Full-orbit motion is xdd = (q/mc) xd x B(x), which is genuinely
+  ! y'' = f(t, y, y') -- general RKN form. Unlike the guiding-centre case this
+  ! needs no reformulation and no second derivatives of the field: it is the one
+  ! place a Nystrom-family method applies to SIMPLE directly, and so the most
+  ! faithful test of the original suggestion.
+  !
+  ! The warm-start logical coordinate is advanced on every force evaluation, as
+  ! in fo_step, so the inversion stays close to its previous solution. A failed
+  ! inversion is recorded in rkng_status and the acceleration is returned as
+  ! zero: fortnum has no way to abort a fixed-step integration mid-flight, so the
+  ! failure is reported after the step rather than propagated through it.
+  subroutine fo_rkng_force(t, y, yp, ypp, ctx)
+    real(dp), intent(in)  :: t
+    real(dp), intent(in)  :: y(:), yp(:)
+    real(dp), intent(out) :: ypp(:)
+    class(*), intent(in), optional :: ctx
+    real(dp) :: Bvec(3), Bmod, gradB(3), u(3), qcm
+    integer :: status
+
+    ypp = 0.0_dp
+    if (rkng_status /= FO_OK) return
+
+    call cart_field(y(1:3), rkng_st%u, Bvec, Bmod, gradB, u, status, &
+      rkng_st%reference_field)
+    if (status /= FO_OK) then
+      rkng_status = status
+      return
+    end if
+    rkng_st%u = u
+
+    qcm = rkng_st%charge/(c*rkng_st%ro0*rkng_st%mass)
+    ypp(1:3) = qcm*cross(yp(1:3), Bvec)
+  end subroutine fo_rkng_force
+
+  ! One full-orbit step with a general Runge-Kutta-Nystrom method, as an
+  ! alternative to the Boris pusher over the same dt and the same field path.
+  !
+  ! Boris is second order and volume preserving, and conserves energy to
+  ! round-off in a static magnetic field because its rotation is exact. RKNG is
+  ! higher order but not structure preserving, so the comparison to make is
+  ! energy drift at matched cost, not energy drift alone.
+  subroutine fo_step_rkng(st, status, nsub)
+    use fortnum_ode_tdrk, only: rkng_integrate_fixed
+    use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+    type(fo_state_t), intent(inout) :: st
+    integer, intent(out) :: status
+    integer, intent(in), optional :: nsub
+    real(dp) :: yend(3), ypend(3)
+    integer :: nfev, nsteps
+    type(fortnum_status_t) :: fstat
+
+    nsteps = 1
+    if (present(nsub)) nsteps = max(1, nsub)
+
+    rkng_st = st
+    rkng_status = FO_OK
+
+    call rkng_integrate_fixed(fo_rkng_force, 0.0_dp, st%dt, st%x, st%v, &
+      nsteps, yend, ypend, nfev, fstat)
+
+    if (rkng_status /= FO_OK) then
+      status = rkng_status        ! leave st at the last resolved state
+      return
+    end if
+    if (fstat%code /= FORTNUM_OK) then
+      status = FO_LOCATE_FAIL
+      return
+    end if
+
+    st%x = yend
+    st%v = ypend
+    st%u = rkng_st%u
+    status = FO_OK
+  end subroutine fo_step_rkng
+
   subroutine cart_field(x, u_guess, Bvec, Bmod, gradB, u_out, status, &
       reference_field)
     real(dp), intent(in) :: x(3), u_guess(3)
