@@ -642,6 +642,21 @@ contains
         end if
     end subroutine apply_config_aliases
 
+    pure logical function classification_enabled()
+        !> Whether a run collects orbit classifications at all. Three call sites
+        !> must agree: the bmin/bmax cache the classifier needs to separate
+        !> trapped from passing, the dispatch to trace_orbit_with_classifiers,
+        !> and the class_parts.dat writer.
+        !>
+        !> fast_class belongs here. Without it, fast_class alone (tcut <= 0 and
+        !> class_plot = .False.) silently traced ordinary orbits and wrote no
+        !> classification output, even though the flag documents the opposite.
+        !> That combination is the only one giving fast classification without
+        !> the Minkowski fractal cut, since the cut fires at kt == ntcut and the
+        !> early exit in classification.f90 requires .not. class_plot.
+        classification_enabled = (ntcut > 0) .or. class_plot .or. fast_class
+    end function classification_enabled
+
     subroutine reset_seed_if_deterministic
         ! for run with fixed random seed
         integer :: seedsize
