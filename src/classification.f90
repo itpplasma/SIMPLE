@@ -27,7 +27,8 @@ module classification
     use magfie_sub, only : CANFLUX, BOOZER
     use check_orbit_type_sub, only : check_orbit_type
     use detect_oneline_mod, only : jpar_spread, jpar_ref, &
-                                   topology_margin, score_status
+                                   topology_margin, score_status, &
+                                   tip_radial_spread, tip_count
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
     implicit none
@@ -366,6 +367,8 @@ contains
                         class_scores(2,ipart) = jpar_ref
                         class_scores(3,ipart) = topology_margin
                         class_scores(4,ipart) = dble(score_status)
+                        class_scores(5,ipart) = tip_radial_spread
+                        class_scores(6,ipart) = dble(tip_count)
                         iclass(1,ipart) = ijpar
                         iclass(2,ipart) = ideal
                         ! Store in classification result

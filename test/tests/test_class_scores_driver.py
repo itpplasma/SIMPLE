@@ -72,14 +72,29 @@ def main() -> int:
 
     checked = 0
     margins = 0
+    excursions = 0
     for score, part in zip(scores, parts):
-        index, spread, reference, margin, status, trap_par = score
+        (index, spread, reference, margin, status, radial_spread,
+         tip_count, trap_par) = score
         if int(index) != int(part[0]):
             raise AssertionError("class_scores and class_parts particle order differ")
         if spread < 0.0 or reference < 0.0:
             raise AssertionError(f"particle {index}: negative J_parallel magnitude")
         if int(status) not in (0, 1, 2, 3):
             raise AssertionError(f"particle {index}: bad score status {status}")
+        # The tip excursion needs no classification, only two tips.
+        if radial_spread < 0.0:
+            raise AssertionError(f"particle {index}: negative radial excursion")
+        if int(tip_count) >= 2 and radial_spread <= 0.0:
+            raise AssertionError(
+                f"particle {index}: {int(tip_count)} tips but zero excursion"
+            )
+        if int(tip_count) < 2 and radial_spread != 0.0:
+            raise AssertionError(
+                f"particle {index}: excursion without two tips"
+            )
+        if int(tip_count) >= 2:
+            excursions += 1
 
         # Status 2 never reaches the margin code at all.
         if int(status) not in (1, 3):
@@ -114,9 +129,12 @@ def main() -> int:
     # test calls one-line with a non-empty monotonicity interval, which this
     # field and surface do not reliably produce. The J_parallel comparison is
     # the load-bearing one here.
+    if excursions == 0:
+        raise AssertionError("no orbit collected two tips, so the excursion is untested")
     print(
         f"J_parallel spread agrees with the class on {checked} orbits; "
-        f"topology margin exercised on {margins}"
+        f"topology margin exercised on {margins}; "
+        f"radial excursion on {excursions}"
     )
     return 0
 

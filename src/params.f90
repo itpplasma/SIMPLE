@@ -99,9 +99,10 @@ module params
     real(dp), allocatable :: trap_par(:), perp_inv(:)
     !> Continuous margins behind the integer classes, one row per particle:
     !> 1 = J_parallel spread across tips, 2 = |J_parallel| at the first tip,
-    !> 3 = ideal-orbit monotonicity margin, 4 = score status.
+    !> 3 = ideal-orbit monotonicity margin, 4 = score status,
+    !> 5 = radial excursion of the tips, 6 = number of tips.
     real(dp), allocatable :: class_scores(:, :)
-    integer, parameter :: n_class_scores = 4
+    integer, parameter :: n_class_scores = 6
     integer, allocatable :: iclass(:, :)
     logical, allocatable :: class_passing(:), class_lost(:)
 

@@ -16,9 +16,17 @@
     !> the recurrence test, which forms no margin. jpar_spread is valid for
     !> status 1 and 3, topology_margin only for status 1.
     double precision :: jpar_spread, jpar_ref, topology_margin
+    !> Radial excursion of the banana tips, max(s) - min(s) over every tip
+    !> collected so far, and the number of tips behind it. Unlike the class
+    !> margins this needs no threshold, no recurrence and no nturns: two tips
+    !> suffice. It is the width of the radial band the orbit explores, which
+    !> is the quantity a phase-space barrier suppresses.
+    double precision :: tip_radial_spread
+    integer :: tip_count
     integer :: score_status
   !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs, &
-  !$omp               jpar_spread, jpar_ref, topology_margin, score_status)
+  !$omp               jpar_spread, jpar_ref, topology_margin, score_status, &
+  !$omp               tip_radial_spread, tip_count)
   end module detect_oneline_mod
 !
 module check_orbit_type_sub
@@ -36,7 +44,7 @@ contains
                                  fprs,igroup, &
                                  ipermin,iret, &
                                  jpar_spread,jpar_ref,topology_margin, &
-                                 score_status
+                                 score_status,tip_radial_spread,tip_count
   use sorting_mod, only : sortin
 !
   implicit none
@@ -78,6 +86,8 @@ contains
     jpar_spread=0.d0
     jpar_ref=0.d0
     topology_margin=0.d0
+    tip_radial_spread=0.d0
+    tip_count=0
     score_status=0
   endif
 !
@@ -95,6 +105,13 @@ contains
     return
   endif
   fprs(:,nfp)=fpr_in
+!
+! Radial excursion over all tips collected so far. Independent of the
+! classification path, so it exists even when nothing resolves.
+  tip_count=nfp
+  if(nfp.ge.2) then
+    tip_radial_spread=maxval(fprs(1,1:nfp))-minval(fprs(1,1:nfp))
+  endif
 !
   if(nfp.lt.3) return
 !
