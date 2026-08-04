@@ -5,6 +5,7 @@ module classification
     use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
         ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
         class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &
+        class_scores, &
         nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
         integmode, relerr, ntau, should_skip, orbit_exit_code, unresolved_orbits, &
         max_consecutive_warning_holds, &
@@ -25,6 +26,8 @@ module classification
     use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
     use magfie_sub, only : CANFLUX, BOOZER
     use check_orbit_type_sub, only : check_orbit_type
+    use detect_oneline_mod, only : jpar_spread, jpar_ref, &
+                                   topology_margin, score_status
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
     implicit none
@@ -359,6 +362,10 @@ contains
                         !
                         call check_orbit_type(nturns,nfp_cot,fpr_in,ideal,ijpar,ierr_cot)
                         !
+                        class_scores(1,ipart) = jpar_spread
+                        class_scores(2,ipart) = jpar_ref
+                        class_scores(3,ipart) = topology_margin
+                        class_scores(4,ipart) = dble(score_status)
                         iclass(1,ipart) = ijpar
                         iclass(2,ipart) = ideal
                         ! Store in classification result

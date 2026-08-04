@@ -97,6 +97,11 @@ module params
     real(dp) :: canonical_ode_relerr = 1d-11
 
     real(dp), allocatable :: trap_par(:), perp_inv(:)
+    !> Continuous margins behind the integer classes, one row per particle:
+    !> 1 = J_parallel spread across tips, 2 = |J_parallel| at the first tip,
+    !> 3 = ideal-orbit monotonicity margin, 4 = score status.
+    real(dp), allocatable :: class_scores(:, :)
+    integer, parameter :: n_class_scores = 4
     integer, allocatable :: iclass(:, :)
     logical, allocatable :: class_passing(:), class_lost(:)
 
@@ -502,6 +507,7 @@ contains
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
+        if (allocated(class_scores)) deallocate (class_scores)
         if (allocated(class_passing)) deallocate (class_passing)
         if (allocated(class_lost)) deallocate (class_lost)
         if (allocated(xstart)) deallocate (xstart)
@@ -525,6 +531,7 @@ contains
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
         allocate (unresolved_orbits(ntimstep))
         allocate (iclass(3, ntestpart))
+        allocate (class_scores(n_class_scores, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
         allocate (wall_hit(ntestpart))
         allocate (wall_hit_cart(3, ntestpart))
@@ -539,6 +546,7 @@ contains
         trap_par = 0.0d0
         perp_inv = 0.0d0
         iclass = 0
+        class_scores = 0d0
         class_passing = .false.
         class_lost = .false.
         wall_hit = 0_int8

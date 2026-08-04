@@ -6,7 +6,19 @@
     double precision :: pi,twopi
     integer,          dimension(:),   allocatable :: iret
     double precision, dimension(:,:), allocatable :: fprs
-  !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs)
+    !> Continuous margins behind the integer classes. The J_parallel class
+    !> thresholds jpar_spread against tol_perpinv, and the ideal-orbit class
+    !> is the sign test on topology_margin. Both are the quantities the
+    !> classifier already forms and then discards, kept so that a smooth
+    !> confinement score can be built without re-tracing.
+    !> score_status: 0 unresolved; 1 resolved with a valid topology margin;
+    !> 2 early stochastic exit; 3 resolved but the ideal-orbit class came from
+    !> the recurrence test, which forms no margin. jpar_spread is valid for
+    !> status 1 and 3, topology_margin only for status 1.
+    double precision :: jpar_spread, jpar_ref, topology_margin
+    integer :: score_status
+  !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs, &
+  !$omp               jpar_spread, jpar_ref, topology_margin, score_status)
   end module detect_oneline_mod
 !
 module check_orbit_type_sub
@@ -22,7 +34,9 @@ contains
   use detect_oneline_mod, only : prop,nfp_dim,nfp_max,iper, &
                                  pi,twopi, &
                                  fprs,igroup, &
-                                 ipermin,iret
+                                 ipermin,iret, &
+                                 jpar_spread,jpar_ref,topology_margin, &
+                                 score_status
   use sorting_mod, only : sortin
 !
   implicit none
@@ -36,7 +50,7 @@ contains
 !
   double precision :: dummy,dt1,dt2,derfix,per,ds1,ds2
   double precision :: theta_1,theta_2,theta_test,errint
-  double precision :: perpinv_beg,tol_perpinv
+  double precision :: perpinv_beg,tol_perpinv,drift,margin
   double precision, dimension(nfp_dim) :: fpr_in
   integer, dimension(:), allocatable :: ipoi
 !
@@ -61,6 +75,10 @@ contains
     igroup=0
     ideal=0
     ijpar=0
+    jpar_spread=0.d0
+    jpar_ref=0.d0
+    topology_margin=0.d0
+    score_status=0
   endif
 !
   if(igroup.ge.nturns) then
@@ -96,6 +114,7 @@ contains
         ideal=2
         ijpar=2
         igroup=nturns
+        score_status=2
         return
       endif
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
@@ -116,6 +135,7 @@ contains
     ideal=noline+1
 !
 ! check sequencies in all intervals:
+    margin=huge(1.d0)
     if(ideal.eq.1) then
       nturnm1=nturns-1
       allocate(ipoi(nturnm1))
@@ -126,24 +146,32 @@ contains
         do j=2,nturnm1
           theta_1=fprs(2,iret(ipoi(j-1))+k+1)
           theta_2=modulo(fprs(2,iret(ipoi(j))+k+1)-theta_1+pi,twopi)+theta_1-pi
-          if(theta_2.lt.theta_1) then
-            ideal=2
-            exit
-          endif
+          margin=min(margin,theta_2-theta_1)
+          if(theta_2.lt.theta_1) ideal=2
         enddo
-        if(ideal.eq.2) exit
       enddo
       deallocate(ipoi)
+    endif
+    !
+    ! Status 1 means topology_margin is a real margin. The recurrence test
+    ! decides without forming one, and the monotonicity loop is empty when
+    ! the last two return intervals coincide.
+    if(margin.lt.huge(1.d0)) then
+      topology_margin=margin
+      score_status=1
+    else
+      score_status=3
     endif
 !
 ! check J_perp change
     ijpar=1
     perpinv_beg=fprs(3,2)
+    jpar_ref=abs(perpinv_beg)
+    jpar_spread=0.d0
     do k=2,iret(nturns)
-      if(abs(fprs(3,k)-perpinv_beg).gt.tol_perpinv) then
-        ijpar=2
-        exit
-      endif
+      drift=abs(fprs(3,k)-perpinv_beg)
+      jpar_spread=max(jpar_spread,drift)
+      if(drift.gt.tol_perpinv) ijpar=2
     enddo
   endif
 !
