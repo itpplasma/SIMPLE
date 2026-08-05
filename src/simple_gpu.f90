@@ -19,7 +19,7 @@ module simple_gpu
     use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
     use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use boozer_sub, only: boozer_state
-    use omp_lib, only: omp_get_thread_num
+    !$ use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
 #endif
@@ -263,7 +263,8 @@ contains
         end if
 
         !$omp parallel num_threads(ngpu) private(dev, i0, i1)
-        dev = omp_get_thread_num()
+        dev = 0
+        !$ dev = omp_get_thread_num()
 #ifdef _OPENACC
         call acc_set_device_num(dev, acc_device_nvidia)
 #endif

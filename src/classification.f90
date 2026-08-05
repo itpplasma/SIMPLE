@@ -1,7 +1,7 @@
 module classification
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-    use omp_lib
+    !$ use omp_lib
     use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
         ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
         class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &

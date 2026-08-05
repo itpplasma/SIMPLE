@@ -1,6 +1,7 @@
 module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
-    use omp_lib
+    !$ use omp_lib
+    use timing, only: get_wtime
     use util, only: sqrt2, twopi
     use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
         orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
@@ -774,6 +775,9 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         real(dp), allocatable :: traj(:, :), times(:)
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+        integer :: debug_thread
+#endif
 
         if (output_orbits_macrostep) then
             call init_orbit_netcdf(ntestpart, ntimstep)
@@ -798,8 +802,10 @@ contains
             if (debug) then
                 !$omp critical
                 kpart = kpart + 1
+                debug_thread = 0
+                !$ debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-                    omp_get_thread_num()
+                    debug_thread
                 !$omp end critical
             end if
 #endif
@@ -870,7 +876,7 @@ contains
         end do
 
         ! CPU reference (OpenMP over particles)
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         !$omp parallel do private(i, it, ktau, ierr) schedule(dynamic)
         do i = 1, ntestpart
             ierr = 0
@@ -888,7 +894,7 @@ contains
             cpu_zend(:, i) = si_cpu(i)%z(1:4)
         end do
         !$omp end parallel do
-        t1 = omp_get_wtime()
+        t1 = get_wtime()
         t_cpu = t1 - t0
 
         if (any(cpu_loss < ntimstep)) then
@@ -896,10 +902,10 @@ contains
         end if
 
         ! GPU kernel
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
             gpu_loss, gpu_zend)
-        t1 = omp_get_wtime()
+        t1 = get_wtime()
         t_gpu = t1 - t0
 
         ! Compare
@@ -941,6 +947,9 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         type(classification_result_t) :: class_result
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+        integer :: debug_thread
+#endif
 
         !$omp parallel firstprivate(norb) private(class_result, i)
         !$omp do
@@ -949,8 +958,10 @@ contains
             if (debug) then
                 !$omp critical
                 kpart = kpart + 1
+                debug_thread = 0
+                !$ debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-                    omp_get_thread_num()
+                    debug_thread
                 !$omp end critical
             end if
 #endif
