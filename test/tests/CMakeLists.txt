@@ -526,6 +526,13 @@ add_executable(test_array_utils.x test_array_utils.f90)
 target_link_libraries(test_array_utils.x simple)
 add_test(NAME test_array_utils COMMAND test_array_utils.x)
 
+add_executable(test_continuous_classifier_scores.x
+    test_continuous_classifier_scores.f90)
+target_link_libraries(test_continuous_classifier_scores.x simple)
+add_test(NAME test_continuous_classifier_scores
+    COMMAND test_continuous_classifier_scores.x)
+set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
+
     # New comprehensive unit tests
     add_executable(test_util_simple.x test_util_simple.f90)
     target_link_libraries(test_util_simple.x simple)

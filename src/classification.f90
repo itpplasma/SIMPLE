@@ -26,9 +26,11 @@ module classification
     use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
     use magfie_sub, only : CANFLUX, BOOZER
     use check_orbit_type_sub, only : check_orbit_type
-    use detect_oneline_mod, only : jpar_spread, jpar_ref, &
-                                   topology_margin, score_status, &
-                                   tip_radial_spread, tip_count
+    use detect_oneline_mod, only : jpar_variation_rate, rotation_number_drift, &
+                                   precession_turns, jpar_sample_count, &
+                                   rotation_half_count, tip_count, &
+                                   jpar_spread, jpar_ref, topology_margin, &
+                                   score_status
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
     implicit none
@@ -363,12 +365,16 @@ contains
                         !
                         call check_orbit_type(nturns,nfp_cot,fpr_in,ideal,ijpar,ierr_cot)
                         !
-                        class_scores(1,ipart) = jpar_spread
-                        class_scores(2,ipart) = jpar_ref
-                        class_scores(3,ipart) = topology_margin
-                        class_scores(4,ipart) = dble(score_status)
-                        class_scores(5,ipart) = tip_radial_spread
+                        class_scores(1,ipart) = jpar_variation_rate
+                        class_scores(2,ipart) = rotation_number_drift
+                        class_scores(3,ipart) = precession_turns
+                        class_scores(4,ipart) = dble(jpar_sample_count)
+                        class_scores(5,ipart) = dble(rotation_half_count)
                         class_scores(6,ipart) = dble(tip_count)
+                        class_scores(7,ipart) = jpar_spread
+                        class_scores(8,ipart) = jpar_ref
+                        class_scores(9,ipart) = topology_margin
+                        class_scores(10,ipart) = dble(score_status)
                         iclass(1,ipart) = ijpar
                         iclass(2,ipart) = ideal
                         ! Store in classification result

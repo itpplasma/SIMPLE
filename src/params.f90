@@ -97,12 +97,15 @@ module params
     real(dp) :: canonical_ode_relerr = 1d-11
 
     real(dp), allocatable :: trap_par(:), perp_inv(:)
-    !> Continuous margins behind the integer classes, one row per particle:
-    !> 1 = J_parallel spread across tips, 2 = |J_parallel| at the first tip,
-    !> 3 = ideal-orbit monotonicity margin, 4 = score status,
-    !> 5 = radial excursion of the tips, 6 = number of tips.
+    !> Continuous classifier values, one row per particle:
+    !> 1 = normalized J_parallel RMS drift rate per precession turn,
+    !> 2 = first-half/second-half rotation-number drift,
+    !> 3 = achieved precession turns, 4 = J_parallel samples,
+    !> 5 = rotation samples per half, 6 = number of tips.
+    !> Columns 7:10 retain the legacy spread, reference, topology margin and
+    !> status for published-classifier validation; objectives use columns 1:2.
     real(dp), allocatable :: class_scores(:, :)
-    integer, parameter :: n_class_scores = 6
+    integer, parameter :: n_class_scores = 10
     integer, allocatable :: iclass(:, :)
     logical, allocatable :: class_passing(:), class_lost(:)
 

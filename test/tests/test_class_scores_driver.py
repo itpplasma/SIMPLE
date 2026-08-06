@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""Driver coverage for the continuous classifier margins.
+"""Driver coverage for the continuous fast-classifier score output.
 
-The classifier reduces two continuous quantities to integer codes: the
-J_parallel spread is thresholded against tol_perpinv, and the ideal-orbit
-class is the sign of the monotonicity margin. class_scores.dat exposes those
-quantities so a smooth confinement score can be built without re-tracing.
-
-The oracle is the integer classification SIMPLE already writes: thresholding
-the continuous score must reproduce the discrete class it was derived from.
-That is a property of the pair of files, independent of either one's values.
+The independent numerical oracle for the score formulas is the analytic
+``test_continuous_classifier_scores`` unit test. This driver verifies that a
+real trace writes those scores with their resolution metadata, while retaining
+the legacy margins solely for published-classifier compatibility checks.
 """
 
 from __future__ import annotations
@@ -71,30 +67,38 @@ def main() -> int:
         raise AssertionError(f"class_parts.dat has {len(parts)} rows, want {NTESTPART}")
 
     checked = 0
+    jpar_scores = 0
     margins = 0
-    excursions = 0
+    rotation_scores = 0
     for score, part in zip(scores, parts):
-        (index, spread, reference, margin, status, radial_spread,
-         tip_count, trap_par) = score
+        (index, jpar_rate, rotation_drift, turns, jpar_samples,
+         rotation_samples, tip_count, spread, reference, margin, status,
+         trap_par) = score
         if int(index) != int(part[0]):
             raise AssertionError("class_scores and class_parts particle order differ")
-        if spread < 0.0 or reference < 0.0:
+        if min(jpar_rate, rotation_drift, turns, spread, reference) < 0.0:
             raise AssertionError(f"particle {index}: negative J_parallel magnitude")
         if int(status) not in (0, 1, 2, 3):
             raise AssertionError(f"particle {index}: bad score status {status}")
-        # The tip excursion needs no classification, only two tips.
-        if radial_spread < 0.0:
-            raise AssertionError(f"particle {index}: negative radial excursion")
-        if int(tip_count) >= 2 and radial_spread <= 0.0:
+        if any(value != int(value) for value in (
+            jpar_samples, rotation_samples, tip_count, status
+        )):
             raise AssertionError(
-                f"particle {index}: {int(tip_count)} tips but zero excursion"
+                f"particle {index}: non-integral resolution metadata"
             )
-        if int(tip_count) < 2 and radial_spread != 0.0:
+        if int(jpar_samples) > max(int(tip_count) - 2, 0):
             raise AssertionError(
-                f"particle {index}: excursion without two tips"
+                f"particle {index}: too many J_parallel samples"
             )
-        if int(tip_count) >= 2:
-            excursions += 1
+        expected_rotation_samples = (int(tip_count) - 1) // 2
+        if expected_rotation_samples < 2:
+            expected_rotation_samples = 0
+        if int(rotation_samples) != expected_rotation_samples:
+            raise AssertionError(f"particle {index}: rotation sample count mismatch")
+        if int(jpar_samples) > 0:
+            jpar_scores += 1
+        if int(rotation_samples) > 0:
+            rotation_scores += 1
 
         # Status 2 never reaches the margin code at all.
         if int(status) not in (1, 3):
@@ -120,21 +124,18 @@ def main() -> int:
                 f"{expected_ideal} but the class is {ideal}"
             )
 
-    if checked == 0:
+    if checked == 0 or jpar_scores == 0 or rotation_scores == 0:
         raise AssertionError(
-            "no orbit resolved over nturns, so the comparison was vacuous; "
-            "raise trace_time or lower nturns in this case"
+            "the trace did not resolve both continuous scores and a legacy class"
         )
     # Margin coverage is opportunistic: status 1 needs an orbit the recurrence
     # test calls one-line with a non-empty monotonicity interval, which this
     # field and surface do not reliably produce. The J_parallel comparison is
     # the load-bearing one here.
-    if excursions == 0:
-        raise AssertionError("no orbit collected two tips, so the excursion is untested")
     print(
-        f"J_parallel spread agrees with the class on {checked} orbits; "
-        f"topology margin exercised on {margins}; "
-        f"radial excursion on {excursions}"
+        f"continuous J_parallel score on {jpar_scores} orbits; "
+        f"rotation drift on {rotation_scores}; legacy threshold agreement on "
+        f"{checked}; topology margin exercised on {margins}"
     )
     return 0
 

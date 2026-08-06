@@ -1,35 +1,39 @@
 !
   module detect_oneline_mod
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+
     logical :: prop=.true.
     integer, parameter :: nfp_dim=3, ipermin=10
     integer :: nfp_max,iper,igroup
     double precision :: pi,twopi
     integer,          dimension(:),   allocatable :: iret
     double precision, dimension(:,:), allocatable :: fprs
-    !> Continuous margins behind the integer classes. The J_parallel class
-    !> thresholds jpar_spread against tol_perpinv, and the ideal-orbit class
-    !> is the sign test on topology_margin. Both are the quantities the
-    !> classifier already forms and then discards, kept so that a smooth
-    !> confinement score can be built without re-tracing.
+    !> Continuous scores from every banana tip collected so far. J_parallel
+    !> variation is the RMS relative drift rate per poloidal precession turn.
+    !> Rotation drift compares the mean tip-map rotation number in the first
+    !> and second halves of the trace. Sample counts distinguish a physical
+    !> zero from an unresolved score.
+    real(dp) :: jpar_variation_rate, rotation_number_drift, precession_turns
+    integer :: jpar_sample_count, rotation_half_count
+    !> Legacy margins retained to cross-check the published classifiers.
+    !> Production metrics consume the continuous scores above, not thresholds.
     !> score_status: 0 unresolved; 1 resolved with a valid topology margin;
     !> 2 early stochastic exit; 3 resolved but the ideal-orbit class came from
     !> the recurrence test, which forms no margin. jpar_spread is valid for
     !> status 1 and 3, topology_margin only for status 1.
     double precision :: jpar_spread, jpar_ref, topology_margin
-    !> Radial excursion of the banana tips, max(s) - min(s) over every tip
-    !> collected so far, and the number of tips behind it. Unlike the class
-    !> margins this needs no threshold, no recurrence and no nturns: two tips
-    !> suffice. It is the width of the radial band the orbit explores, which
-    !> is the quantity a phase-space barrier suppresses.
-    double precision :: tip_radial_spread
     integer :: tip_count
     integer :: score_status
   !$omp threadprivate(prop, nfp_max, iper, igroup, iret, fprs, &
+  !$omp               jpar_variation_rate, rotation_number_drift, &
+  !$omp               precession_turns, jpar_sample_count, rotation_half_count, &
   !$omp               jpar_spread, jpar_ref, topology_margin, score_status, &
-  !$omp               tip_radial_spread, tip_count)
+  !$omp               tip_count)
   end module detect_oneline_mod
 !
 module check_orbit_type_sub
+
+use, intrinsic :: iso_fortran_env, only: dp => real64
 
 implicit none
 
@@ -43,8 +47,11 @@ contains
                                  pi,twopi, &
                                  fprs,igroup, &
                                  ipermin,iret, &
+                                 jpar_variation_rate,rotation_number_drift, &
+                                 precession_turns,jpar_sample_count, &
+                                 rotation_half_count, &
                                  jpar_spread,jpar_ref,topology_margin, &
-                                 score_status,tip_radial_spread,tip_count
+                                 score_status,tip_count
   use sorting_mod, only : sortin
 !
   implicit none
@@ -86,7 +93,11 @@ contains
     jpar_spread=0.d0
     jpar_ref=0.d0
     topology_margin=0.d0
-    tip_radial_spread=0.d0
+    jpar_variation_rate=0.d0
+    rotation_number_drift=0.d0
+    precession_turns=0.d0
+    jpar_sample_count=0
+    rotation_half_count=0
     tip_count=0
     score_status=0
   endif
@@ -106,11 +117,13 @@ contains
   endif
   fprs(:,nfp)=fpr_in
 !
-! Radial excursion over all tips collected so far. Independent of the
-! classification path, so it exists even when nothing resolves.
   tip_count=nfp
+  call compute_continuous_tip_scores(fprs,nfp,jpar_variation_rate, &
+    rotation_number_drift,precession_turns,jpar_sample_count, &
+    rotation_half_count)
   if(nfp.ge.2) then
-    tip_radial_spread=maxval(fprs(1,1:nfp))-minval(fprs(1,1:nfp))
+    jpar_ref=abs(fprs(3,2))
+    jpar_spread=maxval(abs(fprs(3,2:nfp)-fprs(3,2)))
   endif
 !
   if(nfp.lt.3) return
@@ -193,6 +206,68 @@ contains
   endif
 !
   end subroutine check_orbit_type
+!
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  pure subroutine compute_continuous_tip_scores(tips,n,jpar_rate,rotation_drift, &
+      achieved_turns,jpar_samples,rotation_samples)
+    real(dp), intent(in) :: tips(:,:)
+    integer, intent(in) :: n
+    real(dp), intent(out) :: jpar_rate,rotation_drift,achieved_turns
+    integer, intent(out) :: jpar_samples,rotation_samples
+
+    integer :: half,k,nincrements
+    real(dp) :: cumulative_turns,delta_theta,jpar_reference,pi_local
+    real(dp) :: rate,rotation_first,rotation_second,sum_rate_squared,twopi_local
+
+    pi_local=acos(-1.0_dp)
+    twopi_local=2.0_dp*pi_local
+    jpar_rate=0.0_dp
+    rotation_drift=0.0_dp
+    achieved_turns=0.0_dp
+    jpar_samples=0
+    rotation_samples=0
+
+    if(n.lt.3) return
+
+    jpar_reference=abs(tips(3,2))
+    cumulative_turns=0.0_dp
+    sum_rate_squared=0.0_dp
+    do k=3,n
+      delta_theta=modulo(tips(2,k)-tips(2,k-1)+pi_local,twopi_local)-pi_local
+      cumulative_turns=cumulative_turns+abs(delta_theta)/twopi_local
+      if(jpar_reference.gt.tiny(1.0_dp)) then
+        if(cumulative_turns.gt.tiny(1.0_dp)) then
+          rate=(tips(3,k)-tips(3,2))/jpar_reference/cumulative_turns
+          sum_rate_squared=sum_rate_squared+rate*rate
+          jpar_samples=jpar_samples+1
+        endif
+      endif
+    enddo
+    achieved_turns=cumulative_turns
+    if(jpar_samples.gt.0) then
+      jpar_rate=sqrt(sum_rate_squared/real(jpar_samples,dp))
+    endif
+
+    nincrements=n-1
+    half=nincrements/2
+    if(half.lt.2) return
+
+    rotation_first=0.0_dp
+    do k=2,half+1
+      delta_theta=modulo(tips(2,k)-tips(2,k-1)+pi_local,twopi_local)-pi_local
+      rotation_first=rotation_first+delta_theta
+    enddo
+    rotation_second=0.0_dp
+    do k=n-half+1,n
+      delta_theta=modulo(tips(2,k)-tips(2,k-1)+pi_local,twopi_local)-pi_local
+      rotation_second=rotation_second+delta_theta
+    enddo
+    rotation_samples=half
+    rotation_first=rotation_first/(twopi_local*real(half,dp))
+    rotation_second=rotation_second/(twopi_local*real(half,dp))
+    rotation_drift=abs(rotation_first-rotation_second)
+  end subroutine compute_continuous_tip_scores
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !

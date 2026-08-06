@@ -2826,8 +2826,8 @@ contains
             end do
             close (unit)
 
-            ! Continuous margins behind the integer classes, in a separate file
-            ! so class_parts.dat keeps its column contract.
+            ! Continuous fast-classifier scores and validation diagnostics, in
+            ! a separate file so class_parts.dat keeps its column contract.
             open (newunit=unit, file='class_scores.dat', status='replace', &
                   action='write', recl=1024)
             do i = 1, ntestpart
