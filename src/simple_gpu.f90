@@ -64,6 +64,42 @@ contains
         gpu_finite_iterate = .true.
     end function gpu_finite_iterate
 
+    subroutine gpu_get_derivatives2_radial_mixed(f, pphi)
+        ! Euler's two-variable Newton system consumes only derivatives with at
+        ! least one radial or canonical-momentum index. Avoid constructing the
+        ! angular-only Hessian entries used by the five-variable midpoint map.
+        !$acc routine seq
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: pphi
+
+        call get_derivatives(f, pphi)
+
+        f%d2vpar(1:3) = -f%d2Aph(1:3)/f%ro0 - f%d2hph(1:3)*f%vpar
+        f%d2vpar(1) = f%d2vpar(1) - 2.0_dp*f%dhph(1)*f%dvpar(1)
+        f%d2vpar(2) = f%d2vpar(2) - &
+            (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
+        f%d2vpar(3) = f%d2vpar(3) - &
+            (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
+        f%d2vpar(1:3) = f%d2vpar(1:3)/f%hph
+
+        f%d2H(1:3) = f%vpar*f%d2vpar(1:3) + f%mu*f%d2Bmod(1:3)
+        f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
+        f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
+        f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
+
+        f%d2pth(1:3) = f%d2vpar(1:3)*f%hth + &
+            f%vpar*f%d2hth(1:3) + f%d2Ath(1:3)/f%ro0
+        f%d2pth(1) = f%d2pth(1) + 2.0_dp*f%dvpar(1)*f%dhth(1)
+        f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + &
+            f%dvpar(2)*f%dhth(1)
+        f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + &
+            f%dvpar(3)*f%dhth(1)
+
+        f%d2vpar(7:9) = -f%dhph/f%hph**2
+        f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
+        f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+    end subroutine gpu_get_derivatives2_radial_mixed
+
     subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
@@ -98,7 +134,7 @@ contains
             call eval_field_booz_device(f, x(1), si%z(2), si%z(3), &
                 BOOZER_SECDERS_RADIAL_MIXED)
             nfev = nfev + 1
-            call get_derivatives2(f, x(2))
+            call gpu_get_derivatives2_radial_mixed(f, x(2))
             call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
                 linear_failed, step_boundary_limited)
             boundary_limited = boundary_limited .or. step_boundary_limited
