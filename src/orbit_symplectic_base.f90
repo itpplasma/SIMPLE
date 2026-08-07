@@ -15,6 +15,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     ! iterate inside an outer volume is not misread as a loss; per-volume boundary
     ! stops are handled by the caller (#439).
     real(dp) :: sympl_rmax = 1.0d0
+    !$acc declare copyin(sympl_rmax)
 
     ! Integration methods
     integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &

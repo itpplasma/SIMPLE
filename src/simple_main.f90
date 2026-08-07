@@ -643,6 +643,7 @@ contains
             ! interface (#441). Beyond the edge the locked per-volume field is
             ! extended linearly, so iterates out there stay finite.
             sympl_rmax = real(sf%data%Mvol + 1, dp)
+            !$acc update device(sympl_rmax)
             call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
                 spectre_ncon_phi, spectre_ncon_order, &
                 spectre_ncon_ode_max_steps, &

@@ -27,6 +27,7 @@ module simple_gpu
         RK54_CASH_KARP, RK54_DORMAND_PRINCE, RK54_NEED_RHS, RK54_ACCEPTED, &
         RK54_REJECTED, RK54_FAILED
     use boozer_sub, only: boozer_state, splint_boozer_rk_device
+    use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
@@ -429,8 +430,13 @@ contains
         real(dp) :: dvpar_r, dvpar_theta, dvpar_phi
         real(dp) :: dh_r, dh_theta, dh_phi, dpth_r, dpth_phi
 
-        call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
-            btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        if (rk_tables_ready) then
+            call splint_boozer_rk_table_device(y(1), y(2), y(3), aphi, &
+                daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        else
+            call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
+                btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        end if
         bmod2 = bmod*bmod
         hth = btheta/bmod
         hph = bphi/bmod
@@ -455,6 +461,31 @@ contains
         dydt(3) = (vpar - hprime*hth)/hph
         dydt(4) = -(dh_phi - hprime*dpth_phi)
     end subroutine gpu_rhs_canonical
+
+    subroutine gpu_rhs_canonical_cartesian(y, mu, ro0, dydt)
+        ! Integrate the radial Boozer plane as (s*cos(theta), s*sin(theta)).
+        ! This removes the theta singularity at the magnetic axis while keeping
+        ! SIMPLE's native canonical momentum and canonical Boozer RHS.
+        !$acc routine seq
+        real(dp), intent(in) :: y(4), mu, ro0
+        real(dp), intent(out) :: dydt(4)
+
+        real(dp) :: polar(4), polar_rhs(4), radial, radial_x, radial_y
+
+        radial = sqrt(y(1)*y(1) + y(2)*y(2))
+        polar = [radial, atan2(y(2), y(1)), y(3), y(4)]
+        call gpu_rhs_canonical(polar, mu, ro0, polar_rhs)
+        if (radial > tiny(1.0_dp)) then
+            radial_x = y(1)/radial
+            radial_y = y(2)/radial
+        else
+            radial_x = cos(polar(2))
+            radial_y = sin(polar(2))
+        end if
+        dydt(1) = polar_rhs(1)*radial_x - y(2)*polar_rhs(2)
+        dydt(2) = polar_rhs(1)*radial_y + y(1)*polar_rhs(2)
+        dydt(3:4) = polar_rhs(3:4)
+    end subroutine gpu_rhs_canonical_cartesian
 
     subroutine evaluate_rhs_gpu(y, mu, ro0, npart, dydt)
         ! Batch entry point used to compare the compact device RHS against the
@@ -538,6 +569,71 @@ contains
         nfev = state%nfev
     end subroutine gpu_trace_rk54
 
+    subroutine gpu_trace_rk54_cartesian(mu, ro0, y, duration, controls, &
+            loss_time, nfev, ierr)
+        !$acc routine seq
+        real(dp), intent(in) :: mu, ro0
+        real(dp), intent(inout) :: y(4)
+        real(dp), intent(in) :: duration
+        type(rk54_controls4_t), intent(in) :: controls
+        real(dp), intent(out) :: loss_time
+        integer, intent(out) :: nfev, ierr
+
+        integer, parameter :: max_attempts = 100000000
+        type(rk54_state4_t) :: state
+        real(dp) :: t_eval, y_eval(4), dydt(4), h0, radial
+        integer :: request, attempt, rhs_calls
+
+        loss_time = duration
+        nfev = 0
+        ierr = 0
+        if (duration <= 0.0_dp) return
+
+        h0 = min(duration, 1.0e-3_dp*controls%hmax)
+        call rk54_initialize4(state, 0.0_dp, y, h0)
+
+        do attempt = 1, max_attempts
+            if (state%t >= duration) exit
+            radial = sqrt(state%y(1)*state%y(1) + state%y(2)*state%y(2))
+            if (radial >= 1.0_dp) then
+                loss_time = state%t
+                exit
+            end if
+
+            state%h = min(state%h, duration - state%t)
+            call rk54_request4(state, controls, t_eval, y_eval, request)
+            rhs_calls = 0
+            do while (request == RK54_NEED_RHS)
+                call gpu_rhs_canonical_cartesian(y_eval, mu, ro0, dydt)
+                call rk54_supply4(state, controls, dydt, t_eval, y_eval, request)
+                rhs_calls = rhs_calls + 1
+                if (rhs_calls > 7) then
+                    request = RK54_FAILED
+                    exit
+                end if
+            end do
+
+            if (request == RK54_FAILED) then
+                ierr = RK54_FAILED
+                exit
+            end if
+            if (request == RK54_ACCEPTED) then
+                radial = sqrt(state%y(1)*state%y(1) + state%y(2)*state%y(2))
+                if (radial >= 1.0_dp) then
+                    loss_time = state%t
+                    exit
+                end if
+            else if (request /= RK54_REJECTED) then
+                ierr = request
+                exit
+            end if
+        end do
+        if (attempt > max_attempts) ierr = RK54_FAILED
+
+        y = state%y
+        nfev = state%nfev
+    end subroutine gpu_trace_rk54_cartesian
+
     subroutine gpu_rk_segment_hmax(y, duration, hmax)
         ! Match FIRM3D's per-segment quarter-turn cap, evaluated at the
         ! segment's initial state: dt <= (G/B)*pi/(2*v_total). SIMPLE's
@@ -549,10 +645,40 @@ contains
         real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
         real(dp) :: dbmod(3)
 
-        call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
-            btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        if (rk_tables_ready) then
+            call splint_boozer_rk_table_device(y(1), y(2), y(3), aphi, &
+                daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        else
+            call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
+                btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        end if
         hmax = min(duration, 0.5_dp*pi*abs(bphi/bmod)/sqrt2)
     end subroutine gpu_rk_segment_hmax
+
+    subroutine gpu_rk_segment_hmax_cartesian(y, duration, hmax, &
+            momentum_atol_scale)
+        !$acc routine seq
+        real(dp), intent(in) :: y(4), duration
+        real(dp), intent(out) :: hmax, momentum_atol_scale
+
+        real(dp) :: polar(4), aphi, daphi, btheta, dbtheta
+        real(dp) :: bphi, dbphi, bmod, dbmod(3)
+
+        polar = [sqrt(y(1)*y(1) + y(2)*y(2)), atan2(y(2), y(1)), &
+            y(3), y(4)]
+        if (rk_tables_ready) then
+            call splint_boozer_rk_table_device(polar(1), polar(2), polar(3), &
+                aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        else
+            call splint_boozer_rk_device(polar(1), polar(2), polar(3), aphi, &
+                daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        end if
+        hmax = min(duration, 0.5_dp*pi*abs(bphi/bmod)/sqrt2)
+        ! FIRM3D applies atol=rtol*v_total to v_parallel. In SIMPLE's
+        ! canonical momentum p_phi=v_parallel*h_phi+A_phi/ro0, the equivalent
+        ! absolute scale is sqrt(2)*|h_phi|.
+        momentum_atol_scale = sqrt2*abs(bphi/bmod)
+    end subroutine gpu_rk_segment_hmax_cartesian
 
     subroutine gpu_trace_euler_segment(si, f, nsteps, warning_mode, elapsed, &
             nfev, ierr)
@@ -617,7 +743,8 @@ contains
         real(dp), allocatable :: y(:, :), mu(:), ro0(:)
         integer, allocatable :: orbit_status(:)
         real(dp) :: current_time, segment_duration, segment_loss_time
-        real(dp) :: y_local(4), hmax_local, new_weight, weighted_losses
+        real(dp) :: y_local(4), hmax_local, momentum_atol_scale
+        real(dp) :: new_weight, weighted_losses
         real(dp) :: loss_detection_tolerance
         integer :: i, ierr, segment_nfev
 
@@ -630,10 +757,13 @@ contains
         loss_time = total_duration
         weighted_losses = 0.0_dp
         do i = 1, npart
-            y(:, i) = si(i)%z
+            y(1, i) = si(i)%z(1)*cos(si(i)%z(2))
+            y(2, i) = si(i)%z(1)*sin(si(i)%z(2))
+            y(3:4, i) = si(i)%z(3:4)
             mu(i) = f(i)%mu
             ro0(i) = f(i)%ro0
-            if (y(1, i) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+            if (sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i)) >= &
+                    1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                 orbit_status(i) = 1
                 loss_time(i) = 0.0_dp
                 weighted_losses = weighted_losses + 1.0_dp
@@ -663,20 +793,21 @@ contains
 #ifdef _OPENACC
             !$acc parallel loop gang vector default(present) &
             !$acc&   private(controls_i, y_local, segment_loss_time, &
-            !$acc&           hmax_local, segment_nfev, ierr) &
+            !$acc&           hmax_local, momentum_atol_scale, segment_nfev, ierr) &
             !$acc&   firstprivate(controls, current_time, segment_duration, &
             !$acc&                time_scale, loss_tau, loss_detection_tolerance) &
             !$acc&   copy(new_weight)
 #else
             !$omp parallel do default(shared) schedule(static) &
             !$omp&   private(i, controls_i, y_local, segment_loss_time, &
-            !$omp&           hmax_local, segment_nfev, ierr) &
+            !$omp&           hmax_local, momentum_atol_scale, segment_nfev, ierr) &
             !$omp&   reduction(+:new_weight)
 #endif
             do i = 1, npart
                 if (orbit_status(i) /= 0) cycle
                 y_local = y(:, i)
-                if (y_local(1) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+                if (sqrt(y_local(1)*y_local(1) + y_local(2)*y_local(2)) >= &
+                        1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                     orbit_status(i) = 1
                     loss_time(i) = current_time
                     !$acc atomic update
@@ -685,10 +816,13 @@ contains
                     cycle
                 end if
                 controls_i = controls
-                call gpu_rk_segment_hmax(y_local, segment_duration, hmax_local)
+                call gpu_rk_segment_hmax_cartesian(y_local, segment_duration, &
+                    hmax_local, momentum_atol_scale)
                 controls_i%hmax = hmax_local
-                call gpu_trace_rk54(mu(i), ro0(i), y_local, segment_duration, &
-                    controls_i, segment_loss_time, segment_nfev, ierr)
+                controls_i%atol(4) = controls_i%rtol*momentum_atol_scale
+                call gpu_trace_rk54_cartesian(mu(i), ro0(i), y_local, &
+                    segment_duration, controls_i, segment_loss_time, &
+                    segment_nfev, ierr)
                 y(:, i) = y_local
                 nfev(i) = nfev(i) + segment_nfev + 1
                 if (ierr /= 0) then
@@ -713,8 +847,10 @@ contains
         !$acc end data
 
         do i = 1, npart
-            si(i)%z = y(:, i)
-            zend(:, i) = y(:, i)
+            si(i)%z(1) = sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i))
+            si(i)%z(2) = atan2(y(2, i), y(1, i))
+            si(i)%z(3:4) = y(3:4, i)
+            zend(:, i) = si(i)%z
             loss_step(i) = orbit_status(i)
         end do
         observed_duration = current_time
