@@ -1143,12 +1143,19 @@ contains
         real(dp), intent(out) :: observed_duration, energy_loss_fraction
         integer(int64), intent(out) :: warp_nfev_slots
 
-        integer, allocatable :: orbit_status(:)
+        type(symplectic_integrator_t), allocatable :: si_next(:)
+        type(field_can_t), allocatable :: f_next(:)
+        integer, allocatable :: orbit_status(:), orbit_status_next(:)
+        integer, allocatable :: nfev_next(:), original_index(:)
+        integer, allocatable :: order(:), order_scratch(:)
+        real(dp), allocatable :: loss_time_next(:), work_key(:)
         real(dp) :: total_duration, current_time, segment_duration
         real(dp) :: elapsed, new_weight, weighted_losses, expected_duration
         real(dp) :: schedule_tolerance
-        integer :: i, it, ierr, segment_nfev
-        logical :: warning_mode
+        character(16) :: ordering_value
+        integer :: i, it, ierr, segment_nfev, original, source
+        integer :: ordering_length, ordering_status
+        logical :: warning_mode, order_work
 
         if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
                 loss_tau <= 0.0_dp) &
@@ -1167,19 +1174,55 @@ contains
             current_time = current_time + segment_duration
         end do
 
-        allocate (orbit_status(npart))
+        allocate (si_next(npart), f_next(npart), orbit_status(npart), &
+            orbit_status_next(npart), nfev_next(npart), &
+            original_index(npart), order(npart), order_scratch(npart), &
+            loss_time_next(npart), work_key(npart))
         orbit_status = 0
         loss_time = total_duration
         nfev = 0
         warp_nfev_slots = 0_int64
         weighted_losses = 0.0_dp
         do i = 1, npart
+            original_index(i) = i
             if (si(i)%z(1) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                 orbit_status(i) = 1
                 loss_time(i) = 0.0_dp
                 weighted_losses = weighted_losses + 1.0_dp
             end if
         end do
+
+        order_work = .true.
+        call get_environment_variable('SIMPLE_GPU_WORK_ORDER', ordering_value, &
+            ordering_length, ordering_status)
+        if (ordering_status == 0 .and. ordering_length > 0) &
+            order_work = trim(adjustl(ordering_value(:ordering_length))) /= '0' .and. &
+                trim(adjustl(ordering_value(:ordering_length))) /= 'none'
+#ifndef _OPENACC
+        order_work = .false.
+#endif
+        if (order_work) then
+            do i = 1, npart
+                if (orbit_status(i) == 0) then
+                    work_key(i) = abs(f(i)%vpar)
+                else
+                    work_key(i) = -1.0_dp
+                end if
+            end do
+            call stable_order_descending(work_key, order, order_scratch)
+            do i = 1, npart
+                source = order(i)
+                si_next(i) = si(source)
+                f_next(i) = f(source)
+                orbit_status_next(i) = orbit_status(source)
+                loss_time_next(i) = loss_time(source)
+                original_index(i) = source
+            end do
+            si = si_next
+            f = f_next
+            orbit_status = orbit_status_next
+            loss_time = loss_time_next
+        end if
         current_time = 0.0_dp
         warning_mode = symplectic_newton_warning_mode
 
@@ -1263,9 +1306,18 @@ contains
         end do
 
         do i = 1, npart
-            zend(:, i) = si(i)%z
-            loss_step(i) = orbit_status(i)
+            original = original_index(i)
+            si_next(original) = si(i)
+            f_next(original) = f(i)
+            zend(:, original) = si(i)%z
+            loss_step(original) = orbit_status(i)
+            loss_time_next(original) = loss_time(i)
+            nfev_next(original) = nfev(i)
         end do
+        si = si_next
+        f = f_next
+        loss_time = loss_time_next
+        nfev = nfev_next
         observed_duration = current_time
         energy_loss_fraction = weighted_losses/real(npart, dp)
     end subroutine trace_orbits_gpu_symplectic_landreman
