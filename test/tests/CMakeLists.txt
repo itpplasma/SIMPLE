@@ -417,6 +417,17 @@ set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
 
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
+add_executable(test_start_integration_coordinates.x
+    test_start_integration_coordinates.f90)
+target_link_libraries(test_start_integration_coordinates.x simple)
+add_test(NAME test_start_integration_coordinates
+    COMMAND test_start_integration_coordinates.x)
+set_tests_properties(test_start_integration_coordinates PROPERTIES
+    LABELS "unit"
+    WORKING_DIRECTORY
+        ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
+
 add_executable(test_deterministic_seed.x test_deterministic_seed.f90)
 target_link_libraries(test_deterministic_seed.x simple)
 add_test(NAME test_deterministic_seed COMMAND test_deterministic_seed.x)

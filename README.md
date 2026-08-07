@@ -231,7 +231,7 @@ wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wou
 
 For a self-contained demo that downloads test data, runs SIMPLE, and prints the confined fraction, use `examples/run_example.sh`.
 
-In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions.
+In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions. Use `startmode=6` when the first three input columns are already Boozer integration coordinates `(s, theta_B, zeta_B)`. SIMPLE converts them to its stored reference coordinates before tracing.
 For chartmap coordinates, `chart_boundary_kind` declares what the outer chart
 surface represents. Its values are `auto` (the default), `lcfs`, `wall`, and
 `domain`. `auto` treats a chart whose recorded LCFS is at normalized radius one

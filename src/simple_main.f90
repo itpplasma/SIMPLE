@@ -1153,6 +1153,7 @@ contains
 
     subroutine sample_particles(xstart_is_integ_coords)
         use samplers, only: sample, START_FILE, sample_grid, &
+            sample_read_integration, &
             sample_surface_fieldline, sample_surface_fieldline_from_integ
 
         logical, intent(in), optional :: xstart_is_integ_coords
@@ -1195,6 +1196,9 @@ contains
                     '(2 < num_surf), stopping.'
                 stop
             end if
+
+        elseif (6 == startmode) then
+            call sample_read_integration(zstart, START_FILE)
 
         else
             print *, 'Unknown startmode: ', startmode
