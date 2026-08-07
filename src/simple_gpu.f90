@@ -168,13 +168,14 @@ contains
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev)
+    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev, predictor)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         logical, intent(in) :: warning_mode
         integer, intent(out) :: ierr
         integer, intent(out) :: nfev
+        real(dp), intent(in), optional :: predictor(2)
 
         real(dp) :: x(2), xlast(2)
         integer :: ktau, newton_status, newton_nfev
@@ -190,12 +191,26 @@ contains
             accepted_field = f
             si%pthold = f%pth
 
-            x(1) = si%z(1)
-            x(2) = si%z(4)
+            if (ktau == 0 .and. present(predictor)) then
+                x = predictor
+            else
+                x(1) = si%z(1)
+                x(2) = si%z(4)
+            end if
 
             call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
                 newton_nfev)
             nfev = nfev + newton_nfev
+            if (newton_status /= SYMPLECTIC_STEP_OK .and. ktau == 0 .and. &
+                    present(predictor)) then
+                si = accepted_integrator
+                f = accepted_field
+                x(1) = si%z(1)
+                x(2) = si%z(4)
+                call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
+                    newton_nfev)
+                nfev = nfev + newton_nfev
+            end if
             if (newton_status /= SYMPLECTIC_STEP_OK) then
                 si = accepted_integrator
                 f = accepted_field
@@ -744,15 +759,32 @@ contains
         integer, intent(out) :: nfev, ierr
 
         integer :: k, step_nfev
+        real(dp) :: z_previous(4), predictor(2)
+        logical :: use_predictor
 
         elapsed = 0.0_dp
         nfev = 0
         ierr = SYMPLECTIC_STEP_OK
+        use_predictor = .false.
         do k = 1, nsteps
-            call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev)
+            if (use_predictor) then
+                predictor(1) = 2.0_dp*si%z(1) - z_previous(1)
+                predictor(2) = 2.0_dp*si%z(4) - z_previous(4)
+                use_predictor = predictor(1) >= 0.0_dp .and. &
+                    predictor(1) <= 1.0_dp .and. &
+                    abs(si%z(2) - z_previous(2)) < 0.5_dp*pi
+            end if
+            z_previous = si%z
+            if (use_predictor) then
+                call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev, &
+                    predictor)
+            else
+                call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev)
+            end if
             nfev = nfev + step_nfev
             elapsed = elapsed + si%dt
             if (ierr /= SYMPLECTIC_STEP_OK) exit
+            use_predictor = .true.
         end do
     end subroutine gpu_trace_euler_segment
 
@@ -1495,8 +1527,8 @@ contains
         integer, intent(out) :: nfev(npart)
 
         integer :: i, it, ktau, ierr, lstep, step_nfev
-        real(dp) :: elapsed
-        logical :: warning_mode
+        real(dp) :: elapsed, z_previous(4), predictor(2)
+        logical :: warning_mode, use_predictor
 
         warning_mode = symplectic_newton_warning_mode
 
@@ -1504,20 +1536,36 @@ contains
         !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), loss_time(istart:iend), &
         !$acc&           zend(:, istart:iend), nfev(istart:iend)) &
-        !$acc&   private(it, ktau, ierr, lstep, elapsed, step_nfev) &
+        !$acc&   private(it, ktau, ierr, lstep, elapsed, step_nfev, &
+        !$acc&           z_previous, predictor, use_predictor) &
         !$acc&   firstprivate(warning_mode)
         do i = istart, iend
             ierr = 0
             lstep = ntimstep
             elapsed = 0.0_dp
             nfev(i) = 0
+            use_predictor = .false.
             macro: do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
-                        step_nfev)
+                    if (use_predictor) then
+                        predictor(1) = 2.0_dp*si(i)%z(1) - z_previous(1)
+                        predictor(2) = 2.0_dp*si(i)%z(4) - z_previous(4)
+                        use_predictor = predictor(1) >= 0.0_dp .and. &
+                            predictor(1) <= 1.0_dp .and. &
+                            abs(si(i)%z(2) - z_previous(2)) < 0.5_dp*pi
+                    end if
+                    z_previous = si(i)%z
+                    if (use_predictor) then
+                        call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
+                            step_nfev, predictor)
+                    else
+                        call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
+                            step_nfev)
+                    end if
                     nfev(i) = nfev(i) + step_nfev
                     elapsed = elapsed + si(i)%dt
                     if (ierr /= 0) exit
+                    use_predictor = .true.
                 end do
                 if (ierr /= 0) then
                     lstep = it
