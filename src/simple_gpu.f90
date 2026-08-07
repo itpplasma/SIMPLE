@@ -423,31 +423,37 @@ contains
         real(dp), intent(out) :: dydt(4)
 
         real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
-        real(dp) :: dbmod(3), daph(3), dath(3), hth, hph
-        real(dp) :: dhth(3), dhph(3), vpar, dvpar(3), dh(3), dpth(3)
-        real(dp) :: hprime, bmod2
+        real(dp) :: dbmod(3), hth, hph, vpar, hprime, bmod2
+        real(dp) :: dhth_r, dhth_phi
+        real(dp) :: dhph_r, dhph_theta, dhph_phi
+        real(dp) :: dvpar_r, dvpar_theta, dvpar_phi
+        real(dp) :: dh_r, dh_theta, dh_phi, dpth_r, dpth_phi
 
         call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
             btheta, dbtheta, bphi, dbphi, bmod, dbmod)
         bmod2 = bmod*bmod
         hth = btheta/bmod
         hph = bphi/bmod
-        dhth = -btheta*dbmod/bmod2
-        dhth(1) = dhth(1) + dbtheta/bmod
-        dhph = -bphi*dbmod/bmod2
-        dhph(1) = dhph(1) + dbphi/bmod
-        daph = [daphi, 0.0_dp, 0.0_dp]
-        dath = [boozer_state%torflux, 0.0_dp, 0.0_dp]
+        dhth_r = dbtheta/bmod - btheta*dbmod(1)/bmod2
+        dhth_phi = -btheta*dbmod(3)/bmod2
+        dhph_r = dbphi/bmod - bphi*dbmod(1)/bmod2
+        dhph_theta = -bphi*dbmod(2)/bmod2
+        dhph_phi = -bphi*dbmod(3)/bmod2
         vpar = (y(4) - aphi/ro0)/hph
-        dvpar = -(daph/ro0 + dhph*vpar)/hph
-        dh = vpar*dvpar + mu*dbmod
-        dpth = dvpar*hth + vpar*dhth + dath/ro0
-        hprime = dh(1)/dpth(1)
+        dvpar_r = -(daphi/ro0 + dhph_r*vpar)/hph
+        dvpar_theta = -dhph_theta*vpar/hph
+        dvpar_phi = -dhph_phi*vpar/hph
+        dh_r = vpar*dvpar_r + mu*dbmod(1)
+        dh_theta = vpar*dvpar_theta + mu*dbmod(2)
+        dh_phi = vpar*dvpar_phi + mu*dbmod(3)
+        dpth_r = dvpar_r*hth + vpar*dhth_r + boozer_state%torflux/ro0
+        dpth_phi = dvpar_phi*hth + vpar*dhth_phi
+        hprime = dh_r/dpth_r
 
-        dydt(1) = -(dh(2) - hth/hph*dh(3))/dpth(1)
+        dydt(1) = -(dh_theta - hth/hph*dh_phi)/dpth_r
         dydt(2) = hprime
         dydt(3) = (vpar - hprime*hth)/hph
-        dydt(4) = -(dh(3) - hprime*dpth(3))
+        dydt(4) = -(dh_phi - hprime*dpth_phi)
     end subroutine gpu_rhs_canonical
 
     subroutine evaluate_rhs_gpu(y, mu, ro0, npart, dydt)
