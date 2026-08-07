@@ -18,7 +18,8 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
 
     ! Integration methods
     integer, parameter :: RK45 = 0, EXPL_IMPL_EULER = 1, IMPL_EXPL_EULER = 2, &
-             MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, LOBATTO3 = 15
+             MIDPOINT = 3, GAUSS1 = 4, GAUSS2 = 5, GAUSS3 = 6, GAUSS4 = 7, &
+             CASH_KARP = 8, DORMAND_PRINCE = 9, LOBATTO3 = 15
     integer, parameter :: SYMPLECTIC_STEP_OK = 0
     integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
     integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
@@ -79,6 +80,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
 contains
 
     subroutine coeff_rk_gauss(n, a, b, c)
+        !$acc routine seq
         integer, intent(in) :: n
         real(dp), intent(inout) :: a(n, n), b(n), c(n)
 

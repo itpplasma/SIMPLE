@@ -397,10 +397,20 @@ contains
                 call sympl_landing_stats_reset
             end block
         end if
-        call progress_init(checkpoint_interval, ntestpart)
-        call trace_parallel(norb)
-        call progress_finalize
-        call print_phase_time('Parallel particle tracing completed')
+        block
+            character(32) :: gpu_run_env
+            integer :: gpu_run_len, gpu_run_stat
+            call get_environment_variable('SIMPLE_GPU_RUN', gpu_run_env, &
+                gpu_run_len, gpu_run_stat)
+            if (gpu_run_stat == 0 .and. gpu_run_len > 0) then
+                call trace_gpu_production(norb)
+            else
+                call progress_init(checkpoint_interval, ntestpart)
+                call trace_parallel(norb)
+                call progress_finalize
+            end if
+        end block
+        call print_phase_time('Particle tracing completed')
 
         call write_output
         call print_phase_time('Output writing completed')
@@ -822,6 +832,131 @@ contains
         end if
     end subroutine trace_parallel
 
+    subroutine trace_gpu_production(norb)
+        ! End-to-end loss-tracing path used by the Landreman comparison. This
+        ! path deliberately excludes the separate continuous fast-classifier
+        ! campaign (J_parallel and rotation only) and all unsupported physics.
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use simple, only: init_sympl
+        use simple_gpu, only: trace_orbits_gpu_method
+        use field_can_boozer, only: eval_field_booz
+        use field_can_mod, only: get_val
+        use boozer_sub, only: sync_boozer_state
+        use magfie_sub, only: BOOZER
+        use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, &
+            CASH_KARP, DORMAND_PRINCE
+
+        type(tracer_t), intent(inout) :: norb
+        type(symplectic_integrator_t), allocatable :: si_gpu(:)
+        type(field_can_t), allocatable :: f_gpu(:)
+        integer, allocatable :: loss_step(:), nfev(:)
+        real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
+        logical, allocatable :: passing(:)
+        character(32) :: method_name
+        integer :: method_len, method_stat, method, init_mode, i, it
+        integer(8) :: nfev_total
+        real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
+
+        if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
+                class_plot .or. fast_class .or. ntcut > 0 .or. &
+                output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
+            error stop 'SIMPLE_GPU_RUN requires Boozer GC loss tracing without '// &
+                'collisions, wall, orbit output, or classifiers'
+        end if
+
+        method = integmode
+        call get_environment_variable('SIMPLE_GPU_METHOD', method_name, &
+            method_len, method_stat)
+        if (method_stat == 0 .and. method_len > 0) then
+            select case (trim(adjustl(method_name(:method_len))))
+            case ('euler', 'explicit-implicit-euler')
+                method = EXPL_IMPL_EULER
+            case ('midpoint')
+                method = MIDPOINT
+            case ('cash-karp', 'cash_karp', 'ck')
+                method = CASH_KARP
+            case ('dormand-prince', 'dormand_prince', 'dopri', 'rk45')
+                method = DORMAND_PRINCE
+            case default
+                error stop 'unknown SIMPLE_GPU_METHOD'
+            end select
+        end if
+        if (method /= EXPL_IMPL_EULER .and. method /= MIDPOINT .and. &
+                method /= CASH_KARP .and. method /= DORMAND_PRINCE) &
+            error stop 'SIMPLE_GPU_RUN supports euler, midpoint, cash-karp, or dopri'
+
+        init_mode = method
+        if (method == CASH_KARP .or. method == DORMAND_PRINCE) &
+            init_mode = EXPL_IMPL_EULER
+        allocate (si_gpu(ntestpart), f_gpu(ntestpart), loss_step(ntestpart), &
+            nfev(ntestpart), loss_time_normalized(ntestpart), &
+            zcanonical(4, ntestpart), passing(ntestpart))
+
+        t0 = omp_get_wtime()
+        do i = 1, ntestpart
+            call ref_to_integ(zstart(1:3, i), z(1:3))
+            z(4:5) = zstart(4:5, i)
+            call init_sympl(si_gpu(i), f_gpu(i), z, dtaumin, dtaumin, relerr, &
+                init_mode)
+            call compute_pitch_angle_params(z, passing(i), trap_par(i), perp_inv(i))
+        end do
+        call sync_boozer_state
+        t_init = omp_get_wtime() - t0
+
+        t0 = omp_get_wtime()
+        call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
+            ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
+        t_trace = omp_get_wtime() - t0
+
+        total_time_normalized = real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+        confpart_pass = 0.0_dp
+        confpart_trap = 0.0_dp
+        unresolved_orbits = 0
+        nfev_total = 0_8
+        t0 = omp_get_wtime()
+        do i = 1, ntestpart
+            nfev_total = nfev_total + int(nfev(i), 8)
+            si_gpu(i)%z = zcanonical(:, i)
+            call eval_field_booz(f_gpu(i), zcanonical(1, i), zcanonical(2, i), &
+                zcanonical(3, i), 0)
+            call get_val(f_gpu(i), zcanonical(4, i))
+            call integ_to_ref(zcanonical(1:3, i), zend(1:3, i))
+            zend(4, i) = si_gpu(i)%pabs
+            zend(5, i) = f_gpu(i)%vpar/(si_gpu(i)%pabs*sqrt2)
+
+            if (loss_step(i) < 0) then
+                times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
+                orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
+            else if (loss_time_normalized(i) < total_time_normalized - &
+                    16.0_dp*epsilon(1.0_dp)*max(total_time_normalized, 1.0_dp)) then
+                times_lost(i) = loss_time_normalized(i)*sqrt2/v0
+                orbit_exit_code(i) = ORBIT_EXIT_LCFS
+            else
+                times_lost(i) = trace_time
+                orbit_exit_code(i) = ORBIT_EXIT_COMPLETED
+            end if
+            do it = 1, ntimstep
+                if (orbit_exit_code(i) == ORBIT_EXIT_COMPLETED .or. &
+                        times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) &
+                    call increase_confined_count(it, passing(i))
+            end do
+        end do
+        t_finish = omp_get_wtime() - t0
+
+        print *, '==================== GPU production trace ==================='
+        print '(a,i0)', ' integrator mode = ', method
+        print '(a,i0)', ' particles = ', ntestpart
+        print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
+        print '(a,f12.6,a)', ' tracing        = ', t_trace, ' s'
+        print '(a,f12.6,a)', ' finalization   = ', t_finish, ' s'
+        print '(a,f12.6,a)', ' end-to-end     = ', t_init + t_trace + t_finish, ' s'
+        print '(a,i0)', ' field evaluations = ', nfev_total
+        print '(a,i0)', ' physical losses = ', count(orbit_exit_code == ORBIT_EXIT_LCFS)
+        print '(a,i0)', ' numerical failures = ', &
+            count(orbit_exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN)
+        print *, '============================================================'
+    end subroutine trace_gpu_production
+
     subroutine trace_compare_gpu(norb)
         ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
         ! symplectic integrator on identical per-particle initial states.
@@ -829,34 +964,38 @@ contains
         ! to the Boozer + EXPL_IMPL_EULER path without wall, collision, or
         ! classifier options.
         use orbit_symplectic, only: orbit_timestep_sympl
-        use orbit_symplectic_base, only: symplectic_integrator_t, EXPL_IMPL_EULER
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+            EXPL_IMPL_EULER, MIDPOINT
         use field_can_mod, only: field_can_t
         use magfie_sub, only: BOOZER
         use boozer_sub, only: sync_boozer_state
-        use simple_gpu, only: trace_orbits_gpu
+        use simple_gpu, only: trace_orbits_gpu_method
 
         type(tracer_t), intent(inout) :: norb
 
         type(symplectic_integrator_t), allocatable :: si_cpu(:), si_gpu(:)
         type(field_can_t), allocatable :: f_cpu(:), f_gpu(:)
-        integer, allocatable :: cpu_loss(:), gpu_loss(:)
+        integer, allocatable :: cpu_loss(:), gpu_loss(:), gpu_nfev(:)
+        real(dp), allocatable :: gpu_loss_time(:)
         real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
         real(dp) :: z(5)
         integer :: i, it, ktau, ierr, loss_mismatch
         integer :: cpu_lost, gpu_lost, flip
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
 
-        if (isw_field_type /= BOOZER .or. integmode /= EXPL_IMPL_EULER .or. swcoll .or. &
+        if (isw_field_type /= BOOZER .or. &
+            (integmode /= EXPL_IMPL_EULER .and. integmode /= MIDPOINT) .or. swcoll .or. &
             len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. generate_start_only) then
             error stop "simple_main.trace_compare_gpu: SIMPLE_GPU_BENCH requires Boozer, " // &
-                "EXPL_IMPL_EULER, and no wall/collision/classifier options"
+                "EXPL_IMPL_EULER or MIDPOINT, and no wall/collision/classifier options"
         end if
 
         call sync_boozer_state
 
         allocate (si_cpu(ntestpart), si_gpu(ntestpart))
         allocate (f_cpu(ntestpart), f_gpu(ntestpart))
-        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart))
+        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart), gpu_nfev(ntestpart))
+        allocate (gpu_loss_time(ntestpart))
         allocate (cpu_zend(4, ntestpart), gpu_zend(4, ntestpart))
 
         ! Identical per-particle initialisation (host). init_sympl sets the
@@ -897,8 +1036,8 @@ contains
 
         ! GPU kernel
         t0 = omp_get_wtime()
-        call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
-            gpu_loss, gpu_zend)
+        call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
+            ntau_macro, integmode, gpu_loss, gpu_loss_time, gpu_zend, gpu_nfev)
         t1 = omp_get_wtime()
         t_gpu = t1 - t0
 
@@ -918,6 +1057,7 @@ contains
 
         print *, '==================== GPU vs CPU tracing ===================='
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
+        print '(a,i0)', ' integrator mode = ', integmode
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
         print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, &
@@ -927,6 +1067,7 @@ contains
         print '(a,i0,a,i0)', ' lost<->confined flips = ', flip, ' / ', ntestpart
         print '(a,f10.4,a)', ' CPU time (OpenMP) = ', t_cpu, ' s'
         print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
+        print '(a,i0)', ' GPU field evaluations = ', sum(gpu_nfev)
         if (t_gpu > 0d0) print '(a,f8.2,a)', ' speedup (CPU/GPU) = ', t_cpu/t_gpu, ' x'
         print *, '============================================================'
     end subroutine trace_compare_gpu

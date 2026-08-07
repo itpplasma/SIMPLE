@@ -809,9 +809,18 @@ if(SIMPLE_ENABLE_OPENACC)
 endif()
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.in
     ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench/test_gpu_orbit_bench.in
+    COPYONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_midpoint_bench.in
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench/test_gpu_midpoint_bench.in
+    COPYONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench/start.dat
     COPYONLY)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt
@@ -828,6 +837,18 @@ set_tests_properties(test_gpu_orbit_bench PROPERTIES
     LABELS "unit"
     PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench
+    TIMEOUT 120)
+
+add_test(NAME test_gpu_midpoint_bench
+    COMMAND ${CMAKE_COMMAND} -E env
+        SIMPLE_GPU_BENCH=1
+        $<TARGET_FILE:simple.x>
+        test_gpu_midpoint_bench.in
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_gpu_midpoint_bench PROPERTIES
+    LABELS "unit;gpu"
+    PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench
     TIMEOUT 120)
 
 # Macrostep log grid tests (issue: performance regression with log grid)
