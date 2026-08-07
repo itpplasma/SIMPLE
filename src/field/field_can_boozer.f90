@@ -167,17 +167,23 @@ contains
         integer, intent(in) :: mode_secders
         !$acc routine seq
 
-        real(dp) :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, &
+        real(dp) :: bmod2, &
             d3Aphdr3, dummy, dummy3(3), dummy6(6), &
             Bth, Bph, dBth, dBph, d2Bth, d2Bph
 
         f%dAth = 0.0_dp
         f%dAph = 0.0_dp
-        f%d2Ath = 0.0_dp
-        f%d2Aph = 0.0_dp
-        f%d2hth = 0.0_dp
-        f%d2hph = 0.0_dp
-        f%d2Bmod = 0.0_dp
+        if (mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
+            f%d2Ath(1:3) = 0.0_dp
+            f%d2Aph(1:3) = 0.0_dp
+            f%d2hth(1:3) = 0.0_dp
+            f%d2hph(1:3) = 0.0_dp
+        else
+            f%d2Ath = 0.0_dp
+            f%d2Aph = 0.0_dp
+            f%d2hth = 0.0_dp
+            f%d2hph = 0.0_dp
+        end if
 
         call splint_boozer_coord_device(r, th_c, ph_c, mode_secders, &
                                         f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
@@ -187,10 +193,6 @@ contains
                                         dummy, dummy3, dummy6)
 
         bmod2 = f%Bmod**2
-        sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*boozer_state%torflux
-        Bctr_vartheta = -f%dAph(1)/sqg
-        Bctr_varphi = f%dAth(1)/sqg
-
         f%hth = Bth/f%Bmod
         f%hph = Bph/f%Bmod
         f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
