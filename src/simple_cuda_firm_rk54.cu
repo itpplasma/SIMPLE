@@ -13,7 +13,12 @@
 namespace {
 
 constexpr int kQuantities = 13;
-constexpr int kThreads = 128;
+#ifndef SIMPLE_CUDA_THREADS
+#define SIMPLE_CUDA_THREADS 32
+#endif
+constexpr int kThreads = SIMPLE_CUDA_THREADS;
+static_assert(kThreads > 0 && kThreads <= 1024,
+              "SIMPLE_CUDA_THREADS must be between 1 and 1024");
 constexpr int kMaximumAttempts = 100000000;
 constexpr double kPi = 3.141592653589793238462643383279502884;
 
@@ -48,15 +53,13 @@ __device__ __forceinline__ void lagrange_weights(double x, double w[4]) {
 
 __device__ __noinline__ void interpolate13(
     const double *__restrict__ data, const Parameters &p,
-    const double state[4], double output[13], bool &reflected) {
-    const double x = state[0];
-    const double y = state[1];
-    const double s = hypot(x, y);
+    const double state[4], const double s, double theta,
+    double output[13], bool &reflected) {
     // The stored theta metagrid is the stellarator-symmetric half-domain
     // [0, pi], but the physical angle must first be wrapped over 2*pi and only
     // then reflected. Wrapping directly by the metagrid extent changes the
     // sign of odd quantities and is not equivalent.
-    double theta = wrap_periodic(atan2(y, x), 0.0, 2.0*kPi);
+    if (theta < 0.0) theta += 2.0*kPi;
     double zeta = wrap_periodic(state[2], p.minimum[2],
                                 p.period_or_maximum[2] - p.minimum[2]);
 
@@ -114,14 +117,14 @@ __device__ __noinline__ void right_hand_side(
     const double *__restrict__ field, const Parameters &p, const double mu,
     const double state[4], double derivative[4], double *mod_b_out = nullptr,
     double *g_out = nullptr) {
-    double value[13];
-    bool reflected;
-    interpolate13(field, p, state, value, reflected);
-
     const double x = state[0];
     const double y = state[1];
     const double s = hypot(x, y);
     const double theta = atan2(y, x);
+    double value[13];
+    bool reflected;
+    interpolate13(field, p, state, s, theta, value, reflected);
+
     const double vparallel = state[3];
 
     const double mod_b = value[0];
@@ -156,8 +159,10 @@ __device__ __noinline__ void right_hand_side(
                             (db_dpsi*i - db_dtheta*k)*energy_factor)/(iota*d);
     const double vpardot = (c*db_dtheta - f*db_dzeta)*mu*mod_b/(iota*d);
 
-    derivative[0] = sdot*cos(theta) - s*sin(theta)*thetadot;
-    derivative[1] = sdot*sin(theta) + s*cos(theta)*thetadot;
+    const double radial_x = s > 0.0 ? x/s : 1.0;
+    const double radial_y = s > 0.0 ? y/s : 0.0;
+    derivative[0] = sdot*radial_x - y*thetadot;
+    derivative[1] = sdot*radial_y + x*thetadot;
     derivative[2] = zetadot;
     derivative[3] = vpardot;
     if (mod_b_out) *mod_b_out = mod_b;
@@ -373,8 +378,16 @@ __global__ void trace_kernel(const double *__restrict__ field,
             after_reject = false;
             lost = hypot(y[0], y[1]) >= 1.0;
             if (!lost && t < p.tmax) {
-                right_hand_side(field, p, mu, y, first_derivative);
-                ++nfev;
+                if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+                    // The seventh DP stage is evaluated at the accepted state,
+                    // so it is the first stage of the next attempt (FSAL).
+#pragma unroll
+                    for (int q = 0; q < 4; ++q)
+                        first_derivative[q] = k[6][q];
+                } else {
+                    right_hand_side(field, p, mu, y, first_derivative);
+                    ++nfev;
+                }
             }
         } else {
             ++rejected;
