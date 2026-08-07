@@ -162,10 +162,13 @@ def run_short_dopri_trace(
             raise AssertionError(
                 "short DOPRI orbit must remain confined without numerical failures"
             )
-        if evaluations != 288:
+        # Two initial RHS calls per orbit plus five published DOPRI 5(4) steps
+        # at six calls each: the accepted seventh stage is reused through FSAL.
+        expected_evaluations = 8 * (2 + 5 * 6)
+        if evaluations != expected_evaluations:
             raise AssertionError(
                 f"order-{spline_order} short DOPRI orbit used {evaluations} "
-                "rather than 288 field evaluations"
+                f"rather than {expected_evaluations} field evaluations"
             )
 
 
