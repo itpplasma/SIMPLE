@@ -1,7 +1,24 @@
+module start_integration_coordinates_fixture
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+
+    implicit none
+
+contains
+
+    subroutine known_transform(xinteg, xref)
+        real(dp), intent(in) :: xinteg(3)
+        real(dp), intent(out) :: xref(3)
+
+        xref = [2.0_dp*xinteg(1), xinteg(2) + 1.0_dp, xinteg(3) - 1.0_dp]
+    end subroutine known_transform
+
+end module start_integration_coordinates_fixture
+
 program test_start_integration_coordinates
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_mod, only: integ_to_ref
     use samplers, only: save_starting_points, sample_read_integration, START_FILE
+    use start_integration_coordinates_fixture, only: known_transform
 
     implicit none
 
@@ -25,14 +42,5 @@ program test_start_integration_coordinates
         print *, 'integration-coordinate start conversion mismatch'
         error stop 1
     end if
-
-contains
-
-    subroutine known_transform(xinteg, xref)
-        real(dp), intent(in) :: xinteg(3)
-        real(dp), intent(out) :: xref(3)
-
-        xref = [2.0_dp*xinteg(1), xinteg(2) + 1.0_dp, xinteg(3) - 1.0_dp]
-    end subroutine known_transform
 
 end program test_start_integration_coordinates

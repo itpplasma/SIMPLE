@@ -210,7 +210,7 @@ module params
 contains
 
     subroutine read_config(config_file)
-        character(256), intent(in) :: config_file
+        character(*), intent(in) :: config_file
 
         open (1, file=config_file, status='old', action='read')
         read (1, nml=config)
