@@ -408,12 +408,13 @@ contains
             status = SYMPLECTIC_STEP_OK
     end subroutine gpu_newton_midpoint
 
-    subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev)
+    subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev, predictor)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         logical, intent(in) :: warning_mode
         integer, intent(out) :: ierr, nfev
+        real(dp), intent(in), optional :: predictor(5)
 
         type(symplectic_integrator_t) :: accepted_integrator
         type(field_can_t) :: accepted_field
@@ -426,10 +427,24 @@ contains
             accepted_integrator = si
             accepted_field = f
             si%pthold = f%pth
-            x(1:4) = si%z
-            x(5) = si%z(1)
+            if (ktau == 1 .and. present(predictor)) then
+                x = predictor
+            else
+                x(1:4) = si%z
+                x(5) = si%z(1)
+            end if
             call gpu_newton_midpoint(si, f, x, warning_mode, step_status, step_nfev)
             nfev = nfev + step_nfev
+            if (step_status /= SYMPLECTIC_STEP_OK .and. ktau == 1 .and. &
+                    present(predictor)) then
+                si = accepted_integrator
+                f = accepted_field
+                x(1:4) = si%z
+                x(5) = si%z(1)
+                call gpu_newton_midpoint(si, f, x, warning_mode, step_status, &
+                    step_nfev)
+                nfev = nfev + step_nfev
+            end if
             if (step_status /= SYMPLECTIC_STEP_OK) then
                 si = accepted_integrator
                 f = accepted_field
@@ -752,15 +767,33 @@ contains
         integer, intent(out) :: nfev, ierr
 
         integer :: k, step_nfev
+        real(dp) :: z_previous(4), predictor(5)
+        logical :: use_predictor
 
         elapsed = 0.0_dp
         nfev = 0
         ierr = SYMPLECTIC_STEP_OK
+        use_predictor = .false.
         do k = 1, nsteps
-            call gpu_timestep_midpoint(si, f, warning_mode, ierr, step_nfev)
+            if (use_predictor) then
+                predictor(1:4) = 2.0_dp*si%z - z_previous
+                predictor(5) = 1.5_dp*si%z(1) - 0.5_dp*z_previous(1)
+                use_predictor = predictor(1) >= 0.0_dp .and. &
+                    predictor(1) <= 1.0_dp .and. predictor(5) >= 0.0_dp .and. &
+                    predictor(5) <= 1.0_dp .and. &
+                    abs(si%z(2) - z_previous(2)) < 0.5_dp*pi
+            end if
+            z_previous = si%z
+            if (use_predictor) then
+                call gpu_timestep_midpoint(si, f, warning_mode, ierr, step_nfev, &
+                    predictor)
+            else
+                call gpu_timestep_midpoint(si, f, warning_mode, ierr, step_nfev)
+            end if
             nfev = nfev + step_nfev
             elapsed = elapsed + si%dt
             if (ierr /= SYMPLECTIC_STEP_OK) exit
+            use_predictor = .true.
         end do
     end subroutine gpu_trace_midpoint_segment
 
@@ -1339,28 +1372,47 @@ contains
         real(dp), intent(out) :: zend(4, npart)
 
         integer :: i, it, ktau, ierr, lstep, step_nfev
-        real(dp) :: elapsed
-        logical :: warning_mode
+        real(dp) :: elapsed, z_previous(4), predictor(5)
+        logical :: warning_mode, use_predictor
 
         warning_mode = symplectic_newton_warning_mode
         !$acc parallel loop gang vector default(present) &
         !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), zend(:, istart:iend), &
         !$acc&           nfev(istart:iend), loss_time_out(istart:iend)) &
-        !$acc&   private(it, ktau, ierr, lstep, step_nfev, elapsed) &
+        !$acc&   private(it, ktau, ierr, lstep, step_nfev, elapsed, &
+        !$acc&           z_previous, predictor, use_predictor) &
         !$acc&   firstprivate(warning_mode)
         do i = istart, iend
             ierr = 0
             lstep = ntimstep
             nfev(i) = 0
             elapsed = 0.0_dp
+            use_predictor = .false.
             macro: do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call gpu_timestep_midpoint(si(i), f(i), warning_mode, ierr, &
-                        step_nfev)
+                    if (use_predictor) then
+                        predictor(1:4) = 2.0_dp*si(i)%z - z_previous
+                        predictor(5) = 1.5_dp*si(i)%z(1) - &
+                            0.5_dp*z_previous(1)
+                        use_predictor = predictor(1) >= 0.0_dp .and. &
+                            predictor(1) <= 1.0_dp .and. &
+                            predictor(5) >= 0.0_dp .and. &
+                            predictor(5) <= 1.0_dp .and. &
+                            abs(si(i)%z(2) - z_previous(2)) < 0.5_dp*pi
+                    end if
+                    z_previous = si(i)%z
+                    if (use_predictor) then
+                        call gpu_timestep_midpoint(si(i), f(i), warning_mode, &
+                            ierr, step_nfev, predictor)
+                    else
+                        call gpu_timestep_midpoint(si(i), f(i), warning_mode, &
+                            ierr, step_nfev)
+                    end if
                     nfev(i) = nfev(i) + step_nfev
                     elapsed = elapsed + si(i)%dt
                     if (ierr /= 0) exit
+                    use_predictor = .true.
                 end do
                 if (ierr /= 0) then
                     lstep = it
