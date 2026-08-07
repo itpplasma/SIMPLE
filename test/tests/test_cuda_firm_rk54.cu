@@ -158,11 +158,20 @@ int main() {
         SIMPLE_CUDA_DORMAND_PRINCE, 1, field, 64*13, ranges, stz,
         vparallel, 4.0, 2.0, 1.0, 1.0, 0.02, 1.0e-10, 1.0e-12,
         0.02, 0.005, 0.1, output, counters, profile);
-    if (segmented != 0 || std::fabs(output[0] - 0.02) > 1.0e-15 ||
-        counters[1] == 0) {
+    const double zeta_rate = vparallel[0]*2.0/(3.0 + 0.7*0.4);
+    const double expected_theta = stz[1] + 0.7*zeta_rate*0.02;
+    const double expected_zeta = zeta_rate*0.02;
+    const double maximum_error = std::max({
+        std::fabs(output[0] - 0.02),
+        std::fabs(output[1] - stz[0]),
+        std::fabs(angle_error(output[2], expected_theta)),
+        std::fabs(output[3] - expected_zeta),
+        std::fabs(output[4] - vparallel[0]),
+    });
+    if (segmented != 0 || maximum_error > 2.0e-9 || counters[1] == 0) {
         std::fprintf(stderr,
-            "Landreman segmented path failed: status=%d time=%.17g accepted=%llu\n",
-            segmented, output[0], counters[1]);
+            "Landreman segmented path failed: status=%d error=%.3e accepted=%llu\n",
+            segmented, maximum_error, counters[1]);
         ++failures;
     }
     return failures == 0 ? 0 : 1;

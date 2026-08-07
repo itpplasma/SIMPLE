@@ -781,12 +781,14 @@ extern "C" int simple_cuda_firm_rk54_landreman(
         if (error == cudaSuccess) {
             const auto metric_begin = Clock::now();
             for (int particle = 0; particle < particle_count; ++particle) {
+                const double x = current_state[4*particle];
+                const double y = current_state[4*particle + 1];
                 final_stzv[7*particle] = lost[particle] ?
                     loss_time[particle] : tmax;
-                final_stzv[7*particle + 1] = 0.0;
-                final_stzv[7*particle + 2] = 0.0;
-                final_stzv[7*particle + 3] = 0.0;
-                final_stzv[7*particle + 4] = 0.0;
+                final_stzv[7*particle + 1] = hypot(x, y);
+                final_stzv[7*particle + 2] = atan2(y, x);
+                final_stzv[7*particle + 3] = current_state[4*particle + 2];
+                final_stzv[7*particle + 4] = current_state[4*particle + 3];
                 final_stzv[7*particle + 5] = timestep_min[particle];
                 final_stzv[7*particle + 6] = timestep_max[particle];
             }
