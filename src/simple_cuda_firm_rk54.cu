@@ -657,6 +657,10 @@ extern "C" int simple_cuda_firm_rk54_landreman(
     }
     std::vector<double> segment_output(7*particle_count);
     std::vector<unsigned long long> segment_counters(3*particle_count);
+    std::vector<double> ordered_state(4*particle_count);
+    std::vector<int> particle_order;
+    particle_order.reserve(particle_count);
+    std::vector<unsigned long long> previous_work(particle_count, 0);
     std::vector<double> loss_time(particle_count, -1.0);
     std::vector<double> timestep_min(particle_count,
                                      std::numeric_limits<double>::infinity());
@@ -693,20 +697,37 @@ extern "C" int simple_cuda_firm_rk54_landreman(
 
     {
         double current_time = 0.0;
-        const int blocks = (particle_count + kThreads - 1)/kThreads;
         while (current_time < tmax) {
             const double duration = fmin(t_block, tmax - current_time);
             p.tmax = duration;
+            particle_order.clear();
+            for (int particle = 0; particle < particle_count; ++particle)
+                if (!lost[particle]) particle_order.push_back(particle);
+            std::stable_sort(
+                particle_order.begin(), particle_order.end(),
+                [&](int left, int right) {
+                    if (previous_work[left] != previous_work[right])
+                        return previous_work[left] > previous_work[right];
+                    return left > right;
+                });
+            const int active_count = static_cast<int>(particle_order.size());
+            if (active_count == 0) break;
+            for (int slot = 0; slot < active_count; ++slot) {
+                const int particle = particle_order[slot];
+                for (int q = 0; q < 4; ++q)
+                    ordered_state[4*slot + q] = current_state[4*particle + q];
+            }
             {
                 const auto upload_begin = Clock::now();
-                error = cudaMemcpy(state_device, current_state.data(),
-                    4*particle_count*sizeof(double), cudaMemcpyHostToDevice);
+                error = cudaMemcpy(state_device, ordered_state.data(),
+                    4*active_count*sizeof(double), cudaMemcpyHostToDevice);
                 const auto upload_end = Clock::now();
                 if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_UPLOAD] +=
                     milliseconds(upload_begin, upload_end);
             }
             if (error != cudaSuccess) break;
 
+            const int blocks = (active_count + kThreads - 1)/kThreads;
             cudaEvent_t start{}, stop{};
             error = cudaEventCreate(&start);
             if (error == cudaSuccess) error = cudaEventCreate(&stop);
@@ -715,11 +736,11 @@ extern "C" int simple_cuda_firm_rk54_landreman(
                 if (method == SIMPLE_CUDA_DORMAND_PRINCE) {
                     trace_kernel<SIMPLE_CUDA_DORMAND_PRINCE><<<blocks, kThreads>>>(
                         field_device, state_device, p,
-                        particle_count, output_device, counter_device);
+                        active_count, output_device, counter_device);
                 } else {
                     trace_kernel<SIMPLE_CUDA_CASH_KARP><<<blocks, kThreads>>>(
                         field_device, state_device, p,
-                        particle_count, output_device, counter_device);
+                        active_count, output_device, counter_device);
                 }
                 error = cudaGetLastError();
             }
@@ -736,10 +757,10 @@ extern "C" int simple_cuda_firm_rk54_landreman(
             {
                 const auto download_begin = Clock::now();
                 error = cudaMemcpy(segment_output.data(), output_device,
-                    7*particle_count*sizeof(double), cudaMemcpyDeviceToHost);
+                    7*active_count*sizeof(double), cudaMemcpyDeviceToHost);
                 if (error == cudaSuccess)
                     error = cudaMemcpy(segment_counters.data(), counter_device,
-                        3*particle_count*sizeof(unsigned long long),
+                        3*active_count*sizeof(unsigned long long),
                         cudaMemcpyDeviceToHost);
                 const auto download_end = Clock::now();
                 if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_DOWNLOAD] +=
@@ -748,22 +769,21 @@ extern "C" int simple_cuda_firm_rk54_landreman(
             if (error != cudaSuccess) break;
 
             const auto metric_begin = Clock::now();
-            for (int particle = 0; particle < particle_count; ++particle) {
+            for (int slot = 0; slot < active_count; ++slot) {
+                const int particle = particle_order[slot];
+                previous_work[particle] = segment_counters[3*slot];
                 timestep_min[particle] = fmin(timestep_min[particle],
-                    segment_output[7*particle + 5]);
+                    segment_output[7*slot + 5]);
                 timestep_max[particle] = fmax(timestep_max[particle],
-                    segment_output[7*particle + 6]);
+                    segment_output[7*slot + 6]);
                 for (int c = 0; c < 3; ++c)
-                    counters[3*particle + c] += segment_counters[3*particle + c];
-                if (lost[particle]) continue;
-                current_state[4*particle] = segment_output[7*particle + 1];
-                current_state[4*particle + 1] = segment_output[7*particle + 2];
-                current_state[4*particle + 2] = segment_output[7*particle + 3];
-                current_state[4*particle + 3] = segment_output[7*particle + 4];
-                if (segment_output[7*particle] < duration - 1.0e-12) {
+                    counters[3*particle + c] += segment_counters[3*slot + c];
+                for (int q = 0; q < 4; ++q)
+                    current_state[4*particle + q] = segment_output[7*slot + 1 + q];
+                if (segment_output[7*slot] < duration - 1.0e-12) {
                     lost[particle] = 1;
                     loss_time[particle] = current_time +
-                                          segment_output[7*particle];
+                                          segment_output[7*slot];
                 }
             }
             current_time += duration;

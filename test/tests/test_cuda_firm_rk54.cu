@@ -130,13 +130,15 @@ int main() {
     const double ranges[9] = {0.0, 1.0, 4.0, 0.0, pi, 4.0,
                               0.0, 2.0*pi, 4.0};
     double field[64*13]{};
-    double stz[3]{};
-    double vparallel[1]{};
-    double output[7]{};
-    unsigned long long counters[3]{};
+    constexpr int segmented_particles = 16;
+    double stz[3*segmented_particles]{};
+    double vparallel[segmented_particles]{};
+    double output[7*segmented_particles]{};
+    unsigned long long counters[3*segmented_particles]{};
     double profile[SIMPLE_CUDA_PROFILE_COUNT]{};
     const int invalid = simple_cuda_firm_rk54(
-        SIMPLE_CUDA_DORMAND_PRINCE, 1, field, 64*13 - 1, ranges, stz,
+        SIMPLE_CUDA_DORMAND_PRINCE, segmented_particles, field, 64*13 - 1,
+        ranges, stz,
         vparallel, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0e-6, 0.0, output,
         counters, profile);
     if (invalid != 4) {
@@ -151,23 +153,32 @@ int main() {
         field[13*point + 6] = 0.4;
         field[13*point + 8] = 0.7;
     }
-    stz[0] = 0.5;
-    stz[1] = 0.2;
-    vparallel[0] = 0.4;
+    for (int particle = 0; particle < segmented_particles; ++particle) {
+        stz[3*particle] = 0.12 + 0.04*particle;
+        stz[3*particle + 1] = -2.5 + 0.31*particle;
+        stz[3*particle + 2] = -0.4 + 0.13*particle;
+        vparallel[particle] = 0.35 + 0.015*particle;
+    }
     const int segmented = simple_cuda_firm_rk54_landreman(
-        SIMPLE_CUDA_DORMAND_PRINCE, 1, field, 64*13, ranges, stz,
+        SIMPLE_CUDA_DORMAND_PRINCE, segmented_particles, field, 64*13,
+        ranges, stz,
         vparallel, 4.0, 2.0, 1.0, 1.0, 0.02, 1.0e-10, 1.0e-12,
         0.02, 0.005, 0.1, output, counters, profile);
-    const double zeta_rate = vparallel[0]*2.0/(3.0 + 0.7*0.4);
-    const double expected_theta = stz[1] + 0.7*zeta_rate*0.02;
-    const double expected_zeta = zeta_rate*0.02;
-    const double maximum_error = std::max({
-        std::fabs(output[0] - 0.02),
-        std::fabs(output[1] - stz[0]),
-        std::fabs(angle_error(output[2], expected_theta)),
-        std::fabs(output[3] - expected_zeta),
-        std::fabs(output[4] - vparallel[0]),
-    });
+    double maximum_error = 0.0;
+    for (int particle = 0; particle < segmented_particles; ++particle) {
+        const double zeta_rate = vparallel[particle]*2.0/(3.0 + 0.7*0.4);
+        const double expected_theta = stz[3*particle + 1] +
+                                      0.7*zeta_rate*0.02;
+        const double expected_zeta = stz[3*particle + 2] + zeta_rate*0.02;
+        maximum_error = std::max({
+            maximum_error,
+            std::fabs(output[7*particle] - 0.02),
+            std::fabs(output[7*particle + 1] - stz[3*particle]),
+            std::fabs(angle_error(output[7*particle + 2], expected_theta)),
+            std::fabs(output[7*particle + 3] - expected_zeta),
+            std::fabs(output[7*particle + 4] - vparallel[particle]),
+        });
+    }
     if (segmented != 0 || maximum_error > 2.0e-9 || counters[1] == 0) {
         std::fprintf(stderr,
             "Landreman segmented path failed: status=%d error=%.3e accepted=%llu\n",
