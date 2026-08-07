@@ -125,6 +125,7 @@ int main() {
     }
     failures += check_method(SIMPLE_CUDA_DORMAND_PRINCE, true);
     failures += check_method(SIMPLE_CUDA_CASH_KARP, true);
+    if (cpu_only) return failures == 0 ? 0 : 1;
 
     const double ranges[9] = {0.0, 1.0, 4.0, 0.0, pi, 4.0,
                               0.0, 2.0*pi, 4.0};
