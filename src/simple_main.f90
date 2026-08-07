@@ -440,6 +440,7 @@ contains
         use field_base, only: magnetic_field_t
         use field, only: field_from_file, is_spectre_file
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
+        use boozer_chartmap, only: set_boozer_chartmap_spline_orders
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
             REFCOORDS, SPECTRE, set_magfie_refcoords_field
@@ -477,6 +478,7 @@ contains
             call init_spectre_field(self)
             call print_phase_time('SPECTRE field loading completed')
         else if (use_boozer_chartmap) then
+            call set_boozer_chartmap_spline_orders(ans_s, ans_tp)
             ! Boozer chartmap: file-based, no VMEC initialization needed
             call init_reference_coordinates(coord_input)
             call print_phase_time('Reference coordinate system '// &
