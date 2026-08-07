@@ -28,7 +28,10 @@ def run_case(
     with tempfile.TemporaryDirectory(prefix=f"landreman-{method}-", dir=Path.cwd()) as tmp:
         root = Path(tmp)
         starts = []
-        boundary_count = 8 if method == "dopri" else 4
+        # Keep survivors as an independent oracle for the native RK work-order
+        # permutation: boundary losses must still be written under their
+        # original particle IDs after the internal GPU slots are regrouped.
+        boundary_count = 4
         for index, line in enumerate(starts_source.read_text().splitlines()):
             columns = line.split()
             if index < boundary_count:

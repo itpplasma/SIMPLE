@@ -729,7 +729,7 @@ contains
     subroutine trace_orbits_gpu_rk54_landreman(si, f, npart, method, &
             total_duration, block_duration, time_scale, loss_tau, maxloss, &
             hmin, loss_step, loss_time, zend, nfev, observed_duration, &
-            energy_loss_fraction)
+            energy_loss_fraction, warp_nfev_slots)
         type(symplectic_integrator_t), intent(inout) :: si(npart)
         type(field_can_t), intent(in) :: f(npart)
         integer, intent(in) :: npart, method
@@ -738,23 +738,37 @@ contains
         integer, intent(out) :: loss_step(npart), nfev(npart)
         real(dp), intent(out) :: loss_time(npart), zend(4, npart)
         real(dp), intent(out) :: observed_duration, energy_loss_fraction
+        integer(int64), intent(out) :: warp_nfev_slots
 
         type(rk54_controls4_t) :: controls, controls_i
-        real(dp), allocatable :: y(:, :), mu(:), ro0(:)
-        integer, allocatable :: orbit_status(:)
+        real(dp), allocatable :: y(:, :), mu(:), ro0(:), loss_time_slot(:)
+        real(dp), allocatable :: y_next(:, :), mu_next(:), ro0_next(:)
+        real(dp), allocatable :: loss_time_next(:), work_key(:)
+        integer, allocatable :: orbit_status(:), orbit_status_next(:)
+        integer, allocatable :: nfev_slot(:), nfev_next(:), segment_work(:)
+        integer, allocatable :: original_index(:), original_index_next(:)
+        integer, allocatable :: order(:), order_scratch(:)
         real(dp) :: current_time, segment_duration, segment_loss_time
         real(dp) :: y_local(4), hmax_local, momentum_atol_scale
         real(dp) :: new_weight, weighted_losses
-        real(dp) :: loss_detection_tolerance
-        integer :: i, ierr, segment_nfev
+        real(dp) :: loss_detection_tolerance, pilot_fraction, pilot_duration
+        character(16) :: ordering_value, pilot_value
+        integer :: i, ierr, segment_nfev, active_count, original
+        integer :: ordering_length, ordering_status, pilot_length, pilot_status
+        logical :: order_work
 
         if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
                 loss_tau <= 0.0_dp) &
             error stop 'invalid Landreman RK segment controls'
 
-        allocate (y(4, npart), mu(npart), ro0(npart), orbit_status(npart))
+        allocate (y(4, npart), mu(npart), ro0(npart), &
+            loss_time_slot(npart), y_next(4, npart), mu_next(npart), &
+            ro0_next(npart), loss_time_next(npart), work_key(npart), &
+            orbit_status(npart), orbit_status_next(npart), nfev_slot(npart), &
+            nfev_next(npart), segment_work(npart), original_index(npart), &
+            original_index_next(npart), order(npart), order_scratch(npart))
         orbit_status = 0
-        loss_time = total_duration
+        loss_time_slot = total_duration
         weighted_losses = 0.0_dp
         do i = 1, npart
             y(1, i) = si(i)%z(1)*cos(si(i)%z(2))
@@ -762,16 +776,55 @@ contains
             y(3:4, i) = si(i)%z(3:4)
             mu(i) = f(i)%mu
             ro0(i) = f(i)%ro0
+            original_index(i) = i
             if (sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i)) >= &
                     1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                 orbit_status(i) = 1
-                loss_time(i) = 0.0_dp
+                loss_time_slot(i) = 0.0_dp
                 weighted_losses = weighted_losses + 1.0_dp
             end if
         end do
-        nfev = 0
+        nfev_slot = 0
+        segment_work = 0
+        warp_nfev_slots = 0_int64
         current_time = 0.0_dp
         loss_detection_tolerance = 1.0e-12_dp/time_scale
+
+        order_work = .true.
+        call get_environment_variable('SIMPLE_GPU_WORK_ORDER', ordering_value, &
+            ordering_length, ordering_status)
+        if (ordering_status == 0 .and. ordering_length > 0) &
+            order_work = trim(adjustl(ordering_value(:ordering_length))) /= '0' .and. &
+                trim(adjustl(ordering_value(:ordering_length))) /= 'none'
+#ifndef _OPENACC
+        order_work = .false.
+#endif
+        pilot_fraction = 0.05_dp
+        call get_environment_variable('SIMPLE_GPU_PILOT_FRACTION', pilot_value, &
+            pilot_length, pilot_status)
+        if (pilot_status == 0 .and. pilot_length > 0) then
+            read (pilot_value(:pilot_length), *, iostat=pilot_status) pilot_fraction
+            if (pilot_status /= 0) &
+                error stop 'invalid SIMPLE_GPU_PILOT_FRACTION'
+        end if
+        if (pilot_fraction < 0.0_dp .or. pilot_fraction > 0.25_dp) &
+            error stop 'SIMPLE_GPU_PILOT_FRACTION must be in [0, 0.25]'
+        if (.not. order_work .or. npart < 1024) pilot_fraction = 0.0_dp
+        if (order_work) then
+            do i = 1, npart
+                if (orbit_status(i) == 0) then
+                    work_key(i) = abs(f(i)%vpar)
+                else
+                    work_key(i) = -1.0_dp
+                end if
+            end do
+            call stable_order_descending(work_key, order, order_scratch)
+            call reorder_rk_slots(order, y, mu, ro0, orbit_status, &
+                loss_time_slot, nfev_slot, original_index, y_next, mu_next, &
+                ro0_next, orbit_status_next, loss_time_next, nfev_next, &
+                original_index_next)
+        end if
+        active_count = count(orbit_status == 0)
 
         controls%rtol = si(1)%rtol
         controls%atol = si(1)%rtol
@@ -782,7 +835,56 @@ contains
             controls%method = RK54_DORMAND_PRINCE
         end if
 
-        !$acc data copy(y, orbit_status, loss_time, nfev) copyin(mu, ro0)
+        !$acc data copy(y, orbit_status, loss_time_slot, nfev_slot, segment_work) &
+        !$acc& copyin(mu, ro0)
+        if (pilot_fraction > 0.0_dp .and. active_count > 0) then
+            pilot_duration = pilot_fraction*min(block_duration, total_duration)
+#ifdef _OPENACC
+            !$acc parallel loop gang vector default(present) &
+            !$acc&   private(controls_i, y_local, segment_loss_time, &
+            !$acc&           hmax_local, momentum_atol_scale, segment_nfev, ierr) &
+            !$acc&   firstprivate(controls, pilot_duration)
+#else
+            !$omp parallel do default(shared) schedule(static) &
+            !$omp&   private(i, controls_i, y_local, segment_loss_time, &
+            !$omp&           hmax_local, momentum_atol_scale, segment_nfev, ierr)
+#endif
+            do i = 1, active_count
+                y_local = y(:, i)
+                controls_i = controls
+                call gpu_rk_segment_hmax_cartesian(y_local, pilot_duration, &
+                    hmax_local, momentum_atol_scale)
+                controls_i%hmax = hmax_local
+                controls_i%atol(4) = controls_i%rtol*momentum_atol_scale
+                call gpu_trace_rk54_cartesian(mu(i), ro0(i), y_local, &
+                    pilot_duration, controls_i, segment_loss_time, &
+                    segment_nfev, ierr)
+                segment_work(i) = segment_nfev + 1
+            end do
+#ifndef _OPENACC
+            !$omp end parallel do
+#endif
+            !$acc update self(segment_work)
+            nfev_slot(1:active_count) = segment_work(1:active_count)
+            do i = 1, active_count, 32
+                warp_nfev_slots = warp_nfev_slots + 32_int64*int( &
+                    maxval(segment_work(i:min(i + 31, active_count))), int64)
+            end do
+            do i = 1, npart
+                if (orbit_status(i) == 0) then
+                    work_key(i) = real(segment_work(i), dp)
+                else
+                    work_key(i) = -1.0_dp
+                end if
+            end do
+            call stable_order_descending(work_key, order, order_scratch)
+            call reorder_rk_slots(order, y, mu, ro0, orbit_status, &
+                loss_time_slot, nfev_slot, original_index, y_next, mu_next, &
+                ro0_next, orbit_status_next, loss_time_next, nfev_next, &
+                original_index_next)
+            !$acc update device(y, mu, ro0, orbit_status, loss_time_slot, &
+            !$acc& nfev_slot)
+        end if
         do while (current_time < total_duration)
             segment_duration = min(block_duration, total_duration - current_time)
             if (weighted_losses/real(npart, dp) > maxloss) then
@@ -803,16 +905,17 @@ contains
             !$omp&           hmax_local, momentum_atol_scale, segment_nfev, ierr) &
             !$omp&   reduction(+:new_weight)
 #endif
-            do i = 1, npart
+            do i = 1, active_count
+                segment_work(i) = 0
                 if (orbit_status(i) /= 0) cycle
                 y_local = y(:, i)
                 if (sqrt(y_local(1)*y_local(1) + y_local(2)*y_local(2)) >= &
                         1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                     orbit_status(i) = 1
-                    loss_time(i) = current_time
+                    loss_time_slot(i) = current_time
                     !$acc atomic update
                     new_weight = new_weight + &
-                        exp(-loss_time(i)*time_scale/loss_tau)
+                        exp(-loss_time_slot(i)*time_scale/loss_tau)
                     cycle
                 end if
                 controls_i = controls
@@ -824,43 +927,141 @@ contains
                     segment_duration, controls_i, segment_loss_time, &
                     segment_nfev, ierr)
                 y(:, i) = y_local
-                nfev(i) = nfev(i) + segment_nfev + 1
+                segment_work(i) = segment_nfev + 1
+                nfev_slot(i) = nfev_slot(i) + segment_work(i)
                 if (ierr /= 0) then
                     orbit_status(i) = -ierr
                 else if (segment_loss_time < segment_duration - &
                         loss_detection_tolerance) then
                     orbit_status(i) = 1
-                    loss_time(i) = current_time + segment_loss_time
+                    loss_time_slot(i) = current_time + segment_loss_time
                     !$acc atomic update
                     new_weight = new_weight + &
-                        exp(-loss_time(i)*time_scale/loss_tau)
+                        exp(-loss_time_slot(i)*time_scale/loss_tau)
                 end if
             end do
 #ifndef _OPENACC
             !$omp end parallel do
 #endif
+            !$acc update self(segment_work)
+            do i = 1, active_count, 32
+                warp_nfev_slots = warp_nfev_slots + 32_int64*int( &
+                    maxval(segment_work(i:min(i + 31, active_count))), int64)
+            end do
             weighted_losses = weighted_losses + new_weight
             current_time = current_time + segment_duration
             if (current_time < total_duration .and. &
                     weighted_losses/real(npart, dp) > maxloss) exit
+            if (current_time < total_duration .and. order_work) then
+                !$acc update self(y, orbit_status, loss_time_slot, nfev_slot)
+                do i = 1, npart
+                    if (orbit_status(i) == 0) then
+                        work_key(i) = real(segment_work(i), dp)
+                    else
+                        work_key(i) = -1.0_dp
+                    end if
+                end do
+                call stable_order_descending(work_key, order, order_scratch)
+                call reorder_rk_slots(order, y, mu, ro0, orbit_status, &
+                    loss_time_slot, nfev_slot, original_index, y_next, mu_next, &
+                    ro0_next, orbit_status_next, loss_time_next, nfev_next, &
+                    original_index_next)
+                active_count = count(orbit_status == 0)
+                !$acc update device(y, mu, ro0, orbit_status, loss_time_slot, &
+                !$acc& nfev_slot)
+            end if
         end do
         !$acc end data
 
         do i = 1, npart
-            si(i)%z(1) = sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i))
-            si(i)%z(2) = atan2(y(2, i), y(1, i))
-            si(i)%z(3:4) = y(3:4, i)
-            zend(:, i) = si(i)%z
-            loss_step(i) = orbit_status(i)
+            original = original_index(i)
+            si(original)%z(1) = sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i))
+            si(original)%z(2) = atan2(y(2, i), y(1, i))
+            si(original)%z(3:4) = y(3:4, i)
+            zend(:, original) = si(original)%z
+            loss_step(original) = orbit_status(i)
+            loss_time(original) = loss_time_slot(i)
+            nfev(original) = nfev_slot(i)
         end do
         observed_duration = current_time
         energy_loss_fraction = weighted_losses/real(npart, dp)
     end subroutine trace_orbits_gpu_rk54_landreman
 
+    subroutine stable_order_descending(key, order, scratch)
+        real(dp), intent(in) :: key(:)
+        integer, intent(out) :: order(size(key))
+        integer, intent(inout) :: scratch(size(key))
+
+        integer :: n, width, left, middle, right, i, j, k
+
+        n = size(key)
+        do i = 1, n
+            order(i) = i
+        end do
+        width = 1
+        do while (width < n)
+            do left = 1, n, 2*width
+                middle = min(left + width, n + 1)
+                right = min(left + 2*width - 1, n)
+                i = left
+                j = middle
+                do k = left, right
+                    if (i >= middle) then
+                        scratch(k) = order(j)
+                        j = j + 1
+                    else if (j > right) then
+                        scratch(k) = order(i)
+                        i = i + 1
+                    else if (key(order(i)) >= key(order(j))) then
+                        scratch(k) = order(i)
+                        i = i + 1
+                    else
+                        scratch(k) = order(j)
+                        j = j + 1
+                    end if
+                end do
+            end do
+            order = scratch
+            width = 2*width
+        end do
+    end subroutine stable_order_descending
+
+    subroutine reorder_rk_slots(order, y, mu, ro0, orbit_status, loss_time, &
+            nfev, original_index, y_next, mu_next, ro0_next, &
+            orbit_status_next, loss_time_next, nfev_next, original_index_next)
+        integer, intent(in) :: order(:)
+        real(dp), intent(inout) :: y(:, :), mu(:), ro0(:), loss_time(:)
+        integer, intent(inout) :: orbit_status(:), nfev(:), original_index(:)
+        real(dp), intent(inout) :: y_next(:, :), mu_next(:), ro0_next(:)
+        real(dp), intent(inout) :: loss_time_next(:)
+        integer, intent(inout) :: orbit_status_next(:), nfev_next(:)
+        integer, intent(inout) :: original_index_next(:)
+
+        integer :: i, source
+
+        do i = 1, size(order)
+            source = order(i)
+            y_next(:, i) = y(:, source)
+            mu_next(i) = mu(source)
+            ro0_next(i) = ro0(source)
+            orbit_status_next(i) = orbit_status(source)
+            loss_time_next(i) = loss_time(source)
+            nfev_next(i) = nfev(source)
+            original_index_next(i) = original_index(source)
+        end do
+        y = y_next
+        mu = mu_next
+        ro0 = ro0_next
+        orbit_status = orbit_status_next
+        loss_time = loss_time_next
+        nfev = nfev_next
+        original_index = original_index_next
+    end subroutine reorder_rk_slots
+
     subroutine trace_orbits_gpu_symplectic_landreman(si, f, npart, ntimstep, &
             ntau_macro, method, block_duration, time_scale, loss_tau, maxloss, &
             loss_step, loss_time, zend, nfev, observed_duration, &
-            energy_loss_fraction)
+            energy_loss_fraction, warp_nfev_slots)
         type(symplectic_integrator_t), intent(inout) :: si(npart)
         type(field_can_t), intent(inout) :: f(npart)
         integer, intent(in) :: npart, ntimstep, method
@@ -869,6 +1070,7 @@ contains
         integer, intent(out) :: loss_step(npart), nfev(npart)
         real(dp), intent(out) :: loss_time(npart), zend(4, npart)
         real(dp), intent(out) :: observed_duration, energy_loss_fraction
+        integer(int64), intent(out) :: warp_nfev_slots
 
         integer, allocatable :: orbit_status(:)
         real(dp) :: total_duration, current_time, segment_duration
@@ -898,6 +1100,7 @@ contains
         orbit_status = 0
         loss_time = total_duration
         nfev = 0
+        warp_nfev_slots = 0_int64
         weighted_losses = 0.0_dp
         do i = 1, npart
             if (si(i)%z(1) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
@@ -983,6 +1186,11 @@ contains
         end do
         !$acc end data
 
+        do i = 1, npart, 32
+            warp_nfev_slots = warp_nfev_slots + 32_int64*int( &
+                maxval(nfev(i:min(i + 31, npart))), int64)
+        end do
+
         do i = 1, npart
             zend(:, i) = si(i)%z
             loss_step(i) = orbit_status(i)
@@ -994,7 +1202,7 @@ contains
     subroutine trace_orbits_gpu_landreman(si, f, npart, ntimstep, ntau_macro, &
             method, block_duration, time_scale, loss_tau, maxloss, hmin, &
             loss_step, loss_time, zend, nfev, observed_duration, &
-            energy_loss_fraction)
+            energy_loss_fraction, warp_nfev_slots)
         type(symplectic_integrator_t), intent(inout) :: si(npart)
         type(field_can_t), intent(inout) :: f(npart)
         integer, intent(in) :: npart, ntimstep, method
@@ -1003,6 +1211,7 @@ contains
         integer, intent(out) :: loss_step(npart), nfev(npart)
         real(dp), intent(out) :: loss_time(npart), zend(4, npart)
         real(dp), intent(out) :: observed_duration, energy_loss_fraction
+        integer(int64), intent(out) :: warp_nfev_slots
 
         real(dp) :: total_duration
 
@@ -1012,12 +1221,12 @@ contains
             call trace_orbits_gpu_rk54_landreman(si, f, npart, method, &
                 total_duration, block_duration, time_scale, loss_tau, maxloss, &
                 hmin, loss_step, loss_time, zend, nfev, observed_duration, &
-                energy_loss_fraction)
+                energy_loss_fraction, warp_nfev_slots)
         case (EXPL_IMPL_EULER, MIDPOINT)
             call trace_orbits_gpu_symplectic_landreman(si, f, npart, ntimstep, &
                 ntau_macro, method, block_duration, time_scale, loss_tau, maxloss, &
                 loss_step, loss_time, zend, nfev, observed_duration, &
-                energy_loss_fraction)
+                energy_loss_fraction, warp_nfev_slots)
         case default
             error stop 'trace_orbits_gpu_landreman: unsupported integrator'
         end select

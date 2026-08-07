@@ -869,10 +869,12 @@ contains
         real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
         logical, allocatable :: passing(:)
         character(32) :: method_name, landreman_value, start_coordinates
+        character(1024) :: particle_profile_path
         integer :: method_len, method_stat, method, init_mode, i, it
         integer :: landreman_len, landreman_stat, start_coordinates_len
-        integer :: start_coordinates_stat
-        integer(8) :: nfev_total
+        integer :: start_coordinates_stat, particle_profile_len
+        integer :: particle_profile_stat, particle_profile_unit
+        integer(8) :: nfev_total, warp_nfev_slots
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
         real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
         real(dp) :: time_scale, observed_duration, energy_loss_fraction
@@ -948,6 +950,7 @@ contains
             landreman_mode = trim(adjustl(landreman_value(:landreman_len))) /= '0'
 
         t0 = omp_get_wtime()
+        warp_nfev_slots = 0_8
         if (landreman_mode) then
             call read_optional_environment_real('SIMPLE_GPU_T_BLOCK', &
                 1.0e-3_dp, block_time)
@@ -970,7 +973,7 @@ contains
                 ntau_macro, method, block_time/time_scale, time_scale, loss_tau, &
                 maxloss, minimum_timestep/time_scale, loss_step, &
                 loss_time_normalized, zcanonical, nfev, observed_duration, &
-                energy_loss_fraction)
+                energy_loss_fraction, warp_nfev_slots)
         else
             call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
                 ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
@@ -1013,6 +1016,12 @@ contains
                     call increase_confined_count(it, passing(i))
             end do
         end do
+        if (.not. landreman_mode) then
+            do i = 1, ntestpart, 32
+                warp_nfev_slots = warp_nfev_slots + 32_8*int( &
+                    maxval(nfev(i:min(i + 31, ntestpart))), 8)
+            end do
+        end if
         t_finish = omp_get_wtime() - t0
 
         print *, '==================== GPU production trace ==================='
@@ -1024,6 +1033,10 @@ contains
         print '(a,f12.6,a)', ' finalization   = ', t_finish, ' s'
         print '(a,f12.6,a)', ' end-to-end     = ', t_init + t_trace + t_finish, ' s'
         print '(a,i0)', ' field evaluations = ', nfev_total
+        print '(a,i0)', ' warp RHS slots = ', warp_nfev_slots
+        if (warp_nfev_slots > 0_8) print '(a,f8.4)', &
+            ' warp RHS utilization = ', real(nfev_total, dp)/ &
+            real(warp_nfev_slots, dp)
         print '(a,i0)', ' physical losses = ', count(orbit_exit_code == ORBIT_EXIT_LCFS)
         print '(a,i0)', ' numerical failures = ', &
             count(orbit_exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN)
@@ -1033,6 +1046,23 @@ contains
             print '(a,es12.4)', ' energy loss fraction = ', energy_loss_fraction
         end if
         print *, '============================================================'
+
+        call get_environment_variable('SIMPLE_GPU_PARTICLE_PROFILE', &
+            particle_profile_path, particle_profile_len, particle_profile_stat)
+        if (particle_profile_stat == 0 .and. particle_profile_len > 0) then
+            open (newunit=particle_profile_unit, &
+                file=trim(particle_profile_path(:particle_profile_len)), &
+                status='replace', action='write')
+            write (particle_profile_unit, '(a)') &
+                'particle,s,theta,zeta,speed,pitch,nfev,loss_step,loss_time'
+            do i = 1, ntestpart
+                write (particle_profile_unit, &
+                    '(i0,5(",",es24.16),2(",",i0),",",es24.16)') &
+                    i, zstart(:, i), nfev(i), loss_step(i), &
+                    loss_time_normalized(i)*time_scale
+            end do
+            close (particle_profile_unit)
+        end if
     end subroutine trace_gpu_production
 
     subroutine trace_compare_gpu(norb)
