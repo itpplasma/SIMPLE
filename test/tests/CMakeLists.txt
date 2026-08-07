@@ -875,6 +875,17 @@ set_tests_properties(test_gpu_midpoint_bench PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench
     TIMEOUT 120)
 
+add_test(NAME test_gpu_landreman_segments
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_landreman_segments.py
+        $<TARGET_FILE:simple.x>
+        ${WOUT_FILE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt)
+set_tests_properties(test_gpu_landreman_segments PROPERTIES
+    LABELS "integration;gpu"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    TIMEOUT 120)
+
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
 target_link_libraries(test_macrostep_log_grid.x simple)

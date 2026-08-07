@@ -10,7 +10,7 @@ module simple_gpu
     ! symplectic-Euler algebra from orbit_symplectic_euler1. Equivalence is
     ! checked against the CPU path by test_gpu_orbit_bench.
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
-    use util, only: pi, twopi
+    use util, only: pi, sqrt2, twopi
     use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
     use field_can_boozer, only: eval_field_booz_device
     use orbit_symplectic_base, only: symplectic_integrator_t, &
@@ -26,7 +26,7 @@ module simple_gpu
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE, RK54_NEED_RHS, RK54_ACCEPTED, &
         RK54_REJECTED, RK54_FAILED
-    use boozer_sub, only: boozer_state
+    use boozer_sub, only: boozer_state, splint_boozer_rk_device
     use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
@@ -40,6 +40,7 @@ module simple_gpu
     public :: trace_orbits_gpu, trace_orbits_gpu_range
     public :: trace_orbits_gpu_method, trace_orbits_gpu_rk54_range
     public :: trace_orbits_gpu_midpoint_range
+    public :: trace_orbits_gpu_landreman
     public :: evaluate_rhs_gpu
 
 contains
@@ -421,20 +422,32 @@ contains
         real(dp), intent(in) :: mu, ro0
         real(dp), intent(out) :: dydt(4)
 
-        type(field_can_t) :: feval
-        real(dp) :: hprime
+        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
+        real(dp) :: dbmod(3), daph(3), dath(3), hth, hph
+        real(dp) :: dhth(3), dhph(3), vpar, dvpar(3), dh(3), dpth(3)
+        real(dp) :: hprime, bmod2
 
-        feval%mu = mu
-        feval%ro0 = ro0
-        call eval_field_booz_device(feval, y(1), y(2), y(3), 0)
-        call get_derivatives(feval, y(4))
-        hprime = feval%dH(1)/feval%dpth(1)
+        call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
+            btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        bmod2 = bmod*bmod
+        hth = btheta/bmod
+        hph = bphi/bmod
+        dhth = -btheta*dbmod/bmod2
+        dhth(1) = dhth(1) + dbtheta/bmod
+        dhph = -bphi*dbmod/bmod2
+        dhph(1) = dhph(1) + dbphi/bmod
+        daph = [daphi, 0.0_dp, 0.0_dp]
+        dath = [boozer_state%torflux, 0.0_dp, 0.0_dp]
+        vpar = (y(4) - aphi/ro0)/hph
+        dvpar = -(daph/ro0 + dhph*vpar)/hph
+        dh = vpar*dvpar + mu*dbmod
+        dpth = dvpar*hth + vpar*dhth + dath/ro0
+        hprime = dh(1)/dpth(1)
 
-        dydt(1) = -(feval%dH(2) - feval%hth/feval%hph*feval%dH(3))/ &
-            feval%dpth(1)
+        dydt(1) = -(dh(2) - hth/hph*dh(3))/dpth(1)
         dydt(2) = hprime
-        dydt(3) = (feval%vpar - hprime*feval%hth)/feval%hph
-        dydt(4) = -(feval%dH(3) - hprime*feval%dpth(3))
+        dydt(3) = (vpar - hprime*hth)/hph
+        dydt(4) = -(dh(3) - hprime*dpth(3))
     end subroutine gpu_rhs_canonical
 
     subroutine evaluate_rhs_gpu(y, mu, ro0, npart, dydt)
@@ -465,14 +478,14 @@ contains
         integer, parameter :: max_attempts = 100000000
         type(rk54_state4_t) :: state
         real(dp) :: t_eval, y_eval(4), dydt(4), h0
-        integer :: request, attempt
+        integer :: request, attempt, rhs_calls
 
         loss_time = duration
         nfev = 0
         ierr = 0
         if (duration <= 0.0_dp) return
 
-        h0 = min(duration, max(controls%hmin, 1.0e-3_dp*controls%hmax))
+        h0 = min(duration, 1.0e-3_dp*controls%hmax)
         call rk54_initialize4(state, 0.0_dp, y, h0)
 
         do attempt = 1, max_attempts
@@ -484,9 +497,15 @@ contains
 
             state%h = min(state%h, duration - state%t)
             call rk54_request4(state, controls, t_eval, y_eval, request)
+            rhs_calls = 0
             do while (request == RK54_NEED_RHS)
                 call gpu_rhs_canonical(y_eval, mu, ro0, dydt)
                 call rk54_supply4(state, controls, dydt, t_eval, y_eval, request)
+                rhs_calls = rhs_calls + 1
+                if (rhs_calls > 7) then
+                    request = RK54_FAILED
+                    exit
+                end if
             end do
 
             if (request == RK54_FAILED) then
@@ -512,6 +531,355 @@ contains
         y = state%y
         nfev = state%nfev
     end subroutine gpu_trace_rk54
+
+    subroutine gpu_rk_segment_hmax(y, duration, hmax)
+        ! Match FIRM3D's per-segment quarter-turn cap, evaluated at the
+        ! segment's initial state: dt <= (G/B)*pi/(2*v_total). SIMPLE's
+        ! canonical independent variable is physical_time*v_total/sqrt(2).
+        !$acc routine seq
+        real(dp), intent(in) :: y(4), duration
+        real(dp), intent(out) :: hmax
+
+        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
+        real(dp) :: dbmod(3)
+
+        call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
+            btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        hmax = min(duration, 0.5_dp*pi*abs(bphi/bmod)/sqrt2)
+    end subroutine gpu_rk_segment_hmax
+
+    subroutine gpu_trace_euler_segment(si, f, nsteps, warning_mode, elapsed, &
+            nfev, ierr)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(in) :: nsteps
+        logical, intent(in) :: warning_mode
+        real(dp), intent(out) :: elapsed
+        integer, intent(out) :: nfev, ierr
+
+        integer :: k, step_nfev
+
+        elapsed = 0.0_dp
+        nfev = 0
+        ierr = SYMPLECTIC_STEP_OK
+        do k = 1, nsteps
+            call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev)
+            nfev = nfev + step_nfev
+            elapsed = elapsed + si%dt
+            if (ierr /= SYMPLECTIC_STEP_OK) exit
+        end do
+    end subroutine gpu_trace_euler_segment
+
+    subroutine gpu_trace_midpoint_segment(si, f, nsteps, warning_mode, elapsed, &
+            nfev, ierr)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(in) :: nsteps
+        logical, intent(in) :: warning_mode
+        real(dp), intent(out) :: elapsed
+        integer, intent(out) :: nfev, ierr
+
+        integer :: k, step_nfev
+
+        elapsed = 0.0_dp
+        nfev = 0
+        ierr = SYMPLECTIC_STEP_OK
+        do k = 1, nsteps
+            call gpu_timestep_midpoint(si, f, warning_mode, ierr, step_nfev)
+            nfev = nfev + step_nfev
+            elapsed = elapsed + si%dt
+            if (ierr /= SYMPLECTIC_STEP_OK) exit
+        end do
+    end subroutine gpu_trace_midpoint_segment
+
+    subroutine trace_orbits_gpu_rk54_landreman(si, f, npart, method, &
+            total_duration, block_duration, time_scale, loss_tau, maxloss, &
+            hmin, loss_step, loss_time, zend, nfev, observed_duration, &
+            energy_loss_fraction)
+        type(symplectic_integrator_t), intent(inout) :: si(npart)
+        type(field_can_t), intent(in) :: f(npart)
+        integer, intent(in) :: npart, method
+        real(dp), intent(in) :: total_duration, block_duration, time_scale
+        real(dp), intent(in) :: loss_tau, maxloss, hmin
+        integer, intent(out) :: loss_step(npart), nfev(npart)
+        real(dp), intent(out) :: loss_time(npart), zend(4, npart)
+        real(dp), intent(out) :: observed_duration, energy_loss_fraction
+
+        type(rk54_controls4_t) :: controls, controls_i
+        real(dp), allocatable :: y(:, :), mu(:), ro0(:)
+        integer, allocatable :: orbit_status(:)
+        real(dp) :: current_time, segment_duration, segment_loss_time
+        real(dp) :: y_local(4), hmax_local, new_weight, weighted_losses
+        real(dp) :: loss_detection_tolerance
+        integer :: i, ierr, segment_nfev
+
+        if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
+                loss_tau <= 0.0_dp) &
+            error stop 'invalid Landreman RK segment controls'
+
+        allocate (y(4, npart), mu(npart), ro0(npart), orbit_status(npart))
+        orbit_status = 0
+        loss_time = total_duration
+        weighted_losses = 0.0_dp
+        do i = 1, npart
+            y(:, i) = si(i)%z
+            mu(i) = f(i)%mu
+            ro0(i) = f(i)%ro0
+            if (y(1, i) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+                orbit_status(i) = 1
+                loss_time(i) = 0.0_dp
+                weighted_losses = weighted_losses + 1.0_dp
+            end if
+        end do
+        nfev = 0
+        current_time = 0.0_dp
+        loss_detection_tolerance = 1.0e-12_dp/time_scale
+
+        controls%rtol = si(1)%rtol
+        controls%atol = si(1)%rtol
+        controls%hmin = hmin
+        if (method == CASH_KARP) then
+            controls%method = RK54_CASH_KARP
+        else
+            controls%method = RK54_DORMAND_PRINCE
+        end if
+
+        !$acc data copy(y, orbit_status, loss_time, nfev) copyin(mu, ro0)
+        do while (current_time < total_duration)
+            segment_duration = min(block_duration, total_duration - current_time)
+            if (weighted_losses/real(npart, dp) > maxloss) then
+                current_time = current_time + segment_duration
+                exit
+            end if
+            new_weight = 0.0_dp
+#ifdef _OPENACC
+            !$acc parallel loop gang vector default(present) &
+            !$acc&   private(controls_i, y_local, segment_loss_time, &
+            !$acc&           hmax_local, segment_nfev, ierr) &
+            !$acc&   firstprivate(controls, current_time, segment_duration, &
+            !$acc&                time_scale, loss_tau, loss_detection_tolerance) &
+            !$acc&   copy(new_weight)
+#else
+            !$omp parallel do default(shared) schedule(static) &
+            !$omp&   private(i, controls_i, y_local, segment_loss_time, &
+            !$omp&           hmax_local, segment_nfev, ierr) &
+            !$omp&   reduction(+:new_weight)
+#endif
+            do i = 1, npart
+                if (orbit_status(i) /= 0) cycle
+                y_local = y(:, i)
+                if (y_local(1) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+                    orbit_status(i) = 1
+                    loss_time(i) = current_time
+                    !$acc atomic update
+                    new_weight = new_weight + &
+                        exp(-loss_time(i)*time_scale/loss_tau)
+                    cycle
+                end if
+                controls_i = controls
+                call gpu_rk_segment_hmax(y_local, segment_duration, hmax_local)
+                controls_i%hmax = hmax_local
+                call gpu_trace_rk54(mu(i), ro0(i), y_local, segment_duration, &
+                    controls_i, segment_loss_time, segment_nfev, ierr)
+                y(:, i) = y_local
+                nfev(i) = nfev(i) + segment_nfev + 1
+                if (ierr /= 0) then
+                    orbit_status(i) = -ierr
+                else if (segment_loss_time < segment_duration - &
+                        loss_detection_tolerance) then
+                    orbit_status(i) = 1
+                    loss_time(i) = current_time + segment_loss_time
+                    !$acc atomic update
+                    new_weight = new_weight + &
+                        exp(-loss_time(i)*time_scale/loss_tau)
+                end if
+            end do
+#ifndef _OPENACC
+            !$omp end parallel do
+#endif
+            weighted_losses = weighted_losses + new_weight
+            current_time = current_time + segment_duration
+            if (current_time < total_duration .and. &
+                    weighted_losses/real(npart, dp) > maxloss) exit
+        end do
+        !$acc end data
+
+        do i = 1, npart
+            si(i)%z = y(:, i)
+            zend(:, i) = y(:, i)
+            loss_step(i) = orbit_status(i)
+        end do
+        observed_duration = current_time
+        energy_loss_fraction = weighted_losses/real(npart, dp)
+    end subroutine trace_orbits_gpu_rk54_landreman
+
+    subroutine trace_orbits_gpu_symplectic_landreman(si, f, npart, ntimstep, &
+            ntau_macro, method, block_duration, time_scale, loss_tau, maxloss, &
+            loss_step, loss_time, zend, nfev, observed_duration, &
+            energy_loss_fraction)
+        type(symplectic_integrator_t), intent(inout) :: si(npart)
+        type(field_can_t), intent(inout) :: f(npart)
+        integer, intent(in) :: npart, ntimstep, method
+        integer, intent(in) :: ntau_macro(ntimstep)
+        real(dp), intent(in) :: block_duration, time_scale, loss_tau, maxloss
+        integer, intent(out) :: loss_step(npart), nfev(npart)
+        real(dp), intent(out) :: loss_time(npart), zend(4, npart)
+        real(dp), intent(out) :: observed_duration, energy_loss_fraction
+
+        integer, allocatable :: orbit_status(:)
+        real(dp) :: total_duration, current_time, segment_duration
+        real(dp) :: elapsed, new_weight, weighted_losses, expected_duration
+        real(dp) :: schedule_tolerance
+        integer :: i, it, ierr, segment_nfev
+        logical :: warning_mode
+
+        if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
+                loss_tau <= 0.0_dp) &
+            error stop 'invalid Landreman symplectic segment controls'
+        if (method /= EXPL_IMPL_EULER .and. method /= MIDPOINT) &
+            error stop 'invalid Landreman symplectic method'
+
+        total_duration = si(1)%dt*real(sum(ntau_macro(2:ntimstep)), dp)
+        schedule_tolerance = 64.0_dp*epsilon(1.0_dp)*max(1.0_dp, total_duration)
+        current_time = 0.0_dp
+        do it = 2, ntimstep
+            segment_duration = si(1)%dt*real(ntau_macro(it), dp)
+            expected_duration = min(block_duration, total_duration - current_time)
+            if (abs(segment_duration - expected_duration) > schedule_tolerance) &
+                error stop 'SIMPLE macrostep schedule does not match Landreman block size'
+            current_time = current_time + segment_duration
+        end do
+
+        allocate (orbit_status(npart))
+        orbit_status = 0
+        loss_time = total_duration
+        nfev = 0
+        weighted_losses = 0.0_dp
+        do i = 1, npart
+            if (si(i)%z(1) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+                orbit_status(i) = 1
+                loss_time(i) = 0.0_dp
+                weighted_losses = weighted_losses + 1.0_dp
+            end if
+        end do
+        current_time = 0.0_dp
+        warning_mode = symplectic_newton_warning_mode
+
+        !$acc data copy(si, f, orbit_status, loss_time, nfev)
+        do it = 2, ntimstep
+            segment_duration = si(1)%dt*real(ntau_macro(it), dp)
+            if (weighted_losses/real(npart, dp) > maxloss) then
+                current_time = current_time + segment_duration
+                exit
+            end if
+            new_weight = 0.0_dp
+            if (method == EXPL_IMPL_EULER) then
+#ifdef _OPENACC
+                !$acc parallel loop gang vector default(present) &
+                !$acc&   private(elapsed, segment_nfev, ierr) &
+                !$acc&   firstprivate(warning_mode, current_time, time_scale, loss_tau) &
+                !$acc&   copy(new_weight)
+#else
+                !$omp parallel do default(shared) schedule(static) &
+                !$omp&   private(i, elapsed, segment_nfev, ierr) &
+                !$omp&   reduction(+:new_weight)
+#endif
+                do i = 1, npart
+                    if (orbit_status(i) /= 0) cycle
+                    call gpu_trace_euler_segment(si(i), f(i), ntau_macro(it), &
+                        warning_mode, elapsed, segment_nfev, ierr)
+                    nfev(i) = nfev(i) + segment_nfev
+                    if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
+                        orbit_status(i) = 1
+                        loss_time(i) = current_time + elapsed
+                        !$acc atomic update
+                        new_weight = new_weight + &
+                            exp(-loss_time(i)*time_scale/loss_tau)
+                    else if (ierr /= SYMPLECTIC_STEP_OK) then
+                        orbit_status(i) = -ierr
+                    end if
+                end do
+#ifndef _OPENACC
+                !$omp end parallel do
+#endif
+            else
+#ifdef _OPENACC
+                !$acc parallel loop gang vector default(present) &
+                !$acc&   private(elapsed, segment_nfev, ierr) &
+                !$acc&   firstprivate(warning_mode, current_time, time_scale, loss_tau) &
+                !$acc&   copy(new_weight)
+#else
+                !$omp parallel do default(shared) schedule(static) &
+                !$omp&   private(i, elapsed, segment_nfev, ierr) &
+                !$omp&   reduction(+:new_weight)
+#endif
+                do i = 1, npart
+                    if (orbit_status(i) /= 0) cycle
+                    call gpu_trace_midpoint_segment(si(i), f(i), ntau_macro(it), &
+                        warning_mode, elapsed, segment_nfev, ierr)
+                    nfev(i) = nfev(i) + segment_nfev
+                    if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
+                        orbit_status(i) = 1
+                        loss_time(i) = current_time + elapsed
+                        !$acc atomic update
+                        new_weight = new_weight + &
+                            exp(-loss_time(i)*time_scale/loss_tau)
+                    else if (ierr /= SYMPLECTIC_STEP_OK) then
+                        orbit_status(i) = -ierr
+                    end if
+                end do
+#ifndef _OPENACC
+                !$omp end parallel do
+#endif
+            end if
+            weighted_losses = weighted_losses + new_weight
+            current_time = current_time + segment_duration
+            if (current_time < total_duration .and. &
+                    weighted_losses/real(npart, dp) > maxloss) exit
+        end do
+        !$acc end data
+
+        do i = 1, npart
+            zend(:, i) = si(i)%z
+            loss_step(i) = orbit_status(i)
+        end do
+        observed_duration = current_time
+        energy_loss_fraction = weighted_losses/real(npart, dp)
+    end subroutine trace_orbits_gpu_symplectic_landreman
+
+    subroutine trace_orbits_gpu_landreman(si, f, npart, ntimstep, ntau_macro, &
+            method, block_duration, time_scale, loss_tau, maxloss, hmin, &
+            loss_step, loss_time, zend, nfev, observed_duration, &
+            energy_loss_fraction)
+        type(symplectic_integrator_t), intent(inout) :: si(npart)
+        type(field_can_t), intent(inout) :: f(npart)
+        integer, intent(in) :: npart, ntimstep, method
+        integer, intent(in) :: ntau_macro(ntimstep)
+        real(dp), intent(in) :: block_duration, time_scale, loss_tau, maxloss, hmin
+        integer, intent(out) :: loss_step(npart), nfev(npart)
+        real(dp), intent(out) :: loss_time(npart), zend(4, npart)
+        real(dp), intent(out) :: observed_duration, energy_loss_fraction
+
+        real(dp) :: total_duration
+
+        total_duration = si(1)%dt*real(sum(ntau_macro(2:ntimstep)), dp)
+        select case (method)
+        case (CASH_KARP, DORMAND_PRINCE)
+            call trace_orbits_gpu_rk54_landreman(si, f, npart, method, &
+                total_duration, block_duration, time_scale, loss_tau, maxloss, &
+                hmin, loss_step, loss_time, zend, nfev, observed_duration, &
+                energy_loss_fraction)
+        case (EXPL_IMPL_EULER, MIDPOINT)
+            call trace_orbits_gpu_symplectic_landreman(si, f, npart, ntimstep, &
+                ntau_macro, method, block_duration, time_scale, loss_tau, maxloss, &
+                loss_step, loss_time, zend, nfev, observed_duration, &
+                energy_loss_fraction)
+        case default
+            error stop 'trace_orbits_gpu_landreman: unsupported integrator'
+        end select
+    end subroutine trace_orbits_gpu_landreman
 
     subroutine trace_orbits_gpu_rk54_range(si, f, npart, istart, iend, &
             ntimstep, ntau_macro, method, loss_step, loss_time_out, zend, nfev)

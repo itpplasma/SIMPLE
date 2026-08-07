@@ -832,16 +832,31 @@ contains
         end if
     end subroutine trace_parallel
 
+    subroutine read_optional_environment_real(name, default_value, value)
+        character(*), intent(in) :: name
+        real(dp), intent(in) :: default_value
+        real(dp), intent(out) :: value
+
+        character(128) :: text
+        integer :: length, status
+
+        value = default_value
+        call get_environment_variable(name, text, length, status)
+        if (status /= 0 .or. length <= 0) return
+        read (text(:length), *, iostat=status) value
+        if (status /= 0) error stop 'invalid real-valued SIMPLE environment setting'
+    end subroutine read_optional_environment_real
+
     subroutine trace_gpu_production(norb)
         ! End-to-end loss-tracing path used by the Landreman comparison. This
         ! path deliberately excludes the separate continuous fast-classifier
         ! campaign (J_parallel and rotation only) and all unsupported physics.
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
         use simple, only: init_sympl
-        use simple_gpu, only: trace_orbits_gpu_method
+        use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method
         use field_can_boozer, only: eval_field_booz
         use field_can_mod, only: get_val
-        use boozer_sub, only: sync_boozer_state
+        use boozer_sub, only: boozer_rk_device_supported, sync_boozer_state
         use magfie_sub, only: BOOZER
         use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, &
             CASH_KARP, DORMAND_PRINCE
@@ -852,10 +867,14 @@ contains
         integer, allocatable :: loss_step(:), nfev(:)
         real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
         logical, allocatable :: passing(:)
-        character(32) :: method_name
+        character(32) :: method_name, landreman_value
         integer :: method_len, method_stat, method, init_mode, i, it
+        integer :: landreman_len, landreman_stat
         integer(8) :: nfev_total
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
+        real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
+        real(dp) :: time_scale, observed_duration, energy_loss_fraction
+        logical :: landreman_mode
 
         if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
                 class_plot .or. fast_class .or. ntcut > 0 .or. &
@@ -901,11 +920,48 @@ contains
             call compute_pitch_angle_params(z, passing(i), trap_par(i), perp_inv(i))
         end do
         call sync_boozer_state
+        if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
+                .not. boozer_rk_device_supported()) &
+            error stop 'GPU RK requires scalar quintic Boozer splines'
         t_init = omp_get_wtime() - t0
 
+        landreman_mode = .false.
+        call get_environment_variable('SIMPLE_GPU_LANDREMAN', landreman_value, &
+            landreman_len, landreman_stat)
+        if (landreman_stat == 0 .and. landreman_len > 0) &
+            landreman_mode = trim(adjustl(landreman_value(:landreman_len))) /= '0'
+
         t0 = omp_get_wtime()
-        call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
-            ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
+        if (landreman_mode) then
+            call read_optional_environment_real('SIMPLE_GPU_T_BLOCK', &
+                1.0e-3_dp, block_time)
+            call read_optional_environment_real('SIMPLE_GPU_LOSS_TAU', &
+                0.1_dp, loss_tau)
+            call read_optional_environment_real('SIMPLE_GPU_MAXLOSS', &
+                0.02_dp, maxloss)
+            call read_optional_environment_real('SIMPLE_GPU_MIN_TIMESTEP', &
+                1.0e-10_dp, minimum_timestep)
+            if (block_time <= 0.0_dp .or. block_time > trace_time) &
+                error stop 'SIMPLE_GPU_T_BLOCK must be in (0, trace_time]'
+            if (loss_tau <= 0.0_dp) &
+                error stop 'SIMPLE_GPU_LOSS_TAU must be positive'
+            if (maxloss < 0.0_dp) &
+                error stop 'SIMPLE_GPU_MAXLOSS must be nonnegative'
+            if (minimum_timestep < 0.0_dp) &
+                error stop 'SIMPLE_GPU_MIN_TIMESTEP must be nonnegative'
+            time_scale = sqrt2/v0
+            call trace_orbits_gpu_landreman(si_gpu, f_gpu, ntestpart, ntimstep, &
+                ntau_macro, method, block_time/time_scale, time_scale, loss_tau, &
+                maxloss, minimum_timestep/time_scale, loss_step, &
+                loss_time_normalized, zcanonical, nfev, observed_duration, &
+                energy_loss_fraction)
+        else
+            call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
+                ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
+            observed_duration = &
+                real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+            energy_loss_fraction = 0.0_dp
+        end if
         t_trace = omp_get_wtime() - t0
 
         total_time_normalized = real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
@@ -954,6 +1010,11 @@ contains
         print '(a,i0)', ' physical losses = ', count(orbit_exit_code == ORBIT_EXIT_LCFS)
         print '(a,i0)', ' numerical failures = ', &
             count(orbit_exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN)
+        if (landreman_mode) then
+            print '(a,f12.6,a)', ' observed until = ', &
+                observed_duration*sqrt2/v0, ' s'
+            print '(a,es12.4)', ' energy loss fraction = ', energy_loss_fraction
+        end if
         print *, '============================================================'
     end subroutine trace_gpu_production
 
