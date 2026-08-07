@@ -12,7 +12,7 @@
 
 namespace {
 
-constexpr int kQuantities = 13;
+constexpr int kStoredQuantities = 13;
 #ifndef SIMPLE_CUDA_THREADS
 #define SIMPLE_CUDA_THREADS 32
 #endif
@@ -51,10 +51,13 @@ __device__ __forceinline__ void lagrange_weights(double x, double w[4]) {
     w[3] = x*(x - 1.0)*(x - 2.0)/6.0;
 }
 
+template<int Method>
 __device__ __noinline__ void interpolate13(
     const double *__restrict__ data, const Parameters &p,
     const double state[4], const double s, double theta,
-    double output[13], bool &reflected) {
+    double *output, bool &reflected) {
+    constexpr int quantity_count =
+        Method == SIMPLE_CUDA_DORMAND_PRINCE ? 12 : 13;
     // The stored theta metagrid is the stellarator-symmetric half-domain
     // [0, pi], but the physical angle must first be wrapped over 2*pi and only
     // then reflected. Wrapping directly by the metagrid extent changes the
@@ -91,10 +94,10 @@ __device__ __noinline__ void interpolate13(
     const std::size_t cell =
         (static_cast<std::size_t>(grid_index[0])*p.cell_count[1] +
          grid_index[1])*p.cell_count[2] + grid_index[2];
-    const double *cell_data = data + kQuantities*64*cell;
+    const double *cell_data = data + kStoredQuantities*64*cell;
 
 #pragma unroll
-    for (int q = 0; q < kQuantities; ++q) output[q] = 0.0;
+    for (int q = 0; q < quantity_count; ++q) output[q] = 0.0;
 #pragma unroll
     for (int i = 0; i < 4; ++i) {
 #pragma unroll
@@ -103,16 +106,28 @@ __device__ __noinline__ void interpolate13(
 #pragma unroll
             for (int k = 0; k < 4; ++k) {
                 const double weight = wij*w2[k];
-                const double *point = cell_data + kQuantities*(16*i + 4*j + k);
+                const double *point =
+                    cell_data + kStoredQuantities*(16*i + 4*j + k);
+                if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
 #pragma unroll
-                for (int q = 0; q < kQuantities; ++q) {
-                    output[q] = fma(point[q], weight, output[q]);
+                    for (int q = 0; q < 9; ++q)
+                        output[q] = fma(point[q], weight, output[q]);
+                    // d(iota)/d(psi), stored at point[9], does not enter the
+                    // general guiding-center equations.
+                    output[9] = fma(point[10], weight, output[9]);
+                    output[10] = fma(point[11], weight, output[10]);
+                    output[11] = fma(point[12], weight, output[11]);
+                } else {
+#pragma unroll
+                    for (int q = 0; q < kStoredQuantities; ++q)
+                        output[q] = fma(point[q], weight, output[q]);
                 }
             }
         }
     }
 }
 
+template<int Method>
 __device__ __noinline__ void right_hand_side(
     const double *__restrict__ field, const Parameters &p, const double mu,
     const double state[4], double derivative[4], double *mod_b_out = nullptr,
@@ -121,9 +136,11 @@ __device__ __noinline__ void right_hand_side(
     const double y = state[1];
     const double s = hypot(x, y);
     const double theta = atan2(y, x);
-    double value[13];
+    constexpr int quantity_count =
+        Method == SIMPLE_CUDA_DORMAND_PRINCE ? 12 : 13;
+    double value[quantity_count];
     bool reflected;
-    interpolate13(field, p, state, s, theta, value, reflected);
+    interpolate13<Method>(field, p, state, s, theta, value, reflected);
 
     const double vparallel = state[3];
 
@@ -136,9 +153,18 @@ __device__ __noinline__ void right_hand_side(
     const double i = value[6];
     const double di_dpsi = value[7]/p.psi0;
     const double iota = value[8];
-    double k = value[10];
-    const double dk_dtheta = value[11];
-    const double dk_dzeta = value[12];
+    double k;
+    double dk_dtheta;
+    double dk_dzeta;
+    if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+        k = value[9];
+        dk_dtheta = value[10];
+        dk_dzeta = value[11];
+    } else {
+        k = value[10];
+        dk_dtheta = value[11];
+        dk_dzeta = value[12];
+    }
     if (reflected) {
         db_dtheta = -db_dtheta;
         db_dzeta = -db_dzeta;
@@ -320,7 +346,7 @@ __global__ void trace_kernel(const double *__restrict__ field,
     double y[4] = {initial_state[4*particle], initial_state[4*particle + 1],
                    initial_state[4*particle + 2], initial_state[4*particle + 3]};
     double first_derivative[4], mod_b, g;
-    right_hand_side(field, p, -1.0, y, first_derivative, &mod_b, &g);
+    right_hand_side<Method>(field, p, -1.0, y, first_derivative, &mod_b, &g);
     const double mu = (p.total_speed*p.total_speed - y[3]*y[3])/(2.0*mod_b);
     const double hmax = fmin(p.tmax, (g/mod_b)*(0.5*kPi)/p.total_speed);
     double h = fmax(p.minimum_timestep, 1.0e-3*hmax);
@@ -344,7 +370,7 @@ __global__ void trace_kernel(const double *__restrict__ field,
         double trial[4];
         for (int stage = 1; stage < stage_count<Method>(); ++stage) {
             stage_state<Method>(stage, y, h, k, trial);
-            right_hand_side(field, p, mu, trial, k[stage]);
+            right_hand_side<Method>(field, p, mu, trial, k[stage]);
             ++nfev;
         }
         const double error = finish_attempt<Method>(y, h, k, trial,
@@ -385,7 +411,7 @@ __global__ void trace_kernel(const double *__restrict__ field,
                     for (int q = 0; q < 4; ++q)
                         first_derivative[q] = k[6][q];
                 } else {
-                    right_hand_side(field, p, mu, y, first_derivative);
+                    right_hand_side<Method>(field, p, mu, y, first_derivative);
                     ++nfev;
                 }
             }
@@ -436,7 +462,7 @@ extern "C" int simple_cuda_firm_rk54(
         minimum_timestep < 0.0) return 2;
 
     Parameters p{};
-    std::size_t expected = kQuantities*64;
+    std::size_t expected = kStoredQuantities*64;
     for (int d = 0; d < 3; ++d) {
         p.minimum[d] = ranges[3*d];
         p.period_or_maximum[d] = ranges[3*d + 1];
@@ -579,7 +605,7 @@ extern "C" int simple_cuda_firm_rk54_landreman(
         t_block <= 0.0 || tau <= 0.0) return 2;
 
     Parameters p{};
-    std::size_t expected = kQuantities*64;
+    std::size_t expected = kStoredQuantities*64;
     for (int d = 0; d < 3; ++d) {
         p.minimum[d] = ranges[3*d];
         p.period_or_maximum[d] = ranges[3*d + 1];
