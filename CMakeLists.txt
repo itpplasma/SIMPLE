@@ -82,6 +82,7 @@ option(SIMPLE_ENABLE_CUDA
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 
 if(SIMPLE_ENABLE_CUDA)
+    enable_language(CXX)
     include(CheckLanguage)
     check_language(CUDA)
     if(NOT CMAKE_CUDA_COMPILER)
@@ -98,9 +99,11 @@ if(SIMPLE_ENABLE_CUDA)
         src/simple_cuda_firm_rk54.h)
     target_include_directories(simple_cuda_firm_rk54 PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(simple_cuda_firm_rk54 PUBLIC CUDA::cudart)
+    find_package(OpenMP COMPONENTS CXX REQUIRED)
+    target_link_libraries(simple_cuda_firm_rk54 PUBLIC
+        CUDA::cudart OpenMP::OpenMP_CXX)
     target_compile_options(simple_cuda_firm_rk54 PRIVATE
-        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v>)
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v;-Xcompiler=-fopenmp>)
     set_target_properties(simple_cuda_firm_rk54 PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON

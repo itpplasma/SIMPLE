@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <vector>
 
@@ -13,7 +14,7 @@ double angle_error(double actual, double expected) {
     return std::remainder(actual - expected, 2.0*pi);
 }
 
-int check_method(int method) {
+int check_method(int method, bool cpu) {
     constexpr int particles = 16;
     constexpr int quantities = 13;
     constexpr int grid_points = 4;
@@ -49,13 +50,23 @@ int check_method(int method) {
     std::vector<double> output(7*particles);
     std::vector<unsigned long long> counters(3*particles);
     double profile[SIMPLE_CUDA_PROFILE_COUNT];
-    const int status = simple_cuda_firm_rk54(
-        method, particles, field.data(), field.size(), ranges,
-        initial_stz.data(), initial_vparallel.data(), 4.0, 2.0,
-        total_speed, 1.0, tmax, 1.0e-10, 1.0e-12, output.data(),
-        counters.data(), profile);
+    int status;
+    if (cpu) {
+        status = simple_cpu_firm_rk54_landreman(
+            method, particles, field.data(), field.size(), ranges,
+            initial_stz.data(), initial_vparallel.data(), 4.0, 2.0,
+            total_speed, 1.0, tmax, 1.0e-10, 1.0e-12, 0.02, 0.005,
+            0.1, output.data(), counters.data(), profile);
+    } else {
+        status = simple_cuda_firm_rk54(
+            method, particles, field.data(), field.size(), ranges,
+            initial_stz.data(), initial_vparallel.data(), 4.0, 2.0,
+            total_speed, 1.0, tmax, 1.0e-10, 1.0e-12, output.data(),
+            counters.data(), profile);
+    }
     if (status != 0) {
-        std::fprintf(stderr, "CUDA RK method %d failed: %s\n", method,
+        std::fprintf(stderr, "%s RK method %d failed: %s\n",
+                     cpu ? "CPU" : "CUDA", method,
                      simple_cuda_error_string(status));
         return 1;
     }
@@ -80,16 +91,19 @@ int check_method(int method) {
         maximum_error = std::max(maximum_error,
             std::fabs(output[7*particle + 4] - vparallel));
         if (counters[3*particle] == 0 || counters[3*particle + 1] == 0) {
-            std::fprintf(stderr, "CUDA RK method %d did not advance particle %d\n",
-                         method, particle);
+            std::fprintf(stderr, "%s RK method %d did not advance particle %d\n",
+                         cpu ? "CPU" : "CUDA", method, particle);
             return 1;
         }
     }
-    std::printf("method=%d max analytic error=%.3e kernel_ms=%.3f total_ms=%.3f\n",
-                method, maximum_error, profile[SIMPLE_CUDA_PROFILE_KERNEL],
+    std::printf("backend=%s method=%d max analytic error=%.3e "
+                "trace_ms=%.3f total_ms=%.3f\n",
+                cpu ? "cpu" : "cuda", method, maximum_error,
+                profile[SIMPLE_CUDA_PROFILE_KERNEL],
                 profile[SIMPLE_CUDA_PROFILE_TOTAL]);
     if (maximum_error > 2.0e-9) {
-        std::fprintf(stderr, "CUDA RK method %d exceeds analytic tolerance\n", method);
+        std::fprintf(stderr, "%s RK method %d exceeds analytic tolerance\n",
+                     cpu ? "CPU" : "CUDA", method);
         return 1;
     }
     if (!(profile[SIMPLE_CUDA_PROFILE_TOTAL] >=
@@ -104,8 +118,13 @@ int check_method(int method) {
 
 int main() {
     int failures = 0;
-    failures += check_method(SIMPLE_CUDA_DORMAND_PRINCE);
-    failures += check_method(SIMPLE_CUDA_CASH_KARP);
+    const bool cpu_only = std::getenv("SIMPLE_CPU_ONLY") != nullptr;
+    if (!cpu_only) {
+        failures += check_method(SIMPLE_CUDA_DORMAND_PRINCE, false);
+        failures += check_method(SIMPLE_CUDA_CASH_KARP, false);
+    }
+    failures += check_method(SIMPLE_CUDA_DORMAND_PRINCE, true);
+    failures += check_method(SIMPLE_CUDA_CASH_KARP, true);
 
     const double ranges[9] = {0.0, 1.0, 4.0, 0.0, pi, 4.0,
                               0.0, 2.0*pi, 4.0};

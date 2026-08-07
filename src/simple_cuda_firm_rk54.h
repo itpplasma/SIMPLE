@@ -79,6 +79,31 @@ int simple_cuda_firm_rk54_landreman(
     unsigned long long *counters,
     double profile_ms[SIMPLE_CUDA_PROFILE_COUNT]);
 
+/* OpenMP CPU baseline for the same segmented Landreman protocol and orbit
+ * equations. The profile KERNEL slot records CPU tracing time; upload and
+ * download are zero. */
+int simple_cpu_firm_rk54_landreman(
+    int method,
+    int particle_count,
+    const double *quad_points,
+    size_t quad_point_count,
+    const double ranges[9],
+    const double *initial_stz,
+    const double *initial_vparallel,
+    double mass,
+    double charge,
+    double total_speed,
+    double psi0,
+    double tmax,
+    double tolerance,
+    double minimum_timestep,
+    double maxloss,
+    double t_block,
+    double tau,
+    double *final_stzv,
+    unsigned long long *counters,
+    double profile_ms[SIMPLE_CUDA_PROFILE_COUNT]);
+
 const char *simple_cuda_error_string(int status);
 
 #ifdef __cplusplus

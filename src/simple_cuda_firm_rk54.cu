@@ -37,14 +37,16 @@ struct Parameters {
     double minimum_timestep;
 };
 
-__device__ __forceinline__ double wrap_periodic(double x, double minimum,
-                                                 double period) {
+__host__ __device__ __forceinline__ double wrap_periodic(double x,
+                                                          double minimum,
+                                                          double period) {
     double wrapped = fmod(x - minimum, period);
     if (wrapped < 0.0) wrapped += period;
     return minimum + wrapped;
 }
 
-__device__ __forceinline__ void lagrange_weights(double x, double w[4]) {
+__host__ __device__ __forceinline__ void lagrange_weights(double x,
+                                                           double w[4]) {
     w[0] = (1.0 - x)*(2.0 - x)*(3.0 - x)/6.0;
     w[1] = x*(2.0 - x)*(3.0 - x)/2.0;
     w[2] = x*(x - 1.0)*(3.0 - x)/2.0;
@@ -52,7 +54,7 @@ __device__ __forceinline__ void lagrange_weights(double x, double w[4]) {
 }
 
 template<int Method>
-__device__ __noinline__ void interpolate13(
+__host__ __device__ __noinline__ void interpolate13(
     const double *__restrict__ data, const Parameters &p,
     const double state[4], const double s, double theta,
     double *output, bool &reflected) {
@@ -80,7 +82,8 @@ __device__ __noinline__ void interpolate13(
     for (int d = 0; d < 3; ++d) {
         int first = 3*(static_cast<int>((coordinate[d] - p.minimum[d])/
                                         p.step[d])/3);
-        first = max(0, min(first, p.point_count[d] - 4));
+        first = first < 0 ? 0 : first;
+        first = first > p.point_count[d] - 4 ? p.point_count[d] - 4 : first;
         grid_index[d] = first/3;
         relative[d] = (coordinate[d] - p.minimum[d] - first*p.step[d])/
                       p.step[d];
@@ -128,7 +131,7 @@ __device__ __noinline__ void interpolate13(
 }
 
 template<int Method>
-__device__ __noinline__ void right_hand_side(
+__host__ __device__ __noinline__ void right_hand_side(
     const double *__restrict__ field, const Parameters &p, const double mu,
     const double state[4], double derivative[4], double *mod_b_out = nullptr,
     double *g_out = nullptr) {
@@ -196,14 +199,13 @@ __device__ __noinline__ void right_hand_side(
 }
 
 template<int Method>
-__device__ __forceinline__ int stage_count() {
+__host__ __device__ __forceinline__ int stage_count() {
     return Method == SIMPLE_CUDA_DORMAND_PRINCE ? 7 : 6;
 }
 
 template<int Method>
-__device__ __forceinline__ void stage_state(int stage, const double y[4],
-                                             double h, double k[7][4],
-                                             double trial[4]) {
+__host__ __device__ __forceinline__ void stage_state(
+    int stage, const double y[4], double h, double k[7][4], double trial[4]) {
 #pragma unroll
     for (int q = 0; q < 4; ++q) trial[q] = y[q];
     if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
@@ -287,11 +289,9 @@ __device__ __forceinline__ void stage_state(int stage, const double y[4],
 }
 
 template<int Method>
-__device__ __forceinline__ double finish_attempt(const double y[4], double h,
-                                                  double k[7][4],
-                                                  double trial[4],
-                                                  double tolerance,
-                                                  double total_speed) {
+__host__ __device__ __forceinline__ double finish_attempt(
+    const double y[4], double h, double k[7][4], double trial[4],
+    double tolerance, double total_speed) {
     double error[4];
     if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
 #pragma unroll
@@ -335,16 +335,11 @@ __device__ __forceinline__ double finish_attempt(const double y[4], double h,
 }
 
 template<int Method>
-__global__ void trace_kernel(const double *__restrict__ field,
-                             const double *__restrict__ initial_state,
-                             Parameters p, int particle_count,
-                             double *__restrict__ output,
-                             unsigned long long *__restrict__ counters) {
-    const int particle = blockIdx.x*blockDim.x + threadIdx.x;
-    if (particle >= particle_count) return;
-
-    double y[4] = {initial_state[4*particle], initial_state[4*particle + 1],
-                   initial_state[4*particle + 2], initial_state[4*particle + 3]};
+__host__ __device__ __forceinline__ void trace_particle(
+    const double *__restrict__ field, const double initial_state[4],
+    const Parameters &p, double output[7], unsigned long long counters[3]) {
+    double y[4] = {initial_state[0], initial_state[1], initial_state[2],
+                   initial_state[3]};
     double first_derivative[4], mod_b, g;
     right_hand_side<Method>(field, p, -1.0, y, first_derivative, &mod_b, &g);
     const double mu = (p.total_speed*p.total_speed - y[3]*y[3])/(2.0*mod_b);
@@ -422,16 +417,40 @@ __global__ void trace_kernel(const double *__restrict__ field,
         h = hnew;
     }
 
-    output[7*particle] = t;
-    output[7*particle + 1] = y[0];
-    output[7*particle + 2] = y[1];
-    output[7*particle + 3] = y[2];
-    output[7*particle + 4] = y[3];
-    output[7*particle + 5] = hmin_seen;
-    output[7*particle + 6] = hmax_seen;
-    counters[3*particle] = nfev;
-    counters[3*particle + 1] = accepted;
-    counters[3*particle + 2] = rejected;
+    output[0] = t;
+    output[1] = y[0];
+    output[2] = y[1];
+    output[3] = y[2];
+    output[4] = y[3];
+    output[5] = hmin_seen;
+    output[6] = hmax_seen;
+    counters[0] = nfev;
+    counters[1] = accepted;
+    counters[2] = rejected;
+}
+
+template<int Method>
+__global__ void trace_kernel(const double *__restrict__ field,
+                             const double *__restrict__ initial_state,
+                             Parameters p, int particle_count,
+                             double *__restrict__ output,
+                             unsigned long long *__restrict__ counters) {
+    const int particle = blockIdx.x*blockDim.x + threadIdx.x;
+    if (particle >= particle_count) return;
+    trace_particle<Method>(field, initial_state + 4*particle, p,
+                           output + 7*particle, counters + 3*particle);
+}
+
+template<int Method>
+void trace_particles_cpu(const double *__restrict__ field,
+                         const double *__restrict__ initial_state,
+                         const Parameters &p, int particle_count,
+                         double *__restrict__ output,
+                         unsigned long long *__restrict__ counters) {
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int particle = 0; particle < particle_count; ++particle)
+        trace_particle<Method>(field, initial_state + 4*particle, p,
+                               output + 7*particle, counters + 3*particle);
 }
 
 using Clock = std::chrono::steady_clock;
@@ -785,6 +804,139 @@ segmented_cleanup:
     if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_TOTAL] =
         milliseconds(total_begin, Clock::now());
     return cuda_status(error);
+}
+
+extern "C" int simple_cpu_firm_rk54_landreman(
+    int method, int particle_count, const double *quad_points,
+    size_t quad_point_count, const double ranges[9], const double *initial_stz,
+    const double *initial_vparallel, double mass, double charge,
+    double total_speed, double psi0, double tmax, double tolerance,
+    double minimum_timestep, double maxloss, double t_block, double tau,
+    double *final_stzv, unsigned long long *counters,
+    double profile_ms[SIMPLE_CUDA_PROFILE_COUNT]) {
+    if (profile_ms)
+        std::fill(profile_ms, profile_ms + SIMPLE_CUDA_PROFILE_COUNT, 0.0);
+    if (method != SIMPLE_CUDA_CASH_KARP &&
+        method != SIMPLE_CUDA_DORMAND_PRINCE) return 1;
+    if (particle_count <= 0 || !quad_points || !ranges || !initial_stz ||
+        !initial_vparallel || !final_stzv || !counters || total_speed <= 0.0 ||
+        psi0 == 0.0 || tmax <= 0.0 || tolerance <= 0.0 ||
+        minimum_timestep < 0.0 || maxloss < 0.0 || maxloss >= 1.0 ||
+        t_block <= 0.0 || tau <= 0.0) return 2;
+
+    Parameters p{};
+    std::size_t expected = kStoredQuantities*64;
+    for (int d = 0; d < 3; ++d) {
+        p.minimum[d] = ranges[3*d];
+        p.period_or_maximum[d] = ranges[3*d + 1];
+        p.point_count[d] = static_cast<int>(ranges[3*d + 2]);
+        if (p.point_count[d] < 4 || (p.point_count[d] - 1)%3 != 0 ||
+            p.period_or_maximum[d] <= p.minimum[d]) return 3;
+        p.step[d] = (p.period_or_maximum[d] - p.minimum[d])/
+                    (p.point_count[d] - 1);
+        p.cell_count[d] = (p.point_count[d] - 1)/3;
+        expected *= static_cast<std::size_t>(p.cell_count[d]);
+    }
+    if (quad_point_count != expected) return 4;
+    p.mass = mass;
+    p.charge = charge;
+    p.total_speed = total_speed;
+    p.psi0 = psi0;
+    p.tolerance = tolerance;
+    p.minimum_timestep = minimum_timestep;
+
+    const auto total_begin = Clock::now();
+    const auto allocate_begin = total_begin;
+    std::vector<double> current_state(4*particle_count);
+    for (int particle = 0; particle < particle_count; ++particle) {
+        const double s = initial_stz[3*particle];
+        const double theta = initial_stz[3*particle + 1];
+        current_state[4*particle] = s*cos(theta);
+        current_state[4*particle + 1] = s*sin(theta);
+        current_state[4*particle + 2] = initial_stz[3*particle + 2];
+        current_state[4*particle + 3] = initial_vparallel[particle];
+    }
+    std::vector<double> segment_output(7*particle_count);
+    std::vector<unsigned long long> segment_counters(3*particle_count);
+    std::vector<double> loss_time(particle_count, -1.0);
+    std::vector<double> timestep_min(particle_count,
+                                     std::numeric_limits<double>::infinity());
+    std::vector<double> timestep_max(particle_count, 0.0);
+    std::vector<unsigned char> lost(particle_count, 0);
+    std::fill(counters, counters + 3*particle_count, 0);
+    const auto allocate_end = Clock::now();
+    if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_ALLOCATE] =
+        milliseconds(allocate_begin, allocate_end);
+
+    double current_time = 0.0;
+    while (current_time < tmax) {
+        const double duration = fmin(t_block, tmax - current_time);
+        p.tmax = duration;
+        const auto trace_begin = Clock::now();
+        if (method == SIMPLE_CUDA_DORMAND_PRINCE) {
+            trace_particles_cpu<SIMPLE_CUDA_DORMAND_PRINCE>(
+                quad_points, current_state.data(), p, particle_count,
+                segment_output.data(), segment_counters.data());
+        } else {
+            trace_particles_cpu<SIMPLE_CUDA_CASH_KARP>(
+                quad_points, current_state.data(), p, particle_count,
+                segment_output.data(), segment_counters.data());
+        }
+        const auto trace_end = Clock::now();
+        if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_KERNEL] +=
+            milliseconds(trace_begin, trace_end);
+
+        const auto metric_begin = Clock::now();
+        for (int particle = 0; particle < particle_count; ++particle) {
+            timestep_min[particle] = fmin(timestep_min[particle],
+                segment_output[7*particle + 5]);
+            timestep_max[particle] = fmax(timestep_max[particle],
+                segment_output[7*particle + 6]);
+            for (int c = 0; c < 3; ++c)
+                counters[3*particle + c] += segment_counters[3*particle + c];
+            if (lost[particle]) continue;
+            current_state[4*particle] = segment_output[7*particle + 1];
+            current_state[4*particle + 1] = segment_output[7*particle + 2];
+            current_state[4*particle + 2] = segment_output[7*particle + 3];
+            current_state[4*particle + 3] = segment_output[7*particle + 4];
+            if (segment_output[7*particle] < duration - 1.0e-12) {
+                lost[particle] = 1;
+                loss_time[particle] = current_time +
+                                      segment_output[7*particle];
+            }
+        }
+        current_time += duration;
+        double weighted_losses = 0.0;
+        for (int particle = 0; particle < particle_count; ++particle)
+            if (lost[particle])
+                weighted_losses += exp(-loss_time[particle]/tau);
+        const bool should_stop = weighted_losses/particle_count > maxloss;
+        const auto metric_end = Clock::now();
+        if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_METRIC] +=
+            milliseconds(metric_begin, metric_end);
+        if (should_stop) break;
+    }
+
+    const auto metric_begin = Clock::now();
+    for (int particle = 0; particle < particle_count; ++particle) {
+        const double x = current_state[4*particle];
+        const double y = current_state[4*particle + 1];
+        final_stzv[7*particle] = lost[particle] ? loss_time[particle] : tmax;
+        final_stzv[7*particle + 1] = hypot(x, y);
+        final_stzv[7*particle + 2] = atan2(y, x);
+        final_stzv[7*particle + 3] = current_state[4*particle + 2];
+        final_stzv[7*particle + 4] = current_state[4*particle + 3];
+        final_stzv[7*particle + 5] = timestep_min[particle];
+        final_stzv[7*particle + 6] = timestep_max[particle];
+    }
+    const auto metric_end = Clock::now();
+    if (profile_ms) {
+        profile_ms[SIMPLE_CUDA_PROFILE_METRIC] +=
+            milliseconds(metric_begin, metric_end);
+        profile_ms[SIMPLE_CUDA_PROFILE_TOTAL] =
+            milliseconds(total_begin, Clock::now());
+    }
+    return 0;
 }
 
 extern "C" const char *simple_cuda_error_string(int status) {
