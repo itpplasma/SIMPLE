@@ -1,5 +1,6 @@
 program test_continuous_classifier_scores
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
     use check_orbit_type_sub, only: compute_continuous_tip_scores
     implicit none
 
@@ -9,6 +10,7 @@ program test_continuous_classifier_scores
     call test_constant_drift_rate(errors)
     call test_rotation_frequency_drift(errors)
     call test_unresolved_reference(errors)
+    call test_nonfinite_tip(errors)
     call test_too_few_tips(errors)
 
     if (errors > 0) then
@@ -98,6 +100,32 @@ contains
         call assert_equal("zero reference samples", jpar_samples, 0, errors)
         call assert_equal("rotation remains resolved", rotation_samples, 2, errors)
     end subroutine test_unresolved_reference
+
+    subroutine test_nonfinite_tip(errors)
+        integer, intent(inout) :: errors
+        integer, parameter :: n = 5
+        integer :: jpar_samples, rotation_samples
+        real(dp) :: jpar_rate, rotation_drift, turns
+        real(dp) :: tips(3, n)
+
+        tips = 0.0_dp
+        tips(2, :) = [0.0_dp, 0.2_dp, 0.4_dp, 0.6_dp, 0.8_dp]
+        tips(3, :) = 1.0_dp
+        tips(3, 4) = ieee_value(0.0_dp, ieee_quiet_nan)
+
+        call compute_continuous_tip_scores(tips, n, jpar_rate, &
+            rotation_drift, turns, jpar_samples, rotation_samples)
+
+        if (.not. all(ieee_is_finite([jpar_rate, rotation_drift, turns]))) then
+            print *, "FAIL: nonfinite tip produced a nonfinite score"
+            errors = errors + 1
+        endif
+        call assert_close("nonfinite J_parallel score", jpar_rate, 0.0_dp, errors)
+        call assert_close("nonfinite rotation score", rotation_drift, 0.0_dp, errors)
+        call assert_close("nonfinite turns", turns, 0.0_dp, errors)
+        call assert_equal("nonfinite J_parallel samples", jpar_samples, 0, errors)
+        call assert_equal("nonfinite rotation samples", rotation_samples, 0, errors)
+    end subroutine test_nonfinite_tip
 
     subroutine test_too_few_tips(errors)
         integer, intent(inout) :: errors

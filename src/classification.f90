@@ -1,6 +1,6 @@
 module classification
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
     use omp_lib
     use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
         ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
@@ -332,6 +332,20 @@ contains
                         call plag_coeff(nplagr,nder,zerolam,xp,coef)
 
                         var_tip=matmul(orb_sten(:,ipoi),coef(0,:))
+                        if (.not. all(ieee_is_finite(var_tip))) then
+                            ! A failed numerical step must not become a raw
+                            ! NaN/Inf classifier score. Preserve the event as
+                            ! an explicitly unresolved particle; consumers
+                            ! can then exclude it using the zero sample counts.
+                            class_scores(:,ipart) = 0.0_dp
+                            iclass(:,ipart) = 0
+                            class_result%fractal = 0
+                            class_result%jpar = 0
+                            class_result%topology = 0
+                            class_result%exit_code = ORBIT_EXIT_NUMERICAL_EVENT
+                            ierr = 1
+                            exit
+                        endif
                         var_tip(2)=modulo(var_tip(2),twopi)
                         var_tip(3)=modulo(var_tip(3),twopi)
 
