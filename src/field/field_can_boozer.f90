@@ -158,7 +158,9 @@ contains
     subroutine eval_field_booz_device(f, r, th_c, ph_c, mode_secders)
         ! Device-only counterpart of eval_field_booz. Initialization checks and
         ! host diagnostic counters stay in splint_boozer_coord's host wrapper.
-        use boozer_sub, only: splint_boozer_coord_device, boozer_state
+        ! BOOZER_SECDERS_RADIAL_MIXED computes only rr, r-theta, and r-phi.
+        use boozer_sub, only: splint_boozer_coord_device, boozer_state, &
+            BOOZER_SECDERS_RADIAL_MIXED
 
         type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
@@ -203,12 +205,8 @@ contains
                          Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
         end if
 
-        if (mode_secders == 2) then
-            f%d2hth((/4, 6/)) = Bth/bmod2*( &
-                2.0_dp*f%dBmod((/2, 3/))**2/f%Bmod - f%d2Bmod((/4, 6/)))
-            f%d2hph((/4, 6/)) = Bph/bmod2*( &
-                2.0_dp*f%dBmod((/2, 3/))**2/f%Bmod - f%d2Bmod((/4, 6/)))
-
+        if (mode_secders == 2 .or. &
+                mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
             f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
                 Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
             f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
@@ -218,6 +216,13 @@ contains
                 Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
             f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 + &
                 Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+        end if
+
+        if (mode_secders == 2) then
+            f%d2hth((/4, 6/)) = Bth/bmod2*( &
+                2.0_dp*f%dBmod((/2, 3/))**2/f%Bmod - f%d2Bmod((/4, 6/)))
+            f%d2hph((/4, 6/)) = Bph/bmod2*( &
+                2.0_dp*f%dBmod((/2, 3/))**2/f%Bmod - f%d2Bmod((/4, 6/)))
 
             f%d2hth(5) = Bth/bmod2*( &
                 2.0_dp*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))

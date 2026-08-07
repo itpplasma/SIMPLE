@@ -26,7 +26,8 @@ module simple_gpu
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE, RK54_NEED_RHS, RK54_ACCEPTED, &
         RK54_REJECTED, RK54_FAILED
-    use boozer_sub, only: boozer_state, splint_boozer_rk_device
+    use boozer_sub, only: boozer_state, splint_boozer_rk_device, &
+        BOOZER_SECDERS_RADIAL_MIXED
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
@@ -94,7 +95,8 @@ contains
             ! (mirrors newton1 in orbit_symplectic, #370).
             if (x(1) < 0d0) x(1) = 0.01d0
 
-            call eval_field_booz_device(f, x(1), si%z(2), si%z(3), 2)
+            call eval_field_booz_device(f, x(1), si%z(2), si%z(3), &
+                BOOZER_SECDERS_RADIAL_MIXED)
             nfev = nfev + 1
             call get_derivatives2(f, x(2))
             call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
