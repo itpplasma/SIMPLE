@@ -40,6 +40,7 @@ module simple_gpu
     public :: trace_orbits_gpu, trace_orbits_gpu_range
     public :: trace_orbits_gpu_method, trace_orbits_gpu_rk54_range
     public :: trace_orbits_gpu_midpoint_range
+    public :: evaluate_rhs_gpu
 
 contains
 
@@ -412,18 +413,19 @@ contains
         end do
     end subroutine gpu_timestep_midpoint
 
-    subroutine gpu_rhs_canonical(y, field_template, dydt)
+    subroutine gpu_rhs_canonical(y, mu, ro0, dydt)
         ! Canonical guiding-centre equations used by SIMPLE's CPU RK45 path,
         ! with the Boozer evaluator bound statically for device compilation.
         !$acc routine seq
         real(dp), intent(in) :: y(4)
-        type(field_can_t), intent(in) :: field_template
+        real(dp), intent(in) :: mu, ro0
         real(dp), intent(out) :: dydt(4)
 
         type(field_can_t) :: feval
         real(dp) :: hprime
 
-        feval = field_template
+        feval%mu = mu
+        feval%ro0 = ro0
         call eval_field_booz_device(feval, y(1), y(2), y(3), 0)
         call get_derivatives(feval, y(4))
         hprime = feval%dH(1)/feval%dpth(1)
@@ -435,10 +437,25 @@ contains
         dydt(4) = -(feval%dH(3) - hprime*feval%dpth(3))
     end subroutine gpu_rhs_canonical
 
-    subroutine gpu_trace_rk54(field_template, y, duration, controls, loss_time, &
+    subroutine evaluate_rhs_gpu(y, mu, ro0, npart, dydt)
+        ! Batch entry point used to compare the compact device RHS against the
+        ! host canonical-field implementation on independently evaluated data.
+        integer, intent(in) :: npart
+        real(dp), intent(in) :: y(4, npart), mu(npart), ro0(npart)
+        real(dp), intent(out) :: dydt(4, npart)
+
+        integer :: i
+
+        !$acc parallel loop gang vector copyin(y, mu, ro0) copyout(dydt)
+        do i = 1, npart
+            call gpu_rhs_canonical(y(:, i), mu(i), ro0(i), dydt(:, i))
+        end do
+    end subroutine evaluate_rhs_gpu
+
+    subroutine gpu_trace_rk54(mu, ro0, y, duration, controls, loss_time, &
             nfev, ierr)
         !$acc routine seq
-        type(field_can_t), intent(in) :: field_template
+        real(dp), intent(in) :: mu, ro0
         real(dp), intent(inout) :: y(4)
         real(dp), intent(in) :: duration
         type(rk54_controls4_t), intent(in) :: controls
@@ -468,7 +485,7 @@ contains
             state%h = min(state%h, duration - state%t)
             call rk54_request4(state, controls, t_eval, y_eval, request)
             do while (request == RK54_NEED_RHS)
-                call gpu_rhs_canonical(y_eval, field_template, dydt)
+                call gpu_rhs_canonical(y_eval, mu, ro0, dydt)
                 call rk54_supply4(state, controls, dydt, t_eval, y_eval, request)
             end do
 
@@ -508,6 +525,7 @@ contains
 
         type(rk54_controls4_t) :: controls
         real(dp) :: duration, loss_time, y(4), elapsed
+        real(dp) :: mu(npart), ro0(npart)
         integer :: i, it, ierr
 
         duration = si(istart)%dt*real(sum(ntau_macro(2:ntimstep)), dp)
@@ -521,14 +539,20 @@ contains
             controls%method = RK54_DORMAND_PRINCE
         end if
 
+        do i = istart, iend
+            mu(i) = f(i)%mu
+            ro0(i) = f(i)%ro0
+        end do
+
         !$acc parallel loop gang vector default(present) &
-        !$acc&   copyin(si(istart:iend), f(istart:iend), ntau_macro) &
+        !$acc&   copyin(si(istart:iend), mu(istart:iend), ro0(istart:iend), &
+        !$acc&          ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), zend(:, istart:iend), &
         !$acc&           nfev(istart:iend), loss_time_out(istart:iend)) &
         !$acc&   private(y, loss_time, elapsed, ierr, it) firstprivate(controls, duration)
         do i = istart, iend
             y = si(i)%z
-            call gpu_trace_rk54(f(i), y, duration, controls, loss_time, &
+            call gpu_trace_rk54(mu(i), ro0(i), y, duration, controls, loss_time, &
                 nfev(i), ierr)
             loss_step(i) = ntimstep
             if (loss_time < duration) then

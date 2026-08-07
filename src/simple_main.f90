@@ -966,10 +966,11 @@ contains
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_symplectic_base, only: symplectic_integrator_t, &
             EXPL_IMPL_EULER, MIDPOINT
-        use field_can_mod, only: field_can_t
+        use field_can_mod, only: field_can_t, get_derivatives
+        use field_can_boozer, only: eval_field_booz
         use magfie_sub, only: BOOZER
         use boozer_sub, only: sync_boozer_state
-        use simple_gpu, only: trace_orbits_gpu_method
+        use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method
 
         type(tracer_t), intent(inout) :: norb
 
@@ -978,7 +979,9 @@ contains
         integer, allocatable :: cpu_loss(:), gpu_loss(:), gpu_nfev(:)
         real(dp), allocatable :: gpu_loss_time(:)
         real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
-        real(dp) :: z(5)
+        real(dp), allocatable :: rhs_y(:, :), rhs_mu(:), rhs_ro0(:)
+        real(dp), allocatable :: rhs_host(:, :), rhs_device(:, :)
+        real(dp) :: z(5), hprime, rhs_scale, rhs_error
         integer :: i, it, ktau, ierr, loss_mismatch
         integer :: cpu_lost, gpu_lost, flip
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
@@ -997,6 +1000,8 @@ contains
         allocate (cpu_loss(ntestpart), gpu_loss(ntestpart), gpu_nfev(ntestpart))
         allocate (gpu_loss_time(ntestpart))
         allocate (cpu_zend(4, ntestpart), gpu_zend(4, ntestpart))
+        allocate (rhs_y(4, ntestpart), rhs_mu(ntestpart), rhs_ro0(ntestpart))
+        allocate (rhs_host(4, ntestpart), rhs_device(4, ntestpart))
 
         ! Identical per-particle initialisation (host). init_sympl sets the
         ! orbit_timestep_sympl procedure pointer for the CPU reference.
@@ -1006,7 +1011,26 @@ contains
             call init_sympl(si_cpu(i), f_cpu(i), z, dtaumin, dtaumin, relerr, integmode)
             si_gpu(i) = si_cpu(i)
             f_gpu(i) = f_cpu(i)
+
+            rhs_y(:, i) = si_cpu(i)%z
+            rhs_mu(i) = f_cpu(i)%mu
+            rhs_ro0(i) = f_cpu(i)%ro0
+            call eval_field_booz(f_cpu(i), rhs_y(1, i), rhs_y(2, i), &
+                rhs_y(3, i), 0)
+            call get_derivatives(f_cpu(i), rhs_y(4, i))
+            hprime = f_cpu(i)%dH(1)/f_cpu(i)%dpth(1)
+            rhs_host(1, i) = -(f_cpu(i)%dH(2) - &
+                f_cpu(i)%hth/f_cpu(i)%hph*f_cpu(i)%dH(3))/f_cpu(i)%dpth(1)
+            rhs_host(2, i) = hprime
+            rhs_host(3, i) = (f_cpu(i)%vpar - hprime*f_cpu(i)%hth)/f_cpu(i)%hph
+            rhs_host(4, i) = -(f_cpu(i)%dH(3) - hprime*f_cpu(i)%dpth(3))
         end do
+
+        call evaluate_rhs_gpu(rhs_y, rhs_mu, rhs_ro0, ntestpart, rhs_device)
+        rhs_scale = max(1.0_dp, maxval(abs(rhs_host)))
+        rhs_error = maxval(abs(rhs_device - rhs_host))/rhs_scale
+        if (rhs_error > 1.0e-11_dp) &
+            error stop 'compact GPU canonical RHS differs from host reference'
 
         ! CPU reference (OpenMP over particles)
         t0 = omp_get_wtime()
@@ -1058,6 +1082,7 @@ contains
         print *, '==================== GPU vs CPU tracing ===================='
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
         print '(a,i0)', ' integrator mode = ', integmode
+        print '(a,es12.4)', ' compact RHS relative error = ', rhs_error
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
         print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, &
