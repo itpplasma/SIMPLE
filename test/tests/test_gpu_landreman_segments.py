@@ -107,7 +107,7 @@ def run_case(
 
 
 def run_short_dopri_trace(
-    executable: Path, wout: Path, starts_source: Path
+    executable: Path, wout: Path, starts_source: Path, spline_order: int
 ) -> None:
     """Exercise the composed RK and Boozer device path, not only accounting."""
     with tempfile.TemporaryDirectory(prefix="landreman-dopri-orbit-", dir=Path.cwd()) as tmp:
@@ -124,6 +124,8 @@ def run_short_dopri_trace(
             "integmode = 1\n"
             "npoiper2 = 256\n"
             "relerr = 1d-6\n"
+            f"ns_s = {spline_order}\n"
+            f"ns_tp = {spline_order}\n"
             "/\n"
         )
         environment = os.environ.copy()
@@ -157,7 +159,8 @@ def run_short_dopri_trace(
             )
         if evaluations != 288:
             raise AssertionError(
-                f"short DOPRI orbit used {evaluations} rather than 288 field evaluations"
+                f"order-{spline_order} short DOPRI orbit used {evaluations} "
+                "rather than 288 field evaluations"
             )
 
 
@@ -165,7 +168,8 @@ def main() -> None:
     if len(sys.argv) != 4:
         raise SystemExit("usage: test_gpu_landreman_segments.py SIMPLE WOUT STARTS")
     executable, wout, starts = (Path(value).resolve() for value in sys.argv[1:])
-    run_short_dopri_trace(executable, wout, starts)
+    run_short_dopri_trace(executable, wout, starts, 5)
+    run_short_dopri_trace(executable, wout, starts, 3)
     run_case(executable, wout, starts, "dopri", 1.0e-6)
     run_case(executable, wout, starts, "euler", 1.0e-13)
     print("segmented Landreman RK and symplectic accounting passed")

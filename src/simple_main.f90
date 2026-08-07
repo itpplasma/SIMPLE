@@ -922,7 +922,7 @@ contains
         call sync_boozer_state
         if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
                 .not. boozer_rk_device_supported()) &
-            error stop 'GPU RK requires scalar quintic Boozer splines'
+            error stop 'GPU RK requires scalar cubic or quintic Boozer splines'
         t_init = omp_get_wtime() - t0
 
         landreman_mode = .false.
