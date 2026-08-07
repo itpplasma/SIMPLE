@@ -867,9 +867,10 @@ contains
         integer, allocatable :: loss_step(:), nfev(:)
         real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
         logical, allocatable :: passing(:)
-        character(32) :: method_name, landreman_value
+        character(32) :: method_name, landreman_value, start_coordinates
         integer :: method_len, method_stat, method, init_mode, i, it
-        integer :: landreman_len, landreman_stat
+        integer :: landreman_len, landreman_stat, start_coordinates_len
+        integer :: start_coordinates_stat
         integer(8) :: nfev_total
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
         real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
@@ -911,9 +912,23 @@ contains
             nfev(ntestpart), loss_time_normalized(ntestpart), &
             zcanonical(4, ntestpart), passing(ntestpart))
 
+        start_coordinates = 'reference'
+        call get_environment_variable('SIMPLE_GPU_START_COORDINATES', &
+            start_coordinates, start_coordinates_len, start_coordinates_stat)
+        if (start_coordinates_stat /= 0 .or. start_coordinates_len <= 0) &
+            start_coordinates = 'reference'
+        start_coordinates = trim(adjustl(start_coordinates))
+        if (trim(start_coordinates) /= 'reference' .and. &
+                trim(start_coordinates) /= 'boozer') &
+            error stop 'SIMPLE_GPU_START_COORDINATES must be reference or boozer'
+
         t0 = omp_get_wtime()
         do i = 1, ntestpart
-            call ref_to_integ(zstart(1:3, i), z(1:3))
+            if (trim(start_coordinates) == 'boozer') then
+                z(1:3) = zstart(1:3, i)
+            else
+                call ref_to_integ(zstart(1:3, i), z(1:3))
+            end if
             z(4:5) = zstart(4:5, i)
             call init_sympl(si_gpu(i), f_gpu(i), z, dtaumin, dtaumin, relerr, &
                 init_mode)
@@ -1002,6 +1017,7 @@ contains
         print *, '==================== GPU production trace ==================='
         print '(a,i0)', ' integrator mode = ', method
         print '(a,i0)', ' particles = ', ntestpart
+        print '(a,a)', ' start coordinates = ', trim(start_coordinates)
         print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
         print '(a,f12.6,a)', ' tracing        = ', t_trace, ' s'
         print '(a,f12.6,a)', ' finalization   = ', t_finish, ' s'
