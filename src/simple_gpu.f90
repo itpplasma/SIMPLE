@@ -318,8 +318,7 @@ contains
         fmid = f
         dpthmid = f%dpth(1)
         pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
-        call eval_field_booz_device(f, x(1), x(2), x(3), &
-            BOOZER_SECDERS_RADIAL_MIXED)
+        call eval_field_booz_device(f, x(1), x(2), x(3), 0)
         call get_derivatives(f, x(4))
         residual(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
 
