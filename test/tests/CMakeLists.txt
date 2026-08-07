@@ -808,6 +808,19 @@ if(SIMPLE_ENABLE_OPENACC)
     )
 endif()
 
+if(SIMPLE_ENABLE_CUDA)
+    add_executable(test_cuda_firm_rk54.x test_cuda_firm_rk54.cu)
+    # Replace directory-wide Fortran I/O links: this C++/CUDA oracle only
+    # exercises the standalone CUDA C ABI.
+    set_property(TARGET test_cuda_firm_rk54.x PROPERTY
+        LINK_LIBRARIES simple_cuda_firm_rk54)
+    set_property(TARGET test_cuda_firm_rk54.x PROPERTY LINK_OPTIONS "")
+    add_test(NAME test_cuda_firm_rk54 COMMAND test_cuda_firm_rk54.x)
+    set_tests_properties(test_cuda_firm_rk54 PROPERTIES
+        LABELS "unit;gpu;cuda"
+        TIMEOUT 120)
+endif()
+
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench)
 configure_file(

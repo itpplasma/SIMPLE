@@ -77,7 +77,36 @@ option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+option(SIMPLE_ENABLE_CUDA
+    "Build direct-CUDA FIRM3D-compatible guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
+
+if(SIMPLE_ENABLE_CUDA)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "SIMPLE_ENABLE_CUDA requires a CUDA compiler")
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+
+    # Create this target before project-wide Fortran link dependencies are
+    # introduced below. The standalone C ABI is intentionally usable by the
+    # Landreman Python harness without pulling NetCDF/HDF5 or SIMPLE itself.
+    add_library(simple_cuda_firm_rk54 SHARED
+        src/simple_cuda_firm_rk54.cu
+        src/simple_cuda_firm_rk54.h)
+    target_include_directories(simple_cuda_firm_rk54 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(simple_cuda_firm_rk54 PUBLIC CUDA::cudart)
+    target_compile_options(simple_cuda_firm_rk54 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v>)
+    set_target_properties(simple_cuda_firm_rk54 PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
 
 if(SIMPLE_DETERMINISTIC_FP)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
