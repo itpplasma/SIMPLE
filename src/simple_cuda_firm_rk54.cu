@@ -45,6 +45,36 @@ __host__ __device__ __forceinline__ double wrap_periodic(double x,
     return minimum + wrapped;
 }
 
+__host__ __device__ __forceinline__ void encode_state(
+    double s, double theta, double zeta, double vparallel, double state[4]) {
+#ifdef SIMPLE_CUDA_POLAR_COORDINATES
+    state[0] = s;
+    state[1] = theta;
+#else
+    state[0] = s*cos(theta);
+    state[1] = s*sin(theta);
+#endif
+    state[2] = zeta;
+    state[3] = vparallel;
+}
+
+__host__ __device__ __forceinline__ double state_s(const double state[4]) {
+#ifdef SIMPLE_CUDA_POLAR_COORDINATES
+    return state[0];
+#else
+    return hypot(state[0], state[1]);
+#endif
+}
+
+__host__ __device__ __forceinline__ double state_theta(
+    const double state[4]) {
+#ifdef SIMPLE_CUDA_POLAR_COORDINATES
+    return state[1];
+#else
+    return atan2(state[1], state[0]);
+#endif
+}
+
 __host__ __device__ __forceinline__ void lagrange_weights(double x,
                                                            double w[4]) {
     w[0] = (1.0 - x)*(2.0 - x)*(3.0 - x)/6.0;
@@ -64,7 +94,7 @@ __host__ __device__ __noinline__ void interpolate13(
     // [0, pi], but the physical angle must first be wrapped over 2*pi and only
     // then reflected. Wrapping directly by the metagrid extent changes the
     // sign of odd quantities and is not equivalent.
-    if (theta < 0.0) theta += 2.0*kPi;
+    theta = wrap_periodic(theta, 0.0, 2.0*kPi);
     double zeta = wrap_periodic(state[2], p.minimum[2],
                                 p.period_or_maximum[2] - p.minimum[2]);
 
@@ -135,10 +165,8 @@ __host__ __device__ __noinline__ void right_hand_side(
     const double *__restrict__ field, const Parameters &p, const double mu,
     const double state[4], double derivative[4], double *mod_b_out = nullptr,
     double *g_out = nullptr) {
-    const double x = state[0];
-    const double y = state[1];
-    const double s = hypot(x, y);
-    const double theta = atan2(y, x);
+    const double s = state_s(state);
+    const double theta = state_theta(state);
     constexpr int quantity_count =
         Method == SIMPLE_CUDA_DORMAND_PRINCE ? 12 : 13;
     double value[quantity_count];
@@ -188,10 +216,17 @@ __host__ __device__ __noinline__ void right_hand_side(
                             (db_dpsi*i - db_dtheta*k)*energy_factor)/(iota*d);
     const double vpardot = (c*db_dtheta - f*db_dzeta)*mu*mod_b/(iota*d);
 
+#ifdef SIMPLE_CUDA_POLAR_COORDINATES
+    derivative[0] = sdot;
+    derivative[1] = thetadot;
+#else
+    const double x = state[0];
+    const double y = state[1];
     const double radial_x = s > 0.0 ? x/s : 1.0;
     const double radial_y = s > 0.0 ? y/s : 0.0;
     derivative[0] = sdot*radial_x - y*thetadot;
     derivative[1] = sdot*radial_y + x*thetadot;
+#endif
     derivative[2] = zetadot;
     derivative[3] = vpardot;
     if (mod_b_out) *mod_b_out = mod_b;
@@ -351,7 +386,7 @@ __host__ __device__ __forceinline__ void trace_particle(
     double previous_error = 1.0;
     bool first_step = true;
     bool after_reject = false;
-    bool lost = hypot(y[0], y[1]) >= 1.0;
+    bool lost = state_s(y) >= 1.0;
     unsigned long long nfev = 1;
     unsigned long long accepted = 0;
     unsigned long long rejected = 0;
@@ -397,7 +432,7 @@ __host__ __device__ __forceinline__ void trace_particle(
             previous_error = fmax(error, 1.0e-10);
             first_step = false;
             after_reject = false;
-            lost = hypot(y[0], y[1]) >= 1.0;
+            lost = state_s(y) >= 1.0;
             if (!lost && t < p.tmax) {
                 if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
                     // The seventh DP stage is evaluated at the accepted state,
@@ -508,10 +543,9 @@ extern "C" int simple_cuda_firm_rk54(
     for (int particle = 0; particle < particle_count; ++particle) {
         const double s = initial_stz[3*particle];
         const double theta = initial_stz[3*particle + 1];
-        initial_state[4*particle] = s*cos(theta);
-        initial_state[4*particle + 1] = s*sin(theta);
-        initial_state[4*particle + 2] = initial_stz[3*particle + 2];
-        initial_state[4*particle + 3] = initial_vparallel[particle];
+        encode_state(s, theta, initial_stz[3*particle + 2],
+                     initial_vparallel[particle],
+                     initial_state.data() + 4*particle);
     }
     double *field_device = nullptr;
     double *state_device = nullptr;
@@ -585,10 +619,11 @@ extern "C" int simple_cuda_firm_rk54(
     if (error == cudaSuccess) {
         const auto metric_begin = Clock::now();
         for (int particle = 0; particle < particle_count; ++particle) {
-            const double x = final_stzv[7*particle + 1];
-            const double y = final_stzv[7*particle + 2];
-            final_stzv[7*particle + 1] = hypot(x, y);
-            final_stzv[7*particle + 2] = atan2(y, x);
+            const double final_s = state_s(final_stzv + 7*particle + 1);
+            const double final_theta =
+                state_theta(final_stzv + 7*particle + 1);
+            final_stzv[7*particle + 1] = final_s;
+            final_stzv[7*particle + 2] = final_theta;
         }
         const auto metric_end = Clock::now();
         if (profile_ms) profile_ms[SIMPLE_CUDA_PROFILE_METRIC] =
@@ -650,10 +685,9 @@ extern "C" int simple_cuda_firm_rk54_landreman(
     for (int particle = 0; particle < particle_count; ++particle) {
         const double s = initial_stz[3*particle];
         const double theta = initial_stz[3*particle + 1];
-        current_state[4*particle] = s*cos(theta);
-        current_state[4*particle + 1] = s*sin(theta);
-        current_state[4*particle + 2] = initial_stz[3*particle + 2];
-        current_state[4*particle + 3] = initial_vparallel[particle];
+        encode_state(s, theta, initial_stz[3*particle + 2],
+                     initial_vparallel[particle],
+                     current_state.data() + 4*particle);
     }
     std::vector<double> segment_output(7*particle_count);
     std::vector<unsigned long long> segment_counters(3*particle_count);
@@ -801,12 +835,12 @@ extern "C" int simple_cuda_firm_rk54_landreman(
         if (error == cudaSuccess) {
             const auto metric_begin = Clock::now();
             for (int particle = 0; particle < particle_count; ++particle) {
-                const double x = current_state[4*particle];
-                const double y = current_state[4*particle + 1];
                 final_stzv[7*particle] = lost[particle] ?
                     loss_time[particle] : tmax;
-                final_stzv[7*particle + 1] = hypot(x, y);
-                final_stzv[7*particle + 2] = atan2(y, x);
+                final_stzv[7*particle + 1] =
+                    state_s(current_state.data() + 4*particle);
+                final_stzv[7*particle + 2] =
+                    state_theta(current_state.data() + 4*particle);
                 final_stzv[7*particle + 3] = current_state[4*particle + 2];
                 final_stzv[7*particle + 4] = current_state[4*particle + 3];
                 final_stzv[7*particle + 5] = timestep_min[particle];
@@ -873,10 +907,9 @@ extern "C" int simple_cpu_firm_rk54_landreman(
     for (int particle = 0; particle < particle_count; ++particle) {
         const double s = initial_stz[3*particle];
         const double theta = initial_stz[3*particle + 1];
-        current_state[4*particle] = s*cos(theta);
-        current_state[4*particle + 1] = s*sin(theta);
-        current_state[4*particle + 2] = initial_stz[3*particle + 2];
-        current_state[4*particle + 3] = initial_vparallel[particle];
+        encode_state(s, theta, initial_stz[3*particle + 2],
+                     initial_vparallel[particle],
+                     current_state.data() + 4*particle);
     }
     std::vector<double> segment_output(7*particle_count);
     std::vector<unsigned long long> segment_counters(3*particle_count);
@@ -941,11 +974,11 @@ extern "C" int simple_cpu_firm_rk54_landreman(
 
     const auto metric_begin = Clock::now();
     for (int particle = 0; particle < particle_count; ++particle) {
-        const double x = current_state[4*particle];
-        const double y = current_state[4*particle + 1];
         final_stzv[7*particle] = lost[particle] ? loss_time[particle] : tmax;
-        final_stzv[7*particle + 1] = hypot(x, y);
-        final_stzv[7*particle + 2] = atan2(y, x);
+        final_stzv[7*particle + 1] =
+            state_s(current_state.data() + 4*particle);
+        final_stzv[7*particle + 2] =
+            state_theta(current_state.data() + 4*particle);
         final_stzv[7*particle + 3] = current_state[4*particle + 2];
         final_stzv[7*particle + 4] = current_state[4*particle + 3];
         final_stzv[7*particle + 5] = timestep_min[particle];

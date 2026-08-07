@@ -79,6 +79,8 @@ option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_CUDA
     "Build direct-CUDA FIRM3D-compatible guiding-center kernels" OFF)
+option(SIMPLE_CUDA_POLAR_COORDINATES
+    "Integrate the direct-CUDA orbit state in Boozer (s, theta, zeta) coordinates" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 
 if(SIMPLE_ENABLE_CUDA)
@@ -104,6 +106,10 @@ if(SIMPLE_ENABLE_CUDA)
         CUDA::cudart OpenMP::OpenMP_CXX)
     target_compile_options(simple_cuda_firm_rk54 PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v;-Xcompiler=-fopenmp>)
+    if(SIMPLE_CUDA_POLAR_COORDINATES)
+        target_compile_definitions(simple_cuda_firm_rk54 PRIVATE
+            SIMPLE_CUDA_POLAR_COORDINATES=1)
+    endif()
     set_target_properties(simple_cuda_firm_rk54 PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
