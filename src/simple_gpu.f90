@@ -699,13 +699,13 @@ contains
         nfev = state%nfev
     end subroutine gpu_trace_rk54_cartesian
 
-    subroutine gpu_rk_segment_hmax(y, duration, hmax)
+    subroutine gpu_rk_segment_hmax(y, duration, hmax, momentum_atol_scale)
         ! Match FIRM3D's per-segment quarter-turn cap, evaluated at the
         ! segment's initial state: dt <= (G/B)*pi/(2*v_total). SIMPLE's
         ! canonical independent variable is physical_time*v_total/sqrt(2).
         !$acc routine seq
         real(dp), intent(in) :: y(4), duration
-        real(dp), intent(out) :: hmax
+        real(dp), intent(out) :: hmax, momentum_atol_scale
 
         real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
         real(dp) :: dbmod(3)
@@ -718,6 +718,7 @@ contains
                 btheta, dbtheta, bphi, dbphi, bmod, dbmod)
         end if
         hmax = min(duration, 0.5_dp*pi*abs(bphi/bmod)/sqrt2)
+        momentum_atol_scale = sqrt2*abs(bphi/bmod)
     end subroutine gpu_rk_segment_hmax
 
     subroutine gpu_rk_segment_hmax_cartesian(y, duration, hmax, &
@@ -871,14 +872,11 @@ contains
         loss_time_slot = total_duration
         weighted_losses = 0.0_dp
         do i = 1, npart
-            y(1, i) = si(i)%z(1)*cos(si(i)%z(2))
-            y(2, i) = si(i)%z(1)*sin(si(i)%z(2))
-            y(3:4, i) = si(i)%z(3:4)
+            y(:, i) = si(i)%z
             mu(i) = f(i)%mu
             ro0(i) = f(i)%ro0
             original_index(i) = i
-            if (sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i)) >= &
-                    1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+            if (y(1, i) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                 orbit_status(i) = 1
                 loss_time_slot(i) = 0.0_dp
                 weighted_losses = weighted_losses + 1.0_dp
@@ -952,11 +950,11 @@ contains
             do i = 1, active_count
                 y_local = y(:, i)
                 controls_i = controls
-                call gpu_rk_segment_hmax_cartesian(y_local, pilot_duration, &
-                    hmax_local, momentum_atol_scale)
+                call gpu_rk_segment_hmax(y_local, pilot_duration, hmax_local, &
+                    momentum_atol_scale)
                 controls_i%hmax = hmax_local
                 controls_i%atol(4) = controls_i%rtol*momentum_atol_scale
-                call gpu_trace_rk54_cartesian(mu(i), ro0(i), y_local, &
+                call gpu_trace_rk54(mu(i), ro0(i), y_local, &
                     pilot_duration, controls_i, segment_loss_time, &
                     segment_nfev, ierr)
                 segment_work(i) = segment_nfev + 1
@@ -1009,8 +1007,7 @@ contains
                 segment_work(i) = 0
                 if (orbit_status(i) /= 0) cycle
                 y_local = y(:, i)
-                if (sqrt(y_local(1)*y_local(1) + y_local(2)*y_local(2)) >= &
-                        1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
+                if (y_local(1) >= 1.0_dp - 64.0_dp*epsilon(1.0_dp)) then
                     orbit_status(i) = 1
                     loss_time_slot(i) = current_time
                     !$acc atomic update
@@ -1019,11 +1016,11 @@ contains
                     cycle
                 end if
                 controls_i = controls
-                call gpu_rk_segment_hmax_cartesian(y_local, segment_duration, &
-                    hmax_local, momentum_atol_scale)
+                call gpu_rk_segment_hmax(y_local, segment_duration, hmax_local, &
+                    momentum_atol_scale)
                 controls_i%hmax = hmax_local
                 controls_i%atol(4) = controls_i%rtol*momentum_atol_scale
-                call gpu_trace_rk54_cartesian(mu(i), ro0(i), y_local, &
+                call gpu_trace_rk54(mu(i), ro0(i), y_local, &
                     segment_duration, controls_i, segment_loss_time, &
                     segment_nfev, ierr)
                 y(:, i) = y_local
@@ -1075,9 +1072,7 @@ contains
 
         do i = 1, npart
             original = original_index(i)
-            si(original)%z(1) = sqrt(y(1, i)*y(1, i) + y(2, i)*y(2, i))
-            si(original)%z(2) = atan2(y(2, i), y(1, i))
-            si(original)%z(3:4) = y(3:4, i)
+            si(original)%z = y(:, i)
             zend(:, original) = si(original)%z
             loss_step(original) = orbit_status(i)
             loss_time(original) = loss_time_slot(i)
