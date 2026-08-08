@@ -100,6 +100,7 @@ def run_case(
     netcdffile: Path | None,
     field_input: Path | None,
     coord_input: Path | None,
+    landreman: bool,
 ) -> dict[str, object]:
     case_dir.mkdir(parents=True)
     (case_dir / "start.dat").write_text(starts)
@@ -122,10 +123,19 @@ def run_case(
             "SIMPLE_GPU_RUN": "1",
             "SIMPLE_GPU_METHOD": method,
             "SIMPLE_GPU_START_COORDINATES": "boozer",
-            "SIMPLE_GPU_LANDREMAN": "0",
+            "SIMPLE_GPU_LANDREMAN": "1" if landreman else "0",
             "SIMPLE_GPU_PARTICLE_PROFILE": str(profile_path),
         }
     )
+    if landreman:
+        environment.update(
+            {
+                "SIMPLE_GPU_T_BLOCK": str(min(trace_time, 1.0e-4)),
+                "SIMPLE_GPU_LOSS_TAU": "0.1",
+                "SIMPLE_GPU_MAXLOSS": "1.0",
+                "SIMPLE_GPU_MIN_TIMESTEP": "0",
+            }
+        )
     result = subprocess.run(
         [executable, "simple.in"],
         cwd=case_dir,
@@ -136,7 +146,7 @@ def run_case(
         stderr=subprocess.STDOUT,
     )
     (case_dir / "run.log").write_text(result.stdout)
-    return {
+    result_data: dict[str, object] = {
         "method": method,
         "npoiper2": npoiper2,
         "relerr": relerr,
@@ -159,6 +169,18 @@ def run_case(
         ),
         "profile": read_profile(profile_path),
     }
+    if landreman:
+        result_data["observed_until_s"] = read_value(
+            r"observed until =\s*([0-9.eE+-]+) s",
+            result.stdout,
+            "observed until",
+        )
+        result_data["energy_loss_fraction"] = read_value(
+            r"energy loss fraction =\s*([0-9.eE+-]+)",
+            result.stdout,
+            "energy loss fraction",
+        )
+    return result_data
 
 
 def compare(
@@ -219,6 +241,11 @@ def main() -> None:
     parser.add_argument("--reference-relerr", type=float, default=1.0e-8)
     parser.add_argument("--npoiper2", type=int, nargs="+", default=[32, 64, 128, 256])
     parser.add_argument("--methods", nargs="+", default=["euler", "midpoint"])
+    parser.add_argument(
+        "--landreman",
+        action="store_true",
+        help="run the blockwise Landreman energy-loss accounting path",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -245,6 +272,7 @@ def main() -> None:
         args.netcdffile,
         args.field_input,
         args.coord_input,
+        args.landreman,
     )
     results: list[dict[str, object]] = []
     for method in args.methods:
@@ -262,6 +290,7 @@ def main() -> None:
                 args.netcdffile,
                 args.field_input,
                 args.coord_input,
+                args.landreman,
             )
             candidate["comparison_to_dopri"] = compare(
                 candidate, reference, args.trace_time
