@@ -259,7 +259,7 @@ contains
         real(dp), intent(in) :: x(5)
         real(dp), intent(out) :: residual(5), jacobian(5, 5)
 
-        type(field_can_t) :: fmid
+        real(dp) :: fmid_dpth(4), fmid_dH(9), fmid_d2pth(10), fmid_d2H(10)
         real(dp) :: dpthmid, pthdotbar
 
         call eval_field_booz_device(f, x(5), 0.5_dp*(x(2) + si%z(2)), &
@@ -323,29 +323,35 @@ contains
             f%dpth(1)*f%dpth(4) + 0.5_dp*si%dt*(f%d2pth(7)*f%dH(2) + &
             f%dpth(1)*f%d2H(8) - f%d2pth(8)*f%dH(1) - f%dpth(2)*f%d2H(7)))
 
-        fmid = f
+        ! Only these derivative arrays from the old endpoint enter the
+        ! midpoint Jacobian. Avoid copying the complete field workspace on
+        ! every Newton iteration.
+        fmid_dpth = f%dpth
+        fmid_dH = f%dH
+        fmid_d2pth = f%d2pth
+        fmid_d2H = f%d2H
         dpthmid = f%dpth(1)
         pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
         call eval_field_booz_device(f, x(1), x(2), x(3), 0)
         call get_derivatives(f, x(4))
         residual(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
 
-        jacobian(1, 1) = fmid%dpth(1)*f%dpth(1)
-        jacobian(1, 2) = 0.5_dp*(fmid%d2pth(2)*(f%pth - si%pthold) + &
-            si%dt*(fmid%d2pth(2)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(4) - &
-            fmid%dpth(2)*fmid%d2H(2) - fmid%d2pth(4)*fmid%dH(1))) + &
-            fmid%dpth(1)*f%dpth(2)
-        jacobian(1, 3) = 0.5_dp*(fmid%d2pth(3)*(f%pth - si%pthold) + &
-            si%dt*(fmid%d2pth(3)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(5) - &
-            fmid%dpth(2)*fmid%d2H(3) - fmid%d2pth(5)*fmid%dH(1))) + &
-            fmid%dpth(1)*f%dpth(3)
-        jacobian(1, 4) = 0.5_dp*(fmid%d2pth(7)*(f%pth - si%pthold) + &
-            si%dt*(fmid%d2pth(7)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(8) - &
-            fmid%dpth(2)*fmid%d2H(7) - fmid%d2pth(8)*fmid%dH(1))) + &
-            fmid%dpth(1)*f%dpth(4)
-        jacobian(1, 5) = fmid%d2pth(1)*(f%pth - si%pthold) + si%dt*( &
-            fmid%d2pth(1)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(2) - &
-            fmid%dpth(2)*fmid%d2H(1) - fmid%d2pth(2)*fmid%dH(1))
+        jacobian(1, 1) = fmid_dpth(1)*f%dpth(1)
+        jacobian(1, 2) = 0.5_dp*(fmid_d2pth(2)*(f%pth - si%pthold) + &
+            si%dt*(fmid_d2pth(2)*fmid_dH(2) + fmid_dpth(1)*fmid_d2H(4) - &
+            fmid_dpth(2)*fmid_d2H(2) - fmid_d2pth(4)*fmid_dH(1))) + &
+            fmid_dpth(1)*f%dpth(2)
+        jacobian(1, 3) = 0.5_dp*(fmid_d2pth(3)*(f%pth - si%pthold) + &
+            si%dt*(fmid_d2pth(3)*fmid_dH(2) + fmid_dpth(1)*fmid_d2H(5) - &
+            fmid_dpth(2)*fmid_d2H(3) - fmid_d2pth(5)*fmid_dH(1))) + &
+            fmid_dpth(1)*f%dpth(3)
+        jacobian(1, 4) = 0.5_dp*(fmid_d2pth(7)*(f%pth - si%pthold) + &
+            si%dt*(fmid_d2pth(7)*fmid_dH(2) + fmid_dpth(1)*fmid_d2H(8) - &
+            fmid_dpth(2)*fmid_d2H(7) - fmid_d2pth(8)*fmid_dH(1))) + &
+            fmid_dpth(1)*f%dpth(4)
+        jacobian(1, 5) = fmid_d2pth(1)*(f%pth - si%pthold) + si%dt*( &
+            fmid_d2pth(1)*fmid_dH(2) + fmid_dpth(1)*fmid_d2H(2) - &
+            fmid_dpth(2)*fmid_d2H(1) - fmid_d2pth(2)*fmid_dH(1))
     end subroutine gpu_midpoint_system
 
     subroutine gpu_newton_midpoint(si, f, x, warning_mode, status, nfev)
