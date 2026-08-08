@@ -212,8 +212,11 @@ def main() -> None:
     parser.add_argument("--particles", type=int, default=64)
     parser.add_argument("--trace-time", type=float, default=1.0e-4)
     parser.add_argument("--ntimstep", type=int, default=51)
-    parser.add_argument("--reference-npoiper2", type=int, default=1024)
-    parser.add_argument("--reference-relerr", type=float, default=1.0e-12)
+    # This is tight enough to resolve the short production chartmap control
+    # without turning the reference itself into the experiment.  A separate
+    # convergence spot-check can raise either value when needed.
+    parser.add_argument("--reference-npoiper2", type=int, default=256)
+    parser.add_argument("--reference-relerr", type=float, default=1.0e-8)
     parser.add_argument("--npoiper2", type=int, nargs="+", default=[32, 64, 128, 256])
     parser.add_argument("--methods", nargs="+", default=["euler", "midpoint"])
     parser.add_argument("--output", type=Path, required=True)
