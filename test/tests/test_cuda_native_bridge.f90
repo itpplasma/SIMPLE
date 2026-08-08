@@ -51,6 +51,7 @@ program test_cuda_native_bridge
     do method = CASH_KARP, DORMAND_PRINCE
         if (method /= CASH_KARP .and. method /= DORMAND_PRINCE) cycle
         call check_method(method)
+        call check_early_stop(method)
     end do
     print *, 'native CUDA Fortran bridge oracle passed'
 
@@ -91,5 +92,28 @@ contains
         if (profile_ms(3) <= 0.0_dp .or. profile_ms(5) < profile_ms(3)) &
             error stop 'native CUDA Fortran bridge profile mismatch'
     end subroutine check_method
+
+    subroutine check_early_stop(method)
+        integer, intent(in) :: method
+        integer :: j
+
+        si(1)%z = [1.1_dp, 0.0_dp, 0.0_dp, 0.5_dp]
+        si(2)%z = [0.4_dp, -0.2_dp, 1.1_dp, -0.7_dp]
+        si(3)%z = [0.6_dp, 0.8_dp, -0.5_dp, 1.25_dp]
+        do j = 1, npart
+            si(j)%rtol = 1.0e-10_dp
+        end do
+        call trace_orbits_cuda_native_landreman(si, f, npart, method, &
+            duration, 0.005_dp, 1.0_dp, 1.0_dp, 0.0_dp, 1.0e-14_dp, &
+            loss_step, loss_time, zend, nfev, observed_duration, &
+            energy_loss_fraction, warp_nfev_slots, profile_ms)
+
+        if (abs(observed_duration - 0.005_dp) > 1.0e-14_dp .or. &
+            count(loss_step == 1) /= 1 .or. loss_step(1) /= 1 .or. &
+            abs(loss_time(1)) > 1.0e-14_dp .or. &
+            any(abs(loss_time(2:3) - duration) > 1.0e-14_dp) .or. &
+            abs(energy_loss_fraction - 1.0_dp/3.0_dp) > 1.0e-14_dp) &
+            error stop 'native CUDA Fortran bridge early-stop mismatch'
+    end subroutine check_early_stop
 
 end program test_cuda_native_bridge

@@ -24,8 +24,9 @@ module simple_cuda_native
                 field_table_count, profile_table, profile_table_count, &
                 point_count, x_min, inv_h_step, period, inv_period, torflux, &
                 initial_z, mu, ro0, total_duration, block_duration, tolerance, &
-                minimum_timestep, final_z, loss_time, status, rhs_evaluations, &
-                warp_rhs_slots, profile_ms) bind(c, &
+                minimum_timestep, loss_decay_rate, maxloss, observed_duration, &
+                final_z, loss_time, status, rhs_evaluations, warp_rhs_slots, &
+                profile_ms) bind(c, &
                 name='simple_cuda_native_rk54') result(ierr)
             import :: c_double, c_float, c_int, c_int64_t, c_size_t
             integer(c_int), value :: method, particle_count
@@ -37,7 +38,8 @@ module simple_cuda_native
             real(c_double), value :: torflux
             real(c_double), intent(in) :: initial_z(*), mu(*), ro0(*)
             real(c_double), value :: total_duration, block_duration, tolerance
-            real(c_double), value :: minimum_timestep
+            real(c_double), value :: minimum_timestep, loss_decay_rate, maxloss
+            real(c_double), intent(out) :: observed_duration
             real(c_double), intent(out) :: final_z(*), loss_time(*)
             integer(c_int), intent(out) :: status(*)
             integer(c_int64_t), intent(out) :: rhs_evaluations(*)
@@ -96,8 +98,9 @@ contains
             rk_profile_table, size(rk_profile_table, kind=c_size_t), &
             point_count, rk_x_min, rk_inv_h_step, rk_period, rk_inv_period, &
             boozer_state%torflux, initial_z, mu, ro0, total_duration, &
-            block_duration, si(1)%rtol, hmin, zend, loss_time, status, &
-            nfev_c, warp_nfev_slots, profile_ms)
+            block_duration, si(1)%rtol, hmin, time_scale/loss_tau, maxloss, &
+            observed_duration, zend, loss_time, status, nfev_c, &
+            warp_nfev_slots, profile_ms)
         if (ierr /= 0_c_int) then
             print '(a,i0)', ' native CUDA RK error = ', ierr
             error stop 'native CUDA RK launch failed'
@@ -121,10 +124,6 @@ contains
             end if
         end do
         energy_loss_fraction = energy_loss_fraction/real(npart, dp)
-        observed_duration = total_duration
-        if (energy_loss_fraction > maxloss) &
-            error stop 'native CUDA RK crossed SIMPLE_GPU_MAXLOSS; use openacc backend'
-
     end subroutine trace_orbits_cuda_native_landreman
 
 end module simple_cuda_native

@@ -514,6 +514,7 @@ extern "C" int simple_cuda_native_rk54(
     const double inv_period[3], double torflux, const double *initial_z,
     const double *mu, const double *ro0, double total_duration,
     double block_duration, double tolerance, double minimum_timestep,
+    double loss_decay_rate, double maxloss, double *observed_duration,
     double *final_z, double *loss_time, int *status, uint64_t *rhs_evaluations,
     uint64_t *warp_rhs_slots,
     double profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_COUNT]) {
@@ -525,8 +526,9 @@ extern "C" int simple_cuda_native_rk54(
   if (particle_count <= 0 || !field_table || !profile_table || !point_count ||
       !x_min || !inv_h_step || !period || !inv_period || !initial_z || !mu ||
       !ro0 || !final_z || !loss_time || !status || !rhs_evaluations ||
-      !warp_rhs_slots || total_duration < 0.0 || block_duration <= 0.0 ||
-      tolerance <= 0.0 || minimum_timestep < 0.0)
+      !warp_rhs_slots || !observed_duration || total_duration < 0.0 ||
+      block_duration <= 0.0 || tolerance <= 0.0 || minimum_timestep < 0.0 ||
+      loss_decay_rate <= 0.0 || maxloss < 0.0)
     return 2;
 
   size_t expected_field = 2;
@@ -577,6 +579,7 @@ extern "C" int simple_cuda_native_rk54(
   std::fill(status, status + particle_count, 0);
   std::fill(rhs_evaluations, rhs_evaluations + particle_count, 0);
   *warp_rhs_slots = 0;
+  *observed_duration = 0.0;
   float *field_device = nullptr;
   float *profile_device = nullptr;
   double *initial_device = nullptr;
@@ -637,6 +640,7 @@ extern "C" int simple_cuda_native_rk54(
   {
     int active_count = particle_count;
     double current_time = 0.0;
+    double weighted_losses = 0.0;
     const double loss_tolerance = 16.0 *
                                   std::numeric_limits<double>::epsilon() *
                                   std::max(total_duration, 1.0);
@@ -828,8 +832,11 @@ extern "C" int simple_cuda_native_rk54(
         loss_time[original] = current_time + segment_loss[slot];
         status[original] = segment_status[slot];
         rhs_evaluations[original] = cumulative_nfev[slot];
+        if (segment_status[slot] == 0)
+          weighted_losses += exp(-loss_decay_rate * loss_time[original]);
       }
       current_time += duration;
+      const bool should_stop = weighted_losses / particle_count > maxloss;
 
       std::stable_sort(survivors.begin(), survivors.end(),
                        [&](int left, int right) {
@@ -850,6 +857,8 @@ extern "C" int simple_cuda_native_rk54(
       original_index.swap(next_original);
       cumulative_nfev.swap(next_cumulative);
       active_count = next_count;
+      if (should_stop)
+        break;
     }
 
     if (error == cudaSuccess) {
@@ -861,6 +870,7 @@ extern "C" int simple_cuda_native_rk54(
         status[original] = 0;
         rhs_evaluations[original] = cumulative_nfev[slot];
       }
+      *observed_duration = current_time;
     }
   }
 
