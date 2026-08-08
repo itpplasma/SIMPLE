@@ -60,7 +60,13 @@ __device__ __forceinline__ void
 cubic_table_location(double x, int dimension, const Geometry &geometry,
                      int &first, float weight[4], float *derivative) {
   double x_eval = x;
-  if (dimension > 0) {
+  if (dimension == 1) {
+    // theta comes from atan2 and is therefore already within one period of
+    // the table's [0, 2*pi] interval. Avoid a device double-precision floor
+    // in every RHS evaluation.
+    if (x < geometry.x_min[dimension])
+      x_eval = x + geometry.period[dimension];
+  } else if (dimension > 0) {
     const double periods =
         floor((x - geometry.x_min[dimension]) * geometry.inv_period[dimension]);
     x_eval = x - periods * geometry.period[dimension];
