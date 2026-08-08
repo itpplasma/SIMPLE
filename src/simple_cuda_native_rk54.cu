@@ -647,6 +647,8 @@ extern "C" int simple_cuda_native_rk54(
   {
     int active_count = particle_count;
     double current_time = 0.0;
+    double next_checkpoint = std::min(block_duration, total_duration);
+    bool early_loss_probe = false;
     double weighted_losses = 0.0;
     const double loss_tolerance = 16.0 *
                                   std::numeric_limits<double>::epsilon() *
@@ -707,12 +709,28 @@ extern "C" int simple_cuda_native_rk54(
         error =
             cudaMemcpy(segment_nfev.data(), nfev_device,
                        active_count * sizeof(uint64_t), cudaMemcpyDeviceToHost);
+      if (error == cudaSuccess)
+        error = cudaMemcpy(segment_loss.data(), loss_device,
+                           active_count * sizeof(double),
+                           cudaMemcpyDeviceToHost);
+      if (error == cudaSuccess)
+        error = cudaMemcpy(segment_status.data(), status_device,
+                           active_count * sizeof(int), cudaMemcpyDeviceToHost);
       const auto download_end = Clock::now();
       if (profile_ms)
         profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_DOWNLOAD] +=
             milliseconds(download_begin, download_end);
       if (error != cudaSuccess)
         goto cleanup;
+
+      double pilot_weighted_losses = 0.0;
+      for (int slot = 0; slot < active_count; ++slot)
+        if (segment_status[slot] == 0 &&
+            segment_loss[slot] < pilot_duration - loss_tolerance)
+          pilot_weighted_losses +=
+              exp(-loss_decay_rate * segment_loss[slot]);
+      early_loss_probe =
+          pilot_weighted_losses / particle_count > 0.25 * maxloss;
 
       for (int first = 0; first < active_count; first += 32) {
         uint64_t maximum = 0;
@@ -743,8 +761,11 @@ extern "C" int simple_cuda_native_rk54(
     }
     while (current_time < total_duration && active_count > 0 &&
            error == cudaSuccess) {
-      const double duration =
-          std::min(block_duration, total_duration - current_time);
+      const double duration = early_loss_probe
+                                  ? 0.1 * next_checkpoint
+                                  : std::min(next_checkpoint - current_time,
+                                             total_duration - current_time);
+      early_loss_probe = false;
       geometry.total_duration = duration;
       geometry.block_duration = duration;
 
@@ -844,6 +865,9 @@ extern "C" int simple_cuda_native_rk54(
       }
       current_time += duration;
       const bool should_stop = weighted_losses / particle_count > maxloss;
+      if (current_time >= next_checkpoint - loss_tolerance)
+        next_checkpoint =
+            std::min(next_checkpoint + block_duration, total_duration);
 
       std::stable_sort(survivors.begin(), survivors.end(),
                        [&](int left, int right) {

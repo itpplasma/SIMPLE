@@ -150,6 +150,59 @@ int exercise_early_stop(int method) {
   return 0;
 }
 
+int exercise_early_loss_probe(int method) {
+  constexpr int particle_count = 1024;
+  constexpr int initially_lost = 300;
+  const int point_count[3] = {4, 4, 4};
+  const double x_min[3] = {0.0, 0.0, 0.0};
+  const double inv_h_step[3] = {1.0, 1.0, 1.0};
+  const double period[3] = {0.0, 3.0, 3.0};
+  const double inv_period[3] = {0.0, 1.0 / 3.0, 1.0 / 3.0};
+  std::vector<float> field_table(2 * 4 * 4 * 4, 0.0f);
+  for (std::size_t point = 0; point < field_table.size() / 2; ++point)
+    field_table[2 * point] = 1.0f;
+  std::vector<float> profile_table(6 * 4, 0.0f);
+  for (int radial = 0; radial < 4; ++radial)
+    profile_table[6 * radial + 4] = 1.0f;
+
+  std::vector<double> initial_z(4 * particle_count, 0.0);
+  std::vector<double> mu(particle_count, 0.1);
+  std::vector<double> ro0(particle_count, 2.0);
+  for (int particle = 0; particle < particle_count; ++particle) {
+    initial_z[4 * particle] = particle < initially_lost ? 1.1 : 0.2;
+    initial_z[4 * particle + 3] = 0.5;
+  }
+  std::vector<double> final_z(4 * particle_count);
+  std::vector<double> loss_time(particle_count);
+  std::vector<int> status(particle_count);
+  std::vector<uint64_t> nfev(particle_count);
+  uint64_t warp_rhs_slots{};
+  double observed_duration{};
+  double profile[SIMPLE_CUDA_NATIVE_PROFILE_COUNT]{};
+  constexpr double duration = 0.02;
+  constexpr double block_duration = 0.005;
+  constexpr double probe_duration = 0.1 * block_duration;
+
+  const int result = simple_cuda_native_rk54(
+      method, particle_count, field_table.data(), field_table.size(),
+      profile_table.data(), profile_table.size(), point_count, x_min,
+      inv_h_step, period, inv_period, 1.0, initial_z.data(), mu.data(),
+      ro0.data(), duration, block_duration, 1.0e-10, 1.0e-14, 1.0, 0.2,
+      &observed_duration, final_z.data(), loss_time.data(), status.data(),
+      nfev.data(), &warp_rhs_slots, profile);
+  if (result != 0 || !close(observed_duration, probe_duration, 1.0e-14) ||
+      !close(loss_time[0], 0.0, 1.0e-14) ||
+      !close(loss_time[initially_lost], duration, 1.0e-14)) {
+    std::fprintf(stderr,
+                 "early-loss probe mismatch method %d: result %d, "
+                 "observed %.17g, losses [%.17g, %.17g]\n",
+                 method, result, observed_duration, loss_time[0],
+                 loss_time[initially_lost]);
+    return 6;
+  }
+  return 0;
+}
+
 } // namespace
 
 int main() {
@@ -161,6 +214,9 @@ int main() {
     const int early_stop_result = exercise_early_stop(method);
     if (early_stop_result != 0)
       return early_stop_result;
+    const int early_probe_result = exercise_early_loss_probe(method);
+    if (early_probe_result != 0)
+      return early_probe_result;
   }
   std::printf("native CUDA RK54 closed-form oracle passed\n");
   return 0;
