@@ -13,7 +13,7 @@
 namespace {
 
 #ifndef SIMPLE_CUDA_NATIVE_THREADS
-#define SIMPLE_CUDA_NATIVE_THREADS 32
+#define SIMPLE_CUDA_NATIVE_THREADS 96
 #endif
 
 constexpr int kThreads = SIMPLE_CUDA_NATIVE_THREADS;
