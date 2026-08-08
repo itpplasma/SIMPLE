@@ -410,6 +410,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
       }
 
       double trial[4];
+#pragma unroll
       for (int stage = 1; stage < stage_count<Method>(); ++stage) {
         stage_state<Method>(stage, y, h, k, trial);
         canonical_rhs(field_table, profile_table, geometry, trial, mu, ro0,
