@@ -178,7 +178,7 @@ evaluate_boozer_table(const float *__restrict__ field_table,
 __device__ __forceinline__ void
 canonical_rhs(const float *__restrict__ field_table,
               const float *__restrict__ profile_table, const Geometry &geometry,
-              const double y[4], double mu, double ro0, double dydt[4]) {
+              const double y[4], double mu, double inv_ro0, double dydt[4]) {
   const double radial = radial_norm(y);
   const double theta = atan2(y[1], y[0]);
   double aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod[3];
@@ -187,7 +187,6 @@ canonical_rhs(const float *__restrict__ field_table,
                         dbmod);
 
   const double inv_bphi = 1.0 / bphi;
-  const double inv_ro0 = 1.0 / ro0;
   const double bmod_over_bphi = bmod * inv_bphi;
   const double parallel_over_bmod =
       (y[3] - aphi * inv_ro0) * inv_bphi;
@@ -371,6 +370,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
                                const double initial_z[4], double mu, double ro0,
                                double final_z[4], double &lost_at,
                                int &particle_status, uint64_t &nfev) {
+  const double inv_ro0 = 1.0 / ro0;
   double y[4] = {initial_z[0], initial_z[1], initial_z[2], initial_z[3]};
   double current_time = 0.0;
   lost_at = geometry.total_duration;
@@ -402,7 +402,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
       double k[7][4];
       if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
         if (!have_first_derivative) {
-          canonical_rhs(field_table, profile_table, geometry, y, mu, ro0,
+          canonical_rhs(field_table, profile_table, geometry, y, mu, inv_ro0,
                         first_derivative);
           ++nfev;
           have_first_derivative = true;
@@ -411,7 +411,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
         for (int q = 0; q < 4; ++q)
           k[0][q] = first_derivative[q];
       } else {
-        canonical_rhs(field_table, profile_table, geometry, y, mu, ro0, k[0]);
+        canonical_rhs(field_table, profile_table, geometry, y, mu, inv_ro0, k[0]);
         ++nfev;
       }
 
@@ -419,7 +419,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
 #pragma unroll
       for (int stage = 1; stage < stage_count<Method>(); ++stage) {
         stage_state<Method>(stage, y, h, k, trial);
-        canonical_rhs(field_table, profile_table, geometry, trial, mu, ro0,
+        canonical_rhs(field_table, profile_table, geometry, trial, mu, inv_ro0,
                       k[stage]);
         ++nfev;
       }
