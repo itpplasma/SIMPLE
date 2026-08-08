@@ -899,7 +899,7 @@ contains
 #ifndef _OPENACC
         order_work = .false.
 #endif
-        pilot_fraction = 0.05_dp
+        pilot_fraction = 0.04_dp
         call get_environment_variable('SIMPLE_GPU_PILOT_FRACTION', pilot_value, &
             pilot_length, pilot_status)
         if (pilot_status == 0 .and. pilot_length > 0) then
