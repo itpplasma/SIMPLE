@@ -173,7 +173,7 @@ evaluate_boozer_table(const float *__restrict__ field_table,
   dbphi = profile_value[5];
 }
 
-__device__ __noinline__ void
+__device__ __forceinline__ void
 canonical_rhs(const float *__restrict__ field_table,
               const float *__restrict__ profile_table, const Geometry &geometry,
               const double y[4], double mu, double ro0, double dydt[4]) {
