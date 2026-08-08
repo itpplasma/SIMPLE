@@ -424,16 +424,17 @@ contains
         integer, intent(out) :: ierr, nfev
         real(dp), intent(in), optional :: predictor(5)
 
-        type(symplectic_integrator_t) :: accepted_integrator
-        type(field_can_t) :: accepted_field
-        real(dp) :: x(5)
+        real(dp) :: x(5), accepted_pthold, accepted_Aph
         integer :: ktau, step_status, step_nfev
 
         ierr = 0
         nfev = 0
         do ktau = 1, si%ntau
-            accepted_integrator = si
-            accepted_field = f
+            ! Newton overwrites the field workspace. The retry only needs the
+            ! accepted tolerance state and A_phi; the next field evaluation
+            ! repopulates the remaining workspace entries.
+            accepted_pthold = si%pthold
+            accepted_Aph = f%Aph
             si%pthold = f%pth
             if (ktau == 1 .and. present(predictor)) then
                 x = predictor
@@ -445,8 +446,8 @@ contains
             nfev = nfev + step_nfev
             if (step_status /= SYMPLECTIC_STEP_OK .and. ktau == 1 .and. &
                     present(predictor)) then
-                si = accepted_integrator
-                f = accepted_field
+                si%pthold = accepted_pthold
+                f%Aph = accepted_Aph
                 x(1:4) = si%z
                 x(5) = si%z(1)
                 call gpu_newton_midpoint(si, f, x, warning_mode, step_status, &
@@ -454,8 +455,8 @@ contains
                 nfev = nfev + step_nfev
             end if
             if (step_status /= SYMPLECTIC_STEP_OK) then
-                si = accepted_integrator
-                f = accepted_field
+                si%pthold = accepted_pthold
+                f%Aph = accepted_Aph
                 ierr = step_status
                 return
             end if
@@ -464,8 +465,8 @@ contains
                 x(2) = x(2) + pi
             end if
             if (x(1) > 1.0_dp) then
-                si = accepted_integrator
-                f = accepted_field
+                si%pthold = accepted_pthold
+                f%Aph = accepted_Aph
                 ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
