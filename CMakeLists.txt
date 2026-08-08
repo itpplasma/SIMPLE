@@ -272,16 +272,29 @@ else()
 endif()
 
 # fortnum provides the multidimensional root finder (multiroot_hybrids) that
-# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi.
+# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi. The GPU RK54
+# path additionally needs the device reverse-communication module, which is
+# available in the development branch but not in the historical pin.
 if(NOT TARGET fortnum)
-    include(FetchContent)
-    FetchContent_Declare(
-        fortnum
-        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        # Allocation-free GPU RK5(4), generated from the pinned fortsym kernels.
-        GIT_TAG d58884a1f7dca6aecc1620e3bc311f1e1a90e534
-    )
-    FetchContent_MakeAvailable(fortnum)
+    if(DEFINED FORTNUM_SOURCE_DIR)
+        get_filename_component(_fortnum_source "${FORTNUM_SOURCE_DIR}" ABSOLUTE
+            BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+        if(NOT IS_DIRECTORY "${_fortnum_source}")
+            message(FATAL_ERROR
+                "FORTNUM_SOURCE_DIR='${_fortnum_source}' is not a directory")
+        endif()
+        add_subdirectory("${_fortnum_source}" "${CMAKE_CURRENT_BINARY_DIR}/fortnum"
+            EXCLUDE_FROM_ALL)
+    else()
+        include(FetchContent)
+        FetchContent_Declare(
+            fortnum
+            GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+            # Allocation-free GPU RK5(4), generated from the pinned fortsym kernels.
+            GIT_TAG d58884a1f7dca6aecc1620e3bc311f1e1a90e534
+        )
+        FetchContent_MakeAvailable(fortnum)
+    endif()
 endif()
 
 if (SIMPLE_TESTING)
