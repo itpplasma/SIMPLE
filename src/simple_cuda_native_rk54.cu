@@ -433,7 +433,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
       const double error_floor = fmax(error, 1.0e-300);
       double factor;
       if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
-        factor = 0.9 * pow(error_floor, -1.0 / 3.0);
+        factor = 0.9 / cbrt(error_floor);
         factor = fmax(0.2, fmin(5.0, factor));
         if (error > 0.5 && error < 1.0)
           factor = 1.0;
