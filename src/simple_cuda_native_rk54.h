@@ -31,6 +31,7 @@ int simple_cuda_native_rk54(
     const double *mu, const double *ro0, double total_duration,
     double block_duration, double tolerance, double minimum_timestep,
     double *final_z, double *loss_time, int *status, uint64_t *rhs_evaluations,
+    uint64_t *warp_rhs_slots,
     double profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_COUNT]);
 
 const char *simple_cuda_native_error_string(int status);

@@ -6,6 +6,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <limits>
+#include <numeric>
+#include <vector>
 
 namespace {
 
@@ -33,6 +36,10 @@ struct Geometry {
   double tolerance;
   double minimum_timestep;
 };
+
+__device__ __forceinline__ double radial_norm(const double y[4]) {
+  return sqrt(y[0] * y[0] + y[1] * y[1]);
+}
 
 __device__ __forceinline__ void
 cubic_table_location(double x, int dimension, const Geometry &geometry,
@@ -147,7 +154,7 @@ __device__ __noinline__ void
 canonical_rhs(const float *__restrict__ field_table,
               const float *__restrict__ profile_table, const Geometry &geometry,
               const double y[4], double mu, double ro0, double dydt[4]) {
-  const double radial = hypot(y[0], y[1]);
+  const double radial = radial_norm(y);
   const double theta = atan2(y[1], y[0]);
   double aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod[3];
   evaluate_boozer_table(field_table, profile_table, geometry, radial, theta,
@@ -192,7 +199,7 @@ segment_limits(const float *__restrict__ field_table,
                const float *__restrict__ profile_table,
                const Geometry &geometry, const double y[4], double duration,
                double &hmax, double &momentum_atol_scale) {
-  const double radial = hypot(y[0], y[1]);
+  const double radial = radial_norm(y);
   const double theta = atan2(y[1], y[0]);
   double aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod[3];
   evaluate_boozer_table(field_table, profile_table, geometry, radial, theta,
@@ -355,7 +362,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
   nfev = 0;
 
   while (current_time < geometry.total_duration) {
-    if (hypot(y[0], y[1]) >= 1.0) {
+    if (radial_norm(y) >= 1.0) {
       lost_at = current_time;
       break;
     }
@@ -364,6 +371,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
     double hmax, momentum_atol_scale;
     segment_limits(field_table, profile_table, geometry, y, duration, hmax,
                    momentum_atol_scale);
+    ++nfev;
     double h = fmin(duration, 1.0e-3 * hmax);
     double segment_time = 0.0;
     double previous_error = 1.0;
@@ -437,7 +445,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
           for (int q = 0; q < 4; ++q)
             first_derivative[q] = k[6][q];
         }
-        if (hypot(y[0], y[1]) >= 1.0) {
+        if (radial_norm(y) >= 1.0) {
           lost_at = current_time + segment_time;
           break;
         }
@@ -453,7 +461,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
     current_time += duration;
   }
 
-  final_z[0] = hypot(y[0], y[1]);
+  final_z[0] = radial_norm(y);
   final_z[1] = atan2(y[1], y[0]);
   final_z[2] = y[2];
   final_z[3] = y[3];
@@ -497,6 +505,7 @@ extern "C" int simple_cuda_native_rk54(
     const double *mu, const double *ro0, double total_duration,
     double block_duration, double tolerance, double minimum_timestep,
     double *final_z, double *loss_time, int *status, uint64_t *rhs_evaluations,
+    uint64_t *warp_rhs_slots,
     double profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_COUNT]) {
   if (profile_ms)
     std::fill(profile_ms, profile_ms + SIMPLE_CUDA_NATIVE_PROFILE_COUNT, 0.0);
@@ -506,8 +515,8 @@ extern "C" int simple_cuda_native_rk54(
   if (particle_count <= 0 || !field_table || !profile_table || !point_count ||
       !x_min || !inv_h_step || !period || !inv_period || !initial_z || !mu ||
       !ro0 || !final_z || !loss_time || !status || !rhs_evaluations ||
-      total_duration < 0.0 || block_duration <= 0.0 || tolerance <= 0.0 ||
-      minimum_timestep < 0.0)
+      !warp_rhs_slots || total_duration < 0.0 || block_duration <= 0.0 ||
+      tolerance <= 0.0 || minimum_timestep < 0.0)
     return 2;
 
   size_t expected_field = 2;
@@ -530,13 +539,31 @@ extern "C" int simple_cuda_native_rk54(
     geometry.inv_period[d] = inv_period[d];
   }
   geometry.torflux = torflux;
-  geometry.total_duration = total_duration;
-  geometry.block_duration = block_duration;
   geometry.tolerance = tolerance;
   geometry.minimum_timestep = minimum_timestep;
 
   const auto total_begin = Clock::now();
   const auto allocate_begin = total_begin;
+  std::vector<double> active_z(initial_z, initial_z + 4 * particle_count);
+  std::vector<double> active_mu(mu, mu + particle_count);
+  std::vector<double> active_ro0(ro0, ro0 + particle_count);
+  std::vector<double> segment_z(4 * particle_count);
+  std::vector<double> segment_loss(particle_count);
+  std::vector<double> next_z(4 * particle_count);
+  std::vector<double> next_mu(particle_count);
+  std::vector<double> next_ro0(particle_count);
+  std::vector<int> segment_status(particle_count);
+  std::vector<int> original_index(particle_count);
+  std::vector<int> next_original(particle_count);
+  std::vector<int> survivors;
+  std::vector<uint64_t> segment_nfev(particle_count);
+  std::vector<uint64_t> cumulative_nfev(particle_count, 0);
+  std::vector<uint64_t> next_cumulative(particle_count);
+  std::iota(original_index.begin(), original_index.end(), 0);
+  survivors.reserve(particle_count);
+  std::fill(status, status + particle_count, 0);
+  std::fill(rhs_evaluations, rhs_evaluations + particle_count, 0);
+  *warp_rhs_slots = 0;
   float *field_device = nullptr;
   float *profile_device = nullptr;
   double *initial_device = nullptr;
@@ -546,6 +573,8 @@ extern "C" int simple_cuda_native_rk54(
   double *loss_device = nullptr;
   int *status_device = nullptr;
   uint64_t *nfev_device = nullptr;
+  cudaEvent_t kernel_start{};
+  cudaEvent_t kernel_stop{};
   cudaError_t error =
       cudaMalloc(&field_device, field_table_count * sizeof(float));
   if (error == cudaSuccess)
@@ -564,6 +593,10 @@ extern "C" int simple_cuda_native_rk54(
     error = cudaMalloc(&status_device, particle_count * sizeof(int));
   if (error == cudaSuccess)
     error = cudaMalloc(&nfev_device, particle_count * sizeof(uint64_t));
+  if (error == cudaSuccess)
+    error = cudaEventCreate(&kernel_start);
+  if (error == cudaSuccess)
+    error = cudaEventCreate(&kernel_stop);
   const auto allocate_end = Clock::now();
   if (profile_ms)
     profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_ALLOCATE] =
@@ -580,16 +613,6 @@ extern "C" int simple_cuda_native_rk54(
       error = cudaMemcpy(profile_device, profile_table,
                          profile_table_count * sizeof(float),
                          cudaMemcpyHostToDevice);
-    if (error == cudaSuccess)
-      error = cudaMemcpy(initial_device, initial_z,
-                         4 * particle_count * sizeof(double),
-                         cudaMemcpyHostToDevice);
-    if (error == cudaSuccess)
-      error = cudaMemcpy(mu_device, mu, particle_count * sizeof(double),
-                         cudaMemcpyHostToDevice);
-    if (error == cudaSuccess)
-      error = cudaMemcpy(ro0_device, ro0, particle_count * sizeof(double),
-                         cudaMemcpyHostToDevice);
     const auto upload_end = Clock::now();
     if (profile_ms)
       profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_UPLOAD] =
@@ -599,67 +622,238 @@ extern "C" int simple_cuda_native_rk54(
     goto cleanup;
 
   {
-    cudaEvent_t start{}, stop{};
-    error = cudaEventCreate(&start);
-    if (error == cudaSuccess)
-      error = cudaEventCreate(&stop);
-    if (error == cudaSuccess)
-      error = cudaEventRecord(start);
-    const int blocks = (particle_count + kThreads - 1) / kThreads;
-    if (error == cudaSuccess) {
-      if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
-        trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE><<<blocks, kThreads>>>(
-            field_device, profile_device, geometry, particle_count,
-            initial_device, mu_device, ro0_device, final_device, loss_device,
-            status_device, nfev_device);
-      } else {
-        trace_kernel<SIMPLE_CUDA_NATIVE_CASH_KARP><<<blocks, kThreads>>>(
-            field_device, profile_device, geometry, particle_count,
-            initial_device, mu_device, ro0_device, final_device, loss_device,
-            status_device, nfev_device);
-      }
-      error = cudaGetLastError();
-    }
-    if (error == cudaSuccess)
-      error = cudaEventRecord(stop);
-    if (error == cudaSuccess)
-      error = cudaEventSynchronize(stop);
-    float kernel_ms = 0.0f;
-    if (error == cudaSuccess)
-      error = cudaEventElapsedTime(&kernel_ms, start, stop);
-    if (profile_ms)
-      profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_KERNEL] = kernel_ms;
-    if (start)
-      cudaEventDestroy(start);
-    if (stop)
-      cudaEventDestroy(stop);
-  }
-  if (error != cudaSuccess)
-    goto cleanup;
+    int active_count = particle_count;
+    double current_time = 0.0;
+    const double loss_tolerance = 16.0 *
+                                  std::numeric_limits<double>::epsilon() *
+                                  std::max(total_duration, 1.0);
+    if (active_count >= 1024 && total_duration > 0.0) {
+      const double pilot_duration =
+          0.04 * std::min(block_duration, total_duration);
+      geometry.total_duration = pilot_duration;
+      geometry.block_duration = pilot_duration;
 
-  {
-    const auto download_begin = Clock::now();
-    error =
-        cudaMemcpy(final_z, final_device, 4 * particle_count * sizeof(double),
-                   cudaMemcpyDeviceToHost);
-    if (error == cudaSuccess)
+      const auto upload_begin = Clock::now();
       error =
-          cudaMemcpy(loss_time, loss_device, particle_count * sizeof(double),
-                     cudaMemcpyDeviceToHost);
-    if (error == cudaSuccess)
-      error = cudaMemcpy(status, status_device, particle_count * sizeof(int),
-                         cudaMemcpyDeviceToHost);
-    if (error == cudaSuccess)
+          cudaMemcpy(initial_device, active_z.data(),
+                     4 * active_count * sizeof(double), cudaMemcpyHostToDevice);
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(mu_device, active_mu.data(),
+                       active_count * sizeof(double), cudaMemcpyHostToDevice);
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(ro0_device, active_ro0.data(),
+                       active_count * sizeof(double), cudaMemcpyHostToDevice);
+      const auto upload_end = Clock::now();
+      if (profile_ms)
+        profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_UPLOAD] +=
+            milliseconds(upload_begin, upload_end);
+
+      if (error == cudaSuccess)
+        error = cudaEventRecord(kernel_start);
+      const int blocks = (active_count + kThreads - 1) / kThreads;
+      if (error == cudaSuccess) {
+        if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+          trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE><<<blocks, kThreads>>>(
+              field_device, profile_device, geometry, active_count,
+              initial_device, mu_device, ro0_device, final_device, loss_device,
+              status_device, nfev_device);
+        } else {
+          trace_kernel<SIMPLE_CUDA_NATIVE_CASH_KARP><<<blocks, kThreads>>>(
+              field_device, profile_device, geometry, active_count,
+              initial_device, mu_device, ro0_device, final_device, loss_device,
+              status_device, nfev_device);
+        }
+        error = cudaGetLastError();
+      }
+      if (error == cudaSuccess)
+        error = cudaEventRecord(kernel_stop);
+      if (error == cudaSuccess)
+        error = cudaEventSynchronize(kernel_stop);
+      float pilot_kernel_ms = 0.0f;
+      if (error == cudaSuccess)
+        error =
+            cudaEventElapsedTime(&pilot_kernel_ms, kernel_start, kernel_stop);
+      if (profile_ms)
+        profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_KERNEL] += pilot_kernel_ms;
+
+      const auto download_begin = Clock::now();
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(segment_nfev.data(), nfev_device,
+                       active_count * sizeof(uint64_t), cudaMemcpyDeviceToHost);
+      const auto download_end = Clock::now();
+      if (profile_ms)
+        profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_DOWNLOAD] +=
+            milliseconds(download_begin, download_end);
+      if (error != cudaSuccess)
+        goto cleanup;
+
+      for (int first = 0; first < active_count; first += 32) {
+        uint64_t maximum = 0;
+        for (int slot = first; slot < std::min(first + 32, active_count);
+             ++slot)
+          maximum = std::max(maximum, segment_nfev[slot]);
+        *warp_rhs_slots += 32 * maximum;
+      }
+      survivors.resize(active_count);
+      std::iota(survivors.begin(), survivors.end(), 0);
+      std::stable_sort(survivors.begin(), survivors.end(),
+                       [&](int left, int right) {
+                         return segment_nfev[left] > segment_nfev[right];
+                       });
+      for (int next = 0; next < active_count; ++next) {
+        const int source = survivors[next];
+        std::copy_n(active_z.data() + 4 * source, 4, next_z.data() + 4 * next);
+        next_mu[next] = active_mu[source];
+        next_ro0[next] = active_ro0[source];
+        next_original[next] = original_index[source];
+        next_cumulative[next] = segment_nfev[source];
+      }
+      active_z.swap(next_z);
+      active_mu.swap(next_mu);
+      active_ro0.swap(next_ro0);
+      original_index.swap(next_original);
+      cumulative_nfev.swap(next_cumulative);
+    }
+    while (current_time < total_duration && active_count > 0 &&
+           error == cudaSuccess) {
+      const double duration =
+          std::min(block_duration, total_duration - current_time);
+      geometry.total_duration = duration;
+      geometry.block_duration = duration;
+
+      const auto upload_begin = Clock::now();
       error =
-          cudaMemcpy(rhs_evaluations, nfev_device,
-                     particle_count * sizeof(uint64_t), cudaMemcpyDeviceToHost);
-    const auto download_end = Clock::now();
-    if (profile_ms)
-      profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_DOWNLOAD] =
-          milliseconds(download_begin, download_end);
+          cudaMemcpy(initial_device, active_z.data(),
+                     4 * active_count * sizeof(double), cudaMemcpyHostToDevice);
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(mu_device, active_mu.data(),
+                       active_count * sizeof(double), cudaMemcpyHostToDevice);
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(ro0_device, active_ro0.data(),
+                       active_count * sizeof(double), cudaMemcpyHostToDevice);
+      const auto upload_end = Clock::now();
+      if (profile_ms)
+        profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_UPLOAD] +=
+            milliseconds(upload_begin, upload_end);
+
+      if (error == cudaSuccess)
+        error = cudaEventRecord(kernel_start);
+      const int blocks = (active_count + kThreads - 1) / kThreads;
+      if (error == cudaSuccess) {
+        if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+          trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE><<<blocks, kThreads>>>(
+              field_device, profile_device, geometry, active_count,
+              initial_device, mu_device, ro0_device, final_device, loss_device,
+              status_device, nfev_device);
+        } else {
+          trace_kernel<SIMPLE_CUDA_NATIVE_CASH_KARP><<<blocks, kThreads>>>(
+              field_device, profile_device, geometry, active_count,
+              initial_device, mu_device, ro0_device, final_device, loss_device,
+              status_device, nfev_device);
+        }
+        error = cudaGetLastError();
+      }
+      if (error == cudaSuccess)
+        error = cudaEventRecord(kernel_stop);
+      if (error == cudaSuccess)
+        error = cudaEventSynchronize(kernel_stop);
+      float segment_kernel_ms = 0.0f;
+      if (error == cudaSuccess)
+        error =
+            cudaEventElapsedTime(&segment_kernel_ms, kernel_start, kernel_stop);
+      if (profile_ms)
+        profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_KERNEL] += segment_kernel_ms;
+
+      const auto download_begin = Clock::now();
+      if (error == cudaSuccess)
+        error = cudaMemcpy(segment_z.data(), final_device,
+                           4 * active_count * sizeof(double),
+                           cudaMemcpyDeviceToHost);
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(segment_loss.data(), loss_device,
+                       active_count * sizeof(double), cudaMemcpyDeviceToHost);
+      if (error == cudaSuccess)
+        error = cudaMemcpy(segment_status.data(), status_device,
+                           active_count * sizeof(int), cudaMemcpyDeviceToHost);
+      if (error == cudaSuccess)
+        error =
+            cudaMemcpy(segment_nfev.data(), nfev_device,
+                       active_count * sizeof(uint64_t), cudaMemcpyDeviceToHost);
+      const auto download_end = Clock::now();
+      if (profile_ms)
+        profile_ms[SIMPLE_CUDA_NATIVE_PROFILE_DOWNLOAD] +=
+            milliseconds(download_begin, download_end);
+      if (error != cudaSuccess)
+        break;
+
+      for (int first = 0; first < active_count; first += 32) {
+        uint64_t maximum = 0;
+        for (int slot = first; slot < std::min(first + 32, active_count);
+             ++slot)
+          maximum = std::max(maximum, segment_nfev[slot]);
+        *warp_rhs_slots += 32 * maximum;
+      }
+
+      survivors.clear();
+      for (int slot = 0; slot < active_count; ++slot) {
+        cumulative_nfev[slot] += segment_nfev[slot];
+        const bool lost = segment_status[slot] == 0 &&
+                          segment_loss[slot] < duration - loss_tolerance;
+        if (segment_status[slot] == 0 && !lost) {
+          survivors.push_back(slot);
+          continue;
+        }
+        const int original = original_index[slot];
+        std::copy_n(segment_z.data() + 4 * slot, 4, final_z + 4 * original);
+        loss_time[original] = current_time + segment_loss[slot];
+        status[original] = segment_status[slot];
+        rhs_evaluations[original] = cumulative_nfev[slot];
+      }
+      current_time += duration;
+
+      std::stable_sort(survivors.begin(), survivors.end(),
+                       [&](int left, int right) {
+                         return segment_nfev[left] > segment_nfev[right];
+                       });
+      const int next_count = static_cast<int>(survivors.size());
+      for (int next = 0; next < next_count; ++next) {
+        const int source = survivors[next];
+        std::copy_n(segment_z.data() + 4 * source, 4, next_z.data() + 4 * next);
+        next_mu[next] = active_mu[source];
+        next_ro0[next] = active_ro0[source];
+        next_original[next] = original_index[source];
+        next_cumulative[next] = cumulative_nfev[source];
+      }
+      active_z.swap(next_z);
+      active_mu.swap(next_mu);
+      active_ro0.swap(next_ro0);
+      original_index.swap(next_original);
+      cumulative_nfev.swap(next_cumulative);
+      active_count = next_count;
+    }
+
+    if (error == cudaSuccess) {
+      for (int slot = 0; slot < active_count; ++slot) {
+        const int original = original_index[slot];
+        std::copy_n(active_z.data() + 4 * slot, 4, final_z + 4 * original);
+        loss_time[original] = total_duration;
+        status[original] = 0;
+        rhs_evaluations[original] = cumulative_nfev[slot];
+      }
+    }
   }
 
 cleanup:
+  if (kernel_stop)
+    cudaEventDestroy(kernel_stop);
+  if (kernel_start)
+    cudaEventDestroy(kernel_start);
   cudaFree(nfev_device);
   cudaFree(status_device);
   cudaFree(loss_device);

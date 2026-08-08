@@ -839,6 +839,13 @@ if(SIMPLE_ENABLE_CUDA)
     set_tests_properties(test_cuda_native_rk54 PROPERTIES
         LABELS "unit;gpu;cuda"
         TIMEOUT 120)
+
+    add_executable(test_cuda_native_bridge.x test_cuda_native_bridge.f90)
+    target_link_libraries(test_cuda_native_bridge.x simple)
+    add_test(NAME test_cuda_native_bridge COMMAND test_cuda_native_bridge.x)
+    set_tests_properties(test_cuda_native_bridge PROPERTIES
+        LABELS "unit;gpu;cuda"
+        TIMEOUT 120)
 endif()
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)

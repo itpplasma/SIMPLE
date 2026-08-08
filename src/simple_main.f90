@@ -863,6 +863,9 @@ contains
         use magfie_sub, only: BOOZER
         use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, &
             CASH_KARP, DORMAND_PRINCE
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        use simple_cuda_native, only: trace_orbits_cuda_native_landreman
+#endif
 
         type(tracer_t), intent(inout) :: norb
         type(symplectic_integrator_t), allocatable :: si_gpu(:)
@@ -871,8 +874,10 @@ contains
         real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
         logical, allocatable :: passing(:)
         character(32) :: method_name, landreman_value, start_coordinates
+        character(32) :: backend_name
         character(1024) :: particle_profile_path
         integer :: method_len, method_stat, method, init_mode, i, it
+        integer :: backend_len, backend_stat
         integer :: landreman_len, landreman_stat, start_coordinates_len
         integer :: start_coordinates_stat, particle_profile_len
         integer :: particle_profile_stat, particle_profile_unit
@@ -880,11 +885,12 @@ contains
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
         real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
         real(dp) :: time_scale, observed_duration, energy_loss_fraction
-        logical :: landreman_mode
+        real(dp) :: cuda_profile_ms(5)
+        logical :: landreman_mode, cuda_native_backend
 
         if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
-                class_plot .or. fast_class .or. ntcut > 0 .or. &
-                output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
+            class_plot .or. fast_class .or. ntcut > 0 .or. &
+            output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
             error stop 'SIMPLE_GPU_RUN requires Boozer GC loss tracing without '// &
                 'collisions, wall, orbit output, or classifiers'
         end if
@@ -907,8 +913,29 @@ contains
             end select
         end if
         if (method /= EXPL_IMPL_EULER .and. method /= MIDPOINT .and. &
-                method /= CASH_KARP .and. method /= DORMAND_PRINCE) &
+            method /= CASH_KARP .and. method /= DORMAND_PRINCE) &
             error stop 'SIMPLE_GPU_RUN supports euler, midpoint, cash-karp, or dopri'
+
+        backend_name = 'openacc'
+        call get_environment_variable('SIMPLE_GPU_BACKEND', backend_name, &
+            backend_len, backend_stat)
+        if (backend_stat /= 0 .or. backend_len <= 0) backend_name = 'openacc'
+        backend_name = trim(adjustl(backend_name))
+        select case (trim(backend_name))
+        case ('openacc')
+            cuda_native_backend = .false.
+        case ('cuda-native', 'cuda_native')
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            cuda_native_backend = .true.
+#else
+            error stop 'SIMPLE_GPU_BACKEND=cuda-native requires SIMPLE_ENABLE_CUDA'
+#endif
+        case default
+            error stop 'SIMPLE_GPU_BACKEND must be openacc or cuda-native'
+        end select
+        if (cuda_native_backend .and. method /= CASH_KARP .and. &
+            method /= DORMAND_PRINCE) &
+            error stop 'cuda-native backend supports only cash-karp or dopri'
 
         init_mode = method
         if (method == CASH_KARP .or. method == DORMAND_PRINCE) &
@@ -924,7 +951,7 @@ contains
             start_coordinates = 'reference'
         start_coordinates = trim(adjustl(start_coordinates))
         if (trim(start_coordinates) /= 'reference' .and. &
-                trim(start_coordinates) /= 'boozer') &
+            trim(start_coordinates) /= 'boozer') &
             error stop 'SIMPLE_GPU_START_COORDINATES must be reference or boozer'
 
         t0 = omp_get_wtime()
@@ -941,7 +968,7 @@ contains
         end do
         call sync_boozer_state
         if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
-                .not. boozer_rk_device_supported()) &
+            .not. boozer_rk_device_supported()) &
             error stop 'GPU RK requires scalar cubic or quintic Boozer splines'
         t_init = omp_get_wtime() - t0
 
@@ -950,9 +977,12 @@ contains
             landreman_len, landreman_stat)
         if (landreman_stat == 0 .and. landreman_len > 0) &
             landreman_mode = trim(adjustl(landreman_value(:landreman_len))) /= '0'
+        if (cuda_native_backend .and. .not. landreman_mode) &
+            error stop 'cuda-native backend currently requires SIMPLE_GPU_LANDREMAN=1'
 
         t0 = omp_get_wtime()
         warp_nfev_slots = 0_8
+        cuda_profile_ms = 0.0_dp
         if (landreman_mode) then
             call read_optional_environment_real('SIMPLE_GPU_T_BLOCK', &
                 1.0e-3_dp, block_time)
@@ -971,11 +1001,25 @@ contains
             if (minimum_timestep < 0.0_dp) &
                 error stop 'SIMPLE_GPU_MIN_TIMESTEP must be nonnegative'
             time_scale = sqrt2/v0
-            call trace_orbits_gpu_landreman(si_gpu, f_gpu, ntestpart, ntimstep, &
-                ntau_macro, method, block_time/time_scale, time_scale, loss_tau, &
-                maxloss, minimum_timestep/time_scale, loss_step, &
-                loss_time_normalized, zcanonical, nfev, observed_duration, &
-                energy_loss_fraction, warp_nfev_slots)
+            total_time_normalized = &
+                real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+            if (cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+                call trace_orbits_cuda_native_landreman(si_gpu, f_gpu, &
+                    ntestpart, method, total_time_normalized, &
+                    block_time/time_scale, time_scale, loss_tau, maxloss, &
+                    minimum_timestep/time_scale, loss_step, &
+                    loss_time_normalized, zcanonical, nfev, observed_duration, &
+                    energy_loss_fraction, warp_nfev_slots, cuda_profile_ms)
+#endif
+            else
+                call trace_orbits_gpu_landreman(si_gpu, f_gpu, ntestpart, &
+                    ntimstep, ntau_macro, method, block_time/time_scale, &
+                    time_scale, loss_tau, maxloss, &
+                    minimum_timestep/time_scale, loss_step, &
+                    loss_time_normalized, zcanonical, nfev, observed_duration, &
+                    energy_loss_fraction, warp_nfev_slots)
+            end if
         else
             call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
                 ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
@@ -1014,7 +1058,7 @@ contains
             end if
             do it = 1, ntimstep
                 if (orbit_exit_code(i) == ORBIT_EXIT_COMPLETED .or. &
-                        times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) &
+                    times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) &
                     call increase_confined_count(it, passing(i))
             end do
         end do
@@ -1028,6 +1072,7 @@ contains
 
         print *, '==================== GPU production trace ==================='
         print '(a,i0)', ' integrator mode = ', method
+        print '(a,a)', ' backend = ', trim(backend_name)
         print '(a,i0)', ' particles = ', ntestpart
         print '(a,a)', ' start coordinates = ', trim(start_coordinates)
         print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
@@ -1046,6 +1091,13 @@ contains
             print '(a,f12.6,a)', ' observed until = ', &
                 observed_duration*sqrt2/v0, ' s'
             print '(a,es12.4)', ' energy loss fraction = ', energy_loss_fraction
+        end if
+        if (cuda_native_backend) then
+            print '(a,f12.6,a)', ' CUDA allocation = ', cuda_profile_ms(1)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA upload     = ', cuda_profile_ms(2)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA kernel     = ', cuda_profile_ms(3)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA download   = ', cuda_profile_ms(4)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA C-ABI total= ', cuda_profile_ms(5)/1.0e3_dp, ' s'
         end if
         print *, '============================================================'
 

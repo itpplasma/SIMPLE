@@ -36,6 +36,7 @@ int exercise_method(int method) {
   std::array<double, particle_count> loss_time{};
   std::array<int, particle_count> status{};
   std::array<uint64_t, particle_count> nfev{};
+  uint64_t warp_rhs_slots{};
   double profile[SIMPLE_CUDA_NATIVE_PROFILE_COUNT]{};
   constexpr double duration = 0.02;
 
@@ -44,7 +45,7 @@ int exercise_method(int method) {
       profile_table.data(), profile_table.size(), point_count, x_min,
       inv_h_step, period, inv_period, 1.0, initial_z.data(), mu.data(),
       ro0.data(), duration, 0.005, 1.0e-10, 1.0e-14, final_z.data(),
-      loss_time.data(), status.data(), nfev.data(), profile);
+      loss_time.data(), status.data(), nfev.data(), &warp_rhs_slots, profile);
   if (result != 0) {
     std::fprintf(stderr, "%s\n", simple_cuda_native_error_string(result));
     return 1;
@@ -80,7 +81,7 @@ int exercise_method(int method) {
       profile_table.data(), profile_table.size(), point_count, x_min,
       inv_h_step, period, inv_period, 1.0, initial_z.data(), mu.data(),
       ro0.data(), duration, 0.005, 1.0e-10, 1.0e-14, final_z.data(),
-      loss_time.data(), status.data(), nfev.data(), profile);
+      loss_time.data(), status.data(), nfev.data(), &warp_rhs_slots, profile);
   if (invalid != 4) {
     std::fprintf(stderr,
                  "table-size validation did not reject malformed input\n");
