@@ -78,7 +78,7 @@ option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-poin
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_CUDA
-    "Build direct-CUDA FIRM3D-compatible guiding-center kernels" OFF)
+    "Build direct-CUDA guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 
 if(SIMPLE_ENABLE_CUDA)
@@ -105,6 +105,20 @@ if(SIMPLE_ENABLE_CUDA)
     target_compile_options(simple_cuda_firm_rk54 PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v;-Xcompiler=-fopenmp>)
     set_target_properties(simple_cuda_firm_rk54 PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+    add_library(simple_cuda_native_rk54 SHARED
+        src/simple_cuda_native_rk54.cu
+        src/simple_cuda_native_rk54.h)
+    target_include_directories(simple_cuda_native_rk54 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(simple_cuda_native_rk54 PUBLIC CUDA::cudart)
+    target_compile_options(simple_cuda_native_rk54 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v>)
+    set_target_properties(simple_cuda_native_rk54 PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
         CUDA_SEPARABLE_COMPILATION OFF
