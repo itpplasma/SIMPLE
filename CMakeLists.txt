@@ -144,12 +144,10 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
             $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
-            $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
         )
         add_link_options(
-            -acc
-            -gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}
+            $<$<LINK_LANGUAGE:Fortran>:-acc>
+            $<$<LINK_LANGUAGE:Fortran>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
         )
     endif()
 endif()
