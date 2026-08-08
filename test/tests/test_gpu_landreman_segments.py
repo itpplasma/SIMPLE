@@ -63,6 +63,7 @@ def run_case(
                 "SIMPLE_GPU_MAXLOSS": "0.1",
                 "SIMPLE_GPU_LOSS_TAU": "0.1",
                 "SIMPLE_GPU_MIN_TIMESTEP": "0",
+                "SIMPLE_GPU_PARTICLE_PROFILE": str(root / "particles.csv"),
             }
         )
         result = subprocess.run(
@@ -108,6 +109,26 @@ def run_case(
                 f"{method}: early-stop survivors were not reported at tmax: "
                 f"{times[boundary_count:]}"
             )
+
+        profile = (root / "particles.csv").read_text().splitlines()
+        expected_header = (
+            "particle,s_start,theta_start,zeta_start,speed_start,pitch_start,"
+            "s_end,theta_end,zeta_end,speed_end,pitch_end,nfev,loss_step,loss_time"
+        )
+        if profile[0] != expected_header or len(profile) != 9:
+            raise AssertionError(f"{method}: invalid particle profile shape")
+        for row in profile[1 : boundary_count + 1]:
+            columns = row.split(",")
+            if len(columns) != 14:
+                raise AssertionError(f"{method}: invalid particle profile row: {row}")
+            unchanged = all(
+                abs(float(columns[start]) - float(columns[end])) <= 1.0e-12
+                for start, end in ((1, 6), (4, 9), (5, 10))
+            )
+            if not unchanged:
+                raise AssertionError(
+                    f"{method}: initially lost particle endpoint changed: {row}"
+                )
 
 
 def run_short_dopri_trace(

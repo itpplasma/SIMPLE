@@ -1056,11 +1056,13 @@ contains
                 file=trim(particle_profile_path(:particle_profile_len)), &
                 status='replace', action='write')
             write (particle_profile_unit, '(a)') &
-                'particle,s,theta,zeta,speed,pitch,nfev,loss_step,loss_time'
+                'particle,s_start,theta_start,zeta_start,speed_start,'// &
+                'pitch_start,s_end,theta_end,zeta_end,speed_end,pitch_end,'// &
+                'nfev,loss_step,loss_time'
             do i = 1, ntestpart
                 write (particle_profile_unit, &
-                    '(i0,5(",",es24.16),2(",",i0),",",es24.16)') &
-                    i, zstart(:, i), nfev(i), loss_step(i), &
+                    '(i0,10(",",es24.16),2(",",i0),",",es24.16)') &
+                    i, zstart(:, i), zend(:, i), nfev(i), loss_step(i), &
                     loss_time_normalized(i)*time_scale
             end do
             close (particle_profile_unit)
