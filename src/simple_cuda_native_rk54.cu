@@ -145,8 +145,10 @@ evaluate_field_table(const float *__restrict__ table, const Geometry &geometry,
       }
       value[0] = fmaf(weight_theta_phi, radial_bmod, value[0]);
       value[1] = fmaf(weight_theta_phi, radial_dbmod, value[1]);
-      value[2] = fmaf(derivative_theta[j] * weight_phi[k], radial_bmod, value[2]);
-      value[3] = fmaf(weight_theta[j] * derivative_phi[k], radial_bmod, value[3]);
+      value[2] =
+          fmaf(derivative_theta[j] * weight_phi[k], radial_bmod, value[2]);
+      value[3] =
+          fmaf(weight_theta[j] * derivative_phi[k], radial_bmod, value[3]);
     }
   }
 }
@@ -185,36 +187,32 @@ canonical_rhs(const float *__restrict__ field_table,
                         dbmod);
 
   const double inv_bmod = 1.0 / bmod;
-  const double inv_bmod2 = inv_bmod * inv_bmod;
+  const double inv_bphi = 1.0 / bphi;
+  const double inv_ro0 = 1.0 / ro0;
   const double htheta = btheta * inv_bmod;
-  const double hphi = bphi * inv_bmod;
-  const double dhtheta_r = dbtheta * inv_bmod - btheta * dbmod[0] * inv_bmod2;
-  const double dhtheta_phi = -btheta * dbmod[2] * inv_bmod2;
-  const double dhphi_r = dbphi * inv_bmod - bphi * dbmod[0] * inv_bmod2;
-  const double dhphi_theta = -bphi * dbmod[1] * inv_bmod2;
-  const double dhphi_phi = -bphi * dbmod[2] * inv_bmod2;
-  const double inv_hphi = 1.0 / hphi;
-  const double vparallel = (y[3] - aphi / ro0) * inv_hphi;
-  const double dvparallel_r = -(daphi / ro0 + dhphi_r * vparallel) * inv_hphi;
-  const double dvparallel_theta = -dhphi_theta * vparallel * inv_hphi;
-  const double dvparallel_phi = -dhphi_phi * vparallel * inv_hphi;
+  const double bmod_over_bphi = bmod * inv_bphi;
+  const double vparallel = (y[3] - aphi * inv_ro0) * bmod_over_bphi;
+  const double dvparallel_r =
+      -daphi * inv_ro0 * bmod_over_bphi -
+      (dbphi * inv_bphi - dbmod[0] * inv_bmod) * vparallel;
+  const double energy_gradient = vparallel * vparallel * inv_bmod + mu;
   const double dh_r = vparallel * dvparallel_r + mu * dbmod[0];
-  const double dh_theta = vparallel * dvparallel_theta + mu * dbmod[1];
-  const double dh_phi = vparallel * dvparallel_phi + mu * dbmod[2];
+  const double dh_theta = dbmod[1] * energy_gradient;
+  const double dh_phi = dbmod[2] * energy_gradient;
   const double dptheta_r =
-      dvparallel_r * htheta + vparallel * dhtheta_r + geometry.torflux / ro0;
-  const double dptheta_phi = dvparallel_phi * htheta + vparallel * dhtheta_phi;
+      (geometry.torflux - daphi * btheta * inv_bphi) * inv_ro0 +
+      vparallel * inv_bmod * (dbtheta - btheta * dbphi * inv_bphi);
   const double inv_dptheta = 1.0 / dptheta_r;
   const double hprime = dh_r * inv_dptheta;
 
   const double radial_dot =
-      -(dh_theta - htheta * inv_hphi * dh_phi) * inv_dptheta;
+      -(dh_theta - btheta * inv_bphi * dh_phi) * inv_dptheta;
   const double theta_dot = hprime;
   dydt[0] =
       radial > 0.0 ? radial_dot * y[0] / radial - y[1] * theta_dot : radial_dot;
   dydt[1] = radial > 0.0 ? radial_dot * y[1] / radial + y[0] * theta_dot : 0.0;
-  dydt[2] = (vparallel - hprime * htheta) * inv_hphi;
-  dydt[3] = -(dh_phi - hprime * dptheta_phi);
+  dydt[2] = (vparallel - hprime * htheta) * bmod_over_bphi;
+  dydt[3] = -dh_phi;
 }
 
 __device__ __forceinline__ void
