@@ -24,7 +24,8 @@ module orbit_rk_core
   ! GC kernel exists here; the CPP and symplectic full-orbit models were shelved.
   integer, parameter, public :: MODEL_GC = 0
 
-  public :: rk_gauss_residual, rk_gauss_jacobian, rk_gauss_newton, rk_solve
+  public :: rk_gauss_residual, rk_gauss_jacobian, rk_gauss_newton, rk_solve, &
+    rk_solve5
 
 contains
 
@@ -217,6 +218,56 @@ contains
       rhs(i) = tmp/A(i,i)
     end do
   end subroutine rk_solve
+
+  ! Fixed-size variant for the single-stage midpoint Newton system. Keeping
+  ! the matrix shape in the interface lets device compilers specialize the
+  ! pivot and triangular-solve loops without changing the pivoting policy.
+  pure subroutine rk_solve5(A, rhs, info)
+    !$acc routine seq
+    real(dp), intent(inout) :: A(5,5), rhs(5)
+    integer, intent(out) :: info
+    integer :: i, j, k, ipiv
+    real(dp) :: piv, amax, factor, tmp
+
+    info = 0
+    do k = 1, 5
+      ipiv = k
+      amax = abs(A(k,k))
+      do i = k+1, 5
+        if (abs(A(i,k)) > amax) then
+          amax = abs(A(i,k))
+          ipiv = i
+        end if
+      end do
+      if (.not. (amax > 0d0)) then
+        info = k
+        return
+      end if
+      if (ipiv /= k) then
+        do j = 1, 5
+          tmp = A(k,j); A(k,j) = A(ipiv,j); A(ipiv,j) = tmp
+        end do
+        tmp = rhs(k); rhs(k) = rhs(ipiv); rhs(ipiv) = tmp
+      end if
+      piv = A(k,k)
+      do i = k+1, 5
+        factor = A(i,k)/piv
+        A(i,k) = factor
+        do j = k+1, 5
+          A(i,j) = A(i,j) - factor*A(k,j)
+        end do
+        rhs(i) = rhs(i) - factor*rhs(k)
+      end do
+    end do
+
+    do i = 5, 1, -1
+      tmp = rhs(i)
+      do j = i+1, 5
+        tmp = tmp - A(i,j)*rhs(j)
+      end do
+      rhs(i) = tmp/A(i,i)
+    end do
+  end subroutine rk_solve5
 
   ! Device-callable Newton iteration for the Gauss step. Mirrors the
   ! newton_rk_gauss control flow (atol/rtol/tolref, boundary guards, maxit) with

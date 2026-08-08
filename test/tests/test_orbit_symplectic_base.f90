@@ -1,5 +1,6 @@
 program test_orbit_symplectic_base
     use orbit_symplectic_base
+    use orbit_rk_core, only: rk_solve5
     implicit none
 
     integer :: errors
@@ -18,6 +19,9 @@ program test_orbit_symplectic_base
     ! Test symplectic_integrator_t type initialization
     call test_symplectic_integrator_type(errors)
 
+    ! Test the fixed-size midpoint Newton linear solve
+    call test_rk_solve5(errors)
+
     if (errors == 0) then
         print *, "All orbit_symplectic_base module tests passed!"
     else
@@ -26,6 +30,44 @@ program test_orbit_symplectic_base
     end if
 
 contains
+
+    subroutine test_rk_solve5(errors)
+        integer, intent(inout) :: errors
+        real(dp) :: matrix(5, 5), rhs(5), expected(5)
+        integer :: info
+        real(dp), parameter :: tol = 1.0d-13
+
+        print *, "Testing fixed-size midpoint linear solve..."
+
+        matrix(1, :) = [0.0d0, 2.0d0, 0.0d0, 0.0d0, 1.0d0]
+        matrix(2, :) = [1.0d0, 3.0d0, 1.0d0, 0.0d0, 0.0d0]
+        matrix(3, :) = [0.0d0, 1.0d0, 4.0d0, 1.0d0, 0.0d0]
+        matrix(4, :) = [0.0d0, 0.0d0, 1.0d0, 5.0d0, 1.0d0]
+        matrix(5, :) = [1.0d0, 0.0d0, 0.0d0, 1.0d0, 6.0d0]
+        expected = [1.0d0, -2.0d0, 0.5d0, 3.0d0, -1.0d0]
+        rhs = matmul(matrix, expected)
+
+        call rk_solve5(matrix, rhs, info)
+        if (info /= 0 .or. maxval(abs(rhs - expected)) > tol) then
+            print *, "ERROR: fixed-size pivoted solve returned the wrong solution"
+            print *, "info, max error:", info, maxval(abs(rhs - expected))
+            errors = errors + 1
+        end if
+
+        matrix = 0.0d0
+        matrix(1, 1) = 1.0d0
+        matrix(2, 2) = 1.0d0
+        matrix(3, 3) = 1.0d0
+        matrix(4, 4) = 1.0d0
+        rhs = 0.0d0
+        call rk_solve5(matrix, rhs, info)
+        if (info == 0) then
+            print *, "ERROR: singular fixed-size solve was accepted"
+            errors = errors + 1
+        end if
+
+        if (errors == 0) print *, "  Fixed-size midpoint solve test PASSED"
+    end subroutine test_rk_solve5
 
     subroutine test_integration_constants(errors)
         integer, intent(inout) :: errors

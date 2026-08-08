@@ -11,7 +11,7 @@ module simple_gpu
     ! checked against the CPU path by test_gpu_orbit_bench.
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use util, only: pi, sqrt2, twopi
-    use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
+    use field_can_mod, only: field_can_t, get_val, get_derivatives
     use field_can_boozer, only: eval_field_booz_device
     use orbit_symplectic_base, only: symplectic_integrator_t, &
         SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
@@ -21,7 +21,7 @@ module simple_gpu
     use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, CASH_KARP, &
         DORMAND_PRINCE
-    use orbit_rk_core, only: rk_solve
+    use orbit_rk_core, only: rk_solve5
     use fortnum_ode_rk54_device, only: rk54_controls4_t, rk54_state4_t, &
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE, RK54_NEED_RHS, RK54_ACCEPTED, &
@@ -99,6 +99,53 @@ contains
         f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
         f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
     end subroutine gpu_get_derivatives2_radial_mixed
+
+    subroutine gpu_get_derivatives2_midpoint(f, pphi)
+        ! Midpoint's five-equation Jacobian does not use the pphi^2 entries.
+        ! Keep the derivative algebra allocation-free while avoiding those
+        ! products.
+        !$acc routine seq
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: pphi
+
+        call get_derivatives(f, pphi)
+
+        f%d2vpar(1:6) = -f%d2Aph(1:6)/f%ro0 - f%d2hph(1:6)*f%vpar
+        f%d2vpar(1) = f%d2vpar(1) - 2.0_dp*f%dhph(1)*f%dvpar(1)
+        f%d2vpar(2) = f%d2vpar(2) - &
+            (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
+        f%d2vpar(3) = f%d2vpar(3) - &
+            (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
+        f%d2vpar(4) = f%d2vpar(4) - 2.0_dp*f%dhph(2)*f%dvpar(2)
+        f%d2vpar(5) = f%d2vpar(5) - &
+            (f%dhph(2)*f%dvpar(3) + f%dhph(3)*f%dvpar(2))
+        f%d2vpar(6) = f%d2vpar(6) - 2.0_dp*f%dhph(3)*f%dvpar(3)
+        f%d2vpar(1:6) = f%d2vpar(1:6)/f%hph
+
+        f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod(1:6)
+        f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
+        f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
+        f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
+        f%d2H(4) = f%d2H(4) + f%dvpar(2)**2
+        f%d2H(5) = f%d2H(5) + f%dvpar(2)*f%dvpar(3)
+        f%d2H(6) = f%d2H(6) + f%dvpar(3)**2
+
+        f%d2pth(1:6) = f%d2vpar(1:6)*f%hth + f%vpar*f%d2hth(1:6) + &
+            f%d2Ath(1:6)/f%ro0
+        f%d2pth(1) = f%d2pth(1) + 2.0_dp*f%dvpar(1)*f%dhth(1)
+        f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + &
+            f%dvpar(2)*f%dhth(1)
+        f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + &
+            f%dvpar(3)*f%dhth(1)
+        f%d2pth(4) = f%d2pth(4) + 2.0_dp*f%dvpar(2)*f%dhth(2)
+        f%d2pth(5) = f%d2pth(5) + f%dvpar(2)*f%dhth(3) + &
+            f%dvpar(3)*f%dhth(2)
+        f%d2pth(6) = f%d2pth(6) + 2.0_dp*f%dvpar(3)*f%dhth(3)
+
+        f%d2vpar(7:9) = -f%dhph/f%hph**2
+        f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
+        f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+    end subroutine gpu_get_derivatives2_midpoint
 
     subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
         !$acc routine seq
@@ -265,7 +312,7 @@ contains
 
         call eval_field_booz_device(f, x(5), 0.5_dp*(x(2) + si%z(2)), &
             0.5_dp*(x(3) + si%z(3)), 2)
-        call get_derivatives2(f, 0.5_dp*(x(4) + si%z(4)))
+        call gpu_get_derivatives2_midpoint(f, 0.5_dp*(x(4) + si%z(4)))
 
         residual(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
         residual(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - &
@@ -388,7 +435,7 @@ contains
             nfev = nfev + 2
             residual_abs = abs(residual)
             xlast = x
-            call rk_solve(5, jacobian, residual, info)
+            call rk_solve5(jacobian, residual, info)
             if (info /= 0) then
                 status = SYMPLECTIC_STEP_LINEAR_SOLVE
                 return
