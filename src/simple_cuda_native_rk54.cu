@@ -186,22 +186,22 @@ canonical_rhs(const float *__restrict__ field_table,
                         y[2], aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod,
                         dbmod);
 
-  const double inv_bmod = 1.0 / bmod;
   const double inv_bphi = 1.0 / bphi;
   const double inv_ro0 = 1.0 / ro0;
-  const double htheta = btheta * inv_bmod;
   const double bmod_over_bphi = bmod * inv_bphi;
-  const double vparallel = (y[3] - aphi * inv_ro0) * bmod_over_bphi;
-  const double dvparallel_r =
-      -daphi * inv_ro0 * bmod_over_bphi -
-      (dbphi * inv_bphi - dbmod[0] * inv_bmod) * vparallel;
-  const double energy_gradient = vparallel * vparallel * inv_bmod + mu;
-  const double dh_r = vparallel * dvparallel_r + mu * dbmod[0];
+  const double parallel_over_bmod =
+      (y[3] - aphi * inv_ro0) * inv_bphi;
+  const double vparallel = bmod * parallel_over_bmod;
+  const double energy_gradient = vparallel * parallel_over_bmod + mu;
+  const double profile_gradient = daphi * inv_ro0 +
+                                  dbphi * parallel_over_bmod;
+  const double dh_r = dbmod[0] * energy_gradient -
+                      vparallel * bmod_over_bphi * profile_gradient;
   const double dh_theta = dbmod[1] * energy_gradient;
   const double dh_phi = dbmod[2] * energy_gradient;
   const double dptheta_r =
-      (geometry.torflux - daphi * btheta * inv_bphi) * inv_ro0 +
-      vparallel * inv_bmod * (dbtheta - btheta * dbphi * inv_bphi);
+      geometry.torflux * inv_ro0 + dbtheta * parallel_over_bmod -
+      btheta * inv_bphi * profile_gradient;
   const double inv_dptheta = 1.0 / dptheta_r;
   const double hprime = dh_r * inv_dptheta;
 
@@ -211,7 +211,7 @@ canonical_rhs(const float *__restrict__ field_table,
   dydt[0] =
       radial > 0.0 ? radial_dot * y[0] / radial - y[1] * theta_dot : radial_dot;
   dydt[1] = radial > 0.0 ? radial_dot * y[1] / radial + y[0] * theta_dot : 0.0;
-  dydt[2] = (vparallel - hprime * htheta) * bmod_over_bphi;
+  dydt[2] = (bmod * vparallel - hprime * btheta) * inv_bphi;
   dydt[3] = -dh_phi;
 }
 
