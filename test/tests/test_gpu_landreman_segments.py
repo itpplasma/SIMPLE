@@ -132,8 +132,12 @@ def run_case(
 
 
 def run_short_dopri_trace(
-    executable: Path, wout: Path, starts_source: Path, spline_order: int
-) -> None:
+    executable: Path,
+    wout: Path,
+    starts_source: Path,
+    spline_order: int,
+    compact_init: bool = False,
+) -> list[list[float]]:
     """Exercise the composed RK and Boozer device path, not only accounting."""
     with tempfile.TemporaryDirectory(prefix="landreman-dopri-orbit-", dir=Path.cwd()) as tmp:
         root = Path(tmp)
@@ -165,17 +169,23 @@ def run_short_dopri_trace(
                 "SIMPLE_GPU_MAXLOSS": "1",
                 "SIMPLE_GPU_LOSS_TAU": "0.1",
                 "SIMPLE_GPU_MIN_TIMESTEP": "1e-12",
+                "SIMPLE_GPU_PARTICLE_PROFILE": str(root / "particles.csv"),
             }
         )
-        output = subprocess.run(
+        if compact_init:
+            environment["SIMPLE_GPU_BACKEND"] = "cuda-native"
+            environment["SIMPLE_GPU_COMPACT_INIT"] = "1"
+        result = subprocess.run(
             [executable, "simple.in"],
             cwd=root,
             env=environment,
-            check=True,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-        ).stdout
+        )
+        if result.returncode != 0:
+            raise AssertionError(result.stdout)
+        output = result.stdout
         losses = int(extract(r"physical losses =\s*([0-9]+)", output))
         failures = int(extract(r"numerical failures =\s*([0-9]+)", output))
         evaluations = int(extract(r"field evaluations =\s*([0-9]+)", output))
@@ -191,16 +201,51 @@ def run_short_dopri_trace(
                 f"order-{spline_order} short DOPRI orbit used {evaluations} "
                 f"rather than {expected_evaluations} field evaluations"
             )
+        return [
+            [float(value) for value in line.split(",")[1:11]]
+            for line in (root / "particles.csv").read_text().splitlines()[1:]
+        ]
+
+
+def compare_compact_initialization(
+    executable: Path, wout: Path, starts_source: Path
+) -> None:
+    """Use the established full setup as the compact setup's behavior oracle."""
+    old_backend = os.environ.get("SIMPLE_GPU_BACKEND")
+    os.environ["SIMPLE_GPU_BACKEND"] = "cuda-native"
+    try:
+        full = run_short_dopri_trace(executable, wout, starts_source, 5)
+    finally:
+        if old_backend is None:
+            os.environ.pop("SIMPLE_GPU_BACKEND", None)
+        else:
+            os.environ["SIMPLE_GPU_BACKEND"] = old_backend
+    compact = run_short_dopri_trace(
+        executable, wout, starts_source, 5, compact_init=True
+    )
+    for particle, (expected, actual) in enumerate(zip(full, compact), start=1):
+        for column, (reference, candidate) in enumerate(
+            zip(expected, actual), start=1
+        ):
+            tolerance = 2.0e-6 * max(1.0, abs(reference))
+            if abs(candidate - reference) > tolerance:
+                raise AssertionError(
+                    f"compact particle {particle} column {column}: {candidate} "
+                    f"differs from full initialization {reference}"
+                )
 
 
 def main() -> None:
-    if len(sys.argv) != 4:
-        raise SystemExit("usage: test_gpu_landreman_segments.py SIMPLE WOUT STARTS")
-    executable, wout, starts = (Path(value).resolve() for value in sys.argv[1:])
-    run_short_dopri_trace(executable, wout, starts, 5)
+    if len(sys.argv) not in (4, 5):
+        raise SystemExit(
+            "usage: test_gpu_landreman_segments.py SIMPLE WOUT STARTS [RK_CHARTMAP]"
+        )
+    executable, wout, starts = (Path(value).resolve() for value in sys.argv[1:4])
     run_short_dopri_trace(executable, wout, starts, 3)
     run_case(executable, wout, starts, "dopri", 1.0e-6)
     run_case(executable, wout, starts, "euler", 1.0e-13)
+    if len(sys.argv) == 5:
+        compare_compact_initialization(executable, Path(sys.argv[4]).resolve(), starts)
     print("segmented Landreman RK and symplectic accounting passed")
 
 

@@ -60,6 +60,7 @@ module simple_main
     integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     real(dp), save :: invariant_edge_radius = 1.0_dp
+    logical, save :: compact_cuda_rk_init = .false.
     type(stl_wall_t), save :: wall
 
     integer, parameter :: RK_RECOVERY_GENERIC = 1
@@ -337,8 +338,10 @@ contains
             if (generate_start_only) stop 'stopping after generating start.dat'
         else if (chartmap_mode) then
             ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
+            if (.not. compact_cuda_rk_init) then
             call init_magfie(isw_field_type)
             call print_phase_time('Boozer magfie initialization completed')
+            end if
 
             if (startmode /= 2) then
                 call init_starting_surf
@@ -442,7 +445,8 @@ contains
         use field_base, only: magnetic_field_t
         use field, only: field_from_file, is_spectre_file
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
-        use boozer_chartmap, only: set_boozer_chartmap_spline_orders
+        use boozer_chartmap, only: set_boozer_chartmap_spline_orders, &
+            load_boozer_from_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
             REFCOORDS, SPECTRE, set_magfie_refcoords_field
@@ -450,6 +454,8 @@ contains
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
         use params, only: coord_input, field_input, wall_input, wall_units
+        use field_can_mod, only: init_field_can_boozer_chartmap_compact
+        use new_vmec_stuff_mod, only: nper
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
@@ -457,6 +463,8 @@ contains
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
         logical :: use_boozer_chartmap, use_spectre
+        character(32) :: compact_value, backend_value, starts_value
+        integer :: compact_length, compact_status
 
         self%integmode = aintegmode
         map_boundary_exit_code = ORBIT_EXIT_LCFS
@@ -471,6 +479,22 @@ contains
             if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
         end if
 
+        compact_cuda_rk_init = .false.
+        call get_environment_variable('SIMPLE_GPU_COMPACT_INIT', compact_value, &
+            compact_length, compact_status)
+        if (compact_status == 0 .and. compact_length > 0) &
+            compact_cuda_rk_init = &
+            trim(adjustl(compact_value(:compact_length))) /= '0'
+        if (compact_cuda_rk_init) then
+            call get_environment_variable('SIMPLE_GPU_BACKEND', backend_value)
+            call get_environment_variable('SIMPLE_GPU_START_COORDINATES', &
+                starts_value)
+            if (trim(adjustl(backend_value)) /= 'cuda-native' .or. &
+                trim(adjustl(starts_value)) /= 'boozer' .or. &
+                .not. use_boozer_chartmap .or. len_trim(wall_input) > 0) &
+                error stop 'compact init requires native CUDA Boozer starts without wall'
+        end if
+
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
             invariant_edge_radius = 0.5_dp
@@ -481,6 +505,12 @@ contains
             call print_phase_time('SPECTRE field loading completed')
         else if (use_boozer_chartmap) then
             call set_boozer_chartmap_spline_orders(ans_s, ans_tp)
+            if (compact_cuda_rk_init) then
+                call load_boozer_from_chartmap(field_input, .true.)
+                call init_field_can_boozer_chartmap_compact
+                self%fper = twopi/real(nper, dp)
+                call print_phase_time('Compact Boozer RK table loading completed')
+            else
             ! Boozer chartmap: file-based, no VMEC initialization needed
             call init_reference_coordinates(coord_input)
             call print_phase_time('Reference coordinate system '// &
@@ -502,6 +532,7 @@ contains
             if (self%integmode >= 0) then
                 call field_from_file(field_input, field_temp)
                 call print_phase_time('Boozer chartmap field loading completed')
+            end if
             end if
         else
             vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
@@ -576,6 +607,7 @@ contains
             call print_phase_time('Canonical field initialization completed')
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                 isw_field_type == MEISS .or. isw_field_type == ALBERT) then
+            if (compact_cuda_rk_init) return
             call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
                 canonical_grid_ntheta, canonical_grid_nphi, &
                 canonical_ode_relerr)
@@ -866,7 +898,8 @@ contains
         use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, &
             CASH_KARP, DORMAND_PRINCE
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
-        use simple_cuda_native, only: trace_orbits_cuda_native_landreman
+        use simple_cuda_native, only: trace_orbits_cuda_native_landreman, &
+            initialize_cuda_native_particle, evaluate_cuda_native_particle
 #endif
 
         type(tracer_t), intent(inout) :: norb
@@ -964,9 +997,20 @@ contains
                 call ref_to_integ(zstart(1:3, i), z(1:3))
             end if
             z(4:5) = zstart(4:5, i)
-            call init_sympl(si_gpu(i), f_gpu(i), z, dtaumin, dtaumin, relerr, &
-                init_mode)
-            call compute_pitch_angle_params(z, passing(i), trap_par(i), perp_inv(i))
+            if (compact_cuda_rk_init .and. cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+                call initialize_cuda_native_particle(si_gpu(i), f_gpu(i), z, &
+                    dtaumin, relerr)
+                passing(i) = .false.
+                trap_par(i) = 0.0_dp
+                perp_inv(i) = z(4)**2*(1.0_dp - z(5)**2)/f_gpu(i)%Bmod
+#endif
+            else
+                call init_sympl(si_gpu(i), f_gpu(i), z, dtaumin, dtaumin, &
+                    relerr, init_mode)
+                call compute_pitch_angle_params(z, passing(i), trap_par(i), &
+                    perp_inv(i))
+            end if
         end do
         call sync_boozer_state
         if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
@@ -1040,8 +1084,15 @@ contains
         do i = 1, ntestpart
             nfev_total = nfev_total + int(nfev(i), 8)
             si_gpu(i)%z = zcanonical(:, i)
-            call eval_field_booz(f_gpu(i), zcanonical(1, i), zcanonical(2, i), &
-                zcanonical(3, i), 0)
+            if (compact_cuda_rk_init .and. cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+                call evaluate_cuda_native_particle(f_gpu(i), zcanonical(1, i), &
+                    zcanonical(2, i), zcanonical(3, i))
+#endif
+            else
+                call eval_field_booz(f_gpu(i), zcanonical(1, i), &
+                    zcanonical(2, i), zcanonical(3, i), 0)
+            end if
             call get_val(f_gpu(i), zcanonical(4, i))
             call integ_to_ref(zcanonical(1:3, i), zend(1:3, i))
             zend(4, i) = si_gpu(i)%pabs

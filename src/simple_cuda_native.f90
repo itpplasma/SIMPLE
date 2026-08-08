@@ -18,6 +18,7 @@ module simple_cuda_native
     integer, parameter, public :: CUDA_NATIVE_PROFILE_COUNT = 5
 
     public :: trace_orbits_cuda_native_landreman
+    public :: initialize_cuda_native_particle, evaluate_cuda_native_particle
 
     interface
         function cuda_native_rk54(method, particle_count, field_table, &
@@ -50,6 +51,55 @@ module simple_cuda_native
     end interface
 
 contains
+
+    subroutine evaluate_cuda_native_particle(f, s, theta, phi)
+        use boozer_rk_tables, only: splint_boozer_rk_table_device
+
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: s, theta, phi
+        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi
+        real(dp) :: bmod, dbmod(3)
+
+        call splint_boozer_rk_table_device(s, theta, phi, aphi, daphi, &
+            btheta, dbtheta, bphi, dbphi, bmod, dbmod)
+        f%Ath = boozer_state%torflux*s
+        f%Aph = aphi
+        f%dAth = 0.0_dp
+        f%dAth(1) = boozer_state%torflux
+        f%dAph = 0.0_dp
+        f%dAph(1) = daphi
+        f%Bmod = bmod
+        f%dBmod = dbmod
+        f%hth = btheta/bmod
+        f%hph = bphi/bmod
+        f%dhth = 0.0_dp
+        f%dhph = 0.0_dp
+        f%dhth(1) = dbtheta/bmod - btheta*dbmod(1)/bmod**2
+        f%dhph(1) = dbphi/bmod - bphi*dbmod(1)/bmod**2
+        f%dhth(2:3) = -btheta*dbmod(2:3)/bmod**2
+        f%dhph(2:3) = -bphi*dbmod(2:3)/bmod**2
+    end subroutine evaluate_cuda_native_particle
+
+    subroutine initialize_cuda_native_particle(si, f, z, timestep, tolerance)
+        use parmot_mod, only: ro0
+        use util, only: sqrt2
+
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: z(5), timestep, tolerance
+
+        call evaluate_cuda_native_particle(f, z(1), z(2), z(3))
+        f%mu = z(4)**2*(1.0_dp - z(5)**2)/f%Bmod
+        f%ro0 = ro0/sqrt2
+        f%vpar = z(4)*z(5)*sqrt2
+        si%z(1:3) = z(1:3)
+        si%z(4) = f%vpar*f%hph + f%Aph/f%ro0
+        si%pabs = z(4)
+        si%dt = timestep/sqrt2
+        si%rtol = tolerance
+        si%atol = tolerance
+        si%ntau = 1
+    end subroutine initialize_cuda_native_particle
 
     subroutine trace_orbits_cuda_native_landreman(si, f, npart, method, &
             total_duration, block_duration, time_scale, loss_tau, maxloss, &
