@@ -1146,7 +1146,7 @@ contains
         real(dp), allocatable :: rhs_y(:, :), rhs_mu(:), rhs_ro0(:)
         real(dp), allocatable :: rhs_host(:, :), rhs_device(:, :)
         real(dp) :: z(5), hprime, rhs_scale, rhs_error
-        integer :: i, it, ktau, ierr, loss_mismatch
+        integer :: i, it, ktau, ierr, loss_mismatch, rhs_location(2)
         integer :: cpu_lost, gpu_lost, flip
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
 
@@ -1193,8 +1193,14 @@ contains
         call evaluate_rhs_gpu(rhs_y, rhs_mu, rhs_ro0, ntestpart, rhs_device)
         rhs_scale = max(1.0_dp, maxval(abs(rhs_host)))
         rhs_error = maxval(abs(rhs_device - rhs_host))/rhs_scale
-        if (rhs_error > 1.0e-11_dp) &
+        if (rhs_error > 1.0e-11_dp) then
+            rhs_location = maxloc(abs(rhs_device - rhs_host))
+            print '(a,es12.4)', ' compact RHS relative error = ', rhs_error
+            print *, 'maximum RHS mismatch at ', rhs_location
+            print *, 'host RHS = ', rhs_host(:, rhs_location(2))
+            print *, 'compact RHS = ', rhs_device(:, rhs_location(2))
             error stop 'compact GPU canonical RHS differs from host reference'
+        end if
 
         ! CPU reference (OpenMP over particles)
         t0 = omp_get_wtime()
