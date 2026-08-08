@@ -177,18 +177,15 @@ contains
         integer, intent(out) :: nfev
         real(dp), intent(in), optional :: predictor(2)
 
-        real(dp) :: x(2), xlast(2)
+        real(dp) :: x(2), xlast(2), accepted_pthold
         integer :: ktau, newton_status, newton_nfev
         logical :: crossed
-        type(symplectic_integrator_t) :: accepted_integrator
-        type(field_can_t) :: accepted_field
 
         ierr = 0
         nfev = 0
         ktau = 0
         do while (ktau < si%ntau)
-            accepted_integrator = si
-            accepted_field = f
+            accepted_pthold = si%pthold
             si%pthold = f%pth
 
             if (ktau == 0 .and. present(predictor)) then
@@ -203,8 +200,7 @@ contains
             nfev = nfev + newton_nfev
             if (newton_status /= SYMPLECTIC_STEP_OK .and. ktau == 0 .and. &
                     present(predictor)) then
-                si = accepted_integrator
-                f = accepted_field
+                si%pthold = accepted_pthold
                 x(1) = si%z(1)
                 x(2) = si%z(4)
                 call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
@@ -212,15 +208,13 @@ contains
                 nfev = nfev + newton_nfev
             end if
             if (newton_status /= SYMPLECTIC_STEP_OK) then
-                si = accepted_integrator
-                f = accepted_field
+                si%pthold = accepted_pthold
                 ierr = newton_status
                 return
             end if
 
             if (x(1) > 1.0d0) then
-                si = accepted_integrator
-                f = accepted_field
+                si%pthold = accepted_pthold
                 ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
@@ -229,14 +223,13 @@ contains
                 ! The converged radius lies beyond the axis: commit the
                 ! chart switch (r, theta) -> (|r|, theta + pi) (#370).
                 x(1) = -x(1)
-                si%z(2) = si%z(2) + pi
                 crossed = .true.
                 if (x(1) > 1.0d0) then
-                    si = accepted_integrator
-                    f = accepted_field
+                    si%pthold = accepted_pthold
                     ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                     return
                 end if
+                si%z(2) = si%z(2) + pi
             end if
 
             si%z(1) = x(1)
