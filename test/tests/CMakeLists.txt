@@ -37,6 +37,13 @@ endif()
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
+# Keep all Python-backed tests on the same environment.  A worktree venv is
+# populated by uv and may contain dependencies unavailable to the system
+# interpreter selected by FindPython3.
+if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+    set(Python3_EXECUTABLE "${CMAKE_SOURCE_DIR}/.venv/bin/python" CACHE FILEPATH
+        "Python interpreter used by SIMPLE tests" FORCE)
+endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
