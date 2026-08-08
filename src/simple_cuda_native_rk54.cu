@@ -71,11 +71,11 @@ cubic_table_location(double x, int dimension, const Geometry &geometry,
         floor((x - geometry.x_min[dimension]) * geometry.inv_period[dimension]);
     x_eval = x - periods * geometry.period[dimension];
   }
-  const double x_grid =
-      (x_eval - geometry.x_min[dimension]) * geometry.inv_h_step[dimension];
+  const float x_grid = static_cast<float>(x_eval - geometry.x_min[dimension]) *
+                       static_cast<float>(geometry.inv_h_step[dimension]);
   int first_zero = 3 * (static_cast<int>(x_grid) / 3);
   first_zero = max(0, min(first_zero, geometry.point_count[dimension] - 4));
-  const float relative = static_cast<float>(x_grid - first_zero);
+  const float relative = x_grid - static_cast<float>(first_zero);
   first = first_zero;
 
   weight[0] = (1.0f - relative) * (2.0f - relative) * (3.0f - relative) / 6.0f;
