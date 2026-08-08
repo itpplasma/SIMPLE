@@ -132,21 +132,21 @@ evaluate_field_table(const float *__restrict__ table, const Geometry &geometry,
 #pragma unroll
     for (int j = 0; j < 4; ++j) {
       const float weight_theta_phi = weight_theta[j] * weight_phi[k];
+      float radial_bmod = 0.0f;
+      float radial_dbmod = 0.0f;
 #pragma unroll
       for (int i = 0; i < 4; ++i) {
         const int point =
             (first_s + i) + ns * ((first_theta + j) + nt * (first_phi + k));
         const float2 field_point =
             reinterpret_cast<const float2 *>(table)[point];
-        const float bmod = field_point.x;
-        value[0] = fmaf(weight_s[i] * weight_theta_phi, bmod, value[0]);
-        value[1] =
-            fmaf(weight_s[i] * weight_theta_phi, field_point.y, value[1]);
-        value[2] = fmaf(weight_s[i] * derivative_theta[j] * weight_phi[k], bmod,
-                        value[2]);
-        value[3] = fmaf(weight_s[i] * weight_theta[j] * derivative_phi[k], bmod,
-                        value[3]);
+        radial_bmod = fmaf(weight_s[i], field_point.x, radial_bmod);
+        radial_dbmod = fmaf(weight_s[i], field_point.y, radial_dbmod);
       }
+      value[0] = fmaf(weight_theta_phi, radial_bmod, value[0]);
+      value[1] = fmaf(weight_theta_phi, radial_dbmod, value[1]);
+      value[2] = fmaf(derivative_theta[j] * weight_phi[k], radial_bmod, value[2]);
+      value[3] = fmaf(weight_theta[j] * derivative_phi[k], radial_bmod, value[3]);
     }
   }
 }
