@@ -142,16 +142,24 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
+        # NVHPC 23.x spells managed memory as -gpu=managed.  Newer
+        # compilers still accept that spelling, while mem:managed is rejected
+        # by the CUDA 12.2-era compiler needed on older cluster drivers.
+        if(SIMPLE_OPENACC_MEM STREQUAL "managed")
+            set(_simple_openacc_mem_option "managed")
+        else()
+            set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
+        endif()
         message(STATUS "OpenACC enabled for NVHPC compiler (arch:${SIMPLE_OPENACC_GPU_ARCH}, mem:${SIMPLE_OPENACC_MEM})")
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},mem:${SIMPLE_OPENACC_MEM}>
+            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},mem:${SIMPLE_OPENACC_MEM}>
+            $<$<COMPILE_LANGUAGE:C>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
         )
         add_link_options(
             -acc
-            -gpu=${SIMPLE_OPENACC_GPU_ARCH},mem:${SIMPLE_OPENACC_MEM}
+            -gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}
         )
     endif()
 endif()
