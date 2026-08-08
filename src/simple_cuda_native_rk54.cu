@@ -41,6 +41,21 @@ __device__ __forceinline__ double radial_norm(const double y[4]) {
   return sqrt(y[0] * y[0] + y[1] * y[1]);
 }
 
+void canonical_to_cartesian(const double canonical[4], double cartesian[4]) {
+  cartesian[0] = canonical[0] * std::cos(canonical[1]);
+  cartesian[1] = canonical[0] * std::sin(canonical[1]);
+  cartesian[2] = canonical[2];
+  cartesian[3] = canonical[3];
+}
+
+void cartesian_to_canonical(const double cartesian[4], double canonical[4]) {
+  canonical[0] =
+      std::sqrt(cartesian[0] * cartesian[0] + cartesian[1] * cartesian[1]);
+  canonical[1] = std::atan2(cartesian[1], cartesian[0]);
+  canonical[2] = cartesian[2];
+  canonical[3] = cartesian[3];
+}
+
 __device__ __forceinline__ void
 cubic_table_location(double x, int dimension, const Geometry &geometry,
                      int &first, float weight[4], float *derivative) {
@@ -350,12 +365,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
                                const double initial_z[4], double mu, double ro0,
                                double final_z[4], double &lost_at,
                                int &particle_status, uint64_t &nfev) {
-  double y[4] = {
-      initial_z[0] * cos(initial_z[1]),
-      initial_z[0] * sin(initial_z[1]),
-      initial_z[2],
-      initial_z[3],
-  };
+  double y[4] = {initial_z[0], initial_z[1], initial_z[2], initial_z[3]};
   double current_time = 0.0;
   lost_at = geometry.total_duration;
   particle_status = 0;
@@ -461,8 +471,8 @@ __device__ void trace_particle(const float *__restrict__ field_table,
     current_time += duration;
   }
 
-  final_z[0] = radial_norm(y);
-  final_z[1] = atan2(y[1], y[0]);
+  final_z[0] = y[0];
+  final_z[1] = y[1];
   final_z[2] = y[2];
   final_z[3] = y[3];
 }
@@ -544,7 +554,7 @@ extern "C" int simple_cuda_native_rk54(
 
   const auto total_begin = Clock::now();
   const auto allocate_begin = total_begin;
-  std::vector<double> active_z(initial_z, initial_z + 4 * particle_count);
+  std::vector<double> active_z(4 * particle_count);
   std::vector<double> active_mu(mu, mu + particle_count);
   std::vector<double> active_ro0(ro0, ro0 + particle_count);
   std::vector<double> segment_z(4 * particle_count);
@@ -560,6 +570,9 @@ extern "C" int simple_cuda_native_rk54(
   std::vector<uint64_t> cumulative_nfev(particle_count, 0);
   std::vector<uint64_t> next_cumulative(particle_count);
   std::iota(original_index.begin(), original_index.end(), 0);
+  for (int particle = 0; particle < particle_count; ++particle)
+    canonical_to_cartesian(initial_z + 4 * particle,
+                           active_z.data() + 4 * particle);
   survivors.reserve(particle_count);
   std::fill(status, status + particle_count, 0);
   std::fill(rhs_evaluations, rhs_evaluations + particle_count, 0);
@@ -810,7 +823,8 @@ extern "C" int simple_cuda_native_rk54(
           continue;
         }
         const int original = original_index[slot];
-        std::copy_n(segment_z.data() + 4 * slot, 4, final_z + 4 * original);
+        cartesian_to_canonical(segment_z.data() + 4 * slot,
+                               final_z + 4 * original);
         loss_time[original] = current_time + segment_loss[slot];
         status[original] = segment_status[slot];
         rhs_evaluations[original] = cumulative_nfev[slot];
@@ -841,7 +855,8 @@ extern "C" int simple_cuda_native_rk54(
     if (error == cudaSuccess) {
       for (int slot = 0; slot < active_count; ++slot) {
         const int original = original_index[slot];
-        std::copy_n(active_z.data() + 4 * slot, 4, final_z + 4 * original);
+        cartesian_to_canonical(active_z.data() + 4 * slot,
+                               final_z + 4 * original);
         loss_time[original] = total_duration;
         status[original] = 0;
         rhs_evaluations[original] = cumulative_nfev[slot];
