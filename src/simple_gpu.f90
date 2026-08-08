@@ -259,8 +259,8 @@ contains
         real(dp), intent(in) :: x(5)
         real(dp), intent(out) :: residual(5), jacobian(5, 5)
 
+        type(field_can_t) :: fmid
         real(dp) :: dpthmid, pthdotbar
-        real(dp) :: midpoint_d2pth(4), midpoint_cross(4)
 
         call eval_field_booz_device(f, x(5), 0.5_dp*(x(2) + si%z(2)), &
             0.5_dp*(x(3) + si%z(3)), 2)
@@ -323,38 +323,29 @@ contains
             f%dpth(1)*f%dpth(4) + 0.5_dp*si%dt*(f%d2pth(7)*f%dH(2) + &
             f%dpth(1)*f%d2H(8) - f%d2pth(8)*f%dH(1) - f%dpth(2)*f%d2H(7)))
 
+        fmid = f
         dpthmid = f%dpth(1)
         pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
-        midpoint_d2pth = [f%d2pth(2), f%d2pth(3), f%d2pth(7), &
-            f%d2pth(1)]
-        midpoint_cross(1) = f%d2pth(2)*f%dH(2) + &
-            f%dpth(1)*f%d2H(4) - f%dpth(2)*f%d2H(2) - &
-            f%d2pth(4)*f%dH(1)
-        midpoint_cross(2) = f%d2pth(3)*f%dH(2) + &
-            f%dpth(1)*f%d2H(5) - f%dpth(2)*f%d2H(3) - &
-            f%d2pth(5)*f%dH(1)
-        midpoint_cross(3) = f%d2pth(7)*f%dH(2) + &
-            f%dpth(1)*f%d2H(8) - f%dpth(2)*f%d2H(7) - &
-            f%d2pth(8)*f%dH(1)
-        midpoint_cross(4) = f%d2pth(1)*f%dH(2) + &
-            f%dpth(1)*f%d2H(2) - f%dpth(2)*f%d2H(1) - &
-            f%d2pth(2)*f%dH(1)
         call eval_field_booz_device(f, x(1), x(2), x(3), 0)
         call get_derivatives(f, x(4))
         residual(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
 
-        jacobian(1, 1) = dpthmid*f%dpth(1)
-        jacobian(1, 2) = 0.5_dp*(midpoint_d2pth(1)* &
-            (f%pth - si%pthold) + si%dt*midpoint_cross(1)) + &
-            dpthmid*f%dpth(2)
-        jacobian(1, 3) = 0.5_dp*(midpoint_d2pth(2)* &
-            (f%pth - si%pthold) + si%dt*midpoint_cross(2)) + &
-            dpthmid*f%dpth(3)
-        jacobian(1, 4) = 0.5_dp*(midpoint_d2pth(3)* &
-            (f%pth - si%pthold) + si%dt*midpoint_cross(3)) + &
-            dpthmid*f%dpth(4)
-        jacobian(1, 5) = midpoint_d2pth(4)*(f%pth - si%pthold) + &
-            si%dt*midpoint_cross(4)
+        jacobian(1, 1) = fmid%dpth(1)*f%dpth(1)
+        jacobian(1, 2) = 0.5_dp*(fmid%d2pth(2)*(f%pth - si%pthold) + &
+            si%dt*(fmid%d2pth(2)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(4) - &
+            fmid%dpth(2)*fmid%d2H(2) - fmid%d2pth(4)*fmid%dH(1))) + &
+            fmid%dpth(1)*f%dpth(2)
+        jacobian(1, 3) = 0.5_dp*(fmid%d2pth(3)*(f%pth - si%pthold) + &
+            si%dt*(fmid%d2pth(3)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(5) - &
+            fmid%dpth(2)*fmid%d2H(3) - fmid%d2pth(5)*fmid%dH(1))) + &
+            fmid%dpth(1)*f%dpth(3)
+        jacobian(1, 4) = 0.5_dp*(fmid%d2pth(7)*(f%pth - si%pthold) + &
+            si%dt*(fmid%d2pth(7)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(8) - &
+            fmid%dpth(2)*fmid%d2H(7) - fmid%d2pth(8)*fmid%dH(1))) + &
+            fmid%dpth(1)*f%dpth(4)
+        jacobian(1, 5) = fmid%d2pth(1)*(f%pth - si%pthold) + si%dt*( &
+            fmid%d2pth(1)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(2) - &
+            fmid%dpth(2)*fmid%d2H(1) - fmid%d2pth(2)*fmid%dH(1))
     end subroutine gpu_midpoint_system
 
     subroutine gpu_newton_midpoint(si, f, x, warning_mode, status, nfev)
@@ -433,17 +424,16 @@ contains
         integer, intent(out) :: ierr, nfev
         real(dp), intent(in), optional :: predictor(5)
 
-        real(dp) :: x(5), accepted_pthold, accepted_Aph
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
+        real(dp) :: x(5)
         integer :: ktau, step_status, step_nfev
 
         ierr = 0
         nfev = 0
         do ktau = 1, si%ntau
-            ! Newton only mutates the field workspace. A retry needs the
-            ! accepted A_phi for its tolerance scale; the full field is
-            ! overwritten by the first midpoint evaluation.
-            accepted_pthold = si%pthold
-            accepted_Aph = f%Aph
+            accepted_integrator = si
+            accepted_field = f
             si%pthold = f%pth
             if (ktau == 1 .and. present(predictor)) then
                 x = predictor
@@ -455,8 +445,8 @@ contains
             nfev = nfev + step_nfev
             if (step_status /= SYMPLECTIC_STEP_OK .and. ktau == 1 .and. &
                     present(predictor)) then
-                si%pthold = accepted_pthold
-                f%Aph = accepted_Aph
+                si = accepted_integrator
+                f = accepted_field
                 x(1:4) = si%z
                 x(5) = si%z(1)
                 call gpu_newton_midpoint(si, f, x, warning_mode, step_status, &
@@ -464,8 +454,8 @@ contains
                 nfev = nfev + step_nfev
             end if
             if (step_status /= SYMPLECTIC_STEP_OK) then
-                si%pthold = accepted_pthold
-                f%Aph = accepted_Aph
+                si = accepted_integrator
+                f = accepted_field
                 ierr = step_status
                 return
             end if
@@ -474,8 +464,8 @@ contains
                 x(2) = x(2) + pi
             end if
             if (x(1) > 1.0_dp) then
-                si%pthold = accepted_pthold
-                f%Aph = accepted_Aph
+                si = accepted_integrator
+                f = accepted_field
                 ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
