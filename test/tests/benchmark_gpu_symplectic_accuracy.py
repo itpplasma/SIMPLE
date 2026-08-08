@@ -130,7 +130,9 @@ def run_case(
     if landreman:
         environment.update(
             {
-                "SIMPLE_GPU_T_BLOCK": str(min(trace_time, 1.0e-4)),
+                "SIMPLE_GPU_T_BLOCK": str(
+                    trace_time / max(ntimstep - 1, 1)
+                ),
                 "SIMPLE_GPU_LOSS_TAU": "0.1",
                 "SIMPLE_GPU_MAXLOSS": "1.0",
                 "SIMPLE_GPU_MIN_TIMESTEP": "0",
@@ -140,12 +142,16 @@ def run_case(
         [executable, "simple.in"],
         cwd=case_dir,
         env=environment,
-        check=True,
+        check=False,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
     (case_dir / "run.log").write_text(result.stdout)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"{method} npoiper2={npoiper2} failed; see {case_dir / 'run.log'}"
+        )
     result_data: dict[str, object] = {
         "method": method,
         "npoiper2": npoiper2,
