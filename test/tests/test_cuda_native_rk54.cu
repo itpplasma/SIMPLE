@@ -4,8 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <iomanip>
-#include <iostream>
+#include <cstdio>
 #include <vector>
 
 namespace {
@@ -47,7 +46,7 @@ int exercise_method(int method) {
       ro0.data(), duration, 0.005, 1.0e-10, 1.0e-14, final_z.data(),
       loss_time.data(), status.data(), nfev.data(), profile);
   if (result != 0) {
-    std::cerr << simple_cuda_native_error_string(result) << '\n';
+    std::fprintf(stderr, "%s\n", simple_cuda_native_error_string(result));
     return 1;
   }
   for (int particle = 0; particle < particle_count; ++particle) {
@@ -59,19 +58,20 @@ int exercise_method(int method) {
         !close(final_z[offset + 3], initial_z[offset + 3]) ||
         !close(loss_time[particle], duration) || status[particle] != 0 ||
         nfev[particle] == 0) {
-      std::cerr << "closed-form orbit mismatch for method " << method
-                << ", particle " << particle << std::setprecision(17)
-                << ": actual [" << final_z[offset] << ", "
-                << final_z[offset + 1] << ", " << final_z[offset + 2] << ", "
-                << final_z[offset + 3] << "], expected phi "
-                << initial_z[offset + 2] + initial_z[offset + 3] * duration
-                << ", loss " << loss_time[particle] << ", status "
-                << status[particle] << ", nfev " << nfev[particle] << '\n';
+      std::fprintf(stderr,
+                   "closed-form mismatch method %d particle %d: "
+                   "actual [%.17g, %.17g, %.17g, %.17g], expected phi %.17g, "
+                   "loss %.17g, status %d, nfev %llu\n",
+                   method, particle, final_z[offset], final_z[offset + 1],
+                   final_z[offset + 2], final_z[offset + 3],
+                   initial_z[offset + 2] + initial_z[offset + 3] * duration,
+                   loss_time[particle], status[particle],
+                   static_cast<unsigned long long>(nfev[particle]));
       return 2;
     }
   }
   if (!(profile[SIMPLE_CUDA_NATIVE_PROFILE_KERNEL] > 0.0)) {
-    std::cerr << "missing CUDA kernel timing\n";
+    std::fprintf(stderr, "missing CUDA kernel timing\n");
     return 3;
   }
 
@@ -82,7 +82,8 @@ int exercise_method(int method) {
       ro0.data(), duration, 0.005, 1.0e-10, 1.0e-14, final_z.data(),
       loss_time.data(), status.data(), nfev.data(), profile);
   if (invalid != 4) {
-    std::cerr << "table-size validation did not reject malformed input\n";
+    std::fprintf(stderr,
+                 "table-size validation did not reject malformed input\n");
     return 4;
   }
   return 0;
@@ -97,6 +98,6 @@ int main() {
     if (result != 0)
       return result;
   }
-  std::cout << "native CUDA RK54 closed-form oracle passed\n";
+  std::printf("native CUDA RK54 closed-form oracle passed\n");
   return 0;
 }
