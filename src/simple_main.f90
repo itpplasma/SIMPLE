@@ -340,8 +340,10 @@ contains
             call init_magfie(isw_field_type)
             call print_phase_time('Boozer magfie initialization completed')
 
-            call init_starting_surf
-            call print_phase_time('Starting surface initialization completed')
+            if (startmode /= 2) then
+                call init_starting_surf
+                call print_phase_time('Starting surface initialization completed')
+            end if
 
             call sample_particles(.true.)
             call print_phase_time('Particle sampling completed')
