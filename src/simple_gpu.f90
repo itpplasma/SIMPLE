@@ -259,7 +259,7 @@ contains
         real(dp), intent(in) :: x(5)
         real(dp), intent(out) :: residual(5), jacobian(5, 5)
 
-        real(dp) :: fmid_dpth(4), fmid_dH(9), fmid_d2pth(10), fmid_d2H(10)
+        real(dp) :: fmid_dpth(4), fmid_dH(4), fmid_d2pth(10), fmid_d2H(10)
         real(dp) :: dpthmid, pthdotbar
 
         call eval_field_booz_device(f, x(5), 0.5_dp*(x(2) + si%z(2)), &
