@@ -161,6 +161,8 @@ contains
         ! BOOZER_SECDERS_RADIAL_MIXED computes only rr, r-theta, and r-phi.
         use boozer_sub, only: splint_boozer_coord_device, boozer_state, &
             BOOZER_SECDERS_RADIAL_MIXED
+        use boozer_rk_tables, only: rk_tables_ready, &
+            splint_boozer_symplectic_table_device
 
         type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
@@ -185,12 +187,22 @@ contains
             f%d2hph = 0.0_dp
         end if
 
-        call splint_boozer_coord_device(r, th_c, ph_c, mode_secders, &
-                                        f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
-                                        f%d2Aph(1), d3Aphdr3, &
-                                        Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
-                                        f%Bmod, f%dBmod, f%d2Bmod, &
-                                        dummy, dummy3, dummy6)
+        if (rk_tables_ready) then
+            f%Ath = boozer_state%torflux*abs(r)
+            f%dAth(1) = boozer_state%torflux
+            call splint_boozer_symplectic_table_device(abs(r), th_c, ph_c, &
+                mode_secders, f%Aph, f%dAph(1), f%d2Aph(1), &
+                Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                f%Bmod, f%dBmod, f%d2Bmod)
+            d3Aphdr3 = 0.0_dp
+        else
+            call splint_boozer_coord_device(r, th_c, ph_c, mode_secders, &
+                                            f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
+                                            f%d2Aph(1), d3Aphdr3, &
+                                            Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                                            f%Bmod, f%dBmod, f%d2Bmod, &
+                                            dummy, dummy3, dummy6)
+        end if
 
         bmod2 = f%Bmod**2
         f%hth = Bth/f%Bmod
