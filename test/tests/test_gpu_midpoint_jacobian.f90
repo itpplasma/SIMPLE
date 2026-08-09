@@ -4,7 +4,8 @@ program test_gpu_midpoint_jacobian
     use field_can_mod, only: field_can_t, field_can_init, get_val
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t
-    use simple_gpu, only: gpu_midpoint_system, gpu_midpoint_newton_update
+    use simple_gpu, only: gpu_midpoint_system, gpu_midpoint_newton_update, &
+        gpu_midpoint_residual_decreased
 
     implicit none
 
@@ -64,6 +65,7 @@ program test_gpu_midpoint_jacobian
     if (max_error > 5.0e-4_dp) &
         error stop 'GPU midpoint Jacobian oracle failed'
     call test_scaled_newton_update()
+    call test_residual_decrease_rule()
     print *, 'test_gpu_midpoint_jacobian: PASSED'
 
 contains
@@ -104,4 +106,19 @@ contains
         if (residual_error > 1.0e-9_dp) &
             error stop 'scaled midpoint Newton solve residual failed'
     end subroutine test_scaled_newton_update
+
+    subroutine test_residual_decrease_rule()
+        real(dp) :: current_residual(5), trial_residual(5), tolref(5)
+
+        current_residual = [1.0_dp, -2.0_dp, 0.5_dp, 3.0_dp, -1.0_dp]
+        tolref = [1.0_dp, 2.0_dp, 1.0_dp, 4.0_dp, 1.0_dp]
+        trial_residual = 0.5_dp*current_residual
+        if (.not. gpu_midpoint_residual_decreased(current_residual, &
+                trial_residual, tolref, 1.0e-12_dp, 1.0e-10_dp)) &
+            error stop 'midpoint residual decrease rule rejected a decrease'
+        trial_residual(1) = 2.0_dp*current_residual(1)
+        if (gpu_midpoint_residual_decreased(current_residual, trial_residual, &
+                tolref, 1.0e-12_dp, 1.0e-10_dp)) &
+            error stop 'midpoint residual decrease rule accepted an increase'
+    end subroutine test_residual_decrease_rule
 end program test_gpu_midpoint_jacobian
