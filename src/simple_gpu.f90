@@ -38,6 +38,7 @@ module simple_gpu
     private
 
     integer, parameter :: maxit = 32
+    real(dp), parameter :: axis_pcart_default_smax = 0.01_dp
 
     public :: trace_orbits_gpu, trace_orbits_gpu_range
     public :: trace_orbits_gpu_method, trace_orbits_gpu_rk54_range
@@ -147,6 +148,68 @@ contains
         f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
     end subroutine gpu_get_derivatives2_midpoint
 
+    subroutine gpu_axis_pcart_velocity(f, y, fxy)
+        ! Guiding-center velocity in (X,Y,phi,pphi), where
+        ! X=s*cos(theta) and Y=s*sin(theta). The polar
+        ! derivatives are singular at the axis, but this transformed velocity
+        ! is regular for the chartmap fields used by the GPU path.
+        !$acc routine seq
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: y(4)
+        real(dp), intent(out) :: fxy(4)
+
+        ! Use the same regularized spline RHS as the validated DOPRI
+        ! Cartesian path. The generic chartmap Hessian path is singular near
+        ! the axis and is not an independent near-axis oracle.
+        call gpu_rhs_canonical_cartesian(y, f%mu, f%ro0, fxy)
+    end subroutine gpu_axis_pcart_velocity
+
+    subroutine gpu_axis_pcart_step(si, f, ierr, nfev)
+        ! One explicit RK4 step in the regularized pseudo-Cartesian chart.
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr, nfev
+
+        real(dp) :: dt, rho, y0(4), y(4), k1(4), k2(4), k3(4), k4(4)
+        real(dp) :: snew
+
+        ierr = SYMPLECTIC_STEP_OK
+        nfev = 0
+        dt = si%dt
+        rho = max(si%z(1), 0.0_dp)
+        y0 = [rho*cos(si%z(2)), rho*sin(si%z(2)), si%z(3), si%z(4)]
+
+        call gpu_axis_pcart_velocity(f, y0, k1)
+        call gpu_axis_pcart_velocity(f, y0 + 0.5_dp*dt*k1, k2)
+        call gpu_axis_pcart_velocity(f, y0 + 0.5_dp*dt*k2, k3)
+        call gpu_axis_pcart_velocity(f, y0 + dt*k3, k4)
+        nfev = 4
+        y = y0 + dt/6.0_dp*(k1 + 2.0_dp*k2 + 2.0_dp*k3 + k4)
+        if (.not. gpu_finite_iterate(y)) then
+            ierr = SYMPLECTIC_STEP_MAXITER
+            return
+        end if
+
+        snew = sqrt(y(1)**2 + y(2)**2)
+        if (.not. gpu_finite_iterate([snew])) then
+            ierr = SYMPLECTIC_STEP_MAXITER
+            return
+        end if
+        if (snew > 1.0_dp) then
+            ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+            return
+        end if
+
+        si%z(1) = snew
+        si%z(2) = atan2(y(2), y(1))
+        si%z(3) = y(3)
+        si%z(4) = y(4)
+        call eval_field_booz_device(f, si%z(1), si%z(2), si%z(3), 0)
+        call get_derivatives(f, si%z(4))
+        nfev = 5
+    end subroutine gpu_axis_pcart_step
+
     subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
@@ -215,23 +278,33 @@ contains
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev, predictor)
+    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev, axis_pcart, &
+            axis_smax, predictor)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         logical, intent(in) :: warning_mode
         integer, intent(out) :: ierr
         integer, intent(out) :: nfev
+        logical, intent(in) :: axis_pcart
+        real(dp), intent(in) :: axis_smax
         real(dp), intent(in), optional :: predictor(2)
 
         real(dp) :: x(2), xlast(2), accepted_pthold
-        integer :: ktau, newton_status, newton_nfev
+        integer :: ktau, newton_status, newton_nfev, axis_nfev
         logical :: crossed
 
         ierr = 0
         nfev = 0
         ktau = 0
         do while (ktau < si%ntau)
+            if (axis_pcart .and. si%z(1) < axis_smax) then
+                call gpu_axis_pcart_step(si, f, ierr, axis_nfev)
+                nfev = nfev + axis_nfev
+                ktau = ktau + 1
+                if (ierr /= SYMPLECTIC_STEP_OK) return
+                cycle
+            end if
             accepted_pthold = si%pthold
             si%pthold = f%pth
 
@@ -796,13 +869,15 @@ contains
         momentum_atol_scale = sqrt2*abs(bphi/bmod)
     end subroutine gpu_rk_segment_hmax_cartesian
 
-    subroutine gpu_trace_euler_segment(si, f, nsteps, warning_mode, elapsed, &
-            nfev, ierr)
+    subroutine gpu_trace_euler_segment(si, f, nsteps, warning_mode, axis_pcart, &
+            axis_smax, elapsed, nfev, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         integer, intent(in) :: nsteps
         logical, intent(in) :: warning_mode
+        logical, intent(in) :: axis_pcart
+        real(dp), intent(in) :: axis_smax
         real(dp), intent(out) :: elapsed
         integer, intent(out) :: nfev, ierr
 
@@ -825,9 +900,10 @@ contains
             z_previous = si%z
             if (use_predictor) then
                 call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev, &
-                    predictor)
+                    axis_pcart, axis_smax, predictor)
             else
-                call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev)
+                call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev, &
+                    axis_pcart, axis_smax)
             end if
             nfev = nfev + step_nfev
             elapsed = elapsed + si%dt
@@ -1233,9 +1309,14 @@ contains
         real(dp) :: elapsed, new_weight, weighted_losses, expected_duration
         real(dp) :: schedule_tolerance
         character(16) :: ordering_value
+        character(16) :: axis_value
+        character(32) :: axis_smax_value
         integer :: i, it, ierr, segment_nfev, original, source
-        integer :: ordering_length, ordering_status
+        integer :: ordering_length, ordering_status, axis_length, axis_status
+        integer :: axis_smax_length, axis_smax_status
+        real(dp) :: axis_smax
         logical :: warning_mode, order_work
+        logical :: axis_pcart
 
         if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
                 loss_tau <= 0.0_dp) &
@@ -1305,6 +1386,30 @@ contains
         end if
         current_time = 0.0_dp
         warning_mode = symplectic_newton_warning_mode
+        axis_pcart = .false.
+        axis_smax = axis_pcart_default_smax
+        call get_environment_variable('SIMPLE_GPU_AXIS_PCART', axis_value, &
+            axis_length, axis_status)
+        if (axis_status == 0 .and. axis_length > 0) then
+            select case (trim(adjustl(axis_value(:axis_length))))
+            case ('1', 'true', 'on')
+                axis_pcart = .true.
+            case ('0', 'false', 'off')
+                axis_pcart = .false.
+            case default
+                error stop 'SIMPLE_GPU_AXIS_PCART must be 0, 1, true, or false'
+            end select
+        end if
+        call get_environment_variable('SIMPLE_GPU_AXIS_PCART_SMAX', &
+            axis_smax_value, axis_smax_length, axis_smax_status)
+        if (axis_smax_status == 0 .and. axis_smax_length > 0) then
+            read (axis_smax_value(:axis_smax_length), *, iostat=axis_smax_status) &
+                axis_smax
+            if (axis_smax_status /= 0) &
+                error stop 'invalid SIMPLE_GPU_AXIS_PCART_SMAX'
+        end if
+        if (axis_smax <= 0.0_dp .or. axis_smax > 1.0_dp) &
+            error stop 'SIMPLE_GPU_AXIS_PCART_SMAX must be in (0, 1]'
 
         !$acc data copy(si, f, orbit_status, loss_time, nfev)
         do it = 2, ntimstep
@@ -1318,7 +1423,8 @@ contains
 #ifdef _OPENACC
                 !$acc parallel loop gang vector default(present) &
                 !$acc&   private(elapsed, segment_nfev, ierr) &
-                !$acc&   firstprivate(warning_mode, current_time, time_scale, loss_tau) &
+                !$acc&   firstprivate(warning_mode, axis_pcart, axis_smax, &
+                !$acc&       current_time, time_scale, loss_tau) &
                 !$acc&   copy(new_weight)
 #else
                 !$omp parallel do default(shared) schedule(static) &
@@ -1328,7 +1434,8 @@ contains
                 do i = 1, npart
                     if (orbit_status(i) /= 0) cycle
                     call gpu_trace_euler_segment(si(i), f(i), ntau_macro(it), &
-                        warning_mode, elapsed, segment_nfev, ierr)
+                        warning_mode, axis_pcart, axis_smax, elapsed, &
+                        segment_nfev, ierr)
                     nfev(i) = nfev(i) + segment_nfev
                     if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
                         orbit_status(i) = 1
@@ -1605,10 +1712,10 @@ contains
                     z_previous = si(i)%z
                     if (use_predictor) then
                         call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
-                            step_nfev, predictor)
+                            step_nfev, .false., 0.0_dp, predictor)
                     else
                         call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
-                            step_nfev)
+                            step_nfev, .false., 0.0_dp)
                     end if
                     nfev(i) = nfev(i) + step_nfev
                     elapsed = elapsed + si(i)%dt

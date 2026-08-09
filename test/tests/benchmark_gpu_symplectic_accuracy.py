@@ -101,6 +101,8 @@ def run_case(
     field_input: Path | None,
     coord_input: Path | None,
     landreman: bool,
+    axis_pcart: bool,
+    axis_pcart_smax: float | None,
 ) -> dict[str, object]:
     case_dir.mkdir(parents=True)
     (case_dir / "start.dat").write_text(starts)
@@ -124,9 +126,12 @@ def run_case(
             "SIMPLE_GPU_METHOD": method,
             "SIMPLE_GPU_START_COORDINATES": "boozer",
             "SIMPLE_GPU_LANDREMAN": "1" if landreman else "0",
+            "SIMPLE_GPU_AXIS_PCART": "1" if axis_pcart else "0",
             "SIMPLE_GPU_PARTICLE_PROFILE": str(profile_path),
         }
     )
+    if axis_pcart_smax is not None:
+        environment["SIMPLE_GPU_AXIS_PCART_SMAX"] = str(axis_pcart_smax)
     if landreman:
         environment.update(
             {
@@ -156,6 +161,8 @@ def run_case(
         "method": method,
         "npoiper2": npoiper2,
         "relerr": relerr,
+        "axis_pcart": axis_pcart,
+        "axis_pcart_smax": axis_pcart_smax,
         "tracing_s": read_value(
             r"tracing\s+=\s*([0-9.eE+-]+) s", result.stdout, "tracing"
         ),
@@ -252,11 +259,23 @@ def main() -> None:
         action="store_true",
         help="run the blockwise Landreman energy-loss accounting path",
     )
+    parser.add_argument(
+        "--axis-pcart",
+        action="store_true",
+        help="enable the GPU pseudo-Cartesian near-axis Euler shell",
+    )
+    parser.add_argument(
+        "--axis-pcart-smax",
+        type=float,
+        help="upper s threshold for the pseudo-Cartesian shell",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     if args.netcdffile is None and (args.field_input is None or args.coord_input is None):
         parser.error("provide --netcdffile or both --field-input and --coord-input")
+    if args.axis_pcart_smax is not None and not (0.0 < args.axis_pcart_smax <= 1.0):
+        parser.error("--axis-pcart-smax must be in (0, 1]")
     if args.work_dir.exists():
         raise RuntimeError(f"work directory already exists: {args.work_dir}")
     args.work_dir.mkdir(parents=True)
@@ -279,6 +298,8 @@ def main() -> None:
         args.field_input,
         args.coord_input,
         args.landreman,
+        args.axis_pcart,
+        args.axis_pcart_smax,
     )
     results: list[dict[str, object]] = []
     for method in args.methods:
@@ -297,6 +318,8 @@ def main() -> None:
                 args.field_input,
                 args.coord_input,
                 args.landreman,
+                args.axis_pcart,
+                args.axis_pcart_smax,
             )
             candidate["comparison_to_dopri"] = compare(
                 candidate, reference, args.trace_time
@@ -308,6 +331,8 @@ def main() -> None:
     args.output.write_text(
         json.dumps(
             {
+                "axis_pcart": args.axis_pcart,
+                "axis_pcart_smax": args.axis_pcart_smax,
                 "reference": {key: value for key, value in reference.items() if key != "profile"},
                 "results": results,
             },
