@@ -64,10 +64,12 @@ contains
         xinteg(3) = mod(xinteg(3), twopi)
     end subroutine ref_to_integ_boozer
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
     subroutine eval_field_booz(f, r, th_c, ph_c, mode_secders)
         use boozer_sub, only: splint_boozer_coord, boozer_state
+        use boozer_rk_tables, only: rk_tables_ready, &
+            splint_boozer_symplectic_table_device
         !
         ! Evaluates magnetic field in Boozer canonical coordinates (r, th_c, ph_c)
         ! and stores results in variable f
@@ -108,12 +110,20 @@ contains
         f%d2hph = 0d0
         f%d2Bmod = 0d0
 
-        call splint_boozer_coord(r, th_c, ph_c, mode_secders, &
-                                 f%Ath, f%Aph, f%dAth(1), f%dAph(1), f%d2Aph(1), &
-                                 d3Aphdr3, &
-                                 Bth, dBth, d2Bth, &
-                                 Bph, dBph, d2Bph, &
-                                 f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
+        if (rk_tables_ready) then
+            f%Ath = boozer_state%torflux*abs(r)
+            f%dAth(1) = boozer_state%torflux
+            call splint_boozer_symplectic_table_device(abs(r), th_c, ph_c, &
+                mode_secders, f%Aph, f%dAph(1), f%d2Aph(1), Bth, dBth, d2Bth, &
+                Bph, dBph, d2Bph, f%Bmod, f%dBmod, f%d2Bmod)
+            d3Aphdr3 = 0.0_dp
+        else
+            call splint_boozer_coord(r, th_c, ph_c, mode_secders, &
+                f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
+                f%d2Aph(1), d3Aphdr3, &
+                Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
+        end if
 
         bmod2 = f%Bmod**2
         sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*boozer_state%torflux
@@ -129,26 +139,26 @@ contains
 
         if (mode_secders > 0) then
             f%d2hth(1) = d2Bth/f%Bmod - 2d0*dBth*f%dBmod(1)/bmod2 + &
-                         Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+                Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
             f%d2hph(1) = d2Bph/f%Bmod - 2d0*dBph*f%dBmod(1)/bmod2 + &
-                         Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+                Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
         end if
 
         if (mode_secders .eq. 2) then
             f%d2hth((/4, 6/)) = Bth/bmod2*(2d0*f%dBmod((/2, 3/))**2/f%Bmod - &
-                                           f%d2Bmod((/4, 6/)))
+                f%d2Bmod((/4, 6/)))
             f%d2hph((/4, 6/)) = Bph/bmod2*(2d0*f%dBmod((/2, 3/))**2/f%Bmod - &
-                                           f%d2Bmod((/4, 6/)))
+                f%d2Bmod((/4, 6/)))
 
             f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 &
-                         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+                + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
             f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 &
-                         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+                + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
 
             f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 &
-                         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+                + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
             f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 &
-                         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+                + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
 
             f%d2hth(5) = Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
             f%d2hph(5) = Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
@@ -161,6 +171,8 @@ contains
         ! BOOZER_SECDERS_RADIAL_MIXED computes only rr, r-theta, and r-phi.
         use boozer_sub, only: splint_boozer_coord_device, boozer_state, &
             BOOZER_SECDERS_RADIAL_MIXED
+        use boozer_rk_tables, only: rk_tables_ready, &
+            splint_boozer_symplectic_table_device
 
         type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
@@ -185,12 +197,21 @@ contains
             f%d2hph = 0.0_dp
         end if
 
-        call splint_boozer_coord_device(r, th_c, ph_c, mode_secders, &
-                                        f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
-                                        f%d2Aph(1), d3Aphdr3, &
-                                        Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
-                                        f%Bmod, f%dBmod, f%d2Bmod, &
-                                        dummy, dummy3, dummy6)
+        if (rk_tables_ready) then
+            f%Ath = boozer_state%torflux*abs(r)
+            f%dAth(1) = boozer_state%torflux
+            call splint_boozer_symplectic_table_device(abs(r), th_c, ph_c, &
+                mode_secders, f%Aph, f%dAph(1), f%d2Aph(1), Bth, dBth, d2Bth, &
+                Bph, dBph, d2Bph, f%Bmod, f%dBmod, f%d2Bmod)
+            d3Aphdr3 = 0.0_dp
+        else
+            call splint_boozer_coord_device(r, th_c, ph_c, mode_secders, &
+                f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
+                f%d2Aph(1), d3Aphdr3, &
+                Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                f%Bmod, f%dBmod, f%d2Bmod, &
+                dummy, dummy3, dummy6)
+        end if
 
         bmod2 = f%Bmod**2
         f%hth = Bth/f%Bmod
@@ -202,13 +223,13 @@ contains
 
         if (mode_secders > 0) then
             f%d2hth(1) = d2Bth/f%Bmod - 2.0_dp*dBth*f%dBmod(1)/bmod2 + &
-                         Bth/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+                Bth/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
             f%d2hph(1) = d2Bph/f%Bmod - 2.0_dp*dBph*f%dBmod(1)/bmod2 + &
-                         Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+                Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
         end if
 
         if (mode_secders == 2 .or. &
-                mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
+            mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
             f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
                 Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
             f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
