@@ -20,7 +20,31 @@ constexpr int kThreads = SIMPLE_CUDA_THREADS;
 static_assert(kThreads > 0 && kThreads <= 1024,
               "SIMPLE_CUDA_THREADS must be between 1 and 1024");
 constexpr int kMaximumAttempts = 100000000;
+constexpr int kMaximumStages = 13;
 constexpr double kPi = 3.141592653589793238462643383279502884;
+
+template<int Method>
+__host__ __device__ constexpr bool is_dopri5() {
+    return Method == SIMPLE_CUDA_DORMAND_PRINCE ||
+           Method == SIMPLE_CUDA_DORMAND_PRINCE_TUNED;
+}
+
+template<int Method>
+__host__ __device__ constexpr bool is_dop853() {
+    return Method == SIMPLE_CUDA_DOP853;
+}
+
+template<int Method>
+__host__ __device__ constexpr bool uses_dopri_field_layout() {
+    return is_dopri5<Method>() || is_dop853<Method>();
+}
+
+bool supported_method(int method) {
+    return method == SIMPLE_CUDA_CASH_KARP ||
+           method == SIMPLE_CUDA_DORMAND_PRINCE ||
+           method == SIMPLE_CUDA_DORMAND_PRINCE_TUNED ||
+           method == SIMPLE_CUDA_DOP853;
+}
 
 struct Parameters {
     double minimum[3];
@@ -58,8 +82,7 @@ __host__ __device__ __noinline__ void interpolate13(
     const double *__restrict__ data, const Parameters &p,
     const double state[4], const double s, double theta,
     double *output, bool &reflected) {
-    constexpr int quantity_count =
-        Method == SIMPLE_CUDA_DORMAND_PRINCE ? 12 : 13;
+    constexpr int quantity_count = uses_dopri_field_layout<Method>() ? 12 : 13;
     // The stored theta metagrid is the stellarator-symmetric half-domain
     // [0, pi], but the physical angle must first be wrapped over 2*pi and only
     // then reflected. Wrapping directly by the metagrid extent changes the
@@ -111,7 +134,7 @@ __host__ __device__ __noinline__ void interpolate13(
                 const double weight = wij*w2[k];
                 const double *point =
                     cell_data + kStoredQuantities*(16*i + 4*j + k);
-                if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+                if constexpr (uses_dopri_field_layout<Method>()) {
 #pragma unroll
                     for (int q = 0; q < 9; ++q)
                         output[q] = fma(point[q], weight, output[q]);
@@ -131,20 +154,12 @@ __host__ __device__ __noinline__ void interpolate13(
 }
 
 template<int Method>
-__host__ __device__ __noinline__ void right_hand_side(
-    const double *__restrict__ field, const Parameters &p, const double mu,
-    const double state[4], double derivative[4], double *mod_b_out = nullptr,
-    double *g_out = nullptr) {
+__host__ __device__ __forceinline__ void rhs_from_interpolated(
+    const Parameters &p, const double mu, const double state[4],
+    const double value[], bool reflected, double derivative[4]) {
     const double x = state[0];
     const double y = state[1];
     const double s = hypot(x, y);
-    const double theta = atan2(y, x);
-    constexpr int quantity_count =
-        Method == SIMPLE_CUDA_DORMAND_PRINCE ? 12 : 13;
-    double value[quantity_count];
-    bool reflected;
-    interpolate13<Method>(field, p, state, s, theta, value, reflected);
-
     const double vparallel = state[3];
 
     const double mod_b = value[0];
@@ -159,7 +174,7 @@ __host__ __device__ __noinline__ void right_hand_side(
     double k;
     double dk_dtheta;
     double dk_dzeta;
-    if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+    if constexpr (uses_dopri_field_layout<Method>()) {
         k = value[9];
         dk_dtheta = value[10];
         dk_dzeta = value[11];
@@ -194,21 +209,156 @@ __host__ __device__ __noinline__ void right_hand_side(
     derivative[1] = sdot*radial_y + x*thetadot;
     derivative[2] = zetadot;
     derivative[3] = vpardot;
+}
+
+template<int Method>
+__host__ __device__ __noinline__ void right_hand_side(
+    const double *__restrict__ field, const Parameters &p, const double mu,
+    const double state[4], double derivative[4], double *mod_b_out = nullptr,
+    double *g_out = nullptr) {
+    const double x = state[0];
+    const double y = state[1];
+    const double s = hypot(x, y);
+    const double theta = atan2(y, x);
+    constexpr int quantity_count = uses_dopri_field_layout<Method>() ? 12 : 13;
+    double value[quantity_count];
+    bool reflected;
+    interpolate13<Method>(field, p, state, s, theta, value, reflected);
+    rhs_from_interpolated<Method>(p, mu, state, value, reflected, derivative);
+    const double mod_b = value[0];
+    const double g = value[4];
     if (mod_b_out) *mod_b_out = mod_b;
     if (g_out) *g_out = g;
 }
 
 template<int Method>
+__host__ __device__ __noinline__ void initialize_particle(
+    const double *__restrict__ field, const Parameters &p, const double state[4],
+    double &mu, double &hmax, double derivative[4]) {
+    const double x = state[0];
+    const double y = state[1];
+    const double s = hypot(x, y);
+    const double theta = atan2(y, x);
+    constexpr int quantity_count = uses_dopri_field_layout<Method>() ? 12 : 13;
+    double value[quantity_count];
+    bool reflected;
+    interpolate13<Method>(field, p, state, s, theta, value, reflected);
+    const double mod_b = value[0];
+    mu = (p.total_speed*p.total_speed - state[3]*state[3])/(2.0*mod_b);
+    hmax = fmin(p.tmax, (value[4]/mod_b)*(0.5*kPi)/p.total_speed);
+    rhs_from_interpolated<Method>(p, mu, state, value, reflected, derivative);
+}
+
+template<int Method>
 __host__ __device__ __forceinline__ int stage_count() {
-    return Method == SIMPLE_CUDA_DORMAND_PRINCE ? 7 : 6;
+    if constexpr (is_dop853<Method>()) return 12;
+    return is_dopri5<Method>() ? 7 : 6;
 }
 
 template<int Method>
 __host__ __device__ __forceinline__ void stage_state(
-    int stage, const double y[4], double h, double k[7][4], double trial[4]) {
+    int stage, const double y[4], double h,
+    double k[kMaximumStages][4], double trial[4]) {
 #pragma unroll
     for (int q = 0; q < 4; ++q) trial[q] = y[q];
-    if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+    if constexpr (is_dop853<Method>()) {
+        switch (stage) {
+        case 1:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*0.05260015195876773*k[0][q];
+            break;
+        case 2:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.01972505698453790*k[0][q] +
+                               0.05917517095361370*k[1][q]);
+            break;
+        case 3:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.02958758547680685*k[0][q] +
+                               0.08876275643042055*k[2][q]);
+            break;
+        case 4:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.24136513415926669*k[0][q] -
+                               0.88454947932828609*k[2][q] +
+                               0.92483400326179199*k[3][q]);
+            break;
+        case 5:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.03703703703703704*k[0][q] +
+                               0.17082860872947386*k[3][q] +
+                               0.12546768756682242*k[4][q]);
+            break;
+        case 6:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.03710937500000000*k[0][q] +
+                               0.17025221101954405*k[3][q] +
+                               0.06021653898045596*k[4][q] -
+                               0.01757812500000000*k[5][q]);
+            break;
+        case 7:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.03709200011850479*k[0][q] +
+                               0.17038392571223998*k[3][q] +
+                               0.10726203044637328*k[4][q] -
+                               0.01531943774862441*k[5][q] +
+                               0.00827378916381402*k[6][q]);
+            break;
+        case 8:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.62411095871607569*k[0][q] -
+                               3.36089262944694142*k[3][q] -
+                               0.86821934684172597*k[4][q] +
+                               27.59209969944671004*k[5][q] +
+                               20.15406755047789014*k[6][q] -
+                               43.48988418106996111*k[7][q]);
+            break;
+        case 9:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(0.47766253643826434*k[0][q] -
+                               2.48811461997166770*k[3][q] -
+                               0.59029082683684297*k[4][q] +
+                               21.23005144818119311*k[5][q] +
+                               15.27923363288242315*k[6][q] -
+                               33.28821096898486294*k[7][q] -
+                               0.02033120170850863*k[8][q]);
+            break;
+        case 10:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(-0.93714243008598730*k[0][q] +
+                               5.18637242884406380*k[3][q] +
+                               1.09143734899672950*k[4][q] -
+                               8.14978701074692680*k[5][q] -
+                               18.520065659996959*k[6][q] +
+                               22.739487099350505*k[7][q] +
+                               2.49360555267965230*k[8][q] -
+                               3.04676447189821960*k[9][q]);
+            break;
+        case 11:
+#pragma unroll
+            for (int q = 0; q < 4; ++q)
+                trial[q] += h*(2.27331014751653800*k[0][q] -
+                               10.534495466737249*k[3][q] -
+                               2.00087205822486250*k[4][q] -
+                               17.958931863118799*k[5][q] +
+                               27.948884529419960*k[6][q] -
+                               2.85899827713502350*k[7][q] -
+                               8.87285693353062930*k[8][q] +
+                               12.360567175794303*k[9][q] +
+                               0.64339274601576357*k[10][q]);
+            break;
+        }
+    } else if constexpr (is_dopri5<Method>()) {
         switch (stage) {
         case 1:
 #pragma unroll
@@ -290,10 +440,58 @@ __host__ __device__ __forceinline__ void stage_state(
 
 template<int Method>
 __host__ __device__ __forceinline__ double finish_attempt(
-    const double y[4], double h, double k[7][4], double trial[4],
+    const double y[4], double h, double k[kMaximumStages][4], double trial[4],
     double tolerance, double total_speed) {
     double error[4];
-    if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+    if constexpr (is_dop853<Method>()) {
+#pragma unroll
+        for (int q = 0; q < 4; ++q) {
+            trial[q] = y[q] + h*(0.05429373411656876*k[0][q] +
+                4.45031289275240900*k[5][q] +
+                1.89151789931450030*k[6][q] -
+                5.80120396001058500*k[7][q] +
+                0.31116436695781990*k[8][q] -
+                0.15216094966251610*k[9][q] +
+                0.20136540080403034*k[10][q] +
+                0.04471061572777259*k[11][q]);
+            const double error5 = h*(0.01312004499419488*k[0][q] -
+                1.22515644637620440*k[5][q] -
+                0.49575894965725020*k[6][q] +
+                1.66437718245498640*k[7][q] -
+                0.35032884874997366*k[8][q] +
+                0.33417911871301750*k[9][q] +
+                0.08192320648511571*k[10][q] -
+                0.02235530786388629*k[11][q]);
+            const double atol = q == 3 ? tolerance*total_speed : tolerance;
+            const double scale = atol + tolerance*fmax(fabs(y[q]),
+                                                       fabs(trial[q]));
+            error[q] = error5/scale;
+        }
+        double error5_norm_sq = 0.0;
+        double error3_norm_sq = 0.0;
+#pragma unroll
+        for (int q = 0; q < 4; ++q) {
+            const double error5 = error[q];
+            const double error3 = h*( -0.18980075407240762*k[0][q] +
+                4.45031289275240900*k[5][q] +
+                1.89151789931450030*k[6][q] -
+                5.80120396001058500*k[7][q] -
+                0.42268232132379190*k[8][q] -
+                0.15216094966251610*k[9][q] +
+                0.20136540080403034*k[10][q] +
+                0.02265179219836082*k[11][q]);
+            const double component_atol = q == 3 ? tolerance*total_speed :
+                                           tolerance;
+            const double scale = component_atol +
+                tolerance*fmax(fabs(y[q]), fabs(trial[q]));
+            const double scaled3 = error3/scale;
+            error5_norm_sq = fma(error5, error5, error5_norm_sq);
+            error3_norm_sq = fma(scaled3, scaled3, error3_norm_sq);
+        }
+        if (error5_norm_sq == 0.0 && error3_norm_sq == 0.0) return 0.0;
+        return error5_norm_sq/
+               sqrt((error5_norm_sq + 0.01*error3_norm_sq)*4.0);
+    } else if constexpr (is_dopri5<Method>()) {
 #pragma unroll
         for (int q = 0; q < 4; ++q) {
             trial[q] = y[q] + h*(35.0*k[0][q]/384.0 +
@@ -340,10 +538,8 @@ __host__ __device__ __forceinline__ void trace_particle(
     const Parameters &p, double output[7], unsigned long long counters[3]) {
     double y[4] = {initial_state[0], initial_state[1], initial_state[2],
                    initial_state[3]};
-    double first_derivative[4], mod_b, g;
-    right_hand_side<Method>(field, p, -1.0, y, first_derivative, &mod_b, &g);
-    const double mu = (p.total_speed*p.total_speed - y[3]*y[3])/(2.0*mod_b);
-    const double hmax = fmin(p.tmax, (g/mod_b)*(0.5*kPi)/p.total_speed);
+    double first_derivative[4], mu, hmax;
+    initialize_particle<Method>(field, p, y, mu, hmax, first_derivative);
     double h = fmax(p.minimum_timestep, 1.0e-3*hmax);
     double hmin_seen = h;
     double hmax_seen = h;
@@ -359,7 +555,7 @@ __host__ __device__ __forceinline__ void trace_particle(
     for (int attempt = 0; attempt < kMaximumAttempts && t < p.tmax && !lost;
          ++attempt) {
         h = fmin(h, p.tmax - t);
-        double k[7][4];
+        double k[kMaximumStages][4];
 #pragma unroll
         for (int q = 0; q < 4; ++q) k[0][q] = first_derivative[q];
         double trial[4];
@@ -370,12 +566,31 @@ __host__ __device__ __forceinline__ void trace_particle(
         }
         const double error = finish_attempt<Method>(y, h, k, trial,
                                                      p.tolerance, p.total_speed);
+        if constexpr (is_dop853<Method>()) {
+            // DOP853's thirteenth RHS evaluation is the endpoint derivative;
+            // it is reusable as the first stage after an accepted step.
+            right_hand_side<Method>(field, p, mu, trial, k[12]);
+            ++nfev;
+        }
         const double floor_error = fmax(error, 1.0e-300);
         double factor;
         if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
             factor = 0.9*pow(floor_error, -1.0/3.0);
             factor = fmax(0.2, fmin(5.0, factor));
             if (error > 0.5 && error < 1.0) factor = 1.0;
+        } else if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE_TUNED) {
+            if (first_step || after_reject) {
+                factor = 0.9*pow(floor_error, -1.0/5.0);
+            } else {
+                factor = 0.9*pow(floor_error, -0.14)*
+                         pow(previous_error, 0.08);
+            }
+            if (after_reject) factor = fmin(1.0, factor);
+            factor = fmax(0.2, fmin(5.0, factor));
+        } else if constexpr (is_dop853<Method>()) {
+            factor = 0.9*pow(floor_error, -1.0/8.0);
+            if (after_reject) factor = fmin(1.0, factor);
+            factor = fmax(0.2, fmin(10.0, factor));
         } else if (first_step || after_reject) {
             factor = 0.9*pow(fmax(error, 1.0e-10), -1.0/5.0);
             factor = fmax(0.2, fmin(5.0, factor));
@@ -399,12 +614,16 @@ __host__ __device__ __forceinline__ void trace_particle(
             after_reject = false;
             lost = hypot(y[0], y[1]) >= 1.0;
             if (!lost && t < p.tmax) {
-                if constexpr (Method == SIMPLE_CUDA_DORMAND_PRINCE) {
+                if constexpr (is_dopri5<Method>()) {
                     // The seventh DP stage is evaluated at the accepted state,
                     // so it is the first stage of the next attempt (FSAL).
 #pragma unroll
                     for (int q = 0; q < 4; ++q)
                         first_derivative[q] = k[6][q];
+                } else if constexpr (is_dop853<Method>()) {
+#pragma unroll
+                    for (int q = 0; q < 4; ++q)
+                        first_derivative[q] = k[12][q];
                 } else {
                     right_hand_side<Method>(field, p, mu, y, first_derivative);
                     ++nfev;
@@ -473,8 +692,7 @@ extern "C" int simple_cuda_firm_rk54(
     double minimum_timestep, double *final_stzv,
     unsigned long long *counters, double profile_ms[SIMPLE_CUDA_PROFILE_COUNT]) {
     if (profile_ms) std::fill(profile_ms, profile_ms + SIMPLE_CUDA_PROFILE_COUNT, 0.0);
-    if (method != SIMPLE_CUDA_CASH_KARP &&
-        method != SIMPLE_CUDA_DORMAND_PRINCE) return 1;
+    if (!supported_method(method)) return 1;
     if (particle_count <= 0 || !quad_points || !ranges || !initial_stz ||
         !initial_vparallel || !final_stzv || !counters || total_speed <= 0.0 ||
         psi0 == 0.0 || tmax < 0.0 || tolerance <= 0.0 ||
@@ -553,6 +771,14 @@ extern "C" int simple_cuda_firm_rk54(
                 trace_kernel<SIMPLE_CUDA_DORMAND_PRINCE><<<blocks, kThreads>>>(
                     field_device, state_device, p, particle_count,
                     output_device, counter_device);
+            } else if (method == SIMPLE_CUDA_DORMAND_PRINCE_TUNED) {
+                trace_kernel<SIMPLE_CUDA_DORMAND_PRINCE_TUNED><<<blocks, kThreads>>>(
+                    field_device, state_device, p, particle_count,
+                    output_device, counter_device);
+            } else if (method == SIMPLE_CUDA_DOP853) {
+                trace_kernel<SIMPLE_CUDA_DOP853><<<blocks, kThreads>>>(
+                    field_device, state_device, p, particle_count,
+                    output_device, counter_device);
             } else {
                 trace_kernel<SIMPLE_CUDA_CASH_KARP><<<blocks, kThreads>>>(
                     field_device, state_device, p, particle_count,
@@ -615,8 +841,7 @@ extern "C" int simple_cuda_firm_rk54_landreman(
     double profile_ms[SIMPLE_CUDA_PROFILE_COUNT]) {
     if (profile_ms)
         std::fill(profile_ms, profile_ms + SIMPLE_CUDA_PROFILE_COUNT, 0.0);
-    if (method != SIMPLE_CUDA_CASH_KARP &&
-        method != SIMPLE_CUDA_DORMAND_PRINCE) return 1;
+    if (!supported_method(method)) return 1;
     if (particle_count <= 0 || !quad_points || !ranges || !initial_stz ||
         !initial_vparallel || !final_stzv || !counters || total_speed <= 0.0 ||
         psi0 == 0.0 || tmax <= 0.0 || tolerance <= 0.0 ||
@@ -737,6 +962,14 @@ extern "C" int simple_cuda_firm_rk54_landreman(
                     trace_kernel<SIMPLE_CUDA_DORMAND_PRINCE><<<blocks, kThreads>>>(
                         field_device, state_device, p,
                         active_count, output_device, counter_device);
+                } else if (method == SIMPLE_CUDA_DORMAND_PRINCE_TUNED) {
+                    trace_kernel<SIMPLE_CUDA_DORMAND_PRINCE_TUNED><<<blocks, kThreads>>>(
+                        field_device, state_device, p,
+                        active_count, output_device, counter_device);
+                } else if (method == SIMPLE_CUDA_DOP853) {
+                    trace_kernel<SIMPLE_CUDA_DOP853><<<blocks, kThreads>>>(
+                        field_device, state_device, p,
+                        active_count, output_device, counter_device);
                 } else {
                     trace_kernel<SIMPLE_CUDA_CASH_KARP><<<blocks, kThreads>>>(
                         field_device, state_device, p,
@@ -838,8 +1071,7 @@ extern "C" int simple_cpu_firm_rk54_landreman(
     double profile_ms[SIMPLE_CUDA_PROFILE_COUNT]) {
     if (profile_ms)
         std::fill(profile_ms, profile_ms + SIMPLE_CUDA_PROFILE_COUNT, 0.0);
-    if (method != SIMPLE_CUDA_CASH_KARP &&
-        method != SIMPLE_CUDA_DORMAND_PRINCE) return 1;
+    if (!supported_method(method)) return 1;
     if (particle_count <= 0 || !quad_points || !ranges || !initial_stz ||
         !initial_vparallel || !final_stzv || !counters || total_speed <= 0.0 ||
         psi0 == 0.0 || tmax <= 0.0 || tolerance <= 0.0 ||
@@ -897,6 +1129,14 @@ extern "C" int simple_cpu_firm_rk54_landreman(
         const auto trace_begin = Clock::now();
         if (method == SIMPLE_CUDA_DORMAND_PRINCE) {
             trace_particles_cpu<SIMPLE_CUDA_DORMAND_PRINCE>(
+                quad_points, current_state.data(), p, particle_count,
+                segment_output.data(), segment_counters.data());
+        } else if (method == SIMPLE_CUDA_DORMAND_PRINCE_TUNED) {
+            trace_particles_cpu<SIMPLE_CUDA_DORMAND_PRINCE_TUNED>(
+                quad_points, current_state.data(), p, particle_count,
+                segment_output.data(), segment_counters.data());
+        } else if (method == SIMPLE_CUDA_DOP853) {
+            trace_particles_cpu<SIMPLE_CUDA_DOP853>(
                 quad_points, current_state.data(), p, particle_count,
                 segment_output.data(), segment_counters.data());
         } else {

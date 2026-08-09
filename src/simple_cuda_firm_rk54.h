@@ -9,7 +9,9 @@ extern "C" {
 
 enum {
     SIMPLE_CUDA_CASH_KARP = 1,
-    SIMPLE_CUDA_DORMAND_PRINCE = 2
+    SIMPLE_CUDA_DORMAND_PRINCE = 2,       /* FIRM3D-compatible controller */
+    SIMPLE_CUDA_DORMAND_PRINCE_TUNED = 3, /* PI controller, same tableau */
+    SIMPLE_CUDA_DOP853 = 4               /* Hairer DOP853 8(7) pair */
 };
 
 enum {

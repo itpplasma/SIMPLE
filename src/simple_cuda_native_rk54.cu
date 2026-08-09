@@ -433,10 +433,17 @@ __device__ void trace_particle(const float *__restrict__ field_table,
       const double error_floor = fmax(error, 1.0e-300);
       double factor;
       if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
-        factor = 0.9 / cbrt(error_floor);
+        // Use the embedded fourth-order error exponent and a PI controller.
+        // The old cbrt controller was overly aggressive for DOPRI5 and led to
+        // avoidable rejected attempts on long, segmented traces.
+        if (first_step || after_reject) {
+          factor = 0.9 * pow(error_floor, -1.0 / 5.0);
+        } else {
+          factor = 0.9 * pow(error_floor, -0.14) * pow(previous_error, 0.08);
+        }
+        if (after_reject)
+          factor = fmin(1.0, factor);
         factor = fmax(0.2, fmin(5.0, factor));
-        if (error > 0.5 && error < 1.0)
-          factor = 1.0;
       } else if (first_step || after_reject) {
         factor = 0.9 * pow(fmax(error, 1.0e-10), -1.0 / 5.0);
         factor = fmax(0.2, fmin(5.0, factor));
