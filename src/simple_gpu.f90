@@ -1039,8 +1039,8 @@ contains
         end do
     end subroutine gpu_trace_euler_segment
 
-    subroutine gpu_trace_midpoint_segment(si, f, nsteps, warning_mode, elapsed, &
-            nfev, ierr)
+    subroutine gpu_trace_midpoint_segment_once(si, f, nsteps, warning_mode, &
+            elapsed, nfev, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -1077,6 +1077,59 @@ contains
             elapsed = elapsed + si%dt
             if (ierr /= SYMPLECTIC_STEP_OK) exit
             use_predictor = .true.
+        end do
+    end subroutine gpu_trace_midpoint_segment_once
+
+    subroutine gpu_trace_midpoint_segment(si, f, nsteps, warning_mode, &
+            retry_depth, elapsed, nfev, ierr)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(in) :: nsteps, retry_depth
+        logical, intent(in) :: warning_mode
+        real(dp), intent(out) :: elapsed
+        integer, intent(out) :: nfev, ierr
+
+        real(dp) :: accepted_z(4), accepted_pthold, accepted_dt
+        real(dp) :: attempt_elapsed
+        integer :: accepted_ntau, attempt_nfev, attempt_ierr
+        integer :: depth, subdivision
+
+        accepted_z = si%z
+        accepted_pthold = si%pthold
+        accepted_dt = si%dt
+        accepted_ntau = si%ntau
+        nfev = 0
+        elapsed = 0.0_dp
+        ierr = SYMPLECTIC_STEP_OK
+        subdivision = 1
+
+        do depth = 0, retry_depth
+            if (depth > 0) then
+                ! Reconstruct the accepted segment start without copying the
+                ! full field workspace into every device thread's locals.
+                si%z = accepted_z
+                si%pthold = accepted_pthold
+                si%dt = accepted_dt/real(subdivision, dp)
+                call eval_field_booz_device(f, si%z(1), si%z(2), si%z(3), 0)
+                call get_val(f, si%z(4))
+                nfev = nfev + 1
+            end if
+
+            call gpu_trace_midpoint_segment_once(si, f, nsteps*subdivision, &
+                warning_mode, attempt_elapsed, attempt_nfev, attempt_ierr)
+            nfev = nfev + attempt_nfev
+            elapsed = elapsed + attempt_elapsed
+            ierr = attempt_ierr
+            si%dt = accepted_dt
+            si%ntau = accepted_ntau
+
+            if (ierr == SYMPLECTIC_STEP_OK .or. &
+                    ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) return
+            if ((ierr /= SYMPLECTIC_STEP_MAXITER .and. &
+                    ierr /= SYMPLECTIC_STEP_LINEAR_SOLVE) .or. &
+                    depth == retry_depth) return
+            subdivision = subdivision*2
         end do
     end subroutine gpu_trace_midpoint_segment
 
@@ -1439,13 +1492,16 @@ contains
         character(16) :: axis_value
         character(16) :: reuse_value
         character(16) :: taylor_value
+        character(16) :: retry_value
         character(32) :: axis_smax_value
         integer :: i, it, ierr, segment_nfev, original, source
         integer :: ordering_length, ordering_status, axis_length, axis_status
         integer :: reuse_length, reuse_status
         integer :: taylor_length, taylor_status
+        integer :: retry_length, retry_env_status, retry_read_status
         integer :: axis_smax_length, axis_smax_status
         real(dp) :: axis_smax
+        integer :: midpoint_retry_depth
         logical :: warning_mode, order_work
         logical :: axis_pcart, reuse_hessian, taylor_newton
 
@@ -1570,6 +1626,18 @@ contains
             end select
         end if
 
+        midpoint_retry_depth = 0
+        call get_environment_variable('SIMPLE_GPU_MIDPOINT_RETRY', retry_value, &
+            retry_length, retry_env_status)
+        if (retry_env_status == 0 .and. retry_length > 0) then
+            read (retry_value(:retry_length), *, iostat=retry_read_status) &
+                midpoint_retry_depth
+            if (retry_read_status /= 0) &
+                error stop 'invalid SIMPLE_GPU_MIDPOINT_RETRY'
+        end if
+        if (midpoint_retry_depth < 0 .or. midpoint_retry_depth > 3) &
+            error stop 'SIMPLE_GPU_MIDPOINT_RETRY must be in [0, 3]'
+
         !$acc data copy(si, f, orbit_status, loss_time, nfev)
         do it = 2, ntimstep
             segment_duration = si(1)%dt*real(ntau_macro(it), dp)
@@ -1614,7 +1682,8 @@ contains
 #ifdef _OPENACC
                 !$acc parallel loop gang vector default(present) &
                 !$acc&   private(elapsed, segment_nfev, ierr) &
-                !$acc&   firstprivate(warning_mode, current_time, time_scale, loss_tau) &
+                !$acc&   firstprivate(warning_mode, midpoint_retry_depth, &
+                !$acc&       current_time, time_scale, loss_tau) &
                 !$acc&   copy(new_weight)
 #else
                 !$omp parallel do default(shared) schedule(static) &
@@ -1624,7 +1693,8 @@ contains
                 do i = 1, npart
                     if (orbit_status(i) /= 0) cycle
                     call gpu_trace_midpoint_segment(si(i), f(i), ntau_macro(it), &
-                        warning_mode, elapsed, segment_nfev, ierr)
+                        warning_mode, midpoint_retry_depth, elapsed, segment_nfev, &
+                        ierr)
                     nfev(i) = nfev(i) + segment_nfev
                     if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
                         orbit_status(i) = 1
