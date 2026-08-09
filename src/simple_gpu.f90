@@ -653,25 +653,46 @@ contains
 
         type(symplectic_integrator_t) :: accepted_integrator
         type(field_can_t) :: accepted_field
-        real(dp) :: x(5)
+        real(dp) :: x(5), internal_predictor(5), z_previous(4)
         integer :: ktau, step_status, step_nfev
+        logical :: use_predictor, predictor_used, crossed
 
         ierr = 0
         nfev = 0
+        z_previous = si%z
+        use_predictor = present(predictor)
         do ktau = 1, si%ntau
-            accepted_integrator = si
-            accepted_field = f
-            si%pthold = f%pth
+            predictor_used = .false.
             if (ktau == 1 .and. present(predictor)) then
                 x = predictor
+                predictor_used = .true.
+            else if (ktau > 1 .and. use_predictor) then
+                internal_predictor(1:4) = 2.0_dp*si%z - z_previous
+                internal_predictor(5) = 1.5_dp*si%z(1) - &
+                    0.5_dp*z_previous(1)
+                use_predictor = internal_predictor(1) >= 0.0_dp .and. &
+                    internal_predictor(1) <= 1.0_dp .and. &
+                    internal_predictor(5) >= 0.0_dp .and. &
+                    internal_predictor(5) <= 1.0_dp .and. &
+                    abs(si%z(2) - z_previous(2)) < 0.5_dp*pi
+                if (use_predictor) then
+                    x = internal_predictor
+                    predictor_used = .true.
+                else
+                    x(1:4) = si%z
+                    x(5) = si%z(1)
+                end if
             else
                 x(1:4) = si%z
                 x(5) = si%z(1)
             end if
+            z_previous = si%z
+            accepted_integrator = si
+            accepted_field = f
+            si%pthold = f%pth
             call gpu_newton_midpoint(si, f, x, warning_mode, step_status, step_nfev)
             nfev = nfev + step_nfev
-            if (step_status /= SYMPLECTIC_STEP_OK .and. ktau == 1 .and. &
-                    present(predictor)) then
+            if (step_status /= SYMPLECTIC_STEP_OK .and. predictor_used) then
                 si = accepted_integrator
                 f = accepted_field
                 x(1:4) = si%z
@@ -686,7 +707,8 @@ contains
                 ierr = step_status
                 return
             end if
-            if (x(1) < 0.0_dp) then
+            crossed = x(1) < 0.0_dp
+            if (crossed) then
                 x(1) = -x(1)
                 x(2) = x(2) + pi
             end if
@@ -700,6 +722,7 @@ contains
             call eval_field_booz_device(f, si%z(1), si%z(2), si%z(3), 0)
             call get_val(f, si%z(4))
             nfev = nfev + 1
+            use_predictor = .not. crossed
         end do
     end subroutine gpu_timestep_midpoint
 
