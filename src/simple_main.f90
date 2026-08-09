@@ -873,6 +873,7 @@ contains
         character(32) :: method_name, landreman_value, start_coordinates
         character(1024) :: particle_profile_path
         integer :: method_len, method_stat, method, init_mode, i, it
+        integer :: raw_step_status
         integer :: landreman_len, landreman_stat, start_coordinates_len
         integer :: start_coordinates_stat, particle_profile_len
         integer :: particle_profile_stat, particle_profile_unit
@@ -1003,7 +1004,21 @@ contains
 
             if (loss_step(i) < 0) then
                 times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
-                orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
+                raw_step_status = -loss_step(i)
+                if (method == EXPL_IMPL_EULER .or. method == MIDPOINT) then
+                    select case (raw_step_status)
+                    case (SYMPLECTIC_STEP_OUTSIDE_DOMAIN)
+                        orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_DOMAIN
+                    case (SYMPLECTIC_STEP_MAXITER)
+                        orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_MAXITER
+                    case (SYMPLECTIC_STEP_LINEAR_SOLVE)
+                        orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_LINEAR
+                    case default
+                        orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
+                    end select
+                else
+                    orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
+                end if
             else if (loss_time_normalized(i) < total_time_normalized - &
                     16.0_dp*epsilon(1.0_dp)*max(total_time_normalized, 1.0_dp)) then
                 times_lost(i) = loss_time_normalized(i)*sqrt2/v0
