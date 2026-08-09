@@ -535,6 +535,14 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
 
+    # Compare the compact native-RK symplectic field/Hessian contract against
+    # the generic Boozer evaluator on a real extended chartmap. This is an
+    # explicit diagnostic target because the production chartmap lives outside
+    # the repository and is supplied as its command-line argument.
+    add_executable(test_boozer_rk_symplectic_oracle.x
+        test_boozer_rk_symplectic_oracle.f90)
+    target_link_libraries(test_boozer_rk_symplectic_oracle.x simple)
+
     # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
     add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
     target_link_libraries(generate_test_boozer_chartmap.x netcdf m)
