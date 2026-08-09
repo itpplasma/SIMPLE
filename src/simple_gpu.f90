@@ -210,13 +210,15 @@ contains
         nfev = 5
     end subroutine gpu_axis_pcart_step
 
-    subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
+    subroutine gpu_newton1(si, f, x, xlast, warning_mode, reuse_hessian, &
+            status, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         real(dp), intent(inout) :: x(2)
         real(dp), intent(out) :: xlast(2)
         logical, intent(in) :: warning_mode
+        logical, intent(in) :: reuse_hessian
         integer, intent(out) :: status
         integer, intent(out) :: nfev
 
@@ -224,6 +226,8 @@ contains
         integer :: kit
         logical :: converged, linear_failed, boundary_limited
         logical :: step_boundary_limited
+        real(dp) :: d2Ath_saved(3), d2Aph_saved(3), d2hth_saved(3)
+        real(dp) :: d2hph_saved(3), d2Bmod_saved(3)
 
         status = SYMPLECTIC_STEP_MAXITER
         nfev = 0
@@ -241,8 +245,29 @@ contains
             ! (mirrors newton1 in orbit_symplectic, #370).
             if (x(1) < 0d0) x(1) = 0.01d0
 
-            call eval_field_booz_device(f, x(1), si%z(2), si%z(3), &
-                BOOZER_SECDERS_RADIAL_MIXED)
+            if (reuse_hessian .and. kit > 1) then
+                ! The Newton residual is refreshed at every iterate, but the
+                ! table Hessian is reused within this step.  The first
+                ! iterate saved the radial/mixed geometric second
+                ! derivatives; mode 0 clears those arrays, so restore only
+                ! the entries consumed by gpu_get_derivatives2_radial_mixed.
+                call eval_field_booz_device(f, x(1), si%z(2), si%z(3), 0)
+                f%d2Ath(1:3) = d2Ath_saved
+                f%d2Aph(1:3) = d2Aph_saved
+                f%d2hth(1:3) = d2hth_saved
+                f%d2hph(1:3) = d2hph_saved
+                f%d2Bmod(1:3) = d2Bmod_saved
+            else
+                call eval_field_booz_device(f, x(1), si%z(2), si%z(3), &
+                    BOOZER_SECDERS_RADIAL_MIXED)
+                if (reuse_hessian) then
+                    d2Ath_saved = f%d2Ath(1:3)
+                    d2Aph_saved = f%d2Aph(1:3)
+                    d2hth_saved = f%d2hth(1:3)
+                    d2hph_saved = f%d2hph(1:3)
+                    d2Bmod_saved = f%d2Bmod(1:3)
+                end if
+            end if
             nfev = nfev + 1
             call gpu_get_derivatives2_radial_mixed(f, x(2))
             call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
@@ -278,12 +303,13 @@ contains
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev, axis_pcart, &
-            axis_smax, predictor)
+    subroutine gpu_timestep_euler(si, f, warning_mode, reuse_hessian, ierr, &
+            nfev, axis_pcart, axis_smax, predictor)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         logical, intent(in) :: warning_mode
+        logical, intent(in) :: reuse_hessian
         integer, intent(out) :: ierr
         integer, intent(out) :: nfev
         logical, intent(in) :: axis_pcart
@@ -315,16 +341,16 @@ contains
                 x(2) = si%z(4)
             end if
 
-            call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
-                newton_nfev)
+            call gpu_newton1(si, f, x, xlast, warning_mode, reuse_hessian, &
+                newton_status, newton_nfev)
             nfev = nfev + newton_nfev
             if (newton_status /= SYMPLECTIC_STEP_OK .and. ktau == 0 .and. &
                     present(predictor)) then
                 si%pthold = accepted_pthold
                 x(1) = si%z(1)
                 x(2) = si%z(4)
-                call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
-                    newton_nfev)
+                call gpu_newton1(si, f, x, xlast, warning_mode, reuse_hessian, &
+                    newton_status, newton_nfev)
                 nfev = nfev + newton_nfev
             end if
             if (newton_status /= SYMPLECTIC_STEP_OK) then
@@ -869,13 +895,14 @@ contains
         momentum_atol_scale = sqrt2*abs(bphi/bmod)
     end subroutine gpu_rk_segment_hmax_cartesian
 
-    subroutine gpu_trace_euler_segment(si, f, nsteps, warning_mode, axis_pcart, &
-            axis_smax, elapsed, nfev, ierr)
+    subroutine gpu_trace_euler_segment(si, f, nsteps, warning_mode, &
+            reuse_hessian, axis_pcart, axis_smax, elapsed, nfev, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         integer, intent(in) :: nsteps
         logical, intent(in) :: warning_mode
+        logical, intent(in) :: reuse_hessian
         logical, intent(in) :: axis_pcart
         real(dp), intent(in) :: axis_smax
         real(dp), intent(out) :: elapsed
@@ -899,11 +926,11 @@ contains
             end if
             z_previous = si%z
             if (use_predictor) then
-                call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev, &
-                    axis_pcart, axis_smax, predictor)
+                call gpu_timestep_euler(si, f, warning_mode, reuse_hessian, &
+                    ierr, step_nfev, axis_pcart, axis_smax, predictor)
             else
-                call gpu_timestep_euler(si, f, warning_mode, ierr, step_nfev, &
-                    axis_pcart, axis_smax)
+                call gpu_timestep_euler(si, f, warning_mode, reuse_hessian, &
+                    ierr, step_nfev, axis_pcart, axis_smax)
             end if
             nfev = nfev + step_nfev
             elapsed = elapsed + si%dt
@@ -1310,13 +1337,15 @@ contains
         real(dp) :: schedule_tolerance
         character(16) :: ordering_value
         character(16) :: axis_value
+        character(16) :: reuse_value
         character(32) :: axis_smax_value
         integer :: i, it, ierr, segment_nfev, original, source
         integer :: ordering_length, ordering_status, axis_length, axis_status
+        integer :: reuse_length, reuse_status
         integer :: axis_smax_length, axis_smax_status
         real(dp) :: axis_smax
         logical :: warning_mode, order_work
-        logical :: axis_pcart
+        logical :: axis_pcart, reuse_hessian
 
         if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
                 loss_tau <= 0.0_dp) &
@@ -1411,6 +1440,20 @@ contains
         if (axis_smax <= 0.0_dp .or. axis_smax > 1.0_dp) &
             error stop 'SIMPLE_GPU_AXIS_PCART_SMAX must be in (0, 1]'
 
+        reuse_hessian = .false.
+        call get_environment_variable('SIMPLE_GPU_EULER_REUSE_HESSIAN', &
+            reuse_value, reuse_length, reuse_status)
+        if (reuse_status == 0 .and. reuse_length > 0) then
+            select case (trim(adjustl(reuse_value(:reuse_length))))
+            case ('1', 'true', 'on')
+                reuse_hessian = .true.
+            case ('0', 'false', 'off')
+                reuse_hessian = .false.
+            case default
+                error stop 'SIMPLE_GPU_EULER_REUSE_HESSIAN must be 0, 1, true, or false'
+            end select
+        end if
+
         !$acc data copy(si, f, orbit_status, loss_time, nfev)
         do it = 2, ntimstep
             segment_duration = si(1)%dt*real(ntau_macro(it), dp)
@@ -1423,7 +1466,7 @@ contains
 #ifdef _OPENACC
                 !$acc parallel loop gang vector default(present) &
                 !$acc&   private(elapsed, segment_nfev, ierr) &
-                !$acc&   firstprivate(warning_mode, axis_pcart, axis_smax, &
+                !$acc&   firstprivate(warning_mode, reuse_hessian, axis_pcart, axis_smax, &
                 !$acc&       current_time, time_scale, loss_tau) &
                 !$acc&   copy(new_weight)
 #else
@@ -1434,8 +1477,8 @@ contains
                 do i = 1, npart
                     if (orbit_status(i) /= 0) cycle
                     call gpu_trace_euler_segment(si(i), f(i), ntau_macro(it), &
-                        warning_mode, axis_pcart, axis_smax, elapsed, &
-                        segment_nfev, ierr)
+                        warning_mode, reuse_hessian, axis_pcart, axis_smax, &
+                        elapsed, segment_nfev, ierr)
                     nfev(i) = nfev(i) + segment_nfev
                     if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
                         orbit_status(i) = 1
@@ -1711,11 +1754,11 @@ contains
                     end if
                     z_previous = si(i)%z
                     if (use_predictor) then
-                        call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
-                            step_nfev, .false., 0.0_dp, predictor)
+                        call gpu_timestep_euler(si(i), f(i), warning_mode, .false., &
+                            ierr, step_nfev, .false., 0.0_dp, predictor)
                     else
-                        call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
-                            step_nfev, .false., 0.0_dp)
+                        call gpu_timestep_euler(si(i), f(i), warning_mode, .false., &
+                            ierr, step_nfev, .false., 0.0_dp)
                     end if
                     nfev(i) = nfev(i) + step_nfev
                     elapsed = elapsed + si(i)%dt
