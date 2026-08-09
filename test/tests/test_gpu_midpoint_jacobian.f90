@@ -97,7 +97,7 @@ contains
         rhs = [1.0_dp, -2.0_dp, 0.5_dp, 3.0_dp, -1.0_dp]
 
         call gpu_midpoint_newton_update(jacobian, rhs, variable_scale, .true., &
-            correction, info)
+            .true., correction, info)
         if (info /= 0) error stop 'scaled midpoint Newton solve failed'
         residual_error = maxval(abs(matmul(jacobian, correction) - rhs) / &
             max(1.0_dp, abs(rhs)))
