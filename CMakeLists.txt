@@ -302,8 +302,8 @@ if(NOT TARGET fortnum)
     FetchContent_Declare(
         fortnum
         GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        # Allocation-free GPU RK5(4), generated from the pinned fortsym kernels.
-        GIT_TAG d5b988bf7900935d53e25c5295e3435a49bf5798
+        # Allocation-free GPU RK5(4), including the tuned DOPRI controller.
+        GIT_TAG 1974453a8f39985ddff19fba0f92bccf71c80b22
     )
     FetchContent_MakeAvailable(fortnum)
 endif()

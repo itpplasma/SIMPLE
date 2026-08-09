@@ -24,8 +24,8 @@ module simple_gpu
     use orbit_rk_core, only: rk_solve
     use fortnum_ode_rk54_device, only: rk54_controls4_t, rk54_state4_t, &
         rk54_initialize4, rk54_request4, rk54_supply4, &
-        RK54_CASH_KARP, RK54_DORMAND_PRINCE, RK54_NEED_RHS, RK54_ACCEPTED, &
-        RK54_REJECTED, RK54_FAILED
+        RK54_CASH_KARP, RK54_DORMAND_PRINCE_TUNED, RK54_NEED_RHS, &
+        RK54_ACCEPTED, RK54_REJECTED, RK54_FAILED
     use boozer_sub, only: boozer_state, splint_boozer_rk_device, &
         BOOZER_SECDERS_RADIAL_MIXED
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
@@ -932,7 +932,7 @@ contains
         if (method == CASH_KARP) then
             controls%method = RK54_CASH_KARP
         else
-            controls%method = RK54_DORMAND_PRINCE
+            controls%method = RK54_DORMAND_PRINCE_TUNED
         end if
 
         !$acc data copy(y, orbit_status, loss_time_slot, nfev_slot, segment_work) &
@@ -1407,7 +1407,7 @@ contains
         if (method == CASH_KARP) then
             controls%method = RK54_CASH_KARP
         else
-            controls%method = RK54_DORMAND_PRINCE
+            controls%method = RK54_DORMAND_PRINCE_TUNED
         end if
 
         do i = istart, iend
