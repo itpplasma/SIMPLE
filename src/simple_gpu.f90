@@ -1119,7 +1119,8 @@ contains
             call gpu_trace_midpoint_segment_once(si, f, nsteps*subdivision, &
                 warning_mode, attempt_elapsed, attempt_nfev, attempt_ierr)
             nfev = nfev + attempt_nfev
-            elapsed = elapsed + attempt_elapsed
+            ! Failed attempts consume work but do not advance physical time.
+            elapsed = attempt_elapsed
             ierr = attempt_ierr
             si%dt = accepted_dt
             si%ntau = accepted_ntau
