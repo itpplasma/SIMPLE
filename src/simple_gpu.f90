@@ -45,6 +45,7 @@ module simple_gpu
     public :: trace_orbits_gpu_midpoint_range
     public :: trace_orbits_gpu_landreman
     public :: evaluate_rhs_gpu
+    public :: gpu_midpoint_system
 
 contains
 

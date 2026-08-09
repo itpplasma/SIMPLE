@@ -543,6 +543,13 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         test_boozer_rk_symplectic_oracle.f90)
     target_link_libraries(test_boozer_rk_symplectic_oracle.x simple)
 
+    # Device-specialized midpoint residual/Jacobian diagnostic. The external
+    # chartmap is supplied explicitly because production chartmaps are not
+    # repository fixtures.
+    add_executable(test_gpu_midpoint_jacobian.x
+        test_gpu_midpoint_jacobian.f90)
+    target_link_libraries(test_gpu_midpoint_jacobian.x simple)
+
     # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
     add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
     target_link_libraries(generate_test_boozer_chartmap.x netcdf m)
