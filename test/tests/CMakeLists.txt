@@ -683,6 +683,10 @@ add_executable(test_newton_solver_status.x test_newton_solver_status.f90)
 target_link_libraries(test_newton_solver_status.x simple)
 add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
 
+add_executable(test_midpoint_jacobian.x test_midpoint_jacobian.f90)
+target_link_libraries(test_midpoint_jacobian.x simple)
+add_test(NAME test_midpoint_jacobian COMMAND test_midpoint_jacobian.x)
+
 add_executable(test_boundary_event_config.x test_boundary_event_config.f90)
 target_link_libraries(test_boundary_event_config.x simple)
 add_test(NAME test_boundary_event_config_valid
