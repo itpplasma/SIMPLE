@@ -602,13 +602,14 @@ contains
     end subroutine gpu_midpoint_explicit_predictor
 
     subroutine gpu_newton_midpoint(si, f, x, warning_mode, midpoint_maxit, &
-            status, nfev)
+            midpoint_damping, status, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(in) :: si
         type(field_can_t), intent(inout) :: f
         real(dp), intent(inout) :: x(5)
         logical, intent(in) :: warning_mode
         integer, intent(in) :: midpoint_maxit
+        real(dp), intent(in) :: midpoint_damping
         integer, intent(out) :: status, nfev
 
         integer :: kit, info, ir
@@ -651,7 +652,7 @@ contains
                 end if
             end do
             limited = scale < 1.0_dp
-            x = x - scale*residual
+            x = x - scale*midpoint_damping*residual
             if (x(1) > 1.0_dp .or. x(5) > 1.0_dp) then
                 status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
@@ -672,13 +673,14 @@ contains
     end subroutine gpu_newton_midpoint
 
     subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev, &
-            midpoint_maxit, explicit_predictor, predictor)
+            midpoint_maxit, midpoint_damping, explicit_predictor, predictor)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         logical, intent(in) :: warning_mode
         integer, intent(out) :: ierr, nfev
         integer, intent(in) :: midpoint_maxit
+        real(dp), intent(in) :: midpoint_damping
         logical, intent(in) :: explicit_predictor
         real(dp), intent(in), optional :: predictor(5)
 
@@ -728,7 +730,7 @@ contains
             accepted_Aph = f%Aph
             si%pthold = f%pth
             call gpu_newton_midpoint(si, f, x, warning_mode, midpoint_maxit, &
-                step_status, step_nfev)
+                midpoint_damping, step_status, step_nfev)
             nfev = nfev + step_nfev
             if (step_status /= SYMPLECTIC_STEP_OK .and. predictor_used) then
                 si%pthold = accepted_pthold
@@ -736,7 +738,7 @@ contains
                 x(1:4) = si%z
                 x(5) = si%z(1)
                 call gpu_newton_midpoint(si, f, x, warning_mode, midpoint_maxit, &
-                    step_status, step_nfev)
+                    midpoint_damping, step_status, step_nfev)
                 nfev = nfev + step_nfev
             end if
             if (step_status /= SYMPLECTIC_STEP_OK) then
@@ -1076,13 +1078,14 @@ contains
     end subroutine gpu_trace_euler_segment
 
     subroutine gpu_trace_midpoint_segment_once(si, f, nsteps, warning_mode, &
-            midpoint_maxit, explicit_predictor, elapsed, nfev, ierr)
+            midpoint_maxit, midpoint_damping, explicit_predictor, elapsed, nfev, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         integer, intent(in) :: nsteps
         logical, intent(in) :: warning_mode
         integer, intent(in) :: midpoint_maxit
+        real(dp), intent(in) :: midpoint_damping
         logical, intent(in) :: explicit_predictor
         real(dp), intent(out) :: elapsed
         integer, intent(out) :: nfev, ierr
@@ -1107,10 +1110,11 @@ contains
             z_previous = si%z
             if (use_predictor) then
                 call gpu_timestep_midpoint(si, f, warning_mode, ierr, step_nfev, &
-                            midpoint_maxit, explicit_predictor, predictor)
+                            midpoint_maxit, midpoint_damping, explicit_predictor, &
+                            predictor)
             else
                 call gpu_timestep_midpoint(si, f, warning_mode, ierr, step_nfev, &
-                    midpoint_maxit, explicit_predictor)
+                    midpoint_maxit, midpoint_damping, explicit_predictor)
             end if
             nfev = nfev + step_nfev
             elapsed = elapsed + si%dt
@@ -1120,13 +1124,15 @@ contains
     end subroutine gpu_trace_midpoint_segment_once
 
     subroutine gpu_trace_midpoint_segment(si, f, nsteps, warning_mode, &
-            retry_depth, midpoint_maxit, explicit_predictor, elapsed, nfev, ierr)
+            retry_depth, midpoint_maxit, midpoint_damping, explicit_predictor, &
+            elapsed, nfev, ierr)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         integer, intent(in) :: nsteps, retry_depth
         logical, intent(in) :: warning_mode
         integer, intent(in) :: midpoint_maxit
+        real(dp), intent(in) :: midpoint_damping
         logical, intent(in) :: explicit_predictor
         real(dp), intent(out) :: elapsed
         integer, intent(out) :: nfev, ierr
@@ -1158,8 +1164,8 @@ contains
             end if
 
             call gpu_trace_midpoint_segment_once(si, f, nsteps*subdivision, &
-                warning_mode, midpoint_maxit, explicit_predictor, attempt_elapsed, &
-                attempt_nfev, attempt_ierr)
+                warning_mode, midpoint_maxit, midpoint_damping, explicit_predictor, &
+                attempt_elapsed, attempt_nfev, attempt_ierr)
             nfev = nfev + attempt_nfev
             ! Failed attempts consume work but do not advance physical time.
             elapsed = attempt_elapsed
@@ -1537,6 +1543,7 @@ contains
         character(16) :: taylor_value
         character(16) :: retry_value
         character(16) :: predictor_value
+        character(32) :: midpoint_damping_value
         character(32) :: midpoint_maxit_value
         character(32) :: axis_smax_value
         integer :: i, it, ierr, segment_nfev, original, source
@@ -1545,11 +1552,14 @@ contains
         integer :: taylor_length, taylor_status
         integer :: retry_length, retry_env_status, retry_read_status
         integer :: predictor_length, predictor_status
+        integer :: midpoint_damping_length, midpoint_damping_status
+        integer :: midpoint_damping_read_status
         integer :: midpoint_maxit_length, midpoint_maxit_status
         integer :: midpoint_maxit_read_status
         integer :: axis_smax_length, axis_smax_status
         real(dp) :: axis_smax
         integer :: midpoint_retry_depth, midpoint_maxit
+        real(dp) :: midpoint_damping
         logical :: warning_mode, order_work
         logical :: axis_pcart, reuse_hessian, taylor_newton, explicit_predictor
 
@@ -1698,6 +1708,19 @@ contains
         if (midpoint_maxit < 1 .or. midpoint_maxit > 256) &
             error stop 'SIMPLE_GPU_MIDPOINT_MAXIT must be in [1, 256]'
 
+        midpoint_damping = 1.0_dp
+        call get_environment_variable('SIMPLE_GPU_MIDPOINT_DAMPING', &
+            midpoint_damping_value, midpoint_damping_length, midpoint_damping_status)
+        if (midpoint_damping_status == 0 .and. midpoint_damping_length > 0) then
+            read (midpoint_damping_value(:midpoint_damping_length), *, &
+                iostat=midpoint_damping_read_status) midpoint_damping
+            if (midpoint_damping_read_status /= 0) &
+                error stop 'invalid SIMPLE_GPU_MIDPOINT_DAMPING'
+        end if
+        if (.not. (midpoint_damping > 0.0_dp .and. &
+                midpoint_damping <= 1.0_dp)) &
+            error stop 'SIMPLE_GPU_MIDPOINT_DAMPING must be in (0, 1]'
+
         explicit_predictor = .false.
         call get_environment_variable('SIMPLE_GPU_MIDPOINT_EXPLICIT_PREDICTOR', &
             predictor_value, predictor_length, predictor_status)
@@ -1757,7 +1780,7 @@ contains
                 !$acc parallel loop gang vector default(present) &
                 !$acc&   private(elapsed, segment_nfev, ierr) &
                 !$acc&   firstprivate(warning_mode, midpoint_retry_depth, &
-                !$acc&       midpoint_maxit, explicit_predictor, &
+                !$acc&       midpoint_maxit, midpoint_damping, explicit_predictor, &
                 !$acc&       current_time, time_scale, loss_tau) &
                 !$acc&   copy(new_weight)
 #else
@@ -1769,7 +1792,8 @@ contains
                     if (orbit_status(i) /= 0) cycle
                     call gpu_trace_midpoint_segment(si(i), f(i), ntau_macro(it), &
                         warning_mode, midpoint_retry_depth, midpoint_maxit, &
-                        explicit_predictor, elapsed, segment_nfev, ierr)
+                        midpoint_damping, explicit_predictor, elapsed, &
+                        segment_nfev, ierr)
                     nfev(i) = nfev(i) + segment_nfev
                     if (ierr == SYMPLECTIC_STEP_OUTSIDE_DOMAIN) then
                         orbit_status(i) = 1
@@ -1948,10 +1972,10 @@ contains
                     z_previous = si(i)%z
                     if (use_predictor) then
                         call gpu_timestep_midpoint(si(i), f(i), warning_mode, &
-                            ierr, step_nfev, maxit, .false., predictor)
+                            ierr, step_nfev, maxit, 1.0_dp, .false., predictor)
                     else
                         call gpu_timestep_midpoint(si(i), f(i), warning_mode, &
-                            ierr, step_nfev, maxit, .false.)
+                            ierr, step_nfev, maxit, 1.0_dp, .false.)
                     end if
                     nfev(i) = nfev(i) + step_nfev
                     elapsed = elapsed + si(i)%dt
