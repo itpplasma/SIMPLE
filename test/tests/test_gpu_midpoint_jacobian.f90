@@ -5,7 +5,7 @@ program test_gpu_midpoint_jacobian
     use field_can_boozer, only: eval_field_booz
     use orbit_symplectic_base, only: symplectic_integrator_t
     use simple_gpu, only: gpu_midpoint_system, gpu_midpoint_newton_update, &
-        gpu_midpoint_residual_decreased
+        gpu_midpoint_residual_decreased, gpu_midpoint_newton_update_lm
 
     implicit none
 
@@ -65,6 +65,7 @@ program test_gpu_midpoint_jacobian
     if (max_error > 5.0e-4_dp) &
         error stop 'GPU midpoint Jacobian oracle failed'
     call test_scaled_newton_update()
+    call test_lm_newton_update()
     call test_residual_decrease_rule()
     print *, 'test_gpu_midpoint_jacobian: PASSED'
 
@@ -106,6 +107,25 @@ contains
         if (residual_error > 1.0e-9_dp) &
             error stop 'scaled midpoint Newton solve residual failed'
     end subroutine test_scaled_newton_update
+
+    subroutine test_lm_newton_update()
+        real(dp) :: jacobian(5, 5), rhs(5), variable_scale(5), correction(5)
+        real(dp), parameter :: lambda = 1.0e-2_dp
+        integer :: i, info
+
+        jacobian = 0.0_dp
+        do i = 1, 5
+            jacobian(i, i) = 1.0_dp
+        end do
+        rhs = [1.0_dp, -2.0_dp, 0.5_dp, 3.0_dp, -1.0_dp]
+        variable_scale = [1.0e-8_dp, 1.0e8_dp, 1.0e-4_dp, 1.0e4_dp, 1.0_dp]
+
+        call gpu_midpoint_newton_update_lm(jacobian, rhs, variable_scale, &
+            lambda, correction, info)
+        if (info /= 0) error stop 'midpoint LM solve failed'
+        if (maxval(abs(correction - rhs/(1.0_dp + lambda))) > 1.0e-10_dp) &
+            error stop 'midpoint LM solve did not apply the independent damping'
+    end subroutine test_lm_newton_update
 
     subroutine test_residual_decrease_rule()
         real(dp) :: current_residual(5), trial_residual(5), tolref(5)
