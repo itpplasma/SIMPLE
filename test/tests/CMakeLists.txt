@@ -745,6 +745,16 @@ add_test(NAME test_bder_from_splines
 set_tests_properties(test_bder_from_splines PROPERTIES
     LABELS "integration")
 
+add_executable(test_splined_kernel_bench.x test_splined_kernel_bench.f90)
+target_link_libraries(test_splined_kernel_bench.x simple)
+add_dependencies(test_splined_kernel_bench.x ncsx_test_data)
+add_test(NAME test_splined_kernel_bench
+    COMMAND test_splined_kernel_bench.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_splined_kernel_bench PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 120)
+
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
 add_dependencies(test_refcoords_file_detection.x chartmap_test_data)
