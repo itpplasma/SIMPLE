@@ -1,6 +1,16 @@
 #ifndef SIMPLE_CUDA_FIRM_RK54_H
 #define SIMPLE_CUDA_FIRM_RK54_H
 
+/*
+ * Provenance:
+ *
+ * The Landreman-compatible interface declared here belongs to an
+ * independent SIMPLE implementation of the FIRM3D tracing protocol. No
+ * FIRM3D source code was copied. See the reference implementation at
+ * https://github.com/ColumbiaStellaratorTheory/firm3d and the complete
+ * upstream MIT notice in LICENSES/FIRM3D-MIT.txt.
+ */
+
 #include <stddef.h>
 
 #ifdef __cplusplus

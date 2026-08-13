@@ -1,4 +1,12 @@
 module simple_gpu
+    ! Provenance:
+    ! The trace_orbits_gpu_landreman path is an independent SIMPLE
+    ! implementation of the FIRM3D/Landreman tracing protocol. No FIRM3D
+    ! source code was copied. Reference implementation:
+    ! https://github.com/ColumbiaStellaratorTheory/firm3d
+    ! FIRM3D is MIT-licensed, Copyright (c) 2025 ColumbiaStellaratorTheory;
+    ! the complete upstream notice is in LICENSES/FIRM3D-MIT.txt.
+
     ! OpenACC GPU offload of the default orbit-tracing hot path:
     ! Boozer field (isw_field_type=2), one particle per GPU thread. The
     ! fixed-step symplectic Euler path and allocation-free adaptive RK5(4)

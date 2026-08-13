@@ -1,3 +1,20 @@
+/*
+ * Provenance:
+ *
+ * This file is an independent SIMPLE implementation of the FIRM3D
+ * Landreman GPU tracing protocol. It was written from the documented
+ * equations and protocol; no FIRM3D source code was copied into this file.
+ * The standard Dormand--Prince tableau and cubic interpolation weights are
+ * standard numerical formulas and are not FIRM3D-specific.
+ *
+ * Reference implementation: FIRM3D (Fast Ion Reduced Models in 3D),
+ * https://github.com/ColumbiaStellaratorTheory/firm3d
+ *
+ * FIRM3D is MIT-licensed, Copyright (c) 2025 ColumbiaStellaratorTheory.
+ * The complete upstream notice is preserved in
+ * LICENSES/FIRM3D-MIT.txt.
+ */
+
 #include "simple_cuda_firm_rk54.h"
 
 #include <cuda_runtime.h>
