@@ -171,8 +171,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "OpenACC memory model for libneo" FORCE)
         set(FORTNUM_GPU_BACKEND OPENACC CACHE STRING
             "GPU backend for Fortnum" FORCE)
-        set(SIMPLE_DETERMINISTIC_FP ON CACHE BOOL
-            "Disable fast-math for reproducible floating-point" FORCE)
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
             $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
