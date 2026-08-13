@@ -518,8 +518,8 @@ All canonical coordinate systems transform to a form where:
 - A_theta, A_phi independent of angles
 - Uses `splint_boozer_coord()` from libneo
 
-The OpenACC adaptive-RK path evaluates the same canonical Boozer field from
-the device-resident spline coefficients. Per-particle initialization extracts
+The adaptive-RK path evaluates the same canonical Boozer field from the
+device-resident spline coefficients. Per-particle initialization extracts
 only the invariant magnetic moment and normalized gyroradius; RK stages rebuild
 the transient field values on the device instead of copying the full
 `field_can_t` object into every orbit thread. `test_gpu_orbit_bench` compares
