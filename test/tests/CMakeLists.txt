@@ -894,16 +894,10 @@ set_tests_properties(test_gpu_midpoint_bench PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench
     TIMEOUT 120)
 
-add_test(NAME test_gpu_landreman_segments
-    COMMAND ${Python3_EXECUTABLE}
-        ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_landreman_segments.py
-        $<TARGET_FILE:simple.x>
-        ${WOUT_FILE}
-        ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt)
-set_tests_properties(test_gpu_landreman_segments PROPERTIES
-    LABELS "integration;gpu"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    TIMEOUT 120)
+# The former segmented Landreman test exercised the legacy OpenACC production
+# path with an ordinary VMEC file. Native CUDA production requires a compact
+# Boozer RK chartmap, so segmented CUDA accounting is covered by
+# test_cuda_native_bridge instead.
 
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)

@@ -50,5 +50,5 @@ counts, loss steps, and loss times. Multiple devices are experimental; use one
 process per GPU unless device-local field tables have been arranged.
 
 The native CUDA tests are `test_cuda_native_rk54` and
-`test_cuda_native_bridge`. `test_gpu_landreman_segments` checks the segmented
-loss accounting when a device backend is available.
+`test_cuda_native_bridge`; the latter checks segmented loss accounting through
+the Fortran-to-CUDA production bridge.
