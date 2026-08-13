@@ -345,7 +345,7 @@ contains
             call print_phase_time('Boozer magfie initialization completed')
             end if
 
-            if (startmode /= 2) then
+            if (.not. gpu_compact_init) then
                 call init_starting_surf
                 call print_phase_time('Starting surface initialization completed')
             end if
