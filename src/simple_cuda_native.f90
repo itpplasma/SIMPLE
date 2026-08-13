@@ -14,7 +14,9 @@ module simple_cuda_native
     private
 
     integer(c_int), parameter :: CUDA_CASH_KARP = 1_c_int
-    integer(c_int), parameter :: CUDA_DORMAND_PRINCE = 2_c_int
+    ! The production DOPRI entry point is the tuned fifth-order/PI controller.
+    ! Keep the numeric value stable for callers compiled against the old name.
+    integer(c_int), parameter :: CUDA_DORMAND_PRINCE_TUNED = 2_c_int
     integer, parameter, public :: CUDA_NATIVE_PROFILE_COUNT = 5
 
     public :: trace_orbits_cuda_native_landreman
@@ -129,7 +131,7 @@ contains
         if (method == CASH_KARP) then
             cuda_method = CUDA_CASH_KARP
         else if (method == DORMAND_PRINCE) then
-            cuda_method = CUDA_DORMAND_PRINCE
+            cuda_method = CUDA_DORMAND_PRINCE_TUNED
         else
             error stop 'native CUDA RK supports only Cash-Karp and Dormand-Prince'
         end if

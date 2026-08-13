@@ -10,7 +10,10 @@ extern "C" {
 
 enum {
   SIMPLE_CUDA_NATIVE_CASH_KARP = 1,
-  SIMPLE_CUDA_NATIVE_DORMAND_PRINCE = 2,
+  /* Public DOPRI production dispatch uses the tuned PI controller. */
+  SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED = 2,
+  /* Keep the old spelling and numeric ABI for existing callers. */
+  SIMPLE_CUDA_NATIVE_DORMAND_PRINCE = SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED,
 };
 
 enum {

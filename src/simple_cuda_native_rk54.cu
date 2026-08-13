@@ -231,7 +231,7 @@ segment_limits(const float *__restrict__ field_table,
 }
 
 template <int Method> __device__ __forceinline__ int stage_count() {
-  return Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE ? 7 : 6;
+  return Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED ? 7 : 6;
 }
 
 template <int Method>
@@ -241,7 +241,7 @@ __device__ __forceinline__ void stage_state(int stage, const double y[4],
 #pragma unroll
   for (int q = 0; q < 4; ++q)
     trial[q] = y[q];
-  if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+  if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
     switch (stage) {
     case 1:
 #pragma unroll
@@ -322,7 +322,7 @@ __device__ __forceinline__ double
 finish_attempt(const double y[4], double h, const double k[7][4],
                double trial[4], double tolerance, double momentum_atol_scale) {
   double error[4];
-  if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+  if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
 #pragma unroll
     for (int q = 0; q < 4; ++q) {
       trial[q] = y[q] + h * (35.0 * k[0][q] / 384.0 + 500.0 * k[2][q] / 1113.0 +
@@ -400,7 +400,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
          ++attempt) {
       h = fmin(h, duration - segment_time);
       double k[7][4];
-      if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+      if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
         if (!have_first_derivative) {
           canonical_rhs(field_table, profile_table, geometry, y, mu, ro0,
                         first_derivative);
@@ -432,7 +432,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
 
       const double error_floor = fmax(error, 1.0e-300);
       double factor;
-      if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+      if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
         // Use the embedded fourth-order error exponent and a PI controller.
         // The old cbrt controller was overly aggressive for DOPRI5 and led to
         // avoidable rejected attempts on long, segmented traces.
@@ -464,7 +464,7 @@ __device__ void trace_particle(const float *__restrict__ field_table,
         previous_error = fmax(error, 1.0e-10);
         first_step = false;
         after_reject = false;
-        if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
+        if constexpr (Method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
 #pragma unroll
           for (int q = 0; q < 4; ++q)
             first_derivative[q] = k[6][q];
@@ -535,7 +535,7 @@ extern "C" int simple_cuda_native_rk54(
   if (profile_ms)
     std::fill(profile_ms, profile_ms + SIMPLE_CUDA_NATIVE_PROFILE_COUNT, 0.0);
   if (method != SIMPLE_CUDA_NATIVE_CASH_KARP &&
-      method != SIMPLE_CUDA_NATIVE_DORMAND_PRINCE)
+      method != SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED)
     return 1;
   if (particle_count <= 0 || !field_table || !profile_table || !point_count ||
       !x_min || !inv_h_step || !period || !inv_period || !initial_z || !mu ||
@@ -687,8 +687,8 @@ extern "C" int simple_cuda_native_rk54(
         error = cudaEventRecord(kernel_start);
       const int blocks = (active_count + kThreads - 1) / kThreads;
       if (error == cudaSuccess) {
-        if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
-          trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE><<<blocks, kThreads>>>(
+        if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
+          trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED><<<blocks, kThreads>>>(
               field_device, profile_device, geometry, active_count,
               initial_device, mu_device, ro0_device, final_device, loss_device,
               status_device, nfev_device);
@@ -797,8 +797,8 @@ extern "C" int simple_cuda_native_rk54(
         error = cudaEventRecord(kernel_start);
       const int blocks = (active_count + kThreads - 1) / kThreads;
       if (error == cudaSuccess) {
-        if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE) {
-          trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE><<<blocks, kThreads>>>(
+        if (method == SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED) {
+          trace_kernel<SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED><<<blocks, kThreads>>>(
               field_device, profile_device, geometry, active_count,
               initial_device, mu_device, ro0_device, final_device, loss_device,
               status_device, nfev_device);

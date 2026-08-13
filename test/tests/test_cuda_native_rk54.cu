@@ -207,7 +207,8 @@ int exercise_early_loss_probe(int method) {
 
 int main() {
   for (const int method :
-       {SIMPLE_CUDA_NATIVE_DORMAND_PRINCE, SIMPLE_CUDA_NATIVE_CASH_KARP}) {
+       {SIMPLE_CUDA_NATIVE_DORMAND_PRINCE_TUNED,
+        SIMPLE_CUDA_NATIVE_CASH_KARP}) {
     const int result = exercise_method(method);
     if (result != 0)
       return result;
