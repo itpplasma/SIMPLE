@@ -892,12 +892,9 @@ contains
         backend_name = trim(gpu_backend)
         select case (trim(backend_name))
         case ('auto')
-#ifdef SIMPLE_ENABLE_CUDA_NATIVE
             backend_name = 'cuda-native'
-#else
-            backend_name = 'openacc'
-#endif
         case ('openacc')
+            error stop 'gpu_backend=openacc is not supported; build with SIMPLE_ENABLE_CUDA'
         case ('cuda-native')
 #ifndef SIMPLE_ENABLE_CUDA_NATIVE
             error stop 'gpu_backend=cuda-native requires SIMPLE_ENABLE_CUDA'
