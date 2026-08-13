@@ -147,12 +147,10 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(SIMPLE_NVHPC)
 
     if(SIMPLE_ENABLE_OPENACC)
-        # Memory model for OpenACC. "managed" places allocatables in CUDA
-        # managed memory so derived-type allocatable components (e.g. batch
-        # spline %coeff) stay coherent host<->device without manual deep-copy
-        # update clauses, which nvfortran does not perform for such components.
-        # "unified" additionally covers module/static data (needs HMM driver).
-        set(SIMPLE_OPENACC_MEM "managed" CACHE STRING
+        # Memory model for OpenACC. "unified" covers module/static data as well
+        # as allocatable derived-type components (needs an HMM-capable driver).
+        # "managed" is a lighter alternative on newer NVHPC/libneo versions.
+        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")

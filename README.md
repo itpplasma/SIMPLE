@@ -154,7 +154,7 @@ cmake --build build-gpu -j
 ```
 
 The OpenACC option propagates the matching OpenACC settings to libneo and
-Fortnum. The default memory model is `managed`. Override
+Fortnum. The default memory model is `unified`. Override
 `SIMPLE_OPENACC_MEM` only when the target system requires it.
 
 Run the configured input:
