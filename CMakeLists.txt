@@ -239,6 +239,24 @@ if(SIMPLE_DETERMINISTIC_FP)
     set(LIBNEO_DETERMINISTIC_FP ON CACHE BOOL
         "Use deterministic floating-point options in libneo" FORCE)
 endif()
+
+# fortnum provides the root finder and allocation-free GPU RK5(4) device
+# integrator used by SIMPLE. libneo declares fortnum as well, so this must be
+# declared first: FetchContent keeps the first declaration and silently ignores
+# later pins. Without this ordering, a clean clone can resolve an older
+# libneo-selected fortnum and miss fortnum_ode_rk54_device.mod.
+if(NOT TARGET fortnum)
+    include(FetchContent)
+    FetchContent_Declare(
+        fortnum
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+        # Temporary dependency pin for the tuned-DOPRI PR; update to the
+        # resulting Fortnum main commit after lazy-fortran/fortnum#90 merges.
+        GIT_TAG b382eff4d2578570c05cdc0b8471e11ce61fb8bd
+    )
+    FetchContent_MakeAvailable(fortnum)
+endif()
+
 find_or_fetch(libneo)
 
 # Consume the scientific-I/O target selected by libneo. The variable fallback
@@ -294,19 +312,6 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(USE_FORTPLOT)
 else()
     message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")
-endif()
-
-# fortnum provides the multidimensional root finder (multiroot_hybrids) that
-# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi.
-if(NOT TARGET fortnum)
-    include(FetchContent)
-    FetchContent_Declare(
-        fortnum
-        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        # Allocation-free GPU RK5(4), including the tuned DOPRI controller.
-        GIT_TAG 1974453a8f39985ddff19fba0f92bccf71c80b22
-    )
-    FetchContent_MakeAvailable(fortnum)
 endif()
 
 if (SIMPLE_TESTING)
