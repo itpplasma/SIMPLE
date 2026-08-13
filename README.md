@@ -125,90 +125,72 @@ Numerically unresolved orbits are reported separately from physical losses.
 
 ## GPU builds and runs
 
-SIMPLE has two NVIDIA GPU backends:
+GPU runs are configured in `simple.in`. No GPU environment variables are
+needed. Set `gpu_mode = 'production'` and use Boozer guiding-center tracing
+(`isw_field_type = 2`) without collisions, walls, orbit output, or classifiers:
 
-- OpenACC offloads the Fortran tracing path and supports Euler, midpoint,
-  Cash-Karp, and tuned DOPRI tracing.
-- Native CUDA builds the direct CUDA RK kernels. Its production driver supports
-  Cash-Karp and DOPRI. `SIMPLE_GPU_METHOD=dopri` selects the tuned fifth-order
-  Dormand-Prince controller and uses the `relerr` tolerance from `simple.in`.
+```fortran
+gpu_mode = 'production'
+gpu_backend = 'auto'       ! native CUDA if built, otherwise OpenACC
+gpu_method = 'auto'        ! tuned DOPRI on native CUDA, Euler on OpenACC
+gpu_landreman = .True.     ! segmented alpha-loss objective
+```
 
-GPU production tracing is selected with `SIMPLE_GPU_RUN=1`. The input must use
-Boozer guiding-center tracing (`isw_field_type=2`) without collisions, walls,
-orbit output, or classifier options. The tolerance is the `relerr` value from
-`simple.in`.
+OpenACC supports Euler, midpoint, Cash-Karp, and tuned DOPRI. Native CUDA
+supports Cash-Karp and tuned DOPRI. The tolerance is always `relerr` from the
+same `simple.in` file. Unsupported combinations stop with an error.
 
 ### OpenACC build
 
 The OpenACC path requires the NVIDIA HPC SDK, `nvfortran`, `nvc`, a CUDA-capable
-GPU, and NetCDF/HDF5 modules built with the same `nvfortran` compiler. Build
-with a consistent memory model across SIMPLE, libneo, and Fortnum:
+GPU, and NetCDF/HDF5 modules built with the same `nvfortran` compiler:
 
 ```bash
 cmake -S . -B build-gpu -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_Fortran_COMPILER=nvfortran \
   -DCMAKE_C_COMPILER=nvc \
-  -DSIMPLE_DETERMINISTIC_FP=ON \
-  -DSIMPLE_ENABLE_OPENACC=ON \
-  -DENABLE_OPENACC=ON \
-  -DSIMPLE_OPENACC_MEM=unified \
-  -DLIBNEO_OPENACC_MEM=unified \
-  -DFORTNUM_GPU_BACKEND=OPENACC
+  -DSIMPLE_ENABLE_OPENACC=ON
 cmake --build build-gpu -j
 ```
 
-Run the example on the GPU with:
+The OpenACC option propagates the matching OpenACC settings to libneo and
+Fortnum. The default memory model is `managed`. Override
+`SIMPLE_OPENACC_MEM` only when the target system requires it.
+
+Run the configured input:
 
 ```bash
-(cd run && SIMPLE_GPU_RUN=1 ../build-gpu/simple.x simple.in)
+(cd run && ../build-gpu/simple.x simple.in)
 ```
 
-Use `SIMPLE_GPU_METHOD=dopri` or `SIMPLE_GPU_METHOD=cash-karp` to select an
-adaptive RK method. Set `SIMPLE_GPU_LANDREMAN=1` for the segmented,
-exponentially weighted loss objective used in the FIRM3D comparison. Its
-controls are `SIMPLE_GPU_T_BLOCK`, `SIMPLE_GPU_LOSS_TAU`,
-`SIMPLE_GPU_MAXLOSS`, and `SIMPLE_GPU_MIN_TIMESTEP`.
+Set `gpu_method` explicitly when comparing methods. `gpu_num_devices` defaults
+to one. Increase it only after checking the multi-GPU limitations in
+[DOC/gpu-openacc.md](DOC/gpu-openacc.md).
 
-For Boozer Euler or midpoint inputs, `SIMPLE_GPU_BENCH=1` compares the OpenACC
-kernel with the CPU path using identical particles. The default uses one GPU.
-`SIMPLE_GPU_NUM_DEVICES=N` enables the experimental multi-GPU split. See
-[DOC/gpu-openacc.md](DOC/gpu-openacc.md) for memory-model requirements,
-validation, and measured performance.
+For the OpenACC CPU/GPU agreement test, use `gpu_mode = 'benchmark'` with
+`integmode = 1` or `3`.
 
 ### Native CUDA build
 
-The native CUDA path requires the CUDA toolkit and a C++17 compiler. It can be
-built alongside the normal GNU Fortran SIMPLE build:
+The native CUDA path requires the CUDA toolkit, a C++17 compiler, and a normal
+GNU Fortran build:
 
 ```bash
 cmake -S . -B build-cuda -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DSIMPLE_DETERMINISTIC_FP=ON \
   -DSIMPLE_ENABLE_CUDA=ON
 cmake --build build-cuda -j
 ```
 
-Run the native CUDA DOPRI path with the Landreman-style segmented objective:
+With the `simple.in` settings above, run:
 
 ```bash
-(cd run && \
-  SIMPLE_GPU_RUN=1 \
-  SIMPLE_GPU_BACKEND=cuda-native \
-  SIMPLE_GPU_METHOD=dopri \
-  SIMPLE_GPU_LANDREMAN=1 \
-  ../build-cuda/simple.x simple.in)
+(cd run && ../build-cuda/simple.x simple.in)
 ```
 
-The native backend accepts `cash-karp` and `dopri`. It requires
-`SIMPLE_GPU_LANDREMAN=1`, uses the Boozer RK field tables, and reports separate
-CUDA phase timings plus a C-ABI total. Set
-`SIMPLE_GPU_START_COORDINATES=boozer` only when `start.dat` contains Boozer
-coordinates. The default `reference` mode converts ordinary SIMPLE starts.
-
-To write a run profile, set `SIMPLE_GPU_PARTICLE_PROFILE=/path/particles.csv`.
-The CSV records initial and final states, field-evaluation counts, loss steps,
-and loss times.
+Set `gpu_start_coordinates = 'boozer'` only when `start.dat` already contains
+Boozer coordinates. Set `gpu_particle_profile` to write the per-particle CSV.
+The Landreman controls are `gpu_t_block`, `gpu_loss_tau`, `gpu_maxloss`, and
+`gpu_min_timestep`.
 
 ## Boozer chartmaps
 

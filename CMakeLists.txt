@@ -152,7 +152,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         # spline %coeff) stay coherent host<->device without manual deep-copy
         # update clauses, which nvfortran does not perform for such components.
         # "unified" additionally covers module/static data (needs HMM driver).
-        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
+        set(SIMPLE_OPENACC_MEM "managed" CACHE STRING
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
@@ -166,6 +166,13 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
         endif()
         message(STATUS "OpenACC enabled for NVHPC compiler (arch:${SIMPLE_OPENACC_GPU_ARCH}, mem:${SIMPLE_OPENACC_MEM})")
+        set(ENABLE_OPENACC ON CACHE BOOL "Enable OpenACC compiler flags." FORCE)
+        set(LIBNEO_OPENACC_MEM "${SIMPLE_OPENACC_MEM}" CACHE STRING
+            "OpenACC memory model for libneo" FORCE)
+        set(FORTNUM_GPU_BACKEND OPENACC CACHE STRING
+            "GPU backend for Fortnum" FORCE)
+        set(SIMPLE_DETERMINISTIC_FP ON CACHE BOOL
+            "Disable fast-math for reproducible floating-point" FORCE)
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
             $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
