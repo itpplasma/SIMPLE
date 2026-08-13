@@ -62,7 +62,7 @@ output_error = .False. ! Output additional error diagnostics
 
 ! GPU execution. Leave gpu_mode='off' for the normal CPU/OpenMP path.
 ! gpu_mode = 'production' or 'benchmark'
-! gpu_backend = 'cuda-native' (or explicitly 'openacc' for the legacy path)
+! gpu_backend = 'cuda-native'
 ! gpu_method = 'dopri' (or 'cash-karp' for native CUDA)
 ! gpu_start_coordinates = 'reference' or 'boozer'
 ! gpu_landreman = .True. uses the segmented alpha-loss objective.

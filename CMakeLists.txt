@@ -82,6 +82,11 @@ option(SIMPLE_ENABLE_CUDA
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 
 if(SIMPLE_ENABLE_CUDA)
+    # CUDA 12 no longer provides a useful default for the Turing-and-newer
+    # devices used by the native path. Keep the public build to one switch,
+    # while allowing a site to override this cache value for another GPU.
+    set(CMAKE_CUDA_ARCHITECTURES 75 CACHE STRING
+        "CUDA architectures for native SIMPLE kernels")
     enable_language(CXX)
     include(CheckLanguage)
     check_language(CUDA)
