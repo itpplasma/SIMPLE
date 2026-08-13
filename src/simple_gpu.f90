@@ -37,6 +37,7 @@ module simple_gpu
     use boozer_sub, only: boozer_state, splint_boozer_rk_device, &
         BOOZER_SECDERS_RADIAL_MIXED
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
+    use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
     use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
@@ -860,9 +861,7 @@ contains
         real(dp) :: y_local(4), hmax_local, momentum_atol_scale
         real(dp) :: new_weight, weighted_losses
         real(dp) :: loss_detection_tolerance, pilot_fraction, pilot_duration
-        character(16) :: ordering_value, pilot_value
         integer :: i, ierr, segment_nfev, active_count, original
-        integer :: ordering_length, ordering_status, pilot_length, pilot_status
         logical :: order_work
 
         if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
@@ -898,25 +897,13 @@ contains
         current_time = 0.0_dp
         loss_detection_tolerance = 1.0e-12_dp/time_scale
 
-        order_work = .true.
-        call get_environment_variable('SIMPLE_GPU_WORK_ORDER', ordering_value, &
-            ordering_length, ordering_status)
-        if (ordering_status == 0 .and. ordering_length > 0) &
-            order_work = trim(adjustl(ordering_value(:ordering_length))) /= '0' .and. &
-                trim(adjustl(ordering_value(:ordering_length))) /= 'none'
+        order_work = gpu_work_order
 #ifndef _OPENACC
         order_work = .false.
 #endif
-        pilot_fraction = 0.04_dp
-        call get_environment_variable('SIMPLE_GPU_PILOT_FRACTION', pilot_value, &
-            pilot_length, pilot_status)
-        if (pilot_status == 0 .and. pilot_length > 0) then
-            read (pilot_value(:pilot_length), *, iostat=pilot_status) pilot_fraction
-            if (pilot_status /= 0) &
-                error stop 'invalid SIMPLE_GPU_PILOT_FRACTION'
-        end if
+        pilot_fraction = gpu_pilot_fraction
         if (pilot_fraction < 0.0_dp .or. pilot_fraction > 0.25_dp) &
-            error stop 'SIMPLE_GPU_PILOT_FRACTION must be in [0, 0.25]'
+            error stop 'gpu_pilot_fraction must be in [0, 0.25]'
         if (.not. order_work .or. npart < 1024) pilot_fraction = 0.0_dp
         if (order_work) then
             do i = 1, npart
@@ -1189,9 +1176,7 @@ contains
         real(dp) :: total_duration, current_time, segment_duration
         real(dp) :: elapsed, new_weight, weighted_losses, expected_duration
         real(dp) :: schedule_tolerance
-        character(16) :: ordering_value
         integer :: i, it, ierr, segment_nfev, original, source
-        integer :: ordering_length, ordering_status
         logical :: warning_mode, order_work
 
         if (block_duration <= 0.0_dp .or. time_scale <= 0.0_dp .or. &
@@ -1229,12 +1214,7 @@ contains
             end if
         end do
 
-        order_work = .true.
-        call get_environment_variable('SIMPLE_GPU_WORK_ORDER', ordering_value, &
-            ordering_length, ordering_status)
-        if (ordering_status == 0 .and. ordering_length > 0) &
-            order_work = trim(adjustl(ordering_value(:ordering_length))) /= '0' .and. &
-                trim(adjustl(ordering_value(:ordering_length))) /= 'none'
+        order_work = gpu_work_order
 #ifndef _OPENACC
         order_work = .false.
 #endif
@@ -1602,17 +1582,13 @@ contains
         integer :: ngpu, navail, dev, i0, i1
         real(dp), allocatable :: loss_time(:)
         integer, allocatable :: nfev(:)
-        character(16) :: env_val
-        integer :: env_len, env_stat, req
+        integer :: req
 
         ! Number of devices to use. Default 1: with -gpu=mem:unified the spline
         ! coefficient array is shared and migrates between devices on access, so
         ! splitting across cards thrashes. Real multi-GPU needs a per-device
-        ! resident copy of the read-only splines. Opt in with SIMPLE_GPU_NUM_DEVICES.
-        req = 1
-        call get_environment_variable('SIMPLE_GPU_NUM_DEVICES', env_val, env_len, env_stat)
-        if (env_stat == 0 .and. env_len > 0) read (env_val, *, iostat=env_stat) req
-        if (env_stat /= 0 .or. req < 1) req = 1
+        ! resident copy of the read-only splines. Opt in with gpu_num_devices.
+        req = gpu_num_devices
 
         ngpu = 1
         allocate (loss_time(npart), nfev(npart))

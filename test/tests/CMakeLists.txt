@@ -875,9 +875,7 @@ configure_file(
     COPYONLY)
 
 add_test(NAME test_gpu_orbit_bench
-    COMMAND ${CMAKE_COMMAND} -E env
-        SIMPLE_GPU_BENCH=1
-        $<TARGET_FILE:simple.x>
+    COMMAND $<TARGET_FILE:simple.x>
         test_gpu_orbit_bench.in
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_gpu_orbit_bench PROPERTIES
@@ -887,9 +885,7 @@ set_tests_properties(test_gpu_orbit_bench PROPERTIES
     TIMEOUT 120)
 
 add_test(NAME test_gpu_midpoint_bench
-    COMMAND ${CMAKE_COMMAND} -E env
-        SIMPLE_GPU_BENCH=1
-        $<TARGET_FILE:simple.x>
+    COMMAND $<TARGET_FILE:simple.x>
         test_gpu_midpoint_bench.in
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_gpu_midpoint_bench PROPERTIES

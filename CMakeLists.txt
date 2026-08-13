@@ -147,18 +147,15 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(SIMPLE_NVHPC)
 
     if(SIMPLE_ENABLE_OPENACC)
-        # Memory model for OpenACC. "managed" places allocatables in CUDA
-        # managed memory so derived-type allocatable components (e.g. batch
-        # spline %coeff) stay coherent host<->device without manual deep-copy
-        # update clauses, which nvfortran does not perform for such components.
-        # "unified" additionally covers module/static data (needs HMM driver).
-        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
+        # Memory model for OpenACC. "managed" is supported by the standard
+        # cluster GPUs. "unified" additionally covers module/static data but
+        # needs an HMM-capable driver and is an explicit override.
+        set(SIMPLE_OPENACC_MEM "managed" CACHE STRING
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
         # NVHPC before 24.x spells managed memory as -gpu=managed. Newer
-        # compilers reject that legacy spelling when another target uses the
-        # explicit mem:managed form, so keep every target on one spelling.
+        # compilers use the explicit mem:managed form.
         if(CMAKE_Fortran_COMPILER_VERSION VERSION_LESS "24.0" AND
            SIMPLE_OPENACC_MEM STREQUAL "managed")
             set(_simple_openacc_mem_option "managed")
@@ -166,15 +163,19 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
         endif()
         message(STATUS "OpenACC enabled for NVHPC compiler (arch:${SIMPLE_OPENACC_GPU_ARCH}, mem:${SIMPLE_OPENACC_MEM})")
+        set(SIMPLE_OPENACC_GPU_FLAG
+            "-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}")
+        set(ENABLE_OPENACC ON CACHE BOOL "Enable OpenACC compiler flags." FORCE)
+        set(LIBNEO_OPENACC_MEM "${SIMPLE_OPENACC_MEM}" CACHE STRING
+            "OpenACC memory model for libneo" FORCE)
+        set(FORTNUM_GPU_BACKEND OPENACC CACHE STRING
+            "GPU backend for Fortnum" FORCE)
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
         )
         add_link_options(
             -acc
-            -gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}
         )
     endif()
 endif()

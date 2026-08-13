@@ -1,107 +1,95 @@
-# OpenACC GPU tracing
+# GPU tracing
 
-SIMPLE can offload the default orbit-tracing hot path to NVIDIA GPUs with
-OpenACC. The offloaded configuration is the Boozer field (`isw_field_type=2`)
-with the explicit-implicit symplectic Euler integrator
-(`integmode=EXPL_IMPL_EULER`), no collisions, wall, or classifiers. Every other
-configuration keeps the existing CPU path.
+SIMPLE's GPU production path is configured in the `config` namelist in
+`simple.in`. The environment does not select the executable path or integrator.
 
-One particle runs per GPU thread. The integration is double precision, as the
-symplectic scheme requires; the parallelism over particles is what the GPU
-exploits, not single-orbit vectorization.
+```fortran
+gpu_mode = 'production'       ! off, production, or benchmark
+gpu_backend = 'auto'          ! native CUDA if built, otherwise OpenACC
+gpu_method = 'auto'           ! tuned DOPRI on native CUDA, Euler on OpenACC
+gpu_landreman = .True.        ! segmented alpha-loss objective
+gpu_start_coordinates = 'reference'
+```
 
-## Requirements
+The production input must use Boozer guiding-center tracing
+(`isw_field_type = 2`) without collisions, walls, orbit output, or classifier
+options. `relerr` is used as the integration tolerance. The supported methods
+are:
 
-- NVIDIA HPC SDK (`nvfortran`), tested with 26.3.
-- A CUDA-capable GPU. Tested on RTX 5060 Ti (cc120, Blackwell).
-- NetCDF-Fortran and HDF5-Fortran built with `nvfortran` (compiler-specific
-  `.mod` files; the distro packages are built with gfortran and are unusable).
-  `nf-config` on `PATH` must point at the nvfortran build.
+| Backend | Methods | `gpu_method = 'auto'` |
+| --- | --- | --- |
+| OpenACC | Euler, midpoint, Cash-Karp, tuned DOPRI | explicit-implicit Euler |
+| Native CUDA | Cash-Karp, tuned DOPRI | tuned DOPRI |
 
-libneo must be built from a branch carrying the matching OpenACC fixes (managed
-memory for batch splines, `acc routine seq` on the single-point evaluators, the
-hdf5_tools nvfortran compile fix).
+## OpenACC build
 
-## Build
+Requirements:
+
+- NVIDIA HPC SDK (`nvfortran`, `nvc`), tested with 26.3.
+- A CUDA-capable GPU.
+- NetCDF-Fortran and HDF5-Fortran built with `nvfortran`.
+
+The one feature switch propagates matching OpenACC settings to libneo and
+Fortnum. The default memory model is `managed`.
 
 ```bash
 cmake -S . -B build-gpu -G Ninja \
-  -DCMAKE_Fortran_COMPILER=nvfortran -DCMAKE_C_COMPILER=nvc \
-  -DCMAKE_BUILD_TYPE=Release -DSIMPLE_DETERMINISTIC_FP=ON \
-  -DSIMPLE_ENABLE_OPENACC=ON -DENABLE_OPENACC=ON \
-  -DLIBNEO_OPENACC_MEM=unified -DFORTNUM_GPU_BACKEND=OPENACC
+  -DCMAKE_Fortran_COMPILER=nvfortran \
+  -DCMAKE_C_COMPILER=nvc \
+  -DSIMPLE_ENABLE_OPENACC=ON
 cmake --build build-gpu -j
+(cd run && ../build-gpu/simple.x simple.in)
 ```
 
-`SIMPLE_DETERMINISTIC_FP=ON` is required: the default `-fast -Mfprelaxed`
-relaxes reciprocals and square roots, which breaks convergence of the
-symplectic Newton iteration.
+Set `SIMPLE_OPENACC_MEM` at configure time only when the target system needs a
+different memory model. SIMPLE passes the same value to libneo.
 
-`SIMPLE_OPENACC_MEM` (default `unified`) selects the memory model. `unified`
-needs an HMM-capable driver and keeps module statics plus allocatable spline
-coefficients coherent across host and devices. `LIBNEO_OPENACC_MEM` must match.
-
-The memory model matters for correctness, not only speed: without managed or
-unified memory, `nvfortran` does not copy the allocatable `coeff` component of a
-batch spline back from the device, so every spline evaluation returns zero.
-
-## Multi-GPU
-
-`trace_orbits_gpu` uses one device by default. `SIMPLE_GPU_NUM_DEVICES=N`
-splits the particle batch across N devices, one host thread per device.
-
-Splitting across cards is not yet profitable. With `mem:unified` the spline
-coefficient array is shared, so two devices fault it back and forth on every
-evaluation and throughput collapses. Profitable multi-GPU needs a per-device
-resident copy of the read-only splines (construct or copy the coefficients once
-per device), which the current batch spline construction does not do. Until
-then, run one process per GPU over disjoint particle sets.
-
-## Validation and benchmarking
-
-Set `SIMPLE_GPU_BENCH=1` to run the GPU kernel and the CPU integrator on
-identical per-particle initial states and report the agreement and speedup:
+## Native CUDA build
 
 ```bash
-SIMPLE_GPU_BENCH=1 ./build-gpu/simple.x simple.in
+cmake -S . -B build-cuda -G Ninja -DSIMPLE_ENABLE_CUDA=ON
+cmake --build build-cuda -j
+(cd run && ../build-cuda/simple.x simple.in)
 ```
 
-`test_batch_splines_device` checks that batch spline evaluation inside an
-OpenACC kernel matches the host result; it is registered when
-`SIMPLE_ENABLE_OPENACC=ON`.
+The native path uses Boozer RK field tables and reports allocation, upload,
+kernel, download, and C-ABI timings. `gpu_compact_init = .True.` enables its
+compact Boozer initializer. Use it only with native CUDA and Boozer starts.
 
-For Landreman-style alpha-loss objectives, set `SIMPLE_GPU_LANDREMAN=1`.
-`SIMPLE_GPU_T_BLOCK`, `SIMPLE_GPU_LOSS_TAU`, `SIMPLE_GPU_MAXLOSS`, and
-`SIMPLE_GPU_MIN_TIMESTEP` select the physical-time block length, exponential
-loss time scale, strict early-stop threshold, and adaptive-RK minimum step.
-Particle state and spline data remain resident while only the newly accumulated
-loss weight is synchronized after each block. Dormand-Prince and Cash-Karp use
-the FIRM3D quarter-turn step cap at each block boundary. Symplectic Euler and
-midpoint require the SIMPLE macrostep spacing to equal `SIMPLE_GPU_T_BLOCK`;
-the driver rejects a mismatched schedule rather than silently changing it.
+## Production controls
 
-All participating projects must use the same NVHPC memory model. In particular,
-set `SIMPLE_OPENACC_MEM` and `LIBNEO_OPENACC_MEM` to the same value and enable
-`FORTNUM_GPU_BACKEND=OPENACC`; mixed `managed`/`unified` device objects can fail
-at device link time.
+The following namelist values have defaults suitable for the production path:
 
-## Measured performance
+```fortran
+gpu_num_devices = 1
+gpu_t_block = 1d-3
+gpu_loss_tau = 0.1d0
+gpu_maxloss = 0.02d0
+gpu_min_timestep = 1d-10
+gpu_pilot_fraction = 0.04d0
+gpu_work_order = .True.
+gpu_particle_profile = ''
+```
 
-RTX 5060 Ti (single card) versus a 32-thread Ryzen CPU, Boozer + Euler,
-`trace_time=3e-4`:
+`gpu_num_devices > 1` is experimental. With managed memory, a shared spline
+table can migrate between devices, so one process per GPU is usually better.
+`gpu_particle_profile` writes initial and final states, field-evaluation counts,
+loss steps, and loss times.
 
-| particles | CPU (OpenMP) | GPU    | speedup |
-|-----------|--------------|--------|---------|
-| 1024      | 1.74 s       | 5.92 s | 0.29x   |
-| 4096      | 7.03 s       | 5.91 s | 1.19x   |
-| 16384     | 27.6 s       | 23.0 s | 1.20x   |
+## Benchmark mode
 
-The GPU saturates near 4096 particles and holds about 1.2x against the
-32-thread CPU. Final-state positions agree to about 1e-5 and loss-step
-classification matches for every particle; the small position difference is
-floating-point reassociation in the parallel reductions, within the spread
-expected for chaotic orbits.
+Set `gpu_mode = 'benchmark'` in `simple.in` with `integmode = 1` (Euler) or
+`integmode = 3` (midpoint). The benchmark runs the OpenACC GPU and CPU paths on
+identical particles and reports agreement and speedup. It does not support
+walls, collisions, classifier options, or boundary-reaching traces.
 
-The 1.2x ceiling on one card is the double-precision throughput of consumer
-Blackwell (FP64 at 1/64 of FP32). Splitting across both cards scales the
-particle batch further.
+## Validation
+
+`test_batch_splines_device` checks device spline evaluation against the host
+result. `test_gpu_orbit_bench` and `test_gpu_midpoint_bench` exercise benchmark
+mode. `test_gpu_landreman_segments` checks the segmented accounting and the
+native CUDA bridge when the corresponding GPU build is available.
+
+On an RTX 5060 Ti against a 32-thread Ryzen CPU, the OpenACC Euler path reached
+about 1.2x at 4,096 and 16,384 particles for the documented short benchmark.
+The result depends on particle count, GPU, compiler, and memory model.

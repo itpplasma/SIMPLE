@@ -48,6 +48,17 @@ def run_case(
             "isw_field_type = 2\n"
             "integmode = 1\n"
             "npoiper2 = 256\n"
+            "gpu_mode = 'production'\n"
+            "gpu_backend = 'openacc'\n"
+            "gpu_compact_init = .false.\n"
+            f"gpu_method = '{method}'\n"
+            "gpu_start_coordinates = 'boozer'\n"
+            "gpu_landreman = .true.\n"
+            "gpu_t_block = 1d-6\n"
+            "gpu_maxloss = 0.1d0\n"
+            "gpu_loss_tau = 0.1d0\n"
+            "gpu_min_timestep = 0d0\n"
+            "gpu_particle_profile = 'particles.csv'\n"
             f"relerr = {relerr:.17e}\n"
             "/\n"
         )
@@ -55,15 +66,6 @@ def run_case(
         environment.update(
             {
                 "OMP_NUM_THREADS": "1",
-                "SIMPLE_GPU_RUN": "1",
-                "SIMPLE_GPU_METHOD": method,
-                "SIMPLE_GPU_START_COORDINATES": "boozer",
-                "SIMPLE_GPU_LANDREMAN": "1",
-                "SIMPLE_GPU_T_BLOCK": "1e-6",
-                "SIMPLE_GPU_MAXLOSS": "0.1",
-                "SIMPLE_GPU_LOSS_TAU": "0.1",
-                "SIMPLE_GPU_MIN_TIMESTEP": "0",
-                "SIMPLE_GPU_PARTICLE_PROFILE": str(root / "particles.csv"),
             }
         )
         result = subprocess.run(
@@ -152,6 +154,17 @@ def run_short_dopri_trace(
             "isw_field_type = 2\n"
             "integmode = 1\n"
             "npoiper2 = 256\n"
+            "gpu_mode = 'production'\n"
+            "gpu_backend = 'openacc'\n"
+            "gpu_compact_init = .false.\n"
+            "gpu_method = 'dopri'\n"
+            "gpu_start_coordinates = 'boozer'\n"
+            "gpu_landreman = .true.\n"
+            "gpu_t_block = 1d-10\n"
+            "gpu_maxloss = 1d0\n"
+            "gpu_loss_tau = 0.1d0\n"
+            "gpu_min_timestep = 1d-12\n"
+            "gpu_particle_profile = 'particles.csv'\n"
             "relerr = 1d-6\n"
             f"ns_s = {spline_order}\n"
             f"ns_tp = {spline_order}\n"
@@ -161,20 +174,13 @@ def run_short_dopri_trace(
         environment.update(
             {
                 "OMP_NUM_THREADS": "1",
-                "SIMPLE_GPU_RUN": "1",
-                "SIMPLE_GPU_METHOD": "dopri",
-                "SIMPLE_GPU_START_COORDINATES": "boozer",
-                "SIMPLE_GPU_LANDREMAN": "1",
-                "SIMPLE_GPU_T_BLOCK": "1e-10",
-                "SIMPLE_GPU_MAXLOSS": "1",
-                "SIMPLE_GPU_LOSS_TAU": "0.1",
-                "SIMPLE_GPU_MIN_TIMESTEP": "1e-12",
-                "SIMPLE_GPU_PARTICLE_PROFILE": str(root / "particles.csv"),
             }
         )
         if compact_init:
-            environment["SIMPLE_GPU_BACKEND"] = "cuda-native"
-            environment["SIMPLE_GPU_COMPACT_INIT"] = "1"
+            text = (root / "simple.in").read_text()
+            text = text.replace("gpu_backend = 'openacc'", "gpu_backend = 'cuda-native'")
+            text = text.replace("gpu_compact_init = .false.", "gpu_compact_init = .true.")
+            (root / "simple.in").write_text(text)
         result = subprocess.run(
             [executable, "simple.in"],
             cwd=root,
@@ -195,11 +201,13 @@ def run_short_dopri_trace(
             )
         # Two initial RHS calls per orbit plus six calls per accepted DOPRI
         # 5(4) step: the seventh stage is reused through FSAL. The original
-        # controller takes five steps in this short oracle (256 calls); the
-        # tuned controller takes eight (400 calls). Both are deliberate
-        # controller contracts, while any other count signals a regression.
+        # controller takes five or six steps in this short oracle (256 or 304
+        # calls); the tuned controller takes eight (400 calls). These are the
+        # deliberate controller contracts, while any other count signals a
+        # regression.
         expected_evaluations = {
             8 * (2 + 5 * 6),
+            8 * (2 + 6 * 6),
             8 * (2 + 8 * 6),
         }
         if evaluations not in expected_evaluations:
@@ -217,15 +225,7 @@ def compare_compact_initialization(
     executable: Path, wout: Path, starts_source: Path
 ) -> None:
     """Use the established full setup as the compact setup's behavior oracle."""
-    old_backend = os.environ.get("SIMPLE_GPU_BACKEND")
-    os.environ["SIMPLE_GPU_BACKEND"] = "cuda-native"
-    try:
-        full = run_short_dopri_trace(executable, wout, starts_source, 5)
-    finally:
-        if old_backend is None:
-            os.environ.pop("SIMPLE_GPU_BACKEND", None)
-        else:
-            os.environ["SIMPLE_GPU_BACKEND"] = old_backend
+    full = run_short_dopri_trace(executable, wout, starts_source, 5)
     compact = run_short_dopri_trace(
         executable, wout, starts_source, 5, compact_init=True
     )

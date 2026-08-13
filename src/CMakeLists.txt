@@ -98,6 +98,10 @@ list(APPEND SOURCES
 
     add_library (simple STATIC ${SOURCES})
 
+    if(SIMPLE_ENABLE_OPENACC AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+        target_compile_options(simple PRIVATE "${SIMPLE_OPENACC_GPU_FLAG}")
+    endif()
+
     if(SIMPLE_ENABLE_CUDA)
         target_compile_definitions(simple PRIVATE SIMPLE_ENABLE_CUDA_NATIVE)
         target_link_libraries(simple PUBLIC simple_cuda_native_rk54)

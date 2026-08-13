@@ -26,6 +26,9 @@ module simple_main
         chart_boundary_kind, chart_boundary_kind_effective, &
         wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
         ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
+        gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
+        gpu_landreman, gpu_compact_init, gpu_t_block, gpu_loss_tau, &
+        gpu_maxloss, gpu_min_timestep, gpu_particle_profile, &
         ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
         ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
         ORBIT_EXIT_NUMERICAL_DOMAIN, &
@@ -60,7 +63,6 @@ module simple_main
     integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     real(dp), save :: invariant_edge_radius = 1.0_dp
-    logical, save :: compact_cuda_rk_init = .false.
     type(stl_wall_t), save :: wall
 
     integer, parameter :: RK_RECOVERY_GENERIC = 1
@@ -338,7 +340,7 @@ contains
             if (generate_start_only) stop 'stopping after generating start.dat'
         else if (chartmap_mode) then
             ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
-            if (.not. compact_cuda_rk_init) then
+            if (.not. gpu_compact_init) then
             call init_magfie(isw_field_type)
             call print_phase_time('Boozer magfie initialization completed')
             end if
@@ -382,16 +384,10 @@ contains
             call print_phase_time('Restart data loaded')
         end if
 
-        block
-            character(32) :: gpu_bench_env
-            integer :: gpu_bench_len, gpu_bench_stat
-            call get_environment_variable('SIMPLE_GPU_BENCH', gpu_bench_env, &
-                gpu_bench_len, gpu_bench_stat)
-            if (gpu_bench_stat == 0 .and. gpu_bench_len > 0) then
-                call trace_compare_gpu(norb)
-                return
-            end if
-        end block
+        if (trim(gpu_mode) == 'benchmark') then
+            call trace_compare_gpu(norb)
+            return
+        end if
 
         call diag_counters_init
         if (isw_field_type == SPECTRE) then
@@ -402,19 +398,13 @@ contains
                 call sympl_landing_stats_reset
             end block
         end if
-        block
-            character(32) :: gpu_run_env
-            integer :: gpu_run_len, gpu_run_stat
-            call get_environment_variable('SIMPLE_GPU_RUN', gpu_run_env, &
-                gpu_run_len, gpu_run_stat)
-            if (gpu_run_stat == 0 .and. gpu_run_len > 0) then
-                call trace_gpu_production(norb)
-            else
-                call progress_init(checkpoint_interval, ntestpart)
-                call trace_parallel(norb)
-                call progress_finalize
-            end if
-        end block
+        if (trim(gpu_mode) == 'production') then
+            call trace_gpu_production(norb)
+        else
+            call progress_init(checkpoint_interval, ntestpart)
+            call trace_parallel(norb)
+            call progress_finalize
+        end if
         call print_phase_time('Particle tracing completed')
 
         call write_output
@@ -463,9 +453,6 @@ contains
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
         logical :: use_boozer_chartmap, use_spectre
-        character(32) :: compact_value, backend_value, starts_value
-        integer :: compact_length, compact_status
-
         self%integmode = aintegmode
         map_boundary_exit_code = ORBIT_EXIT_LCFS
         chart_boundary_kind_effective = 'lcfs'
@@ -479,18 +466,9 @@ contains
             if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
         end if
 
-        compact_cuda_rk_init = .false.
-        call get_environment_variable('SIMPLE_GPU_COMPACT_INIT', compact_value, &
-            compact_length, compact_status)
-        if (compact_status == 0 .and. compact_length > 0) &
-            compact_cuda_rk_init = &
-            trim(adjustl(compact_value(:compact_length))) /= '0'
-        if (compact_cuda_rk_init) then
-            call get_environment_variable('SIMPLE_GPU_BACKEND', backend_value)
-            call get_environment_variable('SIMPLE_GPU_START_COORDINATES', &
-                starts_value)
-            if (trim(adjustl(backend_value)) /= 'cuda-native' .or. &
-                trim(adjustl(starts_value)) /= 'boozer' .or. &
+        if (gpu_compact_init) then
+            if (trim(gpu_backend) /= 'cuda-native' .or. &
+                trim(gpu_start_coordinates) /= 'boozer' .or. &
                 .not. use_boozer_chartmap .or. len_trim(wall_input) > 0) &
                 error stop 'compact init requires native CUDA Boozer starts without wall'
         end if
@@ -505,7 +483,7 @@ contains
             call print_phase_time('SPECTRE field loading completed')
         else if (use_boozer_chartmap) then
             call set_boozer_chartmap_spline_orders(ans_s, ans_tp)
-            if (compact_cuda_rk_init) then
+            if (gpu_compact_init) then
                 call load_boozer_from_chartmap(field_input, .true.)
                 call init_field_can_boozer_chartmap_compact
                 self%fper = twopi/real(nper, dp)
@@ -607,7 +585,7 @@ contains
             call print_phase_time('Canonical field initialization completed')
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                 isw_field_type == MEISS .or. isw_field_type == ALBERT) then
-            if (compact_cuda_rk_init) return
+            if (gpu_compact_init) return
             call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
                 canonical_grid_ntheta, canonical_grid_nphi, &
                 canonical_ode_relerr)
@@ -869,21 +847,6 @@ contains
         end if
     end subroutine trace_parallel
 
-    subroutine read_optional_environment_real(name, default_value, value)
-        character(*), intent(in) :: name
-        real(dp), intent(in) :: default_value
-        real(dp), intent(out) :: value
-
-        character(128) :: text
-        integer :: length, status
-
-        value = default_value
-        call get_environment_variable(name, text, length, status)
-        if (status /= 0 .or. length <= 0) return
-        read (text(:length), *, iostat=status) value
-        if (status /= 0) error stop 'invalid real-valued SIMPLE environment setting'
-    end subroutine read_optional_environment_real
-
     subroutine trace_gpu_production(norb)
         ! End-to-end loss-tracing path used by the Landreman comparison. This
         ! path deliberately excludes the separate continuous fast-classifier
@@ -908,14 +871,10 @@ contains
         integer, allocatable :: loss_step(:), nfev(:)
         real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
         logical, allocatable :: passing(:)
-        character(32) :: method_name, landreman_value, start_coordinates
         character(32) :: backend_name
-        character(1024) :: particle_profile_path
-        integer :: method_len, method_stat, method, init_mode, i, it
-        integer :: backend_len, backend_stat
-        integer :: landreman_len, landreman_stat, start_coordinates_len
-        integer :: start_coordinates_stat, particle_profile_len
-        integer :: particle_profile_stat, particle_profile_unit
+        character(32) :: start_coordinates
+        integer :: method, init_mode, i, it
+        integer :: particle_profile_unit
         integer(8) :: nfev_total, warp_nfev_slots
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
         real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
@@ -926,16 +885,47 @@ contains
         if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
             class_plot .or. fast_class .or. ntcut > 0 .or. &
             output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
-            error stop 'SIMPLE_GPU_RUN requires Boozer GC loss tracing without '// &
+            error stop 'gpu_mode=production requires Boozer GC loss tracing without '// &
                 'collisions, wall, orbit output, or classifiers'
         end if
 
-        method = integmode
-        call get_environment_variable('SIMPLE_GPU_METHOD', method_name, &
-            method_len, method_stat)
-        if (method_stat == 0 .and. method_len > 0) then
-            select case (trim(adjustl(method_name(:method_len))))
-            case ('euler', 'explicit-implicit-euler')
+        backend_name = trim(gpu_backend)
+        select case (trim(backend_name))
+        case ('auto')
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            backend_name = 'cuda-native'
+#else
+            backend_name = 'openacc'
+#endif
+        case ('openacc')
+        case ('cuda-native')
+#ifndef SIMPLE_ENABLE_CUDA_NATIVE
+            error stop 'gpu_backend=cuda-native requires SIMPLE_ENABLE_CUDA'
+#endif
+        case default
+            error stop 'gpu_backend must be openacc or cuda-native'
+        end select
+        select case (trim(backend_name))
+        case ('openacc')
+            cuda_native_backend = .false.
+        case ('cuda-native')
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            cuda_native_backend = .true.
+#else
+            error stop 'gpu_backend=cuda-native requires SIMPLE_ENABLE_CUDA'
+#endif
+        end select
+
+        select case (trim(gpu_method))
+        case ('auto')
+            if (cuda_native_backend) then
+                method = DORMAND_PRINCE
+            else
+                method = EXPL_IMPL_EULER
+            end if
+        case default
+            select case (trim(gpu_method))
+            case ('euler')
                 method = EXPL_IMPL_EULER
             case ('midpoint')
                 method = MIDPOINT
@@ -944,30 +934,12 @@ contains
             case ('dormand-prince', 'dormand_prince', 'dopri', 'rk45')
                 method = DORMAND_PRINCE
             case default
-                error stop 'unknown SIMPLE_GPU_METHOD'
+                error stop 'gpu_method must be auto, euler, midpoint, cash-karp, or dopri'
             end select
-        end if
+        end select
         if (method /= EXPL_IMPL_EULER .and. method /= MIDPOINT .and. &
             method /= CASH_KARP .and. method /= DORMAND_PRINCE) &
-            error stop 'SIMPLE_GPU_RUN supports euler, midpoint, cash-karp, or dopri'
-
-        backend_name = 'openacc'
-        call get_environment_variable('SIMPLE_GPU_BACKEND', backend_name, &
-            backend_len, backend_stat)
-        if (backend_stat /= 0 .or. backend_len <= 0) backend_name = 'openacc'
-        backend_name = trim(adjustl(backend_name))
-        select case (trim(backend_name))
-        case ('openacc')
-            cuda_native_backend = .false.
-        case ('cuda-native', 'cuda_native')
-#ifdef SIMPLE_ENABLE_CUDA_NATIVE
-            cuda_native_backend = .true.
-#else
-            error stop 'SIMPLE_GPU_BACKEND=cuda-native requires SIMPLE_ENABLE_CUDA'
-#endif
-        case default
-            error stop 'SIMPLE_GPU_BACKEND must be openacc or cuda-native'
-        end select
+            error stop 'gpu_method supports euler, midpoint, cash-karp, or dopri'
         if (cuda_native_backend .and. method /= CASH_KARP .and. &
             method /= DORMAND_PRINCE) &
             error stop 'cuda-native backend supports only cash-karp or dopri'
@@ -979,15 +951,10 @@ contains
             nfev(ntestpart), loss_time_normalized(ntestpart), &
             zcanonical(4, ntestpart), passing(ntestpart))
 
-        start_coordinates = 'reference'
-        call get_environment_variable('SIMPLE_GPU_START_COORDINATES', &
-            start_coordinates, start_coordinates_len, start_coordinates_stat)
-        if (start_coordinates_stat /= 0 .or. start_coordinates_len <= 0) &
-            start_coordinates = 'reference'
-        start_coordinates = trim(adjustl(start_coordinates))
+        start_coordinates = trim(gpu_start_coordinates)
         if (trim(start_coordinates) /= 'reference' .and. &
             trim(start_coordinates) /= 'boozer') &
-            error stop 'SIMPLE_GPU_START_COORDINATES must be reference or boozer'
+            error stop 'gpu_start_coordinates must be reference or boozer'
 
         t0 = omp_get_wtime()
         do i = 1, ntestpart
@@ -997,7 +964,7 @@ contains
                 call ref_to_integ(zstart(1:3, i), z(1:3))
             end if
             z(4:5) = zstart(4:5, i)
-            if (compact_cuda_rk_init .and. cuda_native_backend) then
+            if (gpu_compact_init .and. cuda_native_backend) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
                 call initialize_cuda_native_particle(si_gpu(i), f_gpu(i), z, &
                     dtaumin, relerr)
@@ -1018,34 +985,26 @@ contains
             error stop 'GPU RK requires scalar cubic or quintic Boozer splines'
         t_init = omp_get_wtime() - t0
 
-        landreman_mode = .false.
-        call get_environment_variable('SIMPLE_GPU_LANDREMAN', landreman_value, &
-            landreman_len, landreman_stat)
-        if (landreman_stat == 0 .and. landreman_len > 0) &
-            landreman_mode = trim(adjustl(landreman_value(:landreman_len))) /= '0'
+        landreman_mode = gpu_landreman
         if (cuda_native_backend .and. .not. landreman_mode) &
-            error stop 'cuda-native backend currently requires SIMPLE_GPU_LANDREMAN=1'
+            error stop 'gpu_landreman must be true for the native CUDA backend'
 
         t0 = omp_get_wtime()
         warp_nfev_slots = 0_8
         cuda_profile_ms = 0.0_dp
         if (landreman_mode) then
-            call read_optional_environment_real('SIMPLE_GPU_T_BLOCK', &
-                1.0e-3_dp, block_time)
-            call read_optional_environment_real('SIMPLE_GPU_LOSS_TAU', &
-                0.1_dp, loss_tau)
-            call read_optional_environment_real('SIMPLE_GPU_MAXLOSS', &
-                0.02_dp, maxloss)
-            call read_optional_environment_real('SIMPLE_GPU_MIN_TIMESTEP', &
-                1.0e-10_dp, minimum_timestep)
+            block_time = gpu_t_block
+            loss_tau = gpu_loss_tau
+            maxloss = gpu_maxloss
+            minimum_timestep = gpu_min_timestep
             if (block_time <= 0.0_dp .or. block_time > trace_time) &
-                error stop 'SIMPLE_GPU_T_BLOCK must be in (0, trace_time]'
+                error stop 'gpu_t_block must be in (0, trace_time]'
             if (loss_tau <= 0.0_dp) &
-                error stop 'SIMPLE_GPU_LOSS_TAU must be positive'
+                error stop 'gpu_loss_tau must be positive'
             if (maxloss < 0.0_dp) &
-                error stop 'SIMPLE_GPU_MAXLOSS must be nonnegative'
+                error stop 'gpu_maxloss must be nonnegative'
             if (minimum_timestep < 0.0_dp) &
-                error stop 'SIMPLE_GPU_MIN_TIMESTEP must be nonnegative'
+                error stop 'gpu_min_timestep must be nonnegative'
             time_scale = sqrt2/v0
             total_time_normalized = &
                 real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
@@ -1084,7 +1043,7 @@ contains
         do i = 1, ntestpart
             nfev_total = nfev_total + int(nfev(i), 8)
             si_gpu(i)%z = zcanonical(:, i)
-            if (compact_cuda_rk_init .and. cuda_native_backend) then
+            if (gpu_compact_init .and. cuda_native_backend) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
                 call evaluate_cuda_native_particle(f_gpu(i), zcanonical(1, i), &
                     zcanonical(2, i), zcanonical(3, i))
@@ -1154,11 +1113,9 @@ contains
         end if
         print *, '============================================================'
 
-        call get_environment_variable('SIMPLE_GPU_PARTICLE_PROFILE', &
-            particle_profile_path, particle_profile_len, particle_profile_stat)
-        if (particle_profile_stat == 0 .and. particle_profile_len > 0) then
+        if (len_trim(gpu_particle_profile) > 0) then
             open (newunit=particle_profile_unit, &
-                file=trim(particle_profile_path(:particle_profile_len)), &
+                file=trim(gpu_particle_profile), &
                 status='replace', action='write')
             write (particle_profile_unit, '(a)') &
                 'particle,s_start,theta_start,zeta_start,speed_start,'// &
@@ -1177,8 +1134,8 @@ contains
     subroutine trace_compare_gpu(norb)
         ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
         ! symplectic integrator on identical per-particle initial states.
-        ! Triggered by the SIMPLE_GPU_BENCH environment variable and restricted
-        ! to the Boozer + EXPL_IMPL_EULER path without wall, collision, or
+        ! Triggered by gpu_mode='benchmark' and restricted to the Boozer
+        ! explicit-implicit Euler or midpoint path without wall, collision, or
         ! classifier options.
         use orbit_symplectic, only: orbit_timestep_sympl
         use orbit_symplectic_base, only: symplectic_integrator_t, &
@@ -1206,7 +1163,7 @@ contains
         if (isw_field_type /= BOOZER .or. &
             (integmode /= EXPL_IMPL_EULER .and. integmode /= MIDPOINT) .or. swcoll .or. &
             len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. generate_start_only) then
-            error stop "simple_main.trace_compare_gpu: SIMPLE_GPU_BENCH requires Boozer, " // &
+            error stop "simple_main.trace_compare_gpu: gpu_mode='benchmark' requires Boozer, " // &
                 "EXPL_IMPL_EULER or MIDPOINT, and no wall/collision/classifier options"
         end if
 
@@ -1278,7 +1235,7 @@ contains
         t_cpu = t1 - t0
 
         if (any(cpu_loss < ntimstep)) then
-            error stop 'SIMPLE_GPU_BENCH does not support boundary-reaching traces'
+            error stop 'gpu_mode=benchmark does not support boundary-reaching traces'
         end if
 
         ! GPU kernel
