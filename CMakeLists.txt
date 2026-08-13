@@ -147,18 +147,17 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(SIMPLE_NVHPC)
 
     if(SIMPLE_ENABLE_OPENACC)
-        # Memory model for OpenACC. "unified" covers module/static data as well
-        # as allocatable derived-type components (needs an HMM-capable driver).
-        # "managed" is a lighter alternative on newer NVHPC/libneo versions.
-        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
+        # Memory model for OpenACC. "managed" is supported by the standard
+        # cluster GPUs. "unified" additionally covers module/static data but
+        # needs an HMM-capable driver and is an explicit override.
+        set(SIMPLE_OPENACC_MEM "managed" CACHE STRING
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
-        # NVHPC before 24.x spells managed memory as -gpu=managed. Newer
-        # compilers reject that legacy spelling when another target uses the
-        # explicit mem:managed form, so keep every target on one spelling.
-        if(CMAKE_Fortran_COMPILER_VERSION VERSION_LESS "24.0" AND
-           SIMPLE_OPENACC_MEM STREQUAL "managed")
+        # Keep the legacy spelling for managed memory because the standard GPU
+        # libneo checkout uses it too. Mixing it with mem:managed is rejected
+        # by NVHPC even though both spellings select the same model.
+        if(SIMPLE_OPENACC_MEM STREQUAL "managed")
             set(_simple_openacc_mem_option "managed")
         else()
             set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")

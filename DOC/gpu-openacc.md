@@ -30,7 +30,7 @@ Requirements:
 - NetCDF-Fortran and HDF5-Fortran built with `nvfortran`.
 
 The one feature switch propagates matching OpenACC settings to libneo and
-Fortnum. The default memory model is `unified`.
+Fortnum. The default memory model is `managed`.
 
 ```bash
 cmake -S . -B build-gpu -G Ninja \
@@ -71,7 +71,7 @@ gpu_work_order = .True.
 gpu_particle_profile = ''
 ```
 
-`gpu_num_devices > 1` is experimental. With unified memory, a shared spline
+`gpu_num_devices > 1` is experimental. With managed memory, a shared spline
 table can migrate between devices, so one process per GPU is usually better.
 `gpu_particle_profile` writes initial and final states, field-evaluation counts,
 loss steps, and loss times.
