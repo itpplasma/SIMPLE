@@ -154,15 +154,17 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
-        # Keep the legacy spelling for managed memory because the standard GPU
-        # libneo checkout uses it too. Mixing it with mem:managed is rejected
-        # by NVHPC even though both spellings select the same model.
-        if(SIMPLE_OPENACC_MEM STREQUAL "managed")
+        # NVHPC before 24.x spells managed memory as -gpu=managed. Newer
+        # compilers use the explicit mem:managed form.
+        if(CMAKE_Fortran_COMPILER_VERSION VERSION_LESS "24.0" AND
+           SIMPLE_OPENACC_MEM STREQUAL "managed")
             set(_simple_openacc_mem_option "managed")
         else()
             set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
         endif()
         message(STATUS "OpenACC enabled for NVHPC compiler (arch:${SIMPLE_OPENACC_GPU_ARCH}, mem:${SIMPLE_OPENACC_MEM})")
+        set(SIMPLE_OPENACC_GPU_FLAG
+            "-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}")
         set(ENABLE_OPENACC ON CACHE BOOL "Enable OpenACC compiler flags." FORCE)
         set(LIBNEO_OPENACC_MEM "${SIMPLE_OPENACC_MEM}" CACHE STRING
             "OpenACC memory model for libneo" FORCE)
@@ -170,13 +172,10 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "GPU backend for Fortnum" FORCE)
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
         )
         add_link_options(
             -acc
-            -gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}
         )
     endif()
 endif()
