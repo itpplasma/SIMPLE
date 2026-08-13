@@ -154,10 +154,11 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
-        # NVHPC before 24.x spells managed memory as -gpu=managed. Newer
-        # compilers use the explicit mem:managed form.
-        if(CMAKE_Fortran_COMPILER_VERSION VERSION_LESS "24.0" AND
-           SIMPLE_OPENACC_MEM STREQUAL "managed")
+        # Keep the managed-memory spelling identical to the standard libneo
+        # OpenACC checkout. NVHPC accepts the newer spelling too, but mixing
+        # the two spellings across linked targets has caused illegal-address
+        # failures at runtime on older cluster toolchains.
+        if(SIMPLE_OPENACC_MEM STREQUAL "managed")
             set(_simple_openacc_mem_option "managed")
         else()
             set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")

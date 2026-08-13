@@ -72,13 +72,12 @@ module params
 
     integer :: integmode = EXPL_IMPL_EULER
 
-    ! GPU execution is configured in the same namelist as the CPU run.  The
-    ! auto method selects the fastest production method for the chosen
-    ! backend: explicit-implicit Euler for OpenACC and tuned DOPRI for native
-    ! CUDA.  The GPU path only supports a subset of integmode values.
+    ! GPU execution is configured in the same namelist as the CPU run. Native
+    ! CUDA with tuned DOPRI is the default production path. The legacy
+    ! OpenACC path remains available only when selected explicitly.
     character(16) :: gpu_mode = 'off'
-    character(16) :: gpu_backend = 'auto'
-    character(16) :: gpu_method = 'auto'
+    character(16) :: gpu_backend = 'cuda-native'
+    character(16) :: gpu_method = 'dopri'
     character(16) :: gpu_start_coordinates = 'reference'
     logical :: gpu_landreman = .true.
     logical :: gpu_compact_init = .false.

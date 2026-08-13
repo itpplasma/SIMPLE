@@ -131,46 +131,10 @@ needed. Set `gpu_mode = 'production'` and use Boozer guiding-center tracing
 
 ```fortran
 gpu_mode = 'production'
-gpu_backend = 'auto'       ! native CUDA if built, otherwise OpenACC
-gpu_method = 'auto'        ! tuned DOPRI on native CUDA, Euler on OpenACC
+gpu_backend = 'cuda-native'
+gpu_method = 'dopri'       ! tuned Dormand-Prince
 gpu_landreman = .True.     ! segmented alpha-loss objective
 ```
-
-OpenACC supports Euler, midpoint, Cash-Karp, and tuned DOPRI. Native CUDA
-supports Cash-Karp and tuned DOPRI. The tolerance is always `relerr` from the
-same `simple.in` file. Unsupported combinations stop with an error.
-
-### OpenACC build
-
-The OpenACC path requires the NVIDIA HPC SDK, `nvfortran`, `nvc`, a CUDA-capable
-GPU, and NetCDF/HDF5 modules built with the same `nvfortran` compiler:
-
-```bash
-cmake -S . -B build-gpu -G Ninja \
-  -DCMAKE_Fortran_COMPILER=nvfortran \
-  -DCMAKE_C_COMPILER=nvc \
-  -DSIMPLE_ENABLE_OPENACC=ON
-cmake --build build-gpu -j
-```
-
-The OpenACC option propagates the matching OpenACC settings to libneo and
-Fortnum. The default memory model is `managed`. Override
-`SIMPLE_OPENACC_MEM` only when the target system requires it.
-
-Run the configured input:
-
-```bash
-(cd run && ../build-gpu/simple.x simple.in)
-```
-
-Set `gpu_method` explicitly when comparing methods. `gpu_num_devices` defaults
-to one. Increase it only after checking the multi-GPU limitations in
-[DOC/gpu-openacc.md](DOC/gpu-openacc.md).
-
-For the OpenACC CPU/GPU agreement test, use `gpu_mode = 'benchmark'` with
-`integmode = 1` or `3`.
-
-### Native CUDA build
 
 The native CUDA path requires the CUDA toolkit, a C++17 compiler, and a normal
 GNU Fortran build:
@@ -187,7 +151,9 @@ With the `simple.in` settings above, run:
 (cd run && ../build-cuda/simple.x simple.in)
 ```
 
-Set `gpu_start_coordinates = 'boozer'` only when `start.dat` already contains
+Native CUDA supports tuned DOPRI and Cash-Karp; `gpu_method = 'dopri'` is the
+default. The tolerance is `relerr` from the same `simple.in` file. Set
+`gpu_start_coordinates = 'boozer'` only when `start.dat` already contains
 Boozer coordinates. Set `gpu_particle_profile` to write the per-particle CSV.
 The Landreman controls are `gpu_t_block`, `gpu_loss_tau`, `gpu_maxloss`, and
 `gpu_min_timestep`.
