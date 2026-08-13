@@ -28,7 +28,8 @@ hdf5_tools nvfortran compile fix).
 cmake -S . -B build-gpu -G Ninja \
   -DCMAKE_Fortran_COMPILER=nvfortran -DCMAKE_C_COMPILER=nvc \
   -DCMAKE_BUILD_TYPE=Release -DSIMPLE_DETERMINISTIC_FP=ON \
-  -DSIMPLE_ENABLE_OPENACC=ON -DENABLE_OPENACC=ON
+  -DSIMPLE_ENABLE_OPENACC=ON -DENABLE_OPENACC=ON \
+  -DLIBNEO_OPENACC_MEM=unified -DFORTNUM_GPU_BACKEND=OPENACC
 cmake --build build-gpu -j
 ```
 
@@ -68,6 +69,21 @@ SIMPLE_GPU_BENCH=1 ./build-gpu/simple.x simple.in
 `test_batch_splines_device` checks that batch spline evaluation inside an
 OpenACC kernel matches the host result; it is registered when
 `SIMPLE_ENABLE_OPENACC=ON`.
+
+For Landreman-style alpha-loss objectives, set `SIMPLE_GPU_LANDREMAN=1`.
+`SIMPLE_GPU_T_BLOCK`, `SIMPLE_GPU_LOSS_TAU`, `SIMPLE_GPU_MAXLOSS`, and
+`SIMPLE_GPU_MIN_TIMESTEP` select the physical-time block length, exponential
+loss time scale, strict early-stop threshold, and adaptive-RK minimum step.
+Particle state and spline data remain resident while only the newly accumulated
+loss weight is synchronized after each block. Dormand-Prince and Cash-Karp use
+the FIRM3D quarter-turn step cap at each block boundary. Symplectic Euler and
+midpoint require the SIMPLE macrostep spacing to equal `SIMPLE_GPU_T_BLOCK`;
+the driver rejects a mismatched schedule rather than silently changing it.
+
+All participating projects must use the same NVHPC memory model. In particular,
+set `SIMPLE_OPENACC_MEM` and `LIBNEO_OPENACC_MEM` to the same value and enable
+`FORTNUM_GPU_BACKEND=OPENACC`; mixed `managed`/`unified` device objects can fail
+at device link time.
 
 ## Measured performance
 

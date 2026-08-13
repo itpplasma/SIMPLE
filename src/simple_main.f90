@@ -60,6 +60,7 @@ module simple_main
     integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     real(dp), save :: invariant_edge_radius = 1.0_dp
+    logical, save :: compact_cuda_rk_init = .false.
     type(stl_wall_t), save :: wall
 
     integer, parameter :: RK_RECOVERY_GENERIC = 1
@@ -337,11 +338,15 @@ contains
             if (generate_start_only) stop 'stopping after generating start.dat'
         else if (chartmap_mode) then
             ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
+            if (.not. compact_cuda_rk_init) then
             call init_magfie(isw_field_type)
             call print_phase_time('Boozer magfie initialization completed')
+            end if
 
-            call init_starting_surf
-            call print_phase_time('Starting surface initialization completed')
+            if (startmode /= 2) then
+                call init_starting_surf
+                call print_phase_time('Starting surface initialization completed')
+            end if
 
             call sample_particles(.true.)
             call print_phase_time('Particle sampling completed')
@@ -397,10 +402,20 @@ contains
                 call sympl_landing_stats_reset
             end block
         end if
-        call progress_init(checkpoint_interval, ntestpart)
-        call trace_parallel(norb)
-        call progress_finalize
-        call print_phase_time('Parallel particle tracing completed')
+        block
+            character(32) :: gpu_run_env
+            integer :: gpu_run_len, gpu_run_stat
+            call get_environment_variable('SIMPLE_GPU_RUN', gpu_run_env, &
+                gpu_run_len, gpu_run_stat)
+            if (gpu_run_stat == 0 .and. gpu_run_len > 0) then
+                call trace_gpu_production(norb)
+            else
+                call progress_init(checkpoint_interval, ntestpart)
+                call trace_parallel(norb)
+                call progress_finalize
+            end if
+        end block
+        call print_phase_time('Particle tracing completed')
 
         call write_output
         call print_phase_time('Output writing completed')
@@ -430,6 +445,8 @@ contains
         use field_base, only: magnetic_field_t
         use field, only: field_from_file, is_spectre_file
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
+        use boozer_chartmap, only: set_boozer_chartmap_spline_orders, &
+            load_boozer_from_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
             REFCOORDS, SPECTRE, set_magfie_refcoords_field
@@ -437,6 +454,8 @@ contains
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
         use params, only: coord_input, field_input, wall_input, wall_units
+        use field_can_mod, only: init_field_can_boozer_chartmap_compact
+        use new_vmec_stuff_mod, only: nper
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
@@ -444,6 +463,8 @@ contains
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
         logical :: use_boozer_chartmap, use_spectre
+        character(32) :: compact_value, backend_value, starts_value
+        integer :: compact_length, compact_status
 
         self%integmode = aintegmode
         map_boundary_exit_code = ORBIT_EXIT_LCFS
@@ -458,6 +479,22 @@ contains
             if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
         end if
 
+        compact_cuda_rk_init = .false.
+        call get_environment_variable('SIMPLE_GPU_COMPACT_INIT', compact_value, &
+            compact_length, compact_status)
+        if (compact_status == 0 .and. compact_length > 0) &
+            compact_cuda_rk_init = &
+            trim(adjustl(compact_value(:compact_length))) /= '0'
+        if (compact_cuda_rk_init) then
+            call get_environment_variable('SIMPLE_GPU_BACKEND', backend_value)
+            call get_environment_variable('SIMPLE_GPU_START_COORDINATES', &
+                starts_value)
+            if (trim(adjustl(backend_value)) /= 'cuda-native' .or. &
+                trim(adjustl(starts_value)) /= 'boozer' .or. &
+                .not. use_boozer_chartmap .or. len_trim(wall_input) > 0) &
+                error stop 'compact init requires native CUDA Boozer starts without wall'
+        end if
+
         ! TEST field is analytic - no VMEC or field files needed
         if (isw_field_type == TEST) then
             invariant_edge_radius = 0.5_dp
@@ -467,6 +504,13 @@ contains
             call init_spectre_field(self)
             call print_phase_time('SPECTRE field loading completed')
         else if (use_boozer_chartmap) then
+            call set_boozer_chartmap_spline_orders(ans_s, ans_tp)
+            if (compact_cuda_rk_init) then
+                call load_boozer_from_chartmap(field_input, .true.)
+                call init_field_can_boozer_chartmap_compact
+                self%fper = twopi/real(nper, dp)
+                call print_phase_time('Compact Boozer RK table loading completed')
+            else
             ! Boozer chartmap: file-based, no VMEC initialization needed
             call init_reference_coordinates(coord_input)
             call print_phase_time('Reference coordinate system '// &
@@ -488,6 +532,7 @@ contains
             if (self%integmode >= 0) then
                 call field_from_file(field_input, field_temp)
                 call print_phase_time('Boozer chartmap field loading completed')
+            end if
             end if
         else
             vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
@@ -562,6 +607,7 @@ contains
             call print_phase_time('Canonical field initialization completed')
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                 isw_field_type == MEISS .or. isw_field_type == ALBERT) then
+            if (compact_cuda_rk_init) return
             call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
                 canonical_grid_ntheta, canonical_grid_nphi, &
                 canonical_ode_relerr)
@@ -633,6 +679,7 @@ contains
             ! interface (#441). Beyond the edge the locked per-volume field is
             ! extended linearly, so iterates out there stay finite.
             sympl_rmax = real(sf%data%Mvol + 1, dp)
+            !$acc update device(sympl_rmax)
             call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
                 spectre_ncon_phi, spectre_ncon_order, &
                 spectre_ncon_ode_max_steps, &
@@ -822,6 +869,311 @@ contains
         end if
     end subroutine trace_parallel
 
+    subroutine read_optional_environment_real(name, default_value, value)
+        character(*), intent(in) :: name
+        real(dp), intent(in) :: default_value
+        real(dp), intent(out) :: value
+
+        character(128) :: text
+        integer :: length, status
+
+        value = default_value
+        call get_environment_variable(name, text, length, status)
+        if (status /= 0 .or. length <= 0) return
+        read (text(:length), *, iostat=status) value
+        if (status /= 0) error stop 'invalid real-valued SIMPLE environment setting'
+    end subroutine read_optional_environment_real
+
+    subroutine trace_gpu_production(norb)
+        ! End-to-end loss-tracing path used by the Landreman comparison. This
+        ! path deliberately excludes the separate continuous fast-classifier
+        ! campaign (J_parallel and rotation only) and all unsupported physics.
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use simple, only: init_sympl
+        use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method
+        use field_can_boozer, only: eval_field_booz
+        use field_can_mod, only: get_val
+        use boozer_sub, only: boozer_rk_device_supported, sync_boozer_state
+        use magfie_sub, only: BOOZER
+        use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, &
+            CASH_KARP, DORMAND_PRINCE
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        use simple_cuda_native, only: trace_orbits_cuda_native_landreman, &
+            initialize_cuda_native_particle, evaluate_cuda_native_particle
+#endif
+
+        type(tracer_t), intent(inout) :: norb
+        type(symplectic_integrator_t), allocatable :: si_gpu(:)
+        type(field_can_t), allocatable :: f_gpu(:)
+        integer, allocatable :: loss_step(:), nfev(:)
+        real(dp), allocatable :: loss_time_normalized(:), zcanonical(:, :)
+        logical, allocatable :: passing(:)
+        character(32) :: method_name, landreman_value, start_coordinates
+        character(32) :: backend_name
+        character(1024) :: particle_profile_path
+        integer :: method_len, method_stat, method, init_mode, i, it
+        integer :: backend_len, backend_stat
+        integer :: landreman_len, landreman_stat, start_coordinates_len
+        integer :: start_coordinates_stat, particle_profile_len
+        integer :: particle_profile_stat, particle_profile_unit
+        integer(8) :: nfev_total, warp_nfev_slots
+        real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
+        real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
+        real(dp) :: time_scale, observed_duration, energy_loss_fraction
+        real(dp) :: cuda_profile_ms(5)
+        logical :: landreman_mode, cuda_native_backend
+
+        if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
+            class_plot .or. fast_class .or. ntcut > 0 .or. &
+            output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
+            error stop 'SIMPLE_GPU_RUN requires Boozer GC loss tracing without '// &
+                'collisions, wall, orbit output, or classifiers'
+        end if
+
+        method = integmode
+        call get_environment_variable('SIMPLE_GPU_METHOD', method_name, &
+            method_len, method_stat)
+        if (method_stat == 0 .and. method_len > 0) then
+            select case (trim(adjustl(method_name(:method_len))))
+            case ('euler', 'explicit-implicit-euler')
+                method = EXPL_IMPL_EULER
+            case ('midpoint')
+                method = MIDPOINT
+            case ('cash-karp', 'cash_karp', 'ck')
+                method = CASH_KARP
+            case ('dormand-prince', 'dormand_prince', 'dopri', 'rk45')
+                method = DORMAND_PRINCE
+            case default
+                error stop 'unknown SIMPLE_GPU_METHOD'
+            end select
+        end if
+        if (method /= EXPL_IMPL_EULER .and. method /= MIDPOINT .and. &
+            method /= CASH_KARP .and. method /= DORMAND_PRINCE) &
+            error stop 'SIMPLE_GPU_RUN supports euler, midpoint, cash-karp, or dopri'
+
+        backend_name = 'openacc'
+        call get_environment_variable('SIMPLE_GPU_BACKEND', backend_name, &
+            backend_len, backend_stat)
+        if (backend_stat /= 0 .or. backend_len <= 0) backend_name = 'openacc'
+        backend_name = trim(adjustl(backend_name))
+        select case (trim(backend_name))
+        case ('openacc')
+            cuda_native_backend = .false.
+        case ('cuda-native', 'cuda_native')
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            cuda_native_backend = .true.
+#else
+            error stop 'SIMPLE_GPU_BACKEND=cuda-native requires SIMPLE_ENABLE_CUDA'
+#endif
+        case default
+            error stop 'SIMPLE_GPU_BACKEND must be openacc or cuda-native'
+        end select
+        if (cuda_native_backend .and. method /= CASH_KARP .and. &
+            method /= DORMAND_PRINCE) &
+            error stop 'cuda-native backend supports only cash-karp or dopri'
+
+        init_mode = method
+        if (method == CASH_KARP .or. method == DORMAND_PRINCE) &
+            init_mode = EXPL_IMPL_EULER
+        allocate (si_gpu(ntestpart), f_gpu(ntestpart), loss_step(ntestpart), &
+            nfev(ntestpart), loss_time_normalized(ntestpart), &
+            zcanonical(4, ntestpart), passing(ntestpart))
+
+        start_coordinates = 'reference'
+        call get_environment_variable('SIMPLE_GPU_START_COORDINATES', &
+            start_coordinates, start_coordinates_len, start_coordinates_stat)
+        if (start_coordinates_stat /= 0 .or. start_coordinates_len <= 0) &
+            start_coordinates = 'reference'
+        start_coordinates = trim(adjustl(start_coordinates))
+        if (trim(start_coordinates) /= 'reference' .and. &
+            trim(start_coordinates) /= 'boozer') &
+            error stop 'SIMPLE_GPU_START_COORDINATES must be reference or boozer'
+
+        t0 = omp_get_wtime()
+        do i = 1, ntestpart
+            if (trim(start_coordinates) == 'boozer') then
+                z(1:3) = zstart(1:3, i)
+            else
+                call ref_to_integ(zstart(1:3, i), z(1:3))
+            end if
+            z(4:5) = zstart(4:5, i)
+            if (compact_cuda_rk_init .and. cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+                call initialize_cuda_native_particle(si_gpu(i), f_gpu(i), z, &
+                    dtaumin, relerr)
+                passing(i) = .false.
+                trap_par(i) = 0.0_dp
+                perp_inv(i) = z(4)**2*(1.0_dp - z(5)**2)/f_gpu(i)%Bmod
+#endif
+            else
+                call init_sympl(si_gpu(i), f_gpu(i), z, dtaumin, dtaumin, &
+                    relerr, init_mode)
+                call compute_pitch_angle_params(z, passing(i), trap_par(i), &
+                    perp_inv(i))
+            end if
+        end do
+        call sync_boozer_state
+        if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
+            .not. boozer_rk_device_supported()) &
+            error stop 'GPU RK requires scalar cubic or quintic Boozer splines'
+        t_init = omp_get_wtime() - t0
+
+        landreman_mode = .false.
+        call get_environment_variable('SIMPLE_GPU_LANDREMAN', landreman_value, &
+            landreman_len, landreman_stat)
+        if (landreman_stat == 0 .and. landreman_len > 0) &
+            landreman_mode = trim(adjustl(landreman_value(:landreman_len))) /= '0'
+        if (cuda_native_backend .and. .not. landreman_mode) &
+            error stop 'cuda-native backend currently requires SIMPLE_GPU_LANDREMAN=1'
+
+        t0 = omp_get_wtime()
+        warp_nfev_slots = 0_8
+        cuda_profile_ms = 0.0_dp
+        if (landreman_mode) then
+            call read_optional_environment_real('SIMPLE_GPU_T_BLOCK', &
+                1.0e-3_dp, block_time)
+            call read_optional_environment_real('SIMPLE_GPU_LOSS_TAU', &
+                0.1_dp, loss_tau)
+            call read_optional_environment_real('SIMPLE_GPU_MAXLOSS', &
+                0.02_dp, maxloss)
+            call read_optional_environment_real('SIMPLE_GPU_MIN_TIMESTEP', &
+                1.0e-10_dp, minimum_timestep)
+            if (block_time <= 0.0_dp .or. block_time > trace_time) &
+                error stop 'SIMPLE_GPU_T_BLOCK must be in (0, trace_time]'
+            if (loss_tau <= 0.0_dp) &
+                error stop 'SIMPLE_GPU_LOSS_TAU must be positive'
+            if (maxloss < 0.0_dp) &
+                error stop 'SIMPLE_GPU_MAXLOSS must be nonnegative'
+            if (minimum_timestep < 0.0_dp) &
+                error stop 'SIMPLE_GPU_MIN_TIMESTEP must be nonnegative'
+            time_scale = sqrt2/v0
+            total_time_normalized = &
+                real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+            if (cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+                call trace_orbits_cuda_native_landreman(si_gpu, f_gpu, &
+                    ntestpart, method, total_time_normalized, &
+                    block_time/time_scale, time_scale, loss_tau, maxloss, &
+                    minimum_timestep/time_scale, loss_step, &
+                    loss_time_normalized, zcanonical, nfev, observed_duration, &
+                    energy_loss_fraction, warp_nfev_slots, cuda_profile_ms)
+#endif
+            else
+                call trace_orbits_gpu_landreman(si_gpu, f_gpu, ntestpart, &
+                    ntimstep, ntau_macro, method, block_time/time_scale, &
+                    time_scale, loss_tau, maxloss, &
+                    minimum_timestep/time_scale, loss_step, &
+                    loss_time_normalized, zcanonical, nfev, observed_duration, &
+                    energy_loss_fraction, warp_nfev_slots)
+            end if
+        else
+            call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
+                ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
+            observed_duration = &
+                real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+            energy_loss_fraction = 0.0_dp
+        end if
+        t_trace = omp_get_wtime() - t0
+
+        total_time_normalized = real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+        confpart_pass = 0.0_dp
+        confpart_trap = 0.0_dp
+        unresolved_orbits = 0
+        nfev_total = 0_8
+        t0 = omp_get_wtime()
+        do i = 1, ntestpart
+            nfev_total = nfev_total + int(nfev(i), 8)
+            si_gpu(i)%z = zcanonical(:, i)
+            if (compact_cuda_rk_init .and. cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+                call evaluate_cuda_native_particle(f_gpu(i), zcanonical(1, i), &
+                    zcanonical(2, i), zcanonical(3, i))
+#endif
+            else
+                call eval_field_booz(f_gpu(i), zcanonical(1, i), &
+                    zcanonical(2, i), zcanonical(3, i), 0)
+            end if
+            call get_val(f_gpu(i), zcanonical(4, i))
+            call integ_to_ref(zcanonical(1:3, i), zend(1:3, i))
+            zend(4, i) = si_gpu(i)%pabs
+            zend(5, i) = f_gpu(i)%vpar/(si_gpu(i)%pabs*sqrt2)
+
+            if (loss_step(i) < 0) then
+                times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
+                orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
+            else if (loss_time_normalized(i) < total_time_normalized - &
+                    16.0_dp*epsilon(1.0_dp)*max(total_time_normalized, 1.0_dp)) then
+                times_lost(i) = loss_time_normalized(i)*sqrt2/v0
+                orbit_exit_code(i) = ORBIT_EXIT_LCFS
+            else
+                times_lost(i) = trace_time
+                orbit_exit_code(i) = ORBIT_EXIT_COMPLETED
+            end if
+            do it = 1, ntimstep
+                if (orbit_exit_code(i) == ORBIT_EXIT_COMPLETED .or. &
+                    times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) &
+                    call increase_confined_count(it, passing(i))
+            end do
+        end do
+        if (.not. landreman_mode) then
+            do i = 1, ntestpart, 32
+                warp_nfev_slots = warp_nfev_slots + 32_8*int( &
+                    maxval(nfev(i:min(i + 31, ntestpart))), 8)
+            end do
+        end if
+        t_finish = omp_get_wtime() - t0
+
+        print *, '==================== GPU production trace ==================='
+        print '(a,i0)', ' integrator mode = ', method
+        print '(a,a)', ' backend = ', trim(backend_name)
+        print '(a,i0)', ' particles = ', ntestpart
+        print '(a,a)', ' start coordinates = ', trim(start_coordinates)
+        print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
+        print '(a,f12.6,a)', ' tracing        = ', t_trace, ' s'
+        print '(a,f12.6,a)', ' finalization   = ', t_finish, ' s'
+        print '(a,f12.6,a)', ' end-to-end     = ', t_init + t_trace + t_finish, ' s'
+        print '(a,i0)', ' field evaluations = ', nfev_total
+        print '(a,i0)', ' warp RHS slots = ', warp_nfev_slots
+        if (warp_nfev_slots > 0_8) print '(a,f8.4)', &
+            ' warp RHS utilization = ', real(nfev_total, dp)/ &
+            real(warp_nfev_slots, dp)
+        print '(a,i0)', ' physical losses = ', count(orbit_exit_code == ORBIT_EXIT_LCFS)
+        print '(a,i0)', ' numerical failures = ', &
+            count(orbit_exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN)
+        if (landreman_mode) then
+            print '(a,f12.6,a)', ' observed until = ', &
+                observed_duration*sqrt2/v0, ' s'
+            print '(a,es12.4)', ' energy loss fraction = ', energy_loss_fraction
+        end if
+        if (cuda_native_backend) then
+            print '(a,f12.6,a)', ' CUDA allocation = ', cuda_profile_ms(1)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA upload     = ', cuda_profile_ms(2)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA kernel     = ', cuda_profile_ms(3)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA download   = ', cuda_profile_ms(4)/1.0e3_dp, ' s'
+            print '(a,f12.6,a)', ' CUDA C-ABI total= ', cuda_profile_ms(5)/1.0e3_dp, ' s'
+        end if
+        print *, '============================================================'
+
+        call get_environment_variable('SIMPLE_GPU_PARTICLE_PROFILE', &
+            particle_profile_path, particle_profile_len, particle_profile_stat)
+        if (particle_profile_stat == 0 .and. particle_profile_len > 0) then
+            open (newunit=particle_profile_unit, &
+                file=trim(particle_profile_path(:particle_profile_len)), &
+                status='replace', action='write')
+            write (particle_profile_unit, '(a)') &
+                'particle,s_start,theta_start,zeta_start,speed_start,'// &
+                'pitch_start,s_end,theta_end,zeta_end,speed_end,pitch_end,'// &
+                'nfev,loss_step,loss_time'
+            do i = 1, ntestpart
+                write (particle_profile_unit, &
+                    '(i0,10(",",es24.16),2(",",i0),",",es24.16)') &
+                    i, zstart(:, i), zend(:, i), nfev(i), loss_step(i), &
+                    loss_time_normalized(i)*time_scale
+            end do
+            close (particle_profile_unit)
+        end if
+    end subroutine trace_gpu_production
+
     subroutine trace_compare_gpu(norb)
         ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
         ! symplectic integrator on identical per-particle initial states.
@@ -829,35 +1181,44 @@ contains
         ! to the Boozer + EXPL_IMPL_EULER path without wall, collision, or
         ! classifier options.
         use orbit_symplectic, only: orbit_timestep_sympl
-        use orbit_symplectic_base, only: symplectic_integrator_t, EXPL_IMPL_EULER
-        use field_can_mod, only: field_can_t
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+            EXPL_IMPL_EULER, MIDPOINT
+        use field_can_mod, only: field_can_t, get_derivatives
+        use field_can_boozer, only: eval_field_booz
         use magfie_sub, only: BOOZER
         use boozer_sub, only: sync_boozer_state
-        use simple_gpu, only: trace_orbits_gpu
+        use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method
 
         type(tracer_t), intent(inout) :: norb
 
         type(symplectic_integrator_t), allocatable :: si_cpu(:), si_gpu(:)
         type(field_can_t), allocatable :: f_cpu(:), f_gpu(:)
-        integer, allocatable :: cpu_loss(:), gpu_loss(:)
+        integer, allocatable :: cpu_loss(:), gpu_loss(:), gpu_nfev(:)
+        real(dp), allocatable :: gpu_loss_time(:)
         real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
-        real(dp) :: z(5)
-        integer :: i, it, ktau, ierr, loss_mismatch
+        real(dp), allocatable :: rhs_y(:, :), rhs_mu(:), rhs_ro0(:)
+        real(dp), allocatable :: rhs_host(:, :), rhs_device(:, :)
+        real(dp) :: z(5), hprime, rhs_scale, rhs_error
+        integer :: i, it, ktau, ierr, loss_mismatch, rhs_location(2)
         integer :: cpu_lost, gpu_lost, flip
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
 
-        if (isw_field_type /= BOOZER .or. integmode /= EXPL_IMPL_EULER .or. swcoll .or. &
+        if (isw_field_type /= BOOZER .or. &
+            (integmode /= EXPL_IMPL_EULER .and. integmode /= MIDPOINT) .or. swcoll .or. &
             len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. generate_start_only) then
             error stop "simple_main.trace_compare_gpu: SIMPLE_GPU_BENCH requires Boozer, " // &
-                "EXPL_IMPL_EULER, and no wall/collision/classifier options"
+                "EXPL_IMPL_EULER or MIDPOINT, and no wall/collision/classifier options"
         end if
 
         call sync_boozer_state
 
         allocate (si_cpu(ntestpart), si_gpu(ntestpart))
         allocate (f_cpu(ntestpart), f_gpu(ntestpart))
-        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart))
+        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart), gpu_nfev(ntestpart))
+        allocate (gpu_loss_time(ntestpart))
         allocate (cpu_zend(4, ntestpart), gpu_zend(4, ntestpart))
+        allocate (rhs_y(4, ntestpart), rhs_mu(ntestpart), rhs_ro0(ntestpart))
+        allocate (rhs_host(4, ntestpart), rhs_device(4, ntestpart))
 
         ! Identical per-particle initialisation (host). init_sympl sets the
         ! orbit_timestep_sympl procedure pointer for the CPU reference.
@@ -867,7 +1228,32 @@ contains
             call init_sympl(si_cpu(i), f_cpu(i), z, dtaumin, dtaumin, relerr, integmode)
             si_gpu(i) = si_cpu(i)
             f_gpu(i) = f_cpu(i)
+
+            rhs_y(:, i) = si_cpu(i)%z
+            rhs_mu(i) = f_cpu(i)%mu
+            rhs_ro0(i) = f_cpu(i)%ro0
+            call eval_field_booz(f_cpu(i), rhs_y(1, i), rhs_y(2, i), &
+                rhs_y(3, i), 0)
+            call get_derivatives(f_cpu(i), rhs_y(4, i))
+            hprime = f_cpu(i)%dH(1)/f_cpu(i)%dpth(1)
+            rhs_host(1, i) = -(f_cpu(i)%dH(2) - &
+                f_cpu(i)%hth/f_cpu(i)%hph*f_cpu(i)%dH(3))/f_cpu(i)%dpth(1)
+            rhs_host(2, i) = hprime
+            rhs_host(3, i) = (f_cpu(i)%vpar - hprime*f_cpu(i)%hth)/f_cpu(i)%hph
+            rhs_host(4, i) = -(f_cpu(i)%dH(3) - hprime*f_cpu(i)%dpth(3))
         end do
+
+        call evaluate_rhs_gpu(rhs_y, rhs_mu, rhs_ro0, ntestpart, rhs_device)
+        rhs_scale = max(1.0_dp, maxval(abs(rhs_host)))
+        rhs_error = maxval(abs(rhs_device - rhs_host))/rhs_scale
+        if (rhs_error > 1.0e-11_dp) then
+            rhs_location = maxloc(abs(rhs_device - rhs_host))
+            print '(a,es12.4)', ' compact RHS relative error = ', rhs_error
+            print *, 'maximum RHS mismatch at ', rhs_location
+            print *, 'host RHS = ', rhs_host(:, rhs_location(2))
+            print *, 'compact RHS = ', rhs_device(:, rhs_location(2))
+            error stop 'compact GPU canonical RHS differs from host reference'
+        end if
 
         ! CPU reference (OpenMP over particles)
         t0 = omp_get_wtime()
@@ -897,8 +1283,8 @@ contains
 
         ! GPU kernel
         t0 = omp_get_wtime()
-        call trace_orbits_gpu(si_gpu, f_gpu, ntestpart, ntimstep, ntau_macro, &
-            gpu_loss, gpu_zend)
+        call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
+            ntau_macro, integmode, gpu_loss, gpu_loss_time, gpu_zend, gpu_nfev)
         t1 = omp_get_wtime()
         t_gpu = t1 - t0
 
@@ -918,6 +1304,8 @@ contains
 
         print *, '==================== GPU vs CPU tracing ===================='
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
+        print '(a,i0)', ' integrator mode = ', integmode
+        print '(a,es12.4)', ' compact RHS relative error = ', rhs_error
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
         print '(a,i0,a,i0,a,f7.4)', ' CPU lost = ', cpu_lost, ' / ', ntestpart, &
@@ -927,6 +1315,7 @@ contains
         print '(a,i0,a,i0)', ' lost<->confined flips = ', flip, ' / ', ntestpart
         print '(a,f10.4,a)', ' CPU time (OpenMP) = ', t_cpu, ' s'
         print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
+        print '(a,i0)', ' GPU field evaluations = ', sum(gpu_nfev)
         if (t_gpu > 0d0) print '(a,f8.2,a)', ' speedup (CPU/GPU) = ', t_cpu/t_gpu, ' x'
         print *, '============================================================'
     end subroutine trace_compare_gpu
@@ -1012,6 +1401,7 @@ contains
 
     subroutine sample_particles(xstart_is_integ_coords)
         use samplers, only: sample, START_FILE, sample_grid, &
+            sample_read_integration, &
             sample_surface_fieldline, sample_surface_fieldline_from_integ
 
         logical, intent(in), optional :: xstart_is_integ_coords
@@ -1054,6 +1444,9 @@ contains
                     '(2 < num_surf), stopping.'
                 stop
             end if
+
+        elseif (6 == startmode) then
+            call sample_read_integration(zstart, START_FILE)
 
         else
             print *, 'Unknown startmode: ', startmode

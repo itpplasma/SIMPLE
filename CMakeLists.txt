@@ -77,7 +77,53 @@ option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+option(SIMPLE_ENABLE_CUDA
+    "Build direct-CUDA guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
+
+if(SIMPLE_ENABLE_CUDA)
+    enable_language(CXX)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "SIMPLE_ENABLE_CUDA requires a CUDA compiler")
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+
+    # Create this target before project-wide Fortran link dependencies are
+    # introduced below. The standalone C ABI is intentionally usable by the
+    # Landreman Python harness without pulling NetCDF/HDF5 or SIMPLE itself.
+    add_library(simple_cuda_firm_rk54 SHARED
+        src/simple_cuda_firm_rk54.cu
+        src/simple_cuda_firm_rk54.h)
+    target_include_directories(simple_cuda_firm_rk54 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    find_package(OpenMP COMPONENTS CXX REQUIRED)
+    target_link_libraries(simple_cuda_firm_rk54 PUBLIC
+        CUDA::cudart OpenMP::OpenMP_CXX)
+    target_compile_options(simple_cuda_firm_rk54 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v;-Xcompiler=-fopenmp>)
+    set_target_properties(simple_cuda_firm_rk54 PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+    add_library(simple_cuda_native_rk54 SHARED
+        src/simple_cuda_native_rk54.cu
+        src/simple_cuda_native_rk54.h)
+    target_include_directories(simple_cuda_native_rk54 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(simple_cuda_native_rk54 PUBLIC CUDA::cudart)
+    target_compile_options(simple_cuda_native_rk54 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v>)
+    set_target_properties(simple_cuda_native_rk54 PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
 
 if(SIMPLE_DETERMINISTIC_FP)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -108,16 +154,27 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         # "unified" additionally covers module/static data (needs HMM driver).
         set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
             "OpenACC memory model: managed|unified|separate")
-        message(STATUS "OpenACC enabled for NVHPC compiler (mem:${SIMPLE_OPENACC_MEM})")
+        set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
+            "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
+        # NVHPC before 24.x spells managed memory as -gpu=managed. Newer
+        # compilers reject that legacy spelling when another target uses the
+        # explicit mem:managed form, so keep every target on one spelling.
+        if(CMAKE_Fortran_COMPILER_VERSION VERSION_LESS "24.0" AND
+           SIMPLE_OPENACC_MEM STREQUAL "managed")
+            set(_simple_openacc_mem_option "managed")
+        else()
+            set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
+        endif()
+        message(STATUS "OpenACC enabled for NVHPC compiler (arch:${SIMPLE_OPENACC_GPU_ARCH}, mem:${SIMPLE_OPENACC_MEM})")
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
+            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
+            $<$<COMPILE_LANGUAGE:C>:-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}>
         )
         add_link_options(
             -acc
-            -gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}
+            -gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}
         )
     endif()
 endif()
@@ -182,6 +239,24 @@ if(SIMPLE_DETERMINISTIC_FP)
     set(LIBNEO_DETERMINISTIC_FP ON CACHE BOOL
         "Use deterministic floating-point options in libneo" FORCE)
 endif()
+
+# fortnum provides the root finder and allocation-free GPU RK5(4) device
+# integrator used by SIMPLE. libneo declares fortnum as well, so this must be
+# declared first: FetchContent keeps the first declaration and silently ignores
+# later pins. Without this ordering, a clean clone can resolve an older
+# libneo-selected fortnum and miss fortnum_ode_rk54_device.mod.
+if(NOT TARGET fortnum)
+    include(FetchContent)
+    FetchContent_Declare(
+        fortnum
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+        # Temporary dependency pin for the tuned-DOPRI PR; update to the
+        # resulting Fortnum main commit after lazy-fortran/fortnum#90 merges.
+        GIT_TAG b382eff4d2578570c05cdc0b8471e11ce61fb8bd
+    )
+    FetchContent_MakeAvailable(fortnum)
+endif()
+
 find_or_fetch(libneo)
 
 # Consume the scientific-I/O target selected by libneo. The variable fallback
@@ -237,18 +312,6 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(USE_FORTPLOT)
 else()
     message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")
-endif()
-
-# fortnum provides the multidimensional root finder (multiroot_hybrids) that
-# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi.
-if(NOT TARGET fortnum)
-    include(FetchContent)
-    FetchContent_Declare(
-        fortnum
-        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        GIT_TAG 92de6e949a772cfffc73bb5295fe5e2b056b9c18
-    )
-    FetchContent_MakeAvailable(fortnum)
 endif()
 
 if (SIMPLE_TESTING)
