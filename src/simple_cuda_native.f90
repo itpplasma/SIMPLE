@@ -1,4 +1,7 @@
 module simple_cuda_native
+    ! Native CUDA bridge for SIMPLE's segmented loss objective used in the
+    ! Landreman comparison. The related optimization and loss-threshold
+    ! protocol is described at https://arxiv.org/abs/2606.19523.
     use, intrinsic :: iso_c_binding, only: c_double, c_float, c_int, &
         c_int64_t, c_size_t
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
