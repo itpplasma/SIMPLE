@@ -8,12 +8,15 @@ or integrator.
 gpu_mode = 'production'
 gpu_backend = 'cuda-native'
 gpu_method = 'dopri'
-gpu_landreman = .True.
+gpu_landreman = .True.       ! segmented loss objective; see arXiv:2606.19523
 ```
 
 Use Boozer guiding-center tracing (`isw_field_type = 2`) without collisions,
 walls, orbit output, or classifier options. Native CUDA supports tuned DOPRI
 and Cash-Karp. DOPRI is the default. Both use `relerr` as their tolerance.
+The segmented loss-threshold objective is the Landreman comparison mode; the
+related optimization and tracing protocol is described in
+https://arxiv.org/abs/2606.19523.
 
 ## Build and run
 

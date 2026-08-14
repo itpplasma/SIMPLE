@@ -9,6 +9,8 @@
  *
  * Reference implementation: FIRM3D (Fast Ion Reduced Models in 3D),
  * https://github.com/ColumbiaStellaratorTheory/firm3d
+ * Related alpha-confinement optimization and loss-threshold protocol:
+ * https://arxiv.org/abs/2606.19523
  *
  * FIRM3D is MIT-licensed, Copyright (c) 2025 ColumbiaStellaratorTheory.
  * The complete upstream notice is preserved in

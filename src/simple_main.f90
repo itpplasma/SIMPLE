@@ -849,6 +849,8 @@ contains
 
     subroutine trace_gpu_production(norb)
         ! End-to-end loss-tracing path used by the Landreman comparison. This
+        ! related optimization and loss-threshold protocol is described at
+        ! https://arxiv.org/abs/2606.19523.
         ! path deliberately excludes the separate continuous fast-classifier
         ! campaign (J_parallel and rotation only) and all unsupported physics.
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan

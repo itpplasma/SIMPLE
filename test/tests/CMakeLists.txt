@@ -894,7 +894,8 @@ set_tests_properties(test_gpu_midpoint_bench PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench
     TIMEOUT 120)
 
-# The former segmented Landreman test exercised the legacy OpenACC production
+# The former segmented Landreman test exercised the loss-threshold protocol
+# described at https://arxiv.org/abs/2606.19523 and the legacy OpenACC production
 # path with an ordinary VMEC file. Native CUDA production requires a compact
 # Boozer RK chartmap, so segmented CUDA accounting is covered by
 # test_cuda_native_bridge instead.

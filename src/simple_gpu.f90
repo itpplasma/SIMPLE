@@ -4,6 +4,8 @@ module simple_gpu
     ! implementation of the FIRM3D/Landreman tracing protocol. No FIRM3D
     ! source code was copied. Reference implementation:
     ! https://github.com/ColumbiaStellaratorTheory/firm3d
+    ! Related alpha-confinement optimization and loss-threshold protocol:
+    ! https://arxiv.org/abs/2606.19523
     ! FIRM3D is MIT-licensed, Copyright (c) 2025 ColumbiaStellaratorTheory;
     ! the complete upstream notice is in LICENSES/FIRM3D-MIT.txt.
 

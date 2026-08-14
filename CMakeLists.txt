@@ -98,7 +98,9 @@ if(SIMPLE_ENABLE_CUDA)
 
     # Create this target before project-wide Fortran link dependencies are
     # introduced below. The standalone C ABI is intentionally usable by the
-    # Landreman Python harness without pulling NetCDF/HDF5 or SIMPLE itself.
+    # Landreman Python harness without pulling NetCDF/HDF5 or SIMPLE itself;
+    # the related loss-threshold protocol is described at
+    # https://arxiv.org/abs/2606.19523.
     add_library(simple_cuda_firm_rk54 SHARED
         src/simple_cuda_firm_rk54.cu
         src/simple_cuda_firm_rk54.h)

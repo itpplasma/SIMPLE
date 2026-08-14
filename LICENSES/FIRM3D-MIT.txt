@@ -8,6 +8,10 @@ the referenced FIRM3D project and is included for clear provenance.
 Reference implementation:
 https://github.com/ColumbiaStellaratorTheory/firm3d
 
+Related publication describing the alpha-confinement optimization and
+loss-threshold tracing objective:
+https://arxiv.org/abs/2606.19523
+
 MIT License
 
 Copyright (c) 2025 ColumbiaStellaratorTheory

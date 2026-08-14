@@ -65,7 +65,8 @@ output_error = .False. ! Output additional error diagnostics
 ! gpu_backend = 'cuda-native'
 ! gpu_method = 'dopri' (or 'cash-karp' for native CUDA)
 ! gpu_start_coordinates = 'reference' or 'boozer'
-! gpu_landreman = .True. uses the segmented alpha-loss objective.
+! gpu_landreman = .True. uses the segmented alpha-loss objective described at
+! https://arxiv.org/abs/2606.19523.
 ! gpu_compact_init = .False. uses the native CUDA compact initializer.
 ! gpu_num_devices = 1
 ! gpu_t_block = 1d-3

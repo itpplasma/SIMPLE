@@ -15,6 +15,8 @@ modes are documented in `DOC/config.md` and `examples/simple_full.in`. The
 software is distributed under the MIT License. The FIRM3D-compatible tracing
 implementation has separate provenance information in
 [LICENSES/FIRM3D-MIT.txt](LICENSES/FIRM3D-MIT.txt).
+The segmented loss objective follows the related GPU tracing and optimization
+protocol described by Landreman et al. [3].
 
 ## Building
 
@@ -133,7 +135,7 @@ needed. Set `gpu_mode = 'production'` and use Boozer guiding-center tracing
 gpu_mode = 'production'
 gpu_backend = 'cuda-native'
 gpu_method = 'dopri'       ! tuned Dormand-Prince
-gpu_landreman = .True.     ! segmented alpha-loss objective
+gpu_landreman = .True.     ! segmented alpha-loss objective [3]
 ```
 
 The native CUDA path requires the CUDA toolkit, a C++17 compiler, and a normal
@@ -156,7 +158,7 @@ default. The tolerance is `relerr` from the same `simple.in` file. Set
 `gpu_start_coordinates = 'boozer'` only when `start.dat` already contains
 Boozer coordinates. Set `gpu_particle_profile` to write the per-particle CSV.
 The Landreman controls are `gpu_t_block`, `gpu_loss_tau`, `gpu_maxloss`, and
-`gpu_min_timestep`.
+`gpu_min_timestep`; see [3] for the related loss-threshold objective.
 
 ## Boozer chartmaps
 
@@ -198,6 +200,11 @@ https://doi.org/10.1017/S0022377820000203
 with non-canonical quadrature for guiding-center orbits in magnetic confinement
 devices," *Journal of Computational Physics* 403, 109065 (2020),
 https://doi.org/10.1016/j.jcp.2019.109065
+
+[3] M. Landreman, M. Czekanski, A. Giuliani, B. Jang, and R. Conlin,
+"Bayesian optimization of stellarator alpha-particle confinement using
+data-informed parameter spaces and dimensionality reduction," arXiv:2606.19523
+(2026), https://arxiv.org/abs/2606.19523
 
 When using the FIRM3D-compatible tracing path, also retain the provenance in
 [LICENSES/FIRM3D-MIT.txt](LICENSES/FIRM3D-MIT.txt).

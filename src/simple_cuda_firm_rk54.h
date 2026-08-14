@@ -8,7 +8,9 @@
  * independent SIMPLE implementation of the FIRM3D tracing protocol. No
  * FIRM3D source code was copied. See the reference implementation at
  * https://github.com/ColumbiaStellaratorTheory/firm3d and the complete
- * upstream MIT notice in LICENSES/FIRM3D-MIT.txt.
+ * upstream MIT notice in LICENSES/FIRM3D-MIT.txt. The related
+ * alpha-confinement optimization and loss-threshold protocol is described at
+ * https://arxiv.org/abs/2606.19523.
  */
 
 #include <stddef.h>
