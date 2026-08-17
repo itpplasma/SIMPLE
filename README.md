@@ -125,11 +125,11 @@ The main outputs are:
 
 Numerically unresolved orbits are reported separately from physical losses.
 
-## GPU builds and runs
+## GPU quickstart
 
-GPU runs are configured in `simple.in`. No GPU environment variables are
-needed. Set `gpu_mode = 'production'` and use Boozer guiding-center tracing
-(`isw_field_type = 2`) without collisions, walls, orbit output, or classifiers:
+The supported production GPU backend is native CUDA. Configure it in
+`simple.in` for Boozer guiding-center tracing (`isw_field_type = 2`), without
+collisions, walls, orbit output, or classifiers:
 
 ```fortran
 gpu_mode = 'production'
@@ -138,12 +138,13 @@ gpu_method = 'dopri'       ! tuned Dormand-Prince
 gpu_landreman = .True.     ! segmented alpha-loss objective [3]
 ```
 
-The native CUDA path requires the CUDA toolkit, a C++17 compiler, and a normal
-GNU Fortran build:
+Build with the CUDA toolkit, CMake, Ninja, and either GNU or NVIDIA Fortran.
+Set the CUDA architecture for the target GPU. Perlmutter's A100 uses `80`:
 
 ```bash
 cmake -S . -B build-cuda -G Ninja \
-  -DSIMPLE_ENABLE_CUDA=ON
+  -DSIMPLE_ENABLE_CUDA=ON \
+  -DCMAKE_CUDA_ARCHITECTURES=80
 cmake --build build-cuda -j
 ```
 
@@ -153,12 +154,9 @@ With the `simple.in` settings above, run:
 (cd run && ../build-cuda/simple.x simple.in)
 ```
 
-Native CUDA supports tuned DOPRI and Cash-Karp; `gpu_method = 'dopri'` is the
-default. The tolerance is `relerr` from the same `simple.in` file. Set
-`gpu_start_coordinates = 'boozer'` only when `start.dat` already contains
-Boozer coordinates. Set `gpu_particle_profile` to write the per-particle CSV.
-The Landreman controls are `gpu_t_block`, `gpu_loss_tau`, `gpu_maxloss`, and
-`gpu_min_timestep`; see [3] for the related loss-threshold objective.
+The complete GPU configuration and controls are in
+[DOC/gpu-cuda.md](DOC/gpu-cuda.md). Cluster-specific build and Slurm examples
+for Perlmutter, aCluster, and sCluster are in [RUN/README.md](RUN/README.md).
 
 ## Boozer chartmaps
 

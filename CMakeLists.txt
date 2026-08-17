@@ -249,6 +249,15 @@ if(SIMPLE_DETERMINISTIC_FP)
         "Use deterministic floating-point options in libneo" FORCE)
 endif()
 
+# SIMPLE_ENABLE_OPENACC is the authoritative switch.  Otherwise libneo
+# enables OpenACC automatically for nvfortran, even for CPU builds and for
+# SIMPLE's native CUDA path.  That legacy interpolation path is not used by
+# SIMPLE's CUDA kernels and fails with some current NVHPC releases.
+if(NOT SIMPLE_ENABLE_OPENACC)
+    set(ENABLE_OPENACC OFF CACHE BOOL
+        "Disable libneo OpenACC when SIMPLE does not enable OpenACC" FORCE)
+endif()
+
 # fortnum provides the root finder and allocation-free GPU RK5(4) device
 # integrator used by SIMPLE. libneo declares fortnum as well, so this must be
 # declared first: FetchContent keeps the first declaration and silently ignores
