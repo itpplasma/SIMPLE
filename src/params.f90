@@ -57,6 +57,10 @@ module params
     integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103
     integer, parameter :: ORBIT_EXIT_NUMERICAL_EVENT = 104
     integer, parameter :: ORBIT_EXIT_NUMERICAL_FULL_ORBIT = 105
+    ! A marker whose trajectory was silently corrupted by a storm of symplectic
+    ! recovery events. It is not a physical loss and is not counted as confined;
+    ! the trajectory is no longer trustworthy, so the marker is flagged for audit.
+    integer, parameter :: ORBIT_EXIT_RECOVERY_STORM = 106
     real(dp) :: contr_pp = -1d0
     integer          :: ibins
     logical          :: generate_start_only = .False.
@@ -165,6 +169,12 @@ module params
     !> microstep. A second consecutive failure is terminal rather than freezing
     !> the remainder of the orbit at one phase-space point.
     integer, parameter :: max_consecutive_warning_holds = 1
+    !> Per-marker threshold: if a marker accumulates more than this many recovery
+    !> events during the full trace, it is flagged as a recovery storm exit (106).
+    integer :: recovery_storm_threshold = 1000
+    !> Run-level warning bound: if the ensemble-mean recovery events per
+    !> microstep exceeds this value, a warning suggesting a larger npoiper2
+    real(dp) :: recovery_rate_warning_per_step = 1.0e1_dp
 
     character(1000) :: field_input = ''
     character(1000) :: coord_input = ''
@@ -222,7 +232,8 @@ module params
 	        spectre_ncon_ode_relerr, &
         output_results_netcdf, &
 	        output_error, output_orbits_macrostep, &  ! callback
-	        macrostep_time_grid, checkpoint_interval, restart
+	        macrostep_time_grid, checkpoint_interval, restart, &
+        recovery_storm_threshold, recovery_rate_warning_per_step
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
