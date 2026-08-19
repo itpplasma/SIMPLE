@@ -18,7 +18,7 @@ module field_can_spectre
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use field_base, only: magnetic_field_t
     use field_spectre, only: spectre_field_t
-    use field_can_base, only: field_can_t, n_field_evaluations, twopi
+    use field_can_base, only: count_field_evaluation, field_can_t, twopi
     use field_can_meiss, only: meiss_volume_t, init_meiss, get_meiss_coordinates, &
                                harvest_meiss_volume, cleanup_meiss
     use coordinate_scaling, only: identity_scaling_t
@@ -294,7 +294,7 @@ contains
         real(dp) :: x(3), dr_out
         real(dp) :: y(5), dy(3, 5), d2y(6, 5)
 
-        n_field_evaluations = n_field_evaluations + 1
+        call count_field_evaluation(mode_secders)
 
         lvol = active_volume(r)
         x = [band_clamp(r, spectre_volumes(lvol)), th_c, ph_c]

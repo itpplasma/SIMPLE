@@ -3065,19 +3065,35 @@ contains
     end subroutine collide
 
     subroutine write_output
-        use field_can_base, only: n_field_evaluations
+        use field_can_base, only: n_field_evaluations, n_field_evaluations_d1, &
+                                  n_field_evaluations_d2
         use params, only: output_results_netcdf
         use netcdf_results_output, only: write_results_netcdf
 
         integer(8) :: total_field_evaluations
+        integer(8) :: total_field_evaluations_d1, total_field_evaluations_d2
 
         ! Sum field evaluations across all threads
         total_field_evaluations = 0
-        !$omp parallel reduction(+:total_field_evaluations)
+        total_field_evaluations_d1 = 0
+        total_field_evaluations_d2 = 0
+        !$omp parallel reduction(+:total_field_evaluations, &
+        !$omp&                   total_field_evaluations_d1, &
+        !$omp&                   total_field_evaluations_d2)
         total_field_evaluations = total_field_evaluations + n_field_evaluations
+        total_field_evaluations_d1 = total_field_evaluations_d1 + &
+                                     n_field_evaluations_d1
+        total_field_evaluations_d2 = total_field_evaluations_d2 + &
+                                     n_field_evaluations_d2
         !$omp end parallel
 
         print *, "Total field evaluations: ", total_field_evaluations
+        ! Split by derivative depth: first derivatives only (what explicit
+        ! Runge-Kutta paths need) versus second derivatives (what the implicit
+        ! symplectic Jacobians need). The two cost different amounts, so a fair
+        ! cost-per-accuracy comparison has to weight them separately.
+        print *, "  first-derivative  (mode_secders=0): ", total_field_evaluations_d1
+        print *, "  second-derivative (mode_secders>0): ", total_field_evaluations_d2
 
         call write_results
 

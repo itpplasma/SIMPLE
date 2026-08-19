@@ -345,6 +345,23 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+    # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
+    # Built but deliberately not registered with ctest: it is a timing
+    # measurement, so its result is hardware-dependent and must not gate CI.
+    # Run manually from the project root: ./build/test/tests/bench_secders_cost.x
+    add_executable (bench_secders_cost.x bench_secders_cost.f90)
+    target_link_libraries(bench_secders_cost.x simple)
+
+    add_executable (test_field_eval_counters.x test_field_eval_counters.f90)
+    target_link_libraries(test_field_eval_counters.x simple)
+    add_test(NAME test_field_eval_counters
+        COMMAND test_field_eval_counters.x
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(test_field_eval_counters PROPERTIES
+        LABELS "unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
