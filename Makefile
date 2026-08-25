@@ -1,7 +1,7 @@
 CONFIG ?= Release
 FLAGS ?=
 BUILD_DIR := build
-GOLDEN_LIBNEO_REF := 055ec9aa7c0e80228d393fdc6e4e2a99235e5973
+GOLDEN_LIBNEO_REF := 9f1e9dcf5ab6800213415eac485e85a6d395f72a
 
 # Prevent ambient shell env from silently changing which libneo is fetched.
 # Pass the ref explicitly via: make ... LIBNEO_REF=<branch|tag|sha>
