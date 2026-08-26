@@ -30,6 +30,12 @@ procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 
 contains
 
+    subroutine init_field_can_boozer_chartmap_compact()
+        call field_can_from_name("boozer")
+        integ_to_ref => integ_to_ref_boozer_chartmap
+        ref_to_integ => ref_to_integ_boozer_chartmap
+    end subroutine init_field_can_boozer_chartmap_compact
+
 subroutine field_can_from_name(field_name, field_noncan, n_r, n_th, n_phi, &
     transformation_relerr)
 

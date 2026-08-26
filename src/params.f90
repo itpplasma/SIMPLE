@@ -13,6 +13,7 @@ module params
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
                                      EXPL_IMPL_EULER, &
+                                     CASH_KARP, DORMAND_PRINCE, &
                                      boundary_event_fraction_tolerance, &
                                      boundary_event_radial_tolerance, &
                                      symplectic_newton_warning_mode
@@ -70,6 +71,24 @@ module params
 	    integer(8), allocatable :: kt_macro(:)
 
     integer :: integmode = EXPL_IMPL_EULER
+
+    ! GPU execution is configured in the same namelist as the CPU run. Native
+    ! CUDA with tuned DOPRI is the default production path. The legacy
+    ! OpenACC path remains available only when selected explicitly.
+    character(16) :: gpu_mode = 'off'
+    character(16) :: gpu_backend = 'cuda-native'
+    character(16) :: gpu_method = 'dopri'
+    character(16) :: gpu_start_coordinates = 'reference'
+    logical :: gpu_landreman = .true.
+    logical :: gpu_compact_init = .false.
+    logical :: gpu_work_order = .true.
+    integer :: gpu_num_devices = 1
+    real(dp) :: gpu_t_block = 1.0d-3
+    real(dp) :: gpu_loss_tau = 0.1d0
+    real(dp) :: gpu_maxloss = 0.02d0
+    real(dp) :: gpu_min_timestep = 1.0d-10
+    real(dp) :: gpu_pilot_fraction = 0.04d0
+    character(1000) :: gpu_particle_profile = ''
 
     ! Orbit model selector. 0 = guiding-center (GC), the default symplectic
     ! gyro-averaged path. 7 = full orbit (FO), the gyro-resolved Boris pusher in
@@ -176,11 +195,15 @@ module params
     integer :: spectre_ncon_ode_max_steps = 1000000
     real(dp) :: spectre_ncon_ode_relerr = 1.0e-2_dp
 
-	    namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
-	        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
+    namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
+        trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
 	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
 	        isw_field_type, generate_start_only, startmode, grid_density, &
-	        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+        gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
+        gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
+        gpu_t_block, gpu_loss_tau, gpu_maxloss, gpu_min_timestep, &
+        gpu_pilot_fraction, gpu_particle_profile, &
 	        symplectic_newton_warning_mode, &
 	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
 	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
@@ -210,13 +233,18 @@ module params
 contains
 
     subroutine read_config(config_file)
-        character(256), intent(in) :: config_file
+        character(*), intent(in) :: config_file
 
         open (1, file=config_file, status='old', action='read')
         read (1, nml=config)
         close (1)
 
         call apply_config_aliases
+
+        gpu_mode = to_lower(trim(gpu_mode))
+        gpu_backend = to_lower(trim(gpu_backend))
+        gpu_method = to_lower(trim(gpu_method))
+        gpu_start_coordinates = to_lower(trim(gpu_start_coordinates))
 
         call reset_seed_if_deterministic
 
@@ -249,7 +277,44 @@ contains
             error stop 'Collisions are incompatible with classification'
         end if
 
+        call validate_gpu_config
+
     end subroutine read_config
+
+    subroutine validate_gpu_config
+        select case (trim(gpu_mode))
+        case ('off', 'production', 'benchmark')
+        case default
+            error stop 'gpu_mode must be off, production, or benchmark'
+        end select
+
+        select case (trim(gpu_backend))
+        case ('openacc', 'cuda-native', 'auto')
+        case default
+            error stop 'gpu_backend must be openacc, cuda-native, or auto'
+        end select
+
+        select case (trim(gpu_method))
+        case ('auto', 'euler', 'midpoint', 'cash-karp', 'dopri')
+        case default
+            error stop 'gpu_method must be auto, euler, midpoint, cash-karp, or dopri'
+        end select
+
+        select case (trim(gpu_start_coordinates))
+        case ('reference', 'boozer')
+        case default
+            error stop 'gpu_start_coordinates must be reference or boozer'
+        end select
+
+        if (gpu_num_devices < 1) error stop 'gpu_num_devices must be positive'
+        if (gpu_t_block <= 0.0d0) error stop 'gpu_t_block must be positive'
+        if (gpu_loss_tau <= 0.0d0) error stop 'gpu_loss_tau must be positive'
+        if (gpu_maxloss < 0.0d0) error stop 'gpu_maxloss must be nonnegative'
+        if (gpu_min_timestep < 0.0d0) &
+            error stop 'gpu_min_timestep must be nonnegative'
+        if (gpu_pilot_fraction < 0.0d0 .or. gpu_pilot_fraction > 0.25d0) &
+            error stop 'gpu_pilot_fraction must be in [0, 0.25]'
+    end subroutine validate_gpu_config
 
     subroutine validate_chart_boundary_kind
         select case (trim(chart_boundary_kind))

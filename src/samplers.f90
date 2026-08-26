@@ -81,6 +81,24 @@ contains
         call load_starting_points(zstart, filename)
     end subroutine
 
+    subroutine sample_read_integration(zstart, filename)
+        ! Read (s, theta_B, zeta_B, |v|/v0, v_parallel/|v|) and convert only
+        ! the position to SIMPLE's stored reference-coordinate convention.
+        ! This permits exact reuse of externally generated Boozer particles.
+        use field_can_mod, only: integ_to_ref
+
+        real(dp), dimension(:, :), intent(inout) :: zstart
+        character(len=*), intent(in) :: filename
+        real(dp) :: xinteg(3)
+        integer :: ipart
+
+        call load_starting_points(zstart, filename)
+        do ipart = 1, size(zstart, 2)
+            xinteg = zstart(1:3, ipart)
+            call integ_to_ref(xinteg, zstart(1:3, ipart))
+        end do
+    end subroutine sample_read_integration
+
     ! Samplers ################################
     subroutine sample_volume_single(zstart, s_inner, s_outer)
         use params, only: isw_field_type, num_surf

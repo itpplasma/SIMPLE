@@ -37,6 +37,13 @@ endif()
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
 file(CREATE_LINK "${WOUT_QH_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout_qh.nc" SYMBOLIC)
 
+# Keep all Python-backed tests on the same environment.  A worktree venv is
+# populated by uv and may contain dependencies unavailable to the system
+# interpreter selected by FindPython3.
+if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+    set(Python3_EXECUTABLE "${CMAKE_SOURCE_DIR}/.venv/bin/python" CACHE FILEPATH
+        "Python interpreter used by SIMPLE tests" FORCE)
+endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -416,6 +423,17 @@ set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
 add_executable (test_samplers.x test_samplers.f90)
 target_link_libraries(test_samplers.x simple)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
+add_executable(test_start_integration_coordinates.x
+    test_start_integration_coordinates.f90)
+target_link_libraries(test_start_integration_coordinates.x simple)
+add_test(NAME test_start_integration_coordinates
+    COMMAND test_start_integration_coordinates.x)
+set_tests_properties(test_start_integration_coordinates PROPERTIES
+    LABELS "unit"
+    WORKING_DIRECTORY
+        ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
 
 add_executable(test_deterministic_seed.x test_deterministic_seed.f90)
 target_link_libraries(test_deterministic_seed.x simple)
@@ -820,10 +838,48 @@ if(SIMPLE_ENABLE_OPENACC)
     )
 endif()
 
+if(SIMPLE_ENABLE_CUDA)
+    add_executable(test_cuda_firm_rk54.x test_cuda_firm_rk54.cu)
+    # Replace directory-wide Fortran I/O links: this C++/CUDA oracle only
+    # exercises the standalone CUDA C ABI.
+    set_property(TARGET test_cuda_firm_rk54.x PROPERTY
+        LINK_LIBRARIES simple_cuda_firm_rk54)
+    set_property(TARGET test_cuda_firm_rk54.x PROPERTY LINK_OPTIONS "")
+    add_test(NAME test_cuda_firm_rk54 COMMAND test_cuda_firm_rk54.x)
+    set_tests_properties(test_cuda_firm_rk54 PROPERTIES
+        LABELS "unit;gpu;cuda"
+        TIMEOUT 120)
+
+    add_executable(test_cuda_native_rk54.x test_cuda_native_rk54.cu)
+    set_property(TARGET test_cuda_native_rk54.x PROPERTY
+        LINK_LIBRARIES simple_cuda_native_rk54)
+    set_property(TARGET test_cuda_native_rk54.x PROPERTY LINK_OPTIONS "")
+    add_test(NAME test_cuda_native_rk54 COMMAND test_cuda_native_rk54.x)
+    set_tests_properties(test_cuda_native_rk54 PROPERTIES
+        LABELS "unit;gpu;cuda"
+        TIMEOUT 120)
+
+    add_executable(test_cuda_native_bridge.x test_cuda_native_bridge.f90)
+    target_link_libraries(test_cuda_native_bridge.x simple)
+    add_test(NAME test_cuda_native_bridge COMMAND test_cuda_native_bridge.x)
+    set_tests_properties(test_cuda_native_bridge PROPERTIES
+        LABELS "unit;gpu;cuda"
+        TIMEOUT 120)
+endif()
+
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.in
     ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench/test_gpu_orbit_bench.in
+    COPYONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_midpoint_bench.in
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench/test_gpu_midpoint_bench.in
+    COPYONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench/start.dat
     COPYONLY)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt
@@ -831,9 +887,7 @@ configure_file(
     COPYONLY)
 
 add_test(NAME test_gpu_orbit_bench
-    COMMAND ${CMAKE_COMMAND} -E env
-        SIMPLE_GPU_BENCH=1
-        $<TARGET_FILE:simple.x>
+    COMMAND $<TARGET_FILE:simple.x>
         test_gpu_orbit_bench.in
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_gpu_orbit_bench PROPERTIES
@@ -841,6 +895,22 @@ set_tests_properties(test_gpu_orbit_bench PROPERTIES
     PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench
     TIMEOUT 120)
+
+add_test(NAME test_gpu_midpoint_bench
+    COMMAND $<TARGET_FILE:simple.x>
+        test_gpu_midpoint_bench.in
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_gpu_midpoint_bench PROPERTIES
+    LABELS "unit;gpu"
+    PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench
+    TIMEOUT 120)
+
+# The former segmented Landreman test exercised the loss-threshold protocol
+# described at https://arxiv.org/abs/2606.19523 and the legacy OpenACC production
+# path with an ordinary VMEC file. Native CUDA production requires a compact
+# Boozer RK chartmap, so segmented CUDA accounting is covered by
+# test_cuda_native_bridge instead.
 
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
