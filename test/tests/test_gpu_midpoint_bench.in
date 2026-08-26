@@ -6,6 +6,6 @@ sbeg = 0.3d0
 startmode = 2
 netcdffile = '../wout.nc'
 isw_field_type = 2
-integmode = 1
+integmode = 3
 gpu_mode = 'benchmark'
 /

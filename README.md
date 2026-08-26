@@ -3,374 +3,206 @@
 # SIMPLE
 **S**ymplectic **I**ntegration **M**ethods for **P**article **L**oss **E**stimation
 
-SIMPLE computes statistical losses of guiding-center orbits for particles of given mass, charge and
-energy from the volume of 3D magnetic configurations. Orbits are traced via a symplectic integrator [1,2]
-that guarantees conservation of invariants of motion within fixed bounds over long integration periods.
-A classifier based on Poincarè plots [1] allows for accelerated prediction for confinement of regular (non-chaotic) orbits.
+SIMPLE computes guiding-center orbit losses for particles in three-dimensional
+magnetic configurations. It traces orbits with symplectic integrators and can
+classify regular and chaotic orbits from Poincare plots. The main application
+is fast evaluation of fusion alpha-particle losses during stellarator
+optimization.
 
-The main focus of SIMPLE is to make computation of fusion alpha particle losses fast enough to be used directly in
-stellarator optimization codes. For that reason currently 3D configurations with nested magnetic flux surfaces are
-supported based on a VMEC equilibrium file in NetCDF format, and orbits are computed without taking collisions into account.
-
-The code is free to use and modify under the MIT License and links to Runge-Kutta-Fehlberg routines in
-`SRC/contrib/rkf45.f90` from https://people.sc.fsu.edu/~jburkardt/f_src/rkf45/rkf45.html under the GNU LGPL License.
+The standard run uses a VMEC equilibrium in NetCDF format, nested magnetic
+flux surfaces, and collisionless guiding-center orbits. Other field and orbit
+modes are documented in `DOC/config.md` and `examples/simple_full.in`. The
+software is distributed under the MIT License. The FIRM3D-compatible tracing
+implementation has separate provenance information in
+[LICENSES/FIRM3D-MIT.txt](LICENSES/FIRM3D-MIT.txt).
+The segmented loss objective follows the related GPU tracing and optimization
+protocol described by Landreman et al. [3].
 
 ## Building
-Run `make` to produce a `build` directory including the main executable
-`simple.x`, main library `libsimple.so` and Python module `pysimple`.
 
-To build against a specific libneo branch, tag, or commit SHA, pass it
-explicitly; the ambient shell environment is intentionally ignored:
+The default build produces `build/simple.x`, the SIMPLE library, and, when
+the Python prerequisites are available, the `pysimple` module:
 
 ```bash
-make LIBNEO_REF=my-branch          # via make
-cmake -DLIBNEO_REF=my-branch ...   # via cmake directly
+make
 ```
 
-To use a local libneo checkout instead of fetching from GitHub:
+Build requirements:
+
+- CMake 3.22 or newer, with Ninja.
+- GNU Fortran and Git.
+- NetCDF-C and NetCDF-Fortran.
+- LAPACK and BLAS.
+- OpenMP.
+
+On common systems:
 
 ```bash
-make LIBNEO_PATH=/path/to/libneo
-cmake -DLIBNEO_SOURCE_DIR=/path/to/libneo ...
-```
-
-Required build tools:
-* CMake (>= 3.22)
-* Ninja
-* GNU Fortran (gfortran)
-* git
-
-Required libraries:
-* NetCDF-Fortran (and NetCDF-C), provides `nf-config` and `nc-config`
-* LAPACK/BLAS
-* OpenMP (enabled by default, usually included with gfortran)
-
-On Arch Linux:
-```bash
+# Arch Linux
 sudo pacman -S gcc-fortran cmake ninja netcdf netcdf-fortran lapack blas
-```
 
-On Ubuntu/Debian:
-```bash
-sudo apt install gfortran cmake ninja-build libnetcdf-dev libnetcdff-dev liblapack-dev libblas-dev
-```
+# Ubuntu or Debian
+sudo apt install gfortran cmake ninja-build libnetcdf-dev libnetcdff-dev \
+    liblapack-dev libblas-dev
 
-On macOS (Homebrew):
-```bash
+# macOS with Homebrew
 brew install gcc cmake ninja netcdf netcdf-fortran lapack
 ```
 
-### Python virtual environment (recommended)
+To select a libneo branch, tag, or commit, pass it explicitly:
 
-On machines where the system Python is externally managed (PEP 668), create a
-repository-local virtual environment before installing `f90wrap` or the Python
-bindings:
+```bash
+make LIBNEO_REF=my-branch
+```
+
+To use a local libneo checkout:
+
+```bash
+make LIBNEO_PATH=/path/to/libneo
+```
+
+For a reproducible floating-point build and the fast test suite:
+
+```bash
+make build-deterministic
+make test-fast
+```
+
+### Python interface
+
+Create the recommended repository-local environment with:
 
 ```bash
 ./setup-venv.sh
-```
-
-The script creates `.venv/`, installs the Python dependencies, and installs
-`pysimple` in editable mode so `python -c "import pysimple"` works from the
-repository root.
-
-If you are using SIMPLE together with the sibling benchmark checkout
-`../benchmark-simple-potato`, prefer the shared environment in that benchmark
-repository so all three checkouts (`../benchmark-simple-potato`, `../SIMPLE`,
-`../NEO-RT`) use the same Python installation:
-
-```bash
-source ../benchmark-simple-potato/.venv/bin/activate
-python -m pip install --no-build-isolation -e .
-```
-
-Later, reactivate the same environment with:
-
-```bash
 source .venv/bin/activate
 ```
 
-If you need to refresh packages after pulling new changes, rerun
-`./setup-venv.sh`. Pass `--recreate` to discard the existing `.venv` and start
-from scratch.
-
-If you prefer the manual steps, the equivalent workflow is:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -e . --no-build-isolation
-```
-
-Important: if CMake previously reported `Python f90wrap not found, skipping
-interface build.`, activate the virtual environment first and then rebuild or
-reinstall `pysimple` so the bindings are generated with `f90wrap` available on
-`PATH`.
-
-### Python API
-
-SIMPLE provides a clean module-level Python API for orbit tracing and classification.
-
-#### Basic Usage
+For a Python example, see `examples/simple_api.py`:
 
 ```python
 import pysimple
 
-# Initialize with VMEC file and parameters
-pysimple.init('wout.nc', deterministic=True, trace_time=1e-3)
-
-# Sample particles on a flux surface
+pysimple.init("wout.nc", deterministic=True, trace_time=1e-3)
 particles = pysimple.sample_surface(100, s=0.5)
-
-# Trace orbits in parallel
 results = pysimple.trace_parallel(particles)
-lost = ((results['loss_times'] > 0.0) & (results['loss_times'] < 1e-3)).sum()
-skipped = (results['loss_times'] < 0.0).sum()
+lost = ((results["loss_times"] > 0.0) &
+        (results["loss_times"] < 1e-3)).sum()
+skipped = (results["loss_times"] < 0.0).sum()
 print(f"Lost: {lost} particles (skipped deep-passing: {skipped})")
 ```
 
-#### Initialization
+Examples for classification, trajectories, and plotting are also included. The
+Python interface accepts the parameters documented in `src/params.f90` and
+`DOC/config.md`.
 
-**`pysimple.init(vmec_file, **params)`**
+## CPU quickstart
 
-Initialize SIMPLE with a VMEC equilibrium file and optional parameters.
+Copy `examples/simple.in` and provide a VMEC file named `wout.nc`:
 
-Parameters:
-- `vmec_file`: Path to VMEC NetCDF file (wout.nc)
-- `deterministic=True`: Use fixed random seed for reproducibility
-- `trace_time=1e-3`: Integration time in seconds
-- `ntestpart=100`: Number of test particles
-- `npoiper2=64`: Integration steps per poloidal transit
-- `integmode`: Integration method (default: MIDPOINT)
-- `isw_field_type`: Field type (`-1=TEST`, `0=CANFLUX`, `1=VMEC`, `2=BOOZER`, `3=MEISS`, `4=ALBERT`, `5=REFCOORDS`)
-- Any other Fortran parameter from params.f90
-
-#### Particle Sampling
-
-**`pysimple.sample_surface(n_particles, s)`**
-
-Sample particles uniformly on a flux surface.
-
-Returns: `(5, n_particles)` array with columns `[s, theta, phi, v/v0, lambda]`,
-where `lambda = v_parallel / v`
-
-**`pysimple.sample_volume(n_particles, s_inner, s_outer)`**
-
-Sample particles uniformly in a volume between two flux surfaces.
-
-**`pysimple.load_particles(filename)`**
-
-Load particles from a text file (e.g., start.dat format).
-
-#### Orbit Tracing
-
-**`pysimple.trace_parallel(positions, integrator='midpoint')`**
-
-Trace multiple particle orbits in parallel.
-
-Parameters:
-- `positions`: `(5, n_particles)` array of initial conditions
-- `integrator`: Integration method ('midpoint', 'rk45', 'gauss2', etc.)
-
-Returns dictionary:
-- `'final_positions'`: `(5, n_particles)` final positions
-- `'loss_times'`: `(n_particles,)` loss times
-- `'trap_parameter'`: `(n_particles,)` trapping parameter
-- `'perpendicular_invariant'`: `(n_particles,)` perpendicular invariant
-
-**`pysimple.trace_orbit(position, integrator='midpoint', return_trajectory=False)`**
-
-Trace a single particle orbit.
-
-If `return_trajectory=True`, returns full trajectory arrays.
-
-#### Orbit Classification
-
-**`pysimple.classify_parallel(positions, integrator='midpoint')`**
-
-Classify particle orbits as trapped or passing.
-
-Returns dictionary including all trace_parallel outputs plus:
-- `'passing'`: `(n_particles,)` boolean (True=passing, False=trapped)
-- `'lost'`: `(n_particles,)` boolean
-- `'jpar'`: `(n_particles,)` J-parallel conservation (0-2)
-- `'topology'`: `(n_particles,)` topological classification (0-2)
-- `'fractal'`: `(n_particles,)` fractal classification (`1=regular`, `2=chaotic`)
-
-#### Integrator Constants
-
-Available integrators (from `orbit_symplectic_base.f90`):
-- `pysimple.RK45` (0): Runge-Kutta 4/5
-- `pysimple.MIDPOINT` (3): Symplectic midpoint (default)
-- `pysimple.GAUSS1` (4): Gauss 1st order
-- `pysimple.GAUSS2` (5): Gauss 2nd order
-- `pysimple.LOBATTO3` (15): Lobatto 3rd order
-
-#### Complete Examples
-
-Start with `examples/simple_api.py`, `examples/classify_fast.py`, or
-`examples/classify_fractal.py`. `examples/orbits_and_cuts.py` now derives a
-simple toroidal-plane cut from `pysimple.trace_orbit()`, but `simple_api.py`
-remains the shortest entry point for new users.
-
-## Usage
-
-SIMPLE currently runs on a single node with OpenMP shared memory parallelization with one particle per thread and background
-fields residing in main memory. The main executable is `simple.x`.
-
-### Input
-* `simple.in`
-* a VMEC NetCDF equlibrium (wout.nc) file with name specified in `simple.in`
-
-A minimal quickstart input is `examples/simple.in`. The full parameter reference with comments is `examples/simple_full.in`. An example `wout.nc` can be obtained by
 ```bash
-wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc
+mkdir -p run
+cp examples/simple.in run/simple.in
+wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/\
+wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O run/wout.nc
+(cd run && ../build/simple.x simple.in)
 ```
 
-For a self-contained demo that downloads test data, runs SIMPLE, and prints the confined fraction, use `examples/run_example.sh`.
+`examples/simple_full.in` contains the complete input file with comments.
+`examples/run_example.sh` performs the same setup in `/tmp/simple_example`.
 
-In addition `start.dat` is either an input for given (`startmode>=2`) or an output (`startmode` 0 or 1) for randomly generated initial conditions.
-For chartmap coordinates, `chart_boundary_kind` declares what the outer chart
-surface represents. Its values are `auto` (the default), `lcfs`, `wall`, and
-`domain`. `auto` treats a chart whose recorded LCFS is at normalized radius one
-as an LCFS and treats other outer chart surfaces as numerical-domain limits.
-Set `wall` explicitly when the outer chart surface is the physical coordinate
-wall. The requested and effective values are stored in `results.nc`.
-For an external `wall_input` STL, SIMPLE tests every accepted microstep chord
-whose endpoint has passed the chart's recorded LCFS. Chords ending inside the
-LCFS are not queried: in a non-convex toroidal geometry their straight
-Cartesian interpolation can intersect the external wall even though the
-physical orbit has not left the plasma. The effective radial query threshold
-is stored as `wall_query_rho_lcfs` in `results.nc` (`-1` when inactive).
+The main outputs are:
 
-Default warning mode accepts finite generic Newton corrections through 100
-tolerance units after the iteration limit. This covers the observed roundoff
-plateau at `relerr=1e-13` while still rejecting large and non-finite iterates.
-At a midpoint crossing of the polar-coordinate axis, the signed endpoint and
-midpoint radii may remain unconverged even though the physical nonradial state
-has converged. SIMPLE accepts that chart change only when both radial values are
-within `1d-6`, the endpoint radius is negative, and the angular and momentum
-corrections satisfy the normal warning bound. It then applies the equivalent
-positive-radius chart switch and records `warning_axis_crossing_accept`.
-After symplectic retries fail, SIMPLE advances the same interval with the
-established adaptive-RK guiding-centre pusher. The conventional equations are
-always tried first. If they encounter the
-`B_parallel_star = B + rho_0 v_parallel b dot curl(b)` singularity, SIMPLE uses
-the leading toroidally regularized equations of
-[Burby and Ellison](https://doi.org/10.1063/1.5004429). The required condition
-is a nonzero contravariant toroidal field component. The near-identity spatial
-map is applied on entry and inverted on exit. If the reference polar chart
-itself becomes unresolved at the magnetic axis, one interval is bridged with
-the Cartesian Boris full-orbit pusher. Its field assembly uses the regular
-co-rotating `(X,Y,phi)` frame; the field-period wedge rotation restores the lab
-frame without an angular seam. These paths use the existing physical field in
-its native reference coordinates; they do not replace the field or reprocess
-the whole device.
+- `confined_fraction.dat`: time, passing fraction, trapped fraction, and
+  resolved-particle count.
+- `unresolved_fraction.dat`: time, unresolved fraction, and total particle
+  count.
+- `times_lost.dat`: particle index, loss time, trapping parameter, initial
+  radial coordinate, perpendicular invariant, and final state.
+- `orbit_exit_code.dat`: particle index, exit code, loss time, and boundary
+  diagnostics.
+- `results.nc`: per-orbit results and diagnostics when NetCDF output is
+  enabled.
 
-For a collisionless marker, every recovery handoff retains the momentum shell
-from the last accepted symplectic state. A collision updates that reference in
-the usual way. Recovery returns to the requested symplectic method after 256
-consecutive conventional-RK intervals with
-`abs(B_parallel_star/B) >= 0.3` and, for an axis or edge recovery, after the
-corresponding chart hysteresis has also been cleared. This prevents repeated
-reseed cycles from promoting a bounded energy oscillation into a new reference
-energy. The measured Hamiltonian remains an output diagnostic; symplectic
-integration is not described as exact energy conservation.
+Numerically unresolved orbits are reported separately from physical losses.
 
-If every recovery path fails, one isolated microstep is rolled back and
-consumed as a warning hold; the next microstep retries normally. A successful
-step resets the allowance, while a second consecutive full failure is a
-numerical exit instead of a permanent frozen orbit. SPECTRE interface states
-retain the stricter 10-unit bound and their established recovery behavior. The
-hold limit and aggregate Newton, retry, toroidal-regularization, axis-full-orbit,
-recovery, and rejection counters are stored in `results.nc`.
+## GPU quickstart
 
-One narrower collisionless guiding-centre outcome is recorded separately. If
-all recovery methods have been attempted, the final error is Newton
-nonconvergence, and the last validated state remains in the axis-local core
-(normalized toroidal flux `s<0.01`, equivalent to chartmap `rho<0.1`), SIMPLE
-records exit code 4 and counts the marker confined through `trace_time`. This
-is neither a wall/LCFS loss nor an unlabelled successful completion.
-Collisional, full-orbit, strict-mode, SPECTRE, and non-core failures retain
-their numerical exit codes.
+The supported production GPU backend is native CUDA. Configure it in
+`simple.in` for Boozer guiding-center tracing (`isw_field_type = 2`), without
+collisions, walls, orbit output, or classifiers:
 
-### Output
-`confined_fraction.dat` is the main output, containing four columns:
-1. Physical time
-2. Confined fraction of passing particles
-3. Confined fraction of trapped particles
-4. Number of numerically resolved particles used as the denominator
+```fortran
+gpu_mode = 'production'
+gpu_backend = 'cuda-native'
+gpu_method = 'dopri'       ! tuned Dormand-Prince
+gpu_landreman = .True.     ! segmented alpha-loss objective [3]
+```
 
-The sum of 2. and 3. yields the overall confined fraction among resolved
-particles at each time. Numerically fatal orbits are excluded from both the
-numerator and denominator. If no orbit is resolved, both fractions are `NaN`.
-`unresolved_fraction.dat` reports the excluded numerical-failure fraction
-against the total initial population; its third column remains the total
-number of particles.
+Build with the CUDA toolkit, CMake, Ninja, and either GNU or NVIDIA Fortran.
+Set the CUDA architecture for the target GPU. Perlmutter's A100 uses `80`:
 
-`times_lost.dat` contains the loss time of each particle. Columns are:
-1. Particle index. Corresponds to line number in start.dat .
-2. Time t_loss [s] when the particle is lost. Possible values are: -1, `NaN`,
-   `trace_time`, or any other value between 0 and trace_time.
-  * If never lost or classified as regular, maximum tracing time `trace_time` is written.
-  * If ignored due to contr_pp, which defines deep passing region as confined (we don consider them anymore), -1 is written.
-  * If tracing ends in a numerical fatal condition, `NaN` is written. Such an
-    orbit is unresolved, not physically lost or confined.
-  * If a collisionless guiding-centre marker exhausts all recovery methods in
-    the axis-local core, `trace_time` is written with audited exit code 4 and
-    the marker is counted confined.
-3. Trapping parameter trap_par that is 1 for deeply trapped, 0 for tp boundary
-   and negative for passing. Eq. (3.1) in Accelerated Methods paper.
-   Whenever trap_par < contr_pp, particle is not traced and counted as confined.
+```bash
+cmake -S . -B build-cuda -G Ninja \
+  -DSIMPLE_ENABLE_CUDA=ON \
+  -DCMAKE_CUDA_ARCHITECTURES=80
+cmake --build build-cuda -j
+```
 
-### Boozer Chartmap Mode (GVEC and other sources)
+With the `simple.in` settings above, run:
 
-SIMPLE can run from pre-computed Boozer chartmap NetCDF files instead of a
-VMEC equilibrium. This enables use of GVEC equilibria and other field sources
-without requiring them at runtime.
+```bash
+(cd run && ../build-cuda/simple.x simple.in)
+```
 
-**Workflow:**
+The complete GPU configuration and controls are in
+[DOC/gpu-cuda.md](DOC/gpu-cuda.md). Cluster-specific build and Slurm examples
+for Perlmutter, aCluster, and sCluster are in [RUN/README.md](RUN/README.md).
 
-1. Convert a GVEC solution to chartmap format:
-   ```bash
-   python tools/gvec_to_boozer_chartmap.py parameter_final.ini State_final.dat boozer_chartmap.nc
-   ```
-   Run `python tools/gvec_to_boozer_chartmap.py --help` for grid resolution options (`--nrho`, `--ntheta`, `--nphi`).
+## Boozer chartmaps
 
-   booz_xform output (`boozmn*.nc`) converts the same way; the boozmn file alone is sufficient:
-   ```bash
-   python tools/booz_xform_to_boozer_chartmap.py boozmn_case.nc boozer_chartmap.nc
-   ```
+SIMPLE can read precomputed Boozer chartmaps from GVEC, booz_xform, and other
+field sources:
 
-2. Use `examples/simple_chartmap.in` as a starting point, pointing `field_input` and `coord_input` to your chartmap file.
+```bash
+python tools/gvec_to_boozer_chartmap.py parameter_final.ini State_final.dat \
+    boozer_chartmap.nc
+python tools/booz_xform_to_boozer_chartmap.py boozmn_case.nc \
+    boozer_chartmap.nc
+```
 
-3. Run as usual: `./build/simple.x`
+Use `examples/simple_chartmap.in` as the input template. Set both `field_input`
+and `coord_input` to the chartmap. No VMEC file is required at runtime.
+`sbeg` is normalized toroidal flux, while the chartmap radial coordinate is
+`rho = sqrt(s)`. The exporter handles the documented Boozer sign convention.
+See `docs/boozer-chartmap-schema.rst` for the NetCDF schema and scaling rules.
 
-Key differences from VMEC mode:
-- Both `field_input` and `coord_input` reference the same chartmap NetCDF file
-- No VMEC file is needed at runtime
-- `sbeg` remains normalized toroidal flux `s`; chartmap runs evaluate the
-  corresponding surface at `rho = sqrt(sbeg)`
-- Boozer chartmap files store `A_phi` on `s`; geometry, `Bmod`,
-  `B_theta`, and `B_phi` stay on `rho`
-- GVEC chartmaps must be written in SIMPLE's left-handed Boozer convention;
-  the exporter default flips the toroidal angle and negates `A_phi`/`B_phi`
-- `vmec_B_scale` and `vmec_RZ_scale` also apply to chartmap fields and
-  coordinates at runtime
+## Golden-record tests
 
-See `docs/boozer-chartmap-schema.rst` for the required NetCDF schema, sign
-map, and scaling rules.
+To compare numerical output with a reference revision:
 
-### Comparing Commits ("Golden Record")
-To compare output between commits, use the golden record test suite in `test/golden_record/`. Run `test/golden_record/golden_record.sh [ref_version]` to build a reference version and compare its output against the current build.
+```bash
+make test-golden-main
+```
+
+The golden-record scripts build the selected reference and compare its output
+with the current build. Use `make test-all` for the complete local suite.
 
 ## References
-When using this code for scientific publications, please cite the according references:
 
-[1] C. G. Albert, S. V. Kasilov, and W. Kernbichler,
-Accelerated methods for direct computation of fusion alpha particle losses within stellarator optimization. J. Plasma Phys 86, 815860201 (2020), https://doi.org/10.1017/S0022377820000203
+[1] C. G. Albert, S. V. Kasilov, and W. Kernbichler, "Accelerated methods for
+direct computation of fusion alpha particle losses within stellarator
+optimization," *Journal of Plasma Physics* 86, 815860201 (2020),
+https://doi.org/10.1017/S0022377820000203
 
-[2] C. G. Albert, S. V. Kasilov, and W. Kernbichler,
-Symplectic integration with non-canonical quadrature for guiding-center orbits in magnetic confinement devices. J. Comp. Phys 403, 109065 (2020), https://doi.org/10.1016/j.jcp.2019.109065, preprint on https://arxiv.org/abs/1903.06885
+[2] C. G. Albert, S. V. Kasilov, and W. Kernbichler, "Symplectic integration
+with non-canonical quadrature for guiding-center orbits in magnetic confinement
+devices," *Journal of Computational Physics* 403, 109065 (2020),
+https://doi.org/10.1016/j.jcp.2019.109065
+
+[3] M. Landreman, M. Czekanski, A. Giuliani, B. Jang, and R. Conlin,
+"Bayesian optimization of stellarator alpha-particle confinement using
+data-informed parameter spaces and dimensionality reduction," arXiv:2606.19523
+(2026), https://arxiv.org/abs/2606.19523
+
+When using the FIRM3D-compatible tracing path, also retain the provenance in
+[LICENSES/FIRM3D-MIT.txt](LICENSES/FIRM3D-MIT.txt).
