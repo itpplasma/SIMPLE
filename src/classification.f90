@@ -1,10 +1,11 @@
 module classification
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
     use omp_lib
     use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
         ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
         class_plot, ntcut, nturns, fast_class, n_tip_vars, nplagr, nder, npl_half, &
+        class_scores, &
         nfp, fper, zerolam, num_surf, bmax, bmin, dtaumin, v0, cut_in_per, &
         integmode, relerr, ntau, should_skip, orbit_exit_code, unresolved_orbits, &
         max_consecutive_warning_holds, &
@@ -25,6 +26,11 @@ module classification
     use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
     use magfie_sub, only : CANFLUX, BOOZER
     use check_orbit_type_sub, only : check_orbit_type
+    use detect_oneline_mod, only : jpar_variation_rate, rotation_number_drift, &
+                                   precession_turns, jpar_sample_count, &
+                                   rotation_half_count, tip_count, &
+                                   jpar_spread, jpar_ref, topology_margin, &
+                                   score_status
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
     implicit none
@@ -326,6 +332,20 @@ contains
                         call plag_coeff(nplagr,nder,zerolam,xp,coef)
 
                         var_tip=matmul(orb_sten(:,ipoi),coef(0,:))
+                        if (.not. all(ieee_is_finite(var_tip))) then
+                            ! A failed numerical step must not become a raw
+                            ! NaN/Inf classifier score. Preserve the event as
+                            ! an explicitly unresolved particle; consumers
+                            ! can then exclude it using the zero sample counts.
+                            class_scores(:,ipart) = 0.0_dp
+                            iclass(:,ipart) = 0
+                            class_result%fractal = 0
+                            class_result%jpar = 0
+                            class_result%topology = 0
+                            class_result%exit_code = ORBIT_EXIT_NUMERICAL_EVENT
+                            ierr = 1
+                            exit
+                        endif
                         var_tip(2)=modulo(var_tip(2),twopi)
                         var_tip(3)=modulo(var_tip(3),twopi)
 
@@ -359,6 +379,16 @@ contains
                         !
                         call check_orbit_type(nturns,nfp_cot,fpr_in,ideal,ijpar,ierr_cot)
                         !
+                        class_scores(1,ipart) = jpar_variation_rate
+                        class_scores(2,ipart) = rotation_number_drift
+                        class_scores(3,ipart) = precession_turns
+                        class_scores(4,ipart) = dble(jpar_sample_count)
+                        class_scores(5,ipart) = dble(rotation_half_count)
+                        class_scores(6,ipart) = dble(tip_count)
+                        class_scores(7,ipart) = jpar_spread
+                        class_scores(8,ipart) = jpar_ref
+                        class_scores(9,ipart) = topology_margin
+                        class_scores(10,ipart) = dble(score_status)
                         iclass(1,ipart) = ijpar
                         iclass(2,ipart) = ideal
                         ! Store in classification result

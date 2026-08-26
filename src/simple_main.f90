@@ -18,7 +18,7 @@ module simple_main
         boundary_event_radial_residual, &
         boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
         fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
-        zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
+        zend, trap_par, perp_inv, class_scores, sbeg, ntimstep, should_skip, &
         reset_seed_if_deterministic, classification_enabled, &
         field_input, isw_field_type, reuse_batch, &
         max_consecutive_warning_holds, &
@@ -3172,6 +3172,15 @@ contains
             open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
                 write (unit, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
+            end do
+            close (unit)
+
+            ! Continuous fast-classifier scores and validation diagnostics, in
+            ! a separate file so class_parts.dat keeps its column contract.
+            open (newunit=unit, file='class_scores.dat', status='replace', &
+                  action='write', recl=1024)
+            do i = 1, ntestpart
+                write (unit, *) i, class_scores(:, i), trap_par(i)
             end do
             close (unit)
 

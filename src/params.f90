@@ -116,6 +116,15 @@ module params
     real(dp) :: canonical_ode_relerr = 1d-11
 
     real(dp), allocatable :: trap_par(:), perp_inv(:)
+    !> Continuous classifier values, one row per particle:
+    !> 1 = normalized J_parallel RMS drift rate per precession turn,
+    !> 2 = first-half/second-half rotation-number drift,
+    !> 3 = achieved precession turns, 4 = J_parallel samples,
+    !> 5 = rotation samples per half, 6 = number of tips.
+    !> Columns 7:10 retain the legacy spread, reference, topology margin and
+    !> status for published-classifier validation; objectives use columns 1:2.
+    real(dp), allocatable :: class_scores(:, :)
+    integer, parameter :: n_class_scores = 10
     integer, allocatable :: iclass(:, :)
     logical, allocatable :: class_passing(:), class_lost(:)
 
@@ -567,6 +576,7 @@ contains
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
+        if (allocated(class_scores)) deallocate (class_scores)
         if (allocated(class_passing)) deallocate (class_passing)
         if (allocated(class_lost)) deallocate (class_lost)
         if (allocated(xstart)) deallocate (xstart)
@@ -590,6 +600,7 @@ contains
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
         allocate (unresolved_orbits(ntimstep))
         allocate (iclass(3, ntestpart))
+        allocate (class_scores(n_class_scores, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
         allocate (wall_hit(ntestpart))
         allocate (wall_hit_cart(3, ntestpart))
@@ -604,6 +615,7 @@ contains
         trap_par = 0.0d0
         perp_inv = 0.0d0
         iclass = 0
+        class_scores = 0d0
         class_passing = .false.
         class_lost = .false.
         wall_hit = 0_int8
