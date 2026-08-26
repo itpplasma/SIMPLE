@@ -4,12 +4,16 @@ module field_vmecpp
     implicit none
     private
 
+    integer, parameter :: vmecpp_geometry_jet_size = 10
+
+    ! The entries are value, ds, dtheta, dzeta, dss, ds_dtheta,
+    ! ds_dzeta, dtheta2, dtheta_dzeta, and dzeta2.
     type, bind(C), public :: vmecpp_geometry_point_t
-        real(c_double) :: r(4)
-        real(c_double) :: z(4)
-        real(c_double) :: lambda(4)
-        real(c_double) :: toroidal_flux(4)
-        real(c_double) :: poloidal_flux(4)
+        real(c_double) :: r(vmecpp_geometry_jet_size)
+        real(c_double) :: z(vmecpp_geometry_jet_size)
+        real(c_double) :: lambda(vmecpp_geometry_jet_size)
+        real(c_double) :: toroidal_flux(vmecpp_geometry_jet_size)
+        real(c_double) :: poloidal_flux(vmecpp_geometry_jet_size)
     end type vmecpp_geometry_point_t
 
     type, bind(C) :: vmecpp_geometry_metadata_t
@@ -104,70 +108,148 @@ contains
         if (status /= 0) error stop 'VMEC++ geometry evaluation failed'
     end subroutine evaluate_vmecpp_geometry
 
-    subroutine field_components(x, bmod, sqrtg, hcovar, hctrvr)
-        real(c_double), intent(in) :: x(3)
-        real(c_double), intent(out) :: bmod, sqrtg
-        real(c_double), intent(out) :: hcovar(3), hctrvr(3)
-        type(vmecpp_geometry_point_t) :: point
-        real(c_double) :: e_s(3), e_theta(3), e_zeta(3), metric(3, 3)
-        real(c_double) :: bcontrav(3), bcovar(3), bvector(3)
-        real(c_double) :: cosine, sine, flux_scale
-        call evaluate_vmecpp_geometry(x(1), x(2), x(3), point)
-        cosine = cos(x(3))
-        sine = sin(x(3))
-        e_s = [point%r(2)*cosine, point%r(2)*sine, point%z(2)]
-        e_theta = [point%r(3)*cosine, point%r(3)*sine, point%z(3)]
-        e_zeta = [point%r(4)*cosine-point%r(1)*sine, &
-            point%r(4)*sine+point%r(1)*cosine, point%z(4)]
-        sqrtg = dot_product(e_s, cross_product(e_theta, e_zeta))
-        flux_scale = 1.0_c_double/(2.0_c_double*acos(-1.0_c_double)*sqrtg)
-        bcontrav(1) = 0.0_c_double
-        bcontrav(2) = -(point%poloidal_flux(2) - &
-            point%toroidal_flux(2)*point%lambda(4))*flux_scale
-        bcontrav(3) = -point%toroidal_flux(2)* &
-            (1.0_c_double+point%lambda(3))*flux_scale
-        metric(:, 1) = [dot_product(e_s, e_s), &
-            dot_product(e_theta, e_s), dot_product(e_zeta, e_s)]
-        metric(:, 2) = [dot_product(e_s, e_theta), &
-            dot_product(e_theta, e_theta), dot_product(e_zeta, e_theta)]
-        metric(:, 3) = [dot_product(e_s, e_zeta), &
-            dot_product(e_theta, e_zeta), dot_product(e_zeta, e_zeta)]
-        bcovar = matmul(metric, bcontrav)
-        bvector = bcontrav(2)*e_theta + bcontrav(3)*e_zeta
-        bmod = sqrt(dot_product(bvector, bvector))
-        hcovar = bcovar/bmod
-        hctrvr = bcontrav/bmod
-    end subroutine field_components
-
     subroutine magfie_vmecpp(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
         real(c_double), intent(in) :: x(3)
         real(c_double), intent(out) :: bmod, sqrtg
         real(c_double), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
-        real(c_double), parameter :: steps(3) = [1.0e-3_c_double, &
-            2.0e-3_c_double*acos(-1.0_c_double), &
-            4.0e-4_c_double*acos(-1.0_c_double)]
-        real(c_double) :: shifted(3), bplus, bminus, unused_jacobian
-        real(c_double) :: hcovar_plus(3), hcovar_minus(3), unused(3)
-        real(c_double) :: derivatives(3, 3)
-        integer :: coordinate
+        type(vmecpp_geometry_point_t) :: point
+        real(c_double) :: basis(3, 3), basis_derivative(3, 3, 3)
+        real(c_double) :: metric(3, 3), metric_derivative(3, 3, 3)
+        real(c_double) :: bcontrav(3), bcontrav_derivative(3, 3)
+        real(c_double) :: bcovar(3), bcovar_derivative(3, 3)
+        real(c_double) :: bvector(3), bvector_derivative(3, 3)
+        real(c_double) :: sqrtg_derivative(3), hcovar_derivative(3, 3)
+        real(c_double) :: d_poloidal_flux(3), d_toroidal_flux(3)
+        real(c_double) :: d_lambda_theta(3), d_lambda_zeta(3)
+        real(c_double) :: cosine, sine, inverse_sqrtg, derivative_inverse
+        real(c_double) :: poloidal_flux, toroidal_flux, lambda_theta, lambda_zeta
+        real(c_double) :: numerator, numerator_derivative
+        real(c_double) :: cross_value(3)
+        integer :: coordinate, i, j
 
+        call evaluate_vmecpp_geometry(x(1), x(2), x(3), point)
+        cosine = cos(x(3))
+        sine = sin(x(3))
+
+        basis(:, 1) = [point%r(2)*cosine, point%r(2)*sine, point%z(2)]
+        basis(:, 2) = [point%r(3)*cosine, point%r(3)*sine, point%z(3)]
+        basis(:, 3) = [point%r(4)*cosine-point%r(1)*sine, &
+            point%r(4)*sine+point%r(1)*cosine, point%z(4)]
+
+        basis_derivative(:, 1, 1) = [point%r(5)*cosine, point%r(5)*sine, &
+            point%z(5)]
+        basis_derivative(:, 2, 1) = [point%r(6)*cosine, point%r(6)*sine, &
+            point%z(6)]
+        basis_derivative(:, 3, 1) = [point%r(7)*cosine-point%r(2)*sine, &
+            point%r(7)*sine+point%r(2)*cosine, point%z(7)]
+
+        basis_derivative(:, 1, 2) = [point%r(6)*cosine, point%r(6)*sine, &
+            point%z(6)]
+        basis_derivative(:, 2, 2) = [point%r(8)*cosine, point%r(8)*sine, &
+            point%z(8)]
+        basis_derivative(:, 3, 2) = [point%r(9)*cosine-point%r(3)*sine, &
+            point%r(9)*sine+point%r(3)*cosine, point%z(9)]
+
+        basis_derivative(:, 1, 3) = [point%r(7)*cosine-point%r(2)*sine, &
+            point%r(7)*sine+point%r(2)*cosine, point%z(7)]
+        basis_derivative(:, 2, 3) = [point%r(9)*cosine-point%r(3)*sine, &
+            point%r(9)*sine+point%r(3)*cosine, point%z(9)]
+        basis_derivative(:, 3, 3) = [point%r(10)*cosine- &
+            2.0_c_double*point%r(4)*sine-point%r(1)*cosine, &
+            point%r(10)*sine+2.0_c_double*point%r(4)*cosine- &
+            point%r(1)*sine, point%z(10)]
+
+        sqrtg = dot_product(basis(:, 1), &
+            cross_product(basis(:, 2), basis(:, 3)))
         do coordinate = 1, 3
-            shifted = x
-            shifted(coordinate) = x(coordinate) + steps(coordinate)
-            call field_components(shifted, bplus, unused_jacobian, &
-                hcovar_plus, unused)
-            shifted(coordinate) = x(coordinate) - steps(coordinate)
-            call field_components(shifted, bminus, unused_jacobian, &
-                hcovar_minus, unused)
-            bder(coordinate) = (bplus-bminus)/(2.0_c_double*steps(coordinate))
-            derivatives(:, coordinate) = &
-                (hcovar_plus-hcovar_minus)/(2.0_c_double*steps(coordinate))
+            sqrtg_derivative(coordinate) = dot_product( &
+                basis_derivative(:, 1, coordinate), &
+                cross_product(basis(:, 2), basis(:, 3))) + &
+                dot_product(basis(:, 1), cross_product( &
+                basis_derivative(:, 2, coordinate), basis(:, 3))) + &
+                dot_product(basis(:, 1), cross_product(basis(:, 2), &
+                basis_derivative(:, 3, coordinate)))
         end do
-        call field_components(x, bmod, sqrtg, hcovar, hctrvr)
-        bder = bder/bmod
-        hcurl = [derivatives(3, 2)-derivatives(2, 3), &
-            derivatives(1, 3)-derivatives(3, 1), &
-            derivatives(2, 1)-derivatives(1, 2)]/sqrtg
+
+        do i = 1, 3
+            do j = 1, 3
+                metric(i, j) = dot_product(basis(:, i), basis(:, j))
+                do coordinate = 1, 3
+                    metric_derivative(i, j, coordinate) = &
+                        dot_product(basis_derivative(:, i, coordinate), &
+                        basis(:, j)) + dot_product(basis(:, i), &
+                        basis_derivative(:, j, coordinate))
+                end do
+            end do
+        end do
+
+        poloidal_flux = point%poloidal_flux(2)
+        toroidal_flux = point%toroidal_flux(2)
+        d_poloidal_flux = [point%poloidal_flux(5), 0.0_c_double, 0.0_c_double]
+        d_toroidal_flux = [point%toroidal_flux(5), 0.0_c_double, 0.0_c_double]
+        lambda_theta = point%lambda(3)
+        lambda_zeta = point%lambda(4)
+        d_lambda_theta = [point%lambda(6), point%lambda(8), &
+            point%lambda(9)]
+        d_lambda_zeta = [point%lambda(7), point%lambda(9), &
+            point%lambda(10)]
+
+        inverse_sqrtg = 1.0_c_double/(2.0_c_double*acos(-1.0_c_double)*sqrtg)
+        bcontrav = [0.0_c_double, &
+            -(poloidal_flux-toroidal_flux*lambda_zeta)*inverse_sqrtg, &
+            -toroidal_flux*(1.0_c_double+lambda_theta)*inverse_sqrtg]
+        do coordinate = 1, 3
+            derivative_inverse = -inverse_sqrtg*sqrtg_derivative(coordinate)/sqrtg
+            numerator = poloidal_flux-toroidal_flux*lambda_zeta
+            numerator_derivative = d_poloidal_flux(coordinate)- &
+                d_toroidal_flux(coordinate)*lambda_zeta- &
+                toroidal_flux*d_lambda_zeta(coordinate)
+            bcontrav_derivative(1, coordinate) = 0.0_c_double
+            bcontrav_derivative(2, coordinate) = -(numerator_derivative* &
+                inverse_sqrtg+numerator*derivative_inverse)
+            numerator = toroidal_flux*(1.0_c_double+lambda_theta)
+            numerator_derivative = d_toroidal_flux(coordinate)* &
+                (1.0_c_double+lambda_theta)+toroidal_flux* &
+                d_lambda_theta(coordinate)
+            bcontrav_derivative(3, coordinate) = -(numerator_derivative* &
+                inverse_sqrtg+numerator*derivative_inverse)
+        end do
+
+        bcovar = matmul(metric, bcontrav)
+        do coordinate = 1, 3
+            bcovar_derivative(:, coordinate) = 0.0_c_double
+            do i = 1, 3
+                do j = 1, 3
+                    bcovar_derivative(i, coordinate) = &
+                        bcovar_derivative(i, coordinate)+ &
+                        metric_derivative(i, j, coordinate)*bcontrav(j)+ &
+                        metric(i, j)*bcontrav_derivative(j, coordinate)
+                end do
+            end do
+        end do
+
+        bvector = matmul(basis, bcontrav)
+        do coordinate = 1, 3
+            bvector_derivative(:, coordinate) = &
+                matmul(basis_derivative(:, :, coordinate), bcontrav)+ &
+                matmul(basis, bcontrav_derivative(:, coordinate))
+        end do
+        bmod = sqrt(dot_product(bvector, bvector))
+        do coordinate = 1, 3
+            bder(coordinate) = dot_product(bvector, &
+                bvector_derivative(:, coordinate))/(bmod*bmod)
+        end do
+        hcovar = bcovar/bmod
+        do coordinate = 1, 3
+            hcovar_derivative(:, coordinate) = &
+                bcovar_derivative(:, coordinate)/bmod- &
+                hcovar*bder(coordinate)
+        end do
+        hctrvr = bcontrav/bmod
+        cross_value = [hcovar_derivative(3, 2)-hcovar_derivative(2, 3), &
+            hcovar_derivative(1, 3)-hcovar_derivative(3, 1), &
+            hcovar_derivative(2, 1)-hcovar_derivative(1, 2)]
+        hcurl = cross_value/sqrtg
 
         bmod = bmod*1.0e4_c_double
         sqrtg = sqrtg*1.0e6_c_double

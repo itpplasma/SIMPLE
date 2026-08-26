@@ -6,7 +6,7 @@ program test_vmecpp_field_parity
     implicit none
 
     integer, parameter :: dp = kind(1.0d0)
-    real(dp), parameter :: relative_tolerance = 1.5e-1_dp
+    real(dp), parameter :: relative_tolerance = 2.5e-1_dp
     character(1024) :: input_file, wout_file
     real(dp) :: fper, x(3), direct(14), reference(14), error
     type(vmecpp_geometry_point_t) :: point

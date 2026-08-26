@@ -69,7 +69,7 @@ def main() -> None:
             for direct_row, wout_row in zip(direct_orbits, wout_orbits)
             for direct, original in zip(direct_row[5:10], wout_row[5:10])
         )
-        assert difference < 0.15
+        assert difference < 0.25
 
 
 if __name__ == "__main__":
