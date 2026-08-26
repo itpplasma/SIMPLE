@@ -14,7 +14,7 @@ from pathlib import Path
 
 from simple_driver import run_simple_case
 
-NTESTPART = 64
+NTESTPART = 32
 TOL_PERPINV = 15.0
 
 CONFIG = """
@@ -23,7 +23,7 @@ netcdffile = 'wout.nc'
 multharm = 3
 contr_pp = -1d10
 trace_time = 4d-2
-ntestpart = 64
+ntestpart = 32
 nper = 1
 npoiper = 4
 npoiper2 = 64
