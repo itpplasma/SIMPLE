@@ -59,6 +59,22 @@ ran_seed = 12345   ! Random seed to get batch_size amounts of random indices fro
 reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored in batch.dat, new batch generated if batch.dat not found.
 output_orbits_macrostep = .False. ! Output orbit positions to fort.9XXXX
 output_error = .False. ! Output additional error diagnostics
+
+! GPU execution. Leave gpu_mode='off' for the normal CPU/OpenMP path.
+! gpu_mode = 'production' or 'benchmark'
+! gpu_backend = 'cuda-native'
+! gpu_method = 'dopri' (or 'cash-karp' for native CUDA)
+! gpu_start_coordinates = 'reference' or 'boozer'
+! gpu_landreman = .True. uses the segmented alpha-loss objective described at
+! https://arxiv.org/abs/2606.19523.
+! gpu_compact_init = .False. uses the native CUDA compact initializer.
+! gpu_num_devices = 1
+! gpu_t_block = 1d-3
+! gpu_loss_tau = 0.1d0
+! gpu_maxloss = 0.02d0
+! gpu_min_timestep = 1d-10
+! gpu_pilot_fraction = 0.04d0
+! gpu_particle_profile = '' or a CSV output path.
 /
 
 &profiles

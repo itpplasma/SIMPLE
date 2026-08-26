@@ -298,12 +298,15 @@ contains
       strict_integrator%atol = 0.0_dp
       symplectic_newton_warning_mode = .false.
       call orbit_timestep_sympl(strict_integrator, strict_field, step_status)
-      if (step_status /= SYMPLECTIC_STEP_MAXITER) then
+      ! A zero tolerance forces a strict failure.  The precise failure can be
+      ! MAXITER, an intermediate-domain rejection, or a failed boundary
+      ! localization depending on the implicit method's Newton trajectory.
+      if (step_status == SYMPLECTIC_STEP_OK) then
         print *, 'strict mode, status:', modes(mode_index), step_status
-        error stop 'strict timestep did not report max iterations'
+        error stop 'strict timestep accepted a nonconverged step'
       end if
       if (any(strict_integrator%z /= initial_state)) then
-        error stop 'strict max-iteration failure changed the accepted state'
+        error stop 'strict solver failure changed the accepted state'
       end if
 
     end do
