@@ -6,6 +6,9 @@ use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use field_base, only: magnetic_field_t
 use field_splined, only: splined_field_t
 use field_spectre, only: spectre_field_t
+#ifdef SIMPLE_ENABLE_VMECPP
+use field_vmecpp, only: magfie_vmecpp
+#endif
 use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
                               RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
 
@@ -42,7 +45,7 @@ end interface
 procedure(magfie_base), pointer :: magfie => null()
 
 integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
-                      REFCOORDS=5, SPECTRE=6
+                      REFCOORDS=5, SPECTRE=6, VMECPP=7
 
 class(magnetic_field_t), allocatable :: refcoords_field
 type(spectre_field_t), allocatable :: spectre_field
@@ -89,6 +92,10 @@ subroutine init_magfie(id)
     magfie => magfie_refcoords
   case(SPECTRE)
     magfie => magfie_spectre
+#ifdef SIMPLE_ENABLE_VMECPP
+  case(VMECPP)
+    magfie => magfie_vmecpp
+#endif
   case default
     print *,'init_magfie: unknown id ', id
     error stop

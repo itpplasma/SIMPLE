@@ -71,6 +71,12 @@
     simple_entry.f90
     )
 
+    set_source_files_properties(magfie.f90 simple_main.f90
+        PROPERTIES Fortran_PREPROCESS ON)
+    if(SIMPLE_ENABLE_VMECPP)
+        list(APPEND SOURCES field/field_vmecpp.f90)
+    endif()
+
     if(SIMPLE_ENABLE_CUDA)
         list(APPEND SOURCES simple_cuda_native.f90)
     endif()
@@ -137,6 +143,11 @@ endif()
 target_link_libraries(simple PUBLIC
     BLAS::BLAS LAPACK::LAPACK
 )
+
+if(SIMPLE_ENABLE_VMECPP)
+    target_link_libraries(simple PUBLIC ${VMECPP_LIBRARY})
+    target_compile_definitions(simple PRIVATE SIMPLE_ENABLE_VMECPP)
+endif()
 
 target_link_libraries(simple PUBLIC
     LIBNEO::boozer

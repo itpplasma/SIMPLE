@@ -19,6 +19,17 @@ set(WOUT_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_
 set(WOUT_QH_FILE "${TEST_DATA_DIR}/wout_qh.nc")
 set(WOUT_QH_URL "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc")
 
+if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
+    add_executable(test_vmecpp_field_parity.x test_vmecpp_field_parity.f90)
+    target_link_libraries(test_vmecpp_field_parity.x simple)
+    add_test(NAME test_vmecpp_field_parity
+        COMMAND test_vmecpp_field_parity.x
+            ${VMECPP_TEST_DATA_DIR}/wout_cth_like_fixed_bdy.nc
+            ${VMECPP_TEST_DATA_DIR}/cth_like_fixed_bdy.json)
+    set_tests_properties(test_vmecpp_field_parity PROPERTIES
+        LABELS "integration;vmecpp")
+endif()
+
 # Download if not present
 if(NOT EXISTS "${WOUT_FILE}")
     file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
@@ -45,6 +56,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
         "Python interpreter used by SIMPLE tests" FORCE)
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
+    add_test(NAME test_vmecpp_orbit_parity
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/test/python/test_vmecpp_direct_parity.py
+            $<TARGET_FILE:simple.x>
+            ${VMECPP_TEST_DATA_DIR}/wout_cth_like_fixed_bdy.nc
+            ${VMECPP_TEST_DATA_DIR}/cth_like_fixed_bdy.json)
+    set_tests_properties(test_vmecpp_orbit_parity PROPERTIES
+        LABELS "integration;vmecpp" ENVIRONMENT "OMP_NUM_THREADS=1")
+endif()
 
 if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     add_test(

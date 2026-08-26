@@ -80,6 +80,21 @@ option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_CUDA
     "Build direct-CUDA guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
+option(SIMPLE_ENABLE_VMECPP "Enable direct VMEC++ input-file geometry" OFF)
+
+if(SIMPLE_ENABLE_VMECPP)
+    set(VMECPP_ROOT "" CACHE PATH "VMEC++ installation prefix")
+    set(VMECPP_TEST_DATA_DIR "" CACHE PATH
+        "Directory containing matching VMEC++ input and wout test data")
+    find_path(VMECPP_INCLUDE_DIR geometry_c_api.h
+        HINTS ${VMECPP_ROOT}/vmecpp/include ${VMECPP_ROOT}/include)
+    find_library(VMECPP_LIBRARY vmecpp_core
+        HINTS ${VMECPP_ROOT}/vmecpp/cpp ${VMECPP_ROOT}/lib)
+    if(NOT VMECPP_INCLUDE_DIR OR NOT VMECPP_LIBRARY)
+        message(FATAL_ERROR
+            "SIMPLE_ENABLE_VMECPP requires VMECPP_ROOT containing the installed C API")
+    endif()
+endif()
 
 if(SIMPLE_ENABLE_CUDA)
     # CUDA 12 no longer provides a useful default for the Turing-and-newer
@@ -376,21 +391,21 @@ endif()
 if (ENABLE_COVERAGE)
     if (CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
         message(STATUS "Coverage analysis enabled for ${CMAKE_BUILD_TYPE} build")
-        
+
         # Create interface library for coverage flags to scope them to specific targets
         add_library(coverage_flags INTERFACE)
         target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
         target_link_options(coverage_flags INTERFACE --coverage -lgcov)
-        
+
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)
         if(LCOV_PATH)
             add_custom_target(coverage
                 COMMAND ${CMAKE_COMMAND} -E echo "Generating coverage data..."
                 COMMAND ${LCOV_PATH} --capture --directory ${CMAKE_BINARY_DIR} --output-file coverage.info
-                    --rc branch_coverage=1 
-                    --ignore-errors inconsistent 
-                    --ignore-errors mismatch 
+                    --rc branch_coverage=1
+                    --ignore-errors inconsistent
+                    --ignore-errors mismatch
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
                     "/home/ert/code/libneo/*"
