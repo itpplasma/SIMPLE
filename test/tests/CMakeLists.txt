@@ -58,6 +58,14 @@ if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         LABELS "unit;regression")
 endif()
 
+add_test(
+    NAME test_openmp_optional
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_openmp_optional.py
+        ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(test_openmp_optional PROPERTIES LABELS "unit;regression")
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
