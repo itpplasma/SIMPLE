@@ -24,7 +24,6 @@ if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
     target_link_libraries(test_vmecpp_field_parity.x simple)
     add_test(NAME test_vmecpp_field_parity
         COMMAND test_vmecpp_field_parity.x
-            ${VMECPP_TEST_DATA_DIR}/wout_cth_like_fixed_bdy.nc
             ${VMECPP_TEST_DATA_DIR}/cth_like_fixed_bdy.json)
     set_tests_properties(test_vmecpp_field_parity PROPERTIES
         LABELS "integration;vmecpp")
