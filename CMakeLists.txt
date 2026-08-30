@@ -83,17 +83,64 @@ option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
 option(SIMPLE_ENABLE_VMECPP "Enable direct VMEC++ input-file geometry" OFF)
 
 if(SIMPLE_ENABLE_VMECPP)
-    set(VMECPP_ROOT "" CACHE PATH "VMEC++ installation prefix")
-    set(VMECPP_TEST_DATA_DIR "" CACHE PATH
-        "Directory containing matching VMEC++ input and wout test data")
-    find_path(VMECPP_INCLUDE_DIR geometry_c_api.h
-        HINTS ${VMECPP_ROOT}/vmecpp/include ${VMECPP_ROOT}/include)
-    find_library(VMECPP_LIBRARY vmecpp_core
-        HINTS ${VMECPP_ROOT}/vmecpp/cpp ${VMECPP_ROOT}/lib)
-    if(NOT VMECPP_INCLUDE_DIR OR NOT VMECPP_LIBRARY)
-        message(FATAL_ERROR
-            "SIMPLE_ENABLE_VMECPP requires VMECPP_ROOT containing the installed C API")
+    # VMEC++ installs no C++ headers and exports no CMake package, so it is
+    # built from source here. The ISO C adapter itself lives in SIMPLE
+    # (src/field/vmecpp_c_api); upstream maintains only the C++ API.
+    enable_language(CXX)
+    include(FetchContent)
+    set(VMECPP_GIT_REPOSITORY "https://github.com/itpplasma/vmecpp.git"
+        CACHE STRING "VMEC++ source repository")
+    # Pinned, not a branch: the geometry layer this adapter calls must match.
+    set(VMECPP_GIT_TAG "ff46c3de82bc5e505397c4ea4832fd0003ed65b9"
+        CACHE STRING "VMEC++ commit to build against")
+
+    # Building a second x86-64-v3 copy of the whole core doubles build time and
+    # buys SIMPLE nothing: the adapter is not on a hot loop.
+    set(VMECPP_HWCAPS_DISPATCH OFF CACHE BOOL
+        "Build the x86-64-v3 VMEC++ core variant" FORCE)
+
+    # VMEC++ takes its optimization from CMAKE_CXX_FLAGS_<CONFIG>. SIMPLE's
+    # Fast configuration defines no C++ flags, which would build the solver
+    # unoptimized; give it the Release ones.
+    if(NOT CMAKE_CXX_FLAGS_FAST)
+        set(CMAKE_CXX_FLAGS_FAST "-O3 -DNDEBUG" CACHE STRING
+            "C++ flags used by the Fast build type" FORCE)
     endif()
+
+    FetchContent_Declare(vmecpp
+        GIT_REPOSITORY ${VMECPP_GIT_REPOSITORY}
+        GIT_TAG ${VMECPP_GIT_TAG}
+        GIT_SHALLOW FALSE
+    )
+    FetchContent_MakeAvailable(vmecpp)
+
+    # vmecpp_core carries no PUBLIC include directories: VMEC++ sets its own
+    # include paths with directory-scoped include_directories(), which do not
+    # propagate outside its subtree. Collect them here for the adapter target.
+    FetchContent_GetProperties(eigen)
+    FetchContent_GetProperties(abseil-cpp)
+    FetchContent_GetProperties(abscab-cpp)
+    set(VMECPP_ADAPTER_INCLUDE_DIRS
+        ${vmecpp_SOURCE_DIR}/src/vmecpp/cpp
+        ${eigen_SOURCE_DIR}
+        ${abseil-cpp_SOURCE_DIR}
+        ${abscab-cpp_SOURCE_DIR}
+    )
+
+    # VMEC++ pins Eigen's alignment so that cores built for different -march
+    # settings stay interchangeable. These are ABI-affecting: an adapter built
+    # without them mismatches Eigen::aligned_allocator and corrupts the heap
+    # when it destroys a VMEC++ object. They are set by add_compile_definitions()
+    # in the VMEC++ directory scope, which does not reach SIMPLE's targets.
+    set(VMECPP_ADAPTER_COMPILE_DEFINITIONS
+        EIGEN_MAX_ALIGN_BYTES=32
+        EIGEN_MAX_STATIC_ALIGN_BYTES=32
+    )
+
+    # VMEC++ ships matching input and wout files for its own tests; use them
+    # for the parity tests unless a site points somewhere else.
+    set(VMECPP_TEST_DATA_DIR "${vmecpp_SOURCE_DIR}/src/vmecpp/cpp/vmecpp/test_data"
+        CACHE PATH "Directory containing matching VMEC++ input and wout test data")
 endif()
 
 if(SIMPLE_ENABLE_CUDA)

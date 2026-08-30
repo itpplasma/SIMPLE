@@ -145,7 +145,21 @@ target_link_libraries(simple PUBLIC
 )
 
 if(SIMPLE_ENABLE_VMECPP)
-    target_link_libraries(simple PUBLIC ${VMECPP_LIBRARY})
+    # ISO C adapter over the VMEC++ C++ geometry API, owned by SIMPLE.
+    add_library(simple_vmecpp_c_api STATIC
+        field/vmecpp_c_api/geometry_c_api.cc)
+    target_include_directories(simple_vmecpp_c_api PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/field/vmecpp_c_api)
+    target_include_directories(simple_vmecpp_c_api PRIVATE
+        ${VMECPP_ADAPTER_INCLUDE_DIRS})
+    target_compile_definitions(simple_vmecpp_c_api PRIVATE
+        ${VMECPP_ADAPTER_COMPILE_DEFINITIONS})
+    set_target_properties(simple_vmecpp_c_api PROPERTIES
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON)
+    target_link_libraries(simple_vmecpp_c_api PUBLIC vmecpp_core)
+
+    target_link_libraries(simple PUBLIC simple_vmecpp_c_api)
     target_compile_definitions(simple PRIVATE SIMPLE_ENABLE_VMECPP)
 endif()
 

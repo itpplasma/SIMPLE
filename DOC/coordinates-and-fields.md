@@ -267,6 +267,24 @@ The handle is created once during initialization and destroyed when the field
 is closed. This makes the run and the field evaluation one explicit producer
 contract rather than a reader coupled to a `wout` layout.
 
+The ISO C adapter itself lives in SIMPLE, under `src/field/vmecpp_c_api/`.
+VMEC++ upstream maintains only the C++ API, installs no C++ headers, and
+exports no CMake package, so `SIMPLE_ENABLE_VMECPP=ON` fetches the VMEC++
+sources with `FetchContent` at the commit pinned by `VMECPP_GIT_TAG` and
+builds them as part of the SIMPLE build. There is nothing to install
+beforehand:
+
+```
+cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Fast -DSIMPLE_ENABLE_VMECPP=ON
+cmake --build build
+ctest --test-dir build/test -R test_vmecpp
+```
+
+The option is off by default, so an ordinary SIMPLE build never fetches or
+compiles VMEC++. `VMECPP_TEST_DATA_DIR` defaults to the test data shipped
+with the fetched VMEC++ sources, which is where the parity tests take their
+matching input and `wout` pair from.
+
 ### 3.3 Coils Field
 
 **Type**: `coils_field_t`

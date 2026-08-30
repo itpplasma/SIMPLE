@@ -66,7 +66,11 @@ contains
         values(9:11) = base(6:8)
 
         do coordinate = 1, 3
-            step = 1.0e-4_dp
+            ! The oracle is roundoff- rather than truncation-limited: its
+            ! error grows like 1/step below here and like step^4 above it.
+            ! At 3e-4 the fourth-order stencil sits near its optimum, about
+            ! an order of magnitude under the tolerance below.
+            step = 3.0e-4_dp
             call shifted_components(position, coordinate, 2.0_dp*step, plus2)
             call shifted_components(position, coordinate, step, plus)
             call shifted_components(position, coordinate, -step, minus)
