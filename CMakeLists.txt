@@ -91,7 +91,7 @@ if(SIMPLE_ENABLE_VMECPP)
     set(VMECPP_GIT_REPOSITORY "https://github.com/itpplasma/vmecpp.git"
         CACHE STRING "VMEC++ source repository")
     # Pinned, not a branch: the geometry layer this adapter calls must match.
-    set(VMECPP_GIT_TAG "62be1eed476328398c28d2141944d54a89432897"
+    set(VMECPP_GIT_TAG "d2de4fd046b90bb3c011a25dadeedd47481ec47a"
         CACHE STRING "VMEC++ commit to build against")
 
     # Building a second x86-64-v3 copy of the whole core doubles build time and
