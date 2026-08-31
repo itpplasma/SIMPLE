@@ -249,6 +249,42 @@ call create_vmec_field(field)
 ! Allocates vmec_coordinate_system_t into field%coords
 ```
 
+#### Direct VMEC++ geometry
+
+When `SIMPLE_ENABLE_VMECPP` is enabled, `netcdffile` may instead name a
+VMEC++ JSON input file. `simple_main` passes that file to the ISO C geometry
+API, which runs VMEC++ in memory and keeps the resulting geometry handle. No
+`wout` file is read or written on this path.
+
+The C API evaluates `R`, `Z`, `lambda`, and both flux profiles as a common
+ten-entry jet: value, first derivatives in `(s, theta, zeta)`, and all second
+derivatives. `field_vmecpp` uses those jets directly to form the covariant
+basis, metric, magnetic field, `bder`, and `hcurl`; it does not finite
+difference the field at runtime. The direct path uses the same VMEC
+coordinates `(s, theta, varphi)` and unit conventions as the VMEC field.
+
+The handle is created once during initialization and destroyed when the field
+is closed. This makes the run and the field evaluation one explicit producer
+contract rather than a reader coupled to a `wout` layout.
+
+The ISO C adapter itself lives in SIMPLE, under `src/field/vmecpp_c_api/`.
+VMEC++ upstream maintains only the C++ API, installs no C++ headers, and
+exports no CMake package, so `SIMPLE_ENABLE_VMECPP=ON` fetches the VMEC++
+sources with `FetchContent` at the commit pinned by `VMECPP_GIT_TAG` and
+builds them as part of the SIMPLE build. There is nothing to install
+beforehand:
+
+```
+cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Fast -DSIMPLE_ENABLE_VMECPP=ON
+cmake --build build
+ctest --test-dir build/test -R test_vmecpp
+```
+
+The option is off by default, so an ordinary SIMPLE build never fetches or
+compiles VMEC++. `VMECPP_TEST_DATA_DIR` defaults to the test data shipped
+with the fetched VMEC++ sources, which is where the parity tests take their
+matching input and `wout` pair from.
+
 ### 3.3 Coils Field
 
 **Type**: `coils_field_t`
@@ -944,7 +980,7 @@ alias `'spectre'` is not read from the namelist (the slot is integer).
 
 | Parameter | Type | Purpose |
 |-----------|------|---------|
-| `netcdffile` | string | VMEC wout.nc file path |
+| `netcdffile` | string | VMEC wout.nc path, or VMEC++ JSON input when direct support is enabled |
 | `field_input` | string | Field data file (VMEC wout, coils file, or Boozer chartmap NetCDF) |
 | `coord_input` | string | Reference coordinate file (VMEC or chartmap) |
 

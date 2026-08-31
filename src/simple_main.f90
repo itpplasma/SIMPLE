@@ -262,6 +262,9 @@ contains
             ntestpart, ntimstep, coord_input, restart
         use timing, only: init_timer, print_phase_time
         use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
+#ifdef SIMPLE_ENABLE_VMECPP
+        use magfie_sub, only: VMECPP
+#endif
         use samplers, only: init_starting_surf, sample_spectre_surface, &
             init_spectre_start_bounds
         use version, only: simple_version
@@ -272,7 +275,7 @@ contains
 
         character(256) :: config_file
         type(tracer_t) :: norb
-        logical :: chartmap_mode, spectre_mode
+        logical :: chartmap_mode, direct_mode, spectre_mode
 
         ! Print version on startup
         print '(A,A)', 'SIMPLE version ', simple_version
@@ -312,7 +315,8 @@ contains
 
         chartmap_mode = .false.
         spectre_mode = .false.
-        if (len_trim(field_input) > 0) then
+        direct_mode = is_vmecpp_input(netcdffile)
+        if (len_trim(field_input) > 0 .and. .not. direct_mode) then
             spectre_mode = is_spectre_file(field_input)
             if (.not. spectre_mode) chartmap_mode = is_boozer_chartmap(field_input)
         end if
@@ -355,7 +359,15 @@ contains
 
             if (generate_start_only) stop 'stopping after generating start.dat'
         else
-            call init_magfie(VMEC)
+            if (direct_mode) then
+#ifdef SIMPLE_ENABLE_VMECPP
+                call init_magfie(VMECPP)
+#else
+                error stop 'SIMPLE was built without SIMPLE_ENABLE_VMECPP'
+#endif
+            else
+                call init_magfie(VMEC)
+            end if
             call print_phase_time('VMEC magnetic field initialization completed')
 
             call init_starting_surf
@@ -440,6 +452,9 @@ contains
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
             REFCOORDS, SPECTRE, set_magfie_refcoords_field
+#ifdef SIMPLE_ENABLE_VMECPP
+        use magfie_sub, only: VMECPP
+#endif
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -512,6 +527,20 @@ contains
                 call print_phase_time('Boozer chartmap field loading completed')
             end if
             end if
+        else if (is_vmecpp_input(vmec_file)) then
+#ifdef SIMPLE_ENABLE_VMECPP
+            block
+                use field_vmecpp, only: get_vmecpp_metadata, open_vmecpp_geometry
+                use new_vmec_stuff_mod, only: nper, rmajor
+                call open_vmecpp_geometry(vmec_file)
+                call get_vmecpp_metadata(nper, rmajor)
+                self%fper = twopi/real(nper, dp)
+                isw_field_type = VMECPP
+            end block
+            call print_phase_time('VMEC++ direct geometry initialization completed')
+#else
+            error stop 'SIMPLE was built without SIMPLE_ENABLE_VMECPP'
+#endif
         else
             vmec_equilibrium_file = select_vmec_equilibrium_file(vmec_file, &
                 field_input, &
@@ -596,6 +625,14 @@ contains
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
+
+    logical function is_vmecpp_input(path)
+        character(*), intent(in) :: path
+        integer :: length
+
+        length = len_trim(path)
+        is_vmecpp_input = length >= 5 .and. path(length-4:length) == '.json'
+    end function is_vmecpp_input
 
     subroutine init_spectre_field(self)
         !> VMEC-free SPECTRE setup. Mirrors the Boozer-chartmap precedent: no
