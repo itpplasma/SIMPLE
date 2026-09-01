@@ -2,7 +2,8 @@ program test_profiles
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple_profiles
     use collis_alp
-    use params, only: facE_al, particle_energy_eV, resolve_particle_energy
+    use params, only: facE_al, particle_energy_eV, resolve_particle_energy, &
+        deterministic, ran_seed, reset_seed_if_deterministic
     implicit none
 
     logical :: all_passed
@@ -21,6 +22,7 @@ program test_profiles
     call test_maxwellian_fixed_point(all_passed, n_failed)
     call test_explicit_particle_energy(all_passed, n_failed)
     call test_lorentz_legendre_relaxation(all_passed, n_failed)
+    call test_deterministic_particle_streams(all_passed, n_failed)
     call plot_collision_frequency_comparison()
 
     if (all_passed) then
@@ -31,6 +33,30 @@ program test_profiles
     end if
 
 contains
+
+    subroutine test_deterministic_particle_streams(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+        real(dp) :: first(16), replay(16), other(16)
+
+        print *, 'Testing deterministic per-particle random streams...'
+        deterministic = .true.
+        ran_seed = 314159
+        call reset_seed_if_deterministic(17)
+        call random_number(first)
+        call reset_seed_if_deterministic(17)
+        call random_number(replay)
+        call reset_seed_if_deterministic(18)
+        call random_number(other)
+        if (any(first /= replay) .or. all(first == other)) then
+            print *, '  FAIL: particle streams do not replay/separate'
+            passed = .false.
+            nfail = nfail + 1
+        else
+            print *, '  PASS: same particle replays; different particles separate'
+        end if
+        deterministic = .false.
+    end subroutine test_deterministic_particle_streams
 
     subroutine test_explicit_particle_energy(passed, nfail)
         logical, intent(inout) :: passed

@@ -1302,7 +1302,7 @@ contains
             end if
 #endif
 
-            if (swcoll) call reset_seed_if_deterministic
+            if (swcoll) call reset_seed_if_deterministic(i)
             call trace_orbit_with_classifiers(norb, i, class_result)
 
             ! Store classification flags in params arrays
@@ -1848,7 +1848,7 @@ contains
         orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
         orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
 
-        if (swcoll) call reset_seed_if_deterministic
+        if (swcoll) call reset_seed_if_deterministic(ipart)
 
         if (ntcut > 0 .or. class_plot) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)

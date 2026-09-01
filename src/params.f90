@@ -772,15 +772,26 @@ contains
         end if
     end subroutine apply_config_aliases
 
-    subroutine reset_seed_if_deterministic
+    subroutine reset_seed_if_deterministic(stream_id)
         ! for run with fixed random seed
-        integer :: seedsize
+        integer, intent(in), optional :: stream_id
+        integer :: seedsize, i, stream
         integer, allocatable :: seed(:)
+        integer(int64) :: state
+        integer(int64), parameter :: modulus = 2147483647_int64
 
         if (deterministic) then
             call random_seed(size=seedsize)
             if (.not. allocated(seed)) allocate (seed(seedsize))
-            seed = ran_seed
+            stream = 0
+            if (present(stream_id)) stream = stream_id
+            state = modulo(int(ran_seed, int64) + 104729_int64*int(stream, int64), &
+                           modulus - 1_int64) + 1_int64
+            do i = 1, seedsize
+                state = modulo(48271_int64*state + 7919_int64*int(i, int64), &
+                               modulus - 1_int64) + 1_int64
+                seed(i) = int(state)
+            end do
             call random_seed(put=seed)
         end if
     end subroutine reset_seed_if_deterministic
