@@ -6,13 +6,15 @@ module simple_main
         orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
         ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
-    use collis_alp, only: loacol_alpha, stost, init_collision_profiles
+    use collis_alp, only: loacol_alpha, stost, init_collision_profiles, &
+        configure_lorentz_nustar, stost_lorentz
     use magfie_sub, only: ALBERT
     use samplers, only: sample
     use field_can_mod, only: field_can_t, evaluate_field => evaluate, &
         integ_to_ref, ref_to_integ, init_field_can
     use callback, only: output_orbits_macrostep
-    use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
+    use params, only: swcoll, collision_model, ntestpart, startmode, &
+        special_ants_file, num_surf, &
         grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
         confpart_trap, unresolved_orbits, times_lost, orbit_exit_code, &
         boundary_event_radial_residual, &
@@ -1329,7 +1331,9 @@ contains
     end subroutine read_profiles_config
 
     subroutine init_collisions
-        use params, only: am1, am2, Z1, Z2, facE_al, dchichi, slowrate, &
+        use params, only: am1, am2, Z1, Z2, particle_energy_eV_effective, &
+            collision_model, nu_star_standard, lorentz_major_radius_cm, &
+            lorentz_iota, lorentz_nu, dchichi, slowrate, &
             dchichi_norm, slowrate_norm, v0
         use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
             ni1_scale, ni2_scale
@@ -1337,7 +1341,18 @@ contains
         real(dp) :: v0_coll, ealpha
         real(dp) :: densi1, densi2, tempi1, tempi2, tempe
 
-        ealpha = 3.5d6/facE_al
+        ealpha = particle_energy_eV_effective
+        if (trim(collision_model) == 'lorentz_nustar') then
+            call configure_lorentz_nustar(nu_star_standard, &
+                lorentz_major_radius_cm, lorentz_iota, v0)
+            lorentz_nu = nu_star_standard*abs(lorentz_iota)*v0 &
+                /lorentz_major_radius_cm
+            dchichi = lorentz_nu
+            slowrate = 0.0_dp
+            dchichi_norm = lorentz_nu/v0
+            slowrate_norm = 0.0_dp
+            return
+        end if
         densi1 = ni1_scale*1.0d-6
         densi2 = ni2_scale*1.0d-6
         tempi1 = Ti1_scale
@@ -3058,7 +3073,11 @@ contains
         real(dp), intent(in) :: dt
         integer :: ierr_coll
 
-        call stost(z, dt, 1, ierr_coll)
+        if (trim(collision_model) == 'lorentz_nustar') then
+            call stost_lorentz(z, dt, ierr_coll)
+        else
+            call stost(z, dt, 1, ierr_coll)
+        end if
         if (ierr_coll /= 0) then
             print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
         end if
