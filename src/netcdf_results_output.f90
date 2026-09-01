@@ -48,6 +48,7 @@ contains
                           particle_energy_eV_effective, n_d, n_e, v0, &
                           collision_model, nu_star_standard, &
                           lorentz_major_radius_cm, lorentz_iota, lorentz_nu, &
+                          radial_electric_potential_slope, &
                           integmode, relerr, npoiper, npoiper2, &
                           boundary_event_fraction_tolerance, &
                           boundary_event_radial_tolerance, &
@@ -335,6 +336,9 @@ contains
         call check_nc(status, 'put_att lorentz_iota')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_nu_s-1', lorentz_nu)
         call check_nc(status, 'put_att lorentz_nu_s-1')
+        status = nf90_put_att(ncid, nf90_global, &
+            'radial_electric_potential_slope', radial_electric_potential_slope)
+        call check_nc(status, 'put_att radial_electric_potential_slope')
         status = nf90_put_att(ncid, nf90_global, 'integmode', integmode)
         call check_nc(status, 'put_att integmode')
         status = nf90_put_att(ncid, nf90_global, 'relerr', relerr)

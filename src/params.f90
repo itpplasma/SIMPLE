@@ -11,6 +11,7 @@ module params
     use velo_mod, only: isw_field_type
     use magfie_sub, only: TEST
     use field_can_mod, only: eval_field => evaluate, field_can_t
+    use field_can_base, only: set_radial_electric_potential_slope
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
                                      EXPL_IMPL_EULER, &
                                      CASH_KARP, DORMAND_PRINCE, &
@@ -157,6 +158,7 @@ module params
     real(dp) :: lorentz_major_radius_cm = -1.0_dp
     real(dp) :: lorentz_iota = 0.0_dp
     real(dp) :: lorentz_nu = 0.0_dp
+    real(dp) :: radial_electric_potential_slope = 0.0_dp
 
     logical :: debug = .False.
     logical :: output_results_netcdf = .False.
@@ -220,7 +222,8 @@ module params
 	        tcut, nturns, debug, &
 	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
 	        vmec_RZ_scale, swcoll, collision_model, nu_star_standard, &
-            lorentz_major_radius_cm, lorentz_iota, deterministic, old_axis_healing, &
+            lorentz_major_radius_cm, lorentz_iota, radial_electric_potential_slope, &
+            deterministic, old_axis_healing, &
 	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
 	        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
 	        am1, am2, Z1, Z2, &
@@ -289,6 +292,9 @@ contains
         end if
 
         call validate_collision_config
+        if (.not. config_value_is_finite(radial_electric_potential_slope)) &
+            error stop 'radial_electric_potential_slope must be finite'
+        call set_radial_electric_potential_slope(radial_electric_potential_slope)
 
         call validate_gpu_config
 
