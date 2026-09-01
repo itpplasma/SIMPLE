@@ -783,8 +783,13 @@ contains
         if (deterministic) then
             call random_seed(size=seedsize)
             if (.not. allocated(seed)) allocate (seed(seedsize))
+            if (.not. present(stream_id)) then
+                seed = ran_seed
+                call random_seed(put=seed)
+                return
+            end if
             stream = 0
-            if (present(stream_id)) stream = stream_id
+            stream = stream_id
             state = modulo(int(ran_seed, int64) + 104729_int64*int(stream, int64), &
                            modulus - 1_int64) + 1_int64
             do i = 1, seedsize

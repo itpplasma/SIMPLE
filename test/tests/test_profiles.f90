@@ -38,10 +38,21 @@ contains
         logical, intent(inout) :: passed
         integer, intent(inout) :: nfail
         real(dp) :: first(16), replay(16), other(16)
+        integer :: seedsize
+        integer, allocatable :: legacy_seed(:)
 
         print *, 'Testing deterministic per-particle random streams...'
         deterministic = .true.
         ran_seed = 314159
+        call reset_seed_if_deterministic
+        call random_seed(size=seedsize)
+        allocate (legacy_seed(seedsize))
+        call random_seed(get=legacy_seed)
+        if (any(legacy_seed /= ran_seed)) then
+            print *, '  FAIL: untagged legacy seed state changed'
+            passed = .false.
+            nfail = nfail + 1
+        end if
         call reset_seed_if_deterministic(17)
         call random_number(first)
         call reset_seed_if_deterministic(17)
