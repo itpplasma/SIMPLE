@@ -511,6 +511,11 @@ add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
 add_test(NAME test_magfie COMMAND test_magfie.x)
 
+add_executable(test_radial_electric_potential.x test_radial_electric_potential.f90)
+target_link_libraries(test_radial_electric_potential.x simple)
+add_test(NAME test_radial_electric_potential COMMAND test_radial_electric_potential.x)
+set_tests_properties(test_radial_electric_potential PROPERTIES LABELS "unit;physics")
+
 # Unit tests for refactored modules
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
 target_link_libraries(test_stencil_utils.x simple)

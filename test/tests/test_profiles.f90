@@ -2,6 +2,8 @@ program test_profiles
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple_profiles
     use collis_alp
+    use params, only: facE_al, particle_energy_eV, resolve_particle_energy, &
+        deterministic, ran_seed, reset_seed_if_deterministic
     implicit none
 
     logical :: all_passed
@@ -18,6 +20,9 @@ program test_profiles
     call test_slowing_down_distribution(all_passed, n_failed)
     call test_loss_fraction_flat_vs_scalar(all_passed, n_failed)
     call test_maxwellian_fixed_point(all_passed, n_failed)
+    call test_explicit_particle_energy(all_passed, n_failed)
+    call test_lorentz_legendre_relaxation(all_passed, n_failed)
+    call test_deterministic_particle_streams(all_passed, n_failed)
     call plot_collision_frequency_comparison()
 
     if (all_passed) then
@@ -28,6 +33,145 @@ program test_profiles
     end if
 
 contains
+
+    subroutine test_deterministic_particle_streams(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+        real(dp) :: first(16), replay(16), other(16)
+        integer :: seedsize
+        integer, allocatable :: legacy_seed(:)
+
+        print *, 'Testing deterministic per-particle random streams...'
+        deterministic = .true.
+        ran_seed = 314159
+        call reset_seed_if_deterministic
+        call random_seed(size=seedsize)
+        allocate (legacy_seed(seedsize))
+        call random_seed(get=legacy_seed)
+        if (any(legacy_seed /= ran_seed)) then
+            print *, '  FAIL: untagged legacy seed state changed'
+            passed = .false.
+            nfail = nfail + 1
+        end if
+        call reset_seed_if_deterministic(17)
+        call random_number(first)
+        call reset_seed_if_deterministic(17)
+        call random_number(replay)
+        call reset_seed_if_deterministic(18)
+        call random_number(other)
+        if (any(first /= replay) .or. all(first == other)) then
+            print *, '  FAIL: particle streams do not replay/separate'
+            passed = .false.
+            nfail = nfail + 1
+        else
+            print *, '  PASS: same particle replays; different particles separate'
+        end if
+        deterministic = .false.
+    end subroutine test_deterministic_particle_streams
+
+    subroutine test_explicit_particle_energy(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+
+        real(dp) :: energy
+        integer :: status
+
+        print *, 'Testing explicit particle energy and legacy fallback...'
+        facE_al = 1000.0_dp
+        particle_energy_eV = -1.0_dp
+        call resolve_particle_energy(energy, status)
+        if (status /= 0 .or. abs(energy - 3500.0_dp) > 1.0e-12_dp) then
+            print *, '  FAIL: facE_al fallback', energy, status
+            passed = .false.
+            nfail = nfail + 1
+        end if
+
+        facE_al = 1.0_dp
+        particle_energy_eV = 3000.0_dp
+        call resolve_particle_energy(energy, status)
+        if (status /= 0 .or. abs(energy - 3000.0_dp) > 1.0e-12_dp) then
+            print *, '  FAIL: explicit energy', energy, status
+            passed = .false.
+            nfail = nfail + 1
+        end if
+
+        facE_al = 1000.0_dp
+        particle_energy_eV = 3000.0_dp
+        call resolve_particle_energy(energy, status)
+        if (status == 0) then
+            print *, '  FAIL: inconsistent explicit and legacy energies accepted'
+            passed = .false.
+            nfail = nfail + 1
+        else
+            print *, '  PASS: explicit energy, fallback, and consistency check'
+        end if
+
+        facE_al = 1.0_dp
+        particle_energy_eV = -1.0_dp
+    end subroutine test_explicit_particle_energy
+
+    subroutine test_lorentz_legendre_relaxation(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+
+        integer, parameter :: nparticle = 40000, nstep = 200
+        real(dp), parameter :: vref = 10.0_dp, radius = 5.0_dp
+        real(dp), parameter :: iota = 0.2_dp, nustar = 1.0_dp
+        real(dp), parameter :: dt = 0.005_dp, lambda0 = 0.5_dp
+        real(dp), parameter :: moment_tolerance = 1.2e-2_dp
+        real(dp) :: z(5), p1_mean, p2_mean, p1_exact, p2_exact, nu
+        integer :: i, k, ierr, seed_size
+        integer, allocatable :: seed(:)
+
+        print *, 'Testing Lorentz Legendre relaxation...'
+        call random_seed(size=seed_size)
+        allocate (seed(seed_size))
+        seed = 271828
+        call random_seed(put=seed)
+        deallocate (seed)
+
+        call configure_lorentz_nustar(nustar, radius, iota, vref)
+        p1_mean = 0.0_dp
+        p2_mean = 0.0_dp
+        do i = 1, nparticle
+            z = [0.5_dp, 0.0_dp, 0.0_dp, 1.0_dp, lambda0]
+            do k = 1, nstep
+                call stost_lorentz(z, vref*dt, ierr)
+                if (ierr /= 0) exit
+            end do
+            if (ierr /= 0) then
+                print *, '  FAIL: Lorentz step left pitch domain', ierr, z(5)
+                passed = .false.
+                nfail = nfail + 1
+                return
+            end if
+            if (abs(z(4) - 1.0_dp) > 0.0_dp) then
+                print *, '  FAIL: monoenergetic collision changed momentum', z(4)
+                passed = .false.
+                nfail = nfail + 1
+                return
+            end if
+            p1_mean = p1_mean + z(5)
+            p2_mean = p2_mean + 0.5_dp*(3.0_dp*z(5)**2 - 1.0_dp)
+        end do
+        p1_mean = p1_mean/real(nparticle, dp)
+        p2_mean = p2_mean/real(nparticle, dp)
+
+        nu = nustar*abs(iota)*vref/radius
+        p1_exact = lambda0*exp(-nu*real(nstep, dp)*dt)
+        p2_exact = 0.5_dp*(3.0_dp*lambda0**2 - 1.0_dp) &
+            *exp(-3.0_dp*nu*real(nstep, dp)*dt)
+        if (abs(p1_mean - p1_exact) > moment_tolerance .or. &
+            abs(p2_mean - p2_exact) > moment_tolerance) then
+            print *, '  FAIL: moments numerical/exact', p1_mean, p1_exact, &
+                p2_mean, p2_exact
+            passed = .false.
+            nfail = nfail + 1
+        else
+            print *, '  PASS: P1/P2 analytic decay and fixed momentum', &
+                p1_mean, p2_mean
+        end if
+    end subroutine test_lorentz_legendre_relaxation
 
     ! Flat profiles reproduce the scalar collision operator up to floating-point
     ! round-off, not bit-for-bit: the grid is built by an independent per-node

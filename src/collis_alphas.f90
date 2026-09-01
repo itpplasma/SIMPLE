@@ -7,8 +7,57 @@ module collis_alp
 
     real(wp), dimension(nsorts) :: efcolf, velrat, enrat
     real(wp), dimension(nsorts, N_S_GRID) :: efcolf_grid, velrat_grid, enrat_grid
+    real(wp) :: lorentz_nu = 0.0_wp
+    real(wp) :: lorentz_dhh = 0.0_wp
 
 contains
+
+    subroutine configure_lorentz_nustar(nu_star, major_radius_cm, iota, vref)
+        real(wp), intent(in) :: nu_star, major_radius_cm, iota, vref
+
+        if (nu_star < 0.0_wp) error stop 'nu_star_standard must be nonnegative'
+        if (major_radius_cm <= 0.0_wp) &
+            error stop 'lorentz_major_radius_cm must be positive'
+        if (abs(iota) <= tiny(1.0_wp)) error stop 'lorentz_iota must be nonzero'
+        if (vref <= 0.0_wp) error stop 'Lorentz reference velocity must be positive'
+
+        lorentz_nu = nu_star*abs(iota)*vref/major_radius_cm
+        ! stost advances in path length d tau = vref dt.  This coefficient gives
+        ! the Lorentz generator (nu/2) d/dlambda[(1-lambda^2)d/dlambda].
+        lorentz_dhh = lorentz_nu/(2.0_wp*vref)
+    end subroutine configure_lorentz_nustar
+
+    subroutine stost_lorentz(z, dtauc, ierr)
+        real(wp), intent(inout) :: z(5)
+        real(wp), intent(in) :: dtauc
+        integer, intent(out) :: ierr
+
+        real(wp) :: alam, coala, dalam
+        real :: ur
+
+        ierr = 0
+        alam = z(5)
+        coala = 1.0_wp - alam**2
+        if (coala < 0.0_wp) then
+            ierr = 1
+            return
+        end if
+
+        call getran(1, ur)
+        dalam = sqrt(2.0_wp*lorentz_dhh*coala*dtauc)*real(ur, wp) &
+            - 2.0_wp*alam*lorentz_dhh*dtauc
+        alam = alam + dalam
+        if (alam > 1.0_wp) then
+            alam = 2.0_wp - alam
+        else if (alam < -1.0_wp) then
+            alam = -2.0_wp - alam
+        end if
+        if (abs(alam) > 1.0_wp) then
+            ierr = 2
+            return
+        end if
+        z(5) = alam
+    end subroutine stost_lorentz
 
     subroutine coleff(p, dpp, dhh, fpeff)
         real(wp), intent(in) :: p
