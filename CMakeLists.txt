@@ -268,9 +268,7 @@ if(NOT TARGET fortnum)
     FetchContent_Declare(
         fortnum
         GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        # Temporary dependency pin for the tuned-DOPRI PR; update to the
-        # resulting Fortnum main commit after lazy-fortran/fortnum#90 merges.
-        GIT_TAG b382eff4d2578570c05cdc0b8471e11ce61fb8bd
+        GIT_TAG 48f6f9bf0d4d523c3677bb686f5892f6e1329a24
     )
     FetchContent_MakeAvailable(fortnum)
 endif()
