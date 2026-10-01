@@ -585,6 +585,12 @@ f%Ath = Ath_norm * psi    ! Linear in psi
 f%dAth = [Ath_norm, 0, 0] ! Constant derivative
 ```
 
+The `diag_albert.x` diagnostic renders the four stored Albert field
+components at three radial slices with fortplot. PNG filenames, theta/phi axes,
+field data, and radial selection are preserved. Native PNG rendering replaces
+the former generated Python sidecar scripts. Diagnostic plotting is disabled
+when fortplot is unavailable, following the Meiss diagnostic behavior.
+
 ### 6.5 Canonical Flux Coordinates
 
 **File**: `src/field/field_can_flux.f90`

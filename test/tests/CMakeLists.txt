@@ -46,6 +46,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
+if(TARGET fortplot::fortplot)
+    add_executable(test_diag_albert.x test_diag_albert.f90)
+    target_link_libraries(test_diag_albert.x PRIVATE simple)
+    add_test(NAME test_diag_albert
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_diag_albert.py
+            $<TARGET_FILE:test_diag_albert.x>)
+    set_tests_properties(test_diag_albert PROPERTIES
+        LABELS "unit;integration" TIMEOUT 120)
+endif()
+
 if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     add_test(
         NAME test_deterministic_dependency_flags
