@@ -276,6 +276,7 @@ contains
     z(1) = s; z(2) = th; z(3) = ph
     z(4) = fo%pabs
     z(5) = vpar/(z(4)*dsqrt(2d0))
+    ierr = 0
   end subroutine orbit_timestep_fo
 
   subroutine orbit_timestep_fo_bridge(fo, z, interval, ierr, continue_state)
