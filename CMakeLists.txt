@@ -321,10 +321,13 @@ endif()
 # Fetch fortplot for diagnostic plotting (disabled for nvfortran due to compatibility issues)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     include(FetchContent)
+    # SIMPLE uses the native plotting API and does not need the fortarray adapter.
+    set(FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF CACHE BOOL
+        "Build the optional fortarray plotting adapter")
     FetchContent_Declare(
         fortplot
         GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-        GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
+        GIT_TAG b17c5e03664d15ad94005646ee213fc7189c6f8c
     )
     FetchContent_MakeAvailable(fortplot)
     add_compile_definitions(USE_FORTPLOT)
@@ -484,32 +487,6 @@ else()
 endif()
 
 # Trampoline error flags will be applied per-target to avoid affecting subprojects
-
-# Auto-download pyplot-fortran single file during build
-set(PYPLOT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
-set(PYPLOT_MODULE_FILE ${PYPLOT_SOURCE_DIR}/pyplot_module.F90)
-
-# Download pyplot_module.F90 if it doesn't exist
-if(NOT EXISTS ${PYPLOT_MODULE_FILE})
-    message(STATUS "Downloading pyplot_module.F90...")
-    file(MAKE_DIRECTORY ${PYPLOT_SOURCE_DIR})
-    file(DOWNLOAD
-        "https://raw.githubusercontent.com/jacobwilliams/pyplot-fortran/refs/heads/master/src/pyplot_module.F90"
-        ${PYPLOT_MODULE_FILE}
-        SHOW_PROGRESS
-    )
-endif()
-
-# Create pyplot library from downloaded source
-add_library(pyplot STATIC ${PYPLOT_MODULE_FILE})
-set_target_properties(pyplot PROPERTIES
-    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
-)
-target_include_directories(pyplot PUBLIC ${CMAKE_BINARY_DIR}/include)
-# The downloaded module has lines longer than the 132-column free-form limit.
-target_compile_options(pyplot PRIVATE
-    $<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-ffree-line-length-none>
-)
 
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
