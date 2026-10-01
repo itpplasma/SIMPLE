@@ -506,6 +506,10 @@ set_target_properties(pyplot PROPERTIES
     Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
 )
 target_include_directories(pyplot PUBLIC ${CMAKE_BINARY_DIR}/include)
+# The downloaded module has lines longer than the 132-column free-form limit.
+target_compile_options(pyplot PRIVATE
+    $<$<COMPILE_LANG_AND_ID:Fortran,GNU>:-ffree-line-length-none>
+)
 
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")
