@@ -25,7 +25,7 @@ module field_can_albert
         BatchSplineData3D, construct_batch_splines_3d, &
         evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
         evaluate_batch_splines_3d_der2
-    use field_can_base, only: field_can_t, n_field_evaluations
+    use field_can_base, only: count_field_evaluation, field_can_t
     use field_can_meiss, only: xmin, xmax, n_r, n_th, n_phi, order, periodic, twopi, &
                                get_grid_point, &
                 init_albert => init_meiss, init_transformation, spline_transformation, &
@@ -61,7 +61,7 @@ contains
 
         real(dp) :: x(3)
 
-        n_field_evaluations = n_field_evaluations + 1
+        call count_field_evaluation(mode_secders)
 
         x = [r, th_c, ph_c]
 

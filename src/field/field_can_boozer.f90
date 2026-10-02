@@ -1,6 +1,6 @@
 module field_can_boozer
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_base, only: field_can_t, n_field_evaluations, twopi
+    use field_can_base, only: count_field_evaluation, field_can_t, twopi
 
     implicit none
 
@@ -37,7 +37,7 @@ contains
 
         call eval_field_booz(f, r, th_c, ph_c, mode_secders)
 
-        n_field_evaluations = n_field_evaluations + 1
+        call count_field_evaluation(mode_secders)
     end subroutine evaluate_boozer
 
     subroutine integ_to_ref_boozer(xinteg, xref)
