@@ -1,6 +1,7 @@
 module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
-    use omp_lib
+    !$ use omp_lib
+    use timing, only: get_wtime
     use util, only: sqrt2, twopi
     use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
         orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
@@ -799,6 +800,9 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         real(dp), allocatable :: traj(:, :), times(:)
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+        integer :: debug_thread
+#endif
 
         if (output_orbits_macrostep) then
             call init_orbit_netcdf(ntestpart, ntimstep)
@@ -823,8 +827,10 @@ contains
             if (debug) then
                 !$omp critical
                 kpart = kpart + 1
+                debug_thread = 0
+                !$ debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-                    omp_get_thread_num()
+                    debug_thread
                 !$omp end critical
             end if
 #endif
@@ -955,7 +961,7 @@ contains
             trim(start_coordinates) /= 'boozer') &
             error stop 'gpu_start_coordinates must be reference or boozer'
 
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         do i = 1, ntestpart
             if (trim(start_coordinates) == 'boozer') then
                 z(1:3) = zstart(1:3, i)
@@ -982,13 +988,13 @@ contains
         if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
             .not. boozer_rk_device_supported()) &
             error stop 'GPU RK requires scalar cubic or quintic Boozer splines'
-        t_init = omp_get_wtime() - t0
+        t_init = get_wtime() - t0
 
         landreman_mode = gpu_landreman
         if (cuda_native_backend .and. .not. landreman_mode) &
             error stop 'gpu_landreman must be true for the native CUDA backend'
 
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         warp_nfev_slots = 0_8
         cuda_profile_ms = 0.0_dp
         if (landreman_mode) then
@@ -1031,14 +1037,14 @@ contains
                 real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
             energy_loss_fraction = 0.0_dp
         end if
-        t_trace = omp_get_wtime() - t0
+        t_trace = get_wtime() - t0
 
         total_time_normalized = real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
         confpart_pass = 0.0_dp
         confpart_trap = 0.0_dp
         unresolved_orbits = 0
         nfev_total = 0_8
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         do i = 1, ntestpart
             nfev_total = nfev_total + int(nfev(i), 8)
             si_gpu(i)%z = zcanonical(:, i)
@@ -1079,7 +1085,7 @@ contains
                     maxval(nfev(i:min(i + 31, ntestpart))), 8)
             end do
         end if
-        t_finish = omp_get_wtime() - t0
+        t_finish = get_wtime() - t0
 
         print *, '==================== GPU production trace ==================='
         print '(a,i0)', ' integrator mode = ', method
@@ -1212,7 +1218,7 @@ contains
         end if
 
         ! CPU reference (OpenMP over particles)
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         !$omp parallel do private(i, it, ktau, ierr) schedule(dynamic)
         do i = 1, ntestpart
             ierr = 0
@@ -1230,7 +1236,7 @@ contains
             cpu_zend(:, i) = si_cpu(i)%z(1:4)
         end do
         !$omp end parallel do
-        t1 = omp_get_wtime()
+        t1 = get_wtime()
         t_cpu = t1 - t0
 
         if (any(cpu_loss < ntimstep)) then
@@ -1238,10 +1244,10 @@ contains
         end if
 
         ! GPU kernel
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
             ntau_macro, integmode, gpu_loss, gpu_loss_time, gpu_zend, gpu_nfev)
-        t1 = omp_get_wtime()
+        t1 = get_wtime()
         t_gpu = t1 - t0
 
         ! Compare
@@ -1286,6 +1292,9 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         type(classification_result_t) :: class_result
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+        integer :: debug_thread
+#endif
 
         !$omp parallel firstprivate(norb) private(class_result, i)
         !$omp do
@@ -1294,8 +1303,10 @@ contains
             if (debug) then
                 !$omp critical
                 kpart = kpart + 1
+                debug_thread = 0
+                !$ debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-                    omp_get_thread_num()
+                    debug_thread
                 !$omp end critical
             end if
 #endif

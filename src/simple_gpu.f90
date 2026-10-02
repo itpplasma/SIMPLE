@@ -40,7 +40,7 @@ module simple_gpu
         BOOZER_SECDERS_RADIAL_MIXED
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
-    use omp_lib, only: omp_get_thread_num
+    !$ use omp_lib, only: omp_get_thread_num
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
 #endif
@@ -1606,7 +1606,8 @@ contains
         end if
 
         !$omp parallel num_threads(ngpu) private(dev, i0, i1)
-        dev = omp_get_thread_num()
+        dev = 0
+        !$ dev = omp_get_thread_num()
 #ifdef _OPENACC
         call acc_set_device_num(dev, acc_device_nvidia)
 #endif
