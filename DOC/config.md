@@ -49,3 +49,19 @@
   builds use at least `1d-8` only on slices where the covariant toroidal field
   component is near zero, preventing step-size underflow at that coordinate
   singularity. Change one setting at a time in resolution studies.
+
+* `particle_energy_eV` selects the test-particle energy directly. Its default
+  sentinel, `-1`, retains the legacy energy `3.5d6/facE_al` eV. When an
+  explicit energy is set, the default `facE_al=1` is ignored; a nondefault
+  `facE_al` must describe the same energy or input validation fails. `n_d` and
+  `n_e` remain the particle mass and charge numbers.
+
+* `collision_model='full'` retains the Coulomb pitch-and-energy operator.
+  `collision_model='lorentz_nustar'` instead applies monoenergetic pitch-angle
+  scattering when `swcoll=.true.`. Specify positive
+  `lorentz_major_radius_cm`, nonzero `lorentz_iota`, and nonnegative
+  `nu_star_standard`, using
+  `nu_star_standard = R0*nu/(abs(iota)*v0)`. This mode leaves `p_abs` exactly
+  unchanged. Enable `output_orbits_macrostep` and `output_results_netcdf` to
+  record radial histories in `orbits.nc` and loss accounting in `results.nc`;
+  both files carry the effective energy and collision normalization metadata.

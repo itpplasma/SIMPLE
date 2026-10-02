@@ -93,6 +93,10 @@ contains
 
 
     subroutine init_orbit_netcdf(n_particles, n_timesteps)
+        use params, only: collision_model, particle_energy_eV_effective, &
+            nu_star_standard, lorentz_major_radius_cm, lorentz_iota, lorentz_nu, &
+            radial_electric_potential_slope
+
         integer, intent(in) :: n_particles, n_timesteps
         integer :: status, coord_varid_particle, coord_varid_timestep
         character(len=16) :: cart_units, coordinate_type, radial_coordinate
@@ -211,6 +215,26 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'radial_coordinate', &
             trim(radial_coordinate))
         call check_nc(status, 'nf90_put_att radial_coordinate')
+
+        status = nf90_put_att(ncid, nf90_global, 'particle_energy_eV', &
+            particle_energy_eV_effective)
+        call check_nc(status, 'nf90_put_att particle_energy_eV')
+        status = nf90_put_att(ncid, nf90_global, 'collision_model', &
+            trim(collision_model))
+        call check_nc(status, 'nf90_put_att collision_model')
+        status = nf90_put_att(ncid, nf90_global, 'nu_star_standard', &
+            nu_star_standard)
+        call check_nc(status, 'nf90_put_att nu_star_standard')
+        status = nf90_put_att(ncid, nf90_global, 'lorentz_major_radius_cm', &
+            lorentz_major_radius_cm)
+        call check_nc(status, 'nf90_put_att lorentz_major_radius_cm')
+        status = nf90_put_att(ncid, nf90_global, 'lorentz_iota', lorentz_iota)
+        call check_nc(status, 'nf90_put_att lorentz_iota')
+        status = nf90_put_att(ncid, nf90_global, 'lorentz_nu_s-1', lorentz_nu)
+        call check_nc(status, 'nf90_put_att lorentz_nu_s-1')
+        status = nf90_put_att(ncid, nf90_global, &
+            'radial_electric_potential_slope', radial_electric_potential_slope)
+        call check_nc(status, 'nf90_put_att radial_electric_potential_slope')
 
         ! End define mode
         status = nf90_enddef(ncid)
