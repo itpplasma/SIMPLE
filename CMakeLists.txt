@@ -258,6 +258,17 @@ if(NOT SIMPLE_ENABLE_OPENACC)
         "Disable libneo OpenACC when SIMPLE does not enable OpenACC" FORCE)
 endif()
 
+set(_dependency_versions_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependency_versions.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${_dependency_versions_file}")
+file(READ "${_dependency_versions_file}" _dependency_versions)
+foreach(_dependency IN ITEMS fortnum fortplot)
+    string(TOUPPER "${_dependency}" _dependency_upper)
+    if(NOT DEFINED ${_dependency_upper}_REF)
+        string(JSON ${_dependency_upper}_REF GET "${_dependency_versions}" ${_dependency})
+    endif()
+endforeach()
+
 # fortnum provides the root finder and allocation-free GPU RK5(4) device
 # integrator used by SIMPLE. libneo declares fortnum as well, so this must be
 # declared first: FetchContent keeps the first declaration and silently ignores
@@ -268,7 +279,7 @@ if(NOT TARGET fortnum)
     FetchContent_Declare(
         fortnum
         GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        GIT_TAG 48f6f9bf0d4d523c3677bb686f5892f6e1329a24
+        GIT_TAG ${FORTNUM_REF}
     )
     FetchContent_MakeAvailable(fortnum)
 endif()
@@ -325,7 +336,7 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     FetchContent_Declare(
         fortplot
         GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-        GIT_TAG b17c5e03664d15ad94005646ee213fc7189c6f8c
+        GIT_TAG ${FORTPLOT_REF}
     )
     FetchContent_MakeAvailable(fortplot)
     add_compile_definitions(USE_FORTPLOT)
