@@ -1,7 +1,10 @@
 CONFIG ?= Release
 FLAGS ?=
 BUILD_DIR := build
-GOLDEN_LIBNEO_REF := 66ef89c2b59420bb8fbd14aa0838d5e88082bef8
+GOLDEN_LIBNEO_REF := $(shell cmake -DDEPENDENCY=libneo_golden -P cmake/read_dependency_version.cmake)
+ifeq ($(strip $(GOLDEN_LIBNEO_REF)),)
+  $(error Unable to read libneo_golden from cmake/dependency_versions.json)
+endif
 
 # Prevent ambient shell env from silently changing which libneo is fetched.
 # Pass the ref explicitly via: make ... LIBNEO_REF=<branch|tag|sha>
