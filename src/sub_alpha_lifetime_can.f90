@@ -351,6 +351,7 @@ contains
         !
         use parmot_mod, only : rmu,ro0
         use magfie_sub, only : magfie
+        use field_can_base, only : count_field_evaluation
         !
         implicit none
         !
@@ -387,6 +388,13 @@ contains
             !            hcurl  - contravariant components of the curl of this vector
             !
             call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+            ! The magfie path carries its own counter. The canonical backends
+            ! bump n_field_evaluations inside field_can, but this drift-kinetic
+            ! right-hand side goes straight to magfie and was previously
+            ! invisible, so any cost comparison between the RK and symplectic
+            ! paths was counting only one of them. magfie supplies first
+            ! derivatives only, so it counts as a d1 evaluation.
+            call count_field_evaluation(0)
             !
             ! in elefie: x(i)   - space coords (input, see above)
             !            derphi - derivatives of the dimensionless electric potential
