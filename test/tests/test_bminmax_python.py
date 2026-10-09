@@ -24,9 +24,9 @@ def iter_cases(path: Path):
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        num_surf, ntcut, class_plot, expected = line.split()
+        num_surf, ntcut, class_plot, fast_class, expected = line.split()
         yield (
-            (int(num_surf), int(ntcut), class_plot == "T"),
+            (int(num_surf), int(ntcut), class_plot == "T", fast_class == "T"),
             expected == "T",
         )
 
