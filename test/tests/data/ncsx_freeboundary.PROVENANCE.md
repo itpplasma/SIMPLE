@@ -20,9 +20,9 @@ flux surface set to 0.1:
 The three-rank SPECTRE field solve completed without overlapping interfaces.
 This compact file is a field-evaluation and particle-transition fixture, not a
 force-minimized free-boundary equilibrium. At this resolution the Beltrami
-residual is large (volume averages 0.5, 2.8 and 12 for the three volumes);
-`mpol=8`, `ntor=4` lowers the plasma-volume averages to 0.2 at five times the
-file size and test time.
+residual is large (largest component average 0.56, 2.8 and 12 in the three
+volumes); `mpol=8`, `ntor=4` lowers it to 0.19 and 0.20 in the plasma volumes
+at five times the file size and test time.
 
 The interface blend of every volume keeps a single Jacobian sign. An earlier
 version placed the first surface at 0.2, where the NCSX bean indentation is
