@@ -26,11 +26,15 @@ module interface_crossing
     public :: apply_crossing, crossing_info_t, axis_offset
     public :: crossing_log_reset, crossing_log_record, crossing_log_write, &
         crossing_log_count, crossing_log_count_type
-    public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSS_CROSSING, CROSS_REFLECTION, &
+    public :: CROSSING_LEVEL0, CROSSING_LEVEL1, CROSSING_SYMPLECTIC, &
+        CROSS_CROSSING, CROSS_REFLECTION, &
         CROSS_LOSS, CROSS_STOP, CROSS_SHEET, CROSS_RECOVERY, CROSS_INVALID
 
     integer, parameter :: CROSSING_LEVEL0 = 0
     integer, parameter :: CROSSING_LEVEL1 = 1
+    !> Symplectic crossing step of the midpoint scheme (spectre_sympl_orbit);
+    !> where that step cannot be formed the Level-1 map is applied.
+    integer, parameter :: CROSSING_SYMPLECTIC = 2
     integer, parameter :: CROSS_CROSSING = 1
     integer, parameter :: CROSS_REFLECTION = 2
     integer, parameter :: CROSS_LOSS = 3
@@ -136,7 +140,8 @@ contains
         info%event_type = CROSS_INVALID
         y_out = y_iface
 
-        if (level /= CROSSING_LEVEL0 .and. level /= CROSSING_LEVEL1) then
+        if (level /= CROSSING_LEVEL0 .and. level /= CROSSING_LEVEL1 .and. &
+            level /= CROSSING_SYMPLECTIC) then
             error stop 'apply_crossing: unknown crossing_level'
         end if
         if ((direction /= -1 .and. direction /= 1) .or. iface < 0 .or. &
@@ -194,7 +199,7 @@ contains
             return
         end if
 
-        if (level == CROSSING_LEVEL1) then
+        if (level == CROSSING_LEVEL1 .or. level == CROSSING_SYMPLECTIC) then
             call level1_map(rho_face, rho_home, rho_target, direction, &
                 bmod_home, mu, vpar, y_iface, y_out, info)
             if (.not. valid_mapped_crossing(y_out, info)) then

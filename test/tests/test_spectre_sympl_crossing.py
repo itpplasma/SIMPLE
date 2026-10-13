@@ -10,11 +10,13 @@ and checks the exact-landing crossing pipeline end to end:
   * Reflection: deeply-trapped markers mirror at the interface (events logged),
     stay in their volume, conserve H = v_par^2/2 + mu*B exactly across the
     event, and the orbit continues afterwards.
-  * Cross-path consistency: the same 32-marker ensemble under integmode 3 and
-    integmode 0 (RK45 + crossing) loses a fraction of markers that agrees
-    within Monte-Carlo error.
+  * Cross-path consistency: the same 32-marker ensemble under integmode 3
+    (crossing_level 1 and 2) and integmode 0 (RK45 + crossing) loses a
+    fraction of markers that agrees within Monte-Carlo error; crossing_level
+    2 resolves its crossings without Level-1 fallbacks.
   * Step-halving: a crossing-rich single orbit re-run with doubled npoiper2
-    converges at the scheme's order (delta ratio reported and bounded).
+    converges at the scheme's order under both crossing levels (delta ratio
+    reported and bounded).
 
 Usage:
     test_spectre_sympl_crossing.py <simple.x> <tok2vol.h5>
@@ -42,7 +44,7 @@ HALVING_RATIO_LO, HALVING_RATIO_HI = 3.0, 6.0
 
 def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
                 relerr, face_al=1.0, ntimstep=100, ncon_phi=None,
-                explicit_starts=False):
+                explicit_starts=False, crossing_level=1):
     lines = [
         "&config",
         f"  trace_time = {trace_time}",
@@ -58,6 +60,7 @@ def write_input(path, h5, integmode, npart, trace_time, sbeg, npoiper2,
         "  output_orbits_macrostep = .True.",
         "  deterministic = .True.",
         "  ran_seed = 12345",
+        f"  crossing_level = {crossing_level}",
     ]
     if explicit_starts:
         lines.append("  startmode = 2")
@@ -193,36 +196,53 @@ def loss_fraction(workdir, trace_time):
     return float(lost.sum())/len(tl), len(tl)
 
 
+def parse_symplectic_stats(stdout):
+    m = re.search(r"sympl_symplectic_stats: transmissions=\s*(\d+)\s+"
+                  r"reflections=\s*(\d+)\s+fallbacks=\s*(\d+)", stdout)
+    if not m:
+        raise RuntimeError("sympl_symplectic_stats line missing from stdout")
+    return tuple(int(g) for g in m.groups())
+
+
 def check_cross_path(binary, h5, failures):
     # 250 keV keeps Bstar_parallel nonzero for every fixed-seed marker in both
     # GC formulations and still produces interface crossings and losses.
     trace_time, npart = 2.0e-5, 32
+    common = dict(h5=h5, npart=npart, trace_time=trace_time, sbeg=0.5,
+                  npoiper2=256, face_al=14.0)
     with tempfile.TemporaryDirectory() as work:
-        out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
-                         trace_time=trace_time, sbeg=0.5, npoiper2=256,
-                         relerr="1d-12", face_al=14.0)
-        ev3 = load_events(work)
-        _, _, stops = parse_landing_stats(out)
-        check_stops(ev3, stops, "cross-path sympl", failures)
-        p3, n3 = loss_fraction(work, trace_time)
-    with tempfile.TemporaryDirectory() as work:
-        run_simple(binary, work, h5=h5, integmode=0, npart=npart,
-                   trace_time=trace_time, sbeg=0.5, npoiper2=256,
-                   relerr="1d-8", face_al=14.0)
+        run_simple(binary, work, integmode=0, relerr="1d-8", **common)
         p0, n0 = loss_fraction(work, trace_time)
+    for level in (1, 2):
+        tag = f"cross-path sympl level {level}"
+        with tempfile.TemporaryDirectory() as work:
+            out = run_simple(binary, work, integmode=3, relerr="1d-12",
+                             crossing_level=level, **common)
+            ev3 = load_events(work)
+            _, _, stops = parse_landing_stats(out)
+            check_stops(ev3, stops, tag, failures)
+            p3, n3 = loss_fraction(work, trace_time)
+            transmissions, reflections, fallbacks = parse_symplectic_stats(out)
+        if level == 2:
+            print(f"{tag}: transmissions={transmissions} "
+                  f"reflections={reflections} fallbacks={fallbacks}")
+            if transmissions == 0:
+                failures.append(f"{tag}: no symplectic transmissions")
+            if fallbacks > 0.05*(transmissions + reflections + fallbacks):
+                failures.append(f"{tag}: {fallbacks} Level-1 fallbacks")
 
-    p_mean = 0.5*(p3 + p0)
-    # The statistic is the difference of two independent resolved-marker
-    # binomial proportions. Its null variance has a contribution from each
-    # sample, which may have different resolved denominators.
-    variance = max(p_mean*(1.0 - p_mean), 1.0/max(n3, n0))
-    sigma_delta = np.sqrt(variance*(1.0/n3 + 1.0/n0))
-    if not abs(p3 - p0) < 3.0*sigma_delta:
-        failures.append(f"cross-path: loss fractions differ beyond MC error: "
-                        f"sympl {p3:.3f} vs RK45 {p0:.3f} (3 sigma = "
-                        f"{3.0*sigma_delta:.3f})")
-    print(f"cross-path: loss fraction sympl={p3:.3f} RK45={p0:.3f} "
-          f"3sigma={3.0*sigma_delta:.3f} (N={n3},{n0})")
+        p_mean = 0.5*(p3 + p0)
+        # The statistic is the difference of two independent resolved-marker
+        # binomial proportions. Its null variance has a contribution from
+        # each sample, which may have different resolved denominators.
+        variance = max(p_mean*(1.0 - p_mean), 1.0/max(n3, n0))
+        sigma_delta = np.sqrt(variance*(1.0/n3 + 1.0/n0))
+        if not abs(p3 - p0) < 3.0*sigma_delta:
+            failures.append(f"{tag}: loss fractions differ beyond MC error: "
+                            f"sympl {p3:.3f} vs RK45 {p0:.3f} (3 sigma = "
+                            f"{3.0*sigma_delta:.3f})")
+        print(f"{tag}: loss fraction sympl={p3:.3f} RK45={p0:.3f} "
+              f"3sigma={3.0*sigma_delta:.3f} (N={n3},{n0})")
 
 
 def orbit_states(workdir):
@@ -233,7 +253,8 @@ def orbit_states(workdir):
     return z  # (component, timestep, particle)
 
 
-def check_step_halving(binary, h5, failures):
+def check_step_halving(binary, h5, failures, crossing_level):
+    tag = f"halving level {crossing_level}"
     trace_time = 5.0e-5
     # Fixed crossers make the order probe independent of sampler changes.
     starts = np.array([
@@ -249,12 +270,19 @@ def check_step_halving(binary, h5, failures):
             out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
                              trace_time=trace_time, sbeg=0.97,
                              npoiper2=npoiper2, relerr="1d-12", face_al=50.0,
-                             ncon_phi=32, starts=starts)
+                             ncon_phi=32, starts=starts,
+                             crossing_level=crossing_level)
             ev = load_events(work)
             _, _, stops = parse_landing_stats(out)
-            check_stops(ev, stops, f"halving np={npoiper2}", failures)
+            check_stops(ev, stops, f"{tag} np={npoiper2}", failures)
             states.append(orbit_states(work))
-            cross = ev[ev[:, C_TYPE] == TYPE_CROSSING] if len(ev) else ev
+            # Level 2 reflects passing markers that Level 1 transmits: the
+            # sheet-tangent field gives no mirror force, so the state can only
+            # leave on the side where its entry energy is reached along X_s.
+            # Its interface events of either kind probe the order.
+            kinds = ((TYPE_CROSSING,) if crossing_level == 1
+                     else (TYPE_CROSSING, TYPE_REFLECTION))
+            cross = ev[np.isin(ev[:, C_TYPE], kinds)] if len(ev) else ev
             crossers.append(set(cross[:, C_PART].astype(int)) if len(cross)
                             else set())
             tl = load_times_lost(work)
@@ -264,7 +292,7 @@ def check_step_halving(binary, h5, failures):
     usable = (crossers[0] & crossers[1] & crossers[2]
               & confined[0] & confined[1] & confined[2])
     if not usable:
-        failures.append(f"halving: no marker crossing and confined in all "
+        failures.append(f"{tag}: no marker crossing and confined in all "
                         f"runs (crossers {sorted(crossers[0])}, confined "
                         f"{sorted(confined[0])})")
         return
@@ -278,10 +306,10 @@ def check_step_halving(binary, h5, failures):
     # (largest d2 above round-off).
     p, d1, d2, ratio = max(ratios, key=lambda r: r[2])
     if not HALVING_RATIO_LO <= ratio <= HALVING_RATIO_HI:
-        failures.append(f"halving: convergence ratio {ratio:.2f} outside "
+        failures.append(f"{tag}: convergence ratio {ratio:.2f} outside "
                         f"[{HALVING_RATIO_LO}, {HALVING_RATIO_HI}] "
                         f"(marker {p}, d1={d1:.3e}, d2={d2:.3e})")
-    print(f"halving: markers={sorted(usable)} marker {p}: "
+    print(f"{tag}: markers={sorted(usable)} marker {p}: "
           f"d(h,h/2)={d1:.3e} d(h/2,h/4)={d2:.3e} ratio={ratio:.2f}")
 
 
@@ -291,7 +319,8 @@ def main():
 
     check_landing_and_reflection(binary, tok2vol, failures)
     check_cross_path(binary, tok2vol, failures)
-    check_step_halving(binary, tok2vol, failures)
+    check_step_halving(binary, tok2vol, failures, crossing_level=1)
+    check_step_halving(binary, tok2vol, failures, crossing_level=2)
 
     if failures:
         print("\nFAILURES:")

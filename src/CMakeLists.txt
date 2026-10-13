@@ -34,6 +34,7 @@
     spectre_fo_hybrid.f90
     interface_crossing.f90
     spectre_orbit.f90
+    spectre_refraction.f90
     spectre_sympl_orbit.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90

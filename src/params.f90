@@ -12,7 +12,7 @@ module params
     use magfie_sub, only: TEST
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-                                     EXPL_IMPL_EULER, &
+                                     EXPL_IMPL_EULER, MIDPOINT, &
                                      CASH_KARP, DORMAND_PRINCE, &
                                      boundary_event_fraction_tolerance, &
                                      boundary_event_radial_tolerance, &
@@ -176,8 +176,9 @@ module params
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
-    !> SPECTRE RK45 interface-crossing map: 1 = Level-1 refraction (default),
-    !> 0 = Level-0 energy rescale (regression comparison).
+    !> SPECTRE interface-crossing map: 1 = Level-1 refraction (default),
+    !> 0 = Level-0 energy rescale (regression comparison), 2 = exactly
+    !> symplectic crossing step (integmode = 3 only).
     integer :: crossing_level = 1
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
@@ -311,6 +312,13 @@ contains
 
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
+        end if
+
+        if (crossing_level < 0 .or. crossing_level > 2) then
+            error stop 'crossing_level must be 0, 1 or 2'
+        end if
+        if (crossing_level == 2 .and. integmode /= MIDPOINT) then
+            error stop 'crossing_level = 2 requires integmode = 3 (midpoint)'
         end if
 
         call validate_gpu_config

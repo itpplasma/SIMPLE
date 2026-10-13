@@ -92,6 +92,20 @@ set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
 
+# Symplecticity of one crossing microstep (crossing_level 2) on the
+# pure-magnitude sheet, with the Level-1 map as non-symplectic control.
+add_executable(test_spectre_symplectic_step.x test_spectre_symplectic_step.f90)
+target_link_libraries(test_spectre_symplectic_step.x simple)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_symplectic_step)
+add_test(NAME test_spectre_symplectic_step
+    COMMAND $<TARGET_FILE:test_spectre_symplectic_step.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol_sheet.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_symplectic_step)
+set_tests_properties(test_spectre_symplectic_step PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)
+
 # Kicked Level-1 reflection (CA15): forbidden crossings relocate along the
 # interface to the conjugate equal-B point at frozen (vpar, p, lambda, mu).
 add_executable(test_spectre_kicked_reflection.x test_spectre_kicked_reflection.f90)

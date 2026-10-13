@@ -3216,7 +3216,7 @@ contains
         !> tests can assert the interface landing accuracy from stdout.
         use interface_crossing, only: crossing_log_write
         use spectre_sympl_orbit, only: sympl_landing_stats, sympl_sheet_stats, &
-            sympl_fo_stats
+            sympl_fo_stats, sympl_symplectic_stats
         use magfie_sub, only: SPECTRE
 
         integer :: landings, stops, sheet_entries, sheet_exits
@@ -3225,6 +3225,7 @@ contains
         integer :: sheet_stop_reason(5)
         integer :: fo_entries, fo_exits, fo_losses, fo_failures
         integer :: fo_failure_status(5)
+        integer :: transmissions, reflections, fallbacks
         real(dp) :: max_resid
 
         if (isw_field_type /= SPECTRE) return
@@ -3250,6 +3251,10 @@ contains
                 'sympl_fo_stats: entries= ', fo_entries, ' exits= ', fo_exits, &
                 ' losses= ', fo_losses, ' failures= ', fo_failures, ' status= ', &
                 fo_failure_status
+            call sympl_symplectic_stats(transmissions, reflections, fallbacks)
+            print '(A,I0,A,I0,A,I0)', 'sympl_symplectic_stats: transmissions= ', &
+                transmissions, ' reflections= ', reflections, ' fallbacks= ', &
+                fallbacks
         end if
     end subroutine write_spectre_crossing_events
 

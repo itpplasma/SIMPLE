@@ -198,12 +198,13 @@ substep length `h*` with `|rho_g(h*) - k| < 1e-10` is solved by Illinois
 false position, each evaluation one full implicit step of the same scheme
 from the same pre-step state, so the landed state lies on the exact
 discrete orbit of a symplectic map. Per-volume splines are evaluated with
-a home-volume lock and a C1 radial extension from an `EDGE_BAND` inside
-the volume edge (`field_can_spectre`): `A` and `Bmod` continue linearly,
-the radial slope of `h_theta`, `h_phi` blends to zero, which keeps
-`dpth/dr = sqrtg*Bmod/(ro0*h_phi) > 0` in the whole sheet-adjacent zone
-where the raw guiding-center 1-form degenerates (`Bstar_par -> 0`, the
-canonical analogue of the RK45 drift band). Where the landing root falls
+a home-volume lock; past the volume edge, where only Newton iterates
+probe, the field continues linearly in `rho_g` (`extend_beyond_edge` in
+`field_can_spectre`). The true per-volume guiding-center 1-form does not
+degenerate next to the interfaces (`Bstar_par/B >= 0.93` at 3.5 MeV with
+`|v_par| = v` on the committed fixtures), so no blending band is applied;
+the former `EDGE_BAND` blend masked charts that fold near the interface,
+which `create_spectre_field` now rejects. Where the landing root falls
 in a step-length regime with a multi-branched implicit solve (grazing
 events) the substep is halved and re-solved; committed substeps that jump
 more than half a volume width in `rho_g`, more than O(1) in energy, or
@@ -215,6 +216,72 @@ microstep budget is completed there, preserving the scheme's order under
 step halving. Only one-step schemes are admitted (`ntau = 1` asserted); a
 persistent non-convergence terminates the orbit through the `CROSS_STOP`
 fallback, which the tok2vol tests assert does not occur.
+
+## Level 2: exactly symplectic crossing (`crossing_level = 2`)
+
+Level 1 lands on the interface, applies a map in physical variables and
+restarts the scheme; the composite is not a symplectic map (a
+finite-difference Jacobian of one crossing microstep violates
+`M^T J M = J` at O(1)). Level 2 replaces it, for `integmode = 3`, by a
+crossing step that is exactly symplectic.
+
+**Limit dynamics.** In the canonical variables `(theta, phi, p_theta,
+p_phi)` of a volume chart the interface is the level set of
+`s = rho_g - k`, a function of the full phase-space state through
+`p_theta = P(rho_g, theta, phi, p_phi)`. Its Hamiltonian vector field `X_s`
+moves the state along the interface at fixed `rho_g`:
+
+    dtheta/dl = 1/P_r,   dphi/dl = -P_pphi/P_r,   dp_phi/dl = P_phi/P_r.
+
+Smoothing the jump over a layer of width `w`,
+`H_w = (1 - chi) H_below + chi H_above` with `chi(s/w)` rising from 0 to 1,
+adds the fast drift `(H_above - H_below) chi'/w X_s`, the grad-B drift
+along the sheet. As `w -> 0` the state runs along `X_s` in the direction of
+`sign(H_above - H_below)` and leaves the layer at the first point where
+`H_target` returns to the entry energy (transmission) or `H_home` does
+(reflection). The limit uses the true piecewise `A` and `B`; nothing is
+mollified in the code.
+
+This exit rule differs from the Level-0/1 criterion
+`v_par^2 > 2 mu [[B]]`. Inside the layer `b` is tangent to the interface and
+`grad B` normal to it, so the mirror force `-mu b.grad B` vanishes and
+`v_par` cannot pay for the jump in `mu B`; the state transmits only where
+the drift along `X_s` reaches a point with `H_target` equal to the entry
+energy. On tok2vol a passing marker with `v_par^2/2 = 0.043`,
+`mu [[B]] = 0.011` therefore reflects under Level 2, while Level 1
+transmits it, because `H_target - H_entry >= 0.0106` on the whole
+interface orbit.
+
+**Discrete step.** A crossing step of length `h` from `z0` consists of a
+midpoint substep of length `h1` landing on `s = 0`, the exact flow of
+`X_s` for a length `l`, and a midpoint substep of length `h - h1` in the
+exit chart. `l` is fixed by matching the discrete energies at the two
+substep midpoints, `H(zbar_1) = H(zbar_2)`; with this condition the
+composite is a discrete variational collision step (Fetecau, Marsden,
+Ortiz and West 2003) and is exactly symplectic, while matching continuum
+energies at the jump instead leaves an O(1) defect. The candidates for `l`
+are the continuum energy roots along `X_s` in the limit direction, from the
+nearest outward over at most one poloidal turn. Each candidate is refined
+by secant iteration on the discrete condition and accepted only if the
+remainder substep ends inside the exit volume on the exit side.
+
+**Chart transfer.** At transmission the state keeps its physical
+position, `v_par` and `mu`; `p_phi` is rebuilt in the target gauge. The
+transfer is presymplectic, and the crossing step exactly symplectic, when
+the guiding-center 1-form `A + v_par h` is continuous across the
+interface: a pure-magnitude sheet. On an interface where the direction of
+`B` jumps (a current sheet) the zero-width guiding-center limit depends on
+the field profile inside the layer; there the transfer keeps the Level-1
+convention (conserved `v_par` and `mu`), and the step is symplectic within
+each chart but not across the transfer.
+
+**Fallback and diagnostics.** If no candidate is accepted, the step falls
+back to the Level-1 map. `simple.x` prints
+`sympl_symplectic_stats: transmissions= reflections= fallbacks=`.
+`test_spectre_symplectic_step` measures the symplecticity defect of one
+crossing microstep on the pure-magnitude fixture `tok2vol_sheet.h5`:
+`max|M^T J M - J| = 4.9e-9` for Level 2 (solver round-off; the
+O(eps^2) difference error lies below it) against `4.6` for Level 1.
 
 ## Physical caveat
 

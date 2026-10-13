@@ -842,12 +842,9 @@ or the volume pinned by `set_spectre_volume_lock` during multi-volume
 stepping, so Newton iterates probing past an interior interface never read
 the neighbour volume's discontinuous field -- and evaluates that volume's
 splines; `integ_to_ref` / `ref_to_integ` apply the active volume's
-`lambda_phi` transform (radial map is the identity). Within `EDGE_BAND` of a
-volume edge and beyond it the field is the C1 radial extension from the band
-edge (`extend_band`): `A` and `Bmod` linear, the radial slope of `h_theta`,
-`h_phi` blended to zero, which removes the sheet-adjacent `Bstar_par -> 0`
-degeneracy of the guiding-center 1-form from the zone (the canonical analogue
-of the RK45 path's `drift_band`).
+`lambda_phi` transform (radial map is the identity). Past the volume edge,
+where only Newton iterates probe, the field continues linearly in `r`
+(`extend_beyond_edge`).
 
 **Multi-volume orbits (#441)**. `trace_orbit_spectre_sympl` drives
 `spectre_sympl_orbit`: an accepted step leaving `[home_lo, home_hi]` is
@@ -1035,7 +1032,7 @@ validation suite (#442). Example input: `examples/simple_spectre.in`.
 | `field_input` | string | `''` | SPECTRE HDF5 equilibrium (`.h5`); VMEC-free |
 | `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
-| `crossing_level` | int | 1 | interface crossing map: `1` = Level-1 refraction, `0` = Level-0 energy rescale |
+| `crossing_level` | int | 1 | interface crossing map: `1` = Level-1 refraction, `0` = Level-0 energy rescale, `2` = exactly symplectic crossing step (`integmode = 3` only) |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
 | `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |

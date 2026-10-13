@@ -16,15 +16,16 @@ module spectre_sympl_orbit
     use util, only: twopi, sqrt2
     use parmot_mod, only: ro0
     use field_can_mod, only: field_can_t, eval_field => evaluate, integ_to_ref, &
-        ref_to_integ
+        ref_to_integ, get_derivatives, get_val
     use field_can_spectre, only: set_spectre_volume_lock
-    use orbit_symplectic_base, only: symplectic_integrator_t, &
+    use orbit_symplectic_base, only: symplectic_integrator_t, MIDPOINT, &
         symplectic_newton_warning_mode, symplectic_spectre_newton_warning_factor, &
         SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use interface_crossing, only: apply_crossing, crossing_info_t, &
         crossing_log_record, CROSS_LOSS, CROSS_STOP, CROSS_RECOVERY, CROSS_INVALID, &
-        CROSS_REFLECTION, CROSS_SHEET
+        CROSS_REFLECTION, CROSS_SHEET, CROSS_CROSSING, CROSSING_SYMPLECTIC
+    use spectre_refraction, only: midpoint_energy, interface_flow, REFRACTION_OK
     use spectre_sheet_gc, only: sheet_gc_state_t, sheet_gc_initialize, &
         sheet_gc_advance, sheet_gc_to_y, SHEET_GC_OK
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_enter, &
@@ -37,7 +38,7 @@ module spectre_sympl_orbit
     public :: sympl_spectre_state_t, sympl_spectre_reset, recanon_pphi, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
         sympl_landing_stats, sympl_landing_eval_stats, sympl_sheet_stats
-    public :: sympl_fo_stats
+    public :: sympl_fo_stats, sympl_symplectic_stats
     public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP, &
         SYMPL_SPECTRE_SKIM
 
@@ -92,6 +93,16 @@ module spectre_sympl_orbit
     !> would pick the outer volume, whose zeta gauge differs by O(1).
     real(dp), parameter :: transform_bias = 1.0d-8
 
+    !> Symplectic crossing (crossing_level 2): landing residual, energy-root
+    !> scan along the interface (first point and number of doublings, in
+    !> radians of poloidal motion) and the secant tolerance on the discrete
+    !> energy, relative to |H|.
+    real(dp), parameter :: symplectic_landing_tol = 1.0d-13
+    real(dp), parameter :: scan_tau0 = 1.0d-6
+    integer, parameter :: n_scan = 24
+    real(dp), parameter :: refine_tol = 1.0d-14
+    integer, parameter :: max_refine = 40
+
     type :: sympl_spectre_state_t
         real(dp) :: home_lo = 0.0_dp
         real(dp) :: home_hi = 1.0_dp
@@ -129,6 +140,8 @@ module spectre_sympl_orbit
     integer, allocatable :: n_fo_entries(:), n_fo_exits(:), n_fo_losses(:)
     integer, allocatable :: n_fo_failures(:), n_fo_failure_status(:, :)
     real(dp), allocatable :: max_landing_resid(:)
+    integer, allocatable :: n_sympl_transmissions(:), n_sympl_reflections(:)
+    integer, allocatable :: n_sympl_fallbacks(:)
 
 contains
 
@@ -140,6 +153,10 @@ contains
         if (mode <= 0) then
             error stop 'spectre_sympl_orbit: crossing pipeline requires a '// &
                 'symplectic scheme (integmode > 0)'
+        end if
+        if (level == CROSSING_SYMPLECTIC .and. mode /= MIDPOINT) then
+            error stop 'spectre_sympl_orbit: crossing_level = 2 requires '// &
+                'integmode = 3 (midpoint)'
         end if
         if (si%ntau /= 1) then
             ! Re-canonicalization restarts the scheme from a single point, so no
@@ -203,7 +220,7 @@ contains
         integer :: iters, nev, iface, direction, ierr_step, ierr_sheet, ierr_fo
         integer :: fo_owner
         integer :: prev_iface
-        logical :: boundary, solved, sheet_exited, fo_exited, resume_gc
+        logical :: boundary, solved, sheet_exited, fo_exited, resume_gc, crossed
 
         ierr = SYMPL_SPECTRE_OK
         t_frac = 1.0_dp
@@ -355,6 +372,27 @@ contains
                 ! solve indefinitely.
                 h_try = min(2.0_dp*h_try, budget)
                 cycle
+            end if
+
+            if (state%level == CROSSING_SYMPLECTIC .and. iface >= 1 .and. &
+                iface < state%mvol) then
+                call symplectic_crossing(state, si, f, si0, f0, h_try, &
+                    ierr_step == 0, iface, direction, info, crossed)
+                if (crossed) then
+                    used = used + h_try
+                    budget = state%dt_std - used
+                    call crossing_log_record(ipart, &
+                        t_base_sec + dt_sec*used/state%dt_std, info)
+                    if (skimming(state, info)) then
+                        ierr = SYMPL_SPECTRE_SKIM
+                        t_frac = used/state%dt_std
+                        exit
+                    end if
+                    if (budget <= budget_eps*state%dt_std) exit
+                    h_try = budget
+                    cycle
+                end if
+                call count_symplectic_crossing(CROSS_INVALID)
             end if
 
             call locate_landing(si, f, si0, f0, h_try, real(iface, dp), &
@@ -552,6 +590,273 @@ contains
         skimming = state%skim_count >= SKIM_MAX
     end function skimming
 
+    subroutine symplectic_crossing(state, si, f, si0, f0, h_step, full_committed, &
+            iface, direction, info, done)
+        !> Exactly symplectic crossing step of the midpoint scheme (crossing_level
+        !> 2). The step of length h_step from (si0, f0) hits interface iface. It
+        !> lands on the interface with a midpoint substep, flows along the
+        !> interface vector field X_s and completes the step with a second
+        !> midpoint substep, in the target volume (transmission) or back in the
+        !> home volume (reflection). The flow length matches the discrete
+        !> energies H(z_mid) of the two substeps (see spectre_refraction). The
+        !> state crosses with its physical (position, v_par, mu); p_phi is
+        !> rebuilt in the target gauge.
+        !>
+        !> The exit is the one of the limit of a smoothed jump: inside a layer
+        !> H = (1 - chi) H_below + chi H_above the state drifts along X_s with
+        !> rate (H_above - H_below) chi'/width, so the flow runs one way only,
+        !> and the state leaves at the first point where H_target (transmission)
+        !> or H_home (reflection) returns to the entry energy. On done = .false.
+        !> (si, f) and the home volume are unchanged and the caller falls back to
+        !> the Level-1 map.
+        type(sympl_spectre_state_t), intent(inout) :: state
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        type(symplectic_integrator_t), intent(in) :: si0
+        type(field_can_t), intent(in) :: f0
+        real(dp), intent(in) :: h_step
+        logical, intent(in) :: full_committed
+        integer, intent(in) :: iface, direction
+        type(crossing_info_t), intent(out) :: info
+        logical, intent(out) :: done
+
+        type(symplectic_integrator_t) :: si_land, si_out
+        type(field_can_t) :: f_land, f_target, f_out, fw
+        real(dp) :: h_land, resid, h_rem, e_land, xref(3), xinteg(3), zu(4)
+        real(dp) :: tau, roots(2*n_scan), keys(2*n_scan), scale_home, scale_target
+        integer :: home, target, status, sigma, n_home, n_target, n, i, j
+        integer :: kind(2*n_scan)
+        logical :: solved
+
+        done = .false.
+        home = nint(state%home_hi)
+        target = merge(iface + 1, iface, direction == 1)
+
+        si_land = si
+        f_land = f
+        call locate_landing(si_land, f_land, si0, f0, h_step, real(iface, dp), &
+            direction, full_committed, h_land, resid, solved, &
+            tol=symplectic_landing_tol)
+        if (.not. solved) return
+        h_rem = h_step - h_land
+
+        fw = f_land
+        call midpoint_energy(si0%z, f0%pth, si_land%z, f_land%pth, fw, e_land, &
+            status)
+        if (status /= REFRACTION_OK) return
+
+        call integ_to_ref(si_land%z(1:3), xref)
+        xref(3) = unwrap_near(xref(3), si_land%z(3))
+
+        info%iface = iface
+        info%vol_from = home
+        info%theta = xref(2)
+        info%zeta = xref(3)
+        info%vpar_before = f_land%vpar/sqrt2
+        info%mu = 0.5_dp*f_land%mu
+        info%bmod_home = f_land%Bmod
+
+        call set_home_volume(state, target)
+        call ref_to_integ(xref, xinteg)
+        zu(1) = si_land%z(1)
+        zu(2) = unwrap_near(xinteg(2), si_land%z(2))
+        zu(3) = unwrap_near(xinteg(3), si_land%z(3))
+        f_target = f_land
+        call eval_field(f_target, zu(1), zu(2), zu(3), 0)
+        zu(4) = f_land%vpar*f_target%hph + f_target%Aph/f_target%ro0
+        call get_val(f_target, zu(4))
+
+        ! Flow direction: sign of H_above - H_below at the landing point, with
+        ! X_s oriented by s = rho_g - iface.
+        sigma = merge(1, -1, real(direction, dp)*(f_target%H - f_land%H) >= 0.0_dp)
+
+        call flow_scale(zu, f_land, scale_target)
+        call scan_energy_roots(zu, f_land, e_land, scale_target, sigma, &
+            roots(1:n_scan), n_target)
+        call set_home_volume(state, home)
+        call flow_scale(si_land%z, f_land, scale_home)
+        call scan_energy_roots(si_land%z, f_land, e_land, scale_home, sigma, &
+            roots(n_target + 1:n_target + n_scan), n_home)
+        n = n_target + n_home
+        kind(1:n_target) = CROSS_CROSSING
+        kind(n_target + 1:n) = CROSS_REFLECTION
+        keys(1:n) = abs(roots(1:n))
+
+        j = 0
+        do i = 1, n
+            j = minloc(keys(1:n), dim=1)
+            keys(j) = huge(1.0_dp)
+            if (kind(j) == CROSS_CROSSING) then
+                call set_home_volume(state, target)
+                call refine_discrete_root(state, si0, f_land, zu, h_rem, e_land, &
+                    scale_target, roots(j), direction, target, si_out, f_out, tau, &
+                    done)
+            else
+                call set_home_volume(state, home)
+                call refine_discrete_root(state, si0, f_land, si_land%z, h_rem, &
+                    e_land, scale_home, roots(j), -direction, home, si_out, &
+                    f_out, tau, done)
+            end if
+            if (done) exit
+        end do
+        if (.not. done) then
+            call set_home_volume(state, home)
+            return
+        end if
+
+        info%event_type = kind(j)
+        info%vol_to = merge(target, home, kind(j) == CROSS_CROSSING)
+        info%lambda = tau
+        info%vpar_after = f_out%vpar/sqrt2
+        info%bmod_target = f_out%Bmod
+        call integ_to_ref(si_out%z(1:3), xinteg)
+        info%dtheta = si_out%z(2) - si_land%z(2)
+        info%dzeta = unwrap_near(xinteg(3), xref(3)) - xref(3)
+        si = si_out
+        f = f_out
+        call update_landing_stats(resid)
+        call count_symplectic_crossing(info%event_type)
+    end subroutine symplectic_crossing
+
+    subroutine flow_scale(z, f_land, scale)
+        !> Flow length per radian of poloidal motion along X_s, |P_r|, in the
+        !> locked chart.
+        real(dp), intent(in) :: z(4)
+        type(field_can_t), intent(in) :: f_land
+        real(dp), intent(out) :: scale
+
+        type(field_can_t) :: f
+
+        f = f_land
+        call eval_field(f, z(1), z(2), z(3), 0)
+        call get_derivatives(f, z(4))
+        scale = abs(f%dpth(1))
+        if (.not. ieee_is_finite(scale)) scale = 0.0_dp
+    end subroutine flow_scale
+
+    subroutine scan_energy_roots(z_start, f_land, e_land, scale, sigma, roots, &
+            n_roots)
+        !> Roots of H(z(tau)) - e_land along X_s in the locked chart, tau in
+        !> radians of poloidal motion with sign sigma, on a geometric grid out
+        !> to 2 pi, in order of increasing |tau|.
+        real(dp), intent(in) :: z_start(4), e_land, scale
+        type(field_can_t), intent(in) :: f_land
+        integer, intent(in) :: sigma
+        real(dp), intent(out) :: roots(:)
+        integer, intent(out) :: n_roots
+
+        real(dp) :: z(4), tau_prev, tau, g_prev, g
+        integer :: k, status
+        type(field_can_t) :: f
+
+        n_roots = 0
+        if (scale <= 0.0_dp) return
+        f = f_land
+        z = z_start
+        call interface_flow(z, 0.0_dp, f, status)
+        tau_prev = 0.0_dp
+        g_prev = f%H - e_land
+        do k = 1, n_scan
+            tau = real(sigma, dp)*scan_tau0*2.0_dp**(k - 1)
+            call interface_flow(z, (tau - tau_prev)*scale, f, status)
+            if (status /= REFRACTION_OK) exit
+            g = f%H - e_land
+            if (g_prev*g <= 0.0_dp) then
+                n_roots = n_roots + 1
+                roots(n_roots) = tau_prev - g_prev*(tau - tau_prev)/(g - g_prev)
+            end if
+            tau_prev = tau
+            g_prev = g
+        end do
+    end subroutine scan_energy_roots
+
+    subroutine refine_discrete_root(state, si0, f_land, z_start, h_rem, e_land, &
+            scale, tau_guess, side, lvol, si_out, f_out, tau, found)
+        !> Secant iteration on G(tau) = H_mid(remainder) - e_land.
+        type(sympl_spectre_state_t), intent(in) :: state
+        type(symplectic_integrator_t), intent(in) :: si0
+        type(field_can_t), intent(in) :: f_land
+        real(dp), intent(in) :: z_start(4), h_rem, e_land, scale, tau_guess
+        integer, intent(in) :: side, lvol
+        type(symplectic_integrator_t), intent(out) :: si_out
+        type(field_can_t), intent(out) :: f_out
+        real(dp), intent(out) :: tau
+        logical, intent(out) :: found
+
+        real(dp) :: t0, t1, g0, g1, t2, tol
+        integer :: it
+        logical :: ok0, ok1
+
+        found = .false.
+        tol = refine_tol*max(abs(e_land), 1.0_dp)
+        t0 = tau_guess
+        t1 = tau_guess + max(abs(tau_guess), 1.0_dp)*1.0d-7
+        call remainder_energy(state, si0, f_land, z_start, h_rem, scale, t0, &
+            si_out, f_out, g0, ok0)
+        g0 = g0 - e_land
+        call remainder_energy(state, si0, f_land, z_start, h_rem, scale, t1, &
+            si_out, f_out, g1, ok1)
+        g1 = g1 - e_land
+        if (.not. (ok0 .and. ok1)) return
+        do it = 1, max_refine
+            if (abs(g1) <= tol) exit
+            if (abs(g1 - g0) <= tiny(1.0_dp)) return
+            t2 = t1 - g1*(t1 - t0)/(g1 - g0)
+            t0 = t1
+            g0 = g1
+            t1 = t2
+            call remainder_energy(state, si0, f_land, z_start, h_rem, scale, t1, &
+                si_out, f_out, g1, ok1)
+            if (.not. ok1) return
+            g1 = g1 - e_land
+        end do
+        if (abs(g1) > tol) return
+        if (real(side, dp)*(si_out%z(1) - z_start(1)) <= 0.0_dp) return
+        if (si_out%z(1) < real(lvol - 1, dp) .or. si_out%z(1) > real(lvol, dp)) return
+        tau = t1
+        found = .true.
+    end subroutine refine_discrete_root
+
+    subroutine remainder_energy(state, si0, f_land, z_start, h_rem, scale, tau, &
+            si_out, f_out, energy, ok)
+        !> Flow tau radians along X_s from z_start, take the remainder midpoint
+        !> substep h_rem and return its discrete energy.
+        type(sympl_spectre_state_t), intent(in) :: state
+        type(symplectic_integrator_t), intent(in) :: si0
+        type(field_can_t), intent(in) :: f_land
+        real(dp), intent(in) :: z_start(4), h_rem, scale, tau
+        type(symplectic_integrator_t), intent(out) :: si_out
+        type(field_can_t), intent(out) :: f_out
+        real(dp), intent(out) :: energy
+        logical, intent(out) :: ok
+
+        type(symplectic_integrator_t) :: si_start
+        type(field_can_t) :: fm
+        real(dp) :: zu(4), pth_u
+        integer :: status, ierr
+
+        ok = .false.
+        energy = 0.0_dp
+        f_out = f_land
+        zu = z_start
+        call interface_flow(zu, tau*scale, f_out, status)
+        if (status /= REFRACTION_OK) return
+        si_out = si0
+        call orbit_sympl_init(si_out, f_out, zu, h_rem, 1, si0%rtol, state%mode)
+        si_out%warning_factor = symplectic_spectre_newton_warning_factor
+        pth_u = f_out%pth
+        si_start = si_out
+        if (h_rem > 0.0_dp) then
+            call orbit_timestep_sympl(si_out, f_out, ierr)
+            if (ierr /= 0) return
+            if (step_teleported(si_start, si_out, f_out)) return
+        end if
+        fm = f_out
+        call midpoint_energy(zu, pth_u, si_out%z, f_out%pth, fm, energy, status)
+        ok = status == REFRACTION_OK .and. ieee_is_finite(energy)
+        si_out%dt = state%dt_std
+    end subroutine remainder_energy
+
     subroutine classify_step(state, rho_start, si, ierr_step, boundary, iface, &
             direction)
         type(sympl_spectre_state_t), intent(in) :: state
@@ -597,7 +902,7 @@ contains
     end subroutine classify_step
 
     subroutine locate_landing(si, f, si0, f0, h_full, rho_k, direction, &
-            full_committed, h_land, resid, solved)
+            full_committed, h_land, resid, solved, tol)
         !> Solve g(h) = dir*(z1(1; h) - rho_k) = 0 for the substep length by
         !> Illinois false position; every evaluation is one full implicit step of
         !> length h from the same pre-step state (si0, f0). Spline evaluations
@@ -615,12 +920,17 @@ contains
         logical, intent(in) :: full_committed
         real(dp), intent(out) :: h_land, resid
         logical, intent(out) :: solved
+        !> Target |rho_g - rho_k|; default landing_tol.
+        real(dp), intent(in), optional :: tol
 
         type(symplectic_integrator_t) :: si_best
         type(field_can_t) :: f_best
-        real(dp) :: dir, t_lo, t_hi, f_lo, f_hi, t_mid, g, best
+        real(dp) :: dir, t_lo, t_hi, f_lo, f_hi, t_mid, g, best, target_tol
         integer :: it, ierr_step, last_side, evals
         logical :: hi_valid
+
+        target_tol = landing_tol
+        if (present(tol)) target_tol = tol
 
         dir = real(direction, dp)
         t_lo = 0.0_dp
@@ -642,7 +952,7 @@ contains
         end if
 
         do it = 1, max_locate
-            if (best < landing_tol) exit
+            if (best < target_tol) exit
             if (hi_valid) then
                 if (abs(f_hi - f_lo) <= tiny(1.0_dp)) exit
                 t_mid = t_hi - f_hi*(t_hi - t_lo)/(f_hi - f_lo)
@@ -1102,7 +1412,8 @@ contains
                 n_sheet_exits, n_sheet_init_failures, n_sheet_advance_failures, &
                 n_sheet_failure_status, n_stop_reason, n_fo_entries, n_fo_exits, &
                 n_fo_losses, n_fo_failures, n_fo_failure_status, &
-                max_landing_resid)
+                max_landing_resid, n_sympl_transmissions, n_sympl_reflections, &
+                n_sympl_fallbacks)
         end if
         allocate(n_landings(0:nthreads - 1), n_landing_evals(0:nthreads - 1), &
             n_stops(0:nthreads - 1), n_sheet_entries(0:nthreads - 1), &
@@ -1114,7 +1425,9 @@ contains
             n_fo_exits(0:nthreads - 1), n_fo_losses(0:nthreads - 1), &
             n_fo_failures(0:nthreads - 1), &
             n_fo_failure_status(5, 0:nthreads - 1), &
-            max_landing_resid(0:nthreads - 1))
+            max_landing_resid(0:nthreads - 1), &
+            n_sympl_transmissions(0:nthreads - 1), &
+            n_sympl_reflections(0:nthreads - 1), n_sympl_fallbacks(0:nthreads - 1))
         n_landings = 0
         n_landing_evals = 0
         n_stops = 0
@@ -1130,6 +1443,9 @@ contains
         n_fo_failures = 0
         n_fo_failure_status = 0
         max_landing_resid = 0.0_dp
+        n_sympl_transmissions = 0
+        n_sympl_reflections = 0
+        n_sympl_fallbacks = 0
     end subroutine sympl_landing_stats_reset
 
     subroutine sympl_landing_stats(landings, max_resid, stops)
@@ -1242,6 +1558,38 @@ contains
             failure_status = sum(n_fo_failure_status, dim=2)
         end if
     end subroutine sympl_fo_stats
+
+    subroutine sympl_symplectic_stats(transmissions, reflections, fallbacks)
+        integer, intent(out) :: transmissions, reflections, fallbacks
+
+        transmissions = 0
+        reflections = 0
+        fallbacks = 0
+        if (allocated(n_sympl_transmissions)) then
+            transmissions = sum(n_sympl_transmissions)
+            reflections = sum(n_sympl_reflections)
+            fallbacks = sum(n_sympl_fallbacks)
+        end if
+    end subroutine sympl_symplectic_stats
+
+    subroutine count_symplectic_crossing(event_type)
+        !> event_type CROSS_CROSSING or CROSS_REFLECTION; any other value counts a
+        !> fallback to the Level-1 map.
+        integer, intent(in) :: event_type
+
+        integer :: tid
+
+        if (.not. allocated(n_sympl_transmissions)) return
+        tid = stats_thread()
+        select case (event_type)
+        case (CROSS_CROSSING)
+            n_sympl_transmissions(tid) = n_sympl_transmissions(tid) + 1
+        case (CROSS_REFLECTION)
+            n_sympl_reflections(tid) = n_sympl_reflections(tid) + 1
+        case default
+            n_sympl_fallbacks(tid) = n_sympl_fallbacks(tid) + 1
+        end select
+    end subroutine count_symplectic_crossing
 
     integer function stats_thread()
         stats_thread = 0
