@@ -176,6 +176,17 @@ module params
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
+    !> SPECTRE interface crossing: 1 = Level-1 refraction (default), 0 = Level-0
+    !> energy rescale (regression comparison), 3 = full orbit near interfaces
+    !> (symplectic guiding-centre path, integmode > 0).
+    integer :: crossing_level = 1
+    !> Full orbit near SPECTRE interfaces: entry distance of the guiding centre
+    !> to an interface in radial gyroradii (crossing_level = 3), width of the
+    !> smooth layer replacing each interior interface in gyroradii (0: sharp
+    !> per-volume field), and the Boris step bound h |B|/(2 ro0).
+    real(dp) :: spectre_fo_entry_larmor = 3.0_dp
+    real(dp) :: spectre_fo_layer_larmor = 0.0_dp
+    real(dp) :: spectre_fo_rotation = 0.05_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -220,7 +231,8 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        wall_input, wall_units, chart_boundary_kind, integ_coords, &
+        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
+        spectre_fo_entry_larmor, spectre_fo_layer_larmor, spectre_fo_rotation, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &
@@ -308,6 +320,18 @@ contains
 
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
+        end if
+
+        if (crossing_level < 0 .or. crossing_level == 2 .or. crossing_level > 3) then
+            error stop 'crossing_level must be 0, 1 or 3'
+        end if
+        if (crossing_level == 3 .and. integmode <= 0) then
+            error stop 'crossing_level = 3 requires a symplectic integmode'
+        end if
+        if (spectre_fo_entry_larmor <= 0.0_dp .or. &
+            spectre_fo_layer_larmor < 0.0_dp .or. spectre_fo_rotation <= 0.0_dp) then
+            error stop 'spectre_fo_entry_larmor and spectre_fo_rotation must be '// &
+                'positive, spectre_fo_layer_larmor nonnegative'
         end if
 
         call validate_gpu_config
