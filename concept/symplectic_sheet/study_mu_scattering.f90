@@ -2,7 +2,7 @@ program study_mu_scattering
     !> Statistics of the magnetic-moment change of markers that cross the sheet
     !> thousands of times, for one scheme per run.
     !>
-    !> usage: study_mu_scattering.x SCHEME H WIDTH A_OUT P_PHI [G_MIN L [T_END]]
+    !> usage: study_mu_scattering.x SCHEME H WIDTH A_OUT P_PHI [G_MIN L [T_END [analytic]]]
     !>   SCHEME  rk45 | midpoint_region | naive | landing | poincare |
     !>           poincare_gauss2 (G_MIN = 1: plain Gauss-Legendre)
     !>   H       step (rk45: tolerance)
@@ -56,6 +56,7 @@ program study_mu_scattering
         call get_command_argument(7, arg)
         read (arg, *) pp%length
     end if
+    if (command_argument_count() >= 9) par%analytic = .true.
     if (command_argument_count() >= 8) then
         call get_command_argument(8, arg)
         read (arg, *) T_END
