@@ -1,11 +1,10 @@
 .. SIMPLE documentation master file
 
-Welcome to the SIMPLE Python API docs!
-======================================
+SIMPLE Python API
+=================
 
-This documentation covers the public Python interface to SIMPLE.  It is built
-directly from the source tree and examples so that the reference stays in sync
-with the codebase.
+The overview is ``python/README.rst``, the reference is built from the
+docstrings of ``pysimple`` and the examples are the scripts in ``examples/``.
 
 .. toctree::
    :maxdepth: 2

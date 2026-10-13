@@ -1,12 +1,11 @@
 Examples
 ========
 
-The snippets below are pulled directly from the example scripts inside the
-repository.  They rely exclusively on the public :mod:`simple` API, ensuring the
-documentation never drifts from runnable code.
+The scripts below are included verbatim from ``examples/`` and run by
+``test/python/test_examples.py``.
 
-Simple session trace
---------------------
+Surface trace
+-------------
 
 .. literalinclude:: ../examples/simple_api.py
    :language: python
@@ -36,6 +35,3 @@ Macrostep orbit trace
    :language: python
    :caption: examples/orbit_macro.py
    :linenos:
-
-All examples are exercised directly in the pytest suite,
-so the documentation mirrors the tested code paths one-to-one.

@@ -65,6 +65,11 @@ module simple_main
     real(dp), save :: invariant_edge_radius = 1.0_dp
     type(stl_wall_t), save :: wall
 
+    integer, parameter :: INPUT_VMEC = 0
+    integer, parameter :: INPUT_TEST = 1
+    integer, parameter :: INPUT_SPECTRE = 2
+    integer, parameter :: INPUT_CHARTMAP = 3
+
     integer, parameter :: RK_RECOVERY_GENERIC = 1
     integer, parameter :: RK_RECOVERY_AXIS = 2
     integer, parameter :: RK_RECOVERY_EDGE = 3
@@ -256,125 +261,29 @@ contains
     end subroutine update_recovery_streak
 
     subroutine main
-        use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, &
-            integmode, params_init, swcoll, generate_start_only, &
-            isw_field_type, field_input, startmode, &
-            ntestpart, ntimstep, coord_input, restart
+        use params, only: restart
+        use magfie_sub, only: SPECTRE
         use timing, only: init_timer, print_phase_time
-        use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
-        use samplers, only: init_starting_surf, sample_spectre_surface, &
-            init_spectre_start_bounds
         use version, only: simple_version
-        use field_boozer_chartmap, only: is_boozer_chartmap
-        use field, only: is_spectre_file
-
-        implicit none
 
         character(256) :: config_file
         type(tracer_t) :: norb
-        logical :: chartmap_mode, spectre_mode
 
-        ! Print version on startup
         print '(A,A)', 'SIMPLE version ', simple_version
-
-        ! Initialize timing
         call init_timer()
 
-        ! read configuration file name from command line arguments
         if (command_argument_count() == 0) then
             config_file = 'simple.in'
         else
             call get_command_argument(1, config_file)
         end if
-        call print_phase_time('Command line parsing completed')
 
-        ! Must be called in this order. TODO: Fix
-        call read_config(config_file)
-        call validate_orbit_model_config
-        call print_phase_time('Configuration reading completed')
-
-        call read_profiles_config(config_file)
-        call print_phase_time('Profiles configuration reading completed')
-
-        call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-        call print_phase_time('Field initialization completed')
-
-        call params_init
-        call print_phase_time('Parameter initialization completed')
-
-        call print_parameters
-        call print_phase_time('Parameter printing completed')
-
-        if (swcoll) then
-            call init_collisions
-            call print_phase_time('Collision initialization completed')
-        end if
-
-        chartmap_mode = .false.
-        spectre_mode = .false.
-        if (len_trim(field_input) > 0) then
-            spectre_mode = is_spectre_file(field_input)
-            if (.not. spectre_mode) chartmap_mode = is_boozer_chartmap(field_input)
-        end if
-
-        if (isw_field_type == TEST) then
-            ! TEST field uses analytic tokamak - no VMEC needed for sampling
-            call init_magfie(TEST)
-            call print_phase_time('TEST field initialization completed')
-            call sample_particles_test_field
-            call print_phase_time('TEST field particle sampling completed')
-        else if (spectre_mode) then
-            ! SPECTRE: VMEC-free, per-volume RK45 guiding centers. Sampling and
-            ! tracing use magfie_spectre directly on the stacked-rho chart.
-            call init_magfie(SPECTRE)
-            call print_phase_time('SPECTRE magfie initialization completed')
-
-            if (startmode == 1) then
-                call sample_spectre_surface(zstart)
-            else
-                call sample_particles(.true.)
-                if (startmode == 2) call init_spectre_start_bounds(zstart)
-            end if
-            call print_phase_time('SPECTRE particle sampling completed')
-
-            if (generate_start_only) stop 'stopping after generating start.dat'
-        else if (chartmap_mode) then
-            ! Boozer chartmap: no VMEC, use Boozer magfie for field line tracing.
-            if (.not. gpu_compact_init) then
-            call init_magfie(isw_field_type)
-            call print_phase_time('Boozer magfie initialization completed')
-            end if
-
-            if (.not. gpu_compact_init) then
-                call init_starting_surf
-                call print_phase_time('Starting surface initialization completed')
-            end if
-
-            call sample_particles(.true.)
-            call print_phase_time('Particle sampling completed')
-
-            if (generate_start_only) stop 'stopping after generating start.dat'
-        else
-            call init_magfie(VMEC)
-            call print_phase_time('VMEC magnetic field initialization completed')
-
-            call init_starting_surf
-            call print_phase_time('Starting surface initialization completed')
-
-            call sample_particles
-            call print_phase_time('Particle sampling completed')
-
-            if (generate_start_only) stop 'stopping after generating start.dat'
-
-            call init_magfie(isw_field_type)
-            call print_phase_time('Field type initialization completed')
-        end if
-
-        if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
-            call init_bminmax
-            call print_phase_time('Bmin/Bmax initialization completed')
-        end if
-
+        call load_config(config_file)
+        call init_run(norb)
+        call init_sampling_field
+        call sample_start
+        if (generate_start_only) stop 'stopping after generating start.dat'
+        call init_tracing_field
         call init_counters
         call print_phase_time('Counter initialization completed')
 
@@ -412,6 +321,117 @@ contains
 
         call stl_wall_finalize(wall)
     end subroutine main
+
+    !> Read and validate a simple.in file, including its &profiles group.
+    subroutine load_config(config_file)
+        use params, only: read_config
+        use timing, only: print_phase_time
+
+        character(*), intent(in) :: config_file
+
+        call read_config(config_file)
+        call validate_orbit_model_config
+        call print_phase_time('Configuration reading completed')
+        call read_profiles_config(config_file)
+        call print_phase_time('Profiles configuration reading completed')
+    end subroutine load_config
+
+    !> Load the field and derive run parameters from the current &config values.
+    subroutine init_run(norb)
+        use params, only: netcdffile, ns_s, ns_tp, multharm, params_init
+        use timing, only: print_phase_time
+
+        type(tracer_t), intent(inout) :: norb
+
+        call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
+        call print_phase_time('Field initialization completed')
+        call params_init
+        call print_phase_time('Parameter initialization completed')
+        call print_parameters
+        if (swcoll) then
+            call init_collisions
+            call print_phase_time('Collision initialization completed')
+        end if
+    end subroutine init_run
+
+    !> Classify the configured input as TEST, SPECTRE, Boozer chartmap or VMEC.
+    integer function run_input_kind()
+        use magfie_sub, only: TEST
+        use field_boozer_chartmap, only: is_boozer_chartmap
+        use field, only: is_spectre_file
+
+        run_input_kind = INPUT_VMEC
+        if (isw_field_type == TEST) then
+            run_input_kind = INPUT_TEST
+        else if (len_trim(field_input) > 0) then
+            if (is_spectre_file(field_input)) then
+                run_input_kind = INPUT_SPECTRE
+            else if (is_boozer_chartmap(field_input)) then
+                run_input_kind = INPUT_CHARTMAP
+            end if
+        end if
+    end function run_input_kind
+
+    !> Select the field used for sampling and integrate the starting field line.
+    subroutine init_sampling_field
+        use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
+        use samplers, only: init_starting_surf
+        use timing, only: print_phase_time
+
+        select case (run_input_kind())
+        case (INPUT_TEST)
+            call init_magfie(TEST)
+        case (INPUT_SPECTRE)
+            call init_magfie(SPECTRE)
+        case (INPUT_CHARTMAP)
+            if (.not. gpu_compact_init) then
+                call init_magfie(isw_field_type)
+                call init_starting_surf
+            end if
+        case default
+            call init_magfie(VMEC)
+            call init_starting_surf
+        end select
+        call print_phase_time('Sampling field initialization completed')
+    end subroutine init_sampling_field
+
+    !> Fill zstart according to startmode. Requires init_sampling_field.
+    subroutine sample_start
+        use samplers, only: sample_spectre_surface, init_spectre_start_bounds
+        use timing, only: print_phase_time
+
+        select case (run_input_kind())
+        case (INPUT_TEST)
+            call sample_particles_test_field
+        case (INPUT_SPECTRE)
+            if (startmode == 1) then
+                call sample_spectre_surface(zstart)
+            else
+                call sample_particles(.true.)
+                if (startmode == 2) call init_spectre_start_bounds(zstart)
+            end if
+        case (INPUT_CHARTMAP)
+            call sample_particles(.true.)
+        case default
+            call sample_particles
+        end select
+        call print_phase_time('Particle sampling completed')
+    end subroutine sample_start
+
+    !> Select the integration field and the bmin/bmax cache for tracing.
+    subroutine init_tracing_field
+        use magfie_sub, only: TEST, init_magfie
+        use timing, only: print_phase_time
+
+        if (run_input_kind() == INPUT_VMEC) then
+            call init_magfie(isw_field_type)
+            call print_phase_time('Field type initialization completed')
+        end if
+        if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
+            call init_bminmax
+            call print_phase_time('Bmin/Bmax initialization completed')
+        end if
+    end subroutine init_tracing_field
 
     ! Reject orbit_model values this build does not implement, with a clear message,
     ! before any tracing starts. Only guiding-center (the default symplectic path)
@@ -1323,7 +1343,7 @@ contains
     subroutine read_profiles_config(config_file)
         use simple_profiles, only: read_profiles
 
-        character(256), intent(in) :: config_file
+        character(*), intent(in) :: config_file
 
         call read_profiles(config_file)
     end subroutine read_profiles_config

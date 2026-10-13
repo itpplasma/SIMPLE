@@ -195,34 +195,42 @@ module params
     integer :: spectre_ncon_ode_max_steps = 1000000
     real(dp) :: spectre_ncon_ode_relerr = 1.0e-2_dp
 
+    ! Removed &config keys. They are still read so that old input files run;
+    ! a value other than the historical default prints a warning.
+    logical :: local = .true.
+    integer :: loopskip = 0
+    real(dp) :: bmod_ref = 5.0d4
+    real(dp) :: macrostep_log_ratio = 1.0d3
+
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
-	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
-	        isw_field_type, generate_start_only, startmode, grid_density, &
+        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
+        isw_field_type, generate_start_only, startmode, grid_density, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
         gpu_t_block, gpu_loss_tau, gpu_maxloss, gpu_min_timestep, &
         gpu_pilot_fraction, gpu_particle_profile, &
-	        symplectic_newton_warning_mode, &
-	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
-	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
-	        canonical_ode_relerr, &
-	        tcut, nturns, debug, &
-	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
-	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
-	        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
-	        am1, am2, Z1, Z2, &
-	        densi1, densi2, tempi1, tempi2, tempe, &
-	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-	        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
-	        spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
-	        spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
-	        spectre_ncon_ode_relerr, &
+        symplectic_newton_warning_mode, &
+        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
+        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
+        canonical_ode_relerr, &
+        tcut, nturns, debug, &
+        class_plot, cut_in_per, fast_class, vmec_B_scale, &
+        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
+        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
+        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
+        am1, am2, Z1, Z2, &
+        densi1, densi2, tempi1, tempi2, tempe, &
+        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
+        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
+        spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
+        spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
+        spectre_ncon_ode_relerr, &
         output_results_netcdf, &
-	        output_error, output_orbits_macrostep, &  ! callback
-	        macrostep_time_grid, checkpoint_interval, restart
+        output_error, output_orbits_macrostep, &  ! callback
+        macrostep_time_grid, checkpoint_interval, restart, &
+        local, loopskip, bmod_ref, macrostep_log_ratio  ! removed, ignored
 
     integer(int8), allocatable :: wall_hit(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
@@ -235,10 +243,38 @@ contains
     subroutine read_config(config_file)
         character(*), intent(in) :: config_file
 
-        open (1, file=config_file, status='old', action='read')
-        read (1, nml=config)
-        close (1)
+        call read_config_namelist(config_file)
+        call finalize_config
+    end subroutine read_config
 
+    subroutine read_config_namelist(config_file)
+        ! Read the &config group without resolving aliases or validating.
+        character(*), intent(in) :: config_file
+        integer :: unit
+
+        open (newunit=unit, file=config_file, status='old', action='read')
+        read (unit, nml=config)
+        close (unit)
+    end subroutine read_config_namelist
+
+    subroutine reset_config
+        ! Restore every &config value to its compiled default. The first call
+        ! records the defaults, so call it before changing any value.
+        integer, save :: defaults_unit
+        logical, save :: recorded = .false.
+
+        if (.not. recorded) then
+            open (newunit=defaults_unit, status='scratch', delim='apostrophe')
+            write (defaults_unit, nml=config)
+            recorded = .true.
+        end if
+        rewind (defaults_unit)
+        read (defaults_unit, nml=config)
+    end subroutine reset_config
+
+    subroutine finalize_config
+        ! Resolve aliases, normalize and validate the current &config values.
+        call warn_removed_config_keys
         call apply_config_aliases
 
         gpu_mode = to_lower(trim(gpu_mode))
@@ -278,8 +314,17 @@ contains
         end if
 
         call validate_gpu_config
+    end subroutine finalize_config
 
-    end subroutine read_config
+    subroutine warn_removed_config_keys
+        if (.not. local) print *, 'WARNING: removed &config key local is ignored; ', &
+            'use num_surf=0 for volume sampling'
+        if (loopskip /= 0) print *, 'WARNING: removed &config key loopskip is ignored'
+        if (bmod_ref /= 5.0d4) print *, 'WARNING: removed &config key bmod_ref ', &
+            'is ignored; use vmec_B_scale to scale the field'
+        if (macrostep_log_ratio /= 1.0d3) print *, 'WARNING: removed &config key ', &
+            'macrostep_log_ratio is ignored'
+    end subroutine warn_removed_config_keys
 
     subroutine validate_gpu_config
         select case (trim(gpu_mode))

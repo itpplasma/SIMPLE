@@ -27,7 +27,6 @@
     field_line_spectre.f90
     field_can.f90
     magfie.f90
-    magfie_wrapper.f90
     magfie_can_boozer.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
@@ -58,7 +57,6 @@
     netcdf_results_output.f90
     callback.f90
     params.f90
-    params_wrapper.f90
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90
@@ -68,6 +66,7 @@
     timing.f90
     simple_gpu.f90
     simple_main.f90
+    simple_api.f90
     simple_entry.f90
     )
 

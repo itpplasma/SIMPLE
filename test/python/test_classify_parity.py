@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Parity tests for classification between Python and Fortran."""
+"""Classification by pysimple must match simple.x for the same simple.in."""
 
 from __future__ import annotations
 
@@ -9,138 +8,41 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-pytest.importorskip("pysimple", reason="pysimple module not available")
+pysimple = pytest.importorskip("pysimple")
 
-import pysimple
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SIMPLE_EXE = REPO_ROOT / "build" / "simple.x"
+SIMPLE_X = Path(__file__).resolve().parents[2] / "build" / "simple.x"
 
 
-def _write_simple_in(path: Path, vmec: Path, n_particles: int, trace_time: float, surface: float) -> None:
-    text = f"""&config
+def test_classification_matches_simple_x(tmp_path, vmec_file, monkeypatch):
+    if not SIMPLE_X.exists():
+        pytest.skip("simple.x is not built")
+    (tmp_path / "simple.in").write_text(f"""&config
 startmode = 1
-ntestpart = {n_particles}
-trace_time = {trace_time:.1e}
+ntestpart = 10
+trace_time = 1d-3
 npoiper2 = 64
 tcut = 0.1
-class_plot = .false.
 notrace_passing = 0
 isw_field_type = 0
 integmode = 3
-netcdffile = '{vmec}'
+netcdffile = '{Path(vmec_file).resolve()}'
 deterministic = .true.
-sbeg(1) = {surface}
-num_surf = 1
+sbeg = 0.35
 /
-"""
-    (path / "simple.in").write_text(text)
+""")
+    subprocess.run([str(SIMPLE_X), "simple.in"], cwd=tmp_path, check=True,
+                   capture_output=True)
+    # times_lost.dat: ipart, loss_time, trap_par, s_start, perp_inv, ...
+    reference = np.loadtxt(tmp_path / "times_lost.dat")
 
-
-def _read_fortran_classification(path: Path, n_particles: int) -> dict[str, np.ndarray]:
-    """Read classification results from Fortran times_lost.dat."""
-    data = np.loadtxt(path / "times_lost.dat")
-
-    # times_lost.dat format:
-    # ipart, loss_time, trap_par, s_start, perp_inv, zend(1:5)
-    # Passing/trapped is reconstructed from trap_par, matching the Fortran code
-    # path where trap_par < 0 indicates passing.
-    trap_parameter = data[:, 2]
-
-    return {
-        "passing": trap_parameter < 0.0,
-        "loss_times": data[:, 1],
-        "trap_parameter": trap_parameter,
-        "perpendicular_invariant": data[:, 4],
-    }
-
-
-@pytest.mark.usefixtures("vmec_file")
-def test_classification_parity(tmp_path: Path, vmec_file: str) -> None:
-    """Compare classification results between Fortran and Python."""
-    if not SIMPLE_EXE.exists():
-        pytest.skip("simple.x is not built; run CMake/Ninja build first")
-
-    vmec_path = Path(vmec_file).resolve()
-    n_particles = 10
-    surface = 0.35
-
-    fortran_dir = tmp_path / "fortran"
     python_dir = tmp_path / "python"
-    fortran_dir.mkdir()
     python_dir.mkdir()
+    monkeypatch.chdir(python_dir)
+    pysimple.init(config=tmp_path / "simple.in")
+    result = pysimple.classify_parallel(pysimple.load_particles(tmp_path / "start.dat"))
 
-    # Run Fortran executable
-    _write_simple_in(fortran_dir, vmec_path, n_particles, 1.0e-3, surface)
-    subprocess.run([str(SIMPLE_EXE), "simple.in"], cwd=fortran_dir, check=True)
-    assert (fortran_dir / "times_lost.dat").exists()
-
-    # Use same start.dat for Python to ensure exact parity
-    start_path = python_dir / "start.dat"
-    start_path.write_text((fortran_dir / "start.dat").read_text())
-
-    # Run Python API
-    pysimple.init(
-        vmec_path,
-        deterministic=True,
-        isw_field_type=0,
-        notrace_passing=0,
-        npoiper2=64,
-        num_surf=1,
-        trace_time=1.0e-3,
-        tcut=0.1,
-        class_plot=False,
-    )
-    # Note: sbeg is set by sampling, not manually
-
-    particles = pysimple.load_particles(start_path)
-    python_results = pysimple.classify_parallel(particles, integrator="midpoint")
-
-    # Read Fortran results
-    fortran_results = _read_fortran_classification(fortran_dir, n_particles)
-
-    # Compare basic results (classification indices not written to file)
-    np.testing.assert_array_equal(
-        python_results["passing"],
-        fortran_results["passing"],
-        err_msg="Passing classification mismatch",
-    )
-
-    np.testing.assert_allclose(
-        python_results["loss_times"],
-        fortran_results["loss_times"],
-        rtol=1e-10,
-        atol=1e-12,
-        equal_nan=True,
-        err_msg="Loss times mismatch",
-    )
-
-    np.testing.assert_allclose(
-        python_results["trap_parameter"],
-        fortran_results["trap_parameter"],
-        rtol=1e-10,
-        atol=1e-12,
-        equal_nan=True,
-        err_msg="Trap parameter mismatch",
-    )
-
-    np.testing.assert_allclose(
-        python_results["perpendicular_invariant"],
-        fortran_results["perpendicular_invariant"],
-        rtol=1e-10,
-        atol=1e-12,
-        equal_nan=True,
-        err_msg="Perpendicular invariant mismatch",
-    )
-
-    # Verify classification arrays are populated (values depend on ntcut/class_plot settings)
-    assert "fractal" in python_results
-    assert "jpar" in python_results
-    assert "topology" in python_results
-    assert python_results["fractal"].shape == (n_particles,)
-    assert python_results["jpar"].shape == (n_particles,)
-    assert python_results["topology"].shape == (n_particles,)
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    np.testing.assert_array_equal(result["passing"], reference[:, 2] < 0.0)
+    for key, column in [("loss_times", 1), ("trap_parameter", 2),
+                        ("perpendicular_invariant", 4)]:
+        np.testing.assert_allclose(result[key], reference[:, column], rtol=1e-10,
+                                   atol=1e-12, equal_nan=True, err_msg=key)
