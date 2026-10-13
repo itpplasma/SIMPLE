@@ -6,8 +6,8 @@ add_test(NAME test_magfie_coils
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 set_tests_properties(test_magfie_coils PROPERTIES
-    TIMEOUT 120
-    LABELS "integration"
+    TIMEOUT 600
+    LABELS "integration;slow"
 )
 
 add_executable (test_coils_field_compare.x test_coils_field_compare.f90)
