@@ -16,8 +16,11 @@ map is checked directly from spectre_crossing_events.dat:
     and far-side relocated transmissions, lambda_k = 0) may move O(1) along
     the interface and are held to exact energy instead. The same run under
     crossing_level = 0 applies no kick.
-  * Level-0 vs Level-1: the same ensemble under both maps keeps the event count
-    within 20% and conserves energy in both.
+  * Level-0 vs Level-1: both maps take the same crossing/forbidden decision,
+    so every marker that never meets a forbidden crossing ends with the same
+    exit code under both, and both conserve energy. Forbidden crossings
+    differ by design (Level-0 mirrors in place, Level-1 relocates), so
+    markers with one are excluded and event counts are not compared.
 
 Usage:
     test_spectre_crossing_l1.py <simple.x> <tok2vol.h5>
@@ -45,6 +48,8 @@ KICK_MIN, KICK_MAX = 1.0e-8, 0.3
 # sufficient to test every component identity without lengthening this already
 # two-minute integration fixture; the current seed supplies sixteen.
 MIN_REFRACTED = 10
+# Markers without a forbidden crossing compared between Level 0 and Level 1.
+MIN_COMPARED = 10
 
 
 def write_input(path, h5, level):
@@ -81,10 +86,8 @@ def load_events(workdir):
     return a.reshape(1, -1) if a.ndim == 1 else a
 
 
-def load_lost_fraction(workdir):
-    tl = np.loadtxt(os.path.join(workdir, "times_lost.dat"))
-    lost = tl[:, 1] < TRACE_TIME * (1.0 - 1e-9)
-    return int(lost.sum()) / len(tl)
+def load_exit_codes(workdir):
+    return np.loadtxt(os.path.join(workdir, "orbit_exit_code.dat"))[:, 1].astype(int)
 
 
 def energy_residual(ev):
@@ -174,23 +177,30 @@ def main():
     with tempfile.TemporaryDirectory() as work1:
         run_simple(binary, work1, tok2vol, level=1)
         ev1 = load_events(work1)
-        loss1 = load_lost_fraction(work1)
+        exit1 = load_exit_codes(work1)
     with tempfile.TemporaryDirectory() as work0:
         run_simple(binary, work0, tok2vol, level=0)
         ev0 = load_events(work0)
-        loss0 = load_lost_fraction(work0)
+        exit0 = load_exit_codes(work0)
 
     check_identity(ev1, failures)
     check_physics(ev1, ev0, failures)
     check_energy(ev1, "level1", failures)
     check_energy(ev0, "level0", failures)
 
-    n1, n0 = len(ev1), len(ev0)
-    spread = abs(n1 - n0) / max(n0, 1)
-    if not spread <= 0.20:
-        failures.append(f"ensemble: event count spread {spread:.2%} > 20%")
-    print(f"ensemble: events L1={n1} L0={n0} spread={spread:.2%} "
-          f"loss_fraction L1={loss1:.3f} L0={loss0:.3f} (informational)")
+    forbidden = np.zeros(exit1.size, dtype=bool)
+    for ev in (ev0, ev1):
+        refl = ev[ev[:, C_TYPE] == TYPE_REFLECTION]
+        forbidden[refl[:, C_PART].astype(int) - 1] = True
+    compared = np.flatnonzero(~forbidden)
+    differ = compared[exit1[compared] != exit0[compared]]
+    if compared.size < MIN_COMPARED:
+        failures.append(f"ensemble: only {compared.size} markers without "
+                        f"forbidden crossings (< {MIN_COMPARED})")
+    if differ.size:
+        failures.append(f"ensemble: exit codes differ for markers {differ + 1}")
+    print(f"ensemble: markers={exit1.size} compared={compared.size} "
+          f"differ={differ.size} events L1={len(ev1)} L0={len(ev0)}")
 
     if failures:
         print("\nFAILURES:")

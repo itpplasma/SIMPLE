@@ -415,6 +415,11 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 end subroutine
 ```
 
+`compute_hcurl` forms `(curl h)^i = eps^ijk d_j h_k / sqrtg` from
+`dh(j, k) = d h_k / d x_j`, derivative index first. The splined field returns
+that order; a field that is not splined goes through central differences in
+`magfie_generic_refcoords`, which builds the same order.
+
 ---
 
 ## 5. Splined Field Architecture
@@ -665,7 +670,9 @@ of the outermost interface (SI meters; `stevvo` scales it to cm). `fper` is
 and `d h_i/dx` in a single field evaluation; the coordinate system supplies the
 analytic metric and its derivative `d g_ij/dx`. `grad log|B|` (`bder`) and
 `curl(h)` (`hcurl`), the small drift corrections, follow analytically from the
-vector-potential Hessian and `d g_ij/dx`, so the field is evaluated once per
+vector-potential Hessian and `d g_ij/dx` (libneo returns `d h_i/dx_j` with the
+component index first; `magfie_spectre` transposes it for `compute_hcurl`), so
+the field is evaluated once per
 call instead of the seven central-difference evaluations it replaced. `|B|`
 jumps across SPEC interfaces (the pressure jump), but the analytic derivative is
 the in-volume derivative in the volume `lvol = min(int(rho_g)+1, Mvol)` owning
@@ -857,10 +864,8 @@ iterates inside the domain or on the landing solve at `rho_g = Mvol`.
 Grazing events whose landing solve stalls, and committed steps that jump in
 `rho_g`, energy, or theta beyond physical bounds (silently unconverged
 Newton), are retried with a halved substep; persistent non-convergence
-terminates the orbit through the logged `CROSS_STOP` fallback. On tok2vol
-this occurs only at full 3.5 MeV alpha energy, where the interior
-`Bstar_par = 0` surface invalidates the guiding-center premise for a subset
-of pitches.
+terminates the orbit through the logged `CROSS_STOP` fallback; the tok2vol
+tests assert that it does not occur.
 
 **Optional follow-up** (documented, not implemented): a `no_K`-style variant that
 drops `rho_par h_s` in SPECTRE coordinates directly -- the same

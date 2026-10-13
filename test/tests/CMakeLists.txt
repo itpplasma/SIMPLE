@@ -414,7 +414,7 @@ add_executable(test_spectre_fo_hybrid.x test_spectre_fo_hybrid.f90)
 target_link_libraries(test_spectre_fo_hybrid.x simple)
 add_test(NAME test_spectre_fo_hybrid
     COMMAND test_spectre_fo_hybrid.x
-        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5)
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol_sheet.h5)
 set_tests_properties(test_spectre_fo_hybrid PROPERTIES LABELS "integration")
 
 add_executable(test_spectre_freeboundary.x test_spectre_freeboundary.f90)

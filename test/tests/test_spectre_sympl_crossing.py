@@ -130,12 +130,13 @@ def check_stops(ev, stops, tag, failures):
 
 
 def check_landing_and_reflection(binary, h5, failures):
-    # 437.5 keV keeps Bstar_parallel nonzero for the fixed-seed reflection
-    # ensemble while retaining both transmissions and magnetic mirrors.
-    trace_time, npart = 2.0e-5, 16
+    # 437.5 keV keeps Bstar_parallel nonzero for the fixed-seed ensemble; the
+    # start surface s = 0.9 lets markers reach the interface with both
+    # transmissions and magnetic mirrors.
+    trace_time, npart = 2.0e-5, 128
     with tempfile.TemporaryDirectory() as work:
         out = run_simple(binary, work, h5=h5, integmode=3, npart=npart,
-                         trace_time=trace_time, sbeg=0.5, npoiper2=256,
+                         trace_time=trace_time, sbeg=0.9, npoiper2=256,
                          relerr="1d-12", face_al=8.0)
         ev = load_events(work)
         tl = load_times_lost(work)
@@ -234,8 +235,7 @@ def orbit_states(workdir):
 
 def check_step_halving(binary, h5, failures):
     trace_time = 5.0e-5
-    # Fixed crossers keep the order probe away from tok2vol's documented
-    # corrupted theta bands and make its signal independent of sampler changes.
+    # Fixed crossers make the order probe independent of sampler changes.
     starts = np.array([
         [0.97, 2.99433050, 2.50345665, 1.0, -0.79833378],
         [0.97, 6.23409792, 1.61988371, 1.0, 0.20488363],

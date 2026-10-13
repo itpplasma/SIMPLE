@@ -3,10 +3,8 @@
 
 Production-scope validation of SPECTRE guiding-center support on the committed
 two-volume tok2vol fixture (integ_coords = 6, integmode = 3, crossing_level = 1).
-Markers run at facE_al = 4 (875 keV): the guiding-center-defensible energy on
-tok2vol -- at the full 3.5 MeV the interior GC degeneracy breaks the canonical
-model for a subset of pitches (see DOC/spectre-interface-crossing.md and
-test_spectre_gc_rk45).
+Markers run at facE_al = 8 (437.5 keV), where the guiding-center model is valid
+on tok2vol and the ensemble ends with both confined and lost markers.
 
 Scenarios:
   1. Losses + accounting: every marker is confined or terminated early, no marker
@@ -40,7 +38,7 @@ import numpy as np
 
 TRACE_TIME = 1.0e-4
 NPART = 64
-FACE_AL = 4.0
+FACE_AL = 8.0
 NPOIPER2 = 128
 
 # spectre_crossing_events.dat columns.
@@ -48,8 +46,10 @@ C_PART, C_TYPE, C_MU = 0, 3, 10
 TYPE_CROSSING, TYPE_REFLECTION = 1, 2
 
 # The Level-1 map conserves mu within each crossing exactly; the residual is the
-# symplectic GC flow's between-crossing mu drift (measured ~4e-5 here).
+# symplectic GC flow's between-crossing mu drift (measured below 1e-9 here).
 MU_SCATTER_TOL = 5.0e-3
+# The scatter is measured along repeated crossings of at least one marker.
+MU_MIN_REPEAT = 5
 # The mirror criterion is exact, so the analytic split and trap_par must agree.
 CLASS_MATCH_MIN = 1.0
 
@@ -215,7 +215,7 @@ def gc_mu_conservation(binary, h5, failures):
     # Small dedicated run near the interface: a few markers cross repeatedly,
     # keeping the crossing log small enough to load.
     with tempfile.TemporaryDirectory() as work:
-        run(binary, work, h5, ntestpart=8, sbeg=0.9, trace_time=5.0e-6,
+        run(binary, work, h5, ntestpart=8, sbeg=0.95, trace_time=5.0e-5,
             ntimstep=50, npoiper2=256)
         ev = np.loadtxt(os.path.join(work, "spectre_crossing_events.dat"))
     ev = ev.reshape(1, -1) if ev.ndim == 1 else ev
@@ -225,15 +225,21 @@ def gc_mu_conservation(binary, h5, failures):
         return
 
     scatter = 0.0
+    max_repeat = 0
     for p in np.unique(events[:, C_PART]):
         mus = events[events[:, C_PART] == p][:, C_MU]
+        max_repeat = max(max_repeat, len(mus))
         ref = float(np.median(mus))
         if ref > 0.0:
             scatter = max(scatter, float(np.max(np.abs(mus - ref)) / ref))
+    if max_repeat < MU_MIN_REPEAT:
+        failures.append(f"mu: no marker crosses at least {MU_MIN_REPEAT} times "
+                        f"(max {max_repeat})")
     if not scatter < MU_SCATTER_TOL:
         failures.append(f"mu: GC-map mu scatter {scatter:.3e} >= "
                         f"{MU_SCATTER_TOL:.0e} (conserved-mu model self-broken)")
-    print(f"mu: crossing_events={len(events)} GC-side mu_scatter={scatter:.3e} "
+    print(f"mu: crossing_events={len(events)} max_per_marker={max_repeat} "
+          f"GC-side mu_scatter={scatter:.3e} "
           f"(conserved-mu model; the map holds mu fixed per crossing, this is "
           f"the between-crossing symplectic drift)")
     print("mu: ROADMAP -- the PHYSICAL mu scatter needs a full-orbit Boris trace "
