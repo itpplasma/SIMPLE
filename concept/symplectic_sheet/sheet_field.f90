@@ -36,6 +36,9 @@ module sheet_field
         real(dp) :: a_out = 1.3_dp
         real(dp) :: p_phi = 0.25_dp
         real(dp) :: width = 0.0_dp
+        !> Analytic layer: psi blends with (1 + tanh(4 (r - r0)/width))/2
+        !> everywhere instead of the compact C2 quintic step.
+        logical :: analytic = .false.
     end type field_params_t
 
 contains
@@ -74,7 +77,7 @@ contains
         real(dp), intent(in) :: r
 
         in_layer = par%width > 0.0_dp .and. &
-                   abs(r - par%r_sheet) < 0.5_dp*par%width
+                   (par%analytic .or. abs(r - par%r_sheet) < 0.5_dp*par%width)
     end function in_layer
 
     pure subroutine psi_radial(par, r, psi, dpsi, d2psi)
@@ -87,10 +90,17 @@ contains
         real(dp) :: w, x, s, s1, s2, da, d, d1, d2
 
         w = par%width
-        x = (r - par%r_sheet)/w + 0.5_dp
-        s = x**3*(10.0_dp - 15.0_dp*x + 6.0_dp*x*x)
-        s1 = 30.0_dp*x*x*(x - 1.0_dp)**2/w
-        s2 = 60.0_dp*x*(x - 1.0_dp)*(2.0_dp*x - 1.0_dp)/(w*w)
+        if (par%analytic) then
+            x = tanh(4.0_dp*(r - par%r_sheet)/w)
+            s = 0.5_dp*(1.0_dp + x)
+            s1 = 2.0_dp*(1.0_dp - x*x)/w
+            s2 = -16.0_dp*x*(1.0_dp - x*x)/(w*w)
+        else
+            x = (r - par%r_sheet)/w + 0.5_dp
+            s = x**3*(10.0_dp - 15.0_dp*x + 6.0_dp*x*x)
+            s1 = 30.0_dp*x*x*(x - 1.0_dp)**2/w
+            s2 = 60.0_dp*x*(x - 1.0_dp)*(2.0_dp*x - 1.0_dp)/(w*w)
+        end if
         da = par%a_out - par%a_in
         d = da*(r*r - par%r_sheet**2)
         d1 = 2.0_dp*da*r

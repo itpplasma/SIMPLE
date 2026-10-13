@@ -53,7 +53,9 @@ error at the end):
 |---|---|---|
 | RK45, tol 1e-6 | 1.8, 2.0e-4 | 16.9, 2.0e-3, 1.72e-2 |
 | RK45, tol 1e-8 | 2.6, 1.0e-4 | 24.6, 1.0e-3, 1.68e-2 |
-| Poincare Gauss-Legendre 2, h = 0.1 | 13.4, 1.1e-4 | 128, 4.2e-4, 1.50e-2 |
+| RK45, tol 1e-10 | - | 50.8, 3.4e-5, 1.66e-2 |
+| Poincare Gauss-Legendre 2, h = 0.1, L = 5e-3 | 13.4, 1.1e-4 | 128, 4.2e-4, 1.50e-2 |
+| same, analytic layer, L = 1e-2 | 19.3, 5.4e-7 | 193, 5.1e-7, 1.61e-2 |
 
 1. A finite layer of width `rho/20` to `rho/5` reproduces the sharp-sheet
    physics: the full-orbit zero-width limit is benign.
@@ -68,12 +70,14 @@ error at the end):
 4. The Poincare refinement with the midpoint leaves an excess scattering
    from the residual `K = k` acting as the potential `k/g` (below); with the
    fourth-order Gauss-Legendre base method it matches the reference.
-5. In this two-dimensional prototype with a cheap field, RK45 is 5 to 7 times
-   faster than the Gauss-Legendre Poincare scheme. Its energy error grows
-   linearly in time; the symplectic scheme's grows more slowly (factor 3.8
-   for ten times the time) but is not bounded, plausibly because the C2
-   layer limits backward error analysis. The 10 % lower long-time mu spread
-   of the symplectic run is unexplained at this ensemble size.
+5. The energy error of the symplectic scheme stays bounded (5e-7 at both
+   times) once every time scale of the transformed Hamiltonian is resolved:
+   with `L = 5e-3` the transition of `g` was crossed in two fictitious steps
+   and the energy random-walked (1e-4 to 4e-4); `L = 1e-2` fixes it at 15 %
+   more steps. RK45's energy error grows linearly in time at any tolerance.
+6. In this two-dimensional prototype with a cheap field, RK45 at tol 1e-10
+   is about 4 times faster than the bounded-energy symplectic scheme over
+   4e5 time units, with an energy error 70 times larger and growing.
 
 ## Error of a fixed step across a force jump
 
@@ -105,7 +109,10 @@ the motion is the physical one on the shell `H = E + k/g(q)`: `k/g` acts as
 an extra potential across the transition zone of `g`, with an impulse
 `~ k (1 - g_min)/v_n` independent of the zone length. `k` is the energy error
 of the base method, `O(h^2)` for the midpoint and `O(h^4)` for the two-stage
-Gauss-Legendre method, which removes the residual (table below).
+Gauss-Legendre method, which removes the residual (table above). The
+transformed Hamiltonian has the extra time scale `L/(g v)` of the transition
+zone; a fixed step in `tau` keeps the energy error bounded only when it
+resolves that scale too, as for any symplectic method.
 
 `test_fo_symplectic` checks the analytic tangent map of landing steps
 (`M^T J M = J` to 1e-13); `test_fo_stationary` checks long-run stationarity
