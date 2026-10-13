@@ -130,8 +130,7 @@ weak this exceeds the thin-layer picture, so the solve is capped at a kick
 the energy-exact Level-0 rescale (`v_par' = sign(v_par) sqrt(radicand0)`, no
 kick). Every energetically allowed marker therefore crosses, with the
 tangential refraction applied where it is small. On the two-volume tok2vol
-fixture the poloidal variation is weak, so most crossings take the Level-0
-rescale and a minority refract with kicks up to `~0.2` rad.
+fixture most crossings refract, with kicks up to `~0.3` rad.
 
 ## Impulse-map validity domain (finding F5)
 
@@ -144,11 +143,9 @@ Outside that domain the ideal sheet supplies no parallel mirror channel
 tangential slide along the sheet toward an equal-|B| point, which leaves
 the impulse map's ordering. Implementation: crossings whose refraction
 root exceeds a 0.3 rad tangential kick fall back to the energy-exact
-Level-0 rescale (the adiabatic-mirror convention); on the tok2vol
-fixture this affects most crossings because its poloidal |B| variation
-is weak. Mirror-vs-slide in this regime is an open modeling question to
-be adjudicated by the full-orbit comparison (SIMPLE#442); both
-conventions conserve H and mu exactly.
+Level-0 rescale (the adiabatic-mirror convention). Mirror-vs-slide in this
+regime is an open modeling question to be adjudicated by the full-orbit
+comparison (SIMPLE#442); both conventions conserve H and mu exactly.
 
 ## Mixed-sheet ambiguity (finding F4) and the adopted convention
 
@@ -217,8 +214,7 @@ gauge (the orbit-start code path, so no gauge matching), and the remaining
 microstep budget is completed there, preserving the scheme's order under
 step halving. Only one-step schemes are admitted (`ntau = 1` asserted); a
 persistent non-convergence terminates the orbit through the `CROSS_STOP`
-fallback, which on the tok2vol tests occurs only where the full-energy
-interior degeneracy invalidates the guiding-center premise itself.
+fallback, which the tok2vol tests assert does not occur.
 
 ## Physical caveat
 

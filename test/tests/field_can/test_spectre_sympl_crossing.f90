@@ -56,7 +56,7 @@ program test_spectre_sympl_crossing
 
     implicit none
 
-    integer, parameter :: NMARKER = 8, NSTEP = 60000, NSAMPLE = 16
+    integer, parameter :: NMARKER = 80, NSTEP = 60000, NSAMPLE = 16
     integer, parameter :: NREC = NSTEP/NSAMPLE, MIN_REC = 100
     real(dp), parameter :: RHO0 = 0.97_dp, LAM0 = 0.9_dp
     !> Zero-consistency bound on the fitted relative H slope of crossing
@@ -302,8 +302,6 @@ contains
 
         lam = LAM0
         if (mod(im, 2) == 0) lam = -LAM0
-        ! Keep the evenly spaced stress ensemble out of tok2vol's documented
-        ! corrupted coefficient bands around theta = pi/2 and 3*pi/2.
         th0 = twopi*(real((im - 1)/2, dp) + 0.25_dp)/real(NMARKER/2, dp)
 
         zphys = [RHO0, th0, 0.0_dp, 1.0_dp, lam]

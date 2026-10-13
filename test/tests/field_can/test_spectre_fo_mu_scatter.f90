@@ -1,15 +1,14 @@
 program test_spectre_fo_mu_scatter
     !> Physical mu-scatter reference at a SPECTRE interface (ROADMAP section 4):
-    !> controlled full-orbit traversals on tok2vol measure the return magnetic
-    !> moment against the conserved-mu GC sheet convention. For each entry
-    !> pitch and angle the Boris leg runs at two gyrostep scales; the recorded
+    !> controlled full-orbit traversals of the current-free sheet fixture
+    !> tok2vol_sheet measure the return magnetic moment against the
+    !> conserved-mu GC sheet convention. For each entry pitch and angle the
+    !> Boris leg runs at two gyrostep scales; the recorded
     !> table (mu_scatter.dat) is the reference data the companion repository
     !> archives. Witnesses here: every traversal exits with an OK status, the
     !> reconstructed energy matches entry exactly (the switch identities), the
     !> scatter |mu_out/mu_in - 1| stays inside a generous physical bound, and
     !> the ensemble rms scatter agrees between the two gyrostep scales.
-    !> Entry angles avoid the corrupted volume-2 coefficient bands of this
-    !> fixture near theta = +-pi/2.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: tracer_t

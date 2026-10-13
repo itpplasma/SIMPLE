@@ -1,15 +1,18 @@
 program test_spectre_kicked_reflection
-    !> Kicked Level-1 reflection (CA15) on the axisymmetric two-volume
-    !> tok2vol fixture: a forbidden crossing relocates along the interface at
-    !> frozen (v_par, p, lambda, mu) to the conjugate equal-B point instead of
-    !> mirroring in place. Witnesses:
+    !> Kicked Level-1 reflection (CA15) on the current-free two-volume sheet
+    !> fixture tok2vol_sheet (circular interfaces, B = F_l/R per volume, a
+    !> pure-magnitude jump [[B]] > 0 outward). A forbidden crossing moves along
+    !> the interface at frozen (v_par, p, lambda, mu) until either the home
+    !> field returns to its entry value B* or the target field drops to B*.
+    !> With B proportional to 1/R on both sides:
     !>
-    !>   * the exit is a same-side CROSS_REFLECTION with v_par unchanged and a
-    !>     nonzero tangential displacement;
-    !>   * the home field at the exit equals the entry value to the relocation
-    !>     tolerance, so H = v_par^2/2 + mu B is exact algebraically;
-    !>   * on this up-down symmetric fixture the conjugate point of theta0 is
-    !>     -theta0 (modulo the measured asymmetry of the discrete chart);
+    !>   * a start near the |B| minimum (outboard, R(theta0)*(1+[[B]]/B) above
+    !>     the largest R) reflects on the same side at the up-down conjugate
+    !>     2 pi - theta0;
+    !>   * a start further inboard reaches the target level B* first and
+    !>     transmits into the outer volume at the equal-B point;
+    !>   * both exits keep v_par, p and lambda and land on the frozen field
+    !>     value, so H = v_par^2/2 + mu B is exact algebraically;
     !>   * an energetically allowed crossing still transmits (regression on the
     !>     radicand0 >= 0 branch).
 
@@ -35,11 +38,11 @@ program test_spectre_kicked_reflection
     type(tracer_t) :: norb
     type(crossing_info_t) :: info
     real(dp) :: y(5), y_out(5)
-    real(dp) :: th0, mu, vpar, bm_in, bm_out, jump_max, dir_jump_max
+    real(dp) :: th0, mu, vpar, jump_max, dir_jump_max
     logical :: failed
 
     if (command_argument_count() < 1) then
-        print *, 'usage: test_spectre_kicked_reflection <tok2vol.h5>'
+        print *, 'usage: test_spectre_kicked_reflection <tok2vol_sheet.h5>'
         error stop 1
     end if
     call get_command_argument(1, h5file)
@@ -57,48 +60,11 @@ program test_spectre_kicked_reflection
     print '(A,ES11.3,A,ES11.3)', 'interface scan: max [[B]]/B = ', jump_max, &
         '  max |1-cos([[h]])| = ', dir_jump_max
 
-    ! Entry near the |B| minimum at theta = 0, on the side the tangential
-    ! sheet drift (sign(ro0 h_zeta) in theta) leaves downhill in the home
-    ! field; the conjugate equal-B exit is 2 pi - theta0 by up-down symmetry.
-    ! The window [-0.8, 0.8] also avoids the corrupted volume-2 coefficient
-    ! bands of this fixture near theta = +-pi/2 (see the PR description).
-    th0 = 0.8_dp
-    if (drift_theta_sign(th0) > 0.0_dp) th0 = TWOPI - 0.8_dp
+    th0 = outboard_start(0.4_dp)
     call forbidden_state(th0, y, mu, vpar)
     call apply_crossing(y, 1, 1, 2, CROSSING_LEVEL1, y_out, info)
-
-    bm_in = bmod_side(1.0_dp - 1.0d-12, y(2), y(3))
-    bm_out = bmod_side(1.0_dp - 1.0d-12, y_out(2), y_out(3))
-    print '(A,I0,A,I0,A,ES11.3)', 'forbidden: event=', info%event_type, &
-        ' vol_to=', info%vol_to, '  dtheta = ', info%dtheta
-    print '(A,ES11.3,A,ES11.3)', '  |B_exit - B_entry|/B = ', &
-        abs(bm_out - bm_in)/bm_in, '  vpar_after - vpar = ', &
-        info%vpar_after - vpar
-
-    if (info%event_type /= CROSS_REFLECTION) then
-        print *, 'FAIL: forbidden crossing did not reflect'
-        failed = .true.
-    end if
-    if (info%vol_to /= 1) then
-        print *, 'FAIL: reflection left the home volume'
-        failed = .true.
-    end if
-    if (abs(info%dtheta) < 1.0d-6) then
-        print *, 'FAIL: relocation produced no tangential displacement'
-        failed = .true.
-    end if
-    if (abs(info%vpar_after - vpar) > 0.0_dp) then
-        print *, 'FAIL: relocation changed v_par'
-        failed = .true.
-    end if
-    if (any(abs(y_out(4:5) - y(4:5)) > 0.0_dp)) then
-        print *, 'FAIL: relocation changed p or lambda'
-        failed = .true.
-    end if
-    if (abs(bm_out - bm_in)/bm_in > EQUAL_B_TOL) then
-        print *, 'FAIL: exit field does not match the frozen entry value'
-        failed = .true.
-    end if
+    call check_relocation('reflection', CROSS_REFLECTION, 1, &
+        bmod_side(1.0_dp - 1.0d-12, y_out(2), y_out(3)))
     if (abs(mod(y_out(2) + 2.0_dp*TWOPI, TWOPI) &
             - mod(TWOPI - th0, TWOPI)) > CONJ_TOL) then
         print '(A,F10.6)', 'FAIL: exit not at the conjugate -theta0, theta = ', &
@@ -106,11 +72,17 @@ program test_spectre_kicked_reflection
         failed = .true.
     end if
 
+    th0 = outboard_start(0.8_dp)
+    call forbidden_state(th0, y, mu, vpar)
+    call apply_crossing(y, 1, 1, 2, CROSSING_LEVEL1, y_out, info)
+    call check_relocation('transmission', CROSS_CROSSING, 2, &
+        bmod_side(1.0_dp + 1.0d-12, y_out(2), y_out(3)))
+
     call allowed_state(th0, y, mu, vpar)
     call apply_crossing(y, 1, 1, 2, CROSSING_LEVEL1, y_out, info)
     print '(A,I0,A,I0)', 'allowed: event=', info%event_type, ' vol_to=', &
         info%vol_to
-    if (info%event_type /= CROSS_CROSSING) then
+    if (info%event_type /= CROSS_CROSSING .or. info%vol_to /= 2) then
         print *, 'FAIL: allowed crossing did not transmit'
         failed = .true.
     end if
@@ -119,6 +91,49 @@ program test_spectre_kicked_reflection
     print *, 'kicked Level-1 reflection PASS'
 
 contains
+
+    function outboard_start(th) result(th0)
+        !> theta or 2 pi - theta, whichever side the tangential sheet drift
+        !> (sign(ro0 h_zeta) in theta) leaves downhill in the home field.
+        real(dp), intent(in) :: th
+        real(dp) :: th0
+
+        th0 = th
+        if (drift_theta_sign(th0) > 0.0_dp) th0 = TWOPI - th
+    end function outboard_start
+
+    subroutine check_relocation(label, event_type, vol_to, bm_exit)
+        character(*), intent(in) :: label
+        integer, intent(in) :: event_type, vol_to
+        real(dp), intent(in) :: bm_exit
+
+        real(dp) :: bm_in
+
+        bm_in = bmod_side(1.0_dp - 1.0d-12, y(2), y(3))
+        print '(A,A,I0,A,I0,A,ES11.3,A,ES11.3)', label, ': event=', &
+            info%event_type, ' vol_to=', info%vol_to, '  dtheta = ', info%dtheta, &
+            '  |B_exit - B*|/B* = ', abs(bm_exit - bm_in)/bm_in
+        if (info%event_type /= event_type .or. info%vol_to /= vol_to) then
+            print *, 'FAIL: ', label, ' has the wrong event type or volume'
+            failed = .true.
+        end if
+        if (abs(info%dtheta) < 1.0d-6) then
+            print *, 'FAIL: ', label, ' produced no tangential displacement'
+            failed = .true.
+        end if
+        if (abs(info%vpar_after - vpar) > 0.0_dp) then
+            print *, 'FAIL: ', label, ' changed v_par'
+            failed = .true.
+        end if
+        if (any(abs(y_out(4:5) - y(4:5)) > 0.0_dp)) then
+            print *, 'FAIL: ', label, ' changed p or lambda'
+            failed = .true.
+        end if
+        if (abs(bm_exit - bm_in)/bm_in > EQUAL_B_TOL) then
+            print *, 'FAIL: ', label, ' exit field differs from the entry value'
+            failed = .true.
+        end if
+    end subroutine check_relocation
 
     subroutine write_input(h5)
         character(*), intent(in) :: h5

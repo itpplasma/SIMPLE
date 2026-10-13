@@ -295,9 +295,10 @@ contains
         real(dp) :: bm, bp, gm, gp, gm_prev, gp_prev, bmod_hit
         real(dp) :: th, ze, th_prev, ze_prev, th_hit, ze_hit
         real(dp) :: bm0, bp0, hcov(3), hctr(3), hcov_t(3), hctr_t(3)
-        integer :: k
+        integer :: k, vol_target
         logical :: reflect_hit, transmit_hit, valid
 
+        vol_target = info%vol_to
         ! Level-0 mirror defaults; every early return keeps them.
         dtheta = 0.0_dp
         dzeta = 0.0_dp
@@ -399,6 +400,7 @@ contains
             dzeta = ze_hit - zeta0
             vpar_new = vpar
             info%event_type = CROSS_CROSSING
+            info%vol_to = vol_target
             info%bmod_target = bmod_at([rho_target, th_hit, ze_hit])
         end if
     end subroutine relocate_forbidden

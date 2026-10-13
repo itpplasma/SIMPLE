@@ -112,7 +112,7 @@ target_link_libraries(test_spectre_kicked_reflection.x simple)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_kicked_reflection)
 add_test(NAME test_spectre_kicked_reflection
     COMMAND $<TARGET_FILE:test_spectre_kicked_reflection.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol_sheet.h5
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_kicked_reflection)
 set_tests_properties(test_spectre_kicked_reflection PROPERTIES
     LABELS "integration"
@@ -126,7 +126,7 @@ target_link_libraries(test_spectre_fo_mu_scatter.x simple)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
 add_test(NAME test_spectre_fo_mu_scatter
     COMMAND $<TARGET_FILE:test_spectre_fo_mu_scatter.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol_sheet.h5
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
 set_tests_properties(test_spectre_fo_mu_scatter PROPERTIES
     LABELS "integration"
