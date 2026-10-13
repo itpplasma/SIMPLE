@@ -216,6 +216,29 @@ step halving. Only one-step schemes are admitted (`ntau = 1` asserted); a
 persistent non-convergence terminates the orbit through the `CROSS_STOP`
 fallback, which the tok2vol tests assert does not occur.
 
+## Full orbit near interfaces (`crossing_level = 3`)
+
+MRxMHD interfaces are current sheets: the field direction jumps (tok2vol up to
+0.045 rad, the outer NCSX free-boundary interface up to 0.32 rad with
+`|B|` jumps of -25 to +38 %). No guiding-centre crossing map can be
+symplectic there while keeping the position, and the guiding-centre limit
+through a thin sheet does not exist; a full orbit through the sheet is
+well defined. With `crossing_level = 3` the symplectic guiding-centre path
+switches to the full orbit (`spectre_fo_hybrid`, Boris) when the guiding
+centre comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
+interface, and back when it is one gyroradius farther out.
+
+A fixed step that does not resolve the force jump at the sheet makes a
+zero-mean impulse error `~ h [[F]]` per crossing that random-walks the
+invariants. `spectre_fo_layer_larmor` replaces each interior interface by a
+smooth layer of that many gyroradii for the full orbit, and
+`spectre_fo_rotation` bounds the Boris step. On tok2vol at 3.5 keV
+(`test_spectre_fo_interfaces`) the relative spread of the exactly conserved
+canonical toroidal momentum over all full-orbit phases is 14 % with the
+sharp field at the default bound 0.05, 3.2 % at 0.0125, 4.0 % with a layer of
+0.2 gyroradii at 0.05, and 0.93 % with the layer at 0.0125. The prototype in
+`concept/symplectic_sheet` documents the underlying analysis.
+
 ## Physical caveat
 
 `mu` conservation through a zero-width sheet is a modeling convention: the

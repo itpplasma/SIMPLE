@@ -1035,7 +1035,10 @@ validation suite (#442). Example input: `examples/simple_spectre.in`.
 | `field_input` | string | `''` | SPECTRE HDF5 equilibrium (`.h5`); VMEC-free |
 | `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
-| `crossing_level` | int | 1 | interface crossing map: `1` = Level-1 refraction, `0` = Level-0 energy rescale |
+| `crossing_level` | int | 1 | interface crossing: `1` = Level-1 refraction, `0` = Level-0 energy rescale, `3` = full orbit near interfaces (symplectic path) |
+| `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
+| `spectre_fo_layer_larmor` | real | 0 | full-orbit smooth layer width in gyroradii; `0` keeps the sharp per-volume field |
+| `spectre_fo_rotation` | real | 0.05 | Boris step bound `h |B|/(2 ro0)` |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
 | `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |

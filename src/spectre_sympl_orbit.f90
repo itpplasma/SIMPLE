@@ -24,11 +24,13 @@ module spectre_sympl_orbit
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use interface_crossing, only: apply_crossing, crossing_info_t, &
         crossing_log_record, CROSS_LOSS, CROSS_STOP, CROSS_RECOVERY, CROSS_INVALID, &
-        CROSS_REFLECTION, CROSS_SHEET
+        CROSS_REFLECTION, CROSS_SHEET, CROSSING_FULL_ORBIT
     use spectre_sheet_gc, only: sheet_gc_state_t, sheet_gc_initialize, &
         sheet_gc_advance, sheet_gc_to_y, SHEET_GC_OK
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_enter, &
-        spectre_fo_advance_until_exit, SPECTRE_FO_OK, SPECTRE_FO_LOSS
+        spectre_fo_advance_until_exit, spectre_fo_radial_larmor, SPECTRE_FO_OK, &
+        SPECTRE_FO_LOSS
+    use params, only: spectre_fo_entry_larmor
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
     implicit none
@@ -199,7 +201,7 @@ contains
         type(field_can_t) :: f0
         type(crossing_info_t) :: info
         real(dp) :: budget, used, h_try, h_land, resid, y_iface(5), y_out(5)
-        real(dp) :: sheet_dt_used
+        real(dp) :: sheet_dt_used, exit_rho
         integer :: iters, nev, iface, direction, ierr_step, ierr_sheet, ierr_fo
         integer :: fo_owner
         integer :: prev_iface
@@ -295,6 +297,26 @@ contains
                 end if
                 exit
             end if
+            if (state%level == CROSSING_FULL_ORBIT) then
+                call interface_proximity(state, si, f, y_iface, iface, exit_rho)
+                if (iface > 0) then
+                    call start_fo(state, si, f, y_iface, nint(state%home_hi), &
+                        iface, budget, used, y_out, fo_owner, fo_exited, ierr_fo, &
+                        exit_rho)
+                    if (ierr_fo /= SPECTRE_FO_OK) then
+                        if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
+                            budget, used, ierr, t_frac)) exit
+                        call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
+                            dt_sec*used/state%dt_std, iface, 0, STOP_SHEET, used, &
+                            state%dt_std, ierr, t_frac)
+                        exit
+                    end if
+                    if (.not. fo_exited .or. &
+                        budget <= budget_eps*state%dt_std) exit
+                    h_try = budget
+                    cycle
+                end if
+            end if
             si0 = si
             f0 = f
             si%dt = h_try
@@ -384,6 +406,29 @@ contains
                 cycle
             end if
             call landed_state(si, f, real(iface, dp), direction, y_iface)
+            if (state%level == CROSSING_FULL_ORBIT .and. iface >= 1 .and. &
+                iface < state%mvol) then
+                ! The guiding centre stepped onto the interface without passing
+                ! the proximity test: continue in full orbit from the landing.
+                used = used + h_land
+                budget = state%dt_std - used
+                call update_landing_stats(resid)
+                call fo_exit_distance(state, y_iface, exit_rho)
+                call start_fo(state, si, f, y_iface, nint(state%home_hi), iface, &
+                    budget, used, y_out, fo_owner, fo_exited, ierr_fo, exit_rho)
+                if (ierr_fo /= SPECTRE_FO_OK) then
+                    if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
+                        budget, used, ierr, t_frac)) exit
+                    call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
+                        dt_sec*used/state%dt_std, iface, direction, STOP_LANDING, &
+                        used, state%dt_std, ierr, t_frac)
+                    exit
+                end if
+                if (.not. fo_exited .or. &
+                    budget <= budget_eps*state%dt_std) exit
+                h_try = budget
+                cycle
+            end if
             call apply_crossing(y_iface, iface, direction, state%mvol, &
                 state%level, y_out, info)
             if (info%event_type == CROSS_INVALID) then
@@ -751,8 +796,50 @@ contains
         lambda = sign(sqrt(lambda2), f%vpar)
     end function shell_pitch
 
+    subroutine interface_proximity(state, si, f, y, iface, exit_rho)
+        !> Nearest interior interface iface if the guiding centre is closer to
+        !> it than spectre_fo_entry_larmor radial gyroradii, else iface = 0. y
+        !> is the guiding-centre state and exit_rho the matching exit distance.
+        type(sympl_spectre_state_t), intent(in) :: state
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(in) :: f
+        real(dp), intent(out) :: y(5), exit_rho
+        integer, intent(out) :: iface
+
+        real(dp) :: rho_r
+        integer :: k, status
+
+        iface = 0
+        exit_rho = 0.0_dp
+        call integrator_state(si, f, y)
+        k = nint(y(1))
+        if (k < 1 .or. k >= state%mvol) return
+        call spectre_fo_radial_larmor(y, nint(state%home_hi), ro0/sqrt2, rho_r, &
+            status)
+        if (status /= SPECTRE_FO_OK) return
+        if (abs(y(1) - real(k, dp)) >= spectre_fo_entry_larmor*rho_r) return
+        iface = k
+        exit_rho = (spectre_fo_entry_larmor + 1.0_dp)*rho_r
+    end subroutine interface_proximity
+
+    subroutine fo_exit_distance(state, y, exit_rho)
+        !> Exit distance (rho_g) for a full orbit started on an interface.
+        type(sympl_spectre_state_t), intent(in) :: state
+        real(dp), intent(in) :: y(5)
+        real(dp), intent(out) :: exit_rho
+
+        real(dp) :: rho_r
+        integer :: status
+
+        call spectre_fo_radial_larmor(y, nint(state%home_hi), ro0/sqrt2, rho_r, &
+            status)
+        exit_rho = 0.0_dp
+        if (status == SPECTRE_FO_OK) &
+            exit_rho = (spectre_fo_entry_larmor + 1.0_dp)*rho_r
+    end subroutine fo_exit_distance
+
     subroutine start_fo(state, si, f, y, owner, iface, budget, used, y_out, &
-            owner_out, exited, ierr)
+            owner_out, exited, ierr, exit_rho)
         type(sympl_spectre_state_t), intent(inout) :: state
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -762,6 +849,9 @@ contains
         real(dp), intent(out) :: y_out(5)
         integer, intent(out) :: owner_out, ierr
         logical, intent(out) :: exited
+        !> Leave the full orbit once the guiding centre is this far (rho_g)
+        !> from the interface; default: the gyrophase-based legacy rule.
+        real(dp), intent(in), optional :: exit_rho
 
         y_out = y
         owner_out = owner
@@ -772,6 +862,7 @@ contains
             call count_fo_failure(ierr)
             return
         end if
+        if (present(exit_rho)) state%fo%exit_rho = exit_rho
         call count_fo_entry
         call continue_fo(state, si, f, budget, used, y_out, owner_out, &
             exited, ierr)

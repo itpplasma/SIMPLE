@@ -13,7 +13,12 @@ module spectre_fo_hybrid
     integer, parameter, public :: SPECTRE_FO_LOSS = 6
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), parameter :: OWNER_EPS = 1.0e-12_dp
-    real(dp), parameter :: MAX_ROTATION_PARAMETER = 0.05_dp
+    !> Boris step bound h |B| / (2 ro0) <= rotation_parameter, and the width of
+    !> the smooth layer that replaces each interior interface for the full
+    !> orbit, in gyroradii (0: the sharp per-volume field). Set by
+    !> spectre_fo_configure; read-only during tracing.
+    real(dp) :: rotation_parameter = 0.05_dp
+    real(dp) :: layer_larmor = 0.0_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
     integer, parameter :: NPHASE = 64
     type, public :: spectre_fo_state_t
@@ -23,15 +28,29 @@ module spectre_fo_hybrid
         real(dp) :: last_y(5) = 0.0_dp
         real(dp) :: entry_rho = 0.0_dp
         real(dp) :: entry_pzeta = 0.0_dp
+        !> Smooth-layer width in rho_g, fixed at entry from the gyroradius.
+        real(dp) :: layer_rho = 0.0_dp
+        !> Exit when the guiding centre is farther than this from the interface
+        !> (rho_g); 0 keeps the gyrophase-based legacy rule.
+        real(dp) :: exit_rho = 0.0_dp
         integer :: owner = 0
         integer :: iface = 0
         logical :: has_y = .false.
         logical :: active = .false.
     end type spectre_fo_state_t
-    public :: spectre_fo_enter, spectre_fo_to_gc
+    public :: spectre_fo_enter, spectre_fo_to_gc, spectre_fo_configure
+    public :: spectre_fo_radial_larmor
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta
 contains
+    subroutine spectre_fo_configure(rotation, layer)
+        real(dp), intent(in) :: rotation, layer
+
+        if (rotation <= 0.0_dp .or. layer < 0.0_dp) &
+            error stop 'spectre_fo_configure: invalid rotation or layer width'
+        rotation_parameter = rotation
+        layer_larmor = layer
+    end subroutine spectre_fo_configure
     subroutine spectre_fo_enter(state, y, owner, iface, ro0_bar, status)
         type(spectre_fo_state_t), intent(out) :: state
         real(dp), intent(in) :: y(5), ro0_bar
@@ -68,8 +87,67 @@ contains
         state%x = x_gc + (ro0_bar/bmod)*cross(b, vperp*eperp)
         call locate_cart(state%x, state%u, state%owner, status)
         if (status /= SPECTRE_FO_OK) return
+        state%layer_rho = layer_larmor*(ro0_bar*vperp/bmod)/M_TO_CM &
+                          *radial_gradient(y(1:3))
         state%active = .true.
     end subroutine spectre_fo_enter
+    subroutine spectre_fo_radial_larmor(y, owner, ro0_bar, rho_r, status)
+        !> Gyroradius of the guiding-centre state y in rho_g units.
+        real(dp), intent(in) :: y(5), ro0_bar
+        integer, intent(in) :: owner
+        real(dp), intent(out) :: rho_r
+        integer, intent(out) :: status
+        real(dp) :: x(3), b(3), bmod, acov(3), e_zeta(3), vpar, vperp
+
+        rho_r = 0.0_dp
+        call logical_sample(y(1:3), owner, x, b, bmod, acov, e_zeta, status)
+        if (status /= SPECTRE_FO_OK) return
+        vpar = sqrt(2.0_dp)*y(4)*y(5)
+        vperp = sqrt(max(2.0_dp*y(4)**2 - vpar**2, 0.0_dp))
+        rho_r = ro0_bar*vperp/bmod/M_TO_CM*radial_gradient(y(1:3))
+    end subroutine spectre_fo_radial_larmor
+    real(dp) function radial_gradient(u) result(grad)
+        !> |grad rho_g| per metre at the logical point u.
+        real(dp), intent(in) :: u(3)
+        real(dp) :: g(3, 3), ginv(3, 3), sqrtg
+
+        call spectre_field%coords%metric_tensor(u, g, ginv, sqrtg)
+        grad = sqrt(ginv(1, 1))
+    end function radial_gradient
+    subroutine layer_sample(layer_rho, u, owner, b, bmod, status)
+        !> Field for the full orbit: inside the layer |rho_g - k| < w/2 around
+        !> an interior interface k it blends the two volumes' fields (each held
+        !> at its interface value beyond its edge) with a C2 quintic step; B.n
+        !> vanishes on both sides, so the blend stays divergence-free to O(w).
+        real(dp), intent(in) :: layer_rho, u(3)
+        integer, intent(in) :: owner
+        real(dp), intent(inout) :: b(3), bmod
+        integer, intent(out) :: status
+        real(dp) :: x(3), b_other(3), bmod_other, acov(3), e_zeta(3), xi, s
+        real(dp) :: b_low(3), b_high(3)
+        integer :: k, other
+
+        status = SPECTRE_FO_OK
+        if (layer_rho <= 0.0_dp) return
+        k = nint(u(1))
+        if (k < 1 .or. k >= spectre_field%data%Mvol) return
+        if (abs(u(1) - real(k, dp)) >= 0.5_dp*layer_rho) return
+        other = merge(k + 1, k, owner == k)
+        call logical_sample(u, other, x, b_other, bmod_other, acov, e_zeta, status)
+        if (status /= SPECTRE_FO_OK) return
+        if (owner == k) then
+            b_low = bmod*b
+            b_high = bmod_other*b_other
+        else
+            b_low = bmod_other*b_other
+            b_high = bmod*b
+        end if
+        xi = (u(1) - real(k, dp))/layer_rho + 0.5_dp
+        s = xi**3*(10.0_dp - 15.0_dp*xi + 6.0_dp*xi*xi)
+        b = (1.0_dp - s)*b_low + s*b_high
+        bmod = norm2(b)
+        b = b/bmod
+    end subroutine layer_sample
     subroutine spectre_fo_advance_until_exit(state, dt, ro0_bar, dt_used, y, &
             owner, exited, status, h_scale)
         type(spectre_fo_state_t), intent(inout) :: state
@@ -109,7 +187,7 @@ contains
             call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
                 e_zeta, status)
             if (status /= SPECTRE_FO_OK) return
-            h = min(remaining, hfac*2.0_dp*MAX_ROTATION_PARAMETER*ro0_bar/bmod)
+            h = min(remaining, hfac*2.0_dp*rotation_parameter*ro0_bar/bmod)
             call boris_substep(state, h, ro0_bar, status)
             if (status /= SPECTRE_FO_OK) return
             dt_used = dt_used + h
@@ -213,7 +291,9 @@ contains
             e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
         radial_larmor = max(abs(state%u(1) - y_gc(1)), 1.0e-8_dp)
-        if (state%iface == 0) then
+        if (state%exit_rho > 0.0_dp) then
+            exited = abs(y_gc(1) - real(state%iface, dp)) > state%exit_rho
+        else if (state%iface == 0) then
             exited = abs(y_gc(1) - state%entry_rho) > 4.0_dp*radial_larmor
         else
             exited = abs(y_gc(1) - real(state%iface, dp)) > &
@@ -256,6 +336,9 @@ contains
             owner_mid = state%owner
             call cart_sample(xmid, u_mid, owner_mid, b, bmod, acov, &
                 e_zeta, status)
+            if (status == SPECTRE_FO_OK) &
+                call layer_sample(state%layer_rho, u_mid, owner_mid, b, bmod, &
+                    status)
             if (status /= SPECTRE_FO_OK) then
                 if (state%owner == spectre_field%data%Mvol .and. &
                     state%u(1) >= real(state%owner, dp) - OWNER_EPS) then
@@ -266,7 +349,7 @@ contains
                 h = 0.5_dp*h
                 cycle
             end if
-            h_bound = 2.0_dp*MAX_ROTATION_PARAMETER*ro0_bar/bmod
+            h_bound = 2.0_dp*rotation_parameter*ro0_bar/bmod
             if (h > h_bound*(1.0_dp + 4.0_dp*epsilon(1.0_dp))) then
                 h = h_bound
                 cycle
@@ -309,7 +392,7 @@ contains
         integer, intent(in) :: owner
         real(dp), intent(out) :: alpha
         integer, intent(out) :: status
-        real(dp) :: a0, a1, f0, f1, amid, fmid, scale
+        real(dp) :: a0, a1, f0, f1, amid, fmid, scale, best_residual, best_alpha
         integer :: i, ierr
         logical :: have_previous
         if (vperp <= sqrt(epsilon(1.0_dp))) then
@@ -327,6 +410,8 @@ contains
             return
         end if
         have_previous = .false.
+        best_residual = huge(1.0_dp)
+        best_alpha = 0.0_dp
         do i = 0, NPHASE
             a1 = 8.0_dp*atan(1.0_dp)*real(i, dp)/real(NPHASE, dp)
             call phase_residual(a1, x_gc, u_gc, owner, b, e1, e2, vpar, &
@@ -334,6 +419,10 @@ contains
             if (ierr /= SPECTRE_FO_OK) then
                 have_previous = .false.
                 cycle
+            end if
+            if (abs(f1) < best_residual) then
+                best_residual = abs(f1)
+                best_alpha = a1
             end if
             if (f1 == 0.0_dp) then
                 alpha = a1
@@ -348,7 +437,15 @@ contains
             have_previous = .true.
         end do
         if (i > NPHASE) then
-            status = SPECTRE_FO_GYROPHASE_FAIL
+            ! The gyrophase variation of p_zeta, proportional to v_perp, does
+            ! not reach the guiding-centre value (strongly passing markers):
+            ! take the closest gyrophase, an O(gyroradius^2) p_zeta error.
+            if (best_residual == huge(1.0_dp)) then
+                status = SPECTRE_FO_GYROPHASE_FAIL
+                return
+            end if
+            alpha = best_alpha
+            status = SPECTRE_FO_OK
             return
         end if
         do i = 1, 60
