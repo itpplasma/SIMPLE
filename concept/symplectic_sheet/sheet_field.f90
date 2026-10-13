@@ -26,7 +26,7 @@ module sheet_field
 
     public :: field_params_t, hamiltonian, grad_hamiltonian, hess_hamiltonian
     public :: sheet_distance, grad_sheet_distance, region_of, minor_radius
-    public :: bfield, psi_value
+    public :: bfield, psi_value, psi_derivatives
 
     type :: field_params_t
         real(dp) :: r_major = 10.0_dp

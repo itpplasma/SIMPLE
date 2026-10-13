@@ -16,12 +16,12 @@ module fo_sheet
     !> differentiation of the midpoint, landing and energy-matching conditions.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use sheet_field, only: field_params_t, hamiltonian, grad_hamiltonian, &
-        hess_hamiltonian, sheet_distance, grad_sheet_distance, region_of
+        hess_hamiltonian, sheet_distance, grad_sheet_distance, region_of, bfield
     implicit none
     private
 
     public :: midpoint_step, sheet_step, tangent_map, poincare_step, &
-        poincare_gauss2_step
+        poincare_gauss2_step, boris_step
     public :: step_stats_t, step_record_t, poincare_params_t
     public :: SCHEME_LANDING, SCHEME_NAIVE, SCHEME_MIDPOINT_REGION
 
@@ -227,6 +227,36 @@ contains
         z1 = z0 + 0.5_dp*dtau*(f(:, 1) + f(:, 2))
         dt = 0.5_dp*dtau*(g(1) + g(2))
     end subroutine poincare_gauss2_step
+
+    subroutine boris_step(par, x, v, h)
+        !> Boris push in Cartesian (x, y, z) with the field of the local region:
+        !> half-step drift, velocity rotation about B(x), half-step drift. It
+        !> preserves phase-space volume and |v| exactly, not p_phi.
+        type(field_params_t), intent(in) :: par
+        real(dp), intent(inout) :: x(3), v(3)
+        real(dp), intent(in) :: h
+
+        real(dp) :: rr, c, s, bc(3), b(3), t(3), sv(3), vp(3)
+
+        x = x + 0.5_dp*h*v
+        rr = hypot(x(1), x(2))
+        c = x(1)/rr
+        s = x(2)/rr
+        call bfield(par, [rr, x(3)], bc)
+        b = [bc(1)*c - bc(2)*s, bc(1)*s + bc(2)*c, bc(3)]
+        t = 0.5_dp*h*b
+        sv = 2.0_dp*t/(1.0_dp + dot_product(t, t))
+        vp = v + cross3(v, t)
+        v = v + cross3(vp, sv)
+        x = x + 0.5_dp*h*v
+    end subroutine boris_step
+
+    pure function cross3(a, b) result(c)
+        real(dp), intent(in) :: a(3), b(3)
+        real(dp) :: c(3)
+
+        c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), a(1)*b(2) - a(2)*b(1)]
+    end function cross3
 
     subroutine grad_k(par, pp, z, e0, gk, g)
         !> Gradient of K = g (H - e0).

@@ -79,6 +79,62 @@ error at the end):
    is about 4 times faster than the bounded-energy symplectic scheme over
    4e5 time units, with an energy error 70 times larger and growing.
 
+## Boris
+
+`boris_step` (Cartesian, field of the local region) keeps `|v|` and phase-space
+volume exactly but is not symplectic. Strong sheet (`a_out = 2`,
+`p_phi = 0.45`), rms dmu/mu against the RK45 reference 1.68e-2:
+
+| field | h | rms dmu/mu | wall s (T = 4e4) |
+|---|---|---|---|
+| sharp | 0.1 / 0.05 / 0.025 | 0.166 / 0.090 / 0.049 | 1.1 / 2.2 / 6.4 |
+| layer w = 1e-2 | 0.1 / 0.05 / 0.025 / 0.0125 | 2.44e-2 / 1.73e-2 / 1.66e-2 / 1.67e-2 | 1.0 / 2.4 / 4.8 / 8.4 |
+
+On the sharp sheet it has the same `h sqrt(N)` scattering as every unresolved
+fixed step. On a resolved layer it is accurate and as fast as RK45 with an
+exact energy; at h = 0.05 over T = 4e5 the spread reaches 1.84e-2 against
+1.66e-2, so h = 0.025 is the safe choice there.
+
+## GC away from the sheet (`gc_hybrid.f90`, `study_hybrid.f90`)
+
+GC drift equations (RK45, tol 1e-10) where the GC is farther than `D_OUT`
+gyroradii from the sheet, FO (RK45 on the sharp sheet) within `D_IN`.
+FO -> GC is the first-order transform with mu chosen to conserve the energy
+exactly; GC -> FO lifts with the advanced gyrophase. Energy is conserved
+through every switch (round trip error O(rho^2) in position, 1e-13 in
+energy). Weak poloidal field (`a_in = 0.25`, `a_out = 0.75`, q ~ 2), D_IN = 3,
+D_OUT = 4, T = 4e4:
+
+| v (rho) | switches per marker | rms dp_phi (FO everywhere: 0) | rms dmu/mu hybrid / FO everywhere |
+|---|---|---|---|
+| 0.01 | 1.6 | 3.2e-5 | 1.8e-3 / 0.5e-3 |
+| 0.02 | 2.4 | 2.1e-4 | 1.6e-3 / 0.9e-3 |
+| 0.04 | 3.0 | 9.8e-4 | 3.4e-3 / 1.05e-3 |
+
+Each switch makes an error set by the order of the GC transform: the
+canonical momentum p_phi, exactly conserved physically, jumps by roughly
+`rho^2` per switch, and these errors random-walk with the number of
+switches. Symplecticity does not remove this; a higher-order transform or
+fewer switches (hysteresis) does. A lift that picks the gyrophase keeping
+p_phi exact (axisymmetric only) reduces but does not remove it.
+
+## Real SPECTRE interfaces
+
+`tools/spectre_interface_jumps.f90` (built against a SIMPLE build, see its
+header) evaluates the true field at `rho_g = k -+ 1e-10` on a 128 x 64 grid:
+
+| fixture, interface | direction jump max (rms) | `|B+|/|B-| - 1` |
+|---|---|---|
+| tok2vol_sheet | 0 | +1.1 % |
+| tok2vol | 0.045 rad (0.029) | +1.0 to +1.2 % |
+| NCSX free boundary, 1 | 0.054 rad (0.020) | +1 to +8 % |
+| NCSX free boundary, 2 | 0.32 rad (0.11) | -25 to +38 % |
+
+The outer NCSX interface is a strong sheet, comparable to or stronger than
+the prototype's `a_out = 2` case. The tangential vector potential jumps at
+every interface (per-volume gauge), so a full orbit in a global chart needs
+the gauges of neighbouring volumes matched first.
+
 ## Error of a fixed step across a force jump
 
 Let a step of length `h` cross the sheet at the fraction `theta` of the step,
