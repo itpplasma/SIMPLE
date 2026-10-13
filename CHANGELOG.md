@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | PR #527 2026-10-13 | Fix the sign of the curvature drift (`hcurl`) for SPECTRE fields and for unsplined reference fields on the RK45 path: both passed component-first `d h_i/dx_j` to `compute_hcurl`, which takes the derivative index first. A forbidden Level-1 crossing that relocates to a transmission now enters the target volume instead of staying owned by the home volume. The tok2vol test fixture is replaced by a valid current-carrying equilibrium; the current-free sheet fixture tok2vol_sheet serves the pure-magnitude interface tests. |
 | Y | PR #503 2026-07-22 | In warning mode, recover a failed conventional guiding-centre interval with toroidal regularization and, only at an unresolved polar axis, a Cartesian full-orbit bridge. Preserve the last accepted momentum shell, return to the requested symplectic method after a safe streak, and retain the bounded isolated-warning hold instead of freezing a marker indefinitely. Successful legacy steps are unchanged. |
 | N | v1.5.1 (release/1.5) 2025-12-23 | Use atomic updates when incrementing the confined pass/trap counters so each branch stays thread-safe without enclosing the entire branch in an OpenMP critical region. |
 | N | v1.4.2 (release/1.4) 2025-12-23 | Backport the atomic-update behavior for confined counters so release/1.4 matches v1.5.1’s threading sync. |

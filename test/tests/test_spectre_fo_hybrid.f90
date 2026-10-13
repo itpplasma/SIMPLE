@@ -75,8 +75,9 @@ program test_spectre_fo_hybrid
     call spectre_field%evaluate(u_eval, acov, hcov, bmod, sqgb)
     pzeta_gc = sqrt(2.0_dp)*y_back(4)*y_back(5)*hcov(3)*M_TO_CM + &
         acov(3)*A_SCALE/RO0_BAR
-    if (abs(pzeta_gc - pzeta_particle) > &
-        2.0e-10_dp*max(abs(pzeta_particle), 1.0_dp)) &
+    ! The axisymmetric GC map restores the entry P_zeta, the exact invariant,
+    ! not the Boris value, which drifts within the bound checked above.
+    if (abs(pzeta_gc - target) > 2.0e-10_dp*max(abs(target), 1.0_dp)) &
         error stop 'reconstruction P_zeta mismatch'
     if (abs(mu_bar - y_back(4)**2*(1.0_dp - y_back(5)**2)/ &
         (bmod*TESLA_TO_GAUSS)) > 64.0_dp*epsilon(1.0_dp)*max(mu_bar, 1.0_dp)) &
