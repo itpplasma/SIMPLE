@@ -1,15 +1,22 @@
-"""
-Simple module-level API for SIMPLE - mirroring Fortran global state.
+"""Python interface to SIMPLE.
 
-Usage:
+pysimple is a thin layer over the Fortran module ``simple_api``. A run is
+configured by the ``&config`` namelist of ``simple.in``; every keyword argument
+of :func:`init` is a ``&config`` name (see ``examples/simple_full.in``)::
+
     import pysimple
 
-    pysimple.init('wout.nc', deterministic=True, ntestpart=100)
-    particles = pysimple.sample_surface(100, s=0.5)
-    pysimple.trace(particles, tmax=1e-3)
+    pysimple.init(config="simple.in")             # exactly as simple.x
+    pysimple.init("wout.nc", trace_time=1e-3)     # equilibrium plus settings
+    pysimple.init("wout.nc", config="simple.in")  # file with overrides
 
-    # Direct parameter access
-    pysimple.params.trace_time = 2e-3
+    start = pysimple.sample()                     # as configured by startmode
+    result = pysimple.trace_parallel(start)
+
+States are ``(s, theta, phi, v/v0, v_par/v)`` in reference coordinates and
+have shape ``(5,)`` for one particle or ``(5, n)`` for ``n`` particles.
+Angles are radians. ``pysimple.params`` exposes the Fortran ``params`` module
+for reading derived values such as ``params.v0``.
 """
 
 from __future__ import annotations
@@ -19,43 +26,33 @@ from typing import Any
 
 import numpy as np
 
-from ._bminmax import needs_bminmax_cache as _needs_bminmax_cache
-
 try:
-    import simple_backend as _fortran_backend
+    import simple_backend as _backend
 except ImportError as exc:
-    if getattr(exc, "name", None) == "f90wrap":
-        raise ImportError(
-            "f90wrap is required to import SIMPLE Python bindings. Install f90wrap."
-        ) from exc
-    if getattr(exc, "name", None) == "_simple_backend":
-        raise ImportError(
-            "Fortran extension _simple_backend failed to import. "
-            "Rebuild SIMPLE with Python bindings enabled."
-        ) from exc
     raise ImportError(
-        "simple_backend module not found. Build SIMPLE with Python bindings enabled."
+        "SIMPLE Python bindings not found. Build SIMPLE with "
+        "ENABLE_PYTHON_INTERFACE=ON or install it with pip."
     ) from exc
 
-# Integration mode constants (mirroring orbit_symplectic_base.f90)
-RK45 = 0
-EXPL_IMPL_EULER = 1
-IMPL_EXPL_EULER = 2
-MIDPOINT = 3
-GAUSS1 = 4
-GAUSS2 = 5
-GAUSS3 = 6
-GAUSS4 = 7
-LOBATTO3 = 15
+_api = _backend.simple_api
+params = _backend.params
 
-_INTEGRATOR_ALIASES: dict[str, int] = {
+_integrators = _backend.orbit_symplectic_base
+RK45 = _integrators.rk45
+EXPL_IMPL_EULER = _integrators.expl_impl_euler
+IMPL_EXPL_EULER = _integrators.impl_expl_euler
+MIDPOINT = _integrators.midpoint
+GAUSS1 = _integrators.gauss1
+GAUSS2 = _integrators.gauss2
+GAUSS3 = _integrators.gauss3
+GAUSS4 = _integrators.gauss4
+LOBATTO3 = _integrators.lobatto3
+
+_INTEGRATORS = {
     "rk45": RK45,
     "expl_impl_euler": EXPL_IMPL_EULER,
-    "explicit_implicit_euler": EXPL_IMPL_EULER,
     "impl_expl_euler": IMPL_EXPL_EULER,
-    "implicit_explicit_euler": IMPL_EXPL_EULER,
     "midpoint": MIDPOINT,
-    "symplectic_midpoint": MIDPOINT,
     "gauss1": GAUSS1,
     "gauss2": GAUSS2,
     "gauss3": GAUSS3,
@@ -63,648 +60,306 @@ _INTEGRATOR_ALIASES: dict[str, int] = {
     "lobatto3": LOBATTO3,
 }
 
-ORBIT_CLASS_UNKNOWN = 0
-ORBIT_CLASS_TRAPPED = 1
-ORBIT_CLASS_PASSING = 2
+_frequencies = _backend.orbit_frequencies
+ORBIT_CLASS_UNKNOWN = _frequencies.orbit_class_unknown
+ORBIT_CLASS_TRAPPED = _frequencies.orbit_class_trapped
+ORBIT_CLASS_PASSING = _frequencies.orbit_class_passing
+FREQ_SUCCESS = _frequencies.freq_success
+FREQ_INVALID_INPUT = _frequencies.freq_invalid_input
+FREQ_ORBIT_LOST = _frequencies.freq_orbit_lost
+FREQ_INTEGRATOR_ERROR = _frequencies.freq_integrator_error
+FREQ_MAX_STEPS = _frequencies.freq_max_steps
 
-FREQ_SUCCESS = 0
-FREQ_INVALID_INPUT = 1
-FREQ_ORBIT_LOST = 2
-FREQ_INTEGRATOR_ERROR = 3
-FREQ_MAX_STEPS = 4
+_invariants = _backend.orbit_invariants
+INVARIANT_SUCCESS = _invariants.invariant_success
+INVARIANT_INVALID_INPUT = _invariants.invariant_invalid_input
+INVARIANT_NOT_AXISYMMETRIC = _invariants.invariant_not_axisymmetric
+INVARIANT_NO_INTERSECTION = _invariants.invariant_no_intersection
+INVARIANT_ROOT_FAILURE = _invariants.invariant_root_failure
+INVARIANT_CAPACITY = _invariants.invariant_capacity
+SECTION_EXTREMUM_UNKNOWN = _invariants.section_extremum_unknown
+SECTION_B_MINIMUM = _invariants.section_b_minimum
+SECTION_B_MAXIMUM = _invariants.section_b_maximum
 
-INVARIANT_SUCCESS = 0
-INVARIANT_INVALID_INPUT = 1
-INVARIANT_NOT_AXISYMMETRIC = 2
-INVARIANT_NO_INTERSECTION = 3
-INVARIANT_ROOT_FAILURE = 4
-INVARIANT_CAPACITY = 5
-
-SECTION_EXTREMUM_UNKNOWN = 0
-SECTION_B_MINIMUM = 1
-SECTION_B_MAXIMUM = 2
-
+CUT_ANY = -1
 CUT_TIP = 0
 CUT_TOROIDAL = 1
+_CUTS = {"any": CUT_ANY, "tip": CUT_TIP, "toroidal": CUT_TOROIDAL}
 
-# Default spline orders used by Fortran
-DEFAULT_NS_S = 5
-DEFAULT_NS_TP = 5
-DEFAULT_MULTHARM = 5
+_ORBIT_CLASS_NAMES = {
+    ORBIT_CLASS_UNKNOWN: "unknown",
+    ORBIT_CLASS_TRAPPED: "trapped",
+    ORBIT_CLASS_PASSING: "passing",
+}
+_SECTION_NAMES = {
+    SECTION_EXTREMUM_UNKNOWN: "unknown",
+    SECTION_B_MINIMUM: "B_min",
+    SECTION_B_MAXIMUM: "B_max",
+}
+_CUT_NAMES = {CUT_TIP: "tip", CUT_TOROIDAL: "toroidal"}
 
-# Field type constants (mirroring magfie_sub.f90)
-_TEST_FIELD_ID = -1
-_VMEC_FIELD_ID = 1
-_BOOZER_FIELD_ID = 2
-
-# Direct access to Fortran params module
-params = _fortran_backend.params
-
-# Module-level simple_main instance (Fortran module exposed as class by f90wrap)
-_simple_main = _fortran_backend.Simple_Main()
-
-# Module state
 _initialized = False
-_current_vmec: str | None = None
-_current_chartmap = False
-_tracer: "_fortran_backend.simple.tracer_t | None" = None
-_field_key: "tuple | None" = None
+
+# Record the compiled defaults before anything changes a &config value.
+_api.simple_reset_config()
 
 
-def _is_test_field() -> bool:
-    return int(_fortran_backend.velo_mod.isw_field_type) == _TEST_FIELD_ID
+def _check(status_message: tuple[int, str], what: str) -> None:
+    status, message = status_message
+    if status != 0:
+        raise ValueError(f"{what}: {message.strip() or f'status {status}'}")
 
 
-def _is_boozer_chartmap(path: str) -> bool:
-    """Return whether *path* declares the Boozer chart-map file contract."""
-    try:
-        import netCDF4
-    except ImportError as exc:
-        raise ImportError(
-            "netCDF4 is required to initialize SIMPLE from a NetCDF equilibrium"
-        ) from exc
-
-    try:
-        with netCDF4.Dataset(path, "r") as dataset:
-            return int(dataset.getncattr("boozer_field")) == 1
-    except (AttributeError, OSError, TypeError, ValueError):
-        return False
+def _namelist_value(value: Any) -> str:
+    if isinstance(value, (bool, np.bool_)):
+        return ".true." if value else ".false."
+    if isinstance(value, (str, Path)):
+        return "'" + str(value).replace("'", "''") + "'"
+    if np.ndim(value) > 0:
+        return ", ".join(_namelist_value(item) for item in np.ravel(value))
+    return repr(value.item() if isinstance(value, np.generic) else value)
 
 
-def _sampling_rng() -> np.random.Generator:
-    deterministic = bool(getattr(params, "deterministic", False))
-    seed = 0 if deterministic else None
-    return np.random.default_rng(seed)
+def _set_config(**settings: Any) -> None:
+    for name, value in settings.items():
+        text = f"&config {name} = {_namelist_value(value)} /"
+        _check(_api.simple_set_config(text), f"&config {name}")
 
 
-def _capture_test_field_bounds() -> tuple[float, float, float]:
-    original_bmod00 = float(getattr(params, "bmod00", 1.0))
-    original_bmin = float(getattr(params, "bmin", 1.0))
-    original_bmax = float(getattr(params, "bmax", 1.0))
-    return original_bmod00, original_bmin, original_bmax
+def _require_init() -> None:
+    if not _initialized:
+        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
 
 
-def _apply_test_field_bounds(r_value: float) -> None:
-    if hasattr(params, "bmod00"):
-        params.bmod00 = 1.0
-    if hasattr(params, "bmax"):
-        params.bmax = 1.0 + float(r_value)
-    if hasattr(params, "bmin"):
-        params.bmin = 1.0 - float(r_value)
+def _integrator_code(integrator: str | int) -> int:
+    if isinstance(integrator, str):
+        try:
+            return _INTEGRATORS[integrator.lower()]
+        except KeyError:
+            raise ValueError(f"Unknown integrator: {integrator}") from None
+    return int(integrator)
 
 
-def _restore_test_field_bounds(original: tuple[float, float, float]) -> None:
-    if hasattr(params, "bmod00"):
-        params.bmod00 = original[0]
-    if hasattr(params, "bmin"):
-        params.bmin = original[1]
-    if hasattr(params, "bmax"):
-        params.bmax = original[2]
+def _use_integrator(integrator: str | int | None) -> None:
+    if integrator is not None:
+        params.integmode = _integrator_code(integrator)
+
+
+def _state(position: np.ndarray) -> np.ndarray:
+    state = np.asarray(position, dtype=np.float64)
+    if state.shape != (5,):
+        raise ValueError(f"position must have shape (5,), got {state.shape}")
+    return state
+
+
+def _states(positions: np.ndarray) -> np.ndarray:
+    states = np.asfortranarray(positions, dtype=np.float64)
+    if states.ndim != 2 or states.shape[0] != 5:
+        raise ValueError(
+            f"positions must have shape (5, n_particles), got {states.shape}"
+        )
+    return states
 
 
 def init(
-    vmec_file: str | Path,
+    field: str | Path | None = None,
     *,
-    ns_s: int = DEFAULT_NS_S,
-    ns_tp: int = DEFAULT_NS_TP,
-    multharm: int = DEFAULT_MULTHARM,
-    integmode: int = MIDPOINT,
-    **param_overrides: Any,
+    config: str | Path | None = None,
+    **settings: Any,
 ) -> None:
+    """Configure SIMPLE and load the field.
+
+    All ``&config`` values start from their defaults. ``config`` reads a
+    ``simple.in`` file (its ``&config`` and ``&profiles`` groups), ``field``
+    sets ``netcdffile``, ``field_input`` and ``coord_input`` to one
+    equilibrium file, and ``settings`` set further ``&config`` values. Later
+    sources override earlier ones in this order. A Boozer chartmap selects
+    ``isw_field_type=2`` unless the field type is set.
+
+    Raises ``ValueError`` for an unreadable file or an unknown ``&config``
+    name.
     """
-    Initialize SIMPLE with VMEC file and parameters.
+    global _initialized
 
-    Follows the same initialization sequence as simple_main::main():
-    1. Set parameters (replaces read_config, without file I/O)
-    2. init_field() - loads VMEC, initializes field evaluation
-    3. params_init() - computes derived parameters, resets seed if deterministic
-
-    Parameters
-    ----------
-    vmec_file : str | Path
-        Path to VMEC equilibrium NetCDF file
-    ns_s : int
-        Spline order for radial coordinate (default: 5)
-    ns_tp : int
-        Spline order for theta/phi coordinates (default: 5)
-    multharm : int
-        Multiharmonic order (default: 5)
-    integmode : int
-        Integration mode (default: MIDPOINT)
-    **param_overrides
-        Additional Fortran parameters to set (e.g., deterministic=True, ntestpart=100)
-
-    Example
-    -------
-    >>> import pysimple
-    >>> pysimple.init('wout.nc', deterministic=True, ntestpart=1000, trace_time=1e-3)
-    """
-    global _initialized, _current_vmec, _current_chartmap, _tracer
-    global _trace_initialized, _field_key
-
-    # Reset trace initialization flag to ensure field pointers are updated
-    _trace_initialized = False
-
-    vmec_path = str(Path(vmec_file).expanduser().resolve())
-    chartmap_mode = _is_boozer_chartmap(vmec_path)
-
-    # A Boozer chart map is already expressed in the canonical coordinates
-    # required by the symplectic integrators.  Select that representation when
-    # the caller has not explicitly requested a field type.
-    explicit_field_type = {"isw_field_type", "integ_coords"} & param_overrides.keys()
-    if chartmap_mode and not explicit_field_type:
-        _fortran_backend.velo_mod.isw_field_type = _BOOZER_FIELD_ID
-        if hasattr(params, "integ_coords"):
-            params.integ_coords = _BOOZER_FIELD_ID
-
-    # Step 1: Set parameters (replaces read_config without file I/O)
-    params.netcdffile = vmec_path
-    if hasattr(params, "coord_input"):
-        params.coord_input = vmec_path
-    if hasattr(params, "field_input"):
-        params.field_input = vmec_path
-    params.ns_s = int(ns_s)
-    params.ns_tp = int(ns_tp)
-    params.multharm = int(multharm)
-    params.integmode = int(integmode)
-
-    # Apply user parameter overrides BEFORE params_init
-    # This ensures ntestpart is set correctly before array allocation
-    for key, value in param_overrides.items():
-        if key in {"isw_field_type", "integ_coords"}:
-            value_int = int(value)
-            _fortran_backend.velo_mod.isw_field_type = value_int
-            if hasattr(params, "integ_coords"):
-                params.integ_coords = value_int
-            continue
-        # Fortran namelist names are case-insensitive (e.g. facE_al in
-        # simple.in), while f90wrap exposes them lowercased.
-        if not hasattr(params, key):
-            key = key.lower()
-        if not hasattr(params, key):
-            raise ValueError(f"Unknown SIMPLE parameter: {key}")
-        setattr(params, key, value)
-
-    if hasattr(params, "apply_config_aliases"):
-        params.apply_config_aliases()
-
-    # Step 2: init_field (same as Fortran main()). The field construction is a
-    # pure function of (file, spline orders, multharm, integmode, field type)
-    # -- init_field builds the canonical data of the requested field type --
-    # so repeated re-initialization with an identical key keeps the built
-    # field and tracer; params_init and the magfie pointer setup below still
-    # run every call.
-    field_key = (vmec_path, params.ns_s, params.ns_tp, params.multharm,
-                 params.integmode,
-                 int(_fortran_backend.velo_mod.isw_field_type))
-    if not (_initialized and _tracer is not None and field_key == _field_key):
-        _tracer = _fortran_backend.simple.tracer_t()
-        _simple_main.init_field(
-            _tracer,
-            vmec_path,
-            params.ns_s,
-            params.ns_tp,
-            params.multharm,
-            params.integmode,
-        )
-        _field_key = field_key
-
-    field_type = int(_fortran_backend.velo_mod.isw_field_type)
-
-    # Chart-map inputs do not carry a VMEC wout.  Point magfie at the Boozer
-    # chart-map field before params_init(), whose stevvo setup evaluates B.
-    if chartmap_mode:
-        if field_type != _BOOZER_FIELD_ID:
-            raise ValueError(
-                "Boozer chart-map input requires isw_field_type=2 "
-                "(or omit isw_field_type to select it automatically)"
-            )
-        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
-
-    # Step 3: params_init (same as Fortran main())
-    # This calls reset_seed_if_deterministic() internally!
-    # Also calls reallocate_arrays() which allocates xstart, volstart needed by init_starting_surf
-    # NOTE: params_init() will use the ntestpart value set above
-    params.params_init()
-
-    # Step 4: init_magfie - set function pointer for magnetic field evaluation
-    # Use isw_field_type from velo_mod (set via param_overrides above)
-    # Step 5: init_starting_surf (required for non-TEST fields)
-    # Match Fortran driver ordering: initialize VMEC magfie for surface setup,
-    # then restore requested field type for tracing.
-    if chartmap_mode:
-        samplers = _fortran_backend.Samplers()
-        samplers.init_starting_surf()
-    elif field_type != _TEST_FIELD_ID:
-        _fortran_backend.magfie_wrapper.wrapper_init_magfie(_VMEC_FIELD_ID)
-        samplers = _fortran_backend.Samplers()
-        samplers.init_starting_surf()
-        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
-    else:
-        _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
-
+    _initialized = False
+    _api.simple_reset_config()
+    if config is not None:
+        path = Path(config).expanduser()
+        _check(_api.simple_read_config(str(path)), str(path))
+    if field is not None:
+        path = str(Path(field).expanduser().resolve())
+        settings = {"netcdffile": path, "field_input": path, "coord_input": path,
+                    **settings}
+    _set_config(**settings)
+    _api.simple_init()
     _initialized = True
-    _current_vmec = vmec_path
-    _current_chartmap = chartmap_mode
+
+
+def sample(n_particles: int | None = None) -> np.ndarray:
+    """Sample start states as configured by ``startmode``, ``sbeg`` and
+    ``num_surf``. ``n_particles`` defaults to ``ntestpart``."""
+    _require_init()
+    n = int(params.ntestpart if n_particles is None else n_particles)
+    z = np.zeros((5, n), order="F")
+    _api.simple_sample(n, z)
+    return np.ascontiguousarray(z)
 
 
 def sample_surface(n_particles: int, s: float) -> np.ndarray:
-    """
-    Sample particles on a flux surface.
-
-    Parameters
-    ----------
-    n_particles : int
-        Number of particles to sample
-    s : float
-        Normalized toroidal flux coordinate (0 to 1)
-
-    Returns
-    -------
-    np.ndarray
-        Array of shape (5, n_particles) containing particle positions
-
-    Example
-    -------
-    >>> particles = pysimple.sample_surface(100, s=0.5)
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    params.ntestpart = int(n_particles)
-    params.reallocate_arrays()
-    params.startmode = 2
-
-    # Use wrapper to avoid f90wrap array bug
-    _fortran_backend.params_wrapper.set_sbeg(1, float(s))
-    _sync_single_surface_state(float(s))
-
-    if _is_test_field():
-        rng = _sampling_rng()
-        dim = int(params.zstart_dim1)
-        zstart = np.zeros((dim, n_particles), dtype=np.float64, order="F")
-        r_start = 0.5 * float(s)
-        zstart[0, :] = r_start
-        zstart[1, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
-        zstart[2, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
-        zstart[3, :] = 1.0
-        zstart[4, :] = rng.uniform(-1.0, 1.0, n_particles)
-    else:
-        samplers = _fortran_backend.Samplers()
-        zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-        samplers.sample(zstart)
-
-    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
-
-    return np.ascontiguousarray(zstart, dtype=np.float64)
+    """Sample start states on flux surface ``s`` along the starting field line."""
+    _require_init()
+    z = np.zeros((5, n_particles), order="F")
+    _api.simple_sample_surface(n_particles, float(s), z)
+    return np.ascontiguousarray(z)
 
 
 def sample_volume(n_particles: int, s_inner: float, s_outer: float) -> np.ndarray:
-    """
-    Sample particles in a volume between two flux surfaces.
-
-    Parameters
-    ----------
-    n_particles : int
-        Number of particles to sample
-    s_inner : float
-        Inner flux surface (0 to 1)
-    s_outer : float
-        Outer flux surface (0 to 1)
-
-    Returns
-    -------
-    np.ndarray
-        Array of shape (5, n_particles) containing particle positions
-
-    Example
-    -------
-    >>> particles = pysimple.sample_volume(1000, s_inner=0.1, s_outer=0.9)
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    params.ntestpart = int(n_particles)
-    params.reallocate_arrays()
-    params.startmode = 5  # Volume sampling mode
-
-    if _is_test_field():
-        rng = _sampling_rng()
-        dim = int(params.zstart_dim1)
-        zstart = np.zeros((dim, n_particles), dtype=np.float64, order="F")
-        r_inner = 0.5 * float(s_inner)
-        r_outer = 0.5 * float(s_outer)
-        zstart[0, :] = rng.uniform(r_inner, r_outer, n_particles)
-        zstart[1, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
-        zstart[2, :] = rng.uniform(0.0, 2.0 * np.pi, n_particles)
-        zstart[3, :] = 1.0
-        zstart[4, :] = rng.uniform(-1.0, 1.0, n_particles)
-    else:
-        zstart = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-        samplers = _fortran_backend.Samplers()
-        samplers.sample(zstart, float(s_inner), float(s_outer))
-
-    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
-
-    return np.ascontiguousarray(zstart, dtype=np.float64)
+    """Sample start states uniformly in the volume ``s_inner < s < s_outer``."""
+    _require_init()
+    z = np.zeros((5, n_particles), order="F")
+    _api.simple_sample_volume(n_particles, float(s_inner), float(s_outer), z)
+    return np.ascontiguousarray(z)
 
 
 def load_particles(particle_file: str | Path) -> np.ndarray:
+    """Read start states from a ``start.dat``-style text file."""
+    return np.loadtxt(Path(particle_file).expanduser(), ndmin=2).T.copy()
+
+
+def _trace_results(n: int) -> dict[str, np.ndarray]:
+    z_end = np.zeros((5, n), order="F")
+    loss_times = np.zeros(n)
+    trap_parameter = np.zeros(n)
+    perpendicular_invariant = np.zeros(n)
+    _api.simple_get_results(n, z_end, loss_times, trap_parameter,
+                            perpendicular_invariant)
+    return {
+        "final_positions": np.ascontiguousarray(z_end),
+        "loss_times": loss_times,
+        "trap_parameter": trap_parameter,
+        "perpendicular_invariant": perpendicular_invariant,
+    }
+
+
+def trace_parallel(
+    positions: np.ndarray, integrator: str | int | None = None
+) -> dict[str, np.ndarray]:
+    """Trace particles to ``trace_time`` or loss with OpenMP, as simple.x.
+
+    ``integrator`` overrides ``integmode``. ``loss_times`` is ``trace_time``
+    for confined, ``-1`` for skipped and ``NaN`` for numerically failed
+    particles.
     """
-    Load particles from a text file.
+    _require_init()
+    states = _states(positions)
+    _use_integrator(integrator)
+    _api.simple_set_start(states.shape[1], states)
+    _api.simple_trace()
+    return _trace_results(states.shape[1])
 
-    Parameters
-    ----------
-    particle_file : str | Path
-        Path to particle file (e.g., start.dat)
 
-    Returns
-    -------
-    np.ndarray
-        Array of shape (5, n_particles) containing particle positions
+def classify_parallel(
+    positions: np.ndarray, integrator: str | int | None = None
+) -> dict[str, np.ndarray]:
+    """Trace particles with the classifiers selected by ``tcut``,
+    ``fast_class`` and ``nturns``.
 
-    Example
-    -------
-    >>> particles = pysimple.load_particles('start.dat')
+    Adds ``passing``, ``lost`` and the ``jpar``, ``topology`` and ``fractal``
+    classes (0 unclassified, 1 regular, 2 chaotic) to the trace results.
     """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    particle_path = Path(particle_file).expanduser().resolve()
-
-    # Read file directly in Python to avoid Fortran hardcoded 'start.dat' path
-    particles_list = []
-    with particle_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                values = [float(x) for x in line.split()]
-                if len(values) != 5:
-                    raise ValueError(f"Expected 5 values per line, got {len(values)}")
-                particles_list.append(values)
-
-    if len(particles_list) == 0:
-        return np.zeros((5, 0), dtype=np.float64, order="C")
-
-    # Convert to (5, n_particles) array
-    particles = np.array(particles_list, dtype=np.float64).T
-
-    return np.ascontiguousarray(particles, dtype=np.float64)
-
-
-_trace_initialized = False
-
-
-def _ensure_trace_initialized():
-    """Initialize components that only need to be configured once after init()."""
-    global _trace_initialized
-
-    if _trace_initialized:
-        return
-
-    # init_magfie(isw_field_type) - set field evaluation to configured type
-    _fortran_backend.magfie_wrapper.wrapper_init_magfie(
-        _fortran_backend.velo_mod.isw_field_type
+    _require_init()
+    states = _states(positions)
+    n = states.shape[1]
+    _use_integrator(integrator)
+    _api.simple_set_start(n, states)
+    _api.simple_classify()
+    results = _trace_results(n)
+    passing = np.zeros(n, dtype=np.int32)
+    lost = np.zeros(n, dtype=np.int32)
+    classes = np.zeros((3, n), dtype=np.int32, order="F")
+    _api.simple_get_classification(n, passing, lost, classes)
+    results.update(
+        passing=passing.astype(bool),
+        lost=lost.astype(bool),
+        jpar=classes[0].copy(),
+        topology=classes[1].copy(),
+        fractal=classes[2].copy(),
     )
-
-    if (
-        _fortran_backend.velo_mod.isw_field_type != _TEST_FIELD_ID
-        and _needs_bminmax_cache(params.num_surf, params.ntcut, params.class_plot)
-    ):
-        _simple_main.init_bminmax()
-
-    _trace_initialized = True
+    return results
 
 
-def _reset_trace_counters() -> None:
-    """Reset per-run result arrays after any particle-array reallocation."""
-    _simple_main.init_counters()
+def classify_fast(
+    positions: np.ndarray, nturns: int = 8, integrator: str | int | None = None
+) -> dict[str, np.ndarray]:
+    """Classify by J_parallel and topology, stopping after ``nturns``."""
+    _require_init()
+    _set_config(nturns=int(nturns), fast_class=True, tcut=-1.0)
+    return classify_parallel(positions, integrator)
 
 
-def _load_loss_times(n_particles: int) -> np.ndarray:
-    """Read the current backend loss-time array."""
-    loss_times = np.zeros(n_particles, dtype=np.float64)
-    _fortran_backend.params_wrapper.get_times_lost_bulk(n_particles, loss_times)
-    return np.ascontiguousarray(loss_times, dtype=np.float64)
+def classify_fractal(
+    positions: np.ndarray, tcut: float = 0.1, integrator: str | int | None = None
+) -> dict[str, np.ndarray]:
+    """Classify by fractal dimension at time ``tcut``."""
+    _require_init()
+    _set_config(tcut=float(tcut), fast_class=False)
+    return classify_parallel(positions, integrator)
 
 
-def _sync_single_surface_state(surface_s: float) -> None:
-    """Refresh single-surface sampling and bmin/bmax state for a loaded surface."""
-    if _is_test_field() or int(getattr(params, "num_surf", 0)) != 1:
-        return
-
-    _fortran_backend.params_wrapper.set_sbeg(1, float(surface_s))
-    field_type = int(_fortran_backend.velo_mod.isw_field_type)
-    setup_field_type = field_type if _current_chartmap else _VMEC_FIELD_ID
-    _fortran_backend.magfie_wrapper.wrapper_init_magfie(setup_field_type)
-    _fortran_backend.Samplers().init_starting_surf()
-    _fortran_backend.magfie_wrapper.wrapper_init_magfie(field_type)
-
-
-def _maybe_sync_single_surface_state(positions: np.ndarray) -> None:
-    """Align sbeg/bmin/bmax with the provided surface when all particles share it."""
-    if positions.size == 0:
-        return
-
-    if positions.ndim == 1:
-        _sync_single_surface_state(float(positions[0]))
-        return
-
-    if positions.ndim != 2:
-        return
-
-    surface_s = float(positions[0, 0])
-    if np.allclose(positions[0, :], surface_s, rtol=0.0, atol=1.0e-12):
-        _sync_single_surface_state(surface_s)
+def write_output() -> None:
+    """Write the simple.x output files for the last trace."""
+    _require_init()
+    _api.simple_write_output()
 
 
 def trace_orbit(
     position: np.ndarray,
-    integrator: str | int = MIDPOINT,
+    integrator: str | int | None = None,
     return_trajectory: bool = False,
-) -> dict[str, np.ndarray]:
-    """
-    Trace a single particle orbit.
-
-    Parameters
-    ----------
-    position : np.ndarray
-        Array of shape (5,) containing the initial particle state
-        ``[s, theta, phi, v/v0, lambda]`` with ``lambda = v_parallel / v``.
-        The sign of ``lambda`` sets the parallel-direction branch, but
-        trapped/passing topology depends on both ``lambda`` and the launch
-        position.
-    integrator : str | int
-        Integration method (default: MIDPOINT)
-    return_trajectory : bool
-        If True, return full trajectory arrays
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        Dictionary containing:
-        - 'final_position': array of shape (5,)
-        - 'loss_time': float
-        - 'trajectory': array of shape (5, ntimstep) if return_trajectory=True
-        - 'times': array of shape (ntimstep,) if return_trajectory=True
-
-    Note
-    ----
-    The trace time is determined by the `trace_time` parameter passed to `init()`.
-    To change trace time, call `init()` again with a different `trace_time` value.
-    Deep-passing seeds may be intentionally skipped by the backend when
-    ``contr_pp`` is left at its default value of ``-1``; set a more negative
-    ``contr_pp`` in ``init()`` (for example ``-1e10``) to force tracing.
-
-    Example
-    -------
-    >>> pysimple.init('wout.nc', trace_time=1e-3)
-    >>> result = pysimple.trace_orbit(position, return_trajectory=True)
-    >>> trajectory = result['trajectory']
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    # Resolve integrator
-    if isinstance(integrator, str):
-        key = integrator.lower()
-        if key not in _INTEGRATOR_ALIASES:
-            raise ValueError(f"Unknown integrator: {integrator}")
-        integrator_code = _INTEGRATOR_ALIASES[key]
-    else:
-        integrator_code = int(integrator)
-
-    position = np.ascontiguousarray(position, dtype=np.float64)
-    if position.shape != (5,):
-        raise ValueError(f"position must have shape (5,), got {position.shape}")
-
-    # Set up simulation for single particle
-    params.ntestpart = 1
-    params.reallocate_arrays()
-    params.integmode = integrator_code
-    _ensure_trace_initialized()
-    _maybe_sync_single_surface_state(position)
-    _reset_trace_counters()
-
-    # Use wrapper to avoid f90wrap zstart binding mismatch
-    zstart = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order='F')
-    zstart[:, 0] = position
-    _fortran_backend.params_wrapper.set_zstart_bulk(1, zstart)
-
-    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
-
-    try:
-        if test_bounds is not None:
-            _apply_test_field_bounds(float(position[0]))
-
-        if return_trajectory:
-            # Allocate trajectory arrays (canonical coordinates)
-            traj_can = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
-            times = np.zeros(params.ntimstep, dtype=np.float64)
-
-            # Call trace_orbit with trajectory output (use initialized tracer)
-            _simple_main.trace_orbit(_tracer, 1, traj_can, times)
-
-            # Convert integrator trajectory to reference coordinates in bulk.
-            traj_ref = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
-            _fortran_backend.params_wrapper.integ_traj_to_ref(traj_can, traj_ref)
-            traj_ref_out = np.ascontiguousarray(traj_ref)
-
-            # Extract final position via wrapper to avoid f90wrap zend binding mismatch
-            zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
-            _fortran_backend.params_wrapper.get_zend_bulk(1, zend)
-            final_pos = zend[:, 0]
-            loss_time = float(_load_loss_times(1)[0])
-
-            return {
-                "final_position": np.ascontiguousarray(final_pos),
-                "loss_time": loss_time,
-                "trajectory": traj_ref_out,
-                "times": times,
-            }
-
-        # Call trace_orbit without trajectory (just allocate dummy arrays)
-        traj = np.zeros((5, params.ntimstep), dtype=np.float64, order="F")
-        times = np.zeros(params.ntimstep, dtype=np.float64)
-        _simple_main.trace_orbit(_tracer, 1, traj, times)
-
-        # Extract final position via wrapper to avoid f90wrap zend binding mismatch
-        zend = np.zeros((params.zstart_dim1, 1), dtype=np.float64, order="F")
-        _fortran_backend.params_wrapper.get_zend_bulk(1, zend)
-        final_pos = zend[:, 0]
-        loss_time = float(_load_loss_times(1)[0])
-
-        return {
-            "final_position": np.ascontiguousarray(final_pos),
-            "loss_time": loss_time,
-        }
-    finally:
-        if test_bounds is not None:
-            _restore_test_field_bounds(test_bounds)
+) -> dict[str, np.ndarray | float]:
+    """Trace one orbit; optionally return its ``ntimstep`` samples."""
+    _require_init()
+    state = _state(position)
+    _use_integrator(integrator)
+    nt = int(params.ntimstep)
+    trajectory = np.zeros((5, nt), order="F")
+    times = np.zeros(nt)
+    z_end = np.zeros(5)
+    loss_time = _api.simple_trace_orbit(state, nt, trajectory, times, z_end)
+    result: dict[str, np.ndarray | float] = {
+        "final_position": z_end,
+        "loss_time": float(loss_time),
+    }
+    if return_trajectory:
+        result["trajectory"] = np.ascontiguousarray(trajectory)
+        result["times"] = times
+    return result
 
 
 def compute_canonical_frequencies(
     position: np.ndarray,
     *,
-    integrator: str | int = MIDPOINT,
+    integrator: str | int | None = None,
     n_periods: int = 1,
     max_steps: int = 10_000_000,
 ) -> dict[str, float | int | str]:
-    """Compute bounce/transit and mean toroidal frequencies for one orbit.
+    """Bounce/transit period and mean toroidal precession of one orbit.
 
-    ``position`` is ``[s, theta, phi, v/v0, lambda]`` in the public
-    reference coordinates. Set ``n_periods=1`` for a symmetric configuration
-    or use more periods to quantify cycle variation in an asymmetric field.
-    Periods are seconds, angles radians, and frequencies rad/s.
+    A trapped cycle runs between same-direction ``v_par = 0`` crossings, a
+    passing cycle between signed ``2*pi`` poloidal advances. With
+    ``n_periods > 1`` the result is the mean and spread over several cycles.
+    Periods are in seconds, angles in radians, frequencies in rad/s. Check
+    ``status`` against the ``FREQ_*`` constants before using the values.
     """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    if isinstance(integrator, str):
-        key = integrator.lower()
-        if key not in _INTEGRATOR_ALIASES:
-            raise ValueError(f"Unknown integrator: {integrator}")
-        integrator_code = _INTEGRATOR_ALIASES[key]
-    else:
-        integrator_code = int(integrator)
-
-    position = np.ascontiguousarray(position, dtype=np.float64)
-    if position.shape != (5,):
-        raise ValueError(f"position must have shape (5,), got {position.shape}")
-    if n_periods < 1:
-        raise ValueError("n_periods must be at least one")
-    if max_steps < 1:
-        raise ValueError("max_steps must be at least one")
-
-    params.integmode = integrator_code
-    _ensure_trace_initialized()
-    _maybe_sync_single_surface_state(position)
-
-    values = np.zeros(6, dtype=np.float64)
+    _require_init()
+    state = _state(position)
+    if n_periods < 1 or max_steps < 1:
+        raise ValueError("n_periods and max_steps must be at least one")
+    _use_integrator(integrator)
+    values = np.zeros(6)
     metadata = np.zeros(5, dtype=np.int32)
-    test_bounds = _capture_test_field_bounds() if _is_test_field() else None
-
-    try:
-        if test_bounds is not None:
-            _apply_test_field_bounds(float(position[0]))
-        _simple_main.compute_canonical_frequencies_flat(
-            _tracer,
-            position,
-            int(n_periods),
-            int(max_steps),
-            values,
-            metadata,
-        )
-    finally:
-        if test_bounds is not None:
-            _restore_test_field_bounds(test_bounds)
-
-    orbit_names = {
-        ORBIT_CLASS_UNKNOWN: "unknown",
-        ORBIT_CLASS_TRAPPED: "trapped",
-        ORBIT_CLASS_PASSING: "passing",
-    }
-    orbit_class = int(metadata[1])
+    _api.simple_orbit_frequencies(state, int(n_periods), int(max_steps), values,
+                                  metadata)
     return {
         "period": float(values[0]),
         "period_std": float(values[1]),
@@ -713,108 +368,69 @@ def compute_canonical_frequencies(
         "omega_b": float(values[4]),
         "omega_phi": float(values[5]),
         "status": int(metadata[0]),
-        "orbit_class": orbit_names.get(orbit_class, "unknown"),
-        "orbit_class_code": orbit_class,
+        "orbit_class": _ORBIT_CLASS_NAMES.get(int(metadata[1]), "unknown"),
+        "orbit_class_code": int(metadata[1]),
         "parallel_direction": int(metadata[2]),
         "n_periods": int(metadata[3]),
         "n_steps": int(metadata[4]),
     }
 
 
-def invariants_from_state(position: np.ndarray) -> dict[str, float | int | str]:
-    """Convert one public GC state to ``(H0, J_perp, p_phi)``.
+def invariants_from_state(position: np.ndarray) -> dict[str, float | int]:
+    """Invariants ``(H0, J_perp, p_phi)`` of one state.
 
-    ``H0=(v/v0)^2`` and ``J_perp=H0*(1-lambda**2)/B`` use the same
-    normalization as POTATO when both codes use the same reference velocity.
-    ``p_phi`` is the flux-normalized canonical toroidal momentum
-    ``psi*=(c/q)P_phi``. It is axis-zero and positive in the outward flux
-    direction. The magnetic-flux term is zero on axis, while the total also
-    contains the parallel-momentum term. It is not a dimensionless flux label.
+    ``H0 = (v/v0)**2`` and ``J_perp = H0 * (1 - lambda**2) / B``. ``p_phi`` is
+    ``(c/q) P_phi`` in magnetic-flux units, zero on axis and positive outward
+    in its flux term. It is not the radial label ``s``.
     """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    position = np.ascontiguousarray(position, dtype=np.float64)
-    if position.shape != (5,):
-        raise ValueError(f"position must have shape (5,), got {position.shape}")
-
-    _ensure_trace_initialized()
-    values = np.zeros(6, dtype=np.float64)
-    status = _simple_main.invariants_from_state_flat(_tracer, position, values)
+    _require_init()
+    values = np.zeros(6)
+    status = _api.simple_invariants_from_state(_state(position), values)
     return {
         "h0": float(values[0]),
         "j_perp": float(values[1]),
         "p_phi": float(values[2]),
-        "psi_star": float(values[2]),
         "axis_flux_native": float(values[3]),
         "outward_sign": float(values[4]),
         "edge_flux_native": float(values[5]),
         "status": int(status),
-        "p_phi_convention": "axis-zero, outward-positive flux gauge for (c/q)P_phi",
-        "time_convention": "tau=v0*t",
     }
 
 
 def states_from_invariants(
-    h0: float,
-    j_perp: float,
-    p_phi: float,
-    *,
-    max_solutions: int = 64,
-) -> dict[str, np.ndarray | int | str]:
-    """Return all regular cut states matching ``(H0, J_perp, p_phi)``.
+    h0: float, j_perp: float, p_phi: float, *, max_solutions: int = 64
+) -> dict[str, np.ndarray | int]:
+    """All start states on the axisymmetric cut with the given invariants.
 
-    The axisymmetric cut is ``grad(psi) x grad(B) = 0``. Results are ordered
-    by cylindrical major radius, matching POTATO's HFS-to-LFS ``R_c``
-    convention. Multiple entries may represent the same physical orbit;
-    no outer/inner topological class is selected implicitly.
+    The cut is ``grad(psi) x grad(B) = 0``. States are ordered by major
+    radius from the high- to the low-field side, as POTATO's ``R_c``.
     """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
+    _require_init()
     if not np.isfinite([h0, j_perp, p_phi]).all():
         raise ValueError("invariants must be finite")
-    if h0 <= 0.0:
-        raise ValueError("h0 must be positive")
-    if j_perp < 0.0:
-        raise ValueError("j_perp must be non-negative")
-    if max_solutions < 1:
-        raise ValueError("max_solutions must be at least one")
-
-    _ensure_trace_initialized()
-    values = np.ascontiguousarray([h0, j_perp, p_phi], dtype=np.float64)
-    states = np.zeros((5, max_solutions), dtype=np.float64, order="F")
+    if h0 <= 0.0 or j_perp < 0.0 or max_solutions < 1:
+        raise ValueError("need h0 > 0, j_perp >= 0 and max_solutions >= 1")
+    states = np.zeros((5, max_solutions), order="F")
     metadata = np.zeros((3, max_solutions), dtype=np.int32, order="F")
-    residuals = np.zeros(max_solutions, dtype=np.float64)
-    cylindrical = np.zeros((3, max_solutions), dtype=np.float64, order="F")
-    n_solutions, status = _simple_main.states_from_invariants_flat(
-        _tracer,
-        values,
-        int(max_solutions),
-        states,
-        metadata,
-        residuals,
-        cylindrical,
+    residuals = np.zeros(max_solutions)
+    cylindrical = np.zeros((3, max_solutions), order="F")
+    n_solutions, status = _api.simple_states_from_invariants(
+        np.array([h0, j_perp, p_phi], dtype=np.float64), int(max_solutions),
+        states, metadata, residuals, cylindrical,
     )
-    count = int(n_solutions)
-    kind_names = {
-        SECTION_EXTREMUM_UNKNOWN: "unknown",
-        SECTION_B_MINIMUM: "B_min",
-        SECTION_B_MAXIMUM: "B_max",
-    }
-    kinds = metadata[2, :count].copy()
+    n = int(n_solutions)
+    kinds = metadata[2, :n].copy()
     return {
-        "states": np.ascontiguousarray(states[:, :count].T),
-        "cylindrical": np.ascontiguousarray(cylindrical[:, :count].T),
-        "sigma": np.ascontiguousarray(metadata[0, :count]),
-        "section_branch": np.ascontiguousarray(metadata[1, :count]),
-        "section_kind_code": np.ascontiguousarray(kinds),
-        "section_kind": np.asarray(
-            [kind_names.get(int(kind), "unknown") for kind in kinds]
-        ),
-        "residual": np.ascontiguousarray(residuals[:count]),
-        "n_solutions": count,
+        "states": np.ascontiguousarray(states[:, :n].T),
+        "cylindrical": np.ascontiguousarray(cylindrical[:, :n].T),
+        "sigma": metadata[0, :n].copy(),
+        "section_branch": metadata[1, :n].copy(),
+        "section_kind_code": kinds,
+        "section_kind": np.array([_SECTION_NAMES.get(int(k), "unknown")
+                                  for k in kinds]),
+        "residual": residuals[:n].copy(),
+        "n_solutions": n,
         "status": int(status),
-        "ordering": "POTATO R_c (HFS to LFS)",
     }
 
 
@@ -827,31 +443,22 @@ def states_from_potato_invariants(
     psi_edge: float,
     v0_ratio: float = 1.0,
     max_solutions: int = 64,
-) -> dict[str, np.ndarray | int | str]:
-    """Convert raw POTATO invariants and return matching SIMPLE starts.
+) -> dict[str, np.ndarray | int]:
+    """Convert POTATO invariants and return the matching SIMPLE start states.
 
-    ``v0_ratio`` is ``v0_POTATO/v0_SIMPLE``. The default is correct only when
-    both runs use the same reference energy, species mass, and charge state.
-    ``psi_axis`` and ``psi_edge`` are in the same flux units and gauge as the
-    raw POTATO ``psi_star``.
+    ``v0_ratio`` is ``v0_POTATO / v0_SIMPLE``. ``psi_axis`` and ``psi_edge``
+    use the units and gauge of POTATO's ``psi_star``.
     """
-    if v0_ratio <= 0.0 or not np.isfinite(v0_ratio):
+    if not (np.isfinite(v0_ratio) and v0_ratio > 0.0):
         raise ValueError("v0_ratio must be finite and positive")
-    if not np.isfinite([psi_axis, psi_edge]).all():
-        raise ValueError("psi_axis and psi_edge must be finite")
-    if psi_edge == psi_axis:
-        raise ValueError("psi_edge must differ from psi_axis")
-    raw = np.ascontiguousarray([h0, j_perp, psi_star], dtype=np.float64)
-    converted = np.zeros(3, dtype=np.float64)
-    _simple_main.potato_invariants_to_simple_flat(
-        raw, float(psi_axis), float(psi_edge), float(v0_ratio), converted
+    if not np.isfinite([psi_axis, psi_edge]).all() or psi_edge == psi_axis:
+        raise ValueError("psi_axis and psi_edge must be finite and differ")
+    converted = np.zeros(3)
+    _api.simple_potato_invariants(
+        np.array([h0, j_perp, psi_star], dtype=np.float64), float(psi_axis),
+        float(psi_edge), float(v0_ratio), converted,
     )
-    result = states_from_invariants(
-        float(converted[0]),
-        float(converted[1]),
-        float(converted[2]),
-        max_solutions=max_solutions,
-    )
+    result = states_from_invariants(*converted, max_solutions=max_solutions)
     result["simple_invariants"] = converted
     return result
 
@@ -860,428 +467,46 @@ def trace_to_cut(
     position: np.ndarray,
     *,
     cut: str | int = "tip",
-    integrator: str | int = MIDPOINT,
+    integrator: str | int | None = None,
     max_events: int = 100,
 ) -> dict[str, np.ndarray | float | int | str]:
-    """Trace one orbit to an interpolated tip or toroidal-period cut."""
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    cut_aliases = {"any": -1, "tip": CUT_TIP, "toroidal": CUT_TOROIDAL}
-    if isinstance(cut, str):
-        key = cut.lower()
-        if key not in cut_aliases:
-            raise ValueError(f"Unknown cut: {cut}")
-        cut_code = cut_aliases[key]
-    else:
-        cut_code = int(cut)
-        if cut_code not in {-1, CUT_TIP, CUT_TOROIDAL}:
-            raise ValueError(f"Unknown cut: {cut}")
-
-    if isinstance(integrator, str):
-        key = integrator.lower()
-        if key not in _INTEGRATOR_ALIASES:
-            raise ValueError(f"Unknown integrator: {integrator}")
-        integrator_code = _INTEGRATOR_ALIASES[key]
-    else:
-        integrator_code = int(integrator)
-    if integrator_code <= RK45:
+    """Trace one orbit to its next ``"tip"`` (``v_par = 0``), ``"toroidal"``
+    field-period cut or ``"any"`` cut. Needs a symplectic integrator."""
+    _require_init()
+    cut_code = _CUTS.get(cut.lower()) if isinstance(cut, str) else int(cut)
+    if cut_code not in _CUTS.values():
+        raise ValueError(f"Unknown cut: {cut}")
+    _use_integrator(integrator)
+    if int(params.integmode) <= RK45:
         raise ValueError("trace_to_cut requires a symplectic integrator")
     if max_events < 1:
         raise ValueError("max_events must be at least one")
-
-    position = np.ascontiguousarray(position, dtype=np.float64)
-    if position.shape != (5,):
-        raise ValueError(f"position must have shape (5,), got {position.shape}")
-
-    params.integmode = integrator_code
-    _ensure_trace_initialized()
-    _maybe_sync_single_surface_state(position)
-    cut_state = np.zeros(6, dtype=np.float64)
-    cut_type, status = _simple_main.trace_to_cut_flat(
-        _tracer,
-        position,
-        cut_code,
-        int(max_events),
-        cut_state,
+    cut_state = np.zeros(6)
+    cut_type, status = _api.simple_trace_to_cut(
+        _state(position), cut_code, int(max_events), cut_state
     )
-    cut_names = {CUT_TIP: "tip", CUT_TOROIDAL: "toroidal"}
     return {
-        "state": np.ascontiguousarray(cut_state[:5]),
+        "state": cut_state[:5].copy(),
         "parallel_invariant": float(cut_state[5]),
-        "cut_type": cut_names.get(int(cut_type), "unknown"),
+        "cut_type": _CUT_NAMES.get(int(cut_type), "unknown"),
         "cut_type_code": int(cut_type),
         "status": int(status),
     }
 
 
-def trace_parallel(
-    positions: np.ndarray,
-    integrator: str | int = MIDPOINT,
-) -> dict[str, np.ndarray]:
-    """
-    Trace multiple particle orbits in parallel (no trajectory output).
-
-    Parameters
-    ----------
-    positions : np.ndarray
-        Array of shape (5, n_particles) containing initial positions
-    integrator : str | int
-        Integration method (default: MIDPOINT)
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        Dictionary containing:
-        - 'final_positions': array of shape (5, n_particles)
-        - 'loss_times': array of shape (n_particles,)
-        - 'trap_parameter': array of shape (n_particles,) if available
-        - 'perpendicular_invariant': array of shape (n_particles,) if available
-
-    Note
-    ----
-    The trace time is determined by the `trace_time` parameter passed to `init()`.
-    To change trace time, call `init()` again with a different `trace_time` value.
-
-    Example
-    -------
-    >>> pysimple.init('wout.nc', trace_time=1e-3)
-    >>> results = pysimple.trace_parallel(particles)
-    >>> lost_mask = (results['loss_times'] > 0.0) & (
-    ...     results['loss_times'] < pysimple.params.trace_time
-    ... )
-
-    Notes
-    -----
-    For trajectory output, use trace_orbit() for single particles or loop over particles.
-    This function uses the parallel Fortran implementation for speed.
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    # Resolve integrator
-    if isinstance(integrator, str):
-        key = integrator.lower()
-        if key not in _INTEGRATOR_ALIASES:
-            raise ValueError(f"Unknown integrator: {integrator}")
-        integrator_code = _INTEGRATOR_ALIASES[key]
-    else:
-        integrator_code = int(integrator)
-
-    positions = np.ascontiguousarray(positions, dtype=np.float64)
-    if positions.ndim != 2 or positions.shape[0] != 5:
-        raise ValueError(
-            f"positions must have shape (5, n_particles), got {positions.shape}"
-        )
-    n_particles = positions.shape[1]
-
-    # Set up simulation
-    params.ntestpart = n_particles
-    params.reallocate_arrays()
-    params.integmode = integrator_code
-    _ensure_trace_initialized()
-    _maybe_sync_single_surface_state(positions)
-    _reset_trace_counters()
-    zstart = np.asfortranarray(positions, dtype=np.float64)
-    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
-
-    # Run parallel simulation (calls trace_parallel in Fortran).
-    _simple_main.trace_parallel(_tracer)
-
-    zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-    _fortran_backend.params_wrapper.get_zend_bulk(n_particles, zend)
-    final_positions = np.ascontiguousarray(zend, dtype=np.float64)
-
-    loss_times = _load_loss_times(n_particles)
-
-    results: dict[str, np.ndarray] = {
-        "final_positions": final_positions,
-        "loss_times": np.ascontiguousarray(loss_times, dtype=np.float64),
-    }
-
-    if hasattr(params, "trap_par"):
-        trap_parameter = np.zeros(n_particles, dtype=np.float64)
-        _fortran_backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
-        results["trap_parameter"] = np.ascontiguousarray(
-            trap_parameter, dtype=np.float64
-        )
-
-    if hasattr(params, "perp_inv"):
-        perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
-        _fortran_backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
-        results["perpendicular_invariant"] = np.ascontiguousarray(
-            perpendicular_invariant, dtype=np.float64
-        )
-
-    return results
-
-
-def classify_parallel(
-    positions: np.ndarray,
-    integrator: str | int = MIDPOINT,
-) -> dict[str, np.ndarray]:
-    """
-    Trace and classify multiple particle orbits in parallel.
-
-    Performs orbit classification including:
-    - Trapped/passing determination
-    - Fractal dimension (regular vs chaotic)
-    - J_parallel conservation (trapped only)
-    - Topological classification (trapped only)
-
-    Parameters
-    ----------
-    positions : np.ndarray
-        Array of shape (5, n_particles) containing initial positions
-    integrator : str | int
-        Integration method (default: MIDPOINT)
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        Dictionary containing:
-        - 'final_positions': array of shape (5, n_particles)
-        - 'loss_times': array of shape (n_particles,)
-        - 'trap_parameter': array of shape (n_particles,)
-        - 'perpendicular_invariant': array of shape (n_particles,)
-        - 'passing': boolean array (True=passing, False=trapped)
-        - 'lost': boolean array (True=lost, False=confined)
-        - 'fractal': int array (0=unclassified, 1=regular, 2=chaotic)
-        - 'jpar': int array (0=unclassified, 1=regular, 2=stochastic)
-        - 'topology': int array (0=unclassified, 1=ideal, 2=non-ideal)
-
-    Note
-    ----
-    Classification requires params.ntcut > 0 to be set via init().
-    The trace time is determined by params.trace_time.
-
-    Example
-    -------
-    >>> pysimple.init('wout.nc', deterministic=True, trace_time=1e-3)
-    >>> particles = pysimple.sample_surface(100, s=0.5)
-    >>> results = pysimple.classify_parallel(particles)
-    >>> regular = results['fractal'] == 1
-    >>> chaotic = results['fractal'] == 2
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    # Resolve integrator
-    if isinstance(integrator, str):
-        key = integrator.lower()
-        if key not in _INTEGRATOR_ALIASES:
-            raise ValueError(f"Unknown integrator: {integrator}")
-        integrator_code = _INTEGRATOR_ALIASES[key]
-    else:
-        integrator_code = int(integrator)
-
-    positions = np.ascontiguousarray(positions, dtype=np.float64)
-    if positions.ndim != 2 or positions.shape[0] != 5:
-        raise ValueError(
-            f"positions must have shape (5, n_particles), got {positions.shape}"
-        )
-    n_particles = positions.shape[1]
-
-    # Set up simulation
-    params.ntestpart = n_particles
-    params.reallocate_arrays()
-    params.integmode = integrator_code
-    _ensure_trace_initialized()
-    _maybe_sync_single_surface_state(positions)
-    _reset_trace_counters()
-    zstart = np.asfortranarray(positions, dtype=np.float64)
-    _fortran_backend.params_wrapper.set_zstart_bulk(n_particles, zstart)
-
-    # Run parallel classification (calls classify_parallel in Fortran).
-    _simple_main.classify_parallel(_tracer)
-
-    zend = np.zeros((params.zstart_dim1, n_particles), dtype=np.float64, order="F")
-    _fortran_backend.params_wrapper.get_zend_bulk(n_particles, zend)
-
-    loss_times = _load_loss_times(n_particles)
-
-    trap_parameter = np.zeros(n_particles, dtype=np.float64)
-    _fortran_backend.params_wrapper.get_trap_par_bulk(n_particles, trap_parameter)
-
-    perpendicular_invariant = np.zeros(n_particles, dtype=np.float64)
-    _fortran_backend.params_wrapper.get_perp_inv_bulk(n_particles, perpendicular_invariant)
-
-    passing_i = np.zeros(n_particles, dtype=np.int32)
-    _fortran_backend.params_wrapper.get_class_passing_bulk(n_particles, passing_i)
-    passing = passing_i.astype(bool)
-
-    lost_i = np.zeros(n_particles, dtype=np.int32)
-    _fortran_backend.params_wrapper.get_class_lost_bulk(n_particles, lost_i)
-    lost = lost_i.astype(bool)
-
-    iclass = np.zeros((3, n_particles), dtype=np.int32, order="F")
-    _fortran_backend.params_wrapper.get_iclass_bulk(n_particles, iclass)
-
-    return {
-        "final_positions": np.ascontiguousarray(zend, dtype=np.float64),
-        "loss_times": np.ascontiguousarray(loss_times, dtype=np.float64),
-        "trap_parameter": np.ascontiguousarray(trap_parameter, dtype=np.float64),
-        "perpendicular_invariant": np.ascontiguousarray(perpendicular_invariant, dtype=np.float64),
-        "passing": np.ascontiguousarray(passing, dtype=bool),
-        "lost": np.ascontiguousarray(lost, dtype=bool),
-        "jpar": np.ascontiguousarray(iclass[0, :], dtype=np.int32),
-        "topology": np.ascontiguousarray(iclass[1, :], dtype=np.int32),
-        "fractal": np.ascontiguousarray(iclass[2, :], dtype=np.int32),
-    }
-
-
-def classify_fast(
-    positions: np.ndarray,
-    nturns: int = 8,
-    integrator: str | int = MIDPOINT,
-) -> dict[str, np.ndarray]:
-    """
-    Fast classification using jpar and topology only (stops after nturns).
-
-    This sets fast_class=True internally, causing integration to stop after
-    nturns recurrence periods when jpar/topology classification completes.
-    Fractal classification is disabled.
-
-    Parameters
-    ----------
-    positions : np.ndarray
-        Array of shape (5, n_particles) containing initial positions
-    nturns : int
-        Number of recurrence periods for jpar/topology (default: 8)
-    integrator : str | int
-        Integration method (default: MIDPOINT)
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        Dictionary containing:
-        - 'jpar': J-parallel conservation (0=unclassified, 1=regular, 2=stochastic)
-        - 'topology': Topological classification (0=unclassified, 1=ideal, 2=non-ideal)
-        - 'passing': boolean array
-        - 'lost': boolean array
-        - Other trace results
-
-    Example
-    -------
-    >>> pysimple.init('wout.nc', deterministic=True)
-    >>> particles = pysimple.sample_surface(100, s=0.5)
-    >>> results = pysimple.classify_fast(particles, nturns=8)
-    >>> jpar_regular = (results['jpar'] == 1).sum()
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    params.nturns = int(nturns)
-    params.fast_class = True
-    params.tcut = -1.0
-
-    return classify_parallel(positions, integrator=integrator)
-
-
-def classify_fractal(
-    positions: np.ndarray,
-    tcut: float = 0.1,
-    integrator: str | int = MIDPOINT,
-) -> dict[str, np.ndarray]:
-    """
-    Fractal classification using fractal dimension only.
-
-    Computes fractal dimension at time tcut. Integration continues
-    to full trace_time. jpar/topology classifiers are NOT run (fast_class disabled).
-
-    Parameters
-    ----------
-    positions : np.ndarray
-        Array of shape (5, n_particles) containing initial positions
-    tcut : float
-        Time cutoff for fractal classification (default: 0.1)
-    integrator : str | int
-        Integration method (default: MIDPOINT)
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        Dictionary containing:
-        - 'fractal': Fractal dimension (0=unclassified, 1=regular, 2=chaotic)
-        - 'jpar': Will be 0 (unclassified) - not computed
-        - 'topology': Will be 0 (unclassified) - not computed
-        - 'passing': boolean array
-        - 'lost': boolean array
-        - Other trace results
-
-    Note
-    ----
-    Fractal dimension needs many more footprints than jpar/topology, so tcut is
-    typically larger (0.1 or more).
-
-    Example
-    -------
-    >>> pysimple.init('wout.nc', deterministic=True, trace_time=1e-3)
-    >>> particles = pysimple.sample_surface(100, s=0.5)
-    >>> results = pysimple.classify_fractal(particles, tcut=0.1)
-    >>> fractal_regular = (results['fractal'] == 1).sum()
-    >>> fractal_chaotic = (results['fractal'] == 2).sum()
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-
-    params.tcut = float(tcut)
-    params.fast_class = False
-
-    return classify_parallel(positions, integrator=integrator)
-
-
-def current_vmec() -> str | None:
-    """Return the currently loaded VMEC file path."""
-    return _current_vmec
-
-
-def write_output() -> None:
-    """
-    Write output files for the current simulation.
-
-    Writes ASCII output files (times_lost.dat, etc.) and optionally
-    results.nc if output_results_netcdf=True was set in init().
-
-    The results.nc file contains:
-    - times_lost, trap_par, perp_inv: Per-particle loss data
-    - zstart, zend: Phase space positions (rho, theta, zeta, p, v_par/v)
-    - xstart_cart, xend_cart: Cartesian positions (x, y, z) in cm
-    - iclass, class_lost: Classification data
-    - Global attributes with simulation config
-
-    Example
-    -------
-    >>> pysimple.init('wout.nc', output_results_netcdf=True)
-    >>> particles = pysimple.sample_surface(100, s=0.5)
-    >>> pysimple.trace_parallel(particles)
-    >>> pysimple.write_output()  # Creates results.nc and ASCII files
-    """
-    if not _initialized:
-        raise RuntimeError("SIMPLE not initialized. Call pysimple.init() first.")
-    _simple_main.write_output()
-
-
 __all__ = [
-    'init',
-    'sample_surface',
-    'sample_volume',
-    'load_particles',
-    'trace_orbit',
-    'trace_parallel',
-    'classify_parallel',
-    'classify_fast',
-    'classify_fractal',
-    'current_vmec',
-    'write_output',
-    'params',
-    'RK45',
-    'EXPL_IMPL_EULER',
-    'IMPL_EXPL_EULER',
-    'MIDPOINT',
-    'GAUSS1',
-    'GAUSS2',
-    'GAUSS3',
-    'GAUSS4',
-    'LOBATTO3',
+    "init", "sample", "sample_surface", "sample_volume", "load_particles",
+    "trace_parallel", "classify_parallel", "classify_fast", "classify_fractal",
+    "write_output", "trace_orbit", "compute_canonical_frequencies",
+    "invariants_from_state", "states_from_invariants",
+    "states_from_potato_invariants", "trace_to_cut", "params",
+    "RK45", "EXPL_IMPL_EULER", "IMPL_EXPL_EULER", "MIDPOINT", "GAUSS1",
+    "GAUSS2", "GAUSS3", "GAUSS4", "LOBATTO3",
+    "ORBIT_CLASS_UNKNOWN", "ORBIT_CLASS_TRAPPED", "ORBIT_CLASS_PASSING",
+    "FREQ_SUCCESS", "FREQ_INVALID_INPUT", "FREQ_ORBIT_LOST",
+    "FREQ_INTEGRATOR_ERROR", "FREQ_MAX_STEPS",
+    "INVARIANT_SUCCESS", "INVARIANT_INVALID_INPUT", "INVARIANT_NOT_AXISYMMETRIC",
+    "INVARIANT_NO_INTERSECTION", "INVARIANT_ROOT_FAILURE", "INVARIANT_CAPACITY",
+    "SECTION_EXTREMUM_UNKNOWN", "SECTION_B_MINIMUM", "SECTION_B_MAXIMUM",
+    "CUT_ANY", "CUT_TIP", "CUT_TOROIDAL",
 ]

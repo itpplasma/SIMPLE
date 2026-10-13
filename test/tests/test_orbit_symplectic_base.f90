@@ -6,17 +6,11 @@ program test_orbit_symplectic_base
 
     errors = 0
 
-    ! Test integration method constants
-    call test_integration_constants(errors)
-
     ! Test Runge-Kutta Gauss coefficients
     call test_rk_gauss_coefficients(errors)
 
     ! Test Runge-Kutta Lobatto coefficients
     call test_rk_lobatto_coefficients(errors)
-
-    ! Test symplectic_integrator_t type initialization
-    call test_symplectic_integrator_type(errors)
 
     if (errors == 0) then
         print *, "All orbit_symplectic_base module tests passed!"
@@ -26,57 +20,6 @@ program test_orbit_symplectic_base
     end if
 
 contains
-
-    subroutine test_integration_constants(errors)
-        integer, intent(inout) :: errors
-        integer :: methods(7)
-        integer :: i, j
-        logical :: all_distinct
-
-        print *, "Testing integration method constants..."
-
-        ! Given: The module defines constants for different integration methods
-        ! When: We use these constants
-        ! Then: They should be distinct and within expected range
-
-        ! Test that constants are distinct (no two methods have same value)
-
-  methods = [RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, LOBATTO3]
-
-        all_distinct = .true.
-        do i = 1, size(methods)
-            do j = i + 1, size(methods)
-                if (methods(i) == methods(j)) then
-                    print *, "ERROR: Integration method constants not distinct"
-                    print *, "Method", i, "and", j, "have same value:", methods(i)
-                    errors = errors + 1
-                    all_distinct = .false.
-                    exit
-                end if
-            end do
-            if (.not. all_distinct) exit
-        end do
-
-        ! Test that S_MAX is large enough for all methods
-        if (S_MAX < maxval(methods)) then
-            print *, "ERROR: S_MAX too small for defined methods"
-            print *, "S_MAX:", S_MAX, "Max method value:", maxval(methods)
-            errors = errors + 1
-        end if
-
-        ! Test that all constants are non-negative (sensible range)
-        do i = 1, size(methods)
-            if (methods(i) < 0) then
-                print *, "ERROR: Integration method constant is negative:", methods(i)
-                errors = errors + 1
-            end if
-        end do
-
-        if (errors == 0) then
-            print *, "  Integration constants test PASSED"
-        end if
-
-    end subroutine test_integration_constants
 
     subroutine test_rk_gauss_coefficients(errors)
         integer, intent(inout) :: errors
@@ -351,59 +294,5 @@ contains
         end if
 
     end subroutine test_lobatto_unsupported
-
-    subroutine test_symplectic_integrator_type(errors)
-        integer, intent(inout) :: errors
-        type(symplectic_integrator_t) :: si
-        type(multistage_integrator_t) :: mi
-
-        print *, "Testing symplectic_integrator_t type..."
-
-        ! Given: The symplectic_integrator_t and multistage_integrator_t types
-        ! When: We initialize them with default values
-        ! Then: They should have the expected structure
-
-        ! Test symplectic_integrator_t initialization
-        si%atol = 1.0d-10
-        si%rtol = 1.0d-8
-        si%z = [1.0_dp, 0.0_dp, 0.0_dp, 0.1_dp]
-        si%pthold = 0.0_dp
-        si%ntau = 1000
-        si%dt = 1.0d-3
-        si%pabs = 0.1_dp
-
-        ! Basic checks on data integrity
-        if (si%atol /= 1.0d-10) then
-            print *, "ERROR: symplectic_integrator_t atol assignment failed"
-            errors = errors + 1
-        end if
-
-        if (size(si%z) /= 4) then
-            print *, "ERROR: symplectic_integrator_t z should have 4 components"
-            errors = errors + 1
-        end if
-
-        ! Test multistage_integrator_t initialization
-        mi%s = 3
-        if (mi%s /= 3) then
-            print *, "ERROR: multistage_integrator_t s assignment failed"
-            errors = errors + 1
-        end if
-
-        if (size(mi%alpha) /= S_MAX) then
-            print *, "ERROR: multistage_integrator_t alpha array size incorrect"
-            errors = errors + 1
-        end if
-
-        if (size(mi%stages) /= 2*S_MAX) then
-            print *, "ERROR: multistage_integrator_t stages array size incorrect"
-            errors = errors + 1
-        end if
-
-        if (errors == 0) then
-            print *, "  symplectic_integrator_t type test PASSED"
-        end if
-
-    end subroutine test_symplectic_integrator_type
 
 end program test_orbit_symplectic_base

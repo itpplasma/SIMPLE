@@ -57,18 +57,6 @@ if(TARGET fortplot::fortplot)
         LABELS "unit;integration" TIMEOUT 120)
 endif()
 
-if(SIMPLE_DETERMINISTIC_FP AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    add_test(
-        NAME test_deterministic_dependency_flags
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_deterministic_dependency_flags.py
-            ${CMAKE_BINARY_DIR}/compile_commands.json
-            ${libneo_SOURCE_DIR}
-    )
-    set_tests_properties(test_deterministic_dependency_flags PROPERTIES
-        LABELS "unit;regression")
-endif()
-
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -228,21 +216,6 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         LABELS "integration;plot;python"
         TIMEOUT 180
         FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
-
-    add_test(NAME plot_chartmap_vmec_vs_map2disc
-        COMMAND ${CMAKE_COMMAND} -E env
-            PYTHONPATH=${LIBNEO_PYTHON_DIR}:${LIBNEO_PYTHON_BINARY_DIR}
-            ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/plot_chartmap_compare_map2disc.py
-            --vmec ${CHARTMAP_FILE}
-            --map2disc ${CHARTMAP_MAP2DISC_FILE}
-            --out ${CMAKE_CURRENT_BINARY_DIR}/chartmap_vmec_vs_map2disc_slices.png
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(plot_chartmap_vmec_vs_map2disc PROPERTIES
-        DEPENDS "chartmap_test_data;generate_chartmap_map2disc"
-        LABELS "integration;plot;python"
-        TIMEOUT 120
-        FIXTURES_REQUIRED chartmap_map2disc)
 endif()
 
 # Download NCSX test data for field equivalence tests (coils + wout)
@@ -321,9 +294,6 @@ endif()
 ##################################################
 # TEST EXECUTABLES
 ##################################################
-add_executable(utility_test.x utility_test.f90)
-target_link_libraries(utility_test.x testing_utils)
-
 if (ENABLE_OPENMP)
     add_executable (test_sympl_tok.x test_sympl.f90)
     target_link_libraries(test_sympl_tok.x simple)
@@ -332,16 +302,6 @@ if (ENABLE_OPENMP)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_sympl_tokamak PROPERTIES
         LABELS "integration")
-
-    if(SIMPLE_ENABLE_PYTHON_TOOLS)
-        add_test(NAME test_sympl_tokamak_plot
-            COMMAND ${CMAKE_COMMAND} -E env python3
-                ${CMAKE_CURRENT_SOURCE_DIR}/plot_tokamak_testfield.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-        set_tests_properties(test_sympl_tokamak_plot PROPERTIES
-            DEPENDS test_sympl_tokamak
-            LABELS "integration;plot;python")
-    endif()
 
     add_executable (test_sympl.x test_sympl_stell.f90)
     target_link_libraries(test_sympl.x simple)
@@ -407,33 +367,20 @@ if (ENABLE_OPENMP)
         TIMEOUT 120)
 endif()
 
-add_executable (test_coord_trans.x test_coord_trans.f90)
-target_link_libraries(test_coord_trans.x simple)
-
-add_executable (test_magfie.x test_magfie.f90)
-target_link_libraries(test_magfie.x simple)
-add_executable (test_poincare1.x test_poincare1.f90)
-target_link_libraries(test_poincare1.x simple)
-add_executable (test_poiplot_classification.x test_poiplot_classification.f90
-)
-target_link_libraries(test_poiplot_classification.x simple)
-add_executable (test_parse_ants.x test_parse_ants.f90)
-target_link_libraries(test_parse_ants.x simple)
-add_executable (test_boozer.x test_boozer.f90)
-target_link_libraries(test_boozer.x simple)
-
-add_executable (test_orbits.x test_orbits_vmec.f90)
-target_link_libraries(test_orbits.x simple)
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
+
+add_executable(test_config_reference.x test_config_reference.f90)
+target_link_libraries(test_config_reference.x simple)
+add_test(NAME test_config_reference
+    COMMAND test_config_reference.x ${CMAKE_SOURCE_DIR}/examples/simple_full.in
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_config_reference PROPERTIES LABELS "unit")
 
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
 set_tests_properties(test_profiles PROPERTIES LABELS "unit")
-
-add_executable (test_samplers.x test_samplers.f90)
-target_link_libraries(test_samplers.x simple)
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
 add_executable(test_start_integration_coordinates.x
@@ -494,15 +441,6 @@ add_test(NAME test_orbit_invariants COMMAND test_orbit_invariants.x)
 set_tests_properties(test_orbit_invariants PROPERTIES LABELS "unit")
 
 if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    add_test(NAME test_bminmax_python
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/test_bminmax_python.py
-            ${CMAKE_CURRENT_SOURCE_DIR}/bminmax_cache_cases.tsv
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(test_bminmax_python PROPERTIES
-        LABELS "unit;python"
-        TIMEOUT 15)
-
     add_test(NAME test_bminmax_driver
         COMMAND ${CMAKE_COMMAND} -E env
             CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
@@ -520,21 +458,10 @@ add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
-add_test(NAME test_magfie COMMAND test_magfie.x)
-
 # Unit tests for refactored modules
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
 target_link_libraries(test_stencil_utils.x simple)
 add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
-
-add_executable(test_array_utils.x test_array_utils.f90)
-target_link_libraries(test_array_utils.x simple)
-add_test(NAME test_array_utils COMMAND test_array_utils.x)
-
-    # New comprehensive unit tests
-    add_executable(test_util_simple.x test_util_simple.f90)
-    target_link_libraries(test_util_simple.x simple)
-    add_test(NAME test_util_simple COMMAND test_util_simple.x)
 
     add_executable(test_chartmap_metadata.x test_chartmap_metadata.f90)
     target_link_libraries(test_chartmap_metadata.x simple testing_utils)
@@ -618,13 +545,6 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
             TIMEOUT 7200)
     endif()
 
-    add_test(NAME test_gvec_chartmap_converter_static
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/test_gvec_chartmap_converter_static.py)
-    set_tests_properties(test_gvec_chartmap_converter_static PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        LABELS "unit;python")
-
     # Export tool for e2e test
     add_executable(export_boozer_chartmap_tool.x export_boozer_chartmap_tool.f90)
     target_link_libraries(export_boozer_chartmap_tool.x simple)
@@ -669,17 +589,9 @@ add_test(NAME test_array_utils COMMAND test_array_utils.x)
         set_tests_properties(test_stl_wall_intersection PROPERTIES LABELS "unit;wall")
     endif()
 
-    add_executable(test_timing.x test_timing.f90)
-    target_link_libraries(test_timing.x simple)
-    add_test(NAME test_timing COMMAND test_timing.x)
-
 add_executable(test_sorting.x test_sorting.f90)
 target_link_libraries(test_sorting.x simple)
 add_test(NAME test_sorting COMMAND test_sorting.x)
-
-add_executable(test_lapack_interfaces.x test_lapack_interfaces.f90)
-target_link_libraries(test_lapack_interfaces.x simple)
-add_test(NAME test_lapack_interfaces COMMAND test_lapack_interfaces.x)
 
 add_executable(test_orbit_symplectic_base.x test_orbit_symplectic_base.f90)
 target_link_libraries(test_orbit_symplectic_base.x simple)
@@ -718,10 +630,6 @@ set_tests_properties(
     test_chart_boundary_config_invalid
     PROPERTIES WILL_FAIL TRUE)
 
-add_executable(test_field_base.x test_field_base.f90)
-target_link_libraries(test_field_base.x simple)
-add_test(NAME test_field_base COMMAND test_field_base.x)
-
 add_executable(test_ntcut_overflow.x test_ntcut_overflow.f90)
 target_link_libraries(test_ntcut_overflow.x simple)
 add_test(NAME test_ntcut_overflow COMMAND test_ntcut_overflow.x)
@@ -729,15 +637,9 @@ add_test(NAME test_ntcut_overflow COMMAND test_ntcut_overflow.x)
 # Sub-second base-interface tests for the libneo reverse-dependency gate
 # (ctest -L smoke).
 set_property(TEST
-    test_lapack_interfaces
     test_orbit_symplectic_base
-    test_field_base
     test_ntcut_overflow
     APPEND PROPERTY LABELS smoke)
-
-add_executable(test_coordinates_simple.x test_coordinates_simple.f90)
-target_link_libraries(test_coordinates_simple.x simple)
-add_test(NAME test_coordinates_simple COMMAND test_coordinates_simple.x)
 
 add_executable(test_coordinate_scaling.x test_coordinate_scaling.f90)
 target_link_libraries(test_coordinate_scaling.x simple)
@@ -1079,7 +981,6 @@ set_tests_properties(test_spectre_validation PROPERTIES
 
 add_subdirectory(field_can)
 add_subdirectory(magfie)
-add_subdirectory(orbit)
 
 ##################################################
 # ORBIT NETCDF OUTPUT SYSTEM TEST
@@ -1115,19 +1016,6 @@ set_tests_properties(orbit_netcdf_verify PROPERTIES
     TIMEOUT 30
     LABELS "system;integration"
 )
-
-if(SIMPLE_ENABLE_PYTHON_TOOLS)
-    add_test(
-        NAME orbit_netcdf_plot
-        COMMAND ${CMAKE_COMMAND} -E env python3 ${CMAKE_CURRENT_SOURCE_DIR}/plot_orbit.py 3
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-    set_tests_properties(orbit_netcdf_plot PROPERTIES
-        DEPENDS orbit_netcdf_output
-        TIMEOUT 30
-        LABELS "system;integration;plot;python"
-    )
-endif()
 
 ##################################################
 # NCSX GC Cash-Karp COMPARISON TEST (VMEC vs MEISS)

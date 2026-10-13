@@ -106,9 +106,10 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 - `simple.x`: Primary executable requiring `simple.in` and VMEC file
 - Example inputs in `examples/simple.in` and downloadable `wout.nc`
 
-### Python Interface
-- `simple` package (`python/simple/`) - batch-oriented API with `ParticleBatch`, `BatchResults`, and `trace_orbits`
-- Example: `examples/simple_api.py` - minimal usage demonstration with the cleaned API
+### Library and Python Interface
+- `src/simple_api.f90`: Fortran library interface (configuration, sampling, tracing, single-orbit diagnostics); `simple.x` runs the same phases from `simple_main::main`
+- `pysimple` (`python/pysimple/`): thin wrapper of `simple_api` and `params`; `pysimple.init(config="simple.in")` reproduces `simple.x`. Guide: `python/README.rst`
+- `examples/simple_full.in`: every `&config`/`&profiles` key at its default; `test_config_reference` keeps it in sync
 
 ### Output Files
 - `confined_fraction.dat`: Main confinement statistics over time

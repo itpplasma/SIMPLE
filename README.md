@@ -11,7 +11,7 @@ optimization.
 
 The standard run uses a VMEC equilibrium in NetCDF format, nested magnetic
 flux surfaces, and collisionless guiding-center orbits. Other field and orbit
-modes are documented in `DOC/config.md` and `examples/simple_full.in`. The
+modes are documented in `examples/simple_full.in` and `DOC/config.md`. The
 software is distributed under the MIT License. The FIRM3D-compatible tracing
 implementation has separate provenance information in
 [LICENSES/FIRM3D-MIT.txt](LICENSES/FIRM3D-MIT.txt).
@@ -77,23 +77,17 @@ Create the recommended repository-local environment with:
 source .venv/bin/activate
 ```
 
-For a Python example, see `examples/simple_api.py`:
+The Python package `pysimple` runs the same code as `simple.x` and is
+configured with the same `simple.in`:
 
 ```python
 import pysimple
 
-pysimple.init("wout.nc", deterministic=True, trace_time=1e-3)
-particles = pysimple.sample_surface(100, s=0.5)
-results = pysimple.trace_parallel(particles)
-lost = ((results["loss_times"] > 0.0) &
-        (results["loss_times"] < 1e-3)).sum()
-skipped = (results["loss_times"] < 0.0).sum()
-print(f"Lost: {lost} particles (skipped deep-passing: {skipped})")
+pysimple.init(config="simple.in")            # or pysimple.init("wout.nc", trace_time=1e-3)
+result = pysimple.trace_parallel(pysimple.sample())
 ```
 
-Examples for classification, trajectories, and plotting are also included. The
-Python interface accepts the parameters documented in `src/params.f90` and
-`DOC/config.md`.
+See `python/README.rst` and `examples/simple_api.py`.
 
 ## CPU quickstart
 
@@ -107,7 +101,8 @@ wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O run/wout.nc
 (cd run && ../build/simple.x simple.in)
 ```
 
-`examples/simple_full.in` contains the complete input file with comments.
+`examples/simple_full.in` lists every input key with its default value and
+meaning; a run needs only the keys that differ.
 `examples/run_example.sh` performs the same setup in `/tmp/simple_example`.
 
 The main outputs are:
