@@ -2,8 +2,9 @@ program study_mu_scattering
     !> Statistics of the magnetic-moment change of markers that cross the sheet
     !> thousands of times, for one scheme per run.
     !>
-    !> usage: study_mu_scattering.x SCHEME H WIDTH A_OUT P_PHI [G_MIN L]
-    !>   SCHEME  rk45 | midpoint_region | naive | landing | poincare
+    !> usage: study_mu_scattering.x SCHEME H WIDTH A_OUT P_PHI [G_MIN L [T_END]]
+    !>   SCHEME  rk45 | midpoint_region | naive | landing | poincare |
+    !>           poincare_gauss2 (G_MIN = 1: plain Gauss-Legendre)
     !>   H       step (rk45: tolerance)
     !>   WIDTH   smooth layer width (0: sharp sheet; poincare needs > 0)
     !>   A_OUT   outer psi coefficient (inner is 1): sets the direction jump
@@ -20,21 +21,23 @@ program study_mu_scattering
     use sheet_field, only: field_params_t, region_of, bfield, psi_value, &
         hamiltonian
     use fo_sheet, only: sheet_step, step_stats_t, SCHEME_NAIVE, &
-        SCHEME_MIDPOINT_REGION, SCHEME_LANDING, poincare_step, poincare_params_t
+        SCHEME_MIDPOINT_REGION, SCHEME_LANDING, poincare_step, poincare_params_t, &
+        poincare_gauss2_step
     use rk_reference, only: rk_advance
     use sheet_setup, only: initial_state
     implicit none
 
     integer, parameter :: NMARKER = 256
-    real(dp), parameter :: T_END = 4.0e4_dp, T_AVG = 200.0_dp, SPEED = 0.05_dp
+    real(dp), parameter :: T_AVG = 200.0_dp, SPEED = 0.05_dp
     real(dp), parameter :: RK_SAMPLE = 0.1_dp
 
     type(field_params_t) :: par
     type(poincare_params_t) :: pp
+    real(dp) :: T_END = 4.0e4_dp
     character(32) :: scheme, arg
-    real(dp) :: h, mu0(NMARKER), mu1(NMARKER), d(NMARKER)
+    real(dp) :: h, mu0(NMARKER), mu1(NMARKER), d(NMARKER), de(NMARKER)
     integer :: im, crossings(NMARKER)
-    integer(8) :: steps(NMARKER)
+    integer(8) :: steps(NMARKER), clock0, clock1, clock_rate
 
     call get_command_argument(1, scheme)
     call get_command_argument(2, arg)
@@ -53,25 +56,33 @@ program study_mu_scattering
         call get_command_argument(7, arg)
         read (arg, *) pp%length
     end if
+    if (command_argument_count() >= 8) then
+        call get_command_argument(8, arg)
+        read (arg, *) T_END
+    end if
 
+    call system_clock(clock0, clock_rate)
     !$omp parallel do default(shared) private(im) schedule(dynamic)
     do im = 1, NMARKER
-        call run_marker(im, mu0(im), mu1(im), crossings(im), steps(im))
+        call run_marker(im, mu0(im), mu1(im), crossings(im), steps(im), de(im))
     end do
     !$omp end parallel do
 
+    call system_clock(clock1)
     d = mu1/mu0 - 1.0_dp
-    print '(A16,A,F7.4,A,ES8.1,A,F4.1,A,F5.2,A,ES10.3,A,ES10.3,A,I6,A,F8.1)', &
+    print '(A16,A,F7.4,A,ES8.1,A,F4.1,A,F5.2,A,ES10.3,A,ES10.3,A,I6,A,F8.1,A,F8.2,A,ES9.2)', &
         trim(scheme), ' h ', h, ' w ', par%width, ' a_out ', par%a_out, &
         ' p_phi ', par%p_phi, '  rms ', sqrt(sum(d**2)/NMARKER), '  mean ', sum(d)/NMARKER, &
         '  crossings ', sum(crossings)/NMARKER, '  steps/time ', &
-        real(sum(steps), dp)/(NMARKER*T_END)
+        real(sum(steps), dp)/(NMARKER*T_END), '  wall s ', &
+        real(clock1 - clock0, dp)/real(clock_rate, dp), '  rms dH/H end ', &
+        sqrt(sum(de**2)/NMARKER)
 
 contains
 
-    subroutine run_marker(im, m0, m1, ncross, nstep)
+    subroutine run_marker(im, m0, m1, ncross, nstep, de_end)
         integer, intent(in) :: im
-        real(dp), intent(out) :: m0, m1
+        real(dp), intent(out) :: m0, m1, de_end
         integer, intent(out) :: ncross
         integer(8), intent(out) :: nstep
 
@@ -108,8 +119,12 @@ contains
                 dt = h
                 call sheet_step(par, SCHEME_LANDING, region, z, h, z_new, stats)
                 z = z_new
-            case ('poincare')
-                call poincare_step(par, pp, z, e0, h, z_new, dt, ok)
+            case ('poincare', 'poincare_gauss2')
+                if (trim(scheme) == 'poincare') then
+                    call poincare_step(par, pp, z, e0, h, z_new, dt, ok)
+                else
+                    call poincare_gauss2_step(par, pp, z, e0, h, z_new, dt, ok)
+                end if
                 if (.not. ok) stats%failures = stats%failures + 1
                 if (region_of(par, z_new(1:2)) /= region) &
                     stats%crossings = stats%crossings + 1
@@ -124,6 +139,7 @@ contains
             if (t > T_END - T_AVG) m1 = m1 + mu_of(z, region)*dt
         end do
         if (trim(scheme) /= 'rk45') ncross = stats%crossings
+        de_end = hamiltonian(par, region, z)/e0 - 1.0_dp
     end subroutine run_marker
 
     real(dp) function mu_of(z, region) result(mu)
