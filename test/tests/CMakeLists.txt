@@ -1046,6 +1046,10 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
 
+add_subdirectory(
+    "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
+    "${CMAKE_CURRENT_BINARY_DIR}/canonical_switch")
+
 # Concept-only Gauss2 full orbit: not part of libsimple and not selectable
 # from simple.in. Built here so the generated-kernel proof chain stays executable.
 set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
