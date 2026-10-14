@@ -57,8 +57,7 @@ program test_spectre_multivolume_init
     initial_angles = si%z(2:3)
     completed = 0
     do k = 1, NSTEP
-        call orbit_microstep_sympl_spectre(state, si, f, 1, 0.0_dp, &
-            0.0_dp, status, t_frac)
+        call orbit_microstep_sympl_spectre(state, si, f, status, t_frac)
         if (status /= SYMPL_SPECTRE_OK) exit
         if (.not. all(ieee_is_finite(si%z))) error stop 'nonfinite GC state'
         if (abs(t_frac - 1.0_dp) > 1d-12) error stop 'incomplete microstep'
@@ -89,8 +88,7 @@ program test_spectre_multivolume_init
     call sympl_spectre_reset(state, si, spectre_mvol, integmode, crossing_level)
     call sympl_landing_stats_reset
     do k = 1, 100
-        call orbit_microstep_sympl_spectre(state, si, f, 1, 0.0_dp, &
-            0.0_dp, status, t_frac)
+        call orbit_microstep_sympl_spectre(state, si, f, status, t_frac)
         if (status /= SYMPL_SPECTRE_OK) exit
     end do
     print '(A,I0,A,F14.10,A,ES12.4)', 'outer-edge status = ', status, &

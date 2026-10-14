@@ -22,7 +22,7 @@ program test_spectre_fo_interfaces
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple, only: init_sympl
     use simple_api, only: simple_read_config, simple_init
-    use params, only: dtaumin, relerr, v0, crossing_level, integmode
+    use params, only: dtaumin, relerr, crossing_level, integmode
     use magfie_sub, only: init_magfie, SPECTRE
     use field_can_mod, only: field_can_t, ref_to_integ
     use field_can_spectre, only: spectre_mvol
@@ -156,8 +156,7 @@ contains
         visited = .false.
         call sympl_fo_stats(entries0, exits0, losses, failures, counts)
         do k = 1, NSTEP
-            call orbit_microstep_sympl_spectre(state, si, f, im, &
-                real(k - 1, dp)*dtaumin/v0, dtaumin/v0, ierr, t_frac)
+            call orbit_microstep_sympl_spectre(state, si, f, ierr, t_frac)
             if (ierr /= SYMPL_SPECTRE_OK) then
                 print '(A,I0,A,I0)', 'marker ', im, ' stopped with ', ierr
                 error stop 'incomplete marker trace'

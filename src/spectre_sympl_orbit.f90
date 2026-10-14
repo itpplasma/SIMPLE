@@ -33,7 +33,6 @@ module spectre_sympl_orbit
     integer, parameter :: SYMPL_SPECTRE_LOSS = 88
     integer, parameter :: SYMPL_SPECTRE_STOP = 89
     integer, parameter :: STOP_SHEET = 1, STOP_TELEPORT = 2, STOP_STEP = 3
-    integer, parameter :: STOP_LANDING = 4
     !> Landing target and acceptance for |rho_g - k| at the interface. The
     !> h*-solve aims at landing_tol; the per-volume splines are clamped at the
     !> volume edge, which kinks the landed rho_g just outside the interface, so a
@@ -87,7 +86,6 @@ module spectre_sympl_orbit
     !> Hot-path statistics are per-thread. Each OpenMP worker writes only its
     !> own slot; totals are reduced after the parallel trace has joined.
     integer, allocatable :: n_landings(:), n_landing_evals(:), n_stops(:)
-    integer, allocatable :: n_stop_reason(:, :)
     integer, allocatable :: n_fo_entries(:), n_fo_exits(:), n_fo_losses(:)
     integer, allocatable :: n_fo_failures(:), n_fo_failure_status(:, :)
     real(dp), allocatable :: max_landing_resid(:)
@@ -144,8 +142,7 @@ contains
         call set_spectre_volume_lock(lvol)
     end subroutine set_home_volume
 
-    subroutine orbit_microstep_sympl_spectre(state, si, f, ipart, t_base_sec, &
-            dt_sec, ierr, t_frac)
+    subroutine orbit_microstep_sympl_spectre(state, si, f, ierr, t_frac)
         !> Advance one microstep of length state%dt_std, resolving interface
         !> events by exact-landing substeps. On SYMPL_SPECTRE_LOSS or
         !> SYMPL_SPECTRE_STOP the orbit terminates at fraction t_frac of the
@@ -153,8 +150,6 @@ contains
         type(sympl_spectre_state_t), intent(inout) :: state
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
-        integer, intent(in) :: ipart
-        real(dp), intent(in) :: t_base_sec, dt_sec
         integer, intent(out) :: ierr
         real(dp), intent(out) :: t_frac
 
@@ -182,9 +177,7 @@ contains
                     si%dt = state%dt_std
                     return
                 end if
-                call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
-                    dt_sec*used/state%dt_std, state%fo%iface, 1, STOP_SHEET, &
-                    used, state%dt_std, ierr, t_frac)
+                call finish_fo_error(ierr_fo, used, state%dt_std, ierr, t_frac)
                 si%dt = state%dt_std
                 return
             end if
@@ -199,9 +192,8 @@ contains
         do
             iters = iters + 1
             if (iters > max_iters) then
-                call recover_local_error(state, si, f, ipart, t_base_sec + &
-                    dt_sec*used/state%dt_std, STOP_STEP, budget, used, ierr, &
-                    t_frac, resume_gc)
+                call recover_local_error(state, si, f, STOP_STEP, budget, used, &
+                    ierr, t_frac, resume_gc)
                 if (resume_gc) then
                     iters = 0
                     h_try = budget
@@ -218,9 +210,8 @@ contains
                     if (ierr_fo /= SPECTRE_FO_OK) then
                         if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
                             budget, used, ierr, t_frac)) exit
-                        call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
-                            dt_sec*used/state%dt_std, iface, 0, STOP_SHEET, used, &
-                            state%dt_std, ierr, t_frac)
+                        call finish_fo_error(ierr_fo, used, state%dt_std, ierr, &
+                            t_frac)
                         exit
                     end if
                     if (.not. fo_exited .or. &
@@ -244,9 +235,8 @@ contains
                     end if
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
-                    call recover_local_error(state, si, f, ipart, t_base_sec + &
-                        dt_sec*used/state%dt_std, STOP_TELEPORT, budget, used, &
-                        ierr, t_frac, resume_gc)
+                    call recover_local_error(state, si, f, STOP_TELEPORT, budget, &
+                        used, ierr, t_frac, resume_gc)
                     if (resume_gc) then
                         h_try = budget
                         cycle
@@ -272,9 +262,8 @@ contains
                     end if
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
-                    call recover_local_error(state, si, f, ipart, t_base_sec + &
-                        dt_sec*used/state%dt_std, STOP_STEP, budget, used, ierr, &
-                        t_frac, resume_gc)
+                    call recover_local_error(state, si, f, STOP_STEP, budget, &
+                        used, ierr, t_frac, resume_gc)
                     if (resume_gc) then
                         h_try = budget
                         cycle
@@ -307,9 +296,7 @@ contains
                 if (ierr_fo /= SPECTRE_FO_OK) then
                     if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
                         budget, used, ierr, t_frac)) exit
-                    call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
-                        dt_sec*used/state%dt_std, iface, direction, STOP_LANDING, &
-                        used, state%dt_std, ierr, t_frac)
+                    call finish_fo_error(ierr_fo, used, state%dt_std, ierr, t_frac)
                     exit
                 end if
                 if (.not. fo_exited .or. &
@@ -331,9 +318,7 @@ contains
                 if (ierr_fo /= SPECTRE_FO_OK) then
                     if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
                         budget, used, ierr, t_frac)) exit
-                    call finish_fo_error(ierr_fo, si, f, ipart, t_base_sec + &
-                        dt_sec*used/state%dt_std, iface, direction, STOP_LANDING, &
-                        used, state%dt_std, ierr, t_frac)
+                    call finish_fo_error(ierr_fo, used, state%dt_std, ierr, t_frac)
                     exit
                 end if
                 if (.not. fo_exited .or. &
@@ -722,16 +707,15 @@ contains
         end if
     end function step_teleported
 
-    subroutine recover_local_error(state, si, f, ipart, t_sec, reason, budget, &
-            used, ierr, t_frac, resume_gc)
+    subroutine recover_local_error(state, si, f, reason, budget, used, &
+            ierr, t_frac, resume_gc)
         !> A bulk or axis-local solver failure has no interface metadata. Do not
         !> invent an interior interface from nint(rho): interface FO recovery is
         !> valid only after an actual landed interface event.
         type(sympl_spectre_state_t), intent(inout) :: state
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
-        integer, intent(in) :: ipart, reason
-        real(dp), intent(in) :: t_sec
+        integer, intent(in) :: reason
         real(dp), intent(inout) :: budget, used
         integer, intent(out) :: ierr
         real(dp), intent(out) :: t_frac
@@ -751,8 +735,7 @@ contains
             return
         end if
         if (ierr_fo == SPECTRE_FO_LOSS) then
-            call finish_fo_error(ierr_fo, si, f, ipart, t_sec, 0, 0, reason, &
-                used, state%dt_std, ierr, t_frac)
+            call finish_fo_error(ierr_fo, used, state%dt_std, ierr, t_frac)
             return
         end if
         ! Bulk recovery has no interface or sheet. Preserve the last valid FO
@@ -766,7 +749,7 @@ contains
         if (recover_warning_skip(state, si, budget, used, ierr, t_frac, reason, &
             0, 0)) return
 
-        call record_stop(si, f, ipart, t_sec, 0, 0, reason)
+        call record_stop
         ierr = SYMPL_SPECTRE_STOP
         t_frac = used/state%dt_std
     end subroutine recover_local_error
@@ -848,34 +831,22 @@ contains
             maxval(abs(state%warning_hold_z)))
     end function same_warning_hold
 
-    subroutine record_stop(si, f, ipart, t_sec, iface, direction, reason)
-        type(symplectic_integrator_t), intent(in) :: si
-        type(field_can_t), intent(in) :: f
-        integer, intent(in) :: ipart
-        real(dp), intent(in) :: t_sec
-        integer, intent(in) :: iface, direction, reason
-
+    subroutine record_stop
         if (allocated(n_stops)) then
             n_stops(stats_thread()) = n_stops(stats_thread()) + 1
-            if (reason >= 1 .and. reason <= size(n_stop_reason, 1)) &
-                n_stop_reason(reason, stats_thread()) = &
-                    n_stop_reason(reason, stats_thread()) + 1
         end if
     end subroutine record_stop
 
-    subroutine finish_fo_error(fo_status, si, f, ipart, t_sec, iface, &
-            direction, reason, used, dt, ierr, t_frac)
-        integer, intent(in) :: fo_status, ipart, iface, direction, reason
-        type(symplectic_integrator_t), intent(in) :: si
-        type(field_can_t), intent(in) :: f
-        real(dp), intent(in) :: t_sec, used, dt
+    subroutine finish_fo_error(fo_status, used, dt, ierr, t_frac)
+        integer, intent(in) :: fo_status
+        real(dp), intent(in) :: used, dt
         integer, intent(out) :: ierr
         real(dp), intent(out) :: t_frac
 
         if (fo_status == SPECTRE_FO_LOSS) then
             ierr = SYMPL_SPECTRE_LOSS
         else
-            call record_stop(si, f, ipart, t_sec, iface, direction, reason)
+            call record_stop
             ierr = SYMPL_SPECTRE_STOP
         end if
         t_frac = used/dt
@@ -898,13 +869,12 @@ contains
         !$ nthreads = omp_get_max_threads()
         if (allocated(n_landings)) then
             deallocate(n_landings, n_landing_evals, n_stops, &
-                n_stop_reason, n_fo_entries, n_fo_exits, &
+                n_fo_entries, n_fo_exits, &
                 n_fo_losses, n_fo_failures, n_fo_failure_status, &
                 max_landing_resid)
         end if
         allocate(n_landings(0:nthreads - 1), n_landing_evals(0:nthreads - 1), &
-            n_stops(0:nthreads - 1), &
-            n_stop_reason(4, 0:nthreads - 1), n_fo_entries(0:nthreads - 1), &
+            n_stops(0:nthreads - 1), n_fo_entries(0:nthreads - 1), &
             n_fo_exits(0:nthreads - 1), n_fo_losses(0:nthreads - 1), &
             n_fo_failures(0:nthreads - 1), &
             n_fo_failure_status(5, 0:nthreads - 1), &
@@ -912,7 +882,6 @@ contains
         n_landings = 0
         n_landing_evals = 0
         n_stops = 0
-        n_stop_reason = 0
         n_fo_entries = 0
         n_fo_exits = 0
         n_fo_losses = 0

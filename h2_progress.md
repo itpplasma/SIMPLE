@@ -13,4 +13,24 @@
 - Restored Mvol+1 trial margin; reset default bound on field initialization.
 - Updated bound comments and coordinates documentation. Interface doc has no
   bound claim and needs no edit.
-- Next: dead stop-record chain cleanup and full make test.
+- Fix committed as 32e5c1e.
+- Removed unread stop-reason counters and unused marker/time argument chain;
+  warning-hold reason/interface/direction matching retained unchanged.
+- Correctness contract: T3 init fix; rho_g is the dimensionless global volume
+  label, angles radians. Physical edge and event localization remain at Mvol.
+  Cleanup is T1; counters still consumed by diagnostics retain their behavior.
+- Regression uses actual GC motion and absence of recovery, not bound equality.
+  Edge witness checks physical loss and fractional terminal time. No tolerances
+  or golden records changed.
+- make CONFIG=Fast passed before and after the changes.
+- Full make test CONFIG=Fast VERBOSE=1: 95/95 passed, no failures or skips,
+  765.02 seconds. Includes FO interface/events, invariant, loss, Python API,
+  golden-orbit output and convergence tests; no tolerances loosened.
+- Full-suite new witness after cleanup matches pre-cleanup values exactly:
+  10000 steps, 0 FO entries/stops/holds, 47.010 rad; loss at 2.0000000000,
+  status 88, fraction 3.1826e-4. Logs: build/h2_fail_before.log,
+  build/h2_pass_after.log, build/h2_full_test.log.
+- Inspected diff; only requested fix, cleanup, focused test, docs and this record.
+- Remaining compiler real-comparison warnings are on unchanged source lines.
+- Publication target: plain push to origin/feat/spectre-fo-interfaces;
+  no merge, GitHub post, force push, other agent, or protected-host work.

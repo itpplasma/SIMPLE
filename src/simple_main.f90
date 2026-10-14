@@ -2061,10 +2061,7 @@ contains
             if (it >= 2) then
                 do ktau = 1, ntau_macro(it)
                     call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
-                        ipart, &
-                        real(kt, dp)*dtaumin/v0, &
-                        dtaumin/v0, ierr_orbit, &
-                        t_frac)
+                        ierr_orbit, t_frac)
                     if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
                     kt = kt + 1
                 end do
