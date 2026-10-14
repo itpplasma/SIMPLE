@@ -1,0 +1,20 @@
+{
+  "repo": "/home/ert/code/SIMPLE-fo-gauss2",
+  "commit": "3ddc30b",
+  "files": {
+    "src/spectre_fo_hybrid.f90": {"sha256": "1054dab39fe1a0e96f1e01be7798be78753e6ec30cda6432b0b20f09931aa65a",
+      "ranges": {"configure": "63-77", "enter_entry_selection": "78-149", "gauss2_params": "120-147", "advance_until_exit": "173-243", "to_gc": "244-314", "check_exit": "333-358", "gauss_advance_until_exit": "385-451"}},
+    "src/spectre_fo_gauss2.f90": {"sha256": "2257b247f459ce61f5ee0c5d9b131ee8541bfae1ad3cf00d4316dd575f141818",
+      "ranges": {"potential_owner_from_q": "125-162", "encode_decode": "375-405", "eval": "425-492", "entry_step": "494-502", "step_newton_tol_1e-12": "504-577"}},
+    "src/spectre_sympl_orbit.f90": {"sha256": "3d39e6519cbc583110a431268e4327a6097b302f08189dfa639c216a07db79e0",
+      "ranges": {"microstep_continue_or_start": "146-343", "interface_proximity": "544-568", "start_fo": "586-613", "continue_fo_clock_overshoot": "615-649", "recover_local_error": "719-764", "recover_fo_failure_warning_skip": "766-842"}},
+    "src/simple_main.f90": {"sha256": "248530d4991decef167061a537181f02f76ba8693885cf933ef781ba86025956",
+      "ranges": {"spectre_fo_configure_before_parallel": "664-668"}}
+  },
+  "entry_selected": ["layer_rho (=width, from bmod, |grad rho|, speed)", "h_entry = 0.1*ro0/bmod", "refine_length", "g_min", "energy E0 = |v|^2/2 of entry FO state", "radial_scale m_ref", "h_tau = gauss2_entry_step(...)", "z_gauss via gauss2_encode with width=layer_rho", "gyrophase alpha (axisymmetric solve)"],
+  "fixed_globally": ["ro0_bar = ro0/sqrt2 (set at init)", "Newton tol 1e-12 absolute, 20 its (fo_tolerance unused by Gauss2)", "gauge table from gauss2_prepare", "hfac = 1 in production (h_scale only in tests)"],
+  "in_segment_parameter_changes": "none found: no assignment to h_tau/energy/layer_rho/refine_length/g_min/radial_scale outside spectre_fo_enter; no step halving or retry; no h clipping (clock overshoot carried in fo_time_ahead); segment persists across microsteps via state%fo%active",
+  "segment_ends": ["check_exit (state-dependent stopping time, every step once gc_check_time >= 0.25*h_tau)", "Newton failure -> STEP_LIMIT (no retry) -> recover_fo_failure/warning skip or stop -> GC recanonicalize from last_y", "loss rho >= Mvol", "warning hold sets fo%active=false"],
+  "switches_not_covered_by_leaf_theorem": ["entry selection sigma (all params + encode)", "exit stopping rule", "FO->GC map and recanonicalize", "re-entry with fresh sigma"],
+  "notes": ["gc_check_time compares physical clock against 0.25*h_tau (tau units): mixed units, affects only check cadence, not the map", "owner per step is derived from q inside potential; Hamiltonian is a fixed function of z within a segment"]
+}
