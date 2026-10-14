@@ -665,7 +665,9 @@ with the Lorentz force, eliminating stage coordinate inversion. A Cartesian
 position chart remains near the volume-1 axis. GC reconstruction uses the spline
 inverse, and retains its original physical transform and exit conditions. The
 provider is constructed before parallel tracing and then shared read-only;
-field reinitialization releases the previous tables.
+field reinitialization releases the previous tables. Accepted endpoint samples
+are reused for GC reconstruction and the next RK first stage; a landed sheet
+refreshes the sample in the new owner's field.
 Spline-grid convergence is required alongside time-integration convergence;
 see [the interface description](spectre-interface-crossing.md).
 
