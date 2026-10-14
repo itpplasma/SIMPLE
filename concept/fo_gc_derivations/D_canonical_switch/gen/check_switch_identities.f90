@@ -17,8 +17,11 @@ program check_switch_identities
     use fortsym_engine_symengine, only: symengine_engine_t, make_symengine_engine
     use fortsym_check, only: suite_t, suite_begin, suite_end, check_identity
     use fortsym_eval, only: binding_t, eval_expr
+    use fortsym_assume_api, only: assumption_context_t, init_assumption_context, &
+        record_assumption, FACT_POSITIVE
     implicit none
     type(arena_t), target :: arena
+    type(assumption_context_t), target :: assumptions
     type(expr_t) :: zeros(3)
     type(expr_t) :: p(130), packed_refs(130), field(3), bh(3), e1(3), e2(3), av(3), dv(3)
     type(expr_t) :: dbh(3, 3), gmag(3), rvec(3), rstar(3), cr(3), cb(3)
@@ -45,6 +48,7 @@ program check_switch_identities
     character(256) :: label
 
     call arena%init()
+    call init_assumption_context(assumptions, arena)
     do i = 1, size(p)
         p(i) = sym(arena, 'p'//idx(i))
         packed_refs(i) = func('p', [num(arena, i)])
@@ -70,7 +74,12 @@ program check_switch_identities
         dv(i) = -sin(p(6))*e1(i) + cos(p(6))*e2(i)
     end do
     wsym = sym(arena, 'wperp')
-    w = wsym
+    ! This is the existing mu>0 action-angle chart, not the polar mu=0 point.
+    call record_assumption(assumptions, wsym, FACT_POSITIVE)
+    ! Keep the generator's mu dependence while differentiating and taking Lie
+    ! derivatives. Replacing w by an independent symbol here drops d_mu v.
+    ! The rational field witness substitutes mu=wperp^2/(2 B) afterwards.
+    w = sqrt(2*p(5)*bn)
     do i = 1, 3
         vt(i) = w*av(i)
         vel(i) = p(4)*bh(i) + vt(i)
@@ -137,9 +146,19 @@ program check_switch_identities
         rho1(i) = -g2x(i) - dir/2
     end do
     ! ---------------- item D exact pullback identities ----------------
-    ! The construction above is the prototype's (derive_gc.f90) with the single
-    ! change w = wsym (perpendicular speed as independent coordinate), so that
-    ! mu = wsym**2/(2*bn) is substituted below and no sqrt of a symbol remains.
+    ! Match the generator's chain-rule image in local B coordinates. The
+    ! recovered draft left neg_g1 uninitialised and refused selector 1.
+    coords(1:3) = p(8:10)
+    do i = 1, 3
+        neg_g1(i) = num(arena, 0)
+        do j = 1, 3
+            neg_g1(i) = neg_g1(i) + rho(j)*p(10 + i + 3*(j - 1))
+        end do
+    end do
+    do i = 4, 6
+        neg_g1(i) = -g1(i)
+    end do
+    ! Substitute mu=wperp^2/(2 B) only after constructing the physical map.
     eng = make_symengine_engine(arena)
     call suite_begin(suite, 'item D first-order switch exact identities')
     call cotangent_lift_checks()
@@ -187,11 +206,21 @@ program check_switch_identities
                 end do
                 edef = epull - wgc(i, j)
                 do k = 0, n + 1
-                    coef = subs_many(edef, [p(7)], [num(arena, 0)])
                     write (label, '(a,i0,a,i0,a,i0,a,i0,a)') 'selector ', n, &
                         ': eps^', k - 1, ' coefficient of (T^*omega_p - omega_GC)(', &
                         i, ',', j, ') vanishes (field c,k,g symbolic)'
-                    call check_identity(suite, eng, trim(label), clear_t(coef))
+                    block
+                        type(engine_result_t) :: reduced
+                        ! diff is deliberately unsimplified. Normalize before
+                        ! eps=0 so cancelled terms cannot create 0*0**(-1).
+                        reduced = simplify(edef, assumptions)
+                        if (.not. reduced%ok) error stop 'pullback coefficient simplification'
+                        edef = reduced%value
+                        coef = subs_many(edef, [p(7)], [num(arena, 0)])
+                        reduced = simplify(clear_t(coef), assumptions)
+                        if (.not. reduced%ok) error stop 'pullback coefficient limit'
+                        call check_identity(suite, eng, trim(label), reduced%value)
+                    end block
                     edef = diff(edef, p(7))
                 end do
             end do
@@ -249,7 +278,7 @@ contains
         r = subs_many(e, [p(1), p(2), p(3), cos(p(6)), sin(p(6))], &
             [num(arena, 0), num(arena, 0), num(arena, 0), &
              (1 - tsym**2)/(1 + tsym**2), 2*tsym/(1 + tsym**2)])
-        s = simplify(r)
+        s = simplify(r, assumptions)
         if (s%ok) r = s%value
     end function at_point
 
@@ -429,7 +458,12 @@ contains
                         write (label, '(a,i0,a,i0,a,i0,a,i0,a)') 'Lie truncation N=', nn, &
                             ': eps^', k - 1, ' coefficient of d(T_N^*Gamma) - d(Cartan series) (', &
                             i, ',', j, ') vanishes (generic generator, quadratic A)'
-                        call check_identity(suite, eng, trim(label), e)
+                        block
+                            type(engine_result_t) :: reduced
+                            reduced = simplify(e)
+                            if (.not. reduced%ok) error stop 'Lie coefficient simplification'
+                            call check_identity(suite, eng, trim(label), reduced%value)
+                        end block
                         d2 = diff(d2, p(7))
                     end do
                 end do
