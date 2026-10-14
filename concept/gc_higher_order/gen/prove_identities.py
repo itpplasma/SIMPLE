@@ -35,6 +35,19 @@ prove('Euler-Lagrange inversion with gyrophase and gyrogauge vector',
 prove('exact energy conservation of the truncated reduced model',
       mu*grad.dot(xd)+u*ud)
 
+# H2 changes all Hamiltonian derivatives, not just the phase frequency.
+hx=s.Matrix(s.symbols('hX1:4'))
+hu,hm=s.symbols('hu hm')
+Hgrad=mu*grad+eps**2*hx
+Hu=u+eps**2*hu
+Hm=B+eps**2*hm
+xd2=(Hu*bs+eps*b.cross(Hgrad))/bs[2]
+ud2=-bs.dot(Hgrad)/bs[2]
+pd2=-Hm/eps-R.dot(xd2)
+prove('H0+epsilon^2 H2 Euler-Lagrange inversion',
+      omega*s.Matrix([*xd2,ud2,0,pd2])-s.Matrix([*Hgrad,Hu,Hm,0]))
+prove('H0+epsilon^2 H2 exact reduced-energy conservation',Hgrad.dot(xd2)+Hu*ud2)
+
 # First-order drift from Bstar=B+epsilon*u*curl(b)+O(epsilon**2).
 cx,cy,tau,kx,ky = s.symbols('cx cy tau kx ky')
 cb = s.Matrix([-ky,kx,tau])  # curl b = tau*b+b cross kappa
@@ -89,6 +102,25 @@ from_constraint = -Om*avgG+J*p**2*(t**2/2-a2)/Om - vg2/2
 from_published = J**2*bp/2+J*p**2*bl/(2*Om)-p**4*k2/(2*Om**2)
 prove('TB second-order Hamiltonian scalar constraint, excluding common Pi1.vgc',
       from_constraint-from_published)
+
+# BSQ 2013 has Pi1_perp=0. BT 2016 (215)-(216) dyadic identities:
+# paper contraction conventions N=trace(D^2), T=||D||^2.
+div,hd=s.symbols('div hd')
+N=(div**2-t**2)/2+4*a2
+T=k2+(div**2+t**2)/2+4*a2
+cBT=2*a2-(t**2+div**2)/4
+bsq_perp=(g2+h-3*(g2+div**2))/2+(N-3*T+3*k2+15*div**2)/8
+bsq_par=(3*N-T+div**2+k2)/4-3*kg+3*k2+hd
+prove('BSQ/BT beta_perp equivalence in Pi1_perp=0 representation',
+      bsq_perp-bp.subs(c,cBT))
+prove('BSQ/BT beta_parallel equivalence using div(kappa)=N+b.grad(div b)',
+      bsq_par-bl.subs(dk,N+hd))
+# Chosen Pi1_perp changes H2 by Pi1_perp.vgc=-J*kappa.(J*gradlnB+p^2*kappa/Om)/2.
+gx,gy=s.symbols('gx gy')
+prove('polarization representation H2 shift',
+      s.Matrix([-J*kx/2,-J*ky/2,0]).dot(s.Matrix(
+          [J*gx+p**2*kx/Om,J*gy+p**2*ky/Om,0]))
+      +J*(J*(kx*gx+ky*gy)+p**2*(kx**2+ky**2)/Om)/2)
 
 # Independent second-order slab derivation, not a tensor transcription.
 # A_y(X+eps*q)-A_y(X)=eps*B*q+eps**2*g*q**2/2.
