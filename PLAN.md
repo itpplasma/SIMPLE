@@ -74,6 +74,21 @@ complete six-control batch took about 24 minutes sequentially including native
 launch/setup/output. No direct 256-marker/2 ms raw-main run was measured here.
 No protected-host job was started, resumed or cancelled.
 
+Published plots (uploaded 2026-10-14; links expire after three days):
+
+- Full-duration measured end-to-end cost: https://box.sloppy.at/bce8c.png
+- Full-duration loss curves and pointwise uncertainty: https://box.sloppy.at/4d014.png
+- Paired main/spline tracing cost at 200 us: https://box.sloppy.at/17ce5.png
+
+The next ordered step, GC source/proof audit, is active on
+`research/gc-source-audit-20261014`. Its independent closed-form Hamiltonian
+witness failed against unchanged production source: both midpoint branches
+carry an extra midpoint-radius increment; Gauss uses the wrong r/phi mixed
+momentum derivative and omits the parallel-speed p_phi increment. The RED
+checkpoint is `810f1e5`, including fixed bounds and retained records. Repairs
+and fresh stellarator map/energy checks are pending. No result below should be
+read as a completed production GC proof bridge.
+
 ## Goal and constraints
 
 Physically faithful long stellarator orbits, without artificial loss or
