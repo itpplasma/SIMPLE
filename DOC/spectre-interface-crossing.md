@@ -304,7 +304,7 @@ and magnitude jumps of -25 to +38 %. Recorded losses for 64 markers at
 | model | interface 1 (`rho_g = 0.95`) | interface 2 (`rho_g = 1.95`) |
 |---|---:|---:|
 | full orbit everywhere, RK45 (reference) | 6 | 39 |
-| level 3, RK45 | 7 | 41 |
+| level 3, RK45 (corrected events) | 5 | 39 |
 | level 3, Boris (layer 0.2, rotation 0.0125) | 5 | 48 |
 | level 1, symplectic GC | 7 | 29 |
 | level 1, RK45 GC | 1 | 7 |
@@ -317,10 +317,14 @@ ensemble comparisons; individual fates differ even between full-orbit runs.
 
 Use `crossing_level = 3`, `integmode > 0`, and
 `spectre_fo_integrator = 'rk45'` at such interfaces. This resolves gyromotion
-and costs far more than the GC maps. In this 32-thread comparison the hybrid
-RK45 took 929/409 s at interfaces 1/2 versus 920/565 s for full orbit
-everywhere and 15/25 s for symplectic GC: the hybrid costs about as much as
-full orbit everywhere here because the markers remain near the interfaces. Setup and
+and costs far more than the GC maps. The corrected-event hybrid RK45 reruns
+took 3343/1848 s at interfaces 1/2,
+using two concurrent runs with eight OpenMP threads each, deterministic seed
+12345, and `relerr = 1e-12`. Both loss counts agree with the retained full-orbit
+references within the stated counting uncertainty. The earlier hybrid counts
+were 7/41 with wall times 929/409 s; the retained reference and GC timings were
+920/565 s and 15/25 s. These historical timings use different thread counts,
+so they are not a direct speed comparison with the corrected runs. Setup and
 full timing evidence are retained in
 [`concept/symplectic_sheet/README.md`](../concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
 

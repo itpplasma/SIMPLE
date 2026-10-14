@@ -177,14 +177,17 @@ of the microcanonical ensemble; `study_mu_scattering` produces the table.
 ## SIMPLE on NCSX: loss fractions against full orbit everywhere
 
 `ncsx_freeboundary.h5` (Mvol = 3), 3.5 keV alphas (`facE_al = 1000`), 64
-markers started next to an interface, `trace_time = 2e-3`, 32 threads. The
+markers started next to an interface, `trace_time = 2e-3`. The original
+study used 32 threads; the corrected-event hybrid row below uses eight threads
+per run, with the two interfaces run concurrently, deterministic seed 12345,
+and `relerr = 1e-12`. Other rows retain historical results and timings. The
 reference is full orbit everywhere: crossing_level 3, RK45 at tolerance 1e-9,
 `spectre_fo_entry_larmor = 1e6`.
 
 | model | s = 0.95 (interface 1): lost, wall s | s = 1.95 (interface 2): lost, wall s |
 |---|---|---|
 | full orbit everywhere, RK45 (reference) | 6, 920 | 39, 565 |
-| level 3, RK45 | 7, 929 | 41, 409 |
+| level 3, RK45 (corrected events, 8 threads) | 5, 3343 | 39, 1848 |
 | level 3, Boris (layer 0.2, rotation 0.0125) | 5, 1399 | 48, 480 |
 | level 1, symplectic GC | 7, 15 | 29, 25 |
 | level 1, RK45 GC | 1, 17 | 7, 30 |
@@ -195,8 +198,9 @@ spuriously (RK45 GC: 32 of the 39 reference losses are missed). Level 3 with
 RK45 matches the reference at both interfaces; Boris overestimates the losses
 at interface 2 by about 2 sigma. Individual marker fates differ even between
 full-orbit runs (chaotic orbits near the interface); only the fractions
-compare. The hybrid costs about as much as full orbit everywhere here:
-the markers stay near the interfaces.
+compare. The markers stay near the interfaces, so the hybrid spends substantial
+time in full orbit. Corrected and historical timings have different thread counts
+and are not a direct speed comparison.
 
 For strong interfaces use `crossing_level = 3` with
 `spectre_fo_integrator = 'rk45'` (the default FO integrator); `'boris'` remains
