@@ -142,41 +142,76 @@ program test_spectre_fo_events
     if (status /= SPECTRE_FO_LOSS) error stop 'outer-domain retry did not find loss'
     if (used < 0.0_dp .or. used > dt) error stop 'invalid loss time budget'
     if (state%u(1) < 2.0_dp - 2.0e-12_dp) error stop 'unlocalized outer loss'
+    call zero_time_field_jump
     call inward_thin_volume
+    call hidden_opposite_crossing
     print '(A)', 'PASS'
 
 contains
+
+    subroutine zero_time_field_jump
+        ! A zero-time switch into a stronger field must recompute the gyro cap.
+        ! Loose RK tolerance isolates that bound; independent RK4 supplies the
+        ! trajectory oracle, without sharing the trial or event algorithm.
+        type(spectre_field_t) :: jump
+        type(spectre_fo_state_t) :: orbit
+        real(dp) :: u(3), x(3), b(3), bmod, dt, used, y(5), pz, xr(3), vr(3)
+        integer :: status, owner
+        logical :: exited
+
+        jump = sf
+        jump%data%vol(2)%Ate = 20.0_dp*jump%data%vol(2)%Ate
+        jump%data%vol(2)%Aze = 20.0_dp*jump%data%vol(2)%Aze
+        jump%data%vol(2)%Ato = 20.0_dp*jump%data%vol(2)%Ato
+        jump%data%vol(2)%Azo = 20.0_dp*jump%data%vol(2)%Azo
+        call set_magfie_spectre_field(jump)
+        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 0.1_dp)
+        u = [1.0_dp - 1.0e-12_dp, 0.0_dp, 0.0_dp]
+        call sample(u, x, b, bmod)
+        u(1) = 1.0_dp
+        orbit = spectre_fo_state_t()
+        call spectre_field%coords%evaluate_cart(u, orbit%x)
+        orbit%x = orbit%x*M_TO_CM
+        orbit%v = [1.0_dp, 0.0_dp, 0.0_dp]
+        orbit%u = u
+        orbit%owner = 1
+        orbit%iface = 1
+        orbit%active = .true.
+        orbit%exit_rho = 10.0_dp
+        call spectre_fo_canonical_pzeta(orbit, RO, pz, status)
+        if (status /= SPECTRE_FO_OK) error stop 'field-jump initial sample failed'
+        orbit%entry_owner = 1
+        orbit%entry_pzeta = pz
+        dt = 0.1_dp*RO/bmod
+        orbit%h_rk = dt
+        ! A nanometre outward offset gives the oracle the outgoing side
+        ! at t=0, rather than the inverse's arbitrary exact-sheet convention.
+        xr = orbit%x + [1.0e-7_dp, 0.0_dp, 0.0_dp]
+        vr = orbit%v
+        call reference_trace(xr, vr, dt, 10000)
+        call spectre_fo_advance_until_exit(orbit, dt, RO, used, y, owner, &
+            exited, status)
+        if (status /= SPECTRE_FO_OK .or. exited) error stop 'field-jump trace failed'
+        if (abs(used/dt - 1.0_dp) > 1.0e-12_dp) error stop 'missing field-jump time'
+        print '(A,ES12.4)', 'zero-time field-jump velocity error against RK4: ', &
+            norm2(orbit%v - vr)
+        if (norm2(orbit%v - vr) > 1.0e-7_dp) &
+            error stop 'gyro cap lost after zero-time owner change'
+        call set_magfie_spectre_field(sf)
+        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
+    end subroutine zero_time_field_jump
 
     subroutine inward_thin_volume
         ! Split the fixture's outer volume with a very thin intermediate
         ! chart. Its coefficients scale with its width to keep |B| finite.
         ! A long inward trial reaches volume 1 through a reversed-field thin
         ! volume 2. Independent RK4 must see its impulse at the first sheet.
-        type(spectre_field_t) :: thin
         type(spectre_fo_state_t) :: orbit
         real(dp) :: u(3), x(3), b(3), bmod, pz, dt, used, y(5), xr(3), vr(3)
         integer :: status, owner
         logical :: exited
 
-        thin = sf
-        thin%data%Mvol = 3
-        thin%data%Nvol = 3
-        thin%data%Lrad = [sf%data%Lrad, sf%data%Lrad(2)]
-        thin%data%vol = [sf%data%vol, sf%data%vol(2)]
-        call split_geometry(sf%data%Rbc, thin%data%Rbc)
-        call split_geometry(sf%data%Rbs, thin%data%Rbs)
-        call split_geometry(sf%data%Zbc, thin%data%Zbc)
-        call split_geometry(sf%data%Zbs, thin%data%Zbs)
-        call linear_sheet_coefficients(sf%data%vol(2)%Ate, thin%data%vol(2)%Ate)
-        call linear_sheet_coefficients(sf%data%vol(2)%Aze, thin%data%vol(2)%Aze)
-        call linear_sheet_coefficients(sf%data%vol(2)%Ato, thin%data%vol(2)%Ato)
-        call linear_sheet_coefficients(sf%data%vol(2)%Azo, thin%data%vol(2)%Azo)
-        thin%data%vol(2)%Ate = -2.0_dp*thin%data%vol(2)%Ate
-        thin%data%vol(2)%Aze = -2.0_dp*thin%data%vol(2)%Aze
-        thin%data%vol(2)%Ato = -2.0_dp*thin%data%vol(2)%Ato
-        thin%data%vol(2)%Azo = -2.0_dp*thin%data%vol(2)%Azo
-        call make_spectre_coordinate_system(thin%coords, thin%data)
-        call set_magfie_spectre_field(thin)
+        call set_thin_field(1.0e-4_dp)
         call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
         u = [2.00001_dp, 0.0_dp, 0.0_dp]
         call sample(u, x, b, bmod)
@@ -209,13 +244,86 @@ contains
             error stop 'inward trial skipped thin-volume impulse'
     end subroutine inward_thin_volume
 
-    subroutine linear_sheet_coefficients(original, linear)
+    subroutine hidden_opposite_crossing
+        ! An early inward excursion must precede the home-field continuation's
+        ! later outward landing in a thin volume. Check the first sheet's
+        ! impulse with independent geometric-field RK4.
+        type(spectre_fo_state_t) :: orbit
+        real(dp) :: u(3), x(3), b(3), bmod, dt, used, y(5), pz, xr(3), vr(3)
+        real(dp) :: tangent(3), normal(3)
+        integer :: status, owner
+        logical :: exited
+
+        call set_thin_field(1.0e-5_dp)
+        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
+        u = [1.025_dp, 0.0_dp, 0.0_dp]
+        call sample(u, x, b, bmod)
+        normal = [1.0_dp, 0.0_dp, 0.0_dp]
+        tangent = cross(b, normal)
+        tangent = tangent/norm2(tangent)
+        orbit = spectre_fo_state_t()
+        orbit%x = x
+        orbit%v = -0.01_dp*normal + sqrt(1.0_dp - 0.01_dp**2)*tangent
+        orbit%u = u
+        orbit%owner = 2
+        orbit%iface = 1
+        orbit%active = .true.
+        orbit%exit_rho = 10.0_dp
+        call spectre_fo_canonical_pzeta(orbit, RO, pz, status)
+        if (status /= SPECTRE_FO_OK) error stop 'hidden-pulse initial sample failed'
+        orbit%entry_owner = 2
+        orbit%entry_pzeta = pz
+        dt = 0.1_dp*RO/bmod
+        orbit%h_rk = dt
+        xr = orbit%x
+        vr = orbit%v
+        call reference_trace(xr, vr, dt, 100000)
+        call spectre_fo_advance_until_exit(orbit, dt, RO, used, y, owner, &
+            exited, status)
+        if (status /= SPECTRE_FO_OK .or. exited) error stop 'hidden-pulse trace failed'
+        if (abs(used/dt - 1.0_dp) > 1.0e-12_dp) error stop 'missing hidden-pulse time'
+        print '(A,ES12.4)', 'landing-trial hidden-pulse velocity error against RK4: ', &
+            norm2(orbit%v - vr)
+        if (orbit%owner /= 1 .or. norm2(orbit%v - vr) > 2.0e-6_dp) &
+            error stop 'landing trial skipped the first inward pulse'
+    end subroutine hidden_opposite_crossing
+
+    subroutine set_thin_field(width)
+        real(dp), intent(in) :: width
+        type(spectre_field_t) :: thin
+
+        thin = sf
+        thin%data%Mvol = 3
+        thin%data%Nvol = 3
+        thin%data%Lrad = [sf%data%Lrad, sf%data%Lrad(2)]
+        thin%data%vol = [sf%data%vol, sf%data%vol(2)]
+        call split_geometry(sf%data%Rbc, thin%data%Rbc, width)
+        call split_geometry(sf%data%Rbs, thin%data%Rbs, width)
+        call split_geometry(sf%data%Zbc, thin%data%Zbc, width)
+        call split_geometry(sf%data%Zbs, thin%data%Zbs, width)
+        call linear_sheet_coefficients(sf%data%vol(2)%Ate, &
+            thin%data%vol(2)%Ate, width)
+        call linear_sheet_coefficients(sf%data%vol(2)%Aze, &
+            thin%data%vol(2)%Aze, width)
+        call linear_sheet_coefficients(sf%data%vol(2)%Ato, &
+            thin%data%vol(2)%Ato, width)
+        call linear_sheet_coefficients(sf%data%vol(2)%Azo, &
+            thin%data%vol(2)%Azo, width)
+        thin%data%vol(2)%Ate = -2.0_dp*thin%data%vol(2)%Ate
+        thin%data%vol(2)%Aze = -2.0_dp*thin%data%vol(2)%Aze
+        thin%data%vol(2)%Ato = -2.0_dp*thin%data%vol(2)%Ato
+        thin%data%vol(2)%Azo = -2.0_dp*thin%data%vol(2)%Azo
+        call make_spectre_coordinate_system(thin%coords, thin%data)
+        call set_magfie_spectre_field(thin)
+    end subroutine set_thin_field
+
+    subroutine linear_sheet_coefficients(original, linear, width)
         ! Keep the outer volume's inner-edge dA/ds constant through the thin
         ! chart before reversing it, giving a finite sheet-force contrast.
         ! Chebyshev T_l'(-1)=(-1)^(l-1) l^2.
         real(dp), intent(in) :: original(0:, :)
         real(dp), intent(out) :: linear(0:, :)
-        real(dp), parameter :: WIDTH = 1.0e-4_dp
+        real(dp), intent(in) :: width
         integer :: l
 
         linear = 0.0_dp
@@ -226,10 +334,10 @@ contains
         linear(0, :) = linear(1, :)
     end subroutine linear_sheet_coefficients
 
-    subroutine split_geometry(original, split)
+    subroutine split_geometry(original, split, width)
         real(dp), intent(in) :: original(:, 0:)
         real(dp), allocatable, intent(out) :: split(:, :)
-        real(dp), parameter :: WIDTH = 1.0e-4_dp
+        real(dp), intent(in) :: width
 
         allocate (split(size(original, 1), 0:3))
         split(:, 0:1) = original(:, 0:1)
@@ -239,7 +347,7 @@ contains
 
     subroutine reference_trace(x, v, dt, nsteps)
         ! Independent fixed-step RK4, always sampling the geometric field.
-        ! At most 1e-5 rad per step bounds sheet-force quadrature error;
+        ! Fine fixed steps resolve the sheet-force quadrature independently;
         ! this oracle has no owner continuation, landing, or GC projection.
         real(dp), intent(inout) :: x(3), v(3)
         real(dp), intent(in) :: dt

@@ -229,8 +229,9 @@ canonical toroidal momentum over all full-orbit phases is 14 % with the
 sharp field at the default bound 0.05, 3.2 % at 0.0125, 4.0 % with a layer of
 0.2 gyroradii at 0.05, and 0.93 % with the layer at 0.0125.
 `spectre_fo_integrator = 'rk45'` integrates the full orbit adaptively on the
-sharp field. Every trial stage's geometric owner is checked. A stage that
-crosses and returns before the endpoint causes rejection and step halving;
+sharp field. Every trial stage's geometric owner is checked, including shortened
+bracketing and landing trials and ownership changes in both directions. A stage
+that crosses and returns before the endpoint causes rejection and step halving;
 a changed endpoint is localized on the first sheet leaving the initial
 owner (`owner - 1` inward, `owner` outward), including trials that span a thin
 intermediate volume. The remaining time is integrated in the new owner.
@@ -241,8 +242,9 @@ The Cartesian radial residual refines near-sheet inverse coordinates that
 would otherwise snap both bracket ends onto the sheet.
 
 RK45 also caps each trial at `h |B| / ro0_bar <= 0.1` rad, about 1/63 of a
-gyro-period. Stage checks cannot exclude arbitrarily shallow excursions
-between samples. In the local uniform-field, planar-sheet approximation,
+gyro-period. This cap is rechecked against each trial's initial field, including
+zero-time owner changes. Stage checks cannot exclude arbitrarily shallow
+excursions between samples. In the local uniform-field, planar-sheet approximation,
 a circular cross-and-return within this entire step has depth at most
 `rho_L (1 - cos(0.05))`, approximately `1.25e-3 rho_L`; interface curvature
 and field variation limit this estimate. This bounds the geometric scale of

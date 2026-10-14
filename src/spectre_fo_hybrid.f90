@@ -13,6 +13,7 @@ module spectre_fo_hybrid
     integer, parameter, public :: SPECTRE_FO_LOSS = 6
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), parameter :: OWNER_EPS = 1.0e-12_dp
+    integer, parameter :: STAGE_IN = 0, STAGE_OUT = 1
     !> Boris step bound h |B| / (2 ro0) <= rotation_parameter, and the width of
     !> the smooth layer that replaces each interior interface for the full
     !> orbit, in gyroradii (0: the sharp per-volume field). Set by
@@ -224,7 +225,8 @@ contains
             if (fo_integrator == FO_RK45) then
                 if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
                 h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/bmod)
-                call rk45_substep(state, h, ro0_bar, status)
+                call rk45_substep(state, h, ro0_bar, status, &
+                    hfac*RK_GYRO_ANGLE)
             else
                 call boris_substep(state, h, ro0_bar, status)
             end if
@@ -387,7 +389,7 @@ contains
         if (status /= SPECTRE_FO_OK) return
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
     end subroutine spectre_fo_canonical_pzeta
-    subroutine rk45_substep(state, h, ro0_bar, status)
+    subroutine rk45_substep(state, h, ro0_bar, status, angle_limit)
         !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
         !> the sharp field (no layer) the stages use the owner's field, held at
         !> its interface value beyond the volume edge. Stage cross-and-return
@@ -396,27 +398,36 @@ contains
         !> taken.
         type(spectre_fo_state_t), intent(inout) :: state
         real(dp), intent(inout) :: h
-        real(dp), intent(in) :: ro0_bar
+        real(dp), intent(in) :: ro0_bar, angle_limit
         integer, intent(out) :: status
         real(dp) :: x1(3), v1(3), u1(3), err, a, b, fa, fb, c, fc, iface_rho
-        integer :: attempt, owner1, it, side, grazes, stage_owner
+        real(dp) :: trial_angle
+        integer :: attempt, owner1, it, side, grazes, stage_sides, opposite_stage
+        logical :: root_consistent
 
         grazes = 0
         do attempt = 1, 60
             call dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
-                stage_owner)
+                stage_sides, trial_angle)
             if (status /= SPECTRE_FO_OK) then
                 ! A failed stage has no embedded error estimate.
                 h = 0.5_dp*h
+                cycle
+            end if
+            if (trial_angle > angle_limit*(1.0_dp + 4.0_dp*epsilon(1.0_dp))) then
+                ! A zero-time owner change can increase |B|. Recheck the cap
+                ! with this trial's initial field, including h_scale.
+                h = h*angle_limit/trial_angle
                 cycle
             end if
             if (err > 1.0_dp) then
                 h = h*max(0.2_dp, min(0.5_dp, 0.9_dp*err**(-0.2_dp)))
                 cycle
             end if
-            if (state%layer_rho <= 0.0_dp .and. stage_owner /= state%owner) then
+            if (state%layer_rho <= 0.0_dp .and. stage_sides /= 0) then
                 if (owner1 == state%owner .or. &
-                    (stage_owner - state%owner)*(owner1 - state%owner) < 0) then
+                    (owner1 > state%owner .and. btest(stage_sides, STAGE_IN)) .or. &
+                    (owner1 < state%owner .and. btest(stage_sides, STAGE_OUT))) then
                     ! A stage detects a cross-and-return, or an earlier sheet
                     ! in the opposite direction. Never commit the continuation.
                     h = 0.5_dp*h
@@ -429,6 +440,7 @@ contains
                 ! lies beyond a thin intermediate volume.
                 iface_rho = real(merge(state%owner, state%owner - 1, &
                     owner1 > state%owner), dp)
+                opposite_stage = merge(STAGE_IN, STAGE_OUT, owner1 > state%owner)
                 a = 0.0_dp
                 fa = state%u(1) - iface_rho
                 b = h
@@ -447,8 +459,12 @@ contains
                     ! at t=0 and bracket the later return at positive time.
                     a = h/32.0_dp
                     call dp_trial(state, a, ro0_bar, x1, v1, u1, owner1, err, &
-                        status)
+                        status, stage_sides)
                     if (status /= SPECTRE_FO_OK) then
+                        h = 0.5_dp*h
+                        cycle
+                    end if
+                    if (btest(stage_sides, opposite_stage)) then
                         h = 0.5_dp*h
                         cycle
                     end if
@@ -462,12 +478,19 @@ contains
                     h = 0.5_dp*h
                     cycle
                 end if
+                root_consistent = .true.
                 side = 0
                 do it = 1, 100
                     c = (a*fb - b*fa)/(fb - fa)
                     call dp_trial(state, c, ro0_bar, x1, v1, u1, owner1, err, &
-                        status)
+                        status, stage_sides)
                     if (status /= SPECTRE_FO_OK) exit
+                    if (btest(stage_sides, opposite_stage)) then
+                        ! Shortened trials can expose an earlier opposite sheet
+                        ! missed by the nominal stage grid. Retry from the start.
+                        root_consistent = .false.
+                        exit
+                    end if
                     fc = u1(1) - iface_rho
                     if (abs(fc) <= 1.0e-12_dp) exit
                     if (fc*fb > 0.0_dp) then
@@ -482,7 +505,7 @@ contains
                         side = 1
                     end if
                 end do
-                if (status /= SPECTRE_FO_OK) then
+                if (status /= SPECTRE_FO_OK .or. .not. root_consistent) then
                     h = 0.5_dp*h
                     cycle
                 end if
@@ -518,19 +541,20 @@ contains
         status = SPECTRE_FO_STEP_LIMIT
     end subroutine rk45_substep
     subroutine dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
-            stage_owner)
+            stage_sides, gyro_angle)
         !> One Dormand-Prince 5(4) step from the state; err is the scaled error
         !> (gyroradius for x, |v| for v) over fo_tolerance.
         type(spectre_fo_state_t), intent(in) :: state
         real(dp), intent(in) :: h, ro0_bar
         real(dp), intent(out) :: x1(3), v1(3), u1(3), err
         integer, intent(out) :: owner1, status
-        integer, intent(out), optional :: stage_owner
+        integer, intent(out), optional :: stage_sides
+        real(dp), intent(out), optional :: gyro_angle
         real(dp) :: kx(3, 7), kv(3, 7), xs(3), vs(3), w(7, 7), bvec(3), bmod
         real(dp) :: rho_l, ex(3), ev(3)
         integer :: i, j, owner_geo
 
-        if (present(stage_owner)) stage_owner = state%owner
+        if (present(stage_sides)) stage_sides = 0
         w = 0.0_dp
         w(2, 1) = 1.0_dp/5
         w(3, 1:2) = [3.0_dp/40, 9.0_dp/40]
@@ -552,10 +576,16 @@ contains
             end do
             call stage_field(state, xs, u1, bvec, bmod, owner_geo, status)
             if (status /= SPECTRE_FO_OK) return
-            if (present(stage_owner)) then
-                if (stage_owner == state%owner) stage_owner = owner_geo
+            if (present(stage_sides)) then
+                if (owner_geo < state%owner) &
+                    stage_sides = ibset(stage_sides, STAGE_IN)
+                if (owner_geo > state%owner) &
+                    stage_sides = ibset(stage_sides, STAGE_OUT)
             end if
-            if (i == 1) rho_l = ro0_bar*norm2(vs)/bmod
+            if (i == 1) then
+                rho_l = ro0_bar*norm2(vs)/bmod
+                if (present(gyro_angle)) gyro_angle = h*bmod/ro0_bar
+            end if
             kx(:, i) = vs
             kv(:, i) = (bmod/ro0_bar)*cross(vs, bvec)
         end do
