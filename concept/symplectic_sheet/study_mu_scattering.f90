@@ -3,7 +3,7 @@ program study_mu_scattering
     !> thousands of times, for one scheme per run.
     !>
     !> usage: study_mu_scattering.x SCHEME H WIDTH A_OUT P_PHI [G_MIN L [T_END [analytic]]]
-    !>   SCHEME  rk45 | midpoint_region | naive | landing | poincare |
+    !>   SCHEME  rk45 | poincare |
     !>           poincare_gauss2 (G_MIN = 1: plain Gauss-Legendre)
     !>   H       step (rk45: tolerance)
     !>   WIDTH   smooth layer width (0: sharp sheet; poincare needs > 0)
@@ -20,9 +20,7 @@ program study_mu_scattering
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use sheet_field, only: field_params_t, region_of, bfield, psi_value, &
         hamiltonian
-    use fo_sheet, only: sheet_step, step_stats_t, SCHEME_NAIVE, &
-        SCHEME_MIDPOINT_REGION, SCHEME_LANDING, poincare_step, poincare_params_t, &
-        poincare_gauss2_step
+    use fo_sheet, only: poincare_step, poincare_params_t, poincare_gauss2_step
     use rk_reference, only: rk_advance
     use sheet_setup, only: initial_state
     implicit none
@@ -40,6 +38,7 @@ program study_mu_scattering
     integer(8) :: steps(NMARKER), clock0, clock1, clock_rate
 
     call get_command_argument(1, scheme)
+
     call get_command_argument(2, arg)
     read (arg, *) h
     call get_command_argument(3, arg)
@@ -89,7 +88,6 @@ contains
 
         real(dp) :: z(4), z_new(4), t, dt, h_try, e0
         integer :: region
-        type(step_stats_t) :: stats
         logical :: ok
 
         call initial_state(par, SPEED, mod(im - 1, 8) + 1, z)
@@ -107,28 +105,15 @@ contains
             case ('rk45')
                 dt = RK_SAMPLE
                 call rk_advance(par, region, z, dt, h, h_try, ncross)
-            case ('midpoint_region')
-                dt = h
-                call sheet_step(par, SCHEME_MIDPOINT_REGION, region, z, h, &
-                    z_new, stats)
-                z = z_new
-            case ('naive')
-                dt = h
-                call sheet_step(par, SCHEME_NAIVE, region, z, h, z_new, stats)
-                z = z_new
-            case ('landing')
-                dt = h
-                call sheet_step(par, SCHEME_LANDING, region, z, h, z_new, stats)
-                z = z_new
             case ('poincare', 'poincare_gauss2')
                 if (trim(scheme) == 'poincare') then
                     call poincare_step(par, pp, z, e0, h, z_new, dt, ok)
                 else
                     call poincare_gauss2_step(par, pp, z, e0, h, z_new, dt, ok)
                 end if
-                if (.not. ok) stats%failures = stats%failures + 1
+                if (.not. ok) error stop 'smooth-layer solve failed'
                 if (region_of(par, z_new(1:2)) /= region) &
-                    stats%crossings = stats%crossings + 1
+                    ncross = ncross + 1
                 region = region_of(par, z_new(1:2))
                 z = z_new
             case default
@@ -139,7 +124,6 @@ contains
             if (t <= T_AVG) m0 = m0 + mu_of(z, region)*dt
             if (t > T_END - T_AVG) m1 = m1 + mu_of(z, region)*dt
         end do
-        if (trim(scheme) /= 'rk45') ncross = stats%crossings
         de_end = (0.5_dp*z(3)**2 + 0.5_dp*(z(4) + par%f_tor*log(z(1)))**2 &
                   + 0.5_dp*((par%p_phi - psi_value(par, region, z(1:2)))/z(1))**2) &
                  /e0 - 1.0_dp
