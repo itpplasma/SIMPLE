@@ -1178,3 +1178,7 @@ add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_sym
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 33333334 100 0 0)
 set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
     LABELS "regression;integration;slow" TIMEOUT 3600)
+
+add_subdirectory(
+    "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
+    "${CMAKE_CURRENT_BINARY_DIR}/canonical_switch")
