@@ -173,3 +173,27 @@ resolves that scale too, as for any symplectic method.
 `test_fo_symplectic` checks the analytic tangent map of landing steps
 (`M^T J M = J` to 1e-13); `test_fo_stationary` checks long-run stationarity
 of the microcanonical ensemble; `study_mu_scattering` produces the table.
+
+## SIMPLE on NCSX: loss fractions against full orbit everywhere
+
+`ncsx_freeboundary.h5` (Mvol = 3), 3.5 keV alphas (`facE_al = 1000`), 64
+markers started next to an interface, `trace_time = 2e-3`, 32 threads. The
+reference is full orbit everywhere: crossing_level 3, RK45 at tolerance 1e-9,
+`spectre_fo_entry_larmor = 1e6`.
+
+| model | s = 0.95 (interface 1): lost, wall s | s = 1.95 (interface 2): lost, wall s |
+|---|---|---|
+| full orbit everywhere, RK45 (reference) | 6, 920 | 39, 565 |
+| level 3, RK45 | 7, 929 | 41, 409 |
+| level 3, Boris (layer 0.2, rotation 0.0125) | 5, 1399 | 48, 480 |
+| level 1, symplectic GC | 7, 15 | 29, 25 |
+| level 1, RK45 GC | 1, 17 | 7, 30 |
+
+Counting noise is about +-2 markers at interface 1 and +-4 at interface 2. At
+the strong outer interface both guiding-centre maps confine particles
+spuriously (RK45 GC: 32 of the 39 reference losses are missed). Level 3 with
+RK45 matches the reference at both interfaces; Boris overestimates the losses
+at interface 2 by about 2 sigma. Individual marker fates differ even between
+full-orbit runs (chaotic orbits near the interface); only the fractions
+compare. The hybrid is not cheaper than full orbit everywhere here: the
+markers stay near the interfaces.
