@@ -3,10 +3,47 @@
 Updated 2026-10-14. Active study: `research/spectre-loss-study-20261014`.
 Recovery branch: `recovery/spectre-session-20261014`.
 Production baseline: `origin/main` at `fe002a3`, including cleanup PR #533.
+Measurement baseline remains pinned to this revision even if main advances.
 This consolidates the stopped Claude controller and its GPT Sol, strategy,
 Opus and nested derivation workers. It records unfinished research rather
 than claiming the scientific programme is complete. No previous worker is
 running or being resumed by this recovery.
+
+## Current measured checkpoint
+
+The repaired 24-case controls are complete: 32 matched markers, 200 us,
+16 local threads, NCSX/G3V3L3Fi, sheet/volume starts, FO/current hybrid,
+and main/default/refined fields. Every case completed with zero numerical
+stops, FO failures or warning-held intervals. All paired loss statuses agree
+with main. Retained starts, sparse traces and source/dependency hashes are in
+`concept/spectre_loss_study/results/long/{summary.json,traces.npz}`; reproduce
+plots with `analyze.py` using that directory as input.
+
+| Case | FO tracing speedup | Hybrid tracing speedup | FO / hybrid losses |
+| --- | ---: | ---: | ---: |
+| NCSX sheet | 7.43x | 7.44x | 4/32 / 3/32 |
+| NCSX volume | 6.63x | 7.43x | 9/32 / 9/32 |
+| G3V3L3Fi sheet | 5.79x | 6.47x | 0/32 / 0/32 |
+| G3V3L3Fi volume | 5.87x | 6.11x | 2/32 / 2/32 |
+
+These are tracing speedups on a shared host, excluding setup. They do not
+establish trajectory identity: the largest NCSX sheet FO separation from
+main is 26.3 cm at the default grid and 0.623 cm at the refined grid after
+200 us. Hybrid sheet runs have up to four sampled GC/FO representation
+mismatches; paired positions exclude those records. The repaired near-axis
+marker completes, but its raw-main trajectory differs from both converging
+spline grids. Independent axis-limit tests, rather than exact agreement with
+a singular raw pole evaluation, check the field there. Aggregate loss
+agreement alone is insufficient for scientific promotion.
+
+The six 256-marker, 2 ms physical-volume controls are running sequentially
+through `full.py`, with 16 bound local OpenMP threads. Completed NCSX FO
+controls take 436.59 s (default) and 440.55 s (refined) of tracing. Losses are
+101/256 and 99/256 respectively, with no stops/failures/holds. The final paired
+comparison, current hybrid and G3V3L3Fi controls remain pending. These direct
+measurements replace the earlier hours-scale estimate for this workload;
+thread counts, host load and implementation differed in that estimate.
+No protected-host job was started, resumed or cancelled.
 
 ## Goal and constraints
 
@@ -295,7 +332,7 @@ pole-seeded inverse. The exact marker replay has one entry/exit, zero holds or
 failures, and advances to rho=0.2744 at 200 microseconds. All 21 affected native
 tests pass in 229.96 s, including the G3V3L3Fi axis limit and transition-region
 checks. This is pushed as `47d3fb0` on PR #534 / `9c62300` on this branch;
-the longer 24-case controls are rerunning. This fix
+the repaired longer controls are complete as recorded above. This fix
 retains cheap field evaluation without a raw fallback or a new setting.
 The study controller now includes the provider in its source hashes and refuses
 unresolved intervals as scientific acceptance. The GC audit is prepared in
@@ -318,8 +355,8 @@ and plotting source reproduce them. The convergence plot was uploaded to
    convergence before promotion. Keep the existing physical transition criteria.
    Profile the remaining spline-only GC reconstruction before introducing a
    conservative exit screen. Measure end-to-end cost, including setup and FO
-   residence, under controlled load. The observed short tracing improvement is
-   5.1–5.5x; the >=10x per-step target is not established. Current main retains
+   residence, under controlled load. The repaired 200 us tracing improvement is
+   5.8–7.4x; the >=10x per-step target is not established. Current main retains
    its Cartesian path until a reviewed performance change is promoted.
 2. **Finish the production GC proof bridge.** Map each of the eight variants'
    actual equations and field/extrapolation operations to its theorem. Restore
