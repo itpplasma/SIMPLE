@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Independent second-order slab magnetic action, derived in prove_identities.py."""
-import json
+import compact_json
 from pathlib import Path
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -33,7 +33,7 @@ for n in range(3):
     assert exponent>n+0.8,(n,exponent)
     fits.append(dict(n=n,exponent=exponent,expected=n+1))
     print('slab magnetic action',n,'exponent',round(exponent,4))
-(ROOT/'results/slab_action.json').write_text(json.dumps(dict(
+(ROOT/'results/slab_action.json').write_text(compact_json.dumps(dict(
     scope='constant-direction linear-magnitude field only; magnetic action, not orbit tracking',
     formula='J=E/B - epsilon*g*E*vy/B**3 + epsilon**2*g**2*(3*E*vy**2/2+3*E**2/4)/B**5',
-    rows=rows,fits=fits),indent=2)+'\n')
+    rows=rows,fits=fits)))

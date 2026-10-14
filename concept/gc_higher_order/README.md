@@ -19,7 +19,7 @@ The standalone prototype now has canonical implicit midpoint (time order 2)
 and two-stage Gauss–Legendre (time order 4), with analytic Hamiltonian
 derivatives, radial/parallel Newton inversion and analytic stage Newton.
 The physics generator is [derive_canonical.py](gen/derive_canonical.py), its
-committed analytic field kernels are [canonical_kernels.py](generated/canonical_kernels.py),
+generated analytic field kernels are written to `build/canonical_kernels.py`,
 and the integrator is [gc_canonical.py](gen/gc_canonical.py). The existing
 fortsym-generated Fortran D2 transform supplies particle reconstruction.
 Python is the standalone driver; no production SIMPLE integration is claimed.
@@ -385,13 +385,21 @@ under stated hypotheses; it proves no GC field identity or accuracy bound.
 
 ## Build and regenerate
 
-Run from the SIMPLE repository root. Normal compilation uses only gfortran
-and committed generated kernels; the standalone Makefile never includes
-SIMPLE's build. Generated CSE leaves use packed inputs and array temporaries,
-compiled with `GEN_FFLAGS=-O0` to bound GCC register-allocation time; runtime/API
-use `-O2`, with `-fPIC` throughout. Regeneration uses fortsym
-`build/include` and `build/lib`;
-override `FORTSYM=/path/to/fortsym` when needed.
+Run from the SIMPLE repository root. The standalone Makefile never includes
+SIMPLE's build. Generated kernels are not committed: the Fortran D2 kernels
+(about 115k lines) are produced by `gen/derive_gc.f90` linked against fortsym,
+and the canonical Python kernels by SymPy in `gen/derive_canonical.py`, both
+into `build/`. `check-generated` and `canonical-check-generated` compare their
+SHA-256 against the hashes pinned in the Makefile, which are the hashes of the
+kernels used for the retained measurements. Measurement JSON is written with
+one record per line. The source hashes inside `results/*provenance.json`
+refer to the pre-rebase prototype commits that produced the measurements.
+
+Generated CSE leaves use packed inputs and array temporaries, compiled with
+`GEN_FFLAGS=-O0` to bound GCC register-allocation time; runtime/API use
+`-O2`, with `-fPIC` throughout. Generation uses fortsym `build/include` and
+`build/lib` from branch `feat/lie-pullback` at `1372fbd`; the default is the
+sibling checkout `../fortsym`; override `FORTSYM=/path/to/fortsym` when needed.
 
 ```sh
 make -f concept/gc_higher_order/Makefile test

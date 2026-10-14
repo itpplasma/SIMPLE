@@ -2,7 +2,7 @@
 """RK45 full-orbit comparison with phase carried, without phase alignment."""
 import ctypes as ct
 import csv
-import json
+import compact_json
 import os
 import platform
 from pathlib import Path
@@ -149,14 +149,14 @@ def main():
         writer=csv.DictWriter(stream,fieldnames=list(rows[0]),lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
-    (ROOT/'results/orbit_summary.json').write_text(json.dumps(dict(
+    (ROOT/'results/orbit_summary.json').write_text(compact_json.dumps(dict(
         python=platform.python_version(),numpy=np.__version__,scipy=scipy.__version__,
         epsilon_convention='dv/dt=v cross B/epsilon; normalized speed and gradient scales O(1)',
         time_interval=[0,1],samples=401,rk_tolerance=dict(rtol=2e-12,atol=2e-14),
         finest_tolerance_factor=0.1,fit='log-log last four epsilon values',
         norms='time-sampled RMS Euclidean; no gyroaveraging or phase alignment',
         fits=fits,tolerance_check=convergence,
-        n2=dict(status='available',representation='Pi1=-mu curl(b)/2, Pi2=0; zero-mean sigma4')),indent=2)+'\n')
+        n2=dict(status='available',representation='Pi1=-mu curl(b)/2, Pi2=0; zero-mean sigma4'))))
 
 if __name__ == '__main__':
     main()
