@@ -12,6 +12,16 @@
       "method": "SymPy exact"
     },
     {
+      "identity": "H0+epsilon^2 H2 Euler-Lagrange inversion",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "H0+epsilon^2 H2 exact reduced-energy conservation",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
       "identity": "first-order curvature and grad-B drift",
       "status": "proved",
       "method": "SymPy exact"
@@ -43,6 +53,21 @@
     },
     {
       "identity": "TB second-order Hamiltonian scalar constraint, excluding common Pi1.vgc",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "BSQ/BT beta_perp equivalence in Pi1_perp=0 representation",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "BSQ/BT beta_parallel equivalence using div(kappa)=N+b.grad(div b)",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "polarization representation H2 shift",
       "status": "proved",
       "method": "SymPy exact"
     },

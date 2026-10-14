@@ -2,20 +2,25 @@ module gc_api
     ! Local-jet API; no dependency on SIMPLE or fortsym at runtime.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    use gc_generated, only: map0, map1, rhs0, rhs1, diagnostic
+    use gc_generated, only: map0, map1, rhs0, rhs1, rhs2, diagnostic
+    use gc_second_order, only: map2, map1plus
     implicit none
     private
     public :: dp, field_derivs_t, gc_transform, gc_inverse, gc_rhs
     public :: gc_transform_jacobian, gc_diagnostics
+    public :: GC_FIRST_PLUS
     public :: GC_OK, GC_ORDER, GC_FIELD, GC_NEWTON, GC_POLAR
     integer, parameter :: GC_OK = 0, GC_ORDER = 1, GC_FIELD = 2, &
                           GC_NEWTON = 3, GC_POLAR = 4
+
+    integer, parameter :: GC_FIRST_PLUS = 11
 
     type :: field_derivs_t
         real(dp) :: origin(3) = 0.0_dp
         real(dp) :: b(3) = 0.0_dp
         real(dp) :: db(3, 3) = 0.0_dp
         real(dp) :: d2b(3, 3, 3) = 0.0_dp
+        real(dp) :: d3b(3, 3, 3, 3) = 0.0_dp
         real(dp) :: epsilon = 1.0_dp
         integer :: gauge_axis = 1
     end type field_derivs_t
@@ -24,13 +29,13 @@ contains
         integer, intent(in) :: n
         type(field_derivs_t), intent(in) :: f
         real(dp), intent(in) :: X(3), u, mu, phi
-        real(dp), intent(out) :: p(49)
+        real(dp), intent(out) :: p(130)
         integer, intent(out) :: ierr
-        real(dp) :: b(3), db(3, 3), dx(3), bn, norm_ref
-        integer :: j, k
+        real(dp) :: b(3), db(3, 3), d2b(3, 3, 3), dx(3), bn, norm_ref
+        integer :: j, k, l
         p = 0.0_dp
         ierr = GC_ORDER
-        if (n < 0 .or. n > 1) return
+        if (n /= 0 .and. n /= 1 .and. n /= 2 .and. n /= GC_FIRST_PLUS) return
         ierr = GC_FIELD
         if (.not. ieee_is_finite(f%epsilon)) return
         if (f%epsilon <= 0.0_dp) return
@@ -42,6 +47,9 @@ contains
         do k = 1, 3
             do j = 1, 3
                 b = b + 0.5_dp*f%d2b(:, j, k)*dx(j)*dx(k)
+                do l = 1, 3
+                    b = b + f%d3b(:, j, k, l)*dx(j)*dx(k)*dx(l)/6
+                end do
             end do
         end do
         bn = norm2(b)
@@ -55,11 +63,19 @@ contains
         db = f%db
         do k = 1, 3
             db = db + f%d2b(:, :, k)*dx(k)
+            do l = 1, 3
+                db = db + 0.5_dp*f%d3b(:, :, k, l)*dx(k)*dx(l)
+            end do
         end do
         p(4:7) = [u, mu, phi, f%epsilon]
         p(8:10) = b
         p(11:19) = reshape(db, [9])
-        p(20:46) = reshape(f%d2b, [27])
+        d2b = f%d2b
+        do l = 1, 3
+            d2b = d2b + f%d3b(:, :, :, l)*dx(l)
+        end do
+        p(20:46) = reshape(d2b, [27])
+        p(50:130) = reshape(f%d3b, [81])
         p(46 + f%gauge_axis) = 1.0_dp
         ierr = GC_OK
     end subroutine pack
@@ -70,13 +86,17 @@ contains
         real(dp), intent(in) :: X(3), u, mu, phi
         real(dp), intent(out) :: x_particle(3), v(3)
         integer, intent(out) :: ierr
-        real(dp) :: p(49), result(42)
+        real(dp) :: p(130), result(42)
         x_particle = 0.0_dp
         v = 0.0_dp
         call pack(n, field_derivs, X, u, mu, phi, p, ierr)
         if (ierr /= GC_OK) return
         if (n == 0) then
             call map0(p, result)
+        else if (n == 2) then
+            call map2(p, result)
+        else if (n == GC_FIRST_PLUS) then
+            call map1plus(p, result)
         else
             call map1(p, result)
         end if
@@ -94,12 +114,16 @@ contains
         real(dp), intent(in) :: X(3), u, mu, phi
         real(dp), intent(out) :: jac(6, 6)
         integer, intent(out) :: ierr
-        real(dp) :: p(49), result(42)
+        real(dp) :: p(130), result(42)
         jac = 0.0_dp
         call pack(n, field_derivs, X, u, mu, phi, p, ierr)
         if (ierr /= GC_OK) return
         if (n == 0) then
             call map0(p, result)
+        else if (n == 2) then
+            call map2(p, result)
+        else if (n == GC_FIRST_PLUS) then
+            call map1plus(p, result)
         else
             call map1(p, result)
         end if
@@ -118,7 +142,7 @@ contains
         real(dp), intent(out) :: X_dot(3), u_dot, mu_dot, phi_dot
         real(dp), intent(out) :: bstar(3), bstar_parallel, drift(3)
         integer, intent(out) :: ierr
-        real(dp) :: p(49), result(12)
+        real(dp) :: p(130), result(12)
         X_dot = 0.0_dp
         u_dot = 0.0_dp
         mu_dot = 0.0_dp
@@ -130,8 +154,10 @@ contains
         if (ierr /= GC_OK) return
         if (n == 0) then
             call rhs0(p, result)
-        else
+        else if (n == 1) then
             call rhs1(p, result)
+        else
+            call rhs2(p, result)
         end if
         if (.not. all(ieee_is_finite(result))) then
             ierr = GC_FIELD
@@ -154,7 +180,7 @@ contains
         real(dp), intent(in) :: X(3), u, mu, phi
         real(dp), intent(out) :: coefficients(14)
         integer, intent(out) :: ierr
-        real(dp) :: p(49)
+        real(dp) :: p(130)
         coefficients = 0.0_dp
         call pack(1, field_derivs, X, u, mu, phi, p, ierr)
         if (ierr /= GC_OK) return
@@ -162,7 +188,7 @@ contains
     end subroutine gc_diagnostics
 
     subroutine gc_inverse(n, field_derivs, x_particle, v, X, u, mu, phi, ierr)
-        ! Newton in one fixed local quadratic field jet; principal phase branch.
+        ! Newton in one fixed local cubic field jet; principal phase branch.
         integer, intent(in) :: n
         type(field_derivs_t), intent(in) :: field_derivs
         real(dp), intent(in) :: x_particle(3), v(3)
@@ -170,7 +196,7 @@ contains
         integer, intent(out) :: ierr
         real(dp) :: z(6), trial(6), target(6), val(6), testval(6), jac(6, 6)
         real(dp) :: b(3), bh(3), ref(3), e1(3), e2(3), wv(3), delta(6)
-        real(dp) :: bn, alpha, residual, new_residual, p(49), result(42)
+        real(dp) :: bn, alpha, residual, new_residual, p(130), result(42)
         integer :: it, j, status
         X = 0.0_dp
         u = 0.0_dp
@@ -197,6 +223,10 @@ contains
             if (ierr /= GC_OK) return
             if (n == 0) then
                 call map0(p, result)
+            else if (n == 2) then
+                call map2(p, result)
+            else if (n == GC_FIRST_PLUS) then
+                call map1plus(p, result)
             else
                 call map1(p, result)
             end if
