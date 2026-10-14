@@ -79,15 +79,51 @@ Published plots (uploaded 2026-10-14; links expire after three days):
 - Full-duration measured end-to-end cost: https://box.sloppy.at/bce8c.png
 - Full-duration loss curves and pointwise uncertainty: https://box.sloppy.at/4d014.png
 - Paired main/spline tracing cost at 200 us: https://box.sloppy.at/17ce5.png
+- GC energy/domain limits and equal-time refinement: https://box.sloppy.at/a4710.png
 
-The next ordered step, GC source/proof audit, is active on
-`research/gc-source-audit-20261014`. Its independent closed-form Hamiltonian
-witness failed against unchanged production source: both midpoint branches
-carry an extra midpoint-radius increment; Gauss uses the wrong r/phi mixed
-momentum derivative and omits the parallel-speed p_phi increment. The RED
-checkpoint is `810f1e5`, including fixed bounds and retained records. Repairs
-and fresh stellarator map/energy checks are pending. No result below should be
-read as a completed production GC proof bridge.
+The GC source/proof audit is retained on
+`research/gc-source-audit-20261014` through `d9df7a8`. The independent closed-form
+Hamiltonian witness reproduces three production bugs (RED `810f1e5`): an extra
+midpoint-radius Taylor increment in both midpoint branches, a wrong Gauss
+r/phi Hessian index, and omitted Gauss parallel-speed p_phi increment. The
+fix is `6a4fc33`; each individual regression is rejected when reintroduced.
+The dedicated main-based branch `fix/gc-field-extrapolation` contains only
+those source repairs, the independent regression and affected documentation;
+it is pushed as PR #535, commit `6970eff`. Native main-based checks pass
+85/85 in 478.83 s; after fixing local interpreter discovery, the rebuilt
+Python API suite passes all 17 cases in 99.52 s. Other backend-dependent Python
+suites were not rerun. The repair is integrated here as `0993478`; affected
+SPECTRE checks are running.
+
+All eight methods pass the one-step/100-step NCSX canonical-flux/Boozer and QH
+Boozer map checks with unchanged bounds (1e-7/1e-5) and original spacings
+(1e-4/5e-5). The original fourth-order finite-difference stencil failed two
+NCSX 100-step checks before and after the source repair; an eight-point stencil
+improves oracle resolution and passes. Both outcomes remain retained.
+
+The long energy acceptance is **not closed**. QH Boozer passes all methods at
+both starts for 100,000 steps. NCSX trapped starts reach the chart boundary;
+some landing solves return status 5 near s=1, which is not relabelled physical
+loss. NCSX Boozer passing Gauss2 fails the original coarse-step envelope gate;
+halving the step at equal elapsed interval passes and reduces extrema from
+roughly 1.6e-4 to 2.6e-7. Original failures, source hashes, samples and plots are
+retained under the audit branch's `concept/gc_symplectic_proof/`. No thresholds
+or starts were changed to obtain acceptance. Ideal fixed-step tableau theorems
+survive; finite-Newton/field/domain and whole-hybrid proof bridges remain open.
+
+
+The consistent-switch concept continues on
+`research/canonical-switch-20261014` (`7626cd8` for the portable build and real
+Hessians). Its original zero magnetic Hessians fail independent Cartesian
+checks on both stellarators. Correct logical second jets plus geometry
+chain-rule terms pass all six volume samples (max scaled error 2.62e-6,
+fixed acceptance bound 2e-4). The build/runner now use native Make/CTest.
+New independent two-form pullback and analytic-Jacobian checks pass on analytic
+fields and all three volumes of each stellarator: selector 1 defects scale
+with epsilon squared; selector 0 remains first order. These are numerical
+checks, not exact emitted-map identities or production integration. The full
+10-case, seven-epsilon reconstruction study and recovered exact identity
+checker are running. Production still uses its existing switch and phase.
 
 ## Goal and constraints
 

@@ -9,6 +9,20 @@ import subprocess
 import time
 
 
+STUDY_SOURCES = (
+    "concept/spectre_loss_study/study_spectre_orbits.f90",
+    "src/simple.f90", "src/spectre_sympl_orbit.f90",
+    "src/spectre_fo_hybrid.f90", "src/spectre_fo_field.f90",
+    "src/orbit_symplectic.f90", "src/orbit_symplectic_base.f90",
+    "src/field_can.f90", "src/field/field_can_spectre.f90",
+)
+
+
+def source_hashes(root):
+    return {path: hashlib.sha256((root / path).read_bytes()).hexdigest()
+            for path in STUDY_SOURCES if (root / path).exists()}
+
+
 def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
@@ -66,13 +80,7 @@ def main():
     metadata = vars(args).copy()
     metadata.update(source_revision=git(args.root, "rev-parse", "HEAD"),
                     measurement_diff=git(args.root, "diff", "--stat"),
-                    source_hashes={str(path): hashlib.sha256(
-                        (args.root / path).read_bytes()).hexdigest() for path in [
-                            Path("concept/spectre_loss_study/study_spectre_orbits.f90"),
-                            Path("src/spectre_sympl_orbit.f90"),
-                            Path("src/spectre_fo_hybrid.f90"),
-                            Path("src/spectre_fo_field.f90")]
-                        if (args.root / path).exists()},
+                    source_hashes=source_hashes(args.root),
                     fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),
                     process_s=time.monotonic() - started, returncode=process.returncode,
                     load_average=os.getloadavg(), command=command)
