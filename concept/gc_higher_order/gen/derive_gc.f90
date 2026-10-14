@@ -2,7 +2,7 @@ program derive_gc
     ! Consumer-owned physics. q/m=1/epsilon; theta(paper)=-phi(here).
     ! TB = Tronko & Brizard, PoP 22, 112507 (2015), arXiv:1511.01005v1.
     use fortsym_arena, only: arena_t
-    use fortsym_expr, only: expr_t, sym, num, sqrt, sin, cos, &
+    use fortsym_expr, only: expr_t, sym, num, func, sqrt, sin, cos, &
                         operator(+), operator(-), operator(*), operator(/), operator(**)
     use fortsym_products, only: jvp
     use fortsym_subs, only: subs_many
@@ -14,7 +14,7 @@ program derive_gc
     implicit none
     type(arena_t), target :: arena
     type(expr_t) :: zeros(3)
-    type(expr_t) :: p(49), field(3), bh(3), e1(3), e2(3), av(3), dv(3)
+    type(expr_t) :: p(130), packed_refs(130), field(3), bh(3), e1(3), e2(3), av(3), dv(3)
     type(expr_t) :: dbh(3, 3), gmag(3), rvec(3), rstar(3), cr(3), cb(3)
     type(expr_t) :: kap(3), rho(3), rh(3), vt(3), vel(3), g1(6), coords(6)
     type(expr_t) :: g2x(3), rho1(3), pi1(3), dir, bn, scale, w, tau, al1, al2
@@ -22,7 +22,12 @@ program derive_gc
     type(expr_t) :: curl_r(3), alpha_sq, divb, divk, curl_bg(3), gradlog(3)
     type(expr_t) :: work(3), work2(3), neg_g1(6)
     type(expr_t) :: tmap(6), roots(42), rroots(12), bs(3), bp, xd(3), ud, phid
-    type(expr_t) :: vdr(3), trial
+    type(expr_t) :: vdr(3), trial, hgrad(3), hu, hmu
+    type(expr_t) :: p2v(3), p3v(3), p4v(3), d1p2(3), d1p4(3), d11p3(3)
+    type(expr_t) :: d11p4(3), sigma3, g2(6), g3x(3), g3par, qtheta, fa(3)
+    type(expr_t) :: basis(6, 2), fullroots(126), qroots(13), qa, qb
+    type(expr_t) :: grouped(18), tangents(18), qtangents(2)
+    integer :: a, m
     character(256) :: filename
     character(:), allocatable :: why
     integer :: i, j, k, l, n, unit
@@ -31,6 +36,7 @@ program derive_gc
     call arena%init()
     do i = 1, size(p)
         p(i) = sym(arena, 'p'//idx(i))
+        packed_refs(i) = func('p', [num(arena, i)])
     end do
     coords = p(1:6)
     zeros = num(arena, 0)
@@ -163,39 +169,6 @@ program derive_gc
         end do
         call emit('map'//idx(n), roots)
     end do
-    ! Reduced Lagrangian: (A/eps+u*b-eps*mu*Rstar).dX-eps*mu*dphi-Hdt.
-    ! This truncates H=u^2/2+mu*B. It is not the full second-order theory.
-    do n = 0, 1
-        if (n == 0) then
-            bs = field
-            bp = bn
-            do i = 1, 3
-                xd(i) = p(4)*bh(i)
-            end do
-            ud = -p(5)*dot(bh, gmag)
-            phid = -bn/p(7) - dot(rvec, xd)
-        else
-            do i = 1, 3
-                rstar(i) = rvec(i) + cb(i)/2
-            end do
-            cr = curl(rstar)
-            do i = 1, 3
-                bs(i) = field(i) + p(7)*p(4)*cb(i) - p(7)**2*p(5)*cr(i)
-            end do
-            bp = dot(bh, bs)
-            work = cross(bh, gmag)
-            do i = 1, 3
-                xd(i) = (p(4)*bs(i) + p(7)*p(5)*work(i))/bp
-            end do
-            ud = -p(5)*dot(bs, gmag)/bp
-            phid = -bn/p(7) - dot(rstar, xd)
-        end if
-        do i = 1, 3
-            vdr(i) = xd(i) - p(4)*bh(i)
-        end do
-        rroots = [xd, ud, phid, bs, bp, vdr]
-        call emit('rhs'//idx(n), rroots)
-    end do
     ! Diagnostic TB (33)-(38), Pi1=-mu curl(b)/2, Pi2_parallel=0.
     ! A coefficient transcription plus consistency test, not a derived T2.
     curl_r = curl(rvec)
@@ -226,18 +199,168 @@ program derive_gc
     avg_g2mu = p(5)**2/(2*bn)*(tau**2/2 + dot(bh, curl_r) - alpha_sq &
                                - dot(bh, curl_bg)/2) - p(5)*p(4)**2/(2*bn**2) &
                *(dot(kap, work) + divk - tau**2)
+    ! H0+epsilon^2 H2 in the same mixed representation, Pi2=0.
+    ! Reduced Lagrangian: (A/eps+u*b-eps*mu*Rstar).dX-eps*mu*dphi-Hdt.
+    ! This truncates H=u^2/2+mu*B. It is not the full second-order theory.
+    do n = 0, 2
+        if (n == 0) then
+            bs = field
+            bp = bn
+            do i = 1, 3
+                xd(i) = p(4)*bh(i)
+            end do
+            ud = -p(5)*dot(bh, gmag)
+            phid = -bn/p(7) - dot(rvec, xd)
+        else
+            do i = 1, 3
+                rstar(i) = rvec(i) + cb(i)/2
+            end do
+            cr = curl(rstar)
+            do i = 1, 3
+                bs(i) = field(i) + p(7)*p(4)*cb(i) - p(7)**2*p(5)*cr(i)
+            end do
+            bp = dot(bh, bs)
+            work = cross(bh, gmag)
+            do i = 1, 3
+                xd(i) = (p(4)*bs(i) + p(7)*p(5)*work(i))/bp
+            end do
+            ud = -p(5)*dot(bs, gmag)/bp
+            phid = -bn/p(7) - dot(rstar, xd)
+            if (n == 2) then
+                do i = 1, 3
+                    hgrad(i) = p(5)*gmag(i) + p(7)**2*spatial(h2, i)
+                end do
+                hu = p(4) + p(7)**2*diff(h2, p(4))
+                hmu = bn + p(7)**2*diff(h2, p(5))
+                work = cross(bh, hgrad)
+                do i = 1, 3
+                    xd(i) = (hu*bs(i) + p(7)*work(i))/bp
+                end do
+                ud = -dot(bs, hgrad)/bp
+                phid = -hmu/p(7) - dot(rstar, xd)
+            end if
+        end if
+        do i = 1, 3
+            vdr(i) = xd(i) - p(4)*bh(i)
+        end do
+        rroots = [xd, ud, phid, bs, bp, vdr]
+        call emit('rhs'//idx(n), rroots)
+    end do
     call emit('diagnostic', [rho, gu, gm, gt, rho1, h2, avg_g2mu, tau, al1, al2])
+    ! Brizard-Tronko 2016 (97),(100),(104),(112)-(114).
+    ! sigma4 is the zero-mean periodic primitive of qtheta; its two
+    ! required momentum derivatives are reconstructed by finite Fourier sums.
+    do i = 1, 3
+        p2v(i) = p(4)*bh(i) + vt(i)/2
+        p3v(i) = p(4)*bh(i)/2 + vt(i)/3
+        p4v(i) = p(4)*bh(i)/3 + vt(i)/4
+    end do
+    d1p2 = d1(p2v)
+    d1p4 = d1(p4v)
+    d11p3 = d1(d1(p3v))
+    d11p4 = d1(d1p4)
+    sigma3 = -p(4)*dot(bh, g2x)/3
+    do i = 1, 3
+        work(i) = d11p3(i) + spatial(sigma3, i)
+    end do
+    g2(1:3) = g2x
+    g2(4) = p(4)*dot(kap, g2x) + dot(bh, work)
+    g2(5) = -p(5)*dot(g2x, gradlog) - p(4)*g2(4)/bn - h2/bn
+    do a = 1, 3
+        fa(a) = num(arena, 0)
+        do i = 1, 3
+            fa(a) = fa(a) + paper_diff(d1p4(i), a)*rho(i)
+        end do
+    end do
+    qtheta = g2(5)
+    g3par = num(arena, 0)
+    gt = num(arena, 0)
+    do i = 1, 3
+        qtheta = qtheta + (g2x(i)*paper_diff(d1p2(i), 3) &
+                   + rho(i)*paper_diff(d11p4(i), 3))/2
+        g3par = g3par + (g2x(i)*paper_diff(d1p2(i), 1) &
+                   + rho(i)*paper_diff(d11p4(i), 1))/2
+        gt = gt + (g2x(i)*(rstar(i) + paper_diff(d1p2(i), 2)) &
+                   + rho(i)*paper_diff(d11p4(i), 2))/2
+    end do
+    do a = 1, 3
+        qa = along(fa(a))
+        do m = 1, 3
+            qb = g1(3 + m)
+            if (m == 3) qb = -qb
+            qa = qa - qb*paper_diff(fa(m), a)
+        end do
+        select case(a)
+        case(1)
+            g3par = g3par + qa/2
+        case(2)
+            gt = gt + qa/2
+        case(3)
+            qtheta = qtheta + qa/2
+        end select
+    end do
+    ! Paper G1_theta=-G1_phi, and partial_theta=-partial_phi.
+    g3par = g3par - (g1(5)*paper_diff(-g1(6), 1) &
+                        + g1(6)*paper_diff(g1(5), 1))/4
+    gt = gt - (g1(5)*paper_diff(-g1(6), 2) &
+                  + g1(6)*paper_diff(g1(5), 2) - along(-g1(6)))/4
+    qtheta = qtheta - (g1(5)*paper_diff(-g1(6), 3) &
+                          + g1(6)*paper_diff(g1(5), 3) + along(g1(5)))/4
+    ! Base generators omit -sigma4_u and -sigma4_mu, added at runtime.
+    g2(6) = -gt
+    work2 = cross(bh, work)
+    do i = 1, 3
+        g3x(i) = g3par*bh(i) + dot(g2x, bh)*p(4)*cb(i)/bn &
+                 - g2x(i)*p(4)*tau/bn - work2(i)/bn
+        qa = num(arena, 0)
+        do j = 1, 6
+            qa = qa + g2(j)*derivative(rho(i), j)
+        end do
+        qb = -g3x(i) - qa + along(along(rho(i)))/6
+        tmap(i) = p(i) + p(7)*rho(i) + p(7)**2*rho1(i) + p(7)**3*qb
+        qa = num(arena, 0)
+        do j = 1, 6
+            qa = qa + g2(j)*derivative(vel(i), j)
+        end do
+        tmap(i + 3) = vel(i) - p(7)*along(vel(i)) &
+                        + p(7)**2*(-qa + along(along(vel(i)))/2)
+        basis(i, 1) = p(7)**3*bh(i)
+        basis(i + 3, 1) = num(arena, 0)
+        basis(i, 2) = p(7)**3*paper_diff(rho(i), 3)
+        basis(i + 3, 2) = p(7)**2*paper_diff(vel(i), 3)
+    end do
+    grouped(1:6) = tmap
+    grouped(7:12) = basis(:, 1)
+    grouped(13:18) = basis(:, 2)
+    fullroots(1:6) = tmap
+    fullroots(43:48) = basis(:, 1)
+    fullroots(85:90) = basis(:, 2)
+    do j = 1, 6
+        tangents = derivative_many(grouped, j)
+        do a = 0, 2
+            l = 42*a + 6*j
+            fullroots(l + 1:l + 6) = tangents(6*a + 1:6*a + 6)
+        end do
+    end do
+    call emit('map2base', fullroots)
+    qroots(1) = qtheta
+    qroots(2) = diff(qtheta, p(4))
+    qroots(3) = diff(qtheta, p(5))
+    do j = 1, 5
+        qtangents = derivative_many(qroots(2:3), j)
+        qroots(3 + j) = qtangents(1)
+        qroots(8 + j) = qtangents(2)
+    end do
+    call emit('gauge4', qroots)
     write (unit, '(a)') 'end module gc_generated'
     close (unit)
 contains
-    function spatial(f, j) result(value)
-        ! Cartesian total derivative of a scalar built from a local field jet.
-        ! The consumer owns the B(X) dependency; fortsym supplies all partials.
-        type(expr_t), intent(in) :: f
+    function spatial_many(f, j) result(value)
+        type(expr_t), intent(in) :: f(:)
         integer, intent(in) :: j
-        type(expr_t) :: value
-        integer :: a, k, slot
-        type(expr_t) :: variables(13), directions(13), root(1), output(1)
+        type(expr_t) :: value(size(f))
+        integer :: a, k, l, slot
+        type(expr_t) :: variables(40), directions(40)
         variables(1) = p(j)
         directions(1) = num(arena, 1)
         slot = 1
@@ -249,12 +372,68 @@ contains
                 slot = slot + 1
                 variables(slot) = p(10 + a + 3*(k - 1))
                 directions(slot) = p(19 + a + 3*(k - 1) + 9*(j - 1))
+                do l = 1, 3
+                    slot = slot + 1
+                    variables(slot) = p(19 + a + 3*(k - 1) + 9*(l - 1))
+                    directions(slot) = p(49 + a + 3*(k - 1) &
+                        + 9*(l - 1) + 27*(j - 1))
+                end do
             end do
         end do
-        root(1) = f
-        output = jvp(root, variables, directions)
+        value = jvp(f, variables, directions)
+    end function spatial_many
+
+    function spatial(f, j) result(value)
+        type(expr_t), intent(in) :: f
+        integer, intent(in) :: j
+        type(expr_t) :: value, output(1)
+        output = spatial_many([f], j)
         value = output(1)
     end function spatial
+
+    function derivative_many(f, j) result(value)
+        type(expr_t), intent(in) :: f(:)
+        integer, intent(in) :: j
+        type(expr_t) :: value(size(f)), variables(1), directions(1)
+        if (j <= 3) then
+            value = spatial_many(f, j)
+        else
+            variables(1) = p(j)
+            directions(1) = num(arena, 1)
+            value = jvp(f, variables, directions)
+        end if
+    end function derivative_many
+
+    function along(f) result(value)
+        type(expr_t), intent(in) :: f
+        type(expr_t) :: value
+        integer :: j
+        value = num(arena, 0)
+        do j = 1, 6
+            value = value + g1(j)*derivative(f, j)
+        end do
+    end function along
+
+    function paper_diff(f, a) result(value)
+        type(expr_t), intent(in) :: f
+        integer, intent(in) :: a
+        type(expr_t) :: value
+        value = diff(f, p(3 + a))
+        if (a == 3) value = -value
+    end function paper_diff
+
+    function d1(v) result(value)
+        type(expr_t), intent(in) :: v(3)
+        type(expr_t) :: value(3), cv(3)
+        integer :: i, a
+        cv = cross(rho, curl(v))
+        do i = 1, 3
+            value(i) = cv(i)
+            do a = 4, 6
+                value(i) = value(i) + g1(a)*diff(v(i), p(a))
+            end do
+        end do
+    end function d1
 
     function diff(f, x) result(value)
         type(expr_t), intent(in) :: f, x
@@ -319,54 +498,29 @@ contains
              spatial(a(2), 1) - spatial(a(1), 2)]
     end function curl
 
-    recursive subroutine mark_inputs(f, used, visited)
-        type(expr_t), intent(in) :: f
-        logical, intent(inout) :: used(49), visited(:)
-        integer :: k
-        if (visited(f%id)) return
-        visited(f%id) = .true.
-        do k = 1, 49
-            if (f%id == p(k)%id) used(k) = .true.
-        end do
-        do k = 1, f%nargs()
-            call mark_inputs(f%arg(k), used, visited)
-        end do
-    end subroutine mark_inputs
-
     subroutine emit(name, expressions)
         character(*), intent(in) :: name
         type(expr_t), intent(in) :: expressions(:)
         type(kernel_spec_t) :: spec
         type(expr_t) :: leaves(size(expressions))
         type(engine_result_t) :: simplified
-        logical :: used(49)
-        logical, allocatable :: visited(:)
-        integer :: slot
         integer :: i
         do i = 1, size(expressions)
             leaves(i) = subs_many(expressions(i), p(1:3), zeros)
             simplified = simplify(leaves(i))
             if (.not. simplified%ok) error stop 'native simplification refused'
-            leaves(i) = simplified%value
+            leaves(i) = subs_many(simplified%value, p, packed_refs)
         end do
         spec%name = str(name//'_leaf')
         spec%generator = str('concept/gc_higher_order/gen/derive_gc.f90')
         spec%regenerate_command = str('make -f concept/gc_higher_order/Makefile regen')
         spec%target = TARGET_FORTRAN_CPU
         spec%pure_procedure = .true.
-        allocate (visited(arena%size()), source=.false.)
-        used = .false.
-        do i = 1, size(leaves)
-            call mark_inputs(leaves(i), used, visited)
-        end do
-        allocate (spec%args(count(used)), spec%outputs(1), spec%output_shapes(1))
-        allocate (spec%output_references(size(expressions)))
-        slot = 0
-        do i = 1, 49
-            if (.not. used(i)) cycle
-            slot = slot + 1
-            spec%args(slot) = str('p'//idx(i))
-        end do
+        spec%array_temporaries = .true.
+        allocate (spec%args(1), spec%arg_shapes(1), spec%outputs(1))
+        allocate (spec%output_shapes(1), spec%output_references(size(expressions)))
+        spec%args(1) = str('p')
+        spec%arg_shapes(1) = str('(130)')
         spec%outputs(1) = str('result')
         spec%output_shapes(1) = str('('//idx(size(expressions))//')')
         do i = 1, size(expressions)
@@ -374,15 +528,12 @@ contains
         end do
         write (unit, '(a)') chars(emit_kernel(leaves, spec))
         write (unit, '(a)') '    pure subroutine '//name//'(p,result)'
-        write (unit, '(a)') '        real(dp), intent(in) :: p(49)'
+        write (unit, '(a)') '        real(dp), intent(in) :: p(130)'
         write (unit, '(a)') '        real(dp), intent(out) :: result('// &
             idx(size(expressions))//')'
-        write (unit, '(a)') '        call '//name//'_leaf( &'
-        do i = 1, 49
-            if (.not. used(i)) cycle
-            write (unit, '(a)') '            p('//idx(i)//'), &'
-        end do
-        write (unit, '(a)') '            result)'
+        write (unit, '(a)') '        call '//name//'_leaf(p,result)'
         write (unit, '(a)') '    end subroutine '//name
+        flush(unit)
+        print '(a)', 'Generated '//name
     end subroutine emit
 end program derive_gc
