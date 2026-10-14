@@ -178,17 +178,9 @@ module params
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
     !> SPECTRE interface treatment: only full orbit (3) is supported.
     integer :: crossing_level = 3
-    !> Full orbit near SPECTRE interfaces: entry distance of the guiding centre
-    !> to an interface in radial gyroradii (crossing_level = 3), width of the
-    !> smooth layer replacing each interior interface in gyroradii (0: sharp
-    !> per-volume field), and the Boris step bound h |B|/(2 ro0).
+    !> Full orbit near SPECTRE interfaces: entry distance in radial gyroradii
+    !> and the relative tolerance of RK45 on the sharp per-volume field.
     real(dp) :: spectre_fo_entry_larmor = 3.0_dp
-    real(dp) :: spectre_fo_layer_larmor = 0.0_dp
-    real(dp) :: spectre_fo_rotation = 0.05_dp
-    !> Full-orbit integrator near SPECTRE interfaces: 'rk45' (default; adaptive,
-    !> relative tolerance spectre_fo_tolerance; exact interface crossings on
-    !> the sharp field) or 'boris' (step bounded by spectre_fo_rotation).
-    character(16) :: spectre_fo_integrator = 'rk45'
     real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
@@ -235,8 +227,7 @@ module params
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
-        spectre_fo_entry_larmor, spectre_fo_layer_larmor, spectre_fo_rotation, &
-        spectre_fo_integrator, spectre_fo_tolerance, &
+        spectre_fo_entry_larmor, spectre_fo_tolerance, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &
@@ -329,14 +320,8 @@ contains
         if (crossing_level /= 3) then
             error stop 'crossing_level must be 3; fixed-mu GC maps were removed'
         end if
-        if (spectre_fo_entry_larmor <= 0.0_dp .or. &
-            spectre_fo_layer_larmor < 0.0_dp .or. spectre_fo_rotation <= 0.0_dp) then
-            error stop 'spectre_fo_entry_larmor and spectre_fo_rotation must be '// &
-                'positive, spectre_fo_layer_larmor nonnegative'
-        end if
-        spectre_fo_integrator = to_lower(trim(spectre_fo_integrator))
-        if (spectre_fo_integrator /= 'boris' .and. spectre_fo_integrator /= 'rk45') &
-            error stop "spectre_fo_integrator must be 'boris' or 'rk45'"
+        if (spectre_fo_entry_larmor <= 0.0_dp) &
+            error stop 'spectre_fo_entry_larmor must be positive'
         if (spectre_fo_tolerance <= 0.0_dp) &
             error stop 'spectre_fo_tolerance must be positive'
 

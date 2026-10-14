@@ -14,15 +14,7 @@ module spectre_fo_hybrid
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), parameter :: OWNER_EPS = 1.0e-12_dp
     integer, parameter :: STAGE_IN = 0, STAGE_OUT = 1
-    !> Boris step bound h |B| / (2 ro0) <= rotation_parameter, and the width of
-    !> the smooth layer that replaces each interior interface for the full
-    !> orbit, in gyroradii (0: the sharp per-volume field). Set by
-    !> spectre_fo_configure; read-only during tracing.
-    real(dp) :: rotation_parameter = 0.05_dp
-    real(dp) :: layer_larmor = 0.0_dp
-    !> Full-orbit integrator and the relative tolerance of FO_RK45.
-    integer, parameter, public :: FO_BORIS = 1, FO_RK45 = 2
-    integer :: fo_integrator = FO_BORIS
+    !> RK45 relative tolerance, configured before parallel tracing.
     real(dp) :: fo_tolerance = 1.0e-9_dp
     ! At most 0.1 rad (1/63 of a gyro-period). A cross-and-return hidden
     ! between stage samples has circular-orbit depth <= rho_L*(1-cos(0.05)),
@@ -40,12 +32,10 @@ module spectre_fo_hybrid
         real(dp) :: entry_pzeta = 0.0_dp
         ! Actual FO minus target GC momentum, expressed in the entry gauge.
         real(dp) :: entry_pzeta_defect = 0.0_dp
-        !> Next step of FO_RK45 (adapted between substeps).
+        !> Next RK45 step (adapted between substeps).
         real(dp) :: h_rk = 0.0_dp
         !> Volume whose gauge entry_pzeta is expressed in.
         integer :: entry_owner = 0
-        !> Smooth-layer width in rho_g, fixed at entry from the gyroradius.
-        real(dp) :: layer_rho = 0.0_dp
         !> Exit when the guiding centre is farther than this from the interface
         !> (rho_g); 0 keeps the gyrophase-based legacy rule.
         real(dp) :: exit_rho = 0.0_dp
@@ -59,25 +49,12 @@ module spectre_fo_hybrid
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta
 contains
-    subroutine spectre_fo_configure(rotation, layer, integrator, tolerance)
-        real(dp), intent(in) :: rotation, layer
-        integer, intent(in), optional :: integrator
-        real(dp), intent(in), optional :: tolerance
+    subroutine spectre_fo_configure(tolerance)
+        real(dp), intent(in) :: tolerance
 
-        if (rotation <= 0.0_dp .or. layer < 0.0_dp) &
-            error stop 'spectre_fo_configure: invalid rotation or layer width'
-        rotation_parameter = rotation
-        layer_larmor = layer
-        if (present(integrator)) then
-            if (integrator /= FO_BORIS .and. integrator /= FO_RK45) &
-                error stop 'spectre_fo_configure: unknown integrator'
-            fo_integrator = integrator
-        end if
-        if (present(tolerance)) then
-            if (tolerance <= 0.0_dp) &
-                error stop 'spectre_fo_configure: tolerance must be positive'
-            fo_tolerance = tolerance
-        end if
+        if (tolerance <= 0.0_dp) &
+            error stop 'spectre_fo_configure: tolerance must be positive'
+        fo_tolerance = tolerance
     end subroutine spectre_fo_configure
     subroutine spectre_fo_enter(state, y, owner, iface, ro0_bar, status)
         type(spectre_fo_state_t), intent(out) :: state
@@ -121,8 +98,6 @@ contains
                 vperp, target, ro0_bar, state%entry_pzeta_defect, status)
             if (status /= SPECTRE_FO_OK) return
         end if
-        state%layer_rho = layer_larmor*(ro0_bar*vperp/bmod)/M_TO_CM &
-                          *radial_gradient(y(1:3))
         state%active = .true.
     end subroutine spectre_fo_enter
     subroutine spectre_fo_radial_larmor(y, owner, ro0_bar, rho_r, status)
@@ -148,40 +123,6 @@ contains
         call spectre_field%coords%metric_tensor(u, g, ginv, sqrtg)
         grad = sqrt(ginv(1, 1))
     end function radial_gradient
-    subroutine layer_sample(layer_rho, u, owner, b, bmod, status)
-        !> Field for the full orbit: inside the layer |rho_g - k| < w/2 around
-        !> an interior interface k it blends the two volumes' fields (each held
-        !> at its interface value beyond its edge) with a C2 quintic step; B.n
-        !> vanishes on both sides, so the blend stays divergence-free to O(w).
-        real(dp), intent(in) :: layer_rho, u(3)
-        integer, intent(in) :: owner
-        real(dp), intent(inout) :: b(3), bmod
-        integer, intent(out) :: status
-        real(dp) :: x(3), b_other(3), bmod_other, acov(3), e_zeta(3), xi, s
-        real(dp) :: b_low(3), b_high(3)
-        integer :: k, other
-
-        status = SPECTRE_FO_OK
-        if (layer_rho <= 0.0_dp) return
-        k = nint(u(1))
-        if (k < 1 .or. k >= spectre_field%data%Mvol) return
-        if (abs(u(1) - real(k, dp)) >= 0.5_dp*layer_rho) return
-        other = merge(k + 1, k, owner == k)
-        call logical_sample(u, other, x, b_other, bmod_other, acov, e_zeta, status)
-        if (status /= SPECTRE_FO_OK) return
-        if (owner == k) then
-            b_low = bmod*b
-            b_high = bmod_other*b_other
-        else
-            b_low = bmod_other*b_other
-            b_high = bmod*b
-        end if
-        xi = (u(1) - real(k, dp))/layer_rho + 0.5_dp
-        s = xi**3*(10.0_dp - 15.0_dp*xi + 6.0_dp*xi*xi)
-        b = (1.0_dp - s)*b_low + s*b_high
-        bmod = norm2(b)
-        b = b/bmod
-    end subroutine layer_sample
     subroutine spectre_fo_advance_until_exit(state, dt, ro0_bar, dt_used, y, &
             owner, exited, status, h_scale)
         type(spectre_fo_state_t), intent(inout) :: state
@@ -221,15 +162,10 @@ contains
             call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
                 e_zeta, status)
             if (status /= SPECTRE_FO_OK) return
-            h = min(remaining, hfac*2.0_dp*rotation_parameter*ro0_bar/bmod)
-            if (fo_integrator == FO_RK45) then
-                if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
-                h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/bmod)
-                call rk45_substep(state, h, ro0_bar, status, &
-                    hfac*RK_GYRO_ANGLE)
-            else
-                call boris_substep(state, h, ro0_bar, status)
-            end if
+            h = remaining
+            if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
+            h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/bmod)
+            call rk45_substep(state, h, ro0_bar, status, hfac*RK_GYRO_ANGLE)
             if (status /= SPECTRE_FO_OK) then
                 if (status == SPECTRE_FO_LOSS) dt_used = dt_used + h
                 return
@@ -275,9 +211,8 @@ contains
         if (status /= SPECTRE_FO_OK) return
         vpar = dot_product(state%v, b)
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
-        ! Standard Boris conserves speed exactly but not the canonical momentum
-        ! associated with an ignorable toroidal angle. In an axisymmetric field
-        ! that momentum is an exact physical invariant, including across a
+        ! In an axisymmetric field toroidal canonical momentum is an exact
+        ! physical invariant, including across a
         ! discontinuous radial sheet. Use the entry value when mapping back to
         ! GC variables so a short recovery excursion cannot create a hidden
         ! p_zeta kick.
@@ -391,7 +326,7 @@ contains
     end subroutine spectre_fo_canonical_pzeta
     subroutine rk45_substep(state, h, ro0_bar, status, angle_limit)
         !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
-        !> the sharp field (no layer) the stages use the owner's field, held at
+        !> the sharp field the stages use the owner's field, held at
         !> its interface value beyond the volume edge. Stage cross-and-return
         !> trials are rejected; changed endpoints land on the first interface,
         !> where the owner switches. On input h is the trial step, on output the step
@@ -424,7 +359,7 @@ contains
                 h = h*max(0.2_dp, min(0.5_dp, 0.9_dp*err**(-0.2_dp)))
                 cycle
             end if
-            if (state%layer_rho <= 0.0_dp .and. stage_sides /= 0) then
+            if (stage_sides /= 0) then
                 if (owner1 == state%owner .or. &
                     (owner1 > state%owner .and. btest(stage_sides, STAGE_IN)) .or. &
                     (owner1 < state%owner .and. btest(stage_sides, STAGE_OUT))) then
@@ -435,7 +370,7 @@ contains
                 end if
             end if
             state%h_rk = h*min(5.0_dp, 0.9_dp*max(err, 1.0e-10_dp)**(-0.2_dp))
-            if (state%layer_rho <= 0.0_dp .and. owner1 /= state%owner) then
+            if (owner1 /= state%owner) then
                 ! The first sheet of the initial owner, even if the endpoint
                 ! lies beyond a thin intermediate volume.
                 iface_rho = real(merge(state%owner, state%owner - 1, &
@@ -602,88 +537,20 @@ contains
         if (status /= SPECTRE_FO_OK) return
     end subroutine dp_trial
     subroutine stage_field(state, x, u, bvec, bmod, owner_geo, status)
-        !> Field at a stage point: the owner's field on the sharp sheet, the
-        !> blended field of the geometric owner with a layer.
+        !> Field at a stage point: the owner's sharp field, clamped at its edge.
         type(spectre_fo_state_t), intent(in) :: state
         real(dp), intent(in) :: x(3)
         real(dp), intent(inout) :: u(3)
         real(dp), intent(out) :: bvec(3), bmod
         integer, intent(out) :: owner_geo, status
         real(dp) :: acov(3), e_zeta(3), xs(3)
-        integer :: owner_eval
 
         owner_geo = state%owner
         call locate_cart(x, u, owner_geo, status)
         if (status /= SPECTRE_FO_OK) return
-        owner_eval = state%owner
-        if (state%layer_rho > 0.0_dp) owner_eval = owner_geo
-        call logical_sample(u, owner_eval, xs, bvec, bmod, acov, e_zeta, status)
+        call logical_sample(u, state%owner, xs, bvec, bmod, acov, e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
-        call layer_sample(state%layer_rho, u, owner_eval, bvec, bmod, status)
     end subroutine stage_field
-    subroutine boris_substep(state, h, ro0_bar, status)
-        type(spectre_fo_state_t), intent(inout) :: state
-        real(dp), intent(inout) :: h
-        real(dp), intent(in) :: ro0_bar
-        integer, intent(out) :: status
-        real(dp) :: b(3), bmod, acov(3), e_zeta(3), t(3), s(3), vp(3), vnew(3)
-        real(dp) :: xmid(3), xnew(3), h_bound, u_mid(3), u_new(3)
-        integer :: owner_mid, owner_new, attempt
-        do attempt = 1, 40
-            xmid = state%x + 0.5_dp*h*state%v
-            u_mid = state%u
-            owner_mid = state%owner
-            call cart_sample(xmid, u_mid, owner_mid, b, bmod, acov, &
-                e_zeta, status)
-            if (status == SPECTRE_FO_OK) &
-                call layer_sample(state%layer_rho, u_mid, owner_mid, b, bmod, &
-                    status)
-            if (status /= SPECTRE_FO_OK) then
-                if (state%owner == spectre_field%data%Mvol .and. &
-                    state%u(1) >= real(state%owner, dp) - OWNER_EPS) then
-                    h = 0.0_dp
-                    status = SPECTRE_FO_LOSS
-                    return
-                end if
-                h = 0.5_dp*h
-                cycle
-            end if
-            h_bound = 2.0_dp*rotation_parameter*ro0_bar/bmod
-            if (h > h_bound*(1.0_dp + 4.0_dp*epsilon(1.0_dp))) then
-                h = h_bound
-                cycle
-            end if
-            t = 0.5_dp*h*bmod*b/ro0_bar
-            s = 2.0_dp*t/(1.0_dp + dot_product(t, t))
-            vp = state%v + cross(state%v, t)
-            vnew = state%v + cross(vp, s)
-            xnew = xmid + 0.5_dp*h*vnew
-            u_new = u_mid
-            owner_new = owner_mid
-            call locate_cart(xnew, u_new, owner_new, status)
-            if (status /= SPECTRE_FO_OK) then
-                if (state%owner == spectre_field%data%Mvol .and. &
-                    state%u(1) >= real(state%owner, dp) - OWNER_EPS) then
-                    h = 0.0_dp
-                    status = SPECTRE_FO_LOSS
-                    return
-                end if
-                h = 0.5_dp*h
-                cycle
-            end if
-            if (owner_new == spectre_field%data%Mvol .and. &
-                u_new(1) >= real(owner_new, dp) - OWNER_EPS) then
-                u_new(1) = real(owner_new, dp)
-            end if
-            state%x = xnew
-            state%v = vnew
-            state%u = u_new
-            state%owner = owner_new
-            status = SPECTRE_FO_OK
-            return
-        end do
-        status = SPECTRE_FO_STEP_LIMIT
-    end subroutine boris_substep
     subroutine solve_gyrophase(x_gc, u_gc, owner, b, e1, e2, vpar, vperp, &
             target, ro0_bar, alpha, status)
         real(dp), intent(in) :: x_gc(3), u_gc(3), b(3), e1(3), e2(3)

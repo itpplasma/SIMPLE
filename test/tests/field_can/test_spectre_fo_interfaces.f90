@@ -16,9 +16,8 @@ program test_spectre_fo_interfaces
     !>     of that volume, so its spread measures the switching and guiding-
     !>     centre errors accumulated between the phases.
     !>
-    !> usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45>
-    !> Boris runs on a layer of 0.2 gyroradii with the step bound 0.0125, RK45
-    !> on the sharp field with exact interface crossings.
+    !> usage: test_spectre_fo_interfaces <tok2vol.h5>
+    !> RK45 on the sharp field with exact interface crossings.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple, only: init_sympl
@@ -39,11 +38,9 @@ program test_spectre_fo_interfaces
 
     integer, parameter :: NMARKER = 8, NSTEP = 20000, NSAMPLE = 4
     real(dp), parameter :: RHO0 = 0.97_dp, LAM0 = 0.5_dp
-    !> Boris on the resolved layer: measured p_zeta spread 0.93 %, shell 2e-13.
     !> RK45 bounds include adaptive FO energy drift and finite-order GC/FO
     !> conversion error; sharp-sheet events also have an independent RK4 test.
-    real(dp) :: shell_tol, pzeta_tol
-    character(len=16) :: integrator
+    real(dp), parameter :: shell_tol = 1.0e-4_dp, pzeta_tol = 1.0e-5_dp
 
     character(len=1024) :: h5file
     character(len=256) :: config_file
@@ -53,21 +50,13 @@ program test_spectre_fo_interfaces
     integer :: im, entries, exits, losses, failures, status(5), phases
     logical :: failed
 
-    if (command_argument_count() < 2) then
-        print *, 'usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45>'
+    if (command_argument_count() < 1) then
+        print *, 'usage: test_spectre_fo_interfaces <tok2vol.h5>'
         error stop 1
     end if
     call get_command_argument(1, h5file)
-    call get_command_argument(2, integrator)
-    if (trim(integrator) == 'rk45') then
-        shell_tol = 1.0e-4_dp
-        pzeta_tol = 1.0e-5_dp
-    else
-        shell_tol = 1.0e-9_dp
-        pzeta_tol = 2.0e-2_dp
-    end if
 
-    call write_input(trim(h5file), trim(integrator))
+    call write_input(trim(h5file))
     config_file = 'simple.in'
     call simple_read_config(config_file, config_status, message)
     if (config_status /= 0) error stop 'library configuration failed'
@@ -110,8 +99,8 @@ program test_spectre_fo_interfaces
 
 contains
 
-    subroutine write_input(h5, integrator)
-        character(*), intent(in) :: h5, integrator
+    subroutine write_input(h5)
+        character(*), intent(in) :: h5
         integer :: unit
 
         open (newunit=unit, file='simple.in', status='replace', action='write')
@@ -120,14 +109,8 @@ contains
         write (unit, '(A)') '  integ_coords = 6'
         write (unit, '(A)') '  integmode = 3'
         write (unit, '(A)') '  crossing_level = 3'
-        if (integrator == 'rk45') then
-            ! Exercise the default RK45 through the public library path.
-            write (unit, '(A)') '  spectre_fo_tolerance = 1d-9'
-        else
-            write (unit, '(A)') "  spectre_fo_integrator = 'boris'"
-            write (unit, '(A)') '  spectre_fo_layer_larmor = 0.2d0'
-            write (unit, '(A)') '  spectre_fo_rotation = 0.0125d0'
-        end if
+        ! Exercise RK45 through the public library path.
+        write (unit, '(A)') '  spectre_fo_tolerance = 1d-9'
         write (unit, '(A)') '  spectre_ncon_phi = 32'
         write (unit, '(A)') '  ntestpart = 8'
         write (unit, '(A)') '  ntimstep = 100'

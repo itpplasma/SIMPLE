@@ -16,21 +16,9 @@ arguments, symbolic verifier, recorded measurements, and code provenance.
 With `crossing_level = 3` and `integmode > 0`, the symplectic guiding-centre
 path switches to the full orbit (`spectre_fo_hybrid`) when the guiding centre
 comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
-interface, and back when it is one gyroradius farther out. The default
-`spectre_fo_integrator = 'rk45'` uses the sharp per-volume field and localizes
-detected interface crossings; `'boris'` remains an option for a resolved smooth layer.
-
-A fixed step that does not resolve the force jump at the sheet makes a
-zero-mean impulse error `~ h [[F]]` per crossing that random-walks the
-invariants. `spectre_fo_layer_larmor` replaces each interior interface by a
-smooth layer of that many gyroradii for the full orbit, and
-`spectre_fo_rotation` bounds the Boris step. On tok2vol at 3.5 keV
-(`test_spectre_fo_interfaces`) the relative spread of the exactly conserved
-canonical toroidal momentum over all full-orbit phases is 14 % with the
-sharp field at the default bound 0.05, 3.2 % at 0.0125, 4.0 % with a layer of
-0.2 gyroradii at 0.05, and 0.93 % with the layer at 0.0125.
-`spectre_fo_integrator = 'rk45'` integrates the full orbit adaptively on the
-sharp field. Every trial stage's geometric owner is checked, including shortened
+interface, and back when it is one gyroradius farther out. RK45 uses the sharp
+per-volume field and localizes interface crossings. Every trial stage's
+geometric owner is checked, including shortened
 bracketing and landing trials and ownership changes in both directions. A stage
 that crosses and returns before the endpoint causes rejection and step halving;
 a changed endpoint is localized on the first sheet leaving the initial
@@ -64,12 +52,10 @@ there is no gyrophase root, entry accepts the closest sampled phase only when
 `abs(delta P_zeta) <= 1e-3 max(abs(P_zeta_entry), 1)` in internal momentum
 units; otherwise it reports `SPECTRE_FO_GYROPHASE_FAIL`. The signed accepted
 defect is exposed as `spectre_fo_state_t%entry_pzeta_defect`. No gyroradius-squared
-error estimate is asserted for this fallback. RK45 can drift in energy;
-Boris preserves speed. The existing long-trace bounds remain shell defect
-below `1e-4` and relative momentum spread below `1e-5` for RK45, and `1e-9`
-and `2e-2` for Boris at layer 0.2 and rotation 0.0125. The integration tests use
-the public `simple_api` initialization, exercising default RK45 and nondefault
-Boris configuration, and require every marker to complete and enter FO, with
+error estimate is asserted for this fallback. RK45 can drift in energy.
+The unchanged long-trace bounds remain shell defect below `1e-4` and relative
+momentum spread below `1e-5`. The integration tests use public `simple_api`
+initialization and require every marker to complete and enter FO, with
 round-trip witnesses and invariant samples in every visited volume. A focused
 near-tangent test compares against independent geometric-field RK4 and the
 axisymmetric momentum
@@ -116,7 +102,7 @@ uncertainty (about 2 and 4 markers at the two interfaces). Boris on the
 ensemble comparisons; individual fates differ even between full-orbit runs.
 
 Use `crossing_level = 3`, `integmode > 0`, and
-`spectre_fo_integrator = 'rk45'` at such interfaces. This resolves gyromotion
+RK45 at such interfaces. This resolves gyromotion
 and costs far more than the GC maps. The corrected-event hybrid RK45 reruns
 took 3343/1848 s at interfaces 1/2,
 using two concurrent runs with eight OpenMP threads each, deterministic seed
@@ -134,3 +120,21 @@ discontinuity, and real crossings scatter `mu` (quasi-adiabatic regime).
 The MRxMHD sheet stands in for a thin finite relaxed layer; full-orbit
 comparisons quantify the scatter and bound the domain of validity of the
 conserved-mu map.
+
+## Removal of the smoothed-layer Boris option
+
+The SPECTRE Boris integrator and its integrator/layer/rotation configuration
+keys were removed without aliases. A finite smoothed layer changes the magnetic
+field and therefore the physics; it does not integrate exactly the sharp-sheet
+Hamiltonian. RK45 with exact crossings reproduces the retained full-orbit-everywhere
+reference loss fractions within counting uncertainty (table above).
+See [the symbolic rejection record](spectre-rejected-interface-models.md#t2-a-boris-smoothing-layer-changes-the-target-problem)
+for the model distinction. Historical measurements above are evidence, not
+available configurations. The last revision containing the removed code is
+[`afec0c9`](https://github.com/itpplasma/SIMPLE/commit/afec0c9ccc5a90350ec71755a611450c23623083).
+
+`spectre_fo_entry_larmor`, radial-gradient evaluation and exit-distance state
+remain necessary for GC/RK45 switching. The fixed 0.1-rad RK45 gyro-angle bound
+and `h_scale` still bound trial excursions; neither is a Boris rotation option.
+The standalone study's analytic layer width also remains for its non-Boris
+Gauss/Poincare convergence experiments.

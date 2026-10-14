@@ -79,9 +79,11 @@ error at the end):
    is about 4 times faster than the bounded-energy symplectic scheme over
    4e5 time units, with an energy error 70 times larger and growing.
 
-## Boris
+## Historical Boris comparison (removed)
 
-`boris_step` (Cartesian, field of the local region) keeps `|v|` and phase-space
+The Boris implementation is retained only in git history; see
+[the removal record](../../DOC/spectre-interface-crossing.md#removal-of-the-smoothed-layer-boris-option).
+These are recorded measurements. The former `boris_step` (Cartesian, field of the local region) keeps `|v|` and phase-space
 volume exactly but is not symplectic. Strong sheet (`a_out = 2`,
 `p_phi = 0.45`), rms dmu/mu against the RK45 reference 1.68e-2:
 
@@ -202,8 +204,7 @@ compare. The markers stay near the interfaces, so the hybrid spends substantial
 time in full orbit. Corrected and historical timings have different thread counts
 and are not a direct speed comparison.
 
-For strong interfaces use `crossing_level = 3` with
-`spectre_fo_integrator = 'rk45'` (the default FO integrator); `'boris'` remains
-available for a resolved smooth layer. The GC direction-jump ordering and
+For strong interfaces use `crossing_level = 3` with `integmode > 0`;
+sharp-field RK45 with exact crossings is the full-orbit integrator. The GC direction-jump ordering and
 operational warning are documented in
 [`DOC/spectre-interface-crossing.md`](../../DOC/spectre-interface-crossing.md#warning-guiding-centre-maps-at-strong-interface-jumps).

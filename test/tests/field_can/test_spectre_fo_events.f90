@@ -10,7 +10,7 @@ program test_spectre_fo_events
     use field_spectre, only: spectre_field_t, create_spectre_field
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_configure, &
         spectre_fo_advance_until_exit, spectre_fo_canonical_pzeta, &
-        spectre_fo_enter, FO_RK45, SPECTRE_FO_OK, SPECTRE_FO_LOSS, &
+        spectre_fo_enter, SPECTRE_FO_OK, SPECTRE_FO_LOSS, &
         SPECTRE_FO_GYROPHASE_FAIL
     implicit none
 
@@ -27,7 +27,7 @@ program test_spectre_fo_events
     call create_spectre_field(sf, trim(h5file), status)
     if (status /= 0) error stop 'fixture initialization failed'
     call set_magfie_spectre_field(sf)
-    call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
+    call spectre_fo_configure( 1.0e-6_dp)
 
     u = [1.0_dp - 1.0e-12_dp, 0.0_dp, 0.0_dp]
     call sample(u, x, b, bmod)
@@ -165,7 +165,7 @@ contains
         jump%data%vol(2)%Ato = 20.0_dp*jump%data%vol(2)%Ato
         jump%data%vol(2)%Azo = 20.0_dp*jump%data%vol(2)%Azo
         call set_magfie_spectre_field(jump)
-        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 0.1_dp)
+        call spectre_fo_configure( 0.1_dp)
         u = [1.0_dp - 1.0e-12_dp, 0.0_dp, 0.0_dp]
         call sample(u, x, b, bmod)
         u(1) = 1.0_dp
@@ -198,7 +198,7 @@ contains
         if (norm2(orbit%v - vr) > 1.0e-7_dp) &
             error stop 'gyro cap lost after zero-time owner change'
         call set_magfie_spectre_field(sf)
-        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
+        call spectre_fo_configure( 1.0e-6_dp)
     end subroutine zero_time_field_jump
 
     subroutine inward_thin_volume
@@ -212,7 +212,7 @@ contains
         logical :: exited
 
         call set_thin_field(1.0e-4_dp)
-        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
+        call spectre_fo_configure( 1.0e-6_dp)
         u = [2.00001_dp, 0.0_dp, 0.0_dp]
         call sample(u, x, b, bmod)
         orbit = spectre_fo_state_t()
@@ -255,7 +255,7 @@ contains
         logical :: exited
 
         call set_thin_field(1.0e-5_dp)
-        call spectre_fo_configure(0.05_dp, 0.0_dp, FO_RK45, 1.0e-6_dp)
+        call spectre_fo_configure( 1.0e-6_dp)
         u = [1.025_dp, 0.0_dp, 0.0_dp]
         call sample(u, x, b, bmod)
         normal = [1.0_dp, 0.0_dp, 0.0_dp]

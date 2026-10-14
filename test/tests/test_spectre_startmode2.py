@@ -45,7 +45,9 @@ def run(binary, field, generate_start_only):
                               capture_output=True, text=True, timeout=120)
         if not generate_start_only:
             assert proc.returncode != 0
-            assert "no valid interface crossing on this version" in proc.stdout + proc.stderr
+            output = proc.stdout + proc.stderr
+            assert "multi-volume SPECTRE tracing requires integmode > 0" in output
+            assert "DOC/spectre-rejected-interface-models.md" in output
             assert not (work / "times_lost.dat").exists()
             return
         if proc.returncode != 0:

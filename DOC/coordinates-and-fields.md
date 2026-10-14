@@ -940,10 +940,7 @@ detected automatically from `field_input`; see
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
 | `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
-| `spectre_fo_layer_larmor` | real | 0 | full-orbit smooth layer width in gyroradii; `0` keeps the sharp per-volume field |
-| `spectre_fo_rotation` | real | 0.05 | Boris step bound `h \|B\|/(2 ro0)` |
-| `spectre_fo_integrator` | string | `'rk45'` | full orbit near interfaces: `'rk45'` (adaptive, exact interface crossings on the sharp field) or `'boris'` (fixed step; use a resolved smooth layer) |
-| `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of the `'rk45'` full orbit |
+| `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of sharp-field RK45 with exact crossings |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
 | `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |

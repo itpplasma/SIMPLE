@@ -372,12 +372,12 @@ do not prove universal drift or a uniform sharp-width Gauss2 bound.
 
 ## Do not reintroduce
 
-On main, multi-volume SPECTRE orbit tracing is disabled until the full-orbit
-interface treatment of PR #530 lands. Main has no selectable full-orbit
-interface or Boris option. The prototypes and recorded measurements above are
-historical evidence, not available main configurations. Future treatment must
-use full orbits with exact interface crossings and matched-gauge momentum
-bookkeeping; T5b–c state the verification conditions.
+Multi-volume SPECTRE orbit tracing now uses only `crossing_level = 3` with
+`integmode > 0`: sharp-field RK45 full orbits with exact interface crossings
+and matched-gauge momentum bookkeeping. The rejected GC and smoothed-layer
+Boris prototypes remain historical evidence, not available configurations.
+T5b–c state the verification conditions; see
+[the interface status](spectre-interface-crossing.md).
 
 The removed GC code last existed on main at
 [`b113786`](https://github.com/itpplasma/SIMPLE/commit/b113786), the branch-point
@@ -390,9 +390,9 @@ history for inspection, not reuse.
 
 | Rejected option/model | Reason to reject as a sharp-interface prescription | Main provenance / future treatment |
 | --- | --- | --- |
-| `crossing_level = 0` | T1b point-fixed obstruction; T1c–d physical ordering and mu failure | `b113786`, #443; disabled pending PR #530 |
-| `crossing_level = 1` | T1c–d; energy solve alone fails the general form guarantee in T1a/b | `b113786`, #440, #441, #459, #477; disabled pending PR #530 |
-| RK45 GC crossing (`integmode = 0`, GC reset) | T4 inherits T1 irrespective of tolerance | `b113786`, #443/#440; disabled pending PR #530 |
+| `crossing_level = 0` | T1b point-fixed obstruction; T1c–d physical ordering and mu failure | `b113786`, #443; removed without aliases; use level-3 full orbit |
+| `crossing_level = 1` | T1c–d; energy solve alone fails the general form guarantee in T1a/b | `b113786`, #440, #441, #459, #477; removed without aliases; use level-3 full orbit |
+| RK45 GC crossing (`integmode = 0`, GC reset) | T4 inherits T1 irrespective of tolerance | `b113786`, #443/#440; removed without aliases; use level-3 full orbit |
 | Prototype `spectre_fo_integrator = 'boris'` | T2 finite-width model error; T3 unresolved crossing error and measured invariant spread | Never a main interface option; event-resolved full orbit |
 | Prototype `spectre_fo_layer_larmor` | T2 uncontrolled fixed-width target change | Never a main option; a new convergence contract is required |
 | Prototype `spectre_fo_rotation` | T3 gyromotion bound alone does not locate or resolve a sheet | Never a main option; event landing and tolerance control |

@@ -4,7 +4,7 @@ program study_mu_scattering
     !>
     !> usage: study_mu_scattering.x SCHEME H WIDTH A_OUT P_PHI [G_MIN L [T_END [analytic]]]
     !>   SCHEME  rk45 | midpoint_region | naive | landing | poincare |
-    !>           poincare_gauss2 (G_MIN = 1: plain Gauss-Legendre) | boris
+    !>           poincare_gauss2 (G_MIN = 1: plain Gauss-Legendre)
     !>   H       step (rk45: tolerance)
     !>   WIDTH   smooth layer width (0: sharp sheet; poincare needs > 0)
     !>   A_OUT   outer psi coefficient (inner is 1): sets the direction jump
@@ -22,7 +22,7 @@ program study_mu_scattering
         hamiltonian
     use fo_sheet, only: sheet_step, step_stats_t, SCHEME_NAIVE, &
         SCHEME_MIDPOINT_REGION, SCHEME_LANDING, poincare_step, poincare_params_t, &
-        poincare_gauss2_step, boris_step
+        poincare_gauss2_step
     use rk_reference, only: rk_advance
     use sheet_setup, only: initial_state
     implicit none
@@ -34,9 +34,6 @@ program study_mu_scattering
     type(field_params_t) :: par
     type(poincare_params_t) :: pp
     real(dp) :: T_END = 4.0e4_dp
-    !> Marker p_phi; changes only under Boris, which does not conserve it.
-    real(dp) :: boris_pphi = 0.0_dp
-    !$omp threadprivate(boris_pphi)
     character(32) :: scheme, arg
     real(dp) :: h, mu0(NMARKER), mu1(NMARKER), d(NMARKER), de(NMARKER)
     integer :: im, crossings(NMARKER)
@@ -98,7 +95,6 @@ contains
         call initial_state(par, SPEED, mod(im - 1, 8) + 1, z)
         z(3) = z(3)*(1.0_dp + 1.0e-3_dp*real(im, dp)/NMARKER)
         region = region_of(par, z(1:2))
-        boris_pphi = par%p_phi
         e0 = hamiltonian(par, region, z)
         m0 = 0.0_dp
         m1 = 0.0_dp
@@ -135,9 +131,6 @@ contains
                     stats%crossings = stats%crossings + 1
                 region = region_of(par, z_new(1:2))
                 z = z_new
-            case ('boris')
-                dt = h
-                call boris_cartesian(z, h, region)
             case default
                 error stop 'unknown scheme'
             end select
@@ -148,37 +141,11 @@ contains
         end do
         if (trim(scheme) /= 'rk45') ncross = stats%crossings
         de_end = (0.5_dp*z(3)**2 + 0.5_dp*(z(4) + par%f_tor*log(z(1)))**2 &
-                  + 0.5_dp*((pm_phi() - psi_value(par, region, z(1:2)))/z(1))**2) &
+                  + 0.5_dp*((par%p_phi - psi_value(par, region, z(1:2)))/z(1))**2) &
                  /e0 - 1.0_dp
     end subroutine run_marker
 
-    subroutine boris_cartesian(z, h, region)
-        !> One Boris step of the reduced state: lift to Cartesian at phi = 0,
-        !> push, and map back; the marker's p_phi becomes that of the new
-        !> state (Boris does not conserve it exactly).
-        real(dp), intent(inout) :: z(4)
-        real(dp), intent(in) :: h
-        integer, intent(inout) :: region
 
-        real(dp) :: v(3), x(3), rr, c, s, vr, vphi
-
-        v = [z(3), (pm_phi() - psi_value(par, region, z(1:2)))/z(1), &
-             z(4) + par%f_tor*log(z(1))]
-        x = [z(1), 0.0_dp, z(2)]
-        call boris_step(par, x, v, h)
-        rr = hypot(x(1), x(2))
-        c = x(1)/rr
-        s = x(2)/rr
-        vr = v(1)*c + v(2)*s
-        vphi = -v(1)*s + v(2)*c
-        z = [rr, x(3), vr, v(3) - par%f_tor*log(rr)]
-        region = region_of(par, z(1:2))
-        boris_pphi = rr*vphi + psi_value(par, region, z(1:2))
-    end subroutine boris_cartesian
-
-    real(dp) function pm_phi() result(p)
-        p = boris_pphi
-    end function pm_phi
 
     real(dp) function mu_of(z, region) result(mu)
         real(dp), intent(in) :: z(4)
@@ -187,7 +154,7 @@ contains
         real(dp) :: b(3), v(3), bm, vpar
 
         call bfield(par, z(1:2), b)
-        v = [z(3), (pm_phi() - psi_value(par, region, z(1:2)))/z(1), &
+        v = [z(3), (par%p_phi - psi_value(par, region, z(1:2)))/z(1), &
              z(4) + par%f_tor*log(z(1))]
         bm = norm2(b)
         vpar = dot_product(v, b)/bm

@@ -84,18 +84,14 @@ set_tests_properties(test_spectre_sympl_volume_pphi PROPERTIES
 add_executable(test_spectre_fo_interfaces.x test_spectre_fo_interfaces.f90)
 target_link_libraries(test_spectre_fo_interfaces.x simple)
 
-foreach(fo_integrator boris rk45)
-    file(MAKE_DIRECTORY
-        ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_${fo_integrator})
-    add_test(NAME test_spectre_fo_interfaces_${fo_integrator}
-        COMMAND $<TARGET_FILE:test_spectre_fo_interfaces.x>
-            ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5 ${fo_integrator}
-        WORKING_DIRECTORY
-            ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_${fo_integrator})
-    set_tests_properties(test_spectre_fo_interfaces_${fo_integrator} PROPERTIES
-        LABELS "integration;slow"
-        TIMEOUT 600)
-endforeach()
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_rk45)
+add_test(NAME test_spectre_fo_interfaces_rk45
+    COMMAND $<TARGET_FILE:test_spectre_fo_interfaces.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_rk45)
+set_tests_properties(test_spectre_fo_interfaces_rk45 PROPERTIES
+    LABELS "integration;slow"
+    TIMEOUT 600)
 
 # Adversarial sharp-sheet events and gauge-consistent entry momentum.
 add_executable(test_spectre_fo_events.x test_spectre_fo_events.f90)
@@ -108,20 +104,6 @@ add_test(NAME test_spectre_fo_events
 set_tests_properties(test_spectre_fo_events PROPERTIES
     LABELS "integration"
     TIMEOUT 60)
-
-# Physical mu-scatter reference (ROADMAP section 4): full-orbit interface
-# traversals against the conserved-mu GC sheet convention, two gyrostep scales.
-add_executable(test_spectre_fo_mu_scatter.x test_spectre_fo_mu_scatter.f90)
-target_link_libraries(test_spectre_fo_mu_scatter.x simple)
-
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
-add_test(NAME test_spectre_fo_mu_scatter
-    COMMAND $<TARGET_FILE:test_spectre_fo_mu_scatter.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol_sheet.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
-set_tests_properties(test_spectre_fo_mu_scatter PROPERTIES
-    LABELS "integration"
-    TIMEOUT 300)
 
 # Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
 # difference algorithm they replaced to the FD truncation floor, at interior
