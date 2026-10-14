@@ -3,10 +3,10 @@ FC = gfortran
 FFLAGS ?= -O2 -march=native -fopenmp -Wall -Wextra -fimplicit-none -std=f2018
 ROOT := concept/interface_candidates
 BUILD := $(ROOT)/build
-MODULES := sheet_field fo_sheet rk_reference sheet_setup gc_hybrid candidate_field transforms candidate_orbits
+MODULES := sheet_field fo_sheet rk_reference candidate_field transforms candidate_orbits
 OBJECTS := $(addprefix $(BUILD)/,$(addsuffix .o,$(MODULES)))
 
-all: $(BUILD)/compare.x $(BUILD)/test_candidates.x $(BUILD)/study_hybrid.x
+all: $(BUILD)/compare.x $(BUILD)/test_candidates.x
 
 $(BUILD):
 	mkdir -p $@
@@ -14,7 +14,7 @@ $(BUILD):
 $(BUILD)/%.o: $(ROOT)/%.f90 | $(BUILD)
 	$(FC) $(FFLAGS) -J$(BUILD) -I$(BUILD) -c $< -o $@
 
-$(BUILD)/fo_sheet.o $(BUILD)/rk_reference.o $(BUILD)/sheet_setup.o $(BUILD)/gc_hybrid.o: $(BUILD)/sheet_field.o
+$(BUILD)/fo_sheet.o $(BUILD)/rk_reference.o: $(BUILD)/sheet_field.o
 $(BUILD)/candidate_field.o: $(BUILD)/sheet_field.o
 $(BUILD)/candidate_field.o: $(ROOT)/torsion_kernel.inc
 $(BUILD)/transforms.o: $(BUILD)/candidate_field.o
@@ -37,9 +37,8 @@ summarize:
 	python3 $(ROOT)/summarize.py
 	python3 $(ROOT)/render_report.py
 
-accuracy: $(BUILD)/accuracy.x $(BUILD)/sheet_accuracy.x
+accuracy: $(BUILD)/accuracy.x
 	OMP_NUM_THREADS=$${OMP_NUM_THREADS:-16} $(BUILD)/accuracy.x
-	OMP_NUM_THREADS=$${OMP_NUM_THREADS:-16} $(BUILD)/sheet_accuracy.x
 
 clean:
 	rm -rf $(BUILD)

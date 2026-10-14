@@ -1,9 +1,18 @@
 # Symplectic full orbits through a current sheet
 
-Standalone Fortran prototype, not part of the SIMPLE build: `make`, then run
-the programs in `build/`. It studies fixed-step symplectic integration of
-charged-particle full orbits through an MRxMHD-type current sheet, against an
-adaptive RK45 reference.
+Standalone Fortran reference/convergence experiment, outside SIMPLE's CMake
+build. Run from the SIMPLE root:
+
+```sh
+make -f concept/symplectic_sheet/Makefile
+```
+
+The executable study selectors are `rk45`, `poincare` and `poincare_gauss2`.
+The latter two require a resolved smooth layer and compare that explicitly
+different field model. The `naive`, `midpoint_region` and `landing` selectors,
+sharp-branch/energy-kick implementation and their dedicated tests were removed.
+See the [removal ledger](../../DOC/spectre-rejected-interface-models.md#implementation-removal-ledger).
+The following measurements and descriptions of removed schemes are historical.
 
 ## Model
 
@@ -18,7 +27,7 @@ The force jump at the sheet is `v_phi x [[B_p]]`. With
 `p_phi = psi(r0)` the crossing markers have `v_phi = 0` there and barely feel
 the sheet; the studies use `p_phi = 0.45` (`v_phi ~ 0.4 v`).
 
-## Integrators
+## Integrators in the historical comparison
 
 - `rk_reference.f90`: Dormand-Prince 5(4) with exact branch switching at the
   sheet (false-position landing, grazing touches resolved).
@@ -172,9 +181,12 @@ transformed Hamiltonian has the extra time scale `L/(g v)` of the transition
 zone; a fixed step in `tau` keeps the energy error bounded only when it
 resolves that scale too, as for any symplectic method.
 
-`test_fo_symplectic` checks the analytic tangent map of landing steps
-(`M^T J M = J` to 1e-13); `test_fo_stationary` checks long-run stationarity
-of the microcanonical ensemble; `study_mu_scattering` produces the table.
+The removed `test_fo_symplectic` checked an analytic tangent for the landing
+construction on the crossings it completed. That did not validate grazing
+coverage or physical long-time accuracy. Its source and the old stationary
+comparison remain in history. Current smooth-layer methods retain their original
+Hamiltonian equations; no exact symplectic claim for a terminated floating-point
+solve or for the production hybrid follows from these historical tests.
 
 ## SIMPLE on NCSX: loss fractions against full orbit everywhere
 

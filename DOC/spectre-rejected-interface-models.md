@@ -309,9 +309,9 @@ locally $h_\tau\ll L/(g|v_n|)$. Constants need not be uniform as layer width
 or $g_{\min}$ tends to zero. Positive $g$ alone does not smooth a discontinuous
 gradient of $H$; standard smooth backward-error analysis does not cover a
 sharp-sheet Gauss step. A finite smoothing layer still needs T2's target-limit
-check. The `gauss2` option under development in a stacked PR must validate
-its interface construction and nonlinear solve accuracy before these bounds
-can certify it; this document does not certify that implementation.
+check. A smooth-layer Gauss2 experiment must validate its interface construction
+and nonlinear solve accuracy before these bounds can certify it. No production
+Gauss2 full-orbit option is retained; this document does not certify the experiment.
 
 **T5c (event-resolved full-orbit RK45).** On a fixed finite time interval with
 finitely many uniformly transversal crossings, piecewise smooth Lipschitz
@@ -401,6 +401,69 @@ The held-back `feat/spectre-symplectic-crossing` must not be promoted as a
 physical sharp-interface cure: GC symplecticity does not bypass T1c–d.
 Reopening requires a new physical/asymptotic contract and independent
 full-orbit convergence/invariant evidence, not a renamed knob or energy check.
+
+## Implementation removal ledger
+
+Updated 2026-10-14. This ledger distinguishes a demonstrated failure of a
+specific formulation from an unfinished proof, insufficient resolution, or a
+method rejected for a different target. A small energy error or matching loss
+count does not repair the failures below.
+
+The newly collected comparison was added to main's cleanup branch in
+[`4a1f842`](https://github.com/itpplasma/SIMPLE/commit/4a1f842), preserving the
+original GPT worker result `345bfa8`. The removal commit in this cleanup deletes its retired
+executable paths and settings, plus the earlier sharp-sheet branch/landing code
+already on main. Both commits are retained by a merge commit,
+rather than squash-merging away the add/remove history. Historical tables,
+compressed marker records and mathematical witnesses remain evidence, not
+selectable methods. F1–F5 are formulation/domain failures or measured failures
+of the named implementation. F6 is retirement from the requested symplectic
+target; it is not a claim that every Boris calculation is wrong.
+
+| ID | Failed contract and decisive evidence | Removed implementation/settings |
+| --- | --- | --- |
+| F1: fixed-mu GC sheet reset | **Physical counterexample**, T1d: continuous particle velocity at a direction/magnitude jump generally changes mu. T1b also obstructs point-fixed presymplectic energy resets. No smaller RK tolerance repairs the model. Historical moderate T-A C1L0/L1 runs each also reported 9 failed trajectories. | Comparison `reset_old`, C1L0/C1L1 dispatch and `old_level`; production levels 0/1 and GC-only multi-volume RK45 were already removed/rejected by #531/#530. |
+| F2: phase-discarding hybrid as a reversible/symplectic formulation | **Information loss and measured reversal failure.** Multiple phases are mapped to one state; choosing phase zero or a momentum root cannot invert that projection. Moderate T-A reverse velocity RMS/v was about 0.30/0.31 for C2fixed/C2pphi, versus 2.8e-5 for FO at the same tolerance. This rejects that formulation as a reversible/symplectic candidate; it does not prove every finite-time hybrid loss statistic wrong. | C2fixed/C2pphi dispatch, `discarded_projection`, `match_phase`, `phase_rule`, and their matrix entries. |
+| F3: refreshed frozen-plane patches as a curved-field orbit solver | **Measured failure of this implementation.** Moderate T-A C4/T1 at patch step .25 had normalized toroidal-momentum RMS error about .60 versus 1.3e-9 for FO, and reverse velocity error about 1.32. The long strong T-B run also had two reconstruction failures. Refreshing a state-selected plane has no inherited exact planar symplectic guarantee. | C4 dispatch, `local_patch`, `patch_step` and its scans. The exact constant-field `helix`/`plane_step`/cycle oracle stays: it passes inverse, repeated-event and compression checks. No impossibility of curvature corrections is claimed. |
+| F4: unresolved fixed-branch sharp-sheet stepping | **Local error counterexample**, T3: crossing error is generically O(h times force jump), irrespective of the smooth method's nominal order. Historical naive sharp stepping gave rms relative mu change about .85 against a .017 reference. Midpoint branch choice reduced bias but retained excess scattering. | `SCHEME_NAIVE`, `SCHEME_MIDPOINT_REGION`, `midpoint_step` sharp-branch dispatch, their CLI selectors and dedicated stationary experiment. Resolved smooth midpoint is not rejected. |
+| F5: energy-kick landing as a general sheet integrator | **Domain and accuracy failure.** The normal kick fails near grazing when the energy-matching kick exceeds available normal velocity. Recorded rms mu changes were 1.9 and .24 at h=.1/.05 against the .017 reference; a smaller step helped but did not supply grazing coverage. Successful tangent checks on accepted transversal events were not a general physical-accuracy proof. | `SCHEME_LANDING`, `sheet_step`, landing/root/kick helpers, tangent/record machinery and the dedicated landing test. This rejects this implemented kick rule, not variational event integrators generally. |
+| F6: Boris advertised as a canonical symplectic sheet option | **Wrong guarantee**, T3 and T5: speed/volume preservation does not establish canonical symplecticity; finite smoothing also changes the target unless width and step converge. Resolved Boris can approximate a smooth field accurately, so it is not universally an inaccurate method. It is retired here as a candidate for the requested symplectic sharp-sheet solver. | Comparison C5 dispatch, `boris`, copied `boris_step`, `boris_step` setting and width/step scans. SPECTRE production Boris/layer controls were already removed by #530; generic full-orbit Boris elsewhere is unaffected. |
+
+Current comparison executables accept only FO, C3 (phase-carrying concept), and
+GL2 (resolved smooth-layer control). The retired candidate dispatches and their settings are absent; no compatibility
+handling or new rejection checks/tests are added.
+The copied older hybrid driver and the accuracy driver dedicated solely to the
+retired candidates were removed with their build targets. No aliases or shims
+map old names onto a remaining method. Fresh study data use `build/study/` so
+historical measurements are not overwritten.
+
+### What this does not establish
+
+- The current production event-resolved RK45 GC/FO bridge remains the finite-time
+  baseline. It is not claimed reversible or globally symplectic. Its zeroth-order
+  switch must be replaced coherently; removing it without a replacement would
+  remove working multi-volume tracing, not validate another formulation.
+- The slow NCSX smooth-layer Gauss2 implementation is **not a production candidate**
+  in its present form. Its dispatch/namelist option remains absent. Its retained
+  fixed-parameter concept has successful resolved tests; the timing comparison
+  and open whole-map proof do not establish that all Gauss integrators fail.
+- Higher-order GC, the canonical Lie switch, spline-provider FO and a variational
+  event construction are unfinished or limited concepts, not demonstrated dead
+  ends. No production flags are added for them by this cleanup.
+- Random phase, ring/Bessel averaging alone at a sheet, and indefinite frozen
+  planar cycles are not justified replacements for phase-dependent curved-sheet
+  dynamics. They are not implemented as production options. Reopening a retired
+  path needs a materially changed formulation and independent full-orbit evidence
+  for its stated domain, not a renamed setting or a weaker tolerance.
+
+### Verification of the removal
+
+The retained exact symbolic rejection verifier and comparison behavioural tests
+run unchanged in strength. The latter still check the sharp FO reference,
+forward/backward events, shallow crossing-return detection, lift/inverse and
+energy identities, nonaxisymmetric two-form order, and exact planar compression.
+The native SIMPLE suite and before/after survivor comparison are recorded
+in the cleanup PR. No production equations or namelist defaults change.
 
 ## Appendix: exact symbolic verification output
 

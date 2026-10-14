@@ -18,7 +18,7 @@ program compare
     integer(int64) :: clk0, clk1, rate, rng
     integer :: i, j, unit
     if (command_argument_count() < 12) error stop &
-        'usage: METHOD CASE AOUT SPEED TEND TOL DIN ORDER KNOB WIDTH SAMPLE FILE'
+        'usage: METHOD CASE AOUT SPEED TEND TOL DIN ORDER GL2_STEP GL2_WIDTH SAMPLE FILE'
     if (omp_get_max_threads() > 16) error stop 'OMP_NUM_THREADS must be <=16'
     call get_command_argument(1, method_name)
     call get_command_argument(2, case_name)
@@ -37,8 +37,6 @@ program compare
     read (arg, *) opt%order
     call get_command_argument(9, arg)
     read (arg, *) dt
-    opt%patch_step = dt
-    opt%boris_step = dt
     call get_command_argument(10, arg)
     read (arg, *) width
     call get_command_argument(11, arg)
@@ -47,25 +45,15 @@ program compare
     select case (trim(method_name))
     case ('FO')
         opt%method = 0
-    case ('C1L0', 'C1L1')
-        opt%method = 1
-        opt%old_level = merge(1, 0, trim(method_name) == 'C1L1')
-    case ('C2fixed', 'C2pphi')
-        opt%method = 2
-        opt%phase_rule = merge(1, 0, trim(method_name) == 'C2pphi')
     case ('C3')
         opt%method = 3
-    case ('C4')
-        opt%method = 4
-    case ('C5')
-        opt%method = 5
     case ('GL2')
         opt%method = 6
         if (trim(case_name) /= 'A') error stop 'GL2 prototype is axisymmetric'
     case default
         error stop 'unknown method'
     end select
-    if (opt%method == 3 .or. opt%method == 4) then
+    if (opt%method == 3) then
         if (.not. kernel_available(opt%order)) &
             error stop 'requested transform/RHS/energy order unavailable'
     end if
@@ -82,7 +70,7 @@ program compare
         call marker(randoms(:, i), initial(:, i))
     end do
     ! Initial states always use the sharp target field, even for layer controls.
-    if (opt%method == 5 .or. opt%method == 6) then
+    if (opt%method == 6) then
         pm%torus%width = width*speed
         pm%torus%analytic = opt%method == 6
     end if
@@ -153,7 +141,11 @@ contains
         e0 = 0.5_dp*sum(y(4:6)**2)
         p0 = canonical_pphi(pm, y)
         rinit = radius(pm, y(1:3))
-        call initialize(pm, opt, y, orbit)
+        if (opt%method == 6) then
+            call initialize(pm, options_t(), y, orbit)
+        else
+            call initialize(pm, opt, y, orbit)
+        end if
         rmin = rinit
         rmax = rinit
         emax = 0.0_dp
