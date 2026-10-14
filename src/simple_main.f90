@@ -303,12 +303,15 @@ contains
             block
                 use interface_crossing, only: crossing_log_reset
                 use spectre_sympl_orbit, only: sympl_landing_stats_reset
-                use spectre_fo_hybrid, only: spectre_fo_configure
-                use params, only: spectre_fo_rotation, spectre_fo_layer_larmor
+                use spectre_fo_hybrid, only: spectre_fo_configure, FO_BORIS, FO_RK45
+                use params, only: spectre_fo_rotation, spectre_fo_layer_larmor, &
+                    spectre_fo_integrator, spectre_fo_tolerance
                 call crossing_log_reset(256)
                 call sympl_landing_stats_reset
                 call spectre_fo_configure(spectre_fo_rotation, &
-                    spectre_fo_layer_larmor)
+                    spectre_fo_layer_larmor, &
+                    merge(FO_RK45, FO_BORIS, spectre_fo_integrator == 'rk45'), &
+                    spectre_fo_tolerance)
             end block
         end if
         if (trim(gpu_mode) == 'production') then

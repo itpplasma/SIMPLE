@@ -19,6 +19,10 @@ module spectre_fo_hybrid
     !> spectre_fo_configure; read-only during tracing.
     real(dp) :: rotation_parameter = 0.05_dp
     real(dp) :: layer_larmor = 0.0_dp
+    !> Full-orbit integrator and the relative tolerance of FO_RK45.
+    integer, parameter, public :: FO_BORIS = 1, FO_RK45 = 2
+    integer :: fo_integrator = FO_BORIS
+    real(dp) :: fo_tolerance = 1.0e-9_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
     integer, parameter :: NPHASE = 64
     type, public :: spectre_fo_state_t
@@ -28,6 +32,10 @@ module spectre_fo_hybrid
         real(dp) :: last_y(5) = 0.0_dp
         real(dp) :: entry_rho = 0.0_dp
         real(dp) :: entry_pzeta = 0.0_dp
+        !> Next step of FO_RK45 (adapted between substeps).
+        real(dp) :: h_rk = 0.0_dp
+        !> Volume whose gauge entry_pzeta is expressed in.
+        integer :: entry_owner = 0
         !> Smooth-layer width in rho_g, fixed at entry from the gyroradius.
         real(dp) :: layer_rho = 0.0_dp
         !> Exit when the guiding centre is farther than this from the interface
@@ -43,13 +51,25 @@ module spectre_fo_hybrid
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta
 contains
-    subroutine spectre_fo_configure(rotation, layer)
+    subroutine spectre_fo_configure(rotation, layer, integrator, tolerance)
         real(dp), intent(in) :: rotation, layer
+        integer, intent(in), optional :: integrator
+        real(dp), intent(in), optional :: tolerance
 
         if (rotation <= 0.0_dp .or. layer < 0.0_dp) &
             error stop 'spectre_fo_configure: invalid rotation or layer width'
         rotation_parameter = rotation
         layer_larmor = layer
+        if (present(integrator)) then
+            if (integrator /= FO_BORIS .and. integrator /= FO_RK45) &
+                error stop 'spectre_fo_configure: unknown integrator'
+            fo_integrator = integrator
+        end if
+        if (present(tolerance)) then
+            if (tolerance <= 0.0_dp) &
+                error stop 'spectre_fo_configure: tolerance must be positive'
+            fo_tolerance = tolerance
+        end if
     end subroutine spectre_fo_configure
     subroutine spectre_fo_enter(state, y, owner, iface, ro0_bar, status)
         type(spectre_fo_state_t), intent(out) :: state
@@ -76,6 +96,7 @@ contains
         call perpendicular_frame(b, e1, e2)
         target = vpar*dot_product(b, e_zeta) + acov(3)/ro0_bar
         state%entry_pzeta = target
+        state%entry_owner = owner
         alpha = 0.0_dp
         if (axisymmetric()) then
             call solve_gyrophase(x_gc, state%u, owner, b, e1, e2, vpar, &
@@ -188,7 +209,12 @@ contains
                 e_zeta, status)
             if (status /= SPECTRE_FO_OK) return
             h = min(remaining, hfac*2.0_dp*rotation_parameter*ro0_bar/bmod)
-            call boris_substep(state, h, ro0_bar, status)
+            if (fo_integrator == FO_RK45) then
+                if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
+                call rk45_substep(state, h, ro0_bar, status)
+            else
+                call boris_substep(state, h, ro0_bar, status)
+            end if
             if (status /= SPECTRE_FO_OK) return
             dt_used = dt_used + h
             remaining = remaining - h
@@ -260,6 +286,11 @@ contains
             return
         end if
         if (axisymmetric()) then
+            ! Each volume has its own gauge (A vanishes on its inner boundary);
+            ! in axisymmetry A_zeta is constant on an interface, so the entry
+            ! momentum moves to the exit volume's gauge by the jumps of A_zeta
+            ! across the interfaces in between.
+            pzeta = pzeta + gauge_shift(state%entry_owner, owner_gc)/ro0_bar
             vpar = (pzeta - acov_gc(3)/ro0_bar)/h_zeta
         else
             vpar = dot_product(state%v, b_gc)
@@ -276,6 +307,24 @@ contains
         if (present(mu_bar)) mu_bar = perpendicular_energy/(2.0_dp*bmod)
         owner = owner_gc
     end subroutine spectre_fo_to_gc
+    real(dp) function gauge_shift(from, to) result(shift)
+        !> Sum of the A_zeta jumps (in the field's acov units) across the
+        !> interfaces from volume from to volume to, at theta = zeta = 0.
+        integer, intent(in) :: from, to
+        real(dp) :: x(3), b(3), bmod, a_low(3), a_high(3), e_zeta(3)
+        integer :: k, step, status
+
+        shift = 0.0_dp
+        if (from == to .or. from < 1 .or. to < 1) return
+        step = merge(1, -1, to > from)
+        do k = min(from, to), max(from, to) - 1
+            call logical_sample([real(k, dp), 0.0_dp, 0.0_dp], k, x, b, bmod, &
+                a_low, e_zeta, status)
+            call logical_sample([real(k, dp), 0.0_dp, 0.0_dp], k + 1, x, b, &
+                bmod, a_high, e_zeta, status)
+            shift = shift + real(step, dp)*(a_high(3) - a_low(3))
+        end do
+    end function gauge_shift
     subroutine check_exit(state, y_gc, owner_gc, exited, status)
         type(spectre_fo_state_t), intent(inout) :: state
         real(dp), intent(in) :: y_gc(5)
@@ -322,6 +371,160 @@ contains
         if (status /= SPECTRE_FO_OK) return
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
     end subroutine spectre_fo_canonical_pzeta
+    subroutine rk45_substep(state, h, ro0_bar, status)
+        !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
+        !> the sharp field (no layer) the stages use the owner's field, held at
+        !> its interface value beyond the volume edge, and a step that ends in
+        !> another volume is shortened to land on the interface, where the
+        !> owner switches. On input h is the trial step, on output the step
+        !> taken.
+        type(spectre_fo_state_t), intent(inout) :: state
+        real(dp), intent(inout) :: h
+        real(dp), intent(in) :: ro0_bar
+        integer, intent(out) :: status
+        real(dp) :: x1(3), v1(3), u1(3), err, a, b, fa, fb, c, fc, iface_rho
+        integer :: attempt, owner1, it, side, grazes
+
+        grazes = 0
+        do attempt = 1, 60
+            call dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status)
+            if (status == SPECTRE_FO_LOSS) then
+                h = 0.0_dp
+                return
+            end if
+            if (status /= SPECTRE_FO_OK .or. err > 1.0_dp) then
+                h = h*max(0.2_dp, min(0.5_dp, 0.9_dp*max(err, 1.0_dp)**(-0.2_dp)))
+                cycle
+            end if
+            state%h_rk = h*min(5.0_dp, 0.9_dp*max(err, 1.0e-10_dp)**(-0.2_dp))
+            if (state%layer_rho <= 0.0_dp .and. owner1 /= state%owner .and. &
+                grazes < 2) then
+                iface_rho = real(min(owner1, state%owner), dp)
+                a = 0.0_dp
+                fa = state%u(1) - iface_rho
+                b = h
+                fb = u1(1) - iface_rho
+                side = 0
+                do it = 1, 100
+                    c = (a*fb - b*fa)/(fb - fa)
+                    call dp_trial(state, c, ro0_bar, x1, v1, u1, owner1, err, &
+                        status)
+                    if (status /= SPECTRE_FO_OK) return
+                    fc = u1(1) - iface_rho
+                    if (abs(fc) <= 1.0e-12_dp) exit
+                    if (fc*fb > 0.0_dp) then
+                        b = c
+                        fb = fc
+                        if (side == -1) fa = 0.5_dp*fa
+                        side = -1
+                    else
+                        a = c
+                        fa = fc
+                        if (side == 1) fb = 0.5_dp*fb
+                        side = 1
+                    end if
+                end do
+                if (c <= 1.0e-10_dp*h) then
+                    ! The orbit grazes the interface at the step start: it
+                    ! belongs to the other volume. Switch and redo the step; a
+                    ! second graze in a row is a tangency, where the step is
+                    ! taken with the volume of its end point.
+                    state%owner = merge(state%owner + 1, state%owner - 1, &
+                        iface_rho >= real(state%owner, dp))
+                    state%u(1) = iface_rho
+                    grazes = grazes + 1
+                    cycle
+                end if
+                h = c
+                u1(1) = iface_rho
+                owner1 = merge(state%owner + 1, state%owner - 1, &
+                    iface_rho >= real(state%owner, dp))
+            end if
+            state%x = x1
+            state%v = v1
+            state%u = u1
+            state%owner = owner1
+            status = SPECTRE_FO_OK
+            return
+        end do
+        status = SPECTRE_FO_STEP_LIMIT
+    end subroutine rk45_substep
+    subroutine dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status)
+        !> One Dormand-Prince 5(4) step from the state; err is the scaled error
+        !> (gyroradius for x, |v| for v) over fo_tolerance.
+        type(spectre_fo_state_t), intent(in) :: state
+        real(dp), intent(in) :: h, ro0_bar
+        real(dp), intent(out) :: x1(3), v1(3), u1(3), err
+        integer, intent(out) :: owner1, status
+        real(dp) :: kx(3, 7), kv(3, 7), xs(3), vs(3), w(7, 7), bvec(3), bmod
+        real(dp) :: rho_l, ex(3), ev(3)
+        integer :: i, j
+
+        w = 0.0_dp
+        w(2, 1) = 1.0_dp/5
+        w(3, 1:2) = [3.0_dp/40, 9.0_dp/40]
+        w(4, 1:3) = [44.0_dp/45, -56.0_dp/15, 32.0_dp/9]
+        w(5, 1:4) = [19372.0_dp/6561, -25360.0_dp/2187, 64448.0_dp/6561, &
+            -212.0_dp/729]
+        w(6, 1:5) = [9017.0_dp/3168, -355.0_dp/33, 46732.0_dp/5247, &
+            49.0_dp/176, -5103.0_dp/18656]
+        w(7, 1:6) = [35.0_dp/384, 0.0_dp, 500.0_dp/1113, 125.0_dp/192, &
+            -2187.0_dp/6784, 11.0_dp/84]
+        u1 = state%u
+        owner1 = state%owner
+        do i = 1, 7
+            xs = state%x
+            vs = state%v
+            do j = 1, i - 1
+                xs = xs + h*w(i, j)*kx(:, j)
+                vs = vs + h*w(i, j)*kv(:, j)
+            end do
+            call stage_field(state, xs, u1, bvec, bmod, status)
+            if (status /= SPECTRE_FO_OK) return
+            if (i == 1) rho_l = ro0_bar*norm2(vs)/bmod
+            kx(:, i) = vs
+            kv(:, i) = (bmod/ro0_bar)*cross(vs, bvec)
+        end do
+        x1 = xs
+        v1 = vs
+        ex = h*(71.0_dp/57600*kx(:, 1) - 71.0_dp/16695*kx(:, 3) + &
+            71.0_dp/1920*kx(:, 4) - 17253.0_dp/339200*kx(:, 5) + &
+            22.0_dp/525*kx(:, 6) - 1.0_dp/40*kx(:, 7))
+        ev = h*(71.0_dp/57600*kv(:, 1) - 71.0_dp/16695*kv(:, 3) + &
+            71.0_dp/1920*kv(:, 4) - 17253.0_dp/339200*kv(:, 5) + &
+            22.0_dp/525*kv(:, 6) - 1.0_dp/40*kv(:, 7))
+        err = max(norm2(ex)/rho_l, norm2(ev)/norm2(state%v))/fo_tolerance
+        call locate_cart(x1, u1, owner1, status)
+        if (status /= SPECTRE_FO_OK) then
+            if (state%owner == spectre_field%data%Mvol .and. &
+                state%u(1) >= real(state%owner, dp) - 0.1_dp) then
+                status = SPECTRE_FO_LOSS
+            end if
+            return
+        end if
+        if (owner1 == spectre_field%data%Mvol .and. &
+            u1(1) >= real(owner1, dp) - OWNER_EPS) status = SPECTRE_FO_LOSS
+    end subroutine dp_trial
+    subroutine stage_field(state, x, u, bvec, bmod, status)
+        !> Field at a stage point: the owner's field on the sharp sheet, the
+        !> blended field of the geometric owner with a layer.
+        type(spectre_fo_state_t), intent(in) :: state
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(inout) :: u(3)
+        real(dp), intent(out) :: bvec(3), bmod
+        integer, intent(out) :: status
+        real(dp) :: acov(3), e_zeta(3), xs(3)
+        integer :: owner_geo, owner_eval
+
+        owner_geo = state%owner
+        call locate_cart(x, u, owner_geo, status)
+        if (status /= SPECTRE_FO_OK) return
+        owner_eval = state%owner
+        if (state%layer_rho > 0.0_dp) owner_eval = owner_geo
+        call logical_sample(u, owner_eval, xs, bvec, bmod, acov, e_zeta, status)
+        if (status /= SPECTRE_FO_OK) return
+        call layer_sample(state%layer_rho, u, owner_eval, bvec, bmod, status)
+    end subroutine stage_field
     subroutine boris_substep(state, h, ro0_bar, status)
         type(spectre_fo_state_t), intent(inout) :: state
         real(dp), intent(inout) :: h

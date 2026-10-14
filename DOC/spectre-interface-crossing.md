@@ -236,8 +236,15 @@ smooth layer of that many gyroradii for the full orbit, and
 (`test_spectre_fo_interfaces`) the relative spread of the exactly conserved
 canonical toroidal momentum over all full-orbit phases is 14 % with the
 sharp field at the default bound 0.05, 3.2 % at 0.0125, 4.0 % with a layer of
-0.2 gyroradii at 0.05, and 0.93 % with the layer at 0.0125. The prototype in
-`concept/symplectic_sheet` documents the underlying analysis.
+0.2 gyroradii at 0.05, and 0.93 % with the layer at 0.0125.
+`spectre_fo_integrator = 'rk45'` integrates the full orbit adaptively on the
+sharp field and lands each step that changes volume on the interface: the
+spread is 6e-8 at `spectre_fo_tolerance = 1e-9` (1.2e-6 for a marker with a
+tangential touch), at the cost of the fine Boris setting, with an energy
+drift of 1.6e-5 that Boris does not have. Each volume's vector potential has
+its own gauge (it vanishes on the volume's inner boundary); the axisymmetric
+exit converts the entry momentum to the exit volume's gauge. The prototype
+in `concept/symplectic_sheet` documents the underlying analysis.
 
 ## Physical caveat
 

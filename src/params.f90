@@ -187,6 +187,11 @@ module params
     real(dp) :: spectre_fo_entry_larmor = 3.0_dp
     real(dp) :: spectre_fo_layer_larmor = 0.0_dp
     real(dp) :: spectre_fo_rotation = 0.05_dp
+    !> Full-orbit integrator near SPECTRE interfaces: 'boris' (fixed step
+    !> bounded by spectre_fo_rotation) or 'rk45' (adaptive, relative tolerance
+    !> spectre_fo_tolerance; exact interface crossing on the sharp field).
+    character(16) :: spectre_fo_integrator = 'boris'
+    real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -233,6 +238,7 @@ module params
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_layer_larmor, spectre_fo_rotation, &
+        spectre_fo_integrator, spectre_fo_tolerance, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &
@@ -333,6 +339,11 @@ contains
             error stop 'spectre_fo_entry_larmor and spectre_fo_rotation must be '// &
                 'positive, spectre_fo_layer_larmor nonnegative'
         end if
+        spectre_fo_integrator = to_lower(trim(spectre_fo_integrator))
+        if (spectre_fo_integrator /= 'boris' .and. spectre_fo_integrator /= 'rk45') &
+            error stop "spectre_fo_integrator must be 'boris' or 'rk45'"
+        if (spectre_fo_tolerance <= 0.0_dp) &
+            error stop 'spectre_fo_tolerance must be positive'
 
         call validate_gpu_config
     end subroutine finalize_config

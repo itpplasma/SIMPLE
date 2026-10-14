@@ -15,12 +15,17 @@ program test_spectre_fo_interfaces
     !>     the same volume. It is sampled in the full orbit in SPECTRE's gauge
     !>     of that volume, so its spread measures the switching and guiding-
     !>     centre errors accumulated between the phases.
+    !>
+    !> usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45>
+    !> Boris runs on a layer of 0.2 gyroradii with the step bound 0.0125, RK45
+    !> on the sharp field with exact interface crossings.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: tracer_t, init_sympl
     use simple_main, only: init_field
     use params, only: read_config, params_init, netcdffile, ns_s, ns_tp, &
         multharm, dtaumin, relerr, v0, crossing_level, integmode, &
-        spectre_fo_rotation, spectre_fo_layer_larmor
+        spectre_fo_rotation, spectre_fo_layer_larmor, spectre_fo_integrator, &
+        spectre_fo_tolerance
     use magfie_sub, only: init_magfie, SPECTRE
     use field_can_mod, only: field_can_t, ref_to_integ
     use field_can_spectre, only: spectre_mvol
@@ -29,7 +34,7 @@ program test_spectre_fo_interfaces
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
         SYMPL_SPECTRE_OK
     use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, spectre_fo_configure, &
-        SPECTRE_FO_OK
+        SPECTRE_FO_OK, FO_BORIS, FO_RK45
     use interface_crossing, only: crossing_log_reset
     use parmot_mod, only: ro0
     use util, only: twopi, sqrt2
@@ -38,10 +43,12 @@ program test_spectre_fo_interfaces
 
     integer, parameter :: NMARKER = 8, NSTEP = 20000, NSAMPLE = 4
     real(dp), parameter :: RHO0 = 0.97_dp, LAM0 = 0.5_dp
-    real(dp), parameter :: SHELL_TOL = 1.0e-9_dp
-    !> Measured 0.93 % with the layer of 0.2 gyroradii and the Boris bound
-    !> 0.0125; the sharp field at the default bound 0.05 reaches 14 %.
-    real(dp), parameter :: PZETA_TOL = 2.0e-2_dp
+    !> Boris: measured p_zeta spread 0.93 % (the sharp field at the default
+    !> bound 0.05 reaches 14 %), shell 2e-13. RK45 at tolerance 1e-9: p_zeta
+    !> spread 6e-8, 1.2e-6 for a marker with a tangential touch of the
+    !> interface (taken with one volume's field), shell drift 1.6e-5.
+    real(dp) :: shell_tol, pzeta_tol
+    character(len=16) :: integrator
 
     character(len=1024) :: h5file
     character(len=256) :: config_file
@@ -51,13 +58,21 @@ program test_spectre_fo_interfaces
     integer :: worst_phases
     logical :: failed
 
-    if (command_argument_count() < 1) then
-        print *, 'usage: test_spectre_fo_interfaces <tok2vol.h5>'
+    if (command_argument_count() < 2) then
+        print *, 'usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45>'
         error stop 1
     end if
     call get_command_argument(1, h5file)
+    call get_command_argument(2, integrator)
+    if (trim(integrator) == 'rk45') then
+        shell_tol = 1.0e-4_dp
+        pzeta_tol = 1.0e-5_dp
+    else
+        shell_tol = 1.0e-9_dp
+        pzeta_tol = 2.0e-2_dp
+    end if
 
-    call write_input(trim(h5file))
+    call write_input(trim(h5file), trim(integrator))
     config_file = 'simple.in'
     call read_config(config_file)
     call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
@@ -65,7 +80,9 @@ program test_spectre_fo_interfaces
     call init_magfie(SPECTRE)
     call crossing_log_reset(1024)
     call sympl_landing_stats_reset
-    call spectre_fo_configure(spectre_fo_rotation, spectre_fo_layer_larmor)
+    call spectre_fo_configure(spectre_fo_rotation, spectre_fo_layer_larmor, &
+        merge(FO_RK45, FO_BORIS, spectre_fo_integrator == 'rk45'), &
+        spectre_fo_tolerance)
 
     worst_spread = 0.0_dp
     worst_shell = 0.0_dp
@@ -79,8 +96,8 @@ program test_spectre_fo_interfaces
         worst_phases = min(worst_phases, phases)
     end do
     call sympl_fo_stats(entries, exits, losses, failures, status)
-    print '(A,4(I0,1X))', 'FO entries exits losses failures: ', entries, exits, &
-        losses, failures
+    print '(A,4(I0,1X),A,5(I0,1X))', 'FO entries exits losses failures: ', &
+        entries, exits, losses, failures, ' by status: ', status
 
     failed = .false.
     if (entries < NMARKER .or. exits < NMARKER) then
@@ -91,11 +108,11 @@ program test_spectre_fo_interfaces
         print '(A)', 'FAIL: full-orbit failures or losses'
         failed = .true.
     end if
-    if (worst_shell >= SHELL_TOL) then
+    if (worst_shell >= shell_tol) then
         print '(A)', 'FAIL: momentum shell not kept'
         failed = .true.
     end if
-    if (worst_spread >= PZETA_TOL) then
+    if (worst_spread >= pzeta_tol) then
         print '(A)', 'FAIL: canonical toroidal momentum not conserved'
         failed = .true.
     end if
@@ -104,8 +121,8 @@ program test_spectre_fo_interfaces
 
 contains
 
-    subroutine write_input(h5)
-        character(*), intent(in) :: h5
+    subroutine write_input(h5, integrator)
+        character(*), intent(in) :: h5, integrator
         integer :: unit
 
         open (newunit=unit, file='simple.in', status='replace', action='write')
@@ -114,8 +131,13 @@ contains
         write (unit, '(A)') '  integ_coords = 6'
         write (unit, '(A)') '  integmode = 3'
         write (unit, '(A)') '  crossing_level = 3'
-        write (unit, '(A)') '  spectre_fo_layer_larmor = 0.2d0'
-        write (unit, '(A)') '  spectre_fo_rotation = 0.0125d0'
+        if (integrator == 'rk45') then
+            write (unit, '(A)') "  spectre_fo_integrator = 'rk45'"
+            write (unit, '(A)') '  spectre_fo_tolerance = 1d-9'
+        else
+            write (unit, '(A)') '  spectre_fo_layer_larmor = 0.2d0'
+            write (unit, '(A)') '  spectre_fo_rotation = 0.0125d0'
+        end if
         write (unit, '(A)') '  spectre_ncon_phi = 32'
         write (unit, '(A)') '  ntestpart = 8'
         write (unit, '(A)') '  ntimstep = 100'
