@@ -212,15 +212,12 @@ fallback, which the tok2vol tests assert does not occur.
 
 ## Full orbit near interfaces (`crossing_level = 3`)
 
-MRxMHD interfaces are current sheets: the field direction jumps (tok2vol up to
-0.045 rad, the outer NCSX free-boundary interface up to 0.32 rad with
-`|B|` jumps of -25 to +38 %). No guiding-centre crossing map can be
-symplectic there while keeping the position, and the guiding-centre limit
-through a thin sheet does not exist; a full orbit through the sheet is
-well defined. With `crossing_level = 3` the symplectic guiding-centre path
-switches to the full orbit (`spectre_fo_hybrid`, Boris) when the guiding
-centre comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
-interface, and back when it is one gyroradius farther out.
+With `crossing_level = 3` and `integmode > 0`, the symplectic guiding-centre
+path switches to the full orbit (`spectre_fo_hybrid`) when the guiding centre
+comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
+interface, and back when it is one gyroradius farther out. The default
+`spectre_fo_integrator = 'rk45'` uses the sharp per-volume field and exact
+interface crossings; `'boris'` remains an option for a resolved smooth layer.
 
 A fixed step that does not resolve the force jump at the sheet makes a
 zero-mean impulse error `~ h [[F]]` per crossing that random-walks the
@@ -240,11 +237,52 @@ its own gauge (it vanishes on the volume's inner boundary); the axisymmetric
 exit converts the entry momentum to the exit volume's gauge. The prototype
 in `concept/symplectic_sheet` documents the underlying analysis.
 
-## Physical caveat
+## Warning: guiding-centre maps at strong interface jumps
+
+Guiding-centre (GC) crossing maps (`crossing_level = 0` or `1`) are not
+valid where the field direction or `|B|` jumps strongly. Conservation of
+energy and `mu` by a map does not establish its physical validity. For a
+local sheet `B = B(z)(cos alpha(z), sin alpha(z), 0)`,
+`h . curl h = -alpha'(z)`, so the GC parallel Jacobian is
+
+    B*_par = B(1 - rho_par alpha'),   rho_par = m c v_par / (e B).
+
+At a finite direction jump compressed into width `w`, `alpha' ~ [[alpha]]/w`;
+for nonzero parallel gyroradius the GC ordering fails as `w -> 0`, and the
+GC equations have no regular direction-jump limit. A strong magnitude jump
+also violates the slow-field-variation ordering and can scatter `mu`. The
+full-orbit equations remain well defined through the sharp sheet.
+
+The NCSX free-boundary outer interface has direction jumps up to 0.32 rad
+and magnitude jumps of -25 to +38 %. Recorded losses for 64 markers at
+3.5 keV, traced for 2 ms from each interface, are:
+
+| model | interface 1 (`rho_g = 0.95`) | interface 2 (`rho_g = 1.95`) |
+|---|---:|---:|
+| full orbit everywhere, RK45 (reference) | 6 | 39 |
+| level 3, RK45 | 7 | 41 |
+| level 3, Boris (layer 0.2, rotation 0.0125) | 5 | 48 |
+| level 1, symplectic GC | 7 | 29 |
+| level 1, RK45 GC | 1 | 7 |
+
+At the strong outer interface the GC maps give spurious confinement;
+level 3 with RK45 agrees with the reference loss fractions within counting
+uncertainty (about 2 and 4 markers at the two interfaces). Boris on the
+0.2-gyroradius layer overestimates the outer-interface losses. These are
+ensemble comparisons; individual fates differ even between full-orbit runs.
+
+Use `crossing_level = 3`, `integmode > 0`, and
+`spectre_fo_integrator = 'rk45'` at such interfaces. This resolves gyromotion
+and costs far more than the GC maps. In this 32-thread comparison the hybrid
+RK45 took 929/409 s at interfaces 1/2 versus 920/565 s for full orbit
+everywhere and 15/25 s for symplectic GC: the hybrid costs about as much as
+full orbit everywhere here because the markers remain near the interfaces. Setup and
+full timing evidence are retained in
+[`concept/symplectic_sheet/README.md`](../concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
 
 `mu` conservation through a zero-width sheet is a modeling convention: the
 Buechner-Zelenyi adiabaticity parameter vanishes for an ideal
 discontinuity, and real crossings scatter `mu` (quasi-adiabatic regime).
-The MRxMHD sheet stands in for a thin finite relaxed layer; the full-orbit
-Boris pusher quantifies the scatter (SIMPLE#442) and bounds the domain of
-validity of the conserved-mu map.
+The MRxMHD sheet stands in for a thin finite relaxed layer; full-orbit
+comparisons quantify the scatter and bound the domain of validity of the
+conserved-mu map.
