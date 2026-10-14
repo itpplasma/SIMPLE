@@ -1,0 +1,269 @@
+{
+  "status": "PASS",
+  "rows": [
+    {
+      "field": "uniform",
+      "order": 1,
+      "method": "midpoint",
+      "rhs_error": 6.688871678761643e-10,
+      "hessian_error": 1.000088900582341e-12,
+      "tangent_fd_error": 1.397779669787269e-10,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 1.4077805587930925e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "uniform",
+      "order": 1,
+      "method": "gauss2",
+      "rhs_error": 6.688871678761643e-10,
+      "hessian_error": 1.000088900582341e-12,
+      "tangent_fd_error": 1.397779669787269e-10,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 1.4077805587930925e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "uniform",
+      "order": 2,
+      "method": "midpoint",
+      "rhs_error": 6.688871678761643e-10,
+      "hessian_error": 1.000088900582341e-12,
+      "tangent_fd_error": 1.397779669787269e-10,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 1.4077805587930925e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "uniform",
+      "order": 2,
+      "method": "gauss2",
+      "rhs_error": 6.688871678761643e-10,
+      "hessian_error": 1.000088900582341e-12,
+      "tangent_fd_error": 1.397779669787269e-10,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 1.4077805587930925e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_gradient",
+      "order": 1,
+      "method": "midpoint",
+      "rhs_error": 7.223981413062575e-10,
+      "hessian_error": 7.547090175030746e-09,
+      "tangent_fd_error": 9.011856677565433e-10,
+      "symplectic_defect": 6.938893903907228e-18,
+      "fd_symplectic_defect": 9.087798638618416e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_gradient",
+      "order": 1,
+      "method": "gauss2",
+      "rhs_error": 7.223981413062575e-10,
+      "hessian_error": 7.547090175030746e-09,
+      "tangent_fd_error": 9.011856677565433e-10,
+      "symplectic_defect": 6.938893903907228e-18,
+      "fd_symplectic_defect": 9.087798638618416e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_gradient",
+      "order": 2,
+      "method": "midpoint",
+      "rhs_error": 7.223412978873966e-10,
+      "hessian_error": 6.1076072532806336e-09,
+      "tangent_fd_error": 8.650432176127154e-10,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 8.706169674077557e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_gradient",
+      "order": 2,
+      "method": "gauss2",
+      "rhs_error": 7.223412978873966e-10,
+      "hessian_error": 6.1076072532806336e-09,
+      "tangent_fd_error": 8.650432176127154e-10,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 8.706169674077557e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "order": 1,
+      "method": "midpoint",
+      "rhs_error": 6.689191422992735e-10,
+      "hessian_error": 8.398024393951875e-10,
+      "tangent_fd_error": 1.0279563866788521e-09,
+      "symplectic_defect": 2.168404344971009e-19,
+      "fd_symplectic_defect": 1.0289564755794345e-09,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "order": 1,
+      "method": "gauss2",
+      "rhs_error": 6.689191422992735e-10,
+      "hessian_error": 8.398024393951875e-10,
+      "tangent_fd_error": 1.0279563866788521e-09,
+      "symplectic_defect": 2.168404344971009e-19,
+      "fd_symplectic_defect": 1.0289564755794345e-09,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "order": 2,
+      "method": "midpoint",
+      "rhs_error": 6.689830911454919e-10,
+      "hessian_error": 8.397838171386729e-10,
+      "tangent_fd_error": 1.0279563866788521e-09,
+      "symplectic_defect": 6.776263578034403e-21,
+      "fd_symplectic_defect": 1.0289564755794345e-09,
+      "newton_iterations": 1
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "order": 2,
+      "method": "gauss2",
+      "rhs_error": 6.689830911454919e-10,
+      "hessian_error": 8.397838171386729e-10,
+      "tangent_fd_error": 1.0279563866788521e-09,
+      "symplectic_defect": 6.776263578034403e-21,
+      "fd_symplectic_defect": 1.0289564755794345e-09,
+      "newton_iterations": 1
+    },
+    {
+      "field": "magnetic_shear",
+      "order": 1,
+      "method": "midpoint",
+      "rhs_error": 6.728839707648149e-10,
+      "hessian_error": 7.778238844680097e-09,
+      "tangent_fd_error": 1.0135302735969631e-09,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 9.624627397147867e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "magnetic_shear",
+      "order": 1,
+      "method": "gauss2",
+      "rhs_error": 6.728839707648149e-10,
+      "hessian_error": 7.778238844680097e-09,
+      "tangent_fd_error": 1.0135302735969631e-09,
+      "symplectic_defect": 0.0,
+      "fd_symplectic_defect": 9.624627397147867e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "magnetic_shear",
+      "order": 2,
+      "method": "midpoint",
+      "rhs_error": 6.728875234784937e-10,
+      "hessian_error": 7.757679498787695e-09,
+      "tangent_fd_error": 1.0033635537004537e-09,
+      "symplectic_defect": 1.734723475976807e-18,
+      "fd_symplectic_defect": 9.520543763075207e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "magnetic_shear",
+      "order": 2,
+      "method": "gauss2",
+      "rhs_error": 6.728875234784937e-10,
+      "hessian_error": 7.757679498787695e-09,
+      "tangent_fd_error": 1.0033635537004537e-09,
+      "symplectic_defect": 1.734723475976807e-18,
+      "fd_symplectic_defect": 9.520543763075207e-10,
+      "newton_iterations": 1
+    },
+    {
+      "field": "sheet_inner",
+      "order": 1,
+      "method": "midpoint",
+      "rhs_error": 6.651497130860662e-10,
+      "hessian_error": 1.4989466334824897e-09,
+      "tangent_fd_error": 1.540400819052823e-10,
+      "symplectic_defect": 6.938893903907228e-18,
+      "fd_symplectic_defect": 1.5441494350537655e-10,
+      "newton_iterations": 3
+    },
+    {
+      "field": "sheet_inner",
+      "order": 1,
+      "method": "gauss2",
+      "rhs_error": 6.651497130860662e-10,
+      "hessian_error": 1.4989466334824897e-09,
+      "tangent_fd_error": 1.397779669787269e-10,
+      "symplectic_defect": 6.938893903907228e-18,
+      "fd_symplectic_defect": 1.3991074965247208e-10,
+      "newton_iterations": 2
+    },
+    {
+      "field": "sheet_inner",
+      "order": 2,
+      "method": "midpoint",
+      "rhs_error": 6.651390549450298e-10,
+      "hessian_error": 2.3905524781930865e-09,
+      "tangent_fd_error": 3.199467583231419e-10,
+      "symplectic_defect": 6.938893903907228e-18,
+      "fd_symplectic_defect": 3.3259945324818534e-10,
+      "newton_iterations": 3
+    },
+    {
+      "field": "sheet_inner",
+      "order": 2,
+      "method": "gauss2",
+      "rhs_error": 6.651390549450298e-10,
+      "hessian_error": 2.3905524781930865e-09,
+      "tangent_fd_error": 1.397779669787269e-10,
+      "symplectic_defect": 1.1102230246251565e-16,
+      "fd_symplectic_defect": 1.3991074965247208e-10,
+      "newton_iterations": 2
+    },
+    {
+      "field": "sheet_outer",
+      "order": 1,
+      "method": "midpoint",
+      "rhs_error": 6.328555457457696e-10,
+      "hessian_error": 3.5849536672571958e-09,
+      "tangent_fd_error": 7.484004527213983e-10,
+      "symplectic_defect": 1.734723475976807e-18,
+      "fd_symplectic_defect": 7.480507324686414e-10,
+      "newton_iterations": 3
+    },
+    {
+      "field": "sheet_outer",
+      "order": 1,
+      "method": "gauss2",
+      "rhs_error": 6.328555457457696e-10,
+      "hessian_error": 3.5849536672571958e-09,
+      "tangent_fd_error": 7.484004527213983e-10,
+      "symplectic_defect": 2.220446049250313e-16,
+      "fd_symplectic_defect": 7.48918149717781e-10,
+      "newton_iterations": 3
+    },
+    {
+      "field": "sheet_outer",
+      "order": 2,
+      "method": "midpoint",
+      "rhs_error": 6.328413348910544e-10,
+      "hessian_error": 4.487146765264072e-09,
+      "tangent_fd_error": 7.484004527213983e-10,
+      "symplectic_defect": 1.734723475976807e-18,
+      "fd_symplectic_defect": 7.482676700476532e-10,
+      "newton_iterations": 3
+    },
+    {
+      "field": "sheet_outer",
+      "order": 2,
+      "method": "gauss2",
+      "rhs_error": 6.328413348910544e-10,
+      "hessian_error": 4.487146765264072e-09,
+      "tangent_fd_error": 7.484004527213983e-10,
+      "symplectic_defect": 8.673617379884035e-19,
+      "fd_symplectic_defect": 7.478340169342346e-10,
+      "newton_iterations": 3
+    }
+  ]
+}

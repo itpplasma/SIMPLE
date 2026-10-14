@@ -1,5 +1,9 @@
 # Standalone guiding-centre Lie-transform prototype
 
+**Task E passes local canonical and symplectic checks** for midpoint and
+two-stage Gauss–Legendre, retaining D2's orbit orders. See the
+[canonical formulation and measured results](#task-e-canonical-symplectic-integration).
+
 **Task D2 passes the stated orbit-order checks.** Selector 2 reconstructs
 position with at least order three and velocity with at least order two on
 the test fields over t in [0,1]; use `GC_FIRST_PLUS` (11, label 1+) for the
@@ -8,6 +12,213 @@ SIMPLE's `src/` and build are untouched.
 Physics and its symbolic derivation live in [gen/](gen/); generic Lie algebra
 and code generation use the local fortsym branch `feat/lie-pullback` at
 `1372fbd`. No arbitrary-order guiding-centre recurrence is claimed.
+
+## Task E: canonical symplectic integration
+
+The standalone prototype now has canonical implicit midpoint (time order 2)
+and two-stage Gauss–Legendre (time order 4), with analytic Hamiltonian
+derivatives, radial/parallel Newton inversion and analytic stage Newton.
+The physics generator is [derive_canonical.py](gen/derive_canonical.py), its
+committed analytic field kernels are [canonical_kernels.py](generated/canonical_kernels.py),
+and the integrator is [gc_canonical.py](gen/gc_canonical.py). The existing
+fortsym-generated Fortran D2 transform supplies particle reconstruction.
+Python is the standalone driver; no production SIMPLE integration is claimed.
+
+### Decision and local one-form proof
+
+Choose the additional canonicalization route, retaining D2's representation.
+The literature's **Hamiltonian representation does not eliminate the
+gyrogauge connection**: BT 2016 (3), (35) retains `J(dtheta-R.dX)` even when
+the symplectic momentum has no higher-order corrections. In fixed spatial
+coordinates a scalar gauge cannot remove a connection with nonzero curl.
+For example, magnetic shear `B=(0,k x,1)` gives
+`[curl(R*)]_z(x=0)=k^2/2` in D2's frame. Changing the Hamiltonian alone cannot
+change this two-form. A further local phase-space transform is permitted;
+this is distinct from merely selecting a Lie-transform scalar gauge.
+
+There is also a useful correction to the task's radial obstruction: a
+**single radial component can be removed locally** while carrying phase.
+Take any SIMPLE-style spatial chart `(r,q1,q2)` with `A_r=b_r=0`, on a
+contractible radial segment. In the README units the physical gyroaction is
+`J=epsilon*mu` because `Omega=B/epsilon`. Define
+
+```
+K(r,q) = integral_[r_ref,r] R*_r(s,q) ds
+zeta = -phi - K;  C_a = R*_a - partial_a K
+P_a = A_a/epsilon + u*b_a - J*C_a                 (a=1,2)
+H_can(q,P,J) = [u^2/2 + (J/epsilon)*B + epsilon^2*H2]_(r,u=inverse(q,P,J))
+```
+
+Substitution, including variable J, gives the exact local identity for the
+truncated D2 theory
+`(A/epsilon+u b).dX-J(R*.dX+dphi)=P1 dq1+P2 dq2+J dzeta`.
+The radial term cancels because `K_r=R*_r`; its angular curvature is retained
+in `C_a`, and its effect on the Hamiltonian enters through the inverse map.
+Gyrophase is integrated as `zetadot=partial_J H_can`, rather than discarded.
+The spatial `A_r` gauge is chosen first; adding `d(chi/epsilon)` to the
+one-form has no effect on the dynamics.
+
+This is an exact extended Darboux completion, rather than a claim that every
+new variable changes at order epsilon squared. At fixed `(q,P,J)`, let
+`a_a=A_(a,r)+epsilon*u*b_(a,r)` and `D=a1*b2-a2*b1 != 0`. Relative to the
+map without `-J C_a`, its leading inverse displacement is
+
+```
+delta_r = epsilon^2*mu*(C1*b2-C2*b1)/D
+delta_u = epsilon*mu*(a1*C2-a2*C1)/D.
+```
+
+Thus the slow spatial correction is O(epsilon^2), while the parallel
+momentum generally changes at O(epsilon); the carried phase offset K is
+O(1). A requirement that all six variables change only at O(epsilon^2)
+would be incompatible with a generic parallel connection. Keeping the
+implicit map exact avoids introducing additional truncation error into H.
+The transform requested here is
+`T_2^can = C o T_2^(-1)` from particle state to canonical GC, and its
+reconstruction is `T_2 o C^(-1)`. Here T2 is D2's GC-to-particle map, and C
+is the map above. For a natural frame rotated by psi from D2's Cartesian
+frame, use `phi_natural=phi_D2-psi` in C; reconstruction uses
+`phi_D2=-zeta-K+psi`. Canonical angles, including zeta, are carried without
+wrapping. The frame angle psi is recovered modulo 2pi for the periodic
+particle reconstruction; a caller needing a continuous D2 phase must unwrap
+psi across frame branches.
+
+D2 uses `R*=R+curl(b)/2`, including the perpendicular polarization momentum.
+The task's `R+(b.curl b)b/2` corresponds to a different perpendicular
+symplectic representation. It must come with the corresponding change in
+H2 and particle pullback. Task E preserves D2's representation throughout.
+
+[prove_canonical.py](gen/prove_canonical.py) checks 29 exact local one-/two-form,
+inverse-displacement, radial-primitive, obstruction and slab identities.
+The sheet chart uses `(r,theta,varphi)` with `b_r=0`, radial natural frame,
+`R=10+r cos(theta)`, `c=5/a`, `d=sqrt(100+c^2 cos(theta)^2)` and
+`v=r/(sqrt(r^2+c^2)+c)`. Its radial primitive is
+`K=c sin(theta)/d [atanh((10v-c cos(theta))/d)-atanh(-c cos(theta)/d)]`.
+The radial gauge of A_theta uses 20 terms of its convergent geometric
+series; omitted derivatives through order three are below 1e-15 on
+`0<r<=1`. Each sheet branch is analytic and used only in its own smooth
+volume. No crossing rule or sheet-interface approximation is introduced.
+
+### Analytic derivatives and verification protocol
+
+Let `w=(r,u,mu,q1,q2)`, `v=(q1,q2,P1,P2,J)`, `M=partial_w v`,
+`W=M^(-1)` and `g_v=W^T grad_w H`. Then
+`H_vv=W^T [H_ww-sum_i (g_v)_i (v_i)_ww] W`.
+Symbolically differentiated P and H kernels supply both Newton systems;
+there are no finite-difference derivatives in integration. Midpoint uses
+`A=(1/2), b=(1)`. Gauss–Legendre uses diagonal `1/4`, off-diagonal
+`1/4 +/- sqrt(3)/6`, and weights `(1/2,1/2)`. Both satisfy
+`b_i A_ij+b_j A_ji=b_i b_j`. The six-dimensional discrete tangent is
+obtained by differentiating the converged stage equations, and is also
+checked independently by finite differences of the actual solved map.
+
+Measured Task E results are retained in `results/canonical_*.json`.
+Acceptance covers the original six fields and selectors 1, 1+ and 2,
+with the unchanged D2 full-orbit protocol: five epsilon scales, 401 raw
+samples on `[0,1]`, last-four log fits, matched physical initial states,
+and no phase alignment, time rescaling or energy normalization. Symplectic
+steps are refined until RMS errors agree with D2 RK45 within 1%; the finest
+sheet scale is also checked by step halving. This deliberately resolves
+time error separately from the asymptotic GC error. Selector 1 preserves
+its baseline phase limitation; phase-complete first order uses selector 1+.
+
+| Field | 1+ p(x),p(v), both methods | T2 midpoint p(x),p(v) | T2 Gauss–Legendre p(x),p(v) |
+|---|---:|---:|---:|
+| gradient | 2.986, 2.092 | 3.985, 2.986 | 3.985, 2.986 |
+| curvature | 3.016, 3.001 | 3.542, 3.003 | 3.542, 3.003 |
+| shear | 3.004, 1.988 | 3.009, 1.960 | 3.009, 1.960 |
+| sheet inner | 3.010, 2.126 | 2.970, 1.970 | 2.971, 1.969 |
+| sheet outer | 3.019–3.020, 2.218–2.219 | 3.036, 2.571 | 3.037, 2.571 |
+
+Every nonuniform fit differs from its D2 RK45 exponent by less than 0.001.
+The largest relative difference in RMS errors is 0.5831%; the largest finest
+step-halving change is 0.5719%. Uniform-field motion is exact at solver
+roundoff. Resolving the small outer-sheet T2 error required 45,600 midpoint
+steps on `[0,1]` at epsilon=.005, with 91,200 for the precision check;
+Gauss–Legendre used 400. These are accuracy settings for reconstruction,
+not recommended production time steps.
+
+Long-time checks use `epsilon=.04`, `t<=4000`, fixed steps 2 and 1, and
+eight equal time windows. They check bounded energy envelopes, the expected
+step powers on the sheets, exact cyclic momenta, and remaining in the smooth
+volume. Uniform/slab/shear/circular-curvature slow motions in these charts
+have constant momenta and energy at roundoff, so their energy test alone
+does not demonstrate a nontrivial modified Hamiltonian. The sheet tests do.
+
+For both GC orders the measured sheet energy envelopes at `t<=4000` are:
+
+| Field | Midpoint h=2 / h=1 | Gauss–Legendre h=2 / h=1 |
+|---|---:|---:|
+| inner | 1.42e-5 / 3.55e-6 | 1.11e-9 / 6.93e-11 |
+| outer | 1.01e-4 / 2.52e-5 | 1.80e-8 / 1.13e-9 |
+
+The largest final/first energy-window ratio is 1.000032; halving h gives
+the expected factors four and sixteen. J and the
+axisymmetric canonical p_phi have **zero measured change**. The analytic
+six-dimensional map defect `maxabs(T^T Omega T-Omega)` is at most 2.22e-16;
+independent finite differences of the solved map give at most 1.03e-9.
+These are finite numerical checks, not all-time error bounds.
+
+Cost was measured on `[0,20]`, epsilon=.04, one thread, excluding initial
+inversion and particle reconstruction. Representative selector-2 measurements
+are seconds / RMS slow-position error against a tighter canonical RK45 run:
+
+| Method | inner | outer |
+|---|---:|---:|
+| midpoint, h=.1 | 0.737 / 1.54e-6 | 0.960 / 1.44e-5 |
+| Gauss–Legendre, h=.1 | 1.44 / 4.46e-13 | 1.46 / 4.38e-12 |
+| RK45, same analytic Python kernels | 0.118 / 6.93e-10 | 0.175 / 6.54e-10 |
+| RK45, existing Fortran D2 RHS | 0.0814 / 1.31e-10 | 0.0902 / 4.85e-10 |
+
+The RK45 comparison uses rtol=1e-9, atol=1e-11. Carried-phase RMS errors are
+1.52e-5 / 1.02e-4 for midpoint, 3.36e-12 / 5.54e-11 for Gauss–Legendre,
+and 2.17e-9 / 4.43e-9 for the Fortran RK45 on inner / outer volumes.
+This prototype demonstrates structure and accuracy, **not a speedup**:
+the settings have different errors, and Python plus repeated analytic
+Hessian/inverse evaluation adds substantial overhead. The complete selector-1/2
+cost, call counts and errors are in [canonical_cost.json](results/canonical_cost.json).
+
+### What production SIMPLE would need
+
+SIMPLE's canonical construction can retain `A_r=b_r=0` and its linear
+parallel dependence. It must add the radial phase primitive K and angular
+connection tables C_a, use `A_eff,a=A_a-epsilon^2*mu*C_a`, modify the
+canonical momentum derivatives and inverse, add H2 consistently, and carry
+the `(zeta,J)` pair for full-orbit reconstruction. The geometry tables K
+and C_a can remain independent of mu; effective potentials and the inverse
+are mu dependent and could instead be tabulated per mu. Keeping the phase
+pair avoids needing a separate mu-dependent spatial canonicalization.
+Axisymmetric tables must preserve exact toroidal independence.
+Where `b_phi != 0`, the existing scalar radial Newton construction remains
+available: `u=(P_phi-A_phi/epsilon+J*C_phi)/b_phi` is still linear in P_phi,
+and substituting it into P_theta leaves one radial root. The prototype solves
+the equivalent two-variable `(r,u)` system, which also supports the circular
+curvature chart where the other angular component must eliminate u.
+
+Third magnetic derivatives are needed for the H2 RHS and D2 transform;
+**fourth derivatives generally enter an analytic Hessian of H2** for stage
+Newton. Production would need sufficiently smooth higher-derivative splines
+or another consistent derivative representation, not just existing first-
+and second-derivative field tables. Phase patches must be joined with the
+matching gyrogauge change; neither a single global phase chart nor a global
+nondegenerate momentum inverse is guaranteed. The prototype certifies local
+smooth charts, not the discontinuous sheet, magnetic-axis chart singularities,
+or a global toroidal Darboux theorem. SIMPLE `src/` and its build are untouched.
+
+Sources checked for this decision: [Littlejohn 1983](https://doi.org/10.1017/S002237780000060X)
+(variational conservation laws); [Cary & Brizard 2009](https://doi.org/10.1103/RevModPhys.81.693)
+(Hamiltonian and gyrogauge framework); [BT 2016, (3), (35), Appendix A](https://arxiv.org/html/1606.06534v1)
+(the connection remains in the Hamiltonian representation);
+[Brizard & Tronko 2011](https://arxiv.org/abs/1105.1145)
+(gyrokinetic momentum conservation, not the second-order GC transform);
+[Burby–Squire–Qin 2013](https://arxiv.org/abs/1312.3973)
+(representation freedom); [Burby–Qin](https://arxiv.org/abs/1312.3975)
+(global phase-chart obstruction); [Albert–Kasilov–Kernbichler, JCP 403,
+109065 (2020), section 3](https://arxiv.org/html/1903.06885)
+(implicit canonical momenta and radial solve); and the later
+[Albert et al., general toroidal canonicalization](https://arxiv.org/html/2503.15278v2)
+(spatial canonicalization beyond nested flux surfaces). These sources do
+not establish the new numerical orbit bounds; those are measured here.
 
 ## Units, phase and field contract
 
@@ -189,6 +400,10 @@ make -f concept/gc_higher_order/Makefile check-orders
 make -f concept/gc_higher_order/Makefile regen
 make -f concept/gc_higher_order/Makefile check-generated
 make -f concept/gc_higher_order/Makefile lean
+make -f concept/gc_higher_order/Makefile canonical-test
+make -f concept/gc_higher_order/Makefile canonical-check-generated
+make -f concept/gc_higher_order/Makefile canonical-study
+make -f concept/gc_higher_order/Makefile canonical-check-results
 ```
 
 ## Sources checked on 2026-10-14
