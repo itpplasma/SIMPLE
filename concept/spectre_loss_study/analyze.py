@@ -37,6 +37,9 @@ else:
                 delta = np.angle(np.exp(1j*delta))
             initial_error.append(float(np.max(np.abs(delta))) if len(delta) else None)
         case.update(run=metadata, mean_fo_fraction=float(np.mean(markers["fo_fraction"])),
+                    worker_wall_fraction=float(np.sum(markers["wall_s"])
+                                               /(case["trace_s"]*case["threads"])),
+                    maximum_marker_wall_s=float(np.max(markers["wall_s"])),
                     fo_time_fraction=float(np.sum(markers["fo_fraction"]*markers["time_s"])
                                            /np.sum(markers["time_s"])),
                     maximum_shell_error=float(np.max(markers["shell_error"])),
