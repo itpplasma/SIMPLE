@@ -37,5 +37,14 @@ repair. The existing source-tableau exact-arithmetic check passes.
 
 Candidate corrections are the endpoint-only midpoint Taylor increment, the
 Gauss r/phi mixed derivative index and Gauss parallel-speed p_phi increment.
-They are not applied in this checkpoint. The standalone witness is numerical
-implementation evidence, not a proof of the floating-point whole orbit map.
+The three corrections now pass the frozen witness. Restoring each defect
+individually fails it again; those isolated records are retained alongside RED
+and GREEN. The standalone witness is numerical implementation evidence, not a
+proof of the floating-point whole orbit map.
+
+The first stellarator map run passes the NCSX canonical-flux and QH Boozer
+cases and all one-step checks, but the original fourth-order FD stencil fails
+two 100-step NCSX Boozer checks: midpoint/Gauss1 give 2.028e-5 at spacing 1e-4
+and 2.280e-6 at 5e-5. Unchanged pre-fix production gives the same values.
+The original failure is retained; oracle-resolution work is separate from the
+three source repairs. No defect or spacing-disagreement bound is relaxed.
