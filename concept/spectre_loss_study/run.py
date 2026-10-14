@@ -70,7 +70,9 @@ def main():
                         (args.root / path).read_bytes()).hexdigest() for path in [
                             Path("concept/spectre_loss_study/study_spectre_orbits.f90"),
                             Path("src/spectre_sympl_orbit.f90"),
-                            Path("src/spectre_fo_hybrid.f90")]},
+                            Path("src/spectre_fo_hybrid.f90"),
+                            Path("src/spectre_fo_field.f90")]
+                        if (args.root / path).exists()},
                     fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),
                     process_s=time.monotonic() - started, returncode=process.returncode,
                     load_average=os.getloadavg(), command=command)

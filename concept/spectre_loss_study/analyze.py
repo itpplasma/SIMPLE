@@ -37,6 +37,8 @@ else:
                 delta = np.angle(np.exp(1j*delta))
             initial_error.append(float(np.max(np.abs(delta))) if len(delta) else None)
         case.update(run=metadata, mean_fo_fraction=float(np.mean(markers["fo_fraction"])),
+                    valid_for_loss_comparison=not any(case[key] for key in
+                        ["numerical_stops", "fo_failures", "warning_hold_count"]),
                     worker_wall_fraction=float(np.sum(markers["wall_s"])
                                                /(case["trace_s"]*case["threads"])),
                     maximum_marker_wall_s=float(np.max(markers["wall_s"])),
@@ -109,6 +111,12 @@ for row, field in enumerate(["ncsx", "g3v3"]):
             ax.bar(np.arange(2) + (index - (len(variants) - 1)/2)*0.18,
                    values, 0.17, color=styles[variant][0],
                    hatch=styles[variant][2], label=styles[variant][1])
+        invalid = [v for v in variants for mode in ["fo", "hybrid"]
+                   if not summaries[f"{field}_{sampling}_{mode}_{v}"].get(
+                       "valid_for_loss_comparison", True)]
+        if invalid:
+            ax.text(0.03, 0.91, "Includes invalid held runs; see summary",
+                    transform=ax.transAxes, color="#D55E00", fontsize=9)
         ax.set_xticks([0, 1], ["FO throughout", "GC + sheet FO"])
         ax.set_ylabel("Parallel tracing wall time [s]")
         ax.set_title(f"{'NCSX' if field == 'ncsx' else 'G3V3L3Fi'} · {sampling} starts")
@@ -156,7 +164,9 @@ for row, field in enumerate(["ncsx", "g3v3"]):
                 ax.step(times, fraction, where="post", color=styles[variant][0],
                         linestyle="-" if mode == "fo" else "--",
                         label=f"{styles[variant][1]} {'FO' if mode == 'fo' else 'hybrid'}"
-                        f" ({len(lost)}/{len(markers)})")
+                        f" ({len(lost)}/{len(markers)})" +
+                        (" INVALID: held/fault" if not summaries[name].get(
+                            "valid_for_loss_comparison", True) else ""))
         ax.set_title(f"{'NCSX' if field == 'ncsx' else 'G3V3L3Fi'} · {sampling} starts")
         ax.set_xlabel("Physical time [µs]")
         ax.set_ylabel("Cumulative physical loss / initial markers")

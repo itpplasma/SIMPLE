@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Sequential paired pilot matrix; completed native cases are resumable."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -32,6 +33,13 @@ for field in ["ncsx", "g3v3"]:
                     field=field, sampling=sampling, mode=mode, grid=grid,
                     markers=args.markers, threads=args.threads,
                     duration=args.duration).items())
+                root = args.baseline if variant == "raw" else Path.cwd()
+                source_paths = ["concept/spectre_loss_study/study_spectre_orbits.f90",
+                                "src/spectre_sympl_orbit.f90", "src/spectre_fo_hybrid.f90",
+                                "src/spectre_fo_field.f90"]
+                hashes = {p: hashlib.sha256((root / p).read_bytes()).hexdigest()
+                          for p in source_paths if (root / p).exists()}
+                same = same and prior.get("source_hashes") == hashes
                 if same and prior.get("returncode") == 0:
                     print(f"reuse {output}", flush=True)
                     continue
