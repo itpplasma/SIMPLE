@@ -12,6 +12,8 @@ program study_spectre_orbits
     use magfie_sub, only: init_magfie, SPECTRE, spectre_field, M_TO_CM
     use field_can_mod, only: field_can_t, ref_to_integ, integ_to_ref
     use field_can_spectre, only: spectre_mvol
+    use parmot_mod, only: ro0
+    use spectre_fo_hybrid, only: spectre_fo_enter, SPECTRE_FO_OK
     use orbit_symplectic_base, only: symplectic_integrator_t
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
@@ -21,6 +23,7 @@ program study_spectre_orbits
 
     character(len=1024) :: config_file, prefix, starts_file, fixture
     character(len=256) :: message, sampling, line
+    character(len=16) :: study_mode
     real(dp), allocatable :: starts(:, :), records(:, :, :), result(:, :)
     integer, allocatable :: samples(:)
     real(dp) :: setup0, setup_s, trace0, trace_s, dt, begin_marker, elapsed
@@ -37,6 +40,7 @@ program study_spectre_orbits
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_OUTPUT', prefix)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_STARTS', starts_file)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_SAMPLING', sampling)
+    call get_environment_variable('SIMPLE_SPECTRE_STUDY_MODE', study_mode)
     call get_environment_variable('OMP_NUM_THREADS', message)
     if (len_trim(message) == 0) call omp_set_num_threads(8)
     if (len_trim(prefix) == 0) prefix = 'study'
@@ -87,11 +91,8 @@ program study_spectre_orbits
             call spectre_field%evaluate(u, a, hc, bmag)
             call spectre_field%coords%metric_tensor(u, g, gi, jac)
             ! ro0 in G cm; raw B and metric use T and m.
-            block
-                use parmot_mod, only: ro0
-                radial_larmor = ro0*sqrt(1 - y(5)**2)/(bmag*1.0e4_dp) &
-                    *sqrt(gi(1, 1))/M_TO_CM
-            end block
+            radial_larmor = ro0*sqrt(1 - y(5)**2)/(bmag*1.0e4_dp) &
+                *sqrt(gi(1, 1))/M_TO_CM
             y(1) = real(iface, dp) + side*0.5_dp*radial_larmor
             starts(:, m) = y
         end do
@@ -121,6 +122,13 @@ program study_spectre_orbits
         z(4:5) = y(4:5)
         call init_sympl(si, field, z, dtaumin, dtaumin, relerr, integmode)
         call sympl_spectre_reset(state, si, spectre_mvol, integmode, crossing_level)
+        if (trim(study_mode) == 'fo') then
+            call spectre_fo_enter(state%fo, y, &
+                min(spectre_mvol, int(y(1)) + 1), nint(y(1)), &
+                ro0/sqrt2, status)
+            if (status /= SPECTRE_FO_OK) error stop 'FO reference launch'
+            state%fo%exit_rho = 1.0e6_dp
+        end if
         rec = 1
         elapsed = 0.0_dp
         worst_shell = 0.0_dp
@@ -134,7 +142,7 @@ program study_spectre_orbits
                     abs(sum(state%fo%v**2)/2 - starts(4, m)**2))
             else
                 worst_shell = max(worst_shell, &
-                    abs(si%pabs**2 - starts(4, m)**2))
+                    abs(field%H - starts(4, m)**2))
             end if
             if (mod(k, stride) == 0 .or. status /= SYMPL_SPECTRE_OK .or. &
                 k == nsteps) then
@@ -216,9 +224,8 @@ contains
             call integ_to_ref(integrator%z(1:3), coordinate)
             call spectre_field%coords%evaluate_cart(coordinate, pos)
             pos = pos*M_TO_CM
-            speed = integrator%pabs**2
-            lambda = sign(sqrt(max(0.0_dp, &
-                1 - f%mu*f%Bmod/integrator%pabs**2)), f%vpar)
+            speed = f%H
+            lambda = f%vpar/sqrt(2*f%H)
             owner = min(spectre_mvol, int(coordinate(1)) + 1)
         end if
         row = [time, coordinate, speed, lambda, &

@@ -7,6 +7,10 @@ numerical stops (89), recovered failures and warning holds remain distinct.
 applied to the detached main baseline. GC output positions represent guiding
 centres, FO positions represent particles; compare like modes. FO `lambda` is
 the most recent reconstructed GC pitch, not instantaneous particle pitch.
+The FO reference explicitly enters every marker before stepping and disables
+return to GC with a large exit distance. Enlarging the interface-entry distance
+alone is insufficient: the production proximity screen excludes points whose
+nearest integer is the magnetic axis or the outer edge.
 
 From a configured native checkout:
 
