@@ -13,7 +13,8 @@ program test_fo_boris
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
-  use simple, only: init_params, orbit_timestep_fo_bridge, tracer_t
+    use simple, only: init_params, init_fo, orbit_timestep_fo, &
+        orbit_timestep_fo_bridge, tracer_t
   use simple_main, only: init_field
   use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, &
     fo_energy, fo_mu, fo_to_gc, accept_or_fail, FO_OK, FO_LOCATE_FAIL
@@ -51,6 +52,7 @@ program test_fo_boris
   call check_reference_fallback_field(nfail)
   call check_reference_axis_bridge(nfail)
   call check_toroidal_position_map(nfail)
+    call check_full_orbit_wrapper_success(nfail)
 
   ! passing (lambda=0.9), trapped (lambda=0.2), and an inner orbit driven toward
   ! the axis (small s, lambda=0.7) to exercise the near-axis crossing.
@@ -70,6 +72,36 @@ program test_fo_boris
   end if
 
 contains
+
+    subroutine check_full_orbit_wrapper_success(nfail)
+        integer, intent(inout) :: nfail
+        real(dp), parameter :: z0(5) = [0.5_dp, 0.5_dp, 0.2_dp, 1.0_dp, 0.9_dp]
+        type(fo_state_t) :: state, reference
+        real(dp) :: z(5), position_start(3), s, theta, phi, vpar
+        integer :: ierr, status
+
+        call init_fo(state, z0, dtaumin)
+        reference = state
+        position_start = state%x
+
+        ! Establish success independently of the wrapper's returned status.
+        call fo_step(reference, status)
+        call check('wrapper fixture Boris step succeeds', status == FO_OK, nfail)
+        if (status /= FO_OK) return
+        call fo_to_gc(reference, s, theta, phi, vpar, status)
+        call check('wrapper fixture guiding-centre recovery succeeds', &
+            status == FO_OK, nfail)
+        if (status /= FO_OK) return
+
+        z = z0
+        ierr = -987654321
+        call orbit_timestep_fo(state, z, ierr)
+        call check('successful full-orbit wrapper returns zero', ierr == 0, nfail)
+        call check('successful full-orbit wrapper advances position', &
+            maxval(abs(state%x - position_start)) > 0.0_dp, nfail)
+        call check('successful full-orbit wrapper writes finite coordinates', &
+            all(ieee_is_finite(z)), nfail)
+    end subroutine check_full_orbit_wrapper_success
 
   subroutine check_reference_axis_bridge(nfail)
     integer, intent(inout) :: nfail
