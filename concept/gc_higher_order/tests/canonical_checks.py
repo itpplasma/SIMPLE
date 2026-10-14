@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Behavioral canonical-flow, analytic derivative and discrete-map oracles."""
-import json
+import compact_json
 import sys
 from pathlib import Path
 import numpy as np
@@ -55,7 +55,7 @@ def main():
                     tangent_fd_error=float(tangent_error), symplectic_defect=float(defect),
                     fd_symplectic_defect=float(fd_defect), newton_iterations=iterations))
         print(name, 'canonical oracles PASS', flush=True)
-    (ROOT/'results/canonical_checks.json').write_text(json.dumps(dict(status='PASS', rows=rows), indent=2)+'\n')
+    (ROOT/'results/canonical_checks.json').write_text(compact_json.dumps(dict(status='PASS', rows=rows)))
 
 
 if __name__ == '__main__':
