@@ -1,17 +1,15 @@
-diff --git a/test/tests/CMakeLists.txt b/test/tests/CMakeLists.txt
-index 8c31469..ed6d181 100644
 --- a/test/tests/CMakeLists.txt
 +++ b/test/tests/CMakeLists.txt
-@@ -1045,3 +1045,35 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
-     LABELS "unit;chartmap"
-     TIMEOUT 30
-     FIXTURES_REQUIRED vmec_test_data)
+@@ -1182,3 +1182,47 @@
+ add_subdirectory(
+     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
+     "${CMAKE_CURRENT_BINARY_DIR}/canonical_switch")
 +
 +##################################################
 +# GC symplecticity proof chain (concept/gc_symplectic_proof)
 +##################################################
 +set(GC_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/gc_symplectic_proof")
-+add_executable(test_gc_symplectic.x test_gc_symplectic.f90)
++add_executable(test_gc_symplectic.x "${GC_PROOF_DIR}/test_gc_symplectic.f90")
 +target_link_libraries(test_gc_symplectic.x simple)
 +# L5 map oracle: FD symplecticity defect of the production step map for all
 +# eight GC variants. NCSX (c09r00) at 1 keV; QH reactor scale at 3.5 MeV.
@@ -25,16 +23,28 @@ index 8c31469..ed6d181 100644
 +        COMMAND test_gc_symplectic.x map ${gc_file} ${gc_type} ${gc_ekin}
 +        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 +    set_tests_properties(test_gc_symplectic_map_${gc_name} PROPERTIES
-+        LABELS "integration;proof" TIMEOUT 900)
++        LABELS "integration;proof" TIMEOUT 900
++        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1"
++        FIXTURES_REQUIRED vmec_test_data)
 +    add_test(NAME test_gc_symplectic_energy_${gc_name}
 +        COMMAND test_gc_symplectic.x energy ${gc_file} ${gc_type} ${gc_ekin} 100000
 +        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 +    set_tests_properties(test_gc_symplectic_energy_${gc_name} PROPERTIES
-+        LABELS "integration;proof;slow" TIMEOUT 3600)
++        LABELS "integration;proof;slow" TIMEOUT 3600
++        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;SIMPLE_GC_PROOF_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/gc_energy_${gc_name}.csv"
++        FIXTURES_REQUIRED vmec_test_data)
 +endforeach()
++add_test(NAME study_gc_energy_half_ncsx_boozer
++    COMMAND test_gc_symplectic.x energy wout_ncsx.nc 2 1.0e3 200000 0.5
++    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
++set_tests_properties(study_gc_energy_half_ncsx_boozer PROPERTIES
++    LABELS "integration;research;slow" TIMEOUT 3600
++    ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;SIMPLE_GC_PROOF_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/gc_energy_half_ncsx_boozer.csv"
++    FIXTURES_REQUIRED vmec_test_data)
 +# Axisymmetric analytic field: smoke only, not acceptance evidence.
 +add_test(NAME test_gc_symplectic_map_tokamak_smoke
 +    COMMAND test_gc_symplectic.x map test -1 0
 +    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 +set_tests_properties(test_gc_symplectic_map_tokamak_smoke PROPERTIES
-+    LABELS "integration" TIMEOUT 120)
++    LABELS "integration" TIMEOUT 120
++    ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
