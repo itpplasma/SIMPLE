@@ -130,6 +130,18 @@ foreach(threads IN ITEMS 1 4)
         TIMEOUT 120)
 endforeach()
 
+add_executable(study_spectre_orbits.x
+    ${CMAKE_SOURCE_DIR}/concept/spectre_loss_study/study_spectre_orbits.f90)
+target_link_libraries(study_spectre_orbits.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_study)
+add_test(NAME study_spectre_orbits
+    COMMAND $<TARGET_FILE:study_spectre_orbits.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_study)
+set_tests_properties(study_spectre_orbits PROPERTIES
+    LABELS "performance;research"
+    RUN_SERIAL TRUE TIMEOUT 7200)
+
 add_executable(test_spectre_fo_spline.x test_spectre_fo_spline.f90)
 target_link_libraries(test_spectre_fo_spline.x simple)
 foreach(fixture IN ITEMS tok2vol ncsx_freeboundary)
