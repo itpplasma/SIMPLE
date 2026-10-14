@@ -1,0 +1,100 @@
+{
+  "sympy": "1.14.0",
+  "checks": [
+    {
+      "identity": "Euler-Lagrange inversion with gyrophase and gyrogauge vector",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "exact energy conservation of the truncated reduced model",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "first-order curvature and grad-B drift",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "TB alpha1=partial_theta alpha2, theta=-phi",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "gyroaverage of alpha1 vanishes",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "Banos gyroaverage <G1_parallel>=mu*tau",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "gyrogauge invariance of perpendicular velocity",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "gyrogauge connection transforms as Rprime=R+dpsi",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "TB second-order Hamiltonian scalar constraint, excluding common Pi1.vgc",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab canonical homological equation",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "independent second-order slab Hamiltonian",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab action derivative coefficient epsilon**-1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab action derivative coefficient epsilon**0",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab action derivative coefficient epsilon**1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "commutator of Lie derivatives is the vector-field Lie bracket",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "Lie transform inverse composition through order two, coordinate 0",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "Lie transform inverse composition through order two, coordinate 1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "counterexample reset translation is symplectic",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "symplectic reset must preserve Hamiltonian",
+      "status": "disproved",
+      "counterexample": "(q,p)->(q+1,p), omega=dq wedge dp, H=q"
+    }
+  ]
+}
