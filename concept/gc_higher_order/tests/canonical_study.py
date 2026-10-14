@@ -2,7 +2,7 @@
 """Canonical midpoint/GL2 long-time and full-orbit studies, without alignment."""
 import argparse
 import csv
-import json
+import compact_json
 import sys
 import time
 from pathlib import Path
@@ -107,7 +107,7 @@ def order_study(order_select=(1, 11, 2), output=None):
         temporal_gate='1% agreement with D2 RK45 errors and finest sheet step halving',
         rows=rows, fits=fits, step_halving=precision)
     target = ROOT/'results/canonical_orders.json' if output is None else output
-    target.write_text(json.dumps(result, indent=2)+'\n')
+    target.write_text(compact_json.dumps(result))
 
 
 def energy_study():
@@ -147,9 +147,9 @@ def energy_study():
                 pair = [z for z in rows if z['field'] == name and z['order'] == order and z['method'] == method]
                 ratio = pair[0]['energy_error_max']/pair[1]['energy_error_max']
                 assert 2**(power-.5) < ratio < 2**(power+.5), (name, order, method, ratio)
-    (ROOT/'results/canonical_energy.json').write_text(json.dumps(dict(status='PASS',
+    (ROOT/'results/canonical_energy.json').write_text(compact_json.dumps(dict(status='PASS',
         criterion='eight equal time blocks: final envelope <=1.25 initial envelope plus roundoff floor; step order on sheets',
-        rows=rows), indent=2)+'\n')
+        rows=rows)))
 
 
 def cost_study():
@@ -197,9 +197,9 @@ def cost_study():
                     carried_phase_rms=rms((gc_out[:, 5]-gc_ref[:, 5])[:, None]),
                     reference_seconds=reference_seconds))
                 print('cost', name, order, method, seconds, flush=True)
-    (ROOT/'results/canonical_cost.json').write_text(json.dumps(dict(rows=rows,
+    (ROOT/'results/canonical_cost.json').write_text(compact_json.dumps(dict(rows=rows,
         scope='single thread Python canonical kernels versus same-kernel RK45 and Fortran D2 RHS; excludes initial inversion and particle reconstruction',
-        interval=[0, 20], dt=.1, rk_tolerance=dict(rtol=1e-9, atol=1e-11)), indent=2)+'\n')
+        interval=[0, 20], dt=.1, rk_tolerance=dict(rtol=1e-9, atol=1e-11))))
 
 
 if __name__ == '__main__':
