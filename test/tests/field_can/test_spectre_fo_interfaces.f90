@@ -16,7 +16,7 @@ program test_spectre_fo_interfaces
     !>     of that volume, so its spread measures the switching and guiding-
     !>     centre errors accumulated between the phases.
     !>
-    !> usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45>
+    !> usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45|gauss2>
     !> Boris runs on a layer of 0.2 gyroradii with the step bound 0.0125, RK45
     !> on the sharp field with exact interface crossings.
     use, intrinsic :: iso_fortran_env, only: dp => real64
@@ -34,7 +34,7 @@ program test_spectre_fo_interfaces
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
         SYMPL_SPECTRE_OK
     use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, spectre_fo_configure, &
-        SPECTRE_FO_OK, FO_BORIS, FO_RK45
+        SPECTRE_FO_OK, FO_BORIS, FO_RK45, FO_GAUSS2
     use interface_crossing, only: crossing_log_reset
     use parmot_mod, only: ro0
     use util, only: twopi, sqrt2
@@ -59,7 +59,7 @@ program test_spectre_fo_interfaces
     logical :: failed
 
     if (command_argument_count() < 2) then
-        print *, 'usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45>'
+        print *, 'usage: test_spectre_fo_interfaces <tok2vol.h5> <boris|rk45|gauss2>'
         error stop 1
     end if
     call get_command_argument(1, h5file)
@@ -67,6 +67,9 @@ program test_spectre_fo_interfaces
     if (trim(integrator) == 'rk45') then
         shell_tol = 1.0e-4_dp
         pzeta_tol = 1.0e-5_dp
+    else if (trim(integrator) == 'gauss2') then
+        shell_tol = 1.0e-5_dp
+        pzeta_tol = 2.0e-7_dp
     else
         shell_tol = 1.0e-9_dp
         pzeta_tol = 2.0e-2_dp
@@ -81,12 +84,16 @@ program test_spectre_fo_interfaces
     call crossing_log_reset(1024)
     call sympl_landing_stats_reset
     call spectre_fo_configure(spectre_fo_rotation, spectre_fo_layer_larmor, &
-        merge(FO_RK45, FO_BORIS, spectre_fo_integrator == 'rk45'), &
+        merge(FO_GAUSS2, merge(FO_RK45, FO_BORIS, &
+        spectre_fo_integrator == 'rk45'), spectre_fo_integrator == 'gauss2'), &
         spectre_fo_tolerance)
 
     worst_spread = 0.0_dp
     worst_shell = 0.0_dp
     worst_phases = huge(1)
+    !$omp parallel do if(trim(integrator) == 'gauss2') num_threads(8) &
+    !$omp private(spread, shell, phases) &
+    !$omp reduction(max:worst_spread, worst_shell) reduction(min:worst_phases)
     do im = 1, NMARKER
         call trace_marker(im, spread, shell, phases)
         print '(A,I0,A,I0,A,ES10.3,A,ES10.3)', 'marker ', im, ': FO phases ', &
@@ -95,6 +102,7 @@ program test_spectre_fo_interfaces
         worst_shell = max(worst_shell, shell)
         worst_phases = min(worst_phases, phases)
     end do
+    !$omp end parallel do
     call sympl_fo_stats(entries, exits, losses, failures, status)
     print '(A,4(I0,1X),A,5(I0,1X))', 'FO entries exits losses failures: ', &
         entries, exits, losses, failures, ' by status: ', status
@@ -134,6 +142,10 @@ contains
         if (integrator == 'rk45') then
             write (unit, '(A)') "  spectre_fo_integrator = 'rk45'"
             write (unit, '(A)') '  spectre_fo_tolerance = 1d-9'
+        else if (integrator == 'gauss2') then
+            write (unit, '(A)') "  spectre_fo_integrator = 'gauss2'"
+            write (unit, '(A)') '  spectre_fo_layer_larmor = 0.05d0'
+            write (unit, '(A)') '  spectre_fo_rotation = 0.025d0'
         else
             write (unit, '(A)') '  spectre_fo_layer_larmor = 0.2d0'
             write (unit, '(A)') '  spectre_fo_rotation = 0.0125d0'
@@ -183,6 +195,7 @@ contains
                 real(k - 1, dp)*dtaumin/v0, dtaumin/v0, ierr, t_frac)
             if (ierr /= SYMPL_SPECTRE_OK) then
                 print '(A,I0,A,I0)', 'marker ', im, ' stopped with ', ierr
+                shell = huge(1.0_dp)
                 exit
             end if
             if (state%fo%active .and. .not. was_fo) phases = phases + 1

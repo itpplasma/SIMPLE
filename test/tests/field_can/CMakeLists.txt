@@ -98,7 +98,7 @@ set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
 add_executable(test_spectre_fo_interfaces.x test_spectre_fo_interfaces.f90)
 target_link_libraries(test_spectre_fo_interfaces.x simple)
 
-foreach(fo_integrator boris rk45)
+foreach(fo_integrator boris rk45 gauss2)
     file(MAKE_DIRECTORY
         ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_${fo_integrator})
     add_test(NAME test_spectre_fo_interfaces_${fo_integrator}
@@ -109,6 +109,12 @@ foreach(fo_integrator boris rk45)
     set_tests_properties(test_spectre_fo_interfaces_${fo_integrator} PROPERTIES
         LABELS "integration;slow"
         TIMEOUT 600)
+    if(fo_integrator STREQUAL "gauss2")
+        # Fixed fictitious steps spend most work resolving the layer. Allow
+        # the long invariant run to finish on shared or low-core-count hosts.
+        set_tests_properties(test_spectre_fo_interfaces_${fo_integrator}
+            PROPERTIES TIMEOUT 1800)
+    endif()
 endforeach()
 
 # Kicked Level-1 reflection (CA15): forbidden crossings relocate along the
@@ -159,4 +165,30 @@ add_test(NAME test_magfie_spectre_analytic_stell
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_magfie_spectre_analytic_stell PROPERTIES
     LABELS "integration"
+    TIMEOUT 120)
+
+# Independent field/derivative oracles, analytic tangent map and stationary
+# full-orbit energy envelope across repeated layer crossings.
+add_executable(test_spectre_fo_gauss2.x test_spectre_fo_gauss2.f90)
+target_link_libraries(test_spectre_fo_gauss2.x simple)
+add_test(NAME test_spectre_fo_gauss2
+    COMMAND $<TARGET_FILE:test_spectre_fo_gauss2.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5)
+set_tests_properties(test_spectre_fo_gauss2 PROPERTIES
+    LABELS "integration;slow"
+    TIMEOUT 600)
+
+add_test(NAME test_spectre_fo_gauss2_ncsx
+    COMMAND $<TARGET_FILE:test_spectre_fo_gauss2.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5 field)
+set_tests_properties(test_spectre_fo_gauss2_ncsx PROPERTIES
+    LABELS "integration;slow"
+    TIMEOUT 120)
+
+add_test(NAME test_spectre_fo_gauss2_incompatible_gauge
+    COMMAND $<TARGET_FILE:test_spectre_fo_gauss2.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5 incompatible)
+set_tests_properties(test_spectre_fo_gauss2_incompatible_gauge PROPERTIES
+    LABELS "integration"
+    WILL_FAIL TRUE
     TIMEOUT 120)

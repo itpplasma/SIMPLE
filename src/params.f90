@@ -189,7 +189,8 @@ module params
     real(dp) :: spectre_fo_rotation = 0.05_dp
     !> Full-orbit integrator near SPECTRE interfaces: 'boris' (fixed step
     !> bounded by spectre_fo_rotation) or 'rk45' (adaptive, relative tolerance
-    !> spectre_fo_tolerance; exact interface crossing on the sharp field).
+    !> spectre_fo_tolerance; exact interface crossing on the sharp field), or
+    !> 'gauss2' (fixed fictitious step, canonical Poincare Hamiltonian layer).
     character(16) :: spectre_fo_integrator = 'boris'
     real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
@@ -340,8 +341,9 @@ contains
                 'positive, spectre_fo_layer_larmor nonnegative'
         end if
         spectre_fo_integrator = to_lower(trim(spectre_fo_integrator))
-        if (spectre_fo_integrator /= 'boris' .and. spectre_fo_integrator /= 'rk45') &
-            error stop "spectre_fo_integrator must be 'boris' or 'rk45'"
+        if (spectre_fo_integrator /= 'boris' .and. spectre_fo_integrator /= 'rk45' &
+            .and. spectre_fo_integrator /= 'gauss2') &
+            error stop "spectre_fo_integrator must be 'boris', 'rk45' or 'gauss2'"
         if (spectre_fo_tolerance <= 0.0_dp) &
             error stop 'spectre_fo_tolerance must be positive'
 

@@ -246,6 +246,114 @@ its own gauge (it vanishes on the volume's inner boundary); the axisymmetric
 exit converts the entry momentum to the exit volume's gauge. The prototype
 in `concept/symplectic_sheet` documents the underlying analysis.
 
+## Canonical full orbit with Gauss-Legendre 2
+
+`spectre_fo_integrator = 'gauss2'` selects two-stage Gauss-Legendre (order
+four) for the canonical full orbit. Boris and RK45 retain their existing
+field and stepping paths. The Gauss path needs a single smooth potential
+and embedding, implemented in `src/spectre_fo_gauss2.f90`.
+
+At interface `rho_g = k`, let the tangential potential mismatch be
+`D = A_k - A_(k+1)`. Both sides have zero normal field, so its angular
+exterior derivative vanishes. For a Fourier mode with phase
+`m theta - n zeta`, this requires `m D_zeta + n D_theta = 0`. The code checks
+this condition before tracing and rejects incompatible data. Each nonzero
+mode is therefore the angular gradient of a periodic scalar. Its constant
+mode is the gradient of `D_theta theta + D_zeta zeta` on the unwrapped angle
+cover. This scalar need not be periodic; its gradient and the matched
+potential are periodic. Equivalently, these constants are closed harmonic
+one-forms on the torus. Requiring a single-valued periodic scalar would
+incorrectly exclude the nonzero flux offsets. The matching corrections are
+accumulated from volume 1, keeping `A_rho = 0`. On the committed fixtures,
+independent boundary-coefficient evaluation gives maximum compatibility
+residuals of `2.5e-20` (tok2vol) and `1.7e-18` (NCSX), in SI flux units.
+
+Inside a width `w` centered on the interface, analytically continue the
+per-volume polynomials and blend the matched potentials:
+
+```
+xi = (rho_g - k)/w + 1/2
+S = logistic(-1/xi + 1/(1-xi))
+A = A_low + S (A_high_matched - A_low)
+dA = (1-S) dA_low + S dA_high_matched + dS wedge Delta A
+```
+
+`S` saturates outside `[0,1]`; all derivatives vanish at its edges. The last term, equivalent to
+`grad S x Delta A` in Cartesian coordinates, is retained in the analytic
+potential derivatives. Thus `B = curl A` is divergence-free; directly
+blending B would omit this term. The native stacked-rho embedding is only
+C0. Its SPEC interface Fourier coefficients and axis power law are blended
+with the same switch, giving a smooth embedding inside the layer and the original
+embedding outside it. This is a finite-width regularization of both the
+potential and its coordinate representation; the physical comparison must
+check its thin-layer limit. All geometry derivatives through third order are
+analytic. No field finite differences enter the Newton solver.
+
+With `e_i = d x/d q_i` in cm, `G_ij = e_i dot e_j`, and
+`a_i = A_i / ro0_bar` (SI potential multiplied by `1e8`), the Hamiltonian is
+
+```
+P_i = e_i dot v + a_i
+H(q,P) = (P-a)^T G^(-1) (P-a)/2
+K(q,P) = g(q) (H(q,P) - E)
+```
+
+Here `q = (rho_g, theta, zeta)` uses radians, P has cm units, v is normalized
+as in the existing full orbit, `ro0_bar = ro0/sqrt(2)` is in Gauss*cm, and
+physical integration time has cm units. Analytic derivatives of A and G
+supply the gradient and Hessian of H; the Hessian of K includes both
+`grad g outer grad H` terms and `(H-E) Hess g`. The Gauss stage equations
+are solved by Newton with that Hessian. The metric is inverted after
+normalizing its basis lengths; its coordinate aspect ratio must not be treated
+as geometric singularity. The convergence criterion accounts for coordinate
+rounding amplified by the stage Jacobian, including large unwrapped angles. Differentiating those implicit stage
+equations supplies the discrete tangent map with E and step held fixed.
+
+E, w, fictitious step h, and refinement parameters are frozen at FO entry.
+The step is `h = 2 spectre_fo_rotation ro0_bar/B_entry`. Width defaults to
+one twentieth of the total-speed radial gyroradius when the requested width
+is zero; positive widths use `spectre_fo_layer_larmor`. Widths of one or more stacked-rho
+units are rejected so adjacent compact layers cannot overlap. For each interface,
+`g_k = 1-(1-g_min) exp(-((rho_g-k)/L)^2)`; g is their product. Using the entry
+bound `v_r = |v| |grad rho_g|`, choose `L = max(16 h v_r, 16 w)` and
+`g_min = min(0.1, w/(256 h v_r))`. These choices resolve both the layer and
+the refinement transition near entry; long-run invariants and the physical
+loss comparison remain the acceptance tests because these scales vary
+along an orbit. No energy projection is applied. Complete fixed fictitious
+steps can overrun an output interval; the hybrid carries that physical-time
+excess into subsequent intervals, including after a GC return. Output states
+therefore have a time offset bounded by one physical FO step. GC return
+checks occur at output boundaries and at intervals of at most one quarter of
+the nominal gyrostep (rounded up to a complete Gauss step). Wall detection
+still runs on every canonical step; no GC conversion feeds back into an active
+canonical FO trajectory.
+
+The symplecticity claim concerns the canonical FO step at fixed E and h.
+GC lifts, returns, and the entry-dependent choice of frozen parameters are
+not a symplectic map of the combined hybrid phase space. Their accumulated
+momentum and loss effects need the separate integration tests.
+
+### Gauss validation and limits
+
+The tok2vol hybrid integration check exercises 24 FO entries and 20 exits
+with zero losses or failures. Its maximum momentum-shell error is `2.14e-6`
+and relative canonical p_zeta spread is `4.30e-8`, comparable to the RK45
+reference of approximately `6e-8`. The frozen-parameter FO test runs 160000
+steps and 143 layer crossings: the first- and last-quarter energy envelopes
+are `1.32764e-6` and `1.39189e-6`. It rejects a growing envelope. Analytic
+layer tangent defects after constant canonical normalization are `3.19e-13`
+(tok2vol) and `3.17e-14` (NCSX), below the `1e-10` test threshold. These
+checks establish the FO map's local properties; stellarator loss fractions
+and wall time are separate acceptance evidence.
+
+The long NCSX comparison at `facE_al = 1000`, layer `0.05` and rotation
+`0.05` exposed completed momentum-shell ratios as large as `1.425` relative
+to the initial shell, together with FO Newton/step-limit recoveries. This
+setting fails physical acceptance. Entry-based refinement scales do not
+establish a global stellarator error bound. The Gauss option remains
+experimental; the tokamak and local tangent results do not justify using
+this NCSX setting in production. It also has not achieved a speed improvement.
+
 ## Physical caveat
 
 `mu` conservation through a zero-width sheet is a modeling convention: the

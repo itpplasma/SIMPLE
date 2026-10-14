@@ -101,6 +101,8 @@ module spectre_sympl_orbit
         integer :: mode = 0
         integer :: level = 1
         real(dp) :: dt_std = 0.0_dp
+        !> Physical-time overshoot of a complete fixed fictitious Gauss step.
+        real(dp) :: fo_time_ahead = 0.0_dp
         !> Consecutive same-interface reflections with no angular progress, and
         !> the interface and (theta, zeta) at the start of the current run.
         integer :: skim_count = 0
@@ -211,7 +213,10 @@ contains
         t_frac = 1.0_dp
         si%warning_factor = symplectic_spectre_newton_warning_factor
         budget = state%dt_std
-        used = 0.0_dp
+        used = min(state%fo_time_ahead, state%dt_std)
+        state%fo_time_ahead = state%fo_time_ahead - used
+        budget = budget - used
+        if (budget <= budget_eps*state%dt_std) return
         h_try = budget
         nev = 0
         prev_iface = -1
@@ -883,6 +888,13 @@ contains
         call spectre_fo_advance_until_exit(state%fo, budget, ro0/sqrt2, &
             dt_used, y_out, owner_out, exited, ierr)
         used = used + dt_used
+        ! The FO discrete map always takes the same fictitious step. Its end
+        ! can fall beyond this output interval; carry that time into the next
+        ! interval, including after a GC return, instead of shortening the step.
+        if (state%fo%h_tau > 0.0_dp .and. used > state%dt_std) then
+            state%fo_time_ahead = state%fo_time_ahead + used - state%dt_std
+            used = state%dt_std
+        end if
         budget = state%dt_std - used
         if (ierr /= SPECTRE_FO_OK) then
             if (ierr == SPECTRE_FO_LOSS) then

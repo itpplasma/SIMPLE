@@ -1,7 +1,10 @@
 module spectre_fo_hybrid
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use libneo_coordinates, only: spectre_coordinate_system_t
     use magfie_sub, only: spectre_field, TESLA_TO_GAUSS, M_TO_CM
+    use spectre_fo_gauss2, only: gauss2_prepare, gauss2_encode, gauss2_decode, &
+        gauss2_step, gauss2_gauge_zeta
     implicit none
     private
     integer, parameter, public :: SPECTRE_FO_OK = 0
@@ -20,7 +23,7 @@ module spectre_fo_hybrid
     real(dp) :: rotation_parameter = 0.05_dp
     real(dp) :: layer_larmor = 0.0_dp
     !> Full-orbit integrator and the relative tolerance of FO_RK45.
-    integer, parameter, public :: FO_BORIS = 1, FO_RK45 = 2
+    integer, parameter, public :: FO_BORIS = 1, FO_RK45 = 2, FO_GAUSS2 = 3
     integer :: fo_integrator = FO_BORIS
     real(dp) :: fo_tolerance = 1.0e-9_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
@@ -34,6 +37,11 @@ module spectre_fo_hybrid
         real(dp) :: entry_pzeta = 0.0_dp
         !> Next step of FO_RK45 (adapted between substeps).
         real(dp) :: h_rk = 0.0_dp
+        !> Canonical Gauss state and frozen parameters of its FO excursion.
+        real(dp) :: z_gauss(6) = 0.0_dp
+        real(dp) :: h_tau = 0.0_dp, energy = 0.0_dp
+        real(dp) :: refine_length = 0.0_dp, g_min = 1.0_dp
+        real(dp) :: gc_check_time = 0.0_dp
         !> Volume whose gauge entry_pzeta is expressed in.
         integer :: entry_owner = 0
         !> Smooth-layer width in rho_g, fixed at entry from the gyroradius.
@@ -61,7 +69,8 @@ contains
         rotation_parameter = rotation
         layer_larmor = layer
         if (present(integrator)) then
-            if (integrator /= FO_BORIS .and. integrator /= FO_RK45) &
+            if (integrator /= FO_BORIS .and. integrator /= FO_RK45 .and. &
+                integrator /= FO_GAUSS2) &
                 error stop 'spectre_fo_configure: unknown integrator'
             fo_integrator = integrator
         end if
@@ -70,6 +79,7 @@ contains
                 error stop 'spectre_fo_configure: tolerance must be positive'
             fo_tolerance = tolerance
         end if
+        if (fo_integrator == FO_GAUSS2) call gauss2_prepare
     end subroutine spectre_fo_configure
     subroutine spectre_fo_enter(state, y, owner, iface, ro0_bar, status)
         type(spectre_fo_state_t), intent(out) :: state
@@ -77,7 +87,8 @@ contains
         integer, intent(in) :: owner, iface
         integer, intent(out) :: status
         real(dp) :: x_gc(3), b(3), e1(3), e2(3), eperp(3), e_zeta(3)
-        real(dp) :: acov(3), bmod, vpar, vperp, target, alpha
+        real(dp) :: acov(3), bmod, vpar, vperp, target, alpha, radial_speed
+        logical :: ok
         state = spectre_fo_state_t()
         if (ro0_bar <= 0.0_dp .or. y(4) <= 0.0_dp) then
             status = SPECTRE_FO_INVALID_STATE
@@ -110,6 +121,32 @@ contains
         if (status /= SPECTRE_FO_OK) return
         state%layer_rho = layer_larmor*(ro0_bar*vperp/bmod)/M_TO_CM &
                           *radial_gradient(y(1:3))
+        if (fo_integrator == FO_GAUSS2) then
+            radial_speed = sqrt(2.0_dp)*y(4)/M_TO_CM*radial_gradient(y(1:3))
+            ! Freeze all parameters at entry: state-dependent steps would destroy
+            ! the symplectic discrete map. Default layer is rho/20 for Gauss.
+            state%layer_rho = merge(layer_larmor, 0.05_dp, layer_larmor > 0.0_dp)* &
+                ro0_bar/bmod*radial_speed
+            if (state%layer_rho >= 1.0_dp) then
+                ! The compact layers around consecutive integer interfaces
+                ! must not overlap: nearest-interface dispatch assumes this.
+                status = SPECTRE_FO_INVALID_STATE
+                return
+            end if
+            state%h_tau = 2.0_dp*rotation_parameter*ro0_bar/bmod
+            state%refine_length = max(16.0_dp*state%h_tau*radial_speed, &
+                16.0_dp*state%layer_rho)
+            state%g_min = min(0.1_dp, state%layer_rho/ &
+                (256.0_dp*state%h_tau*radial_speed))
+            state%energy = 0.5_dp*dot_product(state%v, state%v)
+            state%z_gauss(1:3) = state%u
+            call gauss2_encode(state%x, state%v, state%layer_rho, ro0_bar, &
+                state%z_gauss, ok)
+            if (.not. ok) then
+                status = SPECTRE_FO_LOCATE_FAIL
+                return
+            end if
+        end if
         state%active = .true.
     end subroutine spectre_fo_enter
     subroutine spectre_fo_radial_larmor(y, owner, ro0_bar, rho_r, status)
@@ -181,7 +218,8 @@ contains
         !> production path omits it.
         real(dp), intent(in), optional :: h_scale
         real(dp) :: remaining, h, bmod, b(3), acov(3), e_zeta(3), hfac
-        integer :: nstep, map_status
+        integer :: nstep, map_status, decode_status
+        logical :: check_gc
         dt_used = 0.0_dp
         y = 0.0_dp
         owner = state%owner
@@ -199,25 +237,46 @@ contains
             hfac = h_scale
         end if
         remaining = dt
-        do nstep = 1, MAX_SUBSTEPS
+        ! Refinement can require many fictitious steps per physical output
+        ! interval. Keep the existing limits for the other two pushers.
+        do nstep = 1, merge(10000000, MAX_SUBSTEPS, fo_integrator == FO_GAUSS2)
             if (remaining <= epsilon(1.0_dp)*max(dt, 1.0_dp)) then
-                dt_used = dt
+                if (fo_integrator /= FO_GAUSS2) dt_used = dt
                 status = SPECTRE_FO_OK
                 return
             end if
-            call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
-                e_zeta, status)
-            if (status /= SPECTRE_FO_OK) return
-            h = min(remaining, hfac*2.0_dp*rotation_parameter*ro0_bar/bmod)
-            if (fo_integrator == FO_RK45) then
-                if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
-                call rk45_substep(state, h, ro0_bar, status)
+            if (fo_integrator == FO_GAUSS2) then
+                call gauss_substep(state, ro0_bar, hfac, h, status)
             else
-                call boris_substep(state, h, ro0_bar, status)
+                call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
+                    e_zeta, status)
+                if (status /= SPECTRE_FO_OK) return
+                h = min(remaining, hfac*2.0_dp*rotation_parameter*ro0_bar/bmod)
+                if (fo_integrator == FO_RK45) then
+                    if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
+                    call rk45_substep(state, h, ro0_bar, status)
+                else
+                    call boris_substep(state, h, ro0_bar, status)
+                end if
             end if
-            if (status /= SPECTRE_FO_OK) return
+            if (status /= SPECTRE_FO_OK) then
+                if (fo_integrator == FO_GAUSS2) then
+                    ! Refresh the last accepted state, including on a wall hit.
+                    call gauss_refresh(state, ro0_bar, decode_status)
+                end if
+                return
+            end if
             dt_used = dt_used + h
             remaining = remaining - h
+            if (fo_integrator == FO_GAUSS2) then
+                state%gc_check_time = state%gc_check_time + h
+                check_gc = state%gc_check_time >= 0.25_dp*hfac*state%h_tau &
+                    .or. remaining <= epsilon(1.0_dp)*max(dt, 1.0_dp)
+                if (.not. check_gc) cycle
+                call gauss_refresh(state, ro0_bar, status)
+                if (status /= SPECTRE_FO_OK) return
+                state%gc_check_time = 0.0_dp
+            end if
             call spectre_fo_to_gc(state, ro0_bar, y, owner, map_status)
             if (map_status == SPECTRE_FO_OK) then
                 state%last_y = y
@@ -366,11 +425,58 @@ contains
             status = SPECTRE_FO_INVALID_STATE
             return
         end if
+        if (fo_integrator == FO_GAUSS2) then
+            pzeta = state%z_gauss(6) - gauss2_gauge_zeta( &
+                state%z_gauss(1:3), state%owner, ro0_bar)
+            status = SPECTRE_FO_OK
+            return
+        end if
         call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
             e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
     end subroutine spectre_fo_canonical_pzeta
+    subroutine gauss_substep(state, ro0_bar, hfac, dt, status)
+        type(spectre_fo_state_t), intent(inout) :: state
+        real(dp), intent(in) :: ro0_bar, hfac
+        real(dp), intent(out) :: dt
+        integer, intent(out) :: status
+        real(dp) :: z1(6)
+        logical :: ok
+
+        dt = 0.0_dp
+        call gauss2_step(state%z_gauss, state%layer_rho, ro0_bar, state%energy, &
+            state%refine_length, state%g_min, hfac*state%h_tau, z1, dt, ok)
+        if (.not. ok) then
+            status = SPECTRE_FO_STEP_LIMIT
+            return
+        end if
+        if (z1(1) >= real(spectre_field%data%Mvol, dp)) then
+            status = SPECTRE_FO_LOSS
+            return
+        end if
+        state%z_gauss = z1
+        ! Both embeddings agree on the interface itself and retain its side.
+        ! The GC mapping below locates Cartesian x in the original chart.
+        state%u = z1(1:3)
+        state%owner = min(max(int(z1(1)) + 1, 1), spectre_field%data%Mvol)
+        status = SPECTRE_FO_OK
+    end subroutine gauss_substep
+
+    subroutine gauss_refresh(state, ro0_bar, status)
+        type(spectre_fo_state_t), intent(inout) :: state
+        real(dp), intent(in) :: ro0_bar
+        integer, intent(out) :: status
+        real(dp) :: x1(3), v1(3)
+
+        call gauss2_decode(state%z_gauss, state%layer_rho, ro0_bar, x1, v1)
+        status = SPECTRE_FO_INVALID_STATE
+        if (.not. all(ieee_is_finite(v1))) return
+        state%x = x1
+        state%v = v1
+        status = SPECTRE_FO_OK
+    end subroutine gauss_refresh
+
     subroutine rk45_substep(state, h, ro0_bar, status)
         !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
         !> the sharp field (no layer) the stages use the owner's field, held at

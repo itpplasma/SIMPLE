@@ -642,6 +642,29 @@ the axis volume). Field lines never cross interfaces (`B.n = 0` on both sides),
 so no crossing logic is involved. This app is a standalone diagnostic separate
 from the guiding-center stack below.
 
+#### Canonical full-orbit layer (`spectre_fo_integrator = 'gauss2'`)
+
+`src/spectre_fo_gauss2.f90` uses the existing SPECTRE vector-potential basis
+and interface geometry coefficients to build a smooth canonical layer for
+level 3. It matches tangential potentials mode by mode, including harmonic
+flux offsets as linear gauge functions on unwrapped angles. Incompatible
+interface normal fields are rejected. A smooth compact switch blends the matched A and
+the SPEC embedding; `B = curl A` includes the derivative-of-switch term.
+This regularizes the native chart's discontinuous radial basis inside the
+layer while preserving it outside. Geometry derivatives through third order
+and potential derivatives through second order give the analytic Hamiltonian
+Hessian. See [the derivation](spectre-interface-crossing.md#canonical-full-orbit-with-gauss-legendre-2).
+
+Canonical momenta are `P_i = e_i dot v + A_i/ro0_bar` (cm), with `e_i` in cm,
+`ro0_bar = ro0/sqrt(2)` in Gauss*cm, and the flux-like SI A scaled by `1e8`.
+The full-orbit H is one half the squared normalized speed. Fixed fictitious
+Gauss steps integrate `K = g(H-E)` and quadrature of g advances physical time.
+The hybrid carries a complete step's time excess across output intervals;
+its sampled state can be ahead by at most one physical FO step. The default
+Gauss layer width, when the input width is zero, is the total-speed radial
+gyroradius divided by 20. Positive input widths override it. Other integrators
+retain their existing zero-width and perpendicular-gyroradius conventions.
+
 #### Guiding-center RK45 per volume (`integ_coords = 6`)
 
 **Files**: `src/magfie.f90` (`magfie_spectre`), `src/spectre_orbit.f90`,
@@ -689,7 +712,7 @@ Gaussian-CGS. The conversion lives in one block in `magfie_spectre`:
 | `hctrvr` (contravariant `h^i`) | `1e-2` | `1/L` |
 | `bder` = `d log\|B\|/dx` | `1` | dimensionless (the chart is dimensionless) |
 
-The covariant vector potential (`T*m -> G*cm`, factor `1e6`) does not enter the
+The covariant vector potential (flux-like `T*m^2 -> G*cm^2`, factor `1e8`) does not enter the
 non-canonical RK45 path, which uses only `bmod`/`sqrtg`/`bder`/`hcovar`/
 `hctrvr`/`hcurl`. The alpha normalization then follows the standard SIMPLE chain
 unchanged: `v0`, `ro0 = v0 m c / e` (cm*Gauss), and `dtaumin = 2*pi*rmajor/
@@ -1037,9 +1060,9 @@ validation suite (#442). Example input: `examples/simple_spectre.in`.
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
 | `crossing_level` | int | 1 | interface crossing: `1` = Level-1 refraction, `0` = Level-0 energy rescale, `3` = full orbit near interfaces (symplectic path) |
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
-| `spectre_fo_layer_larmor` | real | 0 | full-orbit smooth layer width in gyroradii; `0` keeps the sharp per-volume field |
+| `spectre_fo_layer_larmor` | real | 0 | full-orbit layer width in gyroradii; `0` keeps the sharp field for Boris/RK45 and selects rho/20 for Gauss |
 | `spectre_fo_rotation` | real | 0.05 | Boris step bound `h |B|/(2 ro0)` |
-| `spectre_fo_integrator` | string | `'boris'` | full orbit near interfaces: `'boris'` or `'rk45'` (adaptive, exact interface crossing on the sharp field) |
+| `spectre_fo_integrator` | string | `'boris'` | full orbit near interfaces: `'boris'`, `'rk45'` (adaptive, exact sharp-interface crossing), or `'gauss2'` (canonical fixed fictitious step on a smooth potential layer) |
 | `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of the `'rk45'` full orbit |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
