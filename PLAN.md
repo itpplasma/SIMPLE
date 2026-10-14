@@ -139,6 +139,15 @@ results are pushed as `c3a3f31`. Production still uses its existing switch and
 phase. Actual extended canonical GC action/phase, connection tables and
 production entry/exit remain to be implemented and validated.
 
+The recovered branch has now been merged into this checkout (`8afaecb`), and
+the completed switch work is integrated as `97fde90`, `060d17f`, `4d963cc`.
+Latest GC audit sources, results and exact native registration patch are also
+collected here; their known RED energy acceptance stays outside the default
+suite. Historical Lean caches are preserved and ignored. Production changes
+remain reviewable as the two focused PRs #534 and #535; this research branch
+also contains the recovered concept inventory and all retained new evidence.
+A fresh native Fast suite is running on the consolidated checkout.
+
 ## Goal and constraints
 
 Physically faithful long stellarator orbits, without artificial loss or
@@ -452,14 +461,15 @@ and plotting source reproduce them. The convergence plot was uploaded to
    residence, under controlled load. The repaired 200 us tracing improvement is
    5.8–7.4x; the >=10x per-step target is not established. Current main retains
    its Cartesian path until a reviewed performance change is promoted.
-2. **Finish the production GC proof bridge.** Map each of the eight variants'
+2. **Finish the production GC proof bridge (three source repairs verified; uniform proof still open).** Map each of the eight variants'
    actual equations and field/extrapolation operations to its theorem. Restore
    the draft oracle on a development branch; run NCSX canonical-flux/Boozer and
    QH cases. Preserve one-step/100-step defect gates (1e-7/1e-5), spacing controls
    and the negative control. Repair only reproduced implementation defects.
-3. **W1/W3: validate and integrate the consistent switch.** Complete item D's
-   generated identity checks and build recipe; audit units, gyrophase, gauge and
-   the relation to production GC variables. Require scaled round-trip identity
+3. **W1/W3: validate and integrate the consistent switch.** Item D's native build, local identity checks,
+   regeneration and independent numerical pullback are complete. Implement
+   the extended canonical action/phase and gyrogauge connection tables, then
+   audit physical units and matching to production GC variables. Require scaled round-trip identity
    at 1e-12, O(epsilon^2) mu defect and independent FO reconstruction. Replace
    both entry and exit together with carried phase. Redesign the long-run
    comparison so it distinguishes sheet physics, switch error and artificial
@@ -486,9 +496,11 @@ and plotting source reproduce them. The convergence plot was uploaded to
    investigations available. Revisit GC2 production only after the derivative
    provider, gyrogauge tables and actual stellarator benefit are established.
 
-## Recovery verification and publication
+## Recovery verification and publication (historical checkpoint)
 
-Production `src/` and `examples/` are identical to main `fe002a3`. Gauss2 is
+At the recovered `082bea4` checkpoint, production `src/` and `examples/`
+were identical to main `fe002a3`; this paragraph is historical, superseded by
+the active performance and GC changes above. Gauss2 is
 linked only into a test-only concept library. W4's replacement path and GC
 oracle registrations are preserved in patches, with explicit draft READMEs.
 
