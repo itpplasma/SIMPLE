@@ -3,432 +3,63 @@
   "numpy": "2.5.4",
   "scipy": "1.18.1",
   "epsilon_convention": "dv/dt=v cross B/epsilon; normalized speed and gradient scales O(1)",
-  "time_interval": [
-    0,
-    1
-  ],
+  "time_interval": [0, 1],
   "samples": 401,
-  "rk_tolerance": {
-    "rtol": 2e-12,
-    "atol": 2e-14
-  },
+  "rk_tolerance": {"rtol": 2e-12, "atol": 2e-14},
   "finest_tolerance_factor": 0.1,
   "fit": "log-log last four epsilon values",
   "norms": "time-sampled RMS Euclidean; no gyroaveraging or phase alignment",
   "fits": [
-    {
-      "field": "uniform",
-      "n": 0,
-      "expected_position": 1,
-      "expected_velocity": 1,
-      "position_rms_exponent": -0.004357849542709878,
-      "velocity_rms_exponent": -1.004353403528634,
-      "phase_space_rms_exponent": -1.0039911074255297,
-      "status": "solver_floor",
-      "selector": "0"
-    },
-    {
-      "field": "uniform",
-      "n": 1,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": -0.00435776730090521,
-      "velocity_rms_exponent": -1.004353403528634,
-      "phase_space_rms_exponent": -1.0039911067409728,
-      "status": "solver_floor",
-      "selector": "1"
-    },
-    {
-      "field": "uniform",
-      "n": 11,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": -0.00435776730090521,
-      "velocity_rms_exponent": -1.004353403528634,
-      "phase_space_rms_exponent": -1.0039911067409728,
-      "status": "solver_floor",
-      "selector": "1+"
-    },
-    {
-      "field": "uniform",
-      "n": 2,
-      "expected_position": 3,
-      "expected_velocity": 2,
-      "position_rms_exponent": -0.00435776730090521,
-      "velocity_rms_exponent": -1.004353403528634,
-      "phase_space_rms_exponent": -1.0039911067409728,
-      "status": "solver_floor",
-      "selector": "2"
-    },
-    {
-      "field": "constant_gradient",
-      "n": 0,
-      "expected_position": 1,
-      "expected_velocity": 1,
-      "position_rms_exponent": 0.9922919750667671,
-      "velocity_rms_exponent": 0.9884036947769259,
-      "phase_space_rms_exponent": 0.9887146416098983,
-      "status": "observed",
-      "selector": "0"
-    },
-    {
-      "field": "constant_gradient",
-      "n": 1,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 2.0015419277988835,
-      "velocity_rms_exponent": 1.0006714067191222,
-      "phase_space_rms_exponent": 1.000983164891395,
-      "status": "baseline_phase_limit",
-      "selector": "1"
-    },
-    {
-      "field": "constant_gradient",
-      "n": 11,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 2.986097070077692,
-      "velocity_rms_exponent": 2.092088043790287,
-      "phase_space_rms_exponent": 2.204078901425057,
-      "status": "observed",
-      "selector": "1+"
-    },
-    {
-      "field": "constant_gradient",
-      "n": 2,
-      "expected_position": 3,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.984812211340808,
-      "velocity_rms_exponent": 2.986049864889014,
-      "phase_space_rms_exponent": 2.9863881748719914,
-      "status": "observed",
-      "selector": "2"
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 0,
-      "expected_position": 1,
-      "expected_velocity": 1,
-      "position_rms_exponent": 0.9890048227314633,
-      "velocity_rms_exponent": 1.015161565501292,
-      "phase_space_rms_exponent": 1.0114119287654613,
-      "status": "observed",
-      "selector": "0"
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 1,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 2.019931661119422,
-      "velocity_rms_exponent": 1.0062162756548476,
-      "phase_space_rms_exponent": 1.0068678157560653,
-      "status": "baseline_phase_limit",
-      "selector": "1"
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 11,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.015763358608398,
-      "velocity_rms_exponent": 3.000940204178572,
-      "phase_space_rms_exponent": 3.013047060704182,
-      "status": "observed",
-      "selector": "1+"
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 2,
-      "expected_position": 3,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.5422307196708296,
-      "velocity_rms_exponent": 3.002798229162528,
-      "phase_space_rms_exponent": 3.0031198057503516,
-      "status": "observed",
-      "selector": "2"
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 0,
-      "expected_position": 1,
-      "expected_velocity": 1,
-      "position_rms_exponent": 1.0105335137928633,
-      "velocity_rms_exponent": -0.0038297888448564463,
-      "phase_space_rms_exponent": -0.0034241829411812484,
-      "status": "baseline_phase_limit",
-      "selector": "0"
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 1,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 1.976878239774095,
-      "velocity_rms_exponent": 0.9354245095264943,
-      "phase_space_rms_exponent": 0.937427173139303,
-      "status": "baseline_phase_limit",
-      "selector": "1"
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 11,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.0036697519181277,
-      "velocity_rms_exponent": 1.9879816008383526,
-      "phase_space_rms_exponent": 2.2050008891948116,
-      "status": "observed",
-      "selector": "1+"
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 2,
-      "expected_position": 3,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.008996254731888,
-      "velocity_rms_exponent": 1.9602225295911784,
-      "phase_space_rms_exponent": 1.9635729685667407,
-      "status": "observed",
-      "selector": "2"
-    },
-    {
-      "field": "sheet_inner",
-      "n": 0,
-      "expected_position": 1,
-      "expected_velocity": 1,
-      "position_rms_exponent": 1.0444774805110375,
-      "velocity_rms_exponent": 0.02055459296361892,
-      "phase_space_rms_exponent": 0.021247130053554632,
-      "status": "baseline_phase_limit",
-      "selector": "0"
-    },
-    {
-      "field": "sheet_inner",
-      "n": 1,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 1.9911039273245696,
-      "velocity_rms_exponent": 1.0151236466587326,
-      "phase_space_rms_exponent": 1.0156579492545983,
-      "status": "baseline_phase_limit",
-      "selector": "1"
-    },
-    {
-      "field": "sheet_inner",
-      "n": 11,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.009673180841921,
-      "velocity_rms_exponent": 2.1260997312873195,
-      "phase_space_rms_exponent": 2.6136064188618353,
-      "status": "observed",
-      "selector": "1+"
-    },
-    {
-      "field": "sheet_inner",
-      "n": 2,
-      "expected_position": 3,
-      "expected_velocity": 2,
-      "position_rms_exponent": 2.9706750945025284,
-      "velocity_rms_exponent": 1.969368606702143,
-      "phase_space_rms_exponent": 1.9698485738659648,
-      "status": "observed",
-      "selector": "2"
-    },
-    {
-      "field": "sheet_outer",
-      "n": 0,
-      "expected_position": 1,
-      "expected_velocity": 1,
-      "position_rms_exponent": 1.0256311534604006,
-      "velocity_rms_exponent": 0.0139609144724882,
-      "phase_space_rms_exponent": 0.014562873405517646,
-      "status": "baseline_phase_limit",
-      "selector": "0"
-    },
-    {
-      "field": "sheet_outer",
-      "n": 1,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 1.9572116566747442,
-      "velocity_rms_exponent": 1.0072760268737004,
-      "phase_space_rms_exponent": 1.0081998038921143,
-      "status": "baseline_phase_limit",
-      "selector": "1"
-    },
-    {
-      "field": "sheet_outer",
-      "n": 11,
-      "expected_position": 2,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.0193175183934575,
-      "velocity_rms_exponent": 2.2187490357568076,
-      "phase_space_rms_exponent": 2.674938987596023,
-      "status": "observed",
-      "selector": "1+"
-    },
-    {
-      "field": "sheet_outer",
-      "n": 2,
-      "expected_position": 3,
-      "expected_velocity": 2,
-      "position_rms_exponent": 3.0368464520167686,
-      "velocity_rms_exponent": 2.570847932401352,
-      "phase_space_rms_exponent": 2.5715961086859007,
-      "status": "observed",
-      "selector": "2"
-    }
+    {"field": "uniform", "n": 0, "expected_position": 1, "expected_velocity": 1, "position_rms_exponent": -0.004357849542709878, "velocity_rms_exponent": -1.004353403528634, "phase_space_rms_exponent": -1.0039911074255297, "status": "solver_floor", "selector": "0"},
+    {"field": "uniform", "n": 1, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": -0.00435776730090521, "velocity_rms_exponent": -1.004353403528634, "phase_space_rms_exponent": -1.0039911067409728, "status": "solver_floor", "selector": "1"},
+    {"field": "uniform", "n": 11, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": -0.00435776730090521, "velocity_rms_exponent": -1.004353403528634, "phase_space_rms_exponent": -1.0039911067409728, "status": "solver_floor", "selector": "1+"},
+    {"field": "uniform", "n": 2, "expected_position": 3, "expected_velocity": 2, "position_rms_exponent": -0.00435776730090521, "velocity_rms_exponent": -1.004353403528634, "phase_space_rms_exponent": -1.0039911067409728, "status": "solver_floor", "selector": "2"},
+    {"field": "constant_gradient", "n": 0, "expected_position": 1, "expected_velocity": 1, "position_rms_exponent": 0.9922919750667671, "velocity_rms_exponent": 0.9884036947769259, "phase_space_rms_exponent": 0.9887146416098983, "status": "observed", "selector": "0"},
+    {"field": "constant_gradient", "n": 1, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 2.0015419277988835, "velocity_rms_exponent": 1.0006714067191222, "phase_space_rms_exponent": 1.000983164891395, "status": "baseline_phase_limit", "selector": "1"},
+    {"field": "constant_gradient", "n": 11, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 2.986097070077692, "velocity_rms_exponent": 2.092088043790287, "phase_space_rms_exponent": 2.204078901425057, "status": "observed", "selector": "1+"},
+    {"field": "constant_gradient", "n": 2, "expected_position": 3, "expected_velocity": 2, "position_rms_exponent": 3.984812211340808, "velocity_rms_exponent": 2.986049864889014, "phase_space_rms_exponent": 2.9863881748719914, "status": "observed", "selector": "2"},
+    {"field": "constant_curvature_on_fieldline", "n": 0, "expected_position": 1, "expected_velocity": 1, "position_rms_exponent": 0.9890048227314633, "velocity_rms_exponent": 1.015161565501292, "phase_space_rms_exponent": 1.0114119287654613, "status": "observed", "selector": "0"},
+    {"field": "constant_curvature_on_fieldline", "n": 1, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 2.019931661119422, "velocity_rms_exponent": 1.0062162756548476, "phase_space_rms_exponent": 1.0068678157560653, "status": "baseline_phase_limit", "selector": "1"},
+    {"field": "constant_curvature_on_fieldline", "n": 11, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 3.015763358608398, "velocity_rms_exponent": 3.000940204178572, "phase_space_rms_exponent": 3.013047060704182, "status": "observed", "selector": "1+"},
+    {"field": "constant_curvature_on_fieldline", "n": 2, "expected_position": 3, "expected_velocity": 2, "position_rms_exponent": 3.5422307196708296, "velocity_rms_exponent": 3.002798229162528, "phase_space_rms_exponent": 3.0031198057503516, "status": "observed", "selector": "2"},
+    {"field": "magnetic_shear", "n": 0, "expected_position": 1, "expected_velocity": 1, "position_rms_exponent": 1.0105335137928633, "velocity_rms_exponent": -0.0038297888448564463, "phase_space_rms_exponent": -0.0034241829411812484, "status": "baseline_phase_limit", "selector": "0"},
+    {"field": "magnetic_shear", "n": 1, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 1.976878239774095, "velocity_rms_exponent": 0.9354245095264943, "phase_space_rms_exponent": 0.937427173139303, "status": "baseline_phase_limit", "selector": "1"},
+    {"field": "magnetic_shear", "n": 11, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 3.0036697519181277, "velocity_rms_exponent": 1.9879816008383526, "phase_space_rms_exponent": 2.2050008891948116, "status": "observed", "selector": "1+"},
+    {"field": "magnetic_shear", "n": 2, "expected_position": 3, "expected_velocity": 2, "position_rms_exponent": 3.008996254731888, "velocity_rms_exponent": 1.9602225295911784, "phase_space_rms_exponent": 1.9635729685667407, "status": "observed", "selector": "2"},
+    {"field": "sheet_inner", "n": 0, "expected_position": 1, "expected_velocity": 1, "position_rms_exponent": 1.0444774805110375, "velocity_rms_exponent": 0.02055459296361892, "phase_space_rms_exponent": 0.021247130053554632, "status": "baseline_phase_limit", "selector": "0"},
+    {"field": "sheet_inner", "n": 1, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 1.9911039273245696, "velocity_rms_exponent": 1.0151236466587326, "phase_space_rms_exponent": 1.0156579492545983, "status": "baseline_phase_limit", "selector": "1"},
+    {"field": "sheet_inner", "n": 11, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 3.009673180841921, "velocity_rms_exponent": 2.1260997312873195, "phase_space_rms_exponent": 2.6136064188618353, "status": "observed", "selector": "1+"},
+    {"field": "sheet_inner", "n": 2, "expected_position": 3, "expected_velocity": 2, "position_rms_exponent": 2.9706750945025284, "velocity_rms_exponent": 1.969368606702143, "phase_space_rms_exponent": 1.9698485738659648, "status": "observed", "selector": "2"},
+    {"field": "sheet_outer", "n": 0, "expected_position": 1, "expected_velocity": 1, "position_rms_exponent": 1.0256311534604006, "velocity_rms_exponent": 0.0139609144724882, "phase_space_rms_exponent": 0.014562873405517646, "status": "baseline_phase_limit", "selector": "0"},
+    {"field": "sheet_outer", "n": 1, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 1.9572116566747442, "velocity_rms_exponent": 1.0072760268737004, "phase_space_rms_exponent": 1.0081998038921143, "status": "baseline_phase_limit", "selector": "1"},
+    {"field": "sheet_outer", "n": 11, "expected_position": 2, "expected_velocity": 2, "position_rms_exponent": 3.0193175183934575, "velocity_rms_exponent": 2.2187490357568076, "phase_space_rms_exponent": 2.674938987596023, "status": "observed", "selector": "1+"},
+    {"field": "sheet_outer", "n": 2, "expected_position": 3, "expected_velocity": 2, "position_rms_exponent": 3.0368464520167686, "velocity_rms_exponent": 2.570847932401352, "phase_space_rms_exponent": 2.5715961086859007, "status": "observed", "selector": "2"}
   ],
   "tolerance_check": [
-    {
-      "field": "uniform",
-      "n": 0,
-      "position_relative_change": 0.8995595187757394,
-      "velocity_relative_change": 0.9006260607821316
-    },
-    {
-      "field": "uniform",
-      "n": 1,
-      "position_relative_change": 0.8995598571518769,
-      "velocity_relative_change": 0.9006260607821316
-    },
-    {
-      "field": "uniform",
-      "n": 11,
-      "position_relative_change": 0.8995598571518769,
-      "velocity_relative_change": 0.9006260607821316
-    },
-    {
-      "field": "uniform",
-      "n": 2,
-      "position_relative_change": 0.8995598571518769,
-      "velocity_relative_change": 0.9006260607821316
-    },
-    {
-      "field": "constant_gradient",
-      "n": 0,
-      "position_relative_change": 6.959832710151659e-11,
-      "velocity_relative_change": 7.645779565024213e-10
-    },
-    {
-      "field": "constant_gradient",
-      "n": 1,
-      "position_relative_change": 1.3600428561133526e-08,
-      "velocity_relative_change": 1.1326021898128147e-08
-    },
-    {
-      "field": "constant_gradient",
-      "n": 11,
-      "position_relative_change": 3.2885554628325764e-05,
-      "velocity_relative_change": 7.25763737241536e-05
-    },
-    {
-      "field": "constant_gradient",
-      "n": 2,
-      "position_relative_change": 0.004556467116378693,
-      "velocity_relative_change": 0.00514118141403741
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 0,
-      "position_relative_change": 8.018030683842881e-13,
-      "velocity_relative_change": 7.356861564389305e-09
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 1,
-      "position_relative_change": 6.484881520663066e-09,
-      "velocity_relative_change": 8.62150573155418e-09
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 11,
-      "position_relative_change": 6.502913481809536e-06,
-      "velocity_relative_change": 0.0018653835659661056
-    },
-    {
-      "field": "constant_curvature_on_fieldline",
-      "n": 2,
-      "position_relative_change": 0.00024199471120078808,
-      "velocity_relative_change": 0.001629551663051676
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 0,
-      "position_relative_change": 1.682509687128686e-11,
-      "velocity_relative_change": 1.1263767696334526e-11
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 1,
-      "position_relative_change": 6.792569307023655e-08,
-      "velocity_relative_change": 2.490183117487277e-07
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 11,
-      "position_relative_change": 6.119940069360119e-05,
-      "velocity_relative_change": 0.0002172869061962679
-    },
-    {
-      "field": "magnetic_shear",
-      "n": 2,
-      "position_relative_change": 7.331723926529143e-05,
-      "velocity_relative_change": 0.00021700312990291515
-    },
-    {
-      "field": "sheet_inner",
-      "n": 0,
-      "position_relative_change": 4.162981070976457e-11,
-      "velocity_relative_change": 4.757128024834856e-11
-    },
-    {
-      "field": "sheet_inner",
-      "n": 1,
-      "position_relative_change": 5.028651917093896e-08,
-      "velocity_relative_change": 3.056218833563662e-08
-    },
-    {
-      "field": "sheet_inner",
-      "n": 11,
-      "position_relative_change": 2.3915440282129552e-05,
-      "velocity_relative_change": 9.672738369082001e-05
-    },
-    {
-      "field": "sheet_inner",
-      "n": 2,
-      "position_relative_change": 0.00012158509968096531,
-      "velocity_relative_change": 5.000841415658819e-05
-    },
-    {
-      "field": "sheet_outer",
-      "n": 0,
-      "position_relative_change": 4.875100323431525e-11,
-      "velocity_relative_change": 5.7287730115263e-11
-    },
-    {
-      "field": "sheet_outer",
-      "n": 1,
-      "position_relative_change": 4.5235140966326526e-08,
-      "velocity_relative_change": 6.964993293223642e-08
-    },
-    {
-      "field": "sheet_outer",
-      "n": 11,
-      "position_relative_change": 8.371080728597491e-06,
-      "velocity_relative_change": 0.00011881125258950131
-    },
-    {
-      "field": "sheet_outer",
-      "n": 2,
-      "position_relative_change": 3.528434042687767e-05,
-      "velocity_relative_change": 0.0009071214990507004
-    }
+    {"field": "uniform", "n": 0, "position_relative_change": 0.8995595187757394, "velocity_relative_change": 0.9006260607821316},
+    {"field": "uniform", "n": 1, "position_relative_change": 0.8995598571518769, "velocity_relative_change": 0.9006260607821316},
+    {"field": "uniform", "n": 11, "position_relative_change": 0.8995598571518769, "velocity_relative_change": 0.9006260607821316},
+    {"field": "uniform", "n": 2, "position_relative_change": 0.8995598571518769, "velocity_relative_change": 0.9006260607821316},
+    {"field": "constant_gradient", "n": 0, "position_relative_change": 6.959832710151659e-11, "velocity_relative_change": 7.645779565024213e-10},
+    {"field": "constant_gradient", "n": 1, "position_relative_change": 1.3600428561133526e-08, "velocity_relative_change": 1.1326021898128147e-08},
+    {"field": "constant_gradient", "n": 11, "position_relative_change": 3.2885554628325764e-05, "velocity_relative_change": 7.25763737241536e-05},
+    {"field": "constant_gradient", "n": 2, "position_relative_change": 0.004556467116378693, "velocity_relative_change": 0.00514118141403741},
+    {"field": "constant_curvature_on_fieldline", "n": 0, "position_relative_change": 8.018030683842881e-13, "velocity_relative_change": 7.356861564389305e-09},
+    {"field": "constant_curvature_on_fieldline", "n": 1, "position_relative_change": 6.484881520663066e-09, "velocity_relative_change": 8.62150573155418e-09},
+    {"field": "constant_curvature_on_fieldline", "n": 11, "position_relative_change": 6.502913481809536e-06, "velocity_relative_change": 0.0018653835659661056},
+    {"field": "constant_curvature_on_fieldline", "n": 2, "position_relative_change": 0.00024199471120078808, "velocity_relative_change": 0.001629551663051676},
+    {"field": "magnetic_shear", "n": 0, "position_relative_change": 1.682509687128686e-11, "velocity_relative_change": 1.1263767696334526e-11},
+    {"field": "magnetic_shear", "n": 1, "position_relative_change": 6.792569307023655e-08, "velocity_relative_change": 2.490183117487277e-07},
+    {"field": "magnetic_shear", "n": 11, "position_relative_change": 6.119940069360119e-05, "velocity_relative_change": 0.0002172869061962679},
+    {"field": "magnetic_shear", "n": 2, "position_relative_change": 7.331723926529143e-05, "velocity_relative_change": 0.00021700312990291515},
+    {"field": "sheet_inner", "n": 0, "position_relative_change": 4.162981070976457e-11, "velocity_relative_change": 4.757128024834856e-11},
+    {"field": "sheet_inner", "n": 1, "position_relative_change": 5.028651917093896e-08, "velocity_relative_change": 3.056218833563662e-08},
+    {"field": "sheet_inner", "n": 11, "position_relative_change": 2.3915440282129552e-05, "velocity_relative_change": 9.672738369082001e-05},
+    {"field": "sheet_inner", "n": 2, "position_relative_change": 0.00012158509968096531, "velocity_relative_change": 5.000841415658819e-05},
+    {"field": "sheet_outer", "n": 0, "position_relative_change": 4.875100323431525e-11, "velocity_relative_change": 5.7287730115263e-11},
+    {"field": "sheet_outer", "n": 1, "position_relative_change": 4.5235140966326526e-08, "velocity_relative_change": 6.964993293223642e-08},
+    {"field": "sheet_outer", "n": 11, "position_relative_change": 8.371080728597491e-06, "velocity_relative_change": 0.00011881125258950131},
+    {"field": "sheet_outer", "n": 2, "position_relative_change": 3.528434042687767e-05, "velocity_relative_change": 0.0009071214990507004}
   ],
-  "n2": {
-    "status": "available",
-    "representation": "Pi1=-mu curl(b)/2, Pi2=0; zero-mean sigma4"
-  }
+  "n2": {"status": "available", "representation": "Pi1=-mu curl(b)/2, Pi2=0; zero-mean sigma4"}
 }

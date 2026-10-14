@@ -8,7 +8,7 @@ import importlib.util
 from pathlib import Path
 import numpy as np
 
-_path = Path(__file__).resolve().parents[1]/'generated/canonical_kernels.py'
+_path = Path(__file__).resolve().parents[1]/'build/canonical_kernels.py'
 _spec = importlib.util.spec_from_file_location('canonical_kernels', _path)
 _kernels = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_kernels)
