@@ -98,14 +98,18 @@ set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
 add_executable(test_spectre_fo_interfaces.x test_spectre_fo_interfaces.f90)
 target_link_libraries(test_spectre_fo_interfaces.x simple)
 
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces)
-add_test(NAME test_spectre_fo_interfaces
-    COMMAND $<TARGET_FILE:test_spectre_fo_interfaces.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces)
-set_tests_properties(test_spectre_fo_interfaces PROPERTIES
-    LABELS "integration;slow"
-    TIMEOUT 600)
+foreach(fo_integrator boris rk45)
+    file(MAKE_DIRECTORY
+        ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_${fo_integrator})
+    add_test(NAME test_spectre_fo_interfaces_${fo_integrator}
+        COMMAND $<TARGET_FILE:test_spectre_fo_interfaces.x>
+            ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5 ${fo_integrator}
+        WORKING_DIRECTORY
+            ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_${fo_integrator})
+    set_tests_properties(test_spectre_fo_interfaces_${fo_integrator} PROPERTIES
+        LABELS "integration;slow"
+        TIMEOUT 600)
+endforeach()
 
 # Kicked Level-1 reflection (CA15): forbidden crossings relocate along the
 # interface to the conjugate equal-B point at frozen (vpar, p, lambda, mu).

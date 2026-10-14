@@ -943,6 +943,8 @@ disabled pending PR #530; see
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
 | `spectre_fo_layer_larmor` | real | 0 | full-orbit smooth layer width in gyroradii; `0` keeps the sharp per-volume field |
 | `spectre_fo_rotation` | real | 0.05 | Boris step bound `h |B|/(2 ro0)` |
+| `spectre_fo_integrator` | string | `'boris'` | full orbit near interfaces: `'boris'` or `'rk45'` (adaptive, exact interface crossing on the sharp field) |
+| `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of the `'rk45'` full orbit |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
 | `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |
