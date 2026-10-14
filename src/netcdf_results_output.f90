@@ -178,7 +178,10 @@ contains
         status = nf90_put_att(ncid, var_trap_par, 'units', 'dimensionless')
         call check_nc(status, 'put_att trap_par units')
         status = nf90_put_att(ncid, var_trap_par, 'description', &
-                              'Trapping parameter eta = mu*B_max/E')
+                              'Trapping parameter (mu*B_max/E - 1)*B_min/' // &
+                              '(B_max - B_min) on the start surface: ' // &
+                              '<0 passing, 0 trapped-passing boundary, ' // &
+                              '1 reflecting at B_min')
         call check_nc(status, 'put_att trap_par description')
 
         status = nf90_def_var(ncid, 'perp_inv', nf90_double, &

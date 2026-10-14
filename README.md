@@ -118,6 +118,18 @@ The main outputs are:
 - `results.nc`: per-orbit results and diagnostics when NetCDF output is
   enabled.
 
+The trapping parameter (`trap_par` in `times_lost.dat` and `results.nc`,
+`trap_parameter` in `pysimple`) is evaluated at the start point as
+
+    trap_par = (mu*B_max/E - 1) * B_min/(B_max - B_min)
+             = ((1 - lambda**2)*B_max/B - 1) * B_min/(B_max - B_min),
+
+with pitch `lambda = v_par/v` and `B_min`, `B_max` on the start flux surface.
+Negative values are passing, 0 is the trapped-passing boundary and 1 is a
+deeply trapped particle reflecting at `B_min`. The passing/trapped split in
+`confined_fraction.dat` uses `trap_par < 0`; the fractions there are divided
+by the resolved-particle count at each time.
+
 Numerically unresolved orbits are reported separately from physical losses.
 
 ## GPU quickstart
