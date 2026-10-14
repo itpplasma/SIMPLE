@@ -28,8 +28,19 @@ else:
                                     delimiter=",", names=True)
                   for key in ["trace", "markers", "starts"]}
         markers = arrays["markers"]
+        first_rows = arrays["trace"][np.r_[True, np.diff(arrays["trace"]["marker"]) != 0]]
+        gc_rows = first_rows["fo"] == 0
+        initial_error = []
+        for coordinate in ["rho", "theta", "zeta"]:
+            delta = first_rows[coordinate][gc_rows] - arrays["starts"][coordinate][gc_rows]
+            if coordinate != "rho":
+                delta = np.angle(np.exp(1j*delta))
+            initial_error.append(float(np.max(np.abs(delta))) if len(delta) else None)
         case.update(run=metadata, mean_fo_fraction=float(np.mean(markers["fo_fraction"])),
+                    fo_time_fraction=float(np.sum(markers["fo_fraction"]*markers["time_s"])
+                                           /np.sum(markers["time_s"])),
                     maximum_shell_error=float(np.max(markers["shell_error"])),
+                    initial_gc_reference_error_rho_theta_zeta=initial_error,
                     initial_fo_launches=(case["markers"] if metadata["mode"] == "fo" else 0))
         cases[path.parent.name] = dict(summary=case, **arrays)
 for name, data in cases.items():

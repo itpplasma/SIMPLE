@@ -244,14 +244,36 @@ depended on the preceding marker on a thread; marker 12's NCSX toroidal start
 shifted by 8.3e-4 rad and acquired a false FO excursion. A single-marker replay
 isolated this. Those results/plots are superseded, kept only in ignored build
 scratch, and must not be used as acceptance evidence. The driver now resets
-the lock before initialization and after each marker; the matrix is rerunning.
+the lock before initialization and after each marker. The corrected 32-case
+matrix completed with no numerical stops, FO failures or warning holds.
+All paired loss statuses and sampled GC/FO representations agree with main.
+Initial GC angle round trips are at roundoff. Default-grid maximum paired FO
+position errors are 0.90 micrometers on NCSX and 0.0014 micrometers on G3V3L3Fi;
+the NCSX hybrid volume error is 0.20 micrometers. NCSX sheet FO errors decrease
+18.55 -> 0.219 -> 0.0319 micrometers on the 16/32/48 radial grids. NCSX volume
+losses are 3/16 for FO and 2/16 for the current hybrid; other pilot ensembles
+have no loss by 2 microseconds. These are short controls, not long-time model
+validation or a 256-marker acceptance study.
+
+Retained inputs, sparse traces, marker outcomes, source provenance, summaries
+and figures are in `concept/spectre_loss_study/results/pilot/`; reproduce plots
+with `python concept/spectre_loss_study/analyze.py
+concept/spectre_loss_study/results/pilot build/study/replot`. The default-grid
+short tracing improvement spans 3.7–6.1x across fields and modes; setup is
+excluded. The >=10x target and actual 2 ms throughput remain unestablished.
 
 A 16-marker NCSX sheet FO profile at 200 microseconds completed without
 stops/holds/failures. Profiling attributed 67.7% of all sampled user CPU time
 (including setup) to the general batch first-derivative spline kernel; the
-remaining coordinate inversion is a smaller contributor. Do not optimize an
-approximate exit screen before addressing this measured cost. Its profiled
-7.02 s trace is not an uninstrumented throughput result.
+remaining coordinate inversion is a smaller contributor. Filtering call
+chains to FO gives 8012/9264 samples (86.5%) in that kernel, with 2072 samples
+(22.4%, inclusive) passing through the spline inverse and 4988 (53.8%) through
+RK trials. Do not optimize an approximate exit screen before addressing this
+measured cost. Its profiled 7.02 s trace is not an uninstrumented throughput
+result. A small endpoint-sample reuse change is undergoing the 20 affected
+native tests; it preserves field queries at the same coordinates and refreshes
+the sample at owner changes. No field-order or transition-threshold change is
+introduced.
 
 1. **W4 first: review and validate the focused performance PR above.** The
    regular logical-position/Cartesian-velocity path is implemented and locally
