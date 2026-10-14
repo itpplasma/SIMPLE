@@ -1045,3 +1045,84 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     LABELS "unit;chartmap"
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
+
+# Frozen actual FO step and the scalar-generated replacement share only the
+# field/geometry provider. Neither target changes SIMPLE's production dispatch.
+set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
+add_executable(test_fo_symplectic.x
+    ${FO_PROOF_DIR}/reference_gauss2.f90
+    ${CMAKE_SOURCE_DIR}/src/generated/fo_kernel.f90
+    ${FO_PROOF_DIR}/generated_stepper.f90
+    test_fo_symplectic.f90)
+target_include_directories(test_fo_symplectic.x PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/generated)
+target_link_libraries(test_fo_symplectic.x PRIVATE simple)
+target_compile_options(test_fo_symplectic.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+set_target_properties(test_fo_symplectic.x PROPERTIES
+    Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fo_proof_modules)
+add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000)
+set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
+add_test(NAME test_fo_symplectic_long COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000)
+set_tests_properties(test_fo_symplectic_long PROPERTIES
+    LABELS "slow;integration" TIMEOUT 14400)
+
+add_test(NAME test_fo_symplectic_resolved COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100)
+set_tests_properties(test_fo_symplectic_resolved PROPERTIES
+    LABELS "integration" TIMEOUT 900)
+add_test(NAME test_fo_symplectic_resolved_long COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 100)
+set_tests_properties(test_fo_symplectic_resolved_long PROPERTIES
+    LABELS "slow;integration" TIMEOUT 14400)
+
+add_test(NAME test_fo_symplectic_newton_boundary COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1 failure)
+set_tests_properties(test_fo_symplectic_newton_boundary PROPERTIES
+    LABELS "integration" TIMEOUT 30)
+
+find_program(FO_PROOF_LAKE lake)
+if(FO_PROOF_LAKE)
+    add_test(NAME test_fo_symplectic_lean COMMAND bash
+        ${FO_PROOF_DIR}/check_lean.sh)
+    set_tests_properties(test_fo_symplectic_lean PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} LABELS "proof" TIMEOUT 600)
+endif()
+set(SIMPLE_FORTSYM_BUILD "${CMAKE_SOURCE_DIR}/../fortsym/build" CACHE PATH
+    "Existing FortSym build for the optional FO generator proof test")
+if(EXISTS "${SIMPLE_FORTSYM_BUILD}/include/fortsym_fparse.mod")
+    add_test(NAME test_fo_symplectic_generated COMMAND bash
+        ${CMAKE_SOURCE_DIR}/gen/check_fo_generated.sh)
+    set_tests_properties(test_fo_symplectic_generated PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} LABELS "proof;slow" TIMEOUT 1200
+        ENVIRONMENT "FORTSYM_BUILD=${SIMPLE_FORTSYM_BUILD}")
+endif()
+
+# Second 3D stellarator already shipped with the pinned libneo dependency.
+# Its provenance identifies SPECTRE's Nfp=5, Ntor=2 G3V3L3Fi case.
+set(FO_SECOND_FIELD "${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5")
+foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+    set(fo_nsteps 1000)
+    set(fo_velocity 1)
+    if(fo_suffix MATCHES "long")
+        set(fo_nsteps 1000000)
+    endif()
+    if(fo_suffix MATCHES "resolved")
+        set(fo_velocity 100)
+    endif()
+    add_test(NAME test_fo_symplectic_${fo_suffix} COMMAND test_fo_symplectic.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity})
+    set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
+        LABELS "integration" TIMEOUT 900)
+    if(fo_suffix MATCHES "long")
+        set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
+            LABELS "integration;slow" TIMEOUT 14400)
+    endif()
+endforeach()

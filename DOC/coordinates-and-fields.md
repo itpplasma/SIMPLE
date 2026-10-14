@@ -1285,3 +1285,16 @@ New name `integ_coords` is more descriptive but less documented.
 
 *Document last updated: 2026-07-18*
 *Corresponding code version: Post v1.5.1*
+
+### Full-orbit Gauss2 proof harness
+
+The consumer derivation and compiled comparison are documented in
+[`concept/fo_symplectic_proof/README.md`](../concept/fo_symplectic_proof/README.md).
+Its normalized canonical Hamiltonian uses SPECTRE's covariant spectral A and
+the metric of a blended embedding. Its autonomous K includes the smooth
+radial metric factor sqrt(m_ref/(m_ref + g^{rho rho})), with m_ref frozen at
+FO entry; FortSym generates its full three-coordinate gradient and Hessian.
+It differentiates A, never a separately smoothed B. The generated kernel is currently a test/concept target; the
+production field and integrator dispatch are unchanged. The proof covers exact
+regular fixed-parameter FO stage branches; field-jet, floating-point and hybrid
+switching obligations remain explicitly scoped in the proof chain.
