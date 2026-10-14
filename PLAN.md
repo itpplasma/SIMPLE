@@ -238,6 +238,21 @@ by grid convergence, controlled throughput/profile measurements and a modest
 loss comparison. Keep physical loss, numerical stop and recovered holds
 separate. No production switch or symplectic proof is promoted by these runs.
 
+The first 32-case pilot exposed a driver defect: it omitted production's
+per-marker `set_spectre_volume_lock(0)` cleanup. The resulting hybrid starts
+depended on the preceding marker on a thread; marker 12's NCSX toroidal start
+shifted by 8.3e-4 rad and acquired a false FO excursion. A single-marker replay
+isolated this. Those results/plots are superseded, kept only in ignored build
+scratch, and must not be used as acceptance evidence. The driver now resets
+the lock before initialization and after each marker; the matrix is rerunning.
+
+A 16-marker NCSX sheet FO profile at 200 microseconds completed without
+stops/holds/failures. Profiling attributed 67.7% of all sampled user CPU time
+(including setup) to the general batch first-derivative spline kernel; the
+remaining coordinate inversion is a smaller contributor. Do not optimize an
+approximate exit screen before addressing this measured cost. Its profiled
+7.02 s trace is not an uninstrumented throughput result.
+
 1. **W4 first: review and validate the focused performance PR above.** The
    regular logical-position/Cartesian-velocity path is implemented and locally
    checked. Complete longer NCSX/G3V3L3Fi trajectory/loss and spline-grid

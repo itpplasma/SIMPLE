@@ -12,6 +12,8 @@ parser.add_argument("--output", type=Path, default=Path("build/study/spectre"))
 parser.add_argument("--duration", type=float, default=2e-6)
 parser.add_argument("--markers", type=int, default=16)
 parser.add_argument("--threads", type=int, default=8)
+parser.add_argument("--variants", nargs="+", choices=["raw", "coarse", "spline", "fine"],
+                    default=["raw", "coarse", "spline", "fine"])
 args = parser.parse_args()
 runner = Path(__file__).with_name("run.py")
 for field in ["ncsx", "g3v3"]:
@@ -21,6 +23,8 @@ for field in ["ncsx", "g3v3"]:
             for variant, grid in [("raw", None), ("coarse", [16, 32, 16]),
                                   ("spline", [32, 64, 32]),
                                   ("fine", [48, 96, 48])]:
+                if variant not in args.variants:
+                    continue
                 output = args.output / f"{field}_{sampling}_{mode}_{variant}"
                 metadata = output / "run.json"
                 prior = json.loads(metadata.read_text()) if metadata.exists() else {}

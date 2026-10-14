@@ -11,7 +11,7 @@ program study_spectre_orbits
         crossing_level
     use magfie_sub, only: init_magfie, SPECTRE, spectre_field, M_TO_CM
     use field_can_mod, only: field_can_t, ref_to_integ, integ_to_ref
-    use field_can_spectre, only: spectre_mvol
+    use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
     use parmot_mod, only: ro0
     use spectre_fo_hybrid, only: spectre_fo_enter, SPECTRE_FO_OK
     use orbit_symplectic_base, only: symplectic_integrator_t
@@ -118,6 +118,8 @@ program study_spectre_orbits
     do m = 1, ntestpart
         begin_marker = omp_get_wtime()
         y = starts(:, m)
+        ! Match production's per-marker dispatch reset before initialization.
+        call set_spectre_volume_lock(0)
         call ref_to_integ(y(1:3), z(1:3))
         z(4:5) = y(4:5)
         call init_sympl(si, field, z, dtaumin, dtaumin, relerr, integmode)
@@ -159,6 +161,7 @@ program study_spectre_orbits
             state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
             worst_shell, omp_get_wtime() - begin_marker, &
             real(state%warning_hold_count, dp), real(min(k, nsteps), dp)]
+        call set_spectre_volume_lock(0)
     end do
     !$omp end parallel do
     trace_s = omp_get_wtime() - trace0
