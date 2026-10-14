@@ -35,10 +35,11 @@ program test_gc_symplectic
     type(field_can_t) :: f, fe
     type(tracer_t) :: norb
     character(len=256) :: arg, mode_arg, file_arg
-    integer :: field_type, nsteps, nfail, istart, nstart
-    real(dp) :: ekin, dt, pscale, rseed
+    integer :: field_type, nsteps, nfail, istart, nstart, energy_unit, output_status
+    real(dp) :: ekin, dt, pscale, rseed, step_scale
     real(dp) :: w0(4), starts(4, 2)
     logical :: smoke
+    character(len=1024) :: energy_output
 
     call get_command_argument(1, mode_arg)
     call get_command_argument(2, file_arg)
@@ -48,6 +49,10 @@ program test_gc_symplectic
     if (command_argument_count() >= 5) then
         call get_command_argument(5, arg); read(arg, *) nsteps
     end if
+    step_scale = 1.0_dp
+    if (command_argument_count() >= 6) then
+        call get_command_argument(6, arg); read(arg, *) step_scale
+    end if
     smoke = trim(file_arg) == 'test'
 
     ! (s, theta, phi, lambda): a passing and a trapped start.
@@ -55,6 +60,16 @@ program test_gc_symplectic
     starts(:, 2) = [0.5_dp, 1.2_dp, 0.3_dp, 0.2_dp]
     nstart = 2
     call setup_field
+    dt = dt*step_scale
+    energy_unit = -1
+    if (trim(mode_arg) == 'energy') then
+        call get_environment_variable('SIMPLE_GC_PROOF_OUTPUT', energy_output, &
+            status=output_status)
+        if (output_status == 0 .and. len_trim(energy_output) > 0) then
+            open(newunit=energy_unit, file=trim(energy_output), status='replace')
+            write(energy_unit, '(a)') 'start,method,step,h,r,relative_energy'
+        end if
+    end if
     nfail = 0
     do istart = 1, nstart
         call initial_state(starts(:, istart), w0)
@@ -69,6 +84,7 @@ program test_gc_symplectic
             error stop 'mode must be map or energy'
         end select
     end do
+    if (energy_unit /= -1) close(energy_unit)
     if (nfail > 0) then
         write(*, '(a,i0,a)') 'FAIL: ', nfail, ' check(s) failed'
         error stop 1
@@ -326,6 +342,12 @@ contains
                 call radius_of(wcur, r, ok)
                 if (.not. ok) exit
                 y = fe%H/h0 - 1.0_dp
+                if (energy_unit /= -1) then
+                    if (k == 1 .or. modulo(k, max(1, nsteps/400)) == 0) then
+                        write(energy_unit, '(i0,a,a,a,i0,3(a,es24.16))') &
+                            istart, ',', trim(names(i)), ',', k, ',', dt, ',', r, ',', y
+                    end if
+                end if
                 ymin = min(ymin, y); ymax = max(ymax, y)
                 if (2*k <= nsteps) then
                     half_max(1) = max(half_max(1), abs(y))
@@ -337,7 +359,8 @@ contains
             end do
             rseed = rseed0
             if (.not. ok) then
-                write(*, '(a,a16,a,i0)') 'ENERGY ', names(i), ' refused at step ', k
+                write(*, '(a,a16,a,i0,a,i0,a,es12.4)') 'ENERGY ', names(i), &
+                    ' refused at step ', k, ' status=', ierr, ' last radial seed=', si%z(1)
                 nfail = nfail + 1
                 cycle
             end if

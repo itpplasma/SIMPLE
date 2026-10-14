@@ -1079,9 +1079,16 @@ foreach(gc_case IN ITEMS "ncsx_canflux;wout_ncsx.nc;0;1.0e3"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_gc_symplectic_energy_${gc_name} PROPERTIES
         LABELS "integration;proof;slow" TIMEOUT 3600
-        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1"
+        ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;SIMPLE_GC_PROOF_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/gc_energy_${gc_name}.csv"
         FIXTURES_REQUIRED vmec_test_data)
 endforeach()
+add_test(NAME study_gc_energy_half_ncsx_boozer
+    COMMAND test_gc_symplectic.x energy wout_ncsx.nc 2 1.0e3 200000 0.5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(study_gc_energy_half_ncsx_boozer PROPERTIES
+    LABELS "integration;research;slow" TIMEOUT 3600
+    ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;SIMPLE_GC_PROOF_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/gc_energy_half_ncsx_boozer.csv"
+    FIXTURES_REQUIRED vmec_test_data)
 # Axisymmetric analytic field: smoke only, not acceptance evidence.
 add_test(NAME test_gc_symplectic_map_tokamak_smoke
     COMMAND test_gc_symplectic.x map test -1 0

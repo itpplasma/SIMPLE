@@ -57,4 +57,31 @@ The previously failing NCSX midpoint/Gauss1 case gives 6.895e-6 / 6.264e-7,
 with spacing disagreement 2.583e-6. This improves the numerical oracle's
 resolution; it is not an exact floating-point symplecticity proof. Both
 stencils' records and the pre-fix failure are in `map_results.json`.
-The 100,000-step stellarator energy checks are running separately.
+The 100,000-step stellarator energy checks and NCSX step-halving control are complete; their original acceptance failures remain open as detailed below.
+
+## Long energy/domain result
+
+QH Boozer passes all eight methods at both starts for 100,000 steps. NCSX
+canonical-flux passes all methods at the passing start, but the trapped start
+reaches the chart edge near step 9,800. NCSX Boozer's trapped start also reaches
+the chart edge, with boundary status 4 or unresolved landing status 5 near
+s=1. Neither is a completed 100,000-step smooth-volume orbit; status 5 is not
+relabelled a physical loss.
+
+At the NCSX Boozer passing start the coarse Gauss2 run fails the original
+second-half envelope gate (max2/max1=2.079, energy extrema -1.576e-4/7.582e-5).
+Halving h and doubling the steps to keep the same elapsed interval passes all
+eight passing-start checks; Gauss2 extrema become -2.645e-7/2.275e-7 and
+max2/max1=0.987. The trapped start still reaches the domain edge. The original
+energy acceptance selections therefore remain RED: no threshold is relaxed,
+start removed, domain exit turned into completion or proof closure claimed.
+Sparse samples, all-step summary metrics and the plotting source are retained
+under `results/energy/` and `plot_energy.py`.
+
+The first unsupported proof bridge remains the identification of the ideal
+exact-stage, fixed-step canonical theorem with the terminated-Newton,
+extrapolated-field, domain-limited production map. The three verified source
+repairs remove linear extrapolation defects; finite numerical oracles do not
+supply missing uniform derivative/domain bounds. State-selected landing is
+also outside the fixed-step theorem. The ideal tableau theorems survive with
+their hypotheses; a whole-production/hybrid theorem remains open.
