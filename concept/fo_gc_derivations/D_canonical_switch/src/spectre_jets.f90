@@ -3,7 +3,8 @@ module spectre_jets
     ! SPECTRE equilibrium (libneo field_spectre, SI units: m, T) in one owner
     ! volume. B_cart = e_i (sqrtg B^i)/sqrtg is evaluated in logical u; grad B
     ! uses an 8th-order central difference in u, mapped by the inverse
-    ! covariant basis. The difference step is fixed, so the provider is a
+    ! covariant basis. The Hessian includes the geometry chain-rule term.
+    ! The difference step is fixed, so the provider is a
     ! deterministic smooth function of X (round-trip checks rely on this).
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_spectre, only: spectre_field_t, create_spectre_field
@@ -109,13 +110,18 @@ contains
         type(switch_jets_t), intent(inout) :: jets
         integer, intent(out) :: ierr
         real(dp) :: u(3), up(3), um(3), bp(3), bm(3), dbdu(3, 3), ecov(3, 3)
-        real(dp) :: einv(3, 3)
-        integer :: j, k, ipiv(3), info
+        real(dp) :: einv(3, 3), d2bdu(3, 3, 3), d2xdu(3, 3, 3)
+        real(dp) :: ep(3, 3), em(3, 3), corrected(3, 3), value(3)
+        real(dp), parameter :: csecond(0:4) = [-205.0_dp/72, 8.0_dp/5, &
+            -1.0_dp/5, 8.0_dp/315, -1.0_dp/560]
+        integer :: i, j, k, l, m, ipiv(3), info
         call sj_locate(X, u, ierr)
         if (ierr /= SW_OK) return
         call sj_bcart(u, jets%b)
         do j = 1, 3
             dbdu(:, j) = 0.0_dp
+            d2bdu(:, j, j) = csecond(0)*jets%b
+            d2xdu(:, :, j) = 0.0_dp
             do k = 1, 4
                 up = u
                 um = u
@@ -124,8 +130,37 @@ contains
                 call sj_bcart(up, bp)
                 call sj_bcart(um, bm)
                 dbdu(:, j) = dbdu(:, j) + c8(k)*(bp - bm)
+                d2bdu(:, j, j) = d2bdu(:, j, j) + csecond(k)*(bp + bm)
+                call field%coords%covariant_basis(up, ep)
+                call field%coords%covariant_basis(um, em)
+                d2xdu(:, :, j) = d2xdu(:, :, j) + c8(k)*(ep - em)
             end do
             dbdu(:, j) = dbdu(:, j)/hstep(j)
+            d2bdu(:, j, j) = d2bdu(:, j, j)/hstep(j)**2
+            d2xdu(:, :, j) = d2xdu(:, :, j)/hstep(j)
+        end do
+        do j = 1, 3
+            do k = j + 1, 3
+                d2bdu(:, j, k) = 0.0_dp
+                do l = -4, 4
+                    if (l == 0) cycle
+                    do m = -4, 4
+                        if (m == 0) cycle
+                        up = u
+                        up(j) = up(j) + l*hstep(j)
+                        up(k) = up(k) + m*hstep(k)
+                        call sj_bcart(up, value)
+                        d2bdu(:, j, k) = d2bdu(:, j, k) + &
+                            sign(1.0_dp, real(l*m, dp))*c8(abs(l))*c8(abs(m))*value
+                    end do
+                end do
+                d2bdu(:, j, k) = d2bdu(:, j, k)/(hstep(j)*hstep(k))
+                d2bdu(:, k, j) = d2bdu(:, j, k)
+                ! Both independent basis derivatives describe the same jet.
+                value = 0.5_dp*(d2xdu(:, j, k) + d2xdu(:, k, j))
+                d2xdu(:, j, k) = value
+                d2xdu(:, k, j) = value
+            end do
         end do
         call field%coords%covariant_basis(u, ecov)
         einv = 0.0_dp
@@ -138,7 +173,15 @@ contains
             return
         end if
         jets%db = matmul(dbdu, einv)
-        jets%d2b = 0.0_dp
+        ! B_,u_j u_k = B_,x_a x_b E_a j E_b k + B_,x_a X_a,jk.
+        ! Subtract the chart curvature before applying the inverse basis twice.
+        do i = 1, 3
+            corrected = d2bdu(i, :, :)
+            do j = 1, 3
+                corrected = corrected - jets%db(i, j)*d2xdu(j, :, :)
+            end do
+            jets%d2b(i, :, :) = matmul(transpose(einv), matmul(corrected, einv))
+        end do
         sj_u = u
     end subroutine sj_jets
 end module spectre_jets
