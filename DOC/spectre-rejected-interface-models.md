@@ -411,7 +411,8 @@ count does not repair the failures below.
 
 The newly collected comparison was added to main's cleanup branch in
 [`4a1f842`](https://github.com/itpplasma/SIMPLE/commit/4a1f842), preserving the
-original GPT worker result `345bfa8`. The removal commit in this cleanup deletes its retired
+original GPT worker result `345bfa8`. The removal commit
+[`3a6fd37`](https://github.com/itpplasma/SIMPLE/commit/3a6fd37) deletes its retired
 executable paths and settings, plus the earlier sharp-sheet branch/landing code
 already on main. Both commits are retained by a merge commit,
 rather than squash-merging away the add/remove history. Historical tables,
