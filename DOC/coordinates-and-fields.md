@@ -645,14 +645,16 @@ from the guiding-center stack below.
 #### Guiding-center RK45 per volume (`integ_coords = 6`)
 
 **Files**: `src/magfie.f90` (`magfie_spectre`), `src/spectre_orbit.f90`,
-`src/interface_crossing.f90`, `src/simple_main.f90` (`init_spectre_field`,
+`src/simple_main.f90` (`init_spectre_field`,
 `trace_orbit_spectre`), `src/samplers.f90` (`sample_spectre_surface`).
 
-`simple.x` traces guiding centers in a SPECTRE equilibrium on the non-canonical
-RK45 path, one volume at a time. On reaching an interface the crossing map
-(`crossing_level`, Level 1 by default) switches volume, reflects, or loses the
-marker (see interface crossing below); the outermost interface is the loss
-surface.
+`simple.x` traces guiding centers only for single-volume SPECTRE fields
+(`Mvol = 1`). Multi-volume orbit configuration fails before canonical
+construction with "no valid interface crossing on this version; see
+DOC/spectre-rejected-interface-models.md". It remains disabled until the
+full-orbit interface treatment of PR #530 lands. Multi-volume field evaluation,
+geometry, canonical construction, field-line diagnostics, and sampling with
+`generate_start_only = .true.` remain available.
 
 **Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
 extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
@@ -702,93 +704,19 @@ chart is the integration coordinate, so `start.dat` holds `(rho_g, theta, zeta)`
 directly and every marker sits on the requested interface to round-off. The
 sampler also sets `bmin`/`bmax`/`bmod00` from a scan of the surface.
 
-**Interface crossing (Level 0, #443)**. A marker owns a home volume, fixed after
-the first step as the pair of integer interfaces bracketing `rho_g`. When a
-microstep leaves the home volume, `orbit_timestep_spectre` locates the interface
-`rho_g = k` (Illinois false position on the substep to `< 1e-10`) and hands the
-landing state to `apply_crossing(y_iface, iface, direction, mvol, level, y_out,
-info)` in `interface_crossing.f90`. The `crossing_level` namelist knob selects
-the map: `1` (default) is the Level-1 refraction map (#440), `0` is the Level-0
-energy rescale (#443) kept for regression comparison.
-
-The Level-0 map holds `(theta, zeta)` and the perpendicular invariant, evaluates
-`|B|` from *both* volumes at the same interface point (`rho_g = k -+ 1e-12`, the
-per-volume polynomial basis), and rescales the parallel velocity. Writing the
-stored invariant `perp_inv = z(4)^2 (1 - z(5)^2)/|B| = 2 mu` (`v_perp^2/|B|`), so
-`mu = perp_inv/2` is the magnetic moment:
-
-    v_par'^2 = v_par^2 - 2 mu (B_target - B_home),   v_par = z(4) z(5).
-
-- **Crossing** (`v_par'^2 >= 0`): keep the sign of `v_par`, switch to the
-  neighbour volume. `H = v_par^2/2 + mu |B|` (each side in its own volume) is
-  conserved to round-off, and `z(4)` (hence energy) is unchanged.
-- **Reflection** (`v_par'^2 < 0`): the forbidden crossing into higher `|B|` is a
-  magnetic mirror. The marker stays home with `v_par -> -v_par` (the same-side
-  energy root), so `|v_par|`, `mu`, and `|B|` are unchanged and `H` is exact. A
-  deeply trapped marker whose banana tip sits on the sheet stays pinned there,
-  the crude Level-0 behaviour absent a tangential sheet-drift kick.
-- **Loss**: crossing outward through the outermost interface (`direction = +1`,
-  `iface = Mvol`) removes the marker; its loss time is recorded in
-  `times_lost.dat` and `confined_fraction.dat`.
-- **Axis**: reaching `rho_g = 0` (the coordinate axis, `sqrt(g) = 0`) reflects
-  trivially before the singularity.
-
-After a crossing `rho_g` is nudged `1e-6` into the resolved volume so the next
-substep does not re-trigger the event within the odeint tolerance.
-
-**Interface crossing (Level 1, #440)**. `crossing_level = 1` (default) replaces
-the rescale with the thin-current-sheet limit of the drift: an impulse `Delta z =
-lambda_k X` along the interface Hamiltonian vector field `X = {z, rho_g}`, with
-the single scalar `lambda_k` fixed by exact energy conservation. The generator
-uses the same `parmot_mod` constant `ro0` and the same
-`Bstar_par = |B| + ro0 v_par (h.curl h)` as `velo_can`:
-
-    X_theta = - ro0 hcovar_zeta  / (sqrtg Bstar_par)
-    X_zeta  = + ro0 hcovar_theta / (sqrtg Bstar_par)
-    X_vpar  = + ro0 v_par (curl h)^rho / Bstar_par.
-
-The energy criterion at the landing point (`radicand0 = v_par^2 - 2 mu [[B]]`, the
-Level-0 condition) decides crossing vs mirror, so the event split matches Level 0.
-A forbidden crossing reflects as the Level-0 mirror (`v_par -> -v_par`, no kick).
-For a crossing the angles `(theta, zeta)` and `v_par` receive `lambda_k X`;
-`rho_g` stays on the interface and then switches volume with the Level-0 nudge.
-`lambda_k` solves `H_target(z + lambda_k X) = H_home(z)` by a damped (backtracking)
-Newton, with the generator refreshed each residual at the midpoint state
-`z + (lambda_k/2) X` from both-side quantities averaged, so the discrete map is
-symplectic and keeps `mu` and `p` fixed. The crossing lands the angles on an
-equal-`|B|` target point instead of rescaling `v_par`. That point sits a
-tangential distance `~ mu [[B]] / v_drift_normal` away; where the poloidal `|B|`
-gradient along the sheet drift is weak this exceeds the `0.3` rad thin-layer
-bound and the map falls back to the energy-exact Level-0 rescale (no kick), so
-every energetically allowed marker still crosses. The full derivation is in
-`DOC/spectre-interface-crossing.md`.
-
-**Drift regularization**. The guiding-center drift diverges where
-`Bstar_par = 1 + p_par (c/e) h.curl h -> 0`, a pitch-dependent phase-space
-surface that the interface sheet current pushes into a thin layer beside each
-interface. `velo_can_clamped` in `spectre_orbit.f90` freezes the field at the
-volume edge minus a `2e-2` band and caps the RHS magnitude so the RK45 substep
-integrates a finite, physical drift instead of collapsing to zero step. This
-regularizes only the integrated orbit near the layer; the crossing map itself
-uses the true both-side `|B|` at the exact interface, so energy conservation is
-untouched.
-
-**Crossing log**. Every crossing and reflection appends one line to
-`spectre_crossing_events.dat`, grouped by particle in time order (a stable
-counting sort, so the file is reproducible under OpenMP): particle, time,
-interface, type (1 crossing / 2 reflection / 3 loss / 4 stop), exit volume,
-entry volume, theta, zeta, `v_par` before, `v_par` after, mu, `|B|` home,
-`|B|` target. Both the RK45 and the symplectic path feed this log; type 4 is
-the symplectic path's pathological non-convergence fallback (#441).
+**Single-volume boundary handling**. The RK45 path retains its clamped
+boundary evaluation and coordinate-axis reflection; the outer edge `rho_g = 1`
+is absorbing. No internal interface map or crossing log is produced.
+See [the rejection record](spectre-rejected-interface-models.md) for the removed
+models and their physical failure.
 
 #### Guiding-center symplectic per volume (`integmode > 0`)
 
 **Files**: `src/field/field_can_spectre.f90`, `src/field/field_can_meiss.f90`
 (`spectre_field_t` arms in `ah_cov_on_slice` / `init_canonical_field_components`,
 the `meiss_volume_t` slot, and the `harvest_meiss_volume` mover),
-`src/field_can.f90` (id `SPECTRE` dispatch), `src/spectre_sympl_orbit.f90`
-(multi-volume microstepping with exact interface landing, #441),
-`src/simple_main.f90` (`init_spectre_field`, `trace_orbit_spectre_sympl`).
+`src/field_can.f90` (id `SPECTRE` dispatch),
+`src/simple_main.f90` (`init_spectre_field`, `trace_orbit`).
 
 **Corrected premise** (computer-algebra verified in spectre-orbits
 `ca/05_gc_canonical.wl`): the SPECTRE `A_s = 0` gauge supplies only half of the
@@ -837,35 +765,12 @@ covariant `h_theta`/`h_phi` `1e2` (`L`), covariant `A_theta`/`A_phi`
 factor makes `sqrt(g) = (h_phi A_theta' - h_theta A_phi')/Bmod` come out in
 `cm^3`, matching `magfie_spectre`.
 
-**Evaluation**. `evaluate_spectre_can` picks `lvol = min(int(r)+1, Mvol)` --
-or the volume pinned by `set_spectre_volume_lock` during multi-volume
-stepping, so Newton iterates probing past an interior interface never read
-the neighbour volume's discontinuous field -- and evaluates that volume's
-splines; `integ_to_ref` / `ref_to_integ` apply the active volume's
-`lambda_phi` transform (radial map is the identity). Within `EDGE_BAND` of a
-volume edge and beyond it the field is the C1 radial extension from the band
-edge (`extend_band`): `A` and `Bmod` linear, the radial slope of `h_theta`,
-`h_phi` blended to zero, which removes the sheet-adjacent `Bstar_par -> 0`
-degeneracy of the guiding-center 1-form from the zone (the canonical analogue
-of the RK45 path's `drift_band`).
-
-**Multi-volume orbits (#441)**. `trace_orbit_spectre_sympl` drives
-`spectre_sympl_orbit`: an accepted step leaving `[home_lo, home_hi]` is
-rewound and re-solved for the substep length landing on the interface to
-`|rho_g - k| < 1e-10` (Illinois false position; every trial is one full
-implicit step of the same scheme, so the landed state is on the discrete
-orbit of a symplectic map). The landed state is converted to physical
-variables, `apply_crossing` maps it across (or reflects), and the integrator
-is re-initialized from the mapped state in the target volume's gauge exactly
-like an orbit start; the remaining microstep budget is completed there.
-Markers are lost only at the outermost interface, matching the RK45 path;
-`sympl_rmax` sits at `Mvol + 1` so the internal Newton guards never fire on
-iterates inside the domain or on the landing solve at `rho_g = Mvol`.
-Grazing events whose landing solve stalls, and committed steps that jump in
-`rho_g`, energy, or theta beyond physical bounds (silently unconverged
-Newton), are retried with a halved substep; persistent non-convergence
-terminates the orbit through the logged `CROSS_STOP` fallback; the tok2vol
-tests assert that it does not occur.
+**Evaluation**. `evaluate_spectre_can` picks `lvol = min(int(r)+1, Mvol)`
+and evaluates that volume's splines. `integ_to_ref` / `ref_to_integ` apply the
+volume's `lambda_phi` transform; the radial map is the identity. The existing
+C1 radial extension near volume edges remains part of field evaluation.
+It does not define a physical interface crossing. Single-volume symplectic
+orbits use the ordinary integrator and its absorbing `rho_g = 1` boundary.
 
 **Optional follow-up** (documented, not implemented): a `no_K`-style variant that
 drops `rho_par h_s` in SPECTRE coordinates directly -- the same
@@ -1022,33 +927,26 @@ Cartesian space with a triangulated STL surface (using CGAL).
 
 ### 8.2.3 SPECTRE Equilibria (`integ_coords = 6`)
 
-VMEC-free multi-volume guiding-center tracing on a SPECTRE/SPEC MRxMHD
-equilibrium (HDF5, `.h5`), detected automatically from `field_input`. The
-end-to-end pipeline (issues #437-#442): symplectic field-line Poincare app
-(#437), per-volume RK45 guiding centers (#438), per-volume Meiss canonical
-coordinates (#439), Level-1 refraction (#440) and Level-0 rescale (#443)
-interface crossing maps, symplectic multi-volume crossing (#441), and the
-validation suite (#442). Example input: `examples/simple_spectre.in`.
+VMEC-free single-volume guiding-center tracing and multi-volume field
+and geometry evaluation on SPECTRE/SPEC MRxMHD equilibria (HDF5, `.h5`),
+detected automatically from `field_input`. Multi-volume orbit tracing is
+disabled pending PR #530; see
+[the interface status](spectre-interface-crossing.md). Example sampling input:
+`examples/simple_spectre.in`.
 
 | Parameter | Type | Default | Purpose |
 |-----------|------|---------|---------|
 | `field_input` | string | `''` | SPECTRE HDF5 equilibrium (`.h5`); VMEC-free |
 | `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
-| `crossing_level` | int | 1 | interface crossing map: `1` = Level-1 refraction, `0` = Level-0 energy rescale |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
 | `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |
 
-The radial start `sbeg` is the SPECTRE label `rho_g in [0, Mvol]`; markers are
-lost only at the outermost interface `rho_g = Mvol`. `crossing_level` and the
-construction grid apply to `integmode > 0`; the RK45 path shares
-`crossing_level` but builds no construction. On the axisymmetric two-volume
-tok2vol fixture Level 0 and Level 1 give equal loss fractions (finding F5); the
-committed reference behavior (loss accounting, L0-vs-L1, trapped/passing mirror
-split, fixed-seed determinism) is locked by
-`test/tests/test_spectre_validation.py`, and the construction-grid knob and
-axisymmetric clamp by `test/tests/test_spectre_construction_grid.py`.
+The radial start `sbeg` is the SPECTRE label `rho_g in [0, Mvol]`.
+Single-volume markers are lost at `rho_g = 1`. Construction settings apply to
+`integmode > 0`; RK45 builds no canonical construction. The field construction
+and axisymmetric clamp remain covered by the SPECTRE field tests.
 
 ### 8.3 Integration Mode (`integmode`)
 
@@ -1067,10 +965,6 @@ axisymmetric clamp by `test/tests/test_spectre_construction_grid.py`.
 **Constraints**:
 - integmode >= 1: Requires canonical field type (TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE)
 - integmode = 0 (RK45): works with any initialized field type (VMEC, REFCOORDS, or canonical modes); `simple_main.f90` guards only integmode >= 1
-- SPECTRE multi-volume crossing (#441) admits one-step schemes only (all of
-  the above, driven with `ntau = 1`, asserted in `spectre_sympl_orbit`):
-  re-canonicalization after each interface crossing restarts the scheme from
-  a single point, so no multistep history may carry over
 
 ### 8.4 Spline Parameters
 

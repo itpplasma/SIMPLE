@@ -176,9 +176,6 @@ module params
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
-    !> SPECTRE RK45 interface-crossing map: 1 = Level-1 refraction (default),
-    !> 0 = Level-0 energy rescale (regression comparison).
-    integer :: crossing_level = 1
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -223,7 +220,7 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
+        wall_input, wall_units, chart_boundary_kind, integ_coords, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &

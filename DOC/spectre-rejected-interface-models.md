@@ -344,7 +344,7 @@ times follows merely from its lack of symplecticity.
 
 ## Recorded evidence (not symbolic proof)
 
-The [prototype README](https://github.com/itpplasma/SIMPLE/blob/d2f5b44/concept/symplectic_sheet/README.md) records 64 NCSX
+The [prototype README](https://github.com/itpplasma/SIMPLE/blob/4ce6d88/concept/symplectic_sheet/README.md) records 64 NCSX
 3.5 keV alpha markers near each interface, traced for 2 ms. Counting uncertainty
 is approximately 2/4 markers at interfaces 1/2, and individual chaotic fates
 are not comparable. The outer jump reaches 0.32 rad and -25 to +38% in magnitude.
@@ -357,7 +357,7 @@ are not comparable. The outer jump reaches 0.32 rad and -25 to +38% in magnitude
 | Level 1, RK45 GC | 1 | 7 | 32 reference losses missed; T1/T4 |
 | Level 3, Boris, layer 0.2 rho, rotation 0.0125 | 5 | 48 | Over-loss; consistent with T2/T3, not a causal proof |
 
-The [prototype crossing record](https://github.com/itpplasma/SIMPLE/blob/d2f5b44/DOC/spectre-interface-crossing.md) gives tok2vol canonical
+The [prototype crossing record](https://github.com/itpplasma/SIMPLE/blob/4ce6d88/DOC/spectre-interface-crossing.md) gives tok2vol canonical
 $p_\zeta$ relative spreads: sharp Boris **14%** (rotation 0.05), **3.2%**
 (0.0125); layer 0.2 rho **4.0%** (0.05), **0.93%** (0.0125);
 event-resolved full-orbit RK45 **$6\times10^{-8}$** at tolerance $10^{-9}$
@@ -381,7 +381,9 @@ bookkeeping; T5b–c state the verification conditions.
 
 The removed GC code last existed on main at
 [`b113786`](https://github.com/itpplasma/SIMPLE/commit/b113786), the branch-point
-revision before this removal. Its introducing PRs were #443 (Level 0), #440
+revision before this removal. The removal commit's parent `61316ee` adds only
+this proof record and also retains the old code. Its introducing PRs were
+#443 (Level 0), #440
 (Level 1), and #441 (symplectic flow/map composition); #459 refined symplectic
 event landing and #477 added tangential relocation. The code remains in Git
 history for inspection, not reuse.

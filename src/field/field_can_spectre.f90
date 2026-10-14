@@ -34,7 +34,7 @@ module field_can_spectre
 
     public :: construct_spectre_coordinates, evaluate_spectre_can, &
               integ_to_ref_spectre, ref_to_integ_spectre, cleanup_spectre, &
-              spectre_volumes, spectre_mvol, set_spectre_volume_lock, &
+              spectre_volumes, spectre_mvol, &
               set_spectre_construction_grid
 
     !> Per-volume Meiss construction grid. phi = -1 selects the automatic policy
@@ -54,21 +54,9 @@ module field_can_spectre
     !> for high-order convergence, lower for RK45-only or memory-bound runs).
     integer, parameter :: AXISYM_NPHI = 8, NPHI_FULL = 32
     real(dp), parameter :: AXIS_OFFSET = 1.0e-3_dp
-    !> Sheet-adjacent regularization band, the canonical analogue of the RK45
-    !> path's drift_band (spectre_orbit): the guiding-center 1-form degenerates
-    !> (dpth/dr = 0, i.e. Bstar_par -> 0) in a thin unphysical layer next to
-    !> each interface, where every state on the degeneracy manifold is a
-    !> spurious root of the implicit steppers as h -> 0. Inside the band A and
-    !> Bmod are extended linearly in r from the band edge while the radial slope
-    !> of h_theta, h_phi is blended quadratically to zero over one band width
-    !> (C1 everywhere, so the implicit-step residuals stay smooth); at and
-    !> beyond the interface dpth/dr = sqrtg*Bmod/(ro0*h_phi) > 0 independent of
-    !> pitch, so the canonical structure is non-degenerate by construction and
-    !> all conservation properties survive. The interface jump itself still
-    !> uses the true both-side |B| via magfie. The width is chosen so the
-    !> band-edge h gradients are subcritical (ro0*vpar*curl h < B) for 3.5 MeV
-    !> alphas on the test equilibria: a monotone blend of a subcritical slope
-    !> stays subcritical, so no degeneracy re-enters the blend zone.
+    !> C1 radial extension used by canonical field evaluation at volume edges.
+    !> This boundary regularization is retained for single-volume tracing and
+    !> per-volume field diagnostics; it supplies no interface crossing model.
     real(dp), parameter :: EDGE_BAND = 5.0e-2_dp
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), parameter :: H_SCALE = M_TO_CM
@@ -76,15 +64,6 @@ module field_can_spectre
 
     type(meiss_volume_t), allocatable :: spectre_volumes(:)
     integer :: spectre_mvol = 0
-
-    !> Home-volume lock for multi-volume symplectic stepping (#441). Newton
-    !> iterates of an implicit step may probe past an interior interface, where
-    !> the int(r) dispatch would evaluate the neighbour volume's discontinuous
-    !> field; with the lock set, evaluation stays on the home volume's splines,
-    !> clamped at its edge (the canonical analogue of velo_can_clamped on the
-    !> RK45 path). Each traced marker owns one thread.
-    integer :: lock_lvol = 0
-    !$omp threadprivate(lock_lvol)
 
 contains
 
@@ -98,24 +77,6 @@ contains
         bits = transfer(value, bits)
         ieee_is_finite = iand(bits, exponent_mask) /= exponent_mask
     end function ieee_is_finite
-
-    subroutine set_spectre_volume_lock(lvol)
-        !> lvol > 0 pins field evaluation to that volume; 0 restores dispatch on
-        !> int(r).
-        integer, intent(in) :: lvol
-
-        lock_lvol = lvol
-    end subroutine set_spectre_volume_lock
-
-    integer function active_volume(r) result(lvol)
-        real(dp), intent(in) :: r
-
-        if (lock_lvol > 0) then
-            lvol = min(lock_lvol, spectre_mvol)
-        else
-            lvol = volume_index(r)
-        end if
-    end function active_volume
 
     subroutine set_spectre_construction_grid(n_r, n_th, n_phi, spline_order, &
                                              ode_step_limit, ode_relerr)
@@ -296,7 +257,7 @@ contains
 
         n_field_evaluations = n_field_evaluations + 1
 
-        lvol = active_volume(r)
+        lvol = volume_index(r)
         x = [band_clamp(r, spectre_volumes(lvol)), th_c, ph_c]
         dr_out = r - x(1)
 
@@ -340,7 +301,7 @@ contains
         integer :: lvol
         real(dp) :: x(3), y(2)
 
-        lvol = active_volume(xinteg(1))
+        lvol = volume_index(xinteg(1))
         x = [clamp_to_volume(xinteg(1), spectre_volumes(lvol)), xinteg(2), xinteg(3)]
         call evaluate_batch_splines_3d(spectre_volumes(lvol)%spl_transform, x, y)
 
@@ -367,7 +328,7 @@ contains
             return
         end if
 
-        lvol = active_volume(xref(1))
+        lvol = volume_index(xref(1))
         xinteg(1) = xref(1)
         xinteg(2) = modulo(xref(2), twopi)
         target = modulo(xref(3), twopi)

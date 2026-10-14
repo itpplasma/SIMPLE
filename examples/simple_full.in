@@ -142,8 +142,6 @@ chart_boundary_kind = 'auto'     ! meaning of the chartmap outer boundary: 'lcfs
 !                                  else 'domain'
 
 ! SPECTRE
-crossing_level = 1               ! interface-crossing map: 1 = Level-1 refraction,
-!                                  0 = Level-0 energy rescale
 spectre_sbeg_is_toroidal_flux = .false. ! startmode 1: .true. reads sbeg(1) as normalized
 !                                  toroidal flux, .false. as rho_g
 spectre_ncon_r = 48              ! per-volume Meiss construction grid, radial (integmode > 0)
