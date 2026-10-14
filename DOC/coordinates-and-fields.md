@@ -980,6 +980,17 @@ and axisymmetric clamp remain covered by the SPECTRE field tests.
 
 ### 8.3 Integration Mode (`integmode`)
 
+The canonical steppers carry `p_theta` separately from the radial Newton seed.
+After the final Newton correction, midpoint extrapolates this momentum using
+only endpoint `(r, theta, phi, p_phi)` increments; its independent midpoint
+radius is not an endpoint field argument. Gauss1–4 extrapolate each stage's
+field jet in all four variables, including the `p_phi` dependence of parallel
+speed. The radial correction of `d_phi p_theta` uses `d_r d_phi p_theta`
+(`d2pth(3)` in the packed Hessian). These are first-order Taylor updates, with
+quadratic remainder in the final Newton correction; a finite solve does not
+make the floating-point map exactly symplectic. The independent polynomial
+Hamiltonian regression checks these operations without an equilibrium spline.
+
 | Value | Name | Order | Speed |
 |-------|------|-------|-------|
 | 0 | RK45 | Adaptive | Slow |
