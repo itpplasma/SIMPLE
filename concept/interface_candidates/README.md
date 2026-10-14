@@ -1,5 +1,18 @@
 # Charged-particle interface candidates
 
+The executable methods are now **FO**, **C3** (carried phase, orders 0/1), and
+**GL2** (resolved axisymmetric smooth-layer control). C1L0/C1L1, C2fixed/C2pphi,
+C4 and C5 were removed with their settings and implementations. The exact planar
+helix/cycle oracle remains; its successful fixed-model tests do not validate the
+removed curved-field patch refresh. See the
+[rejection ledger](../../DOC/spectre-rejected-interface-models.md#implementation-removal-ledger).
+
+The tables and model descriptions below are the **historical comparison** from
+`4a1f842`, including failed methods; they are not a list of current CLI options.
+Their data are retained as evidence. Fresh `run_study.py` output goes to
+`build/study/`, leaving those records intact. The historical report tools read
+`results/`; they do not run or restore retired methods.
+
 Standalone experiment on branch `feat/spectre-gc-fo-continuous`; no SIMPLE
 source or build changes. Units are positive charge = mass = 1, no electric
 field. This study compares **continuous formulations** using the same adaptive
@@ -35,11 +48,11 @@ The matrix takes tens of minutes on this shared host. `run_study.py --resume`
 resumes complete configurations of the **same source revision**, checking their
 parameters. Rebuild and restart after a physics change; there is no automatic
 source-revision cache validation. Thread counts above 16 are rejected by the
-ensemble executable. All computation is local. The independent prototype
-`study_hybrid.x` is also built, using the unmodified copied sources.
+ensemble executable. All computation is local. The copied older hybrid driver has been removed; the maintained C3 driver is
+the executable hybrid comparison.
 
-`sheet_field.f90`, `rk_reference.f90`, `fo_sheet.f90`, `gc_hybrid.f90`,
-`study_hybrid.f90` and `sheet_setup.f90` are copies from
+The original experiment copied `sheet_field.f90`, `rk_reference.f90`,
+`fo_sheet.f90`, `gc_hybrid.f90`, `study_hybrid.f90` and `sheet_setup.f90` from
 [the original prototype](../symplectic_sheet/README.md), repository commit
 `a7788ee`. `candidate_field`, `transforms`, `candidate_orbits` and `compare`
 implement this study's 3-D formulations. `proofs/generate_torsion.py` generates
@@ -269,7 +282,7 @@ energy matching and symplectic segment solvers do not make the whole hybrid
 exactly symplectic. C1's resets have the physical fixed-mu obstruction and no
 repair from a finer RK tolerance. Boris is volume/speed preserving, generally
 not canonical symplectic. See the
-[rejected-model proofs](../../../SIMPLE-remove/DOC/spectre-rejected-interface-models.md)
+[rejected-model proofs](../../DOC/spectre-rejected-interface-models.md)
 for the phase-dependent finite mu jump and event-composition criteria.
 
 **Order 2 pending:** Task D committed `c9f23b1` in SIMPLE-gcho; its API refuses

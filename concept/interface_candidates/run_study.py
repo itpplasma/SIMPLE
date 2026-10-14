@@ -8,8 +8,6 @@ import subprocess
 import time
 
 ROOT = Path("concept/interface_candidates")
-LOG = Path("/home/ert/.claude/jobs/ac5435ab/tmp/gpt/c_progress.md")
-
 def configuration(method, case="A", aout=2, speed=.02, tend=4000,
                   tol=1e-9, din=3, order=0, knob=.25, width=0, sample=.5):
     return dict(method=method, case=case, aout=aout, speed=speed, tend=tend,
@@ -22,62 +20,35 @@ def configurations(pilot=False, horizon=4000, long=False, sampling=False):
             for sample in (.0625, .03125):
                 yield configuration("FO", **base, tol=1e-9, sample=sample)
                 yield configuration("C3", **base, order=1, sample=sample)
-            for method in ("C1L0", "C1L1", "C2fixed", "C3"):
-                for tol in (1e-7, 1e-11):
-                    yield configuration(method, **base, tol=tol, order=0)
-            if case == "A":
-                for tol in (1e-7, 1e-11):
-                    yield configuration("C2pphi", **base, tol=tol)
+            for tol in (1e-7, 1e-11):
+                yield configuration("C3", **base, tol=tol, order=0)
         return
     if long:
         for case, aout in (("A", .75), ("B", 2.)):
             base = dict(case=case, aout=aout, speed=.02, tend=16000)
             for tol in (1e-7, 1e-9, 1e-11):
                 yield configuration("FO", **base, tol=tol)
-            yield configuration("C2fixed", **base)
-            if case == "A":
-                yield configuration("C2pphi", **base)
             for order in (0, 1):
                 for din in (2, 3, 5, 8):
                     yield configuration("C3", **base, order=order, din=din)
-            yield configuration("C4", **base, order=1, knob=.125)
-            yield configuration("C5", **base, knob=.00625, width=.05)
         return
     if pilot:
         for case in ("A", "B"):
-            for method, order in (("FO", 0), ("C1L0", 0), ("C1L1", 0),
-                                  ("C2fixed", 0), ("C3", 0), ("C3", 1),
-                                  ("C4", 1), ("C5", 0)):
-                yield configuration(method, case=case, order=order,
-                                    knob=.025 if method == "C5" else .25,
-                                    width=.2 if method == "C5" else 0,
-                                    tend=2000)
+            for method, order in (("FO", 0), ("C3", 0), ("C3", 1)):
+                yield configuration(method, case=case, order=order, tend=2000)
         return
     for case in ("A", "B"):
         for aout in (.30, .75, 2.):
             for speed in (.01, .02, .04):
-                # Same transit-scale horizon; smallest gyroradius gets longest
-                # physical integration, instead of testing only a gyroperiod.
                 base = dict(case=case, aout=aout, speed=speed, tend=horizon*.02/speed)
                 for tol in (1e-7, 1e-9):
                     yield configuration("FO", **base, tol=tol)
                 if aout == 2:
                     yield configuration("FO", **base, tol=1e-11)
-                for name in ("C1L0", "C1L1", "C2fixed"):
-                    yield configuration(name, **base)
-                if case == "A":
-                    yield configuration("C2pphi", **base)
                 for order in (0, 1):
                     for din in (2, 3, 5, 8):
                         yield configuration("C3", **base, order=order, din=din)
-                yield configuration("C4", **base, order=1, knob=.25)
-                yield configuration("C5", **base, knob=.025, width=.2)
                 if aout == 2 and speed == .02:
-                    for knob in (1., .5, .125):
-                        yield configuration("C4", **base, order=1, knob=knob)
-                    for width in (.2, .1, .05):
-                        for knob in (.0125, .00625):
-                            yield configuration("C5", **base, knob=knob, width=width)
                     for tol in (1e-7, 1e-11):
                         yield configuration("C3", **base, order=1, tol=tol)
                     for sample in (.25, .125):
@@ -102,14 +73,16 @@ def main():
     os.environ.setdefault("OMP_PROC_BIND", "true")
     os.environ.setdefault("OMP_PLACES", "cores")
     prefix = "pilot" if args.pilot else ("long" if args.long else ("sampling" if args.sampling else "main"))
-    manifest_path = ROOT / "results" / f"{prefix}_manifest.json"
+    results = ROOT / "build" / "study"
+    results.mkdir(parents=True, exist_ok=True)
+    manifest_path = results / f"{prefix}_manifest.json"
     configurations_list = list(configurations(args.pilot, args.horizon, args.long, args.sampling))
     records = []
     if args.resume and manifest_path.exists():
         records = json.loads(manifest_path.read_text())
     start = time.monotonic()
     for i, cfg in enumerate(configurations_list):
-        filename = ROOT / "results" / f"{prefix}_{i:03d}.csv"
+        filename = results / f"{prefix}_{i:03d}.csv"
         if args.resume and i < len(records):
             if records[i]["config"] != cfg:
                 raise SystemExit("Resume configuration mismatch; no stale reuse")
@@ -129,8 +102,6 @@ def main():
         elapsed = time.monotonic() - start
         message = f"{prefix} {i+1}/{len(configurations_list)} {run.stdout.strip()} elapsed={elapsed:.1f}s"
         print(message, flush=True)
-        with LOG.open("a") as log:
-            log.write("\n" + message + "\n")
 
 if __name__ == "__main__":
     main()
