@@ -1,0 +1,201 @@
+{
+  "python": "3.14.7",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "epsilon_convention": "dv/dt=v cross B/epsilon; normalized speed and gradient scales O(1)",
+  "time_interval": [
+    0,
+    1
+  ],
+  "samples": 401,
+  "fit": "log-log last four epsilon values",
+  "norms": "time-sampled RMS Euclidean; no gyroaveraging or phase alignment",
+  "fits": [
+    {
+      "field": "uniform",
+      "n": 0,
+      "expected": 1,
+      "position_rms_exponent": -0.004944305397125008,
+      "velocity_rms_exponent": -1.0049448214691277,
+      "phase_space_rms_exponent": -1.004582625529496,
+      "status": "solver_floor"
+    },
+    {
+      "field": "uniform",
+      "n": 1,
+      "expected": 2,
+      "position_rms_exponent": -0.004944306954884164,
+      "velocity_rms_exponent": -1.0049448214691277,
+      "phase_space_rms_exponent": -1.0045826255264965,
+      "status": "solver_floor"
+    },
+    {
+      "field": "constant_gradient",
+      "n": 0,
+      "expected": 1,
+      "position_rms_exponent": 0.9922919779971276,
+      "velocity_rms_exponent": 0.9884036044760813,
+      "phase_space_rms_exponent": 0.9887145586512764,
+      "status": "observed"
+    },
+    {
+      "field": "constant_gradient",
+      "n": 1,
+      "expected": 2,
+      "position_rms_exponent": 2.001543341821475,
+      "velocity_rms_exponent": 1.0006727183868278,
+      "phase_space_rms_exponent": 1.0009844765442133,
+      "status": "FAILED"
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "n": 0,
+      "expected": 1,
+      "position_rms_exponent": 0.989004822839205,
+      "velocity_rms_exponent": 1.0151611931474847,
+      "phase_space_rms_exponent": 1.0114116123104933,
+      "status": "observed"
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "n": 1,
+      "expected": 2,
+      "position_rms_exponent": 2.019931046627462,
+      "velocity_rms_exponent": 1.00621528298725,
+      "phase_space_rms_exponent": 1.0068668230897506,
+      "status": "FAILED"
+    },
+    {
+      "field": "magnetic_shear",
+      "n": 0,
+      "expected": 1,
+      "position_rms_exponent": 1.0105335113292855,
+      "velocity_rms_exponent": -0.003829791451246829,
+      "phase_space_rms_exponent": -0.003424185546926714,
+      "status": "FAILED"
+    },
+    {
+      "field": "magnetic_shear",
+      "n": 1,
+      "expected": 2,
+      "position_rms_exponent": 1.9768725820579922,
+      "velocity_rms_exponent": 0.9353949652751131,
+      "phase_space_rms_exponent": 0.9373976263259828,
+      "status": "FAILED"
+    },
+    {
+      "field": "sheet_inner",
+      "n": 0,
+      "expected": 1,
+      "position_rms_exponent": 1.044477483836332,
+      "velocity_rms_exponent": 0.020554598152619737,
+      "phase_space_rms_exponent": 0.02124713524282702,
+      "status": "FAILED"
+    },
+    {
+      "field": "sheet_inner",
+      "n": 1,
+      "expected": 2,
+      "position_rms_exponent": 1.9911084493029496,
+      "velocity_rms_exponent": 1.0151306489841116,
+      "phase_space_rms_exponent": 1.0156649513079494,
+      "status": "FAILED"
+    },
+    {
+      "field": "sheet_outer",
+      "n": 0,
+      "expected": 1,
+      "position_rms_exponent": 1.025631155931451,
+      "velocity_rms_exponent": 0.013960918752405798,
+      "phase_space_rms_exponent": 0.014562877684933296,
+      "status": "FAILED"
+    },
+    {
+      "field": "sheet_outer",
+      "n": 1,
+      "expected": 2,
+      "position_rms_exponent": 1.9572140370675926,
+      "velocity_rms_exponent": 1.0072842220714706,
+      "phase_space_rms_exponent": 1.0082079983137926,
+      "status": "FAILED"
+    }
+  ],
+  "tolerance_check": [
+    {
+      "field": "uniform",
+      "n": 0,
+      "position_relative_change": 0.9016702461958963,
+      "velocity_relative_change": 0.9016698050965312
+    },
+    {
+      "field": "uniform",
+      "n": 1,
+      "position_relative_change": 0.9016702495018509,
+      "velocity_relative_change": 0.9016698050965312
+    },
+    {
+      "field": "constant_gradient",
+      "n": 0,
+      "position_relative_change": 7.069892893341034e-09,
+      "velocity_relative_change": 1.8810029800420125e-07
+    },
+    {
+      "field": "constant_gradient",
+      "n": 1,
+      "position_relative_change": 2.9682121909235804e-06,
+      "velocity_relative_change": 2.73410376894212e-06
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "n": 0,
+      "position_relative_change": 7.658196299331621e-11,
+      "velocity_relative_change": 7.479662933462805e-07
+    },
+    {
+      "field": "constant_curvature_on_fieldline",
+      "n": 1,
+      "position_relative_change": 1.2801522268901522e-06,
+      "velocity_relative_change": 2.0677107436251063e-06
+    },
+    {
+      "field": "magnetic_shear",
+      "n": 0,
+      "position_relative_change": 6.975304445155928e-09,
+      "velocity_relative_change": 6.54641807429357e-09
+    },
+    {
+      "field": "magnetic_shear",
+      "n": 1,
+      "position_relative_change": 1.1673855848659542e-05,
+      "velocity_relative_change": 6.158685134038944e-05
+    },
+    {
+      "field": "sheet_inner",
+      "n": 0,
+      "position_relative_change": 7.696965731440741e-09,
+      "velocity_relative_change": 1.1817348655185356e-08
+    },
+    {
+      "field": "sheet_inner",
+      "n": 1,
+      "position_relative_change": 9.514034298163665e-06,
+      "velocity_relative_change": 1.4521419019031256e-05
+    },
+    {
+      "field": "sheet_outer",
+      "n": 0,
+      "position_relative_change": 6.734754531834142e-09,
+      "velocity_relative_change": 9.754677066098338e-09
+    },
+    {
+      "field": "sheet_outer",
+      "n": 1,
+      "position_relative_change": 5.17500001206983e-06,
+      "velocity_relative_change": 1.6960147249944768e-05
+    }
+  ],
+  "n2": {
+    "status": "unavailable",
+    "reason": "No verified full T2 or second-order RHS"
+  }
+}
