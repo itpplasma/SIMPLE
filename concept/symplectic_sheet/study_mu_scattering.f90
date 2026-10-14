@@ -165,7 +165,6 @@ contains
         v = [z(3), (pm_phi() - psi_value(par, region, z(1:2)))/z(1), &
              z(4) + par%f_tor*log(z(1))]
         x = [z(1), 0.0_dp, z(2)]
-        v = [v(1), v(2), v(3)]
         call boris_step(par, x, v, h)
         rr = hypot(x(1), x(2))
         c = x(1)/rr

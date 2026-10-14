@@ -11,8 +11,6 @@ module rk_reference
 
     public :: rk_advance
 
-    real(dp), parameter :: C2 = 1.0_dp/5, C3 = 3.0_dp/10, C4 = 4.0_dp/5, &
-        C5 = 8.0_dp/9
     real(dp), parameter :: A21 = 1.0_dp/5
     real(dp), parameter :: A31 = 3.0_dp/40, A32 = 9.0_dp/40
     real(dp), parameter :: A41 = 44.0_dp/45, A42 = -56.0_dp/15, A43 = 32.0_dp/9
