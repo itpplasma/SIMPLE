@@ -150,7 +150,7 @@ spectre_fo_entry_larmor = 3d0    ! crossing_level 3: enter full orbit closer tha
 spectre_fo_layer_larmor = 0d0    ! full-orbit smooth layer width in gyroradii
 !                                  (0: sharp per-volume field)
 spectre_fo_rotation = 0.05d0     ! Boris step bound h |B|/(2 ro0)
-spectre_fo_integrator = 'boris'  ! full orbit near interfaces: 'boris' or 'rk45'
+spectre_fo_integrator = 'rk45'   ! full orbit near interfaces: 'rk45' or 'boris'
 spectre_fo_tolerance = 1d-9      ! relative tolerance of the 'rk45' full orbit
 spectre_sbeg_is_toroidal_flux = .false. ! startmode 1: .true. reads sbeg(1) as normalized
 !                                  toroidal flux, .false. as rho_g

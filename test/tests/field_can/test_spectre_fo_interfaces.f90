@@ -11,8 +11,8 @@ program test_spectre_fo_interfaces
     !>   * the momentum shell is kept: |p| in the guiding-centre phases and
     !>     |v|^2/2 = p^2 in the full-orbit phases;
     !>   * the canonical toroidal momentum, exactly conserved physically, stays
-    !>     within PZETA_TOL (relative) over all full-orbit phases of a marker in
-    !>     the same volume. It is sampled in the full orbit in SPECTRE's gauge
+    !>     within the integrator's pzeta_tol (relative) over all full-orbit
+    !>     phases of a marker in the same volume. It is sampled in SPECTRE's gauge
     !>     of that volume, so its spread measures the switching and guiding-
     !>     centre errors accumulated between the phases.
     !>
@@ -55,7 +55,6 @@ program test_spectre_fo_interfaces
     type(tracer_t) :: norb
     real(dp) :: spread, worst_spread, worst_shell, shell
     integer :: im, entries, exits, losses, failures, status(5), phases
-    integer :: worst_phases
     logical :: failed
 
     if (command_argument_count() < 2) then
@@ -86,14 +85,12 @@ program test_spectre_fo_interfaces
 
     worst_spread = 0.0_dp
     worst_shell = 0.0_dp
-    worst_phases = huge(1)
     do im = 1, NMARKER
         call trace_marker(im, spread, shell, phases)
         print '(A,I0,A,I0,A,ES10.3,A,ES10.3)', 'marker ', im, ': FO phases ', &
             phases, '  rel p_zeta spread ', spread, '  shell defect ', shell
         worst_spread = max(worst_spread, spread)
         worst_shell = max(worst_shell, shell)
-        worst_phases = min(worst_phases, phases)
     end do
     call sympl_fo_stats(entries, exits, losses, failures, status)
     print '(A,4(I0,1X),A,5(I0,1X))', 'FO entries exits losses failures: ', &
@@ -135,6 +132,7 @@ contains
             write (unit, '(A)') "  spectre_fo_integrator = 'rk45'"
             write (unit, '(A)') '  spectre_fo_tolerance = 1d-9'
         else
+            write (unit, '(A)') "  spectre_fo_integrator = 'boris'"
             write (unit, '(A)') '  spectre_fo_layer_larmor = 0.2d0'
             write (unit, '(A)') '  spectre_fo_rotation = 0.0125d0'
         end if
