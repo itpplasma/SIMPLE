@@ -1,41 +1,56 @@
 {
   "date": "2026-10-14",
+  "task": "D2",
+  "simple_base": "c9f23b1577347df58c9f413e600f4fd99ac25298",
   "fortsym_branch": "feat/lie-pullback",
-  "fortsym_commit": "de7074cd978b1248a6d84f25cb1c49a46b63363d",
-  "simple_base": "a7788ee581b822bd70ff602c93f32fe06351aeac",
+  "fortsym_commit": "1372fbd1e8dd2f072ed34a0f82eef60dc68d74cd",
+  "fortsym_previous": "de7074cd978b1248a6d84f25cb1c49a46b63363d",
+  "fortsym_local_repairs": [
+    "28940878c18ad08f1a256ffa3440de635336cc59",
+    "1372fbd1e8dd2f072ed34a0f82eef60dc68d74cd"
+  ],
   "compiler": "GNU Fortran (GCC) 16.2.1 20260810",
-  "lean": "4.14.0",
   "sympy": "1.14.0",
   "numpy": "2.5.4",
   "scipy": "1.18.1",
-  "flags": "-O2 -fopenmp -Wall -Wextra -fimplicit-none -std=f2018",
+  "flags": "-O2 -fopenmp -Wall -Wextra -fimplicit-none -std=f2018 -fPIC",
+  "generated_flags": "-O0",
   "OMP_NUM_THREADS": 16,
+  "kernel_storage": "packed p(130) inputs; local array CSE temporaries",
+  "representation": "Pi1=-mu curl(b)/2; Pi2=0; <sigma4>=0; theta=-phi",
+  "rk_tolerance": {
+    "rtol": 2e-12,
+    "atol": 2e-14
+  },
+  "finest_tolerance_factor": 0.1,
+  "maximum_nonuniform_precision_change": 0.00514118141403741,
   "native_checks": {
-    "fortran": "make -f concept/gc_higher_order/Makefile test; passed",
-    "symbolic": "18 exact identities and one explicit counterexample; passed",
-    "lean": "sandwich_iff depends on no axioms; passed",
-    "regeneration": "check-generated cmp passed",
-    "upstream": "CTest test_fortsym_lie, test_fortsym_cse_dag, test_fortsym_kernel passed",
-    "orders": "FAIL: n=1 velocity errors; n=0 shear/torus phase; n=2 unavailable",
-    "bridge": "gfortran -std=f2018 -Wall -Wextra -fsyntax-only; passed after formatting"
+    "fortran": "PASS: all selectors, cubic-jet inverses/Jacobians, gyrogauge, slab H2 phase, T2 position/velocity residual order 3 and Lorentz residual order 2",
+    "symbolic": "PASS: 23 general exact identities, 30 exact slab/Fourier identities, retained reset/H counterexample",
+    "regeneration": "PASS: byte-identical check-generated against the recorded dependency",
+    "upstream": "PASS: 8 affected CTests; kernel/CSE-DAG gates re-passed after final collision guards",
+    "orders": "PASS: first phase-space order via 1+ (position>=2, velocity>=2); T2 (position>=3, velocity>=2); selectors 0/1 baseline phase limitations retained",
+    "openmp": "PASS: 48 field/phase states bit-identical with OMP_NUM_THREADS=1 and 16",
+    "lean": "Unchanged; reuse Task D evidence, no new GC theorem or error-bound proof"
   },
   "fo": {
-    "driver_sha256": "9e9ca744ca600b5ef9a53e4d68cac0837b644f6e741246c17def02b060d9da38",
-    "lane": "gc-higher-order",
-    "session": "3844205-1791959852-079344340",
-    "limit": "Resident lane made partial progress; later status and stop returned Gremlin state provider error: 2. No complete Fo verification or verified lane cleanup claimed. Native affected CTest gates passed."
+    "limit": "No new resident lane under the single-run/no-agent task constraint; Task D provider error remains unverified. Native authorities are used."
   },
+  "scope": "Only standalone concept/gc_higher_order and local fortsym; no push, protected hosts or other agents/models",
   "sources": {
-    "gen/derive_gc.f90": "129f4aef1bb27f031c3be6cb6c59a95d8a0fc48887f5366308eaebff09933527",
-    "generated/gc_generated.f90": "6c969ee42320e08bf95f6eecf87ebc823ef53e01024f80783813b791e4ab7aa0",
-    "gc_api.f90": "f46c34dbfd53fb1cb61e9f399f8c0a350a04ace6d7ced2b091b30eb24aae0e05",
-    "gen/prove_identities.py": "851717f95b13f53e938fa693a504e0b648a2f5d43639ced61cd71a4d2f413f0c",
-    "tests/orbit_study.py": "f574cb3aee7c1f2d6d2f8bad15b0fdae6d63e20e1b6ac4e019accf1edc784577",
+    "Makefile": "f47d70111280024612d5a9361f050a2bba8600541f1cc00621813882f4a1c667",
+    "README.md": "45315a613bfd4262feacffb4273b361a2bfb0d074af8fcafa37fc12db7203b60",
+    "gc_api.f90": "a5ba130d8dbe79cff5e09fa2bdf68937352c034185fa7e9303fab5e335af36c3",
+    "gen/derive_gc.f90": "b4775b9fec1af6cf30442df6497419233b96ac7b112470710d9d9e99463804f9",
+    "gen/gc_second_order.f90": "fd15f234645bde91fb4579b08c7288e4b61cfe83a583e047be27b6b10bace96e",
+    "gen/prove_identities.py": "a1baa518aa91091a51f2da700aff87fe0fb2c2d56c35a01ed52c386e63019570",
+    "gen/prove_second_order.py": "ce6307d7ed67152a707979fa98fc5e7d2d1c77e9b0599ca48aec7e043a49638c",
+    "generated/gc_generated.f90": "2067ae6dab198dae0a3e3ddf7d0d40d0c006899303729fc544d2c569c9a1c192",
+    "tests/test_gc.f90": "59fbacb0b763aa37d463cca75a79f1911266ce6a042f849287c8671eae774fca",
+    "tests/c_bridge.f90": "45564f177e1b65f18976a317679b8f4bb372d3a2ca14bd05505dbdfbbe88400b",
+    "tests/check_orders.py": "e5bd9e5dc9b25c39f79e6f03c6dc1fc5f12c1af7154a47aa62df1e7248c543a4",
+    "tests/orbit_study.py": "bf9e9e5d77799e0fb6279b59208a5d41ea0591263baf1f114b85809af7680f0b",
     "tests/slab_action.py": "deb24650bc7a67b7c353e084f681e27d716a5bdb75fb4e95b63a9a7e6b707a38",
-    "lean/Structure.lean": "349a2b718afbc9b9f8d9a0350e324be54becd2a228dc4a278e25f74db3a74c35",
-    "Makefile": "3ea20530f67ca4c381d88cc492184416793869c99184224d95c187b0ccd8c1e0",
-    "tests/test_gc.f90": "6a0b4337996638966f15cdce98c80478fac5c20f3487ebb6e0372884ddfab9ff",
-    "tests/c_bridge.f90": "409b04a80c7f833afe3638286be4a2560b5b1bb30dfb2f33eba8574ffdff3af1",
-    "tests/check_orders.py": "ffcc53e1ec23eaf74766f688012e6e60a2253586475b5ec443469b4e49dab8ec"
+    "lean/Structure.lean": "349a2b718afbc9b9f8d9a0350e324be54becd2a228dc4a278e25f74db3a74c35"
   }
 }
