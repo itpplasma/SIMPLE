@@ -74,9 +74,10 @@ def main():
                     fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),
                     process_s=time.monotonic() - started, returncode=process.returncode,
                     load_average=os.getloadavg(), command=command)
-    metadata["libneo_revision"] = git(args.root / "build/_deps/libneo-src",
-                                       "rev-parse", "HEAD") if (
-        args.root / "build/_deps/libneo-src/.git").exists() else "shared source override"
+    neo_source = args.root / "build/_deps/libneo-src"
+    if not (neo_source / ".git").exists():
+        neo_source = source_root / "build/_deps/libneo-src"
+    metadata["libneo_revision"] = git(neo_source, "rev-parse", "HEAD")
     (args.output / "run.json").write_text(json.dumps(metadata, default=str, indent=2) + "\n")
     summary = args.output / "study_summary.json"
     print(json.dumps(dict(case=str(args.output), returncode=process.returncode,
