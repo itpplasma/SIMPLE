@@ -20,12 +20,10 @@ program test_spectre_fo_interfaces
     !> Boris runs on a layer of 0.2 gyroradii with the step bound 0.0125, RK45
     !> on the sharp field with exact interface crossings.
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use simple, only: tracer_t, init_sympl
-    use simple_main, only: init_field
-    use params, only: read_config, params_init, netcdffile, ns_s, ns_tp, &
-        multharm, dtaumin, relerr, v0, crossing_level, integmode, &
-        spectre_fo_rotation, spectre_fo_layer_larmor, spectre_fo_integrator, &
-        spectre_fo_tolerance
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use simple, only: init_sympl
+    use simple_api, only: simple_read_config, simple_init
+    use params, only: dtaumin, relerr, v0, crossing_level, integmode
     use magfie_sub, only: init_magfie, SPECTRE
     use field_can_mod, only: field_can_t, ref_to_integ
     use field_can_spectre, only: spectre_mvol
@@ -33,8 +31,7 @@ program test_spectre_fo_interfaces
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
         SYMPL_SPECTRE_OK
-    use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, spectre_fo_configure, &
-        SPECTRE_FO_OK, FO_BORIS, FO_RK45
+    use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, SPECTRE_FO_OK
     use interface_crossing, only: crossing_log_reset
     use parmot_mod, only: ro0
     use util, only: twopi, sqrt2
@@ -43,16 +40,16 @@ program test_spectre_fo_interfaces
 
     integer, parameter :: NMARKER = 8, NSTEP = 20000, NSAMPLE = 4
     real(dp), parameter :: RHO0 = 0.97_dp, LAM0 = 0.5_dp
-    !> Boris: measured p_zeta spread 0.93 % (the sharp field at the default
-    !> bound 0.05 reaches 14 %), shell 2e-13. RK45 at tolerance 1e-9: p_zeta
-    !> spread 6e-8, 1.2e-6 for a marker with a tangential touch of the
-    !> interface (taken with one volume's field), shell drift 1.6e-5.
+    !> Boris on the resolved layer: measured p_zeta spread 0.93 %, shell 2e-13.
+    !> RK45 bounds include adaptive FO energy drift and finite-order GC/FO
+    !> conversion error; sharp-sheet events also have an independent RK4 test.
     real(dp) :: shell_tol, pzeta_tol
     character(len=16) :: integrator
 
     character(len=1024) :: h5file
     character(len=256) :: config_file
-    type(tracer_t) :: norb
+    character(len=256) :: message
+    integer :: config_status
     real(dp) :: spread, worst_spread, worst_shell, shell
     integer :: im, entries, exits, losses, failures, status(5), phases
     logical :: failed
@@ -73,16 +70,14 @@ program test_spectre_fo_interfaces
 
     call write_input(trim(h5file), trim(integrator))
     config_file = 'simple.in'
-    call read_config(config_file)
-    call init_field(norb, netcdffile, ns_s, ns_tp, multharm, integmode)
-    call params_init
+    call simple_read_config(config_file, config_status, message)
+    if (config_status /= 0) error stop 'library configuration failed'
+    call simple_init
     call init_magfie(SPECTRE)
     call crossing_log_reset(1024)
     call sympl_landing_stats_reset
-    call spectre_fo_configure(spectre_fo_rotation, spectre_fo_layer_larmor, &
-        merge(FO_RK45, FO_BORIS, spectre_fo_integrator == 'rk45'), &
-        spectre_fo_tolerance)
 
+    failed = .false.
     worst_spread = 0.0_dp
     worst_shell = 0.0_dp
     do im = 1, NMARKER
@@ -96,7 +91,6 @@ program test_spectre_fo_interfaces
     print '(A,4(I0,1X),A,5(I0,1X))', 'FO entries exits losses failures: ', &
         entries, exits, losses, failures, ' by status: ', status
 
-    failed = .false.
     if (entries < NMARKER .or. exits < NMARKER) then
         print '(A)', 'FAIL: markers did not switch between GC and FO'
         failed = .true.
@@ -129,7 +123,7 @@ contains
         write (unit, '(A)') '  integmode = 3'
         write (unit, '(A)') '  crossing_level = 3'
         if (integrator == 'rk45') then
-            write (unit, '(A)') "  spectre_fo_integrator = 'rk45'"
+            ! Exercise the default RK45 through the public library path.
             write (unit, '(A)') '  spectre_fo_tolerance = 1d-9'
         else
             write (unit, '(A)') "  spectre_fo_integrator = 'boris'"
@@ -159,8 +153,9 @@ contains
         type(sympl_spectre_state_t) :: state
         real(dp) :: zphys(5), z(5), lam, th0, t_frac, pzeta
         real(dp) :: pz_min(2), pz_max(2)
-        integer :: k, ierr, pz_status, owner
-        logical :: was_fo
+        integer :: k, ierr, pz_status, owner, samples(2)
+        integer :: entries0, exits0, entries1, exits1, losses, failures, counts(5)
+        logical :: was_fo, visited(2)
 
         lam = merge(-LAM0, LAM0, mod(im, 2) == 0)
         th0 = twopi*(real((im - 1)/2, dp) + 0.25_dp)/real(NMARKER/2, dp)
@@ -176,35 +171,68 @@ contains
         shell = 0.0_dp
         phases = 0
         was_fo = .false.
+        samples = 0
+        visited = .false.
+        call sympl_fo_stats(entries0, exits0, losses, failures, counts)
         do k = 1, NSTEP
             call orbit_microstep_sympl_spectre(state, si, f, im, &
                 real(k - 1, dp)*dtaumin/v0, dtaumin/v0, ierr, t_frac)
             if (ierr /= SYMPL_SPECTRE_OK) then
                 print '(A,I0,A,I0)', 'marker ', im, ' stopped with ', ierr
-                exit
+                error stop 'incomplete marker trace'
             end if
+            if (.not. ieee_is_finite(t_frac)) error stop 'invalid trace fraction'
+            if (abs(t_frac - 1.0_dp) > 1.0e-12_dp) &
+                error stop 'incomplete microstep'
             if (state%fo%active .and. .not. was_fo) phases = phases + 1
             was_fo = state%fo%active
+            if (state%fo%active) then
+                owner = state%fo%owner
+                if (owner < 1 .or. owner > 2) error stop 'invalid FO owner'
+                visited(owner) = .true.
+            end if
             if (mod(k, NSAMPLE) /= 0) cycle
             if (state%fo%active) then
+                if (.not. all(ieee_is_finite(state%fo%v))) &
+                    error stop 'nonfinite full-orbit shell sample'
                 shell = max(shell, abs(0.5_dp*dot_product(state%fo%v, &
                     state%fo%v) - 1.0_dp))
                 call spectre_fo_canonical_pzeta(state%fo, ro0/sqrt2, pzeta, &
                     pz_status)
-                if (pz_status /= SPECTRE_FO_OK) cycle
-                owner = min(state%fo%owner, 2)
+                if (pz_status /= SPECTRE_FO_OK) error stop 'invariant sample failed'
+                if (.not. ieee_is_finite(pzeta)) error stop 'nonfinite invariant'
+                owner = state%fo%owner
+                if (owner < 1 .or. owner > 2) error stop 'invalid sample owner'
+                visited(owner) = .true.
+                samples(owner) = samples(owner) + 1
                 pz_min(owner) = min(pz_min(owner), pzeta)
                 pz_max(owner) = max(pz_max(owner), pzeta)
             else
+                if (.not. ieee_is_finite(si%pabs)) &
+                    error stop 'nonfinite guiding-centre shell sample'
                 shell = max(shell, abs(si%pabs - 1.0_dp))
             end if
         end do
+        if (k /= NSTEP + 1) error stop 'marker did not complete trace'
+        call sympl_fo_stats(entries1, exits1, losses, failures, counts)
+        print '(A,I0,A,2(I0,1X))', 'marker ', im, ' entries/exits: ', &
+            entries1 - entries0, exits1 - exits0
+        if (entries1 <= entries0) error stop 'marker did not switch to full orbit'
+        ! Sheet-confined markers can remain in FO for the whole interval.
+        ! The first pair are round-trip witnesses; every marker must enter FO.
+        if (im <= 2 .and. exits1 <= exits0) &
+            error stop 'round-trip marker did not return to guiding centre'
+        if (sum(samples) < 2) error stop 'missing invariant samples'
+        if (any(visited .and. samples < 2)) &
+            error stop 'missing visited-volume invariant samples'
+        if (.not. ieee_is_finite(shell)) error stop 'nonfinite shell defect'
         spread = 0.0_dp
         do owner = 1, 2
-            if (pz_max(owner) < pz_min(owner)) cycle
+            if (.not. visited(owner)) cycle
             spread = max(spread, (pz_max(owner) - pz_min(owner)) &
                 /max(abs(pz_max(owner)), abs(pz_min(owner))))
         end do
+        if (.not. ieee_is_finite(spread)) error stop 'invalid invariant spread'
     end subroutine trace_marker
 
 end program test_spectre_fo_interfaces
