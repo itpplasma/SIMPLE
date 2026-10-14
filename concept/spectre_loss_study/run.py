@@ -52,6 +52,7 @@ def main():
                OPENBLAS_NUM_THREADS="1", OMP_PROC_BIND="close", OMP_PLACES="cores",
                SIMPLE_SPECTRE_STUDY_INPUT=str(config),
                SIMPLE_SPECTRE_STUDY_OUTPUT=str(args.output / "study"),
+               SIMPLE_SPECTRE_STUDY_MODE=args.mode,
                SIMPLE_SPECTRE_STUDY_SAMPLING=args.sampling)
     env.pop("SIMPLE_SPECTRE_STUDY_STARTS", None)
     if args.starts:
@@ -65,6 +66,11 @@ def main():
     metadata = vars(args).copy()
     metadata.update(source_revision=git(args.root, "rev-parse", "HEAD"),
                     measurement_diff=git(args.root, "diff", "--stat"),
+                    source_hashes={str(path): hashlib.sha256(
+                        (args.root / path).read_bytes()).hexdigest() for path in [
+                            Path("concept/spectre_loss_study/study_spectre_orbits.f90"),
+                            Path("src/spectre_sympl_orbit.f90"),
+                            Path("src/spectre_fo_hybrid.f90")]},
                     fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),
                     process_s=time.monotonic() - started, returncode=process.returncode,
                     load_average=os.getloadavg(), command=command)
