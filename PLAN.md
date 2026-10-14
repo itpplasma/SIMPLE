@@ -270,10 +270,22 @@ chains to FO gives 8012/9264 samples (86.5%) in that kernel, with 2072 samples
 (22.4%, inclusive) passing through the spline inverse and 4988 (53.8%) through
 RK trials. Do not optimize an approximate exit screen before addressing this
 measured cost. Its profiled 7.02 s trace is not an uninstrumented throughput
-result. A small endpoint-sample reuse change is undergoing the 20 affected
-native tests; it preserves field queries at the same coordinates and refreshes
-the sample at owner changes. No field-order or transition-threshold change is
-introduced.
+result. The endpoint-sample reuse change passed all 20 affected native tests in
+226.64 s, and all four NCSX/G3V3L3Fi physical volume replays (FO/hybrid) retain
+bitwise-identical sparse trajectory arrays. All 130 printed throughput endpoint
+records also match the pre-reuse implementation. The RO=100 witness now takes
+0.433/0.454 s on one thread and 0.117/0.123 s on four threads: about 1.35x faster
+than the previous spline implementation, or 6.8–7.4x faster than main in this
+short nonphysical witness. No field-order or transition-threshold change was
+introduced. This is pushed as `6bbdef0` on PR #534 and `f876d28` on this branch.
+
+The next stage is running locally: 32 matched markers, 200 microseconds, 16
+physical cores, both equilibria and sampling sets, FO/current hybrid, main vs
+default/refined splines (24 cases). No cluster jobs were launched. Do not report
+these runs as complete or extrapolate a full matrix from the short pilot.
+Generated PNGs follow the repository's ignore rule; their versioned NumPy data
+and plotting source reproduce them. The convergence plot was uploaded to
+`https://box.sloppy.at/1dcca.png` on 2026-10-14 (slopbox links expire in 3 days).
 
 1. **W4 first: review and validate the focused performance PR above.** The
    regular logical-position/Cartesian-velocity path is implemented and locally
