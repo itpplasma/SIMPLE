@@ -1,5 +1,7 @@
 # Guiding-center crossing of MRxMHD interfaces
 
+The [rejected-model proofs and removal record](spectre-rejected-interface-models.md) supersede this draft's GC thin-layer and symplectic-reset claims and document the supported full-orbit alternatives.
+
 Staging draft for `DOC/spectre-interface-crossing.md` in SIMPLE (issue #440).
 Every formula here is machine-verified in `ca/06_crossing_map.wl` of
 plasma/proj/spectre-orbits or derived in its `tex/spectre-orbits.pdf`,
