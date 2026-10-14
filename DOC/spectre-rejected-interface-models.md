@@ -309,9 +309,11 @@ locally $h_\tau\ll L/(g|v_n|)$. Constants need not be uniform as layer width
 or $g_{\min}$ tends to zero. Positive $g$ alone does not smooth a discontinuous
 gradient of $H$; standard smooth backward-error analysis does not cover a
 sharp-sheet Gauss step. A finite smoothing layer still needs T2's target-limit
-check. The `gauss2` option under development in a stacked PR must validate
-its interface construction and nonlinear solve accuracy before these bounds
-can certify it; this document does not certify that implementation.
+check. The smooth-layer Gauss2 full orbit is concept-only
+(`concept/fo_symplectic_proof/`) and not selectable from `simple.in`: on NCSX
+it cost several times RK45, needed about 12x more steps and an h/4 safety
+refinement, and its arithmetic/terminated-Newton bounds (L4) remain open.
+This document does not certify that implementation.
 
 **T5c (event-resolved full-orbit RK45).** On a fixed finite time interval with
 finitely many uniformly transversal crossings, piecewise smooth Lipschitz
