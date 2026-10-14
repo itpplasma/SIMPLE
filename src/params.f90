@@ -187,10 +187,10 @@ module params
     real(dp) :: spectre_fo_entry_larmor = 3.0_dp
     real(dp) :: spectre_fo_layer_larmor = 0.0_dp
     real(dp) :: spectre_fo_rotation = 0.05_dp
-    !> Full-orbit integrator near SPECTRE interfaces: 'boris' (fixed step
-    !> bounded by spectre_fo_rotation) or 'rk45' (adaptive, relative tolerance
-    !> spectre_fo_tolerance; exact interface crossing on the sharp field).
-    character(16) :: spectre_fo_integrator = 'boris'
+    !> Full-orbit integrator near SPECTRE interfaces: 'rk45' (default; adaptive,
+    !> relative tolerance spectre_fo_tolerance; exact interface crossings on
+    !> the sharp field) or 'boris' (step bounded by spectre_fo_rotation).
+    character(16) :: spectre_fo_integrator = 'rk45'
     real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
