@@ -36,13 +36,42 @@ spline grids. Independent axis-limit tests, rather than exact agreement with
 a singular raw pole evaluation, check the field there. Aggregate loss
 agreement alone is insufficient for scientific promotion.
 
-The six 256-marker, 2 ms physical-volume controls are running sequentially
-through `full.py`, with 16 bound local OpenMP threads. Completed NCSX FO
-controls take 436.59 s (default) and 440.55 s (refined) of tracing. Losses are
-101/256 and 99/256 respectively, with no stops/failures/holds. The final paired
-comparison, current hybrid and G3V3L3Fi controls remain pending. These direct
-measurements replace the earlier hours-scale estimate for this workload;
-thread counts, host load and implementation differed in that estimate.
+The six 256-marker, 2 ms physical-volume controls are complete, each on
+16 bound local OpenMP threads. All have zero stops/failures/holds. Retained
+starts, sparse traces, health, provenance and paired statistics are in
+`concept/spectre_loss_study/results/full/{summary.json,traces.npz}`. Reproduce
+plots with `full_report.py RESULTS_DIR OUTPUT_DIR`.
+
+| Field / model | Tracing [s] | End-to-end [s] | Losses / 256 | FO residence |
+| --- | ---: | ---: | ---: | ---: |
+| NCSX FO default | 436.59 | 451.36 | 101 | 100% |
+| NCSX FO refined | 440.55 | 458.70 | 99 | 100% |
+| NCSX current hybrid | 218.95 | 233.73 | 99 | 29.9% |
+| G3V3L3Fi FO default | 105.17 | 117.70 | 53 | 100% |
+| G3V3L3Fi FO refined | 109.02 | 128.60 | 53 | 100% |
+| G3V3L3Fi current hybrid | 48.47 | 61.06 | 48 | 38.8% |
+
+Relative to refined FO, NCSX default FO has four paired status disagreements
+(net +0.781 percentage points, paired SE 0.781 pp); the hybrid has six
+(net zero, SE 0.959 pp). Both-lost NCSX markers can differ in loss time by
+1.08 ms (default FO) / 1.24 ms (hybrid), so equal final counts are not pathwise
+convergence. G3V3L3Fi default/refined FO have no status disagreements and a
+maximum paired loss-time difference of 2.14e-12 s. Zero disagreements in 256
+markers still permits an unobserved disagreement rate up to 1.16% at one-sided
+95% confidence under an independent-marker model. G3V3L3Fi hybrid loses five
+fewer markers (net -1.953 pp, paired SE 0.867 pp), all five status differences
+in that direction. This discrepancy remains to be explained by the consistent
+switch/entry and boundary study; it is not removed by the FO spatial grid.
+
+Maximum sampled energy-shell errors are 5.97e-5 for NCSX FO, 5.00e-4 for its
+hybrid, and 1.30–1.34e-5 for the G3V3L3Fi controls. These are measured errors,
+not a bounded-energy or whole-map symplectic proof. The fixed production entry
+phase and GC-centre/FO-particle absorbing-edge conventions still apply.
+
+These direct costs replace the earlier hours-scale estimate for this workload;
+thread counts, host load and implementation differed in that estimate. The
+complete six-control batch took about 24 minutes sequentially including native
+launch/setup/output. No direct 256-marker/2 ms raw-main run was measured here.
 No protected-host job was started, resumed or cancelled.
 
 ## Goal and constraints
