@@ -138,3 +138,8 @@ add_test(NAME test_magfie_spectre_analytic_stell
 set_tests_properties(test_magfie_spectre_analytic_stell PROPERTIES
     LABELS "integration"
     TIMEOUT 120)
+
+add_executable(test_spectre_fo_gauss2.x test_spectre_fo_gauss2.f90)
+target_link_libraries(test_spectre_fo_gauss2.x PRIVATE simple)
+add_test(NAME test_spectre_fo_gauss2 COMMAND test_spectre_fo_gauss2.x
+    ${CMAKE_SOURCE_DIR}/test/tests/data/spectre_tokamak.h5)
