@@ -229,7 +229,7 @@ Execution is authorized through the stages below, with regular commits/pushes
 and final research plots published through slopbox. Do not wait for CI. Keep
 PR #534 focused; study sources and recovered research remain on this branch.
 
-Current milestone: the native physical study driver builds and passes its
+Initial milestone: the native physical study driver builds and passes its
 8-marker, 0.2 microsecond NCSX smoke on main and the spline candidate. A
 detached baseline at `fe002a3` uses the identical measurement source and an
 accepted-FO-time diagnostic; no baseline solver equations are changed. Local
@@ -279,10 +279,35 @@ than the previous spline implementation, or 6.8–7.4x faster than main in this
 short nonphysical witness. No field-order or transition-threshold change was
 introduced. This is pushed as `6bbdef0` on PR #534 and `f876d28` on this branch.
 
-The next stage is running locally: 32 matched markers, 200 microseconds, 16
+The next stage completed locally: 32 matched markers, 200 microseconds, 16
 physical cores, both equilibria and sampling sets, FO/current hybrid, main vs
-default/refined splines (24 cases). No cluster jobs were launched. Do not report
-these runs as complete or extrapolate a full matrix from the short pilot.
+default/refined splines (24 cases). No cluster jobs were launched. FO tracing
+improves 5.5–7.3x; all paired loss statuses match. However, the NCSX volume
+hybrid is invalid: marker 31 has one FO locate failure and 4,666 held intervals
+on both spline grids, while main has none. Do not promote the matching loss
+counts as acceptance evidence or run the large hybrid matrix over this defect.
+
+The cause is established independently: evaluating polar spline derivatives
+over the vanishing axis Jacobian gives relative B error 49.0 at rho=1e-12.
+See ledger F7 and `concept/spectre_loss_study/results/axis-failure.json`.
+A regular xi/eta axis table now gives 4.21e-9 relative B error and resolves the
+pole-seeded inverse. The exact marker replay has one entry/exit, zero holds or
+failures, and advances to rho=0.2744 at 200 microseconds. All 21 affected native
+tests pass in 229.96 s, including the G3V3L3Fi axis limit and transition-region
+checks. This is pushed as `47d3fb0` on PR #534 / `9c62300` on this branch;
+the longer 24-case controls are rerunning. This fix
+retains cheap field evaluation without a raw fallback or a new setting.
+The study controller now includes the provider in its source hashes and refuses
+unresolved intervals as scientific acceptance. The GC audit is prepared in
+`research/gc-source-audit-20261014`; it is not compiled concurrently with timing
+runs and contains no production correction yet.
+After those controls pass, `full.py` measures 256-marker, 2 ms volume controls
+on 16 local cores: default/refined FO and the current hybrid on both fields.
+This answers the actual cost question before the full entry/tolerance matrix.
+It is conditional on the current deterministic entry phase. FO uses particle
+position at the outer edge; GC segments use the guiding-centre edge convention.
+Their loss difference therefore does not isolate interface physics or establish
+a coherent first-order switch. The later W2 acceptance matrix remains open.
 Generated PNGs follow the repository's ignore rule; their versioned NumPy data
 and plotting source reproduce them. The convergence plot was uploaded to
 `https://box.sloppy.at/1dcca.png` on 2026-10-14 (slopbox links expire in 3 days).

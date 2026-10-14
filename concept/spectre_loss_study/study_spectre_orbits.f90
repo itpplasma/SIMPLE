@@ -205,6 +205,8 @@ program study_spectre_orbits
         ' entries/exits/stops ', entries, exits, nfail
     if (.not. all(ieee_is_finite(result))) error stop 'nonfinite study result'
     if (nfail /= 0) error stop 'study recorded numerical stops'
+    if (failures /= 0 .or. any(result(6, :) > 0)) &
+        error stop 'study contains unresolved intervals'
 
 contains
 

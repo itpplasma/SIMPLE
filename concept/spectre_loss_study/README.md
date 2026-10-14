@@ -33,3 +33,15 @@ The runner invokes that same native authority, never the executable directly.
 Study output belongs under ignored `build/study`; retain compact summaries and
 plot sources here when a milestone is complete. Parameter rejection tests are
 outside this study's scope.
+
+The controller records all solver/provider source hashes; completed cases are
+reused only for matching settings and sources. Unresolved FO failures or held
+intervals fail the native study after its diagnostic files have been saved.
+They are never accepted just because the physical-loss count matches.
+
+`pilot.py --baseline PATH --variants raw spline fine --markers 32
+--duration 2e-4 --threads 16 --output build/study/spectre-long` runs the longer
+paired controls. `full.py` then measures 256-marker, 2 ms volume controls on both
+fields; `full_report.py INPUT OUTPUT` retains data and plots, and also replots a
+retained results directory. These use the current entry phase and boundary
+conventions, not a completed phase-consistent hybrid model.
