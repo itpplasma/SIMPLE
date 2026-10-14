@@ -1,7 +1,7 @@
 # SPECTRE orbit programme: recovered status and plan
 
 Updated 2026-10-14. Recovery branch: `recovery/spectre-session-20261014`.
-Production baseline: `origin/main` at `45c0598` (merged PR #530).
+Production baseline: `origin/main` at `fe002a3`, including cleanup PR #533.
 This consolidates the stopped Claude controller and its GPT Sol, strategy,
 Opus and nested derivation workers. It records unfinished research rather
 than claiming the scientific programme is complete. No previous worker is
@@ -29,6 +29,16 @@ The last instruction in that session was to stop agents, record state and push.
 This recovery publishes their work and an actionable continuation plan.
 
 ## What already shipped
+
+- PR #533: collect the comparison in `4a1f842`, then remove demonstrated failed
+  paths in `3a6fd37`, with the exact provenance pinned in the follow-up ledger.
+  The merge preserves add/remove history. Removed executable candidates:
+  fixed-mu C1L0/L1, phase-discarding C2fixed/pphi, curved-field frozen-patch C4,
+  Boris C5 as a symplectic candidate, and the old unresolved branch/energy-kick
+  landing methods. Their implementation/settings/scans and dedicated programs
+  are gone. No new checks or tests reject outdated parameters. The scope and
+  evidence of each rejection are in the
+  [implementation ledger](DOC/spectre-rejected-interface-models.md#implementation-removal-ledger).
 
 - PR #526: Fortran configuration-file API with a thin Python layer, matching
   executable initialization, API/docs cleanup and test pruning. The earlier
@@ -102,7 +112,7 @@ not production stellarator validation and not a sheet-crossing rule.
 | Workstream / source | Collected location | Status at recovery |
 | --- | --- | --- |
 | GPT FLR research worker | `concept/flr_options/` | Original 23-page note source and algebra/local-map/citation scripts reconstructed from the saved GPT session. Exact planar sheet maps and cycle compression; curved-sheet and production claims remain open. |
-| GPT candidate comparison, `345bfa8`, SIMPLE-hybrid | `concept/interface_candidates/` | Standalone sources, compressed marker data, manifests and report tools retained. Carried-phase C3/T1 improves local order but spends 94–97% in FO in the tested grid; no consistent speed gain. Long strong-sheet reversal and nearly parallel reconstruction limits remain. |
+| GPT candidate comparison, `345bfa8`, SIMPLE-hybrid | `concept/interface_candidates/` | Historical marker data/manifests remain evidence. Main now retains only FO, C3 and resolved GL2 executable paths; rejected implementations/settings are removed by #533. C3 has no established speed gain or complete hybrid symplectic proof. |
 | GPT GC orders + canonical completion, SIMPLE-gcho `c9f23b1`, `957d5a8`, `598f041`; Opus rebase/trim, SIMPLE-gclie `24c625a` | `concept/gc_higher_order/` | Final rebased sources and compact results integrated. Kernels generated in build with pinned output hashes. Production untouched. |
 | GPT proof, SIMPLE-sproof/SIMPLE-derive `a27d1ec` | `concept/fo_symplectic_proof/` | Original Lean project, pinned predecessor, symbolic results and measurements retained; original explanatory text in `proof-foundation.md`. |
 | GPT Gauss2 task I and Opus demotion, SIMPLE-fo-gauss2 `12aaf7f`, `286dc20`, `d956968`, `3ddc30b` plus stopped edits | Same FO concept directory; registered test-only library and probes | Final concept-only layout integrated. Production files matched main after demotion. Original radial hybrid test was removed by that demotion; its prior form remains in worker history. |
@@ -114,7 +124,13 @@ not production stellarator validation and not a sheet-crossing rule.
 | SIMPLE-sympl `c91970f`; task-i-pre-rebase `89babb3` | Original history | Superseded/rejected implementations, not active candidates. |
 | SIMPLE-dependency-versions `aab1b38` | Merged PR #523 history | Shared dependency update already shipped. |
 
-The original worktrees are retained locally, including their staging state.
+The original worktrees are retained locally, including their staging state, as
+read-only recovery sources. Do not resume or merge their old tips over the
+cleanup: the authoritative continuation is this rebased recovery branch.
+The pre-cleanup integrated history is also published at
+`archive/spectre-session-20261014-pre-cleanup` (`87aa81f`), including the original
+worker commits. The first-parent recovery changes were replayed onto main;
+ancestry-only experimental production branches were not replayed.
 FortSym's consumer-required Lie/DAG/array-CSE work is `de7074c`, `2894087`,
 `1372fbd` on `lazy-fortran/fortsym:feat/lie-pullback`. It stays in its owning
 library and is published with this recovery; the SIMPLE concepts require that
@@ -194,7 +210,7 @@ before fixing it. A coefficient theorem is not a proof of those code paths.
 
 ## Recovery verification and publication
 
-Production `src/` and `examples/` are identical to main `45c0598`. Gauss2 is
+Production `src/` and `examples/` are identical to main `fe002a3`. Gauss2 is
 linked only into a test-only concept library. W4's replacement path and GC
 oracle registrations are preserved in patches, with explicit draft READMEs.
 
@@ -234,10 +250,29 @@ future work, not a condition for preserving this stopped state.
   were not repeated; fresh coverage is the fast suite plus the focused native
   generator test and standalone checks above.
 
-Publication includes the collected source tree and original worker histories.
-Superseded production paths are resolved by the concept-only collected tree;
-recording their ancestry does not promote them back to production. The clean
+The cleanup is on main via #533 and this recovery branch is rebased onto it.
+The deleted implementations were not restored by replaying recovery commits.
+The original worker histories remain in the published pre-cleanup archive;
+the current branch carries the surviving concepts, proofs and unfinished drafts. The clean
 FortSym `feat/lie-pullback` dependency branch is pushed separately in its owning
-repository. No PR merge or main-branch publication is part of this recovery.
+repository. PR #533 publishes the bounded failed-path cleanup on main; the remaining
+research concepts/drafts stay on this recovery branch.
 For continuation, start with item 1 above and update this ledger with results
 for the actual next revision; do not infer closure from a worker's last message.
+
+### Cleanup and rebase verification
+
+- Cleanup: full existing native `make test CONFIG=Fast`: **95/95 passed**,
+  including 15 slow tests (525 s). Existing standalone behavioural and symbolic
+  checks passed; the remaining original sheet studies built without warnings.
+- Five paired before/after ensembles, 256 markers each: FO A/B, carried-phase
+  C3 A/B (switches exercised), resolved GL2 A. Every recorded numerical value
+  matched exactly; wall-time metadata was excluded.
+- No tests or runtime checks were added for rejecting retired parameters.
+- Merged on explicit instruction without waiting for CI. GitHub required the
+  Build and Test status, so administrator merge was used; that check was still
+  running. Local verification above passed. Add/remove commits remain reachable
+  from main through a merge commit.
+- Rebased recovery focused native checks: the existing switch round-trip,
+  FO symplectic map and Gauss2 concept-field tests passed (3/3). Main's cleaned
+  concept trees, ledger, production sources and settings are retained verbatim.
