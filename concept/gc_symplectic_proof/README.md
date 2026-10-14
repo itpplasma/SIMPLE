@@ -48,3 +48,13 @@ two 100-step NCSX Boozer checks: midpoint/Gauss1 give 2.028e-5 at spacing 1e-4
 and 2.280e-6 at 5e-5. Unchanged pre-fix production gives the same values.
 The original failure is retained; oracle-resolution work is separate from the
 three source repairs. No defect or spacing-disagreement bound is relaxed.
+
+An eight-point central derivative now resolves all registered map cases at the
+same spacings (1e-4, 5e-5) and unchanged bounds (1e-7 one step / 1e-5 for 100
+steps, also for spacing disagreement). All five native selections pass in
+44.54 s, including the independent Hamiltonian witness and analytic smoke.
+The previously failing NCSX midpoint/Gauss1 case gives 6.895e-6 / 6.264e-7,
+with spacing disagreement 2.583e-6. This improves the numerical oracle's
+resolution; it is not an exact floating-point symplecticity proof. Both
+stencils' records and the pre-fix failure are in `map_results.json`.
+The 100,000-step stellarator energy checks are running separately.

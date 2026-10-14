@@ -178,10 +178,16 @@ contains
         real(dp), intent(out) :: jac(4, 4)
         logical, intent(out) :: ok
         logical, intent(in) :: control, halves
-        real(dp) :: scl(4), e(4), wp(4, 4), wo(4)
+        real(dp) :: scl(4), e(4), wp(4, 8), wo(4)
         integer :: j, k
-        real(dp), parameter :: coef(4) = [1.0_dp, -8.0_dp, 8.0_dp, -1.0_dp]
-        real(dp), parameter :: offs(4) = [-2.0_dp, -1.0_dp, 1.0_dp, 2.0_dp]
+        ! Eighth-order central derivative, retaining the predeclared spacing
+        ! pair and defect bounds. The original fourth-order stencil has a
+        ! resolved truncation error above 1e-5 for the 100-step NCSX map.
+        real(dp), parameter :: coef(8) = [1.0_dp/280, -4.0_dp/105, &
+            1.0_dp/5, -4.0_dp/5, 4.0_dp/5, -1.0_dp/5, &
+            4.0_dp/105, -1.0_dp/280]
+        real(dp), parameter :: offs(8) = &
+            [-4.0_dp, -3.0_dp, -2.0_dp, -1.0_dp, 1.0_dp, 2.0_dp, 3.0_dp, 4.0_dp]
         logical :: okk
 
         ! Scaled coordinates (theta, phi, p_theta/P, p_phi/P): a conformal
@@ -189,7 +195,7 @@ contains
         scl = [1.0_dp, 1.0_dp, pscale, pscale]
         ok = .true.
         do j = 1, 4
-            do k = 1, 4
+            do k = 1, 8
                 e = 0.0_dp
                 e(j) = offs(k)*delta*scl(j)
                 if (control) then
@@ -202,8 +208,7 @@ contains
                 ok = ok .and. okk
                 wp(:, k) = wo/scl
             end do
-            jac(:, j) = (coef(1)*wp(:, 1) + coef(2)*wp(:, 2) + coef(3)*wp(:, 3) &
-                + coef(4)*wp(:, 4))/(12.0_dp*delta)
+            jac(:, j) = matmul(wp, coef)/delta
         end do
     end subroutine fd_jacobian
 
