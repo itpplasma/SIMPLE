@@ -164,24 +164,24 @@ contains
         call synchronize_position(state, status)
         if (status /= SPECTRE_FO_OK) return
         remaining = dt
+        call spectre_fo_field_local(state%u, state%owner, particle)
         do nstep = 1, MAX_SUBSTEPS
             if (remaining <= epsilon(1.0_dp)*max(dt, 1.0_dp)) then
                 dt_used = dt
                 status = SPECTRE_FO_OK
                 return
             end if
-            call spectre_fo_field_local(state%u, state%owner, particle)
             h = remaining
             if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
             h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/particle%bmod)
-            call rk45_substep(state, h, ro0_bar, status, hfac*RK_GYRO_ANGLE)
+            call rk45_substep(state, h, ro0_bar, status, hfac*RK_GYRO_ANGLE, &
+                particle)
             if (status /= SPECTRE_FO_OK) then
                 if (status == SPECTRE_FO_LOSS) dt_used = dt_used + h
                 return
             end if
             dt_used = dt_used + h
             remaining = remaining - h
-            call spectre_fo_field_local(state%u, state%owner, particle)
             call gc_map(state, particle, ro0_bar, y, owner, map_status, &
                 exited=exited)
             if (map_status == SPECTRE_FO_OK) then
@@ -345,10 +345,10 @@ contains
         if (status /= SPECTRE_FO_OK) return
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
     end subroutine spectre_fo_canonical_pzeta
-    subroutine rk45_substep(state, h, ro0_bar, status, angle_limit)
+    subroutine rk45_substep(state, h, ro0_bar, status, angle_limit, particle)
         !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
-        !> the sharp field the stages use the owner's field, held at
-        !> its interface value beyond the volume edge. Stage cross-and-return
+        !> the sharp field the stages continue the owner's spline polynomial
+        !> beyond the volume edge. Stage cross-and-return
         !> trials are rejected; changed endpoints land on the first interface,
         !> where the owner switches. On input h is the trial step, on output the step
         !> taken.
@@ -356,6 +356,8 @@ contains
         real(dp), intent(inout) :: h
         real(dp), intent(in) :: ro0_bar, angle_limit
         integer, intent(out) :: status
+        type(spectre_fo_local_t), intent(inout) :: particle
+        type(spectre_fo_local_t) :: final
         real(dp) :: x1(3), v1(3), u1(3), err, a, b, fa, fb, c, fc, iface_rho
         real(dp) :: trial_angle
         integer :: attempt, owner1, it, side, grazes, stage_sides, opposite_stage
@@ -364,7 +366,7 @@ contains
         grazes = 0
         do attempt = 1, 60
             call dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
-                stage_sides, trial_angle)
+                particle, final, stage_sides, trial_angle)
             if (status /= SPECTRE_FO_OK) then
                 ! A failed stage has no embedded error estimate.
                 h = 0.5_dp*h
@@ -415,13 +417,14 @@ contains
                         end if
                         grazes = grazes + 1
                         if (grazes >= 2) h = 0.5_dp*h
+                        call spectre_fo_field_local(state%u, state%owner, particle)
                         cycle
                     end if
                     ! Starts on the sheet moving into home: exclude the root
                     ! at t=0 and bracket the later return at positive time.
                     a = h/32.0_dp
                     call dp_trial(state, a, ro0_bar, x1, v1, u1, owner1, err, &
-                        status, stage_sides)
+                        status, particle, final, stage_sides)
                     if (status /= SPECTRE_FO_OK) then
                         h = 0.5_dp*h
                         cycle
@@ -445,7 +448,7 @@ contains
                 do it = 1, 100
                     c = (a*fb - b*fa)/(fb - fa)
                     call dp_trial(state, c, ro0_bar, x1, v1, u1, owner1, err, &
-                        status, stage_sides)
+                        status, particle, final, stage_sides)
                     if (status /= SPECTRE_FO_OK) exit
                     if (btest(stage_sides, opposite_stage)) then
                         ! Shortened trials can expose an earlier opposite sheet
@@ -486,6 +489,7 @@ contains
                     end if
                     grazes = grazes + 1
                     if (grazes >= 2) h = 0.5_dp*h
+                    call spectre_fo_field_local(state%u, state%owner, particle)
                     cycle
                 end if
                 if (it > 100 .or. err > 1.0_dp) then
@@ -496,6 +500,14 @@ contains
                 u1(1) = iface_rho
                 owner1 = merge(state%owner + 1, state%owner - 1, &
                     iface_rho >= real(state%owner, dp))
+            end if
+            if (owner1 == state%owner) then
+                ! The seventh RK stage is the accepted endpoint. Reuse its
+                ! sample for GC reconstruction and the next first stage.
+                particle = final
+            else if (owner1 <= spectre_field%data%Mvol) then
+                ! A landed sheet changes both the exact coordinate and owner.
+                call spectre_fo_field_local(u1, owner1, particle)
             end if
             owner1 = min(owner1, spectre_field%data%Mvol)
             state%x = x1
@@ -510,7 +522,7 @@ contains
         status = SPECTRE_FO_STEP_LIMIT
     end subroutine rk45_substep
     subroutine dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
-            stage_sides, gyro_angle)
+            initial, final, stage_sides, gyro_angle)
         !> Dormand-Prince on logical position and Cartesian velocity. The
         !> physical Lorentz equation is unchanged; du/dt = E^{-1} v replaces
         !> the iterative Cartesian-to-logical inversion at every RK stage.
@@ -518,6 +530,8 @@ contains
         real(dp), intent(in) :: h, ro0_bar
         real(dp), intent(out) :: x1(3), v1(3), u1(3), err
         integer, intent(out) :: owner1, status
+        type(spectre_fo_local_t), intent(in) :: initial
+        type(spectre_fo_local_t), intent(out) :: final
         integer, intent(out), optional :: stage_sides
         real(dp), intent(out), optional :: gyro_angle
         type(spectre_fo_local_t) :: loc
@@ -573,7 +587,11 @@ contains
             end if
             ! Continue only the initial owner's polynomial for trial stages;
             ! accepted sheet crossings are landed and then change owner.
-            call spectre_fo_field_local(us, state%owner, loc)
+            if (i == 1 .and. .not. cartesian) then
+                loc = initial
+            else
+                call spectre_fo_field_local(us, state%owner, loc)
+            end if
             if (i == 1) then
                 rho_l = ro0_bar*norm2(vs)/loc%bmod
                 if (present(gyro_angle)) gyro_angle = h*loc%bmod/ro0_bar
@@ -585,6 +603,7 @@ contains
         u1 = us
         v1 = vs
         x1 = loc%x
+        final = loc
         if (cartesian) x1 = qs
         owner1 = logical_owner(u1(1), state%owner)
         eu = h*(71.0_dp/57600*ku(:, 1) - 71.0_dp/16695*ku(:, 3) + &
