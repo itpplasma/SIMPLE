@@ -32,8 +32,8 @@ module interface_crossing
 
     integer, parameter :: CROSSING_LEVEL0 = 0
     integer, parameter :: CROSSING_LEVEL1 = 1
-    !> Full orbit near interfaces (spectre_sympl_orbit); where the full orbit
-    !> cannot be started the Level-1 map is applied.
+    !> Full orbit near interfaces on the symplectic path (spectre_sympl_orbit).
+    !> apply_crossing uses the Level-1 map if called directly with this level.
     integer, parameter :: CROSSING_FULL_ORBIT = 3
     integer, parameter :: CROSS_CROSSING = 1
     integer, parameter :: CROSS_REFLECTION = 2
