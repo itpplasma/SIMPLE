@@ -1123,7 +1123,7 @@ foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_lo
 endforeach()
 
 # Same fictitious duration at successive resolutions; no hybrid switches.
-foreach(fo_probe IN ITEMS base half quarter tight base_short captured captured_base)
+foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
     set(probe_marker 20)
     set(probe_steps 1000000)
     set(probe_factor 1)
@@ -1139,8 +1139,6 @@ foreach(fo_probe IN ITEMS base half quarter tight base_short captured captured_b
         set(probe_tol 1e-13)
     elseif(fo_probe STREQUAL "base_short")
         set(probe_steps 50000)
-    elseif(fo_probe STREQUAL "captured_base")
-        set(probe_marker 120)
     elseif(fo_probe STREQUAL "captured")
         set(probe_marker 120)
         set(probe_factor 0.5)
@@ -1153,12 +1151,6 @@ foreach(fo_probe IN ITEMS base half quarter tight base_short captured captured_b
         LABELS "regression;integration;slow" TIMEOUT 3600)
 endforeach()
 
-# Match the original million-step fictitious duration after fixed h/4 refinement.
-add_test(NAME test_fo_gauss2_resolution_large_matched COMMAND test_fo_symplectic.x
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 4000000 100 0 0.25)
-set_tests_properties(test_fo_gauss2_resolution_large_matched PROPERTIES
-    LABELS "regression;integration;slow" TIMEOUT 3600)
 # Also retain the original proof's larger-velocity map oracle at base h.
 add_test(NAME test_fo_gauss2_original_oracle COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5

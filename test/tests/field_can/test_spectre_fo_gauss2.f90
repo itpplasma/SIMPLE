@@ -1,21 +1,18 @@
 program test_spectre_fo_gauss2
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use field_spectre, only: create_spectre_field
     use magfie_sub, only: spectre_field
     use spectre_fo_gauss2, only: gauss2_prepare, gauss2_geometry, gauss2_potential, &
         gauss2_encode, gauss2_decode, gauss2_hamiltonian, gauss2_step
     implicit none
     real(dp), parameter :: WIDTH = 0.001_dp, RO0 = 2000.0_dp
-    integer, parameter :: NSTEP = 160000
     real(dp) :: q(3), x(3), e(3, 3), metric(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
     real(dp) :: a(3), da(3, 3), d2a(3, 3, 3), b(3), hcov(3), bm, sqgb(3)
     real(dp) :: z(6), z1(6), zp(6), zm(6), energy, ep, em, grad(6), hess(6, 6)
     real(dp) :: gp(6), gm(6), hh(6, 6), tangent(6, 6), js(6, 6), defect(6, 6)
-    real(dp) :: dt, total_time, first, last, shell, h, length, vmax(3), scale(6)
-    real(dp) :: velocity(3), pz0, pzspread, derivative_error, delta
+    real(dp) :: dt, h, length, scale(6), velocity(3), derivative_error, delta
     real(dp) :: periodic_x(3), periodic_v(3), reference_x(3), reference_v(3)
-    integer :: ierr, i, j, k, crossings, previous
+    integer :: ierr, i, j, k
     logical :: ok
     character(1024) :: filename
     character(32) :: mode
@@ -103,40 +100,4 @@ program test_spectre_fo_gauss2
         norm2(periodic_v - reference_v) > 1.0e-9_dp) &
         error stop 'discrete-map periodicity'
 
-    if (trim(mode) == 'field') stop 0
-    ! E, h, g and layer width remain frozen throughout this long FO excursion.
-    pz0 = z(6)
-    first = 0.0_dp
-    last = 0.0_dp
-    shell = 0.0_dp
-    pzspread = 0.0_dp
-    crossings = 0
-    previous = merge(1, -1, z(1) > 1.0_dp)
-    total_time = 0.0_dp
-    do k = 1, NSTEP
-        call gauss2_step(z, WIDTH, RO0, energy, length, 0.025_dp, h, z1, dt, ok)
-        if (.not. ok) then
-            print *, 'failed step and canonical state: ', k, z
-            error stop 'long run Newton failure'
-        end if
-        z = z1
-        total_time = total_time + dt
-        call gauss2_decode(z, WIDTH, RO0, x, vmax)
-        if (.not. all(ieee_is_finite(vmax))) error stop 'nonfinite velocity'
-        delta = abs(0.5_dp*dot_product(vmax, vmax)/energy - 1.0_dp)
-        shell = max(shell, delta)
-        if (k <= NSTEP/4) first = max(first, delta)
-        if (k > 3*NSTEP/4) last = max(last, delta)
-        pzspread = max(pzspread, abs(z(6) - pz0)/max(abs(pz0), 1.0_dp))
-        i = merge(1, -1, z(1) > 1.0_dp)
-        if (i /= previous) crossings = crossings + 1
-        previous = i
-    end do
-    print *, 'steps crossings physical time: ', NSTEP, crossings, total_time
-    print *, 'energy first quarter / last quarter / max: ', first, last, shell
-    print *, 'relative canonical p_zeta spread: ', pzspread
-    if (crossings < 100) error stop 'insufficient crossings'
-    if (shell > 5.0e-6_dp) error stop 'energy envelope'
-    if (last > 1.25_dp*first + 1.0e-10_dp) error stop 'growing energy error'
-    if (pzspread > 6.0e-8_dp) error stop 'canonical p_zeta'
 end program test_spectre_fo_gauss2

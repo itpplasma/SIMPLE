@@ -1,9 +1,8 @@
 # Experimental Gauss2 FO integration
 
 This implementation ships the scalar-generated kernel from proof commit
-`a27d1ec50d32e853b3ea0806e4662ed8d1be5b0c`. The proof repository at
-`/home/ert/code/SIMPLE-sproof`, branch `concept/fo-symplectic-proof`, is read-only
-integration evidence. Its README describes the exact L1–L5 boundary and the
+`a27d1ec50d32e853b3ea0806e4662ed8d1be5b0c` on branch
+`concept/fo-symplectic-proof`, which is read-only integration evidence. Its README describes the exact L1–L5 boundary and the
 Lean theorem `Gauss2.gauss2_symplectic`.
 
 The six `src/generated/` leaves, scalar generator, and regeneration/diff test
@@ -147,9 +146,11 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 CTEST_PARALLEL_LEVEL=4 \
 FORTSYM_BUILD=../fortsym/build bash gen/regenerate_fo.sh
 ```
 
-The diagnosis commands include the intentionally retained base-h captured-state
-failure; it is not marked expected-success. `collect_results.py LOG...` records
-registered maps, per-marker envelopes/slopes and solver diagnostics. All
+The base-h captured-state and constant-h/4 larger-velocity trials described
+above are failing diagnoses and are not registered as tests.
+`collect_results.py OUT.json LOG...` regenerates machine-readable records of
+registered maps, per-marker envelopes/slopes and solver diagnostics from a
+verbose test log; the output is not committed. All
 million-step fits use every accepted sample with centered online regression.
 One million accepted steps cover a shorter fictitious duration under the entry
 resolution cap. The separate 2M/4M seed-20 rows compare equal duration, and the

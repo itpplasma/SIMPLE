@@ -1,4 +1,7 @@
-"""Collect bounded numerical evidence from verbose registered make-test logs."""
+"""Collect bounded numerical evidence from verbose registered make-test logs.
+
+Usage: collect_results.py OUT.json LOG... (the output is not committed).
+"""
 import hashlib
 import json
 import re
@@ -30,7 +33,7 @@ def pairs(line):
     return {key: float(value) for key, value in re.findall(
         r'([^\s=]+)=\s*(' + float_pattern + r')', line)}
 
-for name in sys.argv[1:]:
+for name in sys.argv[2:]:
     state = {}
     for line in Path(name).read_text().splitlines():
         match = re.search(r'Start\s+(\d+):\s+((?:test_fo_symplectic|test_fo_gauss2_(?:resolution_|original_oracle))\S*)', line)
@@ -85,7 +88,7 @@ for name in sys.argv[1:]:
             result['tests'][match[1]]['outcome'] = match[2].lstrip('.').strip()
             result['tests'][match[1]]['wall_seconds'] = float(match[3])
 
-(root / 'results.json').write_text(json.dumps(result,indent=2) + '\n')
+Path(sys.argv[1]).write_text(json.dumps(result,indent=2) + '\n')
 print('Collected',len(result['tests']),'registered tests,',
       sum(len(t['maps']) for t in result['tests'].values()),'maps,',
       sum(len(t['energies']) for t in result['tests'].values()),'energy runs')
