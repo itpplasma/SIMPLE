@@ -195,21 +195,44 @@ FO state, use a conservative inexpensive exit screen, and reconstruct the GC
 only when needed for an actual transition or requested output. Small local
 metric solves are distinct from the expensive nonlinear coordinate inversion.
 
+## Focused performance implementation, 2026-10-14
+
+A separate branch, `perf/spectre-fo-logical-spline`, now implements the focused
+performance change against main `fe002a3`: [PR #534](https://github.com/itpplasma/SIMPLE/pull/534), commit `2e243d4`. It reuses W4's
+per-volume provider, without importing the recovery branch's other concepts or
+its draft canonical-momentum rewrite. RK45 advances logical position and
+Cartesian velocity; regular interface stages need no position inversion or raw
+spectral geometry/field evaluation. GC reconstruction retains a spline-only
+inverse. A Cartesian position chart remains below rho=0.05 in volume 1.
+
+The local short NCSX witness (32 markers per surface, RO=100 internally, ten
+reference 1 T gyroperiods, tolerance 1e-9) measured 5.1–5.5x faster tracing against
+main with the same workload. One/four-thread endpoints agree exactly as printed.
+These timings exclude setup and are not a measured 2 ms loss-study ETA. Default
+three-volume spline storage is about 1.27 GiB; measured setup was 1.92 s with one
+thread and 1.46 s with four. Shared field reinitialization releases old tables.
+Maximum sampled relative B-vector error was 2.42e-6 on the default 32/64/32 grid
+and 6.60e-5 on the coarse grid. Geometry/A errors were 6.17e-9/1.63e-7.
+
+Full native `make test CONFIG=Fast VERBOSE=1` passed 99/99. After final
+terminal-boundary/cache-lifecycle adjustments, the affected SPECTRE and Python
+API selection passed 19/19. Existing energy/momentum/event thresholds and stored
+golden records were not changed. PR #534 is a draft; CI was not awaited. The old 2–4 h budget above concerns the Cartesian
+implementation, not this candidate. Long-time stellarator loss agreement,
+spline-grid convergence of losses and the >=10x target remain open. The
+archived W4 patch is historical; do not apply it over this implementation.
+
 ## Ordered continuation plan
 
-1. **W4 first: finish and measure splined logical-coordinate FO.** Resume the
-   preserved sources and patch. Spline R, Z and A separately per volume; derive
-   B and the metric consistently from their jets, preserving one-sided sheet
-   traces and gauge changes. Carry the logical coordinates and volume owner
-   through RK stages and resolve rho-root events and crossing-and-return pairs
-   without Cartesian inversion. Remove the repeated exit-check inversion
-   described above without changing transition criteria. Validate derivatives,
-   grid convergence and axis/exterior ownership against the sharp-field
-   Cartesian reference. Measure matched short-orbit cost, spline setup, RHS
-   evaluations and coordinate inversions under controlled load before W2.
-   Target at least 10x per-step speedup and establish end-to-end throughput;
-   neither speedup is a result yet. Retire the old path only after equivalent
-   physical results and measured benefit.
+1. **W4 first: review and validate the focused performance PR above.** The
+   regular logical-position/Cartesian-velocity path is implemented and locally
+   checked. Complete longer NCSX/G3V3L3Fi trajectory/loss and spline-grid
+   convergence before promotion. Keep the existing physical transition criteria.
+   Profile the remaining spline-only GC reconstruction before introducing a
+   conservative exit screen. Measure end-to-end cost, including setup and FO
+   residence, under controlled load. The observed short tracing improvement is
+   5.1–5.5x; the >=10x per-step target is not established. Current main retains
+   its Cartesian path until a reviewed performance change is promoted.
 2. **Finish the production GC proof bridge.** Map each of the eight variants'
    actual equations and field/extrapolation operations to its theorem. Restore
    the draft oracle on a development branch; run NCSX canonical-flux/Boozer and
