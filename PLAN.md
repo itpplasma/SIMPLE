@@ -80,10 +80,11 @@ No protected-host job was started, resumed or cancelled.
 
 Published plots (uploaded 2026-10-14; links expire after three days):
 
-- Full-duration measured end-to-end cost: https://box.sloppy.at/bce8c.png
-- Full-duration loss curves and pointwise uncertainty: https://box.sloppy.at/4d014.png
+- Latest FO-reference / GC-fixed hybrid end-to-end cost: https://box.sloppy.at/2c9db.png
+- Latest loss curves and pointwise uncertainty: https://box.sloppy.at/8af3d.png
 - Paired main/spline tracing cost at 200 us: https://box.sloppy.at/17ce5.png
 - GC energy/domain limits and equal-time refinement: https://box.sloppy.at/a4710.png
+- Local first-order switch accuracy / pullback scaling: https://box.sloppy.at/667cc.png
 
 The GC source/proof audit is retained on
 `research/gc-source-audit-20261014` through `d9df7a8`. The independent closed-form
@@ -258,7 +259,7 @@ not production stellarator validation and not a sheet-crossing rule.
 | GPT proof, SIMPLE-sproof/SIMPLE-derive `a27d1ec` | `concept/fo_symplectic_proof/` | Original Lean project, pinned predecessor, symbolic results and measurements retained; original explanatory text in `proof-foundation.md`. |
 | GPT Gauss2 task I and Opus demotion, SIMPLE-fo-gauss2 `12aaf7f`, `286dc20`, `d956968`, `3ddc30b` plus stopped edits | Same FO concept directory; registered test-only library and probes | Final concept-only layout integrated. Production files matched main after demotion. Original radial hybrid test was removed by that demotion; its prior form remains in worker history. |
 | Opus W1, SIMPLE-w1 `9b28f29` | `test/tests/field_can/test_spectre_switch_roundtrip.f90` | Diagnostic integrated and registered. Long-run comparison remains incomplete/non-equivalent. |
-| Opus W4, SIMPLE-w4 uncommitted | `concept/fo_logical_spline/` | Generator, emitted RHS, spline provider and benchmark source retained. All tracked production edits in `pending-integration.patch`; not enabled. Build, interface fidelity and speedup validation unfinished. |
+| Opus W4, SIMPLE-w4 uncommitted | `concept/fo_logical_spline/` | Generator, emitted RHS, spline provider and benchmark source retained. All tracked production edits in `pending-integration.patch`; not enabled. The historical prototype is superseded by the validated PR #534 implementation; preserve the draft for provenance, not promotion. |
 | Opus GC proof, SIMPLE-gcproof uncommitted | `concept/gc_symplectic_proof/` | Lean/ideal-tableau results retained; numerical oracle and CMake delta preserved as drafts outside default tests. Stellarator L5 and source-to-theorem bridge unfinished. |
 | Opus derivations, SIMPLE-derive uncommitted | `concept/fo_gc_derivations/`; two additional FO Lean files | All nonignored A–E sources and available results recovered. See below. |
 | Cleanup worker, SIMPLE-remove `d2f5b44`, SIMPLE-mainclean `fc83a75` | Existing rejection docs/verifier and merged history | Already integrated upstream; do not reapply removed maps. |
@@ -301,10 +302,10 @@ layer does not discharge the others.
 | E: GC2 prerequisites | Written connection, H2 and derivative-order analysis | Charge/orientation/units checks and exact derivation. Fourth magnetic derivatives for H2 Hessian and connection/metric table requirements are analysis, not completed machine proofs. |
 | All GC variants | Euler pair, midpoint/Gauss1, Gauss2–4, Lobatto3 exact PRK theorems; 22 standard-axiom results; coefficient audit | Source tie, field derivatives, radial inverse, extrapolation, terminated Newton and landing selections; stellarator map/energy oracle. |
 
-GC worker source-audit leads: possible spurious midpoint extrapolation term,
-Gauss derivative-index and omitted vpar extrapolation term. These were not
-independently established before the stop. Reproduce each against production
-before fixing it. A coefficient theorem is not a proof of those code paths.
+At the stop, the midpoint increment, Gauss Hessian index and omitted vpar
+term were source-audit leads. All three have now been independently reproduced
+and repaired as recorded above. A coefficient theorem alone still does not
+prove the remaining finite-solve/field/domain code paths.
 
 ## Performance and run status, 2026-10-14 20:18 CEST
 
@@ -318,16 +319,15 @@ for this SPECTRE study. These are status observations, not a monitoring service.
 The old eight-thread, 64-marker, 2 ms hybrid cases took 1848–3343 s on a loaded
 host (`concept/symplectic_sheet/README.md`). Linear marker-count scaling gives
 2.05–3.71 h for 256 markers with the same launch distribution and settings.
-Use 2–4 h per configuration as a provisional planning allowance: four paired
-hybrid/FO configurations across two fields would consume about 8–16 h if run
-sequentially; the W2 matrix below has 26 configurations and would consume about
-52–104 h. Parallel allocations reduce elapsed time, not total work. Neither
-G3V3L3Fi cost, volume-sampled FO residence, tolerance scaling nor available
-cluster capacity has been measured for this matrix, so this is not a completion
-ETA. Longer times and larger ensembles increase the work, subject to early loss.
+The controller initially budgeted 2–4 h per configuration, or 52–104 h for
+26 configurations. This historical allowance is superseded by the direct
+16-thread volume-sampled measurements above and must not be used as the
+current ETA. The full entry/tolerance matrix and cluster capacity remain
+unmeasured; longer times and larger ensembles increase work, subject to loss.
 The 256-marker, 2 ms matrix is an initial comparison, not long-time validation.
 
-W4 has no measured speedup. Its pending patch calls `gc_map` after every
+At the stopped-session checkpoint, W4 had no measured speedup. Its old
+pending patch calls `gc_map` after every
 accepted FO substep, and that routine calls `spectre_fo_field_locate` before
 checking exit. Thus it removes Cartesian inversion from RK stages but retains
 an iterative coordinate inversion in every accepted-step exit check. A fast
@@ -419,7 +419,7 @@ than the previous spline implementation, or 6.8–7.4x faster than main in this
 short nonphysical witness. No field-order or transition-threshold change was
 introduced. This is pushed as `6bbdef0` on PR #534 and `f876d28` on this branch.
 
-The next stage completed locally: 32 matched markers, 200 microseconds, 16
+The initial longer stage (before the axis repair) ran locally: 32 matched markers, 200 microseconds, 16
 physical cores, both equilibria and sampling sets, FO/current hybrid, main vs
 default/refined splines (24 cases). No cluster jobs were launched. FO tracing
 improves 5.5–7.3x; all paired loss statuses match. However, the NCSX volume
@@ -438,11 +438,11 @@ checks. This is pushed as `47d3fb0` on PR #534 / `9c62300` on this branch;
 the repaired longer controls are complete as recorded above. This fix
 retains cheap field evaluation without a raw fallback or a new setting.
 The study controller now includes the provider in its source hashes and refuses
-unresolved intervals as scientific acceptance. The GC audit is prepared in
-`research/gc-source-audit-20261014`; it is not compiled concurrently with timing
-runs and contains no production correction yet.
-After those controls pass, `full.py` measures 256-marker, 2 ms volume controls
-on 16 local cores: default/refined FO and the current hybrid on both fields.
+unresolved intervals as scientific acceptance. The later GC audit is complete to the stated source/numerical scope and
+collected here; its three verified repairs are isolated in PR #535. Builds
+were kept separate from the primary throughput measurements.
+`full.py` completed the 256-marker, 2 ms volume controls on 16 local cores,
+followed by both GC-fixed hybrid replays; see the current checkpoint above.
 This answers the actual cost question before the full entry/tolerance matrix.
 It is conditional on the current deterministic entry phase. FO uses particle
 position at the outer edge; GC segments use the guiding-centre edge convention.
@@ -454,22 +454,30 @@ and plotting source reproduce them. The convergence plot was uploaded to
 
 1. **W4 first: review and validate the focused performance PR above.** The
    regular logical-position/Cartesian-velocity path is implemented and locally
-   checked. Complete longer NCSX/G3V3L3Fi trajectory/loss and spline-grid
-   convergence before promotion. Keep the existing physical transition criteria.
+   checked, including longer NCSX/G3V3L3Fi trajectory/loss and two-grid controls.
+   Review the retained spatial/loss differences against the required accuracy
+   before promotion. Keep the existing physical transition criteria.
    Profile the remaining spline-only GC reconstruction before introducing a
    conservative exit screen. Measure end-to-end cost, including setup and FO
    residence, under controlled load. The repaired 200 us tracing improvement is
    5.8–7.4x; the >=10x per-step target is not established. Current main retains
    its Cartesian path until a reviewed performance change is promoted.
 2. **Finish the production GC proof bridge (three source repairs verified; uniform proof still open).** Map each of the eight variants'
-   actual equations and field/extrapolation operations to its theorem. Restore
-   the draft oracle on a development branch; run NCSX canonical-flux/Boozer and
-   QH cases. Preserve one-step/100-step defect gates (1e-7/1e-5), spacing controls
-   and the negative control. Repair only reproduced implementation defects.
+   actual equations and field/extrapolation operations to its theorem. The
+   stellarator one-step/100-step numerical checks pass; preserve their bounds
+   (1e-7/1e-5), spacing and negative controls. Quantify finite-Newton and field
+   errors and establish a suitable smooth-domain/time-step hypothesis for the
+   unresolved long-energy claim. Preserve the failed energy/domain evidence.
 3. **W1/W3: validate and integrate the consistent switch.** Item D's native build, local identity checks,
    regeneration and independent numerical pullback are complete. Implement
    the extended canonical action/phase and gyrogauge connection tables, then
-   audit physical units and matching to production GC variables. Require scaled round-trip identity
+   audit physical units and matching to production GC variables. Reuse the
+   recovered local Darboux completion; a gyrofrequency counter on fixed-mu
+   GC is insufficient. Phase-complete first-order evolution also needs the
+   consistent H2 frequency correction; investigate splining its coefficient
+   fields to keep tracing cheap, rather than evaluating high derivatives per
+   stage. These tables and the real-field six-dimensional model are not yet
+   implemented. Require scaled round-trip identity
    at 1e-12, O(epsilon^2) mu defect and independent FO reconstruction. Replace
    both entry and exit together with carried phase. Redesign the long-run
    comparison so it distinguishes sheet physics, switch error and artificial
