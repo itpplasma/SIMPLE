@@ -37,23 +37,27 @@ a singular raw pole evaluation, check the field there. Aggregate loss
 agreement alone is insufficient for scientific promotion.
 
 The six 256-marker, 2 ms physical-volume controls are complete, each on
-16 bound local OpenMP threads. All have zero stops/failures/holds. Retained
-starts, sparse traces, health, provenance and paired statistics are in
-`concept/spectre_loss_study/results/full/{summary.json,traces.npz}`. Reproduce
-plots with `full_report.py RESULTS_DIR OUTPUT_DIR`.
+16 bound local OpenMP threads. Both hybrids were replayed after the GC repair
+with zero stops/failures/holds. The table uses those latest hybrid rows and
+the unchanged original FO references (FO throughout does not execute the
+repaired GC stepper). Retained starts, sparse traces, case-specific provenance
+and paired statistics are in `concept/spectre_loss_study/results/full-gc-fixed/`.
+The original six-run snapshot remains in `results/full/`. Reproduce plots with
+`full_report.py RESULTS_DIR OUTPUT_DIR`; the replay is an accuracy check on a
+shared host, rather than a fresh controlled throughput benchmark.
 
 | Field / model | Tracing [s] | End-to-end [s] | Losses / 256 | FO residence |
 | --- | ---: | ---: | ---: | ---: |
 | NCSX FO default | 436.59 | 451.36 | 101 | 100% |
 | NCSX FO refined | 440.55 | 458.70 | 99 | 100% |
-| NCSX current hybrid | 218.95 | 233.73 | 99 | 29.9% |
+| NCSX current hybrid | 228.82 | 249.20 | 98 | 29.9% |
 | G3V3L3Fi FO default | 105.17 | 117.70 | 53 | 100% |
 | G3V3L3Fi FO refined | 109.02 | 128.60 | 53 | 100% |
-| G3V3L3Fi current hybrid | 48.47 | 61.06 | 48 | 38.8% |
+| G3V3L3Fi current hybrid | 49.19 | 65.98 | 48 | 38.8% |
 
 Relative to refined FO, NCSX default FO has four paired status disagreements
-(net +0.781 percentage points, paired SE 0.781 pp); the hybrid has six
-(net zero, SE 0.959 pp). Both-lost NCSX markers can differ in loss time by
+(net +0.781 percentage points, paired SE 0.781 pp); the repaired hybrid has seven
+(net -0.391 pp, SE 1.035 pp). Both-lost NCSX markers can differ in loss time by
 1.08 ms (default FO) / 1.24 ms (hybrid), so equal final counts are not pathwise
 convergence. G3V3L3Fi default/refined FO have no status disagreements and a
 maximum paired loss-time difference of 2.14e-12 s. Zero disagreements in 256
@@ -93,10 +97,10 @@ it is pushed as PR #535, commit `6970eff`. Native main-based checks pass
 85/85 in 478.83 s; after fixing local interpreter discovery, the rebuilt
 Python API suite passes all 17 cases in 99.52 s. Other backend-dependent Python
 suites were not rerun. The repair is integrated here as `0993478`; affected
-SPECTRE checks pass, 22/22 in 137.19 s. Two 256-marker hybrid controls
-are being replayed against the retained FO references to check the GC repair;
-this replay is an accuracy comparison on a shared host, not a replacement
-controlled throughput benchmark.
+SPECTRE checks pass, 22/22 in 137.19 s. Both 256-marker hybrid controls
+were replayed against retained FO references, giving 98 NCSX / 48 G3V3L3Fi
+losses with no stops/failures/holds. The original NCSX hybrid lost 99; one
+additional paired final-status difference is retained rather than suppressed.
 
 All eight methods pass the one-step/100-step NCSX canonical-flux/Boozer and QH
 Boozer map checks with unchanged bounds (1e-7/1e-5) and original spacings
