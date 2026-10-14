@@ -1045,3 +1045,130 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     LABELS "unit;chartmap"
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
+
+# Compare the shipped implementation with the pinned handwritten predecessor.
+set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
+file(READ "${FO_PROOF_DIR}/reference_gauss2.f90" FO_REFERENCE_SOURCE)
+string(REPLACE "module spectre_fo_gauss2" "module reference_fo_gauss2"
+    FO_REFERENCE_SOURCE "${FO_REFERENCE_SOURCE}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/reference_gauss2.f90" "${FO_REFERENCE_SOURCE}")
+add_executable(test_fo_symplectic.x
+    ${CMAKE_CURRENT_BINARY_DIR}/reference_gauss2.f90
+    ${FO_PROOF_DIR}/generated_stepper.f90
+    test_fo_symplectic.f90)
+target_include_directories(test_fo_symplectic.x PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/generated)
+target_link_libraries(test_fo_symplectic.x PRIVATE simple)
+target_compile_options(test_fo_symplectic.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+set_target_properties(test_fo_symplectic.x PROPERTIES
+    Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fo_proof_modules)
+add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000)
+set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
+add_test(NAME test_fo_symplectic_long COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000)
+set_tests_properties(test_fo_symplectic_long PROPERTIES
+    LABELS "slow;integration" TIMEOUT 14400)
+
+add_test(NAME test_fo_symplectic_resolved COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100)
+set_tests_properties(test_fo_symplectic_resolved PROPERTIES
+    LABELS "integration" TIMEOUT 900)
+add_test(NAME test_fo_symplectic_resolved_long COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 100)
+set_tests_properties(test_fo_symplectic_resolved_long PROPERTIES
+    LABELS "slow;integration" TIMEOUT 14400)
+
+add_test(NAME test_fo_symplectic_newton_boundary COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1 failure)
+set_tests_properties(test_fo_symplectic_newton_boundary PROPERTIES
+    LABELS "integration" TIMEOUT 30)
+
+set(SIMPLE_FORTSYM_BUILD "${CMAKE_SOURCE_DIR}/../fortsym/build" CACHE PATH
+    "Existing FortSym build for the optional FO generator proof test")
+if(EXISTS "${SIMPLE_FORTSYM_BUILD}/include/fortsym_fparse.mod")
+    add_test(NAME test_fo_symplectic_generated COMMAND bash
+        ${CMAKE_SOURCE_DIR}/gen/check_fo_generated.sh)
+    set_tests_properties(test_fo_symplectic_generated PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} LABELS "proof;slow" TIMEOUT 1200
+        ENVIRONMENT "FORTSYM_BUILD=${SIMPLE_FORTSYM_BUILD}")
+endif()
+
+# Second 3D stellarator already shipped with the pinned libneo dependency.
+# Its provenance identifies SPECTRE's Nfp=5, Ntor=2 G3V3L3Fi case.
+set(FO_SECOND_FIELD "${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5")
+foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+    set(fo_nsteps 1000)
+    set(fo_velocity 1)
+    if(fo_suffix MATCHES "long")
+        set(fo_nsteps 1000000)
+    endif()
+    if(fo_suffix MATCHES "resolved")
+        set(fo_velocity 100)
+    endif()
+    add_test(NAME test_fo_symplectic_${fo_suffix} COMMAND test_fo_symplectic.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity})
+    set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
+        LABELS "integration" TIMEOUT 900)
+    if(fo_suffix MATCHES "long")
+        set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
+            LABELS "integration;slow" TIMEOUT 14400)
+    endif()
+endforeach()
+
+# Same fictitious duration at successive resolutions; no hybrid switches.
+foreach(fo_probe IN ITEMS base half quarter tight base_short captured captured_base)
+    set(probe_marker 20)
+    set(probe_steps 1000000)
+    set(probe_factor 1)
+    set(probe_tol 1e-12)
+    if(fo_probe STREQUAL "half")
+        set(probe_steps 2000000)
+        set(probe_factor 0.5)
+    elseif(fo_probe STREQUAL "quarter")
+        set(probe_steps 4000000)
+        set(probe_factor 0.25)
+    elseif(fo_probe STREQUAL "tight")
+        set(probe_steps 50000)
+        set(probe_tol 1e-13)
+    elseif(fo_probe STREQUAL "base_short")
+        set(probe_steps 50000)
+    elseif(fo_probe STREQUAL "captured_base")
+        set(probe_marker 120)
+    elseif(fo_probe STREQUAL "captured")
+        set(probe_marker 120)
+        set(probe_factor 0.5)
+    endif()
+    add_test(NAME test_fo_gauss2_resolution_${fo_probe} COMMAND test_fo_symplectic.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5
+        ${probe_steps} 1 ${probe_marker} ${probe_factor} ${probe_tol})
+    set_tests_properties(test_fo_gauss2_resolution_${fo_probe} PROPERTIES
+        LABELS "regression;integration;slow" TIMEOUT 3600)
+endforeach()
+
+# Match the original million-step fictitious duration after fixed h/4 refinement.
+add_test(NAME test_fo_gauss2_resolution_large_matched COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 4000000 100 0 0.25)
+set_tests_properties(test_fo_gauss2_resolution_large_matched PROPERTIES
+    LABELS "regression;integration;slow" TIMEOUT 3600)
+# Also retain the original proof's larger-velocity map oracle at base h.
+add_test(NAME test_fo_gauss2_original_oracle COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 1)
+set_tests_properties(test_fo_gauss2_original_oracle PROPERTIES
+    LABELS "integration" TIMEOUT 900)
+
+# Same fictitious duration as the original P2 million-step larger-velocity run.
+add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_symplectic.x
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 33333334 100 0 0)
+set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
+    LABELS "regression;integration;slow" TIMEOUT 3600)

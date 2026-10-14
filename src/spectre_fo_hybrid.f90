@@ -1,5 +1,8 @@
 module spectre_fo_hybrid
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use spectre_fo_gauss2, only: gauss2_prepare, gauss2_encode, gauss2_decode, &
+        gauss2_step, gauss2_gauge_zeta, gauss2_entry_step
     use libneo_coordinates, only: spectre_coordinate_system_t
     use magfie_sub, only: spectre_field, TESLA_TO_GAUSS, M_TO_CM
     implicit none
@@ -15,6 +18,8 @@ module spectre_fo_hybrid
     real(dp), parameter :: OWNER_EPS = 1.0e-12_dp
     integer, parameter :: STAGE_IN = 0, STAGE_OUT = 1
     !> RK45 relative tolerance, configured before parallel tracing.
+    integer, parameter, public :: FO_RK45 = 1, FO_GAUSS2 = 2
+    integer :: fo_integrator = FO_RK45
     real(dp) :: fo_tolerance = 1.0e-9_dp
     ! At most 0.1 rad (1/63 of a gyro-period). A cross-and-return hidden
     ! between stage samples has circular-orbit depth <= rho_L*(1-cos(0.05)),
@@ -34,6 +39,12 @@ module spectre_fo_hybrid
         real(dp) :: entry_pzeta_defect = 0.0_dp
         !> Next RK45 step (adapted between substeps).
         real(dp) :: h_rk = 0.0_dp
+        ! All Gauss parameters are fixed at FO entry.
+        real(dp) :: z_gauss(6) = 0.0_dp
+        real(dp) :: h_tau = 0.0_dp, energy = 0.0_dp
+        real(dp) :: layer_rho = 0.0_dp, refine_length = 0.0_dp
+        real(dp) :: g_min = 1.0_dp, radial_scale = 0.0_dp
+        real(dp) :: gc_check_time = 0.0_dp
         !> Volume whose gauge entry_pzeta is expressed in.
         integer :: entry_owner = 0
         !> Exit when the guiding centre is farther than this from the interface
@@ -49,12 +60,20 @@ module spectre_fo_hybrid
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta
 contains
-    subroutine spectre_fo_configure(tolerance)
+    subroutine spectre_fo_configure(tolerance, integrator)
         real(dp), intent(in) :: tolerance
+        integer, intent(in), optional :: integrator
 
         if (tolerance <= 0.0_dp) &
             error stop 'spectre_fo_configure: tolerance must be positive'
         fo_tolerance = tolerance
+        fo_integrator = FO_RK45
+        if (present(integrator)) then
+            if (integrator /= FO_RK45 .and. integrator /= FO_GAUSS2) &
+                error stop 'spectre_fo_configure: unknown integrator'
+            fo_integrator = integrator
+        end if
+        if (fo_integrator == FO_GAUSS2) call gauss2_prepare
     end subroutine spectre_fo_configure
     subroutine spectre_fo_enter(state, y, owner, iface, ro0_bar, status)
         type(spectre_fo_state_t), intent(out) :: state
@@ -62,7 +81,8 @@ contains
         integer, intent(in) :: owner, iface
         integer, intent(out) :: status
         real(dp) :: x_gc(3), b(3), e1(3), e2(3), eperp(3), e_zeta(3)
-        real(dp) :: acov(3), bmod, vpar, vperp, target, alpha
+        real(dp) :: acov(3), bmod, vpar, vperp, target, alpha, radial_speed, h_entry
+        logical :: ok
         state = spectre_fo_state_t()
         if (ro0_bar <= 0.0_dp .or. y(4) <= 0.0_dp) then
             status = SPECTRE_FO_INVALID_STATE
@@ -97,6 +117,33 @@ contains
             call phase_residual(alpha, x_gc, y(1:3), owner, b, e1, e2, vpar, &
                 vperp, target, ro0_bar, state%entry_pzeta_defect, status)
             if (status /= SPECTRE_FO_OK) return
+        end if
+        if (fo_integrator == FO_GAUSS2) then
+            radial_speed = sqrt(2.0_dp)*y(4)/M_TO_CM*radial_gradient(y(1:3))
+            state%layer_rho = 0.05_dp*ro0_bar/bmod*radial_speed
+            if (state%layer_rho <= 0.0_dp .or. state%layer_rho >= 1.0_dp) then
+                status = SPECTRE_FO_INVALID_STATE
+                return
+            end if
+            h_entry = RK_GYRO_ANGLE*ro0_bar/bmod
+            state%refine_length = max(16.0_dp*h_entry*radial_speed, &
+                16.0_dp*state%layer_rho)
+            state%g_min = min(0.1_dp, state%layer_rho/ &
+                (256.0_dp*h_entry*radial_speed))
+            state%energy = 0.5_dp*dot_product(state%v, state%v)
+            state%radial_scale = (state%refine_length/ &
+                (16.0_dp*h_entry*sqrt(2.0_dp*state%energy)))**2
+            ! Prescribed safety refinement, chosen before any stage solve.
+            ! Retain the Hamiltonian's metric reference from the base entry h.
+            state%h_tau = gauss2_entry_step(h_entry, state%layer_rho, &
+                state%refine_length, state%g_min)
+            state%z_gauss(1:3) = state%u
+            call gauss2_encode(state%x, state%v, state%layer_rho, ro0_bar, &
+                state%z_gauss, ok)
+            if (.not. ok) then
+                status = SPECTRE_FO_LOCATE_FAIL
+                return
+            end if
         end if
         state%active = .true.
     end subroutine spectre_fo_enter
@@ -151,6 +198,11 @@ contains
                 return
             end if
             hfac = h_scale
+        end if
+        if (fo_integrator == FO_GAUSS2) then
+            call gauss_advance_until_exit(state, dt, ro0_bar, hfac, dt_used, &
+                y, owner, exited, status)
+            return
         end if
         remaining = dt
         do nstep = 1, MAX_SUBSTEPS
@@ -319,11 +371,85 @@ contains
             status = SPECTRE_FO_INVALID_STATE
             return
         end if
+        if (fo_integrator == FO_GAUSS2) then
+            pzeta = state%z_gauss(6) - gauss2_gauge_zeta( &
+                state%z_gauss(1:3), state%owner, ro0_bar)
+            status = SPECTRE_FO_OK
+            return
+        end if
         call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
             e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
     end subroutine spectre_fo_canonical_pzeta
+    subroutine gauss_advance_until_exit(state, dt, ro0_bar, hfac, dt_used, &
+            y, owner, exited, status)
+        type(spectre_fo_state_t), intent(inout) :: state
+        real(dp), intent(in) :: dt, ro0_bar, hfac
+        real(dp), intent(out) :: dt_used, y(5)
+        integer, intent(out) :: owner, status
+        logical, intent(out) :: exited
+        real(dp) :: z1(6), clock, x1(3), v1(3)
+        integer :: nstep, map_status
+        logical :: ok
+
+        dt_used = 0.0_dp
+        y = 0.0_dp
+        owner = state%owner
+        exited = .false.
+        status = SPECTRE_FO_INVALID_STATE
+        if (state%h_tau <= 0.0_dp .or. state%energy <= 0.0_dp .or. &
+            state%layer_rho <= 0.0_dp .or. state%layer_rho >= 1.0_dp) return
+        status = SPECTRE_FO_OK
+        do nstep = 1, 10000000
+            if (dt_used >= dt) return
+            call gauss2_step(state%z_gauss, state%layer_rho, ro0_bar, state%energy, &
+                state%refine_length, state%g_min, hfac*state%h_tau, z1, clock, ok, &
+                radial_scale=state%radial_scale)
+            if (.not. ok) then
+                ! Retain the last accepted canonical state and refresh its
+                ! Cartesian representation before propagating the failure.
+                call gauss2_decode(state%z_gauss, state%layer_rho, ro0_bar, &
+                    state%x, state%v)
+                status = SPECTRE_FO_STEP_LIMIT
+                return
+            end if
+            state%z_gauss = z1
+            state%u = z1(1:3)
+            state%owner = min(max(int(z1(1)) + 1, 1), spectre_field%data%Mvol)
+            owner = state%owner
+            dt_used = dt_used + clock
+            state%gc_check_time = state%gc_check_time + clock
+            if (state%gc_check_time < 0.25_dp*hfac*state%h_tau .and. &
+                dt_used < dt .and. z1(1) < real(spectre_field%data%Mvol, dp)) cycle
+            call gauss2_decode(z1, state%layer_rho, ro0_bar, x1, v1)
+            if (.not. all(ieee_is_finite(v1))) then
+                status = SPECTRE_FO_INVALID_STATE
+                return
+            end if
+            state%x = x1
+            state%v = v1
+            state%gc_check_time = 0.0_dp
+            if (z1(1) >= real(spectre_field%data%Mvol, dp)) then
+                status = SPECTRE_FO_LOSS
+                return
+            end if
+            call spectre_fo_to_gc(state, ro0_bar, y, owner, map_status)
+            if (map_status /= SPECTRE_FO_OK) cycle
+            state%last_y = y
+            call check_exit(state, y, owner, exited, map_status)
+            if (map_status /= SPECTRE_FO_OK) then
+                status = map_status
+                return
+            end if
+            if (exited) then
+                state%active = .false.
+                return
+            end if
+        end do
+        status = SPECTRE_FO_STEP_LIMIT
+    end subroutine gauss_advance_until_exit
+
     subroutine rk45_substep(state, h, ro0_bar, status, angle_limit)
         !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
         !> the sharp field the stages use the owner's field, held at

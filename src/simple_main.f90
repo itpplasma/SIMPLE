@@ -642,8 +642,8 @@ contains
         use params, only: spectre_ncon_ode_relerr
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
-        use spectre_fo_hybrid, only: spectre_fo_configure
-        use params, only: spectre_fo_tolerance
+        use spectre_fo_hybrid, only: spectre_fo_configure, FO_RK45, FO_GAUSS2
+        use params, only: spectre_fo_tolerance, spectre_fo_experimental_gauss2
 
         type(tracer_t), intent(inout) :: self
 
@@ -664,7 +664,8 @@ contains
         call set_magfie_spectre_field(sf)
 
         ! Shared by simple.x and simple_api, before any parallel tracing.
-        call spectre_fo_configure(spectre_fo_tolerance)
+        call spectre_fo_configure(spectre_fo_tolerance, &
+            merge(FO_GAUSS2, FO_RK45, spectre_fo_experimental_gauss2))
 
         r00 = 0.0d0
         do ii = 1, sf%data%mn

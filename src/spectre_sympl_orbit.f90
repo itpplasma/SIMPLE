@@ -80,6 +80,7 @@ module spectre_sympl_orbit
         integer :: warning_hold_iface = 0
         integer :: warning_hold_direction = 0
         real(dp) :: warning_hold_z(4) = 0.0_dp
+        real(dp) :: fo_time_ahead = 0.0_dp
         type(spectre_fo_state_t) :: fo
     end type sympl_spectre_state_t
 
@@ -165,7 +166,10 @@ contains
         t_frac = 1.0_dp
         si%warning_factor = symplectic_spectre_newton_warning_factor
         budget = state%dt_std
-        used = 0.0_dp
+        used = min(state%fo_time_ahead, state%dt_std)
+        state%fo_time_ahead = state%fo_time_ahead - used
+        budget = budget - used
+        if (budget <= budget_eps*state%dt_std) return
         h_try = budget
 
         if (state%fo%active) then
@@ -623,6 +627,11 @@ contains
         call spectre_fo_advance_until_exit(state%fo, budget, ro0/sqrt2, &
             dt_used, y_out, owner_out, exited, ierr)
         used = used + dt_used
+        ! A complete Gauss map may overshoot the output clock interval.
+        if (state%fo%h_tau > 0.0_dp .and. used > state%dt_std) then
+            state%fo_time_ahead = state%fo_time_ahead + used - state%dt_std
+            used = state%dt_std
+        end if
         budget = state%dt_std - used
         if (ierr /= SPECTRE_FO_OK) then
             if (ierr == SPECTRE_FO_LOSS) then

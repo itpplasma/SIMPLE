@@ -142,4 +142,16 @@ set_tests_properties(test_magfie_spectre_analytic_stell PROPERTIES
 add_executable(test_spectre_fo_gauss2.x test_spectre_fo_gauss2.f90)
 target_link_libraries(test_spectre_fo_gauss2.x PRIVATE simple)
 add_test(NAME test_spectre_fo_gauss2 COMMAND test_spectre_fo_gauss2.x
-    ${CMAKE_SOURCE_DIR}/test/tests/data/spectre_tokamak.h5)
+    ${CMAKE_SOURCE_DIR}/test/tests/data/tok2vol.h5 field)
+set_tests_properties(test_spectre_fo_gauss2 PROPERTIES LABELS "integration" TIMEOUT 120)
+
+add_executable(test_spectre_fo_gauss2_radial_refinement.x
+    test_spectre_fo_gauss2_radial_refinement.f90)
+target_link_libraries(test_spectre_fo_gauss2_radial_refinement.x PRIVATE simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gauss2_radial_refinement)
+add_test(NAME test_spectre_fo_gauss2_radial_refinement
+    COMMAND test_spectre_fo_gauss2_radial_refinement.x
+        ${CMAKE_SOURCE_DIR}/test/tests/data/ncsx_freeboundary.h5)
+set_tests_properties(test_spectre_fo_gauss2_radial_refinement PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gauss2_radial_refinement
+    LABELS "integration" ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 120)

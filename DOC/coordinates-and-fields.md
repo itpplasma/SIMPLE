@@ -697,6 +697,25 @@ non-canonical RK45 path, which uses only `bmod`/`sqrtg`/`bder`/`hcovar`/
 unchanged: `v0`, `ro0 = v0 m c / e` (cm*Gauss), and `dtaumin = 2*pi*rmajor/
 npoiper2` (cm).
 
+**Experimental canonical full orbit**. `spectre_fo_experimental_gauss2 = .true.`
+selects a smooth-layer FO segment with canonical `q = (rho_g, theta, zeta)`
+and `P_i = e_i dot v + A_i/ro0_bar`. The physical Hamiltonian is
+`H = (P-A/ro0_bar)^T g^{-1} (P-A/ro0_bar)/2`, with the embedding and its Gram
+metric in cm. The potential uses `TESLA_TO_GAUSS*M_TO_CM**2/ro0_bar`; both
+covariant A and the embedding are blended, then differentiated from that same
+representation. The field-provider code is shared with the independent
+checks; field evaluation on this FO path is spectral rather than splined.
+
+The scalar-generated `src/generated/fo_kernel.f90` and five includes are the
+unaltered registered output from proof commit `a27d1ec`. They supply H, its
+jets, the inverse radial metric, the full monitor jet, and `f/df` of
+`K = t(q)*(H-E0)`. All excursion parameters and the layer-resolved entry step are
+frozen; the physical clock uses the two stage monitor values. The Gauss2
+exact-stage theorem covers regular differentiable fixed-parameter FO maps.
+L4 arithmetic/terminated-Newton bounds, entry selection and the noncanonical
+GC↔FO switch remain open. This option is experimental; RK45 stays the default.
+See [the integration evidence](../concept/fo_symplectic_proof/README.md).
+
 **Sampler**. `startmode = 1` samples the control surface `rho_g = sbeg(1)`:
 `(theta, zeta)` grid nodes drawn with probability proportional to the surface
 Jacobian `|e_theta x e_zeta|`, uniform velocity magnitude, random pitch. The
@@ -942,6 +961,7 @@ detected automatically from `field_input`; see
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
 | `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
+| `spectre_fo_experimental_gauss2` | logical | `.false.` | opt in to experimental canonical smooth-layer Gauss2 FO |
 | `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of sharp-field RK45 with exact crossings |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |

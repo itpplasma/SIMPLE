@@ -31,6 +31,7 @@
     chamb_m.f90
     sub_alpha_lifetime_can.f90
     spectre_orbit.f90
+    generated/fo_kernel.f90
     spectre_fo_gauss2.f90
     spectre_fo_hybrid.f90
     spectre_sympl_orbit.f90
@@ -105,6 +106,7 @@ list(APPEND SOURCES
         target_link_libraries(simple PUBLIC simple_cuda_native_rk54)
     endif()
 
+    target_include_directories(simple PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/generated)
     target_include_directories(simple PUBLIC
         $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>
     )

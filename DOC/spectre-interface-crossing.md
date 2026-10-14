@@ -67,6 +67,26 @@ FO loss counters cover only FO phases.
 FO configuration is applied in shared SPECTRE field initialization, before
 parallel tracing, identically for `simple.x` and `simple_api`/`pysimple`.
 
+## Experimental Gauss2 full orbit
+
+`spectre_fo_experimental_gauss2 = .true.` selects the canonical smooth-layer FO
+implementation; RK45 remains the default. Gauss2 blends the vector potential
+and chart embedding, uses the unchanged scalar-generated proof kernel, and
+solves the two implicit stages at absolute residual tolerance `1e-12`. Layer
+width, E0, monitor parameters, metric reference and h are fixed at FO entry.
+The entry step is `h_entry/2 * min(1,width/(gmin*length))`, chosen before the
+first stage solve, with the metric reference computed from the original entry
+step. Each step advances the
+physical clock by Gauss quadrature of the two stage monitors; output overshoot
+is carried into the next interval.
+
+The proven scope is the regular differentiable exact-stage branch of a
+fixed-parameter Hamiltonian Gauss2 map in a nonsingular smooth chart. The
+terminated solver, provider jets and floating-point arithmetic retain L4
+obligations. Entry parameter selection and the GC↔FO switch are not established
+canonical maps. Stellarator measurements and the resolution diagnosis are in
+[the integration README](../concept/fo_symplectic_proof/README.md).
+
 ## Warning: guiding-centre maps at strong interface jumps
 
 Guiding-centre (GC) crossing maps (`crossing_level = 0` or `1`) are not

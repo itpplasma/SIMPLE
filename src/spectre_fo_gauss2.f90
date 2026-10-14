@@ -8,6 +8,8 @@ module spectre_fo_gauss2
     use fortnum_linalg, only: inv3
     use spectre_basis, only: spectre_vecpot_t, eval_spectre_vector_potential, &
         get_cheby_d2, get_zernike_d2
+    use fo_kernel, only: fo_eval, fo_monitor_factor, fo_jet_product, &
+        fo_radial, fo_metric_monitor
     implicit none
     private
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
@@ -16,7 +18,8 @@ module spectre_fo_gauss2
         0.25_dp + sqrt(3.0_dp)/6.0_dp, 0.25_dp - sqrt(3.0_dp)/6.0_dp, &
         0.25_dp], [2, 2])
     public :: gauss2_prepare, gauss2_geometry, gauss2_potential, gauss2_hamiltonian
-    public :: gauss2_step, gauss2_encode, gauss2_decode, gauss2_gauge_zeta
+    public :: gauss2_entry_step, gauss2_eval, gauss2_step
+    public :: gauss2_encode, gauss2_decode, gauss2_gauge_zeta
 contains
     subroutine gauss2_prepare
         !> Match the interface one-forms mode by mode. Their nonconstant part
@@ -405,156 +408,135 @@ contains
             radial_metric, radial_grad, radial_hess)
         real(dp), intent(in) :: z(6), width, ro0
         real(dp), intent(out) :: energy, grad(6), hess(6, 6)
-        ! Optional jet of g^{rho rho}, in inverse cm squared.
         real(dp), intent(out), optional :: radial_metric, radial_grad(3)
         real(dp), intent(out), optional :: radial_hess(3, 3)
-        real(dp) :: x(3), e(3, 3), metric(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
-        real(dp) :: a(3), da(3, 3), d2a(3, 3, 3), w(3), v(3)
-        real(dp) :: gi(3, 3), dgi(3, 3, 3), d2gi(3, 3), tmp(3, 3)
-        real(dp) :: basis_norm(3), unit_metric(3, 3)
-        integer :: i, j
+        real(dp) :: f(6), df(6, 6), rj(10)
 
-        call gauss2_geometry(z(1:3), width, x, e, metric, dg, d2g)
-        call gauss2_potential(z(1:3), width, ro0, a, da, d2a)
-        ! The guard on an unscaled metric mistakes coordinate aspect ratio
-        ! for singular geometry. Invert the Gram matrix of unit basis vectors.
-        do i = 1, 3
-            basis_norm(i) = sqrt(metric(i, i))
-        end do
-        do j = 1, 3
-            do i = 1, 3
-                unit_metric(i, j) = metric(i, j)/(basis_norm(i)*basis_norm(j))
-            end do
-        end do
-        gi = inverse3(unit_metric)
-        do j = 1, 3
-            do i = 1, 3
-                gi(i, j) = gi(i, j)/(basis_norm(i)*basis_norm(j))
-            end do
-        end do
-        if (present(radial_metric)) radial_metric = gi(1, 1)
-        w = z(4:6) - a
-        v = matmul(gi, w)
-        energy = 0.5_dp*dot_product(w, v)
-        grad(4:6) = v
-        hess(4:6, 4:6) = gi
-        do i = 1, 3
-            dgi(:, :, i) = -matmul(gi, matmul(dg(:, :, i), gi))
-            if (present(radial_grad)) radial_grad(i) = dgi(1, 1, i)
-            grad(i) = 0.5_dp*dot_product(w, matmul(dgi(:, :, i), w)) &
-                - dot_product(da(:, i), v)
-            hess(i, 4:6) = matmul(dgi(:, :, i), w) - matmul(gi, da(:, i))
-            hess(4:6, i) = hess(i, 4:6)
-        end do
-        do j = 1, 3
-            do i = 1, 3
-                tmp = matmul(dg(:, :, j), matmul(gi, dg(:, :, i))) &
-                    + matmul(dg(:, :, i), matmul(gi, dg(:, :, j))) - d2g(:, :, i, j)
-                d2gi = matmul(gi, matmul(tmp, gi))
-                if (present(radial_hess)) radial_hess(i, j) = d2gi(1, 1)
-                hess(i, j) = 0.5_dp*dot_product(w, matmul(d2gi, w)) &
-                    - dot_product(da(:, i), matmul(dgi(:, :, j), w)) &
-                    - dot_product(da(:, j), matmul(dgi(:, :, i), w)) &
-                    + dot_product(da(:, i), matmul(gi, da(:, j))) &
-                    - dot_product(d2a(:, i, j), v)
-            end do
-        end do
+        call gauss2_eval(z, width, ro0, energy, f, df, &
+            grad=grad, hess=hess, radial_jet=rj)
+        if (present(radial_metric)) radial_metric = rj(1)
+        if (present(radial_grad)) radial_grad = rj(2:4)
+        if (present(radial_hess)) then
+            radial_hess = reshape([rj(5), rj(6), rj(8), rj(6), rj(7), &
+                rj(9), rj(8), rj(9), rj(10)], [3, 3])
+        end if
     end subroutine gauss2_hamiltonian
 
-    subroutine transformed(z, width, ro0, e0, length, gmin, radial_scale, f, df, g)
-        real(dp), intent(in) :: z(6), width, ro0, e0, length, gmin, radial_scale
-        real(dp), intent(out) :: f(6), df(6, 6), g
-        real(dp) :: energy, grad(6), hess(6, 6), gq, gqq, d, expd
-        real(dp) :: radial_metric, radial_grad(3), radial_hess(3, 3)
-        real(dp) :: monitor, m1, m2, mg(3), mh(3, 3), ggrad(3), ghess(3, 3)
-        integer :: k, i, j
+    subroutine gauss2_eval(z, width, ro0, energy, f, df, e0, length, gmin, &
+            radial_scale, kenergy, monitor, grad, hess, radial_jet)
+        real(dp), intent(in) :: z(6), width, ro0
+        real(dp), intent(out) :: energy, f(6), df(6, 6)
+        real(dp), intent(in), optional :: e0, length, gmin, radial_scale
+        real(dp), intent(out), optional :: kenergy, monitor, grad(6), hess(6, 6)
+        real(dp), intent(out), optional :: radial_jet(10)
+        real(dp) :: x(3), basis(3, 3), g(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
+        real(dp) :: av(3), da(3, 3), d2a(3, 3, 3), aj(3, 10), gj(6, 10)
+        real(dp) :: ke, gh(6), hh(6, 6), tj(10), rhoj(3), rj(10)
+        real(dp) :: factor(3), product(3), energy0
+        integer :: i, j, k, l
+        integer, parameter :: si(6) = [1, 1, 1, 2, 2, 3], sj(6) = [1, 2, 3, 2, 3, 3]
 
-        call gauss2_hamiltonian(z, width, ro0, energy, grad, hess, &
-            radial_metric, radial_grad, radial_hess)
-        g = 1.0_dp
-        gq = 0.0_dp
-        gqq = 0.0_dp
-        do k = 1, spectre_field%data%Mvol - 1
-            d = z(1) - real(k, dp)
-            expd = (1.0_dp - gmin)*exp(-(d/length)**2)
-            ! Product of positive refinements also covers neighbouring layers.
-            gqq = gqq*(1.0_dp - expd) + 4.0_dp*gq*d/length**2*expd &
-                + g*(2.0_dp/length**2 - 4.0_dp*d*d/length**4)*expd
-            gq = gq*(1.0_dp - expd) + g*2.0_dp*d/length**2*expd
-            g = g*(1.0_dp - expd)
+        call gauss2_geometry(z(1:3), width, x, basis, g, dg, d2g)
+        call gauss2_potential(z(1:3), width, ro0, av, da, d2a)
+        ! Jets: value, rho, theta, zeta, rr, rt, tt, rz, tz, zz.
+        aj(:, 1) = av
+        aj(:, 2:4) = da
+        do l = 1, 6
+            gj(l, 1) = g(si(l), sj(l))
+            gj(l, 2:4) = dg(si(l), sj(l), :)
         end do
-        ggrad = [gq, 0.0_dp, 0.0_dp]
-        ghess = 0.0_dp
-        ghess(1, 1) = gqq
-        if (radial_scale > 0.0_dp) then
-            ! The radial speed bound changes strongly along a 3D interface.
-            ! A smooth metric monitor refines the same autonomous K=g(H-E),
-            ! rather than adapting h or projecting the physical energy.
-            monitor = sqrt(radial_scale/(radial_scale + radial_metric))
-            m1 = -0.5_dp*monitor/(radial_scale + radial_metric)
-            m2 = 0.75_dp*monitor/(radial_scale + radial_metric)**2
-            mg = m1*radial_grad
-            do j = 1, 3
-                do i = 1, 3
-                    mh(i, j) = m1*radial_hess(i, j) &
-                        + m2*radial_grad(i)*radial_grad(j)
-                    ghess(i, j) = monitor*ghess(i, j) + g*mh(i, j) &
-                        + ggrad(i)*mg(j) + mg(i)*ggrad(j)
+        k = 4
+        do j = 1, 3
+            do i = 1, j
+                k = k + 1
+                aj(:, k) = d2a(:, i, j)
+                do l = 1, 6
+                    gj(l, k) = d2g(si(l), sj(l), i, j)
                 end do
             end do
-            ggrad = monitor*ggrad + g*mg
-            g = g*monitor
-        end if
-        do j = 1, 3
-            do i = 1, 3
-                hess(i, j) = g*hess(i, j) + ggrad(i)*grad(j) &
-                    + grad(i)*ggrad(j) + (energy - e0)*ghess(i, j)
-            end do
-            hess(j, 4:6) = g*hess(j, 4:6) + ggrad(j)*grad(4:6)
-            hess(4:6, j) = hess(j, 4:6)
         end do
-        hess(4:6, 4:6) = g*hess(4:6, 4:6)
-        grad(1:3) = g*grad(1:3) + (energy - e0)*ggrad
-        grad(4:6) = g*grad(4:6)
-        f(1:3) = grad(4:6)
-        f(4:6) = -grad(1:3)
-        df(1:3, :) = hess(4:6, :)
-        df(4:6, :) = -hess(1:3, :)
-    end subroutine transformed
+        ! Normalized P=e_i.v+A/ro0 has unit mass and charge.
+        energy0 = 0.0_dp
+        if (present(e0)) energy0 = e0
+        rhoj = [1.0_dp, 0.0_dp, 0.0_dp]
+        if (present(gmin) .and. present(length)) then
+            do k = 1, spectre_field%data%Mvol - 1
+                call fo_monitor_factor(z(1) - real(k, dp), length, gmin, &
+                    factor(1), factor(2), factor(3))
+                call fo_jet_product(rhoj(1), rhoj(2), rhoj(3), &
+                    factor(1), factor(2), factor(3), &
+                    product(1), product(2), product(3))
+                rhoj = product
+            end do
+        end if
+        tj = 0.0_dp
+        tj(1) = rhoj(1)
+        tj(2) = rhoj(2)
+        tj(5) = rhoj(3)
+        if (present(radial_jet)) then
+            call fo_radial(gj, rj)
+            radial_jet = rj
+        end if
+        if (present(radial_scale)) then
+            if (radial_scale > 0.0_dp) then
+                call fo_radial(gj, rj)
+                call fo_metric_monitor(rj, rhoj, radial_scale, tj)
+            end if
+        end if
+        call fo_eval(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
+            tj, energy, ke, gh, hh, f, df)
+        if (present(kenergy)) kenergy = ke
+        if (present(monitor)) monitor = tj(1)
+        if (present(grad)) grad = gh
+        if (present(hess)) hess = hh
+    end subroutine gauss2_eval
+
+    pure real(dp) function gauss2_entry_step(h_entry, width, length, gmin) result(h)
+        real(dp), intent(in) :: h_entry, width, length, gmin
+
+        ! At a sheet the rho factor is at most gmin. With the frozen metric
+        ! reference, the on-shell radial speed is bounded by length/(16*h_entry)
+        ! times this factor. Resolve the compact width as well as the monitor
+        ! length. This entry choice stays fixed for the complete FO segment.
+        h = 0.5_dp*h_entry*min(1.0_dp, width/(gmin*length))
+    end function gauss2_entry_step
 
     subroutine gauss2_step(z0, width, ro0, e0, length, gmin, h, z1, dt, ok, &
-            tangent, radial_scale)
+            tangent, radial_scale, tolerance, residual)
         real(dp), intent(in) :: z0(6), width, ro0, e0, length, gmin, h
         real(dp), intent(out) :: z1(6), dt
         logical, intent(out) :: ok
-        real(dp), intent(out), optional :: tangent(6, 6)
-        ! Frozen metric reference; omitted/zero retains radial-only refinement.
-        real(dp), intent(in), optional :: radial_scale
-        real(dp) :: y(6, 2), f(6, 2), df(6, 6, 2), g(2), jac(12, 12)
-        real(dp) :: rhs(12, 6), scale(6), resid(12), update(12), identity(6, 6)
-        real(dp) :: roundoff(12), residual_floor(12), radial_ref
-        integer :: it, i, j, info, piv(12)
-        logical :: stages_converged
+        real(dp), intent(out), optional :: tangent(6, 6), residual
+        real(dp), intent(in), optional :: radial_scale, tolerance
+        real(dp) :: dy(6, 2), y(6), f(6, 2), df(6, 6, 2), monitor(2)
+        real(dp) :: jac(12, 12), rhs(12, 6), r(6, 2), delta(12)
+        real(dp) :: eye(6, 6), energy, radial_ref, tol, res
+        integer :: i, j, it, piv(12), info
 
+        ok = .false.
         z1 = z0
         dt = 0.0_dp
-        identity = 0.0_dp
-        do i = 1, 6
-            identity(i, i) = 1.0_dp
-        end do
+        if (present(tangent)) tangent = 0.0_dp
+        if (present(residual)) residual = huge(1.0_dp)
         radial_ref = 0.0_dp
         if (present(radial_scale)) radial_ref = radial_scale
-        scale = [1.0_dp, 1.0_dp, 1.0_dp, max(abs(z0(4:6)), 100.0_dp)]
-        call transformed(z0, width, ro0, e0, length, gmin, radial_ref, &
-            f(:, 1), df(:, :, 1), g(1))
-        y(:, 1) = z0 + h*(0.5_dp - sqrt(3.0_dp)/6.0_dp)*f(:, 1)
-        y(:, 2) = z0 + h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
-        ok = .false.
-        stages_converged = .false.
+        tol = 1.0e-12_dp
+        if (present(tolerance)) tol = tolerance
+        eye = 0.0_dp
+        do i = 1, 6
+            eye(i, i) = 1.0_dp
+        end do
+        call gauss2_eval(z0, width, ro0, energy, f(:, 1), df(:, :, 1), &
+            e0, length, gmin, radial_ref)
+        ! Solve for stage increments: subtracting two large absolute momenta
+        ! needlessly adds a cancellation floor to the Newton residual.
+        dy(:, 1) = h*(0.5_dp - sqrt(3.0_dp)/6.0_dp)*f(:, 1)
+        dy(:, 2) = h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         do it = 1, 20
             do j = 1, 2
-                call transformed(y(:, j), width, ro0, e0, length, gmin, radial_ref, &
-                    f(:, j), df(:, :, j), g(j))
+                y = z0 + dy(:, j)
+                call gauss2_eval(y, width, ro0, energy, f(:, j), df(:, :, j), &
+                    e0, length, gmin, radial_ref, monitor=monitor(j))
                 do i = 1, 2
                     jac(6*i - 5:6*i, 6*j - 5:6*j) = -h*GL_A(i, j)*df(:, :, j)
                 end do
@@ -563,45 +545,34 @@ contains
                 jac(i, i) = jac(i, i) + 1.0_dp
             end do
             do i = 1, 2
-                resid(6*i - 5:6*i) = y(:, i) - z0 &
-                    - h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))
+                r(:, i) = dy(:, i) - h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))
             end do
-            if (.not. all(ieee_is_finite(resid))) return
-            ! A rounding-sized perturbation of the stages is amplified by
-            ! the force Jacobian, especially for large unwrapped angles. Use
-            ! that backward-error floor, not a fixed absolute force tolerance.
-            roundoff = 8.0_dp*epsilon(1.0_dp)* &
-                max(abs(reshape(y, [12])), 1.0_dp)
-            residual_floor = 2.0e-13_dp*[scale, scale] &
-                + matmul(abs(jac), roundoff)
-            if (stages_converged .or. all(abs(resid) <= residual_floor)) then
+            res = maxval(abs(r))
+            if (present(residual)) residual = res
+            if (.not. all(ieee_is_finite(r))) return
+            if (res <= tol) then
                 ok = .true.
                 exit
             end if
-            update = -resid
-            call dgesv(12, 1, jac, 12, piv, update, 12, info)
+            delta = -reshape(r, [12])
+            call dgesv(12, 1, jac, 12, piv, delta, 12, info)
             if (info /= 0) return
-            y(:, 1) = y(:, 1) + update(1:6)
-            y(:, 2) = y(:, 2) + update(7:12)
-            ! Inside a narrow layer the force residual has a rounding floor
-            ! amplified by its analytic Jacobian. Convergence of the stages
-            ! themselves is the meaningful Newton criterion there.
-            stages_converged = maxval(abs(update(1:6))/scale) < 3.0e-12_dp &
-                .and. maxval(abs(update(7:12))/scale) < 3.0e-12_dp
+            dy = dy + reshape(delta, [6, 2])
         end do
-        z1 = z0 + 0.5_dp*h*(f(:, 1) + f(:, 2))
-        dt = 0.5_dp*h*sum(g)
         if (.not. ok) return
+        z1 = z0 + 0.5_dp*h*(f(:, 1) + f(:, 2))
+        dt = 0.5_dp*h*sum(monitor)
         if (.not. present(tangent)) return
-        ! Analytic derivative of the implicit stages, with E and h held fixed.
-        rhs(1:6, :) = identity
-        rhs(7:12, :) = identity
+        ! Derivative of the exact stage equations at the computed stages.
+        ! The finite-difference oracle also checks the terminated algorithm.
+        rhs(1:6, :) = eye
+        rhs(7:12, :) = eye
         call dgesv(12, 6, jac, 12, piv, rhs, 12, info)
         if (info /= 0) then
             ok = .false.
             return
         end if
-        tangent = identity + 0.5_dp*h*(matmul(df(:, :, 1), rhs(1:6, :)) &
+        tangent = eye + 0.5_dp*h*(matmul(df(:, :, 1), rhs(1:6, :)) &
             + matmul(df(:, :, 2), rhs(7:12, :)))
     end subroutine gauss2_step
 end module spectre_fo_gauss2
