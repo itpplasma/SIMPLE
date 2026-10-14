@@ -455,6 +455,7 @@ contains
     end subroutine validate_orbit_model_config
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
+        use spectre_fo_field, only: spectre_fo_field_clear
         use field_base, only: magnetic_field_t
         use field, only: field_from_file, is_spectre_file
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
@@ -477,6 +478,9 @@ contains
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
         logical :: use_boozer_chartmap, use_spectre
+
+        ! Release the previous FO tables when a library run changes fields.
+        call spectre_fo_field_clear
         self%integmode = aintegmode
         ! Reset the default domain when a library run changes field backend.
         sympl_rmax = 1.0_dp
@@ -643,7 +647,7 @@ contains
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
         use spectre_fo_hybrid, only: spectre_fo_configure
-        use params, only: spectre_fo_tolerance
+        use params, only: spectre_fo_tolerance, spectre_fo_grid
 
         type(tracer_t), intent(inout) :: self
 
@@ -664,7 +668,7 @@ contains
         call set_magfie_spectre_field(sf)
 
         ! Shared by simple.x and simple_api, before any parallel tracing.
-        call spectre_fo_configure(spectre_fo_tolerance)
+        call spectre_fo_configure(spectre_fo_tolerance, spectre_fo_grid)
 
         r00 = 0.0d0
         do ii = 1, sf%data%mn

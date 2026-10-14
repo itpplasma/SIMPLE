@@ -117,6 +117,32 @@ set_tests_properties(test_spectre_fo_events PROPERTIES
     LABELS "integration"
     TIMEOUT 60)
 
+add_executable(test_spectre_fo_throughput.x test_spectre_fo_throughput.f90)
+target_link_libraries(test_spectre_fo_throughput.x simple)
+foreach(threads IN ITEMS 1 4)
+    add_test(NAME test_spectre_fo_throughput_${threads}
+        COMMAND $<TARGET_FILE:test_spectre_fo_throughput.x>
+            ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5)
+    set_tests_properties(test_spectre_fo_throughput_${threads} PROPERTIES
+        LABELS "performance"
+        ENVIRONMENT "OMP_NUM_THREADS=${threads}"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
+
+add_executable(test_spectre_fo_spline.x test_spectre_fo_spline.f90)
+target_link_libraries(test_spectre_fo_spline.x simple)
+foreach(fixture IN ITEMS tok2vol ncsx_freeboundary)
+    add_test(NAME test_spectre_fo_spline_${fixture}
+        COMMAND $<TARGET_FILE:test_spectre_fo_spline.x>
+            ${CMAKE_CURRENT_SOURCE_DIR}/../data/${fixture}.h5)
+    set_tests_properties(test_spectre_fo_spline_${fixture} PROPERTIES
+        LABELS "integration"
+        ENVIRONMENT "OMP_NUM_THREADS=4"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
+
 # Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
 # difference algorithm they replaced to the FD truncation floor, at interior
 # points of every volume of the committed tokamak and stellarator fixtures.
