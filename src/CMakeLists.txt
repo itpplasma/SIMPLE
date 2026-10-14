@@ -31,6 +31,8 @@
     chamb_m.f90
     sub_alpha_lifetime_can.f90
     spectre_orbit.f90
+    spectre_fo_hybrid.f90
+    spectre_sympl_orbit.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90

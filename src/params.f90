@@ -176,6 +176,12 @@ module params
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
+    !> SPECTRE interface treatment: only full orbit (3) is supported.
+    integer :: crossing_level = 3
+    !> Full orbit near SPECTRE interfaces: entry distance in radial gyroradii
+    !> and the relative tolerance of RK45 on the sharp per-volume field.
+    real(dp) :: spectre_fo_entry_larmor = 3.0_dp
+    real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -220,7 +226,8 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-        wall_input, wall_units, chart_boundary_kind, integ_coords, &
+        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
+        spectre_fo_entry_larmor, spectre_fo_tolerance, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &
@@ -309,6 +316,14 @@ contains
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
         end if
+
+        if (crossing_level /= 3) then
+            error stop 'crossing_level must be 3; fixed-mu GC maps were removed'
+        end if
+        if (spectre_fo_entry_larmor <= 0.0_dp) &
+            error stop 'spectre_fo_entry_larmor must be positive'
+        if (spectre_fo_tolerance <= 0.0_dp) &
+            error stop 'spectre_fo_tolerance must be positive'
 
         call validate_gpu_config
     end subroutine finalize_config
