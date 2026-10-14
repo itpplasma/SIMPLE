@@ -49,6 +49,26 @@ test: $(BUILD)/test_gc
 	python3 $(ROOT)/gen/prove_identities.py
 	python3 $(ROOT)/gen/prove_second_order.py
 
+# Canonical kernels are committed, so these tests do not regenerate them.
+canonical-test: $(BUILD)/libgc.so
+	python3 $(ROOT)/gen/prove_canonical.py
+	OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 $(ROOT)/tests/canonical_checks.py
+
+canonical-study: $(BUILD)/libgc.so
+	OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 $(ROOT)/tests/canonical_study.py energy
+	OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 $(ROOT)/tests/canonical_study.py orders
+	OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 $(ROOT)/tests/canonical_study.py cost
+
+canonical-regen:
+	python3 $(ROOT)/gen/derive_canonical.py
+
+canonical-check-generated: | $(BUILD)
+	python3 $(ROOT)/gen/derive_canonical.py $(BUILD)/canonical_regenerated.py
+	cmp $(ROOT)/generated/canonical_kernels.py $(BUILD)/canonical_regenerated.py
+
+canonical-check-results:
+	python3 $(ROOT)/tests/check_canonical_results.py
+
 study: $(BUILD)/libgc.so
 	python3 $(ROOT)/tests/orbit_study.py
 	python3 $(ROOT)/tests/slab_action.py
@@ -62,4 +82,6 @@ lean:
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all regen check-generated test study check-orders lean clean
+.PHONY: all regen check-generated test study check-orders lean clean \
+        canonical-test canonical-study canonical-regen \
+        canonical-check-generated canonical-check-results
