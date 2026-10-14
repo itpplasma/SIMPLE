@@ -7,7 +7,9 @@ module spectre_fo_field
     !> SPECTRE's A_rho = 0 gauge of that volume; zeta is the cylindrical angle,
     !> periodic over one field period. The basis, the Jacobian and B from dA
     !> follow from the jets, so the splined geometry and field are consistent
-    !> with each other. Each slab is sampled up to its own edges (the upper edge
+    !> with each other. A regular (xi, eta, zeta) axis chart carries R, Z and
+    !> all three components of A; its jets join the polar representation before
+    !> B is evaluated. Each slab is sampled up to its own edges (the upper edge
     !> just inside it), so the sheet at rho = k has the two one-sided limits of
     !> volumes k and k+1. Outside its slab a spline continues its edge cell's
     !> polynomial smoothly; the full orbit uses this only for trial stages.
@@ -18,13 +20,17 @@ module spectre_fo_field
     implicit none
     private
 
-    integer, parameter :: NQ = 4, SPLINE_ORDER = 5
+    integer, parameter :: NQ = 4, AXIS_NQ = 5, SPLINE_ORDER = 5
+    real(dp), parameter, public :: FO_AXIS_RADIUS = 0.05_dp
+    real(dp), parameter :: AXIS_OUTER = 2*FO_AXIS_RADIUS
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     !> Upper-edge sample offset: rho = k itself belongs to volume k+1.
     real(dp), parameter :: EDGE_INSET = 1.0e-12_dp
     real(dp), parameter :: TWOPI = 8.0_dp*atan(1.0_dp)
 
     type(BatchSplineData3D), allocatable :: vol_spl(:)
+    type(BatchSplineData3D) :: axis_spl
+    logical :: axis_built = .false.
     integer :: fo_field_mvol = 0
     logical, public, protected :: fo_field_axisymmetric = .false.
 
@@ -90,13 +96,58 @@ contains
                 [SPLINE_ORDER, SPLINE_ORDER, SPLINE_ORDER], &
                 [.false., .true., .true.], vol_spl(k))
         end do
+        call build_axis_spline(n_rho, n_zeta, period)
     end subroutine spectre_fo_field_build
+
+    subroutine build_axis_spline(n_rho, n_zeta, period)
+        ! Regular first-volume chart xi=rho*cos(theta), eta=rho*sin(theta).
+        ! Tabulate all three components of the potential in that chart.
+        integer, intent(in) :: n_rho, n_zeta
+        real(dp), intent(in) :: period
+        real(dp), allocatable :: values(:, :, :, :)
+        real(dp) :: xi, eta, rho, u(3), cyl(3), a(3), hc(3), bmod, h
+        integer :: n, i, j, k
+
+        n = 2*max(3, n_rho/4) + 1
+        h = 2*AXIS_OUTER/real(n - 1, dp)
+        allocate (values(n, n, n_zeta, AXIS_NQ))
+        !$omp parallel do collapse(2) &
+        !$omp private(i, j, k, xi, eta, rho, u, cyl, a, hc, bmod)
+        do k = 1, n_zeta
+            do j = 1, n
+                eta = -AXIS_OUTER + (j - 1)*h
+                do i = 1, n
+                    xi = -AXIS_OUTER + (i - 1)*h
+                    rho = sqrt(xi*xi + eta*eta)
+                    u = [rho, atan2(eta, xi), (k - 1)*period/(n_zeta - 1)]
+                    call spectre_field%coords%evaluate_cyl(u, cyl)
+                    if (rho < EDGE_INSET) u(1:2) = [EDGE_INSET, 0.0_dp]
+                    call spectre_field%evaluate(u, a, hc, bmod)
+                    values(i, j, k, 1:2) = [cyl(1), cyl(3)]*M_TO_CM
+                    if (rho < EDGE_INSET) then
+                        values(i, j, k, 3:4) = 0.0_dp
+                    else
+                        values(i, j, k, 3:4) = [-eta, xi]*a(2)*A_SCALE/rho**2
+                    end if
+                    values(i, j, k, 5) = a(3)*A_SCALE
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call construct_batch_splines_3d([-AXIS_OUTER, -AXIS_OUTER, 0.0_dp], &
+            [AXIS_OUTER, AXIS_OUTER, period], values, &
+            [SPLINE_ORDER, SPLINE_ORDER, SPLINE_ORDER], &
+            [.false., .false., .true.], axis_spl)
+        axis_built = .true.
+    end subroutine build_axis_spline
 
     subroutine spectre_fo_field_clear
         integer :: k
 
         fo_field_axisymmetric = .false.
         fo_field_mvol = 0
+        if (axis_built) call destroy_batch_splines_3d(axis_spl)
+        axis_built = .false.
         if (.not. allocated(vol_spl)) return
         do k = 1, size(vol_spl)
             call destroy_batch_splines_3d(vol_spl(k))
@@ -110,6 +161,10 @@ contains
         type(spectre_fo_local_t), intent(out) :: loc
         real(dp) :: y(NQ), dy(3, NQ)
 
+        if (owner == 1 .and. abs(u(1)) < AXIS_OUTER) then
+            call axis_local(u, loc)
+            return
+        end if
         call evaluate_batch_splines_3d_der(vol_spl(owner), u, y, dy)
         call local_from_values(u(3), y(1), dy(:, 1), y(2), dy(:, 2), y(3), &
             dy(:, 3), y(4), dy(:, 4), loc)
@@ -118,7 +173,19 @@ contains
     pure subroutine local_from_values(zeta, r, dr, z, dz, at, dat, az, daz, loc)
         real(dp), intent(in) :: zeta, r, dr(3), z, dz(3), at, dat(3), az, daz(3)
         type(spectre_fo_local_t), intent(out) :: loc
-        real(dp) :: c, s, sqgb(3), cof(3, 3)
+        real(dp) :: sqgb(3)
+
+        call geometry_from_values(zeta, r, dr, z, dz, loc)
+        loc%acov = [0.0_dp, at, az]
+        ! Match libneo: |J| B^i = eps^ijk d_j A_k with A_rho = 0.
+        sqgb = [daz(2) - dat(3), -daz(1), dat(1)]
+        call set_magnetic_field(loc, sqgb)
+    end subroutine local_from_values
+
+    pure subroutine geometry_from_values(zeta, r, dr, z, dz, loc)
+        real(dp), intent(in) :: zeta, r, dr(3), z, dz(3)
+        type(spectre_fo_local_t), intent(out) :: loc
+        real(dp) :: c, s, cof(3, 3)
         integer :: i
 
         c = cos(zeta)
@@ -134,20 +201,131 @@ contains
         cof(:, 3) = cross(loc%e(:, 1), loc%e(:, 2))
         loc%jac = dot_product(loc%e(:, 1), cof(:, 1))
         loc%dual = cof/loc%jac
-        loc%acov = [0.0_dp, at, az]
-        ! Match libneo: |J| B^i = eps^ijk d_j A_k with A_rho = 0.
-        sqgb = [daz(2) - dat(3), -daz(1), dat(1)]
+    end subroutine geometry_from_values
+
+    pure subroutine set_magnetic_field(loc, sqgb)
+        type(spectre_fo_local_t), intent(inout) :: loc
+        real(dp), intent(in) :: sqgb(3)
         loc%b = matmul(loc%e, sqgb)/abs(loc%jac)
         loc%bmod = norm2(loc%b)
         loc%b = loc%b/max(loc%bmod, tiny(1.0_dp))
-    end subroutine local_from_values
+    end subroutine set_magnetic_field
+
+    subroutine axis_values(q, y, dy)
+        ! Join representations of smooth geometry and the potential, including
+        ! the derivative of the weight. Taking curl afterwards preserves the
+        ! field consistency and avoids an artificial chart-boundary sheet.
+        real(dp), intent(in) :: q(3)
+        real(dp), intent(out) :: y(AXIS_NQ), dy(3, AXIS_NQ)
+        real(dp) :: ya(AXIS_NQ), da(3, AXIS_NQ), yb(AXIS_NQ), db(3, AXIS_NQ)
+        real(dp) :: p(NQ), dpdu(3, NQ), u(3), rho, c, s, f, df(3), t, w, dw(3)
+        integer :: j
+
+        rho = norm2(q(1:2))
+        if (rho <= FO_AXIS_RADIUS) then
+            call evaluate_batch_splines_3d_der(axis_spl, q, y, dy)
+            return
+        end if
+        c = q(1)/rho
+        s = q(2)/rho
+        u = [rho, atan2(q(2), q(1)), q(3)]
+        call evaluate_batch_splines_3d_der(vol_spl(1), u, p, dpdu)
+        yb(1:2) = p(1:2)
+        db(1, 1:2) = c*dpdu(1, 1:2) - s/rho*dpdu(2, 1:2)
+        db(2, 1:2) = s*dpdu(1, 1:2) + c/rho*dpdu(2, 1:2)
+        db(3, 1:2) = dpdu(3, 1:2)
+        f = p(3)/rho
+        df = [c*(dpdu(1, 3) - f)/rho - s*dpdu(2, 3)/rho**2, &
+            s*(dpdu(1, 3) - f)/rho + c*dpdu(2, 3)/rho**2, dpdu(3, 3)/rho]
+        yb(3:5) = [-s*f, c*f, p(4)]
+        db(:, 3) = [s*c*f/rho, -c*c*f/rho, 0.0_dp] - s*df
+        db(:, 4) = [s*s*f/rho, -c*s*f/rho, 0.0_dp] + c*df
+        db(:, 5) = [c*dpdu(1, 4) - s/rho*dpdu(2, 4), &
+            s*dpdu(1, 4) + c/rho*dpdu(2, 4), dpdu(3, 4)]
+        if (rho >= AXIS_OUTER) then
+            y = yb
+            dy = db
+            return
+        end if
+        call evaluate_batch_splines_3d_der(axis_spl, q, ya, da)
+        t = (rho - FO_AXIS_RADIUS)/(AXIS_OUTER - FO_AXIS_RADIUS)
+        ! C4 weight matches the continuity of the quintic potential splines.
+        w = 1 - t**5*(126 - 420*t + 540*t*t - 315*t**3 + 70*t**4)
+        dw = -630*t**4*(1 - t)**4/(AXIS_OUTER - FO_AXIS_RADIUS) &
+            *[c, s, 0.0_dp]
+        y = w*ya + (1 - w)*yb
+        do j = 1, AXIS_NQ
+            dy(:, j) = w*da(:, j) + (1 - w)*db(:, j) + dw*(ya(j) - yb(j))
+        end do
+    end subroutine axis_values
+
+    subroutine axis_local(u, loc)
+        real(dp), intent(in) :: u(3)
+        type(spectre_fo_local_t), intent(out) :: loc
+        real(dp) :: y(AXIS_NQ), dy(3, AXIS_NQ), q(3), c, s
+        real(dp) :: basis(3, 2), dual(3, 2), curl_a(3)
+
+        c = cos(u(2))
+        s = sin(u(2))
+        q = [u(1)*c, u(1)*s, u(3)]
+        call axis_values(q, y, dy)
+        call geometry_from_values(u(3), y(1), dy(:, 1), y(2), dy(:, 2), loc)
+        curl_a = [dy(2, 5) - dy(3, 4), dy(3, 3) - dy(1, 5), &
+            dy(1, 4) - dy(2, 3)]
+        call set_magnetic_field(loc, curl_a)
+        ! Expose the existing polar basis to callers; the magnetic field was
+        ! evaluated with the nonsingular Cartesian-chart Jacobian above.
+        basis = loc%e(:, 1:2)
+        dual = loc%dual(:, 1:2)
+        loc%e(:, 1) = c*basis(:, 1) + s*basis(:, 2)
+        loc%e(:, 2) = u(1)*(-s*basis(:, 1) + c*basis(:, 2))
+        loc%dual(:, 1) = c*dual(:, 1) + s*dual(:, 2)
+        loc%dual(:, 2) = 0.0_dp
+        if (abs(u(1)) > tiny(1.0_dp)) &
+            loc%dual(:, 2) = (-s*dual(:, 1) + c*dual(:, 2))/u(1)
+        loc%jac = loc%jac*u(1)
+        loc%acov = [c*y(3) + s*y(4), u(1)*(-s*y(3) + c*y(4)), y(5)]
+    end subroutine axis_local
+
+    subroutine locate_axis(rt, zt, phi, v, status)
+        real(dp), intent(in) :: rt, zt, phi
+        real(dp), intent(inout) :: v(3)
+        integer, intent(out) :: status
+        real(dp) :: q(3), y(AXIS_NQ), dy(3, AXIS_NQ), fr, fz, det
+        real(dp) :: delta(2), step, theta
+        integer :: it
+
+        q = [v(1)*cos(v(2)), v(1)*sin(v(2)), phi]
+        do it = 1, 60
+            call axis_values(q, y, dy)
+            fr = y(1) - rt
+            fz = y(2) - zt
+            det = dy(1, 1)*dy(2, 2) - dy(2, 1)*dy(1, 2)
+            if (abs(det) <= tiny(1.0_dp)) exit
+            delta = [(fr*dy(2, 2) - fz*dy(2, 1))/det, &
+                (fz*dy(1, 1) - fr*dy(1, 2))/det]
+            step = maxval(abs(delta))
+            if (step > AXIS_OUTER) delta = delta*AXIS_OUTER/step
+            q(1:2) = q(1:2) - delta
+            if (maxval(abs(delta)) <= 1.0e-12_dp .and. &
+                abs(fr) + abs(fz) <= 1.0e-12_dp*max(rt, 1.0_dp)) then
+                theta = v(2)
+                if (norm2(q(1:2)) > tiny(1.0_dp)) theta = atan2(q(2), q(1))
+                v = [norm2(q(1:2)), &
+                    theta + TWOPI*nint((v(2) - theta)/TWOPI), phi]
+                status = 0
+                return
+            end if
+        end do
+        status = 2
+    end subroutine locate_axis
 
     subroutine spectre_fo_field_locate(x, u, owner, status)
         !> Logical point of the Cartesian x (cm): zeta is the cylindrical angle,
         !> (rho, theta) a Newton root of (R, Z) at that zeta, starting from u in
         !> volume owner. A root outside the owner's slab moves to the adjacent
         !> volume and is refined there. status = 0 on success, 1 if the point is
-        !> beyond the outer boundary or near the axis chart singularity, 2 if
+        !> beyond the outer boundary, 2 if
         !> Newton fails.
         real(dp), intent(in) :: x(3)
         real(dp), intent(inout) :: u(3)
@@ -162,11 +340,22 @@ contains
         phi = atan2(x(2), x(1))
         v = u
         v(3) = phi + TWOPI*nint((u(3) - phi)/TWOPI)
+        phi = v(3)
         own = owner
         scale = max(rt, 1.0_dp)
         switches = 0
         status = 2
         do it = 1, 60
+            if (own == 1 .and. v(1) < AXIS_OUTER) then
+                call locate_axis(rt, zt, phi, v, status)
+                if (status /= 0) return
+                if (v(1) < AXIS_OUTER) then
+                    u = v
+                    owner = 1
+                    return
+                end if
+                status = 2
+            end if
             call evaluate_batch_splines_3d_der(vol_spl(own), v, y, dy)
             fr = y(1) - rt
             fz = y(2) - zt

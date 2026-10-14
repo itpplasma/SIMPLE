@@ -2,7 +2,8 @@ module spectre_fo_hybrid
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use magfie_sub, only: spectre_field
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
-        spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric
+        spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
+        FO_AXIS_RADIUS
     implicit none
     private
     integer, parameter, public :: SPECTRE_FO_OK = 0
@@ -543,7 +544,7 @@ contains
         ! Cartesian position remains a regular chart near the polar axis.
         ! That small recovery region uses the same spline provider, with an
         ! inverse per stage; the regular logical path never performs one.
-        cartesian = state%owner == 1 .and. state%u(1) < 0.05_dp
+        cartesian = state%owner == 1 .and. state%u(1) < FO_AXIS_RADIUS
         q0 = state%u
         if (cartesian) q0 = state%x
         u1 = state%u
@@ -581,7 +582,7 @@ contains
                 if (owner_geo > state%owner) &
                     stage_sides = ibset(stage_sides, STAGE_OUT)
             end if
-            if (us(1) <= 0.0_dp) then
+            if (us(1) <= 0.0_dp .and. .not. cartesian) then
                 status = SPECTRE_FO_LOCATE_FAIL
                 return
             end if

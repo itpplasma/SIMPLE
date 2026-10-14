@@ -419,7 +419,9 @@ rather than squash-merging away the add/remove history. Historical tables,
 compressed marker records and mathematical witnesses remain evidence, not
 selectable methods. F1–F5 are formulation/domain failures or measured failures
 of the named implementation. F6 is retirement from the requested symplectic
-target; it is not a claim that every Boris calculation is wrong.
+target; it is not a claim that every Boris calculation is wrong. F7 records a
+numerical chart failure in the later performance candidate, not a rejection of
+full-orbit physics.
 
 | ID | Failed contract and decisive evidence | Removed implementation/settings |
 | --- | --- | --- |
@@ -429,6 +431,23 @@ target; it is not a claim that every Boris calculation is wrong.
 | F4: unresolved fixed-branch sharp-sheet stepping | **Local error counterexample**, T3: crossing error is generically O(h times force jump), irrespective of the smooth method's nominal order. Historical naive sharp stepping gave rms relative mu change about .85 against a .017 reference. Midpoint branch choice reduced bias but retained excess scattering. | `SCHEME_NAIVE`, `SCHEME_MIDPOINT_REGION`, `midpoint_step` sharp-branch dispatch, their CLI selectors and dedicated stationary experiment. Resolved smooth midpoint is not rejected. |
 | F5: energy-kick landing as a general sheet integrator | **Domain and accuracy failure.** The normal kick fails near grazing when the energy-matching kick exceeds available normal velocity. Recorded rms mu changes were 1.9 and .24 at h=.1/.05 against the .017 reference; a smaller step helped but did not supply grazing coverage. Successful tangent checks on accepted transversal events were not a general physical-accuracy proof. | `SCHEME_LANDING`, `sheet_step`, landing/root/kick helpers, tangent/record machinery and the dedicated landing test. This rejects this implemented kick rule, not variational event integrators generally. |
 | F6: Boris advertised as a canonical symplectic sheet option | **Wrong guarantee**, T3 and T5: speed/volume preservation does not establish canonical symplecticity; finite smoothing also changes the target unless width and step converge. Resolved Boris can approximate a smooth field accurately, so it is not universally an inaccurate method. It is retired here as a candidate for the requested symplectic sharp-sheet solver. | Comparison C5 dispatch, `boris`, copied `boris_step`, `boris_step` setting and width/step scans. SPECTRE production Boris/layer controls were already removed by #530; generic full-orbit Boris elsewhere is unaffected. |
+
+F7: `2e243d4`/`6bbdef0` applied the polar FO splines at the magnetic axis.
+In the 32-marker, 3.5 keV NCSX volume pilot (200 microseconds), marker 31
+reached rho=6.19e-13. FO entry returned `SPECTRE_FO_LOCATE_FAIL`; the default and
+refined grids each recorded 4,666 warning-held intervals. Its apparent
+confinement is invalid even though aggregate loss counts match main. The
+independent opposite-point raw-field limit gives relative field error 49.0 at
+rho=1e-12 for the default polar spline. The field derivative error is amplified
+by the vanishing polar Jacobian; refining the integrator cannot fix it.
+The replacement removes the polar-field/axis-inverse route near the axis and
+uses regular xi/eta splines for geometry and all potential components, joined
+to the bulk potential before taking curl. It adds no compatibility setting or
+raw spectral fallback. The new axis-limit error is 4.21e-9 on NCSX and the
+pole-seeded inverse passes. A replay of marker 31 has one FO entry/exit and
+zero holds/failures. The retained initial condition and failure counters are
+in `concept/spectre_loss_study/results/axis-failure.json` on the study branch.
+Larger ensemble reruns and the existing invariant/event checks still apply.
 
 Current comparison executables accept only FO, C3 (phase-carrying concept), and
 GL2 (resolved smooth-layer control). The retired candidate dispatches and their settings are absent; no compatibility
