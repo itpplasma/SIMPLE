@@ -141,11 +141,7 @@ contains
         e0 = 0.5_dp*sum(y(4:6)**2)
         p0 = canonical_pphi(pm, y)
         rinit = radius(pm, y(1:3))
-        if (opt%method == 6) then
-            call initialize(pm, options_t(), y, orbit)
-        else
-            call initialize(pm, opt, y, orbit)
-        end if
+        call initialize(pm, opt, y, orbit)
         rmin = rinit
         rmax = rinit
         emax = 0.0_dp
