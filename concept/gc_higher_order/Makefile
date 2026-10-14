@@ -3,7 +3,10 @@ ROOT := concept/gc_higher_order
 BUILD := $(ROOT)/build
 FORTSYM ?= /home/ert/code/fortsym
 FC := gfortran
-FFLAGS ?= -O2 -fopenmp -Wall -Wextra -fimplicit-none -std=f2018
+FFLAGS ?= -O2 -fopenmp -Wall -Wextra -fimplicit-none -std=f2018 -fPIC
+# Large straight-line CSE leaves make GCC register allocation pathological.
+# Their algebra is already optimized by fortsym; keep compilation bounded.
+GEN_FFLAGS ?= -O0
 export OMP_NUM_THREADS := 16
 
 all: $(BUILD)/test_gc
@@ -23,21 +26,28 @@ check-generated: $(BUILD)/derive_gc
 	cmp $(ROOT)/generated/gc_generated.f90 $(BUILD)/regenerated.f90
 
 $(BUILD)/gc_generated.o: $(ROOT)/generated/gc_generated.f90 | $(BUILD)
-	$(FC) $(FFLAGS) -J$(BUILD) -c $< -o $@
+	$(FC) $(FFLAGS) $(GEN_FFLAGS) -J$(BUILD) -c $< -o $@
 
-$(BUILD)/gc_api.o: $(ROOT)/gc_api.f90 $(BUILD)/gc_generated.o
+$(BUILD)/gc_second_order.o: $(ROOT)/gen/gc_second_order.f90 $(BUILD)/gc_generated.o
 	$(FC) $(FFLAGS) -I$(BUILD) -J$(BUILD) -c $< -o $@
 
-$(BUILD)/libgc.so: $(BUILD)/gc_generated.o $(BUILD)/gc_api.o $(ROOT)/tests/c_bridge.f90
-	$(FC) $(FFLAGS) -shared -fPIC -I$(BUILD) $(ROOT)/tests/c_bridge.f90 \
-	    $(ROOT)/generated/gc_generated.f90 $(ROOT)/gc_api.f90 -J$(BUILD) -o $@
+$(BUILD)/gc_api.o: $(ROOT)/gc_api.f90 $(BUILD)/gc_second_order.o
+	$(FC) $(FFLAGS) -I$(BUILD) -J$(BUILD) -c $< -o $@
 
-$(BUILD)/test_gc: $(ROOT)/tests/test_gc.f90 $(BUILD)/gc_api.o $(BUILD)/gc_generated.o
+$(BUILD)/c_bridge.o: $(ROOT)/tests/c_bridge.f90 $(BUILD)/gc_api.o
+	$(FC) $(FFLAGS) -I$(BUILD) -J$(BUILD) -c $< -o $@
+
+$(BUILD)/libgc.so: $(BUILD)/gc_generated.o $(BUILD)/gc_second_order.o \
+                   $(BUILD)/gc_api.o $(BUILD)/c_bridge.o
+	$(FC) $(FFLAGS) -shared $^ -o $@
+
+$(BUILD)/test_gc: $(ROOT)/tests/test_gc.f90 $(BUILD)/gc_api.o $(BUILD)/gc_second_order.o $(BUILD)/gc_generated.o
 	$(FC) $(FFLAGS) -fcheck=all -I$(BUILD) $^ -o $@
 
 test: $(BUILD)/test_gc
 	$(BUILD)/test_gc
 	python3 $(ROOT)/gen/prove_identities.py
+	python3 $(ROOT)/gen/prove_second_order.py
 
 study: $(BUILD)/libgc.so
 	python3 $(ROOT)/tests/orbit_study.py
