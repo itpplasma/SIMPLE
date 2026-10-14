@@ -78,6 +78,18 @@ set_tests_properties(test_spectre_sympl_volume_pphi PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
 
+add_executable(test_spectre_multivolume_init.x test_spectre_multivolume_init.f90)
+target_link_libraries(test_spectre_multivolume_init.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_multivolume_init)
+add_test(NAME test_spectre_multivolume_init
+    COMMAND $<TARGET_FILE:test_spectre_multivolume_init.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_multivolume_init)
+set_tests_properties(test_spectre_multivolume_init PROPERTIES
+    LABELS "integration"
+    ENVIRONMENT "OMP_NUM_THREADS=1"
+    TIMEOUT 60)
+
 # Full orbit near SPECTRE interfaces (crossing_level = 3): GC <-> FO switching
 # on the axisymmetric current-sheet fixture, with the momentum shell and the
 # canonical toroidal momentum as witnesses.

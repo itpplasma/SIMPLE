@@ -469,6 +469,7 @@ contains
         use params, only: coord_input, field_input, wall_input, wall_units
         use field_can_mod, only: init_field_can_boozer_chartmap_compact
         use new_vmec_stuff_mod, only: nper
+        use orbit_symplectic_base, only: sympl_rmax
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
@@ -477,6 +478,9 @@ contains
         character(:), allocatable :: vmec_equilibrium_file
         logical :: use_boozer_chartmap, use_spectre
         self%integmode = aintegmode
+        ! Reset the default domain when a library run changes field backend.
+        sympl_rmax = 1.0_dp
+        !$acc update device(sympl_rmax)
         map_boundary_exit_code = ORBIT_EXIT_LCFS
         chart_boundary_kind_effective = 'lcfs'
         invariant_edge_radius = 1.0_dp
@@ -681,9 +685,9 @@ contains
             ' rmajor = ', rmajor, ' m'
 
         if (self%integmode > 0) then
-            ! Orbit tracing is restricted to one volume, whose outer edge is
-            ! rho_g = 1, the native symplectic boundary.
-            sympl_rmax = 1.0_dp
+            ! Allow Newton trials beyond every volume, including the outer edge.
+            ! Physical loss is localized at rho_g = Mvol by the event handler.
+            sympl_rmax = real(sf%data%Mvol + 1, dp)
             !$acc update device(sympl_rmax)
             call set_spectre_construction_grid(spectre_ncon_r, spectre_ncon_th, &
                 spectre_ncon_phi, spectre_ncon_order, &

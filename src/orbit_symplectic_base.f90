@@ -9,8 +9,8 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
 
     logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
-    ! Upper radial bound for Newton/loss guards: normalized-flux edge s = 1
-    ! (rho_g = 1 for single-volume SPECTRE orbit tracing).
+    ! Upper radial bound for Newton trials: normalized-flux edge s = 1 by
+    ! default; SPECTRE uses Mvol + 1, with physical loss localized at Mvol.
     real(dp) :: sympl_rmax = 1.0d0
     !$acc declare copyin(sympl_rmax)
 

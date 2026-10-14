@@ -769,8 +769,10 @@ factor makes `sqrt(g) = (h_phi A_theta' - h_theta A_phi')/Bmod` come out in
 and evaluates that volume's splines. `integ_to_ref` / `ref_to_integ` apply the
 volume's `lambda_phi` transform; the radial map is the identity. The existing
 C1 radial extension near volume edges remains part of field evaluation.
-It does not define a physical interface crossing. Single-volume symplectic
-orbits use the ordinary integrator and its absorbing `rho_g = 1` boundary.
+It does not define a physical interface crossing. SPECTRE symplectic
+initialization sets the Newton trial bound to `rho_g = Mvol + 1`, allowing
+trials beyond each volume edge. The SPECTRE event handler localizes physical
+loss at `rho_g = Mvol`, including `rho_g = 1` for a single-volume field.
 
 **Optional follow-up** (documented, not implemented): a `no_K`-style variant that
 drops `rho_par h_s` in SPECTRE coordinates directly -- the same

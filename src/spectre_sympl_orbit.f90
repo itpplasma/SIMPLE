@@ -367,9 +367,9 @@ contains
         direction = 0
 
         if (ierr_step /= 0) then
-            ! The stepper refuses to commit r > sympl_rmax (= Mvol). From the
-            ! outermost volume that is the outward-crossing signal, with si%z
-            ! still holding the pre-step state.
+            ! A trial exceeding the Newton margin (Mvol + 1) from the outer
+            ! volume still brackets its physical edge at Mvol, with si%z
+            ! holding the pre-step state. Successful trials are checked below.
             if (ierr_step == SYMPLECTIC_STEP_OUTSIDE_DOMAIN .and. &
                     nint(state%home_hi) == state%mvol) then
                 boundary = .true.
