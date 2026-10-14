@@ -117,6 +117,21 @@ set_tests_properties(test_spectre_fo_events PROPERTIES
     LABELS "integration"
     TIMEOUT 60)
 
+# Diagnostic: zeroth-order GC -> FO -> GC switch round trip at NCSX interface
+# points, without an FO step and over the exit gyrophase of a short full orbit;
+# records d(mu)/mu, d(v_par), d(x_gc) and their gyroradius scaling. Asserts
+# only completion and finite defects.
+add_executable(test_spectre_switch_roundtrip.x test_spectre_switch_roundtrip.f90)
+target_link_libraries(test_spectre_switch_roundtrip.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_switch_roundtrip)
+add_test(NAME test_spectre_switch_roundtrip
+    COMMAND $<TARGET_FILE:test_spectre_switch_roundtrip.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_switch_roundtrip)
+set_tests_properties(test_spectre_switch_roundtrip PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)
+
 # Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
 # difference algorithm they replaced to the FD truncation floor, at interior
 # points of every volume of the committed tokamak and stellarator fixtures.
