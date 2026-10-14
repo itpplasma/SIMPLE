@@ -46,7 +46,7 @@ This recovery publishes their work and an actionable continuation plan.
 - PR #527: SPECTRE drift sign, relocated transmission ownership and fixture
   corrections. PR #529: non-folding NCSX free-boundary fixture.
 - PR #531: remove rejected fixed-mu GC interface maps. This is included in
-  the ancestry of #530; the live main ref remains `45c0598`.
+  the ancestry of #530 and the current main baseline.
 - PR #530: symplectic GC in smooth volumes, RK45 full orbit near interior
   sheets, event resolution, gyromotion bounds, gauge-consistent exit and
   multi-volume Newton domain. SPECTRE Boris/layer controls and GC interface
@@ -165,27 +165,63 @@ Gauss derivative-index and omitted vpar extrapolation term. These were not
 independently established before the stop. Reproduce each against production
 before fixing it. A coefficient theorem is not a proof of those code paths.
 
+## Performance and run status, 2026-10-14 20:18 CEST
+
+Read-only Slurm queries found no jobs under the account on `acluster` and no
+SIMPLE/SPECTRE loss jobs on `scluster`. The latter still runs the separate ITER
+GVEC, VMEC, MEPHIT and NTV campaign; its launch commands/work directories were
+checked. No local SIMPLE loss tracer was running. No jobs were started or
+cancelled. Recovered Claude/Codex command logs contain no remote submissions
+for this SPECTRE study. These are status observations, not a monitoring service.
+
+The old eight-thread, 64-marker, 2 ms hybrid cases took 1848–3343 s on a loaded
+host (`concept/symplectic_sheet/README.md`). Linear marker-count scaling gives
+2.05–3.71 h for 256 markers with the same launch distribution and settings.
+Use 2–4 h per configuration as a provisional planning allowance: four paired
+hybrid/FO configurations across two fields would consume about 8–16 h if run
+sequentially; the W2 matrix below has 26 configurations and would consume about
+52–104 h. Parallel allocations reduce elapsed time, not total work. Neither
+G3V3L3Fi cost, volume-sampled FO residence, tolerance scaling nor available
+cluster capacity has been measured for this matrix, so this is not a completion
+ETA. Longer times and larger ensembles increase the work, subject to early loss.
+The 256-marker, 2 ms matrix is an initial comparison, not long-time validation.
+
+W4 has no measured speedup. Its pending patch calls `gc_map` after every
+accepted FO substep, and that routine calls `spectre_fo_field_locate` before
+checking exit. Thus it removes Cartesian inversion from RK stages but retains
+an iterative coordinate inversion in every accepted-step exit check. A fast
+implementation must also avoid this repeated reconstruction: retain logical
+FO state, use a conservative inexpensive exit screen, and reconstruct the GC
+only when needed for an actual transition or requested output. Small local
+metric solves are distinct from the expensive nonlinear coordinate inversion.
+
 ## Ordered continuation plan
 
-1. **Finish the production GC proof bridge.** Map each of the eight variants'
+1. **W4 first: finish and measure splined logical-coordinate FO.** Resume the
+   preserved sources and patch. Spline R, Z and A separately per volume; derive
+   B and the metric consistently from their jets, preserving one-sided sheet
+   traces and gauge changes. Carry the logical coordinates and volume owner
+   through RK stages and resolve rho-root events and crossing-and-return pairs
+   without Cartesian inversion. Remove the repeated exit-check inversion
+   described above without changing transition criteria. Validate derivatives,
+   grid convergence and axis/exterior ownership against the sharp-field
+   Cartesian reference. Measure matched short-orbit cost, spline setup, RHS
+   evaluations and coordinate inversions under controlled load before W2.
+   Target at least 10x per-step speedup and establish end-to-end throughput;
+   neither speedup is a result yet. Retire the old path only after equivalent
+   physical results and measured benefit.
+2. **Finish the production GC proof bridge.** Map each of the eight variants'
    actual equations and field/extrapolation operations to its theorem. Restore
    the draft oracle on a development branch; run NCSX canonical-flux/Boozer and
    QH cases. Preserve one-step/100-step defect gates (1e-7/1e-5), spacing controls
    and the negative control. Repair only reproduced implementation defects.
-2. **W1/W3: validate and integrate the consistent switch.** Complete item D's
+3. **W1/W3: validate and integrate the consistent switch.** Complete item D's
    generated identity checks and build recipe; audit units, gyrophase, gauge and
    the relation to production GC variables. Require scaled round-trip identity
    at 1e-12, O(epsilon^2) mu defect and independent FO reconstruction. Replace
    both entry and exit together with carried phase. Redesign the long-run
    comparison so it distinguishes sheet physics, switch error and artificial
    absorbing boundaries. No production switch change has yet been made.
-3. **W4: finish splined logical-coordinate FO.** Resume the preserved sources
-   and patch; validate derivatives and metric/gauge continuity per volume.
-   Resolve rho-root events and crossing-and-return pairs without Cartesian
-   inversion. Test axis/exterior ownership and compare energy/trajectory/loss
-   results to current sharp-field Cartesian RK45. Target at least 10x per-step
-   speedup. Retire the old path only after equivalent physical results and
-   throughput are measured; the speedup is currently a target, not a result.
 4. **W2: paired volume-sampled benchmark.** At least 256 matched markers on
    NCSX and G3V3L3Fi, 2 ms initially. Compare entry distances 1.5/2/3/4 rho_L,
    tolerances 1e-7/1e-9/1e-11 and FO everywhere at 1e-9. Publish loss-time curves,
