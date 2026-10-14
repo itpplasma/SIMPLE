@@ -659,6 +659,12 @@ Canonical momenta are `P_i = e_i dot v + A_i/ro0_bar` (cm), with `e_i` in cm,
 `ro0_bar = ro0/sqrt(2)` in Gauss*cm, and the flux-like SI A scaled by `1e8`.
 The full-orbit H is one half the squared normalized speed. Fixed fictitious
 Gauss steps integrate `K = g(H-E)` and quadrature of g advances physical time.
+The interface refinement factor also includes the smooth chart's inverse
+radial metric: `sqrt(m_ref/(m_ref + g^{rho rho}))`, with the reference
+`m_ref = (L/(16 h_tau sqrt(2 E)))^2` frozen at entry. Its analytic first and
+second derivatives enter the transformed Hamiltonian. This accounts for
+large angular changes of the radial speed bound in three-dimensional fields
+without changing the fictitious step or projecting energy.
 The hybrid carries a complete step's time excess across output intervals;
 its sampled state can be ahead by at most one physical FO step. The default
 Gauss layer width, when the input width is zero, is the total-speed radial

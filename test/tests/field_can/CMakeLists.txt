@@ -192,3 +192,16 @@ set_tests_properties(test_spectre_fo_gauss2_incompatible_gauge PROPERTIES
     LABELS "integration"
     WILL_FAIL TRUE
     TIMEOUT 120)
+
+add_executable(test_spectre_fo_gauss2_radial_refinement.x
+    test_spectre_fo_gauss2_radial_refinement.f90)
+target_link_libraries(test_spectre_fo_gauss2_radial_refinement.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gauss2_radial_refinement)
+add_test(NAME test_spectre_fo_gauss2_radial_refinement
+    COMMAND $<TARGET_FILE:test_spectre_fo_gauss2_radial_refinement.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gauss2_radial_refinement)
+set_tests_properties(test_spectre_fo_gauss2_radial_refinement PROPERTIES
+    LABELS "integration"
+    ENVIRONMENT "OMP_NUM_THREADS=1"
+    TIMEOUT 120)

@@ -316,10 +316,15 @@ is zero; positive widths use `spectre_fo_layer_larmor`. Widths of one or more st
 units are rejected so adjacent compact layers cannot overlap. For each interface,
 `g_k = 1-(1-g_min) exp(-((rho_g-k)/L)^2)`; g is their product. Using the entry
 bound `v_r = |v| |grad rho_g|`, choose `L = max(16 h v_r, 16 w)` and
-`g_min = min(0.1, w/(256 h v_r))`. These choices resolve both the layer and
-the refinement transition near entry; long-run invariants and the physical
-loss comparison remain the acceptance tests because these scales vary
-along an orbit. No energy projection is applied. Complete fixed fictitious
+`g_min = min(0.1, w/(256 h v_r))`. The entry bound alone is insufficient
+in three dimensions: the smooth chart's `|grad rho_g|` can increase by nearly
+an order of magnitude along an interface. Multiply the product of `g_k` by
+`sqrt(m_ref/(m_ref + g^{rho rho}))`, where the inverse metric is in cm and
+`m_ref = (L/(16 h sqrt(2 E)))^2` remains frozen at entry. The analytic first
+and second derivatives of this metric monitor enter the full gradient and
+Hessian of K, including angular and mixed derivatives. Refining h for a
+convergence check leaves `m_ref` fixed. Long-run invariants and the physical
+loss comparison remain the acceptance tests. No energy projection is applied. Complete fixed fictitious
 steps can overrun an output interval; the hybrid carries that physical-time
 excess into subsequent intervals, including after a GC return. Output states
 therefore have a time offset bounded by one physical FO step. GC return
@@ -336,9 +341,9 @@ momentum and loss effects need the separate integration tests.
 ### Gauss validation and limits
 
 The tok2vol hybrid integration check exercises 24 FO entries and 20 exits
-with zero losses or failures. Its maximum momentum-shell error is `2.14e-6`
+with zero losses or failures. Its maximum momentum-shell error is `1.30e-6`
 and relative canonical p_zeta spread is `4.30e-8`, comparable to the RK45
-reference of approximately `6e-8`. The frozen-parameter FO test runs 160000
+reference of approximately `6e-8`. The radial-only frozen-parameter FO test runs 160000
 steps and 143 layer crossings: the first- and last-quarter energy envelopes
 are `1.32764e-6` and `1.39189e-6`. It rejects a growing envelope. Analytic
 layer tangent defects after constant canonical normalization are `3.19e-13`
@@ -349,10 +354,20 @@ and wall time are separate acceptance evidence.
 The long NCSX comparison at `facE_al = 1000`, layer `0.05` and rotation
 `0.05` exposed completed momentum-shell ratios as large as `1.425` relative
 to the initial shell, together with FO Newton/step-limit recoveries. This
-setting fails physical acceptance. Entry-based refinement scales do not
-establish a global stellarator error bound. The Gauss option remains
-experimental; the tokamak and local tangent results do not justify using
-this NCSX setting in production. It also has not achieved a speed improvement.
+entry-only refinement failed physical acceptance. A single-thread marker-20
+replay located the kicks inside accepted Gauss steps, before Newton recovery:
+`H` jumped from `1.91366` to `2.29522` with both endpoints in volume 1.
+At an earlier kick the smooth radial gradient was `61.42/m`, versus an entry
+reference of approximately `6.86/m`; the embedding Jacobian remained positive.
+A short on-shell replay fails with a relative energy envelope of `9.90e-4`
+without the metric monitor and passes at `7.80e-9` with it. The monitored
+analytic tangent agrees with finite differences within `7.69e-8` and its
+symplectic defect is `2.22e-16`. The focused regression is
+`test_spectre_fo_gauss2_radial_refinement`.
+
+The metric monitor repairs this resolution defect; it does not establish a
+global stellarator error bound or validate the combined GC/FO map. The Gauss
+option remains experimental and has not established a speed improvement.
 
 ## Physical caveat
 

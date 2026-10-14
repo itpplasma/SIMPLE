@@ -401,9 +401,13 @@ contains
         v = matmul(transpose(inverse3(e)), z(4:6) - a)
     end subroutine gauss2_decode
 
-    subroutine gauss2_hamiltonian(z, width, ro0, energy, grad, hess)
+    subroutine gauss2_hamiltonian(z, width, ro0, energy, grad, hess, &
+            radial_metric, radial_grad, radial_hess)
         real(dp), intent(in) :: z(6), width, ro0
         real(dp), intent(out) :: energy, grad(6), hess(6, 6)
+        ! Optional jet of g^{rho rho}, in inverse cm squared.
+        real(dp), intent(out), optional :: radial_metric, radial_grad(3)
+        real(dp), intent(out), optional :: radial_hess(3, 3)
         real(dp) :: x(3), e(3, 3), metric(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
         real(dp) :: a(3), da(3, 3), d2a(3, 3, 3), w(3), v(3)
         real(dp) :: gi(3, 3), dgi(3, 3, 3), d2gi(3, 3), tmp(3, 3)
@@ -428,6 +432,7 @@ contains
                 gi(i, j) = gi(i, j)/(basis_norm(i)*basis_norm(j))
             end do
         end do
+        if (present(radial_metric)) radial_metric = gi(1, 1)
         w = z(4:6) - a
         v = matmul(gi, w)
         energy = 0.5_dp*dot_product(w, v)
@@ -435,6 +440,7 @@ contains
         hess(4:6, 4:6) = gi
         do i = 1, 3
             dgi(:, :, i) = -matmul(gi, matmul(dg(:, :, i), gi))
+            if (present(radial_grad)) radial_grad(i) = dgi(1, 1, i)
             grad(i) = 0.5_dp*dot_product(w, matmul(dgi(:, :, i), w)) &
                 - dot_product(da(:, i), v)
             hess(i, 4:6) = matmul(dgi(:, :, i), w) - matmul(gi, da(:, i))
@@ -445,6 +451,7 @@ contains
                 tmp = matmul(dg(:, :, j), matmul(gi, dg(:, :, i))) &
                     + matmul(dg(:, :, i), matmul(gi, dg(:, :, j))) - d2g(:, :, i, j)
                 d2gi = matmul(gi, matmul(tmp, gi))
+                if (present(radial_hess)) radial_hess(i, j) = d2gi(1, 1)
                 hess(i, j) = 0.5_dp*dot_product(w, matmul(d2gi, w)) &
                     - dot_product(da(:, i), matmul(dgi(:, :, j), w)) &
                     - dot_product(da(:, j), matmul(dgi(:, :, i), w)) &
@@ -454,13 +461,16 @@ contains
         end do
     end subroutine gauss2_hamiltonian
 
-    subroutine transformed(z, width, ro0, e0, length, gmin, f, df, g)
-        real(dp), intent(in) :: z(6), width, ro0, e0, length, gmin
+    subroutine transformed(z, width, ro0, e0, length, gmin, radial_scale, f, df, g)
+        real(dp), intent(in) :: z(6), width, ro0, e0, length, gmin, radial_scale
         real(dp), intent(out) :: f(6), df(6, 6), g
         real(dp) :: energy, grad(6), hess(6, 6), gq, gqq, d, expd
-        integer :: k
+        real(dp) :: radial_metric, radial_grad(3), radial_hess(3, 3)
+        real(dp) :: monitor, m1, m2, mg(3), mh(3, 3), ggrad(3), ghess(3, 3)
+        integer :: k, i, j
 
-        call gauss2_hamiltonian(z, width, ro0, energy, grad, hess)
+        call gauss2_hamiltonian(z, width, ro0, energy, grad, hess, &
+            radial_metric, radial_grad, radial_hess)
         g = 1.0_dp
         gq = 0.0_dp
         gqq = 0.0_dp
@@ -473,26 +483,56 @@ contains
             gq = gq*(1.0_dp - expd) + g*2.0_dp*d/length**2*expd
             g = g*(1.0_dp - expd)
         end do
-        hess = g*hess
-        hess(1, :) = hess(1, :) + gq*grad
-        hess(:, 1) = hess(:, 1) + gq*grad
-        hess(1, 1) = hess(1, 1) + (energy - e0)*gqq
-        grad = g*grad
-        grad(1) = grad(1) + (energy - e0)*gq
+        ggrad = [gq, 0.0_dp, 0.0_dp]
+        ghess = 0.0_dp
+        ghess(1, 1) = gqq
+        if (radial_scale > 0.0_dp) then
+            ! The radial speed bound changes strongly along a 3D interface.
+            ! A smooth metric monitor refines the same autonomous K=g(H-E),
+            ! rather than adapting h or projecting the physical energy.
+            monitor = sqrt(radial_scale/(radial_scale + radial_metric))
+            m1 = -0.5_dp*monitor/(radial_scale + radial_metric)
+            m2 = 0.75_dp*monitor/(radial_scale + radial_metric)**2
+            mg = m1*radial_grad
+            do j = 1, 3
+                do i = 1, 3
+                    mh(i, j) = m1*radial_hess(i, j) &
+                        + m2*radial_grad(i)*radial_grad(j)
+                    ghess(i, j) = monitor*ghess(i, j) + g*mh(i, j) &
+                        + ggrad(i)*mg(j) + mg(i)*ggrad(j)
+                end do
+            end do
+            ggrad = monitor*ggrad + g*mg
+            g = g*monitor
+        end if
+        do j = 1, 3
+            do i = 1, 3
+                hess(i, j) = g*hess(i, j) + ggrad(i)*grad(j) &
+                    + grad(i)*ggrad(j) + (energy - e0)*ghess(i, j)
+            end do
+            hess(j, 4:6) = g*hess(j, 4:6) + ggrad(j)*grad(4:6)
+            hess(4:6, j) = hess(j, 4:6)
+        end do
+        hess(4:6, 4:6) = g*hess(4:6, 4:6)
+        grad(1:3) = g*grad(1:3) + (energy - e0)*ggrad
+        grad(4:6) = g*grad(4:6)
         f(1:3) = grad(4:6)
         f(4:6) = -grad(1:3)
         df(1:3, :) = hess(4:6, :)
         df(4:6, :) = -hess(1:3, :)
     end subroutine transformed
 
-    subroutine gauss2_step(z0, width, ro0, e0, length, gmin, h, z1, dt, ok, tangent)
+    subroutine gauss2_step(z0, width, ro0, e0, length, gmin, h, z1, dt, ok, &
+            tangent, radial_scale)
         real(dp), intent(in) :: z0(6), width, ro0, e0, length, gmin, h
         real(dp), intent(out) :: z1(6), dt
         logical, intent(out) :: ok
         real(dp), intent(out), optional :: tangent(6, 6)
+        ! Frozen metric reference; omitted/zero retains radial-only refinement.
+        real(dp), intent(in), optional :: radial_scale
         real(dp) :: y(6, 2), f(6, 2), df(6, 6, 2), g(2), jac(12, 12)
         real(dp) :: rhs(12, 6), scale(6), resid(12), update(12), identity(6, 6)
-        real(dp) :: roundoff(12), residual_floor(12)
+        real(dp) :: roundoff(12), residual_floor(12), radial_ref
         integer :: it, i, j, info, piv(12)
         logical :: stages_converged
 
@@ -502,15 +542,18 @@ contains
         do i = 1, 6
             identity(i, i) = 1.0_dp
         end do
+        radial_ref = 0.0_dp
+        if (present(radial_scale)) radial_ref = radial_scale
         scale = [1.0_dp, 1.0_dp, 1.0_dp, max(abs(z0(4:6)), 100.0_dp)]
-        call transformed(z0, width, ro0, e0, length, gmin, f(:, 1), df(:, :, 1), g(1))
+        call transformed(z0, width, ro0, e0, length, gmin, radial_ref, &
+            f(:, 1), df(:, :, 1), g(1))
         y(:, 1) = z0 + h*(0.5_dp - sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         y(:, 2) = z0 + h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         ok = .false.
         stages_converged = .false.
         do it = 1, 20
             do j = 1, 2
-                call transformed(y(:, j), width, ro0, e0, length, gmin, &
+                call transformed(y(:, j), width, ro0, e0, length, gmin, radial_ref, &
                     f(:, j), df(:, :, j), g(j))
                 do i = 1, 2
                     jac(6*i - 5:6*i, 6*j - 5:6*j) = -h*GL_A(i, j)*df(:, :, j)

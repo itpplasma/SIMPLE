@@ -441,12 +441,17 @@ contains
         real(dp), intent(in) :: ro0_bar, hfac
         real(dp), intent(out) :: dt
         integer, intent(out) :: status
-        real(dp) :: z1(6)
+        real(dp) :: z1(6), radial_scale
         logical :: ok
 
         dt = 0.0_dp
+        ! Freeze the metric reference together with the excursion parameters.
+        ! hfac refines h while leaving this Hamiltonian unchanged.
+        radial_scale = (state%refine_length/ &
+            (16.0_dp*state%h_tau*sqrt(2.0_dp*state%energy)))**2
         call gauss2_step(state%z_gauss, state%layer_rho, ro0_bar, state%energy, &
-            state%refine_length, state%g_min, hfac*state%h_tau, z1, dt, ok)
+            state%refine_length, state%g_min, hfac*state%h_tau, z1, dt, ok, &
+            radial_scale=radial_scale)
         if (.not. ok) then
             status = SPECTRE_FO_STEP_LIMIT
             return
