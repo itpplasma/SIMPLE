@@ -8,12 +8,14 @@ program test_spectre_fo_spline
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
         spectre_fo_field_locate, spectre_fo_local_t
     implicit none
+    real(dp), parameter :: axis_samples(6) = &
+        [0.001_dp, 0.049_dp, 0.051_dp, 0.075_dp, 0.099_dp, 0.101_dp]
     type(spectre_field_t) :: field
     type(spectre_fo_local_t) :: loc
     character(len=1024) :: path
     real(dp) :: u(3), raw(3), a(3), hc(3), bmag, sqgb(3), e(3, 3), g(3, 3)
     real(dp) :: gi(3, 3), jac, b(3), located(3), errors(3, 2), fraction, delta
-    integer :: status, level, volume, j, owner, nr, nt, nz
+    integer :: status, level, volume, j, owner, nr, nt, nz, side
 
     call get_command_argument(1, path)
     call create_spectre_field(field, trim(path), status)
@@ -32,6 +34,8 @@ program test_spectre_fo_spline
                 if (j == 1) fraction = 1.0e-10_dp
                 if (j == 2) fraction = 1.0_dp - 1.0e-10_dp
                 if (volume == 1 .and. j == 1) fraction = 0.05_dp
+                if (volume == 1 .and. j >= 3 .and. j <= 8) &
+                    fraction = axis_samples(j - 2)
                 u = [real(volume - 1, dp) + fraction, 0.713_dp*j, 0.317_dp*j]
                 call spectre_fo_field_local(u, volume, loc)
                 call spectre_field%coords%evaluate_cart(u, raw)
@@ -59,6 +63,30 @@ program test_spectre_fo_spline
         end do
         print '(a,i1,3es14.5)', 'grid level ', level, errors(:, level)
     end do
+    ! Independent regular-axis limit from opposite raw-field samples. A polar
+    ! spline's derivative error divided by its vanishing Jacobian is unsafe.
+    b = 0.0_dp
+    do side = 0, 1
+        u = [1.0e-5_dp, 0.66_dp + side*acos(-1.0_dp), 1.587_dp]
+        call spectre_field%evaluate(u, a, hc, bmag, sqgb)
+        call spectre_field%coords%covariant_basis(u, e)
+        call spectre_field%coords%metric_tensor(u, g, gi, jac)
+        b = b + 0.5_dp*matmul(e, sqgb)/jac
+    end do
+    u = [1.0e-12_dp, 0.66_dp, 1.587_dp]
+    call spectre_fo_field_local(u, 1, loc)
+    delta = norm2(loc%b*loc%bmod/TESLA_TO_GAUSS - b)/norm2(b)
+    print '(a,es14.5)', 'axis field relative error ', delta
+    if (delta > 1.0e-5_dp) error stop 'regular-axis magnetic field limit'
+    ! Reproduce the nearly singular warm start of the 200 us physical pilot.
+    u = [0.02_dp, 0.7_dp, 1.587_dp]
+    call spectre_field%coords%evaluate_cart(u, raw)
+    located = [6.0e-13_dp, 0.66_dp, u(3)]
+    owner = 1
+    call spectre_fo_field_locate(raw*M_TO_CM, located, owner, status)
+    if (status /= 0) error stop 'regular-axis inverse from a pole seed'
+    call spectre_field%coords%evaluate_cart(located, b)
+    if (norm2(b - raw) > 1.0e-8_dp) error stop 'regular-axis inverse residual'
     if (errors(1, 2) > 1.0e-7_dp) error stop 'spline geometry error'
     if (errors(2, 2) > 1.0e-5_dp) error stop 'spline magnetic field error'
     if (errors(3, 2) > 1.0e-6_dp) error stop 'spline potential error'
