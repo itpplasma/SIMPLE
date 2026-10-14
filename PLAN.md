@@ -93,7 +93,10 @@ it is pushed as PR #535, commit `6970eff`. Native main-based checks pass
 85/85 in 478.83 s; after fixing local interpreter discovery, the rebuilt
 Python API suite passes all 17 cases in 99.52 s. Other backend-dependent Python
 suites were not rerun. The repair is integrated here as `0993478`; affected
-SPECTRE checks are running.
+SPECTRE checks pass, 22/22 in 137.19 s. Two 256-marker hybrid controls
+are being replayed against the retained FO references to check the GC repair;
+this replay is an accuracy comparison on a shared host, not a replacement
+controlled throughput benchmark.
 
 All eight methods pass the one-step/100-step NCSX canonical-flux/Boozer and QH
 Boozer map checks with unchanged bounds (1e-7/1e-5) and original spacings
@@ -122,8 +125,15 @@ New independent two-form pullback and analytic-Jacobian checks pass on analytic
 fields and all three volumes of each stellarator: selector 1 defects scale
 with epsilon squared; selector 0 remains first order. These are numerical
 checks, not exact emitted-map identities or production integration. The full
-10-case, seven-epsilon reconstruction study and recovered exact identity
-checker are running. Production still uses its existing switch and phase.
+10-case, seven-epsilon reconstruction study is complete: finest-four mu-defect
+orders are 1.995–2.001, worst scaled round trips below 4e-13 and temporal
+refinement changes below 0.033%. The source-linked regeneration check reproduces
+the committed kernel exactly. The repaired checker proves 132/132 identities
+without probes, for its stated local field family and generic Lie-series
+claims; this is not an exact general nonlinear SPECTRE-field identity. These
+results are pushed as `c3a3f31`. Production still uses its existing switch and
+phase. Actual extended canonical GC action/phase, connection tables and
+production entry/exit remain to be implemented and validated.
 
 ## Goal and constraints
 
