@@ -1,0 +1,54 @@
+{
+  "uniform_field_canonical_poisson": {
+    "passed": true,
+    "residual": "Matrix([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]])"
+  },
+  "direction_reset_speed": {
+    "passed": true,
+    "residual": "0"
+  },
+  "uniform_phase_mean": {
+    "passed": true,
+    "residual": "0"
+  },
+  "uniform_phase_variance": {
+    "passed": true,
+    "residual": "0"
+  },
+  "flux_phase_mean": {
+    "passed": true,
+    "residual": "0"
+  },
+  "flux_phase_variance": {
+    "passed": true,
+    "residual": "0"
+  },
+  "sheet_saltation_two_form": {
+    "passed": true,
+    "residual": "Matrix([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]])"
+  },
+  "helix_position_derivative": {
+    "passed": true,
+    "residual": "Matrix([[0], [0], [0]])"
+  },
+  "helix_lorentz_equation": {
+    "passed": true,
+    "residual": "Matrix([[0], [0], [0]])"
+  },
+  "helix_constant_speed": {
+    "passed": true,
+    "residual": "0"
+  },
+  "normal_oscillator": {
+    "passed": true,
+    "residual": "0"
+  },
+  "normal_integral": {
+    "passed": true,
+    "residual": "0"
+  },
+  "ring_fraction_derivative": {
+    "passed": true,
+    "residual": "0"
+  }
+}
