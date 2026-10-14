@@ -147,7 +147,15 @@ collected here; their known RED energy acceptance stays outside the default
 suite. Historical Lean caches are preserved and ignored. Production changes
 remain reviewable as the two focused PRs #534 and #535; this research branch
 also contains the recovered concept inventory and all retained new evidence.
-A fresh native Fast suite is running on the consolidated checkout.
+The consolidated native Fast sweep passed 98/99 cases in 463.91 s. Its sole
+failure was the recovered W1 diagnostic: it compared a raw-field construction
+with the spline-based entry map at near machine precision. The diagnostic now
+uses the same owning-volume interpolant, retaining its original strict phase
+identity and other bounds. Its focused native rerun passes in 2.37 s; the other
+98 results remain valid because only this test and documentation changed.
+Thus all 99 selected checks are covered without repeating unchanged cases.
+The rejected-model symbolic verifier also passes after consolidation. No
+retired parameter rejection checks or runtime compatibility paths were added.
 
 ## Goal and constraints
 
@@ -574,3 +582,22 @@ for the actual next revision; do not infer closure from a worker's last message.
 - Rebased recovery focused native checks: the existing switch round-trip,
   FO symplectic map and Gauss2 concept-field tests passed (3/3). Main's cleaned
   concept trees, ledger, production sources and settings are retained verbatim.
+
+### Latest consolidated verification and promotion status
+
+- The native Fast sweep plus the repaired diagnostic rerun covers all 99 selected
+  checks, including the recovered FO proof controls, real-field first-order
+  switch checks, exact 132-identity suite and regeneration. The slow full suite
+  was not repeated after consolidation; the explicit long-energy failures
+  remain retained and are not enabled in the default suite.
+- Production source repairs remain isolated in PR #535 (`6970eff`, T3); the
+  field-performance change is PR #534 (`47d3fb0`, T4). Both have complete local
+  evidence and no reviews as of this checkpoint. Main is still `fe002a3`.
+- Main promotion is awaiting Chris's response to the required review decision.
+  `docs/review-policy.md` specifies domain review for T3 and senior review for
+  T4. CI is not awaited. No further main-dependent production integration is
+  promoted while that decision is pending.
+- The original add/remove cleanup history remains on main. The consolidated
+  research branch contains the recovered work and new results, while the
+  separate audit/switch branches retain their provenance. Cluster jobs were
+  not started or resumed; all new orbit runs were local.

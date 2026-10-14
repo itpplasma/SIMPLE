@@ -12,6 +12,7 @@ program test_spectre_switch_roundtrip
     use util, only: c, e_charge, p_mass, ev
     use magfie_sub, only: spectre_field, set_magfie_spectre_field
     use field_spectre, only: spectre_field_t, create_spectre_field
+    use spectre_fo_field, only: spectre_fo_field_local, spectre_fo_local_t
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_configure, &
         spectre_fo_enter, spectre_fo_to_gc, spectre_fo_radial_larmor, &
         spectre_fo_advance_until_exit, SPECTRE_FO_OK
@@ -79,7 +80,7 @@ program test_spectre_switch_roundtrip
                         y(1) = 1.0_dp + DIST(ip)*rho_r
                     end if
                     u = y(1:3)
-                    call sample(u, x_gc, b, bmod)
+                    call sample(u, x_gc, b, bmod, owner)
                     vpar = sqrt(2.0_dp)*lam
                     vperp = sqrt(2.0_dp)*sqrt(1.0_dp - lam**2)
                     rho_l = ro0_bar*vperp/bmod
@@ -112,8 +113,8 @@ program test_spectre_switch_roundtrip
                             nfail(ie, ip) = nfail(ie, ip) + 1
                             cycle
                         end if
-                        call sample(state%u, xp, bp, bmod_p)
-                        call sample(y_out(1:3), x_out, b_out, bmod_out)
+                        call sample(state%u, xp, bp, bmod_p, state%owner)
+                        call sample(y_out(1:3), x_out, b_out, bmod_out, owner_out)
                         dmu = mu_out/mu_in - 1.0_dp
                         dlam = y_out(5) - lam
                         drho = (y_out(1) - y(1))/rho_r
@@ -209,7 +210,7 @@ contains
                             y(1) = 1.0_dp - 3.0_dp*rho_r
                         end if
                         call spectre_fo_radial_larmor(y, 1, ro0_bar, rho_r, status)
-                        call sample(y(1:3), x_gc, b, bmod)
+                        call sample(y(1:3), x_gc, b, bmod, 1)
                         mu_in = (1.0_dp - lam**2)/bmod
                         call spectre_fo_enter(state, y, 1, 1, ro0_bar, status)
                         if (status /= SPECTRE_FO_OK) error stop 'scan enter'
@@ -284,18 +285,19 @@ contains
         ro = v0*4.0_dp*p_mass*c/(2.0_dp*e_charge)
     end function alpha_ro0
 
-    subroutine sample(u, x, b, bmod)
+    subroutine sample(u, x, b, bmod, owner)
         real(dp), intent(in) :: u(3)
         real(dp), intent(out) :: x(3), b(3), bmod
-        real(dp) :: a(3), hc(3), sqgb(3), g(3, 3), gi(3, 3), sg, e(3, 3)
+        integer, intent(in) :: owner
+        type(spectre_fo_local_t) :: loc
 
-        call spectre_field%coords%evaluate_cart(u, x)
-        call spectre_field%coords%covariant_basis(u, e)
-        call spectre_field%coords%metric_tensor(u, g, gi, sg)
-        call spectre_field%evaluate(u, a, hc, bmod, sqgb)
-        b = matmul(e, sqgb/sg)/bmod
-        x = x*1.0e2_dp
-        bmod = bmod*1.0e4_dp
+        ! The phase identity is for the field actually used by the switch.
+        ! Independent raw-field accuracy belongs to test_spectre_fo_spline;
+        ! interpolation error must not be counted here as a switch defect.
+        call spectre_fo_field_local(u, owner, loc)
+        x = loc%x
+        b = loc%b
+        bmod = loc%bmod
     end subroutine sample
 
     pure subroutine perpendicular_frame(b, e1, e2)
