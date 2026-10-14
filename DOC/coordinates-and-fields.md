@@ -648,13 +648,13 @@ from the guiding-center stack below.
 `src/simple_main.f90` (`init_spectre_field`,
 `trace_orbit_spectre`), `src/samplers.f90` (`sample_spectre_surface`).
 
-`simple.x` traces guiding centers only for single-volume SPECTRE fields
-(`Mvol = 1`). Multi-volume orbit configuration fails before canonical
-construction with "no valid interface crossing on this version; see
-DOC/spectre-rejected-interface-models.md". It remains disabled until the
-full-orbit interface treatment of PR #530 lands. Multi-volume field evaluation,
-geometry, canonical construction, field-line diagnostics, and sampling with
-`generate_start_only = .true.` remain available.
+`simple.x` traces multi-volume SPECTRE fields with `integmode > 0` and
+`crossing_level = 3` (default), using full orbit at interior interfaces.
+Levels 0/1 and their GC crossing-event log were removed without aliases; see
+[the rejection record](spectre-rejected-interface-models.md). Single-volume RK45
+and multi-volume field evaluation, geometry, diagnostics and sampling remain
+supported. The home-volume lock pins implicit Newton trials and coordinate
+transforms to one volume; interior physical crossings use the full orbit.
 
 **Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
 extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
@@ -927,10 +927,9 @@ Cartesian space with a triangulated STL surface (using CGAL).
 
 ### 8.2.3 SPECTRE Equilibria (`integ_coords = 6`)
 
-VMEC-free single-volume guiding-center tracing and multi-volume field
+VMEC-free guiding-centre tracing with full orbit near interfaces, and field
 and geometry evaluation on SPECTRE/SPEC MRxMHD equilibria (HDF5, `.h5`),
-detected automatically from `field_input`. Multi-volume orbit tracing is
-disabled pending PR #530; see
+detected automatically from `field_input`; see
 [the interface status](spectre-interface-crossing.md). Example sampling input:
 `examples/simple_spectre.in`.
 
@@ -939,7 +938,7 @@ disabled pending PR #530; see
 | `field_input` | string | `''` | SPECTRE HDF5 equilibrium (`.h5`); VMEC-free |
 | `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
-| `crossing_level` | int | 1 | interface crossing: `1` = Level-1 refraction, `0` = Level-0 energy rescale, `3` = full orbit near interfaces (symplectic path) |
+| `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
 | `spectre_fo_layer_larmor` | real | 0 | full-orbit smooth layer width in gyroradii; `0` keeps the sharp per-volume field |
 | `spectre_fo_rotation` | real | 0.05 | Boris step bound `h \|B\|/(2 ro0)` |

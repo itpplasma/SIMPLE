@@ -78,20 +78,6 @@ set_tests_properties(test_spectre_sympl_volume_pphi PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
 
-# Symplectic multi-volume crossing (#441): long-run H and p_phi invariants of
-# the composed flow-jump-flow map on the committed tok2vol fixture.
-add_executable(test_spectre_sympl_crossing.x test_spectre_sympl_crossing.f90)
-target_link_libraries(test_spectre_sympl_crossing.x simple)
-
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_sympl_crossing)
-add_test(NAME test_spectre_sympl_crossing_invariants
-    COMMAND $<TARGET_FILE:test_spectre_sympl_crossing.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_sympl_crossing)
-set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
-    LABELS "integration"
-    TIMEOUT 300)
-
 # Full orbit near SPECTRE interfaces (crossing_level = 3): GC <-> FO switching
 # on the axisymmetric current-sheet fixture, with the momentum shell and the
 # canonical toroidal momentum as witnesses.
@@ -122,20 +108,6 @@ add_test(NAME test_spectre_fo_events
 set_tests_properties(test_spectre_fo_events PROPERTIES
     LABELS "integration"
     TIMEOUT 60)
-
-# Kicked Level-1 reflection (CA15): forbidden crossings relocate along the
-# interface to the conjugate equal-B point at frozen (vpar, p, lambda, mu).
-add_executable(test_spectre_kicked_reflection.x test_spectre_kicked_reflection.f90)
-target_link_libraries(test_spectre_kicked_reflection.x simple)
-
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_kicked_reflection)
-add_test(NAME test_spectre_kicked_reflection
-    COMMAND $<TARGET_FILE:test_spectre_kicked_reflection.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol_sheet.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_kicked_reflection)
-set_tests_properties(test_spectre_kicked_reflection PROPERTIES
-    LABELS "integration"
-    TIMEOUT 300)
 
 # Physical mu-scatter reference (ROADMAP section 4): full-orbit interface
 # traversals against the conserved-mu GC sheet convention, two gyrostep scales.

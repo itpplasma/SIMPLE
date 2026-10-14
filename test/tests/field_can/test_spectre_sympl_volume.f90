@@ -19,7 +19,7 @@ program test_spectre_sympl_volume
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: tracer_t
     use simple_main, only: init_field, init_tracing_field
-    use params, only: read_config, netcdffile, ns_s, ns_tp, multharm
+    use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, integmode
     use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
     use field_can_spectre, only: spectre_volumes, spectre_mvol
     use field_spectre, only: spectre_field_t, create_spectre_field
@@ -58,6 +58,7 @@ program test_spectre_sympl_volume
     select case (trim(mode))
     case ('reject')
         print *, 'SPECTRE sampling-only configuration accepted'
+        integmode = 0  ! GC RK45 has no multi-volume crossing treatment.
         call init_tracing_field
         error stop 'multi-volume tracing activation was accepted'
     case ('construction')

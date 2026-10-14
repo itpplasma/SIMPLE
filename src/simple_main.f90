@@ -7,7 +7,7 @@ module simple_main
         ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles
-    use magfie_sub, only: ALBERT
+    use magfie_sub, only: ALBERT, SPECTRE
     use samplers, only: sample
     use field_can_mod, only: field_can_t, evaluate_field => evaluate, &
         integ_to_ref, ref_to_integ, init_field_can
@@ -300,9 +300,7 @@ contains
         call diag_counters_init
         if (isw_field_type == SPECTRE) then
             block
-                use interface_crossing, only: crossing_log_reset
                 use spectre_sympl_orbit, only: sympl_landing_stats_reset
-                call crossing_log_reset(256)
                 call sympl_landing_stats_reset
             end block
         end if
@@ -424,8 +422,8 @@ contains
 
         ! Library callers can activate tracing after sampling-only initialization.
         if (run_input_kind() == INPUT_SPECTRE) then
-            if (spectre_field%data%Mvol > 1) error stop &
-                'no valid interface crossing on this version; '// &
+            if (spectre_field%data%Mvol > 1 .and. integmode <= 0) error stop &
+                'multi-volume SPECTRE tracing requires integmode > 0 and crossing_level = 3; '// &
                 'see DOC/spectre-rejected-interface-models.md'
         end if
         if (run_input_kind() == INPUT_VMEC) then
@@ -656,8 +654,9 @@ contains
                 trim(field_input), ' (ierr = ', ierr, ')'
             error stop
         end if
-        if (sf%data%Mvol > 1 .and. .not. generate_start_only) error stop &
-            'no valid interface crossing on this version; '// &
+        if (sf%data%Mvol > 1 .and. integmode <= 0 .and. &
+            .not. generate_start_only) error stop &
+            'multi-volume SPECTRE tracing requires integmode > 0 and crossing_level = 3; '// &
             'see DOC/spectre-rejected-interface-models.md'
         call set_magfie_spectre_field(sf)
 
@@ -1901,8 +1900,13 @@ contains
 
         call compute_pitch_angle_params(z, passing, trap_par(ipart), perp_inv(ipart))
 
-        if (isw_field_type == SPECTRE .and. integmode == 0) then
-            call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
+        if (isw_field_type == SPECTRE) then
+            if (integmode > 0) then
+                call trace_orbit_spectre_sympl(anorb, ipart, z, passing, &
+                    orbit_traj, orbit_times)
+            else
+                call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
+            end if
             return
         end if
 
@@ -2018,6 +2022,116 @@ contains
         end if
         !$omp end critical
     end subroutine trace_orbit
+
+    subroutine trace_orbit_spectre_sympl(anorb, ipart, z, passing, orbit_traj, &
+            orbit_times)
+        !> Per-volume guiding centres switch to full orbit at interior sheets.
+        use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
+            orbit_microstep_sympl_spectre, &
+            SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, &
+            SYMPL_SPECTRE_STOP
+        use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
+        use params, only: crossing_level
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+
+        type(tracer_t), intent(inout) :: anorb
+        integer, intent(in) :: ipart
+        real(dp), intent(inout) :: z(5)
+        logical, intent(in) :: passing
+        real(dp), intent(out) :: orbit_traj(:, :)
+        real(dp), intent(out) :: orbit_times(:)
+
+        type(sympl_spectre_state_t) :: state
+        integer :: it, it_f, ktau, ierr_orbit, it_final
+        integer :: first_unresolved_it
+        integer(8) :: kt
+        real(dp) :: t_stop, t_frac
+
+        call sympl_spectre_reset(state, anorb%si, spectre_mvol, integmode, &
+            crossing_level)
+
+        kt = 0
+        it_final = 0
+        ierr_orbit = SYMPL_SPECTRE_OK
+        t_frac = 1.0d0
+        first_unresolved_it = 0
+
+        do it = 1, ntimstep
+            if (it >= 2) then
+                do ktau = 1, ntau_macro(it)
+                    call orbit_microstep_sympl_spectre(state, anorb%si, anorb%f, &
+                        ipart, &
+                        real(kt, dp)*dtaumin/v0, &
+                        dtaumin/v0, ierr_orbit, &
+                        t_frac)
+                    if (ierr_orbit /= SYMPL_SPECTRE_OK) exit
+                    kt = kt + 1
+                end do
+            end if
+
+            if (ierr_orbit /= SYMPL_SPECTRE_OK) then
+                it_final = it
+                select case (ierr_orbit)
+                case (SYMPL_SPECTRE_LOSS)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_LCFS
+                case (SYMPL_SPECTRE_STOP)
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+                case default
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                end select
+                if (ierr_orbit /= SYMPL_SPECTRE_LOSS .and. &
+                    first_unresolved_it == 0) first_unresolved_it = it
+                exit
+            end if
+
+            if (state%fo%active .and. state%fo%has_y) then
+                z = state%fo%last_y
+            else
+                call to_standard_z_coordinates(anorb, z)
+            end if
+            orbit_traj(:, it) = z
+            orbit_times(it) = kt*dtaumin/v0
+            if (first_unresolved_it == 0) call increase_confined_count(it, passing)
+            it_final = it
+        end do
+
+        if (first_unresolved_it > 0) then
+            do it_f = first_unresolved_it, ntimstep
+                !$omp atomic update
+                unresolved_orbits(it_f) = unresolved_orbits(it_f) + 1
+            end do
+        end if
+
+        if (it_final < ntimstep) then
+            do it = it_final + 1, ntimstep
+                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+            end do
+        end if
+
+        if (ierr_orbit == SYMPL_SPECTRE_OK) then
+            t_stop = real(kt, dp)*dtaumin/v0
+            orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
+        else if (ierr_orbit /= SYMPL_SPECTRE_LOSS) then
+            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
+        else
+            t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
+        end if
+
+        if (state%fo%active .and. state%fo%has_y) then
+            z = state%fo%last_y
+        else
+            call to_standard_z_coordinates(anorb, z)
+        end if
+        ! The next marker on this thread starts with an unlocked field dispatch.
+        call set_spectre_volume_lock(0)
+
+        !$omp critical
+        call integ_to_ref(z(1:3), zend(1:3, ipart))
+        zend(4:5, ipart) = z(4:5)
+        times_lost(ipart) = t_stop
+        !$omp end critical
+    end subroutine trace_orbit_spectre_sympl
 
     subroutine trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
         !> Single-volume RK45 guiding-center trace for SPECTRE.

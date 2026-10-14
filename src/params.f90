@@ -176,10 +176,8 @@ module params
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
-    !> SPECTRE interface crossing: 1 = Level-1 refraction (default), 0 = Level-0
-    !> energy rescale (regression comparison), 3 = full orbit near interfaces
-    !> (symplectic guiding-centre path, integmode > 0).
-    integer :: crossing_level = 1
+    !> SPECTRE interface treatment: only full orbit (3) is supported.
+    integer :: crossing_level = 3
     !> Full orbit near SPECTRE interfaces: entry distance of the guiding centre
     !> to an interface in radial gyroradii (crossing_level = 3), width of the
     !> smooth layer replacing each interior interface in gyroradii (0: sharp
@@ -328,11 +326,8 @@ contains
             error stop 'Collisions are incompatible with classification'
         end if
 
-        if (crossing_level < 0 .or. crossing_level == 2 .or. crossing_level > 3) then
-            error stop 'crossing_level must be 0, 1 or 3'
-        end if
-        if (crossing_level == 3 .and. integmode <= 0) then
-            error stop 'crossing_level = 3 requires a symplectic integmode'
+        if (crossing_level /= 3) then
+            error stop 'crossing_level must be 3; fixed-mu GC maps were removed'
         end if
         if (spectre_fo_entry_larmor <= 0.0_dp .or. &
             spectre_fo_layer_larmor < 0.0_dp .or. spectre_fo_rotation <= 0.0_dp) then

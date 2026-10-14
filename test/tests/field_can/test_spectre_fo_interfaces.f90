@@ -32,7 +32,6 @@ program test_spectre_fo_interfaces
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
         SYMPL_SPECTRE_OK
     use spectre_fo_hybrid, only: spectre_fo_canonical_pzeta, SPECTRE_FO_OK
-    use interface_crossing, only: crossing_log_reset
     use parmot_mod, only: ro0
     use util, only: twopi, sqrt2
 
@@ -74,7 +73,6 @@ program test_spectre_fo_interfaces
     if (config_status /= 0) error stop 'library configuration failed'
     call simple_init
     call init_magfie(SPECTRE)
-    call crossing_log_reset(1024)
     call sympl_landing_stats_reset
 
     failed = .false.

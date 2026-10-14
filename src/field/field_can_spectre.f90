@@ -34,7 +34,7 @@ module field_can_spectre
 
     public :: construct_spectre_coordinates, evaluate_spectre_can, &
               integ_to_ref_spectre, ref_to_integ_spectre, cleanup_spectre, &
-              spectre_volumes, spectre_mvol, &
+              spectre_volumes, spectre_mvol, set_spectre_volume_lock, &
               set_spectre_construction_grid
 
     !> Per-volume Meiss construction grid. phi = -1 selects the automatic policy
@@ -65,6 +65,10 @@ module field_can_spectre
     type(meiss_volume_t), allocatable :: spectre_volumes(:)
     integer :: spectre_mvol = 0
 
+    !> Pin Newton trials and coordinate transforms to the guiding centre owner.
+    integer :: lock_lvol = 0
+    !$omp threadprivate(lock_lvol)
+
 contains
 
     elemental logical function ieee_is_finite(value)
@@ -77,6 +81,24 @@ contains
         bits = transfer(value, bits)
         ieee_is_finite = iand(bits, exponent_mask) /= exponent_mask
     end function ieee_is_finite
+
+    subroutine set_spectre_volume_lock(lvol)
+        !> lvol > 0 pins field evaluation to that volume; 0 restores dispatch on
+        !> int(r).
+        integer, intent(in) :: lvol
+
+        lock_lvol = lvol
+    end subroutine set_spectre_volume_lock
+
+    integer function active_volume(r) result(lvol)
+        real(dp), intent(in) :: r
+
+        if (lock_lvol > 0) then
+            lvol = min(lock_lvol, spectre_mvol)
+        else
+            lvol = volume_index(r)
+        end if
+    end function active_volume
 
     subroutine set_spectre_construction_grid(n_r, n_th, n_phi, spline_order, &
                                              ode_step_limit, ode_relerr)
@@ -257,7 +279,7 @@ contains
 
         n_field_evaluations = n_field_evaluations + 1
 
-        lvol = volume_index(r)
+        lvol = active_volume(r)
         x = [band_clamp(r, spectre_volumes(lvol)), th_c, ph_c]
         dr_out = r - x(1)
 
@@ -301,7 +323,7 @@ contains
         integer :: lvol
         real(dp) :: x(3), y(2)
 
-        lvol = volume_index(xinteg(1))
+        lvol = active_volume(xinteg(1))
         x = [clamp_to_volume(xinteg(1), spectre_volumes(lvol)), xinteg(2), xinteg(3)]
         call evaluate_batch_splines_3d(spectre_volumes(lvol)%spl_transform, x, y)
 
@@ -328,7 +350,7 @@ contains
             return
         end if
 
-        lvol = volume_index(xref(1))
+        lvol = active_volume(xref(1))
         xinteg(1) = xref(1)
         xinteg(2) = modulo(xref(2), twopi)
         target = modulo(xref(3), twopi)

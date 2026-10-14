@@ -87,20 +87,23 @@ def classification(binary, h5, failures):
 
 def main():
     binary, source, field_driver = sys.argv[1:]
-    for mode in (0, 1, 3, 5):
+    for mode, level in ((0, 3), (1, 0), (3, 1), (5, 1)):
         with tempfile.TemporaryDirectory() as work:
             write_input(os.path.join(work, "simple.in"), source)
             path = os.path.join(work, "simple.in")
             with open(path) as f:
                 config = f.read().replace("integmode = 3", f"integmode = {mode}")
+                config = config.replace("&config", f"&config\n crossing_level = {level}")
             with open(path, "w") as f:
                 f.write(config)
             proc = subprocess.run([binary, "simple.in"], cwd=work,
                                   capture_output=True, text=True, timeout=30)
             output = proc.stdout + proc.stderr
             assert proc.returncode != 0, f"mode {mode} traced a multi-volume field"
-            assert "no valid interface crossing on this version;" in output
-            assert "DOC/spectre-rejected-interface-models.md" in output
+            assert ("multi-volume SPECTRE tracing requires" if level == 3 else
+                    "crossing_level must be 3") in output
+            if level == 3:
+                assert "DOC/spectre-rejected-interface-models.md" in output
             assert "spectre_construction_grid:" not in output
             assert not os.path.exists(os.path.join(work, "times_lost.dat"))
     # A library caller must not turn a sampling-only field into an orbit run.
@@ -110,7 +113,7 @@ def main():
         output = proc.stdout + proc.stderr
         assert "SPECTRE sampling-only configuration accepted" in output
         assert proc.returncode != 0
-        assert "no valid interface crossing on this version;" in output
+        assert "multi-volume SPECTRE tracing requires" in output
         assert "DOC/spectre-rejected-interface-models.md" in output
     failures = []
     with axis_volume(source) as field:
