@@ -123,7 +123,7 @@ p_phi exact (axisymmetric only) reduces but does not remove it.
 `tools/spectre_interface_jumps.f90` (built against a SIMPLE build, see its
 header) evaluates the true field at `rho_g = k -+ 1e-10` on a 128 x 64 grid:
 
-| fixture, interface | direction jump max (rms) | `|B+|/|B-| - 1` |
+| fixture, interface | direction jump max (rms) | `\|B+\|/\|B-\| - 1` |
 |---|---|---|
 | tok2vol_sheet | 0 | +1.1 % |
 | tok2vol | 0.045 rad (0.029) | +1.0 to +1.2 % |
@@ -195,5 +195,11 @@ spuriously (RK45 GC: 32 of the 39 reference losses are missed). Level 3 with
 RK45 matches the reference at both interfaces; Boris overestimates the losses
 at interface 2 by about 2 sigma. Individual marker fates differ even between
 full-orbit runs (chaotic orbits near the interface); only the fractions
-compare. The hybrid is not cheaper than full orbit everywhere here: the
-markers stay near the interfaces.
+compare. The hybrid costs about as much as full orbit everywhere here:
+the markers stay near the interfaces.
+
+For strong interfaces use `crossing_level = 3` with
+`spectre_fo_integrator = 'rk45'` (the default FO integrator); `'boris'` remains
+available for a resolved smooth layer. The GC direction-jump ordering and
+operational warning are documented in
+[`DOC/spectre-interface-crossing.md`](../../DOC/spectre-interface-crossing.md#warning-guiding-centre-maps-at-strong-interface-jumps).

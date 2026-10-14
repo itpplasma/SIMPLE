@@ -761,7 +761,10 @@ tangential distance `~ mu [[B]] / v_drift_normal` away; where the poloidal `|B|`
 gradient along the sheet drift is weak this exceeds the `0.3` rad thin-layer
 bound and the map falls back to the energy-exact Level-0 rescale (no kick), so
 every energetically allowed marker still crosses. The full derivation is in
-`DOC/spectre-interface-crossing.md`.
+`DOC/spectre-interface-crossing.md`. Levels 0/1 are not valid at strong jumps
+in field direction or magnitude; use `crossing_level = 3` with the default
+`spectre_fo_integrator = 'rk45'` on the symplectic path there. The warning and
+full-orbit comparison in that document describe the validity limit and cost.
 
 **Drift regularization**. The guiding-center drift diverges where
 `Bstar_par = 1 + p_par (c/e) h.curl h -> 0`, a pitch-dependent phase-space
@@ -1038,8 +1041,8 @@ validation suite (#442). Example input: `examples/simple_spectre.in`.
 | `crossing_level` | int | 1 | interface crossing: `1` = Level-1 refraction, `0` = Level-0 energy rescale, `3` = full orbit near interfaces (symplectic path) |
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
 | `spectre_fo_layer_larmor` | real | 0 | full-orbit smooth layer width in gyroradii; `0` keeps the sharp per-volume field |
-| `spectre_fo_rotation` | real | 0.05 | Boris step bound `h |B|/(2 ro0)` |
-| `spectre_fo_integrator` | string | `'boris'` | full orbit near interfaces: `'boris'` or `'rk45'` (adaptive, exact interface crossing on the sharp field) |
+| `spectre_fo_rotation` | real | 0.05 | Boris step bound `h \|B\|/(2 ro0)` |
+| `spectre_fo_integrator` | string | `'rk45'` | full orbit near interfaces: `'rk45'` (adaptive, exact interface crossings on the sharp field) or `'boris'` (fixed step; use a resolved smooth layer) |
 | `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of the `'rk45'` full orbit |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
