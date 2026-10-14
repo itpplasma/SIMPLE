@@ -667,7 +667,17 @@ inverse, and retains its original physical transform and exit conditions. The
 provider is constructed before parallel tracing and then shared read-only;
 field reinitialization releases the previous tables. Accepted endpoint samples
 are reused for GC reconstruction and the next RK first stage; a landed sheet
-refreshes the sample in the new owner's field.
+refreshes the sample in the new owner's field. The first-volume magnetic axis
+uses a regular `(xi, eta) = rho_g*(cos(theta), sin(theta))` table of R, Z and all
+three potential components. This avoids amplifying polar spline derivative
+error by the vanishing polar Jacobian. Geometry and potential jets join the
+polar representation over `0.05 < rho_g < 0.1`, including derivatives of the
+joining weight before taking the curl. Axis coordinate inversion solves for
+xi/eta with a nonsingular Jacobian. No raw spectral fallback is used during
+tracing. The axis table uses `2*max(3, n_rho/4)+1` points in each transverse
+direction and the configured zeta grid. Default three-volume coefficient
+storage including this table is about 1.34 GiB. Reinitialization also releases
+the axis table.
 Spline-grid convergence is required alongside time-integration convergence;
 see [the interface description](spectre-interface-crossing.md).
 

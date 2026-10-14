@@ -155,6 +155,13 @@ foreach(fixture IN ITEMS tok2vol ncsx_freeboundary)
         TIMEOUT 120)
 endforeach()
 
+add_test(NAME test_spectre_fo_spline_g3v3
+    COMMAND $<TARGET_FILE:test_spectre_fo_spline.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
+set_tests_properties(test_spectre_fo_spline_g3v3 PROPERTIES
+    LABELS "integration" ENVIRONMENT "OMP_NUM_THREADS=4"
+    RUN_SERIAL TRUE TIMEOUT 120)
+
 # Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
 # difference algorithm they replaced to the FD truncation floor, at interior
 # points of every volume of the committed tokamak and stellarator fixtures.
