@@ -142,6 +142,7 @@ contains
         write (unit_in, '(A)') "  field_input = '"//h5//"'"
         write (unit_in, '(A)') '  integ_coords = 6'
         write (unit_in, '(A)') '  integmode = 3'
+        write (unit_in, '(A)') "  spectre_fo_integrator = 'boris'"
         write (unit_in, '(A)') '  spectre_ncon_phi = 32'
         write (unit_in, '(A)') '  ntestpart = 1'
         write (unit_in, '(A)') '  ntimstep = 10'

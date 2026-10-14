@@ -23,6 +23,11 @@ module spectre_fo_hybrid
     integer, parameter, public :: FO_BORIS = 1, FO_RK45 = 2
     integer :: fo_integrator = FO_BORIS
     real(dp) :: fo_tolerance = 1.0e-9_dp
+    ! At most 0.1 rad (1/63 of a gyro-period). A cross-and-return hidden
+    ! between stage samples has circular-orbit depth <= rho_L*(1-cos(0.05)),
+    ! about 1.25e-3 rho_L; tolerance alone cannot bound a missed sheet force.
+    real(dp), parameter :: RK_GYRO_ANGLE = 0.1_dp
+    real(dp), parameter :: ENTRY_MOMENTUM_TOL = 1.0e-3_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
     integer, parameter :: NPHASE = 64
     type, public :: spectre_fo_state_t
@@ -32,6 +37,8 @@ module spectre_fo_hybrid
         real(dp) :: last_y(5) = 0.0_dp
         real(dp) :: entry_rho = 0.0_dp
         real(dp) :: entry_pzeta = 0.0_dp
+        ! Actual FO minus target GC momentum, expressed in the entry gauge.
+        real(dp) :: entry_pzeta_defect = 0.0_dp
         !> Next step of FO_RK45 (adapted between substeps).
         real(dp) :: h_rk = 0.0_dp
         !> Volume whose gauge entry_pzeta is expressed in.
@@ -108,6 +115,11 @@ contains
         state%x = x_gc + (ro0_bar/bmod)*cross(b, vperp*eperp)
         call locate_cart(state%x, state%u, state%owner, status)
         if (status /= SPECTRE_FO_OK) return
+        if (axisymmetric()) then
+            call phase_residual(alpha, x_gc, y(1:3), owner, b, e1, e2, vpar, &
+                vperp, target, ro0_bar, state%entry_pzeta_defect, status)
+            if (status /= SPECTRE_FO_OK) return
+        end if
         state%layer_rho = layer_larmor*(ro0_bar*vperp/bmod)/M_TO_CM &
                           *radial_gradient(y(1:3))
         state%active = .true.
@@ -211,11 +223,15 @@ contains
             h = min(remaining, hfac*2.0_dp*rotation_parameter*ro0_bar/bmod)
             if (fo_integrator == FO_RK45) then
                 if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
+                h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/bmod)
                 call rk45_substep(state, h, ro0_bar, status)
             else
                 call boris_substep(state, h, ro0_bar, status)
             end if
-            if (status /= SPECTRE_FO_OK) return
+            if (status /= SPECTRE_FO_OK) then
+                if (status == SPECTRE_FO_LOSS) dt_used = dt_used + h
+                return
+            end if
             dt_used = dt_used + h
             remaining = remaining - h
             call spectre_fo_to_gc(state, ro0_bar, y, owner, map_status)
@@ -374,42 +390,84 @@ contains
     subroutine rk45_substep(state, h, ro0_bar, status)
         !> Adaptive Dormand-Prince 5(4) step of x' = v, v' = (|B|/ro0) v x b. On
         !> the sharp field (no layer) the stages use the owner's field, held at
-        !> its interface value beyond the volume edge, and a step that ends in
-        !> another volume is shortened to land on the interface, where the
-        !> owner switches. On input h is the trial step, on output the step
+        !> its interface value beyond the volume edge. Stage cross-and-return
+        !> trials are rejected; changed endpoints land on the first interface,
+        !> where the owner switches. On input h is the trial step, on output the step
         !> taken.
         type(spectre_fo_state_t), intent(inout) :: state
         real(dp), intent(inout) :: h
         real(dp), intent(in) :: ro0_bar
         integer, intent(out) :: status
         real(dp) :: x1(3), v1(3), u1(3), err, a, b, fa, fb, c, fc, iface_rho
-        integer :: attempt, owner1, it, side, grazes
+        integer :: attempt, owner1, it, side, grazes, stage_owner
 
         grazes = 0
         do attempt = 1, 60
-            call dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status)
-            if (status == SPECTRE_FO_LOSS) then
-                h = 0.0_dp
-                return
-            end if
-            if (status /= SPECTRE_FO_OK .or. err > 1.0_dp) then
-                h = h*max(0.2_dp, min(0.5_dp, 0.9_dp*max(err, 1.0_dp)**(-0.2_dp)))
+            call dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
+                stage_owner)
+            if (status /= SPECTRE_FO_OK) then
+                ! A failed stage has no embedded error estimate.
+                h = 0.5_dp*h
                 cycle
             end if
+            if (err > 1.0_dp) then
+                h = h*max(0.2_dp, min(0.5_dp, 0.9_dp*err**(-0.2_dp)))
+                cycle
+            end if
+            if (state%layer_rho <= 0.0_dp .and. stage_owner /= state%owner) then
+                if (owner1 == state%owner .or. &
+                    (stage_owner - state%owner)*(owner1 - state%owner) < 0) then
+                    ! A stage detects a cross-and-return, or an earlier sheet
+                    ! in the opposite direction. Never commit the continuation.
+                    h = 0.5_dp*h
+                    cycle
+                end if
+            end if
             state%h_rk = h*min(5.0_dp, 0.9_dp*max(err, 1.0e-10_dp)**(-0.2_dp))
-            if (state%layer_rho <= 0.0_dp .and. owner1 /= state%owner .and. &
-                grazes < 2) then
-                iface_rho = real(min(owner1, state%owner), dp)
+            if (state%layer_rho <= 0.0_dp .and. owner1 /= state%owner) then
+                ! The first sheet of the initial owner, even if the endpoint
+                ! lies beyond a thin intermediate volume.
+                iface_rho = real(merge(state%owner, state%owner - 1, &
+                    owner1 > state%owner), dp)
                 a = 0.0_dp
                 fa = state%u(1) - iface_rho
                 b = h
                 fb = u1(1) - iface_rho
+                if (abs(fa) <= OWNER_EPS) then
+                    if (real(owner1 - state%owner, dp) &
+                        *radial_velocity(state%u, state%v) > 0.0_dp) then
+                        ! The outgoing normal velocity leaves the home side.
+                        state%owner = merge(state%owner + 1, state%owner - 1, &
+                            owner1 > state%owner)
+                        grazes = grazes + 1
+                        if (grazes >= 2) h = 0.5_dp*h
+                        cycle
+                    end if
+                    ! Starts on the sheet moving into home: exclude the root
+                    ! at t=0 and bracket the later return at positive time.
+                    a = h/32.0_dp
+                    call dp_trial(state, a, ro0_bar, x1, v1, u1, owner1, err, &
+                        status)
+                    if (status /= SPECTRE_FO_OK) then
+                        h = 0.5_dp*h
+                        cycle
+                    end if
+                    fa = u1(1) - iface_rho
+                    if (fa*fb >= 0.0_dp) then
+                        h = 0.5_dp*h
+                        cycle
+                    end if
+                end if
+                if (fb == fa) then
+                    h = 0.5_dp*h
+                    cycle
+                end if
                 side = 0
                 do it = 1, 100
                     c = (a*fb - b*fa)/(fb - fa)
                     call dp_trial(state, c, ro0_bar, x1, v1, u1, owner1, err, &
                         status)
-                    if (status /= SPECTRE_FO_OK) return
+                    if (status /= SPECTRE_FO_OK) exit
                     fc = u1(1) - iface_rho
                     if (abs(fc) <= 1.0e-12_dp) exit
                     if (fc*fb > 0.0_dp) then
@@ -424,15 +482,23 @@ contains
                         side = 1
                     end if
                 end do
+                if (status /= SPECTRE_FO_OK) then
+                    h = 0.5_dp*h
+                    cycle
+                end if
                 if (c <= 1.0e-10_dp*h) then
                     ! The orbit grazes the interface at the step start: it
-                    ! belongs to the other volume. Switch and redo the step; a
-                    ! second graze in a row is a tangency, where the step is
-                    ! taken with the volume of its end point.
+                    ! belongs to the other volume. Switch and redo the step.
+                    ! Repeated grazing must reduce/retry, never bypass landing.
                     state%owner = merge(state%owner + 1, state%owner - 1, &
                         iface_rho >= real(state%owner, dp))
                     state%u(1) = iface_rho
                     grazes = grazes + 1
+                    if (grazes >= 2) h = 0.5_dp*h
+                    cycle
+                end if
+                if (it > 100 .or. err > 1.0_dp) then
+                    h = 0.5_dp*h
                     cycle
                 end if
                 h = c
@@ -445,21 +511,26 @@ contains
             state%u = u1
             state%owner = owner1
             status = SPECTRE_FO_OK
+            if (owner1 == spectre_field%data%Mvol .and. &
+                u1(1) >= real(owner1, dp) - OWNER_EPS) status = SPECTRE_FO_LOSS
             return
         end do
         status = SPECTRE_FO_STEP_LIMIT
     end subroutine rk45_substep
-    subroutine dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status)
+    subroutine dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
+            stage_owner)
         !> One Dormand-Prince 5(4) step from the state; err is the scaled error
         !> (gyroradius for x, |v| for v) over fo_tolerance.
         type(spectre_fo_state_t), intent(in) :: state
         real(dp), intent(in) :: h, ro0_bar
         real(dp), intent(out) :: x1(3), v1(3), u1(3), err
         integer, intent(out) :: owner1, status
+        integer, intent(out), optional :: stage_owner
         real(dp) :: kx(3, 7), kv(3, 7), xs(3), vs(3), w(7, 7), bvec(3), bmod
         real(dp) :: rho_l, ex(3), ev(3)
-        integer :: i, j
+        integer :: i, j, owner_geo
 
+        if (present(stage_owner)) stage_owner = state%owner
         w = 0.0_dp
         w(2, 1) = 1.0_dp/5
         w(3, 1:2) = [3.0_dp/40, 9.0_dp/40]
@@ -479,8 +550,11 @@ contains
                 xs = xs + h*w(i, j)*kx(:, j)
                 vs = vs + h*w(i, j)*kv(:, j)
             end do
-            call stage_field(state, xs, u1, bvec, bmod, status)
+            call stage_field(state, xs, u1, bvec, bmod, owner_geo, status)
             if (status /= SPECTRE_FO_OK) return
+            if (present(stage_owner)) then
+                if (stage_owner == state%owner) stage_owner = owner_geo
+            end if
             if (i == 1) rho_l = ro0_bar*norm2(vs)/bmod
             kx(:, i) = vs
             kv(:, i) = (bmod/ro0_bar)*cross(vs, bvec)
@@ -495,26 +569,18 @@ contains
             22.0_dp/525*kv(:, 6) - 1.0_dp/40*kv(:, 7))
         err = max(norm2(ex)/rho_l, norm2(ev)/norm2(state%v))/fo_tolerance
         call locate_cart(x1, u1, owner1, status)
-        if (status /= SPECTRE_FO_OK) then
-            if (state%owner == spectre_field%data%Mvol .and. &
-                state%u(1) >= real(state%owner, dp) - 0.1_dp) then
-                status = SPECTRE_FO_LOSS
-            end if
-            return
-        end if
-        if (owner1 == spectre_field%data%Mvol .and. &
-            u1(1) >= real(owner1, dp) - OWNER_EPS) status = SPECTRE_FO_LOSS
+        if (status /= SPECTRE_FO_OK) return
     end subroutine dp_trial
-    subroutine stage_field(state, x, u, bvec, bmod, status)
+    subroutine stage_field(state, x, u, bvec, bmod, owner_geo, status)
         !> Field at a stage point: the owner's field on the sharp sheet, the
         !> blended field of the geometric owner with a layer.
         type(spectre_fo_state_t), intent(in) :: state
         real(dp), intent(in) :: x(3)
         real(dp), intent(inout) :: u(3)
         real(dp), intent(out) :: bvec(3), bmod
-        integer, intent(out) :: status
+        integer, intent(out) :: owner_geo, status
         real(dp) :: acov(3), e_zeta(3), xs(3)
-        integer :: owner_geo, owner_eval
+        integer :: owner_eval
 
         owner_geo = state%owner
         call locate_cart(x, u, owner_geo, status)
@@ -642,8 +708,9 @@ contains
         if (i > NPHASE) then
             ! The gyrophase variation of p_zeta, proportional to v_perp, does
             ! not reach the guiding-centre value (strongly passing markers):
-            ! take the closest gyrophase, an O(gyroradius^2) p_zeta error.
-            if (best_residual == huge(1.0_dp)) then
+            ! take the closest gyrophase only with a bounded momentum defect.
+            ! Entry records the actual signed defect; no order claim is made.
+            if (best_residual > ENTRY_MOMENTUM_TOL*max(abs(target), 1.0_dp)) then
                 status = SPECTRE_FO_GYROPHASE_FAIL
                 return
             end if
@@ -687,7 +754,8 @@ contains
         call cart_sample(x, u, trial_owner, b, bmod, acov, e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
         v = vpar*b_gc + vperp*eperp
-        residual = dot_product(v, e_zeta) + acov(3)/ro0_bar - target
+        residual = dot_product(v, e_zeta) &
+            + (acov(3) - gauge_shift(owner, trial_owner))/ro0_bar - target
     end subroutine phase_residual
     subroutine cart_sample(x, u, owner, b, bmod, acov, e_zeta, status)
         real(dp), intent(in) :: x(3)
@@ -755,6 +823,7 @@ contains
             call coords%from_cyl_warm(xcyl, trial, owner, ierr)
             if (ierr == 0) then
                 u = trial
+                call refine_sheet_location(x, u, owner)
                 status = SPECTRE_FO_OK
                 return
             end if
@@ -767,6 +836,7 @@ contains
                 if (ierr == 0) then
                     u = trial
                     owner = candidate
+                    call refine_sheet_location(x, u, owner)
                     status = SPECTRE_FO_OK
                     return
                 end if
@@ -778,6 +848,7 @@ contains
                 if (abs(trial(1) - real(nint(trial(1)), dp)) > OWNER_EPS) &
                     owner = candidate
                 u = trial
+                call refine_sheet_location(x, u, owner)
                 status = SPECTRE_FO_OK
                 return
             end if
@@ -787,6 +858,40 @@ contains
         end select
         status = SPECTRE_FO_LOCATE_FAIL
     end subroutine locate_cart
+
+    subroutine refine_sheet_location(x, u, owner)
+        ! The warm inverse snaps within 5e-10 rho of a sheet. Recover its
+        ! signed distance for event bracketing; otherwise fa=fb=0 is possible.
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(inout) :: u(3)
+        integer, intent(inout) :: owner
+        real(dp) :: xu(3), e(3, 3), g(3, 3), gi(3, 3), sg
+        integer :: k
+
+        k = nint(u(1))
+        if (k < 1 .or. k > spectre_field%data%Mvol) return
+        if (abs(u(1) - real(k, dp)) > 1.0e-9_dp) return
+        call spectre_field%coords%evaluate_cart(u, xu)
+        call spectre_field%coords%covariant_basis(u, e)
+        call spectre_field%coords%metric_tensor(u, g, gi, sg)
+        u(1) = u(1) + dot_product(x/M_TO_CM - xu, matmul(e, gi(:, 1)))
+        if (abs(u(1) - real(k, dp)) <= OWNER_EPS) then
+            ! Preserve exact terminal coordinates and the landed owner within
+            ! the event tolerance, including Cartesian roundoff at an edge.
+            u(1) = real(k, dp)
+        else
+            owner = min(int(u(1)) + 1, spectre_field%data%Mvol)
+        end if
+    end subroutine refine_sheet_location
+
+    real(dp) function radial_velocity(u, v) result(vrho)
+        real(dp), intent(in) :: u(3), v(3)
+        real(dp) :: e(3, 3), g(3, 3), gi(3, 3), sg
+
+        call spectre_field%coords%covariant_basis(u, e)
+        call spectre_field%coords%metric_tensor(u, g, gi, sg)
+        vrho = dot_product(v/M_TO_CM, matmul(e, gi(:, 1)))
+    end function radial_velocity
 
     pure subroutine perpendicular_frame(b, e1, e2)
         real(dp), intent(in) :: b(3)

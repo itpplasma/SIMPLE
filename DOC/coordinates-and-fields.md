@@ -783,6 +783,32 @@ interface, type (1 crossing / 2 reflection / 3 loss / 4 stop), exit volume,
 entry volume, theta, zeta, `v_par` before, `v_par` after, mu, `|B|` home,
 `|B|` target. Both the RK45 and the symplectic path feed this log; type 4 is
 the symplectic path's pathological non-convergence fallback (#441).
+This is a GC crossing-map log: FO entries, sheet transits, exits, and FO losses
+are excluded. For level-3 losses, `times_lost.dat` is authoritative (column 2:
+`0 < t < trace_time`), with `n_fo_losses` reporting the FO subset; type-3 log
+counts alone undercount level-3 losses.
+
+**Level-3 FO configuration and events**. Shared `init_spectre_field` applies
+rotation, layer width, integrator, and tolerance before parallel tracing, for
+both `simple.x` and `simple_api`/`pysimple`. Sharp-field RK45 checks every stage's
+geometric owner, halves cross-and-return trials, and localizes changed endpoints
+on the initial owner's first sheet (`owner - 1` inward, `owner` outward).
+Near-sheet Cartesian residuals refine snapped inverse coordinates; outgoing
+normal motion and positive-time brackets handle starts on a sheet. Repeated
+grazing reduces/retries or reports a step limit, without bypassing localization.
+A trial is capped at 0.1 rad of gyromotion. The local circular-orbit estimate
+bounds excursions hidden between stages by `1.25e-3` gyroradii in depth;
+curvature and field variation limit that estimate. Failed stages retry with a
+defined halving factor, and numerical location failure is distinct from a
+located physical outer-boundary loss, which retains the terminal state/time.
+
+In axisymmetry, gyrophase trial momenta are translated into the entry volume's
+gauge by subtracting the summed `A_zeta` jump divided by `ro0_bar`, the inverse
+of the exit conversion. A no-root entry is accepted only for a defect no larger
+than `1e-3 max(abs(P_zeta_entry), 1)` in internal momentum units; larger defects
+report `SPECTRE_FO_GYROPHASE_FAIL`. The signed defect is available in
+`spectre_fo_state_t%entry_pzeta_defect`. The bound and unresolved-grazing estimate
+are detailed in `DOC/spectre-interface-crossing.md`.
 
 #### Guiding-center symplectic per volume (`integmode > 0`)
 

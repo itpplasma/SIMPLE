@@ -222,8 +222,8 @@ With `crossing_level = 3` and `integmode > 0`, the symplectic guiding-centre
 path switches to the full orbit (`spectre_fo_hybrid`) when the guiding centre
 comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
 interface, and back when it is one gyroradius farther out. The default
-`spectre_fo_integrator = 'rk45'` uses the sharp per-volume field and exact
-interface crossings; `'boris'` remains an option for a resolved smooth layer.
+`spectre_fo_integrator = 'rk45'` uses the sharp per-volume field and localizes
+detected interface crossings; `'boris'` remains an option for a resolved smooth layer.
 
 A fixed step that does not resolve the force jump at the sheet makes a
 zero-mean impulse error `~ h [[F]]` per crossing that random-walks the
@@ -235,13 +235,55 @@ canonical toroidal momentum over all full-orbit phases is 14 % with the
 sharp field at the default bound 0.05, 3.2 % at 0.0125, 4.0 % with a layer of
 0.2 gyroradii at 0.05, and 0.93 % with the layer at 0.0125.
 `spectre_fo_integrator = 'rk45'` integrates the full orbit adaptively on the
-sharp field and lands each step that changes volume on the interface: the
-spread is 6e-8 at `spectre_fo_tolerance = 1e-9` (1.2e-6 for a marker with a
-tangential touch), at the cost of the fine Boris setting, with an energy
-drift of 1.6e-5 that Boris does not have. Each volume's vector potential has
-its own gauge (it vanishes on the volume's inner boundary); the axisymmetric
-exit converts the entry momentum to the exit volume's gauge. The prototype
-in `concept/symplectic_sheet` documents the underlying analysis.
+sharp field. Every trial stage's geometric owner is checked. A stage that
+crosses and returns before the endpoint causes rejection and step halving;
+a changed endpoint is localized on the first sheet leaving the initial
+owner (`owner - 1` inward, `owner` outward), including trials that span a thin
+intermediate volume. The remaining time is integrated in the new owner.
+Starts on a sheet use the outgoing normal velocity; a later return is
+bracketed at positive time. Repeated grazing reduces/retries and eventually
+reports `SPECTRE_FO_STEP_LIMIT`, rather than committing an unlocalized step.
+The Cartesian radial residual refines near-sheet inverse coordinates that
+would otherwise snap both bracket ends onto the sheet.
+
+RK45 also caps each trial at `h |B| / ro0_bar <= 0.1` rad, about 1/63 of a
+gyro-period. Stage checks cannot exclude arbitrarily shallow excursions
+between samples. In the local uniform-field, planar-sheet approximation,
+a circular cross-and-return within this entire step has depth at most
+`rho_L (1 - cos(0.05))`, approximately `1.25e-3 rho_L`; interface curvature
+and field variation limit this estimate. This bounds the geometric scale of
+the remaining unresolved-grazing risk, rather than claiming that the RK error
+estimate detects a force jump. The optional `h_scale` reduces this cap for
+convergence studies. Failed trial stages halve the step without reading an
+uncomputed error estimate. A location failure near the outer edge is numerical
+failure, not by itself a physical loss; loss requires a located terminal point,
+whose state and elapsed substep time are retained.
+
+Each volume's vector potential has its own gauge (it vanishes on the volume's
+inner boundary). Both the axisymmetric entry residual and exit mapping convert
+momenta with the same summed interface jumps of `A_zeta`. A trial particle in
+another volume is translated back to the entry gauge before comparison. If
+there is no gyrophase root, entry accepts the closest sampled phase only when
+`abs(delta P_zeta) <= 1e-3 max(abs(P_zeta_entry), 1)` in internal momentum
+units; otherwise it reports `SPECTRE_FO_GYROPHASE_FAIL`. The signed accepted
+defect is exposed as `spectre_fo_state_t%entry_pzeta_defect`. No gyroradius-squared
+error estimate is asserted for this fallback. RK45 can drift in energy;
+Boris preserves speed. The existing long-trace bounds remain shell defect
+below `1e-4` and relative momentum spread below `1e-5` for RK45, and `1e-9`
+and `2e-2` for Boris at layer 0.2 and rotation 0.0125. The integration tests use
+the public `simple_api` initialization, exercising default RK45 and nondefault
+Boris configuration, and require every marker to complete and enter FO, with
+round-trip witnesses and invariant samples in every visited volume. A focused
+near-tangent test compares against independent geometric-field RK4 and the
+axisymmetric momentum
+invariant. The prototype in `concept/symplectic_sheet` documents the analysis.
+
+FO entries, sheet transits, exits, and FO losses are excluded from
+`spectre_crossing_events.dat`, which records GC crossing-map events. For level-3
+loss accounting use `times_lost.dat` (column 2: `0 < t < trace_time` is a loss)
+and the FO loss counters, rather than counting type-3 crossing-log events.
+FO configuration is applied in shared SPECTRE field initialization, before
+parallel tracing, identically for `simple.x` and `simple_api`/`pysimple`.
 
 ## Warning: guiding-centre maps at strong interface jumps
 

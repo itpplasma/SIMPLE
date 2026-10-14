@@ -111,6 +111,18 @@ foreach(fo_integrator boris rk45)
         TIMEOUT 600)
 endforeach()
 
+# Adversarial sharp-sheet events and gauge-consistent entry momentum.
+add_executable(test_spectre_fo_events.x test_spectre_fo_events.f90)
+target_link_libraries(test_spectre_fo_events.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_events)
+add_test(NAME test_spectre_fo_events
+    COMMAND $<TARGET_FILE:test_spectre_fo_events.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_events)
+set_tests_properties(test_spectre_fo_events PROPERTIES
+    LABELS "integration"
+    TIMEOUT 60)
+
 # Kicked Level-1 reflection (CA15): forbidden crossings relocate along the
 # interface to the conjugate equal-B point at frozen (vpar, p, lambda, mu).
 add_executable(test_spectre_kicked_reflection.x test_spectre_kicked_reflection.f90)
