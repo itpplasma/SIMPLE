@@ -46,6 +46,7 @@ def main():
     parser.add_argument("--phase", type=float, default=0,
                         help="FO launch phase offset in radians (research only)")
     parser.add_argument("--npoiper2", type=int, default=1024)
+    parser.add_argument("--integmode", type=int, default=3)
     parser.add_argument("--macrosteps", type=int, default=64)
     parser.add_argument("--construction-tolerance", type=float)
     args = parser.parse_args()
@@ -61,7 +62,7 @@ def main():
     config.write_text(
         "&config\n"
         f"field_input='{fixture}'\n"
-        "integ_coords=6, integmode=3, crossing_level=3\n"
+        f"integ_coords=6, integmode={args.integmode}, crossing_level=3\n"
         f"ntestpart={args.markers}, ntimstep={args.macrosteps + 1}, "
         f"npoiper2={args.npoiper2}\n"
         f"facE_al=1000, trace_time={args.duration:.17e}, relerr=1d-12\n"

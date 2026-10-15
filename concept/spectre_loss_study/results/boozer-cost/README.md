@@ -34,14 +34,16 @@ markers are 32.4 s (entry 0.01), 191.5 s (hybrid) and 349.8 s (FO).
 - A pure-GC SPECTRE step costs 8.0–8.4 us at a 20.9 ns step. At the same
   integrator and `npoiper2`, this is 2.7x the Boozer GC cost. The remaining factor
   to production Boozer comes from the study's 4x smaller step and midpoint
-  instead of Euler1. Whether SPECTRE GC requires that step has not been tested.
+  instead of Euler1. Midpoint at 256 cuts the SPECTRE GC part 3.7x without a
+  resolvable loss change; Euler1 makes the switch chatter (`../fo-residence/`).
 - FO costs about 30x GC on the same field. The default hybrid spends 30% of
   particle time in FO, which accounts for about 90% of its compute; it is 3.0x
   cheaper than FO everywhere in core-seconds.
-- Hybrid thread efficiency is 42–45% versus 70% for FO everywhere: a few
-  FO-heavy markers dominate the tail. Its 191 s wall time would be about 80 s
-  at full occupancy. This corrects the earlier wall-clock decomposition, which
-  attributed the imbalance to GC and implied FO/GC ratios of only 3–7.
+- Hybrid thread efficiency is 42–45% versus 70% for FO everywhere. This came
+  from the study driver's static OpenMP schedule; production already uses
+  dynamic scheduling, and the driver now matches it (wall time 191 s to 94 s,
+  identical outcomes; see `../fo-residence/`). The earlier wall-clock
+  decomposition that implied FO/GC ratios of only 3–7 was wrong for the same reason.
 - Residual FO at sheets and the wall (entry 0.01) already costs 36x Boozer.
   Reducing FO residence is therefore the main cost lever; faster GC steps alone
   cannot approach Boozer cost.
